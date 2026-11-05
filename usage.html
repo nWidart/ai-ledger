@@ -1,0 +1,434 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Claude Usage</title>
+<style>
+:root {
+  color-scheme: light;
+  --bg: #f6f5f2; --surface-1: #fcfcfb; --surface-2: #f0efec; --border: #e2e0da;
+  --text-primary: #0b0b0b; --text-secondary: #52514e; --text-muted: #7a7973;
+  --series-1: #2a78d6; --series-1-soft: rgba(42,120,214,.12); --series-2: #eb6834; --series-3: #1baf7a;
+  --series-4: #eda100; --series-5: #e87ba4; --series-6: #008300;
+  --grid: #e8e6e1; --good: #0ca30c; --good-text: #006300; --critical: #d03b3b; --warning-text: #8a5a00;
+  --accent: #2a78d6;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #121211; --surface-1: #1a1a19; --surface-2: #242422; --border: #33332f;
+    --text-primary: #f0efec; --text-secondary: #c3c2b7; --text-muted: #8f8e86;
+    --series-1: #3987e5; --series-1-soft: rgba(57,135,229,.18); --series-2: #d95926; --series-3: #199e70;
+    --series-4: #c98500; --series-5: #d55181; --series-6: #008300;
+    --grid: #2b2b28; --good-text: #4cc94c; --critical: #e66767; --warning-text: #e0b04a; --accent: #3987e5;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #121211; --surface-1: #1a1a19; --surface-2: #242422; --border: #33332f;
+  --text-primary: #f0efec; --text-secondary: #c3c2b7; --text-muted: #8f8e86;
+  --series-1: #3987e5; --series-1-soft: rgba(57,135,229,.18); --series-2: #d95926; --series-3: #199e70;
+  --series-4: #c98500; --series-5: #d55181; --series-6: #008300;
+  --grid: #2b2b28; --good-text: #4cc94c; --critical: #e66767; --warning-text: #e0b04a; --accent: #3987e5;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text-primary);
+  font: 14px/1.45 ui-sans-serif, -apple-system, "SF Pro Text", "Inter", system-ui, sans-serif; }
+.wrap { max-width: 1240px; margin: 0 auto; padding: 24px 16px 64px; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 16px; margin-bottom: 16px; }
+h1 { font-size: 22px; margin: 0; letter-spacing: -.01em; }
+.sub { color: var(--text-muted); font-size: 13px; }
+.filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 16px; }
+select, button {
+  font: inherit; color: var(--text-primary); background: var(--surface-1);
+  border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; }
+select { max-width: 100%; }
+button { cursor: pointer; }
+button:hover { background: var(--surface-2); }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; border-radius: 0; padding: 6px 12px; }
+.seg button[aria-pressed=true] { background: var(--text-primary); color: var(--surface-1); }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; padding: 16px; min-width: 0; }
+.kpi .label { color: var(--text-secondary); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+.kpi .value { font-size: 26px; font-weight: 600; font-variant-numeric: tabular-nums; margin-top: 4px; }
+.kpi .note { color: var(--text-muted); font-size: 12px; margin-top: 2px; }
+.card h2 { font-size: 15px; margin: 0 0 2px; }
+.hint { color: var(--text-muted); font-size: 12px; margin-bottom: 8px; }
+.banner { border: 1px solid var(--border); border-left: 3px solid var(--warning-text); background: var(--surface-1);
+  border-radius: 8px; padding: 8px 12px; margin-bottom: 16px; font-size: 13px; color: var(--text-secondary); }
+.banner b { color: var(--warning-text); }
+.chart-head { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: flex-start; justify-content: space-between; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 6px; margin: 8px 0; }
+.legend button { font-size: 12px; padding: 2px 8px; display: inline-flex; gap: 6px; align-items: center; border-radius: 999px; }
+.legend button[aria-pressed=false] { color: var(--text-muted); }
+.legend button[aria-pressed=false] i { opacity: .25; }
+.legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+#chart { position: relative; }
+#chart svg { display: block; width: 100%; height: 260px; overflow: visible; }
+.tip { position: absolute; pointer-events: none; background: var(--surface-1); border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px 10px; font-size: 12px; box-shadow: 0 4px 16px rgba(0,0,0,.12);
+  white-space: nowrap; display: none; z-index: 2; }
+.tip b { font-variant-numeric: tabular-nums; }
+.tip i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; margin-right: 6px; }
+.grid2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; margin-top: 16px; }
+.grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 16px; }
+@media (max-width: 900px) { .grid2, .grid3 { grid-template-columns: 1fr; } }
+.scroll { overflow-x: auto; }
+.tall { max-height: 520px; overflow: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; color: var(--text-muted); font-weight: 500; font-size: 12px; padding: 6px 8px; border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; background: var(--surface-1); white-space: nowrap; }
+td { padding: 7px 8px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+td.num, th.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+td.when { white-space: nowrap; }
+td.name { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+tbody tr.pick { cursor: pointer; }
+tbody tr.pick:hover { background: var(--surface-2); }
+tbody tr.sel { background: var(--series-1-soft); }
+tbody tr:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.chip { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-secondary); white-space: nowrap; }
+.chip.warn { border-color: var(--warning-text); color: var(--warning-text); }
+.bad { color: var(--critical); }
+.muted { color: var(--text-muted); }
+.empty { color: var(--text-muted); padding: 24px 0; text-align: center; }
+a { color: var(--accent); }
+.detail h2 { font-size: 17px; }
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin: 10px 0 14px; }
+.facts div { background: var(--surface-2); border-radius: 8px; padding: 8px 10px; }
+.facts .v { font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.facts .l { font-size: 12px; color: var(--text-muted); }
+.detail h3 { font-size: 13px; margin: 14px 0 4px; color: var(--text-secondary); }
+code { font: 12px/1.4 ui-monospace, "SF Mono", Menlo, monospace; }
+</style>
+</head>
+<body>
+<!--NAV-->
+<div class="wrap">
+  <header>
+    <h1>Claude usage</h1>
+    <span class="sub" id="sub"></span>
+  </header>
+
+  <div class="filters" role="group" aria-label="Filters">
+    <select id="fProject" aria-label="Project"></select>
+    <div class="seg" id="fRange" role="group" aria-label="Time range">
+      <button data-v="7">7d</button><button data-v="14">14d</button><button data-v="30">30d</button><button data-v="90">90d</button><button data-v="0">All</button>
+    </div>
+  </div>
+
+  <div id="banner"></div>
+  <section class="kpis" id="kpis" aria-label="Summary"></section>
+
+  <section class="card">
+    <div class="chart-head">
+      <div><h2 id="chartTitle">Tokens per day</h2><div class="hint" id="chartHint"></div></div>
+      <div class="seg" id="fMetric" role="group" aria-label="Chart metric"><button data-v="tokens">Tokens</button><button data-v="cost">Cost</button></div>
+    </div>
+    <div class="legend" id="legend"></div>
+    <div id="chart"></div>
+  </section>
+
+  <section class="card" style="margin-top:16px">
+    <h2>Projects</h2>
+    <div class="hint">Click a project to filter the page. Cost is an estimate at API list prices.</div>
+    <div class="scroll"><table>
+      <thead><tr><th>Project</th><th class="num">Sessions</th><th class="num">Tokens</th><th class="num">Est. cost</th><th class="num">Cache hit</th>
+        <th class="num">1h writes</th><th class="num">Subagents</th><th class="num">Tokens / prompt</th><th class="num">Commits</th><th class="num">Cost / commit</th>
+        <th class="num">Errors / 100</th><th class="num">Error loops</th></tr></thead>
+      <tbody id="projBody"></tbody>
+    </table></div>
+  </section>
+
+  <div class="grid2">
+    <section class="card">
+      <h2>Sessions</h2>
+      <div class="hint" id="sessHint">Newest first. Click a session for details.</div>
+      <div class="scroll tall"><table>
+        <thead><tr><th>Started</th><th>Project</th><th class="num">Duration</th><th class="num">Prompts</th><th class="num">Tokens</th><th class="num">Est. cost</th>
+          <th class="num">Peak context</th><th class="num">Compactions</th><th class="num">Commits</th></tr></thead>
+        <tbody id="sessBody"></tbody>
+      </table></div>
+    </section>
+    <section class="card detail" id="detail" aria-live="polite"></section>
+  </div>
+
+  <div class="grid2">
+    <section class="card">
+      <h2>Models and effort</h2>
+      <div class="hint">Requests per model and effort level.</div>
+      <div class="scroll"><table>
+        <thead><tr><th>Model</th><th>Effort</th><th class="num">Requests</th><th class="num">Share</th><th class="num">Tokens</th><th class="num">Est. cost</th></tr></thead>
+        <tbody id="modelBody"></tbody>
+      </table></div>
+    </section>
+    <section class="card">
+      <h2>Tools</h2>
+      <div class="hint">Calls, failure rate and latency from tool_use to tool_result.</div>
+      <div class="scroll tall"><table>
+        <thead><tr><th>Tool</th><th class="num">Calls</th><th class="num">Failed</th><th class="num">p50</th><th class="num">p95</th></tr></thead>
+        <tbody id="toolBody"></tbody>
+      </table></div>
+    </section>
+  </div>
+
+  <div class="grid3">
+    <section class="card"><h2>MCP servers</h2><div class="scroll tall"><table>
+      <thead><tr><th>Server</th><th class="num">Calls</th><th class="num">Failed</th></tr></thead><tbody id="mcpBody"></tbody></table></div></section>
+    <section class="card"><h2>Skills</h2><div class="scroll tall"><table>
+      <thead><tr><th>Skill</th><th class="num">Calls</th><th class="num">Failed</th></tr></thead><tbody id="skillBody"></tbody></table></div></section>
+    <section class="card"><h2>Hooks</h2><div class="scroll tall"><table>
+      <thead><tr><th>Hook</th><th class="num">Runs</th><th class="num">Failed</th><th class="num">Avg</th></tr></thead><tbody id="hookBody"></tbody></table></div></section>
+  </div>
+
+  <section class="card" style="margin-top:16px">
+    <h2>Error loops</h2>
+    <div class="hint">The same tool failing three or more times in a row within a session. Links open the first failure in the errors dashboard.</div>
+    <div class="scroll tall"><table>
+      <thead><tr><th>When</th><th>Project</th><th>Session</th><th>Tool</th><th class="num">Failures</th><th></th></tr></thead>
+      <tbody id="loopBody"></tbody>
+    </table></div>
+  </section>
+</div>
+<div class="tip" id="tip" role="tooltip"></div>
+
+<script type="module">
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const num = (n, d = 0) => n == null ? "–" : n.toLocaleString(undefined, { maximumFractionDigits: d, minimumFractionDigits: d });
+const big = n => n == null ? "–" : n >= 1e9 ? num(n / 1e9, 2) + "B" : n >= 1e6 ? num(n / 1e6, 1) + "M" : n >= 1e3 ? num(n / 1e3, 1) + "k" : num(n);
+const usd = n => n == null ? "–" : "$" + num(n, n < 10 ? 2 : 0);
+const pct = (n, d = 0) => n == null ? "–" : num(n * 100, d) + "%";
+const dur = s => s == null ? "–" : s < 60 ? `${Math.round(s)}s` : s < 3600 ? `${Math.round(s / 60)}m` : `${num(s / 3600, 1)}h`;
+const ms = v => v == null ? "–" : v < 1000 ? `${Math.round(v)}ms` : `${num(v / 1000, 1)}s`;
+const when = ts => ts ? new Date(ts).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "–";
+const RANGES = [7, 14, 30, 90, 0];
+const KINDS = [
+  { k: "input", label: "Input", c: "var(--series-1)" },
+  { k: "text_out", label: "Output", c: "var(--series-2)" },
+  { k: "thinking", label: "Thinking", c: "var(--series-3)" },
+  { k: "cache_read", label: "Cache read", c: "var(--series-4)" },
+  { k: "cache_5m", label: "Cache write 5m", c: "var(--series-5)" },
+  { k: "cache_1h", label: "Cache write 1h", c: "var(--series-6)" },
+];
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+};
+const state = { project: "", range: 30, session: "", metric: "tokens", hidden: store.get("claude-usage-hidden", []) };
+let DATA = null;
+
+function readHash() {
+  const h = new URLSearchParams(location.hash.slice(1));
+  state.project = h.get("project") || "";
+  state.range = h.has("range") && RANGES.includes(+h.get("range")) ? +h.get("range") : 30;
+  state.session = h.get("session") || "";
+}
+function writeHash() {
+  const p = new URLSearchParams();
+  if (state.project) p.set("project", state.project);
+  p.set("range", state.range);
+  if (state.session) p.set("session", state.session);
+  if (location.hash !== "#" + p) history.replaceState(null, "", location.pathname + "#" + p);
+}
+
+async function load() {
+  writeHash();
+  const q = new URLSearchParams({ project: state.project, range: state.range, session: state.session });
+  const res = await fetch("/api/usage?" + q);
+  DATA = await res.json();
+  render();
+}
+
+function render() {
+  const d = DATA, t = d.totals;
+  document.querySelectorAll("#fRange button").forEach(b => b.setAttribute("aria-pressed", +b.dataset.v === state.range));
+  document.querySelectorAll("#fMetric button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === state.metric));
+  const projects = d.projects.includes(state.project) || !state.project ? d.projects : [state.project, ...d.projects];
+  $("#fProject").innerHTML = `<option value="">All projects</option>` + projects.map(p => `<option value="${esc(p)}">${esc(p)}</option>`).join("");
+  $("#fProject").value = state.project;
+  $("#sub").textContent = `${d.start ? `${d.start} – ${d.end}` : `all time to ${d.end}`} · costs are estimates at API list prices`;
+  $("#banner").innerHTML = d.unpriced.length ? `<div class="banner"><b>⚠ Unpriced models:</b> ${d.unpriced.map(u => `<code>${esc(u.model)}</code> (${big(u.tokens)} tokens)`).join(", ")}.
+    Their tokens are counted; their cost is unknown and left out of totals. Add them to <code>prices.json</code>.</div>` : "";
+  const sub = t.subagent_cost_share != null ? pct(t.subagent_cost_share) + " of cost" : "";
+  $("#kpis").innerHTML = [
+    ["Est. cost", usd(t.cost), `${num(t.requests)} requests${d.unpriced.length ? " · excl. unpriced" : ""}`],
+    ["Tokens", big(t.tokens), `${big(t.output)} output · ${big(t.thinking)} thinking`],
+    ["Cache hit", pct(t.cache_hit_ratio), `${pct(t.write_1h_share)} of cache writes are 1h`],
+    ["Subagents", pct(t.subagent_token_share), `of tokens${sub ? " · " + sub : ""}`],
+    ["Per prompt", big(t.tokens_per_prompt), `tokens · ${num(t.turns_per_prompt, 1)} turns · ${num(t.tool_calls_per_prompt, 1)} tool calls · ${num(t.prompts)} prompts`],
+    ["Commits", num(t.commits), t.commits ? `${usd(t.cost_per_commit)} · ${big(t.tokens_per_commit)} tokens per commit` : "per-commit ratios n/a"],
+    ["Tests", num(t.test_runs), `${num(t.tests_passed)} passed · ${num(t.tests_failed)} failed`],
+    ["Friction", num(t.errors_per_100_calls, 1), `errors / 100 calls · ${num(t.error_loops)} loops · ${pct(t.interruption_rate)} prompts interrupted`],
+    ["Time", dur(t.session_seconds), `in ${num(t.sessions)} sessions · median ${dur(t.median_session_seconds)} · ${dur(t.thinking_ms / 1000)} thinking`],
+    ["Context", num(t.near_limit), `sessions near the limit (≥ 80%)`],
+  ].map(([l, v, n]) => `<div class="card kpi"><div class="label">${l}</div><div class="value">${v}</div><div class="note">${n}</div></div>`).join("");
+  renderChart(); renderProjects(); renderSessions(); renderDetail(); renderTables();
+}
+
+// ---------- chart ----------
+function days() {
+  const out = [], have = Object.fromEntries(DATA.daily.map(r => [r.day, r]));
+  const first = DATA.start || DATA.daily[0]?.day || DATA.end;
+  for (let x = new Date(first + "T00:00:00Z"); x <= new Date(DATA.end + "T00:00:00Z"); x = new Date(+x + 864e5)) {
+    const k = x.toISOString().slice(0, 10), r = have[k] || {};
+    out.push({ day: k, input: r.input || 0, text_out: (r.output || 0) - (r.thinking || 0), thinking: r.thinking || 0,
+      cache_read: r.cache_read || 0, cache_5m: r.cache_5m || 0, cache_1h: r.cache_1h || 0, cost: r.cost || 0, unpriced: r.unpriced || 0 });
+  }
+  return out;
+}
+function niceStep(raw) { const p = 10 ** Math.floor(Math.log10(raw || 1)); const n = raw / p; return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10) * p; }
+const dayLabel = (k, long) => new Date(k + "T00:00:00Z").toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC", ...(long ? { year: "numeric" } : {}) });
+function renderChart() {
+  const cost = state.metric === "cost";
+  const kinds = cost ? [{ k: "cost", label: "Est. cost", c: "var(--series-1)" }] : KINDS.filter(k => !state.hidden.includes(k.k));
+  $("#chartTitle").textContent = cost ? "Estimated cost per day" : "Tokens per day";
+  $("#chartHint").textContent = cost ? "At API list prices. Unpriced models are left out." : "Click a legend entry to hide that kind; cache reads usually dwarf the rest.";
+  $("#legend").innerHTML = cost ? "" : KINDS.map(k => `<button type="button" data-k="${k.k}" aria-pressed="${!state.hidden.includes(k.k)}"><i style="background:${k.c}"></i>${k.label}</button>`).join("");
+  $("#legend").querySelectorAll("button").forEach(b => b.onclick = () => {
+    state.hidden = state.hidden.includes(b.dataset.k) ? state.hidden.filter(x => x !== b.dataset.k) : [...state.hidden, b.dataset.k];
+    store.set("claude-usage-hidden", state.hidden); renderChart();
+  });
+  const pts = days(), el = $("#chart");
+  const W = el.clientWidth || 800, H = 260, m = { t: 12, r: 8, b: 26, l: 52 };
+  const iw = W - m.l - m.r, ih = H - m.t - m.b;
+  const total = p => kinds.reduce((s, k) => s + p[k.k], 0);
+  const max = Math.max(...pts.map(total), 0) * 1.08 || 1;
+  const step = niceStep(max / 4), yMax = Math.ceil(max / step) * step;
+  const bw = iw / pts.length, gap = Math.min(4, bw * .25), w = Math.max(1, bw - gap);
+  const y = v => m.t + ih - v / yMax * ih;
+  const fy = v => cost ? usd(v) : big(v);
+  let g = "";
+  for (let v = 0; v <= yMax + 1e-9; v += step)
+    g += `<line x1="${m.l}" x2="${W - m.r}" y1="${y(v)}" y2="${y(v)}" stroke="var(--grid)"/><text x="${m.l - 6}" y="${y(v) + 4}" text-anchor="end" font-size="11" fill="var(--text-muted)">${fy(v)}</text>`;
+  const every = Math.max(1, Math.ceil(pts.length / Math.max(2, Math.floor(iw / 64))));
+  pts.forEach((p, i) => {
+    const x = m.l + i * bw + gap / 2;
+    if (i % every === 0) g += `<text x="${x + w / 2}" y="${H - 6}" text-anchor="middle" font-size="11" fill="var(--text-muted)">${dayLabel(p.day)}</text>`;
+    let base = 0;
+    const segs = kinds.filter(k => p[k.k] > 0);
+    segs.forEach((k, j) => {
+      const h = p[k.k] / yMax * ih, top = y(base + p[k.k]);
+      // 2px surface gap between stacked segments; the top segment gets rounded corners.
+      const hh = Math.max(0, h - (j ? 2 : 0));
+      g += j === segs.length - 1 && hh > 4
+        ? `<path d="M${x},${top + hh} V${top + 3} q0,-3 3,-3 H${x + w - 3} q3,0 3,3 V${top + hh} Z" fill="${k.c}"/>`
+        : `<rect x="${x}" y="${top}" width="${w}" height="${hh}" fill="${k.c}"/>`;
+      base += p[k.k];
+    });
+  });
+  el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${cost ? "Estimated cost" : "Tokens by kind"} per day">${g}
+    <rect id="hl" y="${m.t}" height="${ih}" fill="var(--text-primary)" opacity=".06" visibility="hidden"/>
+    <rect x="${m.l}" y="${m.t}" width="${iw}" height="${ih}" fill="transparent" id="hit"/></svg>`;
+  const svg = el.querySelector("svg"), tip = $("#tip"), hit = el.querySelector("#hit"), hl = el.querySelector("#hl");
+  hit.addEventListener("mousemove", ev => {
+    const r = svg.getBoundingClientRect(), px = (ev.clientX - r.left) * W / r.width;
+    const i = Math.max(0, Math.min(pts.length - 1, Math.floor((px - m.l) / bw))), p = pts[i];
+    hl.setAttribute("x", m.l + i * bw); hl.setAttribute("width", bw); hl.setAttribute("visibility", "visible");
+    tip.innerHTML = `<div class="muted">${dayLabel(p.day, true)}</div>` + (cost
+      ? `<div><b>${usd(p.cost)}</b> estimated${p.unpriced ? ` · ${p.unpriced} unpriced requests` : ""}</div>`
+      : kinds.slice().reverse().map(k => `<div><i style="background:${k.c}"></i>${k.label} <b>${big(p[k.k])}</b></div>`).join("") + `<div class="muted">Total ${big(total(p))}</div>`);
+    tip.style.display = "block";
+    const tx = ev.clientX + 14 + tip.offsetWidth > window.innerWidth ? ev.clientX - tip.offsetWidth - 14 : ev.clientX + 14;
+    tip.style.left = tx + window.scrollX + "px"; tip.style.top = ev.clientY + window.scrollY - 10 + "px";
+  });
+  hit.addEventListener("mouseleave", () => { tip.style.display = "none"; hl.setAttribute("visibility", "hidden"); });
+}
+
+// ---------- tables ----------
+const pickRow = (sel, fn) => document.querySelectorAll(sel).forEach(tr => {
+  tr.addEventListener("click", () => fn(tr.dataset.v));
+  tr.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fn(tr.dataset.v); } });
+});
+function renderProjects() {
+  $("#projBody").innerHTML = DATA.by_project.map(p => `<tr class="pick${p.project === state.project ? " sel" : ""}" tabindex="0" data-v="${esc(p.project)}">
+    <td class="name">${esc(p.project)}</td><td class="num">${num(p.sessions)}</td><td class="num">${big(p.tokens)}</td>
+    <td class="num">${usd(p.cost)}${p.unpriced ? ` <span class="chip warn" title="${p.unpriced} requests from unpriced models">+?</span>` : ""}</td>
+    <td class="num">${pct(p.cache_hit_ratio)}</td><td class="num">${pct(p.write_1h_share)}</td><td class="num">${pct(p.subagent_share)}</td>
+    <td class="num">${big(p.tokens_per_prompt)}</td><td class="num">${num(p.commits)}</td>
+    <td class="num">${p.cost_per_commit == null ? '<span class="muted">n/a</span>' : usd(p.cost_per_commit)}</td>
+    <td class="num">${num(p.errors_per_100_calls, 1)}</td><td class="num">${num(p.error_loops)}</td></tr>`).join("")
+    || `<tr><td colspan="12" class="empty">No usage in this range.</td></tr>`;
+  pickRow("#projBody tr.pick", v => { state.project = state.project === v ? "" : v; state.session = ""; load(); });
+}
+function renderSessions() {
+  $("#sessHint").textContent = `${num(DATA.totals.sessions)} sessions${DATA.sessions.length < DATA.totals.sessions ? `, newest ${DATA.sessions.length} shown` : ""}. Click a session for details.`;
+  $("#sessBody").innerHTML = DATA.sessions.map(s => `<tr class="pick${s.session_id === state.session ? " sel" : ""}" tabindex="0" data-v="${esc(s.session_id)}">
+    <td class="when">${when(s.first_ts)}</td><td class="name">${esc(s.project)}</td><td class="num">${dur(s.duration_s)}</td><td class="num">${num(s.prompts)}</td>
+    <td class="num">${big(s.tokens)}</td><td class="num">${usd(s.cost)}</td>
+    <td class="num">${big(s.peak_context)}${s.near_limit ? ` <span class="chip warn" title="${pct(s.context_share)} of the context window">⚠ ${pct(s.context_share)}</span>` : ""}</td>
+    <td class="num">${num(s.compactions)}</td><td class="num">${num(s.commits)}</td></tr>`).join("")
+    || `<tr><td colspan="9" class="empty">No sessions in this range.</td></tr>`;
+  pickRow("#sessBody tr.pick", v => { state.session = state.session === v ? "" : v; load(); });
+}
+function rateTable(sel, rs, n = "calls", extra = () => "") {
+  $(sel).innerHTML = rs.map(r => `<tr><td class="name" title="${esc(r.name ?? r.tool)}">${esc(r.name ?? r.tool)}</td><td class="num">${num(r[n])}</td>
+    <td class="num ${r.failure_rate > .1 ? "bad" : ""}">${pct(r.failure_rate, 1)}</td>${extra(r)}</tr>`).join("")
+    || `<tr><td colspan="5" class="empty">None in this range.</td></tr>`;
+}
+function renderTables() {
+  const reqs = DATA.models.reduce((s, r) => s + r.requests, 0) || 1;
+  $("#modelBody").innerHTML = DATA.models.map(r => `<tr><td class="name">${esc(r.model)}</td><td>${esc(r.effort)}</td><td class="num">${num(r.requests)}</td>
+    <td class="num">${pct(r.requests / reqs)}</td><td class="num">${big(r.tokens)}</td><td class="num">${r.cost == null ? '<span class="chip warn">unpriced</span>' : usd(r.cost)}</td></tr>`).join("")
+    || `<tr><td colspan="6" class="empty">No requests in this range.</td></tr>`;
+  rateTable("#toolBody", DATA.tools, "calls", r => `<td class="num">${ms(r.p50_ms)}</td><td class="num">${ms(r.p95_ms)}</td>`);
+  rateTable("#mcpBody", DATA.mcp);
+  rateTable("#skillBody", DATA.skills);
+  rateTable("#hookBody", DATA.hooks, "runs", r => `<td class="num">${ms(r.avg_ms)}</td>`);
+  $("#loopBody").innerHTML = DATA.error_loops.map(l => `<tr><td class="when">${when(l.start_ts)}</td><td class="name">${esc(l.project)}</td>
+    <td><a href="#" data-session="${esc(l.session_id)}">#${esc(l.session_id.slice(0, 8))}</a></td><td>${esc(l.tool)}</td><td class="num">${num(l.failures)}</td>
+    <td><a href="/errors#ex=${encodeURIComponent(l.first_id)}">Open in Errors</a></td></tr>`).join("")
+    || `<tr><td colspan="6" class="empty">No error loops in this range.</td></tr>`;
+  $("#loopBody").querySelectorAll("a[data-session]").forEach(a => a.onclick = ev => { ev.preventDefault(); state.session = a.dataset.session; load(); });
+}
+
+// ---------- session drill-in ----------
+function renderDetail() {
+  const el = $("#detail"), s = DATA.session;
+  if (!s) {
+    const near = DATA.near_limit;
+    el.innerHTML = `<h2>Context health</h2><div class="hint">Sessions whose largest request used at least 80% of the model's context window.</div>
+      ${near.length ? `<table><thead><tr><th>Started</th><th>Project</th><th class="num">Peak</th><th class="num">Compactions</th></tr></thead><tbody>
+        ${near.map(x => `<tr class="pick" tabindex="0" data-v="${esc(x.session_id)}"><td class="when">${when(x.first_ts)}</td><td class="name">${esc(x.project)}</td>
+        <td class="num">${pct(x.context_share)}</td><td class="num">${num(x.compactions)}</td></tr>`).join("")}</tbody></table>`
+        : `<div class="empty">No session came near its context limit in this range.</div>`}
+      ${state.session ? `<div class="empty">Session ${esc(state.session.slice(0, 8))} was not found.</div>` : ""}`;
+    pickRow("#detail tr.pick", v => { state.session = v; load(); });
+    return;
+  }
+  const i = s.info, cost = s.models.reduce((a, r) => a + (r.cost || 0), 0), tokens = s.models.reduce((a, r) => a + r.tokens, 0);
+  el.innerHTML = `<div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><h2>Session #${esc(i.session_id.slice(0, 8))}</h2>
+      <button id="closeS" aria-label="Close session">✕</button></div>
+    <div class="hint">${esc(i.project)}${i.git_branch ? ` · ${esc(i.git_branch)}` : ""} · ${when(i.first_ts)} – ${when(i.last_ts)} · whole session, ignores the range filter</div>
+    <div class="facts">
+      <div><div class="v">${usd(cost)}</div><div class="l">est. cost</div></div>
+      <div><div class="v">${big(tokens)}</div><div class="l">tokens</div></div>
+      <div><div class="v">${num(s.prompts.prompts)}</div><div class="l">prompts · ${num(s.prompts.interrupted)} interrupted</div></div>
+      <div><div class="v">${big(i.peak_context)}</div><div class="l">peak context${i.context_limit ? ` · ${pct(i.peak_context / i.context_limit)}` : ""}</div></div>
+      <div><div class="v">${num(i.compactions)}</div><div class="l">compactions</div></div>
+      <div><div class="v">${num(s.commits.length)}</div><div class="l">commits</div></div>
+    </div>
+    <code class="muted" style="word-break:break-all">${esc(i.session_id)}</code>
+    <h3>Models</h3><div class="scroll"><table><thead><tr><th>Model</th><th>Effort</th><th>Thread</th><th class="num">Requests</th><th class="num">Tokens</th><th class="num">Est. cost</th></tr></thead><tbody>
+      ${s.models.map(r => `<tr><td class="name">${esc(r.model)}</td><td>${esc(r.effort)}</td><td>${r.subagent ? "subagent" : "main"}</td><td class="num">${num(r.requests)}</td>
+        <td class="num">${big(r.tokens)}</td><td class="num">${usd(r.cost)}</td></tr>`).join("")}</tbody></table></div>
+    <h3>Tools</h3><div class="scroll"><table><thead><tr><th>Tool</th><th class="num">Calls</th><th class="num">Failed</th><th class="num">p50</th></tr></thead><tbody>
+      ${s.tools.map(r => `<tr><td class="name">${esc(r.tool)}</td><td class="num">${num(r.calls)}</td><td class="num ${r.failure_rate > .1 ? "bad" : ""}">${pct(r.failure_rate, 1)}</td><td class="num">${ms(r.p50_ms)}</td></tr>`).join("")
+        || `<tr><td colspan="4" class="empty">No tool calls.</td></tr>`}</tbody></table></div>
+    ${s.error_loops.length ? `<h3>Error loops</h3>${s.error_loops.map(l => `<div>${esc(l.tool)} failed ${l.failures}× in a row · <a href="/errors#ex=${encodeURIComponent(l.first_id)}">Open in Errors</a></div>`).join("")}` : ""}
+    ${s.commits.length ? `<h3>Commits</h3>${s.commits.map(c => `<div class="muted" style="font-size:12px;margin:3px 0"><code>${esc(c.command)}</code></div>`).join("")}` : ""}`;
+  $("#closeS").onclick = () => { state.session = ""; load(); };
+}
+
+// ---------- wiring ----------
+readHash();
+$("#fProject").onchange = e => { state.project = e.target.value; state.session = ""; load(); };
+document.querySelectorAll("#fRange button").forEach(b => b.onclick = () => { state.range = +b.dataset.v; load(); });
+document.querySelectorAll("#fMetric button").forEach(b => b.onclick = () => { state.metric = b.dataset.v; render(); });
+window.addEventListener("hashchange", () => { readHash(); load(); });
+let rt; window.addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(() => DATA && renderChart(), 120); });
+load();
+</script>
+</body>
+</html>

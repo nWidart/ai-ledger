@@ -1,0 +1,50 @@
+<nav class="appnav" aria-label="Dashboards">
+  <div class="appnav-in">
+    <a href="/usage">Usage</a><a href="/errors">Errors</a>
+    <span class="appnav-status" id="navStatus" aria-live="polite"></span>
+    <button type="button" id="navRefresh">Refresh</button>
+  </div>
+</nav>
+<style>
+.appnav { background: var(--surface-1); border-bottom: 1px solid var(--border); }
+.appnav-in { max-width: 1240px; margin: 0 auto; padding: 8px 16px; display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center; }
+.appnav a { color: var(--text-secondary); text-decoration: none; padding: 5px 10px; border-radius: 8px; font-weight: 500; }
+.appnav a:hover { background: var(--surface-2); color: var(--text-primary); }
+.appnav a[aria-current=page] { background: var(--text-primary); color: var(--surface-1); }
+.appnav-status { margin-left: auto; color: var(--text-muted); font-size: 12px; }
+.appnav button { font-size: 13px; padding: 4px 10px; }
+</style>
+<script>
+(() => {
+  // Project and range travel between pages; page-only keys (ex, cat, session) stay behind.
+  const shared = () => {
+    const h = new URLSearchParams(location.hash.slice(1)), out = new URLSearchParams();
+    for (const k of ["project", "range"]) if (h.has(k) && h.get(k) !== "") out.set(k, h.get(k));
+    return String(out) ? "#" + out : "";
+  };
+  document.querySelectorAll(".appnav a").forEach(a => {
+    const path = a.getAttribute("href");
+    if (path === location.pathname) a.setAttribute("aria-current", "page");
+    const sync = () => { a.href = path + shared(); };
+    a.addEventListener("pointerdown", sync); a.addEventListener("focus", sync); a.addEventListener("click", sync);
+  });
+  const el = document.getElementById("navStatus"), btn = document.getElementById("navRefresh");
+  let wasIngesting = null;
+  const show = s => {
+    const st = s.last_stats ? ` · ${s.last_stats.inserted.toLocaleString()} new lines` : "";
+    el.textContent = s.error ? `Ingest failed: ${s.error}` : s.ingesting ? "Ingesting transcripts…"
+      : s.last_ingest ? `Last ingest ${new Date(s.last_ingest).toLocaleTimeString()}${st}` : "";
+    // The first ingest after start runs while the page is open; reload once it lands.
+    if (wasIngesting && !s.ingesting && s.last_stats?.inserted) return location.reload();
+    if (s.ingesting) wasIngesting = true;
+    if (s.ingesting) setTimeout(poll, 3000);
+  };
+  const poll = () => fetch("/api/status").then(r => r.json()).then(show).catch(() => { el.textContent = "App not reachable"; });
+  btn.addEventListener("click", () => {
+    btn.disabled = true; el.textContent = "Ingesting…";
+    fetch("/api/refresh", { method: "POST" }).then(r => r.json()).then(() => location.reload())
+      .catch(() => { el.textContent = "Refresh failed"; btn.disabled = false; });
+  });
+  poll();
+})();
+</script>

@@ -104,6 +104,7 @@ pre.snip { margin: 8px 0 0; padding: 10px; background: var(--surface-1); border:
 </style>
 </head>
 <body>
+<!--NAV-->
 <div class="wrap">
   <header>
     <h1>Claude tool errors</h1>
@@ -113,7 +114,7 @@ pre.snip { margin: 8px 0 0; padding: 10px; background: var(--surface-1); border:
   <div class="filters" role="group" aria-label="Filters">
     <select id="fProject" aria-label="Project"></select>
     <div class="seg" id="fRange" role="group" aria-label="Time range">
-      <button data-v="14">14d</button><button data-v="30">30d</button><button data-v="90">90d</button><button data-v="0">All</button>
+      <button data-v="7">7d</button><button data-v="14">14d</button><button data-v="30">30d</button><button data-v="90">90d</button><button data-v="0">All</button>
     </div>
     <div class="seg" id="fGran" role="group" aria-label="Granularity">
       <button data-v="day">Day</button><button data-v="week">Week</button>
@@ -144,8 +145,8 @@ pre.snip { margin: 8px 0 0; padding: 10px; background: var(--surface-1); border:
 </div>
 <div class="tip" id="tip" role="tooltip"></div>
 
-<script>
-const DATA = /*__DATA__*/null;
+<script type="module">
+const DATA = await (await fetch("/api/errors")).json();
 const CATS = Object.fromEntries(DATA.categories.map(c => [c.id, c]));
 const NOISE = new Set(["infra", "user_denied"]);
 const store = {
@@ -162,13 +163,21 @@ const baseUrl = () => location.href.split("#")[0];
 const exUrl = e => `${baseUrl()}#ex=${encodeURIComponent(e.id)}`;
 function readHash() {
   const h = new URLSearchParams(location.hash.slice(1));
+  if (h.has("project")) state.project = h.get("project");
+  if (h.has("range") && [7, 14, 30, 90, 0].includes(+h.get("range"))) state.range = +h.get("range");
+  // A hash with a view (from the nav or a copied URL) decides the open type; the saved one does not apply.
+  if (h.has("range")) { state.cat = null; state.focus = null; }
   const ex = BY_ID[h.get("ex")];
   if (ex) { state.cat = ex.c; state.focus = ex.id; state.q = ""; return true; }
   if (CATS[h.get("cat")]) { state.cat = h.get("cat"); state.focus = null; }
   return false;
 }
 function writeHash() {
-  const h = state.focus ? `#ex=${encodeURIComponent(state.focus)}` : state.cat ? `#cat=${encodeURIComponent(state.cat)}` : "";
+  const p = new URLSearchParams();
+  if (state.project) p.set("project", state.project);
+  p.set("range", state.range);
+  if (state.focus) p.set("ex", state.focus); else if (state.cat) p.set("cat", state.cat);
+  const h = "#" + p;
   if (location.hash !== h) history.replaceState(null, "", baseUrl() + h);
 }
 
@@ -178,8 +187,8 @@ const fmt = (n, d = 0) => n.toLocaleString(undefined, { maximumFractionDigits: d
 const DAY = 864e5;
 const toDate = s => new Date(s + "T00:00:00Z");
 const iso = d => d.toISOString().slice(0, 10);
-const lastDay = DATA.errors.reduce((m, e) => e.d > m ? e.d : m, DATA.calls.reduce((m, c) => c[0] > m ? c[0] : m, ""));
-const firstDay = DATA.calls.reduce((m, c) => (!m || c[0] < m) ? c[0] : m, "");
+const lastDay = DATA.errors.reduce((m, e) => e.d > m ? e.d : m, DATA.calls.reduce((m, c) => c[0] > m ? c[0] : m, "")) || iso(new Date());
+const firstDay = DATA.calls.reduce((m, c) => (!m || c[0] < m) ? c[0] : m, "") || lastDay;
 
 function bucketOf(day) {
   if (state.gran === "day") return day;
@@ -336,7 +345,7 @@ function renderDetail(f) {
     el.innerHTML = `<h2>Where to start</h2><p class="why">Biggest open error types that have a ready-made fix. Pick one, apply the fix, then mark it applied to watch its rate drop.</p>
       ${open.map(([c, n]) => `<div class="ex" style="cursor:pointer" data-c="${c}"><div class="row" style="justify-content:space-between"><b>${esc(CATS[c].label)}</b><span class="muted">${fmt(n)} errors</span></div>
       <div class="muted" style="font-size:13px;margin-top:2px">${esc(CATS[c].fix)}</div></div>`).join("") || `<div class="empty">Nothing open with a known fix.</div>`}
-      <div class="ex" style="border-bottom:0"><div class="muted" style="font-size:12px">Run <code>python3 build_dashboard.py</code> again to refresh the data. Fix markers live in this browser.</div></div>`;
+      <div class="ex" style="border-bottom:0"><div class="muted" style="font-size:12px">The app ingests new transcript lines every minute; use Refresh above to ingest now. Fix markers live in this browser.</div></div>`;
     el.querySelectorAll("[data-c]").forEach(d => d.addEventListener("click", () => { state.cat = d.dataset.c; render(); }));
     return;
   }
@@ -389,6 +398,7 @@ function exHtml(list) {
 // ---------- wiring ----------
 function render() {
   store.set("claude-errors-view", { project: state.project, range: state.range, gran: state.gran, sub: state.sub, noise: state.noise, cat: state.cat });
+  $("#fProject").value = state.project;
   document.querySelectorAll("#fRange button").forEach(b => b.setAttribute("aria-pressed", +b.dataset.v === state.range));
   document.querySelectorAll("#fGran button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === state.gran));
   const f = filtered();
@@ -400,8 +410,12 @@ function scrollToFocus() {
   if (el) el.scrollIntoView({ block: "center" });
 }
 (function init() {
-  $("#gen").textContent = `Generated ${new Date(DATA.generated).toLocaleString()} · data ${label(firstDay, true)} – ${label(lastDay, true)}`;
-  const projects = Object.entries(DATA.errors.reduce((m, e) => (m[e.p] = (m[e.p] || 0) + 1, m), {})).sort((a, b) => b[1] - a[1]);
+  const linked = readHash();
+  $("#gen").textContent = (DATA.generated ? `Ingested ${new Date(DATA.generated).toLocaleString()} · ` : "") + (firstDay ? `data ${label(firstDay, true)} – ${label(lastDay, true)}` : "no data yet");
+  // Every project with tool calls, so a project picked on another page is selectable here even without errors.
+  const counts = DATA.calls.reduce((m, c) => (m[c[1]] = m[c[1]] || 0, m), {});
+  for (const e of DATA.errors) counts[e.p] = (counts[e.p] || 0) + 1;
+  const projects = Object.entries(counts).sort((a, b) => b[1] - a[1]);
   $("#fProject").innerHTML = `<option value="">All projects</option>` + projects.map(([p, n]) => `<option value="${esc(p)}">${esc(p)} (${n})</option>`).join("");
   if (!projects.some(p => p[0] === state.project)) state.project = "";
   $("#fProject").value = state.project;
@@ -427,7 +441,6 @@ function scrollToFocus() {
     row.classList.add("focus");
     writeHash();
   });
-  const linked = readHash();
   render();
   if (linked) scrollToFocus();
 })();
