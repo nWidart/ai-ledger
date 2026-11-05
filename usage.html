@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Claude Usage</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <style>
 :root {
   color-scheme: light;
@@ -12,7 +15,7 @@
   --series-1: #2a78d6; --series-1-soft: rgba(42,120,214,.12); --series-2: #eb6834; --series-3: #1baf7a;
   --series-4: #eda100; --series-5: #e87ba4; --series-6: #008300;
   --grid: #e8e6e1; --good: #0ca30c; --good-text: #006300; --critical: #d03b3b; --warning-text: #8a5a00;
-  --accent: #2a78d6;
+  --accent: #2a78d6; --track: #ebe9e4;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -21,7 +24,7 @@
     --text-primary: #f0efec; --text-secondary: #c3c2b7; --text-muted: #8f8e86;
     --series-1: #3987e5; --series-1-soft: rgba(57,135,229,.18); --series-2: #d95926; --series-3: #199e70;
     --series-4: #c98500; --series-5: #d55181; --series-6: #008300;
-    --grid: #2b2b28; --good-text: #4cc94c; --critical: #e66767; --warning-text: #e0b04a; --accent: #3987e5;
+    --grid: #2b2b28; --good-text: #4cc94c; --critical: #e66767; --warning-text: #e0b04a; --accent: #3987e5; --track: #262624;
   }
 }
 :root[data-theme="dark"] {
@@ -30,16 +33,18 @@
   --text-primary: #f0efec; --text-secondary: #c3c2b7; --text-muted: #8f8e86;
   --series-1: #3987e5; --series-1-soft: rgba(57,135,229,.18); --series-2: #d95926; --series-3: #199e70;
   --series-4: #c98500; --series-5: #d55181; --series-6: #008300;
-  --grid: #2b2b28; --good-text: #4cc94c; --critical: #e66767; --warning-text: #e0b04a; --accent: #3987e5;
+  --grid: #2b2b28; --good-text: #4cc94c; --critical: #e66767; --warning-text: #e0b04a; --accent: #3987e5; --track: #262624;
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--text-primary);
-  font: 14px/1.45 ui-sans-serif, -apple-system, "SF Pro Text", "Inter", system-ui, sans-serif; }
-.wrap { max-width: 1240px; margin: 0 auto; padding: 24px 16px 64px; }
-header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 16px; margin-bottom: 16px; }
-h1 { font-size: 22px; margin: 0; letter-spacing: -.01em; }
-.sub { color: var(--text-muted); font-size: 13px; }
-.filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 16px; }
+  font: 14px/1.5 "IBM Plex Sans", ui-sans-serif, -apple-system, system-ui, sans-serif; font-variant-numeric: tabular-nums; }
+.wrap { max-width: 1240px; margin: 0 auto; padding: 20px 16px 72px; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Header: title left, filters right */
+.top { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: center; justify-content: space-between; margin-bottom: 28px; }
+h1 { font-size: 15px; font-weight: 600; margin: 0; color: var(--text-secondary); }
+.filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 select, button {
   font: inherit; color: var(--text-primary); background: var(--surface-1);
   border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; }
@@ -49,39 +54,99 @@ button:hover { background: var(--surface-2); }
 .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
 .seg button { border: 0; border-radius: 0; padding: 6px 12px; }
 .seg button[aria-pressed=true] { background: var(--text-primary); color: var(--surface-1); }
-.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 16px; }
-.card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; padding: 16px; min-width: 0; }
-.kpi .label { color: var(--text-secondary); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
-.kpi .value { font-size: 26px; font-weight: 600; font-variant-numeric: tabular-nums; margin-top: 4px; }
-.kpi .note { color: var(--text-muted); font-size: 12px; margin-top: 2px; }
-.card h2 { font-size: 15px; margin: 0 0 2px; }
-.hint { color: var(--text-muted); font-size: 12px; margin-bottom: 8px; }
-.banner { border: 1px solid var(--border); border-left: 3px solid var(--warning-text); background: var(--surface-1);
-  border-radius: 8px; padding: 8px 12px; margin-bottom: 16px; font-size: 13px; color: var(--text-secondary); }
+.linkish { border: 0; background: none; padding: 0; color: var(--accent); }
+.linkish:hover { background: none; text-decoration: underline; }
+
+/* The lede: the period's answer as one sentence */
+.lede { margin: 0 0 28px; max-width: 30ch; font-size: clamp(26px, 4.4vw, 44px); line-height: 1.12;
+  font-weight: 500; letter-spacing: -.022em; text-wrap: balance; }
+.sub { color: var(--text-muted); font-size: 13px; margin: -16px 0 24px; }
+.banner { border-left: 3px solid var(--warning-text); background: var(--surface-1);
+  padding: 8px 12px; margin-bottom: 20px; font-size: 13px; color: var(--text-secondary); }
 .banner b { color: var(--warning-text); }
+
+.panel { background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; min-width: 0; }
+h2 { font-size: 16px; font-weight: 600; margin: 0; letter-spacing: -.005em; }
+.hint { color: var(--text-muted); font-size: 12.5px; margin: 2px 0 10px; }
+
+/* Daily chart */
 .chart-head { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: flex-start; justify-content: space-between; }
-.legend { display: flex; flex-wrap: wrap; gap: 4px 6px; margin: 8px 0; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 6px; margin: 4px 0 8px; }
 .legend button { font-size: 12px; padding: 2px 8px; display: inline-flex; gap: 6px; align-items: center; border-radius: 999px; }
 .legend button[aria-pressed=false] { color: var(--text-muted); }
 .legend button[aria-pressed=false] i { opacity: .25; }
 .legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
 #chart { position: relative; }
-#chart svg { display: block; width: 100%; height: 260px; overflow: visible; }
+#chart svg { display: block; width: 100%; height: 240px; overflow: visible; }
 .tip { position: absolute; pointer-events: none; background: var(--surface-1); border: 1px solid var(--border);
   border-radius: 8px; padding: 8px 10px; font-size: 12px; box-shadow: 0 4px 16px rgba(0,0,0,.12);
   white-space: nowrap; display: none; z-index: 2; }
-.tip b { font-variant-numeric: tabular-nums; }
 .tip i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; margin-right: 6px; }
-.grid2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; margin-top: 16px; }
-.grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 16px; }
-@media (max-width: 900px) { .grid2, .grid3 { grid-template-columns: 1fr; } }
+
+/* Ledgers: one row per project or model, bar = share */
+.split { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 16px; margin-top: 16px; }
+.ledger { list-style: none; margin: 8px 0 0; padding: 0; }
+.ledger li { display: grid; grid-template-columns: minmax(0, 13rem) minmax(40px, 1fr) 4.5rem 3rem; gap: 12px; align-items: center;
+  padding: 6px 8px; margin: 0 -8px; border-radius: 6px; }
+.ledger li.pick { cursor: pointer; }
+.ledger li.pick:hover { background: var(--surface-2); }
+.ledger li.sel { background: var(--series-1-soft); }
+.ledger .n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ledger .bar { height: 8px; background: var(--track); border-radius: 4px; overflow: hidden; }
+.ledger .bar span { display: block; height: 100%; background: var(--series-1); border-radius: 4px; }
+.ledger .v { text-align: right; font-weight: 500; }
+.ledger .s { text-align: right; color: var(--text-muted); font-size: 12.5px; }
+.more { margin-top: 10px; font-size: 13px; }
+
+/* Vitals: four ratios in one ruled strip */
+.vitals { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 16px;
+  border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.vital { padding: 18px 20px 18px 0; }
+.vital + .vital { padding-left: 20px; border-left: 1px solid var(--border); }
+.vital .v { font-size: 28px; font-weight: 500; letter-spacing: -.02em; line-height: 1.1; }
+.vital .l { font-weight: 500; margin-top: 4px; }
+.vital .d { color: var(--text-muted); font-size: 12.5px; margin-top: 2px; }
+
+/* Needs attention */
+.attention { margin-top: 28px; }
+.attention ul { list-style: none; margin: 8px 0 0; padding: 0; }
+.attention li { overflow-wrap: anywhere; padding: 8px 0 8px 14px; border-left: 3px solid var(--warning-text); margin-bottom: 6px; color: var(--text-secondary); }
+.attention li b { color: var(--text-primary); font-weight: 600; }
+.attention .ok { border-left-color: var(--good); }
+
+/* Drawers: the full tables, closed by default */
+.drawers { margin-top: 32px; border-top: 1px solid var(--border); }
+details.drawer { border-bottom: 1px solid var(--border); }
+details.drawer > summary { list-style: none; cursor: pointer; display: flex; gap: 12px; align-items: baseline; padding: 14px 4px; }
+details.drawer > summary::-webkit-details-marker { display: none; }
+details.drawer > summary::before { content: ""; width: 7px; height: 7px; flex: none; align-self: center;
+  border-right: 1.5px solid var(--text-muted); border-bottom: 1.5px solid var(--text-muted); transform: rotate(-45deg); transition: transform .15s; }
+details.drawer[open] > summary::before { transform: rotate(45deg); }
+details.drawer > summary:hover h2 { color: var(--accent); }
+details.drawer > summary .c { color: var(--text-muted); font-size: 13px; }
+details.drawer > summary .w { color: var(--text-muted); font-size: 12.5px; margin-left: auto; text-align: right; }
+.drawer-body { padding: 0 0 24px; }
+.grid2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+.grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; }
+.grid3 h3 { font-size: 14px; margin: 0 0 6px; }
+@media (max-width: 900px) {
+  .split, .grid2, .grid3 { grid-template-columns: 1fr; }
+  .vitals { grid-template-columns: 1fr 1fr; }
+  .vital:nth-child(3) { padding-left: 0; border-left: 0; }
+  .vital:nth-child(n+3) { border-top: 1px solid var(--border); }
+  details.drawer > summary .w { display: none; }
+}
+@media (max-width: 520px) { .ledger li { grid-template-columns: minmax(0, 1fr) 4.5rem 3rem; } .ledger .bar { display: none; } }
+@media (prefers-reduced-motion: reduce) { details.drawer > summary::before { transition: none; } }
+
 .scroll { overflow-x: auto; }
 .tall { max-height: 520px; overflow: auto; }
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
 th { text-align: left; color: var(--text-muted); font-weight: 500; font-size: 12px; padding: 6px 8px; border-bottom: 1px solid var(--border);
-  position: sticky; top: 0; background: var(--surface-1); white-space: nowrap; }
+  position: sticky; top: 0; background: var(--bg); white-space: nowrap; }
+.panel th { background: var(--surface-1); }
 td { padding: 7px 8px; border-bottom: 1px solid var(--border); vertical-align: middle; }
-td.num, th.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+td.num, th.num { text-align: right; white-space: nowrap; }
 td.when { white-space: nowrap; }
 td.name { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 tbody tr.pick { cursor: pointer; }
@@ -94,102 +159,135 @@ tbody tr:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px;
 .muted { color: var(--text-muted); }
 .empty { color: var(--text-muted); padding: 24px 0; text-align: center; }
 a { color: var(--accent); }
-.detail h2 { font-size: 17px; }
+
+/* Totals drawer */
+.totals { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0 24px; margin: 0; }
+.totals div { padding: 10px 0; border-bottom: 1px solid var(--border); }
+.totals dt { color: var(--text-muted); font-size: 12.5px; }
+.totals dd { margin: 2px 0 0; font-size: 17px; font-weight: 500; }
+.totals dd small { display: block; font-size: 12.5px; font-weight: 400; color: var(--text-secondary); }
+
+/* Session drill-in */
+.detail-head { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
 .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin: 10px 0 14px; }
 .facts div { background: var(--surface-2); border-radius: 8px; padding: 8px 10px; }
-.facts .v { font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.facts .v { font-size: 17px; font-weight: 600; }
 .facts .l { font-size: 12px; color: var(--text-muted); }
 .detail h3 { font-size: 13px; margin: 14px 0 4px; color: var(--text-secondary); }
+.sid { word-break: break-all; }
+.commit { font-size: 12px; margin: 3px 0; }
 code { font: 12px/1.4 ui-monospace, "SF Mono", Menlo, monospace; }
 </style>
 </head>
 <body>
 <!--NAV-->
 <div class="wrap">
-  <header>
+  <header class="top">
     <h1>Claude usage</h1>
-    <span class="sub" id="sub"></span>
+    <div class="filters" role="group" aria-label="Filters">
+      <select id="fProject" aria-label="Project"></select>
+      <div class="seg" id="fRange" role="group" aria-label="Time range">
+        <button data-v="7">7d</button><button data-v="14">14d</button><button data-v="30">30d</button><button data-v="90">90d</button><button data-v="0">All</button>
+      </div>
+    </div>
   </header>
 
-  <div class="filters" role="group" aria-label="Filters">
-    <select id="fProject" aria-label="Project"></select>
-    <div class="seg" id="fRange" role="group" aria-label="Time range">
-      <button data-v="7">7d</button><button data-v="14">14d</button><button data-v="30">30d</button><button data-v="90">90d</button><button data-v="0">All</button>
-    </div>
-  </div>
-
   <div id="banner"></div>
-  <section class="kpis" id="kpis" aria-label="Summary"></section>
+  <p class="lede" id="lede" aria-live="polite"></p>
+  <p class="sub" id="sub"></p>
 
-  <section class="card">
+  <section class="panel" aria-labelledby="chartTitle">
     <div class="chart-head">
-      <div><h2 id="chartTitle">Tokens per day</h2><div class="hint" id="chartHint"></div></div>
-      <div class="seg" id="fMetric" role="group" aria-label="Chart metric"><button data-v="tokens">Tokens</button><button data-v="cost">Cost</button></div>
+      <div><h2 id="chartTitle">Estimated cost per day</h2><div class="hint" id="chartHint"></div></div>
+      <div class="seg" id="fMetric" role="group" aria-label="Chart metric"><button data-v="cost">Cost</button><button data-v="tokens">Tokens</button></div>
     </div>
     <div class="legend" id="legend"></div>
     <div id="chart"></div>
   </section>
 
-  <section class="card" style="margin-top:16px">
-    <h2>Projects</h2>
-    <div class="hint">Click a project to filter the page. Cost is an estimate at API list prices.</div>
-    <div class="scroll"><table>
-      <thead><tr><th>Project</th><th class="num">Sessions</th><th class="num">Tokens</th><th class="num">Est. cost</th><th class="num">Cache hit</th>
-        <th class="num">1h writes</th><th class="num">Subagents</th><th class="num">Tokens / prompt</th><th class="num">Commits</th><th class="num">Cost / commit</th>
-        <th class="num">Errors / 100</th><th class="num">Error loops</th></tr></thead>
-      <tbody id="projBody"></tbody>
-    </table></div>
-  </section>
-
-  <div class="grid2">
-    <section class="card">
-      <h2>Sessions</h2>
-      <div class="hint" id="sessHint">Newest first. Click a session for details.</div>
-      <div class="scroll tall"><table>
-        <thead><tr><th>Started</th><th>Project</th><th class="num">Duration</th><th class="num">Prompts</th><th class="num">Tokens</th><th class="num">Est. cost</th>
-          <th class="num">Peak context</th><th class="num">Compactions</th><th class="num">Commits</th></tr></thead>
-        <tbody id="sessBody"></tbody>
-      </table></div>
+  <div class="split">
+    <section class="panel">
+      <h2>Where the spend went</h2>
+      <div class="hint">Estimated cost per project. Select a project to filter the page.</div>
+      <ol class="ledger" id="ledger"></ol>
+      <button type="button" class="linkish more" id="ledgerMore" hidden></button>
     </section>
-    <section class="card detail" id="detail" aria-live="polite"></section>
+    <section class="panel">
+      <h2>Models and effort</h2>
+      <div class="hint">Share of requests, with estimated cost.</div>
+      <ol class="ledger" id="modelLedger"></ol>
+    </section>
   </div>
 
-  <div class="grid2">
-    <section class="card">
-      <h2>Models and effort</h2>
-      <div class="hint">Requests per model and effort level.</div>
-      <div class="scroll"><table>
-        <thead><tr><th>Model</th><th>Effort</th><th class="num">Requests</th><th class="num">Share</th><th class="num">Tokens</th><th class="num">Est. cost</th></tr></thead>
-        <tbody id="modelBody"></tbody>
+  <section class="vitals" id="vitals" aria-label="Efficiency"></section>
+
+  <section class="attention" aria-labelledby="attTitle">
+    <h2 id="attTitle">Needs attention</h2>
+    <ul id="attention"></ul>
+  </section>
+
+  <div class="drawers">
+    <details class="drawer" id="d-sessions">
+      <summary><h2>Sessions</h2><span class="c" id="sessCount"></span><span class="w">Duration, context, compactions and per-session drill-in</span></summary>
+      <div class="drawer-body grid2">
+        <div>
+          <div class="hint" id="sessHint"></div>
+          <div class="scroll tall"><table>
+            <thead><tr><th>Started</th><th>Project</th><th class="num">Duration</th><th class="num">Prompts</th><th class="num">Tokens</th><th class="num">Est. cost</th>
+              <th class="num">Peak context</th><th class="num">Compactions</th><th class="num">Commits</th></tr></thead>
+            <tbody id="sessBody"></tbody>
+          </table></div>
+        </div>
+        <section class="panel detail" id="detail" aria-live="polite"></section>
+      </div>
+    </details>
+
+    <details class="drawer" id="d-totals">
+      <summary><h2>All totals</h2><span class="w">Tokens by kind, per-prompt ratios, tests and time</span></summary>
+      <div class="drawer-body"><dl class="totals" id="totals"></dl></div>
+    </details>
+
+    <details class="drawer" id="d-projects">
+      <summary><h2>Project metrics</h2><span class="c" id="projCount"></span><span class="w">Cache, subagents, commits and errors per project</span></summary>
+      <div class="drawer-body scroll"><table>
+        <thead><tr><th>Project</th><th class="num">Sessions</th><th class="num">Tokens</th><th class="num">Est. cost</th><th class="num">Cache hit</th>
+          <th class="num">1h writes</th><th class="num">Subagents</th><th class="num">Tokens / prompt</th><th class="num">Commits</th><th class="num">Cost / commit</th>
+          <th class="num">Errors / 100</th><th class="num">Error loops</th></tr></thead>
+        <tbody id="projBody"></tbody>
       </table></div>
-    </section>
-    <section class="card">
-      <h2>Tools</h2>
-      <div class="hint">Calls, failure rate and latency from tool_use to tool_result.</div>
-      <div class="scroll tall"><table>
+    </details>
+
+    <details class="drawer" id="d-tools">
+      <summary><h2>Tools</h2><span class="c" id="toolCount"></span><span class="w">Calls, failure rate and latency from tool_use to tool_result</span></summary>
+      <div class="drawer-body scroll tall"><table>
         <thead><tr><th>Tool</th><th class="num">Calls</th><th class="num">Failed</th><th class="num">p50</th><th class="num">p95</th></tr></thead>
         <tbody id="toolBody"></tbody>
       </table></div>
-    </section>
-  </div>
+    </details>
 
-  <div class="grid3">
-    <section class="card"><h2>MCP servers</h2><div class="scroll tall"><table>
-      <thead><tr><th>Server</th><th class="num">Calls</th><th class="num">Failed</th></tr></thead><tbody id="mcpBody"></tbody></table></div></section>
-    <section class="card"><h2>Skills</h2><div class="scroll tall"><table>
-      <thead><tr><th>Skill</th><th class="num">Calls</th><th class="num">Failed</th></tr></thead><tbody id="skillBody"></tbody></table></div></section>
-    <section class="card"><h2>Hooks</h2><div class="scroll tall"><table>
-      <thead><tr><th>Hook</th><th class="num">Runs</th><th class="num">Failed</th><th class="num">Avg</th></tr></thead><tbody id="hookBody"></tbody></table></div></section>
-  </div>
+    <details class="drawer" id="d-ext">
+      <summary><h2>MCP servers, skills and hooks</h2><span class="c" id="extCount"></span></summary>
+      <div class="drawer-body grid3">
+        <div><h3>MCP servers</h3><div class="scroll tall"><table>
+          <thead><tr><th>Server</th><th class="num">Calls</th><th class="num">Failed</th></tr></thead><tbody id="mcpBody"></tbody></table></div></div>
+        <div><h3>Skills</h3><div class="scroll tall"><table>
+          <thead><tr><th>Skill</th><th class="num">Calls</th><th class="num">Failed</th></tr></thead><tbody id="skillBody"></tbody></table></div></div>
+        <div><h3>Hooks</h3><div class="scroll tall"><table>
+          <thead><tr><th>Hook</th><th class="num">Runs</th><th class="num">Failed</th><th class="num">Avg</th></tr></thead><tbody id="hookBody"></tbody></table></div></div>
+      </div>
+    </details>
 
-  <section class="card" style="margin-top:16px">
-    <h2>Error loops</h2>
-    <div class="hint">The same tool failing three or more times in a row within a session. Links open the first failure in the errors dashboard.</div>
-    <div class="scroll tall"><table>
-      <thead><tr><th>When</th><th>Project</th><th>Session</th><th>Tool</th><th class="num">Failures</th><th></th></tr></thead>
-      <tbody id="loopBody"></tbody>
-    </table></div>
-  </section>
+    <details class="drawer" id="d-loops">
+      <summary><h2>Error loops</h2><span class="c" id="loopCount"></span><span class="w">Same tool failing three or more times in a row</span></summary>
+      <div class="drawer-body">
+        <div class="hint">Links open the first failure in the errors dashboard.</div>
+        <div class="scroll tall"><table>
+          <thead><tr><th>When</th><th>Project</th><th>Session</th><th>Tool</th><th class="num">Failures</th><th></th></tr></thead>
+          <tbody id="loopBody"></tbody>
+        </table></div>
+      </div>
+    </details>
+  </div>
 </div>
 <div class="tip" id="tip" role="tooltip"></div>
 
@@ -203,7 +301,9 @@ const pct = (n, d = 0) => n == null ? "–" : num(n * 100, d) + "%";
 const dur = s => s == null ? "–" : s < 60 ? `${Math.round(s)}s` : s < 3600 ? `${Math.round(s / 60)}m` : `${num(s / 3600, 1)}h`;
 const ms = v => v == null ? "–" : v < 1000 ? `${Math.round(v)}ms` : `${num(v / 1000, 1)}s`;
 const when = ts => ts ? new Date(ts).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "–";
+const plural = (n, one, many = one + "s") => `${num(n)} ${n === 1 ? one : many}`;
 const RANGES = [7, 14, 30, 90, 0];
+const LEDGER_TOP = 8;
 const KINDS = [
   { k: "input", label: "Input", c: "var(--series-1)" },
   { k: "text_out", label: "Output", c: "var(--series-2)" },
@@ -216,7 +316,8 @@ const store = {
   get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
 };
-const state = { project: "", range: 30, session: "", metric: "tokens", hidden: store.get("claude-usage-hidden", []) };
+const state = { project: "", range: 30, session: "", metric: store.get("claude-usage-metric", "cost"),
+  hidden: store.get("claude-usage-hidden", []), ledgerAll: false };
 let DATA = null;
 
 function readHash() {
@@ -238,8 +339,24 @@ async function load() {
   const q = new URLSearchParams({ project: state.project, range: state.range, session: state.session });
   const res = await fetch("/api/usage?" + q);
   DATA = await res.json();
+  if (state.session) openDrawer("d-sessions");
   render();
 }
+
+// ---------- drawers ----------
+const openDrawers = new Set(store.get("claude-usage-open", []));
+function openDrawer(id, scroll) {
+  const d = document.getElementById(id);
+  d.open = true;
+  if (scroll) d.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+}
+document.querySelectorAll("details.drawer").forEach(d => {
+  d.open = openDrawers.has(d.id);
+  d.addEventListener("toggle", () => {
+    d.open ? openDrawers.add(d.id) : openDrawers.delete(d.id);
+    store.set("claude-usage-open", [...openDrawers]);
+  });
+});
 
 function render() {
   const d = DATA, t = d.totals;
@@ -248,23 +365,86 @@ function render() {
   const projects = d.projects.includes(state.project) || !state.project ? d.projects : [state.project, ...d.projects];
   $("#fProject").innerHTML = `<option value="">All projects</option>` + projects.map(p => `<option value="${esc(p)}">${esc(p)}</option>`).join("");
   $("#fProject").value = state.project;
-  $("#sub").textContent = `${d.start ? `${d.start} – ${d.end}` : `all time to ${d.end}`} · costs are estimates at API list prices`;
-  $("#banner").innerHTML = d.unpriced.length ? `<div class="banner"><b>⚠ Unpriced models:</b> ${d.unpriced.map(u => `<code>${esc(u.model)}</code> (${big(u.tokens)} tokens)`).join(", ")}.
+  $("#banner").innerHTML = d.unpriced.length ? `<div class="banner"><b>Unpriced models:</b> ${d.unpriced.map(u => `<code>${esc(u.model)}</code> (${big(u.tokens)} tokens)`).join(", ")}.
     Their tokens are counted; their cost is unknown and left out of totals. Add them to <code>prices.json</code>.</div>` : "";
-  const sub = t.subagent_cost_share != null ? pct(t.subagent_cost_share) + " of cost" : "";
-  $("#kpis").innerHTML = [
-    ["Est. cost", usd(t.cost), `${num(t.requests)} requests${d.unpriced.length ? " · excl. unpriced" : ""}`],
-    ["Tokens", big(t.tokens), `${big(t.output)} output · ${big(t.thinking)} thinking`],
-    ["Cache hit", pct(t.cache_hit_ratio), `${pct(t.write_1h_share)} of cache writes are 1h`],
-    ["Subagents", pct(t.subagent_token_share), `of tokens${sub ? " · " + sub : ""}`],
-    ["Per prompt", big(t.tokens_per_prompt), `tokens · ${num(t.turns_per_prompt, 1)} turns · ${num(t.tool_calls_per_prompt, 1)} tool calls · ${num(t.prompts)} prompts`],
-    ["Commits", num(t.commits), t.commits ? `${usd(t.cost_per_commit)} · ${big(t.tokens_per_commit)} tokens per commit` : "per-commit ratios n/a"],
-    ["Tests", num(t.test_runs), `${num(t.tests_passed)} passed · ${num(t.tests_failed)} failed`],
-    ["Friction", num(t.errors_per_100_calls, 1), `errors / 100 calls · ${num(t.error_loops)} loops · ${pct(t.interruption_rate)} prompts interrupted`],
-    ["Time", dur(t.session_seconds), `in ${num(t.sessions)} sessions · median ${dur(t.median_session_seconds)} · ${dur(t.thinking_ms / 1000)} thinking`],
-    ["Context", num(t.near_limit), `sessions near the limit (≥ 80%)`],
-  ].map(([l, v, n]) => `<div class="card kpi"><div class="label">${l}</div><div class="value">${v}</div><div class="note">${n}</div></div>`).join("");
-  renderChart(); renderProjects(); renderSessions(); renderDetail(); renderTables();
+  renderLede(); renderChart(); renderLedgers(); renderVitals(); renderAttention(); renderTotals();
+  renderProjects(); renderSessions(); renderDetail(); renderTables();
+}
+
+function renderLede() {
+  const d = DATA, t = d.totals;
+  const span = d.start ? `over the last ${state.range} days` : `since ${dayLabel(d.daily[0]?.day || d.end, true)}`;
+  const where = state.project ? `on ${state.project}` : "";
+  const reach = state.project ? plural(t.sessions, "session") : `${plural(t.sessions, "session")} in ${plural(d.by_project.length, "project")}`;
+  $("#lede").textContent = t.requests
+    ? `${usd(t.cost)} ${where ? where + " " : ""}${span}, across ${reach}.`
+    : `No Claude usage ${where ? where + " " : ""}${span}.`;
+  const dates = d.start ? `${dayLabel(d.start, true)} to ${dayLabel(d.end, true)}` : `All time to ${dayLabel(d.end, true)}`;
+  $("#sub").textContent = `${dates}. ${big(t.tokens)} tokens in ${num(t.requests)} requests. Cost is estimated at API list prices${d.unpriced.length ? " and leaves out unpriced models" : ""}.`;
+}
+
+function ledgerRow({ name, share, value, side, pick, sel, title }) {
+  return `<li${pick != null ? ` class="pick${sel ? " sel" : ""}" tabindex="0" data-v="${esc(pick)}"` : ""}>
+    <span class="n" title="${esc(title ?? name)}">${esc(name)}</span>
+    <span class="bar" aria-hidden="true"><span style="width:${Math.max(share * 100, share > 0 ? 1 : 0)}%"></span></span>
+    <span class="v">${value}</span><span class="s">${side}</span></li>`;
+}
+function renderLedgers() {
+  const ps = DATA.by_project, total = ps.reduce((s, p) => s + (p.cost || 0), 0) || 1, max = Math.max(...ps.map(p => p.cost || 0), 0) || 1;
+  const shown = state.ledgerAll ? ps : ps.slice(0, LEDGER_TOP);
+  $("#ledger").innerHTML = shown.map(p => ledgerRow({
+    name: p.project, share: (p.cost || 0) / max, pick: p.project, sel: p.project === state.project,
+    value: usd(p.cost) + (p.unpriced ? ` <span class="chip warn" title="${p.unpriced} requests from unpriced models">+?</span>` : ""),
+    side: pct((p.cost || 0) / total),
+  })).join("") || `<li class="empty">No usage in this range.</li>`;
+  const btn = $("#ledgerMore");
+  btn.hidden = ps.length <= LEDGER_TOP;
+  btn.textContent = state.ledgerAll ? `Show top ${LEDGER_TOP}` : `Show all ${ps.length} projects`;
+  pickRow("#ledger li.pick", v => { state.project = state.project === v ? "" : v; state.session = ""; load(); });
+
+  const models = DATA.models, reqs = models.reduce((s, r) => s + r.requests, 0) || 1, mmax = Math.max(...models.map(r => r.requests), 0) || 1;
+  $("#modelLedger").innerHTML = models.map(r => ledgerRow({
+    name: r.model.replace(/^claude-/, "") + (r.effort && r.effort !== "(none)" ? ` · ${r.effort}` : ""), title: `${r.model}, ${r.effort} effort, ${num(r.requests)} requests, ${big(r.tokens)} tokens`,
+    share: r.requests / mmax, value: pct(r.requests / reqs),
+    side: r.cost == null ? '<span class="chip warn">unpriced</span>' : usd(r.cost),
+  })).join("") || `<li class="empty">No requests in this range.</li>`;
+}
+
+function renderVitals() {
+  const t = DATA.totals;
+  $("#vitals").innerHTML = [
+    [pct(t.cache_hit_ratio, 1), "Cache hit", `of input tokens came from cache. ${pct(t.write_1h_share)} of cache writes use the 1-hour lifetime.`],
+    [pct(t.subagent_token_share), "Subagents", `of tokens came from subagents${t.subagent_cost_share != null ? `, and ${pct(t.subagent_cost_share)} of cost` : ""}.`],
+    [t.commits ? usd(t.cost_per_commit) : "n/a", "Per commit", t.commits ? `${big(t.tokens_per_commit)} tokens for each of ${num(t.commits)} commits.` : "No commits in this range."],
+    [num(t.errors_per_100_calls, 1), "Errors per 100 calls", `${num(t.errors)} failed tool calls. ${pct(t.interruption_rate)} of prompts interrupted.`],
+  ].map(([v, l, d]) => `<div class="vital"><div class="v">${v}</div><div class="l">${l}</div><div class="d">${d}</div></div>`).join("");
+}
+
+function renderAttention() {
+  const t = DATA.totals, items = [];
+  if (t.error_loops) items.push([`<b>${plural(t.error_loops, "error loop")}</b>: a tool failed three or more times in a row.`, "d-loops", "See loops"]);
+  if (DATA.near_limit.length) items.push([`<b>${plural(DATA.near_limit.length, "session")}</b> used 80% or more of the context window.`, "d-sessions", "See sessions"]);
+  const flaky = DATA.tools.filter(r => r.calls >= 20 && r.failure_rate > .1);
+  if (flaky.length) items.push([`<b>${plural(flaky.length, "tool")}</b> fail more than 10% of the time: ${flaky.slice(0, 4).map(r => `${esc(r.tool)} (${pct(r.failure_rate)})`).join(", ")}${flaky.length > 4 ? ", and more" : ""}.`, "d-tools", "See tools"]);
+  if (t.tests_failed) items.push([`<b>${plural(t.tests_failed, "failed test run")}</b> out of ${num(t.test_runs)}.`, "d-totals", "See totals"]);
+  $("#attention").innerHTML = items.map(([text, id, cta]) => `<li>${text} <button type="button" class="linkish" data-open="${id}">${cta}</button></li>`).join("")
+    || `<li class="ok">Nothing needs attention in this range.</li>`;
+  $("#attention").querySelectorAll("[data-open]").forEach(b => b.onclick = () => openDrawer(b.dataset.open, true));
+}
+
+function renderTotals() {
+  const t = DATA.totals;
+  $("#totals").innerHTML = [
+    ["Tokens", big(t.tokens), `${big(t.input)} input, ${big(t.output)} output, ${big(t.thinking)} of it thinking`],
+    ["Cache", `${big(t.cache_read)} read`, `${big(t.cache_5m)} written for 5m, ${big(t.cache_1h)} for 1h`],
+    ["Requests", num(t.requests), `${num(t.main_requests)} from the main thread`],
+    ["Per prompt", `${big(t.tokens_per_prompt)} tokens`, `${usd(t.cost_per_prompt)}, ${num(t.turns_per_prompt, 1)} turns, ${num(t.tool_calls_per_prompt, 1)} tool calls`],
+    ["Prompts", num(t.prompts), `${num(t.interrupted)} interrupted (${pct(t.interruption_rate, 1)})`],
+    ["Tests and builds", plural(t.test_runs, "run"), `${num(t.tests_passed)} passed, ${num(t.tests_failed)} failed`],
+    ["Session time", dur(t.session_seconds), `in ${plural(t.sessions, "session")}, median ${dur(t.median_session_seconds)}`],
+    ["Thinking time", dur(t.thinking_ms / 1000), "spent in extended thinking"],
+    ["Context", plural(t.near_limit, "session"), "near the context limit (80% or more)"],
+  ].map(([l, v, n]) => `<div><dt>${l}</dt><dd>${v}<small>${n}</small></dd></div>`).join("");
 }
 
 // ---------- chart ----------
@@ -284,14 +464,14 @@ function renderChart() {
   const cost = state.metric === "cost";
   const kinds = cost ? [{ k: "cost", label: "Est. cost", c: "var(--series-1)" }] : KINDS.filter(k => !state.hidden.includes(k.k));
   $("#chartTitle").textContent = cost ? "Estimated cost per day" : "Tokens per day";
-  $("#chartHint").textContent = cost ? "At API list prices. Unpriced models are left out." : "Click a legend entry to hide that kind; cache reads usually dwarf the rest.";
+  $("#chartHint").textContent = cost ? "At API list prices. Unpriced models are left out." : "Select a kind to hide it. Cache reads usually dwarf the rest.";
   $("#legend").innerHTML = cost ? "" : KINDS.map(k => `<button type="button" data-k="${k.k}" aria-pressed="${!state.hidden.includes(k.k)}"><i style="background:${k.c}"></i>${k.label}</button>`).join("");
   $("#legend").querySelectorAll("button").forEach(b => b.onclick = () => {
     state.hidden = state.hidden.includes(b.dataset.k) ? state.hidden.filter(x => x !== b.dataset.k) : [...state.hidden, b.dataset.k];
     store.set("claude-usage-hidden", state.hidden); renderChart();
   });
   const pts = days(), el = $("#chart");
-  const W = el.clientWidth || 800, H = 260, m = { t: 12, r: 8, b: 26, l: 52 };
+  const W = el.clientWidth || 800, H = 240, m = { t: 12, r: 8, b: 26, l: 52 };
   const iw = W - m.l - m.r, ih = H - m.t - m.b;
   const total = p => kinds.reduce((s, k) => s + p[k.k], 0);
   const max = Math.max(...pts.map(total), 0) * 1.08 || 1;
@@ -327,7 +507,7 @@ function renderChart() {
     const i = Math.max(0, Math.min(pts.length - 1, Math.floor((px - m.l) / bw))), p = pts[i];
     hl.setAttribute("x", m.l + i * bw); hl.setAttribute("width", bw); hl.setAttribute("visibility", "visible");
     tip.innerHTML = `<div class="muted">${dayLabel(p.day, true)}</div>` + (cost
-      ? `<div><b>${usd(p.cost)}</b> estimated${p.unpriced ? ` · ${p.unpriced} unpriced requests` : ""}</div>`
+      ? `<div><b>${usd(p.cost)}</b> estimated${p.unpriced ? `, ${p.unpriced} unpriced requests` : ""}</div>`
       : kinds.slice().reverse().map(k => `<div><i style="background:${k.c}"></i>${k.label} <b>${big(p[k.k])}</b></div>`).join("") + `<div class="muted">Total ${big(total(p))}</div>`);
     tip.style.display = "block";
     const tx = ev.clientX + 14 + tip.offsetWidth > window.innerWidth ? ev.clientX - tip.offsetWidth - 14 : ev.clientX + 14;
@@ -342,6 +522,7 @@ const pickRow = (sel, fn) => document.querySelectorAll(sel).forEach(tr => {
   tr.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fn(tr.dataset.v); } });
 });
 function renderProjects() {
+  $("#projCount").textContent = num(DATA.by_project.length);
   $("#projBody").innerHTML = DATA.by_project.map(p => `<tr class="pick${p.project === state.project ? " sel" : ""}" tabindex="0" data-v="${esc(p.project)}">
     <td class="name">${esc(p.project)}</td><td class="num">${num(p.sessions)}</td><td class="num">${big(p.tokens)}</td>
     <td class="num">${usd(p.cost)}${p.unpriced ? ` <span class="chip warn" title="${p.unpriced} requests from unpriced models">+?</span>` : ""}</td>
@@ -353,11 +534,12 @@ function renderProjects() {
   pickRow("#projBody tr.pick", v => { state.project = state.project === v ? "" : v; state.session = ""; load(); });
 }
 function renderSessions() {
-  $("#sessHint").textContent = `${num(DATA.totals.sessions)} sessions${DATA.sessions.length < DATA.totals.sessions ? `, newest ${DATA.sessions.length} shown` : ""}. Click a session for details.`;
+  $("#sessCount").textContent = num(DATA.totals.sessions);
+  $("#sessHint").textContent = `Newest first${DATA.sessions.length < DATA.totals.sessions ? `, ${num(DATA.sessions.length)} shown` : ""}. Select a session for details.`;
   $("#sessBody").innerHTML = DATA.sessions.map(s => `<tr class="pick${s.session_id === state.session ? " sel" : ""}" tabindex="0" data-v="${esc(s.session_id)}">
     <td class="when">${when(s.first_ts)}</td><td class="name">${esc(s.project)}</td><td class="num">${dur(s.duration_s)}</td><td class="num">${num(s.prompts)}</td>
     <td class="num">${big(s.tokens)}</td><td class="num">${usd(s.cost)}</td>
-    <td class="num">${big(s.peak_context)}${s.near_limit ? ` <span class="chip warn" title="${pct(s.context_share)} of the context window">⚠ ${pct(s.context_share)}</span>` : ""}</td>
+    <td class="num">${big(s.peak_context)}${s.near_limit ? ` <span class="chip warn" title="${pct(s.context_share)} of the context window">${pct(s.context_share)}</span>` : ""}</td>
     <td class="num">${num(s.compactions)}</td><td class="num">${num(s.commits)}</td></tr>`).join("")
     || `<tr><td colspan="9" class="empty">No sessions in this range.</td></tr>`;
   pickRow("#sessBody tr.pick", v => { state.session = state.session === v ? "" : v; load(); });
@@ -368,10 +550,9 @@ function rateTable(sel, rs, n = "calls", extra = () => "") {
     || `<tr><td colspan="5" class="empty">None in this range.</td></tr>`;
 }
 function renderTables() {
-  const reqs = DATA.models.reduce((s, r) => s + r.requests, 0) || 1;
-  $("#modelBody").innerHTML = DATA.models.map(r => `<tr><td class="name">${esc(r.model)}</td><td>${esc(r.effort)}</td><td class="num">${num(r.requests)}</td>
-    <td class="num">${pct(r.requests / reqs)}</td><td class="num">${big(r.tokens)}</td><td class="num">${r.cost == null ? '<span class="chip warn">unpriced</span>' : usd(r.cost)}</td></tr>`).join("")
-    || `<tr><td colspan="6" class="empty">No requests in this range.</td></tr>`;
+  $("#toolCount").textContent = num(DATA.tools.length);
+  $("#extCount").textContent = `${num(DATA.mcp.length)}, ${num(DATA.skills.length)} and ${num(DATA.hooks.length)}`;
+  $("#loopCount").textContent = num(DATA.error_loops.length);
   rateTable("#toolBody", DATA.tools, "calls", r => `<td class="num">${ms(r.p50_ms)}</td><td class="num">${ms(r.p95_ms)}</td>`);
   rateTable("#mcpBody", DATA.mcp);
   rateTable("#skillBody", DATA.skills);
@@ -398,26 +579,26 @@ function renderDetail() {
     return;
   }
   const i = s.info, cost = s.models.reduce((a, r) => a + (r.cost || 0), 0), tokens = s.models.reduce((a, r) => a + r.tokens, 0);
-  el.innerHTML = `<div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><h2>Session #${esc(i.session_id.slice(0, 8))}</h2>
+  el.innerHTML = `<div class="detail-head"><h2>Session #${esc(i.session_id.slice(0, 8))}</h2>
       <button id="closeS" aria-label="Close session">✕</button></div>
-    <div class="hint">${esc(i.project)}${i.git_branch ? ` · ${esc(i.git_branch)}` : ""} · ${when(i.first_ts)} – ${when(i.last_ts)} · whole session, ignores the range filter</div>
+    <div class="hint">${esc(i.project)}${i.git_branch ? ` on ${esc(i.git_branch)}` : ""}, ${when(i.first_ts)} to ${when(i.last_ts)}. Whole session; ignores the range filter.</div>
     <div class="facts">
       <div><div class="v">${usd(cost)}</div><div class="l">est. cost</div></div>
       <div><div class="v">${big(tokens)}</div><div class="l">tokens</div></div>
-      <div><div class="v">${num(s.prompts.prompts)}</div><div class="l">prompts · ${num(s.prompts.interrupted)} interrupted</div></div>
-      <div><div class="v">${big(i.peak_context)}</div><div class="l">peak context${i.context_limit ? ` · ${pct(i.peak_context / i.context_limit)}` : ""}</div></div>
+      <div><div class="v">${num(s.prompts.prompts)}</div><div class="l">prompts, ${num(s.prompts.interrupted)} interrupted</div></div>
+      <div><div class="v">${big(i.peak_context)}</div><div class="l">peak context${i.context_limit ? `, ${pct(i.peak_context / i.context_limit)}` : ""}</div></div>
       <div><div class="v">${num(i.compactions)}</div><div class="l">compactions</div></div>
       <div><div class="v">${num(s.commits.length)}</div><div class="l">commits</div></div>
     </div>
-    <code class="muted" style="word-break:break-all">${esc(i.session_id)}</code>
+    <code class="muted sid">${esc(i.session_id)}</code>
     <h3>Models</h3><div class="scroll"><table><thead><tr><th>Model</th><th>Effort</th><th>Thread</th><th class="num">Requests</th><th class="num">Tokens</th><th class="num">Est. cost</th></tr></thead><tbody>
       ${s.models.map(r => `<tr><td class="name">${esc(r.model)}</td><td>${esc(r.effort)}</td><td>${r.subagent ? "subagent" : "main"}</td><td class="num">${num(r.requests)}</td>
         <td class="num">${big(r.tokens)}</td><td class="num">${usd(r.cost)}</td></tr>`).join("")}</tbody></table></div>
     <h3>Tools</h3><div class="scroll"><table><thead><tr><th>Tool</th><th class="num">Calls</th><th class="num">Failed</th><th class="num">p50</th></tr></thead><tbody>
       ${s.tools.map(r => `<tr><td class="name">${esc(r.tool)}</td><td class="num">${num(r.calls)}</td><td class="num ${r.failure_rate > .1 ? "bad" : ""}">${pct(r.failure_rate, 1)}</td><td class="num">${ms(r.p50_ms)}</td></tr>`).join("")
         || `<tr><td colspan="4" class="empty">No tool calls.</td></tr>`}</tbody></table></div>
-    ${s.error_loops.length ? `<h3>Error loops</h3>${s.error_loops.map(l => `<div>${esc(l.tool)} failed ${l.failures}× in a row · <a href="/errors#ex=${encodeURIComponent(l.first_id)}">Open in Errors</a></div>`).join("")}` : ""}
-    ${s.commits.length ? `<h3>Commits</h3>${s.commits.map(c => `<div class="muted" style="font-size:12px;margin:3px 0"><code>${esc(c.command)}</code></div>`).join("")}` : ""}`;
+    ${s.error_loops.length ? `<h3>Error loops</h3>${s.error_loops.map(l => `<div>${esc(l.tool)} failed ${l.failures}× in a row. <a href="/errors#ex=${encodeURIComponent(l.first_id)}">Open in Errors</a></div>`).join("")}` : ""}
+    ${s.commits.length ? `<h3>Commits</h3>${s.commits.map(c => `<div class="muted commit"><code>${esc(c.command)}</code></div>`).join("")}` : ""}`;
   $("#closeS").onclick = () => { state.session = ""; load(); };
 }
 
@@ -425,7 +606,10 @@ function renderDetail() {
 readHash();
 $("#fProject").onchange = e => { state.project = e.target.value; state.session = ""; load(); };
 document.querySelectorAll("#fRange button").forEach(b => b.onclick = () => { state.range = +b.dataset.v; load(); });
-document.querySelectorAll("#fMetric button").forEach(b => b.onclick = () => { state.metric = b.dataset.v; render(); });
+document.querySelectorAll("#fMetric button").forEach(b => b.onclick = () => {
+  state.metric = b.dataset.v; store.set("claude-usage-metric", state.metric); render();
+});
+$("#ledgerMore").onclick = () => { state.ledgerAll = !state.ledgerAll; renderLedgers(); };
 window.addEventListener("hashchange", () => { readHash(); load(); });
 let rt; window.addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(() => DATA && renderChart(), 120); });
 load();
