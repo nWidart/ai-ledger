@@ -91,6 +91,7 @@ pre.snip { margin: 8px 0 0; padding: 10px; background: var(--surface-1); border:
 .ex code, .ex .err { display: block; font: 12px/1.4 ui-monospace, "SF Mono", Menlo, monospace; white-space: pre-wrap; word-break: break-word;
   background: var(--surface-2); border-radius: 6px; padding: 6px 8px; margin-top: 6px; max-height: 9.5em; overflow: auto; }
 .ex .err { color: var(--critical); }
+#exList .ex { cursor: pointer; }
 .ex.focus { background: var(--series-1-soft); box-shadow: inset 3px 0 0 var(--series-1); padding-left: 10px; padding-right: 8px; border-radius: 6px; }
 .ex .meta .link { margin-left: auto; display: inline-flex; gap: 6px; }
 .ex .meta a { color: var(--accent); text-decoration: none; }
@@ -412,9 +413,19 @@ function scrollToFocus() {
   let t; window.addEventListener("resize", () => { clearTimeout(t); t = setTimeout(() => renderChart(filtered()), 120); });
   window.addEventListener("hashchange", () => { const ex = readHash(); render(); if (ex) scrollToFocus(); });
   $("#detail").addEventListener("click", ev => {
-    const b = ev.target.closest("button[data-copy]"); if (!b) return;
-    const e = BY_ID[b.dataset.copy];
-    navigator.clipboard?.writeText(exUrl(e)).then(() => { b.textContent = "Copied ✓"; setTimeout(() => b.textContent = "Copy URL", 1500); });
+    const b = ev.target.closest("button[data-copy]");
+    if (b) {
+      const e = BY_ID[b.dataset.copy];
+      navigator.clipboard?.writeText(exUrl(e)).then(() => { b.textContent = "Copied ✓"; setTimeout(() => b.textContent = "Copy URL", 1500); });
+      return;
+    }
+    // Clicking anywhere on an example selects it and puts its permalink in the address bar.
+    const row = ev.target.closest(".ex[id^='ex-']");
+    if (!row || ev.target.closest("a") || String(window.getSelection())) return;
+    state.focus = row.id.slice(3);
+    document.querySelectorAll("#exList .ex.focus").forEach(x => x.classList.remove("focus"));
+    row.classList.add("focus");
+    writeHash();
   });
   const linked = readHash();
   render();
