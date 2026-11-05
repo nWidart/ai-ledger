@@ -1,0 +1,4 @@
+# Generated output: contains commands, paths and errors from your transcripts
+claude-errors.html
+__pycache__/
+.DS_Store

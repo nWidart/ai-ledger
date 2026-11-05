@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Claude Tool Errors</title>
+<style>
+:root {
+  color-scheme: light;
+  --bg: #f6f5f2; --surface-1: #fcfcfb; --surface-2: #f0efec; --border: #e2e0da;
+  --text-primary: #0b0b0b; --text-secondary: #52514e; --text-muted: #7a7973;
+  --series-1: #2a78d6; --series-1-soft: rgba(42,120,214,.12); --series-2: #eb6834;
+  --grid: #e8e6e1; --good: #0ca30c; --good-text: #006300; --critical: #d03b3b;
+  --accent: #2a78d6;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #121211; --surface-1: #1a1a19; --surface-2: #242422; --border: #33332f;
+    --text-primary: #f0efec; --text-secondary: #c3c2b7; --text-muted: #8f8e86;
+    --series-1: #3987e5; --series-1-soft: rgba(57,135,229,.18); --series-2: #d95926;
+    --grid: #2b2b28; --good-text: #4cc94c; --critical: #e66767; --accent: #3987e5;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #121211; --surface-1: #1a1a19; --surface-2: #242422; --border: #33332f;
+  --text-primary: #f0efec; --text-secondary: #c3c2b7; --text-muted: #8f8e86;
+  --series-1: #3987e5; --series-1-soft: rgba(57,135,229,.18); --series-2: #d95926;
+  --grid: #2b2b28; --good-text: #4cc94c; --critical: #e66767; --accent: #3987e5;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text-primary);
+  font: 14px/1.45 ui-sans-serif, -apple-system, "SF Pro Text", "Inter", system-ui, sans-serif; }
+.wrap { max-width: 1240px; margin: 0 auto; padding: 24px 16px 64px; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 16px; margin-bottom: 16px; }
+h1 { font-size: 22px; margin: 0; letter-spacing: -.01em; }
+.sub { color: var(--text-muted); font-size: 13px; }
+.filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 16px; }
+select, input[type=date], input[type=search], button {
+  font: inherit; color: var(--text-primary); background: var(--surface-1);
+  border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; }
+button { cursor: pointer; }
+button:hover { background: var(--surface-2); }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; border-radius: 0; padding: 6px 12px; }
+.seg button[aria-pressed=true] { background: var(--text-primary); color: var(--surface-1); }
+label.chk { display: inline-flex; gap: 6px; align-items: center; color: var(--text-secondary); font-size: 13px; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+.kpi .label { color: var(--text-secondary); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+.kpi .value { font-size: 28px; font-weight: 600; font-variant-numeric: tabular-nums; margin-top: 4px; }
+.kpi .note { color: var(--text-muted); font-size: 12px; margin-top: 2px; }
+.delta-down { color: var(--good-text); } .delta-up { color: var(--critical); }
+.chart-card h2, .card h2 { font-size: 15px; margin: 0 0 2px; }
+.chart-card .hint { color: var(--text-muted); font-size: 12px; margin-bottom: 8px; }
+#chart { position: relative; }
+#chart svg { display: block; width: 100%; height: 260px; overflow: visible; }
+.tip { position: absolute; pointer-events: none; background: var(--surface-1); border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px 10px; font-size: 12px; box-shadow: 0 4px 16px rgba(0,0,0,.12);
+  white-space: nowrap; display: none; z-index: 2; }
+.tip b { font-variant-numeric: tabular-nums; }
+.grid2 { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 16px; margin-top: 16px; }
+@media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; color: var(--text-muted); font-weight: 500; font-size: 12px; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+td { padding: 8px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+td.num, th.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+tbody tr { cursor: pointer; }
+tbody tr:hover { background: var(--surface-2); }
+tbody tr.sel { background: var(--series-1-soft); }
+tbody tr:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.bar { height: 6px; background: var(--surface-2); border-radius: 3px; min-width: 60px; }
+.bar > i { display: block; height: 100%; background: var(--series-1); border-radius: 3px; }
+.chip { display: inline-block; font-size: 11px; padding: 2px 7px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-secondary); white-space: nowrap; }
+.chip.fixed { border-color: var(--good); color: var(--good-text); }
+.spark { width: 84px; height: 22px; display: block; }
+.detail h2 { font-size: 18px; margin-bottom: 4px; }
+.detail .why { color: var(--text-secondary); margin: 0 0 12px; }
+.fixbox { background: var(--surface-2); border-radius: 10px; padding: 12px; margin-bottom: 12px; }
+.fixbox .t { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); margin-bottom: 4px; }
+pre.snip { margin: 8px 0 0; padding: 10px; background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px;
+  font: 12px/1.4 ui-monospace, "SF Mono", Menlo, monospace; white-space: pre-wrap; word-break: break-word; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.ba { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 12px 0; }
+.ba div { background: var(--surface-2); border-radius: 8px; padding: 8px 10px; }
+.ba .v { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.ba .l { font-size: 12px; color: var(--text-muted); }
+.ex { border-top: 1px solid var(--border); padding: 10px 0; }
+.ex .meta { font-size: 12px; color: var(--text-muted); display: flex; gap: 8px; flex-wrap: wrap; }
+.ex code, .ex .err { display: block; font: 12px/1.4 ui-monospace, "SF Mono", Menlo, monospace; white-space: pre-wrap; word-break: break-word;
+  background: var(--surface-2); border-radius: 6px; padding: 6px 8px; margin-top: 6px; max-height: 9.5em; overflow: auto; }
+.ex .err { color: var(--critical); }
+.ex blockquote { margin: 6px 0 0; padding-left: 10px; border-left: 3px solid var(--series-1); color: var(--text-secondary); font-size: 13px; }
+.muted { color: var(--text-muted); }
+.empty { color: var(--text-muted); padding: 24px 0; text-align: center; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Claude tool errors</h1>
+    <span class="sub" id="gen"></span>
+  </header>
+
+  <div class="filters" role="group" aria-label="Filters">
+    <select id="fProject" aria-label="Project"></select>
+    <div class="seg" id="fRange" role="group" aria-label="Time range">
+      <button data-v="14">14d</button><button data-v="30">30d</button><button data-v="90">90d</button><button data-v="0">All</button>
+    </div>
+    <div class="seg" id="fGran" role="group" aria-label="Granularity">
+      <button data-v="day">Day</button><button data-v="week">Week</button>
+    </div>
+    <label class="chk"><input type="checkbox" id="fSub" checked> Include subagents</label>
+    <label class="chk"><input type="checkbox" id="fNoise"> Hide noise (harness, user rejections)</label>
+  </div>
+
+  <section class="kpis" id="kpis" aria-label="Summary"></section>
+
+  <section class="card chart-card">
+    <h2 id="chartTitle">Error rate</h2>
+    <div class="hint" id="chartHint">Errors per 100 tool calls. Dashed lines mark fixes you applied.</div>
+    <div id="chart"></div>
+  </section>
+
+  <div class="grid2">
+    <section class="card">
+      <h2>Error types</h2>
+      <div class="hint muted" style="font-size:12px;margin-bottom:8px">Trend compares the second half of the range with the first half. Click a row for fixes and examples.</div>
+      <table>
+        <thead><tr><th>Type</th><th class="num">Errors</th><th>Share</th><th>Rate trend</th><th class="num">Change</th><th>Status</th></tr></thead>
+        <tbody id="catBody"></tbody>
+      </table>
+    </section>
+    <section class="card detail" id="detail" aria-live="polite"></section>
+  </div>
+</div>
+<div class="tip" id="tip" role="tooltip"></div>
+
+<script>
+const DATA = /*__DATA__*/null;
+const CATS = Object.fromEntries(DATA.categories.map(c => [c.id, c]));
+const NOISE = new Set(["infra", "user_denied"]);
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+};
+let fixes = store.get("claude-errors-fixes", {});
+const state = Object.assign({ project: "", range: 30, gran: "day", sub: true, noise: false, cat: null, q: "" },
+  store.get("claude-errors-view", {}));
+state.q = "";
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const fmt = (n, d = 0) => n.toLocaleString(undefined, { maximumFractionDigits: d, minimumFractionDigits: d });
+const DAY = 864e5;
+const toDate = s => new Date(s + "T00:00:00Z");
+const iso = d => d.toISOString().slice(0, 10);
+const lastDay = DATA.errors.reduce((m, e) => e.d > m ? e.d : m, DATA.calls.reduce((m, c) => c[0] > m ? c[0] : m, ""));
+const firstDay = DATA.calls.reduce((m, c) => (!m || c[0] < m) ? c[0] : m, "");
+
+function bucketOf(day) {
+  if (state.gran === "day") return day;
+  const d = toDate(day); const wd = (d.getUTCDay() + 6) % 7;
+  return iso(new Date(d - wd * DAY));
+}
+
+// ---------- filtering ----------
+function rangeStart() {
+  if (!state.range) return firstDay;
+  return iso(new Date(toDate(lastDay) - (state.range - 1) * DAY));
+}
+function filtered() {
+  const start = rangeStart();
+  const errs = DATA.errors.filter(e => e.d >= start && (!state.project || e.p === state.project)
+    && (state.sub || !e.sub) && (!state.noise || !NOISE.has(e.c)));
+  const calls = DATA.calls.filter(c => c[0] >= start && (!state.project || c[1] === state.project));
+  return { start, errs, calls };
+}
+function buckets(start) {
+  const out = []; const seen = new Set();
+  for (let d = toDate(start); d <= toDate(lastDay); d = new Date(+d + DAY)) {
+    const b = bucketOf(iso(d)); if (!seen.has(b)) { seen.add(b); out.push(b); }
+  }
+  return out;
+}
+function series(errs, calls, keys, cat) {
+  const e = Object.fromEntries(keys.map(k => [k, 0])), c = Object.fromEntries(keys.map(k => [k, 0]));
+  for (const x of errs) if (!cat || x.c === cat) { const b = bucketOf(x.d); if (b in e) e[b]++; }
+  for (const x of calls) { const b = bucketOf(x[0]); if (b in c) c[b] += x[2]; }
+  return keys.map(k => ({ k, e: e[k], c: c[k], r: c[k] ? e[k] / c[k] * 100 : null }));
+}
+const rate = (e, c) => c ? e / c * 100 : 0;
+
+// ---------- KPIs ----------
+function renderKpis(f) {
+  const totalCalls = f.calls.reduce((s, c) => s + c[2], 0);
+  const mid = iso(new Date((+toDate(f.start) + +toDate(lastDay)) / 2));
+  const half = (arr, pick, first) => arr.filter(x => first ? pick(x) < mid : pick(x) >= mid);
+  const r1 = rate(half(f.errs, x => x.d, true).length, half(f.calls, x => x[0], true).reduce((s, c) => s + c[2], 0));
+  const r2 = rate(half(f.errs, x => x.d, false).length, half(f.calls, x => x[0], false).reduce((s, c) => s + c[2], 0));
+  const delta = r1 ? (r2 - r1) / r1 * 100 : 0;
+  const counts = countBy(f.errs);
+  const top = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+  const nFix = Object.keys(fixes).length;
+  $("#kpis").innerHTML = `
+    <div class="card kpi"><div class="label">Errors</div><div class="value">${fmt(f.errs.length)}</div>
+      <div class="note">of ${fmt(totalCalls)} tool calls</div></div>
+    <div class="card kpi"><div class="label">Error rate</div><div class="value">${fmt(rate(f.errs.length, totalCalls), 1)}%</div>
+      <div class="note">errors per 100 tool calls</div></div>
+    <div class="card kpi"><div class="label">Trend</div>
+      <div class="value ${delta < 0 ? "delta-down" : delta > 0 ? "delta-up" : ""}">${delta > 0 ? "▲ +" : delta < 0 ? "▼ " : ""}${fmt(delta, 0)}%</div>
+      <div class="note">rate, 2nd half vs 1st half (${fmt(r1, 1)}% → ${fmt(r2, 1)}%)</div></div>
+    <div class="card kpi"><div class="label">Top type</div><div class="value" style="font-size:17px;line-height:1.3;margin-top:8px">${top ? esc(CATS[top[0]].label) : "–"}</div>
+      <div class="note">${top ? fmt(top[1]) + " errors · " + fmt(top[1] / f.errs.length * 100, 0) + "%" : ""} · ${nFix} fix${nFix === 1 ? "" : "es"} tracked</div></div>`;
+}
+function countBy(errs) { const m = {}; for (const e of errs) m[e.c] = (m[e.c] || 0) + 1; return m; }
+
+// ---------- main chart ----------
+function renderChart(f) {
+  const keys = buckets(f.start);
+  const pts = series(f.errs, f.calls, keys, state.cat);
+  const el = $("#chart");
+  const W = el.clientWidth || 800, H = 260, m = { t: 12, r: 12, b: 26, l: 40 };
+  const iw = W - m.l - m.r, ih = H - m.t - m.b;
+  const max = Math.max(1, ...pts.map(p => p.r || 0)) * 1.12;
+  const step = niceStep(max / 4); const yMax = Math.ceil(max / step) * step;
+  const x = i => m.l + (keys.length === 1 ? iw / 2 : i / (keys.length - 1) * iw);
+  const y = v => m.t + ih - v / yMax * ih;
+  let g = "";
+  for (let v = 0; v <= yMax + 1e-9; v += step)
+    g += `<line x1="${m.l}" x2="${W - m.r}" y1="${y(v)}" y2="${y(v)}" stroke="var(--grid)"/>`
+      + `<text x="${m.l - 6}" y="${y(v) + 4}" text-anchor="end" font-size="11" fill="var(--text-muted)">${fmt(v, step < 1 ? 1 : 0)}%</text>`;
+  const every = Math.max(1, Math.ceil(keys.length / Math.max(2, Math.floor(iw / 70))));
+  keys.forEach((k, i) => { if (i % every === 0 || i === keys.length - 1 && keys.length < 12)
+    g += `<text x="${x(i)}" y="${H - 6}" text-anchor="middle" font-size="11" fill="var(--text-muted)">${label(k)}</text>`; });
+  // fix markers
+  for (const [cid, day] of Object.entries(fixes)) {
+    if (state.cat && state.cat !== cid) continue;
+    const i = keys.indexOf(bucketOf(day)); if (i < 0) continue;
+    g += `<line x1="${x(i)}" x2="${x(i)}" y1="${m.t}" y2="${m.t + ih}" stroke="var(--good)" stroke-width="1.5" stroke-dasharray="4 3"/>`
+      + `<text x="${x(i) + 4}" y="${m.t + 10}" font-size="11" fill="var(--good-text)">✓ ${esc(shortLabel(CATS[cid].label))}</text>`;
+  }
+  const valid = pts.map((p, i) => [p, i]).filter(([p]) => p.r != null);
+  const line = valid.map(([p, i], j) => `${j ? "L" : "M"}${x(i).toFixed(1)},${y(p.r).toFixed(1)}`).join("");
+  const area = valid.length ? line + `L${x(valid[valid.length - 1][1])},${y(0)}L${x(valid[0][1])},${y(0)}Z` : "";
+  const dots = keys.length <= 45 ? valid.map(([p, i]) => `<circle cx="${x(i)}" cy="${y(p.r)}" r="3" fill="var(--series-1)" stroke="var(--surface-1)" stroke-width="2"/>`).join("") : "";
+  el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Error rate over time">${g}
+    <path d="${area}" fill="var(--series-1-soft)"/>
+    <path d="${line}" fill="none" stroke="var(--series-1)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+    ${dots}<line id="xh" y1="${m.t}" y2="${m.t + ih}" stroke="var(--text-muted)" stroke-width="1" visibility="hidden"/>
+    <circle id="xd" r="5" fill="var(--series-1)" stroke="var(--surface-1)" stroke-width="2" visibility="hidden"/>
+    <rect x="${m.l}" y="${m.t}" width="${iw}" height="${ih}" fill="transparent" id="hit"/></svg>`;
+  const svg = el.querySelector("svg"), tip = $("#tip");
+  const hit = el.querySelector("#hit"), xh = el.querySelector("#xh"), xd = el.querySelector("#xd");
+  hit.addEventListener("mousemove", ev => {
+    const r = svg.getBoundingClientRect(); const px = (ev.clientX - r.left) * W / r.width;
+    const i = Math.max(0, Math.min(keys.length - 1, Math.round((px - m.l) / iw * (keys.length - 1))));
+    const p = pts[i];
+    xh.setAttribute("x1", x(i)); xh.setAttribute("x2", x(i)); xh.setAttribute("visibility", "visible");
+    if (p.r != null) { xd.setAttribute("cx", x(i)); xd.setAttribute("cy", y(p.r)); xd.setAttribute("visibility", "visible"); }
+    tip.innerHTML = `<div class="muted">${state.gran === "week" ? "Week of " : ""}${label(p.k, true)}</div>
+      <div><b>${p.r == null ? "–" : fmt(p.r, 2) + "%"}</b> rate</div><div><b>${fmt(p.e)}</b> errors · ${fmt(p.c)} calls</div>`;
+    tip.style.display = "block";
+    const tx = ev.clientX + 14 + tip.offsetWidth > window.innerWidth ? ev.clientX - tip.offsetWidth - 14 : ev.clientX + 14;
+    tip.style.left = tx + window.scrollX + "px"; tip.style.top = ev.clientY + window.scrollY - 10 + "px";
+  });
+  hit.addEventListener("mouseleave", () => { tip.style.display = "none"; xh.setAttribute("visibility", "hidden"); xd.setAttribute("visibility", "hidden"); });
+  $("#chartTitle").textContent = state.cat ? `Error rate · ${CATS[state.cat].label}` : "Error rate · all types";
+}
+function niceStep(raw) { const p = 10 ** Math.floor(Math.log10(raw)); const n = raw / p; return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10) * p; }
+function label(k, long) { const d = toDate(k); return d.toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC", ...(long ? { year: "numeric" } : {}) }); }
+function shortLabel(s) { return s.length > 22 ? s.slice(0, 21) + "…" : s; }
+
+// ---------- category table ----------
+function renderTable(f) {
+  const counts = countBy(f.errs), total = f.errs.length || 1;
+  const keys = buckets(f.start);
+  const mid = iso(new Date((+toDate(f.start) + +toDate(lastDay)) / 2));
+  const c1 = f.calls.filter(c => c[0] < mid).reduce((s, c) => s + c[2], 0), c2 = f.calls.filter(c => c[0] >= mid).reduce((s, c) => s + c[2], 0);
+  const rows = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  if (state.cat && !counts[state.cat]) state.cat = null;
+  $("#catBody").innerHTML = rows.map(([cid, n]) => {
+    const pts = series(f.errs, f.calls, keys, cid);
+    const e1 = f.errs.filter(e => e.c === cid && e.d < mid).length, e2 = n - e1;
+    const r1 = rate(e1, c1), r2 = rate(e2, c2);
+    const d = r1 ? (r2 - r1) / r1 * 100 : (r2 ? 100 : 0);
+    const status = fixes[cid] ? `<span class="chip fixed">✓ Fixed ${label(fixes[cid])}</span>` : `<span class="chip">Open</span>`;
+    return `<tr tabindex="0" data-c="${cid}" class="${state.cat === cid ? "sel" : ""}" aria-selected="${state.cat === cid}">
+      <td>${esc(CATS[cid].label)}</td><td class="num">${fmt(n)}</td>
+      <td><div class="bar" title="${fmt(n / total * 100, 1)}%"><i style="width:${Math.max(2, n / rows[0][1] * 100)}%"></i></div></td>
+      <td>${spark(pts)}</td>
+      <td class="num ${d < -5 ? "delta-down" : d > 5 ? "delta-up" : "muted"}">${d > 5 ? "▲" : d < -5 ? "▼" : ""} ${fmt(Math.abs(d), 0)}%</td>
+      <td>${status}</td></tr>`;
+  }).join("") || `<tr><td colspan="6" class="empty">No errors in this range 🎉</td></tr>`;
+  document.querySelectorAll("#catBody tr[data-c]").forEach(tr => {
+    const pick = () => { state.cat = state.cat === tr.dataset.c ? null : tr.dataset.c; state.q = ""; render(); };
+    tr.addEventListener("click", pick);
+    tr.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(); } });
+  });
+}
+function spark(pts) {
+  const W = 84, H = 22, max = Math.max(...pts.map(p => p.r || 0)) || 1;
+  const d = pts.map((p, i) => `${i ? "L" : "M"}${(pts.length === 1 ? W / 2 : i / (pts.length - 1) * W).toFixed(1)},${(H - 2 - (p.r || 0) / max * (H - 4)).toFixed(1)}`).join("");
+  return `<svg class="spark" viewBox="0 0 ${W} ${H}" aria-hidden="true"><path d="${d}" fill="none" stroke="var(--series-1)" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
+}
+
+// ---------- detail ----------
+function renderDetail(f) {
+  const el = $("#detail");
+  if (!state.cat) {
+    const counts = countBy(f.errs);
+    const open = Object.entries(counts).filter(([c]) => !fixes[c] && CATS[c].snippet).sort((a, b) => b[1] - a[1]).slice(0, 5);
+    el.innerHTML = `<h2>Where to start</h2><p class="why">Biggest open error types that have a ready-made fix. Pick one, apply the fix, then mark it applied to watch its rate drop.</p>
+      ${open.map(([c, n]) => `<div class="ex" style="cursor:pointer" data-c="${c}"><div class="row" style="justify-content:space-between"><b>${esc(CATS[c].label)}</b><span class="muted">${fmt(n)} errors</span></div>
+      <div class="muted" style="font-size:13px;margin-top:2px">${esc(CATS[c].fix)}</div></div>`).join("") || `<div class="empty">Nothing open with a known fix.</div>`}
+      <div class="ex" style="border-bottom:0"><div class="muted" style="font-size:12px">Run <code>python3 build_dashboard.py</code> again to refresh the data. Fix markers live in this browser.</div></div>`;
+    el.querySelectorAll("[data-c]").forEach(d => d.addEventListener("click", () => { state.cat = d.dataset.c; render(); }));
+    return;
+  }
+  const c = CATS[state.cat];
+  const all = DATA.errors.filter(e => e.c === state.cat && (!state.project || e.p === state.project) && (state.sub || !e.sub));
+  const fixDay = fixes[state.cat];
+  let ba = "";
+  if (fixDay) {
+    const callsIn = (a, b) => DATA.calls.filter(x => x[0] >= a && x[0] < b && (!state.project || x[1] === state.project)).reduce((s, x) => s + x[2], 0);
+    const before = all.filter(e => e.d < fixDay).length, after = all.length - before;
+    const rb = rate(before, callsIn("0000", fixDay)), ra = rate(after, callsIn(fixDay, "9999"));
+    ba = `<div class="ba"><div><div class="l">Rate before fix</div><div class="v">${fmt(rb, 2)}%</div><div class="l">${fmt(before)} errors</div></div>
+      <div><div class="l">Rate since ${label(fixDay)}</div><div class="v ${ra < rb ? "delta-down" : "delta-up"}">${fmt(ra, 2)}%</div><div class="l">${fmt(after)} errors</div></div></div>`;
+  }
+  const q = state.q.toLowerCase();
+  const ex = f.errs.filter(e => e.c === state.cat && (!q || (e.i + e.e + e.r + e.p).toLowerCase().includes(q))).slice().reverse();
+  const tools = Object.entries(ex.reduce((m, e) => (m[e.t] = (m[e.t] || 0) + 1, m), {})).sort((a, b) => b[1] - a[1]).slice(0, 3);
+  el.innerHTML = `<div class="row" style="justify-content:space-between"><h2>${esc(c.label)}</h2><button id="clr" aria-label="Close detail">✕</button></div>
+    <p class="why">${esc(c.why)}${tools.length ? ` <span class="muted">Mostly ${tools.map(t => esc(t[0])).join(", ")}.</span>` : ""}</p>
+    <div class="fixbox"><div class="t">Potential fix</div><div>${esc(c.fix)}</div>
+      ${c.snippet ? `<pre class="snip" id="snip">${esc(c.snippet)}</pre><div class="row" style="margin-top:8px"><button id="copy">Copy CLAUDE.md line</button></div>` : ""}
+      <div class="row" style="margin-top:10px">
+        ${fixDay ? `<span class="chip fixed">✓ Fix applied ${label(fixDay, true)}</span><button id="unfix">Undo</button>`
+          : `<label class="chk">Applied on <input type="date" id="fixDate" value="${lastDay}" max="${lastDay}"></label><button id="fix">Mark fix applied</button>`}
+      </div></div>
+    ${ba}
+    <div class="row" style="justify-content:space-between;margin-top:4px"><b>Examples</b><span class="muted" style="font-size:12px">${fmt(ex.length)} in range, newest first</span></div>
+    <input type="search" id="q" placeholder="Filter examples…" value="${esc(state.q)}" style="width:100%;margin:8px 0" aria-label="Filter examples">
+    <div id="exList">${exHtml(ex.slice(0, 30))}</div>
+    ${ex.length > 30 ? `<button id="more" style="width:100%;margin-top:8px">Show more</button>` : ""}`;
+  $("#clr").onclick = () => { state.cat = null; render(); };
+  const cp = $("#copy"); if (cp) cp.onclick = () => navigator.clipboard?.writeText(c.snippet).then(() => cp.textContent = "Copied ✓");
+  const fx = $("#fix"); if (fx) fx.onclick = () => { fixes[state.cat] = $("#fixDate").value || lastDay; store.set("claude-errors-fixes", fixes); render(); };
+  const uf = $("#unfix"); if (uf) uf.onclick = () => { delete fixes[state.cat]; store.set("claude-errors-fixes", fixes); render(); };
+  const qi = $("#q"); qi.oninput = () => { state.q = qi.value; const ex2 = f.errs.filter(e => e.c === state.cat && (!qi.value || (e.i + e.e + e.r + e.p).toLowerCase().includes(qi.value.toLowerCase()))).reverse(); $("#exList").innerHTML = exHtml(ex2.slice(0, 30)); };
+  let shown = 30; const mo = $("#more"); if (mo) mo.onclick = () => { shown += 30; $("#exList").innerHTML = exHtml(ex.slice(0, shown)); if (shown >= ex.length) mo.remove(); };
+}
+function exHtml(list) {
+  return list.map(e => `<div class="ex">
+    <div class="meta"><span>${esc(new Date(e.ts).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }))}</span>
+      <span>${esc(e.p)}</span><span>${esc(e.t)}</span>${e.sub ? "<span>subagent</span>" : ""}<span title="session">#${esc(e.s)}</span></div>
+    ${e.i ? `<code>${esc(e.i)}</code>` : ""}<div class="err">${esc(e.e)}</div>
+    ${e.r ? `<blockquote>${esc(e.r)}</blockquote>` : ""}</div>`).join("") || `<div class="empty">No examples match.</div>`;
+}
+
+// ---------- wiring ----------
+function render() {
+  store.set("claude-errors-view", { project: state.project, range: state.range, gran: state.gran, sub: state.sub, noise: state.noise, cat: state.cat });
+  document.querySelectorAll("#fRange button").forEach(b => b.setAttribute("aria-pressed", +b.dataset.v === state.range));
+  document.querySelectorAll("#fGran button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === state.gran));
+  const f = filtered();
+  renderKpis(f); renderTable(f); renderChart(f); renderDetail(f);
+}
+(function init() {
+  $("#gen").textContent = `Generated ${new Date(DATA.generated).toLocaleString()} · data ${label(firstDay, true)} – ${label(lastDay, true)}`;
+  const projects = Object.entries(DATA.errors.reduce((m, e) => (m[e.p] = (m[e.p] || 0) + 1, m), {})).sort((a, b) => b[1] - a[1]);
+  $("#fProject").innerHTML = `<option value="">All projects</option>` + projects.map(([p, n]) => `<option value="${esc(p)}">${esc(p)} (${n})</option>`).join("");
+  if (!projects.some(p => p[0] === state.project)) state.project = "";
+  $("#fProject").value = state.project;
+  $("#fProject").onchange = e => { state.project = e.target.value; render(); };
+  document.querySelectorAll("#fRange button").forEach(b => b.onclick = () => { state.range = +b.dataset.v; render(); });
+  document.querySelectorAll("#fGran button").forEach(b => b.onclick = () => { state.gran = b.dataset.v; render(); });
+  $("#fSub").checked = state.sub; $("#fSub").onchange = e => { state.sub = e.target.checked; render(); };
+  $("#fNoise").checked = state.noise; $("#fNoise").onchange = e => { state.noise = e.target.checked; render(); };
+  let t; window.addEventListener("resize", () => { clearTimeout(t); t = setTimeout(() => renderChart(filtered()), 120); });
+  render();
+})();
+</script>
+</body>
+</html>
