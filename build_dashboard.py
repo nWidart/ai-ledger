@@ -206,7 +206,7 @@ def scan(root):
                     cmd = summarize_input(tool, inp)
                     cat = next(r["id"] for r in RULES if r["test"](err, tool, cmd))
                     errors.append(dict(
-                        ts=d.get("timestamp"), d=day, p=proj, s=d.get("sessionId", "")[:8],
+                        id=x.get("tool_use_id") or "", ts=d.get("timestamp"), d=day, p=proj, s=d.get("sessionId", "")[:8],
                         t=tool, c=cat, i=cmd[:400], e=err[:700], r=followup(rows, i),
                         sub=1 if "/subagents/" in f else 0,
                     ))
@@ -236,6 +236,8 @@ def main():
 
     errors, calls = scan(a.projects)
     errors = [e for e in errors if e["d"]]
+    # Resumed or forked sessions copy earlier turns into a new file; keep each tool call once.
+    errors = list({e["id"] or id(e): e for e in errors}.values())
     errors.sort(key=lambda e: e["ts"])
     data = dict(
         generated=datetime.now(timezone.utc).isoformat(timespec="minutes"),

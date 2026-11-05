@@ -91,6 +91,11 @@ pre.snip { margin: 8px 0 0; padding: 10px; background: var(--surface-1); border:
 .ex code, .ex .err { display: block; font: 12px/1.4 ui-monospace, "SF Mono", Menlo, monospace; white-space: pre-wrap; word-break: break-word;
   background: var(--surface-2); border-radius: 6px; padding: 6px 8px; margin-top: 6px; max-height: 9.5em; overflow: auto; }
 .ex .err { color: var(--critical); }
+.ex.focus { background: var(--series-1-soft); box-shadow: inset 3px 0 0 var(--series-1); padding-left: 10px; padding-right: 8px; border-radius: 6px; }
+.ex .meta .link { margin-left: auto; display: inline-flex; gap: 6px; }
+.ex .meta a { color: var(--accent); text-decoration: none; }
+.ex .meta a:hover { text-decoration: underline; }
+.ex .meta button { font-size: 11px; padding: 1px 7px; border-radius: 6px; }
 .ex blockquote { margin: 6px 0 0; padding-left: 10px; border-left: 3px solid var(--series-1); color: var(--text-secondary); font-size: 13px; }
 .muted { color: var(--text-muted); }
 .empty { color: var(--text-muted); padding: 24px 0; text-align: center; }
@@ -149,7 +154,22 @@ const store = {
 let fixes = store.get("claude-errors-fixes", {});
 const state = Object.assign({ project: "", range: 30, gran: "day", sub: true, noise: false, cat: null, q: "" },
   store.get("claude-errors-view", {}));
-state.q = "";
+state.q = ""; state.focus = null;
+const BY_ID = Object.fromEntries(DATA.errors.filter(e => e.id).map(e => [e.id, e]));
+// Permalinks: #cat=<type> opens a type, #ex=<tool_use_id> opens one example.
+const baseUrl = () => location.href.split("#")[0];
+const exUrl = e => `${baseUrl()}#ex=${encodeURIComponent(e.id)}`;
+function readHash() {
+  const h = new URLSearchParams(location.hash.slice(1));
+  const ex = BY_ID[h.get("ex")];
+  if (ex) { state.cat = ex.c; state.focus = ex.id; state.q = ""; return true; }
+  if (CATS[h.get("cat")]) { state.cat = h.get("cat"); state.focus = null; }
+  return false;
+}
+function writeHash() {
+  const h = state.focus ? `#ex=${encodeURIComponent(state.focus)}` : state.cat ? `#cat=${encodeURIComponent(state.cat)}` : "";
+  if (location.hash !== h) history.replaceState(null, "", baseUrl() + h);
+}
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -280,7 +300,7 @@ function renderTable(f) {
   const mid = iso(new Date((+toDate(f.start) + +toDate(lastDay)) / 2));
   const c1 = f.calls.filter(c => c[0] < mid).reduce((s, c) => s + c[2], 0), c2 = f.calls.filter(c => c[0] >= mid).reduce((s, c) => s + c[2], 0);
   const rows = Object.entries(counts).sort((a, b) => b[1] - a[1]);
-  if (state.cat && !counts[state.cat]) state.cat = null;
+  if (state.cat && !counts[state.cat] && !state.focus) state.cat = null;
   $("#catBody").innerHTML = rows.map(([cid, n]) => {
     const pts = series(f.errs, f.calls, keys, cid);
     const e1 = f.errs.filter(e => e.c === cid && e.d < mid).length, e2 = n - e1;
@@ -295,7 +315,7 @@ function renderTable(f) {
       <td>${status}</td></tr>`;
   }).join("") || `<tr><td colspan="6" class="empty">No errors in this range 🎉</td></tr>`;
   document.querySelectorAll("#catBody tr[data-c]").forEach(tr => {
-    const pick = () => { state.cat = state.cat === tr.dataset.c ? null : tr.dataset.c; state.q = ""; render(); };
+    const pick = () => { state.cat = state.cat === tr.dataset.c ? null : tr.dataset.c; state.q = ""; state.focus = null; render(); };
     tr.addEventListener("click", pick);
     tr.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(); } });
   });
@@ -332,6 +352,9 @@ function renderDetail(f) {
   }
   const q = state.q.toLowerCase();
   const ex = f.errs.filter(e => e.c === state.cat && (!q || (e.i + e.e + e.r + e.p).toLowerCase().includes(q))).slice().reverse();
+  // A linked example shows first, even when outside the current filters.
+  const focused = BY_ID[state.focus];
+  if (focused) { const i = ex.indexOf(focused); if (i >= 0) ex.splice(i, 1); ex.unshift(focused); }
   const tools = Object.entries(ex.reduce((m, e) => (m[e.t] = (m[e.t] || 0) + 1, m), {})).sort((a, b) => b[1] - a[1]).slice(0, 3);
   el.innerHTML = `<div class="row" style="justify-content:space-between"><h2>${esc(c.label)}</h2><button id="clr" aria-label="Close detail">✕</button></div>
     <p class="why">${esc(c.why)}${tools.length ? ` <span class="muted">Mostly ${tools.map(t => esc(t[0])).join(", ")}.</span>` : ""}</p>
@@ -346,7 +369,7 @@ function renderDetail(f) {
     <input type="search" id="q" placeholder="Filter examples…" value="${esc(state.q)}" style="width:100%;margin:8px 0" aria-label="Filter examples">
     <div id="exList">${exHtml(ex.slice(0, 30))}</div>
     ${ex.length > 30 ? `<button id="more" style="width:100%;margin-top:8px">Show more</button>` : ""}`;
-  $("#clr").onclick = () => { state.cat = null; render(); };
+  $("#clr").onclick = () => { state.cat = null; state.focus = null; render(); };
   const cp = $("#copy"); if (cp) cp.onclick = () => navigator.clipboard?.writeText(c.snippet).then(() => cp.textContent = "Copied ✓");
   const fx = $("#fix"); if (fx) fx.onclick = () => { fixes[state.cat] = $("#fixDate").value || lastDay; store.set("claude-errors-fixes", fixes); render(); };
   const uf = $("#unfix"); if (uf) uf.onclick = () => { delete fixes[state.cat]; store.set("claude-errors-fixes", fixes); render(); };
@@ -354,9 +377,10 @@ function renderDetail(f) {
   let shown = 30; const mo = $("#more"); if (mo) mo.onclick = () => { shown += 30; $("#exList").innerHTML = exHtml(ex.slice(0, shown)); if (shown >= ex.length) mo.remove(); };
 }
 function exHtml(list) {
-  return list.map(e => `<div class="ex">
+  return list.map(e => `<div class="ex${e.id && e.id === state.focus ? " focus" : ""}"${e.id ? ` id="ex-${esc(e.id)}"` : ""}>
     <div class="meta"><span>${esc(new Date(e.ts).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }))}</span>
-      <span>${esc(e.p)}</span><span>${esc(e.t)}</span>${e.sub ? "<span>subagent</span>" : ""}<span title="session">#${esc(e.s)}</span></div>
+      <span>${esc(e.p)}</span><span>${esc(e.t)}</span>${e.sub ? "<span>subagent</span>" : ""}<span title="session">#${esc(e.s)}</span>
+      ${e.id ? `<span class="link"><a href="#ex=${encodeURIComponent(e.id)}" title="Permalink to this error">🔗 Link</a><button type="button" data-copy="${esc(e.id)}">Copy URL</button></span>` : ""}</div>
     ${e.i ? `<code>${esc(e.i)}</code>` : ""}<div class="err">${esc(e.e)}</div>
     ${e.r ? `<blockquote>${esc(e.r)}</blockquote>` : ""}</div>`).join("") || `<div class="empty">No examples match.</div>`;
 }
@@ -368,6 +392,11 @@ function render() {
   document.querySelectorAll("#fGran button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === state.gran));
   const f = filtered();
   renderKpis(f); renderTable(f); renderChart(f); renderDetail(f);
+  writeHash();
+}
+function scrollToFocus() {
+  const el = state.focus && document.getElementById("ex-" + state.focus);
+  if (el) el.scrollIntoView({ block: "center" });
 }
 (function init() {
   $("#gen").textContent = `Generated ${new Date(DATA.generated).toLocaleString()} · data ${label(firstDay, true)} – ${label(lastDay, true)}`;
@@ -381,7 +410,15 @@ function render() {
   $("#fSub").checked = state.sub; $("#fSub").onchange = e => { state.sub = e.target.checked; render(); };
   $("#fNoise").checked = state.noise; $("#fNoise").onchange = e => { state.noise = e.target.checked; render(); };
   let t; window.addEventListener("resize", () => { clearTimeout(t); t = setTimeout(() => renderChart(filtered()), 120); });
+  window.addEventListener("hashchange", () => { const ex = readHash(); render(); if (ex) scrollToFocus(); });
+  $("#detail").addEventListener("click", ev => {
+    const b = ev.target.closest("button[data-copy]"); if (!b) return;
+    const e = BY_ID[b.dataset.copy];
+    navigator.clipboard?.writeText(exUrl(e)).then(() => { b.textContent = "Copied ✓"; setTimeout(() => b.textContent = "Copy URL", 1500); });
+  });
+  const linked = readHash();
   render();
+  if (linked) scrollToFocus();
 })();
 </script>
 </body>
