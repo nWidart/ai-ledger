@@ -18,4 +18,5 @@ Local DuckDB store of Claude Code and Codex transcripts, served as dashboards (A
 - After a payload change, regenerate the page-test fixtures in `web/src/__fixtures__/`: `uv run python -m unittest tests.test_web_fixtures`.
 - Both sources (Claude Code, Codex) map onto the same derived tables. A parser change in `store.py` or `codex.py` must keep that shape.
 - Plan features as OpenSpec changes in `openspec/changes/`; current specs live in `openspec/specs/`.
+- Give each OpenSpec change its own git worktree, on its own branch from `main`. Propose, apply and archive the change in that worktree, never in the main checkout or another change's branch. After archiving, remove the worktree.
 - Update `README.md` when user-visible behavior changes.
