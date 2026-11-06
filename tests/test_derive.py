@@ -1,3 +1,4 @@
+import glob
 import json
 import os
 import shutil
@@ -226,6 +227,40 @@ class RebuildTest(StoreCase):
         self.assertEqual(self.counts(), before)
         self.assertEqual(before["requests"], 3)
         self.assertEqual(before["followups"], 1)
+
+
+class OtherDeriver(store.Deriver):
+    """A second source's parser: Claude's line shapes under its own session ids."""
+
+    def add(self, d):
+        super().add(dict(d, sessionId="other-" + d["sessionId"]))
+
+
+class TwoSourceRebuildTest(StoreCase):
+    def rows(self):
+        return {t: self.q(f"SELECT * FROM {t} ORDER BY ALL") for t in store.DERIVED} | {
+            "files": self.q("SELECT path, seq, source FROM files ORDER BY ALL")}
+
+    def test_rebuild_uses_each_source_deriver(self):
+        other = os.path.join(self.tmp, "other")
+        os.makedirs(other)
+        src = store.Source(lambda root: sorted(glob.glob(os.path.join(root, "*.jsonl"))),
+                           lambda d, path, offset: "other:" + store.line_key(d, path, offset), OtherDeriver, lambda path: False)
+        with mock.patch.dict(store.SOURCES, other=src):
+            body = (prompt("u1", "2026-11-01T10:00:00Z", "p1", "go")
+                    + assistant("a1", "m1", "2026-11-01T10:00:01Z", [tool_use("t1", "Bash", command="x")]))
+            self.write("a.jsonl", body)
+            with open(os.path.join(other, "b.jsonl"), "w") as fh:
+                fh.write(body.replace('"m1"', '"m2"').replace('"t1"', '"t2"').replace('"p1"', '"p2"'))
+            store.ingest(self.con, self.roots | dict(other=other))
+            self.write("a.jsonl", result("r1", "2026-11-01T10:00:02Z", "t1", "Exit code 1", error=True)
+                       + assistant("a2", "m3", "2026-11-01T10:00:03Z", [dict(type="text", text="Hm.")]))
+            store.ingest(self.con, self.roots | dict(other=other))
+            before = self.rows()
+            store.rebuild(self.con)
+            self.assertEqual(self.rows(), before)
+        self.assertEqual(self.q("SELECT session_id, source FROM sessions ORDER BY 1"), [("other-s1", "other"), ("s1", "claude")])
+        self.assertEqual(self.q("SELECT count(*) FROM requests"), [(3,)])
 
 
 if __name__ == "__main__":
