@@ -3,7 +3,9 @@
 Ingest uses this to categorize errors. Add a rule to RULES when a new error pattern shows up in "Other".
 """
 import json
+import os
 import re
+from urllib.parse import urlsplit
 
 # Commands that run tests, builds or linters. A call matching this is a test run; it passed when it did not fail.
 TEST_CMD = re.compile(r"\b(npm|pnpm|yarn|bun|npx|vitest|jest|pytest|cargo|tsc|phpunit|pest|go test|go build|make|eslint|ruff|mypy|artisan test|composer)\b")
@@ -152,6 +154,37 @@ def summarize_input(tool, inp):
         if k in inp and isinstance(inp[k], str):
             return inp[k]
     return json.dumps(inp)[:300]
+
+
+# input_pattern: a shell script wrapped as `bash -lc '…'`, and what may come before the command itself: a subshell's
+# "(", `cd … &&` or `cd …;`, env assignments and sudo with its flags.
+SHELL_WRAP = re.compile(r"""\s*(?:\S*/)?(?:ba|z)?sh\s+-l?c\s+(['"])(.*)\1\s*$""", re.S)
+SHELL_LEAD = re.compile(r"\s*(?:\(\s*|cd\s+[^&;|]*(?:&&|;)\s*|[A-Za-z_]\w*=\S*\s+|sudo\s+(?:-\S+\s+)*)")
+FILE_TOOLS = {"Read", "Edit", "Write", "NotebookEdit", "apply_patch"}
+SEARCH_TOOLS = {"Grep", "Glob"}
+SEARCH_CUT = 40
+
+
+def input_pattern(tool, summary):
+    """The group a call's input_summary falls in on the tool inspector: a shell command's first word, a file's extension
+    (its name when it has none), a search pattern cut to SEARCH_CUT, a URL's host, "search" for a web search, else "other"."""
+    summary = (summary or "").strip()
+    if tool in SHELL_TOOLS:
+        cmd = summary
+        while m := SHELL_WRAP.match(cmd) or SHELL_LEAD.match(cmd):
+            cmd = m.group(2) if m.re is SHELL_WRAP else cmd[m.end():]
+        word = re.match(r"[^\s;&|()<>]+", cmd)
+        return word.group(0) if word else "other"
+    if tool in FILE_TOOLS:
+        name = os.path.basename(summary.split(", ")[0])  # apply_patch lists every changed file
+        return (os.path.splitext(name)[1] or name) if name else "other"
+    if tool in SEARCH_TOOLS:
+        return summary[:SEARCH_CUT] or "other"
+    if tool == "WebFetch":
+        return urlsplit(summary).hostname or "other"
+    if tool in ("WebSearch", "web_search"):
+        return "search"
+    return "other"
 
 
 def categorize(err, tool, cmd):
