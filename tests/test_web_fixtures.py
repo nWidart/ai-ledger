@@ -71,6 +71,7 @@ class WebFixturesTest(unittest.TestCase):
             # 30 days: previous period and changes are set; all time with a session: they are null and the drill-in is in.
             "usage.ts": ("UsagePayload", metrics.usage(c, "", 30, prices=tm.PRICES, today=tm.TODAY)),
             "usage-all.ts": ("UsagePayload", metrics.usage(c, "", 0, "s1", prices=tm.PRICES, today=tm.TODAY, automated=True)),
+            "palette.ts": ("PalettePayload", metrics.palette(c, "", 30, tm.TODAY)),
             "sessions.ts": ("SessionsPage", metrics.session_list(c, prices=tm.PRICES, today=tm.TODAY)),
             "session.ts": ("SessionDetail", metrics.session(c, "s1", prices=tm.PRICES)),
             # A Claude and a Codex session on one day, filtered to Codex.

@@ -371,6 +371,33 @@ def tool_detail(cur, kind, name, project="", range_days=0, today=None, automated
                 error_loops=loops, shell=shell, recent=recent, tools=tools)
 
 
+def palette(cur, project="", range_days=0, today=None, automated=False, source=""):
+    """The command palette's suggestions with their counts for a view. projects and sources count the view's sessions (those
+    with requests in range), each leaving its own facet out, so another project's count shows while one is chosen. tools, mcp
+    and skills: calls, failures and failure rate with usage()'s filter, called ones only. categories: failed calls per
+    category as the Errors page counts them (by end time, automated sessions always in). Raises ValueError for an unknown source."""
+    today = today or date.today()
+    _, _, _, fp, W, _, _ = view(project, range_days, {}, today, automated, source)
+
+    def sessions_by(col, p, src):
+        _, _, _, sfp, SW, _, _ = view(p, range_days, {}, today, automated, src)
+        return cur.execute(f"""SELECT {col}, count(DISTINCT r.session_id) FROM requests r JOIN sessions s USING (session_id)
+            WHERE {SW('r.ts')} AND {col} IS NOT NULL GROUP BY 1 ORDER BY 2 DESC, 1""", sfp).fetchall()
+
+    tc = f"tool_calls t JOIN sessions s USING (session_id) WHERE {W('coalesce(t.start_ts, t.end_ts)')}"
+    rate = lambda col: rate_rows(rows(cur, f"""SELECT {col} AS name, count(*) AS calls, count(*) FILTER (WHERE t.is_error) AS errors
+        FROM {tc} AND {col} IS NOT NULL GROUP BY 1 ORDER BY calls DESC, 1""", fp))
+    _, _, _, efp, EW, _, _ = view(project, range_days, {}, today, True, source)
+    labels = {r["id"]: r["label"] for r in RULES}
+    cats = cur.execute(f"""SELECT t.category, count(*) FROM tool_calls t JOIN sessions s USING (session_id)
+        WHERE t.is_error AND t.end_ts IS NOT NULL AND {EW('t.end_ts')} GROUP BY 1 ORDER BY 2 DESC, 1""", efp).fetchall()
+    return dict(project=project, range=range_days, automated=bool(automated), source=source,
+                projects=[dict(name=n, sessions=c) for n, c in sessions_by("s.project", "", source)],
+                sources=[dict(source=n, sessions=c) for n, c in sessions_by("coalesce(s.source, 'claude')", project, "")],
+                tools=rate("t.tool"), mcp=rate("t.mcp_server"), skills=rate("t.skill"),
+                categories=[dict(id=c, label=labels.get(c, c), errors=n) for c, n in cats])
+
+
 def project_changes(by_project, previous):
     """Each project's estimated-cost change against the previous period, biggest move first, for the "what changed" chart.
     new: the project had no requests at all in the previous period. Projects active only before the view count too (cost 0 now).

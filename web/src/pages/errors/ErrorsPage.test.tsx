@@ -1,10 +1,14 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import fixture from "../../__fixtures__/errors";
 import tool from "../../__fixtures__/tool";
 import type { ErrorsPayload } from "../../api";
+import palette from "../../__fixtures__/palette";
+import { Palette } from "../../components/palette/Palette";
+import { openPalette } from "../../components/palette/store";
 import { ErrorsPage } from "./ErrorsPage";
+import { VIEW_KEY } from "./view";
 
 const json = (body: unknown) => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) } as Response);
 
@@ -104,6 +108,19 @@ describe("ErrorsPage", () => {
     await userEvent.click(screen.getByRole("checkbox", { name: /Hide noise/ }));
     expect(location.hash).toBe("#range=30&sub=0&noise=0&gran=week");
     expect(history.length).toBe(n + 3);
+  });
+
+  it("commits a palette filter in place, keeping the open type and saving the view", async () => {
+    vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/errors") ? fixture : url.startsWith("/api/palette") ? palette : {})));
+    history.replaceState(null, "", "/errors#range=30&cat=x");
+    render(<><ErrorsPage /><Palette /></>);
+    await screen.findByRole("heading", { level: 1, name: /failed tool calls/ });
+    act(() => openPalette());
+    const n = history.length;
+    await userEvent.type(await screen.findByRole("combobox", { name: "Filters, pages, inspectors and commands" }), "#foo{Enter}");
+    expect(location.hash).toBe("#project=foo&range=30&cat=x");
+    expect(history.length).toBe(n + 1);
+    await waitFor(() => expect(JSON.parse(localStorage.getItem(VIEW_KEY)!)).toMatchObject({ project: "foo", range: 30, cat: "x" }));
   });
 
   describe("tool sheet", () => {

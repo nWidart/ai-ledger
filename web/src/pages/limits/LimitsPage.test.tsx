@@ -1,8 +1,11 @@
-import { render, screen, within } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { LimitWindow, LimitsPayload } from "../../api";
 import limits from "../../__fixtures__/limits";
+import palette from "../../__fixtures__/palette";
+import { Palette } from "../../components/palette/Palette";
+import { openPalette } from "../../components/palette/store";
 import { mockApi } from "../../components/sheets/testing";
 import { caption, pace, span, whenDay } from "./limits";
 import { LimitsPage } from "./LimitsPage";
@@ -99,5 +102,17 @@ describe("LimitsPage", () => {
     await userEvent.click(screen.getByRole("button", { name: "Codex" }));
     expect(location.hash).toBe("#range=30&source=codex");
     expect(vi.mocked(f).mock.calls.at(-1)![0]).toBe("/api/limits?range=30&source=codex");
+  });
+
+  it("sends >bash from Limits to Activity, which hosts the inspector", async () => {
+    mockApi({ "/api/limits": () => fixture, "/api/palette": () => palette });
+    history.replaceState(null, "", "/limits");
+    render(<><LimitsPage /><Palette /></>);
+    await lede();
+    act(() => openPalette());
+    await userEvent.type(screen.getByRole("combobox", { name: "Filters, pages, inspectors and commands" }), ">bash");
+    expect(document.getElementById(screen.getByRole("combobox", { name: "Filters, pages, inspectors and commands" }).getAttribute("aria-describedby")!)!.textContent).toBe("Enter: open Bash inspector on Activity · 30d");
+    await userEvent.keyboard("{Enter}");
+    expect(location.pathname + location.hash).toBe("/usage#tool=Bash");
   });
 });

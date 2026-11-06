@@ -105,10 +105,16 @@ export function useHashState(): [HashState, typeof setHash] {
   return [useMemo(() => parseHash(hash), [hash]), setHash];
 }
 
-/** Client-side page switch: a new history entry, no reload. */
-export function navigate(href: string) {
+/** Goes to href (a path and hash) as one history entry, no reload; scrolls to the top when the page changes. A no-op when
+ *  href is where we are. */
+export function go(href: string) {
+  const to = new URL(href, location.href);
+  if (to.pathname + to.search + to.hash === location.pathname + location.search + location.hash) return;
+  const moved = to.pathname !== location.pathname;
   history.pushState(null, "", href);
   emit();
-  scrollTo?.(0, 0);
+  if (moved) scrollTo?.(0, 0);
 }
+/** Client-side page switch: a new history entry, no reload. */
+export const navigate = (href: string) => go(href);
 export const usePathname = (): string => useSyncExternalStore(subscribe, () => location.pathname, () => "/");

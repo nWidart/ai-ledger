@@ -142,6 +142,19 @@ export interface ToolPayload {
   tools: (RateRow & { tool: string; p50_ms: number | null })[] | null;
 }
 
+// Command palette (/api/palette, metrics.palette): its suggestions with counts for the view its filter chips describe.
+export interface PalettePayload {
+  project: string; range: number; automated: boolean; source: Source | "";
+  /** Sessions per project under the other filters (the project filter left out). */
+  projects: { name: string; sessions: number }[];
+  /** Sessions per source under the other filters (the source filter left out). */
+  sources: { source: Source; sessions: number }[];
+  /** Called ones only. */
+  tools: NamedRateRow[]; mcp: NamedRateRow[]; skills: NamedRateRow[];
+  /** Failed calls per category, counted as the Errors page does (automated sessions always in). */
+  categories: { id: string | null; label: string | null; errors: number }[];
+}
+
 export interface ErrorDetail { id: string; i: string; e: string; r: string; cut: ("i" | "e" | "r")[] }
 
 // Limits (/api/limits, limits.py payload): plan-limit windows per provider, their forecast, history and value.
@@ -208,6 +221,7 @@ export const sessionsUrl = (v: View, o: { q?: string; near?: boolean; offset?: n
 export const sessionUrl = (id: string) => `/api/session?${qs({ id })}`;
 export const promptUrl = (session: string) => `/api/prompt?${qs({ session })}`;
 export const toolUrl = (kind: ToolKind, name: string, v: View) => `/api/tool?${qs({ kind, name, ...viewQs(v) })}`;
+export const paletteUrl = (v: View) => `/api/palette?${qs(viewQs(v))}`;
 export const limitsUrl = (v: View) => `/api/limits?${qs({ project: v.project, range: v.range, source: v.source })}`;
 export const errorsUrl = "/api/errors";
 export const errorUrl = (id: string) => `/api/error?${qs({ id })}`;

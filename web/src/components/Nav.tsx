@@ -1,9 +1,11 @@
-import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import { useEffect, useRef, type MouseEvent, type ReactNode } from "react";
 import { statusUrl, type Status } from "../api";
 import { navigate, setHash, sharedHash, useHashState, usePathname } from "../hash";
 import { getTheme, nextTheme, setTheme, useTheme, type Theme } from "../theme";
-import { clearApiCache, getJson, noteIngest } from "../useApi";
+import { getJson, noteIngest } from "../useApi";
 import { ProjectDot } from "./ProjectDot";
+import { openPalette, shortcutHint, shortcutKeys } from "./palette/store";
+import { noteStatus, refresh, useRefreshState } from "./refresh";
 import "./Nav.css";
 
 export const PAGES = [
@@ -21,17 +23,12 @@ const THEME_ICON: Record<Theme, ReactNode> = {
   dark: <path d="M13.5 9.5A5.5 5.5 0 0 1 6.5 2.5a5.5 5.5 0 1 0 7 7Z" />,
 };
 
-const statusText = (s: Status) => {
-  const st = s.last_stats ? ` · ${s.last_stats.inserted.toLocaleString()} new lines` : "";
-  return s.error ? `Ingest failed: ${s.error}` : s.ingesting ? "Ingesting transcripts…"
-    : s.last_ingest ? `Last ingest ${new Date(s.last_ingest).toLocaleTimeString()}${st}` : "";
-};
-
-/** The shared top bar: brand, page tabs (keeping project, range and auto), the project filter chip, ingest status and Refresh. */
+/** The shared top bar: brand, page tabs (keeping project, range and auto), the project filter chip, the palette button,
+ *  ingest status and Refresh. */
 export function Nav() {
   const path = usePathname(), [h] = useHashState(), shared = sharedHash(), theme = useTheme(), next = nextTheme(theme);
   const nav = useRef<HTMLElement>(null);
-  const [st, setSt] = useState({ text: "", failed: false, busy: false, retry: false });
+  const st = useRefreshState();
 
   // Pages offset scroll targets by the sticky nav's height, which grows when it wraps on phones.
   useEffect(() => {
@@ -48,26 +45,17 @@ export function Nav() {
       getJson<Status>(statusUrl).then(s => {
         if (!live) return;
         noteIngest(s.last_ingest);
-        setSt(x => ({ ...x, text: statusText(s), failed: !!s.error, retry: false }));
+        noteStatus(s);
         timer = window.setTimeout(poll, s.ingesting ? INGESTING_MS : POLL_MS);
       }, () => {
         if (!live) return;
-        setSt(x => ({ ...x, text: "App not reachable", failed: true }));
+        noteStatus(null);
         timer = window.setTimeout(poll, POLL_MS);
       });
     };
     poll();
     return () => { live = false; clearTimeout(timer); };
   }, []);
-
-  const refresh = () => {
-    setSt(x => ({ ...x, busy: true, text: "Ingesting…" }));
-    getJson<Status>("/api/refresh", { method: "POST" }).then(s => {
-      noteIngest(s.last_ingest);
-      clearApiCache();
-      setSt({ text: statusText(s), failed: !!s.error, busy: false, retry: false });
-    }, () => setSt({ text: "Refresh failed. Select Retry to try again.", failed: true, busy: false, retry: true }));
-  };
 
   const go = (e: MouseEvent<HTMLAnchorElement>, to: string) => {
     if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
@@ -99,6 +87,11 @@ export function Nav() {
             <button type="button" aria-label="Clear project filter" title="Show all projects" onClick={clear}>✕<span className="lbl"> Clear</span></button>
           </span>
         )}
+        <button type="button" className="appnav-palette" aria-label={`Open command palette (${shortcutHint()})`} aria-haspopup="dialog"
+          aria-keyshortcuts={shortcutKeys()} title={`Filter, go to a page or open an inspector (${shortcutHint()})`} onClick={openPalette}>
+          <svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5" fill="none" stroke="currentColor" strokeWidth="1.8" /><path d="m13 13 4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>
+          <span className="lbl">Search</span><kbd>{shortcutHint()}</kbd>
+        </button>
         <span className="appnav-status" id="navStatus" aria-live="polite">{st.text}</span>
         <button type="button" id="navRefresh" className={st.failed ? "failed" : undefined} title={st.text} disabled={st.busy} onClick={refresh}>
           {st.retry ? "Retry" : "Refresh"}

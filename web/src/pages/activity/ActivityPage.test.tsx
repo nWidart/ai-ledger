@@ -7,6 +7,9 @@ import usageAll from "../../__fixtures__/usage-all";
 import sessions from "../../__fixtures__/sessions";
 import session from "../../__fixtures__/session";
 import tool from "../../__fixtures__/tool";
+import palette from "../../__fixtures__/palette";
+import { Palette } from "../../components/palette/Palette";
+import { openPalette } from "../../components/palette/store";
 import { mockApi } from "../../components/sheets/testing";
 import { ActivityPage } from "./ActivityPage";
 import { workDays } from "./work";
@@ -167,5 +170,20 @@ describe("ActivityPage", () => {
     await userEvent.click(within(document.querySelector("dialog")!).getByRole("button", { name: "Close" }));
     await userEvent.click(ext.getByRole("button", { name: "review" }));
     expect(location.hash).toBe("#range=30&skill=review");
+  });
+
+  it("opens the palette over an open tool sheet, and Escape leaves the sheet open", async () => {
+    mockApi({ "/api/usage": () => usage, "/api/tool": () => tool, "/api/palette": () => palette });
+    at("#range=30&tool=Bash");
+    render(<><ActivityPage /><Palette /></>);
+    const sheet = document.querySelector<HTMLDialogElement>("dialog.sheet")!;
+    expect(await within(sheet).findByText("Recent calls")).toBeTruthy();
+    act(() => { dispatchEvent(new KeyboardEvent("keydown", { key: "k", ctrlKey: true, metaKey: true, bubbles: true })); openPalette(); });
+    const pal = document.querySelector<HTMLDialogElement>("dialog.palette")!;
+    expect([sheet.open, pal.open]).toEqual([true, true]);
+    // Both are modal; the palette's showModal() comes later, so it is on top and holds focus.
+    expect(pal.contains(document.activeElement)).toBe(true);
+    await userEvent.keyboard("{Escape}");
+    expect([sheet.open, pal.open, location.hash]).toEqual([true, false, "#range=30&tool=Bash"]);
   });
 });

@@ -1,7 +1,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { errorsHref, openToolSheet } from "./components/sheets/session";
-import { formatHash, parseHash, setHash, sharedHash, useHashState } from "./hash";
+import { formatHash, go, navigate, parseHash, setHash, sharedHash, useHashState } from "./hash";
 
 describe("parseHash", () => {
   it("reads a Usage URL from before the change", () => {
@@ -115,5 +115,40 @@ describe("useHashState", () => {
       dispatchEvent(new HashChangeEvent("hashchange"));
     });
     expect(result.current[0]).toMatchObject({ project: "", range: 30, cat: "x" });
+  });
+});
+
+describe("go", () => {
+  it("writes a page and hash change as one entry and scrolls to the top", () => {
+    history.replaceState(null, "", "/usage#range=30");
+    const push = vi.spyOn(history, "pushState"), scroll = vi.spyOn(window, "scrollTo"), len = history.length;
+    go("/cost#project=foo&range=7&tool=Bash");
+    expect(push).toHaveBeenCalledTimes(1);
+    expect(history.length).toBe(len + 1);
+    expect(location.pathname + location.hash).toBe("/cost#project=foo&range=7&tool=Bash");
+    expect(scroll).toHaveBeenCalledWith(0, 0);
+  });
+  it("adds nothing for the current location", () => {
+    history.replaceState(null, "", "/errors#project=foo");
+    const push = vi.spyOn(history, "pushState"), len = history.length;
+    go("/errors#project=foo");
+    expect(push).not.toHaveBeenCalled();
+    expect(history.length).toBe(len);
+  });
+  it("does not scroll for a hash-only change, and tells subscribers", () => {
+    history.replaceState(null, "", "/usage#range=30");
+    const scroll = vi.spyOn(window, "scrollTo");
+    const { result } = renderHook(() => useHashState());
+    act(() => go("/usage#range=7"));
+    expect(result.current[0].range).toBe(7);
+    expect(scroll).not.toHaveBeenCalled();
+  });
+  it("keeps navigate's page switch", () => {
+    history.replaceState(null, "", "/usage#range=30");
+    const push = vi.spyOn(history, "pushState"), scroll = vi.spyOn(window, "scrollTo");
+    navigate("/errors#range=30");
+    expect(location.pathname).toBe("/errors");
+    expect(push).toHaveBeenCalledTimes(1);
+    expect(scroll).toHaveBeenCalledWith(0, 0);
   });
 });

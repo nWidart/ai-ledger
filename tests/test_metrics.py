@@ -6,7 +6,7 @@ import sys
 import tempfile
 import threading
 import unittest
-from datetime import date
+from datetime import date, timedelta
 from http.server import ThreadingHTTPServer
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -393,6 +393,29 @@ class MetricsTest(unittest.TestCase):
             httpd.shutdown()
             httpd.server_close()
 
+    def test_palette(self):
+        c = self.con.cursor()
+        pal = lambda *a, **k: metrics.palette(c, *a, today=TODAY, **k)
+        rate = lambda rs, key="name": [(r[key], r["calls"], r["errors"], r["failure_rate"]) for r in rs]
+        for project, days, auto in (("", 0, False), ("foo", 7, False), ("", 30, True)):
+            p, u = pal(project, days, automated=auto), metrics.usage(c, project, days, prices=PRICES, today=TODAY, automated=auto)
+            self.assertEqual(rate(p["tools"]), rate(u["tools"], "tool"))
+            self.assertEqual((rate(p["mcp"]), rate(p["skills"])), (rate(u["mcp"]), rate(u["skills"])))
+        self.assertEqual(pal()["projects"], [dict(name="foo", sessions=2), dict(name="bar", sessions=1)])
+        self.assertEqual(pal(automated=True)["projects"][-1], dict(name="observer-sessions", sessions=1))
+        self.assertEqual(pal("", 30)["projects"], [dict(name="foo", sessions=2)])
+        # A project filter leaves the project counts as they are and narrows the rest.
+        self.assertEqual(pal("bar")["projects"], pal()["projects"])
+        self.assertEqual((pal("bar")["tools"], pal("bar")["sources"]), ([], [dict(source="claude", sessions=1)]))
+        self.assertEqual(pal()["sources"], [dict(source="claude", sessions=3)])
+        self.assertEqual(pal()["categories"], [dict(id="x", label="x", errors=6)])
+        # bar has nothing in the last 7 days; the project list still counts foo there.
+        empty = pal("bar", 7)
+        self.assertEqual([empty[k] for k in ("sources", "tools", "mcp", "skills", "categories")], [[], [], [], [], []])
+        self.assertEqual(empty["projects"], [dict(name="foo", sessions=2)])
+        with self.assertRaises(ValueError):
+            pal(source="grok")
+
     def codex_models(self, *requests):
         """The model rows of a Codex session holding requests, priced by prices.json. The rows are removed after."""
         c = self.con.cursor()
@@ -672,6 +695,22 @@ class ToolDetailTest(unittest.TestCase):
         self.assertIsNone(d["patterns"])
         self.assertIsNone(d["shell"])
         self.assertIsNone(d["tools"])
+
+    def test_palette_categories_match_errors_page(self):
+        errs = metrics.errors_payload(self.con.cursor(), today=TODAY)["errors"]
+        for project, days, source in (("", 0, ""), ("foo", 7, ""), ("bar", 30, ""), ("", 30, "codex")):
+            start = (TODAY - timedelta(days=days - 1)).isoformat() if days else ""
+            want = {}
+            for e in errs:
+                if (not project or e["p"] == project) and (not source or e["src"] == source) and e["d"] >= start:
+                    want[e["c"]] = want.get(e["c"], 0) + 1
+            got = metrics.palette(self.con.cursor(), project, days, TODAY, source=source)["categories"]
+            self.assertEqual({r["id"]: r["errors"] for r in got}, want, (project, days, source))
+        cats = metrics.palette(self.con.cursor(), "foo", 7, TODAY)["categories"]
+        self.assertEqual(cats[0], dict(id="tests", label="Tests / build / lint failed", errors=4))
+        tools = {r["name"]: r for r in metrics.palette(self.con.cursor(), "foo", 7, TODAY)["tools"]}
+        self.assertEqual((tools["Bash"]["calls"], tools["Bash"]["errors"]), (31, 4))
+        self.assertNotIn("Bash", {r["name"] for r in metrics.palette(self.con.cursor(), source="codex")["tools"]})
 
     def test_unknown_kind_and_source(self):
         with self.assertRaises(ValueError):

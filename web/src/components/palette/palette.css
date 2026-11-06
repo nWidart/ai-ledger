@@ -1,0 +1,81 @@
+/* Command palette: a modal box near the top, over the page and any open sheet. Theme tokens only (theme.css). */
+/* Filter badges: the chart blue is too light for 11px text, so a darker ink of it (4.5:1 or more, highlighted rows included). */
+dialog.palette { --pal-filter-ink: #1c5dab; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) dialog.palette { --pal-filter-ink: #74aff5; } }
+:root[data-theme="dark"] dialog.palette { --pal-filter-ink: #74aff5; }
+dialog.palette { margin: 12vh auto 0; padding: 0; width: min(680px, calc(100% - 32px)); max-height: min(560px, 76vh);
+  background: var(--surface-1); color: var(--text-primary); border: 1px solid var(--border); border-radius: 14px;
+  box-shadow: var(--shadow-pop); overflow: hidden; }
+dialog.palette[open] { display: flex; flex-direction: column; }
+dialog.palette::backdrop { background: rgba(0,0,0,.28); }
+.pal-in { display: flex; flex-direction: column; min-height: 0; max-height: inherit; }
+
+.pal-field { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 10px 14px; border-bottom: 1px solid var(--border); cursor: text; }
+.pal-icon { flex: none; color: var(--text-muted); }
+.pal-chips { display: contents; }
+.pal-input { flex: 1 1 160px; min-width: 120px; border: 0; outline: 0; background: none; color: var(--text-primary);
+  font: inherit; font-size: 15px; padding: 6px 2px; }
+.pal-input::placeholder { color: var(--text-muted); }
+
+.pal-chip { display: inline-flex; align-items: center; gap: 3px; max-width: 100%; padding: 2px 6px 2px 8px; border-radius: 999px;
+  font-size: 13px; font-weight: 500; line-height: 1.5; border: 1px solid var(--border); background: var(--surface-2); color: var(--text-primary);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pal-chip:hover { background: var(--track); }
+.pal-chip.dest { background: var(--accent-soft); border-color: transparent; color: var(--accent-ink); }
+.pal-chip.replaced, .pal-chip.dropped { text-decoration: line-through; color: var(--text-muted); background: none; border-style: dashed; }
+.pal-sigil { color: var(--text-muted); font-weight: 600; }
+.pal-chip.dest .pal-sigil { color: inherit; opacity: .75; }
+.pal-x { font-size: 10px; opacity: .6; margin-left: 2px; }
+.pal-chip:hover .pal-x, .pal-chip:focus-visible .pal-x { opacity: 1; }
+
+.pal-list { list-style: none; margin: 0; padding: 6px; overflow-y: auto; min-height: 0; flex: 1 1 auto; overscroll-behavior: contain; }
+.pal-list:empty { display: none; }
+.pal-group { padding: 8px 10px 4px; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--text-muted); }
+.pal-opt { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; cursor: pointer; min-width: 0; }
+.pal-opt[aria-selected=true] { background: var(--accent-soft); }
+.pal-opt[aria-selected=true] .pal-kbd { color: var(--accent-ink); border-color: var(--accent); }
+.pal-badge { flex: none; min-width: 74px; font-size: 11px; font-weight: 500; color: var(--text-secondary); padding: 1px 6px;
+  border-radius: 5px; background: var(--surface-2); text-align: center; }
+.pal-badge.k-project, .pal-badge.k-source, .pal-badge.k-range, .pal-badge.k-automated { color: var(--pal-filter-ink); background: var(--series-1-soft); }
+.pal-badge.k-category { color: var(--critical-text); background: var(--critical-soft); }
+.pal-badge.k-command { color: var(--warning-text); background: var(--warning-soft); }
+.pal-text { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pal-text mark { background: none; color: inherit; font-weight: 700; text-decoration: underline; text-decoration-color: var(--accent); text-underline-offset: 2px; }
+.pal-detail { flex: none; color: var(--text-muted); font-size: 12px; white-space: nowrap; }
+.pal-kbd, .pal-keys kbd { font: 11px/1.4 ui-monospace, "SF Mono", Menlo, monospace; color: var(--text-muted); padding: 0 5px;
+  border: 1px solid var(--border); border-radius: 5px; background: var(--surface-1); }
+.pal-kbd { flex: none; }
+
+.pal-close { flex: none; margin-left: auto; border: 0; background: none; color: var(--text-muted); padding: 4px 8px; border-radius: 8px; font-size: 13px; }
+.pal-close:hover { color: var(--text-primary); }
+.pal-apply { border: 0; background: var(--accent); color: var(--on-accent); font-weight: 500; font-size: 12px; padding: 3px 12px; border-radius: 7px; }
+.pal-apply:hover { background: var(--accent-ink); }
+.pal-list[aria-busy=true] .pal-detail { opacity: .45; }
+.pal-retry { margin-left: 6px; font-size: 12px; padding: 2px 10px; }
+.pal-toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 20; max-width: calc(100% - 32px);
+  padding: 8px 14px; border-radius: 10px; background: var(--text-primary); color: var(--bg); font-size: 13px; box-shadow: var(--shadow-pop);
+  overflow-wrap: anywhere; }
+.pal-note { margin: 0; padding: 14px 16px; color: var(--text-muted); font-size: 13px; }
+.pal-foot { display: flex; flex-wrap: wrap; gap: 4px 16px; justify-content: space-between; padding: 8px 14px; border-top: 1px solid var(--border);
+  background: var(--surface-2); color: var(--text-secondary); font-size: 12px; }
+.pal-foot > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.pal-foot-end { display: inline-flex; gap: 12px; align-items: center; margin-left: auto; }
+.pal-keys { display: inline-flex; gap: 4px; align-items: center; color: var(--text-muted); white-space: nowrap; }
+
+/* Phones: full width at the top, no key legend (touch has none of those keys), details under the name. */
+@media (max-width: 520px) {
+  dialog.palette { margin-top: 8px; width: calc(100% - 16px); max-height: calc(100dvh - 16px); }
+  .pal-keys { display: none; }
+  .pal-foot-end { flex-basis: 100%; }
+  .pal-opt { flex-wrap: wrap; gap: 2px 8px; }
+  .pal-badge { min-width: 0; }
+  .pal-detail { flex-basis: 100%; padding-left: 0; order: 3; }
+}
+/* Touch: rows, Close and Apply get finger-sized targets. */
+@media (pointer: coarse) {
+  .pal-opt { min-height: 44px; }
+  .pal-close, .pal-apply { min-height: 44px; min-width: 44px; }
+  .pal-field { gap: 8px; }
+  .pal-chip { min-height: 44px; padding: 0 10px 0 12px; }
+  .pal-apply { flex: 1; font-size: 14px; }
+}

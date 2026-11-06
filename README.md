@@ -66,6 +66,34 @@ Where the limit figures come from:
 
 The button at the right end of the top bar sets the theme: **System** (follows the OS), **Light** or **Dark**. Each click moves to the next. The browser keeps the choice, and other open tabs switch with it.
 
+## Command palette
+
+Press **Cmd+K** on macOS or **Ctrl+K** elsewhere, or click **Search** in the navigation, to build a view in one step. Type `#` to narrow and `>` to go somewhere or run a command, in any order:
+
+- `#` filters: a project, a source (`#claude`, `#codex`), a range (`#7d`, `#14d`, `#30d`, `#90d`, `#all`) or `#automated`.
+- `>` destinations: a page (`>errors`), an inspector (a tool such as `>bash`, an MCP server, a skill, a session, an error type), or a command (`>refresh`, `>copy link`).
+- Text without a sigil searches every kind. Each row shows its kind and the sigil it becomes.
+
+Examples:
+
+- `>errors` opens Errors with the current filters.
+- `>errors #myproject` opens Errors filtered to `myproject`.
+- `#myproject >bash` opens the Bash inspector on the current page, for `myproject`.
+- `#myproject #codex #7d >cost` opens Cost with those three filters.
+- `>errors >bash` opens Errors with the Bash inspector over it.
+
+Picked terms become chips. The palette opens with a chip for each current filter, so removing a chip removes that filter. Tab adds the highlighted row, Backspace removes the last chip, Enter applies, and Esc closes. Enter waits while a typed term is not a chip yet, and the footer names it. With a mouse, a clicked filter becomes a chip and a clicked destination applies; on a touch screen every tapped row becomes a chip and **Apply** applies. The footer says what Enter will do. Tool, MCP server and skill rows count only the calls in the chosen view, so an empty combination shows before you apply it.
+
+When terms clash:
+
+- Two pages: the later one wins.
+- Two values of a project, source or range: the later one wins.
+- Two inspectors: the later one wins.
+- An error type opens Errors. A later page that cannot show it drops it.
+- An inspector with no page stays on the current page, or opens Activity from Limits.
+
+One commit adds one browser history entry, so Back undoes it. The suggestions come from `/api/palette`, which takes the same `project`, `range`, `source` and `automated` parameters as `/api/usage`.
+
 ## Privacy
 
 `data/ai-ledger.duckdb` holds full transcript content, including any secrets that appeared in a session. It is git-ignored. Do not share it.

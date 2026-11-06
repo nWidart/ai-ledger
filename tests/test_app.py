@@ -74,6 +74,18 @@ class AppTest(unittest.TestCase):
         status, _, body = self.get("/api/tool?kind=tool&name=Bash&source=grok")
         self.assertEqual((status, json.loads(body)), (400, dict(error="unknown source: grok")))
 
+    def test_palette(self):
+        status, _, body = self.get("/api/palette?range=0")
+        got = json.loads(body)
+        self.assertEqual(status, 200)
+        for k in ("projects", "sources", "tools", "mcp", "skills", "categories"):
+            self.assertIsInstance(got[k], list, k)
+        self.assertEqual([(r["name"], r["calls"]) for r in got["tools"]], [("Bash", 1)])
+        status, _, body = self.get("/api/palette?source=grok")
+        self.assertEqual((status, json.loads(body)), (400, dict(error="unknown source: grok")))
+        status, _, body = self.get("/api/palette?range=-1")
+        self.assertEqual((status, json.loads(body)), (400, dict(error="range must be >= 0")))
+
     def test_foreign_host_refused(self):
         self.assertEqual(self.get("/usage", host="example.com")[0], 403)
         self.assertEqual(self.get("/assets/x.js", host="evil:8765")[0], 403)

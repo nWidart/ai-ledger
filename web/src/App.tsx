@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { Nav } from "./components/Nav";
+import { Palette } from "./components/palette/Palette";
 import { usePathname } from "./hash";
 import { ActivityPage } from "./pages/activity/ActivityPage";
 import { CostPage } from "./pages/cost/CostPage";
@@ -22,5 +23,5 @@ export function App() {
   useEffect(() => { if (path !== route) history.replaceState(null, "", route + location.hash); }, [path, route]);
   useEffect(() => { document.title = ROUTES[route].title; }, [route]);
   const { Page } = ROUTES[route];
-  return <><Nav /><Page /></>;
+  return <><Nav /><Page /><Palette /></>;
 }
