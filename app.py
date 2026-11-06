@@ -153,6 +153,9 @@ def handler(app):
                 elif url.path == "/api/limits":
                     self.json(limits.payload(app.con.cursor(), int(q.get("range") or 0), q.get("source", ""), q.get("project", ""),
                                              polls={p.name: dict(p.state) for p in app.pollers}))
+                elif url.path == "/api/tool":
+                    self.json(metrics.tool_detail(app.con.cursor(), q.get("kind", ""), q.get("name", ""), q.get("project", ""),
+                                                  int(q.get("range") or 0), automated=q.get("automated") == "1", source=q.get("source", "")))
                 elif url.path == "/api/usage":
                     self.json(metrics.usage(app.con.cursor(), q.get("project", ""), int(q.get("range") or 0), q.get("session", ""),
                                             automated=q.get("automated") == "1", source=q.get("source", "")))

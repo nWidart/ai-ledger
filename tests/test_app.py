@@ -1,4 +1,5 @@
 import http.client
+import json
 import os
 import sys
 import tempfile
@@ -18,6 +19,10 @@ class AppTest(unittest.TestCase):
     def setUpClass(cls):
         cls.tmp = tempfile.mkdtemp()
         cls.con = store.open_store(os.path.join(cls.tmp, "d", "x.duckdb"))
+        store.insert(cls.con.cursor(), "sessions", ["session_id", "project", "first_ts", "last_ts"],
+                     [("s1", "foo", "2026-11-04 10:00:00", "2026-11-04 11:00:00")])
+        store.insert(cls.con.cursor(), "tool_calls", ["tool_use_id", "session_id", "tool", "input_summary", "start_ts", "end_ts", "is_error"],
+                     [("t1", "s1", "Bash", "npm test", "2026-11-04 10:01:00", "2026-11-04 10:01:02", False)])
         cls.httpd = ThreadingHTTPServer(("127.0.0.1", 0), app.handler(app.App(cls.con, dict(claude=cls.tmp))))
         threading.Thread(target=cls.httpd.serve_forever, daemon=True).start()
 
@@ -58,6 +63,16 @@ class AppTest(unittest.TestCase):
         for path in ("/assets/../app.py", "/assets/../index.html", "/assets/%2e%2e/index.html", "/assets/", "/assets/missing.js",
                      "/assets//etc/passwd", "/theme.css", "/nav.html"):
             self.assertEqual(self.get(path)[0], 404, path)
+
+    def test_tool_inspector(self):
+        status, _, body = self.get("/api/tool?kind=tool&name=Bash")
+        self.assertEqual((status, json.loads(body)["totals"]["calls"]), (200, 1))
+        status, _, body = self.get("/api/tool?kind=tool&name=Glob&range=30")
+        self.assertEqual((status, json.loads(body)["totals"]["calls"]), (200, 0))
+        status, _, body = self.get("/api/tool?kind=hook&name=Bash")
+        self.assertEqual((status, json.loads(body)), (400, dict(error="unknown kind: hook")))
+        status, _, body = self.get("/api/tool?kind=tool&name=Bash&source=grok")
+        self.assertEqual((status, json.loads(body)), (400, dict(error="unknown source: grok")))
 
     def test_foreign_host_refused(self):
         self.assertEqual(self.get("/usage", host="example.com")[0], 403)
