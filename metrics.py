@@ -318,7 +318,7 @@ def rate_rows(rs, n="calls"):
 
 def project_list(cur, automated=False):
     sql, sp = scope("", automated)
-    return [r[0] for r in cur.execute(f"SELECT project FROM sessions s WHERE project IS NOT NULL AND {sql} GROUP BY 1 ORDER BY count(*) DESC",
+    return [r[0] for r in cur.execute(f"SELECT project FROM sessions s WHERE project IS NOT NULL AND {sql} GROUP BY 1 ORDER BY count(*) DESC, 1",
                                       sp).fetchall()]
 
 
