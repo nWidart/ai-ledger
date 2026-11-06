@@ -9,8 +9,8 @@ export default {
  "end": "2026-11-05",
  "projects": [
   "foo",
-  "bar",
-  "observer-sessions"
+  "observer-sessions",
+  "bar"
  ],
  "project_order": [
   "foo",
@@ -158,17 +158,17 @@ export default {
  "models": [
   {
    "model": "m-a",
-   "effort": "(none)",
-   "requests": 2,
-   "tokens": 220,
-   "cost": 0.0004
-  },
-  {
-   "model": "m-a",
    "effort": "high",
    "requests": 2,
    "tokens": 12000000,
    "cost": 15.8
+  },
+  {
+   "model": "m-a",
+   "effort": "(none)",
+   "requests": 2,
+   "tokens": 220,
+   "cost": 0.0004
   },
   {
    "model": "m-unknown",
