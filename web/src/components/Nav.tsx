@@ -78,7 +78,7 @@ export function Nav() {
           <rect x="4.5" y="10.5" width="2.6" height="5" rx="1.1" fill="var(--surface-1)" />
           <rect x="8.7" y="7" width="2.6" height="8.5" rx="1.1" fill="var(--surface-1)" />
           <rect x="12.9" y="4.5" width="2.6" height="11" rx="1.1" fill="var(--surface-1)" opacity=".7" />
-        </svg><span className="appnav-word">Claude <b>ledger</b></span></span>
+        </svg><span className="appnav-word">AI <b>Ledger</b></span></span>
         <span className="appnav-tabs">
           {PAGES.map(p => (
             <a key={p.path} href={p.path + shared} aria-current={p.path === path ? "page" : undefined} onClick={e => go(e, p.path)}>{p.label}</a>

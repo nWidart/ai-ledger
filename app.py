@@ -174,7 +174,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("command", nargs="?", choices=["serve", "ingest", "rebuild"], default="serve")
     ap.add_argument("--projects", default=store.DEFAULT_ROOT, help="transcript root")
-    ap.add_argument("--db", default=store.DEFAULT_DB, help="database file")
+    ap.add_argument("--db", help="database file (default data/ai-ledger.duckdb)")
     a = ap.parse_args()
     try:
         con = store.open_store(a.db)

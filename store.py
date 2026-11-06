@@ -7,6 +7,7 @@ import glob
 import json
 import os
 import subprocess
+import sys
 import time
 from datetime import datetime, timezone
 
@@ -15,7 +16,8 @@ import duckdb
 from categorize import GIT_COMMIT, TEST_CMD, categorize, error_text, summarize_input
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_DB = os.path.join(HERE, "data", "claude.duckdb")
+DEFAULT_DB = os.path.join(HERE, "data", "ai-ledger.duckdb")
+EARLIER_DB = os.path.join(HERE, "data", "claude.duckdb")  # default before the rename to AI Ledger
 DEFAULT_ROOT = os.path.expanduser("~/.claude/projects")
 BUSY = "the app is running and owns the store; use Refresh in the dashboard"
 
@@ -57,11 +59,29 @@ class StoreBusy(Exception):
     pass
 
 
-def open_store(path=DEFAULT_DB):
-    """Open (or create) the database for writing. Raises StoreBusy when another process holds it."""
+def move_earlier_store(new, old):
+    """Move a store at its pre-rename path to the new one, write-ahead log included. Never replaces a store."""
+    if os.path.exists(old):
+        if os.path.exists(new):
+            print(f"store: opened {new}; {old} also exists and was not moved", file=sys.stderr)
+            return
+        os.replace(old, new)
+    # Also finishes a move that stopped between the file and its log.
+    if os.path.exists(old + ".wal") and not os.path.exists(new + ".wal"):
+        os.replace(old + ".wal", new + ".wal")
+
+
+def open_store(path=None):
+    """Open (or create) the database for writing. Raises StoreBusy when another process holds it.
+
+    With no path, opens DEFAULT_DB, first moving a store found at EARLIER_DB there."""
+    default = path is None
+    path = DEFAULT_DB if default else path
     d = os.path.dirname(os.path.abspath(path))
     os.makedirs(d, mode=0o700, exist_ok=True)
     os.chmod(d, 0o700)
+    if default:
+        move_earlier_store(DEFAULT_DB, EARLIER_DB)
     # Kept for the whole process: DuckDB creates the WAL and temp files later, and they hold transcript text too.
     os.umask(0o077)
     try:
@@ -73,6 +93,9 @@ def open_store(path=DEFAULT_DB):
     os.chmod(path, 0o600)
     con.execute(RAW_SCHEMA)
     con.execute(DERIVED_SCHEMA)
+    for old, new in PROJECT_ALIASES.items():  # names stored before the alias existed
+        for table in ("projects_by_cwd", "sessions"):
+            con.execute(f"UPDATE {table} SET project = ? WHERE project = ?", [new, old])
     return con
 
 
@@ -110,9 +133,16 @@ def update_from(cur, table, key, cols, rows, where=""):
 # ---------- project identity ----------
 
 TEMP_PREFIXES = ("/private/var/folders/", "/var/folders/", "/private/tmp/", "/tmp/")
+# Repositories whose folder was renamed: sessions from the old folder belong to the new project.
+PROJECT_ALIASES = {"claude-errors-dashboard": "ai-ledger"}
 
 
 def resolve_project(cwd):
+    name = project_of(cwd)
+    return PROJECT_ALIASES.get(name, name)
+
+
+def project_of(cwd):
     if not cwd:
         return "(unknown)"
     if cwd.startswith(TEMP_PREFIXES) or cwd.rstrip("/") in ("/tmp", "/private/tmp"):

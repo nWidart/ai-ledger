@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Runs as a single local process that owns the transcript store, keeps it current, and serves the Activity, Cost and Errors dashboards behind one shared navigation.
+Runs AI Ledger as a single local process that owns the transcript store, keeps it current, and serves the Activity, Cost and Errors dashboards behind one shared navigation.
 
 ## Requirements
 

@@ -1,5 +1,5 @@
 {
-  "name": "claude-ledger-web",
+  "name": "ai-ledger-web",
   "private": true,
   "type": "module",
   "scripts": {

@@ -66,6 +66,12 @@ class ProjectTest(unittest.TestCase):
         self.assertEqual(store.resolve_project("/Users/x/ws/foo/worktrees/thread-9/sub"), "foo")
         self.assertEqual(store.resolve_project("/Users/x/.t3/worktrees/foo/t3-3fb14cfd"), "foo")
 
+    def test_renamed_repository_alias(self):
+        self.assertEqual(store.resolve_project("/Users/x/Sites/projects/claude-errors-dashboard"), "ai-ledger")
+        self.assertEqual(store.resolve_project("/Users/x/Sites/projects/claude-errors-dashboard/.claude/worktrees/x"),
+                         "ai-ledger")
+        self.assertEqual(store.resolve_project("/Users/x/Sites/projects/ai-ledger"), "ai-ledger")
+
     def test_temp_path(self):
         self.assertEqual(store.resolve_project("/private/var/folders/ab/T/tmp123"), "(temp)")
         self.assertEqual(store.resolve_project("/tmp/scratch"), "(temp)")
@@ -171,6 +177,28 @@ class DeriveTest(StoreCase):
         self.ingest()
         self.assertEqual(self.q("SELECT hook, command, duration_ms, is_error FROM hooks ORDER BY source, command"),
                          [("SessionStart:startup", None, None, True), ("Stop", "a", 10, False), ("Stop", "b", None, True)])
+
+
+class AliasTest(StoreCase):
+    def test_open_renames_stored_projects(self):
+        self.con.execute("INSERT INTO projects_by_cwd VALUES ('/gone/claude-errors-dashboard', 'claude-errors-dashboard')")
+        self.con.execute("INSERT INTO sessions (session_id, project) VALUES ('s1', 'claude-errors-dashboard')")
+        self.con.close()
+        for _ in range(2):  # idempotent
+            self.con = store.open_store(self.db)
+            self.assertEqual(self.q("SELECT project FROM projects_by_cwd UNION ALL SELECT project FROM sessions"),
+                             [("ai-ledger",), ("ai-ledger",)])
+            self.con.close()
+        self.con = store.open_store(self.db)
+
+    def test_rebuild_keeps_alias(self):
+        self.con.execute("INSERT INTO projects_by_cwd VALUES ('/gone/claude-errors-dashboard', 'claude-errors-dashboard')")
+        self.con.close()
+        self.con = store.open_store(self.db)
+        self.write("a.jsonl", prompt("u1", "2026-11-01T10:00:00Z", "p1", "go").replace("/nowhere/foo", "/gone/claude-errors-dashboard"))
+        store.ingest(self.con, self.root)
+        store.rebuild(self.con)
+        self.assertEqual(self.q("SELECT project FROM sessions"), [("ai-ledger",)])
 
 
 class RebuildTest(StoreCase):

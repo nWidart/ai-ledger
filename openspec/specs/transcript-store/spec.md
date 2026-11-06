@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Keeps a permanent, deduplicated, queryable local copy of every Claude Code transcript line, so usage and error metrics survive transcript cleanup and do not require rescanning raw files.
+AI Ledger's store: keeps a permanent, deduplicated, queryable local copy of every coding-agent transcript line (today Claude Code's), so usage and error metrics survive transcript cleanup and do not require rescanning raw files.
 
 ## Requirements
 

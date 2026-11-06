@@ -1,6 +1,6 @@
-# Claude errors dashboard
+# AI Ledger
 
-A local app that keeps a permanent copy of your Claude Code transcripts (`~/.claude/projects`) in a DuckDB store and serves three dashboards on it:
+A local ledger of your AI coding-agent transcripts (today Claude Code, from `~/.claude/projects`). It keeps a permanent copy of them in a DuckDB store and serves three dashboards on it:
 
 - **Activity**: what Claude did and where it struggled: commits, prompts and sessions, what needs attention (error loops, sessions near the context limit, flaky tools, failed tests), context health, autonomy and friction, time, and tool, MCP, skill and hook use per project and session.
 - **Cost**: what it cost and why that changed: estimated cost against the previous period, tokens by kind, cache efficiency, model mix, and cost per project, session and commit.
@@ -24,7 +24,7 @@ uv run app.py rebuild   # regenerate derived tables from the stored lines, e.g. 
 uv run python -m unittest discover -s tests
 ```
 
-Options: `--projects <dir>` (transcript root), `--db <file>` (database, default `data/claude.duckdb`).
+Options: `--projects <dir>` (transcript root), `--db <file>` (database, default `data/ai-ledger.duckdb`).
 
 The app listens on `127.0.0.1:8765` only. Use that address, not `localhost`: fix markers live in that browser origin, so the app redirects `localhost` there.
 
@@ -50,7 +50,19 @@ Sessions that a tool starts in the background (the projects in `AUTOMATED_PROJEC
 - `metrics.py` — the queries behind the dashboards.
 - `prices.json` — per-model prices (USD per million tokens) and context windows.
 - `web/` — the pages: one React and TypeScript app (Vite). `web/src/pages/` holds Activity, Cost and Errors, `web/src/components/` the shared top bar, filters, sheets, drawers and charts, and `web/src/theme.css` the colors for light and dark. `web/dist/` is the committed build that the app serves.
-- `data/claude.duckdb` — the store, git-ignored and readable only by you. It holds full transcript content, including any secrets that appeared in sessions.
+- `data/ai-ledger.duckdb` — the store, git-ignored and readable only by you. It holds full transcript content, including any secrets that appeared in sessions.
+
+## Renamed from claude-errors-dashboard
+
+The app was called `claude-errors-dashboard` and kept its store in `data/claude.duckdb`. On start it moves that file, and its `.wal`, to `data/ai-ledger.duckdb`. It never creates an empty store next to it. Sessions run in the old folder belong to project `ai-ledger` (`PROJECT_ALIASES` in `store.py`). Browser state (applied fixes, saved views) is kept.
+
+To rename the folder:
+
+1. Start the app once from the old folder, so the store moves and the project names are rewritten. Then stop it.
+2. Stop every agent session that runs in the folder.
+3. `mv ~/Sites/projects/claude-errors-dashboard ~/Sites/projects/ai-ledger`
+4. Move the Claude Code memory for this project, which is kept per folder path: `mkdir -p ~/.claude/projects/-Users-<you>-Sites-projects-ai-ledger && mv ~/.claude/projects/-Users-<you>-Sites-projects-claude-errors-dashboard/memory ~/.claude/projects/-Users-<you>-Sites-projects-ai-ledger/`. Leave the transcript `.jsonl` files where they are: ingest reads every folder under `~/.claude/projects`.
+5. Run `uv sync` in the new folder (the virtualenv holds absolute paths). Repoint anything that opens the old path, such as your editor or shell aliases, then start the app.
 
 ## Develop the pages
 

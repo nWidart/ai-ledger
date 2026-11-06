@@ -7,9 +7,9 @@ import { ErrorsPage } from "./pages/errors/ErrorsPage";
 
 // One app, three pages: the path picks the page; the nav switches with pushState, so payloads stay in memory between them.
 const ROUTES = {
-  "/usage": { title: "Claude Activity", Page: ActivityPage },
-  "/cost": { title: "Claude Cost", Page: CostPage },
-  "/errors": { title: "Claude Errors", Page: ErrorsPage },
+  "/usage": { title: "Activity · AI Ledger", Page: ActivityPage },
+  "/cost": { title: "Cost · AI Ledger", Page: CostPage },
+  "/errors": { title: "Errors · AI Ledger", Page: ErrorsPage },
 } as const;
 type Route = keyof typeof ROUTES;
 const isRoute = (p: string): p is Route => p in ROUTES;

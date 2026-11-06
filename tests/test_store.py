@@ -3,8 +3,10 @@ import os
 import shutil
 import stat
 import sys
+import subprocess
 import tempfile
 import unittest
+from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import store  # noqa: E402
@@ -18,7 +20,7 @@ class StoreCase(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
         self.root = os.path.join(self.tmp, "projects")
-        self.db = os.path.join(self.tmp, "data", "claude.duckdb")
+        self.db = os.path.join(self.tmp, "data", "ai-ledger.duckdb")
         os.makedirs(os.path.join(self.root, "proj"))
         self.con = store.open_store(self.db)
 
@@ -123,6 +125,79 @@ class IngestTest(StoreCase):
         store.ingest(self.con, self.root)
         self.assertEqual(self.count(), 2)
         self.assertEqual(self.q("SELECT count(*) FROM files")[0][0], 1)
+
+
+class MoveEarlierStoreTest(unittest.TestCase):
+    """The default store moved from data/claude.duckdb to data/ai-ledger.duckdb; nothing stored may be lost."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.data = os.path.join(self.tmp, "data")
+        os.makedirs(self.data)
+        self.old = os.path.join(self.data, "claude.duckdb")
+        self.new = os.path.join(self.data, "ai-ledger.duckdb")
+        patch = mock.patch.multiple(store, DEFAULT_DB=self.new, EARLIER_DB=self.old)
+        patch.start()
+        self.addCleanup(patch.stop)
+        self.addCleanup(shutil.rmtree, self.tmp)
+
+    def make(self, path, key):
+        con = store.open_store(path)
+        con.execute("INSERT INTO raw_lines (key, json) VALUES (?, '{}')", [key])
+        con.close()
+
+    def keys(self, con):
+        return [r[0] for r in con.execute("SELECT key FROM raw_lines ORDER BY key").fetchall()]
+
+    def test_moves_earlier_store(self):
+        self.make(self.old, "u1")
+        con = store.open_store()
+        self.assertEqual(self.keys(con), ["u1"])
+        con.close()
+        self.assertFalse(os.path.exists(self.old))
+        self.assertEqual(stat.S_IMODE(os.stat(self.new).st_mode), 0o600)
+
+    def test_moves_write_ahead_log(self):
+        # A process that exits without a checkpoint leaves its last insert only in claude.duckdb.wal.
+        script = ("import duckdb, os, sys; sys.path.insert(0, sys.argv[2]); import store; "
+                  "c = store.open_store(sys.argv[1]); c.execute(\"SET checkpoint_threshold = '10GB'\"); "
+                  "c.execute(\"INSERT INTO raw_lines (key, json) VALUES ('u1', '{}')\"); os._exit(0)")
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        subprocess.run([sys.executable, "-c", script, self.old, root], check=True)
+        self.assertTrue(os.path.exists(self.old + ".wal"))
+        con = store.open_store()
+        self.assertEqual(self.keys(con), ["u1"])
+        con.close()
+        self.assertFalse(os.path.exists(self.old + ".wal"))
+
+    def test_finishes_move_stopped_before_log(self):
+        self.make(self.old, "u1")
+        open(self.old + ".wal", "wb").close()
+        os.replace(self.old, self.new)  # as if the process died between the two moves
+        store.open_store().close()
+        self.assertFalse(os.path.exists(self.old + ".wal"))
+
+    def test_both_stores_keep_new_and_leave_earlier(self):
+        self.make(self.old, "old")
+        self.make(self.new, "new")
+        con = store.open_store()
+        self.assertEqual(self.keys(con), ["new"])
+        con.close()
+        con = store.open_store(self.old)
+        self.assertEqual(self.keys(con), ["old"])
+        con.close()
+
+    def test_explicit_path_moves_nothing(self):
+        self.make(self.old, "u1")
+        other = os.path.join(self.data, "other.duckdb")
+        store.open_store(other).close()
+        self.assertTrue(os.path.exists(self.old))
+        self.assertFalse(os.path.exists(self.new))
+
+    def test_new_store_without_earlier(self):
+        store.open_store().close()
+        self.assertTrue(os.path.exists(self.new))
+        self.assertFalse(os.path.exists(self.old))
 
 
 if __name__ == "__main__":

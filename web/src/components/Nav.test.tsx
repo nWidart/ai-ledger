@@ -16,13 +16,13 @@ describe("Nav", () => {
     history.replaceState(null, "", "/usage#project=foo&range=14&auto=1&session=s1");
     render(<App />);
     expect(screen.getByRole("link", { name: "Activity" }).getAttribute("aria-current")).toBe("page");
-    expect(document.title).toBe("Claude Activity");
+    expect(document.title).toBe("Activity · AI Ledger");
     await userEvent.click(screen.getByRole("link", { name: "Cost" }));
     expect(location.pathname).toBe("/cost");
     expect(location.hash).toBe("#project=foo&range=14&auto=1");
     expect(screen.getByRole("link", { name: "Cost" }).getAttribute("aria-current")).toBe("page");
     expect(screen.getByRole("link", { name: "Activity" }).getAttribute("aria-current")).toBeNull();
-    expect(document.title).toBe("Claude Cost");
+    expect(document.title).toBe("Cost · AI Ledger");
     expect(screen.getByRole("link", { name: "Errors" }).getAttribute("href")).toBe("/errors#project=foo&range=14&auto=1");
     // Back returns to Activity with its page-only keys.
     await act(async () => {
@@ -30,7 +30,13 @@ describe("Nav", () => {
       await new Promise(r => addEventListener("popstate", r, { once: true }));
     });
     expect(location.pathname).toBe("/usage");
-    expect(document.title).toBe("Claude Activity");
+    expect(document.title).toBe("Activity · AI Ledger");
+  });
+
+  it("names the app AI Ledger", () => {
+    vi.stubGlobal("fetch", vi.fn(() => json(status)));
+    const { container } = render(<Nav />);
+    expect(container.querySelector(".appnav-word")?.textContent).toBe("AI Ledger");
   });
 
   it("shows the project chip and clears the filter", async () => {
