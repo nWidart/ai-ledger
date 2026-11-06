@@ -67,6 +67,12 @@ class ProjectTest(unittest.TestCase):
         self.assertEqual(store.resolve_project("/Users/x/ws/foo/worktrees/thread-9/sub"), "foo")
         self.assertEqual(store.resolve_project("/Users/x/.t3/worktrees/foo/t3-3fb14cfd"), "foo")
 
+    def test_codex_desktop_workspaces(self):
+        codex = os.path.expanduser("~/Documents/Codex")
+        self.assertEqual(store.resolve_project(f"{codex}/2026-10-01/new-chat/work/invoice-export"), "codex-desktop")
+        self.assertEqual(store.resolve_project(f"{codex}/2026-11-02/i"), "codex-desktop")
+        self.assertEqual(store.resolve_project(f"{codex}Other/foo"), "foo")
+
     def test_renamed_repository_alias(self):
         self.assertEqual(store.resolve_project("/Users/x/Sites/projects/claude-errors-dashboard"), "ai-ledger")
         self.assertEqual(store.resolve_project("/Users/x/Sites/projects/claude-errors-dashboard/.claude/worktrees/x"),
