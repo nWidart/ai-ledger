@@ -139,6 +139,8 @@ def update_from(cur, table, key, cols, rows, where=""):
 TEMP_PREFIXES = ("/private/var/folders/", "/var/folders/", "/private/tmp/", "/tmp/")
 # Repositories whose folder was renamed: sessions from the old folder belong to the new project.
 PROJECT_ALIASES = {"claude-errors-dashboard": "ai-ledger"}
+# Folders where an app makes one working folder per chat (~/Documents/Codex/<date>/<slug>): one project for all of them.
+APP_WORKSPACES = {os.path.expanduser("~/Documents/Codex") + "/": "codex-desktop"}
 
 
 def resolve_project(cwd):
@@ -151,6 +153,9 @@ def project_of(cwd):
         return "(unknown)"
     if cwd.startswith(TEMP_PREFIXES) or cwd.rstrip("/") in ("/tmp", "/private/tmp"):
         return "(temp)"
+    for prefix, name in APP_WORKSPACES.items():
+        if cwd.startswith(prefix):
+            return name
     if os.path.isdir(cwd):
         try:
             r = subprocess.run(["git", "-C", cwd, "rev-parse", "--path-format=absolute", "--git-common-dir"],
@@ -497,6 +502,16 @@ def line_fields(d, path):
     return d.get("sessionId"), d.get("uuid"), d.get("timestamp")
 
 
+def prompt_text(d, pid):
+    """The text of human prompt pid if Claude Code line d holds it, else None."""
+    if d.get("promptId") != pid or d.get("isMeta"):
+        return None
+    content = (d.get("message") or {}).get("content")
+    text = content if isinstance(content, str) else "\n".join(
+        x.get("text") or "" for x in content if isinstance(x, dict) and x.get("type") == "text") if isinstance(content, list) else ""
+    return text.strip() or None
+
+
 def read_from(path, offset, size):
     """The bytes of a plain file from offset to size, and False: the file is read incrementally."""
     with open(path, "rb") as fh:
@@ -511,12 +526,15 @@ class Source(NamedTuple):
     subagent: Callable  # path -> whether the file holds subagent work
     fields: Callable = line_fields  # (line, path) -> raw_lines session_id, uuid, ts
     read: Callable = read_from  # (path, offset, size) -> (bytes, whole); whole: the file decompressed from its start
+    prompt_text: Callable = prompt_text  # (line, prompt_id) -> the prompt's text if the line holds it, else None
+    prompt_type: str = "user"  # raw_lines.type of the lines that hold prompt text
 
 
 import codex  # noqa: E402  (it subclasses Deriver)
 
 SOURCES = {"claude": Source(transcript_files, line_key, Deriver, lambda path: "/subagents/" in path),
-           "codex": Source(codex.files, codex.key, codex.CodexDeriver, codex.subagent, codex.fields, codex.read)}
+           "codex": Source(codex.files, codex.key, codex.CodexDeriver, codex.subagent, codex.fields, codex.read,
+                            codex.prompt_text, "event_msg")}
 
 
 def rebuild(con, log=None):

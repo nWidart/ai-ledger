@@ -62,6 +62,18 @@ def read(path, offset, size):
         return zstd.decompress(fh.read()), True
 
 
+def typed(it):
+    """The text of a UserMessage item the person typed, or None for one the CLI injected."""
+    text = text_of(it.get("content")).strip() if isinstance(it, dict) and it.get("type") == "UserMessage" else ""
+    return text if text and not text.startswith(INJECTED) else None
+
+
+def prompt_text(d, pid):
+    """The text of prompt pid (a turn id) if line d is that turn's typed UserMessage, else None."""
+    p = d.get("payload") if isinstance(d.get("payload"), dict) else {}
+    return typed(p.get("item")) if p.get("type") == "item_completed" and p.get("turn_id") == pid else None
+
+
 def before(ts, seconds):
     """ts (as ts_of returns it) minus seconds."""
     if not ts or not seconds:
@@ -203,9 +215,8 @@ class CodexDeriver(store.Deriver):
     def item(self, p, it, ts):
         t = it.get("type")
         if t == "UserMessage":
-            text = text_of(it.get("content")).strip()
             turn = p.get("turn_id")
-            if turn and text and not text.startswith(INJECTED) and turn not in self.prompts:
+            if turn and typed(it) and turn not in self.prompts:
                 self.prompts[turn] = (turn, self.sid, ts, False)
         elif t == "AgentMessage":
             said = text_of(it.get("content")).strip()

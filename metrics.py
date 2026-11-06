@@ -4,6 +4,7 @@ import os
 import re
 from datetime import date, timedelta
 
+import store
 from categorize import RULES
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -483,29 +484,29 @@ def session_timeline(cur, sid, allq, p):
 
 
 def first_prompts(cur, sids):
-    """{session_id: full text of its first human prompt} (the earliest row in prompts), for the sessions that have one stored."""
+    """{session_id: full text of its first human prompt} (the earliest row in prompts), for the sessions that have one stored.
+    Each line is read by its file's source (store.SOURCES)."""
     if not sids:
         return {}
     found = {}
-    for sid, pid, line in cur.execute("""
+    types = sorted({src.prompt_type for src in store.SOURCES.values()})
+    for sid, pid, source, line in cur.execute("""
             WITH fp AS (SELECT session_id, arg_min(prompt_id, ts) AS pid FROM prompts WHERE list_contains(?, session_id) GROUP BY 1)
-            SELECT r.session_id, fp.pid, r.json FROM raw_lines r JOIN fp USING (session_id)
-            WHERE r.type = 'user' AND contains(r.json, fp.pid)
+            SELECT r.session_id, fp.pid, coalesce(f.source, 'claude'), r.json FROM raw_lines r JOIN fp USING (session_id)
+            LEFT JOIN files f ON f.path = r.file
+            WHERE list_contains(?, r.type) AND contains(r.json, fp.pid)
             QUALIFY row_number() OVER (PARTITION BY r.session_id ORDER BY r.ts) <= 20
-            ORDER BY r.session_id, r.ts""", [list(sids)]).fetchall():
-        if sid in found:
+            ORDER BY r.session_id, r.ts""", [list(sids), types]).fetchall():
+        src = store.SOURCES.get(source)
+        if sid in found or src is None:
             continue
         try:
             d = json.loads(line)
         except ValueError:
             continue
-        if d.get("promptId") != pid or d.get("isMeta"):
-            continue
-        content = (d.get("message") or {}).get("content")
-        text = content if isinstance(content, str) else "\n".join(
-            x.get("text") or "" for x in content if isinstance(x, dict) and x.get("type") == "text") if isinstance(content, list) else ""
-        if text.strip():
-            found[sid] = text.strip()
+        text = src.prompt_text(d, pid) if isinstance(d, dict) else None
+        if text:
+            found[sid] = text
     return found
 
 

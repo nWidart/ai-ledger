@@ -342,6 +342,9 @@ class PromptTest(CodexCase):
                    + msg(2, "# AGENTS.md instructions for /nowhere/foo\n\nbe brief") + msg(3, "run it now"))
         self.ingest()
         self.assertEqual(self.q("SELECT prompt_id, ts FROM prompts"), [("t1", datetime.fromisoformat("2026-11-06 10:00:00"))])
+        # The session's title comes from the typed message, not the injected ones before it.
+        self.assertEqual(metrics.first_prompt(self.con.cursor(), THREAD), "run it now")
+        self.assertEqual(metrics.with_titles(self.con.cursor(), [dict(session_id=THREAD)])[0]["title"], "run it now")
 
     def test_automation_heartbeat(self):
         self.put("v0155_heartbeat")
