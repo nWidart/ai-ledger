@@ -8,6 +8,8 @@ A local ledger of your AI coding-agent transcripts (today Claude Code, from `~/.
 
 ## Usage
 
+Needs Python 3.14 or newer (`uv sync` installs it): Codex archives are read with the standard library's `compression.zstd`.
+
 ```bash
 uv sync
 uv run app.py

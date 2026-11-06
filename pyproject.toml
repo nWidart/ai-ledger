@@ -2,7 +2,7 @@
 name = "ai-ledger"
 version = "0.1.0"
 description = "Local store and dashboards for AI coding-agent transcripts"
-requires-python = ">=3.11"
+requires-python = ">=3.14"
 dependencies = [
     "duckdb==2.0.0",
 ]
