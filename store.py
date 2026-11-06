@@ -1,7 +1,8 @@
 """Local DuckDB store of coding-agent transcripts, one source per agent (SOURCES).
 
-Raw layer: every transcript line, verbatim and deduplicated, never deleted. Derived layer: sessions,
-requests, tool calls, prompts and hooks, written during ingest and rebuildable from the raw lines.
+Raw layer: every transcript line and every plan-limit poll, verbatim and deduplicated, never deleted. Derived
+layer: sessions, requests, tool calls, prompts, hooks and plan-limit snapshots, written during ingest and
+rebuildable from the raw layer.
 """
 import glob
 import json
@@ -9,7 +10,7 @@ import os
 import subprocess
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Callable, NamedTuple
 
 import duckdb
@@ -32,9 +33,11 @@ CREATE TABLE IF NOT EXISTS raw_lines (
   session_id VARCHAR, uuid VARCHAR, ts VARCHAR, subagent BOOLEAN, parsed BOOLEAN,
   json VARCHAR USING COMPRESSION zstd);
 CREATE TABLE IF NOT EXISTS projects_by_cwd (cwd VARCHAR PRIMARY KEY, project VARCHAR);
+CREATE TABLE IF NOT EXISTS limit_polls (
+  provider VARCHAR, polled_at TIMESTAMP, json VARCHAR, PRIMARY KEY (provider, polled_at));
 """
 
-DERIVED = ["sessions", "requests", "tool_calls", "prompts", "hooks"]
+DERIVED = ["sessions", "requests", "tool_calls", "prompts", "hooks", "limit_snapshots"]
 DERIVED_SCHEMA = """
 CREATE TABLE IF NOT EXISTS sessions (
   session_id VARCHAR PRIMARY KEY, project VARCHAR, cwd VARCHAR, git_branch VARCHAR,
@@ -54,6 +57,10 @@ CREATE TABLE IF NOT EXISTS prompts (
 CREATE TABLE IF NOT EXISTS hooks (
   session_id VARCHAR, ts TIMESTAMP, source VARCHAR, hook VARCHAR, command VARCHAR,
   duration_ms BIGINT, is_error BOOLEAN);
+CREATE TABLE IF NOT EXISTS limit_snapshots (
+  provider VARCHAR, limit_id VARCHAR, scope VARCHAR, window_minutes INTEGER, resets_at TIMESTAMP,
+  observed_at TIMESTAMP, used_percent DOUBLE, plan VARCHAR, reached BOOLEAN,
+  PRIMARY KEY (provider, limit_id, scope, resets_at, observed_at));
 """
 
 
@@ -310,6 +317,19 @@ def ts_of(s):
     return s.replace("T", " ").rstrip("Z")[:26] if isinstance(s, str) and s else None
 
 
+SNAPSHOT_COLS = ["provider", "limit_id", "scope", "window_minutes", "resets_at", "observed_at", "used_percent", "plan", "reached"]
+
+
+def snapshot(provider, limit_id, scope, window_minutes, resets_at, observed_at, used_percent, plan=None, reached=False):
+    """One limit_snapshots row. resets_at is a UTC datetime, rounded to the minute: providers jitter it between reports."""
+    reset = (resets_at.astimezone(timezone.utc).replace(tzinfo=None) + timedelta(seconds=30)).replace(second=0, microsecond=0)
+    return (provider, limit_id, scope or "", window_minutes, reset, observed_at, float(used_percent), plan, bool(reached))
+
+
+def write_snapshots(cur, rows):
+    insert(cur, "limit_snapshots", SNAPSHOT_COLS, rows)
+
+
 INTERRUPT = "[Request interrupted by user"
 
 
@@ -322,6 +342,7 @@ class Deriver:
         self.cur, self.projects, self.source, self.path, self.sub, self.seq = cur, projects, source, path, sub, seq
         self.sessions, self.requests, self.uses, self.results = {}, {}, {}, {}
         self.prompts, self.interrupted, self.hooks, self.followups = {}, set(), [], {}
+        self.limits = []  # limit_snapshots rows; only sources whose transcripts report plan limits fill it
         # Errors from earlier ingests of this file still waiting for Claude's next words.
         self.pending = dict(cur.execute(
             "SELECT tool_use_id, result_seq FROM tool_calls WHERE result_file = ? AND is_error AND followup IS NULL "
@@ -462,6 +483,7 @@ class Deriver:
         if self.interrupted:
             update_from(cur, "prompts", "prompt_id", ["interrupted"], [(p, True) for p in self.interrupted])
         insert(cur, "hooks", ["session_id", "ts", "source", "hook", "command", "duration_ms", "is_error"], self.hooks, tail="")
+        write_snapshots(cur, self.limits)
         # Errors still open stay in self.pending; the next ingest reloads them from tool_calls.
         update_from(cur, "tool_calls", "tool_use_id", ["followup"], list(self.followups.items()), where="AND tool_calls.followup IS NULL")
 
@@ -541,6 +563,7 @@ class Source(NamedTuple):
 
 
 import codex  # noqa: E402  (it subclasses Deriver)
+import limits  # noqa: E402  (it writes snapshots through this module)
 
 SOURCES = {"claude": Source(transcript_files, line_key, Deriver, lambda path: "/subagents/" in path),
            "codex": Source(codex.files, codex.key, codex.CodexDeriver, codex.subagent, codex.fields, codex.read,
@@ -572,4 +595,5 @@ def rebuild(con, log=None):
             raise
         if log:
             log(path)
+    limits.rederive_polls(cur)  # snapshots of polled limits come from limit_polls, not from transcript lines
     return dict(files=len(files), seconds=round(time.time() - t0, 2))

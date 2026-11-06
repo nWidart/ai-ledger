@@ -421,5 +421,43 @@ class CodexRebuildTest(CodexCase):
         self.assertEqual(self.q("SELECT source, count(*) FROM sessions GROUP BY 1 ORDER BY 1"), [("claude", 1), ("codex", 6)])
 
 
+class LimitTest(CodexCase):
+    def snaps(self):
+        return self.q("SELECT limit_id, window_minutes, strftime(resets_at, '%m-%d %H:%M'), used_percent, plan, reached "
+                      "FROM limit_snapshots ORDER BY observed_at, window_minutes")
+
+    def test_both_windows_of_a_plan(self):
+        self.put("v0166_aborted")
+        self.ingest()
+        self.assertEqual(self.snaps()[:2], [("codex_300", 300, "11-06 03:08", 49.0, "plus", False),
+                                            ("codex_10080", 10080, "11-11 15:22", 13.0, "plus", False)])
+        # The reached limit is the full 5-hour window, not the weekly one at 20%.
+        self.assertEqual([r[5] for r in self.snaps()[2:4]], [True, False])
+
+    def test_weekly_only_plan(self):
+        self.put("v0166")
+        self.ingest()
+        self.assertEqual(self.snaps(), [("codex_10080", 10080, "11-13 04:56", p, "prolite", False) for p in (1.0, 1.0, 2.0)])
+
+    def test_repeated_event_stored_once(self):
+        name, text = fixture("v0166")
+        last = [ln for ln in text.splitlines() if '"token_count"' in ln][-1]
+        self.place(name, text + json.dumps(json.loads(last) | dict(ordinal=999)) + "\n")  # a fork repeats it, same time
+        self.ingest()
+        self.assertEqual(len(self.snaps()), 3)
+
+    def test_rebuild_derives_the_same_snapshots(self):
+        name, text = fixture("v0166_aborted")
+        lines = text.splitlines(keepends=True)
+        self.place(name, "".join(lines[:10]))
+        self.ingest()
+        self.place(name, "".join(lines[10:]), mode="a")
+        self.ingest()
+        before = self.snaps()
+        self.assertEqual(len(before), 6)
+        store.rebuild(self.con)
+        self.assertEqual(self.snaps(), before)
+
+
 if __name__ == "__main__":
     unittest.main()

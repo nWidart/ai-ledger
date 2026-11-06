@@ -6,9 +6,11 @@ import sys
 import subprocess
 import tempfile
 import unittest
+from datetime import datetime, timezone
 from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import limits  # noqa: E402
 import store  # noqa: E402
 
 
@@ -227,6 +229,24 @@ class MoveEarlierStoreTest(unittest.TestCase):
         store.open_store().close()
         self.assertTrue(os.path.exists(self.new))
         self.assertFalse(os.path.exists(self.old))
+
+
+class LimitStoreTest(StoreCase):
+    def test_reset_jitter_is_one_window(self):
+        def at(s):
+            return datetime.fromisoformat(s).replace(tzinfo=timezone.utc)
+        store.write_snapshots(self.con.cursor(), [
+            store.snapshot("claude", "weekly_all", "", 10080, at("2026-11-08T05:00:00.355791"), "2026-11-06 15:00:00", 57),
+            store.snapshot("claude", "weekly_all", "", 10080, at("2026-11-08T04:59:59.855048"), "2026-11-06 15:05:00", 58)])
+        self.assertEqual(self.q("SELECT DISTINCT resets_at FROM limit_snapshots"), [(datetime(2026, 11, 8, 5, 0),)])
+
+    def test_rebuild_keeps_polls_and_their_snapshots(self):
+        poll = dict(plan="max", response=dict(limits=[dict(kind="weekly_all", group="weekly", percent=57,
+                                                            resets_at="2026-11-08T05:00:00+00:00")]))
+        limits.store_poll(self.con.cursor(), "claude", datetime(2026, 11, 6, 15), poll)
+        store.rebuild(self.con)
+        self.assertEqual(self.q("SELECT count(*) FROM limit_polls"), [(1,)])
+        self.assertEqual(self.q("SELECT provider, limit_id, used_percent, plan FROM limit_snapshots"), [("claude", "weekly_all", 57.0, "max")])
 
 
 if __name__ == "__main__":

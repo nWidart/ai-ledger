@@ -10,7 +10,7 @@ import glob
 import json
 import os
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 
 from compression import zstd
@@ -116,6 +116,22 @@ def error_of(item):
     return (text if isinstance(text, str) else json.dumps(text)).strip()
 
 
+def limit_rows(rl, ts):
+    """limit_snapshots rows from a token_count's rate_limits: one per window it reports (primary, secondary).
+    A limit is its limit_id and window length, so the 5-hour and weekly windows of one plan stay apart."""
+    windows = [w for w in (rl.get("primary"), rl.get("secondary")) if isinstance(w, dict)
+               and isinstance(w.get("used_percent"), (int, float)) and w.get("resets_at") and w.get("window_minutes")]
+    top = max((w["used_percent"] for w in windows), default=None)
+    out = []
+    for w in windows:
+        # rate_limit_reached_type does not say which window it means: the fullest one is the one that blocks.
+        reached = w["used_percent"] >= 100 or (rl.get("rate_limit_reached_type") is not None and w["used_percent"] == top)
+        out.append(store.snapshot("codex", f"{rl.get('limit_id') or 'codex'}_{w['window_minutes']}", "", w["window_minutes"],
+                                  datetime.fromtimestamp(w["resets_at"], timezone.utc), ts, w["used_percent"],
+                                  rl.get("plan_type"), reached))
+    return out
+
+
 class CodexDeriver(store.Deriver):
     """Turns new lines of one Codex rollout file into derived rows. Deriver.flush writes them.
 
@@ -210,7 +226,10 @@ class CodexDeriver(store.Deriver):
 
     def token_count(self, p, s, ts, ordinal):
         """A running total. It repeats a token_usage_record, so it counts only in a thread that has none (CLI < 0.153).
-        Its last_token_usage is then the response's usage; a repeated total is the same response again."""
+        Its last_token_usage is then the response's usage; a repeated total is the same response again.
+        Its rate_limits always count: limits dedupe on their own key, not on the usage."""
+        if isinstance(p.get("rate_limits"), dict) and ts:
+            self.limits += limit_rows(p["rate_limits"], ts)
         info = p.get("info") if isinstance(p.get("info"), dict) else {}
         total = (info.get("total_token_usage") or {}).get("total_tokens")
         if total is None or not isinstance(info.get("last_token_usage"), dict):

@@ -2,9 +2,9 @@
 
 ## 1. Snapshot store and Codex limits
 
-- [ ] 1.1 Add the raw table `limit_polls` to `RAW_SCHEMA`, and the derived table `limit_snapshots` to `DERIVED` / `DERIVED_SCHEMA`, with the primary key from design Decision 1 and `resets_at` rounded to the minute. Verify with a `test_store` case that two snapshots whose reset times differ by under a second land in one window, and that `rebuild()` keeps `limit_polls` rows.
-- [ ] 1.2 Add trimmed `rate_limits` blocks to the Codex fixtures. Cover a `plus` event with both windows, a `prolite` event with weekly only, a reached limit (`used_percent` 100 with `rate_limit_reached_type` set), and a plan change with an earlier reset. Verify that the fixtures parse and contain no real paths.
-- [ ] 1.3 Make `CodexDeriver.token_count` write one snapshot per non-null `primary` / `secondary`, including events whose usage is skipped as a repeat. Verify with `test_codex` cases for both windows, weekly only, a forked thread's repeated event stored once, and a rebuild that yields the same snapshots as incremental ingest.
+- [x] 1.1 Add the raw table `limit_polls` to `RAW_SCHEMA`, and the derived table `limit_snapshots` to `DERIVED` / `DERIVED_SCHEMA`, with the primary key from design Decision 1 and `resets_at` rounded to the minute. Verify with a `test_store` case that two snapshots whose reset times differ by under a second land in one window, and that `rebuild()` keeps `limit_polls` rows.
+- [x] 1.2 Add trimmed `rate_limits` blocks to the Codex fixtures. Cover a `plus` event with both windows, a `prolite` event with weekly only, a reached limit (`used_percent` 100 with `rate_limit_reached_type` set), and a plan change with an earlier reset. Verify that the fixtures parse and contain no real paths.
+- [x] 1.3 Make `CodexDeriver.token_count` write one snapshot per non-null `primary` / `secondary`, including events whose usage is skipped as a repeat. Verify with `test_codex` cases for both windows, weekly only, a forked thread's repeated event stored once, and a rebuild that yields the same snapshots as incremental ingest.
 
 ## 2. Claude polling
 
