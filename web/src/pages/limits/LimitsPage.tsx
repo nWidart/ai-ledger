@@ -5,7 +5,7 @@ import { big, dur, num, usd, when } from "../../format";
 import { useHashState } from "../../hash";
 import { useApi } from "../../useApi";
 import { LimitChart } from "./LimitChart";
-import { bindingWindow, caption, pace, whenDay, windowName } from "./limits";
+import { bindingWindow, caption, pace, planName, whenDay, windowName } from "./limits";
 import "./limits.css";
 
 const viewName = (v: View) => `${v.range ? `the last ${v.range} days` : "all time"}`;
@@ -38,7 +38,7 @@ function WindowCard({ w, d }: { w: LimitWindow; d: LimitsPayload }) {
   return (
     <section className="panel lim-card" aria-label={windowName(w)}>
       <header>
-        <h3>{windowName(w)}{w.plan && <span className="muted"> · {w.plan}</span>}</h3>
+        <h3>{windowName(w)}{w.plan && <span className="muted" title={w.plan}> · {planName(w.plan)}</span>}</h3>
         <div className="now-pct"><b>{num(w.current)}%</b> <span className={"chip" + (w.measured ? "" : " est")}>{w.measured ? "measured" : "estimated"}</span></div>
       </header>
       <LimitChart w={w} now={d.now} events={d.events} />
@@ -53,10 +53,10 @@ function History({ d }: { d: LimitsPayload }) {
     <section className="panel sect" id="history" aria-labelledby="histTitle">
       <h2 id="histTitle">Past windows</h2>
       <div className="hint">Closed windows in {d.history.length ? "the range" : "this range"}, newest first. Estimated windows are rebuilt from counted usage.</div>
-      <div className="scroll"><table>
+      <div className="scroll tall"><table>
         <thead><tr><th>Window</th><th>Plan</th><th>Ended</th><th className="num">Final</th><th>Hit 100%</th><th>Note</th></tr></thead>
         <tbody>{d.history.length ? d.history.map(h => <tr key={`${h.provider}-${h.label}-${h.closed_at}`}>
-          <td>{windowName(h)}</td><td>{h.plan ?? "–"}</td><td>{when(h.closed_at)}</td><td className="num">{num(h.final)}%</td>
+          <td>{windowName(h)}</td><td title={h.plan ?? undefined}>{planName(h.plan) ?? "–"}</td><td>{when(h.closed_at)}</td><td className="num">{num(h.final)}%</td>
           <td>{h.hit ? <b className="bad">{h.hit_minutes != null ? dur(h.hit_minutes * 60) : "yes"}</b> : "–"}</td>
           <td>{h.early && <span>ended early{h.reason ? ` by a ${h.reason}` : ""}</span>}{h.estimated && <span className="chip est">estimated</span>}</td>
         </tr>) : <tr><td colSpan={6} className="empty">No closed windows in this range.</td></tr>}</tbody>
@@ -84,7 +84,7 @@ function Value({ d }: { d: LimitsPayload }) {
       <h2 id="valueTitle">What a point buys</h2>
       <div className="hint">One point is 1% of a limit. Cost is estimated at API list prices; points used and tokens per point by model over the range.</div>
       {v.limits.length ? v.limits.map(l => <div key={`${l.provider}-${l.label}`} className="val">
-        <h3>{windowName(l)}: {usd(l.cost_per_point)} a point{l.plan && <span className="muted"> · {l.plan}</span>}</h3>
+        <h3>{windowName(l)}: {usd(l.cost_per_point)} a point{l.plan && <span className="muted" title={l.plan}> · {planName(l.plan)}</span>}</h3>
         <div className="scroll"><table>
           <thead><tr><th>Model</th><th className="num">Points used</th><th className="num">Tokens a point</th></tr></thead>
           <tbody>{l.models.map(m => <tr key={m.model}><td>{m.model}</td><td className="num">{num(m.points, 1)}</td><td className="num">{big(m.tokens_per_point)}</td></tr>)}</tbody>

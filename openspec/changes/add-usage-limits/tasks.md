@@ -31,8 +31,8 @@
 
 ## 5. Integration
 
-- [ ] 5.1 Against an instant copy of the real store, run `rebuild`. Verify that Codex snapshots backfill (about 833 weekly and 444 five-hour), that the `plus` → `prolite` change on 2026-11-06 and the 95% five-hour peak on 2026-11-05 appear in history, and that other totals are unchanged.
-- [ ] 5.2 Start the app on the copy; port 8765 is fixed, so ask before stopping the user's running app. Confirm the first Keychain read (allow the prompt if macOS shows one), that a Claude poll lands within 5 minutes, and in the browser that both providers' windows, forecasts and history render. Document in the README the Limits page, the Keychain read, the undocumented endpoint, and the one-time `rebuild` after updating.
+- [x] 5.1 Against an instant copy of the real store, run `rebuild`. Verify that Codex snapshots backfill (about 833 weekly and 444 five-hour), that the `plus` → `prolite` change on 2026-11-06 and the 95% five-hour peak on 2026-11-05 appear in history, and that other totals are unchanged.
+- [x] 5.2 Start the app on the copy; port 8765 is fixed, so ask before stopping the user's running app. Confirm the first Keychain read (allow the prompt if macOS shows one), that a Claude poll lands within 5 minutes, and in the browser that both providers' windows, forecasts and history render. Document in the README the Limits page, the Keychain read, the undocumented endpoint, and the one-time `rebuild` after updating.
 
 ## Workflow follow-up
 

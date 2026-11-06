@@ -36,7 +36,11 @@ For each open window, Limits SHALL show the percent left, the time left to reset
 - **THEN** Limits shows 80% left over 3.5 days, a target pace of about 23% a day, and says the user is behind that pace
 
 ### Requirement: Suggest where to send work
-Limits SHALL suggest the provider with the most headroom left at the current pace. It SHALL not suggest a provider whose binding window is forecast to reach 100% before it resets.
+Limits SHALL suggest the provider with the most headroom left at the current pace. It SHALL not suggest a provider whose binding window is forecast to reach 100% before it resets. It SHALL suggest nothing unless at least two providers have a forecast.
+
+#### Scenario: Only one provider forecast
+- **WHEN** Claude weekly has a forecast and Codex is not calibrated yet
+- **THEN** Limits suggests no provider
 
 #### Scenario: Codex has room
 - **WHEN** Claude weekly is forecast to reach 100% before it resets and Codex weekly is forecast to reset at 30%

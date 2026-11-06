@@ -12,6 +12,9 @@ export function span(msLeft: number): string {
   return d ? `${d}d ${h}h` : h ? `${h}h ${mm}m` : `${mm}m`;
 }
 
+/** A plan as the page shows it: Claude's "max/default_claude_max_20x" (subscription/tier) reads "max". */
+export const planName = (plan: string | null) => plan?.split("/")[0] ?? null;
+
 export const windowName = (w: { provider_label: string; label: string }) => `${w.provider_label} ${w.label}`;
 
 /** "Reaches 100% at Sat 2:00 PM", "Resets first at about 66%", or why there is no forecast. */

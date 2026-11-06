@@ -551,7 +551,10 @@ def binding_of(windows):
 
 def suggestion_of(windows):
     """The provider with the most room left at reset at the current pace. A provider with any window forecast to reach
-    100% before it resets is never suggested; its room is that of its fullest window."""
+    100% before it resets is never suggested; its room is that of its fullest window. None unless two providers have
+    forecasts: a suggestion compares providers."""
+    if len({w["provider"] for w in windows if w["forecast"]}) < 2:
+        return None
     best = None
     for p in dict.fromkeys(w["provider"] for w in windows):
         fc = [w for w in windows if w["provider"] == p and w["forecast"]]

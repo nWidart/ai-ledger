@@ -1,6 +1,7 @@
 import { useRef } from "react";
 import type { LimitWindow, PlanChange } from "../../api";
 import { useWidth } from "../../components/chart";
+import { when } from "../../format";
 import { caption, whenDay } from "./limits";
 
 const H = 168, M = { t: 12, r: 10, b: 24, l: 36 };
@@ -17,6 +18,7 @@ export function LimitChart({ w, now, events }: { w: LimitWindow; now: string; ev
   const measured = w.series.filter(p => p.measured);
   const f = w.forecast;
   const band = f && `${path(f.curve.map(p => ({ t: p.t, v: p.hi })))}L${f.curve.slice().reverse().map(p => `${x(p.t).toFixed(1)},${y(p.lo).toFixed(1)}`).join("L")}Z`;
+  const at = (w.window_minutes ?? 0) >= 1440 ? when : whenDay; // a weekday alone repeats across a week
   const marks = events.filter(e => e.provider === w.provider && Date.parse(e.at) >= t0 && Date.parse(e.at) <= t1);
   return (
     <div className="lim-chart" ref={box}>
@@ -33,8 +35,8 @@ export function LimitChart({ w, now, events }: { w: LimitWindow; now: string; ev
         {marks.map(e => <g key={e.at} className="plan"><line x1={x(e.at)} x2={x(e.at)} y1={M.t} y2={M.t + ih} />
           <title>{`Plan change ${e.plan_from} → ${e.plan_to}, ${whenDay(e.at)}`}</title></g>)}
         <line x1={x(now)} x2={x(now)} y1={M.t} y2={M.t + ih} className="now" />
-        <text x={M.l} y={H - 6} className="ax">{whenDay(w.start)}</text>
-        <text x={W - M.r} y={H - 6} textAnchor="end" className="ax">resets {whenDay(w.resets_at)}</text>
+        <text x={M.l} y={H - 6} className="ax">{at(w.start)}</text>
+        <text x={W - M.r} y={H - 6} textAnchor="end" className="ax">resets {at(w.resets_at)}</text>
       </svg>
     </div>
   );

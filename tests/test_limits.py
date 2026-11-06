@@ -387,6 +387,7 @@ class PayloadTest(AnalysisCase):
         self.assertEqual(out["binding"], dict(provider="claude", limit_id="weekly_all", scope="", runs_out=True))
         self.assertEqual(out["suggestion"]["provider"], "codex")
         self.assertGreater(out["suggestion"]["unused_at_reset"], 60)
+        self.assertIsNone(self.payload(self.NOW, source="codex")["suggestion"])  # nothing to compare with
 
     def test_open_windows_ignore_range(self):
         out = self.payload(self.NOW, range_days=7)
