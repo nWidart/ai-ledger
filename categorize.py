@@ -181,7 +181,10 @@ def input_pattern(tool, summary):
     if tool in SEARCH_TOOLS:
         return summary[:SEARCH_CUT] or "other"
     if tool == "WebFetch":
-        return urlsplit(summary).hostname or "other"
+        try:
+            return urlsplit(summary).hostname or "other"
+        except ValueError:  # such as an unclosed IPv6 bracket
+            return "other"
     if tool in ("WebSearch", "web_search"):
         return "search"
     return "other"

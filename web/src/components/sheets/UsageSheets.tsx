@@ -22,17 +22,19 @@ const twin = (v: string) => {
  * tool, mcp or skill: a tool, MCP server or skill; session: a session), so Back, reload and shared links agree with them:
  * a session opened from a project or tool sheet gets ← Back to it.
  * data: the page's payload, for its project filter and the session titles it already knows.
+ * automated: the page shows automated sessions whatever the hash says (Errors), so its sheets do too.
  */
-export function UsageSheets({ data }: { data: UsagePayload | undefined }) {
+export function UsageSheets({ data, automated }: { data: UsagePayload | undefined; automated?: boolean }) {
   const [h, set] = useHashState();
+  const view = { ...viewOf(h), automated: automated || h.auto };
   const { session, inspect } = h;
   const [tk, tn]: [ToolKind, string] = h.tool ? ["tool", h.tool] : h.mcp ? ["mcp", h.mcp] : ["skill", h.skill];
   const under = inspect || tn, open = !!(session || under);
   const shown = useRef(""), backTo = useRef<BackTo | null>(null);
   if (open) shown.current = session || under;
   if (data) for (const s of [...data.top_sessions, ...data.sessions]) sessName(s);
-  const proj = useApi<UsagePayload>(inspect && !session ? usageUrl({ ...viewOf(h), project: inspect }) : null);
-  const tool = useApi<ToolPayload>(tn && !inspect && !session ? toolUrl(tk, tn, viewOf(h)) : null);
+  const proj = useApi<UsagePayload>(inspect && !session ? usageUrl({ ...view, project: inspect }) : null);
+  const tool = useApi<ToolPayload>(tn && !inspect && !session ? toolUrl(tk, tn, view) : null);
   const sess = useApi<SessionDetail>(session ? sessionUrl(session) : null);
   const pageProject = data?.project ?? h.project;
   const close = () => { backTo.current = null; set({ inspect: null, tool: null, mcp: null, skill: null, session: null }); };

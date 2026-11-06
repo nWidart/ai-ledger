@@ -119,12 +119,12 @@ describe("ErrorsPage", () => {
       return dlg;
     };
 
-    it("opens from an example's tool name in the page's view, and closing keeps the open type", async () => {
+    it("opens from an example's tool name in the page's view, automated sessions included, and closing keeps the open type", async () => {
       history.replaceState(null, "", "/errors#range=7&cat=x");
       await page();
       const dlg = await openBash();
       expect(location.hash).toBe("#range=7&tool=Bash&cat=x");
-      expect(vi.mocked(fetch).mock.calls.map(c => c[0])).toContain("/api/tool?kind=tool&name=Bash&range=7");
+      expect(vi.mocked(fetch).mock.calls.map(c => c[0])).toContain("/api/tool?kind=tool&name=Bash&range=7&automated=1");
       await userEvent.click(within(dlg).getByRole("button", { name: "Close" }));
       expect(location.hash).toBe("#range=7&cat=x");
       expect(document.activeElement).toBe(within(document.getElementById("ex-t07")!).getByRole("button", { name: "Bash" }));

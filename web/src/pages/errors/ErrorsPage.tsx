@@ -205,7 +205,7 @@ export function ErrorsPage() {
           {toSheet && <><section className="card detail" id="detail"><Detail /></section>{detailLive}</>}
         </dialog>
       </Ctx.Provider>}
-      <UsageSheets data={undefined} />
+      <UsageSheets data={undefined} automated />
     </div>
   );
 }

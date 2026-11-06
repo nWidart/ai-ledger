@@ -46,6 +46,7 @@ class InputPatternTest(unittest.TestCase):
         for tool in ("Bash", "Edit", "Grep", "WebFetch"):
             self.assertEqual(input_pattern(tool, ""), "other", tool)
         self.assertEqual(input_pattern("WebFetch", "not a url"), "other")
+        self.assertEqual(input_pattern("WebFetch", "http://[invalid"), "other")
 
 
 if __name__ == "__main__":
