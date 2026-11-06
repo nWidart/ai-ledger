@@ -213,6 +213,9 @@ def transcript_files(root):
                   + glob.glob(os.path.join(root, "*", "*", "subagents", "*.jsonl")))
 
 
+unreadable = {}  # path -> (size, mtime) of a file that failed to read, so a later ingest skips it until it changes
+
+
 def ingest(con, roots, log=None):
     """Read new bytes of every transcript file under roots ({source: dir}). One transaction per file.
 
@@ -234,7 +237,14 @@ def ingest(con, roots, log=None):
             continue
         if st.st_size < offset:  # rewritten or truncated: read again from the start; dedup drops repeats
             offset, lines = 0, 0
-        data, whole = SOURCES[name].read(path, offset, st.st_size)
+        if unreadable.get(path) == (st.st_size, st.st_mtime):
+            continue
+        try:
+            data, whole = SOURCES[name].read(path, offset, st.st_size)
+        except Exception as e:  # a corrupt or half-written .zst: skip it until it changes, keep ingesting the others
+            unreadable[path] = (st.st_size, st.st_mtime)
+            print(f"ingest: cannot read {path}: {type(e).__name__}: {e}", file=sys.stderr, flush=True)
+            continue
         if whole:  # a compressed file, decompressed from its start; dedup drops the lines already stored
             offset, lines = 0, 0
             data += b"" if data.endswith(b"\n") else b"\n"

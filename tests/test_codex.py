@@ -1,10 +1,12 @@
 import glob
+import io
 import json
 import os
 import shutil
 import sys
 import unittest
 from datetime import date, datetime
+from unittest import mock
 
 from compression import zstd
 
@@ -124,6 +126,18 @@ class DiscoveryTest(CodexCase):
         os.utime(p, (1, 1))
         self.assertEqual(self.ingest()["inserted"], 0)  # changed: read whole again, nothing stored twice
         self.assertEqual(self.count(), 13)
+
+    def test_corrupt_archive_skipped(self):
+        bad = self.put("v0139", where="archived_sessions", zst=True)
+        with open(bad, "r+b") as fh:
+            fh.truncate(os.path.getsize(bad) // 2)
+        self.put("v0166")
+        with mock.patch("sys.stderr", new_callable=io.StringIO) as err:
+            self.assertEqual(self.ingest()["files"], 1)  # the good file still ingests
+            self.assertEqual(self.ingest()["files"], 0)  # the bad one is not retried while unchanged
+        self.assertEqual(err.getvalue().count("cannot read"), 1)
+        self.put("v0139", where="archived_sessions", zst=True)  # rewritten whole
+        self.assertEqual(self.ingest()["inserted"], 13)
 
     def test_codex_home_missing(self):
         self.assertFalse(os.path.exists(self.home))
@@ -251,6 +265,18 @@ class TurnTest(CodexCase):
         self.assertEqual(self.q("SELECT DISTINCT model, effort, subagent FROM requests"), [("gpt-6.1-sol", "high", False)])
         self.assertEqual(self.q("SELECT count(*) FROM requests"), [(2,)])
 
+    def test_old_cli_chunk_starting_mid_turn_keeps_model(self):
+        name, text = fixture("v0139")  # no token_usage_record: usage comes from token_count
+        lines = text.splitlines(keepends=True)
+        self.place(name, "".join(lines[:6]))  # through the first token_count
+        self.ingest()
+        self.place(name, "".join(lines[6:]), mode="a")
+        self.ingest()
+        self.assertEqual(self.q("SELECT DISTINCT model FROM requests"), [("gpt-5.5",)])
+        before = self.q("SELECT * FROM requests ORDER BY ALL")
+        store.rebuild(self.con)
+        self.assertEqual(self.q("SELECT * FROM requests ORDER BY ALL"), before)
+
     def test_session_fields_and_peak_context(self):
         self.put("v0166")
         self.put("v0155_heartbeat")
@@ -261,6 +287,8 @@ class TurnTest(CodexCase):
                            "gpt-6.1-sol", "codex")])
         self.assertEqual(self.q("SELECT compactions, first_ts, last_ts FROM sessions WHERE entrypoint = 'codex_work_desktop'"),
                          [(1, datetime.fromisoformat("2026-09-25 20:27:16.697"), datetime.fromisoformat("2026-10-26 16:03:25.295"))])
+        sid = self.q("SELECT session_id FROM sessions WHERE entrypoint = 'codex_work_desktop'")[0][0]
+        self.assertEqual(len(metrics.session(self.con.cursor(), sid, prices={})["compaction_ts"]), 1)
 
 
 class ToolTest(CodexCase):

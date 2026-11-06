@@ -152,6 +152,14 @@ class CodexDeriver(store.Deriver):
                 self.context(d["payload"], latest=False)
         return self.turns.get(turn) or self.turns.get(self.turn) or (None, None)
 
+    def turn_before(self, ordinal):
+        """The turn of a line when the chunk started after its turn_context: the thread's last stored one before it."""
+        if self.turn is None and isinstance(ordinal, int):
+            before = [d for d in self.thread_lines("turn_context") if (d.get("ordinal") or 0) < ordinal]
+            if before:
+                self.context(before[-1]["payload"])
+        return self.turn
+
     def context(self, p, latest=True):
         settings = (p.get("collaboration_mode") or {}).get("settings") or {}
         if p.get("turn_id") not in self.turns or latest:
@@ -183,7 +191,7 @@ class CodexDeriver(store.Deriver):
         elif t == "compacted" and s:
             s["compactions"] += 1
         elif t == "event_msg" and p.get("type") == "token_count":
-            self.token_count(p, s, ts)
+            self.token_count(p, s, ts, d.get("ordinal"))
         elif t == "event_msg" and p.get("type") == "item_completed" and isinstance(p.get("item"), dict):
             self.item(p, p["item"], ts)
         elif t == "event_msg" and p.get("type") == "turn_aborted" and p.get("reason") == "interrupted" and p.get("turn_id"):
@@ -200,7 +208,7 @@ class CodexDeriver(store.Deriver):
         if s and not self.sub and inp > s["peak"]:
             s["peak"], s["peak_model"] = inp, model
 
-    def token_count(self, p, s, ts):
+    def token_count(self, p, s, ts, ordinal):
         """A running total. It repeats a token_usage_record, so it counts only in a thread that has none (CLI < 0.153).
         Its last_token_usage is then the response's usage; a repeated total is the same response again."""
         info = p.get("info") if isinstance(p.get("info"), dict) else {}
@@ -210,7 +218,7 @@ class CodexDeriver(store.Deriver):
         if self.records is None:
             self.records = bool(self.thread_lines("token_usage_record", 1))
         if not self.records:
-            self.request(f"codex:{self.thread}:total:{total}", self.turn, info["last_token_usage"], s, ts)
+            self.request(f"codex:{self.thread}:total:{total}", self.turn_before(ordinal), info["last_token_usage"], s, ts)
 
     def item(self, p, it, ts):
         t = it.get("type")
