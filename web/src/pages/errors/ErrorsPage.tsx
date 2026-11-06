@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, u
 import { errorsUrl, type ErrorDetail, type ErrorsPayload } from "../../api";
 import { setOrder } from "../../colors";
 import { agentName, Filters } from "../../components/Filters";
+import { UsageSheets } from "../../components/sheets/UsageSheets";
 import { num as fmt } from "../../format";
 import { setHash, useHashState } from "../../hash";
 import { useApi } from "../../useApi";
@@ -204,6 +205,7 @@ export function ErrorsPage() {
           {toSheet && <><section className="card detail" id="detail"><Detail /></section>{detailLive}</>}
         </dialog>
       </Ctx.Provider>}
+      <UsageSheets data={undefined} />
     </div>
   );
 }

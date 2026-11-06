@@ -33,9 +33,8 @@ export interface ProjectSheetProps {
 }
 
 /** The project sheet's body: its summary over the page's range, models and its most expensive sessions. */
-export function ProjectSheet({ name, d, error, retry, range, pageProject, onSession, backTo }: ProjectSheetProps) {
-  const body = useRef<HTMLTableSectionElement>(null);
-  // Back from a session: the scroll and the row it was opened from (after the sheet's own scroll-to-top for new content).
+/** Back from a session: the scroll and the row it was opened from (after the sheet's own scroll-to-top for new content). */
+export function useBackTo(d: unknown, backTo: RefObject<BackTo | null> | undefined, body: RefObject<HTMLElement | null>) {
   useEffect(() => {
     const to = backTo?.current;
     if (!d || !to) return;
@@ -43,7 +42,12 @@ export function ProjectSheet({ name, d, error, retry, range, pageProject, onSess
     const dlg = body.current?.closest("dialog");
     if (dlg) dlg.scrollTop = to.scroll;
     body.current?.querySelector<HTMLElement>(`[data-v="${CSS.escape(to.v)}"] button`)?.focus({ preventScroll: true });
-  }, [d, backTo]);
+  }, [d, backTo, body]);
+}
+
+export function ProjectSheet({ name, d, error, retry, range, pageProject, onSession, backTo }: ProjectSheetProps) {
+  const body = useRef<HTMLTableSectionElement>(null);
+  useBackTo(d, backTo, body);
   if (error) return <div className="empty" role="alert">Could not load this project ({error.message}). <button type="button" className="linkish" onClick={retry}>Retry</button></div>;
   if (!d) return <div className="empty" role="status">Loading…</div>;
   const t = d.totals, top = d.top_sessions.slice(0, 8);

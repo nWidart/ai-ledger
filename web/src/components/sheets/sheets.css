@@ -40,6 +40,11 @@ dialog.sheet .statline b { color: var(--text-primary); font-weight: 600; font-si
 dialog.sheet details.sd { border-top: 1px solid var(--border); }
 dialog.sheet details.sd > summary { cursor: pointer; padding: 10px 0; font-size: 13px; font-weight: 600; color: var(--text-secondary); }
 dialog.sheet details.sd > summary .c { font-weight: 400; color: var(--text-muted); margin-left: 6px; }
+/* Tool sheet: calls per day and failure types */
+dialog.sheet .days svg { display: block; width: 100%; height: 56px; }
+dialog.sheet .tcat { margin: 6px 0 10px; font-size: 13px; }
+dialog.sheet td.name .cellbtn { white-space: normal; overflow-wrap: anywhere; }
+dialog.sheet td.name code { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; }
 /* Source: the first prompt exactly as recorded */
 dialog.sheet pre.fp-raw { margin: 0 0 8px; padding: 10px 12px; max-height: 320px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere;
   border-left: 3px solid var(--accent); background: var(--surface-1); border-radius: 0 8px 8px 0; font: 12px/1.5 ui-monospace, "SF Mono", Menlo, monospace; }

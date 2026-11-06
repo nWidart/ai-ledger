@@ -6,6 +6,7 @@ import usage from "../../__fixtures__/usage";
 import usageAll from "../../__fixtures__/usage-all";
 import sessions from "../../__fixtures__/sessions";
 import session from "../../__fixtures__/session";
+import tool from "../../__fixtures__/tool";
 import { mockApi } from "../../components/sheets/testing";
 import { ActivityPage } from "./ActivityPage";
 import { workDays } from "./work";
@@ -135,5 +136,36 @@ describe("ActivityPage", () => {
     expect(await dlg.findByText("Timeline")).toBeTruthy();
     await userEvent.click(dlg.getByRole("button", { name: "Close" }));
     expect(location.hash).toBe("#range=30");
+  });
+
+  it("opens a tool sheet from the tools drawer, and Escape returns focus to the row", async () => {
+    mockApi({ "/api/usage": () => usage, "/api/tool": q => ({ ...tool, kind: q.get("kind"), name: q.get("name") }) });
+    at();
+    render(<ActivityPage />);
+    await loaded();
+    act(() => { (document.getElementById("d-tools") as HTMLDetailsElement).open = true; });
+    const row = document.querySelector<HTMLElement>('#d-tools tr[data-v="Bash"]')!;
+    await userEvent.click(row.querySelector("td:last-child")!);
+    expect(location.hash).toBe("#range=30&tool=Bash");
+    const dlg = within(document.querySelector("dialog")!);
+    expect(await dlg.findByText("Recent calls")).toBeTruthy();
+    // The browser turns Escape on a modal dialog into a cancel event.
+    act(() => { document.querySelector("dialog")!.dispatchEvent(new Event("cancel", { cancelable: true })); });
+    expect(location.hash).toBe("#range=30");
+    await waitFor(() => expect(document.activeElement).toBe(within(document.querySelector<HTMLElement>('#d-tools tr[data-v="Bash"]')!).getByRole("button", { name: "Bash" })));
+  });
+
+  it("opens MCP server and skill sheets from the extensions drawer", async () => {
+    mockApi({ "/api/usage": () => usage, "/api/tool": q => ({ ...tool, kind: q.get("kind"), name: q.get("name") }) });
+    at();
+    render(<ActivityPage />);
+    await loaded();
+    const ext = within(document.getElementById("d-ext")!);
+    await userEvent.click(ext.getByRole("button", { name: "srv" }));
+    expect(location.hash).toBe("#range=30&mcp=srv");
+    expect((await within(document.querySelector("dialog")!).findByRole("heading", { level: 2 })).textContent).toBe("MCP serversrv");
+    await userEvent.click(within(document.querySelector("dialog")!).getByRole("button", { name: "Close" }));
+    await userEvent.click(ext.getByRole("button", { name: "review" }));
+    expect(location.hash).toBe("#range=30&skill=review");
   });
 });

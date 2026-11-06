@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState, type MouseEvent } from "react";
 import { errorUrl, type ErrorDetail } from "../../api";
 import { ProjectName } from "../../components/ProjectDot";
+import { openToolSheet } from "../../components/sheets/session";
 import { num as fmt, when as at } from "../../format";
 import { navigate } from "../../hash";
 import { getJson } from "../../useApi";
@@ -69,7 +70,7 @@ export function Example({ e }: { e: Err }) {
       id={e.id ? "ex-" + e.id : undefined} data-cut={cut ? "" : undefined} onClick={click}>
       <div className="meta">
         <span>{at(e.ts)}</span>
-        <ProjectName project={e.p} /><span>{e.t}</span>{e.sub ? <span>subagent</span> : null}
+        <ProjectName project={e.p} /><button type="button" className="linkish" title={`Inspect ${e.t}`} onClick={() => openToolSheet("tool", e.t)}>{e.t}</button>{e.sub ? <span>subagent</span> : null}
         {e.s && <a href={sessionHref(x.v, e.s)} title={`Open session ${e.s} in Activity`} onClick={session}>#{e.s.slice(0, 8)}</a>}
         {e.id && <span className="link"><a href={viewHash(x.v, e.id)} data-link={e.id} title="Permalink to this error">🔗 Link</a>
           <button type="button" data-copy={e.id} onClick={copy}>{copied ? "Copied ✓" : "Copy URL"}</button></span>}

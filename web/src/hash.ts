@@ -16,6 +16,10 @@ export interface HashState {
   /** Activity and Cost: the open session sheet; inspect: the open project sheet. */
   session: string;
   inspect: string;
+  /** The open tool, MCP server or skill sheet; at most one is set. */
+  tool: string;
+  mcp: string;
+  skill: string;
   /** Errors: the linked example and the open type. */
   ex: string;
   cat: string;
@@ -30,9 +34,9 @@ export interface HashState {
 export type HashPatch = { [k: string]: string | number | boolean | null | undefined };
 
 // Back retraces changes to these; other keys replace unless the caller asks to push.
-const PUSH_KEYS = ["project", "range", "source", "auto", "inspect", "session", "ex", "cat"];
+const PUSH_KEYS = ["project", "range", "source", "auto", "inspect", "tool", "mcp", "skill", "session", "ex", "cat"];
 // Written in this order (as the pages wrote them), with any other keys between gran and inspect.
-const HEAD = ["project", "range", "source", "auto", "sub", "noise", "gran"], TAIL = ["inspect", "session", "ex", "cat"];
+const HEAD = ["project", "range", "source", "auto", "sub", "noise", "gran"], TAIL = ["inspect", "tool", "mcp", "skill", "session", "ex", "cat"];
 /** Project, range, source and the automated toggle travel between pages; page-only keys stay behind. */
 export const SHARED_KEYS = ["project", "range", "source", "auto"] as const;
 
@@ -46,7 +50,7 @@ export function parseHash(hash: string): HashState {
   const r = h.has("range") ? +h.get("range")! : NaN;
   return {
     project: h.get("project") || "", range: isRange(r) ? r : DEFAULT_RANGE, session: h.get("session") || "",
-    inspect: h.get("inspect") || "", ex: h.get("ex") || "", cat: h.get("cat") || "", auto: h.get("auto") === "1",
+    inspect: h.get("inspect") || "", tool: h.get("tool") || "", mcp: h.get("mcp") || "", skill: h.get("skill") || "", ex: h.get("ex") || "", cat: h.get("cat") || "", auto: h.get("auto") === "1",
     source: sourceOf(h.get("source")), raw,
   };
 }

@@ -1,6 +1,6 @@
 // Pieces the sheets and the pages share: session names, links to Errors, opening a sheet, and the session timeline's model.
 import type { MouseEvent } from "react";
-import type { SessionDetail } from "../../api";
+import type { SessionDetail, Source, ToolKind } from "../../api";
 import { big, num, pct, plural, usd } from "../../format";
 import { navigate, setHash } from "../../hash";
 
@@ -16,15 +16,20 @@ export const knownTitle = (id: string): string | undefined => titles.get(id);
 
 /** Opens the project sheet (Back retraces it); from a session sheet it replaces the session. */
 export const openProjectSheet = (name: string | null | undefined) => setHash({ inspect: name || null, session: null });
-/** Opens the session sheet; over a project sheet, Back returns to the project. */
+/** Opens the session sheet; over a project or tool sheet, Back returns to it. */
 export const openSessionSheet = (id: string) => setHash({ session: id });
+/** Opens the sheet of a tool, MCP server or skill in place of any other sheet (Back retraces it). */
+export const openToolSheet = (kind: ToolKind, name: string) =>
+  setHash({ tool: kind === "tool" ? name : null, mcp: kind === "mcp" ? name : null, skill: kind === "skill" ? name : null, inspect: null, session: null });
 
-/** The Errors page for a project, its range when given, focused on one failure when ex is set. */
-export function errorsHref(project: string | null | undefined, range?: number | null, ex?: string): string {
+/** The Errors page for a project, its range when given, focused on one failure when ex is set, else on type cat. */
+export function errorsHref(project: string | null | undefined, range?: number | null, ex?: string, o: { source?: Source | ""; cat?: string | null } = {}): string {
   const p = new URLSearchParams();
   if (project) p.set("project", project);
   if (range != null) p.set("range", String(range));
+  if (o.source) p.set("source", o.source);
   if (ex) p.set("ex", ex);
+  else if (o.cat) p.set("cat", o.cat);
   const s = String(p);
   return "/errors" + (s ? "#" + s : "");
 }

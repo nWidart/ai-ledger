@@ -1,5 +1,5 @@
 import { useRef, type ReactNode } from "react";
-import { sessionUrl, usageUrl, viewOf, type SessionDetail, type UsagePayload } from "../../api";
+import { sessionUrl, toolUrl, usageUrl, viewOf, type SessionDetail, type ToolKind, type ToolPayload, type UsagePayload } from "../../api";
 import { useHashState } from "../../hash";
 import { useApi } from "../../useApi";
 import { ProjectDot } from "../ProjectDot";
@@ -7,6 +7,7 @@ import { Sheet } from "../Sheet";
 import { ProjectSheet, type BackTo } from "./ProjectSheet";
 import { knownTitle, openSessionSheet, sessName, shortId } from "./session";
 import { SessionSheet } from "./SessionSheet";
+import { TOOL_KINDS, ToolSheet } from "./ToolSheet";
 import "./sheets.css";
 
 // The page's control for item v, so focus can return to a re-rendered row: a row or ledger item (data-v), or a session button.
@@ -17,23 +18,27 @@ const twin = (v: string) => {
 };
 
 /**
- * The project and session sheets of Activity and Cost. What they show lives in the hash (inspect: a project, session: a
- * session), so Back, reload and shared links agree with them: a session opened from a project sheet gets ← Back to it.
+ * The project, tool and session sheets of Activity, Cost and Errors. What they show lives in the hash (inspect: a project;
+ * tool, mcp or skill: a tool, MCP server or skill; session: a session), so Back, reload and shared links agree with them:
+ * a session opened from a project or tool sheet gets ← Back to it.
  * data: the page's payload, for its project filter and the session titles it already knows.
  */
 export function UsageSheets({ data }: { data: UsagePayload | undefined }) {
   const [h, set] = useHashState();
-  const { session, inspect } = h, open = !!(session || inspect);
+  const { session, inspect } = h;
+  const [tk, tn]: [ToolKind, string] = h.tool ? ["tool", h.tool] : h.mcp ? ["mcp", h.mcp] : ["skill", h.skill];
+  const under = inspect || tn, open = !!(session || under);
   const shown = useRef(""), backTo = useRef<BackTo | null>(null);
-  if (open) shown.current = session || inspect;
+  if (open) shown.current = session || under;
   if (data) for (const s of [...data.top_sessions, ...data.sessions]) sessName(s);
   const proj = useApi<UsagePayload>(inspect && !session ? usageUrl({ ...viewOf(h), project: inspect }) : null);
+  const tool = useApi<ToolPayload>(tn && !inspect && !session ? toolUrl(tk, tn, viewOf(h)) : null);
   const sess = useApi<SessionDetail>(session ? sessionUrl(session) : null);
   const pageProject = data?.project ?? h.project;
-  const close = () => { backTo.current = null; set({ inspect: null, session: null }); };
+  const close = () => { backTo.current = null; set({ inspect: null, tool: null, mcp: null, skill: null, session: null }); };
   const toSession = (id: string, el: HTMLElement) => {
     const dlg = el.closest("dialog");
-    backTo.current = { scroll: dlg?.scrollTop ?? 0, v: id };
+    backTo.current = { scroll: dlg?.scrollTop ?? 0, v: el.closest<HTMLElement>("[data-v]")?.dataset.v ?? id };
     openSessionSheet(id);
   };
 
@@ -48,10 +53,13 @@ export function UsageSheets({ data }: { data: UsagePayload | undefined }) {
     title = <><ProjectDot project={inspect} />{inspect}</>;
     body = <ProjectSheet key={inspect} name={inspect} d={proj.data} error={proj.error} retry={proj.retry} range={h.range}
       pageProject={pageProject} onSession={toSession} backTo={backTo} />;
+  } else if (tn) {
+    kind = TOOL_KINDS[tk]; key = tk + "|" + tn; title = tn;
+    body = <ToolSheet key={key} kind={tk} name={tn} d={tool.data} error={tool.error} retry={tool.retry} onSession={toSession} backTo={backTo} />;
   }
   return (
     <Sheet open={open} kind={kind} title={title} contentKey={key} onClose={close} busy={!!session && sess.loading}
-      onBack={session && inspect ? () => set({ session: null }) : undefined} returnFocus={() => shown.current ? twin(shown.current) : null}>
+      onBack={session && under ? () => set({ session: null }) : undefined} returnFocus={() => shown.current ? twin(shown.current) : null}>
       {body}
     </Sheet>
   );

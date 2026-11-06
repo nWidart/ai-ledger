@@ -1,5 +1,6 @@
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { errorsHref, openToolSheet } from "./components/sheets/session";
 import { formatHash, parseHash, setHash, sharedHash, useHashState } from "./hash";
 
 describe("parseHash", () => {
@@ -27,6 +28,15 @@ describe("parseHash", () => {
     expect(parseHash("#source=claude").source).toBe("claude");
     expect(parseHash("#source=grok")).toMatchObject({ source: "", raw: { source: "grok" } });
     expect(parseHash("").source).toBe("");
+  });
+  it("reads the inspected tool, MCP server and skill", () => {
+    expect(parseHash("#range=7&tool=Bash")).toMatchObject({ tool: "Bash", mcp: "", skill: "" });
+    expect(parseHash("#mcp=github&session=s1")).toMatchObject({ mcp: "github", session: "s1", tool: "" });
+    expect(parseHash("#skill=ship").skill).toBe("ship");
+  });
+  it("writes the inspected tool after inspect and before session", () => {
+    expect(formatHash({ session: "s", tool: "mcp__a:b", range: "30", ex: "e" })).toBe("#range=30&tool=mcp__a%3Ab&session=s&ex=e");
+    expect(formatHash({ skill: "ship", mcp: "gh", inspect: "p" })).toBe("#inspect=p&mcp=gh&skill=ship");
   });
   it("writes keys in the order the pages always did", () => {
     expect(formatHash({ session: "s", range: "30", project: "a b", inspect: "p" })).toBe("#project=a+b&range=30&inspect=p&session=s");
@@ -56,6 +66,23 @@ describe("setHash", () => {
     setHash({ range: 7 }); // no change, no entry
     expect(push).toHaveBeenCalledTimes(4);
     expect(location.pathname).toBe("/usage");
+  });
+  it("opens a tool sheet with a push, clearing the other sheets", () => {
+    history.replaceState(null, "", "/usage#range=30&inspect=foo&session=s1");
+    const push = vi.spyOn(history, "pushState");
+    openToolSheet("tool", "Bash");
+    expect(push).toHaveBeenCalledTimes(1);
+    expect(location.hash).toBe("#range=30&tool=Bash");
+    openToolSheet("mcp", "github");
+    expect(location.hash).toBe("#range=30&mcp=github");
+    openToolSheet("skill", "ship");
+    expect(location.hash).toBe("#range=30&skill=ship");
+    expect(push).toHaveBeenCalledTimes(3);
+  });
+  it("links to Errors with the source and an open type", () => {
+    expect(errorsHref("foo", 7, undefined, { source: "codex", cat: "tests" })).toBe("/errors#project=foo&range=7&source=codex&cat=tests");
+    expect(errorsHref(null, 0, "t1", { source: "" })).toBe("/errors#range=0&ex=t1");
+    expect(errorsHref("foo")).toBe("/errors#project=foo");
   });
   it("writes auto=1 and removes it when off", () => {
     history.replaceState(null, "", "/cost#range=30");

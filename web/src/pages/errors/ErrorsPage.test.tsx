@@ -1,7 +1,8 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import fixture from "../../__fixtures__/errors";
+import tool from "../../__fixtures__/tool";
 import type { ErrorsPayload } from "../../api";
 import { ErrorsPage } from "./ErrorsPage";
 
@@ -103,5 +104,53 @@ describe("ErrorsPage", () => {
     await userEvent.click(screen.getByRole("checkbox", { name: /Hide noise/ }));
     expect(location.hash).toBe("#range=30&sub=0&noise=0&gran=week");
     expect(history.length).toBe(n + 3);
+  });
+
+  describe("tool sheet", () => {
+    beforeEach(() => {
+      vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/errors") ? fixture : url.startsWith("/api/tool") ? tool : {})));
+      localStorage.setItem("claude-errors-mode", '"flat"'); // every example listed, none inside a closed incident
+    });
+    afterEach(() => { vi.unstubAllGlobals(); });
+    const openBash = async () => {
+      await userEvent.click(within(document.getElementById("ex-t07")!).getByRole("button", { name: "Bash" }));
+      const dlg = document.querySelector<HTMLDialogElement>("dialog.sheet:not(#sheet)")!;
+      expect(await within(dlg).findByText("Recent calls")).toBeTruthy();
+      return dlg;
+    };
+
+    it("opens from an example's tool name in the page's view, and closing keeps the open type", async () => {
+      history.replaceState(null, "", "/errors#range=7&cat=x");
+      await page();
+      const dlg = await openBash();
+      expect(location.hash).toBe("#range=7&tool=Bash&cat=x");
+      expect(vi.mocked(fetch).mock.calls.map(c => c[0])).toContain("/api/tool?kind=tool&name=Bash&range=7");
+      await userEvent.click(within(dlg).getByRole("button", { name: "Close" }));
+      expect(location.hash).toBe("#range=7&cat=x");
+      expect(document.activeElement).toBe(within(document.getElementById("ex-t07")!).getByRole("button", { name: "Bash" }));
+    });
+
+    it("keeps a linked example when it closes", async () => {
+      history.replaceState(null, "", "/errors#range=30&ex=t07");
+      await page();
+      const dlg = await openBash();
+      expect(location.hash).toBe("#range=30&tool=Bash&ex=t07");
+      await userEvent.click(within(dlg).getByRole("button", { name: "Close" }));
+      expect(location.hash).toBe("#range=30&ex=t07");
+    });
+
+    it("opens over the narrow-screen detail sheet, which stays open", async () => {
+      vi.stubGlobal("matchMedia", (q: string) => ({ matches: q.includes("max-width"), media: q, addEventListener() {}, removeEventListener() {} }));
+      history.replaceState(null, "", "/errors#range=30&cat=x");
+      await page();
+      const detail = document.getElementById("sheet") as HTMLDialogElement;
+      expect(detail.open).toBe(true);
+      const dlg = await openBash();
+      expect(dlg.open).toBe(true);
+      await userEvent.click(within(dlg).getByRole("button", { name: "Close" }));
+      expect(dlg.open).toBe(false);
+      expect(detail.open).toBe(true);
+      expect(location.hash).toBe("#range=30&cat=x");
+    });
   });
 });

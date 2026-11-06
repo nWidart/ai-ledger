@@ -1,9 +1,10 @@
-import type { ErrorLoop, HookRow, NamedRateRow, ProjectRow, ToolRow } from "../../api";
+import type { ErrorLoop, HookRow, NamedRateRow, ProjectRow, ToolKind, ToolRow } from "../../api";
 import { useColors } from "../../colors";
 import { Drawer } from "../../components/Drawer";
 import { ProjectName } from "../../components/ProjectDot";
 import { Toned, ToneKey } from "../../components/tone";
-import { appLink, errorsHref, openProjectSheet, openSessionSheet, pickRow, shortId, utc } from "../../components/sheets/session";
+import { appLink, errorsHref, openProjectSheet, openSessionSheet, openToolSheet, pickRow, shortId, utc } from "../../components/sheets/session";
+import { RateCells } from "../../components/sheets/ToolSheet";
 import { big, median, ms, num, pct, when } from "../../format";
 import { flakyFirst } from "./work";
 
@@ -30,8 +31,6 @@ export function ProjectsDrawer({ rows, selected }: { rows: ProjectRow[]; selecte
   );
 }
 
-const RateCells = ({ r, n }: { r: { failure_rate: number | null }; n: number }) =>
-  <><td className="num">{num(n)}</td><td className={"num" + ((r.failure_rate ?? 0) > .1 ? " bad" : "")}>{pct(r.failure_rate, 1)}</td></>;
 const None = ({ cols }: { cols: number }) => <tr><td colSpan={cols} className="empty">None in this range.</td></tr>;
 
 /** Tools by calls; flaky: the ones failing over 10% of at least 20 calls first (from "Needs attention"). */
@@ -41,19 +40,21 @@ export function ToolsDrawer({ tools, flaky }: { tools: ToolRow[]; flaky: boolean
     <Drawer id="d-tools" title="Tools" count={num(tools.length)} description="Calls, failure rate and latency from tool_use to tool_result" bodyClassName="scroll tall">
       {flaky && <div className="hint">Tools failing over 10% of at least 20 calls first.</div>}
       <table><thead><tr><th>Tool</th><th className="num">Calls</th><th className="num">Failed</th><th className="num">p50</th><th className="num">p95</th></tr></thead>
-        <tbody>{rs.length ? rs.map(r => <tr key={r.tool}><td className="name" title={r.tool}>{r.tool}</td><RateCells r={r} n={r.calls} />
+        <tbody>{rs.length ? rs.map(r => <tr key={r.tool} {...pickRow(r.tool, v => openToolSheet("tool", v))}>
+          <td className="name"><button type="button" className="cellbtn" title={r.tool}>{r.tool}</button></td><RateCells r={r} n={r.calls} />
           <td className="num">{ms(r.p50_ms)}</td><td className="num">{ms(r.p95_ms)}</td></tr>) : <None cols={5} />}</tbody></table>
     </Drawer>
   );
 }
 
 export function ExtDrawer({ mcp, skills, hooks }: { mcp: NamedRateRow[]; skills: NamedRateRow[]; hooks: HookRow[] }) {
-  const rate = (title: string, head: string, rs: NamedRateRow[]) => <div><h3>{title}</h3><div className="scroll tall"><table>
+  const rate = (title: string, head: string, kind: ToolKind, rs: NamedRateRow[]) => <div><h3>{title}</h3><div className="scroll tall"><table>
     <thead><tr><th>{head}</th><th className="num">Calls</th><th className="num">Failed</th></tr></thead>
-    <tbody>{rs.length ? rs.map(r => <tr key={r.name}><td className="name" title={r.name}>{r.name}</td><RateCells r={r} n={r.calls} /></tr>) : <None cols={3} />}</tbody></table></div></div>;
+    <tbody>{rs.length ? rs.map(r => <tr key={r.name} {...pickRow(r.name, v => openToolSheet(kind, v))}>
+      <td className="name"><button type="button" className="cellbtn" title={r.name}>{r.name}</button></td><RateCells r={r} n={r.calls} /></tr>) : <None cols={3} />}</tbody></table></div></div>;
   return (
     <Drawer id="d-ext" title="MCP servers, skills and hooks" count={`${num(mcp.length)}, ${num(skills.length)} and ${num(hooks.length)}`} bodyClassName="grid3">
-      {rate("MCP servers", "Server", mcp)}{rate("Skills", "Skill", skills)}
+      {rate("MCP servers", "Server", "mcp", mcp)}{rate("Skills", "Skill", "skill", skills)}
       <div><h3>Hooks</h3><div className="scroll tall"><table>
         <thead><tr><th>Hook</th><th className="num">Runs</th><th className="num">Failed</th><th className="num">Avg</th></tr></thead>
         <tbody>{hooks.length ? hooks.map((r, k) => <tr key={k}><td className="name" title={[r.name, r.event].filter(Boolean).join(" · ")}>{r.name}</td>

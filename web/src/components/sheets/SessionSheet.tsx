@@ -3,7 +3,7 @@ import { promptUrl, type SessionDetail } from "../../api";
 import { big, dur, ms, num, pct, plural, usd, when } from "../../format";
 import { ApiError, getJson } from "../../useApi";
 import { ProjectDot } from "../ProjectDot";
-import { appLink, errorsHref, openProjectSheet } from "./session";
+import { appLink, errorsHref, openProjectSheet, openToolSheet, pickRow } from "./session";
 import { FilterButton } from "./FilterButton";
 import { Timeline } from "./Timeline";
 
@@ -87,7 +87,8 @@ export function SessionSheet({ id, s, error, retry, range, pageProject }: Sessio
     </table></div></details>
     <details className="sd"><summary>Tools<span className="c">{num(s.tools.length)}</span></summary><div className="scroll"><table>
       <thead><tr><th>Tool</th><th className="num">Calls</th><th className="num">Failed</th><th className="num">p50</th></tr></thead>
-      <tbody>{s.tools.length ? s.tools.map(r => <tr key={r.tool}><td className="name">{r.tool}</td><td className="num">{num(r.calls)}</td>
+      <tbody>{s.tools.length ? s.tools.map(r => <tr key={r.tool} {...pickRow(r.tool, v => openToolSheet("tool", v))}>
+        <td className="name"><button type="button" className="cellbtn">{r.tool}</button></td><td className="num">{num(r.calls)}</td>
         <td className={"num" + ((r.failure_rate ?? 0) > .1 ? " bad" : "")}>{pct(r.failure_rate, 1)}</td><td className="num">{ms(r.p50_ms)}</td></tr>)
         : <tr><td colSpan={4} className="empty">No tool calls.</td></tr>}</tbody>
     </table></div></details>
