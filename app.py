@@ -32,6 +32,7 @@ class App:
         self.con, self.root = con, root
         self.lock = threading.Lock()
         self.wake = threading.Event()
+        self.stopping = threading.Event()
         self.state = dict(ingesting=False, last_ingest=None, last_stats=None, error=None)
 
     def ingest(self):
@@ -50,10 +51,16 @@ class App:
                 self.state["ingesting"] = False
 
     def loop(self):
-        while True:
+        while not self.stopping.is_set():
             self.ingest()
             self.wake.wait(INTERVAL)
             self.wake.clear()
+
+    def stop(self, thread):
+        """End the ingest loop so nothing holds the connection at exit (DuckDB's bindings warn about leaks otherwise)."""
+        self.stopping.set()
+        self.wake.set()
+        thread.join()
 
     def status(self):
         cur = self.con.cursor()
@@ -162,12 +169,16 @@ def serve(con, root):
         httpd = ThreadingHTTPServer((HOST, PORT), handler(app))
     except OSError as e:
         sys.exit(f"cannot listen on {HOST}:{PORT}: {e}")
-    threading.Thread(target=app.loop, daemon=True).start()
+    loop = threading.Thread(target=app.loop, daemon=True)
+    loop.start()
     print(f"serving http://{HOST}:{PORT}/ (ingest every {INTERVAL}s)", flush=True)
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
         pass
+    finally:
+        httpd.server_close()
+        app.stop(loop)
 
 
 def main():
