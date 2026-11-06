@@ -10,11 +10,11 @@ See proposal.md, "Why". Today `store.py` has one ingest path:
 
 `metrics.py` filters everything through `scope()` (project and automated) and `view()` (range). The Errors page is different: it gets every error from `errors_payload` and filters by project in the browser.
 
-What the local Codex data shows (CLI 0.139 to 0.166; 15 live files, 5 archived):
+What the local Codex data shows (CLI 0.120 to 0.166; 89 files, most of them `.jsonl.zst` under `sessions/` as well as the 5 in `archived_sessions/`):
 - Every line has `timestamp`, `ordinal`, `type`, and `payload`. None has a `uuid`.
 - `session_meta` (line 0) has `id`, `cwd`, `originator`, `cli_version` and `git.branch`.
 - `turn_context` has `turn_id`, `model` and `collaboration_mode.settings.reasoning_effort` (not always set).
-- `token_usage_record` has `turn_id`, `response_id` and `usage`. `usage` holds `input_tokens` (cached included), `cached_input_tokens`, `cache_write_input_tokens` (always 0 so far), `output_tokens` and `reasoning_output_tokens`. `response_id` never repeats.
+- `token_usage_record` has `turn_id`, `response_id` and `usage`. `usage` holds `input_tokens` (cached included), `cached_input_tokens`, `cache_write_input_tokens` (946,272 tokens in total, always part of `input_tokens`), `output_tokens` and `reasoning_output_tokens`. `response_id` never repeats.
 - `event_msg` / `token_count` repeats the same usage as a running total, so it is ignored.
 - Tools run in code mode. A `custom_tool_call` named `exec` runs a JS script that calls the real tools. The real calls arrive as `event_msg` / `item_completed`, and the item `type` is one of:
   - `McpToolCall`: `server`, `tool`, `arguments`, `status`, `result`, `duration`.
@@ -107,7 +107,7 @@ What the local Codex data shows (CLI 0.139 to 0.166; 15 live files, 5 archived):
 ## Risks / Trade-offs
 
 - [Codex's format changes between CLI versions (0.139 to 0.166 locally)] → The parser ignores unknown line and item types. Fixtures come from real lines of several versions, and raw lines are kept, so a parser fix plus `rebuild` recovers.
-- [`cache_write_input_tokens` is always 0 locally, so its subset-of-input meaning is unconfirmed] → The total is unaffected. Only the cache-write vs input price split could be off. See Open Questions.
+- [The cache write rate matters: local records hold 946,272 cache-write tokens] → They are part of `input_tokens` in every record (uncached input is never negative and `total_tokens` is input plus output), so they are priced once, at the cache-write rate.
 - [OpenAI list prices for `gpt-6-astra` and `gpt-6.1-sol` may not be published] → Unlisted models stay unpriced. Cost already counts and shows unpriced requests.
 - [The `ALTER` on a table with a primary key fails on this DuckDB version] → The fallback is copy-and-swap in one transaction. Task 1.2 first runs the migration on a clone of the real store.
 - [Codex subagent and thread semantics are inferred from 2 archived files] → They're treated as subagent work of the parent session. If that's wrong, only `subagent` flags change, and a rebuild fixes them.
@@ -115,9 +115,5 @@ What the local Codex data shows (CLI 0.139 to 0.166; 15 live files, 5 archived):
 ## Migration Plan
 
 1. On open, the store adds `source` to `files` and `sessions` with default `claude`. No raw rows are touched.
-2. The first ingest after upgrade reads all Codex files. That's 20 files, a few MB.
+2. The first ingest after upgrade reads all Codex files. That was 89 files and about 23,000 lines here.
 3. Rollback: the earlier code ignores the extra column. Codex sessions would then show as unlabeled sessions. To drop them, delete the `codex` rows from `files`, the derived tables and `raw_lines` (`key LIKE 'codex:%'`), then rebuild.
-
-## Open Questions
-
-- Does `cache_write_input_tokens` ever become nonzero, and is it then included in `input_tokens`? Check the first nonzero record against OpenAI's usage docs. Only the price split depends on it.

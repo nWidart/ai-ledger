@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import fixture from "../../__fixtures__/errors";
 import type { ErrorsPayload } from "../../api";
 import {
-  beforeAfter, bucketOf, buckets, byWeight, change, chartData, exList, filtered, incidentsOf, incSummary, makeModel, pointText,
+  beforeAfter, bucketOf, buckets, byWeight, change, chartData, emptyTypes, exList, filtered, incidentsOf, incSummary, makeModel, pointText,
   rangeStart, series, settle, summary, typeColors, typeRows, viewTypes, whereToStart, type View,
 } from "./model";
 import { DEFAULT_VIEW, loadFixes, loadMode, readView, viewHash, viewPatch } from "./view";
@@ -32,6 +32,12 @@ describe("ranges", () => {
 });
 
 describe("filtering and series", () => {
+  it("says a project has no calls only within the chosen source", () => {
+    const p = fixture.errors[0]!.p;
+    expect(emptyTypes(m, v({ project: p }), filtered(m, v({ project: p })))).not.toMatch(/No tool calls recorded/);
+    expect(emptyTypes(m, v({ project: p, source: "codex" }), filtered(m, v({ project: p, source: "codex" }))))
+      .toBe(`No tool calls recorded for ${p}.`);
+  });
   it("filters by project, subagents and noise", () => {
     expect(filtered(m, v()).errs).toHaveLength(6);
     expect(filtered(m, v({ project: "bar" })).errs).toHaveLength(0);

@@ -248,7 +248,7 @@ export function typeRows(m: Model, v: View, f: Filtered): TypeRow[] {
 }
 /** The table's empty row. */
 export function emptyTypes(m: Model, v: View, f: Filtered): string {
-  const none = v.project && !m.data.calls.some(c => c[1] === v.project) && !m.errors.some(e => e.p === v.project);
+  const none = v.project && !m.data.calls.some(c => inScope(v, c[1], c[4])) && !m.errors.some(e => inScope(v, e.p, e.src));
   return none ? `No tool calls recorded for ${v.project}.` : sumCalls(v, f.calls) ? "No errors in this range 🎉" : "No tool calls in this range.";
 }
 
