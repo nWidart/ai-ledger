@@ -259,13 +259,21 @@ def usage(cur, project="", range_days=0, session="", prices=None, today=None, au
     return out
 
 
+def previous_dates(range_days, today):
+    """(first day, last day) of the equal-length period just before a view of range_days ending today; None for all time."""
+    if not range_days:
+        return None
+    end = today - timedelta(days=range_days)
+    return end - timedelta(days=range_days - 1), end
+
+
 def previous_period(cur, project, range_days, prices, today, automated=False, source=""):
     """The equal-length period just before the view (same scope()), for the headline comparison and its sparkline.
     None for the all-time view, which has nothing before it."""
-    if not range_days:
+    dates = previous_dates(range_days, today)
+    if dates is None:
         return None
-    end = today - timedelta(days=range_days)  # last day of the previous period
-    start = end - timedelta(days=range_days - 1)
+    start, end = dates
     pcte, pparams = price_cte(prices)
     sql, sp = scope(project, automated, source)
     rq = requests_cte(pcte, f"{sql} AND r.ts >= CAST(? AS DATE) AND r.ts < CAST(? AS DATE) + INTERVAL 1 DAY")
