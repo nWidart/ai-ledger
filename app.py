@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 
+import limits
 import metrics
 import store
 
@@ -28,8 +29,9 @@ ASSET_TYPES = {".js": "text/javascript; charset=utf-8", ".css": "text/css; chars
 
 
 class App:
-    def __init__(self, con, roots):
+    def __init__(self, con, roots, pollers=None):
         self.con, self.roots = con, roots
+        self.pollers = limits.pollers() if pollers is None else pollers
         self.lock = threading.Lock()
         self.wake = threading.Event()
         self.stopping = threading.Event()
@@ -50,9 +52,16 @@ class App:
             finally:
                 self.state["ingesting"] = False
 
+    def poll(self):
+        """Poll each provider's plan limits that is due. A poller never raises, so ingest goes on whatever the endpoint does."""
+        for p in self.pollers:
+            if p.due():
+                p.run(self.con, self.lock)
+
     def loop(self):
         while not self.stopping.is_set():
             self.ingest()
+            self.poll()
             self.wake.wait(INTERVAL)
             self.wake.clear()
 
@@ -65,7 +74,7 @@ class App:
     def status(self):
         cur = self.con.cursor()
         counts = {t: cur.execute(f"SELECT count(*) FROM {t}").fetchone()[0] for t in ("raw_lines", "files", "sessions", "requests", "tool_calls")}
-        return dict(self.state, counts=counts, interval=INTERVAL)
+        return dict(self.state, counts=counts, interval=INTERVAL, limits={p.name: dict(p.state) for p in self.pollers})
 
 
 def asset(path):

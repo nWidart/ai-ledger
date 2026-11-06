@@ -94,6 +94,7 @@ def fetch_claude(cred):
         with urllib.request.urlopen(req, timeout=10) as r:
             body = json.loads(r.read())
     except urllib.error.HTTPError as e:
+        e.close()
         raise PollFailed(f"usage endpoint answered HTTP {e.code}") from None
     except (urllib.error.URLError, OSError):
         raise PollFailed("usage endpoint unreachable") from None
