@@ -393,6 +393,31 @@ class MetricsTest(unittest.TestCase):
             httpd.shutdown()
             httpd.server_close()
 
+    def codex_models(self, *requests):
+        """The model rows of a Codex session holding requests, priced by prices.json. The rows are removed after."""
+        c = self.con.cursor()
+        store.insert(c, "sessions", ["session_id", "project", "first_ts", "last_ts", "compactions", "peak_context", "source"],
+                     [("cx1", "foo", "2026-11-05 10:00:00", "2026-11-05 10:05:00", 0, 0, "codex")])
+        cols = ["message_id", "session_id", "ts", "model", "effort", "subagent", "input", "output", "thinking",
+                "cache_read", "cache_5m", "cache_1h"]
+        store.insert(c, "requests", cols, [(f"cx{i}", "cx1", "2026-11-05 10:01:00", *r) for i, r in enumerate(requests)])
+        try:
+            return {m["model"]: m for m in metrics.session(c, "cx1", prices=metrics.load_prices())["models"]}
+        finally:
+            c.execute("DELETE FROM requests WHERE session_id = 'cx1'")
+            c.execute("DELETE FROM sessions WHERE session_id = 'cx1'")
+
+    def test_codex_request_priced(self):
+        # input_tokens 25,707 with 13,440 cached and 182 out; then a 300K prompt, above the 272K long-context threshold.
+        m = self.codex_models(("gpt-6.1-sol", "high", False, 12_267, 182, 0, 13_440, 0, 0),
+                              ("gpt-6-astra", "medium", False, 100_000, 1_000, 10, 150_000, 50_000, 0))
+        self.assertAlmostEqual(m["gpt-6.1-sol"]["cost"], (12_267 * 2 + 182 * 10 + 13_440 * 0.1) / 1e6)
+        self.assertAlmostEqual(m["gpt-6-astra"]["cost"], (100_000 * 20 + 1_000 * 75 + 150_000 * 2 + 50_000 * 25) / 1e6)
+
+    def test_unlisted_codex_model_unpriced(self):
+        m = self.codex_models(("gpt-5.5", None, False, 1_000, 10, 0, 0, 0, 0))  # seen in Codex sessions, not in prices.json
+        self.assertIsNone(m["gpt-5.5"]["cost"])
+
 
 class SourceFilterTest(unittest.TestCase):
     """One day (Nov 5) with a Claude session (c1, 1,000,000 tokens) and a Codex session (x1, 200,000 tokens) in project foo,
