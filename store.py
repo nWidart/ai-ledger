@@ -14,7 +14,7 @@ from typing import Callable, NamedTuple
 
 import duckdb
 
-from categorize import GIT_COMMIT, TEST_CMD, categorize, error_text, summarize_input
+from categorize import GIT_COMMIT, SHELL_TOOLS, TEST_CMD, categorize, error_text, summarize_input
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_DB = os.path.join(HERE, "data", "ai-ledger.duckdb")
@@ -225,17 +225,18 @@ def ingest(con, roots, log=None):
         except OSError:
             continue
         size, offset, lines, seq, mtime = known.get(path, (0, 0, 0, 0, 0))
-        if path in known and st.st_size == offset:
+        if path in known and st.st_size == offset and st.st_mtime == mtime:
             continue
         if st.st_size < offset:  # rewritten or truncated: read again from the start; dedup drops repeats
             offset, lines = 0, 0
-        with open(path, "rb") as fh:
-            fh.seek(offset)
-            data = fh.read(st.st_size - offset)
+        data, whole = SOURCES[name].read(path, offset, st.st_size)
+        if whole:  # a compressed file, decompressed from its start; dedup drops the lines already stored
+            offset, lines = 0, 0
+            data += b"" if data.endswith(b"\n") else b"\n"
         end = data.rfind(b"\n") + 1
         if not end:
             continue
-        n, ins = ingest_chunk(cur, projects, name, path, data[:end], offset, lines, seq, st)
+        n, ins = ingest_chunk(cur, projects, name, path, data[:end], offset, lines, seq, st, whole)
         stats["files"] += 1
         stats["lines"] += n
         stats["inserted"] += ins
@@ -245,7 +246,8 @@ def ingest(con, roots, log=None):
     return stats
 
 
-def ingest_chunk(cur, projects, name, path, data, offset, lines, seq, st):
+def ingest_chunk(cur, projects, name, path, data, offset, lines, seq, st, whole=False):
+    """Store and derive the complete lines in data, which starts at offset. A whole file's read_offset is its size."""
     src = SOURCES[name]
     sub = src.subagent(path)
     rows, parsed, seen = [], {}, set()
@@ -261,8 +263,7 @@ def ingest_chunk(cur, projects, name, path, data, offset, lines, seq, st):
         if key not in seen:
             seen.add(key)
             dd = d if ok else {}
-            rows.append((key, path, lines, pos, dd.get("type"), dd.get("sessionId"), dd.get("uuid"),
-                         dd.get("timestamp"), sub, ok, text))
+            rows.append((key, path, lines, pos, dd.get("type"), *src.fields(dd, path), sub, ok, text))
             if ok:
                 parsed[key] = d
         lines += 1
@@ -277,7 +278,7 @@ def ingest_chunk(cur, projects, name, path, data, offset, lines, seq, st):
                 der.add(parsed[r[0]])
         der.flush()
         insert(cur, "files", ["path", "size", "read_offset", "lines", "seq", "mtime", "last_ingest", "source"],
-               [(path, st.st_size, pos, lines, der.seq, st.st_mtime, datetime.now(timezone.utc).replace(tzinfo=None), name)],
+               [(path, st.st_size, st.st_size if whole else pos, lines, der.seq, st.st_mtime, datetime.now(timezone.utc).replace(tzinfo=None), name)],
                tail="ON CONFLICT (path) DO UPDATE SET size = excluded.size, read_offset = excluded.read_offset, "
                     "lines = excluded.lines, seq = excluded.seq, mtime = excluded.mtime, last_ingest = excluded.last_ingest")
         cur.execute("COMMIT")
@@ -380,13 +381,13 @@ class Deriver:
             if x.get("type") == "tool_use" and x.get("id") and x["id"] not in self.uses:
                 name, inp = x.get("name") or "?", x.get("input")
                 summary = summarize_input(name, inp)
-                bash = name == "Bash"
+                shell = name in SHELL_TOOLS
                 self.uses[x["id"]] = dict(
                     session_id=sid, tool=name, mcp_server=name[5:].rsplit("__", 1)[0] if name.startswith("mcp__") else None,
                     skill=inp.get("skill") if name == "Skill" and isinstance(inp, dict) else None,
                     input_summary=summary, start_ts=ts, subagent=self.sub or bool(d.get("isSidechain")),
-                    is_commit=bash and GIT_COMMIT.search(summary) is not None,
-                    is_test=bash and TEST_CMD.search(summary) is not None)
+                    is_commit=shell and GIT_COMMIT.search(summary) is not None,
+                    is_test=shell and TEST_CMD.search(summary) is not None)
             elif x.get("type") in ("text", "thinking"):
                 said = ((x.get("text") if x.get("type") == "text" else x.get("thinking")) or "").strip()
                 if said:
@@ -491,14 +492,31 @@ class Deriver:
                 r and r["seq"])
 
 
+def line_fields(d, path):
+    """The raw_lines columns session_id, uuid and ts of a Claude Code line."""
+    return d.get("sessionId"), d.get("uuid"), d.get("timestamp")
+
+
+def read_from(path, offset, size):
+    """The bytes of a plain file from offset to size, and False: the file is read incrementally."""
+    with open(path, "rb") as fh:
+        fh.seek(offset)
+        return fh.read(size - offset), False
+
+
 class Source(NamedTuple):
     files: Callable  # root -> transcript paths
     key: Callable  # (line, path, offset) -> dedup key
     deriver: type  # Deriver or a subclass
     subagent: Callable  # path -> whether the file holds subagent work
+    fields: Callable = line_fields  # (line, path) -> raw_lines session_id, uuid, ts
+    read: Callable = read_from  # (path, offset, size) -> (bytes, whole); whole: the file decompressed from its start
 
 
-SOURCES = {"claude": Source(transcript_files, line_key, Deriver, lambda path: "/subagents/" in path)}
+import codex  # noqa: E402  (it subclasses Deriver)
+
+SOURCES = {"claude": Source(transcript_files, line_key, Deriver, lambda path: "/subagents/" in path),
+           "codex": Source(codex.files, codex.key, codex.CodexDeriver, codex.subagent, codex.fields, codex.read)}
 
 
 def rebuild(con, log=None):

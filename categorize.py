@@ -7,8 +7,10 @@ import re
 
 # Commands that run tests, builds or linters. A call matching this is a test run; it passed when it did not fail.
 TEST_CMD = re.compile(r"\b(npm|pnpm|yarn|bun|npx|vitest|jest|pytest|cargo|tsc|phpunit|pest|go test|go build|make|eslint|ruff|mypy|artisan test|composer)\b")
-# A Bash command that runs `git commit`, allowing global options such as `-C <dir>`.
+# A shell command that runs `git commit`, allowing global options such as `-C <dir>`.
 GIT_COMMIT = re.compile(r"\bgit\b(\s+-\S+(\s+\S+)?)*\s+commit\b")
+# Tool names that run a shell command, per source: Claude Code's and Codex's. TEST_CMD and GIT_COMMIT apply to these.
+SHELL_TOOLS = {"Bash", "exec_command"}
 
 # First matching rule wins. Each rule: id, label, test(err, tool, cmd) -> bool, why, fix, snippet.
 RULES = [
