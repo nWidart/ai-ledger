@@ -11,29 +11,29 @@
 :root {
   color-scheme: light;
   --bg: #f6f5f2; --surface-1: #fcfcfb; --surface-2: #f0efec; --border: #e2e0da;
-  --text-primary: #0b0b0b; --text-secondary: #52514e; --text-muted: #7a7973;
+  --text-primary: #0b0b0b; --text-secondary: #52514e; --text-muted: #66655f;
   --series-1: #2a78d6; --series-1-soft: rgba(42,120,214,.12); --series-2: #eb6834; --series-3: #1baf7a;
   --series-4: #eda100; --series-5: #e87ba4; --series-6: #008300;
   --grid: #e8e6e1; --good: #0ca30c; --good-text: #006300; --critical: #d03b3b; --warning-text: #8a5a00;
-  --accent: #2a78d6; --track: #ebe9e4;
+  --accent: #2a78d6; --track: #ebe9e4; --link: #1f62b5; --critical-text: #b42318;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
     --bg: #121211; --surface-1: #1a1a19; --surface-2: #242422; --border: #33332f;
-    --text-primary: #f0efec; --text-secondary: #c3c2b7; --text-muted: #8f8e86;
+    --text-primary: #f0efec; --text-secondary: #c3c2b7; --text-muted: #9d9c94;
     --series-1: #3987e5; --series-1-soft: rgba(57,135,229,.18); --series-2: #d95926; --series-3: #199e70;
     --series-4: #c98500; --series-5: #d55181; --series-6: #008300;
-    --grid: #2b2b28; --good-text: #4cc94c; --critical: #e66767; --warning-text: #e0b04a; --accent: #3987e5; --track: #262624;
+    --grid: #2b2b28; --good-text: #4cc94c; --critical: #e66767; --warning-text: #e0b04a; --accent: #3987e5; --track: #262624; --link: #6aa6f0; --critical-text: #f08080;
   }
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
   --bg: #121211; --surface-1: #1a1a19; --surface-2: #242422; --border: #33332f;
-  --text-primary: #f0efec; --text-secondary: #c3c2b7; --text-muted: #8f8e86;
+  --text-primary: #f0efec; --text-secondary: #c3c2b7; --text-muted: #9d9c94;
   --series-1: #3987e5; --series-1-soft: rgba(57,135,229,.18); --series-2: #d95926; --series-3: #199e70;
   --series-4: #c98500; --series-5: #d55181; --series-6: #008300;
-  --grid: #2b2b28; --good-text: #4cc94c; --critical: #e66767; --warning-text: #e0b04a; --accent: #3987e5; --track: #262624;
+  --grid: #2b2b28; --good-text: #4cc94c; --critical: #e66767; --warning-text: #e0b04a; --accent: #3987e5; --track: #262624; --link: #6aa6f0; --critical-text: #f08080;
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--text-primary);
@@ -54,7 +54,7 @@ button:hover { background: var(--surface-2); }
 .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
 .seg button { border: 0; border-radius: 0; padding: 6px 12px; }
 .seg button[aria-pressed=true] { background: var(--text-primary); color: var(--surface-1); }
-.linkish { border: 0; background: none; padding: 0; color: var(--accent); }
+.linkish { border: 0; background: none; padding: 0; color: var(--link); font-size: inherit; }
 .linkish:hover { background: none; text-decoration: underline; }
 
 /* The lede: the period's answer as one sentence */
@@ -88,9 +88,22 @@ h2 { font-size: 16px; font-weight: 600; margin: 0; letter-spacing: -.005em; }
 .ledger { list-style: none; margin: 8px 0 0; padding: 0; }
 .ledger li { display: grid; grid-template-columns: minmax(0, 13rem) minmax(40px, 1fr) 4.5rem 3rem; gap: 12px; align-items: center;
   padding: 6px 8px; margin: 0 -8px; border-radius: 6px; }
-.ledger li.pick { cursor: pointer; }
-.ledger li.pick:hover { background: var(--surface-2); }
-.ledger li.sel { background: var(--series-1-soft); }
+.ledger li.pick { display: block; padding: 0; }
+.ledger .rowbtn { display: grid; grid-template-columns: inherit; width: 100%; gap: 12px; align-items: center; padding: 6px 8px;
+  border: 0; border-radius: 6px; background: none; color: inherit; text-align: left; font: inherit; }
+.ledger li.pick .rowbtn { grid-template-columns: minmax(0, 13rem) minmax(40px, 1fr) 4.5rem 3rem; }
+.ledger .rowbtn:hover { background: var(--surface-2); }
+.cellbtn { border: 0; background: none; padding: 0; font: inherit; color: var(--link); text-align: left; max-width: 100%;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cellbtn:hover { background: none; text-decoration: underline; }
+.tools-row { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin-bottom: 6px; }
+.tools-row input[type=search] { font: inherit; color: var(--text-primary); background: var(--surface-1); border: 1px solid var(--border);
+  border-radius: 8px; padding: 6px 10px; flex: 1 1 260px; min-width: 0; }
+label.chk { display: inline-flex; gap: 6px; align-items: center; color: var(--text-secondary); font-size: 13px; }
+#chart:focus-visible { outline-offset: 4px; border-radius: 4px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+#sheetTitle:focus { outline: none; }
+#lede:focus { outline: none; }
 .ledger .n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ledger .bar { height: 8px; background: var(--track); border-radius: 4px; overflow: hidden; }
 .ledger .bar span { display: block; height: 100%; background: var(--series-1); border-radius: 4px; }
@@ -116,13 +129,13 @@ h2 { font-size: 16px; font-weight: 600; margin: 0; letter-spacing: -.005em; }
 
 /* Drawers: the full tables, closed by default */
 .drawers { margin-top: 32px; border-top: 1px solid var(--border); }
-details.drawer { border-bottom: 1px solid var(--border); }
+details.drawer { border-bottom: 1px solid var(--border); scroll-margin-top: calc(var(--appnav-h, 56px) + 12px); }
 details.drawer > summary { list-style: none; cursor: pointer; display: flex; gap: 12px; align-items: baseline; padding: 14px 4px; }
 details.drawer > summary::-webkit-details-marker { display: none; }
 details.drawer > summary::before { content: ""; width: 7px; height: 7px; flex: none; align-self: center;
   border-right: 1.5px solid var(--text-muted); border-bottom: 1.5px solid var(--text-muted); transform: rotate(-45deg); transition: transform .15s; }
 details.drawer[open] > summary::before { transform: rotate(45deg); }
-details.drawer > summary:hover h2 { color: var(--accent); }
+details.drawer > summary:hover h2 { color: var(--link); }
 details.drawer > summary .c { color: var(--text-muted); font-size: 13px; }
 details.drawer > summary .w { color: var(--text-muted); font-size: 12.5px; margin-left: auto; text-align: right; }
 .drawer-body { padding: 0 0 24px; }
@@ -136,7 +149,7 @@ details.drawer > summary .w { color: var(--text-muted); font-size: 12.5px; margi
   .vital:nth-child(n+3) { border-top: 1px solid var(--border); }
   details.drawer > summary .w { display: none; }
 }
-@media (max-width: 520px) { .ledger li { grid-template-columns: minmax(0, 1fr) 4.5rem 3rem; } .ledger .bar { display: none; } }
+@media (max-width: 520px) { .ledger li, .ledger li.pick .rowbtn { grid-template-columns: minmax(0, 1fr) 4.5rem 3rem; } .ledger .bar { display: none; } }
 @media (prefers-reduced-motion: reduce) { details.drawer > summary::before { transition: none; } }
 
 .scroll { overflow-x: auto; }
@@ -155,10 +168,19 @@ tbody tr.sel { background: var(--series-1-soft); }
 tbody tr:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .chip { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-secondary); white-space: nowrap; }
 .chip.warn { border-color: var(--warning-text); color: var(--warning-text); }
-.bad { color: var(--critical); }
+.bad { color: var(--critical-text); }
+.small { font-size: 12px; }
+body.loading .wrap > :not(.top) { opacity: .55; transition: opacity .2s; }
+tbody.stale { opacity: .45; pointer-events: none; }
+#d-projects th:first-child, #d-projects td:first-child { position: sticky; left: 0; background: var(--bg); z-index: 1; box-shadow: 1px 0 0 var(--border); }
+#d-projects th:first-child { z-index: 2; }
+.pending { margin: -16px 0 12px; min-height: 1.5em; color: var(--text-secondary); font-size: 13px; }
+.pending:empty { visibility: hidden; }
+.sheet td.name { white-space: normal; overflow-wrap: anywhere; max-width: none; }
+@media (max-width: 520px) { #d-sessions .opt { display: none; } #d-sessions td.name { max-width: 90px; } #d-sessions td.when { white-space: normal; } #d-sessions td.when .small { overflow-wrap: anywhere; } }
 .muted { color: var(--text-muted); }
 .empty { color: var(--text-muted); padding: 24px 0; text-align: center; }
-a { color: var(--accent); }
+a { color: var(--link); }
 
 /* Totals drawer */
 .totals { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0 24px; margin: 0; }
@@ -167,15 +189,33 @@ a { color: var(--accent); }
 .totals dd { margin: 2px 0 0; font-size: 17px; font-weight: 500; }
 .totals dd small { display: block; font-size: 12.5px; font-weight: 400; color: var(--text-secondary); }
 
-/* Session drill-in */
-.detail-head { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
-.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin: 10px 0 14px; }
-.facts div { background: var(--surface-2); border-radius: 8px; padding: 8px 10px; }
+/* Sheet: project and session details over the page, without changing the page's filters */
+dialog.sheet { inset: 0 0 0 auto; margin: 0; width: min(640px, 100%); max-width: 100%; height: 100dvh; max-height: 100dvh;
+  padding: 0; border: 0; border-left: 1px solid var(--border); background: var(--bg); color: var(--text-primary);
+  overflow: auto; overscroll-behavior: contain; box-shadow: -8px 0 32px rgba(0,0,0,.16); }
+dialog.sheet::backdrop { background: rgba(0,0,0,.3); }
+.sheet-in { min-height: 100%; }
+.sheet-head { position: sticky; top: 0; z-index: 1; display: flex; gap: 8px; align-items: center; padding: 12px 20px;
+  background: var(--surface-1); border-bottom: 1px solid var(--border); }
+.sheet-head h2 { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sheet-body { padding: 16px 20px 40px; }
+.sheet-kind { color: var(--text-muted); font-size: 12px; font-weight: 500; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 4px; }
+.btn { font: inherit; font-size: 13px; text-decoration: none; color: var(--text-primary); background: var(--surface-1);
+  border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; }
+.btn:hover { background: var(--surface-2); }
+.btn.primary { background: var(--text-primary); color: var(--surface-1); border-color: var(--text-primary); }
+.btn.primary:hover { opacity: .88; }
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; margin: 10px 0 14px; }
+.facts > div { background: var(--surface-2); border-radius: 8px; padding: 8px 10px; min-width: 0; }
 .facts .v { font-size: 17px; font-weight: 600; }
 .facts .l { font-size: 12px; color: var(--text-muted); }
-.detail h3 { font-size: 13px; margin: 14px 0 4px; color: var(--text-secondary); }
+.sheet h3 { font-size: 13px; margin: 14px 0 4px; color: var(--text-secondary); }
 .sid { word-break: break-all; }
 .commit { font-size: 12px; margin: 3px 0; }
+.commit code { white-space: pre-wrap; overflow-wrap: anywhere; }
+.sheet-body { overflow-wrap: anywhere; }
+.sheet-body .hint .chip { margin-bottom: 4px; }
 code { font: 12px/1.4 ui-monospace, "SF Mono", Menlo, monospace; }
 </style>
 </head>
@@ -192,8 +232,10 @@ code { font: 12px/1.4 ui-monospace, "SF Mono", Menlo, monospace; }
     </div>
   </header>
 
+  <div class="banner" id="loadError" role="alert" hidden><b id="loadErrorMsg"></b> <button type="button" class="linkish" id="retry">Retry</button></div>
   <div id="banner"></div>
-  <p class="lede" id="lede" aria-live="polite"></p>
+  <p class="pending" id="pending" role="status"></p>
+  <p class="lede" id="lede" aria-live="polite" tabindex="-1">Loading usage…</p>
   <p class="sub" id="sub"></p>
 
   <section class="panel" aria-labelledby="chartTitle">
@@ -202,13 +244,14 @@ code { font: 12px/1.4 ui-monospace, "SF Mono", Menlo, monospace; }
       <div class="seg" id="fMetric" role="group" aria-label="Chart metric"><button data-v="cost">Cost</button><button data-v="tokens">Tokens</button></div>
     </div>
     <div class="legend" id="legend"></div>
-    <div id="chart"></div>
+    <div id="chart" tabindex="0" role="img"></div>
+    <div class="sr" id="chartLive" aria-live="polite"></div>
   </section>
 
   <div class="split">
     <section class="panel">
-      <h2>Where the spend went</h2>
-      <div class="hint">Estimated cost per project. Select a project to filter the page.</div>
+      <h2 id="ledgerTitle">Where the spend went</h2>
+      <div class="hint" id="ledgerHint"></div>
       <ol class="ledger" id="ledger"></ol>
       <button type="button" class="linkish more" id="ledgerMore" hidden></button>
     </section>
@@ -228,17 +271,21 @@ code { font: 12px/1.4 ui-monospace, "SF Mono", Menlo, monospace; }
 
   <div class="drawers">
     <details class="drawer" id="d-sessions">
-      <summary><h2>Sessions</h2><span class="c" id="sessCount"></span><span class="w">Duration, context, compactions and per-session drill-in</span></summary>
-      <div class="drawer-body grid2">
+      <summary><h2>Sessions</h2><span class="c" id="sessCount"></span><span class="w">Duration, context, compactions and commits per session</span></summary>
+      <div class="drawer-body">
         <div>
-          <div class="hint" id="sessHint"></div>
+          <div class="tools-row">
+            <input type="search" id="sessQ" placeholder="Search by session id, project or branch" aria-label="Search sessions">
+            <label class="chk"><input type="checkbox" id="sessNear"> Near context limit only</label>
+          </div>
+          <div class="hint" id="sessHint" aria-live="polite"></div>
           <div class="scroll tall"><table>
-            <thead><tr><th>Started</th><th>Project</th><th class="num">Duration</th><th class="num">Prompts</th><th class="num">Tokens</th><th class="num">Est. cost</th>
-              <th class="num">Peak context</th><th class="num">Compactions</th><th class="num">Commits</th></tr></thead>
+            <thead><tr><th>Started</th><th>Project</th><th class="num opt">Duration</th><th class="num opt">Prompts</th><th class="num opt">Tokens</th><th class="num">Est. cost</th>
+              <th class="num">Peak context</th><th class="num opt">Compactions</th><th class="num opt">Commits</th></tr></thead>
             <tbody id="sessBody"></tbody>
           </table></div>
+          <button type="button" class="linkish more" id="sessMore" hidden>Show more sessions</button>
         </div>
-        <section class="panel detail" id="detail" aria-live="polite"></section>
       </div>
     </details>
 
@@ -290,6 +337,16 @@ code { font: 12px/1.4 ui-monospace, "SF Mono", Menlo, monospace; }
   </div>
 </div>
 <div class="tip" id="tip" role="tooltip"></div>
+<dialog class="sheet" id="sheet" aria-labelledby="sheetTitle">
+  <div class="sheet-in">
+    <div class="sheet-head">
+      <button type="button" id="sheetBack" hidden>← Back</button>
+      <h2 id="sheetTitle" tabindex="-1"></h2>
+      <button type="button" id="sheetClose" aria-label="Close">✕</button>
+    </div>
+    <div class="sheet-body" id="sheetBody"></div>
+  </div>
+</dialog>
 
 <script type="module">
 const $ = s => document.querySelector(s);
@@ -316,7 +373,7 @@ const store = {
   get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
 };
-const state = { project: "", range: 30, session: "", metric: store.get("claude-usage-metric", "cost"),
+const state = { project: "", range: 30, session: "", inspect: "", nearOnly: false, sessQ: "", metric: store.get("claude-usage-metric", "cost"),
   hidden: store.get("claude-usage-hidden", []), ledgerAll: false };
 let DATA = null;
 
@@ -325,22 +382,69 @@ function readHash() {
   state.project = h.get("project") || "";
   state.range = h.has("range") && RANGES.includes(+h.get("range")) ? +h.get("range") : 30;
   state.session = h.get("session") || "";
+  state.inspect = h.get("inspect") || "";
 }
-function writeHash() {
+// The hash holds the whole view: filters plus the open sheet (inspect = a project, session = a session).
+const hashOf = () => {
   const p = new URLSearchParams();
   if (state.project) p.set("project", state.project);
   p.set("range", state.range);
+  if (state.inspect) p.set("inspect", state.inspect);
   if (state.session) p.set("session", state.session);
-  if (location.hash !== "#" + p) history.replaceState(null, "", location.pathname + "#" + p);
+  return "#" + p;
+};
+function writeHash(push) {
+  const h = hashOf();
+  if (location.hash !== h) history[push ? "pushState" : "replaceState"](null, "", location.pathname + h);
+  window.appnav?.sync();
+}
+// Every user step goes through here, so browser Back retraces it.
+function go(changes) {
+  const refetch = DATA == null || ["project", "range"].some(k => k in changes && changes[k] !== state[k]);
+  Object.assign(state, changes);
+  if ("project" in changes || "range" in changes) state.ledgerAll = false;
+  writeHash(true);
+  pushedFor = refetch ? seq + 1 : 0; // the load about to start owns this history entry
+  // The sheets fetch their own data, so opening or closing one leaves the page as it is.
+  if (refetch) { load(); if (!state.inspect && !state.session) renderSheet(); } else renderSheet();
 }
 
+let seq = 0, failed = null, pushedFor = 0;
+const viewName = v => `${v.project || "all projects"}, ${v.range ? `last ${v.range} days` : "all time"}`;
 async function load() {
   writeHash();
-  const q = new URLSearchParams({ project: state.project, range: state.range, session: state.session });
-  const res = await fetch("/api/usage?" + q);
-  DATA = await res.json();
-  if (state.session) openDrawer("d-sessions");
-  render();
+  const my = ++seq, want = { project: state.project, range: state.range };
+  // The loading look belongs to the newest request only.
+  const busy = setTimeout(() => my === seq && document.body.classList.add("loading"), 150);
+  // Say what is coming while the old numbers stay on screen.
+  if (DATA) $("#pending").textContent = `Loading ${viewName(want)}…`;
+  $(".wrap").setAttribute("aria-busy", "true");
+  try {
+    const res = await fetch("/api/usage?" + new URLSearchParams(want));
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const d = await res.json();
+    if (my !== seq) return; // a newer view was asked for meanwhile
+    if (failed) pendingFocus = "#lede"; // recovered from a failure: land on the new answer
+    DATA = d; failed = null;
+    $("#loadError").hidden = true;
+    render();
+  } catch (e) {
+    if (my !== seq) return;
+    // Keep the page honest: go back to the view the shown data belongs to, and offer the asked-for one again.
+    failed = want;
+    if (DATA) {
+      Object.assign(state, { project: DATA.project, range: DATA.range });
+      // The failed step never happened: drop its history entry rather than stacking a copy of the old view.
+      if (pushedFor === my && location.hash !== hashOf()) history.back(); else writeHash();
+      render();
+    } else { $("#lede").textContent = "Usage could not be loaded."; $("#sub").textContent = ""; }
+    $("#loadError").hidden = false;
+    $("#loadErrorMsg").textContent = `Could not load ${viewName(want)} (${e.message}).${DATA ? ` Still showing ${viewName(DATA)}.` : ""}`;
+    $("#retry").focus();
+  } finally {
+    clearTimeout(busy);
+    if (my === seq) { document.body.classList.remove("loading"); $(".wrap").removeAttribute("aria-busy"); $("#pending").textContent = ""; }
+  }
 }
 
 // ---------- drawers ----------
@@ -348,7 +452,10 @@ const openDrawers = new Set(store.get("claude-usage-open", []));
 function openDrawer(id, scroll) {
   const d = document.getElementById(id);
   d.open = true;
-  if (scroll) d.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+  if (scroll) {
+    d.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+    (d.querySelector(".drawer-body input") || d.querySelector("summary")).focus({ preventScroll: true });
+  }
 }
 document.querySelectorAll("details.drawer").forEach(d => {
   d.open = openDrawers.has(d.id);
@@ -368,14 +475,18 @@ function render() {
   $("#banner").innerHTML = d.unpriced.length ? `<div class="banner"><b>Unpriced models:</b> ${d.unpriced.map(u => `<code>${esc(u.model)}</code> (${big(u.tokens)} tokens)`).join(", ")}.
     Their tokens are counted; their cost is unknown and left out of totals. Add them to <code>prices.json</code>.</div>` : "";
   renderLede(); renderChart(); renderLedgers(); renderVitals(); renderAttention(); renderTotals();
-  renderProjects(); renderSessions(); renderDetail(); renderTables();
+  renderProjects(); renderSessions(); renderTables(); renderSheet();
+  if (pendingFocus) { $(pendingFocus)?.focus({ preventScroll: pendingFocus !== "#lede" }); pendingFocus = null; }
+  else if (restoreKey && !sheet.open && (document.activeElement === document.body || !document.activeElement)) focusTwin(restoreKey);
+  restoreKey = null;
 }
+let pendingFocus = null;
 
 function renderLede() {
   const d = DATA, t = d.totals;
-  const span = d.start ? `over the last ${state.range} days` : `since ${dayLabel(d.daily[0]?.day || d.end, true)}`;
-  const where = state.project ? `on ${state.project}` : "";
-  const reach = state.project ? plural(t.sessions, "session") : `${plural(t.sessions, "session")} in ${plural(d.by_project.length, "project")}`;
+  const span = d.start ? `over the last ${d.range} days` : `since ${dayLabel(d.daily[0]?.day || d.end, true)}`;
+  const where = d.project ? `on ${d.project}` : "";
+  const reach = d.project ? plural(t.sessions, "session") : `${plural(t.sessions, "session")} in ${plural(d.by_project.length, "project")}`;
   $("#lede").textContent = t.requests
     ? `${usd(t.cost)} ${where ? where + " " : ""}${span}, across ${reach}.`
     : `No Claude usage ${where ? where + " " : ""}${span}.`;
@@ -383,32 +494,43 @@ function renderLede() {
   $("#sub").textContent = `${dates}. ${big(t.tokens)} tokens in ${num(t.requests)} requests. Cost is estimated at API list prices${d.unpriced.length ? " and leaves out unpriced models" : ""}.`;
 }
 
-function ledgerRow({ name, share, value, side, pick, sel, title }) {
-  return `<li${pick != null ? ` class="pick${sel ? " sel" : ""}" tabindex="0" data-v="${esc(pick)}"` : ""}>
-    <span class="n" title="${esc(title ?? name)}">${esc(name)}</span>
+// A selectable row is a real button, so it gets focus, a name and Enter/Space for free.
+function ledgerRow({ name, share, value, side, pick, title }) {
+  const cells = `<span class="n" title="${esc(title ?? name)}">${esc(name)}</span>
     <span class="bar" aria-hidden="true"><span style="width:${Math.max(share * 100, share > 0 ? 1 : 0)}%"></span></span>
-    <span class="v">${value}</span><span class="s">${side}</span></li>`;
+    <span class="v">${value}</span><span class="s">${side}</span>`;
+  return pick != null ? `<li class="pick" data-v="${esc(pick)}"><button type="button" class="rowbtn">${cells}</button></li>` : `<li>${cells}</li>`;
 }
 function renderLedgers() {
-  const ps = DATA.by_project, total = ps.reduce((s, p) => s + (p.cost || 0), 0) || 1, max = Math.max(...ps.map(p => p.cost || 0), 0) || 1;
-  const shown = state.ledgerAll ? ps : ps.slice(0, LEDGER_TOP);
-  $("#ledger").innerHTML = shown.map(p => ledgerRow({
-    name: p.project, share: (p.cost || 0) / max, pick: p.project, sel: p.project === state.project,
-    value: usd(p.cost) + (p.unpriced ? ` <span class="chip warn" title="${p.unpriced} requests from unpriced models">+?</span>` : ""),
-    side: pct((p.cost || 0) / total),
+  // One project selected: its spend broken down by session. Otherwise: by project.
+  const bySession = !!DATA.project, total = DATA.totals.cost || 1;
+  const rs = bySession
+    ? DATA.top_sessions.map(s => ({ key: s.session_id, name: `${when(s.first_ts)}${s.git_branch ? ` · ${s.git_branch}` : ""}`, cost: s.cost, unpriced: s.unpriced }))
+    : DATA.by_project.map(p => ({ key: p.project, name: p.project, cost: p.cost, unpriced: p.unpriced })).sort((a, b) => (b.cost || 0) - (a.cost || 0));
+  const max = Math.max(...rs.map(r => r.cost || 0), 0) || 1;
+  $("#ledgerTitle").textContent = bySession ? "Most expensive sessions" : "Where the spend went";
+  $("#ledgerHint").textContent = bySession
+    ? `Estimated cost per session in ${DATA.project}, as a share of its ${usd(DATA.totals.cost)}. Select one for details.`
+    : "Estimated cost per project, as a share of the total. Select a project for details.";
+  const shown = state.ledgerAll ? rs : rs.slice(0, LEDGER_TOP);
+  $("#ledger").innerHTML = shown.map(r => ledgerRow({
+    name: r.name, share: (r.cost || 0) / max, pick: r.key,
+    value: usd(r.cost) + (r.unpriced ? ` <span class="chip warn" title="${r.unpriced} requests from unpriced models">+?</span>` : ""),
+    side: pct((r.cost || 0) / total),
   })).join("") || `<li class="empty">No usage in this range.</li>`;
-  const btn = $("#ledgerMore");
-  btn.hidden = ps.length <= LEDGER_TOP;
-  btn.textContent = state.ledgerAll ? `Show top ${LEDGER_TOP}` : `Show all ${ps.length} projects`;
-  pickRow("#ledger li.pick", v => { state.project = state.project === v ? "" : v; state.session = ""; load(); });
+  const btn = $("#ledgerMore"), all = bySession ? Math.min(rs.length, DATA.totals.sessions) : rs.length;
+  btn.hidden = rs.length <= LEDGER_TOP;
+  btn.textContent = state.ledgerAll ? `Show top ${LEDGER_TOP}` : `Show top ${num(all)} ${bySession ? "sessions" : "projects"}`;
+  onPick("#ledger", bySession ? openSession : openProject);
 
   const models = DATA.models, reqs = models.reduce((s, r) => s + r.requests, 0) || 1, mmax = Math.max(...models.map(r => r.requests), 0) || 1;
-  $("#modelLedger").innerHTML = models.map(r => ledgerRow({
-    name: r.model.replace(/^claude-/, "") + (r.effort && r.effort !== "(none)" ? ` · ${r.effort}` : ""), title: `${r.model}, ${r.effort} effort, ${num(r.requests)} requests, ${big(r.tokens)} tokens`,
-    share: r.requests / mmax, value: pct(r.requests / reqs),
-    side: r.cost == null ? '<span class="chip warn">unpriced</span>' : usd(r.cost),
-  })).join("") || `<li class="empty">No requests in this range.</li>`;
+  $("#modelLedger").innerHTML = modelRows(models, reqs, mmax);
 }
+const modelRows = (models, reqs, mmax) => models.map(r => ledgerRow({
+  name: r.model.replace(/^claude-/, "") + (r.effort && r.effort !== "(none)" ? ` · ${r.effort}` : ""), title: `${r.model}, ${r.effort} effort, ${num(r.requests)} requests, ${big(r.tokens)} tokens`,
+  share: r.requests / mmax, value: pct(r.requests / reqs),
+  side: r.cost == null ? '<span class="chip warn">unpriced</span>' : usd(r.cost),
+})).join("") || `<li class="empty">No requests in this range.</li>`;
 
 function renderVitals() {
   const t = DATA.totals;
@@ -423,13 +545,19 @@ function renderVitals() {
 function renderAttention() {
   const t = DATA.totals, items = [];
   if (t.error_loops) items.push([`<b>${plural(t.error_loops, "error loop")}</b>: a tool failed three or more times in a row.`, "d-loops", "See loops"]);
-  if (DATA.near_limit.length) items.push([`<b>${plural(DATA.near_limit.length, "session")}</b> used 80% or more of the context window.`, "d-sessions", "See sessions"]);
+  if (DATA.near_limit.length) items.push([`<b>${plural(DATA.near_limit.length, "session")}</b> used 80% or more of the context window: ${DATA.near_limit.slice(0, 4).map(x =>
+    `<button type="button" class="linkish" data-session="${esc(x.session_id)}">#${esc(x.session_id.slice(0, 8))}</button> (${pct(x.context_share)})`).join(", ")}${DATA.near_limit.length > 4 ? ", and more" : ""}.`, "d-sessions", "See them all", "near"]);
   const flaky = DATA.tools.filter(r => r.calls >= 20 && r.failure_rate > .1);
-  if (flaky.length) items.push([`<b>${plural(flaky.length, "tool")}</b> fail more than 10% of the time: ${flaky.slice(0, 4).map(r => `${esc(r.tool)} (${pct(r.failure_rate)})`).join(", ")}${flaky.length > 4 ? ", and more" : ""}.`, "d-tools", "See tools"]);
+  if (flaky.length) items.push([`<b>${plural(flaky.length, "tool")}</b> fail more than 10% of the time: ${flaky.slice(0, 4).map(r => `${esc(r.tool)} (${pct(r.failure_rate)})`).join(", ")}${flaky.length > 4 ? ", and more" : ""}.`, "d-tools", "See tools", "flaky"]);
   if (t.tests_failed) items.push([`<b>${plural(t.tests_failed, "failed test run")}</b> out of ${num(t.test_runs)}.`, "d-totals", "See totals"]);
-  $("#attention").innerHTML = items.map(([text, id, cta]) => `<li>${text} <button type="button" class="linkish" data-open="${id}">${cta}</button></li>`).join("")
+  $("#attention").innerHTML = items.map(([text, id, cta, mode]) => `<li>${text} <button type="button" class="linkish" data-open="${id}" data-mode="${mode || ""}">${cta}</button></li>`).join("")
     || `<li class="ok">Nothing needs attention in this range.</li>`;
-  $("#attention").querySelectorAll("[data-open]").forEach(b => b.onclick = () => openDrawer(b.dataset.open, true));
+  $("#attention").querySelectorAll("[data-open]").forEach(b => b.onclick = () => {
+    if (b.dataset.mode === "near") { state.nearOnly = true; state.sessQ = ""; $("#sessNear").checked = true; $("#sessQ").value = ""; renderSessions(); }
+    if (b.dataset.mode === "flaky") { state.flakyFirst = true; renderTables(); }
+    openDrawer(b.dataset.open, true);
+  });
+  $("#attention").querySelectorAll("[data-session]").forEach(b => b.onclick = () => openSession(b.dataset.session, b));
 }
 
 function renderTotals() {
@@ -460,15 +588,18 @@ function days() {
 }
 function niceStep(raw) { const p = 10 ** Math.floor(Math.log10(raw || 1)); const n = raw / p; return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10) * p; }
 const dayLabel = (k, long) => new Date(k + "T00:00:00Z").toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC", ...(long ? { year: "numeric" } : {}) });
+let chartIdx = null;
 function renderChart() {
+  $("#tip").style.display = "none"; $("#chartLive").textContent = ""; chartIdx = null;
   const cost = state.metric === "cost";
   const kinds = cost ? [{ k: "cost", label: "Est. cost", c: "var(--series-1)" }] : KINDS.filter(k => !state.hidden.includes(k.k));
   $("#chartTitle").textContent = cost ? "Estimated cost per day" : "Tokens per day";
-  $("#chartHint").textContent = cost ? "At API list prices. Unpriced models are left out." : "Select a kind to hide it. Cache reads usually dwarf the rest.";
+  $("#chartHint").textContent = (cost ? "At API list prices. Unpriced models are left out." : "Select a kind to hide it. Cache reads usually dwarf the rest.") + " Focus the chart and use the arrow keys to read each day.";
   $("#legend").innerHTML = cost ? "" : KINDS.map(k => `<button type="button" data-k="${k.k}" aria-pressed="${!state.hidden.includes(k.k)}"><i style="background:${k.c}"></i>${k.label}</button>`).join("");
   $("#legend").querySelectorAll("button").forEach(b => b.onclick = () => {
     state.hidden = state.hidden.includes(b.dataset.k) ? state.hidden.filter(x => x !== b.dataset.k) : [...state.hidden, b.dataset.k];
     store.set("claude-usage-hidden", state.hidden); renderChart();
+    $(`#legend [data-k="${b.dataset.k}"]`).focus();
   });
   const pts = days(), el = $("#chart");
   const W = el.clientWidth || 800, H = 240, m = { t: 12, r: 8, b: 26, l: 52 };
@@ -498,121 +629,336 @@ function renderChart() {
       base += p[k.k];
     });
   });
-  el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${cost ? "Estimated cost" : "Tokens by kind"} per day">${g}
+  el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" aria-hidden="true">${g}
     <rect id="hl" y="${m.t}" height="${ih}" fill="var(--text-primary)" opacity=".06" visibility="hidden"/>
     <rect x="${m.l}" y="${m.t}" width="${iw}" height="${ih}" fill="transparent" id="hit"/></svg>`;
+  el.setAttribute("aria-label", `${cost ? "Estimated cost" : "Tokens by kind"} per day, ${pts.length} days. Use the left and right arrow keys to read each day.`);
   const svg = el.querySelector("svg"), tip = $("#tip"), hit = el.querySelector("#hit"), hl = el.querySelector("#hl");
-  hit.addEventListener("mousemove", ev => {
-    const r = svg.getBoundingClientRect(), px = (ev.clientX - r.left) * W / r.width;
-    const i = Math.max(0, Math.min(pts.length - 1, Math.floor((px - m.l) / bw))), p = pts[i];
+  const text = p => cost ? `${usd(p.cost)} estimated${p.unpriced ? `, ${p.unpriced} unpriced requests` : ""}`
+    : kinds.map(k => `${k.label} ${big(p[k.k])}`).join(", ") + `, total ${big(total(p))}`;
+  const show = (i, cx, cy) => {
+    const p = pts[i];
+    chartIdx = i;
     hl.setAttribute("x", m.l + i * bw); hl.setAttribute("width", bw); hl.setAttribute("visibility", "visible");
     tip.innerHTML = `<div class="muted">${dayLabel(p.day, true)}</div>` + (cost
       ? `<div><b>${usd(p.cost)}</b> estimated${p.unpriced ? `, ${p.unpriced} unpriced requests` : ""}</div>`
       : kinds.slice().reverse().map(k => `<div><i style="background:${k.c}"></i>${k.label} <b>${big(p[k.k])}</b></div>`).join("") + `<div class="muted">Total ${big(total(p))}</div>`);
     tip.style.display = "block";
-    const tx = ev.clientX + 14 + tip.offsetWidth > window.innerWidth ? ev.clientX - tip.offsetWidth - 14 : ev.clientX + 14;
-    tip.style.left = tx + window.scrollX + "px"; tip.style.top = ev.clientY + window.scrollY - 10 + "px";
+    const tx = cx + 14 + tip.offsetWidth > window.innerWidth ? cx - tip.offsetWidth - 14 : cx + 14;
+    tip.style.left = Math.max(4, tx) + window.scrollX + "px"; tip.style.top = cy + window.scrollY - 10 + "px";
+    $("#chartLive").textContent = `${dayLabel(p.day, true)}: ${text(p)}`;
+  };
+  const hide = () => { tip.style.display = "none"; hl.setAttribute("visibility", "hidden"); };
+  hit.addEventListener("pointermove", ev => {
+    const r = svg.getBoundingClientRect(), px = (ev.clientX - r.left) * W / r.width;
+    show(Math.max(0, Math.min(pts.length - 1, Math.floor((px - m.l) / bw))), ev.clientX, ev.clientY);
   });
-  hit.addEventListener("mouseleave", () => { tip.style.display = "none"; hl.setAttribute("visibility", "hidden"); });
+  hit.addEventListener("pointerleave", hide);
+  el.onblur = hide;
+  el.onkeydown = ev => {
+    const keys = { ArrowLeft: -1, ArrowRight: 1, Home: -Infinity, End: Infinity };
+    if (!(ev.key in keys)) return;
+    ev.preventDefault();
+    const from = chartIdx ?? (keys[ev.key] > 0 ? -1 : pts.length); // first Right picks the first day, first Left the last
+    const i = Math.max(0, Math.min(pts.length - 1, from + keys[ev.key]));
+    const r = svg.getBoundingClientRect(), s = r.width / W;
+    show(i, r.left + (m.l + (i + .5) * bw) * s, r.top + m.t * s + 20);
+  };
+  el.onfocus = () => { if (chartIdx == null || chartIdx >= pts.length) chartIdx = null; };
 }
 
 // ---------- tables ----------
-const pickRow = (sel, fn) => document.querySelectorAll(sel).forEach(tr => {
-  tr.addEventListener("click", () => fn(tr.dataset.v));
-  tr.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fn(tr.dataset.v); } });
-});
+// Rows and ledger items carry data-v; one delegated handler per container survives re-renders.
+const picks = new Map();
+function onPick(sel, fn) {
+  const el = $(sel);
+  if (!picks.has(el)) el.addEventListener("click", ev => {
+    const row = ev.target.closest("[data-v]");
+    if (!row || ev.target.closest("a") || String(window.getSelection())) return;
+    picks.get(el)(row.dataset.v, row.querySelector("button") || row);
+  });
+  picks.set(el, fn);
+}
+const pickCell = (v, label) => `<button type="button" class="cellbtn" title="${esc(v)}">${esc(label)}</button>`;
 function renderProjects() {
   $("#projCount").textContent = num(DATA.by_project.length);
-  $("#projBody").innerHTML = DATA.by_project.map(p => `<tr class="pick${p.project === state.project ? " sel" : ""}" tabindex="0" data-v="${esc(p.project)}">
-    <td class="name">${esc(p.project)}</td><td class="num">${num(p.sessions)}</td><td class="num">${big(p.tokens)}</td>
+  $("#projBody").innerHTML = DATA.by_project.map(p => `<tr class="pick${p.project === DATA.project ? " sel" : ""}" data-v="${esc(p.project)}">
+    <td class="name">${pickCell(p.project, p.project)}</td><td class="num">${num(p.sessions)}</td><td class="num">${big(p.tokens)}</td>
     <td class="num">${usd(p.cost)}${p.unpriced ? ` <span class="chip warn" title="${p.unpriced} requests from unpriced models">+?</span>` : ""}</td>
     <td class="num">${pct(p.cache_hit_ratio)}</td><td class="num">${pct(p.write_1h_share)}</td><td class="num">${pct(p.subagent_share)}</td>
     <td class="num">${big(p.tokens_per_prompt)}</td><td class="num">${num(p.commits)}</td>
     <td class="num">${p.cost_per_commit == null ? '<span class="muted">n/a</span>' : usd(p.cost_per_commit)}</td>
     <td class="num">${num(p.errors_per_100_calls, 1)}</td><td class="num">${num(p.error_loops)}</td></tr>`).join("")
     || `<tr><td colspan="12" class="empty">No usage in this range.</td></tr>`;
-  pickRow("#projBody tr.pick", v => { state.project = state.project === v ? "" : v; state.session = ""; load(); });
+  onPick("#projBody", openProject);
 }
-function renderSessions() {
+// The sessions drawer pages through every session in the view on the server, so search finds old ones too.
+let sessSeq = 0, sessRows = [], sessTotal = 0;
+async function renderSessions(more) {
   $("#sessCount").textContent = num(DATA.totals.sessions);
-  $("#sessHint").textContent = `Newest first${DATA.sessions.length < DATA.totals.sessions ? `, ${num(DATA.sessions.length)} shown` : ""}. Select a session for details.`;
-  $("#sessBody").innerHTML = DATA.sessions.map(s => `<tr class="pick${s.session_id === state.session ? " sel" : ""}" tabindex="0" data-v="${esc(s.session_id)}">
-    <td class="when">${when(s.first_ts)}</td><td class="name">${esc(s.project)}</td><td class="num">${dur(s.duration_s)}</td><td class="num">${num(s.prompts)}</td>
-    <td class="num">${big(s.tokens)}</td><td class="num">${usd(s.cost)}</td>
+  if (!$("#d-sessions").open) return;
+  const my = ++sessSeq, q = state.sessQ.trim();
+  $("#sessBody").setAttribute("aria-busy", "true"); $("#sessMore").disabled = true;
+  if (!more && $("#sessBody").contains(document.activeElement)) $("#sessQ").focus(); // the rows are about to go inert
+  if (!more) { $("#sessBody").classList.add("stale"); $("#sessBody").inert = true; $("#sessHint").textContent = q ? `Searching for “${q}”…` : "Loading sessions…"; }
+  let d;
+  try {
+    const res = await fetch("/api/sessions?" + new URLSearchParams({ project: DATA.project, range: DATA.range, q, near: state.nearOnly ? 1 : "", offset: more ? sessRows.length : 0 }));
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    d = await res.json();
+  } catch (e) {
+    if (my !== sessSeq) return;
+    // Never leave rows that belong to another query under this one.
+    if (!more) { sessRows = []; $("#sessHint").textContent = q ? `Search for “${q}” failed.` : "Sessions failed to load."; $("#sessBody").innerHTML = `<tr><td colspan="9" class="empty" role="alert">Could not load sessions (${esc(e.message)}). <button type="button" class="linkish" id="sessRetry">Retry</button></td></tr>`; $("#sessMore").hidden = true; }
+    else $("#sessHint").textContent = `Could not load more sessions (${e.message}). Select Show more to try again.`;
+    $("#sessBody").removeAttribute("aria-busy"); $("#sessBody").classList.remove("stale"); $("#sessBody").inert = false; $("#sessMore").disabled = false;
+    $("#sessRetry")?.addEventListener("click", () => { renderSessions(); $("#sessQ").focus(); });
+    return;
+  }
+  if (my !== sessSeq) return;
+  $("#sessBody").removeAttribute("aria-busy"); $("#sessBody").classList.remove("stale"); $("#sessBody").inert = false; $("#sessMore").disabled = false;
+  const first = more ? sessRows.length : 0;
+  sessRows = more ? sessRows.concat(d.sessions) : d.sessions; sessTotal = d.total;
+  $("#sessHint").textContent = `${plural(sessTotal, "session")}${q || state.nearOnly ? " match" : ""}, ${state.nearOnly ? "nearest the limit first" : "newest first"}. `
+    + `${sessRows.length < sessTotal ? `Showing ${num(sessRows.length)}. ` : ""}Select a session for details.`;
+  $("#sessBody").innerHTML = sessRows.map(s => `<tr class="pick${s.session_id === state.session ? " sel" : ""}" data-v="${esc(s.session_id)}">
+    <td class="when">${pickCell(s.session_id, when(s.first_ts))}<div class="muted small">${s.git_branch ? `${esc(s.git_branch)} · ` : ""}#${esc(s.session_id.slice(0, 8))}</div></td>
+    <td class="name">${esc(s.project)}</td><td class="num opt">${dur(s.duration_s)}</td><td class="num opt">${num(s.prompts)}</td>
+    <td class="num opt">${big(s.tokens)}</td><td class="num">${usd(s.cost)}</td>
     <td class="num">${big(s.peak_context)}${s.near_limit ? ` <span class="chip warn" title="${pct(s.context_share)} of the context window">${pct(s.context_share)}</span>` : ""}</td>
-    <td class="num">${num(s.compactions)}</td><td class="num">${num(s.commits)}</td></tr>`).join("")
-    || `<tr><td colspan="9" class="empty">No sessions in this range.</td></tr>`;
-  pickRow("#sessBody tr.pick", v => { state.session = state.session === v ? "" : v; load(); });
+    <td class="num opt">${num(s.compactions)}</td><td class="num opt">${num(s.commits)}</td></tr>`).join("")
+    || `<tr><td colspan="9" class="empty">${q || state.nearOnly ? "No sessions match." : "No sessions in this range."}</td></tr>`;
+  $("#sessMore").hidden = sessRows.length >= sessTotal;
+  onPick("#sessBody", openSession);
+  if (more) $(`#sessBody tr:nth-child(${first + 1}) button`)?.focus();
 }
 function rateTable(sel, rs, n = "calls", extra = () => "") {
   $(sel).innerHTML = rs.map(r => `<tr><td class="name" title="${esc(r.name ?? r.tool)}">${esc(r.name ?? r.tool)}</td><td class="num">${num(r[n])}</td>
     <td class="num ${r.failure_rate > .1 ? "bad" : ""}">${pct(r.failure_rate, 1)}</td>${extra(r)}</tr>`).join("")
     || `<tr><td colspan="5" class="empty">None in this range.</td></tr>`;
 }
+const errorsLink = (project, id) => `/errors#${new URLSearchParams({ project, range: DATA?.range ?? state.range, ex: id })}`;
 function renderTables() {
   $("#toolCount").textContent = num(DATA.tools.length);
   $("#extCount").textContent = `${num(DATA.mcp.length)}, ${num(DATA.skills.length)} and ${num(DATA.hooks.length)}`;
   $("#loopCount").textContent = num(DATA.error_loops.length);
-  rateTable("#toolBody", DATA.tools, "calls", r => `<td class="num">${ms(r.p50_ms)}</td><td class="num">${ms(r.p95_ms)}</td>`);
+  // From "Needs attention": failing tools first.
+  const tools = state.flakyFirst ? DATA.tools.slice().sort((a, b) => (b.calls >= 20 && b.failure_rate > .1) - (a.calls >= 20 && a.failure_rate > .1)) : DATA.tools;
+  rateTable("#toolBody", tools, "calls", r => `<td class="num">${ms(r.p50_ms)}</td><td class="num">${ms(r.p95_ms)}</td>`);
   rateTable("#mcpBody", DATA.mcp);
   rateTable("#skillBody", DATA.skills);
   rateTable("#hookBody", DATA.hooks, "runs", r => `<td class="num">${ms(r.avg_ms)}</td>`);
   $("#loopBody").innerHTML = DATA.error_loops.map(l => `<tr><td class="when">${when(l.start_ts)}</td><td class="name">${esc(l.project)}</td>
-    <td><a href="#" data-session="${esc(l.session_id)}">#${esc(l.session_id.slice(0, 8))}</a></td><td>${esc(l.tool)}</td><td class="num">${num(l.failures)}</td>
-    <td><a href="/errors#ex=${encodeURIComponent(l.first_id)}">Open in Errors</a></td></tr>`).join("")
+    <td><button type="button" class="linkish" data-session="${esc(l.session_id)}">#${esc(l.session_id.slice(0, 8))}</button></td><td>${esc(l.tool)}</td><td class="num">${num(l.failures)}</td>
+    <td><a href="${errorsLink(l.project, l.first_id)}">Open in Errors</a></td></tr>`).join("")
     || `<tr><td colspan="6" class="empty">No error loops in this range.</td></tr>`;
-  $("#loopBody").querySelectorAll("a[data-session]").forEach(a => a.onclick = ev => { ev.preventDefault(); state.session = a.dataset.session; load(); });
+  $("#loopBody").querySelectorAll("[data-session]").forEach(b => b.onclick = () => openSession(b.dataset.session, b));
 }
 
-// ---------- session drill-in ----------
-function renderDetail() {
-  const el = $("#detail"), s = DATA.session;
-  if (!s) {
-    const near = DATA.near_limit;
-    el.innerHTML = `<h2>Context health</h2><div class="hint">Sessions whose largest request used at least 80% of the model's context window.</div>
-      ${near.length ? `<table><thead><tr><th>Started</th><th>Project</th><th class="num">Peak</th><th class="num">Compactions</th></tr></thead><tbody>
-        ${near.map(x => `<tr class="pick" tabindex="0" data-v="${esc(x.session_id)}"><td class="when">${when(x.first_ts)}</td><td class="name">${esc(x.project)}</td>
-        <td class="num">${pct(x.context_share)}</td><td class="num">${num(x.compactions)}</td></tr>`).join("")}</tbody></table>`
-        : `<div class="empty">No session came near its context limit in this range.</div>`}
-      ${state.session ? `<div class="empty">Session ${esc(state.session.slice(0, 8))} was not found.</div>` : ""}`;
-    pickRow("#detail tr.pick", v => { state.session = v; load(); });
-    return;
+// ---------- sheet: project and session details ----------
+// Selecting a project or session opens its details here; the page's filters change only through the filter controls.
+// What the sheet shows lives in the URL (inspect, session), so Back, reload and shared links all agree with it.
+const sheet = $("#sheet");
+let opener = null, pseq = 0, inflight = null; // inflight: the sheet request under way, by cache key
+// Sheet data by project|range and by session id, so Back and Forward retrace without the network.
+const projCache = new Map(), sessCache = new Map();
+const keep = (m, k, v) => { m.delete(k); m.set(k, v); if (m.size > 30) m.delete(m.keys().next().value); };
+function showSheet(kind, title, body) {
+  const fresh = !sheet.open || $("#sheetTitle").dataset.key !== kind + title;
+  $("#sheetTitle").innerHTML = `<span class="sheet-kind">${kind}</span><br>${title}`;
+  $("#sheetTitle").dataset.key = kind + title;
+  $("#sheetBody").innerHTML = body;
+  $("#sheetBack").hidden = !(state.session && state.inspect);
+  if (!sheet.open) sheet.showModal();
+  if (fresh) sheet.scrollTop = 0;
+  if (fresh || !sheet.contains(document.activeElement)) $("#sheetTitle").focus();
+}
+// A session's cost: unknown when no model is priced, a labelled subtotal when only some are.
+function sessCost(models) {
+  const priced = models.filter(r => r.cost != null), unpriced = models.length - priced.length;
+  const sum = priced.reduce((a, r) => a + r.cost, 0);
+  return !priced.length ? ["Unknown", "est. cost, no model priced"]
+    : unpriced ? [usd(sum) + "+", `est. cost of priced models; ${plural(unpriced, "model")} unpriced`] : [usd(sum), "est. cost"];
+}
+const facts = fs => `<div class="facts">${fs.map(([v, l]) => `<div><div class="v">${v}</div><div class="l">${l}</div></div>`).join("")}</div>`;
+const filterBtn = p => (DATA?.project ?? state.project) === p
+  ? `<button type="button" class="btn" data-filter="">Show all projects</button>`
+  : `<button type="button" class="btn primary" data-filter="${esc(p)}">Filter dashboard to ${esc(p)}</button>`;
+function wireSheet() {
+  $("#sheetBody").querySelectorAll("[data-filter]").forEach(b => b.onclick = () => {
+    opener = null; pendingFocus = "#lede";
+    go({ project: b.dataset.filter, inspect: "", session: "" });
+  });
+  $("#sheetBody").querySelectorAll("[data-retry]").forEach(b => b.onclick = () => renderSheet());
+  $("#sheetBody").querySelectorAll("[data-inspect]").forEach(b => b.onclick = () => go({ inspect: b.dataset.inspect, session: "" }));
+}
+let openerEl = null, restoreKey = null;
+// Focus the control for item v, preferring the container it was opened from.
+function focusTwin(key) {
+  if (!key?.v) return;
+  const v = CSS.escape(key.v), sel = `[data-v="${v}"] button, button[data-session="${v}"]`;
+  ((key.c && $(`#${key.c}`)?.querySelector(sel)) || $(`.wrap :is(${sel})`))?.focus();
+}
+const OPENERS = "#ledger, #projBody, #sessBody, #loopBody, #attention";
+function remember(from) {
+  if (sheet.open) return;
+  openerEl = from || null;
+  opener = from ? { c: from.closest(OPENERS)?.id, v: from.dataset?.session ?? from.closest("[data-v]")?.dataset.v } : null;
+}
+function openProject(name, from) { remember(from); go({ inspect: name, session: "" }); }
+function openSession(id, from) {
+  if (sheet.open && state.inspect && !state.session) backTo = { scroll: sheet.scrollTop, v: id };
+  remember(from); go({ session: id });
+}
+let backTo = null; // where to return in the project sheet when leaving a session
+
+function renderSheet() {
+  if (state.session) return renderSessionSheet();
+  if (state.inspect) return renderProjectSheet();
+  if (sheet.open) sheet.close();
+}
+async function renderProjectSheet() {
+  const name = state.inspect, key = `${name}|${state.range}`;
+  if (!projCache.has(key)) {
+    if (inflight === key) return; // already on its way; its arrival renders it
+    inflight = key;
+    showSheet("Project", esc(name), `<div class="empty" role="status">Loading…</div>`);
+    const my = ++pseq;
+    try {
+      const res = await fetch("/api/usage?" + new URLSearchParams({ project: name, range: state.range }));
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const d = await res.json();
+      keep(projCache, key, d); inflight = null;
+      if (my !== pseq) return;
+    } catch (e) {
+      inflight = null;
+      // Only report the failure if the user is still looking at this project.
+      if (my !== pseq || state.inspect !== name || state.session || state.range !== +key.split("|").pop()) return;
+      showSheet("Project", esc(name), `<div class="empty" role="alert">Could not load this project (${esc(e.message)}). <button type="button" class="linkish" data-retry>Retry</button></div>`);
+      return wireSheet();
+    }
+    // The user may have moved on while this loaded.
+    if (state.inspect !== name || state.session || `${state.inspect}|${state.range}` !== key) return;
   }
-  const i = s.info, cost = s.models.reduce((a, r) => a + (r.cost || 0), 0), tokens = s.models.reduce((a, r) => a + r.tokens, 0);
-  el.innerHTML = `<div class="detail-head"><h2>Session #${esc(i.session_id.slice(0, 8))}</h2>
-      <button id="closeS" aria-label="Close session">✕</button></div>
-    <div class="hint">${esc(i.project)}${i.git_branch ? ` on ${esc(i.git_branch)}` : ""}, ${when(i.first_ts)} to ${when(i.last_ts)}. Whole session; ignores the range filter.</div>
-    <div class="facts">
-      <div><div class="v">${usd(cost)}</div><div class="l">est. cost</div></div>
-      <div><div class="v">${big(tokens)}</div><div class="l">tokens</div></div>
-      <div><div class="v">${num(s.prompts.prompts)}</div><div class="l">prompts, ${num(s.prompts.interrupted)} interrupted</div></div>
-      <div><div class="v">${big(i.peak_context)}</div><div class="l">peak context${i.context_limit ? `, ${pct(i.peak_context / i.context_limit)}` : ""}</div></div>
-      <div><div class="v">${num(i.compactions)}</div><div class="l">compactions</div></div>
-      <div><div class="v">${num(s.commits.length)}</div><div class="l">commits</div></div>
-    </div>
+  const d = projCache.get(key), t = d.totals, top = d.top_sessions.slice(0, 8);
+  const reqs = d.models.reduce((s, r) => s + r.requests, 0) || 1, mmax = Math.max(...d.models.map(r => r.requests), 0) || 1;
+  const span = d.start ? `Last ${state.range} days` : "All time";
+  showSheet("Project", esc(name), `
+    <div class="hint">${span}, from the range filter. Estimated at API list prices.</div>
+    <div class="actions">${filterBtn(name)}<a class="btn" href="/errors#${new URLSearchParams({ project: name, range: state.range })}">Open its errors</a></div>
+    ${facts([
+      [usd(t.cost), "est. cost"], [num(t.sessions), "sessions"], [big(t.tokens), "tokens"], [pct(t.cache_hit_ratio, 1), "cache hit"],
+      [pct(t.subagent_token_share), "tokens from subagents"], [t.commits ? usd(t.cost_per_commit) : "n/a", `per commit, ${num(t.commits)} commits`],
+      [num(t.errors_per_100_calls, 1), "errors per 100 calls"], [num(t.error_loops), "error loops"],
+    ])}
+    <h3>Models and effort</h3>
+    <ol class="ledger">${modelRows(d.models, reqs, mmax)}</ol>
+    <h3>Most expensive sessions</h3>
+    <div class="scroll"><table><thead><tr><th>Started</th><th>Branch</th><th class="num">Duration</th><th class="num">Est. cost</th></tr></thead><tbody id="sheetSess">
+      ${top.map(s => `<tr class="pick" data-v="${esc(s.session_id)}"><td class="when">${pickCell(s.session_id, when(s.first_ts))}</td><td class="name">${esc(s.git_branch || "–")}</td>
+        <td class="num">${dur(s.duration_s)}</td><td class="num">${usd(s.cost)}</td></tr>`).join("") || `<tr><td colspan="4" class="empty">No sessions in this range.</td></tr>`}
+    </tbody></table></div>`);
+  wireSheet();
+  onPick("#sheetSess", openSession);
+  if (backTo) {
+    sheet.scrollTop = backTo.scroll;
+    $(`#sheetSess [data-v="${CSS.escape(backTo.v)}"] button`)?.focus({ preventScroll: true });
+    backTo = null;
+  }
+}
+let sseq = 0;
+async function renderSessionSheet() {
+  const id = state.session, title = `#${esc(id.slice(0, 8))}`;
+  if (!sessCache.has(id)) {
+    if (inflight === id) return;
+    inflight = id;
+    showSheet("Session", title, `<div class="empty" role="status">Loading session…</div>`);
+    sheet.setAttribute("aria-busy", "true");
+    const my = ++sseq;
+    try {
+      const res = await fetch("/api/session?" + new URLSearchParams({ id }));
+      if (res.status !== 404 && !res.ok) throw new Error(`HTTP ${res.status}`);
+      const s = res.status === 404 ? null : await res.json();
+      keep(sessCache, id, s); inflight = null;
+      if (my !== sseq) return;
+    } catch (e) {
+      inflight = null;
+      if (my !== sseq || state.session !== id) return;
+      sheet.removeAttribute("aria-busy");
+      showSheet("Session", title, `<div class="empty" role="alert">Could not load session ${title} (${esc(e.message)}). <button type="button" class="linkish" data-retry-session>Retry</button></div>`);
+      $("#sheetBody [data-retry-session]").onclick = () => renderSessionSheet();
+      return;
+    }
+    sheet.removeAttribute("aria-busy");
+    if (state.session !== id) return; // the user moved on while this loaded
+  }
+  const s = sessCache.get(id);
+  if (!s) return showSheet("Session", title, `<div class="empty">This session was not found.</div>`);
+  const i = s.info, tokens = s.models.reduce((a, r) => a + r.tokens, 0);
+  showSheet("Session", title, `
+    <div class="hint"><span class="chip">Whole session, not limited by the range filter</span><br>
+      Project <button type="button" class="linkish" data-inspect="${esc(i.project)}">${esc(i.project)}</button>${i.git_branch ? ` on ${esc(i.git_branch)}` : ""}, ${when(i.first_ts)} to ${when(i.last_ts)}.</div>
+    <div class="actions">${filterBtn(i.project)}</div>
+    ${facts([
+      sessCost(s.models), [big(tokens), "tokens"], [num(s.prompts.prompts), `prompts, ${num(s.prompts.interrupted)} interrupted`],
+      [big(i.peak_context), `peak context${i.context_limit ? `, ${pct(i.peak_context / i.context_limit)}` : ""}`],
+      [num(i.compactions), "compactions"], [num(s.commits.length), "commits"],
+    ])}
     <code class="muted sid">${esc(i.session_id)}</code>
-    <h3>Models</h3><div class="scroll"><table><thead><tr><th>Model</th><th>Effort</th><th>Thread</th><th class="num">Requests</th><th class="num">Tokens</th><th class="num">Est. cost</th></tr></thead><tbody>
-      ${s.models.map(r => `<tr><td class="name">${esc(r.model)}</td><td>${esc(r.effort)}</td><td>${r.subagent ? "subagent" : "main"}</td><td class="num">${num(r.requests)}</td>
-        <td class="num">${big(r.tokens)}</td><td class="num">${usd(r.cost)}</td></tr>`).join("")}</tbody></table></div>
+    <h3>Models</h3><div class="scroll"><table><thead><tr><th>Model</th><th class="num">Requests</th><th class="num">Tokens</th><th class="num">Est. cost</th></tr></thead><tbody>
+      ${s.models.map(r => `<tr><td>${esc(r.model.replace(/^claude-/, ""))}<div class="muted small">${[r.effort !== "(none)" && r.effort, r.subagent ? "subagent" : "main thread"].filter(Boolean).map(esc).join(" · ")}</div></td>
+        <td class="num">${num(r.requests)}</td><td class="num">${big(r.tokens)}</td><td class="num">${usd(r.cost)}</td></tr>`).join("")}</tbody></table></div>
     <h3>Tools</h3><div class="scroll"><table><thead><tr><th>Tool</th><th class="num">Calls</th><th class="num">Failed</th><th class="num">p50</th></tr></thead><tbody>
       ${s.tools.map(r => `<tr><td class="name">${esc(r.tool)}</td><td class="num">${num(r.calls)}</td><td class="num ${r.failure_rate > .1 ? "bad" : ""}">${pct(r.failure_rate, 1)}</td><td class="num">${ms(r.p50_ms)}</td></tr>`).join("")
         || `<tr><td colspan="4" class="empty">No tool calls.</td></tr>`}</tbody></table></div>
-    ${s.error_loops.length ? `<h3>Error loops</h3>${s.error_loops.map(l => `<div>${esc(l.tool)} failed ${l.failures}× in a row. <a href="/errors#ex=${encodeURIComponent(l.first_id)}">Open in Errors</a></div>`).join("")}` : ""}
-    ${s.commits.length ? `<h3>Commits</h3>${s.commits.map(c => `<div class="muted commit"><code>${esc(c.command)}</code></div>`).join("")}` : ""}`;
-  $("#closeS").onclick = () => { state.session = ""; load(); };
+    ${s.error_loops.length ? `<h3>Error loops</h3>${s.error_loops.map(l => `<div>${esc(l.tool)} failed ${l.failures}× in a row. <a href="${errorsLink(i.project, l.first_id)}">Open in Errors</a></div>`).join("")}` : ""}
+    ${s.commits.length ? `<h3>Commits</h3>${s.commits.map(c => `<div class="muted commit"><code>${esc(c.command)}</code></div>`).join("")}` : ""}`);
+  wireSheet();
 }
+// Invalidate sheet requests the moment the user dismisses it, so a late answer cannot reopen it.
+const dismiss = () => { pseq++; sseq++; inflight = null; };
+sheet.addEventListener("cancel", dismiss);
+$("#sheetClose").onclick = () => { dismiss(); sheet.close(); };
+$("#sheetBack").onclick = () => go({ session: "" });
+sheet.addEventListener("click", ev => { if (ev.target === sheet) { dismiss(); sheet.close(); } }); // backdrop
+sheet.addEventListener("close", () => {
+  pseq++; sseq++; inflight = null; sheet.removeAttribute("aria-busy");
+  const shown = state.session || state.inspect;
+  if (state.inspect || state.session) go({ inspect: "", session: "" });
+  // Back to where the user came from: the same element, its re-rendered twin, or the row of what was shown.
+  // A render still in flight may replace it, so render() repeats this with restoreKey.
+  restoreKey = opener;
+  if (openerEl?.isConnected) openerEl.focus();
+  else if (opener) focusTwin(opener);
+  else $("#lede").focus({ preventScroll: true });
+  opener = openerEl = null;
+});
 
 // ---------- wiring ----------
 readHash();
-$("#fProject").onchange = e => { state.project = e.target.value; state.session = ""; load(); };
-document.querySelectorAll("#fRange button").forEach(b => b.onclick = () => { state.range = +b.dataset.v; load(); });
+$("#fProject").onchange = e => go({ project: e.target.value, session: "", inspect: "" });
+document.querySelectorAll("#fRange button").forEach(b => b.onclick = () => go({ range: +b.dataset.v }));
 document.querySelectorAll("#fMetric button").forEach(b => b.onclick = () => {
   state.metric = b.dataset.v; store.set("claude-usage-metric", state.metric); render();
 });
 $("#ledgerMore").onclick = () => { state.ledgerAll = !state.ledgerAll; renderLedgers(); };
-window.addEventListener("hashchange", () => { readHash(); load(); });
+$("#retry").onclick = () => failed && DATA ? go(failed) : load();
+let sq; $("#sessQ").oninput = e => { state.sessQ = e.target.value; clearTimeout(sq); sq = setTimeout(() => renderSessions(), 200); };
+$("#sessMore").onclick = () => renderSessions(true);
+$("#d-sessions").addEventListener("toggle", () => DATA && renderSessions());
+$("#sessNear").onchange = e => { state.nearOnly = e.target.checked; renderSessions(); };
+// Back/forward and links that change the hash: re-read the whole view from the URL.
+const onNav = () => {
+  if (location.hash === hashOf()) return;
+  const was = { project: state.project, range: state.range };
+  readHash();
+  was.project !== state.project || was.range !== state.range ? load() : (renderSheet(), window.appnav?.sync());
+};
+window.addEventListener("popstate", onNav);
+window.addEventListener("hashchange", onNav);
 let rt; window.addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(() => DATA && renderChart(), 120); });
 load();
+renderSheet();
 </script>
 </body>
 </html>

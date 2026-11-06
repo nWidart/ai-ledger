@@ -4,34 +4,39 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Claude Tool Errors</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <style>
 :root {
   color-scheme: light;
   --bg: #f6f5f2; --surface-1: #fcfcfb; --surface-2: #f0efec; --border: #e2e0da;
-  --text-primary: #0b0b0b; --text-secondary: #52514e; --text-muted: #7a7973;
+  --text-primary: #0b0b0b; --text-secondary: #52514e; --text-muted: #66655f;
   --series-1: #2a78d6; --series-1-soft: rgba(42,120,214,.12); --series-2: #eb6834;
   --grid: #e8e6e1; --good: #0ca30c; --good-text: #006300; --critical: #d03b3b;
-  --accent: #2a78d6;
+  --accent: #2a78d6; --link: #1f62b5; --critical-text: #b42318;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
     --bg: #121211; --surface-1: #1a1a19; --surface-2: #242422; --border: #33332f;
-    --text-primary: #f0efec; --text-secondary: #c3c2b7; --text-muted: #8f8e86;
+    --text-primary: #f0efec; --text-secondary: #c3c2b7; --text-muted: #9d9c94;
     --series-1: #3987e5; --series-1-soft: rgba(57,135,229,.18); --series-2: #d95926;
     --grid: #2b2b28; --good-text: #4cc94c; --critical: #e66767; --accent: #3987e5;
+    --link: #5c9df0; --critical-text: #f07a7a;
   }
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
   --bg: #121211; --surface-1: #1a1a19; --surface-2: #242422; --border: #33332f;
-  --text-primary: #f0efec; --text-secondary: #c3c2b7; --text-muted: #8f8e86;
+  --text-primary: #f0efec; --text-secondary: #c3c2b7; --text-muted: #9d9c94;
   --series-1: #3987e5; --series-1-soft: rgba(57,135,229,.18); --series-2: #d95926;
   --grid: #2b2b28; --good-text: #4cc94c; --critical: #e66767; --accent: #3987e5;
+  --link: #5c9df0; --critical-text: #f07a7a;
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--text-primary);
-  font: 14px/1.45 ui-sans-serif, -apple-system, "SF Pro Text", "Inter", system-ui, sans-serif; }
+  font: 14px/1.45 "IBM Plex Sans", ui-sans-serif, -apple-system, system-ui, sans-serif; }
 .wrap { max-width: 1240px; margin: 0 auto; padding: 24px 16px 64px; }
 header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 16px; margin-bottom: 16px; }
 h1 { font-size: 22px; margin: 0; letter-spacing: -.01em; }
@@ -51,17 +56,26 @@ label.chk { display: inline-flex; gap: 6px; align-items: center; color: var(--te
 .kpi .label { color: var(--text-secondary); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
 .kpi .value { font-size: 28px; font-weight: 600; font-variant-numeric: tabular-nums; margin-top: 4px; }
 .kpi .note { color: var(--text-muted); font-size: 12px; margin-top: 2px; }
-.delta-down { color: var(--good-text); } .delta-up { color: var(--critical); }
+.delta-down { color: var(--good-text); } .delta-up { color: var(--critical-text); }
 .chart-card h2, .card h2 { font-size: 15px; margin: 0 0 2px; }
 .chart-card .hint { color: var(--text-muted); font-size: 12px; margin-bottom: 8px; }
-#chart { position: relative; }
+#chart { position: relative; border-radius: 6px; }
+#chart:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
 #chart svg { display: block; width: 100%; height: 260px; overflow: visible; }
 .tip { position: absolute; pointer-events: none; background: var(--surface-1); border: 1px solid var(--border);
   border-radius: 8px; padding: 8px 10px; font-size: 12px; box-shadow: 0 4px 16px rgba(0,0,0,.12);
   white-space: nowrap; display: none; z-index: 2; }
 .tip b { font-variant-numeric: tabular-nums; }
 .grid2 { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 16px; margin-top: 16px; }
-@media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } }
+@media (max-width: 900px) { .grid2 { grid-template-columns: minmax(0, 1fr); } }
+.grid2 > *, .kpis > * { min-width: 0; }
+@media (max-width: 520px) {
+  .kpis { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .kpis .card { padding: 10px 12px; }
+  .kpi .value { font-size: 20px; }
+}
+.tscroll { overflow-x: auto; }
+@media (max-width: 520px) { .c-share, .c-trend { display: none; } }
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
 th { text-align: left; color: var(--text-muted); font-weight: 500; font-size: 12px; padding: 6px 8px; border-bottom: 1px solid var(--border); }
 td { padding: 8px; border-bottom: 1px solid var(--border); vertical-align: middle; }
@@ -69,7 +83,9 @@ td.num, th.num { text-align: right; white-space: nowrap; font-variant-numeric: t
 tbody tr { cursor: pointer; }
 tbody tr:hover { background: var(--surface-2); }
 tbody tr.sel { background: var(--series-1-soft); }
-tbody tr:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.tbtn { background: none; border: 0; border-radius: 4px; padding: 0; text-align: left; color: inherit; }
+.tbtn:hover { background: none; }
+.tbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .bar { height: 6px; background: var(--surface-2); border-radius: 3px; min-width: 60px; }
 .bar > i { display: block; height: 100%; background: var(--series-1); border-radius: 3px; }
 .chip { display: inline-block; font-size: 11px; padding: 2px 7px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-secondary); white-space: nowrap; }
@@ -86,19 +102,59 @@ pre.snip { margin: 8px 0 0; padding: 10px; background: var(--surface-1); border:
 .ba div { background: var(--surface-2); border-radius: 8px; padding: 8px 10px; }
 .ba .v { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .ba .l { font-size: 12px; color: var(--text-muted); }
+.ba .v.muted { font-size: 15px; font-weight: 500; padding: 3px 0; }
 .ex { border-top: 1px solid var(--border); padding: 10px 0; }
-.ex .meta { font-size: 12px; color: var(--text-muted); display: flex; gap: 8px; flex-wrap: wrap; }
+.ex .meta { font-size: 12px; color: var(--text-muted); display: flex; gap: 8px; flex-wrap: wrap; overflow-wrap: anywhere; }
 .ex code, .ex .err { display: block; font: 12px/1.4 ui-monospace, "SF Mono", Menlo, monospace; white-space: pre-wrap; word-break: break-word;
-  background: var(--surface-2); border-radius: 6px; padding: 6px 8px; margin-top: 6px; max-height: 9.5em; overflow: auto; }
-.ex .err { color: var(--critical); }
+  overflow-wrap: anywhere; background: var(--surface-2); border-radius: 6px; padding: 6px 8px; margin-top: 6px; }
+.ex .err { color: var(--critical-text); }
+/* Long bodies start clamped; "Show full" opens one example. */
+.ex:not(.open) code, .ex:not(.open) .err, .ex:not(.open) blockquote { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.ex:not(.open) .err { -webkit-line-clamp: 4; }
+.ex .full { display: block; font-size: 11px; padding: 1px 7px; border-radius: 6px; margin-top: 6px; }
+.ex .full[hidden] { display: none; }
+.ex .full[aria-busy=true] { cursor: progress; color: var(--text-muted); }
+.ex .full.failed { border-color: var(--critical); color: var(--critical-text); }
+.ex .cutnote { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.ex:not(.open) .cutnote { display: none; }
 #exList .ex { cursor: pointer; }
 .ex.focus { background: var(--series-1-soft); box-shadow: inset 3px 0 0 var(--series-1); padding-left: 10px; padding-right: 8px; border-radius: 6px; }
 .ex .meta .link { margin-left: auto; display: inline-flex; gap: 6px; }
-.ex .meta a { color: var(--accent); text-decoration: none; }
+.ex .meta a { color: var(--link); text-decoration: none; }
 .ex .meta a:hover { text-decoration: underline; }
 .ex .meta button { font-size: 11px; padding: 1px 7px; border-radius: 6px; }
 .ex blockquote { margin: 6px 0 0; padding-left: 10px; border-left: 3px solid var(--series-1); color: var(--text-secondary); font-size: 13px; }
 .muted { color: var(--text-muted); }
+.pick { display: block; width: 100%; text-align: left; background: none; border: 0; border-top: 1px solid var(--border); border-radius: 0; padding: 10px 4px; }
+.pick > span { display: block; }
+.pick:focus-visible, .ex:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.outnote { background: var(--surface-2); border-radius: 10px; padding: 10px 12px; margin: 8px 0; }
+#load { margin-bottom: 16px; }
+#detailTitle, .ex { scroll-margin-top: calc(var(--appnav-h, 56px) + 12px); }
+.linkbtn { background: none; border: 0; padding: 0; color: var(--link); font-size: 13px; }
+.linkbtn:hover { background: none; text-decoration: underline; }
+/* Wide screens: the type header and the example search stay in view while the examples scroll. */
+@media (min-width: 901px) {
+  #detail .dhead, #detail .exbar { position: sticky; z-index: 1; background: var(--surface-1); margin: 0 -16px; padding: 10px 16px; }
+  #detail .dhead { top: var(--appnav-h, 56px); flex-wrap: nowrap; border-bottom: 1px solid var(--border); margin-bottom: 12px; }
+  #detail .dhead h2 { margin: 0; min-width: 0; }
+  #detail .exbar { top: calc(var(--appnav-h, 56px) + var(--dhead-h, 0px)); border-bottom: 1px solid var(--border); padding-bottom: 0; }
+  #detail .ex { scroll-margin-top: calc(var(--appnav-h, 56px) + var(--dhead-h, 0px) + var(--exbar-h, 0px) + 12px); }
+}
+.sheet #back { display: none; }
+#detailTitle:focus { outline: none; }
+/* Narrow screens: an open type shows in a sheet over the page; #detail moves into it and back. */
+dialog.sheet { inset: 0 0 0 auto; margin: 0; width: min(640px, 100%); max-width: 100%; height: 100dvh; max-height: 100dvh;
+  padding: 0; border: 0; border-left: 1px solid var(--border); background: var(--surface-1); color: var(--text-primary);
+  overflow: auto; overscroll-behavior: contain; box-shadow: -8px 0 32px rgba(0,0,0,.16); }
+dialog.sheet::backdrop { background: rgba(0,0,0,.3); }
+.sheet > .detail { border: 0; border-radius: 0; min-height: 100%; padding-top: 0; overflow-wrap: anywhere; }
+.sheet .dhead { position: sticky; top: 0; z-index: 1; flex-wrap: nowrap; margin: 0 -16px 12px; padding: 12px 16px;
+  background: var(--surface-1); border-bottom: 1px solid var(--border); }
+.sheet .dhead h2 { margin: 0; min-width: 0; }
+.sheet .exbar { position: sticky; top: var(--dhead-h, 0px); z-index: 1; margin: 0 -16px; padding: 0 16px;
+  background: var(--surface-1); border-bottom: 1px solid var(--border); }
+.sheet .ex { scroll-margin-top: calc(var(--dhead-h, 0px) + var(--exbar-h, 0px) + 12px); }
 .empty { color: var(--text-muted); padding: 24px 0; text-align: center; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 </style>
@@ -107,7 +163,7 @@ pre.snip { margin: 8px 0 0; padding: 10px; background: var(--surface-1); border:
 <!--NAV-->
 <div class="wrap">
   <header>
-    <h1>Claude tool errors</h1>
+    <h1 tabindex="-1">Claude tool errors</h1>
     <span class="sub" id="gen"></span>
   </header>
 
@@ -123,30 +179,52 @@ pre.snip { margin: 8px 0 0; padding: 10px; background: var(--surface-1); border:
     <label class="chk"><input type="checkbox" id="fNoise"> Hide noise (harness, user rejections)</label>
   </div>
 
+  <div class="card" id="load" role="status">Loading errors…</div>
+  <div class="sr" id="pageLive" aria-live="polite"></div>
   <section class="kpis" id="kpis" aria-label="Summary"></section>
 
   <section class="card chart-card">
     <h2 id="chartTitle">Error rate</h2>
-    <div class="hint" id="chartHint">Errors per 100 tool calls. Dashed lines mark fixes you applied.</div>
-    <div id="chart"></div>
+    <div class="hint" id="chartHint">Errors per 100 tool calls. Dashed lines mark fixes you applied (fixes apply to all projects).</div>
+    <div id="chart" tabindex="0" role="img" aria-label="Error rate chart. Use the left and right arrow keys to read each point."></div>
+    <div class="sr" id="chartLive" aria-live="polite"></div>
   </section>
 
   <div class="grid2">
     <section class="card">
       <h2>Error types</h2>
       <div class="hint muted" style="font-size:12px;margin-bottom:8px">Trend compares the second half of the range with the first half. Click a row for fixes and examples.</div>
-      <table>
-        <thead><tr><th>Type</th><th class="num">Errors</th><th>Share</th><th>Rate trend</th><th class="num">Change</th><th>Status</th></tr></thead>
+      <div class="tscroll"><table>
+        <thead><tr><th>Type</th><th class="num">Errors</th><th class="c-share">Share</th><th class="c-trend">Rate trend</th><th class="num">Change</th><th>Status</th></tr></thead>
         <tbody id="catBody"></tbody>
-      </table>
+      </table></div>
     </section>
-    <section class="card detail" id="detail" aria-live="polite"></section>
+    <section class="card detail" id="detail"></section>
+    <div class="sr" id="detailLive" aria-live="polite"></div>
   </div>
 </div>
+<dialog class="sheet" id="sheet" aria-labelledby="detailTitle"></dialog>
 <div class="tip" id="tip" role="tooltip"></div>
 
 <script type="module">
-const DATA = await (await fetch("/api/errors")).json();
+let retried = false;
+async function load() {
+  for (;;) {
+    try { const r = await fetch("/api/errors"); if (!r.ok) throw new Error(`HTTP ${r.status}`); return await r.json(); }
+    catch (err) {
+      const el = document.getElementById("load");
+      el.setAttribute("role", "alert");
+      el.innerHTML = `<b>Couldn't load errors.</b> <span class="muted"></span> <button type="button">Retry</button>`;
+      el.querySelector("span").textContent = `${err.message}. Check that the app is running.`;
+      el.querySelector("button").focus();
+      await new Promise(res => el.querySelector("button").onclick = res);
+      retried = true;
+      el.setAttribute("role", "status"); el.textContent = "Loading errors…";
+    }
+  }
+}
+const DATA = await load();
+document.getElementById("load").remove();
 const CATS = Object.fromEntries(DATA.categories.map(c => [c.id, c]));
 const NOISE = new Set(["infra", "user_denied"]);
 const store = {
@@ -158,27 +236,36 @@ const state = Object.assign({ project: "", range: 30, gran: "day", sub: true, no
   store.get("claude-errors-view", {}));
 state.q = ""; state.focus = null;
 const BY_ID = Object.fromEntries(DATA.errors.filter(e => e.id).map(e => [e.id, e]));
-// Permalinks: #cat=<type> opens a type, #ex=<tool_use_id> opens one example.
+const RANGES = [7, 14, 30, 90, 0];
+// The URL hash is the view: project, range, sub=0 (no subagents), noise=0 (noise hidden), gran=week, cat (open type), ex (one linked example).
 const baseUrl = () => location.href.split("#")[0];
-const exUrl = e => `${baseUrl()}#ex=${encodeURIComponent(e.id)}`;
-function readHash() {
-  const h = new URLSearchParams(location.hash.slice(1));
-  if (h.has("project")) state.project = h.get("project");
-  if (h.has("range") && [7, 14, 30, 90, 0].includes(+h.get("range"))) state.range = +h.get("range");
-  // A hash with a view (from the nav or a copied URL) decides the open type; the saved one does not apply.
-  if (h.has("range")) { state.cat = null; state.focus = null; }
-  const ex = BY_ID[h.get("ex")];
-  if (ex) { state.cat = ex.c; state.focus = ex.id; state.q = ""; return true; }
-  if (CATS[h.get("cat")]) { state.cat = h.get("cat"); state.focus = null; }
-  return false;
-}
-function writeHash() {
+function viewHash(focus = state.focus) {
   const p = new URLSearchParams();
   if (state.project) p.set("project", state.project);
   p.set("range", state.range);
-  if (state.focus) p.set("ex", state.focus); else if (state.cat) p.set("cat", state.cat);
-  const h = "#" + p;
-  if (location.hash !== h) history.replaceState(null, "", baseUrl() + h);
+  if (!state.sub) p.set("sub", 0);
+  if (state.noise) p.set("noise", 0);
+  if (state.gran === "week") p.set("gran", "week");
+  if (focus) p.set("ex", focus); else if (state.cat) p.set("cat", state.cat);
+  return "#" + p;
+}
+const exUrl = e => baseUrl() + viewHash(e.id);
+function readHash() {
+  const h = new URLSearchParams(location.hash.slice(1));
+  // Any view key makes the hash the whole view: omitted keys take their defaults, and the saved view only fills an empty hash.
+  // A bare #ex= link means all time.
+  if (!["project", "range", "sub", "noise", "gran", "cat", "ex"].some(k => h.has(k))) return false;
+  const r = +(h.get("range") ?? NaN), ex = BY_ID[h.get("ex")];
+  Object.assign(state, { project: h.get("project") || "", sub: h.get("sub") !== "0", noise: h.get("noise") === "0",
+    gran: h.get("gran") === "week" ? "week" : "day", range: RANGES.includes(r) ? r : h.has("ex") && !h.has("range") ? 0 : 30,
+    cat: ex ? ex.c : CATS[h.get("cat")] ? h.get("cat") : null, focus: ex ? ex.id : null, q: "" });
+  return !!ex;
+}
+let lastHash = "";
+function writeHash(push) {
+  const h = lastHash = viewHash();
+  if (location.hash !== h) history[push ? "pushState" : "replaceState"](null, "", baseUrl() + h);
+  window.appnav?.sync();
 }
 
 const $ = s => document.querySelector(s);
@@ -187,7 +274,8 @@ const fmt = (n, d = 0) => n.toLocaleString(undefined, { maximumFractionDigits: d
 const DAY = 864e5;
 const toDate = s => new Date(s + "T00:00:00Z");
 const iso = d => d.toISOString().slice(0, 10);
-const lastDay = DATA.errors.reduce((m, e) => e.d > m ? e.d : m, DATA.calls.reduce((m, c) => c[0] > m ? c[0] : m, "")) || iso(new Date());
+// Ranges end today on the server, as on Usage.
+const lastDay = DATA.today || iso(new Date());
 const firstDay = DATA.calls.reduce((m, c) => (!m || c[0] < m) ? c[0] : m, "") || lastDay;
 
 function bucketOf(day) {
@@ -208,6 +296,9 @@ function filtered() {
   const calls = DATA.calls.filter(c => c[0] >= start && (!state.project || c[1] === state.project));
   return { start, errs, calls };
 }
+// Tool calls in a [day, project, calls, subagent calls] row, matching the subagent toggle.
+const nCalls = c => state.sub ? c[2] : c[2] - c[3];
+const sumCalls = arr => arr.reduce((s, c) => s + nCalls(c), 0);
 function buckets(start) {
   const out = []; const seen = new Set();
   for (let d = toDate(start); d <= toDate(lastDay); d = new Date(+d + DAY)) {
@@ -218,32 +309,41 @@ function buckets(start) {
 function series(errs, calls, keys, cat) {
   const e = Object.fromEntries(keys.map(k => [k, 0])), c = Object.fromEntries(keys.map(k => [k, 0]));
   for (const x of errs) if (!cat || x.c === cat) { const b = bucketOf(x.d); if (b in e) e[b]++; }
-  for (const x of calls) { const b = bucketOf(x[0]); if (b in c) c[b] += x[2]; }
+  for (const x of calls) { const b = bucketOf(x[0]); if (b in c) c[b] += nCalls(x); }
   return keys.map(k => ({ k, e: e[k], c: c[k], r: c[k] ? e[k] / c[k] * 100 : null }));
 }
-const rate = (e, c) => c ? e / c * 100 : 0;
+// No calls, no rate: null, never a 0% baseline.
+const rate = (e, c) => c ? e / c * 100 : null;
+// Change from rate a to rate b: "–" when either half has no calls, "New" when a is 0 and b isn't, "–" when both are 0. min: change shown without an arrow.
+function change(a, b, min = 0) {
+  if (a == null || b == null) return { text: "–", cls: "muted", title: `Not enough data in the ${a == null ? "first" : "second"} half` };
+  if (!a) return b ? { text: "New", cls: "delta-up" } : { text: "–", cls: "muted" };
+  const d = (b - a) / a * 100;
+  return { text: `${d > min ? "▲ +" : d < -min ? "▼ " : ""}${fmt(d, 0)}%`, cls: d > min ? "delta-up" : d < -min ? "delta-down" : "muted" };
+}
 
 // ---------- KPIs ----------
 function renderKpis(f) {
-  const totalCalls = f.calls.reduce((s, c) => s + c[2], 0);
+  const totalCalls = sumCalls(f.calls);
   const mid = iso(new Date((+toDate(f.start) + +toDate(lastDay)) / 2));
   const half = (arr, pick, first) => arr.filter(x => first ? pick(x) < mid : pick(x) >= mid);
-  const r1 = rate(half(f.errs, x => x.d, true).length, half(f.calls, x => x[0], true).reduce((s, c) => s + c[2], 0));
-  const r2 = rate(half(f.errs, x => x.d, false).length, half(f.calls, x => x[0], false).reduce((s, c) => s + c[2], 0));
-  const delta = r1 ? (r2 - r1) / r1 * 100 : 0;
+  const r1 = rate(half(f.errs, x => x.d, true).length, sumCalls(half(f.calls, x => x[0], true)));
+  const r2 = rate(half(f.errs, x => x.d, false).length, sumCalls(half(f.calls, x => x[0], false)));
+  const delta = change(r1, r2);
   const counts = countBy(f.errs);
   const top = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
-  const nFix = Object.keys(fixes).length;
+  const nFix = Object.keys(fixes).length, idle = !totalCalls;
   $("#kpis").innerHTML = `
     <div class="card kpi"><div class="label">Errors</div><div class="value">${fmt(f.errs.length)}</div>
       <div class="note">of ${fmt(totalCalls)} tool calls</div></div>
-    <div class="card kpi"><div class="label">Error rate</div><div class="value">${fmt(rate(f.errs.length, totalCalls), 1)}%</div>
-      <div class="note">errors per 100 tool calls</div></div>
+    <div class="card kpi"><div class="label">Error rate</div><div class="value${idle ? " muted" : ""}">${idle ? "–" : fmt(rate(f.errs.length, totalCalls), 1) + "%"}</div>
+      <div class="note">${idle ? "No tool calls in this period" : "errors per 100 tool calls"}</div></div>
     <div class="card kpi"><div class="label">Trend</div>
-      <div class="value ${delta < 0 ? "delta-down" : delta > 0 ? "delta-up" : ""}">${delta > 0 ? "▲ +" : delta < 0 ? "▼ " : ""}${fmt(delta, 0)}%</div>
-      <div class="note">rate, 2nd half vs 1st half (${fmt(r1, 1)}% → ${fmt(r2, 1)}%)</div></div>
+      <div class="value ${idle ? "muted" : delta.cls}">${idle ? "–" : delta.text}</div>
+      <div class="note">${idle ? "No tool calls in this period" : r1 == null ? "No calls in the first half" : r2 == null ? "No calls in the second half"
+        : `rate, 2nd half vs 1st half (${fmt(r1, 1)}% → ${fmt(r2, 1)}%)`}</div></div>
     <div class="card kpi"><div class="label">Top type</div><div class="value" style="font-size:17px;line-height:1.3;margin-top:8px">${top ? esc(CATS[top[0]].label) : "–"}</div>
-      <div class="note">${top ? fmt(top[1]) + " errors · " + fmt(top[1] / f.errs.length * 100, 0) + "%" : ""} · ${nFix} fix${nFix === 1 ? "" : "es"} tracked</div></div>`;
+      <div class="note">${top ? fmt(top[1]) + " errors · " + fmt(top[1] / f.errs.length * 100, 0) + "% · " : ""}${nFix} fix${nFix === 1 ? "" : "es"} tracked</div></div>`;
 }
 function countBy(errs) { const m = {}; for (const e of errs) m[e.c] = (m[e.c] || 0) + 1; return m; }
 
@@ -252,6 +352,14 @@ function renderChart(f) {
   const keys = buckets(f.start);
   const pts = series(f.errs, f.calls, keys, state.cat);
   const el = $("#chart");
+  // Any tooltip or spoken point belongs to the previous data.
+  $("#tip").style.display = "none"; $("#chartLive").textContent = "";
+  $("#chartTitle").textContent = state.cat ? `Error rate · ${CATS[state.cat].label}` : "Error rate · all types";
+  if (!pts.some(p => p.c)) {
+    el.onkeydown = el.onblur = null;
+    el.innerHTML = `<div class="empty" style="height:260px;display:grid;place-items:center">No tool calls in this range.</div>`;
+    return;
+  }
   const W = el.clientWidth || 800, H = 260, m = { t: 12, r: 12, b: 26, l: 40 };
   const iw = W - m.l - m.r, ih = H - m.t - m.b;
   const max = Math.max(1, ...pts.map(p => p.r || 0)) * 1.12;
@@ -272,11 +380,12 @@ function renderChart(f) {
     g += `<line x1="${x(i)}" x2="${x(i)}" y1="${m.t}" y2="${m.t + ih}" stroke="var(--good)" stroke-width="1.5" stroke-dasharray="4 3"/>`
       + `<text x="${x(i) + 4}" y="${m.t + 10}" font-size="11" fill="var(--good-text)">✓ ${esc(shortLabel(CATS[cid].label))}</text>`;
   }
-  const valid = pts.map((p, i) => [p, i]).filter(([p]) => p.r != null);
-  const line = valid.map(([p, i], j) => `${j ? "L" : "M"}${x(i).toFixed(1)},${y(p.r).toFixed(1)}`).join("");
-  const area = valid.length ? line + `L${x(valid[valid.length - 1][1])},${y(0)}L${x(valid[0][1])},${y(0)}Z` : "";
-  const dots = keys.length <= 45 ? valid.map(([p, i]) => `<circle cx="${x(i)}" cy="${y(p.r)}" r="3" fill="var(--series-1)" stroke="var(--surface-1)" stroke-width="2"/>`).join("") : "";
-  el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Error rate over time">${g}
+  const segs = runs(pts), seg = r => r.map(([p, i], j) => `${j ? "L" : "M"}${x(i).toFixed(1)},${y(p.r).toFixed(1)}`).join("");
+  const line = segs.map(seg).join("");
+  const area = segs.map(r => seg(r) + `L${x(r[r.length - 1][1])},${y(0)}L${x(r[0][1])},${y(0)}Z`).join("");
+  // Dots on every real point, or only on lone points once there are too many to dot.
+  const dots = segs.filter(r => keys.length <= 45 || r.length === 1).flat().map(([p, i]) => `<circle cx="${x(i)}" cy="${y(p.r)}" r="3" fill="var(--series-1)" stroke="var(--surface-1)" stroke-width="2"/>`).join("");
+  el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" aria-hidden="true">${g}
     <path d="${area}" fill="var(--series-1-soft)"/>
     <path d="${line}" fill="none" stroke="var(--series-1)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
     ${dots}<line id="xh" y1="${m.t}" y2="${m.t + ih}" stroke="var(--text-muted)" stroke-width="1" visibility="hidden"/>
@@ -284,20 +393,41 @@ function renderChart(f) {
     <rect x="${m.l}" y="${m.t}" width="${iw}" height="${ih}" fill="transparent" id="hit"/></svg>`;
   const svg = el.querySelector("svg"), tip = $("#tip");
   const hit = el.querySelector("#hit"), xh = el.querySelector("#xh"), xd = el.querySelector("#xd");
-  hit.addEventListener("mousemove", ev => {
-    const r = svg.getBoundingClientRect(); const px = (ev.clientX - r.left) * W / r.width;
-    const i = Math.max(0, Math.min(keys.length - 1, Math.round((px - m.l) / iw * (keys.length - 1))));
-    const p = pts[i];
+  let ci = -1;
+  const show = (i, cx, cy) => {
+    const p = pts[ci = i], when = `${state.gran === "week" ? "Week of " : ""}${label(p.k, true)}`;
     xh.setAttribute("x1", x(i)); xh.setAttribute("x2", x(i)); xh.setAttribute("visibility", "visible");
-    if (p.r != null) { xd.setAttribute("cx", x(i)); xd.setAttribute("cy", y(p.r)); xd.setAttribute("visibility", "visible"); }
-    tip.innerHTML = `<div class="muted">${state.gran === "week" ? "Week of " : ""}${label(p.k, true)}</div>
+    xd.setAttribute("visibility", p.r == null ? "hidden" : "visible");
+    if (p.r != null) { xd.setAttribute("cx", x(i)); xd.setAttribute("cy", y(p.r)); }
+    tip.innerHTML = `<div class="muted">${when}</div>
       <div><b>${p.r == null ? "–" : fmt(p.r, 2) + "%"}</b> rate</div><div><b>${fmt(p.e)}</b> errors · ${fmt(p.c)} calls</div>`;
     tip.style.display = "block";
-    const tx = ev.clientX + 14 + tip.offsetWidth > window.innerWidth ? ev.clientX - tip.offsetWidth - 14 : ev.clientX + 14;
-    tip.style.left = tx + window.scrollX + "px"; tip.style.top = ev.clientY + window.scrollY - 10 + "px";
+    const tx = cx + 14 + tip.offsetWidth > window.innerWidth ? Math.max(4, cx - tip.offsetWidth - 14) : cx + 14;
+    tip.style.left = tx + window.scrollX + "px"; tip.style.top = cy + window.scrollY - 10 + "px";
+    return `${when}: ${p.r == null ? "no tool calls" : fmt(p.r, 2) + "% rate"}, ${fmt(p.e)} errors, ${fmt(p.c)} calls`;
+  };
+  // Hidden means no current point: the next arrow starts again from an end.
+  const hide = () => { ci = -1; tip.style.display = "none"; xh.setAttribute("visibility", "hidden"); xd.setAttribute("visibility", "hidden"); };
+  hit.addEventListener("mousemove", ev => {
+    const r = svg.getBoundingClientRect(); const px = (ev.clientX - r.left) * W / r.width;
+    show(Math.max(0, Math.min(keys.length - 1, Math.round((px - m.l) / iw * (keys.length - 1)))), ev.clientX, ev.clientY);
   });
-  hit.addEventListener("mouseleave", () => { tip.style.display = "none"; xh.setAttribute("visibility", "hidden"); xd.setAttribute("visibility", "hidden"); });
-  $("#chartTitle").textContent = state.cat ? `Error rate · ${CATS[state.cat].label}` : "Error rate · all types";
+  hit.addEventListener("mouseleave", hide);
+  el.onblur = hide;
+  el.onkeydown = ev => {
+    const n = keys.length - 1;
+    const i = { ArrowLeft: ci < 0 ? n : ci - 1, ArrowRight: ci + 1, Home: 0, End: n }[ev.key];
+    if (i == null) return;
+    ev.preventDefault();
+    const j = Math.max(0, Math.min(n, i)), p = pts[j], r = svg.getBoundingClientRect();
+    $("#chartLive").textContent = show(j, r.left + x(j) * r.width / W, r.top + (p.r == null ? m.t + ih / 2 : y(p.r)) * r.height / H);
+  };
+}
+// Runs of consecutive [point, index] with a rate: a bucket without calls breaks the line instead of reading as 0%.
+function runs(pts) {
+  const out = []; let cur = null;
+  pts.forEach((p, i) => { if (p.r == null) cur = null; else { if (!cur) out.push(cur = []); cur.push([p, i]); } });
+  return out;
 }
 function niceStep(raw) { const p = 10 ** Math.floor(Math.log10(raw)); const n = raw / p; return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10) * p; }
 function label(k, long) { const d = toDate(k); return d.toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC", ...(long ? { year: "numeric" } : {}) }); }
@@ -308,32 +438,33 @@ function renderTable(f) {
   const counts = countBy(f.errs), total = f.errs.length || 1;
   const keys = buckets(f.start);
   const mid = iso(new Date((+toDate(f.start) + +toDate(lastDay)) / 2));
-  const c1 = f.calls.filter(c => c[0] < mid).reduce((s, c) => s + c[2], 0), c2 = f.calls.filter(c => c[0] >= mid).reduce((s, c) => s + c[2], 0);
+  const c1 = sumCalls(f.calls.filter(c => c[0] < mid)), c2 = sumCalls(f.calls.filter(c => c[0] >= mid));
   const rows = Object.entries(counts).sort((a, b) => b[1] - a[1]);
   if (state.cat && !counts[state.cat] && !state.focus) state.cat = null;
+  const none = state.project && !DATA.calls.some(c => c[1] === state.project) && !DATA.errors.some(e => e.p === state.project);
   $("#catBody").innerHTML = rows.map(([cid, n]) => {
     const pts = series(f.errs, f.calls, keys, cid);
     const e1 = f.errs.filter(e => e.c === cid && e.d < mid).length, e2 = n - e1;
-    const r1 = rate(e1, c1), r2 = rate(e2, c2);
-    const d = r1 ? (r2 - r1) / r1 * 100 : (r2 ? 100 : 0);
+    const d = change(rate(e1, c1), rate(e2, c2), 5);
     const status = fixes[cid] ? `<span class="chip fixed">✓ Fixed ${label(fixes[cid])}</span>` : `<span class="chip">Open</span>`;
-    return `<tr tabindex="0" data-c="${cid}" class="${state.cat === cid ? "sel" : ""}" aria-selected="${state.cat === cid}">
-      <td>${esc(CATS[cid].label)}</td><td class="num">${fmt(n)}</td>
-      <td><div class="bar" title="${fmt(n / total * 100, 1)}%"><i style="width:${Math.max(2, n / rows[0][1] * 100)}%"></i></div></td>
-      <td>${spark(pts)}</td>
-      <td class="num ${d < -5 ? "delta-down" : d > 5 ? "delta-up" : "muted"}">${d > 5 ? "▲" : d < -5 ? "▼" : ""} ${fmt(Math.abs(d), 0)}%</td>
+    return `<tr data-c="${cid}" class="${state.cat === cid ? "sel" : ""}">
+      <td><button type="button" class="tbtn" data-c="${cid}" aria-expanded="${state.cat === cid}" aria-controls="detail">${esc(CATS[cid].label)}</button></td><td class="num">${fmt(n)}</td>
+      <td class="c-share"><div class="bar" title="${fmt(n / total * 100, 1)}%"><i style="width:${Math.max(2, n / rows[0][1] * 100)}%"></i></div></td>
+      <td class="c-trend">${spark(pts)}</td>
+      <td class="num ${d.cls}"${d.title ? ` title="${d.title}"` : ""}>${d.text}</td>
       <td>${status}</td></tr>`;
-  }).join("") || `<tr><td colspan="6" class="empty">No errors in this range 🎉</td></tr>`;
+  }).join("") || `<tr><td colspan="6" class="empty">${none ? `No tool calls recorded for ${esc(state.project)}.` : c1 + c2 ? "No errors in this range 🎉" : "No tool calls in this range."}</td></tr>`;
   document.querySelectorAll("#catBody tr[data-c]").forEach(tr => {
-    const pick = () => { state.cat = state.cat === tr.dataset.c ? null : tr.dataset.c; state.q = ""; state.focus = null; render(); };
-    tr.addEventListener("click", pick);
-    tr.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(); } });
+    const pick = () => { const open = state.cat !== tr.dataset.c; state.cat = open ? tr.dataset.c : null; state.q = ""; state.focus = null; render(true, open); };
+    tr.addEventListener("click", pick); // the type button's clicks and keys bubble here too
   });
 }
 function spark(pts) {
-  const W = 84, H = 22, max = Math.max(...pts.map(p => p.r || 0)) || 1;
-  const d = pts.map((p, i) => `${i ? "L" : "M"}${(pts.length === 1 ? W / 2 : i / (pts.length - 1) * W).toFixed(1)},${(H - 2 - (p.r || 0) / max * (H - 4)).toFixed(1)}`).join("");
-  return `<svg class="spark" viewBox="0 0 ${W} ${H}" aria-hidden="true"><path d="${d}" fill="none" stroke="var(--series-1)" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
+  const W = 84, H = 22, max = Math.max(...pts.map(p => p.r || 0)) || 1, segs = runs(pts);
+  const x = i => (pts.length === 1 ? W / 2 : i / (pts.length - 1) * W).toFixed(1), y = p => (H - 2 - p.r / max * (H - 4)).toFixed(1);
+  const d = segs.map(r => r.map(([p, i], j) => `${j ? "L" : "M"}${x(i)},${y(p)}`).join("")).join("");
+  const lone = segs.filter(r => r.length === 1).map(([[p, i]]) => `<circle cx="${x(i)}" cy="${y(p)}" r="1.5" fill="var(--series-1)"/>`).join("");
+  return `<svg class="spark" viewBox="0 0 ${W} ${H}" aria-hidden="true"><path d="${d}" fill="none" stroke="var(--series-1)" stroke-width="1.5" stroke-linejoin="round"/>${lone}</svg>`;
 }
 
 // ---------- detail ----------
@@ -343,10 +474,10 @@ function renderDetail(f) {
     const counts = countBy(f.errs);
     const open = Object.entries(counts).filter(([c]) => !fixes[c] && CATS[c].snippet).sort((a, b) => b[1] - a[1]).slice(0, 5);
     el.innerHTML = `<h2>Where to start</h2><p class="why">Biggest open error types that have a ready-made fix. Pick one, apply the fix, then mark it applied to watch its rate drop.</p>
-      ${open.map(([c, n]) => `<div class="ex" style="cursor:pointer" data-c="${c}"><div class="row" style="justify-content:space-between"><b>${esc(CATS[c].label)}</b><span class="muted">${fmt(n)} errors</span></div>
-      <div class="muted" style="font-size:13px;margin-top:2px">${esc(CATS[c].fix)}</div></div>`).join("") || `<div class="empty">Nothing open with a known fix.</div>`}
+      ${open.map(([c, n]) => `<button type="button" class="pick" data-c="${c}"><span class="row" style="justify-content:space-between"><b>${esc(CATS[c].label)}</b><span class="muted">${fmt(n)} errors</span></span>
+      <span class="muted" style="font-size:13px;margin-top:2px">${esc(CATS[c].fix)}</span></button>`).join("") || `<div class="empty">Nothing open with a known fix.</div>`}
       <div class="ex" style="border-bottom:0"><div class="muted" style="font-size:12px">The app ingests new transcript lines every minute; use Refresh above to ingest now. Fix markers live in this browser.</div></div>`;
-    el.querySelectorAll("[data-c]").forEach(d => d.addEventListener("click", () => { state.cat = d.dataset.c; render(); }));
+    el.querySelectorAll("[data-c]").forEach(d => d.addEventListener("click", () => { state.cat = d.dataset.c; state.q = ""; render(true, true); }));
     return;
   }
   const c = CATS[state.cat];
@@ -354,56 +485,191 @@ function renderDetail(f) {
   const fixDay = fixes[state.cat];
   let ba = "";
   if (fixDay) {
-    const callsIn = (a, b) => DATA.calls.filter(x => x[0] >= a && x[0] < b && (!state.project || x[1] === state.project)).reduce((s, x) => s + x[2], 0);
-    const before = all.filter(e => e.d < fixDay).length, after = all.length - before;
-    const rb = rate(before, callsIn("0000", fixDay)), ra = rate(after, callsIn(fixDay, "9999"));
-    ba = `<div class="ba"><div><div class="l">Rate before fix</div><div class="v">${fmt(rb, 2)}%</div><div class="l">${fmt(before)} errors</div></div>
-      <div><div class="l">Rate since ${label(fixDay)}</div><div class="v ${ra < rb ? "delta-down" : "delta-up"}">${fmt(ra, 2)}%</div><div class="l">${fmt(after)} errors</div></div></div>`;
+    // All time on purpose, so the comparison doesn't shift with the range; project and subagent filters still apply.
+    const scoped = DATA.calls.filter(x => !state.project || x[1] === state.project);
+    const from = scoped.reduce((m, x) => !m || x[0] < m ? x[0] : m, "");
+    const side = (name, a, b, empty) => {
+      const e = all.filter(x => x.d >= a && x.d < b).length, c = sumCalls(scoped.filter(x => x[0] >= a && x[0] < b));
+      return { name, e, c, r: rate(e, c), empty };
+    };
+    const prev = iso(new Date(toDate(fixDay) - DAY));
+    const sides = [side(`Before fix${from && from <= prev ? ` · ${label(from)} – ${label(prev)}` : ""}`, "0000", fixDay, "No calls"),
+      side(`Since ${label(fixDay)}`, fixDay, "9999", "No calls yet")];
+    const better = sides.every(x => x.r != null) && sides[1].r < sides[0].r;
+    ba = `<div class="l muted" style="font-size:12px;margin-top:12px">Before and after the fix · all time · ${esc(state.project || "all projects")}${state.sub ? "" : " · without subagents"}</div>
+      <div class="ba" style="margin-top:6px">${sides.map((x, i) => `<div><div class="l">${x.name}</div>
+        <div class="v ${x.r == null ? "muted" : i && sides[0].r != null ? better ? "delta-down" : "delta-up" : ""}">${x.r == null ? x.empty : fmt(x.r, 2) + "%"}</div>
+        <div class="l">${fmt(x.e)} error${x.e === 1 ? "" : "s"} · ${fmt(x.c)} call${x.c === 1 ? "" : "s"}</div></div>`).join("")}</div>`;
   }
-  const q = state.q.toLowerCase();
-  const ex = f.errs.filter(e => e.c === state.cat && (!q || (e.i + e.e + e.r + e.p).toLowerCase().includes(q))).slice().reverse();
-  // A linked example shows first, even when outside the current filters.
-  const focused = BY_ID[state.focus];
-  if (focused) { const i = ex.indexOf(focused); if (i >= 0) ex.splice(i, 1); ex.unshift(focused); }
-  const tools = Object.entries(ex.reduce((m, e) => (m[e.t] = (m[e.t] || 0) + 1, m), {})).sort((a, b) => b[1] - a[1]).slice(0, 3);
-  el.innerHTML = `<div class="row" style="justify-content:space-between"><h2>${esc(c.label)}</h2><button id="clr" aria-label="Close detail">✕</button></div>
+  const base = f.errs.filter(e => e.c === state.cat).reverse();
+  // A linked example shows first; outside the current filters it gets its own note instead of joining the list.
+  const focused = BY_ID[state.focus], outside = focused && !base.includes(focused);
+  const tools = Object.entries(base.reduce((m, e) => (m[e.t] = (m[e.t] || 0) + 1, m), {})).sort((a, b) => b[1] - a[1]).slice(0, 3);
+  el.innerHTML = `<div class="row dhead" style="justify-content:space-between"><h2 id="detailTitle" tabindex="-1">${esc(c.label)}</h2>
+    <span class="row" style="flex-wrap:nowrap"><button type="button" id="back" class="linkbtn">Back to types</button><button id="clr" aria-label="Close detail">✕</button></span></div>
     <p class="why">${esc(c.why)}${tools.length ? ` <span class="muted">Mostly ${tools.map(t => esc(t[0])).join(", ")}.</span>` : ""}</p>
     <div class="fixbox"><div class="t">Potential fix</div><div>${esc(c.fix)}</div>
       ${c.snippet ? `<pre class="snip" id="snip">${esc(c.snippet)}</pre><div class="row" style="margin-top:8px"><button id="copy">Copy CLAUDE.md line</button></div>` : ""}
       <div class="row" style="margin-top:10px">
         ${fixDay ? `<span class="chip fixed">✓ Fix applied ${label(fixDay, true)}</span><button id="unfix">Undo</button>`
           : `<label class="chk">Applied on <input type="date" id="fixDate" value="${lastDay}" max="${lastDay}"></label><button id="fix">Mark fix applied</button>`}
+        <span class="muted" style="font-size:12px">Applies to all projects</span>
       </div></div>
     ${ba}
-    <div class="row" style="justify-content:space-between;margin-top:4px"><b>Examples</b><span class="muted" style="font-size:12px">${fmt(ex.length)} in range, newest first</span></div>
-    <input type="search" id="q" placeholder="Filter examples…" value="${esc(state.q)}" style="width:100%;margin:8px 0" aria-label="Filter examples">
-    <div id="exList">${exHtml(ex.slice(0, 30))}</div>
-    ${ex.length > 30 ? `<button id="more" style="width:100%;margin-top:8px">Show more</button>` : ""}`;
-  $("#clr").onclick = () => { state.cat = null; state.focus = null; render(); };
+    ${outside ? `<div class="outnote" id="outside"><div class="row" style="justify-content:space-between"><b>Outside current filters</b>
+      <button type="button" id="clearF">Clear filters</button></div>
+      <div class="muted" style="font-size:12px">This linked example doesn't match the project, range or toggles above.</div>${exHtml([focused])}</div>` : ""}
+    <div class="exbar"><div class="row" style="justify-content:space-between;margin-top:4px"><b>Examples</b><span class="muted" style="font-size:12px" id="exCount"></span></div>
+    <input type="search" id="q" placeholder="Filter examples…" value="${esc(state.q)}" style="width:100%;margin:8px 0" aria-label="Filter examples"></div>
+    <div id="exList"></div>
+    <button id="more" style="width:100%;margin-top:8px" hidden>Show more</button>`;
+  $("#clr").onclick = () => { state.cat = null; state.focus = null; render(true); };
+  $("#back").onclick = () => { const b = $(`#catBody button[data-c="${CSS.escape(state.cat)}"]`); b?.scrollIntoView({ block: "center", behavior: reduceMotion.matches ? "auto" : "smooth" }); b?.focus({ preventScroll: true }); };
+  // The example bar sticks below the header, and examples scroll in below both.
+  stuck.disconnect(); stuck.observe($("#detail .dhead")); stuck.observe($("#detail .exbar"));
+  const cf = $("#clearF"); if (cf) cf.onclick = () => { Object.assign(state, { project: "", range: 0, sub: true, noise: false }); render(true); $("#ex-" + CSS.escape(focused.id))?.focus(); };
   const cp = $("#copy"); if (cp) cp.onclick = () => navigator.clipboard?.writeText(c.snippet).then(() => cp.textContent = "Copied ✓");
-  const fx = $("#fix"); if (fx) fx.onclick = () => { fixes[state.cat] = $("#fixDate").value || lastDay; store.set("claude-errors-fixes", fixes); render(); };
-  const uf = $("#unfix"); if (uf) uf.onclick = () => { delete fixes[state.cat]; store.set("claude-errors-fixes", fixes); render(); };
-  const qi = $("#q"); qi.oninput = () => { state.q = qi.value; const ex2 = f.errs.filter(e => e.c === state.cat && (!qi.value || (e.i + e.e + e.r + e.p).toLowerCase().includes(qi.value.toLowerCase()))).reverse(); $("#exList").innerHTML = exHtml(ex2.slice(0, 30)); };
-  let shown = 30; const mo = $("#more"); if (mo) mo.onclick = () => { shown += 30; $("#exList").innerHTML = exHtml(ex.slice(0, shown)); if (shown >= ex.length) mo.remove(); };
+  // The date input's max is today: reportValidity shows the browser's message for a future or incomplete date.
+  const fx = $("#fix"); if (fx) fx.onclick = () => { const di = $("#fixDate"); if (!di.reportValidity() || di.value > lastDay) return; fixes[state.cat] = di.value || lastDay; store.set("claude-errors-fixes", fixes); render(); $("#unfix")?.focus(); };
+  const uf = $("#unfix"); if (uf) uf.onclick = () => { delete fixes[state.cat]; store.set("claude-errors-fixes", fixes); render(); $("#fix")?.focus(); };
+  // List, count and Show more all come from the current search.
+  let shown = 30, ex = [];
+  const paint = () => {
+    const q = state.q.toLowerCase();
+    ex = base.filter(e => !q || (e.i + e.e + e.r + e.p).toLowerCase().includes(q));
+    if (focused && !outside) { const i = ex.indexOf(focused); if (i > 0) { ex.splice(i, 1); ex.unshift(focused); } }
+    $("#exList").innerHTML = exHtml(ex.slice(0, shown));
+    requestAnimationFrame(fitToggles);
+    $("#exCount").textContent = q ? `${fmt(ex.length)} of ${fmt(base.length)} match` : `${fmt(base.length)} in range, newest first`;
+    $("#more").hidden = ex.length <= shown;
+  };
+  paint();
+  const qi = $("#q"); qi.oninput = () => { state.q = qi.value; shown = 30; paint(); say($("#exCount").textContent); };
+  $("#more").onclick = () => {
+    const from = shown; shown += 30; paint();
+    document.querySelectorAll("#exList .ex")[from]?.focus();
+  };
 }
 function exHtml(list) {
-  return list.map(e => `<div class="ex${e.id && e.id === state.focus ? " focus" : ""}"${e.id ? ` id="ex-${esc(e.id)}"` : ""}>
+  return list.map(e => {
+    // Loaded full text replaces the payload's; a field cut when it was recorded says so.
+    const x = fullText.get(e.id) || e, note = k => x.cut?.includes(k) ? `<div class="cutnote">(summary as recorded)</div>` : "";
+    return `<div class="ex${e.id && e.id === state.focus ? " focus" : ""}${opened.has(exKey(e)) ? " open" : ""}" tabindex="-1"${e.id ? ` id="ex-${esc(e.id)}"` : ""}${e.id && !fullText.has(e.id) && e.i.length >= PAYLOAD_INPUT ? " data-cut" : ""}>
     <div class="meta"><span>${esc(new Date(e.ts).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }))}</span>
-      <span>${esc(e.p)}</span><span>${esc(e.t)}</span>${e.sub ? "<span>subagent</span>" : ""}<span title="session">#${esc(e.s)}</span>
-      ${e.id ? `<span class="link"><a href="#ex=${encodeURIComponent(e.id)}" title="Permalink to this error">🔗 Link</a><button type="button" data-copy="${esc(e.id)}">Copy URL</button></span>` : ""}</div>
-    ${e.i ? `<code>${esc(e.i)}</code>` : ""}<div class="err">${esc(e.e)}</div>
-    ${e.r ? `<blockquote>${esc(e.r)}</blockquote>` : ""}</div>`).join("") || `<div class="empty">No examples match.</div>`;
+      <span>${esc(e.p)}</span><span>${esc(e.t)}</span>${e.sub ? "<span>subagent</span>" : ""}${e.s ? `<a href="${sessionUrl(e)}" title="Open session ${esc(e.s)} in Usage">#${esc(e.s.slice(0, 8))}</a>` : ""}
+      ${e.id ? `<span class="link"><a href="${esc(viewHash(e.id))}" data-link="${esc(e.id)}" title="Permalink to this error">🔗 Link</a><button type="button" data-copy="${esc(e.id)}">Copy URL</button></span>` : ""}</div>
+    ${x.i ? `<code>${esc(x.i)}</code>${note("i")}` : ""}<div class="err">${esc(x.e)}</div>${note("e")}
+    ${x.r ? `<blockquote>${esc(x.r)}</blockquote>${note("r")}` : ""}
+    <button type="button" class="full" data-full="${esc(exKey(e))}" aria-expanded="${opened.has(exKey(e))}" hidden>${opened.has(exKey(e)) ? "Show less" : "Show full"}</button></div>`;
+  }).join("") || `<div class="empty">No examples match.</div>`;
 }
 
+// Examples opened with "Show full", by id (or time and tool for an example without one).
+const opened = new Set(), exKey = e => e.id || e.ts + e.t;
+// The payload cuts inputs at PAYLOAD_INPUT characters; "Show full" loads the rest once per id from /api/error.
+const PAYLOAD_INPUT = 400, fullText = new Map(), loading = new Set();
+async function loadFull(btn, id) {
+  if (loading.has(id)) return;
+  loading.add(id);
+  btn.setAttribute("aria-busy", "true"); btn.classList.remove("failed"); btn.textContent = "Loading…";
+  say("Loading full example…");
+  try {
+    const r = await fetch("/api/error?id=" + encodeURIComponent(id));
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    fullText.set(id, await r.json());
+  } catch {
+    loading.delete(id);
+    const b = document.querySelector(`#detail button[data-full="${CSS.escape(id)}"]`);
+    if (b) { b.removeAttribute("aria-busy"); b.classList.add("failed"); b.textContent = "Couldn't load full text · Retry"; }
+    return say("Couldn't load the full example. Use Retry to try again.");
+  }
+  loading.delete(id);
+  // The example may have re-rendered meanwhile: redraw whichever copy is on the page now, open.
+  opened.add(id);
+  const ex = document.getElementById("ex-" + id);
+  if (!ex) return;
+  const had = ex.contains(document.activeElement), t = document.createElement("div");
+  t.innerHTML = exHtml([BY_ID[id]]); ex.replaceWith(t.firstElementChild);
+  fitToggles();
+  if (had) document.querySelector(`#detail button[data-full="${CSS.escape(id)}"]`)?.focus();
+  say("Full example shown");
+}
+// Concise status for screen readers: counts, loading, failures. The detail itself isn't live.
+const say = s => { const l = $("#detailLive"); l.textContent = ""; requestAnimationFrame(() => l.textContent = s); };
+// "Show full" only where a clamped body is cut off, the payload cut the input, or the example is already open.
+function fitToggles() {
+  document.querySelectorAll("#detail .full").forEach(b => {
+    const ex = b.closest(".ex");
+    b.hidden = !ex.classList.contains("open") && !("cut" in ex.dataset) && ![...ex.querySelectorAll("code, .err, blockquote")].some(x => x.scrollHeight > x.clientHeight + 1);
+  });
+}
+const stuck = new ResizeObserver(() => {
+  const d = $("#detail"), h = d.querySelector(".dhead"), b = d.querySelector(".exbar");
+  d.style.setProperty("--dhead-h", (h?.offsetHeight || 0) + "px"); d.style.setProperty("--exbar-h", (b?.offsetHeight || 0) + "px");
+});
+
+// Usage shows the session's own project; only an Errors project filter carries over.
+const sessionUrl = e => "/usage#" + new URLSearchParams({ range: state.range, session: e.s, ...(state.project && { project: state.project }) });
+
 // ---------- wiring ----------
-function render() {
+// Every project with errors or tool calls, plus the selected one, so a project picked on another page stays selectable.
+const ERR_COUNT = DATA.calls.reduce((m, c) => (m[c[1]] = m[c[1]] || 0, m), {});
+for (const e of DATA.errors) ERR_COUNT[e.p] = (ERR_COUNT[e.p] || 0) + 1;
+function renderProjects() {
+  const projects = Object.entries(ERR_COUNT).sort((a, b) => b[1] - a[1]);
+  if (state.project && !(state.project in ERR_COUNT)) projects.push([state.project, 0]);
+  const html = `<option value="">All projects</option>` + projects.map(([p, n]) => `<option value="${esc(p)}">${esc(p)} — ${fmt(n)} error${n === 1 ? "" : "s"} (all time)</option>`).join("");
+  const sel = $("#fProject");
+  if (sel.dataset.html !== html) { sel.innerHTML = html; sel.dataset.html = html; }
+  sel.value = state.project;
+}
+const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)");
+const narrow = matchMedia("(max-width: 900px)"), sheet = $("#sheet");
+let sheetCat = null;
+// Narrow screens show an open type in the sheet: the one #detail moves there and back, so it renders the same either way.
+function placeDetail() {
+  const d = $("#detail"), toSheet = narrow.matches && !!state.cat, home = toSheet ? sheet : $(".grid2");
+  // The status region moves with the detail: outside the modal sheet it would be inert.
+  if (d.parentNode !== home) { const had = d.contains(document.activeElement); home.append(d, $("#detailLive")); if (had) $("#detailTitle")?.focus({ preventScroll: true }); }
+  if (!toSheet) { if (sheet.open) sheet.close(); return; }
+  if (!sheet.open) sheet.showModal();
+  if (sheetCat !== state.cat) { sheet.scrollTop = 0; $("#detailTitle").focus({ preventScroll: true }); }
+  sheetCat = state.cat;
+}
+function focusDetail() {
+  const h = $("#detailTitle"); if (!h) return;
+  if (sheet.open) return h.focus({ preventScroll: true });
+  const r = h.getBoundingClientRect();
+  if (r.top < parseFloat(getComputedStyle(h).scrollMarginTop) || r.bottom > innerHeight) h.scrollIntoView({ block: "start", behavior: reduceMotion.matches ? "auto" : "smooth" });
+  h.focus({ preventScroll: true });
+}
+// A selector that finds the same control again after a re-render.
+const focusKey = el => el.id ? "#" + CSS.escape(el.id) : ["c", "copy", "link", "full"].map(k => el.dataset?.[k] != null && `${el.tagName}[data-${k}="${CSS.escape(el.dataset[k])}"]`).find(Boolean);
+let shownCat = null;
+// push: add a history entry. toDetail: move focus to the opened type.
+function render(push, toDetail) {
+  const prev = document.activeElement, key = prev && prev !== document.body && focusKey(prev), wasCat = shownCat;
   store.set("claude-errors-view", { project: state.project, range: state.range, gran: state.gran, sub: state.sub, noise: state.noise, cat: state.cat });
-  $("#fProject").value = state.project;
+  renderProjects();
   document.querySelectorAll("#fRange button").forEach(b => b.setAttribute("aria-pressed", +b.dataset.v === state.range));
   document.querySelectorAll("#fGran button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === state.gran));
+  $("#fSub").checked = state.sub; $("#fNoise").checked = state.noise;
   const f = filtered();
-  renderKpis(f); renderTable(f); renderChart(f); renderDetail(f);
-  writeHash();
+  $("#gen").textContent = (state.range ? `${label(f.start, true)} to ${label(lastDay, true)}` : `All time to ${label(lastDay, true)}`)
+    + (DATA.generated ? ` · Ingested ${new Date(DATA.generated).toLocaleString()}` : "");
+  renderKpis(f); renderTable(f); renderChart(f); renderDetail(f); placeDetail();
+  shownCat = state.cat;
+  writeHash(push);
+  if (toDetail && state.cat) return focusDetail();
+  // Never leave focus on a removed element: find it again, else the open type or the type just closed.
+  if (!prev || prev === document.body || prev.isConnected) return;
+  const sel = s => s && document.querySelector(s);
+  (sel(key) || (state.cat ? $("#detailTitle") : sel(`#catBody button[data-c="${wasCat}"]`) || $("#catBody button")))?.focus();
+}
+function selectExample(id) {
+  state.focus = id;
+  document.querySelectorAll("#detail .ex").forEach(x => x.classList.toggle("focus", x.id === "ex-" + id));
+  writeHash(true);
 }
 function scrollToFocus() {
   const el = state.focus && document.getElementById("ex-" + state.focus);
@@ -411,38 +677,49 @@ function scrollToFocus() {
 }
 (function init() {
   const linked = readHash();
-  $("#gen").textContent = (DATA.generated ? `Ingested ${new Date(DATA.generated).toLocaleString()} · ` : "") + (firstDay ? `data ${label(firstDay, true)} – ${label(lastDay, true)}` : "no data yet");
-  // Every project with tool calls, so a project picked on another page is selectable here even without errors.
-  const counts = DATA.calls.reduce((m, c) => (m[c[1]] = m[c[1]] || 0, m), {});
-  for (const e of DATA.errors) counts[e.p] = (counts[e.p] || 0) + 1;
-  const projects = Object.entries(counts).sort((a, b) => b[1] - a[1]);
-  $("#fProject").innerHTML = `<option value="">All projects</option>` + projects.map(([p, n]) => `<option value="${esc(p)}">${esc(p)} (${n})</option>`).join("");
-  if (!projects.some(p => p[0] === state.project)) state.project = "";
-  $("#fProject").value = state.project;
-  $("#fProject").onchange = e => { state.project = e.target.value; render(); };
-  document.querySelectorAll("#fRange button").forEach(b => b.onclick = () => { state.range = +b.dataset.v; render(); });
-  document.querySelectorAll("#fGran button").forEach(b => b.onclick = () => { state.gran = b.dataset.v; render(); });
-  $("#fSub").checked = state.sub; $("#fSub").onchange = e => { state.sub = e.target.checked; render(); };
-  $("#fNoise").checked = state.noise; $("#fNoise").onchange = e => { state.noise = e.target.checked; render(); };
-  let t; window.addEventListener("resize", () => { clearTimeout(t); t = setTimeout(() => renderChart(filtered()), 120); });
-  window.addEventListener("hashchange", () => { const ex = readHash(); render(); if (ex) scrollToFocus(); });
+  $("#fProject").onchange = e => { state.project = e.target.value; render(true); };
+  document.querySelectorAll("#fRange button").forEach(b => b.onclick = () => { state.range = +b.dataset.v; render(true); });
+  document.querySelectorAll("#fGran button").forEach(b => b.onclick = () => { state.gran = b.dataset.v; render(true); });
+  $("#fSub").onchange = e => { state.sub = e.target.checked; render(true); };
+  $("#fNoise").onchange = e => { state.noise = e.target.checked; render(true); };
+  narrow.addEventListener("change", placeDetail);
+  // Esc, the backdrop and ✕ close the sheet; closing it closes the type, and focus returns to that type's button.
+  sheet.addEventListener("click", ev => { if (ev.target === sheet) sheet.close(); });
+  sheet.addEventListener("close", () => {
+    const c = sheetCat; sheetCat = null;
+    if (!narrow.matches) return $("#detailTitle")?.focus({ preventScroll: true });
+    if (state.cat) { state.cat = null; state.focus = null; render(true); }
+    if (c) $(`#catBody button[data-c="${CSS.escape(c)}"]`)?.focus();
+  });
+  let t; window.addEventListener("resize", () => { clearTimeout(t); t = setTimeout(() => { renderChart(filtered()); fitToggles(); }, 120); });
+  // Back, Forward, the nav and permalink clicks all change the hash; re-read it unless it is the one just written.
+  const onNav = () => { if (location.hash === lastHash) return; const ex = readHash(); render(); if (ex) scrollToFocus(); };
+  window.addEventListener("popstate", onNav); window.addEventListener("hashchange", onNav);
   $("#detail").addEventListener("click", ev => {
+    const t = ev.target.closest("button[data-full]");
+    if (t) {
+      if (!t.closest(".ex").classList.contains("open") && BY_ID[t.dataset.full] && !fullText.has(t.dataset.full)) return loadFull(t, t.dataset.full);
+      const ex = t.closest(".ex"), open = ex.classList.toggle("open");
+      if (open) opened.add(t.dataset.full); else opened.delete(t.dataset.full);
+      t.setAttribute("aria-expanded", open); t.textContent = open ? "Show less" : "Show full";
+      if (!open && ex.getBoundingClientRect().top < 0) ex.scrollIntoView({ block: "start" });
+      return;
+    }
     const b = ev.target.closest("button[data-copy]");
     if (b) {
       const e = BY_ID[b.dataset.copy];
       navigator.clipboard?.writeText(exUrl(e)).then(() => { b.textContent = "Copied ✓"; setTimeout(() => b.textContent = "Copy URL", 1500); });
       return;
     }
-    // Clicking anywhere on an example selects it and puts its permalink in the address bar.
-    const row = ev.target.closest(".ex[id^='ex-']");
-    if (!row || ev.target.closest("a") || String(window.getSelection())) return;
-    state.focus = row.id.slice(3);
-    document.querySelectorAll("#exList .ex.focus").forEach(x => x.classList.remove("focus"));
-    row.classList.add("focus");
-    writeHash();
+    // Its Link, or a click anywhere on an example, selects it and puts its permalink in the address bar.
+    const a = ev.target.closest("a"), row = ev.target.closest(".ex[id^='ex-']");
+    if (a?.dataset.link && !(ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey)) { ev.preventDefault(); return selectExample(a.dataset.link); }
+    if (row && !a && !String(window.getSelection())) selectExample(row.id.slice(3));
   });
   render();
   if (linked) scrollToFocus();
+  // After a failed load, Retry was removed with the message: focus the page heading and say so.
+  if (retried) { $("h1").focus(); $("#pageLive").textContent = "Errors loaded"; }
 })();
 </script>
 </body>

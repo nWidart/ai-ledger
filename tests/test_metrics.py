@@ -71,6 +71,19 @@ class MetricsTest(unittest.TestCase):
         self.assertEqual(self.all["totals"]["requests"], 4)
         self.assertEqual([p["project"] for p in self.foo7["by_project"]], ["foo"])
 
+    def test_session_alone_matches_drill_in(self):
+        self.assertEqual(metrics.session(self.con.cursor(), "s1", prices=PRICES), self.foo7["session"])
+        self.assertIsNone(metrics.session(self.con.cursor(), "nope", prices=PRICES))
+
+    def test_session_list(self):
+        all_ = metrics.session_list(self.con.cursor(), prices=PRICES, today=TODAY)
+        self.assertEqual(all_["total"], len(self.all["sessions"]))
+        self.assertEqual([x["session_id"] for x in all_["sessions"]], [x["session_id"] for x in self.all["sessions"]])
+        one = metrics.session_list(self.con.cursor(), q="S1", prices=PRICES, today=TODAY)
+        self.assertEqual([x["session_id"] for x in one["sessions"]], ["s1"])
+        page = metrics.session_list(self.con.cursor(), offset=1, limit=1, prices=PRICES, today=TODAY)
+        self.assertEqual((page["total"], len(page["sessions"])), (all_["total"], 1))
+
     def test_tokens_per_day(self):
         days = {d["day"]: d for d in self.foo7["daily"]}
         self.assertEqual(days["2026-11-04"]["input"], 2_000_000)
@@ -140,6 +153,27 @@ class MetricsTest(unittest.TestCase):
         self.assertEqual((hook["name"], hook["runs"], hook["failure_rate"], hook["avg_ms"]), ("a", 2, 0.5, 200))
         edit = next(x for x in self.foo7["tools"] if x["tool"] == "Edit")
         self.assertEqual(edit["failure_rate"], 1)
+
+
+    def test_errors_payload_splits_subagent_calls(self):
+        calls = metrics.errors_payload(self.con.cursor())["calls"]
+        self.assertEqual(calls, [["2026-11-04", "foo", 10, 0]])
+
+    def test_errors_payload_anchors_on_today(self):
+        self.assertEqual(metrics.errors_payload(self.con.cursor(), today=TODAY)["today"], "2026-11-05")
+
+    def test_error_detail_returns_full_text(self):
+        c = self.con.cursor()
+        long_cmd, json_in = "echo " + "x" * 600, "{" + "a" * 299
+        store.insert(c, "tool_calls", ["tool_use_id", "session_id", "tool", "input_summary", "is_error", "error", "followup"], [
+            ("d1", "s9", "Bash", long_cmd, True, "e" * 700, None), ("d2", "s9", "Edit", json_in, True, "short", "ok")])
+        try:
+            d1 = metrics.error_detail(c, "d1")
+            self.assertEqual((d1["i"], d1["r"], d1["cut"]), (long_cmd, "", ["e"]))
+            self.assertEqual(metrics.error_detail(c, "d2")["cut"], ["i"])
+            self.assertIsNone(metrics.error_detail(c, "missing"))
+        finally:
+            c.execute("DELETE FROM tool_calls WHERE tool_use_id IN ('d1', 'd2')")
 
 
 if __name__ == "__main__":

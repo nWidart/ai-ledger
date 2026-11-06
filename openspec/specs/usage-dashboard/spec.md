@@ -7,11 +7,15 @@ Shows how Claude Code spends tokens, money and time in each project, and how muc
 ## Requirements
 
 ### Requirement: Filter by time range and project
-The usage dashboard SHALL let the user pick a time range and a project, and every metric on the page SHALL reflect that selection.
+The usage dashboard SHALL let the user pick a time range and a project, and every metric on the page SHALL reflect that selection. The project filter SHALL change only through the filter controls or an explicit filter action; selecting a project or session elsewhere SHALL open its details in a side sheet without changing the filter.
 
 #### Scenario: Narrow to one project
 - **WHEN** the user selects project `foo` and the last 7 days
 - **THEN** every chart, tile and table shows only `foo` sessions from those 7 days
+
+#### Scenario: Inspect a project without filtering
+- **WHEN** the user selects project `foo` in the spend ledger or the project table
+- **THEN** a side sheet shows `foo`'s summary, the page keeps its current filter, and the sheet offers a button to filter the dashboard to `foo`
 
 ### Requirement: Show token usage by kind
 The dashboard SHALL show input, output, thinking, cache read, 5-minute cache write and 1-hour cache write tokens per project and over time.
@@ -77,7 +81,7 @@ The dashboard SHALL show the split of requests by model and effort level, and us
 - **THEN** the dashboard shows that server's call count and failure rate
 
 ### Requirement: Link to a project or session
-The usage dashboard SHALL keep the selected project, time range and session in the page URL, so a view can be reopened or shared into an agent prompt.
+The usage dashboard SHALL keep the selected project, time range, inspected project and open session in the page URL, so a view can be reopened or shared into an agent prompt, and browser Back SHALL retrace filter and sheet changes.
 
 #### Scenario: Open a copied URL
 - **WHEN** the user opens a copied usage dashboard URL

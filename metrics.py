@@ -27,10 +27,10 @@ def iso(ts):
 
 # ---------- errors dashboard ----------
 
-def errors_payload(cur, last_ingest=None):
-    """The JSON shape dashboard_template.html has always read."""
+def errors_payload(cur, last_ingest=None, today=None):
+    """The JSON shape dashboard_template.html has always read. today anchors its ranges, as in usage()."""
     errs = rows(cur, """
-        SELECT t.tool_use_id AS id, t.end_ts AS ts, coalesce(s.project, '(unknown)') AS p, left(t.session_id, 8) AS s,
+        SELECT t.tool_use_id AS id, t.end_ts AS ts, coalesce(s.project, '(unknown)') AS p, t.session_id AS s,
                t.tool AS t, t.category AS c, left(t.input_summary, 400) AS i, t.error AS e, coalesce(t.followup, '') AS r,
                CASE WHEN t.subagent THEN 1 ELSE 0 END AS sub
         FROM tool_calls t LEFT JOIN sessions s USING (session_id)
@@ -40,11 +40,29 @@ def errors_payload(cur, last_ingest=None):
         e["ts"] = iso(e["ts"])
         e["e"] = e["e"] or ""
     calls = cur.execute("""
-        SELECT strftime(t.start_ts, '%Y-%m-%d') AS d, coalesce(s.project, '(unknown)') AS p, count(*)
+        SELECT strftime(t.start_ts, '%Y-%m-%d') AS d, coalesce(s.project, '(unknown)') AS p, count(*),
+               count(*) FILTER (WHERE t.subagent)
         FROM tool_calls t LEFT JOIN sessions s USING (session_id)
         WHERE t.start_ts IS NOT NULL GROUP BY 1, 2 ORDER BY 1, 2""").fetchall()
-    return dict(generated=last_ingest, categories=[{k: r[k] for k in ("id", "label", "why", "fix", "snippet")} for r in RULES],
+    return dict(generated=last_ingest, today=(today or date.today()).isoformat(), categories=[{k: r[k] for k in ("id", "label", "why", "fix", "snippet")} for r in RULES],
                 errors=errs, calls=[list(c) for c in calls])
+
+
+# Ingest caps (store.py, categorize.summarize_input): text at its cap may have been cut when recorded.
+RECORD_CAPS = dict(e=700, r=500)
+JSON_INPUT_CAP = 300
+
+
+def error_detail(cur, tool_use_id):
+    """The full recorded input, error and followup of one tool call, or None. cut: the fields that hit an ingest cap."""
+    r = rows(cur, "SELECT input_summary AS i, error AS e, followup AS r FROM tool_calls WHERE tool_use_id = ?", [tool_use_id])
+    if not r:
+        return None
+    d = {k: v or "" for k, v in r[0].items()}
+    cut = [k for k, n in RECORD_CAPS.items() if len(d[k]) >= n]
+    if d["i"].startswith("{") and len(d["i"]) >= JSON_INPUT_CAP:
+        cut.insert(0, "i")
+    return dict(id=tool_use_id, **d, cut=cut)
 
 
 # ---------- usage dashboard ----------
@@ -76,19 +94,22 @@ def requests_cte(pcte, where):
         WHERE {where})"""
 
 
-def usage(cur, project="", range_days=0, session="", prices=None, today=None):
+def view(project, range_days, prices, today):
+    """The filter shared by every usage query: a row belongs to the view when its session's project matches and its time is in range."""
     if range_days < 0:
         raise ValueError("range must be >= 0")
-    prices = load_prices() if prices is None else prices
-    today = today or date.today()
     start = today - timedelta(days=range_days - 1) if range_days else None
     pcte, pparams = price_cte(prices)
-    # Shared filter: a row belongs to the view when its session's project matches and its time is in range.
     sel = "(? = '' OR s.project = ?) AND (CAST(? AS DATE) IS NULL OR {ts} >= CAST(? AS DATE))"
     fp = [project, project, start, start]
     W = lambda ts: sel.format(ts=ts)
-    rq = requests_cte(pcte, W("r.ts"))
-    rp = pparams + fp
+    return start, pcte, pparams, fp, W, requests_cte(pcte, W("r.ts")), pparams + fp
+
+
+def usage(cur, project="", range_days=0, session="", prices=None, today=None):
+    prices = load_prices() if prices is None else prices
+    today = today or date.today()
+    start, pcte, pparams, fp, W, rq, rp = view(project, range_days, prices, today)
     sums = ", ".join(f"coalesce(sum({k}), 0) AS {k}" for k in TOKEN_KINDS)
 
     daily = rows(cur, f"{rq} SELECT strftime(ts, '%Y-%m-%d') AS day, {sums}, sum(cost) AS cost, "
@@ -149,11 +170,24 @@ def usage(cur, project="", range_days=0, session="", prices=None, today=None):
                projects=project_list(cur), totals=totals, daily=daily, unpriced=unpriced, models=models,
                by_project=by_project, tools=rate_rows(tools), mcp=rate_rows(mcp), skills=rate_rows(skills),
                hooks=rate_rows(hooks, "runs"), error_loops=loops[:50],
-               sessions=sorted(sess, key=lambda x: x["last_ts"] or "", reverse=True)[:300],
+               sessions=sorted(sess, key=lambda x: x["first_ts"] or "", reverse=True)[:300],
+               top_sessions=sorted(sess, key=lambda x: -(x["cost"] or 0))[:50],
                near_limit=sorted((x for x in sess if x["near_limit"]), key=lambda x: -x["context_share"]))
     if session:
         out["session"] = session_detail(cur, session, requests_cte(pcte, "r.session_id = ?"), pparams + [session], prices)
     return out
+
+
+def session_list(cur, project="", range_days=0, q="", near=False, offset=0, limit=100, prices=None, today=None):
+    """One page of the view's sessions, newest first (or nearest the context limit first), matching q on id, project or branch."""
+    prices = load_prices() if prices is None else prices
+    _, _, _, fp, W, rq, rp = view(project, range_days, prices, today or date.today())
+    sess = sessions(cur, rq, rp, W, fp, prices)
+    q = q.strip().lower()
+    hits = [x for x in sess if (not near or x["near_limit"])
+            and (not q or q in f"{x['session_id']} {x['project']} {x['git_branch'] or ''}".lower())]
+    hits.sort(key=(lambda x: -x["context_share"]) if near else (lambda x: x["first_ts"] or ""), reverse=not near)
+    return dict(total=len(hits), offset=offset, sessions=hits[offset:offset + limit])
 
 
 def median(xs):
@@ -243,6 +277,13 @@ def projects(cur, rq, rp, W, fp, loops):
                  tokens_per_commit=per(r["tokens"], c["commits"]), cost_per_commit=per(r["cost"] or 0, c["commits"]) if c["commits"] else None,
                  errors_per_100_calls=per(100 * c["errors"], c["calls"]), tokens_per_prompt=per(r["tokens"], prompts.get(r["project"], 0)))
     return rs
+
+
+def session(cur, sid, prices=None):
+    """One session's drill-in on its own, for the session sheet."""
+    prices = load_prices() if prices is None else prices
+    pcte, pparams = price_cte(prices)
+    return session_detail(cur, sid, requests_cte(pcte, "r.session_id = ?"), pparams + [sid], prices)
 
 
 def session_detail(cur, sid, allq, p, prices):
