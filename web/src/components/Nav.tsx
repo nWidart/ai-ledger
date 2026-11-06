@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState, type MouseEvent } from "react";
+import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { statusUrl, type Status } from "../api";
 import { navigate, setHash, sharedHash, useHashState, usePathname } from "../hash";
+import { getTheme, nextTheme, setTheme, useTheme, type Theme } from "../theme";
 import { clearApiCache, getJson, noteIngest } from "../useApi";
 import { ProjectDot } from "./ProjectDot";
 import "./Nav.css";
@@ -13,6 +14,13 @@ export const PAGES = [
 ] as const;
 const POLL_MS = 60_000, INGESTING_MS = 3_000;
 
+// Theme button icons, 16px line art in currentColor: a monitor for system, a sun for light, a moon for dark.
+const THEME_ICON: Record<Theme, ReactNode> = {
+  system: <><rect x="2" y="3" width="12" height="8.5" rx="1.5" /><path d="M5.5 14h5M8 11.5V14" /></>,
+  light: <><circle cx="8" cy="8" r="3" /><path d="M8 1.5v1.5M8 13v1.5M1.5 8H3M13 8h1.5M3.4 3.4l1 1M11.6 11.6l1 1M3.4 12.6l1-1M11.6 4.4l1-1" /></>,
+  dark: <path d="M13.5 9.5A5.5 5.5 0 0 1 6.5 2.5a5.5 5.5 0 1 0 7 7Z" />,
+};
+
 const statusText = (s: Status) => {
   const st = s.last_stats ? ` · ${s.last_stats.inserted.toLocaleString()} new lines` : "";
   return s.error ? `Ingest failed: ${s.error}` : s.ingesting ? "Ingesting transcripts…"
@@ -21,7 +29,7 @@ const statusText = (s: Status) => {
 
 /** The shared top bar: brand, page tabs (keeping project, range and auto), the project filter chip, ingest status and Refresh. */
 export function Nav() {
-  const path = usePathname(), [h] = useHashState(), shared = sharedHash();
+  const path = usePathname(), [h] = useHashState(), shared = sharedHash(), theme = useTheme(), next = nextTheme(theme);
   const nav = useRef<HTMLElement>(null);
   const [st, setSt] = useState({ text: "", failed: false, busy: false, retry: false });
 
@@ -94,6 +102,9 @@ export function Nav() {
         <span className="appnav-status" id="navStatus" aria-live="polite">{st.text}</span>
         <button type="button" id="navRefresh" className={st.failed ? "failed" : undefined} title={st.text} disabled={st.busy} onClick={refresh}>
           {st.retry ? "Retry" : "Refresh"}
+        </button>
+        <button type="button" id="navTheme" aria-label={`Theme: ${theme}`} title={`Theme: ${theme}. Click for ${next}.`} onClick={() => setTheme(nextTheme(getTheme()))}>
+          <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{THEME_ICON[theme]}</svg>
         </button>
       </div>
     </nav>

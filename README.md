@@ -64,6 +64,8 @@ Where the limit figures come from:
 - **Claude Code** writes none. Every 5 minutes, the app asks Anthropic's usage endpoint (`api.anthropic.com/api/oauth/usage`). This endpoint is undocumented and can change without notice. The request uses the OAuth token that Claude Code keeps in the macOS Keychain. The app sends the token only to that endpoint and never stores or logs it. Off macOS, the app does not poll Claude limits.
 - Between readings, the page estimates usage from the transcripts and labels those figures as estimated.
 
+The button at the right end of the top bar sets the theme: **System** (follows the OS), **Light** or **Dark**. Each click moves to the next. The browser keeps the choice, and other open tabs switch with it.
+
 ## Privacy
 
 `data/ai-ledger.duckdb` holds full transcript content, including any secrets that appeared in a session. It is git-ignored. Do not share it.

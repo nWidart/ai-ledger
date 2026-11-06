@@ -73,4 +73,27 @@ describe("Nav", () => {
     expect(screen.getByText("Refresh failed. Select Retry to try again.")).toBeTruthy();
     expect(f).toHaveBeenCalledWith("/api/refresh", { method: "POST" });
   });
+
+  it("steps the theme through light, dark and back to system", async () => {
+    vi.stubGlobal("fetch", vi.fn(() => json(status)));
+    render(<Nav />);
+    const root = document.documentElement;
+    const step = async (name: string) => userEvent.click(screen.getByRole("button", { name }));
+    expect(screen.getByRole("button", { name: "Theme: system" }).getAttribute("title")).toBe("Theme: system. Click for light.");
+    await step("Theme: system");
+    expect(root.dataset.theme).toBe("light");
+    expect(localStorage.getItem("ai-ledger-theme")).toBe("light");
+    await step("Theme: light");
+    expect(root.dataset.theme).toBe("dark");
+    expect(localStorage.getItem("ai-ledger-theme")).toBe("dark");
+    await step("Theme: dark");
+    expect(root.hasAttribute("data-theme")).toBe(false);
+    expect(localStorage.getItem("ai-ledger-theme")).toBeNull();
+    expect(screen.getByRole("button", { name: "Theme: system" })).toBeTruthy();
+    // Two clicks before a re-render still step twice.
+    const b = screen.getByRole("button", { name: "Theme: system" });
+    b.click(); b.click();
+    expect(root.dataset.theme).toBe("dark");
+    delete root.dataset.theme;
+  });
 });
