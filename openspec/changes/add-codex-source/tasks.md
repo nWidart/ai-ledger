@@ -3,7 +3,7 @@
 ## 1. Sources in the store
 
 - [x] 1.1 Raise `requires-python` to `>=3.14` in `pyproject.toml`, run `uv sync`, and note the version in the README setup. Verify that `uv run python -c "import compression.zstd"` succeeds.
-- [ ] 1.2 Add `source` (default `claude`) to `files` and `sessions` on open. Use `ALTER ... ADD COLUMN IF NOT EXISTS`, with copy-and-swap in one transaction as a fallback. Add a test that opens a store created by the current schema and finds every file and session marked `claude` with unchanged counts. Run the migration on an instant copy of the real store in the scratchpad, and check that line and session counts match.
+- [x] 1.2 Add `source` (default `claude`) to `files` and `sessions` on open. Use `ALTER ... ADD COLUMN IF NOT EXISTS`, with copy-and-swap in one transaction as a fallback. Add a test that opens a store created by the current schema and finds every file and session marked `claude` with unchanged counts. Run the migration on an instant copy of the real store in the scratchpad, and check that line and session counts match.
 - [ ] 1.3 Add the source registry (files, line key, deriver per source). Change `ingest(con, roots)` to take `{source: dir}`, write `files.source` and `sessions.source`, and skip a source whose root is missing. Update `app.py` (`--codex`, default `~/.codex`) and existing callers and tests. Verify that the Claude test suite passes unchanged, and that a test with a missing Codex root ingests the Claude files.
 - [ ] 1.4 Make `rebuild` replay each file with its source's deriver. Verify with a test that ingest-then-rebuild produces identical derived rows for a store holding both sources.
 

@@ -24,7 +24,7 @@ BUSY = "the app is running and owns the store; use Refresh in the dashboard"
 RAW_SCHEMA = """
 CREATE TABLE IF NOT EXISTS files (
   path VARCHAR PRIMARY KEY, size BIGINT, read_offset BIGINT, lines BIGINT, seq BIGINT,
-  mtime DOUBLE, last_ingest TIMESTAMP);
+  mtime DOUBLE, last_ingest TIMESTAMP, source VARCHAR DEFAULT 'claude');
 CREATE TABLE IF NOT EXISTS raw_lines (
   key VARCHAR PRIMARY KEY, file VARCHAR, line_no BIGINT, byte_offset BIGINT, type VARCHAR,
   session_id VARCHAR, uuid VARCHAR, ts VARCHAR, subagent BOOLEAN, parsed BOOLEAN,
@@ -37,7 +37,7 @@ DERIVED_SCHEMA = """
 CREATE TABLE IF NOT EXISTS sessions (
   session_id VARCHAR PRIMARY KEY, project VARCHAR, cwd VARCHAR, git_branch VARCHAR,
   first_ts TIMESTAMP, last_ts TIMESTAMP, entrypoint VARCHAR, version VARCHAR,
-  compactions INTEGER, peak_context BIGINT, peak_model VARCHAR);
+  compactions INTEGER, peak_context BIGINT, peak_model VARCHAR, source VARCHAR DEFAULT 'claude');
 CREATE TABLE IF NOT EXISTS requests (
   message_id VARCHAR PRIMARY KEY, session_id VARCHAR, ts TIMESTAMP, model VARCHAR, effort VARCHAR,
   subagent BOOLEAN, input BIGINT, output BIGINT, thinking BIGINT, cache_read BIGINT,
@@ -93,6 +93,8 @@ def open_store(path=None):
     os.chmod(path, 0o600)
     con.execute(RAW_SCHEMA)
     con.execute(DERIVED_SCHEMA)
+    for table in ("files", "sessions"):  # stores from before sources hold only Claude Code's
+        con.execute(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS source VARCHAR DEFAULT 'claude'")
     for old, new in PROJECT_ALIASES.items():  # names stored before the alias existed
         for table in ("projects_by_cwd", "sessions"):
             con.execute(f"UPDATE {table} SET project = ? WHERE project = ?", [new, old])

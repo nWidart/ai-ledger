@@ -127,6 +127,25 @@ class IngestTest(StoreCase):
         self.assertEqual(self.q("SELECT count(*) FROM files")[0][0], 1)
 
 
+class SourceMigrationTest(StoreCase):
+    def test_store_without_source_marked_claude(self):
+        self.write("a.jsonl", line(type="user", uuid="u1", sessionId="s1", timestamp="2026-11-01T10:00:00Z")
+                   + line(type="user", uuid="u2", sessionId="s2", timestamp="2026-11-01T10:00:01Z"))
+        store.ingest(self.con, self.root)
+        for t in ("files", "sessions"):  # the schema before sources
+            self.con.execute(f"ALTER TABLE {t} DROP COLUMN source")
+        counts = lambda: [self.q(f"SELECT count(*) FROM {t}")[0][0] for t in ("raw_lines", "files", "sessions")]
+        before = counts()
+        self.con.close()
+        for _ in range(2):  # idempotent
+            self.con = store.open_store(self.db)
+            self.assertEqual(counts(), before)
+            self.assertEqual(self.q("SELECT source, count(*) FROM files GROUP BY 1 UNION ALL "
+                                    "SELECT source, count(*) FROM sessions GROUP BY 1"), [("claude", 1), ("claude", 2)])
+            self.con.close()
+        self.con = store.open_store(self.db)
+
+
 class MoveEarlierStoreTest(unittest.TestCase):
     """The default store moved from data/claude.duckdb to data/ai-ledger.duckdb; nothing stored may be lost."""
 
