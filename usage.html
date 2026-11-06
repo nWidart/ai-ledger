@@ -7,65 +7,156 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="/theme.css">
 <style>
-:root {
-  color-scheme: light;
-  --bg: #f6f5f2; --surface-1: #fcfcfb; --surface-2: #f0efec; --border: #e2e0da;
-  --text-primary: #0b0b0b; --text-secondary: #52514e; --text-muted: #66655f;
-  --series-1: #2a78d6; --series-1-soft: rgba(42,120,214,.12); --series-2: #eb6834; --series-3: #1baf7a;
-  --series-4: #eda100; --series-5: #e87ba4; --series-6: #008300;
-  --grid: #e8e6e1; --good: #0ca30c; --good-text: #006300; --critical: #d03b3b; --warning-text: #8a5a00;
-  --accent: #2a78d6; --track: #ebe9e4; --link: #1f62b5; --critical-text: #b42318;
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    color-scheme: dark;
-    --bg: #121211; --surface-1: #1a1a19; --surface-2: #242422; --border: #33332f;
-    --text-primary: #f0efec; --text-secondary: #c3c2b7; --text-muted: #9d9c94;
-    --series-1: #3987e5; --series-1-soft: rgba(57,135,229,.18); --series-2: #d95926; --series-3: #199e70;
-    --series-4: #c98500; --series-5: #d55181; --series-6: #008300;
-    --grid: #2b2b28; --good-text: #4cc94c; --critical: #e66767; --warning-text: #e0b04a; --accent: #3987e5; --track: #262624; --link: #6aa6f0; --critical-text: #f08080;
-  }
-}
-:root[data-theme="dark"] {
-  color-scheme: dark;
-  --bg: #121211; --surface-1: #1a1a19; --surface-2: #242422; --border: #33332f;
-  --text-primary: #f0efec; --text-secondary: #c3c2b7; --text-muted: #9d9c94;
-  --series-1: #3987e5; --series-1-soft: rgba(57,135,229,.18); --series-2: #d95926; --series-3: #199e70;
-  --series-4: #c98500; --series-5: #d55181; --series-6: #008300;
-  --grid: #2b2b28; --good-text: #4cc94c; --critical: #e66767; --warning-text: #e0b04a; --accent: #3987e5; --track: #262624; --link: #6aa6f0; --critical-text: #f08080;
-}
-* { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); color: var(--text-primary);
-  font: 14px/1.5 "IBM Plex Sans", ui-sans-serif, -apple-system, system-ui, sans-serif; font-variant-numeric: tabular-nums; }
 .wrap { max-width: 1240px; margin: 0 auto; padding: 20px 16px 72px; }
-:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-/* Header: title left, filters right */
-.top { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: center; justify-content: space-between; margin-bottom: 28px; }
-h1 { font-size: 15px; font-weight: 600; margin: 0; color: var(--text-secondary); }
-.filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-select, button {
-  font: inherit; color: var(--text-primary); background: var(--surface-1);
-  border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; }
-select { max-width: 100%; }
-button { cursor: pointer; }
-button:hover { background: var(--surface-2); }
-.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
-.seg button { border: 0; border-radius: 0; padding: 6px 12px; }
-.seg button[aria-pressed=true] { background: var(--text-primary); color: var(--surface-1); }
+/* Briefing: the period's answer as the page heading, its comparison and trend, then filters */
+.top { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px 32px; align-items: end; margin-bottom: 20px; scroll-margin-top: 80px; }
+.top-side { display: flex; flex-direction: column; align-items: flex-end; gap: 12px; }
+.filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: flex-end; }
 .linkish { border: 0; background: none; padding: 0; color: var(--link); font-size: inherit; }
 .linkish:hover { background: none; text-decoration: underline; }
+.lede { margin: 0; max-width: 24ch; font-size: clamp(26px, 4.2vw, 42px); line-height: 1.12;
+  font-weight: 400; letter-spacing: -.025em; text-wrap: balance; color: var(--text-secondary); }
+/* The figure and the project carry the sentence; the rest recedes. */
+.lede .amt { font-weight: 600; letter-spacing: -.04em; color: var(--text-primary); }
+.lede .proj { color: var(--text-primary); font-weight: 500; white-space: nowrap; }
+.lede .pdot { width: .32em; height: .32em; vertical-align: .2em; margin: 0 .18em 0 .05em; }
+.lede .delta { white-space: nowrap; color: var(--text-primary); font-weight: 500; }
+.lede .dot-sep { display: none; }
+/* The comparison takes its own line, so the amount and the multiple never break mid-phrase. */
+.lede .delta { display: block; }
+.lede .unit { white-space: nowrap; }
+/* The two windows the headline compares, with how many days in each have any recorded usage. */
+.windows { display: flex; flex-wrap: wrap; gap: 4px 18px; margin: 12px 0 0; font-size: 13px; color: var(--text-secondary); }
+.windows b { color: var(--text-primary); font-weight: 600; }
+.windows .chip { margin-left: 4px; }
+.sub { color: var(--text-muted); font-size: 13px; margin: 6px 0 0; }
+/* Sparkline: the previous period (muted) and this one (ink), split by a tick. */
+.spark { margin: 0; width: 240px; }
+.spark svg { display: block; width: 100%; height: 48px; overflow: visible; }
+.spark figcaption { display: flex; justify-content: space-between; gap: 8px; font-size: 11.5px; color: var(--text-muted); margin-top: 4px; }
+.spark figcaption b { color: var(--text-secondary); font-weight: 500; }
+@media (max-width: 720px) {
+  .top { grid-template-columns: minmax(0, 1fr); align-items: start; }
+  .top-side { align-items: stretch; flex-direction: column-reverse; }
+  .filters { justify-content: flex-start; }
+  .spark { width: 100%; }
+}
 
-/* The lede: the period's answer as one sentence */
-.lede { margin: 0 0 28px; max-width: 30ch; font-size: clamp(26px, 4.4vw, 44px); line-height: 1.12;
-  font-weight: 500; letter-spacing: -.022em; text-wrap: balance; }
-.sub { color: var(--text-muted); font-size: 13px; margin: -16px 0 24px; }
+/* Insight cards: the most severe finding leads, wide, with the supporting findings compact in a row beneath it */
+.insights { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; margin: 0 0 20px; }
+.insights .support { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.insight.primary { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: 4px 28px; align-items: start; padding: 18px 22px 18px 24px; }
+.insight.primary .lead, .insight.primary .rest { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.insight.primary .v { font-size: 34px; }
+.insight.primary .t { font-size: 16px; white-space: normal; }
+.insight.primary .b, .insight.primary li { font-size: 14px; }
+.insight.primary .rest { padding-top: 22px; }
+.insight.compact .v { font-size: 20px; }
+.insight.compact .act { margin-top: auto; padding-top: 6px; }
+.insight.compact .b { flex: 0 1 auto; }
+@media (max-width: 760px) { .insight.primary { grid-template-columns: minmax(0, 1fr); } .insight.primary .rest { padding-top: 0; } }
+/* Phones: a metric pair beside the lead finding; the rest of the findings fold into "More insights" under the chart. */
+.mpair { display: none; }
+#moreInsights, #moreInsights[hidden] { display: none; }
+.mpair > div { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; min-width: 0; }
+.mpair .v { font-size: 20px; font-weight: 600; letter-spacing: -.03em; line-height: 1.2; }
+.mpair .l { font-size: 12px; color: var(--text-muted); }
+details.more-ins > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 14px;
+  border: 1px solid var(--border); border-radius: 10px; background: var(--surface-1); font-weight: 500; }
+details.more-ins > summary::-webkit-details-marker { display: none; }
+details.more-ins > summary::after { content: "+"; margin-left: auto; color: var(--text-muted); font-size: 18px; }
+details.more-ins[open] > summary::after { content: "−"; }
+details.more-ins .support { display: grid; gap: 10px; margin-top: 10px; }
+/* Section jump: stands in for the sticky index where that is hidden */
+.jump { display: none; align-items: center; gap: 8px; margin: 0 0 16px; font-size: 13px; color: var(--text-secondary); }
+.jump select { flex: 1; min-height: 40px; }
+@media (max-width: 899px) { .jump { display: flex; } }
+.insight { position: relative; display: flex; flex-direction: column; gap: 4px; padding: 14px 16px 14px 18px; overflow: hidden; }
+.insight::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 4px; background: var(--sev, var(--border)); }
+.insight.good { --sev: var(--good); --sev-text: var(--good-text); }
+.insight.warn { --sev: var(--warning); --sev-text: var(--warning-text); }
+.insight.critical { --sev: var(--critical); --sev-text: var(--critical-text); }
+.insight.info { --sev: var(--border); --sev-text: var(--text-secondary); }
+.insight .k { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; font-weight: 500; color: var(--text-secondary);
+  text-transform: uppercase; letter-spacing: .05em; }
+.insight .sev { font-size: 11px; text-transform: none; letter-spacing: 0; font-weight: 600; color: var(--sev-text); white-space: nowrap; }
+.insight .t { font-weight: 500; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.insight .v { font-size: 24px; font-weight: 600; letter-spacing: -.03em; line-height: 1.15; }
+.insight .b { color: var(--text-secondary); font-size: 13px; flex: 1; overflow-wrap: anywhere; }
+.insight ul { list-style: none; margin: 2px 0 0; padding: 0; display: grid; gap: 6px; flex: 1; }
+.insight li { font-size: 13px; color: var(--text-secondary); padding-left: 12px; position: relative; overflow-wrap: anywhere; }
+.insight li::before { content: ""; position: absolute; left: 0; top: .55em; width: 5px; height: 5px; border-radius: 50%; background: var(--sev); }
+.insight li.crit::before { background: var(--critical); }
+.insight li b { color: var(--text-primary); font-weight: 600; }
+.insight .act { align-self: flex-start; margin-top: 6px; font-size: 13px; font-weight: 500; }
+.insight .act::after { content: " →"; }
+@media (max-width: 520px) {
+  /* What changed sits below the chart here; a script moves its markup there so Tab order follows what is seen. */
+  .wrap { display: flex; flex-direction: column; }
+  .insights .support { display: none; }
+  .mpair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+  #moreInsights:not([hidden]) { display: block; margin: 16px 0 0; }
+  #spend { margin-bottom: 0; }
+  .insight.primary { padding: 14px 16px 14px 18px; }
+  .insight.primary .v { font-size: 28px; }
+}
+
+/* What changed: each project's cost change against the previous period, as bars either side of a zero line */
+.changed { margin: 0 0 20px; }
+.daystrips { display: grid; gap: 4px; font-size: 12px; color: var(--text-secondary); flex: 0 1 420px; min-width: 0; }
+.daystrip { display: grid; grid-template-columns: 5.5rem minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.daystrip .cells { display: flex; gap: 2px; min-width: 0; }
+.daystrip .cells i { flex: 1 1 0; min-width: 2px; max-width: 6px; height: 12px; border-radius: 2px; background: var(--track); }
+.daystrip .cells i.on { background: var(--text-secondary); }
+.daystrip b { color: var(--text-primary); font-weight: 600; }
+.diverge { list-style: none; margin: 12px 0 0; padding: 0; }
+.diverge li > button, .diverge li.rest { display: grid; grid-template-columns: minmax(0, 13rem) minmax(80px, 1fr) 5.5rem minmax(0, 9rem); gap: 12px; align-items: center;
+  width: 100%; min-height: 32px; padding: 4px 8px; margin: 0; border: 0; border-radius: 6px; background: none; color: inherit; font: inherit; text-align: left; }
+.diverge li > button:hover { background: var(--surface-2); }
+.diverge li.rest { color: var(--text-muted); }
+.diverge .n { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.diverge .n > span:first-of-type { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.diverge .dv { display: grid; grid-template-columns: 1fr 1fr; height: 12px; position: relative; }
+.diverge .dv::after { content: ""; position: absolute; left: 50%; top: -4px; bottom: -4px; width: 1px; background: var(--text-muted); }
+.diverge .dv span { display: flex; }
+.diverge .dv .neg { justify-content: flex-end; }
+.diverge .dv i { display: block; height: 100%; border-radius: 3px; min-width: 2px; }
+.diverge .dv .neg i { border-radius: 3px 0 0 3px; } .diverge .dv .pos i { border-radius: 0 3px 3px 0; }
+.diverge .d { text-align: right; font-weight: 600; white-space: nowrap; }
+.diverge .s { color: var(--text-muted); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.diverge .axis { display: grid; grid-template-columns: minmax(0, 13rem) minmax(80px, 1fr) 5.5rem minmax(0, 9rem); gap: 12px; padding: 0 8px 2px;
+  font-size: 11.5px; color: var(--text-muted); }
+.diverge .axis span:nth-child(2) { display: flex; justify-content: space-between; }
+.chip.new { border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.chg-note { margin: 10px 0 0; padding: 8px 12px; border-left: 3px solid var(--warning-text); background: var(--warning-soft); border-radius: 0 6px 6px 0;
+  font-size: 13px; color: var(--text-secondary); }
+@media (max-width: 720px) {
+  .diverge li > button, .diverge li.rest, .diverge .axis { grid-template-columns: minmax(0, 1fr) 5.5rem; row-gap: 4px; }
+  .diverge .dv { grid-column: 1 / -1; grid-row: 2; }
+  .diverge .s { grid-column: 1 / -1; grid-row: 3; }
+  .diverge .axis span:nth-child(2) { grid-column: 1 / -1; }
+  .diverge .axis span:not(:nth-child(2)) { display: none; }
+}
+
+/* Section index: sticky under the top bar on wide screens, marks the section in view */
+.secidx { position: sticky; top: var(--appnav-h, 49px); z-index: 4; display: flex; gap: 2px; align-items: center; margin: 0 -16px 16px;
+  padding: 6px 16px; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(6px);
+  border-bottom: 1px solid transparent; transition: border-color .2s; }
+.secidx.stuck { border-bottom-color: var(--border); }
+.secidx a { font-size: 13px; color: var(--text-secondary); text-decoration: none; padding: 4px 10px; border-radius: 999px; }
+.secidx a:hover { background: var(--surface-2); color: var(--text-primary); }
+.secidx a[aria-current=true] { background: var(--accent-soft); color: var(--accent-ink); font-weight: 600; }
+.secidx .sep { width: 1px; height: 14px; background: var(--border); margin: 0 4px; }
+@media (max-width: 899px) { .secidx { display: none; } }
+.sect { scroll-margin-top: calc(var(--appnav-h, 49px) + var(--secidx-h, 0px) + 12px); }
 .banner { border-left: 3px solid var(--warning-text); background: var(--surface-1);
   padding: 8px 12px; margin-bottom: 20px; font-size: 13px; color: var(--text-secondary); }
 .banner b { color: var(--warning-text); }
 
-.panel { background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; min-width: 0; }
+.panel { padding: 18px 20px; }
 h2 { font-size: 16px; font-weight: 600; margin: 0; letter-spacing: -.005em; }
 .hint { color: var(--text-muted); font-size: 12.5px; margin: 2px 0 10px; }
 
@@ -76,12 +167,16 @@ h2 { font-size: 16px; font-weight: 600; margin: 0; letter-spacing: -.005em; }
 .legend button[aria-pressed=false] { color: var(--text-muted); }
 .legend button[aria-pressed=false] i { opacity: .25; }
 .legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.legend .key { font-size: 12px; padding: 3px 8px; display: inline-flex; gap: 6px; align-items: center; color: var(--text-secondary); }
+.legend button.proj { max-width: 16rem; }
+.legend button.proj span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.legend button.proj[aria-current=true] { border-color: var(--text-secondary); font-weight: 500; }
+.legend i.line { width: 14px; height: 0; border-radius: 0; border-top: 2px solid var(--text-primary); }
 #chart { position: relative; }
 #chart svg { display: block; width: 100%; height: 240px; overflow: visible; }
-.tip { position: absolute; pointer-events: none; background: var(--surface-1); border: 1px solid var(--border);
-  border-radius: 8px; padding: 8px 10px; font-size: 12px; box-shadow: 0 4px 16px rgba(0,0,0,.12);
-  white-space: nowrap; display: none; z-index: 2; }
 .tip i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; margin-right: 6px; }
+.tip .row { display: flex; gap: 16px; justify-content: space-between; }
+.tip .tot { border-top: 1px solid var(--border); margin-top: 4px; padding-top: 4px; }
 
 /* Ledgers: one row per project or model, bar = share */
 .split { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 16px; margin-top: 16px; }
@@ -99,37 +194,30 @@ h2 { font-size: 16px; font-weight: 600; margin: 0; letter-spacing: -.005em; }
 .tools-row { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin-bottom: 6px; }
 .tools-row input[type=search] { font: inherit; color: var(--text-primary); background: var(--surface-1); border: 1px solid var(--border);
   border-radius: 8px; padding: 6px 10px; flex: 1 1 260px; min-width: 0; }
-label.chk { display: inline-flex; gap: 6px; align-items: center; color: var(--text-secondary); font-size: 13px; }
 #chart:focus-visible { outline-offset: 4px; border-radius: 4px; }
-.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 #sheetTitle:focus { outline: none; }
 #lede:focus { outline: none; }
 .ledger .n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ledger .bar { height: 8px; background: var(--track); border-radius: 4px; overflow: hidden; }
-.ledger .bar span { display: block; height: 100%; background: var(--series-1); border-radius: 4px; }
+.ledger .bar span { display: block; height: 100%; background: var(--text-muted); border-radius: 4px; }
+.ledger .n .pdot { margin-right: 8px; }
 .ledger .v { text-align: right; font-weight: 500; }
 .ledger .s { text-align: right; color: var(--text-muted); font-size: 12.5px; }
 .more { margin-top: 10px; font-size: 13px; }
 
 /* Vitals: four ratios in one ruled strip */
-.vitals { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 16px;
+.vitals { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0 0 16px;
   border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
 .vital { padding: 18px 20px 18px 0; }
 .vital + .vital { padding-left: 20px; border-left: 1px solid var(--border); }
-.vital .v { font-size: 28px; font-weight: 500; letter-spacing: -.02em; line-height: 1.1; }
+.vital .v { font-size: 30px; font-weight: 600; letter-spacing: -.035em; line-height: 1.1; }
 .vital .l { font-weight: 500; margin-top: 4px; }
 .vital .d { color: var(--text-muted); font-size: 12.5px; margin-top: 2px; }
 
-/* Needs attention */
-.attention { margin-top: 28px; }
-.attention ul { list-style: none; margin: 8px 0 0; padding: 0; }
-.attention li { overflow-wrap: anywhere; padding: 8px 0 8px 14px; border-left: 3px solid var(--warning-text); margin-bottom: 6px; color: var(--text-secondary); }
-.attention li b { color: var(--text-primary); font-weight: 600; }
-.attention .ok { border-left-color: var(--good); }
 
 /* Drawers: the full tables, closed by default */
 .drawers { margin-top: 32px; border-top: 1px solid var(--border); }
-details.drawer { border-bottom: 1px solid var(--border); scroll-margin-top: calc(var(--appnav-h, 56px) + 12px); }
+details.drawer { border-bottom: 1px solid var(--border); scroll-margin-top: calc(var(--appnav-h, 56px) + var(--secidx-h, 0px) + 12px); }
 details.drawer > summary { list-style: none; cursor: pointer; display: flex; gap: 12px; align-items: baseline; padding: 14px 4px; }
 details.drawer > summary::-webkit-details-marker { display: none; }
 details.drawer > summary::before { content: ""; width: 7px; height: 7px; flex: none; align-self: center;
@@ -143,14 +231,28 @@ details.drawer > summary .w { color: var(--text-muted); font-size: 12.5px; margi
 .grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; }
 .grid3 h3 { font-size: 14px; margin: 0 0 6px; }
 @media (max-width: 900px) {
-  .split, .grid2, .grid3 { grid-template-columns: 1fr; }
-  .vitals { grid-template-columns: 1fr 1fr; }
+  .split, .grid2, .grid3 { grid-template-columns: minmax(0, 1fr); }
+  .vitals { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .vital:nth-child(3) { padding-left: 0; border-left: 0; }
   .vital:nth-child(n+3) { border-top: 1px solid var(--border); }
   details.drawer > summary .w { display: none; }
 }
-@media (max-width: 520px) { .ledger li, .ledger li.pick .rowbtn { grid-template-columns: minmax(0, 1fr) 4.5rem 3rem; } .ledger .bar { display: none; } }
-@media (prefers-reduced-motion: reduce) { details.drawer > summary::before { transition: none; } }
+/* Phones: the share bar moves under the name instead of squeezing between name and value. */
+@media (max-width: 520px) {
+  .ledger li, .ledger li.pick .rowbtn { grid-template-columns: minmax(0, 1fr) 4.5rem 3rem; row-gap: 5px; }
+  .ledger .bar { grid-column: 1 / -1; grid-row: 2; height: 6px; }
+  .vital { padding-right: 12px; }
+  .vital + .vital { padding-left: 12px; }
+  .vital:nth-child(3) { padding-left: 0; }
+  .vital .v { font-size: 26px; }
+}
+@media (prefers-reduced-motion: reduce) { details.drawer > summary::before, .secidx { transition: none; } }
+/* Bars grow in when new data lands (the page sets .grow for one render). */
+@media (prefers-reduced-motion: no-preference) {
+  .grow .ledger .bar span, .grow .ibar i { transform-origin: left; animation: grow-x .6s cubic-bezier(.2,.7,.2,1) both; }
+  .grow #chart .bar-seg { transform-box: fill-box; transform-origin: 50% 100%; animation: grow-y .5s cubic-bezier(.2,.7,.2,1) both;
+    animation-delay: calc(var(--i, 0) * 6ms); }
+}
 
 .scroll { overflow-x: auto; }
 .tall { max-height: 520px; overflow: auto; }
@@ -164,36 +266,95 @@ td.when { white-space: nowrap; }
 td.name { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 tbody tr.pick { cursor: pointer; }
 tbody tr.pick:hover { background: var(--surface-2); }
-tbody tr.sel { background: var(--series-1-soft); }
+tbody tr.sel { background: var(--accent-soft); }
 tbody tr:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-.chip { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-secondary); white-space: nowrap; }
-.chip.warn { border-color: var(--warning-text); color: var(--warning-text); }
 .bad { color: var(--critical-text); }
 .small { font-size: 12px; }
-body.loading .wrap > :not(.top) { opacity: .55; transition: opacity .2s; }
+body.loading .wrap > :not(.top):not(.secidx) { opacity: .55; }
+@media (prefers-reduced-motion: no-preference) { .wrap > :not(.top):not(.secidx) { transition: opacity .2s; } }
 tbody.stale { opacity: .45; pointer-events: none; }
 #d-projects th:first-child, #d-projects td:first-child { position: sticky; left: 0; background: var(--bg); z-index: 1; box-shadow: 1px 0 0 var(--border); }
 #d-projects th:first-child { z-index: 2; }
+/* From "Compare projects": the outlier row, ringed and tinted, with a note above the table saying why. */
+#projBody tr.spot td { background: var(--accent-soft); }
+#projBody tr.spot td:first-child { background: color-mix(in srgb, var(--accent) 12%, var(--bg)); box-shadow: inset 3px 0 0 var(--accent), 1px 0 0 var(--border); }
+#projBody tr.sel td:first-child { background: color-mix(in srgb, var(--accent) 11%, var(--bg)); }
+.proj-note { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; margin: 0 0 10px; padding: 8px 12px; border-radius: 8px;
+  background: var(--surface-1); border: 1px solid var(--border); font-size: 13px; color: var(--text-secondary); }
+.proj-note b { color: var(--text-primary); }
+.proj-note[hidden] { display: none; }
+td.sess { max-width: 340px; }
+td.sess .cellbtn { display: block; width: 100%; font-weight: 500; }
 .pending { margin: -16px 0 12px; min-height: 1.5em; color: var(--text-secondary); font-size: 13px; }
 .pending:empty { visibility: hidden; }
 .sheet td.name { white-space: normal; overflow-wrap: anywhere; max-width: none; }
 @media (max-width: 520px) { #d-sessions .opt { display: none; } #d-sessions td.name { max-width: 90px; } #d-sessions td.when { white-space: normal; } #d-sessions td.when .small { overflow-wrap: anywhere; } }
-.muted { color: var(--text-muted); }
-.empty { color: var(--text-muted); padding: 24px 0; text-align: center; }
-a { color: var(--link); }
+
+/* Project metrics: cells far from the median project are tinted, weighted and marked, so color is never the only cue. */
+td.tone { position: relative; }
+td.tone.worse { background: var(--critical-soft); color: var(--critical-text); font-weight: 600; }
+td.tone.better { background: var(--good-soft); color: var(--good-text); }
+td.tone .mk { font-size: 9px; margin-left: 4px; vertical-align: 1px; }
+.ibar { display: inline-block; width: 44px; height: 6px; border-radius: 3px; background: var(--track); margin-right: 8px; vertical-align: 1px; overflow: hidden; }
+.ibar i { display: block; height: 100%; border-radius: 3px; background: var(--proj-other); }
+.tone-key { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--text-muted); margin: 0 0 8px; }
+.tone-key span { padding: 0 6px; border-radius: 4px; }
+.tone-key .worse { background: var(--critical-soft); color: var(--critical-text); font-weight: 600; }
+.tone-key .better { background: var(--good-soft); color: var(--good-text); }
+.daychip { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; padding: 2px 4px 2px 10px; border-radius: 999px;
+  background: var(--accent-soft); color: var(--accent-ink); font-weight: 500; }
+.daychip[hidden] { display: none; }
+.daychip button { border: 0; background: none; padding: 1px 6px; border-radius: 999px; font-size: 12px; color: inherit; }
+
+/* Session timeline: context per request over time, with tool calls, compactions and commits on the same axis */
+.statline { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 10px 0 12px; font-size: 13px; color: var(--text-secondary); }
+.statline b { color: var(--text-primary); font-weight: 600; font-size: 14px; }
+.tl { margin: 4px 0 6px; }
+.tl svg { display: block; width: 100%; overflow: visible; }
+.tl svg:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+.tl a:focus-visible rect { stroke: var(--text-primary); stroke-width: 2; }
+.tl-read { min-height: 1.5em; font-size: 12.5px; color: var(--text-secondary); }
+.tl-key { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 11.5px; color: var(--text-muted); margin: 4px 0 10px; }
+.tl-key i { display: inline-block; vertical-align: middle; margin-right: 5px; }
+/* Timeline events: the failures (adjacent ones grouped), compactions and commits as a list of real targets */
+.tl-sel { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; min-height: 2.6em; margin: 4px 0 8px; padding: 8px 10px;
+  border-radius: 8px; background: var(--surface-2); font-size: 13px; color: var(--text-secondary); }
+.tl-sel b { color: var(--text-primary); font-weight: 600; }
+.evlist { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 2px; }
+.evlist li { display: flex; align-items: stretch; gap: 4px; }
+.evlist li[hidden] { display: none; }
+.evbtn { flex: 1; min-width: 0; display: grid; grid-template-columns: 12px 4.2rem minmax(0, 1fr); gap: 8px; align-items: center; min-height: 32px;
+  padding: 4px 8px; border: 1px solid transparent; border-radius: 6px; background: none; text-align: left; font-size: 13px; }
+.evbtn:hover { background: var(--surface-2); }
+.evbtn[aria-pressed=true] { background: var(--accent-soft); border-color: var(--accent); }
+.evbtn .mk { width: 10px; height: 10px; border-radius: 2px; background: var(--critical); }
+.ev.compact .mk { background: none; border-left: 2px dashed var(--warning); width: 0; height: 12px; margin-left: 4px; border-radius: 0; }
+.ev.commit .mk { background: var(--good); transform: rotate(45deg) scale(.8); }
+.evbtn .tm { color: var(--text-muted); font-size: 12px; white-space: nowrap; }
+.evbtn .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.evbtn .nm small { color: var(--text-muted); font-size: 12px; margin-left: 6px; }
+.evlink { display: inline-flex; align-items: center; min-height: 32px; padding: 0 8px; border-radius: 6px; font-size: 12.5px; white-space: nowrap; }
+.evlink:hover { background: var(--surface-2); }
+.evhead { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; margin: 10px 0 4px; }
+.evhead h4 { flex: none; margin: 0; font-size: 13px; color: var(--text-secondary); }
+.evhead .c { min-width: 0; color: var(--text-muted); font-size: 12.5px; }
+/* Source: the first prompt exactly as recorded */
+pre.fp-raw { margin: 0 0 8px; padding: 10px 12px; max-height: 320px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere;
+  border-left: 3px solid var(--accent); background: var(--surface-1); border-radius: 0 8px 8px 0; font: 12px/1.5 ui-monospace, "SF Mono", Menlo, monospace; }
+.sheet-sub { color: var(--text-muted); font-size: 12px; font-weight: 400; }
+details.sd { border-top: 1px solid var(--border); }
+details.sd > summary { cursor: pointer; padding: 10px 0; font-size: 13px; font-weight: 600; color: var(--text-secondary); }
+details.sd > summary .c { font-weight: 400; color: var(--text-muted); margin-left: 6px; }
 
 /* Totals drawer */
 .totals { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0 24px; margin: 0; }
 .totals div { padding: 10px 0; border-bottom: 1px solid var(--border); }
 .totals dt { color: var(--text-muted); font-size: 12.5px; }
-.totals dd { margin: 2px 0 0; font-size: 17px; font-weight: 500; }
+.totals dd { margin: 2px 0 0; font-size: 17px; font-weight: 600; letter-spacing: -.02em; }
 .totals dd small { display: block; font-size: 12.5px; font-weight: 400; color: var(--text-secondary); }
 
 /* Sheet: project and session details over the page, without changing the page's filters */
-dialog.sheet { inset: 0 0 0 auto; margin: 0; width: min(640px, 100%); max-width: 100%; height: 100dvh; max-height: 100dvh;
-  padding: 0; border: 0; border-left: 1px solid var(--border); background: var(--bg); color: var(--text-primary);
-  overflow: auto; overscroll-behavior: contain; box-shadow: -8px 0 32px rgba(0,0,0,.16); }
-dialog.sheet::backdrop { background: rgba(0,0,0,.3); }
+dialog.sheet { background: var(--bg); }
 .sheet-in { min-height: 100%; }
 .sheet-head { position: sticky; top: 0; z-index: 1; display: flex; gap: 8px; align-items: center; padding: 12px 20px;
   background: var(--surface-1); border-bottom: 1px solid var(--border); }
@@ -201,14 +362,9 @@ dialog.sheet::backdrop { background: rgba(0,0,0,.3); }
 .sheet-body { padding: 16px 20px 40px; }
 .sheet-kind { color: var(--text-muted); font-size: 12px; font-weight: 500; }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 4px; }
-.btn { font: inherit; font-size: 13px; text-decoration: none; color: var(--text-primary); background: var(--surface-1);
-  border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; }
-.btn:hover { background: var(--surface-2); }
-.btn.primary { background: var(--text-primary); color: var(--surface-1); border-color: var(--text-primary); }
-.btn.primary:hover { opacity: .88; }
 .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; margin: 10px 0 14px; }
 .facts > div { background: var(--surface-2); border-radius: 8px; padding: 8px 10px; min-width: 0; }
-.facts .v { font-size: 17px; font-weight: 600; }
+.facts .v { font-size: 18px; font-weight: 600; letter-spacing: -.025em; }
 .facts .l { font-size: 12px; color: var(--text-muted); }
 .sheet h3 { font-size: 13px; margin: 14px 0 4px; color: var(--text-secondary); }
 .sid { word-break: break-all; }
@@ -216,29 +372,58 @@ dialog.sheet::backdrop { background: rgba(0,0,0,.3); }
 .commit code { white-space: pre-wrap; overflow-wrap: anywhere; }
 .sheet-body { overflow-wrap: anywhere; }
 .sheet-body .hint .chip { margin-bottom: 4px; }
-code { font: 12px/1.4 ui-monospace, "SF Mono", Menlo, monospace; }
 </style>
 </head>
 <body>
 <!--NAV-->
 <div class="wrap">
-  <header class="top">
-    <h1>Claude usage</h1>
-    <div class="filters" role="group" aria-label="Filters">
-      <select id="fProject" aria-label="Project"></select>
-      <div class="seg" id="fRange" role="group" aria-label="Time range">
-        <button data-v="7">7d</button><button data-v="14">14d</button><button data-v="30">30d</button><button data-v="90">90d</button><button data-v="0">All</button>
+  <header class="top sect" id="overview">
+    <div>
+      <h1 class="lede" id="lede" aria-live="polite" tabindex="-1">Loading usage…</h1>
+      <p class="windows" id="windows"></p>
+      <p class="sub" id="sub"></p>
+    </div>
+    <div class="top-side">
+      <div class="filters" role="group" aria-label="Filters">
+        <span class="pick-project" id="fProjectWrap"><i class="pdot" aria-hidden="true"></i><select id="fProject" aria-label="Project"></select></span>
+        <div class="seg" id="fRange" role="group" aria-label="Time range">
+          <button data-v="7">7d</button><button data-v="14">14d</button><button data-v="30">30d</button><button data-v="90">90d</button><button data-v="0">All</button>
+        </div>
       </div>
+      <figure class="spark" id="spark" hidden></figure>
     </div>
   </header>
 
   <div class="banner" id="loadError" role="alert" hidden><b id="loadErrorMsg"></b> <button type="button" class="linkish" id="retry">Retry</button></div>
   <div id="banner"></div>
   <p class="pending" id="pending" role="status"></p>
-  <p class="lede" id="lede" aria-live="polite" tabindex="-1">Loading usage…</p>
-  <p class="sub" id="sub"></p>
 
-  <section class="panel" aria-labelledby="chartTitle">
+  <label class="jump"><span>Jump to</span><select id="jump" aria-label="Jump to a section">
+    <option value="">Choose a section…</option><option value="overview">Overview</option><option value="insights">Attention</option>
+    <option value="spend">Spend</option><option value="changed">What changed</option><option value="d-sessions">Sessions</option>
+    <option value="d-totals">All totals</option><option value="d-projects">Project metrics</option><option value="d-tools">Tools</option>
+    <option value="d-ext">MCP &amp; hooks</option><option value="d-loops">Error loops</option></select></label>
+
+  <section class="panel sect changed" id="changed" aria-labelledby="chgTitle" hidden>
+    <div class="chart-head">
+      <div><h2 id="chgTitle">What changed</h2><div class="hint" id="chgHint"></div></div>
+      <div class="daystrips" id="chgDays"></div>
+    </div>
+    <div class="chg-note" id="chgNote" hidden></div>
+    <ol class="diverge" id="chgList"></ol>
+    <button type="button" class="linkish more" id="chgMore" hidden></button>
+  </section>
+
+  <section class="insights sect" id="insights" aria-label="What stands out"></section>
+
+  <nav class="secidx" id="secidx" aria-label="Page sections">
+    <a href="#overview" data-t="overview">Overview</a><a href="#changed" data-t="changed">Changes</a><a href="#insights" data-t="insights">Attention</a><a href="#spend" data-t="spend">Spend</a>
+    <span class="sep" aria-hidden="true"></span>
+    <a href="#d-sessions" data-t="d-sessions">Sessions</a><a href="#d-totals" data-t="d-totals">Totals</a><a href="#d-projects" data-t="d-projects">Projects</a>
+    <a href="#d-tools" data-t="d-tools">Tools</a><a href="#d-ext" data-t="d-ext">MCP &amp; hooks</a><a href="#d-loops" data-t="d-loops">Loops</a>
+  </nav>
+
+  <section class="panel sect" id="spend" aria-labelledby="chartTitle">
     <div class="chart-head">
       <div><h2 id="chartTitle">Estimated cost per day</h2><div class="hint" id="chartHint"></div></div>
       <div class="seg" id="fMetric" role="group" aria-label="Chart metric"><button data-v="cost">Cost</button><button data-v="tokens">Tokens</button></div>
@@ -247,6 +432,7 @@ code { font: 12px/1.4 ui-monospace, "SF Mono", Menlo, monospace; }
     <div id="chart" tabindex="0" role="img"></div>
     <div class="sr" id="chartLive" aria-live="polite"></div>
   </section>
+  <details class="more-ins" id="moreInsights"><summary>More insights <span class="muted" id="moreInsCount"></span></summary><div class="support" id="moreInsBody"></div></details>
 
   <div class="split">
     <section class="panel">
@@ -262,12 +448,6 @@ code { font: 12px/1.4 ui-monospace, "SF Mono", Menlo, monospace; }
     </section>
   </div>
 
-  <section class="vitals" id="vitals" aria-label="Efficiency"></section>
-
-  <section class="attention" aria-labelledby="attTitle">
-    <h2 id="attTitle">Needs attention</h2>
-    <ul id="attention"></ul>
-  </section>
 
   <div class="drawers">
     <details class="drawer" id="d-sessions">
@@ -277,10 +457,11 @@ code { font: 12px/1.4 ui-monospace, "SF Mono", Menlo, monospace; }
           <div class="tools-row">
             <input type="search" id="sessQ" placeholder="Search by session id, project or branch" aria-label="Search sessions">
             <label class="chk"><input type="checkbox" id="sessNear"> Near context limit only</label>
+            <span class="daychip" id="sessDay" hidden><span></span><button type="button" aria-label="Show sessions on every day" title="Every day">✕</button></span>
           </div>
           <div class="hint" id="sessHint" aria-live="polite"></div>
           <div class="scroll tall"><table>
-            <thead><tr><th>Started</th><th>Project</th><th class="num opt">Duration</th><th class="num opt">Prompts</th><th class="num opt">Tokens</th><th class="num">Est. cost</th>
+            <thead><tr><th>Session</th><th>Project</th><th class="num opt">Duration</th><th class="num opt">Prompts</th><th class="num opt">Tokens</th><th class="num">Est. cost</th>
               <th class="num">Peak context</th><th class="num opt">Compactions</th><th class="num opt">Commits</th></tr></thead>
             <tbody id="sessBody"></tbody>
           </table></div>
@@ -290,18 +471,18 @@ code { font: 12px/1.4 ui-monospace, "SF Mono", Menlo, monospace; }
     </details>
 
     <details class="drawer" id="d-totals">
-      <summary><h2>All totals</h2><span class="w">Tokens by kind, per-prompt ratios, tests and time</span></summary>
-      <div class="drawer-body"><dl class="totals" id="totals"></dl></div>
+      <summary><h2>All totals</h2><span class="w">Efficiency, tokens by kind, per-prompt ratios, tests and time</span></summary>
+      <div class="drawer-body"><section class="vitals" id="vitals" aria-label="Efficiency"></section><dl class="totals" id="totals"></dl></div>
     </details>
 
     <details class="drawer" id="d-projects">
       <summary><h2>Project metrics</h2><span class="c" id="projCount"></span><span class="w">Cache, subagents, commits and errors per project</span></summary>
-      <div class="drawer-body scroll"><table>
+      <div class="drawer-body"><div class="proj-note" id="projNote" role="status" hidden></div><div class="tone-key" id="toneKey"></div><div class="scroll"><table>
         <thead><tr><th>Project</th><th class="num">Sessions</th><th class="num">Tokens</th><th class="num">Est. cost</th><th class="num">Cache hit</th>
-          <th class="num">1h writes</th><th class="num">Subagents</th><th class="num">Tokens / prompt</th><th class="num">Commits</th><th class="num">Cost / commit</th>
+          <th class="num">1h writes</th><th class="num">Subagents</th><th class="num">Tokens / prompt</th><th class="num">Commits</th><th class="num" id="thCpc">Cost / commit</th>
           <th class="num">Errors / 100</th><th class="num">Error loops</th></tr></thead>
         <tbody id="projBody"></tbody>
-      </table></div>
+      </table></div></div>
     </details>
 
     <details class="drawer" id="d-tools">
@@ -351,9 +532,14 @@ code { font: 12px/1.4 ui-monospace, "SF Mono", Menlo, monospace; }
 <script type="module">
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+// Project colors come from the shared nav (the same hue on both pages); "" or null is "Other".
+const color = p => window.appnav?.color(p) ?? "var(--proj-other)";
+const dot = p => window.appnav?.dot(p) ?? "";
+const pname = (p, inner = `<span>${esc(p)}</span>`) => `<span class="pname">${dot(p)}${inner}</span>`;
 const num = (n, d = 0) => n == null ? "–" : n.toLocaleString(undefined, { maximumFractionDigits: d, minimumFractionDigits: d });
 const big = n => n == null ? "–" : n >= 1e9 ? num(n / 1e9, 2) + "B" : n >= 1e6 ? num(n / 1e6, 1) + "M" : n >= 1e3 ? num(n / 1e3, 1) + "k" : num(n);
 const usd = n => n == null ? "–" : "$" + num(n, n < 10 ? 2 : 0);
+const usd0 = n => n ? usd(n) : "$0"; // a cost that is really nothing, not $0.00
 const pct = (n, d = 0) => n == null ? "–" : num(n * 100, d) + "%";
 const dur = s => s == null ? "–" : s < 60 ? `${Math.round(s)}s` : s < 3600 ? `${Math.round(s / 60)}m` : `${num(s / 3600, 1)}h`;
 const ms = v => v == null ? "–" : v < 1000 ? `${Math.round(v)}ms` : `${num(v / 1000, 1)}s`;
@@ -361,6 +547,8 @@ const when = ts => ts ? new Date(ts).toLocaleString(undefined, { month: "short",
 const plural = (n, one, many = one + "s") => `${num(n)} ${n === 1 ? one : many}`;
 const RANGES = [7, 14, 30, 90, 0];
 const LEDGER_TOP = 8;
+// Motion is opt-out: every animation checks this (and the CSS sits behind the same media query).
+const motion = () => !matchMedia("(prefers-reduced-motion: reduce)").matches;
 const KINDS = [
   { k: "input", label: "Input", c: "var(--series-1)" },
   { k: "text_out", label: "Output", c: "var(--series-2)" },
@@ -373,7 +561,7 @@ const store = {
   get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
 };
-const state = { project: "", range: 30, session: "", inspect: "", nearOnly: false, sessQ: "", metric: store.get("claude-usage-metric", "cost"),
+const state = { project: "", range: 30, session: "", inspect: "", nearOnly: false, sessQ: "", sessDay: "", metric: store.get("claude-usage-metric", "cost"),
   hidden: store.get("claude-usage-hidden", []), ledgerAll: false };
 let DATA = null;
 
@@ -402,7 +590,7 @@ function writeHash(push) {
 function go(changes) {
   const refetch = DATA == null || ["project", "range"].some(k => k in changes && changes[k] !== state[k]);
   Object.assign(state, changes);
-  if ("project" in changes || "range" in changes) state.ledgerAll = false;
+  if (refetch) Object.assign(state, { ledgerAll: false, chgAll: false, sessDay: "", projSort: "", projSpot: "", projMed: null });
   writeHash(true);
   pushedFor = refetch ? seq + 1 : 0; // the load about to start owns this history entry
   // The sheets fetch their own data, so opening or closing one leaves the page as it is.
@@ -425,9 +613,10 @@ async function load() {
     const d = await res.json();
     if (my !== seq) return; // a newer view was asked for meanwhile
     if (failed) pendingFocus = "#lede"; // recovered from a failure: land on the new answer
+    const before = DATA;
     DATA = d; failed = null;
     $("#loadError").hidden = true;
-    render();
+    render(before);
   } catch (e) {
     if (my !== seq) return;
     // Keep the page honest: go back to the view the shown data belongs to, and offer the asked-for one again.
@@ -465,39 +654,161 @@ document.querySelectorAll("details.drawer").forEach(d => {
   });
 });
 
-function render() {
+// before: the data on screen until now, so numbers can count from it and the page can crossfade to the new view.
+function render(before) {
   const d = DATA, t = d.totals;
+  const landed = before !== undefined; // a load just finished (not a re-render for a metric or resize)
+  window.appnav?.setOrder(d.project_order);
   document.querySelectorAll("#fRange button").forEach(b => b.setAttribute("aria-pressed", +b.dataset.v === state.range));
   document.querySelectorAll("#fMetric button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === state.metric));
   const projects = d.projects.includes(state.project) || !state.project ? d.projects : [state.project, ...d.projects];
   $("#fProject").innerHTML = `<option value="">All projects</option>` + projects.map(p => `<option value="${esc(p)}">${esc(p)}</option>`).join("");
   $("#fProject").value = state.project;
+  $("#fProjectWrap").classList.toggle("all", !state.project);
+  $("#fProjectWrap .pdot").style.background = color(state.project);
   $("#banner").innerHTML = d.unpriced.length ? `<div class="banner"><b>Unpriced models:</b> ${d.unpriced.map(u => `<code>${esc(u.model)}</code> (${big(u.tokens)} tokens)`).join(", ")}.
     Their tokens are counted; their cost is unknown and left out of totals. Add them to <code>prices.json</code>.</div>` : "";
-  renderLede(); renderChart(); renderLedgers(); renderVitals(); renderAttention(); renderTotals();
+  const wrap = $(".wrap");
+  if (landed && motion()) {
+    wrap.classList.add("grow");
+    if (before) wrap.querySelectorAll(":scope > :is(.insights, .panel, .split, .drawers, .more-ins)").forEach(el => {
+      el.classList.remove("fade-in"); void el.offsetWidth; el.classList.add("fade-in");
+    });
+  }
+  renderLede(before); renderSpark(); renderChanges(); renderChart(); renderLedgers(); renderVitals(); renderInsights(); renderTotals();
   renderProjects(); renderSessions(); renderTables(); renderSheet();
+  if (landed) setTimeout(() => wrap.classList.remove("grow"), 1100);
+  updateIndex();
   if (pendingFocus) { $(pendingFocus)?.focus({ preventScroll: pendingFocus !== "#lede" }); pendingFocus = null; }
   else if (restoreKey && !sheet.open && (document.activeElement === document.body || !document.activeElement)) focusTwin(restoreKey);
   restoreKey = null;
 }
 let pendingFocus = null;
 
-function renderLede() {
-  const d = DATA, t = d.totals;
-  const span = d.start ? `over the last ${d.range} days` : `since ${dayLabel(d.daily[0]?.day || d.end, true)}`;
-  const where = d.project ? `on ${d.project}` : "";
+// The heading answers "what did this period cost, and how does that compare?" in one line:
+// "$3,429 estimated cost · 17.8× the previous 30 days" (a multiple from 2× up, a percentage below), with the exact windows under it.
+function compareText(d) {
+  const t = d.totals, prev = d.previous;
+  if (!prev || !t.requests) return null;
+  const was = `the previous ${d.range} days`;
+  if (!(prev.cost > 0)) return { html: `nothing in ${was}`, sr: `nothing in ${was}` };
+  const r = (t.cost || 0) / prev.cost;
+  if (Math.abs(r - 1) < .005) return { html: `flat vs ${was}`, sr: `flat versus ${was}` };
+  if (r >= 2) return { html: `${mult(r)} ${was}`, sr: `${num(r, 1)} times ${was}` };
+  const up = r > 1;
+  return { html: `${up ? "+" : "−"}${pct(Math.abs(r - 1))} vs ${was}`, sr: `${up ? "up" : "down"} ${pct(Math.abs(r - 1))} versus ${was}` };
+}
+function renderLede(before) {
+  const d = DATA, t = d.totals, prev = d.previous;
+  const where = d.project ? ` <span class="unit">on <span class="proj">${dot(d.project)}${esc(d.project)}</span></span>` : "";
+  const since = d.range ? "" : ` since ${dayLabel(d.daily[0]?.day || d.end, true)}`;
+  const cmp = compareText(d);
+  $("#lede").innerHTML = t.requests
+    ? `<span class="amt">${usd(t.cost)}</span> <span class="unit">estimated cost</span>${where}${since}`
+      + (cmp ? `<span class="dot-sep" aria-hidden="true"> · </span><span class="sr">, </span><span class="delta"><span aria-hidden="true">${cmp.html}</span><span class="sr">${esc(cmp.sr)}</span></span>` : "")
+    : `No Claude usage${where} ${d.range ? `in the last ${d.range} days` : "yet"}.`;
+  // Count the figure up from the one shown before, so a range change reads as a change.
+  const amt = $("#lede .amt"), from = before?.totals?.cost, to = t.cost;
+  if (amt && motion() && from != null && to != null && Math.abs(from - to) > .01) {
+    const t0 = performance.now(), D = 600;
+    const tick = now => {
+      if (!amt.isConnected) return;
+      const k = Math.min(1, (now - t0) / D), e = 1 - (1 - k) ** 3;
+      amt.textContent = usd(from + (to - from) * e);
+      if (k < 1) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }
+  // The exact windows, each with its count of days that have any recorded usage: a thin previous window explains a big multiple.
+  const span = (a, b) => `${dayLabel(a)} – ${dayLabel(b, true)}`;
+  const thin = prev && prev.active_days < Math.min(t.active_days, d.range) / 2;
+  $("#windows").innerHTML = !t.requests ? "" : d.start
+    ? `<span>This period <b>${span(d.start, d.end)}</b> · ${plural(t.active_days, "active day")} of ${d.range}</span>`
+      + (prev ? `<span>Previous <b>${span(prev.start, prev.end)}</b> · ${usd(prev.cost || 0)} · ${plural(prev.active_days, "active day")} of ${d.range}${thin ? ` <span class="chip warn">thin history</span>` : ""}</span>` : "")
+    : `<span>All time <b>${span(d.daily[0]?.day || d.end, d.end)}</b> · ${plural(t.active_days, "active day")}</span>`;
   const reach = d.project ? plural(t.sessions, "session") : `${plural(t.sessions, "session")} in ${plural(d.by_project.length, "project")}`;
-  $("#lede").textContent = t.requests
-    ? `${usd(t.cost)} ${where ? where + " " : ""}${span}, across ${reach}.`
-    : `No Claude usage ${where ? where + " " : ""}${span}.`;
-  const dates = d.start ? `${dayLabel(d.start, true)} to ${dayLabel(d.end, true)}` : `All time to ${dayLabel(d.end, true)}`;
-  $("#sub").textContent = `${dates}. ${big(t.tokens)} tokens in ${num(t.requests)} requests. Cost is estimated at API list prices${d.unpriced.length ? " and leaves out unpriced models" : ""}.`;
+  $("#sub").textContent = t.requests ? `${reach}, ${big(t.tokens)} tokens in ${num(t.requests)} requests. Cost is estimated at API list prices${d.unpriced.length ? " and leaves out unpriced models" : ""}.` : "";
+}
+
+// What changed: each project's cost change against the previous period, biggest move first, as bars either side of zero.
+// The two day strips show which days of each window have any recorded usage, so a thin previous window is visible.
+const CHG_TOP = 8;
+function dayStrip(label, start, n, active) {
+  const on = new Set(active), cells = [];
+  for (let k = 0, x = new Date(start + "T00:00:00Z"); k < n; k++, x = new Date(+x + 864e5)) cells.push(on.has(x.toISOString().slice(0, 10)));
+  const count = cells.filter(Boolean).length;
+  return `<div class="daystrip" role="img" aria-label="${esc(`${label}: ${count} of ${n} days with recorded usage`)}"><span>${label}</span>
+    <span class="cells" aria-hidden="true">${cells.map(c => `<i${c ? ' class="on"' : ""}></i>`).join("")}</span><span><b>${num(count)}</b>/${num(n)} days</span></div>`;
+}
+function renderChanges() {
+  const d = DATA, prev = d.previous, sec = $("#changed"), link = $('#secidx a[data-t="changed"]'), opt = $('#jump option[value="changed"]');
+  const cs = (d.changes || []).filter(c => c.cost || c.prev_cost);
+  const show = !!prev && cs.length > 0;
+  sec.hidden = !show; link.hidden = !show; opt.hidden = !show; opt.disabled = !show;
+  if (!show) return;
+  const t = d.totals, delta = (t.cost || 0) - (prev.cost || 0), sgn = v => (v > 0 ? "+" : v < 0 ? "−" : "") + usd0(Math.abs(v));
+  const fresh = cs.filter(c => c.new && c.cost > 0);
+  $("#chgTitle").textContent = d.project ? `What changed in ${d.project}` : `What changed vs the previous ${d.range} days`;
+  $("#chgHint").textContent = `${usd0(prev.cost || 0)} → ${usd0(t.cost || 0)} (${sgn(delta)}). Each bar is one project's change in estimated cost`
+    + `${fresh.length ? `; ${plural(fresh.length, "project")} marked new had no usage at all before, worth ${usd0(fresh.reduce((a, c) => a + c.cost, 0))}` : ""}. Select a project for details.`;
+  const thin = prev.active_days < Math.min(t.active_days, d.range) / 2;
+  $("#chgDays").innerHTML = dayStrip("This period", d.start, d.range, d.daily.map(r => r.day)) + dayStrip("Previous", prev.start, d.range, prev.daily.map(r => r.day));
+  $("#chgNote").hidden = !thin;
+  $("#chgNote").textContent = thin ? `The previous window has usage on only ${plural(prev.active_days, "day")} against ${num(t.active_days)} now. Older transcripts may not be in the store, so read the multiple as "more than before", not an exact growth rate.` : "";
+  const shown = state.chgAll ? cs : cs.slice(0, CHG_TOP), rest = cs.slice(shown.length);
+  const max = Math.max(...cs.map(c => Math.abs(c.delta)), 0) || 1;
+  const bar = c => { const w = Math.abs(c.delta) / max * 100, i = `<i style="width:${w}%;background:${color(c.project)}"></i>`;
+    return `<span class="dv" aria-hidden="true"><span class="neg">${c.delta < 0 ? i : ""}</span><span class="pos">${c.delta > 0 ? i : ""}</span></span>`; };
+  const restSum = rest.reduce((a, c) => a + c.delta, 0);
+  $("#chgList").innerHTML = `<li class="axis" aria-hidden="true"><span></span><span><span>less</span><span>more</span></span><span></span><span></span></li>`
+    + shown.map(c => `<li data-v="${esc(c.project)}"><button type="button"
+        aria-label="${esc(`${c.project}${c.new ? ", new" : ""}: ${sgn(c.delta)}, from ${usd0(c.prev_cost)} to ${usd0(c.cost)}. Open project details`)}">
+      <span class="n">${dot(c.project)}<span>${esc(c.project)}</span>${c.new ? '<span class="chip new">new</span>' : ""}</span>
+      ${bar(c)}<span class="d">${sgn(c.delta)}</span><span class="s">${usd0(c.prev_cost)} → ${usd0(c.cost)}</span></button></li>`).join("")
+    + (rest.length ? `<li class="rest"><span class="n">${plural(rest.length, "other project")}</span><span></span><span class="d">${sgn(restSum)}</span><span class="s"></span></li>` : "");
+  const btn = $("#chgMore");
+  btn.hidden = cs.length <= CHG_TOP;
+  btn.textContent = state.chgAll ? `Show the top ${CHG_TOP}` : `Show all ${num(cs.length)} projects`;
+  onPick("#chgList", openProject);
+}
+
+// Daily cost across twice the range: the previous period, then this one. All time: the whole history.
+function renderSpark() {
+  const d = DATA, prev = d.previous, el = $("#spark");
+  const byDay = {};
+  for (const r of [...(prev?.daily || []), ...d.daily]) byDay[r.day] = (byDay[r.day] || 0) + (r.cost || 0);
+  const first = prev ? prev.start : d.daily[0]?.day;
+  if (!first || !d.totals.requests) { el.hidden = true; return; }
+  const pts = [];
+  for (let x = new Date(first + "T00:00:00Z"); x <= new Date(d.end + "T00:00:00Z"); x = new Date(+x + 864e5)) {
+    const k = x.toISOString().slice(0, 10); pts.push({ k, v: byDay[k] || 0 });
+  }
+  if (pts.length < 2) { el.hidden = true; return; }
+  const W = 240, H = 48, max = Math.max(...pts.map(p => p.v)) || 1, split = prev ? pts.findIndex(p => p.k >= d.start) : 0;
+  const x = i => i / (pts.length - 1) * W, y = v => H - 2 - v / max * (H - 6);
+  const line = (a, b) => pts.slice(a, b).map((p, j) => `${j ? "L" : "M"}${x(a + j).toFixed(1)},${y(p.v).toFixed(1)}`).join("");
+  const area = (a, b) => `${line(a, b)}L${x(b - 1).toFixed(1)},${H}L${x(a).toFixed(1)},${H}Z`;
+  const cur = Math.max(0, split);
+  el.hidden = false;
+  el.setAttribute("aria-label", prev
+    ? `Daily cost sparkline: previous ${d.range} days ${usd(prev.cost || 0)}, last ${d.range} days ${usd(d.totals.cost)}.`
+    : `Daily cost sparkline since ${dayLabel(first, true)}.`);
+  el.setAttribute("role", "img");
+  el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
+      ${prev ? `<path d="${line(0, cur + 1)}" fill="none" stroke="var(--text-muted)" stroke-width="1.25" stroke-dasharray="3 2" vector-effect="non-scaling-stroke"/>
+        <line x1="${x(cur)}" x2="${x(cur)}" y1="0" y2="${H}" stroke="var(--border)" stroke-dasharray="2 2" vector-effect="non-scaling-stroke"/>` : ""}
+      <path d="${area(cur, pts.length)}" fill="var(--track)"/>
+      <path d="${line(cur, pts.length)}" fill="none" stroke="var(--text-primary)" stroke-width="1.75" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+    </svg>
+    <figcaption aria-hidden="true">${prev ? `<span>Previous ${d.range}d <b>${usd(prev.cost || 0)}</b></span><span>Last ${d.range}d <b>${usd(d.totals.cost)}</b></span>`
+      : `<span>${dayLabel(first)}</span><span>Daily cost</span><span>${dayLabel(d.end)}</span>`}</figcaption>`;
 }
 
 // A selectable row is a real button, so it gets focus, a name and Enter/Space for free.
-function ledgerRow({ name, share, value, side, pick, title }) {
-  const cells = `<span class="n" title="${esc(title ?? name)}">${esc(name)}</span>
-    <span class="bar" aria-hidden="true"><span style="width:${Math.max(share * 100, share > 0 ? 1 : 0)}%"></span></span>
+// project: a dot before the name; c: the bar's color (a project's, or the neutral default).
+function ledgerRow({ name, share, value, side, pick, title, project, c }) {
+  const cells = `<span class="n" title="${esc(title ?? name)}">${project != null ? dot(project) : ""}${esc(name)}</span>
+    <span class="bar" aria-hidden="true"><span style="width:${Math.max(share * 100, share > 0 ? 1 : 0)}%${c ? `;background:${c}` : ""}"></span></span>
     <span class="v">${value}</span><span class="s">${side}</span>`;
   return pick != null ? `<li class="pick" data-v="${esc(pick)}"><button type="button" class="rowbtn">${cells}</button></li>` : `<li>${cells}</li>`;
 }
@@ -505,7 +816,8 @@ function renderLedgers() {
   // One project selected: its spend broken down by session. Otherwise: by project.
   const bySession = !!DATA.project, total = DATA.totals.cost || 1;
   const rs = bySession
-    ? DATA.top_sessions.map(s => ({ key: s.session_id, name: `${when(s.first_ts)}${s.git_branch ? ` · ${s.git_branch}` : ""}`, cost: s.cost, unpriced: s.unpriced }))
+    ? DATA.top_sessions.map(s => ({ key: s.session_id, name: s.title ? sessName(s) : `${when(s.first_ts)}${s.git_branch ? ` · ${s.git_branch}` : ""}`,
+        title: `${s.title ? s.title + " · " : ""}${when(s.first_ts)}${s.git_branch ? ` · ${s.git_branch}` : ""}`, cost: s.cost, unpriced: s.unpriced }))
     : DATA.by_project.map(p => ({ key: p.project, name: p.project, cost: p.cost, unpriced: p.unpriced })).sort((a, b) => (b.cost || 0) - (a.cost || 0));
   const max = Math.max(...rs.map(r => r.cost || 0), 0) || 1;
   $("#ledgerTitle").textContent = bySession ? "Most expensive sessions" : "Where the spend went";
@@ -514,7 +826,8 @@ function renderLedgers() {
     : "Estimated cost per project, as a share of the total. Select a project for details.";
   const shown = state.ledgerAll ? rs : rs.slice(0, LEDGER_TOP);
   $("#ledger").innerHTML = shown.map(r => ledgerRow({
-    name: r.name, share: (r.cost || 0) / max, pick: r.key,
+    name: r.name, title: r.title, share: (r.cost || 0) / max, pick: r.key,
+    project: bySession ? null : r.key, c: color(bySession ? DATA.project : r.key),
     value: usd(r.cost) + (r.unpriced ? ` <span class="chip warn" title="${r.unpriced} requests from unpriced models">+?</span>` : ""),
     side: pct((r.cost || 0) / total),
   })).join("") || `<li class="empty">No usage in this range.</li>`;
@@ -542,23 +855,117 @@ function renderVitals() {
   ].map(([v, l, d]) => `<div class="vital"><div class="v">${v}</div><div class="l">${l}</div><div class="d">${d}</div></div>`).join("");
 }
 
-function renderAttention() {
-  const t = DATA.totals, items = [];
-  if (t.error_loops) items.push([`<b>${plural(t.error_loops, "error loop")}</b>: a tool failed three or more times in a row.`, "d-loops", "See loops"]);
-  if (DATA.near_limit.length) items.push([`<b>${plural(DATA.near_limit.length, "session")}</b> used 80% or more of the context window: ${DATA.near_limit.slice(0, 4).map(x =>
-    `<button type="button" class="linkish" data-session="${esc(x.session_id)}">#${esc(x.session_id.slice(0, 8))}</button> (${pct(x.context_share)})`).join(", ")}${DATA.near_limit.length > 4 ? ", and more" : ""}.`, "d-sessions", "See them all", "near"]);
-  const flaky = DATA.tools.filter(r => r.calls >= 20 && r.failure_rate > .1);
-  if (flaky.length) items.push([`<b>${plural(flaky.length, "tool")}</b> fail more than 10% of the time: ${flaky.slice(0, 4).map(r => `${esc(r.tool)} (${pct(r.failure_rate)})`).join(", ")}${flaky.length > 4 ? ", and more" : ""}.`, "d-tools", "See tools", "flaky"]);
-  if (t.tests_failed) items.push([`<b>${plural(t.tests_failed, "failed test run")}</b> out of ${num(t.test_runs)}.`, "d-totals", "See totals"]);
-  $("#attention").innerHTML = items.map(([text, id, cta, mode]) => `<li>${text} <button type="button" class="linkish" data-open="${id}" data-mode="${mode || ""}">${cta}</button></li>`).join("")
-    || `<li class="ok">Nothing needs attention in this range.</li>`;
-  $("#attention").querySelectorAll("[data-open]").forEach(b => b.onclick = () => {
-    if (b.dataset.mode === "near") { state.nearOnly = true; state.sessQ = ""; $("#sessNear").checked = true; $("#sessQ").value = ""; renderSessions(); }
-    if (b.dataset.mode === "flaky") { state.flakyFirst = true; renderTables(); }
-    openDrawer(b.dataset.open, true);
-  });
-  $("#attention").querySelectorAll("[data-session]").forEach(b => b.onclick = () => openSession(b.dataset.session, b));
+// ---------- insights: what stands out in this view, each with one way to act on it ----------
+const SEV = { good: "✓ Good", warn: "▲ Watch", critical: "● Act", info: "" };
+// Multiples always carry one decimal ("17.8×"), so neighbouring figures read alike.
+const mult = n => `${num(n, n < 100 ? 1 : 0)}×`, ratio = mult;
+function spenderCard(d) {
+  const total = d.totals.cost || 0;
+  if (d.project) {
+    const s = d.top_sessions.find(x => x.cost > 0);
+    if (!s) return null;
+    return { sev: "info", k: "Biggest session", t: `<span title="${esc(s.title || s.session_id)}">${esc(sessName(s))}</span>${!s.title && s.git_branch ? ` · ${esc(s.git_branch)}` : ""}`,
+      v: `${usd(s.cost)} <span class="muted" style="font-size:14px;font-weight:500">${pct(s.cost / (total || 1))}</span>`,
+      b: s.commits ? `${usd(s.cost / s.commits)} per commit over ${plural(s.commits, "commit")}, ${dur(s.duration_s)} long.` : `No commits in ${dur(s.duration_s)}.`,
+      act: ["Open session", el => openSession(s.session_id, el)] };
+  }
+  const p = d.by_project.filter(x => x.cost > 0).sort((a, b) => b.cost - a.cost)[0];
+  if (!p) return null;
+  const med = median(d.by_project.map(x => x.cost_per_commit).filter(v => v != null));
+  const high = p.cost_per_commit != null && med && p.cost_per_commit > 2 * med;
+  return { sev: high ? "warn" : "info", k: "Biggest spender", t: pname(p.project),
+    v: `${usd(p.cost)} <span class="muted" style="font-size:14px;font-weight:500">${pct(p.cost / (total || 1))} of spend</span>`,
+    b: p.cost_per_commit != null ? `${usd(p.cost_per_commit)} per commit over ${plural(p.commits, "commit")}${high ? `, ${ratio(p.cost_per_commit / med)} the median project` : ""}.` : "No commits in this range, so no cost per commit.",
+    act: ["Inspect project", el => openProject(p.project, el)] };
 }
+function peakCard(d) {
+  const pts = days().filter(p => p.cost > 0);
+  if (!pts.length) return null;
+  const peak = pts.reduce((a, b) => b.cost > a.cost ? b : a), med = median(pts.map(p => p.cost)), r = med ? peak.cost / med : 1;
+  return { sev: pts.length >= 5 && r >= 3 ? "warn" : "info", k: "Peak day", t: dayLabel(peak.day, true), v: usd(peak.cost),
+    b: pts.length > 1 ? `${ratio(r)} the median active day (${usd(med)}), ${pct(peak.cost / (d.totals.cost || 1))} of this range.` : "The only active day in this range.",
+    act: ["Show that day's sessions", () => showDay(peak.day)] };
+}
+function perCommitCard(d) {
+  // Compare like with like: projects with 3+ commits (or, inside one project, sessions with 2+), so one lucky or unlucky commit is not an outlier.
+  const pool = d.project
+    ? d.sessions.filter(s => s.commits >= 2 && s.cost > 0).map(s => ({ id: s.session_id, label: esc(titles.get(s.session_id) || `#${s.session_id.slice(0, 8)}`), cpc: s.cost / s.commits, n: s.commits }))
+    : d.by_project.filter(p => p.commits >= 3 && p.cost > 0).map(p => ({ id: p.project, label: pname(p.project), cpc: p.cost_per_commit, n: p.commits }));
+  const unit = d.project ? "session" : "project";
+  if (!d.totals.commits) return { sev: "info", k: "Cost per commit", t: "No commits", v: "n/a", b: "No successful commits in this range to divide the spend by.",
+    act: ["See all totals", () => openDrawer("d-totals", true)] };
+  if (pool.length < 3) return { sev: "info", k: "Cost per commit", t: `${plural(d.totals.commits, "commit")}`, v: usd(d.totals.cost_per_commit),
+    b: `Too few ${unit}s with commits to compare against a median.`, act: ["See all totals", () => openDrawer("d-totals", true)] };
+  const med = median(pool.map(x => x.cpc)), top = pool.reduce((a, b) => b.cpc > a.cpc ? b : a), r = top.cpc / med;
+  if (!d.project) top.label = pname(top.id); // ensure the dot follows the current color order
+  const open = d.project ? el => openSession(top.id, el) : () => compareProjects(top.id, med);
+  if (r < 2) return { sev: "good", k: "Cost per commit", t: `Median ${usd(med)}`, v: usd(d.totals.cost_per_commit),
+    b: `No ${unit} costs more than twice the median per commit (${pool.length} with commits).`, act: [d.project ? "Open the priciest session" : "Compare projects", open] };
+  return { sev: r >= 4 ? "critical" : "warn", k: "Cost-per-commit outlier", t: top.label, v: `${usd(top.cpc)}<span class="muted" style="font-size:14px;font-weight:500"> / commit</span>`,
+    b: `${ratio(r)} the median ${unit} (${usd(med)}) over ${plural(top.n, "commit")}.`, act: [d.project ? "Open session" : "Compare projects", open] };
+}
+function attentionCard(d) {
+  const t = d.totals, items = [];
+  if (t.error_loops) items.push({ crit: true, html: `<b>${plural(t.error_loops, "error loop")}</b>: a tool failed 3+ times in a row.`, cta: "See loops", go: () => openDrawer("d-loops", true) });
+  if (d.near_limit.length) items.push({ html: `<b>${plural(d.near_limit.length, "session")}</b> reached 80%+ of the context window.`, cta: "See them",
+    go: () => { state.nearOnly = true; state.sessQ = ""; state.sessDay = ""; $("#sessNear").checked = true; $("#sessQ").value = ""; renderSessions(); openDrawer("d-sessions", true); } });
+  const flaky = d.tools.filter(r => r.calls >= 20 && r.failure_rate > .1);
+  const worst = flaky.slice().sort((a, b) => b.failure_rate - a.failure_rate)[0], short = n => n.replace(/^mcp__/, "").replace(/__/g, " ");
+  if (flaky.length) items.push({ html: `<b>${plural(flaky.length, "tool")}</b> fail over 10% of calls, worst <span title="${esc(worst.tool)}">${esc(short(worst.tool).slice(0, 28))}${short(worst.tool).length > 28 ? "…" : ""}</span> (${pct(worst.failure_rate)}).`,
+    cta: "See tools", go: () => { state.flakyFirst = true; renderTables(); openDrawer("d-tools", true); } });
+  if (t.tests_failed) items.push({ html: `<b>${plural(t.tests_failed, "failed test run")}</b> of ${num(t.test_runs)}.`, cta: "See totals", go: () => openDrawer("d-totals", true) });
+  const sev = items.some(i => i.crit) ? "critical" : items.length ? "warn" : "good";
+  return { sev, k: "Needs attention", items,
+    t: items.length ? plural(items.length, "thing") + " to look at" : "Nothing needs attention",
+    b: items.length ? "" : "No error loops, sessions near the context limit, flaky tools or failed tests in this range." };
+}
+const SEV_RANK = { critical: 3, warn: 2, good: 1, info: 0 };
+function renderInsights() {
+  const d = DATA, cards = d.totals.requests ? [spenderCard(d), peakCard(d), perCommitCard(d), attentionCard(d)].filter(Boolean) : [];
+  // The most severe finding leads (ties keep the order above); the rest are supporting and compact.
+  const lead = cards.reduce((a, c) => a == null || SEV_RANK[c.sev] > SEV_RANK[a.sev] ? c : a, null);
+  const rest = cards.filter(c => c !== lead);
+  const acts = [];
+  const actBtn = (label, fn, cls = "act") => { acts.push(fn); return `<button type="button" class="linkish ${cls}" data-act="${acts.length - 1}">${label}</button>`; };
+  const head = c => `<div class="k"><span>${c.k}</span>${SEV[c.sev] ? `<span class="sev">${SEV[c.sev]}</span>` : ""}</div>`;
+  const body = c => c.items
+    ? (c.items.length ? `<ul>${c.items.map(i => `<li${i.crit ? ' class="crit"' : ""}>${i.html} ${actBtn(i.cta, i.go, "")}</li>`).join("")}</ul>` : `<div class="b">${c.b}</div>`)
+    : `<div class="b">${c.b}</div>${actBtn(...c.act)}`;
+  const value = c => c.items ? "" : `<div class="v">${c.v}</div>`;
+  const card = (c, primary) => primary
+    ? `<article class="card insight primary ${c.sev}"><div class="lead">${head(c)}<div class="t">${c.t}</div>${value(c)}</div><div class="rest">${body(c)}</div></article>`
+    : `<article class="card insight compact ${c.sev}">${head(c)}<div class="t">${c.t}</div>${value(c)}${body(c)}</article>`;
+  // Phones: a compact metric pair beside the lead; the supporting cards move under the chart, behind "More insights".
+  const t = d.totals, prev = d.previous;
+  const pair = t.requests ? `<div class="mpair">
+      <div><div class="v">${num(t.active_days)}${d.range ? `<span class="muted" style="font-size:13px;font-weight:500"> / ${d.range}</span>` : ""}</div><div class="l">active days${prev ? `, ${num(prev.active_days)} before` : ""}</div></div>
+      <div><div class="v">${t.commits ? usd(t.cost_per_commit) : "n/a"}</div><div class="l">per commit, ${plural(t.commits, "commit")}</div></div></div>` : "";
+  const support = rest.map(c => card(c, false)).join("");
+  $("#insights").innerHTML = lead ? card(lead, true) + pair + (rest.length ? `<div class="support">${support}</div>` : "") : "";
+  $("#moreInsBody").innerHTML = support;
+  $("#moreInsCount").textContent = rest.length ? `(${rest.length})` : "";
+  $("#moreInsights").hidden = !rest.length;
+  document.querySelectorAll("#insights [data-act], #moreInsBody [data-act]").forEach(b => b.onclick = () => acts[+b.dataset.act](b));
+}
+// From the cost-per-commit card: the project table sorted by cost per commit, the outlier ringed, in view, with its median comparison.
+function compareProjects(name, med) {
+  Object.assign(state, { projSort: "cpc", projSpot: name, projMed: med });
+  renderProjects();
+  const d = $("#d-projects");
+  d.open = true;
+  const row = $(`#projBody tr[data-v="${CSS.escape(name)}"]`);
+  (row || d).scrollIntoView({ behavior: motion() ? "smooth" : "auto", block: row ? "center" : "start" });
+  (row?.querySelector("button") || d.querySelector("summary")).focus({ preventScroll: true });
+}
+// The sessions drawer, limited to the sessions that ran on one day (from the peak-day card or a click on the chart).
+function showDay(day) {
+  Object.assign(state, { sessDay: day, nearOnly: false, sessQ: "" });
+  $("#sessNear").checked = false; $("#sessQ").value = "";
+  const was = $("#d-sessions").open;
+  openDrawer("d-sessions", true);
+  if (was) renderSessions(); // opening it renders through its toggle event
+}
+const median = xs => { xs = xs.filter(v => v != null).sort((a, b) => a - b); const m = xs.length >> 1; return !xs.length ? null : xs.length % 2 ? xs[m] : (xs[m - 1] + xs[m]) / 2; };
 
 function renderTotals() {
   const t = DATA.totals;
@@ -576,35 +983,66 @@ function renderTotals() {
 }
 
 // ---------- chart ----------
-function days() {
-  const out = [], have = Object.fromEntries(DATA.daily.map(r => [r.day, r]));
+// Every day of the view, with zeros for idle days. tops: the projects stacked in the cost chart, as "p:<name>" keys plus "p:" for Other.
+function days(tops = []) {
+  const out = [], have = Object.fromEntries(DATA.daily.map(r => [r.day, r])), byDay = {};
+  for (const r of DATA.daily_projects || []) (byDay[r.day] ||= {})[r.project] = r.cost || 0;
   const first = DATA.start || DATA.daily[0]?.day || DATA.end;
   for (let x = new Date(first + "T00:00:00Z"); x <= new Date(DATA.end + "T00:00:00Z"); x = new Date(+x + 864e5)) {
     const k = x.toISOString().slice(0, 10), r = have[k] || {};
     out.push({ day: k, input: r.input || 0, text_out: (r.output || 0) - (r.thinking || 0), thinking: r.thinking || 0,
       cache_read: r.cache_read || 0, cache_5m: r.cache_5m || 0, cache_1h: r.cache_1h || 0, cost: r.cost || 0, unpriced: r.unpriced || 0 });
+    // Split the day's cost: named projects first, Other takes the remainder (never below zero from rounding).
+    const pt = out[out.length - 1], pd = byDay[k] || {};
+    let named = 0;
+    for (const t of tops) if (t.project) { pt[t.k] = pd[t.project] || 0; named += pt[t.k]; }
+    if (tops.some(t => t.k === "p:")) pt["p:"] = Math.max(0, pt.cost - named);
   }
   return out;
 }
 function niceStep(raw) { const p = 10 ** Math.floor(Math.log10(raw || 1)); const n = raw / p; return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10) * p; }
 const dayLabel = (k, long) => new Date(k + "T00:00:00Z").toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC", ...(long ? { year: "numeric" } : {}) });
 let chartIdx = null;
+// The cost chart's stack: the projects that own a hue (the all-time busiest, see nav.html) by spend in this view, then Other
+// in grey for everyone else, so a color means the same project in every range. One project selected: just that project.
+function costKinds() {
+  if (DATA.project) return [{ k: "p:" + DATA.project, label: DATA.project, c: color(DATA.project), project: DATA.project }];
+  const spent = DATA.by_project.filter(p => p.cost > 0).sort((a, b) => b.cost - a.cost);
+  const hued = p => window.appnav?.hasHue ? window.appnav.hasHue(p) : false;
+  const tops = spent.filter(p => hued(p.project)).map(p => ({ k: "p:" + p.project, label: p.project, c: color(p.project), project: p.project }));
+  const rest = spent.length - tops.length;
+  return rest ? [...tops, { k: "p:", label: `Other (${num(rest)})`, c: color(""), project: "" }] : tops;
+}
 function renderChart() {
   $("#tip").style.display = "none"; $("#chartLive").textContent = ""; chartIdx = null;
   const cost = state.metric === "cost";
-  const kinds = cost ? [{ k: "cost", label: "Est. cost", c: "var(--series-1)" }] : KINDS.filter(k => !state.hidden.includes(k.k));
+  const kinds = cost ? costKinds() : KINDS.filter(k => !state.hidden.includes(k.k));
   $("#chartTitle").textContent = cost ? "Estimated cost per day" : "Tokens per day";
-  $("#chartHint").textContent = (cost ? "At API list prices. Unpriced models are left out." : "Select a kind to hide it. Cache reads usually dwarf the rest.") + " Focus the chart and use the arrow keys to read each day.";
-  $("#legend").innerHTML = cost ? "" : KINDS.map(k => `<button type="button" data-k="${k.k}" aria-pressed="${!state.hidden.includes(k.k)}"><i style="background:${k.c}"></i>${k.label}</button>`).join("");
-  $("#legend").querySelectorAll("button").forEach(b => b.onclick = () => {
+  $("#chartHint").textContent = (cost ? `${DATA.project ? "At" : "The busiest projects by spend; select one to filter. At"} API list prices; unpriced models are left out.`
+    : "Select a kind to hide it. Cache reads usually dwarf the rest.") + " Select a day to list its sessions; with the keyboard, focus the chart, use the arrow keys and press Enter.";
+  const avgKey = `<span class="key"><i class="line"></i>7-day average</span>`;
+  // Cost legend: a project's key filters the page to it (again to clear); Other and the average line are keys only.
+  $("#legend").innerHTML = cost
+    ? kinds.map(k => k.project ? `<button type="button" class="proj" data-p="${esc(k.project)}"${DATA.project ? ` aria-current="true" aria-label="${esc(k.project)}, show all projects" title="Show all projects"` : ` title="Filter to ${esc(k.project)}"`}>
+        <i style="background:${k.c}"></i><span>${esc(k.label)}</span>${DATA.project ? " ✕" : ""}</button>` : `<span class="key"><i style="background:${k.c}"></i>${k.label}</span>`).join("") + avgKey
+    : KINDS.map(k => `<button type="button" data-k="${k.k}" aria-pressed="${!state.hidden.includes(k.k)}"><i style="background:${k.c}"></i>${k.label}</button>`).join("") + avgKey;
+  $("#legend").querySelectorAll("button[data-k]").forEach(b => b.onclick = () => {
     state.hidden = state.hidden.includes(b.dataset.k) ? state.hidden.filter(x => x !== b.dataset.k) : [...state.hidden, b.dataset.k];
     store.set("claude-usage-hidden", state.hidden); renderChart();
     $(`#legend [data-k="${b.dataset.k}"]`).focus();
   });
-  const pts = days(), el = $("#chart");
-  const W = el.clientWidth || 800, H = 240, m = { t: 12, r: 8, b: 26, l: 52 };
+  $("#legend").querySelectorAll("button[data-p]").forEach(b => b.onclick = () => {
+    pendingFocus = "#legend button"; // the re-rendered legend: its first key is the way back
+    go({ project: DATA.project ? "" : b.dataset.p, session: "", inspect: "" });
+  });
+  const pts = days(cost ? kinds : []), el = $("#chart");
+  const W = el.clientWidth || 800, H = 240, m = { t: 22, r: 8, b: 26, l: 52 };
   const iw = W - m.l - m.r, ih = H - m.t - m.b;
-  const total = p => kinds.reduce((s, k) => s + p[k.k], 0);
+  const total = p => kinds.reduce((s, k) => s + (p[k.k] || 0), 0);
+  // Trailing 7-day mean of the plotted total, from the seventh day on.
+  const avg = pts.map((p, i) => i < 6 ? null : pts.slice(i - 6, i + 1).reduce((s, q) => s + total(q), 0) / 7);
+  const showAvg = pts.length >= 14;
+  if (!showAvg) $("#legend .key:last-child")?.remove();
   const max = Math.max(...pts.map(total), 0) * 1.08 || 1;
   const step = niceStep(max / 4), yMax = Math.ceil(max / step) * step;
   const bw = iw / pts.length, gap = Math.min(4, bw * .25), w = Math.max(1, bw - gap);
@@ -619,6 +1057,8 @@ function renderChart() {
     if (i % every === 0) g += `<text x="${x + w / 2}" y="${H - 6}" text-anchor="middle" font-size="11" fill="var(--text-muted)">${dayLabel(p.day)}</text>`;
     let base = 0;
     const segs = kinds.filter(k => p[k.k] > 0);
+    // One group per bar, so the whole stack grows from the baseline when data lands.
+    if (segs.length) g += `<g class="bar-seg" style="--i:${Math.min(i, 60)}">`;
     segs.forEach((k, j) => {
       const h = p[k.k] / yMax * ih, top = y(base + p[k.k]);
       // 2px surface gap between stacked segments; the top segment gets rounded corners.
@@ -628,25 +1068,48 @@ function renderChart() {
         : `<rect x="${x}" y="${top}" width="${w}" height="${hh}" fill="${k.c}"/>`;
       base += p[k.k];
     });
+    if (segs.length) g += `</g>`;
   });
+  // The average line, haloed in the surface color so it stays readable across bars of any hue.
+  const cx = i => m.l + (i + .5) * bw;
+  if (showAvg) {
+    const d = avg.map((v, i) => v == null ? "" : `${i === 6 ? "M" : "L"}${cx(i).toFixed(1)},${y(v).toFixed(1)}`).join("");
+    g += `<path d="${d}" fill="none" stroke="var(--surface-1)" stroke-width="4.5" stroke-linejoin="round" stroke-linecap="round"/>
+      <path d="${d}" fill="none" stroke="var(--text-primary)" stroke-width="1.75" stroke-linejoin="round" stroke-linecap="round"/>`;
+  }
+  // Name the peak day above its bar, kept inside the plot at either edge.
+  const peak = pts.reduce((b, p, i) => total(p) > total(pts[b]) ? i : b, 0);
+  if (total(pts[peak]) > 0) {
+    const px = cx(peak), near = 56, anchor = px < m.l + near ? "start" : px > W - m.r - near ? "end" : "middle";
+    const lx = anchor === "start" ? Math.max(m.l, px - w / 2) : anchor === "end" ? Math.min(W - m.r, px + w / 2) : px;
+    g += `<text x="${lx}" y="${y(total(pts[peak])) - 7}" text-anchor="${anchor}" font-size="11" font-weight="600" fill="var(--text-primary)"
+      stroke="var(--surface-1)" stroke-width="3" paint-order="stroke">Peak ${fy(total(pts[peak]))} · ${dayLabel(pts[peak].day)}</text>`;
+  }
   el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" aria-hidden="true">${g}
     <rect id="hl" y="${m.t}" height="${ih}" fill="var(--text-primary)" opacity=".06" visibility="hidden"/>
     <rect x="${m.l}" y="${m.t}" width="${iw}" height="${ih}" fill="transparent" id="hit"/></svg>`;
-  el.setAttribute("aria-label", `${cost ? "Estimated cost" : "Tokens by kind"} per day, ${pts.length} days. Use the left and right arrow keys to read each day.`);
+  el.setAttribute("aria-label", `${cost ? (DATA.project ? "Estimated cost" : "Estimated cost by project") : "Tokens by kind"} per day, ${pts.length} days, peaking at ${fy(total(pts[peak]))} on ${dayLabel(pts[peak].day, true)}. Use the left and right arrow keys to read each day.`);
   const svg = el.querySelector("svg"), tip = $("#tip"), hit = el.querySelector("#hit"), hl = el.querySelector("#hl");
-  const text = p => cost ? `${usd(p.cost)} estimated${p.unpriced ? `, ${p.unpriced} unpriced requests` : ""}`
-    : kinds.map(k => `${k.label} ${big(p[k.k])}`).join(", ") + `, total ${big(total(p))}`;
+  const avgText = i => showAvg && avg[i] != null ? `7-day average ${fy(avg[i])}` : "";
+  // Parts in stack order, top first, as the eye reads the bar; zero parts left out.
+  const parts = p => kinds.slice().reverse().filter(k => p[k.k] > 0);
+  const text = (p, i) => (cost
+    ? `${usd(p.cost)} estimated${parts(p).length > 1 ? ": " + parts(p).map(k => `${k.label} ${usd(p[k.k])}`).join(", ") : ""}${p.unpriced ? `, ${p.unpriced} unpriced requests` : ""}`
+    : kinds.map(k => `${k.label} ${big(p[k.k])}`).join(", ") + `, total ${big(total(p))}`) + (avgText(i) ? `. ${avgText(i)}` : "");
   const show = (i, cx, cy) => {
     const p = pts[i];
     chartIdx = i;
     hl.setAttribute("x", m.l + i * bw); hl.setAttribute("width", bw); hl.setAttribute("visibility", "visible");
+    const row = (k, v) => `<div class="row"><span><i style="background:${k.c}"></i>${esc(k.label)}</span><b>${v}</b></div>`;
     tip.innerHTML = `<div class="muted">${dayLabel(p.day, true)}</div>` + (cost
-      ? `<div><b>${usd(p.cost)}</b> estimated${p.unpriced ? `, ${p.unpriced} unpriced requests` : ""}</div>`
-      : kinds.slice().reverse().map(k => `<div><i style="background:${k.c}"></i>${k.label} <b>${big(p[k.k])}</b></div>`).join("") + `<div class="muted">Total ${big(total(p))}</div>`);
+      ? parts(p).map(k => row(k, usd(p[k.k]))).join("") + `<div class="row${parts(p).length ? " tot" : ""}"><span>Total</span><b>${usd(p.cost)}</b></div>`
+        + (p.unpriced ? `<div class="muted">${p.unpriced} unpriced requests</div>` : "")
+      : kinds.slice().reverse().map(k => row(k, big(p[k.k]))).join("") + `<div class="row tot"><span>Total</span><b>${big(total(p))}</b></div>`)
+      + (avgText(i) ? `<div class="muted">${avgText(i)}</div>` : "");
     tip.style.display = "block";
     const tx = cx + 14 + tip.offsetWidth > window.innerWidth ? cx - tip.offsetWidth - 14 : cx + 14;
     tip.style.left = Math.max(4, tx) + window.scrollX + "px"; tip.style.top = cy + window.scrollY - 10 + "px";
-    $("#chartLive").textContent = `${dayLabel(p.day, true)}: ${text(p)}`;
+    $("#chartLive").textContent = `${dayLabel(p.day, true)}: ${text(p, i)}`;
   };
   const hide = () => { tip.style.display = "none"; hl.setAttribute("visibility", "hidden"); };
   hit.addEventListener("pointermove", ev => {
@@ -654,8 +1117,15 @@ function renderChart() {
     show(Math.max(0, Math.min(pts.length - 1, Math.floor((px - m.l) / bw))), ev.clientX, ev.clientY);
   });
   hit.addEventListener("pointerleave", hide);
+  hit.style.cursor = "pointer";
+  hit.addEventListener("click", ev => {
+    const r = svg.getBoundingClientRect(), px = (ev.clientX - r.left) * W / r.width;
+    const p = pts[Math.max(0, Math.min(pts.length - 1, Math.floor((px - m.l) / bw)))];
+    if (p && (p.cost || total(p))) { hide(); showDay(p.day); }
+  });
   el.onblur = hide;
   el.onkeydown = ev => {
+    if (ev.key === "Enter" && chartIdx != null) { ev.preventDefault(); hide(); return showDay(pts[chartIdx].day); }
     const keys = { ArrowLeft: -1, ArrowRight: 1, Home: -Infinity, End: Infinity };
     if (!(ev.key in keys)) return;
     ev.preventDefault();
@@ -679,16 +1149,62 @@ function onPick(sel, fn) {
   });
   picks.set(el, fn);
 }
-const pickCell = (v, label) => `<button type="button" class="cellbtn" title="${esc(v)}">${esc(label)}</button>`;
+const pickCell = (v, label, title = v) => `<button type="button" class="cellbtn" title="${esc(title)}">${esc(label)}</button>`;
+// A session's readable name: the title the server took from its first prompt, else its short id. Remembered so the sheet
+// can name a session before its details arrive.
+const titles = new Map();
+const sessName = s => { if (s.title) titles.set(s.session_id, s.title); return s.title || `#${s.session_id.slice(0, 8)}`; };
+// How far a project sits from the median project on one metric. better: "up" when a higher value is better.
+// Ratios count when they are 1.5x off the median (cache hit: 10 points); error loops when 2 or more above it.
+function toneOf(v, med, better, kind) {
+  if (v == null || med == null) return null;
+  if (kind === "points") { const dlt = v - med; return Math.abs(dlt) < .1 ? null : { worse: (dlt < 0) === (better === "up"), above: dlt > 0, by: `${num(Math.abs(dlt) * 100)} points` }; }
+  if (kind === "count") return v >= 2 && v > med ? { worse: true, above: true, by: `${num(v - med)} more` } : null;
+  if (!med) return null;
+  // Zero has no multiple of the median ("∞× better"): it is said in absolute terms by the caller's zeroText.
+  if (v === 0) return { worse: better === "up", above: false, zero: true };
+  const r = v / med;
+  if (r < 1.5 && r > 1 / 1.5) return null;
+  return { worse: (r > 1) === (better === "down"), above: r > 1, by: `${ratio(r > 1 ? r : 1 / r)}` };
+}
+// zeroText: how a zero value reads against the median, e.g. "zero errors; median 3.0 per 100 calls".
+function toned(v, text, med, better, kind, medText, zeroText) {
+  const t = toneOf(v, med, better, kind);
+  if (!t) return `<td class="num">${text}</td>`;
+  const what = t.zero ? `${zeroText || `zero; median ${medText}`}, ${t.worse ? "worse" : "better"}`
+    : `${t.above ? "above" : "below"} the median (${medText}) by ${t.by}, ${t.worse ? "worse" : "better"}`;
+  return `<td class="num tone ${t.worse ? "worse" : "better"}" title="${esc(what)}">${text}<span class="mk" aria-hidden="true">${t.above ? "▲" : "▼"}</span><span class="sr">, ${esc(what)}</span></td>`;
+}
 function renderProjects() {
-  $("#projCount").textContent = num(DATA.by_project.length);
-  $("#projBody").innerHTML = DATA.by_project.map(p => `<tr class="pick${p.project === DATA.project ? " sel" : ""}" data-v="${esc(p.project)}">
-    <td class="name">${pickCell(p.project, p.project)}</td><td class="num">${num(p.sessions)}</td><td class="num">${big(p.tokens)}</td>
-    <td class="num">${usd(p.cost)}${p.unpriced ? ` <span class="chip warn" title="${p.unpriced} requests from unpriced models">+?</span>` : ""}</td>
-    <td class="num">${pct(p.cache_hit_ratio)}</td><td class="num">${pct(p.write_1h_share)}</td><td class="num">${pct(p.subagent_share)}</td>
+  const many = DATA.by_project.length >= 3;
+  // Sorted by cost per commit (from "Compare projects"): highest first, projects without commits last.
+  const cpcSort = state.projSort === "cpc";
+  $("#thCpc").setAttribute("aria-sort", cpcSort ? "descending" : "none");
+  const ps = cpcSort ? DATA.by_project.slice().sort((a, b) => (b.cost_per_commit ?? -1) - (a.cost_per_commit ?? -1)) : DATA.by_project;
+  const med = k => many ? median(ps.map(p => p[k])) : null;
+  // Cost per commit only compares projects with 3+ commits, as the outlier card does.
+  const m = { hit: med("cache_hit_ratio"), err: med("errors_per_100_calls"), cpc: many ? median(ps.filter(p => p.commits >= 3).map(p => p.cost_per_commit)) : null, loops: many ? median(ps.map(p => p.error_loops)) : null };
+  const maxCost = Math.max(...ps.map(p => p.cost || 0), 0) || 1;
+  $("#projCount").textContent = num(ps.length);
+  $("#toneKey").innerHTML = many
+    ? `Compared with the median project: <span class="worse">worse ▲▼</span><span class="better">better ▲▼</span> ▲ above, ▼ below the median. Hover a tinted cell for how far.`
+    : "";
+  const spot = cpcSort && ps.find(p => p.project === state.projSpot), note = $("#projNote");
+  note.hidden = !cpcSort;
+  if (cpcSort) {
+    const r = spot && state.projMed ? spot.cost_per_commit / state.projMed : null;
+    note.innerHTML = `<span>Sorted by cost per commit, highest first.</span>${spot ? `<span>${pname(spot.project, `<b>${esc(spot.project)}</b>`)}: <b>${usd(spot.cost_per_commit)}</b> per commit over ${plural(spot.commits, "commit")}${r ? `, ${mult(r)} the median project with 3+ commits (${usd(state.projMed)})` : ""}.</span>` : ""}
+      <button type="button" class="linkish" id="projUnsort">Sort by cost again</button>`;
+    $("#projUnsort").onclick = () => { Object.assign(state, { projSort: "", projSpot: "", projMed: null }); renderProjects(); $("#d-projects summary").focus(); };
+  }
+  $("#projBody").innerHTML = ps.map(p => `<tr class="pick${p.project === DATA.project ? " sel" : ""}${spot && p === spot ? " spot" : ""}" data-v="${esc(p.project)}">
+    <td class="name">${pname(p.project, pickCell(p.project, p.project))}</td><td class="num">${num(p.sessions)}</td><td class="num">${big(p.tokens)}</td>
+    <td class="num"><span class="ibar" aria-hidden="true"><i style="width:${Math.max(2, (p.cost || 0) / maxCost * 100)}%;background:${color(p.project)}"></i></span>${usd(p.cost)}${p.unpriced ? ` <span class="chip warn" title="${p.unpriced} requests from unpriced models">+?</span>` : ""}</td>
+    ${toned(p.cache_hit_ratio, pct(p.cache_hit_ratio), m.hit, "up", "points", pct(m.hit))}<td class="num">${pct(p.write_1h_share)}</td><td class="num">${pct(p.subagent_share)}</td>
     <td class="num">${big(p.tokens_per_prompt)}</td><td class="num">${num(p.commits)}</td>
-    <td class="num">${p.cost_per_commit == null ? '<span class="muted">n/a</span>' : usd(p.cost_per_commit)}</td>
-    <td class="num">${num(p.errors_per_100_calls, 1)}</td><td class="num">${num(p.error_loops)}</td></tr>`).join("")
+    ${p.cost_per_commit == null ? '<td class="num"><span class="muted">n/a</span></td>' : toned(p.cost_per_commit, usd(p.cost_per_commit), p.commits >= 3 ? m.cpc : null, "down", "ratio", usd(m.cpc), `no cost; median ${usd(m.cpc)} per commit`)}
+    ${toned(p.errors_per_100_calls, num(p.errors_per_100_calls, 1), m.err, "down", "ratio", num(m.err, 1), `zero errors; median ${num(m.err, 1)} per 100 calls`)}
+    ${toned(p.error_loops, num(p.error_loops), m.loops, "down", "count", num(m.loops))}</tr>`).join("")
     || `<tr><td colspan="12" class="empty">No usage in this range.</td></tr>`;
   onPick("#projBody", openProject);
 }
@@ -696,6 +1212,8 @@ function renderProjects() {
 let sessSeq = 0, sessRows = [], sessTotal = 0;
 async function renderSessions(more) {
   $("#sessCount").textContent = num(DATA.totals.sessions);
+  $("#sessDay").hidden = !state.sessDay;
+  $("#sessDay > span").textContent = state.sessDay ? `Active on ${dayLabel(state.sessDay, true)}` : "";
   if (!$("#d-sessions").open) return;
   const my = ++sessSeq, q = state.sessQ.trim();
   $("#sessBody").setAttribute("aria-busy", "true"); $("#sessMore").disabled = true;
@@ -703,7 +1221,7 @@ async function renderSessions(more) {
   if (!more) { $("#sessBody").classList.add("stale"); $("#sessBody").inert = true; $("#sessHint").textContent = q ? `Searching for “${q}”…` : "Loading sessions…"; }
   let d;
   try {
-    const res = await fetch("/api/sessions?" + new URLSearchParams({ project: DATA.project, range: DATA.range, q, near: state.nearOnly ? 1 : "", offset: more ? sessRows.length : 0 }));
+    const res = await fetch("/api/sessions?" + new URLSearchParams({ project: DATA.project, range: DATA.range, q, near: state.nearOnly ? 1 : "", day: state.sessDay, offset: more ? sessRows.length : 0 }));
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     d = await res.json();
   } catch (e) {
@@ -719,15 +1237,15 @@ async function renderSessions(more) {
   $("#sessBody").removeAttribute("aria-busy"); $("#sessBody").classList.remove("stale"); $("#sessBody").inert = false; $("#sessMore").disabled = false;
   const first = more ? sessRows.length : 0;
   sessRows = more ? sessRows.concat(d.sessions) : d.sessions; sessTotal = d.total;
-  $("#sessHint").textContent = `${plural(sessTotal, "session")}${q || state.nearOnly ? " match" : ""}, ${state.nearOnly ? "nearest the limit first" : "newest first"}. `
+  $("#sessHint").textContent = `${plural(sessTotal, "session")}${q || state.nearOnly || state.sessDay ? " match" : ""}, ${state.nearOnly ? "nearest the limit first" : "newest first"}. `
     + `${sessRows.length < sessTotal ? `Showing ${num(sessRows.length)}. ` : ""}Select a session for details.`;
   $("#sessBody").innerHTML = sessRows.map(s => `<tr class="pick${s.session_id === state.session ? " sel" : ""}" data-v="${esc(s.session_id)}">
-    <td class="when">${pickCell(s.session_id, when(s.first_ts))}<div class="muted small">${s.git_branch ? `${esc(s.git_branch)} · ` : ""}#${esc(s.session_id.slice(0, 8))}</div></td>
-    <td class="name">${esc(s.project)}</td><td class="num opt">${dur(s.duration_s)}</td><td class="num opt">${num(s.prompts)}</td>
+    <td class="when sess">${pickCell(s.session_id, sessName(s), s.title || s.session_id)}<div class="muted small">${when(s.first_ts)}${s.git_branch ? ` · ${esc(s.git_branch)}` : ""}${s.title ? ` · #${esc(s.session_id.slice(0, 8))}` : ""}</div></td>
+    <td class="name">${pname(s.project)}</td><td class="num opt">${dur(s.duration_s)}</td><td class="num opt">${num(s.prompts)}</td>
     <td class="num opt">${big(s.tokens)}</td><td class="num">${usd(s.cost)}</td>
     <td class="num">${big(s.peak_context)}${s.near_limit ? ` <span class="chip warn" title="${pct(s.context_share)} of the context window">${pct(s.context_share)}</span>` : ""}</td>
     <td class="num opt">${num(s.compactions)}</td><td class="num opt">${num(s.commits)}</td></tr>`).join("")
-    || `<tr><td colspan="9" class="empty">${q || state.nearOnly ? "No sessions match." : "No sessions in this range."}</td></tr>`;
+    || `<tr><td colspan="9" class="empty">${q || state.nearOnly || state.sessDay ? "No sessions match." : "No sessions in this range."}</td></tr>`;
   $("#sessMore").hidden = sessRows.length >= sessTotal;
   onPick("#sessBody", openSession);
   if (more) $(`#sessBody tr:nth-child(${first + 1}) button`)?.focus();
@@ -748,7 +1266,7 @@ function renderTables() {
   rateTable("#mcpBody", DATA.mcp);
   rateTable("#skillBody", DATA.skills);
   rateTable("#hookBody", DATA.hooks, "runs", r => `<td class="num">${ms(r.avg_ms)}</td>`);
-  $("#loopBody").innerHTML = DATA.error_loops.map(l => `<tr><td class="when">${when(l.start_ts)}</td><td class="name">${esc(l.project)}</td>
+  $("#loopBody").innerHTML = DATA.error_loops.map(l => `<tr><td class="when">${when(l.start_ts)}</td><td class="name">${pname(l.project)}</td>
     <td><button type="button" class="linkish" data-session="${esc(l.session_id)}">#${esc(l.session_id.slice(0, 8))}</button></td><td>${esc(l.tool)}</td><td class="num">${num(l.failures)}</td>
     <td><a href="${errorsLink(l.project, l.first_id)}">Open in Errors</a></td></tr>`).join("")
     || `<tr><td colspan="6" class="empty">No error loops in this range.</td></tr>`;
@@ -761,17 +1279,42 @@ function renderTables() {
 const sheet = $("#sheet");
 let opener = null, pseq = 0, inflight = null; // inflight: the sheet request under way, by cache key
 // Sheet data by project|range and by session id, so Back and Forward retrace without the network.
-const projCache = new Map(), sessCache = new Map();
+const projCache = new Map(), sessCache = new Map(), fullPrompts = new Map(); // fullPrompts: /api/prompt text by session
 const keep = (m, k, v) => { m.delete(k); m.set(k, v); if (m.size > 30) m.delete(m.keys().next().value); };
+// Returns false when the sheet already shows exactly this, so the caller need not wire it again. A page render
+// (say a range load finishing) re-asks for the open sheet; leaving it alone keeps what the user opened and where they are.
+let shownBody = null;
 function showSheet(kind, title, body) {
   const fresh = !sheet.open || $("#sheetTitle").dataset.key !== kind + title;
+  $("#sheetBack").hidden = !(state.session && state.inspect);
+  if (!fresh && body === shownBody) return false;
+  const ui = fresh ? null : sheetUi();
   $("#sheetTitle").innerHTML = `<span class="sheet-kind">${kind}</span><br>${title}`;
   $("#sheetTitle").dataset.key = kind + title;
   $("#sheetBody").innerHTML = body;
-  $("#sheetBack").hidden = !(state.session && state.inspect);
+  shownBody = body;
   if (!sheet.open) sheet.showModal();
   if (fresh) sheet.scrollTop = 0;
+  else restoreSheetUi(ui);
   if (fresh || !sheet.contains(document.activeElement)) $("#sheetTitle").focus();
+  return true;
+}
+// What a rebuild of the same sheet would lose: open disclosures, all events shown, the focused control, the scroll.
+function sheetUi() {
+  const body = $("#sheetBody"), a = document.activeElement, tabbable = [...body.querySelectorAll("button, a, summary, [tabindex]")];
+  return {
+    open: [...body.querySelectorAll("details")].map(d => d.open), allEvents: !!$("#tlEvents") && !$("#tlEvMore"),
+    focus: !body.contains(a) ? null : a.id ? `#${CSS.escape(a.id)}` : a.dataset.ev != null ? `[data-ev="${a.dataset.ev}"]` : tabbable.indexOf(a),
+    scroll: sheet.scrollTop,
+  };
+}
+function restoreSheetUi(ui) {
+  const body = $("#sheetBody");
+  body.querySelectorAll("details").forEach((d, k) => { if (ui.open[k]) d.open = true; });
+  if (ui.allEvents) { body.querySelectorAll("#tlEvents li[hidden]").forEach(li => li.hidden = false); $("#tlEvMore")?.remove(); }
+  const el = typeof ui.focus === "string" ? body.querySelector(ui.focus) : ui.focus >= 0 ? body.querySelectorAll("button, a, summary, [tabindex]")[ui.focus] : null;
+  el?.focus({ preventScroll: true });
+  sheet.scrollTop = ui.scroll;
 }
 // A session's cost: unknown when no model is priced, a labelled subtotal when only some are.
 function sessCost(models) {
@@ -799,7 +1342,7 @@ function focusTwin(key) {
   const v = CSS.escape(key.v), sel = `[data-v="${v}"] button, button[data-session="${v}"]`;
   ((key.c && $(`#${key.c}`)?.querySelector(sel)) || $(`.wrap :is(${sel})`))?.focus();
 }
-const OPENERS = "#ledger, #projBody, #sessBody, #loopBody, #attention";
+const OPENERS = "#ledger, #projBody, #sessBody, #loopBody, #insights, #moreInsBody, #chgList";
 function remember(from) {
   if (sheet.open) return;
   openerEl = from || null;
@@ -822,7 +1365,7 @@ async function renderProjectSheet() {
   if (!projCache.has(key)) {
     if (inflight === key) return; // already on its way; its arrival renders it
     inflight = key;
-    showSheet("Project", esc(name), `<div class="empty" role="status">Loading…</div>`);
+    showSheet("Project", dot(name) + esc(name), `<div class="empty" role="status">Loading…</div>`);
     const my = ++pseq;
     try {
       const res = await fetch("/api/usage?" + new URLSearchParams({ project: name, range: state.range }));
@@ -834,7 +1377,7 @@ async function renderProjectSheet() {
       inflight = null;
       // Only report the failure if the user is still looking at this project.
       if (my !== pseq || state.inspect !== name || state.session || state.range !== +key.split("|").pop()) return;
-      showSheet("Project", esc(name), `<div class="empty" role="alert">Could not load this project (${esc(e.message)}). <button type="button" class="linkish" data-retry>Retry</button></div>`);
+      showSheet("Project", dot(name) + esc(name), `<div class="empty" role="alert">Could not load this project (${esc(e.message)}). <button type="button" class="linkish" data-retry>Retry</button></div>`);
       return wireSheet();
     }
     // The user may have moved on while this loaded.
@@ -843,7 +1386,7 @@ async function renderProjectSheet() {
   const d = projCache.get(key), t = d.totals, top = d.top_sessions.slice(0, 8);
   const reqs = d.models.reduce((s, r) => s + r.requests, 0) || 1, mmax = Math.max(...d.models.map(r => r.requests), 0) || 1;
   const span = d.start ? `Last ${state.range} days` : "All time";
-  showSheet("Project", esc(name), `
+  if (showSheet("Project", dot(name) + esc(name), `
     <div class="hint">${span}, from the range filter. Estimated at API list prices.</div>
     <div class="actions">${filterBtn(name)}<a class="btn" href="/errors#${new URLSearchParams({ project: name, range: state.range })}">Open its errors</a></div>
     ${facts([
@@ -854,12 +1397,13 @@ async function renderProjectSheet() {
     <h3>Models and effort</h3>
     <ol class="ledger">${modelRows(d.models, reqs, mmax)}</ol>
     <h3>Most expensive sessions</h3>
-    <div class="scroll"><table><thead><tr><th>Started</th><th>Branch</th><th class="num">Duration</th><th class="num">Est. cost</th></tr></thead><tbody id="sheetSess">
-      ${top.map(s => `<tr class="pick" data-v="${esc(s.session_id)}"><td class="when">${pickCell(s.session_id, when(s.first_ts))}</td><td class="name">${esc(s.git_branch || "–")}</td>
+    <div class="scroll"><table><thead><tr><th>Session</th><th>Branch</th><th class="num">Duration</th><th class="num">Est. cost</th></tr></thead><tbody id="sheetSess">
+      ${top.map(s => `<tr class="pick" data-v="${esc(s.session_id)}"><td class="when sess">${pickCell(s.session_id, sessName(s), s.title || s.session_id)}<div class="muted small">${when(s.first_ts)}</div></td><td class="name">${esc(s.git_branch || "–")}</td>
         <td class="num">${dur(s.duration_s)}</td><td class="num">${usd(s.cost)}</td></tr>`).join("") || `<tr><td colspan="4" class="empty">No sessions in this range.</td></tr>`}
-    </tbody></table></div>`);
-  wireSheet();
-  onPick("#sheetSess", openSession);
+    </tbody></table></div>`)) {
+    wireSheet();
+    onPick("#sheetSess", openSession);
+  }
   if (backTo) {
     sheet.scrollTop = backTo.scroll;
     $(`#sheetSess [data-v="${CSS.escape(backTo.v)}"] button`)?.focus({ preventScroll: true });
@@ -868,7 +1412,10 @@ async function renderProjectSheet() {
 }
 let sseq = 0;
 async function renderSessionSheet() {
-  const id = state.session, title = `#${esc(id.slice(0, 8))}`;
+  const id = state.session, short = `#${esc(id.slice(0, 8))}`;
+  // The heading names the session by its first prompt; the short id stays beside it.
+  const named = n => n ? `${esc(n)} <span class="sheet-sub">${short}</span>` : short;
+  let title = named(titles.get(id));
   if (!sessCache.has(id)) {
     if (inflight === id) return;
     inflight = id;
@@ -894,26 +1441,211 @@ async function renderSessionSheet() {
   }
   const s = sessCache.get(id);
   if (!s) return showSheet("Session", title, `<div class="empty">This session was not found.</div>`);
-  const i = s.info, tokens = s.models.reduce((a, r) => a + r.tokens, 0);
-  showSheet("Session", title, `
+  if (s.title) { titles.set(id, s.title); title = named(s.title); }
+  const i = s.info, tokens = s.models.reduce((a, r) => a + r.tokens, 0), [cost, costNote] = sessCost(s.models);
+  const tl = timeline(s), full = fullPrompts.get(id), cut = s.first_prompt_cut && full == null;
+  const stat = (v, l) => `<span><b>${v}</b> ${l}</span>`;
+  const built = showSheet("Session", title, `
     <div class="hint"><span class="chip">Whole session, not limited by the range filter</span><br>
-      Project <button type="button" class="linkish" data-inspect="${esc(i.project)}">${esc(i.project)}</button>${i.git_branch ? ` on ${esc(i.git_branch)}` : ""}, ${when(i.first_ts)} to ${when(i.last_ts)}.</div>
+      Project ${dot(i.project)}<button type="button" class="linkish" data-inspect="${esc(i.project)}">${esc(i.project)}</button>${i.git_branch ? ` on ${esc(i.git_branch)}` : ""}, ${when(i.first_ts)} to ${when(i.last_ts)}.</div>
     <div class="actions">${filterBtn(i.project)}</div>
-    ${facts([
-      sessCost(s.models), [big(tokens), "tokens"], [num(s.prompts.prompts), `prompts, ${num(s.prompts.interrupted)} interrupted`],
-      [big(i.peak_context), `peak context${i.context_limit ? `, ${pct(i.peak_context / i.context_limit)}` : ""}`],
-      [num(i.compactions), "compactions"], [num(s.commits.length), "commits"],
-    ])}
-    <code class="muted sid">${esc(i.session_id)}</code>
-    <h3>Models</h3><div class="scroll"><table><thead><tr><th>Model</th><th class="num">Requests</th><th class="num">Tokens</th><th class="num">Est. cost</th></tr></thead><tbody>
-      ${s.models.map(r => `<tr><td>${esc(r.model.replace(/^claude-/, ""))}<div class="muted small">${[r.effort !== "(none)" && r.effort, r.subagent ? "subagent" : "main thread"].filter(Boolean).map(esc).join(" · ")}</div></td>
-        <td class="num">${num(r.requests)}</td><td class="num">${big(r.tokens)}</td><td class="num">${usd(r.cost)}</td></tr>`).join("")}</tbody></table></div>
-    <h3>Tools</h3><div class="scroll"><table><thead><tr><th>Tool</th><th class="num">Calls</th><th class="num">Failed</th><th class="num">p50</th></tr></thead><tbody>
-      ${s.tools.map(r => `<tr><td class="name">${esc(r.tool)}</td><td class="num">${num(r.calls)}</td><td class="num ${r.failure_rate > .1 ? "bad" : ""}">${pct(r.failure_rate, 1)}</td><td class="num">${ms(r.p50_ms)}</td></tr>`).join("")
-        || `<tr><td colspan="4" class="empty">No tool calls.</td></tr>`}</tbody></table></div>
+    ${s.first_prompt ? `<details class="sd" id="fpSrc"><summary>Source<span class="c">the first prompt as recorded${cut ? `, first ${num(s.first_prompt.length - 1)} characters` : full != null ? `, all ${num(full.length)} characters` : ""}</span></summary>
+      <pre class="fp-raw" id="fpText" tabindex="-1">${esc(full ?? s.first_prompt)}</pre>
+      ${cut ? `<button type="button" class="linkish small" id="fpMore">Show the whole prompt</button>` : ""}<span class="small muted" id="fpStatus" role="status"></span></details>` : ""}
+    <div class="statline">
+      ${stat(cost, costNote)}${stat(big(tokens), "tokens")}${stat(num(s.prompts.prompts), `prompts${s.prompts.interrupted ? `, ${num(s.prompts.interrupted)} interrupted` : ""}`)}
+      ${stat(big(i.peak_context), `peak context${i.context_limit ? ` (${pct(i.peak_context / i.context_limit)})` : ""}`)}
+      ${stat(num(i.compactions), i.compactions === 1 ? "compaction" : "compactions")}${stat(num(s.commits.length), s.commits.length === 1 ? "commit" : "commits")}
+      ${stat(dur((Date.parse(i.last_ts) - Date.parse(i.first_ts)) / 1000), "long")}
+    </div>
+    <h3>Timeline</h3>
+    ${tl.html}
     ${s.error_loops.length ? `<h3>Error loops</h3>${s.error_loops.map(l => `<div>${esc(l.tool)} failed ${l.failures}× in a row. <a href="${errorsLink(i.project, l.first_id)}">Open in Errors</a></div>`).join("")}` : ""}
-    ${s.commits.length ? `<h3>Commits</h3>${s.commits.map(c => `<div class="muted commit"><code>${esc(c.command)}</code></div>`).join("")}` : ""}`);
+    ${s.commits.length ? `<details class="sd"><summary>Commits<span class="c">${num(s.commits.length)}</span></summary>${s.commits.map(c => `<div class="muted commit"><code>${esc(c.command)}</code></div>`).join("")}</details>` : ""}
+    <details class="sd"><summary>Models<span class="c">${num(s.models.length)}</span></summary><div class="scroll"><table><thead><tr><th>Model</th><th class="num">Requests</th><th class="num">Tokens</th><th class="num">Est. cost</th></tr></thead><tbody>
+      ${s.models.map(r => `<tr><td>${esc(r.model.replace(/^claude-/, ""))}<div class="muted small">${[r.effort !== "(none)" && r.effort, r.subagent ? "subagent" : "main thread"].filter(Boolean).map(esc).join(" · ")}</div></td>
+        <td class="num">${num(r.requests)}</td><td class="num">${big(r.tokens)}</td><td class="num">${usd(r.cost)}</td></tr>`).join("")}</tbody></table></div></details>
+    <details class="sd"><summary>Tools<span class="c">${num(s.tools.length)}</span></summary><div class="scroll"><table><thead><tr><th>Tool</th><th class="num">Calls</th><th class="num">Failed</th><th class="num">p50</th></tr></thead><tbody>
+      ${s.tools.map(r => `<tr><td class="name">${esc(r.tool)}</td><td class="num">${num(r.calls)}</td><td class="num ${r.failure_rate > .1 ? "bad" : ""}">${pct(r.failure_rate, 1)}</td><td class="num">${ms(r.p50_ms)}</td></tr>`).join("")
+        || `<tr><td colspan="4" class="empty">No tool calls.</td></tr>`}</tbody></table></div></details>
+    <p><code class="muted sid">${esc(i.session_id)}</code></p>`);
+  if (!built) return;
   wireSheet();
+  tl.wire?.();
+  // The session payload caps the prompt; the whole text comes from /api/prompt on demand.
+  const more = $("#fpMore");
+  if (more) more.onclick = async () => {
+    more.disabled = true; $("#fpStatus").textContent = "Loading the whole prompt…";
+    try {
+      const res = await fetch("/api/prompt?" + new URLSearchParams({ session: id }));
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const { text } = await res.json();
+      keep(fullPrompts, id, text);
+      if (state.session !== id || !more.isConnected) return;
+      // Rebuild from the cache now, so the sheet on screen is the one later renders compare against and leave alone.
+      renderSessionSheet();
+      $("#fpStatus").textContent = `Showing all ${num(text.length)} characters.`;
+      $("#fpText").focus({ preventScroll: true });
+    } catch (e) {
+      if (!more.isConnected) return;
+      more.disabled = false; more.textContent = "Retry loading the whole prompt";
+      $("#fpStatus").textContent = ` Could not load it (${e.message}).`;
+    }
+  };
+}
+
+// The session timeline: context per main-thread request over time, the 80% context line, compactions and commits,
+// and a strip of tool calls on the same axis (failures in red link to the Errors page). Idle gaps over 20 minutes are
+// squeezed to a short break so a session resumed the next day still reads.
+const EV_TOP = 8; // events listed before "Show all"
+function timeline(s) {
+  const i = s.info, limit = i.context_limit;
+  const reqs = s.requests.filter(r => !r.subagent && r.ts).map(r => ({ ...r, t: Date.parse(r.ts) }));
+  const calls = s.calls.map(c => ({ ...c, t: Date.parse(c.start_ts || c.end_ts) })).filter(c => !isNaN(c.t));
+  const comps = (s.compaction_ts || []).map(Date.parse).filter(t => !isNaN(t));
+  const times = [...reqs.map(r => r.t), ...calls.map(c => c.t), ...comps].sort((a, b) => a - b);
+  if (times.length < 2 || times.at(-1) === times[0]) return { html: `<div class="empty">Not enough activity to draw a timeline.</div>` };
+  const GAP = 20 * 60e3, gaps = [];
+  for (let k = 1; k < times.length; k++) if (times[k] - times[k - 1] > GAP) gaps.push({ a: times[k - 1], b: times[k] });
+  const active = times.at(-1) - times[0] - gaps.reduce((n, g) => n + g.b - g.a, 0);
+  const keep = Math.max(active * .03, 30e3);
+  const ct = t => t - times[0] - gaps.reduce((n, g) => n + (g.b <= t ? g.b - g.a - keep : 0), 0);
+  const total = ct(times.at(-1)) || 1;
+  const W = Math.max(300, ($("#sheetBody").clientWidth || Math.min(640, innerWidth)) - 40);
+  const m = { l: 40, r: 8, t: 14 }, ph = 130, iw = W - m.l - m.r, pb = m.t + ph, sy = pb + 10, sh = 22, H = sy + sh + 20;
+  const x = t => m.l + ct(t) / total * iw;
+  const maxC = Math.max(...reqs.map(r => r.context), 1);
+  const yMax = limit && maxC >= .5 * limit ? limit * 1.02 : maxC * 1.15;
+  const y = v => pb - v / yMax * ph;
+  const fmtT = t => new Date(t).toLocaleString(undefined, times.at(-1) - times[0] > 20 * 3600e3 ? { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" } : { hour: "2-digit", minute: "2-digit" });
+  let g = `<line x1="${m.l}" x2="${W - m.r}" y1="${pb}" y2="${pb}" stroke="var(--border)"/>
+    <line x1="${m.l}" x2="${W - m.r}" y1="${y(yMax / 2)}" y2="${y(yMax / 2)}" stroke="var(--grid)"/>
+    <text x="${m.l - 6}" y="${pb + 4}" text-anchor="end" font-size="10.5" fill="var(--text-muted)">0</text>
+    <text x="${m.l - 6}" y="${y(yMax / 2) + 4}" text-anchor="end" font-size="10.5" fill="var(--text-muted)">${big(yMax / 2)}</text>`;
+  const near = limit ? .8 * limit : null, nearShown = near && near <= yMax;
+  if (nearShown) g += `<line x1="${m.l}" x2="${W - m.r}" y1="${y(near)}" y2="${y(near)}" stroke="var(--critical)" stroke-dasharray="5 4" stroke-width="1.25"/>
+    <text x="${W - m.r}" y="${y(near) - 4}" text-anchor="end" font-size="10.5" fill="var(--critical-text)">80% of ${big(limit)}</text>`;
+  // Breaks where idle time was squeezed out.
+  for (const gp of gaps) {
+    const bx = x(gp.a) + keep / total * iw / 2;
+    g += `<g><title>${esc(dur((gp.b - gp.a) / 1000))} idle</title><rect x="${bx - 3}" y="${m.t}" width="6" height="${sy + sh - m.t}" fill="var(--surface-2)"/>
+      <path d="M${bx - 4},${pb + 3} l3,-6 l2,6 l3,-6" fill="none" stroke="var(--text-muted)"/></g>`;
+  }
+  for (const t of comps) g += `<line x1="${x(t)}" x2="${x(t)}" y1="${m.t}" y2="${pb}" stroke="var(--warning)" stroke-dasharray="3 3" stroke-width="1.5"/>
+    <text x="${x(t) + 3}" y="${m.t + 8}" font-size="10.5" fill="var(--warning-text)">compacted</text>`;
+  if (reqs.length) {
+    const line = reqs.map((r, k) => `${k ? "L" : "M"}${x(r.t).toFixed(1)},${y(r.context).toFixed(1)}`).join("");
+    g += `<path d="${line}L${x(reqs.at(-1).t).toFixed(1)},${pb}L${x(reqs[0].t).toFixed(1)},${pb}Z" fill="var(--series-1-soft)"/>
+      <path d="${line}" fill="none" stroke="var(--series-1)" stroke-width="1.75" stroke-linejoin="round"/>`;
+  }
+  const cmd = Object.fromEntries(s.commits.map(c => [c.tool_use_id, c.command]));
+  const commitCalls = calls.filter(c => c.is_commit), rules = commitCalls.length <= 12; // many commits: diamonds only, no rules
+  for (const c of commitCalls) g += `${rules ? `<line x1="${x(c.t)}" x2="${x(c.t)}" y1="${m.t}" y2="${pb}" stroke="var(--good)" opacity=".45"/>` : ""}
+    <path d="M${x(c.t)},${pb - 5} l5,5 l-5,5 l-5,-5 Z" fill="var(--good)" stroke="var(--surface-1)"><title>Commit at ${esc(fmtT(c.t))}: ${esc(cmd[c.id] || "")}</title></path>`;
+  // Tool-call strip: successes as faint ticks, failures in red. The ticks are only a picture; the event list below holds the targets.
+  g += `<rect x="${m.l}" y="${sy}" width="${iw}" height="${sh}" rx="4" fill="var(--surface-2)"/>`;
+  for (const c of calls) if (!c.is_error) g += `<rect x="${x(c.t) - .5}" y="${sy + 6}" width="1" height="${sh - 12}" fill="var(--text-muted)" opacity=".5"/>`;
+  const fails = calls.filter(c => c.is_error);
+  for (const c of fails) g += `<rect x="${x(c.t) - 1}" y="${sy + 2}" width="2" height="${sh - 4}" rx="1" fill="var(--critical)"/>`;
+  // Events: failures grouped while no call succeeds between them, then compactions and commits, in time order.
+  const events = [];
+  let run = null;
+  for (const c of calls) {
+    if (!c.is_error) { run = null; continue; }
+    if (!run) events.push(run = { kind: "fail", t: c.t, t1: c.t, calls: [] });
+    run.calls.push(c); run.t1 = c.t;
+  }
+  for (const t of comps) events.push({ kind: "compact", t, t1: t });
+  for (const c of commitCalls) events.push({ kind: "commit", t: c.t, t1: c.t, call: c });
+  events.sort((a, b) => a.t - b.t || (a.kind === "fail" ? -1 : 1));
+  const errHref = id => `/errors#${new URLSearchParams({ project: i.project, ex: id })}`;
+  const evName = e => {
+    if (e.kind === "compact") return "Context compacted";
+    if (e.kind === "commit") return `Commit <small>${esc((cmd[e.call.id] || "").replace(/\s+/g, " ").slice(0, 80))}</small>`;
+    const tools = [...new Set(e.calls.map(c => c.tool))], cats = [...new Set(e.calls.map(c => c.category).filter(Boolean))];
+    const n = e.calls.length;
+    return `${esc(tools.slice(0, 2).join(", "))}${tools.length > 2 ? ` +${tools.length - 2}` : ""} failed${n > 1 ? ` ${n}× in a row` : ""}${cats.length ? ` <small>${esc(cats.slice(0, 2).join(", "))}</small>` : ""}`;
+  };
+  const evTime = e => e.t1 - e.t > 60e3 ? `${fmtT(e.t)}–${new Date(e.t1).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}` : fmtT(e.t);
+  // A highlight band for the selected event, drawn under the hit layers.
+  g += `<rect id="tlMark" x="0" y="${m.t}" width="0" height="${sy + sh + 2 - m.t}" fill="var(--accent)" opacity=".16" visibility="hidden"/>
+    <line id="tlMarkL" x1="0" x2="0" y1="${m.t}" y2="${sy + sh + 2}" stroke="var(--accent)" stroke-width="1.5" visibility="hidden"/>`;
+  g += `<text x="${m.l}" y="${H - 4}" font-size="10.5" fill="var(--text-muted)">${esc(fmtT(times[0]))}</text>
+    <text x="${W - m.r}" y="${H - 4}" text-anchor="end" font-size="10.5" fill="var(--text-muted)">${esc(fmtT(times.at(-1)))}</text>
+    <text x="${m.l - 6}" y="${sy + sh / 2 + 4}" text-anchor="end" font-size="10.5" fill="var(--text-muted)">tools</text>
+    <line id="tlGuide" x1="0" x2="0" y1="${m.t}" y2="${pb}" stroke="var(--text-primary)" opacity=".35" visibility="hidden"/>
+    <circle id="tlDot" r="3.5" fill="var(--series-1)" stroke="var(--surface-1)" stroke-width="2" visibility="hidden"/>
+    <rect id="tlHit" x="${m.l}" y="${m.t}" width="${iw}" height="${ph}" fill="transparent"/>`;
+  const summary = reqs.length
+    ? `Context grew from ${big(reqs[0].context)} to a peak of ${big(maxC)} over ${plural(reqs.length, "main-thread request")}; ${plural(calls.length, "tool call")}, ${num(fails.length)} failed.`
+    : `${plural(calls.length, "tool call")}, ${num(fails.length)} failed.`;
+  const html = `<div class="tl"><svg id="tlSvg" viewBox="0 0 ${W} ${H}" height="${H}" tabindex="0" role="group"
+      aria-label="Session timeline. ${esc(summary)} Use the left and right arrow keys to read each request.">${g}</svg></div>
+    <div class="tl-read" id="tlRead" aria-live="polite">${esc(summary)}</div>
+    <div class="tl-key" aria-hidden="true">
+      <span><i style="width:14px;border-top:2px solid var(--series-1)"></i>Context per request</span>
+      ${nearShown ? `<span><i style="width:14px;border-top:2px dashed var(--critical)"></i>80% of the context window</span>` : limit ? `<span>80% line (${big(near)}) is off the scale</span>` : ""}
+      ${comps.length ? `<span><i style="width:0;height:10px;border-left:2px dashed var(--warning)"></i>Compaction</span>` : ""}
+      ${calls.some(c => c.is_commit) ? `<span><i style="width:8px;height:8px;background:var(--good);transform:rotate(45deg)"></i>Commit</span>` : ""}
+      <span><i style="width:1px;height:10px;background:var(--text-muted)"></i>Tool call</span>
+      ${fails.length ? `<span><i style="width:2px;height:12px;background:var(--critical)"></i>Failed call</span>` : ""}
+      ${gaps.length ? `<span>⌇ idle time squeezed out</span>` : ""}
+      ${s.truncated ? `<span>Long session: only the first rows are drawn</span>` : ""}
+    </div>
+    ${events.length ? `<div class="evhead"><h4 id="tlEvH">Events</h4><span class="c">${[
+        fails.length && `${plural(events.filter(e => e.kind === "fail").length, "failure run")} (${plural(fails.length, "failed call")})`,
+        comps.length && plural(comps.length, "compaction"), commitCalls.length && plural(commitCalls.length, "commit")].filter(Boolean).join(", ")}</span></div>
+    <div class="tl-sel" id="tlSel" aria-live="polite"><span class="muted">Select an event to mark it on the timeline.</span></div>
+    <ol class="evlist" id="tlEvents" aria-labelledby="tlEvH">${events.map((e, k) => `<li class="ev ${e.kind}"${k >= EV_TOP ? " hidden" : ""}>
+      <button type="button" class="evbtn" data-ev="${k}" aria-pressed="false"><i class="mk" aria-hidden="true"></i><span class="tm">${esc(evTime(e))}</span><span class="nm">${evName(e)}</span></button>
+      ${e.kind === "fail" ? `<a class="evlink" href="${esc(errHref(e.calls[0].id))}" aria-label="${esc(`Open the first of these failures in Errors`)}">Errors →</a>` : ""}</li>`).join("")}</ol>
+    ${events.length > EV_TOP ? `<button type="button" class="linkish small" id="tlEvMore">Show all ${num(events.length)} events</button>` : ""}` : ""}`;
+  const wire = () => {
+    const svg = $("#tlSvg"); if (!svg) return;
+    // Selecting an event marks it on the timeline and keeps a readout of it until another is selected.
+    const mark = $("#tlMark"), markL = $("#tlMarkL"), sel = $("#tlSel");
+    const pick = k => {
+      const e = events[k];
+      document.querySelectorAll("#tlEvents .evbtn").forEach(b => b.setAttribute("aria-pressed", +b.dataset.ev === k));
+      const x0 = x(e.t), x1 = x(e.t1);
+      mark.setAttribute("x", Math.min(x0, x1) - 4); mark.setAttribute("width", Math.abs(x1 - x0) + 8); mark.setAttribute("visibility", "visible");
+      markL.setAttribute("x1", x0); markL.setAttribute("x2", x0); markL.setAttribute("visibility", "visible");
+      const li = $(`#tlEvents .evbtn[data-ev="${k}"]`)?.closest("li"); if (li) li.hidden = false;
+      sel.innerHTML = `<b>Selected</b><span>${esc(evTime(e))}</span><span>${evName(e)}</span>`
+        + (e.kind === "fail" ? `<a href="${esc(errHref(e.calls[0].id))}">Open in Errors</a>` : "");
+    };
+    $("#tlEvents")?.addEventListener("click", ev => { const b = ev.target.closest(".evbtn"); if (b) pick(+b.dataset.ev); });
+    $("#tlEvMore")?.addEventListener("click", ev => {
+      document.querySelectorAll("#tlEvents li[hidden]").forEach(li => li.hidden = false);
+      $(`#tlEvents .evbtn[data-ev="${EV_TOP}"]`)?.focus(); ev.target.remove();
+    });
+    // A click on the strip or the plot picks the nearest event, so the ticks still lead somewhere.
+    svg.addEventListener("click", ev => {
+      if (!events.length) return;
+      const b = svg.getBoundingClientRect(), px = (ev.clientX - b.left) * W / b.width;
+      let best = 0; events.forEach((e, k) => { if (Math.abs(x(e.t) - px) < Math.abs(x(events[best].t) - px)) best = k; });
+      if (Math.abs(x(events[best].t) - px) <= 16) pick(best);
+    });
+    if (!reqs.length) return;
+    const guide = $("#tlGuide"), dotEl = $("#tlDot"), read = $("#tlRead"), xs = reqs.map(r => x(r.t));
+    let at = null;
+    const show = k => {
+      at = k; const r = reqs[k];
+      guide.setAttribute("x1", xs[k]); guide.setAttribute("x2", xs[k]); guide.setAttribute("visibility", "visible");
+      dotEl.setAttribute("cx", xs[k]); dotEl.setAttribute("cy", y(r.context)); dotEl.setAttribute("visibility", "visible");
+      read.textContent = `Request ${num(k + 1)} of ${num(reqs.length)} · ${fmtT(r.t)} · context ${big(r.context)}${limit ? ` (${pct(r.context / limit)})` : ""} · ${r.model.replace(/^claude-/, "")}${r.cost != null ? ` · ${usd(r.cost)}` : ""}`;
+    };
+    const nearest = px => { let lo = 0, hi = xs.length - 1; while (lo < hi) { const mid = (lo + hi) >> 1; xs[mid] < px ? lo = mid + 1 : hi = mid; } return lo > 0 && px - xs[lo - 1] < xs[lo] - px ? lo - 1 : lo; };
+    $("#tlHit").addEventListener("pointermove", ev => { const b = svg.getBoundingClientRect(); show(nearest((ev.clientX - b.left) * W / b.width)); });
+    svg.addEventListener("keydown", ev => {
+      const step = { ArrowLeft: -1, ArrowRight: 1, Home: -Infinity, End: Infinity }[ev.key];
+      if (step == null) return;
+      ev.preventDefault();
+      const n = (ev.shiftKey && Math.abs(step) === 1 ? 10 : 1) * step;
+      show(Math.max(0, Math.min(reqs.length - 1, (at ?? (step > 0 ? -1 : reqs.length)) + n)));
+    });
+  };
+  return { html, wire };
 }
 // Invalidate sheet requests the moment the user dismisses it, so a late answer cannot reopen it.
 const dismiss = () => { pseq++; sseq++; inflight = null; };
@@ -934,6 +1666,44 @@ sheet.addEventListener("close", () => {
   opener = openerEl = null;
 });
 
+// Phones show What changed after the chart and its insights, desktops above them. Move the markup, not just the
+// boxes, so keyboard order matches the order on screen.
+const narrow = matchMedia("(max-width: 520px)");
+const placeChanged = () => narrow.matches ? $("#moreInsights").after($("#changed")) : $("#insights").before($("#changed"));
+narrow.addEventListener("change", placeChanged);
+placeChanged();
+
+// ---------- section index ----------
+// Links scroll (and open drawers) without touching the hash, which holds the view.
+const idx = $("#secidx"), idxLinks = [...idx.querySelectorAll("a[data-t]")];
+function jumpTo(id) {
+  const el = document.getElementById(id);
+  if (!el || el.hidden) return;
+  if (el.matches("details.drawer")) return openDrawer(el.id, true);
+  el.scrollIntoView({ behavior: motion() ? "smooth" : "auto", block: "start" });
+  el.querySelector("button, a, [tabindex]")?.focus({ preventScroll: true });
+}
+idx.addEventListener("click", ev => {
+  const a = ev.target.closest("a[data-t]"); if (!a) return;
+  ev.preventDefault(); jumpTo(a.dataset.t);
+});
+// Narrow screens hide the sticky index; the jump select does the same, then goes back to its prompt.
+$("#jump").onchange = e => { const v = e.target.value; e.target.value = ""; if (v) jumpTo(v); };
+new ResizeObserver(() => document.documentElement.style.setProperty("--secidx-h", idx.offsetHeight + "px")).observe(idx);
+function updateIndex() {
+  if (!idx.offsetHeight) return;
+  const line = (parseFloat(getComputedStyle(idx).top) || 0) + idx.offsetHeight + 24; // where the index sits once stuck
+  let cur = idxLinks[0];
+  const live = idxLinks.filter(a => !a.hidden);
+  if (scrollY > 8) for (const a of live) if (document.getElementById(a.dataset.t)?.getBoundingClientRect().top <= line) cur = a;
+  if (innerHeight + scrollY >= document.documentElement.scrollHeight - 2) cur = live.findLast(a => document.getElementById(a.dataset.t).getBoundingClientRect().top < innerHeight) || cur;
+  idxLinks.forEach(a => a === cur ? a.setAttribute("aria-current", "true") : a.removeAttribute("aria-current"));
+  idx.classList.toggle("stuck", idx.getBoundingClientRect().top <= (parseFloat(getComputedStyle(idx).top) || 0) + .5 && scrollY > 0);
+}
+let idxRaf = 0;
+addEventListener("scroll", () => { if (!idxRaf) idxRaf = requestAnimationFrame(() => { idxRaf = 0; updateIndex(); }); }, { passive: true });
+document.querySelectorAll("details.drawer").forEach(d => d.addEventListener("toggle", () => updateIndex()));
+
 // ---------- wiring ----------
 readHash();
 $("#fProject").onchange = e => go({ project: e.target.value, session: "", inspect: "" });
@@ -942,11 +1712,13 @@ document.querySelectorAll("#fMetric button").forEach(b => b.onclick = () => {
   state.metric = b.dataset.v; store.set("claude-usage-metric", state.metric); render();
 });
 $("#ledgerMore").onclick = () => { state.ledgerAll = !state.ledgerAll; renderLedgers(); };
+$("#chgMore").onclick = () => { state.chgAll = !state.chgAll; renderChanges(); };
 $("#retry").onclick = () => failed && DATA ? go(failed) : load();
 let sq; $("#sessQ").oninput = e => { state.sessQ = e.target.value; clearTimeout(sq); sq = setTimeout(() => renderSessions(), 200); };
 $("#sessMore").onclick = () => renderSessions(true);
 $("#d-sessions").addEventListener("toggle", () => DATA && renderSessions());
 $("#sessNear").onchange = e => { state.nearOnly = e.target.checked; renderSessions(); };
+$("#sessDay button").onclick = () => { state.sessDay = ""; renderSessions(); $("#sessQ").focus(); };
 // Back/forward and links that change the hash: re-read the whole view from the URL.
 const onNav = () => {
   if (location.hash === hashOf()) return;

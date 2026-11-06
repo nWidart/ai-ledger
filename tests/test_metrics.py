@@ -91,11 +91,99 @@ class MetricsTest(unittest.TestCase):
         self.assertEqual(days["2026-11-04"]["thinking"], 500_000)
         self.assertEqual(days["2026-11-05"]["unpriced"], 1)
 
+    def test_cost_per_day_and_project(self):
+        by = {(d["day"], d["project"]): d for d in self.all["daily_projects"]}
+        self.assertAlmostEqual(by[("2026-11-04", "foo")]["cost"], 15.8)
+        self.assertIsNone(by[("2026-11-05", "foo")]["cost"])  # only an unpriced model that day
+        self.assertAlmostEqual(by[("2026-10-01", "bar")]["cost"], 130 * 2 / 1e6)
+        self.assertEqual({d["project"] for d in self.foo7["daily_projects"]}, {"foo"})
+
+    def test_project_order_ignores_filters(self):
+        self.assertEqual(self.foo7["project_order"], ["foo", "bar"])
+        self.assertEqual(metrics.errors_payload(self.con.cursor())["project_order"], ["foo", "bar"])
+
     def test_cost_and_unpriced(self):
         t = self.foo7["totals"]
         self.assertAlmostEqual(t["cost"], 15.8)
         self.assertEqual([u["model"] for u in self.foo7["unpriced"]], ["m-unknown"])
         self.assertAlmostEqual(self.all["totals"]["cost"], 15.8 + 130 * 2 / 1e6)
+
+    def test_previous_period(self):
+        # One day ending today (s2) against the day before it (s1); same project filter, nothing before all time.
+        prev = metrics.usage(self.con.cursor(), "foo", 1, prices=PRICES, today=TODAY)["previous"]
+        self.assertEqual((prev["start"], prev["end"], prev["requests"], prev["sessions"]), ("2026-11-04", "2026-11-04", 2, 1))
+        self.assertAlmostEqual(prev["cost"], 15.8)
+        self.assertEqual([d["day"] for d in prev["daily"]], ["2026-11-04"])
+        self.assertEqual(metrics.usage(self.con.cursor(), "bar", 1, prices=PRICES, today=TODAY)["previous"]["requests"], 0)
+        self.assertIsNone(self.all["previous"])
+        self.assertEqual(self.foo7["previous"]["start"], "2026-10-23")
+        self.assertEqual((prev["active_days"], self.foo7["totals"]["active_days"]), (1, 2))
+        self.assertEqual([(r["project"], r["requests"]) for r in prev["by_project"]], [("foo", 2)])
+
+    def test_project_changes(self):
+        # 35 days to Nov 5 holds foo (new: nothing of it in the 35 days before); bar's only day (Oct 1) is in the previous window.
+        ch = metrics.usage(self.con.cursor(), "", 35, prices=PRICES, today=TODAY)["changes"]
+        self.assertEqual([(r["project"], r["new"]) for r in ch], [("foo", True), ("bar", False)])
+        self.assertAlmostEqual(ch[0]["delta"], 15.8)
+        self.assertEqual((ch[1]["cost"], ch[1]["prev_cost"]), (0, 130 * 2 / 1e6))
+        self.assertAlmostEqual(ch[1]["delta"], -130 * 2 / 1e6)
+        # One day: foo's priced spend was all the day before.
+        one = metrics.usage(self.con.cursor(), "", 1, prices=PRICES, today=TODAY)["changes"]
+        self.assertEqual([(r["project"], r["new"], r["cost"]) for r in one], [("foo", False, 0)])
+        self.assertIsNone(self.all["changes"])
+
+    def test_prompt_title(self):
+        t = metrics.prompt_title
+        self.assertEqual(t("<command-message>ship</command-message>\n<command-name>/ship</command-name>\n<command-args>add  the tests</command-args>"),
+                         "/ship add the tests")
+        self.assertEqual(t("<command-message>ship is running…</command-message>"), "/ship")
+        self.assertEqual(t("<system-reminder>ignore me</system-reminder>\n\n# Fix the build. Then run the tests.\nMore"), "Fix the build.")
+        self.assertEqual(t("x" * 100), "x" * 79 + "…")
+        self.assertIsNone(t("<system-reminder>only this</system-reminder>"))
+        self.assertIsNone(t(None))
+
+    def test_session_list_by_day(self):
+        day = metrics.session_list(self.con.cursor(), day="2026-11-04", prices=PRICES, today=TODAY)
+        self.assertEqual([x["session_id"] for x in day["sessions"]], ["s1"])
+        with self.assertRaises(ValueError):
+            metrics.session_list(self.con.cursor(), day="nope", prices=PRICES, today=TODAY)
+
+    def test_session_timeline(self):
+        c = self.con.cursor()
+        raw = ["key", "file", "line_no", "type", "session_id", "ts", "subagent", "json"]
+        store.insert(c, "raw_lines", raw, [
+            ("x1", "f", 1, "user", "s1", "2026-11-04T10:00:00Z", False,
+             '{"type":"user","promptId":"p1","message":{"content":[{"type":"text","text":"  fix the build  "}]}}'),
+            ("x2", "f", 2, "system", "s1", "2026-11-04T10:20:00Z", False, '{"type":"system","subtype":"compact_boundary"}')])
+        try:
+            s = metrics.session(c, "s1", prices=PRICES)
+            self.assertEqual(s["first_prompt"], "fix the build")
+            self.assertEqual(s["compaction_ts"], ["2026-11-04T10:20:00Z"])
+            self.assertEqual([(r["ts"], r["context"], r["subagent"]) for r in s["requests"]],
+                             [("2026-11-04T10:01:00.000Z", 10_000_000, False), ("2026-11-04T10:02:00.000Z", 1_000_000, True)])
+            self.assertEqual(len(s["calls"]), 10)
+            self.assertEqual([c_["id"] for c_ in s["calls"] if c_["is_error"]], ["t01", "t02", "t03", "t04", "t07", "t08"])
+            self.assertEqual([c_["id"] for c_ in s["calls"] if c_["is_commit"]], ["t05"])
+            self.assertFalse(s["truncated"])
+            self.assertIsNone(metrics.session(c, "s3", prices=PRICES)["first_prompt"])  # no stored line for its prompt
+            self.assertEqual((s["title"], s["first_prompt_cut"]), ("fix the build", False))
+            listed = metrics.session_list(c, prices=PRICES, today=TODAY)["sessions"]
+            self.assertEqual({x["session_id"]: x["title"] for x in listed}, {"s1": "fix the build", "s2": None, "s3": None})
+        finally:
+            c.execute("DELETE FROM raw_lines WHERE key IN ('x1', 'x2')")
+
+    def test_first_prompt_cap(self):
+        c = self.con.cursor()
+        long = "word " * 200
+        store.insert(c, "raw_lines", ["key", "file", "line_no", "type", "session_id", "ts", "subagent", "json"], [
+            ("x3", "f", 3, "user", "s2", "2026-11-05T09:00:00Z", False, '{"type":"user","promptId":"p3","message":{"content":"%s"}}' % long)])
+        try:
+            s = metrics.session(c, "s2", prices=PRICES)
+            self.assertTrue(s["first_prompt_cut"])
+            self.assertEqual(len(s["first_prompt"]), metrics.FIRST_PROMPT_CAP + 1)
+            self.assertEqual(metrics.first_prompt(c, "s2", cap=None), long.strip())
+        finally:
+            c.execute("DELETE FROM raw_lines WHERE key = 'x3'")
 
     def test_cache_and_subagents(self):
         t = self.foo7["totals"]
@@ -159,6 +247,20 @@ class MetricsTest(unittest.TestCase):
         calls = metrics.errors_payload(self.con.cursor())["calls"]
         self.assertEqual(calls, [["2026-11-04", "foo", 10, 0]])
 
+    def test_error_days_counts_per_day_project_and_category(self):
+        c = self.con.cursor()
+        store.insert(c, "tool_calls", ["tool_use_id", "session_id", "tool", "start_ts", "end_ts", "is_error", "category", "subagent"], [
+            ("k1", "s2", "Bash", "2026-11-05 09:01:00", "2026-11-05 09:01:05", True, "y", True),
+            ("k2", "s2", "Bash", "2026-11-05 09:02:00", "2026-11-05 09:02:05", True, "y", False),
+            ("k3", "s2", "Bash", "2026-11-05 09:03:00", "2026-11-05 09:03:05", False, None, False)])
+        try:
+            p = metrics.errors_payload(c)
+            self.assertEqual(p["error_days"], [["2026-11-04", "foo", "x", 6, 0], ["2026-11-05", "foo", "y", 2, 1]])
+            # The counts agree with the error list they summarize.
+            self.assertEqual(sum(r[3] for r in p["error_days"]), len(p["errors"]))
+        finally:
+            c.execute("DELETE FROM tool_calls WHERE tool_use_id IN ('k1', 'k2', 'k3')")
+
     def test_errors_payload_anchors_on_today(self):
         self.assertEqual(metrics.errors_payload(self.con.cursor(), today=TODAY)["today"], "2026-11-05")
 
@@ -174,6 +276,34 @@ class MetricsTest(unittest.TestCase):
             self.assertIsNone(metrics.error_detail(c, "missing"))
         finally:
             c.execute("DELETE FROM tool_calls WHERE tool_use_id IN ('d1', 'd2')")
+
+    def test_incidents_group_failures_and_record_recovery(self):
+        c = self.con.cursor()
+        row = lambda i, m0, err, cat=None, sub=False, inp="": (i, "s2", "Bash", inp, f"2026-11-05 09:{m0}:00", f"2026-11-05 09:{m0}:05", err, cat, sub)
+        store.insert(c, "tool_calls", ["tool_use_id", "session_id", "tool", "input_summary", "start_ts", "end_ts", "is_error", "category", "subagent"], [
+            row("a1", "00", True, "y"), row("a2", "01", False),  # a success between two failures doesn't end the incident
+            row("a3", "02", True, "y"), row("a4", "03", True, "z"),  # another category: its own incident
+            row("a5", "30", True, "y"),  # more than the gap after a3: a new incident
+            row("a6", "31", False, inp="ls -la"), row("a7", "02", True, "y", sub=True)])  # subagent calls apart
+        try:
+            p = metrics.errors_payload(c)
+            inc, n = p["incidents"], {e["id"]: e["n"] for e in p["errors"]}
+            members = {}
+            for k, i in n.items():
+                members.setdefault(i, []).append(k)
+            by = {tuple(sorted(v)): inc[i] for i, v in members.items()}
+            self.assertEqual(sorted(by), [("a1", "a3"), ("a4",), ("a5",), ("a7",), ("t01", "t02", "t03", "t04"), ("t07",), ("t08",)])
+            a = by[("a1", "a3")]
+            self.assertEqual((a["outcome"], a["ok"], a["c"], a["p"], a["first"], a["last"]),
+                             ("failed_again", 1, "y", "foo", "2026-11-05T09:00:00.000Z", "2026-11-05T09:02:05.000Z"))
+            self.assertEqual(by[("a4",)]["outcome"], "failed_again")
+            self.assertEqual((by[("a5",)]["outcome"], by[("a5",)]["rid"], by[("a5",)]["ri"]), ("recovered", "a6", "ls -la"))
+            self.assertEqual((by[("a7",)]["outcome"], by[("a7",)]["sub"]), ("gave_up", 1))
+            self.assertEqual(by[("t01", "t02", "t03", "t04")]["outcome"], "gave_up")
+            self.assertEqual((by[("t08",)]["outcome"], by[("t08",)]["rid"]), ("recovered", "t09"))
+            self.assertEqual(p["incident_gap_minutes"], metrics.INCIDENT_GAP_MINUTES)
+        finally:
+            c.execute("DELETE FROM tool_calls WHERE tool_use_id LIKE 'a_'")
 
 
 if __name__ == "__main__":

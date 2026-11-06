@@ -22,6 +22,7 @@ import store
 HOST, PORT = "127.0.0.1", 8765
 INTERVAL = 60
 PAGES = {"/errors": "dashboard_template.html", "/usage": "usage.html"}
+ASSETS = {"/theme.css": ("theme.css", "text/css; charset=utf-8")}  # shared by both pages, read on every request like the pages
 
 
 class App:
@@ -102,6 +103,10 @@ def handler(app):
                     self.send(302, "", headers=[("Location", "/usage")])
                 elif url.path in PAGES:
                     self.send(200, page(PAGES[url.path]), "text/html; charset=utf-8")
+                elif url.path in ASSETS:
+                    name, ctype = ASSETS[url.path]
+                    with open(os.path.join(store.HERE, name), "rb") as fh:
+                        self.send(200, fh.read(), ctype)
                 elif url.path == "/api/status":
                     self.json(app.status())
                 elif url.path == "/api/errors":
@@ -112,9 +117,12 @@ def handler(app):
                 elif url.path == "/api/session":
                     detail = metrics.session(app.con.cursor(), q.get("id", ""))
                     self.send(404, json.dumps(dict(error="session not found"))) if detail is None else self.json(detail)
+                elif url.path == "/api/prompt":  # the session's whole first prompt; /api/session caps it
+                    text = metrics.first_prompt(app.con.cursor(), q.get("session", ""), cap=None)
+                    self.send(404, json.dumps(dict(error="prompt not found"))) if text is None else self.json(dict(text=text))
                 elif url.path == "/api/sessions":
                     self.json(metrics.session_list(app.con.cursor(), q.get("project", ""), int(q.get("range") or 0), q.get("q", ""),
-                                                   q.get("near") == "1", int(q.get("offset") or 0)))
+                                                   q.get("near") == "1", int(q.get("offset") or 0), day=q.get("day", "")))
                 elif url.path == "/api/usage":
                     self.json(metrics.usage(app.con.cursor(), q.get("project", ""), int(q.get("range") or 0), q.get("session", "")))
                 else:

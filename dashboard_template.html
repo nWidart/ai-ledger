@@ -7,74 +7,119 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="/theme.css">
 <style>
-:root {
-  color-scheme: light;
-  --bg: #f6f5f2; --surface-1: #fcfcfb; --surface-2: #f0efec; --border: #e2e0da;
-  --text-primary: #0b0b0b; --text-secondary: #52514e; --text-muted: #66655f;
-  --series-1: #2a78d6; --series-1-soft: rgba(42,120,214,.12); --series-2: #eb6834;
-  --grid: #e8e6e1; --good: #0ca30c; --good-text: #006300; --critical: #d03b3b;
-  --accent: #2a78d6; --link: #1f62b5; --critical-text: #b42318;
+body { line-height: 1.45; }
+.wrap { max-width: 1240px; margin: 0 auto; padding: 20px 16px 64px; }
+/* Header as on Usage: page name left, filters right on the same row. */
+.top { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+.kicker { font-size: 15px; font-weight: 600; margin: 0; color: var(--text-secondary); }
+.filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; min-width: 0; max-width: 100%; }
+/* The briefing: the period's answer as one sentence, as on Usage. */
+.lede { margin: 0 0 8px; max-width: 34ch; font-size: clamp(24px, 4vw, 40px); line-height: 1.14;
+  font-weight: 400; letter-spacing: -.025em; text-wrap: balance; color: var(--text-secondary); }
+.lede b { font-weight: 600; letter-spacing: -.04em; color: var(--text-primary); }
+.lede .dn { color: var(--good-text); font-weight: 500; } .lede .up { color: var(--critical-text); font-weight: 500; }
+.lede:focus { outline: none; }
+.sub { color: var(--text-muted); font-size: 13px; margin: 0 0 20px; }
+/* Vitals: Usage's ruled stat strip, same anatomy (value, label, note). */
+.vitals { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 20px;
+  border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.vital { padding: 18px 20px 18px 0; min-width: 0; }
+.vital + .vital { padding-left: 20px; border-left: 1px solid var(--border); }
+.vital .v { font-size: 30px; font-weight: 600; letter-spacing: -.035em; line-height: 1.1; overflow-wrap: anywhere; }
+.vital .v.txt { font-size: 19px; line-height: 1.25; letter-spacing: -.015em; padding-top: 6px; }
+.vital .l { font-weight: 500; margin-top: 4px; }
+.vital .d { color: var(--text-muted); font-size: 12.5px; margin-top: 2px; }
+@media (max-width: 900px) {
+  .vitals { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .vital:nth-child(3) { padding-left: 0; border-left: 0; }
+  .vital:nth-child(n+3) { border-top: 1px solid var(--border); }
 }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    color-scheme: dark;
-    --bg: #121211; --surface-1: #1a1a19; --surface-2: #242422; --border: #33332f;
-    --text-primary: #f0efec; --text-secondary: #c3c2b7; --text-muted: #9d9c94;
-    --series-1: #3987e5; --series-1-soft: rgba(57,135,229,.18); --series-2: #d95926;
-    --grid: #2b2b28; --good-text: #4cc94c; --critical: #e66767; --accent: #3987e5;
-    --link: #5c9df0; --critical-text: #f07a7a;
-  }
+@media (max-width: 520px) {
+  .vital { padding: 10px 12px 10px 0; } .vital + .vital { padding-left: 12px; } .vital:nth-child(3) { padding-left: 0; }
+  .vital .v { font-size: 22px; } .vital .v.txt { font-size: 16px; }
+  /* Phone: the finding, the rate and its change, then the chart; the rest of the summary waits behind More. */
+  .lede { font-size: 21px; margin-bottom: 10px; }
+  .vitals { margin-bottom: 8px; }
+  .vitals:not(.open) .vital:nth-child(n+3), .sub.folded:not(.open) { display: none; }
+  .moresum { display: block; margin: 0 0 14px; font-size: 13px; }
+  .top { margin-bottom: 14px; gap: 8px; }
+  .filters { gap: 6px; }
+  .filters .seg button { padding: 5px 9px; font-size: 13px; }
+  .filters select { padding-top: 5px; padding-bottom: 5px; font-size: 13px; }
+  .filters .long { display: none; }
+  .filters label.chk { font-size: 12.5px; }
+  .chart-card .hint { display: none; }
 }
-:root[data-theme="dark"] {
-  color-scheme: dark;
-  --bg: #121211; --surface-1: #1a1a19; --surface-2: #242422; --border: #33332f;
-  --text-primary: #f0efec; --text-secondary: #c3c2b7; --text-muted: #9d9c94;
-  --series-1: #3987e5; --series-1-soft: rgba(57,135,229,.18); --series-2: #d95926;
-  --grid: #2b2b28; --good-text: #4cc94c; --critical: #e66767; --accent: #3987e5;
-  --link: #5c9df0; --critical-text: #f07a7a;
-}
-* { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); color: var(--text-primary);
-  font: 14px/1.45 "IBM Plex Sans", ui-sans-serif, -apple-system, system-ui, sans-serif; }
-.wrap { max-width: 1240px; margin: 0 auto; padding: 24px 16px 64px; }
-header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 16px; margin-bottom: 16px; }
-h1 { font-size: 22px; margin: 0; letter-spacing: -.01em; }
-.sub { color: var(--text-muted); font-size: 13px; }
-.filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 16px; }
-select, input[type=date], input[type=search], button {
-  font: inherit; color: var(--text-primary); background: var(--surface-1);
-  border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; }
-button { cursor: pointer; }
-button:hover { background: var(--surface-2); }
-.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
-.seg button { border: 0; border-radius: 0; padding: 6px 12px; }
-.seg button[aria-pressed=true] { background: var(--text-primary); color: var(--surface-1); }
-label.chk { display: inline-flex; gap: 6px; align-items: center; color: var(--text-secondary); font-size: 13px; }
-.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-bottom: 16px; }
-.card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
-.kpi .label { color: var(--text-secondary); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
-.kpi .value { font-size: 28px; font-weight: 600; font-variant-numeric: tabular-nums; margin-top: 4px; }
-.kpi .note { color: var(--text-muted); font-size: 12px; margin-top: 2px; }
 .delta-down { color: var(--good-text); } .delta-up { color: var(--critical-text); }
 .chart-card h2, .card h2 { font-size: 15px; margin: 0 0 2px; }
 .chart-card .hint { color: var(--text-muted); font-size: 12px; margin-bottom: 8px; }
 #chart { position: relative; border-radius: 6px; }
 #chart:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
-#chart svg { display: block; width: 100%; height: 260px; overflow: visible; }
-.tip { position: absolute; pointer-events: none; background: var(--surface-1); border: 1px solid var(--border);
-  border-radius: 8px; padding: 8px 10px; font-size: 12px; box-shadow: 0 4px 16px rgba(0,0,0,.12);
-  white-space: nowrap; display: none; z-index: 2; }
-.tip b { font-variant-numeric: tabular-nums; }
+#chart svg { display: block; width: 100%; height: 280px; overflow: visible; }
+/* Legend: each type is a button that selects it; Other and the rate line are keys. */
+.legend { display: flex; flex-wrap: wrap; gap: 4px 6px; margin: 4px 0 10px; }
+.legend button, .legend .key { font-size: 12px; padding: 2px 8px; display: inline-flex; gap: 6px; align-items: center; border-radius: 999px; max-width: 100%; min-width: 0; }
+.legend .key { color: var(--text-secondary); border: 1px solid transparent; }
+.legend button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.legend button em { font-style: normal; color: var(--text-muted); }
+.legend button[aria-pressed=true] { border-color: var(--text-secondary); font-weight: 500; background: var(--surface-2); }
+.legend.has-sel button[aria-pressed=false] i { opacity: .35; }
+.sw { width: 10px; height: 10px; border-radius: 3px; display: inline-block; flex: none; }
+.sw.line { width: 14px; height: 0; border-radius: 0; border-top: 2px solid var(--text-primary); }
+.sw.nodata { background: var(--surface-2); border: 1px dashed var(--border); }
+/* Selecting a type lifts its layer and dims the rest in place. */
+@media (prefers-reduced-motion: no-preference) { #chart .layer, #chart .fix { transition: opacity .2s; } }
+#chart svg.has-sel .layer:not(.on), #chart svg.has-sel .fix:not(.on) { opacity: .2; }
+.sw.line.sel { border-top-width: 2.5px; }
+/* The selected type, named under the legend while it stays selected. */
+.selout { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; font-size: 13px; margin: -4px 0 10px; padding: 6px 10px;
+  background: var(--surface-2); border-radius: 8px; }
+.selout[hidden] { display: none; }
+.selout b { display: inline-flex; gap: 6px; align-items: center; min-width: 0; }
+.selout .muted { font-size: 12px; }
+.selout button { margin-left: auto; font-size: 12px; padding: 2px 8px; }
+.tip .trow { display: flex; gap: 14px; justify-content: space-between; align-items: center; }
+.tip .trow > span { display: inline-flex; gap: 6px; align-items: center; }
+.tip .trow.on { font-weight: 600; }
+.tip .tot { border-bottom: 1px solid var(--border); margin-bottom: 4px; padding-bottom: 4px; }
+/* Motion only for readers who haven't asked for less. */
+@media (prefers-reduced-motion: no-preference) {
+  #chart svg.grow .bars { animation: grow .55s cubic-bezier(.2, .7, .2, 1) both; transform-box: view-box; }
+  #chart svg.grow .rline { stroke-dasharray: 1; animation: draw .7s .15s ease-out both; }
+  .bar > i { animation: barIn .45s ease-out both; transform-origin: left; }
+  @keyframes grow { from { transform: scaleY(0); } }
+  @keyframes draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+  @keyframes barIn { from { transform: scaleX(0); } }
+}
 .grid2 { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 16px; margin-top: 16px; }
 @media (max-width: 900px) { .grid2 { grid-template-columns: minmax(0, 1fr); } }
-.grid2 > *, .kpis > * { min-width: 0; }
-@media (max-width: 520px) {
-  .kpis { grid-template-columns: 1fr 1fr; gap: 8px; }
-  .kpis .card { padding: 10px 12px; }
-  .kpi .value { font-size: 20px; }
-}
+.grid2 > * { min-width: 0; }
 .tscroll { overflow-x: auto; }
+.tbtn .sw { margin-right: 7px; vertical-align: 0; }
+td .chip.fixed { margin-left: 6px; }
+/* Where to start */
+.pick .phead { display: flex; gap: 12px; justify-content: space-between; align-items: baseline; }
+.pick .phead b { min-width: 0; }
+.pick .phead .muted { flex: none; white-space: nowrap; font-size: 13px; }
+.pick .act { color: var(--link); font-size: 13px; margin-top: 4px; }
+.pick:hover .act { text-decoration: underline; }
+.subh { font-size: 13px; font-weight: 600; margin: 18px 0 2px; }
+.rise { color: var(--critical-text); font-weight: 600; font-variant-numeric: tabular-nums; }
+/* Type detail: by project, and the rate when the main chart is out of view */
+.byproj { margin: 12px 0; }
+.byproj .stack { display: flex; gap: 2px; height: 8px; border-radius: 4px; overflow: hidden; margin: 6px 0 4px; }
+.byproj .stack i { display: block; height: 100%; min-width: 2px; }
+.byproj ul { list-style: none; margin: 0; padding: 0; }
+.byproj li button { display: grid; grid-template-columns: minmax(0, 1fr) auto 3rem; gap: 10px; width: 100%; background: none; border: 0; border-radius: 6px;
+  padding: 4px 6px; margin: 0 -6px; text-align: left; font-size: 13px; }
+.byproj li button:hover { background: var(--surface-2); }
+.byproj li .v { font-variant-numeric: tabular-nums; text-align: right; }
+.byproj li .s { color: var(--text-muted); text-align: right; font-size: 12px; }
+.mini { margin: 4px 0 12px; }
+.mini svg { display: block; width: 100%; height: 64px; overflow: visible; }
+.mini[hidden] { display: none; }
 @media (max-width: 520px) { .c-share, .c-trend { display: none; } }
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
 th { text-align: left; color: var(--text-muted); font-weight: 500; font-size: 12px; padding: 6px 8px; border-bottom: 1px solid var(--border); }
@@ -82,13 +127,18 @@ td { padding: 8px; border-bottom: 1px solid var(--border); vertical-align: middl
 td.num, th.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
 tbody tr { cursor: pointer; }
 tbody tr:hover { background: var(--surface-2); }
-tbody tr.sel { background: var(--series-1-soft); }
+tbody tr.sel { background: var(--critical-soft); }
 .tbtn { background: none; border: 0; border-radius: 4px; padding: 0; text-align: left; color: inherit; }
 .tbtn:hover { background: none; }
 .tbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.bar { height: 6px; background: var(--surface-2); border-radius: 3px; min-width: 60px; }
-.bar > i { display: block; height: 100%; background: var(--series-1); border-radius: 3px; }
-.chip { display: inline-block; font-size: 11px; padding: 2px 7px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-secondary); white-space: nowrap; }
+.bar { position: relative; height: 6px; background: var(--surface-2); border-radius: 3px; min-width: 60px; }
+/* A share under 3% (under 2px at the bar's 60px minimum) still gets a mark: a tick taller than the bar, so it reads as "present", not as a length */
+.bar > .tick { position: absolute; left: 0; top: -2px; bottom: -2px; width: 2px; border-radius: 1px; }
+.bar > i { display: block; height: 100%; background: var(--text-muted); border-radius: 3px; }
+.share { display: flex; gap: 8px; align-items: center; }
+.share .bar { flex: 1; }
+.share span { font-size: 12px; color: var(--text-muted); min-width: 2.6em; text-align: right; font-variant-numeric: tabular-nums; }
+.chip { padding: 2px 7px; }
 .chip.fixed { border-color: var(--good); color: var(--good-text); }
 .spark { width: 84px; height: 22px; display: block; }
 .detail h2 { font-size: 18px; margin-bottom: 4px; }
@@ -124,13 +174,42 @@ pre.snip { margin: 8px 0 0; padding: 10px; background: var(--surface-1); border:
 .ex .meta a:hover { text-decoration: underline; }
 .ex .meta button { font-size: 11px; padding: 1px 7px; border-radius: 6px; }
 .ex blockquote { margin: 6px 0 0; padding-left: 10px; border-left: 3px solid var(--series-1); color: var(--text-secondary); font-size: 13px; }
-.muted { color: var(--text-muted); }
 .pick { display: block; width: 100%; text-align: left; background: none; border: 0; border-top: 1px solid var(--border); border-radius: 0; padding: 10px 4px; }
 .pick > span { display: block; }
 .pick:focus-visible, .ex:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+/* Incidents: a type's failures grouped into episodes (one tool, one session, one error), each opening into its calls. */
+.istat { font-size: 13px; color: var(--text-secondary); margin: -4px 0 12px; }
+.istat b { color: var(--text-primary); }
+.inc { border-top: 1px solid var(--border); }
+.inc-h { display: grid; grid-template-columns: 3.2rem minmax(0, 1fr) auto; gap: 2px 10px; align-items: baseline; width: 100%; text-align: left;
+  background: none; border: 0; border-radius: 6px; padding: 9px 6px; margin: 0; }
+.inc-h:hover { background: var(--surface-2); }
+.inc-h:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.inc-h .att { font-size: 18px; font-weight: 600; letter-spacing: -.02em; font-variant-numeric: tabular-nums; grid-row: span 2; }
+.inc-h .att small { font-size: 11px; font-weight: 500; color: var(--text-muted); display: block; letter-spacing: 0; }
+.inc-h .who { display: flex; gap: 8px; flex-wrap: wrap; min-width: 0; font-size: 13px; }
+.inc-h .when { grid-column: 2 / 4; font-size: 12px; color: var(--text-muted); }
+.out { font-size: 11px; padding: 1px 7px; border-radius: 999px; white-space: nowrap; border: 1px solid; }
+.out.ok { color: var(--good-text); border-color: var(--good); }
+.out.bad { color: var(--critical-text); border-color: var(--critical); }
+.out.warn { color: var(--warning-text); border-color: var(--warning-text); }
+.inc-h .chev { display: inline-block; color: var(--text-muted); margin-left: 4px; }
+.inc-h[aria-expanded=true] .chev { transform: rotate(90deg); }
+.inc-b { padding: 0 0 10px 12px; margin-left: 6px; border-left: 2px solid var(--border); }
+.inc-b[hidden] { display: none; }
+.inc-b .ex:first-child { border-top: 0; }
+.inc-b .step { font-size: 11px; color: var(--text-muted); font-weight: 500; }
+.recov { margin-top: 6px; padding: 8px 10px; border-radius: 8px; background: var(--good-soft); font-size: 13px; }
+.recov.none { background: var(--surface-2); color: var(--text-secondary); }
+.recov code { display: block; white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; background: var(--surface-1); border-radius: 6px; padding: 6px 8px; margin-top: 6px; }
+.exmode { margin: 8px 0 0; }
+.exmode button { font-size: 12px; padding: 3px 10px; }
+.fixout { font-size: 13px; margin: 0 0 12px; }
+.fixout b { font-weight: 600; }
+@media (min-width: 521px) { .moresum { display: none; } }
 .outnote { background: var(--surface-2); border-radius: 10px; padding: 10px 12px; margin: 8px 0; }
 #load { margin-bottom: 16px; }
-#detailTitle, .ex { scroll-margin-top: calc(var(--appnav-h, 56px) + 12px); }
+#detailTitle, .ex, .inc { scroll-margin-top: calc(var(--appnav-h, 56px) + 12px); }
 .linkbtn { background: none; border: 0; padding: 0; color: var(--link); font-size: 13px; }
 .linkbtn:hover { background: none; text-decoration: underline; }
 /* Wide screens: the type header and the example search stay in view while the examples scroll. */
@@ -139,54 +218,57 @@ pre.snip { margin: 8px 0 0; padding: 10px; background: var(--surface-1); border:
   #detail .dhead { top: var(--appnav-h, 56px); flex-wrap: nowrap; border-bottom: 1px solid var(--border); margin-bottom: 12px; }
   #detail .dhead h2 { margin: 0; min-width: 0; }
   #detail .exbar { top: calc(var(--appnav-h, 56px) + var(--dhead-h, 0px)); border-bottom: 1px solid var(--border); padding-bottom: 0; }
-  #detail .ex { scroll-margin-top: calc(var(--appnav-h, 56px) + var(--dhead-h, 0px) + var(--exbar-h, 0px) + 12px); }
+  #detail .ex, #detail .inc { scroll-margin-top: calc(var(--appnav-h, 56px) + var(--dhead-h, 0px) + var(--exbar-h, 0px) + 12px); }
 }
 .sheet #back { display: none; }
 #detailTitle:focus { outline: none; }
 /* Narrow screens: an open type shows in a sheet over the page; #detail moves into it and back. */
-dialog.sheet { inset: 0 0 0 auto; margin: 0; width: min(640px, 100%); max-width: 100%; height: 100dvh; max-height: 100dvh;
-  padding: 0; border: 0; border-left: 1px solid var(--border); background: var(--surface-1); color: var(--text-primary);
-  overflow: auto; overscroll-behavior: contain; box-shadow: -8px 0 32px rgba(0,0,0,.16); }
-dialog.sheet::backdrop { background: rgba(0,0,0,.3); }
+dialog.sheet { background: var(--surface-1); }
 .sheet > .detail { border: 0; border-radius: 0; min-height: 100%; padding-top: 0; overflow-wrap: anywhere; }
 .sheet .dhead { position: sticky; top: 0; z-index: 1; flex-wrap: nowrap; margin: 0 -16px 12px; padding: 12px 16px;
   background: var(--surface-1); border-bottom: 1px solid var(--border); }
 .sheet .dhead h2 { margin: 0; min-width: 0; }
 .sheet .exbar { position: sticky; top: var(--dhead-h, 0px); z-index: 1; margin: 0 -16px; padding: 0 16px;
   background: var(--surface-1); border-bottom: 1px solid var(--border); }
-.sheet .ex { scroll-margin-top: calc(var(--dhead-h, 0px) + var(--exbar-h, 0px) + 12px); }
-.empty { color: var(--text-muted); padding: 24px 0; text-align: center; }
-.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.sheet .ex, .sheet .inc { scroll-margin-top: calc(var(--dhead-h, 0px) + var(--exbar-h, 0px) + 12px); }
+/* Phone: only the type header sticks, so the list keeps most of the screen. */
+@media (max-width: 520px) {
+  .sheet .exbar { position: static; }
+  .sheet .ex, .sheet .inc { scroll-margin-top: calc(var(--dhead-h, 0px) + 12px); }
+}
 </style>
 </head>
 <body>
 <!--NAV-->
 <div class="wrap">
-  <header>
-    <h1 tabindex="-1">Claude tool errors</h1>
-    <span class="sub" id="gen"></span>
+  <header class="top">
+    <p class="kicker">Claude tool errors</p>
+    <div class="filters" role="group" aria-label="Filters">
+      <span class="pick-project" id="fProjectWrap"><i class="pdot" aria-hidden="true"></i><select id="fProject" aria-label="Project"></select></span>
+      <div class="seg" id="fRange" role="group" aria-label="Time range">
+        <button data-v="7">7d</button><button data-v="14">14d</button><button data-v="30">30d</button><button data-v="90">90d</button><button data-v="0">All</button>
+      </div>
+      <div class="seg" id="fGran" role="group" aria-label="Granularity">
+        <button data-v="day">Day</button><button data-v="week">Week</button>
+      </div>
+      <label class="chk"><input type="checkbox" id="fSub" checked> <span><span class="long">Include </span>subagents</span></label>
+      <label class="chk" title="Harness errors and user rejections"><input type="checkbox" id="fNoise"> <span>Hide noise<span class="long"> (harness, user rejections)</span></span></label>
+    </div>
   </header>
-
-  <div class="filters" role="group" aria-label="Filters">
-    <select id="fProject" aria-label="Project"></select>
-    <div class="seg" id="fRange" role="group" aria-label="Time range">
-      <button data-v="7">7d</button><button data-v="14">14d</button><button data-v="30">30d</button><button data-v="90">90d</button><button data-v="0">All</button>
-    </div>
-    <div class="seg" id="fGran" role="group" aria-label="Granularity">
-      <button data-v="day">Day</button><button data-v="week">Week</button>
-    </div>
-    <label class="chk"><input type="checkbox" id="fSub" checked> Include subagents</label>
-    <label class="chk"><input type="checkbox" id="fNoise"> Hide noise (harness, user rejections)</label>
-  </div>
 
   <div class="card" id="load" role="status">Loading errors…</div>
   <div class="sr" id="pageLive" aria-live="polite"></div>
-  <section class="kpis" id="kpis" aria-label="Summary"></section>
+  <h1 class="lede" id="lede" tabindex="-1"></h1>
+  <p class="sub folded" id="gen"></p>
+  <section class="vitals" id="kpis" aria-label="Summary"></section>
+  <button type="button" class="linkbtn moresum" id="moreSum" aria-expanded="false" aria-controls="kpis gen">More summary</button>
 
-  <section class="card chart-card">
-    <h2 id="chartTitle">Error rate</h2>
-    <div class="hint" id="chartHint">Errors per 100 tool calls. Dashed lines mark fixes you applied (fixes apply to all projects).</div>
-    <div id="chart" tabindex="0" role="img" aria-label="Error rate chart. Use the left and right arrow keys to read each point."></div>
+  <section class="card chart-card" aria-labelledby="chartTitle">
+    <h2 id="chartTitle">Errors by type</h2>
+    <div class="hint" id="chartHint"></div>
+    <div class="legend" id="legend" role="group" aria-label="Error types in the chart"></div>
+    <div class="selout" id="selOut" hidden></div>
+    <div id="chart" tabindex="0" role="img" aria-label="Errors by type and error rate. Use the left and right arrow keys to read each point."></div>
     <div class="sr" id="chartLive" aria-live="polite"></div>
   </section>
 
@@ -195,7 +277,7 @@ dialog.sheet::backdrop { background: rgba(0,0,0,.3); }
       <h2>Error types</h2>
       <div class="hint muted" style="font-size:12px;margin-bottom:8px">Trend compares the second half of the range with the first half. Click a row for fixes and examples.</div>
       <div class="tscroll"><table>
-        <thead><tr><th>Type</th><th class="num">Errors</th><th class="c-share">Share</th><th class="c-trend">Rate trend</th><th class="num">Change</th><th>Status</th></tr></thead>
+        <thead><tr><th>Type</th><th class="num">Errors</th><th class="c-share">Share</th><th class="c-trend">Rate trend</th><th class="num">Change</th></tr></thead>
         <tbody id="catBody"></tbody>
       </table></div>
     </section>
@@ -225,6 +307,9 @@ async function load() {
 }
 const DATA = await load();
 document.getElementById("load").remove();
+// Project colors match Usage: the shared nav hands them out in the server's all-time order.
+window.appnav?.setOrder(DATA.project_order);
+const dot = p => window.appnav?.dot(p) ?? "";
 const CATS = Object.fromEntries(DATA.categories.map(c => [c.id, c]));
 const NOISE = new Set(["infra", "user_denied"]);
 const store = {
@@ -234,7 +319,8 @@ const store = {
 let fixes = store.get("claude-errors-fixes", {});
 const state = Object.assign({ project: "", range: 30, gran: "day", sub: true, noise: false, cat: null, q: "" },
   store.get("claude-errors-view", {}));
-state.q = ""; state.focus = null;
+state.q = ""; state.focus = null; state.mode = store.get("claude-errors-mode", "inc") === "flat" ? "flat" : "inc";
+const MIN_AFTER_CALLS = 200; // calls since a fix before its rate counts as lower or higher
 const BY_ID = Object.fromEntries(DATA.errors.filter(e => e.id).map(e => [e.id, e]));
 const RANGES = [7, 14, 30, 90, 0];
 // The URL hash is the view: project, range, sub=0 (no subagents), noise=0 (noise hidden), gran=week, cat (open type), ex (one linked example).
@@ -322,160 +408,333 @@ function change(a, b, min = 0) {
   return { text: `${d > min ? "▲ +" : d < -min ? "▼ " : ""}${fmt(d, 0)}%`, cls: d > min ? "delta-up" : d < -min ? "delta-down" : "muted" };
 }
 
-// ---------- KPIs ----------
+// ---------- per-type counts ----------
+// Error types by all-time count: the five busiest keep their color in every view, so a filter never repaints them.
+const ALL_RANK = Object.entries(countBy(DATA.errors)).sort((a, b) => b[1] - a[1]).map(x => x[0]);
+const TOPN = 5;
+// The view's top types, each with a color: an all-time top-5 type takes its own slot, the rest fill free ones.
+function typeColors(top) {
+  const col = {}, used = new Set();
+  for (const c of top) { const i = ALL_RANK.indexOf(c); if (i >= 0 && i < TOPN) { col[c] = i; used.add(i); } }
+  for (const c of top) if (!(c in col)) { let i = 0; while (used.has(i)) i++; col[c] = i; used.add(i); }
+  return Object.fromEntries(Object.entries(col).map(([c, i]) => [c, `var(--type-${i + 1})`]));
+}
+// Errors per [day, project, category] from the server's error_days, under the project, subagent and noise filters.
+function errorDays(from, to = "9999") {
+  return DATA.error_days.filter(r => r[0] >= from && r[0] <= to && (!state.project || r[1] === state.project) && (!state.noise || !NOISE.has(r[2])))
+    .map(r => ({ d: r[0], c: r[2], n: state.sub ? r[3] : r[3] - r[4] })).filter(r => r.n);
+}
+// The view's top types and their colors; a selected type outside them gets its own layer in a neutral ink.
+function viewTypes(f) {
+  const counts = countBy(f.errs), top = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, TOPN).map(x => x[0]);
+  const colors = typeColors(top), extra = state.cat && counts[state.cat] && !top.includes(state.cat) ? state.cat : null;
+  if (extra) colors[extra] = "var(--type-sel)";
+  return { counts, top, extra, layers: extra ? [...top, extra] : top, colors };
+}
+const typeColor = (c, vt) => vt.colors[c] || "var(--type-other)";
+const prevSpan = () => state.range ? [iso(new Date(toDate(rangeStart()) - state.range * DAY)), iso(new Date(toDate(rangeStart()) - DAY))] : null;
+
+// ---------- briefing and vitals ----------
 function renderKpis(f) {
-  const totalCalls = sumCalls(f.calls);
-  const mid = iso(new Date((+toDate(f.start) + +toDate(lastDay)) / 2));
-  const half = (arr, pick, first) => arr.filter(x => first ? pick(x) < mid : pick(x) >= mid);
-  const r1 = rate(half(f.errs, x => x.d, true).length, sumCalls(half(f.calls, x => x[0], true)));
-  const r2 = rate(half(f.errs, x => x.d, false).length, sumCalls(half(f.calls, x => x[0], false)));
-  const delta = change(r1, r2);
-  const counts = countBy(f.errs);
-  const top = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+  const totalCalls = sumCalls(f.calls), n = f.errs.length, r = rate(n, totalCalls);
+  const vt = viewTypes(f), top = vt.top[0];
+  // Previous period: the same number of days just before this range. All time compares its two halves instead.
+  const span = prevSpan();
+  let r0 = null, cmp = "";
+  if (span) {
+    const pc = sumCalls(DATA.calls.filter(c => c[0] >= span[0] && c[0] <= span[1] && (!state.project || c[1] === state.project)));
+    r0 = rate(errorDays(span[0], span[1]).reduce((s, x) => s + x.n, 0), pc); cmp = `vs previous ${state.range} days`;
+  } else {
+    const mid = iso(new Date((+toDate(f.start) + +toDate(lastDay)) / 2));
+    r0 = rate(f.errs.filter(e => e.d < mid).length, sumCalls(f.calls.filter(c => c[0] < mid))); cmp = "vs the first half";
+  }
+  const r1 = span ? r : (() => { const mid = iso(new Date((+toDate(f.start) + +toDate(lastDay)) / 2));
+    return rate(f.errs.filter(e => e.d >= mid).length, sumCalls(f.calls.filter(c => c[0] >= mid))); })();
+  const d = r0 && r1 != null ? (r1 - r0) / r0 * 100 : null;
+  const arrow = d == null ? "" : Math.abs(d) < 1 ? `, flat ${cmp}` : `, <span class="${d < 0 ? "dn" : "up"}">${d < 0 ? "↓" : "↑"}${fmt(Math.abs(d), 0)}%</span> ${cmp}`;
+  const where = state.project ? ` in <b>${dot(state.project)}${esc(state.project)}</b>` : "";
+  $("#lede").innerHTML = !totalCalls ? `No tool calls${where} in this period.`
+    : !n ? `<b>No failed tool calls</b>${where} out of ${fmt(totalCalls)}.`
+    : `<b>${fmt(n)}</b> failed tool call${n === 1 ? "" : "s"}${where} (<b>${fmt(r, 1)}%</b>)${arrow}.`
+      + (top ? ` <b>${esc(CATS[top].label)}</b> is ${fmt(vt.counts[top] / n * 100, 0)}% of them.` : "");
   const nFix = Object.keys(fixes).length, idle = !totalCalls;
-  $("#kpis").innerHTML = `
-    <div class="card kpi"><div class="label">Errors</div><div class="value">${fmt(f.errs.length)}</div>
-      <div class="note">of ${fmt(totalCalls)} tool calls</div></div>
-    <div class="card kpi"><div class="label">Error rate</div><div class="value${idle ? " muted" : ""}">${idle ? "–" : fmt(rate(f.errs.length, totalCalls), 1) + "%"}</div>
-      <div class="note">${idle ? "No tool calls in this period" : "errors per 100 tool calls"}</div></div>
-    <div class="card kpi"><div class="label">Trend</div>
-      <div class="value ${idle ? "muted" : delta.cls}">${idle ? "–" : delta.text}</div>
-      <div class="note">${idle ? "No tool calls in this period" : r1 == null ? "No calls in the first half" : r2 == null ? "No calls in the second half"
-        : `rate, 2nd half vs 1st half (${fmt(r1, 1)}% → ${fmt(r2, 1)}%)`}</div></div>
-    <div class="card kpi"><div class="label">Top type</div><div class="value" style="font-size:17px;line-height:1.3;margin-top:8px">${top ? esc(CATS[top[0]].label) : "–"}</div>
-      <div class="note">${top ? fmt(top[1]) + " errors · " + fmt(top[1] / f.errs.length * 100, 0) + "% · " : ""}${nFix} fix${nFix === 1 ? "" : "es"} tracked</div></div>`;
+  const withFix = Object.keys(vt.counts).filter(c => !fixes[c] && CATS[c].snippet).length;
+  const is = incSummary(f.errs);
+  const vital = (v, l, note, cls = "") => `<div class="vital"><div class="v ${cls}">${v}</div><div class="l">${l}</div><div class="d">${note}</div></div>`;
+  $("#kpis").innerHTML = [
+    vital(idle ? "–" : fmt(r, 1) + "%", "Error rate", idle ? "No tool calls in this period." : `${fmt(n)} of ${fmt(totalCalls)} tool calls failed.`),
+    vital(d == null ? "–" : `${d > 0 ? "+" : ""}${fmt(d, 0)}%`, "Change", r0 == null || r1 == null ? "Not enough calls to compare." : `Error rate ${cmp}: ${fmt(r0, 1)}% → ${fmt(r1, 1)}%.`, d == null ? "" : d < -1 ? "delta-down" : d > 1 ? "delta-up" : ""),
+    vital(n ? fmt(is.n) : "–", "Incidents", n ? `${fmt(n)} error${n === 1 ? "" : "s"} in ${fmt(is.n)} incident${is.n === 1 ? "" : "s"}, ${fmt(is.pct, 0)}% didn't recover. ${RECOVERED_NOTE} ${fmt(Object.keys(vt.counts).length)} error types.` : "No errors in this period."),
+    vital(fmt(nFix), "Fixes applied", `${fmt(withFix)} open type${withFix === 1 ? " has" : "s have"} a ready-made fix.`),
+  ].join("");
 }
 function countBy(errs) { const m = {}; for (const e of errs) m[e.c] = (m[e.c] || 0) + 1; return m; }
 
+// ---------- incidents ----------
+// The server groups failures into incidents: one tool, one session (main thread or subagents), one error type, each failure
+// within incident_gap_minutes of the last. A view's incidents come from its errors, so attempts count only the failures that
+// pass the filters. outcome is what the tool's next call in that session did after the last failure.
+const INC = DATA.incidents || [], GAP = DATA.incident_gap_minutes || 10;
+function incidentsOf(errs) {
+  const m = new Map();
+  for (const e of errs) {
+    if (e.n == null || !INC[e.n]) continue;
+    let g = m.get(e.n); if (!g) m.set(e.n, g = { i: e.n, ...INC[e.n], errs: [] });
+    g.errs.push(e);
+  }
+  for (const g of m.values()) g.errs.sort((a, b) => a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : 0); // the call sequence, in order
+  return [...m.values()];
+}
+const incSpan = g => Math.max(0, Date.parse(g.last) - Date.parse(g.first));
+// Most attempts first, then the longest, then the latest.
+const byWeight = (a, b) => b.errs.length - a.errs.length || incSpan(b) - incSpan(a) || (a.first < b.first ? 1 : -1);
+// "recovered" means only that the tool's next call in that session succeeded, so the badge says that.
+const OUTCOME = { recovered: ["Next call OK", "ok"], failed_again: ["Failed again", "warn"], gave_up: ["Gave up", "bad"] };
+const RECOVERED_NOTE = "Recovered means only that the tool's next call in that session succeeded.";
+function dur(ms) {
+  const s = Math.round(ms / 1000);
+  return s < 60 ? `${s}s` : s < 3600 ? `${Math.round(s / 60)} min` : `${fmt(s / 3600, s < 36000 ? 1 : 0)} h`;
+}
+// "1,078 errors in 326 incidents, 3% didn't recover" for a set of errors.
+function incSummary(errs) {
+  const g = incidentsOf(errs), bad = g.filter(x => x.outcome !== "recovered").length;
+  return { n: g.length, bad, pct: g.length ? bad / g.length * 100 : 0, groups: g };
+}
+
 // ---------- main chart ----------
+// Two panels on one time axis, each with its own labeled scale: error rate (line) above, error counts by type (stacked bars) below.
+let CH = null;
+function chartData(f, vt) {
+  const keys = buckets(f.start), at = new Map(keys.map((k, i) => [k, i]));
+  const pts = keys.map(k => ({ k, c: 0, e: 0, by: {}, other: 0 }));
+  for (const x of f.calls) { const i = at.get(bucketOf(x[0])); if (i != null) pts[i].c += nCalls(x); }
+  for (const x of errorDays(f.start)) {
+    const p = pts[at.get(bucketOf(x.d))]; if (!p) continue;
+    p.e += x.n; if (vt.layers.includes(x.c)) p.by[x.c] = (p.by[x.c] || 0) + x.n; else p.other += x.n;
+    p.byAll = p.byAll || {}; p.byAll[x.c] = (p.byAll[x.c] || 0) + x.n;
+  }
+  for (const p of pts) p.r = rate(p.e, p.c);
+  return { keys, pts };
+}
 function renderChart(f) {
-  const keys = buckets(f.start);
-  const pts = series(f.errs, f.calls, keys, state.cat);
-  const el = $("#chart");
-  // Any tooltip or spoken point belongs to the previous data.
+  const el = $("#chart"), vt = viewTypes(f);
+  const key = JSON.stringify([f.start, state.project, state.sub, state.noise, state.gran, vt.extra, el.clientWidth, fixes]);
   $("#tip").style.display = "none"; $("#chartLive").textContent = "";
-  $("#chartTitle").textContent = state.cat ? `Error rate · ${CATS[state.cat].label}` : "Error rate · all types";
+  // Same data: only the selection changed, so restyle what's drawn instead of drawing it again.
+  if (CH && CH.key === key && el.querySelector("svg")) { renderLegend(vt, CH.pts.some(p => !p.c), f); return highlight(); }
+  const { keys, pts } = chartData(f, vt), fresh = !CH || CH.dataKey !== key.replace(/,\d+,\{.*$/, "");
+  const per = state.gran === "week" ? "week" : "day";
+  $("#chartHint").textContent = `Failed tool calls per ${per}, top ${TOPN} types and Other, with the error rate (errors per 100 tool calls) above. Dashed lines mark fixes you applied.`;
+  renderLegend(vt, pts.some(p => !p.c), f);
   if (!pts.some(p => p.c)) {
-    el.onkeydown = el.onblur = null;
-    el.innerHTML = `<div class="empty" style="height:260px;display:grid;place-items:center">No tool calls in this range.</div>`;
+    CH = null; el.onkeydown = el.onblur = null;
+    el.innerHTML = `<div class="empty" style="height:280px;display:grid;place-items:center">No tool calls in this range.</div>`;
     return;
   }
-  const W = el.clientWidth || 800, H = 260, m = { t: 12, r: 12, b: 26, l: 40 };
-  const iw = W - m.l - m.r, ih = H - m.t - m.b;
-  const max = Math.max(1, ...pts.map(p => p.r || 0)) * 1.12;
-  const step = niceStep(max / 4); const yMax = Math.ceil(max / step) * step;
-  const x = i => m.l + (keys.length === 1 ? iw / 2 : i / (keys.length - 1) * iw);
-  const y = v => m.t + ih - v / yMax * ih;
+  const W = el.clientWidth || 800, H = 280, m = { l: 40, r: 10 };
+  const rT = 18, rH = 62, bT = rT + rH + 26, bH = H - bT - 24, iw = W - m.l - m.r, n = keys.length, bw = iw / n;
+  const cx = i => m.l + (i + .5) * bw;
+  const rMax0 = Math.max(.1, ...pts.map(p => p.r || 0)) * 1.1, rStep = niceStep(rMax0 / 2), rMax = Math.ceil(rMax0 / rStep) * rStep;
+  const yR = v => rT + rH - v / rMax * rH;
+  const eMax0 = Math.max(1, ...pts.map(p => p.e)) * 1.05, eStep = niceStep(eMax0 / 3), eMax = Math.ceil(eMax0 / eStep) * eStep;
+  const yB = v => bT + bH - v / eMax * bH;
+  const t = (x, y, s, a = "end", extra = "") => `<text x="${x}" y="${y}" text-anchor="${a}" font-size="11" fill="var(--text-muted)"${extra}>${s}</text>`;
   let g = "";
-  for (let v = 0; v <= yMax + 1e-9; v += step)
-    g += `<line x1="${m.l}" x2="${W - m.r}" y1="${y(v)}" y2="${y(v)}" stroke="var(--grid)"/>`
-      + `<text x="${m.l - 6}" y="${y(v) + 4}" text-anchor="end" font-size="11" fill="var(--text-muted)">${fmt(v, step < 1 ? 1 : 0)}%</text>`;
-  const every = Math.max(1, Math.ceil(keys.length / Math.max(2, Math.floor(iw / 70))));
-  keys.forEach((k, i) => { if (i % every === 0 || i === keys.length - 1 && keys.length < 12)
-    g += `<text x="${x(i)}" y="${H - 6}" text-anchor="middle" font-size="11" fill="var(--text-muted)">${label(k)}</text>`; });
-  // fix markers
-  for (const [cid, day] of Object.entries(fixes)) {
-    if (state.cat && state.cat !== cid) continue;
-    const i = keys.indexOf(bucketOf(day)); if (i < 0) continue;
-    g += `<line x1="${x(i)}" x2="${x(i)}" y1="${m.t}" y2="${m.t + ih}" stroke="var(--good)" stroke-width="1.5" stroke-dasharray="4 3"/>`
-      + `<text x="${x(i) + 4}" y="${m.t + 10}" font-size="11" fill="var(--good-text)">✓ ${esc(shortLabel(CATS[cid].label))}</text>`;
+  // No activity: faint bands over buckets without a single tool call, labeled when there's room.
+  for (let i = 0; i < n; i++) {
+    if (pts[i].c) continue;
+    let j = i; while (j + 1 < n && !pts[j + 1].c) j++;
+    const x0 = m.l + i * bw, w = (j - i + 1) * bw;
+    g += `<rect x="${x0}" y="${rT}" width="${w}" height="${bT + bH - rT}" fill="var(--surface-2)" opacity=".75"/>`;
+    if (w > 64) g += t(x0 + w / 2, bT + bH / 2, "no activity", "middle");
+    i = j;
   }
-  const segs = runs(pts), seg = r => r.map(([p, i], j) => `${j ? "L" : "M"}${x(i).toFixed(1)},${y(p.r).toFixed(1)}`).join("");
-  const line = segs.map(seg).join("");
-  const area = segs.map(r => seg(r) + `L${x(r[r.length - 1][1])},${y(0)}L${x(r[0][1])},${y(0)}Z`).join("");
-  // Dots on every real point, or only on lone points once there are too many to dot.
-  const dots = segs.filter(r => keys.length <= 45 || r.length === 1).flat().map(([p, i]) => `<circle cx="${x(i)}" cy="${y(p.r)}" r="3" fill="var(--series-1)" stroke="var(--surface-1)" stroke-width="2"/>`).join("");
-  el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" aria-hidden="true">${g}
-    <path d="${area}" fill="var(--series-1-soft)"/>
-    <path d="${line}" fill="none" stroke="var(--series-1)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
-    ${dots}<line id="xh" y1="${m.t}" y2="${m.t + ih}" stroke="var(--text-muted)" stroke-width="1" visibility="hidden"/>
-    <circle id="xd" r="5" fill="var(--series-1)" stroke="var(--surface-1)" stroke-width="2" visibility="hidden"/>
-    <rect x="${m.l}" y="${m.t}" width="${iw}" height="${ih}" fill="transparent" id="hit"/></svg>`;
+  for (let v = 0; v <= rMax + 1e-9; v += rStep)
+    g += `<line x1="${m.l}" x2="${W - m.r}" y1="${yR(v)}" y2="${yR(v)}" stroke="var(--grid)"/>` + t(m.l - 6, yR(v) + 4, fmt(v, rStep < 1 ? 1 : 0) + "%");
+  for (let v = 0; v <= eMax + 1e-9; v += eStep)
+    g += `<line x1="${m.l}" x2="${W - m.r}" y1="${yB(v)}" y2="${yB(v)}" stroke="var(--grid)"/>` + t(m.l - 6, yB(v) + 4, fmt(v));
+  g += t(m.l, rT - 7, "Error rate, % of tool calls", "start", ` font-weight="500" fill="var(--text-secondary)"`)
+    + t(m.l, bT - 8, `Failed calls per ${per}, by type`, "start", ` font-weight="500" fill="var(--text-secondary)"`);
+  const every = Math.max(1, Math.ceil(n / Math.max(2, Math.floor(iw / 70))));
+  keys.forEach((k, i) => { if (i % every === 0) g += t(cx(i), H - 6, label(k), "middle"); });
+  // Stacked bars: biggest type on the baseline, Other on top; a 2px surface gap between segments.
+  const bwid = Math.max(1, Math.min(26, bw * .72)), order = [...vt.layers, "__other"];
+  const layerRects = Object.fromEntries(order.map(c => [c, ""]));
+  pts.forEach((p, i) => {
+    let acc = 0;
+    for (const c of order) {
+      const v = c === "__other" ? p.other : p.by[c] || 0; if (!v) continue;
+      const y0 = yB(acc), y1 = yB(acc + v), h = y0 - y1, gap = h > 4 ? 2 : 0;
+      layerRects[c] += `<rect x="${(cx(i) - bwid / 2).toFixed(1)}" y="${y1.toFixed(1)}" width="${bwid.toFixed(1)}" height="${Math.max(.8, h - gap).toFixed(1)}" rx="1.5"/>`;
+      acc += v;
+    }
+  });
+  const bars = order.map(c => `<g class="layer" data-c="${c}" fill="${c === "__other" ? "var(--type-other)" : typeColor(c, vt)}">${layerRects[c]}</g>`).join("");
+  // Rate line: solid across buckets with calls; a faint dotted bridge over a no-activity gap, never a lone dot.
+  const path = get => {
+    let solid = "", bridge = "", prev = null, run = 0;
+    pts.forEach((p, i) => {
+      const v = get(p); if (v == null) { run = 0; return; }
+      const P = `${cx(i).toFixed(1)},${yR(v).toFixed(1)}`;
+      if (!run) { if (prev) bridge += `M${prev}L${P}`; solid += `M${P}L${P}`; } else solid += `L${P}`;
+      run++; prev = P;
+    });
+    return { solid, bridge };
+  };
+  const all = path(p => p.r);
+  let fx = "";
+  for (const [cid, day] of Object.entries(fixes)) {
+    const i = keys.indexOf(bucketOf(day)); if (i < 0 || !CATS[cid]) continue;
+    fx += `<g class="fix" data-c="${cid}"><line x1="${cx(i)}" x2="${cx(i)}" y1="${rT}" y2="${bT + bH}" stroke="var(--good)" stroke-width="1.5" stroke-dasharray="4 3"/>`
+      + `<text x="${cx(i) + 4}" y="${rT + 10}" font-size="11" fill="var(--good-text)">✓ ${esc(shortLabel(CATS[cid].label))}</text></g>`;
+  }
+  el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" aria-hidden="true" class="${fresh ? "grow" : ""}">${g}
+    <g class="bars" style="transform-origin:0 ${bT + bH}px">${bars}</g>
+    <path d="${all.bridge}" fill="none" stroke="var(--text-muted)" stroke-width="1.25" stroke-dasharray="1 4" stroke-linecap="round" opacity=".7"/>
+    <path class="rline" id="rAll" pathLength="1" d="${all.solid}" fill="none" stroke="var(--text-primary)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+    <path id="rSelB" d="" fill="none" stroke-width="1.25" stroke-dasharray="1 4" stroke-linecap="round" opacity=".8"/>
+    <path id="rSel" d="" fill="none" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+    ${fx}<rect id="xh" y="${rT}" height="${bT + bH - rT}" width="${bw}" fill="var(--text-primary)" opacity=".06" visibility="hidden"/>
+    <circle id="xd" r="4.5" fill="var(--text-primary)" stroke="var(--surface-1)" stroke-width="2" visibility="hidden"/>
+    <rect x="${m.l}" y="${rT}" width="${iw}" height="${bT + bH - rT}" fill="transparent" id="hit"/></svg>`;
+  CH = { key, dataKey: key.replace(/,\d+,\{.*$/, ""), pts, keys, vt, cx, yR, path, n };
+  highlight();
   const svg = el.querySelector("svg"), tip = $("#tip");
   const hit = el.querySelector("#hit"), xh = el.querySelector("#xh"), xd = el.querySelector("#xd");
   let ci = -1;
-  const show = (i, cx, cy) => {
-    const p = pts[ci = i], when = `${state.gran === "week" ? "Week of " : ""}${label(p.k, true)}`;
-    xh.setAttribute("x1", x(i)); xh.setAttribute("x2", x(i)); xh.setAttribute("visibility", "visible");
+  const show = (i, sx, sy) => {
+    const p = pts[ci = i], when = `${state.gran === "week" ? "Week of " : ""}${label(p.k, true)}`, cvt = CH.vt;
+    xh.setAttribute("x", m.l + i * bw); xh.setAttribute("visibility", "visible");
     xd.setAttribute("visibility", p.r == null ? "hidden" : "visible");
-    if (p.r != null) { xd.setAttribute("cx", x(i)); xd.setAttribute("cy", y(p.r)); }
-    tip.innerHTML = `<div class="muted">${when}</div>
-      <div><b>${p.r == null ? "–" : fmt(p.r, 2) + "%"}</b> rate</div><div><b>${fmt(p.e)}</b> errors · ${fmt(p.c)} calls</div>`;
+    if (p.r != null) { xd.setAttribute("cx", cx(i)); xd.setAttribute("cy", yR(p.r)); }
+    const rows = [...cvt.layers.filter(c => p.by[c]).map(c => [CATS[c].label, p.by[c], typeColor(c, cvt), c === state.cat]),
+      ...(p.other ? [["Other types", p.other, "var(--type-other)", false]] : [])];
+    const selN = state.cat && p.byAll?.[state.cat] || 0, inOther = state.cat && !cvt.layers.includes(state.cat);
+    tip.innerHTML = `<div class="muted">${when}</div>` + (!p.c ? `<div><b>No activity</b> · no tool calls</div>`
+      : `<div class="tot"><b>${fmt(p.r, 2)}%</b> rate · <b>${fmt(p.e)}</b> errors · ${fmt(p.c)} calls</div>`
+        + rows.map(([l, v, c, on]) => `<div class="trow${on ? " on" : ""}"><span><i class="sw" style="background:${c}"></i>${esc(shortLabel(l))}</span><b>${fmt(v)}</b></div>`).join("")
+        + (inOther && selN ? `<div class="trow on"><span>${esc(shortLabel(CATS[state.cat].label))}</span><b>${fmt(selN)}</b></div>` : ""));
     tip.style.display = "block";
-    const tx = cx + 14 + tip.offsetWidth > window.innerWidth ? Math.max(4, cx - tip.offsetWidth - 14) : cx + 14;
-    tip.style.left = tx + window.scrollX + "px"; tip.style.top = cy + window.scrollY - 10 + "px";
-    return `${when}: ${p.r == null ? "no tool calls" : fmt(p.r, 2) + "% rate"}, ${fmt(p.e)} errors, ${fmt(p.c)} calls`;
+    const tx = sx + 14 + tip.offsetWidth > window.innerWidth ? Math.max(4, sx - tip.offsetWidth - 14) : sx + 14;
+    tip.style.left = tx + window.scrollX + "px"; tip.style.top = sy + window.scrollY - 10 + "px";
+    if (!p.c) return `${when}: no activity`;
+    return `${when}: ${fmt(p.r, 2)}% rate, ${fmt(p.e)} errors of ${fmt(p.c)} calls. ` + rows.map(([l, v]) => `${l} ${fmt(v)}`).join(", ")
+      + (state.cat && selN ? `. Selected ${CATS[state.cat].label}: ${fmt(selN)}` : "");
   };
-  // Hidden means no current point: the next arrow starts again from an end.
   const hide = () => { ci = -1; tip.style.display = "none"; xh.setAttribute("visibility", "hidden"); xd.setAttribute("visibility", "hidden"); };
   hit.addEventListener("mousemove", ev => {
-    const r = svg.getBoundingClientRect(); const px = (ev.clientX - r.left) * W / r.width;
-    show(Math.max(0, Math.min(keys.length - 1, Math.round((px - m.l) / iw * (keys.length - 1)))), ev.clientX, ev.clientY);
+    const r = svg.getBoundingClientRect(), px = (ev.clientX - r.left) * W / r.width;
+    show(Math.max(0, Math.min(n - 1, Math.floor((px - m.l) / bw))), ev.clientX, ev.clientY);
   });
   hit.addEventListener("mouseleave", hide);
   el.onblur = hide;
   el.onkeydown = ev => {
-    const n = keys.length - 1;
-    const i = { ArrowLeft: ci < 0 ? n : ci - 1, ArrowRight: ci + 1, Home: 0, End: n }[ev.key];
+    const i = { ArrowLeft: ci < 0 ? n - 1 : ci - 1, ArrowRight: ci + 1, Home: 0, End: n - 1 }[ev.key];
     if (i == null) return;
     ev.preventDefault();
-    const j = Math.max(0, Math.min(n, i)), p = pts[j], r = svg.getBoundingClientRect();
-    $("#chartLive").textContent = show(j, r.left + x(j) * r.width / W, r.top + (p.r == null ? m.t + ih / 2 : y(p.r)) * r.height / H);
+    const j = Math.max(0, Math.min(n - 1, i)), p = pts[j], r = svg.getBoundingClientRect();
+    $("#chartLive").textContent = show(j, r.left + cx(j) * r.width / W, r.top + (p.r == null ? rT + rH / 2 : yR(p.r)) * r.height / H);
   };
 }
-// Runs of consecutive [point, index] with a rate: a bucket without calls breaks the line instead of reading as 0%.
-function runs(pts) {
-  const out = []; let cur = null;
-  pts.forEach((p, i) => { if (p.r == null) cur = null; else { if (!cur) out.push(cur = []); cur.push([p, i]); } });
-  return out;
+// The selected type: its layer and fix marker at full strength, the rest dimmed, and its own rate line over the overall one.
+function highlight() {
+  const svg = $("#chart svg"); if (!svg || !CH) return;
+  const c = state.cat, layer = c && (CH.vt.layers.includes(c) ? c : "__other");
+  svg.classList.toggle("has-sel", !!c);
+  svg.querySelectorAll(".layer, .fix").forEach(g => g.classList.toggle("on", g.dataset.c === (g.classList.contains("fix") ? c : layer)));
+  const sel = svg.querySelector("#rSel"), all = svg.querySelector("#rAll");
+  const d = c ? CH.path(p => p.c ? (p.byAll?.[c] || 0) / p.c * 100 : null) : { solid: "", bridge: "" }, selB = svg.querySelector("#rSelB");
+  sel.setAttribute("d", d.solid); sel.setAttribute("stroke", c ? typeColor(c, CH.vt) : "none");
+  selB.setAttribute("d", d.bridge); selB.setAttribute("stroke", c ? typeColor(c, CH.vt) : "none");
+  all.setAttribute("stroke", c ? "var(--text-muted)" : "var(--text-primary)"); all.setAttribute("stroke-width", c ? 1.5 : 2);
+  $("#chartTitle").textContent = c ? `Errors by type · ${CATS[c].label} selected` : "Errors by type";
+}
+function renderLegend(vt, gaps, f) {
+  const el = $("#legend"), sel = state.cat && vt.counts[state.cat] ? state.cat : null, sc = sel && typeColor(sel, vt);
+  el.classList.toggle("has-sel", !!state.cat);
+  el.innerHTML = vt.layers.map(c => `<button type="button" data-c="${c}" aria-pressed="${state.cat === c}"><i class="sw" style="background:${typeColor(c, vt)}"></i><span>${esc(CATS[c].label)}</span><em>${fmt(vt.counts[c])}</em></button>`).join("")
+    + (Object.keys(vt.counts).length > vt.layers.length ? `<span class="key"><i class="sw" style="background:var(--type-other)"></i>Other types</span>` : "")
+    + `<span class="key"><i class="sw line"${sel ? ` style="border-top-color:var(--text-muted)"` : ""}></i>${sel ? "Overall rate" : "Error rate"}</span>`
+    + (sel ? `<span class="key"><i class="sw line sel" style="border-top-color:${sc}"></i>${esc(shortLabel(CATS[sel].label))} rate</span>` : "")
+    + `${gaps ? `<span class="key"><i class="sw nodata"></i>No activity</span>` : ""}`;
+  el.querySelectorAll("button").forEach(b => b.onclick = () => { const open = state.cat !== b.dataset.c; state.cat = open ? b.dataset.c : null; state.q = ""; state.focus = null; render(true); });
+  // The selection stays named here while it lasts: its count, share, rate and incidents in this view.
+  const so = $("#selOut");
+  so.hidden = !sel;
+  if (!sel) return (so.innerHTML = "");
+  const n = vt.counts[sel], tot = Object.values(vt.counts).reduce((a, b) => a + b, 0), calls = sumCalls(f.calls);
+  const is = incSummary(f.errs.filter(e => e.c === sel));
+  so.innerHTML = `<span class="muted">Selected</span><b><i class="sw" style="background:${sc}" aria-hidden="true"></i>${esc(CATS[sel].label)}</b>
+    <span class="muted">${fmt(n)} error${n === 1 ? "" : "s"} · ${fmt(n / tot * 100, 0)}% of errors · ${calls ? fmt(n / calls * 100, 2) + "% of tool calls" : "no calls"} · ${fmt(is.n)} incident${is.n === 1 ? "" : "s"}</span>
+    <button type="button" id="selClr">Clear selection</button>`;
+  $("#selClr").onclick = () => { state.cat = null; state.focus = null; state.q = ""; render(true); $("#catBody button")?.focus(); };
 }
 function niceStep(raw) { const p = 10 ** Math.floor(Math.log10(raw)); const n = raw / p; return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10) * p; }
 function label(k, long) { const d = toDate(k); return d.toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC", ...(long ? { year: "numeric" } : {}) }); }
-function shortLabel(s) { return s.length > 22 ? s.slice(0, 21) + "…" : s; }
+function shortLabel(s) { return s.length > 26 ? s.slice(0, 25) + "…" : s; }
 
 // ---------- category table ----------
 function renderTable(f) {
-  const counts = countBy(f.errs), total = f.errs.length || 1;
+  const counts = countBy(f.errs), total = f.errs.length || 1, vt = viewTypes(f);
   const keys = buckets(f.start);
   const mid = iso(new Date((+toDate(f.start) + +toDate(lastDay)) / 2));
   const c1 = sumCalls(f.calls.filter(c => c[0] < mid)), c2 = sumCalls(f.calls.filter(c => c[0] >= mid));
   const rows = Object.entries(counts).sort((a, b) => b[1] - a[1]);
   if (state.cat && !counts[state.cat] && !state.focus) state.cat = null;
   const none = state.project && !DATA.calls.some(c => c[1] === state.project) && !DATA.errors.some(e => e.p === state.project);
+  // The swatch ties a row to its chart layer; types folded into Other get Other's grey. A badge only once a fix is applied.
   $("#catBody").innerHTML = rows.map(([cid, n]) => {
-    const pts = series(f.errs, f.calls, keys, cid);
+    const pts = series(f.errs, f.calls, keys, cid), col = typeColor(cid, vt);
     const e1 = f.errs.filter(e => e.c === cid && e.d < mid).length, e2 = n - e1;
     const d = change(rate(e1, c1), rate(e2, c2), 5);
-    const status = fixes[cid] ? `<span class="chip fixed">✓ Fixed ${label(fixes[cid])}</span>` : `<span class="chip">Open</span>`;
+    const badge = fixes[cid] ? `<span class="chip fixed">✓ Fix applied ${label(fixes[cid])}</span>` : "";
     return `<tr data-c="${cid}" class="${state.cat === cid ? "sel" : ""}">
-      <td><button type="button" class="tbtn" data-c="${cid}" aria-expanded="${state.cat === cid}" aria-controls="detail">${esc(CATS[cid].label)}</button></td><td class="num">${fmt(n)}</td>
-      <td class="c-share"><div class="bar" title="${fmt(n / total * 100, 1)}%"><i style="width:${Math.max(2, n / rows[0][1] * 100)}%"></i></div></td>
+      <td><button type="button" class="tbtn" data-c="${cid}" aria-expanded="${state.cat === cid}" aria-controls="detail"><i class="sw" style="background:${col}" aria-hidden="true"></i>${esc(CATS[cid].label)}</button>${badge}</td><td class="num">${fmt(n)}</td>
+      <td class="c-share"><div class="share"><div class="bar" aria-hidden="true"><i style="width:${n / total * 100}%;background:${col}"></i>${n / total < .03 ? `<b class="tick" style="background:${col}"></b>` : ""}</div><span>${fmt(n / total * 100, n / total < .01 ? 1 : 0)}%</span></div></td>
       <td class="c-trend">${spark(pts)}</td>
-      <td class="num ${d.cls}"${d.title ? ` title="${d.title}"` : ""}>${d.text}</td>
-      <td>${status}</td></tr>`;
-  }).join("") || `<tr><td colspan="6" class="empty">${none ? `No tool calls recorded for ${esc(state.project)}.` : c1 + c2 ? "No errors in this range 🎉" : "No tool calls in this range."}</td></tr>`;
+      <td class="num ${d.cls}"${d.title ? ` title="${d.title}"` : ""}>${d.text}</td></tr>`;
+  }).join("") || `<tr><td colspan="5" class="empty">${none ? `No tool calls recorded for ${esc(state.project)}.` : c1 + c2 ? "No errors in this range 🎉" : "No tool calls in this range."}</td></tr>`;
   document.querySelectorAll("#catBody tr[data-c]").forEach(tr => {
     const pick = () => { const open = state.cat !== tr.dataset.c; state.cat = open ? tr.dataset.c : null; state.q = ""; state.focus = null; render(true, open); };
     tr.addEventListener("click", pick); // the type button's clicks and keys bubble here too
   });
 }
-function spark(pts) {
-  const W = 84, H = 22, max = Math.max(...pts.map(p => p.r || 0)) || 1, segs = runs(pts);
-  const x = i => (pts.length === 1 ? W / 2 : i / (pts.length - 1) * W).toFixed(1), y = p => (H - 2 - p.r / max * (H - 4)).toFixed(1);
-  const d = segs.map(r => r.map(([p, i], j) => `${j ? "L" : "M"}${x(i)},${y(p)}`).join("")).join("");
-  const lone = segs.filter(r => r.length === 1).map(([[p, i]]) => `<circle cx="${x(i)}" cy="${y(p)}" r="1.5" fill="var(--series-1)"/>`).join("");
-  return `<svg class="spark" viewBox="0 0 ${W} ${H}" aria-hidden="true"><path d="${d}" fill="none" stroke="var(--series-1)" stroke-width="1.5" stroke-linejoin="round"/>${lone}</svg>`;
+// A small rate line: faint bands where no tool calls ran, dotted bridges across them, so a gap never strands a lone dot.
+function spark(pts, { W = 84, H = 22, stroke = "var(--text-secondary)", marks = [] } = {}) {
+  const n = pts.length, max = Math.max(...pts.map(p => p.r || 0)) || 1, bw = W / n;
+  const x = i => ((i + .5) * bw).toFixed(1), y = p => (H - 2 - p.r / max * (H - 4)).toFixed(1);
+  let bands = "", solid = "", bridge = "", prev = null, run = 0;
+  pts.forEach((p, i) => {
+    if (p.r == null) { run = 0; if (!pts[i - 1] || pts[i - 1].r != null) { let j = i; while (j + 1 < n && pts[j + 1].r == null) j++; bands += `<rect x="${(i * bw).toFixed(1)}" y="0" width="${((j - i + 1) * bw).toFixed(1)}" height="${H}" fill="var(--surface-2)" opacity=".7"/>`; } return; }
+    const P = `${x(i)},${y(p)}`;
+    if (!run) { if (prev) bridge += `M${prev}L${P}`; solid += `M${P}L${P}`; } else solid += `L${P}`;
+    run++; prev = P;
+  });
+  const fx = marks.map(i => `<line x1="${x(i)}" x2="${x(i)}" y1="0" y2="${H}" stroke="var(--good)" stroke-width="1.25" stroke-dasharray="3 2"/>`).join("");
+  return `<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">${bands}${fx}<path d="${bridge}" fill="none" stroke="var(--text-muted)" stroke-width="1" stroke-dasharray="1 3" stroke-linecap="round" opacity=".7" vector-effect="non-scaling-stroke"/>`
+    + `<path d="${solid}" fill="none" stroke="${stroke}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/></svg>`;
 }
 
 // ---------- detail ----------
 function renderDetail(f) {
   const el = $("#detail");
   if (!state.cat) {
-    const counts = countBy(f.errs);
-    const open = Object.entries(counts).filter(([c]) => !fixes[c] && CATS[c].snippet).sort((a, b) => b[1] - a[1]).slice(0, 5);
+    const counts = countBy(f.errs), vt = viewTypes(f);
+    const open = Object.entries(counts).filter(([c]) => !fixes[c] && CATS[c].snippet).sort((a, b) => b[1] - a[1]).slice(0, 4);
+    // Rising fastest: rate in the second half of the range against the first, among types with enough recent errors to mean it.
+    const mid = iso(new Date((+toDate(f.start) + +toDate(lastDay)) / 2));
+    const c1 = sumCalls(f.calls.filter(c => c[0] < mid)), c2 = sumCalls(f.calls.filter(c => c[0] >= mid));
+    const rising = Object.keys(counts).map(c => {
+      const e1 = f.errs.filter(e => e.c === c && e.d < mid).length, e2 = counts[c] - e1, r1 = rate(e1, c1), r2 = rate(e2, c2);
+      return { c, e1, e2, d: r1 == null || r2 == null ? null : r1 ? (r2 - r1) / r1 * 100 : Infinity };
+    }).filter(x => x.d != null && x.d > 10 && x.e2 >= 5).sort((a, b) => b.d - a.d || b.e2 - a.e2).slice(0, 4);
+    const pick = (c, top, sub, act) => `<button type="button" class="pick" data-c="${c}"><span class="phead"><b><i class="sw" style="background:${typeColor(c, vt)};margin-right:7px" aria-hidden="true"></i>${esc(CATS[c].label)}</b>${top}</span>
+      ${sub ? `<span class="muted" style="font-size:13px;margin-top:2px">${sub}</span>` : ""}<span class="act">${act} →</span></button>`;
     el.innerHTML = `<h2>Where to start</h2><p class="why">Biggest open error types that have a ready-made fix. Pick one, apply the fix, then mark it applied to watch its rate drop.</p>
-      ${open.map(([c, n]) => `<button type="button" class="pick" data-c="${c}"><span class="row" style="justify-content:space-between"><b>${esc(CATS[c].label)}</b><span class="muted">${fmt(n)} errors</span></span>
-      <span class="muted" style="font-size:13px;margin-top:2px">${esc(CATS[c].fix)}</span></button>`).join("") || `<div class="empty">Nothing open with a known fix.</div>`}
+      ${open.map(([c, n]) => pick(c, `<span class="muted">${fmt(n)} errors</span>`, esc(CATS[c].fix), "Open fix and examples")).join("") || `<div class="empty">Nothing open with a known fix.</div>`}
+      <h3 class="subh">Rising fastest</h3><p class="why" style="font-size:13px;margin-bottom:4px">Error rate in the second half of the range against the first.</p>
+      ${rising.map(x => pick(x.c, `<span class="rise">${x.d === Infinity ? "New" : `+${fmt(x.d, 0)}%`}</span>`, `${fmt(x.e1)} → ${fmt(x.e2)} errors${NOISE.has(x.c) ? " · noise" : ""}`,
+        fixes[x.c] ? "Check the fix" : "See what changed")).join("") || `<div class="empty" style="padding:12px 0">Nothing is rising in this range.</div>`}
       <div class="ex" style="border-bottom:0"><div class="muted" style="font-size:12px">The app ingests new transcript lines every minute; use Refresh above to ingest now. Fix markers live in this browser.</div></div>`;
     el.querySelectorAll("[data-c]").forEach(d => d.addEventListener("click", () => { state.cat = d.dataset.c; state.q = ""; render(true, true); }));
     return;
@@ -495,19 +754,29 @@ function renderDetail(f) {
     const prev = iso(new Date(toDate(fixDay) - DAY));
     const sides = [side(`Before fix${from && from <= prev ? ` · ${label(from)} – ${label(prev)}` : ""}`, "0000", fixDay, "No calls"),
       side(`Since ${label(fixDay)}`, fixDay, "9999", "No calls yet")];
-    const better = sides.every(x => x.r != null) && sides[1].r < sides[0].r;
+    // The verdict waits for enough calls since the fix that the old rate would have produced 5 errors (and at least
+    // MIN_AFTER_CALLS), so a quiet day or two can't read as a win.
+    const [b4, af] = sides, need = Math.ceil(Math.max(MIN_AFTER_CALLS, b4.r ? 5 / (b4.r / 100) : 0));
+    const enough = b4.r != null && af.r != null && af.c >= need;
+    const verdict = !enough ? ["Not enough calls yet", "warn"] : af.r < b4.r ? ["Rate lower", "ok"] : af.r > b4.r ? ["Rate higher", "bad"] : ["Rate unchanged", "warn"];
+    const pct = x => x.r == null ? "–" : fmt(x.r, 2) + "%", den = x => `${fmt(x.e)} of ${fmt(x.c)} call${x.c === 1 ? "" : "s"}`;
     ba = `<div class="l muted" style="font-size:12px;margin-top:12px">Before and after the fix · all time · ${esc(state.project || "all projects")}${state.sub ? "" : " · without subagents"}</div>
       <div class="ba" style="margin-top:6px">${sides.map((x, i) => `<div><div class="l">${x.name}</div>
-        <div class="v ${x.r == null ? "muted" : i && sides[0].r != null ? better ? "delta-down" : "delta-up" : ""}">${x.r == null ? x.empty : fmt(x.r, 2) + "%"}</div>
-        <div class="l">${fmt(x.e)} error${x.e === 1 ? "" : "s"} · ${fmt(x.c)} call${x.c === 1 ? "" : "s"}</div></div>`).join("")}</div>`;
+        <div class="v ${x.r == null ? "muted" : i && enough ? verdict[1] === "ok" ? "delta-down" : verdict[1] === "bad" ? "delta-up" : "" : ""}">${x.r == null ? x.empty : pct(x)}</div>
+        <div class="l">${fmt(x.e)} error${x.e === 1 ? "" : "s"} · ${fmt(x.c)} call${x.c === 1 ? "" : "s"}</div></div>`).join("")}</div>
+      <p class="fixout"><span class="out ${verdict[1]}">${verdict[0]}</span>
+        ${enough ? `${pct(b4)} before (${den(b4)}) → ${pct(af)} since (${den(af)}).`
+          : `${fmt(af.c)} call${af.c === 1 ? "" : "s"} since the fix (${fmt(af.e)} failed); ${fmt(need)} needed to compare${b4.r != null ? ` with ${pct(b4)} before (${den(b4)})` : ""}.`}</p>`;
   }
-  const base = f.errs.filter(e => e.c === state.cat).reverse();
+  const base = f.errs.filter(e => e.c === state.cat).reverse(), is = incSummary(base);
+  const worst = is.groups.slice().sort(byWeight)[0];
   // A linked example shows first; outside the current filters it gets its own note instead of joining the list.
   const focused = BY_ID[state.focus], outside = focused && !base.includes(focused);
   const tools = Object.entries(base.reduce((m, e) => (m[e.t] = (m[e.t] || 0) + 1, m), {})).sort((a, b) => b[1] - a[1]).slice(0, 3);
   el.innerHTML = `<div class="row dhead" style="justify-content:space-between"><h2 id="detailTitle" tabindex="-1">${esc(c.label)}</h2>
     <span class="row" style="flex-wrap:nowrap"><button type="button" id="back" class="linkbtn">Back to types</button><button id="clr" aria-label="Close detail">✕</button></span></div>
     <p class="why">${esc(c.why)}${tools.length ? ` <span class="muted">Mostly ${tools.map(t => esc(t[0])).join(", ")}.</span>` : ""}</p>
+    ${base.length ? `<p class="istat" title="An incident: failures of one tool in one session with this error, each within ${GAP} minutes of the last. Recovered: the tool's next call in that session succeeded."><b>${fmt(base.length)}</b> error${base.length === 1 ? "" : "s"} in <b>${fmt(is.n)}</b> incident${is.n === 1 ? "" : "s"}, <b>${fmt(is.pct, 0)}%</b> didn't recover <span class="muted">(${RECOVERED_NOTE.replace(/\.$/, "")})</span>.${worst && worst.errs.length > 1 ? ` Largest: ${fmt(worst.errs.length)} attempts over ${dur(incSpan(worst))}.` : ""}</p>` : ""}
     <div class="fixbox"><div class="t">Potential fix</div><div>${esc(c.fix)}</div>
       ${c.snippet ? `<pre class="snip" id="snip">${esc(c.snippet)}</pre><div class="row" style="margin-top:8px"><button id="copy">Copy CLAUDE.md line</button></div>` : ""}
       <div class="row" style="margin-top:10px">
@@ -516,13 +785,18 @@ function renderDetail(f) {
         <span class="muted" style="font-size:12px">Applies to all projects</span>
       </div></div>
     ${ba}
+    <div class="mini" id="mini" hidden>${miniRate(f)}</div>
+    ${byProject(base)}
     ${outside ? `<div class="outnote" id="outside"><div class="row" style="justify-content:space-between"><b>Outside current filters</b>
       <button type="button" id="clearF">Clear filters</button></div>
       <div class="muted" style="font-size:12px">This linked example doesn't match the project, range or toggles above.</div>${exHtml([focused])}</div>` : ""}
-    <div class="exbar"><div class="row" style="justify-content:space-between;margin-top:4px"><b>Examples</b><span class="muted" style="font-size:12px" id="exCount"></span></div>
-    <input type="search" id="q" placeholder="Filter examples…" value="${esc(state.q)}" style="width:100%;margin:8px 0" aria-label="Filter examples"></div>
+    <div class="exbar"><div class="row" style="justify-content:space-between;margin-top:4px"><b id="exHead">${state.mode === "flat" ? "Errors" : "Incidents"}</b><span class="muted" style="font-size:12px" id="exCount"></span></div>
+    <div class="seg exmode" id="exMode" role="group" aria-label="List"><button type="button" data-m="inc" aria-pressed="${state.mode !== "flat"}">Incidents</button><button type="button" data-m="flat" aria-pressed="${state.mode === "flat"}">Every error, newest first</button></div>
+    <input type="search" id="q" placeholder="Filter by command, error or project…" value="${esc(state.q)}" style="width:100%;margin:8px 0" aria-label="Filter ${state.mode === "flat" ? "errors" : "incidents"}"></div>
     <div id="exList"></div>
     <button id="more" style="width:100%;margin-top:8px" hidden>Show more</button>`;
+  el.querySelectorAll(".byproj button[data-p]").forEach(b => b.onclick = () => { state.project = b.dataset.p; render(true); });
+  syncMini();
   $("#clr").onclick = () => { state.cat = null; state.focus = null; render(true); };
   $("#back").onclick = () => { const b = $(`#catBody button[data-c="${CSS.escape(state.cat)}"]`); b?.scrollIntoView({ block: "center", behavior: reduceMotion.matches ? "auto" : "smooth" }); b?.focus({ preventScroll: true }); };
   // The example bar sticks below the header, and examples scroll in below both.
@@ -532,36 +806,105 @@ function renderDetail(f) {
   // The date input's max is today: reportValidity shows the browser's message for a future or incomplete date.
   const fx = $("#fix"); if (fx) fx.onclick = () => { const di = $("#fixDate"); if (!di.reportValidity() || di.value > lastDay) return; fixes[state.cat] = di.value || lastDay; store.set("claude-errors-fixes", fixes); render(); $("#unfix")?.focus(); };
   const uf = $("#unfix"); if (uf) uf.onclick = () => { delete fixes[state.cat]; store.set("claude-errors-fixes", fixes); render(); $("#fix")?.focus(); };
-  // List, count and Show more all come from the current search.
-  let shown = 30, ex = [];
+  // List, count and Show more all come from the current search. Incidents: those with a matching failure, the linked one first and open.
+  const PAGE = state.mode === "flat" ? 30 : 20;
+  let shown = PAGE, ex = [];
+  const groups = is.groups.sort(byWeight), focusInc = focused && !outside ? focused.n : null;
+  if (focusInc != null) openInc.add(focusInc);
   const paint = () => {
-    const q = state.q.toLowerCase();
-    ex = base.filter(e => !q || (e.i + e.e + e.r + e.p).toLowerCase().includes(q));
-    if (focused && !outside) { const i = ex.indexOf(focused); if (i > 0) { ex.splice(i, 1); ex.unshift(focused); } }
-    $("#exList").innerHTML = exHtml(ex.slice(0, shown));
+    const q = state.q.toLowerCase(), hit = e => !q || (e.i + e.e + e.r + e.p + e.t).toLowerCase().includes(q);
+    if (state.mode === "flat") {
+      ex = base.filter(hit);
+      if (focused && !outside) { const i = ex.indexOf(focused); if (i > 0) { ex.splice(i, 1); ex.unshift(focused); } }
+      $("#exList").innerHTML = exHtml(ex.slice(0, shown));
+      $("#exCount").textContent = q ? `${fmt(ex.length)} of ${fmt(base.length)} match` : `${fmt(base.length)} in range, newest first`;
+    } else {
+      ex = groups.filter(g => g.errs.some(hit));
+      if (focusInc != null) { const i = ex.findIndex(g => g.i === focusInc); if (i > 0) ex.unshift(...ex.splice(i, 1)); }
+      $("#exList").innerHTML = ex.slice(0, shown).map(incHtml).join("") || `<div class="empty">No incidents match.</div>`;
+      $("#exCount").textContent = q ? `${fmt(ex.length)} of ${fmt(groups.length)} match` : `${fmt(groups.length)} in range, most attempts first`;
+    }
     requestAnimationFrame(fitToggles);
-    $("#exCount").textContent = q ? `${fmt(ex.length)} of ${fmt(base.length)} match` : `${fmt(base.length)} in range, newest first`;
     $("#more").hidden = ex.length <= shown;
   };
   paint();
-  const qi = $("#q"); qi.oninput = () => { state.q = qi.value; shown = 30; paint(); say($("#exCount").textContent); };
+  const qi = $("#q"); qi.oninput = () => { state.q = qi.value; shown = PAGE; paint(); say($("#exCount").textContent); };
+  document.querySelectorAll("#exMode button").forEach(b => b.onclick = () => {
+    if (state.mode === b.dataset.m) return;
+    state.mode = b.dataset.m; store.set("claude-errors-mode", state.mode); render();
+    $(`#exMode button[data-m="${state.mode}"]`)?.focus();
+  });
   $("#more").onclick = () => {
-    const from = shown; shown += 30; paint();
-    document.querySelectorAll("#exList .ex")[from]?.focus();
+    const from = shown; shown += PAGE; paint();
+    document.querySelectorAll(state.mode === "flat" ? "#exList .ex" : "#exList .inc-h")[from]?.focus();
   };
 }
+// Where this type happens, by project: a share bar in project colors and the top five, each a filter.
+function byProject(base) {
+  if (state.project || !base.length) return "";
+  const rows = Object.entries(countBy(base.map(e => ({ c: e.p })))).sort((a, b) => b[1] - a[1]), n = base.length;
+  const top = rows.slice(0, 5), rest = rows.slice(5).reduce((s, r) => s + r[1], 0);
+  const col = p => window.appnav?.color(p) ?? "var(--proj-other)";
+  return `<div class="byproj"><div class="row" style="justify-content:space-between"><b style="font-size:13px">By project</b><span class="muted" style="font-size:12px">${fmt(rows.length)} project${rows.length === 1 ? "" : "s"}</span></div>
+    <div class="stack" aria-hidden="true">${top.map(([p, v]) => `<i style="flex:${v};background:${col(p)}" title="${esc(p)}"></i>`).join("")}${rest ? `<i style="flex:${rest};background:var(--proj-other)"></i>` : ""}</div>
+    <ul>${top.map(([p, v]) => `<li><button type="button" data-p="${esc(p)}" title="Show only ${esc(p)}"><span class="pname">${dot(p)}<span>${esc(p)}</span></span><span class="v">${fmt(v)}</span><span class="s">${fmt(v / n * 100, 0)}%</span></button></li>`).join("")}
+    ${rest ? `<li class="muted" style="font-size:12px;padding:4px 0">${fmt(rows.length - 5)} more: ${fmt(rest)} errors</li>` : ""}</ul></div>`;
+}
+// The type's rate over the range with its fix marker, for when the main chart is out of view (scrolled away, or under the sheet).
+function miniRate(f) {
+  const pts = series(f.errs, f.calls, buckets(f.start), state.cat), fix = fixes[state.cat];
+  const vt = viewTypes(f), i = fix ? pts.findIndex(p => p.k === bucketOf(fix)) : -1, max = Math.max(...pts.map(p => p.r || 0));
+  return `<div class="row" style="justify-content:space-between;font-size:12px"><span class="muted">Error rate, ${state.range ? `last ${state.range} days` : "all time"}${fix && i >= 0 ? " · dashed line: fix applied" : ""}</span>
+    <span class="muted">peak ${fmt(max, 2)}%</span></div>${spark(pts, { W: 600, H: 64, stroke: typeColor(state.cat, vt), marks: i >= 0 ? [i] : [] })}`;
+}
+// The mini chart shows only while the main chart is out of view.
+let chartInView = true;
+const syncMini = () => { const m = $("#mini"); if (m) m.hidden = chartInView && !sheet.open; };
+new IntersectionObserver(es => { chartInView = es[es.length - 1].isIntersecting; syncMini(); }, { threshold: .25 }).observe(document.getElementById("chart"));
 function exHtml(list) {
   return list.map(e => {
     // Loaded full text replaces the payload's; a field cut when it was recorded says so.
     const x = fullText.get(e.id) || e, note = k => x.cut?.includes(k) ? `<div class="cutnote">(summary as recorded)</div>` : "";
     return `<div class="ex${e.id && e.id === state.focus ? " focus" : ""}${opened.has(exKey(e)) ? " open" : ""}" tabindex="-1"${e.id ? ` id="ex-${esc(e.id)}"` : ""}${e.id && !fullText.has(e.id) && e.i.length >= PAYLOAD_INPUT ? " data-cut" : ""}>
     <div class="meta"><span>${esc(new Date(e.ts).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }))}</span>
-      <span>${esc(e.p)}</span><span>${esc(e.t)}</span>${e.sub ? "<span>subagent</span>" : ""}${e.s ? `<a href="${sessionUrl(e)}" title="Open session ${esc(e.s)} in Usage">#${esc(e.s.slice(0, 8))}</a>` : ""}
+      <span class="pname">${dot(e.p)}<span>${esc(e.p)}</span></span><span>${esc(e.t)}</span>${e.sub ? "<span>subagent</span>" : ""}${e.s ? `<a href="${sessionUrl(e)}" title="Open session ${esc(e.s)} in Usage">#${esc(e.s.slice(0, 8))}</a>` : ""}
       ${e.id ? `<span class="link"><a href="${esc(viewHash(e.id))}" data-link="${esc(e.id)}" title="Permalink to this error">🔗 Link</a><button type="button" data-copy="${esc(e.id)}">Copy URL</button></span>` : ""}</div>
     ${x.i ? `<code>${esc(x.i)}</code>${note("i")}` : ""}<div class="err">${esc(x.e)}</div>${note("e")}
     ${x.r ? `<blockquote>${esc(x.r)}</blockquote>${note("r")}` : ""}
     <button type="button" class="full" data-full="${esc(exKey(e))}" aria-expanded="${opened.has(exKey(e))}" hidden>${opened.has(exKey(e)) ? "Show less" : "Show full"}</button></div>`;
   }).join("") || `<div class="empty">No examples match.</div>`;
+}
+
+// One incident: attempts, where, when, how it ended; open, its failures in order and the call that recovered.
+const openInc = new Set();
+function incHtml(g) {
+  const open = openInc.has(g.i), [ol, oc] = OUTCOME[g.outcome] || ["", ""], n = g.errs.length;
+  const t0 = new Date(g.first), t1 = new Date(g.last), sameDay = t0.toDateString() === t1.toDateString();
+  const when = t0.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
+    + (n > 1 ? ` – ${t1.toLocaleString(undefined, sameDay ? { hour: "2-digit", minute: "2-digit" } : { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })} · ${dur(incSpan(g))}` : "");
+  return `<div class="inc" id="inc-${g.i}"><button type="button" class="inc-h" data-inc="${g.i}" aria-expanded="${open}" aria-controls="incb-${g.i}">
+    <span class="att">${fmt(n)}×<small>${n === 1 ? "attempt" : "attempts"}</small></span>
+    <span class="who"><span class="pname">${dot(g.p)}<span>${esc(g.p)}</span></span><span>${esc(g.t)}</span>${g.sub ? `<span class="muted">subagent</span>` : ""}</span>
+    <span class="out ${oc}"${g.outcome === "recovered" ? ` title="The next ${esc(g.t)} call in this session succeeded"` : ""}>${ol}</span>
+    <span class="when">${esc(when)}${g.ok ? ` · ${fmt(g.ok)} successful ${esc(g.t)} call${g.ok === 1 ? "" : "s"} in between` : ""}<span class="chev" aria-hidden="true">›</span></span></button>
+    <div class="inc-b" id="incb-${g.i}"${open ? "" : " hidden"}>${open ? incBody(g) : ""}</div></div>`;
+}
+function incBody(g) {
+  const after = g.rts ? dur(Math.max(0, Date.parse(g.rts) - Date.parse(g.last))) : "";
+  const end = g.outcome === "recovered"
+    ? `<div class="recov"><b>Next ${esc(g.t)} call succeeded</b> · ${after} later${g.ri ? ":" : "."}${g.ri ? `<code>${esc(g.ri)}</code>` : ""}</div>`
+    : g.outcome === "gave_up" ? `<div class="recov none"><b>Gave up</b> · the session never called ${esc(g.t)} again${g.sub ? " from a subagent" : ""}.</div>`
+    : `<div class="recov none"><b>Failed again</b> · the next ${esc(g.t)} call failed too, with another error or more than ${GAP} minutes later.</div>`;
+  return exHtml(g.errs) + end;
+}
+function toggleInc(i, btn) {
+  const open = !openInc.has(i), b = document.getElementById("incb-" + i);
+  if (open) openInc.add(i); else openInc.delete(i);
+  btn.setAttribute("aria-expanded", open);
+  if (!b) return;
+  const g = open && incidentsOf(filtered().errs.filter(e => e.n === i))[0];
+  b.innerHTML = g ? incBody(g) : ""; b.hidden = !g;
+  if (g) requestAnimationFrame(fitToggles);
 }
 
 // Examples opened with "Show full", by id (or time and tool for an example without one).
@@ -622,6 +965,8 @@ function renderProjects() {
   const sel = $("#fProject");
   if (sel.dataset.html !== html) { sel.innerHTML = html; sel.dataset.html = html; }
   sel.value = state.project;
+  $("#fProjectWrap").classList.toggle("all", !state.project);
+  $("#fProjectWrap .pdot").style.background = window.appnav?.color(state.project) ?? "";
 }
 const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)");
 const narrow = matchMedia("(max-width: 900px)"), sheet = $("#sheet");
@@ -644,7 +989,7 @@ function focusDetail() {
   h.focus({ preventScroll: true });
 }
 // A selector that finds the same control again after a re-render.
-const focusKey = el => el.id ? "#" + CSS.escape(el.id) : ["c", "copy", "link", "full"].map(k => el.dataset?.[k] != null && `${el.tagName}[data-${k}="${CSS.escape(el.dataset[k])}"]`).find(Boolean);
+const focusKey = el => el.id ? "#" + CSS.escape(el.id) : ["c", "copy", "link", "full", "inc", "m"].map(k => el.dataset?.[k] != null && `${el.tagName}[data-${k}="${CSS.escape(el.dataset[k])}"]`).find(Boolean);
 let shownCat = null;
 // push: add a history entry. toDetail: move focus to the opened type.
 function render(push, toDetail) {
@@ -657,7 +1002,9 @@ function render(push, toDetail) {
   const f = filtered();
   $("#gen").textContent = (state.range ? `${label(f.start, true)} to ${label(lastDay, true)}` : `All time to ${label(lastDay, true)}`)
     + (DATA.generated ? ` · Ingested ${new Date(DATA.generated).toLocaleString()}` : "");
-  renderKpis(f); renderTable(f); renderChart(f); renderDetail(f); placeDetail();
+  renderKpis(f); renderTable(f); renderChart(f); renderDetail(f); placeDetail(); syncMini();
+  // A new type fades in over the old one's place.
+  if (wasCat !== state.cat && !reduceMotion.matches) $("#detail").animate?.([{ opacity: 0, transform: "translateY(4px)" }, { opacity: 1, transform: "none" }], { duration: 200, easing: "ease-out" });
   shownCat = state.cat;
   writeHash(push);
   if (toDetail && state.cat) return focusDetail();
@@ -671,9 +1018,12 @@ function selectExample(id) {
   document.querySelectorAll("#detail .ex").forEach(x => x.classList.toggle("focus", x.id === "ex-" + id));
   writeHash(true);
 }
+// A deep link lands on its example: scrolled into view, and keyboard focus there so Tab continues from it.
 function scrollToFocus() {
   const el = state.focus && document.getElementById("ex-" + state.focus);
-  if (el) el.scrollIntoView({ block: "center" });
+  if (!el) return;
+  el.scrollIntoView({ block: "center" });
+  el.focus({ preventScroll: true });
 }
 (function init() {
   const linked = readHash();
@@ -695,7 +1045,14 @@ function scrollToFocus() {
   // Back, Forward, the nav and permalink clicks all change the hash; re-read it unless it is the one just written.
   const onNav = () => { if (location.hash === lastHash) return; const ex = readHash(); render(); if (ex) scrollToFocus(); };
   window.addEventListener("popstate", onNav); window.addEventListener("hashchange", onNav);
+  $("#moreSum").onclick = ev => {
+    const b = ev.currentTarget, o = b.getAttribute("aria-expanded") !== "true";
+    b.setAttribute("aria-expanded", o); b.textContent = o ? "Less summary" : "More summary";
+    $("#kpis").classList.toggle("open", o); $("#gen").classList.toggle("open", o);
+  };
   $("#detail").addEventListener("click", ev => {
+    const ib = ev.target.closest("button[data-inc]");
+    if (ib) return toggleInc(+ib.dataset.inc, ib);
     const t = ev.target.closest("button[data-full]");
     if (t) {
       if (!t.closest(".ex").classList.contains("open") && BY_ID[t.dataset.full] && !fullText.has(t.dataset.full)) return loadFull(t, t.dataset.full);
@@ -719,7 +1076,7 @@ function scrollToFocus() {
   render();
   if (linked) scrollToFocus();
   // After a failed load, Retry was removed with the message: focus the page heading and say so.
-  if (retried) { $("h1").focus(); $("#pageLive").textContent = "Errors loaded"; }
+  if (retried) { $("#lede").focus(); $("#pageLive").textContent = "Errors loaded"; }
 })();
 </script>
 </body>

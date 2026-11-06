@@ -1,6 +1,7 @@
 """Queries behind the dashboards: the errors payload and the usage metrics. SQL over the derived tables."""
 import json
 import os
+import re
 from datetime import date, timedelta
 
 from categorize import RULES
@@ -39,13 +40,71 @@ def errors_payload(cur, last_ingest=None, today=None):
         e["d"] = e["ts"].strftime("%Y-%m-%d")
         e["ts"] = iso(e["ts"])
         e["e"] = e["e"] or ""
+    inc, of = incidents(cur)
+    for e in errs:
+        e["n"] = of.get(e["id"])
     calls = cur.execute("""
         SELECT strftime(t.start_ts, '%Y-%m-%d') AS d, coalesce(s.project, '(unknown)') AS p, count(*),
                count(*) FILTER (WHERE t.subagent)
         FROM tool_calls t LEFT JOIN sessions s USING (session_id)
         WHERE t.start_ts IS NOT NULL GROUP BY 1, 2 ORDER BY 1, 2""").fetchall()
-    return dict(generated=last_ingest, today=(today or date.today()).isoformat(), categories=[{k: r[k] for k in ("id", "label", "why", "fix", "snippet")} for r in RULES],
-                errors=errs, calls=[list(c) for c in calls])
+    return dict(generated=last_ingest, today=(today or date.today()).isoformat(), project_order=project_order(cur), categories=[{k: r[k] for k in ("id", "label", "why", "fix", "snippet")} for r in RULES],
+                errors=errs, calls=[list(c) for c in calls], error_days=error_days(cur), incidents=inc,
+                incident_gap_minutes=INCIDENT_GAP_MINUTES)
+
+
+INCIDENT_GAP_MINUTES = 10  # a failure more than this long after the previous one of the same tool starts a new incident
+
+
+def incidents(cur):
+    """Failed calls grouped into incidents: failures of one tool in one session (main thread and subagents apart) with the
+    same category, each starting at most INCIDENT_GAP_MINUTES after the previous one ended. Calls of that tool that succeed in
+    between don't end an incident (ok counts them), so an intermittent problem reads as one episode.
+    Returns (incidents, {tool_use_id: incident index}). Each incident: s session, t tool, c category, p project, sub,
+    first/last (ISO start of the first failure, end of the last), ok, outcome of the tool's next call in the session after the
+    last failure ("recovered": it succeeded; "failed_again": it failed with another error, or later than the gap; "gave_up":
+    the session never called that tool again), and for a recovery rid, ri (its input, cut to 400) and rts (its start)."""
+    got = cur.execute(f"""
+        WITH seq AS (
+          SELECT tool_use_id AS id, session_id, tool, subagent, category, is_error, end_ts, coalesce(start_ts, end_ts) AS ts,
+                 sum(CASE WHEN is_error THEN 0 ELSE 1 END) OVER w AS oks,
+                 lead(tool_use_id) OVER w AS n_id, lead(is_error) OVER w AS n_err
+          FROM tool_calls WHERE coalesce(start_ts, end_ts) IS NOT NULL
+          WINDOW w AS (PARTITION BY session_id, subagent, tool ORDER BY coalesce(start_ts, end_ts), tool_use_id)),
+        fails AS (
+          SELECT *, CASE WHEN ts - lag(end_ts) OVER f <= INTERVAL {INCIDENT_GAP_MINUTES} MINUTE THEN 0 ELSE 1 END AS brk
+          FROM seq WHERE is_error AND end_ts IS NOT NULL
+          WINDOW f AS (PARTITION BY session_id, subagent, tool, category ORDER BY ts, id)),
+        grp AS (
+          SELECT *, sum(brk) OVER (PARTITION BY session_id, subagent, tool, category ORDER BY ts, id) AS g FROM fails),
+        inc AS (
+          SELECT session_id, subagent, tool, category AS c, g, list(id ORDER BY ts, id) AS ids, min(ts) AS first,
+                 max(end_ts) AS last, max(oks) - min(oks) AS ok, list(n_id ORDER BY ts, id)[-1] AS n_id,
+                 list(n_err ORDER BY ts, id)[-1] AS n_err
+          FROM grp GROUP BY 1, 2, 3, 4, 5)
+        SELECT i.session_id, i.tool, i.c, coalesce(s.project, '(unknown)'), i.subagent, i.first, i.last, i.ok, i.ids,
+               CASE WHEN i.n_id IS NULL THEN 'gave_up' WHEN NOT i.n_err THEN 'recovered' ELSE 'failed_again' END,
+               CASE WHEN NOT i.n_err THEN i.n_id END, CASE WHEN NOT i.n_err THEN left(r.input_summary, 400) END,
+               CASE WHEN NOT i.n_err THEN coalesce(r.start_ts, r.end_ts) END
+        FROM inc i LEFT JOIN sessions s USING (session_id) LEFT JOIN tool_calls r ON r.tool_use_id = i.n_id
+        ORDER BY i.first, i.session_id, i.tool, i.c""").fetchall()
+    out, of = [], {}
+    for sid, tool, c, p, sub, first, last, ok, ids, outcome, rid, ri, rts in got:
+        for x in ids:
+            of[x] = len(out)
+        out.append(dict(s=sid, t=tool, c=c, p=p, sub=1 if sub else 0, first=iso(first), last=iso(last), ok=ok, outcome=outcome,
+                        rid=rid, ri=ri or "", rts=iso(rts)))
+    return out, of
+
+
+def error_days(cur):
+    """Failed calls per [day, project, category, errors, subagent errors], dated like an error's d (its end time),
+    so the stacked chart sums counts instead of walking every error."""
+    return [list(r) for r in cur.execute("""
+        SELECT strftime(t.end_ts, '%Y-%m-%d') AS d, coalesce(s.project, '(unknown)') AS p, t.category AS c, count(*),
+               count(*) FILTER (WHERE t.subagent)
+        FROM tool_calls t LEFT JOIN sessions s USING (session_id)
+        WHERE t.is_error AND t.end_ts IS NOT NULL GROUP BY 1, 2, 3 ORDER BY 1, 2, 3""").fetchall()]
 
 
 # Ingest caps (store.py, categorize.summarize_input): text at its cap may have been cut when recorded.
@@ -114,10 +173,13 @@ def usage(cur, project="", range_days=0, session="", prices=None, today=None):
 
     daily = rows(cur, f"{rq} SELECT strftime(ts, '%Y-%m-%d') AS day, {sums}, sum(cost) AS cost, "
                       f"count(*) FILTER (WHERE cost IS NULL) AS unpriced FROM rq GROUP BY 1 ORDER BY 1", rp)
+    # The same days split by project, for the stacked cost chart.
+    daily_projects = rows(cur, f"{rq} SELECT strftime(ts, '%Y-%m-%d') AS day, project, sum(cost) AS cost, sum(tokens) AS tokens "
+                               f"FROM rq GROUP BY 1, 2 ORDER BY 1, 2", rp)
     tot = rows(cur, f"""{rq} SELECT {sums}, coalesce(sum(tokens), 0) AS tokens, sum(cost) AS cost,
         count(*) AS requests, count(*) FILTER (WHERE NOT subagent) AS main_requests,
         coalesce(sum(tokens) FILTER (WHERE subagent), 0) AS sub_tokens, sum(cost) FILTER (WHERE subagent) AS sub_cost,
-        coalesce(sum(thinking_ms), 0) AS thinking_ms FROM rq""", rp)[0]
+        coalesce(sum(thinking_ms), 0) AS thinking_ms, count(DISTINCT CAST(ts AS DATE)) AS active_days FROM rq""", rp)[0]
     unpriced = rows(cur, f"{rq} SELECT model, count(*) AS requests, sum(tokens) AS tokens FROM rq WHERE cost IS NULL GROUP BY 1 ORDER BY 3 DESC", rp)
     models = rows(cur, f"""{rq} SELECT model, coalesce(effort, '(none)') AS effort, count(*) AS requests, sum(tokens) AS tokens,
         sum(cost) AS cost FROM rq GROUP BY 1, 2 ORDER BY requests DESC""", rp)
@@ -167,27 +229,64 @@ def usage(cur, project="", range_days=0, session="", prices=None, today=None):
         median_session_seconds=median([x["duration_s"] for x in sess if x["duration_s"] is not None]),
         near_limit=sum(1 for x in sess if x["near_limit"]))
     out = dict(project=project, range=range_days, start=start.isoformat() if start else None, end=today.isoformat(),
-               projects=project_list(cur), totals=totals, daily=daily, unpriced=unpriced, models=models,
+               projects=project_list(cur), project_order=project_order(cur), totals=totals, daily=daily, daily_projects=daily_projects, unpriced=unpriced, models=models,
                by_project=by_project, tools=rate_rows(tools), mcp=rate_rows(mcp), skills=rate_rows(skills),
                hooks=rate_rows(hooks, "runs"), error_loops=loops[:50],
                sessions=sorted(sess, key=lambda x: x["first_ts"] or "", reverse=True)[:300],
-               top_sessions=sorted(sess, key=lambda x: -(x["cost"] or 0))[:50],
-               near_limit=sorted((x for x in sess if x["near_limit"]), key=lambda x: -x["context_share"]))
+               top_sessions=with_titles(cur, sorted(sess, key=lambda x: -(x["cost"] or 0))[:50]),
+               near_limit=sorted((x for x in sess if x["near_limit"]), key=lambda x: -x["context_share"]),
+               previous=previous_period(cur, project, range_days, prices, today))
+    out["changes"] = project_changes(by_project, out["previous"])
     if session:
         out["session"] = session_detail(cur, session, requests_cte(pcte, "r.session_id = ?"), pparams + [session], prices)
     return out
 
 
-def session_list(cur, project="", range_days=0, q="", near=False, offset=0, limit=100, prices=None, today=None):
-    """One page of the view's sessions, newest first (or nearest the context limit first), matching q on id, project or branch."""
+def previous_period(cur, project, range_days, prices, today):
+    """The equal-length period just before the view (same project filter), for the headline comparison and its sparkline.
+    None for the all-time view, which has nothing before it."""
+    if not range_days:
+        return None
+    end = today - timedelta(days=range_days)  # last day of the previous period
+    start = end - timedelta(days=range_days - 1)
+    pcte, pparams = price_cte(prices)
+    rq = requests_cte(pcte, "(? = '' OR s.project = ?) AND r.ts >= CAST(? AS DATE) AND r.ts < CAST(? AS DATE) + INTERVAL 1 DAY")
+    p = pparams + [project, project, start, end]
+    tot = rows(cur, f"""{rq} SELECT coalesce(sum(tokens), 0) AS tokens, sum(cost) AS cost, count(*) AS requests,
+        count(DISTINCT session_id) AS sessions, count(DISTINCT CAST(ts AS DATE)) AS active_days FROM rq""", p)[0]
+    daily = rows(cur, f"{rq} SELECT strftime(ts, '%Y-%m-%d') AS day, sum(cost) AS cost, sum(tokens) AS tokens FROM rq GROUP BY 1 ORDER BY 1", p)
+    by_project = rows(cur, f"{rq} SELECT project, sum(cost) AS cost, sum(tokens) AS tokens, count(*) AS requests FROM rq GROUP BY 1", p)
+    return dict(tot, start=start.isoformat(), end=end.isoformat(), daily=daily, by_project=by_project)
+
+
+def project_changes(by_project, previous):
+    """Each project's estimated-cost change against the previous period, biggest move first, for the "what changed" chart.
+    new: the project had no requests at all in the previous period. Projects active only before the view count too (cost 0 now).
+    None for the all-time view."""
+    if previous is None:
+        return None
+    now = {r["project"]: r for r in by_project}
+    before = {r["project"]: r for r in previous["by_project"]}
+    out = []
+    for name in now.keys() | before.keys():
+        c, b = (now.get(name) or {}).get("cost") or 0, (before.get(name) or {}).get("cost") or 0
+        out.append(dict(project=name, cost=c, prev_cost=b, delta=c - b, new=name not in before))
+    return sorted(out, key=lambda r: (-abs(r["delta"]), r["project"] or ""))
+
+
+def session_list(cur, project="", range_days=0, q="", near=False, offset=0, limit=100, prices=None, today=None, day=""):
+    """One page of the view's sessions, newest first (or nearest the context limit first), matching q on id, project or branch.
+    day (YYYY-MM-DD): only sessions with requests on that day."""
     prices = load_prices() if prices is None else prices
     _, _, _, fp, W, rq, rp = view(project, range_days, prices, today or date.today())
     sess = sessions(cur, rq, rp, W, fp, prices)
     q = q.strip().lower()
-    hits = [x for x in sess if (not near or x["near_limit"])
+    on_day = {r[0] for r in cur.execute("SELECT DISTINCT session_id FROM requests WHERE CAST(ts AS DATE) = ?",
+                                        [date.fromisoformat(day)]).fetchall()} if day else None
+    hits = [x for x in sess if (not near or x["near_limit"]) and (on_day is None or x["session_id"] in on_day)
             and (not q or q in f"{x['session_id']} {x['project']} {x['git_branch'] or ''}".lower())]
     hits.sort(key=(lambda x: -x["context_share"]) if near else (lambda x: x["first_ts"] or ""), reverse=not near)
-    return dict(total=len(hits), offset=offset, sessions=hits[offset:offset + limit])
+    return dict(total=len(hits), offset=offset, sessions=with_titles(cur, hits[offset:offset + limit]))
 
 
 def median(xs):
@@ -206,6 +305,12 @@ def rate_rows(rs, n="calls"):
 
 def project_list(cur):
     return [r[0] for r in cur.execute("SELECT project FROM sessions WHERE project IS NOT NULL GROUP BY 1 ORDER BY count(*) DESC").fetchall()]
+
+
+def project_order(cur):
+    """Projects by all-time tokens, busiest first. Both pages hand out project colors in this order, so it ignores every filter."""
+    return [r[0] for r in cur.execute("""SELECT s.project FROM requests r JOIN sessions s USING (session_id) WHERE s.project IS NOT NULL
+        GROUP BY 1 ORDER BY sum(r.input + r.output + r.cache_read + r.cache_5m + r.cache_1h) DESC, 1""").fetchall()]
 
 
 def error_loops(cur, W, fp):
@@ -308,4 +413,103 @@ def session_detail(cur, sid, allq, p, prices):
         commits=rows(cur, """SELECT tool_use_id, start_ts, left(input_summary, 200) AS command FROM tool_calls
             WHERE session_id = ? AND is_commit AND test_passed ORDER BY start_ts""", [sid]),
         prompts=rows(cur, "SELECT count(*) AS prompts, count(*) FILTER (WHERE interrupted) AS interrupted FROM prompts WHERE session_id = ?", [sid])[0],
-        error_loops=error_loops(cur, lambda ts: "t.session_id = ?", [sid]))
+        error_loops=error_loops(cur, lambda ts: "t.session_id = ?", [sid]),
+        **session_timeline(cur, sid, allq, p))
+
+
+TIMELINE_CAP = 5000  # rows per series in the session timeline; longer sessions keep their first rows
+FIRST_PROMPT_CAP = 600
+
+
+def session_timeline(cur, sid, allq, p):
+    """Per-request and per-tool-call rows for the session sheet's timeline, plus compaction times and the first prompt.
+    context: the prompt size of each request (input plus cache), the same measure as sessions.peak_context."""
+    reqs = rows(cur, f"""{allq} SELECT ts, model, subagent, input + cache_read + cache_5m + cache_1h AS context, output, cost
+        FROM rq ORDER BY ts, message_id LIMIT {TIMELINE_CAP}""", p)
+    calls = rows(cur, f"""SELECT tool_use_id AS id, tool, start_ts, end_ts, is_error, category, subagent,
+        is_commit AND coalesce(test_passed, false) AS is_commit
+        FROM tool_calls WHERE session_id = ? AND coalesce(start_ts, end_ts) IS NOT NULL
+        ORDER BY coalesce(start_ts, end_ts), tool_use_id LIMIT {TIMELINE_CAP}""", [sid])
+    for r in reqs:
+        r["ts"] = iso(r["ts"])
+    for c in calls:
+        c["start_ts"], c["end_ts"] = iso(c["start_ts"]), iso(c["end_ts"])
+    compactions = [r[0] for r in cur.execute("""SELECT ts FROM raw_lines WHERE session_id = ? AND type = 'system'
+        AND json LIKE '%"compact_boundary"%' ORDER BY ts""", [sid]).fetchall()]
+    full = first_prompts(cur, [sid]).get(sid)
+    return dict(requests=reqs, calls=calls, compaction_ts=compactions, first_prompt=cap_prompt(full),
+                first_prompt_cut=bool(full and len(full) > FIRST_PROMPT_CAP), title=prompt_title(full),
+                truncated=len(reqs) >= TIMELINE_CAP or len(calls) >= TIMELINE_CAP)
+
+
+def first_prompts(cur, sids):
+    """{session_id: full text of its first human prompt} (the earliest row in prompts), for the sessions that have one stored."""
+    if not sids:
+        return {}
+    found = {}
+    for sid, pid, line in cur.execute("""
+            WITH fp AS (SELECT session_id, arg_min(prompt_id, ts) AS pid FROM prompts WHERE list_contains(?, session_id) GROUP BY 1)
+            SELECT r.session_id, fp.pid, r.json FROM raw_lines r JOIN fp USING (session_id)
+            WHERE r.type = 'user' AND contains(r.json, fp.pid)
+            QUALIFY row_number() OVER (PARTITION BY r.session_id ORDER BY r.ts) <= 20
+            ORDER BY r.session_id, r.ts""", [list(sids)]).fetchall():
+        if sid in found:
+            continue
+        try:
+            d = json.loads(line)
+        except ValueError:
+            continue
+        if d.get("promptId") != pid or d.get("isMeta"):
+            continue
+        content = (d.get("message") or {}).get("content")
+        text = content if isinstance(content, str) else "\n".join(
+            x.get("text") or "" for x in content if isinstance(x, dict) and x.get("type") == "text") if isinstance(content, list) else ""
+        if text.strip():
+            found[sid] = text.strip()
+    return found
+
+
+def cap_prompt(text, cap=FIRST_PROMPT_CAP):
+    return None if text is None else text[:cap] + ("…" if len(text) > cap else "")
+
+
+def first_prompt(cur, sid, cap=FIRST_PROMPT_CAP):
+    """The text of the session's first human prompt, cut to cap characters (None: the whole text), or None."""
+    text = first_prompts(cur, [sid]).get(sid)
+    return text if cap is None else cap_prompt(text, cap)
+
+
+TITLE_LEN = 80
+# Claude Code wraps slash commands and injected context in hyphenated tags: <command-name>, <command-args>, <system-reminder>, ...
+CMD_TAG = lambda tag: re.compile(rf"<{tag}>\s*(.*?)\s*</{tag}>", re.S)
+WRAPPER_BLOCK = re.compile(r"<([a-z]+(?:-[a-z]+)+)>.*?</\1>", re.S)
+WRAPPER_TAG = re.compile(r"</?[a-z]+(?:-[a-z]+)+>")
+
+
+def prompt_title(text, n=TITLE_LEN):
+    """A short readable name for a session from its first prompt: "/ship add tests" for a slash command (its tags stripped),
+    else the first sentence of the first line, cut to n characters. None when nothing readable is left."""
+    if not text:
+        return None
+    name, msg, args = (CMD_TAG(t).search(text) for t in ("command-name", "command-message", "command-args"))
+    if name or msg:
+        cmd = name.group(1).strip() if name else (msg.group(1).split() or [""])[0]
+        title = ("" if cmd.startswith("/") else "/") + cmd + (" " + args.group(1) if args and args.group(1).strip() else "")
+    else:
+        body = WRAPPER_TAG.sub(" ", WRAPPER_BLOCK.sub(" ", text))
+        line = next((ln.strip() for ln in body.splitlines() if ln.strip()), "")
+        line = re.sub(r"^[#>*\-\s]+", "", line)
+        m = re.search(r"[.!?](?=\s|$)", line)
+        title = line[:m.end()] if m and m.end() > 12 else line
+    title = " ".join(title.split())
+    if not title:
+        return None
+    return title if len(title) <= n else title[:n - 1].rstrip() + "…"
+
+
+def with_titles(cur, sess):
+    """Adds title (from the first prompt, see prompt_title) to each session row; returns the rows."""
+    texts = first_prompts(cur, [x["session_id"] for x in sess])
+    for x in sess:
+        x["title"] = prompt_title(texts.get(x["session_id"]))
+    return sess
