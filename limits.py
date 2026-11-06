@@ -385,7 +385,11 @@ def earlier_windows(ws, usage, cal, horizon):
         cost = usage.cost(source, w.scope, w.start, end)
         if cost > 0:
             w.closed_at, w.final = end, min(100.0, cost / cal["per_pct"])
-            w.points = []
+            if w.final >= 100:  # when the estimate first reached the cap, to the step
+                t, step = w.start, step_of(w)
+                while t < end and usage.cost(source, w.scope, w.start, t) < 100 * cal["per_pct"]:
+                    t += step
+                w.hit_start = min(t, end)
             out.append(w)
         end = w.start
     return out[::-1]

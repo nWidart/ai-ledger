@@ -9,6 +9,7 @@ export const PAGES = [
   { path: "/usage", label: "Activity" },
   { path: "/cost", label: "Cost" },
   { path: "/errors", label: "Errors" },
+  { path: "/limits", label: "Limits" },
 ] as const;
 const POLL_MS = 60_000, INGESTING_MS = 3_000;
 

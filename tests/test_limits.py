@@ -307,6 +307,7 @@ class EstimateTest(AnalysisCase):
         past = [h for h in out["history"] if h["provider"] == "claude"]
         self.assertEqual([(h["start"], h["final"], h["estimated"]) for h in past],
                          [("2026-10-25T05:00:00.000Z", 5.0, True), ("2026-10-18T05:00:00.000Z", 0.1, True)])
+        self.assertFalse(any(h["hit"] for h in past))
         series = out["windows"][0]["series"]
         self.assertFalse(series[24]["measured"])
         self.assertEqual(series[-1], dict(t="2026-11-06T05:00:00.000Z", pct=25.0, measured=True))
@@ -489,6 +490,8 @@ class PageFixtureTest(AnalysisCase):
         self.assertTrue(out["events"])
         self.assertTrue(out["value"]["limits"])
         self.assertIn("polling failing", out["freshness"][0]["flags"])
+        full = [h for h in out["history"] if h["estimated"] and h["final"] == 100]
+        self.assertTrue(full and all(h["hit"] and h["hit_minutes"] > 0 for h in full))
 
 
 if __name__ == "__main__":

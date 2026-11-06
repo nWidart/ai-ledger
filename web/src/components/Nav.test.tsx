@@ -6,6 +6,7 @@ import { Nav } from "./Nav";
 import usage from "../__fixtures__/usage";
 import sessions from "../__fixtures__/sessions";
 import session from "../__fixtures__/session";
+import limits from "../__fixtures__/limits";
 
 const status = { ingesting: false, last_ingest: "2026-11-05T12:00:00+00:00", last_stats: { files: 1, lines: 2, inserted: 2, seconds: 0.1 }, error: null, counts: {}, interval: 60 };
 const json = (body: unknown, ok = true) => Promise.resolve({ ok, status: ok ? 200 : 500, json: () => Promise.resolve(body) } as Response);
@@ -31,6 +32,17 @@ describe("Nav", () => {
     });
     expect(location.pathname).toBe("/usage");
     expect(document.title).toBe("Activity · AI Ledger");
+  });
+
+  it("opens Limits with the project, range and source from Cost", async () => {
+    vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/status") ? status : url.startsWith("/api/limits") ? limits : usage)));
+    history.replaceState(null, "", "/cost#project=foo&range=30&source=codex");
+    render(<App />);
+    await userEvent.click(screen.getByRole("link", { name: "Limits" }));
+    expect(location.pathname).toBe("/limits");
+    expect(location.hash).toBe("#project=foo&range=30&source=codex");
+    expect(document.title).toBe("Limits · AI Ledger");
+    expect(vi.mocked(fetch).mock.calls.some(c => String(c[0]) === "/api/limits?project=foo&range=30&source=codex")).toBe(true);
   });
 
   it("names the app AI Ledger", () => {

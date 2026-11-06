@@ -2063,8 +2063,8 @@ export default {
    "start": "2026-10-25T05:00:00.000Z",
    "closed_at": "2026-11-01T05:00:00.000Z",
    "final": 100.0,
-   "hit": false,
-   "hit_minutes": null,
+   "hit": true,
+   "hit_minutes": 2160,
    "early": false,
    "reason": null,
    "estimated": true
@@ -2091,8 +2091,8 @@ export default {
    "start": "2026-10-18T05:00:00.000Z",
    "closed_at": "2026-10-25T05:00:00.000Z",
    "final": 100.0,
-   "hit": false,
-   "hit_minutes": null,
+   "hit": true,
+   "hit_minutes": 2160,
    "early": false,
    "reason": null,
    "estimated": true
@@ -2119,8 +2119,8 @@ export default {
    "start": "2026-10-11T05:00:00.000Z",
    "closed_at": "2026-10-18T05:00:00.000Z",
    "final": 100.0,
-   "hit": false,
-   "hit_minutes": null,
+   "hit": true,
+   "hit_minutes": 2160,
    "early": false,
    "reason": null,
    "estimated": true

@@ -4,12 +4,14 @@ import { usePathname } from "./hash";
 import { ActivityPage } from "./pages/activity/ActivityPage";
 import { CostPage } from "./pages/cost/CostPage";
 import { ErrorsPage } from "./pages/errors/ErrorsPage";
+import { LimitsPage } from "./pages/limits/LimitsPage";
 
-// One app, three pages: the path picks the page; the nav switches with pushState, so payloads stay in memory between them.
+// One app, four pages: the path picks the page; the nav switches with pushState, so payloads stay in memory between them.
 const ROUTES = {
   "/usage": { title: "Activity · AI Ledger", Page: ActivityPage },
   "/cost": { title: "Cost · AI Ledger", Page: CostPage },
   "/errors": { title: "Errors · AI Ledger", Page: ErrorsPage },
+  "/limits": { title: "Limits · AI Ledger", Page: LimitsPage },
 } as const;
 type Route = keyof typeof ROUTES;
 const isRoute = (p: string): p is Route => p in ROUTES;

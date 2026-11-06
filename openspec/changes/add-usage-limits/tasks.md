@@ -23,11 +23,11 @@
 
 ## 4. Limits page
 
-- [ ] 4.1 Add `/limits` to `app.py` `PAGES`, `App.tsx` `ROUTES` and `Nav.tsx` `PAGES`, and add the `limitsUrl` and payload types in `api.ts`. Verify with `test_app` (the page serves) and `Nav.test.tsx` (Limits carries project, range and source from Cost).
-- [ ] 4.2 Build the lead (the binding window, or "no limit runs out at the current pace") and the freshness strip (measured or estimated, last poll, polling failing). Verify with page tests on the fixture for both lead states and for the failing-poll flag.
-- [ ] 4.3 Build the window charts with `components/chart.ts`: measured and estimated points styled differently, the forecast band, the 100% line, the reset marker and plan-change markers, plus the "reaches 100% at …" / "resets first at about …%" caption and the no-forecast reason. Verify with page tests for the caption variants and with a check in the light and dark themes.
-- [ ] 4.4 Build headroom and pace, the routing hint, the history list, unused capacity, and value per 1% (by model, plus commits per 1% by project). Show "not available" where data is thin. Verify with page tests for the behind-pace scenario, the Codex suggestion, the 22% plan-change row, and the 60% unused average.
-- [ ] 4.5 Run `npm run check` in `web/`, commit the rebuilt `web/dist/`, and verify that `tests/test_web_build.py` passes.
+- [x] 4.1 Add `/limits` to `app.py` `PAGES`, `App.tsx` `ROUTES` and `Nav.tsx` `PAGES`, and add the `limitsUrl` and payload types in `api.ts`. Verify with `test_app` (the page serves) and `Nav.test.tsx` (Limits carries project, range and source from Cost).
+- [x] 4.2 Build the lead (the binding window, or "no limit runs out at the current pace") and the freshness strip (measured or estimated, last poll, polling failing). Verify with page tests on the fixture for both lead states and for the failing-poll flag.
+- [x] 4.3 Build the window charts with `components/chart.ts`: measured and estimated points styled differently, the forecast band, the 100% line, the reset marker and plan-change markers, plus the "reaches 100% at …" / "resets first at about …%" caption and the no-forecast reason. Verify with page tests for the caption variants and with a check in the light and dark themes.
+- [x] 4.4 Build headroom and pace, the routing hint, the history list, unused capacity, and value per 1% (by model, plus commits per 1% by project). Show "not available" where data is thin. Verify with page tests for the behind-pace scenario, the Codex suggestion, the 22% plan-change row, and the 60% unused average.
+- [x] 4.5 Run `npm run check` in `web/`, commit the rebuilt `web/dist/`, and verify that `tests/test_web_build.py` passes.
 
 ## 5. Integration
 

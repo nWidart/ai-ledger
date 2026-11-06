@@ -118,10 +118,51 @@ export interface ErrorsPayload {
 }
 export interface ErrorDetail { id: string; i: string; e: string; r: string; cut: ("i" | "e" | "r")[] }
 
+// Limits (/api/limits, limits.py payload): plan-limit windows per provider, their forecast, history and value.
+export interface LimitPoint { t: Ts; pct: number; measured: boolean }
+export interface ForecastPoint { t: Ts; mid: number; lo: number; hi: number }
+export interface Forecast {
+  /** shaped: follows the user's hour-of-day profile; flat: a constant rate (too little history). */
+  kind: "shaped" | "flat"; curve: ForecastPoint[];
+  /** When the middle forecast reaches 100%, with the high (early) and low (late) bounds; null: resets first. */
+  hits_at: Ts | null; hits_at_early: Ts | null; hits_at_late: Ts | null;
+  /** Percent at reset: null when the middle forecast reaches 100% first. */
+  at_reset: number | null; at_reset_low: number; at_reset_high: number;
+  /** Points a day: the pace that ends at exactly 100% at reset, and the current one. */
+  pace_target: number | null; pace_now: number; pace: "ahead" | "behind" | null;
+}
+export interface LimitWindow {
+  provider: string; provider_label: string; limit_id: string; scope: string; label: string; window_minutes: number | null; plan: string | null;
+  start: Ts; resets_at: Ts; current: number | null; measured: boolean; last_snapshot: Ts | null; series: LimitPoint[];
+  calibration: { per_pct: number; points: number; windows: number } | null;
+  forecast: Forecast | null; no_forecast: string | null; hit_start: Ts | null;
+}
+export interface LimitHistoryRow {
+  provider: string; provider_label: string; label: string; plan: string | null; start: Ts; closed_at: Ts; final: number;
+  hit: boolean; hit_minutes: number | null; early: boolean; reason: string | null; estimated: boolean;
+}
+export interface PlanChange { kind: "plan_change"; provider: string; at: Ts; plan_from: string; plan_to: string }
+export interface LimitsPayload {
+  now: Ts; windows: LimitWindow[];
+  binding: { provider: string; limit_id: string; scope: string; runs_out: boolean } | null;
+  suggestion: { provider: string; provider_label: string; label: string; unused_at_reset: number; resets_at: Ts } | null;
+  history: LimitHistoryRow[]; events: PlanChange[];
+  unused: { provider: string; provider_label: string; label: string; windows: number; estimated: number; avg_unused: number }[];
+  value: {
+    limits: { provider: string; provider_label: string; label: string; plan: string | null; cost_per_point: number;
+      models: { model: string; points: number; tokens_per_point: number | null }[] }[];
+    projects: { provider: string; provider_label: string; label: string; project: string; commits: number; points: number; commits_per_point: number | null }[];
+  };
+  freshness: { provider: string; provider_label: string; last_snapshot: Ts | null; measured: boolean; polled: boolean;
+    last_ok: string | null; error: string | null; flags: ("polling failing" | "token expired" | "old" | "no snapshots")[] }[];
+}
+
 export interface IngestStats { files: number; lines: number; inserted: number; seconds: number }
 export interface Status {
   ingesting: boolean; last_ingest: string | null; last_stats: IngestStats | null; error: string | null;
   counts: Record<string, number>; interval: number;
+  /** Plan-limit pollers by provider; never the credential. */
+  limits?: Record<string, { last_ok: string | null; last_attempt: string | null; failures: number; error: string | null; stale: boolean }>;
 }
 
 // URLs. automated: Activity and Cost leave automated sessions out unless asked (auto=1 in the page hash). source: "" is all.
@@ -140,6 +181,7 @@ export const sessionsUrl = (v: View, o: { q?: string; near?: boolean; offset?: n
   `/api/sessions?${qs({ ...viewQs(v), q: o.q, near: o.near, offset: o.offset || undefined, day: o.day })}`;
 export const sessionUrl = (id: string) => `/api/session?${qs({ id })}`;
 export const promptUrl = (session: string) => `/api/prompt?${qs({ session })}`;
+export const limitsUrl = (v: View) => `/api/limits?${qs({ project: v.project, range: v.range, source: v.source })}`;
 export const errorsUrl = "/api/errors";
 export const errorUrl = (id: string) => `/api/error?${qs({ id })}`;
 export const statusUrl = "/api/status";
