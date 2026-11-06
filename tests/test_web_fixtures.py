@@ -55,16 +55,18 @@ class WebFixturesTest(unittest.TestCase):
     def setUpClass(cls):
         tm.MetricsTest.setUpClass()
         tm.SourceFilterTest.setUpClass()
+        tm.ToolDetailTest.setUpClass()
         cls.cur = tm.MetricsTest.con.cursor()
 
     @classmethod
     def tearDownClass(cls):
         tm.MetricsTest.tearDownClass()
         tm.SourceFilterTest.tearDownClass()
+        tm.ToolDetailTest.tearDownClass()
 
     def test_write_fixtures(self):
         os.makedirs(OUT, exist_ok=True)
-        c = self.cur
+        c, t = self.cur, tm.ToolDetailTest.con.cursor()
         got = {
             # 30 days: previous period and changes are set; all time with a session: they are null and the drill-in is in.
             "usage.ts": ("UsagePayload", metrics.usage(c, "", 30, prices=tm.PRICES, today=tm.TODAY)),
@@ -76,6 +78,10 @@ class WebFixturesTest(unittest.TestCase):
                                                              today=tm.TODAY, source="codex")),
             "errors.ts": ("ErrorsPayload", metrics.errors_payload(c, "2026-11-05T12:00:00+00:00", today=tm.TODAY)),
             "limits.ts": ("LimitsPayload", limits_fixture()),
+            # The tool inspector: Bash over 30 days (a previous period, npm at 40% failed), an MCP server and a skill.
+            "tool.ts": ("ToolPayload", metrics.tool_detail(t, "tool", "Bash", "", 30, tm.TODAY)),
+            "tool-mcp.ts": ("ToolPayload", metrics.tool_detail(t, "mcp", "github", "", 0, tm.TODAY)),
+            "tool-skill.ts": ("ToolPayload", metrics.tool_detail(t, "skill", "ship", "", 0, tm.TODAY)),
         }
         for name, (typ, obj) in got.items():
             write(name, typ, obj)

@@ -116,6 +116,32 @@ export interface ErrorsPayload {
   error_days: [Day, string, string | null, number, number, Source][];
   incidents: Incident[]; incident_gap_minutes: number;
 }
+// Tool inspector (/api/tool, metrics.tool_detail): one tool, MCP server or skill over the view.
+export type ToolKind = "tool" | "mcp" | "skill";
+export interface ToolPayload {
+  kind: ToolKind; name: string; project: string; range: number; automated: boolean; source: Source | ""; start: Day | null; end: Day;
+  totals: RateRow & { subagent_calls: number; subagent_share: number | null; p50_ms: number | null; p95_ms: number | null };
+  /** The period before the view; null for all time. */
+  previous: (RateRow & { start: Day; end: Day }) | null;
+  daily: { day: Day; ok: number; failed: number }[];
+  projects: (RateRow & { project: string | null })[];
+  sources: (RateRow & { source: Source })[];
+  threads: (RateRow & { subagent: boolean })[];
+  /** Calls grouped by input pattern (categorize.input_pattern), largest first, with "other" last; null for a skill. */
+  patterns: (RateRow & { pattern: string })[] | null;
+  categories: { id: string | null; label: string | null; why: string; fix: string; errors: number }[];
+  recovery: { incidents: number } & Record<Outcome, number>;
+  error_loops: ErrorLoop[];
+  /** Test runs and commits; null unless the subject is a shell tool. */
+  shell: { test_runs: number; tests_passed: number; tests_failed: number; pass_rate: number | null; commits: number } | null;
+  recent: {
+    id: string; ts: Ts | null; session_id: string; project: string | null; source: Source; tool: string; input: string;
+    is_error: boolean; category: string | null; subagent: boolean; duration_ms: number | null;
+  }[];
+  /** The tools an MCP server served; null for other kinds. */
+  tools: (RateRow & { tool: string; p50_ms: number | null })[] | null;
+}
+
 export interface ErrorDetail { id: string; i: string; e: string; r: string; cut: ("i" | "e" | "r")[] }
 
 // Limits (/api/limits, limits.py payload): plan-limit windows per provider, their forecast, history and value.
@@ -181,6 +207,7 @@ export const sessionsUrl = (v: View, o: { q?: string; near?: boolean; offset?: n
   `/api/sessions?${qs({ ...viewQs(v), q: o.q, near: o.near, offset: o.offset || undefined, day: o.day })}`;
 export const sessionUrl = (id: string) => `/api/session?${qs({ id })}`;
 export const promptUrl = (session: string) => `/api/prompt?${qs({ session })}`;
+export const toolUrl = (kind: ToolKind, name: string, v: View) => `/api/tool?${qs({ kind, name, ...viewQs(v) })}`;
 export const limitsUrl = (v: View) => `/api/limits?${qs({ project: v.project, range: v.range, source: v.source })}`;
 export const errorsUrl = "/api/errors";
 export const errorUrl = (id: string) => `/api/error?${qs({ id })}`;
