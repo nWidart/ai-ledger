@@ -1,99 +1,98 @@
 # AI Ledger
 
-A local ledger of your AI coding-agent transcripts: Claude Code (from `~/.claude/projects`) and OpenAI's Codex CLI (from `~/.codex/sessions` and `~/.codex/archived_sessions`, plain or `.zst`). It keeps a permanent copy of them in a DuckDB store and serves four dashboards on it:
+A local ledger of your Claude Code and Codex transcripts, with four dashboards: Activity, Cost, Errors and Limits.
 
-- **Activity**: what the agents did and where it struggled: commits, prompts and sessions, what needs attention (error loops, sessions near the context limit, flaky tools, failed tests), context health, autonomy and friction, time, and tool, MCP, skill and hook use per project and session.
-- **Cost**: what it cost and why that changed: estimated cost against the previous period, tokens by kind, cache efficiency, model mix, and cost per project, session and commit.
-- **Errors**: failed tool calls grouped into error types with suggested fixes, and the error rate over time.
-- **Limits**: how much of each plan limit (5-hour, weekly) is used, when each will run out or reset at the current pace, and how much capacity goes unused.
+![Tour of the four pages](docs/tour.gif)
 
-## Usage
+## Why
 
-Needs Python 3.14 or newer (`uv sync` installs it): Codex archives are read with the standard library's `compression.zstd`.
+Coding agents leave a full record of their work on disk, then delete or archive it. That record answers questions their own UIs don't:
+
+- **What did the agents get done, and where did they struggle?** Commits, prompts, sessions, error loops, flaky tools.
+- **What did it cost, and why did that change?** An estimate at API list prices, compared with the period before.
+- **Which errors keep coming back, and how do I stop them?** Failed tool calls grouped by cause, each with a fix to paste into `CLAUDE.md`.
+- **Will I hit my plan limit before it resets?** A forecast per limit window, and which provider has room left.
+
+Goals:
+
+- **Local and private.** Everything stays on your machine. The server listens on `127.0.0.1` only.
+- **Permanent.** The store keeps every transcript line, even after the agent deletes or archives the file.
+- **One view of both agents.** Claude Code and Codex map onto the same tables, so every page filters by source.
+- **Linkable.** Filters, open sheets and single errors live in the URL, so you can paste a view into an agent prompt.
+
+## Run
+
+Needs [uv](https://docs.astral.sh/uv/); it installs Python 3.14.
 
 ```bash
 uv sync
-uv run app.py
-open http://127.0.0.1:8765/
+uv run app.py               # http://127.0.0.1:8765/ (use 127.0.0.1, not localhost)
 ```
 
-The first start ingests every transcript (about 4 minutes for 3.4 GB). After that the app ingests new transcript lines every 60 seconds; **Refresh** in the top bar ingests now. The store keeps lines after an agent deletes or archives its transcript files. A Codex session that moves to the archive is not counted twice.
+The first start reads every transcript (about 4 minutes for 3.4 GB). After that the app reads new lines every 60 seconds. Click **Refresh** to read them now.
 
-Commands, which only run while the app is stopped (the app owns the store):
+Stop the app before you run these commands, because the app keeps the store open:
 
 ```bash
-uv run app.py ingest    # ingest new transcript lines once
-uv run app.py rebuild   # regenerate derived tables from the stored lines, e.g. after a parser change
-uv run python -m unittest discover -s tests
+uv run app.py ingest        # read new transcript lines once
+uv run app.py rebuild       # recompute the derived tables, e.g. after a parser change
 ```
 
-Options: `--projects <dir>` (Claude Code transcript root), `--codex <dir>` (Codex home, default `~/.codex`; skipped when missing), `--db <file>` (database, default `data/ai-ledger.duckdb`).
-
-After updating to a version with Limits, stop the app and run `uv run app.py rebuild` once: it reads the plan limits out of the Codex sessions already stored. Without it, only new Codex sessions add limit history.
-
-The app listens on `127.0.0.1:8765` only. Use that address, not `localhost`: fix markers live in that browser origin, so the app redirects `localhost` there.
+Options: `--projects <dir>` (default `~/.claude/projects`), `--codex <dir>` (default `~/.codex`), `--db <file>` (default `data/ai-ledger.duckdb`).
 
 ## Pages
 
-All pages share the top bar. Switching pages keeps the selected project, time range, source and automated-sessions choice (`#project=…&range=…&source=…&auto=1`). `/` opens Activity.
+**Activity**: what got done and what needs attention. Select a day to list its sessions. Open a session to see its context timeline. Click a tool to open the tool inspector.
 
-Every page has a source filter: All, Claude Code or Codex (`source=claude` or `source=codex`; All leaves it out of the URL).
+![Activity](docs/activity.gif)
 
-Activity and Cost share their filters: a project and a range (7, 14, 30, 90 days or all). Click a project or a session to open its details in a side sheet; the sheet offers a button to filter the page to that project. The URL holds `project`, `range`, `inspect` (the open project) and `session`, so a copied URL reopens the same view, and browser Back retraces filter and sheet changes. A session's details show its first prompt, a timeline of context size per request with tool calls, failures, compactions and commits, and a list of those events; failures link to the Errors page.
+**Cost**: estimated cost against the period before, with each project's share of the change. Also: spend per day, by model and per session. Prices come from `prices.json`. The page names models missing from it and leaves them out of the totals.
 
-Click a tool in Activity's tools table or a session's tools, an MCP server or skill in Activity's extensions table, or a tool name on an Errors example to open the tool inspector. It covers the page's view: calls, failure rate and p50 and p95 latency against the period before, calls per day, where the tool runs (projects, sources, main thread or subagents), its inputs grouped by pattern (a command's first word, a file's extension, a search pattern or a URL's host), failures by error type with links into Errors, how often the agent recovered, error loops, test runs and commits for shell tools, and recent calls linking to their sessions. An MCP server's sheet lists its tools; a skill's sheet covers the calls that invoked it. The URL keeps it as `tool`, `mcp` or `skill`, so `http://127.0.0.1:8765/usage#tool=Bash` opens the `Bash` sheet, and a session opened from it offers ← Back. The sheet reads `/api/tool?kind=tool|mcp|skill&name=…` with the page's filters.
+![Cost](docs/cost.gif)
 
-Sessions that a tool starts in the background (the projects in `AUTOMATED_PROJECTS` in `metrics.py`, today claude-mem's `observer-sessions`) are left out of Activity and Cost unless you tick **Include automated sessions**, or filter to that project.
+**Errors**: failed tool calls by type, the error rate over time, and a suggested fix for each type. Mark a fix as applied to compare the error rate before and after it. Each error type and each example has a permalink.
 
-**Activity** (`/usage`): the heading gives the commits, prompts and sessions of the view, followed by what needs attention, each with a link to its table. A chart shows commits, prompts or sessions per day with failed tool calls; select a day to list its sessions. Below: sessions, per-project metrics, tools, MCP servers, skills and hooks, and error loops.
+![Errors](docs/errors.gif)
 
-**Cost** (`/cost`): the heading gives the estimated cost and compares it with the equal period before; "What changed" shows each project's share of that change. Cost is an estimate at API list prices from `prices.json`; models missing there are named on the page and left out of cost totals. Below: cost per day by project, where the spend went, models and effort, tokens and cache, cost per project and the most expensive sessions.
+**Limits**: usage of each plan limit window, with a forecast to its reset. Below: capacity left unused, past windows, and what 1% of a limit buys.
 
-**Errors** (`/errors`): each example has a permalink (`#ex=<tool_use_id>`, the "Copy URL" button) and each error type has one (`#cat=<type>`), so you can paste a specific error into an agent prompt. The tool_use_id also lets an agent find the call in the transcripts with `grep -r <id> ~/.claude/projects`. Fixes you mark as applied are stored in the browser's localStorage, so the chart shows a marker on that date and the before/after error rate. Error loops on the Activity page link here. Inside an error type, failures are grouped into incidents: failures of the same tool with the same error type in one session, each within 10 minutes of the last. An incident counts as recovered when the tool's next call in that session succeeds.
+![Limits](docs/limits.gif)
 
-**Limits** (`/limits`): one card per open limit window with its usage so far, a forecast to its reset with a low–high band, and "reaches 100% at …" or "resets first at about …%". The heading names the window that stops you first. When two providers have forecasts, the page suggests the one with the most room left. Below: what each limit left unused at past resets, past windows with limit hits, early resets and plan changes, and what one point (1% of a limit) buys, by model and by project.
+Where the limit figures come from:
 
-- Codex writes its limits into its session files. The app reads them from there, so Codex figures update only while you use Codex.
-- Claude Code writes none. While serving, the app asks Anthropic's account usage endpoint every 5 minutes, and waits longer after failures. The endpoint is `api.anthropic.com/api/oauth/usage`, an undocumented endpoint that can change without notice. The request uses the OAuth token Claude Code keeps in the macOS Keychain (`Claude Code-credentials`). The first read may show a Keychain prompt; choose Always Allow. The token is read on each poll and sent only to that endpoint. It is never stored, logged or refreshed. While it is expired, polling waits until Claude Code renews it. Off macOS, Claude limits are not polled.
-- Between readings, and for weeks before the first poll, the page estimates the percent from the usage it counts. It converts that usage with the estimated dollars per point it measured, and marks such figures as estimated. Use outside the ledger (claude.ai, Codex cloud) counts against your limits but not in the estimates, until the next reading.
-- The forecast follows your hour-of-day rhythm over the last 8 weeks, with recent weeks counting more. A provider with fewer than 14 active days gets a flat rate.
-- The time range applies to history, unused capacity and value; open windows always show. The project filter applies only to commits per point, because limits are per account.
+- **Codex** writes its limits into its session files.
+- **Claude Code** writes none. Every 5 minutes, the app asks Anthropic's usage endpoint (`api.anthropic.com/api/oauth/usage`). This endpoint is undocumented and can change without notice. The request uses the OAuth token that Claude Code keeps in the macOS Keychain. The app sends the token only to that endpoint and never stores or logs it. Off macOS, the app does not poll Claude limits.
+- Between readings, the page estimates usage from the transcripts and labels those figures as estimated.
+
+## Privacy
+
+`data/ai-ledger.duckdb` holds full transcript content, including any secrets that appeared in a session. It is git-ignored. Do not share it.
 
 ## Files
 
-- `app.py` — the app: HTTP server, background ingest, `ingest` and `rebuild` commands.
-- `store.py` — the store: raw lines, the source registry (`SOURCES`), incremental ingest, project resolution, derived tables (sessions, requests, tool calls, prompts, hooks).
-- `codex.py` — the Codex source: session files, line keys, and the parser that turns Codex lines into the same derived records.
-- `categorize.py` — error categories. Add a rule to `RULES` when a new error pattern shows up in "Other", then run `rebuild`.
-- `metrics.py` — the queries behind the dashboards.
-- `limits.py` — plan limits: providers (`PROVIDERS`), the Claude poller, windows, calibration, the forecast and the Limits payload.
-- `prices.json` — per-model prices (USD per million tokens) and context windows, for Claude and OpenAI models.
-- `web/` — the pages: one React and TypeScript app (Vite). `web/src/pages/` holds Activity, Cost, Errors and Limits, `web/src/components/` the shared top bar, filters, sheets, drawers and charts, and `web/src/theme.css` the colors for light and dark. `web/dist/` is the committed build that the app serves.
-- `data/ai-ledger.duckdb` — the store, git-ignored and readable only by you. It holds full transcript content, including any secrets that appeared in sessions.
+- `app.py`: the HTTP server, the background ingest, and the CLI commands.
+- `store.py`, `codex.py`: the store, and the parsers for Claude Code and Codex.
+- `categorize.py`: error types and their fixes. Add a rule when an error pattern shows up under "Other", then run `rebuild`.
+- `metrics.py`, `limits.py`: the queries and forecasts behind the pages.
+- `web/`: the React pages. `web/dist/` is the committed build that the app serves.
+- `tools/demo/`: the recorder that makes the GIFs above.
+- `openspec/specs/`: how each page behaves in detail.
 
-## Renamed from claude-errors-dashboard
-
-The app was called `claude-errors-dashboard` and kept its store in `data/claude.duckdb`. On start it moves that file, and its `.wal`, to `data/ai-ledger.duckdb`. It never creates an empty store next to it. Sessions run in the old folder belong to project `ai-ledger` (`PROJECT_ALIASES` in `store.py`). Browser state (applied fixes, saved views) is kept.
-
-To rename the folder:
-
-1. Start the app once from the old folder, so the store moves and the project names are rewritten. Then stop it.
-2. Stop every agent session that runs in the folder.
-3. `mv ~/Sites/projects/claude-errors-dashboard ~/Sites/projects/ai-ledger`
-4. Move the Claude Code memory for this project, which is kept per folder path: `mkdir -p ~/.claude/projects/-Users-<you>-Sites-projects-ai-ledger && mv ~/.claude/projects/-Users-<you>-Sites-projects-claude-errors-dashboard/memory ~/.claude/projects/-Users-<you>-Sites-projects-ai-ledger/`. Leave the transcript `.jsonl` files where they are: ingest reads every folder under `~/.claude/projects`.
-5. Run `uv sync` in the new folder (the virtualenv holds absolute paths). Repoint anything that opens the old path, such as your editor or shell aliases, then start the app.
-
-## Develop the pages
-
-Running the app needs only Python. Changing the pages needs Node:
+## Develop
 
 ```bash
-cd web
-npm install
-npm run dev      # http://127.0.0.1:5173/usage, with /api proxied to the app on 127.0.0.1:8765 (start the app first)
-npm run check    # typecheck, tests and build: run it before committing
+uv run python -m unittest discover -s tests
+cd web && npm install && npm run dev    # http://127.0.0.1:5173, /api proxied to the running app
+cd web && npm run check                 # typecheck, tests and build: run before committing
 ```
 
-Commit `web/dist/` with the source change. `npm run build` writes `web/dist/source-hash.txt`, and `tests/test_web_build.py` fails when the sources no longer match the build. `tests/test_web_fixtures.py` regenerates the API fixtures in `web/src/__fixtures__/` that the page tests use.
+Commit `web/dist/` with every `web/src` change. A test fails when the build is stale.
 
-The dev server is a different browser origin, so fixes marked as applied there are kept apart from the ones on `127.0.0.1:8765`.
+To record the GIFs again, run these from the repository root. The recorder writes them to `docs/`, using only made-up data:
+
+```bash
+uv run tools/demo/seed.py                     # synthetic store in tools/demo/demo.duckdb
+uv run tools/demo/serve.py                    # serves it on 127.0.0.1:8799, with no ingest and no polling
+# in a second terminal:
+cd tools/demo && npm install && npx playwright install chromium-headless-shell && npm run record    # needs gifski: brew install gifski
+```
