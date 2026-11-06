@@ -32,7 +32,7 @@ class InputPatternTest(unittest.TestCase):
             ("Write", "/repo/web/src/App.tsx", ".tsx"),
             ("Read", "/repo/Makefile", "Makefile"),
             ("NotebookEdit", "/repo/n.ipynb", ".ipynb"),
-            ("apply_patch", "/repo/food-ordering-customer-ui/src/main.ts, /repo/README.md", ".ts"),
+            ("apply_patch", "/repo/shop-ui/src/main.ts, /repo/README.md", ".ts"),
         ]:
             self.assertEqual(input_pattern(tool, summary), want, summary)
 

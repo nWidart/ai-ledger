@@ -52,7 +52,7 @@ The rename moves the working directory out from under any running agent session 
 1. Land the change and run the app once from the old folder, so the store moves to `data/ai-ledger.duckdb` and the project rows are rewritten.
 2. Stop the app and any agent sessions in the folder.
 3. `mv ~/Sites/projects/claude-errors-dashboard ~/Sites/projects/ai-ledger`.
-4. Move the Claude Code memory: `mv ~/.claude/projects/-Users-nicolaswidart-Sites-projects-claude-errors-dashboard/memory ~/.claude/projects/-Users-nicolaswidart-Sites-projects-ai-ledger/memory` (create the target's parent first if no session has run there yet). Leave the transcript `.jsonl` files where they are.
+4. Move the Claude Code memory: `mv ~/.claude/projects/-Users-<you>-Sites-projects-claude-errors-dashboard/memory ~/.claude/projects/-Users-<you>-Sites-projects-ai-ledger/memory` (create the target's parent first if no session has run there yet). Leave the transcript `.jsonl` files where they are.
 5. Run `uv sync` in the new folder (the virtualenv holds absolute paths), repoint T3 Code and any shell aliases, then start the app.
 
 Rollback: before step 3, rename `data/ai-ledger.duckdb` (and its `.wal`) back to `data/claude.duckdb` and check out the previous commit. After step 3, move the folder back first.

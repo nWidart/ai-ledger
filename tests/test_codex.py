@@ -118,7 +118,7 @@ class DiscoveryTest(CodexCase):
         self.assertEqual((stats["files"], stats["inserted"]), (1, 13))
         self.assertEqual(self.q("SELECT read_offset, size, source FROM files"), [(os.path.getsize(p), os.path.getsize(p), "codex")])
         self.assertEqual(self.q("SELECT session_id, source, cwd FROM sessions"),
-                         [("0a0f0001-0000-7000-8000-000000000001", "codex", "/nowhere/Sites/explorations/foodorderingservices")])
+                         [("0a0f0001-0000-7000-8000-000000000001", "codex", "/nowhere/Sites/explorations/shopapp")])
         offsets = [r[0] for r in self.q("SELECT byte_offset FROM raw_lines ORDER BY line_no")]
         self.assertEqual(offsets[0], 0)
         self.assertEqual(offsets, sorted(offsets))
@@ -344,7 +344,7 @@ class ToolTest(CodexCase):
         self.ingest()
         self.assertEqual(self.q("SELECT tool, count(*) FROM tool_calls WHERE tool IN ('apply_patch', 'web_search') GROUP BY 1 ORDER BY 1"),
                          [("apply_patch", 1), ("web_search", 1)])
-        self.assertIn("food-ordering-customer-ui", self.q("SELECT input_summary FROM tool_calls WHERE tool = 'apply_patch'")[0][0])
+        self.assertIn("shop-ui", self.q("SELECT input_summary FROM tool_calls WHERE tool = 'apply_patch'")[0][0])
         done = next(json.loads(x) for x in fixture("v0166")[1].splitlines() if "preview_status" in x)
         took = done["payload"]["item"]["duration"]
         (us,), = self.q("SELECT date_diff('microsecond', start_ts, end_ts) FROM tool_calls WHERE tool LIKE '%preview_status'")
