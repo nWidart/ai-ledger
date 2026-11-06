@@ -140,10 +140,10 @@ def handler(app):
                 elif url.path == "/api/sessions":
                     self.json(metrics.session_list(app.con.cursor(), q.get("project", ""), int(q.get("range") or 0), q.get("q", ""),
                                                    q.get("near") == "1", int(q.get("offset") or 0), day=q.get("day", ""),
-                                                   automated=q.get("automated") == "1"))
+                                                   automated=q.get("automated") == "1", source=q.get("source", "")))
                 elif url.path == "/api/usage":
                     self.json(metrics.usage(app.con.cursor(), q.get("project", ""), int(q.get("range") or 0), q.get("session", ""),
-                                            automated=q.get("automated") == "1"))
+                                            automated=q.get("automated") == "1", source=q.get("source", "")))
                 else:
                     self.send(404, "not found\n", "text/plain")
             except ValueError as e:

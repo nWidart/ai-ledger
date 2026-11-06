@@ -10,6 +10,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 NEAR_LIMIT = 0.8  # share of the context window that counts as "near the limit"
 TOKEN_KINDS = ["input", "output", "thinking", "cache_read", "cache_5m", "cache_1h"]
 AUTOMATED_PROJECTS = ("observer-sessions",)  # projects whose sessions a tool starts, left out of usage unless asked for
+SOURCES = ("claude", "codex")  # the coding agents a session can come from (sessions.source); '' in a filter is all of them
 
 
 def load_prices(path=os.path.join(HERE, "prices.json")):
@@ -34,7 +35,7 @@ def errors_payload(cur, last_ingest=None, today=None):
     errs = rows(cur, """
         SELECT t.tool_use_id AS id, t.end_ts AS ts, coalesce(s.project, '(unknown)') AS p, t.session_id AS s,
                t.tool AS t, t.category AS c, left(t.input_summary, 400) AS i, t.error AS e, coalesce(t.followup, '') AS r,
-               CASE WHEN t.subagent THEN 1 ELSE 0 END AS sub
+               CASE WHEN t.subagent THEN 1 ELSE 0 END AS sub, coalesce(s.source, 'claude') AS src
         FROM tool_calls t LEFT JOIN sessions s USING (session_id)
         WHERE t.is_error AND t.end_ts IS NOT NULL ORDER BY t.end_ts""")
     for e in errs:
@@ -46,9 +47,9 @@ def errors_payload(cur, last_ingest=None, today=None):
         e["n"] = of.get(e["id"])
     calls = cur.execute("""
         SELECT strftime(t.start_ts, '%Y-%m-%d') AS d, coalesce(s.project, '(unknown)') AS p, count(*),
-               count(*) FILTER (WHERE t.subagent)
+               count(*) FILTER (WHERE t.subagent), coalesce(s.source, 'claude') AS src
         FROM tool_calls t LEFT JOIN sessions s USING (session_id)
-        WHERE t.start_ts IS NOT NULL GROUP BY 1, 2 ORDER BY 1, 2""").fetchall()
+        WHERE t.start_ts IS NOT NULL GROUP BY 1, 2, 5 ORDER BY 1, 2, 5""").fetchall()
     return dict(generated=last_ingest, today=(today or date.today()).isoformat(), project_order=project_order(cur), categories=[{k: r[k] for k in ("id", "label", "why", "fix", "snippet")} for r in RULES],
                 errors=errs, calls=[list(c) for c in calls], error_days=error_days(cur), incidents=inc,
                 incident_gap_minutes=INCIDENT_GAP_MINUTES)
@@ -99,13 +100,13 @@ def incidents(cur):
 
 
 def error_days(cur):
-    """Failed calls per [day, project, category, errors, subagent errors], dated like an error's d (its end time),
+    """Failed calls per [day, project, category, errors, subagent errors, source], dated like an error's d (its end time),
     so the stacked chart sums counts instead of walking every error."""
     return [list(r) for r in cur.execute("""
         SELECT strftime(t.end_ts, '%Y-%m-%d') AS d, coalesce(s.project, '(unknown)') AS p, t.category AS c, count(*),
-               count(*) FILTER (WHERE t.subagent)
+               count(*) FILTER (WHERE t.subagent), coalesce(s.source, 'claude') AS src
         FROM tool_calls t LEFT JOIN sessions s USING (session_id)
-        WHERE t.is_error AND t.end_ts IS NOT NULL GROUP BY 1, 2, 3 ORDER BY 1, 2, 3""").fetchall()]
+        WHERE t.is_error AND t.end_ts IS NOT NULL GROUP BY 1, 2, 3, 6 ORDER BY 1, 2, 3, 6""").fetchall()]
 
 
 # Ingest caps (store.py, categorize.summarize_input): text at its cap may have been cut when recorded.
@@ -154,31 +155,34 @@ def requests_cte(pcte, where):
         WHERE {where})"""
 
 
-def scope(project, automated):
-    """The project part of every usage filter, over sessions s: the project matches ('' is all of them), and sessions of
-    AUTOMATED_PROJECTS are left out unless automated or the filter names that project. Returns (sql, params)."""
+def scope(project, automated, source=""):
+    """The session part of every usage filter, over sessions s: the project and the source match ('' is all of them), and
+    sessions of AUTOMATED_PROJECTS are left out unless automated or the filter names that project. Returns (sql, params).
+    Raises ValueError for a source not in SOURCES."""
+    if source and source not in SOURCES:
+        raise ValueError(f"unknown source: {source}")
     marks = ",".join("?" * len(AUTOMATED_PROJECTS))
-    return (f"(? = '' OR s.project = ?) AND (? OR s.project = ? OR coalesce(s.project, '') NOT IN ({marks}))",
-            [project, project, bool(automated), project, *AUTOMATED_PROJECTS])
+    return (f"(? = '' OR s.project = ?) AND (? OR s.project = ? OR coalesce(s.project, '') NOT IN ({marks})) AND (? = '' OR s.source = ?)",
+            [project, project, bool(automated), project, *AUTOMATED_PROJECTS, source, source])
 
 
-def view(project, range_days, prices, today, automated=False):
+def view(project, range_days, prices, today, automated=False, source=""):
     """The filter shared by every usage query: a row belongs to the view when its session is in scope() and its time is in range."""
     if range_days < 0:
         raise ValueError("range must be >= 0")
     start = today - timedelta(days=range_days - 1) if range_days else None
     pcte, pparams = price_cte(prices)
-    sql, sp = scope(project, automated)
+    sql, sp = scope(project, automated, source)
     sel = sql + " AND (CAST(? AS DATE) IS NULL OR {ts} >= CAST(? AS DATE))"
     fp = sp + [start, start]
     W = lambda ts: sel.format(ts=ts)
     return start, pcte, pparams, fp, W, requests_cte(pcte, W("r.ts")), pparams + fp
 
 
-def usage(cur, project="", range_days=0, session="", prices=None, today=None, automated=False):
+def usage(cur, project="", range_days=0, session="", prices=None, today=None, automated=False, source=""):
     prices = load_prices() if prices is None else prices
     today = today or date.today()
-    start, pcte, pparams, fp, W, rq, rp = view(project, range_days, prices, today, automated)
+    start, pcte, pparams, fp, W, rq, rp = view(project, range_days, prices, today, automated, source)
     sums = ", ".join(f"coalesce(sum({k}), 0) AS {k}" for k in TOKEN_KINDS)
 
     daily = rows(cur, f"{rq} SELECT strftime(ts, '%Y-%m-%d') AS day, {sums}, sum(cost) AS cost, "
@@ -239,7 +243,7 @@ def usage(cur, project="", range_days=0, session="", prices=None, today=None, au
         session_seconds=sum(x["duration_s"] or 0 for x in sess),
         median_session_seconds=median([x["duration_s"] for x in sess if x["duration_s"] is not None]),
         near_limit=sum(1 for x in sess if x["near_limit"]))
-    out = dict(project=project, range=range_days, automated=bool(automated), start=start.isoformat() if start else None, end=today.isoformat(),
+    out = dict(project=project, range=range_days, automated=bool(automated), source=source, start=start.isoformat() if start else None, end=today.isoformat(),
                projects=project_list(cur, automated), project_order=project_order(cur), totals=totals, daily=daily, daily_projects=daily_projects,
                daily_work=work, unpriced=unpriced, models=models,
                by_project=by_project, tools=rate_rows(tools), mcp=rate_rows(mcp), skills=rate_rows(skills),
@@ -247,14 +251,14 @@ def usage(cur, project="", range_days=0, session="", prices=None, today=None, au
                sessions=sorted(sess, key=lambda x: x["first_ts"] or "", reverse=True)[:300],
                top_sessions=with_titles(cur, sorted(sess, key=lambda x: -(x["cost"] or 0))[:50]),
                near_limit=sorted((x for x in sess if x["near_limit"]), key=lambda x: -x["context_share"]),
-               previous=previous_period(cur, project, range_days, prices, today, automated))
+               previous=previous_period(cur, project, range_days, prices, today, automated, source))
     out["changes"] = project_changes(by_project, out["previous"])
     if session:
         out["session"] = session_detail(cur, session, requests_cte(pcte, "r.session_id = ?"), pparams + [session], prices)
     return out
 
 
-def previous_period(cur, project, range_days, prices, today, automated=False):
+def previous_period(cur, project, range_days, prices, today, automated=False, source=""):
     """The equal-length period just before the view (same scope()), for the headline comparison and its sparkline.
     None for the all-time view, which has nothing before it."""
     if not range_days:
@@ -262,7 +266,7 @@ def previous_period(cur, project, range_days, prices, today, automated=False):
     end = today - timedelta(days=range_days)  # last day of the previous period
     start = end - timedelta(days=range_days - 1)
     pcte, pparams = price_cte(prices)
-    sql, sp = scope(project, automated)
+    sql, sp = scope(project, automated, source)
     rq = requests_cte(pcte, f"{sql} AND r.ts >= CAST(? AS DATE) AND r.ts < CAST(? AS DATE) + INTERVAL 1 DAY")
     p = pparams + sp + [start, end]
     tot = rows(cur, f"""{rq} SELECT coalesce(sum(tokens), 0) AS tokens, sum(cost) AS cost, count(*) AS requests,
@@ -287,11 +291,12 @@ def project_changes(by_project, previous):
     return sorted(out, key=lambda r: (-abs(r["delta"]), r["project"] or ""))
 
 
-def session_list(cur, project="", range_days=0, q="", near=False, offset=0, limit=100, prices=None, today=None, day="", automated=False):
+def session_list(cur, project="", range_days=0, q="", near=False, offset=0, limit=100, prices=None, today=None, day="", automated=False,
+                 source=""):
     """One page of the view's sessions, newest first (or nearest the context limit first), matching q on id, project or branch.
     day (YYYY-MM-DD): only sessions with requests on that day."""
     prices = load_prices() if prices is None else prices
-    _, _, _, fp, W, rq, rp = view(project, range_days, prices, today or date.today(), automated)
+    _, _, _, fp, W, rq, rp = view(project, range_days, prices, today or date.today(), automated, source)
     sess = sessions(cur, rq, rp, W, fp, prices)
     q = q.strip().lower()
     on_day = {r[0] for r in cur.execute("SELECT DISTINCT session_id FROM requests WHERE CAST(ts AS DATE) = ?",

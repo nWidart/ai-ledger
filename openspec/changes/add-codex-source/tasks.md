@@ -18,7 +18,7 @@
 
 ## 3. Source filter in metrics and API
 
-- [ ] 3.1 Add `source` to `scope()` and thread it through `usage`, `session_list` and `session`. Add `src` to the errors payload and to its `calls` rows. Make `app.py` accept `source` on the APIs and reject unknown values with 400. Verify with `test_metrics` and `test_app` cases: the Claude-plus-Codex day total, the per-source totals, and a 400 for `source=grok`.
+- [x] 3.1 Add `source` to `scope()` and thread it through `usage`, `session_list` and `session`. Add `src` to the errors payload and to its `calls` rows. Make `app.py` accept `source` on the APIs and reject unknown values with 400. Verify with `test_metrics` and `test_app` cases: the Claude-plus-Codex day total, the per-source totals, and a 400 for `source=grok`.
 - [ ] 3.2 Extend the `test_metrics` fixture with a Codex session, and regenerate `web/src/__fixtures__/`. Verify that `tests/test_web_fixtures.py` passes and that a second run leaves the fixtures unchanged.
 
 ## 4. Dashboards

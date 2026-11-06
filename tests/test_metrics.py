@@ -259,7 +259,7 @@ class MetricsTest(unittest.TestCase):
 
     def test_errors_payload_splits_subagent_calls(self):
         calls = metrics.errors_payload(self.con.cursor())["calls"]
-        self.assertEqual(calls, [["2026-11-04", "foo", 10, 0]])
+        self.assertEqual(calls, [["2026-11-04", "foo", 10, 0, "claude"]])
 
     def test_error_days_counts_per_day_project_and_category(self):
         c = self.con.cursor()
@@ -269,7 +269,7 @@ class MetricsTest(unittest.TestCase):
             ("k3", "s2", "Bash", "2026-11-05 09:03:00", "2026-11-05 09:03:05", False, None, False)])
         try:
             p = metrics.errors_payload(c)
-            self.assertEqual(p["error_days"], [["2026-11-04", "foo", "x", 6, 0], ["2026-11-05", "foo", "y", 2, 1]])
+            self.assertEqual(p["error_days"], [["2026-11-04", "foo", "x", 6, 0, "claude"], ["2026-11-05", "foo", "y", 2, 1, "claude"]])
             # The counts agree with the error list they summarize.
             self.assertEqual(sum(r[3] for r in p["error_days"]), len(p["errors"]))
         finally:
@@ -389,6 +389,87 @@ class MetricsTest(unittest.TestCase):
                 return json.loads(r.read())
             self.assertEqual((get("/api/usage")["totals"]["sessions"], get("/api/usage?automated=1")["totals"]["sessions"]), (3, 4))
             self.assertEqual((get("/api/sessions")["total"], get("/api/sessions?automated=1")["total"]), (3, 4))
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
+
+
+class SourceFilterTest(unittest.TestCase):
+    """One day (Nov 5) with a Claude session (c1, 1,000,000 tokens) and a Codex session (x1, 200,000 tokens) in project foo,
+    each with one failed tool call."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.mkdtemp()
+        cls.con = store.open_store(os.path.join(cls.tmp, "d", "x.duckdb"))
+        c = cls.con.cursor()
+        store.insert(c, "sessions", ["session_id", "project", "first_ts", "last_ts", "source"], [
+            ("c1", "foo", "2026-11-05 09:00:00", "2026-11-05 09:30:00", "claude"),
+            ("x1", "foo", "2026-11-05 10:00:00", "2026-11-05 10:30:00", "codex")])
+        store.insert(c, "requests", ["message_id", "session_id", "ts", "model", "subagent", "input", "output", "thinking",
+                                     "cache_read", "cache_5m", "cache_1h"], [
+            ("rc", "c1", "2026-11-05 09:01:00", "m-a", False, 400_000, 100_000, 0, 500_000, 0, 0),
+            ("rx", "x1", "2026-11-05 10:01:00", "m-a", False, 50_000, 30_000, 10_000, 120_000, 0, 0)])
+        store.insert(c, "tool_calls", ["tool_use_id", "session_id", "tool", "start_ts", "end_ts", "is_error", "category", "subagent"], [
+            ("tc", "c1", "Bash", "2026-11-05 09:02:00", "2026-11-05 09:02:01", True, "x", False),
+            ("tx", "x1", "exec_command", "2026-11-05 10:02:00", "2026-11-05 10:02:01", True, "x", False)])
+        store.insert(c, "prompts", ["prompt_id", "session_id", "ts", "interrupted"], [
+            ("pc", "c1", "2026-11-05 09:00:00", False), ("px", "x1", "2026-11-05 10:00:00", False)])
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.con.close()
+        shutil.rmtree(cls.tmp)
+
+    def usage(self, source=""):
+        return metrics.usage(self.con.cursor(), "", 7, prices=PRICES, today=TODAY, source=source)
+
+    def test_all_sources_add_up(self):
+        u = self.usage()
+        self.assertEqual(u["source"], "")
+        self.assertEqual({d["day"]: d["input"] + d["output"] + d["cache_read"] for d in u["daily"]}, {"2026-11-05": 1_200_000})
+        self.assertEqual((u["totals"]["tokens"], u["totals"]["sessions"], u["totals"]["prompts"], u["totals"]["errors"]), (1_200_000, 2, 2, 2))
+
+    def test_each_source_alone(self):
+        for source, sid, tokens, tool in (("claude", "c1", 1_000_000, "Bash"), ("codex", "x1", 200_000, "exec_command")):
+            u = self.usage(source)
+            self.assertEqual(u["source"], source)
+            self.assertEqual((u["totals"]["tokens"], u["totals"]["sessions"], u["totals"]["prompts"], u["totals"]["errors"]), (tokens, 1, 1, 1))
+            self.assertEqual([x["session_id"] for x in u["sessions"]], [sid])
+            self.assertEqual([t["tool"] for t in u["tools"]], [tool])
+            self.assertEqual([(r["project"], r["tokens"]) for r in u["by_project"]], [("foo", tokens)])
+            listed = metrics.session_list(self.con.cursor(), prices=PRICES, today=TODAY, source=source)
+            self.assertEqual([x["session_id"] for x in listed["sessions"]], [sid])
+        prev = metrics.usage(self.con.cursor(), "", 1, prices=PRICES, today=date(2026, 11, 6), source="codex")["previous"]
+        self.assertEqual((prev["tokens"], prev["sessions"]), (200_000, 1))
+
+    def test_unknown_source_is_refused(self):
+        with self.assertRaises(ValueError):
+            self.usage("grok")
+        with self.assertRaises(ValueError):
+            metrics.session_list(self.con.cursor(), prices=PRICES, today=TODAY, source="grok")
+
+    def test_errors_payload_tags_sources(self):
+        p = metrics.errors_payload(self.con.cursor(), today=TODAY)
+        self.assertEqual({e["id"]: e["src"] for e in p["errors"]}, {"tc": "claude", "tx": "codex"})
+        self.assertEqual(p["calls"], [["2026-11-05", "foo", 1, 0, "claude"], ["2026-11-05", "foo", 1, 0, "codex"]])
+        self.assertEqual(p["error_days"], [["2026-11-05", "foo", "x", 1, 0, "claude"], ["2026-11-05", "foo", "x", 1, 0, "codex"]])
+
+    def test_api_reads_source_param(self):
+        httpd = ThreadingHTTPServer(("127.0.0.1", 0), app.handler(app.App(self.con, dict(claude=self.tmp))))
+        threading.Thread(target=httpd.serve_forever, daemon=True).start()
+        try:
+            def get(path):
+                h = http.client.HTTPConnection("127.0.0.1", httpd.server_address[1])
+                h.request("GET", path, headers={"Host": f"{app.HOST}:{app.PORT}"})
+                r = h.getresponse()
+                return r.status, json.loads(r.read())
+            self.assertEqual(get("/api/usage?range=0")[1]["totals"]["tokens"], 1_200_000)
+            self.assertEqual(get("/api/usage?range=0&source=codex")[1]["totals"]["tokens"], 200_000)
+            self.assertEqual(get("/api/sessions?source=claude")[1]["total"], 1)
+            for path in ("/api/usage?source=grok", "/api/sessions?source=grok"):
+                status, body = get(path)
+                self.assertEqual((status, body), (400, dict(error="unknown source: grok")), path)
         finally:
             httpd.shutdown()
             httpd.server_close()
