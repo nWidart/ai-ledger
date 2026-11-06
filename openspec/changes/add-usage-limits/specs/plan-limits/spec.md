@@ -58,18 +58,22 @@ A failed poll, an unexpected response, or a missing field SHALL NOT stop ingest 
 - **THEN** no snapshot is recorded, the status reports the poll as failed, and the next ingest runs as normal
 
 ### Requirement: Calibrate limits against counted usage
-For each limit, the system SHALL estimate the cost per 1% from snapshots and the estimated API cost of the provider's requests counted in the same window. Requests on a model outside a model-scoped limit SHALL not count toward it. Each estimate SHALL use the most recent windows. It SHALL report how many percentage points it rests on.
+For each limit, the system SHALL estimate the cost per 1% from snapshots and the estimated API cost of the provider's requests counted in the same window. Requests on a model outside a model-scoped limit SHALL not count toward it. A window of known length starts at 0%, and that start SHALL count as its first snapshot. Each estimate SHALL use the most recent windows. It SHALL report how many percentage points it rests on.
 
 #### Scenario: Calibrate from two snapshots
 - **WHEN** a Claude weekly window goes from 40% to 50% while $80 of estimated Claude usage is counted between those snapshots
 - **THEN** that window's calibration is $8 per 1%
 
+#### Scenario: One poll calibrates a known window
+- **WHEN** the first poll of a weekly window that started 5 days ago reads 57%, and $1,140 of usage was counted since its start
+- **THEN** that window's calibration is $20 per 1%
+
 #### Scenario: Too little change to calibrate
-- **WHEN** a window has moved less than 5 points since its first snapshot
+- **WHEN** a window has moved less than 5 points since its start
 - **THEN** that window adds nothing to the calibration, and the limit uses earlier windows or is marked uncalibrated
 
 ### Requirement: Estimate usage between and before snapshots
-For a calibrated limit, the system SHALL estimate the percent used at any time in a window: the last snapshot plus counted usage since then, divided by the calibration. Before a limit's first snapshot, the estimate SHALL use usage since the window's start, which the window length and the next known reset give. Estimates SHALL be marked as estimates.
+For a calibrated limit, the system SHALL estimate the percent used at any time in a window: the last snapshot plus counted usage since then, divided by the calibration. Before a limit's first snapshot, the estimate SHALL use usage since the window's start, which the window length and the next known reset give. Earlier windows SHALL be estimated only for limits that reset on a fixed schedule. Estimates SHALL be marked as estimates.
 
 #### Scenario: Between polls
 - **WHEN** the last poll read 57% and $16 of usage was counted since, at $8 per 1%
@@ -95,7 +99,7 @@ For each open window, the system SHALL forecast the percent used until the windo
 - **THEN** the forecast rises by almost nothing in those hours
 
 ### Requirement: Fall back to a flat forecast
-A provider with fewer than 14 active days in the last 8 weeks SHALL be forecast at a flat rate: its average rate over its recent windows. The forecast SHALL say it is flat. When fewer than two snapshots or no calibration exist, the system SHALL show no forecast and say why.
+A provider with fewer than 14 active days in the last 8 weeks SHALL be forecast at a flat rate: its average rate over its recent windows. The forecast SHALL say it is flat. When a limit has no calibration, the system SHALL show no forecast and say why.
 
 #### Scenario: New provider
 - **WHEN** a provider has 3 active days of history

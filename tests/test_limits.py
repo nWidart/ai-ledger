@@ -6,11 +6,12 @@ import sys
 import threading
 import unittest
 import urllib.error
-from datetime import datetime
+from datetime import date, datetime, timedelta, timezone
 from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import limits  # noqa: E402
+import store  # noqa: E402
 from test_store import StoreCase  # noqa: E402
 
 FIXTURES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "claude")
@@ -184,6 +185,310 @@ class AppPollTest(StoreCase):
         self.assertIsNone(a.state["error"])
         self.assertEqual(a.status()["limits"]["claude"]["failures"], 0)
         self.assertEqual(self.q("SELECT count(*) FROM limit_polls"), [(6,)])
+
+
+PRICES = {m: dict(input=1, output=0, cache_read=0, cache_5m=0, cache_1h=0, context=None)
+          for m in ("claude-opus-5-5", "claude-fable-5-1", "gpt-6-astra")}  # $1 per million input tokens
+T0 = datetime(2026, 11, 1, 5, 0)  # a Claude weekly window from T0 to T0 + 7 days
+
+
+def at(t):
+    return t.replace(tzinfo=timezone.utc)
+
+
+class AnalysisCase(StoreCase):
+    def spend(self, source, model, *uses):
+        """Requests costing the given dollars at the given times, one session per source."""
+        cur = self.con.cursor()
+        sid = f"s-{source}"
+        cur.execute("INSERT INTO sessions (session_id, project, source) VALUES (?, 'foo', ?) ON CONFLICT DO NOTHING", [sid, source])
+        n = self.q("SELECT count(*) FROM requests")[0][0]
+        store.insert(cur, "requests", ["message_id", "session_id", "ts", "model", "subagent", "input", "output", "thinking",
+                                       "cache_read", "cache_5m", "cache_1h"],
+                     [(f"m{n + i}", sid, t, model, False, int(c * 1e6), 0, 0, 0, 0, 0) for i, (t, c) in enumerate(uses)])
+
+    def snap(self, provider, limit_id, observed, pct, resets=T0 + timedelta(days=7), minutes=10080, plan="max", scope="", reached=False):
+        store.write_snapshots(self.con.cursor(), [store.snapshot(provider, limit_id, scope, minutes, at(resets), observed, pct, plan, reached)])
+
+    def windows(self, now):
+        snaps = self.q(f"SELECT {', '.join(store.SNAPSHOT_COLS)} FROM limit_snapshots")
+        by = limits.group_windows(snaps)
+        for ws in by.values():
+            limits.close_windows(ws, now)
+        return by, snaps
+
+    def usage(self):
+        return limits.load_usage(self.con.cursor(), PRICES)
+
+    def payload(self, now, **kw):
+        return limits.payload(self.con.cursor(), now=now, today=now.date(), prices=PRICES, tz=timezone.utc, **kw)
+
+
+class WindowTest(AnalysisCase):
+    def test_plan_upgrade_closes_window_early(self):
+        old, new = datetime(2026, 11, 11, 15, 22), datetime(2026, 11, 13, 4, 56)
+        self.snap("codex", "codex_10080", datetime(2026, 11, 6, 3, 22), 22, resets=old, plan="plus")
+        self.snap("codex", "codex_10080", datetime(2026, 11, 6, 4, 56, 45), 2, resets=new, plan="prolite")
+        by, snaps = self.windows(datetime(2026, 11, 6, 8))
+        first, second = by[("codex", "codex_10080", "")]
+        self.assertEqual((first.final, first.early, first.reason, first.closed_at), (22, True, "plan change from plus to prolite",
+                                                                                     datetime(2026, 11, 6, 4, 56, 45)))
+        self.assertIsNone(second.closed_at)
+        self.assertEqual(limits.plan_changes(snaps), [dict(kind="plan_change", provider="codex", at="2026-11-06T04:56:45.000Z",
+                                                           plan_from="plus", plan_to="prolite")])
+
+    def test_limit_hit_lasts_until_reset(self):
+        reset = datetime(2026, 11, 6, 4, 7)
+        for t, pct in ((datetime(2026, 11, 5, 22, 53), 49), (datetime(2026, 11, 5, 23, 52), 100), (datetime(2026, 11, 6, 0, 30), 100)):
+            self.snap("codex", "codex_300", t, pct, resets=reset, minutes=300, plan="plus")
+        now = datetime(2026, 11, 6, 9)
+        by, _ = self.windows(now)
+        row = limits.history_row(by[("codex", "codex_300", "")][0])
+        self.assertEqual((row["hit"], row["hit_minutes"], row["final"]), (True, 255, 100))
+
+    def test_reset_drift_is_one_window(self):
+        self.snap("codex", "codex_10080", datetime(2026, 10, 21, 6, 0, 32), 0, resets=datetime(2026, 10, 28, 6, 0), plan="prolite")
+        self.snap("codex", "codex_10080", datetime(2026, 10, 21, 6, 0, 41), 1, resets=datetime(2026, 10, 28, 6, 1), plan="prolite")
+        by, _ = self.windows(datetime(2026, 10, 22))
+        self.assertEqual(len(by[("codex", "codex_10080", "")]), 1)
+
+
+class CalibrationTest(AnalysisCase):
+    def test_dollars_per_point(self):
+        self.spend("claude", "claude-opus-5-5", (T0 + timedelta(days=1), 320), (T0 + timedelta(days=3), 80))
+        self.snap("claude", "weekly_all", T0 + timedelta(days=2), 40)
+        self.snap("claude", "weekly_all", T0 + timedelta(days=4), 50)
+        by, _ = self.windows(T0 + timedelta(days=4))
+        cal = limits.calibrate(by[("claude", "weekly_all", "")], self.usage())
+        self.assertEqual((cal["per_pct"], cal["points"], cal["windows"]), (8.0, 50.0, 1))
+
+    def test_one_poll_calibrates_a_known_window(self):
+        self.spend("claude", "claude-opus-5-5", (T0 + timedelta(days=2), 1140))
+        self.snap("claude", "weekly_all", T0 + timedelta(days=5), 57)
+        by, _ = self.windows(T0 + timedelta(days=5))
+        self.assertEqual(limits.calibrate(by[("claude", "weekly_all", "")], self.usage())["per_pct"], 20.0)
+
+    def test_small_move_adds_nothing(self):
+        self.spend("claude", "claude-opus-5-5", (T0 + timedelta(hours=1), 30))
+        self.snap("claude", "weekly_all", T0 + timedelta(hours=2), 3)
+        by, _ = self.windows(T0 + timedelta(hours=2))
+        self.assertIsNone(limits.calibrate(by[("claude", "weekly_all", "")], self.usage()))
+
+    def test_plan_change_restarts_calibration(self):
+        prev = T0 - timedelta(days=7)
+        self.spend("claude", "claude-opus-5-5", (prev + timedelta(days=1), 100))
+        self.snap("claude", "weekly_all", prev + timedelta(days=2), 50, resets=T0, plan="pro")
+        self.snap("claude", "weekly_all", T0 + timedelta(hours=1), 1, plan="max")
+        by, _ = self.windows(T0 + timedelta(hours=1))
+        self.assertIsNone(limits.calibrate(by[("claude", "weekly_all", "")], self.usage()))
+
+    def test_scoped_limit_counts_only_its_model(self):
+        self.spend("claude", "claude-opus-5-5", (T0 + timedelta(days=1), 500))
+        self.spend("claude", "claude-fable-5-1", (T0 + timedelta(days=1), 60))
+        self.snap("claude", "weekly_scoped", T0 + timedelta(days=2), 10, scope="Fable")
+        by, _ = self.windows(T0 + timedelta(days=2))
+        self.assertEqual(limits.calibrate(by[("claude", "weekly_scoped", "Fable")], self.usage())["per_pct"], 6.0)
+
+
+class EstimateTest(AnalysisCase):
+    def test_between_polls(self):
+        self.spend("claude", "claude-opus-5-5", (T0 + timedelta(days=1), 456), (T0 + timedelta(days=4, hours=1), 16))
+        self.snap("claude", "weekly_all", T0 + timedelta(days=4), 57)
+        by, _ = self.windows(T0 + timedelta(days=4, hours=2))
+        ws = by[("claude", "weekly_all", "")]
+        cal = limits.calibrate(ws, self.usage())
+        self.assertEqual(cal["per_pct"], 8.0)
+        self.assertEqual(limits.estimate(ws[0], T0 + timedelta(days=4, hours=2), self.usage(), cal), (59.0, False))
+
+    def test_history_before_polling_started(self):
+        self.spend("claude", "claude-opus-5-5", (T0 - timedelta(days=5), 40), (T0 - timedelta(days=12), 0.5), (T0 + timedelta(days=1), 200))
+        self.snap("claude", "weekly_all", T0 + timedelta(days=5), 25)
+        out = self.payload(T0 + timedelta(days=5))
+        past = [h for h in out["history"] if h["provider"] == "claude"]
+        self.assertEqual([(h["start"], h["final"], h["estimated"]) for h in past],
+                         [("2026-10-25T05:00:00.000Z", 5.0, True), ("2026-10-18T05:00:00.000Z", 0.1, True)])
+        series = out["windows"][0]["series"]
+        self.assertFalse(series[24]["measured"])
+        self.assertEqual(series[-1], dict(t="2026-11-06T05:00:00.000Z", pct=25.0, measured=True))
+
+
+def busy_days(case, source, model, days, end, per_hour, hours=range(8, 23)):
+    """Usage on each of the last `days` days before end, only in the given UTC hours."""
+    uses = []
+    for d in range(1, days + 1):
+        day = (end - timedelta(days=d)).replace(hour=0, minute=0, second=0, microsecond=0)
+        uses += [(day + timedelta(hours=h, minutes=30), per_hour) for h in hours]
+    case.spend(source, model, *uses)
+
+
+class ForecastTest(AnalysisCase):
+    def forecast_for(self, now, pct, resets):
+        self.snap("claude", "weekly_all", now, pct, resets=resets)
+        return self.payload(now)["windows"][0]
+
+    def test_quiet_hours_add_almost_nothing(self):
+        now = datetime(2026, 11, 6, 0, 0)
+        busy_days(self, "claude", "claude-opus-5-5", 30, now, 1.0)
+        w = self.forecast_for(now, 50, datetime(2026, 11, 9, 0, 0))
+        curve = {p["t"][11:16]: p["mid"] for p in w["forecast"]["curve"][:10]}
+        self.assertEqual(w["forecast"]["kind"], "shaped")
+        self.assertLess(curve["07:00"] - curve["00:00"], 0.01)  # nights: no use in the profile
+        self.assertGreater(curve["09:00"], curve["08:00"])  # the 08:00-09:00 hour is a busy one
+
+    def test_runs_out_before_reset(self):
+        now = datetime(2026, 11, 6, 0, 0)
+        busy_days(self, "claude", "claude-opus-5-5", 30, now, 2.0)
+        # $30 a day; the window has cost $X since its start, so a point is worth X / 57.
+        w = self.forecast_for(now, 95, datetime(2026, 11, 8, 0, 0))
+        f = w["forecast"]
+        self.assertIsNotNone(f["hits_at"])
+        self.assertLessEqual(f["hits_at_early"], f["hits_at"])
+        self.assertTrue(f["hits_at"] < w["resets_at"])
+        self.assertIsNone(f["at_reset"])
+        self.assertEqual(f["pace"], "ahead")
+
+    def test_resets_first_with_bounds(self):
+        now = datetime(2026, 11, 6, 0, 0)
+        busy_days(self, "claude", "claude-opus-5-5", 30, now, 0.1)
+        w = self.forecast_for(now, 50, datetime(2026, 11, 6, 12, 0))
+        f = w["forecast"]
+        self.assertIsNone(f["hits_at"])
+        self.assertTrue(f["at_reset_low"] <= f["at_reset"] <= f["at_reset_high"] < 100)
+        self.assertEqual(f["pace"], "behind")
+
+    def test_new_provider_is_flat(self):
+        now = datetime(2026, 11, 6, 0, 0)
+        busy_days(self, "claude", "claude-opus-5-5", 3, now, 1.0)
+        w = self.forecast_for(now, 50, datetime(2026, 11, 9, 0, 0))
+        self.assertEqual(w["forecast"]["kind"], "flat")
+
+    def test_no_calibration_no_forecast(self):
+        now = datetime(2026, 11, 6, 0, 0)
+        w = self.forecast_for(now, 2, datetime(2026, 11, 9, 0, 0))
+        self.assertIsNone(w["forecast"])
+        self.assertIn("Not calibrated", w["no_forecast"])
+
+
+class PayloadTest(AnalysisCase):
+    NOW = datetime(2026, 11, 6, 12, 0)
+
+    def setUp(self):
+        super().setUp()
+        busy_days(self, "claude", "claude-opus-5-5", 30, self.NOW, 3.0)
+        busy_days(self, "codex", "gpt-6-astra", 30, self.NOW, 0.01)
+        # Claude weekly runs out; Codex weekly resets at about 30%.
+        self.snap("claude", "weekly_all", self.NOW, 90, resets=datetime(2026, 11, 8, 5, 0))
+        self.snap("codex", "codex_10080", self.NOW, 28, resets=datetime(2026, 11, 7, 0, 0), plan="plus")
+        self.snap("codex", "codex_10080", datetime(2026, 10, 20), 40, resets=datetime(2026, 10, 25), plan="plus")
+
+    def test_binding_and_suggestion(self):
+        out = self.payload(self.NOW)
+        self.assertEqual(out["binding"], dict(provider="claude", limit_id="weekly_all", scope="", runs_out=True))
+        self.assertEqual(out["suggestion"]["provider"], "codex")
+        self.assertGreater(out["suggestion"]["unused_at_reset"], 60)
+
+    def test_open_windows_ignore_range(self):
+        out = self.payload(self.NOW, range_days=7)
+        self.assertEqual(len(out["windows"]), 2)
+        self.assertEqual([h["final"] for h in out["history"] if h["provider"] == "codex"], [])
+        out = self.payload(self.NOW, range_days=30)
+        self.assertEqual([h["final"] for h in out["history"] if h["provider"] == "codex"], [40])
+        self.assertEqual([u["avg_unused"] for u in out["unused"] if u["provider"] == "codex"], [60])
+
+    def test_source_narrows(self):
+        out = self.payload(self.NOW, source="codex")
+        self.assertEqual({w["provider"] for w in out["windows"]}, {"codex"})
+        self.assertEqual([f["provider"] for f in out["freshness"]], ["codex"])
+        with self.assertRaises(ValueError):
+            self.payload(self.NOW, source="grok")
+
+    def test_freshness_flags_failing_polls(self):
+        out = self.payload(self.NOW + timedelta(minutes=30), polls=dict(claude=dict(failures=3, last_ok="2026-11-06T12:00:00+00:00",
+                                                                                     error="usage endpoint unreachable", stale=False)))
+        claude = out["freshness"][0]
+        self.assertEqual(claude["flags"], ["polling failing", "old"])
+        self.assertFalse(claude["measured"])
+
+
+class ValueTest(AnalysisCase):
+    def test_commits_per_point_by_project(self):
+        now = datetime(2026, 11, 6, 12, 0)
+        self.spend("claude", "claude-opus-5-5", (T0 + timedelta(days=1), 80))
+        self.snap("claude", "weekly_all", now, 10)  # $8 a point
+        cur = self.con.cursor()
+        cur.execute("INSERT INTO sessions (session_id, project, source) VALUES ('s-bar', 'bar', 'claude')")
+        store.insert(cur, "requests", ["message_id", "session_id", "ts", "model", "subagent", "input", "output", "thinking", "cache_read",
+                                       "cache_5m", "cache_1h"], [("b1", "s-bar", T0 + timedelta(days=2), "claude-opus-5-5", False, 16_000_000, 0, 0, 0, 0, 0)])
+        store.insert(cur, "tool_calls", ["tool_use_id", "session_id", "tool", "start_ts", "is_commit", "test_passed"],
+                     [(f"c{i}", "s-claude", "Bash", T0 + timedelta(days=1), True, True) for i in range(5)])
+        value = self.payload(now)["value"]
+        self.assertEqual(value["limits"][0]["cost_per_point"], 9.6)  # $96 over 10 points
+        self.assertEqual([(p["project"], p["commits"], p["points"], p["commits_per_point"]) for p in value["projects"]],
+                         [("foo", 5, 8.3, 0.6), ("bar", 0, 1.7, None)])
+        only = self.payload(now, project="bar")["value"]["projects"]
+        self.assertEqual([p["project"] for p in only], ["bar"])
+        self.assertEqual(len(self.payload(now, project="bar")["windows"]), 1)
+
+
+class ApiTest(AnalysisCase):
+    def test_endpoint_and_unknown_source(self):
+        import http.client
+        from http.server import ThreadingHTTPServer
+        import app
+        a = app.App(self.con, self.roots, pollers=[])
+        httpd = ThreadingHTTPServer(("127.0.0.1", 0), app.handler(a))
+        threading.Thread(target=httpd.serve_forever, daemon=True).start()
+        try:
+            def get(path):
+                h = http.client.HTTPConnection("127.0.0.1", httpd.server_address[1])
+                h.request("GET", path, headers={"Host": f"{app.HOST}:{app.PORT}"})
+                r = h.getresponse()
+                return r.status, r.read()
+            status, body = get("/api/limits?range=30&source=codex")
+            self.assertEqual((status, json.loads(body)["windows"]), (200, []))
+            self.assertEqual(get("/api/limits?source=grok")[0], 400)
+            self.assertEqual(get("/limits")[0] in (200, 503), True)
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
+
+
+FIXTURE_NOW = datetime(2026, 11, 6, 12, 0)
+
+
+def page_fixture(case):
+    """The Limits payload the web page tests render: Claude weekly runs out before its reset while its polls fail;
+    Codex weekly leaves room and has a history with a limit hit and an early reset by a plan change."""
+    now = FIXTURE_NOW
+    busy_days(case, "claude", "claude-opus-5-5", 30, now, 3.0)
+    busy_days(case, "claude", "claude-fable-5-1", 30, now, 0.2, hours=range(20, 22))
+    busy_days(case, "codex", "gpt-6-astra", 30, now, 0.01)
+    case.spend("codex", "gpt-6-astra", (datetime(2026, 11, 6, 5, 30), 0.45))  # one long task early in the new week
+    case.snap("claude", "weekly_all", now - timedelta(hours=2), 88, resets=datetime(2026, 11, 8, 5, 0))
+    case.snap("claude", "weekly_all", now - timedelta(minutes=40), 90, resets=datetime(2026, 11, 8, 5, 0))
+    case.snap("claude", "weekly_scoped", now - timedelta(minutes=40), 4, resets=datetime(2026, 11, 8, 5, 0), scope="Fable")
+    for t, pct in ((datetime(2026, 11, 5, 22, 53), 49), (datetime(2026, 11, 5, 23, 52), 100)):
+        case.snap("codex", "codex_300", t, pct, resets=datetime(2026, 11, 6, 4, 7), minutes=300, plan="plus")
+    case.snap("codex", "codex_10080", datetime(2026, 11, 5, 23, 52), 22, resets=datetime(2026, 11, 11, 15, 22), plan="plus")
+    case.snap("codex", "codex_10080", datetime(2026, 11, 6, 4, 56, 45), 2, resets=datetime(2026, 11, 13, 4, 56), plan="prolite")
+    case.snap("codex", "codex_10080", now - timedelta(hours=1), 9, resets=datetime(2026, 11, 13, 4, 56), plan="prolite")
+    case.snap("codex", "codex_10080", datetime(2026, 10, 25, 9), 30, resets=datetime(2026, 10, 28, 6, 0), plan="plus")
+    case.snap("codex", "codex_10080", datetime(2026, 10, 18, 9), 50, resets=datetime(2026, 10, 21, 6, 0), plan="plus")
+    polls = dict(claude=dict(last_ok=limits.metrics.iso(now - timedelta(minutes=40)), last_attempt=limits.metrics.iso(now),
+                             failures=3, error="usage endpoint unreachable", stale=False))
+    return case.payload(now, range_days=30, polls=polls)
+
+
+class PageFixtureTest(AnalysisCase):
+    def test_fixture_shows_every_section(self):
+        out = page_fixture(self)
+        self.assertTrue(out["binding"]["runs_out"])
+        self.assertEqual(out["suggestion"]["provider"], "codex")
+        self.assertTrue(any(h["hit"] for h in out["history"]))
+        self.assertTrue(any(h["early"] for h in out["history"]))
+        self.assertTrue(out["events"])
+        self.assertTrue(out["value"]["limits"])
+        self.assertIn("polling failing", out["freshness"][0]["flags"])
 
 
 if __name__ == "__main__":

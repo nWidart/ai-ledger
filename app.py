@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Local app: owns the transcript store, keeps it current, serves the Activity, Cost and Errors dashboards.
+"""Local app: owns the transcript store, keeps it current, serves the Activity, Cost, Errors and Limits dashboards.
 
 Usage:
   uv run app.py            serve on http://127.0.0.1:8765 (ingests at start and every 60 seconds)
@@ -23,7 +23,7 @@ import store
 HOST, PORT = "127.0.0.1", 8765
 INTERVAL = 60
 WEB = os.path.join(store.HERE, "web", "dist")  # the committed frontend build (npm run build in web/)
-PAGES = ("/usage", "/cost", "/errors")  # one app; it picks the page from the path
+PAGES = ("/usage", "/cost", "/errors", "/limits")  # one app; it picks the page from the path
 ASSET_TYPES = {".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml",
                ".png": "image/png", ".woff2": "font/woff2", ".json": "application/json; charset=utf-8"}
 
@@ -150,6 +150,9 @@ def handler(app):
                     self.json(metrics.session_list(app.con.cursor(), q.get("project", ""), int(q.get("range") or 0), q.get("q", ""),
                                                    q.get("near") == "1", int(q.get("offset") or 0), day=q.get("day", ""),
                                                    automated=q.get("automated") == "1", source=q.get("source", "")))
+                elif url.path == "/api/limits":
+                    self.json(limits.payload(app.con.cursor(), int(q.get("range") or 0), q.get("source", ""), q.get("project", ""),
+                                             polls={p.name: dict(p.state) for p in app.pollers}))
                 elif url.path == "/api/usage":
                     self.json(metrics.usage(app.con.cursor(), q.get("project", ""), int(q.get("range") or 0), q.get("session", ""),
                                             automated=q.get("automated") == "1", source=q.get("source", "")))

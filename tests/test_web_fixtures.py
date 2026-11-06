@@ -10,6 +10,7 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import test_metrics as tm  # noqa: E402  (puts the repo root on sys.path; imported whole so its tests don't run twice)
 import metrics  # noqa: E402
+import test_limits as tl  # noqa: E402
 
 OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "web", "src", "__fixtures__")
 
@@ -40,6 +41,15 @@ def write(name, typ, obj):
         fh.write(text)
 
 
+def limits_fixture():
+    case = tl.AnalysisCase()
+    case.setUp()
+    try:
+        return tl.page_fixture(case)
+    finally:
+        case.tearDown()
+
+
 class WebFixturesTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -65,6 +75,7 @@ class WebFixturesTest(unittest.TestCase):
             "usage-codex.ts": ("UsagePayload", metrics.usage(tm.SourceFilterTest.con.cursor(), "", 0, prices=tm.PRICES,
                                                              today=tm.TODAY, source="codex")),
             "errors.ts": ("ErrorsPayload", metrics.errors_payload(c, "2026-11-05T12:00:00+00:00", today=tm.TODAY)),
+            "limits.ts": ("LimitsPayload", limits_fixture()),
         }
         for name, (typ, obj) in got.items():
             write(name, typ, obj)

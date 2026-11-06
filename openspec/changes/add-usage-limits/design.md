@@ -85,7 +85,7 @@ Current state that shapes the approach:
 
 - Plan limits weight models and token kinds unevenly; a cache read costs almost nothing. Estimated API cost is the closest proxy the ledger already computes for both providers through `price_cte`.
 - Raw token counts would make one 1% of Opus look like ten of Haiku. Tokens per 1% are still shown on the page, from the dollar calibration, per model.
-- Per window: `(cost counted between the first and last snapshot) / (last % − first %)`. A window counts only if it moved at least 5 points; integer percents give ±0.5 points of error, so 5 points keeps the error under about 10%.
+- Per window: `(cost counted between the first and last snapshot) / (last % − first %)`. A window of known length starts at 0% at `resets_at − window_minutes`, and that start serves as its first snapshot. So a single Claude poll calibrates the open week, instead of waiting hours for it to move 5 points. A window counts only if it moved at least 5 points; integer percents give ±0.5 points of error, so 5 points keeps the error under about 10%.
 - A limit's calibration is the point-weighted mean of its last 4 qualifying windows on the same plan. A plan change starts a new calibration, because the cap changed.
 - Model-scoped limits count only requests whose model maps to the scope.
 
@@ -95,6 +95,7 @@ Current state that shapes the approach:
 - With no snapshot yet in the window, the base is 0% at the window start, which is `resets_at − window_minutes`.
 - Once `resets_at` has passed with no newer snapshot, the next window is assumed to start at 0%. This matters for Codex, which reports only when used.
 - For past windows with no snapshot at all, the window start is unknown. The earliest known reset is stepped back by whole window lengths, and this is marked as estimated. Claude history before polling started is rebuilt this way.
+- That stepping back holds only for windows that reset on a fixed schedule. A provider declares which ones (`Provider.fixed`): Claude's weekly windows. Codex's windows, both 5-hour and weekly, start at the first use after a reset. In the user's data, `prolite` weekly windows also reset early, often. For those, there is no estimated history. An idle window after its reset is assumed to start now.
 
 ### 6. Forecast: shared hour shape × per-provider level
 
