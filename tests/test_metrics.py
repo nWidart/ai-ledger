@@ -500,5 +500,185 @@ class SourceFilterTest(unittest.TestCase):
             httpd.server_close()
 
 
+class ToolDetailTest(unittest.TestCase):
+    """The tool inspector's fixture. Project foo: f1 (Nov 4) runs Bash (git 20 times, npm test 10 times with four failures
+    in a row at the end, then ls), Edit, Read, Grep (failed, then recovered), WebFetch from subagents, the github MCP server
+    and the ship and review skills; f2 (Nov 5) has a failed WebFetch and a Grep failure it gives up on; old (Oct 20) runs
+    make; p1 (Sep 20, the previous 30 days) runs ls 20 times with one failure; x1 is a Codex session. Project bar: b1 (Nov 4)
+    runs git and gives up on a failed Grep."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.mkdtemp()
+        cls.con = store.open_store(os.path.join(cls.tmp, "d", "x.duckdb"))
+        c = cls.con.cursor()
+        store.insert(c, "sessions", ["session_id", "project", "first_ts", "last_ts", "source"], [
+            ("f1", "foo", "2026-11-04 10:00:00", "2026-11-04 12:00:00", "claude"),
+            ("f2", "foo", "2026-11-05 09:00:00", "2026-11-05 10:00:00", "claude"),
+            ("old", "foo", "2026-10-20 09:00:00", "2026-10-20 10:00:00", "claude"),
+            ("p1", "foo", "2026-09-20 09:00:00", "2026-09-20 10:00:00", "claude"),
+            ("x1", "foo", "2026-11-04 09:00:00", "2026-11-04 10:00:00", "codex"),
+            ("b1", "bar", "2026-11-04 09:00:00", "2026-11-04 10:00:00", "claude")])
+        clock, out = {}, []
+
+        def call(sid, day, tool, inp="", cat=None, sub=False, mcp=None, skill=None, test=False, commit=False, ms=1000):
+            """One call, a minute after the session's previous one (from 10:00 on day). cat: failed with that category."""
+            n = clock[sid] = clock.get(sid, -1) + 1
+            start = f"{day} {10 + n // 60:02d}:{n % 60:02d}:00"
+            out.append((f"{sid}-{n:02d}", sid, tool, mcp, skill, inp, start, f"{day} {10 + n // 60:02d}:{n % 60:02d}:{ms // 1000:02d}",
+                        cat is not None, cat, sub, commit, test, cat is None))
+
+        for _ in range(19):
+            call("f1", "2026-11-04", "Bash", "git status")
+        call("f1", "2026-11-04", "Bash", "git commit -m x", commit=True)
+        for i in range(10):
+            call("f1", "2026-11-04", "Bash", "npm test", cat="tests" if i >= 6 else None, test=True, ms=10_000)
+        call("f1", "2026-11-04", "Bash", "ls")
+        for path in ("/r/a.py", "/r/b.py", "/r/c.tsx"):
+            call("f1", "2026-11-04", "Edit", path)
+        call("f1", "2026-11-04", "Read", "/r/Makefile")
+        call("f1", "2026-11-04", "Grep", "def foo", cat="search_empty")
+        call("f1", "2026-11-04", "Grep", "def foo")
+        call("f1", "2026-11-04", "WebFetch", "https://docs.python.org/3/", sub=True)
+        call("f1", "2026-11-04", "WebFetch", "https://docs.python.org/3/library/", sub=True)
+        call("f1", "2026-11-04", "mcp__github__search_issues", '{"q": "bug"}', mcp="github", cat="infra")
+        call("f1", "2026-11-04", "mcp__github__search_issues", '{"q": "bug"}', mcp="github")
+        call("f1", "2026-11-04", "mcp__github__get_pr", '{"n": 1}', mcp="github")
+        call("f1", "2026-11-04", "Skill", "ship", skill="ship", cat="bad_call")
+        call("f1", "2026-11-04", "Skill", "ship", skill="ship")
+        call("f1", "2026-11-04", "Skill", "review", skill="review")
+        call("f2", "2026-11-05", "WebFetch", "https://docs.python.org/3/library/re.html", cat="infra")
+        call("f2", "2026-11-05", "Grep", "class Bar", cat="search_empty")
+        call("old", "2026-10-20", "Bash", "make")
+        for i in range(20):
+            call("p1", "2026-09-20", "Bash", "ls", cat="no_file" if i == 0 else None)
+        call("x1", "2026-11-04", "exec_command", "npm test", test=True)
+        call("b1", "2026-11-04", "Bash", "git status")
+        call("b1", "2026-11-04", "Grep", "x", cat="search_empty")
+        store.insert(c, "tool_calls", ["tool_use_id", "session_id", "tool", "mcp_server", "skill", "input_summary", "start_ts", "end_ts",
+                                       "is_error", "category", "subagent", "is_commit", "is_test", "test_passed"], out)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.con.close()
+        shutil.rmtree(cls.tmp)
+
+    def detail(self, kind, name, project="", range_days=0, **k):
+        return metrics.tool_detail(self.con.cursor(), kind, name, project, range_days, TODAY, **k)
+
+    def test_filtered_view(self):
+        d = self.detail("tool", "Bash", "foo", 7)
+        self.assertEqual((d["kind"], d["name"], d["start"], d["end"]), ("tool", "Bash", "2026-10-30", "2026-11-05"))
+        self.assertEqual((d["totals"]["calls"], d["totals"]["errors"]), (31, 4))
+        self.assertEqual([(r["project"], r["calls"]) for r in d["projects"]], [("foo", 31)])
+        self.assertEqual({r["session_id"] for r in d["recent"]}, {"f1"})
+        self.assertEqual(self.detail("tool", "Bash")["totals"]["calls"], 53)
+        self.assertEqual([(r["project"], r["calls"]) for r in self.detail("tool", "Bash", "", 30)["projects"]], [("foo", 32), ("bar", 1)])
+        self.assertEqual(self.detail("tool", "Bash", source="codex")["totals"]["calls"], 0)
+
+    def test_empty_subject(self):
+        d = self.detail("tool", "Glob", "", 30)
+        self.assertEqual((d["totals"]["calls"], d["totals"]["errors"], d["totals"]["failure_rate"]), (0, 0, None))
+        for k in ("daily", "projects", "sources", "threads", "patterns", "categories", "error_loops", "recent"):
+            self.assertEqual(d[k], [], k)
+        self.assertEqual(d["recovery"], dict(incidents=0, recovered=0, failed_again=0, gave_up=0))
+        self.assertEqual((d["previous"]["calls"], d["previous"]["failure_rate"]), (0, None))
+        self.assertIsNone(d["tools"])
+
+    def test_failure_rate_against_previous_period(self):
+        d = self.detail("tool", "Bash", "foo", 30)
+        self.assertAlmostEqual(d["totals"]["failure_rate"], 4 / 32)
+        p = d["previous"]
+        self.assertEqual((p["start"], p["end"], p["calls"], p["errors"]), ("2026-09-07", "2026-10-06", 20, 1))
+        self.assertAlmostEqual(p["failure_rate"], 0.05)
+        self.assertIsNone(self.detail("tool", "Bash")["previous"])
+
+    def test_latency_and_calls_per_day(self):
+        t = self.detail("tool", "Bash", "foo", 7)["totals"]
+        self.assertEqual((t["p50_ms"], t["p95_ms"]), (1000, 10_000))
+        self.assertEqual(self.detail("tool", "WebFetch")["daily"],
+                         [dict(day="2026-11-04", ok=2, failed=0), dict(day="2026-11-05", ok=0, failed=1)])
+
+    def test_where_used(self):
+        d = self.detail("tool", "WebFetch")
+        self.assertEqual(d["totals"]["subagent_calls"], 2)
+        self.assertAlmostEqual(d["totals"]["subagent_share"], 2 / 3)
+        self.assertEqual([(r["subagent"], r["calls"], r["errors"]) for r in d["threads"]], [(True, 2, 0), (False, 1, 1)])
+        self.assertEqual([(r["source"], r["calls"]) for r in self.detail("tool", "Bash")["sources"]], [("claude", 53)])
+        self.assertEqual([(r["source"], r["calls"]) for r in self.detail("tool", "exec_command")["sources"]], [("codex", 1)])
+
+    def test_input_patterns(self):
+        rate = lambda d: [(r["pattern"], r["calls"], r["failure_rate"]) for r in d["patterns"]]
+        self.assertEqual(rate(self.detail("tool", "Bash", "foo", 7)), [("git", 20, 0), ("npm", 10, 0.4), ("ls", 1, 0)])
+        self.assertEqual(rate(self.detail("tool", "Edit")), [(".py", 2, 0), (".tsx", 1, 0)])
+        self.assertEqual(rate(self.detail("tool", "WebFetch")), [("docs.python.org", 3, 1 / 3)])
+
+    def test_patterns_keep_the_top_groups(self):
+        c = self.con.cursor()
+        store.insert(c, "tool_calls", ["tool_use_id", "session_id", "tool", "input_summary", "start_ts", "end_ts", "is_error"],
+                     [(f"many{i}", "f2", "Glob", f"p{i:02d}" if i < 17 else "", "2026-11-05 11:00:00", "2026-11-05 11:00:01", False)
+                      for i in range(19)])
+        try:
+            got = [(r["pattern"], r["calls"]) for r in self.detail("tool", "Glob")["patterns"]]
+            self.assertEqual(got, [(f"p{i:02d}", 1) for i in range(metrics.TOP_PATTERNS)] + [("other", 4)])
+        finally:
+            c.execute("DELETE FROM tool_calls WHERE tool_use_id LIKE 'many%'")
+
+    def test_failures_by_category(self):
+        cats = self.detail("tool", "Bash", "foo", 7)["categories"]
+        self.assertEqual([(r["id"], r["label"], r["errors"]) for r in cats], [("tests", "Tests / build / lint failed", 4)])
+        self.assertTrue(cats[0]["why"] and cats[0]["fix"])
+
+    def test_recovery_matches_errors_page(self):
+        r = self.detail("tool", "Grep")["recovery"]
+        self.assertEqual(r, dict(incidents=3, recovered=1, failed_again=0, gave_up=2))
+        on_page = metrics.errors_payload(self.con.cursor(), today=TODAY)["incidents"]
+        self.assertEqual(r["gave_up"], sum(1 for i in on_page if i["t"] == "Grep" and i["outcome"] == "gave_up"))
+        self.assertEqual(self.detail("tool", "Grep", "foo")["recovery"]["gave_up"], 1)
+        self.assertEqual(self.detail("tool", "Bash", "foo", 7)["recovery"], dict(incidents=1, recovered=1, failed_again=0, gave_up=0))
+
+    def test_error_loops(self):
+        loops = self.detail("tool", "Bash", "foo", 7)["error_loops"]
+        self.assertEqual([(lp["session_id"], lp["failures"], lp["first_id"]) for lp in loops], [("f1", 4, "f1-26")])
+        self.assertEqual(self.detail("tool", "Read")["error_loops"], [])
+
+    def test_shell_tests_and_commits(self):
+        self.assertEqual(self.detail("tool", "Bash", "foo", 7)["shell"],
+                         dict(test_runs=10, tests_passed=6, tests_failed=4, pass_rate=0.6, commits=1))
+        self.assertEqual(self.detail("tool", "exec_command")["shell"]["test_runs"], 1)
+        self.assertIsNone(self.detail("tool", "Read")["shell"])
+
+    def test_recent_calls(self):
+        recent = self.detail("tool", "Bash")["recent"]
+        self.assertEqual(len(recent), metrics.RECENT_CALLS)
+        self.assertEqual(recent[0]["id"], "f1-30")  # the latest: ls, after the npm failures
+        self.assertEqual([r["ts"] for r in recent], sorted((r["ts"] for r in recent), reverse=True))
+        failed = next(r for r in recent if r["is_error"])
+        self.assertEqual({k: failed[k] for k in ("id", "session_id", "project", "source", "tool", "input", "category", "subagent", "duration_ms")},
+                         dict(id="f1-29", session_id="f1", project="foo", source="claude", tool="Bash", input="npm test", category="tests",
+                              subagent=False, duration_ms=10_000))
+
+    def test_mcp_server(self):
+        d = self.detail("mcp", "github")
+        self.assertEqual((d["totals"]["calls"], d["totals"]["errors"]), (3, 1))
+        self.assertEqual([(r["tool"], r["calls"], r["failure_rate"]) for r in d["tools"]],
+                         [("mcp__github__search_issues", 2, 0.5), ("mcp__github__get_pr", 1, 0)])
+        self.assertEqual(d["recovery"]["recovered"], 1)
+
+    def test_skill(self):
+        d = self.detail("skill", "ship")
+        self.assertEqual((d["totals"]["calls"], d["totals"]["errors"], len(d["recent"])), (2, 1, 2))
+        self.assertEqual([(r["project"], r["calls"]) for r in d["projects"]], [("foo", 2)])
+        self.assertIsNone(d["patterns"])
+        self.assertIsNone(d["shell"])
+        self.assertIsNone(d["tools"])
+
+    def test_unknown_kind_and_source(self):
+        with self.assertRaises(ValueError):
+            self.detail("hook", "Bash")
+        with self.assertRaises(ValueError):
+            self.detail("tool", "Bash", source="grok")
+
+
 if __name__ == "__main__":
     unittest.main()

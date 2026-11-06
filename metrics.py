@@ -5,7 +5,7 @@ import re
 from datetime import date, timedelta
 
 import store
-from categorize import RULES
+from categorize import RULES, SHELL_TOOLS, input_pattern
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 NEAR_LIMIT = 0.8  # share of the context window that counts as "near the limit"
@@ -283,6 +283,92 @@ def previous_period(cur, project, range_days, prices, today, automated=False, so
     daily = rows(cur, f"{rq} SELECT strftime(ts, '%Y-%m-%d') AS day, sum(cost) AS cost, sum(tokens) AS tokens FROM rq GROUP BY 1 ORDER BY 1", p)
     by_project = rows(cur, f"{rq} SELECT project, sum(cost) AS cost, sum(tokens) AS tokens, count(*) AS requests FROM rq GROUP BY 1", p)
     return dict(tot, start=start.isoformat(), end=end.isoformat(), daily=daily, by_project=by_project)
+
+
+SUBJECTS = dict(tool="t.tool", mcp="t.mcp_server", skill="t.skill")  # what an inspector kind matches its name against
+TOP_PATTERNS = 15  # input-pattern groups on the tool inspector; the rest fold into "other"
+RECENT_CALLS = 50
+
+
+def tool_detail(cur, kind, name, project="", range_days=0, today=None, automated=False, source=""):
+    """The tool inspector: every section for one tool, MCP server or skill (kind, matched against SUBJECTS) over the view.
+    A skill covers its Skill invocations only: the store does not link the calls made while a skill runs.
+    previous: calls and failures in the period before (None for all time). recovery: the outcomes of the subject's incidents
+    (as on the Errors page) that start in the view. Raises ValueError for an unknown kind or source."""
+    if kind not in SUBJECTS:
+        raise ValueError(f"unknown kind: {kind}")
+    today = today or date.today()
+    start, _, _, fp, W, _, _ = view(project, range_days, {}, today, automated, source)
+    ts = "coalesce(t.start_ts, t.end_ts)"
+    tc = f"tool_calls t JOIN sessions s USING (session_id) WHERE {W(ts)} AND {SUBJECTS[kind]} = ?"
+    p = fp + [name]
+    rate = "count(*) AS calls, count(*) FILTER (WHERE t.is_error) AS errors"
+    per = lambda a, b: a / b if b else None
+
+    tot = rows(cur, f"""SELECT {rate}, count(*) FILTER (WHERE t.subagent) AS subagent_calls,
+        quantile_cont(date_diff('millisecond', t.start_ts, t.end_ts), 0.5) AS p50_ms,
+        quantile_cont(date_diff('millisecond', t.start_ts, t.end_ts), 0.95) AS p95_ms FROM {tc}""", p)[0]
+    tot.update(failure_rate=per(tot["errors"], tot["calls"]), subagent_share=per(tot["subagent_calls"], tot["calls"]))
+    previous = None
+    if (dates := previous_dates(range_days, today)) is not None:
+        sql, sp = scope(project, automated, source)
+        previous = rows(cur, f"""SELECT {rate} FROM tool_calls t JOIN sessions s USING (session_id) WHERE {sql}
+            AND {ts} >= CAST(? AS DATE) AND {ts} < CAST(? AS DATE) + INTERVAL 1 DAY AND {SUBJECTS[kind]} = ?""", sp + [*dates, name])[0]
+        previous.update(start=dates[0].isoformat(), end=dates[1].isoformat(), failure_rate=per(previous["errors"], previous["calls"]))
+    by = lambda col, alias: rate_rows(rows(cur, f"SELECT {col} AS {alias}, {rate} FROM {tc} GROUP BY 1 ORDER BY calls DESC, 1", p))
+    daily = rows(cur, f"""SELECT strftime({ts}, '%Y-%m-%d') AS day, count(*) FILTER (WHERE NOT t.is_error) AS ok,
+        count(*) FILTER (WHERE t.is_error) AS failed FROM {tc} AND {ts} IS NOT NULL GROUP BY 1 ORDER BY 1""", p)
+
+    # One pass over the subject's calls: input patterns in Python (categorize.input_pattern), failed ids for incidents and loops.
+    groups, failed = {}, set()
+    for tid, tool, summary, is_error in cur.execute(f"SELECT t.tool_use_id, t.tool, t.input_summary, t.is_error FROM {tc}", p).fetchall():
+        g = groups.setdefault(input_pattern(tool, summary), [0, 0])
+        g[0] += 1
+        if is_error:
+            g[1] += 1
+            failed.add(tid)
+    patterns = None
+    if kind != "skill":
+        other = groups.pop("other", [0, 0])
+        ranked = sorted(groups.items(), key=lambda kv: (-kv[1][0], kv[0]))
+        for _, (n, e) in ranked[TOP_PATTERNS:]:
+            other = [other[0] + n, other[1] + e]
+        patterns = rate_rows([dict(pattern=k, calls=n, errors=e) for k, (n, e) in ranked[:TOP_PATTERNS] + ([("other", other)] if other[0] else [])])
+
+    rules = {r["id"]: r for r in RULES}
+    categories = [dict(id=c, label=rules.get(c, {}).get("label", c), why=rules.get(c, {}).get("why", ""), fix=rules.get(c, {}).get("fix", ""),
+                       errors=n)
+                  for c, n in cur.execute(f"SELECT t.category, count(*) FROM {tc} AND t.is_error GROUP BY 1 ORDER BY 2 DESC, 1", p).fetchall()]
+    inc, of = incidents(cur)
+    first = start.isoformat() if start else ""
+    recovery = dict(incidents=0, recovered=0, failed_again=0, gave_up=0)
+    for i in {of[x] for x in failed if x in of}:
+        if (inc[i]["first"] or "") >= first:
+            recovery["incidents"] += 1
+            recovery[inc[i]["outcome"]] += 1
+    loops = [lp for lp in error_loops(cur, W, fp) if lp["first_id"] in failed]
+    shell = None
+    if kind == "tool" and name in SHELL_TOOLS:
+        shell = rows(cur, f"""SELECT count(*) FILTER (WHERE t.is_test AND t.end_ts IS NOT NULL) AS test_runs,
+            count(*) FILTER (WHERE t.is_test AND t.test_passed) AS tests_passed,
+            count(*) FILTER (WHERE t.is_test AND NOT t.test_passed) AS tests_failed,
+            count(*) FILTER (WHERE t.is_commit AND t.test_passed) AS commits FROM {tc}""", p)[0]
+        shell["pass_rate"] = per(shell["tests_passed"], shell["test_runs"])
+    recent = rows(cur, f"""SELECT t.tool_use_id AS id, {ts} AS ts, t.session_id, s.project, coalesce(s.source, 'claude') AS source,
+        t.tool, left(t.input_summary, 400) AS input, t.is_error, t.category, t.subagent,
+        date_diff('millisecond', t.start_ts, t.end_ts) AS duration_ms FROM {tc} ORDER BY {ts} DESC NULLS LAST, t.tool_use_id DESC
+        LIMIT {RECENT_CALLS}""", p)
+    for r in recent:
+        r["ts"], r["input"] = iso(r["ts"]), r["input"] or ""
+    tools = None
+    if kind == "mcp":
+        tools = rate_rows(rows(cur, f"""SELECT t.tool, {rate}, quantile_cont(date_diff('millisecond', t.start_ts, t.end_ts), 0.5) AS p50_ms
+            FROM {tc} GROUP BY 1 ORDER BY calls DESC, 1""", p))
+    return dict(kind=kind, name=name, project=project, range=range_days, automated=bool(automated), source=source,
+                start=start.isoformat() if start else None, end=today.isoformat(), totals=tot, previous=previous, daily=daily,
+                projects=by("s.project", "project"), sources=by("coalesce(s.source, 'claude')", "source"),
+                threads=by("t.subagent", "subagent"), patterns=patterns, categories=categories, recovery=recovery,
+                error_loops=loops, shell=shell, recent=recent, tools=tools)
 
 
 def project_changes(by_project, previous):
