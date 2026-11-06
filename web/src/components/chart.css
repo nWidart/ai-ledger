@@ -1,0 +1,16 @@
+/* Day charts of Activity and Cost: heading row, legend, plot and tooltip */
+:is(.pg-activity, .pg-cost) .chart-head { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: flex-start; justify-content: space-between; }
+:is(.pg-activity, .pg-cost) .legend { display: flex; flex-wrap: wrap; gap: 4px 6px; margin: 4px 0 8px; }
+:is(.pg-activity, .pg-cost) .legend .key { font-size: 12px; padding: 3px 8px; display: inline-flex; gap: 6px; align-items: center; color: var(--text-secondary); }
+:is(.pg-activity, .pg-cost) .legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+:is(.pg-activity, .pg-cost) .legend i.line { width: 14px; height: 0; border-radius: 0; border-top: 2px solid var(--text-primary); }
+:is(.pg-activity, .pg-cost) .chart { position: relative; }
+:is(.pg-activity, .pg-cost) .chart svg { display: block; width: 100%; height: 240px; overflow: visible; }
+:is(.pg-activity, .pg-cost) .chart:focus-visible { outline-offset: 4px; border-radius: 4px; }
+:is(.pg-activity, .pg-cost) .tip i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; margin-right: 6px; }
+:is(.pg-activity, .pg-cost) .tip .row { display: flex; gap: 16px; justify-content: space-between; }
+:is(.pg-activity, .pg-cost) .tip .tot { border-top: 1px solid var(--border); margin-top: 4px; padding-top: 4px; }
+@media (prefers-reduced-motion: no-preference) {
+  :is(.pg-activity, .pg-cost).grow .chart .bar-seg { transform-box: fill-box; transform-origin: 50% 100%; animation: grow-y .5s cubic-bezier(.2,.7,.2,1) both;
+    animation-delay: calc(var(--i, 0) * 6ms); }
+}

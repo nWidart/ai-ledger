@@ -1,0 +1,58 @@
+import { act, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it, vi } from "vitest";
+import { App } from "../App";
+import { Nav } from "./Nav";
+import usage from "../__fixtures__/usage";
+import sessions from "../__fixtures__/sessions";
+import session from "../__fixtures__/session";
+
+const status = { ingesting: false, last_ingest: "2026-11-05T12:00:00+00:00", last_stats: { files: 1, lines: 2, inserted: 2, seconds: 0.1 }, error: null, counts: {}, interval: 60 };
+const json = (body: unknown, ok = true) => Promise.resolve({ ok, status: ok ? 200 : 500, json: () => Promise.resolve(body) } as Response);
+
+describe("Nav", () => {
+  it("switches tabs keeping project, range and auto, and marks the current tab", async () => {
+    vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/status") ? status : url.startsWith("/api/sessions") ? sessions : url.startsWith("/api/session") ? session : usage)));
+    history.replaceState(null, "", "/usage#project=foo&range=14&auto=1&session=s1");
+    render(<App />);
+    expect(screen.getByRole("link", { name: "Activity" }).getAttribute("aria-current")).toBe("page");
+    expect(document.title).toBe("Claude Activity");
+    await userEvent.click(screen.getByRole("link", { name: "Cost" }));
+    expect(location.pathname).toBe("/cost");
+    expect(location.hash).toBe("#project=foo&range=14&auto=1");
+    expect(screen.getByRole("link", { name: "Cost" }).getAttribute("aria-current")).toBe("page");
+    expect(screen.getByRole("link", { name: "Activity" }).getAttribute("aria-current")).toBeNull();
+    expect(document.title).toBe("Claude Cost");
+    expect(screen.getByRole("link", { name: "Errors" }).getAttribute("href")).toBe("/errors#project=foo&range=14&auto=1");
+    // Back returns to Activity with its page-only keys.
+    await act(async () => {
+      history.back();
+      await new Promise(r => addEventListener("popstate", r, { once: true }));
+    });
+    expect(location.pathname).toBe("/usage");
+    expect(document.title).toBe("Claude Activity");
+  });
+
+  it("shows the project chip and clears the filter", async () => {
+    vi.stubGlobal("fetch", vi.fn(() => json(status)));
+    history.replaceState(null, "", "/errors#project=foo&range=30&session=s1");
+    render(<Nav />);
+    await userEvent.click(screen.getByRole("button", { name: "Clear project filter" }));
+    expect(location.hash).toBe("#range=30");
+    expect(screen.queryByRole("button", { name: "Clear project filter" })).toBeNull();
+    expect(screen.getByRole("link", { name: "Errors" }).getAttribute("aria-current")).toBe("page");
+  });
+
+  it("shows the ingest status, and a failed Refresh offers Retry", async () => {
+    const f = vi.fn((_url: string, init?: RequestInit) => init?.method === "POST" ? Promise.reject(new Error("down")) : json(status));
+    vi.stubGlobal("fetch", f);
+    history.replaceState(null, "", "/usage");
+    render(<Nav />);
+    expect(await screen.findByText(/Last ingest .* · 2 new lines/)).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Refresh" }));
+    const btn = await screen.findByRole("button", { name: "Retry" });
+    expect(btn.className).toBe("failed");
+    expect(screen.getByText("Refresh failed. Select Retry to try again.")).toBeTruthy();
+    expect(f).toHaveBeenCalledWith("/api/refresh", { method: "POST" });
+  });
+});

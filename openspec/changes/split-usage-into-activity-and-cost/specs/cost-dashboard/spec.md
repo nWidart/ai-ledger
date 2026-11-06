@@ -1,0 +1,89 @@
+# Spec Delta
+
+## Purpose
+
+Shows what Claude Code usage cost at API list prices, where that cost went, and why it changed against the previous period, so expensive projects, sessions and habits stand out.
+
+## ADDED Requirements
+
+### Requirement: Filter by time range and project
+The cost dashboard SHALL let the user pick a time range and a project, and every figure on the page SHALL reflect that selection. The project filter SHALL change only through the filter controls or an explicit filter action; selecting a project or session elsewhere SHALL open its details in a side sheet without changing the filter.
+
+#### Scenario: Narrow to one project
+- **WHEN** the user selects project `foo` and the last 7 days on the cost dashboard
+- **THEN** every chart, card and table shows only `foo` sessions from those 7 days
+
+#### Scenario: Inspect a project without filtering
+- **WHEN** the user selects project `foo` in the spend ledger
+- **THEN** a side sheet shows `foo`'s summary, the page keeps its current filter, and the sheet offers a button to filter the dashboard to `foo`
+
+### Requirement: Lead with the period's cost and its change
+The cost dashboard SHALL open with the estimated cost of the selected view, its change against the previous period of equal length, and a daily cost sparkline across both periods. For the all-time range it SHALL show the cost since the first recorded day, without a comparison.
+
+#### Scenario: Thirty-day view
+- **WHEN** the user views the last 30 days
+- **THEN** the page heading shows the period's estimated cost and its change against the 30 days before, and names both windows with their count of days with recorded usage
+
+#### Scenario: Thin previous period
+- **WHEN** the previous period has usage on fewer than half as many days as the current one
+- **THEN** the comparison is marked as resting on thin history
+
+### Requirement: Show what changed by project
+The cost dashboard SHALL show each project's change in estimated cost against the previous period, largest change first, and SHALL mark projects with no usage in the previous period as new.
+
+#### Scenario: New project
+- **WHEN** project `foo` has cost in the current period and no usage in the previous one
+- **THEN** `foo` shows its full cost as an increase and is marked new
+
+### Requirement: Show token usage by kind
+The dashboard SHALL show input, output, thinking, cache read, 5-minute cache write and 1-hour cache write tokens per project and over time.
+
+#### Scenario: Daily token chart
+- **WHEN** the user views a project
+- **THEN** a chart shows each token kind per day
+
+### Requirement: Show estimated cost
+The dashboard SHALL show an estimated cost per project, model and day, computed from per-model prices for each token kind, and SHALL label the value as an API-price estimate.
+
+#### Scenario: Model without a price
+- **WHEN** a request used a model missing from the price table
+- **THEN** its tokens are still counted, its cost shows as unknown, and the dashboard names the unpriced model
+
+### Requirement: Show cache efficiency
+The dashboard SHALL show the cache hit ratio (cache read tokens divided by all input tokens) and the share of cache writes that used the 1-hour lifetime.
+
+#### Scenario: Cache ratio per project
+- **WHEN** the user compares projects
+- **THEN** each project shows its cache hit ratio and 1-hour write share
+
+### Requirement: Show subagent cost share
+The cost dashboard SHALL show what share of estimated cost came from subagents.
+
+#### Scenario: Subagent heavy project
+- **WHEN** 40% of a project's cost came from subagent requests
+- **THEN** the cost dashboard shows a 40% subagent cost share for that project
+
+### Requirement: Show cost per outcome
+The cost dashboard SHALL show cost per commit and cost per prompt per project, and SHALL point out a project (or, inside one project, a session) whose cost per commit is more than twice the median.
+
+#### Scenario: Cost-per-commit outlier
+- **WHEN** one project with three or more commits costs four times the median project per commit
+- **THEN** the cost dashboard names that project as an outlier and offers to compare projects
+
+#### Scenario: Project with no commits
+- **WHEN** a project has cost but no commits in the range
+- **THEN** its cost per commit shows as not available, not as zero or infinity
+
+### Requirement: Show model mix
+The cost dashboard SHALL show the split of requests by model and effort level, each with its estimated cost.
+
+#### Scenario: Two models
+- **WHEN** 70% of requests in the view used one model and 30% another
+- **THEN** the cost dashboard shows both shares and each model's estimated cost
+
+### Requirement: Link to a cost view
+The cost dashboard SHALL keep the selected project, time range, inspected project and open session in the page URL, so a view can be reopened or shared, and browser Back SHALL retrace filter and sheet changes.
+
+#### Scenario: Open a copied URL
+- **WHEN** the user opens a copied cost dashboard URL
+- **THEN** the same project, range and session are selected

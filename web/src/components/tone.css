@@ -1,0 +1,14 @@
+/* Project tables of Activity and Cost: cells far from the median project are tinted, weighted and marked, so color is never the only cue. */
+:is(.pg-activity, .pg-cost) td.tone { position: relative; }
+:is(.pg-activity, .pg-cost) td.tone.worse { background: var(--critical-soft); color: var(--critical-text); font-weight: 600; }
+:is(.pg-activity, .pg-cost) td.tone.better { background: var(--good-soft); color: var(--good-text); }
+:is(.pg-activity, .pg-cost) td.tone .mk { font-size: 9px; margin-left: 4px; vertical-align: 1px; }
+:is(.pg-activity, .pg-cost) .ibar { display: inline-block; width: 44px; height: 6px; border-radius: 3px; background: var(--track); margin-right: 8px; vertical-align: 1px; overflow: hidden; }
+:is(.pg-activity, .pg-cost) .ibar i { display: block; height: 100%; border-radius: 3px; background: var(--proj-other); }
+:is(.pg-activity, .pg-cost) .tone-key { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--text-muted); margin: 0 0 8px; }
+:is(.pg-activity, .pg-cost) .tone-key span { padding: 0 6px; border-radius: 4px; }
+:is(.pg-activity, .pg-cost) .tone-key .worse { background: var(--critical-soft); color: var(--critical-text); font-weight: 600; }
+:is(.pg-activity, .pg-cost) .tone-key .better { background: var(--good-soft); color: var(--good-text); }
+@media (prefers-reduced-motion: no-preference) {
+  :is(.pg-activity, .pg-cost).grow .ibar i { transform-origin: left; animation: grow-x .6s cubic-bezier(.2,.7,.2,1) both; }
+}

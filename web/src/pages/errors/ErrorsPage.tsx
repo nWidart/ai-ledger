@@ -1,0 +1,208 @@
+import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore } from "react";
+import { errorsUrl, type ErrorDetail, type ErrorsPayload } from "../../api";
+import { setOrder } from "../../colors";
+import { Filters } from "../../components/Filters";
+import { num as fmt } from "../../format";
+import { setHash, useHashState } from "../../hash";
+import { useApi } from "../../useApi";
+import { Ctx, type ErrorsCtx } from "./context";
+import { Detail } from "./Detail";
+import { filtered, makeModel, settle, viewTypes, type Fixes, type View } from "./model";
+import { RateChart } from "./RateChart";
+import { Summary } from "./Summary";
+import { TypeTable } from "./TypeTable";
+import { FIXES_KEY, loadFixes, loadMode, MODE_KEY, readView, savedOf, store, VIEW_KEY, viewPatch, type Mode, type SavedView } from "./view";
+import "./errors.css";
+
+const NARROW = "(max-width: 900px)", EMPTY = { cats: {}, byId: {} };
+const reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+const useMedia = (q: string) => useSyncExternalStore(
+  f => { const mq = matchMedia(q); mq.addEventListener("change", f); return () => mq.removeEventListener("change", f); },
+  () => matchMedia(q).matches, () => false);
+const $ = (s: string | null | undefined) => (s ? document.querySelector<HTMLElement>(s) : null);
+// A selector that finds the same control again after a re-render.
+const focusKey = (el: HTMLElement) => el.id ? "#" + CSS.escape(el.id)
+  : ["c", "copy", "link", "full", "inc", "m"].map(k => el.dataset[k] != null && `${el.tagName}[data-${k}="${CSS.escape(el.dataset[k])}"]`).find(Boolean) || null;
+
+export function ErrorsPage() {
+  const { data, error, retry } = useApi<ErrorsPayload>(errorsUrl);
+  const m = useMemo(() => (data ? makeModel(data) : undefined), [data]);
+  // Project colors match Activity: the nav hands them out in the server's all-time order.
+  useEffect(() => { if (data) setOrder(data.project_order); }, [data]);
+  const [h] = useHashState();
+  const saved = useRef<SavedView>(store.get<SavedView>(VIEW_KEY, {}));
+  const read = useMemo(() => readView(h.raw, saved.current, m ?? EMPTY), [h.raw, m]);
+  const view = useMemo(() => (m ? settle(m, read.view) : read.view), [m, read.view]);
+  const viewRef = useRef(view);
+  viewRef.current = view;
+
+  const [fixes, setFixesS] = useState<Fixes>(loadFixes), [mode, setModeS] = useState<Mode>(loadMode), [q, setQ] = useState("");
+  const [, bump] = useReducer((x: number) => x + 1, 0);
+  const sets = useRef({ openInc: new Set<number>(), opened: new Set<string>(), fullText: new Map<string, ErrorDetail>(), loading: new Set<string>(), failed: new Set<string>() }).current;
+  const narrow = useMedia(NARROW), toSheet = !!m && narrow && !!view.cat;
+  const [chartInView, setChartInView] = useState(true), [live, setLive] = useState(""), [pageLive, setPageLive] = useState("");
+  const sheet = useRef<HTMLDialogElement>(null), retryBtn = useRef<HTMLButtonElement>(null);
+  const pending = useRef<(() => void)[]>([]), selecting = useRef(false), navd = useRef(false), retried = useRef(false), init = useRef(false);
+  const lastHash = useRef(""), sheetCat = useRef<string | null>(null), prevCat = useRef<string | null>(null), shownCat = useRef<string | null>(null);
+
+  const f = useMemo(() => m && filtered(m, view), [m, view.project, view.range, view.sub, view.noise]); // the type and the link don't filter
+  const vt = useMemo(() => m && f && viewTypes(m, view, f), [m, f, view]);
+
+  // push: add a history entry (Back retraces it). A new type starts its search over.
+  const update = useCallback((patch: Partial<View>, push = false) => {
+    const cur = viewRef.current;
+    if (patch.cat !== undefined && patch.cat !== cur.cat) setQ("");
+    setHash(viewPatch({ ...cur, ...patch }), { push });
+  }, []);
+  const after = useCallback((fn: () => void) => { pending.current.push(fn); bump(); }, []);
+  // Concise status for screen readers: counts, loading, failures. The detail itself isn't live.
+  const say = useCallback((s: string) => { setLive(""); requestAnimationFrame(() => setLive(s)); }, []);
+  const focusDetail = useCallback(() => {
+    const t = $("#detailTitle");
+    if (!t) return;
+    if (sheet.current?.open) return t.focus({ preventScroll: true });
+    const r = t.getBoundingClientRect();
+    if (r.top < parseFloat(getComputedStyle(t).scrollMarginTop) || r.bottom > innerHeight) t.scrollIntoView({ block: "start", behavior: reduced() ? "auto" : "smooth" });
+    t.focus({ preventScroll: true });
+  }, []);
+  const pick = useCallback((c: string | null, toDetail = false) => {
+    update({ cat: c, focus: null }, true);
+    setQ("");
+    if (toDetail && c) after(focusDetail);
+  }, [update, after, focusDetail]);
+  // A click on an example selects it: its permalink goes in the address bar, and the list stays where it is.
+  const select = useCallback((id: string) => { selecting.current = true; update({ focus: id }, true); }, [update]);
+  const setFixes = useCallback((x: Fixes) => { setFixesS(x); store.set(FIXES_KEY, x); }, []);
+  const setMode = useCallback((x: Mode) => { setModeS(x); store.set(MODE_KEY, x); }, []);
+
+  // The list puts the linked example first; a click on an example moves the link, not the list, until the view next changes.
+  const fullKey = JSON.stringify([!!m, view.project, view.range, view.gran, view.sub, view.noise, view.cat, mode, fixes]);
+  const pin = useRef({ key: "", focus: null as string | null });
+  if (pin.current.key !== fullKey || (pin.current.focus !== view.focus && !selecting.current)) {
+    pin.current = { key: fullKey, focus: view.focus };
+    const n = view.focus ? m?.byId[view.focus]?.n : null;
+    if (n != null) sets.openInc.add(n); // the linked example's incident opens
+  }
+  useEffect(() => { selecting.current = false; });
+
+  // The view is the hash: write it back whole (a closed type drops out, an empty hash takes the saved view), and remember it.
+  useLayoutEffect(() => { if (m) setHash(viewPatch(view), { push: false }); }, [m, view]);
+  useEffect(() => {
+    if (!m) return;
+    saved.current = savedOf(view);
+    store.set(VIEW_KEY, saved.current);
+  }, [m, view]);
+  // Back, Forward and hash links re-read the hash: the search starts over and a linked example scrolls into view.
+  useEffect(() => {
+    const on = () => { if (location.hash !== lastHash.current) { navd.current = true; setQ(""); } };
+    addEventListener("popstate", on); addEventListener("hashchange", on);
+    return () => { removeEventListener("popstate", on); removeEventListener("hashchange", on); };
+  }, []);
+  useEffect(() => { if (error) retryBtn.current?.focus(); }, [error]);
+
+  // The mini chart shows only while the main chart is out of view.
+  useEffect(() => {
+    const el = m && document.getElementById("chart");
+    if (!el) return;
+    const io = new IntersectionObserver(es => setChartInView(es[es.length - 1]!.isIntersecting), { threshold: .25 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [m]);
+  // Esc, the backdrop and ✕ close the sheet; closing it closes the type, and focus returns to that type's button.
+  useEffect(() => {
+    const d = sheet.current;
+    if (!d) return;
+    const closed = () => {
+      const c = sheetCat.current;
+      sheetCat.current = null;
+      if (!matchMedia(NARROW).matches) return $("#detailTitle")?.focus({ preventScroll: true });
+      if (viewRef.current.cat) update({ cat: null, focus: null }, true);
+      if (c) $(`#catBody button[data-c="${CSS.escape(c)}"]`)?.focus();
+    };
+    d.addEventListener("close", closed);
+    return () => d.removeEventListener("close", closed);
+  }, [m, update]);
+
+  // What had focus as this render started, and where: never leave focus on a removed element.
+  const had = typeof document === "undefined" ? null : document.activeElement;
+  const was = had instanceof HTMLElement && had !== document.body ? { el: had, key: focusKey(had), box: had.closest("[id]")?.id } : null;
+  const wasRef = useRef(was);
+  wasRef.current = was;
+  useLayoutEffect(() => {
+    if (!m) return;
+    // Narrow screens show an open type in the sheet: the detail renders there, the same either way.
+    const d = sheet.current!;
+    if (toSheet) {
+      if (!d.open) d.showModal();
+      if (sheetCat.current !== view.cat) { d.scrollTop = 0; $("#detailTitle")?.focus({ preventScroll: true }); }
+      sheetCat.current = view.cat;
+    } else if (d.open) d.close();
+    // A new type fades in over the old one's place.
+    if (shownCat.current !== view.cat && !reduced()) document.getElementById("detail")?.animate?.([{ opacity: 0, transform: "translateY(4px)" }, { opacity: 1, transform: "none" }], { duration: 200, easing: "ease-out" });
+    shownCat.current = view.cat;
+    const w = wasRef.current, blank = () => !document.activeElement || document.activeElement === document.body;
+    const lost = w && !w.el.isConnected && blank() ? w : null;
+    const fns = pending.current.splice(0);
+    fns.forEach(fn => fn());
+    let placed = fns.length > 0;
+    if (!init.current || navd.current) {
+      // A deep link lands on its example: scrolled into view, and keyboard focus there so Tab continues from it.
+      const ex = read.linked && view.focus && document.getElementById("ex-" + view.focus);
+      if (ex) { ex.scrollIntoView({ block: "center" }); ex.focus({ preventScroll: true }); placed = true; }
+      // After a failed load, Retry went with the message: focus the page heading and say so.
+      if (!init.current && retried.current) { $("#lede")?.focus(); setPageLive("Errors loaded"); placed = true; }
+      init.current = true; navd.current = false;
+    }
+    if (lost && !placed && blank()) {
+      const k = lost.key;
+      ($(lost.box && k ? `#${CSS.escape(lost.box)} ${k}` : null) || $(k)
+        || (view.cat ? $("#detailTitle") : $(`#catBody button[data-c="${CSS.escape(prevCat.current ?? "")}"]`) || $("#catBody button")))?.focus();
+    }
+    prevCat.current = view.cat;
+    lastHash.current = location.hash;
+  });
+
+  const projects = useMemo(() => {
+    const ps = (m?.projects ?? []).map(([p, n]) => ({ value: p, label: `${p} — ${fmt(n)} error${n === 1 ? "" : "s"} (all time)` }));
+    if (view.project && !ps.some(p => p.value === view.project)) ps.push({ value: view.project, label: `${view.project} — 0 errors (all time)` });
+    return ps;
+  }, [m, view.project]);
+
+  const ctx: ErrorsCtx | null = m && f && vt ? {
+    m, v: view, f, vt, fixes, mode, q, pinned: pin.current.focus ? m.byId[pin.current.focus] : undefined, inSheet: toSheet, chartInView,
+    update, pick, select, setFixes, setMode, setQ, after, say, bump, ...sets,
+  } : null;
+  const detailLive = <div className="sr" id="detailLive" aria-live="polite">{live}</div>;
+
+  return (
+    <div className="wrap pg-errors">
+      <header className="top">
+        <p className="kicker">Claude tool errors</p>
+        <Filters projects={projects}>
+          <div className="seg" id="fGran" role="group" aria-label="Granularity">
+            {(["day", "week"] as const).map(g => <button key={g} type="button" aria-pressed={view.gran === g} onClick={() => update({ gran: g }, true)}>{g === "day" ? "Day" : "Week"}</button>)}
+          </div>
+          <label className="chk"><input type="checkbox" id="fSub" checked={view.sub} onChange={e => update({ sub: e.target.checked }, true)} /> <span><span className="long">Include </span>subagents</span></label>
+          <label className="chk" title="Harness errors and user rejections"><input type="checkbox" id="fNoise" checked={view.noise} onChange={e => update({ noise: e.target.checked }, true)} /> <span>Hide noise<span className="long"> (harness, user rejections)</span></span></label>
+        </Filters>
+      </header>
+      {!m && (error
+        ? <div className="card" id="load" role="alert"><b>Couldn't load errors.</b> <span className="muted">{error.message}. Check that the app is running.</span>{" "}
+          <button type="button" ref={retryBtn} onClick={() => { retried.current = true; retry(); }}>Retry</button></div>
+        : <div className="card" id="load" role="status">Loading errors…</div>)}
+      <div className="sr" id="pageLive" aria-live="polite">{pageLive}</div>
+      {ctx && <Ctx.Provider value={ctx}>
+        <Summary />
+        <RateChart />
+        <div className="grid2">
+          <TypeTable />
+          {!toSheet && <><section className="card detail" id="detail"><Detail /></section>{detailLive}</>}
+        </div>
+        {/* The status region moves with the detail: outside the modal sheet it would be inert. */}
+        <dialog className="sheet" id="sheet" aria-labelledby="detailTitle" ref={sheet} onClick={e => { if (e.target === e.currentTarget) e.currentTarget.close(); }}>
+          {toSheet && <><section className="card detail" id="detail"><Detail /></section>{detailLive}</>}
+        </dialog>
+      </Ctx.Provider>}
+    </div>
+  );
+}

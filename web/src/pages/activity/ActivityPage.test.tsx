@@ -1,0 +1,118 @@
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it, vi } from "vitest";
+import type { UsagePayload } from "../../api";
+import usage from "../../__fixtures__/usage";
+import usageAll from "../../__fixtures__/usage-all";
+import sessions from "../../__fixtures__/sessions";
+import session from "../../__fixtures__/session";
+import { mockApi } from "../../components/sheets/testing";
+import { ActivityPage } from "./ActivityPage";
+import { workDays } from "./work";
+
+const at = (hash = "#range=30") => history.replaceState(null, "", "/usage" + hash);
+const serve = (d: UsagePayload) => mockApi({ "/api/usage": () => d, "/api/sessions": () => sessions, "/api/session": () => session });
+const attention = () => within(document.getElementById("attention")!);
+const loaded = () => screen.findByRole("heading", { level: 1, name: /commit/ });
+const fetched = () => vi.mocked(fetch).mock.calls.map(c => c[0]);
+const quiet: UsagePayload = { ...usage, totals: { ...usage.totals, error_loops: 0, tests_failed: 0 }, error_loops: [], near_limit: [] };
+
+describe("work per day", () => {
+  it("covers every day of the view, with zeros for idle days", () => {
+    const ds = workDays(usage);
+    expect(ds).toHaveLength(30);
+    expect(ds[0]).toEqual({ day: "2026-10-07", sessions: 0, prompts: 0, commits: 0, failed_calls: 0 });
+    expect(ds.at(-2)).toEqual({ day: "2026-11-04", sessions: 1, prompts: 2, commits: 1, failed_calls: 6 });
+    expect(ds.at(-1)!.day).toBe("2026-11-05");
+    expect(ds.reduce((a, r) => a + r.commits, 0)).toBe(usage.totals.commits);
+    // All time starts at the first day with work.
+    expect(workDays(usageAll)[0]!.day).toBe(usageAll.daily_work[0]!.day);
+  });
+});
+
+describe("ActivityPage", () => {
+  it("leads with the work done and no cost figure before the attention summary", async () => {
+    serve(usage);
+    at();
+    render(<ActivityPage />);
+    const lede = await loaded();
+    expect(lede.textContent).toBe("1 commit from 3 prompts, in 2 sessions, 2 active days");
+    const before = document.querySelector(".top")!.textContent! + document.getElementById("attention")!.textContent!;
+    expect(before).not.toMatch(/\$|cost/i);
+  });
+
+  it("lists error loops and near-limit sessions, each opening its table", async () => {
+    serve({ ...usage, totals: { ...usage.totals, error_loops: 3 } });
+    at();
+    render(<ActivityPage />);
+    await loaded();
+    const loops = (await attention().findByText("3 error loops")).closest("li")!;
+    expect(loops.className).toBe("crit");
+    expect(attention().getByText("● Act")).toBeTruthy();
+    expect(attention().getByText("1 session").closest("li")!.textContent).toMatch(/reached 80%\+ of the context window/);
+    expect(attention().getByText("1 failed test run").closest("li")!.textContent).toMatch(/of 2/);
+    await userEvent.click(within(loops).getByRole("button", { name: "See loops" }));
+    expect((document.getElementById("d-loops") as HTMLDetailsElement).open).toBe(true);
+    await userEvent.click(attention().getByRole("button", { name: "See it" }));
+    expect((document.getElementById("d-sessions") as HTMLDetailsElement).open).toBe(true);
+    expect(screen.getByRole("checkbox", { name: "Near context limit only" })).toHaveProperty("checked", true);
+    await waitFor(() => expect(fetched()).toContain("/api/sessions?range=30&near=1"));
+  });
+
+  it("says when nothing needs attention", async () => {
+    serve(quiet);
+    at();
+    render(<ActivityPage />);
+    await loaded();
+    expect(await attention().findByText("Nothing needs attention")).toBeTruthy();
+    expect(attention().getByText(/No error loops, sessions near the context limit, flaky tools or failed tests/)).toBeTruthy();
+    expect(attention().getByText("✓ Good")).toBeTruthy();
+  });
+
+  it("puts flaky tools first when asked", async () => {
+    const flaky = { tool: "WebFetch", calls: 40, errors: 10, p50_ms: 900, p95_ms: 2000, failure_rate: .25 };
+    serve({ ...quiet, tools: [...quiet.tools, flaky] });
+    at();
+    render(<ActivityPage />);
+    await loaded();
+    const item = (await attention().findByText("1 tool")).closest("li")!;
+    expect(item.textContent).toMatch(/worst WebFetch \(25%\)/);
+    const first = () => document.querySelector("#d-tools tbody tr td")!.textContent;
+    expect(first()).toBe("Edit");
+    await userEvent.click(within(item).getByRole("button", { name: "See tools" }));
+    expect(first()).toBe("WebFetch");
+  });
+
+  it("selecting a day on the work chart lists that day's sessions", async () => {
+    serve(usage);
+    at();
+    render(<ActivityPage />);
+    const chart = await screen.findByRole("img", { name: /^Commits and failed tool calls per day, 30 days/ });
+    act(() => chart.focus());
+    fireEvent.keyDown(chart, { key: "End" });
+    expect(screen.getByText("Nov 5, 2026: 0 commits, 1 prompt, 1 session, 0 failed calls")).toBeTruthy();
+    fireEvent.keyDown(chart, { key: "ArrowLeft" });
+    fireEvent.keyDown(chart, { key: "Enter" });
+    expect((document.getElementById("d-sessions") as HTMLDetailsElement).open).toBe(true);
+    expect(screen.getByText("Active on Nov 4, 2026")).toBeTruthy();
+    await waitFor(() => expect(fetched()).toContain("/api/sessions?range=30&day=2026-11-04"));
+    // The bars follow the chosen count.
+    await userEvent.click(screen.getByRole("button", { name: "Prompts" }));
+    expect(screen.getByRole("img", { name: /^Prompts and failed tool calls per day/ })).toBeTruthy();
+  });
+
+  it("opens a session sheet from the sessions table and closes it again", async () => {
+    serve(usage);
+    at();
+    render(<ActivityPage />);
+    await loaded();
+    act(() => { (document.getElementById("d-sessions") as HTMLDetailsElement).open = true; });
+    const row = await within(document.getElementById("d-sessions")!).findByRole("button", { name: "#s1" });
+    await userEvent.click(row);
+    expect(location.hash).toBe("#range=30&session=s1");
+    const dlg = within(document.querySelector("dialog")!);
+    expect(await dlg.findByText("Timeline")).toBeTruthy();
+    await userEvent.click(dlg.getByRole("button", { name: "Close" }));
+    expect(location.hash).toBe("#range=30");
+  });
+});

@@ -1,0 +1,37 @@
+/* Insight cards: the most severe finding leads, wide, with the supporting findings compact in a row beneath it */
+.insights { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; margin: 0 0 20px; }
+.insights .support { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.insight { position: relative; display: flex; flex-direction: column; gap: 4px; padding: 14px 16px 14px 18px; overflow: hidden; }
+.insight::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 4px; background: var(--sev, var(--border)); }
+.insight.good { --sev: var(--good); --sev-text: var(--good-text); }
+.insight.warn { --sev: var(--warning); --sev-text: var(--warning-text); }
+.insight.critical { --sev: var(--critical); --sev-text: var(--critical-text); }
+.insight.info { --sev: var(--border); --sev-text: var(--text-secondary); }
+.insight .k { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; font-weight: 500; color: var(--text-secondary);
+  text-transform: uppercase; letter-spacing: .05em; }
+.insight .sev { font-size: 11px; text-transform: none; letter-spacing: 0; font-weight: 600; color: var(--sev-text); white-space: nowrap; }
+.insight .t { font-weight: 500; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.insight .v { font-size: 24px; font-weight: 600; letter-spacing: -.03em; line-height: 1.15; }
+.insight .v .muted { font-size: 14px; font-weight: 500; }
+.insight .b { color: var(--text-secondary); font-size: 13px; flex: 1; overflow-wrap: anywhere; }
+.insight ul { list-style: none; margin: 2px 0 0; padding: 0; display: grid; gap: 6px; flex: 1; }
+.insight li { font-size: 13px; color: var(--text-secondary); padding-left: 12px; position: relative; overflow-wrap: anywhere; }
+.insight li::before { content: ""; position: absolute; left: 0; top: .55em; width: 5px; height: 5px; border-radius: 50%; background: var(--sev); }
+.insight li.crit::before { background: var(--critical); }
+.insight li b { color: var(--text-primary); font-weight: 600; }
+.insight .act { align-self: flex-start; margin-top: 6px; font-size: 13px; font-weight: 500; }
+.insight .act::after { content: " →"; }
+.insight.primary { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: 4px 28px; align-items: start; padding: 18px 22px 18px 24px; }
+.insight.primary .lead, .insight.primary .rest { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.insight.primary .v { font-size: 34px; }
+.insight.primary .t { font-size: 16px; white-space: normal; }
+.insight.primary .b, .insight.primary li { font-size: 14px; }
+.insight.primary .rest { padding-top: 22px; }
+.insight.compact .v { font-size: 20px; }
+.insight.compact .act { margin-top: auto; padding-top: 6px; }
+.insight.compact .b { flex: 0 1 auto; }
+@media (max-width: 760px) { .insight.primary { grid-template-columns: minmax(0, 1fr); } .insight.primary .rest { padding-top: 0; } }
+@media (max-width: 520px) {
+  .insight.primary { padding: 14px 16px 14px 18px; }
+  .insight.primary .v { font-size: 28px; }
+}

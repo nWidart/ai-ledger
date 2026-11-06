@@ -1,0 +1,15 @@
+/* Drawers: the full tables, closed by default */
+.drawers { margin-top: 32px; border-top: 1px solid var(--border); }
+details.drawer { border-bottom: 1px solid var(--border); scroll-margin-top: calc(var(--appnav-h, 56px) + var(--secidx-h, 0px) + 12px); }
+details.drawer > summary { list-style: none; cursor: pointer; display: flex; gap: 12px; align-items: baseline; padding: 14px 4px; }
+details.drawer > summary::-webkit-details-marker { display: none; }
+details.drawer > summary::before { content: ""; width: 7px; height: 7px; flex: none; align-self: center;
+  border-right: 1.5px solid var(--text-muted); border-bottom: 1.5px solid var(--text-muted); transform: rotate(-45deg); transition: transform .15s; }
+details.drawer[open] > summary::before { transform: rotate(45deg); }
+details.drawer > summary h2 { font-size: 16px; font-weight: 600; margin: 0; letter-spacing: -.005em; }
+details.drawer > summary:hover h2 { color: var(--link); }
+details.drawer > summary .c { color: var(--text-muted); font-size: 13px; }
+details.drawer > summary .w { color: var(--text-muted); font-size: 12.5px; margin-left: auto; text-align: right; }
+.drawer-body { padding: 0 0 24px; }
+@media (max-width: 900px) { details.drawer > summary .w { display: none; } }
+@media (prefers-reduced-motion: reduce) { details.drawer > summary::before { transition: none; } }

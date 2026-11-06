@@ -1,0 +1,9 @@
+/* Sheet: project and session details over the page, without changing the page's filters (dialog.sheet base is in theme.css) */
+dialog.sheet { background: var(--bg); }
+.sheet-in { min-height: 100%; }
+.sheet-head { position: sticky; top: 0; z-index: 1; display: flex; gap: 8px; align-items: center; padding: 12px 20px;
+  background: var(--surface-1); border-bottom: 1px solid var(--border); }
+.sheet-head h2 { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 16px; font-weight: 600; margin: 0; letter-spacing: -.005em; }
+.sheet-head h2:focus { outline: none; }
+.sheet-body { padding: 16px 20px 40px; overflow-wrap: anywhere; }
+.sheet-kind { color: var(--text-muted); font-size: 12px; font-weight: 500; }

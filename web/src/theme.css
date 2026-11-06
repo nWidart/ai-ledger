@@ -1,5 +1,5 @@
-/* Shared by the Usage and Errors pages (served at /theme.css): tokens, base type, controls, cards, KPIs, chips, tooltips, sheets.
-   Page styles stay in each page; anything both pages draw the same way lives here. */
+/* Shared by every page (imported once in main.tsx): tokens, base type, controls, cards, KPIs, chips, tooltips, sheets.
+   Page styles stay in each page; anything several pages draw the same way lives here. */
 :root {
   color-scheme: light;
   --bg: #f6f5f2; --surface-1: #fcfcfb; --surface-2: #f0efec; --border: #e2e0da;

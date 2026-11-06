@@ -1,0 +1,14 @@
+/* Section index of Activity and Cost: sticky under the nav on wide screens, marks the section in view; a jump select stands in on narrow ones */
+:is(.pg-activity, .pg-cost) .secidx { position: sticky; top: var(--appnav-h, 49px); z-index: 4; display: flex; gap: 2px; align-items: center; margin: 0 -16px 16px;
+  padding: 6px 16px; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(6px);
+  border-bottom: 1px solid transparent; transition: border-color .2s; }
+:is(.pg-activity, .pg-cost) .secidx.stuck { border-bottom-color: var(--border); }
+:is(.pg-activity, .pg-cost) .secidx a { font-size: 13px; color: var(--text-secondary); text-decoration: none; padding: 4px 10px; border-radius: 999px; }
+:is(.pg-activity, .pg-cost) .secidx a:hover { background: var(--surface-2); color: var(--text-primary); }
+:is(.pg-activity, .pg-cost) .secidx a[aria-current=true] { background: var(--accent-soft); color: var(--accent-ink); font-weight: 600; }
+:is(.pg-activity, .pg-cost) .secidx .sep { width: 1px; height: 14px; background: var(--border); margin: 0 4px; }
+:is(.pg-activity, .pg-cost) .jump { display: none; align-items: center; gap: 8px; margin: 0 0 16px; font-size: 13px; color: var(--text-secondary); }
+:is(.pg-activity, .pg-cost) .jump select { flex: 1; min-width: 0; min-height: 40px; }
+@media (max-width: 899px) { :is(.pg-activity, .pg-cost) .secidx { display: none; } :is(.pg-activity, .pg-cost) .jump { display: flex; } }
+:is(.pg-activity, .pg-cost) .sect { scroll-margin-top: calc(var(--appnav-h, 49px) + var(--secidx-h, 0px) + 12px); }
+@media (prefers-reduced-motion: reduce) { :is(.pg-activity, .pg-cost) .secidx { transition: none; } }

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Local app: owns the transcript store, keeps it current, serves the Errors and Usage dashboards.
+"""Local app: owns the transcript store, keeps it current, serves the Activity, Cost and Errors dashboards.
 
 Usage:
   uv run app.py            serve on http://127.0.0.1:8765 (ingests at start and every 60 seconds)
@@ -21,8 +21,10 @@ import store
 
 HOST, PORT = "127.0.0.1", 8765
 INTERVAL = 60
-PAGES = {"/errors": "dashboard_template.html", "/usage": "usage.html"}
-ASSETS = {"/theme.css": ("theme.css", "text/css; charset=utf-8")}  # shared by both pages, read on every request like the pages
+WEB = os.path.join(store.HERE, "web", "dist")  # the committed frontend build (npm run build in web/)
+PAGES = ("/usage", "/cost", "/errors")  # one app; it picks the page from the path
+ASSET_TYPES = {".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml",
+               ".png": "image/png", ".woff2": "font/woff2", ".json": "application/json; charset=utf-8"}
 
 
 class App:
@@ -59,21 +61,22 @@ class App:
         return dict(self.state, counts=counts, interval=INTERVAL)
 
 
-def page(name):
-    with open(os.path.join(store.HERE, name)) as fh:
-        html = fh.read()
-    with open(os.path.join(store.HERE, "nav.html")) as fh:
-        return html.replace("<!--NAV-->", fh.read())
+def asset(path):
+    """The build file at /assets/<name>, or None when the name leaves web/dist/assets or has no known type."""
+    base = os.path.realpath(os.path.join(WEB, "assets"))
+    full = os.path.realpath(os.path.join(base, path[len("/assets/"):]))
+    ext = os.path.splitext(full)[1]
+    return (full, ASSET_TYPES[ext]) if os.path.dirname(full) == base and ext in ASSET_TYPES and os.path.isfile(full) else None
 
 
 def handler(app):
     class Handler(BaseHTTPRequestHandler):
-        def send(self, code, body, ctype="application/json; charset=utf-8", headers=()):
+        def send(self, code, body, ctype="application/json; charset=utf-8", headers=(), cache="no-store"):
             data = body if isinstance(body, bytes) else body.encode()
             self.send_response(code)
             self.send_header("Content-Type", ctype)
             self.send_header("Content-Length", str(len(data)))
-            self.send_header("Cache-Control", "no-store")
+            self.send_header("Cache-Control", cache)
             for k, v in headers:
                 self.send_header(k, v)
             self.end_headers()
@@ -102,11 +105,18 @@ def handler(app):
                 if url.path == "/":
                     self.send(302, "", headers=[("Location", "/usage")])
                 elif url.path in PAGES:
-                    self.send(200, page(PAGES[url.path]), "text/html; charset=utf-8")
-                elif url.path in ASSETS:
-                    name, ctype = ASSETS[url.path]
-                    with open(os.path.join(store.HERE, name), "rb") as fh:
-                        self.send(200, fh.read(), ctype)
+                    try:
+                        with open(os.path.join(WEB, "index.html"), "rb") as fh:
+                            self.send(200, fh.read(), "text/html; charset=utf-8")
+                    except FileNotFoundError:
+                        self.send(503, "frontend build missing: run npm install && npm run build in web/\n", "text/plain")
+                elif url.path.startswith("/assets/"):
+                    found = asset(url.path)
+                    if found is None:
+                        self.send(404, "not found\n", "text/plain")
+                    else:  # names carry a content hash, so a file never changes
+                        with open(found[0], "rb") as fh:
+                            self.send(200, fh.read(), found[1], cache="public, max-age=31536000, immutable")
                 elif url.path == "/api/status":
                     self.json(app.status())
                 elif url.path == "/api/errors":
@@ -122,9 +132,11 @@ def handler(app):
                     self.send(404, json.dumps(dict(error="prompt not found"))) if text is None else self.json(dict(text=text))
                 elif url.path == "/api/sessions":
                     self.json(metrics.session_list(app.con.cursor(), q.get("project", ""), int(q.get("range") or 0), q.get("q", ""),
-                                                   q.get("near") == "1", int(q.get("offset") or 0), day=q.get("day", "")))
+                                                   q.get("near") == "1", int(q.get("offset") or 0), day=q.get("day", ""),
+                                                   automated=q.get("automated") == "1"))
                 elif url.path == "/api/usage":
-                    self.json(metrics.usage(app.con.cursor(), q.get("project", ""), int(q.get("range") or 0), q.get("session", "")))
+                    self.json(metrics.usage(app.con.cursor(), q.get("project", ""), int(q.get("range") or 0), q.get("session", ""),
+                                            automated=q.get("automated") == "1"))
                 else:
                     self.send(404, "not found\n", "text/plain")
             except ValueError as e:

@@ -1,0 +1,25 @@
+/* Ledgers: one row per project or model, bar = share */
+.ledger { list-style: none; margin: 8px 0 0; padding: 0; }
+.ledger li { display: grid; grid-template-columns: minmax(0, 13rem) minmax(40px, 1fr) 4.5rem 3rem; gap: 12px; align-items: center;
+  padding: 6px 8px; margin: 0 -8px; border-radius: 6px; }
+.ledger li.pick { display: block; padding: 0; }
+.ledger li.empty { display: block; }
+.ledger .rowbtn { display: grid; grid-template-columns: inherit; width: 100%; gap: 12px; align-items: center; padding: 6px 8px;
+  border: 0; border-radius: 6px; background: none; color: inherit; text-align: left; font: inherit; }
+.ledger li.pick .rowbtn { grid-template-columns: minmax(0, 13rem) minmax(40px, 1fr) 4.5rem 3rem; }
+.ledger .rowbtn:hover { background: var(--surface-2); }
+.ledger .n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ledger .bar { height: 8px; background: var(--track); border-radius: 4px; overflow: hidden; }
+.ledger .bar span { display: block; height: 100%; background: var(--text-muted); border-radius: 4px; }
+.ledger .n .pdot { margin-right: 8px; }
+.ledger .v { text-align: right; font-weight: 500; }
+.ledger .s { text-align: right; color: var(--text-muted); font-size: 12.5px; }
+/* Phones: the share bar moves under the name instead of squeezing between name and value. */
+@media (max-width: 520px) {
+  .ledger li, .ledger li.pick .rowbtn { grid-template-columns: minmax(0, 1fr) 4.5rem 3rem; row-gap: 5px; }
+  .ledger .bar { grid-column: 1 / -1; grid-row: 2; height: 6px; }
+}
+/* Bars grow in when new data lands (a page sets .grow on an ancestor for one render). */
+@media (prefers-reduced-motion: no-preference) {
+  .grow .ledger .bar span { transform-origin: left; animation: grow-x .6s cubic-bezier(.2,.7,.2,1) both; }
+}

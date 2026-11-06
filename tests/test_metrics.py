@@ -1,11 +1,16 @@
+import http.client
+import json
 import os
 import shutil
 import sys
 import tempfile
+import threading
 import unittest
 from datetime import date
+from http.server import ThreadingHTTPServer
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import app  # noqa: E402
 import metrics  # noqa: E402
 import store  # noqa: E402
 
@@ -18,7 +23,8 @@ TODAY = date(2026, 11, 5)
 
 
 class MetricsTest(unittest.TestCase):
-    """Fixture: project foo (sessions s1, s2), project bar (s3, outside a 7-day range)."""
+    """Fixture: project foo (sessions s1, s2), project bar (s3, outside a 7-day range), and the automated project
+    observer-sessions (o1, with a request and a prompt on each of Nov 4 and 5), which every view leaves out by default."""
 
     @classmethod
     def setUpClass(cls):
@@ -28,7 +34,8 @@ class MetricsTest(unittest.TestCase):
         store.insert(c, "sessions", ["session_id", "project", "first_ts", "last_ts", "compactions", "peak_context", "peak_model"], [
             ("s1", "foo", "2026-11-04 10:00:00", "2026-11-04 11:00:00", 2, 900, "m-a"),
             ("s2", "foo", "2026-11-05 09:00:00", "2026-11-05 09:30:00", 0, 100, "m-a"),
-            ("s3", "bar", "2026-10-01 09:00:00", "2026-10-01 09:10:00", 0, 50, "m-a")])
+            ("s3", "bar", "2026-10-01 09:00:00", "2026-10-01 09:10:00", 0, 50, "m-a"),
+            ("o1", "observer-sessions", "2026-11-04 12:00:00", "2026-11-05 12:00:00", 0, 100, "m-a")])
         cols = ["message_id", "session_id", "ts", "model", "effort", "subagent", "input", "output", "thinking",
                 "cache_read", "cache_5m", "cache_1h", "thinking_ms"]
         M = 1_000_000
@@ -39,7 +46,10 @@ class MetricsTest(unittest.TestCase):
             # s2: an unpriced model
             ("r3", "s2", "2026-11-05 09:01:00", "m-unknown", "medium", False, 100, 100, 0, 0, 0, 0, 500),
             # s3: long-tier prompt (60 + 60 > 100): every kind at 2 per MTok
-            ("r4", "s3", "2026-10-01 09:01:00", "m-tier", None, False, 60, 10, 0, 60, 0, 0, 0)])
+            ("r4", "s3", "2026-10-01 09:01:00", "m-tier", None, False, 60, 10, 0, 60, 0, 0, 0),
+            # o1: more tokens than bar, so it would rank above bar in project_order if it were counted
+            ("r5", "o1", "2026-11-04 12:00:00", "m-a", None, False, 100, 10, 0, 0, 0, 0, 0),
+            ("r6", "o1", "2026-11-05 12:00:00", "m-a", None, False, 100, 10, 0, 0, 0, 0, 0)])
         tcols = ["tool_use_id", "session_id", "tool", "mcp_server", "skill", "input_summary", "start_ts", "end_ts",
                  "is_error", "category", "subagent", "is_commit", "is_test", "test_passed"]
         t = lambda i, s, tool, sec, err, **k: (i, s, tool, k.get("mcp"), k.get("skill"), "", f"2026-11-04 10:{i[-2:]}:00",
@@ -53,12 +63,14 @@ class MetricsTest(unittest.TestCase):
             t("t09", "s1", "mcp__srv__q", 3, False, mcp="srv"), t("t10", "s1", "Skill", 1, False, skill="review")])
         store.insert(c, "prompts", ["prompt_id", "session_id", "ts", "interrupted"], [
             ("p1", "s1", "2026-11-04 10:00:00", True), ("p2", "s1", "2026-11-04 10:30:00", False),
-            ("p3", "s2", "2026-11-05 09:00:00", False), ("p4", "s3", "2026-10-01 09:00:00", False)])
+            ("p3", "s2", "2026-11-05 09:00:00", False), ("p4", "s3", "2026-10-01 09:00:00", False),
+            ("p5", "o1", "2026-11-04 12:00:00", False), ("p6", "o1", "2026-11-05 12:00:00", False)])
         store.insert(c, "hooks", ["session_id", "ts", "source", "hook", "command", "duration_ms", "is_error"], [
             ("s1", "2026-11-04 10:00:00", "stop_summary", "Stop", "a", 100, False),
             ("s1", "2026-11-04 10:05:00", "stop_summary", "Stop", "a", 300, True)], tail="")
         cls.all = metrics.usage(cls.con.cursor(), prices=PRICES, today=TODAY)
         cls.foo7 = metrics.usage(cls.con.cursor(), "foo", 7, "s1", prices=PRICES, today=TODAY)
+        cls.auto = metrics.usage(cls.con.cursor(), prices=PRICES, today=TODAY, automated=True)
 
     @classmethod
     def tearDownClass(cls):
@@ -191,6 +203,8 @@ class MetricsTest(unittest.TestCase):
         self.assertAlmostEqual(t["write_1h_share"], 0.5)
         self.assertAlmostEqual(t["subagent_token_share"], 1 / (11 + 1 + 0.0002))
         self.assertAlmostEqual(t["subagent_cost_share"], 1 / 15.8)
+        foo = next(p for p in self.foo7["by_project"] if p["project"] == "foo")
+        self.assertAlmostEqual(foo["subagent_cost_share"], t["subagent_cost_share"])
 
     def test_context_and_prompts(self):
         s1 = next(s for s in self.foo7["sessions"] if s["session_id"] == "s1")
@@ -304,6 +318,80 @@ class MetricsTest(unittest.TestCase):
             self.assertEqual(p["incident_gap_minutes"], metrics.INCIDENT_GAP_MINUTES)
         finally:
             c.execute("DELETE FROM tool_calls WHERE tool_use_id LIKE 'a_'")
+
+    def test_automated_sessions_left_out_by_default(self):
+        ids = lambda u: {x["session_id"] for x in u["sessions"]}
+        self.assertEqual((self.all["totals"]["sessions"], self.all["totals"]["requests"], self.all["totals"]["prompts"]), (3, 4, 4))
+        self.assertEqual((self.auto["totals"]["sessions"], self.auto["totals"]["requests"], self.auto["totals"]["prompts"]), (4, 6, 6))
+        self.assertEqual((ids(self.all), ids(self.auto)), ({"s1", "s2", "s3"}, {"s1", "s2", "s3", "o1"}))
+        self.assertNotIn("observer-sessions", [p["project"] for p in self.all["by_project"]])
+        self.assertIn("observer-sessions", [p["project"] for p in self.auto["by_project"]])
+        self.assertEqual((self.all["automated"], self.auto["automated"]), (False, True))
+        # One day ending Nov 5: o1 is in both the view and the previous period (Nov 4), and in the changes, only when asked.
+        one = metrics.usage(self.con.cursor(), "", 1, prices=PRICES, today=TODAY)
+        one_auto = metrics.usage(self.con.cursor(), "", 1, prices=PRICES, today=TODAY, automated=True)
+        self.assertEqual((one["previous"]["sessions"], one["previous"]["requests"]), (1, 2))
+        self.assertEqual((one_auto["previous"]["sessions"], one_auto["previous"]["requests"]), (2, 3))
+        self.assertEqual([r["project"] for r in one["previous"]["by_project"]], ["foo"])
+        self.assertEqual({r["project"] for r in one_auto["previous"]["by_project"]}, {"foo", "observer-sessions"})
+        self.assertEqual([r["project"] for r in one["changes"]], ["foo"])
+        self.assertEqual({r["project"] for r in one_auto["changes"]}, {"foo", "observer-sessions"})
+        self.assertEqual(one_auto["totals"]["sessions"] - one["totals"]["sessions"], 1)
+        # Naming an automated project in the filter includes it, flag or not; other projects stay out of that view anyway.
+        named = metrics.usage(self.con.cursor(), "observer-sessions", prices=PRICES, today=TODAY)
+        self.assertEqual(({x["session_id"] for x in named["sessions"]}, named["totals"]["requests"]), ({"o1"}, 2))
+
+    def test_automated_project_and_session_lists(self):
+        self.assertEqual(self.all["projects"], ["foo", "bar"])
+        self.assertEqual(set(self.auto["projects"]), {"foo", "bar", "observer-sessions"})
+        self.assertEqual(metrics.project_list(self.con.cursor()), self.all["projects"])
+        # project_order never lists automated projects, whatever the view.
+        self.assertEqual(self.auto["project_order"], ["foo", "bar"])
+        self.assertEqual(metrics.project_order(self.con.cursor()), ["foo", "bar"])
+        ids = lambda **k: [x["session_id"] for x in metrics.session_list(self.con.cursor(), prices=PRICES, today=TODAY, **k)["sessions"]]
+        self.assertEqual(ids(), [x["session_id"] for x in self.all["sessions"]])
+        self.assertEqual(ids(automated=True), [x["session_id"] for x in self.auto["sessions"]])
+        self.assertIn("o1", ids(automated=True))
+        self.assertEqual(ids(day="2026-11-05"), ["s2"])
+        self.assertEqual(set(ids(day="2026-11-05", automated=True)), {"s2", "o1"})
+
+    def test_daily_work(self):
+        work = {d["day"]: d for d in self.all["daily_work"]}
+        self.assertEqual(list(work), ["2026-10-01", "2026-11-04", "2026-11-05"])
+        self.assertEqual(work["2026-11-04"], dict(day="2026-11-04", sessions=1, prompts=2, commits=1, failed_calls=6))
+        self.assertEqual(work["2026-11-05"], dict(day="2026-11-05", sessions=1, prompts=1, commits=0, failed_calls=0))
+        self.assertEqual([d["day"] for d in self.foo7["daily_work"]], ["2026-11-04", "2026-11-05"])
+        for u in (self.all, self.foo7, self.auto):
+            t, total = u["totals"], lambda k: sum(d[k] for d in u["daily_work"])
+            self.assertEqual((total("prompts"), total("commits"), total("failed_calls")), (t["prompts"], t["commits"], t["errors"]))
+        # Sessions sum to totals only when no session spans days: o1 is active on Nov 4 and 5, so it counts on both.
+        self.assertEqual(sum(d["sessions"] for d in self.all["daily_work"]), self.all["totals"]["sessions"])
+        self.assertEqual(sum(d["sessions"] for d in self.auto["daily_work"]), self.auto["totals"]["sessions"] + 1)
+        c = self.con.cursor()
+        store.insert(c, "tool_calls", ["tool_use_id", "session_id", "tool", "start_ts", "end_ts", "is_error", "category", "subagent"], [
+            ("w1", "o1", "Bash", "2026-11-05 12:00:30", "2026-11-05 12:00:31", True, "x", False)])
+        try:
+            day = lambda **k: {d["day"]: d for d in metrics.usage(c, prices=PRICES, today=TODAY, **k)["daily_work"]}["2026-11-05"]
+            self.assertEqual((day()["sessions"], day()["failed_calls"]), (1, 0))
+            self.assertEqual((day(automated=True)["sessions"], day(automated=True)["prompts"], day(automated=True)["failed_calls"]), (2, 2, 1))
+        finally:
+            c.execute("DELETE FROM tool_calls WHERE tool_use_id = 'w1'")
+
+    def test_api_reads_automated_param(self):
+        httpd = ThreadingHTTPServer(("127.0.0.1", 0), app.handler(app.App(self.con, self.tmp)))
+        threading.Thread(target=httpd.serve_forever, daemon=True).start()
+        try:
+            def get(path):
+                h = http.client.HTTPConnection("127.0.0.1", httpd.server_address[1])
+                h.request("GET", path, headers={"Host": f"{app.HOST}:{app.PORT}"})
+                r = h.getresponse()
+                self.assertEqual(r.status, 200)
+                return json.loads(r.read())
+            self.assertEqual((get("/api/usage")["totals"]["sessions"], get("/api/usage?automated=1")["totals"]["sessions"]), (3, 4))
+            self.assertEqual((get("/api/sessions")["total"], get("/api/sessions?automated=1")["total"]), (3, 4))
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
 
 
 if __name__ == "__main__":

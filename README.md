@@ -1,8 +1,9 @@
 # Claude errors dashboard
 
-A local app that keeps a permanent copy of your Claude Code transcripts (`~/.claude/projects`) in a DuckDB store and serves two dashboards on it:
+A local app that keeps a permanent copy of your Claude Code transcripts (`~/.claude/projects`) in a DuckDB store and serves three dashboards on it:
 
-- **Usage**: tokens by kind, estimated cost, cache efficiency, subagent share, context health, autonomy and friction, time, and outcomes (commits, test runs) per project and session.
+- **Activity**: what Claude did and where it struggled: commits, prompts and sessions, what needs attention (error loops, sessions near the context limit, flaky tools, failed tests), context health, autonomy and friction, time, and tool, MCP, skill and hook use per project and session.
+- **Cost**: what it cost and why that changed: estimated cost against the previous period, tokens by kind, cache efficiency, model mix, and cost per project, session and commit.
 - **Errors**: failed tool calls grouped into error types with suggested fixes, and the error rate over time.
 
 ## Usage
@@ -29,19 +30,39 @@ The app listens on `127.0.0.1:8765` only. Use that address, not `localhost`: fix
 
 ## Pages
 
-Both pages share the top bar. Switching pages keeps the selected project and time range (`#project=…&range=…`).
+All pages share the top bar. Switching pages keeps the selected project, time range and automated-sessions choice (`#project=…&range=…&auto=1`). `/` opens Activity.
 
-**Usage** (`/usage`): pick a project and a range (7, 14, 30, 90 days or all). Click a project row to filter, or a session to open its details. The URL holds `project`, `range` and `session`, so a copied URL reopens the same view. Cost is an estimate at API list prices from `prices.json`; models missing there are named on the page and left out of cost totals. The top of the page compares the range with the equal period before it, and "What changed" shows each project's share of that change. A session's details show its first prompt, a timeline of context size per request with tool calls, failures, compactions and commits, and a list of those events; failures link to the Errors page.
+Activity and Cost share their filters: a project and a range (7, 14, 30, 90 days or all). Click a project or a session to open its details in a side sheet; the sheet offers a button to filter the page to that project. The URL holds `project`, `range`, `inspect` (the open project) and `session`, so a copied URL reopens the same view, and browser Back retraces filter and sheet changes. A session's details show its first prompt, a timeline of context size per request with tool calls, failures, compactions and commits, and a list of those events; failures link to the Errors page.
 
-**Errors** (`/errors`): each example has a permalink (`#ex=<tool_use_id>`, the "Copy URL" button) and each error type has one (`#cat=<type>`), so you can paste a specific error into an agent prompt. The tool_use_id also lets an agent find the call in the transcripts with `grep -r <id> ~/.claude/projects`. Fixes you mark as applied are stored in the browser's localStorage, so the chart shows a marker on that date and the before/after error rate. Error loops on the usage page link here. Inside an error type, failures are grouped into incidents: failures of the same tool with the same error type in one session, each within 10 minutes of the last. An incident counts as recovered when the tool's next call in that session succeeds.
+Sessions that a tool starts in the background (the projects in `AUTOMATED_PROJECTS` in `metrics.py`, today claude-mem's `observer-sessions`) are left out of Activity and Cost unless you tick **Include automated sessions**, or filter to that project.
+
+**Activity** (`/usage`): the heading gives the commits, prompts and sessions of the view, followed by what needs attention, each with a link to its table. A chart shows commits, prompts or sessions per day with failed tool calls; select a day to list its sessions. Below: sessions, per-project metrics, tools, MCP servers, skills and hooks, and error loops.
+
+**Cost** (`/cost`): the heading gives the estimated cost and compares it with the equal period before; "What changed" shows each project's share of that change. Cost is an estimate at API list prices from `prices.json`; models missing there are named on the page and left out of cost totals. Below: cost per day by project, where the spend went, models and effort, tokens and cache, cost per project and the most expensive sessions.
+
+**Errors** (`/errors`): each example has a permalink (`#ex=<tool_use_id>`, the "Copy URL" button) and each error type has one (`#cat=<type>`), so you can paste a specific error into an agent prompt. The tool_use_id also lets an agent find the call in the transcripts with `grep -r <id> ~/.claude/projects`. Fixes you mark as applied are stored in the browser's localStorage, so the chart shows a marker on that date and the before/after error rate. Error loops on the Activity page link here. Inside an error type, failures are grouped into incidents: failures of the same tool with the same error type in one session, each within 10 minutes of the last. An incident counts as recovered when the tool's next call in that session succeeds.
 
 ## Files
 
 - `app.py` — the app: HTTP server, background ingest, `ingest` and `rebuild` commands.
 - `store.py` — the store: raw lines, incremental ingest, project resolution, derived tables (sessions, requests, tool calls, prompts, hooks).
 - `categorize.py` — error categories. Add a rule to `RULES` when a new error pattern shows up in "Other", then run `rebuild`.
-- `metrics.py` — the queries behind both dashboards.
+- `metrics.py` — the queries behind the dashboards.
 - `prices.json` — per-model prices (USD per million tokens) and context windows.
-- `usage.html`, `dashboard_template.html`, `nav.html` — the Usage page, the Errors page and their shared top bar.
-- `theme.css` — styles both pages share (colors for light and dark, controls, cards, project colors), served at `/theme.css`.
+- `web/` — the pages: one React and TypeScript app (Vite). `web/src/pages/` holds Activity, Cost and Errors, `web/src/components/` the shared top bar, filters, sheets, drawers and charts, and `web/src/theme.css` the colors for light and dark. `web/dist/` is the committed build that the app serves.
 - `data/claude.duckdb` — the store, git-ignored and readable only by you. It holds full transcript content, including any secrets that appeared in sessions.
+
+## Develop the pages
+
+Running the app needs only Python. Changing the pages needs Node:
+
+```bash
+cd web
+npm install
+npm run dev      # http://127.0.0.1:5173/usage, with /api proxied to the app on 127.0.0.1:8765 (start the app first)
+npm run check    # typecheck, tests and build: run it before committing
+```
+
+Commit `web/dist/` with the source change. `npm run build` writes `web/dist/source-hash.txt`, and `tests/test_web_build.py` fails when the sources no longer match the build. `tests/test_web_fixtures.py` regenerates the API fixtures in `web/src/__fixtures__/` that the page tests use.
+
+The dev server is a different browser origin, so fixes marked as applied there are kept apart from the ones on `127.0.0.1:8765`.

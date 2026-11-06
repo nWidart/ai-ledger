@@ -1,0 +1,10 @@
+/* Page basics both dashboards draw the same way; theme.css holds the tokens and controls. Page styles live with each page,
+   scoped under its root class (.pg-activity, .pg-cost, .pg-errors), since every page's CSS is loaded at once. */
+.wrap { max-width: 1240px; margin: 0 auto; padding: 20px 16px 72px; }
+.linkish { border: 0; background: none; padding: 0; color: var(--link); font-size: inherit; }
+.linkish:hover { background: none; text-decoration: underline; }
+.panel { padding: 18px 20px; }
+.hint { color: var(--text-muted); font-size: 12.5px; margin: 2px 0 10px; }
+.more { margin-top: 10px; font-size: 13px; }
+.banner { border-left: 3px solid var(--warning-text); background: var(--surface-1); padding: 8px 12px; margin-bottom: 20px; font-size: 13px; color: var(--text-secondary); }
+.banner b { color: var(--warning-text); }

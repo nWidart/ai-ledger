@@ -1,0 +1,70 @@
+/* Activity (/usage): every rule sits under .pg-activity, since every page's CSS is loaded at once. */
+
+/* Briefing: the period's work as the page heading, then filters */
+.pg-activity .top { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px 32px; align-items: end; margin-bottom: 20px; }
+.pg-activity .top-side { display: flex; flex-direction: column; align-items: flex-end; gap: 12px; min-width: 0; }
+.pg-activity .top-side .filters { justify-content: flex-end; }
+.pg-activity .lede { margin: 0; max-width: 26ch; font-size: clamp(26px, 4.2vw, 42px); line-height: 1.12;
+  font-weight: 400; letter-spacing: -.025em; text-wrap: balance; color: var(--text-secondary); }
+.pg-activity .lede:focus { outline: none; }
+/* The figure and the project carry the sentence; the rest recedes. */
+.pg-activity .lede .amt { font-weight: 600; letter-spacing: -.04em; color: var(--text-primary); white-space: nowrap; }
+.pg-activity .lede .proj { color: var(--text-primary); font-weight: 500; white-space: nowrap; }
+.pg-activity .lede .pdot { width: .32em; height: .32em; vertical-align: .2em; margin: 0 .18em 0 .05em; }
+.pg-activity .lede .unit { white-space: nowrap; }
+/* Sessions and active days take their own line, so the commit count never breaks mid-phrase. */
+.pg-activity .lede .delta { display: block; color: var(--text-primary); font-weight: 500; font-size: .62em; letter-spacing: -.015em; margin-top: 4px; }
+.pg-activity .sub { color: var(--text-muted); font-size: 13px; margin: 8px 0 0; }
+@media (max-width: 720px) {
+  .pg-activity .top { grid-template-columns: minmax(0, 1fr); align-items: start; }
+  .pg-activity .top-side { align-items: stretch; }
+  .pg-activity .top-side .filters { justify-content: flex-start; }
+}
+.pg-activity h2 { font-size: 16px; font-weight: 600; margin: 0; letter-spacing: -.005em; }
+.pg-activity .pending { margin: -12px 0 12px; min-height: 1.5em; color: var(--text-secondary); font-size: 13px; }
+.pg-activity .pending:empty { visibility: hidden; }
+.pg-activity.loading > :not(.top):not(.secidx) { opacity: .55; }
+@media (prefers-reduced-motion: no-preference) { .pg-activity > :not(.top):not(.secidx) { transition: opacity .2s; } }
+
+
+/* Work vitals: five ratios in one ruled strip */
+.pg-activity .vitals { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1px; margin: 0 0 20px;
+  background: var(--border); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.pg-activity .vital { padding: 16px 16px 16px 0; background: var(--bg); min-width: 0; }
+.pg-activity .vital + .vital { padding-left: 16px; }
+.pg-activity .vital:focus { outline: none; }
+.pg-activity .vital:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.pg-activity .vital .v { font-size: 28px; font-weight: 600; letter-spacing: -.035em; line-height: 1.1; }
+.pg-activity .vital .l { font-weight: 500; margin-top: 4px; }
+.pg-activity .vital .d { color: var(--text-muted); font-size: 12.5px; margin-top: 2px; }
+@media (max-width: 900px) {
+  .pg-activity .vitals { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pg-activity .vital:nth-child(odd) { padding-left: 0; }
+  .pg-activity .vital:last-child:nth-child(odd) { grid-column: 1 / -1; }
+}
+@media (max-width: 520px) {
+  .pg-activity .vital { padding-right: 12px; }
+  .pg-activity .vital + .vital:nth-child(even) { padding-left: 12px; }
+  .pg-activity .vital .v { font-size: 24px; }
+}
+
+
+/* Drawers: the full tables */
+.pg-activity .tools-row { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin-bottom: 6px; }
+.pg-activity .tools-row input[type=search] { font: inherit; color: var(--text-primary); background: var(--surface-1); border: 1px solid var(--border);
+  border-radius: 8px; padding: 6px 10px; flex: 1 1 260px; min-width: 0; }
+.pg-activity .daychip { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; padding: 2px 4px 2px 10px; border-radius: 999px;
+  background: var(--accent-soft); color: var(--accent-ink); font-weight: 500; }
+.pg-activity .daychip button { border: 0; background: none; padding: 1px 6px; border-radius: 999px; font-size: 12px; color: inherit; }
+.pg-activity .grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; }
+.pg-activity .grid3 h3 { font-size: 14px; margin: 0 0 6px; }
+@media (max-width: 900px) { .pg-activity .grid3 { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 520px) {
+  .pg-activity #d-sessions .opt { display: none; }
+  .pg-activity #d-sessions td.name { max-width: 90px; }
+  .pg-activity #d-sessions td.when { white-space: normal; }
+  .pg-activity #d-sessions td.when .small { overflow-wrap: anywhere; }
+}
+.pg-activity #d-projects th:first-child, .pg-activity #d-projects td:first-child { position: sticky; left: 0; background: var(--bg); z-index: 1; box-shadow: 1px 0 0 var(--border); }
+.pg-activity #d-projects th:first-child { z-index: 2; }
+.pg-activity #d-projects tr.sel td:first-child { background: color-mix(in srgb, var(--accent) 11%, var(--bg)); }
