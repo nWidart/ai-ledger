@@ -60,8 +60,11 @@ export interface Previous {
 }
 export interface Change { project: string | null; cost: number; prev_cost: number; delta: number; new: boolean }
 
+/** The coding agent a session came from; "" in a filter is every source. */
+export type Source = "claude" | "codex";
+
 export interface UsagePayload {
-  project: string; range: number; automated: boolean; start: Day | null; end: Day;
+  project: string; range: number; automated: boolean; source: Source | ""; start: Day | null; end: Day;
   projects: string[]; project_order: string[]; totals: Totals;
   daily: DailyRow[]; daily_projects: DailyProjectRow[]; daily_work: DailyWorkRow[];
   unpriced: UnpricedRow[]; models: ModelRow[]; by_project: ProjectRow[];
@@ -78,7 +81,7 @@ export interface SessionsPage { total: number; offset: number; sessions: TitledS
 export interface SessionInfo {
   session_id: string; project: string | null; cwd: string | null; git_branch: string | null; first_ts: Ts | null; last_ts: Ts | null;
   entrypoint: string | null; version: string | null; compactions: number | null; peak_context: number | null; peak_model: string | null;
-  context_limit: number | null;
+  source: Source; context_limit: number | null;
 }
 export interface SessionModelRow extends Tokens { model: string | null; effort: string; subagent: boolean; requests: number; tokens: number; cost: number | null }
 export interface SessionDetail {
@@ -98,8 +101,8 @@ export interface SessionDetail {
 export interface PromptPayload { text: string }
 
 export interface Category { id: string; label: string; why: string; fix: string; snippet: string }
-/** One failed call. p project, s session, t tool, c category, i input, e error, r followup, d day, n incident index. */
-export interface ErrorRow { id: string; ts: Ts; p: string; s: string; t: string; c: string | null; i: string; e: string; r: string; sub: 0 | 1; d: Day; n: number | null }
+/** One failed call. p project, s session, t tool, c category, i input, e error, r followup, d day, n incident index, src source. */
+export interface ErrorRow { id: string; ts: Ts; p: string; s: string; t: string; c: string | null; i: string; e: string; r: string; sub: 0 | 1; src: Source; d: Day; n: number | null }
 export type Outcome = "recovered" | "failed_again" | "gave_up";
 export interface Incident {
   s: string; t: string; c: string | null; p: string; sub: 0 | 1; first: Ts | null; last: Ts | null; ok: number; outcome: Outcome;
@@ -107,10 +110,10 @@ export interface Incident {
 }
 export interface ErrorsPayload {
   generated: string | null; today: Day; project_order: string[]; categories: Category[]; errors: ErrorRow[];
-  /** [day, project, calls, subagent calls] */
-  calls: [Day, string, number, number][];
-  /** [day, project, category, errors, subagent errors] */
-  error_days: [Day, string, string | null, number, number][];
+  /** [day, project, calls, subagent calls, source] */
+  calls: [Day, string, number, number, Source][];
+  /** [day, project, category, errors, subagent errors, source] */
+  error_days: [Day, string, string | null, number, number, Source][];
   incidents: Incident[]; incident_gap_minutes: number;
 }
 export interface ErrorDetail { id: string; i: string; e: string; r: string; cut: ("i" | "e" | "r")[] }
@@ -121,18 +124,20 @@ export interface Status {
   counts: Record<string, number>; interval: number;
 }
 
-// URLs. automated: Activity and Cost leave automated sessions out unless asked (auto=1 in the page hash).
+// URLs. automated: Activity and Cost leave automated sessions out unless asked (auto=1 in the page hash). source: "" is all.
 const qs = (o: Record<string, string | number | boolean | null | undefined>) => {
   const p = new URLSearchParams();
   for (const [k, v] of Object.entries(o)) if (v !== undefined && v !== null && v !== "" && v !== false) p.set(k, v === true ? "1" : String(v));
   return String(p);
 };
-export interface View { project: string; range: number; automated: boolean }
+export interface View { project: string; range: number; automated: boolean; source: Source | "" }
 /** The API view of the page hash (useHashState()). */
-export const viewOf = (h: { project: string; range: number; auto: boolean }): View => ({ project: h.project, range: h.range, automated: h.auto });
-export const usageUrl = (v: View, session = "") => `/api/usage?${qs({ project: v.project, range: v.range, automated: v.automated, session })}`;
+export const viewOf = (h: { project: string; range: number; auto: boolean; source: Source | "" }): View =>
+  ({ project: h.project, range: h.range, automated: h.auto, source: h.source });
+const viewQs = (v: View) => ({ project: v.project, range: v.range, automated: v.automated, source: v.source });
+export const usageUrl = (v: View, session = "") => `/api/usage?${qs({ ...viewQs(v), session })}`;
 export const sessionsUrl = (v: View, o: { q?: string; near?: boolean; offset?: number; day?: Day } = {}) =>
-  `/api/sessions?${qs({ project: v.project, range: v.range, automated: v.automated, q: o.q, near: o.near, offset: o.offset || undefined, day: o.day })}`;
+  `/api/sessions?${qs({ ...viewQs(v), q: o.q, near: o.near, offset: o.offset || undefined, day: o.day })}`;
 export const sessionUrl = (id: string) => `/api/session?${qs({ id })}`;
 export const promptUrl = (session: string) => `/api/prompt?${qs({ session })}`;
 export const errorsUrl = "/api/errors";

@@ -1,7 +1,8 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import fixture from "../../__fixtures__/errors";
+import type { ErrorsPayload } from "../../api";
 import { ErrorsPage } from "./ErrorsPage";
 
 const json = (body: unknown) => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) } as Response);
@@ -44,7 +45,7 @@ describe("ErrorsPage", () => {
     await userEvent.click(screen.getByRole("button", { name: "Undo" }));
     expect(localStorage.getItem("claude-errors-fixes")).toBe("{}");
     expect(document.activeElement?.id).toBe("fix");
-    expect(JSON.parse(localStorage.getItem("claude-errors-view")!)).toEqual({ project: "", range: 7, gran: "day", sub: true, noise: false, cat: "x" });
+    expect(JSON.parse(localStorage.getItem("claude-errors-view")!)).toEqual({ project: "", range: 7, source: "", gran: "day", sub: true, noise: false, cat: "x" });
   });
 
   it("lands an #ex permalink on its example, all time, inside its open incident", async () => {
@@ -72,6 +73,26 @@ describe("ErrorsPage", () => {
     await userEvent.click(document.getElementById("ex-t07")!.querySelector(".err")!);
     expect(location.hash).toBe("#range=30&ex=t07");
     expect(document.querySelector("#exList .ex")).toBe(first);
+  });
+
+  it("says Agent tool errors for every source, and narrows to Codex in the browser", async () => {
+    // t07 and t08 (and 3 of the 10 calls) from Codex; the rest stay Claude's.
+    const codexIds = new Set(["t07", "t08"]), errors = fixture.errors.map(e => ({ ...e, src: codexIds.has(e.id) ? "codex" as const : "claude" as const }));
+    const days = new Map<string, ErrorsPayload["error_days"][number]>();
+    for (const e of errors) {
+      const k = [e.d, e.p, e.c, e.src].join("|"), r = days.get(k) ?? [e.d, e.p, e.c, 0, 0, e.src];
+      r[3]++; r[4] += e.sub; days.set(k, r);
+    }
+    const mixed: ErrorsPayload = { ...fixture, errors, error_days: [...days.values()],
+      calls: [["2026-11-04", "foo", 7, 0, "claude"], ["2026-11-04", "foo", 3, 0, "codex"]] };
+    vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/errors") ? mixed : {})));
+    await page();
+    expect(document.querySelector(".kicker")?.textContent).toBe("Agent tool errors");
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toMatch(/^6 failed tool calls \(60\.0%\)/);
+    await userEvent.click(within(screen.getByRole("group", { name: "Source" })).getByRole("button", { name: "Codex" }));
+    expect(location.hash).toBe("#range=30&source=codex");
+    expect(document.querySelector(".kicker")?.textContent).toBe("Codex tool errors");
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toMatch(/^2 failed tool calls \(66\.7%\)/);
   });
 
   it("filters with the page's own hash keys and pushes them", async () => {

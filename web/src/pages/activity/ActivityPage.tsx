@@ -3,7 +3,7 @@ import { usageUrl, viewOf, type UsagePayload, type View } from "../../api";
 import { setOrder } from "../../colors";
 import { motion, useCountUp } from "../../components/chart";
 import { openDrawer } from "../../components/Drawer";
-import { Filters } from "../../components/Filters";
+import { agentName, Filters } from "../../components/Filters";
 import { InsightCard, type Insight, type InsightItem } from "../../components/InsightCard";
 import { ProjectDot } from "../../components/ProjectDot";
 import { SectionIndex } from "../../components/SectionIndex";
@@ -48,7 +48,7 @@ function Lede({ d, before }: { d: UsagePayload; before: UsagePayload | undefined
     <h1 className="lede" id="lede" aria-live="polite" tabIndex={-1}>{t.requests
       ? <><span className="amt">{plural(commits, "commit")}</span> <span className="unit">from {plural(t.prompts, "prompt")}</span>{where}{since}
         <span className="sr">, </span><span className="delta">in {plural(t.sessions, "session")}{!d.project && d.by_project.length > 1 ? ` across ${plural(d.by_project.length, "project")}` : ""}, {plural(t.active_days, "active day")}</span></>
-      : <>No Claude activity{where} {d.range ? `in the last ${d.range} days` : "yet"}.</>}</h1>
+      : <>No {agentName(d.source)} activity{where} {d.range ? `in the last ${d.range} days` : "yet"}.</>}</h1>
     {t.requests > 0 && <p className="sub">{num(t.turns_per_prompt, 1)} turns and {num(t.tool_calls_per_prompt, 1)} tool calls per prompt. {plural(t.interrupted, "prompt")} interrupted.</p>}
   </>;
 }
@@ -68,7 +68,7 @@ function Vitals({ d }: { d: UsagePayload }) {
   </section>;
 }
 
-/** Activity (/usage): what Claude did and where it struggled. */
+/** Activity (/usage): what the coding agents did (all of them, or the one the source filter picks) and where they struggled. */
 export function ActivityPage() {
   const [h] = useHashState();
   const want: View = viewOf(h), url = usageUrl(want), viewKey = url;
@@ -124,7 +124,7 @@ export function ActivityPage() {
         {has && <Vitals d={d} />}
         <WorkChart days={days} metric={metric} onMetric={setMetric} onDay={showDay} />
         <div className="drawers">
-          <SessionsDrawer view={{ project: d.project, range: d.range, automated: d.automated }} count={d.totals.sessions} filter={sess} onFilter={setSess} selected={h.session} />
+          <SessionsDrawer view={{ project: d.project, range: d.range, automated: d.automated, source: d.source }} count={d.totals.sessions} filter={sess} onFilter={setSess} selected={h.session} />
           <ProjectsDrawer rows={d.by_project} selected={d.project} />
           <ToolsDrawer tools={d.tools} flaky={flaky} />
           <ExtDrawer mcp={d.mcp} skills={d.skills} hooks={d.hooks} />

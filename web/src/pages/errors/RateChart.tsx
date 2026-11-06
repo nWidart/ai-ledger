@@ -15,7 +15,7 @@ export function RateChart() {
   const [W, setW] = useState(0);
   const [hover, setHover] = useState<{ i: number; sx: number; sy: number } | null>(null), [live, setLive] = useState("");
   const { keys, pts } = useMemo(() => chartData(m, v, f, vt), [m, v, f, vt]);
-  const dataKey = JSON.stringify([f.start, v.project, v.sub, v.noise, v.gran, vt.extra]);
+  const dataKey = JSON.stringify([f.start, v.project, v.source, v.sub, v.noise, v.gran, vt.extra]);
   const cat = v.cat, per = v.gran === "week" ? "week" : "day";
 
   // Width from the box; a resize redraws after it settles.

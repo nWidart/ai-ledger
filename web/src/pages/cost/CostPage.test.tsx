@@ -57,6 +57,31 @@ describe("CostPage", () => {
     expect(screen.getByRole("img", { name: "Daily cost sparkline: previous 30 days $7.90, last 30 days $16." })).toBeTruthy();
   });
 
+  it("narrows to Codex when picked and records it in the URL", async () => {
+    const codex: UsagePayload = { ...usage, source: "codex", previous: null, totals: { ...usage.totals, cost: 2 } };
+    mockApi({ "/api/usage": q => (q.get("source") === "codex" ? codex : usage), "/api/sessions": () => sessions, "/api/session": () => session });
+    at();
+    render(<CostPage />);
+    await loaded();
+    await userEvent.click(within(screen.getByRole("group", { name: "Source" })).getByRole("button", { name: "Codex" }));
+    expect(location.hash).toBe("#range=30&source=codex");
+    await waitFor(() => expect(document.getElementById("lede")!.textContent).toBe("$2.00 estimated cost"));
+    expect(fetched()).toContain("/api/usage?range=30&source=codex");
+  });
+
+  it("names no agent when nothing was used in the range with every source, and the agent when one is picked", async () => {
+    const none: UsagePayload = { ...usage, totals: { ...usage.totals, requests: 0 } };
+    serve(none);
+    at();
+    const { unmount } = render(<CostPage />);
+    expect((await screen.findByRole("heading", { level: 1, name: /^No / })).textContent).toBe("No agent usage in the last 30 days.");
+    unmount();
+    serve({ ...none, source: "codex" });
+    at("#range=30&source=codex");
+    render(<CostPage />);
+    expect((await screen.findByRole("heading", { level: 1, name: /^No / })).textContent).toBe("No Codex usage in the last 30 days.");
+  });
+
   it("marks the comparison as resting on thin history", async () => {
     await show({ ...doubled, totals: { ...doubled.totals, active_days: 5 } });
     expect(within(document.querySelector(".windows")!).getByText("thin history")).toBeTruthy();

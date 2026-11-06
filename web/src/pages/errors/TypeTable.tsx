@@ -8,7 +8,7 @@ import { Spark } from "./Spark";
 export function TypeTable() {
   const { m, v, f, fixes, pick } = useErrors(), rows = typeRows(m, v, f);
   // Rows mount again when the filters change, so their share bars grow in.
-  const at = JSON.stringify([f.start, v.project, v.sub, v.noise, v.gran]);
+  const at = JSON.stringify([f.start, v.project, v.source, v.sub, v.noise, v.gran]);
   return (
     <section className="card">
       <h2>Error types</h2>

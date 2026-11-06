@@ -1,5 +1,6 @@
-import type { ReactNode } from "react";
-import { RANGES, useHashState } from "../hash";
+import { useEffect, type ReactNode } from "react";
+import type { Source } from "../api";
+import { RANGES, SOURCES, setHash, useHashState } from "../hash";
 import { ProjectDot } from "./ProjectDot";
 import "./Filters.css";
 
@@ -15,10 +16,16 @@ export interface FiltersProps {
 }
 
 const rangeLabel = (r: number) => (r ? `${r}d` : "All");
+export const SOURCE_LABELS: Record<Source, string> = { claude: "Claude Code", codex: "Codex" };
+/** Who did the work, for page text: the selected agent, or "agent" for every source. */
+export const agentName = (source: Source | "") => (source ? SOURCE_LABELS[source] : "agent");
 
-/** Project picker with its color dot, range segments and the automated toggle, all writing the URL hash. */
+/** Project picker with its color dot, range and source segments and the automated toggle, all writing the URL hash. */
 export function Filters({ projects, automated = false, children }: FiltersProps) {
   const [h, set] = useHashState();
+  // An unknown source reads as All; the URL drops it so a copied link says what the page shows.
+  const badSource = !!h.raw.source && !h.source;
+  useEffect(() => { if (badSource) setHash({ source: null }, { push: false }); }, [badSource]);
   const opts = projects.map(p => (typeof p === "string" ? { value: p } : p));
   if (h.project && !opts.some(o => o.value === h.project)) opts.unshift({ value: h.project });
   return (
@@ -33,6 +40,11 @@ export function Filters({ projects, automated = false, children }: FiltersProps)
       <div className="seg" id="fRange" role="group" aria-label="Time range">
         {RANGES.map(r => (
           <button key={r} type="button" aria-pressed={h.range === r} onClick={() => set({ range: r })}>{rangeLabel(r)}</button>
+        ))}
+      </div>
+      <div className="seg" id="fSource" role="group" aria-label="Source">
+        {(["", ...SOURCES] as const).map(s => (
+          <button key={s} type="button" aria-pressed={h.source === s} onClick={() => set({ source: s, session: null, inspect: null })}>{s ? SOURCE_LABELS[s] : "All"}</button>
         ))}
       </div>
       {children}

@@ -2,10 +2,12 @@
 // and sheets opening or closing (pushState); everything else replaces the entry. Keys and values are the ones the pages
 // have always written, so links copied before the React app open the same view.
 import { useMemo, useSyncExternalStore } from "react";
+import type { Source } from "./api";
 
 export const RANGES = [7, 14, 30, 90, 0] as const;
 export type Range = (typeof RANGES)[number];
 export const DEFAULT_RANGE: Range = 30;
+export const SOURCES = ["claude", "codex"] as const satisfies readonly Source[];
 
 export interface HashState {
   project: string;
@@ -19,6 +21,8 @@ export interface HashState {
   cat: string;
   /** Include automated sessions (auto=1). */
   auto: boolean;
+  /** The coding agent: "claude", "codex", or "" (all) when missing or unknown. */
+  source: Source | "";
   /** Every key as written, page-only ones too (Errors: sub, noise, gran). */
   raw: Readonly<Record<string, string>>;
 }
@@ -26,13 +30,15 @@ export interface HashState {
 export type HashPatch = { [k: string]: string | number | boolean | null | undefined };
 
 // Back retraces changes to these; other keys replace unless the caller asks to push.
-const PUSH_KEYS = ["project", "range", "auto", "inspect", "session", "ex", "cat"];
+const PUSH_KEYS = ["project", "range", "source", "auto", "inspect", "session", "ex", "cat"];
 // Written in this order (as the pages wrote them), with any other keys between gran and inspect.
-const HEAD = ["project", "range", "auto", "sub", "noise", "gran"], TAIL = ["inspect", "session", "ex", "cat"];
-/** Project, range and the automated toggle travel between pages; page-only keys stay behind. */
-export const SHARED_KEYS = ["project", "range", "auto"] as const;
+const HEAD = ["project", "range", "source", "auto", "sub", "noise", "gran"], TAIL = ["inspect", "session", "ex", "cat"];
+/** Project, range, source and the automated toggle travel between pages; page-only keys stay behind. */
+export const SHARED_KEYS = ["project", "range", "source", "auto"] as const;
 
 const isRange = (n: number): n is Range => (RANGES as readonly number[]).includes(n);
+/** A hash source value, or "" (all) when missing or unknown. */
+export const sourceOf = (v: string | null | undefined): Source | "" => ((SOURCES as readonly string[]).includes(v ?? "") ? (v as Source) : "");
 
 export function parseHash(hash: string): HashState {
   const h = new URLSearchParams(hash.replace(/^#/, "")), raw: Record<string, string> = {};
@@ -40,7 +46,8 @@ export function parseHash(hash: string): HashState {
   const r = h.has("range") ? +h.get("range")! : NaN;
   return {
     project: h.get("project") || "", range: isRange(r) ? r : DEFAULT_RANGE, session: h.get("session") || "",
-    inspect: h.get("inspect") || "", ex: h.get("ex") || "", cat: h.get("cat") || "", auto: h.get("auto") === "1", raw,
+    inspect: h.get("inspect") || "", ex: h.get("ex") || "", cat: h.get("cat") || "", auto: h.get("auto") === "1",
+    source: sourceOf(h.get("source")), raw,
   };
 }
 

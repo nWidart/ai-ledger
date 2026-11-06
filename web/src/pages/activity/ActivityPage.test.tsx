@@ -41,6 +41,27 @@ describe("ActivityPage", () => {
     expect(before).not.toMatch(/\$|cost/i);
   });
 
+  it("narrows to Codex when picked and records it in the URL", async () => {
+    const codex: UsagePayload = { ...usage, source: "codex", totals: { ...usage.totals, commits: 0, prompts: 1, sessions: 1, active_days: 1 } };
+    mockApi({ "/api/usage": q => (q.get("source") === "codex" ? codex : usage), "/api/sessions": () => sessions, "/api/session": () => session });
+    at();
+    render(<ActivityPage />);
+    await loaded();
+    await userEvent.click(within(screen.getByRole("group", { name: "Source" })).getByRole("button", { name: "Codex" }));
+    expect(location.hash).toBe("#range=30&source=codex");
+    expect((await screen.findByRole("heading", { level: 1, name: /^0 commits/ })).textContent).toBe("0 commits from 1 prompt, in 1 session, 1 active day");
+    expect(fetched()).toContain("/api/usage?range=30&source=codex");
+  });
+
+  it("names no agent when nothing happened in the range with every source", async () => {
+    const none: UsagePayload = { ...usage, totals: { ...usage.totals, requests: 0 } };
+    serve(none);
+    at();
+    render(<ActivityPage />);
+    const lede = await screen.findByRole("heading", { level: 1, name: /^No / });
+    expect(lede.textContent).toBe("No agent activity in the last 30 days.");
+  });
+
   it("lists error loops and near-limit sessions, each opening its table", async () => {
     serve({ ...usage, totals: { ...usage.totals, error_loops: 3 } });
     at();

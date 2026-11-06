@@ -5,6 +5,7 @@ export default {
  "project": "",
  "range": 30,
  "automated": false,
+ "source": "",
  "start": "2026-10-07",
  "end": "2026-11-05",
  "projects": [

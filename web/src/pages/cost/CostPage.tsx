@@ -60,7 +60,7 @@ function SpendLedger({ d, all, onAll }: { d: UsagePayload; all: boolean; onAll: 
   );
 }
 
-/** Cost (/cost): what Claude Code usage cost at API list prices, where it went, and why it changed. */
+/** Cost (/cost): what coding-agent usage (every source, or the one picked) cost at API list prices, where it went, and why it changed. */
 export function CostPage() {
   const [h, set] = useHashState();
   const want: View = viewOf(h), url = usageUrl(want), viewKey = url;
@@ -135,7 +135,7 @@ export function CostPage() {
         <div className="drawers">
           <TokensDrawer t={d.totals} />
           <ProjectCostDrawer rows={d.by_project} selected={d.project} sort={sort} onSort={setSort} />
-          <TopSessionsDrawer view={{ project: d.project, range: d.range, automated: d.automated }} top={d.top_sessions} day={day} onDay={setDay} selected={h.session} />
+          <TopSessionsDrawer view={{ project: d.project, range: d.range, automated: d.automated, source: d.source }} top={d.top_sessions} day={day} onDay={setDay} selected={h.session} />
         </div>
       </>}
       <UsageSheets data={d} />

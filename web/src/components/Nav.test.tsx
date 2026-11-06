@@ -11,19 +11,19 @@ const status = { ingesting: false, last_ingest: "2026-11-05T12:00:00+00:00", las
 const json = (body: unknown, ok = true) => Promise.resolve({ ok, status: ok ? 200 : 500, json: () => Promise.resolve(body) } as Response);
 
 describe("Nav", () => {
-  it("switches tabs keeping project, range and auto, and marks the current tab", async () => {
+  it("switches tabs keeping project, range, source and auto, and marks the current tab", async () => {
     vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/status") ? status : url.startsWith("/api/sessions") ? sessions : url.startsWith("/api/session") ? session : usage)));
-    history.replaceState(null, "", "/usage#project=foo&range=14&auto=1&session=s1");
+    history.replaceState(null, "", "/usage#project=foo&range=14&source=codex&auto=1&session=s1");
     render(<App />);
     expect(screen.getByRole("link", { name: "Activity" }).getAttribute("aria-current")).toBe("page");
     expect(document.title).toBe("Activity · AI Ledger");
     await userEvent.click(screen.getByRole("link", { name: "Cost" }));
     expect(location.pathname).toBe("/cost");
-    expect(location.hash).toBe("#project=foo&range=14&auto=1");
+    expect(location.hash).toBe("#project=foo&range=14&source=codex&auto=1");
     expect(screen.getByRole("link", { name: "Cost" }).getAttribute("aria-current")).toBe("page");
     expect(screen.getByRole("link", { name: "Activity" }).getAttribute("aria-current")).toBeNull();
     expect(document.title).toBe("Cost · AI Ledger");
-    expect(screen.getByRole("link", { name: "Errors" }).getAttribute("href")).toBe("/errors#project=foo&range=14&auto=1");
+    expect(screen.getByRole("link", { name: "Errors" }).getAttribute("href")).toBe("/errors#project=foo&range=14&source=codex&auto=1");
     // Back returns to Activity with its page-only keys.
     await act(async () => {
       history.back();

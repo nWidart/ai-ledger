@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { Filters } from "./Filters";
@@ -32,6 +32,26 @@ describe("Filters", () => {
     expect(location.hash).toBe("#range=30&auto=1");
     expect(box.checked).toBe(true);
     await userEvent.click(box);
+    expect(location.hash).toBe("#range=30");
+  });
+
+  it("picks a source, closing the open sheet, and All removes it", async () => {
+    history.replaceState(null, "", "/usage#range=30&session=s1");
+    render(<Filters projects={["foo"]} automated />);
+    const group = within(screen.getByRole("group", { name: "Source" }));
+    expect(group.getAllByRole("button").map(b => b.textContent)).toEqual(["All", "Claude Code", "Codex"]);
+    expect(group.getByRole("button", { name: "All" }).getAttribute("aria-pressed")).toBe("true");
+    await userEvent.click(group.getByRole("button", { name: "Codex" }));
+    expect(location.hash).toBe("#range=30&source=codex");
+    expect(group.getByRole("button", { name: "Codex" }).getAttribute("aria-pressed")).toBe("true");
+    await userEvent.click(group.getByRole("button", { name: "All" }));
+    expect(location.hash).toBe("#range=30");
+  });
+
+  it("shows an unknown source as All and drops it from the URL", () => {
+    history.replaceState(null, "", "/cost#range=30&source=grok");
+    render(<Filters projects={["foo"]} automated />);
+    expect(within(screen.getByRole("group", { name: "Source" })).getByRole("button", { name: "All" }).getAttribute("aria-pressed")).toBe("true");
     expect(location.hash).toBe("#range=30");
   });
 

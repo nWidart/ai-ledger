@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore } from "react";
 import { errorsUrl, type ErrorDetail, type ErrorsPayload } from "../../api";
 import { setOrder } from "../../colors";
-import { Filters } from "../../components/Filters";
+import { agentName, Filters } from "../../components/Filters";
 import { num as fmt } from "../../format";
 import { setHash, useHashState } from "../../hash";
 import { useApi } from "../../useApi";
@@ -24,6 +24,7 @@ const $ = (s: string | null | undefined) => (s ? document.querySelector<HTMLElem
 const focusKey = (el: HTMLElement) => el.id ? "#" + CSS.escape(el.id)
   : ["c", "copy", "link", "full", "inc", "m"].map(k => el.dataset[k] != null && `${el.tagName}[data-${k}="${CSS.escape(el.dataset[k])}"]`).find(Boolean) || null;
 
+/** Errors (/errors): failed tool calls of every coding agent (or the one the source filter picks), by type, with fixes. */
 export function ErrorsPage() {
   const { data, error, retry } = useApi<ErrorsPayload>(errorsUrl);
   const m = useMemo(() => (data ? makeModel(data) : undefined), [data]);
@@ -45,7 +46,7 @@ export function ErrorsPage() {
   const pending = useRef<(() => void)[]>([]), selecting = useRef(false), navd = useRef(false), retried = useRef(false), init = useRef(false);
   const lastHash = useRef(""), sheetCat = useRef<string | null>(null), prevCat = useRef<string | null>(null), shownCat = useRef<string | null>(null);
 
-  const f = useMemo(() => m && filtered(m, view), [m, view.project, view.range, view.sub, view.noise]); // the type and the link don't filter
+  const f = useMemo(() => m && filtered(m, view), [m, view.project, view.source, view.range, view.sub, view.noise]); // the type and the link don't filter
   const vt = useMemo(() => m && f && viewTypes(m, view, f), [m, f, view]);
 
   // push: add a history entry (Back retraces it). A new type starts its search over.
@@ -76,7 +77,7 @@ export function ErrorsPage() {
   const setMode = useCallback((x: Mode) => { setModeS(x); store.set(MODE_KEY, x); }, []);
 
   // The list puts the linked example first; a click on an example moves the link, not the list, until the view next changes.
-  const fullKey = JSON.stringify([!!m, view.project, view.range, view.gran, view.sub, view.noise, view.cat, mode, fixes]);
+  const fullKey = JSON.stringify([!!m, view.project, view.source, view.range, view.gran, view.sub, view.noise, view.cat, mode, fixes]);
   const pin = useRef({ key: "", focus: null as string | null });
   if (pin.current.key !== fullKey || (pin.current.focus !== view.focus && !selecting.current)) {
     pin.current = { key: fullKey, focus: view.focus };
@@ -177,7 +178,7 @@ export function ErrorsPage() {
   return (
     <div className="wrap pg-errors">
       <header className="top">
-        <p className="kicker">Claude tool errors</p>
+        <p className="kicker">{view.source ? agentName(view.source) : "Agent"} tool errors</p>
         <Filters projects={projects}>
           <div className="seg" id="fGran" role="group" aria-label="Granularity">
             {(["day", "week"] as const).map(g => <button key={g} type="button" aria-pressed={view.gran === g} onClick={() => update({ gran: g }, true)}>{g === "day" ? "Day" : "Week"}</button>)}

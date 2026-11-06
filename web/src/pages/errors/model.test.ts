@@ -66,7 +66,7 @@ describe("types", () => {
   it("name an unknown type by its id and give a selected type outside the top its own layer", () => {
     expect(m.cats.x?.label).toBe("x");
     const p: ErrorsPayload = { ...fixture, errors: fixture.errors.map((e, i) => ({ ...e, c: ["a", "b", "c", "d", "e", "f"][i]! })),
-      error_days: ["a", "b", "c", "d", "e", "f"].map(c => ["2026-11-04", "foo", c, c === "f" ? 1 : 2, 0] as [string, string, string, number, number]) };
+      error_days: ["a", "b", "c", "d", "e", "f"].map(c => ["2026-11-04", "foo", c, c === "f" ? 1 : 2, 0, "claude"] as [string, string, string, number, number, "claude"]) };
     const mm = makeModel(p), vv = v({ cat: "f" }), vt = viewTypes(mm, vv, filtered(mm, vv));
     expect(vt.top).toHaveLength(5);
     expect(vt.extra).toBe("f");
@@ -137,7 +137,7 @@ describe("summary and fixes", () => {
     expect(ba.sides[1]).toMatchObject({ e: 6, c: 10, r: 60 });
     expect(ba.need).toBe(200);
     expect(ba.verdict).toEqual(["Not enough calls yet", "warn"]);
-    const p: ErrorsPayload = { ...fixture, calls: [["2026-10-01", "foo", 1000, 0], ["2026-11-04", "foo", 1000, 0]],
+    const p: ErrorsPayload = { ...fixture, calls: [["2026-10-01", "foo", 1000, 0, "claude"], ["2026-11-04", "foo", 1000, 0, "claude"]],
       errors: [...fixture.errors, ...Array.from({ length: 50 }, (_, i) => ({ ...fixture.errors[0]!, id: `old${i}`, d: "2026-10-01", n: null }))] };
     const after = beforeAfter(makeModel(p), v(), "x", "2026-11-04");
     expect(after.sides[0].name).toMatch(/^Before fix · Oct 1 – Nov 3$/);
@@ -159,12 +159,14 @@ describe("hash and storage", () => {
   it("reads the old page's keys; a bare #ex= link is all time and opens its type", () => {
     expect(readView(raw("ex=t07"), {}, m)).toEqual({ linked: true, view: { ...DEFAULT_VIEW, range: 0, cat: "x", focus: "t07" } });
     expect(readView(raw("project=foo&range=7&sub=0&noise=0&gran=week&cat=x"), {}, m).view)
-      .toEqual({ project: "foo", range: 7, sub: false, noise: true, gran: "week", cat: "x", focus: null });
+      .toEqual({ project: "foo", source: "", range: 7, sub: false, noise: true, gran: "week", cat: "x", focus: null });
+    expect(readView(raw("source=codex"), {}, m).view).toEqual({ ...DEFAULT_VIEW, source: "codex" });
+    expect(readView(raw("source=grok&range=7"), {}, m).view).toEqual({ ...DEFAULT_VIEW, range: 7 });
     expect(readView(raw("cat=nope&range=5"), {}, m).view).toMatchObject({ cat: null, range: 30 });
   });
   it("fills an empty hash from the saved view, and only an empty one", () => {
-    const saved = { project: "foo", range: 90, gran: "week", sub: false, noise: true, cat: "x" };
-    expect(readView({}, saved, m).view).toEqual({ project: "foo", range: 90, gran: "week", sub: false, noise: true, cat: "x", focus: null });
+    const saved = { project: "foo", range: 90, source: "codex", gran: "week", sub: false, noise: true, cat: "x" };
+    expect(readView({}, saved, m).view).toEqual({ project: "foo", source: "codex", range: 90, gran: "week", sub: false, noise: true, cat: "x", focus: null });
     expect(readView(raw("auto=1"), saved, m).view.range).toBe(90);
     expect(readView(raw("range=7"), saved, m).view).toEqual({ ...DEFAULT_VIEW, range: 7 });
   });
@@ -172,7 +174,8 @@ describe("hash and storage", () => {
     const vv = v({ project: "foo", range: 0, sub: false, noise: true, gran: "week", cat: "x" });
     expect(viewHash(vv)).toBe("#project=foo&range=0&sub=0&noise=0&gran=week&cat=x");
     expect(viewHash(vv, "t01")).toBe("#project=foo&range=0&sub=0&noise=0&gran=week&ex=t01");
-    expect(viewPatch(v({ cat: "x", focus: "t01" }))).toMatchObject({ ex: "t01", cat: null, sub: null, range: 30 });
+    expect(viewPatch(v({ cat: "x", focus: "t01" }))).toMatchObject({ ex: "t01", cat: null, sub: null, range: 30, source: null });
+    expect(viewHash(v({ source: "codex" }))).toBe("#range=30&source=codex");
   });
   it("reads fixes and the list mode in the old page's JSON", () => {
     localStorage.setItem("claude-errors-fixes", '{"x":"2026-11-04","worktree":"2026-10-01"}');

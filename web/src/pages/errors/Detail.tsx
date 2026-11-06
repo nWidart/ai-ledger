@@ -53,7 +53,7 @@ function TypeDetail({ cat }: { cat: string }) {
   const tools = topTools(base), flat = mode === "flat", PAGE = flat ? 30 : 20;
   const list = exList(base, groups, flat, q, outside ? undefined : focused);
   // List, count and Show more all come from the current search; any other change starts the list over.
-  const reset = JSON.stringify([cat, v.project, v.range, v.sub, v.noise, v.gran, mode, q, fixes]);
+  const reset = JSON.stringify([cat, v.project, v.source, v.range, v.sub, v.noise, v.gran, mode, q, fixes]);
   const [more, setMore] = useState({ reset, n: PAGE }), shown = more.reset === reset ? more.n : PAGE;
 
   // The example bar sticks below the header, and examples scroll in below both.

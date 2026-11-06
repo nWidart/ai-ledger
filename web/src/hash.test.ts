@@ -22,10 +22,17 @@ describe("parseHash", () => {
     expect(parseHash("#auto=1").auto).toBe(true);
     expect(parseHash("#auto=0").auto).toBe(false);
   });
+  it("reads a known source, and an unknown one as All", () => {
+    expect(parseHash("#source=codex").source).toBe("codex");
+    expect(parseHash("#source=claude").source).toBe("claude");
+    expect(parseHash("#source=grok")).toMatchObject({ source: "", raw: { source: "grok" } });
+    expect(parseHash("").source).toBe("");
+  });
   it("writes keys in the order the pages always did", () => {
     expect(formatHash({ session: "s", range: "30", project: "a b", inspect: "p" })).toBe("#project=a+b&range=30&inspect=p&session=s");
     expect(formatHash({ cat: "x", gran: "week", zz: "1", sub: "0", range: "7" })).toBe("#range=7&sub=0&gran=week&zz=1&cat=x");
     expect(formatHash({})).toBe("");
+    expect(formatHash({ auto: "1", source: "codex", range: "7" })).toBe("#range=7&source=codex&auto=1");
   });
 });
 
@@ -60,6 +67,7 @@ describe("setHash", () => {
   it("carries only the shared keys", () => {
     expect(sharedHash("#project=foo&range=14&auto=1&session=s1&ex=t1&sub=0")).toBe("#project=foo&range=14&auto=1");
     expect(sharedHash("#session=s1")).toBe("");
+    expect(sharedHash("#range=7&source=codex&cat=x")).toBe("#range=7&source=codex");
   });
 });
 

@@ -32,7 +32,9 @@ The app listens on `127.0.0.1:8765` only. Use that address, not `localhost`: fix
 
 ## Pages
 
-All pages share the top bar. Switching pages keeps the selected project, time range and automated-sessions choice (`#project=…&range=…&auto=1`). `/` opens Activity.
+All pages share the top bar. Switching pages keeps the selected project, time range, source and automated-sessions choice (`#project=…&range=…&source=…&auto=1`). `/` opens Activity.
+
+Every page has a source filter: All, Claude Code or Codex (`source=claude` or `source=codex`; All leaves it out of the URL).
 
 Activity and Cost share their filters: a project and a range (7, 14, 30, 90 days or all). Click a project or a session to open its details in a side sheet; the sheet offers a button to filter the page to that project. The URL holds `project`, `range`, `inspect` (the open project) and `session`, so a copied URL reopens the same view, and browser Back retraces filter and sheet changes. A session's details show its first prompt, a timeline of context size per request with tool calls, failures, compactions and commits, and a list of those events; failures link to the Errors page.
 

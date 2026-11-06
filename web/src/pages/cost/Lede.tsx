@@ -1,5 +1,6 @@
 import type { UsagePayload } from "../../api";
 import { useCountUp } from "../../components/chart";
+import { agentName } from "../../components/Filters";
 import { ProjectDot } from "../../components/ProjectDot";
 import { big, dayLabel, num, plural, usd } from "../../format";
 import { compareText, sparkPoints, thinHistory } from "./cost";
@@ -21,7 +22,7 @@ export function Lede({ d, before }: { d: UsagePayload; before: UsagePayload | un
     <h1 className="lede" id="lede" aria-live="polite" tabIndex={-1}>{t.requests
       ? <><span className="amt">{usd(t.cost == null ? null : shown)}</span> <span className="unit">estimated cost</span>{where}{since}
         {cmp && <><span className="sr">, </span><span className="delta"><span aria-hidden="true">{cmp.text}</span><span className="sr">{cmp.sr}</span></span></>}</>
-      : <>No Claude usage{where} {d.range ? `in the last ${d.range} days` : "yet"}.</>}</h1>
+      : <>No {agentName(d.source)} usage{where} {d.range ? `in the last ${d.range} days` : "yet"}.</>}</h1>
     {t.requests > 0 && <p className="windows">{d.start
       ? <><span>This period <b>{span(d.start, d.end)}</b> · {plural(t.active_days, "active day")} of {d.range}</span>
         {prev && <span>Previous <b>{span(prev.start, prev.end)}</b> · {usd(prev.cost || 0)} · {plural(prev.active_days, "active day")} of {d.range}

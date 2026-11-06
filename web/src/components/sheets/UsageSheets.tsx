@@ -1,5 +1,5 @@
 import { useRef, type ReactNode } from "react";
-import { sessionUrl, usageUrl, type SessionDetail, type UsagePayload } from "../../api";
+import { sessionUrl, usageUrl, viewOf, type SessionDetail, type UsagePayload } from "../../api";
 import { useHashState } from "../../hash";
 import { useApi } from "../../useApi";
 import { ProjectDot } from "../ProjectDot";
@@ -27,7 +27,7 @@ export function UsageSheets({ data }: { data: UsagePayload | undefined }) {
   const shown = useRef(""), backTo = useRef<BackTo | null>(null);
   if (open) shown.current = session || inspect;
   if (data) for (const s of [...data.top_sessions, ...data.sessions]) sessName(s);
-  const proj = useApi<UsagePayload>(inspect && !session ? usageUrl({ project: inspect, range: h.range, automated: h.auto }) : null);
+  const proj = useApi<UsagePayload>(inspect && !session ? usageUrl({ ...viewOf(h), project: inspect }) : null);
   const sess = useApi<SessionDetail>(session ? sessionUrl(session) : null);
   const pageProject = data?.project ?? h.project;
   const close = () => { backTo.current = null; set({ inspect: null, session: null }); };

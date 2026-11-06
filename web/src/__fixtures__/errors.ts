@@ -190,6 +190,7 @@ export default {
    "e": "",
    "r": "",
    "sub": 0,
+   "src": "claude",
    "d": "2026-11-04",
    "n": 0
   },
@@ -204,6 +205,7 @@ export default {
    "e": "",
    "r": "",
    "sub": 0,
+   "src": "claude",
    "d": "2026-11-04",
    "n": 0
   },
@@ -218,6 +220,7 @@ export default {
    "e": "",
    "r": "",
    "sub": 0,
+   "src": "claude",
    "d": "2026-11-04",
    "n": 0
   },
@@ -232,6 +235,7 @@ export default {
    "e": "",
    "r": "",
    "sub": 0,
+   "src": "claude",
    "d": "2026-11-04",
    "n": 0
   },
@@ -246,6 +250,7 @@ export default {
    "e": "",
    "r": "",
    "sub": 0,
+   "src": "claude",
    "d": "2026-11-04",
    "n": 1
   },
@@ -260,6 +265,7 @@ export default {
    "e": "",
    "r": "",
    "sub": 0,
+   "src": "claude",
    "d": "2026-11-04",
    "n": 2
   }
@@ -269,7 +275,8 @@ export default {
    "2026-11-04",
    "foo",
    10,
-   0
+   0,
+   "claude"
   ]
  ],
  "error_days": [
@@ -278,7 +285,8 @@ export default {
    "foo",
    "x",
    6,
-   0
+   0,
+   "claude"
   ]
  ],
  "incidents": [

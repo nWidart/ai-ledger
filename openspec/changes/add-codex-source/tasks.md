@@ -23,10 +23,10 @@
 
 ## 4. Dashboards
 
-- [ ] 4.1 Add `source` to `SHARED_KEYS` and the hash parser, falling back to All on unknown values. Pass it in every API call (`useApi`), and filter the Errors page model by `src` in the browser. Verify with `hash.test.ts` (`source=grok` falls back) and `Nav.test.tsx` (the source travels between pages).
-- [ ] 4.2 Add the All / Claude Code / Codex control to `Filters` on Activity, Cost and Errors. Verify with page tests that picking Codex narrows the figures and writes `source=codex`.
-- [ ] 4.3 Make the empty-state headings and the Errors kicker source-neutral ("No agent activity", "Agent tool errors"), and update the page doc comments. Verify with page tests that the wording contains no "Claude" when the source is All.
-- [ ] 4.4 Run `npm run check` in `web/`, commit the rebuilt `web/dist/`, and verify that `tests/test_web_build.py` passes.
+- [x] 4.1 Add `source` to `SHARED_KEYS` and the hash parser, falling back to All on unknown values. Pass it in every API call (`useApi`), and filter the Errors page model by `src` in the browser. Verify with `hash.test.ts` (`source=grok` falls back) and `Nav.test.tsx` (the source travels between pages).
+- [x] 4.2 Add the All / Claude Code / Codex control to `Filters` on Activity, Cost and Errors. Verify with page tests that picking Codex narrows the figures and writes `source=codex`.
+- [x] 4.3 Make the empty-state headings and the Errors kicker source-neutral ("No agent activity", "Agent tool errors"), and update the page doc comments. Verify with page tests that the wording contains no "Claude" when the source is All.
+- [x] 4.4 Run `npm run check` in `web/`, commit the rebuilt `web/dist/`, and verify that `tests/test_web_build.py` passes.
 
 ## 5. Integration
 

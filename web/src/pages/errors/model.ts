@@ -1,6 +1,6 @@
 // Errors data logic, ported from dashboard_template.html: the payload indexed once, then pure functions of it and the view.
-// /api/errors returns every error; the page filters on the client.
-import type { Category, Day, ErrorRow, ErrorsPayload, Incident } from "../../api";
+// /api/errors returns every error; the page filters on the client, by project and source among others.
+import type { Category, Day, ErrorRow, ErrorsPayload, Incident, Source } from "../../api";
 import { dayLabel, num as fmt } from "../../format";
 import type { Range } from "../../hash";
 
@@ -15,8 +15,8 @@ export const label = (k: string, long = false) => dayLabel(k, long);
 export const shortLabel = (s: string) => (s.length > 26 ? s.slice(0, 25) + "…" : s);
 
 export type Gran = "day" | "week";
-/** The view the hash holds. sub: include subagents; noise: hide noise; cat: the open type; focus: the linked example. */
-export interface View { project: string; range: Range; gran: Gran; sub: boolean; noise: boolean; cat: string | null; focus: string | null }
+/** The view the hash holds. source: "" is all; sub: include subagents; noise: hide noise; cat: the open type; focus: the linked example. */
+export interface View { project: string; source: Source | ""; range: Range; gran: Gran; sub: boolean; noise: boolean; cat: string | null; focus: string | null }
 /** Applied fixes: type id -> YYYY-MM-DD, as the old page stored them. */
 export type Fixes = Record<string, Day>;
 
@@ -29,8 +29,8 @@ export interface Model {
   lastDay: Day; firstDay: Day; incidents: Incident[]; gap: number;
   /** Every project with errors or tool calls, by all-time errors. */
   projects: [string, number][];
-  /** [day, project, category, errors, subagent errors] with a category. */
-  errorDays: [Day, string, string, number, number][];
+  /** [day, project, category, errors, subagent errors, source] with a category. */
+  errorDays: [Day, string, string, number, number, Source][];
 }
 
 /** The payload indexed once. A type the rules don't list (or none) still gets a category, named by its id. */
@@ -38,7 +38,7 @@ export function makeModel(data: ErrorsPayload): Model {
   const cats: Record<string, Category> = Object.fromEntries(data.categories.map(c => [c.id, c]));
   const known = (c: string | null) => { const id = c ?? "other"; cats[id] ??= { id, label: id, why: "", fix: "", snippet: "" }; return id; };
   const errors = data.errors.map(e => ({ ...e, c: known(e.c) }));
-  const errorDays = data.error_days.map(([d, p, c, n, s]) => [d, p, known(c), n, s] as [Day, string, string, number, number]);
+  const errorDays = data.error_days.map(([d, p, c, n, s, src]) => [d, p, known(c), n, s, src] as [Day, string, string, number, number, Source]);
   const byId = Object.fromEntries(errors.filter(e => e.id).map(e => [e.id, e]));
   const allRank = Object.entries(countBy(errors)).sort((a, b) => b[1] - a[1]).map(x => x[0]);
   // Ranges end today on the server, as on Usage.
@@ -64,11 +64,14 @@ export const bucketOf = (day: Day, gran: Gran): Day => {
   return iso(new Date(+d - wd * DAY));
 };
 export const rangeStart = (m: Model, v: View): Day => (v.range ? iso(new Date(+toDate(m.lastDay) - (v.range - 1) * DAY)) : m.firstDay);
+/** The row's project and source pass the view's filters. */
+export const inScope = (v: View, project: string, src: Source) => (!v.project || project === v.project) && (!v.source || src === v.source);
+const callIn = (v: View) => (c: CallRow) => inScope(v, c[1], c[4]);
 export interface Filtered { start: Day; errs: Err[]; calls: CallRow[] }
 export function filtered(m: Model, v: View): Filtered {
-  const start = rangeStart(m, v);
-  const errs = m.errors.filter(e => e.d >= start && (!v.project || e.p === v.project) && (v.sub || !e.sub) && (!v.noise || !NOISE.has(e.c)));
-  const calls = m.data.calls.filter(c => c[0] >= start && (!v.project || c[1] === v.project));
+  const start = rangeStart(m, v), scoped = callIn(v);
+  const errs = m.errors.filter(e => e.d >= start && inScope(v, e.p, e.src) && (v.sub || !e.sub) && (!v.noise || !NOISE.has(e.c)));
+  const calls = m.data.calls.filter(c => c[0] >= start && scoped(c));
   return { start, errs, calls };
 }
 /** Tool calls in a [day, project, calls, subagent calls] row, matching the subagent toggle. */
@@ -111,9 +114,9 @@ export function typeColors(allRank: readonly string[], top: readonly string[]): 
   for (const c of top) if (!(c in col)) { let i = 0; while (used.has(i)) i++; col[c] = i; used.add(i); }
   return Object.fromEntries(Object.entries(col).map(([c, i]) => [c, `var(--type-${i + 1})`]));
 }
-/** Errors per [day, category] from the server's error_days, under the project, subagent and noise filters. */
+/** Errors per [day, category] from the server's error_days, under the project, source, subagent and noise filters. */
 export function errorDays(m: Model, v: View, from: Day, to: Day = "9999") {
-  return m.errorDays.filter(r => r[0] >= from && r[0] <= to && (!v.project || r[1] === v.project) && (!v.noise || !NOISE.has(r[2])))
+  return m.errorDays.filter(r => r[0] >= from && r[0] <= to && inScope(v, r[1], r[5]) && (!v.noise || !NOISE.has(r[2])))
     .map(r => ({ d: r[0], c: r[2], n: v.sub ? r[3] : r[3] - r[4] })).filter(r => r.n);
 }
 export interface ViewTypes { counts: Record<string, number>; top: string[]; extra: string | null; layers: string[]; colors: Record<string, string> }
@@ -145,7 +148,7 @@ export function summary(m: Model, v: View, f: Filtered, fixes: Fixes): Summary {
   const span = prevSpan(m, v);
   let r0: number | null, r1: number | null, cmp: string;
   if (span) {
-    const pc = sumCalls(v, m.data.calls.filter(c => c[0] >= span[0] && c[0] <= span[1] && (!v.project || c[1] === v.project)));
+    const scoped = callIn(v), pc = sumCalls(v, m.data.calls.filter(c => c[0] >= span[0] && c[0] <= span[1] && scoped(c)));
     r0 = rate(errorDays(m, v, span[0], span[1]).reduce((s, x) => s + x.n, 0), pc); r1 = r; cmp = `vs previous ${v.range} days`;
   } else {
     const mid = midDay(m, f);
@@ -265,12 +268,12 @@ export function whereToStart(m: Model, v: View, f: Filtered, fixes: Fixes) {
 }
 export interface Side { name: string; e: number; c: number; r: number | null; empty: string }
 export interface BeforeAfter { sides: [Side, Side]; need: number; enough: boolean; verdict: [string, string] }
-/** The rate before and since a fix. All time on purpose, so the comparison doesn't shift with the range; project and subagent
- *  filters still apply. The verdict waits for enough calls since the fix that the old rate would have produced 5 errors (and at
+/** The rate before and since a fix. All time on purpose, so the comparison doesn't shift with the range; project, source and
+ *  subagent filters still apply. The verdict waits for enough calls since the fix that the old rate would have produced 5 errors (and at
  *  least MIN_AFTER_CALLS), so a quiet day or two can't read as a win. */
 export function beforeAfter(m: Model, v: View, cat: string, fixDay: Day): BeforeAfter {
-  const all = m.errors.filter(e => e.c === cat && (!v.project || e.p === v.project) && (v.sub || !e.sub));
-  const scoped = m.data.calls.filter(x => !v.project || x[1] === v.project);
+  const all = m.errors.filter(e => e.c === cat && inScope(v, e.p, e.src) && (v.sub || !e.sub));
+  const scoped = m.data.calls.filter(callIn(v));
   const from = scoped.reduce((s, x) => (!s || x[0] < s ? x[0] : s), "");
   const side = (name: string, a: Day, b: Day, empty: string): Side => {
     const e = all.filter(x => x.d >= a && x.d < b).length, c = sumCalls(v, scoped.filter(x => x[0] >= a && x[0] < b));
@@ -307,5 +310,6 @@ export function exList(base: readonly Err[], groups: readonly Group[], flat: boo
   if (fi != null) { const i = ex.findIndex(g => g.i === fi); if (i > 0) ex.unshift(...ex.splice(i, 1)); }
   return { flat, items: ex, count: q ? `${fmt(ex.length)} of ${fmt(groups.length)} match` : `${fmt(groups.length)} in range, most attempts first` };
 }
-/** Usage shows the session's own project; only an Errors project filter carries over. */
-export const sessionHref = (v: View, s: string) => "/usage#" + new URLSearchParams({ range: String(v.range), session: s, ...(v.project && { project: v.project }) });
+/** Usage shows the session's own project; only an Errors project or source filter carries over. */
+export const sessionHref = (v: View, s: string) =>
+  "/usage#" + new URLSearchParams({ range: String(v.range), session: s, ...(v.project && { project: v.project }), ...(v.source && { source: v.source }) });
