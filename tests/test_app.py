@@ -18,7 +18,7 @@ class AppTest(unittest.TestCase):
     def setUpClass(cls):
         cls.tmp = tempfile.mkdtemp()
         cls.con = store.open_store(os.path.join(cls.tmp, "d", "x.duckdb"))
-        cls.httpd = ThreadingHTTPServer(("127.0.0.1", 0), app.handler(app.App(cls.con, cls.tmp)))
+        cls.httpd = ThreadingHTTPServer(("127.0.0.1", 0), app.handler(app.App(cls.con, dict(claude=cls.tmp))))
         threading.Thread(target=cls.httpd.serve_forever, daemon=True).start()
 
     @classmethod

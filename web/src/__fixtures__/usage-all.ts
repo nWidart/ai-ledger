@@ -9,8 +9,8 @@ export default {
  "end": "2026-11-05",
  "projects": [
   "foo",
-  "observer-sessions",
-  "bar"
+  "bar",
+  "observer-sessions"
  ],
  "project_order": [
   "foo",
@@ -617,6 +617,7 @@ export default {
    "compactions": 2,
    "peak_context": 900,
    "peak_model": "m-a",
+   "source": "claude",
    "context_limit": 1000
   },
   "models": [

@@ -28,8 +28,8 @@ ASSET_TYPES = {".js": "text/javascript; charset=utf-8", ".css": "text/css; chars
 
 
 class App:
-    def __init__(self, con, root):
-        self.con, self.root = con, root
+    def __init__(self, con, roots):
+        self.con, self.roots = con, roots
         self.lock = threading.Lock()
         self.wake = threading.Event()
         self.stopping = threading.Event()
@@ -39,7 +39,7 @@ class App:
         with self.lock:
             self.state["ingesting"] = True
             try:
-                stats = store.ingest(self.con, self.root, log=None)
+                stats = store.ingest(self.con, self.roots, log=None)
                 self.state.update(last_ingest=datetime.now(timezone.utc).isoformat(timespec="seconds"),
                                   last_stats=stats, error=None)
                 if stats["files"]:
@@ -163,8 +163,8 @@ def handler(app):
     return Handler
 
 
-def serve(con, root):
-    app = App(con, root)
+def serve(con, roots):
+    app = App(con, roots)
     try:
         httpd = ThreadingHTTPServer((HOST, PORT), handler(app))
     except OSError as e:
@@ -184,19 +184,21 @@ def serve(con, root):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("command", nargs="?", choices=["serve", "ingest", "rebuild"], default="serve")
-    ap.add_argument("--projects", default=store.DEFAULT_ROOT, help="transcript root")
+    ap.add_argument("--projects", default=store.DEFAULT_ROOT, help="Claude Code transcript root")
+    ap.add_argument("--codex", default=store.DEFAULT_CODEX, help="Codex home")
     ap.add_argument("--db", help="database file (default data/ai-ledger.duckdb)")
     a = ap.parse_args()
+    roots = dict(claude=a.projects, codex=a.codex)
     try:
         con = store.open_store(a.db)
     except store.StoreBusy as e:
         print(e, file=sys.stderr)
         sys.exit(1)
     if a.command == "serve":
-        serve(con, a.projects)
+        serve(con, roots)
     elif a.command == "ingest":
         t = time.time()
-        print(store.ingest(con, a.projects, log=print))
+        print(store.ingest(con, roots, log=print))
         print(f"done in {time.time() - t:.1f}s")
     else:
         print(store.rebuild(con))

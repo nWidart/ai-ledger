@@ -378,7 +378,7 @@ class MetricsTest(unittest.TestCase):
             c.execute("DELETE FROM tool_calls WHERE tool_use_id = 'w1'")
 
     def test_api_reads_automated_param(self):
-        httpd = ThreadingHTTPServer(("127.0.0.1", 0), app.handler(app.App(self.con, self.tmp)))
+        httpd = ThreadingHTTPServer(("127.0.0.1", 0), app.handler(app.App(self.con, dict(claude=self.tmp))))
         threading.Thread(target=httpd.serve_forever, daemon=True).start()
         try:
             def get(path):

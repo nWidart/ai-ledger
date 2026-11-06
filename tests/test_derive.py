@@ -95,7 +95,7 @@ class ProjectTest(unittest.TestCase):
 
 class DeriveTest(StoreCase):
     def ingest(self):
-        store.ingest(self.con, self.root)
+        store.ingest(self.con, self.roots)
 
     def test_split_response_counts_usage_once(self):
         self.write("a.jsonl", assistant("a1", "m1", "2026-11-01T10:00:00Z", [dict(type="thinking", thinking="")])
@@ -196,7 +196,7 @@ class AliasTest(StoreCase):
         self.con.close()
         self.con = store.open_store(self.db)
         self.write("a.jsonl", prompt("u1", "2026-11-01T10:00:00Z", "p1", "go").replace("/nowhere/foo", "/gone/claude-errors-dashboard"))
-        store.ingest(self.con, self.root)
+        store.ingest(self.con, self.roots)
         store.rebuild(self.con)
         self.assertEqual(self.q("SELECT project FROM sessions"), [("ai-ledger",)])
 
@@ -212,15 +212,15 @@ class RebuildTest(StoreCase):
     def test_rebuild_matches_incremental(self):
         a = self.write("a.jsonl", prompt("u1", "2026-11-01T10:00:00Z", "p1", "go")
                        + assistant("a1", "m1", "2026-11-01T10:00:01Z", [tool_use("t1", "Bash", command="x")]))
-        store.ingest(self.con, self.root)
+        store.ingest(self.con, self.roots)
         self.write("a.jsonl", result("r1", "2026-11-01T10:00:02Z", "t1", "Exit code 1", error=True)
                    + assistant("a2", "m2", "2026-11-01T10:00:03Z", [dict(type="text", text="Hm.")])
                    + line(type="system", subtype="compact_boundary", uuid="c1", timestamp="2026-11-01T10:05:00Z", **S))
         self.write("s1/subagents/agent-1.jsonl", assistant("b1", "m3", "2026-11-01T10:00:04Z",
                                                           [tool_use("t2", "Read", file_path="/y")]))
-        store.ingest(self.con, self.root)
+        store.ingest(self.con, self.roots)
         os.remove(a)
-        store.ingest(self.con, self.root)
+        store.ingest(self.con, self.roots)
         before = self.counts()
         store.rebuild(self.con)
         self.assertEqual(self.counts(), before)

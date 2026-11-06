@@ -1,4 +1,4 @@
-"""Local DuckDB store of Claude Code transcripts.
+"""Local DuckDB store of coding-agent transcripts, one source per agent (SOURCES).
 
 Raw layer: every transcript line, verbatim and deduplicated, never deleted. Derived layer: sessions,
 requests, tool calls, prompts and hooks, written during ingest and rebuildable from the raw lines.
@@ -10,6 +10,7 @@ import subprocess
 import sys
 import time
 from datetime import datetime, timezone
+from typing import Callable, NamedTuple
 
 import duckdb
 
@@ -19,6 +20,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_DB = os.path.join(HERE, "data", "ai-ledger.duckdb")
 EARLIER_DB = os.path.join(HERE, "data", "claude.duckdb")  # default before the rename to AI Ledger
 DEFAULT_ROOT = os.path.expanduser("~/.claude/projects")
+DEFAULT_CODEX = os.path.expanduser("~/.codex")
 BUSY = "the app is running and owns the store; use Refresh in the dashboard"
 
 RAW_SCHEMA = """
@@ -206,14 +208,18 @@ def transcript_files(root):
                   + glob.glob(os.path.join(root, "*", "*", "subagents", "*.jsonl")))
 
 
-def ingest(con, root=DEFAULT_ROOT, log=None):
-    """Read new bytes of every transcript file. One transaction per file."""
+def ingest(con, roots, log=None):
+    """Read new bytes of every transcript file under roots ({source: dir}). One transaction per file.
+
+    Skips a source whose root is missing or not given, and a name not in SOURCES."""
     t0 = time.time()
     cur = con.cursor()
     known = {r[0]: r[1:] for r in cur.execute("SELECT path, size, read_offset, lines, seq, mtime FROM files").fetchall()}
     projects = Projects(cur)
     stats = dict(files=0, lines=0, inserted=0)
-    for path in transcript_files(root):
+    found = [(name, path) for name, src in SOURCES.items() if os.path.isdir(roots.get(name) or "")
+             for path in src.files(roots[name])]
+    for name, path in found:
         try:
             st = os.stat(path)
         except OSError:
@@ -229,7 +235,7 @@ def ingest(con, root=DEFAULT_ROOT, log=None):
         end = data.rfind(b"\n") + 1
         if not end:
             continue
-        n, ins = ingest_chunk(cur, projects, path, data[:end], offset, lines, seq, st)
+        n, ins = ingest_chunk(cur, projects, name, path, data[:end], offset, lines, seq, st)
         stats["files"] += 1
         stats["lines"] += n
         stats["inserted"] += ins
@@ -239,8 +245,9 @@ def ingest(con, root=DEFAULT_ROOT, log=None):
     return stats
 
 
-def ingest_chunk(cur, projects, path, data, offset, lines, seq, st):
-    sub = "/subagents/" in path
+def ingest_chunk(cur, projects, name, path, data, offset, lines, seq, st):
+    src = SOURCES[name]
+    sub = src.subagent(path)
     rows, parsed, seen = [], {}, set()
     pos = offset
     for raw in data.split(b"\n")[:-1]:
@@ -250,7 +257,7 @@ def ingest_chunk(cur, projects, path, data, offset, lines, seq, st):
             ok = isinstance(d, dict)
         except ValueError:
             d, ok = None, False
-        key = line_key(d, path, pos)
+        key = src.key(d, path, pos)
         if key not in seen:
             seen.add(key)
             dd = d if ok else {}
@@ -264,13 +271,13 @@ def ingest_chunk(cur, projects, path, data, offset, lines, seq, st):
     try:
         new = set(insert(cur, "raw_lines", ["key", "file", "line_no", "byte_offset", "type", "session_id", "uuid",
                                             "ts", "subagent", "parsed", "json"], rows, returning="key"))
-        der = Deriver(cur, projects, path, sub, seq)
+        der = src.deriver(cur, projects, name, path, sub, seq)
         for r in rows:
             if r[0] in new and r[0] in parsed:
                 der.add(parsed[r[0]])
         der.flush()
-        insert(cur, "files", ["path", "size", "read_offset", "lines", "seq", "mtime", "last_ingest"],
-               [(path, st.st_size, pos, lines, der.seq, st.st_mtime, datetime.now(timezone.utc).replace(tzinfo=None))],
+        insert(cur, "files", ["path", "size", "read_offset", "lines", "seq", "mtime", "last_ingest", "source"],
+               [(path, st.st_size, pos, lines, der.seq, st.st_mtime, datetime.now(timezone.utc).replace(tzinfo=None), name)],
                tail="ON CONFLICT (path) DO UPDATE SET size = excluded.size, read_offset = excluded.read_offset, "
                     "lines = excluded.lines, seq = excluded.seq, mtime = excluded.mtime, last_ingest = excluded.last_ingest")
         cur.execute("COMMIT")
@@ -291,10 +298,12 @@ INTERRUPT = "[Request interrupted by user"
 
 
 class Deriver:
-    """Turns new transcript lines of one file into derived rows, then writes them in bulk."""
+    """Turns new Claude Code lines of one file into derived rows, then writes them in bulk.
 
-    def __init__(self, cur, projects, path, sub, seq):
-        self.cur, self.projects, self.path, self.sub, self.seq = cur, projects, path, sub, seq
+    Another source's deriver subclasses it and overrides add: it fills the same dicts, and flush writes them."""
+
+    def __init__(self, cur, projects, source, path, sub, seq):
+        self.cur, self.projects, self.source, self.path, self.sub, self.seq = cur, projects, source, path, sub, seq
         self.sessions, self.requests, self.uses, self.results = {}, {}, {}, {}
         self.prompts, self.interrupted, self.hooks, self.followups = {}, set(), [], {}
         # Errors from earlier ingests of this file still waiting for Claude's next words.
@@ -419,9 +428,9 @@ class Deriver:
         for sid, s in self.sessions.items():
             proj = self.projects.get(cur, s["cwd"]) if s["cwd"] else None
             srows.append((sid, proj, s["cwd"], s["git_branch"], s["first"], s["last"], s["entrypoint"], s["version"],
-                          s["compactions"], s["peak"], s["peak_model"]))
+                          s["compactions"], s["peak"], s["peak_model"], self.source))
         insert(cur, "sessions", ["session_id", "project", "cwd", "git_branch", "first_ts", "last_ts", "entrypoint",
-                                 "version", "compactions", "peak_context", "peak_model"], srows,
+                                 "version", "compactions", "peak_context", "peak_model", "source"], srows,
                tail="ON CONFLICT (session_id) DO UPDATE SET project = coalesce(sessions.project, excluded.project), "
                     "cwd = coalesce(sessions.cwd, excluded.cwd), git_branch = coalesce(sessions.git_branch, excluded.git_branch), "
                     "first_ts = least(sessions.first_ts, excluded.first_ts), last_ts = greatest(sessions.last_ts, excluded.last_ts), "
@@ -482,6 +491,16 @@ class Deriver:
                 r and r["seq"])
 
 
+class Source(NamedTuple):
+    files: Callable  # root -> transcript paths
+    key: Callable  # (line, path, offset) -> dedup key
+    deriver: type  # Deriver or a subclass
+    subagent: Callable  # path -> whether the file holds subagent work
+
+
+SOURCES = {"claude": Source(transcript_files, line_key, Deriver, lambda path: "/subagents/" in path)}
+
+
 def rebuild(con, log=None):
     """Drop the derived tables and replay them from raw_lines, file by file in byte order."""
     t0 = time.time()
@@ -490,11 +509,13 @@ def rebuild(con, log=None):
         cur.execute(f"DROP TABLE IF EXISTS {t}")
     cur.execute(DERIVED_SCHEMA)
     projects = Projects(cur)
-    files = [r[0] for r in cur.execute("SELECT DISTINCT file FROM raw_lines ORDER BY file").fetchall()]
-    for path in files:
+    files = cur.execute("SELECT DISTINCT r.file, coalesce(f.source, 'claude') FROM raw_lines r "
+                        "LEFT JOIN files f ON f.path = r.file ORDER BY 1").fetchall()
+    for path, name in files:
+        src = SOURCES[name]
         cur.execute("BEGIN")
         try:
-            der = Deriver(cur, projects, path, "/subagents/" in path, 0)
+            der = src.deriver(cur, projects, name, path, src.subagent(path), 0)
             for (text,) in cur.execute("SELECT json FROM raw_lines WHERE file = ? AND parsed ORDER BY byte_offset", [path]).fetchall():
                 der.add(json.loads(text))
             der.flush()

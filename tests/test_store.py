@@ -20,6 +20,7 @@ class StoreCase(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
         self.root = os.path.join(self.tmp, "projects")
+        self.roots = dict(claude=self.root, codex=os.path.join(self.tmp, "codex"))  # never the real homes
         self.db = os.path.join(self.tmp, "data", "ai-ledger.duckdb")
         os.makedirs(os.path.join(self.root, "proj"))
         self.con = store.open_store(self.db)
@@ -59,37 +60,37 @@ class SchemaTest(StoreCase):
 class IngestTest(StoreCase):
     def test_growth_reads_only_new_bytes(self):
         p = self.write("a.jsonl", line(type="user", uuid="u1", sessionId="s"))
-        store.ingest(self.con, self.root)
+        store.ingest(self.con, self.roots)
         before = os.path.getsize(p)
         self.write("a.jsonl", line(type="user", uuid="u2", sessionId="s"))
-        stats = store.ingest(self.con, self.root)
+        stats = store.ingest(self.con, self.roots)
         self.assertEqual(stats["lines"], 1)
         self.assertEqual(self.count(), 2)
         self.assertEqual(self.q("SELECT byte_offset FROM raw_lines WHERE key = 'u2'")[0][0], before)
-        self.assertEqual(store.ingest(self.con, self.root)["files"], 0)
+        self.assertEqual(store.ingest(self.con, self.roots)["files"], 0)
 
     def test_partial_last_line_waits(self):
         self.write("a.jsonl", line(type="user", uuid="u1") + '{"type": "user", "uu')
-        store.ingest(self.con, self.root)
+        store.ingest(self.con, self.roots)
         self.assertEqual(self.count(), 1)
         self.write("a.jsonl", 'id": "u2"}\n')
-        store.ingest(self.con, self.root)
+        store.ingest(self.con, self.roots)
         self.assertEqual(self.count("key = 'u2' AND parsed"), 1)
 
     def test_shrink_rereads_without_duplicates(self):
         self.write("a.jsonl", line(type="user", uuid="u1") + line(type="user", uuid="u2"))
-        store.ingest(self.con, self.root)
+        store.ingest(self.con, self.roots)
         self.write("a.jsonl", line(type="user", uuid="u1"), mode="w")
-        store.ingest(self.con, self.root)
+        store.ingest(self.con, self.roots)
         self.assertEqual(self.count(), 2)
         self.write("a.jsonl", line(type="user", uuid="u3"))
-        store.ingest(self.con, self.root)
+        store.ingest(self.con, self.roots)
         self.assertEqual(self.count(), 3)
 
     def test_duplicate_uuid_across_files(self):
         self.write("a.jsonl", line(type="user", uuid="u1", sessionId="s1"))
         self.write("b.jsonl", line(type="user", uuid="u1", sessionId="s2") + line(type="user", uuid="u9"))
-        store.ingest(self.con, self.root)
+        store.ingest(self.con, self.roots)
         self.assertEqual(self.count("key = 'u1'"), 1)
         self.assertEqual(self.count(), 2)
 
@@ -97,32 +98,41 @@ class IngestTest(StoreCase):
         blob = line(type="api-request-blob", hash="h1", message={"role": "user", "content": "x"})
         self.write("a.jsonl", blob)
         self.write("b.jsonl", blob + blob)
-        store.ingest(self.con, self.root)
+        store.ingest(self.con, self.roots)
         self.assertEqual(self.count("key = 'blob:h1'"), 1)
         self.assertEqual(self.count(), 1)
 
     def test_malformed_line_kept_unparsed(self):
         self.write("a.jsonl", "not json\n" + line(type="user", uuid="u1"))
-        store.ingest(self.con, self.root)
+        store.ingest(self.con, self.roots)
         self.assertEqual(self.q("SELECT parsed, json FROM raw_lines WHERE NOT parsed"), [(False, "not json")])
         self.assertEqual(self.count("parsed"), 1)
 
     def test_lines_kept_verbatim(self):
         text = '{"type":"assistant",  "uuid":"u1", "x": "é"}'
         self.write("a.jsonl", text + "\n")
-        store.ingest(self.con, self.root)
+        store.ingest(self.con, self.roots)
         self.assertEqual(self.q("SELECT json FROM raw_lines")[0][0], text)
 
     def test_subagent_lines_marked(self):
         self.write("s1/subagents/agent-1.jsonl", line(type="user", uuid="u1"))
-        store.ingest(self.con, self.root)
+        store.ingest(self.con, self.roots)
         self.assertEqual(self.q("SELECT subagent FROM raw_lines")[0][0], True)
+
+    def test_missing_root_skipped(self):
+        self.write("a.jsonl", line(type="user", uuid="u1", sessionId="s1"))
+        self.assertFalse(os.path.exists(self.roots["codex"]))
+        self.assertEqual(store.ingest(self.con, self.roots)["files"], 1)
+        self.assertEqual(self.q("SELECT source FROM files UNION ALL SELECT source FROM sessions"), [("claude",), ("claude",)])
+        shutil.rmtree(self.root)
+        self.assertEqual(store.ingest(self.con, self.roots)["files"], 0)
+        self.assertEqual(self.count(), 1)
 
     def test_deleted_source_keeps_rows(self):
         p = self.write("a.jsonl", line(type="user", uuid="u1") + line(type="user", uuid="u2"))
-        store.ingest(self.con, self.root)
+        store.ingest(self.con, self.roots)
         os.remove(p)
-        store.ingest(self.con, self.root)
+        store.ingest(self.con, self.roots)
         self.assertEqual(self.count(), 2)
         self.assertEqual(self.q("SELECT count(*) FROM files")[0][0], 1)
 
@@ -131,7 +141,7 @@ class SourceMigrationTest(StoreCase):
     def test_store_without_source_marked_claude(self):
         self.write("a.jsonl", line(type="user", uuid="u1", sessionId="s1", timestamp="2026-11-01T10:00:00Z")
                    + line(type="user", uuid="u2", sessionId="s2", timestamp="2026-11-01T10:00:01Z"))
-        store.ingest(self.con, self.root)
+        store.ingest(self.con, self.roots)
         for t in ("files", "sessions"):  # the schema before sources
             self.con.execute(f"ALTER TABLE {t} DROP COLUMN source")
         counts = lambda: [self.q(f"SELECT count(*) FROM {t}")[0][0] for t in ("raw_lines", "files", "sessions")]
