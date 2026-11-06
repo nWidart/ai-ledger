@@ -1,8 +1,8 @@
 # AI Ledger
 
-A local ledger of your AI coding-agent transcripts (today Claude Code, from `~/.claude/projects`). It keeps a permanent copy of them in a DuckDB store and serves three dashboards on it:
+A local ledger of your AI coding-agent transcripts: Claude Code (from `~/.claude/projects`) and OpenAI's Codex CLI (from `~/.codex/sessions` and `~/.codex/archived_sessions`, plain or `.zst`). It keeps a permanent copy of them in a DuckDB store and serves three dashboards on it:
 
-- **Activity**: what Claude did and where it struggled: commits, prompts and sessions, what needs attention (error loops, sessions near the context limit, flaky tools, failed tests), context health, autonomy and friction, time, and tool, MCP, skill and hook use per project and session.
+- **Activity**: what the agents did and where it struggled: commits, prompts and sessions, what needs attention (error loops, sessions near the context limit, flaky tools, failed tests), context health, autonomy and friction, time, and tool, MCP, skill and hook use per project and session.
 - **Cost**: what it cost and why that changed: estimated cost against the previous period, tokens by kind, cache efficiency, model mix, and cost per project, session and commit.
 - **Errors**: failed tool calls grouped into error types with suggested fixes, and the error rate over time.
 
@@ -16,7 +16,7 @@ uv run app.py
 open http://127.0.0.1:8765/
 ```
 
-The first start ingests every transcript (about 4 minutes for 3.4 GB). After that the app ingests new transcript lines every 60 seconds; **Refresh** in the top bar ingests now. The store keeps lines after Claude Code deletes the transcript files.
+The first start ingests every transcript (about 4 minutes for 3.4 GB). After that the app ingests new transcript lines every 60 seconds; **Refresh** in the top bar ingests now. The store keeps lines after an agent deletes or archives its transcript files. A Codex session that moves to the archive is not counted twice.
 
 Commands, which only run while the app is stopped (the app owns the store):
 
@@ -26,7 +26,7 @@ uv run app.py rebuild   # regenerate derived tables from the stored lines, e.g. 
 uv run python -m unittest discover -s tests
 ```
 
-Options: `--projects <dir>` (transcript root), `--db <file>` (database, default `data/ai-ledger.duckdb`).
+Options: `--projects <dir>` (Claude Code transcript root), `--codex <dir>` (Codex home, default `~/.codex`; skipped when missing), `--db <file>` (database, default `data/ai-ledger.duckdb`).
 
 The app listens on `127.0.0.1:8765` only. Use that address, not `localhost`: fix markers live in that browser origin, so the app redirects `localhost` there.
 
@@ -49,10 +49,11 @@ Sessions that a tool starts in the background (the projects in `AUTOMATED_PROJEC
 ## Files
 
 - `app.py` — the app: HTTP server, background ingest, `ingest` and `rebuild` commands.
-- `store.py` — the store: raw lines, incremental ingest, project resolution, derived tables (sessions, requests, tool calls, prompts, hooks).
+- `store.py` — the store: raw lines, the source registry (`SOURCES`), incremental ingest, project resolution, derived tables (sessions, requests, tool calls, prompts, hooks).
+- `codex.py` — the Codex source: session files, line keys, and the parser that turns Codex lines into the same derived records.
 - `categorize.py` — error categories. Add a rule to `RULES` when a new error pattern shows up in "Other", then run `rebuild`.
 - `metrics.py` — the queries behind the dashboards.
-- `prices.json` — per-model prices (USD per million tokens) and context windows.
+- `prices.json` — per-model prices (USD per million tokens) and context windows, for Claude and OpenAI models.
 - `web/` — the pages: one React and TypeScript app (Vite). `web/src/pages/` holds Activity, Cost and Errors, `web/src/components/` the shared top bar, filters, sheets, drawers and charts, and `web/src/theme.css` the colors for light and dark. `web/dist/` is the committed build that the app serves.
 - `data/ai-ledger.duckdb` — the store, git-ignored and readable only by you. It holds full transcript content, including any secrets that appeared in sessions.
 

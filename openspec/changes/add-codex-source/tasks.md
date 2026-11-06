@@ -30,7 +30,7 @@
 
 ## 5. Integration
 
-- [ ] 5.1 Against an instant copy of the real store, run ingest with the real `~/.codex`. Verify that Codex lines and sessions appear (20 files), Claude totals are unchanged, and archived copies of live sessions add no duplicate requests. Then run `rebuild` and check that totals match.
+- [x] 5.1 Against an instant copy of the real store, run ingest with the real `~/.codex`. Verify that Codex lines and sessions appear (20 files), Claude totals are unchanged, and archived copies of live sessions add no duplicate requests. Then run `rebuild` and check that totals match.
 - [ ] 5.2 Start the app with `--db` set to the copy. Port 8765 is fixed, so first ask before stopping the user's running app. Check in the browser: switch the source on all three pages, confirm the URL carries it across the nav, and confirm Codex errors appear on Errors. Update the README sections on what is ingested and on the `--codex` option.
 
 ## Workflow follow-up
