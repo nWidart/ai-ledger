@@ -43,15 +43,15 @@ export default {
   "interrupted": 1,
   "error_loops": 1,
   "sessions": 4,
-  "cache_hit_ratio": 0.7272504140750989,
+  "cache_hit_ratio": 0.727250414,
   "write_1h_share": 0.5,
-  "subagent_token_share": 0.08332951406393874,
-  "subagent_cost_share": 0.06328849554385703,
-  "tokens_per_prompt": 2000091.6666666667,
-  "cost_per_prompt": 2.6334433333333336,
-  "turns_per_prompt": 0.8333333333333334,
-  "tool_calls_per_prompt": 1.6666666666666667,
-  "interruption_rate": 0.16666666666666666,
+  "subagent_token_share": 0.083329514,
+  "subagent_cost_share": 0.063288496,
+  "tokens_per_prompt": 2000091.666666667,
+  "cost_per_prompt": 2.633443333,
+  "turns_per_prompt": 0.833333333,
+  "tool_calls_per_prompt": 1.666666667,
+  "interruption_rate": 0.166666667,
   "tokens_per_commit": 12000550.0,
   "cost_per_commit": 15.80066,
   "errors_per_100_calls": 60.0,
@@ -204,14 +204,14 @@ export default {
    "commits": 1,
    "prompts": 3,
    "error_loops": 1,
-   "cache_hit_ratio": 0.7272661157625839,
+   "cache_hit_ratio": 0.727266116,
    "write_1h_share": 0.5,
-   "subagent_share": 0.0833319444675922,
-   "subagent_cost_share": 0.06329113924050632,
+   "subagent_share": 0.083331944,
+   "subagent_cost_share": 0.063291139,
    "tokens_per_commit": 12000200.0,
    "cost_per_commit": 15.8,
    "errors_per_100_calls": 60.0,
-   "tokens_per_prompt": 4000066.6666666665
+   "tokens_per_prompt": 4000066.666666667
   },
   {
    "project": "observer-sessions",
@@ -281,7 +281,7 @@ export default {
    "errors": 1,
    "p50_ms": 4000.0,
    "p95_ms": 9400.0,
-   "failure_rate": 0.3333333333333333
+   "failure_rate": 0.333333333
   },
   {
    "tool": "mcp__srv__q",
@@ -678,7 +678,7 @@ export default {
     "calls": 3,
     "errors": 1,
     "p50_ms": 4000.0,
-    "failure_rate": 0.3333333333333333
+    "failure_rate": 0.333333333
    },
    {
     "tool": "mcp__srv__q",

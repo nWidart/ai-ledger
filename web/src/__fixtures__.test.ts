@@ -5,6 +5,7 @@ import errors from "./__fixtures__/errors";
 import session from "./__fixtures__/session";
 import sessions from "./__fixtures__/sessions";
 import usageAll from "./__fixtures__/usage-all";
+import usageCodex from "./__fixtures__/usage-codex";
 import usage from "./__fixtures__/usage";
 import type { ErrorsPayload, SessionDetail, SessionsPage, UsagePayload } from "./api";
 
@@ -18,5 +19,7 @@ describe("fixtures", () => {
     expect(s.info.session_id).toBe("s1");
     expect(l.total).toBe(l.sessions.length);
     expect(e.errors.length).toBeGreaterThan(0);
+    const x: UsagePayload = usageCodex;
+    expect(x.source).toBe("codex");
   });
 });

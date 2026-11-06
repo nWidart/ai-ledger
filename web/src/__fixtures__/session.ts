@@ -74,7 +74,7 @@ export default {
    "calls": 3,
    "errors": 1,
    "p50_ms": 4000.0,
-   "failure_rate": 0.3333333333333333
+   "failure_rate": 0.333333333
   },
   {
    "tool": "mcp__srv__q",
