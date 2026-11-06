@@ -1,5 +1,6 @@
 {
-  "source": "https://platform.claude.com/docs/en/about-claude/pricing and https://platform.claude.com/docs/en/about-claude/models/overview, read 2026-11-05",
+  "source": "https://platform.claude.com/docs/en/about-claude/pricing and https://platform.claude.com/docs/en/about-claude/models/overview, read 2026-11-05; OpenAI: https://developers.openai.com/api/docs/pricing (Standard tier), read 2026-11-06",
+  "openai": "cache_5m is the 30-minute cache write rate; cache_1h is 0 because Codex reports a single cache-write count. long applies above 272K input tokens.",
   "unit": "USD per million tokens; context in tokens (null when the docs do not state it)",
   "models": {
     "claude-fable-5-1": {"input": 10, "output": 50, "cache_read": 0.25, "cache_5m": 12.5, "cache_1h": 20, "context": 1000000},
@@ -8,6 +9,12 @@
     "claude-haiku-5-5": {"input": 0.1, "output": 0.5, "cache_read": 0.01, "cache_5m": 0.125, "cache_1h": 0.2, "context": 1000000,
       "long_above": 100000,
       "long": {"input": 0.5, "output": 2.5, "cache_read": 0.05, "cache_5m": 0.625, "cache_1h": 1}},
-    "claude-haiku-4-5-20251001": {"input": 1, "output": 5, "cache_read": 0.1, "cache_5m": 1.25, "cache_1h": 2, "context": null}
+    "claude-haiku-4-5-20251001": {"input": 1, "output": 5, "cache_read": 0.1, "cache_5m": 1.25, "cache_1h": 2, "context": null},
+    "gpt-6-astra": {"input": 10, "output": 50, "cache_read": 1, "cache_5m": 12.5, "cache_1h": 0, "context": null,
+      "long_above": 272000,
+      "long": {"input": 20, "output": 75, "cache_read": 2, "cache_5m": 25, "cache_1h": 0}},
+    "gpt-6.1-sol": {"input": 2, "output": 10, "cache_read": 0.1, "cache_5m": 2.5, "cache_1h": 0, "context": null,
+      "long_above": 272000,
+      "long": {"input": 4, "output": 15, "cache_read": 0.2, "cache_5m": 5, "cache_1h": 0}}
   }
 }
