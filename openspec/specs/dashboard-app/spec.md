@@ -32,7 +32,7 @@ Only one process SHALL write to the store at a time. A second app or command-lin
 - **THEN** the command exits with a non-zero status and a message saying the app owns the store
 
 ### Requirement: Shared navigation
-Every dashboard page SHALL show the same navigation with Activity, Cost, Errors and Limits entries, mark the current page, and keep the selected project and time range when switching pages.
+Every dashboard page SHALL show the same navigation with Activity, Cost, Errors, Limits and Insights entries, mark the current page, and keep the selected project and time range when switching pages.
 
 #### Scenario: Switch from Usage to Errors
 - **WHEN** the user views project `foo` for the last 30 days on Activity (`/usage`) and clicks Errors
@@ -45,6 +45,10 @@ Every dashboard page SHALL show the same navigation with Activity, Cost, Errors 
 #### Scenario: Switch from Cost to Limits
 - **WHEN** the user views Codex for the last 30 days on Cost and clicks Limits
 - **THEN** the Limits page opens filtered to Codex and the last 30 days
+
+#### Scenario: Switch from Cost to Insights
+- **WHEN** the user views project `foo` for the last 30 days on Cost and clicks Insights
+- **THEN** the Insights page opens filtered to `foo` and the last 30 days
 
 ### Requirement: Errors dashboard served from the store
 The errors dashboard SHALL read its data from the store and SHALL keep its existing behavior: error categories with suggested fixes, per-example (`#ex=<tool_use_id>`) and per-category (`#cat=<type>`) permalinks, and applied-fix markers.
@@ -62,7 +66,7 @@ The errors dashboard SHALL read its data from the store and SHALL keep its exist
 - **THEN** the marker still shows on its date with the before and after error rate
 
 ### Requirement: Open Activity by default
-The app SHALL serve Activity at `/usage`, Cost at `/cost`, Errors at `/errors` and Limits at `/limits`, and SHALL send `/` to Activity.
+The app SHALL serve Activity at `/usage`, Cost at `/cost`, Errors at `/errors`, Limits at `/limits` and Insights at `/insights`, and SHALL send `/` to Activity.
 
 #### Scenario: Open the app root
 - **WHEN** the user opens `http://127.0.0.1:8765/`
@@ -71,6 +75,10 @@ The app SHALL serve Activity at `/usage`, Cost at `/cost`, Errors at `/errors` a
 #### Scenario: Open Limits directly
 - **WHEN** the user opens `http://127.0.0.1:8765/limits`
 - **THEN** the Limits page opens
+
+#### Scenario: Open Insights
+- **WHEN** the user opens `http://127.0.0.1:8765/insights`
+- **THEN** the Insights page opens
 
 ### Requirement: Run without a frontend toolchain
 The app SHALL serve every dashboard page from files in the repository, so running it needs only Python and its Python dependencies. A frontend toolchain SHALL be needed only to change the pages.
@@ -98,8 +106,8 @@ Activity and Cost SHALL leave out sessions from known automated projects (today 
 Every dashboard page SHALL show the app's name, AI Ledger, in its navigation brand and in its browser title, after the page's own name.
 
 #### Scenario: Page titles
-- **WHEN** the user opens `/usage`, `/cost` and `/errors`
-- **THEN** the browser titles are `Activity · AI Ledger`, `Cost · AI Ledger` and `Errors · AI Ledger`
+- **WHEN** the user opens `/usage`, `/cost`, `/errors` and `/insights`
+- **THEN** the browser titles are `Activity · AI Ledger`, `Cost · AI Ledger`, `Errors · AI Ledger` and `Insights · AI Ledger`
 
 #### Scenario: Navigation brand
 - **WHEN** any dashboard page is open
@@ -117,7 +125,7 @@ Choices the pages saved in the browser before the rename SHALL still apply after
 - **THEN** the marker still shows on its date after the rename
 
 ### Requirement: Filter by source
-Activity, Cost, Errors and Limits SHALL offer a source filter with the choices All, Claude Code and Codex, defaulting to All. Every figure, chart and table on the page SHALL reflect the chosen source. The choice SHALL be kept in the page URL and carried across pages with the project and time range.
+Activity, Cost, Errors, Limits and Insights SHALL offer a source filter with the choices All, Claude Code and Codex, defaulting to All. Every figure, chart and table on the page SHALL reflect the chosen source. The choice SHALL be kept in the page URL and carried across pages with the project and time range.
 
 #### Scenario: Default shows every source
 - **WHEN** the user opens Cost with no source in the URL, and the last 30 days hold $120 of Claude usage and $15 of Codex usage
@@ -134,6 +142,10 @@ Activity, Cost, Errors and Limits SHALL offer a source filter with the choices A
 #### Scenario: Unknown source in the URL
 - **WHEN** the URL holds `source=grok`
 - **THEN** the page shows All and replaces the value in the URL
+
+#### Scenario: Codex on Insights
+- **WHEN** the user views Codex on Activity and clicks Insights
+- **THEN** Insights opens with source Codex and says that `/insights` analyses only Claude Code sessions
 
 ### Requirement: Describe agent work without naming one agent
 Page text that describes work from any source SHALL NOT name Claude. Text MAY name an agent when the source filter selects it.
