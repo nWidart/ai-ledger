@@ -54,7 +54,7 @@ Options: `--projects <dir>` (default `~/.claude/projects`), `--codex <dir>` (def
 
 ![Errors](docs/errors.gif)
 
-**Limits**: usage of each plan limit window, with a forecast to its reset. Below: capacity left unused, past windows, and what 1% of a limit buys.
+**Limits**: usage of each plan limit window, with a forecast to its reset. Open windows are account-wide: the range and project filters do not apply to them. Below: capacity left unused, then past windows and what 1% of a limit buys, folded until opened.
 
 ![Limits](docs/limits.gif)
 

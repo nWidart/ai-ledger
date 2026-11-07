@@ -36,7 +36,7 @@ export function Example({ e }: { e: Err }) {
   const note = (k: string) => t.cut?.includes(k) ? <div className="cutnote">(summary as recorded)</div> : null;
   const cut = !!e.id && !x.fullText.has(e.id) && e.i.length >= PAYLOAD_INPUT;
   const busy = x.loading.has(e.id), failed = x.failed.has(e.id);
-  const [clamped, setClamped] = useState(false), [copied, setCopied] = useState(false);
+  const [clamped, setClamped] = useState(false), [copied, setCopied] = useState<"" | "ok" | "fail">("");
   // "Show full" only where a clamped body is cut off, the payload cut the input, or the example is already open.
   useLayoutEffect(() => {
     const el = ref.current!;
@@ -54,7 +54,9 @@ export function Example({ e }: { e: Err }) {
     if (open && el && el.getBoundingClientRect().top < 0) el.scrollIntoView({ block: "start" });
   };
   const copy = () => {
-    navigator.clipboard?.writeText(location.href.split("#")[0] + viewHash(x.v, e.id)).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); });
+    const done = (r: "ok" | "fail") => { setCopied(r); setTimeout(() => setCopied(""), r === "ok" ? 1500 : 4000); };
+    // No clipboard API (or a refusal) throws inside the chain, so both end in the failed state.
+    Promise.resolve().then(() => navigator.clipboard.writeText(location.href.split("#")[0] + viewHash(x.v, e.id))).then(() => done("ok"), () => done("fail"));
   };
   // Its Link, or a click anywhere on an example, selects it and puts its permalink in the address bar.
   const click = (ev: MouseEvent<HTMLDivElement>) => {
@@ -73,7 +75,8 @@ export function Example({ e }: { e: Err }) {
         <ProjectName project={e.p} /><button type="button" className="linkish" title={`Inspect ${e.t}`} onClick={() => openToolSheet("tool", e.t)}>{e.t}</button>{e.sub ? <span>subagent</span> : null}
         {e.s && <a href={sessionHref(x.v, e.s)} title={`Open session ${e.s} in Activity`} onClick={session}>#{e.s.slice(0, 8)}</a>}
         {e.id && <span className="link"><a href={viewHash(x.v, e.id)} data-link={e.id} title="Permalink to this error">🔗 Link</a>
-          <button type="button" data-copy={e.id} onClick={copy}>{copied ? "Copied ✓" : "Copy URL"}</button></span>}
+          <button type="button" data-copy={e.id} onClick={copy}>{copied === "ok" ? "Copied ✓" : copied === "fail" ? "Copy failed" : "Copy URL"}</button>
+            <span className="sr" role="status">{copied === "fail" ? "Could not copy the link." : copied === "ok" ? "Link copied." : ""}</span></span>}
       </div>
       {t.i ? <><code>{t.i}</code>{note("i")}</> : null}<div className="err">{t.e}</div>{note("e")}
       {t.r ? <><blockquote>{t.r}</blockquote>{note("r")}</> : null}

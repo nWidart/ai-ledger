@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { ProjectName } from "../../components/ProjectDot";
 import { useColors } from "../../colors";
 import { num as fmt } from "../../format";
@@ -72,7 +72,10 @@ function TypeDetail({ cat }: { cat: string }) {
     b?.scrollIntoView({ block: "center", behavior: reduced() ? "auto" : "smooth" });
     b?.focus({ preventScroll: true });
   };
-  const copy = (b: HTMLButtonElement) => navigator.clipboard?.writeText(c.snippet).then(() => { b.textContent = "Copied ✓"; });
+  const [copied, setCopied] = useState<"" | "ok" | "fail">("");
+  useEffect(() => setCopied(""), [cat]);
+  // No clipboard API (or a refusal) throws inside the chain, so both end in the failed state.
+  const copy = () => { Promise.resolve().then(() => navigator.clipboard.writeText(c.snippet)).then(() => setCopied("ok"), () => setCopied("fail")); };
   // The date input's max is today: reportValidity shows the browser's message for a future or incomplete date.
   const date = useRef<HTMLInputElement>(null);
   const mark = () => {
@@ -114,7 +117,8 @@ function TypeDetail({ cat }: { cat: string }) {
       <b>{fmt(base.length)}</b> error{base.length === 1 ? "" : "s"} in <b>{fmt(is.n)}</b> incident{is.n === 1 ? "" : "s"}, <b>{fmt(is.pct, 0)}%</b> didn't recover <span className="muted">({RECOVERED_NOTE.replace(/\.$/, "")})</span>.
       {worst && worst.errs.length > 1 ? ` Largest: ${fmt(worst.errs.length)} attempts over ${dur(incSpan(worst))}.` : ""}</p> : null}
     <div className="fixbox"><div className="t">Potential fix</div><div>{c.fix}</div>
-      {c.snippet ? <><pre className="snip" id="snip">{c.snippet}</pre><div className="row" style={{ marginTop: 8 }}><button type="button" id="copy" onClick={e => copy(e.currentTarget)}>Copy CLAUDE.md line</button></div></> : null}
+      {c.snippet ? <><pre className="snip" id="snip">{c.snippet}</pre><div className="row" style={{ marginTop: 8 }}><button type="button" id="copy" onClick={copy}>{copied === "ok" ? "Copied ✓" : "Copy CLAUDE.md line"}</button>
+        <span role="status" className={copied === "fail" ? "muted" : "sr"}>{copied === "fail" ? "Could not copy: select the line above and copy it." : copied === "ok" ? "Copied." : ""}</span></div></> : null}
       <div className="row" style={{ marginTop: 10 }}>
         {fixDay ? <><span className="chip fixed">✓ Fix applied {label(fixDay, true)}</span><button type="button" id="unfix" onClick={undo}>Undo</button></>
           : <><label className="chk">Applied on <input type="date" id="fixDate" ref={date} defaultValue={m.lastDay} max={m.lastDay} /></label><button type="button" id="fix" onClick={mark}>Mark fix applied</button></>}

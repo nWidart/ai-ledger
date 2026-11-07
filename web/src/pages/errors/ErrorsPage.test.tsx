@@ -53,6 +53,16 @@ describe("ErrorsPage", () => {
     expect(JSON.parse(localStorage.getItem("claude-errors-view")!)).toEqual({ project: "", range: 7, source: "", gran: "day", sub: true, noise: false, cat: "x" });
   });
 
+  it("says when copying an example's URL fails", async () => {
+    Object.defineProperty(navigator, "clipboard", { value: { writeText: () => Promise.reject(new Error("denied")) }, configurable: true });
+    history.replaceState(null, "", "/errors#ex=t02");
+    await page();
+    const ex = document.getElementById("ex-t02")!;
+    await userEvent.click(within(ex).getByRole("button", { name: "Copy URL" }));
+    expect(await within(ex).findByRole("button", { name: "Copy failed" })).toBeTruthy();
+    expect(within(ex).getByRole("status").textContent).toBe("Could not copy the link.");
+  });
+
   it("lands an #ex permalink on its example, all time, inside its open incident", async () => {
     history.replaceState(null, "", "/errors#ex=t02");
     await page();
