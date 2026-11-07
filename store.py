@@ -1,7 +1,7 @@
 """Local DuckDB store of coding-agent transcripts, one source per agent (SOURCES).
 
-Raw layer: every transcript line and every plan-limit poll, verbatim and deduplicated, never deleted. Derived
-layer: sessions, requests, tool calls, prompts, hooks and plan-limit snapshots, written during ingest and
+Raw layer: every transcript line, every plan-limit poll and every /insights usage-data file, verbatim and deduplicated, never deleted. Derived
+layer: sessions, requests, tool calls, prompts, hooks, plan-limit snapshots and /insights facets, written during ingest and
 rebuildable from the raw layer.
 """
 import glob
@@ -22,6 +22,7 @@ DEFAULT_DB = os.path.join(HERE, "data", "ai-ledger.duckdb")
 EARLIER_DB = os.path.join(HERE, "data", "claude.duckdb")  # default before the rename to AI Ledger
 DEFAULT_ROOT = os.path.expanduser("~/.claude/projects")
 DEFAULT_CODEX = os.path.expanduser("~/.codex")
+DEFAULT_USAGE_DATA = os.path.expanduser("~/.claude/usage-data")  # Claude Code's /insights facets and session meta
 BUSY = "the app is running and owns the store; use Refresh in the dashboard"
 
 RAW_SCHEMA = """
@@ -35,9 +36,12 @@ CREATE TABLE IF NOT EXISTS raw_lines (
 CREATE TABLE IF NOT EXISTS projects_by_cwd (cwd VARCHAR PRIMARY KEY, project VARCHAR);
 CREATE TABLE IF NOT EXISTS limit_polls (
   provider VARCHAR, polled_at TIMESTAMP, json VARCHAR, PRIMARY KEY (provider, polled_at));
+CREATE TABLE IF NOT EXISTS usage_files (
+  path VARCHAR PRIMARY KEY, kind VARCHAR, session_id VARCHAR, size BIGINT, mtime DOUBLE,
+  json VARCHAR USING COMPRESSION zstd, ingested_at TIMESTAMP);
 """
 
-DERIVED = ["sessions", "requests", "tool_calls", "prompts", "hooks", "limit_snapshots"]
+DERIVED = ["sessions", "requests", "tool_calls", "prompts", "hooks", "limit_snapshots", "session_facets", "facet_counts", "session_meta"]
 DERIVED_SCHEMA = """
 CREATE TABLE IF NOT EXISTS sessions (
   session_id VARCHAR PRIMARY KEY, project VARCHAR, cwd VARCHAR, git_branch VARCHAR,
@@ -61,6 +65,15 @@ CREATE TABLE IF NOT EXISTS limit_snapshots (
   provider VARCHAR, limit_id VARCHAR, scope VARCHAR, window_minutes INTEGER, resets_at TIMESTAMP,
   observed_at TIMESTAMP, used_percent DOUBLE, plan VARCHAR, reached BOOLEAN,
   PRIMARY KEY (provider, limit_id, scope, resets_at, observed_at));
+CREATE TABLE IF NOT EXISTS session_facets (
+  session_id VARCHAR PRIMARY KEY, outcome VARCHAR, helpfulness VARCHAR, session_type VARCHAR, underlying_goal VARCHAR,
+  brief_summary VARCHAR, friction_detail VARCHAR, primary_success VARCHAR, file_mtime TIMESTAMP);
+CREATE TABLE IF NOT EXISTS facet_counts (
+  session_id VARCHAR, kind VARCHAR, name VARCHAR, n BIGINT, PRIMARY KEY (session_id, kind, name));
+CREATE TABLE IF NOT EXISTS session_meta (
+  session_id VARCHAR PRIMARY KEY, project_path VARCHAR, project VARCHAR, start_time TIMESTAMP, duration_minutes INTEGER,
+  lines_added BIGINT, lines_removed BIGINT, files_modified INTEGER, git_pushes INTEGER, languages VARCHAR,
+  permission_mode VARCHAR, response_p50_s DOUBLE, destructive_commands INTEGER, bash_would_prompt INTEGER);
 """
 
 
@@ -226,7 +239,8 @@ unreadable = {}  # path -> (size, mtime) of a file that failed to read, so a lat
 def ingest(con, roots, log=None):
     """Read new bytes of every transcript file under roots ({source: dir}). One transaction per file.
 
-    Skips a source whose root is missing or not given, and a name not in SOURCES."""
+    Skips a source whose root is missing or not given, and a name not in SOURCES. Then reads roots["insights"], the
+    usage-data directory of Claude Code's /insights, after the transcripts so a session new in this ingest is known first."""
     t0 = time.time()
     cur = con.cursor()
     known = {r[0]: r[1:] for r in cur.execute("SELECT path, size, read_offset, lines, seq, mtime FROM files").fetchall()}
@@ -264,6 +278,11 @@ def ingest(con, roots, log=None):
         stats["inserted"] += ins
         if log:
             log(f"{path}: {n} lines, {ins} new")
+    try:
+        stats.update(insights.ingest(cur, roots.get("insights"), projects, log))
+    except Exception as e:  # never fails transcript ingest; the message could quote a file, so only its type
+        print(f"ingest: usage data failed: {type(e).__name__}", file=sys.stderr, flush=True)
+        stats.update(usage_files=0, usage_skipped=1)
     stats["seconds"] = round(time.time() - t0, 2)
     return stats
 
@@ -564,6 +583,7 @@ class Source(NamedTuple):
 
 import codex  # noqa: E402  (it subclasses Deriver)
 import limits  # noqa: E402  (it writes snapshots through this module)
+import insights  # noqa: E402  (it reads usage data through this module)
 
 SOURCES = {"claude": Source(transcript_files, line_key, Deriver, lambda path: "/subagents/" in path),
            "codex": Source(codex.files, codex.key, codex.CodexDeriver, codex.subagent, codex.fields, codex.read,
@@ -596,4 +616,5 @@ def rebuild(con, log=None):
         if log:
             log(path)
     limits.rederive_polls(cur)  # snapshots of polled limits come from limit_polls, not from transcript lines
+    insights.rederive(cur)  # facets and session meta come from usage_files
     return dict(files=len(files), seconds=round(time.time() - t0, 2))

@@ -1,0 +1,22 @@
+{
+  "session_id": "0000aaaa-0000-4000-8000-000000000002",
+  "underlying_goal": "Fix a flaky date test in the demo app",
+  "goal_categories": {
+    "fix_bug": 2,
+    "write_tests": 1
+  },
+  "outcome": "partially_achieved",
+  "user_satisfaction_counts": {
+    "likely_satisfied": 2,
+    "dissatisfied": 1
+  },
+  "claude_helpfulness": "moderately_helpful",
+  "session_type": "iterative_refinement",
+  "friction_counts": {
+    "wrong_approach": 3,
+    "buggy_code": 1
+  },
+  "friction_detail": "Synthetic: patched the wrong time zone helper first. SENTINEL-facet-text",
+  "primary_success": "The test passes locally",
+  "brief_summary": "Synthetic: chased a flaky date test. SENTINEL-facet-text"
+}

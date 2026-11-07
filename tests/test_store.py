@@ -1,3 +1,4 @@
+import io
 import json
 import os
 import shutil
@@ -247,6 +248,33 @@ class LimitStoreTest(StoreCase):
         store.rebuild(self.con)
         self.assertEqual(self.q("SELECT count(*) FROM limit_polls"), [(1,)])
         self.assertEqual(self.q("SELECT provider, limit_id, used_percent, plan FROM limit_snapshots"), [("claude", "weekly_all", 57.0, "max")])
+
+
+class UsageDataStoreTest(StoreCase):
+    def test_store_from_before_usage_data_gains_the_tables(self):
+        self.write("a.jsonl", line(type="user", uuid="u1", sessionId="s1", timestamp="2026-11-01T10:00:00Z"))
+        store.ingest(self.con, self.roots)
+        for t in ("usage_files", "session_facets", "facet_counts", "session_meta"):  # the schema before this change
+            self.con.execute(f"DROP TABLE {t}")
+        counts = lambda: {t: self.q(f"SELECT count(*) FROM {t}")[0][0] for t in ("raw_lines", "files", "sessions", "projects_by_cwd")}
+        before = counts()
+        self.con.close()
+        self.con = store.open_store(self.db)
+        self.assertEqual(counts(), before)
+        cols = [r[0] for r in self.q("SELECT column_name FROM information_schema.columns WHERE table_name = 'usage_files' ORDER BY ordinal_position")]
+        self.assertEqual(cols, ["path", "kind", "session_id", "size", "mtime", "json", "ingested_at"])
+        for t in ("session_facets", "facet_counts", "session_meta"):
+            self.assertEqual(self.q(f"SELECT count(*) FROM {t}"), [(0,)])
+
+    def test_usage_data_failure_keeps_transcript_ingest(self):
+        self.write("a.jsonl", line(type="user", uuid="u1", sessionId="s1"))
+        with mock.patch("insights.ingest", side_effect=RuntimeError("SENTINEL-facet-text")), \
+                mock.patch("sys.stderr", new_callable=io.StringIO) as err:
+            stats = store.ingest(self.con, dict(self.roots, insights=self.tmp))
+        self.assertEqual((stats["files"], stats["usage_files"], stats["usage_skipped"]), (1, 0, 1))
+        self.assertEqual(self.count(), 1)
+        self.assertIn("RuntimeError", err.getvalue())
+        self.assertNotIn("SENTINEL", err.getvalue())
 
 
 if __name__ == "__main__":

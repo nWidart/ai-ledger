@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Local app: owns the transcript store, keeps it current, serves the Activity, Cost, Errors and Limits dashboards.
+"""Local app: owns the transcript store, keeps it current, serves the Activity, Cost, Errors, Limits and Insights dashboards.
 
 Usage:
   uv run app.py            serve on http://127.0.0.1:8765 (ingests at start and every 60 seconds)
-  uv run app.py ingest     ingest new transcript lines once, then exit
+  uv run app.py ingest     ingest new transcript lines and /insights usage data once, then exit
   uv run app.py rebuild    regenerate the derived tables from the stored raw lines
 """
 import argparse
@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 
+import insights
 import limits
 import metrics
 import store
@@ -23,7 +24,7 @@ import store
 HOST, PORT = "127.0.0.1", 8765
 INTERVAL = 60
 WEB = os.path.join(store.HERE, "web", "dist")  # the committed frontend build (npm run build in web/)
-PAGES = ("/usage", "/cost", "/errors", "/limits")  # one app; it picks the page from the path
+PAGES = ("/usage", "/cost", "/errors", "/limits", "/insights")  # one app; it picks the page from the path
 ASSET_TYPES = {".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml",
                ".png": "image/png", ".woff2": "font/woff2", ".json": "application/json; charset=utf-8"}
 
@@ -44,8 +45,9 @@ class App:
                 stats = store.ingest(self.con, self.roots, log=None)
                 self.state.update(last_ingest=datetime.now(timezone.utc).isoformat(timespec="seconds"),
                                   last_stats=stats, error=None)
-                if stats["files"]:
-                    print(f"ingest: {stats['files']} files, {stats['inserted']} new lines, {stats['seconds']}s", flush=True)
+                if stats["files"] or stats.get("usage_files") or stats.get("usage_skipped"):
+                    print(f"ingest: {stats['files']} files, {stats['inserted']} new lines, {stats.get('usage_files', 0)} usage-data files "
+                          f"({stats.get('usage_skipped', 0)} skipped), {stats['seconds']}s", flush=True)
             except Exception as e:  # keep serving; the next run retries
                 self.state["error"] = f"{type(e).__name__}: {e}"
                 print("ingest failed:", self.state["error"], file=sys.stderr, flush=True)
@@ -156,6 +158,9 @@ def handler(app):
                 elif url.path == "/api/limits":
                     self.json(limits.payload(app.con.cursor(), int(q.get("range") or 0), q.get("source", ""), q.get("project", ""),
                                              polls={p.name: dict(p.state) for p in app.pollers}))
+                elif url.path == "/api/insights":
+                    self.json(insights.payload(app.con.cursor(), q.get("project", ""), int(q.get("range") or 0), q.get("source", ""),
+                                               automated=q.get("automated") == "1", usage_dir=app.roots.get("insights")))
                 elif url.path == "/api/tool":
                     self.json(metrics.tool_detail(app.con.cursor(), q.get("kind", ""), q.get("name", ""), q.get("project", ""),
                                                   int(q.get("range") or 0), automated=q.get("automated") == "1", source=q.get("source", "")))
@@ -204,9 +209,10 @@ def main():
     ap.add_argument("command", nargs="?", choices=["serve", "ingest", "rebuild"], default="serve")
     ap.add_argument("--projects", default=store.DEFAULT_ROOT, help="Claude Code transcript root")
     ap.add_argument("--codex", default=store.DEFAULT_CODEX, help="Codex home")
+    ap.add_argument("--usage-data", default=store.DEFAULT_USAGE_DATA, help="Claude Code /insights usage-data directory")
     ap.add_argument("--db", help="database file (default data/ai-ledger.duckdb)")
     a = ap.parse_args()
-    roots = dict(claude=a.projects, codex=a.codex)
+    roots = dict(claude=a.projects, codex=a.codex, insights=a.usage_data)
     try:
         con = store.open_store(a.db)
     except store.StoreBusy as e:

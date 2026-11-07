@@ -1,6 +1,7 @@
 import http.client
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import threading
@@ -10,6 +11,8 @@ from http.server import ThreadingHTTPServer
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import app  # noqa: E402
 import store  # noqa: E402
+
+USAGE_DATA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "usage-data")
 
 
 class AppTest(unittest.TestCase):
@@ -23,7 +26,8 @@ class AppTest(unittest.TestCase):
                      [("s1", "foo", "2026-11-04 10:00:00", "2026-11-04 11:00:00")])
         store.insert(cls.con.cursor(), "tool_calls", ["tool_use_id", "session_id", "tool", "input_summary", "start_ts", "end_ts", "is_error"],
                      [("t1", "s1", "Bash", "npm test", "2026-11-04 10:01:00", "2026-11-04 10:01:02", False)])
-        cls.httpd = ThreadingHTTPServer(("127.0.0.1", 0), app.handler(app.App(cls.con, dict(claude=cls.tmp))))
+        store.ingest(cls.con, dict(insights=USAGE_DATA))
+        cls.httpd = ThreadingHTTPServer(("127.0.0.1", 0), app.handler(app.App(cls.con, dict(claude=cls.tmp, insights=USAGE_DATA))))
         threading.Thread(target=cls.httpd.serve_forever, daemon=True).start()
 
     @classmethod
@@ -85,6 +89,24 @@ class AppTest(unittest.TestCase):
         self.assertEqual((status, json.loads(body)), (400, dict(error="unknown source: grok")))
         status, _, body = self.get("/api/palette?range=-1")
         self.assertEqual((status, json.loads(body)), (400, dict(error="range must be >= 0")))
+
+    def test_insights(self):
+        self.assertIn("/insights", app.PAGES)
+        status, _, body = self.get("/api/insights?range=0")
+        got = json.loads(body)
+        self.assertEqual((status, got["coverage"]["facets"], got["coverage"]["dir"]), (200, 3, USAGE_DATA))
+        self.assertEqual(len(got["sessions"]), 3)
+        status, _, body = self.get("/api/insights?source=grok")
+        self.assertEqual((status, json.loads(body)), (400, dict(error="unknown source: grok")))
+
+    def test_ingest_command_reads_usage_data(self):
+        tmp = tempfile.mkdtemp()
+        r = subprocess.run([sys.executable, os.path.join(store.HERE, "app.py"), "ingest", "--db", os.path.join(tmp, "x.duckdb"),
+                            "--projects", os.path.join(tmp, "p"), "--codex", os.path.join(tmp, "c"), "--usage-data", USAGE_DATA],
+                           capture_output=True, text=True, timeout=60)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("'usage_files': 6, 'usage_skipped': 2", r.stdout)
+        self.assertNotIn("SENTINEL", r.stdout + r.stderr)
 
     def test_foreign_host_refused(self):
         self.assertEqual(self.get("/usage", host="example.com")[0], 403)
