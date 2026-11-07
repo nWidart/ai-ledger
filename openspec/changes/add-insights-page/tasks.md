@@ -46,8 +46,8 @@ Privacy for every group: `~/.claude/usage-data/` and `data/` hold transcript sum
 
 ## 6. Integration
 
-- [ ] 6.1 Copy `data/ai-ledger.duckdb` to a scratch path. Run `uv run app.py ingest --db <copy>` (and never the live store). Verify that it reports about 150 facets and 586 meta files with 0 skipped. Then run `rebuild --db <copy>` and verify that the facet counts are unchanged. Print counts only, never facet text.
-- [ ] 6.2 Serve the copy on a free port and check in the browser: `ai-ledger` facets include worktree sessions; the outcome counts for All match the totals in the design's Context; Codex shows its message; a session link opens its sheet on Activity.
+- [x] 6.1 Copy `data/ai-ledger.duckdb` to a scratch path. Run `uv run app.py ingest --db <copy>` (and never the live store). Verify that it reports about 150 facets and 586 meta files with 0 skipped. Then run `rebuild --db <copy>` and verify that the facet counts are unchanged. Print counts only, never facet text.
+- [x] 6.2 Serve the copy on a free port and check in the browser: `ai-ledger` facets include worktree sessions; the outcome counts for All match the totals in the design's Context; Codex shows its message; a session link opens its sheet on Activity.
 
 ## Workflow follow-up
 
