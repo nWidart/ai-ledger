@@ -3,7 +3,7 @@ import { usageUrl, viewOf, type UsagePayload, type View } from "../../api";
 import { setOrder } from "../../colors";
 import { motion, useCountUp } from "../../components/chart";
 import { openDrawer } from "../../components/Drawer";
-import { agentName, Filters } from "../../components/Filters";
+import { agentName, Filters, viewName } from "../../components/Filters";
 import { InsightCard, type Insight, type InsightItem } from "../../components/InsightCard";
 import { ProjectDot } from "../../components/ProjectDot";
 import { SectionIndex } from "../../components/SectionIndex";
@@ -18,7 +18,6 @@ import { flakyTools, shortTool, workDays, type WorkMetric } from "./work";
 import { WorkChart } from "./WorkChart";
 import "./activity.css";
 
-const viewName = (v: { project: string; range: number }) => `${v.project || "all projects"}, ${v.range ? `last ${v.range} days` : "all time"}`;
 const METRIC_KEY = "claude-activity-metric";
 const loadMetric = (): WorkMetric => { try { const v = localStorage.getItem(METRIC_KEY); return v === "prompts" || v === "sessions" ? v : "commits"; } catch { return "commits"; } };
 

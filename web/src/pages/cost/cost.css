@@ -23,12 +23,13 @@
 .pg-cost .spark svg { display: block; width: 100%; height: 48px; overflow: visible; }
 .pg-cost .spark figcaption { display: flex; justify-content: space-between; gap: 8px; font-size: 11.5px; color: var(--text-muted); margin-top: 4px; }
 .pg-cost .spark figcaption b { color: var(--text-secondary); font-weight: 500; }
-@media (max-width: 720px) {
+/* Stack before the filters squeeze the heading into a narrow column. */
+@media (max-width: 1040px) {
   .pg-cost .top { grid-template-columns: minmax(0, 1fr); align-items: start; }
   .pg-cost .top-side { max-width: none; align-items: stretch; flex-direction: column-reverse; }
   .pg-cost .top-side .filters { justify-content: flex-start; }
-  .pg-cost .spark { width: 100%; }
 }
+@media (max-width: 720px) { .pg-cost .spark { width: 100%; } }
 .pg-cost h2 { font-size: 16px; font-weight: 600; margin: 0; letter-spacing: -.005em; }
 .pg-cost .pending { margin: -12px 0 12px; min-height: 1.5em; color: var(--text-secondary); font-size: 13px; }
 .pg-cost .pending:empty { visibility: hidden; }

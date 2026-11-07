@@ -17,6 +17,9 @@ export interface FiltersProps {
 
 const rangeLabel = (r: number) => (r ? `${r}d` : "All");
 export const SOURCE_LABELS: Record<Source, string> = { claude: "Claude Code", codex: "Codex" };
+/** A view in words for banners and status lines: "atlas-api, Codex, last 30 days". */
+export const viewName = (v: { project: string; range: number; source: Source | "" }) =>
+  [v.project || "all projects", v.source && SOURCE_LABELS[v.source], v.range ? `last ${v.range} days` : "all time"].filter(Boolean).join(", ");
 /** Who did the work, for page text: the selected agent, or "agent" for every source. */
 export const agentName = (source: Source | "") => (source ? SOURCE_LABELS[source] : "agent");
 

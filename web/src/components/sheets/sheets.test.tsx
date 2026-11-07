@@ -85,6 +85,13 @@ describe("SessionSheet", () => {
 });
 
 describe("ProjectSheet", () => {
+  it("keeps the source on its errors link", async () => {
+    mockApi({ "/api/usage": q => ({ ...usage, project: q.get("project"), source: q.get("source") }) });
+    at("#range=30&source=codex&inspect=foo");
+    render(<UsageSheets data={usage} />);
+    expect((await sheet().findByRole("link", { name: "Open its errors" })).getAttribute("href")).toBe("/errors#project=foo&range=30&source=codex");
+  });
+
   it("summarizes the project, opens a session over it and goes back", async () => {
     const f = mockApi({ "/api/usage": q => ({ ...usage, project: q.get("project") }), "/api/session": () => session });
     at("#range=30&inspect=foo");

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "reac
 import { usageUrl, viewOf, type UsagePayload, type View } from "../../api";
 import { setOrder, useColors } from "../../colors";
 import { openDrawer } from "../../components/Drawer";
-import { Filters } from "../../components/Filters";
+import { Filters, viewName } from "../../components/Filters";
 import { InsightCard, rankInsights } from "../../components/InsightCard";
 import { Ledger, LedgerRow } from "../../components/Ledger";
 import { SectionIndex } from "../../components/SectionIndex";
@@ -21,7 +21,6 @@ import { cacheInsight, pairFacts, peakInsight, perCommitInsight, spenderInsight,
 import { Lede, Spark } from "./Lede";
 import "./cost.css";
 
-const viewName = (v: { project: string; range: number }) => `${v.project || "all projects"}, ${v.range ? `last ${v.range} days` : "all time"}`;
 const LEDGER_TOP = 8;
 // The chart's metric and hidden token kinds, under the keys the Usage page kept them in.
 const METRIC_KEY = "claude-usage-metric", HIDDEN_KEY = "claude-usage-hidden";

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { limitsUrl, viewOf, type LimitsPayload, type LimitWindow, type View } from "../../api";
 import { Drawer } from "../../components/Drawer";
-import { Filters } from "../../components/Filters";
+import { Filters, viewName } from "../../components/Filters";
 import { Ledger, LedgerRow } from "../../components/Ledger";
 import { big, dur, num, usd, when } from "../../format";
 import { useHashState } from "../../hash";
@@ -10,7 +10,7 @@ import { LimitChart } from "./LimitChart";
 import { bindingWindow, caption, pace, planName, whenDay, windowName } from "./limits";
 import "./limits.css";
 
-const viewName = (v: View) => `${v.project || "all projects"}, ${v.range ? `the last ${v.range} days` : "all time"}`;
+const rangeName = (range: number) => (range ? `the last ${range} days` : "all time");
 
 /** The heading answers "will I run out?": the window that stops the user first, or the fullest one at reset. */
 function Lede({ d }: { d: LimitsPayload }) {
@@ -70,7 +70,7 @@ function Unused({ d, view }: { d: LimitsPayload; view: View }) {
   return (
     <section className="panel sect" id="unused" aria-labelledby="unusedTitle">
       <h2 id="unusedTitle">Left unused</h2>
-      <div className="hint">Average share of each limit still unused when its windows reset, for {viewName(view)}.</div>
+      <div className="hint">Average share of each limit still unused when its windows reset, over {rangeName(view.range)}.</div>
       <Ledger empty="No closed windows in this range.">{d.unused.map(u => <LedgerRow key={`${u.provider}-${u.label}`} name={windowName(u)}
         share={u.avg_unused / 100} value={`${num(u.avg_unused)}% unused`}
         side={`${num(u.windows)} windows${u.estimated ? `, ${num(u.estimated)} estimated` : ""}`} />)}</Ledger>
@@ -78,7 +78,7 @@ function Unused({ d, view }: { d: LimitsPayload; view: View }) {
   );
 }
 
-function Value({ d }: { d: LimitsPayload }) {
+function Value({ d, project }: { d: LimitsPayload; project: string }) {
   const v = d.value;
   return (
     <Drawer id="value" title="What a point buys" description="Cost, tokens and commits per 1% of a limit">
@@ -91,7 +91,7 @@ function Value({ d }: { d: LimitsPayload }) {
         </table></div>
       </div>) : <p className="empty">No calibrated limit yet.</p>}
       {v.projects.length > 0 && <div className="val">
-        <h3>Commits a point, by project</h3>
+        <h3>Commits a point, by project{project && <span className="muted"> · {project} only</span>}</h3>
         <div className="scroll"><table>
           <thead><tr><th>Project</th><th>Limit</th><th className="num">Points</th><th className="num">Commits</th><th className="num">Commits a point</th></tr></thead>
           <tbody>{v.projects.map(p => <tr key={`${p.provider}-${p.project}`}><td>{p.project}</td><td>{windowName(p)}</td>
@@ -128,7 +128,7 @@ export function LimitsPage() {
       {d && <>
         <div className="sect-head sect" id="windows">
           <h2>Open windows</h2>
-          <p className="hint">Now, for the whole account: the project and range filters apply to the sections below.</p>
+          <p className="hint">Now, for the whole account: the range and project filters do not apply.</p>
           {d.windows.length > 0 && <ul className="lim-key" aria-label="Chart key">
             <li><i className="k-used" />used so far</li><li><i className="k-dot" />measured reading</li><li><i className="k-fc" />forecast</li>
             <li><i className="k-band" />likely range</li><li><i className="k-now" />now</li><li><i className="k-cap" />limit</li>
@@ -142,7 +142,7 @@ export function LimitsPage() {
         <Unused d={d} view={shown} />
         <div className="drawers">
           <History d={d} />
-          <Value d={d} />
+          <Value d={d} project={shown.project} />
         </div>
       </>}
     </div>

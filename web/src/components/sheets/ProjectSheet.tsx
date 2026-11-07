@@ -54,7 +54,7 @@ export function ProjectSheet({ name, d, error, retry, range, pageProject, onSess
   return <>
     <div className="hint">{d.start ? `Last ${range} days` : "All time"}, from the range filter. Estimated at API list prices.</div>
     <div className="actions"><FilterButton project={name} pageProject={pageProject} />
-      <a className="btn" href={errorsHref(name, range)} onClick={appLink}>Open its errors</a></div>
+      <a className="btn" href={errorsHref(name, range, undefined, { source: d.source })} onClick={appLink}>Open its errors</a></div>
     <Facts facts={[
       [usd(t.cost), "est. cost"], [num(t.sessions), "sessions"], [big(t.tokens), "tokens"], [pct(t.cache_hit_ratio, 1), "cache hit"],
       [pct(t.subagent_token_share), "tokens from subagents"], [t.commits ? usd(t.cost_per_commit) : "n/a", `per commit, ${num(t.commits)} commits`],

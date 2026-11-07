@@ -12,7 +12,8 @@
 .pg-limits .fresh { list-style: none; padding: 0; margin: 12px 0 0; display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: 12.5px; color: var(--text-muted); }
 .pg-limits .fresh b { color: var(--text-secondary); font-weight: 500; }
 .pg-limits .fresh .chip { margin-left: 6px; }
-@media (max-width: 720px) {
+/* Stack before the filters squeeze the heading into a narrow column. */
+@media (max-width: 1040px) {
   .pg-limits .top { grid-template-columns: minmax(0, 1fr); }
   .pg-limits .top-side { max-width: none; align-items: stretch; flex-direction: column-reverse; }
   .pg-limits .top-side .filters { justify-content: flex-start; }

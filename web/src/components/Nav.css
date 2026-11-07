@@ -47,3 +47,9 @@
   #navRefresh { display: inline-flex; align-items: center; }
   #navRefresh svg { display: block; }
 }
+/* The narrowest phones: the logo goes and everything tightens so the actions stay on the tabs' row. */
+@media (max-width: 360px) {
+  .appnav-brand { display: none; }
+  .appnav a { padding: 8px 2px; font-size: 13.5px; }
+  .appnav .appnav-palette, #navRefresh, #navTheme { width: 32px; }
+}

@@ -95,6 +95,8 @@ export function Palette() {
       if (d.open) return; // the close event comes a task later; the palette may have opened again since (Esc, then Cmd+K)
       closePalette();
       if (opener.current?.isConnected) opener.current.focus();
+      // The opener left with its page: start the reader at the new page's heading, unless an inspector took focus.
+      else if (!document.querySelector("dialog[open]")) document.getElementById("lede")?.focus({ preventScroll: true });
       opener.current = null;
     };
     d.addEventListener("cancel", cancel); d.addEventListener("close", closed);
