@@ -18,6 +18,8 @@
   .pg-limits .top-side { max-width: none; align-items: stretch; flex-direction: column-reverse; }
   .pg-limits .top-side .filters { justify-content: flex-start; }
 }
+.pg-limits .pending { margin: -12px 0 12px; min-height: 1.5em; color: var(--text-secondary); font-size: 13px; }
+.pg-limits .pending:empty { visibility: hidden; }
 .pg-limits.loading > :not(.top) { opacity: .55; }
 @media (prefers-reduced-motion: no-preference) { .pg-limits > :not(.top) { transition: opacity .2s; } }
 

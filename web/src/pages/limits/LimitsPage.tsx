@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { limitsUrl, viewOf, type LimitsPayload, type LimitWindow, type View } from "../../api";
 import { Drawer } from "../../components/Drawer";
 import { Filters, viewName } from "../../components/Filters";
+import { useLanding } from "../../components/useLanding";
 import { Ledger, LedgerRow } from "../../components/Ledger";
 import { big, dur, num, usd, when } from "../../format";
 import { useHashState } from "../../hash";
@@ -111,9 +112,9 @@ export function LimitsPage() {
   // The payload does not echo its view, so remember the one the data on screen answers.
   const [shown, setShown] = useState(want);
   useEffect(() => { if (d && !loading && !error) setShown(want); }, [d, loading, error, url]); // want is read through url
-  const projects = d ? [...new Set(d.value.projects.map(p => p.project))] : [];
+  const { slow, wrap, retryBtn } = useLanding(d, loading, error, ":scope > :is(.lim-grid, .panel, .drawers)");
   return (
-    <div className={"wrap pg-limits" + (loading && d ? " loading" : "")} aria-busy={loading || undefined}>
+    <div className={"wrap pg-limits" + (slow ? " loading" : "")} ref={wrap} aria-busy={loading || undefined}>
       <header className="top sect" id="overview">
         <div>
           {d ? <Lede d={d} /> : <h1 className="lede" id="lede" tabIndex={-1}>{error ? "Limits could not be loaded." : "Loading limits…"}</h1>}
@@ -121,10 +122,11 @@ export function LimitsPage() {
             its {d.suggestion.label} limit would go unused (resets {whenDay(d.suggestion.resets_at)}).</p>}
           {d && <Freshness d={d} />}
         </div>
-        <div className="top-side"><Filters projects={projects} /></div>
+        <div className="top-side"><Filters projects={d?.projects ?? []} /></div>
       </header>
       {error && <div className="banner" role="alert"><b>Could not load limits for {viewName(want)} ({error.message}).{d ? ` Still showing ${viewName(shown)}.` : ""}</b>{" "}
-        <button type="button" className="linkish" onClick={retry}>Retry</button></div>}
+        <button type="button" className="linkish" ref={retryBtn} onClick={retry}>Retry</button></div>}
+      <p className="pending" role="status">{loading && d ? `Loading limits for ${viewName(want)}…` : ""}</p>
       {d && <>
         <div className="sect-head sect" id="windows">
           <h2>Open windows</h2>

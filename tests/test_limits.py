@@ -430,6 +430,7 @@ class ValueTest(AnalysisCase):
         only = self.payload(now, project="bar")["value"]["projects"]
         self.assertEqual([p["project"] for p in only], ["bar"])
         self.assertEqual(len(self.payload(now, project="bar")["windows"]), 1)
+        self.assertEqual(sorted(self.payload(now, project="bar")["projects"]), ["bar", "foo"])  # the picker keeps every project
 
 
 class ApiTest(AnalysisCase):

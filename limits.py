@@ -570,7 +570,8 @@ def suggestion_of(windows):
 
 def payload(cur, range_days=0, source="", project="", now=None, today=None, prices=None, tz=None, polls=None):
     """The JSON the Limits page reads. Open windows ignore range_days; history, unused capacity and value use it.
-    project narrows only commits per point: limits are per account. polls is each poller's state, by provider."""
+    project narrows only commits per point: limits are per account. projects lists every project for the picker, whatever
+    the filters. polls is each poller's state, by provider."""
     if source and source not in metrics.SOURCES:
         raise ValueError(f"unknown source: {source}")
     if range_days < 0:
@@ -610,7 +611,7 @@ def payload(cur, range_days=0, source="", project="", now=None, today=None, pric
         u["estimated"] += h["estimated"]
         u["total"] += 100 - h["final"]
     unused = [dict({k: v for k, v in u.items() if k != "total"}, avg_unused=round(u["total"] / u["windows"], 1)) for u in unused.values()]
-    return dict(now=metrics.iso(now), windows=windows, binding=binding_of(windows), suggestion=suggestion_of(windows),
+    return dict(now=metrics.iso(now), projects=metrics.project_list(cur), windows=windows, binding=binding_of(windows), suggestion=suggestion_of(windows),
                 history=history, events=events, unused=unused, value=value(cur, usage, cals, start, now, project, prices),
                 freshness=freshness(names, snaps, windows, polls or {}, now))
 

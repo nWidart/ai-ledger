@@ -18,7 +18,9 @@ export function LimitChart({ w, now, events }: { w: LimitWindow; now: string; ev
   const measured = w.series.filter(p => p.measured);
   const f = w.forecast;
   const band = f && `${path(f.curve.map(p => ({ t: p.t, v: p.hi })))}L${f.curve.slice().reverse().map(p => `${x(p.t).toFixed(1)},${y(p.lo).toFixed(1)}`).join("L")}Z`;
-  const at = (w.window_minutes ?? 0) >= 1440 ? when : whenDay; // a weekday alone repeats across a week
+  // A weekday alone repeats across a week, so long windows give the date; on a narrow chart, the date without the time.
+  const day = (t: string) => new Date(t).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  const at = (w.window_minutes ?? 0) >= 1440 ? (W < 360 ? day : when) : whenDay;
   const marks = events.filter(e => e.provider === w.provider && Date.parse(e.at) >= t0 && Date.parse(e.at) <= t1);
   return (
     <div className="lim-chart" ref={box}>

@@ -348,15 +348,18 @@ describe("Palette accessibility", () => {
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "opener" }));
   });
 
-  it("focuses the page heading when its opener is gone on close", async () => {
+  it("focuses the page heading when its opener is gone on close, and follows it when the page replaces it", async () => {
     serve();
     history.replaceState(null, "", "/usage#range=30");
-    const page = (opener: boolean) => <>{opener && <button>opener</button>}<h1 id="lede" tabIndex={-1}>Heading</h1><Palette /></>;
-    const { rerender } = render(page(true));
+    const page = (opener: boolean, heading: string) =>
+      <>{opener && <button>opener</button>}<h1 key={heading} id="lede" tabIndex={-1}>{heading}</h1><Palette /></>;
+    const { rerender } = render(page(true, "Loading…"));
     screen.getByRole("button", { name: "opener" }).focus();
     act(() => openPalette());
-    rerender(page(false));
+    rerender(page(false, "Loading…"));
     await userEvent.type(box(), "{Escape}");
-    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Heading" })));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Loading…" })));
+    rerender(page(false, "Loaded"));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Loaded" })));
   });
 });

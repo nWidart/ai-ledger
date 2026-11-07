@@ -43,6 +43,19 @@ function Marked({ text, ranges }: { text: string; ranges: Ranges }) {
   return <>{out}</>;
 }
 
+/** Focus the page heading, and follow it while the page swaps its loading heading for the answer, until focus moves on. */
+function landOnLede() {
+  let at = document.getElementById("lede");
+  at?.focus({ preventScroll: true });
+  const mo = new MutationObserver(() => {
+    if (document.activeElement !== document.body && document.activeElement !== at) { mo.disconnect(); return; }
+    const now = document.getElementById("lede");
+    if (now && now !== at) { at = now; now.focus({ preventScroll: true }); }
+  });
+  mo.observe(document.body, { childList: true, subtree: true });
+  setTimeout(() => mo.disconnect(), 10_000);
+}
+
 /**
  * The command palette (Cmd+K or Ctrl+K, or the nav button): # filters, > pages, inspectors and commands, as chips. One
  * commit writes the whole view to the URL as one history entry. Mounted once by App, so it lives across page switches.
@@ -96,7 +109,7 @@ export function Palette() {
       closePalette();
       if (opener.current?.isConnected) opener.current.focus();
       // The opener left with its page: start the reader at the new page's heading, unless an inspector took focus.
-      else if (!document.querySelector("dialog[open]")) document.getElementById("lede")?.focus({ preventScroll: true });
+      else if (!document.querySelector("dialog[open]")) landOnLede();
       opener.current = null;
     };
     d.addEventListener("cancel", cancel); d.addEventListener("close", closed);

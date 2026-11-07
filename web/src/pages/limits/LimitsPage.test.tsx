@@ -104,6 +104,24 @@ describe("LimitsPage", () => {
     expect(vi.mocked(f).mock.calls.at(-1)![0]).toBe("/api/limits?range=30&source=codex");
   });
 
+  it("offers every project in the picker while one is chosen", async () => {
+    show({ ...fixture, projects: ["foo", "bar"], value: { ...fixture.value, projects: [] } }, "#project=foo&range=30");
+    await lede();
+    expect(screen.getAllByRole("option").map(o => o.textContent)).toEqual(["All projects", "foo", "bar"]);
+  });
+
+  it("after a failure, Retry lands focus on the new heading", async () => {
+    let fail = true;
+    mockApi({ "/api/limits": () => (fail ? undefined : fixture) });
+    history.replaceState(null, "", "/limits#range=30");
+    render(<LimitsPage />);
+    const retry = await screen.findByRole("button", { name: "Retry" });
+    expect(document.activeElement).toBe(retry);
+    fail = false;
+    await userEvent.click(retry);
+    expect(document.activeElement).toBe(await lede());
+  });
+
   it("sends >bash from Limits to Activity, which hosts the inspector", async () => {
     mockApi({ "/api/limits": () => fixture, "/api/palette": () => palette });
     history.replaceState(null, "", "/limits");

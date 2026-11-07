@@ -3,6 +3,9 @@ import type { LimitsPayload } from "../api";
 
 export default {
  "now": "2026-11-06T12:00:00.000Z",
+ "projects": [
+  "foo"
+ ],
  "windows": [
   {
    "provider": "claude",

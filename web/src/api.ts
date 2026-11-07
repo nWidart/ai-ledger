@@ -183,6 +183,8 @@ export interface LimitHistoryRow {
 export interface PlanChange { kind: "plan_change"; provider: string; at: Ts; plan_from: string; plan_to: string }
 export interface LimitsPayload {
   now: Ts; windows: LimitWindow[];
+  /** Every project, busiest first, for the picker; the filters leave it alone. */
+  projects: string[];
   binding: { provider: string; limit_id: string; scope: string; runs_out: boolean } | null;
   suggestion: { provider: string; provider_label: string; label: string; unused_at_reset: number; resets_at: Ts } | null;
   history: LimitHistoryRow[]; events: PlanChange[];
