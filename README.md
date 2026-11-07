@@ -2,23 +2,18 @@
 
 A local ledger of your Claude Code and Codex transcripts, with five dashboards: Activity, Cost, Errors, Limits and Insights.
 
-![Tour of the four pages](docs/tour.gif)
+![Tour of the pages](docs/tour.gif)
 
 ## Why
 
 Coding agents leave a full record of their work on disk, then delete or archive it. That record answers questions their own UIs don't:
 
-- **What did the agents get done, and where did they struggle?** Commits, prompts, sessions, error loops, flaky tools.
-- **What did it cost, and why did that change?** An estimate at API list prices, compared with the period before.
-- **Which errors keep coming back, and how do I stop them?** Failed tool calls grouped by cause, each with a fix to paste into `CLAUDE.md`.
-- **Will I hit my plan limit before it resets?** A forecast per limit window, and which provider has room left.
+- **What did the agents get done, and where did they struggle?**
+- **What did it cost, and why did that change?**
+- **Which errors keep coming back, and how do I stop them?**
+- **Will I hit my plan limit before it resets?**
 
-Goals:
-
-- **Local and private.** Everything stays on your machine. The server listens on `127.0.0.1` only.
-- **Permanent.** The store keeps every transcript line, even after the agent deletes or archives the file.
-- **One view of both agents.** Claude Code and Codex map onto the same tables, so every page filters by source.
-- **Linkable.** Filters, open sheets and single errors live in the URL, so you can paste a view into an agent prompt.
+Everything stays on your machine: the server listens on `127.0.0.1` only. The store keeps every transcript line, even after the agent deletes the file. Claude Code and Codex share the same tables, so every page filters by source. Filters and open sheets live in the URL.
 
 ## Run
 
@@ -29,7 +24,7 @@ uv sync
 uv run app.py               # http://127.0.0.1:8765/ (use 127.0.0.1, not localhost)
 ```
 
-The first start reads every transcript (about 4 minutes for 3.4 GB). After that the app reads new lines every 60 seconds. Click **Refresh** to read them now.
+The first start reads every transcript (about 4 minutes for 3.4 GB). After that the app reads new lines every 60 seconds, or when you click **Refresh**.
 
 Stop the app before you run these commands, because the app keeps the store open:
 
@@ -42,80 +37,43 @@ Options: `--projects <dir>` (default `~/.claude/projects`), `--codex <dir>` (def
 
 ## Pages
 
-**Activity**: what got done and what needs attention. Select a day to list its sessions. Open a session to see its context timeline. Click a tool to open the tool inspector.
+**Activity**: what got done and what needs attention, per day, session and tool.
 
 ![Activity](docs/activity.gif)
 
-**Cost**: estimated cost against the period before, with each project's share of the change. Also: spend per day, by model and per session. Prices come from `prices.json`. The page names models missing from it and leaves them out of the totals.
+**Cost**: estimated cost at API list prices against the period before, per project, day, model and session. Prices come from `prices.json`.
 
 ![Cost](docs/cost.gif)
 
-**Errors**: failed tool calls by type, the error rate over time, and a suggested fix for each type. Mark a fix as applied to compare the error rate before and after it. Each error type and each example has a permalink.
+**Errors**: failed tool calls by type, the error rate over time, and a fix to paste into `CLAUDE.md` for each type.
 
 ![Errors](docs/errors.gif)
 
-**Limits**: usage of each plan limit window, with a forecast to its reset. Open windows are account-wide: the range and project filters do not apply to them. Below: capacity left unused, then past windows and what 1% of a limit buys, folded until opened.
+**Limits**: usage of each plan limit window, with a forecast to its reset.
 
 ![Limits](docs/limits.gif)
 
-Where the limit figures come from:
+Codex writes its limits into its session files. For Claude Code, the app polls Anthropic's undocumented usage endpoint every 5 minutes, using the OAuth token from the macOS Keychain. The token goes only to that endpoint and is never stored or logged. Off macOS, the app does not poll. Between readings, the page estimates usage from transcripts and labels it as estimated.
 
-- **Codex** writes its limits into its session files.
-- **Claude Code** writes none. Every 5 minutes, the app asks Anthropic's usage endpoint (`api.anthropic.com/api/oauth/usage`). This endpoint is undocumented and can change without notice. The request uses the OAuth token that Claude Code keeps in the macOS Keychain. The app sends the token only to that endpoint and never stores or logs it. Off macOS, the app does not poll Claude limits.
-- Between readings, the page estimates usage from the transcripts and labels those figures as estimated.
-
-**Insights**: how Claude Code's `/insights` command judged your sessions, per project and time range: outcomes, user satisfaction, Claude's helpfulness, friction categories, goals and session types, then the analysed sessions with their summary and friction detail. Each stored session links to its sheet on Activity.
-
-- These figures are a model's judgments, not measurements, and the page labels every one of them as model-judged. `/insights` asks a model to read each transcript and writes one facet per analysed session to `~/.claude/usage-data/facets/`, with measured figures in `session-meta/`. The app copies both into the store at every ingest and keeps them after Claude Code overwrites or deletes them. It never reads the narrative `report*.html`.
-- Only Claude Code sessions are covered. Codex sessions are counted apart as not analysed.
-- The page says how many Claude Code sessions in the view have no facet and when the newest facet was written. Run `/insights` in Claude Code to analyse more, then Refresh.
-
-The button at the right end of the top bar sets the theme: **System** (follows the OS), **Light** or **Dark**. Each click moves to the next. The browser keeps the choice, and other open tabs switch with it.
+**Insights**: how Claude Code's `/insights` command judged your sessions: outcomes, satisfaction, friction, goals. These are model judgments, not measurements. Run `/insights` in Claude Code to analyse more sessions, then **Refresh**.
 
 ## Command palette
 
-Press **Cmd+K** on macOS or **Ctrl+K** elsewhere, or click **Search** in the navigation, to build a view in one step. Type `#` to narrow and `>` to go somewhere or run a command, in any order:
+Press **Cmd+K** (**Ctrl+K** elsewhere) to build a view in one step. Type `#` to filter and `>` to go somewhere or run a command:
 
-- `#` filters: a project, a source (`#claude`, `#codex`), a range (`#7d`, `#14d`, `#30d`, `#90d`, `#all`) or `#automated`.
-- `>` destinations: a page (`>errors`), an inspector (a tool such as `>bash`, an MCP server, a skill, a session, an error type), or a command (`>refresh`, `>copy link`).
-- Text without a sigil searches every kind. Each row shows its kind and the sigil it becomes.
+- `#` filters: a project, a source (`#claude`, `#codex`), a range (`#7d`, `#30d`, `#all`) or `#automated`.
+- `>` destinations: a page (`>errors`), an inspector (`>bash`, an MCP server, a skill, a session), or a command (`>refresh`, `>copy link`).
 
 Examples:
 
-- `>errors` opens Errors with the current filters.
 - `>errors #myproject` opens Errors filtered to `myproject`.
 - `#myproject >bash` opens the Bash inspector on the current page, for `myproject`.
 - `#myproject #codex #7d >cost` opens Cost with those three filters.
 - `>errors >bash` opens Errors with the Bash inspector over it.
 
-Picked terms become chips. The palette opens with a chip for each current filter, so removing a chip removes that filter. Tab adds the highlighted row, Backspace removes the last chip, Enter applies, and Esc closes. Enter waits while a typed term is not a chip yet, and the footer names it. With a mouse, a clicked filter becomes a chip and a clicked destination applies; on a touch screen every tapped row becomes a chip and **Apply** applies. The footer says what Enter will do. Tool, MCP server and skill rows count only the calls in the chosen view, so an empty combination shows before you apply it.
-
-When terms clash:
-
-- Two pages: the later one wins.
-- Two values of a project, source or range: the later one wins.
-- Two inspectors: the later one wins.
-- An error type opens Errors. A later page that cannot show it drops it.
-- An inspector with no page stays on the current page, or opens Activity from Limits.
-
-One commit adds one browser history entry, so Back undoes it. The suggestions come from `/api/palette`, which takes the same `project`, `range`, `source` and `automated` parameters as `/api/usage`.
-
 ## Privacy
 
 `data/ai-ledger.duckdb` holds full transcript content, including any secrets that appeared in a session. It is git-ignored. Do not share it.
-
-The `/insights` facets and session meta it copies from `~/.claude/usage-data` hold summaries of transcript content. They stay in the same git-ignored store, and the app logs only their paths, never their text. Tests and the demo store use made-up facets.
-
-## Files
-
-- `app.py`: the HTTP server, the background ingest, and the CLI commands.
-- `store.py`, `codex.py`: the store, and the parsers for Claude Code and Codex.
-- `categorize.py`: error types and their fixes. Add a rule when an error pattern shows up under "Other", then run `rebuild`.
-- `metrics.py`, `limits.py`: the queries and forecasts behind the pages.
-- `insights.py`: reads `/insights` facets and session meta, and builds the Insights payload.
-- `web/`: the React pages. `web/dist/` is the committed build that the app serves.
-- `tools/demo/`: the recorder that makes the GIFs above.
-- `openspec/specs/`: how each page behaves in detail.
 
 ## Develop
 
@@ -127,11 +85,11 @@ cd web && npm run check                 # typecheck, tests and build: run before
 
 Commit `web/dist/` with every `web/src` change. A test fails when the build is stale.
 
-To record the GIFs again, run these from the repository root. The recorder writes them to `docs/`, using only made-up data:
+To record the GIFs again from made-up data:
 
 ```bash
 uv run tools/demo/seed.py                     # synthetic store in tools/demo/demo.duckdb
-uv run tools/demo/serve.py                    # serves it on 127.0.0.1:8799, with no ingest and no polling
+uv run tools/demo/serve.py                    # serves it on 127.0.0.1:8799
 # in a second terminal:
-cd tools/demo && npm install && npx playwright install chromium-headless-shell && npm run record    # needs gifski: brew install gifski
+cd tools/demo && npm install && npx playwright install chromium-headless-shell && npm run record    # needs gifski
 ```
