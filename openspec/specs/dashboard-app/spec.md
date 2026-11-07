@@ -32,7 +32,7 @@ Only one process SHALL write to the store at a time. A second app or command-lin
 - **THEN** the command exits with a non-zero status and a message saying the app owns the store
 
 ### Requirement: Shared navigation
-Every dashboard page SHALL show the same navigation with Activity, Cost and Errors entries, mark the current page, and keep the selected project and time range when switching pages.
+Every dashboard page SHALL show the same navigation with Activity, Cost, Errors and Limits entries, mark the current page, and keep the selected project and time range when switching pages.
 
 #### Scenario: Switch from Usage to Errors
 - **WHEN** the user views project `foo` for the last 30 days on Activity (`/usage`) and clicks Errors
@@ -41,6 +41,10 @@ Every dashboard page SHALL show the same navigation with Activity, Cost and Erro
 #### Scenario: Switch from Activity to Cost
 - **WHEN** the user views project `foo` for the last 30 days on Activity and clicks Cost
 - **THEN** the cost dashboard opens filtered to `foo` and the last 30 days
+
+#### Scenario: Switch from Cost to Limits
+- **WHEN** the user views Codex for the last 30 days on Cost and clicks Limits
+- **THEN** the Limits page opens filtered to Codex and the last 30 days
 
 ### Requirement: Errors dashboard served from the store
 The errors dashboard SHALL read its data from the store and SHALL keep its existing behavior: error categories with suggested fixes, per-example (`#ex=<tool_use_id>`) and per-category (`#cat=<type>`) permalinks, and applied-fix markers.
@@ -58,11 +62,15 @@ The errors dashboard SHALL read its data from the store and SHALL keep its exist
 - **THEN** the marker still shows on its date with the before and after error rate
 
 ### Requirement: Open Activity by default
-The app SHALL serve Activity at `/usage`, Cost at `/cost` and Errors at `/errors`, and SHALL send `/` to Activity.
+The app SHALL serve Activity at `/usage`, Cost at `/cost`, Errors at `/errors` and Limits at `/limits`, and SHALL send `/` to Activity.
 
 #### Scenario: Open the app root
 - **WHEN** the user opens `http://127.0.0.1:8765/`
 - **THEN** the Activity page opens
+
+#### Scenario: Open Limits directly
+- **WHEN** the user opens `http://127.0.0.1:8765/limits`
+- **THEN** the Limits page opens
 
 ### Requirement: Run without a frontend toolchain
 The app SHALL serve every dashboard page from files in the repository, so running it needs only Python and its Python dependencies. A frontend toolchain SHALL be needed only to change the pages.
@@ -109,7 +117,7 @@ Choices the pages saved in the browser before the rename SHALL still apply after
 - **THEN** the marker still shows on its date after the rename
 
 ### Requirement: Filter by source
-Activity, Cost and Errors SHALL offer a source filter with the choices All, Claude Code and Codex, defaulting to All. Every figure, chart and table on the page SHALL reflect the chosen source. The choice SHALL be kept in the page URL and carried across pages with the project and time range.
+Activity, Cost, Errors and Limits SHALL offer a source filter with the choices All, Claude Code and Codex, defaulting to All. Every figure, chart and table on the page SHALL reflect the chosen source. The choice SHALL be kept in the page URL and carried across pages with the project and time range.
 
 #### Scenario: Default shows every source
 - **WHEN** the user opens Cost with no source in the URL, and the last 30 days hold $120 of Claude usage and $15 of Codex usage
