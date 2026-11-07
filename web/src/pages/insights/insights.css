@@ -1,0 +1,102 @@
+/* Insights (/insights): every rule sits under .pg-insights, since every page's CSS is loaded at once. Tables come from sheets.css. */
+.pg-insights .top { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+.pg-insights .kicker { font-size: 15px; font-weight: 600; margin: 0; color: var(--text-secondary); display: flex; gap: 8px; align-items: center; }
+/* The model-judged tag: dashed, so it never reads as a measured chip. */
+.pg-insights .judged { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 500; padding: 1px 8px; border-radius: 999px;
+  border: 1px dashed var(--text-muted); color: var(--text-secondary); white-space: nowrap; letter-spacing: 0; cursor: help; }
+.pg-insights .judged::before { content: "≈"; font-weight: 600; color: var(--text-muted); }
+.pg-insights .banner .when { color: inherit; font-weight: 500; }
+.pg-insights .banner b.when { color: var(--text-primary); }
+.pg-insights .cov { margin: -8px 0 16px; font-size: 13px; color: var(--text-secondary); }
+.pg-insights .banner + .cov { margin-top: -12px; }
+.pg-insights .lede { margin: 0 0 8px; max-width: 34ch; font-size: clamp(24px, 4vw, 40px); line-height: 1.14; font-weight: 400;
+  letter-spacing: -.025em; text-wrap: balance; color: var(--text-secondary); }
+.pg-insights .lede:focus { outline: none; }
+.pg-insights .lede b { font-weight: 600; letter-spacing: -.04em; color: var(--text-primary); }
+.pg-insights .lede code { font-size: .8em; }
+.pg-insights .sub { color: var(--text-muted); font-size: 13px; margin: 0 0 20px; max-width: 90ch; }
+.pg-insights .pending { margin: -12px 0 8px; min-height: 1.5em; color: var(--text-secondary); font-size: 13px; }
+.pg-insights .pending:empty { visibility: hidden; }
+.pg-insights.loading > :not(.top) { opacity: .55; }
+@media (prefers-reduced-motion: no-preference) { .pg-insights > :not(.top) { transition: opacity .2s; } }
+
+/* Five outcomes in one ruled strip */
+.pg-insights .vitals { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1px; margin: 0 0 20px;
+  background: var(--border); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.pg-insights .vital { padding: 16px 16px 16px 0; background: var(--bg); min-width: 0; }
+.pg-insights .vital + .vital { padding-left: 16px; }
+.pg-insights .vital .v { font-size: 28px; font-weight: 600; letter-spacing: -.035em; line-height: 1.1; }
+.pg-insights .vital .v small { font-size: 15px; font-weight: 500; color: var(--text-muted); letter-spacing: -.01em; }
+.pg-insights .vital .l { font-weight: 500; margin-top: 4px; }
+.pg-insights .vital .d { color: var(--text-muted); font-size: 12.5px; margin-top: 2px; }
+.pg-insights .vital.good .v { color: var(--good-text); }
+.pg-insights .vital.bad .v { color: var(--critical-text); }
+@media (max-width: 900px) {
+  .pg-insights .vitals { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pg-insights .vital:first-child { grid-column: 1 / -1; }
+  .pg-insights .vital:nth-child(2), .pg-insights .vital:nth-child(4) { padding-left: 0; }
+}
+@media (max-width: 520px) {
+  .pg-insights .vital { padding: 10px 12px 10px 0; }
+  .pg-insights .vital + .vital { padding-left: 12px; }
+  .pg-insights .vital:nth-child(2), .pg-insights .vital:nth-child(4) { padding-left: 0; }
+  .pg-insights .vital .v { font-size: 22px; }
+  .pg-insights .lede { font-size: 21px; }
+}
+
+.pg-insights h2 { font-size: 15px; font-weight: 600; margin: 0 0 2px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.pg-insights h3 { font-size: 13px; font-weight: 600; margin: 18px 0 2px; color: var(--text-secondary); }
+.pg-insights .grid2 { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 16px; margin-bottom: 16px; }
+.pg-insights .stack { display: grid; gap: 16px; align-content: start; }
+@media (max-width: 900px) { .pg-insights .grid2 { grid-template-columns: minmax(0, 1fr); } }
+/* Ledgers here carry "N sessions" on the side, wider than the default column. */
+.pg-insights .ledger li { grid-template-columns: minmax(0, 13rem) minmax(40px, 1fr) 3.5rem 5.5rem; }
+@media (max-width: 520px) { .pg-insights .ledger li { grid-template-columns: minmax(0, 1fr) 3.5rem 5.5rem; } }
+
+/* Session types: one stacked strip with a key */
+.pg-insights .strip { display: flex; height: 10px; border-radius: 5px; overflow: hidden; gap: 2px; margin: 10px 0 8px; }
+.pg-insights .strip i { display: block; height: 100%; }
+.pg-insights .key { display: flex; flex-wrap: wrap; gap: 4px 14px; list-style: none; margin: 0; padding: 0; font-size: 13px; color: var(--text-secondary); }
+.pg-insights .key li { display: inline-flex; align-items: center; gap: 6px; }
+.pg-insights .key .sw { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.pg-insights .key b { color: var(--text-primary); font-weight: 600; }
+
+/* Session log */
+.pg-insights .log-head { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; justify-content: space-between; }
+.pg-insights .log td { vertical-align: top; padding-top: 9px; padding-bottom: 9px; }
+.pg-insights .log td.when { color: var(--text-secondary); }
+.pg-insights .log td.proj { max-width: 160px; }
+.pg-insights .log td.goal .chip, .pg-insights .log td.fr .chip { margin: 0 4px 4px 0; }
+.pg-insights .log td.goal, .pg-insights .log td.fr { max-width: 200px; }
+.pg-insights .log td.detail { color: var(--text-secondary); min-width: 280px; max-width: 460px; }
+.pg-insights .log td.detail p { margin: 0; }
+.pg-insights .log td.detail p + p { margin-top: 4px; }
+.pg-insights .log td.detail .fd b { color: var(--text-primary); font-weight: 500; }
+.pg-insights .log td.go { white-space: nowrap; text-align: right; }
+.pg-insights .log td.go a { font-weight: 500; text-decoration: none; }
+.pg-insights .log td.go a:hover { text-decoration: underline; }
+.pg-insights .badge { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 999px;
+  white-space: nowrap; background: var(--surface-2); color: var(--text-secondary); }
+.pg-insights .badge::before { font-size: 10px; content: "?"; }
+.pg-insights .badge.full { background: var(--good-soft); color: var(--good-text); }
+.pg-insights .badge.full::before { content: "✓"; }
+.pg-insights .badge.part { background: var(--warning-soft); color: var(--warning-text); }
+.pg-insights .badge.part::before { content: "◐"; }
+.pg-insights .badge.not { background: var(--critical-soft); color: var(--critical-text); }
+.pg-insights .badge.not::before { content: "✕"; }
+.pg-insights .dis { display: block; margin-top: 3px; font-size: 11.5px; color: var(--critical-text); }
+/* Phones: each session becomes a card; the labels the header gave move next to the values. */
+@media (max-width: 720px) {
+  .pg-insights .log .scroll { overflow: visible; max-height: none; background: none; }
+  .pg-insights .log thead { display: none; }
+  .pg-insights .log table, .pg-insights .log tbody { display: block; }
+  .pg-insights .log tr { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 6px 10px; padding: 12px 0; border-bottom: 1px solid var(--border); }
+  .pg-insights .log td { display: block; border: 0; padding: 0; min-width: 0; max-width: none; }
+  .pg-insights .log td.when { grid-column: 1; }
+  .pg-insights .log td.proj { grid-column: 2; }
+  .pg-insights .log td.go { grid-column: 3; }
+  .pg-insights .log td.out, .pg-insights .log td.goal, .pg-insights .log td.fr, .pg-insights .log td.detail { grid-column: 1 / -1; }
+  .pg-insights .log td.out .dis { display: inline; margin: 0 0 0 8px; }
+  .pg-insights .log td.goal::before, .pg-insights .log td.fr::before { content: attr(data-k) " "; color: var(--text-muted); font-size: 12px; margin-right: 4px; }
+  .pg-insights .log td.empty { grid-column: 1 / -1; }
+}

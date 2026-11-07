@@ -1,33 +1,33 @@
-/* Data tables of Activity, Cost, Limits and their sheets (scoped to them: Errors draws its own) */
+/* Data tables of Activity, Cost, Limits, Insights and their sheets (scoped to them: Errors draws its own) */
 /* Wide tables scroll sideways. A shadow shows at an edge only while more columns sit past it: the covers scroll with the
    content (local) and hide the shadows (scroll) at either end. --scroll-bg is whatever the table sits on. */
-:is(.pg-activity, .pg-cost, .pg-limits, dialog.sheet) .scroll { overflow-x: auto; --scroll-bg: var(--bg);
+:is(.pg-activity, .pg-cost, .pg-limits, .pg-insights, dialog.sheet) .scroll { overflow-x: auto; --scroll-bg: var(--bg);
   background: linear-gradient(to right, var(--scroll-bg) 30%, transparent) left / 24px 100% no-repeat local,
     linear-gradient(to left, var(--scroll-bg) 30%, transparent) right / 24px 100% no-repeat local,
     radial-gradient(farthest-side at 0 50%, var(--scroll-shadow), transparent) left / 10px 100% no-repeat scroll,
     radial-gradient(farthest-side at 100% 50%, var(--scroll-shadow), transparent) right / 10px 100% no-repeat scroll; }
 :is(.panel, dialog.sheet) .scroll { --scroll-bg: var(--surface-1); }
-:is(.pg-activity, .pg-cost, .pg-limits, dialog.sheet) .tall { max-height: 520px; overflow: auto; }
-:is(.pg-activity, .pg-cost, .pg-limits, dialog.sheet) table { width: 100%; border-collapse: collapse; font-size: 13px; }
-:is(.pg-activity, .pg-cost, .pg-limits, dialog.sheet) th { text-align: left; color: var(--text-muted); font-weight: 500; font-size: 12px; padding: 6px 8px;
+:is(.pg-activity, .pg-cost, .pg-limits, .pg-insights, dialog.sheet) .tall { max-height: 520px; overflow: auto; }
+:is(.pg-activity, .pg-cost, .pg-limits, .pg-insights, dialog.sheet) table { width: 100%; border-collapse: collapse; font-size: 13px; }
+:is(.pg-activity, .pg-cost, .pg-limits, .pg-insights, dialog.sheet) th { text-align: left; color: var(--text-muted); font-weight: 500; font-size: 12px; padding: 6px 8px;
   border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--bg); white-space: nowrap; }
-:is(.pg-activity, .pg-cost, .pg-limits) .panel th { background: var(--surface-1); }
-:is(.pg-activity, .pg-cost, .pg-limits, dialog.sheet) td { padding: 7px 8px; border-bottom: 1px solid var(--border); vertical-align: middle; }
-:is(.pg-activity, .pg-cost, .pg-limits, dialog.sheet) :is(td, th).num { text-align: right; white-space: nowrap; }
-:is(.pg-activity, .pg-cost, .pg-limits, dialog.sheet) td.when { white-space: nowrap; }
-:is(.pg-activity, .pg-cost, .pg-limits, dialog.sheet) td.name { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-:is(.pg-activity, .pg-cost, .pg-limits, dialog.sheet) td.sess { max-width: 340px; }
-:is(.pg-activity, .pg-cost, .pg-limits, dialog.sheet) td.sess .cellbtn { display: block; width: 100%; font-weight: 500; }
-:is(.pg-activity, .pg-cost, .pg-limits, dialog.sheet) tbody tr.pick { cursor: pointer; }
-:is(.pg-activity, .pg-cost, .pg-limits, dialog.sheet) tbody tr.pick:hover { background: var(--surface-2); }
-:is(.pg-activity, .pg-cost, .pg-limits, dialog.sheet) tbody tr.sel { background: var(--accent-soft); }
-:is(.pg-activity, .pg-cost, .pg-limits, dialog.sheet) tbody tr:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-:is(.pg-activity, .pg-cost, .pg-limits, dialog.sheet) tbody.stale { opacity: .45; pointer-events: none; }
-:is(.pg-activity, .pg-cost, .pg-limits, dialog.sheet) .bad { color: var(--critical-text); }
-:is(.pg-activity, .pg-cost, .pg-limits, dialog.sheet) .small { font-size: 12px; }
-:is(.pg-activity, .pg-cost, .pg-limits, dialog.sheet) .cellbtn { border: 0; background: none; padding: 0; font: inherit; color: var(--link); text-align: left; max-width: 100%;
+:is(.pg-activity, .pg-cost, .pg-limits, .pg-insights) .panel th { background: var(--surface-1); }
+:is(.pg-activity, .pg-cost, .pg-limits, .pg-insights, dialog.sheet) td { padding: 7px 8px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+:is(.pg-activity, .pg-cost, .pg-limits, .pg-insights, dialog.sheet) :is(td, th).num { text-align: right; white-space: nowrap; }
+:is(.pg-activity, .pg-cost, .pg-limits, .pg-insights, dialog.sheet) td.when { white-space: nowrap; }
+:is(.pg-activity, .pg-cost, .pg-limits, .pg-insights, dialog.sheet) td.name { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+:is(.pg-activity, .pg-cost, .pg-limits, .pg-insights, dialog.sheet) td.sess { max-width: 340px; }
+:is(.pg-activity, .pg-cost, .pg-limits, .pg-insights, dialog.sheet) td.sess .cellbtn { display: block; width: 100%; font-weight: 500; }
+:is(.pg-activity, .pg-cost, .pg-limits, .pg-insights, dialog.sheet) tbody tr.pick { cursor: pointer; }
+:is(.pg-activity, .pg-cost, .pg-limits, .pg-insights, dialog.sheet) tbody tr.pick:hover { background: var(--surface-2); }
+:is(.pg-activity, .pg-cost, .pg-limits, .pg-insights, dialog.sheet) tbody tr.sel { background: var(--accent-soft); }
+:is(.pg-activity, .pg-cost, .pg-limits, .pg-insights, dialog.sheet) tbody tr:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+:is(.pg-activity, .pg-cost, .pg-limits, .pg-insights, dialog.sheet) tbody.stale { opacity: .45; pointer-events: none; }
+:is(.pg-activity, .pg-cost, .pg-limits, .pg-insights, dialog.sheet) .bad { color: var(--critical-text); }
+:is(.pg-activity, .pg-cost, .pg-limits, .pg-insights, dialog.sheet) .small { font-size: 12px; }
+:is(.pg-activity, .pg-cost, .pg-limits, .pg-insights, dialog.sheet) .cellbtn { border: 0; background: none; padding: 0; font: inherit; color: var(--link); text-align: left; max-width: 100%;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-:is(.pg-activity, .pg-cost, .pg-limits, dialog.sheet) .cellbtn:hover { background: none; text-decoration: underline; }
+:is(.pg-activity, .pg-cost, .pg-limits, .pg-insights, dialog.sheet) .cellbtn:hover { background: none; text-decoration: underline; }
 
 /* Sheet bodies: project and session details */
 dialog.sheet .sheet-sub { color: var(--text-muted); font-size: 12px; font-weight: 400; }

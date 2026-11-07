@@ -198,7 +198,39 @@ export interface LimitsPayload {
     last_ok: string | null; error: string | null; flags: ("polling failing" | "token expired" | "old" | "no snapshots")[] }[];
 }
 
-export interface IngestStats { files: number; lines: number; inserted: number; seconds: number }
+// Insights (/api/insights, insights.py payload): Claude Code's /insights facets, a model's judgment of each analysed session.
+export interface FacetCount { name: string; n: number }
+export interface FacetTally extends FacetCount { sessions: number }
+export interface InsightSession {
+  session_id: string; project: string; start: Ts | null; outcome: string | null; helpfulness: string | null; session_type: string | null;
+  brief_summary: string | null; friction_detail: string | null;
+  /** Category names, most counted first. */
+  friction: string[]; goals: string[]; satisfaction: string[];
+  /** false: the facet's session has no transcript in the store, so it has no session sheet. */
+  in_store: boolean;
+}
+export interface InsightsPayload {
+  coverage: {
+    /** Claude Code sessions in the view, those with a facet and those without; Codex sessions are never analysed. */
+    claude_sessions: number; analysed: number; not_analysed: number; codex_sessions: number;
+    /** Facets in the view, and those of them whose session is not in the store. */
+    facets: number; orphans: number;
+    /** Over the whole store, whatever the filters. */
+    stored_facets: number; newest_facet: Ts | null;
+    /** The usage-data directory the app reads. */
+    dir: string | null;
+  };
+  /** Every project, busiest first, then projects only facets name. */
+  projects: string[];
+  /** Known values in a fixed order (zeros included), then unknown ones by count. */
+  outcomes: FacetCount[]; helpfulness: FacetCount[]; session_types: FacetCount[];
+  /** Summed counts and the sessions that reported each, most first. */
+  satisfaction: FacetTally[]; friction: FacetTally[]; goals: FacetTally[];
+  /** Newest first, at most 200; truncated when there were more. */
+  sessions: InsightSession[]; truncated: boolean;
+}
+
+export interface IngestStats { files: number; lines: number; inserted: number; seconds: number; usage_files?: number; usage_skipped?: number }
 export interface Status {
   ingesting: boolean; last_ingest: string | null; last_stats: IngestStats | null; error: string | null;
   counts: Record<string, number>; interval: number;
@@ -225,6 +257,7 @@ export const promptUrl = (session: string) => `/api/prompt?${qs({ session })}`;
 export const toolUrl = (kind: ToolKind, name: string, v: View) => `/api/tool?${qs({ kind, name, ...viewQs(v) })}`;
 export const paletteUrl = (v: View) => `/api/palette?${qs(viewQs(v))}`;
 export const limitsUrl = (v: View) => `/api/limits?${qs({ project: v.project, range: v.range, source: v.source })}`;
+export const insightsUrl = (v: View) => `/api/insights?${qs(viewQs(v))}`;
 export const errorsUrl = "/api/errors";
 export const errorUrl = (id: string) => `/api/error?${qs({ id })}`;
 export const statusUrl = "/api/status";

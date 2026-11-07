@@ -11,6 +11,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import test_metrics as tm  # noqa: E402  (puts the repo root on sys.path; imported whole so its tests don't run twice)
 import metrics  # noqa: E402
 import test_limits as tl  # noqa: E402
+import test_insights as ti  # noqa: E402
 
 OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "web", "src", "__fixtures__")
 
@@ -50,6 +51,27 @@ def limits_fixture():
         case.tearDown()
 
 
+def insights_fixtures():
+    """The Insights payloads the page tests render: the synthetic usage-data fixture (an in-store session, a worktree
+    orphan and an unknown outcome) beside two unanalysed Claude Code sessions and a Codex one; and a store with no facets."""
+    case = ti.InsightsCase()
+    case.setUp()
+    try:
+        empty = case.payload(range_days=0)
+        case.session(ti.A + "1", "demo-app", "2026-11-03 09:00:00")
+        case.session("c1", "demo-app", "2026-11-03 10:00:00")
+        case.session("c2", "demo-app", "2026-11-04 10:00:00")
+        case.session("x1", "demo-app", "2026-11-04 11:00:00", source="codex")
+        case.ingest()
+        case.con.execute("UPDATE session_facets SET file_mtime = TIMESTAMP '2026-11-05 18:00:00'")
+        full = case.payload(range_days=0)
+        for d in (empty, full):
+            d["coverage"]["dir"] = "/Users/example/.claude/usage-data"
+        return full, empty
+    finally:
+        case.tearDown()
+
+
 class WebFixturesTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -84,6 +106,9 @@ class WebFixturesTest(unittest.TestCase):
             "tool-mcp.ts": ("ToolPayload", metrics.tool_detail(t, "mcp", "github", "", 0, tm.TODAY)),
             "tool-skill.ts": ("ToolPayload", metrics.tool_detail(t, "skill", "ship", "", 0, tm.TODAY)),
         }
+        full, empty = insights_fixtures()
+        got["insights.ts"] = ("InsightsPayload", full)
+        got["insights-empty.ts"] = ("InsightsPayload", empty)
         for name, (typ, obj) in got.items():
             write(name, typ, obj)
         self.assertIn("daily_work", got["usage.ts"][1])
