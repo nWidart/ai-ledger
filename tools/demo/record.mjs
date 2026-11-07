@@ -117,6 +117,7 @@ const SCENES = {
     await h.wait(1500);
     await h.scrollTo(page.locator("#where"));
     await h.wait(1500);
+    await h.click(page.locator("#d-top summary"), { dx: 0.05, pause: 600 });
     await h.scrollTo(page.locator("#d-top"));
     await h.wait(1500);
   },
@@ -136,13 +137,15 @@ const SCENES = {
     const { page } = h;
     await start("/limits#range=30");
     await h.wait(2200);
-    const card = page.locator("#windows svg").first();
+    const card = page.locator(".lim-grid svg").first();
     const box = await card.boundingBox();
     for (const k of [0.2, 0.5, 0.75, 0.95]) { await h.move(box.x + box.width * k, box.y + box.height * 0.5); await h.wait(500); }
     await h.scrollTo(page.locator("#unused"));
     await h.wait(1500);
+    await h.click(page.locator("#history summary"), { dx: 0.05, pause: 600 });
     await h.scrollTo(page.locator("#history"));
     await h.wait(1500);
+    await h.click(page.locator("#value summary"), { dx: 0.05, pause: 600 });
     await h.scrollTo(page.locator("#value"));
     await h.wait(2000);
   },
@@ -160,7 +163,7 @@ const SCENES = {
     await h.scrollTo(page.locator("#chartTitle"), 20);
     await h.wait(1500);
     await h.click(page.getByRole("link", { name: "Limits", exact: true }), { pause: 300 });
-    await page.locator("#windows svg").first().waitFor(); await h.wait(2500);
+    await page.locator(".lim-grid svg").first().waitFor(); await h.wait(2500);
     await h.scrollTo(page.locator("#history"));
     await h.wait(1500);
   },
