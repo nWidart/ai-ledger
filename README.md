@@ -1,6 +1,6 @@
 # AI Ledger
 
-A local ledger of your Claude Code and Codex transcripts, with four dashboards: Activity, Cost, Errors and Limits.
+A local ledger of your Claude Code and Codex transcripts, with five dashboards: Activity, Cost, Errors, Limits and Insights.
 
 ![Tour of the four pages](docs/tour.gif)
 
@@ -34,11 +34,11 @@ The first start reads every transcript (about 4 minutes for 3.4 GB). After that 
 Stop the app before you run these commands, because the app keeps the store open:
 
 ```bash
-uv run app.py ingest        # read new transcript lines once
+uv run app.py ingest        # read new transcript lines and /insights data once
 uv run app.py rebuild       # recompute the derived tables, e.g. after a parser change
 ```
 
-Options: `--projects <dir>` (default `~/.claude/projects`), `--codex <dir>` (default `~/.codex`), `--db <file>` (default `data/ai-ledger.duckdb`).
+Options: `--projects <dir>` (default `~/.claude/projects`), `--codex <dir>` (default `~/.codex`), `--usage-data <dir>` (default `~/.claude/usage-data`), `--db <file>` (default `data/ai-ledger.duckdb`).
 
 ## Pages
 
@@ -63,6 +63,12 @@ Where the limit figures come from:
 - **Codex** writes its limits into its session files.
 - **Claude Code** writes none. Every 5 minutes, the app asks Anthropic's usage endpoint (`api.anthropic.com/api/oauth/usage`). This endpoint is undocumented and can change without notice. The request uses the OAuth token that Claude Code keeps in the macOS Keychain. The app sends the token only to that endpoint and never stores or logs it. Off macOS, the app does not poll Claude limits.
 - Between readings, the page estimates usage from the transcripts and labels those figures as estimated.
+
+**Insights**: how Claude Code's `/insights` command judged your sessions, per project and time range: outcomes, user satisfaction, Claude's helpfulness, friction categories, goals and session types, then the analysed sessions with their summary and friction detail. Each stored session links to its sheet on Activity.
+
+- These figures are a model's judgments, not measurements, and the page labels every one of them as model-judged. `/insights` asks a model to read each transcript and writes one facet per analysed session to `~/.claude/usage-data/facets/`, with measured figures in `session-meta/`. The app copies both into the store at every ingest and keeps them after Claude Code overwrites or deletes them. It never reads the narrative `report*.html`.
+- Only Claude Code sessions are covered. Codex sessions are counted apart as not analysed.
+- The page says how many Claude Code sessions in the view have no facet and when the newest facet was written. Run `/insights` in Claude Code to analyse more, then Refresh.
 
 The button at the right end of the top bar sets the theme: **System** (follows the OS), **Light** or **Dark**. Each click moves to the next. The browser keeps the choice, and other open tabs switch with it.
 
@@ -98,12 +104,15 @@ One commit adds one browser history entry, so Back undoes it. The suggestions co
 
 `data/ai-ledger.duckdb` holds full transcript content, including any secrets that appeared in a session. It is git-ignored. Do not share it.
 
+The `/insights` facets and session meta it copies from `~/.claude/usage-data` hold summaries of transcript content. They stay in the same git-ignored store, and the app logs only their paths, never their text. Tests and the demo store use made-up facets.
+
 ## Files
 
 - `app.py`: the HTTP server, the background ingest, and the CLI commands.
 - `store.py`, `codex.py`: the store, and the parsers for Claude Code and Codex.
 - `categorize.py`: error types and their fixes. Add a rule when an error pattern shows up under "Other", then run `rebuild`.
 - `metrics.py`, `limits.py`: the queries and forecasts behind the pages.
+- `insights.py`: reads `/insights` facets and session meta, and builds the Insights payload.
 - `web/`: the React pages. `web/dist/` is the committed build that the app serves.
 - `tools/demo/`: the recorder that makes the GIFs above.
 - `openspec/specs/`: how each page behaves in detail.

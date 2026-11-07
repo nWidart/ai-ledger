@@ -1,5 +1,5 @@
 // Records scripted walkthroughs of the demo server as GIFs in docs/: PNG frames from Playwright, encoded by gifski.
-// node record.mjs [scene...]   (scenes: tour activity cost errors limits; default all)
+// node record.mjs [scene...]   (scenes: tour activity cost errors limits insights; default all)
 // CHROMIUM=<path> uses that Chromium instead of Playwright's own.
 import { chromium } from "playwright";
 import { execFileSync } from "node:child_process";
@@ -148,6 +148,19 @@ const SCENES = {
     await h.click(page.locator("#value summary"), { dx: 0.05, pause: 600 });
     await h.scrollTo(page.locator("#value"));
     await h.wait(2000);
+  },
+  async insights(h, start) {
+    const { page } = h;
+    await start("/insights#range=30");
+    await h.wait(2200);
+    await h.scrollTo(page.locator("#friction"), 20);
+    await h.wait(1800);
+    await h.scrollTo(page.locator("#outcomes"), 20);
+    await h.wait(1500);
+    await h.scrollTo(page.locator("#log"), 20);
+    await h.click(page.getByLabel("Only sessions with friction"), { pause: 1500 });
+    await h.click(page.locator("#log a", { hasText: "Session" }).first(), { pause: 2600 });
+    await page.keyboard.press("Escape"); await h.wait(800);
   },
   async tour(h, start) {
     const { page } = h;

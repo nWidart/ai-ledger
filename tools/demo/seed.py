@@ -12,6 +12,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 DB = os.path.join(HERE, "demo.duckdb")
 sys.path.insert(0, os.path.dirname(os.path.dirname(HERE)))
 import categorize  # noqa: E402
+import insights  # noqa: E402
 import store  # noqa: E402
 
 rnd = random.Random(7)
@@ -165,4 +166,54 @@ for provider, lid5, lidw, plan in [("claude", "five_hour", "weekly_all", "max"),
                 t += timedelta(hours=1)
             reset += timedelta(minutes=minutes)
 store.write_snapshots(c, snaps)
-print(f"{len(sessions)} sessions, {len(reqs)} requests, {len(tools)} tool calls, {len(snaps)} limit snapshots")
+
+# /insights facets and session meta for most Claude Code sessions; the newest days and a share of the rest stay unanalysed.
+# Three facets belong to worktree sessions whose transcripts are not in the store.
+OUTCOMES = [("fully_achieved", 0.66), ("mostly_achieved", 0.17), ("partially_achieved", 0.11), ("not_achieved", 0.04), ("unclear_from_transcript", 0.02)]
+HELPFUL = [("essential", 0.2), ("very_helpful", 0.55), ("moderately_helpful", 0.17), ("slightly_helpful", 0.06), ("unhelpful", 0.02)]
+TYPES = [("multi_task", 0.4), ("iterative_refinement", 0.3), ("single_task", 0.2), ("quick_question", 0.1)]
+GOALS = ["implement_feature", "fix_bug", "write_tests", "refactor_code", "update_docs", "investigate_issue"]
+FRICTION = {  # category: made-up details
+    "wrong_approach": ["Started with a regex parser before the user pointed at the existing tokenizer.",
+                       "Patched the symptom in the view instead of the stale cache underneath."],
+    "buggy_code": ["The first patch broke two snapshot tests that it had not run.",
+                   "An off-by-one in the pagination cursor skipped the last page."],
+    "misunderstood_request": ["Rewrote the whole settings form when only the label text was asked for.",
+                              "Opened the pull request against main instead of the release branch the user named."],
+    "excessive_changes": ["Reformatted three unrelated files along with the one-line fix.",
+                          "Added an unrequested migration guide section to the README."],
+    "environment": ["The test runner needed a newer Node than the shell had.", "A missing env var made the dev server fail on start."],
+}
+facet_rows = []
+claude = [s for s in sessions if s[11] == "claude"]
+orphans = [(f"demo-wt-{i}", project, NOW - timedelta(days=2 + 3 * i)) for i, project in enumerate(["atlas-api", "ledger-web", "atlas-api"])]
+for sid, project, start in [(s[0], s[1], s[4]) for s in claude] + orphans:
+    if not sid.startswith("demo-wt") and (start > NOW - timedelta(days=4) or rnd.random() < 0.25):
+        continue
+    outcome, = pick(OUTCOMES)
+    bad = outcome in ("partially_achieved", "not_achieved")
+    friction = {}
+    for _ in range(rnd.choice([0, 0, 1, 1, 2]) + (1 if bad else 0)):
+        k = rnd.choice(list(FRICTION))
+        friction[k] = friction.get(k, 0) + rnd.randint(1, 3)
+    sat = {"likely_satisfied" if rnd.random() < 0.6 else "satisfied": rnd.randint(1, 3)}
+    if bad and rnd.random() < 0.6:
+        sat["dissatisfied"] = 1
+    goal = rnd.choice(GOALS)
+    detail = " ".join(rnd.choice(FRICTION[k]) for k in friction)
+    what = rnd.choice(PROMPTS[project]).rstrip("?")
+    facet = dict(session_id=sid, underlying_goal=what, goal_categories={goal: 1, **({"write_tests": 1} if rnd.random() < 0.3 else {})},
+                 outcome=outcome, user_satisfaction_counts=sat, claude_helpfulness=pick(HELPFUL)[0], session_type=pick(TYPES)[0],
+                 friction_counts=friction, friction_detail=detail, primary_success="", brief_summary=f"Asked to {what[0].lower() + what[1:]} in {project}; {'done' if outcome == 'fully_achieved' else 'partly done' if bad else 'mostly done'}.")
+    cwd = f"/home/demo/code/{project}" + ("/.claude/worktrees/" + sid if sid.startswith("demo-wt") else "")
+    meta = dict(session_id=sid, project_path=cwd, start_time=start.isoformat() + "Z", duration_minutes=rnd.randint(5, 120),
+                lines_added=rnd.randint(0, 400), lines_removed=rnd.randint(0, 150), files_modified=rnd.randint(0, 12), git_pushes=rnd.randint(0, 2),
+                languages={"TypeScript": rnd.randint(1, 20)}, user_response_times=[rnd.uniform(3, 90) for _ in range(4)],
+                destructive_command_count=0, bash_would_prompt_count=rnd.randint(0, 3))
+    mtime = (NOW - timedelta(days=1, hours=3)).replace(tzinfo=timezone.utc).timestamp()
+    for kind, d in (("facet", facet), ("meta", meta)):
+        text = json.dumps(d)
+        facet_rows.append((f"/home/demo/.claude/usage-data/{'facets' if kind == 'facet' else 'session-meta'}/{sid}.json", kind, sid, len(text), mtime, text, NOW))
+store.insert(c, "usage_files", ["path", "kind", "session_id", "size", "mtime", "json", "ingested_at"], facet_rows)
+insights.rederive(c)
+print(f"{len(sessions)} sessions, {len(reqs)} requests, {len(tools)} tool calls, {len(snaps)} limit snapshots, {len(facet_rows) // 2} facets")
