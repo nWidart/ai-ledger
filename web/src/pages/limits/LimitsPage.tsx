@@ -1,4 +1,6 @@
+import { useEffect, useState } from "react";
 import { limitsUrl, viewOf, type LimitsPayload, type LimitWindow, type View } from "../../api";
+import { Drawer } from "../../components/Drawer";
 import { Filters } from "../../components/Filters";
 import { Ledger, LedgerRow } from "../../components/Ledger";
 import { big, dur, num, usd, when } from "../../format";
@@ -8,7 +10,7 @@ import { LimitChart } from "./LimitChart";
 import { bindingWindow, caption, pace, planName, whenDay, windowName } from "./limits";
 import "./limits.css";
 
-const viewName = (v: View) => `${v.range ? `the last ${v.range} days` : "all time"}`;
+const viewName = (v: View) => `${v.project || "all projects"}, ${v.range ? `the last ${v.range} days` : "all time"}`;
 
 /** The heading answers "will I run out?": the window that stops the user first, or the fullest one at reset. */
 function Lede({ d }: { d: LimitsPayload }) {
@@ -50,8 +52,7 @@ function WindowCard({ w, d }: { w: LimitWindow; d: LimitsPayload }) {
 
 function History({ d }: { d: LimitsPayload }) {
   return (
-    <section className="panel sect" id="history" aria-labelledby="histTitle">
-      <h2 id="histTitle">Past windows</h2>
+    <Drawer id="history" title="Past windows" count={num(d.history.length)} description="Closed windows: final use, hits and early resets">
       <div className="hint">Closed windows in {d.history.length ? "the range" : "this range"}, newest first. Estimated windows are rebuilt from counted usage.</div>
       <div className="scroll tall"><table>
         <thead><tr><th>Window</th><th>Plan</th><th>Ended</th><th className="num">Final</th><th>Hit 100%</th><th>Note</th></tr></thead>
@@ -61,15 +62,15 @@ function History({ d }: { d: LimitsPayload }) {
           <td>{h.early && <span>ended early{h.reason ? ` by a ${h.reason}` : ""}</span>}{h.estimated && <span className="chip est">estimated</span>}</td>
         </tr>) : <tr><td colSpan={6} className="empty">No closed windows in this range.</td></tr>}</tbody>
       </table></div>
-    </section>
+    </Drawer>
   );
 }
 
-function Unused({ d }: { d: LimitsPayload }) {
+function Unused({ d, view }: { d: LimitsPayload; view: View }) {
   return (
     <section className="panel sect" id="unused" aria-labelledby="unusedTitle">
       <h2 id="unusedTitle">Left unused</h2>
-      <div className="hint">Average share of each limit still unused when its windows reset.</div>
+      <div className="hint">Average share of each limit still unused when its windows reset, for {viewName(view)}.</div>
       <Ledger empty="No closed windows in this range.">{d.unused.map(u => <LedgerRow key={`${u.provider}-${u.label}`} name={windowName(u)}
         share={u.avg_unused / 100} value={`${num(u.avg_unused)}% unused`}
         side={`${num(u.windows)} windows${u.estimated ? `, ${num(u.estimated)} estimated` : ""}`} />)}</Ledger>
@@ -80,8 +81,7 @@ function Unused({ d }: { d: LimitsPayload }) {
 function Value({ d }: { d: LimitsPayload }) {
   const v = d.value;
   return (
-    <section className="panel sect" id="value" aria-labelledby="valueTitle">
-      <h2 id="valueTitle">What a point buys</h2>
+    <Drawer id="value" title="What a point buys" description="Cost, tokens and commits per 1% of a limit">
       <div className="hint">One point is 1% of a limit. Cost is estimated at API list prices; points used and tokens per point by model over the range.</div>
       {v.limits.length ? v.limits.map(l => <div key={`${l.provider}-${l.label}`} className="val">
         <h3>{windowName(l)}: {usd(l.cost_per_point)} a point{l.plan && <span className="muted" title={l.plan}> · {planName(l.plan)}</span>}</h3>
@@ -98,7 +98,7 @@ function Value({ d }: { d: LimitsPayload }) {
             <td className="num">{num(p.points, 1)}</td><td className="num">{num(p.commits)}</td><td className="num">{num(p.commits_per_point, 2)}</td></tr>)}</tbody>
         </table></div>
       </div>}
-    </section>
+    </Drawer>
   );
 }
 
@@ -107,7 +107,10 @@ function Value({ d }: { d: LimitsPayload }) {
 export function LimitsPage() {
   const [h] = useHashState();
   const want = viewOf(h);
-  const { data: d, error, loading, retry } = useApi<LimitsPayload>(limitsUrl(want), { keepPrevious: true });
+  const url = limitsUrl(want), { data: d, error, loading, retry } = useApi<LimitsPayload>(url, { keepPrevious: true });
+  // The payload does not echo its view, so remember the one the data on screen answers.
+  const [shown, setShown] = useState(want);
+  useEffect(() => { if (d && !loading && !error) setShown(want); }, [d, loading, error, url]); // want is read through url
   const projects = d ? [...new Set(d.value.projects.map(p => p.project))] : [];
   return (
     <div className={"wrap pg-limits" + (loading && d ? " loading" : "")} aria-busy={loading || undefined}>
@@ -120,19 +123,27 @@ export function LimitsPage() {
         </div>
         <div className="top-side"><Filters projects={projects} /></div>
       </header>
-      {error && <div className="banner" role="alert"><b>Could not load limits for {viewName(want)} ({error.message}).</b>{" "}
+      {error && <div className="banner" role="alert"><b>Could not load limits for {viewName(want)} ({error.message}).{d ? ` Still showing ${viewName(shown)}.` : ""}</b>{" "}
         <button type="button" className="linkish" onClick={retry}>Retry</button></div>}
       {d && <>
-        <section className="lim-grid sect" id="windows" aria-label="Open windows">
+        <div className="sect-head sect" id="windows">
+          <h2>Open windows</h2>
+          <p className="hint">Now, for the whole account: the project and range filters apply to the sections below.</p>
+          {d.windows.length > 0 && <ul className="lim-key" aria-label="Chart key">
+            <li><i className="k-used" />used so far</li><li><i className="k-dot" />measured reading</li><li><i className="k-fc" />forecast</li>
+            <li><i className="k-band" />likely range</li><li><i className="k-now" />now</li><li><i className="k-cap" />limit</li>
+          </ul>}
+        </div>
+        <section className="lim-grid" aria-label="Open windows">
           {d.windows.length ? d.windows.map(w => <WindowCard key={`${w.provider}-${w.limit_id}-${w.scope}`} w={w} d={d} />)
             : <p className="empty">No open windows. Limits appear after a Codex session or the first Claude Code poll.</p>}
         </section>
         <p className="hint">Estimates count local agent work only: use elsewhere (claude.ai, Codex cloud) shows up at the next measured reading.</p>
-        <div className="split">
-          <Unused d={d} />
+        <Unused d={d} view={shown} />
+        <div className="drawers">
           <History d={d} />
+          <Value d={d} />
         </div>
-        <Value d={d} />
       </>}
     </div>
   );

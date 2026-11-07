@@ -99,7 +99,7 @@ export function TopSessionsDrawer({ view, top, day, onDay, selected }: {
 }) {
   const [st, setSt] = useState<{ day: string; rows?: TitledSessionRow[]; total?: number; error?: string }>({ day: "" });
   const [tick, setTick] = useState(0), seq = useRef(0);
-  const viewKey = `${view.project}|${view.range}|${view.automated}`;
+  const viewKey = `${view.project}|${view.range}|${view.automated}|${view.source}`;
   useEffect(() => {
     const my = ++seq.current;
     if (!day) { setSt({ day: "" }); return; }

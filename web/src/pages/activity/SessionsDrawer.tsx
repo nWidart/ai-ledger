@@ -28,7 +28,7 @@ export function SessionsDrawer({ view, count, filter, onFilter, selected }: {
   useEffect(() => { const t = setTimeout(() => setQ(filter.q), 200); return () => clearTimeout(t); }, [filter.q]);
   useEffect(() => { if (!filter.q) setQ(""); }, [filter.q]);
   const qt = q.trim(), narrowed = !!(qt || filter.near || filter.day);
-  const viewKey = `${view.project}|${view.range}|${view.automated}`;
+  const viewKey = `${view.project}|${view.range}|${view.automated}|${view.source}`;
 
   useEffect(() => {
     if (!open) return;

@@ -33,9 +33,11 @@ export function pace(w: LimitWindow, now: string): { left: string; reset: string
   const f = w.forecast, ms = Date.parse(w.resets_at) - Date.parse(now);
   const left = w.current == null ? "–" : `${num(100 - w.current)}% left`;
   if (!f || f.pace_target == null) return { left, reset: `${span(ms)} to reset`, rate: null, verdict: null };
+  // Windows shorter than a day read per hour: a 5-hour window at "480% a day" is just 20% an hour.
+  const hourly = (w.window_minutes ?? 1440) < 1440, per = hourly ? "an hour" : "a day", k = hourly ? 1 / 24 : 1;
   return {
     left, reset: `${span(ms)} to reset`,
-    rate: `now ${num(f.pace_now, 1)}% a day; ${num(f.pace_target, 1)}% a day ends at 100%`,
+    rate: `using ${num(f.pace_now * k, 1)}% ${per}; ${num(f.pace_target * k, 1)}% ${per} would use it all`,
     verdict: f.pace === "ahead" ? "ahead of pace: runs out before the reset" : `behind pace: about ${num(100 - (f.at_reset ?? 100))}% would go unused`,
   };
 }

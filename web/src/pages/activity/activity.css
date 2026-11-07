@@ -2,7 +2,7 @@
 
 /* Briefing: the period's work as the page heading, then filters */
 .pg-activity .top { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px 32px; align-items: end; margin-bottom: 20px; }
-.pg-activity .top-side { display: flex; flex-direction: column; align-items: flex-end; gap: 12px; min-width: 0; }
+.pg-activity .top-side { display: flex; flex-direction: column; align-items: flex-end; gap: 12px; min-width: 0; max-width: 600px; }
 .pg-activity .top-side .filters { justify-content: flex-end; }
 .pg-activity .lede { margin: 0; max-width: 26ch; font-size: clamp(26px, 4.2vw, 42px); line-height: 1.12;
   font-weight: 400; letter-spacing: -.025em; text-wrap: balance; color: var(--text-secondary); }
@@ -17,7 +17,7 @@
 .pg-activity .sub { color: var(--text-muted); font-size: 13px; margin: 8px 0 0; }
 @media (max-width: 720px) {
   .pg-activity .top { grid-template-columns: minmax(0, 1fr); align-items: start; }
-  .pg-activity .top-side { align-items: stretch; }
+  .pg-activity .top-side { max-width: none; align-items: stretch; }
   .pg-activity .top-side .filters { justify-content: flex-start; }
 }
 .pg-activity h2 { font-size: 16px; font-weight: 600; margin: 0; letter-spacing: -.005em; }

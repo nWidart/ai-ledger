@@ -57,6 +57,17 @@ describe("ActivityPage", () => {
     expect(fetched()).toContain("/api/usage?range=30&source=codex");
   });
 
+  it("reloads an open sessions table when the source changes", async () => {
+    mockApi({ "/api/usage": q => (q.get("source") === "codex" ? { ...usage, source: "codex" } : usage), "/api/sessions": () => sessions, "/api/session": () => session });
+    at();
+    render(<ActivityPage />);
+    await loaded();
+    act(() => { (document.getElementById("d-sessions") as HTMLDetailsElement).open = true; });
+    await waitFor(() => expect(fetched()).toContain("/api/sessions?range=30"));
+    await userEvent.click(within(screen.getByRole("group", { name: "Source" })).getByRole("button", { name: "Codex" }));
+    await waitFor(() => expect(fetched()).toContain("/api/sessions?range=30&source=codex"));
+  });
+
   it("names no agent when nothing happened in the range with every source", async () => {
     const none: UsagePayload = { ...usage, totals: { ...usage.totals, requests: 0 } };
     serve(none);

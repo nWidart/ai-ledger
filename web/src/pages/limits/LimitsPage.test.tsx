@@ -37,7 +37,7 @@ describe("limit text", () => {
     const w: LimitWindow = { ...codex, current: 20, resets_at: "2026-11-09T12:00:00.000Z",
       forecast: { ...codex.forecast!, pace_target: 80 / 3.5, pace_now: 10, pace: "behind", at_reset: 55 } };
     expect(pace(w, "2026-11-06T00:00:00.000Z")).toEqual({ left: "80% left", reset: "3d 12h to reset",
-      rate: "now 10.0% a day; 22.9% a day ends at 100%", verdict: "behind pace: about 45% would go unused" });
+      rate: "using 10.0% a day; 22.9% a day would use it all", verdict: "behind pace: about 45% would go unused" });
     expect(pace(claude, fixture.now).verdict).toBe("ahead of pace: runs out before the reset");
     expect(span(45 * 60000)).toBe("45m");
   });

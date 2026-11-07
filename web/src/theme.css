@@ -16,7 +16,7 @@
      (graphics need 3:1); every other project shares the grey of the charts' "Other". */
   --proj-1: #2a64c8; --proj-2: #0f8574; --proj-3: #c4378a; --proj-4: #7a52d9; --proj-5: #a67c00; --proj-6: #4f8a1f;
   --proj-other: #8e8c85;
-  --shadow-card: 0 1px 2px rgba(20,18,12,.04); --shadow-pop: 0 6px 24px rgba(20,18,12,.14);
+  --shadow-card: 0 1px 2px rgba(20,18,12,.04); --shadow-pop: 0 6px 24px rgba(20,18,12,.14); --scroll-shadow: rgba(20,18,12,.16);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -31,7 +31,7 @@
     --accent: #e8895f; --accent-soft: rgba(232,137,95,.16); --accent-ink: #f0a582; --on-accent: #1a1a19; --link: var(--accent-ink);
     --proj-1: #5d9bf2; --proj-2: #2ab59f; --proj-3: #e66db3; --proj-4: #a48cf5; --proj-5: #d9ab33; --proj-6: #82c24f;
     --proj-other: #75746d;
-    --shadow-card: none; --shadow-pop: 0 8px 28px rgba(0,0,0,.5);
+    --shadow-card: none; --shadow-pop: 0 8px 28px rgba(0,0,0,.5); --scroll-shadow: rgba(0,0,0,.55);
   }
 }
 :root[data-theme="dark"] {
@@ -46,7 +46,7 @@
   --accent: #e8895f; --accent-soft: rgba(232,137,95,.16); --accent-ink: #f0a582; --on-accent: #1a1a19; --link: var(--accent-ink);
   --proj-1: #5d9bf2; --proj-2: #2ab59f; --proj-3: #e66db3; --proj-4: #a48cf5; --proj-5: #d9ab33; --proj-6: #82c24f;
   --proj-other: #75746d;
-  --shadow-card: none; --shadow-pop: 0 8px 28px rgba(0,0,0,.5);
+  --shadow-card: none; --shadow-pop: 0 8px 28px rgba(0,0,0,.5); --scroll-shadow: rgba(0,0,0,.55);
 }
 
 * { box-sizing: border-box; }
@@ -74,6 +74,9 @@ button:hover { background: var(--surface-2); }
 .seg button + button { box-shadow: -1px 0 0 var(--border); }
 .seg button[aria-pressed=true] { background: var(--accent); color: var(--on-accent); box-shadow: none; font-weight: 500; }
 .seg button[aria-pressed=true] + button { box-shadow: none; }
+/* The group clips outward rings, so a focused segment draws its ring inside; on the accent fill it turns light. */
+.seg button:focus-visible { outline-offset: -3px; }
+.seg button[aria-pressed=true]:focus-visible { outline-color: var(--on-accent); }
 label.chk { display: inline-flex; gap: 6px; align-items: center; color: var(--text-secondary); font-size: 13px; }
 label.chk input, input[type=checkbox], input[type=radio] { accent-color: var(--accent); }
 .btn { font: inherit; font-size: 13px; text-decoration: none; color: var(--text-primary); background: var(--surface-1);

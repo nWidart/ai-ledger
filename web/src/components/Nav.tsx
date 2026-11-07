@@ -93,8 +93,10 @@ export function Nav() {
           <span className="lbl">Search</span><kbd>{shortcutHint()}</kbd>
         </button>
         <span className="appnav-status" id="navStatus" aria-live="polite">{st.text}</span>
-        <button type="button" id="navRefresh" className={st.failed ? "failed" : undefined} title={st.text} disabled={st.busy} onClick={refresh}>
-          {st.retry ? "Retry" : "Refresh"}
+        <button type="button" id="navRefresh" className={st.failed ? "failed" : undefined} title={st.text} disabled={st.busy} onClick={refresh}
+          aria-label={st.retry ? "Retry" : "Refresh"}>
+          <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9" /><path d="M13.5 2.5v3h-3" /></svg>
+          <span className="lbl">{st.retry ? "Retry" : "Refresh"}</span>
         </button>
         <button type="button" id="navTheme" aria-label={`Theme: ${theme}`} title={`Theme: ${theme}. Click for ${next}.`} onClick={() => setTheme(nextTheme(getTheme()))}>
           <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{THEME_ICON[theme]}</svg>

@@ -2,7 +2,7 @@
 
 /* Briefing: the period's answer as the page heading, its comparison and trend, then filters */
 .pg-cost .top { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px 32px; align-items: end; margin-bottom: 20px; }
-.pg-cost .top-side { display: flex; flex-direction: column; align-items: flex-end; gap: 12px; min-width: 0; }
+.pg-cost .top-side { display: flex; flex-direction: column; align-items: flex-end; gap: 12px; min-width: 0; max-width: 600px; }
 .pg-cost .top-side .filters { justify-content: flex-end; }
 .pg-cost .lede { margin: 0; max-width: 24ch; font-size: clamp(26px, 4.2vw, 42px); line-height: 1.12;
   font-weight: 400; letter-spacing: -.025em; text-wrap: balance; color: var(--text-secondary); }
@@ -12,8 +12,8 @@
 .pg-cost .lede .proj { color: var(--text-primary); font-weight: 500; white-space: nowrap; }
 .pg-cost .lede .pdot { width: .32em; height: .32em; vertical-align: .2em; margin: 0 .18em 0 .05em; }
 .pg-cost .lede .unit { white-space: nowrap; }
-/* The comparison takes its own line, so the amount and the multiple never break mid-phrase. */
-.pg-cost .lede .delta { display: block; white-space: nowrap; color: var(--text-primary); font-weight: 500; }
+/* The comparison takes its own line under the amount. */
+.pg-cost .lede .delta { display: block; color: var(--text-primary); font-weight: 500; }
 /* The two windows the headline compares, with how many days in each have any recorded usage. */
 .pg-cost .windows { display: flex; flex-wrap: wrap; gap: 4px 18px; margin: 12px 0 0; font-size: 13px; color: var(--text-secondary); }
 .pg-cost .windows b { color: var(--text-primary); font-weight: 600; }
@@ -25,11 +25,10 @@
 .pg-cost .spark figcaption b { color: var(--text-secondary); font-weight: 500; }
 @media (max-width: 720px) {
   .pg-cost .top { grid-template-columns: minmax(0, 1fr); align-items: start; }
-  .pg-cost .top-side { align-items: stretch; flex-direction: column-reverse; }
+  .pg-cost .top-side { max-width: none; align-items: stretch; flex-direction: column-reverse; }
   .pg-cost .top-side .filters { justify-content: flex-start; }
   .pg-cost .spark { width: 100%; }
 }
-@media (max-width: 520px) { .pg-cost .lede .delta { white-space: normal; } }
 .pg-cost h2 { font-size: 16px; font-weight: 600; margin: 0; letter-spacing: -.005em; }
 .pg-cost .pending { margin: -12px 0 12px; min-height: 1.5em; color: var(--text-secondary); font-size: 13px; }
 .pg-cost .pending:empty { visibility: hidden; }
