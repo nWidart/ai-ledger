@@ -1,0 +1,49 @@
+# Tasks
+
+Privacy for every group: `data/` holds full transcript content. Never copy a real transcript line into `tests/`, `web/src/__fixtures__/`, `tools/demo/` or a commit, and never print one. Every fixture below is written by hand and is synthetic. Measure against a copy of the store only, as `AGENTS.md` describes.
+
+## 1. Display items per source
+
+- [ ] 1.1 Add `live_items(d)` for Claude Code in `store.py` (design Decision 3): prompt, reply, request, tool_use (reusing `summarize_input`), tool_result (reusing `error_text`, with the output kept for the text request), compaction and subagent_start. Verify with `test_derive` cases on synthetic lines: a `Bash` use and its failing result, a reply with text and thinking blocks (thinking is not returned), a `compact_boundary`, an `Agent` call whose result names the agent id, and an unknown line type that returns no items.
+- [ ] 1.2 Add `live_items(d)` for Codex in `codex.py`: `function_call` and `custom_tool_call` as tool_use keyed by `call_id`, `*_output` as tool_result, `UserMessage` and `AgentMessage` as prompt and reply, `task_started` and `task_complete` as turn_start and turn_end, `compacted`, and `spawn_agent` as subagent_start. Names and summaries match `tool_of` where both apply. Verify with `test_codex` cases on synthetic rollout lines, including an `exec` call with no output yet.
+- [ ] 1.3 Expose `live_items` through `SOURCES`, as `prompt_text` is. Verify with a `test_store` case that both sources resolve it, and that a source without one fails at import, not at request time.
+
+## 2. Fast ingest while Live is open
+
+- [ ] 2.1 Give `store.ingest` a `usage=True` parameter, and add `sessions` (the ids that gained new `raw_lines`) to its stats. Verify with `test_store` cases: `usage=False` does not call `insights.ingest`; appending two lines to one synthetic session reports exactly that session id; an ingest with no new bytes reports an empty set.
+- [ ] 2.2 In `app.py`, add the live-page count, the `threading.Condition` and the change record to `App` (design Decision 1). `loop` runs transcript ingest every 2 seconds while the count is above zero, and keeps usage data and pollers on `INTERVAL`. Connecting the first page sets `wake`. Verify with `test_app` cases using a fake clock or short intervals: with no live page, one ingest per interval; with one, transcript ingest repeats and usage ingest does not; after disconnect, the 60-second interval is back.
+- [ ] 2.3 Add `/api/live/events`, the SSE handler (design Decision 2): `changed` notices with session ids, `: keep-alive` every 15 seconds, exit on a broken pipe or `stopping`, and the count lowered on exit. Verify with `test_app` cases against a served test app: a client gets a `changed` notice naming the session after a synthetic transcript grows; no notice after an ingest with nothing new; the notice holds no transcript text (assert a sentinel string in the fixture line is absent); closing the client lowers the count; `App.stop` returns while a client is connected.
+- [ ] 2.4 Measure on a copy of the store, with two synthetic sessions appending a line every 500 ms and one Live client connected for 5 minutes: tick duration, and how long `/api/usage` takes during ticks against without them. Record the numbers in this task. Verify that the median tick is under 500 ms. If it is not, switch to hot-file stat-ing (design Decision 1, alternative 2) before continuing.
+
+## 3. Live payloads
+
+- [ ] 3.1 Create `live.py` with `state(items, now, source)` (design Decision 4). Verify with `test_live` cases for every `live-sessions` state scenario: tool running; turn ended; prompt sent; quiet session with a pending call is idle; a slow `Bash` call and a slow Codex `exec` call give likely waiting for approval; a slow `WebFetch` call does not; Claude thinking is inferred; Codex thinking from `turn_start` is not inferred.
+- [ ] 3.2 Add `live.sessions(cur, project, source, automated, now)` for `/api/live`: active within 10 minutes, newest first, through `metrics.scope`, with project, source, branch, model, cost so far and state. Verify with `test_live` cases: active list order and the 10-minute cut-off; source and project filters; an automated session hidden by default; cost equal to the session's cost from `metrics.session`.
+- [ ] 3.3 Add `live.session(cur, sid, after, text, now)` for `/api/live/session`: events in order, the 500-event first load with a `truncated` flag, the cursor, a call sent again when its result arrives later, subagent lanes tied to their parent call or standing alone, text and the 4 KB cap only with `text`, and the agent-panel figures (context and window from `prices.json`, compactions, cost, requests, tool calls, errors, cache-read share, tokens per minute, newest plan-limit use). Verify with `test_live` cases for every scenario in `Stream one session's events`, `Group subagent work`, `Send transcript text only on request` and `Report the agent's figures`, on synthetic Claude Code and Codex sessions. The Codex fixture includes `spawn_agent`, `task_started` and `task_complete` lines. One case asserts that no prompt, reply or result text appears in the payload without `text`.
+- [ ] 3.4 Wire `/api/live` and `/api/live/session` and the `/live` page path in `app.py`. Unknown sources or a malformed `after` return 400, and an unknown session returns 404. Verify with `test_app` cases.
+- [ ] 3.5 Add the Live payloads to `tests/test_web_fixtures.py` (an active list with every state, one Claude Code session with a lane and a failure, one Codex session, and the same session with text), then run `uv run python -m unittest tests.test_web_fixtures`. Verify that the `web/src/__fixtures__/live*.ts` files are written, that a second run leaves them unchanged, and that they hold only synthetic text.
+
+## 4. Live page
+
+- [ ] 4.1 Add `/live` to `App.tsx` `ROUTES` (title `Live · AI Ledger`) and `Nav.tsx` `PAGES` (label Live), and add the payload types and URLs to `api.ts`. Add `session` and `view` hash keys outside `SHARED_KEYS`. Verify with `Nav.test.tsx`: Live carries project and source from Cost, and Cost gets its range back after Live. Add a palette `suggest.test.ts` case that `>live` is offered and `>insights` still is.
+- [ ] 4.2 Build `useLive.ts`: `EventSource` on `/api/live/events`, refetch of the list and the selected session on `changed`, catch-up with the cursor, dropping repeated keys, a "reconnecting" state on `error`, refetch on `open`, and Pause that holds notices and refetches once on Resume. Verify with unit tests using a fake `EventSource`: a notice for another session refetches only the list; a dropped connection shows reconnecting and then catches up; nothing renders new while paused.
+- [ ] 4.3 Build `LivePage.tsx` with the rail, the empty state (newest session's last line, linked to Activity) and the Stream or Wall switch, using the shared project, source and automated filters. Verify with page tests on the fixtures: newest active session opens by default; the URL session wins; a no-longer-active URL session still shows, marked idle; the empty state's link.
+- [ ] 4.4 Build `Stream.tsx`: tool rows with summary, duration, result and a shared 1-second timer for running calls; a failed mark; the detail in place; lanes that fold; compaction marks; Follow, which turns off on scroll-up or opening a row, and Jump to latest. Verify with page tests for each `live-dashboard` stream, detail, lane and follow scenario, using fake timers for the running timer.
+- [ ] 4.5 Build `AgentPanel.tsx` and the Full text toggle with its banner. Verify with page tests: the meter turns the warning color above 80%; an unknown window shows tokens only; likely waiting for approval is shown as inferred with its reason; Full text refetches with `text=1`, shows the banner, and is off after a remount.
+- [ ] 4.6 Build `Wall.tsx`. Verify with a page test that each active session has a tile with the spec's fields, and that selecting one opens it in the stream view. Check the page in light and dark themes and at phone width (the rail scrolls sideways).
+- [ ] 4.7 Run `cd web && npm run check`, commit the rebuilt `web/dist/`, and verify that `tests/test_web_build.py` passes.
+
+## 5. Demo store and docs
+
+- [ ] 5.1 Give `tools/demo/` a way to replay a synthetic session into the demo store's transcript root while `serve.py` runs: append lines on a timer, with a tool call, a failure, a subagent and a long `Bash` call. Verify that `/live` on the demo app shows each state in turn.
+- [ ] 5.2 Update `README.md`: the Live page in Pages; faster ingest while it is open; the Full text toggle and its privacy note; and that *thinking* and *likely waiting for approval* are inferred. Verify that the documented commands run as written.
+
+## 6. Integration
+
+- [ ] 6.1 Serve a copy of the store on a free port, with real sessions running in another terminal, one Claude Code and one Codex. Check in the browser: a new tool row appears within 3 seconds; a running call's timer counts; a subagent lane groups its calls; a compaction shows; state changes from running to your turn; Full text off sends no text (check the network panel); closing the tab brings the 60-second interval back (check the app log). Report what was checked and anything that differed.
+
+## Workflow follow-up
+
+- On archive, update the `dashboard-app` Purpose to name the Live page.
+- Re-record the README GIFs to include Live, from the demo replay.
+- Revisit approval detection if Claude Code or Codex start recording permission prompts in transcripts.

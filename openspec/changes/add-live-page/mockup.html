@@ -1,0 +1,550 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Ledger Live</title>
+<style>
+:root {
+  color-scheme: light;
+  --bg: #f6f5f2; --surface-1: #fcfcfb; --surface-2: #f0efec; --border: #e2e0da;
+  --text-primary: #0b0b0b; --text-secondary: #52514e; --text-muted: #66655f;
+  --series-1: #2a78d6; --series-1-soft: rgba(42,120,214,.12); --series-3: #1baf7a; --series-4: #eda100;
+  --track: #ebe9e4; --good: #0ca30c; --good-text: #006300; --critical: #d03b3b; --critical-text: #b42318;
+  --critical-soft: rgba(208,59,59,.1); --warning: #c98500; --warning-text: #8a5a00; --warning-soft: rgba(201,133,0,.12);
+  --good-soft: rgba(12,163,12,.1);
+  --accent: #b4502a; --accent-soft: rgba(180,80,42,.11); --accent-ink: #8f3d1e; --on-accent: #ffffff;
+  --proj-1: #2a64c8; --proj-2: #0f8574; --proj-3: #c4378a; --proj-4: #7a52d9; --proj-other: #8e8c85;
+  --shadow-card: 0 1px 2px rgba(20,18,12,.04);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #121211; --surface-1: #1a1a19; --surface-2: #242422; --border: #33332f;
+    --text-primary: #f0efec; --text-secondary: #c3c2b7; --text-muted: #9d9c94;
+    --series-1: #3987e5; --series-1-soft: rgba(57,135,229,.18); --series-3: #199e70; --series-4: #c98500;
+    --track: #262624; --good: #0ca30c; --good-text: #4cc94c; --critical: #e66767; --critical-text: #f08080;
+    --critical-soft: rgba(230,103,103,.16); --warning: #d99a1e; --warning-text: #e0b04a; --warning-soft: rgba(217,154,30,.16);
+    --good-soft: rgba(76,201,76,.13);
+    --accent: #e8895f; --accent-soft: rgba(232,137,95,.16); --accent-ink: #f0a582; --on-accent: #1a1a19;
+    --proj-1: #5d9bf2; --proj-2: #2ab59f; --proj-3: #e66db3; --proj-4: #a48cf5; --proj-other: #75746d;
+    --shadow-card: none;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #121211; --surface-1: #1a1a19; --surface-2: #242422; --border: #33332f;
+  --text-primary: #f0efec; --text-secondary: #c3c2b7; --text-muted: #9d9c94;
+  --series-1: #3987e5; --series-1-soft: rgba(57,135,229,.18); --series-3: #199e70; --series-4: #c98500;
+  --track: #262624; --good: #0ca30c; --good-text: #4cc94c; --critical: #e66767; --critical-text: #f08080;
+  --critical-soft: rgba(230,103,103,.16); --warning: #d99a1e; --warning-text: #e0b04a; --warning-soft: rgba(217,154,30,.16);
+  --good-soft: rgba(76,201,76,.13);
+  --accent: #e8895f; --accent-soft: rgba(232,137,95,.16); --accent-ink: #f0a582; --on-accent: #1a1a19;
+  --proj-1: #5d9bf2; --proj-2: #2ab59f; --proj-3: #e66db3; --proj-4: #a48cf5; --proj-other: #75746d;
+  --shadow-card: none;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text-primary);
+  font: 14px/1.5 "IBM Plex Sans", ui-sans-serif, -apple-system, system-ui, sans-serif; font-variant-numeric: tabular-nums; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+code, .mono { font: 12px/1.45 ui-monospace, "SF Mono", Menlo, monospace; }
+button { font: inherit; color: var(--text-primary); background: var(--surface-1); border: 1px solid var(--border);
+  border-radius: 8px; padding: 5px 10px; cursor: pointer; }
+button:hover { background: var(--surface-2); }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 9px; overflow: hidden; background: var(--surface-1); }
+.seg button { border: 0; border-radius: 0; padding: 5px 12px; font-size: 13px; }
+.seg button + button { box-shadow: -1px 0 0 var(--border); }
+.seg button[aria-pressed=true] { background: var(--accent); color: var(--on-accent); font-weight: 500; box-shadow: none; }
+.chip { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--border);
+  color: var(--text-secondary); white-space: nowrap; }
+.pdot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--proj-other); }
+.muted { color: var(--text-muted); }
+
+/* Nav, as in the app */
+.appnav { background: var(--surface-1); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 5; }
+.appnav-in { max-width: 1400px; margin: 0 auto; padding: 8px 16px; display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center; }
+.brand { font-size: 14.5px; font-weight: 500; letter-spacing: -.02em; color: var(--text-secondary); margin-right: 10px; }
+.brand b { color: var(--text-primary); font-weight: 600; }
+.tabs { display: inline-flex; gap: 2px; padding-left: 10px; border-left: 1px solid var(--border); flex-wrap: wrap; }
+.tabs a { color: var(--text-secondary); text-decoration: none; padding: 5px 10px; border-radius: 8px; font-weight: 500; }
+.tabs a:hover { background: var(--surface-2); color: var(--text-primary); }
+.tabs a[aria-current=page] { background: var(--accent-soft); color: var(--accent-ink); font-weight: 600; }
+.livedot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--good); margin-right: 6px; vertical-align: 1px;
+  animation: pulse 1.6s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .livedot, .spin { animation: none !important; } }
+.navright { margin-left: auto; display: inline-flex; gap: 8px; align-items: center; color: var(--text-muted); font-size: 12px; }
+
+/* Page */
+.wrap { max-width: 1400px; margin: 0 auto; padding: 16px 16px 48px; }
+.bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 14px; }
+.bar h1 { font-size: 20px; letter-spacing: -.02em; margin: 0 8px 0 0; }
+.toggle { display: inline-flex; gap: 7px; align-items: center; font-size: 13px; color: var(--text-secondary); cursor: pointer;
+  user-select: none; }
+.toggle input { accent-color: var(--accent); }
+.spacer { flex: 1; }
+.banner { border-left: 3px solid var(--warning-text); background: var(--surface-1); padding: 8px 12px; margin: 0 0 14px;
+  font-size: 13px; color: var(--text-secondary); }
+.banner b { color: var(--warning-text); }
+
+.grid { display: grid; grid-template-columns: 260px minmax(0, 1fr) 300px; gap: 14px; align-items: start; }
+.panel { background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-card); min-width: 0; }
+.panel h2 { font-size: 11.5px; text-transform: uppercase; letter-spacing: .06em; font-weight: 600; color: var(--text-secondary);
+  margin: 0; padding: 12px 14px 8px; }
+
+/* Session rail */
+.rail ul { list-style: none; margin: 0; padding: 0 6px 8px; }
+.rail li button { width: 100%; text-align: left; border: 0; background: none; border-radius: 9px; padding: 8px 9px;
+  display: grid; grid-template-columns: auto 1fr auto; gap: 2px 8px; align-items: center; }
+.rail li button:hover { background: var(--surface-2); }
+.rail li button[aria-current=true] { background: var(--accent-soft); }
+.rail .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rail .cost { font-size: 12px; color: var(--text-muted); }
+.rail .sub { grid-column: 2 / 4; font-size: 12px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rail .foot { padding: 4px 14px 12px; font-size: 12px; color: var(--text-muted); border-top: 1px solid var(--border); padding-top: 10px; }
+
+.state { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 500; white-space: nowrap; }
+.state i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.st-tool i { background: var(--series-1); animation: pulse 1s infinite; } .st-tool { color: var(--series-1); }
+.st-think i { background: var(--accent); animation: pulse 1.4s infinite; } .st-think { color: var(--accent-ink); }
+.st-you i { background: var(--good); } .st-you { color: var(--good-text); }
+.st-wait i { background: var(--warning); animation: pulse .8s infinite; } .st-wait { color: var(--warning-text); }
+.st-idle i { background: var(--proj-other); } .st-idle { color: var(--text-muted); }
+
+/* Stream */
+.stream-head { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+.stream-head .title { font-weight: 600; font-size: 15px; display: inline-flex; gap: 7px; align-items: center; }
+.stream-head .spacer { flex: 1; }
+.stream { height: 560px; overflow: auto; padding: 8px 0 14px; position: relative; scroll-behavior: smooth; }
+.ev { display: grid; grid-template-columns: 64px 1fr; gap: 10px; padding: 3px 14px; }
+.ev .t { color: var(--text-muted); font-size: 11.5px; padding-top: 3px; }
+.turn { margin-top: 12px; }
+.prompt { background: var(--accent-soft); border-radius: 10px; padding: 8px 12px; }
+.prompt .lbl, .reply .lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; font-weight: 600; color: var(--accent-ink); }
+.reply { border-left: 2px solid var(--border); padding: 4px 12px; }
+.reply .lbl { color: var(--text-secondary); }
+.body { white-space: pre-wrap; margin-top: 2px; }
+.redacted { color: var(--text-muted); font-style: italic; font-size: 13px; }
+.think { color: var(--text-muted); font-size: 12.5px; display: inline-flex; gap: 6px; align-items: center; }
+.tool { width: 100%; text-align: left; border: 1px solid transparent; background: none; border-radius: 8px; padding: 3px 8px;
+  display: grid; grid-template-columns: 18px 92px minmax(0, 1fr) auto auto; gap: 8px; align-items: center; }
+.tool:hover { background: var(--surface-2); }
+.tool[aria-expanded=true] { background: var(--surface-2); border-color: var(--border); border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+.tool .nm { font-weight: 600; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tool .sum { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-secondary); }
+.tool .dur { font-size: 12px; color: var(--text-muted); min-width: 44px; text-align: right; }
+.tool .res { font-size: 13px; width: 16px; text-align: center; }
+.ok { color: var(--good-text); } .bad { color: var(--critical-text); }
+.tool.err { background: var(--critical-soft); }
+.tool.pending .dur { color: var(--series-1); font-weight: 600; }
+.tool.waiting { background: var(--warning-soft); }
+.tool.waiting .dur { color: var(--warning-text); }
+.ico { width: 14px; height: 14px; display: block; color: var(--text-muted); }
+.spin { width: 12px; height: 12px; border: 2px solid var(--series-1-soft); border-top-color: var(--series-1); border-radius: 50%;
+  animation: rot .8s linear infinite; }
+@keyframes rot { to { transform: rotate(360deg); } }
+.detail { border: 1px solid var(--border); border-top: 0; border-radius: 0 0 8px 8px; background: var(--surface-2);
+  padding: 8px 12px 10px 34px; font-size: 12.5px; margin-bottom: 4px; }
+.detail dl { display: grid; grid-template-columns: 80px 1fr; gap: 4px 10px; margin: 0; }
+.detail dt { color: var(--text-muted); } .detail dd { margin: 0; min-width: 0; }
+.detail pre { margin: 0; white-space: pre-wrap; word-break: break-word; font: 12px/1.45 ui-monospace, "SF Mono", Menlo, monospace;
+  max-height: 160px; overflow: auto; }
+.hintline { font-size: 12px; color: var(--warning-text); margin-top: 6px; }
+
+.lane { margin: 4px 0 4px 6px; border-left: 2px solid var(--proj-4); border-radius: 0 8px 8px 0; background: color-mix(in srgb, var(--proj-4) 5%, transparent); }
+.lane-head { width: 100%; border: 0; background: none; text-align: left; padding: 5px 10px; display: flex; gap: 8px; align-items: center; font-size: 13px; }
+.lane-head b { color: var(--proj-4); }
+.lane-head .muted { font-size: 12px; }
+.lane .ev { grid-template-columns: 54px 1fr; padding-left: 6px; }
+.compact { text-align: center; font-size: 12px; color: var(--warning-text); margin: 10px 14px; border-top: 1px dashed var(--warning-text); line-height: 0; }
+.compact span { background: var(--surface-1); padding: 0 8px; }
+.jump { position: sticky; bottom: 8px; left: 0; margin: 0 auto; display: block; box-shadow: 0 4px 14px rgba(0,0,0,.14);
+  background: var(--accent); color: var(--on-accent); border-color: var(--accent); font-size: 12.5px; }
+
+/* Agent's head */
+.head .sec { padding: 4px 14px 14px; border-bottom: 1px solid var(--border); }
+.head .sec:last-child { border-bottom: 0; }
+.big { font-size: 26px; font-weight: 600; letter-spacing: -.035em; line-height: 1.1; }
+.meter { height: 10px; border-radius: 6px; background: var(--track); overflow: hidden; position: relative; margin: 8px 0 4px; }
+.meter > i { position: absolute; inset: 0 auto 0 0; background: var(--series-1); border-radius: 6px; transition: width .6s; }
+.meter.warn > i { background: var(--warning); }
+.meter .mark { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--warning-text); }
+.row { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--text-secondary); gap: 8px; }
+.kv { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.kv div span { display: block; font-size: 11.5px; color: var(--text-muted); }
+.kv div b { font-size: 17px; letter-spacing: -.02em; }
+.spark { width: 100%; height: 44px; display: block; margin-top: 6px; }
+.spark path.l { fill: none; stroke: var(--series-1); stroke-width: 1.6; }
+.spark path.a { fill: var(--series-1-soft); }
+.now { font-size: 13px; padding: 8px 10px; border-radius: 8px; background: var(--surface-2); margin-top: 4px; }
+.now b { font-weight: 600; }
+
+/* Wall */
+.wall { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.tile { text-align: left; padding: 12px 14px; border-radius: 12px; display: flex; flex-direction: column; gap: 6px; }
+.tile.hot { border-color: var(--series-1); }
+.tile.waitb { border-color: var(--warning); }
+.tile .top { display: flex; align-items: center; gap: 7px; font-weight: 600; }
+.tile .top .spacer { flex: 1; }
+.tile .act { font-size: 12.5px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-height: 19px; }
+.tile .meter { height: 6px; margin: 2px 0; }
+.tile .row { font-size: 12px; }
+
+@media (max-width: 1100px) {
+  .grid { grid-template-columns: 220px minmax(0, 1fr); }
+  .head { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+  .head .sec { border-bottom: 0; border-right: 1px solid var(--border); }
+}
+@media (max-width: 720px) {
+  .grid { grid-template-columns: minmax(0, 1fr); }
+  .rail ul { display: flex; overflow-x: auto; gap: 4px; padding: 0 6px 8px; }
+  .rail li button { min-width: 190px; }
+  .rail .foot { display: none; }
+  .tabs { border-left: 0; padding-left: 0; }
+  .navright { display: none; }
+  .stream { height: 480px; }
+  .tool { grid-template-columns: 16px 62px minmax(0, 1fr) auto auto; gap: 6px; }
+  .ev { grid-template-columns: 48px 1fr; gap: 6px; }
+  .head .sec { border-right: 0; border-bottom: 1px solid var(--border); }
+}
+</style>
+</head>
+<body>
+<nav class="appnav"><div class="appnav-in">
+  <span class="brand"><b>AI</b> Ledger</span>
+  <span class="tabs">
+    <a href="#">Activity</a><a href="#">Cost</a><a href="#">Errors</a><a href="#">Limits</a><a href="#">Insights</a>
+    <a href="#" aria-current="page"><span class="livedot"></span>Live</a>
+  </span>
+  <span class="navright"><span id="conn">streaming · fast pass 1s</span><button id="theme" title="Toggle theme">◐</button></span>
+</div></nav>
+
+<main class="wrap">
+  <div class="bar">
+    <h1>Live</h1>
+    <span class="seg" role="group" aria-label="View">
+      <button id="vStream" aria-pressed="true">Stream</button><button id="vWall" aria-pressed="false">Wall</button>
+    </span>
+    <span class="spacer"></span>
+    <label class="toggle"><input type="checkbox" id="follow" checked> Follow</label>
+    <label class="toggle"><input type="checkbox" id="fulltext"> Full text</label>
+    <button id="pause">Pause</button>
+  </div>
+  <div class="banner" id="ftBanner" hidden><b>Full text on.</b> Prompts, replies and tool output show as written, secrets included. The page only listens on 127.0.0.1; turn this off before screen sharing.</div>
+
+  <div id="streamView" class="grid">
+    <section class="panel rail" aria-label="Active sessions">
+      <h2>Active · last 10 min</h2>
+      <ul id="rail"></ul>
+      <div class="foot" id="railFoot"></div>
+    </section>
+    <section class="panel" aria-label="Session stream">
+      <div class="stream-head" id="sHead"></div>
+      <div class="stream" id="stream"></div>
+    </section>
+    <aside class="panel head" aria-label="Agent state" id="headPanel"></aside>
+  </div>
+  <div id="wallView" class="wall" hidden></div>
+  <p class="muted" style="font-size:12px;margin-top:14px">Mockup with synthetic sessions. Events replay on a loop; click a tool row for detail, a subagent header to fold its lane.</p>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const words = s => s.trim().split(/\s+/).length;
+const fmtDur = ms => ms < 1000 ? (ms / 1000).toFixed(1) + "s" : ms < 60000 ? Math.round(ms / 1000) + "s" : Math.floor(ms / 60000) + "m " + Math.round(ms % 60000 / 1000) + "s";
+const fmtTime = t => new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
+const fmtK = n => n >= 1000 ? (n / 1000).toFixed(n >= 100000 ? 0 : 1) + "k" : String(n);
+const money = n => "$" + n.toFixed(2);
+
+// Synthetic sessions. Each script step plays after `d` seconds.
+const SCRIPTS = {
+  ledger: [
+    { d: 1, t: "prompt", text: "Add a hot-file fast pass to ingest: only stat files touched in the last 10 minutes, every second." },
+    { d: 2, t: "think" },
+    { d: 3, t: "tool", name: "Grep", sum: "\"def ingest\" store.py app.py", dur: 0.3, out: "store.py:239:def ingest(con, roots, log=None):\napp.py:41:    def ingest(self):" },
+    { d: 1, t: "tool", name: "Read", sum: "store.py:239-290", dur: 0.2, out: "def ingest(con, roots, log=None):\n    \"\"\"Read new bytes of every transcript file under roots…" },
+    { d: 2, t: "sub", name: "Explore", desc: "find every caller of store.ingest", steps: [
+      { d: 1, name: "Grep", sum: "\"store.ingest\" **/*.py", dur: 0.4, out: "app.py:45\ntests/test_store.py:88\ntests/test_ingest.py:12" },
+      { d: 1, name: "Read", sum: "tests/test_ingest.py", dur: 0.3, out: "class IngestTest(unittest.TestCase): …" },
+      { d: 1, name: "Grep", sum: "\"INTERVAL\" app.py", dur: 0.2, out: "app.py:25:INTERVAL = 60" } ] },
+    { d: 2, t: "think" },
+    { d: 3, t: "tool", name: "Edit", sum: "store.py · add hot(paths, since)", dur: 0.4, out: "Applied 1 edit." },
+    { d: 1, t: "tool", name: "Edit", sum: "app.py · loop runs fast pass every 1s", dur: 0.3, out: "Applied 1 edit." },
+    { d: 1, t: "tool", name: "Bash", sum: "uv run python -m unittest discover -s tests", dur: 9, ok: false,
+      out: "FAIL: test_hot_pass_skips_cold_files (test_ingest.IngestTest)\nAssertionError: 3 != 1", err: "AssertionError: 3 != 1" },
+    { d: 2, t: "think" },
+    { d: 2, t: "tool", name: "Edit", sum: "store.py · compare mtime against since, not offset", dur: 0.3, out: "Applied 1 edit." },
+    { d: 1, t: "tool", name: "Bash", sum: "uv run python -m unittest discover -s tests", dur: 8, out: "Ran 214 tests in 7.9s\n\nOK" },
+    { d: 2, t: "reply", text: "Added `store.hot(con, roots, since)`: it stats only files whose mtime is within the window and hands them to the same `ingest_chunk`. The app loop now runs it every second and keeps the full scan at 60s. Tests pass (214)." },
+    { d: 6, t: "compact" },
+    { d: 4, t: "prompt", text: "Now stream the new rows over SSE at /api/live." },
+    { d: 2, t: "think" },
+    { d: 3, t: "tool", name: "Read", sum: "app.py:90-185", dur: 0.2, out: "def handler(app): …" },
+    { d: 2, t: "tool", name: "Bash", sum: "git push origin feat/live-page", dur: 38, out: "Everything up-to-date" },
+    { d: 2, t: "reply", text: "Pushed. Next step is the EventSource client in web/src/pages/live." },
+    { d: 14, t: "loop" } ],
+  jobdesk: [
+    { d: 2, t: "prompt", text: "Why does the snapshot test for the board header flake on CI?" },
+    { d: 3, t: "think" },
+    { d: 4, t: "tool", name: "Bash", sum: "gh run view 81234 --log-failed", dur: 3, out: "Snapshot mismatch: header.png (12 px differ)" },
+    { d: 2, t: "tool", name: "WebFetch", sum: "playwright.dev/docs/test-snapshots", dur: 2.4, ok: false, out: "", err: "Request timed out after 30s" },
+    { d: 3, t: "tool", name: "Read", sum: "tests/visual/header.spec.ts", dur: 0.2, out: "await expect(page).toHaveScreenshot()" },
+    { d: 3, t: "reply", text: "The header renders the relative time (\"2 min ago\"), so the screenshot drifts with the clock. Freeze the clock with page.clock.install() before the shot." },
+    { d: 30, t: "loop" } ],
+  codex: [
+    { d: 3, t: "prompt", text: "Bump the parser to the new rollout format and keep the fixtures green." },
+    { d: 2, t: "think" },
+    { d: 5, t: "tool", name: "shell", sum: "rg \"response_item\" src/", dur: 0.6, out: "src/rollout.rs:41\nsrc/rollout.rs:88" },
+    { d: 4, t: "tool", name: "apply_patch", sum: "src/rollout.rs", dur: 0.4, out: "Success. Updated 1 file." },
+    { d: 3, t: "tool", name: "shell", sum: "cargo test", dur: 22, out: "test result: ok. 61 passed" },
+    { d: 3, t: "reply", text: "Parser handles both formats; 61 tests pass." },
+    { d: 25, t: "loop" } ],
+};
+
+// Start 40s in the past and fast-forward, so the page opens mid-session.
+let skew = -40000;
+const now = () => Date.now() + skew;
+const SESSIONS = [
+  { id: "ledger", project: "ai-ledger", color: "--proj-1", branch: "feat/live-page", source: "claude", model: "opus-5-5", ctxMax: 200000, ctx: 38400, cost: 0.62, rate: 0.000018 },
+  { id: "jobdesk", project: "jobdesk", color: "--proj-2", branch: "fix/header-snapshot", source: "claude", model: "sonnet-5-5", ctxMax: 200000, ctx: 71200, cost: 1.94, rate: 0.000006 },
+  { id: "codex", project: "graft", color: "--proj-3", branch: "main", source: "codex", model: "gpt-5.5-codex", ctxMax: 272000, ctx: 22000, cost: 0.31, rate: 0.000009 },
+  { id: "old", project: "dotfiles", color: "--proj-other", branch: "main", source: "claude", model: "haiku-5-5", ctxMax: 200000, ctx: 9100, cost: 0.04, rate: 0, idleSince: now() - 7 * 60000 },
+];
+let seq = 0;
+for (const s of SESSIONS) {
+  Object.assign(s, { events: [], step: 0, nextAt: now() + 400, reqs: 4, tools: 0, errors: 0, cacheRead: 0.9, compactions: [],
+    spark: Array.from({ length: 30 }, () => (s.id === "old" ? 0 : Math.round(Math.random() * 3000))), last: s.idleSince || now() });
+  if (s.id === "old") s.events.push({ id: ++seq, t: "reply", text: "Done: zsh prompt now shows the git branch.", ts: s.idleSince });
+}
+
+let selected = "ledger", paused = false, view = "stream";
+const expanded = new Set(), folded = new Set();
+
+function addTokens(s, n) { s.ctx = Math.min(s.ctxMax, s.ctx + n); s.cost += n * s.rate; s.spark[s.spark.length - 1] += n; }
+
+function play(s) {
+  const script = SCRIPTS[s.id];
+  if (!script) return;
+  const step = script[s.step];
+  s.step++;
+  const ts = now(), ev = { id: ++seq, ts };
+  s.last = ts;
+  if (step.t === "loop") { s.step = 0; s.events = s.events.slice(-60); s.nextAt = ts + 1000; return; }
+  if (step.t === "prompt") Object.assign(ev, { t: "prompt", text: step.text });
+  if (step.t === "think") { Object.assign(ev, { t: "think", until: ts + 1800 }); s.reqs++; addTokens(s, 1800); }
+  if (step.t === "reply") { Object.assign(ev, { t: "reply", text: step.text }); s.reqs++; addTokens(s, 900); }
+  if (step.t === "compact") { Object.assign(ev, { t: "compact", from: s.ctx }); s.compactions.push(s.ctx / s.ctxMax); s.ctx = Math.round(s.ctx * 0.28); }
+  if (step.t === "tool") { Object.assign(ev, toolEv(step, ts)); s.tools++; s.reqs++; addTokens(s, 1200); }
+  if (step.t === "sub") {
+    Object.assign(ev, { t: "sub", name: step.name, desc: step.desc, children: [], queue: step.steps.slice(), subNext: ts + 800 });
+    s.tools++;
+  }
+  s.events.push(ev);
+  s.nextAt = ts + (step.d || 1) * 1000;
+}
+function toolEv(step, ts) {
+  return { t: "tool", name: step.name, sum: step.sum, out: step.out, err: step.err, ok: step.ok !== false,
+    start: ts, end: ts + step.dur * 1000, id: ++seq };
+}
+
+function tick(quiet) {
+  if (paused) return;
+  const t = now();
+  for (const s of SESSIONS) {
+    s.spark.push(0); s.spark.shift();
+    // A running subagent plays its own steps; the parent waits on it.
+    const sub = s.events.find(e => e.t === "sub" && !e.done);
+    if (sub) {
+      const last = sub.children[sub.children.length - 1];
+      if ((!last || last.end <= t) && t >= sub.subNext) {
+        if (sub.queue.length) { const st = sub.queue.shift(); sub.children.push(toolEv(st, t)); sub.subNext = t + st.d * 1000; addTokens(s, 700); s.tools++; s.reqs++; }
+        else { sub.done = true; sub.end = t; s.nextAt = t + 1000; }
+      }
+      s.last = t;
+      continue;
+    }
+    const pending = s.events.find(e => e.t === "tool" && e.end > t);
+    if (pending) { s.last = t; continue; }
+    for (const e of s.events) if (e.t === "tool" && !e.counted && e.end <= t) { e.counted = true; if (!e.ok) s.errors++; }
+    if (t >= s.nextAt) play(s);
+  }
+  if (!quiet) render();
+}
+
+function stateOf(s) {
+  const t = now();
+  const sub = s.events.find(e => e.t === "sub" && !e.done);
+  const runningIn = list => list.find(e => e.t === "tool" && e.end > t);
+  const pend = runningIn(s.events) || (sub && runningIn(sub.children));
+  if (pend) {
+    const el = t - pend.start;
+    if (pend.name === "Bash" && el > 30000) return { k: "wait", label: "approval?", detail: `Bash pending ${fmtDur(el)}, likely waiting on you`, ev: pend };
+    return { k: "tool", label: `${pend.name} ${fmtDur(el)}`, detail: `${pend.name} · ${pend.sum}`, ev: pend };
+  }
+  if (sub) return { k: "tool", label: `${sub.name} agent`, detail: `subagent · ${sub.desc}` };
+  if (t - s.last > 5 * 60000) return { k: "idle", label: `idle ${Math.round((t - s.last) / 60000)}m`, detail: "no new lines" };
+  const last = [...s.events].reverse().find(e => e.t !== "compact");
+  if (!last || last.t === "reply") return { k: "you", label: "your turn", detail: "turn ended, waiting for a prompt" };
+  return { k: "think", label: "thinking", detail: "request in flight" };
+}
+
+function stateHtml(st) { return `<span class="state st-${st.k}"><i></i>${esc(st.label)}</span>`; }
+
+function renderRail() {
+  $("#rail").innerHTML = SESSIONS.map(s => {
+    const st = stateOf(s);
+    return `<li><button data-s="${s.id}" aria-current="${s.id === selected}">
+      <span class="pdot" style="background:var(${s.color})"></span><span class="name">${esc(s.project)}</span><span class="cost">${money(s.cost)}</span>
+      <span class="sub">${stateHtml(st)} · ${esc(s.source)}</span></button></li>`;
+  }).join("");
+  const live = SESSIONS.filter(s => stateOf(s).k !== "idle");
+  $("#railFoot").textContent = `${live.length} active · ${money(live.reduce((a, s) => a + s.cost, 0))} so far`;
+}
+
+const ICONS = { ok: "✓", bad: "✕" };
+function toolRow(e, full) {
+  const t = now(), pending = e.end > t, el = (pending ? t : e.end) - e.start;
+  const waiting = pending && e.name === "Bash" && el > 30000;
+  const cls = ["tool", pending ? "pending" : "", waiting ? "waiting" : "", !pending && !e.ok ? "err" : ""].join(" ");
+  const res = pending ? `<span class="spin" aria-label="running"></span>` : e.ok ? `<span class="ok">${ICONS.ok}</span>` : `<span class="bad">${ICONS.bad}</span>`;
+  const open = expanded.has(e.id);
+  let html = `<button class="${cls}" data-x="${e.id}" aria-expanded="${open}">
+    <svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 4h10M3 8h7M3 12h9" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>
+    <span class="nm">${esc(e.name)}</span><span class="sum mono">${esc(e.sum)}</span><span class="dur">${fmtDur(el)}</span><span class="res">${res}</span></button>`;
+  if (open) {
+    const out = pending ? `<span class="muted">running…</span>` : full ? `<pre>${esc(e.out || "(empty)")}</pre>` : `<span class="redacted">output hidden · ${(e.out || "").length} chars · turn on Full text</span>`;
+    html += `<div class="detail"><dl><dt>input</dt><dd class="mono">${esc(e.sum)}</dd>
+      <dt>started</dt><dd>${fmtTime(e.start)}</dd>
+      ${!pending && !e.ok ? `<dt>error</dt><dd class="bad mono">${esc(e.err)}</dd>` : ""}
+      <dt>result</dt><dd>${out}</dd></dl>
+      ${waiting ? `<div class="hintline">Inferred: the transcript has no approval event; a Bash call this slow often waits on a permission prompt.</div>` : ""}</div>`;
+  }
+  return html;
+}
+
+function textBlock(kind, label, text, full) {
+  const body = full ? `<div class="body">${esc(text)}</div>` : `<div class="redacted">${words(text)} words · turn on Full text</div>`;
+  return `<div class="${kind}"><div class="lbl">${label}</div>${body}</div>`;
+}
+
+function renderStream() {
+  const s = SESSIONS.find(x => x.id === selected), full = $("#fulltext").checked, t = now();
+  const st = stateOf(s);
+  $("#sHead").innerHTML = `<span class="title"><span class="pdot" style="background:var(${s.color})"></span>${esc(s.project)}</span>
+    <span class="chip mono">${esc(s.branch)}</span><span class="chip">${esc(s.source)}</span><span class="chip">${esc(s.model)}</span>
+    <span class="spacer"></span>${stateHtml(st)}`;
+  const box = $("#stream");
+  const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
+  const prevTop = box.scrollTop;
+  let html = "";
+  for (const e of s.events) {
+    if (e.t === "prompt") html += `<div class="ev turn"><span class="t">${fmtTime(e.ts)}</span>${textBlock("prompt", "Prompt", e.text, full)}</div>`;
+    else if (e.t === "reply") html += `<div class="ev"><span class="t">${fmtTime(e.ts)}</span>${textBlock("reply", "Reply", e.text, full)}</div>`;
+    else if (e.t === "think") html += `<div class="ev"><span class="t">${fmtTime(e.ts)}</span><span class="think">${e.until > t ? `<span class="spin"></span> thinking…` : "· request · 1.8k tokens"}</span></div>`;
+    else if (e.t === "tool") html += `<div class="ev"><span class="t">${fmtTime(e.ts)}</span><div>${toolRow(e, full)}</div></div>`;
+    else if (e.t === "compact") html += `<div class="compact"><span>context compacted · ${fmtK(e.from)} → ${fmtK(Math.round(e.from * .28))}</span></div>`;
+    else if (e.t === "sub") {
+      const isFolded = folded.has(e.id);
+      const dur = fmtDur((e.done ? e.end : t) - e.ts);
+      html += `<div class="ev"><span class="t">${fmtTime(e.ts)}</span><div class="lane">
+        <button class="lane-head" data-f="${e.id}" aria-expanded="${!isFolded}">${isFolded ? "▸" : "▾"} <b>${esc(e.name)}</b>
+        <span>${esc(e.desc)}</span><span class="muted">${e.children.length} tools · ${dur}</span>${e.done ? `<span class="ok">✓</span>` : `<span class="spin"></span>`}</button>
+        ${isFolded ? "" : e.children.map(c => `<div class="ev"><span class="t">${fmtTime(c.start)}</span><div>${toolRow(c, full)}</div></div>`).join("")}
+      </div></div>`;
+    }
+  }
+  if (st.k === "you") html += `<div class="ev"><span class="t"></span><span class="think">waiting for your next prompt</span></div>`;
+  const follow = $("#follow").checked;
+  if (!follow && !atBottom) html += `<button class="jump" id="jump">Jump to latest ↓</button>`;
+  box.innerHTML = html;
+  box.style.scrollBehavior = "auto";
+  box.scrollTop = follow ? box.scrollHeight : prevTop;
+  box.style.scrollBehavior = "";
+}
+
+function sparkPath(vals, w, h) {
+  const max = Math.max(...vals, 1), step = w / (vals.length - 1);
+  const pts = vals.map((v, i) => [i * step, h - 2 - (v / max) * (h - 6)]);
+  const line = "M" + pts.map(p => p.map(n => n.toFixed(1)).join(",")).join("L");
+  return { line, area: `${line}L${w},${h}L0,${h}Z`, max };
+}
+
+function renderHead() {
+  const s = SESSIONS.find(x => x.id === selected), st = stateOf(s);
+  const pct = s.ctx / s.ctxMax * 100;
+  const sp = sparkPath(s.spark, 260, 44);
+  const tpm = s.spark.slice(-6).reduce((a, b) => a + b, 0) * 10;
+  $("#headPanel").innerHTML = `
+    <div class="sec"><h2 style="padding:12px 0 6px">Doing now</h2>
+      <div class="now">${stateHtml(st)}<div class="muted" style="margin-top:2px">${esc(st.detail)}</div></div></div>
+    <div class="sec"><h2 style="padding:12px 0 2px">Context window</h2>
+      <div class="big">${fmtK(s.ctx)} <span class="muted" style="font-size:14px;font-weight:400">/ ${fmtK(s.ctxMax)}</span></div>
+      <div class="meter ${pct > 75 ? "warn" : ""}" role="meter" aria-valuenow="${pct.toFixed(0)}" aria-valuemin="0" aria-valuemax="100" aria-label="Context used">
+        <i style="width:${pct}%"></i>${s.compactions.map(c => `<span class="mark" style="left:${c * 100}%" title="compacted here"></span>`).join("")}</div>
+      <div class="row"><span>${pct.toFixed(0)}% used</span><span>${s.compactions.length} compaction${s.compactions.length === 1 ? "" : "s"}</span></div></div>
+    <div class="sec"><h2 style="padding:12px 0 6px">This session</h2>
+      <div class="kv"><div><span>Cost</span><b>${money(s.cost)}</b></div><div><span>Requests</span><b>${s.reqs}</b></div>
+      <div><span>Tool calls</span><b>${s.tools}</b></div><div><span>Errors</span><b class="${s.errors ? "bad" : ""}">${s.errors}</b></div>
+      <div><span>Cache read</span><b>${Math.round(s.cacheRead * 100)}%</b></div><div><span>Model</span><b style="font-size:13px">${esc(s.model)}</b></div></div></div>
+    <div class="sec"><h2 style="padding:12px 0 2px">Tokens · last 30s</h2>
+      <div class="row"><span>${fmtK(tpm)} / min</span><span>peak ${fmtK(sp.max)}/s</span></div>
+      <svg class="spark" viewBox="0 0 260 44" preserveAspectRatio="none" aria-hidden="true"><path class="a" d="${sp.area}"/><path class="l" d="${sp.line}"/></svg></div>
+    <div class="sec"><h2 style="padding:12px 0 2px">Plan limit · ${s.source === "codex" ? "Codex" : "Claude"}</h2>
+      <div class="meter"><i style="width:${s.source === "codex" ? 21 : 38}%"></i></div>
+      <div class="row"><span>5h window · ${s.source === "codex" ? 21 : 38}%</span><span>resets 01:40</span></div></div>`;
+}
+
+function renderWall() {
+  const t = now();
+  $("#wallView").innerHTML = SESSIONS.map(s => {
+    const st = stateOf(s), pct = s.ctx / s.ctxMax * 100;
+    const recent = [...s.events].reverse().find(e => e.t === "tool" || e.t === "prompt" || e.t === "sub");
+    const act = !recent ? "" : recent.t === "prompt" ? "▸ prompt" : recent.t === "sub" ? `⤷ ${recent.name}: ${recent.desc}` : `${recent.name} · ${recent.sum}`;
+    return `<button class="panel tile ${st.k === "tool" ? "hot" : ""} ${st.k === "wait" ? "waitb" : ""}" data-w="${s.id}">
+      <span class="top"><span class="pdot" style="background:var(${s.color})"></span>${esc(s.project)}<span class="spacer"></span>${stateHtml(st)}</span>
+      <span class="act mono">${esc(act)}</span>
+      <span class="meter ${pct > 75 ? "warn" : ""}"><i style="width:${pct}%"></i></span>
+      <span class="row"><span>ctx ${pct.toFixed(0)}% · ${s.tools} tools${s.errors ? ` · <span class="bad">${s.errors} err</span>` : ""}</span><span>${money(s.cost)}</span></span>
+      <span class="row"><span class="mono">${esc(s.branch)}</span><span>${esc(s.source)} · ${esc(s.model)}</span></span></button>`;
+  }).join("");
+}
+
+function render() {
+  if (view === "stream") { renderRail(); renderStream(); renderHead(); } else renderWall();
+}
+
+document.addEventListener("click", ev => {
+  const b = ev.target.closest("button"); if (!b) return;
+  if (b.dataset.s) { selected = b.dataset.s; render(); }
+  else if (b.dataset.x) { const id = +b.dataset.x; expanded.has(id) ? expanded.delete(id) : expanded.add(id); $("#follow").checked = false; render(); }
+  else if (b.dataset.f) { const id = +b.dataset.f; folded.has(id) ? folded.delete(id) : folded.add(id); render(); }
+  else if (b.dataset.w) { selected = b.dataset.w; setView("stream"); }
+  else if (b.id === "jump") { $("#follow").checked = true; render(); }
+});
+$("#stream").addEventListener("wheel", ev => { if (ev.deltaY < 0) $("#follow").checked = false; }, { passive: true });
+$("#fulltext").addEventListener("change", () => { $("#ftBanner").hidden = !$("#fulltext").checked; render(); });
+$("#follow").addEventListener("change", render);
+$("#pause").addEventListener("click", () => {
+  paused = !paused; $("#pause").textContent = paused ? "Resume" : "Pause";
+  $("#conn").textContent = paused ? "paused · updates held" : "streaming · fast pass 1s";
+});
+function setView(v) {
+  view = v;
+  $("#vStream").setAttribute("aria-pressed", v === "stream"); $("#vWall").setAttribute("aria-pressed", v === "wall");
+  $("#streamView").hidden = v !== "stream"; $("#wallView").hidden = v !== "wall";
+  render();
+}
+$("#vStream").addEventListener("click", () => setView("stream"));
+$("#vWall").addEventListener("click", () => setView("wall"));
+$("#theme").addEventListener("click", () => {
+  const dark = document.documentElement.dataset.theme ? document.documentElement.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  document.documentElement.dataset.theme = dark ? "light" : "dark";
+});
+
+while (skew < 0) { skew += 1000; tick(true); }
+render();
+setInterval(tick, 1000);
+</script>
+</body>
+</html>
