@@ -82,7 +82,9 @@ RULES = [
          fix="If the hook fires often for valid work, fix the hook; otherwise add the rule it enforces to CLAUDE.md so Claude avoids it up front.",
          snippet=""),
     dict(id="bad_call", label="Wrong tool name or parameters",
-         test=lambda e, t, c: any(s in e for s in ("No such tool available", "InputValidationError", "Invalid parameters", "takes only", "Missing key", "also needs", "at most", "Pass either", "Pass the", "No task found", "haven't viewed", "Cannot enter worktree", "page tools can't")),
+         # Harness and tool-validation messages only: a shell call's error is "Exit code N" then the command's output,
+         # which can hold any of these phrases (a printed doc saying "at most"), so it never counts here.
+         test=lambda e, t, c: not e.lstrip().startswith("Exit code") and any(s in e for s in ("No such tool available", "InputValidationError", "Invalid parameters", "takes only", "Missing key", "also needs", "at most", "Pass either", "Pass the", "No task found", "haven't viewed", "Cannot enter worktree", "page tools can't")),
          why="Claude called a tool that is not loaded, or with a malformed input.",
          fix="Mostly harness/skill-doc issues. If one tool dominates, its instructions or skill are unclear; tighten them.",
          snippet=""),

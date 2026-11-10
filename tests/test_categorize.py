@@ -3,7 +3,7 @@ import sys
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from categorize import input_pattern  # noqa: E402
+from categorize import categorize, input_pattern  # noqa: E402
 
 
 class InputPatternTest(unittest.TestCase):
@@ -47,6 +47,31 @@ class InputPatternTest(unittest.TestCase):
             self.assertEqual(input_pattern(tool, ""), "other", tool)
         self.assertEqual(input_pattern("WebFetch", "not a url"), "other")
         self.assertEqual(input_pattern("WebFetch", "http://[invalid"), "other")
+
+
+class BadCallTest(unittest.TestCase):
+    """bad_call holds harness and tool-validation messages, never a shell command's own output."""
+
+    def test_validation_messages_are_bad_call(self):
+        for tool, err in [
+            ("Edit", "No such tool available: Edit"),
+            ("mcp__t3-code__preview_evaluate", "Invalid parameters for tool 'preview_evaluate'"),
+            ("TaskUpdate", 'Missing key at ["taskIds"]'),
+            ("mcp__github__get_pull_request", "Pass either url, or both repository and number."),
+            ("Bash", "InputValidationError: Bash failed due to the following issue: The required parameter `command` is missing"),
+        ]:
+            self.assertEqual(categorize(err, tool, ""), "bad_call", err)
+
+    def test_shell_output_is_not_bad_call(self):
+        doc = "---\nname: quick-fix\ndescription: A small fix.\n---\nUse at most one builder. Pass the plan path.\n"
+        for tool, err, cmd, want in [
+            ("Bash", "Exit code 1\n" + doc + "cat: missing.md: No such file or directory", "cat SKILL.md missing.md", "no_file"),
+            ("Bash", "Exit code 1\n" + doc + "Pass either a path or a name, at most once.", "cat SKILL.md; false", "chained"),
+            ("exec_command", "Exit code 2\n" + doc + "1 failed", "npm test", "tests"),
+            ("Bash", "Exit code 1\n" + doc + "Invalid parameters: fatal", "git show HEAD:SKILL.md", "git"),
+            ("Bash", "Exit code 1\n" + doc + "build failed", "cat SKILL.md && ./build.sh", "exit_other"),
+        ]:
+            self.assertEqual(categorize(err, tool, cmd), want, cmd)
 
 
 if __name__ == "__main__":
