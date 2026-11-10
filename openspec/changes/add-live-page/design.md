@@ -42,11 +42,11 @@ Current state that shapes the approach:
 
 ### 1. Speed up the ingest loop while Live is open, instead of tailing files separately
 
-`App` counts the connected Live pages. While the count is above zero, `App.loop` runs transcript ingest every 2 seconds. It still runs usage data and the pollers on their 60-second schedule. Connecting the first Live page sets `App.wake`, so speed-up starts at once.
+`App` counts the connected Live pages. While the count is above zero, `App.loop` runs transcript ingest every second. It still runs usage data and the pollers on their 60-second schedule. Connecting the first Live page sets `App.wake`, so speed-up starts at once.
 
 - Considered: a separate tailer that reads files into memory and never touches DuckDB. Rejected: it is a second parser that would drift from `store.py` and `codex.py`, and the spec rule that both sources map onto the same records would apply twice.
-- Considered: stat-ing only files changed in the last few minutes. Rejected for now: the full list and stat cost about 65 ms, which is 3% of a 2-second tick. That saving does not justify a hot set that misses new files. Revisit if file counts grow by ten times.
-- 2 seconds, not 1, halves the write transactions. It still meets the stream requirement that a row appears within 3 seconds.
+- Considered: stat-ing only files changed in the last few minutes. Rejected for now: the full list and stat cost about 65 ms, about 7% of a 1-second tick. That saving does not justify a hot set that misses new files. Revisit if file counts grow by ten times.
+- 1 second, not 2. Claude Code writes an assistant line a few seconds after its timestamp, so the time from a call's start to its row is mostly outside the app's control; the spec measures from when the line is written. At 2 seconds, short calls showed 2.7–4.9 s after their start on real sessions; 1 second takes up to a second off that. A tick took a median of 83 ms in task 2.4, so the extra transactions are affordable.
 
 `store.ingest` gains `usage=True`. The fast pass passes `usage=False` instead of editing `roots`. Its stats gain `sessions`, the set of session ids that got new `raw_lines`. `ingest_chunk` already holds each row's session id.
 
@@ -119,7 +119,7 @@ Running timers tick from one shared 1-second interval in the page, and each tick
 
 ## Risks / Trade-offs
 
-- [Write load every 2 seconds while Live is open] → One transaction per changed file, usually 1–3 files. Measure lock wait and tick time against a copy of the store with two synthetic sessions writing (task 2.4). If a tick takes more than 500 ms, fall back to stat-ing only hot files (decision 1, alternative 2).
+- [Write load every second while Live is open] → One transaction per changed file, usually 1–3 files. Measure lock wait and tick time against a copy of the store with two synthetic sessions writing (task 2.4). If a tick takes more than 500 ms, fall back to stat-ing only hot files (decision 1, alternative 2).
 - [SSE threads hold server threads] → One thread per open Live tab. This is a local single-user app, so a handful of tabs is the realistic maximum. Daemon threads end with the process.
 - [Shutdown hangs on an open stream] → SSE handlers wake at least every 15 seconds and exit on `App.stopping`. `serve_forever` stops accepting first. Daemon threads do not block exit.
 - [Wrong approval guess] → Always labelled as inferred, with the reason. Only shell calls past 30 seconds qualify, so long test runs will sometimes be flagged as likely waiting. That is accepted and stated in the UI.

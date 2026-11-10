@@ -22,7 +22,7 @@ The stream SHALL show the selected session's events in order. Each tool call SHA
 
 #### Scenario: Tool call starts and ends
 - **WHEN** a `Bash` call starts in the followed session and ends 8 seconds later
-- **THEN** its row appears within 3 seconds of the start with a running timer, and when the result arrives it shows 8s and passed
+- **THEN** its row appears within 3 seconds of its transcript line being written, with a running timer, and when the result arrives it shows 8s and passed
 
 #### Scenario: Failed tool call
 - **WHEN** a tool call fails

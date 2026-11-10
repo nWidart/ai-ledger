@@ -11,7 +11,7 @@ Privacy for every group: `data/` holds full transcript content. Never copy a rea
 ## 2. Fast ingest while Live is open
 
 - [x] 2.1 Give `store.ingest` a `usage=True` parameter, and add `sessions` (the ids that gained new `raw_lines`) to its stats. Verify with `test_store` cases: `usage=False` does not call `insights.ingest`; appending two lines to one synthetic session reports exactly that session id; an ingest with no new bytes reports an empty set.
-- [x] 2.2 In `app.py`, add the live-page count, the `threading.Condition` and the change record to `App` (design Decision 1). `loop` runs transcript ingest every 2 seconds while the count is above zero, and keeps usage data and pollers on `INTERVAL`. Connecting the first page sets `wake`. Verify with `test_app` cases using a fake clock or short intervals: with no live page, one ingest per interval; with one, transcript ingest repeats and usage ingest does not; after disconnect, the 60-second interval is back.
+- [x] 2.2 In `app.py`, add the live-page count, the `threading.Condition` and the change record to `App` (design Decision 1). `loop` runs transcript ingest every second (`LIVE_INTERVAL`) while the count is above zero, and keeps usage data and pollers on `INTERVAL`. Connecting the first page sets `wake`. Verify with `test_app` cases using a fake clock or short intervals: with no live page, one ingest per interval; with one, transcript ingest repeats and usage ingest does not; after disconnect, the 60-second interval is back.
 - [x] 2.3 Add `/api/live/events`, the SSE handler (design Decision 2): `changed` notices with session ids, `: keep-alive` every 15 seconds, exit on a broken pipe or `stopping`, and the count lowered on exit. Verify with `test_app` cases against a served test app: a client gets a `changed` notice naming the session after a synthetic transcript grows; no notice after an ingest with nothing new; the notice holds no transcript text (assert a sentinel string in the fixture line is absent); closing the client lowers the count; `App.stop` returns while a client is connected.
 - [x] 2.4 Measure on a copy of the store, with two synthetic sessions appending a line every 500 ms and one Live client connected for 5 minutes: tick duration, and how long `/api/usage` takes during ticks against without them. Record the numbers in this task. Verify that the median tick is under 500 ms. If it is not, switch to hot-file stat-ing (design Decision 1, alternative 2) before continuing.
   Measured 2026-11-10 on a copy of the store (3,512 Claude Code files read from the real root, two synthetic Codex rollouts appending every 500 ms, ticks every 2 s for 5 minutes): 151 ticks, median 83 ms, max 236 ms. `metrics.usage` for 30 days: median 816 ms (max 1,342) without ticks, median 780 ms (max 1,519) during ticks. Under 500 ms, so no hot-file change.
@@ -41,7 +41,7 @@ Privacy for every group: `data/` holds full transcript content. Never copy a rea
 
 ## 6. Integration
 
-- [x] 6.1 Serve a copy of the store on a free port, with real sessions running in another terminal, one Claude Code and one Codex. Check in the browser: a new tool row appears within 3 seconds; a running call's timer counts; a subagent lane groups its calls; a compaction shows; state changes from running to your turn; Full text off sends no text (check the network panel); closing the tab brings the 60-second interval back (check the app log). Report what was checked and anything that differed.
+- [x] 6.1 Serve a copy of the store on a free port, with real sessions running in another terminal, one Claude Code and one Codex. Check in the browser: a new tool row appears within 3 seconds of its line being written; a running call's timer counts; a subagent lane groups its calls; a compaction shows; state changes from running to your turn; Full text off sends no text (check the network panel); closing the tab brings the 60-second interval back (check the app log). Report what was checked and anything that differed.
   Checked 2026-11-10 on a copy of the store served on port 8766, with this Claude Code session and several jobdesk sessions running (no Codex session was running, so Codex was checked only through the synthetic tests and the demo replay):
   - States seen: tool, wait, thinking (inferred), your turn, idle. The rail, stream, panel and wall render in light, dark and at phone width.
   - Rows for running calls appeared 0.4–2.6 s after their start. Short calls that had already finished appeared 2.7–4.9 s after their start, above the spec's 3 s. Claude Code writes an assistant line some seconds after its timestamp, so most of that delay comes before the app can read the line.
@@ -49,6 +49,10 @@ Privacy for every group: `data/` holds full transcript content. Never copy a rea
   - Without Full text, no prompt, reply or tool-output text was in the payloads; with it, 47 prompts and replies carried text.
   - With a Live connection the app ingested every 2 s; after it closed, ingest went back to its interval once the stream noticed (at the next keep-alive).
   - Found and fixed: re-sending a call whose use line was older than the cursor failed in DuckDB (old `->` lambda syntax), 24 times during the check. Fixed in d174e5f with a regression test.
+
+## 7. One-second fast pass
+
+- [ ] 7.1 Set `LIVE_INTERVAL` to 1 second and measure from line write in the specs (the `dashboard-app` and `live-dashboard` deltas, the proposal, design Decision 1 and `README.md`). Verify on a copy of the store with this session running and a Live connection open: rows for running calls appear within 3 seconds of their line being written, and the app log shows no request errors.
 
 ## Workflow follow-up
 

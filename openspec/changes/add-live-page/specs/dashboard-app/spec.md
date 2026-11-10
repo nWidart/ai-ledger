@@ -3,7 +3,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: Keep the store current
-The app SHALL ingest new transcript data when it starts and then on a fixed interval while it runs, and SHALL offer a manual refresh. While at least one Live page is connected, the app SHALL ingest transcripts every 2 seconds. Usage data and plan limits SHALL keep their own interval.
+The app SHALL ingest new transcript data when it starts and then on a fixed interval while it runs, and SHALL offer a manual refresh. While at least one Live page is connected, the app SHALL ingest transcripts every second. Usage data and plan limits SHALL keep their own interval.
 
 #### Scenario: New session while app runs
 - **WHEN** a new Claude Code session writes transcript lines while the app is running
@@ -15,7 +15,7 @@ The app SHALL ingest new transcript data when it starts and then on a fixed inte
 
 #### Scenario: Live page open
 - **WHEN** a Live page is connected and a session writes a line
-- **THEN** the line is in the store within 2 seconds
+- **THEN** the line is in the store within 1 second of being written
 
 #### Scenario: Live page closed
 - **WHEN** the last Live page disconnects

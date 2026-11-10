@@ -25,7 +25,7 @@ uv sync
 uv run app.py               # http://127.0.0.1:8765/ (use 127.0.0.1, not localhost)
 ```
 
-The first start reads every transcript (about 4 minutes for 3.4 GB). After that the app reads new lines every 60 seconds, every 2 seconds while a Live page is open, or when you click **Refresh**.
+The first start reads every transcript (about 4 minutes for 3.4 GB). After that the app reads new lines every 60 seconds, every second while a Live page is open, or when you click **Refresh**.
 
 Stop the app before you run these commands, because the app keeps the store open:
 

@@ -14,7 +14,7 @@ Every page today looks back: the store catches up once a minute, and the pages s
   - **Follow, Pause and Jump to latest** control scrolling and updates.
 - **Full text behind a toggle.** By default the stream shows prompts and replies as word counts, and tool output as a character count. The **Full text** toggle shows them as written. While it is on, the page shows a banner saying that secrets can appear. The server sends text only when the toggle asks for it. The toggle is off on every page load.
 - **Inferred states are labelled.** Transcripts record neither a permission prompt nor a request in flight. The states *thinking* and *likely waiting for approval* are inferred from the last lines and are marked as such. A shell call that is still pending after 30 seconds counts as likely waiting for approval.
-- **Faster ingest while Live is open.** While at least one Live page is connected, the app ingests transcripts every 2 seconds instead of every 60. It then pushes a "changed" notice naming the affected sessions over Server-Sent Events, and the page fetches what is new. Usage data and plan limits keep their own schedule. With no Live page open, nothing changes.
+- **Faster ingest while Live is open.** While at least one Live page is connected, the app ingests transcripts every second instead of every 60. It then pushes a "changed" notice naming the affected sessions over Server-Sent Events, and the page fetches what is new. Usage data and plan limits keep their own schedule. With no Live page open, nothing changes.
 - **Filters.** Live honours the project, source and automated filters. It ignores the time range, but keeps the range in the URL so other pages get it back.
 
 ## Capabilities
@@ -24,7 +24,7 @@ Every page today looks back: the store catches up once a minute, and the pages s
 - `live-dashboard`: the Live page, with its session rail, stream, agent panel, wall view, Follow, Pause and Full text controls, and its filters.
 
 ### Modified Capabilities
-- `dashboard-app`: Live joins the shared navigation, the served pages and the page titles. The store is kept current every 2 seconds while a Live page is connected.
+- `dashboard-app`: Live joins the shared navigation, the served pages and the page titles. The store is kept current every second while a Live page is connected.
 - `command-palette`: `>` page destinations include Insights, already in the code but missing from the spec, and Live.
 
 ## Impact

@@ -2,7 +2,7 @@
 """Local app: owns the transcript store, keeps it current, serves the Activity, Cost, Errors, Limits, Insights and Live pages.
 
 Usage:
-  uv run app.py            serve on http://127.0.0.1:8765 (ingests at start and every 60 seconds, every 2 while Live is open)
+  uv run app.py            serve on http://127.0.0.1:8765 (ingests at start and every 60 seconds, every second while Live is open)
   uv run app.py ingest     ingest new transcript lines and /insights usage data once, then exit
   uv run app.py rebuild    regenerate the derived tables from the stored raw lines
 """
@@ -25,7 +25,7 @@ import store
 
 HOST, PORT = "127.0.0.1", 8765
 INTERVAL = 60
-LIVE_INTERVAL = 2  # transcript ingest while a Live page is connected; usage data and limits stay on INTERVAL
+LIVE_INTERVAL = 1  # transcript ingest while a Live page is connected; usage data and limits stay on INTERVAL
 KEEPALIVE = 15  # seconds between SSE comments, so a closed Live page is noticed
 WEB = os.path.join(store.HERE, "web", "dist")  # the committed frontend build (npm run build in web/)
 PAGES = ("/usage", "/cost", "/errors", "/limits", "/insights", "/live")  # one app; it picks the page from the path
