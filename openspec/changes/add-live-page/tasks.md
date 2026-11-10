@@ -52,7 +52,8 @@ Privacy for every group: `data/` holds full transcript content. Never copy a rea
 
 ## 7. One-second fast pass
 
-- [ ] 7.1 Set `LIVE_INTERVAL` to 1 second and measure from line write in the specs (the `dashboard-app` and `live-dashboard` deltas, the proposal, design Decision 1 and `README.md`). Verify on a copy of the store with this session running and a Live connection open: rows for running calls appear within 3 seconds of their line being written, and the app log shows no request errors.
+- [x] 7.1 Set `LIVE_INTERVAL` to 1 second and measure from line write in the specs (the `dashboard-app` and `live-dashboard` deltas, the proposal, design Decision 1 and `README.md`). Verify on a copy of the store with this session running and a Live connection open: rows for running calls appear within 3 seconds of their line being written, and the app log shows no request errors.
+  Measured 2026-11-10 on the store copy with this session running and one Live connection: 6 tool rows appeared 0.35–1.07 s after their line reached the transcript (Claude Code wrote five Bash lines in one burst, so they share a figure). The app log showed no request errors.
 
 ## Workflow follow-up
 
