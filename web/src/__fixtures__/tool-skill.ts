@@ -81,7 +81,8 @@ export default {
    "is_error": false,
    "category": null,
    "subagent": false,
-   "duration_ms": 1000
+   "duration_ms": 1000,
+   "title": null
   },
   {
    "id": "f1-42",
@@ -94,7 +95,8 @@ export default {
    "is_error": true,
    "category": "bad_call",
    "subagent": false,
-   "duration_ms": 1000
+   "duration_ms": 1000,
+   "title": null
   }
  ],
  "tools": null

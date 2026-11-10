@@ -12,8 +12,9 @@ export function Wall({ sessions, now, pick }: { sessions: LiveListSession[]; now
       const st = stateNow(s.state, now), share = s.context != null && s.window ? s.context / s.window : null;
       const act = !s.latest ? "" : s.latest.kind === "prompt" ? "▸ prompt" : `${s.latest.lane ? "⤷ " : ""}${s.latest.tool} · ${s.latest.summary ?? ""}`;
       return <div role="listitem" key={s.session_id}>
-        <button type="button" className={"panel tile st-" + st.kind} onClick={() => pick(s.session_id)} aria-label={`Open ${s.project ?? "session"}`}>
+        <button type="button" className={"panel tile st-" + st.kind} onClick={() => pick(s.session_id)} aria-label={`Open ${s.title ?? s.project ?? "session"}`}>
           <span className="top"><ProjectName project={s.project} /><StateTag st={st} now={now} /></span>
+          {s.title && <span className="ttl" title={s.title}>{s.title}</span>}
           <code className="act">{act}</code>
           {share != null && <span className={"meter" + (share > NEAR_FULL ? " warn" : "")}><i style={{ width: `${Math.min(100, share * 100)}%` }} /></span>}
           <span className="row"><span>{share != null ? `context ${pct(share)} · ` : ""}{num(s.tools)} tools{s.errors ? <> · <span className="bad">{num(s.errors)} errors</span></> : null}</span>

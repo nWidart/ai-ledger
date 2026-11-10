@@ -2,7 +2,8 @@
 
 Events come from the stored transcript lines through each source's live_items, so a running tool shows before the
 derived tool_calls know of it. Totals (cost, requests, tool calls, errors) come from the derived tables, as on the other
-pages. Prompt, reply and tool-output text leave this module only when the caller asks for it."""
+pages. Prompt, reply and tool-output text leave this module only when the caller asks for it, and so does a session title
+made from the first prompt."""
 import json
 from datetime import datetime, timedelta, timezone
 
@@ -166,8 +167,8 @@ def figures(cur, sids, prices):
     return out
 
 
-def sessions(cur, project="", source="", automated=False, now=None, prices=None):
-    """/api/live: sessions with a line in the last ACTIVE, newest first, each with its state, figures and latest action."""
+def sessions(cur, project="", source="", automated=False, now=None, prices=None, text=False):
+    """/api/live: sessions with a line in the last ACTIVE, newest first, each with its title, state, figures and latest action."""
     now = now or now_utc()
     prices = metrics.load_prices() if prices is None else prices
     where, params = metrics.scope(project, automated, source)
@@ -177,15 +178,22 @@ def sessions(cur, project="", source="", automated=False, now=None, prices=None)
     sids = [s["session_id"] for s in info]
     lines = recent(cur, sids)
     figs = figures(cur, sids, prices)
+    found = metrics.titles(cur, sids, prompts=text)
     out = []
     for s in info:
         events, _ = assemble(lines.get(s["session_id"], []))
         last = s["last_ts"].replace(tzinfo=timezone.utc) if s["last_ts"] else None
         f = figs[s["session_id"]]
-        out.append(dict(session_id=s["session_id"], project=s["project"], source=s["source"], branch=s["git_branch"],
-                        last_ts=iso(last), state=state(events, now, s["source"], last), latest=latest_action(events),
+        out.append(dict(session_id=s["session_id"], **title_of(found, s["session_id"]), project=s["project"], source=s["source"],
+                        branch=s["git_branch"], last_ts=iso(last), state=state(events, now, s["source"], last), latest=latest_action(events),
                         window=window_of(f["model"], events, prices), **f))
     return dict(now=iso(now), sessions=out, newest=None if out else newest_session(cur, where, params))
+
+
+def title_of(found, sid):
+    """The title and title_from fields of session sid, from metrics.titles."""
+    title, origin = found.get(sid, (None, None))
+    return dict(title=title, title_from=origin)
 
 
 def recent(cur, sids):
@@ -241,7 +249,7 @@ def session(cur, sid, after="", text=False, now=None, prices=None):
     last = s["last_ts"].replace(tzinfo=timezone.utc) if s["last_ts"] else None
     cursor = max((r[2] for r in rows if r[2]), default=after or None)
     f = figures(cur, [sid], prices)[sid]
-    return dict(session_id=sid, project=s["project"], source=s["source"], branch=s["git_branch"], last_ts=iso(last),
+    return dict(session_id=sid, **title_of(metrics.titles(cur, [sid], prompts=text), sid), project=s["project"], source=s["source"], branch=s["git_branch"], last_ts=iso(last),
                 now=iso(now), cursor=cursor, truncated=more,
                 state=state(assemble(recent(cur, [sid]).get(sid, []))[0], now, s["source"], last),
                 events=[public(e, text) for e in events], lanes=lanes(events),

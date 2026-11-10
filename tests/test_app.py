@@ -106,6 +106,10 @@ class AppTest(unittest.TestCase):
         status, _, body = self.get("/api/live")
         self.assertEqual((status, json.loads(body)["sessions"]), (200, []))
         self.assertEqual(self.get("/api/live?source=grok")[0], 400)
+        with mock.patch.object(app.live, "sessions", wraps=app.live.sessions) as listed:
+            self.assertEqual(self.get("/api/live?text=1")[0], 200)
+            self.assertEqual(self.get("/api/live")[0], 200)
+        self.assertEqual([c.kwargs["text"] for c in listed.call_args_list], [True, False])
         status, _, body = self.get("/api/live/session?id=s1")
         self.assertEqual((status, json.loads(body)["session_id"]), (200, "s1"))
         self.assertEqual(self.get("/api/live/session?id=s1&after=yesterday")[0], 400)

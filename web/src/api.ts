@@ -40,7 +40,11 @@ export interface RateRow { calls: number; errors: number; failure_rate: number |
 export interface ToolRow extends RateRow { tool: string; p50_ms: number | null; p95_ms: number | null }
 export interface NamedRateRow extends RateRow { name: string }
 export interface HookRow { name: string | null; event: string | null; runs: number; errors: number; avg_ms: number | null; failure_rate: number | null }
-export interface ErrorLoop { session_id: string; project: string | null; tool: string; failures: number; first_id: string; start_ts: Ts }
+export interface ErrorLoop {
+  session_id: string; project: string | null; tool: string; failures: number; first_id: string; start_ts: Ts;
+  /** The session's title (Activity and the tool sheet; the session sheet's loops are all its own). */
+  title?: string | null;
+}
 
 export interface SessionRow {
   session_id: string; project: string | null; git_branch: string | null; first_ts: Ts | null; last_ts: Ts | null; duration_s: number | null;
@@ -136,7 +140,7 @@ export interface ToolPayload {
   shell: { test_runs: number; tests_passed: number; tests_failed: number; pass_rate: number | null; commits: number } | null;
   recent: {
     id: string; ts: Ts | null; session_id: string; project: string | null; source: Source; tool: string; input: string;
-    is_error: boolean; category: string | null; subagent: boolean; duration_ms: number | null;
+    is_error: boolean; category: string | null; subagent: boolean; duration_ms: number | null; title: string | null;
   }[];
   /** The tools an MCP server served; null for other kinds. */
   tools: (RateRow & { tool: string; p50_ms: number | null })[] | null;
@@ -246,7 +250,9 @@ export interface LiveFigures {
   /** Share of prompt tokens read from cache. */
   cache_read: number | null; tools: number; errors: number;
 }
-export interface LiveListSession extends LiveFigures {
+/** The session's title and where it came from; a title made from the first prompt only with text. */
+export interface LiveTitle { title: string | null; title_from: "agent" | "prompt" | null }
+export interface LiveListSession extends LiveFigures, LiveTitle {
   session_id: string; project: string | null; source: Source; branch: string | null; last_ts: Ts | null; state: LiveState;
   latest: { kind: "tool" | "prompt"; tool: string | null; summary: string | null; lane: string | null } | null;
 }
@@ -275,7 +281,7 @@ export interface LiveLane {
   /** The main-thread call that started it, when known; name is that call's tool. */
   parent: string | null; name: string; description: string | null; done: boolean;
 }
-export interface LiveSession extends LiveFigures {
+export interface LiveSession extends LiveFigures, LiveTitle {
   session_id: string; project: string | null; source: Source; branch: string | null; last_ts: Ts | null; now: Ts;
   /** Pass back as after= to get only newer events. */
   cursor: string | null; truncated: boolean; state: LiveState;
@@ -313,8 +319,8 @@ export const toolUrl = (kind: ToolKind, name: string, v: View) => `/api/tool?${q
 export const paletteUrl = (v: View) => `/api/palette?${qs(viewQs(v))}`;
 export const limitsUrl = (v: View) => `/api/limits?${qs({ project: v.project, range: v.range, source: v.source })}`;
 export const insightsUrl = (v: View) => `/api/insights?${qs(viewQs(v))}`;
-export const liveUrl = (v: View) => {
-  const q = qs({ project: v.project, automated: v.automated, source: v.source });
+export const liveUrl = (v: View, text = false) => {
+  const q = qs({ project: v.project, automated: v.automated, source: v.source, text });
   return q ? `/api/live?${q}` : "/api/live";
 };
 export const liveSessionUrl = (id: string, o: { after?: string | null; text?: boolean } = {}) =>

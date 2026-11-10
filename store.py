@@ -41,7 +41,8 @@ CREATE TABLE IF NOT EXISTS usage_files (
   json VARCHAR USING COMPRESSION zstd, ingested_at TIMESTAMP);
 """
 
-DERIVED = ["sessions", "requests", "tool_calls", "prompts", "hooks", "limit_snapshots", "session_facets", "facet_counts", "session_meta"]
+DERIVED = ["sessions", "requests", "tool_calls", "prompts", "hooks", "limit_snapshots", "session_facets", "facet_counts", "session_meta",
+           "session_titles"]
 DERIVED_SCHEMA = """
 CREATE TABLE IF NOT EXISTS sessions (
   session_id VARCHAR PRIMARY KEY, project VARCHAR, cwd VARCHAR, git_branch VARCHAR,
@@ -74,6 +75,7 @@ CREATE TABLE IF NOT EXISTS session_meta (
   session_id VARCHAR PRIMARY KEY, project_path VARCHAR, project VARCHAR, start_time TIMESTAMP, duration_minutes INTEGER,
   lines_added BIGINT, lines_removed BIGINT, files_modified INTEGER, git_pushes INTEGER, languages VARCHAR,
   permission_mode VARCHAR, response_p50_s DOUBLE, destructive_commands INTEGER, bash_would_prompt INTEGER);
+CREATE TABLE IF NOT EXISTS session_titles (session_id VARCHAR PRIMARY KEY, custom VARCHAR, agent VARCHAR);
 """
 
 
@@ -354,6 +356,7 @@ def write_snapshots(cur, rows):
 
 
 INTERRUPT = "[Request interrupted by user"
+TITLE_LINES = {"custom-title": ("customTitle", "custom"), "ai-title": ("aiTitle", "agent")}  # type -> (field, kind)
 
 
 class Deriver:
@@ -366,6 +369,7 @@ class Deriver:
         self.sessions, self.requests, self.uses, self.results = {}, {}, {}, {}
         self.prompts, self.interrupted, self.hooks, self.followups = {}, set(), [], {}
         self.limits = []  # limit_snapshots rows; only sources whose transcripts report plan limits fill it
+        self.titles = {}  # session_id -> {"custom" | "agent": newest title of that kind}; no sessions row of its own
         # Errors from earlier ingests of this file still waiting for Claude's next words.
         self.pending = dict(cur.execute(
             "SELECT tool_use_id, result_seq FROM tool_calls WHERE result_file = ? AND is_error AND followup IS NULL "
@@ -389,8 +393,13 @@ class Deriver:
         return s
 
     def add(self, d):
-        s = self.session(d)
         t = d.get("type")
+        if t in TITLE_LINES:  # written by /rename and by Claude Code itself; a subagent's title is not its session's
+            title = d.get(TITLE_LINES[t][0])
+            if not self.sub and d.get("sessionId") and isinstance(title, str) and title.strip():
+                self.title(d["sessionId"], TITLE_LINES[t][1], title)
+            return
+        s = self.session(d)
         sid, ts = d.get("sessionId"), ts_of(d.get("timestamp"))
         msg = d.get("message") if isinstance(d.get("message"), dict) else {}
         content = msg.get("content")
@@ -415,6 +424,9 @@ class Deriver:
             if at in ("hook_success", "hook_non_blocking_error", "hook_blocking_error", "hook_cancelled"):
                 self.hooks.append((sid, ts, "attachment", a.get("hookName"), a.get("command"), a.get("durationMs"),
                                    at != "hook_success"))
+
+    def title(self, sid, kind, title):
+        self.titles.setdefault(sid, {})[kind] = title
 
     def assistant(self, d, s, sid, ts, msg, content):
         mid = msg.get("id")
@@ -507,6 +519,10 @@ class Deriver:
             update_from(cur, "prompts", "prompt_id", ["interrupted"], [(p, True) for p in self.interrupted])
         insert(cur, "hooks", ["session_id", "ts", "source", "hook", "command", "duration_ms", "is_error"], self.hooks, tail="")
         write_snapshots(cur, self.limits)
+        insert(cur, "session_titles", ["session_id", "custom", "agent"],
+               [(sid, t.get("custom"), t.get("agent")) for sid, t in self.titles.items()],
+               tail="ON CONFLICT (session_id) DO UPDATE SET custom = coalesce(excluded.custom, session_titles.custom), "
+                    "agent = coalesce(excluded.agent, session_titles.agent)")
         # Errors still open stay in self.pending; the next ingest reloads them from tool_calls.
         update_from(cur, "tool_calls", "tool_use_id", ["followup"], list(self.followups.items()), where="AND tool_calls.followup IS NULL")
 

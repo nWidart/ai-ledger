@@ -57,14 +57,20 @@ export function LivePage() {
           <h2>Active · last 10 min</h2>
           <ul>{sessions.map(s => <li key={s.session_id}>
             <button type="button" aria-current={s.session_id === selected ? "true" : undefined} onClick={() => pick(s.session_id)}>
-              <ProjectName project={s.project} /><span className="cost">{usd(s.cost)}</span>
-              <span className="sub"><StateTag st={stateNow(s.state, now)} now={now} /> · {SOURCE_LABELS[s.source]}{s.branch ? <> · <code>{s.branch}</code></> : null}</span>
+              {s.title ? <>
+                <span className="ttl" title={s.title}>{s.title}</span><span className="cost">{usd(s.cost)}</span>
+                <span className="sub"><ProjectName project={s.project} /> · <StateTag st={stateNow(s.state, now)} now={now} /> · {SOURCE_LABELS[s.source]}</span>
+              </> : <>
+                <ProjectName project={s.project} /><span className="cost">{usd(s.cost)}</span>
+                <span className="sub"><StateTag st={stateNow(s.state, now)} now={now} /> · {SOURCE_LABELS[s.source]}{s.branch ? <> · <code>{s.branch}</code></> : null}</span>
+              </>}
             </button></li>)}</ul>
           <p className="foot">{plural(sessions.filter(s => s.state.kind !== "idle").length, "session")} working · {usd(sessions.reduce((a, s) => a + (s.cost ?? 0), 0))} so far</p>
         </section>
         <section className="panel main" aria-label="Session">
           {shown ? <>
             <div className="stream-head">
+              {shown.title && <h2 className="stream-title" title={shown.title}>{shown.title}</h2>}
               <ProjectName project={shown.project}><b>{shown.project ?? "(unknown)"}</b></ProjectName>
               {shown.branch && <code className="chip">{shown.branch}</code>}<span className="chip">{SOURCE_LABELS[shown.source]}</span>
               {shown.model && <span className="chip">{shown.model}</span>}

@@ -4,7 +4,7 @@ import { dayLabel, dayRange, ms, num, pct, plural, when } from "../../format";
 import { agentName } from "../Filters";
 import { ProjectName } from "../ProjectDot";
 import { Facts, useBackTo, type BackTo } from "./ProjectSheet";
-import { appLink, errorsHref, openToolSheet, pickRow, shortId, utc } from "./session";
+import { appLink, errorsHref, openToolSheet, pickRow, sessName, shortId, utc } from "./session";
 
 export const TOOL_KINDS: Record<ToolKind, string> = { tool: "Tool", mcp: "MCP server", skill: "Skill" };
 
@@ -109,12 +109,13 @@ export function ToolSheet({ kind, name, d, error, retry, onSession, backTo }: To
       <Stat v={num(r.failed_again)} l="failed again" /><Stat v={num(r.gave_up)} l="gave up" /></div></>}
     {d.error_loops.length > 0 && <><h3>Error loops</h3>{d.error_loops.map(l => (
       <div key={l.first_id} data-v={l.first_id}>{l.tool} failed {l.failures}× in a row in{" "}
-        <button type="button" className="linkish" onClick={e => onSession(l.session_id, e.currentTarget)}>{shortId(l.session_id)}</button>, {when(utc(l.start_ts))}.{" "}
+        <button type="button" className="linkish" title={l.title || l.session_id} onClick={e => onSession(l.session_id, e.currentTarget)}>{sessName(l)}</button>, {when(utc(l.start_ts))}.{" "}
         <a href={err(l.first_id)} onClick={appLink}>Open in Errors</a></div>))}</>}
     <h3>Recent calls</h3>
-    <div className="scroll"><table><thead><tr><th>Session</th><th>Project</th><th>Input</th><th></th></tr></thead>
+    <div className="scroll"><table className="recent"><thead><tr><th>Session</th><th>Project</th><th>Input</th><th></th></tr></thead>
       <tbody>{d.recent.map(c => <tr key={c.id} {...pickRow(c.id, (_, el) => onSession(c.session_id, el))}>
-        <td className="when"><button type="button" className="cellbtn">{shortId(c.session_id)}</button><div className="muted small">{when(c.ts)}</div></td>
+        <td className="when sess"><button type="button" className="cellbtn" title={c.title || c.session_id}>{sessName(c)}</button>
+          <div className="muted small">{when(c.ts)}{c.title ? ` · ${shortId(c.session_id)}` : ""}</div></td>
         <td className="name"><ProjectName project={c.project} /></td>
         <td className="name"><code>{c.input}</code>{kind !== "tool" && <div className="muted small">{c.tool}</div>}</td>
         <td className="when">{c.is_error ? <a href={err(c.id)} onClick={appLink}>In Errors</a> : <span className="muted small">{ms(c.duration_ms)}</span>}</td></tr>)}</tbody></table></div>

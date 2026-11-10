@@ -3,7 +3,7 @@ import { useColors } from "../../colors";
 import { Drawer } from "../../components/Drawer";
 import { ProjectName } from "../../components/ProjectDot";
 import { Toned, ToneKey } from "../../components/tone";
-import { appLink, errorsHref, openProjectSheet, openSessionSheet, openToolSheet, pickRow, shortId, utc } from "../../components/sheets/session";
+import { appLink, errorsHref, openProjectSheet, openSessionSheet, openToolSheet, pickRow, sessName, shortId, utc } from "../../components/sheets/session";
 import { RateCells } from "../../components/sheets/ToolSheet";
 import { big, median, ms, num, pct, when } from "../../format";
 import { flakyFirst } from "./work";
@@ -71,7 +71,8 @@ export function LoopsDrawer({ loops, range }: { loops: ErrorLoop[]; range: numbe
       <div className="scroll tall"><table>
         <thead><tr><th>When</th><th>Project</th><th>Session</th><th>Tool</th><th className="num">Failures</th><th></th></tr></thead>
         <tbody>{loops.length ? loops.map(l => <tr key={l.first_id}><td className="when">{when(utc(l.start_ts))}</td><td className="name"><ProjectName project={l.project} /></td>
-          <td><button type="button" className="linkish" data-session={l.session_id} onClick={() => openSessionSheet(l.session_id)}>{shortId(l.session_id)}</button></td>
+          <td className="when sess"><button type="button" className="cellbtn" data-session={l.session_id} title={l.title || l.session_id}
+            onClick={() => openSessionSheet(l.session_id)}>{sessName(l)}</button>{l.title && <div className="muted small">{shortId(l.session_id)}</div>}</td>
           <td className="name" title={l.tool}>{l.tool}</td><td className="num">{num(l.failures)}</td>
           <td><a href={errorsHref(l.project, range, l.first_id)} onClick={appLink}>Open in Errors</a></td></tr>)
           : <tr><td colSpan={6} className="empty">No error loops in this range.</td></tr>}</tbody>

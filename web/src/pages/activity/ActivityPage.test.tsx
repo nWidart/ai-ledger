@@ -95,6 +95,20 @@ describe("ActivityPage", () => {
     await waitFor(() => expect(fetched()).toContain("/api/sessions?range=30&near=1"));
   });
 
+  it("names an error loop's session by its title, with the short id below", async () => {
+    const [first, ...rest] = usage.error_loops;
+    serve({ ...usage, error_loops: [{ ...first!, title: "Fix flaky upload test" }, ...rest.map(l => ({ ...l, title: null }))] });
+    at();
+    render(<ActivityPage />);
+    await loaded();
+    const drawer = within(document.getElementById("d-loops")!);
+    const cell = drawer.getByRole("button", { name: "Fix flaky upload test" });
+    expect(cell.getAttribute("title")).toBe("Fix flaky upload test");
+    expect(cell.nextElementSibling!.textContent).toBe("#" + first!.session_id.slice(0, 8));
+    await userEvent.click(cell);
+    expect(location.hash).toContain("session=" + first!.session_id);
+  });
+
   it("says when nothing needs attention", async () => {
     serve(quiet);
     at();

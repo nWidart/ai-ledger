@@ -116,7 +116,8 @@ export default {
    "tool": "Bash",
    "failures": 4,
    "first_id": "f1-26",
-   "start_ts": "2026-11-04 10:26:00"
+   "start_ts": "2026-11-04 10:26:00",
+   "title": null
   }
  ],
  "shell": {
@@ -138,7 +139,8 @@ export default {
    "is_error": false,
    "category": null,
    "subagent": false,
-   "duration_ms": 1000
+   "duration_ms": 1000,
+   "title": null
   },
   {
    "id": "f1-29",
@@ -151,7 +153,8 @@ export default {
    "is_error": true,
    "category": "tests",
    "subagent": false,
-   "duration_ms": 10000
+   "duration_ms": 10000,
+   "title": null
   },
   {
    "id": "f1-28",
@@ -164,7 +167,8 @@ export default {
    "is_error": true,
    "category": "tests",
    "subagent": false,
-   "duration_ms": 10000
+   "duration_ms": 10000,
+   "title": null
   },
   {
    "id": "f1-27",
@@ -177,7 +181,8 @@ export default {
    "is_error": true,
    "category": "tests",
    "subagent": false,
-   "duration_ms": 10000
+   "duration_ms": 10000,
+   "title": null
   },
   {
    "id": "f1-26",
@@ -190,7 +195,8 @@ export default {
    "is_error": true,
    "category": "tests",
    "subagent": false,
-   "duration_ms": 10000
+   "duration_ms": 10000,
+   "title": null
   },
   {
    "id": "f1-25",
@@ -203,7 +209,8 @@ export default {
    "is_error": false,
    "category": null,
    "subagent": false,
-   "duration_ms": 10000
+   "duration_ms": 10000,
+   "title": null
   },
   {
    "id": "f1-24",
@@ -216,7 +223,8 @@ export default {
    "is_error": false,
    "category": null,
    "subagent": false,
-   "duration_ms": 10000
+   "duration_ms": 10000,
+   "title": null
   },
   {
    "id": "f1-23",
@@ -229,7 +237,8 @@ export default {
    "is_error": false,
    "category": null,
    "subagent": false,
-   "duration_ms": 10000
+   "duration_ms": 10000,
+   "title": null
   },
   {
    "id": "f1-22",
@@ -242,7 +251,8 @@ export default {
    "is_error": false,
    "category": null,
    "subagent": false,
-   "duration_ms": 10000
+   "duration_ms": 10000,
+   "title": null
   },
   {
    "id": "f1-21",
@@ -255,7 +265,8 @@ export default {
    "is_error": false,
    "category": null,
    "subagent": false,
-   "duration_ms": 10000
+   "duration_ms": 10000,
+   "title": null
   },
   {
    "id": "f1-20",
@@ -268,7 +279,8 @@ export default {
    "is_error": false,
    "category": null,
    "subagent": false,
-   "duration_ms": 10000
+   "duration_ms": 10000,
+   "title": null
   },
   {
    "id": "f1-19",
@@ -281,7 +293,8 @@ export default {
    "is_error": false,
    "category": null,
    "subagent": false,
-   "duration_ms": 1000
+   "duration_ms": 1000,
+   "title": null
   },
   {
    "id": "f1-18",
@@ -294,7 +307,8 @@ export default {
    "is_error": false,
    "category": null,
    "subagent": false,
-   "duration_ms": 1000
+   "duration_ms": 1000,
+   "title": null
   },
   {
    "id": "f1-17",
@@ -307,7 +321,8 @@ export default {
    "is_error": false,
    "category": null,
    "subagent": false,
-   "duration_ms": 1000
+   "duration_ms": 1000,
+   "title": null
   },
   {
    "id": "f1-16",
@@ -320,7 +335,8 @@ export default {
    "is_error": false,
    "category": null,
    "subagent": false,
-   "duration_ms": 1000
+   "duration_ms": 1000,
+   "title": null
   },
   {
    "id": "f1-15",
@@ -333,7 +349,8 @@ export default {
    "is_error": false,
    "category": null,
    "subagent": false,
-   "duration_ms": 1000
+   "duration_ms": 1000,
+   "title": null
   },
   {
    "id": "f1-14",
@@ -346,7 +363,8 @@ export default {
    "is_error": false,
    "category": null,
    "subagent": false,
-   "duration_ms": 1000
+   "duration_ms": 1000,
+   "title": null
   },
   {
    "id": "f1-13",
@@ -359,7 +377,8 @@ export default {
    "is_error": false,
    "category": null,
    "subagent": false,
-   "duration_ms": 1000
+   "duration_ms": 1000,
+   "title": null
   },
   {
    "id": "f1-12",
@@ -372,7 +391,8 @@ export default {
    "is_error": false,
    "category": null,
    "subagent": false,
-   "duration_ms": 1000
+   "duration_ms": 1000,
+   "title": null
   },
   {
    "id": "f1-11",
@@ -385,7 +405,8 @@ export default {
    "is_error": false,
    "category": null,
    "subagent": false,
-   "duration_ms": 1000
+   "duration_ms": 1000,
+   "title": null
   },
   {
    "id": "f1-10",
@@ -398,7 +419,8 @@ export default {
    "is_error": false,
    "category": null,
    "subagent": false,
-   "duration_ms": 1000
+   "duration_ms": 1000,
+   "title": null
   },
   {
    "id": "f1-09",
@@ -411,7 +433,8 @@ export default {
    "is_error": false,
    "category": null,
    "subagent": false,
-   "duration_ms": 1000
+   "duration_ms": 1000,
+   "title": null
   },
   {
    "id": "f1-08",
@@ -424,7 +447,8 @@ export default {
    "is_error": false,
    "category": null,
    "subagent": false,
-   "duration_ms": 1000
+   "duration_ms": 1000,
+   "title": null
   },
   {
    "id": "f1-07",
@@ -437,7 +461,8 @@ export default {
    "is_error": false,
    "category": null,
    "subagent": false,
-   "duration_ms": 1000
+   "duration_ms": 1000,
+   "title": null
   },
   {
    "id": "f1-06",
@@ -450,7 +475,8 @@ export default {
    "is_error": false,
    "category": null,
    "subagent": false,
-   "duration_ms": 1000
+   "duration_ms": 1000,
+   "title": null
   },
   {
    "id": "f1-05",
@@ -463,7 +489,8 @@ export default {
    "is_error": false,
    "category": null,
    "subagent": false,
-   "duration_ms": 1000
+   "duration_ms": 1000,
+   "title": null
   },
   {
    "id": "f1-04",
@@ -476,7 +503,8 @@ export default {
    "is_error": false,
    "category": null,
    "subagent": false,
-   "duration_ms": 1000
+   "duration_ms": 1000,
+   "title": null
   },
   {
    "id": "f1-03",
@@ -489,7 +517,8 @@ export default {
    "is_error": false,
    "category": null,
    "subagent": false,
-   "duration_ms": 1000
+   "duration_ms": 1000,
+   "title": null
   },
   {
    "id": "f1-02",
@@ -502,7 +531,8 @@ export default {
    "is_error": false,
    "category": null,
    "subagent": false,
-   "duration_ms": 1000
+   "duration_ms": 1000,
+   "title": null
   },
   {
    "id": "f1-01",
@@ -515,7 +545,8 @@ export default {
    "is_error": false,
    "category": null,
    "subagent": false,
-   "duration_ms": 1000
+   "duration_ms": 1000,
+   "title": null
   },
   {
    "id": "f1-00",
@@ -528,7 +559,8 @@ export default {
    "is_error": false,
    "category": null,
    "subagent": false,
-   "duration_ms": 1000
+   "duration_ms": 1000,
+   "title": null
   },
   {
    "id": "b1-00",
@@ -541,7 +573,8 @@ export default {
    "is_error": false,
    "category": null,
    "subagent": false,
-   "duration_ms": 1000
+   "duration_ms": 1000,
+   "title": null
   },
   {
    "id": "old-00",
@@ -554,7 +587,8 @@ export default {
    "is_error": false,
    "category": null,
    "subagent": false,
-   "duration_ms": 1000
+   "duration_ms": 1000,
+   "title": null
   }
  ],
  "tools": null

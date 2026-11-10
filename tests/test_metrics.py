@@ -8,6 +8,7 @@ import threading
 import unittest
 from datetime import date, timedelta
 from http.server import ThreadingHTTPServer
+from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import app  # noqa: E402
@@ -153,6 +154,33 @@ class MetricsTest(unittest.TestCase):
         self.assertEqual(t("x" * 100), "x" * 79 + "…")
         self.assertIsNone(t("<system-reminder>only this</system-reminder>"))
         self.assertIsNone(t(None))
+
+    def test_titles(self):
+        c = self.con.cursor()
+        store.insert(c, "raw_lines", ["key", "file", "line_no", "type", "session_id", "ts", "subagent", "json"], [
+            ("x4", "f", 4, "user", "s2", "2026-11-05T09:00:00Z", False,
+             '{"type":"user","promptId":"p3","message":{"content":"Add a dark mode toggle to the settings page. It should persist."}}')])
+        store.insert(c, "session_titles", ["session_id", "custom", "agent"], [
+            ("s1", "auth  bug\n fix", "Fix login redirect"), ("s3", None, "y" * 140), ("gone", "never stored", None)])
+        try:
+            with mock.patch.object(metrics, "first_prompts", wraps=metrics.first_prompts) as fp:
+                got = metrics.titles(c, ["s1", "s2", "s3", "o1", "s1"])
+            self.assertEqual(got, {"s1": ("auth bug fix", "agent"), "s2": ("Add a dark mode toggle to the settings page.", "prompt"),
+                                   "s3": ("y" * 79 + "…", "agent")})
+            self.assertEqual(fp.call_args.args[1], ["s2", "o1"])  # only the sessions without an agent title
+            self.assertEqual(metrics.titles(c, []), {})
+            self.assertEqual(metrics.session(c, "s1", prices=PRICES)["title"], "auth bug fix")
+            usage = metrics.usage(c, "foo", 7, prices=PRICES, today=TODAY)
+            self.assertEqual(usage["error_loops"][0]["title"], "auth bug fix")
+        finally:
+            c.execute("DELETE FROM raw_lines WHERE key = 'x4'")
+            c.execute("DELETE FROM session_titles")
+
+    def test_short_title(self):
+        self.assertEqual(metrics.short_title("  a \t b\n"), "a b")
+        self.assertEqual(metrics.short_title("z" * 80), "z" * 80)
+        self.assertIsNone(metrics.short_title(" "))
+        self.assertIsNone(metrics.short_title(None))
 
     def test_session_list_by_day(self):
         day = metrics.session_list(self.con.cursor(), day="2026-11-04", prices=PRICES, today=TODAY)
@@ -665,6 +693,16 @@ class ToolDetailTest(unittest.TestCase):
         self.assertEqual([(lp["session_id"], lp["failures"], lp["first_id"]) for lp in loops], [("f1", 4, "f1-26")])
         self.assertEqual(self.detail("tool", "Read")["error_loops"], [])
 
+    def test_titles_on_loops_and_recent_calls(self):
+        c = self.con.cursor()
+        store.insert(c, "session_titles", ["session_id", "custom", "agent"], [("f1", None, "Fix flaky upload test")])
+        try:
+            d = self.detail("tool", "Bash", "foo", 7)
+            self.assertEqual([lp["title"] for lp in d["error_loops"]], ["Fix flaky upload test"])
+            self.assertEqual({r["title"] for r in d["recent"]}, {"Fix flaky upload test"})
+        finally:
+            c.execute("DELETE FROM session_titles")
+
     def test_shell_tests_and_commits(self):
         self.assertEqual(self.detail("tool", "Bash", "foo", 7)["shell"],
                          dict(test_runs=10, tests_passed=6, tests_failed=4, pass_rate=0.6, commits=1))
@@ -676,6 +714,7 @@ class ToolDetailTest(unittest.TestCase):
         self.assertEqual(len(recent), metrics.RECENT_CALLS)
         self.assertEqual(recent[0]["id"], "f1-30")  # the latest: ls, after the npm failures
         self.assertEqual([r["ts"] for r in recent], sorted((r["ts"] for r in recent), reverse=True))
+        self.assertEqual({r["title"] for r in recent}, {None})  # no session of these calls has a title
         failed = next(r for r in recent if r["is_error"])
         self.assertEqual({k: failed[k] for k in ("id", "session_id", "project", "source", "tool", "input", "category", "subagent", "duration_ms")},
                          dict(id="f1-29", session_id="f1", project="foo", source="claude", tool="Bash", input="npm test", category="tests",

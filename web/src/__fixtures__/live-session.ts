@@ -3,6 +3,8 @@ import type { LiveSession } from "../api";
 
 export default {
  "session_id": "s1",
+ "title": "Fast ingest pass while Live is open",
+ "title_from": "agent",
  "project": "foo",
  "source": "claude",
  "branch": "main",

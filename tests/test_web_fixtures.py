@@ -112,6 +112,7 @@ class WebFixturesTest(unittest.TestCase):
         got["insights-empty.ts"] = ("InsightsPayload", empty)
         lv = tlv.page_fixtures()
         got["live.ts"] = ("LivePayload", lv["list"])
+        got["live-text.ts"] = ("LivePayload", lv["list_text"])
         got["live-session.ts"] = ("LiveSession", lv["claude"])
         got["live-session-text.ts"] = ("LiveSession", lv["text"])
         got["live-session-codex.ts"] = ("LiveSession", lv["codex"])

@@ -34,9 +34,13 @@ uv run app.py ingest        # read new transcript lines and /insights data once
 uv run app.py rebuild       # recompute the derived tables, e.g. after a parser change
 ```
 
+A store from before session titles needs one `rebuild` to title past Claude Code sessions.
+
 Options: `--projects <dir>` (default `~/.claude/projects`), `--codex <dir>` (default `~/.codex`), `--usage-data <dir>` (default `~/.claude/usage-data`), `--db <file>` (default `data/ai-ledger.duckdb`).
 
 ## Pages
+
+Pages name each session by its title: the name you gave it (`/rename` in Claude Code), else the title the agent wrote (Claude Code's own title, Codex's thread name), else the start of its first prompt.
 
 **Activity**: what got done and what needs attention, per day, session and tool.
 
@@ -62,7 +66,7 @@ Codex writes its limits into its session files. For Claude Code, the app polls A
 
 Each session has a state: running a tool, thinking, your turn, likely waiting for approval, or idle. Transcripts record neither a request in flight (Claude Code) nor a permission prompt, so *thinking* and *likely waiting for approval* are guesses and the page marks them as inferred: a shell call pending for more than 30 seconds counts as likely waiting for approval.
 
-The stream shows prompts and replies as word counts and tool output as a size. **Full text** shows them as written; it is off each time the page loads.
+The stream shows prompts and replies as word counts and tool output as a size. **Full text** shows them as written; it is off each time the page loads. A title made from the first prompt is prompt text too, so Live shows it only with **Full text** on, and the project until then.
 
 ## Command palette
 

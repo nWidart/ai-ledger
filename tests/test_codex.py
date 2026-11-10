@@ -422,6 +422,62 @@ class CodexRebuildTest(CodexCase):
         self.assertEqual(self.q("SELECT source, count(*) FROM sessions GROUP BY 1 ORDER BY 1"), [("claude", 1), ("codex", 6)])
 
 
+class IndexTest(CodexCase):
+    OTHER = "0a0f9999-0000-7000-8000-000000000002"
+
+    def index(self, *names, mode="a"):
+        text = "".join(line(id=sid, thread_name=name, updated_at=f"2026-11-06T10:00:0{i}.0000000Z") for i, (sid, name) in enumerate(names))
+        return self.place(store.codex.INDEX, text, where="", mode=mode)
+
+    def titles(self):
+        return self.q("SELECT session_id, custom, agent FROM session_titles ORDER BY 1")
+
+    def test_rename_later_line_wins(self):
+        self.place(NAME, meta(THREAD))
+        self.index((THREAD, "Review MRI findings"), (THREAD, "Knee MRI review"))
+        self.ingest()
+        self.assertEqual(self.titles(), [(THREAD, None, "Knee MRI review")])
+        self.assertEqual(self.q("SELECT key, session_id, ts FROM raw_lines WHERE file LIKE '%index%' ORDER BY line_no")[0],
+                         (f"codex-index:{THREAD}:2026-11-06T10:00:00.0000000Z", THREAD, None))
+
+    def test_index_read_before_its_session(self):
+        self.index((THREAD, "Find Kafka Streams UIs"))
+        self.ingest()
+        self.place(NAME, meta(THREAD))
+        self.ingest()
+        self.assertEqual(self.titles(), [(THREAD, None, "Find Kafka Streams UIs")])
+        self.assertEqual(self.q("SELECT session_id FROM sessions"), [(THREAD,)])
+
+    def test_name_for_a_session_never_stored(self):
+        self.place(NAME, meta(THREAD))
+        self.index((self.OTHER, "Gone"))
+        self.ingest()
+        self.assertEqual(self.q("SELECT session_id FROM sessions"), [(THREAD,)])  # every dashboard lists sessions rows
+        self.assertNotIn(self.OTHER, metrics.titles(self.con.cursor(), [THREAD]))
+
+    def test_index_missing(self):
+        self.place(NAME, meta(THREAD) + item(1, "t1", dict(type="UserMessage", id="item-1", content=[dict(type="text", text="run it now")])))
+        self.assertEqual(self.ingest()["files"], 1)
+        self.assertEqual(self.titles(), [])
+        self.assertEqual(metrics.titles(self.con.cursor(), [THREAD]), {THREAD: ("run it now", "prompt")})
+
+    def test_index_rewritten_whole(self):
+        a, b = line(id=THREAD, thread_name="a", updated_at="2026-11-06T10:00:00Z"), line(id=self.OTHER, thread_name="b", updated_at="2026-11-06T10:00:01Z")
+        self.place(store.codex.INDEX, a + b, where="")
+        self.ingest()
+        self.place(store.codex.INDEX, b, where="")  # shorter: read again from the start
+        self.ingest()
+        self.assertEqual(self.count("starts_with(key, 'codex-index:')"), 2)
+        self.assertEqual(self.titles(), [(THREAD, None, "a"), (self.OTHER, None, "b")])
+
+    def test_rebuild_keeps_thread_names(self):
+        self.place(NAME, meta(THREAD))
+        self.index((THREAD, "Find Kafka Streams UIs"))
+        self.ingest()
+        store.rebuild(self.con)
+        self.assertEqual(self.titles(), [(THREAD, None, "Find Kafka Streams UIs")])
+
+
 class LimitTest(CodexCase):
     def snaps(self):
         return self.q("SELECT limit_id, window_minutes, strftime(resets_at, '%m-%d %H:%M'), used_percent, plan, reached "

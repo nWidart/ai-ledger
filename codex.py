@@ -4,7 +4,8 @@ Codex writes one rollout file per thread: sessions/YYYY/MM/DD/rollout-<time>-<th
 once the thread is old, and moved to archived_sessions/ when archived. A file named <session>_<thread> continues
 session <session> in another thread. Every line has timestamp, ordinal, type and payload. A thread's usage is in its
 token_usage_record lines, its tools and prompts in event_msg / item_completed lines. CLIs before 0.153 write no
-token_usage_record; their usage comes from the token_count events instead.
+token_usage_record; their usage comes from the token_count events instead. session_index.jsonl names threads: each line
+is {id, thread_name, updated_at}, and a rename appends a line.
 """
 import glob
 import json
@@ -22,6 +23,7 @@ UUID = r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
 FILE_NAME = re.compile(rf"({UUID})(?:_({UUID}))?\.jsonl(?:\.zst)?$")
 # User messages the CLI writes itself: <environment_context>, <heartbeat>, <realtime_delegation>, AGENTS.md, ...
 INJECTED = ("<", "# AGENTS.md")
+INDEX = "session_index.jsonl"
 
 
 @lru_cache(maxsize=4096)
@@ -32,13 +34,20 @@ def ids(path):
 
 
 def files(root):
-    return sorted(p for pattern in ("sessions/**/rollout-*.jsonl", "sessions/**/rollout-*.jsonl.zst",
+    return sorted(p for pattern in (INDEX, "sessions/**/rollout-*.jsonl", "sessions/**/rollout-*.jsonl.zst",
                                     "archived_sessions/rollout-*.jsonl", "archived_sessions/rollout-*.jsonl.zst")
                   for p in glob.glob(os.path.join(root, pattern), recursive=True))
 
 
+def indexed(path):
+    return os.path.basename(path) == INDEX
+
+
 def key(d, path, offset):
-    """codex:<thread>:<ordinal>: the same for a live file and its compressed or archived copy."""
+    """codex:<thread>:<ordinal>: the same for a live file and its compressed or archived copy.
+    codex-index:<id>:<updated_at> for an index line, so a line kept through a rewrite of the index is stored once."""
+    if indexed(path) and isinstance(d, dict) and d.get("id") and d.get("updated_at"):
+        return f"codex-index:{d['id']}:{d['updated_at']}"
     thread = ids(path)[1]
     if thread and isinstance(d, dict) and isinstance(d.get("ordinal"), int):
         return f"codex:{thread}:{d['ordinal']}"
@@ -51,6 +60,8 @@ def subagent(path):
 
 
 def fields(d, path):
+    if indexed(path):  # no time: an index line is no event of its session
+        return d.get("id"), None, None
     return ids(path)[0], None, d.get("timestamp")
 
 
@@ -237,6 +248,11 @@ class CodexDeriver(store.Deriver):
 
     def add(self, d):
         t, p = d.get("type"), d.get("payload")
+        if indexed(self.path):
+            name = d.get("thread_name")
+            if d.get("id") and isinstance(name, str) and name.strip():
+                self.title(d["id"], "agent", name)
+            return
         if not isinstance(p, dict):
             return
         if t == "session_meta":

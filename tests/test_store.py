@@ -140,6 +140,65 @@ class IngestTest(StoreCase):
         self.assertEqual(self.q("SELECT count(*) FROM files")[0][0], 1)
 
 
+class TitleTest(StoreCase):
+    def ai(self, title, sid="s1"):
+        return line(type="ai-title", aiTitle=title, sessionId=sid)
+
+    def custom(self, title, sid="s1"):
+        return line(type="custom-title", customTitle=title, sessionId=sid)
+
+    def titles(self):
+        return self.q("SELECT session_id, custom, agent FROM session_titles ORDER BY 1")
+
+    def test_custom_title_after_ai_title(self):
+        self.write("a.jsonl", self.ai("Fix login redirect") + self.custom("auth bug"))
+        store.ingest(self.con, self.roots)
+        self.assertEqual(self.titles(), [("s1", "auth bug", "Fix login redirect")])
+
+    def test_custom_title_before_ai_title(self):
+        self.write("a.jsonl", self.custom("auth bug"))
+        store.ingest(self.con, self.roots)
+        self.write("a.jsonl", self.ai("Fix login redirect"))
+        store.ingest(self.con, self.roots)
+        self.assertEqual(self.titles(), [("s1", "auth bug", "Fix login redirect")])
+
+    def test_renamed_twice(self):
+        self.write("a.jsonl", self.custom("draft") + self.custom("release notes"))
+        store.ingest(self.con, self.roots)
+        self.write("a.jsonl", self.custom("final"))
+        store.ingest(self.con, self.roots)
+        self.assertEqual(self.titles(), [("s1", "final", None)])
+
+    def test_subagent_title_ignored(self):
+        self.write("s1/subagents/agent-1.jsonl", self.ai("Search the repo"))
+        store.ingest(self.con, self.roots)
+        self.assertEqual(self.titles(), [])
+
+    def test_title_split_across_ingests(self):
+        text = self.ai("Add session titles")
+        self.write("a.jsonl", text[:20])
+        store.ingest(self.con, self.roots)
+        self.assertEqual(self.titles(), [])
+        self.write("a.jsonl", text[20:])
+        store.ingest(self.con, self.roots)
+        self.assertEqual(self.titles(), [("s1", None, "Add session titles")])
+
+    def test_title_line_makes_no_session(self):
+        self.write("a.jsonl", self.ai("Add session titles") + self.custom("") + line(type="ai-title", aiTitle=3, sessionId="s2"))
+        store.ingest(self.con, self.roots)
+        self.assertEqual(self.q("SELECT count(*) FROM sessions")[0][0], 0)
+        self.assertEqual(self.titles(), [("s1", None, "Add session titles")])
+
+    def test_rebuild_after_the_file_is_gone(self):
+        p = self.write("a.jsonl", self.ai("Fix login redirect") + self.custom("auth bug") + self.ai("x", sid="s2"))
+        store.ingest(self.con, self.roots)
+        before = self.titles()
+        os.remove(p)
+        store.rebuild(self.con)
+        self.assertEqual(self.titles(), before)
+        self.assertEqual(len(before), 2)
+
+
 class SourceMigrationTest(StoreCase):
     def test_store_without_source_marked_claude(self):
         self.write("a.jsonl", line(type="user", uuid="u1", sessionId="s1", timestamp="2026-11-01T10:00:00Z")

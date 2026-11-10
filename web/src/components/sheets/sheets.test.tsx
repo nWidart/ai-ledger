@@ -150,6 +150,18 @@ describe("ToolSheet", () => {
     expect(sheet().getByText(/failed 4× in a row/)).toBeTruthy();
   });
 
+  it("names sessions by their title: a titled loop, and an untitled recent call by its short id", async () => {
+    serve({ ...tool, error_loops: tool.error_loops.map(l => ({ ...l, title: "Fix flaky upload test" })) });
+    at("#range=30&tool=Bash");
+    render(<UsageSheets data={usage} />);
+    const loop = (await sheet().findByText(/failed 4× in a row/)).closest("div")!;
+    const name = within(loop).getByRole("button", { name: "Fix flaky upload test" });
+    expect(name.getAttribute("title")).toBe("Fix flaky upload test");
+    const ok = sheet().getAllByRole("row").find(r => r.getAttribute("data-v") === "f1-30")!;
+    expect(within(ok).getByRole("button").textContent).toBe("#f1");
+    expect(ok.querySelector("td")!.textContent).not.toContain("·");
+  });
+
   it("lists an MCP server's tools, each opening its own sheet", async () => {
     serve(toolMcp);
     at("#range=0&mcp=github");

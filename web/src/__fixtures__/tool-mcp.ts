@@ -88,7 +88,8 @@ export default {
    "is_error": false,
    "category": null,
    "subagent": false,
-   "duration_ms": 1000
+   "duration_ms": 1000,
+   "title": null
   },
   {
    "id": "f1-40",
@@ -101,7 +102,8 @@ export default {
    "is_error": false,
    "category": null,
    "subagent": false,
-   "duration_ms": 1000
+   "duration_ms": 1000,
+   "title": null
   },
   {
    "id": "f1-39",
@@ -114,7 +116,8 @@ export default {
    "is_error": true,
    "category": "infra",
    "subagent": false,
-   "duration_ms": 1000
+   "duration_ms": 1000,
+   "title": null
   }
  ],
  "tools": [

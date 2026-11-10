@@ -6,6 +6,8 @@ export default {
  "sessions": [
   {
    "session_id": "s2",
+   "title": null,
+   "title_from": null,
    "project": "jobdesk",
    "source": "claude",
    "branch": "main",
@@ -33,6 +35,8 @@ export default {
   },
   {
    "session_id": "s3",
+   "title": "Rename the theme tokens across every page, the charts and the print stylesheet",
+   "title_from": "agent",
    "project": "sketchbook",
    "source": "claude",
    "branch": "main",
@@ -60,6 +64,8 @@ export default {
   },
   {
    "session_id": "0a0f7777-0000-7000-8000-000000000007",
+   "title": null,
+   "title_from": null,
    "project": "graft",
    "source": "codex",
    "branch": null,
@@ -87,6 +93,8 @@ export default {
   },
   {
    "session_id": "s1",
+   "title": "Fast ingest pass while Live is open",
+   "title_from": "agent",
    "project": "foo",
    "source": "claude",
    "branch": "main",
@@ -114,6 +122,8 @@ export default {
   },
   {
    "session_id": "s4",
+   "title": null,
+   "title_from": null,
    "project": "dotfiles",
    "source": "claude",
    "branch": "main",

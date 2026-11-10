@@ -248,7 +248,7 @@ def usage(cur, project="", range_days=0, session="", prices=None, today=None, au
                projects=project_list(cur, automated), project_order=project_order(cur), totals=totals, daily=daily, daily_projects=daily_projects,
                daily_work=work, unpriced=unpriced, models=models,
                by_project=by_project, tools=rate_rows(tools), mcp=rate_rows(mcp), skills=rate_rows(skills),
-               hooks=rate_rows(hooks, "runs"), error_loops=loops[:50],
+               hooks=rate_rows(hooks, "runs"), error_loops=with_titles(cur, loops[:50]),
                sessions=sorted(sess, key=lambda x: x["first_ts"] or "", reverse=True)[:300],
                top_sessions=with_titles(cur, sorted(sess, key=lambda x: -(x["cost"] or 0))[:50]),
                near_limit=sorted((x for x in sess if x["near_limit"]), key=lambda x: -x["context_share"]),
@@ -358,7 +358,7 @@ def tool_detail(cur, kind, name, project="", range_days=0, today=None, automated
         t.tool, left(t.input_summary, 400) AS input, t.is_error, t.category, t.subagent,
         date_diff('millisecond', t.start_ts, t.end_ts) AS duration_ms FROM {tc} ORDER BY {ts} DESC NULLS LAST, t.tool_use_id DESC
         LIMIT {RECENT_CALLS}""", p)
-    for r in recent:
+    for r in with_titles(cur, recent):
         r["ts"], r["input"] = iso(r["ts"]), r["input"] or ""
     tools = None
     if kind == "mcp":
@@ -368,7 +368,7 @@ def tool_detail(cur, kind, name, project="", range_days=0, today=None, automated
                 start=start.isoformat() if start else None, end=today.isoformat(), totals=tot, previous=previous, daily=daily,
                 projects=by("s.project", "project"), sources=by("coalesce(s.source, 'claude')", "source"),
                 threads=by("t.subagent", "subagent"), patterns=patterns, categories=categories, recovery=recovery,
-                error_loops=loops, shell=shell, recent=recent, tools=tools)
+                error_loops=with_titles(cur, loops), shell=shell, recent=recent, tools=tools)
 
 
 def palette(cur, project="", range_days=0, today=None, automated=False, source=""):
@@ -601,7 +601,7 @@ def session_timeline(cur, sid, allq, p):
         OR type = 'system' AND json LIKE '%"compact_boundary"%') ORDER BY ts""", [sid]).fetchall()]
     full = first_prompts(cur, [sid]).get(sid)
     return dict(requests=reqs, calls=calls, compaction_ts=compactions, first_prompt=cap_prompt(full),
-                first_prompt_cut=bool(full and len(full) > FIRST_PROMPT_CAP), title=prompt_title(full),
+                first_prompt_cut=bool(full and len(full) > FIRST_PROMPT_CAP), title=titles(cur, [sid]).get(sid, (None,))[0],
                 truncated=len(reqs) >= TIMELINE_CAP or len(calls) >= TIMELINE_CAP)
 
 
@@ -664,15 +664,34 @@ def prompt_title(text, n=TITLE_LEN):
         line = re.sub(r"^[#>*\-\s]+", "", line)
         m = re.search(r"[.!?](?=\s|$)", line)
         title = line[:m.end()] if m and m.end() > 12 else line
-    title = " ".join(title.split())
+    return short_title(title, n)
+
+
+def short_title(title, n=TITLE_LEN):
+    """title with its whitespace collapsed, cut to n characters with an ellipsis; None when nothing is left."""
+    title = " ".join(title.split()) if isinstance(title, str) else ""
     if not title:
         return None
     return title if len(title) <= n else title[:n - 1].rstrip() + "…"
 
 
+def titles(cur, sids, prompts=True):
+    """{session_id: (title, "agent" | "prompt")} for the sessions that have one: the newest custom title, else the newest
+    title the agent wrote (Claude Code's ai-title, Codex's thread name), else prompt_title of the first prompt, unless
+    prompts is False."""
+    sids = list(dict.fromkeys(sids))
+    if not sids:
+        return {}
+    out = {sid: (short_title(t), "agent") for sid, t in cur.execute(
+        "SELECT session_id, coalesce(custom, agent) FROM session_titles WHERE list_contains(?, session_id)", [sids]).fetchall()}
+    texts = first_prompts(cur, [sid for sid in sids if sid not in out]) if prompts else {}
+    out |= {sid: (prompt_title(text), "prompt") for sid, text in texts.items()}
+    return {sid: t for sid, t in out.items() if t[0]}
+
+
 def with_titles(cur, sess):
-    """Adds title (from the first prompt, see prompt_title) to each session row; returns the rows."""
-    texts = first_prompts(cur, [x["session_id"] for x in sess])
+    """Adds title (see titles) to each session row; returns the rows."""
+    found = titles(cur, [x["session_id"] for x in sess])
     for x in sess:
-        x["title"] = prompt_title(texts.get(x["session_id"]))
+        x["title"] = found.get(x["session_id"], (None,))[0]
     return sess

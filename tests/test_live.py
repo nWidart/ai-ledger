@@ -130,6 +130,34 @@ class SessionsTest(LiveCase):
         self.assertEqual((got["sessions"], got["newest"]["session_id"]), ([], "s1"))
 
 
+class TitleTest(LiveCase):
+    def setUp(self):
+        super().setUp()
+        self.write("s1.jsonl", prompt("u1", at(30), "p1", "SENTINEL prompt. More") + line(type="ai-title", aiTitle="Add session titles", sessionId="s1"))
+        self.write("s2.jsonl", prompt("v1", at(20), "q1", "SENTINEL other. More").replace('"s1"', '"s2"'))
+        self.ingest()
+
+    def listed(self, text=False):
+        return {s["session_id"]: (s["title"], s["title_from"]) for s in live.sessions(self.cur(), now=NOW, prices=PRICES, text=text)["sessions"]}
+
+    def test_agent_title(self):
+        self.assertEqual(self.listed()["s1"], ("Add session titles", "agent"))
+        self.assertEqual(self.listed(text=True)["s1"], ("Add session titles", "agent"))
+
+    def test_prompt_title_only_with_text(self):
+        self.assertEqual(self.listed()["s2"], (None, None))
+        self.assertEqual(self.listed(text=True)["s2"], ("SENTINEL other.", "prompt"))
+        detail = lambda text: live.session(self.cur(), "s2", now=NOW, prices=PRICES, text=text)
+        self.assertNotIn("SENTINEL", json.dumps(live.sessions(self.cur(), now=NOW, prices=PRICES)) + json.dumps(detail(False)))
+        self.assertEqual((detail(True)["title"], detail(True)["title_from"]), ("SENTINEL other.", "prompt"))
+        self.assertEqual(live.session(self.cur(), "s1", now=NOW, prices=PRICES)["title"], "Add session titles")
+
+    def test_title_arrives_during_the_session(self):
+        self.write("s2.jsonl", line(type="ai-title", aiTitle="Fix Cost test", sessionId="s2"))
+        self.ingest()
+        self.assertEqual(self.listed()["s2"], ("Fix Cost test", "agent"))
+
+
 class SessionTest(LiveCase):
     def run_session(self, **kw):
         return live.session(self.cur(), kw.pop("sid", "s1"), now=kw.pop("now", NOW), prices=PRICES, **kw)
@@ -265,6 +293,7 @@ class PageCase(LiveCase):
     def build(self):
         sub = dict(S, isSidechain=True, agentId="a7")
         self.write("s1.jsonl", prompt("u1", at(0), "p1", "Add a fast ingest pass while the Live page is open")
+                   + line(type="ai-title", aiTitle="Fast ingest pass while Live is open", sessionId="s1")
                    + assistant("a1", "m1", at(2), [dict(type="text", text="Reading the ingest loop first."),
                                                    tool_use("t1", "Read", file_path="store.py")])
                    + result("r1", at(3), "t1", "def ingest(con, roots):\n    ...")
@@ -286,8 +315,12 @@ class PageCase(LiveCase):
         self.write("s2.jsonl", other(assistant("b1", "n1", at(30), [dict(type="text", text="The header shows a relative time.")])
                                      + prompt("v1", at(55), "q2", "Freeze the clock in the snapshot test"), "s2", "/nowhere/jobdesk"))
         self.write("s3.jsonl", other(prompt("w1", at(10), "q3", "Rename the theme tokens")
+                                     + line(type="custom-title", sessionId="s1",
+                                            customTitle="Rename the theme tokens across every page, the charts and the print stylesheet")
                                      + assistant("e1", "o1", at(40), [dict(type="text", text="Renamed 14 tokens.")]), "s3", "/nowhere/sketchbook"))
-        self.write("s4.jsonl", other(prompt("z1", "2026-11-10T09:53:00.000Z", "q4", "Update the zsh prompt"), "s4", "/nowhere/dotfiles"))
+        # Only command output in its prompt and no title line: no title.
+        self.write("s4.jsonl", other(prompt("z1", "2026-11-10T09:53:00.000Z", "q4", "<local-command-stdout>zsh reloaded</local-command-stdout>"),
+                                     "s4", "/nowhere/dotfiles"))
         thread = "0a0f7777-0000-7000-8000-000000000007"
         self.codex(f"rollout-2026-11-10T10-00-00-{thread}.jsonl", meta(thread).replace("2026-11-06T10:00:00.000Z", at(0)).replace("/nowhere/foo", "/nowhere/graft")
                    + codex_line(1, 20, "event_msg", type="task_started", turn_id="t1", model_context_window=272000)
@@ -300,14 +333,16 @@ class PageCase(LiveCase):
 
 
 def page_fixtures():
-    """The Live payloads the page tests render, at NOW: the active list, a Claude Code session with and without text,
-    and a Codex session."""
+    """The Live payloads the page tests render, at NOW: the active list with and without text, a Claude Code session with
+    and without text, and a Codex session. Titles: foo from the agent, sketchbook renamed (too long for a tile), jobdesk and
+    graft from their first prompt, dotfiles none."""
     case = PageCase()
     case.setUp()
     try:
         thread = case.build()
         cur = case.con.cursor()
-        return dict(list=live.sessions(cur, now=NOW, prices=PRICES), claude=live.session(cur, "s1", now=NOW, prices=PRICES),
+        return dict(list=live.sessions(cur, now=NOW, prices=PRICES), list_text=live.sessions(cur, now=NOW, prices=PRICES, text=True),
+                    claude=live.session(cur, "s1", now=NOW, prices=PRICES),
                     text=live.session(cur, "s1", text=True, now=NOW, prices=PRICES),
                     codex=live.session(cur, thread, now=NOW, prices=PRICES))
     finally:
@@ -322,6 +357,12 @@ class PageFixtureTest(unittest.TestCase):
         self.assertEqual(len(got["claude"]["lanes"]), 1)
         self.assertTrue(any(e.get("failed") for e in got["claude"]["events"]))
         self.assertNotIn("Freeze", json.dumps(got["list"]) + json.dumps(got["claude"]))
+        titles = lambda key: {s["project"]: (s["title"], s["title_from"]) for s in got[key]["sessions"]}
+        self.assertEqual(titles("list"), {"foo": ("Fast ingest pass while Live is open", "agent"),
+                                          "sketchbook": ("Rename the theme tokens across every page, the charts and the print stylesheet", "agent"),
+                                          "jobdesk": (None, None), "graft": (None, None), "dotfiles": (None, None)})
+        self.assertEqual(titles("list_text")["jobdesk"], ("Freeze the clock in the snapshot test", "prompt"))
+        self.assertEqual(titles("list_text")["dotfiles"], (None, None))
 
 
 if __name__ == "__main__":

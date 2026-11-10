@@ -18,6 +18,7 @@
 :is(.pg-activity, .pg-cost, .pg-limits, .pg-insights, dialog.sheet) td.name { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 :is(.pg-activity, .pg-cost, .pg-limits, .pg-insights, dialog.sheet) td.sess { max-width: 340px; }
 :is(.pg-activity, .pg-cost, .pg-limits, .pg-insights, dialog.sheet) td.sess .cellbtn { display: block; width: 100%; font-weight: 500; }
+dialog.sheet table.recent td.sess { max-width: 160px; } /* a long title must not squeeze the Input column */
 :is(.pg-activity, .pg-cost, .pg-limits, .pg-insights, dialog.sheet) tbody tr.pick { cursor: pointer; }
 :is(.pg-activity, .pg-cost, .pg-limits, .pg-insights, dialog.sheet) tbody tr.pick:hover { background: var(--surface-2); }
 :is(.pg-activity, .pg-cost, .pg-limits, .pg-insights, dialog.sheet) tbody tr.sel { background: var(--accent-soft); }

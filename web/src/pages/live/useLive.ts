@@ -39,8 +39,8 @@ export function useLive(view: View, selected: string, text: boolean, paused: boo
   cur.current = { view, selected, text, paused, session, list };
 
   const loadList = useCallback(() => {
-    const url = liveUrl(cur.current.view);
-    getJson<LivePayload>(url).then(d => { if (liveUrl(cur.current.view) === url) { setList(d); setError(undefined); } }, setError);
+    const url = liveUrl(cur.current.view, cur.current.text);
+    getJson<LivePayload>(url).then(d => { if (liveUrl(cur.current.view, cur.current.text) === url) { setList(d); setError(undefined); } }, setError);
   }, []);
   const loadSession = useCallback((catchUp: boolean) => {
     const { selected: sid, text: t, session: s } = cur.current;
@@ -57,7 +57,7 @@ export function useLive(view: View, selected: string, text: boolean, paused: boo
     if (sessions === null || sessions.includes(cur.current.selected)) loadSession(true);
   }, [loadList, loadSession]);
 
-  const listUrl = liveUrl(view);
+  const listUrl = liveUrl(view, text);
   useEffect(() => { loadList(); }, [listUrl, loadList]);
   useEffect(() => { setSession(undefined); loadSession(false); }, [selected, text, loadSession]);
 

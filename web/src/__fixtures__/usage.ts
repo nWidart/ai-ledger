@@ -230,7 +230,8 @@ export default {
    "tool": "Edit",
    "failures": 4,
    "first_id": "t01",
-   "start_ts": "2026-11-04 10:01:00"
+   "start_ts": "2026-11-04 10:01:00",
+   "title": null
   }
  ],
  "sessions": [

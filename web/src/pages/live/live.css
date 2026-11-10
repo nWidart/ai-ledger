@@ -42,7 +42,9 @@
   display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 8px; align-items: center; }
 .pg-live .rail li button:hover { background: var(--surface-2); }
 .pg-live .rail li button[aria-current=true] { background: var(--accent-soft); }
-.pg-live .rail .pname { font-weight: 600; }
+.pg-live .rail .pname, .pg-live .rail .ttl { font-weight: 600; }
+.pg-live .rail .ttl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pg-live .rail .sub .pname { font-weight: inherit; vertical-align: bottom; }
 .pg-live .rail .cost { font-size: 12px; color: var(--text-muted); }
 .pg-live .rail .sub code { font-size: 11.5px; }
 .pg-live .rail .sub { grid-column: 1 / -1; font-size: 12px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -51,6 +53,8 @@
 /* Stream */
 .pg-live .stream-head { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--border); }
 .pg-live .stream-head .pname b { font-size: 15px; }
+.pg-live .stream-head .stream-title { flex-basis: 100%; margin: 0; font-size: 16px; font-weight: 600; color: var(--text-primary);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-transform: none; letter-spacing: -.005em; }
 .pg-live .stream { height: max(420px, calc(100dvh - 260px)); overflow: auto; padding: 8px 0 14px; position: relative; }
 .pg-live .loading { padding: 16px; }
 .pg-live .older { font-size: 12px; margin: 4px 14px 8px; }
@@ -120,6 +124,7 @@
 .pg-live .tile.st-tool { border-color: var(--series-1); }
 .pg-live .tile.st-wait { border-color: var(--warning); }
 .pg-live .tile .top { display: flex; align-items: center; gap: 8px; margin: 0; justify-content: space-between; font-weight: 600; color: var(--text-primary); }
+.pg-live .tile .ttl { font-size: 13px; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pg-live .tile .act { font-size: 12px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-height: 18px; }
 .pg-live .tile .meter { height: 6px; margin: 2px 0; }
 .pg-live .tile .row { font-size: 12px; }

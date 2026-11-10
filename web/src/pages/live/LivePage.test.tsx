@@ -1,8 +1,9 @@
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { LivePayload, LiveSession, LiveToolEvent } from "../../api";
 import live from "../../__fixtures__/live";
+import liveListText from "../../__fixtures__/live-text";
 import liveSession from "../../__fixtures__/live-session";
 import liveText from "../../__fixtures__/live-session-text";
 import liveCodex from "../../__fixtures__/live-session-codex";
@@ -11,11 +12,11 @@ import { LivePage } from "./LivePage";
 import { mergeSession, streamRows } from "./live";
 import { FakeSource } from "./testing";
 
-const list = live as LivePayload, s1 = liveSession as LiveSession, s1text = liveText as LiveSession, codex = liveCodex as LiveSession;
+const list = live as LivePayload, listText = liveListText as LivePayload, s1 = liveSession as LiveSession, s1text = liveText as LiveSession, codex = liveCodex as LiveSession;
 
 function show(hash = "#session=s1", o: { list?: LivePayload; session?: (q: URLSearchParams) => LiveSession | undefined } = {}) {
   const f = mockApi({
-    "/api/live": () => o.list ?? list,
+    "/api/live": q => o.list ?? (q.get("text") ? listText : list),
     "/api/live/session": q => (o.session ? o.session(q) : q.get("id") === "s1" ? (q.get("text") ? s1text : s1) : { ...s1, session_id: q.get("id")!, project: "jobdesk" }),
   });
   history.replaceState(null, "", "/live" + hash);
@@ -54,6 +55,50 @@ describe("LivePage", () => {
     expect(within(rail).getAllByRole("button").map(b => b.querySelector(".pname")!.textContent)).toEqual(["jobdesk", "sketchbook", "graft", "foo", "dotfiles"]);
     await waitFor(() => expect(calls()).toContain("/api/live/session?id=s2"));
     expect(within(rail).getAllByRole("button")[0]!.getAttribute("aria-current")).toBe("true");
+  });
+
+  it("names a titled session in the rail by its title, with the project on the second line", async () => {
+    show("");
+    const rail = await screen.findByRole("region", { name: "Active sessions" });
+    const entry = (project: string) => within(rail).getAllByRole("button").find(b => b.querySelector(".pname")!.textContent === project)!;
+    const foo = entry("foo");
+    expect(foo.querySelector(".ttl")!.textContent).toBe("Fast ingest pass while Live is open");
+    expect(foo.querySelector(".ttl")!.getAttribute("title")).toBe("Fast ingest pass while Live is open");
+    expect(foo.querySelector(".sub .pname")).toBeTruthy();
+    expect(foo.querySelector(".sub code")).toBeNull(); // the branch is in the stream header
+    const jobdesk = entry("jobdesk"); // a first-prompt title only: not sent without Full text
+    expect(jobdesk.querySelector(".ttl")).toBeNull();
+    expect(jobdesk.querySelector(".sub .pname")).toBeNull();
+  });
+
+  it("names two sessions of one project apart", async () => {
+    const two = { ...list, sessions: [{ ...list.sessions[0]!, session_id: "a", project: "ai-ledger", title: "Add session titles", title_from: "agent" as const },
+      { ...list.sessions[0]!, session_id: "b", project: "ai-ledger", title: "Fix Cost test", title_from: "agent" as const }] };
+    show("#session=a", { list: two });
+    const rail = await screen.findByRole("region", { name: "Active sessions" });
+    const entries = within(rail).getAllByRole("button");
+    expect(entries.map(b => b.querySelector(".ttl")!.textContent)).toEqual(["Add session titles", "Fix Cost test"]);
+    expect(entries.map(b => b.querySelector(".sub .pname")!.textContent)).toEqual(["ai-ledger", "ai-ledger"]);
+  });
+
+  it("shows a first-prompt title only with Full text, refetching the list with text", async () => {
+    const { calls } = show("");
+    const rail = await screen.findByRole("region", { name: "Active sessions" });
+    expect(within(rail).queryByText("Freeze the clock in the snapshot test")).toBeNull();
+    await userEvent.click(screen.getByRole("checkbox", { name: "Full text" }));
+    await waitFor(() => expect(calls()).toContain("/api/live?text=1"));
+    expect(await within(rail).findByText("Freeze the clock in the snapshot test")).toBeTruthy();
+  });
+
+  it("titles the stream with the session's title, and only the project without one", async () => {
+    show();
+    const main = await stream();
+    expect(within(main).getByRole("heading", { level: 2 }).textContent).toBe("Fast ingest pass while Live is open");
+    cleanup();
+    show("#session=" + codex.session_id, { session: () => codex });
+    const other = await stream();
+    expect(await within(other).findByRole("button", { name: /^exec_command/ })).toBeTruthy();
+    expect(within(other).queryByRole("heading", { level: 2 })).toBeNull();
   });
 
   it("follows the URL's session, and still shows one that is no longer active", async () => {
@@ -212,7 +257,9 @@ describe("LivePage", () => {
     const wall = await screen.findByRole("list", { name: "Active sessions" });
     const tiles = within(wall).getAllByRole("button");
     expect(tiles.length).toBe(list.sessions.length);
-    const foo = within(wall).getByRole("button", { name: "Open foo" });
+    const foo = within(wall).getByRole("button", { name: "Open Fast ingest pass while Live is open" });
+    expect(foo.querySelector(".ttl")!.getAttribute("title")).toBe("Fast ingest pass while Live is open");
+    expect(within(wall).getByRole("button", { name: "Open dotfiles" }).querySelector(".ttl")).toBeNull();
     expect(foo.textContent).toContain("git push origin feat/live-page");
     expect(foo.textContent).toContain("1 errors");
     await userEvent.click(within(wall).getByRole("button", { name: "Open graft" }));

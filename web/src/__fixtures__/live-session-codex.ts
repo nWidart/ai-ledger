@@ -3,6 +3,8 @@ import type { LiveSession } from "../api";
 
 export default {
  "session_id": "0a0f7777-0000-7000-8000-000000000007",
+ "title": null,
+ "title_from": null,
  "project": "graft",
  "source": "codex",
  "branch": null,
