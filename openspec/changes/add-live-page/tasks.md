@@ -41,7 +41,14 @@ Privacy for every group: `data/` holds full transcript content. Never copy a rea
 
 ## 6. Integration
 
-- [ ] 6.1 Serve a copy of the store on a free port, with real sessions running in another terminal, one Claude Code and one Codex. Check in the browser: a new tool row appears within 3 seconds; a running call's timer counts; a subagent lane groups its calls; a compaction shows; state changes from running to your turn; Full text off sends no text (check the network panel); closing the tab brings the 60-second interval back (check the app log). Report what was checked and anything that differed.
+- [x] 6.1 Serve a copy of the store on a free port, with real sessions running in another terminal, one Claude Code and one Codex. Check in the browser: a new tool row appears within 3 seconds; a running call's timer counts; a subagent lane groups its calls; a compaction shows; state changes from running to your turn; Full text off sends no text (check the network panel); closing the tab brings the 60-second interval back (check the app log). Report what was checked and anything that differed.
+  Checked 2026-11-10 on a copy of the store served on port 8766, with this Claude Code session and several jobdesk sessions running (no Codex session was running, so Codex was checked only through the synthetic tests and the demo replay):
+  - States seen: tool, wait, thinking (inferred), your turn, idle. The rail, stream, panel and wall render in light, dark and at phone width.
+  - Rows for running calls appeared 0.4–2.6 s after their start. Short calls that had already finished appeared 2.7–4.9 s after their start, above the spec's 3 s. Claude Code writes an assistant line some seconds after its timestamp, so most of that delay comes before the app can read the line.
+  - A subagent lane showed in an active session; no active session had a compaction (covered by the tests).
+  - Without Full text, no prompt, reply or tool-output text was in the payloads; with it, 47 prompts and replies carried text.
+  - With a Live connection the app ingested every 2 s; after it closed, ingest went back to its interval once the stream noticed (at the next keep-alive).
+  - Found and fixed: re-sending a call whose use line was older than the cursor failed in DuckDB (old `->` lambda syntax), 24 times during the check. Fixed in d174e5f with a regression test.
 
 ## Workflow follow-up
 
