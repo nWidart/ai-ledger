@@ -41,7 +41,7 @@ A `#` term SHALL select a filter: a project, a source (`#claude` for Claude Code
 - **THEN** the URL records the choice, Errors keeps showing automated sessions as it always does, and the choice applies on Activity and Cost
 
 ### Requirement: Go to a page with `>`
-A `>` term naming a page (Activity, Cost, Errors, Limits) SHALL open that page. Filters that are not changed in the palette SHALL be carried over as the navigation carries them.
+A `>` term naming a page (Activity, Cost, Errors, Limits, Insights, Live) SHALL open that page. Filters that are not changed in the palette SHALL be carried over as the navigation carries them.
 
 #### Scenario: Page only
 - **WHEN** the user views project `myproject` for the last 14 days on Activity and commits `>errors`
@@ -54,6 +54,10 @@ A `>` term naming a page (Activity, Cost, Errors, Limits) SHALL open that page. 
 #### Scenario: No filters set
 - **WHEN** the user has no filters on Activity, the last Errors view saved in the browser was project `other`, and the user commits `>errors`
 - **THEN** Errors opens with no project filter, matching the view the user came from
+
+#### Scenario: Go to Live
+- **WHEN** the user views project `myproject` on Cost and commits `>live`
+- **THEN** Live opens and shows only `myproject` sessions
 
 ### Requirement: Open an inspector with `>`
 A `>` term naming a tool, an MCP server, a skill, a session or an error category SHALL open that subject's sheet: the tool inspector for a tool, MCP server or skill, the session sheet for a session, and the category on Errors for an error category. The sheet SHALL reflect the committed filters.
