@@ -504,3 +504,7 @@ class LiveItemsTest(unittest.TestCase):
             type="AgentMessage", content=[dict(type="text", text="Done")]))), [dict(k="reply", text="Done")])
         self.assertEqual(self.items(type="compacted", payload=dict(message="")), [dict(k="compaction", pre=None)])
         self.assertEqual(self.items(type="world_state", payload=dict()), [])
+
+    def test_usage_record_is_a_request(self):
+        self.assertEqual(self.items(type="token_usage_record", payload=dict(turn_id="t1", response_id="r1", usage=usage(900, 600, 40))),
+                         [dict(k="request", id="r1", model=None, output=40, context=900)])

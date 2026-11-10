@@ -230,6 +230,61 @@ export interface InsightsPayload {
   sessions: InsightSession[]; truncated: boolean;
 }
 
+// Live (/api/live, /api/live/session, live.py payloads): running sessions from the agent's side. Prompt, reply and
+// tool-output text are only present when the session was fetched with text.
+export type LiveStateKind = "idle" | "wait" | "tool" | "thinking" | "you";
+export interface LiveState {
+  /** wait: a shell call pending past 30 s, likely waiting for approval. */
+  kind: LiveStateKind; tool: string | null; since: Ts | null;
+  /** The transcript does not record this state; it is read from the last lines. */
+  inferred: boolean;
+}
+export interface LiveFigures {
+  cost: number | null; requests: number; model: string | null;
+  /** The newest main-thread request's context, and the model's window when known. */
+  context: number | null; window: number | null;
+  /** Share of prompt tokens read from cache. */
+  cache_read: number | null; tools: number; errors: number;
+}
+export interface LiveListSession extends LiveFigures {
+  session_id: string; project: string | null; source: Source; branch: string | null; last_ts: Ts | null; state: LiveState;
+  latest: { kind: "tool" | "prompt"; tool: string | null; summary: string | null; lane: string | null } | null;
+}
+export interface LivePayload {
+  now: Ts; sessions: LiveListSession[];
+  /** With no active session: the one in scope that wrote last. */
+  newest: { session_id: string; project: string | null; last_ts: Ts | null } | null;
+}
+interface LiveEventBase { key: string; ts: Ts | null; lane: string | null }
+export interface LiveTextEvent extends LiveEventBase { k: "prompt" | "reply"; words: number; text?: string }
+export interface LiveToolEvent extends LiveEventBase {
+  k: "tool"; id: string; tool: string; summary: string; description: string | null; start: Ts | null; end: Ts | null;
+  failed: boolean; error: string | null;
+  /** The result's size; its text (cut to 4 KB) only with text. */
+  chars: number; output: string | null; cut: boolean;
+  /** The subagent this call started, when its result names it. */
+  agent: string | null;
+}
+export interface LiveRequestEvent extends LiveEventBase { k: "request"; id: string; model: string | null; output: number; context: number }
+export interface LiveMarkEvent extends LiveEventBase { k: "interrupt" | "turn_end" }
+export interface LiveTurnStart extends LiveEventBase { k: "turn_start"; window: number | null }
+export interface LiveCompaction extends LiveEventBase { k: "compaction"; pre: number | null }
+export type LiveEvent = LiveTextEvent | LiveToolEvent | LiveRequestEvent | LiveMarkEvent | LiveTurnStart | LiveCompaction;
+export interface LiveLane {
+  id: string; start: Ts | null; end: Ts | null; tools: number; running: boolean;
+  /** The main-thread call that started it, when known; name is that call's tool. */
+  parent: string | null; name: string; description: string | null; done: boolean;
+}
+export interface LiveSession extends LiveFigures {
+  session_id: string; project: string | null; source: Source; branch: string | null; last_ts: Ts | null; now: Ts;
+  /** Pass back as after= to get only newer events. */
+  cursor: string | null; truncated: boolean; state: LiveState;
+  events: LiveEvent[]; lanes: LiveLane[];
+  compactions: { ts: Ts | null; pre: number | null }[];
+  spark: { points: number[]; per_minute: number; step: number };
+  limits: { label: string; used_percent: number; observed_at: Ts | null; resets_at: Ts | null }[];
+}
+
 export interface IngestStats { files: number; lines: number; inserted: number; seconds: number; usage_files?: number; usage_skipped?: number }
 export interface Status {
   ingesting: boolean; last_ingest: string | null; last_stats: IngestStats | null; error: string | null;
@@ -258,6 +313,10 @@ export const toolUrl = (kind: ToolKind, name: string, v: View) => `/api/tool?${q
 export const paletteUrl = (v: View) => `/api/palette?${qs(viewQs(v))}`;
 export const limitsUrl = (v: View) => `/api/limits?${qs({ project: v.project, range: v.range, source: v.source })}`;
 export const insightsUrl = (v: View) => `/api/insights?${qs(viewQs(v))}`;
+export const liveUrl = (v: View) => `/api/live?${qs({ project: v.project, automated: v.automated, source: v.source })}`;
+export const liveSessionUrl = (id: string, o: { after?: string | null; text?: boolean } = {}) =>
+  `/api/live/session?${qs({ id, after: o.after, text: o.text })}`;
+export const liveEventsUrl = "/api/live/events";
 export const errorsUrl = "/api/errors";
 export const errorUrl = (id: string) => `/api/error?${qs({ id })}`;
 export const statusUrl = "/api/status";

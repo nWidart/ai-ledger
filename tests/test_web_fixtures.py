@@ -12,6 +12,7 @@ import test_metrics as tm  # noqa: E402  (puts the repo root on sys.path; import
 import metrics  # noqa: E402
 import test_limits as tl  # noqa: E402
 import test_insights as ti  # noqa: E402
+import test_live as tlv  # noqa: E402
 
 OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "web", "src", "__fixtures__")
 
@@ -109,6 +110,11 @@ class WebFixturesTest(unittest.TestCase):
         full, empty = insights_fixtures()
         got["insights.ts"] = ("InsightsPayload", full)
         got["insights-empty.ts"] = ("InsightsPayload", empty)
+        lv = tlv.page_fixtures()
+        got["live.ts"] = ("LivePayload", lv["list"])
+        got["live-session.ts"] = ("LiveSession", lv["claude"])
+        got["live-session-text.ts"] = ("LiveSession", lv["text"])
+        got["live-session-codex.ts"] = ("LiveSession", lv["codex"])
         for name, (typ, obj) in got.items():
             write(name, typ, obj)
         self.assertIn("daily_work", got["usage.ts"][1])

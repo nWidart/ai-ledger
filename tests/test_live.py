@@ -1,0 +1,317 @@
+import json
+import os
+import sys
+import unittest
+from datetime import datetime, timedelta, timezone
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import live  # noqa: E402
+import store  # noqa: E402
+from test_codex import CodexCase, LIVE, NAME, THREAD, meta  # noqa: E402
+from test_derive import S, assistant, prompt, result, tool_use  # noqa: E402
+from test_store import StoreCase, line  # noqa: E402
+
+NOW = datetime(2026, 11, 10, 10, 1, 0, tzinfo=timezone.utc)
+PRICES = {"claude-opus-5-5": dict(input=4, output=20, cache_read=0.2, cache_5m=5, cache_1h=8, context=1000000)}
+
+
+def at(seconds):
+    """A transcript timestamp `seconds` after 10:00:00 on 2026-11-10."""
+    return (datetime(2026, 11, 10, 10, 0, 0) + timedelta(seconds=seconds)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+
+
+def events(text, source="claude"):
+    """Events assembled from transcript text, as live.state sees them."""
+    rows = []
+    for i, raw in enumerate(text.splitlines()):
+        d = json.loads(raw)
+        rows.append((f"k{i}", "/x/a.jsonl", d.get("timestamp"), False, source, raw))
+    return live.assemble(rows)[0]
+
+
+def codex_line(ordinal, seconds, kind, **payload):
+    return line(timestamp=at(seconds), ordinal=ordinal, type=kind, payload=payload)
+
+
+class StateTest(unittest.TestCase):
+    def state(self, text, source="claude", last=None, now=NOW):
+        evs = events(text, source)
+        last = last or max(e["ts"] for e in evs)
+        return live.state(evs, now, source, last)
+
+    def test_tool_running(self):
+        st = self.state(prompt("u1", at(0), "p1", "go") + assistant("a1", "m1", at(50), [tool_use("t1", "Read", file_path="x.py")]))
+        self.assertEqual(st, dict(kind="tool", tool="Read", since="2026-11-10T10:00:50.000Z", inferred=False))
+
+    def test_turn_ended(self):
+        text = (prompt("u1", at(0), "p1", "go") + assistant("a1", "m1", at(5), [tool_use("t1", "Read", file_path="x")])
+                + result("r1", at(6), "t1", "ok") + assistant("a2", "m2", at(8), [dict(type="text", text="Done.")]))
+        self.assertEqual(self.state(text)["kind"], "you")
+
+    def test_prompt_sent_is_inferred_thinking(self):
+        st = self.state(assistant("a1", "m1", at(5), [dict(type="text", text="Done.")]) + prompt("u1", at(30), "p2", "more"))
+        self.assertEqual((st["kind"], st["inferred"]), ("thinking", True))
+
+    def test_tool_result_newest_is_thinking(self):
+        text = assistant("a1", "m1", at(5), [tool_use("t1", "Read", file_path="x")]) + result("r1", at(6), "t1", "ok")
+        self.assertEqual(self.state(text)["kind"], "thinking")
+
+    def test_quiet_session_is_idle_even_with_a_pending_call(self):
+        text = assistant("a1", "m1", at(0), [tool_use("t1", "Bash", command="sleep 999")])
+        st = self.state(text, now=NOW + timedelta(minutes=6))
+        self.assertEqual(st["kind"], "idle")
+
+    def test_slow_shell_call_is_likely_waiting(self):
+        st = self.state(assistant("a1", "m1", at(15), [tool_use("t1", "Bash", command="git push")]))
+        self.assertEqual(st, dict(kind="wait", tool="Bash", since="2026-11-10T10:00:15.000Z", inferred=True))
+
+    def test_slow_codex_exec_is_likely_waiting(self):
+        text = codex_line(1, 15, "response_item", type="custom_tool_call", name="exec", call_id="c1", input="run")
+        self.assertEqual(self.state(text, "codex")["kind"], "wait")
+
+    def test_slow_web_fetch_is_running(self):
+        st = self.state(assistant("a1", "m1", at(15), [tool_use("t1", "WebFetch", url="https://example.com")]))
+        self.assertEqual((st["kind"], st["inferred"]), ("tool", False))
+
+    def test_codex_turn_in_progress_is_thinking_not_inferred(self):
+        text = (codex_line(1, 0, "event_msg", type="task_started", turn_id="t1", model_context_window=272000)
+                + codex_line(2, 1, "event_msg", type="item_completed", turn_id="t1", item=dict(type="UserMessage", content=[dict(type="text", text="go")])))
+        self.assertEqual(self.state(text, "codex"), dict(kind="thinking", tool=None, since="2026-11-10T10:00:00.000Z", inferred=False))
+
+    def test_codex_turn_complete_is_your_turn(self):
+        text = (codex_line(1, 0, "event_msg", type="task_started", turn_id="t1")
+                + codex_line(2, 9, "event_msg", type="task_complete", turn_id="t1"))
+        self.assertEqual(self.state(text, "codex")["kind"], "you")
+
+
+class LiveCase(StoreCase):
+    def ingest(self):
+        store.ingest(self.con, self.roots, usage=False)
+
+    def cur(self):
+        return self.con.cursor()
+
+
+class SessionsTest(LiveCase):
+    def setUp(self):
+        super().setUp()
+        self.write("s1.jsonl", prompt("u1", at(30), "p1", "go") + assistant("a1", "m1", at(40), [tool_use("t1", "Read", file_path="x")]))
+        self.write("s2.jsonl", (prompt("v1", at(-200), "q1", "hi") + assistant("b1", "n1", at(-180), [dict(type="text", text="ok")])).replace('"s1"', '"s2"').replace("/nowhere/foo", "/nowhere/bar"))
+        self.write("old.jsonl", prompt("w1", "2026-11-10T07:00:00.000Z", "r1", "old").replace('"s1"', '"s3"'))
+        self.ingest()
+
+    def test_active_newest_first_with_cut_off(self):
+        got = live.sessions(self.cur(), now=NOW, prices=PRICES)
+        self.assertEqual([s["session_id"] for s in got["sessions"]], ["s1", "s2"])
+        s1 = got["sessions"][0]
+        self.assertEqual((s1["state"]["kind"], s1["latest"]["tool"], s1["window"], s1["requests"]), ("tool", "Read", 1000000, 1))
+
+    def test_cost_matches_the_session_sheet(self):
+        import metrics
+        s1 = live.sessions(self.cur(), now=NOW, prices=PRICES)["sessions"][0]
+        sheet = metrics.session(self.cur(), "s1", prices=PRICES)
+        self.assertAlmostEqual(s1["cost"], sum(m["cost"] for m in sheet["models"]))
+
+    def test_filters(self):
+        self.con.execute("UPDATE sessions SET source = 'codex' WHERE session_id = 's2'")
+        self.assertEqual([s["session_id"] for s in live.sessions(self.cur(), source="codex", now=NOW, prices=PRICES)["sessions"]], ["s2"])
+        project = live.sessions(self.cur(), now=NOW, prices=PRICES)["sessions"][0]["project"]
+        self.assertEqual(len(live.sessions(self.cur(), project=project, now=NOW, prices=PRICES)["sessions"]), 1)
+        with self.assertRaises(ValueError):
+            live.sessions(self.cur(), source="grok", now=NOW)
+
+    def test_automated_session_hidden_by_default(self):
+        self.con.execute("UPDATE sessions SET project = 'observer-sessions' WHERE session_id = 's2'")
+        self.assertEqual([s["session_id"] for s in live.sessions(self.cur(), now=NOW, prices=PRICES)["sessions"]], ["s1"])
+        self.assertEqual(len(live.sessions(self.cur(), automated=True, now=NOW, prices=PRICES)["sessions"]), 2)
+
+    def test_empty_state_names_the_newest_session(self):
+        got = live.sessions(self.cur(), now=NOW + timedelta(hours=1), prices=PRICES)
+        self.assertEqual((got["sessions"], got["newest"]["session_id"]), ([], "s1"))
+
+
+class SessionTest(LiveCase):
+    def run_session(self, **kw):
+        return live.session(self.cur(), kw.pop("sid", "s1"), now=kw.pop("now", NOW), prices=PRICES, **kw)
+
+    def test_first_load_and_catch_up(self):
+        self.write("s1.jsonl", prompt("u1", at(0), "p1", "SECRET prompt") + assistant("a1", "m1", at(1), [tool_use("t1", "Bash", command="ls")]))
+        self.ingest()
+        first = self.run_session()
+        self.assertEqual([e["k"] for e in first["events"]], ["prompt", "request", "tool"])
+        self.assertFalse(first["truncated"])
+        self.write("s1.jsonl", result("r1", at(3), "t1", "a\nb") + assistant("a2", "m2", at(4), [tool_use("t2", "Read", file_path="x"),
+                                                                                                 tool_use("t3", "Grep", pattern="y")]))
+        self.ingest()
+        later = self.run_session(after=first["cursor"])
+        tools = [e for e in later["events"] if e["k"] == "tool"]
+        self.assertEqual([(t["id"], t["end"] is not None) for t in tools], [("t1", True), ("t2", False), ("t3", False)])
+        self.assertNotIn("u1#0", [e["key"] for e in later["events"]])
+
+    def test_call_finishing_with_a_failure_is_sent_again(self):
+        self.write("s1.jsonl", assistant("a1", "m1", at(1), [tool_use("t1", "Bash", command="make")]))
+        self.ingest()
+        first = self.run_session()
+        self.write("s1.jsonl", result("r1", at(9), "t1", "Exit code 2\nboom", error=True))
+        self.ingest()
+        t1, = [e for e in self.run_session(after=first["cursor"])["events"] if e["k"] == "tool"]
+        self.assertEqual((t1["failed"], t1["error"], t1["end"]), (True, "Exit code 2\nboom", "2026-11-10T10:00:09.000Z"))
+
+    def test_first_load_keeps_the_newest_events(self):
+        body = "".join(prompt(f"u{i}", at(i), f"p{i}", "go") for i in range(live.FIRST_LOAD + 20))
+        self.write("s1.jsonl", body)
+        self.ingest()
+        got = self.run_session(now=NOW + timedelta(minutes=10))
+        self.assertEqual((len(got["events"]), got["truncated"], got["events"][-1]["key"]), (live.FIRST_LOAD, True, f"u{live.FIRST_LOAD + 19}#0"))
+
+    def test_text_only_on_request(self):
+        self.write("s1.jsonl", prompt("u1", at(0), "p1", "SECRET prompt") + assistant("a1", "m1", at(1), [
+            dict(type="text", text="SECRET reply"), tool_use("t1", "Bash", command="cat .env")]) + result("r1", at(2), "t1", "SECRET=" + "x" * 5000))
+        self.ingest()
+        plain = self.run_session()
+        self.assertNotIn("SECRET", json.dumps(plain))
+        prompt_ev, = [e for e in plain["events"] if e["k"] == "prompt"]
+        tool_ev, = [e for e in plain["events"] if e["k"] == "tool"]
+        self.assertEqual((prompt_ev["words"], tool_ev["chars"], tool_ev["output"]), (2, 5007, None))
+        full = self.run_session(text=True)
+        tool_ev, = [e for e in full["events"] if e["k"] == "tool"]
+        self.assertEqual((len(tool_ev["output"]), tool_ev["cut"]), (live.TEXT_CAP, True))
+        self.assertIn("SECRET reply", json.dumps(full))
+
+    def test_subagent_lane_tied_to_its_call(self):
+        self.write("s1.jsonl", assistant("a1", "m1", at(1), [tool_use("t1", "Agent", description="find callers", prompt="look")]))
+        sub = dict(S, isSidechain=True, agentId="a7")
+        lines = "".join(line(type="assistant", uuid=f"x{i}", timestamp=at(2 + i), message=dict(
+            id=f"sm{i}", model="claude-opus-5-5", usage=dict(input_tokens=1, output_tokens=1),
+            content=[tool_use(f"st{i}", "Grep", pattern="x")]), **sub) + line(
+            type="user", uuid=f"y{i}", timestamp=at(2 + i), message=dict(role="user", content=[dict(type="tool_result", tool_use_id=f"st{i}", content="r")]), **sub)
+            for i in range(3))
+        self.write("s1/subagents/agent-a7.jsonl", lines)
+        self.ingest()
+        running = self.run_session()
+        lane, = running["lanes"]
+        self.assertEqual((lane["id"], lane["tools"], lane["parent"], lane["done"]), ("a7", 3, None, False))
+        self.assertEqual(sum(1 for e in running["events"] if e["lane"] == "a7" and e["k"] == "tool"), 3)
+        self.write("s1.jsonl", line(type="user", uuid="r1", timestamp=at(9), promptId="p1", toolUseResult=dict(agentId="a7"),
+                                    message=dict(role="user", content=[dict(type="tool_result", tool_use_id="t1", content="done")]), **S))
+        self.ingest()
+        lane, = self.run_session()["lanes"]
+        self.assertEqual((lane["parent"], lane["description"], lane["done"]), ("t1", "find callers", True))
+
+    def test_figures(self):
+        self.write("s1.jsonl", assistant("a1", "m1", at(30), [dict(type="text", text="hi")])
+                   + line(type="system", subtype="compact_boundary", uuid="c1", timestamp=at(31), compactMetadata=dict(preTokens=150000), **S)
+                   + assistant("a2", "m2", at(50), [dict(type="text", text="hi")], input_tokens=1000, cache_read_input_tokens=54000,
+                               cache_creation_input_tokens=0, cache_creation=dict()))
+        self.ingest()
+        got = self.run_session()
+        self.assertEqual((got["context"], got["window"]), (55000, 1000000))
+        self.assertEqual(got["compactions"], [dict(ts="2026-11-10T10:00:31.000Z", pre=150000)])
+        self.assertEqual((got["requests"], got["spark"]["per_minute"]), (2, 180 + 55020))
+        self.assertGreater(got["cache_read"], 0.9)
+
+    def test_unknown_window(self):
+        self.write("s1.jsonl", assistant("a1", "m1", at(30), [dict(type="text", text="hi")], model="mystery-1"))
+        self.ingest()
+        got = self.run_session()
+        self.assertEqual((got["context"], got["window"]), (160, None))
+
+    def test_unknown_session_and_bad_cursor(self):
+        self.assertIsNone(self.run_session(sid="nope"))
+        self.write("s1.jsonl", prompt("u1", at(0), "p1", "go"))
+        self.ingest()
+        with self.assertRaises(ValueError):
+            self.run_session(after="yesterday")
+
+
+class CodexSessionTest(CodexCase):
+    def test_same_event_kinds_as_claude(self):
+        self.place(NAME, meta(THREAD).replace("2026-11-06T10:00:00.000Z", at(0))
+                   + codex_line(1, 1, "event_msg", type="task_started", turn_id="t1", model_context_window=272000)
+                   + codex_line(2, 2, "event_msg", type="item_completed", turn_id="t1", item=dict(type="UserMessage", content=[dict(type="text", text="go")]))
+                   + codex_line(3, 3, "response_item", type="function_call", name="spawn_agent", call_id="c0", arguments=json.dumps(dict(task_name="review")))
+                   + codex_line(4, 4, "response_item", type="function_call_output", call_id="c0", output=json.dumps(dict(task_name="review")))
+                   + codex_line(5, 5, "response_item", type="custom_tool_call", name="exec", call_id="c1", input="run tests")
+                   + codex_line(6, 6, "token_usage_record", turn_id="t1", response_id="r1", usage=dict(input_tokens=900, output_tokens=40)))
+        self.ingest()
+        got = live.session(self.con.cursor(), THREAD, now=NOW - timedelta(seconds=50), prices=PRICES)  # exec pending 5 s
+        self.assertEqual([e["k"] for e in got["events"]], ["turn_start", "prompt", "tool", "tool", "request"])
+        exec_ev = got["events"][3]
+        self.assertEqual((exec_ev["tool"], exec_ev["end"]), ("exec", None))
+        self.assertEqual((got["state"]["kind"], got["window"]), ("tool", 272000))
+
+
+class PageCase(LiveCase):
+    """The store behind the Live page fixtures: one session per state, a lane, a failure, a compaction and a Codex turn.
+    All text is made up."""
+
+    def codex(self, name, text):
+        d = os.path.join(self.roots["codex"], LIVE)
+        os.makedirs(d, exist_ok=True)
+        with open(os.path.join(d, name), "w") as fh:
+            fh.write(text)
+
+    def build(self):
+        sub = dict(S, isSidechain=True, agentId="a7")
+        self.write("s1.jsonl", prompt("u1", at(0), "p1", "Add a fast ingest pass while the Live page is open")
+                   + assistant("a1", "m1", at(2), [dict(type="text", text="Reading the ingest loop first."),
+                                                   tool_use("t1", "Read", file_path="store.py")])
+                   + result("r1", at(3), "t1", "def ingest(con, roots):\n    ...")
+                   + assistant("a2", "m2", at(4), [tool_use("t2", "Agent", description="find callers of ingest", prompt="look")])
+                   + line(type="user", uuid="r2", timestamp=at(12), promptId="p1", toolUseResult=dict(agentId="a7"),
+                          message=dict(role="user", content=[dict(type="tool_result", tool_use_id="t2", content="3 callers")]), **S)
+                   + line(type="system", subtype="compact_boundary", uuid="c1", timestamp=at(13), compactMetadata=dict(preTokens=180000), **S)
+                   + assistant("a3", "m3", at(14), [tool_use("t3", "Bash", command="uv run python -m unittest")])
+                   + result("r3", at(20), "t3", "FAIL: test_hot_pass\nAssertionError: 3 != 1", error=True)
+                   + assistant("a4", "m4", at(22), [tool_use("t4", "Bash", command="git push origin feat/live-page")]))
+        self.write("s1/subagents/agent-a7.jsonl", "".join(
+            line(type="assistant", uuid=f"x{i}", timestamp=at(5 + i * 2), message=dict(
+                id=f"sm{i}", model="claude-opus-5-5", usage=dict(input_tokens=400, output_tokens=60),
+                content=[tool_use(f"st{i}", "Grep", pattern=p)]), **sub)
+            + line(type="user", uuid=f"y{i}", timestamp=at(6 + i * 2), message=dict(role="user", content=[
+                dict(type="tool_result", tool_use_id=f"st{i}", content="app.py:45")]), **sub)
+            for i, p in enumerate(("store.ingest", "INTERVAL", "def loop"))))
+        other = lambda text, sid, cwd: text.replace('"s1"', f'"{sid}"').replace("/nowhere/foo", cwd)
+        self.write("s2.jsonl", other(assistant("b1", "n1", at(30), [dict(type="text", text="The header shows a relative time.")])
+                                     + prompt("v1", at(55), "q2", "Freeze the clock in the snapshot test"), "s2", "/nowhere/jobdesk"))
+        self.write("s3.jsonl", other(prompt("w1", at(10), "q3", "Rename the theme tokens")
+                                     + assistant("e1", "o1", at(40), [dict(type="text", text="Renamed 14 tokens.")]), "s3", "/nowhere/sketchbook"))
+        self.write("s4.jsonl", other(prompt("z1", "2026-11-10T09:53:00.000Z", "q4", "Update the zsh prompt"), "s4", "/nowhere/dotfiles"))
+        thread = "0a0f7777-0000-7000-8000-000000000007"
+        self.codex(f"rollout-2026-11-10T10-00-00-{thread}.jsonl", meta(thread).replace("2026-11-06T10:00:00.000Z", at(0)).replace("/nowhere/foo", "/nowhere/graft")
+                   + codex_line(1, 20, "event_msg", type="task_started", turn_id="t1", model_context_window=272000)
+                   + codex_line(2, 21, "event_msg", type="item_completed", turn_id="t1", item=dict(type="UserMessage", content=[dict(type="text", text="Bump the rollout parser")]))
+                   + codex_line(3, 25, "response_item", type="function_call", name="exec_command", call_id="k1", arguments=json.dumps(dict(cmd="rg response_item src/")))
+                   + codex_line(4, 26, "response_item", type="function_call_output", call_id="k1", output="src/rollout.rs:41")
+                   + codex_line(5, 27, "token_usage_record", turn_id="t1", response_id="r1", usage=dict(input_tokens=22000, cached_input_tokens=20000, output_tokens=300)))
+        self.ingest()
+        return thread
+
+
+def page_fixtures():
+    """The Live payloads the page tests render, at NOW: the active list, a Claude Code session with and without text,
+    and a Codex session."""
+    case = PageCase()
+    case.setUp()
+    try:
+        thread = case.build()
+        cur = case.con.cursor()
+        return dict(list=live.sessions(cur, now=NOW, prices=PRICES), claude=live.session(cur, "s1", now=NOW, prices=PRICES),
+                    text=live.session(cur, "s1", text=True, now=NOW, prices=PRICES),
+                    codex=live.session(cur, thread, now=NOW, prices=PRICES))
+    finally:
+        case.tearDown()
+
+
+class PageFixtureTest(unittest.TestCase):
+    def test_every_state_and_shape(self):
+        got = page_fixtures()
+        states = {s["project"]: s["state"]["kind"] for s in got["list"]["sessions"]}
+        self.assertEqual(states, {"foo": "wait", "jobdesk": "thinking", "sketchbook": "you", "dotfiles": "idle", "graft": "thinking"})
+        self.assertEqual(len(got["claude"]["lanes"]), 1)
+        self.assertTrue(any(e.get("failed") for e in got["claude"]["events"]))
+        self.assertNotIn("Freeze", json.dumps(got["list"]) + json.dumps(got["claude"]))
+
+
+if __name__ == "__main__":
+    unittest.main()

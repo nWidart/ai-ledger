@@ -101,6 +101,16 @@ class AppTest(unittest.TestCase):
         status, _, body = self.get("/api/insights?source=grok")
         self.assertEqual((status, json.loads(body)), (400, dict(error="unknown source: grok")))
 
+    def test_live(self):
+        self.assertIn("/live", app.PAGES)
+        status, _, body = self.get("/api/live")
+        self.assertEqual((status, json.loads(body)["sessions"]), (200, []))
+        self.assertEqual(self.get("/api/live?source=grok")[0], 400)
+        status, _, body = self.get("/api/live/session?id=s1")
+        self.assertEqual((status, json.loads(body)["session_id"]), (200, "s1"))
+        self.assertEqual(self.get("/api/live/session?id=s1&after=yesterday")[0], 400)
+        self.assertEqual(self.get("/api/live/session?id=nope")[0], 404)
+
     def test_ingest_command_reads_usage_data(self):
         tmp = tempfile.mkdtemp()
         r = subprocess.run([sys.executable, os.path.join(store.HERE, "app.py"), "ingest", "--db", os.path.join(tmp, "x.duckdb"),

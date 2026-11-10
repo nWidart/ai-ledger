@@ -88,6 +88,9 @@ def live_items(d):
     if not isinstance(p, dict):
         return []
     pt = p.get("type")
+    if t == "token_usage_record" and p.get("response_id") and isinstance(p.get("usage"), dict):
+        u = p["usage"]  # input_tokens includes the cached input and the cache writes
+        return [dict(k="request", id=p["response_id"], model=None, output=u.get("output_tokens") or 0, context=u.get("input_tokens") or 0)]
     if t == "response_item" and pt in TOOL_CALLS and p.get("call_id"):
         name, raw = p.get("name") or "?", p.get("arguments") if pt == "function_call" else p.get("input")
         try:

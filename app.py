@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Local app: owns the transcript store, keeps it current, serves the Activity, Cost, Errors, Limits and Insights dashboards.
+"""Local app: owns the transcript store, keeps it current, serves the Activity, Cost, Errors, Limits, Insights and Live pages.
 
 Usage:
   uv run app.py            serve on http://127.0.0.1:8765 (ingests at start and every 60 seconds, every 2 while Live is open)
@@ -19,6 +19,7 @@ from urllib.parse import parse_qs, urlsplit
 
 import insights
 import limits
+import live
 import metrics
 import store
 
@@ -27,7 +28,7 @@ INTERVAL = 60
 LIVE_INTERVAL = 2  # transcript ingest while a Live page is connected; usage data and limits stay on INTERVAL
 KEEPALIVE = 15  # seconds between SSE comments, so a closed Live page is noticed
 WEB = os.path.join(store.HERE, "web", "dist")  # the committed frontend build (npm run build in web/)
-PAGES = ("/usage", "/cost", "/errors", "/limits", "/insights")  # one app; it picks the page from the path
+PAGES = ("/usage", "/cost", "/errors", "/limits", "/insights", "/live")  # one app; it picks the page from the path
 ASSET_TYPES = {".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml",
                ".png": "image/png", ".woff2": "font/woff2", ".json": "application/json; charset=utf-8"}
 
@@ -211,6 +212,11 @@ def handler(app):
                             self.send(200, fh.read(), found[1], cache="public, max-age=31536000, immutable")
                 elif url.path == "/api/live/events":
                     self.live_events()
+                elif url.path == "/api/live":
+                    self.json(live.sessions(app.con.cursor(), q.get("project", ""), q.get("source", ""), automated=q.get("automated") == "1"))
+                elif url.path == "/api/live/session":
+                    detail = live.session(app.con.cursor(), q.get("id", ""), q.get("after", ""), text=q.get("text") == "1")
+                    self.send(404, json.dumps(dict(error="session not found"))) if detail is None else self.json(detail)
                 elif url.path == "/api/status":
                     self.json(app.status())
                 elif url.path == "/api/errors":
