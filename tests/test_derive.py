@@ -271,3 +271,40 @@ class TwoSourceRebuildTest(StoreCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LiveItemsTest(unittest.TestCase):
+    """store.live_items: what the Live page shows of one Claude Code line."""
+
+    def items(self, text):
+        return store.live_items(json.loads(text))
+
+    def test_tool_use_and_failing_result(self):
+        use, = self.items(assistant("a1", "m1", "2026-11-10T10:00:00Z", [tool_use("t1", "Bash", command="make test")]))[1:]
+        self.assertEqual(use, dict(k="tool_use", id="t1", tool="Bash", summary="make test", description=None))
+        res, = self.items(result("u1", "2026-11-10T10:00:01Z", "t1", "<tool_use_error>Exit code 2</tool_use_error>", error=True))
+        self.assertEqual((res["k"], res["id"], res["error"]), ("tool_result", "t1", "Exit code 2"))
+
+    def test_request_and_reply_without_thinking(self):
+        req, reply = self.items(assistant("a1", "m1", "2026-11-10T10:00:00Z",
+                                          [dict(type="thinking", thinking="secret plan"), dict(type="text", text="Done.")]))
+        self.assertEqual(req, dict(k="request", id="m1", model="claude-opus-5-5", output=20, context=160))
+        self.assertEqual(reply, dict(k="reply", text="Done."))
+
+    def test_prompt_and_interrupt(self):
+        self.assertEqual(self.items(prompt("u1", "2026-11-10T10:00:00Z", "p1", "Fix the build")), [dict(k="prompt", text="Fix the build")])
+        self.assertEqual(self.items(prompt("u2", "2026-11-10T10:00:01Z", "p1", "[Request interrupted by user]")), [dict(k="interrupt")])
+
+    def test_compact_boundary(self):
+        text = line(type="system", subtype="compact_boundary", uuid="c1", timestamp="2026-11-10T10:00:00Z",
+                    compactMetadata=dict(preTokens=150000), **S)
+        self.assertEqual(self.items(text), [dict(k="compaction", pre=150000)])
+
+    def test_agent_result_names_the_agent(self):
+        text = line(type="user", uuid="u1", timestamp="2026-11-10T10:00:00Z", promptId="p1", toolUseResult=dict(agentId="a7"),
+                    message=dict(role="user", content=[dict(type="tool_result", tool_use_id="t9", content="found 3")]), **S)
+        res, = self.items(text)
+        self.assertEqual((res["id"], res["agent"], res["error"], res["output"]), ("t9", "a7", None, "found 3"))
+
+    def test_unknown_line_type(self):
+        self.assertEqual(self.items(line(type="file-history-snapshot", uuid="f1")), [])

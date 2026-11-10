@@ -5,7 +5,9 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import unittest
+from unittest import mock
 from http.server import ThreadingHTTPServer
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -111,6 +113,125 @@ class AppTest(unittest.TestCase):
     def test_foreign_host_refused(self):
         self.assertEqual(self.get("/usage", host="example.com")[0], 403)
         self.assertEqual(self.get("/assets/x.js", host="evil:8765")[0], 403)
+
+
+class LoopTest(unittest.TestCase):
+    """App.loop: everything every INTERVAL; transcripts every LIVE_INTERVAL only while a Live page is connected."""
+
+    def run_loop(self, steps):
+        calls = []
+
+        def ingest(con, roots, log=None, usage=True):
+            calls.append(usage)
+            return dict(files=0, lines=0, inserted=0, sessions=set(), seconds=0)
+
+        a = app.App(None, {}, pollers=[])
+        with mock.patch.object(app, "INTERVAL", 0.5), mock.patch.object(app, "LIVE_INTERVAL", 0.05), \
+                mock.patch.object(store, "ingest", side_effect=ingest):
+            t = threading.Thread(target=a.loop)
+            t.start()
+            seen = []
+            for step in steps:
+                step(a)
+                n = len(calls)
+                time.sleep(0.4)
+                seen.append(calls[n:])
+            a.stop(t)
+        return seen
+
+    def test_fast_pass_only_while_watched(self):
+        idle, watched, after = self.run_loop([lambda a: None, lambda a: a.watch(1), lambda a: a.watch(-1)])
+        self.assertNotIn(False, idle)
+        self.assertGreaterEqual(watched.count(False), 4)  # every 50 ms over 400 ms
+        self.assertLessEqual(watched.count(True), 1)  # usage data stays on INTERVAL
+        self.assertLessEqual(after.count(False), 1)  # at most the pass already waiting when the page left
+
+    def test_changes_since(self):
+        a = app.App(None, {}, pollers=[])
+        a.publish({"s1"})
+        a.publish({"s2", "s1"})
+        self.assertEqual(a.changes_since(0, 0), (2, {"s1", "s2"}))
+        self.assertEqual(a.changes_since(1, 0), (2, {"s1", "s2"}))
+        self.assertEqual(a.changes_since(2, 0.01), (2, frozenset()))
+        for i in range(70):
+            a.publish({f"x{i}"})
+        self.assertEqual(a.changes_since(2, 0), (72, None))  # older than the log: refetch everything
+
+
+class LiveEventsTest(unittest.TestCase):
+    """/api/live/events: one changed notice per ingest that stored lines, ids only, and the count of Live pages."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.root = os.path.join(self.tmp, "projects")
+        os.makedirs(os.path.join(self.root, "proj"))
+        self.con = store.open_store(os.path.join(self.tmp, "d", "x.duckdb"))
+        self.app = app.App(self.con, dict(claude=self.root, codex=os.path.join(self.tmp, "codex")), pollers=[])
+        self.httpd = ThreadingHTTPServer(("127.0.0.1", 0), app.handler(self.app))
+        threading.Thread(target=self.httpd.serve_forever, daemon=True).start()
+
+    def tearDown(self):
+        self.app.stopping.set()  # end open streams, so no handler thread outlives the connection
+        with self.app.changed:
+            self.app.changed.notify_all()
+        self.wait(lambda: self.app.watchers == 0)
+        self.httpd.shutdown()
+        self.httpd.server_close()
+        self.con.close()
+
+    def connect(self):
+        h = http.client.HTTPConnection("127.0.0.1", self.httpd.server_address[1], timeout=5)
+        h.request("GET", "/api/live/events", headers={"Host": f"{app.HOST}:{app.PORT}"})
+        r = h.getresponse()
+        self.assertEqual((r.status, r.getheader("Content-Type")), (200, "text/event-stream"))
+        self.assertEqual(r.readline(), b"retry: 2000\n")
+        r.readline()
+        self.wait(lambda: self.app.watchers == 1)
+        return h, r
+
+    def wait(self, cond):
+        end = time.monotonic() + 3
+        while not cond():
+            self.assertLess(time.monotonic(), end, "timed out")
+            time.sleep(0.01)
+
+    def append(self, name, sid, text):
+        with open(os.path.join(self.root, "proj", name), "a") as fh:
+            fh.write(json.dumps(dict(type="user", uuid=f"{sid}-{text}", sessionId=sid, timestamp="2026-11-10T10:00:00Z",
+                                     message=dict(role="user", content=text))) + "\n")
+
+    def test_notice_names_the_session_and_holds_no_text(self):
+        h, r = self.connect()
+        self.append("a.jsonl", "s1", "SENTINEL-secret")
+        self.app.ingest(usage=False)
+        self.assertEqual(r.readline(), b"event: changed\n")
+        data = r.readline()
+        self.assertEqual(json.loads(data[len(b"data: "):]), dict(sessions=["s1"]))
+        self.assertNotIn(b"SENTINEL", data)
+        h.close()
+
+    def test_no_notice_when_nothing_new(self):
+        with mock.patch.object(app, "KEEPALIVE", 0.2):
+            h, r = self.connect()
+            self.app.ingest(usage=False)
+            self.assertEqual(r.readline(), b": keep-alive\n")
+            h.close()
+
+    def test_closing_the_page_lowers_the_count(self):
+        with mock.patch.object(app, "KEEPALIVE", 0.05):
+            h, r = self.connect()
+            r.close()
+            h.close()
+            self.wait(lambda: self.app.watchers == 0)
+
+    def test_stop_returns_with_a_page_connected(self):
+        loop = threading.Thread(target=self.app.loop)
+        loop.start()
+        h, r = self.connect()
+        self.app.stop(loop)
+        self.assertFalse(loop.is_alive())
+        self.wait(lambda: self.app.watchers == 0)
+        h.close()
 
 
 if __name__ == "__main__":

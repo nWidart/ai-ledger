@@ -74,6 +74,54 @@ def prompt_text(d, pid):
     return typed(p.get("item")) if p.get("type") == "item_completed" and p.get("turn_id") == pid else None
 
 
+TOOL_CALLS = ("function_call", "custom_tool_call")
+
+
+def live_items(d):
+    """What the Live page shows of Codex line d, in store.live_items' shape, plus turn_start and turn_end.
+
+    Tools come from response_item calls and their *_output lines, keyed by call_id: item_completed arrives only once a
+    tool ends, and many calls never get one. A failed item_completed with the same id marks its call failed."""
+    t, p = d.get("type"), d.get("payload")
+    if t == "compacted":
+        return [dict(k="compaction", pre=None)]
+    if not isinstance(p, dict):
+        return []
+    pt = p.get("type")
+    if t == "response_item" and pt in TOOL_CALLS and p.get("call_id"):
+        name, raw = p.get("name") or "?", p.get("arguments") if pt == "function_call" else p.get("input")
+        try:
+            args = json.loads(raw) if pt == "function_call" and isinstance(raw, str) else None
+        except ValueError:
+            args = None
+        summary = summarize_input(name, args) if isinstance(args, dict) else (raw if isinstance(raw, str) else "")
+        return [dict(k="tool_use", id=p["call_id"], tool=name, summary=summary[:300],
+                     description=args.get("task_name") if isinstance(args, dict) and name == "spawn_agent" else None)]
+    if t == "response_item" and pt in ("function_call_output", "custom_tool_call_output") and p.get("call_id"):
+        out = p.get("output")
+        return [dict(k="tool_result", id=p["call_id"], error=None, output=out if isinstance(out, str) else text_of(out), agent=None)]
+    if t != "event_msg":
+        return []
+    if pt == "task_started":
+        return [dict(k="turn_start", window=p.get("model_context_window"))]
+    if pt == "task_complete":
+        return [dict(k="turn_end")]
+    if pt == "turn_aborted":
+        return [dict(k="interrupt"), dict(k="turn_end")]
+    it = p.get("item") if pt == "item_completed" and isinstance(p.get("item"), dict) else None
+    if it is None:
+        return []
+    if it.get("type") == "UserMessage":
+        text = typed(it)
+        return [dict(k="prompt", text=text)] if text else []
+    if it.get("type") == "AgentMessage":
+        said = text_of(it.get("content")).strip()
+        return [dict(k="reply", text=said)] if said else []
+    if it.get("status") == "failed" and it.get("id") and tool_of(it):
+        return [dict(k="tool_result", id=it["id"], error=error_of(it), output="", agent=None)]
+    return []
+
+
 def before(ts, seconds):
     """ts (as ts_of returns it) minus seconds."""
     if not ts or not seconds:

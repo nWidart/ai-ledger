@@ -2,11 +2,12 @@
 """Local app: owns the transcript store, keeps it current, serves the Activity, Cost, Errors, Limits and Insights dashboards.
 
 Usage:
-  uv run app.py            serve on http://127.0.0.1:8765 (ingests at start and every 60 seconds)
+  uv run app.py            serve on http://127.0.0.1:8765 (ingests at start and every 60 seconds, every 2 while Live is open)
   uv run app.py ingest     ingest new transcript lines and /insights usage data once, then exit
   uv run app.py rebuild    regenerate the derived tables from the stored raw lines
 """
 import argparse
+import collections
 import json
 import os
 import sys
@@ -23,6 +24,8 @@ import store
 
 HOST, PORT = "127.0.0.1", 8765
 INTERVAL = 60
+LIVE_INTERVAL = 2  # transcript ingest while a Live page is connected; usage data and limits stay on INTERVAL
+KEEPALIVE = 15  # seconds between SSE comments, so a closed Live page is noticed
 WEB = os.path.join(store.HERE, "web", "dist")  # the committed frontend build (npm run build in web/)
 PAGES = ("/usage", "/cost", "/errors", "/limits", "/insights")  # one app; it picks the page from the path
 ASSET_TYPES = {".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml",
@@ -37,15 +40,25 @@ class App:
         self.wake = threading.Event()
         self.stopping = threading.Event()
         self.state = dict(ingesting=False, last_ingest=None, last_stats=None, error=None)
+        # Live pages: how many are connected, and the sessions each ingest changed, numbered so each page sends a
+        # notice for every change since its last one.
+        self.watchers = 0
+        self.changed = threading.Condition()
+        self.generation = 0
+        self.changes = collections.deque(maxlen=64)
 
-    def ingest(self):
+    def ingest(self, usage=True):
+        """Ingest transcripts, and usage data unless usage is False (the fast pass while Live is open)."""
         with self.lock:
             self.state["ingesting"] = True
             try:
-                stats = store.ingest(self.con, self.roots, log=None)
+                stats = store.ingest(self.con, self.roots, log=None, usage=usage)
+                sessions = stats.pop("sessions")
                 self.state.update(last_ingest=datetime.now(timezone.utc).isoformat(timespec="seconds"),
                                   last_stats=stats, error=None)
-                if stats["files"] or stats.get("usage_files") or stats.get("usage_skipped"):
+                if sessions:
+                    self.publish(sessions)
+                if usage and (stats["files"] or stats.get("usage_files") or stats.get("usage_skipped")):
                     print(f"ingest: {stats['files']} files, {stats['inserted']} new lines, {stats.get('usage_files', 0)} usage-data files "
                           f"({stats.get('usage_skipped', 0)} skipped), {stats['seconds']}s", flush=True)
             except Exception as e:  # keep serving; the next run retries
@@ -61,17 +74,51 @@ class App:
                 p.run(self.con, self.lock)
 
     def loop(self):
+        """Ingest everything and poll limits every INTERVAL; in between, ingest transcripts every LIVE_INTERVAL while a
+        Live page is connected."""
+        due = 0
         while not self.stopping.is_set():
-            self.ingest()
-            self.poll()
-            self.wake.wait(INTERVAL)
+            if time.monotonic() >= due:
+                self.ingest()
+                self.poll()
+                due = time.monotonic() + INTERVAL
+            elif self.watchers:
+                self.ingest(usage=False)
+            self.wake.wait(LIVE_INTERVAL if self.watchers else max(0, due - time.monotonic()))
             self.wake.clear()
 
     def stop(self, thread):
         """End the ingest loop so nothing holds the connection at exit (DuckDB's bindings warn about leaks otherwise)."""
         self.stopping.set()
         self.wake.set()
+        with self.changed:
+            self.changed.notify_all()  # Live streams return
         thread.join()
+
+    def publish(self, sessions):
+        with self.changed:
+            self.generation += 1
+            self.changes.append((self.generation, frozenset(sessions)))
+            self.changed.notify_all()
+
+    def changes_since(self, generation, timeout):
+        """(newest generation, sessions changed after generation), waiting up to timeout for a change. None for the
+        sessions when the change log no longer reaches back that far: the page then refetches everything."""
+        with self.changed:
+            if self.generation == generation and not self.stopping.is_set():
+                self.changed.wait(timeout)
+            newer = [s for g, s in self.changes if g > generation]
+            if self.generation - generation > len(newer):
+                return self.generation, None
+            return self.generation, frozenset().union(*newer)
+
+    def watch(self, delta):
+        """Count a Live page in (+1) or out (-1); the first one starts the fast pass at once."""
+        with self.changed:
+            self.watchers += delta
+            first = delta > 0 and self.watchers == 1
+        if first:
+            self.wake.set()
 
     def status(self):
         cur = self.con.cursor()
@@ -102,6 +149,33 @@ def handler(app):
 
         def json(self, obj):
             self.send(200, json.dumps(obj, separators=(",", ":"), default=str))
+
+        def live_events(self):
+            """Server-Sent Events for a Live page: a changed notice naming the sessions that gained lines (never their
+            content), or a keep-alive comment every KEEPALIVE seconds. Runs until the page goes or the app stops."""
+            self.send_response(200)
+            for k, v in (("Content-Type", "text/event-stream"), ("Cache-Control", "no-store"), ("X-Accel-Buffering", "no")):
+                self.send_header(k, v)
+            self.end_headers()
+            app.watch(1)
+            try:
+                generation = app.generation
+                self.wfile.write(b"retry: 2000\n\n")
+                self.wfile.flush()
+                while not app.stopping.is_set():
+                    generation, sessions = app.changes_since(generation, KEEPALIVE)
+                    if sessions is None:
+                        msg = 'event: changed\ndata: {"sessions":null}\n\n'
+                    elif sessions:
+                        msg = f"event: changed\ndata: {json.dumps(dict(sessions=sorted(sessions)))}\n\n"
+                    else:
+                        msg = ": keep-alive\n\n"
+                    self.wfile.write(msg.encode())
+                    self.wfile.flush()
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+            finally:
+                app.watch(-1)
 
         def checked_host(self):
             """Serve only 127.0.0.1; send localhost there (fix markers live in that origin); refuse other hosts."""
@@ -135,6 +209,8 @@ def handler(app):
                     else:  # names carry a content hash, so a file never changes
                         with open(found[0], "rb") as fh:
                             self.send(200, fh.read(), found[1], cache="public, max-age=31536000, immutable")
+                elif url.path == "/api/live/events":
+                    self.live_events()
                 elif url.path == "/api/status":
                     self.json(app.status())
                 elif url.path == "/api/errors":

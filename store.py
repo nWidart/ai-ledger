@@ -15,7 +15,7 @@ from typing import Callable, NamedTuple
 
 import duckdb
 
-from categorize import GIT_COMMIT, SHELL_TOOLS, TEST_CMD, categorize, error_text, summarize_input
+from categorize import GIT_COMMIT, SHELL_TOOLS, TEST_CMD, categorize, error_text, summarize_input, text_of
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_DB = os.path.join(HERE, "data", "ai-ledger.duckdb")
@@ -236,16 +236,17 @@ def transcript_files(root):
 unreadable = {}  # path -> (size, mtime) of a file that failed to read, so a later ingest skips it until it changes
 
 
-def ingest(con, roots, log=None):
+def ingest(con, roots, log=None, usage=True):
     """Read new bytes of every transcript file under roots ({source: dir}). One transaction per file.
 
-    Skips a source whose root is missing or not given, and a name not in SOURCES. Then reads roots["insights"], the
-    usage-data directory of Claude Code's /insights, after the transcripts so a session new in this ingest is known first."""
+    Skips a source whose root is missing or not given, and a name not in SOURCES. Then, unless usage is False, reads
+    roots["insights"], the usage-data directory of Claude Code's /insights, after the transcripts so a session new in
+    this ingest is known first. stats["sessions"] holds the ids of the sessions that gained lines."""
     t0 = time.time()
     cur = con.cursor()
     known = {r[0]: r[1:] for r in cur.execute("SELECT path, size, read_offset, lines, seq, mtime FROM files").fetchall()}
     projects = Projects(cur)
-    stats = dict(files=0, lines=0, inserted=0)
+    stats = dict(files=0, lines=0, inserted=0, sessions=set())
     found = [(name, path) for name, src in SOURCES.items() if os.path.isdir(roots.get(name) or "")
              for path in src.files(roots[name])]
     for name, path in found:
@@ -272,14 +273,16 @@ def ingest(con, roots, log=None):
         end = data.rfind(b"\n") + 1
         if not end:
             continue
-        n, ins = ingest_chunk(cur, projects, name, path, data[:end], offset, lines, seq, st, whole)
+        n, ins, sids = ingest_chunk(cur, projects, name, path, data[:end], offset, lines, seq, st, whole)
+        stats["sessions"] |= sids
         stats["files"] += 1
         stats["lines"] += n
         stats["inserted"] += ins
         if log:
             log(f"{path}: {n} lines, {ins} new")
     try:
-        stats.update(insights.ingest(cur, roots.get("insights"), projects, log))
+        if usage:
+            stats.update(insights.ingest(cur, roots.get("insights"), projects, log))
     except Exception as e:  # never fails transcript ingest; the message could quote a file, so only its type
         print(f"ingest: usage data failed: {type(e).__name__}", file=sys.stderr, flush=True)
         stats.update(usage_files=0, usage_skipped=1)
@@ -288,7 +291,8 @@ def ingest(con, roots, log=None):
 
 
 def ingest_chunk(cur, projects, name, path, data, offset, lines, seq, st, whole=False):
-    """Store and derive the complete lines in data, which starts at offset. A whole file's read_offset is its size."""
+    """Store and derive the complete lines in data, which starts at offset. A whole file's read_offset is its size.
+    Returns the lines read, the lines new to the store and the ids of the sessions those new lines belong to."""
     src = SOURCES[name]
     sub = src.subagent(path)
     rows, parsed, seen = [], {}, set()
@@ -326,7 +330,7 @@ def ingest_chunk(cur, projects, name, path, data, offset, lines, seq, st, whole=
     except BaseException:
         cur.execute("ROLLBACK")
         raise
-    return len(rows), len(new)
+    return len(rows), len(new), {r[5] for r in rows if r[0] in new and r[5]}
 
 
 # ---------- derived layer ----------
@@ -563,6 +567,47 @@ def prompt_text(d, pid):
     return text.strip() or None
 
 
+def live_items(d):
+    """What the Live page shows of Claude Code line d, as dicts keyed by k: prompt, reply, interrupt, request, tool_use,
+    tool_result and compaction. Text stays in the items; live.py drops it unless the page asks for it."""
+    t = d.get("type")
+    msg = d.get("message") if isinstance(d.get("message"), dict) else {}
+    content = msg.get("content")
+    blocks = [x for x in content if isinstance(x, dict)] if isinstance(content, list) else []
+    if t == "system" and d.get("subtype") == "compact_boundary":
+        return [dict(k="compaction", pre=(d.get("compactMetadata") or {}).get("preTokens"))]
+    if t == "assistant":
+        items = []
+        model = msg.get("model")
+        if msg.get("id") and model and model != "<synthetic>":
+            u = msg.get("usage") or {}
+            items.append(dict(k="request", id=msg["id"], model=model, output=u.get("output_tokens") or 0,
+                              context=sum(u.get(f) or 0 for f in ("input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"))))
+        said = "\n".join(x.get("text") or "" for x in blocks if x.get("type") == "text").strip()
+        if said:
+            items.append(dict(k="reply", text=said))
+        for x in blocks:
+            if x.get("type") == "tool_use" and x.get("id"):
+                inp = x.get("input") if isinstance(x.get("input"), dict) else {}
+                items.append(dict(k="tool_use", id=x["id"], tool=x.get("name") or "?", summary=summarize_input(x.get("name"), inp),
+                                  description=inp.get("description") if isinstance(inp.get("description"), str) else None))
+        return items
+    if t != "user":
+        return []
+    results = [x for x in blocks if x.get("type") == "tool_result" and x.get("tool_use_id")]
+    if results:
+        agent = (d.get("toolUseResult") or {}).get("agentId") if isinstance(d.get("toolUseResult"), dict) else None
+        return [dict(k="tool_result", id=x["tool_use_id"], error=error_text(x.get("content")) if x.get("is_error") else None,
+                     output=text_of(x.get("content")), agent=agent) for x in results]
+    text = (content if isinstance(content, str) else "\n".join(x.get("text") or "" for x in blocks if x.get("type") == "text")).strip()
+    if INTERRUPT in text:
+        return [dict(k="interrupt")]
+    origin = (d.get("origin") or {}).get("kind") if isinstance(d.get("origin"), dict) else None
+    if text and d.get("promptId") and not d.get("isMeta") and not d.get("isSidechain") and origin in (None, "human"):
+        return [dict(k="prompt", text=text)]
+    return []
+
+
 def read_from(path, offset, size):
     """The bytes of a plain file from offset to size, and False: the file is read incrementally."""
     with open(path, "rb") as fh:
@@ -579,6 +624,7 @@ class Source(NamedTuple):
     read: Callable = read_from  # (path, offset, size) -> (bytes, whole); whole: the file decompressed from its start
     prompt_text: Callable = prompt_text  # (line, prompt_id) -> the prompt's text if the line holds it, else None
     prompt_type: str = "user"  # raw_lines.type of the lines that hold prompt text
+    live_items: Callable = live_items  # line -> what the Live page shows of it
 
 
 import codex  # noqa: E402  (it subclasses Deriver)
@@ -587,7 +633,7 @@ import insights  # noqa: E402  (it reads usage data through this module)
 
 SOURCES = {"claude": Source(transcript_files, line_key, Deriver, lambda path: "/subagents/" in path),
            "codex": Source(codex.files, codex.key, codex.CodexDeriver, codex.subagent, codex.fields, codex.read,
-                            codex.prompt_text, "event_msg")}
+                            codex.prompt_text, "event_msg", codex.live_items)}
 
 
 def rebuild(con, log=None):

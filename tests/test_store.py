@@ -279,3 +279,33 @@ class UsageDataStoreTest(StoreCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LiveItemsSourceTest(unittest.TestCase):
+    def test_each_source_has_its_own_live_items(self):
+        import codex
+        self.assertIs(store.SOURCES["claude"].live_items, store.live_items)
+        self.assertIs(store.SOURCES["codex"].live_items, codex.live_items)
+
+
+class ChangedSessionsTest(StoreCase):
+    def test_reports_sessions_that_gained_lines(self):
+        self.write("a.jsonl", line(type="user", uuid="u1", sessionId="s1"))
+        self.write("b.jsonl", line(type="user", uuid="v1", sessionId="s2"))
+        self.assertEqual(store.ingest(self.con, self.roots)["sessions"], {"s1", "s2"})
+        self.write("a.jsonl", line(type="user", uuid="u2", sessionId="s1") + line(type="user", uuid="u3", sessionId="s1"))
+        self.assertEqual(store.ingest(self.con, self.roots)["sessions"], {"s1"})
+        self.assertEqual(store.ingest(self.con, self.roots)["sessions"], set())
+
+    def test_repeated_lines_change_nothing(self):
+        self.write("a.jsonl", line(type="user", uuid="u1", sessionId="s1"))
+        store.ingest(self.con, self.roots)
+        self.write("a.jsonl", line(type="user", uuid="u1", sessionId="s1"))  # a line already stored
+        self.assertEqual(store.ingest(self.con, self.roots)["sessions"], set())
+
+    def test_usage_false_skips_usage_data(self):
+        with mock.patch.object(store.insights, "ingest", return_value=dict(usage_files=0, usage_skipped=0)) as usage:
+            store.ingest(self.con, self.roots, usage=False)
+            usage.assert_not_called()
+            store.ingest(self.con, self.roots)
+            usage.assert_called_once()

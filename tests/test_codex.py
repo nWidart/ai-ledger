@@ -12,6 +12,7 @@ from compression import zstd
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import metrics  # noqa: E402
+from codex import live_items as codex_live  # noqa: E402
 import store  # noqa: E402
 from test_store import StoreCase  # noqa: E402
 
@@ -461,3 +462,45 @@ class LimitTest(CodexCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LiveItemsTest(unittest.TestCase):
+    """codex.live_items: what the Live page shows of one Codex line."""
+
+    def items(self, **kw):
+        return codex_live(json.loads(line(timestamp="2026-11-10T10:00:00.000Z", ordinal=1, **kw)))
+
+    def test_exec_call_without_output_yet(self):
+        use, = self.items(type="response_item", payload=dict(type="custom_tool_call", name="exec", call_id="c1",
+                                                             input="await tools.exec_command({cmd: 'ls'})"))
+        self.assertEqual(use, dict(k="tool_use", id="c1", tool="exec", summary="await tools.exec_command({cmd: 'ls'})", description=None))
+
+    def test_function_call_and_output(self):
+        use, = self.items(type="response_item", payload=dict(type="function_call", name="exec_command", call_id="c2",
+                                                             arguments=json.dumps(dict(cmd="cargo test"))))
+        self.assertEqual((use["tool"], use["summary"]), ("exec_command", json.dumps(dict(cmd="cargo test"))))
+        res, = self.items(type="response_item", payload=dict(type="function_call_output", call_id="c2", output="ok"))
+        self.assertEqual(res, dict(k="tool_result", id="c2", error=None, output="ok", agent=None))
+
+    def test_spawn_agent_names_its_task(self):
+        use, = self.items(type="response_item", payload=dict(type="function_call", name="spawn_agent", call_id="c3",
+                                                             arguments=json.dumps(dict(task_name="review", message="look"))))
+        self.assertEqual(use["description"], "review")
+
+    def test_failed_item_marks_its_call(self):
+        res, = self.items(type="event_msg", payload=dict(type="item_completed", turn_id="t1", item=dict(
+            type="McpToolCall", id="c4", server="node_repl", tool="js", status="failed", error=dict(message="boom"))))
+        self.assertEqual((res["id"], res["error"]), ("c4", "boom"))
+
+    def test_turns_prompts_and_replies(self):
+        self.assertEqual(self.items(type="event_msg", payload=dict(type="task_started", turn_id="t1", model_context_window=272000)),
+                         [dict(k="turn_start", window=272000)])
+        self.assertEqual(self.items(type="event_msg", payload=dict(type="task_complete", turn_id="t1")), [dict(k="turn_end")])
+        self.assertEqual(self.items(type="event_msg", payload=dict(type="item_completed", turn_id="t1", item=dict(
+            type="UserMessage", content=[dict(type="text", text="Bump the parser")]))), [dict(k="prompt", text="Bump the parser")])
+        self.assertEqual(self.items(type="event_msg", payload=dict(type="item_completed", turn_id="t1", item=dict(
+            type="UserMessage", content=[dict(type="text", text="<environment_context>")]))), [])
+        self.assertEqual(self.items(type="event_msg", payload=dict(type="item_completed", turn_id="t1", item=dict(
+            type="AgentMessage", content=[dict(type="text", text="Done")]))), [dict(k="reply", text="Done")])
+        self.assertEqual(self.items(type="compacted", payload=dict(message="")), [dict(k="compaction", pre=None)])
+        self.assertEqual(self.items(type="world_state", payload=dict()), [])
