@@ -1,6 +1,6 @@
 # AI Ledger
 
-A local ledger of your Claude Code and Codex transcripts, with five dashboards: Activity, Cost, Errors, Limits and Insights.
+A local ledger of your Claude Code and Codex transcripts, with six pages: Activity, Cost, Errors, Limits, Insights and Live.
 
 ![Tour of the pages](docs/tour.gif)
 
@@ -12,6 +12,7 @@ Coding agents leave a full record of their work on disk, then delete or archive 
 - **What did it cost, and why did that change?**
 - **Which errors keep coming back, and how do I stop them?**
 - **Will I hit my plan limit before it resets?**
+- **What are my agents doing right now?**
 
 Everything stays on your machine: the server listens on `127.0.0.1` only. The store keeps every transcript line, even after the agent deletes the file. Claude Code and Codex share the same tables, so every page filters by source. Filters and open sheets live in the URL.
 
@@ -24,7 +25,7 @@ uv sync
 uv run app.py               # http://127.0.0.1:8765/ (use 127.0.0.1, not localhost)
 ```
 
-The first start reads every transcript (about 4 minutes for 3.4 GB). After that the app reads new lines every 60 seconds, or when you click **Refresh**.
+The first start reads every transcript (about 4 minutes for 3.4 GB). After that the app reads new lines every 60 seconds, every 2 seconds while a Live page is open, or when you click **Refresh**.
 
 Stop the app before you run these commands, because the app keeps the store open:
 
@@ -57,6 +58,12 @@ Codex writes its limits into its session files. For Claude Code, the app polls A
 
 **Insights**: how Claude Code's `/insights` command judged your sessions: outcomes, satisfaction, friction, goals. These are model judgments, not measurements. Run `/insights` in Claude Code to analyse more sessions, then **Refresh**.
 
+**Live**: the sessions active in the last 10 minutes, as their lines arrive. Pick a session to follow its prompts, replies and tool calls, with a timer on each running call, subagent work in lanes you can fold, and its context window, cost and plan limits beside it. **Wall** shows every active session at once.
+
+Each session has a state: running a tool, thinking, your turn, likely waiting for approval, or idle. Transcripts record neither a request in flight (Claude Code) nor a permission prompt, so *thinking* and *likely waiting for approval* are guesses and the page marks them as inferred: a shell call pending for more than 30 seconds counts as likely waiting for approval.
+
+The stream shows prompts and replies as word counts and tool output as a size. **Full text** shows them as written; it is off each time the page loads.
+
 ## Command palette
 
 Press **Cmd+K** (**Ctrl+K** elsewhere) to build a view in one step. Type `#` to filter and `>` to go somewhere or run a command:
@@ -75,6 +82,8 @@ Examples:
 
 `data/ai-ledger.duckdb` holds full transcript content, including any secrets that appeared in a session. It is git-ignored. Do not share it.
 
+The Live page's **Full text** puts that content on screen, secrets included. The app sends it only while the toggle is on. Turn it off before you share your screen.
+
 ## Develop
 
 ```bash
@@ -90,6 +99,7 @@ To record the GIFs again from made-up data:
 ```bash
 uv run tools/demo/seed.py                     # synthetic store in tools/demo/demo.duckdb
 uv run tools/demo/serve.py                    # serves it on 127.0.0.1:8799
+uv run tools/demo/replay.py                   # optional, second terminal: plays made-up sessions for the Live page
 # in a second terminal:
 cd tools/demo && npm install && npx playwright install chromium-headless-shell && npm run record    # needs gifski
 ```

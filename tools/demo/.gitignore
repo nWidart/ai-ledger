@@ -1,3 +1,4 @@
 node_modules/
 demo.duckdb
 demo.duckdb.wal
+live/

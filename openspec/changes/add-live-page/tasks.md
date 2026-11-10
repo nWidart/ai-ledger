@@ -36,8 +36,8 @@ Privacy for every group: `data/` holds full transcript content. Never copy a rea
 
 ## 5. Demo store and docs
 
-- [ ] 5.1 Give `tools/demo/` a way to replay a synthetic session into the demo store's transcript root while `serve.py` runs: append lines on a timer, with a tool call, a failure, a subagent and a long `Bash` call. Verify that `/live` on the demo app shows each state in turn.
-- [ ] 5.2 Update `README.md`: the Live page in Pages; faster ingest while it is open; the Full text toggle and its privacy note; and that *thinking* and *likely waiting for approval* are inferred. Verify that the documented commands run as written.
+- [x] 5.1 Give `tools/demo/` a way to replay a synthetic session into the demo store's transcript root while `serve.py` runs: append lines on a timer, with a tool call, a failure, a subagent and a long `Bash` call. Verify that `/live` on the demo app shows each state in turn.
+- [x] 5.2 Update `README.md`: the Live page in Pages; faster ingest while it is open; the Full text toggle and its privacy note; and that *thinking* and *likely waiting for approval* are inferred. Verify that the documented commands run as written.
 
 ## 6. Integration
 

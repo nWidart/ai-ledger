@@ -1,6 +1,6 @@
 # AI Ledger
 
-Local DuckDB store of Claude Code and Codex transcripts, served as dashboards (Activity, Cost, Errors, Limits). See `README.md` for goals and setup, and `openspec/specs/` for page behavior. `tools/demo/` records the README GIFs from a synthetic store.
+Local DuckDB store of Claude Code and Codex transcripts, served as dashboards (Activity, Cost, Errors, Limits, Insights, Live). See `README.md` for goals and setup, and `openspec/specs/` for page behavior. `tools/demo/` records the README GIFs from a synthetic store.
 
 ## Commands
 
