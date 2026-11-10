@@ -157,6 +157,17 @@ class SessionTest(LiveCase):
         t1, = [e for e in self.run_session(after=first["cursor"])["events"] if e["k"] == "tool"]
         self.assertEqual((t1["failed"], t1["error"], t1["end"]), (True, "Exit code 2\nboom", "2026-11-10T10:00:09.000Z"))
 
+    def test_result_for_a_call_older_than_the_cursor(self):
+        self.write("s1.jsonl", assistant("a1", "m1", at(1), [tool_use("t1", "Bash", command="make")])
+                   + assistant("a2", "m2", at(4), [dict(type="text", text="still running")]))
+        self.ingest()
+        first = self.run_session()
+        self.assertEqual(first["cursor"], at(4))
+        self.write("s1.jsonl", result("r1", at(9), "t1", "ok"))
+        self.ingest()
+        t1, = [e for e in self.run_session(after=first["cursor"])["events"] if e["k"] == "tool"]
+        self.assertEqual((t1["id"], t1["key"], t1["end"]), ("t1", "a1#1", "2026-11-10T10:00:09.000Z"))
+
     def test_first_load_keeps_the_newest_events(self):
         body = "".join(prompt(f"u{i}", at(i), f"p{i}", "go") for i in range(live.FIRST_LOAD + 20))
         self.write("s1.jsonl", body)

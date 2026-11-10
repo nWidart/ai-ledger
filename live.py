@@ -252,7 +252,7 @@ def session(cur, sid, after="", text=False, now=None, prices=None):
 def earlier_uses(cur, sid, before, ids):
     """The lines before `before` that hold the tool uses ids."""
     return cur.execute(f"""SELECT {ROW_COLS} FROM {ROW_FROM} WHERE r.session_id = ? AND r.ts < ? AND r.parsed
-        AND list_bool_or(list_transform(?, x -> contains(r.json, x))) ORDER BY r.ts, r.file, r.line_no""", [sid, before, ids]).fetchall()
+        AND list_bool_or(list_transform(?, lambda x: contains(r.json, x))) ORDER BY r.ts, r.file, r.line_no""", [sid, before, ids]).fetchall()
 
 
 def public(e, text):
