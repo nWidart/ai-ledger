@@ -65,7 +65,8 @@ describe("CostPage", () => {
     await loaded();
     await userEvent.click(within(screen.getByRole("group", { name: "Source" })).getByRole("button", { name: "Codex" }));
     expect(location.hash).toBe("#range=30&source=codex");
-    await waitFor(() => expect(document.getElementById("lede")!.textContent).toBe("$2.00 estimated cost"));
+    // The whole page re-renders for the new source; that takes about a second in jsdom, longer while other files run.
+    await waitFor(() => expect(document.getElementById("lede")!.textContent).toBe("$2.00 estimated cost"), { timeout: 5000 });
     expect(fetched()).toContain("/api/usage?range=30&source=codex");
   });
 
