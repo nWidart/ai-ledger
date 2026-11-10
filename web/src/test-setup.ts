@@ -2,6 +2,7 @@
 import { cleanup } from "@testing-library/react";
 import { afterEach } from "vitest";
 import { clearApiCache } from "./useApi";
+import { useFakeSource } from "./pages/live/testing";
 
 if (!HTMLDialogElement.prototype.showModal) {
   HTMLDialogElement.prototype.showModal = function (this: HTMLDialogElement) { this.setAttribute("open", ""); };
@@ -15,6 +16,7 @@ window.matchMedia ??= (q: string) => ({
   matches: false, media: q, onchange: null, addListener() {}, removeListener() {}, addEventListener() {}, removeEventListener() {}, dispatchEvent: () => false,
 });
 globalThis.ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} };
+useFakeSource(); // jsdom has no EventSource; Live tests drive FakeSource.last
 
 afterEach(() => {
   cleanup();

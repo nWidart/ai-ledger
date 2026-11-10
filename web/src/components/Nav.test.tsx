@@ -8,6 +8,8 @@ import sessions from "../__fixtures__/sessions";
 import session from "../__fixtures__/session";
 import limits from "../__fixtures__/limits";
 import insights from "../__fixtures__/insights";
+import live from "../__fixtures__/live";
+import liveSession from "../__fixtures__/live-session";
 
 const status = { ingesting: false, last_ingest: "2026-11-05T12:00:00+00:00", last_stats: { files: 1, lines: 2, inserted: 2, seconds: 0.1 }, error: null, counts: {}, interval: 60 };
 const json = (body: unknown, ok = true) => Promise.resolve({ ok, status: ok ? 200 : 500, json: () => Promise.resolve(body) } as Response);
@@ -55,6 +57,20 @@ describe("Nav", () => {
     expect(location.hash).toBe("#project=foo&range=30&source=codex");
     expect(document.title).toBe("Insights · AI Ledger");
     expect(vi.mocked(fetch).mock.calls.some(c => String(c[0]) === "/api/insights?project=foo&range=30&source=codex")).toBe(true);
+  });
+
+  it("opens Live with the project and source from Cost, and gives Cost its range back", async () => {
+    vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/status") ? status : url.startsWith("/api/live/session") ? liveSession
+      : url.startsWith("/api/live") ? live : usage)));
+    history.replaceState(null, "", "/cost#project=foo&range=14&source=claude");
+    render(<App />);
+    await userEvent.click(screen.getByRole("link", { name: "Live" }));
+    expect(location.pathname).toBe("/live");
+    expect(document.title).toBe("Live · AI Ledger");
+    expect(vi.mocked(fetch).mock.calls.some(c => String(c[0]) === "/api/live?project=foo&source=claude")).toBe(true);
+    expect(screen.queryByRole("group", { name: "Time range" })).toBeNull();
+    await userEvent.click(screen.getByRole("link", { name: "Cost" }));
+    expect(location.hash).toBe("#project=foo&range=14&source=claude");
   });
 
   it("names the app AI Ledger", () => {

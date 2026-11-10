@@ -14,6 +14,7 @@ export const PAGES = [
   { path: "/errors", label: "Errors" },
   { path: "/limits", label: "Limits" },
   { path: "/insights", label: "Insights" },
+  { path: "/live", label: "Live" },
 ] as const;
 const POLL_MS = 60_000, INGESTING_MS = 3_000;
 

@@ -1,0 +1,85 @@
+import { useEffect, useState } from "react";
+import { viewOf } from "../../api";
+import { Filters, SOURCE_LABELS } from "../../components/Filters";
+import { ProjectName } from "../../components/ProjectDot";
+import { plural, usd, when } from "../../format";
+import { useHashState } from "../../hash";
+import { sessionHref } from "../insights/InsightsPage";
+import { AgentPanel, StateTag } from "./AgentPanel";
+import { stateNow } from "./live";
+import { Stream } from "./Stream";
+import { useLive, useNow } from "./useLive";
+import { Wall } from "./Wall";
+import "./live.css";
+
+/** Live (/live): the sessions active in the last 10 minutes, followed from the agent's side as their lines arrive. */
+export function LivePage() {
+  const [h, set] = useHashState();
+  const view = viewOf(h), mode = h.raw.view === "wall" ? "wall" : "stream";
+  const [text, setText] = useState(false); // off on every load: transcript text can hold secrets
+  const [paused, setPaused] = useState(false);
+  const [follow, setFollow] = useState(true);
+  // With none in the URL, the newest active session, kept once picked so the stream does not jump when another writes.
+  const [first, setFirst] = useState("");
+  const selected = h.session || first;
+  const { list, session, conn, held, error } = useLive(view, selected, text, paused);
+  const now = useNow(paused);
+  const sessions = list?.sessions ?? [];
+  const newest = sessions[0]?.session_id ?? "";
+  useEffect(() => { if (!h.session && !first && newest) setFirst(newest); }, [h.session, first, newest]);
+  const pick = (id: string) => { set({ session: id, view: null }); setFollow(true); };
+  const projects = [...new Set(sessions.map(s => s.project).filter((p): p is string => !!p))];
+  const status = paused ? `Paused${held ? ` · ${plural(held, "update")} held` : ""}` : conn === "reconnecting" ? "Connection lost · reconnecting…"
+    : conn === "live" ? "Updating live" : "Connecting…";
+  const shown = session && session.session_id === selected ? session : undefined;
+  return (
+    <main className="wrap pg-live">
+      <div className="top">
+        <h1>Live</h1>
+        <div className="seg" role="group" aria-label="View">
+          <button type="button" aria-pressed={mode === "stream"} onClick={() => set({ view: null })}>Stream</button>
+          <button type="button" aria-pressed={mode === "wall"} onClick={() => set({ view: "wall" })}>Wall</button>
+        </div>
+        <Filters projects={projects} automated range={false} />
+        <span className="spacer" />
+        <label className="chk"><input type="checkbox" checked={follow} onChange={e => setFollow(e.target.checked)} /> Follow</label>
+        <label className="chk"><input type="checkbox" checked={text} onChange={e => setText(e.target.checked)} /> Full text</label>
+        <button type="button" onClick={() => setPaused(p => !p)} aria-pressed={paused}>{paused ? "Resume" : "Pause"}</button>
+      </div>
+      <p className={"conn" + (conn === "reconnecting" ? " lost" : "")} role="status" aria-live="polite">{status}</p>
+      {text && <div className="banner" role="note"><b>Full text on.</b> Prompts, replies and tool output show as written, secrets included.
+        The app only listens on 127.0.0.1; turn this off before sharing your screen.</div>}
+      {error && <div className="banner" role="alert"><b>Could not load.</b> {error.message}</div>}
+      {list && !sessions.length && !h.session && <Empty newest={list.newest} />}
+      {mode === "wall" && sessions.length > 0 && <Wall sessions={sessions} now={now} pick={id => { set({ session: id, view: null }); setFollow(true); }} />}
+      {mode === "stream" && (sessions.length > 0 || h.session) && <div className="grid">
+        <section className="panel rail" aria-label="Active sessions">
+          <h2>Active · last 10 min</h2>
+          <ul>{sessions.map(s => <li key={s.session_id}>
+            <button type="button" aria-current={s.session_id === selected ? "true" : undefined} onClick={() => pick(s.session_id)}>
+              <ProjectName project={s.project} /><span className="cost">{usd(s.cost)}</span>
+              <span className="sub"><StateTag st={stateNow(s.state, now)} now={now} /> · {SOURCE_LABELS[s.source]}{s.branch ? <> · <code>{s.branch}</code></> : null}</span>
+            </button></li>)}</ul>
+          <p className="foot">{plural(sessions.filter(s => s.state.kind !== "idle").length, "session")} working · {usd(sessions.reduce((a, s) => a + (s.cost ?? 0), 0))} so far</p>
+        </section>
+        <section className="panel main" aria-label="Session">
+          {shown ? <>
+            <div className="stream-head">
+              <ProjectName project={shown.project}><b>{shown.project ?? "(unknown)"}</b></ProjectName>
+              {shown.branch && <code className="chip">{shown.branch}</code>}<span className="chip">{SOURCE_LABELS[shown.source]}</span>
+              {shown.model && <span className="chip">{shown.model}</span>}
+              <span className="spacer" /><StateTag st={stateNow(shown.state, now)} now={now} />
+            </div>
+            <Stream key={shown.session_id + String(text)} s={shown} now={now} text={text} follow={follow} setFollow={setFollow} />
+          </> : <p className="muted loading">Loading…</p>}
+        </section>
+        {shown && <AgentPanel s={shown} st={stateNow(shown.state, now)} now={now} />}
+      </div>}
+    </main>
+  );
+}
+
+function Empty({ newest }: { newest: { session_id: string; project: string | null; last_ts: string | null } | null }) {
+  return <p className="empty-live" id="lede">No session is active in this view.
+    {newest && <> The newest, <a href={sessionHref(newest.session_id)}>{newest.project ?? "a session"}</a>, last wrote {when(newest.last_ts)}.</>}</p>;
+}

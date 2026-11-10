@@ -11,6 +11,8 @@ export interface FiltersProps {
   projects: readonly (string | ProjectOption)[];
   /** Show "Include automated sessions" (Activity and Cost; Errors is never filtered). */
   automated?: boolean;
+  /** Show the time range (Live has none: it keeps the range in the URL for the other pages). */
+  range?: boolean;
   /** Page-only controls after the range (Errors: granularity, subagents, noise). */
   children?: ReactNode;
 }
@@ -24,7 +26,7 @@ export const viewName = (v: { project: string; range: number; source: Source | "
 export const agentName = (source: Source | "") => (source ? SOURCE_LABELS[source] : "agent");
 
 /** Project picker with its color dot, range and source segments and the automated toggle, all writing the URL hash. */
-export function Filters({ projects, automated = false, children }: FiltersProps) {
+export function Filters({ projects, automated = false, range = true, children }: FiltersProps) {
   const [h, set] = useHashState();
   // An unknown source reads as All; the URL drops it so a copied link says what the page shows.
   const badSource = !!h.raw.source && !h.source;
@@ -40,11 +42,11 @@ export function Filters({ projects, automated = false, children }: FiltersProps)
           {opts.map(o => <option key={o.value} value={o.value}>{o.label ?? o.value}</option>)}
         </select>
       </span>
-      <div className="seg" id="fRange" role="group" aria-label="Time range">
+      {range && <div className="seg" id="fRange" role="group" aria-label="Time range">
         {RANGES.map(r => (
           <button key={r} type="button" aria-pressed={h.range === r} onClick={() => set({ range: r })}>{rangeLabel(r)}</button>
         ))}
-      </div>
+      </div>}
       <div className="seg" id="fSource" role="group" aria-label="Source">
         {(["", ...SOURCES] as const).map(s => (
           <button key={s} type="button" aria-pressed={h.source === s} onClick={() => set({ source: s, session: null, inspect: null })}>{s ? SOURCE_LABELS[s] : "All"}</button>

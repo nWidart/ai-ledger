@@ -30,6 +30,7 @@ describe("suggest", () => {
     expect(rows("bash")[0]).toMatchObject({ kind: "tool", value: "Bash", sigil: ">" });
     expect(rows(">errors")[0]).toMatchObject({ kind: "page", value: "/errors" });
     expect(rows(">insights")[0]).toMatchObject({ kind: "page", value: "/insights", label: "Insights" });
+    expect(rows(">live")[0]).toMatchObject({ kind: "page", value: "/live", label: "Live" });
     expect(rows("#7d")[0]).toMatchObject({ kind: "range", value: "7", text: "7d" });
     expect(rows("#claude code")[0]).toMatchObject({ kind: "source", value: "claude", text: "Claude Code" });
   });
