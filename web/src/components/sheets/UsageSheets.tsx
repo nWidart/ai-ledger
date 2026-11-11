@@ -1,6 +1,6 @@
 import { useRef, type ReactNode } from "react";
 import { sessionUrl, toolUrl, usageUrl, viewOf, type SessionDetail, type ToolKind, type ToolPayload, type UsagePayload } from "../../api";
-import { useHashState } from "../../hash";
+import { closeSheets, useHashState } from "../../hash";
 import { useApi } from "../../useApi";
 import { ProjectDot } from "../ProjectDot";
 import { Sheet } from "../Sheet";
@@ -37,7 +37,7 @@ export function UsageSheets({ data, automated }: { data: UsagePayload | undefine
   const tool = useApi<ToolPayload>(tn && !inspect && !session ? toolUrl(tk, tn, view) : null);
   const sess = useApi<SessionDetail>(session ? sessionUrl(session) : null);
   const pageProject = data?.project ?? h.project;
-  const close = () => { backTo.current = null; set({ inspect: null, tool: null, mcp: null, skill: null, session: null }); };
+  const close = () => { backTo.current = null; closeSheets({ inspect: null, tool: null, mcp: null, skill: null, session: null }); };
   const toSession = (id: string, el: HTMLElement) => {
     const dlg = el.closest("dialog");
     backTo.current = { scroll: dlg?.scrollTop ?? 0, v: el.closest<HTMLElement>("[data-v]")?.dataset.v ?? id };
