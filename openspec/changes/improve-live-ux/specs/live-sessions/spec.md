@@ -23,7 +23,7 @@ The app SHALL list as active every session whose newest stored line is less than
 
 ### Requirement: Derive each session's state
 The app SHALL give each active session one state, checked in this order:
-- *ended*: the transcript shows the session closed, and no line follows the close.
+- *ended*: the transcript shows the session closed, and no timed line of the main thread follows the close.
 - *idle*: no line for 5 minutes.
 - *running a tool*: a tool call has no result. The state names the tool and when it started.
 - *thinking*: the newest line is a human prompt or a tool result, or, for Codex, the newest turn has started and not completed.
@@ -47,20 +47,12 @@ The app SHALL report *ended* only when the transcript gives evidence of the clos
 - **WHEN** a session's newest line is 7 minutes old, even with a pending tool call
 - **THEN** the state is idle
 
-#### Scenario: Closed session
-- **WHEN** a session's transcript ends with the line that shows the session closed
-- **THEN** the state is ended, with the time of that line, and not your turn or idle
-
-#### Scenario: Closed session resumed
-- **WHEN** a line follows the line that shows the session closed
-- **THEN** the state comes from the other rules, as for any session
-
 #### Scenario: No evidence of a close
 - **WHEN** a session's last line is an assistant reply and nothing in the transcript shows the session closed
 - **THEN** the state is your turn, and idle after 5 minutes
 
 ### Requirement: Flag a likely approval wait
-When a shell tool call (Claude Code `Bash`, Codex `exec` or `exec_command`) has had no result for more than 30 seconds, the app SHALL report the state as *likely waiting for approval*, with how long the call has been pending. A newer pending call, in the main thread or a subagent, SHALL NOT hide it; with several such calls, the oldest SHALL be reported. A shell call that runs in the background, or that carries an explicit timeout above 120 seconds, SHALL NOT count: it reads as *running a tool* however long it has been pending. Each tool event and each running-a-tool state SHALL say whether its call is such a call, so the page applies the same rule as the app.
+When a shell tool call (Claude Code `Bash`, Codex `exec` or `exec_command`) has had no result for more than 30 seconds, the app SHALL report the state as *likely waiting for approval*, with how long the call has been pending. A newer pending call, in the main thread or a subagent, SHALL NOT hide it; with several such calls, the oldest SHALL be reported. A shell call that carries an explicit timeout above 120 seconds is a long call and SHALL NOT count: it reads as *running a tool* however long it has been pending. A background call (`run_in_background`) is not a long call: it returns within seconds, so one still pending after 30 seconds reads as *likely waiting for approval*. Codex's shell tools carry no timeout, so no Codex call is a long call. Each tool event and each running-a-tool state SHALL say whether its call is a long call, so the page applies the same rule as the app.
 
 #### Scenario: Slow shell call
 - **WHEN** a `Bash` call started 45 seconds ago and has no result
@@ -76,19 +68,23 @@ When a shell tool call (Claude Code `Bash`, Codex `exec` or `exec_command`) has 
 
 #### Scenario: Background shell call
 - **WHEN** a `Bash` call with `run_in_background` started 45 seconds ago and has no result
-- **THEN** the state is running a tool, naming `Bash`, and the call is marked as such
+- **THEN** the state is likely waiting for approval, naming `Bash`, and the call is not marked as a long call
 
 #### Scenario: Long explicit timeout
 - **WHEN** a `Bash` call with a timeout of 300 seconds started 45 seconds ago and has no result
-- **THEN** the state is running a tool
+- **THEN** the state is running a tool, naming `Bash`, and the call is marked as a long call
 
 #### Scenario: Short explicit timeout
-- **WHEN** a `Bash` call with a timeout of 60 seconds started 45 seconds ago and has no result
+- **WHEN** a `Bash` call with a timeout of 60 seconds, or of exactly 120 seconds, started 45 seconds ago and has no result
 - **THEN** the state is likely waiting for approval
 
-#### Scenario: Background call hides no wait
-- **WHEN** a `Bash` call with `run_in_background` started 90 seconds ago, and another `Bash` call without one started 45 seconds ago and has no result
+#### Scenario: Long call hides no wait
+- **WHEN** a `Bash` call with a timeout of 600 seconds started 50 seconds ago, and another `Bash` call with no timeout started 45 seconds ago and has no result
 - **THEN** the state is likely waiting for approval, naming the second call, pending 45 seconds
+
+#### Scenario: Codex shell call
+- **WHEN** a Codex `exec` call started 45 seconds ago and has no result
+- **THEN** the state is likely waiting for approval, and the call is not marked as a long call
 
 ### Requirement: Mark inferred states
 Every payload that carries a state SHALL say whether it is inferred. *likely waiting for approval* is always inferred: no transcript records a permission prompt. *thinking* is inferred for Claude Code, which records no request in flight. It is not inferred for Codex, which records when a turn starts and completes. *running a tool*, *your turn*, *idle* and *ended* are not inferred.
@@ -110,7 +106,7 @@ Every payload that carries a state SHALL say whether it is inferred. *likely wai
 - **THEN** the payload does not mark the state as inferred
 
 ### Requirement: Stream one session's events
-For one session, the app SHALL return its events in transcript order: prompts, assistant replies, tool calls and compactions. Each tool call SHALL carry its tool, input summary, the description the agent gave a shell call when it gave one, start time, end time or none, and failure with its error. Each tool call SHALL also say whether it runs detached (in the background, or with an explicit timeout above 120 seconds) and whether it only reads (Claude Code `Read`, `Grep` and `Glob`; for Codex, a shell call whose every command only reads or searches). A request for events after a given point SHALL return the later events and SHALL read again the minute before that point, as transcript lines can be written seconds after their timestamp; each event keeps one key, so the page holds one copy of it.
+For one session, the app SHALL return its events in transcript order: prompts, assistant replies, tool calls and compactions. Each tool call SHALL carry its tool, input summary, the description the agent gave a shell call when it gave one, start time, end time or none, and failure with its error. Each tool call SHALL also say whether it is a long call (an explicit timeout above 120 seconds) and whether it only reads. A request for events after a given point SHALL return the later events and SHALL read again the minute before that point, as transcript lines can be written seconds after their timestamp; each event keeps one key, so the page holds one copy of it.
 
 #### Scenario: First load
 - **WHEN** the page asks for a session's events with no starting point
@@ -136,16 +132,12 @@ For one session, the app SHALL return its events in transcript order: prompts, a
 - **WHEN** a `Bash` call carries the description "Run the Python tests"
 - **THEN** its event carries that description beside its command
 
-#### Scenario: Read-only call
-- **WHEN** a session makes a `Grep` call and a `Bash` call that runs `git commit`
-- **THEN** the `Grep` event is marked as read-only and the `Bash` event is not
-
-#### Scenario: Codex read-only call
-- **WHEN** a Codex `exec_command` runs `rg TODO src` and another runs `rg TODO src && rm notes.md`
-- **THEN** the first is marked as read-only and the second is not
+#### Scenario: Long call
+- **WHEN** a session makes a `Bash` call with a timeout of 300 seconds, one with a timeout of 5 seconds and one with `run_in_background`
+- **THEN** only the first event is marked as a long call
 
 ### Requirement: Group subagent work
-Each event of a subagent SHALL name that subagent, so the page can group them with the subagent's start time, end time when it has ended, and number of tool calls. The tool call that started a subagent SHALL name it: from the call's result when the subagent ends, and while it runs from the start record Claude Code writes beside its transcript (`agent-<id>.meta.json`). The session payload SHALL also give each subagent's cost and model, so the page can show them in the subagent's group.
+Each event of a subagent SHALL name that subagent, so the page can group them with the subagent's start time, end time when it has ended, and number of tool calls. The tool call that started a subagent SHALL name it: from the call's result when the subagent ends, and while it runs from the start record Claude Code writes beside its transcript (`agent-<id>.meta.json`). The session payload SHALL also give, for each subagent that has made a request, the cost of its priced requests and the model of its newest one. A request SHALL count once, for the subagent whose transcript holds it.
 
 #### Scenario: Subagent with three tool calls
 - **WHEN** a Claude Code session starts an Explore subagent that makes three tool calls
@@ -159,6 +151,62 @@ Each event of a subagent SHALL name that subagent, so the page can group them wi
 - **WHEN** a subagent made two requests on `claude-haiku-5-5` that cost $0.02 and $0.03
 - **THEN** the session payload gives that subagent a cost of $0.05 and the model `claude-haiku-5-5`
 
-#### Scenario: Subagent with no priced requests
-- **WHEN** a subagent has written no assistant line yet
-- **THEN** the payload gives it no cost and no model
+#### Scenario: Subagent with no request yet
+- **WHEN** a subagent has made no request yet
+- **THEN** the payload holds no cost and no model for it
+
+#### Scenario: Subagent on a model with no price
+- **WHEN** a subagent's only request is on a model the price list does not hold
+- **THEN** the payload gives it that model and no cost
+
+#### Scenario: Requests of two subagents at the same time
+- **WHEN** two subagents of one session each make a request stamped with the same time
+- **THEN** each request counts in the cost of the subagent that made it, and in no other
+
+#### Scenario: Codex subagent thread
+- **WHEN** a Codex session's subagent thread makes a request that costs $2.00
+- **THEN** the payload gives that thread a cost of $2.00 and the model of the request's turn
+
+## ADDED Requirements
+
+### Requirement: Report a closed session as ended
+The app SHALL take as evidence of a close the `cost-state` line Claude Code writes as it exits, when it comes after the last timed line of the session's main transcript file. A subagent's lines SHALL NOT reopen a closed session. Codex writes no line that marks a close, so a Codex session SHALL never be reported as *ended*. An *ended* state SHALL carry the time of the session's newest timed line, as the close line carries no time.
+
+#### Scenario: Closed session
+- **WHEN** a Claude Code session's main transcript ends with a `cost-state` line
+- **THEN** the state is ended, with the time of the session's newest timed line, and not your turn or idle
+
+#### Scenario: Closed session resumed
+- **WHEN** a timed line follows the `cost-state` line in the session's main transcript
+- **THEN** the state comes from the other rules, as for any session
+
+#### Scenario: Subagent writes after the close
+- **WHEN** a subagent's transcript gains a line after the session's `cost-state` line
+- **THEN** the state stays ended
+
+#### Scenario: Codex session
+- **WHEN** a Codex session's last turn has completed and its rollout is not written to again
+- **THEN** the state is your turn, then idle after 5 minutes, and never ended
+
+### Requirement: Mark tool calls that only read
+The app SHALL mark a tool call as read-only when its tool is `Read`, `Grep` or `Glob`, or when it is a shell call (Claude Code `Bash`, Codex `exec_command`) whose every command reads, searches or prints (`rg`, `grep`, `cat`, `ls`, `head`, `tail`, `wc`, `nl`, `cd`, `pwd`, `echo`, `sed`, `sort`, `find`), carries no flag that makes it write, and redirects nothing into a file. A call that cannot be read as a command line SHALL NOT be marked: Codex's `exec`, and a command cut short.
+
+#### Scenario: Read-only call
+- **WHEN** a session makes a `Grep` call and a `Bash` call that runs `git commit`
+- **THEN** the `Grep` event is marked as read-only and the `Bash` event is not
+
+#### Scenario: Codex read-only call
+- **WHEN** a Codex `exec_command` runs `rg TODO src` and another runs `rg TODO src && rm notes.md`
+- **THEN** the first is marked as read-only and the second is not
+
+#### Scenario: Read-only shell call of several commands
+- **WHEN** a `Bash` call runs `cd web && rg -n 'a|b' src | head -5`
+- **THEN** its event is marked as read-only
+
+#### Scenario: Flag or redirection that writes
+- **WHEN** `Bash` calls run `sed -i s/a/b/ x.py`, `find . -name '*.pyc' -delete` and `cat a > b`
+- **THEN** none is marked as read-only
+
+#### Scenario: Codex script
+- **WHEN** a Codex `exec` call runs a script whose text is `rg TODO src`
+- **THEN** its event is not marked as read-only

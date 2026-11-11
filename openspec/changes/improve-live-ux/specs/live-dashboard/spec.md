@@ -88,7 +88,7 @@ Selecting a tool row SHALL open its detail in place: the input summary, the star
 - **THEN** the detail shows the description and, apart from it, the command
 
 ### Requirement: Fold subagent lanes
-Subagent work SHALL appear as a lane inside the stream. The lane header SHALL show the subagent's name, its description, its tool-call count, its duration, its cost, its model, its error count when above zero, and whether it is still running. Selecting the header SHALL fold or unfold the lane. A finished lane SHALL be folded by default. A running lane SHALL show its last 5 rows and a control to show all of them, and to go back to the last 5. A fold or an expansion the user chose SHALL be kept while the page is open. Updates SHALL keep every lane with all the rows the page holds for it.
+Subagent work SHALL appear as a lane inside the stream. The lane header SHALL show the subagent's name, its description, its tool-call count, its duration, its cost and its model when the app gives them, its error count when above zero, and whether it is still running. Selecting the header SHALL fold or unfold the lane. A finished lane SHALL be folded by default. A running lane with more than 5 rows SHALL show its last 5 and a control to show all of them, and to go back to the last 5. A fold or an expansion the user chose SHALL be kept while the page is open. Updates SHALL keep every lane with all the rows the page holds for it.
 
 #### Scenario: Fold a lane
 - **WHEN** the user selects the header of an Explore lane with three tool calls
@@ -113,6 +113,10 @@ Subagent work SHALL appear as a lane inside the stream. The lane header SHALL sh
 #### Scenario: Lane header figures
 - **WHEN** a lane made 8 tool calls, 2 of them failed, on `claude-haiku-5-5` for $0.05
 - **THEN** its header shows 8 tools, 2 errors, `claude-haiku-5-5` and $0.05
+
+#### Scenario: Lane with no cost
+- **WHEN** the app gives no cost and no model for a lane
+- **THEN** its header shows neither, and still shows its tool count and duration
 
 #### Scenario: Lane the user opened finishes
 - **WHEN** the user unfolds a running lane and the lane then finishes
@@ -173,7 +177,7 @@ When the update connection drops, the page SHALL say that updates are paused and
 ## ADDED Requirements
 
 ### Requirement: Filter the stream
-The stream SHALL offer filters that change what it draws and nothing it holds. Selecting the Errors count SHALL filter the stream to failed tool rows, and selecting it again SHALL clear the filter. A Main thread only toggle SHALL hide every lane. A Hide read-only toggle SHALL hide tool rows that only read: Claude Code's `Read`, `Grep` and `Glob`, and Codex's counterparts.
+The stream SHALL offer filters, in a bar under its head, that change what it draws and nothing it holds. Selecting the Errors count, there or in the agent panel, SHALL filter the stream to failed tool rows, and selecting it again SHALL clear the filter. A Main thread only toggle SHALL hide every lane. A Hide read-only toggle SHALL hide the tool rows the app marks as read-only: `Read`, `Grep`, `Glob`, and shell calls whose every command only reads or searches.
 
 #### Scenario: Filter to failed rows
 - **WHEN** the user selects the Errors count while the stream holds two failed rows among forty
@@ -186,6 +190,14 @@ The stream SHALL offer filters that change what it draws and nothing it holds. S
 #### Scenario: Hide read-only rows
 - **WHEN** the user turns on Hide read-only with `Read`, `Grep`, `Glob` and `Edit` rows in the stream
 - **THEN** only the `Edit` row shows among them
+
+#### Scenario: Hide read-only shell rows
+- **WHEN** the user turns on Hide read-only with a shell row that runs `rg TODO src` and one that runs `git commit`
+- **THEN** only the `git commit` row shows among them
+
+#### Scenario: Errors count pressed
+- **WHEN** the user selects the Errors count in the agent panel
+- **THEN** the stream shows failed rows only, and the count shows as pressed in the agent panel and in the stream's bar
 
 #### Scenario: Filters do not change figures
 - **WHEN** the user turns on any filter
