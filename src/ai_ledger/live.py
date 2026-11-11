@@ -6,10 +6,11 @@ pages. Prompt, reply and tool-output text leave this module only when the caller
 made from the first prompt, a subagent's prompt and tool inputs and descriptions longer than INPUT_CAP."""
 import json
 import re
+import shlex
 from datetime import datetime, timedelta, timezone
 
 from . import limits, metrics, store
-from .categorize import SHELL_TOOLS, SHELL_WRAP, commands
+from .categorize import SHELL_TOOLS
 
 ACTIVE = timedelta(minutes=10)  # a session with a line this recent is listed
 IDLE = timedelta(minutes=5)  # no line for this long: idle, whatever else the lines say
@@ -31,8 +32,13 @@ QUIET_TOOLS = {"Read", "Grep", "Glob"}  # tools that only read: the page can hid
 QUIET_COMMANDS = dict.fromkeys(("rg", "grep", "cat", "ls", "head", "tail", "wc", "nl", "cd", "pwd", "echo")) | {
     "sed": re.compile(r"-[A-Za-z]*i|--in-place"), "sort": re.compile(r"-[A-Za-z]*o|--output"),
     "find": re.compile(r"-(delete|exec|execdir|ok|okdir|fprint0?|fprintf|fls)$")}
-QUOTED = re.compile(r"""'[^']*'|"[^"$`\\]*\"""")  # a quoted word that runs nothing: its |, ; and > are text
-WRITES = re.compile(r">(?!&\d|\s*/dev/null)")  # a redirection into a file
+# What quiet reads of a shell line: words, quotes, SEPARATORS and the redirections of NO_WRITE. A line with more is not
+# quiet. UNREAD is what shlex reads otherwise than the shell does, or what changes the words after they are read: an
+# escape, a substitution or an expansion, and a quoted word that reads as a separator.
+UNREAD = re.compile(r"""[\\`$]|(['"])[;&|]+\1""")
+SEPARATORS = {";", "&&", "||", "|"}
+NO_WRITE = {">": {"/dev/null"}, ">&": {"1", "2"}}  # a redirection that writes no file, by the word after it
+SHELLS = {"bash", "sh", "zsh"}  # `bash -lc '…'` runs its last word as a line of its own
 
 
 def now_utc():
@@ -70,8 +76,8 @@ def lane_of(path, source):
 
 def quiet(tool, summary):
     """Whether a tool call only reads: a tool of QUIET_TOOLS, or a shell call whose every simple command is one of
-    QUIET_COMMANDS with no flag that writes, and that redirects nothing into a file. A call that cannot be read as a
-    command line is not quiet: Codex's exec, which runs a script, and a summary Codex cut short."""
+    QUIET_COMMANDS with no flag that writes. A call that cannot be read for certain is not quiet: a line simple_commands
+    refuses, Codex's exec, which runs a script, and a summary Codex cut short."""
     if tool in QUIET_TOOLS:
         return True
     if tool not in SHELL_TOOLS:
@@ -84,12 +90,48 @@ def quiet(tool, summary):
             return False
         if not isinstance(cmd, str):
             return False
-    while m := SHELL_WRAP.match(cmd):
-        cmd = m.group(2)
-    cmd = QUOTED.sub("_", cmd)
-    simple = list(commands(cmd))
-    writes = lambda words: QUIET_COMMANDS[words[0]] and any(QUIET_COMMANDS[words[0]].match(w) for w in words[1:])
-    return bool(simple) and not WRITES.search(cmd) and all(w[0] in QUIET_COMMANDS and not writes(w) for w in simple)
+    return reads_only(cmd)
+
+
+def reads_only(line):
+    """Whether every simple command of a shell line is one of QUIET_COMMANDS, by its exact name, with no flag that
+    writes. A word with a brace list counts as such a flag: the shell may expand it into one."""
+    simple = simple_commands(line)
+    if not simple:
+        return False
+    if len(simple) == 1 and len(simple[0]) == 3 and simple[0][0] in SHELLS and simple[0][1] in ("-c", "-lc"):
+        return reads_only(simple[0][2])
+    braces = lambda w: "{" in w and ("," in w or ".." in w)
+    writes = lambda words: QUIET_COMMANDS[words[0]] and any(QUIET_COMMANDS[words[0]].match(w) or braces(w) for w in words[1:])
+    return all(w[0] in QUIET_COMMANDS and not writes(w) for w in simple)
+
+
+def simple_commands(line):
+    """The words of each simple command of a shell line, or None for a line that holds more than this reads exactly:
+    UNREAD, a quote with no pair, or an operator that is no separator and no redirection of NO_WRITE (a lone &, a
+    redirection into a file, a heredoc, a subshell). It refuses instead of parsing harder. A comment's words read as
+    words of its command: nothing in it runs, and it ends with its line."""
+    if UNREAD.search(line):
+        return None
+    out = [[]]
+    for text in line.split("\n"):  # no quote spans lines here: one that does has no pair in its line
+        lex = shlex.shlex(text, posix=True, punctuation_chars=True)
+        lex.whitespace, lex.whitespace_split, lex.commenters = " \t", True, ""
+        try:
+            for t in lex:
+                if t in SEPARATORS:
+                    out.append([])
+                elif t in NO_WRITE:
+                    if next(lex, None) not in NO_WRITE[t]:
+                        return None
+                elif t and not t.strip(lex.punctuation_chars):
+                    return None
+                else:
+                    out[-1].append(t)
+        except ValueError:
+            return None
+        out.append([])
+    return [words for words in out if words]
 
 
 def assemble(rows):

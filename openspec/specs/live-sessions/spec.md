@@ -283,7 +283,7 @@ The app SHALL take as evidence of a close the `cost-state` line Claude Code writ
 - **THEN** the state is your turn, then idle after 5 minutes, and never ended
 
 ### Requirement: Mark tool calls that only read
-The app SHALL mark a tool call as read-only when its tool is `Read`, `Grep` or `Glob`, or when it is a shell call (Claude Code `Bash`, Codex `exec_command`) whose every command reads, searches or prints (`rg`, `grep`, `cat`, `ls`, `head`, `tail`, `wc`, `nl`, `cd`, `pwd`, `echo`, `sed`, `sort`, `find`), carries no flag that makes it write, and redirects nothing into a file. A call that cannot be read as a command line SHALL NOT be marked: Codex's `exec`, and a command cut short.
+The app SHALL mark a tool call as read-only when its tool is `Read`, `Grep` or `Glob`, or when it is a shell call (Claude Code `Bash`, Codex `exec_command`) whose every command is one of `rg`, `grep`, `cat`, `ls`, `head`, `tail`, `wc`, `nl`, `cd`, `pwd`, `echo`, `sed`, `sort` and `find`, named without a path, and carries no flag that makes it write. A script given to `bash`, `sh` or `zsh` with `-c` or `-lc` SHALL be read as the command line.
 
 #### Scenario: Read-only call
 - **WHEN** a session makes a `Grep` call and a `Bash` call that runs `git commit`
@@ -297,8 +297,31 @@ The app SHALL mark a tool call as read-only when its tool is `Read`, `Grep` or `
 - **WHEN** a `Bash` call runs `cd web && rg -n 'a|b' src | head -5`
 - **THEN** its event is marked as read-only
 
-#### Scenario: Flag or redirection that writes
-- **WHEN** `Bash` calls run `sed -i s/a/b/ x.py`, `find . -name '*.pyc' -delete` and `cat a > b`
+#### Scenario: Flag that writes
+- **WHEN** `Bash` calls run `sed -i s/a/b/ x.py`, `find . -name '*.pyc' -delete` and `sort -o x x`
+- **THEN** none is marked as read-only
+
+### Requirement: Mark no shell call that cannot be read for certain
+The app SHALL mark a shell call as read-only only when it reads the whole command line for certain. It SHALL read words, quotes, the separators `;`, `&&`, `||`, `|` and a new line, and a redirection to `/dev/null` or to file descriptor 1 or 2. It SHALL NOT mark a line with anything else: a lone `&`, another redirection, a heredoc, parentheses, a backslash, a backtick, a `$`, an unpaired quote, a quoted separator, or a brace list on `sed`, `sort` or `find`; nor Codex's `exec`, nor a cut command.
+
+#### Scenario: Redirection into a file
+- **WHEN** `Bash` calls run `cat a > b`, `ls >> log` and `cat a 2>err.log`
+- **THEN** none is marked as read-only
+
+#### Scenario: Redirection that writes no file
+- **WHEN** a `Bash` call runs `ls -la 2>/dev/null`
+- **THEN** its event is marked as read-only
+
+#### Scenario: Background command
+- **WHEN** a `Bash` call runs `cat notes.txt & rm -rf build`
+- **THEN** its event is not marked as read-only
+
+#### Scenario: Quotes that hide a command
+- **WHEN** a `Bash` call runs `echo "Don't touch $HOME"; rm -rf dist; echo "that's all"`
+- **THEN** its event is not marked as read-only
+
+#### Scenario: Harmless line with a construct that is not read
+- **WHEN** `Bash` calls run `cat "$(make list)"`, `(cat a.py)` and `rg 'foo\.bar' src`
 - **THEN** none is marked as read-only
 
 #### Scenario: Codex script

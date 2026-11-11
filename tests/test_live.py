@@ -127,12 +127,23 @@ class QuietTest(unittest.TestCase):
 
     def test_shell_call_whose_every_command_reads(self):
         self.assertEqual(self.bash("rg TODO src", "cd web && rg -n 'a|b' src | head -5", "cat a.py; echo ---; sed -n '1,9p' b.py | nl",
-                                   "ls -la 2>/dev/null", "find . -name \"*.py\" | sort | wc -l", "bash -lc 'grep -rn \"x > y\" src'"), [True] * 6)
+                                   "ls -la 2>/dev/null", "find . -name \"*.py\" | sort | wc -l", "bash -lc 'grep -rn \"x > y\" src'",
+                                   "rg -n TODO src 2>&1 | head -5", "ls web &&\ncat a.py\n"), [True] * 8)
 
     def test_shell_call_that_writes_or_runs_more(self):
         self.assertEqual(self.bash("git commit -m wip", "rg TODO src && rm notes.md", "cat a > b", "ls >> log", "sed -i s/a/b/ x.py",
                                    "sed -ni.bak 1p x.py", "find . -name '*.pyc' -delete", "find . -exec rm {} +", "sort -o x x",
                                    "cat $(make list)", "cat \"$(make list)\"", "rg x | xargs rm", ""), [False] * 13)
+        self.assertEqual(self.bash("cat a 2>err.log", "rg x | tee out.txt", "cat `make list`", "(rm -rf build)", "cat <(rm -rf build)",
+                                   "env FOO=1 rm notes.md", "FOO=1 rm notes.md", "sed --in-place s/a/b/ x.py", "sort --output=x x",
+                                   "find . -execdir rm {} +", "find . -ok rm {} +", "find . -fprint out.txt", "ls\nrm -rf build",
+                                   "bash -lc 'rm -rf build'", "./cat a.py", "ls >&log"), [False] * 16)
+
+    def test_shell_line_it_cannot_read_for_certain(self):  # each hides its rm or its write from a rule that reads less exactly
+        self.assertEqual(self.bash("cat notes.txt & rm -rf build", "echo \"Don't touch $HOME\"; rm -rf dist; echo \"that's all\"",
+                                   "cat <<EOF\nls it's\nEOF\nrm -rf dist; echo 'ok'", "echo it\\'s; rm -rf dist; echo it\\'s",
+                                   "ls # it's\nrm -rf build # it's", "sed s/a/b/ ';' cat -i x.py", "sed s/a/b/ \\; cat -i x.py",
+                                   "sed -{n,i} s/a/b/ x.py", "cat 'a.py"), [False] * 9)
 
     def test_codex_shell_call(self):
         call = lambda i, cmd: codex_line(i, i, "response_item", type="function_call", name="exec_command", call_id=f"c{i}",
