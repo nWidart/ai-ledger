@@ -1,7 +1,8 @@
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DailyWorkRow, UsagePayload } from "../../api";
 import usage from "../../__fixtures__/usage";
+import { color, setOrder } from "../../colors";
 import { failRate, workBuckets, workKinds, workStack, type WorkMetric } from "./work";
 import { WorkPanel } from "./WorkChart";
 import { WorkHours } from "./WorkHours";
@@ -10,11 +11,11 @@ const row = (day: string, o: Partial<DailyWorkRow> = {}): DailyWorkRow => ({ day
 type WP = UsagePayload["work_projects"][number];
 const wp = (day: string, project: string | null, o: Partial<WP> = {}): WP => ({ day, project, sessions: 1, prompts: 1, commits: 0, calls: 0, failed_calls: 0, ...o });
 
-// Seven projects over two days: a gets the most commits, g the fewest; the bars add up their rows.
+// Seven projects over two days: a gets the most commits, g the most prompts; the bars add up their rows.
 const projects = ["a", "b", "c", "d", "e", "f", "g"];
 const split: WP[] = ["2026-11-04", "2026-11-05"].flatMap((day, j) => projects.map((p, i) => wp(day, p, { commits: 7 - i + j, prompts: i + 1 })));
 const sum = (day: string, k: WorkMetric) => split.filter(r => r.day === day).reduce((s, r) => s + r[k], 0);
-const two = ["2026-11-04", "2026-11-05"].map(day => row(day, { sessions: 7, commits: sum(day, "commits"), prompts: sum(day, "prompts") }));
+const two = ["2026-11-04", "2026-11-05"].map(day => row(day, { sessions: 7, commits: sum(day, "commits"), prompts: sum(day, "prompts"), calls: 10, failed_calls: 1 }));
 const many: UsagePayload = { ...usage, work: two, daily_work: two, work_projects: split };
 
 // Ten weeks to Wednesday Nov 11, work in two of them.
@@ -55,33 +56,78 @@ describe("work buckets", () => {
 });
 
 describe("chart by project", () => {
-  it("stacks the top 5 by the metric plus Other, and each stack adds up to its bar", () => {
+  // a, c, e and g own a hue; b, d and f are grey, so they fold into Other.
+  beforeEach(() => setOrder(["a", "c", "e", "g"]));
+  afterEach(() => setOrder([]));
+
+  it("names only the projects with a hue, by the metric, and folds the rest into Other", () => {
+    const rows = workBuckets(many), ks = workKinds(many, rows, "commits");
+    expect(ks.map(k => k.label)).toEqual(["a", "c", "e", "g", "Other (3)"]);
+    expect(ks.map(k => k.c)).toEqual(["a", "c", "e", "g"].map(color).concat(color("")));
+    expect(new Set(ks.map(k => k.c)).size).toBe(5);
+    expect(workKinds(many, rows, "prompts").map(k => k.label)).toEqual(["g", "e", "c", "a", "Other (3)"]);
+  });
+
+  it("adds each stack up to its bar, Other holding the rest", () => {
     const rows = workBuckets(many);
     for (const metric of ["commits", "prompts", "sessions"] as const) {
       const ks = workKinds(many, rows, metric), st = workStack(rows, many.work_projects, ks, metric);
-      expect(ks).toHaveLength(6);
-      expect(ks.at(-1)).toMatchObject({ k: "p:", label: "Other (2)" });
       rows.forEach((r, i) => expect(Object.values(st[i]!).reduce((s, v) => s + v, 0)).toBe(r[metric]));
     }
-    expect(workKinds(many, rows, "commits").slice(0, 5).map(k => k.project)).toEqual(["a", "b", "c", "d", "e"]);
-    expect(workKinds(many, rows, "prompts").slice(0, 5).map(k => k.project)).toEqual(["g", "f", "e", "d", "c"]);
-    // Other holds f and g: 2 + 1 commits on the first day.
-    expect(workStack(rows, many.work_projects, workKinds(many, rows, "commits"), "commits")[0]!["p:"]).toBe(3);
+    // Other holds b, d and f: 6 + 4 + 2 commits on the first day.
+    expect(workStack(rows, many.work_projects, workKinds(many, rows, "commits"), "commits")[0]!["p:"]).toBe(12);
   });
 
-  it("draws plain bars for one project", () => {
+  it("puts a project with no name in Other without taking a named place", () => {
+    const anon: UsagePayload = { ...many, work_projects: [...split, wp("2026-11-04", null, { commits: 50 })],
+      work: two.map((r, i) => (i ? r : { ...r, commits: r.commits + 50 })) };
+    const rows = workBuckets(anon), ks = workKinds(anon, rows, "commits");
+    expect(ks.map(k => k.label)).toEqual(["a", "c", "e", "g", "Other (4)"]);
+    expect(workStack(rows, anon.work_projects, ks, "commits")[0]!["p:"]).toBe(62);
+  });
+
+  it("draws plain bars for one project, or when no project has a hue", () => {
     const rows = workBuckets(many);
     expect(workKinds({ ...many, project: "a" }, rows, "commits")).toEqual([]);
     expect(workKinds(weekly, workBuckets(weekly), "commits")).toEqual([]);
+    setOrder([]);
+    expect(workKinds(many, rows, "commits")).toEqual([]);
+    panel(many);
+    expect([...document.querySelectorAll("#work .legend .key")].map(k => k.textContent)).toEqual(["Commits", "Errors per 100 calls (right axis)"]);
   });
 
   it("names the stacked projects in the legend", () => {
     panel(many);
-    const legend = document.querySelector("#work .legend")!;
-    expect([...legend.querySelectorAll(".key")].map(k => k.textContent)).toEqual(["a", "b", "c", "d", "e", "Other (2)", "Errors per 100 calls (right axis)"]);
+    expect([...document.querySelectorAll("#work .legend .key")].map(k => k.textContent)).toEqual(["a", "c", "e", "g", "Other (3)", "Errors per 100 calls (right axis)"]);
     cleanup();
     panel({ ...many, project: "a" });
     expect([...document.querySelectorAll("#work .legend .key")].map(k => k.textContent)).toEqual(["Commits", "Errors per 100 calls (right axis)"]);
+  });
+
+  it("stacks the segments from the baseline, in one order, scaled to fit", () => {
+    panel(many);
+    const rows = workBuckets(many), ks = workKinds(many, rows, "commits"), st = workStack(rows, many.work_projects, ks, "commits");
+    const bars = [...document.querySelectorAll("#work .bar-seg")];
+    expect(bars).toHaveLength(2);
+    const base = 240 - 26, plotTop = 22; // the plot's bottom and top edges in the viewBox
+    let scale: number | undefined;
+    bars.forEach((bar, i) => {
+      const segs = [...bar.children].map(seg => {
+        const dd = seg.getAttribute("d");
+        if (!dd) return { fill: seg.getAttribute("fill"), top: +seg.getAttribute("y")!, bottom: +seg.getAttribute("y")! + +seg.getAttribute("height")! };
+        const m = /^M[\d.]+,([\d.]+) V([\d.]+)/.exec(dd)!;
+        return { fill: seg.getAttribute("fill"), top: +m[2]! - 3, bottom: +m[1]! };
+      });
+      // Bottom first, in the legend's order on every bar.
+      expect(segs.map(s => s.fill)).toEqual(ks.map(k => k.c));
+      expect(segs[0]!.bottom).toBeCloseTo(base);
+      segs.slice(1).forEach((s, j) => expect(s.bottom).toBeCloseTo(segs[j]!.top - 2)); // a 2px gap between segments
+      const k = (base - segs.at(-1)!.top) / rows[i]!.commits;
+      scale ??= k;
+      expect(k).toBeCloseTo(scale);
+      segs.forEach((s, j) => expect(s.bottom - s.top + (j ? 2 : 0)).toBeCloseTo(st[i]![ks[j]!.k]! * scale!));
+      expect(segs.at(-1)!.top).toBeGreaterThanOrEqual(plotTop);
+    });
   });
 });
 

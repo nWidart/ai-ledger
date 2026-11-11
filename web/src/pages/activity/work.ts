@@ -39,13 +39,13 @@ export function workBuckets(d: Pick<UsagePayload, "start" | "end" | "work" | "wo
 export const failRate = (r: DailyWorkRow): number | null => (r.calls ? 100 * r.failed_calls / r.calls : null);
 
 type WorkProjectRow = UsagePayload["work_projects"][number];
-/** The chart's stack for a metric: the 5 projects with the most of it over the bars, then Other. None (plain bars) when
- *  the view has a single project. */
+/** The chart's stack for a metric, as Cost stacks: the projects that own a hue, most of it over the bars first, then Other.
+ *  None (plain bars) when the view has a single project or none of its projects has a hue. */
 export function workKinds(d: Pick<UsagePayload, "project" | "work_projects">, rows: readonly DailyWorkRow[], metric: WorkMetric): Kind[] {
   if (d.project) return [];
   const on = new Set(rows.map(r => r.day)), by = new Map<string | null, number>();
   for (const r of d.work_projects) if (on.has(r.day)) by.set(r.project, (by.get(r.project) ?? 0) + r[metric]);
-  const ks = projectKinds([...by].map(([project, v]) => ({ project, v })), (_, i) => i < 5);
+  const ks = projectKinds([...by].map(([project, v]) => ({ project, v })));
   return ks.length > 1 ? ks : [];
 }
 /** Each bar's value per stack key: a project's own, Other the rest of the bar (never below zero), so the segments add up

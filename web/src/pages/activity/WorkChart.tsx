@@ -207,7 +207,7 @@ function WorkBars({ rows, week, kinds, stack, metric, onMetric, onDay }: WorkBar
     <section className="panel sect work" id="work" aria-labelledby="workTitle">
       <div className="chart-head">
         <div><h2 id="workTitle">Work per {unit}</h2>
-          <div className="hint">{M.label}{kinds.length ? " by project (the five with the most, the rest in Other)" : ""} per {week ? "week, from Monday" : "day"}, with
+          <div className="hint">{M.label}{kinds.length ? " by project (projects with a color of their own, the rest in Other)" : ""} per {week ? "week, from Monday" : "day"}, with
             errors per 100 tool calls against the right-hand axis. {week
               ? "Choose a shorter range to pick a day."
               : "Select a day to list its sessions; with the keyboard, focus the chart, use the arrow keys and press Enter."}</div></div>
