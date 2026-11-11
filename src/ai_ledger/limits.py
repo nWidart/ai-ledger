@@ -10,7 +10,7 @@ import subprocess
 import time
 import urllib.error
 import urllib.request
-from bisect import bisect_left
+from bisect import bisect_left, bisect_right
 from datetime import date, datetime, timedelta, timezone
 from typing import Callable, NamedTuple
 
@@ -18,7 +18,8 @@ from . import metrics, store
 
 POLL_SECONDS = 5 * 60
 MAX_BACKOFF = 60 * 60
-WINDOW_NAMES = {300: "5-hour", 1440: "daily", 10080: "weekly"}
+READING_AGE = timedelta(hours=1)  # past this, a reading the app does not poll for (Codex) no longer measures now
+WINDOW_NAMES = {300: "5-hour", 1440: "daily", 10080: "weekly", 43200: "30-day"}
 
 
 # ---------- providers ----------
@@ -215,6 +216,7 @@ SAME_RESET = timedelta(minutes=2)  # reset times this close are one window: prov
 MIN_POINTS = 5  # a window calibrates only after moving this many points: percents are whole numbers
 CAL_WINDOWS = 4
 PROFILE_DAYS, HALF_LIFE, BAND_DAYS, SHAPED_DAYS = 56, 14, 28, 14
+RECENT = timedelta(hours=24)  # a window's own pace: its last seventh, a day at most (a weekly window's last day)
 
 
 class Usage:
@@ -414,7 +416,8 @@ class Profile:
         return t.replace(tzinfo=timezone.utc).astimezone(self.tz).hour
 
     def days(self, source, scope, n):
-        """Counted cost per day for the last n days (newest first), from the provider's first counted use on."""
+        """(cost, share) per day for the last n days (newest first), from the provider's first counted use on. share is
+        the part of the day after that first use: the oldest day can be partial, and counts for that much."""
         ts, _ = self.usage.series(source, scope)
         first = ts[0] if ts else self.now
         out = []
@@ -422,7 +425,8 @@ class Profile:
             t1 = self.now - timedelta(days=d)
             if t1 <= first:
                 break
-            out.append(self.usage.cost(source, scope, max(first, t1 - timedelta(days=1)), t1))
+            t0 = max(first, t1 - timedelta(days=1))
+            out.append((self.usage.cost(source, scope, t0, t1), max(1 / 24, (t1 - t0) / timedelta(days=1))))
         return out
 
     def level(self, source, scope):
@@ -432,20 +436,37 @@ class Profile:
         if not days:
             return None
         weights = [0.5 ** (d / HALF_LIFE) for d in range(len(days))]
-        mid = sum(c * w for c, w in zip(days, weights)) / sum(weights)
-        band = sorted(days[:BAND_DAYS])
+        mid = sum(c * w for (c, _), w in zip(days, weights)) / sum(share * w for (_, share), w in zip(days, weights))
+        band = sorted(c / share for c, share in days[:BAND_DAYS])
         pick = lambda q: band[min(len(band) - 1, int(q * len(band)))]
-        return mid, min(mid, pick(0.2)), max(mid, pick(0.8)), sum(1 for c in days if c > 0) >= SHAPED_DAYS
+        return mid, min(mid, pick(0.2)), max(mid, pick(0.8)), sum(1 for c, _ in days if c > 0) >= SHAPED_DAYS
 
 
-def forecast(w, current, cal, profile):
-    """Percent used from now to the window's reset at the provider's pace, following the hour shape. Returns the
-    curve with low and high bounds, when it reaches 100% (if before the reset), the percent at reset, and the pace."""
+def window_pace(w, now, usage, cal, current):
+    """The window's own pace, (points a day, hours it covers): its use over its last seventh, RECENT at most (a 5-hour
+    window's last 43 minutes, a weekly window's last day). None until the window has been open that long."""
+    span = min(RECENT, timedelta(minutes=w.minutes) / 7) if w.minutes else RECENT
+    if now - span < w.start:
+        return None
+    before, _ = estimate(w, now - span, usage, cal)
+    if before is None:
+        return None
+    return max(0.0, current - before) / (span / timedelta(days=1)), span / timedelta(hours=1)
+
+
+def forecast(w, current, cal, profile, recent=None):
+    """Percent used from now to the window's reset, following the hour shape. The pace is halfway between the
+    provider's usual pace and the window's own recent one (window_pace), and the range covers both. Returns the curve
+    with low and high bounds, when it reaches 100% (if before the reset), the percent at reset, and the paces."""
     source = PROVIDERS[w.provider].source if w.provider in PROVIDERS else w.provider
     lv = profile.level(source, w.scope)
     if lv is None:
         return None
     mid, lo, hi, shaped = lv
+    usual = mid / cal["per_pct"]
+    if recent:
+        r = recent[0] * cal["per_pct"]
+        mid, lo, hi = (mid + r) / 2, min(lo, r), max(hi, r)
     shape = profile.shape if shaped else [1 / 24] * 24
     step = step_of(w)
     t, vals, curve = profile.now, dict(mid=current, lo=current, hi=current), []
@@ -465,7 +486,8 @@ def forecast(w, current, cal, profile):
     left = (w.resets_at - profile.now).total_seconds() / 86400
     target = (100 - current) / left if left > 0 else None
     now_pace = mid / cal["per_pct"]
-    return dict(kind="shaped" if shaped else "flat", curve=curve,
+    return dict(kind="shaped" if shaped else "flat", curve=curve, pace_usual=round(usual, 2),
+                pace_window=round(recent[0], 2) if recent else None, pace_window_hours=round(recent[1], 1) if recent else None,
                 hits_at=metrics.iso(hits["mid"]), hits_at_early=metrics.iso(hits["hi"]), hits_at_late=metrics.iso(hits["lo"]),
                 at_reset=None if hits["mid"] else round(vals["mid"], 1), at_reset_low=round(vals["lo"], 1),
                 at_reset_high=round(vals["hi"], 1), pace_target=None if target is None else round(target, 2),
@@ -517,11 +539,12 @@ def window_row(w, now, usage, cal, profile):
                start=metrics.iso(w.start), resets_at=metrics.iso(w.resets_at), current=None if current is None else round(current, 1),
                measured=measured, last_snapshot=metrics.iso(pts[-1][0]) if pts else None, series=series(w, usage, cal, now),
                calibration=cal and dict(per_pct=round(cal["per_pct"], 4), points=cal["points"], windows=cal["windows"]),
-               forecast=None, no_forecast=None, hit_start=metrics.iso(w.hit_start))
+               forecast=None, no_forecast=None, hit_start=metrics.iso(w.hit_start),
+               at_limit=w.hit_start is not None or (current is not None and current >= 100))
     if current is None or cal is None:
         row["no_forecast"] = "Not calibrated yet: a window has to reach 5% while its usage is counted"
     else:
-        row["forecast"] = forecast(w, current, cal, profile)
+        row["forecast"] = forecast(w, current, cal, profile, window_pace(w, now, usage, cal, current))
         if row["forecast"] is None:
             row["no_forecast"] = "No counted usage for this provider"
     return row
@@ -536,7 +559,12 @@ def history_row(w):
 
 
 def binding_of(windows):
-    """The window that stops the user first: the soonest forecast to reach 100%, else the fullest (forecast at reset)."""
+    """The window that stops the user first: one already at its limit (the last to reset), else the soonest forecast to
+    reach 100%, else the fullest (forecast at reset)."""
+    out = [w for w in windows if w["at_limit"]]
+    if out:
+        w = max(out, key=lambda w: w["resets_at"])
+        return dict(provider=w["provider"], limit_id=w["limit_id"], scope=w["scope"], runs_out=True)
     runs_out = [w for w in windows if w["forecast"] and w["forecast"]["hits_at"]]
     if runs_out:
         w = min(runs_out, key=lambda w: w["forecast"]["hits_at"])
@@ -549,15 +577,15 @@ def binding_of(windows):
 
 
 def suggestion_of(windows):
-    """The provider with the most room left at reset at the current pace. A provider with any window forecast to reach
-    100% before it resets is never suggested; its room is that of its fullest window. None unless two providers have
-    forecasts: a suggestion compares providers."""
+    """The provider with the most room left at reset at the current pace. A provider with any window at its limit, or
+    forecast to reach 100% before it resets, is never suggested; its room is that of its fullest window. None unless two
+    providers have forecasts: a suggestion compares providers."""
     if len({w["provider"] for w in windows if w["forecast"]}) < 2:
         return None
     best = None
     for p in dict.fromkeys(w["provider"] for w in windows):
         fc = [w for w in windows if w["provider"] == p and w["forecast"]]
-        if not fc or any(w["forecast"]["hits_at"] for w in fc):
+        if not fc or any(w["forecast"]["hits_at"] for w in fc) or any(w["at_limit"] for w in windows if w["provider"] == p):
             continue
         tightest = max(fc, key=lambda w: w["forecast"]["at_reset"])
         room = round(100 - tightest["forecast"]["at_reset"], 1)
@@ -586,53 +614,75 @@ def payload(cur, range_days=0, source="", project="", now=None, today=None, pric
     for s in sorted(snaps, key=lambda s: s[5]):
         if s[7]:
             latest_plan[s[0]] = s[7]
-    windows, history, cals = [], [], {}
+    windows, history, cals, spans, closed = [], [], {}, {}, []
     for key, ws in group_windows(snaps).items():
         close_windows(ws, now)
         cal = calibrate(ws, usage)
         cals[key] = (ws[-1].minutes, cal)
         ts, _ = usage.series(source_of(key[0]), key[2])
         horizon = max(start or datetime.min, ts[0] if ts else now)
-        for w in earlier_windows(ws, usage, cal, horizon) + ws:
+        past = earlier_windows(ws, usage, cal, horizon) + ws
+        for w in past:
             if w.closed_at and (start is None or w.closed_at >= start):
                 history.append(history_row(w))
+                # A model-scoped window with nothing used, not even counted use of its model, says nothing of capacity.
+                if not (w.scope and not w.final and not usage.cost(source_of(w.provider), w.scope, w.start, w.closed_at)):
+                    closed.append(history[-1])
         w = open_window(ws, now, latest_plan.get(key[0]))
         if w:
             windows.append(window_row(w, now, usage, cal, profile))
+        # Where the limit counted use on its calibration's plan: its windows on that plan (an estimated one has no plan).
+        spans[key] = sorted((v.start, v.closed_at or now) for v in past + [w] if v and cal and v.plan in (None, cal["plan"]))
     windows.sort(key=lambda w: (names.index(w["provider"]), -(w["window_minutes"] or 0), w["scope"]))
     history.sort(key=lambda h: h["closed_at"], reverse=True)
     events = [e for e in plan_changes(snaps) if start is None or e["at"] >= metrics.iso(start)]
-    unused = {}
-    for h in history:
-        u = unused.setdefault((h["provider"], h["label"]), dict(provider=h["provider"], provider_label=h["provider_label"],
-                                                               label=h["label"], windows=0, estimated=0, total=0.0))
-        u["windows"] += 1
-        u["estimated"] += h["estimated"]
-        u["total"] += 100 - h["final"]
-    unused = [dict({k: v for k, v in u.items() if k != "total"}, avg_unused=round(u["total"] / u["windows"], 1)) for u in unused.values()]
     return dict(now=metrics.iso(now), projects=metrics.project_list(cur), windows=windows, binding=binding_of(windows), suggestion=suggestion_of(windows),
-                history=history, events=events, unused=unused, value=value(cur, usage, cals, start, now, project, prices),
+                history=history, events=events, unused=unused_of(closed), value=value(cur, usage, cals, spans, latest_plan, start, now, project, prices),
                 freshness=freshness(names, snaps, windows, polls or {}, now))
 
 
-def value(cur, usage, cals, start, now, project, prices):
-    """What a point of each calibrated limit buys over the range: tokens per point by model, the points each model used,
-    and per project the commits per point of the provider's longest unscoped limit."""
+def unused_of(history):
+    """Per limit, the average percent left at reset over its windows that ran their full length. A window cut short by
+    an early reset or a plan change never had its full capacity, so it is only counted (early); a limit with no full
+    window has no average."""
+    out = {}
+    for h in history:
+        u = out.setdefault((h["provider"], h["label"]), dict(provider=h["provider"], provider_label=h["provider_label"], label=h["label"],
+                                                             windows=0, estimated=0, early=0, total=0.0))
+        if h["early"]:
+            u["early"] += 1
+            continue
+        u["windows"] += 1
+        u["estimated"] += h["estimated"]
+        u["total"] += 100 - h["final"]
+    return [dict({k: v for k, v in u.items() if k != "total"}, avg_unused=round(u["total"] / u["windows"], 1) if u["windows"] else None)
+            for u in out.values()]
+
+
+def value(cur, usage, cals, spans, latest_plan, start, now, project, prices):
+    """What a point of each calibrated limit buys over the range: tokens per point by model, and the points each model
+    used inside the limit's windows on its calibration's plan (spans); a model without a price has neither. Per project,
+    the commits per point of the provider's longest unscoped limit."""
     t0 = start or datetime.min
     limits_out, main = [], {}
-    for (provider, limit_id, scope), (minutes, cal) in cals.items():
+    for key, (minutes, cal) in cals.items():
+        provider, limit_id, scope = key
         if cal is None:
             continue
-        per_model = {}
+        starts, per_model = [s for s, _ in spans[key]], {}
         for src, model, t, cost, tokens in usage.rows:
-            if src == source_of(provider) and t0 <= t < now and (not scope or scope.lower() in (model or "").lower()):
+            i = bisect_right(starts, t) - 1
+            if src == source_of(provider) and t0 <= t < now and i >= 0 and t < spans[key][i][1] \
+                    and (not scope or scope.lower() in (model or "").lower()):
                 m = per_model.setdefault(model, [0.0, 0])
                 m[0] += cost
                 m[1] += tokens
-        models = [dict(model=m, points=round(c / cal["per_pct"], 1), tokens_per_point=round(tk * cal["per_pct"] / c) if c else None)
+        models = [dict(model=m, priced=c > 0, points=round(c / cal["per_pct"], 1) if c else None,
+                       tokens_per_point=round(tk * cal["per_pct"] / c) if c else None)
                   for m, (c, tk) in sorted(per_model.items(), key=lambda kv: -kv[1][0]) if c or tk]
         limits_out.append(dict(provider=provider, provider_label=provider_label(provider), label=label(provider, limit_id, scope, minutes),
-                               plan=cal["plan"], cost_per_point=round(cal["per_pct"], 4), models=models))
+                               plan=cal["plan"], past_plan=bool(cal["plan"] and latest_plan.get(provider) not in (None, cal["plan"])),
+                               cost_per_point=round(cal["per_pct"], 4), models=models))
         if not scope and (provider not in main or (minutes or 0) > (main[provider][0] or 0)):
             main[provider] = (minutes, cal, label(provider, limit_id, scope, minutes))
     projects = []
@@ -673,7 +723,8 @@ def freshness(names, snaps, windows, polls, now):
         if last is None:
             flags.append("no snapshots")
         mine = [w for w in windows if w["provider"] == n]
-        if "polling failing" in flags or "old" in flags:  # an old poll is no measure of now
+        # An old poll is no measure of now; nor is an old reading, since use outside this machine never shows in it.
+        if "polling failing" in flags or "old" in flags or (not p.interval and last and now - last > READING_AGE):
             for w in mine:
                 w["measured"] = False
         out.append(dict(provider=n, provider_label=p.label, last_snapshot=metrics.iso(last), measured=bool(mine) and all(w["measured"] for w in mine),

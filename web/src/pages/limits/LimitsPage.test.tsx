@@ -7,7 +7,7 @@ import palette from "../../__fixtures__/palette";
 import { Palette } from "../../components/palette/Palette";
 import { openPalette } from "../../components/palette/store";
 import { mockApi } from "../../components/sheets/testing";
-import { caption, pace, span, whenDay } from "./limits";
+import { caption, pace, span, whenDay, windowName } from "./limits";
 import { LimitsPage } from "./LimitsPage";
 
 const fixture = limits as LimitsPayload;
@@ -18,27 +18,38 @@ const show = (d: LimitsPayload, hash = "#range=30") => {
   render(<LimitsPage />);
   return f;
 };
-const lede = () => screen.findByRole("heading", { level: 1, name: /reaches|runs out|seen yet/ });
+const lede = () => screen.findByRole("heading", { level: 1, name: /reaches|runs out|at its limit|seen yet/ });
 // Every window resets first: the fixture's Claude forecast, moved below 100%.
 const calm: LimitsPayload = {
   ...fixture, binding: { provider: "claude", limit_id: "weekly_all", scope: "", runs_out: false },
   windows: [{ ...claude, forecast: { ...claude.forecast!, hits_at: null, hits_at_early: null, hits_at_late: null, at_reset: 96, at_reset_low: 93, at_reset_high: 99, pace: "behind" } }, codex],
 };
+// Codex weekly at 100% now, until its reset.
+const capped: LimitWindow = { ...codex, current: 100, at_limit: true, forecast: { ...codex.forecast!, at_reset: 100, at_reset_low: 100, at_reset_high: 100 } };
+const out: LimitsPayload = { ...fixture, binding: { provider: "codex", limit_id: "codex_10080", scope: "", runs_out: true }, suggestion: null,
+  windows: [claude, fable, capped] };
 
 describe("limit text", () => {
-  it("captions a run-out, a reset-first and a window without forecast", () => {
-    expect(caption(claude)).toBe(`Reaches 100% at ${whenDay("2026-11-06T21:00:00.000Z")} (between ${whenDay("2026-11-06T21:00:00.000Z")} and ${whenDay("2026-11-06T21:00:00.000Z")})`);
-    expect(caption(codex)).toBe("Resets first at about 32% (29–32%)");
+  it("captions a run-out, a reset-first, a window at its limit and a window without forecast", () => {
+    const f = claude.forecast!;
+    expect(caption(claude)).toBe(`Reaches 100% at ${whenDay(f.hits_at)} (between ${whenDay(f.hits_at_early)} and ${whenDay(f.hits_at_late)})`);
+    expect(caption(codex)).toBe("Resets first at about 33% (29–33%)");
+    expect(caption({ ...codex, forecast: { ...codex.forecast!, at_reset_low: 32.7 } })).toBe("Resets first at about 33%"); // no "(33–33%)"
+    expect(caption(capped)).toBe(`At its limit until ${whenDay(codex.resets_at)}`);
     expect(caption(fable)).toBe("Not calibrated yet: a window has to reach 5% while its usage is counted");
   });
 
   it("shows headroom and pace: behind pace leaves room", () => {
     // Codex weekly at 20% with 3.5 of 7 days left.
     const w: LimitWindow = { ...codex, current: 20, resets_at: "2026-11-09T12:00:00.000Z",
-      forecast: { ...codex.forecast!, pace_target: 80 / 3.5, pace_now: 10, pace: "behind", at_reset: 55 } };
+      forecast: { ...codex.forecast!, pace_target: 80 / 3.5, pace_now: 10, pace_usual: 10, pace: "behind", at_reset: 55 } };
     expect(pace(w, "2026-11-06T00:00:00.000Z")).toEqual({ left: "80% left", reset: "3d 12h to reset",
-      rate: "using 10.0% a day; 22.9% a day would use it all", verdict: "behind pace: about 45% would go unused" });
+      rate: "usual pace 10.0% a day; 22.9% a day would use it all", verdict: "behind pace: about 45% would go unused" });
     expect(pace(claude, fixture.now).verdict).toBe("ahead of pace: runs out before the reset");
+    expect(pace(claude, fixture.now).rate).toBe("usual pace 17.7% a day; this window 13.2% a day over its last day; 5.9% a day would use it all");
+    const hour: LimitWindow = { ...w, window_minutes: 300, forecast: { ...w.forecast!, pace_usual: 24, pace_window: 1320, pace_window_hours: 300 / 7 / 60 } };
+    expect(pace(hour, "2026-11-06T00:00:00.000Z").rate).toBe("usual pace 1.0% an hour; this window 55.0% an hour over its last 43m; 1.0% an hour would use it all");
+    expect(pace(capped, fixture.now)).toEqual({ left: "0% left", reset: "6d 16h to reset", rate: null, verdict: null });
     expect(span(45 * 60000)).toBe("45m");
   });
 });
@@ -46,14 +57,22 @@ describe("limit text", () => {
 describe("LimitsPage", () => {
   it("leads with the window that runs out first and suggests where to send work", async () => {
     const f = show(fixture);
-    expect((await lede()).textContent).toBe(`Claude Code weekly reaches 100% ${whenDay(claude.forecast!.hits_at)}, before its reset ${whenDay(claude.resets_at)}.`);
-    expect(screen.getByText(/Send work to/).textContent).toBe(`Send work to Codex: about 68% of its weekly limit would go unused (resets ${whenDay(codex.resets_at)}).`);
+    expect((await lede()).textContent).toBe(`Claude Code weekly, at 90% now, reaches 100% ${whenDay(claude.forecast!.hits_at)}, before its reset ${whenDay(claude.resets_at)}.`);
+    expect(screen.getByText(/Send work to/).textContent).toBe(`Send work to Codex: about 67% of its weekly limit would go unused (resets ${whenDay(codex.resets_at)}).`);
     expect(f.mock.calls[0]![0]).toBe("/api/limits?range=30");
   });
 
   it("says when nothing runs out, and names the fullest window", async () => {
     show(calm);
-    expect((await lede()).textContent).toBe(`No limit runs out at the current pace. Fullest: Claude Code weekly at about 96% when it resets ${whenDay(claude.resets_at)}.`);
+    expect((await lede()).textContent).toBe(`No limit runs out at the current pace. Fullest: Claude Code weekly, at 90% now, about 96% when it resets ${whenDay(claude.resets_at)}.`);
+  });
+
+  it("leads with a window already at its limit, never as one that does not run out", async () => {
+    show(out);
+    expect((await lede()).textContent).toBe(`Codex weekly is at its limit (100% used) until ${whenDay(codex.resets_at)}.`);
+    const card = within(screen.getByRole("region", { name: "Codex weekly" }));
+    expect(card.getByText(`At its limit until ${whenDay(codex.resets_at)}`).className).toBe("cap-text out");
+    expect(screen.queryByText(/Send work to/)).toBeNull();
   });
 
   it("flags failing polls and marks figures measured or estimated", async () => {
@@ -72,7 +91,9 @@ describe("LimitsPage", () => {
     await lede();
     const imgs = screen.getAllByRole("img");
     expect(imgs).toHaveLength(3);
-    expect(imgs[2]!.getAttribute("aria-label")).toBe("Codex weekly: 9% used. Resets first at about 32% (29–32%).");
+    expect(imgs[2]!.getAttribute("aria-label")).toBe(`Codex weekly: 9% used. Resets first at about 33% (29–33%). Plan change from plus to prolite, ${whenDay(fixture.events[0]!.at)}.`);
+    expect(document.querySelector(".lim-chart .plan text")!.textContent).toBe("plan: prolite");
+    expect(within(screen.getByRole("list", { name: "Chart key" })).getByText("plan change")).toBeTruthy();
     expect(within(screen.getByRole("region", { name: "Claude Code weekly · Fable" })).getByText(/Not calibrated yet/)).toBeTruthy();
     expect(document.querySelectorAll(".lim-chart .band")).toHaveLength(2);
   });
@@ -84,7 +105,10 @@ describe("LimitsPage", () => {
     expect(hist.getByText("ended early by a plan change from plus to prolite")).toBeTruthy();
     const hit = hist.getAllByRole("row").find(r => r.textContent!.startsWith("Codex 5-hour"))!;
     expect(within(hit).getByText("4.3h")).toBeTruthy();
-    expect(within(document.getElementById("unused")!).getByText("66% unused")).toBeTruthy();
+    const unused = within(document.getElementById("unused")!);
+    expect(unused.getByText("60% unused")).toBeTruthy();
+    expect(unused.getByText("1 window")).toBeTruthy();
+    expect(unused.getByText(/Left out: 1 window that ended early/)).toBeTruthy();
   });
 
   it("shows what a point buys, by model and by project", async () => {
@@ -94,6 +118,21 @@ describe("LimitsPage", () => {
     expect(value.getByText(/^Claude Code weekly: \$/)).toBeTruthy();
     expect(value.getByText("claude-opus-5-5")).toBeTruthy();
     expect(value.getByText("Commits a point, by project")).toBeTruthy();
+  });
+
+  it("folds projects under a point into one row, and marks unpriced models and earlier plans", async () => {
+    const p = fixture.value.projects[0]!, l = fixture.value.limits[0]!;
+    show({ ...fixture, value: {
+      limits: [{ ...l, past_plan: true, models: [...l.models, { model: "gpt-7-mystery", priced: false, points: null, tokens_per_point: null }] }],
+      projects: [{ ...p, points: 12 }, { ...p, project: "a", points: 0.4, commits: 1 }, { ...p, project: "b", points: 0.3, commits: 0 }],
+    } });
+    await lede();
+    const value = within(document.getElementById("value")!);
+    const rows = value.getAllByRole("row").map(r => r.textContent);
+    expect(rows.filter(r => r!.startsWith("2 smaller projects"))).toEqual([`2 smaller projects${windowName(p)}0.71–`]);
+    expect(rows.some(r => r!.startsWith("a"))).toBe(false);
+    expect(value.getByText("unpriced")).toBeTruthy();
+    expect(value.getByText(/an earlier plan/)).toBeTruthy();
   });
 
   it("sends the source and project filters", async () => {

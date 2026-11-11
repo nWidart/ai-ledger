@@ -171,14 +171,18 @@ export interface Forecast {
   hits_at: Ts | null; hits_at_early: Ts | null; hits_at_late: Ts | null;
   /** Percent at reset: null when the middle forecast reaches 100% first. */
   at_reset: number | null; at_reset_low: number; at_reset_high: number;
-  /** Points a day: the pace that ends at exactly 100% at reset, and the current one. */
+  /** Points a day: the pace that ends at exactly 100% at reset, and the forecast's own: halfway between the usual pace
+   *  (recent weeks) and the window's pace over its last seventh (pace_window, over pace_window_hours; null until then). */
   pace_target: number | null; pace_now: number; pace: "ahead" | "behind" | null;
+  pace_usual: number; pace_window: number | null; pace_window_hours: number | null;
 }
 export interface LimitWindow {
   provider: string; provider_label: string; limit_id: string; scope: string; label: string; window_minutes: number | null; plan: string | null;
   start: Ts; resets_at: Ts; current: number | null; measured: boolean; last_snapshot: Ts | null; series: LimitPoint[];
   calibration: { per_pct: number; points: number; windows: number } | null;
   forecast: Forecast | null; no_forecast: string | null; hit_start: Ts | null;
+  /** At 100% (or reported as reached) now, until it resets. */
+  at_limit: boolean;
 }
 export interface LimitHistoryRow {
   provider: string; provider_label: string; label: string; plan: string | null; start: Ts; closed_at: Ts; final: number;
@@ -192,10 +196,12 @@ export interface LimitsPayload {
   binding: { provider: string; limit_id: string; scope: string; runs_out: boolean } | null;
   suggestion: { provider: string; provider_label: string; label: string; unused_at_reset: number; resets_at: Ts } | null;
   history: LimitHistoryRow[]; events: PlanChange[];
-  unused: { provider: string; provider_label: string; label: string; windows: number; estimated: number; avg_unused: number }[];
+  /** Over full-length windows only: early counts those cut short, and avg_unused is null when none ran their length. */
+  unused: { provider: string; provider_label: string; label: string; windows: number; estimated: number; early: number; avg_unused: number | null }[];
   value: {
-    limits: { provider: string; provider_label: string; label: string; plan: string | null; cost_per_point: number;
-      models: { model: string; points: number; tokens_per_point: number | null }[] }[];
+    /** past_plan: calibrated on a plan the provider no longer reports. A model without a price has no points. */
+    limits: { provider: string; provider_label: string; label: string; plan: string | null; past_plan: boolean; cost_per_point: number;
+      models: { model: string; priced: boolean; points: number | null; tokens_per_point: number | null }[] }[];
     projects: { provider: string; provider_label: string; label: string; project: string; commits: number; points: number; commits_per_point: number | null }[];
   };
   freshness: { provider: string; provider_label: string; last_snapshot: Ts | null; measured: boolean; polled: boolean;
