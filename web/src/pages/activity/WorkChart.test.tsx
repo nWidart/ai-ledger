@@ -145,6 +145,27 @@ describe("failure rate line", () => {
     expect(svg.querySelectorAll("circle.rate")).toHaveLength(2);
   });
 
+  it("ticks the right-hand axis on the count axis's grid lines, with decimals for small steps", () => {
+    const ticks = () => [...document.querySelectorAll("#work svg .rtick")].map(t => t.textContent);
+    panel(d);
+    // Two count steps (no commits: 0 to 1 by 0.5), so a top rate of 50 makes 0, 50, 100.
+    expect(ticks()).toEqual(["0", "50", "100"]);
+    cleanup();
+    const low = [row("2026-11-04", { calls: 1000, failed_calls: 1 }), row("2026-11-05", { calls: 1000, failed_calls: 1 })];
+    panel({ ...usage, work: low, work_projects: [] });
+    expect(ticks()).toEqual(["0.0", "0.1", "0.2"]);
+  });
+
+  it("draws no rate, axis or key when no bar has a tool call", () => {
+    const idle = [row("2026-11-04", { commits: 2 }), row("2026-11-05")];
+    panel({ ...usage, work: idle, work_projects: [] });
+    const svg = document.querySelector("#work svg")!;
+    expect(svg.querySelectorAll(".rtick, .rate")).toHaveLength(0);
+    expect(svg.textContent).not.toContain("Errors per 100 calls");
+    expect(document.querySelector("#work .legend")!.textContent).toBe("Commits");
+    expect(chart().getAttribute("aria-label")).toMatch(/^Commits per day, 2 days/);
+  });
+
   it("gives the rate and the failed count in the tooltip", () => {
     panel(d);
     act(() => chart().focus());
@@ -169,6 +190,18 @@ describe("weekly buckets", () => {
     fireEvent.keyDown(chart(), { key: "Enter" });
     fireEvent.click(document.querySelector("#work .hit")!, { clientX: 60 });
     expect(onDay).not.toHaveBeenCalled();
+  });
+
+  it("say when the view covers part of a week", () => {
+    panel({ ...weekly, start: "2026-09-09" });
+    act(() => chart().focus());
+    fireEvent.keyDown(chart(), { key: "Home" });
+    expect(within(screen.getByRole("tooltip")).getByText("Week of Sep 7, 2026, from Sep 9")).toBeTruthy();
+    fireEvent.keyDown(chart(), { key: "End" });
+    expect(within(screen.getByRole("tooltip")).getByText("Week of Nov 9, 2026, so far")).toBeTruthy();
+    expect(document.querySelector("#work .sr")!.textContent).toMatch(/^Week of Nov 9, 2026, so far: 0 commits/);
+    fireEvent.keyDown(chart(), { key: "ArrowLeft" });
+    expect(within(screen.getByRole("tooltip")).getByText("Week of Nov 2, 2026")).toBeTruthy();
   });
 
   it("days can be picked with a click", () => {
@@ -198,13 +231,35 @@ describe("hours", () => {
     expect(box.textContent).toMatch(/Busiest hour: Tuesdays at 23:00, 30 prompts\. Busiest day: Tuesday, 34 prompts\. 46 prompts in all\./);
   });
 
-  it("reads a cell on focus", () => {
+  it("outlines Monday 0:00 on focus, moves from there and keeps the cell", () => {
     render(<WorkHours cells={cells} />);
-    const table = screen.getByRole("table");
+    const table = screen.getByRole("table"), readout = () => document.querySelector("#hours .readout")!.textContent;
+    const outlined = () => [...table.querySelectorAll("td.at")].map(td => td.getAttribute("title"));
     act(() => table.focus());
+    expect(outlined()).toEqual(["Monday 0:00: 0 prompts"]);
+    expect(readout()).toBe("Monday 0:00: 0 prompts");
+    fireEvent.keyDown(table, { key: "ArrowRight" });
+    expect(readout()).toBe("Monday 1:00: 0 prompts");
     fireEvent.keyDown(table, { key: "ArrowDown" });
     fireEvent.keyDown(table, { key: "End" });
-    expect(document.querySelector("#hours .readout")!.textContent).toBe("Tuesday 23:00: 30 prompts");
+    expect(readout()).toBe("Tuesday 23:00: 30 prompts");
+    act(() => table.blur());
+    expect(outlined()).toEqual([]);
+    expect(readout()).toBe("");
+    act(() => table.focus());
+    expect(readout()).toBe("Tuesday 23:00: 30 prompts");
+  });
+
+  it("does not read cells out on hover", () => {
+    render(<WorkHours cells={cells} />);
+    fireEvent.pointerEnter(screen.getByRole("table").querySelectorAll("tbody tr")[1]!.querySelectorAll("td")[23]!);
+    expect(document.querySelector("#hours .readout")!.textContent).toBe("");
+  });
+
+  it("counts the ties for the busiest hour and day", () => {
+    render(<WorkHours cells={[{ dow: 2, hour: 9, prompts: 5 }, { dow: 4, hour: 9, prompts: 5 }, { dow: 5, hour: 14, prompts: 5 }]} />);
+    expect(document.getElementById("hoursSum")!.textContent)
+      .toMatch(/^Busiest hour: Tuesdays at 9:00 and 2 others, 5 prompts each\.\s+Busiest day: Tuesday and 2 others, 5 prompts each\. 15 prompts in all\./);
   });
 
   it("shows the empty state without data", () => {
