@@ -6,7 +6,7 @@ import type { LiveEvent, LiveListSession, LiveSession, LiveState, LiveToolEvent,
 export const KEEP = 2000;
 /** A shell call pending this long reads as likely waiting for approval (as live.py's APPROVAL). */
 const APPROVAL_MS = 30_000;
-const APPROVAL_TOOLS = new Set(["Bash", "exec_command", "exec"]);
+const APPROVAL_TOOLS = new Set(["Bash", "exec_command", "exec"]); // the shell tools
 /** Whether a call pending for `pending` ms reads as likely waiting for approval, as live.py's state says it: a shell
  *  call past 30 s, unless it is a long one (its timeout is above 120 s). */
 export const likelyWaiting = (tool: string | null, long: boolean, pending: number | null): boolean =>
@@ -90,6 +90,8 @@ export const INFERRED_WHY: Partial<Record<LiveState["kind"], string>> = {
 };
 
 export const isTool = (e: LiveEvent): e is LiveToolEvent => e.k === "tool";
+/** The label the agent gave a shell call, which is its row text in place of the command; null for any other call. */
+export const labelOf = (e: LiveToolEvent): string | null => (APPROVAL_TOOLS.has(e.tool) && e.description) || null;
 
 /** A subagent's work: when its events start and end, its tool calls, and the main-thread call that started it. */
 export interface LiveLane {

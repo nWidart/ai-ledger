@@ -3,7 +3,7 @@ import type { LiveEvent, LiveSession, LiveToolEvent } from "../../api";
 import { big, plural } from "../../format";
 import { appLink } from "../../components/sheets/session";
 import { sessionHref } from "../insights/InsightsPage";
-import { elapsed, isTool, likelyWaiting, since, streamRows, type LiveLane } from "./live";
+import { elapsed, isTool, labelOf, likelyWaiting, since, streamRows, type LiveLane } from "./live";
 
 const time = (ts: string | null | undefined) =>
   ts ? new Date(ts).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }) : "";
@@ -12,17 +12,19 @@ const shortName = (tool: string) => (tool.startsWith("mcp__") && tool.split("__"
 
 function ToolRow({ e, now, text, open, onToggle }: { e: LiveToolEvent; now: number; text: boolean; open: boolean; onToggle: () => void }) {
   const running = e.end == null, took = running ? since(e.start, now) : since(e.start, Date.parse(e.end!));
-  const waiting = running && likelyWaiting(e.tool, e.long, took);
+  const waiting = running && likelyWaiting(e.tool, e.long, took), label = labelOf(e);
   const cls = ["tool", running && "running", waiting && "waiting", e.failed && "failed"].filter(Boolean).join(" ");
   const result = running ? <span className="spin" role="img" aria-label="running" /> : e.failed
     ? <span className="bad" role="img" aria-label="failed">✕</span> : <span className="ok" role="img" aria-label="passed">✓</span>;
   return <>
-    <button type="button" className={cls} aria-expanded={open} onClick={onToggle}>
-      <span className="nm" title={e.tool}>{shortName(e.tool)}</span><span className="sum">{e.summary}</span>
+    <button type="button" className={cls} aria-expanded={open} onClick={onToggle} title={label ? e.summary : undefined}>
+      <span className="nm" title={e.tool}>{shortName(e.tool)}</span>
+      {label ? <span className="sum said">{label}</span> : <span className="sum">{e.summary}</span>}
       <span className="dur">{elapsed(took)}</span><span className="res">{result}</span>
     </button>
     {open && <div className="detail">
       <dl>
+        {label && <><dt>description</dt><dd>{label}</dd></>}
         <dt>input</dt><dd><code>{e.summary || "–"}</code></dd>
         <dt>started</dt><dd>{time(e.start)}</dd>
         {e.failed && <><dt>error</dt><dd className="bad"><code>{e.error}</code></dd></>}

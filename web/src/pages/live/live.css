@@ -83,6 +83,7 @@
 .pg-live .tool[aria-expanded=true] { background: var(--surface-2); border-color: var(--border); border-radius: 8px 8px 0 0; }
 .pg-live .tool .nm { font-weight: 600; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pg-live .tool .sum { font: 12px/1.45 ui-monospace, "SF Mono", Menlo, monospace; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pg-live .tool .sum.said { font: inherit; font-size: 12.5px; } /* a description is prose, not a command */
 .pg-live .tool .dur { font-size: 12px; color: var(--text-muted); min-width: 44px; text-align: right; }
 .pg-live .tool .res { text-align: center; font-size: 13px; }
 .pg-live .tool.running .dur { color: var(--series-1); font-weight: 600; }

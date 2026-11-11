@@ -283,7 +283,8 @@ export interface LivePayload {
 interface LiveEventBase { key: string; ts: Ts | null; lane: string | null }
 export interface LiveTextEvent extends LiveEventBase { k: "prompt" | "reply"; words: number; text?: string }
 export interface LiveToolEvent extends LiveEventBase {
-  /** The input, whole only with text: without, a subagent call's description, and other inputs cut to 300 characters. */
+  /** The input, whole only with text: without, a subagent call's description, and other inputs cut to 300 characters.
+   *  description: the label the agent gave the call (a shell call's row text), cut the same way. */
   k: "tool"; id: string; tool: string; summary: string; description: string | null; start: Ts | null; end: Ts | null;
   failed: boolean; error: string | null;
   /** The result's size; its text (cut to 4 KB) only with text. */

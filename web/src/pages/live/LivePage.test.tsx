@@ -314,6 +314,20 @@ describe("LivePage", () => {
     expect((screen.getByRole("checkbox", { name: "Follow" }) as HTMLInputElement).checked).toBe(false);
   });
 
+  it("shows a shell call's description as its row text, with the command on hover and beside it when opened", async () => {
+    show();
+    await stream();
+    const text = (row: HTMLElement) => [row.querySelector(".sum")!.textContent, row.getAttribute("title")];
+    expect(text(toolRow("Bash", 0))).toEqual(["Run the Python tests", "uv run python -m unittest"]);
+    expect(text(toolRow("Bash", 1))).toEqual(["git push origin feat/live-page", null]); // no description: the command
+    expect(text(toolRow("Agent"))).toEqual(["find callers of ingest", null]); // not a shell call: its input, as before
+    const terms = (row: HTMLElement) => [...row.nextElementSibling!.querySelectorAll("dt")].map(t => `${t.textContent}: ${t.nextElementSibling!.textContent}`);
+    await userEvent.click(toolRow("Bash", 0));
+    expect(terms(toolRow("Bash", 0)).slice(0, 2)).toEqual(["description: Run the Python tests", "input: uv run python -m unittest"]);
+    await userEvent.click(toolRow("Bash", 1));
+    expect(terms(toolRow("Bash", 1))[0]).toBe("input: git push origin feat/live-page");
+  });
+
   it("stops following on scroll-up and offers Jump to latest when new events arrive", async () => {
     const more = { ...s1, events: [...s1.events, { ...(s1.events.at(-1) as LiveToolEvent), key: "n#0", id: "t10", summary: "ls" }], cursor: "c3" };
     let fresh = false;

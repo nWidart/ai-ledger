@@ -144,7 +144,7 @@ export default {
    "id": "t3",
    "tool": "Bash",
    "summary": "uv run python -m unittest",
-   "description": null,
+   "description": "Run the Python tests",
    "start": "2026-11-10T10:00:14.000Z",
    "end": "2026-11-10T10:00:20.000Z",
    "failed": true,

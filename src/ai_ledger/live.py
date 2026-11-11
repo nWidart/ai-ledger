@@ -3,7 +3,7 @@
 Events come from the stored transcript lines through each source's live_items, so a running tool shows before the
 derived tool_calls know of it. Totals (cost, requests, tool calls, errors) come from the derived tables, as on the other
 pages. Prompt, reply and tool-output text leave this module only when the caller asks for it, and so do a session title
-made from the first prompt, a subagent's prompt and tool inputs longer than INPUT_CAP."""
+made from the first prompt, a subagent's prompt and tool inputs and descriptions longer than INPUT_CAP."""
 import json
 from datetime import datetime, timedelta, timezone
 
@@ -20,7 +20,7 @@ FIRST_LINES = FIRST_LOAD * 6  # lines read for a first load: most lines show no 
 OVERLAP = timedelta(seconds=60)  # a catch-up reads again this far before its cursor: some lines are written late
 STATE_LINES = 200  # newest lines read per session for the active list
 TEXT_CAP = 4096  # characters of one tool result sent with text
-INPUT_CAP = 300  # characters of a tool input sent without text, as Codex's live summaries
+INPUT_CAP = 300  # characters of a tool input or description sent without text, as Codex's live summaries
 PROMPT_TOOLS = {"Agent", "Task", "spawn_agent"}  # their input is a prompt: without text, their description stands in
 ERROR_CAP = 700  # as tool_calls.error
 SPARK_STEP = 5  # seconds per point of the tokens chart, over the last minute
@@ -313,6 +313,7 @@ def public(e, text):
             del out["text"]
     elif e["k"] == "tool":
         out["summary"] = tool_input(e, text)
+        out["description"] = capped(e["description"], text)  # the label the agent gave the call: a shell call's row text
         output = e["output"] or ""
         out["chars"] = len(output)
         out["output"] = output[:TEXT_CAP] if text and e["end"] else None
@@ -320,14 +321,17 @@ def public(e, text):
     return out
 
 
+def capped(s, text):
+    """s as sent: whole with text, else cut to INPUT_CAP."""
+    return s if text or s is None or len(s) <= INPUT_CAP else s[:INPUT_CAP] + "…"
+
+
 def tool_input(e, text):
     """Tool event e's input as sent: whole with text; otherwise a subagent call's description instead of its prompt, and
     other inputs cut to INPUT_CAP."""
-    if text:
-        return e["summary"]
-    if e["tool"] in PROMPT_TOOLS:
+    if e["tool"] in PROMPT_TOOLS and not text:
         return e["description"] or ""
-    return e["summary"] if len(e["summary"]) <= INPUT_CAP else e["summary"][:INPUT_CAP] + "…"
+    return capped(e["summary"], text)
 
 
 def started_by(rows, events):

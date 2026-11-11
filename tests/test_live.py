@@ -304,6 +304,16 @@ class SessionTest(LiveCase):
         agent, bash = self.run_session(text=True)["events"]
         self.assertEqual((agent["summary"], bash["summary"][-6:]), ("SECRET brief " * 50, "SECRET"))
 
+    def test_shell_description_beside_its_command_cut_without_text(self):
+        self.write("s1.jsonl", assistant("a1", "m1", at(1), [tool_use("t1", "Bash", command="cd /long/path && uv run pytest", description="Run the Python tests"),
+                                                             tool_use("t2", "Bash", command="ls", description="list " + "x" * 395),
+                                                             tool_use("t3", "Bash", command="ls")]))
+        self.ingest()
+        run, wordy, bare = self.run_session()["events"]
+        self.assertEqual((run["description"], run["summary"]), ("Run the Python tests", "cd /long/path && uv run pytest"))
+        self.assertEqual((wordy["description"], bare["description"]), ("list " + "x" * (live.INPUT_CAP - 5) + "…", None))
+        self.assertEqual(len(self.run_session(text=True)["events"][1]["description"]), 400)
+
     def test_text_only_on_request(self):
         self.write("s1.jsonl", prompt("u1", at(0), "p1", "SECRET prompt") + assistant("a1", "m1", at(1), [
             dict(type="text", text="SECRET reply"), tool_use("t1", "Bash", command="cat .env")]) + result("r1", at(2), "t1", "SECRET=" + "x" * 5000))
@@ -470,7 +480,7 @@ class PageCase(LiveCase):
                    + line(type="user", uuid="r2", timestamp=at(12), promptId="p1", toolUseResult=dict(agentId="a7"),
                           message=dict(role="user", content=[dict(type="tool_result", tool_use_id="t2", content="3 callers")]), **S)
                    + line(type="system", subtype="compact_boundary", uuid="c1", timestamp=at(13), compactMetadata=dict(preTokens=180000), **S)
-                   + assistant("a3", "m3", at(14), [tool_use("t3", "Bash", command="uv run python -m unittest")])
+                   + assistant("a3", "m3", at(14), [tool_use("t3", "Bash", command="uv run python -m unittest", description="Run the Python tests")])
                    + result("r3", at(20), "t3", "FAIL: test_hot_pass\nAssertionError: 3 != 1", error=True)
                    + assistant("a4", "m4", at(22), [tool_use("t4", "Bash", command="git push origin feat/live-page")]))
         self.write("s1/subagents/agent-a7.jsonl", "".join(
