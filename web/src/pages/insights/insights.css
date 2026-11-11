@@ -29,6 +29,7 @@
 .pg-insights .vital .d { color: var(--text-muted); font-size: 12.5px; margin-top: 2px; }
 .pg-insights .vital.good .v { color: var(--good-text); }
 .pg-insights .vital.bad .v { color: var(--critical-text); }
+.pg-insights .vital.bad { color: inherit; } /* the shared .bad rule would redden the label too */
 @media (max-width: 900px) {
   .pg-insights .vitals { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .pg-insights .vital:first-child { grid-column: 1 / -1; }
