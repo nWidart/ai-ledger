@@ -8,22 +8,43 @@ import liveSession from "../../__fixtures__/live-session";
 import liveText from "../../__fixtures__/live-session-text";
 import liveCodex from "../../__fixtures__/live-session-codex";
 import { mockApi } from "../../components/sheets/testing";
+import { App } from "../../App";
 import { LivePage } from "./LivePage";
-import { lanesOf, likelyWaiting, mergeSession, stateNow, stateText, streamRows } from "./live";
+import { groupSessions, lanesOf, likelyWaiting, mergeSession, stateNow, stateText, streamRows } from "./live";
 import { FakeSource } from "./testing";
 
 const list = live as LivePayload, listText = liveListText as LivePayload, s1 = liveSession as LiveSession, s1text = liveText as LiveSession, codex = liveCodex as LiveSession;
 
-function show(hash = "#session=s1", o: { list?: LivePayload; session?: (q: URLSearchParams) => LiveSession | undefined } = {}) {
+const status = { ingesting: false, last_ingest: "2026-11-10T10:00:00+00:00", last_change: "2026-11-10T10:00:00+00:00", last_stats: null, error: null, counts: {}, interval: 60, project_order: [] };
+type Opts = { list?: LivePayload; session?: (q: URLSearchParams) => LiveSession | undefined; status?: () => unknown; app?: boolean };
+
+/** The page alone, or inside the app (o.app) for what the nav and the tab title show. calls leaves the status polls out;
+ *  polls counts them. */
+function show(hash = "#session=s1", o: Opts = {}) {
   const f = mockApi({
     "/api/live": q => o.list ?? (q.get("text") ? listText : list),
     "/api/live/session": q => (o.session ? o.session(q) : q.get("id") === "s1" ? (q.get("text") ? s1text : s1) : { ...s1, session_id: q.get("id")!, project: "jobdesk" }),
+    "/api/status": () => (o.status ? o.status() : status),
   });
   history.replaceState(null, "", "/live" + hash);
-  const r = render(<LivePage />);
-  return { f, r, calls: () => f.mock.calls.map(c => String(c[0])) };
+  const r = render(o.app ? <App /> : <LivePage />);
+  const urls = () => f.mock.calls.map(c => String(c[0]));
+  return { f, r, calls: () => urls().filter(u => u !== "/api/status"), polls: () => urls().filter(u => u === "/api/status").length };
 }
 const stream = () => screen.findByRole("region", { name: "Session" });
+const rail = () => screen.findByRole("region", { name: "Active sessions" });
+const wall = rail; // the wall takes the rail's place, under the same name
+/** The rail or the wall as text: each group's heading, then its sessions' projects. */
+const groups = (el: HTMLElement) => [...el.querySelectorAll("h3")].map(h =>
+  [h.textContent, ...[...h.nextElementSibling!.querySelectorAll("button")].map(b => b.querySelector(".pname")!.textContent)].join(" "));
+/** A list session of the given state that started at `first`. */
+const sess = (id: string, kind: LiveState["kind"], first: string, since = first) => ({ ...list.sessions[0]!, session_id: id, project: id, title: null,
+  first_ts: first, last_ts: since, state: { kind, tool: kind === "tool" || kind === "wait" ? "Bash" : null, since, inferred: kind === "wait", long: kind === "tool" } });
+const fakeClock = (at: string) => {
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval", "Date"] });
+  vi.setSystemTime(Date.parse(at));
+};
+const tick = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
 const ended = list.sessions.find(s => s.state.kind === "ended")!;
 const toolRow = (name: string, nth = 0) => screen.getAllByRole("button", { name: new RegExp("^" + name) })[nth]!;
 
@@ -73,19 +94,94 @@ describe("live.ts", () => {
 
   it("words an ended session apart from your turn and idle", () => {
     const texts = (["ended", "you", "idle"] as const).map(kind => stateText({ ...ended.state, kind }, Date.parse(list.now)));
-    expect(texts.map(t => t.label)).toEqual(["ended", "your turn", "idle 25s"]);
+    expect(texts.map(t => t.label)).toEqual(["ended", "your turn 25s", "idle 25s"]);
     expect(new Set(texts.map(t => t.detail)).size).toBe(3);
     expect(stateNow(ended.state, Date.parse(list.now) + 3_600_000)).toBe(ended.state);
+  });
+
+  it("groups by state in the order of need, oldest start first, then by id", () => {
+    const at = "2026-11-10T09:00:00.000Z", now = Date.parse(list.now);
+    const got = groupSessions([sess("e", "ended", at), sess("i", "idle", at), sess("t", "thinking", "2026-11-10T09:30:00.000Z"), sess("r", "tool", at),
+      sess("b", "you", at), sess("a", "you", at), sess("w", "wait", at), sess("n", "thinking", null as unknown as string)], now);
+    expect(got.map(g => `${g.label}: ${g.sessions.map(s => s.session_id).join(" ")}`)).toEqual(
+      ["approval?: w", "your turn: a b", "working: r t n", "idle: i", "ended: e"]);
+    expect(groupSessions([sess("r", "tool", at)], now).map(g => g.label)).toEqual(["working"]); // an empty group is not drawn
+    // A plain shell call past 30 s joins approval? when the page notices, before the next fetch.
+    const slow = { ...sess("s", "tool", at), state: { ...sess("s", "tool", at).state, long: false } };
+    expect(groupSessions([slow], now)[0]!.label).toBe("approval?");
   });
 });
 
 describe("LivePage", () => {
   it("lists the active sessions and opens the newest when the URL names none", async () => {
     const { calls } = show("");
-    const rail = await screen.findByRole("region", { name: "Active sessions" });
-    expect(within(rail).getAllByRole("button").map(b => b.querySelector(".pname")!.textContent)).toEqual(["jobdesk", "sketchbook", "notes", "graft", "foo", "dotfiles"]);
-    await waitFor(() => expect(calls()).toContain("/api/live/session?id=s2"));
-    expect(within(rail).getAllByRole("button")[0]!.getAttribute("aria-current")).toBe("true");
+    expect(groups(await rail())).toEqual(["approval? · 1 foo", "your turn · 1 sketchbook", "working · 2 graft jobdesk", "idle · 1 dotfiles", "ended · 1 notes"]);
+    await waitFor(() => expect(calls()).toContain("/api/live/session?id=s2")); // the one that wrote last, wherever its group puts it
+    expect(screen.getByRole("button", { current: true }).querySelector(".pname")!.textContent).toBe("jobdesk");
+  });
+
+  it("keeps the rail's order through a write, a state change and a new session", async () => {
+    const a = sess("a", "tool", "2026-11-10T09:00:00.000Z"), b = sess("b", "tool", "2026-11-10T09:30:00.000Z"), c = sess("c", "tool", "2026-11-10T09:45:00.000Z");
+    const o = { list: { ...list, sessions: [b, a] } }; // b wrote last
+    show("#session=a", o);
+    const el = await rail(), after = async (sessions: typeof o.list.sessions, want: string[]) => {
+      o.list = { ...list, sessions };
+      FakeSource.last!.notify(null);
+      await waitFor(() => expect(groups(el)).toEqual(want));
+    };
+    expect(groups(el)).toEqual(["working · 2 a b"]);
+    await after([a, b], ["working · 2 a b"]); // a wrote: no entry moves
+    await after([c, a, b], ["working · 3 a b c"]); // a new session joins the end of its group
+    await after([{ ...b, state: sess("b", "you", b.first_ts).state }, c, a], ["your turn · 1 b", "working · 2 a c"]); // only b moves
+  });
+
+  it("shows how long a session has been on your turn or thinking, counting up with the clock", async () => {
+    fakeClock("2026-11-10T10:04:00.000Z");
+    const o = { list: { ...list, sessions: [sess("a", "you", "2026-11-10T09:00:00.000Z", "2026-11-10T10:00:00.000Z"), sess("b", "thinking", "2026-11-10T09:10:00.000Z", "2026-11-10T10:03:48.000Z")] } };
+    show("#session=a", o);
+    await tick(10);
+    const states = () => [...screen.getByRole("region", { name: "Active sessions" }).querySelectorAll(".state")].map(s => s.textContent);
+    expect(states()).toEqual(["your turn 4m 00s", "thinking 12s"]);
+    await tick(1000);
+    expect(states()).toEqual(["your turn 4m 01s", "thinking 13s"]);
+    cleanup();
+    show("#view=wall", o);
+    await tick(10);
+    expect(states()).toEqual(["your turn 4m 01s", "thinking 13s"]);
+  });
+
+  it("groups the wall as the rail, and frames the tiles that need the user", async () => {
+    const at = "2026-11-10T09:00:00.000Z";
+    show("#view=wall", { list: { ...list, sessions: [sess("r2", "tool", "2026-11-10T09:30:00.000Z"), sess("w", "wait", at), sess("r1", "tool", at), sess("y", "you", at)] } });
+    const el = await wall();
+    await waitFor(() => expect(groups(el)).toEqual(["approval? · 1 w", "your turn · 1 y", "working · 2 r1 r2"]));
+    expect(within(el).getAllByRole("list").map(l => l.getAttribute("aria-label"))).toEqual(["approval?", "your turn", "working"]);
+    expect(within(el).getByRole("button", { name: "Open y" }).className).toBe("panel tile st-you"); // .tile.st-you has the border
+    expect(within(el).getByRole("button", { name: "Open w" }).className).toBe("panel tile st-wait");
+  });
+
+  it("counts the sessions that need the user in the tab title, and gives the title back on leaving", async () => {
+    const at = "2026-11-10T09:00:00.000Z", o = { app: true, list: { ...list, sessions: [sess("w", "wait", at), sess("y", "you", at), sess("r", "tool", at), sess("e", "ended", at)] } };
+    show("#session=w", o);
+    await waitFor(() => expect(document.title).toBe("(2) Live · AI Ledger"));
+    o.list = { ...list, sessions: [sess("r", "tool", at), sess("i", "idle", at)] };
+    FakeSource.last!.notify(null);
+    await waitFor(() => expect(document.title).toBe("Live · AI Ledger"));
+    o.list = { ...list, sessions: [sess("y", "you", at)] };
+    FakeSource.last!.notify(null);
+    await waitFor(() => expect(document.title).toBe("(1) Live · AI Ledger"));
+    await userEvent.click(screen.getByRole("link", { name: "Cost" }));
+    expect(document.title).toBe("Cost · AI Ledger");
+  });
+
+  it("counts a shell call passing 30 s in the tab title when the page notices", async () => {
+    fakeClock("2026-11-10T10:00:20.000Z");
+    const slow = sess("s", "tool", "2026-11-10T10:00:00.000Z");
+    show("#session=s", { app: true, list: { ...list, sessions: [{ ...slow, state: { ...slow.state, long: false } }] } });
+    await tick(10);
+    expect(document.title).toBe("Live · AI Ledger");
+    await tick(11_000);
+    expect(document.title).toBe("(1) Live · AI Ledger");
   });
 
   it("names a titled session in the rail by its title, with the project on the second line", async () => {
@@ -258,6 +354,84 @@ describe("LivePage", () => {
     await waitFor(() => expect(calls().length).toBeGreaterThanOrEqual(n + 2));
   });
 
+  it("opens a new stream after an HTTP error closed it, at 1 s, 2 s and 4 s, and starts over after a success", async () => {
+    fakeClock("2026-11-10T10:01:00.000Z");
+    const { calls } = show();
+    await tick(10);
+    const retried = async (ms: number) => {
+      const was = FakeSource.last!;
+      was.fail();
+      expect([was.closed, screen.getByRole("status").textContent]).toEqual([true, "Connection lost · reconnecting…"]);
+      await tick(ms - 1);
+      expect(FakeSource.last).toBe(was);
+      await tick(1);
+      expect(FakeSource.last).not.toBe(was);
+    };
+    FakeSource.last!.open();
+    await retried(1000);
+    await retried(2000);
+    await retried(4000);
+    const n = calls().length;
+    FakeSource.last!.open();
+    expect(screen.getByRole("status").textContent).toBe("Updating live");
+    await tick(10);
+    expect(calls().slice(n)).toEqual(["/api/live", `/api/live/session?id=s1&after=${encodeURIComponent(s1.cursor!)}`]); // what it missed
+    await retried(1000);
+    for (const ms of [2000, 4000, 8000, 16_000, 30_000, 30_000]) await retried(ms); // capped at 30 s
+  });
+
+  it("leaves a stream that is still connecting to the browser, and clears its retry on unmount", async () => {
+    fakeClock("2026-11-10T10:01:00.000Z");
+    const { r } = show();
+    await tick(10);
+    const src = FakeSource.last!;
+    src.drop();
+    await tick(60_000);
+    expect([FakeSource.last, src.closed]).toEqual([src, false]);
+    src.fail();
+    r.unmount();
+    await tick(60_000);
+    expect(FakeSource.last).toBe(src);
+  });
+
+  it("looks paused while paused: the page carries the class that stills the dots", async () => {
+    show();
+    await stream();
+    const page = screen.getByRole("main");
+    expect(page.className).toBe("wrap pg-live");
+    await userEvent.click(screen.getByRole("button", { name: "Pause" }));
+    expect([page.className, screen.getByRole("status").textContent]).toEqual(["wrap pg-live paused", "Paused"]);
+    await userEvent.click(screen.getByRole("button", { name: "Resume" }));
+    expect([page.className, screen.getByRole("status").textContent]).toEqual(["wrap pg-live", "Connecting…"]);
+  });
+
+  it("updates the nav's Last ingest on a change notice, without waiting for the nav's poll", async () => {
+    const st = { ...status }, text = (ts: string) => `Last ingest ${new Date(ts).toLocaleTimeString()}`;
+    show("#session=s1", { app: true, status: () => st });
+    expect(await screen.findByText(text(st.last_ingest))).toBeTruthy();
+    st.last_ingest = st.last_change = "2026-11-10T10:00:50+00:00";
+    FakeSource.last!.notify(["s2"]);
+    expect(await screen.findByText(text(st.last_ingest))).toBeTruthy();
+  });
+
+  it("asks for the status once at a time however many notices arrive, and not while paused", async () => {
+    const { polls } = show();
+    await stream();
+    expect(polls()).toBe(0);
+    for (let i = 0; i < 10; i++) FakeSource.last!.notify(["s2"]);
+    expect(polls()).toBe(1); // one in flight
+    await waitFor(() => expect(polls()).toBe(2)); // and one more for the notices that came meanwhile
+    await act(async () => { await new Promise(r => setTimeout(r, 20)); });
+    expect(polls()).toBe(2);
+    await userEvent.click(screen.getByRole("button", { name: "Pause" }));
+    FakeSource.last!.notify(["s2"]);
+    FakeSource.last!.notify(["s2"]);
+    await act(async () => { await new Promise(r => setTimeout(r, 20)); });
+    expect(polls()).toBe(2);
+    await userEvent.click(screen.getByRole("button", { name: "Resume" }));
+    await waitFor(() => expect(polls()).toBe(3));
+  });
+
   it("holds updates while paused and fetches once on resume", async () => {
     const { calls } = show();
     await stream();
@@ -329,8 +503,7 @@ describe("LivePage", () => {
     o.list = { ...list, sessions: list.sessions.filter(s => s.session_id !== "s2") };
     FakeSource.last!.notify(null);
     await waitFor(() => expect(calls()).toContain(`/api/live/session?id=${o.list!.sessions[0]!.session_id}`));
-    const rail = screen.getByRole("region", { name: "Active sessions" });
-    expect(within(rail).getAllByRole("button")[0]!.getAttribute("aria-current")).toBe("true");
+    expect(screen.getByRole("button", { current: true }).querySelector(".pname")!.textContent).toBe(o.list.sessions[0]!.project);
   });
 
   it("counts your-turn sessions apart from working ones in the rail's footer", async () => {
@@ -350,8 +523,8 @@ describe("LivePage", () => {
     expect(within(panel).getByText("session closed")).toBeTruthy();
     cleanup();
     show("#view=wall");
-    const wall = await screen.findByRole("list", { name: "Active sessions" });
-    expect(within(wall).getByRole("button", { name: "Open notes" }).className).toBe("panel tile st-ended");
+    const el = await wall();
+    expect(within(el).getByRole("button", { name: "Open notes" }).className).toBe("panel tile st-ended");
   });
 
   it("counts an ended session as neither working nor waiting for you", async () => {
@@ -362,7 +535,7 @@ describe("LivePage", () => {
 
   it("hides Follow on the wall", async () => {
     show("#view=wall");
-    await screen.findByRole("list", { name: "Active sessions" });
+    await wall();
     expect(screen.queryByRole("checkbox", { name: "Follow" })).toBeNull();
   });
 
@@ -389,15 +562,15 @@ describe("LivePage", () => {
 
   it("shows every active session on the wall and opens one in the stream", async () => {
     show("#view=wall");
-    const wall = await screen.findByRole("list", { name: "Active sessions" });
-    const tiles = within(wall).getAllByRole("button");
+    const el = await wall();
+    const tiles = within(el).getAllByRole("button");
     expect(tiles.length).toBe(list.sessions.length);
-    const foo = within(wall).getByRole("button", { name: "Open Fast ingest pass while Live is open" });
+    const foo = within(el).getByRole("button", { name: "Open Fast ingest pass while Live is open" });
     expect(foo.querySelector(".ttl")!.getAttribute("title")).toBe("Fast ingest pass while Live is open");
-    expect(within(wall).getByRole("button", { name: "Open dotfiles" }).querySelector(".ttl")).toBeNull();
+    expect(within(el).getByRole("button", { name: "Open dotfiles" }).querySelector(".ttl")).toBeNull();
     expect(foo.textContent).toContain("git push origin feat/live-page");
     expect(foo.textContent).toContain("1 errors");
-    await userEvent.click(within(wall).getByRole("button", { name: "Open graft" }));
+    await userEvent.click(within(el).getByRole("button", { name: "Open graft" }));
     expect(location.hash).toBe("#session=0a0f7777-0000-7000-8000-000000000007");
     expect(await stream()).toBeTruthy();
   });

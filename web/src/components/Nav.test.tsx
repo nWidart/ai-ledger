@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { App } from "../App";
 import { hasHue, setOrder } from "../colors";
 import { Nav } from "./Nav";
+import { pollStatus } from "./refresh";
 import usage from "../__fixtures__/usage";
 import sessions from "../__fixtures__/sessions";
 import session from "../__fixtures__/session";
@@ -67,7 +68,7 @@ describe("Nav", () => {
     render(<App />);
     await userEvent.click(screen.getByRole("link", { name: "Live" }));
     expect(location.pathname).toBe("/live");
-    expect(document.title).toBe("Live · AI Ledger");
+    await waitFor(() => expect(document.title).toBe("(2) Live · AI Ledger")); // one approval wait and one your turn in the list
     expect(vi.mocked(fetch).mock.calls.some(c => String(c[0]) === "/api/live?project=foo&source=claude")).toBe(true);
     expect(screen.queryByRole("group", { name: "Time range" })).toBeNull();
     await userEvent.click(screen.getByRole("link", { name: "Cost" }));
@@ -108,6 +109,43 @@ describe("Nav", () => {
     expect(btn.className).toBe("failed");
     expect(screen.getByText("Refresh failed. Select Retry to try again.")).toBeTruthy();
     expect(f).toHaveBeenCalledWith("/api/refresh", { method: "POST" });
+  });
+
+  it("polls the status every minute, every 3 s while an ingest runs, and stops on unmount", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    let ingesting = true;
+    const f = vi.fn(() => json({ ...status, ingesting }));
+    vi.stubGlobal("fetch", f);
+    const { unmount } = render(<Nav />);
+    const tick = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
+    await tick(0);
+    expect([f.mock.calls.length, screen.getByText("Ingesting transcripts…") != null]).toEqual([1, true]);
+    ingesting = false;
+    await tick(3000);
+    expect(f.mock.calls.length).toBe(2);
+    await tick(59_999);
+    expect(f.mock.calls.length).toBe(2);
+    await tick(1);
+    expect(f.mock.calls.length).toBe(3);
+    unmount();
+    await tick(120_000);
+    expect(f.mock.calls.length).toBe(3);
+    vi.useRealTimers();
+  });
+
+  it("shows a status poll asked from outside the nav, and says when the app does not answer", async () => {
+    setOrder([]);
+    const f = vi.fn(() => json(status));
+    vi.stubGlobal("fetch", f);
+    render(<Nav />);
+    expect(await screen.findByText(/Last ingest .* · 2 new lines/)).toBeTruthy();
+    f.mockImplementation(() => json({ ...status, last_stats: { ...status.last_stats, inserted: 7 }, project_order: ["foo"] }));
+    await act(async () => { expect((await pollStatus())?.project_order).toEqual(["foo"]); });
+    expect(screen.getByText(/Last ingest .* · 7 new lines/)).toBeTruthy();
+    expect(hasHue("foo")).toBe(true);
+    f.mockImplementation(() => Promise.reject(new Error("down")));
+    await act(async () => { expect(await pollStatus()).toBeNull(); });
+    expect(screen.getByText("App not reachable")).toBeTruthy();
   });
 
   it("steps the theme through light, dark and back to system", async () => {

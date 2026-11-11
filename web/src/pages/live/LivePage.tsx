@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { viewOf, type LiveState } from "../../api";
+import { viewOf, type LiveListSession, type LiveState } from "../../api";
 import { Filters, SOURCE_LABELS } from "../../components/Filters";
 import { ProjectName } from "../../components/ProjectDot";
 import { plural, usd, when } from "../../format";
@@ -7,7 +7,7 @@ import { useHashState } from "../../hash";
 import { ApiError } from "../../useApi";
 import { sessionHref } from "../insights/InsightsPage";
 import { AgentPanel, StateTag } from "./AgentPanel";
-import { stateNow } from "./live";
+import { groupSessions, needsYou, stateNow } from "./live";
 import { Stream } from "./Stream";
 import { useLive, useNow } from "./useLive";
 import { Wall } from "./Wall";
@@ -15,6 +15,8 @@ import "./live.css";
 
 /** The states the rail's footer counts as working; your turn counts as waiting for you, idle and ended as neither. */
 const WORKING = new Set<LiveState["kind"]>(["tool", "thinking", "wait"]);
+/** The tab title's count of sessions that need the user, before the page's own title. */
+const COUNT = /^\(\d+\) /;
 
 /** Live (/live): the sessions active in the last 10 minutes, followed from the agent's side as their lines arrive. */
 export function LivePage() {
@@ -39,8 +41,26 @@ export function LivePage() {
   const missing = !shown && sessionError instanceof ApiError && sessionError.status === 404;
   const error = listError ?? (missing ? undefined : sessionError);
   const states = sessions.map(s => stateNow(s.state, now).kind), waiting = states.filter(k => k === "you").length;
+  // The tab title says how many listed sessions need the user. App sets the page's own title on each route, so this only
+  // adds the count to whatever title is there, and takes it off on leaving.
+  const need = states.filter(needsYou).length;
+  useEffect(() => {
+    const base = document.title.replace(COUNT, "");
+    document.title = need ? `(${need}) ${base}` : base;
+    return () => { document.title = document.title.replace(COUNT, ""); };
+  }, [need]);
+  const entry = (s: LiveListSession) => <li key={s.session_id}>
+    <button type="button" aria-current={s.session_id === selected ? "true" : undefined} onClick={() => pick(s.session_id)}>
+      {s.title ? <>
+        <span className="ttl" title={s.title}>{s.title}</span><span className="cost">{usd(s.cost)}</span>
+        <span className="sub"><ProjectName project={s.project} /> · <StateTag st={stateNow(s.state, now)} now={now} /> · {SOURCE_LABELS[s.source]}</span>
+      </> : <>
+        <ProjectName project={s.project} /><span className="cost">{usd(s.cost)}</span>
+        <span className="sub"><StateTag st={stateNow(s.state, now)} now={now} /> · {SOURCE_LABELS[s.source]}{s.branch ? <> · <code>{s.branch}</code></> : null}</span>
+      </>}
+    </button></li>;
   return (
-    <main className="wrap pg-live">
+    <main className={"wrap pg-live" + (paused ? " paused" : "")}>
       <div className="top">
         <h1>Live</h1>
         <div className="seg" role="group" aria-label="View">
@@ -58,20 +78,14 @@ export function LivePage() {
         The app only listens on 127.0.0.1; turn this off before sharing your screen.</div>}
       {error && <div className="banner" role="alert"><b>Could not load.</b> {error.message}</div>}
       {list && !sessions.length && !h.session && <Empty newest={list.newest} />}
-      {mode === "wall" && sessions.length > 0 && <Wall sessions={sessions} now={now} pick={id => { set({ session: id, view: null }); setFollow(true); }} />}
+      {mode === "wall" && sessions.length > 0 && <Wall sessions={sessions} now={now} pick={pick} />}
       {mode === "stream" && (sessions.length > 0 || h.session) && <div className="grid">
         <section className="panel rail" aria-label="Active sessions">
           <h2>Active · last 10 min</h2>
-          <ul>{sessions.map(s => <li key={s.session_id}>
-            <button type="button" aria-current={s.session_id === selected ? "true" : undefined} onClick={() => pick(s.session_id)}>
-              {s.title ? <>
-                <span className="ttl" title={s.title}>{s.title}</span><span className="cost">{usd(s.cost)}</span>
-                <span className="sub"><ProjectName project={s.project} /> · <StateTag st={stateNow(s.state, now)} now={now} /> · {SOURCE_LABELS[s.source]}</span>
-              </> : <>
-                <ProjectName project={s.project} /><span className="cost">{usd(s.cost)}</span>
-                <span className="sub"><StateTag st={stateNow(s.state, now)} now={now} /> · {SOURCE_LABELS[s.source]}{s.branch ? <> · <code>{s.branch}</code></> : null}</span>
-              </>}
-            </button></li>)}</ul>
+          {groupSessions(sessions, now).map(g => <div key={g.id} className="group">
+            <h3>{g.label} · {g.sessions.length}</h3>
+            <ul>{g.sessions.map(entry)}</ul>
+          </div>)}
           <p className="foot">{plural(states.filter(k => WORKING.has(k)).length, "session")} working
             {waiting ? ` · ${waiting} waiting for you` : ""} · {usd(sessions.reduce((a, s) => a + (s.cost ?? 0), 0))} so far</p>
         </section>

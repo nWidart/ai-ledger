@@ -3,12 +3,13 @@ import { SOURCE_LABELS } from "../../components/Filters";
 import { ProjectName } from "../../components/ProjectDot";
 import { num, pct, usd } from "../../format";
 import { NEAR_FULL, StateTag } from "./AgentPanel";
-import { stateNow } from "./live";
+import { groupSessions, stateNow } from "./live";
 
-/** One tile per active session; picking one opens it in the stream. */
+/** One tile per active session, grouped as the rail is; picking one opens it in the stream. */
 export function Wall({ sessions, now, pick }: { sessions: LiveListSession[]; now: number; pick: (id: string) => void }) {
-  return <div className="wall" role="list" aria-label="Active sessions">
-    {sessions.map(s => {
+  return <section className="walls" aria-label="Active sessions">{groupSessions(sessions, now).map(g => <div key={g.id} className="group">
+    <h3>{g.label} · {g.sessions.length}</h3>
+    <div className="wall" role="list" aria-label={g.label}>{g.sessions.map(s => {
       const st = stateNow(s.state, now), share = s.context != null && s.window ? s.context / s.window : null;
       const act = !s.latest ? "" : s.latest.kind === "prompt" ? "▸ prompt" : `${s.latest.lane ? "⤷ " : ""}${s.latest.tool} · ${s.latest.summary ?? ""}`;
       return <div role="listitem" key={s.session_id}>
@@ -22,6 +23,6 @@ export function Wall({ sessions, now, pick }: { sessions: LiveListSession[]; now
           <span className="row muted"><code>{s.branch ?? "–"}</code><span>{SOURCE_LABELS[s.source]} · {s.model ?? "–"}</span></span>
         </button>
       </div>;
-    })}
-  </div>;
+    })}</div>
+  </div>)}</section>;
 }

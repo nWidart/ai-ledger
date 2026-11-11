@@ -1,7 +1,8 @@
 // Ingest status and Refresh, shared by the nav (status text, Refresh button) and the palette's >refresh command, so both
 // run the same request and the nav shows the same status whichever started it.
 import { useSyncExternalStore } from "react";
-import type { Status } from "../api";
+import { statusUrl, type Status } from "../api";
+import { setOrder } from "../colors";
 import { clearApiCache, getJson, noteIngest } from "../useApi";
 
 export interface RefreshState { text: string; failed: boolean; busy: boolean; retry: boolean }
@@ -20,6 +21,17 @@ export const statusText = (s: Status) => {
 /** A status poll's answer (or "App not reachable" when it failed). */
 export function noteStatus(s: Status | null) {
   set(s ? { ...state, text: statusText(s), failed: !!s.error, retry: false } : { ...state, text: "App not reachable", failed: true });
+}
+
+/** Asks the app for its status and shows it: the nav on its schedule, Live on each change notice. A new last_change
+ *  clears the data cache. Gives the status, or null when the app did not answer. */
+export function pollStatus(): Promise<Status | null> {
+  return getJson<Status>(statusUrl).then(s => {
+    noteIngest(s.last_change);
+    noteStatus(s);
+    setOrder(s.project_order);
+    return s;
+  }, () => { noteStatus(null); return null; });
 }
 
 /** Runs an ingest now, then drops the data cache so every page refetches. */

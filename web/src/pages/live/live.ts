@@ -1,6 +1,6 @@
 // Live page logic with no React: merging a catch-up into the session held, the state as shown now, and the stream's
 // layout of main-thread events and subagent lanes.
-import type { LiveEvent, LiveSession, LiveState, LiveToolEvent, Ts } from "../../api";
+import type { LiveEvent, LiveListSession, LiveSession, LiveState, LiveToolEvent, Ts } from "../../api";
 
 /** Events kept in memory per session; older ones drop off the top. */
 export const KEEP = 2000;
@@ -40,6 +40,27 @@ export const STATE_LABEL: Record<LiveState["kind"], string> = {
   tool: "running", wait: "approval?", thinking: "thinking", you: "your turn", idle: "idle", ended: "ended",
 };
 
+/** The groups of the rail and the wall, in the order of who needs the user first. Working is running a tool or thinking. */
+export type LiveGroup = "wait" | "you" | "working" | "idle" | "ended";
+const GROUPS: LiveGroup[] = ["wait", "you", "working", "idle", "ended"];
+const groupOf = (kind: LiveState["kind"]): LiveGroup => (kind === "tool" || kind === "thinking" ? "working" : kind);
+/** The states the tab title counts: the session waits for the user. */
+export const needsYou = (kind: LiveState["kind"]) => kind === "wait" || kind === "you";
+
+/** The sessions by state group, for the rail and the wall, without the empty groups. Inside a group the oldest start
+ *  comes first, then the session id, so an entry moves only when its state changes group, never on a write. */
+export function groupSessions<T extends Pick<LiveListSession, "session_id" | "first_ts" | "state">>(sessions: readonly T[], now: number):
+  { id: LiveGroup; label: string; sessions: T[] }[] {
+  const by = new Map<LiveGroup, T[]>();
+  for (const s of sessions) {
+    const g = groupOf(stateNow(s.state, now).kind);
+    (by.get(g) ?? by.set(g, []).get(g)!).push(s);
+  }
+  const start = (s: T) => (Number.isNaN(ms(s.first_ts)) ? Infinity : ms(s.first_ts));
+  return GROUPS.filter(g => by.has(g)).map(g => ({ id: g, label: g === "working" ? "working" : STATE_LABEL[g],
+    sessions: by.get(g)!.sort((a, b) => start(a) - start(b) || (a.session_id < b.session_id ? -1 : 1)) }));
+}
+
 /** Milliseconds as the stream shows durations: 0.4s, 12s, 3m 05s, 2h 10m. */
 export function elapsed(msec: number | null): string {
   if (msec == null) return "–";
@@ -50,16 +71,16 @@ export function elapsed(msec: number | null): string {
   return `${Math.floor(s / 3600)}h ${String(Math.floor(s / 60) % 60).padStart(2, "0")}m`;
 }
 
-/** What one state says in words, for the rail and the panel. */
+/** What one state says in words, for the rail, the wall and the panel. Your turn, thinking and idle say for how long. */
 export function stateText(st: LiveState, now: number): { label: string; detail: string } {
-  const el = elapsed(since(st.since, now));
+  const el = elapsed(since(st.since, now)), timed = (label: string) => (el === "–" ? label : `${label} ${el}`);
   switch (st.kind) {
     case "tool": return { label: `${st.tool} ${el}`, detail: `${st.tool} running for ${el}` };
     case "wait": return { label: STATE_LABEL.wait, detail: `${st.tool} pending ${el}: likely waiting for your approval` };
-    case "thinking": return { label: STATE_LABEL.thinking, detail: st.inferred ? "a request is likely in flight" : "the turn is in progress" };
-    case "you": return { label: STATE_LABEL.you, detail: "turn ended, waiting for a prompt" };
+    case "thinking": return { label: timed(STATE_LABEL.thinking), detail: st.inferred ? "a request is likely in flight" : "the turn is in progress" };
+    case "you": return { label: timed(STATE_LABEL.you), detail: "turn ended, waiting for a prompt" };
     case "ended": return { label: STATE_LABEL.ended, detail: "session closed" };
-    default: return { label: el === "–" ? "idle" : `idle ${elapsed(since(st.since, now))}`, detail: "no new lines for 5 minutes" };
+    default: return { label: timed(STATE_LABEL.idle), detail: "no new lines for 5 minutes" };
   }
 }
 

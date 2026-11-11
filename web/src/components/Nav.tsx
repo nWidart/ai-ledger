@@ -1,12 +1,9 @@
 import { useEffect, useRef, type MouseEvent, type ReactNode } from "react";
-import { statusUrl, type Status } from "../api";
 import { navigate, setHash, sharedHash, useHashState, usePathname } from "../hash";
-import { setOrder } from "../colors";
 import { getTheme, nextTheme, setTheme, useTheme, type Theme } from "../theme";
-import { getJson, noteIngest } from "../useApi";
 import { ProjectDot } from "./ProjectDot";
 import { openPalette, shortcutHint, shortcutKeys } from "./palette/store";
-import { noteStatus, refresh, useRefreshState } from "./refresh";
+import { pollStatus, refresh, useRefreshState } from "./refresh";
 import "./Nav.css";
 
 export const PAGES = [
@@ -45,17 +42,7 @@ export function Nav() {
     let live = true, timer = 0;
     const poll = () => {
       clearTimeout(timer);
-      getJson<Status>(statusUrl).then(s => {
-        if (!live) return;
-        noteIngest(s.last_change);
-        noteStatus(s);
-        setOrder(s.project_order);
-        timer = window.setTimeout(poll, s.ingesting ? INGESTING_MS : POLL_MS);
-      }, () => {
-        if (!live) return;
-        noteStatus(null);
-        timer = window.setTimeout(poll, POLL_MS);
-      });
+      void pollStatus().then(s => { if (live) timer = window.setTimeout(poll, s?.ingesting ? INGESTING_MS : POLL_MS); });
     };
     poll();
     return () => { live = false; clearTimeout(timer); };
