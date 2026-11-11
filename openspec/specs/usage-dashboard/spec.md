@@ -99,7 +99,7 @@ The usage dashboard, shown as Activity, SHALL open with the work done in the sel
 
 #### Scenario: Compare with the period before
 - **WHEN** the user opens the last 30 days and the 30 days before had 20 commits against 30 now
-- **THEN** the headline shows commits up 50%
+- **THEN** the headline shows 30 commits followed by ", up from 20 commits"
 
 #### Scenario: All time
 - **WHEN** the user opens the All range
@@ -125,7 +125,7 @@ Activity SHALL show, directly under its lead, every problem found in the view (e
 - **THEN** the drawer's count is 60 and it lists the 50 newest, saying "Showing the 50 newest of 60"
 
 ### Requirement: Show work per day
-Activity SHALL chart commits, prompts or sessions across the view, from its first day with a session, with errors per 100 tool calls on the same chart against its own axis (the failed count stays in the tooltip); a view with no tool calls SHALL show no rate line, axis or legend entry. Selecting a day SHALL list that day's sessions. The all-time lead SHALL date the history from that same day. When the span from the first day with a session to the end of the range is over 60 days, the chart SHALL show one bar per week (Monday start, local time) instead of per day, and its totals SHALL equal the sum of its bars. The week that holds the end of the range SHALL read "so far", and a first week cut by the start of the range SHALL read "from" that date.
+Activity SHALL chart commits, prompts or sessions across the view, from its first day with a session, with errors per 100 tool calls on the same chart against its own axis (the failed count stays in the tooltip); a view with no tool calls SHALL show no rate line, axis or legend entry. Selecting a day SHALL list that day's sessions. The all-time lead SHALL date the history from that same day. When the span from the first day with a session to the end of the range is over 60 days, the chart SHALL show one bar per week (Monday start, local time) instead of per day, and its totals for commits and prompts SHALL equal the sum of its bars; a session counts once in each bucket it touches, so the bars for sessions can add up to more than the total. The week that holds the end of the range SHALL read "so far", and a first week cut by the start of the range SHALL read "from" that date.
 
 #### Scenario: History starts inside the range
 - **WHEN** the user opens the 90-day view and the first session in it ran 40 days ago
