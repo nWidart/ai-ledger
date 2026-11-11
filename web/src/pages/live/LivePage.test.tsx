@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { LivePayload, LiveSession, LiveToolEvent } from "../../api";
+import type { LivePayload, LiveSession, LiveState, LiveToolEvent } from "../../api";
 import live from "../../__fixtures__/live";
 import liveListText from "../../__fixtures__/live-text";
 import liveSession from "../../__fixtures__/live-session";
@@ -9,7 +9,7 @@ import liveText from "../../__fixtures__/live-session-text";
 import liveCodex from "../../__fixtures__/live-session-codex";
 import { mockApi } from "../../components/sheets/testing";
 import { LivePage } from "./LivePage";
-import { lanesOf, mergeSession, streamRows } from "./live";
+import { lanesOf, likelyWaiting, mergeSession, stateNow, stateText, streamRows } from "./live";
 import { FakeSource } from "./testing";
 
 const list = live as LivePayload, listText = liveListText as LivePayload, s1 = liveSession as LiveSession, s1text = liveText as LiveSession, codex = liveCodex as LiveSession;
@@ -24,6 +24,7 @@ function show(hash = "#session=s1", o: { list?: LivePayload; session?: (q: URLSe
   return { f, r, calls: () => f.mock.calls.map(c => String(c[0])) };
 }
 const stream = () => screen.findByRole("region", { name: "Session" });
+const ended = list.sessions.find(s => s.state.kind === "ended")!;
 const toolRow = (name: string, nth = 0) => screen.getAllByRole("button", { name: new RegExp("^" + name) })[nth]!;
 
 afterEach(() => { vi.useRealTimers(); });
@@ -59,13 +60,30 @@ describe("live.ts", () => {
     expect(lanesOf(running)[0]).toMatchObject({ parent: "t2", name: "Agent", done: false });
     expect(lanesOf(running.map(e => (e.k === "tool" && e.id === "t2" ? { ...e, agent: null } : e)))[0]).toMatchObject({ parent: null, name: "Subagent" });
   });
+
+  it("reads a shell call pending past 30 s as a likely approval wait, unless it is a long one", () => {
+    const st: LiveState = { kind: "tool", tool: "Bash", since: "2026-11-10T10:00:00.000Z", inferred: false, long: false };
+    const after = (seconds: number) => Date.parse(st.since!) + seconds * 1000;
+    expect(stateNow(st, after(30)).kind).toBe("tool");
+    expect(stateNow(st, after(31))).toMatchObject({ kind: "wait", inferred: true });
+    expect(stateNow({ ...st, long: true }, after(600))).toMatchObject({ kind: "tool", inferred: false });
+    expect(stateNow({ ...st, tool: "WebFetch" }, after(600)).kind).toBe("tool");
+    expect([likelyWaiting("exec", false, 31_000), likelyWaiting("exec", true, 31_000), likelyWaiting("exec", false, null)]).toEqual([true, false, false]);
+  });
+
+  it("words an ended session apart from your turn and idle", () => {
+    const texts = (["ended", "you", "idle"] as const).map(kind => stateText({ ...ended.state, kind }, Date.parse(list.now)));
+    expect(texts.map(t => t.label)).toEqual(["ended", "your turn", "idle 25s"]);
+    expect(new Set(texts.map(t => t.detail)).size).toBe(3);
+    expect(stateNow(ended.state, Date.parse(list.now) + 3_600_000)).toBe(ended.state);
+  });
 });
 
 describe("LivePage", () => {
   it("lists the active sessions and opens the newest when the URL names none", async () => {
     const { calls } = show("");
     const rail = await screen.findByRole("region", { name: "Active sessions" });
-    expect(within(rail).getAllByRole("button").map(b => b.querySelector(".pname")!.textContent)).toEqual(["jobdesk", "sketchbook", "graft", "foo", "dotfiles"]);
+    expect(within(rail).getAllByRole("button").map(b => b.querySelector(".pname")!.textContent)).toEqual(["jobdesk", "sketchbook", "notes", "graft", "foo", "dotfiles"]);
     await waitFor(() => expect(calls()).toContain("/api/live/session?id=s2"));
     expect(within(rail).getAllByRole("button")[0]!.getAttribute("aria-current")).toBe("true");
   });
@@ -115,7 +133,7 @@ describe("LivePage", () => {
   });
 
   it("follows the URL's session, and still shows one that is no longer active", async () => {
-    show("#session=gone", { list: { ...list, sessions: list.sessions.filter(s => s.session_id !== "s1") }, session: () => ({ ...s1, session_id: "gone", state: { kind: "idle", tool: null, since: s1.last_ts, inferred: false } }) });
+    show("#session=gone", { list: { ...list, sessions: list.sessions.filter(s => s.session_id !== "s1") }, session: () => ({ ...s1, session_id: "gone", state: { kind: "idle", tool: null, since: s1.last_ts, inferred: false, long: false } }) });
     const main = await stream();
     expect(await within(main).findByText(/^idle/)).toBeTruthy();
   });
@@ -174,6 +192,19 @@ describe("LivePage", () => {
     expect(within(push()).getByText("5.0s")).toBeTruthy();
     await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
     expect(push().className).toContain("waiting");
+  });
+
+  it("keeps a long shell call running past 30 s, in its row and in the state", async () => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "Date"] });
+    vi.setSystemTime(Date.parse("2026-11-10T10:01:30.000Z"));
+    const long = { ...s1, state: { ...s1.state, kind: "tool" as const, inferred: false, long: true },
+      events: s1.events.map(e => (e.k === "tool" && e.end == null ? { ...e, long: true } : e)) };
+    show("#session=s1", { session: () => long });
+    await act(async () => { await vi.advanceTimersByTimeAsync(10); });
+    expect(toolRow("Bash", 1).className).toBe("tool running");
+    const panel = screen.getByRole("complementary", { name: "Agent" });
+    expect(within(panel).queryByText(/approval\?/)).toBeNull();
+    expect(within(panel).getByText("Bash running for 1m 08s")).toBeTruthy();
   });
 
   it("opens a failed call's detail in place with the error and the result size only", async () => {
@@ -306,6 +337,27 @@ describe("LivePage", () => {
     show("");
     const rail = await screen.findByRole("region", { name: "Active sessions" });
     expect(rail.querySelector(".foot")!.textContent).toMatch(/^3 sessions working · 1 waiting for you · /);
+  });
+
+  it("shows an ended session as ended in the rail, in the agent panel and on the wall", async () => {
+    show("#session=s5", { session: () => ({ ...s1, session_id: "s5", project: "notes", state: ended.state }) });
+    const rail = await screen.findByRole("region", { name: "Active sessions" });
+    const state = within(rail).getAllByRole("button").find(b => b.querySelector(".pname")!.textContent === "notes")!.querySelector(".state")!;
+    expect([state.className, state.textContent]).toEqual(["state st-ended", "ended"]);
+    await stream();
+    const panel = screen.getByRole("complementary", { name: "Agent" });
+    expect(panel.querySelector(".now")!.className).toBe("now ended");
+    expect(within(panel).getByText("session closed")).toBeTruthy();
+    cleanup();
+    show("#view=wall");
+    const wall = await screen.findByRole("list", { name: "Active sessions" });
+    expect(within(wall).getByRole("button", { name: "Open notes" }).className).toBe("panel tile st-ended");
+  });
+
+  it("counts an ended session as neither working nor waiting for you", async () => {
+    show("#session=s5", { list: { ...list, sessions: [ended] } });
+    const rail = await screen.findByRole("region", { name: "Active sessions" });
+    expect(rail.querySelector(".foot")!.textContent).toMatch(/^0 sessions working · \$/);
   });
 
   it("hides Follow on the wall", async () => {

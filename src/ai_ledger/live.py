@@ -14,6 +14,7 @@ ACTIVE = timedelta(minutes=10)  # a session with a line this recent is listed
 IDLE = timedelta(minutes=5)  # no line for this long: idle, whatever else the lines say
 APPROVAL = timedelta(seconds=30)  # a shell call pending this long is likely waiting for approval
 APPROVAL_TOOLS = SHELL_TOOLS | {"exec"}  # Codex's exec runs a script that calls the shell
+LONG = timedelta(seconds=120)  # a call with a timeout above this, or in the background, runs long: it waits for no approval
 FIRST_LOAD = 500  # events on a first load
 FIRST_LINES = FIRST_LOAD * 6  # lines read for a first load: most lines show no event
 OVERLAP = timedelta(seconds=60)  # a catch-up reads again this far before its cursor: some lines are written late
@@ -44,6 +45,11 @@ def iso(t):
     return t.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:23] + "Z" if t else None
 
 
+def aware(t):
+    """A stored time (UTC, no zone) as an aware one, or None."""
+    return t.replace(tzinfo=timezone.utc) if t else None
+
+
 def lane_of(path, source):
     """The id of the subagent whose lines file path holds: Claude Code's agent-<id>.jsonl, a Codex thread."""
     if source == "codex":
@@ -55,8 +61,9 @@ def lane_of(path, source):
 
 def assemble(rows):
     """Events in line order from raw rows (key, file, ts, subagent, source, json). A tool use and its result become one
-    tool event; requests are left out, as the page shows none. Returns (events, results), where results maps a tool id
-    to its result item when the use is not among the rows."""
+    tool event; requests are left out, as the page shows none. A tool event is long when its input says the call runs in
+    the background or may run past LONG. Returns (events, results), where results maps a tool id to its result item when
+    the use is not among the rows."""
     events, tools, results = [], {}, {}
     for key, path, ts, sub, source, text in rows:
         src = store.SOURCES.get(source or "claude")
@@ -72,7 +79,8 @@ def assemble(rows):
             k = it["k"]
             if k == "tool_use":
                 ev = dict(key=f"{key}#{i}", k="tool", ts=t, lane=lane, id=it["id"], tool=it["tool"], summary=it["summary"],
-                          description=it.get("description"), start=t, end=None, failed=False, error=None, output=None, agent=None)
+                          description=it.get("description"), start=t, end=None, failed=False, error=None, output=None, agent=None,
+                          long=bool(it.get("background")) or (it.get("timeout") or 0) > LONG.total_seconds() * 1000)
                 if it["id"] in results:
                     finish(ev, results.pop(it["id"]))
                 tools[it["id"]] = ev
@@ -98,33 +106,51 @@ def finish(ev, r):
     ev["agent"] = ev["agent"] or r.get("agent")
 
 
-def state(events, now, source, last):
-    """One session's state from its events (in order), now, its source and its newest line's time.
-    kind: idle, wait (likely waiting for approval), tool, thinking or you (your turn)."""
+def state(events, now, source, last, closed=False):
+    """One session's state from its events (in order), now, its source, its newest line's time and whether its
+    transcript shows it closed. kind: ended, idle, wait (likely waiting for approval), tool, thinking or you (your turn).
+    long: the running call is a long one, which never turns into a wait."""
+    def st(kind, since, tool=None, inferred=False, long=False):
+        return dict(kind=kind, tool=tool, since=iso(since), inferred=inferred, long=long)
+    if closed:  # the close line has no time of its own
+        return st("ended", last)
     if last is None or now - last > IDLE:
-        return dict(kind="idle", tool=None, since=iso(last), inferred=False)
+        return st("idle", last)
     pending = [e for e in events if e["k"] == "tool" and e["end"] is None]
     if pending:  # a likely approval wait, the oldest first, else the newest call: a newer call in a subagent hides no wait
-        waits = [e for e in pending if e["tool"] in APPROVAL_TOOLS and e["start"] is not None and now - e["start"] > APPROVAL]
+        waits = [e for e in pending if e["tool"] in APPROVAL_TOOLS and not e["long"] and e["start"] is not None and now - e["start"] > APPROVAL]
         if waits:
             p = min(waits, key=lambda e: e["start"])
-            return dict(kind="wait", tool=p["tool"], since=iso(p["start"]), inferred=True)
+            return st("wait", p["start"], p["tool"], inferred=True)
         p = max(pending, key=lambda e: e["start"] or now)
-        return dict(kind="tool", tool=p["tool"], since=iso(p["start"]), inferred=False)
+        return st("tool", p["start"], p["tool"], long=p["long"])
     if source == "codex":
         turns = [e for e in events if e["k"] in ("turn_start", "turn_end")]
         if turns and turns[-1]["k"] == "turn_start":
-            return dict(kind="thinking", tool=None, since=iso(turns[-1]["ts"]), inferred=False)
-        return dict(kind="you", tool=None, since=iso(turns[-1]["ts"] if turns else last), inferred=False)
+            return st("thinking", turns[-1]["ts"])
+        return st("you", turns[-1]["ts"] if turns else last)
     # Claude Code: whatever happened last among the prompts, replies, interruptions and tool results.
     marks = [(e["ts"], e["k"]) for e in events if e["k"] in ("prompt", "reply", "interrupt") and e["ts"]]
     marks += [(e["end"], "result") for e in events if e["k"] == "tool" and e["end"]]
     if not marks:
-        return dict(kind="you", tool=None, since=iso(last), inferred=False)
+        return st("you", last)
     t, k = max(marks, key=lambda m: m[0])
-    if k in ("prompt", "result"):
-        return dict(kind="thinking", tool=None, since=iso(t), inferred=True)
-    return dict(kind="you", tool=None, since=iso(t), inferred=False)
+    return st("thinking", t, inferred=True) if k in ("prompt", "result") else st("you", t)
+
+
+def closed(cur, sids):
+    """The sessions among sids whose transcript shows they closed: their source's close line (Source.close_type) comes
+    after the last timed line of the main file that wrote last. A source with no close line never has one."""
+    kinds = [f"{name}:{src.close_type}" for name, src in store.SOURCES.items() if src.close_type]
+    if not sids or not kinds:
+        return set()
+    return {r[0] for r in cur.execute("""SELECT session_id FROM (
+            SELECT r.session_id, r.file, max(r.ts) AS ts, coalesce(
+              max(r.line_no) FILTER (WHERE list_contains(?, coalesce(f.source, 'claude') || ':' || r.type))
+              > max(r.line_no) FILTER (WHERE r.ts IS NOT NULL), false) AS closed
+            FROM raw_lines r LEFT JOIN files f ON f.path = r.file
+            WHERE list_contains(?, r.session_id) AND r.parsed AND NOT r.subagent GROUP BY 1, 2)
+        GROUP BY 1 HAVING arg_max(closed, ts)""", [kinds, list(sids)]).fetchall()}
 
 
 def latest_action(events, text):
@@ -180,14 +206,16 @@ def sessions(cur, project="", source="", automated=False, now=None, prices=None,
     lines = recent(cur, sids)
     figs = figures(cur, sids, prices)
     found = metrics.titles(cur, sids, prompts=text)
+    ended = closed(cur, sids)
     out = []
     for s in info:
-        events, _ = assemble(lines.get(s["session_id"], []))
-        last = s["last_ts"].replace(tzinfo=timezone.utc) if s["last_ts"] else None
-        f = figs[s["session_id"]]
-        out.append(dict(session_id=s["session_id"], **title_of(found, s["session_id"]), project=s["project"], source=s["source"],
-                        branch=s["git_branch"], last_ts=iso(last), state=state(events, now, s["source"], last), latest=latest_action(events, text),
-                        window=window_of(f["model"], events, prices), **f))
+        sid = s["session_id"]
+        events, _ = assemble(lines.get(sid, []))
+        last = aware(s["last_ts"])
+        f = figs[sid]
+        out.append(dict(session_id=sid, **title_of(found, sid), project=s["project"], source=s["source"], branch=s["git_branch"],
+                        last_ts=iso(last), state=state(events, now, s["source"], last, sid in ended),
+                        latest=latest_action(events, text), window=window_of(f["model"], events, prices), **f))
     return dict(now=iso(now), sessions=out, newest=None if out else newest_session(cur, where, params))
 
 
@@ -257,12 +285,12 @@ def session(cur, sid, after="", text=False, now=None, prices=None):
             ev["agent"] = ev["agent"] or started[ev["id"]]
     if len(events) > FIRST_LOAD and not after:
         events, more = events[-FIRST_LOAD:], True
-    last = s["last_ts"].replace(tzinfo=timezone.utc) if s["last_ts"] else None
+    last = aware(s["last_ts"])
     cursor = max((r[2] for r in rows if r[2]), default=after or None)
     f = figures(cur, [sid], prices)[sid]
     return dict(session_id=sid, **title_of(metrics.titles(cur, [sid], prompts=text), sid), project=s["project"], source=s["source"], branch=s["git_branch"], last_ts=iso(last),
                 now=iso(now), cursor=cursor, truncated=more,
-                state=state(assemble(recent(cur, [sid]).get(sid, []))[0], now, s["source"], last),
+                state=state(assemble(recent(cur, [sid]).get(sid, []))[0], now, s["source"], last, sid in closed(cur, [sid])),
                 events=[public(e, text) for e in events],
                 window=window_of(f["model"], events, prices), compactions=compactions(cur, sid),
                 spark=spark(cur, sid, now), limits=plan_limits(cur, s["source"], now), **f)

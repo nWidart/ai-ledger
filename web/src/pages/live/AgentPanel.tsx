@@ -25,7 +25,7 @@ export function AgentPanel({ s, st, now }: { s: LiveSession; st: LiveState; now:
   const t = stateText(st, now), share = s.context != null && s.window ? s.context / s.window : null;
   return <aside className="panel head" aria-label="Agent">
     <section className="sec"><h2>Doing now</h2>
-      <div className={"now" + (st.kind === "wait" ? " warn" : "")}><StateTag st={st} now={now} /><div className="muted">{t.detail}</div>
+      <div className={"now" + (st.kind === "wait" ? " warn" : st.kind === "ended" ? " ended" : "")}><StateTag st={st} now={now} /><div className="muted">{t.detail}</div>
         {st.inferred && <div className="why">{INFERRED_WHY[st.kind]}</div>}</div>
     </section>
     <section className="sec" aria-label="Context window"><h2>Context window</h2>

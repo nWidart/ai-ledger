@@ -16,7 +16,8 @@ export default {
   "kind": "wait",
   "tool": "Bash",
   "since": "2026-11-10T10:00:22.000Z",
-  "inferred": true
+  "inferred": true,
+  "long": false
  },
  "events": [
   {
@@ -48,6 +49,7 @@ export default {
    "error": null,
    "output": null,
    "agent": null,
+   "long": false,
    "chars": 31,
    "cut": false
   },
@@ -66,6 +68,7 @@ export default {
    "error": null,
    "output": null,
    "agent": "a7",
+   "long": false,
    "chars": 9,
    "cut": false
   },
@@ -84,6 +87,7 @@ export default {
    "error": null,
    "output": null,
    "agent": null,
+   "long": false,
    "chars": 9,
    "cut": false
   },
@@ -102,6 +106,7 @@ export default {
    "error": null,
    "output": null,
    "agent": null,
+   "long": false,
    "chars": 9,
    "cut": false
   },
@@ -120,6 +125,7 @@ export default {
    "error": null,
    "output": null,
    "agent": null,
+   "long": false,
    "chars": 9,
    "cut": false
   },
@@ -145,6 +151,7 @@ export default {
    "error": "FAIL: test_hot_pass\nAssertionError: 3 != 1",
    "output": null,
    "agent": null,
+   "long": false,
    "chars": 42,
    "cut": false
   },
@@ -163,6 +170,7 @@ export default {
    "error": null,
    "output": null,
    "agent": null,
+   "long": false,
    "chars": 0,
    "cut": false
   }

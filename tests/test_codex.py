@@ -532,12 +532,16 @@ class LiveItemsTest(unittest.TestCase):
     def test_exec_call_without_output_yet(self):
         use, = self.items(type="response_item", payload=dict(type="custom_tool_call", name="exec", call_id="c1",
                                                              input="await tools.exec_command({cmd: 'ls'})"))
-        self.assertEqual(use, dict(k="tool_use", id="c1", tool="exec", summary="await tools.exec_command({cmd: 'ls'})", description=None))
+        self.assertEqual(use, dict(k="tool_use", id="c1", tool="exec", summary="await tools.exec_command({cmd: 'ls'})", description=None,
+                                   background=False, timeout=None))  # as Claude Code's shape; no Codex input says either
 
     def test_function_call_and_output(self):
         use, = self.items(type="response_item", payload=dict(type="function_call", name="exec_command", call_id="c2",
                                                              arguments=json.dumps(dict(cmd="cargo test"))))
         self.assertEqual((use["tool"], use["summary"]), ("exec_command", json.dumps(dict(cmd="cargo test"))))
+        slow, = self.items(type="response_item", payload=dict(type="function_call", name="exec_command", call_id="c2",
+                                                              arguments=json.dumps(dict(cmd="cargo test", yield_time_ms=600000))))
+        self.assertEqual((slow["background"], slow["timeout"]), (False, None))  # a wait for output, not a timeout
         res, = self.items(type="response_item", payload=dict(type="function_call_output", call_id="c2", output="ok"))
         self.assertEqual(res, dict(k="tool_result", id="c2", error=None, output="ok", agent=None))
 

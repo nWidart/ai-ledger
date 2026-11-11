@@ -16,7 +16,8 @@ export default {
     "kind": "thinking",
     "tool": null,
     "since": "2026-11-10T10:00:55.000Z",
-    "inferred": true
+    "inferred": true,
+    "long": false
    },
    "latest": {
     "kind": "prompt",
@@ -45,7 +46,38 @@ export default {
     "kind": "you",
     "tool": null,
     "since": "2026-11-10T10:00:40.000Z",
-    "inferred": false
+    "inferred": false,
+    "long": false
+   },
+   "latest": {
+    "kind": "prompt",
+    "tool": null,
+    "summary": null,
+    "lane": null
+   },
+   "window": 1000000,
+   "cost": 0.0008,
+   "requests": 1,
+   "model": "claude-opus-5-5",
+   "context": 160,
+   "cache_read": 0.625,
+   "tools": 0,
+   "errors": 0
+  },
+  {
+   "session_id": "s5",
+   "title": null,
+   "title_from": null,
+   "project": "notes",
+   "source": "claude",
+   "branch": "main",
+   "last_ts": "2026-11-10T10:00:35.000Z",
+   "state": {
+    "kind": "ended",
+    "tool": null,
+    "since": "2026-11-10T10:00:35.000Z",
+    "inferred": false,
+    "long": false
    },
    "latest": {
     "kind": "prompt",
@@ -74,7 +106,8 @@ export default {
     "kind": "thinking",
     "tool": null,
     "since": "2026-11-10T10:00:20.000Z",
-    "inferred": false
+    "inferred": false,
+    "long": false
    },
    "latest": {
     "kind": "tool",
@@ -103,7 +136,8 @@ export default {
     "kind": "wait",
     "tool": "Bash",
     "since": "2026-11-10T10:00:22.000Z",
-    "inferred": true
+    "inferred": true,
+    "long": false
    },
    "latest": {
     "kind": "tool",
@@ -132,7 +166,8 @@ export default {
     "kind": "idle",
     "tool": null,
     "since": "2026-11-10T09:53:00.000Z",
-    "inferred": false
+    "inferred": false,
+    "long": false
    },
    "latest": {
     "kind": "prompt",

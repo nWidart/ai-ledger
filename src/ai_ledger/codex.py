@@ -92,7 +92,9 @@ def live_items(d):
     """What the Live page shows of Codex line d, in store.live_items' shape, plus turn_start and turn_end.
 
     Tools come from response_item calls and their *_output lines, keyed by call_id: item_completed arrives only once a
-    tool ends, and many calls never get one. A failed item_completed with the same id marks its call failed."""
+    tool ends, and many calls never get one. A failed item_completed with the same id marks its call failed. No shell
+    tool's input has a timeout or a background flag (exec_command's yield_time_ms is how long the call waits for
+    output), and no line says the session closed."""
     t, p = d.get("type"), d.get("payload")
     if t == "compacted":
         return [dict(k="compaction", pre=None)]
@@ -110,7 +112,8 @@ def live_items(d):
             args = None
         summary = summarize_input(name, args) if isinstance(args, dict) else (raw if isinstance(raw, str) else "")
         return [dict(k="tool_use", id=p["call_id"], tool=name, summary=summary[:300],
-                     description=args.get("task_name") if isinstance(args, dict) and name == "spawn_agent" else None)]
+                     description=args.get("task_name") if isinstance(args, dict) and name == "spawn_agent" else None,
+                     background=False, timeout=None)]
     if t == "response_item" and pt in ("function_call_output", "custom_tool_call_output") and p.get("call_id"):
         out = p.get("output")
         return [dict(k="tool_result", id=p["call_id"], error=None, output=out if isinstance(out, str) else text_of(out), agent=None)]

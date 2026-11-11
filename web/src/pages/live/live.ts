@@ -5,8 +5,12 @@ import type { LiveEvent, LiveSession, LiveState, LiveToolEvent, Ts } from "../..
 /** Events kept in memory per session; older ones drop off the top. */
 export const KEEP = 2000;
 /** A shell call pending this long reads as likely waiting for approval (as live.py's APPROVAL). */
-export const APPROVAL_MS = 30_000;
+const APPROVAL_MS = 30_000;
 const APPROVAL_TOOLS = new Set(["Bash", "exec_command", "exec"]);
+/** Whether a call pending for `pending` ms reads as likely waiting for approval, as live.py's state says it: a shell
+ *  call past 30 s, unless it is a long one (in the background, or with a timeout above 120 s). */
+export const likelyWaiting = (tool: string | null, long: boolean, pending: number | null): boolean =>
+  !!tool && APPROVAL_TOOLS.has(tool) && !long && pending != null && pending > APPROVAL_MS;
 
 /** The session after a response: a full load replaces it; a catch-up (after=cursor) adds new events and replaces ones
  *  sent again (a call that finished, the last minute read again), keeping their place. Everything else comes from the
@@ -29,13 +33,11 @@ export const since = (ts: string | null | undefined, now: number): number | null
 
 /** The state as of now: a shell call that passes 30 s between fetches turns into likely waiting for approval here. */
 export function stateNow(st: LiveState, now: number): LiveState {
-  const el = since(st.since, now);
-  if (st.kind === "tool" && st.tool && APPROVAL_TOOLS.has(st.tool) && el != null && el > APPROVAL_MS) return { ...st, kind: "wait", inferred: true };
-  return st;
+  return st.kind === "tool" && likelyWaiting(st.tool, st.long, since(st.since, now)) ? { ...st, kind: "wait", inferred: true } : st;
 }
 
 export const STATE_LABEL: Record<LiveState["kind"], string> = {
-  tool: "running", wait: "approval?", thinking: "thinking", you: "your turn", idle: "idle",
+  tool: "running", wait: "approval?", thinking: "thinking", you: "your turn", idle: "idle", ended: "ended",
 };
 
 /** Milliseconds as the stream shows durations: 0.4s, 12s, 3m 05s, 2h 10m. */
@@ -56,6 +58,7 @@ export function stateText(st: LiveState, now: number): { label: string; detail: 
     case "wait": return { label: STATE_LABEL.wait, detail: `${st.tool} pending ${el}: likely waiting for your approval` };
     case "thinking": return { label: STATE_LABEL.thinking, detail: st.inferred ? "a request is likely in flight" : "the turn is in progress" };
     case "you": return { label: STATE_LABEL.you, detail: "turn ended, waiting for a prompt" };
+    case "ended": return { label: STATE_LABEL.ended, detail: "session closed" };
     default: return { label: el === "–" ? "idle" : `idle ${elapsed(since(st.since, now))}`, detail: "no new lines for 5 minutes" };
   }
 }

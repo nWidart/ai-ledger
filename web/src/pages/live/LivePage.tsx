@@ -13,7 +13,7 @@ import { useLive, useNow } from "./useLive";
 import { Wall } from "./Wall";
 import "./live.css";
 
-/** The states the rail's footer counts as working; your turn counts as waiting for you. */
+/** The states the rail's footer counts as working; your turn counts as waiting for you, idle and ended as neither. */
 const WORKING = new Set<LiveState["kind"]>(["tool", "thinking", "wait"]);
 
 /** Live (/live): the sessions active in the last 10 minutes, followed from the agent's side as their lines arrive. */

@@ -3,17 +3,16 @@ import type { LiveEvent, LiveSession, LiveToolEvent } from "../../api";
 import { big, plural } from "../../format";
 import { appLink } from "../../components/sheets/session";
 import { sessionHref } from "../insights/InsightsPage";
-import { APPROVAL_MS, elapsed, isTool, since, streamRows, type LiveLane } from "./live";
+import { elapsed, isTool, likelyWaiting, since, streamRows, type LiveLane } from "./live";
 
 const time = (ts: string | null | undefined) =>
   ts ? new Date(ts).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }) : "";
-const SHELL = new Set(["Bash", "exec_command", "exec"]);
 /** An MCP tool (mcp__server__tool) by its tool part; the full name shows on hover. */
 const shortName = (tool: string) => (tool.startsWith("mcp__") && tool.split("__").slice(2).join("__")) || tool;
 
 function ToolRow({ e, now, text, open, onToggle }: { e: LiveToolEvent; now: number; text: boolean; open: boolean; onToggle: () => void }) {
   const running = e.end == null, took = running ? since(e.start, now) : since(e.start, Date.parse(e.end!));
-  const waiting = running && SHELL.has(e.tool) && (took ?? 0) > APPROVAL_MS;
+  const waiting = running && likelyWaiting(e.tool, e.long, took);
   const cls = ["tool", running && "running", waiting && "waiting", e.failed && "failed"].filter(Boolean).join(" ");
   const result = running ? <span className="spin" role="img" aria-label="running" /> : e.failed
     ? <span className="bad" role="img" aria-label="failed">✕</span> : <span className="ok" role="img" aria-label="passed">✓</span>;

@@ -249,12 +249,15 @@ export interface InsightsPayload {
 
 // Live (/api/live, /api/live/session, live.py payloads): running sessions from the agent's side. Prompt, reply and
 // tool-output text are only present when the session was fetched with text.
-export type LiveStateKind = "idle" | "wait" | "tool" | "thinking" | "you";
+export type LiveStateKind = "idle" | "wait" | "tool" | "thinking" | "you" | "ended";
 export interface LiveState {
-  /** wait: a shell call pending past 30 s, likely waiting for approval. */
+  /** wait: a shell call pending past 30 s, likely waiting for approval. ended: the transcript shows the session closed
+   *  (Claude Code only; Codex writes no such line). */
   kind: LiveStateKind; tool: string | null; since: Ts | null;
   /** The transcript does not record this state; it is read from the last lines. */
   inferred: boolean;
+  /** tool: the running call is a long one (see LiveToolEvent.long), which never turns into wait. */
+  long: boolean;
 }
 export interface LiveFigures {
   cost: number | null; requests: number; model: string | null;
@@ -285,6 +288,8 @@ export interface LiveToolEvent extends LiveEventBase {
   chars: number; output: string | null; cut: boolean;
   /** The subagent this call started, when its result or the subagent's start names it. */
   agent: string | null;
+  /** Its input says it runs long: in the background, or with a timeout above 120 s. Such a call waits for no approval. */
+  long: boolean;
 }
 export interface LiveMarkEvent extends LiveEventBase { k: "interrupt" | "turn_end" }
 export interface LiveTurnStart extends LiveEventBase { k: "turn_start"; window: number | null }

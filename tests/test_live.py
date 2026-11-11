@@ -38,7 +38,7 @@ class StateTest(unittest.TestCase):
 
     def test_tool_running(self):
         st = self.state(prompt("u1", at(0), "p1", "go") + assistant("a1", "m1", at(50), [tool_use("t1", "Read", file_path="x.py")]))
-        self.assertEqual(st, dict(kind="tool", tool="Read", since="2026-11-10T10:00:50.000Z", inferred=False))
+        self.assertEqual(st, dict(kind="tool", tool="Read", since="2026-11-10T10:00:50.000Z", inferred=False, long=False))
 
     def test_turn_ended(self):
         text = (prompt("u1", at(0), "p1", "go") + assistant("a1", "m1", at(5), [tool_use("t1", "Read", file_path="x")])
@@ -60,12 +60,27 @@ class StateTest(unittest.TestCase):
 
     def test_slow_shell_call_is_likely_waiting(self):
         st = self.state(assistant("a1", "m1", at(15), [tool_use("t1", "Bash", command="git push")]))
-        self.assertEqual(st, dict(kind="wait", tool="Bash", since="2026-11-10T10:00:15.000Z", inferred=True))
+        self.assertEqual(st, dict(kind="wait", tool="Bash", since="2026-11-10T10:00:15.000Z", inferred=True, long=False))
+
+    def test_slow_background_shell_call_is_running(self):
+        st = self.state(assistant("a1", "m1", at(15), [tool_use("t1", "Bash", command="npm run dev", run_in_background=True)]))
+        self.assertEqual(st, dict(kind="tool", tool="Bash", since="2026-11-10T10:00:15.000Z", inferred=False, long=True))
+
+    def test_slow_shell_call_with_a_long_timeout_is_running(self):
+        pending = lambda **inp: self.state(assistant("a1", "m1", at(15), [tool_use("t1", "Bash", command="make test", **inp)]))
+        self.assertEqual((pending(timeout=600000)["kind"], pending(timeout=600000)["long"]), ("tool", True))
+        self.assertEqual((pending(timeout=120000)["kind"], pending(timeout=120000)["long"]), ("wait", False))  # not above 120 s
+        self.assertEqual(pending(timeout="600000")["kind"], "wait")
+
+    def test_long_call_hides_no_likely_wait(self):
+        text = (assistant("a1", "m1", at(10), [tool_use("t1", "Bash", command="npm run dev", run_in_background=True)])
+                + assistant("a2", "m2", at(15), [tool_use("t2", "Bash", command="git push")]))
+        self.assertEqual((self.state(text)["kind"], self.state(text)["since"]), ("wait", "2026-11-10T10:00:15.000Z"))
 
     def test_newer_call_does_not_hide_a_likely_wait(self):
         text = (assistant("a1", "m1", at(15), [tool_use("t1", "Bash", command="git push")])
                 + assistant("a2", "m2", at(50), [tool_use("t2", "Read", file_path="x.py")]))
-        self.assertEqual(self.state(text), dict(kind="wait", tool="Bash", since="2026-11-10T10:00:15.000Z", inferred=True))
+        self.assertEqual(self.state(text), dict(kind="wait", tool="Bash", since="2026-11-10T10:00:15.000Z", inferred=True, long=False))
         text = assistant("a1", "m1", at(45), [tool_use("t1", "Bash", command="ls")]) + assistant("a2", "m2", at(50), [tool_use("t2", "Read", file_path="x")])
         self.assertEqual(self.state(text)["tool"], "Read")
 
@@ -80,12 +95,19 @@ class StateTest(unittest.TestCase):
     def test_codex_turn_in_progress_is_thinking_not_inferred(self):
         text = (codex_line(1, 0, "event_msg", type="task_started", turn_id="t1", model_context_window=272000)
                 + codex_line(2, 1, "event_msg", type="item_completed", turn_id="t1", item=dict(type="UserMessage", content=[dict(type="text", text="go")])))
-        self.assertEqual(self.state(text, "codex"), dict(kind="thinking", tool=None, since="2026-11-10T10:00:00.000Z", inferred=False))
+        self.assertEqual(self.state(text, "codex"), dict(kind="thinking", tool=None, since="2026-11-10T10:00:00.000Z", inferred=False, long=False))
 
     def test_codex_turn_complete_is_your_turn(self):
         text = (codex_line(1, 0, "event_msg", type="task_started", turn_id="t1")
                 + codex_line(2, 9, "event_msg", type="task_complete", turn_id="t1"))
         self.assertEqual(self.state(text, "codex")["kind"], "you")
+
+    def test_closed_session_is_ended_whatever_its_lines_say(self):
+        text = prompt("u1", at(0), "p1", "go") + assistant("a1", "m1", at(5), [tool_use("t1", "Bash", command="sleep 999")])
+        evs = events(text)
+        for now in (NOW, NOW + timedelta(minutes=6)):  # a pending call, then a quiet session
+            self.assertEqual(live.state(evs, now, "claude", evs[-1]["ts"], closed=True),
+                             dict(kind="ended", tool=None, since="2026-11-10T10:00:05.000Z", inferred=False, long=False))
 
 
 class LiveCase(StoreCase):
@@ -109,6 +131,26 @@ class SessionsTest(LiveCase):
         self.assertEqual([s["session_id"] for s in got["sessions"]], ["s1", "s2"])
         s1 = got["sessions"][0]
         self.assertEqual((s1["state"]["kind"], s1["latest"]["tool"], s1["window"], s1["requests"]), ("tool", "Read", 1000000, 1))
+
+    def test_closed_session_is_ended_until_it_writes_again(self):
+        kinds = lambda: {s["session_id"]: s["state"]["kind"] for s in live.sessions(self.cur(), now=NOW, prices=PRICES)["sessions"]}
+        self.assertEqual(kinds(), dict(s1="tool", s2="you"))
+        self.write("s2.jsonl", line(type="cost-state", sessionId="s2", totalCostUSD=0.1))  # Claude Code writes it as it exits
+        self.ingest()
+        self.assertEqual(kinds(), dict(s1="tool", s2="ended"))
+        self.assertEqual(live.session(self.cur(), "s2", now=NOW, prices=PRICES)["state"],
+                         dict(kind="ended", tool=None, since="2026-11-10T09:57:00.000Z", inferred=False, long=False))
+        self.write("s2.jsonl", prompt("v2", at(20), "q2", "again").replace('"s1"', '"s2"'))  # resumed
+        self.ingest()
+        self.assertEqual(kinds()["s2"], "thinking")
+
+    def test_subagent_lines_reopen_no_closed_session(self):
+        self.write("s2.jsonl", line(type="cost-state", sessionId="s2", totalCostUSD=0.1))
+        self.write("s2/subagents/agent-a7.jsonl", line(type="assistant", uuid="x1", timestamp=at(10), message=dict(
+            id="sm1", model="claude-opus-5-5", content=[dict(type="text", text="late")]), **dict(S, sessionId="s2", isSidechain=True, agentId="a7")))
+        self.ingest()
+        s2, = [s for s in live.sessions(self.cur(), now=NOW, prices=PRICES)["sessions"] if s["session_id"] == "s2"]
+        self.assertEqual(s2["state"]["kind"], "ended")
 
     def test_cost_matches_the_session_sheet(self):
         from ai_ledger import metrics
@@ -289,6 +331,13 @@ class SessionTest(LiveCase):
         later = self.run_session(after=first["cursor"], now=NOW + timedelta(minutes=2))
         self.assertEqual([(e["id"], e["agent"]) for e in later["events"] if e["lane"] is None], [("t1", "a7")])
 
+    def test_long_call_marked_on_its_event(self):
+        self.write("s1.jsonl", assistant("a1", "m1", at(1), [tool_use("t1", "Bash", command="npm run dev", run_in_background=True),
+                                                             tool_use("t2", "Bash", command="make", timeout=300000),
+                                                             tool_use("t3", "Bash", command="ls", timeout=5000)]))
+        self.ingest()
+        self.assertEqual([e["long"] for e in self.run_session()["events"]], [True, True, False])
+
     def test_figures(self):
         self.write("s1.jsonl", assistant("a1", "m1", at(30), [dict(type="text", text="hi")])
                    + line(type="system", subtype="compact_boundary", uuid="c1", timestamp=at(31), compactMetadata=dict(preTokens=150000), **S)
@@ -330,6 +379,15 @@ class CodexSessionTest(CodexCase):
         exec_ev = got["events"][3]
         self.assertEqual((exec_ev["tool"], exec_ev["end"]), ("exec", None))
         self.assertEqual((got["state"]["kind"], got["window"]), ("tool", 272000))
+        self.assertEqual((exec_ev["long"], got["state"]["long"]), (False, False))
+
+    def test_closed_is_never_read_from_a_codex_transcript(self):
+        self.place(NAME, meta(THREAD).replace("2026-11-06T10:00:00.000Z", at(0))
+                   + codex_line(1, 1, "event_msg", type="task_started", turn_id="t1")
+                   + codex_line(2, 9, "event_msg", type="task_complete", turn_id="t1")
+                   + line(type="cost-state", ordinal=3))  # no Codex line says the session closed
+        self.ingest()
+        self.assertEqual(live.session(self.con.cursor(), THREAD, now=NOW, prices=PRICES)["state"]["kind"], "you")
 
 
 class PageCase(LiveCase):
@@ -373,6 +431,8 @@ class PageCase(LiveCase):
         # Only command output in its prompt and no title line: no title.
         self.write("s4.jsonl", other(prompt("z1", "2026-11-10T09:53:00.000Z", "q4", "<local-command-stdout>zsh reloaded</local-command-stdout>"),
                                      "s4", "/nowhere/dotfiles"))
+        self.write("s5.jsonl", other(prompt("h1", at(15), "q5", "Sort the reading list") + assistant("i1", "j1", at(35), [dict(type="text", text="Sorted.")])
+                                     + line(type="cost-state", sessionId="s1", totalCostUSD=0.02), "s5", "/nowhere/notes"))
         thread = "0a0f7777-0000-7000-8000-000000000007"
         self.codex(f"rollout-2026-11-10T10-00-00-{thread}.jsonl", meta(thread).replace("2026-11-06T10:00:00.000Z", at(0)).replace("/nowhere/foo", "/nowhere/graft")
                    + codex_line(1, 20, "event_msg", type="task_started", turn_id="t1", model_context_window=272000)
@@ -405,14 +465,15 @@ class PageFixtureTest(unittest.TestCase):
     def test_every_state_and_shape(self):
         got = page_fixtures()
         states = {s["project"]: s["state"]["kind"] for s in got["list"]["sessions"]}
-        self.assertEqual(states, {"foo": "wait", "jobdesk": "thinking", "sketchbook": "you", "dotfiles": "idle", "graft": "thinking"})
+        self.assertEqual(states, {"foo": "wait", "jobdesk": "thinking", "sketchbook": "you", "dotfiles": "idle", "graft": "thinking",
+                                  "notes": "ended"})
         self.assertEqual({e["lane"] for e in got["claude"]["events"]} - {None}, {"a7"})
         self.assertTrue(any(e.get("failed") for e in got["claude"]["events"]))
         self.assertNotIn("Freeze", json.dumps(got["list"]) + json.dumps(got["claude"]))
         titles = lambda key: {s["project"]: (s["title"], s["title_from"]) for s in got[key]["sessions"]}
         self.assertEqual(titles("list"), {"foo": ("Fast ingest pass while Live is open", "agent"),
                                           "sketchbook": ("Rename the theme tokens across every page, the charts and the print stylesheet", "agent"),
-                                          "jobdesk": (None, None), "graft": (None, None), "dotfiles": (None, None)})
+                                          "jobdesk": (None, None), "graft": (None, None), "dotfiles": (None, None), "notes": (None, None)})
         self.assertEqual(titles("list_text")["jobdesk"], ("Freeze the clock in the snapshot test", "prompt"))
         self.assertEqual(titles("list_text")["dotfiles"], (None, None))
 
