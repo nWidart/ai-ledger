@@ -5,8 +5,14 @@ import { appLink } from "../../components/sheets/session";
 import { sessionHref } from "../insights/InsightsPage";
 import { elapsed, isRow, isTool, labelOf, likelyWaiting, passes, since, streamRows, type LaneChoices, type LiveLane, type StreamFilters } from "./live";
 
-const time = (ts: string | null | undefined) =>
-  ts ? new Date(ts).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }) : "";
+const CLOCK = { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false } as const;
+/** An event's time on the reader's clock, with its date when the event is not from the day of now: "Nov 9, 14:03:12". */
+const time = (ts: string | null | undefined, now: number) => {
+  if (!ts) return "";
+  const d = new Date(ts);
+  return d.toDateString() === new Date(now).toDateString() ? d.toLocaleTimeString(undefined, CLOCK)
+    : d.toLocaleString(undefined, { month: "short", day: "numeric", ...CLOCK });
+};
 /** An MCP tool (mcp__server__tool) by its tool part; the full name shows on hover. */
 const shortName = (tool: string) => (tool.startsWith("mcp__") && tool.split("__").slice(2).join("__")) || tool;
 
@@ -26,7 +32,7 @@ function ToolRow({ e, now, text, open, onToggle }: { e: LiveToolEvent; now: numb
       <dl>
         {label && <><dt>description</dt><dd>{label}</dd></>}
         <dt>input</dt><dd><code>{e.summary || "–"}</code></dd>
-        <dt>started</dt><dd>{time(e.start)}</dd>
+        <dt>started</dt><dd>{time(e.start, now)}</dd>
         {e.failed && <><dt>error</dt><dd className="bad"><code>{e.error}</code></dd></>}
         <dt>result</dt><dd>{running ? <span className="muted">running…</span> : text && e.output != null
           ? <pre>{e.output}{e.cut ? "\n…" : ""}</pre>
@@ -68,7 +74,7 @@ function Lane({ lane, fig, v, now, text, open, toggle, fold, all, mark }: {
     </button>
     {!v.folded && !lane.done && v.tools.length > LAST && <button type="button" className="more" onClick={all}>
       {v.cut ? `Show all ${v.tools.length} rows` : `Show last ${LAST}`}</button>}
-    {v.shown.map(e => <div className="ev" key={e.key} ref={mark(e.key)}><span className="t">{time(e.ts)}</span>
+    {v.shown.map(e => <div className="ev" key={e.key} ref={mark(e.key)}><span className="t">{time(e.ts, now)}</span>
       <div><ToolRow e={e} now={now} text={text} open={open.has(e.key)} onToggle={() => toggle(e.key)} /></div></div>)}
   </div>;
 }
@@ -141,7 +147,7 @@ export function Stream({ s, now, text, follow, setFollow, filters: f, setFilters
         if (r.kind === "lane") {
           const id = r.lane.id, v = views.get(id)!;
           if (v.hidden) return null;
-          return <div className="ev" key={"lane:" + id} ref={mark("lane:" + id)}><span className="t">{time(r.lane.start)}</span>
+          return <div className="ev" key={"lane:" + id} ref={mark("lane:" + id)}><span className="t">{time(r.lane.start, now)}</span>
             <Lane lane={r.lane} fig={s.lanes[id]} v={v} now={now} text={text} open={open} toggle={toggle} mark={mark}
               fold={() => setChoices({ ...c, folds: new Map(c.folds).set(id, !v.folded) })}
               all={() => { // asking for every row is opening the lane: it stays open when it finishes
@@ -154,14 +160,14 @@ export function Stream({ s, now, text, follow, setFollow, filters: f, setFilters
         if (!passes(e, f)) return null;
         switch (e.k) {
           case "prompt": case "reply":
-            return <div className={"ev" + (e.k === "prompt" ? " turn" : "")} key={e.key} ref={mark(e.key)}><span className="t">{time(e.ts)}</span><Said e={e} text={text} /></div>;
+            return <div className={"ev" + (e.k === "prompt" ? " turn" : "")} key={e.key} ref={mark(e.key)}><span className="t">{time(e.ts, now)}</span><Said e={e} text={text} /></div>;
           case "tool":
-            return <div className="ev" key={e.key} ref={mark(e.key)}><span className="t">{time(e.ts)}</span>
+            return <div className="ev" key={e.key} ref={mark(e.key)}><span className="t">{time(e.ts, now)}</span>
               <div><ToolRow e={e} now={now} text={text} open={open.has(e.key)} onToggle={() => toggle(e.key)} /></div></div>;
           case "compaction":
             return <div className="compact" key={e.key} ref={mark(e.key)}><span>context compacted{e.pre ? ` at ${big(e.pre)} tokens` : ""}</span></div>;
           case "interrupt":
-            return <div className="ev" key={e.key} ref={mark(e.key)}><span className="t">{time(e.ts)}</span><span className="note">interrupted by you</span></div>;
+            return <div className="ev" key={e.key} ref={mark(e.key)}><span className="t">{time(e.ts, now)}</span><span className="note">interrupted by you</span></div>;
           default:
             return null;
         }

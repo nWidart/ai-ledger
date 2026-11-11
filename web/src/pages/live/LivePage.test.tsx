@@ -729,6 +729,32 @@ describe("LivePage", () => {
     expect(screen.getByRole("link", { name: "session sheet on Activity" }).getAttribute("href")).toBe("/usage#range=0&session=s1");
   });
 
+  it("links the stream head to the session's sheet on Activity", async () => {
+    show("#session=s1", { app: true });
+    const head = (await screen.findByRole("group", { name: "Stream filters" })).previousElementSibling as HTMLElement;
+    const link = within(head).getByRole("link", { name: "Session sheet" });
+    expect([head.className, link.getAttribute("href")]).toEqual(["stream-head", "/usage#range=0&session=s1"]);
+    await userEvent.click(link);
+    expect(location.pathname + location.hash).toBe("/usage#range=0&session=s1"); // in the app, without a reload
+  });
+
+  it("dates the time of an event that is not from today", async () => {
+    // The fixture's events are a day old on this clock, in any time zone; one more event is a minute old.
+    fakeClock("2026-11-11T12:07:00.000Z");
+    const fresh = { ...(s1.events.at(-1) as LiveToolEvent), key: "n#0", id: "t10", ts: "2026-11-11T12:06:00.000Z", start: "2026-11-11T12:06:00.000Z" };
+    show("#session=s1", { session: () => ({ ...s1, events: [...s1.events, fresh] }) });
+    await tick(10);
+    const times = [...screen.getByLabelText("Session events").querySelectorAll(".ev > .t")].map(t => t.textContent!);
+    const clock = (ts: string) => new Date(ts).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
+    const day = (ts: string) => new Date(ts).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    const old = s1.events[0]!.ts!;
+    expect(times[0]).toContain(day(old));
+    expect(times[0]!.endsWith(clock(old))).toBe(true);
+    expect(times.at(-1)).toBe(clock(fresh.ts)); // today: the time alone
+    fireEvent.click(toolRow("Read")); // the opened row's start time is dated too
+    expect(toolRow("Read").nextElementSibling!.textContent).toContain(day(old));
+  });
+
   it("says a session is not found, with a way back to the active ones", async () => {
     show("#session=nope", { session: () => undefined });
     expect(await screen.findByText(/Session not found/)).toBeTruthy();

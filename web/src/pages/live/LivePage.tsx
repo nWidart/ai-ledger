@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { viewOf, type LiveListSession, type LiveState } from "../../api";
 import { Filters, SOURCE_LABELS } from "../../components/Filters";
 import { ProjectName } from "../../components/ProjectDot";
+import { appLink } from "../../components/sheets/session";
 import { plural, usd, when } from "../../format";
 import { useHashState } from "../../hash";
 import { ApiError } from "../../useApi";
@@ -98,6 +99,7 @@ export function LivePage() {
               <ProjectName project={shown.project}><b>{shown.project ?? "(unknown)"}</b></ProjectName>
               {shown.branch && <code className="chip">{shown.branch}</code>}<span className="chip">{SOURCE_LABELS[shown.source]}</span>
               {shown.model && <span className="chip">{shown.model}</span>}
+              <a href={sessionHref(shown.session_id)} onClick={appLink}>Session sheet</a>
               <span className="spacer" /><StateTag st={stateNow(shown.state, now)} now={now} />
             </div>
             <Stream key={shown.session_id} s={shown} now={now} text={text} follow={follow} setFollow={setFollow} filters={filters} setFilters={setFilters}
