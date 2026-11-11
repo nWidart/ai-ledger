@@ -28,8 +28,19 @@ The cost dashboard SHALL open with the estimated cost of the selected view, its 
 - **WHEN** the previous period has usage on fewer than half as many days as the current one
 - **THEN** the comparison is marked as resting on thin history
 
+#### Scenario: Previous period on unpriced models only
+- **WHEN** every request in the previous period used a model missing from the price table
+- **THEN** the heading says there was no priced usage before, the previous cost shows as unknown, not $0, and no change is computed
+
+### Requirement: Explain a day's cost
+Selecting a day on the cost chart, or the peak day's action, SHALL list every session active that day with its estimated cost on that day, costliest first, so the listed costs add up to the day's bar.
+
+#### Scenario: Session across two days
+- **WHEN** a session cost $10 on Nov 4 and $30 on Nov 5, and the user selects Nov 4
+- **THEN** the session is listed at $10, and the list's costs sum to Nov 4's total
+
 ### Requirement: Show what changed by project
-The cost dashboard SHALL show each project's change in estimated cost against the previous period, largest change first, and SHALL mark projects with no usage in the previous period as new.
+The cost dashboard SHALL show each project's change in estimated cost against the previous period, largest change first, and SHALL mark projects with no usage in the previous period as new. A project whose cost in either period is unknown (only unpriced models) SHALL show that cost as unknown and no change. A one-project view SHALL leave this panel out.
 
 #### Scenario: New project
 - **WHEN** project `foo` has cost in the current period and no usage in the previous one
@@ -43,11 +54,15 @@ The dashboard SHALL show input, output, thinking, cache read, 5-minute cache wri
 - **THEN** a chart shows each token kind per day
 
 ### Requirement: Show estimated cost
-The dashboard SHALL show an estimated cost per project, model and day, computed from per-model prices for each token kind, and SHALL label the value as an API-price estimate.
+The dashboard SHALL show an estimated cost per project, model and day, computed from per-model prices for each token kind, and SHALL label the value as an API-price estimate. When a model has no price, the dashboard SHALL name the user prices file by its full path as the place to add one.
 
 #### Scenario: Model without a price
 - **WHEN** a request used a model missing from the price table
-- **THEN** its tokens are still counted, its cost shows as unknown, and the dashboard names the unpriced model
+- **THEN** its tokens are still counted, its cost shows as unknown, and the dashboard names the unpriced model and the path of the user prices file
+
+#### Scenario: Price added by the user
+- **WHEN** the user adds the model to the user prices file and reloads the page
+- **THEN** the model's requests are priced, with no rebuild
 
 ### Requirement: Show cache efficiency
 The dashboard SHALL show the cache hit ratio (cache read tokens divided by all input tokens) and the share of cache writes that used the 1-hour lifetime.
@@ -64,22 +79,26 @@ The cost dashboard SHALL show what share of estimated cost came from subagents.
 - **THEN** the cost dashboard shows a 40% subagent cost share for that project
 
 ### Requirement: Show cost per outcome
-The cost dashboard SHALL show cost per commit and cost per prompt per project, and SHALL point out a project (or, inside one project, a session) whose cost per commit is more than twice the median.
+The cost dashboard SHALL show cost per commit and cost per prompt per project, and SHALL point out a project (or, inside one project, a session) whose cost per commit is more than twice the median and that holds at least 2% of the view's spend. Among findings of equal severity, the one with more money at stake SHALL lead.
 
 #### Scenario: Cost-per-commit outlier
 - **WHEN** one project with three or more commits costs four times the median project per commit
 - **THEN** the cost dashboard names that project as an outlier and offers to compare projects
+
+#### Scenario: Small outlier
+- **WHEN** the project with the highest cost per commit holds 1% of the spend
+- **THEN** the cost dashboard does not name it as an outlier
 
 #### Scenario: Project with no commits
 - **WHEN** a project has cost but no commits in the range
 - **THEN** its cost per commit shows as not available, not as zero or infinity
 
 ### Requirement: Show model mix
-The cost dashboard SHALL show the split of requests by model and effort level, each with its estimated cost.
+The cost dashboard SHALL show each model and effort level's share of estimated cost, costliest first, with its cost, the top 8 until the user asks for all. A share that is above zero but rounds to 0% SHALL read "<1%".
 
 #### Scenario: Two models
-- **WHEN** 70% of requests in the view used one model and 30% another
-- **THEN** the cost dashboard shows both shares and each model's estimated cost
+- **WHEN** 70% of the estimated cost in the view came from one model and 30% from another
+- **THEN** the cost dashboard lists the first model above the second, with both shares and each model's estimated cost
 
 ### Requirement: Link to a cost view
 The cost dashboard SHALL keep the selected project, time range, inspected project and open session in the page URL, so a view can be reopened or shared, and browser Back SHALL retrace filter and sheet changes.
@@ -87,3 +106,10 @@ The cost dashboard SHALL keep the selected project, time range, inspected projec
 #### Scenario: Open a copied URL
 - **WHEN** the user opens a copied cost dashboard URL
 - **THEN** the same project, range and session are selected
+
+### Requirement: Report a bad user prices file
+When the user prices file cannot be read, is not valid JSON, has no `models` object, or has an entry without a number for each price, the app SHALL ignore the whole file, price with the packaged table alone, and the Cost page SHALL show the file's path and the reason.
+
+#### Scenario: Malformed file
+- **WHEN** the user prices file holds invalid JSON
+- **THEN** every page still loads with the packaged prices, and the Cost page says the file was ignored and why

@@ -315,6 +315,7 @@ def main(argv=None):
     ap.add_argument("--version", action="version", version=f"ai-ledger {importlib.metadata.version('ai-ledger')}")
     a = ap.parse_args(argv)
     roots = dict(claude=a.projects, codex=a.codex, insights=a.usage_data)
+    metrics.USER_PRICES = os.path.join(os.path.dirname(os.path.abspath(a.db or store.DEFAULT_DB)), "prices.json")  # next to the store
     try:
         con = store.open_store(a.db)
     except (store.StoreBusy, store.StoreNotMoved) as e:

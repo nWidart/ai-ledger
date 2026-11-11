@@ -48,6 +48,16 @@ The app opens Activity in your browser; `--no-open` skips it. The first start re
 
 With the app stopped, `ai-ledger ingest` reads new lines once and `ai-ledger rebuild` recomputes the derived tables.
 
+### Prices
+
+Cost uses the API list prices shipped with each version (`uv tool upgrade ai-ledger` brings new ones). To price a model the Cost page lists as unpriced, or to change a price, create `prices.json` next to the store: `~/Library/Application Support/ai-ledger/prices.json` on macOS, `~/.local/share/ai-ledger/prices.json` on Linux, or the `--db` file's folder. It takes the shape of the [packaged file](src/ai_ledger/prices.json), in USD per million tokens:
+
+```json
+{"models": {"my-model": {"input": 3, "output": 15, "cache_read": 0.3, "cache_5m": 3.75, "cache_1h": 6, "context": 200000}}}
+```
+
+Its entries add to the packaged prices, or replace a model of the same name, and survive upgrades. Costs are computed from the stored token counts on every page load, so reload the page; no `rebuild` is needed. If the file cannot be used, the app ignores it and the Cost page says why.
+
 ## Privacy
 
 - The server listens on `127.0.0.1` only.

@@ -14,9 +14,45 @@ AUTOMATED_PROJECTS = ("observer-sessions",)  # projects whose sessions a tool st
 SOURCES = ("claude", "codex")  # the coding agents a session can come from (sessions.source); '' in a filter is all of them
 
 
-def load_prices(path=os.path.join(HERE, "prices.json")):
+PRICE_KINDS = ("input", "output", "cache_read", "cache_5m", "cache_1h")  # USD per million tokens, every price entry has each
+# The user's prices file: the packaged prices.json's shape, its models added to or replacing the packaged ones. It sits next
+# to the store; the app points it at the --db folder.
+USER_PRICES = os.path.join(store.data_dir(), "prices.json")
+
+
+def load_prices(path=os.path.join(HERE, "prices.json"), user=None):
+    """Prices per model: the packaged file's, with the user prices file's (user, default USER_PRICES) over them. A missing,
+    unreadable or malformed user file adds nothing (prices_file says why)."""
     with open(path) as fh:
-        return json.load(fh)["models"]
+        return json.load(fh)["models"] | user_prices(user)[0]
+
+
+def user_prices(path=None):
+    """(models, error) from the user prices file: ({}, None) when there is none; ({}, a message) when it cannot be read or
+    an entry lacks a price, so a bad edit is reported and ignored instead of breaking every page."""
+    try:
+        with open(path or USER_PRICES) as fh:
+            data = json.load(fh)
+    except FileNotFoundError:
+        return {}, None
+    except (OSError, ValueError) as e:  # JSONDecodeError is a ValueError
+        return {}, str(e)
+    models = data.get("models") if isinstance(data, dict) else None
+    if not isinstance(models, dict):
+        return {}, 'no "models" object'
+    number = lambda v: isinstance(v, (int, float)) and not isinstance(v, bool)
+    for model, p in models.items():
+        tiers = [p] + ([p.get("long")] if isinstance(p, dict) and p.get("long_above") is not None else [])
+        bad = [k for t in tiers for k in PRICE_KINDS if not isinstance(t, dict) or not number(t.get(k))]
+        bad += [k for k in ("context", "long_above") if isinstance(p, dict) and p.get(k) is not None and not number(p[k])]
+        if bad:
+            return {}, f"{model}: {', '.join(dict.fromkeys(bad))} must be a number"
+    return {m: dict(p, context=p.get("context")) for m, p in models.items()}, None
+
+
+def prices_file():
+    """Where the user prices file is and why it was ignored (error is None when it was read, or there is none)."""
+    return dict(path=USER_PRICES, error=user_prices()[1])
 
 
 def rows(cur, sql, params=()):
@@ -274,6 +310,7 @@ def usage(cur, project="", range_days=0, session="", prices=None, today=None, au
                near_limit=sorted((x for x in sess if x["near_limit"]), key=lambda x: -x["context_share"]),
                previous=previous_period(cur, project, range_days, prices, today, automated, source))
     out["changes"] = project_changes(by_project, out["previous"])
+    out["prices_file"] = prices_file()
     if session:
         out["session"] = session_detail(cur, session, requests_cte(pcte, "r.session_id = ?"), pparams + [session], prices)
     return out
@@ -421,31 +458,43 @@ def palette(cur, project="", range_days=0, today=None, automated=False, source="
 def project_changes(by_project, previous):
     """Each project's estimated-cost change against the previous period, biggest move first, for the "what changed" chart.
     new: the project had no requests at all in the previous period. Projects active only before the view count too (cost 0 now).
-    None for the all-time view."""
+    A period whose requests were all on unpriced models has an unknown (None) cost, and then the delta is None too; those
+    projects sort by the cost that is known. None for the all-time view."""
     if previous is None:
         return None
     now = {r["project"]: r for r in by_project}
     before = {r["project"]: r for r in previous["by_project"]}
     out = []
     for name in now.keys() | before.keys():
-        c, b = (now.get(name) or {}).get("cost") or 0, (before.get(name) or {}).get("cost") or 0
-        out.append(dict(project=name, cost=c, prev_cost=b, delta=c - b, new=name not in before))
-    return sorted(out, key=lambda r: (-abs(r["delta"]), r["project"] or ""))
+        c, b = (now[name]["cost"] if name in now else 0), (before[name]["cost"] if name in before else 0)
+        out.append(dict(project=name, cost=c, prev_cost=b, delta=None if c is None or b is None else c - b, new=name not in before))
+    return sorted(out, key=lambda r: (-abs(r["delta"] if r["delta"] is not None else r["cost"] or r["prev_cost"] or 0), r["project"] or ""))
 
 
 def session_list(cur, project="", range_days=0, q="", near=False, offset=0, limit=100, prices=None, today=None, day="", automated=False,
                  source=""):
-    """One page of the view's sessions, newest first (or nearest the context limit first), matching q on id, project or branch.
-    day (YYYY-MM-DD): only sessions with requests on that day."""
+    """One page of the view's sessions, newest first (or nearest the context limit first), matching q on title, id, project
+    or branch. day (YYYY-MM-DD): the sessions with requests on that day, every figure limited to that day, costliest first and
+    all of them, so their costs add up to the day's."""
     prices = load_prices() if prices is None else prices
-    _, _, _, fp, W, rq, rp = view(project, range_days, prices, today or local_today(cur), automated, source)
+    _, pcte, pparams, fp, W, rq, rp = view(project, range_days, prices, today or local_today(cur), automated, source)
+    if day:
+        dp, by_day = [date.fromisoformat(day)] * 2, W
+        W = lambda ts: f"{by_day(ts)} AND {ts} >= {day_start('CAST(? AS DATE)')} AND {ts} < {day_start('CAST(? AS DATE) + 1')}"
+        fp = fp + dp
+        rq, rp = requests_cte(pcte, W("r.ts")), pparams + fp
     sess = sessions(cur, rq, rp, W, fp, prices)
     q = q.strip().lower()
-    on_day = {r[0] for r in cur.execute(f"SELECT DISTINCT session_id FROM requests WHERE ts >= {day_start('CAST(? AS DATE)')} "
-                                        f"AND ts < {day_start('CAST(? AS DATE) + 1')}", [date.fromisoformat(day)] * 2).fetchall()} if day else None
-    hits = [x for x in sess if (not near or x["near_limit"]) and (on_day is None or x["session_id"] in on_day)
-            and (not q or q in f"{x['session_id']} {x['project']} {x['git_branch'] or ''}".lower())]
-    hits.sort(key=(lambda x: -x["context_share"]) if near else (lambda x: x["first_ts"] or ""), reverse=not near)
+    hits = [x for x in sess if not near or x["near_limit"]]
+    named = titles(cur, [x["session_id"] for x in hits]) if q else {}
+    hits = [x for x in hits if not q or q in f"{(named.get(x['session_id']) or ('',))[0]} {x['session_id']} {x['project']} {x['git_branch'] or ''}".lower()]
+    if near:
+        hits.sort(key=lambda x: -x["context_share"])
+    elif day:
+        hits.sort(key=lambda x: -(x["cost"] or 0))
+        offset, limit = 0, len(hits)
+    else:
+        hits.sort(key=lambda x: x["first_ts"] or "", reverse=True)
     return dict(total=len(hits), offset=offset, sessions=with_titles(cur, hits[offset:offset + limit]))
 
 

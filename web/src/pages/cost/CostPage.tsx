@@ -41,20 +41,20 @@ function SpendLedger({ d, all, onAll }: { d: UsagePayload; all: boolean; onAll: 
     ? d.top_sessions.map(s => ({ key: s.session_id, name: s.title ? sessName(s) : `${when(s.first_ts)}${s.git_branch ? ` · ${s.git_branch}` : ""}`,
         title: `${s.title ? s.title + " · " : ""}${when(s.first_ts)}${s.git_branch ? ` · ${s.git_branch}` : ""}`, cost: s.cost, unpriced: s.unpriced }))
     : d.by_project.map(p => ({ key: p.project ?? "", name: p.project ?? "", title: undefined, cost: p.cost, unpriced: p.unpriced })).sort((a, b) => (b.cost || 0) - (a.cost || 0));
-  const max = Math.max(...rs.map(r => r.cost || 0), 0) || 1, shown = all ? rs : rs.slice(0, LEDGER_TOP);
+  const shown = all ? rs : rs.slice(0, LEDGER_TOP);
   const count = bySession ? Math.min(rs.length, d.totals.sessions) : rs.length;
   return (
     <section className="panel sect" id="where" aria-labelledby="ledgerTitle">
       <h2 id="ledgerTitle">{bySession ? "Most expensive sessions" : "Where the spend went"}</h2>
-      <div className="hint">{bySession ? `Estimated cost per session in ${d.project}, as a share of its ${usd(d.totals.cost)}. Select one for details.`
+      <div className="hint">{bySession ? `Estimated cost per session in ${d.project}${d.totals.cost ? `, as a share of its ${usd(d.totals.cost)}` : ""}. Select one for details.`
         : "Estimated cost per project, as a share of the total. Select a project for details."}</div>
-      <Ledger empty="No usage in this range.">{shown.map(r => <LedgerRow key={r.key} name={r.name} title={r.title} share={(r.cost || 0) / max}
+      <Ledger empty="No usage in this range.">{shown.map(r => <LedgerRow key={r.key} name={r.name} title={r.title} share={(r.cost || 0) / total}
         project={bySession ? undefined : r.key} color={color(bySession ? d.project : r.key)} pickKey={r.key}
         onPick={() => (bySession ? openSessionSheet(r.key) : openProjectSheet(r.key))}
         value={<>{usd(r.cost)}{r.unpriced > 0 && <> <span className="chip warn" title={`${r.unpriced} requests from unpriced models`}>+?</span></>}</>}
         side={pct((r.cost || 0) / total)} />)}</Ledger>
       {rs.length > LEDGER_TOP && <button type="button" className="linkish more" onClick={() => onAll(!all)}>
-        {all ? `Show top ${LEDGER_TOP}` : `Show top ${num(count)} ${bySession ? "sessions" : "projects"}`}</button>}
+        {all ? `Show top ${LEDGER_TOP}` : `Show all ${num(count)} ${bySession ? "sessions" : "projects"}`}</button>}
     </section>
   );
 }
@@ -95,7 +95,7 @@ export function CostPage() {
     ? rankInsights([spenderInsight(d, acts), perCommitInsight(d, acts), peakInsight(d, days, acts), cacheInsight(d, acts)])
     : { lead: null, rest: [] };
   const changes = d && <Changes d={d} all={chgAll} onAll={setChgAll} />;
-  const showChanges = !!d?.previous && !!d.start && moved(d).length > 0;
+  const showChanges = !!d?.previous && !!d.start && !d.project && moved(d).length > 0;
   const cls = "wrap pg-cost" + (slow ? " loading" : "") + (grow ? " grow" : "");
 
   return (
@@ -107,7 +107,10 @@ export function CostPage() {
       {error && <div className="banner" role="alert"><b>Could not load {viewName(want)} ({error.message}).{d ? ` Still showing ${viewName(d)}.` : ""}</b>{" "}
         <button type="button" className="linkish" ref={retryBtn} onClick={retry}>Retry</button></div>}
       {d && d.unpriced.length > 0 && <div className="banner"><b>Unpriced models:</b> {d.unpriced.map((u, k) => <span key={k}>{k ? ", " : ""}<code>{u.model}</code> ({big(u.tokens)} tokens)</span>)}.
-        Their tokens are counted; their cost is unknown and left out of totals. Add them to <code>prices.json</code>.</div>}
+        Their tokens are counted; their cost is unknown and left out of totals. To price them, add them to <code>{d.prices_file.path}</code>,
+        in the shape of the packaged <code>prices.json</code>; the next page load uses them, with no rebuild.</div>}
+      {d?.prices_file.error && <div className="banner" role="alert"><b>Prices file ignored:</b> <code>{d.prices_file.path}</code> could not be used
+        ({d.prices_file.error}). Packaged prices apply until it is fixed.</div>}
       <p className="pending" role="status">{loading && d ? `Loading ${viewName(want)}…` : ""}</p>
       {d && <>
         <SectionIndex groups={[
@@ -129,7 +132,7 @@ export function CostPage() {
         {narrow && changes}
         <div className="split">
           <SpendLedger d={d} all={ledgerAll} onAll={setLedgerAll} />
-          <section className="panel"><h2>Models and effort</h2><div className="hint">Share of requests, with estimated cost.</div><ModelLedger models={d.models} /></section>
+          <section className="panel"><h2>Models and effort</h2><div className="hint">Share of estimated cost, costliest first.</div><ModelLedger key={viewKey} models={d.models} by="cost" /></section>
         </div>
         <div className="drawers">
           <TokensDrawer t={d.totals} />

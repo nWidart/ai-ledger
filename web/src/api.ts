@@ -62,7 +62,8 @@ export interface Previous {
   daily: { day: Day; cost: number | null; tokens: number }[];
   by_project: { project: string | null; cost: number | null; tokens: number; requests: number }[];
 }
-export interface Change { project: string | null; cost: number; prev_cost: number; delta: number; new: boolean }
+/** cost or prev_cost is null when that period's requests were all on unpriced models; delta is then null too. */
+export interface Change { project: string | null; cost: number | null; prev_cost: number | null; delta: number | null; new: boolean }
 
 /** The coding agent a session came from; "" in a filter is every source. */
 export type Source = "claude" | "codex";
@@ -76,6 +77,8 @@ export interface UsagePayload {
   sessions: SessionRow[]; top_sessions: TitledSessionRow[]; near_limit: SessionRow[];
   /** null for the all-time view. */
   previous: Previous | null; changes: Change[] | null;
+  /** The user prices file next to the store (path), and why it was ignored (error; null when read or absent). */
+  prices_file: { path: string; error: string | null };
   /** Present when the request named a session: null when it does not exist. */
   session?: SessionDetail | null;
 }

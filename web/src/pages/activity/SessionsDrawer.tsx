@@ -64,12 +64,13 @@ export function SessionsDrawer({ view, count, filter, onFilter, selected }: {
     focusRow.current = -1;
   }, [rows]);
 
-  const hint = st.moreError ?? (st.hint || (st.error ? "" : `${plural(total, "session")}${narrowed ? " match" : ""}, ${filter.near ? "nearest the limit first" : "newest first"}. `
-    + `${rows.length < total ? `Showing ${num(rows.length)}. ` : ""}Select a session for details.`));
+  const order = filter.near ? "nearest the limit first" : filter.day ? "by their cost on that day" : "newest first";
+  const hint = st.moreError ?? (st.hint || (st.error ? "" : `${plural(total, "session")}${narrowed ? " match" : ""}` + (total ? `, ${order}. `
+    + `${rows.length < total ? `Showing ${num(rows.length)}. ` : ""}Select a session for details.` : ".")));
   return (
     <Drawer id="d-sessions" title="Sessions" count={num(count)} description="Duration, context, failures, compactions and commits per session" onToggle={setOpen}>
       <div className="tools-row">
-        <input type="search" ref={search} value={filter.q} placeholder="Search by session id, project or branch" aria-label="Search sessions"
+        <input type="search" ref={search} value={filter.q} placeholder="Search by title, session id, project or branch" aria-label="Search sessions"
           onChange={e => onFilter({ ...filter, q: e.target.value })} />
         <label className="chk"><input type="checkbox" checked={filter.near} onChange={e => onFilter({ ...filter, near: e.target.checked })} /> Near context limit only</label>
         {filter.day && <span className="daychip"><span>Active on {dayLabel(filter.day, true)}</span>
