@@ -348,6 +348,18 @@ class SessionTest(LiveCase):
         agent, bash = self.run_session(text=True)["events"]
         self.assertEqual((agent["summary"], bash["summary"][-6:]), ("SECRET brief " * 50, "SECRET"))
 
+    def test_no_tool_input_field_longer_than_the_cap_without_text(self):
+        strings = lambda v: [v] if isinstance(v, str) else [s for x in (v.values() if isinstance(v, dict) else v if isinstance(v, list) else []) for s in strings(x)]
+        self.write("s1.jsonl", prompt("u1", at(0), "p1", "go") + assistant("a1", "m1", at(1), [
+            tool_use("t1", "Agent", description="find " + "x" * 1995, prompt="SECRET brief")]))
+        self.ingest()
+        plain, wall = self.run_session(), live.sessions(self.cur(), now=NOW, prices=PRICES)
+        self.assertEqual(plain["events"][1]["summary"], "find " + "x" * (live.INPUT_CAP - 5) + "…")
+        self.assertEqual(max(map(len, strings(plain))), live.INPUT_CAP + 1)
+        self.assertLessEqual(max(map(len, strings(wall))), live.INPUT_CAP + 1)
+        self.assertEqual(wall["sessions"][0]["latest"]["summary"], "find " + "x" * 195)
+        self.assertEqual(len(self.run_session(text=True)["events"][1]["description"]), 2000)
+
     def test_shell_description_beside_its_command_cut_without_text(self):
         self.write("s1.jsonl", assistant("a1", "m1", at(1), [tool_use("t1", "Bash", command="cd /long/path && uv run pytest", description="Run the Python tests"),
                                                              tool_use("t2", "Bash", command="ls", description="list " + "x" * 395),

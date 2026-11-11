@@ -402,11 +402,9 @@ def capped(s, text):
 
 
 def tool_input(e, text):
-    """Tool event e's input as sent: whole with text; otherwise a subagent call's description instead of its prompt, and
-    other inputs cut to INPUT_CAP."""
-    if e["tool"] in PROMPT_TOOLS and not text:
-        return e["description"] or ""
-    return capped(e["summary"], text)
+    """Tool event e's input as sent: whole with text; otherwise cut to INPUT_CAP, a subagent call's description standing
+    in for its prompt."""
+    return capped(e["description"] or "" if e["tool"] in PROMPT_TOOLS and not text else e["summary"], text)
 
 
 def started_by(rows, events):
