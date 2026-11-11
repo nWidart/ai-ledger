@@ -179,6 +179,24 @@ class AppTest(unittest.TestCase):
         self.assertEqual(out.getvalue(), f"ai-ledger {importlib.metadata.version('ai-ledger')}\n")
         opened.assert_not_called()
 
+    def test_user_files_sit_next_to_the_store(self):
+        seen = {}
+
+        def refuse(db):
+            seen.update(prices=metrics.USER_PRICES, automated=metrics.USER_AUTOMATED)
+            raise store.StoreBusy("busy")
+        with mock.patch.object(metrics, "USER_PRICES"), mock.patch.object(metrics, "USER_AUTOMATED"), \
+                mock.patch.object(store, "open_store", side_effect=refuse), contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            app.main(["--db", "/data/ledger/x.duckdb"])
+        self.assertEqual(seen, dict(prices="/data/ledger/prices.json", automated="/data/ledger/automated.json"))
+
+    def test_day(self):
+        status, _, body = self.get("/api/day?day=2026-11-04&range=0")
+        got = json.loads(body)
+        self.assertEqual((status, got["day"], [(t["tool"], t["calls"]) for t in got["tools"]]), (200, "2026-11-04", [("Bash", 1)]))
+        for path in ("/api/day", "/api/day?day=nope", "/api/day?day=2026-11-04&range=-1"):
+            self.assertEqual(self.get(path)[0], 400, path)
+
     def test_store_not_moved_exits(self):
         err = io.StringIO()
         with mock.patch.object(store, "open_store", side_effect=store.StoreNotMoved("cannot move the store a to b")), \

@@ -420,12 +420,13 @@ class MetricsTest(unittest.TestCase):
     def test_daily_work(self):
         work = {d["day"]: d for d in self.all["daily_work"]}
         self.assertEqual(list(work), ["2026-10-01", "2026-11-04", "2026-11-05"])
-        self.assertEqual(work["2026-11-04"], dict(day="2026-11-04", sessions=1, prompts=2, commits=1, failed_calls=6))
-        self.assertEqual(work["2026-11-05"], dict(day="2026-11-05", sessions=1, prompts=1, commits=0, failed_calls=0))
+        self.assertEqual(work["2026-11-04"], dict(day="2026-11-04", sessions=1, prompts=2, commits=1, calls=10, failed_calls=6))
+        self.assertEqual(work["2026-11-05"], dict(day="2026-11-05", sessions=1, prompts=1, commits=0, calls=0, failed_calls=0))
         self.assertEqual([d["day"] for d in self.foo7["daily_work"]], ["2026-11-04", "2026-11-05"])
         for u in (self.all, self.foo7, self.auto):
             t, total = u["totals"], lambda k: sum(d[k] for d in u["daily_work"])
-            self.assertEqual((total("prompts"), total("commits"), total("failed_calls")), (t["prompts"], t["commits"], t["errors"]))
+            self.assertEqual((total("prompts"), total("commits"), total("calls"), total("failed_calls")),
+                             (t["prompts"], t["commits"], t["calls"], t["errors"]))
         # Sessions sum to totals only when no session spans days: o1 is active on Nov 4 and 5, so it counts on both.
         self.assertEqual(sum(d["sessions"] for d in self.all["daily_work"]), self.all["totals"]["sessions"])
         self.assertEqual(sum(d["sessions"] for d in self.auto["daily_work"]), self.auto["totals"]["sessions"] + 1)
@@ -438,6 +439,131 @@ class MetricsTest(unittest.TestCase):
             self.assertEqual((day(automated=True)["sessions"], day(automated=True)["prompts"], day(automated=True)["failed_calls"]), (2, 2, 1))
         finally:
             c.execute("DELETE FROM tool_calls WHERE tool_use_id = 'w1'")
+
+    def test_work_buckets(self):
+        c = self.con.cursor()
+        # 35 days from the first work day (Oct 1) to Nov 5: by day, the same rows as daily_work.
+        for u in (self.all, self.foo7, self.auto):
+            self.assertEqual((u["work_bucket"], u["work"]), ("day", u["daily_work"]))
+        usage = lambda today, **k: metrics.usage(c, "", 0, prices=PRICES, today=today, **k)
+        self.assertEqual(usage(date(2026, 11, 30))["work_bucket"], "day")  # 60 days
+        for auto in (False, True):
+            u = usage(date(2026, 12, 1), automated=auto)  # 61 days: by week, each named by its Monday
+            self.assertEqual(u["work_bucket"], "week")
+            self.assertEqual([r["day"] for r in u["work"]], ["2026-09-28", "2026-11-02"])
+            self.assertEqual(u["daily_work"], (self.auto if auto else self.all)["daily_work"])
+            t, total = u["totals"], lambda k: sum(r[k] for r in u["work"])
+            self.assertEqual((total("prompts"), total("commits"), total("calls"), total("failed_calls")),
+                             (t["prompts"], t["commits"], t["calls"], t["errors"]))
+            # o1 works on Nov 4 and 5: on both days, but once in their week.
+            self.assertEqual(u["work"][1]["sessions"], 3 if auto else 2)
+            self.assertEqual(sum(r["sessions"] for r in u["daily_work"] if r["day"] >= "2026-11-02"), 4 if auto else 2)
+
+    def test_work_projects_sum_to_work(self):
+        weekly = metrics.usage(self.con.cursor(), "", 0, prices=PRICES, today=date(2026, 12, 1), automated=True)
+        keys = ("sessions", "prompts", "commits", "calls", "failed_calls")
+        for u in (self.all, self.foo7, self.auto, weekly):
+            by = {}
+            for r in u["work_projects"]:
+                b = by.setdefault(r["day"], dict.fromkeys(keys, 0))
+                for k in keys:
+                    b[k] += r[k]
+            self.assertEqual(by, {r["day"]: {k: r[k] for k in keys} for r in u["work"]})
+        self.assertEqual([(r["day"], r["project"], r["sessions"], r["prompts"]) for r in weekly["work_projects"]],
+                         [("2026-09-28", "bar", 1, 1), ("2026-11-02", "foo", 2, 3), ("2026-11-02", "observer-sessions", 1, 2)])
+
+    def test_work_hours(self):
+        for u in (self.all, self.foo7, self.auto):
+            self.assertEqual(sum(r["prompts"] for r in u["work_hours"]), u["totals"]["prompts"])
+            for r in u["work_hours"]:
+                self.assertTrue(1 <= r["dow"] <= 7 and 0 <= r["hour"] <= 23 and r["prompts"] > 0, r)
+
+    def test_failed_tests(self):
+        got = self.foo7["failed_tests"]
+        self.assertEqual(got, [dict(id="t07", session_id="s1", title=None, project="foo", source="claude", command="",
+                                    ts="2026-11-04T10:07:00.000Z")])
+        # The id is the one the Errors page lists the failure under.
+        self.assertIn("t07", {e["id"] for e in metrics.errors_payload(self.con.cursor())["errors"]})
+        self.assertEqual(metrics.usage(self.con.cursor(), "bar", 0, prices=PRICES, today=TODAY)["failed_tests"], [])
+
+    def test_previous_matches_usage_over_previous_window(self):
+        keys = ("prompts", "commits", "calls", "errors", "test_runs", "tests_passed", "interrupted", "sub_tokens",
+                "median_session_seconds", "sessions", "requests", "tokens", "active_days")
+        c = self.con.cursor()
+        # Nothing lies after these previous windows, so a usage() call ending on their last day covers exactly them.
+        for today, days, auto in ((date(2026, 11, 7), 2, False), (date(2026, 11, 7), 2, True), (date(2026, 11, 6), 1, False),
+                                  (date(2026, 12, 5), 30, False)):
+            prev = metrics.usage(c, "", days, prices=PRICES, today=today, automated=auto)["previous"]
+            then = metrics.usage(c, "", days, prices=PRICES, today=date.fromisoformat(prev["end"]), automated=auto)["totals"]
+            self.assertEqual({k: prev[k] for k in keys}, {k: then[k] for k in keys}, (today, days, auto))
+        # One day ending Nov 5: the day before holds s1 alone.
+        prev = metrics.usage(c, "foo", 1, prices=PRICES, today=TODAY)["previous"]
+        self.assertEqual({k: prev[k] for k in keys}, dict(
+            prompts=2, commits=1, calls=10, errors=6, test_runs=2, tests_passed=1, interrupted=1, sub_tokens=1_000_000,
+            median_session_seconds=540, sessions=1, requests=2, tokens=12_000_000, active_days=1))
+
+    def test_session_sort(self):
+        ids = lambda **k: [x["session_id"] for x in metrics.session_list(self.con.cursor(), prices=PRICES, today=TODAY, **k)["sessions"]]
+        self.assertEqual(ids(sort=""), ids())
+        self.assertEqual(ids(sort="cost", desc=True), ["s1", "s3", "s2"])  # s2's cost is unknown: last either way
+        self.assertEqual(ids(sort="cost"), ["s3", "s1", "s2"])
+        self.assertEqual(ids(sort="tokens"), ["s3", "s2", "s1"])
+        self.assertEqual(ids(sort="first_ts"), ["s3", "s1", "s2"])
+        self.assertEqual(ids(sort="errors", desc=True)[0], "s1")
+        # The sort comes before the page.
+        page = metrics.session_list(self.con.cursor(), sort="tokens", desc=True, offset=1, limit=1, prices=PRICES, today=TODAY)
+        self.assertEqual((page["total"], [x["session_id"] for x in page["sessions"]]), (3, ["s2"]))
+        for key in metrics.SESSION_SORTS:
+            self.assertEqual(sorted(ids(sort=key)), ["s1", "s2", "s3"], key)
+
+    def test_unknown_sort_never_reaches_sql(self):
+        with mock.patch.object(metrics, "rows") as rows, self.assertRaises(ValueError):
+            metrics.session_list(self.con.cursor(), sort="cost; DROP TABLE sessions", prices=PRICES, today=TODAY)
+        rows.assert_not_called()
+
+    def test_day_view(self):
+        c = self.con.cursor()
+        with mock.patch.object(metrics, "on_day", wraps=metrics.on_day) as narrow:
+            d = metrics.day_view(c, "foo", 7, "2026-11-04", today=TODAY)
+            metrics.session_list(c, "foo", 7, day="2026-11-04", prices=PRICES, today=TODAY)
+        self.assertEqual(narrow.call_count, 2)
+        # Every call of foo's 7 days falls on Nov 4.
+        self.assertEqual(d["day"], "2026-11-04")
+        for k in ("tools", "mcp", "skills", "hooks", "error_loops"):
+            self.assertEqual(d[k], self.foo7[k], k)
+        self.assertEqual(d["error_loops_total"], 1)
+        other = metrics.day_view(c, "foo", 7, "2026-11-05", today=TODAY)
+        self.assertEqual([other[k] for k in ("tools", "mcp", "skills", "hooks", "error_loops", "error_loops_total")], [[], [], [], [], [], 0])
+        for bad in ("", "nope"):
+            with self.assertRaises(ValueError):
+                metrics.day_view(c, day=bad, today=TODAY)
+
+    def test_automated_file(self):
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp)
+        path = os.path.join(tmp, "automated.json")
+        patch = mock.patch.object(metrics, "USER_AUTOMATED", path)
+        patch.start()
+        self.addCleanup(patch.stop)
+        c = self.con.cursor()
+        usage = lambda project="", **k: metrics.usage(c, project, 0, prices=PRICES, today=TODAY, **k)
+        ids = lambda u: {x["session_id"] for x in u["sessions"]}
+        self.assertEqual(usage()["automated_file"], dict(path=path, error=None, projects=[]))  # no file is no error
+        with open(path, "w") as fh:
+            json.dump({"projects": ["bar"]}, fh)
+        u = usage()
+        self.assertEqual(u["automated_file"], dict(path=path, error=None, projects=["bar"]))
+        self.assertEqual((ids(u), u["projects"], [p["project"] for p in u["by_project"]]), ({"s1", "s2"}, ["foo"], ["foo"]))
+        self.assertEqual(ids(usage(automated=True)), {"s1", "s2", "s3", "o1"})
+        self.assertEqual(ids(usage("bar")), {"s3"})  # naming it lets it in, as for observer-sessions
+        self.assertEqual(metrics.session_list(c, prices=PRICES, today=TODAY)["total"], 2)
+        for text, error in (("{bad", "Expecting property name"), ("[]", 'no "projects" list'),
+                            ('{"projects": "bar"}', 'no "projects" list'), ('{"projects": [1]}', "projects must be strings")):
+            with open(path, "w") as fh:
+                fh.write(text)
+            u = usage()
+            self.assertIn(error, u["automated_file"]["error"])
+            self.assertEqual((u["automated_file"]["projects"], ids(u)), ([], {"s1", "s2", "s3"}))
 
     def test_api_reads_automated_param(self):
         httpd = ThreadingHTTPServer(("127.0.0.1", 0), app.handler(app.App(self.con, dict(claude=self.tmp))))
@@ -452,6 +578,9 @@ class MetricsTest(unittest.TestCase):
             self.assertEqual((get("/api/usage")["totals"]["sessions"], get("/api/usage?automated=1")["totals"]["sessions"]), (3, 4))
             self.assertEqual((get("/api/sessions")["total"], get("/api/sessions?automated=1")["total"]), (3, 4))
             self.assertEqual(len(get("/api/sessions?limit=2")["sessions"]), 2)  # a refresh refetches as many rows as are shown
+            self.assertEqual([x["session_id"] for x in get("/api/sessions?sort=tokens&desc=1")["sessions"]], ["s1", "s2", "s3"])
+            self.assertEqual([x["session_id"] for x in get("/api/sessions?sort=tokens")["sessions"]], ["s3", "s2", "s1"])
+            self.assertEqual(get("/api/day?day=2026-11-04&range=0")["error_loops_total"], 1)
         finally:
             httpd.shutdown()
             httpd.server_close()
@@ -554,6 +683,27 @@ class SourceFilterTest(unittest.TestCase):
         prev = metrics.usage(self.con.cursor(), "", 1, prices=PRICES, today=date(2026, 11, 6), source="codex")["previous"]
         self.assertEqual((prev["tokens"], prev["sessions"]), (200_000, 1))
 
+    def test_new_fields_for_each_source(self):
+        c = self.con.cursor()
+        store.insert(c, "tool_calls", ["tool_use_id", "session_id", "tool", "input_summary", "start_ts", "end_ts", "is_error", "category",
+                                       "subagent", "is_test", "test_passed"], [
+            ("tt", "x1", "exec_command", "npm test", "2026-11-05 10:03:00", "2026-11-05 10:03:05", True, "tests", False, True, False)])
+        try:
+            for source, sid, calls, failed in (("claude", "c1", 1, []), ("codex", "x1", 2, ["tt"])):
+                u = self.usage(source)
+                self.assertEqual(u["work_bucket"], "day")
+                self.assertEqual(u["work"], [dict(day="2026-11-05", sessions=1, prompts=1, commits=0, calls=calls, failed_calls=calls)])
+                self.assertEqual(u["work_projects"], [dict(u["work"][0], project="foo")])
+                self.assertEqual(sum(r["prompts"] for r in u["work_hours"]), 1)
+                self.assertEqual([(r["id"], r["session_id"], r["source"]) for r in u["failed_tests"]], [(x, sid, source) for x in failed])
+                self.assertIsNone(u["automated_file"]["error"])
+                prev = metrics.usage(c, "", 1, prices=PRICES, today=date(2026, 11, 6), source=source)["previous"]
+                self.assertEqual((prev["prompts"], prev["calls"], prev["errors"], prev["tests_passed"]), (1, calls, calls, 0))
+                day = metrics.day_view(c, "", 7, "2026-11-05", today=TODAY, source=source)
+                self.assertEqual(sum(t["calls"] for t in day["tools"]), calls)
+        finally:
+            c.execute("DELETE FROM tool_calls WHERE tool_use_id = 'tt'")
+
     def test_unknown_source_is_refused(self):
         with self.assertRaises(ValueError):
             self.usage("grok")
@@ -578,6 +728,9 @@ class SourceFilterTest(unittest.TestCase):
             self.assertEqual(get("/api/usage?range=0")[1]["totals"]["tokens"], 1_200_000)
             self.assertEqual(get("/api/usage?range=0&source=codex")[1]["totals"]["tokens"], 200_000)
             self.assertEqual(get("/api/sessions?source=claude")[1]["total"], 1)
+            for path, error in (("/api/sessions?sort=title", "unknown sort: title"), ("/api/day", "Invalid isoformat string: ''"),
+                                ("/api/day?day=nope", "Invalid isoformat string: 'nope'"), ("/api/day?day=2026-11-05&source=grok", "unknown source: grok")):
+                self.assertEqual(get(path), (400, dict(error=error)), path)
             for path in ("/api/usage?source=grok", "/api/sessions?source=grok"):
                 status, body = get(path)
                 self.assertEqual((status, body), (400, dict(error="unknown source: grok")), path)
@@ -622,6 +775,20 @@ class LocalDayTest(unittest.TestCase):
         self.assertEqual((u["start"], u["totals"]["tokens"], u["totals"]["prompts"], u["totals"]["errors"]), ("2026-03-09", 200, 1, 1))
         self.assertEqual((u["previous"]["start"], u["previous"]["tokens"]), ("2026-03-08", 100))
         self.assertEqual([d["day"] for d in u["previous"]["daily"]], ["2026-03-08"])
+
+    def test_weeks_and_hours_are_local(self):
+        # 68 days from Mar 8 to May 15: by week. z1 works late on Sunday Mar 8 (Monday in UTC), so in the week of Mar 2;
+        # z2 just after midnight on Monday Mar 9.
+        u = metrics.usage(self.con.cursor(), "", 0, prices=PRICES, today=date(2026, 5, 15))
+        self.assertEqual(u["work_bucket"], "week")
+        self.assertEqual([(r["day"], r["sessions"], r["prompts"]) for r in u["work"]], [("2026-03-02", 1, 1), ("2026-03-09", 1, 1)])
+        self.assertEqual([(r["day"], r["project"]) for r in u["work_projects"]], [("2026-03-02", "foo"), ("2026-03-09", "foo")])
+        self.assertEqual(sorted((r["dow"], r["hour"], r["prompts"]) for r in u["work_hours"]), [(1, 0, 1), (7, 23, 1)])
+
+    def test_day_view_by_local_day(self):
+        for day, tool_id in (("2026-03-08", "ta"), ("2026-03-09", "tb")):
+            got = metrics.day_view(self.con.cursor(), day=day, today=date(2026, 3, 9))
+            self.assertEqual([(t["tool"], t["calls"]) for t in got["tools"]], [("Bash", 1)], day)
 
     def test_session_list_by_local_day(self):
         for day, sid in (("2026-03-08", "z1"), ("2026-03-09", "z2")):
@@ -727,6 +894,10 @@ class SessionTimeTest(unittest.TestCase):
         # A 1-day view still measures the whole session.
         u = metrics.usage(self.con.cursor(), "", 1, prices=PRICES, today=TODAY)
         self.assertEqual(u["sessions"][0]["duration_s"], 1800)
+        # A day's list measures that day alone: Nov 4 holds 10 and 15 minutes, Nov 5 five.
+        for day, active in (("2026-11-04", 600 + 900), ("2026-11-05", 300)):
+            got = metrics.session_list(self.con.cursor(), day=day, prices=PRICES, today=TODAY)["sessions"]
+            self.assertEqual([x["duration_s"] for x in got], [active], day)
         # The session sheet shows the same active time, not first to last.
         self.assertEqual(metrics.session(self.con.cursor(), "a", prices=PRICES)["info"]["active_s"], 1800)
 

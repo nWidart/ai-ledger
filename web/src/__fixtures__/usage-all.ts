@@ -132,6 +132,7 @@ export default {
    "sessions": 1,
    "prompts": 1,
    "commits": 0,
+   "calls": 0,
    "failed_calls": 0
   },
   {
@@ -139,6 +140,7 @@ export default {
    "sessions": 2,
    "prompts": 3,
    "commits": 1,
+   "calls": 10,
    "failed_calls": 6
   },
   {
@@ -146,7 +148,104 @@ export default {
    "sessions": 2,
    "prompts": 2,
    "commits": 0,
+   "calls": 0,
    "failed_calls": 0
+  }
+ ],
+ "work_bucket": "day",
+ "work": [
+  {
+   "day": "2026-10-01",
+   "sessions": 1,
+   "prompts": 1,
+   "commits": 0,
+   "calls": 0,
+   "failed_calls": 0
+  },
+  {
+   "day": "2026-11-04",
+   "sessions": 2,
+   "prompts": 3,
+   "commits": 1,
+   "calls": 10,
+   "failed_calls": 6
+  },
+  {
+   "day": "2026-11-05",
+   "sessions": 2,
+   "prompts": 2,
+   "commits": 0,
+   "calls": 0,
+   "failed_calls": 0
+  }
+ ],
+ "work_projects": [
+  {
+   "day": "2026-10-01",
+   "project": "bar",
+   "sessions": 1,
+   "prompts": 1,
+   "commits": 0,
+   "calls": 0,
+   "failed_calls": 0
+  },
+  {
+   "day": "2026-11-04",
+   "project": "foo",
+   "sessions": 1,
+   "prompts": 2,
+   "commits": 1,
+   "calls": 10,
+   "failed_calls": 6
+  },
+  {
+   "day": "2026-11-04",
+   "project": "observer-sessions",
+   "sessions": 1,
+   "prompts": 1,
+   "commits": 0,
+   "calls": 0,
+   "failed_calls": 0
+  },
+  {
+   "day": "2026-11-05",
+   "project": "foo",
+   "sessions": 1,
+   "prompts": 1,
+   "commits": 0,
+   "calls": 0,
+   "failed_calls": 0
+  },
+  {
+   "day": "2026-11-05",
+   "project": "observer-sessions",
+   "sessions": 1,
+   "prompts": 1,
+   "commits": 0,
+   "calls": 0,
+   "failed_calls": 0
+  }
+ ],
+ "work_hours": [
+  {
+   "dow": 3,
+   "hour": 10,
+   "prompts": 2
+  },
+  {
+   "dow": 3,
+   "hour": 12,
+   "prompts": 1
+  },
+  {
+   "dow": 4,
+   "hour": 9,
+   "prompts": 2
+  },
+  {
+   "dow": 4,
+   "hour": 12,
+   "prompts": 1
   }
  ],
  "unpriced": [
@@ -334,6 +433,17 @@ export default {
    "failures": 4,
    "first_id": "t01",
    "start_ts": "2026-11-04 10:01:00",
+   "title": null
+  }
+ ],
+ "failed_tests": [
+  {
+   "id": "t07",
+   "session_id": "s1",
+   "project": "foo",
+   "source": "claude",
+   "command": "",
+   "ts": "2026-11-04T10:07:00.000Z",
    "title": null
   }
  ],
@@ -609,6 +719,11 @@ export default {
  "prices_file": {
   "path": "/Users/example/Library/Application Support/ai-ledger/prices.json",
   "error": null
+ },
+ "automated_file": {
+  "path": "/Users/example/Library/Application Support/ai-ledger/automated.json",
+  "error": null,
+  "projects": []
  },
  "session": {
   "info": {

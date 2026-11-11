@@ -26,12 +26,12 @@ describe("work per day", () => {
   it("covers the view from its first day with a session, with zeros for idle days", () => {
     const ds = workDays(usage);
     expect(ds.map(r => r.day)).toEqual(["2026-11-04", "2026-11-05"]);
-    expect(ds[0]).toEqual({ day: "2026-11-04", sessions: 1, prompts: 2, commits: 1, failed_calls: 6 });
+    expect(ds[0]).toEqual({ day: "2026-11-04", sessions: 1, prompts: 2, commits: 1, calls: 10, failed_calls: 6 });
     expect(ds.reduce((a, r) => a + r.commits, 0)).toBe(usage.totals.commits);
-    const gap = workDays({ ...usage, daily_work: [{ day: "2026-11-01", sessions: 1, prompts: 1, commits: 0, failed_calls: 0 }, ...usage.daily_work] });
+    const gap = workDays({ ...usage, daily_work: [{ day: "2026-11-01", sessions: 1, prompts: 1, commits: 0, calls: 0, failed_calls: 0 }, ...usage.daily_work] });
     expect(gap.map(r => r.sessions)).toEqual([1, 0, 0, 1, 1]);
     // A prompt whose session made no request does not start the axis; a view with no session keeps its whole range.
-    const orphan = { day: "2026-09-01", sessions: 0, prompts: 1, commits: 0, failed_calls: 0 };
+    const orphan = { day: "2026-09-01", sessions: 0, prompts: 1, commits: 0, calls: 0, failed_calls: 0 };
     expect(workDays({ ...usageAll, daily_work: [orphan, ...usageAll.daily_work] })[0]!.day).toBe(usageAll.daily_work.find(r => r.sessions)!.day);
     expect(workDays({ ...usage, daily_work: [] })).toHaveLength(30);
   });

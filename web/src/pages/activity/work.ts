@@ -16,7 +16,7 @@ export const firstWorkDay = (d: Pick<UsagePayload, "daily_work">): string | null
 export function workDays(d: Pick<UsagePayload, "start" | "end" | "daily_work">): DailyWorkRow[] {
   const have = new Map(d.daily_work.map(r => [r.day, r]));
   const first = firstWorkDay(d) ?? d.start ?? d.end;
-  return dayRange(first, d.end).map(day => have.get(day) ?? { day, sessions: 0, prompts: 0, commits: 0, failed_calls: 0 });
+  return dayRange(first, d.end).map(day => have.get(day) ?? { day, sessions: 0, prompts: 0, commits: 0, calls: 0, failed_calls: 0 });
 }
 export const busy = (r: DailyWorkRow) => r.sessions + r.prompts + r.commits + r.failed_calls > 0;
 

@@ -23,8 +23,9 @@ export interface Totals extends Tokens {
 
 export interface DailyRow extends Tokens { day: Day; cost: number | null; unpriced: number }
 export interface DailyProjectRow { day: Day; project: string | null; cost: number | null; tokens: number }
-/** Work per day: sessions with a request that day, prompts, commits (as in totals) and failed tool calls. Idle days are left out. */
-export interface DailyWorkRow { day: Day; sessions: number; prompts: number; commits: number; failed_calls: number }
+/** Work per day (or per week, named by its Monday, in work): sessions with a request in it, each counted once, prompts,
+ *  commits (as in totals), tool calls and failed tool calls. Idle days are left out. */
+export interface DailyWorkRow { day: Day; sessions: number; prompts: number; commits: number; calls: number; failed_calls: number }
 export interface UnpricedRow { model: string | null; requests: number; tokens: number }
 export interface ModelRow { model: string; effort: string; requests: number; tokens: number; cost: number | null }
 
@@ -59,6 +60,9 @@ export interface TitledSessionRow extends SessionRow { title: string | null }
 
 export interface Previous {
   tokens: number; cost: number | null; requests: number; sessions: number; active_days: number; start: Day; end: Day;
+  /** As the same totals of the view. */
+  prompts: number; commits: number; calls: number; errors: number; test_runs: number; tests_passed: number; interrupted: number;
+  sub_tokens: number; median_session_seconds: number | null;
   daily: { day: Day; cost: number | null; tokens: number }[];
   by_project: { project: string | null; cost: number | null; tokens: number; requests: number }[];
 }
@@ -72,6 +76,14 @@ export interface UsagePayload {
   project: string; range: number; automated: boolean; source: Source | ""; start: Day | null; end: Day;
   projects: string[]; project_order: string[]; totals: Totals;
   daily: DailyRow[]; daily_projects: DailyProjectRow[]; daily_work: DailyWorkRow[];
+  /** The work rows by work_bucket: weeks (Monday start, local) when the first work day is over 60 days before the end. */
+  work_bucket: "day" | "week"; work: DailyWorkRow[];
+  /** work split by project; a bucket's rows add up to its work row. */
+  work_projects: { day: Day; project: string | null; sessions: number; prompts: number; commits: number; calls: number; failed_calls: number }[];
+  /** Prompts per local weekday (1 Monday to 7 Sunday) and hour; nonzero cells only. */
+  work_hours: { dow: number; hour: number; prompts: number }[];
+  /** The newest 50 failed test runs; id is the failed call's id on the Errors page. */
+  failed_tests: { id: string; session_id: string; title: string | null; project: string | null; source: Source; command: string; ts: Ts }[];
   unpriced: UnpricedRow[]; models: ModelRow[]; by_project: ProjectRow[];
   tools: ToolRow[]; mcp: NamedRateRow[]; skills: NamedRateRow[]; hooks: HookRow[]; error_loops: ErrorLoop[];
   sessions: SessionRow[]; top_sessions: TitledSessionRow[]; near_limit: SessionRow[];
@@ -79,11 +91,19 @@ export interface UsagePayload {
   previous: Previous | null; changes: Change[] | null;
   /** The user prices file next to the store (path), and why it was ignored (error; null when read or absent). */
   prices_file: { path: string; error: string | null };
+  /** The user automated projects file next to the store, why it was ignored, and the projects it adds. */
+  automated_file: { path: string; error: string | null; projects: string[] };
   /** Present when the request named a session: null when it does not exist. */
   session?: SessionDetail | null;
 }
 
 export interface SessionsPage { total: number; offset: number; sessions: TitledSessionRow[] }
+export type SessionSort = "first_ts" | "duration_s" | "prompts" | "tokens" | "cost" | "peak_context" | "errors" | "compactions" | "commits" | "tests_failed";
+
+/** /api/day: the usage payload's tool, hook and error-loop rows, limited to one local day of the view. */
+export interface DayView {
+  day: Day; tools: ToolRow[]; mcp: NamedRateRow[]; skills: NamedRateRow[]; hooks: HookRow[]; error_loops: ErrorLoop[]; error_loops_total: number;
+}
 
 export interface SessionInfo {
   session_id: string; project: string | null; cwd: string | null; git_branch: string | null; first_ts: Ts | null; last_ts: Ts | null;
@@ -324,8 +344,9 @@ export const viewOf = (h: { project: string; range: number; auto: boolean; sourc
   ({ project: h.project, range: h.range, automated: h.auto, source: h.source });
 const viewQs = (v: View) => ({ project: v.project, range: v.range, automated: v.automated, source: v.source });
 export const usageUrl = (v: View, session = "") => `/api/usage?${qs({ ...viewQs(v), session })}`;
-export const sessionsUrl = (v: View, o: { q?: string; near?: boolean; offset?: number; limit?: number; day?: Day } = {}) =>
-  `/api/sessions?${qs({ ...viewQs(v), q: o.q, near: o.near, offset: o.offset || undefined, limit: o.limit, day: o.day })}`;
+export const sessionsUrl = (v: View, o: { q?: string; near?: boolean; offset?: number; limit?: number; day?: Day; sort?: SessionSort; desc?: boolean } = {}) =>
+  `/api/sessions?${qs({ ...viewQs(v), q: o.q, near: o.near, offset: o.offset || undefined, limit: o.limit, day: o.day, sort: o.sort, desc: o.desc })}`;
+export const dayUrl = (v: View, day: Day) => `/api/day?${qs({ ...viewQs(v), day })}`;
 export const sessionUrl = (id: string) => `/api/session?${qs({ id })}`;
 export const promptUrl = (session: string) => `/api/prompt?${qs({ session })}`;
 export const toolUrl = (kind: ToolKind, name: string, v: View) => `/api/tool?${qs({ kind, name, ...viewQs(v) })}`;
