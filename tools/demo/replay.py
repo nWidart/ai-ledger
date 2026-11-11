@@ -4,6 +4,7 @@ prompt and output here is made up.
 
 uv run tools/demo/replay.py          loops until stopped
 uv run tools/demo/replay.py --once   plays one session
+uv run tools/demo/replay.py --once ledger-web   plays it in another project, as a second session beside the first
 """
 import json
 import os
@@ -13,8 +14,7 @@ import uuid
 from datetime import datetime, timezone
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.join(HERE, "live", "claude", "-nowhere-atlas-api")
-CWD = "/nowhere/atlas-api"
+LIVE = os.path.join(HERE, "live", "claude")
 MODEL = "claude-opus-5-5"
 
 
@@ -23,15 +23,16 @@ def ts():
 
 
 class Session:
-    def __init__(self):
+    def __init__(self, project):
         self.sid = str(uuid.uuid4())
-        self.path = os.path.join(ROOT, self.sid + ".jsonl")
+        self.cwd, self.root = "/nowhere/" + project, os.path.join(LIVE, "-nowhere-" + project)
+        self.path = os.path.join(self.root, self.sid + ".jsonl")
         self.ctx = 42_000
-        os.makedirs(ROOT, exist_ok=True)
+        os.makedirs(self.root, exist_ok=True)
 
     def write(self, d, path=None):
         with open(path or self.path, "a") as fh:
-            fh.write(json.dumps(dict(d, sessionId=self.sid, cwd=CWD, gitBranch="feat/rate-limit", timestamp=ts(),
+            fh.write(json.dumps(dict(d, sessionId=self.sid, cwd=self.cwd, gitBranch="feat/rate-limit", timestamp=ts(),
                                      uuid=str(uuid.uuid4()), version="2.1.0")) + "\n")
 
     def prompt(self, text):
@@ -55,16 +56,17 @@ class Session:
         self.assistant([dict(type="text", text=text)])
 
 
-def play():
-    s = Session()
+def play(project):
+    s = Session(project)
     s.prompt("Add rate limiting to the /orders endpoint")
+    s.write(dict(type="ai-title", aiTitle="Rate-limit the orders endpoint" if project == "atlas-api" else "Throttle the order history fetches"))
     time.sleep(3)
     s.reply("I'll look at the orders router and the middleware first.")
     s.tool("Read", dict(file_path="src/orders/router.ts"), "export const router = Router();\n...", 1.5)
     s.tool("Grep", dict(pattern="rateLimit"), "src/middleware/index.ts:12", 1)
     # A subagent: its own file, then the parent call's result names it.
     agent = uuid.uuid4().hex[:17]
-    sub = os.path.join(ROOT, s.sid, "subagents", f"agent-{agent}.jsonl")
+    sub = os.path.join(s.root, s.sid, "subagents", f"agent-{agent}.jsonl")
     os.makedirs(os.path.dirname(sub), exist_ok=True)
     tid = "toolu_" + uuid.uuid4().hex[:12]
     s.assistant([dict(type="tool_use", id=tid, name="Agent", input=dict(description="find every caller of the orders router", prompt="Look for callers"))])
@@ -83,8 +85,9 @@ def play():
 
 
 if __name__ == "__main__":
+    project = next((a for a in sys.argv[1:] if not a.startswith("-")), "atlas-api")
     while True:
-        play()
+        play(project)
         if "--once" in sys.argv:
             break
         time.sleep(20)

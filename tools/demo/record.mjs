@@ -1,8 +1,11 @@
 // Records scripted walkthroughs of the demo server as GIFs in docs/: PNG frames from Playwright, encoded by gifski.
-// node record.mjs [scene...]   (scenes: tour activity cost errors limits insights; default all)
-// CHROMIUM=<path> uses that Chromium instead of Playwright's own.
+// Each scene records twice: <scene>.gif in dark mode, <scene>-light.gif in light mode.
+// node record.mjs [scene...]   (scenes: tour activity cost errors limits insights live; default all)
+// live plays synthetic sessions with replay.py, so it needs uv.
+// CHROMIUM=<path> uses that Chromium instead of Playwright's own. SCHEMES=light records only that scheme.
+// live leaves its sessions in the store: seed it again before you record live a second time.
 import { chromium } from "playwright";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { mkdtempSync, rmSync, copyFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -10,6 +13,7 @@ import { join } from "node:path";
 const BASE = "http://127.0.0.1:8799";
 const FPS = 12;
 const DOCS = new URL("../../docs/", import.meta.url).pathname;
+const HERE = new URL(".", import.meta.url).pathname;
 
 // A visible cursor: headless Chromium draws none.
 const CURSOR = () => {
@@ -24,9 +28,9 @@ const CURSOR = () => {
   });
 };
 
-async function record(name, scene) {
+async function record(name, scene, scheme) {
   const b = await chromium.launch({ executablePath: process.env.CHROMIUM });
-  const page = await b.newPage({ viewport: { width: 1280, height: 800 }, colorScheme: "dark" });
+  const page = await b.newPage({ viewport: { width: 1280, height: 800 }, colorScheme: scheme });
   await page.addInitScript(CURSOR);
   const dir = mkdtempSync(join(tmpdir(), `ai-ledger-${name}-`));
   const shots = [];
@@ -68,7 +72,8 @@ async function record(name, scene) {
       await h.scroll(y);
     },
   };
-  await scene(h, async path => { await page.goto(BASE + path); await page.waitForLoadState("networkidle"); on = true; });
+  // Live keeps a stream open, so it never reaches networkidle; it passes "load".
+  await scene(h, async (path, state = "networkidle") => { await page.goto(BASE + path); await page.waitForLoadState(state); on = true; });
   on = false;
   await loop;
   await b.close();
@@ -81,9 +86,9 @@ async function record(name, scene) {
     copyFileSync(shots[i].path, f);
     out.push(f);
   }
-  execFileSync("gifski", ["--fps", String(FPS), "--width", "960", "--quality", "80", "-o", `${DOCS}${name}.gif`, ...out], { stdio: "inherit" });
+  execFileSync("gifski", ["--fps", String(FPS), "--width", "960", "--quality", "80", "-o", `${DOCS}${name}${scheme === "light" ? "-light" : ""}.gif`, ...out], { stdio: "inherit" });
   rmSync(dir, { recursive: true });
-  console.log(`${name}: ${out.length} frames`);
+  console.log(`${name} (${scheme}): ${out.length} frames`);
 }
 
 const sel = (page, s, text) => page.locator(s, { hasText: text });
@@ -126,8 +131,8 @@ const SCENES = {
     await start("/errors#range=30");
     await h.wait(1800);
     await h.scrollTo(page.locator("#chartTitle"), 20);
-    await h.click(sel(page, "#legend button, #legend label, #legend span", "Wrong CLI flags"), { pause: 1500 });
-    await h.click(sel(page, "#legend button, #legend label, #legend span", "Wrong CLI flags"), { pause: 800 });
+    await h.click(page.locator("#legend button"), { pause: 1500 });
+    await h.click(page.locator("#legend button"), { pause: 800 });
     await h.scrollTo(page.locator("#catBody"));
     await h.click(page.locator("#catBody tr, #catBody button"), { pause: 1500 });
     await h.scrollTo(page.locator("#detail"));
@@ -162,6 +167,24 @@ const SCENES = {
     await h.click(page.locator("#log a", { hasText: "Session" }).first(), { pause: 2600 });
     await page.keyboard.press("Escape"); await h.wait(800);
   },
+  async live(h, start) {
+    const { page } = h;
+    const replay = project => spawn("uv", ["run", "replay.py", "--once", project], { cwd: HERE, stdio: "ignore" });
+    const runs = [replay("ledger-web")];
+    try {
+      await h.wait(6000);
+      runs.push(replay("atlas-api"));
+      await h.wait(1500);
+      await start("/live", "load");
+      await h.wait(1500);
+      await h.click(sel(page, ".rail li button", "Rate-limit"), { pause: 11500 });
+      await h.click(sel(page, ".stream button", "npm test"), { pause: 3500 });
+      await h.click(btn(page, "Wall"), { pause: 4500 });
+      await h.click(page.getByRole("button", { name: "Open Rate-limit the orders endpoint" }), { pause: 7000 });
+    } finally {
+      for (const r of runs) r.kill();
+    }
+  },
   async tour(h, start) {
     const { page } = h;
     await start("/usage#range=30");
@@ -183,5 +206,5 @@ const SCENES = {
 };
 
 for (const name of process.argv.slice(2).length ? process.argv.slice(2) : Object.keys(SCENES)) {
-  await record(name, SCENES[name]);
+  for (const scheme of (process.env.SCHEMES ?? "dark,light").split(",")) await record(name, SCENES[name], scheme);
 }
