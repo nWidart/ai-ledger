@@ -85,7 +85,7 @@ export function ActivityPage() {
     setSess(s => ({ ...s, day: "" })); setFlaky(false);
   }, [viewKey]);
 
-  const { slow, grow, before, wrap, retryBtn } = useLanding(data, loading, error, ":scope > :is(.insights, .panel, .vitals, .drawers)");
+  const { slow, grow, before, wrap, retryBtn } = useLanding(data, url, loading, error, ":scope > :is(.insights, .panel, .vitals, .drawers)");
 
   const days = useMemo(() => (data ? workDays(data) : []), [data]);
   const sessionsFor = (f: SessFilter) => { setSess(f); openDrawer("d-sessions", true); };

@@ -81,7 +81,7 @@ export function CostPage() {
   const setMetric = (m: CostMetric) => { setMetricState(m); store(METRIC_KEY, m); };
   const setHidden = (ks: string[]) => { setHiddenState(ks); store(HIDDEN_KEY, ks); };
 
-  const { slow, grow, before, wrap, retryBtn } = useLanding(data, loading, error, ":scope > :is(.insights, .panel, .split, .drawers, .more-ins)");
+  const { slow, grow, before, wrap, retryBtn } = useLanding(data, url, loading, error, ":scope > :is(.insights, .panel, .split, .drawers, .more-ins)");
 
   const d = data, has = !!d && d.totals.requests > 0;
   const days = useMemo(() => (d ? costDays(d) : []), [d]);

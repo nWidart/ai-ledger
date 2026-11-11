@@ -129,7 +129,7 @@ export function LimitsPage() {
   // The payload does not echo its view, so remember the one the data on screen answers.
   const [shown, setShown] = useState(want);
   useEffect(() => { if (d && !loading && !error) setShown(want); }, [d, loading, error, url]); // want is read through url
-  const { slow, wrap, retryBtn } = useLanding(d, loading, error, ":scope > :is(.lim-grid, .panel, .drawers)");
+  const { slow, wrap, retryBtn } = useLanding(d, url, loading, error, ":scope > :is(.lim-grid, .panel, .drawers)");
   return (
     <div className={"wrap pg-limits" + (slow ? " loading" : "")} ref={wrap} aria-busy={loading || undefined}>
       <header className="top sect" id="overview">

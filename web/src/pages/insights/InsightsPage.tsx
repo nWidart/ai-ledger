@@ -65,15 +65,18 @@ function Sub({ d, view }: { d: InsightsPayload; view: View }) {
 
 function Vitals({ d }: { d: InsightsPayload }) {
   const c = d.coverage, n = c.facets, full = countOf(d.outcomes, "fully_achieved"), mostly = countOf(d.outcomes, "mostly_achieved");
+  const partly = countOf(d.outcomes, "partially_achieved"), not = countOf(d.outcomes, "not_achieved");
   const dis = d.satisfaction.find(s => s.name === "dissatisfied")?.sessions ?? 0;
+  const unclear = n - full - mostly - partly - not; // unclear_from_transcript, or an outcome this page does not know
   return (
     <section className="vitals" aria-label="Outcomes at a glance">
       <div className="vital"><div className="v">{num(n)}</div><div className="l">Sessions analysed</div>
-        <div className="d">{num(c.analysed)} of {num(c.claude_sessions)} stored Claude Code sessions{c.orphans > 0 && `, ${num(c.orphans)} without transcript`}</div></div>
+        <div className="d">{num(c.analysed)} of {num(c.claude_sessions)} stored Claude Code sessions{c.orphans > 0 && `, ${num(c.orphans)} without transcript`}
+          {unclear > 0 && `; ${num(unclear)} with no clear outcome`}</div></div>
       <div className="vital good"><div className="v">{num(full + mostly)} <small>{pct((full + mostly) / n)}</small></div><div className="l">Fully or mostly achieved</div>
         <div className="d">{num(full)} fully, {num(mostly)} mostly</div></div>
-      <div className="vital"><div className="v">{num(countOf(d.outcomes, "partially_achieved"))}</div><div className="l">Partially</div><div className="d">some of the goal met</div></div>
-      <div className="vital bad"><div className="v">{num(countOf(d.outcomes, "not_achieved"))}</div><div className="l">Not achieved</div><div className="d">goal abandoned or failed</div></div>
+      <div className="vital"><div className="v">{num(partly)}</div><div className="l">Partially</div><div className="d">some of the goal met</div></div>
+      <div className="vital bad"><div className="v">{num(not)}</div><div className="l">Not achieved</div><div className="d">goal abandoned or failed</div></div>
       <div className="vital bad"><div className="v">{num(dis)}</div><div className="l">Dissatisfied</div><div className="d">sessions where the user pushed back</div></div>
     </section>
   );
@@ -214,7 +217,7 @@ export function InsightsPage() {
   const url = insightsUrl(want), { data: d, error, loading, retry } = useApi<InsightsPayload>(url, { keepPrevious: true });
   const [shown, setShown] = useState(want);
   useEffect(() => { if (d && !loading && !error) setShown(want); }, [d, loading, error, url]); // want is read through url
-  const { slow, grow, wrap, retryBtn } = useLanding(d, loading, error, ":scope > :is(.grid2, .panel, .vitals)");
+  const { slow, grow, wrap, retryBtn } = useLanding(d, url, loading, error, ":scope > :is(.grid2, .panel, .vitals)");
   const figures = d && shown.source !== "codex" && d.coverage.facets > 0;
   return (
     <div className={"wrap pg-insights" + (slow ? " loading" : "") + (grow ? " grow" : "")} ref={wrap} aria-busy={loading || undefined}>
