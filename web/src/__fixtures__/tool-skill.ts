@@ -56,7 +56,7 @@ export default {
   {
    "id": "bad_call",
    "label": "Wrong tool name or parameters",
-   "why": "Claude called a tool that is not loaded, or with a malformed input.",
+   "why": "The agent called a tool that is not loaded, or with a malformed input.",
    "fix": "Mostly harness/skill-doc issues. If one tool dominates, its instructions or skill are unclear; tighten them.",
    "errors": 1
   }
