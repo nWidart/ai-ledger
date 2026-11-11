@@ -11,6 +11,7 @@ export default {
    "project": "jobdesk",
    "source": "claude",
    "branch": "main",
+   "first_ts": "2026-11-10T10:00:30.000Z",
    "last_ts": "2026-11-10T10:00:55.000Z",
    "state": {
     "kind": "thinking",
@@ -41,6 +42,7 @@ export default {
    "project": "sketchbook",
    "source": "claude",
    "branch": "main",
+   "first_ts": "2026-11-10T10:00:10.000Z",
    "last_ts": "2026-11-10T10:00:40.000Z",
    "state": {
     "kind": "you",
@@ -71,6 +73,7 @@ export default {
    "project": "notes",
    "source": "claude",
    "branch": "main",
+   "first_ts": "2026-11-10T10:00:15.000Z",
    "last_ts": "2026-11-10T10:00:35.000Z",
    "state": {
     "kind": "ended",
@@ -101,6 +104,7 @@ export default {
    "project": "graft",
    "source": "codex",
    "branch": null,
+   "first_ts": "2026-11-10T10:00:00.000Z",
    "last_ts": "2026-11-10T10:00:27.000Z",
    "state": {
     "kind": "thinking",
@@ -131,6 +135,7 @@ export default {
    "project": "foo",
    "source": "claude",
    "branch": "main",
+   "first_ts": "2026-11-10T10:00:00.000Z",
    "last_ts": "2026-11-10T10:00:22.000Z",
    "state": {
     "kind": "wait",
@@ -161,6 +166,7 @@ export default {
    "project": "dotfiles",
    "source": "claude",
    "branch": "main",
+   "first_ts": "2026-11-10T09:53:00.000Z",
    "last_ts": "2026-11-10T09:53:00.000Z",
    "state": {
     "kind": "idle",

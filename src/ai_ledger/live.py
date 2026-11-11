@@ -195,12 +195,13 @@ def figures(cur, sids, prices):
 
 
 def sessions(cur, project="", source="", automated=False, now=None, prices=None, text=False):
-    """/api/live: sessions with a line in the last ACTIVE, newest first, each with its title, state, figures and latest action."""
+    """/api/live: sessions with a line in the last ACTIVE, newest first, each with its title, start (first_ts), state,
+    figures and latest action."""
     now = now or now_utc()
     prices = metrics.load_prices() if prices is None else prices
     where, params = metrics.scope(project, automated, source)
     since = (now - ACTIVE).astimezone(timezone.utc).replace(tzinfo=None)
-    info = metrics.rows(cur, f"""SELECT s.session_id, s.project, s.source, s.git_branch, s.last_ts FROM sessions s
+    info = metrics.rows(cur, f"""SELECT s.session_id, s.project, s.source, s.git_branch, s.first_ts, s.last_ts FROM sessions s
         WHERE s.last_ts >= ? AND {where} ORDER BY s.last_ts DESC""", [since] + params)
     sids = [s["session_id"] for s in info]
     lines = recent(cur, sids)
@@ -214,7 +215,7 @@ def sessions(cur, project="", source="", automated=False, now=None, prices=None,
         last = aware(s["last_ts"])
         f = figs[sid]
         out.append(dict(session_id=sid, **title_of(found, sid), project=s["project"], source=s["source"], branch=s["git_branch"],
-                        last_ts=iso(last), state=state(events, now, s["source"], last, sid in ended),
+                        first_ts=iso(aware(s["first_ts"])), last_ts=iso(last), state=state(events, now, s["source"], last, sid in ended),
                         latest=latest_action(events, text), window=window_of(f["model"], events, prices), **f))
     return dict(now=iso(now), sessions=out, newest=None if out else newest_session(cur, where, params))
 

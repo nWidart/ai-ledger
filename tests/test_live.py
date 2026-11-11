@@ -132,6 +132,11 @@ class SessionsTest(LiveCase):
         s1 = got["sessions"][0]
         self.assertEqual((s1["state"]["kind"], s1["latest"]["tool"], s1["window"], s1["requests"]), ("tool", "Read", 1000000, 1))
 
+    def test_start_time_is_the_first_line(self):
+        got = live.sessions(self.cur(), now=NOW, prices=PRICES)
+        self.assertEqual([(s["first_ts"], s["last_ts"]) for s in got["sessions"]],
+                         [("2026-11-10T10:00:30.000Z", "2026-11-10T10:00:40.000Z"), ("2026-11-10T09:56:40.000Z", "2026-11-10T09:57:00.000Z")])
+
     def test_closed_session_is_ended_until_it_writes_again(self):
         kinds = lambda: {s["session_id"]: s["state"]["kind"] for s in live.sessions(self.cur(), now=NOW, prices=PRICES)["sessions"]}
         self.assertEqual(kinds(), dict(s1="tool", s2="you"))

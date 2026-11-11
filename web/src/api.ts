@@ -269,7 +269,9 @@ export interface LiveFigures {
 /** The session's title and where it came from; a title made from the first prompt only with text. */
 export interface LiveTitle { title: string | null; title_from: "agent" | "prompt" | null }
 export interface LiveListSession extends LiveFigures, LiveTitle {
-  session_id: string; project: string | null; source: Source; branch: string | null; last_ts: Ts | null; state: LiveState;
+  session_id: string; project: string | null; source: Source; branch: string | null;
+  /** Its first line's time (the session's start) and its newest line's. */
+  first_ts: Ts | null; last_ts: Ts | null; state: LiveState;
   latest: { kind: "tool" | "prompt"; tool: string | null; summary: string | null; lane: string | null } | null;
 }
 export interface LivePayload {
