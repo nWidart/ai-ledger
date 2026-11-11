@@ -69,6 +69,7 @@ class InsightsCase(unittest.TestCase):
     def session(self, sid, project, first_ts, source="claude"):
         store.insert(self.con.cursor(), "sessions", ["session_id", "project", "first_ts", "last_ts", "source"],
                      [(sid, project, first_ts, first_ts, source)])
+        store.insert(self.con.cursor(), "prompts", ["prompt_id", "session_id", "ts"], [(f"p-{sid}", sid, first_ts)])
 
     def payload(self, **kw):
         return insights.payload(self.con.cursor(), today=TODAY, usage_dir=self.usage, **kw)

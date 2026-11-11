@@ -11,6 +11,11 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 NEAR_LIMIT = 0.8  # share of the context window that counts as "near the limit"
 TOKEN_KINDS = ["input", "output", "thinking", "cache_read", "cache_5m", "cache_1h"]
 AUTOMATED_PROJECTS = ("observer-sessions",)  # projects whose sessions a tool starts, left out of usage unless asked for
+TEMP_PROJECT = "(temp)"  # store.project_of's name for a temporary folder, where apps run their one-prompt helpers
+# Sessions a tool started, in any project: no prompt at all, or at most one in a temporary folder (titles and other helpers
+# an app runs). Counts the whole session's prompts, so a session is automated or not whatever the range.
+HELPER_SESSIONS = f"""SELECT a.session_id FROM sessions a LEFT JOIN prompts ap USING (session_id) GROUP BY a.session_id, a.project
+    HAVING count(ap.prompt_id) < CASE WHEN a.project = '{TEMP_PROJECT}' THEN 2 ELSE 1 END"""
 SOURCES = ("claude", "codex")  # the coding agents a session can come from (sessions.source); '' in a filter is all of them
 
 
@@ -179,12 +184,13 @@ def requests_cte(pcte, where):
 
 def scope(project, automated, source=""):
     """The session part of every usage filter, over sessions s: the project and the source match ('' is all of them), and
-    sessions of AUTOMATED_PROJECTS are left out unless automated or the filter names that project. Returns (sql, params).
-    Raises ValueError for a source not in SOURCES."""
+    automated sessions are left out unless automated: those of AUTOMATED_PROJECTS (unless the filter names that project)
+    and HELPER_SESSIONS. Returns (sql, params). Raises ValueError for a source not in SOURCES."""
     if source and source not in SOURCES:
         raise ValueError(f"unknown source: {source}")
     marks = ",".join("?" * len(AUTOMATED_PROJECTS))
-    return (f"(? = '' OR s.project = ?) AND (? OR s.project = ? OR coalesce(s.project, '') NOT IN ({marks})) AND (? = '' OR s.source = ?)",
+    return (f"(? = '' OR s.project = ?) AND (? OR (s.project = ? OR coalesce(s.project, '') NOT IN ({marks})) "
+            f"AND s.session_id NOT IN ({HELPER_SESSIONS})) AND (? = '' OR s.source = ?)",
             [project, project, bool(automated), project, *AUTOMATED_PROJECTS, source, source])
 
 
@@ -214,7 +220,7 @@ def usage(cur, project="", range_days=0, session="", prices=None, today=None, au
     tot = rows(cur, f"""{rq} SELECT {sums}, coalesce(sum(tokens), 0) AS tokens, sum(cost) AS cost,
         count(*) AS requests, count(*) FILTER (WHERE NOT subagent) AS main_requests,
         coalesce(sum(tokens) FILTER (WHERE subagent), 0) AS sub_tokens, sum(cost) FILTER (WHERE subagent) AS sub_cost,
-        coalesce(sum(thinking_ms), 0) AS thinking_ms, count(DISTINCT {day('ts')}) AS active_days FROM rq""", rp)[0]
+        coalesce(sum(thinking_ms), 0) AS thinking_ms FROM rq""", rp)[0]
     unpriced = rows(cur, f"{rq} SELECT model, count(*) AS requests, sum(tokens) AS tokens FROM rq WHERE cost IS NULL GROUP BY 1 ORDER BY 3 DESC, 1", rp)
     models = rows(cur, f"""{rq} SELECT model, coalesce(effort, '(none)') AS effort, count(*) AS requests, sum(tokens) AS tokens,
         sum(cost) AS cost FROM rq GROUP BY 1, 2 ORDER BY requests DESC, tokens DESC, model, effort""", rp)
@@ -237,8 +243,9 @@ def usage(cur, project="", range_days=0, session="", prices=None, today=None, au
     hooks = rows(cur, f"""SELECT coalesce(h.command, h.hook) AS name, h.hook AS event, count(*) AS runs,
         count(*) FILTER (WHERE h.is_error) AS errors, avg(h.duration_ms) AS avg_ms
         FROM hooks h JOIN sessions s USING (session_id) WHERE {W('h.ts')} GROUP BY 1, 2 ORDER BY runs DESC""", fp)
-    pr = rows(cur, f"""SELECT count(*) AS prompts, count(*) FILTER (WHERE interrupted) AS interrupted
-        FROM prompts p JOIN sessions s USING (session_id) WHERE {W('p.ts')}""", fp)[0]
+    # An active day is a day with a prompt: a session that only works on its own (a resumed one, a background task) adds none.
+    pr = rows(cur, f"""SELECT count(*) AS prompts, count(*) FILTER (WHERE interrupted) AS interrupted,
+        count(DISTINCT {day('p.ts')}) AS active_days FROM prompts p JOIN sessions s USING (session_id) WHERE {W('p.ts')}""", fp)[0]
     loops = error_loops(cur, W, fp)
     work = daily_work(cur, rq, rp, W, fp)
 
@@ -296,10 +303,13 @@ def previous_period(cur, project, range_days, prices, today, automated=False, so
     start, end = dates
     pcte, pparams = price_cte(prices)
     sql, sp = scope(project, automated, source)
-    rq = requests_cte(pcte, f"{sql} AND r.ts >= {day_start('CAST(? AS DATE)')} AND r.ts < {day_start('CAST(? AS DATE) + 1')}")
+    within = lambda ts: f"{sql} AND {ts} >= {day_start('CAST(? AS DATE)')} AND {ts} < {day_start('CAST(? AS DATE) + 1')}"
+    rq = requests_cte(pcte, within("r.ts"))
     p = pparams + sp + [start, end]
     tot = rows(cur, f"""{rq} SELECT coalesce(sum(tokens), 0) AS tokens, sum(cost) AS cost, count(*) AS requests,
-        count(DISTINCT session_id) AS sessions, count(DISTINCT {day('ts')}) AS active_days FROM rq""", p)[0]
+        count(DISTINCT session_id) AS sessions FROM rq""", p)[0]
+    tot["active_days"] = cur.execute(f"""SELECT count(DISTINCT {day('p.ts')}) FROM prompts p JOIN sessions s USING (session_id)
+        WHERE {within('p.ts')}""", sp + [start, end]).fetchone()[0]
     daily = rows(cur, f"{rq} SELECT {day('ts')} AS day, sum(cost) AS cost, sum(tokens) AS tokens FROM rq GROUP BY 1 ORDER BY 1", p)
     by_project = rows(cur, f"{rq} SELECT project, sum(cost) AS cost, sum(tokens) AS tokens, count(*) AS requests FROM rq GROUP BY 1", p)
     return dict(tot, start=start.isoformat(), end=end.isoformat(), daily=daily, by_project=by_project)

@@ -29,6 +29,7 @@ class AppTest(unittest.TestCase):
         cls.con = store.open_store(os.path.join(cls.tmp, "d", "x.duckdb"))
         store.insert(cls.con.cursor(), "sessions", ["session_id", "project", "first_ts", "last_ts"],
                      [("s1", "foo", "2026-11-04 10:00:00", "2026-11-04 11:00:00")])
+        store.insert(cls.con.cursor(), "prompts", ["prompt_id", "session_id", "ts"], [("p1", "s1", "2026-11-04 10:00:00")])
         store.insert(cls.con.cursor(), "tool_calls", ["tool_use_id", "session_id", "tool", "input_summary", "start_ts", "end_ts", "is_error"],
                      [("t1", "s1", "Bash", "npm test", "2026-11-04 10:01:00", "2026-11-04 10:01:02", False)])
         store.ingest(cls.con, dict(insights=USAGE_DATA))
