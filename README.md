@@ -8,7 +8,7 @@ See what your coding agents did, what it cost, and where they got stuck. AI Ledg
 uvx ai-ledger    # open http://127.0.0.1:8765/
 ```
 
-Needs [uv](https://docs.astral.sh/uv/). macOS and Linux. Nothing leaves your machine except the Limits check described [below](#privacy).
+Needs [uv](https://docs.astral.sh/uv/). macOS and Linux. Nothing leaves your machine except the Limits check under [Privacy](https://github.com/nWidart/ai-ledger#privacy).
 
 ## What you get
 
@@ -67,8 +67,8 @@ cd web && npm install && npm run dev       # http://127.0.0.1:5173, /api proxied
 cd web && npm run check                    # run before committing
 ```
 
-Commit the build in `src/ai_ledger/web/` with every `web/src` change. `tools/demo/` records the GIFs from synthetic data. Maintainer notes, including releases, are in [AGENTS.md](AGENTS.md).
+Commit the build in `src/ai_ledger/web/` with every `web/src` change. [`tools/demo/`](https://github.com/nWidart/ai-ledger/tree/main/tools/demo) records the GIFs from synthetic data. Maintainer notes, including releases, are in [AGENTS.md](https://github.com/nWidart/ai-ledger/blob/main/AGENTS.md).
 
 ## License
 
-[MIT](LICENSE)
+[MIT](https://github.com/nWidart/ai-ledger/blob/main/LICENSE)
