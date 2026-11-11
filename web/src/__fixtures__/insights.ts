@@ -158,7 +158,8 @@ export default {
    ],
    "satisfaction": [
     "unclear"
-   ]
+   ],
+   "title": null
   },
   {
    "session_id": "0000aaaa-0000-4000-8000-000000000002",
@@ -181,7 +182,8 @@ export default {
    "satisfaction": [
     "likely_satisfied",
     "dissatisfied"
-   ]
+   ],
+   "title": null
   },
   {
    "session_id": "0000aaaa-0000-4000-8000-000000000001",
@@ -199,7 +201,8 @@ export default {
    ],
    "satisfaction": [
     "satisfied"
-   ]
+   ],
+   "title": "Add a theme toggle"
   }
  ],
  "truncated": false

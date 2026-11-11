@@ -176,19 +176,20 @@ def ordered(counts, known):
 
 def payload(cur, project="", range_days=0, source="", automated=False, today=None, usage_dir=None):
     """The JSON the Insights page reads. Only Claude Code sessions have facets: source codex returns coverage alone.
-    underlying_goal and primary_success stay in the store. Raises ValueError for an unknown source or a negative range."""
+    Coverage counts leave automated sessions out, whatever automated says. underlying_goal and primary_success stay in the store. Raises ValueError for an unknown source or a negative range."""
     today = today or date.today()
     start, *_ = metrics.view(project, range_days, {}, today, automated, source)
     sql, sp = metrics.scope(project, automated, source)
     W = f"{sql} AND (CAST(? AS DATE) IS NULL OR s.start >= CAST(? AS DATE))"
     wp = sp + [start, start]
     in_view = f"WITH {FACETS}, v AS (SELECT * FROM f s WHERE {W})"
-    ssql, ssp = metrics.scope(project, automated, "")
+    ssql, ssp = metrics.scope(project, False, "")  # coverage leaves automated sessions out: /insights is not run on them
     per_source = dict(cur.execute(f"""SELECT s.source, count(*) FROM sessions s
         WHERE {ssql} AND (CAST(? AS DATE) IS NULL OR s.first_ts >= CAST(? AS DATE)) AND (? = '' OR s.source = ?) GROUP BY 1""",
                                   ssp + [start, start, source, source]).fetchall())
-    facets, analysed, orphans = cur.execute(f"{in_view} SELECT count(*), count(*) FILTER (WHERE in_store), "
-                                            f"count(*) FILTER (WHERE NOT in_store) FROM v", wp).fetchone()
+    asql, asp = metrics.scope(project, False, source)
+    facets, analysed, orphans = cur.execute(f"{in_view} SELECT count(*), count(*) FILTER (WHERE in_store AND {asql}), "
+                                            f"count(*) FILTER (WHERE NOT in_store) FROM v s", wp + asp).fetchone()
     claude = per_source.get("claude", 0)
     newest = cur.execute("SELECT max(file_mtime) FROM session_facets").fetchone()[0]
     coverage = dict(claude_sessions=claude, analysed=analysed, not_analysed=max(claude - analysed, 0),
@@ -217,5 +218,5 @@ def payload(cur, project="", range_days=0, source="", automated=False, today=Non
         r["start"] = metrics.iso(r["start"])
         for kind, key in (("friction", "friction"), ("goal", "goals"), ("satisfaction", "satisfaction")):
             r[key] = names.get((r["session_id"], kind), [])
-    out.update(sessions=sess[:SESSION_ROWS], truncated=len(sess) > SESSION_ROWS)
+    out.update(sessions=metrics.with_titles(cur, sess[:SESSION_ROWS]), truncated=len(sess) > SESSION_ROWS)
     return out

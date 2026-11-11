@@ -314,6 +314,23 @@ class PayloadTest(InsightsCase):
         self.assertEqual(c["stored_facets"], 3)
         self.assertTrue(c["newest_facet"].endswith("Z"))
 
+    def test_coverage_leaves_automated_sessions_out(self):
+        self.session(A + "1", "observer-sessions", "2026-11-03 09:00:00")
+        self.session("c1", "observer-sessions", "2026-11-03 10:00:00")
+        self.session("c2", "demo-app", "2026-11-03 11:00:00")
+        self.ingest()
+        for auto in (False, True):
+            c = self.payload(automated=auto)["coverage"]
+            self.assertEqual((c["claude_sessions"], c["analysed"], c["not_analysed"]), (1, 0, 1), auto)
+        c = self.payload(project="observer-sessions")["coverage"]  # named, it counts
+        self.assertEqual((c["claude_sessions"], c["analysed"], c["not_analysed"]), (2, 1, 1))
+
+    def test_sessions_carry_their_title(self):
+        self.session(A + "1", "demo-app", "2026-11-03 09:00:00")
+        store.insert(self.con.cursor(), "session_titles", ["session_id", "custom", "agent"], [(A + "1", None, "Synthetic title")])
+        self.ingest()
+        self.assertEqual({r["session_id"]: r["title"] for r in self.payload()["sessions"]}, {A + "1": "Synthetic title", A + "2": None, A + "3": None})
+
     def test_codex_source_returns_coverage_only(self):
         self.session("x1", "demo-app", "2026-11-03 12:00:00", source="codex")
         self.ingest()
