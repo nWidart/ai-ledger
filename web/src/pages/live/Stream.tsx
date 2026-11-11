@@ -3,7 +3,7 @@ import type { LiveEvent, LiveSession, LiveToolEvent, Ts } from "../../api";
 import { big, plural, usd } from "../../format";
 import { appLink } from "../../components/sheets/session";
 import { sessionHref } from "../insights/InsightsPage";
-import { elapsed, isTool, labelOf, likelyWaiting, since, streamRows, type LiveLane } from "./live";
+import { elapsed, isRow, isTool, labelOf, likelyWaiting, passes, since, streamRows, type LiveLane, type StreamFilters } from "./live";
 
 const time = (ts: string | null | undefined) =>
   ts ? new Date(ts).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }) : "";
@@ -49,8 +49,9 @@ const LAST = 5;
 /** Follow: the room left around a row scrolled into view. */
 const PAD = 8;
 
-/** A lane as drawn: folded or not, its tool rows, and those it shows (the last LAST when cut). */
-interface LaneView { folded: boolean; tools: LiveToolEvent[]; shown: LiveToolEvent[]; cut: boolean }
+/** A lane as drawn: hidden by the filters, folded or not, its tool rows the filters leave, and those it shows (the last
+ *  LAST when cut). */
+interface LaneView { hidden: boolean; folded: boolean; tools: LiveToolEvent[]; shown: LiveToolEvent[]; cut: boolean }
 
 function Lane({ lane, fig, v, now, text, open, toggle, fold, all, mark }: {
   lane: LiveLane; fig: LiveSession["lanes"][string] | undefined; v: LaneView; now: number; text: boolean; open: Set<string>;
@@ -72,11 +73,13 @@ function Lane({ lane, fig, v, now, text, open, toggle, fold, all, mark }: {
   </div>;
 }
 
-/** The selected session's events, newest at the bottom. Follow keeps the newest event in view, wherever it stands;
- *  scrolling or opening a row turns it off, and Jump to latest turns it back on. A finished lane is folded and a
- *  running one shows its last LAST rows, until the user chooses otherwise. */
-export function Stream({ s, now, text, follow, setFollow }: {
+/** The selected session's events, newest at the bottom, under the filters' bar. Follow keeps the newest event in view,
+ *  wherever it stands; scrolling or opening a row turns it off, and Jump to latest turns it back on. A finished lane is
+ *  folded and a running one shows its last LAST rows, until the user chooses otherwise. The filters leave rows out of
+ *  what is drawn: a lane with no row left is hidden, and the Errors filter opens the lanes it finds rows in. */
+export function Stream({ s, now, text, follow, setFollow, filters: f, setFilters }: {
   s: LiveSession; now: number; text: boolean; follow: boolean; setFollow: (on: boolean) => void;
+  filters: StreamFilters; setFilters: (f: StreamFilters) => void;
 }) {
   const box = useRef<HTMLDivElement>(null), newest = useRef<HTMLDivElement>(null), setAt = useRef(0);
   const [open, setOpen] = useState(() => new Set<string>());
@@ -84,15 +87,17 @@ export function Stream({ s, now, text, follow, setFollow }: {
   const [folds, setFolds] = useState(() => new Map<string, boolean>());
   const [whole, setWhole] = useState(() => new Set<string>());
   const [seenAt, setSeenAt] = useState(s.events.length);
-  const rows = streamRows(s.events);
+  const rows = streamRows(s.events), filtered = f.errors || f.main || f.quiet;
+  const held = s.events.filter(isRow), hidden = held.filter(e => !passes(e, f)).length;
   const toggle = (k: string) => {
     setOpen(o => { const n = new Set(o); if (!n.delete(k)) n.add(k); return n; });
     if (follow) { setFollow(false); setSeenAt(s.events.length); }
   };
   const view = (lane: LiveLane, events: LiveEvent[]): LaneView => {
-    const tools = events.filter(isTool), folded = folds.get(lane.id) ?? lane.done; // the user's fold outlives the lane's end
+    const tools = events.filter(isTool).filter(e => passes(e, f));
+    const folded = folds.get(lane.id) ?? (lane.done && !f.errors); // the user's fold outlives the lane's end, and the filter
     const cut = !lane.done && !whole.has(lane.id) && tools.length > LAST;
-    return { folded, tools, cut, shown: folded ? [] : cut ? tools.slice(-LAST) : tools };
+    return { hidden: filtered && !tools.length, folded, tools, cut, shown: folded ? [] : cut ? tools.slice(-LAST) : tools };
   };
   const views = new Map(rows.flatMap(r => (r.kind === "lane" ? [[r.lane.id, view(r.lane, r.events)] as const] : [])));
   // The row Follow keeps in view: the newest event drawn, or the header of its lane when the lane shows no row. last is
@@ -100,8 +105,9 @@ export function Stream({ s, now, text, follow, setFollow }: {
   let target = "", last = "", at = -Infinity;
   const see = (key: string, ts: Ts | null) => { const t = ts ? Date.parse(ts) : NaN; last = key; if (t >= at) { at = t; target = key; } };
   for (const r of rows) {
-    if (r.kind === "event") { if (r.e.k !== "turn_start" && r.e.k !== "turn_end") see(r.e.key, r.e.ts); continue; }
+    if (r.kind === "event") { if (isRow(r.e) && passes(r.e, f)) see(r.e.key, r.e.ts); continue; }
     const v = views.get(r.lane.id)!;
+    if (v.hidden) continue;
     if (!v.shown.length) see("lane:" + r.lane.id, r.lane.end);
     for (const e of v.shown) see(e.key, e.ts);
   }
@@ -124,12 +130,20 @@ export function Stream({ s, now, text, follow, setFollow }: {
     if (follow && Math.abs(box.current!.scrollTop - setAt.current) > 1) { setFollow(false); setSeenAt(s.events.length); }
   };
   const newer = !follow && s.events.length > seenAt;
-  return <div className="stream" ref={box} onScroll={onScroll} tabIndex={0} aria-label="Session events">
+  return <>
+    <div className="stream-filters" role="group" aria-label="Stream filters">
+      <button type="button" aria-pressed={f.errors} title="Show failed calls only" onClick={() => setFilters({ ...f, errors: !f.errors })}>{plural(s.errors, "error")}</button>
+      <label className="chk"><input type="checkbox" checked={f.main} onChange={e => setFilters({ ...f, main: e.target.checked })} /> Main thread only</label>
+      <label className="chk"><input type="checkbox" checked={f.quiet} onChange={e => setFilters({ ...f, quiet: e.target.checked })} /> Hide read-only</label>
+      {hidden > 0 && <span className="hid muted">{plural(hidden, "row")} hidden</span>}
+    </div>
+    <div className="stream" ref={box} onScroll={onScroll} tabIndex={0} aria-label="Session events">
     {s.truncated && <p className="older muted">Older events are not shown. The <a href={sessionHref(s.session_id)} onClick={appLink}>session sheet on Activity</a> has
       the whole session.</p>}
     {rows.map(r => {
       if (r.kind === "lane") {
         const id = r.lane.id, v = views.get(id)!;
+        if (v.hidden) return null;
         return <div className="ev" key={"lane:" + id} ref={mark("lane:" + id)}><span className="t">{time(r.lane.start)}</span>
           <Lane lane={r.lane} fig={s.lanes[id]} v={v} now={now} text={text} open={open} toggle={toggle} mark={mark}
             fold={() => setFolds(f => new Map(f).set(id, !v.folded))}
@@ -139,6 +153,7 @@ export function Stream({ s, now, text, follow, setFollow }: {
             }} /></div>;
       }
       const e = r.e;
+      if (!passes(e, f)) return null;
       switch (e.k) {
         case "prompt": case "reply":
           return <div className={"ev" + (e.k === "prompt" ? " turn" : "")} key={e.key} ref={mark(e.key)}><span className="t">{time(e.ts)}</span><Said e={e} text={text} /></div>;
@@ -153,7 +168,10 @@ export function Stream({ s, now, text, follow, setFollow }: {
           return null;
       }
     })}
+    {hidden > 0 && hidden === held.length && <p className="older muted">{f.errors && !held.some(e => isTool(e) && e.failed)
+      ? "No failed calls in the events held." : "The filters hide every row."}</p>}
     {s.state.kind === "you" && <div className="ev"><span className="t" /><span className="note">waiting for your next prompt</span></div>}
     {newer && <button type="button" className="jump" onClick={() => setFollow(true)}>Jump to latest ↓</button>}
-  </div>;
+    </div>
+  </>;
 }

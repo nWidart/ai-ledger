@@ -110,6 +110,39 @@ class StateTest(unittest.TestCase):
                              dict(kind="ended", tool=None, since="2026-11-10T10:00:05.000Z", inferred=False, long=False))
 
 
+class QuietTest(unittest.TestCase):
+    """Which tool calls only read: the Live page can hide them."""
+
+    def quiet(self, text, source="claude"):
+        return [e["quiet"] for e in events(text, source) if e["k"] == "tool"]
+
+    def bash(self, *cmds):
+        return self.quiet(assistant("a1", "m1", at(1), [tool_use(f"t{i}", "Bash", command=c) for i, c in enumerate(cmds)]))
+
+    def test_tools_that_only_read(self):
+        text = assistant("a1", "m1", at(1), [tool_use("t1", "Grep", pattern="x"), tool_use("t2", "Read", file_path="x.py"),
+                                             tool_use("t3", "Glob", pattern="*.py"), tool_use("t4", "Edit", file_path="x.py"),
+                                             tool_use("t5", "WebFetch", url="https://example.com")])
+        self.assertEqual(self.quiet(text), [True, True, True, False, False])
+
+    def test_shell_call_whose_every_command_reads(self):
+        self.assertEqual(self.bash("rg TODO src", "cd web && rg -n 'a|b' src | head -5", "cat a.py; echo ---; sed -n '1,9p' b.py | nl",
+                                   "ls -la 2>/dev/null", "find . -name \"*.py\" | sort | wc -l", "bash -lc 'grep -rn \"x > y\" src'"), [True] * 6)
+
+    def test_shell_call_that_writes_or_runs_more(self):
+        self.assertEqual(self.bash("git commit -m wip", "rg TODO src && rm notes.md", "cat a > b", "ls >> log", "sed -i s/a/b/ x.py",
+                                   "sed -ni.bak 1p x.py", "find . -name '*.pyc' -delete", "find . -exec rm {} +", "sort -o x x",
+                                   "cat $(make list)", "cat \"$(make list)\"", "rg x | xargs rm", ""), [False] * 13)
+
+    def test_codex_shell_call(self):
+        call = lambda i, cmd: codex_line(i, i, "response_item", type="function_call", name="exec_command", call_id=f"c{i}",
+                                         arguments=json.dumps(dict(cmd=cmd, workdir="/nowhere/foo", yield_time_ms=1000)))
+        text = (call(1, "rg TODO src") + call(2, "rg TODO src && rm notes.md") + call(3, "rg TODO " + "src " * 100 + "&& rm notes.md")
+                + codex_line(4, 4, "response_item", type="custom_tool_call", name="exec", call_id="c4", input="rg TODO src"))
+        # The third call's summary is cut before its rm, and exec runs a script, not a command line: neither can be judged.
+        self.assertEqual(self.quiet(text, "codex"), [True, False, False, False])
+
+
 class LiveCase(StoreCase):
     def ingest(self):
         store.ingest(self.con, self.roots, usage=False)
@@ -370,6 +403,11 @@ class SessionTest(LiveCase):
         self.ingest()
         self.assertEqual([e["long"] for e in self.run_session()["events"]], [False, True, False])
 
+    def test_read_only_calls_marked_quiet(self):
+        self.write("s1.jsonl", assistant("a1", "m1", at(1), [tool_use("t1", "Grep", pattern="x"), tool_use("t2", "Bash", command="git commit -m wip")]))
+        self.ingest()
+        self.assertEqual([(e["tool"], e["quiet"]) for e in self.run_session()["events"]], [("Grep", True), ("Bash", False)])
+
     def test_lane_cost_and_model(self):
         self.write("s1.jsonl", assistant("a1", "m1", at(1), [tool_use("t1", "Agent", description="find callers", prompt="look")]))
         step = lambda agent, i, model, block=0, **usage: line(type="assistant", uuid=f"{agent}x{i}{block}", timestamp=at(2 + i), message=dict(
@@ -434,6 +472,14 @@ class CodexSessionTest(CodexCase):
         self.assertEqual((exec_ev["tool"], exec_ev["end"]), ("exec", None))
         self.assertEqual((got["state"]["kind"], got["window"]), ("tool", 272000))
         self.assertEqual((exec_ev["long"], got["state"]["long"], got["lanes"]), (False, False, {}))
+        self.assertEqual([e["quiet"] for e in got["events"] if e["k"] == "tool"], [False, False])
+
+    def test_read_only_shell_calls_marked_quiet(self):
+        call = lambda i, cmd: codex_line(i, i, "response_item", type="function_call", name="exec_command", call_id=f"c{i}", arguments=json.dumps(dict(cmd=cmd)))
+        self.place(NAME, meta(THREAD).replace("2026-11-06T10:00:00.000Z", at(0)) + call(1, "rg TODO src") + call(2, "rg TODO src && rm notes.md"))
+        self.ingest()
+        got = live.session(self.con.cursor(), THREAD, now=NOW, prices=PRICES)
+        self.assertEqual([e["quiet"] for e in got["events"]], [True, False])
 
     def test_thread_lane_cost_and_model(self):
         thread = "0a0f9999-0000-7000-8000-000000000002"

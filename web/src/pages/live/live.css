@@ -64,7 +64,13 @@
 .pg-live .stream-head .pname b { font-size: 15px; }
 .pg-live .stream-head .stream-title { flex-basis: 100%; margin: 0; font-size: 16px; font-weight: 600; color: var(--text-primary);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-transform: none; letter-spacing: -.005em; }
-.pg-live .stream { height: max(420px, calc(100dvh - 260px)); overflow: auto; padding: 8px 0 14px; position: relative; }
+/* The stream's filters. A pressed Errors count, here and in the agent panel, is the filter on. */
+.pg-live .stream-filters { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: center; padding: 6px 14px; border-bottom: 1px solid var(--border); font-size: 12.5px; }
+.pg-live .stream-filters button { font-size: 12px; padding: 2px 9px; border-radius: 999px; }
+.pg-live .stream-filters label.chk { font-size: 12.5px; }
+.pg-live .stream-filters .hid { margin-left: auto; }
+.pg-live .stream-filters button[aria-pressed=true], .pg-live .kv .fig[aria-pressed=true] { background: var(--critical-soft); border-color: var(--critical-text); color: var(--critical-text); }
+.pg-live .stream { height: max(420px, calc(100dvh - 295px)); overflow: auto; padding: 8px 0 14px; position: relative; }
 .pg-live .loading { padding: 16px; }
 .pg-live .older { font-size: 12px; margin: 4px 14px 8px; }
 .pg-live .ev { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 10px; padding: 3px 14px; }
@@ -123,7 +129,8 @@
 .pg-live .row { display: flex; justify-content: space-between; gap: 8px; font-size: 12.5px; color: var(--text-secondary); }
 .pg-live .kv { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .pg-live .kv span { display: block; font-size: 11.5px; color: var(--text-muted); }
-.pg-live .kv b { font-size: 17px; letter-spacing: -.02em; }
+.pg-live .kv b, .pg-live .kv .fig { font-size: 17px; letter-spacing: -.02em; font-weight: 700; }
+.pg-live .kv .fig { display: block; padding: 0 6px; margin-left: -7px; }
 .pg-live .kv b.model { font-size: 13px; overflow-wrap: anywhere; }
 .pg-live .spark { width: 100%; height: 44px; display: block; margin-top: 6px; }
 .pg-live .spark .l { fill: none; stroke: var(--series-1); stroke-width: 1.6; }

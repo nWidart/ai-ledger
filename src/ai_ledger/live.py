@@ -5,10 +5,11 @@ derived tool_calls know of it. Totals (cost, requests, tool calls, errors) come 
 pages. Prompt, reply and tool-output text leave this module only when the caller asks for it, and so do a session title
 made from the first prompt, a subagent's prompt and tool inputs and descriptions longer than INPUT_CAP."""
 import json
+import re
 from datetime import datetime, timedelta, timezone
 
 from . import limits, metrics, store
-from .categorize import SHELL_TOOLS
+from .categorize import SHELL_TOOLS, SHELL_WRAP, commands
 
 ACTIVE = timedelta(minutes=10)  # a session with a line this recent is listed
 IDLE = timedelta(minutes=5)  # no line for this long: idle, whatever else the lines say
@@ -24,6 +25,14 @@ INPUT_CAP = 300  # characters of a tool input or description sent without text, 
 PROMPT_TOOLS = {"Agent", "Task", "spawn_agent"}  # their input is a prompt: without text, their description stands in
 ERROR_CAP = 700  # as tool_calls.error
 SPARK_STEP = 5  # seconds per point of the tokens chart, over the last minute
+QUIET_TOOLS = {"Read", "Grep", "Glob"}  # tools that only read: the page can hide their calls
+# Shell commands that only read, search or print, each with the flags that make it write. Codex names no Read or Grep
+# tool: its exec_command reads and searches through these.
+QUIET_COMMANDS = dict.fromkeys(("rg", "grep", "cat", "ls", "head", "tail", "wc", "nl", "cd", "pwd", "echo")) | {
+    "sed": re.compile(r"-[A-Za-z]*i|--in-place"), "sort": re.compile(r"-[A-Za-z]*o|--output"),
+    "find": re.compile(r"-(delete|exec|execdir|ok|okdir|fprint0?|fprintf|fls)$")}
+QUOTED = re.compile(r"""'[^']*'|"[^"$`\\]*\"""")  # a quoted word that runs nothing: its |, ; and > are text
+WRITES = re.compile(r">(?!&\d|\s*/dev/null)")  # a redirection into a file
 
 
 def now_utc():
@@ -59,11 +68,35 @@ def lane_of(path, source):
     return name[len("agent-"):-len(".jsonl")] if name.startswith("agent-") and name.endswith(".jsonl") else name
 
 
+def quiet(tool, summary):
+    """Whether a tool call only reads: a tool of QUIET_TOOLS, or a shell call whose every simple command is one of
+    QUIET_COMMANDS with no flag that writes, and that redirects nothing into a file. A call that cannot be read as a
+    command line is not quiet: Codex's exec, which runs a script, and a summary Codex cut short."""
+    if tool in QUIET_TOOLS:
+        return True
+    if tool not in SHELL_TOOLS:
+        return False
+    cmd = summary
+    if cmd.startswith("{"):  # Codex's exec_command summary is its arguments as JSON, the command line under cmd
+        try:
+            cmd = json.loads(cmd)["cmd"]
+        except (ValueError, KeyError, TypeError):
+            return False
+        if not isinstance(cmd, str):
+            return False
+    while m := SHELL_WRAP.match(cmd):
+        cmd = m.group(2)
+    cmd = QUOTED.sub("_", cmd)
+    simple = list(commands(cmd))
+    writes = lambda words: QUIET_COMMANDS[words[0]] and any(QUIET_COMMANDS[words[0]].match(w) for w in words[1:])
+    return bool(simple) and not WRITES.search(cmd) and all(w[0] in QUIET_COMMANDS and not writes(w) for w in simple)
+
+
 def assemble(rows):
     """Events in line order from raw rows (key, file, ts, subagent, source, json). A tool use and its result become one
     tool event; requests are left out, as the page shows none. A tool event is long when its input sets a timeout above
-    LONG; a background call is not, as it returns at once. Returns (events, results), where results maps a tool id to its
-    result item when the use is not among the rows."""
+    LONG; a background call is not, as it returns at once. It is quiet when it only reads. Returns (events, results),
+    where results maps a tool id to its result item when the use is not among the rows."""
     events, tools, results = [], {}, {}
     for key, path, ts, sub, source, text in rows:
         src = store.SOURCES.get(source or "claude")
@@ -80,7 +113,7 @@ def assemble(rows):
             if k == "tool_use":
                 ev = dict(key=f"{key}#{i}", k="tool", ts=t, lane=lane, id=it["id"], tool=it["tool"], summary=it["summary"],
                           description=it.get("description"), start=t, end=None, failed=False, error=None, output=None, agent=None,
-                          long=(it.get("timeout") or 0) > LONG.total_seconds() * 1000)
+                          long=(it.get("timeout") or 0) > LONG.total_seconds() * 1000, quiet=quiet(it["tool"], it["summary"]))
                 if it["id"] in results:
                     finish(ev, results.pop(it["id"]))
                 tools[it["id"]] = ev

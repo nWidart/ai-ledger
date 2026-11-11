@@ -50,6 +50,7 @@ export default {
    "output": null,
    "agent": null,
    "long": false,
+   "quiet": true,
    "chars": 31,
    "cut": false
   },
@@ -69,6 +70,7 @@ export default {
    "output": null,
    "agent": "a7",
    "long": false,
+   "quiet": false,
    "chars": 9,
    "cut": false
   },
@@ -88,6 +90,7 @@ export default {
    "output": null,
    "agent": null,
    "long": false,
+   "quiet": true,
    "chars": 9,
    "cut": false
   },
@@ -107,6 +110,7 @@ export default {
    "output": null,
    "agent": null,
    "long": false,
+   "quiet": true,
    "chars": 9,
    "cut": false
   },
@@ -126,6 +130,7 @@ export default {
    "output": null,
    "agent": null,
    "long": false,
+   "quiet": true,
    "chars": 9,
    "cut": false
   },
@@ -152,6 +157,7 @@ export default {
    "output": null,
    "agent": null,
    "long": false,
+   "quiet": false,
    "chars": 42,
    "cut": false
   },
@@ -171,6 +177,7 @@ export default {
    "output": null,
    "agent": null,
    "long": false,
+   "quiet": false,
    "chars": 0,
    "cut": false
   }

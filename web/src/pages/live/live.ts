@@ -93,6 +93,17 @@ export const isTool = (e: LiveEvent): e is LiveToolEvent => e.k === "tool";
 /** The label the agent gave a shell call, which is its row text in place of the command; null for any other call. */
 export const labelOf = (e: LiveToolEvent): string | null => (APPROVAL_TOOLS.has(e.tool) && e.description) || null;
 
+/** The stream's filters: failed calls only, no lane, no call that only reads. They change what the stream draws, not
+ *  what the page holds. */
+export interface StreamFilters { errors: boolean; main: boolean; quiet: boolean }
+export const NO_FILTERS: StreamFilters = { errors: false, main: false, quiet: false };
+/** Whether the stream draws event e as a row: a main-thread prompt, reply, call, compaction or interruption, or a
+ *  lane's call. */
+export const isRow = (e: LiveEvent): boolean => (e.lane ? isTool(e) : e.k !== "turn_start" && e.k !== "turn_end");
+/** Whether the filters leave row e in. With errors on, only failed calls stay: no prompt, reply or mark. */
+export const passes = (e: LiveEvent, f: StreamFilters): boolean =>
+  !(f.main && e.lane) && (isTool(e) ? (!f.errors || e.failed) && !(f.quiet && e.quiet) : !f.errors);
+
 /** A subagent's work: when its events start and end, its tool calls and how many failed, and the main-thread call that
  *  started it. */
 export interface LiveLane {

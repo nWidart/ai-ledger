@@ -1,5 +1,5 @@
 import type { LiveSession, LiveState } from "../../api";
-import { big, num, pct, usd, when } from "../../format";
+import { big, num, pct, plural, usd, when } from "../../format";
 import { INFERRED_WHY, stateText } from "./live";
 
 /** The near-full line, as the session sheet's (metrics.NEAR_LIMIT). */
@@ -20,8 +20,11 @@ function Spark({ points }: { points: number[] }) {
 }
 
 /** The selected session from the agent's side: what it does now, its context window, its figures, tokens over the last
- *  minute and its source's plan limits. */
-export function AgentPanel({ s, st, now }: { s: LiveSession; st: LiveState; now: number }) {
+ *  minute and its source's plan limits. The Errors count is the stream's failed-calls filter (failedOnly), as in the
+ *  stream's own bar. */
+export function AgentPanel({ s, st, now, failedOnly, setFailedOnly }: {
+  s: LiveSession; st: LiveState; now: number; failedOnly: boolean; setFailedOnly: (on: boolean) => void;
+}) {
   const t = stateText(st, now), share = s.context != null && s.window ? s.context / s.window : null;
   return <aside className="panel head" aria-label="Agent">
     <section className="sec"><h2>Doing now</h2>
@@ -44,7 +47,8 @@ export function AgentPanel({ s, st, now }: { s: LiveSession; st: LiveState; now:
     <section className="sec" aria-label="This session"><h2>This session</h2>
       <div className="kv">
         <div><span>Cost</span><b>{usd(s.cost)}</b></div><div><span>Requests</span><b>{num(s.requests)}</b></div>
-        <div><span>Tool calls</span><b>{num(s.tools)}</b></div><div><span>Errors</span><b className={s.errors ? "bad" : ""}>{num(s.errors)}</b></div>
+        <div><span>Tool calls</span><b>{num(s.tools)}</b></div><div><span>Errors</span><button type="button" className={"fig" + (s.errors ? " bad" : "")} aria-pressed={failedOnly} aria-label={plural(s.errors, "error")}
+          title="Show failed calls only" onClick={() => setFailedOnly(!failedOnly)}>{num(s.errors)}</button></div>
         <div><span>Cache read</span><b>{pct(s.cache_read)}</b></div><div><span>Model</span><b className="model">{s.model ?? "–"}</b></div>
       </div>
     </section>

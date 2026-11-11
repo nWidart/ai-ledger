@@ -59,6 +59,11 @@ const laned = (n: number, o: { done?: boolean; failed?: number } = {}): LiveSess
 /** The lane's header, and the input texts of the Grep rows drawn. */
 const laneHead = (name = /^Agent find callers of ingest/) => screen.getByRole("button", { name });
 const greps = () => screen.queryAllByRole("button", { name: /^Grep/ }).map(b => b.querySelector(".sum")!.textContent);
+/** The stream's filter bar, the tools of the rows drawn, and what the bar says is hidden. */
+const bar = () => screen.getByRole("group", { name: "Stream filters" });
+const drawn = () => [...screen.getByLabelText("Session events").querySelectorAll(".tool .nm")].map(n => n.textContent);
+const hidden = () => bar().querySelector(".hid")?.textContent ?? null;
+const check = (name: string) => screen.getByRole("checkbox", { name }) as HTMLInputElement;
 
 afterEach(() => { vi.useRealTimers(); });
 
@@ -598,6 +603,82 @@ describe("LivePage", () => {
     expect(within(panel).getByText(/transcripts record no permission prompt/)).toBeTruthy();
     expect(within(panel).getByRole("meter", { name: "Context used" }).className).toBe("meter");
     expect(within(panel).getByText("Errors").nextElementSibling!.textContent).toBe("1");
+  });
+
+  it("filters the stream to failed rows from the Errors count, in the stream head and in the agent panel", async () => {
+    show();
+    await stream();
+    const panel = screen.getByRole("complementary", { name: "Agent" });
+    const inBar = within(bar()).getByRole("button", { name: "1 error" }), inPanel = within(panel).getByRole("button", { name: "1 error" });
+    const pressed = () => [inBar, inPanel].map(b => b.getAttribute("aria-pressed"));
+    expect([drawn(), pressed(), hidden()]).toEqual([["Read", "Agent", "Bash", "Bash"], ["false", "false"], null]);
+    await userEvent.click(inBar);
+    expect([drawn(), pressed(), hidden()]).toEqual([["Bash"], ["true", "true"], "9 rows hidden"]);
+    expect(toolRow("Bash").className).toContain("failed");
+    expect([screen.queryByText(/11 words/), screen.queryByText(/context compacted/), screen.queryAllByRole("button", { name: /^Agent find/ })]).toEqual([null, null, []]);
+    await userEvent.click(inPanel); // either count clears it
+    expect([drawn(), pressed(), hidden()]).toEqual([["Read", "Agent", "Bash", "Bash"], ["false", "false"], null]);
+    expect(screen.getByText(/11 words/)).toBeTruthy();
+  });
+
+  it("hides every lane with Main thread only, and the rows that only read with Hide read-only", async () => {
+    const main = s1.events.find(e => e.k === "tool" && !e.lane) as LiveToolEvent;
+    const row = (tool: string, quiet: boolean) => ({ ...main, key: tool + "#0", id: tool, tool, quiet });
+    const other = { ...laneCall(40), lane: "b1", key: "b1#0", id: "b1" };
+    show("#session=s1", { session: () => ({ ...laned(3), events: [...laned(3).events, row("Grep", true), row("Glob", true), row("Edit", false), other] }) });
+    await stream();
+    const lanes = () => screen.getByLabelText("Session events").querySelectorAll(".lane").length;
+    expect([lanes(), drawn()]).toEqual([2, ["Read", "Agent", "Grep", "Grep", "Grep", "Bash", "Bash", "Grep", "Glob", "Edit", "Grep"]]);
+    await userEvent.click(check("Main thread only"));
+    expect([lanes(), drawn(), hidden()]).toEqual([0, ["Read", "Agent", "Bash", "Bash", "Grep", "Glob", "Edit"], "4 rows hidden"]);
+    await userEvent.click(check("Main thread only"));
+    await userEvent.click(check("Hide read-only"));
+    expect([lanes(), drawn(), hidden()]).toEqual([0, ["Agent", "Bash", "Bash", "Edit"], "7 rows hidden"]); // a lane with no row left is hidden
+    expect(screen.getByText(/11 words/)).toBeTruthy(); // prompts and replies stay
+  });
+
+  it("shows a lane's matching rows under its header, and says when the filters hide every row", async () => {
+    // The session's only failed call is in its finished lane, one of six.
+    const one = { ...laned(6, { done: true, failed: 1 }), errors: 1 };
+    show("#session=s1", { session: () => ({ ...one, events: one.events.map(e => (e.k === "tool" && !e.lane ? { ...e, failed: false } : e)) }) });
+    await stream();
+    const panel = screen.getByRole("complementary", { name: "Agent" }), figures = panel.textContent;
+    expect(greps()).toEqual([]);
+    await userEvent.click(within(bar()).getByRole("button", { name: "1 error" }));
+    expect([drawn(), greps(), hidden()]).toEqual([["Grep"], ["g1"], "12 rows hidden"]); // the filter opens the folded lane
+    expect(laneHead().querySelector(".muted")!.textContent).toBe("6 tools · 1 error · 5.0s · claude-opus-5-5 · $0.01");
+    await userEvent.click(check("Main thread only"));
+    expect([drawn(), hidden(), screen.queryByRole("button", { name: /^Agent find/ })]).toEqual([[], "13 rows hidden", null]);
+    expect(screen.getByText("The filters hide every row.")).toBeTruthy();
+    expect(panel.textContent).toBe(figures); // the filters change no figure
+    await userEvent.click(check("Main thread only"));
+    await userEvent.click(laneHead()); // the user's fold still holds under the filter
+    expect(drawn()).toEqual([]);
+  });
+
+  it("says there is no failed call when the Errors filter finds none", async () => {
+    show("#session=s1", { session: () => ({ ...s1, errors: 0, events: s1.events.map(e => (e.k === "tool" ? { ...e, failed: false } : e)) }) });
+    await stream();
+    await userEvent.click(within(bar()).getByRole("button", { name: "0 errors" }));
+    expect([drawn(), hidden()]).toEqual([[], "10 rows hidden"]);
+    expect(screen.getByText("No failed calls in the events held.")).toBeTruthy();
+  });
+
+  it("keeps the filters on from one session to the next, and has them off after a reload", async () => {
+    const { r } = show(""); // opens jobdesk, the one that wrote last
+    await screen.findByRole("group", { name: "Stream filters" });
+    await userEvent.click(check("Main thread only"));
+    await userEvent.click(check("Hide read-only"));
+    await userEvent.click(within(bar()).getByRole("button", { name: /error/ }));
+    const on = () => [check("Main thread only").checked, check("Hide read-only").checked, within(bar()).getByRole("button", { name: /error/ }).getAttribute("aria-pressed")];
+    const foo = within(await rail()).getAllByRole("button").find(b => b.querySelector(".pname")!.textContent === "foo")!;
+    await userEvent.click(foo);
+    await waitFor(() => expect(screen.getByRole("region", { name: "Session" }).querySelector(".stream-head .pname")!.textContent).toBe("foo"));
+    expect([on(), drawn()]).toEqual([[true, true, "true"], ["Bash"]]);
+    r.unmount();
+    show();
+    await stream();
+    expect([on(), hidden()]).toEqual([[false, false, "false"], null]);
   });
 
   it("warns on a context above 80% and shows tokens only for an unknown window", async () => {

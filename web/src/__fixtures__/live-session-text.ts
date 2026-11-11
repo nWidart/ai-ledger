@@ -52,6 +52,7 @@ export default {
    "output": "def ingest(con, roots):\n    ...",
    "agent": null,
    "long": false,
+   "quiet": true,
    "chars": 31,
    "cut": false
   },
@@ -71,6 +72,7 @@ export default {
    "output": "3 callers",
    "agent": "a7",
    "long": false,
+   "quiet": false,
    "chars": 9,
    "cut": false
   },
@@ -90,6 +92,7 @@ export default {
    "output": "app.py:45",
    "agent": null,
    "long": false,
+   "quiet": true,
    "chars": 9,
    "cut": false
   },
@@ -109,6 +112,7 @@ export default {
    "output": "app.py:45",
    "agent": null,
    "long": false,
+   "quiet": true,
    "chars": 9,
    "cut": false
   },
@@ -128,6 +132,7 @@ export default {
    "output": "app.py:45",
    "agent": null,
    "long": false,
+   "quiet": true,
    "chars": 9,
    "cut": false
   },
@@ -154,6 +159,7 @@ export default {
    "output": "FAIL: test_hot_pass\nAssertionError: 3 != 1",
    "agent": null,
    "long": false,
+   "quiet": false,
    "chars": 42,
    "cut": false
   },
@@ -173,6 +179,7 @@ export default {
    "output": null,
    "agent": null,
    "long": false,
+   "quiet": false,
    "chars": 0,
    "cut": false
   }

@@ -50,6 +50,7 @@ export default {
    "output": null,
    "agent": null,
    "long": false,
+   "quiet": true,
    "chars": 17,
    "cut": false
   }

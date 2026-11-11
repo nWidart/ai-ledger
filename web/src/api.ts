@@ -293,6 +293,8 @@ export interface LiveToolEvent extends LiveEventBase {
   agent: string | null;
   /** Its input sets a timeout above 120 s: pending past 30 s, such a call does not read as waiting for approval. */
   long: boolean;
+  /** It only reads: Read, Grep or Glob, or a shell call whose every command reads or searches. Hide read-only leaves it out. */
+  quiet: boolean;
 }
 export interface LiveMarkEvent extends LiveEventBase { k: "interrupt" | "turn_end" }
 export interface LiveTurnStart extends LiveEventBase { k: "turn_start"; window: number | null }
