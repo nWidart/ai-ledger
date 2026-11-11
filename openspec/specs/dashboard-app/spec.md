@@ -14,7 +14,7 @@ The app SHALL listen only on `127.0.0.1` and SHALL NOT expose transcript data on
 - **THEN** the connection is refused
 
 ### Requirement: Keep the store current
-The app SHALL ingest new transcript data when it starts and then on a fixed interval while it runs, and SHALL offer a manual refresh. While at least one Live page is connected, the app SHALL ingest transcripts every second. Usage data and plan limits SHALL keep their own interval.
+The app SHALL ingest new transcript data when it starts and then on a fixed interval while it runs, and SHALL offer a manual refresh. While at least one Live page is connected, the app SHALL ingest transcripts every second. Usage data and plan limits SHALL keep their own interval. The time of the last ingest in the navigation SHALL stay current: it follows the app's status on a fixed interval, and while the Live page is open it also follows each change notice the page receives.
 
 #### Scenario: New session while app runs
 - **WHEN** a new Claude Code session writes transcript lines while the app is running
@@ -35,6 +35,18 @@ The app SHALL ingest new transcript data when it starts and then on a fixed inte
 #### Scenario: Live page closed
 - **WHEN** the last Live page disconnects
 - **THEN** the app goes back to ingesting on its fixed interval
+
+#### Scenario: Last ingest follows Live
+- **WHEN** the Live page is open, the navigation shows "Last ingest" with a time 50 seconds old, and the page receives a change notice
+- **THEN** the navigation shows the time of the ingest that stored those lines, within 2 seconds, without waiting for its own poll
+
+#### Scenario: Notices in quick succession
+- **WHEN** the Live page receives a change notice each second for ten seconds
+- **THEN** the page asks for the app's status at most once at a time, and the navigation shows the newest ingest time
+
+#### Scenario: Paused Live page
+- **WHEN** the Live page is paused and receives change notices
+- **THEN** the navigation keeps the time it shows until the user resumes, and then shows the newest
 
 ### Requirement: Single owner of the store
 Only one process SHALL write to the store at a time. A second app or command-line ingest SHALL fail with a clear message instead of corrupting or blocking the store.
