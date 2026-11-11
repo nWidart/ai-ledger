@@ -8,13 +8,14 @@ on:
   workflow_dispatch:
     inputs:
       bump:
-        description: Version bump
+        description: 'Version bump. auto: picked from CHANGELOG.md and the commits since the last tag.'
         type: choice
         options:
+          - auto
           - patch
           - minor
           - major
-        default: patch
+        default: auto
 
 permissions:
   contents: read
