@@ -7,7 +7,7 @@ import { useHashState } from "../../hash";
 import { ApiError } from "../../useApi";
 import { sessionHref } from "../insights/InsightsPage";
 import { AgentPanel, StateTag } from "./AgentPanel";
-import { groupSessions, needsYou, NO_FILTERS, stateNow } from "./live";
+import { groupSessions, needsYou, NO_FILTERS, stateNow, type LaneChoices } from "./live";
 import { Stream } from "./Stream";
 import { useLive, useNow } from "./useLive";
 import { Wall } from "./Wall";
@@ -26,6 +26,7 @@ export function LivePage() {
   const [paused, setPaused] = useState(false);
   const [follow, setFollow] = useState(true);
   const [filters, setFilters] = useState(NO_FILTERS); // off on every load, and kept from one session to the next
+  const [choices, setChoices] = useState<LaneChoices>(() => ({ folds: new Map(), whole: new Set() }));
   // With none in the URL, the newest active session, kept while listed so the stream does not jump when another writes.
   const [first, setFirst] = useState("");
   const selected = h.session || first;
@@ -99,7 +100,8 @@ export function LivePage() {
               {shown.model && <span className="chip">{shown.model}</span>}
               <span className="spacer" /><StateTag st={stateNow(shown.state, now)} now={now} />
             </div>
-            <Stream key={shown.session_id} s={shown} now={now} text={text} follow={follow} setFollow={setFollow} filters={filters} setFilters={setFilters} />
+            <Stream key={shown.session_id} s={shown} now={now} text={text} follow={follow} setFollow={setFollow} filters={filters} setFilters={setFilters}
+              choices={choices} setChoices={setChoices} />
           </> : missing ? <p className="muted loading">Session not found. It may be from another store, or its id is mistyped.{" "}
             <a href="/live" onClick={e => { e.preventDefault(); set({ session: null }); }}>Show the active sessions</a></p>
             : <p className="muted loading">Loading…</p>}

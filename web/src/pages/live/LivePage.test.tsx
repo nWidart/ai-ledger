@@ -321,6 +321,24 @@ describe("LivePage", () => {
     expect(greps().length).toBe(12);
   });
 
+  it("keeps a lane's fold and its expansion through a visit to another session", async () => {
+    const other = { ...laned(12), session_id: "s2", project: "jobdesk", events: laned(12).events.map(e => ({ ...e, lane: e.lane && "b2" })) };
+    show("#session=s1", { session: q => (q.get("id") === "s1" ? laned(12) : other) });
+    await stream();
+    const open = async (project: string) => {
+      await userEvent.click(within(await rail()).getAllByRole("button").find(b => b.querySelector(".pname")!.textContent === project)!);
+      await waitFor(() => expect(screen.getByRole("region", { name: "Session" }).querySelector(".stream-head .pname")!.textContent).toBe(project));
+    };
+    await userEvent.click(screen.getByRole("button", { name: "Show all 12 rows" }));
+    await open("jobdesk");
+    expect(greps().length).toBe(5); // its own lane, as any running one
+    await userEvent.click(screen.getByRole("button", { name: /^Subagent/ }));
+    await open("foo");
+    expect(greps().length).toBe(12);
+    await open("jobdesk");
+    expect([greps(), screen.getByRole("button", { name: /^Subagent/ }).getAttribute("aria-expanded")]).toEqual([[], "false"]);
+  });
+
   it("keeps each lane's rows and the user's choices when an update brings one lane's work", async () => {
     const of = (lane: string, n: number) => ({ ...laneCall(n), lane, key: `${lane}${n}#0`, id: `${lane}${n}`, summary: `${lane}-${n}` });
     const calls = (lane: string, n: number) => Array.from({ length: n }, (_, i) => of(lane, i + 1));

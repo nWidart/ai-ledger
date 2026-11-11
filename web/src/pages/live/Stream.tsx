@@ -3,7 +3,7 @@ import type { LiveEvent, LiveSession, LiveToolEvent, Ts } from "../../api";
 import { big, plural, usd } from "../../format";
 import { appLink } from "../../components/sheets/session";
 import { sessionHref } from "../insights/InsightsPage";
-import { elapsed, isRow, isTool, labelOf, likelyWaiting, passes, since, streamRows, type LiveLane, type StreamFilters } from "./live";
+import { elapsed, isRow, isTool, labelOf, likelyWaiting, passes, since, streamRows, type LaneChoices, type LiveLane, type StreamFilters } from "./live";
 
 const time = (ts: string | null | undefined) =>
   ts ? new Date(ts).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }) : "";
@@ -77,15 +77,12 @@ function Lane({ lane, fig, v, now, text, open, toggle, fold, all, mark }: {
  *  wherever it stands; scrolling or opening a row turns it off, and Jump to latest turns it back on. A finished lane is
  *  folded and a running one shows its last LAST rows, until the user chooses otherwise. The filters leave rows out of
  *  what is drawn: a lane with no row left is hidden, and the Errors filter opens the lanes it finds rows in. */
-export function Stream({ s, now, text, follow, setFollow, filters: f, setFilters }: {
+export function Stream({ s, now, text, follow, setFollow, filters: f, setFilters, choices: c, setChoices }: {
   s: LiveSession; now: number; text: boolean; follow: boolean; setFollow: (on: boolean) => void;
-  filters: StreamFilters; setFilters: (f: StreamFilters) => void;
+  filters: StreamFilters; setFilters: (f: StreamFilters) => void; choices: LaneChoices; setChoices: (c: LaneChoices) => void;
 }) {
   const box = useRef<HTMLDivElement>(null), newest = useRef<HTMLDivElement>(null), setAt = useRef(0);
   const [open, setOpen] = useState(() => new Set<string>());
-  // The user's choices per lane, kept while the page is open: folded or not, and every row.
-  const [folds, setFolds] = useState(() => new Map<string, boolean>());
-  const [whole, setWhole] = useState(() => new Set<string>());
   const [seenAt, setSeenAt] = useState(s.events.length);
   const rows = streamRows(s.events), filtered = f.errors || f.main || f.quiet;
   const held = s.events.filter(isRow), hidden = held.filter(e => !passes(e, f)).length;
@@ -95,8 +92,8 @@ export function Stream({ s, now, text, follow, setFollow, filters: f, setFilters
   };
   const view = (lane: LiveLane, events: LiveEvent[]): LaneView => {
     const tools = events.filter(isTool).filter(e => passes(e, f));
-    const folded = folds.get(lane.id) ?? (lane.done && !f.errors); // the user's fold outlives the lane's end, and the filter
-    const cut = !lane.done && !whole.has(lane.id) && tools.length > LAST;
+    const folded = c.folds.get(lane.id) ?? (lane.done && !f.errors); // the user's fold outlives the lane's end, and the filter
+    const cut = !lane.done && !c.whole.has(lane.id) && tools.length > LAST;
     return { hidden: filtered && !tools.length, folded, tools, cut, shown: folded ? [] : cut ? tools.slice(-LAST) : tools };
   };
   const views = new Map(rows.flatMap(r => (r.kind === "lane" ? [[r.lane.id, view(r.lane, r.events)] as const] : [])));
@@ -138,40 +135,41 @@ export function Stream({ s, now, text, follow, setFollow, filters: f, setFilters
       {hidden > 0 && <span className="hid muted">{plural(hidden, "row")} hidden</span>}
     </div>
     <div className="stream" ref={box} onScroll={onScroll} tabIndex={0} aria-label="Session events">
-    {s.truncated && <p className="older muted">Older events are not shown. The <a href={sessionHref(s.session_id)} onClick={appLink}>session sheet on Activity</a> has
-      the whole session.</p>}
-    {rows.map(r => {
-      if (r.kind === "lane") {
-        const id = r.lane.id, v = views.get(id)!;
-        if (v.hidden) return null;
-        return <div className="ev" key={"lane:" + id} ref={mark("lane:" + id)}><span className="t">{time(r.lane.start)}</span>
-          <Lane lane={r.lane} fig={s.lanes[id]} v={v} now={now} text={text} open={open} toggle={toggle} mark={mark}
-            fold={() => setFolds(f => new Map(f).set(id, !v.folded))}
-            all={() => { // asking for every row is opening the lane: it stays open when it finishes
-              setWhole(w => { const n = new Set(w); if (!n.delete(id)) n.add(id); return n; });
-              setFolds(f => new Map(f).set(id, false));
-            }} /></div>;
-      }
-      const e = r.e;
-      if (!passes(e, f)) return null;
-      switch (e.k) {
-        case "prompt": case "reply":
-          return <div className={"ev" + (e.k === "prompt" ? " turn" : "")} key={e.key} ref={mark(e.key)}><span className="t">{time(e.ts)}</span><Said e={e} text={text} /></div>;
-        case "tool":
-          return <div className="ev" key={e.key} ref={mark(e.key)}><span className="t">{time(e.ts)}</span>
-            <div><ToolRow e={e} now={now} text={text} open={open.has(e.key)} onToggle={() => toggle(e.key)} /></div></div>;
-        case "compaction":
-          return <div className="compact" key={e.key} ref={mark(e.key)}><span>context compacted{e.pre ? ` at ${big(e.pre)} tokens` : ""}</span></div>;
-        case "interrupt":
-          return <div className="ev" key={e.key} ref={mark(e.key)}><span className="t">{time(e.ts)}</span><span className="note">interrupted by you</span></div>;
-        default:
-          return null;
-      }
-    })}
-    {hidden > 0 && hidden === held.length && <p className="older muted">{f.errors && !held.some(e => isTool(e) && e.failed)
-      ? "No failed calls in the events held." : "The filters hide every row."}</p>}
-    {s.state.kind === "you" && <div className="ev"><span className="t" /><span className="note">waiting for your next prompt</span></div>}
-    {newer && <button type="button" className="jump" onClick={() => setFollow(true)}>Jump to latest ↓</button>}
+      {s.truncated && <p className="older muted">Older events are not shown. The <a href={sessionHref(s.session_id)} onClick={appLink}>session sheet on Activity</a> has
+        the whole session.</p>}
+      {rows.map(r => {
+        if (r.kind === "lane") {
+          const id = r.lane.id, v = views.get(id)!;
+          if (v.hidden) return null;
+          return <div className="ev" key={"lane:" + id} ref={mark("lane:" + id)}><span className="t">{time(r.lane.start)}</span>
+            <Lane lane={r.lane} fig={s.lanes[id]} v={v} now={now} text={text} open={open} toggle={toggle} mark={mark}
+              fold={() => setChoices({ ...c, folds: new Map(c.folds).set(id, !v.folded) })}
+              all={() => { // asking for every row is opening the lane: it stays open when it finishes
+                const whole = new Set(c.whole);
+                if (!whole.delete(id)) whole.add(id);
+                setChoices({ folds: new Map(c.folds).set(id, false), whole });
+              }} /></div>;
+        }
+        const e = r.e;
+        if (!passes(e, f)) return null;
+        switch (e.k) {
+          case "prompt": case "reply":
+            return <div className={"ev" + (e.k === "prompt" ? " turn" : "")} key={e.key} ref={mark(e.key)}><span className="t">{time(e.ts)}</span><Said e={e} text={text} /></div>;
+          case "tool":
+            return <div className="ev" key={e.key} ref={mark(e.key)}><span className="t">{time(e.ts)}</span>
+              <div><ToolRow e={e} now={now} text={text} open={open.has(e.key)} onToggle={() => toggle(e.key)} /></div></div>;
+          case "compaction":
+            return <div className="compact" key={e.key} ref={mark(e.key)}><span>context compacted{e.pre ? ` at ${big(e.pre)} tokens` : ""}</span></div>;
+          case "interrupt":
+            return <div className="ev" key={e.key} ref={mark(e.key)}><span className="t">{time(e.ts)}</span><span className="note">interrupted by you</span></div>;
+          default:
+            return null;
+        }
+      })}
+      {hidden > 0 && hidden === held.length && <p className="older muted">{f.errors && !held.some(e => isTool(e) && e.failed)
+        ? "No failed calls in the events held." : "The filters hide every row."}</p>}
+      {s.state.kind === "you" && <div className="ev"><span className="t" /><span className="note">waiting for your next prompt</span></div>}
+      {newer && <button type="button" className="jump" onClick={() => setFollow(true)}>Jump to latest ↓</button>}
     </div>
   </>;
 }

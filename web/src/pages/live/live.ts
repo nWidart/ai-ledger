@@ -104,6 +104,10 @@ export const isRow = (e: LiveEvent): boolean => (e.lane ? isTool(e) : e.k !== "t
 export const passes = (e: LiveEvent, f: StreamFilters): boolean =>
   !(f.main && e.lane) && (isTool(e) ? (!f.errors || e.failed) && !(f.quiet && e.quiet) : !f.errors);
 
+/** The user's choices per lane, kept while the page is open: folded or not (none: a finished lane is folded), and
+ *  every row of a running lane instead of its last few. */
+export interface LaneChoices { folds: ReadonlyMap<string, boolean>; whole: ReadonlySet<string> }
+
 /** A subagent's work: when its events start and end, its tool calls and how many failed, and the main-thread call that
  *  started it. */
 export interface LiveLane {
