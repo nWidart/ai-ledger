@@ -12,11 +12,11 @@ export const TOOL_KINDS: Record<ToolKind, string> = { tool: "Tool", mcp: "MCP se
 export const RateCells = ({ r, n }: { r: { failure_rate: number | null }; n: number }) =>
   <><td className="num">{num(n)}</td><td className={"num" + ((r.failure_rate ?? 0) > .1 ? " bad" : "")}>{pct(r.failure_rate, 1)}</td></>;
 
-/** "up from 5.0%" against the previous period; worse marks a rise as bad. */
-function Vs({ cur, prev, fmt, worse }: { cur: number | null; prev: number | null | undefined; fmt: (n: number) => string; worse?: boolean }) {
+/** "up from 5.0%" against the previous period; worse marks a move that way as bad ("unchanged" when both read the same). */
+export function Vs({ cur, prev, fmt, worse }: { cur: number | null; prev: number | null | undefined; fmt: (n: number) => string; worse?: "up" | "down" }) {
   if (cur == null || prev == null) return null;
-  const d = cur > prev ? "up" : cur < prev ? "down" : "";
-  return <span className={worse && d === "up" ? "bad" : undefined}>, {d ? `${d} from ${fmt(prev)}` : "unchanged"}</span>;
+  const d = fmt(cur) === fmt(prev) ? "" : cur > prev ? "up" : "down";
+  return <span className={d && d === worse ? "bad" : undefined}>, {d ? `${d} from ${fmt(prev)}` : "unchanged"}</span>;
 }
 
 /** Calls per day as stacked bars, failed at the base, in the style of the Errors sparks. */
@@ -73,7 +73,7 @@ export function ToolSheet({ kind, name, d, error, retry, onSession, backTo }: To
     {hint}
     <Facts facts={[
       [num(t.calls), <>calls<Vs cur={t.calls} prev={p?.calls} fmt={num} /></>],
-      [pct(t.failure_rate, 1), <>failed<Vs cur={t.failure_rate} prev={p?.failure_rate} fmt={n => pct(n, 1)} worse /></>],
+      [pct(t.failure_rate, 1), <>failed<Vs cur={t.failure_rate} prev={p?.failure_rate} fmt={n => pct(n, 1)} worse="up" /></>],
       [ms(t.p50_ms), "p50 latency"], [ms(t.p95_ms), "p95 latency"], [pct(t.subagent_share), "from subagents"],
     ]} />
     <h3>Calls per day</h3>

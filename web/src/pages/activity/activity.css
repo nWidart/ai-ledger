@@ -12,6 +12,8 @@
 .pg-activity .lede .proj { color: var(--text-primary); font-weight: 500; white-space: nowrap; }
 .pg-activity .lede .pdot { width: .32em; height: .32em; vertical-align: .2em; margin: 0 .18em 0 .05em; }
 .pg-activity .lede .unit { white-space: nowrap; }
+/* The commits' change against the period before, small beside the big count. */
+.pg-activity .lede .chg { font-size: .45em; font-weight: 500; letter-spacing: 0; color: var(--text-muted); }
 /* Sessions and active days take their own line, so the commit count never breaks mid-phrase. */
 .pg-activity .lede .delta { display: block; color: var(--text-primary); font-weight: 500; font-size: .62em; letter-spacing: -.015em; margin-top: 4px; }
 .pg-activity .sub { color: var(--text-muted); font-size: 13px; margin: 8px 0 0; }

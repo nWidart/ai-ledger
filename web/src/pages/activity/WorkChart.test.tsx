@@ -204,6 +204,18 @@ describe("weekly buckets", () => {
     expect(within(screen.getByRole("tooltip")).getByText("Week of Nov 2, 2026")).toBeTruthy();
   });
 
+  it("call the week that holds the end of the view so far on every weekday, Sunday too", () => {
+    for (const end of ["2026-11-09", "2026-11-11", "2026-11-15"]) {
+      cleanup();
+      panel({ ...weekly, end });
+      act(() => chart().focus());
+      fireEvent.keyDown(chart(), { key: "End" });
+      expect(within(screen.getByRole("tooltip")).getByText("Week of Nov 9, 2026, so far")).toBeTruthy();
+      fireEvent.keyDown(chart(), { key: "ArrowLeft" });
+      expect(within(screen.getByRole("tooltip")).getByText("Week of Nov 2, 2026")).toBeTruthy();
+    }
+  });
+
   it("days can be picked with a click", () => {
     const onDay = panel(usage);
     expect(chart().getAttribute("aria-label")).toMatch(/^Commits and errors per 100 tool calls per day, 2 days/);

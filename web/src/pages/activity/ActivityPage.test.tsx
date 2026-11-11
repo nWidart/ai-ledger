@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import type { DayView, ProjectRow, UsagePayload } from "../../api";
+import type { DayView, Previous, ProjectRow, UsagePayload } from "../../api";
 import usage from "../../__fixtures__/usage";
 import usageAll from "../../__fixtures__/usage-all";
 import sessions from "../../__fixtures__/sessions";
@@ -47,6 +47,122 @@ describe("work per day", () => {
   });
 });
 
+/** The page with the previous period's figures replaced; the current ones are the fixture's. */
+const prior = (p: Partial<Previous> | null): UsagePayload => ({ ...usage, previous: p && { ...usage.previous, ...p } });
+const vital = (label: string) => within(document.getElementById("vitals")!).getByText(label);
+const worse = (el: HTMLElement) => !!el.querySelector(".bad");
+const change = /(up|down) from|unchanged|NaN|Infinity/;
+
+describe("change against the previous period", () => {
+  // Now: 60 errors per 100 calls, 1 of 2 test runs passed (50%), 1 of 3 prompts interrupted (33.3%), 8.3% of tokens from
+  // subagents, median session 4.5 minutes.
+  const before = { calls: 100, errors: 4, test_runs: 4, tests_passed: 3, prompts: 4, interrupted: 0, tokens: 100_000_000, sub_tokens: 20_000_000, median_session_seconds: 600 };
+
+  it("shows each tile's figure the previous period, and marks errors up, pass rate down and interruptions up as worse", async () => {
+    serve(prior(before));
+    at();
+    render(<ActivityPage />);
+    await loaded();
+    expect(vital("Errors per 100 calls").textContent).toBe("Errors per 100 calls, up from 4.0");
+    expect(vital("Test runs passed").textContent).toBe("Test runs passed, down from 75%");
+    expect(vital("Prompts interrupted").textContent).toBe("Prompts interrupted, up from 0.0%");
+    expect(vital("Subagents").textContent).toBe("Subagents, down from 20%");
+    expect(vital("Median session").textContent).toBe("Median session, down from 10m");
+    expect([vital("Errors per 100 calls"), vital("Test runs passed"), vital("Prompts interrupted")].map(worse)).toEqual([true, true, true]);
+    expect([vital("Subagents"), vital("Median session")].map(worse)).toEqual([false, false]);
+  });
+
+  it("does not mark a move the better way", async () => {
+    // Errors down from 80, pass rate up from 25%, interruptions down from 50%; subagent share and session length up.
+    serve(prior({ calls: 100, errors: 80, test_runs: 4, tests_passed: 1, prompts: 2, interrupted: 1, tokens: 100_000_000, sub_tokens: 1_000_000, median_session_seconds: 60 }));
+    at();
+    render(<ActivityPage />);
+    await loaded();
+    expect(vital("Errors per 100 calls").textContent).toBe("Errors per 100 calls, down from 80.0");
+    expect(vital("Test runs passed").textContent).toBe("Test runs passed, up from 25%");
+    expect(vital("Prompts interrupted").textContent).toBe("Prompts interrupted, down from 50.0%");
+    expect(vital("Subagents").textContent).toBe("Subagents, up from 1%");
+    expect(vital("Median session").textContent).toBe("Median session, up from 1m");
+    for (const l of ["Errors per 100 calls", "Test runs passed", "Prompts interrupted", "Subagents", "Median session"]) expect(worse(vital(l))).toBe(false);
+  });
+
+  it("says unchanged for a figure that did not move", async () => {
+    serve(prior({ calls: 10, errors: 6, test_runs: 2, tests_passed: 1, prompts: 3, interrupted: 1 }));
+    at();
+    render(<ActivityPage />);
+    await loaded();
+    expect(vital("Errors per 100 calls").textContent).toBe("Errors per 100 calls, unchanged");
+    expect(vital("Test runs passed").textContent).toBe("Test runs passed, unchanged");
+    expect(vital("Prompts interrupted").textContent).toBe("Prompts interrupted, unchanged");
+  });
+
+  it("shows the headline's commits, sessions and active days against the period before", async () => {
+    serve(prior({ commits: 4, sessions: 1, active_days: 3 }));
+    at();
+    render(<ActivityPage />);
+    expect((await loaded()).textContent).toBe("1 commit from 3 prompts, down from 4 commits, in 2 sessions, up from 1 session, 2 active days, down from 3 active days");
+  });
+
+  it("shows no change in the All range", async () => {
+    serve(usageAll);
+    at("#range=0");
+    render(<ActivityPage />);
+    await loaded();
+    expect(document.querySelector("#lede")!.textContent).not.toMatch(change);
+    expect(document.getElementById("vitals")!.textContent).not.toMatch(change);
+  });
+
+  it("shows no change for a figure whose previous period has nothing to divide by", async () => {
+    serve(prior({ calls: 0, errors: 0, test_runs: 0, tests_passed: 0, prompts: 0, interrupted: 0, tokens: 0, sub_tokens: 0, median_session_seconds: null }));
+    at();
+    render(<ActivityPage />);
+    await loaded();
+    expect(document.getElementById("vitals")!.textContent).not.toMatch(change);
+  });
+});
+
+describe("automated projects file", () => {
+  const bad: UsagePayload = { ...usage, automated_file: { ...usage.automated_file, error: "Expecting value: line 1 column 1 (char 0)" } };
+
+  it("shows a banner with the path and the error, saying the file is ignored", async () => {
+    serve(bad);
+    at();
+    render(<ActivityPage />);
+    await loaded();
+    const banner = screen.getByRole("alert");
+    expect(banner.textContent).toContain(usage.automated_file.path);
+    expect(banner.textContent).toContain("Expecting value: line 1 column 1 (char 0)");
+    expect(banner.textContent).toMatch(/ignored until it is fixed/);
+  });
+
+  it("shows none without an error", async () => {
+    serve(usage);
+    at();
+    render(<ActivityPage />);
+    await loaded();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("names the file on the automated toggle", async () => {
+    serve(usage);
+    at();
+    render(<ActivityPage />);
+    await loaded();
+    expect(document.querySelector("label.chk")!.getAttribute("title")).toContain(usage.automated_file.path);
+  });
+});
+
+describe("work panel", () => {
+  it("puts the hours heatmap on the page and in the section index", async () => {
+    serve(usage);
+    at();
+    render(<ActivityPage />);
+    await loaded();
+    expect(document.getElementById("hours")).toBeTruthy();
+    expect(within(screen.getByRole("navigation", { name: /sections/i })).getByRole("link", { name: "Hours" })).toBeTruthy();
+  });
+});
+
 describe("hook names", () => {
   it("keep the end of each path and drop quotes and a closing || true", () => {
     expect(hookCommand('node "/home/u/.claude/hooks/format-on-save.cjs" post-edit || true')).toBe("node format-on-save.cjs post-edit");
@@ -62,7 +178,7 @@ describe("ActivityPage", () => {
     at();
     render(<ActivityPage />);
     const lede = await loaded();
-    expect(lede.textContent).toBe("1 commit from 3 prompts, in 2 sessions, 2 active days");
+    expect(lede.textContent).toBe("1 commit from 3 prompts, up from 0 commits, in 2 sessions, up from 1 session, 2 active days, up from 1 active day");
     const before = document.querySelector(".top")!.textContent! + document.getElementById("attention")!.textContent!;
     expect(before).not.toMatch(/\$|cost/i);
   });
@@ -75,7 +191,7 @@ describe("ActivityPage", () => {
     await loaded();
     await userEvent.click(within(screen.getByRole("group", { name: "Source" })).getByRole("button", { name: "Codex" }));
     expect(location.hash).toBe("#range=30&source=codex");
-    expect((await screen.findByRole("heading", { level: 1, name: /^0 commits/ })).textContent).toBe("0 commits from 1 prompt, in 1 session, 1 active day");
+    expect((await screen.findByRole("heading", { level: 1, name: /^0 commits/ })).textContent).toBe("0 commits from 1 prompt, unchanged, in 1 session, unchanged, 1 active day, unchanged");
     expect(fetched()).toContain("/api/usage?range=30&source=codex");
   });
 
@@ -503,7 +619,7 @@ describe("ActivityPage", () => {
     serve(usage);
     at();
     render(<ActivityPage />);
-    const chart = await screen.findByRole("img", { name: /^Commits and failed tool calls per day, 2 days/ });
+    const chart = await screen.findByRole("img", { name: /^Commits and errors per 100 tool calls per day, 2 days/ });
     act(() => chart.focus());
     fireEvent.keyDown(chart, { key: "End" });
     expect(screen.getByText("Nov 5, 2026: 0 commits, 1 prompt, 1 session, 0 failed calls")).toBeTruthy();
@@ -514,7 +630,7 @@ describe("ActivityPage", () => {
     await waitFor(() => expect(fetched()).toContain("/api/sessions?range=30&day=2026-11-04"));
     // The bars follow the chosen count.
     await userEvent.click(within(screen.getByRole("group", { name: "Chart metric" })).getByRole("button", { name: "Prompts" }));
-    expect(screen.getByRole("img", { name: /^Prompts and failed tool calls per day/ })).toBeTruthy();
+    expect(screen.getByRole("img", { name: /^Prompts and errors per 100 tool calls per day/ })).toBeTruthy();
   });
 
   it("opens a session sheet from the sessions table and closes it again", async () => {
