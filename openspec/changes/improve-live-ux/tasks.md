@@ -40,7 +40,7 @@ The group check, which every group ends with: `uv run ruff check && uv run pytho
 
 ## 4. Finish
 
-- [ ] 4.1 Update `README.md`: describe the state groups and their order, the your-turn wait time and the tab count, the stable order, the stream filters, lane folding and header, the ended state, and that paused and reconnecting look different. Verify: the README's Live section names each of them and no longer says anything these changes make untrue.
-- [ ] 4.2 Regenerate what a group did not: `uv run python -m unittest tests.test_web_fixtures`, and `cd web && npm run build` if `src/ai_ledger/web/` differs. Verify: `git status` is clean after the regeneration commit, and `tests/test_web_build.py` passes.
-- [ ] 4.3 Run the full check: `uv run ruff check && uv run python -m unittest discover -s tests && (cd web && npm run check)`.
-- [ ] 4.4 Archive the change in its worktree with `openspec archive improve-live-ux`, so the deltas merge into `openspec/specs/live-dashboard`, `live-sessions` and `dashboard-app`. Verify: `openspec validate --specs --strict` passes, and `openspec/changes/improve-live-ux` is gone.
+- [x] 4.1 Update `README.md`: describe the state groups and their order, the your-turn wait time and the tab count, the stable order, the stream filters, lane folding and header, the ended state, and that paused and reconnecting look different. Verify: the README's Live section names each of them and no longer says anything these changes make untrue.
+- [x] 4.2 Regenerate what a group did not: `uv run python -m unittest tests.test_web_fixtures`, and `cd web && npm run build` if `src/ai_ledger/web/` differs. Verify: `git status` is clean after the regeneration commit, and `tests/test_web_build.py` passes.
+- [x] 4.3 Run the full check: `uv run ruff check && uv run python -m unittest discover -s tests && (cd web && npm run check)`.
+- [x] 4.4 Archive the change in its worktree with `openspec archive improve-live-ux`, so the deltas merge into `openspec/specs/live-dashboard`, `live-sessions` and `dashboard-app`. Verify: `openspec validate --specs --strict` passes, and `openspec/changes/improve-live-ux` is gone.
