@@ -47,6 +47,18 @@ const fakeClock = (at: string) => {
 const tick = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
 const ended = list.sessions.find(s => s.state.kind === "ended")!;
 const toolRow = (name: string, nth = 0) => screen.getAllByRole("button", { name: new RegExp("^" + name) })[nth]!;
+const agentCall = s1.events.find(e => e.k === "tool" && e.id === "t2") as LiveToolEvent, grep = s1.events.find(e => e.lane === "a7") as LiveToolEvent;
+/** A call of lane a7, n seconds after 10:00:04, taking a second. */
+const laneCall = (n: number, failed = false): LiveToolEvent => {
+  const ts = (sec: number) => new Date(Date.parse("2026-11-10T10:00:04.000Z") + sec * 1000).toISOString();
+  return { ...grep, key: `g${n}#0`, id: `g${n}`, summary: `g${n}`, ts: ts(n), start: ts(n), end: ts(n + 1), failed };
+};
+/** s1 with n calls in its lane (g1 to gn), `failed` of them failed; the lane runs unless done. */
+const laned = (n: number, o: { done?: boolean; failed?: number } = {}): LiveSession => ({ ...s1, events: s1.events.flatMap(e => (e.lane ? []
+  : e === agentCall ? [{ ...agentCall, end: o.done ? "2026-11-10T10:00:11.000Z" : null }, ...Array.from({ length: n }, (_, i) => laneCall(i + 1, i < (o.failed ?? 0)))] : [e])) });
+/** The lane's header, and the input texts of the Grep rows drawn. */
+const laneHead = (name = /^Agent find callers of ingest/) => screen.getByRole("button", { name });
+const greps = () => screen.queryAllByRole("button", { name: /^Grep/ }).map(b => b.querySelector(".sum")!.textContent);
 
 afterEach(() => { vi.useRealTimers(); });
 
@@ -249,11 +261,93 @@ describe("LivePage", () => {
     expect(failed.className).toContain("failed");
     expect(within(failed).getByRole("img", { name: "failed" })).toBeTruthy();
     expect(screen.getByText("context compacted at 180.0k tokens")).toBeTruthy();
-    const lane = screen.getByRole("button", { name: /^Agent find callers of ingest/ });
-    expect(screen.getAllByRole("button", { name: /^Grep/ }).length).toBe(3);
+    const lane = laneHead(); // finished: folded
+    expect([greps(), lane.getAttribute("aria-expanded")]).toEqual([[], "false"]);
     await userEvent.click(lane);
-    expect(screen.queryAllByRole("button", { name: /^Grep/ }).length).toBe(0);
+    expect([greps(), lane.getAttribute("aria-expanded")]).toEqual([["store.ingest", "INTERVAL", "def loop"], "true"]);
+    await userEvent.click(lane);
+    expect(greps()).toEqual([]);
     expect(lane.textContent).toContain("3 tools");
+  });
+
+  it("shows the last 5 rows of a running lane, all of them on request, and the last 5 again", async () => {
+    show("#session=s1", { session: () => laned(12) });
+    await stream();
+    const last5 = ["g8", "g9", "g10", "g11", "g12"], all = Array.from({ length: 12 }, (_, i) => `g${i + 1}`);
+    expect([greps(), laneHead().getAttribute("aria-expanded")]).toEqual([last5, "true"]);
+    expect(laneHead().textContent).toContain("12 tools");
+    await userEvent.click(screen.getByRole("button", { name: "Show all 12 rows" }));
+    expect(greps()).toEqual(all);
+    await userEvent.click(screen.getByRole("button", { name: "Show last 5" }));
+    expect(greps()).toEqual(last5);
+    cleanup();
+    show("#session=s1", { session: () => laned(5) }); // nothing to cut: no control
+    await stream();
+    expect([greps().length, screen.queryByRole("button", { name: /^Show / })]).toEqual([5, null]);
+  });
+
+  it("folds a lane when it finishes, unless the user opened it", async () => {
+    const o = { s: laned(12) }, finish = async () => {
+      o.s = { ...laned(12, { done: true }), cursor: "c2" };
+      FakeSource.last!.notify(["s1"]);
+      await waitFor(() => expect(within(laneHead()).getByRole("img", { name: "done" })).toBeTruthy());
+    };
+    show("#session=s1", { session: () => o.s });
+    await stream();
+    await userEvent.click(laneHead());
+    expect(greps()).toEqual([]);
+    await userEvent.click(laneHead());
+    expect(greps().length).toBe(5);
+    await finish();
+    expect([greps().length, laneHead().getAttribute("aria-expanded")]).toEqual([12, "true"]); // the user's unfold holds; finished, it shows every row
+    cleanup();
+    o.s = laned(12);
+    show("#session=s1", { session: () => o.s });
+    await stream();
+    expect(greps().length).toBe(5);
+    await finish();
+    expect([greps(), laneHead().getAttribute("aria-expanded")]).toEqual([[], "false"]); // untouched: folded as any finished lane
+    cleanup();
+    o.s = laned(12);
+    show("#session=s1", { session: () => o.s });
+    await stream();
+    await userEvent.click(screen.getByRole("button", { name: "Show all 12 rows" })); // asking for every row opens it too
+    await finish();
+    expect(greps().length).toBe(12);
+  });
+
+  it("keeps each lane's rows and the user's choices when an update brings one lane's work", async () => {
+    const of = (lane: string, n: number) => ({ ...laneCall(n), lane, key: `${lane}${n}#0`, id: `${lane}${n}`, summary: `${lane}-${n}` });
+    const calls = (lane: string, n: number) => Array.from({ length: n }, (_, i) => of(lane, i + 1));
+    const three = { ...s1, events: [...calls("b1", 7), ...calls("b2", 7), ...calls("b3", 2)] };
+    let next: LiveSession | undefined;
+    show("#session=s1", { session: q => (q.get("after") && next ? next : three) });
+    await stream();
+    const heads = () => screen.getAllByRole("button", { name: /^Subagent/ });
+    const shown = () => heads().map(h => [h.querySelector(".muted")!.textContent!.split(" · ")[0], ...[...h.parentElement!.querySelectorAll(".tool .sum")].map(r => r.textContent)].join(" "));
+    await userEvent.click(within(heads()[0]!.parentElement!).getByRole("button", { name: "Show all 7 rows" }));
+    await userEvent.click(heads()[1]!);
+    const before = shown();
+    expect(before).toEqual(["7 tools b1-1 b1-2 b1-3 b1-4 b1-5 b1-6 b1-7", "7 tools", "2 tools b3-1 b3-2"]);
+    next = { ...three, events: [of("b3", 3), of("b3", 4)], cursor: "c2" };
+    FakeSource.last!.notify(["s1"]);
+    await waitFor(() => expect(shown()).toEqual([before[0], before[1], "4 tools b3-1 b3-2 b3-3 b3-4"]));
+  });
+
+  it("shows a lane's errors, model and cost in its header, and leaves out what is not known", async () => {
+    show("#session=s1", { session: () => ({ ...laned(8, { done: true, failed: 2 }), lanes: { a7: { cost: 0.05, model: "claude-haiku-5-5" } } }) });
+    await stream();
+    const figures = () => laneHead().querySelector(".muted")!;
+    expect(figures().textContent).toBe("8 tools · 2 errors · 7.0s · claude-haiku-5-5 · $0.05");
+    expect(within(figures() as HTMLElement).getByText("2 errors").className).toBe("bad");
+    cleanup();
+    show("#session=s1", { session: () => ({ ...laned(8, { done: true }), lanes: {} }) }); // no request of the lane's yet
+    await stream();
+    expect(figures().textContent).toBe("8 tools · 7.0s");
+    cleanup();
+    show("#session=s1", { session: () => ({ ...laned(8, { done: true }), lanes: { a7: { cost: null, model: "mystery-1" } } }) }); // an unpriced model
+    await stream();
+    expect(figures().textContent).toBe("8 tools · 7.0s · mystery-1");
   });
 
   it("keeps the lanes and their rows when a catch-up brings only a main-thread event", async () => {
@@ -261,12 +355,13 @@ describe("LivePage", () => {
     let next: LiveSession | undefined;
     show("#session=s1", { session: q => (q.get("after") && next ? next : s1) });
     await stream();
-    expect(screen.getAllByRole("button", { name: /^Grep/ }).length).toBe(3);
+    await userEvent.click(laneHead());
+    expect(greps().length).toBe(3);
     next = { ...s1, events: [{ ...main, key: "z#0", id: "t9", summary: "ls" }], cursor: "c2" };
     FakeSource.last!.notify(["s1"]);
     expect(await screen.findByRole("button", { name: /^Readls/ })).toBeTruthy();
-    expect(screen.getAllByRole("button", { name: /^Grep/ }).length).toBe(3);
-    expect(screen.getByRole("button", { name: /^Agent find callers of ingest/ }).textContent).toContain("3 tools");
+    expect(greps().length).toBe(3);
+    expect(laneHead().textContent).toContain("3 tools");
   });
 
   it("names an MCP tool by its tool part, with the full name on hover", async () => {
@@ -343,6 +438,41 @@ describe("LivePage", () => {
     const jump = await screen.findByRole("button", { name: "Jump to latest ↓" });
     await userEvent.click(jump);
     expect((screen.getByRole("checkbox", { name: "Follow" }) as HTMLInputElement).checked).toBe(true);
+  });
+
+  it("follows the newest event into a lane in the middle of the stream, without its own scroll turning Follow off", async () => {
+    const o = { s: laned(12) };
+    show("#session=s1", { session: () => o.s });
+    await stream();
+    // jsdom lays nothing out: stand each drawn row 30 px under the one before, in a box that shows three of them.
+    const box = screen.getByLabelText("Session events"), drawn = () => [...box.querySelectorAll(".ev")];
+    Object.defineProperty(box, "clientHeight", { value: 90, configurable: true });
+    Object.defineProperty(box, "scrollHeight", { get: () => drawn().length * 30, configurable: true });
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+      const top = this === box ? 0 : drawn().indexOf(this) * 30 - box.scrollTop, height = this === box ? 90 : 30;
+      return { top, height, bottom: top + height } as DOMRect;
+    });
+    const inView = (el: Element) => { const at = drawn().indexOf(el) * 30; return at >= box.scrollTop && at + 30 <= box.scrollTop + 90; };
+    const follow = () => (screen.getByRole("checkbox", { name: "Follow" }) as HTMLInputElement).checked;
+    const arrive = async (n: number) => {
+      o.s = { ...o.s, events: [laneCall(n)], cursor: `c${n}` };
+      FakeSource.last!.notify(["s1"]);
+      return (await screen.findByRole("button", { name: new RegExp(`^Grepg${n}`) })).closest(".ev")!;
+    };
+    const call = await arrive(30); // newer than the two main-thread calls under the lane
+    expect([inView(call), inView(toolRow("Bash", 1).closest(".ev")!)]).toEqual([true, false]);
+    fireEvent.scroll(box); // the scroll the page did itself
+    expect(follow()).toBe(true);
+    await userEvent.click(laneHead()); // folded: the lane's header stands for its newest call
+    expect([inView(laneHead().closest(".ev")!), follow()]).toEqual([true, true]);
+    await userEvent.click(laneHead());
+    box.scrollTop = 0; // the user reads back
+    fireEvent.scroll(box);
+    expect(follow()).toBe(false);
+    await arrive(31);
+    expect(box.scrollTop).toBe(0);
+    await userEvent.click(screen.getByRole("button", { name: "Jump to latest ↓" }));
+    expect([follow(), inView(toolRow("Grepg31").closest(".ev")!)]).toEqual([true, true]);
   });
 
   it("refetches only the list for another session's notice, and catches up the followed one with the cursor", async () => {

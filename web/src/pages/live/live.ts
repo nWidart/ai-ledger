@@ -93,9 +93,10 @@ export const isTool = (e: LiveEvent): e is LiveToolEvent => e.k === "tool";
 /** The label the agent gave a shell call, which is its row text in place of the command; null for any other call. */
 export const labelOf = (e: LiveToolEvent): string | null => (APPROVAL_TOOLS.has(e.tool) && e.description) || null;
 
-/** A subagent's work: when its events start and end, its tool calls, and the main-thread call that started it. */
+/** A subagent's work: when its events start and end, its tool calls and how many failed, and the main-thread call that
+ *  started it. */
 export interface LiveLane {
-  id: string; start: Ts | null; end: Ts | null; tools: number; running: boolean;
+  id: string; start: Ts | null; end: Ts | null; tools: number; errors: number; running: boolean;
   /** The main-thread call that started it, when known; name is that call's tool. */
   parent: string | null; name: string; description: string | null; done: boolean;
 }
@@ -110,12 +111,12 @@ export function lanesOf(events: readonly LiveEvent[]): LiveLane[] {
     let l = out.get(e.lane);
     if (!l) {
       const p = parents.get(e.lane);
-      l = { id: e.lane, start: e.ts, end: e.ts, tools: 0, running: false, parent: p?.id ?? null, name: p?.tool ?? "Subagent",
+      l = { id: e.lane, start: e.ts, end: e.ts, tools: 0, errors: 0, running: false, parent: p?.id ?? null, name: p?.tool ?? "Subagent",
         description: p?.description ?? null, done: !!p?.end };
       out.set(e.lane, l);
     }
     if (e.ts && !(ms(l.end) >= ms(e.ts))) l.end = e.ts;
-    if (isTool(e)) { l.tools++; l.running ||= e.end == null; }
+    if (isTool(e)) { l.tools++; l.errors += +e.failed; l.running ||= e.end == null; }
   }
   return [...out.values()];
 }
