@@ -32,7 +32,7 @@ Every page with the automated filter (Activity, Cost, Insights, Live) SHALL leav
 ## ADDED Requirements
 
 ### Requirement: Read automated projects from a user file
-The app SHALL read a user automated projects file, `automated.json` next to the store, holding `{"projects": ["name", ...]}`, on every request, and SHALL treat each listed project as automated in addition to the built-in ones. When the file cannot be read, is not valid JSON, has no `projects` list, or has an entry that is not a string, the app SHALL ignore the whole file and the Activity page SHALL show the file's path and the reason. A missing file SHALL be no error.
+The app SHALL read a user automated projects file, `automated.json` next to the store, holding `{"projects": ["name", ...]}`, on every request, and SHALL treat each listed project as automated in addition to the built-in ones. When the file cannot be read, is not valid JSON, has no `projects` list, or has an entry that is not a string, the app SHALL ignore the whole file and the Activity page SHALL show a banner with the file's path and the reason, saying that only the built-in detection applies. The "Include automated" control's tooltip SHALL name the file's path. A missing file SHALL be no error.
 
 #### Scenario: File added
 - **WHEN** the user creates the file with `{"projects": ["docs-bot"]}` and reloads Activity
