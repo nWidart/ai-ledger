@@ -60,7 +60,7 @@ function Vitals({ d }: { d: UsagePayload }) {
     [t.test_runs ? pct(t.tests_passed / t.test_runs) : "n/a", "Test runs passed", t.test_runs ? `${num(t.tests_passed)} passed, ${num(t.tests_failed)} failed of ${plural(t.test_runs, "test or build run")}.` : "No test or build runs in this range.", "v-tests"],
     [pct(t.interruption_rate, 1), "Prompts interrupted", `${num(t.interrupted)} of ${plural(t.prompts, "prompt")}.`],
     [pct(t.subagent_token_share), "Subagents", "of tokens came from subagents."],
-    [dur(t.median_session_seconds), "Median session", `${plural(t.sessions, "session")}, ${dur(t.session_seconds)} in all.`],
+    [dur(t.median_session_seconds), "Median session", `${plural(t.sessions, "session")}, ${dur(t.session_seconds)} active in all.`],
   ];
   return <section className="vitals sect" id="vitals" aria-label="Work health">
     {vs.map(([v, l, n, id]) => <div className="vital" key={l} id={id} tabIndex={id ? -1 : undefined}><div className="v">{v}</div><div className="l">{l}</div><div className="d">{n}</div></div>)}

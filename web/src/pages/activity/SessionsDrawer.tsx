@@ -77,7 +77,7 @@ export function SessionsDrawer({ view, count, filter, onFilter, selected }: {
       </div>
       <div className="hint" aria-live="polite">{hint}</div>
       <div className="scroll tall"><table>
-        <thead><tr><th>Session</th><th>Project</th><th className="num opt">Duration</th><th className="num opt">Prompts</th><th className="num opt">Tokens</th>
+        <thead><tr><th>Session</th><th>Project</th><th className="num opt" title="Active time: pauses over 20 minutes left out">Active</th><th className="num opt">Prompts</th><th className="num opt">Tokens</th>
           <th className="num">Est. cost</th><th className="num">Peak context</th><th className="num opt">Failed</th><th className="num opt">Compactions</th><th className="num opt">Commits</th></tr></thead>
         <tbody ref={body} className={st.stale ? "stale" : undefined} aria-busy={st.busy || undefined} inert={st.stale || undefined}>
           {st.error ? <tr><td colSpan={COLS} className="empty" role="alert">Could not load sessions ({st.error}). <button type="button" className="linkish"

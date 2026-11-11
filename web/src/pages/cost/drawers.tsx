@@ -122,7 +122,7 @@ export function TopSessionsDrawer({ view, top, day, onDay, selected }: {
           onClick={() => { onDay(""); document.querySelector<HTMLElement>("#d-top summary")?.focus(); }}>✕</button></span></div>}
       <div className="hint" aria-live="polite">{hint}</div>
       <div className="scroll tall"><table>
-        <thead><tr><th>Session</th><th>Project</th><th className="num opt">Duration</th><th className="num opt">Prompts</th><th className="num opt">Commits</th>
+        <thead><tr><th>Session</th><th>Project</th><th className="num opt" title="Active time: pauses over 20 minutes left out">Active</th><th className="num opt">Prompts</th><th className="num opt">Commits</th>
           <th className="num">Cost / commit</th><th className="num">Est. cost</th></tr></thead>
         <tbody className={busy ? "stale" : undefined} aria-busy={busy || undefined}>
           {st.error && day ? <tr><td colSpan={7} className="empty" role="alert">Could not load sessions ({st.error}). <button type="button" className="linkish"

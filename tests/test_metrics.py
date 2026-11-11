@@ -250,8 +250,9 @@ class MetricsTest(unittest.TestCase):
 
     def test_time(self):
         t = self.foo7["totals"]
-        self.assertEqual(t["session_seconds"], 3600 + 1800)
-        self.assertEqual(t["median_session_seconds"], 2700)
+        # Active time: s1's request and tool calls span 10:01 to 10:10; s2 has one request.
+        self.assertEqual(t["session_seconds"], 540)
+        self.assertEqual(t["median_session_seconds"], 270)
         self.assertEqual(t["thinking_ms"], 1500)
         bash = next(x for x in self.foo7["tools"] if x["tool"] == "Bash")
         self.assertAlmostEqual(bash["p50_ms"], 4000)
@@ -601,6 +602,40 @@ class LocalDayTest(unittest.TestCase):
         self.assertEqual(metrics.start_ts(cur, date(2026, 3, 8)), datetime(2026, 3, 8, 8))  # PST, UTC-8
         self.assertEqual(metrics.start_ts(cur, date(2026, 3, 9)), datetime(2026, 3, 9, 7))  # PDT, UTC-7
         self.assertEqual(metrics.local_today(cur), datetime.now(ZoneInfo("America/Los_Angeles")).date())
+
+
+class SessionTimeTest(unittest.TestCase):
+    """A session resumed the next day: main-thread requests and tool calls 10, 15 and 5 minutes apart, and a 22-hour
+    pause between the first and second day. A subagent request in the pause doesn't end it."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.mkdtemp()
+        cls.con = store.open_store(os.path.join(cls.tmp, "d", "x.duckdb"))
+        c = cls.con.cursor()
+        store.insert(c, "sessions", ["session_id", "project", "first_ts", "last_ts"], [("a", "foo", "2026-11-04 10:00:00", "2026-11-05 09:05:00")])
+        store.insert(c, "requests", ["message_id", "session_id", "ts", "model", "subagent", "input", "output", "thinking",
+                                     "cache_read", "cache_5m", "cache_1h"], [
+            ("q1", "a", "2026-11-04 10:00:00", "m-a", False, 1, 0, 0, 0, 0, 0),
+            ("q2", "a", "2026-11-04 10:10:00", "m-a", False, 1, 0, 0, 0, 0, 0),
+            ("q3", "a", "2026-11-04 12:00:00", "m-a", True, 1, 0, 0, 0, 0, 0),
+            ("q4", "a", "2026-11-05 09:00:00", "m-a", False, 1, 0, 0, 0, 0, 0)])
+        store.insert(c, "tool_calls", ["tool_use_id", "session_id", "tool", "start_ts", "end_ts", "is_error", "subagent"], [
+            ("c1", "a", "Bash", "2026-11-04 10:25:00", "2026-11-04 10:25:01", False, False),
+            ("c2", "a", "Bash", "2026-11-05 09:05:00", "2026-11-05 09:05:01", False, False)])
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.con.close()
+        shutil.rmtree(cls.tmp)
+
+    def test_duration_is_active_time(self):
+        u = metrics.usage(self.con.cursor(), "", 0, prices=PRICES, today=TODAY)
+        self.assertEqual(u["sessions"][0]["duration_s"], 600 + 900 + 300)
+        self.assertEqual(u["totals"]["session_seconds"], 1800)
+        # A 1-day view still measures the whole session.
+        u = metrics.usage(self.con.cursor(), "", 1, prices=PRICES, today=TODAY)
+        self.assertEqual(u["sessions"][0]["duration_s"], 1800)
 
 
 class ToolDetailTest(unittest.TestCase):

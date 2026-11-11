@@ -506,8 +506,12 @@ def error_loops(cur, W, fp):
         FROM c WHERE is_error GROUP BY session_id, project, tool, grp HAVING count(*) >= 3 ORDER BY start_ts DESC""", fp)
 
 
+IDLE_GAP_S = 20 * 60  # a pause longer than this between a session's requests and tool calls is idle, as on its timeline
+
+
 def sessions(cur, rq, rp, W, fp, prices):
-    """Sessions with requests in the view; every count is limited to the view's range."""
+    """Sessions with requests in the view; every count is limited to the view's range. duration_s is the whole session's
+    active time: the time between its main-thread requests and tool calls, less every pause over IDLE_GAP_S."""
     rs = rows(cur, f"""{rq}, agg AS (
           SELECT session_id, count(*) AS requests, sum(tokens) AS tokens, sum(cost) AS cost,
                  count(*) FILTER (WHERE cost IS NULL) AS unpriced, coalesce(sum(thinking_ms), 0) AS thinking_ms
@@ -518,13 +522,20 @@ def sessions(cur, rq, rp, W, fp, prices):
                  count(*) FILTER (WHERE is_test AND NOT test_passed) AS tests_failed
                FROM tool_calls t JOIN sessions s USING (session_id) WHERE {W('coalesce(t.start_ts, t.end_ts)')} GROUP BY 1),
         pr AS (SELECT session_id, count(*) AS prompts, count(*) FILTER (WHERE interrupted) AS interrupted
-               FROM prompts p JOIN sessions s USING (session_id) WHERE {W('p.ts')} GROUP BY 1)
-        SELECT s.session_id, s.project, s.git_branch, s.first_ts, s.last_ts, date_diff('second', s.first_ts, s.last_ts) AS duration_s,
+               FROM prompts p JOIN sessions s USING (session_id) WHERE {W('p.ts')} GROUP BY 1),
+        ev AS (SELECT session_id, ts AS t FROM requests WHERE NOT subagent AND ts IS NOT NULL AND session_id IN (SELECT session_id FROM agg)
+               UNION ALL SELECT session_id, coalesce(start_ts, end_ts) FROM tool_calls
+               WHERE coalesce(start_ts, end_ts) IS NOT NULL AND session_id IN (SELECT session_id FROM agg)),
+        gap AS (SELECT session_id, date_diff('millisecond', lag(t) OVER (PARTITION BY session_id ORDER BY t), t) AS ms FROM ev),
+        act AS (SELECT session_id, CAST(round(coalesce(sum(ms) FILTER (WHERE ms <= {IDLE_GAP_S * 1000}), 0) / 1000) AS BIGINT) AS active_s
+                FROM gap GROUP BY 1)
+        SELECT s.session_id, s.project, s.git_branch, s.first_ts, s.last_ts, act.active_s AS duration_s,
                s.compactions, s.peak_context, s.peak_model, agg.requests, agg.tokens, agg.cost, agg.unpriced, agg.thinking_ms,
                coalesce(tc.tool_calls, 0) AS tool_calls, coalesce(tc.errors, 0) AS errors, coalesce(tc.commits, 0) AS commits,
                coalesce(tc.tests_passed, 0) AS tests_passed, coalesce(tc.tests_failed, 0) AS tests_failed,
                coalesce(pr.prompts, 0) AS prompts, coalesce(pr.interrupted, 0) AS interrupted
-        FROM agg JOIN sessions s USING (session_id) LEFT JOIN tc USING (session_id) LEFT JOIN pr USING (session_id)""", rp + fp + fp)
+        FROM agg JOIN sessions s USING (session_id) LEFT JOIN tc USING (session_id) LEFT JOIN pr USING (session_id)
+        LEFT JOIN act USING (session_id)""", rp + fp + fp)
     for r in rs:
         limit = (prices.get(r["peak_model"]) or {}).get("context")
         r["context_limit"] = limit
