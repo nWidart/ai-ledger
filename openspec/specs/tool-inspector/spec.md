@@ -126,7 +126,7 @@ The inspector SHALL open from tool rows in the Activity tools drawer, from MCP s
 - **THEN** the inspector opens for that tool in the Errors page's view
 
 ### Requirement: Keep the inspector in the URL
-The open inspector SHALL be kept in the page URL, so reload and a copied link reopen it, and browser Back closes it. A session opened from the inspector SHALL offer ← Back to the inspector.
+The open inspector SHALL be kept in the page URL, so reload and a copied link reopen it, and browser Back closes it. A session opened from the inspector SHALL offer ← Back to the inspector. Closing a sheet the page opened SHALL return to the history entry it opened from, so it adds no entry that Back would reopen.
 
 #### Scenario: Reload with the inspector open
 - **WHEN** the user reloads Activity with the inspector open for `Grep`
@@ -135,6 +135,10 @@ The open inspector SHALL be kept in the page URL, so reload and a copied link re
 #### Scenario: Back from a session
 - **WHEN** the user opens a session from the `Bash` inspector and presses ← Back
 - **THEN** the `Bash` inspector shows again
+
+#### Scenario: Back after closing
+- **WHEN** the user opens the `Bash` inspector from the tools drawer, closes it, then presses browser Back
+- **THEN** the browser leaves the page's current view, without reopening the inspector
 
 ### Requirement: Read only what the store already holds
 The inspector SHALL use only data the store already records for each call. Opening it SHALL NOT require a store rebuild or read transcript files.

@@ -1,7 +1,8 @@
 // Project colors, the same on every page and in every range: only the TOP busiest projects (all-time order from the server,
 // which ignores every filter) get a hue, and no two of them share one. Each claims its hashed slot and steps to the next
-// free one on a clash, so a project keeps its hue while the ranking below it shifts. Every other project is grey,
-// the same grey as "Other" in the charts. Pages call setOrder once their data arrives; until then all dots are grey.
+// free one on a clash, in name order, so a project keeps its hue while the ranking shifts. Every other project is grey,
+// the same grey as "Other" in the charts. The nav calls setOrder with each status poll, pages with their data; until then
+// all dots are grey.
 import { useSyncExternalStore } from "react";
 
 export const TOP = 6; // the number of --proj-N hues in theme.css
@@ -16,7 +17,7 @@ const hash = (s: string) => {
 /** Slot (0-based) per project for an all-time order, busiest first. */
 export function slotsFor(order: readonly string[]): Map<string, number> {
   const out = new Map<string, number>(), used = new Set<number>();
-  for (const p of order.slice(0, TOP)) {
+  for (const p of order.slice(0, TOP).sort()) {
     let i = hash(p) % TOP;
     while (used.has(i)) i = (i + 1) % TOP;
     used.add(i); out.set(p, i);

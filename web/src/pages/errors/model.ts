@@ -68,10 +68,12 @@ export const rangeStart = (m: Model, v: View): Day => (v.range ? iso(new Date(+t
 export const inScope = (v: View, project: string, src: Source) => (!v.project || project === v.project) && (!v.source || src === v.source);
 const callIn = (v: View) => (c: CallRow) => inScope(v, c[1], c[4]);
 export interface Filtered { start: Day; errs: Err[]; calls: CallRow[] }
+/** The view's errors and calls, from its first day to the last (today): a day past it, from a clock ahead of the server's,
+ *  has no bucket. */
 export function filtered(m: Model, v: View): Filtered {
-  const start = rangeStart(m, v), scoped = callIn(v);
-  const errs = m.errors.filter(e => e.d >= start && inScope(v, e.p, e.src) && (v.sub || !e.sub) && (!v.noise || !NOISE.has(e.c)));
-  const calls = m.data.calls.filter(c => c[0] >= start && scoped(c));
+  const start = rangeStart(m, v), scoped = callIn(v), on = (d: Day) => d >= start && d <= m.lastDay;
+  const errs = m.errors.filter(e => on(e.d) && inScope(v, e.p, e.src) && (v.sub || !e.sub) && (!v.noise || !NOISE.has(e.c)));
+  const calls = m.data.calls.filter(c => on(c[0]) && scoped(c));
   return { start, errs, calls };
 }
 /** Tool calls in a [day, project, calls, subagent calls] row, matching the subagent toggle. */
@@ -201,7 +203,7 @@ export function chartData(m: Model, v: View, f: Filtered, vt: ViewTypes) {
   const keys = buckets(m, f.start, v.gran), at = new Map(keys.map((k, i) => [k, i]));
   const pts: ChartPt[] = keys.map(k => ({ k, c: 0, e: 0, by: {}, other: 0, byAll: {}, r: null }));
   for (const x of f.calls) { const i = at.get(bucketOf(x[0], v.gran)); if (i != null) pts[i]!.c += nCalls(v, x); }
-  for (const x of errorDays(m, v, f.start)) {
+  for (const x of errorDays(m, v, f.start, m.lastDay)) {
     const i = at.get(bucketOf(x.d, v.gran)), p = i == null ? undefined : pts[i];
     if (!p) continue;
     p.e += x.n;

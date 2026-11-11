@@ -179,7 +179,7 @@ describe("ActivityPage", () => {
     expect(await dlg.findByText("Recent calls")).toBeTruthy();
     // The browser turns Escape on a modal dialog into a cancel event.
     act(() => { document.querySelector("dialog")!.dispatchEvent(new Event("cancel", { cancelable: true })); });
-    expect(location.hash).toBe("#range=30");
+    await waitFor(() => expect(location.hash).toBe("#range=30")); // closing goes Back over the entry the sheet pushed
     await waitFor(() => expect(document.activeElement).toBe(within(document.querySelector<HTMLElement>('#d-tools tr[data-v="Bash"]')!).getByRole("button", { name: "Bash" })));
   });
 

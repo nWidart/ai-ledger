@@ -1,6 +1,7 @@
 import { useEffect, useRef, type MouseEvent, type ReactNode } from "react";
 import { statusUrl, type Status } from "../api";
 import { navigate, setHash, sharedHash, useHashState, usePathname } from "../hash";
+import { setOrder } from "../colors";
 import { getTheme, nextTheme, setTheme, useTheme, type Theme } from "../theme";
 import { getJson, noteIngest } from "../useApi";
 import { ProjectDot } from "./ProjectDot";
@@ -39,15 +40,16 @@ export function Nav() {
     return () => ro.disconnect();
   }, []);
 
-  // Ingest status: every minute, and every few seconds while an ingest runs. A new last_ingest clears the data cache.
+  // Ingest status: every minute, and every few seconds while an ingest runs. A new last_change clears the data cache.
   useEffect(() => {
     let live = true, timer = 0;
     const poll = () => {
       clearTimeout(timer);
       getJson<Status>(statusUrl).then(s => {
         if (!live) return;
-        noteIngest(s.last_ingest);
+        noteIngest(s.last_change);
         noteStatus(s);
+        setOrder(s.project_order);
         timer = window.setTimeout(poll, s.ingesting ? INGESTING_MS : POLL_MS);
       }, () => {
         if (!live) return;

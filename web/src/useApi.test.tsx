@@ -37,7 +37,19 @@ describe("useApi", () => {
     await waitFor(() => expect(result.current.data?.url).toBe("/y"));
   });
 
-  it("clears the cache when last_ingest changes", async () => {
+  it("keeps the same object when a refetch answers the same", async () => {
+    let n = 0;
+    vi.stubGlobal("fetch", vi.fn(() => { n++; return json({ n: 1 }); }));
+    const { result } = renderHook(() => useApi<{ n: number }>("/same"));
+    await waitFor(() => expect(result.current.data?.n).toBe(1));
+    const first = result.current.data;
+    act(() => clearApiCache());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(n).toBe(2);
+    expect(result.current.data).toBe(first);
+  });
+
+  it("clears the cache when last_change changes", async () => {
     let n = 0;
     vi.stubGlobal("fetch", vi.fn(() => json({ n: ++n })));
     noteIngest("t1");

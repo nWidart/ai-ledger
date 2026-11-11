@@ -52,8 +52,8 @@ export default {
   "tokens_per_commit": null,
   "cost_per_commit": null,
   "errors_per_100_calls": 100.0,
-  "session_seconds": 1800,
-  "median_session_seconds": 1800,
+  "session_seconds": 60,
+  "median_session_seconds": 60,
   "near_limit": 0
  },
  "daily": [
@@ -145,7 +145,7 @@ export default {
    "git_branch": null,
    "first_ts": "2026-11-05T10:00:00.000Z",
    "last_ts": "2026-11-05T10:30:00.000Z",
-   "duration_s": 1800,
+   "duration_s": 60,
    "compactions": null,
    "peak_context": null,
    "peak_model": null,
@@ -176,7 +176,7 @@ export default {
    "git_branch": null,
    "first_ts": "2026-11-05T10:00:00.000Z",
    "last_ts": "2026-11-05T10:30:00.000Z",
-   "duration_s": 1800,
+   "duration_s": 60,
    "compactions": null,
    "peak_context": null,
    "peak_model": null,

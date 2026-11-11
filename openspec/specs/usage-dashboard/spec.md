@@ -39,7 +39,11 @@ The dashboard SHALL show assistant turns and tool calls per user prompt, the rat
 - **THEN** the session counts one error loop and links to it in the errors dashboard
 
 ### Requirement: Show time metrics
-The dashboard SHALL show session duration, thinking time, and tool call latency per tool.
+The dashboard SHALL show session duration, thinking time, and tool call latency per tool. A session's duration SHALL be its active time: the time between its main-thread requests and tool calls, leaving out every pause over 20 minutes, the same rule as the session timeline.
+
+#### Scenario: Resumed session
+- **WHEN** a session works for 30 minutes, pauses for 22 hours, then works for 5 minutes
+- **THEN** its duration is 35 minutes, not 23 hours
 
 #### Scenario: Slow tool
 - **WHEN** the user views tool latency
