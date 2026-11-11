@@ -283,7 +283,7 @@ The app SHALL take as evidence of a close the `cost-state` line Claude Code writ
 - **THEN** the state is your turn, then idle after 5 minutes, and never ended
 
 ### Requirement: Mark tool calls that only read
-The app SHALL mark a tool call as read-only when its tool is `Read`, `Grep` or `Glob`, or when it is a shell call (Claude Code `Bash`, Codex `exec_command`) whose every command is one of `rg`, `grep`, `cat`, `ls`, `head`, `tail`, `wc`, `nl`, `cd`, `pwd`, `echo`, `sed`, `sort` and `find`, named without a path, and carries no flag that makes it write. A script given to `bash`, `sh` or `zsh` with `-c` or `-lc` SHALL be read as the command line.
+The app SHALL mark a tool call as read-only when its tool is `Read`, `Grep` or `Glob`, or when it is a shell call (Claude Code `Bash`, Codex `exec_command`) whose every command, named without a path, is `grep`, `cat`, `ls`, `head`, `tail`, `wc`, `nl`, `cd`, `pwd` or `echo`, or is `rg`, `sort` or `find` with only flags the app lists as reading, or is `sed -n` with a script that only prints lines by number. A `bash`, `sh` or `zsh` script given with `-c` or `-lc` SHALL be read as the line.
 
 #### Scenario: Read-only call
 - **WHEN** a session makes a `Grep` call and a `Bash` call that runs `git commit`
@@ -301,8 +301,20 @@ The app SHALL mark a tool call as read-only when its tool is `Read`, `Grep` or `
 - **WHEN** `Bash` calls run `sed -i s/a/b/ x.py`, `find . -name '*.pyc' -delete` and `sort -o x x`
 - **THEN** none is marked as read-only
 
+#### Scenario: Flags listed as reading
+- **WHEN** `Bash` calls run `rg -l --hidden TODO`, `sort a.txt`, `find src -type f` and `find . -name '*.py'`
+- **THEN** each is marked as read-only
+
+#### Scenario: Flag that is not listed
+- **WHEN** `Bash` calls run `rg --pre ./x.sh TODO`, `sort --compress-program=./x.sh a` and `sort --outp=x x`, a shortened `--output`
+- **THEN** none is marked as read-only
+
+#### Scenario: sed script
+- **WHEN** `Bash` calls run `sed -n '1,50p' a.py`, `sed -n '10p;20p' a.py`, `sed -n 'w out.txt' a.py` and `sed 1e a.py`
+- **THEN** the first two are marked as read-only and the last two are not
+
 ### Requirement: Mark no shell call that cannot be read for certain
-The app SHALL mark a shell call as read-only only when it reads the whole command line for certain. It SHALL read words, quotes, the separators `;`, `&&`, `||`, `|` and a new line, and a redirection to `/dev/null` or to file descriptor 1 or 2. It SHALL NOT mark a line with anything else: a lone `&`, another redirection, a heredoc, parentheses, a backslash, a backtick, a `$`, an unpaired quote, a quoted separator, or a brace list on `sed`, `sort` or `find`; nor Codex's `exec`, nor a cut command.
+The app SHALL mark a shell call as read-only only when it reads its whole line for certain. It SHALL read words, quotes, `;`, `&&`, `||`, `|`, a newline, and a redirection to `/dev/null`, descriptor 1 or 2. It SHALL NOT mark a line with more: a lone `&`, another redirection, a heredoc, parentheses, a `\`, a backtick, a `$`, an unpaired quote, or an unquoted `*`, `?`, `[`, `{`, `^` or `#` on `rg`, `sort`, `find` or `sed`; nor Codex's `exec`, nor a call cut short or with no `cmd`.
 
 #### Scenario: Redirection into a file
 - **WHEN** `Bash` calls run `cat a > b`, `ls >> log` and `cat a 2>err.log`
@@ -324,6 +336,18 @@ The app SHALL mark a shell call as read-only only when it reads the whole comman
 - **WHEN** `Bash` calls run `cat "$(make list)"`, `(cat a.py)` and `rg 'foo\.bar' src`
 - **THEN** none is marked as read-only
 
+#### Scenario: Word the shell may expand into a flag
+- **WHEN** `Bash` calls run `sort *`, `rg TODO [a-c]*`, `sort ^a` and `sort a#-o x`, where a file can be named `-o`
+- **THEN** none is marked as read-only
+
+#### Scenario: Quoted separator
+- **WHEN** a `Bash` call runs `rg ';' src`
+- **THEN** its event is marked as read-only
+
 #### Scenario: Codex script
 - **WHEN** a Codex `exec` call runs a script whose text is `rg TODO src`
+- **THEN** its event is not marked as read-only
+
+#### Scenario: Codex call with no cmd
+- **WHEN** a Codex `exec_command` call's arguments hold `rg TODO src` under `command`, with no `cmd`
 - **THEN** its event is not marked as read-only

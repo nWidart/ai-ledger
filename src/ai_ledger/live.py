@@ -27,19 +27,32 @@ PROMPT_TOOLS = {"Agent", "Task", "spawn_agent"}  # their input is a prompt: with
 ERROR_CAP = 700  # as tool_calls.error
 SPARK_STEP = 5  # seconds per point of the tokens chart, over the last minute
 QUIET_TOOLS = {"Read", "Grep", "Glob"}  # tools that only read: the page can hide their calls
-# Shell commands that only read, search or print, each with the flags that make it write. Codex names no Read or Grep
-# tool: its exec_command reads and searches through these.
-QUIET_COMMANDS = dict.fromkeys(("rg", "grep", "cat", "ls", "head", "tail", "wc", "nl", "cd", "pwd", "echo")) | {
-    "sed": re.compile(r"-[A-Za-z]*i|--in-place"), "sort": re.compile(r"-[A-Za-z]*o|--output"),
-    "find": re.compile(r"-(delete|exec|execdir|ok|okdir|fprint0?|fprintf|fls)$")}
+# Shell commands that only read, search or print. Codex names no Read or Grep tool: its exec_command reads and searches
+# through these. A command with no flag that writes or runs a program reads whatever its words. One with such a flag
+# (sed -i, sort -o, find -delete, rg --pre) reads only when each word that starts with - is in full a flag listed here,
+# among those agents read with: a shortened or unknown flag is not. A short flag that takes a value ends its cluster.
+QUIET_COMMANDS = dict.fromkeys(("grep", "cat", "ls", "head", "tail", "wc", "nl", "cd", "pwd", "echo")) | {
+    "rg": re.compile(r"-[cFHiIlLnNosSuUvwx.]*(?:[ABCegmtT].*)?|--(?:hidden|files|no-ignore|ignore-case|smart-case|case-sensitive"
+                     r"|fixed-strings|line-number|no-line-number|no-heading|with-filename|no-filename|files-with-matches"
+                     r"|files-without-match|count|only-matching|word-regexp|invert-match|multiline|glob|iglob|type|type-not"
+                     r"|max-count|max-depth|context|after-context|before-context|sort|color)(?:=.*)?"),
+    "sort": re.compile(r"-[bfhnruV]*(?:[kt].*)?|--(?:reverse|unique|numeric-sort|human-numeric-sort|version-sort|ignore-case"
+                       r"|key|field-separator)(?:=.*)?"),
+    "find": re.compile(r"-(?:name|iname|path|type|maxdepth|mindepth|mtime|mmin|newer|size|empty|not|o|a|print|print0|prune|\d+\w?)"),
+    "sed": re.compile(r"-n")}
+SED_PRINT = re.compile(r"\d+(?:,\d+)?p(?:;\d+(?:,\d+)?p)*")  # the one sed script that is quiet, with -n: lines to print
 # What quiet reads of a shell line: words, quotes, SEPARATORS and the redirections of NO_WRITE. A line with more is not
 # quiet. UNREAD is what shlex reads otherwise than the shell does, or what changes the words after they are read: an
-# escape, a substitution or an expansion, and a quoted word that reads as a separator.
-UNREAD = re.compile(r"""[\\`$]|(['"])[;&|]+\1""")
+# escape, a substitution or an expansion, and a character of MASK. shlex drops the quotes, so the operators and the
+# expansion characters inside them are masked first: the ones it then gives are the shell's own.
+OPERATORS, EXPANSIONS = "();<>|&", "*?[{^#"  # ^ and # are zsh's, with EXTENDED_GLOB; # also starts a comment
+MASK = str.maketrans(OPERATORS + EXPANSIONS, "".join(map(chr, range(0xE000, 0xE000 + len(OPERATORS + EXPANSIONS)))))
+UNMASK = {masked: char for char, masked in MASK.items()}
+QUOTED = re.compile(r"""'[^']*'|"[^"]*\"""")  # exact on a line with nothing of UNREAD
+UNREAD = re.compile(r"[\\`$%s]" % "".join(map(chr, UNMASK)))
 SEPARATORS = {";", "&&", "||", "|"}
 NO_WRITE = {">": {"/dev/null"}, ">&": {"1", "2"}}  # a redirection that writes no file, by the word after it
 SHELLS = {"bash", "sh", "zsh"}  # `bash -lc '…'` runs its last word as a line of its own
-
 
 def now_utc():
     return datetime.now(timezone.utc)
@@ -75,9 +88,9 @@ def lane_of(path, source):
 
 
 def quiet(tool, summary):
-    """Whether a tool call only reads: a tool of QUIET_TOOLS, or a shell call whose every simple command is one of
-    QUIET_COMMANDS with no flag that writes. A call that cannot be read for certain is not quiet: a line simple_commands
-    refuses, Codex's exec, which runs a script, and a summary Codex cut short."""
+    """Whether a tool call only reads: a tool of QUIET_TOOLS, or a shell call whose every simple command reads, as reads
+    tells. A call that cannot be read for certain is not quiet: a line simple_commands refuses, Codex's exec, which runs
+    a script, and a summary Codex cut short."""
     if tool in QUIET_TOOLS:
         return True
     if tool not in SHELL_TOOLS:
@@ -92,28 +105,45 @@ def quiet(tool, summary):
 
 
 def reads_only(line):
-    """Whether every simple command of a shell line is one of QUIET_COMMANDS, by its exact name, with no flag that
-    writes. A word with a brace list counts as such a flag: the shell may expand it into one."""
+    """Whether every simple command of a shell line reads, as reads tells."""
     simple = simple_commands(line)
     if not simple:
         return False
     if len(simple) == 1 and len(simple[0]) == 3 and simple[0][0] in SHELLS and simple[0][1] in ("-c", "-lc"):
-        return reads_only(simple[0][2])
-    braces = lambda w: "{" in w and ("," in w or ".." in w)
-    writes = lambda words: QUIET_COMMANDS[words[0]] and any(QUIET_COMMANDS[words[0]].match(w) or braces(w) for w in words[1:])
-    return all(w[0] in QUIET_COMMANDS and not writes(w) for w in simple)
+        return reads_only(simple[0][2].translate(UNMASK))
+    return all(reads(words) for words in simple)
+
+
+def reads(words):
+    """Whether one simple command's words, as simple_commands gives them, only read: a command of QUIET_COMMANDS by its
+    exact name and, for one with flags that write, only the flags listed for it and no word the shell may expand, as a
+    file can be named as a flag. sed reads with -n and a script of SED_PRINT, and nothing else."""
+    name, args = words[0], words[1:]
+    if name not in QUIET_COMMANDS:
+        return False
+    flags = QUIET_COMMANDS[name]
+    if flags is None:
+        return True
+    if any(c in w for w in args for c in EXPANSIONS):
+        return False
+    args = [w.translate(UNMASK) for w in args]
+    if not all(flags.fullmatch(w) for w in args if w.startswith("-")):
+        return False
+    plain = [w for w in args if not w.startswith("-")]
+    return name != "sed" or "-n" in args and bool(plain) and SED_PRINT.fullmatch(plain[0]) is not None
 
 
 def simple_commands(line):
     """The words of each simple command of a shell line, or None for a line that holds more than this reads exactly:
     UNREAD, a quote with no pair, or an operator that is no separator and no redirection of NO_WRITE (a lone &, a
-    redirection into a file, a heredoc, a subshell). It refuses instead of parsing harder. A comment's words read as
-    words of its command: nothing in it runs, and it ends with its line."""
+    redirection into a file, a heredoc, a subshell). It refuses instead of parsing harder. A quoted operator or
+    expansion character stays masked in the words: one in clear is the shell's to expand. A comment's words read as
+    words: reads takes none of them for a flag, as it refuses a # on a command with flags that write."""
     if UNREAD.search(line):
         return None
     out = [[]]
     for text in line.split("\n"):  # no quote spans lines here: one that does has no pair in its line
-        lex = shlex.shlex(text, posix=True, punctuation_chars=True)
+        lex = shlex.shlex(QUOTED.sub(lambda m: m.group().translate(MASK), text), posix=True, punctuation_chars=OPERATORS)
         lex.whitespace, lex.whitespace_split, lex.commenters = " \t", True, ""
         try:
             for t in lex:
@@ -122,7 +152,7 @@ def simple_commands(line):
                 elif t in NO_WRITE:
                     if next(lex, None) not in NO_WRITE[t]:
                         return None
-                elif t and not t.strip(lex.punctuation_chars):
+                elif t and not t.strip(OPERATORS):
                     return None
                 else:
                     out[-1].append(t)

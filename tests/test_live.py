@@ -130,6 +130,12 @@ class QuietTest(unittest.TestCase):
                                    "ls -la 2>/dev/null", "find . -name \"*.py\" | sort | wc -l", "bash -lc 'grep -rn \"x > y\" src'",
                                    "rg -n TODO src 2>&1 | head -5", "ls web &&\ncat a.py\n"), [True] * 8)
 
+    def test_command_with_flags_that_write_reads_under_its_listed_flags(self):
+        self.assertEqual(self.bash("sed -n '1,50p' a.py", "sed -n '10p;20p' a.py", "nl -ba a.py | sed -n 10,40p", "rg -n TODO src",
+                                   "rg -l --hidden TODO", "rg -uu -g '*.{ts,tsx}' -e 'a[0-9]*' -C3 --type=py src", "rg ';' src",
+                                   "sort a.txt", "sort -rn -k2,2 -t, a.txt", "find . -name '*.py'", "find src -type f",
+                                   "find . -maxdepth 2 -mtime -7 -print", "rg '#include' src", "rg '^def ' src"), [True] * 14)
+
     def test_shell_call_that_writes_or_runs_more(self):
         self.assertEqual(self.bash("git commit -m wip", "rg TODO src && rm notes.md", "cat a > b", "ls >> log", "sed -i s/a/b/ x.py",
                                    "sed -ni.bak 1p x.py", "find . -name '*.pyc' -delete", "find . -exec rm {} +", "sort -o x x",
@@ -139,11 +145,24 @@ class QuietTest(unittest.TestCase):
                                    "find . -execdir rm {} +", "find . -ok rm {} +", "find . -fprint out.txt", "ls\nrm -rf build",
                                    "bash -lc 'rm -rf build'", "./cat a.py", "ls >&log"), [False] * 16)
 
+    def test_flag_or_sed_script_not_listed_as_reading(self):
+        self.assertEqual(self.bash("sed -n 'w out.txt' a.py", "sed 1e a.py", "rg --pre ./x.sh TODO", "sort --compress-program=./x.sh a",
+                                   "sed --in-pl s/a/b/ x.py", "sort --outp=x x"), [False] * 6)
+        self.assertEqual(self.bash("sed 1p a.py", "sed -n -e 1p a.py", "sed -n 1,5d a.py", "sed -n 's/a/b/p' a.py", "sed -n '1p;w out' a.py",
+                                   "sed -n '$p' a.py", "sed -n", "rg -z TODO", "rg -nz TODO", "rg --hostname-bin=./x TODO", "rg --hid TODO",
+                                   "sort -T /tmp a", "sort -uo x x", "sort --rev a", "find . -fprintf x %p", "find . -newerXY x"), [False] * 16)
+
     def test_shell_line_it_cannot_read_for_certain(self):  # each hides its rm or its write from a rule that reads less exactly
+        hidden = "bash -lc 'sort a %s cat -o x'" % ";".translate(live.MASK)  # the character that stands for a quoted ;
         self.assertEqual(self.bash("cat notes.txt & rm -rf build", "echo \"Don't touch $HOME\"; rm -rf dist; echo \"that's all\"",
                                    "cat <<EOF\nls it's\nEOF\nrm -rf dist; echo 'ok'", "echo it\\'s; rm -rf dist; echo it\\'s",
-                                   "ls # it's\nrm -rf build # it's", "sed s/a/b/ ';' cat -i x.py", "sed s/a/b/ \\; cat -i x.py",
-                                   "sed -{n,i} s/a/b/ x.py", "cat 'a.py"), [False] * 9)
+                                   "ls # it's\nrm -rf build # it's", "sort a ';' cat -o x", "sort a \\; cat -o x", hidden,
+                                   "cat 'a.py", "sed 1,5p a.py # -n"), [False] * 10)
+
+    def test_word_the_shell_may_expand_into_a_flag(self):  # a file can be named -o or -delete
+        self.assertEqual(self.bash("sort *", "sort a?.txt", "rg TODO [a-c]*", "find * -name x", "sort {-o,x} a", "sed -n 1p *.py",
+                                   "sort ^a", "sort a#-o x"), [False] * 8)  # zsh with EXTENDED_GLOB: every file but a, and -o after no a
+        self.assertEqual(self.bash("cat *", "ls *.py | wc -l", "grep -rn TODO src/*.py"), [True] * 3)  # no flag of theirs writes
 
     def test_codex_shell_call(self):
         call = lambda i, **args: codex_line(i, i, "response_item", type="function_call", name="exec_command", call_id=f"c{i}",
