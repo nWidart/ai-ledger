@@ -52,7 +52,6 @@ export function SessionSheet({ id, s, error, retry, range, pageProject }: Sessio
       requestAnimationFrame(() => pre.current?.focus({ preventScroll: true }));
     }, (e: Error) => setFp({ failed: true, status: ` Could not load it (${e.message}).` }));
   };
-  const long = i.first_ts && i.last_ts ? (Date.parse(i.last_ts) - Date.parse(i.first_ts)) / 1000 : null;
 
   return <>
     <div className="hint"><span className="chip">Whole session, not limited by the range filter</span><br />
@@ -71,7 +70,7 @@ export function SessionSheet({ id, s, error, retry, range, pageProject }: Sessio
       <Stat v={big(i.peak_context)} l={`peak context${i.context_limit && i.peak_context != null ? ` (${pct(i.peak_context / i.context_limit)})` : ""}`} />
       <Stat v={num(i.compactions)} l={i.compactions === 1 ? "compaction" : "compactions"} />
       <Stat v={num(s.commits.length)} l={s.commits.length === 1 ? "commit" : "commits"} />
-      <Stat v={dur(long)} l="long" />
+      <Stat v={dur(i.active_s)} l={<span title="Pauses over 20 minutes left out">active</span>} />
     </div>
     <h3>Timeline</h3>
     <Timeline s={s} project={i.project} />

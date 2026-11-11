@@ -10,10 +10,11 @@ import { getJson } from "../../useApi";
 export interface SessFilter { q: string; near: boolean; day: string }
 export const NO_FILTER: SessFilter = { q: "", near: false, day: "" };
 
-const COLS = 11;
+const COLS = 11, PAGE = 100; // PAGE: the server's page size
 
-/** Every session in the view, paged on the server so search finds old ones too. Loads when open, and again from the first
- *  page when usage, the page's payload, changes: an ingest or Refresh brought new data (useApi keeps an identical answer). */
+/** Every session in the view, paged on the server so search finds old ones too. Loads when open, from the first page when
+ *  the query changes. When usage, the page's payload, changes for the same query (an ingest or Refresh brought new data;
+ *  useApi keeps an identical answer), it refetches as many rows as are shown, in place, keeping focus. */
 export function SessionsDrawer({ view, count, filter, onFilter, selected, usage }: {
   view: View; count: number; filter: SessFilter; onFilter: (f: SessFilter) => void; selected: string; usage: UsagePayload;
 }) {
@@ -30,10 +31,23 @@ export function SessionsDrawer({ view, count, filter, onFilter, selected, usage 
   useEffect(() => { if (!filter.q) setQ(""); }, [filter.q]);
   const qt = q.trim(), narrowed = !!(qt || filter.near || filter.day);
   const viewKey = `${view.project}|${view.range}|${view.automated}|${view.source}`;
+  const queryKey = `${viewKey}|${qt}|${filter.near}|${filter.day}|${tick}`, lastQuery = useRef("");
 
   useEffect(() => {
     if (!open) return;
-    const my = ++seq.current;
+    const my = ++seq.current, same = lastQuery.current === queryKey && rows.length > 0;
+    lastQuery.current = queryKey;
+    if (same) {
+      setSt(s => ({ ...s, busy: true }));
+      getJson<SessionsPage>(sessionsUrl(view, { q: qt, near: filter.near, day: filter.day, limit: Math.max(rows.length, PAGE) })).then(d => {
+        if (my !== seq.current) return;
+        setRows(d.sessions); setTotal(d.total); setSt({ busy: false, hint: "" });
+      }, (e: Error) => {
+        if (my !== seq.current) return;
+        setSt({ busy: false, hint: "", moreError: `Could not refresh the sessions (${e.message}).` });
+      });
+      return;
+    }
     if (body.current?.contains(document.activeElement)) search.current?.focus(); // the rows are about to go inert
     setSt({ busy: true, stale: true, hint: qt ? `Searching for “${qt}”…` : "Loading sessions…" });
     getJson<SessionsPage>(sessionsUrl(view, { q: qt, near: filter.near, day: filter.day })).then(d => {
@@ -45,8 +59,8 @@ export function SessionsDrawer({ view, count, filter, onFilter, selected, usage 
       setRows([]); setTotal(0);
       setSt({ busy: false, hint: qt ? `Search for “${qt}” failed.` : "Sessions failed to load.", error: e.message });
     });
-    // view is read through viewKey.
-  }, [open, viewKey, qt, filter.near, filter.day, tick, usage]);
+    // view and the filters are read through queryKey; rows only matter when usage changes.
+  }, [open, queryKey, usage]);
   const more = () => {
     const my = ++seq.current, first = rows.length;
     setSt(s => ({ ...s, busy: true, moreError: undefined }));

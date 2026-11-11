@@ -89,6 +89,8 @@ export interface SessionInfo {
   session_id: string; project: string | null; cwd: string | null; git_branch: string | null; first_ts: Ts | null; last_ts: Ts | null;
   entrypoint: string | null; version: string | null; compactions: number | null; peak_context: number | null; peak_model: string | null;
   source: Source; context_limit: number | null;
+  /** Active time, as the sessions table's duration_s: pauses over 20 minutes left out. */
+  active_s: number | null;
 }
 export interface SessionModelRow extends Tokens { model: string | null; effort: string; subagent: boolean; requests: number; tokens: number; cost: number | null }
 export interface SessionDetail {
@@ -322,8 +324,8 @@ export const viewOf = (h: { project: string; range: number; auto: boolean; sourc
   ({ project: h.project, range: h.range, automated: h.auto, source: h.source });
 const viewQs = (v: View) => ({ project: v.project, range: v.range, automated: v.automated, source: v.source });
 export const usageUrl = (v: View, session = "") => `/api/usage?${qs({ ...viewQs(v), session })}`;
-export const sessionsUrl = (v: View, o: { q?: string; near?: boolean; offset?: number; day?: Day } = {}) =>
-  `/api/sessions?${qs({ ...viewQs(v), q: o.q, near: o.near, offset: o.offset || undefined, day: o.day })}`;
+export const sessionsUrl = (v: View, o: { q?: string; near?: boolean; offset?: number; limit?: number; day?: Day } = {}) =>
+  `/api/sessions?${qs({ ...viewQs(v), q: o.q, near: o.near, offset: o.offset || undefined, limit: o.limit, day: o.day })}`;
 export const sessionUrl = (id: string) => `/api/session?${qs({ id })}`;
 export const promptUrl = (session: string) => `/api/prompt?${qs({ session })}`;
 export const toolUrl = (kind: ToolKind, name: string, v: View) => `/api/tool?${qs({ kind, name, ...viewQs(v) })}`;

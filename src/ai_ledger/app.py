@@ -238,7 +238,8 @@ def handler(app, port=PORT):
                     self.send(404, json.dumps(dict(error="prompt not found"))) if text is None else self.json(dict(text=text))
                 elif url.path == "/api/sessions":
                     self.json(metrics.session_list(app.con.cursor(), q.get("project", ""), int(q.get("range") or 0), q.get("q", ""),
-                                                   q.get("near") == "1", int(q.get("offset") or 0), day=q.get("day", ""),
+                                                   q.get("near") == "1", int(q.get("offset") or 0), max(1, int(q.get("limit") or 100)),
+                                                   day=q.get("day", ""),
                                                    automated=q.get("automated") == "1", source=q.get("source", "")))
                 elif url.path == "/api/palette":
                     self.json(metrics.palette(app.con.cursor(), q.get("project", ""), int(q.get("range") or 0),

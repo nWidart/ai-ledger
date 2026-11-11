@@ -89,7 +89,49 @@ describe("ActivityPage", () => {
     act(() => { (document.getElementById("d-sessions") as HTMLDetailsElement).open = true; });
     await waitFor(() => expect(fetched().filter(u => u === "/api/sessions?range=30")).toHaveLength(1));
     act(() => clearApiCache());
-    await waitFor(() => expect(fetched().filter(u => u === "/api/sessions?range=30")).toHaveLength(2));
+    await waitFor(() => expect(fetched()).toContain("/api/sessions?range=30&limit=100"));
+  });
+
+  it("swaps in new data from a background ingest quietly, and replays the landing only after Refresh", async () => {
+    let n = 0;
+    mockApi({ "/api/usage": () => ({ ...usage, totals: { ...usage.totals, sessions: 2 + n++ } }), "/api/sessions": () => sessions });
+    at();
+    const { container } = render(<ActivityPage />);
+    await screen.findByRole("heading", { level: 1, name: /in 2 sessions/ });
+    const page = container.querySelector(".pg-activity")!, fades = () => page.querySelectorAll(".fade-in").length;
+    await waitFor(() => expect(page.classList.contains("grow")).toBe(false), { timeout: 2000 });
+    act(() => clearApiCache());
+    await screen.findByRole("heading", { level: 1, name: /in 3 sessions/ });
+    expect(page.classList.contains("grow")).toBe(false);
+    expect(fades()).toBe(0);
+    act(() => clearApiCache(true));
+    await screen.findByRole("heading", { level: 1, name: /in 4 sessions/ });
+    expect(page.classList.contains("grow")).toBe(true);
+    expect(fades()).toBeGreaterThan(0);
+  });
+
+  it("keeps an open, paged sessions table and its focus when new data arrives", async () => {
+    let n = 0;
+    const all = Array.from({ length: 250 }, (_, k) => ({ ...sessions.sessions[0], session_id: `x${k}`, title: `Session ${k}` }));
+    const page = (q: URLSearchParams) => {
+      const from = Number(q.get("offset") ?? 0), to = from + Number(q.get("limit") ?? 100);
+      return { total: all.length, offset: from, sessions: all.slice(from, to) };
+    };
+    mockApi({ "/api/usage": () => ({ ...usage, totals: { ...usage.totals, sessions: 2 + n++ } }), "/api/sessions": page });
+    at();
+    render(<ActivityPage />);
+    await loaded();
+    act(() => { (document.getElementById("d-sessions") as HTMLDetailsElement).open = true; });
+    await screen.findByRole("button", { name: "Session 99" });
+    await userEvent.click(screen.getByRole("button", { name: "Show more sessions" }));
+    const row = await screen.findByRole("button", { name: "Session 150" });
+    act(() => row.focus());
+    act(() => clearApiCache());
+    await waitFor(() => expect(fetched()).toContain("/api/sessions?range=30&limit=200"));
+    await waitFor(() => expect(document.querySelector("#d-sessions tbody")!.getAttribute("aria-busy")).toBeNull());
+    expect(document.querySelectorAll("#d-sessions tbody tr")).toHaveLength(200);
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Session 150" }));
+    expect(document.querySelector("#d-sessions tbody")!.hasAttribute("inert")).toBe(false);
   });
 
   it("names no agent when nothing happened in the range with every source", async () => {

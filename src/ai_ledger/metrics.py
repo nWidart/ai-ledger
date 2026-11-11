@@ -577,9 +577,20 @@ def error_loops(cur, W, fp):
 IDLE_GAP_S = 20 * 60  # a pause longer than this between a session's requests and tool calls is idle, as on its timeline
 
 
+def active_cte(ids):
+    """CTEs ending in act(session_id, active_s): the whole active time of each session that ids (SQL) selects, the time
+    between its main-thread requests and tool calls less every pause over IDLE_GAP_S."""
+    return f"""ev AS (SELECT session_id, ts AS t FROM requests WHERE NOT subagent AND ts IS NOT NULL AND session_id IN ({ids})
+               UNION ALL SELECT session_id, coalesce(start_ts, end_ts) FROM tool_calls
+               WHERE coalesce(start_ts, end_ts) IS NOT NULL AND session_id IN ({ids})),
+        gap AS (SELECT session_id, date_diff('millisecond', lag(t) OVER (PARTITION BY session_id ORDER BY t), t) AS ms FROM ev),
+        act AS (SELECT session_id, CAST(round(coalesce(sum(ms) FILTER (WHERE ms <= {IDLE_GAP_S * 1000}), 0) / 1000) AS BIGINT) AS active_s
+                FROM gap GROUP BY 1)"""
+
+
 def sessions(cur, rq, rp, W, fp, prices):
     """Sessions with requests in the view; every count is limited to the view's range. duration_s is the whole session's
-    active time: the time between its main-thread requests and tool calls, less every pause over IDLE_GAP_S."""
+    active time (active_cte)."""
     rs = rows(cur, f"""{rq}, agg AS (
           SELECT session_id, count(*) AS requests, sum(tokens) AS tokens, sum(cost) AS cost,
                  count(*) FILTER (WHERE cost IS NULL) AS unpriced, coalesce(sum(thinking_ms), 0) AS thinking_ms
@@ -591,12 +602,7 @@ def sessions(cur, rq, rp, W, fp, prices):
                FROM tool_calls t JOIN sessions s USING (session_id) WHERE {W('coalesce(t.start_ts, t.end_ts)')} GROUP BY 1),
         pr AS (SELECT session_id, count(*) AS prompts, count(*) FILTER (WHERE interrupted) AS interrupted
                FROM prompts p JOIN sessions s USING (session_id) WHERE {W('p.ts')} GROUP BY 1),
-        ev AS (SELECT session_id, ts AS t FROM requests WHERE NOT subagent AND ts IS NOT NULL AND session_id IN (SELECT session_id FROM agg)
-               UNION ALL SELECT session_id, coalesce(start_ts, end_ts) FROM tool_calls
-               WHERE coalesce(start_ts, end_ts) IS NOT NULL AND session_id IN (SELECT session_id FROM agg)),
-        gap AS (SELECT session_id, date_diff('millisecond', lag(t) OVER (PARTITION BY session_id ORDER BY t), t) AS ms FROM ev),
-        act AS (SELECT session_id, CAST(round(coalesce(sum(ms) FILTER (WHERE ms <= {IDLE_GAP_S * 1000}), 0) / 1000) AS BIGINT) AS active_s
-                FROM gap GROUP BY 1)
+        {active_cte("SELECT session_id FROM agg")}
         SELECT s.session_id, s.project, s.git_branch, s.first_ts, s.last_ts, act.active_s AS duration_s,
                s.compactions, s.peak_context, s.peak_model, agg.requests, agg.tokens, agg.cost, agg.unpriced, agg.thinking_ms,
                coalesce(tc.tool_calls, 0) AS tool_calls, coalesce(tc.errors, 0) AS errors, coalesce(tc.commits, 0) AS commits,
@@ -660,6 +666,7 @@ def session_detail(cur, sid, allq, p, prices):
     info = info[0]
     info["first_ts"], info["last_ts"] = iso(info["first_ts"]), iso(info["last_ts"])
     info["context_limit"] = (prices.get(info["peak_model"]) or {}).get("context")
+    info["active_s"] = (cur.execute(f"WITH {active_cte('?')} SELECT active_s FROM act", [sid, sid]).fetchone() or (None,))[0]
     sums = ", ".join(f"sum({k}) AS {k}" for k in TOKEN_KINDS)
     return dict(
         info=info,

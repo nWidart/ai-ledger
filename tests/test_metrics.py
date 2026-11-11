@@ -451,6 +451,7 @@ class MetricsTest(unittest.TestCase):
                 return json.loads(r.read())
             self.assertEqual((get("/api/usage")["totals"]["sessions"], get("/api/usage?automated=1")["totals"]["sessions"]), (3, 4))
             self.assertEqual((get("/api/sessions")["total"], get("/api/sessions?automated=1")["total"]), (3, 4))
+            self.assertEqual(len(get("/api/sessions?limit=2")["sessions"]), 2)  # a refresh refetches as many rows as are shown
         finally:
             httpd.shutdown()
             httpd.server_close()
@@ -726,6 +727,8 @@ class SessionTimeTest(unittest.TestCase):
         # A 1-day view still measures the whole session.
         u = metrics.usage(self.con.cursor(), "", 1, prices=PRICES, today=TODAY)
         self.assertEqual(u["sessions"][0]["duration_s"], 1800)
+        # The session sheet shows the same active time, not first to last.
+        self.assertEqual(metrics.session(self.con.cursor(), "a", prices=PRICES)["info"]["active_s"], 1800)
 
 
 class ToolDetailTest(unittest.TestCase):

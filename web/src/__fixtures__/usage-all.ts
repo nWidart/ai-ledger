@@ -624,7 +624,8 @@ export default {
    "peak_context": 900,
    "peak_model": "m-a",
    "source": "claude",
-   "context_limit": 1000
+   "context_limit": 1000,
+   "active_s": 540
   },
   "models": [
    {
