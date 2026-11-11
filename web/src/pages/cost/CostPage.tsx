@@ -107,7 +107,10 @@ export function CostPage() {
       {error && <div className="banner" role="alert"><b>Could not load {viewName(want)} ({error.message}).{d ? ` Still showing ${viewName(d)}.` : ""}</b>{" "}
         <button type="button" className="linkish" ref={retryBtn} onClick={retry}>Retry</button></div>}
       {d && d.unpriced.length > 0 && <div className="banner"><b>Unpriced models:</b> {d.unpriced.map((u, k) => <span key={k}>{k ? ", " : ""}<code>{u.model}</code> ({big(u.tokens)} tokens)</span>)}.
-        Their tokens are counted; their cost is unknown and left out of totals. Add them to <code>prices.json</code>.</div>}
+        Their tokens are counted; their cost is unknown and left out of totals. To price them, add them to <code>{d.prices_file.path}</code>,
+        in the shape of the packaged <code>prices.json</code>; the next page load uses them, with no rebuild.</div>}
+      {d?.prices_file.error && <div className="banner" role="alert"><b>Prices file ignored:</b> <code>{d.prices_file.path}</code> could not be used
+        ({d.prices_file.error}). Packaged prices apply until it is fixed.</div>}
       <p className="pending" role="status">{loading && d ? `Loading ${viewName(want)}…` : ""}</p>
       {d && <>
         <SectionIndex groups={[

@@ -77,6 +77,8 @@ export interface UsagePayload {
   sessions: SessionRow[]; top_sessions: TitledSessionRow[]; near_limit: SessionRow[];
   /** null for the all-time view. */
   previous: Previous | null; changes: Change[] | null;
+  /** The user prices file next to the store (path), and why it was ignored (error; null when read or absent). */
+  prices_file: { path: string; error: string | null };
   /** Present when the request named a session: null when it does not exist. */
   session?: SessionDetail | null;
 }

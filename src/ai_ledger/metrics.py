@@ -14,9 +14,45 @@ AUTOMATED_PROJECTS = ("observer-sessions",)  # projects whose sessions a tool st
 SOURCES = ("claude", "codex")  # the coding agents a session can come from (sessions.source); '' in a filter is all of them
 
 
-def load_prices(path=os.path.join(HERE, "prices.json")):
+PRICE_KINDS = ("input", "output", "cache_read", "cache_5m", "cache_1h")  # USD per million tokens, every price entry has each
+# The user's prices file: the packaged prices.json's shape, its models added to or replacing the packaged ones. It sits next
+# to the store; the app points it at the --db folder.
+USER_PRICES = os.path.join(store.data_dir(), "prices.json")
+
+
+def load_prices(path=os.path.join(HERE, "prices.json"), user=None):
+    """Prices per model: the packaged file's, with the user prices file's (user, default USER_PRICES) over them. A missing,
+    unreadable or malformed user file adds nothing (prices_file says why)."""
     with open(path) as fh:
-        return json.load(fh)["models"]
+        return json.load(fh)["models"] | user_prices(user)[0]
+
+
+def user_prices(path=None):
+    """(models, error) from the user prices file: ({}, None) when there is none; ({}, a message) when it cannot be read or
+    an entry lacks a price, so a bad edit is reported and ignored instead of breaking every page."""
+    try:
+        with open(path or USER_PRICES) as fh:
+            data = json.load(fh)
+    except FileNotFoundError:
+        return {}, None
+    except (OSError, ValueError) as e:  # JSONDecodeError is a ValueError
+        return {}, str(e)
+    models = data.get("models") if isinstance(data, dict) else None
+    if not isinstance(models, dict):
+        return {}, 'no "models" object'
+    number = lambda v: isinstance(v, (int, float)) and not isinstance(v, bool)
+    for model, p in models.items():
+        tiers = [p] + ([p.get("long")] if isinstance(p, dict) and p.get("long_above") is not None else [])
+        bad = [k for t in tiers for k in PRICE_KINDS if not isinstance(t, dict) or not number(t.get(k))]
+        bad += [k for k in ("context", "long_above") if isinstance(p, dict) and p.get(k) is not None and not number(p[k])]
+        if bad:
+            return {}, f"{model}: {', '.join(dict.fromkeys(bad))} must be a number"
+    return {m: dict(p, context=p.get("context")) for m, p in models.items()}, None
+
+
+def prices_file():
+    """Where the user prices file is and why it was ignored (error is None when it was read, or there is none)."""
+    return dict(path=USER_PRICES, error=user_prices()[1])
 
 
 def rows(cur, sql, params=()):
@@ -274,6 +310,7 @@ def usage(cur, project="", range_days=0, session="", prices=None, today=None, au
                near_limit=sorted((x for x in sess if x["near_limit"]), key=lambda x: -x["context_share"]),
                previous=previous_period(cur, project, range_days, prices, today, automated, source))
     out["changes"] = project_changes(by_project, out["previous"])
+    out["prices_file"] = prices_file()
     if session:
         out["session"] = session_detail(cur, session, requests_cte(pcte, "r.session_id = ?"), pparams + [session], prices)
     return out

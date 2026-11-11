@@ -190,11 +190,19 @@ describe("CostPage", () => {
 
   it("names unpriced models and marks their spend with +?", async () => {
     await show(usage);
-    expect(screen.getByText("Unpriced models:").closest(".banner")!.textContent).toMatch(/m-unknown \(200 tokens\)/);
+    const banner = screen.getByText("Unpriced models:").closest(".banner")!.textContent;
+    expect(banner).toMatch(/m-unknown \(200 tokens\)/);
+    expect(banner).toMatch(/add them to \/Users\/example\/Library\/Application Support\/ai-ledger\/prices\.json/);
     const row = document.querySelector('#where [data-v="foo"]')!;
     expect(within(row as HTMLElement).getByTitle("1 requests from unpriced models").textContent).toBe("+?");
     expect(screen.getByText("unpriced").className).toMatch(/chip warn/);
     expect(document.querySelector('#d-projcost tr[data-v="foo"]')!.textContent).toMatch(/\$16 \+\?/);
+  });
+
+  it("says when the user prices file was ignored, and why", async () => {
+    await show({ ...usage, prices_file: { ...usage.prices_file, error: "Expecting value: line 1 column 1 (char 0)" } });
+    expect(screen.getByText("Prices file ignored:").closest(".banner")!.textContent)
+      .toMatch(/ai-ledger\/prices\.json could not be used \(Expecting value: line 1 column 1 \(char 0\)\)\. Packaged prices apply/);
   });
 
   it("opens the sheets from the spend ledger and Back closes them", async () => {

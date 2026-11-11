@@ -424,5 +424,9 @@ export default {
    "delta": -0.00026,
    "new": false
   }
- ]
+ ],
+ "prices_file": {
+  "path": "/Users/example/Library/Application Support/ai-ledger/prices.json",
+  "error": null
+ }
 } satisfies UsagePayload;

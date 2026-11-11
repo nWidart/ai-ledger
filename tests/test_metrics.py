@@ -857,5 +857,45 @@ class ToolDetailTest(unittest.TestCase):
             self.detail("tool", "Bash", source="grok")
 
 
+class UserPricesTest(unittest.TestCase):
+    """The user prices file next to the store: its models add to or replace the packaged ones; a bad file is reported and ignored."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.path = os.path.join(self.tmp, "prices.json")
+        patch = mock.patch.object(metrics, "USER_PRICES", self.path)
+        patch.start()
+        self.addCleanup(patch.stop)
+        self.addCleanup(shutil.rmtree, self.tmp)
+        self.packaged = metrics.load_prices()
+
+    def write(self, text):
+        with open(self.path, "w") as fh:
+            fh.write(text)
+
+    def test_missing_file_adds_nothing(self):
+        self.assertEqual(metrics.user_prices(), ({}, None))
+        self.assertEqual(metrics.prices_file(), dict(path=self.path, error=None))
+
+    def test_entries_add_and_override(self):
+        known = next(iter(self.packaged))
+        self.write(json.dumps({"models": {"m-new": {"input": 1, "output": 2, "cache_read": 0, "cache_5m": 0, "cache_1h": 0},
+                                          known: dict(self.packaged[known], input=999)}}))
+        got = metrics.load_prices()
+        self.assertEqual(got["m-new"]["context"], None)  # optional, as in the packaged file
+        self.assertEqual(got[known]["input"], 999)
+        self.assertEqual(len(got), len(self.packaged) + 1)
+        self.assertIsNone(metrics.prices_file()["error"])
+
+    def test_bad_file_is_reported_and_ignored(self):
+        for text, error in (("{not json", "Expecting property name"), ("[]", 'no "models" object'),
+                            ('{"models": {"m-x": {"input": 1}}}', "m-x: output, cache_read, cache_5m, cache_1h must be a number"),
+                            ('{"models": {"m-x": {"input": 1, "output": 1, "cache_read": 1, "cache_5m": 1, "cache_1h": 1, "long_above": 5}}}',
+                             "m-x: input, output, cache_read, cache_5m, cache_1h must be a number")):
+            self.write(text)
+            self.assertEqual(metrics.load_prices(), self.packaged)
+            self.assertIn(error, metrics.prices_file()["error"])
+
+
 if __name__ == "__main__":
     unittest.main()
