@@ -1,5 +1,5 @@
-// Writes dist/source-hash.txt: the hash of the sources the build came from. tests/test_web_build.py recomputes it the same way,
-// so a commit with changed sources and a stale dist/ fails the Python tests.
+// Writes src/ai_ledger/web/source-hash.txt: the hash of the sources the build came from. tests/test_web_build.py recomputes it
+// the same way, so a commit with changed sources and a stale build fails the Python tests.
 // Inputs: every file under src/ (except src/__fixtures__/, which tests regenerate and the build never reads, and dotfiles),
 // plus index.html, package-lock.json and vite.config.ts. Paths are relative to web/ with "/" separators, sorted by code unit.
 // sha256 over, for each file in order: path, NUL, byte length in decimal, NUL, the file's bytes.
@@ -9,6 +9,7 @@ import { dirname, join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const web = join(dirname(fileURLToPath(import.meta.url)), "..");
+const out = join(web, "..", "src", "ai_ledger", "web"); // vite.config.ts outDir
 const SKIP = new Set(["src/__fixtures__"]);
 
 function walk(dir, out) {
@@ -33,6 +34,6 @@ export function sourceHash() {
 }
 
 if (process.argv[1] && relative(process.argv[1], fileURLToPath(import.meta.url)) === "") {
-  writeFileSync(join(web, "dist", "source-hash.txt"), sourceHash() + "\n");
-  console.log(`dist${sep}source-hash.txt written`);
+  writeFileSync(join(out, "source-hash.txt"), sourceHash() + "\n");
+  console.log(`${relative(web, out)}${sep}source-hash.txt written`);
 }

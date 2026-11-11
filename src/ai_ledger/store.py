@@ -4,22 +4,44 @@ Raw layer: every transcript line, every plan-limit poll and every /insights usag
 layer: sessions, requests, tool calls, prompts, hooks, plan-limit snapshots and /insights facets, written during ingest and
 rebuildable from the raw layer.
 """
+import errno
 import glob
 import json
 import os
 import subprocess
 import sys
 import time
+import tomllib
 from datetime import datetime, timedelta, timezone
 from typing import Callable, NamedTuple
 
 import duckdb
 
-from categorize import GIT_COMMIT, SHELL_TOOLS, TEST_CMD, categorize, error_text, summarize_input, text_of
+from .categorize import GIT_COMMIT, SHELL_TOOLS, TEST_CMD, categorize, error_text, summarize_input, text_of
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_DB = os.path.join(HERE, "data", "ai-ledger.duckdb")
-EARLIER_DB = os.path.join(HERE, "data", "claude.duckdb")  # default before the rename to AI Ledger
+
+
+def data_dir():
+    """The per-user folder that holds the store: Application Support on macOS, the XDG data home elsewhere."""
+    if sys.platform == "darwin":
+        return os.path.expanduser("~/Library/Application Support/ai-ledger")
+    return os.path.join(os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share"), "ai-ledger")
+
+
+def checkout_stores(root=os.path.dirname(os.path.dirname(HERE))):
+    """The stores a source checkout kept in its data/ folder before the store moved to data_dir(), newest name first.
+    None for an installed package: no pyproject.toml naming ai-ledger sits two folders above it."""
+    try:
+        with open(os.path.join(root, "pyproject.toml"), "rb") as fh:
+            name = tomllib.load(fh).get("project", {}).get("name")
+    except (OSError, tomllib.TOMLDecodeError):
+        return []
+    return [os.path.join(root, "data", n) for n in ("ai-ledger.duckdb", "claude.duckdb")] if name == "ai-ledger" else []
+
+
+DEFAULT_DB = os.path.join(data_dir(), "ai-ledger.duckdb")
+EARLIER_DBS = checkout_stores()
 DEFAULT_ROOT = os.path.expanduser("~/.claude/projects")
 DEFAULT_CODEX = os.path.expanduser("~/.codex")
 DEFAULT_USAGE_DATA = os.path.expanduser("~/.claude/usage-data")  # Claude Code's /insights facets and session meta
@@ -83,29 +105,41 @@ class StoreBusy(Exception):
     pass
 
 
-def move_earlier_store(new, old):
-    """Move a store at its pre-rename path to the new one, write-ahead log included. Never replaces a store."""
-    if os.path.exists(old):
-        if os.path.exists(new):
-            print(f"store: opened {new}; {old} also exists and was not moved", file=sys.stderr)
-            return
-        os.replace(old, new)
-    # Also finishes a move that stopped between the file and its log.
-    if os.path.exists(old + ".wal") and not os.path.exists(new + ".wal"):
-        os.replace(old + ".wal", new + ".wal")
+class StoreNotMoved(Exception):
+    pass
+
+
+def move_earlier_store(new, earlier):
+    """Move the first store found at an earlier default path to the new one, write-ahead log included. Never replaces a
+    store. Raises StoreNotMoved when the earlier store is on another file system, so no empty store is created."""
+    for old in earlier:
+        try:
+            if os.path.exists(old):
+                if os.path.exists(new):
+                    print(f"store: opened {new}; {old} also exists and was not moved", file=sys.stderr)
+                    continue
+                os.replace(old, new)
+            # Also finishes a move that stopped between the file and its log.
+            if os.path.exists(old + ".wal") and not os.path.exists(new + ".wal"):
+                os.replace(old + ".wal", new + ".wal")
+        except OSError as e:
+            if e.errno != errno.EXDEV:
+                raise
+            raise StoreNotMoved(f"cannot move the store {old} to {new}: they are on different disks. Move {old} "
+                                f"(and its .wal file, if any) there by hand, or pass --db {old}") from e
 
 
 def open_store(path=None):
     """Open (or create) the database for writing. Raises StoreBusy when another process holds it.
 
-    With no path, opens DEFAULT_DB, first moving a store found at EARLIER_DB there."""
+    With no path, opens DEFAULT_DB, first moving a store found at EARLIER_DBS there."""
     default = path is None
     path = DEFAULT_DB if default else path
     d = os.path.dirname(os.path.abspath(path))
     os.makedirs(d, mode=0o700, exist_ok=True)
     os.chmod(d, 0o700)
     if default:
-        move_earlier_store(DEFAULT_DB, EARLIER_DB)
+        move_earlier_store(DEFAULT_DB, EARLIER_DBS)
     # Kept for the whole process: DuckDB creates the WAL and temp files later, and they hold transcript text too.
     os.umask(0o077)
     try:
@@ -643,9 +677,9 @@ class Source(NamedTuple):
     live_items: Callable = live_items  # line -> what the Live page shows of it
 
 
-import codex  # noqa: E402  (it subclasses Deriver)
-import limits  # noqa: E402  (it writes snapshots through this module)
-import insights  # noqa: E402  (it reads usage data through this module)
+from . import codex  # noqa: E402  (it subclasses Deriver)
+from . import limits  # noqa: E402  (it writes snapshots through this module)
+from . import insights  # noqa: E402  (it reads usage data through this module)
 
 SOURCES = {"claude": Source(transcript_files, line_key, Deriver, lambda path: "/subagents/" in path),
            "codex": Source(codex.files, codex.key, codex.CodexDeriver, codex.subagent, codex.fields, codex.read,

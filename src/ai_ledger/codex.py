@@ -16,8 +16,8 @@ from functools import lru_cache
 
 from compression import zstd
 
-import store
-from categorize import GIT_COMMIT, SHELL_TOOLS, TEST_CMD, summarize_input, text_of
+from . import store
+from .categorize import GIT_COMMIT, SHELL_TOOLS, TEST_CMD, summarize_input, text_of
 
 UUID = r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
 FILE_NAME = re.compile(rf"({UUID})(?:_({UUID}))?\.jsonl(?:\.zst)?$")

@@ -9,8 +9,7 @@ import re
 import sys
 from datetime import date, datetime, timezone
 
-import metrics
-import store
+from . import metrics, store
 
 KINDS = {"facets": "facet", "session-meta": "meta"}  # directory -> usage_files.kind; report*.html is never read
 SESSION_ID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")

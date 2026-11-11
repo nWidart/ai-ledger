@@ -2,7 +2,6 @@ import http.client
 import json
 import os
 import shutil
-import sys
 import tempfile
 import threading
 import unittest
@@ -10,10 +9,7 @@ from datetime import date, timedelta
 from http.server import ThreadingHTTPServer
 from unittest import mock
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import app  # noqa: E402
-import metrics  # noqa: E402
-import store  # noqa: E402
+from ai_ledger import app, metrics, store
 
 PRICES = {
     "m-a": {"input": 1, "output": 10, "cache_read": 0.1, "cache_5m": 2, "cache_1h": 4, "context": 1000},

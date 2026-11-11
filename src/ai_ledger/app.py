@@ -1,13 +1,13 @@
-#!/usr/bin/env python3
 """Local app: owns the transcript store, keeps it current, serves the Activity, Cost, Errors, Limits, Insights and Live pages.
 
 Usage:
-  uv run app.py            serve on http://127.0.0.1:8765 (ingests at start and every 60 seconds, every second while Live is open)
-  uv run app.py ingest     ingest new transcript lines and /insights usage data once, then exit
-  uv run app.py rebuild    regenerate the derived tables from the stored raw lines
+  ai-ledger            serve on http://127.0.0.1:8765 (ingests at start and every 60 seconds, every second while Live is open)
+  ai-ledger ingest     ingest new transcript lines and /insights usage data once, then exit
+  ai-ledger rebuild    regenerate the derived tables from the stored raw lines
 """
 import argparse
 import collections
+import importlib.metadata
 import json
 import os
 import sys
@@ -17,17 +17,13 @@ from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 
-import insights
-import limits
-import live
-import metrics
-import store
+from . import insights, limits, live, metrics, store
 
-HOST, PORT = "127.0.0.1", 8765
+HOST, PORT = "127.0.0.1", 8765  # PORT is the default; --port changes it
 INTERVAL = 60
 LIVE_INTERVAL = 1  # transcript ingest while a Live page is connected; usage data and limits stay on INTERVAL
 KEEPALIVE = 15  # seconds between SSE comments, so a closed Live page is noticed
-WEB = os.path.join(store.HERE, "web", "dist")  # the committed frontend build (npm run build in web/)
+WEB = os.path.join(store.HERE, "web")  # the committed frontend build (npm run build in web/), shipped in the package
 PAGES = ("/usage", "/cost", "/errors", "/limits", "/insights", "/live")  # one app; it picks the page from the path
 ASSET_TYPES = {".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml",
                ".png": "image/png", ".woff2": "font/woff2", ".json": "application/json; charset=utf-8"}
@@ -128,14 +124,14 @@ class App:
 
 
 def asset(path):
-    """The build file at /assets/<name>, or None when the name leaves web/dist/assets or has no known type."""
+    """The build file at /assets/<name>, or None when the name leaves the build's assets folder or has no known type."""
     base = os.path.realpath(os.path.join(WEB, "assets"))
     full = os.path.realpath(os.path.join(base, path[len("/assets/"):]))
     ext = os.path.splitext(full)[1]
     return (full, ASSET_TYPES[ext]) if os.path.dirname(full) == base and ext in ASSET_TYPES and os.path.isfile(full) else None
 
 
-def handler(app):
+def handler(app, port=PORT):
     class Handler(BaseHTTPRequestHandler):
         def send(self, code, body, ctype="application/json; charset=utf-8", headers=(), cache="no-store"):
             data = body if isinstance(body, bytes) else body.encode()
@@ -181,10 +177,10 @@ def handler(app):
         def checked_host(self):
             """Serve only 127.0.0.1; send localhost there (fix markers live in that origin); refuse other hosts."""
             host = (self.headers.get("Host") or "").lower()
-            if host == f"localhost:{PORT}":
-                self.send(301, "", headers=[("Location", f"http://{HOST}:{PORT}{self.path}")])
+            if host == f"localhost:{port}":
+                self.send(301, "", headers=[("Location", f"http://{HOST}:{port}{self.path}")])
                 return False
-            if host != f"{HOST}:{PORT}":
+            if host != f"{HOST}:{port}":
                 self.send(403, "forbidden host\n", "text/plain")
                 return False
             return True
@@ -269,15 +265,15 @@ def handler(app):
     return Handler
 
 
-def serve(con, roots):
+def serve(con, roots, port=PORT):
     app = App(con, roots)
     try:
-        httpd = ThreadingHTTPServer((HOST, PORT), handler(app))
+        httpd = ThreadingHTTPServer((HOST, port), handler(app, port))
     except OSError as e:
-        sys.exit(f"cannot listen on {HOST}:{PORT}: {e}")
+        sys.exit(f"cannot listen on {HOST}:{port}: {e}; pass --port to use another port")
     loop = threading.Thread(target=app.loop, daemon=True)
     loop.start()
-    print(f"serving http://{HOST}:{PORT}/ (ingest every {INTERVAL}s)", flush=True)
+    print(f"serving http://{HOST}:{port}/ (ingest every {INTERVAL}s)", flush=True)
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
@@ -287,22 +283,24 @@ def serve(con, roots):
         app.stop(loop)
 
 
-def main():
+def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("command", nargs="?", choices=["serve", "ingest", "rebuild"], default="serve")
     ap.add_argument("--projects", default=store.DEFAULT_ROOT, help="Claude Code transcript root")
     ap.add_argument("--codex", default=store.DEFAULT_CODEX, help="Codex home")
     ap.add_argument("--usage-data", default=store.DEFAULT_USAGE_DATA, help="Claude Code /insights usage-data directory")
-    ap.add_argument("--db", help="database file (default data/ai-ledger.duckdb)")
-    a = ap.parse_args()
+    ap.add_argument("--db", help=f"database file (default {store.DEFAULT_DB})")
+    ap.add_argument("--port", type=int, default=PORT, help=f"port to serve on at {HOST} (default {PORT})")
+    ap.add_argument("--version", action="version", version=f"ai-ledger {importlib.metadata.version('ai-ledger')}")
+    a = ap.parse_args(argv)
     roots = dict(claude=a.projects, codex=a.codex, insights=a.usage_data)
     try:
         con = store.open_store(a.db)
-    except store.StoreBusy as e:
+    except (store.StoreBusy, store.StoreNotMoved) as e:
         print(e, file=sys.stderr)
         sys.exit(1)
     if a.command == "serve":
-        serve(con, roots)
+        serve(con, roots, a.port)
     elif a.command == "ingest":
         t = time.time()
         print(store.ingest(con, roots, log=print))
@@ -311,6 +309,3 @@ def main():
         print(store.rebuild(con))
     con.close()
 
-
-if __name__ == "__main__":
-    main()

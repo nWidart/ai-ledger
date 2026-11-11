@@ -3,18 +3,15 @@ import io
 import json
 import os
 import shutil
-import sys
 import unittest
 from datetime import date, datetime
 from unittest import mock
 
 from compression import zstd
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import metrics  # noqa: E402
-from codex import live_items as codex_live  # noqa: E402
-import store  # noqa: E402
-from test_store import StoreCase  # noqa: E402
+from ai_ledger import metrics, store
+from ai_ledger.codex import live_items as codex_live
+from test_store import StoreCase
 
 FIXTURES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "codex")
 # Trimmed real lines, one file per thread, named <label>--<rollout file name>. Home paths are /nowhere, ids are fake.

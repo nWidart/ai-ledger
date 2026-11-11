@@ -8,8 +8,8 @@ import sys
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import test_metrics as tm  # noqa: E402  (puts the repo root on sys.path; imported whole so its tests don't run twice)
-import metrics  # noqa: E402
+import test_metrics as tm  # noqa: E402  (imported whole so its tests don't run twice)
+from ai_ledger import metrics  # noqa: E402
 import test_limits as tl  # noqa: E402
 import test_insights as ti  # noqa: E402
 import test_live as tlv  # noqa: E402

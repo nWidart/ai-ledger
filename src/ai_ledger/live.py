@@ -7,10 +7,8 @@ made from the first prompt."""
 import json
 from datetime import datetime, timedelta, timezone
 
-import limits
-import metrics
-import store
-from categorize import SHELL_TOOLS
+from . import limits, metrics, store
+from .categorize import SHELL_TOOLS
 
 ACTIVE = timedelta(minutes=10)  # a session with a line this recent is listed
 IDLE = timedelta(minutes=5)  # no line for this long: idle, whatever else the lines say
@@ -45,7 +43,7 @@ def iso(t):
 def lane_of(path, source):
     """The id of the subagent whose lines file path holds: Claude Code's agent-<id>.jsonl, a Codex thread."""
     if source == "codex":
-        import codex
+        from . import codex
         return codex.ids(path)[1]
     name = path.rsplit("/", 1)[-1]
     return name[len("agent-"):-len(".jsonl")] if name.startswith("agent-") and name.endswith(".jsonl") else name

@@ -2,17 +2,14 @@ import io
 import json
 import os
 import subprocess
-import sys
 import threading
 import unittest
 import urllib.error
 from datetime import date, datetime, timedelta, timezone
 from unittest import mock
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import limits  # noqa: E402
-import store  # noqa: E402
-from test_store import StoreCase  # noqa: E402
+from ai_ledger import limits, store
+from test_store import StoreCase
 
 FIXTURES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "claude")
 TOKEN = "sk-ant-oat01-SENTINEL-do-not-leak"
@@ -69,28 +66,28 @@ class ParseTest(unittest.TestCase):
 
 class CredentialTest(unittest.TestCase):
     def setUp(self):
-        patcher = mock.patch("limits.time.time", return_value=1_800_000_000)
+        patcher = mock.patch("ai_ledger.limits.time.time", return_value=1_800_000_000)
         patcher.start()
         self.addCleanup(patcher.stop)
 
     def test_expired_token_skips_without_http(self):
-        with mock.patch("limits.subprocess.run", return_value=keychain(expires_in=-60)), \
-                mock.patch("limits.urllib.request.urlopen") as urlopen:
+        with mock.patch("ai_ledger.limits.subprocess.run", return_value=keychain(expires_in=-60)), \
+                mock.patch("ai_ledger.limits.urllib.request.urlopen") as urlopen:
             with self.assertRaises(limits.PollSkipped):
                 limits.claude_poll()
             urlopen.assert_not_called()
 
     def test_no_credential(self):
-        with mock.patch("limits.subprocess.run", return_value=subprocess.CompletedProcess([], 44, "", "not found")):
+        with mock.patch("ai_ledger.limits.subprocess.run", return_value=subprocess.CompletedProcess([], 44, "", "not found")):
             with self.assertRaises(limits.PollFailed):
                 limits.claude_poll()
-        with mock.patch("limits.subprocess.run", side_effect=FileNotFoundError("security")):
+        with mock.patch("ai_ledger.limits.subprocess.run", side_effect=FileNotFoundError("security")):
             with self.assertRaises(limits.PollFailed):
                 limits.claude_poll()
 
     def test_sends_the_token_only_to_the_usage_endpoint(self):
-        with mock.patch("limits.subprocess.run", return_value=keychain()), \
-                mock.patch("limits.urllib.request.urlopen", return_value=Response(json.dumps(usage_body()).encode())) as urlopen:
+        with mock.patch("ai_ledger.limits.subprocess.run", return_value=keychain()), \
+                mock.patch("ai_ledger.limits.urllib.request.urlopen", return_value=Response(json.dumps(usage_body()).encode())) as urlopen:
             plan, body = limits.claude_poll()
         req = urlopen.call_args[0][0]
         self.assertEqual(req.full_url, limits.USAGE_URL)
@@ -106,14 +103,14 @@ class PollerTest(StoreCase):
         self.lock = threading.Lock()
         p = limits.PROVIDERS["claude"]
         self.poller = limits.Poller("claude", p, clock=lambda: self.now)
-        patcher = mock.patch("limits.time.time", side_effect=lambda: self.now)
+        patcher = mock.patch("ai_ledger.limits.time.time", side_effect=lambda: self.now)
         patcher.start()
         self.addCleanup(patcher.stop)
 
     def run_poll(self, keychain_result=None, response=None, error=None):
         urlopen = mock.Mock(side_effect=error) if error else mock.Mock(return_value=Response(json.dumps(response).encode()))
-        with mock.patch("limits.subprocess.run", return_value=keychain_result or keychain()), \
-                mock.patch("limits.urllib.request.urlopen", urlopen):
+        with mock.patch("ai_ledger.limits.subprocess.run", return_value=keychain_result or keychain()), \
+                mock.patch("ai_ledger.limits.urllib.request.urlopen", urlopen):
             self.poller.run(self.con, self.lock)
         return urlopen
 
@@ -154,8 +151,8 @@ class PollerTest(StoreCase):
         self.run_poll(response=usage_body())
         self.run_poll(error=urllib.error.URLError(f"bad {TOKEN}"))
         self.run_poll(error=RuntimeError(f"weird {TOKEN}"))
-        with mock.patch("limits.subprocess.run", return_value=keychain()), \
-                mock.patch("limits.urllib.request.urlopen", side_effect=ValueError(TOKEN)):
+        with mock.patch("ai_ledger.limits.subprocess.run", return_value=keychain()), \
+                mock.patch("ai_ledger.limits.urllib.request.urlopen", side_effect=ValueError(TOKEN)):
             self.poller.run(self.con, self.lock)
         seen = json.dumps(self.poller.state) + self.stored_text()
         self.assertNotIn("SENTINEL", seen)
@@ -164,7 +161,7 @@ class PollerTest(StoreCase):
 
 class AppPollTest(StoreCase):
     def test_polls_are_spaced_back_off_and_never_stop_ingest(self):
-        import app
+        from ai_ledger import app
         now, calls = [1_800_000_000.0], []
 
         def poll():
@@ -437,7 +434,7 @@ class ApiTest(AnalysisCase):
     def test_endpoint_and_unknown_source(self):
         import http.client
         from http.server import ThreadingHTTPServer
-        import app
+        from ai_ledger import app
         a = app.App(self.con, self.roots, pollers=[])
         httpd = ThreadingHTTPServer(("127.0.0.1", 0), app.handler(a))
         threading.Thread(target=httpd.serve_forever, daemon=True).start()

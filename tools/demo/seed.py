@@ -5,15 +5,12 @@ uv run tools/demo/seed.py    writes tools/demo/demo.duckdb, replacing an earlier
 import json
 import os
 import random
-import sys
 from datetime import datetime, timedelta, timezone
+
+from ai_ledger import categorize, insights, store
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DB = os.path.join(HERE, "demo.duckdb")
-sys.path.insert(0, os.path.dirname(os.path.dirname(HERE)))
-import categorize  # noqa: E402
-import insights  # noqa: E402
-import store  # noqa: E402
 
 rnd = random.Random(7)
 NOW = datetime.now(timezone.utc).replace(tzinfo=None, second=0, microsecond=0)

@@ -6,15 +6,12 @@ import json
 import os
 import shutil
 import subprocess
-import sys
 import tempfile
 import unittest
 from datetime import date
 from unittest import mock
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import insights  # noqa: E402
-import store  # noqa: E402
+from ai_ledger import insights, store
 
 FIXTURES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "usage-data")
 SENTINEL = "SENTINEL-facet-text"

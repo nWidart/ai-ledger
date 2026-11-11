@@ -4,8 +4,8 @@ import os
 import re
 from datetime import date, timedelta
 
-import store
-from categorize import RULES, SHELL_TOOLS, input_pattern
+from . import store
+from .categorize import RULES, SHELL_TOOLS, input_pattern
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 NEAR_LIMIT = 0.8  # share of the context window that counts as "near the limit"

@@ -14,8 +14,7 @@ from bisect import bisect_left
 from datetime import date, datetime, timedelta, timezone
 from typing import Callable, NamedTuple
 
-import metrics
-import store
+from . import metrics, store
 
 POLL_SECONDS = 5 * 60
 MAX_BACKOFF = 60 * 60

@@ -1,9 +1,6 @@
-import os
-import sys
 import unittest
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from categorize import categorize, input_pattern  # noqa: E402
+from ai_ledger.categorize import categorize, input_pattern
 
 
 class InputPatternTest(unittest.TestCase):

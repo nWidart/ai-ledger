@@ -1,15 +1,12 @@
 import json
 import os
-import sys
 import unittest
 from datetime import datetime, timedelta, timezone
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import live  # noqa: E402
-import store  # noqa: E402
-from test_codex import CodexCase, LIVE, NAME, THREAD, meta  # noqa: E402
-from test_derive import S, assistant, prompt, result, tool_use  # noqa: E402
-from test_store import StoreCase, line  # noqa: E402
+from ai_ledger import live, store
+from test_codex import CodexCase, LIVE, NAME, THREAD, meta
+from test_derive import S, assistant, prompt, result, tool_use
+from test_store import StoreCase, line
 
 NOW = datetime(2026, 11, 10, 10, 1, 0, tzinfo=timezone.utc)
 PRICES = {"claude-opus-5-5": dict(input=4, output=20, cache_read=0.2, cache_5m=5, cache_1h=8, context=1000000)}
@@ -107,7 +104,7 @@ class SessionsTest(LiveCase):
         self.assertEqual((s1["state"]["kind"], s1["latest"]["tool"], s1["window"], s1["requests"]), ("tool", "Read", 1000000, 1))
 
     def test_cost_matches_the_session_sheet(self):
-        import metrics
+        from ai_ledger import metrics
         s1 = live.sessions(self.cur(), now=NOW, prices=PRICES)["sessions"][0]
         sheet = metrics.session(self.cur(), "s1", prices=PRICES)
         self.assertAlmostEqual(s1["cost"], sum(m["cost"] for m in sheet["models"]))

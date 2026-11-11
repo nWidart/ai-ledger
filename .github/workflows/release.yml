@@ -1,0 +1,87 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    uses: ./.github/workflows/ci.yml
+    with:
+      tag: ${{ github.ref_name }}
+
+  smoke:
+    needs: check
+    strategy:
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist/
+      - uses: astral-sh/setup-uv@v10
+        with:
+          version: "0.13.x"
+      - name: Run the wheel and serve Activity from a temporary store
+        run: |
+          set -eu
+          wheel=$(ls dist/*.whl)
+          uvx --from "$wheel" ai-ledger --version
+          tmp=$(mktemp -d)
+          mkdir "$tmp/projects" "$tmp/codex" "$tmp/usage-data"
+          uvx --from "$wheel" ai-ledger serve --db "$tmp/store/ai-ledger.duckdb" --projects "$tmp/projects" \
+            --codex "$tmp/codex" --usage-data "$tmp/usage-data" --port 8765 &
+          server=$!
+          trap 'kill "$server"' EXIT
+          base=http://127.0.0.1:8765
+          for _ in $(seq 60); do curl -sf -o /dev/null "$base/usage" && break; sleep 1; done
+          curl -sf -o /dev/null "$base/"
+          asset=$(curl -sf "$base/usage" | grep -o '/assets/[^"]*\.js' | head -n 1)
+          test -n "$asset"
+          curl -sf -o /dev/null "$base$asset"
+          curl -sf "$base/api/usage" | python3 -c 'import json, sys; json.load(sys.stdin)'
+
+  publish:
+    needs: smoke
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write # PyPI trusted publishing: no stored token
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist/
+      - uses: astral-sh/setup-uv@v10
+        with:
+          version: "0.13.x"
+      - run: uv publish --trusted-publishing always dist/*
+
+  github-release:
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist/
+      - name: Notes from CHANGELOG.md
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          awk -v v="${TAG#v}" '/^## \[/ { p = index($0, "## [" v "]") == 1; next } /^\[[^]]*\]: / { p = 0 } p' CHANGELOG.md > notes.md
+          if ! grep -q '[^[:space:]]' notes.md; then
+            echo "::error::CHANGELOG.md has no section for ${TAG#v}"
+            exit 1
+          fi
+      - run: gh release create "$GITHUB_REF_NAME" dist/* --title "$GITHUB_REF_NAME" --notes-file notes.md --verify-tag
+        env:
+          GH_TOKEN: ${{ github.token }}

@@ -1,6 +1,10 @@
+import contextlib
 import http.client
+import importlib.metadata
+import io
 import json
 import os
+import socket
 import subprocess
 import sys
 import tempfile
@@ -10,15 +14,13 @@ import unittest
 from unittest import mock
 from http.server import ThreadingHTTPServer
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-import app  # noqa: E402
-import store  # noqa: E402
+from ai_ledger import app, store
 
 USAGE_DATA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "usage-data")
 
 
 class AppTest(unittest.TestCase):
-    """The pages and assets come from the committed build in web/dist; the host check guards all of them."""
+    """The pages and assets come from the committed build in src/ai_ledger/web; the host check guards all of them."""
 
     @classmethod
     def setUpClass(cls):
@@ -38,8 +40,8 @@ class AppTest(unittest.TestCase):
         cls.httpd.server_close()
         cls.con.close()
 
-    def get(self, path, host=f"{app.HOST}:{app.PORT}"):
-        h = http.client.HTTPConnection("127.0.0.1", self.httpd.server_address[1])
+    def get(self, path, host=f"{app.HOST}:{app.PORT}", server=None):
+        h = http.client.HTTPConnection("127.0.0.1", (server or self.httpd).server_address[1])
         h.request("GET", path, headers={"Host": host})
         r = h.getresponse()
         return r.status, dict(r.getheaders()), r.read()
@@ -117,7 +119,7 @@ class AppTest(unittest.TestCase):
 
     def test_ingest_command_reads_usage_data(self):
         tmp = tempfile.mkdtemp()
-        r = subprocess.run([sys.executable, os.path.join(store.HERE, "app.py"), "ingest", "--db", os.path.join(tmp, "x.duckdb"),
+        r = subprocess.run([sys.executable, "-m", "ai_ledger", "ingest", "--db", os.path.join(tmp, "x.duckdb"),
                             "--projects", os.path.join(tmp, "p"), "--codex", os.path.join(tmp, "c"), "--usage-data", USAGE_DATA],
                            capture_output=True, text=True, timeout=60)
         self.assertEqual(r.returncode, 0, r.stderr)
@@ -127,6 +129,41 @@ class AppTest(unittest.TestCase):
     def test_foreign_host_refused(self):
         self.assertEqual(self.get("/usage", host="example.com")[0], 403)
         self.assertEqual(self.get("/assets/x.js", host="evil:8765")[0], 403)
+
+    def test_custom_port_host_check(self):
+        httpd = ThreadingHTTPServer(("127.0.0.1", 0), app.handler(app.App(self.con, {}, pollers=[]), 8766))
+        threading.Thread(target=httpd.serve_forever, daemon=True).start()
+        self.addCleanup(httpd.server_close)
+        self.addCleanup(httpd.shutdown)
+        self.assertEqual(self.get("/", host="127.0.0.1:8766", server=httpd)[0], 302)
+        status, headers, _ = self.get("/usage", host="localhost:8766", server=httpd)
+        self.assertEqual((status, headers["Location"]), (301, "http://127.0.0.1:8766/usage"))
+        self.assertEqual(self.get("/usage", host=f"127.0.0.1:{app.PORT}", server=httpd)[0], 403)
+
+    def test_port_in_use(self):
+        with socket.socket() as held:
+            held.bind(("127.0.0.1", 0))
+            held.listen()
+            port = held.getsockname()[1]
+            with self.assertRaises(SystemExit) as cm:
+                app.serve(self.con, {}, port)
+        self.assertIn(f"127.0.0.1:{port}", str(cm.exception.code))
+        self.assertIn("--port", str(cm.exception.code))
+
+    def test_version_opens_no_store(self):
+        out = io.StringIO()
+        with mock.patch.object(store, "open_store") as opened, contextlib.redirect_stdout(out), self.assertRaises(SystemExit) as cm:
+            app.main(["--version"])
+        self.assertEqual(cm.exception.code, 0)
+        self.assertEqual(out.getvalue(), f"ai-ledger {importlib.metadata.version('ai-ledger')}\n")
+        opened.assert_not_called()
+
+    def test_store_not_moved_exits(self):
+        err = io.StringIO()
+        with mock.patch.object(store, "open_store", side_effect=store.StoreNotMoved("cannot move the store a to b")), \
+                contextlib.redirect_stderr(err), self.assertRaises(SystemExit) as cm:
+            app.main([])
+        self.assertEqual((cm.exception.code, err.getvalue()), (1, "cannot move the store a to b\n"))
 
 
 class LoopTest(unittest.TestCase):

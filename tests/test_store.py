@@ -1,3 +1,4 @@
+import errno
 import io
 import json
 import os
@@ -10,9 +11,7 @@ import unittest
 from datetime import datetime, timezone
 from unittest import mock
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import limits  # noqa: E402
-import store  # noqa: E402
+from ai_ledger import limits, store
 
 
 def line(**kw):
@@ -218,16 +217,65 @@ class SourceMigrationTest(StoreCase):
         self.con = store.open_store(self.db)
 
 
+class DataDirTest(unittest.TestCase):
+    """The default store lives in a per-user data folder, outside the installed code."""
+
+    def data_dir(self, platform, env):
+        with mock.patch.object(sys, "platform", platform), mock.patch.dict(os.environ, env, clear=True):
+            return store.data_dir()
+
+    def test_macos(self):
+        self.assertEqual(self.data_dir("darwin", dict(HOME="/home/me", XDG_DATA_HOME="/data/me")),
+                         "/home/me/Library/Application Support/ai-ledger")
+
+    def test_xdg_data_home(self):
+        self.assertEqual(self.data_dir("linux", dict(HOME="/home/me", XDG_DATA_HOME="/data/me")), "/data/me/ai-ledger")
+
+    def test_xdg_data_home_unset_or_empty(self):
+        self.assertEqual(self.data_dir("linux", dict(HOME="/home/me")), "/home/me/.local/share/ai-ledger")
+        self.assertEqual(self.data_dir("linux", dict(HOME="/home/me", XDG_DATA_HOME="")), "/home/me/.local/share/ai-ledger")
+
+
+class CheckoutStoresTest(unittest.TestCase):
+    """Only a source checkout of ai-ledger has earlier stores to move; an installed package has none."""
+
+    def setUp(self):
+        self.root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.root)
+
+    def pyproject(self, text):
+        with open(os.path.join(self.root, "pyproject.toml"), "w") as fh:
+            fh.write(text)
+
+    def test_checkout(self):
+        self.pyproject('[project]\nname = "ai-ledger"\n')
+        self.assertEqual(store.checkout_stores(self.root), [os.path.join(self.root, "data", "ai-ledger.duckdb"),
+                                                            os.path.join(self.root, "data", "claude.duckdb")])
+
+    def test_no_checkout_moves_nothing(self):
+        self.assertEqual(store.checkout_stores(self.root), [])  # site-packages: no pyproject.toml above the package
+        self.pyproject('[project]\nname = "something-else"\n')
+        self.assertEqual(store.checkout_stores(self.root), [])
+        self.pyproject("not toml [")
+        self.assertEqual(store.checkout_stores(self.root), [])
+
+    def test_this_checkout(self):
+        self.assertEqual(store.EARLIER_DBS, store.checkout_stores())
+        self.assertEqual(len(store.EARLIER_DBS), 2)
+
+
 class MoveEarlierStoreTest(unittest.TestCase):
-    """The default store moved from data/claude.duckdb to data/ai-ledger.duckdb; nothing stored may be lost."""
+    """The default store moved from the checkout's data/ folder (data/ai-ledger.duckdb, before that data/claude.duckdb)
+    to the per-user data folder; nothing stored may be lost."""
 
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
-        self.data = os.path.join(self.tmp, "data")
+        self.data = os.path.join(self.tmp, "checkout", "data")
         os.makedirs(self.data)
+        self.earlier = os.path.join(self.data, "ai-ledger.duckdb")
         self.old = os.path.join(self.data, "claude.duckdb")
-        self.new = os.path.join(self.data, "ai-ledger.duckdb")
-        patch = mock.patch.multiple(store, DEFAULT_DB=self.new, EARLIER_DB=self.old)
+        self.new = os.path.join(self.tmp, "home", "ai-ledger", "ai-ledger.duckdb")
+        patch = mock.patch.multiple(store, DEFAULT_DB=self.new, EARLIER_DBS=[self.earlier, self.old])
         patch.start()
         self.addCleanup(patch.stop)
         self.addCleanup(shutil.rmtree, self.tmp)
@@ -240,6 +288,15 @@ class MoveEarlierStoreTest(unittest.TestCase):
     def keys(self, con):
         return [r[0] for r in con.execute("SELECT key FROM raw_lines ORDER BY key").fetchall()]
 
+    def test_moves_checkout_store(self):
+        self.make(self.earlier, "u1")
+        con = store.open_store()
+        self.assertEqual(self.keys(con), ["u1"])
+        con.close()
+        self.assertFalse(os.path.exists(self.earlier))
+        self.assertEqual(stat.S_IMODE(os.stat(self.new).st_mode), 0o600)
+        self.assertEqual(stat.S_IMODE(os.stat(os.path.dirname(self.new)).st_mode), 0o700)
+
     def test_moves_earlier_store(self):
         self.make(self.old, "u1")
         con = store.open_store()
@@ -248,13 +305,38 @@ class MoveEarlierStoreTest(unittest.TestCase):
         self.assertFalse(os.path.exists(self.old))
         self.assertEqual(stat.S_IMODE(os.stat(self.new).st_mode), 0o600)
 
+    def test_newest_earlier_name_wins(self):
+        self.make(self.earlier, "new-name")
+        self.make(self.old, "old-name")
+        with mock.patch("sys.stderr", new_callable=io.StringIO) as err:
+            con = store.open_store()
+        self.assertEqual(self.keys(con), ["new-name"])
+        con.close()
+        self.assertTrue(os.path.exists(self.old))
+        self.assertIn(f"{self.old} also exists and was not moved", err.getvalue())
+
+    def test_other_disk_creates_no_store(self):
+        self.make(self.earlier, "u1")
+        with mock.patch("os.replace", side_effect=OSError(errno.EXDEV, "Invalid cross-device link")), \
+                self.assertRaises(store.StoreNotMoved) as cm:
+            store.open_store()
+        self.assertFalse(os.path.exists(self.new))
+        self.assertTrue(os.path.exists(self.earlier))
+        msg = str(cm.exception)
+        for part in (self.earlier, self.new, "by hand", "--db"):
+            self.assertIn(part, msg)
+
+    def test_other_errors_raise(self):
+        self.make(self.earlier, "u1")
+        with mock.patch("os.replace", side_effect=PermissionError(errno.EACCES, "denied")), self.assertRaises(PermissionError):
+            store.open_store()
+
     def test_moves_write_ahead_log(self):
         # A process that exits without a checkpoint leaves its last insert only in claude.duckdb.wal.
-        script = ("import duckdb, os, sys; sys.path.insert(0, sys.argv[2]); import store; "
+        script = ("import duckdb, os, sys; from ai_ledger import store; "
                   "c = store.open_store(sys.argv[1]); c.execute(\"SET checkpoint_threshold = '10GB'\"); "
                   "c.execute(\"INSERT INTO raw_lines (key, json) VALUES ('u1', '{}')\"); os._exit(0)")
-        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        subprocess.run([sys.executable, "-c", script, self.old, root], check=True)
+        subprocess.run([sys.executable, "-c", script, self.old], check=True)
         self.assertTrue(os.path.exists(self.old + ".wal"))
         con = store.open_store()
         self.assertEqual(self.keys(con), ["u1"])
@@ -264,17 +346,20 @@ class MoveEarlierStoreTest(unittest.TestCase):
     def test_finishes_move_stopped_before_log(self):
         self.make(self.old, "u1")
         open(self.old + ".wal", "wb").close()
+        os.makedirs(os.path.dirname(self.new))
         os.replace(self.old, self.new)  # as if the process died between the two moves
         store.open_store().close()
         self.assertFalse(os.path.exists(self.old + ".wal"))
 
     def test_both_stores_keep_new_and_leave_earlier(self):
-        self.make(self.old, "old")
+        self.make(self.earlier, "old")
         self.make(self.new, "new")
-        con = store.open_store()
+        with mock.patch("sys.stderr", new_callable=io.StringIO) as err:
+            con = store.open_store()
         self.assertEqual(self.keys(con), ["new"])
         con.close()
-        con = store.open_store(self.old)
+        self.assertIn(f"{self.earlier} also exists and was not moved", err.getvalue())
+        con = store.open_store(self.earlier)
         self.assertEqual(self.keys(con), ["old"])
         con.close()
 
@@ -284,6 +369,12 @@ class MoveEarlierStoreTest(unittest.TestCase):
         store.open_store(other).close()
         self.assertTrue(os.path.exists(self.old))
         self.assertFalse(os.path.exists(self.new))
+
+    def test_no_checkout_moves_nothing(self):
+        self.make(self.earlier, "u1")
+        with mock.patch.object(store, "EARLIER_DBS", []):
+            store.open_store().close()
+        self.assertTrue(os.path.exists(self.earlier))
 
     def test_new_store_without_earlier(self):
         store.open_store().close()
@@ -327,7 +418,7 @@ class UsageDataStoreTest(StoreCase):
 
     def test_usage_data_failure_keeps_transcript_ingest(self):
         self.write("a.jsonl", line(type="user", uuid="u1", sessionId="s1"))
-        with mock.patch("insights.ingest", side_effect=RuntimeError("SENTINEL-facet-text")), \
+        with mock.patch("ai_ledger.insights.ingest", side_effect=RuntimeError("SENTINEL-facet-text")), \
                 mock.patch("sys.stderr", new_callable=io.StringIO) as err:
             stats = store.ingest(self.con, dict(self.roots, insights=self.tmp))
         self.assertEqual((stats["files"], stats["usage_files"], stats["usage_skipped"]), (1, 0, 1))
@@ -342,7 +433,7 @@ if __name__ == "__main__":
 
 class LiveItemsSourceTest(unittest.TestCase):
     def test_each_source_has_its_own_live_items(self):
-        import codex
+        from ai_ledger import codex
         self.assertIs(store.SOURCES["claude"].live_items, store.live_items)
         self.assertIs(store.SOURCES["codex"].live_items, codex.live_items)
 

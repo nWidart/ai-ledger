@@ -3,14 +3,12 @@ import json
 import os
 import shutil
 import subprocess
-import sys
 import tempfile
 import unittest
 from unittest import mock
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import store  # noqa: E402
-from test_store import StoreCase, line  # noqa: E402
+from ai_ledger import store
+from test_store import StoreCase, line
 
 S = dict(sessionId="s1", cwd="/nowhere/foo", gitBranch="main", entrypoint="cli", version="2.1")
 

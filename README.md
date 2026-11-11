@@ -2,7 +2,7 @@
 
 A local ledger of your Claude Code and Codex transcripts, with six pages: Activity, Cost, Errors, Limits, Insights and Live.
 
-![Tour of the pages](docs/tour.gif)
+![Tour of the pages](https://raw.githubusercontent.com/nWidart/ai-ledger/main/docs/tour.gif)
 
 ## Why
 
@@ -18,25 +18,48 @@ Everything stays on your machine: the server listens on `127.0.0.1` only. The st
 
 ## Run
 
-Needs [uv](https://docs.astral.sh/uv/); it installs Python 3.14.
+Needs [uv](https://docs.astral.sh/uv/); it fetches Python 3.14 when you have none. macOS and Linux.
 
 ```bash
-uv sync
-uv run app.py               # http://127.0.0.1:8765/ (use 127.0.0.1, not localhost)
+uvx ai-ledger               # http://127.0.0.1:8765/ (use 127.0.0.1, not localhost)
+```
+
+Or install the `ai-ledger` command:
+
+```bash
+uv tool install ai-ledger
+ai-ledger
+uv tool upgrade ai-ledger   # later, to get a new version and its prices
 ```
 
 The first start reads every transcript (about 4 minutes for 3.4 GB). After that the app reads new lines every 60 seconds, every second while a Live page is open, or when you click **Refresh**.
 
-Stop the app before you run these commands, because the app keeps the store open:
+Stop the app before you run these commands, because the app keeps the store open (with `uvx`, run `uvx ai-ledger ingest`):
 
 ```bash
-uv run app.py ingest        # read new transcript lines and /insights data once
-uv run app.py rebuild       # recompute the derived tables, e.g. after a parser change
+ai-ledger ingest            # read new transcript lines and /insights data once
+ai-ledger rebuild           # recompute the derived tables, e.g. after a parser change
 ```
 
 A store from before session titles needs one `rebuild` to title past Claude Code sessions.
 
-Options: `--projects <dir>` (default `~/.claude/projects`), `--codex <dir>` (default `~/.codex`), `--usage-data <dir>` (default `~/.claude/usage-data`), `--db <file>` (default `data/ai-ledger.duckdb`).
+Options: `--port <number>` (default `8765`), `--projects <dir>` (default `~/.claude/projects`), `--codex <dir>` (default `~/.codex`), `--usage-data <dir>` (default `~/.claude/usage-data`), `--db <file>` (default: the store in the data folder). `ai-ledger --version` prints the version.
+
+The store is one file in your data folder:
+
+- macOS: `~/Library/Application Support/ai-ledger/ai-ledger.duckdb`
+- Linux: `$XDG_DATA_HOME/ai-ledger/ai-ledger.duckdb`, or `~/.local/share/ai-ledger/ai-ledger.duckdb` when `XDG_DATA_HOME` is unset
+
+Upgrades keep it.
+
+## What it reads and sends
+
+- **It reads** your Claude Code transcripts (`~/.claude/projects`), Claude Code's `/insights` data (`~/.claude/usage-data`) and your Codex sessions (`~/.codex`).
+- **It stores** every transcript line in full in the store, including any secrets that appeared in a session: API keys, tokens, passwords, file contents. The store and its folder are readable only by your user. Do not share the store.
+- **It sends**, on macOS only, the Claude Code OAuth token from your Keychain to Anthropic's usage endpoint, every 5 minutes, for the Limits page. The endpoint is undocumented and can change without notice; Limits then falls back to estimates from your transcripts. The token goes only to that endpoint and is never stored or logged.
+- **Your browser** loads the pages' font from Google Fonts. No transcript data goes with it. Nothing else leaves your machine.
+- **It listens** on `127.0.0.1` only, and answers only requests addressed to it there.
+- **Prices** for the Cost page ship with each release. Upgrade to get new ones.
 
 ## Pages
 
@@ -44,19 +67,19 @@ Pages name each session by its title: the name you gave it (`/rename` in Claude 
 
 **Activity**: what got done and what needs attention, per day, session and tool.
 
-![Activity](docs/activity.gif)
+![Activity](https://raw.githubusercontent.com/nWidart/ai-ledger/main/docs/activity.gif)
 
-**Cost**: estimated cost at API list prices against the period before, per project, day, model and session. Prices come from `prices.json`.
+**Cost**: estimated cost at API list prices against the period before, per project, day, model and session. Prices come from `prices.json`, which ships with each release.
 
-![Cost](docs/cost.gif)
+![Cost](https://raw.githubusercontent.com/nWidart/ai-ledger/main/docs/cost.gif)
 
 **Errors**: failed tool calls by type, the error rate over time, and a fix to paste into `CLAUDE.md` for each type.
 
-![Errors](docs/errors.gif)
+![Errors](https://raw.githubusercontent.com/nWidart/ai-ledger/main/docs/errors.gif)
 
 **Limits**: usage of each plan limit window, with a forecast to its reset.
 
-![Limits](docs/limits.gif)
+![Limits](https://raw.githubusercontent.com/nWidart/ai-ledger/main/docs/limits.gif)
 
 Codex writes its limits into its session files. For Claude Code, the app polls Anthropic's undocumented usage endpoint every 5 minutes, using the OAuth token from the macOS Keychain. The token goes only to that endpoint and is never stored or logged. Off macOS, the app does not poll. Between readings, the page estimates usage from transcripts and labels it as estimated.
 
@@ -84,19 +107,26 @@ Examples:
 
 ## Privacy
 
-`data/ai-ledger.duckdb` holds full transcript content, including any secrets that appeared in a session. It is git-ignored. Do not share it.
+The store holds full transcript content, including any secrets that appeared in a session (see [What it reads and sends](#what-it-reads-and-sends)). Do not share it.
 
 The Live page's **Full text** puts that content on screen, secrets included. The app sends it only while the toggle is on. Turn it off before you share your screen.
 
-## Develop
+## Contributing
+
+Needs uv, and Node for the pages.
 
 ```bash
+uv sync
+uv run ai-ledger                        # the app from your checkout, on http://127.0.0.1:8765/
+uv run ai-ledger --db <copy> --port 8766    # a second app on a copy of the store, beside the running one
 uv run python -m unittest discover -s tests
 cd web && npm install && npm run dev    # http://127.0.0.1:5173, /api proxied to the running app
 cd web && npm run check                 # typecheck, tests and build: run before committing
 ```
 
-Commit `web/dist/` with every `web/src` change. A test fails when the build is stale.
+The Python code lives in `src/ai_ledger/`. The pages build into `src/ai_ledger/web/`, which ships in the package: commit it with every `web/src` change. A test fails when the build is stale.
+
+**Upgrading a checkout from before 0.1.0:** the app no longer runs with `uv run app.py`, and the store no longer lives in the checkout. Run `uv sync`, then `uv run ai-ledger`. On its first start the app moves `data/ai-ledger.duckdb` (or the older `data/claude.duckdb`), with its `.wal` file, to the data folder above. If you pass `--db data/ai-ledger.duckdb` in scripts, point them at the new path. If the data folder is on another disk, the app stops and says so: move the file by hand, or pass `--db` with its path.
 
 To record the GIFs again from made-up data:
 
@@ -107,3 +137,14 @@ uv run tools/demo/replay.py                   # optional, second terminal: plays
 # in a second terminal:
 cd tools/demo && npm install && npx playwright install chromium-headless-shell && npm run record    # needs gifski
 ```
+
+### Release
+
+Pushing a tag `v<version>` runs `.github/workflows/release.yml`: the checks, a smoke test of the wheel on macOS and Linux, the PyPI upload and the GitHub release.
+
+1. Set `version` in `pyproject.toml`, run `uv lock`, and add a `## [<version>] - <date>` section to `CHANGELOG.md`.
+2. Commit on `main`, then `git tag v<version>` and `git push origin v<version>`.
+
+## License
+
+[MIT](LICENSE)
