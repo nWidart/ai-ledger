@@ -208,6 +208,8 @@ export interface FacetTally extends FacetCount { sessions: number }
 export interface InsightSession {
   session_id: string; project: string; start: Ts | null; outcome: string | null; helpfulness: string | null; session_type: string | null;
   brief_summary: string | null; friction_detail: string | null;
+  /** The session's title (session-titles), or null. */
+  title: string | null;
   /** Category names, most counted first. */
   friction: string[]; goals: string[]; satisfaction: string[];
   /** false: the facet's session has no transcript in the store, so it has no session sheet. */

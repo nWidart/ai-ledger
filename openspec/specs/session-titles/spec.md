@@ -51,7 +51,7 @@ Titles SHALL be derived from stored lines. A rebuild SHALL restore every title, 
 - **THEN** the session keeps that title
 
 ### Requirement: Name sessions by their title
-Wherever a page names a session in a list, a table or a sheet heading, it SHALL show the session's title, with the full title on hover when it is cut to fit. A session with no title SHALL be named by its short id. Where a title is shown in a table cell, the short id SHALL show in the cell's secondary line. This SHALL cover the Activity sessions and error-loops drawers, the Cost session lists and insights, the project, session and tool sheets, and palette session search.
+Wherever a page names a session in a list, a table or a sheet heading, it SHALL show the session's title, with the full title on hover when it is cut to fit. A session with no title SHALL be named by its short id. Where a title is shown in a table cell, the short id SHALL show in the cell's secondary line. This SHALL cover the Activity sessions and error-loops drawers, the Cost session lists and insights, the Insights analysed sessions, the project, session and tool sheets, and palette session search.
 
 #### Scenario: Error loop on Activity
 - **WHEN** the error-loops drawer lists a loop in a session titled "Fix flaky upload test"

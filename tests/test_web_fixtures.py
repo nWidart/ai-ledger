@@ -9,7 +9,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import test_metrics as tm  # noqa: E402  (imported whole so its tests don't run twice)
-from ai_ledger import metrics  # noqa: E402
+from ai_ledger import metrics, store  # noqa: E402
 import test_limits as tl  # noqa: E402
 import test_insights as ti  # noqa: E402
 import test_live as tlv  # noqa: E402
@@ -60,6 +60,7 @@ def insights_fixtures():
     try:
         empty = case.payload(range_days=0)
         case.session(ti.A + "1", "demo-app", "2026-11-03 09:00:00")
+        store.insert(case.con.cursor(), "session_titles", ["session_id", "custom", "agent"], [(ti.A + "1", None, "Add a theme toggle")])
         case.session("c1", "demo-app", "2026-11-03 10:00:00")
         case.session("c2", "demo-app", "2026-11-04 10:00:00")
         case.session("x1", "demo-app", "2026-11-04 11:00:00", source="codex")
