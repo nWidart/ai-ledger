@@ -572,6 +572,18 @@ describe("ActivityPage", () => {
     expect(within(screen.getByRole("navigation", { name: "Page sections" })).getByRole("link", { name: "Tests" }).getAttribute("href")).toBe("#d-tests");
   });
 
+  it("lists a failed test run with no time", async () => {
+    const t = { id: "t8", session_id: "s2", title: null, project: "bar", source: "claude" as const, command: "npm test", ts: null };
+    serve({ ...usage, totals: { ...usage.totals, tests_failed: 1 }, failed_tests: [t] });
+    at();
+    render(<ActivityPage />);
+    await loaded();
+    const row = within(document.getElementById("d-tests")!.querySelector("tbody")!);
+    expect(row.getByText("npm test")).toBeTruthy();
+    expect(row.getByRole("link", { name: "Open in Errors" }).getAttribute("href")).toBe("/errors#project=bar&range=30&source=claude&ex=t8");
+    expect(document.querySelector("#d-tests td.when")!.textContent).toBe("–");
+  });
+
   it("names an error loop's session by its title, with the short id below", async () => {
     const [first, ...rest] = usage.error_loops;
     serve({ ...usage, error_loops: [{ ...first!, title: "Fix flaky upload test" }, ...rest.map(l => ({ ...l, title: null }))] });

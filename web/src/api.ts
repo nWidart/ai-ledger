@@ -83,7 +83,7 @@ export interface UsagePayload {
   /** Prompts per local weekday (1 Monday to 7 Sunday) and hour; nonzero cells only. */
   work_hours: { dow: number; hour: number; prompts: number }[];
   /** The newest 50 failed test runs; id is the failed call's id on the Errors page. */
-  failed_tests: { id: string; session_id: string; title: string | null; project: string | null; source: Source; command: string; ts: Ts }[];
+  failed_tests: { id: string; session_id: string; title: string | null; project: string | null; source: Source; command: string; ts: Ts | null }[];
   unpriced: UnpricedRow[]; models: ModelRow[]; by_project: ProjectRow[];
   tools: ToolRow[]; mcp: NamedRateRow[]; skills: NamedRateRow[]; hooks: HookRow[]; error_loops: ErrorLoop[];
   sessions: SessionRow[]; top_sessions: TitledSessionRow[]; near_limit: SessionRow[];

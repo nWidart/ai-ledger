@@ -61,6 +61,22 @@ describe("setHash", () => {
     }
     expect(push.mock.calls.length + replace.mock.calls.length).toBe(10); // 8 writes (the 3 same-value ones are no-ops) and 2 setups: no extra write drops the day
   });
+  it("keeps the day when a write leaves the parsed view as it was", () => {
+    for (const [start, patch] of [
+      ["#day=2026-11-04", { range: 30 }], // no range reads as 30
+      ["#range=abc&day=2026-11-04", { range: 30 }], // an unknown range reads as 30
+      ["#source=foo&day=2026-11-04", { source: null }], // an unknown source cleaned to All
+    ] as const) {
+      history.replaceState(null, "", "/usage" + start);
+      setHash(patch, { push: false });
+      expect(parseHash(location.hash).raw.day, start).toBe("2026-11-04");
+    }
+    history.replaceState(null, "", "/usage#day=2026-11-04");
+    setHash({ range: 30 });
+    expect(location.hash).toBe("#range=30&day=2026-11-04");
+    setHash({ range: 7 });
+    expect(location.hash).toBe("#range=7");
+  });
   it("pushes filter and sheet changes, replaces the rest", () => {
     history.replaceState(null, "", "/usage#project=foo&range=30");
     const push = vi.spyOn(history, "pushState"), replace = vi.spyOn(history, "replaceState");
