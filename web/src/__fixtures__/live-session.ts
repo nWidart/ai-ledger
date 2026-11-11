@@ -175,6 +175,12 @@ export default {
    "cut": false
   }
  ],
+ "lanes": {
+  "a7": {
+   "cost": 0.0084,
+   "model": "claude-opus-5-5"
+  }
+ },
  "window": 1000000,
  "compactions": [
   {

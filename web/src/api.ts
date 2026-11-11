@@ -302,6 +302,8 @@ export interface LiveSession extends LiveFigures, LiveTitle {
   /** Pass back as after= to get newer events, with those of the minute before sent again. */
   cursor: string | null; truncated: boolean; state: LiveState;
   events: LiveEvent[];
+  /** Per subagent lane with a request, by the events' lane id: its cost (null when unpriced) and its newest request's model. */
+  lanes: Record<string, { cost: number | null; model: string | null }>;
   compactions: { ts: Ts | null; pre: number | null }[];
   spark: { points: number[]; per_minute: number; step: number };
   limits: { label: string; used_percent: number; observed_at: Ts | null; resets_at: Ts | null }[];

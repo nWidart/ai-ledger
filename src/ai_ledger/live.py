@@ -247,7 +247,8 @@ def newest_session(cur, where, params):
 
 def session(cur, sid, after="", text=False, now=None, prices=None):
     """/api/live/session: one session's events after cursor `after` (a line timestamp; '' for the newest FIRST_LOAD),
-    its state and figures. None for an unknown session. Raises ValueError for a malformed cursor.
+    its state, its figures and those of its subagent lanes. None for an unknown session. Raises ValueError for a
+    malformed cursor.
 
     A catch-up reads the lines from OVERLAP before the cursor, as a line can be stored after a later-stamped one; the
     page keeps one copy of each event by its key. A subagent's events carry its lane id, and the call that started it
@@ -292,7 +293,7 @@ def session(cur, sid, after="", text=False, now=None, prices=None):
     return dict(session_id=sid, **title_of(metrics.titles(cur, [sid], prompts=text), sid), project=s["project"], source=s["source"], branch=s["git_branch"], last_ts=iso(last),
                 now=iso(now), cursor=cursor, truncated=more,
                 state=state(assemble(recent(cur, [sid]).get(sid, []))[0], now, s["source"], last, sid in closed(cur, [sid])),
-                events=[public(e, text) for e in events],
+                events=[public(e, text) for e in events], lanes=lanes(cur, sid, prices),
                 window=window_of(f["model"], events, prices), compactions=compactions(cur, sid),
                 spark=spark(cur, sid, now), limits=plan_limits(cur, s["source"], now), **f)
 
@@ -349,6 +350,30 @@ def started_by(rows, events):
             continue
         if isinstance(tid, str) and tid:
             out[tid] = lane
+    return out
+
+
+def lanes(cur, sid, prices):
+    """Per subagent lane of the session with a request: its cost (None when no request of its is priced) and its newest
+    request's model, keyed by the events' lane id. requests names no subagent: a request belongs to the lane whose file
+    holds its line."""
+    owner = {}
+    for path, source, text in cur.execute("""SELECT r.file, coalesce(f.source, 'claude'), r.json FROM raw_lines r
+            LEFT JOIN files f ON f.path = r.file WHERE r.session_id = ? AND r.parsed AND r.subagent
+            AND r.type IN ('assistant', 'token_usage_record')""", [sid]).fetchall():
+        for it in store.SOURCES[source].live_items(json.loads(text)):
+            if it["k"] == "request":
+                owner.setdefault(it["id"], lane_of(path, source))
+    out = {}
+    if owner:
+        pcte, pparams = metrics.price_cte(prices)
+        for mid, model, cost in cur.execute(f"""{metrics.requests_cte(pcte, "r.session_id = ? AND r.subagent")}
+                SELECT message_id, model, cost FROM rq ORDER BY ts, message_id""", pparams + [sid]).fetchall():
+            if mid in owner:
+                lane = out.setdefault(owner[mid], dict(cost=None, model=None))
+                lane["model"] = model
+                if cost is not None:
+                    lane["cost"] = (lane["cost"] or 0) + cost
     return out
 
 

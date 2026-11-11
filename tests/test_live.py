@@ -343,6 +343,28 @@ class SessionTest(LiveCase):
         self.ingest()
         self.assertEqual([e["long"] for e in self.run_session()["events"]], [True, True, False])
 
+    def test_lane_cost_and_model(self):
+        self.write("s1.jsonl", assistant("a1", "m1", at(1), [tool_use("t1", "Agent", description="find callers", prompt="look")]))
+        step = lambda agent, i, model, block=0, **usage: line(type="assistant", uuid=f"{agent}x{i}{block}", timestamp=at(2 + i), message=dict(
+            id=f"{agent}m{i}", model=model, usage=usage, content=[tool_use(f"{agent}t{i}{block}", "Grep", pattern="x")]),
+            **dict(S, isSidechain=True, agentId=agent))
+        self.write("s1/subagents/agent-a7.jsonl", step("a7", 0, "claude-opus-5-5", input_tokens=1000000) + step("a7", 1, "claude-opus-5-5", output_tokens=1000000)
+                   + step("a7", 1, "claude-opus-5-5", block=1, output_tokens=1000000))  # one request on two lines counts once
+        self.write("s1/subagents/agent-b2.jsonl", step("b2", 0, "claude-opus-5-5", input_tokens=500000) + step("b2", 1, "mystery-1", input_tokens=9))
+        self.write("s1/subagents/agent-c3.jsonl", step("c3", 0, "mystery-1", input_tokens=9))
+        self.ingest()
+        got = self.run_session()
+        self.assertEqual(got["lanes"], dict(a7=dict(cost=24.0, model="claude-opus-5-5"), b2=dict(cost=2.0, model="mystery-1"),
+                                            c3=dict(cost=None, model="mystery-1")))  # priced at $4 and $20 per million; mystery-1 has no price
+        self.assertEqual({e["lane"] for e in got["events"]} - {None}, set(got["lanes"]))
+        self.assertAlmostEqual(got["cost"], 26.0008)  # the main thread's request on top of the lanes'
+        self.assertEqual(self.run_session(after=got["cursor"])["lanes"], got["lanes"])  # whole on a catch-up too
+
+    def test_no_lanes_without_subagents(self):
+        self.write("s1.jsonl", assistant("a1", "m1", at(1), [dict(type="text", text="hi")]))
+        self.ingest()
+        self.assertEqual(self.run_session()["lanes"], {})
+
     def test_figures(self):
         self.write("s1.jsonl", assistant("a1", "m1", at(30), [dict(type="text", text="hi")])
                    + line(type="system", subtype="compact_boundary", uuid="c1", timestamp=at(31), compactMetadata=dict(preTokens=150000), **S)
@@ -384,7 +406,22 @@ class CodexSessionTest(CodexCase):
         exec_ev = got["events"][3]
         self.assertEqual((exec_ev["tool"], exec_ev["end"]), ("exec", None))
         self.assertEqual((got["state"]["kind"], got["window"]), ("tool", 272000))
-        self.assertEqual((exec_ev["long"], got["state"]["long"]), (False, False))
+        self.assertEqual((exec_ev["long"], got["state"]["long"], got["lanes"]), (False, False, {}))
+
+    def test_thread_lane_cost_and_model(self):
+        thread = "0a0f9999-0000-7000-8000-000000000002"
+        self.place(NAME, meta(THREAD).replace("2026-11-06T10:00:00.000Z", at(0))
+                   + codex_line(1, 1, "turn_context", turn_id="t1", model="claude-opus-5-5")
+                   + codex_line(2, 2, "token_usage_record", turn_id="t1", response_id="r1", usage=dict(input_tokens=1000000, output_tokens=0)))
+        self.place(NAME.replace(THREAD, f"{THREAD}_{thread}"), meta(THREAD, thread).replace("2026-11-06T10:00:00.000Z", at(3))
+                   + codex_line(1, 4, "turn_context", turn_id="u1", model="claude-opus-5-5")
+                   + codex_line(2, 5, "response_item", type="function_call", name="exec_command", call_id="c1", arguments=json.dumps(dict(cmd="ls")))
+                   + codex_line(3, 6, "token_usage_record", turn_id="u1", response_id="r2", usage=dict(input_tokens=500000, output_tokens=0)))
+        self.ingest()
+        got = live.session(self.con.cursor(), THREAD, now=NOW, prices=PRICES)
+        self.assertEqual(got["lanes"], {thread: dict(cost=2.0, model="claude-opus-5-5")})
+        self.assertEqual([e["lane"] for e in got["events"] if e["k"] == "tool"], [thread])
+        self.assertAlmostEqual(got["cost"], 6.0)
 
     def test_closed_is_never_read_from_a_codex_transcript(self):
         self.place(NAME, meta(THREAD).replace("2026-11-06T10:00:00.000Z", at(0))
@@ -472,6 +509,8 @@ class PageFixtureTest(unittest.TestCase):
         states = {s["project"]: s["state"]["kind"] for s in got["list"]["sessions"]}
         self.assertEqual(states, {"foo": "wait", "jobdesk": "thinking", "sketchbook": "you", "dotfiles": "idle", "graft": "thinking",
                                   "notes": "ended"})
+        self.assertEqual({k: v["model"] for k, v in got["claude"]["lanes"].items()}, dict(a7="claude-opus-5-5"))
+        self.assertAlmostEqual(got["claude"]["lanes"]["a7"]["cost"], 0.0084)
         self.assertEqual({e["lane"] for e in got["claude"]["events"]} - {None}, {"a7"})
         self.assertTrue(any(e.get("failed") for e in got["claude"]["events"]))
         self.assertNotIn("Freeze", json.dumps(got["list"]) + json.dumps(got["claude"]))

@@ -54,6 +54,7 @@ export default {
    "cut": false
   }
  ],
+ "lanes": {},
  "window": 272000,
  "compactions": [],
  "spark": {
