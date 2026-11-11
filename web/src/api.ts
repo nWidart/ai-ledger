@@ -294,6 +294,8 @@ export interface LiveSession extends LiveFigures, LiveTitle {
 export interface IngestStats { files: number; lines: number; inserted: number; seconds: number; usage_files?: number; usage_skipped?: number }
 export interface Status {
   ingesting: boolean; last_ingest: string | null; last_stats: IngestStats | null; error: string | null;
+  /** The last ingest that stored new lines or usage data; null until one does. */
+  last_change: string | null;
   counts: Record<string, number>; interval: number;
   /** Plan-limit pollers by provider; never the credential. */
   limits?: Record<string, { last_ok: string | null; last_attempt: string | null; failures: number; error: string | null; stale: boolean }>;

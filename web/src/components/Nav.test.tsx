@@ -11,7 +11,7 @@ import insights from "../__fixtures__/insights";
 import live from "../__fixtures__/live";
 import liveSession from "../__fixtures__/live-session";
 
-const status = { ingesting: false, last_ingest: "2026-11-05T12:00:00+00:00", last_stats: { files: 1, lines: 2, inserted: 2, seconds: 0.1 }, error: null, counts: {}, interval: 60 };
+const status = { ingesting: false, last_ingest: "2026-11-05T12:00:00+00:00", last_change: "2026-11-05T12:00:00+00:00", last_stats: { files: 1, lines: 2, inserted: 2, seconds: 0.1 }, error: null, counts: {}, interval: 60 };
 const json = (body: unknown, ok = true) => Promise.resolve({ ok, status: ok ? 200 : 500, json: () => Promise.resolve(body) } as Response);
 
 describe("Nav", () => {

@@ -39,14 +39,14 @@ export function Nav() {
     return () => ro.disconnect();
   }, []);
 
-  // Ingest status: every minute, and every few seconds while an ingest runs. A new last_ingest clears the data cache.
+  // Ingest status: every minute, and every few seconds while an ingest runs. A new last_change clears the data cache.
   useEffect(() => {
     let live = true, timer = 0;
     const poll = () => {
       clearTimeout(timer);
       getJson<Status>(statusUrl).then(s => {
         if (!live) return;
-        noteIngest(s.last_ingest);
+        noteIngest(s.last_change);
         noteStatus(s);
         timer = window.setTimeout(poll, s.ingesting ? INGESTING_MS : POLL_MS);
       }, () => {

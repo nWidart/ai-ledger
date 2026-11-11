@@ -11,6 +11,7 @@ import tempfile
 import threading
 import time
 import unittest
+from datetime import datetime
 from unittest import mock
 from http.server import ThreadingHTTPServer
 
@@ -272,6 +273,17 @@ class LiveEventsTest(unittest.TestCase):
         self.assertEqual(json.loads(data[len(b"data: "):]), dict(sessions=["s1"]))
         self.assertNotIn(b"SENTINEL", data)
         h.close()
+
+    def test_last_change_moves_only_when_lines_land(self):
+        self.app.ingest(usage=False)
+        self.assertIsNone(self.app.state["last_change"])
+        self.append("a.jsonl", "s1", "hello")
+        with mock.patch.object(app, "datetime", mock.Mock(now=lambda tz: datetime(2026, 11, 10, 10, tzinfo=tz))):
+            self.app.ingest(usage=False)
+        self.assertEqual(self.app.state["last_change"], "2026-11-10T10:00:00+00:00")
+        self.app.ingest(usage=False)
+        self.assertEqual(self.app.state["last_change"], "2026-11-10T10:00:00+00:00")
+        self.assertNotEqual(self.app.state["last_ingest"], self.app.state["last_change"])
 
     def test_no_notice_when_nothing_new(self):
         with mock.patch.object(app, "KEEPALIVE", 0.2):

@@ -38,7 +38,8 @@ class App:
         self.lock = threading.Lock()
         self.wake = threading.Event()
         self.stopping = threading.Event()
-        self.state = dict(ingesting=False, last_ingest=None, last_stats=None, error=None)
+        # last_change: the time of the last ingest that stored anything, so pages refetch only when data changed.
+        self.state = dict(ingesting=False, last_ingest=None, last_change=None, last_stats=None, error=None)
         # Live pages: how many are connected, and the sessions each ingest changed, numbered so each page sends a
         # notice for every change since its last one.
         self.watchers = 0
@@ -53,8 +54,10 @@ class App:
             try:
                 stats = store.ingest(self.con, self.roots, log=None, usage=usage)
                 sessions = stats.pop("sessions")
-                self.state.update(last_ingest=datetime.now(timezone.utc).isoformat(timespec="seconds"),
-                                  last_stats=stats, error=None)
+                now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+                self.state.update(last_ingest=now, last_stats=stats, error=None)
+                if stats["inserted"] or stats.get("usage_files"):
+                    self.state["last_change"] = now
                 if sessions:
                     self.publish(sessions)
                 if usage and (stats["files"] or stats.get("usage_files") or stats.get("usage_skipped")):

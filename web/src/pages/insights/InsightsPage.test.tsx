@@ -103,7 +103,7 @@ describe("InsightsPage", () => {
 
   it("opens the session sheet on Activity from a session link", async () => {
     mockApi({ "/api/insights": () => fixture, "/api/usage": () => usage, "/api/sessions": () => sessions, "/api/session": () => session,
-      "/api/status": () => ({ ingesting: false, last_ingest: null, last_stats: null, error: null, counts: {}, interval: 60 }) });
+      "/api/status": () => ({ ingesting: false, last_ingest: null, last_change: null, last_stats: null, error: null, counts: {}, interval: 60 }) });
     history.replaceState(null, "", "/insights#range=0");
     render(<App />);
     await userEvent.click(await screen.findByRole("link", { name: "Session →" }));

@@ -24,6 +24,10 @@ The app SHALL ingest new transcript data when it starts and then on a fixed inte
 - **WHEN** the user clicks refresh
 - **THEN** the app ingests immediately and the page shows the new data and the time of the last ingest
 
+#### Scenario: Ingest with nothing new
+- **WHEN** a timed ingest stores no new lines and no usage data
+- **THEN** the open page does not refetch or redraw its data; only the time of the last ingest changes
+
 #### Scenario: Live page open
 - **WHEN** a Live page is connected and a session writes a line
 - **THEN** the line is in the store within 1 second of being written
