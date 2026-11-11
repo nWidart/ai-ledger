@@ -42,9 +42,15 @@ export function costDays(d: Pick<UsagePayload, "start" | "end" | "daily" | "dail
  *  everyone else, so a color means the same project in every range. One project selected: just that project. */
 export function costKinds(d: Pick<UsagePayload, "project" | "by_project">): Kind[] {
   if (d.project) return [{ k: "p:" + d.project, label: d.project, c: color(d.project), project: d.project }];
-  const spent = d.by_project.filter(p => (p.cost ?? 0) > 0).sort((a, b) => (b.cost ?? 0) - (a.cost ?? 0));
-  const tops = spent.filter(p => hasHue(p.project)).map(p => ({ k: "p:" + p.project, label: p.project!, c: color(p.project), project: p.project! }));
-  const rest = spent.length - tops.length;
+  return projectKinds(d.by_project.map(p => ({ project: p.project, v: p.cost ?? 0 })));
+}
+
+/** A chart stack of projects with a value, most first: the ones that own a hue in their colors, then Other in grey for
+ *  the rest (a project with no name among them), counted. */
+export function projectKinds(ranked: readonly { project: string | null; v: number }[]): Kind[] {
+  const on = ranked.filter(p => p.v > 0).sort((a, b) => b.v - a.v);
+  const tops = on.filter(p => hasHue(p.project)).map(p => ({ k: "p:" + p.project, label: p.project!, c: color(p.project), project: p.project! }));
+  const rest = on.length - tops.length;
   return rest ? [...tops, { k: "p:", label: `Other (${num(rest)})`, c: color(""), project: "" }] : tops;
 }
 

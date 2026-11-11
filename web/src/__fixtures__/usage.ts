@@ -102,6 +102,7 @@ export default {
    "sessions": 1,
    "prompts": 2,
    "commits": 1,
+   "calls": 10,
    "failed_calls": 6
   },
   {
@@ -109,7 +110,59 @@ export default {
    "sessions": 1,
    "prompts": 1,
    "commits": 0,
+   "calls": 0,
    "failed_calls": 0
+  }
+ ],
+ "work_bucket": "day",
+ "work": [
+  {
+   "day": "2026-11-04",
+   "sessions": 1,
+   "prompts": 2,
+   "commits": 1,
+   "calls": 10,
+   "failed_calls": 6
+  },
+  {
+   "day": "2026-11-05",
+   "sessions": 1,
+   "prompts": 1,
+   "commits": 0,
+   "calls": 0,
+   "failed_calls": 0
+  }
+ ],
+ "work_projects": [
+  {
+   "day": "2026-11-04",
+   "project": "foo",
+   "sessions": 1,
+   "prompts": 2,
+   "commits": 1,
+   "calls": 10,
+   "failed_calls": 6
+  },
+  {
+   "day": "2026-11-05",
+   "project": "foo",
+   "sessions": 1,
+   "prompts": 1,
+   "commits": 0,
+   "calls": 0,
+   "failed_calls": 0
+  }
+ ],
+ "work_hours": [
+  {
+   "dow": 3,
+   "hour": 10,
+   "prompts": 2
+  },
+  {
+   "dow": 4,
+   "hour": 9,
+   "prompts": 1
   }
  ],
  "unpriced": [
@@ -231,6 +284,17 @@ export default {
    "failures": 4,
    "first_id": "t01",
    "start_ts": "2026-11-04 10:01:00",
+   "title": null
+  }
+ ],
+ "failed_tests": [
+  {
+   "id": "t07",
+   "session_id": "s1",
+   "project": "foo",
+   "source": "claude",
+   "command": "",
+   "ts": "2026-11-04T10:07:00.000Z",
    "title": null
   }
  ],
@@ -390,7 +454,16 @@ export default {
   "cost": 0.00026,
   "requests": 1,
   "sessions": 1,
+  "sub_tokens": 0,
+  "prompts": 1,
+  "interrupted": 0,
   "active_days": 1,
+  "calls": 0,
+  "errors": 0,
+  "commits": 0,
+  "test_runs": 0,
+  "tests_passed": 0,
+  "median_session_seconds": 0,
   "start": "2026-09-07",
   "end": "2026-10-06",
   "daily": [
@@ -428,5 +501,10 @@ export default {
  "prices_file": {
   "path": "/Users/example/Library/Application Support/ai-ledger/prices.json",
   "error": null
+ },
+ "automated_file": {
+  "path": "/Users/example/Library/Application Support/ai-ledger/automated.json",
+  "error": null,
+  "projects": []
  }
 } satisfies UsagePayload;

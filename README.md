@@ -12,7 +12,7 @@ Needs [uv](https://docs.astral.sh/uv/). macOS and Linux. Nothing leaves your mac
 
 ## What you get
 
-- **Activity**: what got done per day, session and tool, and what needs attention.
+- **Activity**: what got done per day or week, stacked by project, with errors per 100 calls on the chart, prompts by hour and weekday, and the change against the period before. It lists what needs attention, down to the failed test runs. Tables sort by column, a day on the chart narrows Tools, MCP & hooks and Error loops to it, and the Sessions filters live in the URL.
 - **Cost**: estimated spend at API list prices, per project, model and session, against the period before.
 - **Errors**: failed tool calls by type, with a fix to paste into `CLAUDE.md` or `AGENTS.md`.
 - **Limits**: each plan limit window, with a forecast to its reset.
@@ -22,6 +22,8 @@ Needs [uv](https://docs.astral.sh/uv/). macOS and Linux. Nothing leaves your mac
 Your agents delete old transcripts. AI Ledger keeps every line, so the history stays. Press **Cmd+K** to jump anywhere: `>errors #myproject #7d`.
 
 The pages leave out sessions a tool started: claude-mem's `observer-sessions`, sessions with no prompt, and the one-prompt helpers apps run in temporary folders (session titles and the like). **Include automated** shows them. An active day is a day with a prompt.
+
+To leave out more projects, create `automated.json` next to the store, in the same folder as `prices.json` below: `{"projects": ["my-bot"]}`. Its names add to the built-in detection. The app reads it on every page load, so no restart is needed. If the file cannot be used, the app ignores it and Activity says why.
 
 <table>
 <tr><td><picture><source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/nWidart/ai-ledger/main/docs/activity-light.gif"><img src="https://raw.githubusercontent.com/nWidart/ai-ledger/main/docs/activity.gif" alt="Activity"></picture></td><td><picture><source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/nWidart/ai-ledger/main/docs/cost-light.gif"><img src="https://raw.githubusercontent.com/nWidart/ai-ledger/main/docs/cost.gif" alt="Cost"></picture></td></tr>

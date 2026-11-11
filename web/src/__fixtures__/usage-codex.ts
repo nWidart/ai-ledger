@@ -83,7 +83,37 @@ export default {
    "sessions": 1,
    "prompts": 1,
    "commits": 0,
+   "calls": 1,
    "failed_calls": 1
+  }
+ ],
+ "work_bucket": "day",
+ "work": [
+  {
+   "day": "2026-11-05",
+   "sessions": 1,
+   "prompts": 1,
+   "commits": 0,
+   "calls": 1,
+   "failed_calls": 1
+  }
+ ],
+ "work_projects": [
+  {
+   "day": "2026-11-05",
+   "project": "foo",
+   "sessions": 1,
+   "prompts": 1,
+   "commits": 0,
+   "calls": 1,
+   "failed_calls": 1
+  }
+ ],
+ "work_hours": [
+  {
+   "dow": 4,
+   "hour": 10,
+   "prompts": 1
   }
  ],
  "unpriced": [],
@@ -138,6 +168,7 @@ export default {
  "skills": [],
  "hooks": [],
  "error_loops": [],
+ "failed_tests": [],
  "sessions": [
   {
    "session_id": "x1",
@@ -206,5 +237,10 @@ export default {
  "prices_file": {
   "path": "/Users/example/Library/Application Support/ai-ledger/prices.json",
   "error": null
+ },
+ "automated_file": {
+  "path": "/Users/example/Library/Application Support/ai-ledger/automated.json",
+  "error": null,
+  "projects": []
  }
 } satisfies UsagePayload;
