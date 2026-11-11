@@ -7,15 +7,7 @@ The Live page: watch running sessions as they happen from the agent's side, one 
 ## Requirements
 
 ### Requirement: Show active sessions in a rail
-The Live page SHALL list the active sessions in a rail, grouped by state in this order: *approval?*, *your turn*, *working* (running a tool or thinking), *idle*, *ended*. A group with no session SHALL NOT be drawn. Inside a group, sessions SHALL be ordered by session start, oldest first, not by last write, so an entry moves only when its state changes. Each entry SHALL show the session's title as its main line, then the project with its color, the source and the state on its second line, and the cost so far. An entry in *your turn* or *thinking* SHALL show how long the session has been in that state. An entry with no title SHALL show the project as its main line. Selecting an entry SHALL open that session in the stream. With no session selected, the page SHALL open the newest active session, the one that wrote last.
-
-#### Scenario: Open Live with two running sessions
-- **WHEN** the user opens `/live` while sessions in `ai-ledger` and `jobdesk` are active, and `ai-ledger` wrote last
-- **THEN** the rail lists both, and the stream shows `ai-ledger`
-
-#### Scenario: Filter leaves the open session out
-- **WHEN** no session is named in the URL and the user picks a project whose sessions do not include the one in the stream
-- **THEN** the stream opens the newest session of that project
+The Live page SHALL list the active sessions in a rail, grouped by state in this order: *approval?*, *your turn*, *working* (running a tool or thinking), *idle*, *ended*. A group with no session SHALL NOT be drawn. Inside a group, sessions SHALL be ordered by session start, oldest first, not by last write, so an entry moves only when its state changes.
 
 #### Scenario: Count of working sessions
 - **WHEN** three sessions are active: one running a tool, two waiting for a prompt
@@ -24,14 +16,6 @@ The Live page SHALL list the active sessions in a rail, grouped by state in this
 #### Scenario: No active session
 - **WHEN** no session wrote a line in the last 10 minutes
 - **THEN** the page says no session is active and shows when the newest session last wrote, with a link to it on Activity
-
-#### Scenario: Two sessions in one project
-- **WHEN** two `ai-ledger` sessions are active with the AI titles "Add session titles" and "Fix Cost test"
-- **THEN** their rail entries show those titles as their main lines, and `ai-ledger` on their second lines
-
-#### Scenario: Prompt title under Full text
-- **WHEN** an active session has no agent title and Full text is off
-- **THEN** its entry shows the project as its main line, and when Full text is turned on it shows the title made from its first prompt
 
 #### Scenario: Groups by state
 - **WHEN** five sessions are active: one ended, one idle, one thinking, one in your turn and one likely waiting for approval
@@ -49,12 +33,34 @@ The Live page SHALL list the active sessions in a rail, grouped by state in this
 - **WHEN** a third session starts while two are running
 - **THEN** it joins the end of its group and the two entries above it do not move
 
+### Requirement: Show each session in its rail entry
+Each rail entry SHALL show the session's title as its main line, then the project with its color, the source and the state on its second line, and the cost so far. An entry in *your turn* or *thinking* SHALL show how long the session has been in that state. An entry with no title SHALL show the project as its main line.
+
+#### Scenario: Two sessions in one project
+- **WHEN** two `ai-ledger` sessions are active with the AI titles "Add session titles" and "Fix Cost test"
+- **THEN** their rail entries show those titles as their main lines, and `ai-ledger` on their second lines
+
+#### Scenario: Prompt title under Full text
+- **WHEN** an active session has no agent title and Full text is off
+- **THEN** its entry shows the project as its main line, and when Full text is turned on it shows the title made from its first prompt
+
 #### Scenario: How long on your turn
 - **WHEN** a session has been in your turn for 4 minutes
 - **THEN** its entry shows 4m 00s beside the state, and the figure counts up
 
+### Requirement: Open a session from the rail
+Selecting a rail entry SHALL open that session in the stream. With no session selected, the page SHALL open the newest active session, the one that wrote last.
+
+#### Scenario: Open Live with two running sessions
+- **WHEN** the user opens `/live` while sessions in `ai-ledger` and `jobdesk` are active, and `ai-ledger` wrote last
+- **THEN** the rail lists both, and the stream shows `ai-ledger`
+
+#### Scenario: Filter leaves the open session out
+- **WHEN** no session is named in the URL and the user picks a project whose sessions do not include the one in the stream
+- **THEN** the stream opens the newest session of that project
+
 ### Requirement: Show a session's stream
-The stream SHALL show the selected session's events in order. Each tool call SHALL be a row with its tool, row text, duration and result. The row text of a shell call that carries a description SHALL be that description; otherwise it SHALL be the input summary. A running call SHALL show a timer that counts up each second. A failed call SHALL be marked as failed. Compactions SHALL be marked between events. The time of an event SHALL include its date when the event is not from today. The stream head SHALL link to the session's sheet on Activity. When older events are left out, the stream SHALL say so and link to the session's sheet on Activity.
+The stream SHALL show the selected session's events in order. Each tool call SHALL be a row with its tool, row text, duration and result. A running call SHALL show a timer that counts up each second. A failed call SHALL be marked as failed. Compactions SHALL be marked between events. The time of an event SHALL include its date when the event is not from today.
 
 #### Scenario: Tool call starts and ends
 - **WHEN** a `Bash` call starts in the followed session and ends 8 seconds later
@@ -64,6 +70,13 @@ The stream SHALL show the selected session's events in order. Each tool call SHA
 - **WHEN** a tool call fails
 - **THEN** its row is marked as failed, and the agent panel's error count goes up by one
 
+#### Scenario: Event from another day
+- **WHEN** the user views an idle session whose last event was yesterday at 14:03:12
+- **THEN** the times in the stream show yesterday's date with the time, and events from today show the time alone
+
+### Requirement: Name a shell call by its description
+The row text of a shell call that carries a description SHALL be that description; otherwise it SHALL be the input summary.
+
 #### Scenario: Shell call with a description
 - **WHEN** a `Bash` call runs `cd /long/path && uv run pytest` with the description "Run the Python tests"
 - **THEN** its row text is "Run the Python tests"
@@ -72,9 +85,8 @@ The stream SHALL show the selected session's events in order. Each tool call SHA
 - **WHEN** a `Bash` call carries no description
 - **THEN** its row text is its command
 
-#### Scenario: Event from another day
-- **WHEN** the user views an idle session whose last event was yesterday at 14:03:12
-- **THEN** the times in the stream show yesterday's date with the time, and events from today show the time alone
+### Requirement: Link the stream to the session sheet
+The stream head SHALL link to the session's sheet on Activity. When older events are left out, the stream SHALL say so and link to the session's sheet on Activity.
 
 #### Scenario: Link to the session sheet
 - **WHEN** the user selects the session sheet link in the stream head
@@ -92,7 +104,7 @@ Selecting a tool row SHALL open its detail in place: the input summary, the star
 - **THEN** the detail shows the description and, apart from it, the command
 
 ### Requirement: Fold subagent lanes
-Subagent work SHALL appear as a lane inside the stream. The lane header SHALL show the subagent's name, its description, its tool-call count, its duration, its cost and its model when the app gives them, its error count when above zero, and whether it is still running. Selecting the header SHALL fold or unfold the lane. A finished lane SHALL be folded by default. A running lane with more than 5 rows SHALL show its last 5 and a control to show all of them, and to go back to the last 5. A fold or an expansion the user chose SHALL be kept while the page is open. Updates SHALL keep every lane with all the rows the page holds for it.
+Subagent work SHALL appear as a lane inside the stream. Selecting the lane header SHALL fold or unfold the lane. A finished lane SHALL be folded by default. A running lane with more than 5 rows SHALL show its last 5 and a control to show all of them, and to go back to the last 5. A fold or an expansion the user chose SHALL be kept while the page is open. Updates SHALL keep every lane with all the rows the page holds for it.
 
 #### Scenario: Fold a lane
 - **WHEN** the user selects the header of an Explore lane with three tool calls
@@ -114,6 +126,13 @@ Subagent work SHALL appear as a lane inside the stream. The lane header SHALL sh
 - **WHEN** the user selects the control of a running lane
 - **THEN** all twelve rows show, and the control offers the last 5 again
 
+#### Scenario: Lane the user opened finishes
+- **WHEN** the user unfolds a running lane and the lane then finishes
+- **THEN** the lane stays unfolded
+
+### Requirement: Show a lane's figures in its header
+The lane header SHALL show the subagent's name, its description, its tool-call count, its duration, its cost and its model when the app gives them, its error count when above zero, and whether it is still running.
+
 #### Scenario: Lane header figures
 - **WHEN** a lane made 8 tool calls, 2 of them failed, on `claude-haiku-5-5` for $0.05
 - **THEN** its header shows 8 tools, 2 errors, `claude-haiku-5-5` and $0.05
@@ -121,10 +140,6 @@ Subagent work SHALL appear as a lane inside the stream. The lane header SHALL sh
 #### Scenario: Lane with no cost
 - **WHEN** the app gives no cost and no model for a lane
 - **THEN** its header shows neither, and still shows its tool count and duration
-
-#### Scenario: Lane the user opened finishes
-- **WHEN** the user unfolds a running lane and the lane then finishes
-- **THEN** the lane stays unfolded
 
 ### Requirement: Show the agent panel
 Beside the stream, the page SHALL show the selected session's state with its detail, context window fill with a mark at each compaction, cost, requests, tool calls, errors, cache-read share, a tokens-per-minute chart of the last minute, and the plan-limit use for its source. An inferred state SHALL be shown as inferred.
@@ -171,11 +186,18 @@ The page SHALL offer Pause, which holds new events and states until Resume. Whil
 - **THEN** the connection line says Paused with no green dot, the session's state dot does not pulse, and both are back when the user resumes
 
 ### Requirement: Show all sessions on a wall
-The page SHALL offer a Wall view with one tile per active session, grouped by state in the rail's order, with the same headings. Inside a group, tiles SHALL be ordered by session start, oldest first. A tile SHALL show the project, state, title, latest action, context fill, tool count, errors, cost, branch, source and model. A tile in *your turn* or *thinking* SHALL show how long the session has been in that state. A tile in *your turn* SHALL have a border. The title SHALL take one line under the project, cut with an ellipsis when it does not fit, with the full title on hover. A tile with no title SHALL leave that line out. Selecting a tile SHALL open that session in the stream view.
+The page SHALL offer a Wall view with one tile per active session, grouped by state in the rail's order, with the same headings. Inside a group, tiles SHALL be ordered by session start, oldest first. Selecting a tile SHALL open that session in the stream view.
 
 #### Scenario: Pick a session from the wall
 - **WHEN** the user selects the `graft` tile on the wall
 - **THEN** the stream view opens on `graft`
+
+#### Scenario: Wall groups
+- **WHEN** one session is likely waiting for approval and two are running
+- **THEN** the wall shows the approval tile under its heading, then the two running tiles under theirs
+
+### Requirement: Show each session on its wall tile
+A wall tile SHALL show the project, state, title, latest action, context fill, tool count, errors, cost, branch, source and model. A tile in *your turn* or *thinking* SHALL show how long the session has been in that state. A tile in *your turn* SHALL have a border. The title SHALL take one line under the project, cut with an ellipsis when it does not fit, with the full title on hover. A tile with no title SHALL leave that line out.
 
 #### Scenario: Long title on a tile
 - **WHEN** a session's title is wider than its tile
@@ -184,10 +206,6 @@ The page SHALL offer a Wall view with one tile per active session, grouped by st
 #### Scenario: Your turn tile
 - **WHEN** a session is in your turn
 - **THEN** its tile has a border and shows how long the session has waited
-
-#### Scenario: Wall groups
-- **WHEN** one session is likely waiting for approval and two are running
-- **THEN** the wall shows the approval tile under its heading, then the two running tiles under theirs
 
 ### Requirement: Keep the selection in the URL
 The page SHALL keep the selected session and the view (Stream or Wall) in the URL, with the shared project, source and automated filters.

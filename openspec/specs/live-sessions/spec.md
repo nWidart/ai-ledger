@@ -33,8 +33,6 @@ The app SHALL give each active session one state, checked in this order:
 - *thinking*: the newest line is a human prompt or a tool result, or, for Codex, the newest turn has started and not completed.
 - *your turn*: otherwise.
 
-The app SHALL report *ended* only when the transcript gives evidence of the close. With no such evidence, a closed session keeps the state the other rules give it. Each state SHALL carry the time it began.
-
 #### Scenario: Tool running
 - **WHEN** the newest line of a session is a `Read` tool use with no result yet
 - **THEN** the state is running a tool, naming `Read` and its start time
@@ -51,12 +49,22 @@ The app SHALL report *ended* only when the transcript gives evidence of the clos
 - **WHEN** a session's newest line is 7 minutes old, even with a pending tool call
 - **THEN** the state is idle
 
+### Requirement: Give each state its start time
+Each state SHALL carry the time it began.
+
+#### Scenario: Start of a running tool
+- **WHEN** a `Read` call started at 10:02:00 and has no result yet
+- **THEN** the state is running a tool and carries 10:02:00 as the time it began
+
+### Requirement: Report ended only on evidence of a close
+The app SHALL report *ended* only when the transcript gives evidence of the close. With no such evidence, a closed session keeps the state the other rules give it.
+
 #### Scenario: No evidence of a close
 - **WHEN** a session's last line is an assistant reply and nothing in the transcript shows the session closed
 - **THEN** the state is your turn, and idle after 5 minutes
 
 ### Requirement: Flag a likely approval wait
-When a shell tool call (Claude Code `Bash`, Codex `exec` or `exec_command`) has had no result for more than 30 seconds, the app SHALL report the state as *likely waiting for approval*, with how long the call has been pending. A newer pending call, in the main thread or a subagent, SHALL NOT hide it; with several such calls, the oldest SHALL be reported. A shell call that carries an explicit timeout above 120 seconds is a long call and SHALL NOT count: it reads as *running a tool* however long it has been pending. A background call (`run_in_background`) is not a long call: it returns within seconds, so one still pending after 30 seconds reads as *likely waiting for approval*. Codex's shell tools carry no timeout, so no Codex call is a long call. Each tool event and each running-a-tool state SHALL say whether its call is a long call, so the page applies the same rule as the app.
+When a shell tool call (Claude Code `Bash`, Codex `exec` or `exec_command`) has had no result for more than 30 seconds, the app SHALL report the state as *likely waiting for approval*, with how long the call has been pending. A newer pending call, in the main thread or a subagent, SHALL NOT hide it; with several such calls, the oldest SHALL be reported.
 
 #### Scenario: Slow shell call
 - **WHEN** a `Bash` call started 45 seconds ago and has no result
@@ -70,9 +78,8 @@ When a shell tool call (Claude Code `Bash`, Codex `exec` or `exec_command`) has 
 - **WHEN** a `WebFetch` call started 45 seconds ago and has no result
 - **THEN** the state is running a tool
 
-#### Scenario: Background shell call
-- **WHEN** a `Bash` call with `run_in_background` started 45 seconds ago and has no result
-- **THEN** the state is likely waiting for approval, naming `Bash`, and the call is not marked as a long call
+### Requirement: Leave long calls out of the approval wait
+A shell call that carries an explicit timeout above 120 seconds is a long call and SHALL NOT count: it reads as *running a tool* however long it has been pending. Each tool event and each running-a-tool state SHALL say whether its call is a long call, so the page applies the same rule as the app.
 
 #### Scenario: Long explicit timeout
 - **WHEN** a `Bash` call with a timeout of 300 seconds started 45 seconds ago and has no result
@@ -85,6 +92,13 @@ When a shell tool call (Claude Code `Bash`, Codex `exec` or `exec_command`) has 
 #### Scenario: Long call hides no wait
 - **WHEN** a `Bash` call with a timeout of 600 seconds started 50 seconds ago, and another `Bash` call with no timeout started 45 seconds ago and has no result
 - **THEN** the state is likely waiting for approval, naming the second call, pending 45 seconds
+
+### Requirement: Count background and Codex calls as not long
+A background call (`run_in_background`) SHALL NOT be a long call: it returns within seconds, so one still pending after 30 seconds reads as *likely waiting for approval*. Codex's shell tools carry no timeout, so a Codex call SHALL NOT be a long call.
+
+#### Scenario: Background shell call
+- **WHEN** a `Bash` call with `run_in_background` started 45 seconds ago and has no result
+- **THEN** the state is likely waiting for approval, naming `Bash`, and the call is not marked as a long call
 
 #### Scenario: Codex shell call
 - **WHEN** a Codex `exec` call started 45 seconds ago and has no result
@@ -110,7 +124,7 @@ Every payload that carries a state SHALL say whether it is inferred. *likely wai
 - **THEN** the payload does not mark the state as inferred
 
 ### Requirement: Stream one session's events
-For one session, the app SHALL return its events in transcript order: prompts, assistant replies, tool calls and compactions. Each tool call SHALL carry its tool, input summary, the description the agent gave a shell call when it gave one, start time, end time or none, and failure with its error. Each tool call SHALL also say whether it is a long call (an explicit timeout above 120 seconds) and whether it only reads. A request for events after a given point SHALL return the later events and SHALL read again the minute before that point, as transcript lines can be written seconds after their timestamp; each event keeps one key, so the page holds one copy of it.
+For one session, the app SHALL return its events in transcript order: prompts, assistant replies, tool calls and compactions. A request for events after a given point SHALL return the later events and SHALL read again the minute before that point, as transcript lines can be written seconds after their timestamp; each event keeps one key, so the page holds one copy of it.
 
 #### Scenario: First load
 - **WHEN** the page asks for a session's events with no starting point
@@ -132,6 +146,9 @@ For one session, the app SHALL return its events in transcript order: prompts, a
 - **WHEN** the session is a Codex session
 - **THEN** the events have the same kinds and fields as for a Claude Code session
 
+### Requirement: Describe each tool call
+Each tool call SHALL carry its tool, input summary, the description the agent gave a shell call when it gave one, start time, end time or none, and failure with its error. Each tool call SHALL also say whether it is a long call (an explicit timeout above 120 seconds) and whether it only reads.
+
 #### Scenario: Shell call with a description
 - **WHEN** a `Bash` call carries the description "Run the Python tests"
 - **THEN** its event carries that description beside its command
@@ -141,7 +158,7 @@ For one session, the app SHALL return its events in transcript order: prompts, a
 - **THEN** only the first event is marked as a long call
 
 ### Requirement: Group subagent work
-Each event of a subagent SHALL name that subagent, so the page can group them with the subagent's start time, end time when it has ended, and number of tool calls. The tool call that started a subagent SHALL name it: from the call's result when the subagent ends, and while it runs from the start record Claude Code writes beside its transcript (`agent-<id>.meta.json`). The session payload SHALL also give, for each subagent that has made a request, the cost of its priced requests and the model of its newest one. A request SHALL count once, for the subagent whose transcript holds it.
+Each event of a subagent SHALL name that subagent, so the page can group them with the subagent's start time, end time when it has ended, and number of tool calls. The tool call that started a subagent SHALL name it: from the call's result when the subagent ends, and while it runs from the start record Claude Code writes beside its transcript (`agent-<id>.meta.json`).
 
 #### Scenario: Subagent with three tool calls
 - **WHEN** a Claude Code session starts an Explore subagent that makes three tool calls
@@ -150,6 +167,9 @@ Each event of a subagent SHALL name that subagent, so the page can group them wi
 #### Scenario: Subagent still running
 - **WHEN** a Claude Code session started a subagent with an `Agent` call that has no result yet
 - **THEN** that call names the subagent
+
+### Requirement: Give each subagent's cost and model
+The session payload SHALL give, for each subagent that has made a request, the cost of its priced requests and the model of its newest one. A request SHALL count once, for the subagent whose transcript holds it.
 
 #### Scenario: Subagent cost and model
 - **WHEN** a subagent made two requests on `claude-haiku-5-5` that cost $0.02 and $0.03
@@ -172,7 +192,7 @@ Each event of a subagent SHALL name that subagent, so the page can group them wi
 - **THEN** the payload gives that thread a cost of $2.00 and the model of the request's turn
 
 ### Requirement: Send transcript text only on request
-By default, prompts and replies SHALL be returned as word counts and tool results as character counts, without their text. A session title made from the first prompt is prompt text, and SHALL be left out by default. A tool call's input SHALL be cut to 300 characters by default, and a subagent call (Claude Code `Agent`, Codex `spawn_agent`) SHALL carry its description instead of its prompt. Only a request that asks for text SHALL receive the prompt and reply text, whole tool inputs, up to 4 KB of each tool result, and first-prompt titles.
+By default, prompts and replies SHALL be returned as word counts and tool results as character counts, without their text. A session title made from the first prompt is prompt text, and SHALL be left out by default. Only a request that asks for text SHALL receive the prompt and reply text, whole tool inputs, up to 4 KB of each tool result, and first-prompt titles.
 
 #### Scenario: Default request
 - **WHEN** the page asks for events without asking for text
@@ -181,6 +201,17 @@ By default, prompts and replies SHALL be returned as word counts and tool result
 #### Scenario: Text requested
 - **WHEN** the page asks for events with text
 - **THEN** prompts and replies come as written and each tool result is cut to 4 KB
+
+### Requirement: Cut tool inputs by default
+A tool call's input SHALL be cut to 300 characters by default, and a subagent call (Claude Code `Agent`, Codex `spawn_agent`) SHALL carry its description instead of its prompt.
+
+#### Scenario: Long tool input
+- **WHEN** the page asks for events without asking for text, and a `Bash` call has an input of 800 characters
+- **THEN** the call's input in the response is cut to 300 characters
+
+#### Scenario: Subagent call
+- **WHEN** the page asks for events without asking for text, and the session made an `Agent` call
+- **THEN** the call carries its description and not its prompt
 
 ### Requirement: Report the agent's figures
 For one session, the app SHALL report:
