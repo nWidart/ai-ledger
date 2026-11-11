@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type RefObject } from "react";
+import { useCallback, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import type { LiveEvent, LiveSession, LiveToolEvent, Ts } from "../../api";
 import { big, plural, usd } from "../../format";
 import { appLink } from "../../components/sheets/session";
@@ -54,6 +54,8 @@ function Said({ e, text }: { e: Extract<LiveEvent, { k: "prompt" | "reply" }>; t
 const LAST = 5;
 /** Follow: the room left around a row scrolled into view. */
 const PAD = 8;
+/** How far a box can scroll: another reach means the box or what it draws changed size. */
+const reachOf = (el: HTMLElement) => el.scrollHeight - el.clientHeight;
 
 /** A lane as drawn: hidden by the filters, folded or not, its tool rows the filters leave, and those it shows (the last
  *  LAST when cut). */
@@ -87,7 +89,8 @@ export function Stream({ s, now, text, follow, setFollow, filters: f, setFilters
   s: LiveSession; now: number; text: boolean; follow: boolean; setFollow: (on: boolean) => void;
   filters: StreamFilters; setFilters: (f: StreamFilters) => void; choices: LaneChoices; setChoices: (c: LaneChoices) => void;
 }) {
-  const box = useRef<HTMLDivElement>(null), newest = useRef<HTMLDivElement>(null), setAt = useRef(0);
+  const box = useRef<HTMLDivElement>(null), drawn = useRef<HTMLDivElement>(null), newest = useRef<HTMLDivElement>(null);
+  const put = useRef({ top: 0, reach: 0 });
   const [open, setOpen] = useState(() => new Set<string>());
   const [seenAt, setSeenAt] = useState(s.events.length);
   const rows = streamRows(s.events), filtered = f.errors || f.main || f.quiet;
@@ -115,9 +118,9 @@ export function Stream({ s, now, text, follow, setFollow, filters: f, setFilters
     for (const e of v.shown) see(e.key, e.ts);
   }
   const mark = (key: string) => (key === target ? newest : undefined), foot = target === last;
-  // After every render, as any of them can move the rows: the box goes to its foot when the newest row ends the stream,
-  // else just far enough to show that row whole. It notes where that leaves the box, for onScroll.
-  useLayoutEffect(() => {
+  // Follow's place for the box: its foot when the newest row ends the stream, else just far enough to show that row
+  // whole. It notes where that leaves the box, and the reach the box has there, for onScroll.
+  const place = useCallback(() => {
     const el = box.current, row = newest.current;
     if (!el || !follow) return;
     if (!row || foot) el.scrollTop = el.scrollHeight;
@@ -126,11 +129,23 @@ export function Stream({ s, now, text, follow, setFollow, filters: f, setFilters
       if (bottom > el.scrollTop + el.clientHeight) el.scrollTop = bottom + PAD - el.clientHeight;
       else if (top < el.scrollTop) el.scrollTop = top - PAD;
     }
-    setAt.current = el.scrollTop;
-  });
-  // A scroll that lands where the page last put the box is the page's own; any other is the user's.
+    put.current = { top: el.scrollTop, reach: reachOf(el) };
+  }, [follow, foot]);
+  // The box takes its place after every render, as any of them can move the rows, and whenever the box or what it draws
+  // changes size with no render: a web font that loads, a window resized, a row that wraps anew.
+  useLayoutEffect(place);
+  useLayoutEffect(() => {
+    const ro = new ResizeObserver(place);
+    ro.observe(box.current!);
+    ro.observe(drawn.current!);
+    return () => ro.disconnect();
+  }, [place]);
+  // A scroll is the user's when it moves the box from where the page last put it while the box keeps the reach it had
+  // there. With another reach, the box or its rows changed size and the browser moved the box, to keep it in bounds or
+  // on the row it showed: place sets it right, before the scroll event or after it.
   const onScroll = () => {
-    if (follow && Math.abs(box.current!.scrollTop - setAt.current) > 1) { setFollow(false); setSeenAt(s.events.length); }
+    const el = box.current!, { top, reach } = put.current;
+    if (follow && reachOf(el) === reach && Math.abs(el.scrollTop - top) > 1) { setFollow(false); setSeenAt(s.events.length); }
   };
   const newer = !follow && s.events.length > seenAt;
   return <>
@@ -140,7 +155,7 @@ export function Stream({ s, now, text, follow, setFollow, filters: f, setFilters
       <label className="chk"><input type="checkbox" checked={f.quiet} onChange={e => setFilters({ ...f, quiet: e.target.checked })} /> Hide read-only</label>
       {hidden > 0 && <span className="hid muted">{plural(hidden, "row")} hidden</span>}
     </div>
-    <div className="stream" ref={box} onScroll={onScroll} tabIndex={0} aria-label="Session events">
+    <div className="stream" ref={box} onScroll={onScroll} tabIndex={0} aria-label="Session events"><div ref={drawn}>
       {s.truncated && <p className="older muted">Older events are not shown. The <a href={sessionHref(s.session_id)} onClick={appLink}>session sheet on Activity</a> has
         the whole session.</p>}
       {rows.map(r => {
@@ -176,6 +191,6 @@ export function Stream({ s, now, text, follow, setFollow, filters: f, setFilters
         ? "No failed calls in the events held." : "The filters hide every row."}</p>}
       {s.state.kind === "you" && <div className="ev"><span className="t" /><span className="note">waiting for your next prompt</span></div>}
       {newer && <button type="button" className="jump" onClick={() => setFollow(true)}>Jump to latest ↓</button>}
-    </div>
+    </div></div>
   </>;
 }

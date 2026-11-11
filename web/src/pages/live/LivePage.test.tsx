@@ -451,9 +451,7 @@ describe("LivePage", () => {
     let fresh = false;
     show("#session=s1", { session: () => (fresh ? more : s1) });
     const box = await screen.findByRole("region", { name: "Session events" }).catch(() => screen.findByLabelText("Session events"));
-    Object.defineProperty(box, "scrollHeight", { value: 2000, configurable: true });
-    Object.defineProperty(box, "clientHeight", { value: 400, configurable: true });
-    box.scrollTop = 100;
+    box.scrollTop = 100; // no size changed: the scroll is the user's
     fireEvent.scroll(box);
     expect((screen.getByRole("checkbox", { name: "Follow" }) as HTMLInputElement).checked).toBe(false);
     fresh = true;
@@ -461,6 +459,43 @@ describe("LivePage", () => {
     const jump = await screen.findByRole("button", { name: "Jump to latest ↓" });
     await userEvent.click(jump);
     expect((screen.getByRole("checkbox", { name: "Follow" }) as HTMLInputElement).checked).toBe(true);
+  });
+
+  it("keeps following when the box or its rows change size, and puts the newest event back in view", async () => {
+    // jsdom has no layout and no ResizeObserver: a box `room` px high over rows `rows` px high in all, which keeps its
+    // scrollTop in bounds as a browser does, and the observers the page starts.
+    const told = new Set<() => void>(), l = { room: 400, rows: 2000, top: 0 };
+    vi.spyOn(globalThis, "ResizeObserver").mockImplementation(function (cb: () => void) {
+      return { observe: () => { told.add(cb); }, unobserve() {}, disconnect: () => { told.delete(cb); } };
+    } as never);
+    show();
+    await stream();
+    const box = screen.getByLabelText("Session events"), follow = () => check("Follow").checked;
+    Object.defineProperty(box, "clientHeight", { get: () => l.room, configurable: true });
+    Object.defineProperty(box, "scrollHeight", { get: () => l.rows, configurable: true });
+    Object.defineProperty(box, "scrollTop", { get: () => l.top, set: (v: number) => { l.top = Math.max(0, Math.min(v, l.rows - l.room)); }, configurable: true });
+    // A resize as a browser does it: the box stays in bounds, with a scroll event when that moves it, and the observers
+    // are told, before that event (Chromium) or after it (Firefox, Safari). Then: is Follow on, and is the box at its
+    // foot, where the newest event of s1 is?
+    const resize = (to: Partial<typeof l>, scrollFirst: boolean) => {
+      const was = l.top, tell = () => act(() => told.forEach(cb => cb()));
+      Object.assign(l, to);
+      box.scrollTop = l.top;
+      if (!scrollFirst) tell();
+      if (l.top !== was) fireEvent.scroll(box);
+      if (scrollFirst) tell();
+      return [follow(), l.top === l.rows - l.room];
+    };
+    for (const scrollFirst of [false, true]) {
+      expect(resize({ room: 400, rows: 2000 }, scrollFirst)).toEqual([true, true]);
+      expect(resize({ rows: 1900 }, scrollFirst)).toEqual([true, true]); // a web font loads and rows wrap less: the box is clamped
+      expect(resize({ room: 700 }, scrollFirst)).toEqual([true, true]); // a taller window: clamped again
+      expect(resize({ room: 400, rows: 2600 }, scrollFirst)).toEqual([true, true]); // a narrower one: rows wrap more, and nothing scrolls
+    }
+    box.scrollTop = l.top - 100; // the user reads back
+    fireEvent.scroll(box);
+    expect(follow()).toBe(false);
+    expect(resize({ rows: 3000 }, true)).toEqual([false, false]); // Follow is off: a resize moves nothing
   });
 
   it("follows the newest event into a lane in the middle of the stream, without its own scroll turning Follow off", async () => {
