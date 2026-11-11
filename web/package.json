@@ -5,8 +5,10 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build && node scripts/stamp.mjs",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint --react-plugin --vitest-plugin src",
     "test": "vitest run",
-    "check": "tsc --noEmit && vitest run && npm run build"
+    "check": "npm run typecheck && npm run lint && vitest run && npm run build"
   },
   "dependencies": {
     "react": "19.3.1",
@@ -21,6 +23,7 @@
     "@types/react-dom": "19.3.0",
     "@vitejs/plugin-react": "6.2.1",
     "jsdom": "31.0.0",
+    "oxlint": "1.93.0",
     "typescript": "7.0.2",
     "vite": "8.3.6",
     "vitest": "5.1.0"

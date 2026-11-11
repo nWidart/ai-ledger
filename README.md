@@ -75,9 +75,10 @@ Needs uv and Node.
 ```bash
 uv sync
 uv run ai-ledger --db <copy> --port 8766   # run on a copy of the store
+uv run ruff check                          # lint Python
 uv run python -m unittest discover -s tests
 cd web && npm install && npm run dev       # http://127.0.0.1:5173, /api proxied to the app
-cd web && npm run check                    # run before committing
+cd web && npm run check                    # typecheck, lint, test and build; run before committing
 ```
 
 Commit the build in `src/ai_ledger/web/` with every `web/src` change. [`tools/demo/`](https://github.com/nWidart/ai-ledger/tree/main/tools/demo) records the GIFs from synthetic data. Maintainer notes, including releases, are in [AGENTS.md](https://github.com/nWidart/ai-ledger/blob/main/AGENTS.md).

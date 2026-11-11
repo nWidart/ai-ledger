@@ -5,7 +5,7 @@ import subprocess
 import threading
 import unittest
 import urllib.error
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 from unittest import mock
 
 from ai_ledger import limits, store
@@ -488,7 +488,7 @@ class ValueTest(AnalysisCase):
         self.snap("codex", "codex_300", datetime(2026, 10, 20, 1), 10, resets=datetime(2026, 10, 20, 4), minutes=300, plan="plus")
         self.snap("codex", "codex_10080", datetime(2026, 11, 6, 10), 10, resets=datetime(2026, 11, 13), plan="pro")  # $2 a point
         out = limits.payload(self.con.cursor(), now=now, today=now.date(), prices=prices, tz=timezone.utc)
-        weekly, five = sorted(out["value"]["limits"], key=lambda l: l["label"], reverse=True)
+        weekly, five = sorted(out["value"]["limits"], key=lambda lim: lim["label"], reverse=True)
         self.assertEqual([(m["model"], m["points"], m["priced"]) for m in weekly["models"]],
                          [("gpt-6-nova", 10.0, True), ("gpt-6-astra", None, False)])  # not October's $50 on another plan
         self.assertEqual((weekly["past_plan"], five["plan"], five["past_plan"]), (False, "plus", True))
