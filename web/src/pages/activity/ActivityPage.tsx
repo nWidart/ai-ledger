@@ -1,25 +1,31 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { usageUrl, viewOf, type UsagePayload, type View } from "../../api";
+import { dayUrl, usageUrl, viewOf, type DayView, type UsagePayload, type View } from "../../api";
 import { setOrder } from "../../colors";
-import { motion, useCountUp } from "../../components/chart";
+import { useCountUp } from "../../components/chart";
 import { openDrawer } from "../../components/Drawer";
 import { agentName, Filters, viewName } from "../../components/Filters";
 import { InsightCard, type Insight, type InsightItem } from "../../components/InsightCard";
 import { ProjectDot } from "../../components/ProjectDot";
 import { SectionIndex } from "../../components/SectionIndex";
+import type { SortBy } from "../../components/Sort";
 import { UsageSheets } from "../../components/sheets/UsageSheets";
 import { useLanding } from "../../components/useLanding";
 import { dayLabel, dur, num, pct, plural } from "../../format";
-import { useHashState } from "../../hash";
+import { setHash, useHashState, type HashState } from "../../hash";
 import { useApi } from "../../useApi";
-import { NO_FILTER, SessionsDrawer, type SessFilter } from "./SessionsDrawer";
-import { ExtDrawer, LoopsDrawer, ProjectsDrawer, ToolsDrawer } from "./tables";
+import { SessionsDrawer, type SessFilter } from "./SessionsDrawer";
+import { ExtDrawer, LoopsDrawer, ProjectsDrawer, TestsDrawer, ToolsDrawer, type RowScope, type ToolKey } from "./tables";
 import { firstWorkDay, flakyTools, shortTool, workDays, type WorkMetric } from "./work";
 import { WorkChart } from "./WorkChart";
 import "./activity.css";
 
 const METRIC_KEY = "claude-activity-metric";
 const loadMetric = (): WorkMetric => { try { const v = localStorage.getItem(METRIC_KEY); return v === "prompts" || v === "sessions" ? v : "commits"; } catch { return "commits"; } };
+
+/** The sessions table's limits, kept in the hash (day, q, near=1) so a reload or a shared link restores them. */
+const sessOf = (h: HashState): SessFilter => ({ q: h.raw.q ?? "", near: h.raw.near === "1", day: /^\d{4}-\d{2}-\d{2}$/.test(h.raw.day ?? "") ? h.raw.day! : "" });
+// Replace, not push: typing a search adds no Back entries.
+const setSess = (f: SessFilter) => setHash({ q: f.q, near: f.near, day: f.day }, { push: false });
 
 /** Ways to act on what needs attention: each opens the detail that explains it. */
 export interface AttentionActs { loops: () => void; near: () => void; flaky: () => void; tests: () => void }
@@ -74,16 +80,23 @@ export function ActivityPage() {
   const { data, error, loading, retry } = useApi<UsagePayload>(url, { keepPrevious: true });
   useEffect(() => { if (data) setOrder(data.project_order); }, [data]);
 
-  // Page-only state, reset when the view changes: the sessions table's limits and the tools sort.
-  const [sess, setSess] = useState<SessFilter>(NO_FILTER), [flaky, setFlaky] = useState(false);
+  // Page-only state, reset when the view changes: the tools order. The day goes when the project, range or source does.
+  const sess = sessOf(h), [flaky, setFlaky] = useState(false), [toolSort, setToolSort] = useState<SortBy<ToolKey> | null>(null);
   const [metric, setMetricState] = useState<WorkMetric>(loadMetric);
   const setMetric = (m: WorkMetric) => { setMetricState(m); try { localStorage.setItem(METRIC_KEY, m); } catch { /* storage off */ } };
-  const lastView = useRef(viewKey);
+  const lastView = useRef(viewKey), dayView = `${want.project}|${want.range}|${want.source}`, lastDayView = useRef(dayView);
   useEffect(() => {
     if (lastView.current === viewKey) return;
     lastView.current = viewKey;
-    setSess(s => ({ ...s, day: "" })); setFlaky(false);
+    setFlaky(false);
   }, [viewKey]);
+  useEffect(() => {
+    if (lastDayView.current === dayView) return;
+    lastDayView.current = dayView;
+    setHash({ day: null }, { push: false });
+  }, [dayView]);
+  // A selected day narrows tools, MCP & hooks and error loops to it; the rest stays range-wide.
+  const day = sess.day, dayApi = useApi<DayView>(day ? dayUrl(want, day) : null), dv = day && dayApi.data?.day === day ? dayApi.data : undefined;
 
   const { slow, grow, before, wrap, retryBtn } = useLanding(data, url, loading, error, ":scope > :is(.insights, .panel, .vitals, .drawers)");
 
@@ -93,13 +106,14 @@ export function ActivityPage() {
   const acts = {
     loops: () => openDrawer("d-loops", true),
     near: () => sessionsFor({ q: "", near: true, day: "" }),
-    flaky: () => { setFlaky(true); openDrawer("d-tools", true); },
-    tests: () => {
-      const el = document.getElementById("v-tests");
-      el?.scrollIntoView?.({ behavior: motion() ? "smooth" : "auto", block: "center" });
-      el?.focus({ preventScroll: true });
-    },
+    flaky: () => { setFlaky(true); setToolSort(null); openDrawer("d-tools", true); },
+    tests: () => openDrawer("d-tests", true),
   };
+  const scope: RowScope | undefined = day ? {
+    on: `on ${dayLabel(day, true)}`,
+    note: <div className="hint">{dv ? `${dayLabel(day, true)} only. ` : dayApi.error ? `Could not load ${dayLabel(day, true)} (${dayApi.error.message}); showing the whole range. `
+      : `Loading ${dayLabel(day, true)}…; showing the whole range. `}<button type="button" className="linkish" onClick={() => setSess({ ...sess, day: "" })}>Show the whole range</button></div>,
+  } : undefined;
   const d = data, has = !!d && d.totals.requests > 0;
   const cls = "wrap pg-activity" + (slow ? " loading" : "") + (grow ? " grow" : "");
 
@@ -117,7 +131,7 @@ export function ActivityPage() {
           [{ id: "overview", label: "Overview" }, { id: "attention", label: "Attention", hidden: !has }, { id: "vitals", label: "Health", long: "Work health", hidden: !has },
             { id: "work", label: "Work", long: "Work per day" }],
           [{ id: "d-sessions", label: "Sessions" }, { id: "d-projects", label: "Projects", long: "Project metrics" }, { id: "d-tools", label: "Tools" },
-            { id: "d-ext", label: "MCP & hooks", long: "MCP & hooks" }, { id: "d-loops", label: "Loops", long: "Error loops" }],
+            { id: "d-ext", label: "MCP & hooks", long: "MCP & hooks" }, { id: "d-loops", label: "Loops", long: "Error loops" }, { id: "d-tests", label: "Tests", long: "Failed test runs" }],
         ]} />
         {has && <section className="insights sect" id="attention" aria-label="What needs attention"><InsightCard insight={attentionInsight(d, acts)} primary /></section>}
         {has && <Vitals d={d} />}
@@ -126,9 +140,10 @@ export function ActivityPage() {
           <SessionsDrawer view={{ project: d.project, range: d.range, automated: d.automated, source: d.source }} count={d.totals.sessions} filter={sess} onFilter={setSess}
             selected={h.session} usage={d} />
           <ProjectsDrawer rows={d.by_project} selected={d.project} />
-          <ToolsDrawer tools={d.tools} flaky={flaky} />
-          <ExtDrawer mcp={d.mcp} skills={d.skills} hooks={d.hooks} />
-          <LoopsDrawer loops={d.error_loops} total={d.totals.error_loops} range={d.range} />
+          <ToolsDrawer tools={(dv ?? d).tools} flaky={flaky} sort={toolSort} onSort={setToolSort} scope={scope} />
+          <ExtDrawer mcp={(dv ?? d).mcp} skills={(dv ?? d).skills} hooks={(dv ?? d).hooks} scope={scope} />
+          <LoopsDrawer loops={(dv ?? d).error_loops} total={dv ? dv.error_loops_total : d.totals.error_loops} range={d.range} scope={scope} />
+          <TestsDrawer tests={d.failed_tests} total={d.totals.tests_failed} range={d.range} />
         </div>
       </>}
       <UsageSheets data={d} />

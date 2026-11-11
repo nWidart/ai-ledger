@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import type { UsagePayload } from "../../api";
+import type { DayView, ProjectRow, UsagePayload } from "../../api";
 import usage from "../../__fixtures__/usage";
 import usageAll from "../../__fixtures__/usage-all";
 import sessions from "../../__fixtures__/sessions";
@@ -12,6 +12,7 @@ import { Palette } from "../../components/palette/Palette";
 import { openPalette } from "../../components/palette/store";
 import { mockApi } from "../../components/sheets/testing";
 import { ActivityPage } from "./ActivityPage";
+import { setHash } from "../../hash";
 import { clearApiCache } from "../../useApi";
 import { hookCommand, workDays } from "./work";
 
@@ -165,6 +166,149 @@ describe("ActivityPage", () => {
     await waitFor(() => expect(fetched()).toContain("/api/sessions?range=30&near=1"));
   });
 
+  it("sorts sessions on the server, keeps the sort for Show more, and never reorders a page", async () => {
+    const all = Array.from({ length: 250 }, (_, k) => ({ ...sessions.sessions[0], session_id: `x${k}`, title: `Session ${k}`, cost: k % 7 }));
+    const page = (q: URLSearchParams) => {
+      const from = Number(q.get("offset") ?? 0), to = from + Number(q.get("limit") ?? 100);
+      return { total: all.length, offset: from, sessions: all.slice(from, to) };
+    };
+    mockApi({ "/api/usage": () => usage, "/api/sessions": page });
+    at();
+    render(<ActivityPage />);
+    await loaded();
+    act(() => { (document.getElementById("d-sessions") as HTMLDetailsElement).open = true; });
+    const drawer = within(document.getElementById("d-sessions")!);
+    await drawer.findByRole("button", { name: "Session 99" });
+    expect(drawer.queryByRole("button", { name: "Project" })).toBeNull();
+    const cost = drawer.getByRole("button", { name: "Est. cost" });
+    await userEvent.click(cost);
+    await waitFor(() => expect(fetched()).toContain("/api/sessions?range=30&sort=cost&desc=1"));
+    expect([...document.querySelectorAll("#d-sessions th[aria-sort]")].map(th => [th.textContent, th.getAttribute("aria-sort")])).toEqual([["Est. cost↓", "descending"]]);
+    // The rows keep the server's order: costs 0, 1, 2… are not reordered in the browser.
+    await waitFor(() => expect(document.querySelector("#d-sessions tbody tr button")!.textContent).toBe("Session 0"));
+    await userEvent.click(drawer.getByRole("button", { name: "Show more sessions" }));
+    await waitFor(() => expect(fetched()).toContain("/api/sessions?range=30&offset=100&sort=cost&desc=1"));
+    await userEvent.click(cost);
+    await waitFor(() => expect(fetched()).toContain("/api/sessions?range=30&sort=cost"));
+    expect(cost.closest("th")!.getAttribute("aria-sort")).toBe("ascending");
+    expect(location.hash).toBe("#range=30");
+  });
+
+  it("sorts projects and tools in the browser, projects by sessions first, empty values last", async () => {
+    const p0 = usage.by_project[0]!, proj = (project: string, sessions: number, tokens_per_prompt: number | null): ProjectRow => ({ ...p0, project, sessions, tokens_per_prompt });
+    serve({ ...usage, by_project: [proj("a", 1, null), proj("b", 5, 10), proj("c", 3, 20)] });
+    at();
+    render(<ActivityPage />);
+    await loaded();
+    const order = (id: string) => [...document.querySelectorAll(`#${id} tbody tr`)].map(r => r.getAttribute("data-v"));
+    const projects = within(document.getElementById("d-projects")!);
+    expect(order("d-projects")).toEqual(["b", "c", "a"]);
+    expect(projects.getByRole("button", { name: "Sessions" }).closest("th")!.getAttribute("aria-sort")).toBe("descending");
+    expect(document.getElementById("d-projects")!.querySelector("thead")!.textContent).not.toMatch(/cost/i);
+    await userEvent.click(projects.getByRole("button", { name: "Tokens / prompt" }));
+    expect(order("d-projects")).toEqual(["c", "b", "a"]);
+    await userEvent.click(projects.getByRole("button", { name: "Tokens / prompt" }));
+    expect(order("d-projects")).toEqual(["b", "c", "a"]);
+    expect(order("d-tools")).toEqual(usage.tools.map(t => t.tool));
+    const failed = within(document.getElementById("d-tools")!).getByRole("button", { name: "Failed" });
+    await userEvent.click(failed);
+    expect(order("d-tools")[0]).toBe("Edit");
+    expect(failed.closest("th")!.getAttribute("aria-sort")).toBe("descending");
+    await userEvent.click(failed);
+    expect(order("d-tools").at(-1)).toBe("Edit");
+    expect(fetched().filter(u => !String(u).startsWith("/api/usage"))).toEqual([]);
+  });
+
+  it("restores the sessions filters from the hash and writes them without new history entries", async () => {
+    mockApi({ "/api/usage": () => usage, "/api/sessions": () => sessions, "/api/day": () => ({ day: "2026-11-04", tools: [], mcp: [], skills: [], hooks: [], error_loops: [], error_loops_total: 0 }) });
+    at("#range=30&day=2026-11-04&q=api&near=1");
+    render(<ActivityPage />);
+    await loaded();
+    act(() => { (document.getElementById("d-sessions") as HTMLDetailsElement).open = true; });
+    await waitFor(() => expect(fetched()).toContain("/api/sessions?range=30&q=api&near=1&day=2026-11-04"));
+    const search = screen.getByRole<HTMLInputElement>("searchbox", { name: "Search sessions" });
+    expect(search.value).toBe("api");
+    expect(screen.getByRole("checkbox", { name: "Near context limit only" })).toHaveProperty("checked", true);
+    expect(screen.getByText("Active on Nov 4, 2026")).toBeTruthy();
+    const n = history.length;
+    await userEvent.type(search, "x");
+    await userEvent.click(screen.getByRole("checkbox", { name: "Near context limit only" }));
+    expect(location.hash).toBe("#range=30&day=2026-11-04&q=apix");
+    expect(history.length).toBe(n);
+  });
+
+  it("clears the day when the project, range or source changes", async () => {
+    mockApi({ "/api/usage": () => usage, "/api/sessions": () => sessions, "/api/day": () => ({ day: "2026-11-04", tools: [], mcp: [], skills: [], hooks: [], error_loops: [], error_loops_total: 0 }) });
+    at("#range=30&day=2026-11-04&q=api");
+    render(<ActivityPage />);
+    await loaded();
+    await userEvent.click(within(screen.getByRole("group", { name: "Time range" })).getByRole("button", { name: "7d" }));
+    await waitFor(() => expect(location.hash).toBe("#range=7&q=api"));
+    act(() => setHash({ day: "2026-11-04" }));
+    await userEvent.click(within(screen.getByRole("group", { name: "Source" })).getByRole("button", { name: "Codex" }));
+    await waitFor(() => expect(location.hash).toBe("#range=7&source=codex&q=api"));
+    act(() => setHash({ day: "2026-11-04" }));
+    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Project" }), "foo");
+    await waitFor(() => expect(location.hash).toBe("#project=foo&range=7&source=codex&q=api"));
+  });
+
+  it("narrows tools, MCP & hooks and error loops to the selected day", async () => {
+    const day: DayView = {
+      day: "2026-11-04", tools: [{ tool: "Grep", calls: 2, errors: 0, failure_rate: 0, p50_ms: 10, p95_ms: 20 }],
+      mcp: [{ name: "daysrv", calls: 1, errors: 0, failure_rate: 0 }], skills: [], hooks: [],
+      error_loops: [{ ...usage.error_loops[0]!, first_id: "dl1" }], error_loops_total: 7,
+    };
+    mockApi({ "/api/usage": () => usage, "/api/sessions": () => sessions, "/api/day": () => day });
+    at("#range=30&day=2026-11-04");
+    render(<ActivityPage />);
+    await loaded();
+    const tools = within(document.getElementById("d-tools")!);
+    expect(await tools.findByRole("button", { name: "Grep" })).toBeTruthy();
+    expect(tools.queryByRole("button", { name: "Edit" })).toBeNull();
+    expect(fetched()).toContain("/api/day?range=30&day=2026-11-04");
+    expect(tools.getByText(/^Nov 4, 2026 only\./)).toBeTruthy();
+    expect(within(document.getElementById("d-ext")!).getByRole("button", { name: "daysrv" })).toBeTruthy();
+    const loops = document.getElementById("d-loops")!;
+    expect(loops.querySelector("summary")!.textContent).toMatch(/Error loops\s*7/);
+    expect(loops.querySelector("a")!.getAttribute("href")).toContain("ex=dl1");
+    // Projects and attention stay range-wide; the sessions table says which figures are whole-session.
+    expect(attention().getByText("1 failed test run")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Peak context" }).closest("th")!.getAttribute("title")).toMatch(/whole-session/i);
+    await userEvent.click(tools.getByRole("button", { name: "Show the whole range" }));
+    expect(location.hash).toBe("#range=30");
+    expect(await tools.findByRole("button", { name: "Edit" })).toBeTruthy();
+    expect(tools.queryByRole("button", { name: "Grep" })).toBeNull();
+    expect(within(document.getElementById("d-ext")!).getByRole("button", { name: "srv" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Peak context" }).closest("th")!.getAttribute("title")).toBeNull();
+  });
+
+  it("shows the range rows and fetches no day without a day", async () => {
+    serve(usage);
+    at();
+    render(<ActivityPage />);
+    await loaded();
+    expect(within(document.getElementById("d-tools")!).getByRole("button", { name: "Edit" })).toBeTruthy();
+    expect(fetched().some(u => String(u).startsWith("/api/day"))).toBe(false);
+  });
+
+  it("opens the failed test runs, each linking to its error", async () => {
+    const t = { id: "t9", session_id: "s1", title: "Fix upload", project: "bar", source: "codex" as const, command: "npm test", ts: "2026-11-04T10:07:00.000Z" };
+    serve({ ...usage, totals: { ...usage.totals, tests_failed: 4 }, failed_tests: [t] });
+    at();
+    render(<ActivityPage />);
+    await loaded();
+    await userEvent.click(attention().getByRole("button", { name: "See tests" }));
+    const drawer = document.getElementById("d-tests") as HTMLDetailsElement;
+    expect(drawer.open).toBe(true);
+    expect(drawer.contains(document.activeElement)).toBe(true);
+    expect(drawer.querySelector("summary")!.textContent).toMatch(/Failed test runs\s*4/);
+    const row = within(drawer.querySelector("tbody")!);
+    expect(row.getByText("npm test")).toBeTruthy();
+    expect(row.getByRole("button", { name: "Fix upload" })).toBeTruthy();
+    expect(row.getByRole("link", { name: "Open in Errors" }).getAttribute("href")).toBe("/errors#project=bar&range=30&source=codex&ex=t9");
+    expect(document.querySelector('.sections a[href="#d-tests"], a[href="#d-tests"]')).toBeTruthy();
+  });
+
   it("names an error loop's session by its title, with the short id below", async () => {
     const [first, ...rest] = usage.error_loops;
     serve({ ...usage, error_loops: [{ ...first!, title: "Fix flaky upload test" }, ...rest.map(l => ({ ...l, title: null }))] });
@@ -217,7 +361,7 @@ describe("ActivityPage", () => {
     expect(screen.getByText("Active on Nov 4, 2026")).toBeTruthy();
     await waitFor(() => expect(fetched()).toContain("/api/sessions?range=30&day=2026-11-04"));
     // The bars follow the chosen count.
-    await userEvent.click(screen.getByRole("button", { name: "Prompts" }));
+    await userEvent.click(within(screen.getByRole("group", { name: "Chart metric" })).getByRole("button", { name: "Prompts" }));
     expect(screen.getByRole("img", { name: /^Prompts and failed tool calls per day/ })).toBeTruthy();
   });
 
