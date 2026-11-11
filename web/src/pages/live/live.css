@@ -71,7 +71,7 @@
 .pg-live .stream-filters label.chk { font-size: 12.5px; }
 .pg-live .stream-filters .hid { margin-left: auto; }
 .pg-live .stream-filters button[aria-pressed=true], .pg-live .kv .fig[aria-pressed=true] { background: var(--critical-soft); border-color: var(--critical-text); color: var(--critical-text); }
-.pg-live .stream { height: max(420px, calc(100dvh - 295px)); overflow: auto; padding: 8px 0 14px; position: relative; }
+.pg-live .stream { height: max(420px, calc(100dvh - 298px)); overflow: auto; padding: 8px 0 14px; position: relative; }
 .pg-live .loading { padding: 16px; }
 .pg-live .older { font-size: 12px; margin: 4px 14px 8px; }
 .pg-live .ev { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 10px; padding: 3px 14px; }
@@ -107,7 +107,7 @@
 .pg-live .lane-head { width: 100%; border: 0; background: none; text-align: left; padding: 5px 10px; display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; font-size: 13px; }
 .pg-live .lane-head b { color: var(--proj-4); }
 .pg-live .lane-head .muted { font-size: 12px; }
-.pg-live .lane .more { border: 0; background: none; padding: 0 10px 3px; font-size: 12px; color: var(--accent-ink); }
+.pg-live .lane .more { border: 0; background: none; margin: 0; padding: 0 10px 3px; font-size: 12px; color: var(--accent-ink); }
 .pg-live .lane .more:hover { text-decoration: underline; }
 .pg-live .lane .ev { grid-template-columns: 56px minmax(0, 1fr); padding: 2px 6px; }
 .pg-live .compact { text-align: center; font-size: 12px; color: var(--warning-text); margin: 12px 14px; border-top: 1px dashed var(--warning-text); line-height: 0; }
