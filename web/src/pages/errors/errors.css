@@ -9,6 +9,8 @@
 .pg-errors .lede b { font-weight: 600; letter-spacing: -.04em; color: var(--text-primary); }
 .pg-errors .lede .dn { color: var(--good-text); font-weight: 500; } .pg-errors .lede .up { color: var(--critical-text); font-weight: 500; }
 .pg-errors .lede:focus { outline: none; }
+/* Desktop: the sentence runs wider, so the chart starts above the fold. */
+@media (min-width: 1100px) { .pg-errors .lede { max-width: 56ch; font-size: clamp(24px, 2.6vw, 36px); } }
 .pg-errors .sub { color: var(--text-muted); font-size: 13px; margin: 0 0 20px; }
 /* Vitals: Usage's ruled stat strip, same anatomy (value, label, note). */
 .pg-errors .vitals { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 20px;
@@ -40,7 +42,8 @@
 .pg-errors .chart-card .hint { color: var(--text-muted); font-size: 12px; margin: 0 0 8px; }
 .pg-errors #chart { position: relative; border-radius: 6px; }
 .pg-errors #chart:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
-.pg-errors #chart svg { display: block; width: 100%; height: 280px; overflow: visible; }
+.pg-errors #chart svg { display: block; width: 100%; height: 320px; overflow: visible; }
+.pg-errors #chart .empty { padding: 16px 0; }
 /* Legend: each type is a button that selects it; Other and the rate line are keys. */
 .pg-errors .legend { display: flex; flex-wrap: wrap; gap: 4px 6px; margin: 4px 0 10px; }
 .pg-errors .legend button, .pg-errors .legend .key { font-size: 12px; padding: 2px 8px; display: inline-flex; gap: 6px; align-items: center; border-radius: 999px; max-width: 100%; min-width: 0; }
@@ -52,6 +55,7 @@
 .pg-errors .sw { width: 10px; height: 10px; border-radius: 3px; display: inline-block; flex: none; }
 .pg-errors .sw.line { width: 14px; height: 0; border-radius: 0; border-top: 2px solid var(--text-primary); }
 .pg-errors .sw.nodata { background: var(--surface-2); border: 1px dashed var(--border); }
+.pg-errors .sw.low { width: 8px; height: 8px; border-radius: 50%; border: 1.25px solid var(--text-muted); background: var(--surface-1); }
 /* Selecting a type lifts its layer and dims the rest in place. */
 @media (prefers-reduced-motion: no-preference) { .pg-errors #chart .layer, .pg-errors #chart .fix { transition: opacity .2s; } }
 .pg-errors #chart svg.has-sel .layer:not(.on), .pg-errors #chart svg.has-sel .fix:not(.on) { opacity: .2; }
@@ -79,6 +83,16 @@
 .pg-errors .grid2 { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 16px; margin-top: 16px; }
 @media (max-width: 900px) { .pg-errors .grid2 { grid-template-columns: minmax(0, 1fr); } }
 .pg-errors .grid2 > * { min-width: 0; }
+/* Wide screens: the type table stays in view, scrolling on its own, while a type's examples run down the page beside it. */
+@media (min-width: 901px) {
+  .pg-errors .grid2 { align-items: start; }
+  .pg-errors .types { position: sticky; top: calc(var(--appnav-h, 56px) + 12px); display: flex; flex-direction: column;
+    max-height: calc(100vh - var(--appnav-h, 56px) - 24px); }
+  .pg-errors .types .tscroll { overflow-y: auto; min-height: 0; }
+  .pg-errors .types thead th { position: sticky; top: 0; z-index: 1; background: var(--surface-1); }
+}
+/* Two columns at mid widths: the share bar gives its room to the type names. */
+@media (min-width: 901px) and (max-width: 1100px) { .pg-errors .c-share { display: none; } }
 .pg-errors .tscroll { overflow-x: auto; }
 .pg-errors .tbtn .sw { margin-right: 7px; vertical-align: 0; }
 .pg-errors td .chip.fixed { margin-left: 6px; }

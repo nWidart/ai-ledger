@@ -36,7 +36,7 @@ describe("ErrorsPage", () => {
     const d = document.getElementById("detail")!;
     expect(d.querySelector(".chip.fixed")?.textContent).toBe("✓ Fix applied Nov 4, 2026");
     expect([...d.querySelectorAll(".ba .v")].map(x => x.textContent)).toEqual(["No calls", "60.00%"]);
-    expect(d.querySelector(".fixout")?.textContent).toContain("Not enough calls yet");
+    expect(d.querySelector(".fixout")?.textContent).toBe("No calls before this date No tool calls before Nov 4 to compare with; pick the day the fix went in.");
     expect(document.activeElement?.id).toBe("detailTitle");
     expect(location.hash).toBe("#range=30&cat=x");
   });

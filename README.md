@@ -14,7 +14,7 @@ Needs [uv](https://docs.astral.sh/uv/). macOS and Linux. Nothing leaves your mac
 
 - **Activity**: what got done per day, session and tool, and what needs attention.
 - **Cost**: estimated spend at API list prices, per project, model and session, against the period before.
-- **Errors**: failed tool calls by type, with a fix to paste into `CLAUDE.md`.
+- **Errors**: failed tool calls by type, with a fix to paste into `CLAUDE.md` or `AGENTS.md`.
 - **Limits**: each plan limit window, with a forecast to its reset.
 - **Insights**: how Claude Code's `/insights` judged your sessions.
 - **Live**: every active session as it runs: prompts, tool calls, subagents, context and cost.

@@ -121,44 +121,49 @@ def errors_payload(cur, last_ingest=None, today=None):
         WHERE t.start_ts IS NOT NULL GROUP BY 1, 2, 5 ORDER BY 1, 2, 5""").fetchall()
     return dict(generated=last_ingest, today=(today or local_today(cur)).isoformat(), project_order=project_order(cur), categories=[{k: r[k] for k in ("id", "label", "why", "fix", "snippet")} for r in RULES],
                 errors=errs, calls=[list(c) for c in calls], error_days=error_days(cur), incidents=inc,
-                incident_gap_minutes=INCIDENT_GAP_MINUTES)
+                incident_gap_minutes=INCIDENT_GAP_MINUTES, incident_max_ok=INCIDENT_MAX_OK)
 
 
 INCIDENT_GAP_MINUTES = 10  # a failure more than this long after the previous one of the same tool starts a new incident
+INCIDENT_MAX_OK = 2  # more successful calls of the tool than this between two failures start a new incident
 
 
 def incidents(cur):
-    """Failed calls grouped into incidents: failures of one tool in one session (main thread and subagents apart) with the
-    same category, each starting at most INCIDENT_GAP_MINUTES after the previous one ended. Calls of that tool that succeed in
-    between don't end an incident (ok counts them), so an intermittent problem reads as one episode.
-    Returns (incidents, {tool_use_id: incident index}). Each incident: s session, t tool, c category, p project, sub,
-    first/last (ISO start of the first failure, end of the last), ok, outcome of the tool's next call in the session after the
-    last failure ("recovered": it succeeded; "failed_again": it failed with another error, or later than the gap; "gave_up":
-    the session never called that tool again), and for a recovery rid, ri (its input, cut to 400) and rts (its start)."""
+    """Failed calls grouped into incidents, a retry loop on one thing: failures of one tool by one agent (the main thread or
+    one subagent, told apart by the transcript file that holds its results) with the same category, each starting at most
+    INCIDENT_GAP_MINUTES after the previous one ended and with at most INCIDENT_MAX_OK successful calls of that tool in
+    between (ok counts them over the incident). More successes than that mean the agent moved on: a later failure is a new
+    attempt. Returns (incidents, {tool_use_id: incident index}). Each incident: s session, t tool, c category, p project, sub,
+    first/last (ISO start of the first failure, end of the last), ok, outcome of the agent's next call of that tool that
+    starts after the last failure ended ("recovered": it succeeded; "failed_again": it failed with another error, or later
+    than the gap or the successes allow; "gave_up": the agent never called that tool again), and for a recovery rid, ri
+    (its input, cut to 400) and rts (its start). Calls without a result yet take no part."""
     got = cur.execute(f"""
         WITH seq AS (
-          SELECT tool_use_id AS id, session_id, tool, subagent, category, is_error, end_ts, coalesce(start_ts, end_ts) AS ts,
-                 sum(CASE WHEN is_error THEN 0 ELSE 1 END) OVER w AS oks,
-                 lead(tool_use_id) OVER w AS n_id, lead(is_error) OVER w AS n_err
-          FROM tool_calls WHERE coalesce(start_ts, end_ts) IS NOT NULL
-          WINDOW w AS (PARTITION BY session_id, subagent, tool ORDER BY coalesce(start_ts, end_ts), tool_use_id)),
+          SELECT tool_use_id AS id, session_id, subagent, coalesce(result_file, '') AS agent, tool, category, is_error, end_ts,
+                 coalesce(start_ts, end_ts) AS ts, sum(CASE WHEN is_error THEN 0 ELSE 1 END) OVER w AS oks
+          FROM tool_calls WHERE end_ts IS NOT NULL
+          WINDOW w AS (PARTITION BY session_id, subagent, coalesce(result_file, ''), tool ORDER BY coalesce(start_ts, end_ts), tool_use_id)),
         fails AS (
-          SELECT *, CASE WHEN ts - lag(end_ts) OVER f <= INTERVAL {INCIDENT_GAP_MINUTES} MINUTE THEN 0 ELSE 1 END AS brk
-          FROM seq WHERE is_error AND end_ts IS NOT NULL
-          WINDOW f AS (PARTITION BY session_id, subagent, tool, category ORDER BY ts, id)),
+          SELECT *, CASE WHEN ts - lag(end_ts) OVER f <= INTERVAL {INCIDENT_GAP_MINUTES} MINUTE
+                          AND oks - lag(oks) OVER f <= {INCIDENT_MAX_OK} THEN 0 ELSE 1 END AS brk
+          FROM seq WHERE is_error
+          WINDOW f AS (PARTITION BY session_id, subagent, agent, tool, category ORDER BY ts, id)),
         grp AS (
-          SELECT *, sum(brk) OVER (PARTITION BY session_id, subagent, tool, category ORDER BY ts, id) AS g FROM fails),
+          SELECT *, sum(brk) OVER (PARTITION BY session_id, subagent, agent, tool, category ORDER BY ts, id) AS g FROM fails),
         inc AS (
-          SELECT session_id, subagent, tool, category AS c, g, list(id ORDER BY ts, id) AS ids, min(ts) AS first,
-                 max(end_ts) AS last, max(oks) - min(oks) AS ok, list(n_id ORDER BY ts, id)[-1] AS n_id,
-                 list(n_err ORDER BY ts, id)[-1] AS n_err
-          FROM grp GROUP BY 1, 2, 3, 4, 5)
+          SELECT session_id, subagent, agent, tool, category AS c, g, list(id ORDER BY ts, id) AS ids, min(ts) AS first,
+                 max(end_ts) AS last, max(oks) - min(oks) AS ok
+          FROM grp GROUP BY 1, 2, 3, 4, 5, 6),
+        nxt AS (
+          SELECT i.*, n.id AS n_id, n.is_error AS n_err FROM inc i ASOF LEFT JOIN seq n
+            ON n.session_id = i.session_id AND n.subagent = i.subagent AND n.agent = i.agent AND n.tool = i.tool AND n.ts > i.last)
         SELECT i.session_id, i.tool, i.c, coalesce(s.project, '(unknown)'), i.subagent, i.first, i.last, i.ok, i.ids,
                CASE WHEN i.n_id IS NULL THEN 'gave_up' WHEN NOT i.n_err THEN 'recovered' ELSE 'failed_again' END,
                CASE WHEN NOT i.n_err THEN i.n_id END, CASE WHEN NOT i.n_err THEN left(r.input_summary, 400) END,
                CASE WHEN NOT i.n_err THEN coalesce(r.start_ts, r.end_ts) END
-        FROM inc i LEFT JOIN sessions s USING (session_id) LEFT JOIN tool_calls r ON r.tool_use_id = i.n_id
-        ORDER BY i.first, i.session_id, i.tool, i.c""").fetchall()
+        FROM nxt i LEFT JOIN sessions s USING (session_id) LEFT JOIN tool_calls r ON r.tool_use_id = i.n_id
+        ORDER BY i.first, i.session_id, i.tool, i.c, i.ids[1]""").fetchall()
     out, of = [], {}
     for sid, tool, c, p, sub, first, last, ok, ids, outcome, rid, ri, rts in got:
         for x in ids:

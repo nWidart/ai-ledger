@@ -29,7 +29,7 @@ where the new code does it.
 ## Briefing and vitals
 
 - [x] L438–459: the lede: "N failed tool calls (r%), ↓/↑d% vs previous N days. <Top type> is x% of them." with the project (dot and name) when filtered; "flat" under 1%; "No failed tool calls … out of N." and "No tool calls … in this period." variants. Port: `Summary`, `model.ts` `summary`.
-- [x] L442–453: the comparison is the previous equal period (from `error_days`), or for All time the second half against the first. Port: `model.ts` `summary`.
+- [x] L442–453: the comparison is the previous equal period (from `error_days`), or for All time the second half against the first. Port: `model.ts` `summary`. Changed since: `compare` splits All time at the day that halves its calls and needs 200 calls a side (define-error-incidents).
 - [x] L1003–1004: the date line: "Oct 8, 2026 to Nov 6, 2026 · Ingested <time>" or "All time to …". Port: `Summary` `#gen`.
 - [x] L463–469: four vitals: Error rate, Change (green/red past ±1%), Incidents (with the "didn't recover" share, the recovered note and the type count), Fixes applied (with how many open types have a ready-made fix). Port: `Summary`.
 - [x] L42–45, L264, L1048–1052: on phones only the first two vitals show; "More summary" / "Less summary" (aria-expanded, aria-controls `kpis gen`) shows the rest and the date line. Port: `Summary`, `errors.css`.
@@ -53,7 +53,7 @@ where the new code does it.
 
 ## Error types table
 
-- [x] L677–700: one row per type by count: swatch in its chart color, label button (aria-expanded, aria-controls `detail`), "✓ Fix applied <date>" chip, count, share bar with a tick under 3%, rate trend sparkline, half-on-half change (arrow past ±5%, "New", "–" with a title when a half has no calls). Port: `TypeTable`, `model.ts` `typeRows`, `change`.
+- [x] L677–700: one row per type by count: swatch in its chart color, label button (aria-expanded, aria-controls `detail`), "✓ Fix applied <date>" chip, count, share bar with a tick under 3%, rate trend sparkline, half-on-half change (arrow past ±5%, "New", "–" with a title when a half has no calls). Port: `TypeTable`, `model.ts` `typeRows`, `change`. Changed since: Change uses the summary's comparison, shows counts under 5 errors a side and no "New".
 - [x] L696: empty states: "No tool calls recorded for <project>.", "No errors in this range 🎉", "No tool calls in this range.". Port: `model.ts` `emptyTypes`.
 - [x] L697–700, L130: a click anywhere on a row (or Enter/Space on its button) opens the type, selected row tinted; clicking the open type closes it; opening moves focus to the detail title. Port: `TypeTable`, `pick`.
 - [x] L123: Share and Rate trend columns hide on phones. Port: `errors.css`.
@@ -61,12 +61,12 @@ where the new code does it.
 
 ## Detail: where to start
 
-- [x] L720–740: with no type open: "Where to start" (top 4 open types with a ready-made fix and no marker) and "Rising fastest" (top 4 types up more than 10% half on half with at least 5 recent errors, "New" for types from zero, "· noise", "Check the fix" when fixed); each opens its type and focuses it; the ingest/markers footnote. Port: `Detail` `WhereToStart`, `model.ts` `whereToStart`.
+- [x] L720–740: with no type open: "Where to start" (top 4 open types with a ready-made fix and no marker) and "Rising fastest" (top 4 types up more than 10% half on half with at least 5 recent errors, "New" for types from zero, "· noise", "Check the fix" when fixed); each opens its type and focuses it; the ingest/markers footnote. Port: `Detail` `WhereToStart`, `model.ts` `whereToStart`. Changed since: the summary's comparison, biggest rate gain first, counts under 5 errors.
 
 ## Detail: a type
 
 - [x] L776–779: header (title, "Back to types", ✕ "Close detail"), why text with its three busiest tools, and the incident line ("N errors in K incidents, x% didn't recover (…). Largest: n attempts over t.") with its explanatory title. Port: `Detail` `TypeDetail`.
-- [x] L780–786, L805: potential fix, the CLAUDE.md snippet and "Copy CLAUDE.md line" ("Copied ✓"). Port: `TypeDetail`.
+- [x] L780–786, L805: potential fix, the CLAUDE.md snippet and "Copy CLAUDE.md line" ("Copied ✓"; now "Copy instruction line", as Codex reads AGENTS.md). Port: `TypeDetail`.
 - [x] L783–784, L806–808: "Applied on" date (default and max today), "Mark fix applied" (a future or incomplete date shows the browser's message), focus moves to Undo; Undo removes it and focuses Mark; "Applies to all projects". Port: `TypeDetail` `mark`/`undo`.
 - [x] L319, L807: applied fixes live in `claude-errors-fixes` as `{"<type id>": "YYYY-MM-DD"}`; a value saved by the old page shows as a marker. Port: `view.ts` `loadFixes`, `ErrorsPage` `setFixes`.
 - [x] L746–770: before/after the fix (all time, project and subagent filters only): two figures with their errors and calls and a verdict ("Rate lower/higher/unchanged", or "Not enough calls yet" until max(200, calls for 5 errors at the old rate) calls since the fix). Port: `Detail` `FixResult`, `model.ts` `beforeAfter`.

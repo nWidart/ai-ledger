@@ -6,8 +6,8 @@ import { useErrors } from "./context";
 import { Example, Examples, Incident } from "./Examples";
 import { Spark } from "./Spark";
 import {
-  beforeAfter, bucketOf, buckets, byProject, byWeight, dur, exList, incSpan, incSummary, label, NOISE, RECOVERED_NOTE, series,
-  topTools, typeColor, whereToStart, type Err, type Group,
+  beforeAfter, bucketOf, buckets, byProject, byWeight, dur, exList, incSpan, incSummary, NOISE, RECOVERED_NOTE, series,
+  label, MIN_PCT_ERRORS, topTools, typeColor, whereToStart, yearLabel, type Err, type Group,
 } from "./model";
 
 const reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -29,17 +29,21 @@ function Pick({ c, top, sub, act }: { c: string; top: ReactNode; sub: string; ac
 }
 
 function WhereToStart() {
-  const { m, v, f, fixes } = useErrors(), { open, rising } = whereToStart(m, v, f, fixes);
+  const { m, v, f, fixes } = useErrors(), { open, rising, cmp, why } = whereToStart(m, v, f, fixes);
   return <>
     <h2>Where to start</h2>
-    <p className="why">Biggest open error types that have a ready-made fix. Pick one, apply the fix, then mark it applied to watch its rate drop.</p>
-    {open.length ? open.map(([c, n]) => <Pick key={c} c={c} top={<span className="muted">{fmt(n)} errors</span>} sub={m.cats[c]!.fix} act="Open fix and examples" />)
-      : <div className="empty">Nothing open with a known fix.</div>}
-    <h3 className="subh">Rising fastest</h3>
-    <p className="why" style={{ fontSize: 13, marginBottom: 4 }}>Error rate in the second half of the range against the first.</p>
-    {rising.length ? rising.map(x => <Pick key={x.c} c={x.c} top={<span className="rise">{x.d === Infinity ? "New" : `+${fmt(x.d, 0)}%`}</span>}
-      sub={`${fmt(x.e1)} → ${fmt(x.e2)} errors${NOISE.has(x.c) ? " · noise" : ""}`} act={fixes[x.c] ? "Check the fix" : "See what changed"} />)
-      : <div className="empty" style={{ padding: "12px 0" }}>Nothing is rising in this range.</div>}
+    {!f.errs.length ? <div className="empty">No errors in this range, nothing to start on.</div> : <>
+      <p className="why">Biggest open error types that have a ready-made fix. Pick one, apply the fix, then mark it applied to watch its rate drop.</p>
+      {open.length ? open.map(([c, n]) => <Pick key={c} c={c} top={<span className="muted">{fmt(n)} errors</span>} sub={m.cats[c]!.fix} act="Open fix and examples" />)
+        : <div className="empty">Nothing open with a known fix.</div>}
+      <h3 className="subh">Rising fastest</h3>
+      <p className="why" style={{ fontSize: 13, marginBottom: 4 }}>{`Error rate ${cmp}, as in the table's Change.`}</p>
+      {/* Too few errors before for a percent: the counts, as in the table. */}
+      {rising.length ? rising.map(x => <Pick key={x.c} c={x.c} top={<span className="rise">{x.e1 < MIN_PCT_ERRORS ? `${fmt(x.e1)} → ${fmt(x.e2)}` : `+${fmt(x.d, 0)}%`}</span>}
+        sub={`${x.e1 < MIN_PCT_ERRORS ? `Error rate ${fmt(x.r1, 2)}% → ${fmt(x.r2, 2)}%` : `${fmt(x.e1)} → ${fmt(x.e2)} errors`}${NOISE.has(x.c) ? " · noise" : ""}`}
+        act={fixes[x.c] ? "Check the fix" : "See what changed"} />)
+        : <div className="empty" style={{ padding: "12px 0" }}>{why ? `${why}, nothing to compare.` : "Nothing is rising in this range."}</div>}
+    </>}
     <div className="ex" style={{ borderBottom: 0 }}><div className="muted" style={{ fontSize: 12 }}>The app ingests new transcript lines every minute; use Refresh above to ingest now. Fix markers live in this browser.</div></div>
   </>;
 }
@@ -113,15 +117,15 @@ function TypeDetail({ cat }: { cat: string }) {
       </span>
     </div>
     <p className="why">{c.why}{tools.length ? <> <span className="muted">Mostly {tools.map(t => t[0]).join(", ")}.</span></> : null}</p>
-    {base.length ? <p className="istat" title={`An incident: failures of one tool in one session with this error, each within ${m.gap} minutes of the last. Recovered: the tool's next call in that session succeeded.`}>
+    {base.length ? <p className="istat" title={`An incident: one agent retrying one tool with this error, each failure within ${m.gap} minutes of the last and at most ${m.maxOk} successful calls of that tool apart. Recovered: the agent's next call of that tool, after the last failure, succeeded.`}>
       <b>{fmt(base.length)}</b> error{base.length === 1 ? "" : "s"} in <b>{fmt(is.n)}</b> incident{is.n === 1 ? "" : "s"}, <b>{fmt(is.pct, 0)}%</b> didn't recover <span className="muted">({RECOVERED_NOTE.replace(/\.$/, "")})</span>.
       {worst && worst.errs.length > 1 ? ` Largest: ${fmt(worst.errs.length)} attempts over ${dur(incSpan(worst))}.` : ""}</p> : null}
     <div className="fixbox"><div className="t">Potential fix</div><div>{c.fix}</div>
-      {c.snippet ? <><pre className="snip" id="snip">{c.snippet}</pre><div className="row" style={{ marginTop: 8 }}><button type="button" id="copy" onClick={copy}>{copied === "ok" ? "Copied ✓" : "Copy CLAUDE.md line"}</button>
+      {c.snippet ? <><pre className="snip" id="snip">{c.snippet}</pre><div className="row" style={{ marginTop: 8 }}><button type="button" id="copy" onClick={copy}>{copied === "ok" ? "Copied ✓" : "Copy instruction line"}</button>
         <span role="status" className={copied === "fail" ? "muted" : "sr"}>{copied === "fail" ? "Could not copy: select the line above and copy it." : copied === "ok" ? "Copied." : ""}</span></div></> : null}
       <div className="row" style={{ marginTop: 10 }}>
         {fixDay ? <><span className="chip fixed">✓ Fix applied {label(fixDay, true)}</span><button type="button" id="unfix" onClick={undo}>Undo</button></>
-          : <><label className="chk">Applied on <input type="date" id="fixDate" ref={date} defaultValue={m.lastDay} max={m.lastDay} /></label><button type="button" id="fix" onClick={mark}>Mark fix applied</button></>}
+          : <><label className="chk">Applied on <input type="date" id="fixDate" ref={date} defaultValue={m.lastDay} min={m.firstDay} max={m.lastDay} /></label><button type="button" id="fix" onClick={mark}>Mark fix applied</button></>}
         <span className="muted" style={{ fontSize: 12 }}>Applies to all projects</span>
       </div>
     </div>
@@ -163,6 +167,7 @@ function FixResult({ cat, fixDay }: { cat: string; fixDay: string }) {
     ))}</div>
     <p className="fixout"><span className={"out " + verdict[1]}>{verdict[0]}</span>{" "}
       {enough ? `${pct(b4)} before (${den(b4)}) → ${pct(af)} since (${den(af)}).`
+        : b4.r == null ? `No tool calls before ${yearLabel(m, fixDay)} to compare with; pick the day the fix went in.`
         : `${fmt(af.c)} call${af.c === 1 ? "" : "s"} since the fix (${fmt(af.e)} failed); ${fmt(need)} needed to compare${b4.r != null ? ` with ${pct(b4)} before (${den(b4)})` : ""}.`}</p>
   </>;
 }
@@ -170,7 +175,7 @@ function FixResult({ cat, fixDay }: { cat: string; fixDay: string }) {
 /** The type's rate over the range with its fix marker, for when the main chart is out of view (scrolled away, or under the sheet). */
 function MiniRate({ cat }: { cat: string }) {
   const { m, v, f, vt, fixes } = useErrors(), fix = fixes[cat];
-  const pts = series(v, f.errs, f.calls, buckets(m, f.start, v.gran), cat), i = fix ? pts.findIndex(p => p.k === bucketOf(fix, v.gran)) : -1;
+  const pts = series(v, f.errs, f.calls, buckets(m, f.from, v.gran), cat), i = fix ? pts.findIndex(p => p.k === bucketOf(fix, v.gran)) : -1;
   const max = Math.max(...pts.map(p => p.r || 0));
   return <>
     <div className="row" style={{ justifyContent: "space-between", fontSize: 12 }}>

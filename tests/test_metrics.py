@@ -353,9 +353,33 @@ class MetricsTest(unittest.TestCase):
             self.assertEqual((by[("a7",)]["outcome"], by[("a7",)]["sub"]), ("gave_up", 1))
             self.assertEqual(by[("t01", "t02", "t03", "t04")]["outcome"], "gave_up")
             self.assertEqual((by[("t08",)]["outcome"], by[("t08",)]["rid"]), ("recovered", "t09"))
-            self.assertEqual(p["incident_gap_minutes"], metrics.INCIDENT_GAP_MINUTES)
+            self.assertEqual((p["incident_gap_minutes"], p["incident_max_ok"]), (metrics.INCIDENT_GAP_MINUTES, metrics.INCIDENT_MAX_OK))
         finally:
             c.execute("DELETE FROM tool_calls WHERE tool_use_id LIKE 'a_'")
+
+    def test_incidents_are_retry_loops_of_one_agent(self):
+        c = self.con.cursor()
+        row = lambda i, s0, e0, err, cat=None, f="main": (i, "s3", "Bash", f"2026-11-05 11:{s0}", f"2026-11-05 11:{e0}", err, cat, f != "main", f)
+        store.insert(c, "tool_calls", ["tool_use_id", "session_id", "tool", "start_ts", "end_ts", "is_error", "category", "subagent", "result_file"], [
+            row("b1", "00:00", "00:05", True, "y"), row("b2", "01:00", "01:05", False), row("b3", "02:00", "02:05", False),
+            row("b4", "03:00", "03:05", True, "y"),  # two successes between: still the same retry loop
+            *[row(f"b{5 + k}", f"0{4 + k}:00", f"0{4 + k}:05", False) for k in range(metrics.INCIDENT_MAX_OK + 1)],
+            row("b9", "09:00", "09:30", True, "y"),  # more successes than INCIDENT_MAX_OK between: a new attempt
+            row("c1", "09:10", "09:12", False),  # started before b9 ended: a parallel call, not b9's next call
+            row("c2", "10:00", "10:05", False),
+            row("d1", "00:30", "00:35", True, "y", "agent-1"), row("d2", "01:30", "01:35", True, "y", "agent-2")])  # two subagents
+        try:
+            inc, of = metrics.incidents(c)
+            members = {}
+            for k, i in of.items():
+                members.setdefault(i, []).append(k)
+            by = {tuple(sorted(v)): inc[i] for i, v in members.items() if inc[i]["s"] == "s3"}
+            self.assertEqual(sorted(by), [("b1", "b4"), ("b9",), ("d1",), ("d2",)])
+            self.assertEqual((by[("b1", "b4")]["ok"], by[("b1", "b4")]["outcome"], by[("b1", "b4")]["rid"]), (2, "recovered", "b5"))
+            self.assertEqual((by[("b9",)]["outcome"], by[("b9",)]["rid"]), ("recovered", "c2"))
+            self.assertEqual([by[k]["outcome"] for k in [("d1",), ("d2",)]], ["gave_up", "gave_up"])
+        finally:
+            c.execute("DELETE FROM tool_calls WHERE session_id = 's3'")
 
     def test_automated_sessions_left_out_by_default(self):
         ids = lambda u: {x["session_id"] for x in u["sessions"]}
