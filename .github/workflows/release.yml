@@ -1,17 +1,92 @@
+# Releases when a release PR (opened by release-pr.yml) merges: checks and smoke-tests the merge commit,
+# then tags it, publishes it to PyPI and creates the GitHub release from the CHANGELOG.md section.
+#
+# The tag exists only once the checks and the smoke test pass. A failed check leaves no tag.
+# "Re-run failed jobs" rebuilds the same commit, so it only helps with flaky or infrastructure failures.
+# For a code failure, merge the fix into main through a normal PR, then run this workflow by hand with the tag.
+# The run by hand releases the current main commit the same way.
+# PyPI trusts this file by name (release.yml): renaming it breaks publishing.
 name: Release
 
 on:
-  push:
-    tags: ["v*"]
+  pull_request:
+    types: [closed]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: The release tag, vX.Y.Z. pyproject.toml and CHANGELOG.md on main must already hold this version.
+        type: string
+        required: true
 
 permissions:
   contents: read
 
+concurrency:
+  group: release-${{ github.event.pull_request.head.ref || format('release/{0}', inputs.tag) }}
+  cancel-in-progress: false
+
 jobs:
+  # Picks the tag and the commit to release. From here on, both events go the same way.
+  version:
+    name: Read the release version
+    if: >-
+      github.event_name == 'workflow_dispatch' || (
+        github.event.pull_request.merged == true &&
+        startsWith(github.event.pull_request.head.ref, 'release/v') &&
+        github.event.pull_request.head.repo.full_name == github.repository &&
+        github.event.pull_request.base.ref == 'main'
+      )
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.read.outputs.tag }}
+      sha: ${{ steps.read.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
+      - name: Read version
+        id: read
+        shell: bash
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          INPUT_TAG: ${{ inputs.tag }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+        run: |
+          if [[ $EVENT == workflow_dispatch ]]; then
+            if [[ $REF != refs/heads/main ]]; then
+              echo "::error::Run this workflow on main, not on '$REF'."
+              exit 1
+            fi
+            tag=$INPUT_TAG
+            sha=$GITHUB_SHA
+          else
+            tag=${HEAD_REF#release/}
+            sha=$MERGE_SHA
+          fi
+          if ! [[ $tag =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Tag '$tag' is not vX.Y.Z."
+            exit 1
+          fi
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" > /dev/null; then
+            echo "::error::Tag $tag already exists on origin."
+            exit 1
+          fi
+          # ci.yml checks that pyproject.toml holds the same version.
+          if ! grep -qF "## [${tag#v}]" CHANGELOG.md; then
+            echo "::error::No CHANGELOG.md section for ${tag#v} at $sha"
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
   check:
+    needs: version
     uses: ./.github/workflows/ci.yml
     with:
-      tag: ${{ github.ref_name }}
+      tag: ${{ needs.version.outputs.tag }}
+      ref: ${{ needs.version.outputs.sha }}
 
   smoke:
     needs: check
@@ -46,8 +121,36 @@ jobs:
           curl -sf -o /dev/null "$base$asset"
           curl -sf "$base/api/usage" | python3 -c 'import json, sys; json.load(sys.stdin)'
 
+  # A re-run after a later job failed finds the tag it pushed, and keeps it.
+  tag:
+    name: Tag the commit
+    needs: [version, smoke]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ needs.version.outputs.tag }}
+      SHA: ${{ needs.version.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.version.outputs.sha }}
+      - run: |
+          tagged=$(git ls-remote --tags origin "refs/tags/$TAG^{}" | cut -f1)
+          if [ "$tagged" = "$SHA" ]; then
+            echo "$TAG already tags $SHA."
+            exit 0
+          elif [ -n "$tagged" ]; then
+            echo "::error::Tag $TAG already exists on origin, on $tagged."
+            exit 1
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git tag -a "$TAG" -m "$TAG" "$SHA"
+          git push origin "refs/tags/$TAG"
+
   publish:
-    needs: smoke
+    needs: tag
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
@@ -60,25 +163,43 @@ jobs:
       - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3: also uploads PEP 740 provenance
 
   github-release:
-    needs: publish
+    needs: [version, publish]
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      TAG: ${{ needs.version.outputs.tag }}
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.version.outputs.sha }}
       - uses: actions/download-artifact@v8
         with:
           name: dist
           path: dist/
+      # Edits made on the release branch count: the notes come from CHANGELOG.md at the released commit.
       - name: Notes from CHANGELOG.md
-        env:
-          TAG: ${{ github.ref_name }}
         run: |
           awk -v v="${TAG#v}" '/^## \[/ { p = index($0, "## [" v "]") == 1; next } /^\[[^]]*\]: / { p = 0 } p' CHANGELOG.md > notes.md
           if ! grep -q '[^[:space:]]' notes.md; then
             echo "::error::CHANGELOG.md has no section for ${TAG#v}"
             exit 1
           fi
-      - run: gh release create "$GITHUB_REF_NAME" dist/* --title "$GITHUB_REF_NAME" --notes-file notes.md --verify-tag
-        env:
-          GH_TOKEN: ${{ github.token }}
+      # A re-run after this step failed finds the release, and uploads the files again.
+      - name: Create the GitHub release
+        run: |
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --clobber
+          else
+            gh release create "$TAG" dist/* --title "$TAG" --notes-file notes.md --verify-tag
+          fi
+      # A run by hand usually finds the branch gone already.
+      - name: Delete the release branch
+        run: |
+          branch="release/$TAG"
+          if git ls-remote --exit-code --heads origin "refs/heads/$branch" > /dev/null; then
+            git push origin --delete "$branch"
+          else
+            echo "$branch is already deleted."
+          fi
