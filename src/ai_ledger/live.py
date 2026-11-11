@@ -14,7 +14,7 @@ ACTIVE = timedelta(minutes=10)  # a session with a line this recent is listed
 IDLE = timedelta(minutes=5)  # no line for this long: idle, whatever else the lines say
 APPROVAL = timedelta(seconds=30)  # a shell call pending this long is likely waiting for approval
 APPROVAL_TOOLS = SHELL_TOOLS | {"exec"}  # Codex's exec runs a script that calls the shell
-LONG = timedelta(seconds=120)  # a call with a timeout above this, or in the background, runs long: it waits for no approval
+LONG = timedelta(seconds=120)  # a call with a timeout above this runs long: pending past APPROVAL, it is no approval wait
 FIRST_LOAD = 500  # events on a first load
 FIRST_LINES = FIRST_LOAD * 6  # lines read for a first load: most lines show no event
 OVERLAP = timedelta(seconds=60)  # a catch-up reads again this far before its cursor: some lines are written late
@@ -61,9 +61,9 @@ def lane_of(path, source):
 
 def assemble(rows):
     """Events in line order from raw rows (key, file, ts, subagent, source, json). A tool use and its result become one
-    tool event; requests are left out, as the page shows none. A tool event is long when its input says the call runs in
-    the background or may run past LONG. Returns (events, results), where results maps a tool id to its result item when
-    the use is not among the rows."""
+    tool event; requests are left out, as the page shows none. A tool event is long when its input sets a timeout above
+    LONG; a background call is not, as it returns at once. Returns (events, results), where results maps a tool id to its
+    result item when the use is not among the rows."""
     events, tools, results = [], {}, {}
     for key, path, ts, sub, source, text in rows:
         src = store.SOURCES.get(source or "claude")
@@ -80,7 +80,7 @@ def assemble(rows):
             if k == "tool_use":
                 ev = dict(key=f"{key}#{i}", k="tool", ts=t, lane=lane, id=it["id"], tool=it["tool"], summary=it["summary"],
                           description=it.get("description"), start=t, end=None, failed=False, error=None, output=None, agent=None,
-                          long=bool(it.get("background")) or (it.get("timeout") or 0) > LONG.total_seconds() * 1000)
+                          long=(it.get("timeout") or 0) > LONG.total_seconds() * 1000)
                 if it["id"] in results:
                     finish(ev, results.pop(it["id"]))
                 tools[it["id"]] = ev

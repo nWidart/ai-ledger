@@ -62,9 +62,9 @@ class StateTest(unittest.TestCase):
         st = self.state(assistant("a1", "m1", at(15), [tool_use("t1", "Bash", command="git push")]))
         self.assertEqual(st, dict(kind="wait", tool="Bash", since="2026-11-10T10:00:15.000Z", inferred=True, long=False))
 
-    def test_slow_background_shell_call_is_running(self):
+    def test_slow_background_shell_call_is_likely_waiting(self):  # a background call returns at once: one still pending waits
         st = self.state(assistant("a1", "m1", at(15), [tool_use("t1", "Bash", command="npm run dev", run_in_background=True)]))
-        self.assertEqual(st, dict(kind="tool", tool="Bash", since="2026-11-10T10:00:15.000Z", inferred=False, long=True))
+        self.assertEqual(st, dict(kind="wait", tool="Bash", since="2026-11-10T10:00:15.000Z", inferred=True, long=False))
 
     def test_slow_shell_call_with_a_long_timeout_is_running(self):
         pending = lambda **inp: self.state(assistant("a1", "m1", at(15), [tool_use("t1", "Bash", command="make test", **inp)]))
@@ -73,7 +73,7 @@ class StateTest(unittest.TestCase):
         self.assertEqual(pending(timeout="600000")["kind"], "wait")
 
     def test_long_call_hides_no_likely_wait(self):
-        text = (assistant("a1", "m1", at(10), [tool_use("t1", "Bash", command="npm run dev", run_in_background=True)])
+        text = (assistant("a1", "m1", at(10), [tool_use("t1", "Bash", command="make test", timeout=600000)])
                 + assistant("a2", "m2", at(15), [tool_use("t2", "Bash", command="git push")]))
         self.assertEqual((self.state(text)["kind"], self.state(text)["since"]), ("wait", "2026-11-10T10:00:15.000Z"))
 
@@ -341,7 +341,7 @@ class SessionTest(LiveCase):
                                                              tool_use("t2", "Bash", command="make", timeout=300000),
                                                              tool_use("t3", "Bash", command="ls", timeout=5000)]))
         self.ingest()
-        self.assertEqual([e["long"] for e in self.run_session()["events"]], [True, True, False])
+        self.assertEqual([e["long"] for e in self.run_session()["events"]], [False, True, False])
 
     def test_lane_cost_and_model(self):
         self.write("s1.jsonl", assistant("a1", "m1", at(1), [tool_use("t1", "Agent", description="find callers", prompt="look")]))

@@ -290,7 +290,7 @@ export interface LiveToolEvent extends LiveEventBase {
   chars: number; output: string | null; cut: boolean;
   /** The subagent this call started, when its result or the subagent's start names it. */
   agent: string | null;
-  /** Its input says it runs long: in the background, or with a timeout above 120 s. Such a call waits for no approval. */
+  /** Its input sets a timeout above 120 s: pending past 30 s, such a call does not read as waiting for approval. */
   long: boolean;
 }
 export interface LiveMarkEvent extends LiveEventBase { k: "interrupt" | "turn_end" }

@@ -619,8 +619,8 @@ def prompt_text(d, pid):
 
 def live_items(d):
     """What the Live page shows of Claude Code line d, as dicts keyed by k: prompt, reply, interrupt, request, tool_use,
-    tool_result and compaction. Text stays in the items; live.py drops it unless the page asks for it. A tool_use says
-    how long its call may run, when its input does: background, and timeout in milliseconds."""
+    tool_result and compaction. Text stays in the items; live.py drops it unless the page asks for it. A tool_use
+    carries its input's timeout in milliseconds, when it has one."""
     t = d.get("type")
     msg = d.get("message") if isinstance(d.get("message"), dict) else {}
     content = msg.get("content")
@@ -642,7 +642,6 @@ def live_items(d):
                 inp = x.get("input") if isinstance(x.get("input"), dict) else {}
                 items.append(dict(k="tool_use", id=x["id"], tool=x.get("name") or "?", summary=summarize_input(x.get("name"), inp),
                                   description=inp.get("description") if isinstance(inp.get("description"), str) else None,
-                                  background=inp.get("run_in_background") is True,
                                   timeout=inp.get("timeout") if isinstance(inp.get("timeout"), (int, float)) else None))
         return items
     if t != "user":

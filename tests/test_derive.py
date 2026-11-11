@@ -279,15 +279,15 @@ class LiveItemsTest(unittest.TestCase):
 
     def test_tool_use_and_failing_result(self):
         use, = self.items(assistant("a1", "m1", "2026-11-10T10:00:00Z", [tool_use("t1", "Bash", command="make test")]))[1:]
-        self.assertEqual(use, dict(k="tool_use", id="t1", tool="Bash", summary="make test", description=None, background=False, timeout=None))
+        self.assertEqual(use, dict(k="tool_use", id="t1", tool="Bash", summary="make test", description=None, timeout=None))
         res, = self.items(result("u1", "2026-11-10T10:00:01Z", "t1", "<tool_use_error>Exit code 2</tool_use_error>", error=True))
         self.assertEqual((res["k"], res["id"], res["error"]), ("tool_result", "t1", "Exit code 2"))
 
-    def test_tool_use_says_how_long_its_call_may_run(self):
+    def test_tool_use_carries_its_timeout(self):
         use = lambda **inp: self.items(assistant("a1", "m1", "2026-11-10T10:00:00Z", [tool_use("t1", "Bash", command="make", **inp)]))[1]
-        self.assertEqual((use(run_in_background=True)["background"], use(run_in_background=True)["timeout"]), (True, None))
-        self.assertEqual((use(timeout=600000)["background"], use(timeout=600000)["timeout"]), (False, 600000))
-        self.assertEqual((use(run_in_background="yes", timeout="600000")["background"], use(timeout="600000")["timeout"]), (False, None))
+        self.assertEqual(use(timeout=600000)["timeout"], 600000)
+        self.assertEqual(use(timeout="600000")["timeout"], None)
+        self.assertEqual(use(run_in_background=True), use())  # no part of the item
 
     def test_request_and_reply_without_thinking(self):
         req, reply = self.items(assistant("a1", "m1", "2026-11-10T10:00:00Z",

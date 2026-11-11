@@ -8,7 +8,7 @@ export const KEEP = 2000;
 const APPROVAL_MS = 30_000;
 const APPROVAL_TOOLS = new Set(["Bash", "exec_command", "exec"]);
 /** Whether a call pending for `pending` ms reads as likely waiting for approval, as live.py's state says it: a shell
- *  call past 30 s, unless it is a long one (in the background, or with a timeout above 120 s). */
+ *  call past 30 s, unless it is a long one (its timeout is above 120 s). */
 export const likelyWaiting = (tool: string | null, long: boolean, pending: number | null): boolean =>
   !!tool && APPROVAL_TOOLS.has(tool) && !long && pending != null && pending > APPROVAL_MS;
 
