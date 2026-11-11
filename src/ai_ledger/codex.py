@@ -321,9 +321,11 @@ class CodexDeriver(store.Deriver):
             tid, (name, summary) = it["id"], tool_of(it)
             failed = it.get("status") == "failed"
             shell = name in SHELL_TOOLS
+            # A unified exec command's duration is its startup (microseconds), not its run: such a call has no timing.
+            took = 0 if it.get("source") == "unified_exec_startup" else seconds_of(it.get("duration"))
             self.seq += 1
             self.uses[tid] = dict(session_id=self.sid, tool=name, mcp_server=it.get("server") if t == "McpToolCall" else None,
-                                  skill=None, input_summary=summary, start_ts=before(ts, seconds_of(it.get("duration"))),
+                                  skill=None, input_summary=summary, start_ts=before(ts, took),
                                   subagent=self.sub, is_commit=shell and GIT_COMMIT.search(summary) is not None,
                                   is_test=shell and runs_tests(summary))
             self.results[tid] = dict(end_ts=ts, is_error=failed, error=error_of(it) if failed else None,

@@ -653,6 +653,9 @@ class HelperSessionTest(unittest.TestCase):
         self.assertEqual(self.usage()["totals"]["active_days"], 1)  # Nov 5 has a request but no prompt
         self.assertEqual(self.usage(range_days=1, today=date(2026, 11, 6))["previous"]["active_days"], 0)
 
+    def test_no_latency_without_timing(self):
+        self.assertEqual({t["tool"]: t["p50_ms"] for t in self.usage()["tools"]}, {"Bash": 2000, "exec_command": None})
+
 
 class SessionTimeTest(unittest.TestCase):
     """A session resumed the next day: main-thread requests and tool calls 10, 15 and 5 minutes apart, and a 22-hour

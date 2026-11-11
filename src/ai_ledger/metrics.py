@@ -51,6 +51,12 @@ def local_today(cur):
     return cur.execute("SELECT current_date").fetchone()[0]
 
 
+def latency(t=""):
+    """SQL: a tool call's duration in ms, from the columns of table alias t (e.g. "t."). NULL when the source gave no
+    usable timing: the call does not start before it ends (Codex records some calls with no duration)."""
+    return f"CASE WHEN {t}end_ts > {t}start_ts THEN date_diff('millisecond', {t}start_ts, {t}end_ts) END"
+
+
 def start_ts(cur, d):
     """The stored (naive UTC) timestamp at which the local date d starts; None for None."""
     return cur.execute(f"SELECT {day_start('CAST(? AS DATE)')}", [d]).fetchone()[0] if d else None
@@ -233,8 +239,7 @@ def usage(cur, project="", range_days=0, session="", prices=None, today=None, au
         count(*) FILTER (WHERE is_test AND NOT test_passed) AS tests_failed,
         count(*) FILTER (WHERE NOT t.subagent) AS main_calls FROM {tc}""", fp)[0]
     tools = rows(cur, f"""SELECT tool, count(*) AS calls, count(*) FILTER (WHERE is_error) AS errors,
-        quantile_cont(date_diff('millisecond', start_ts, end_ts), 0.5) AS p50_ms,
-        quantile_cont(date_diff('millisecond', start_ts, end_ts), 0.95) AS p95_ms
+        quantile_cont({latency()}, 0.5) AS p50_ms, quantile_cont({latency()}, 0.95) AS p95_ms
         FROM {tc} GROUP BY 1 ORDER BY calls DESC""", fp)
     mcp = rows(cur, f"SELECT mcp_server AS name, count(*) AS calls, count(*) FILTER (WHERE is_error) AS errors "
                     f"FROM {tc} AND mcp_server IS NOT NULL GROUP BY 1 ORDER BY calls DESC", fp)
@@ -336,8 +341,7 @@ def tool_detail(cur, kind, name, project="", range_days=0, today=None, automated
     per = lambda a, b: a / b if b else None
 
     tot = rows(cur, f"""SELECT {rate}, count(*) FILTER (WHERE t.subagent) AS subagent_calls,
-        quantile_cont(date_diff('millisecond', t.start_ts, t.end_ts), 0.5) AS p50_ms,
-        quantile_cont(date_diff('millisecond', t.start_ts, t.end_ts), 0.95) AS p95_ms FROM {tc}""", p)[0]
+        quantile_cont({latency('t.')}, 0.5) AS p50_ms, quantile_cont({latency('t.')}, 0.95) AS p95_ms FROM {tc}""", p)[0]
     tot.update(failure_rate=per(tot["errors"], tot["calls"]), subagent_share=per(tot["subagent_calls"], tot["calls"]))
     previous = None
     if (dates := previous_dates(range_days, today)) is not None:
@@ -386,13 +390,13 @@ def tool_detail(cur, kind, name, project="", range_days=0, today=None, automated
         shell["pass_rate"] = per(shell["tests_passed"], shell["test_runs"])
     recent = rows(cur, f"""SELECT t.tool_use_id AS id, {ts} AS ts, t.session_id, s.project, coalesce(s.source, 'claude') AS source,
         t.tool, left(t.input_summary, 400) AS input, t.is_error, t.category, t.subagent,
-        date_diff('millisecond', t.start_ts, t.end_ts) AS duration_ms FROM {tc} ORDER BY {ts} DESC NULLS LAST, t.tool_use_id DESC
+        {latency('t.')} AS duration_ms FROM {tc} ORDER BY {ts} DESC NULLS LAST, t.tool_use_id DESC
         LIMIT {RECENT_CALLS}""", p)
     for r in with_titles(cur, recent):
         r["ts"], r["input"] = iso(r["ts"]), r["input"] or ""
     tools = None
     if kind == "mcp":
-        tools = rate_rows(rows(cur, f"""SELECT t.tool, {rate}, quantile_cont(date_diff('millisecond', t.start_ts, t.end_ts), 0.5) AS p50_ms
+        tools = rate_rows(rows(cur, f"""SELECT t.tool, {rate}, quantile_cont({latency('t.')}, 0.5) AS p50_ms
             FROM {tc} GROUP BY 1 ORDER BY calls DESC, 1""", p))
     return dict(kind=kind, name=name, project=project, range=range_days, automated=bool(automated), source=source,
                 start=start.isoformat() if start else None, end=today.isoformat(), totals=tot, previous=previous, daily=daily,
@@ -610,8 +614,8 @@ def session_detail(cur, sid, allq, p, prices):
         timeline=rows(cur, f"{allq} SELECT strftime(date_trunc('minute', ts), '%Y-%m-%dT%H:%M:00Z') AS minute, "
                            f"sum(tokens) AS tokens, sum(cost) AS cost, max(input + cache_read + cache_5m + cache_1h) AS context "
                            f"FROM rq GROUP BY 1 ORDER BY 1", p),
-        tools=rate_rows(rows(cur, """SELECT tool, count(*) AS calls, count(*) FILTER (WHERE is_error) AS errors,
-            quantile_cont(date_diff('millisecond', start_ts, end_ts), 0.5) AS p50_ms FROM tool_calls WHERE session_id = ?
+        tools=rate_rows(rows(cur, f"""SELECT tool, count(*) AS calls, count(*) FILTER (WHERE is_error) AS errors,
+            quantile_cont({latency()}, 0.5) AS p50_ms FROM tool_calls WHERE session_id = ?
             GROUP BY 1 ORDER BY calls DESC""", [sid])),
         commits=rows(cur, """SELECT tool_use_id, start_ts, left(input_summary, 200) AS command FROM tool_calls
             WHERE session_id = ? AND is_commit AND test_passed ORDER BY start_ts""", [sid]),
