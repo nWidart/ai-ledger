@@ -10,7 +10,7 @@ import { mockApi } from "../sheets/testing";
 import { Palette } from "./Palette";
 import { closePalette, openPalette } from "./store";
 
-const status = { ingesting: false, last_ingest: "2026-11-05T12:00:00+00:00", last_change: "2026-11-05T12:00:00+00:00", last_stats: null, error: null, counts: {}, interval: 60 };
+const status = { ingesting: false, last_ingest: "2026-11-05T12:00:00+00:00", last_change: "2026-11-05T12:00:00+00:00", last_stats: null, error: null, counts: {}, interval: 60, project_order: [] };
 // With a project chosen, only that project's tools come back: the palette must refetch to narrow its rows.
 const fooOnly: PalettePayload = { ...palette, project: "foo", tools: palette.tools.filter(t => t.name === "Bash") };
 const serve = (pal: (q: URLSearchParams) => unknown = q => (q.get("project") === "foo" ? fooOnly : palette)) =>

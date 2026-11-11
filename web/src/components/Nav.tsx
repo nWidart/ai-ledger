@@ -1,6 +1,7 @@
 import { useEffect, useRef, type MouseEvent, type ReactNode } from "react";
 import { statusUrl, type Status } from "../api";
 import { navigate, setHash, sharedHash, useHashState, usePathname } from "../hash";
+import { setOrder } from "../colors";
 import { getTheme, nextTheme, setTheme, useTheme, type Theme } from "../theme";
 import { getJson, noteIngest } from "../useApi";
 import { ProjectDot } from "./ProjectDot";
@@ -48,6 +49,7 @@ export function Nav() {
         if (!live) return;
         noteIngest(s.last_change);
         noteStatus(s);
+        setOrder(s.project_order);
         timer = window.setTimeout(poll, s.ingesting ? INGESTING_MS : POLL_MS);
       }, () => {
         if (!live) return;

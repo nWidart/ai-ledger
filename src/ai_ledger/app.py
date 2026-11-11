@@ -125,7 +125,8 @@ class App:
     def status(self):
         cur = self.con.cursor()
         counts = {t: cur.execute(f"SELECT count(*) FROM {t}").fetchone()[0] for t in ("raw_lines", "files", "sessions", "requests", "tool_calls")}
-        return dict(self.state, counts=counts, interval=INTERVAL, limits={p.name: dict(p.state) for p in self.pollers})
+        return dict(self.state, counts=counts, interval=INTERVAL, limits={p.name: dict(p.state) for p in self.pollers},
+                    project_order=metrics.project_order(cur))
 
 
 def asset(path):

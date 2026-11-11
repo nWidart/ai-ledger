@@ -15,7 +15,7 @@ from datetime import datetime
 from unittest import mock
 from http.server import ThreadingHTTPServer
 
-from ai_ledger import app, store
+from ai_ledger import app, metrics, store
 
 USAGE_DATA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "usage-data")
 
@@ -94,6 +94,13 @@ class AppTest(unittest.TestCase):
         self.assertEqual((status, json.loads(body)), (400, dict(error="unknown source: grok")))
         status, _, body = self.get("/api/palette?range=-1")
         self.assertEqual((status, json.loads(body)), (400, dict(error="range must be >= 0")))
+
+    def test_status_carries_project_order(self):
+        status, _, body = self.get("/api/status")
+        got = json.loads(body)
+        self.assertEqual(status, 200)
+        self.assertEqual(got["project_order"], metrics.project_order(self.con.cursor()))
+        self.assertIn("last_change", got)
 
     def test_insights(self):
         self.assertIn("/insights", app.PAGES)

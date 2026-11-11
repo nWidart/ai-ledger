@@ -297,6 +297,8 @@ export interface Status {
   /** The last ingest that stored new lines or usage data; null until one does. */
   last_change: string | null;
   counts: Record<string, number>; interval: number;
+  /** Projects by all-time tokens, for project colors on every page (colors.setOrder). */
+  project_order: string[];
   /** Plan-limit pollers by provider; never the credential. */
   limits?: Record<string, { last_ok: string | null; last_attempt: string | null; failures: number; error: string | null; stale: boolean }>;
 }
