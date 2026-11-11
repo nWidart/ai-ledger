@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import type { ProjectRow, UsagePayload } from "../../api";
+import type { ModelRow, ProjectRow, SessionsPage, UsagePayload } from "../../api";
 import usage from "../../__fixtures__/usage";
 import usageAll from "../../__fixtures__/usage-all";
 import sessions from "../../__fixtures__/sessions";
@@ -11,7 +11,9 @@ import { compareText, costDays, thinHistory } from "./cost";
 import { CostPage } from "./CostPage";
 
 const at = (hash = "#range=30") => history.replaceState(null, "", "/cost" + hash);
-const serve = (d: UsagePayload) => mockApi({ "/api/usage": () => d, "/api/sessions": () => sessions, "/api/session": () => session });
+// The day's sessions as the server sends them: costliest on that day first.
+const byDay: SessionsPage = { ...sessions, sessions: ["s1", "s3", "s2"].map(id => sessions.sessions.find(s => s.session_id === id)!) };
+const serve = (d: UsagePayload) => mockApi({ "/api/usage": () => d, "/api/sessions": q => (q.get("day") ? byDay : sessions), "/api/session": () => session });
 const loaded = () => screen.findByRole("heading", { level: 1, name: /estimated cost/ });
 const fetched = () => vi.mocked(fetch).mock.calls.map(c => c[0]);
 const show = (d: UsagePayload) => { serve(d); at(); render(<CostPage />); return loaded(); };
@@ -23,7 +25,7 @@ const base = usage.by_project[0]!;
 const proj = (project: string, cost: number, commits: number): ProjectRow =>
   ({ ...base, project, cost, commits, unpriced: 0, cost_per_commit: commits ? cost / commits : null });
 const withProjects = (rows: ProjectRow[]): UsagePayload => ({ ...usage, projects: rows.map(p => p.project!), by_project: rows,
-  totals: { ...usage.totals, commits: rows.reduce((a, p) => a + p.commits, 0) } });
+  totals: { ...usage.totals, commits: rows.reduce((a, p) => a + p.commits, 0), cost: rows.reduce((a, p) => a + (p.cost ?? 0), 0) } });
 const doubled: UsagePayload = { ...usage, previous: { ...usage.previous!, cost: 7.9 } };
 
 describe("cost figures", () => {
@@ -31,6 +33,9 @@ describe("cost figures", () => {
     expect(compareText(doubled)).toEqual({ text: "2.0× the previous 30 days", sr: "2.0 times the previous 30 days" });
     expect(compareText({ ...usage, previous: { ...usage.previous!, cost: 12 } })!.text).toBe("+32% vs the previous 30 days");
     expect(compareText(usageAll)).toBeNull();
+    // A previous window with requests, all on unpriced models: its cost is unknown, not nothing.
+    expect(compareText({ ...usage, previous: { ...usage.previous!, cost: null } })!.text).toBe("no priced usage in the previous 30 days");
+    expect(compareText({ ...usage, previous: { ...usage.previous!, cost: null, requests: 0 } })!.text).toBe("nothing in the previous 30 days");
   });
 
   it("marks a previous window with under half the active days as thin", () => {
@@ -123,6 +128,53 @@ describe("CostPage", () => {
     expect(drawer("d-projcost").querySelector(".proj-note")).toBeNull();
   });
 
+  it("names no cost-per-commit outlier under 2% of spend", async () => {
+    await show(withProjects([...["a", "b", "c", "e", "f"].map(n => proj(n, 200, 200)), proj("tiny", 15, 3)])); // $5 a commit against $1, 1.5% of spend
+    expect(insights().queryByText("Cost-per-commit outlier")).toBeNull();
+    expect(insights().getByText(/No project with 2% or more of the spend costs over twice the median/)).toBeTruthy();
+  });
+
+  it("ranks models by their share of cost, under 1% as <1%, the top 8 until Show all", async () => {
+    const m = (model: string, cost: number | null, requests: number): ModelRow => ({ model, effort: "(none)", requests, tokens: 1, cost });
+    const models = [m("cheap-busy", 1, 900), m("dear", 300, 10), m("dust", 0.5, 5), m("free", null, 50),
+      ...[1, 2, 3, 4, 5, 6, 7].map(k => m(`mid-${k}`, 20, 1))];
+    await show({ ...usage, models });
+    const panel = screen.getByRole("heading", { name: "Models and effort" }).closest("section")!;
+    const rows = () => [...panel.querySelectorAll(".ledger li")];
+    expect(rows().map(r => r.querySelector(".n")!.textContent)).toEqual(["dear", ...[1, 2, 3, 4, 5, 6, 7].map(k => `mid-${k}`)]);
+    await userEvent.click(within(panel).getByRole("button", { name: "Show all 11" }));
+    expect(rows().slice(-3).map(r => [r.querySelector(".n")!.textContent, r.querySelector(".v")!.textContent])).toEqual([["cheap-busy", "<1%"], ["dust", "<1%"], ["free", "–"]]);
+  });
+
+  it("shows an unknown previous cost as unknown, with no change", async () => {
+    await show({ ...usage, previous: { ...usage.previous!, cost: null }, changes: [{ project: "foo", cost: 15.8, prev_cost: null, delta: null, new: false }] });
+    expect(document.querySelector(".windows")!.textContent).toMatch(/Previous Sep 7 – Oct 6, 2026 · – · 1 active day of 30/);
+    const changed = document.getElementById("changed")!;
+    expect(changed.querySelector(".hint")!.textContent).toMatch(/^– → \$16\. Each bar/);
+    expect(within(changed).getByRole("button", { name: /^foo: –, from – to \$16/ })).toBeTruthy();
+  });
+
+  it("leaves What changed out of a one-project view", async () => {
+    serve({ ...usage, project: "foo" });
+    at("#range=30&project=foo");
+    render(<CostPage />);
+    await loaded();
+    expect(document.getElementById("changed")).toBeNull();
+  });
+
+  it("says when every token kind is hidden and shows them again", async () => {
+    localStorage.setItem("claude-usage-metric", JSON.stringify("tokens"));
+    localStorage.setItem("claude-usage-hidden", JSON.stringify(["input", "text_out", "thinking", "cache_read", "cache_5m", "cache_1h"]));
+    try {
+      await show(usage);
+      await userEvent.click(screen.getByRole("button", { name: "Show every kind" }));
+      expect(screen.queryByText("All token kinds are hidden.")).toBeNull();
+      expect(screen.getByRole("button", { name: "Input" }).getAttribute("aria-pressed")).toBe("true");
+    } finally {
+      localStorage.clear();
+    }
+  });
+
   it("shows cost per commit as not available for a project with no commits", async () => {
     await show(withProjects([proj("a", 6, 3), proj("idle", 20, 0)]));
     const idle = drawer("d-projcost").querySelector('tbody tr[data-v="idle"]')!;
@@ -163,9 +215,10 @@ describe("CostPage", () => {
     expect(drawer("d-top").open).toBe(true);
     expect(screen.getByText("Active on Nov 4, 2026")).toBeTruthy();
     await waitFor(() => expect(fetched()).toContain("/api/sessions?range=30&day=2026-11-04"));
-    // The mocked page answers with every session; the drawer lists them by cost, unpriced last.
-    expect(await within(drawer("d-top")).findByText(/3 sessions active on Nov 4, 2026, by their estimated cost/)).toBeTruthy();
+    // The server costs each session on that day and orders them; the drawer keeps its order and counts them all.
+    expect(await within(drawer("d-top")).findByText("3 sessions active on Nov 4, 2026, by their estimated cost on that day. Select a session for details.")).toBeTruthy();
     expect([...drawer("d-top").querySelectorAll("tbody tr")].map(r => r.getAttribute("data-v"))).toEqual(["s1", "s3", "s2"]);
+    expect(drawer("d-top").querySelector("summary .c")!.textContent).toBe("3");
     await userEvent.click(screen.getByRole("button", { name: "Show the most expensive sessions on every day" }));
     expect(within(drawer("d-top")).getByText(/The 2 most expensive sessions in this view/)).toBeTruthy();
     // Tokens: one series per kind.

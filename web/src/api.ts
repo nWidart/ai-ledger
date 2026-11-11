@@ -62,7 +62,8 @@ export interface Previous {
   daily: { day: Day; cost: number | null; tokens: number }[];
   by_project: { project: string | null; cost: number | null; tokens: number; requests: number }[];
 }
-export interface Change { project: string | null; cost: number; prev_cost: number; delta: number; new: boolean }
+/** cost or prev_cost is null when that period's requests were all on unpriced models; delta is then null too. */
+export interface Change { project: string | null; cost: number | null; prev_cost: number | null; delta: number | null; new: boolean }
 
 /** The coding agent a session came from; "" in a filter is every source. */
 export type Source = "claude" | "codex";

@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type 
 import type { UsagePayload } from "../../api";
 import { useColors } from "../../colors";
 import { dayAxis, peakLabelAt, tipAt, useWidth } from "../../components/chart";
-import { big, dayLabel, niceStep, usd } from "../../format";
+import { big, dayLabel, niceStep, usd, usd0 } from "../../format";
 import { costDays, costKinds, KINDS, type CostDay, type Kind } from "./cost";
 
 const H = 240;
@@ -41,13 +41,14 @@ export function CostChart({ d, metric, onMetric, hidden, onHidden, onProject, on
 
   const cost = metric === "cost";
   const kinds: Kind[] = cost ? costKinds(d) : KINDS.filter(k => !hidden.includes(k.k));
+  const none = !cost && !kinds.length; // every token kind hidden
   const pts: CostDay[] = costDays(d, cost ? kinds : []);
   const total = (p: CostDay) => kinds.reduce((s, k) => s + (p.v[k.k] || 0), 0);
   // Trailing 7-day mean of the plotted total, from the seventh day on.
   const avg = pts.map((_, i) => (i < 6 ? null : pts.slice(i - 6, i + 1).reduce((s, q) => s + total(q), 0) / 7));
   const showAvg = pts.length >= 14;
   const a = dayAxis(W, H, pts.length, Math.max(...pts.map(total), 0), niceStep);
-  const fy = cost ? usd : big;
+  const fy = cost ? usd : big, ty = cost ? usd0 : big;
   const peak = pts.reduce((b, p, i) => (total(p) > total(pts[b]!) ? i : b), 0), pk = pts[peak];
   const indexAt = (clientX: number) => {
     const r = svg.current!.getBoundingClientRect(), px = (clientX - r.left) * W / r.width;
@@ -84,7 +85,7 @@ export function CostChart({ d, metric, onMetric, hidden, onHidden, onProject, on
     <section className="panel sect" id="spend" aria-labelledby="chartTitle">
       <div className="chart-head">
         <div><h2 id="chartTitle">{cost ? "Estimated cost per day" : "Tokens per day"}</h2>
-          <div className="hint">{cost ? `${d.project ? "At" : "The busiest projects by spend; select one to filter. At"} API list prices; unpriced models are left out.`
+          <div className="hint">{cost ? `${d.project ? "At" : "Projects with a color of their own (the busiest of all time), the rest in Other; select one to filter. At"} API list prices; unpriced models are left out.`
             : "Select a kind to hide it. Cache reads usually dwarf the rest."} Select a day to list its sessions by cost; with the keyboard, focus the chart, use the arrow keys and press Enter.</div></div>
         <div className="seg" role="group" aria-label="Chart metric">
           {(["cost", "tokens"] as const).map(m => <button key={m} type="button" aria-pressed={m === metric} onClick={() => onMetric(m)}>{m === "cost" ? "Cost" : "Tokens"}</button>)}
@@ -100,12 +101,14 @@ export function CostChart({ d, metric, onMetric, hidden, onHidden, onProject, on
           : <span key={k.k} className="key"><i style={{ background: k.c }} />{k.label}</span>)
           : KINDS.map(k => <button key={k.k} type="button" aria-pressed={!hidden.includes(k.k)}
             onClick={() => onHidden(hidden.includes(k.k) ? hidden.filter(x => x !== k.k) : [...hidden, k.k])}><i style={{ background: k.c }} />{k.label}</button>)}
-        {showAvg && <span className="key"><i className="line" />7-day average</span>}
+        {showAvg && !none && <span className="key"><i className="line" />7-day average</span>}
       </div>
-      <div className="chart" ref={box} tabIndex={0} role="img" aria-label={label} onKeyDown={onKey} onBlur={() => setAt(null)}>
+      {none && <div className="empty all-hidden" role="status">All token kinds are hidden.{" "}
+        <button type="button" className="linkish" onClick={() => onHidden([])}>Show every kind</button></div>}
+      <div className="chart" ref={box} tabIndex={0} hidden={none} role="img" aria-label={label} onKeyDown={onKey} onBlur={() => setAt(null)}>
         <svg ref={svg} viewBox={`0 0 ${W} ${H}`} aria-hidden="true">
           {ticks.map(v => <g key={v}><line x1={a.m.l} x2={W - a.m.r} y1={a.y(v)} y2={a.y(v)} stroke="var(--grid)" />
-            <text x={a.m.l - 6} y={a.y(v) + 4} textAnchor="end" fontSize="11" fill="var(--text-muted)">{fy(v)}</text></g>)}
+            <text x={a.m.l - 6} y={a.y(v) + 4} textAnchor="end" fontSize="11" fill="var(--text-muted)">{ty(v)}</text></g>)}
           {pts.map((p, i) => {
             const x = a.x(i), segs = kinds.filter(k => (p.v[k.k] ?? 0) > 0);
             let base = 0;

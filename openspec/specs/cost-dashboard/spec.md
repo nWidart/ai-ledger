@@ -28,8 +28,19 @@ The cost dashboard SHALL open with the estimated cost of the selected view, its 
 - **WHEN** the previous period has usage on fewer than half as many days as the current one
 - **THEN** the comparison is marked as resting on thin history
 
+#### Scenario: Previous period on unpriced models only
+- **WHEN** every request in the previous period used a model missing from the price table
+- **THEN** the heading says there was no priced usage before, the previous cost shows as unknown, not $0, and no change is computed
+
+### Requirement: Explain a day's cost
+Selecting a day on the cost chart, or the peak day's action, SHALL list every session active that day with its estimated cost on that day, costliest first, so the listed costs add up to the day's bar.
+
+#### Scenario: Session across two days
+- **WHEN** a session cost $10 on Nov 4 and $30 on Nov 5, and the user selects Nov 4
+- **THEN** the session is listed at $10, and the list's costs sum to Nov 4's total
+
 ### Requirement: Show what changed by project
-The cost dashboard SHALL show each project's change in estimated cost against the previous period, largest change first, and SHALL mark projects with no usage in the previous period as new.
+The cost dashboard SHALL show each project's change in estimated cost against the previous period, largest change first, and SHALL mark projects with no usage in the previous period as new. A project whose cost in either period is unknown (only unpriced models) SHALL show that cost as unknown and no change. A one-project view SHALL leave this panel out.
 
 #### Scenario: New project
 - **WHEN** project `foo` has cost in the current period and no usage in the previous one
@@ -64,22 +75,26 @@ The cost dashboard SHALL show what share of estimated cost came from subagents.
 - **THEN** the cost dashboard shows a 40% subagent cost share for that project
 
 ### Requirement: Show cost per outcome
-The cost dashboard SHALL show cost per commit and cost per prompt per project, and SHALL point out a project (or, inside one project, a session) whose cost per commit is more than twice the median.
+The cost dashboard SHALL show cost per commit and cost per prompt per project, and SHALL point out a project (or, inside one project, a session) whose cost per commit is more than twice the median and that holds at least 2% of the view's spend. Among findings of equal severity, the one with more money at stake SHALL lead.
 
 #### Scenario: Cost-per-commit outlier
 - **WHEN** one project with three or more commits costs four times the median project per commit
 - **THEN** the cost dashboard names that project as an outlier and offers to compare projects
+
+#### Scenario: Small outlier
+- **WHEN** the project with the highest cost per commit holds 1% of the spend
+- **THEN** the cost dashboard does not name it as an outlier
 
 #### Scenario: Project with no commits
 - **WHEN** a project has cost but no commits in the range
 - **THEN** its cost per commit shows as not available, not as zero or infinity
 
 ### Requirement: Show model mix
-The cost dashboard SHALL show the split of requests by model and effort level, each with its estimated cost.
+The cost dashboard SHALL show each model and effort level's share of estimated cost, costliest first, with its cost, the top 8 until the user asks for all. A share that is above zero but rounds to 0% SHALL read "<1%".
 
 #### Scenario: Two models
-- **WHEN** 70% of requests in the view used one model and 30% another
-- **THEN** the cost dashboard shows both shares and each model's estimated cost
+- **WHEN** 70% of the estimated cost in the view came from one model and 30% from another
+- **THEN** the cost dashboard lists the first model above the second, with both shares and each model's estimated cost
 
 ### Requirement: Link to a cost view
 The cost dashboard SHALL keep the selected project, time range, inspected project and open session in the page URL, so a view can be reopened or shared, and browser Back SHALL retrace filter and sheet changes.

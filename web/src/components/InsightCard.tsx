@@ -21,12 +21,15 @@ export interface Insight {
   act?: InsightAction;
   /** A list finding ("Needs attention"): one line per item, each with its own action; b shows when it is empty. */
   items?: InsightItem[];
+  /** What is at stake (dollars on Cost): breaks a tie in severity, the larger leading. */
+  stake?: number;
 }
 
-/** The most severe card leads (ties keep their order); the rest support it. */
+/** The most severe card leads; among equals, the one with more at stake (ties keep their order). The rest support it. */
 export function rankInsights(cards: readonly (Insight | null | undefined)[]): { lead: Insight | null; rest: Insight[] } {
-  const cs = cards.filter((c): c is Insight => !!c);
-  const lead = cs.reduce<Insight | null>((a, c) => (a == null || SEV_RANK[c.sev] > SEV_RANK[a.sev] ? c : a), null);
+  const cs = cards.filter((c): c is Insight => !!c), stake = (c: Insight) => c.stake ?? -Infinity;
+  const lead = cs.reduce<Insight | null>((a, c) => (a == null || SEV_RANK[c.sev] > SEV_RANK[a.sev]
+    || (SEV_RANK[c.sev] === SEV_RANK[a.sev] && stake(c) > stake(a)) ? c : a), null);
   return { lead, rest: cs.filter(c => c !== lead) };
 }
 

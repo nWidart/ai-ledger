@@ -137,9 +137,10 @@ class MetricsTest(unittest.TestCase):
         self.assertAlmostEqual(ch[0]["delta"], 15.8)
         self.assertEqual((ch[1]["cost"], ch[1]["prev_cost"]), (0, 130 * 2 / 1e6))
         self.assertAlmostEqual(ch[1]["delta"], -130 * 2 / 1e6)
-        # One day: foo's priced spend was all the day before.
+        # One day: foo's priced spend was all the day before; that day it ran only an unpriced model, so its cost and change are unknown.
         one = metrics.usage(self.con.cursor(), "", 1, prices=PRICES, today=TODAY)["changes"]
-        self.assertEqual([(r["project"], r["new"], r["cost"]) for r in one], [("foo", False, 0)])
+        self.assertEqual([(r["project"], r["new"], r["cost"], r["delta"]) for r in one], [("foo", False, None, None)])
+        self.assertAlmostEqual(one[0]["prev_cost"], 15.8)
         self.assertIsNone(self.all["changes"])
 
     def test_prompt_title(self):
@@ -169,6 +170,9 @@ class MetricsTest(unittest.TestCase):
             self.assertEqual(metrics.session(c, "s1", prices=PRICES)["title"], "auth bug fix")
             usage = metrics.usage(c, "foo", 7, prices=PRICES, today=TODAY)
             self.assertEqual(usage["error_loops"][0]["title"], "auth bug fix")
+            search = lambda q: [x["session_id"] for x in metrics.session_list(c, q=q, prices=PRICES, today=TODAY)["sessions"]]
+            self.assertEqual(search("dark MODE"), ["s2"])  # a title from the first prompt
+            self.assertEqual(search("auth bug"), ["s1"])
         finally:
             c.execute("DELETE FROM raw_lines WHERE key = 'x4'")
             c.execute("DELETE FROM session_titles")
@@ -182,6 +186,14 @@ class MetricsTest(unittest.TestCase):
     def test_session_list_by_day(self):
         day = metrics.session_list(self.con.cursor(), day="2026-11-04", prices=PRICES, today=TODAY)
         self.assertEqual([x["session_id"] for x in day["sessions"]], ["s1"])
+        # o1 has requests on Nov 4 and 5: the day's list counts only Nov 4's, costliest first, so the rows add up to the bar.
+        c = self.con.cursor()
+        bar = {d["day"]: d["cost"] for d in metrics.usage(c, prices=PRICES, today=TODAY, automated=True)["daily"]}["2026-11-04"]
+        day = metrics.session_list(c, day="2026-11-04", prices=PRICES, today=TODAY, automated=True, limit=1)
+        self.assertEqual([x["session_id"] for x in day["sessions"]], ["s1", "o1"])
+        self.assertEqual([x["requests"] for x in day["sessions"]], [2, 1])
+        self.assertEqual(day["total"], 2)
+        self.assertAlmostEqual(sum(x["cost"] for x in day["sessions"]), bar)
         with self.assertRaises(ValueError):
             metrics.session_list(self.con.cursor(), day="nope", prices=PRICES, today=TODAY)
 

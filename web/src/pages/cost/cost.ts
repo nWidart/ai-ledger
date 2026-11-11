@@ -1,7 +1,7 @@
 // Cost's figures from the usage payload: the headline comparison, the daily series and the chart's stack.
 import type { Change, UsagePayload } from "../../api";
 import { color, hasHue } from "../../colors";
-import { dayRange, mult, num, pct } from "../../format";
+import { dayRange, mult, num, pct, usd0 } from "../../format";
 
 /** A series in the chart: a token kind, or a project ("p:<name>"; "p:" is Other). */
 export interface Kind { k: string; label: string; c: string; project?: string }
@@ -48,12 +48,20 @@ export function costKinds(d: Pick<UsagePayload, "project" | "by_project">): Kind
   return rest ? [...tops, { k: "p:", label: `Other (${num(rest)})`, c: color(""), project: "" }] : tops;
 }
 
+/** A period's estimated cost: 0 when it had no requests, null (unknown) when all of them were on unpriced models. */
+export const periodCost = (p: { cost: number | null; requests: number }): number | null => (p.requests ? p.cost : 0);
+/** A cost that may be unknown: "–", else as usd0 ("$0" for nothing). */
+export const money = (n: number | null | undefined): string => (n == null ? "–" : usd0(n));
+
 /** The headline's comparison: "17.8× the previous 30 days" from 2× up, a percentage below; sr: the same, read aloud. */
 export function compareText(d: Pick<UsagePayload, "totals" | "previous" | "range">): { text: string; sr: string } | null {
   const t = d.totals, prev = d.previous;
   if (!prev || !t.requests) return null;
   const was = `the previous ${d.range} days`;
-  if (!((prev.cost ?? 0) > 0)) return { text: `nothing in ${was}`, sr: `nothing in ${was}` };
+  if (!((prev.cost ?? 0) > 0)) {
+    const none = `${prev.requests ? "no priced usage" : "nothing"} in ${was}`;
+    return { text: none, sr: none };
+  }
   const r = (t.cost || 0) / prev.cost!;
   if (Math.abs(r - 1) < .005) return { text: `flat vs ${was}`, sr: `flat versus ${was}` };
   if (r >= 2) return { text: `${mult(r)} ${was}`, sr: `${num(r, 1)} times ${was}` };

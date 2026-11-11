@@ -82,4 +82,10 @@ describe("InsightCard", () => {
     expect(run).toHaveBeenCalledTimes(1);
     expect(run.mock.calls[0]![0]).toBeInstanceOf(HTMLButtonElement);
   });
+
+  it("breaks a tie in severity by what is at stake, and keeps the order without one", () => {
+    const card = (k: string, stake?: number): Insight => ({ sev: "warn", k, t: k, stake });
+    expect(rankInsights([card("small", 10), card("big", 900), { ...card("act"), sev: "info", stake: 5000 }]).lead?.k).toBe("big");
+    expect(rankInsights([card("first"), card("second")]).lead?.k).toBe("first");
+  });
 });

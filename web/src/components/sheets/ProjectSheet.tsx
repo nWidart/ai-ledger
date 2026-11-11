@@ -1,18 +1,31 @@
-import { useEffect, useRef, type ReactNode, type RefObject } from "react";
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import type { ModelRow, UsagePayload } from "../../api";
 import { big, dur, num, pct, usd, when } from "../../format";
 import { Ledger, LedgerRow } from "../Ledger";
 import { FilterButton } from "./FilterButton";
 import { appLink, errorsHref, pickRow, sessName } from "./session";
 
-/** Models and effort as ledger rows: share of requests, with estimated cost. Cost reuses it for its own ledger. */
-export function ModelLedger({ models }: { models: readonly ModelRow[] }) {
-  const reqs = models.reduce((s, r) => s + r.requests, 0) || 1, mmax = Math.max(...models.map(r => r.requests), 0) || 1;
-  return <Ledger empty="No requests in this range.">{models.map(r => <LedgerRow key={r.model + "|" + r.effort}
-    name={r.model.replace(/^claude-/, "") + (r.effort && r.effort !== "(none)" ? ` · ${r.effort}` : "")}
-    title={`${r.model}, ${r.effort} effort, ${num(r.requests)} requests, ${big(r.tokens)} tokens`}
-    share={r.requests / mmax} value={pct(r.requests / reqs)}
-    side={r.cost == null ? <span className="chip warn">unpriced</span> : usd(r.cost)} />)}</Ledger>;
+const TOP_MODELS = 8;
+/** A share as a whole percentage, "<1%" for a non-zero share that would round to 0%. */
+const share = (v: number | null) => (v != null && v > 0 && v < .005 ? "<1%" : pct(v));
+
+/** Models and effort as ledger rows: share of requests, with estimated cost. by="cost" (the Cost page): ranked and drawn by
+ *  share of estimated cost, unpriced last, the top TOP_MODELS until Show all. */
+export function ModelLedger({ models, by = "requests" }: { models: readonly ModelRow[]; by?: "requests" | "cost" }) {
+  const [all, setAll] = useState(false), cost = by === "cost";
+  const v = (r: ModelRow) => (cost ? r.cost ?? 0 : r.requests);
+  const rs = cost ? models.slice().sort((a, b) => (b.cost ?? -1) - (a.cost ?? -1)) : models;
+  const sum = rs.reduce((s, r) => s + v(r), 0) || 1, max = Math.max(...rs.map(v), 0) || 1;
+  const shown = cost && !all ? rs.slice(0, TOP_MODELS) : rs;
+  return <>
+    <Ledger empty="No requests in this range.">{shown.map(r => <LedgerRow key={r.model + "|" + r.effort}
+      name={r.model.replace(/^claude-/, "") + (r.effort && r.effort !== "(none)" ? ` · ${r.effort}` : "")}
+      title={`${r.model}, ${r.effort} effort, ${num(r.requests)} requests, ${big(r.tokens)} tokens`}
+      share={v(r) / max} value={cost && r.cost == null ? "–" : share(v(r) / sum)}
+      side={r.cost == null ? <span className="chip warn">unpriced</span> : usd(r.cost)} />)}</Ledger>
+    {cost && rs.length > TOP_MODELS && <button type="button" className="linkish more" onClick={() => setAll(!all)}>
+      {all ? `Show top ${TOP_MODELS}` : `Show all ${num(rs.length)}`}</button>}
+  </>;
 }
 
 export const Facts = ({ facts }: { facts: [ReactNode, ReactNode][] }) =>
