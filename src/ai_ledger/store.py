@@ -17,7 +17,7 @@ from typing import Callable, NamedTuple
 
 import duckdb
 
-from .categorize import GIT_COMMIT, SHELL_TOOLS, TEST_CMD, categorize, error_text, summarize_input, text_of
+from .categorize import GIT_COMMIT, SHELL_TOOLS, categorize, error_text, runs_tests, summarize_input, text_of
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -492,7 +492,7 @@ class Deriver:
                     skill=inp.get("skill") if name == "Skill" and isinstance(inp, dict) else None,
                     input_summary=summary, start_ts=ts, subagent=self.sub or bool(d.get("isSidechain")),
                     is_commit=shell and GIT_COMMIT.search(summary) is not None,
-                    is_test=shell and TEST_CMD.search(summary) is not None)
+                    is_test=shell and runs_tests(summary))
             elif x.get("type") in ("text", "thinking"):
                 said = ((x.get("text") if x.get("type") == "text" else x.get("thinking")) or "").strip()
                 if said:
