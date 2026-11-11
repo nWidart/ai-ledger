@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { dayUrl, usageUrl, viewOf, type DayView, type UsagePayload, type View } from "../../api";
+import { dayUrl, usageUrl, viewOf, type DayView, type SessionSort, type UsagePayload, type View } from "../../api";
 import { setOrder } from "../../colors";
 import { useCountUp } from "../../components/chart";
 import { openDrawer } from "../../components/Drawer";
@@ -23,7 +23,11 @@ const METRIC_KEY = "claude-activity-metric";
 const loadMetric = (): WorkMetric => { try { const v = localStorage.getItem(METRIC_KEY); return v === "prompts" || v === "sessions" ? v : "commits"; } catch { return "commits"; } };
 
 /** The sessions table's limits, kept in the hash (day, q, near=1) so a reload or a shared link restores them. */
-const sessOf = (h: HashState): SessFilter => ({ q: h.raw.q ?? "", near: h.raw.near === "1", day: /^\d{4}-\d{2}-\d{2}$/.test(h.raw.day ?? "") ? h.raw.day! : "" });
+const sessOf = (h: HashState): SessFilter => ({ q: h.raw.q ?? "", near: h.raw.near === "1", day: isDay(h.raw.day) ? h.raw.day : "" });
+// A real calendar day as YYYY-MM-DD: 2026-02-30 is not one.
+const isDay = (s: string | undefined): s is string => !!s && /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(Date.parse(s)) && new Date(s).toISOString().startsWith(s);
+// The day belongs to the view: a project, range or source change clears it in the same write, so Back restores both.
+const RESET = { day: null };
 // Replace, not push: typing a search adds no Back entries.
 const setSess = (f: SessFilter) => setHash({ q: f.q, near: f.near, day: f.day }, { push: false });
 
@@ -80,28 +84,25 @@ export function ActivityPage() {
   const { data, error, loading, retry } = useApi<UsagePayload>(url, { keepPrevious: true });
   useEffect(() => { if (data) setOrder(data.project_order); }, [data]);
 
-  // Page-only state, reset when the view changes: the tools order. The day goes when the project, range or source does.
+  // Page-only state: flaky tools first resets when the view changes; the tools and sessions sorts stay.
   const sess = sessOf(h), [flaky, setFlaky] = useState(false), [toolSort, setToolSort] = useState<SortBy<ToolKey> | null>(null);
+  const [sessSort, setSessSort] = useState<SortBy<SessionSort> | null>(null);
   const [metric, setMetricState] = useState<WorkMetric>(loadMetric);
   const setMetric = (m: WorkMetric) => { setMetricState(m); try { localStorage.setItem(METRIC_KEY, m); } catch { /* storage off */ } };
-  const lastView = useRef(viewKey), dayView = `${want.project}|${want.range}|${want.source}`, lastDayView = useRef(dayView);
+  const lastView = useRef(viewKey);
   useEffect(() => {
     if (lastView.current === viewKey) return;
     lastView.current = viewKey;
     setFlaky(false);
   }, [viewKey]);
-  useEffect(() => {
-    if (lastDayView.current === dayView) return;
-    lastDayView.current = dayView;
-    setHash({ day: null }, { push: false });
-  }, [dayView]);
   // A selected day narrows tools, MCP & hooks and error loops to it; the rest stays range-wide.
   const day = sess.day, dayApi = useApi<DayView>(day ? dayUrl(want, day) : null), dv = day && dayApi.data?.day === day ? dayApi.data : undefined;
 
   const { slow, grow, before, wrap, retryBtn } = useLanding(data, url, loading, error, ":scope > :is(.insights, .panel, .vitals, .drawers)");
 
   const days = useMemo(() => (data ? workDays(data) : []), [data]);
-  const sessionsFor = (f: SessFilter) => { setSess(f); openDrawer("d-sessions", true); };
+  // The attention and chart actions show the table in the order they promise.
+  const sessionsFor = (f: SessFilter) => { setSess(f); setSessSort(null); openDrawer("d-sessions", true); };
   const showDay = (day: string) => sessionsFor({ q: "", near: false, day });
   const acts = {
     loops: () => openDrawer("d-loops", true),
@@ -110,7 +111,7 @@ export function ActivityPage() {
     tests: () => openDrawer("d-tests", true),
   };
   const scope: RowScope | undefined = day ? {
-    on: `on ${dayLabel(day, true)}`,
+    on: dv ? `on ${dayLabel(day, true)}` : "in this range",
     note: <div className="hint">{dv ? `${dayLabel(day, true)} only. ` : dayApi.error ? `Could not load ${dayLabel(day, true)} (${dayApi.error.message}); showing the whole range. `
       : `Loading ${dayLabel(day, true)}…; showing the whole range. `}<button type="button" className="linkish" onClick={() => setSess({ ...sess, day: "" })}>Show the whole range</button></div>,
   } : undefined;
@@ -121,7 +122,7 @@ export function ActivityPage() {
     <div className={cls} ref={wrap} aria-busy={loading || undefined}>
       <header className="top sect" id="overview">
         <div>{d ? <Lede d={d} before={before} /> : <h1 className="lede" id="lede" tabIndex={-1} aria-live="polite">{error ? "Activity could not be loaded." : "Loading activity…"}</h1>}</div>
-        <div className="top-side"><Filters projects={d?.projects ?? []} automated /></div>
+        <div className="top-side"><Filters projects={d?.projects ?? []} automated reset={RESET} /></div>
       </header>
       {error && <div className="banner" role="alert"><b>Could not load {viewName(want)} ({error.message}).{d ? ` Still showing ${viewName(d)}.` : ""}</b>{" "}
         <button type="button" className="linkish" ref={retryBtn} onClick={retry}>Retry</button></div>}
@@ -137,7 +138,7 @@ export function ActivityPage() {
         {has && <Vitals d={d} />}
         <WorkChart days={days} metric={metric} onMetric={setMetric} onDay={showDay} />
         <div className="drawers">
-          <SessionsDrawer view={{ project: d.project, range: d.range, automated: d.automated, source: d.source }} count={d.totals.sessions} filter={sess} onFilter={setSess}
+          <SessionsDrawer view={{ project: d.project, range: d.range, automated: d.automated, source: d.source }} count={d.totals.sessions} filter={sess} onFilter={setSess} sort={sessSort} onSort={setSessSort}
             selected={h.session} usage={d} />
           <ProjectsDrawer rows={d.by_project} selected={d.project} />
           <ToolsDrawer tools={(dv ?? d).tools} flaky={flaky} sort={toolSort} onSort={setToolSort} scope={scope} />

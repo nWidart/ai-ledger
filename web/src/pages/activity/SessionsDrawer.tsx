@@ -19,19 +19,29 @@ const HEAD: [string, SessionSort | null, string, string?, boolean?][] = [
   ["Tokens", "tokens", "num opt2"], ["Est. cost", "cost", "num"], ["Peak context", "peak_context", "num", undefined, true], ["Failed", "errors", "num opt"],
   ["Compactions", "compactions", "num opt2", undefined, true], ["Commits", "commits", "num opt"], ["Tests", "tests_failed", "num opt", "Test and build runs: passed of run"],
 ];
+// The order each sort gives, most first then least first.
+const ORDER: Record<SessionSort, [string, string]> = {
+  first_ts: ["newest first", "oldest first"], duration_s: ["longest active time first", "shortest active time first"],
+  prompts: ["most prompts first", "fewest prompts first"], tokens: ["most tokens first", "fewest tokens first"], cost: ["costliest first", "cheapest first"],
+  peak_context: ["largest peak context first", "smallest peak context first"], errors: ["most failed calls first", "fewest failed calls first"],
+  compactions: ["most compactions first", "fewest compactions first"], commits: ["most commits first", "fewest commits first"],
+  tests_failed: ["most failed test runs first", "fewest failed test runs first"],
+};
 
 /** Every session in the view, paged on the server so search finds old ones too, and sorted there so a sort orders them all.
  *  Loads when open, from the first page when the query or the sort changes. When usage, the page's payload, changes for the same query (an ingest or Refresh brought new data;
- *  useApi keeps an identical answer), it refetches as many rows as are shown, in place, keeping focus. */
-export function SessionsDrawer({ view, count, filter, onFilter, selected, usage }: {
-  view: View; count: number; filter: SessFilter; onFilter: (f: SessFilter) => void; selected: string; usage: UsagePayload;
+ *  useApi keeps an identical answer), it refetches as many rows as are shown, in place, keeping focus. sort: the page's, none
+ *  for today's order. */
+export function SessionsDrawer({ view, count, filter, onFilter, sort, onSort, selected, usage }: {
+  view: View; count: number; filter: SessFilter; onFilter: (f: SessFilter) => void; sort: SortBy<SessionSort> | null; onSort: (s: SortBy<SessionSort>) => void;
+  selected: string; usage: UsagePayload;
 }) {
   const [open, setOpen] = useState(false);
   useEffect(() => { setOpen(!!(document.getElementById("d-sessions") as HTMLDetailsElement | null)?.open); }, []);
   const [rows, setRows] = useState<TitledSessionRow[]>([]), [total, setTotal] = useState(0);
   // stale: a new query is under way, so the rows shown go inert; busy: any request, Show more included.
   const [st, setSt] = useState<{ busy: boolean; stale?: boolean; hint: string; error?: string; moreError?: string }>({ busy: false, hint: "" });
-  const [tick, setTick] = useState(0), [sort, setSort] = useState<SortBy<SessionSort> | null>(null);
+  const [tick, setTick] = useState(0);
   const by = { sort: sort?.key, desc: sort?.desc };
   const seq = useRef(0), body = useRef<HTMLTableSectionElement>(null), search = useRef<HTMLInputElement>(null), focusRow = useRef(-1);
   // Searching waits for a pause in typing.
@@ -88,9 +98,7 @@ export function SessionsDrawer({ view, count, filter, onFilter, selected, usage 
     focusRow.current = -1;
   }, [rows]);
 
-  const sorted = !sort ? "" : sort.key === "first_ts" ? (sort.desc ? "newest first" : "oldest first")
-    : `by ${sort.key === "tests_failed" ? "failed tests" : HEAD.find(c => c[1] === sort.key)![0].toLowerCase()}, ${sort.desc ? "most" : "least"} first`;
-  const order = sorted || (filter.near ? "nearest the limit first" : filter.day ? "by their cost on that day" : "newest first");
+  const order = sort ? ORDER[sort.key][sort.desc ? 0 : 1] : filter.near ? "nearest the limit first" : filter.day ? "by their cost on that day" : "newest first";
   const hint = st.moreError ?? (st.hint || (st.error ? "" : `${plural(total, "session")}${narrowed ? " match" : ""}` + (total ? `, ${order}. `
     + `${rows.length < total ? `Showing ${num(rows.length)}. ` : ""}Select a session for details.` : ".")));
   return (
@@ -106,7 +114,7 @@ export function SessionsDrawer({ view, count, filter, onFilter, selected, usage 
       <div className="scroll tall"><table>
         <thead><tr>{HEAD.map(([label, k, cls, title, whole]) => {
           const t = whole && filter.day ? WHOLE : title;
-          return k ? <SortTh key={label} k={k} sort={sort} onSort={setSort} className={cls || undefined} title={t}>{label}</SortTh>
+          return k ? <SortTh key={label} k={k} sort={sort} onSort={onSort} className={cls || undefined} title={t}>{label}</SortTh>
             : <th key={label} className={cls || undefined} title={t}>{label}</th>;
         })}</tr></thead>
         <tbody ref={body} className={st.stale ? "stale" : undefined} aria-busy={st.busy || undefined} inert={st.stale || undefined}>
