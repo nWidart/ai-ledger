@@ -261,31 +261,27 @@ export interface LivePayload {
   /** With no active session: the one in scope that wrote last. */
   newest: { session_id: string; project: string | null; last_ts: Ts | null } | null;
 }
+/** lane: the subagent whose work it is, null on the main thread. */
 interface LiveEventBase { key: string; ts: Ts | null; lane: string | null }
 export interface LiveTextEvent extends LiveEventBase { k: "prompt" | "reply"; words: number; text?: string }
 export interface LiveToolEvent extends LiveEventBase {
+  /** The input, whole only with text: without, a subagent call's description, and other inputs cut to 300 characters. */
   k: "tool"; id: string; tool: string; summary: string; description: string | null; start: Ts | null; end: Ts | null;
   failed: boolean; error: string | null;
   /** The result's size; its text (cut to 4 KB) only with text. */
   chars: number; output: string | null; cut: boolean;
-  /** The subagent this call started, when its result names it. */
+  /** The subagent this call started, when its result or the subagent's start names it. */
   agent: string | null;
 }
-export interface LiveRequestEvent extends LiveEventBase { k: "request"; id: string; model: string | null; output: number; context: number }
 export interface LiveMarkEvent extends LiveEventBase { k: "interrupt" | "turn_end" }
 export interface LiveTurnStart extends LiveEventBase { k: "turn_start"; window: number | null }
 export interface LiveCompaction extends LiveEventBase { k: "compaction"; pre: number | null }
-export type LiveEvent = LiveTextEvent | LiveToolEvent | LiveRequestEvent | LiveMarkEvent | LiveTurnStart | LiveCompaction;
-export interface LiveLane {
-  id: string; start: Ts | null; end: Ts | null; tools: number; running: boolean;
-  /** The main-thread call that started it, when known; name is that call's tool. */
-  parent: string | null; name: string; description: string | null; done: boolean;
-}
+export type LiveEvent = LiveTextEvent | LiveToolEvent | LiveMarkEvent | LiveTurnStart | LiveCompaction;
 export interface LiveSession extends LiveFigures, LiveTitle {
   session_id: string; project: string | null; source: Source; branch: string | null; last_ts: Ts | null; now: Ts;
-  /** Pass back as after= to get only newer events. */
+  /** Pass back as after= to get newer events, with those of the minute before sent again. */
   cursor: string | null; truncated: boolean; state: LiveState;
-  events: LiveEvent[]; lanes: LiveLane[];
+  events: LiveEvent[];
   compactions: { ts: Ts | null; pre: number | null }[];
   spark: { points: number[]; per_minute: number; step: number };
   limits: { label: string; used_percent: number; observed_at: Ts | null; resets_at: Ts | null }[];

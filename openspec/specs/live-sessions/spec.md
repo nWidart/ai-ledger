@@ -45,11 +45,15 @@ The app SHALL give each active session one state, checked in this order:
 - **THEN** the state is idle
 
 ### Requirement: Flag a likely approval wait
-When a shell tool call (Claude Code `Bash`, Codex `exec` or `exec_command`) has had no result for more than 30 seconds, the app SHALL report the state as *likely waiting for approval*, with how long the call has been pending.
+When a shell tool call (Claude Code `Bash`, Codex `exec` or `exec_command`) has had no result for more than 30 seconds, the app SHALL report the state as *likely waiting for approval*, with how long the call has been pending. A newer pending call, in the main thread or a subagent, SHALL NOT hide it; with several such calls, the oldest SHALL be reported.
 
 #### Scenario: Slow shell call
 - **WHEN** a `Bash` call started 45 seconds ago and has no result
 - **THEN** the state is likely waiting for approval, pending 45 seconds
+
+#### Scenario: Newer call in a subagent
+- **WHEN** a `Bash` call started 45 seconds ago and has no result, and a subagent started a `Read` call 2 seconds ago
+- **THEN** the state is likely waiting for approval, naming `Bash`, pending 45 seconds
 
 #### Scenario: Slow non-shell call
 - **WHEN** a `WebFetch` call started 45 seconds ago and has no result
@@ -71,7 +75,7 @@ Every payload that carries a state SHALL say whether it is inferred. *likely wai
 - **THEN** the payload does not mark the state as inferred
 
 ### Requirement: Stream one session's events
-For one session, the app SHALL return its events in transcript order: prompts, assistant replies, requests, tool calls and compactions. Each tool call SHALL carry its tool, input summary, start time, end time or none, and failure with its error. A request for events after a given point SHALL return only later events.
+For one session, the app SHALL return its events in transcript order: prompts, assistant replies, tool calls and compactions. Each tool call SHALL carry its tool, input summary, start time, end time or none, and failure with its error. A request for events after a given point SHALL return the later events and SHALL read again the minute before that point, as transcript lines can be written seconds after their timestamp; each event keeps one key, so the page holds one copy of it.
 
 #### Scenario: First load
 - **WHEN** the page asks for a session's events with no starting point
@@ -79,7 +83,11 @@ For one session, the app SHALL return its events in transcript order: prompts, a
 
 #### Scenario: Catch up
 - **WHEN** the page asks for events after the last one it holds, and two tool calls were written since
-- **THEN** the app returns those two tool calls and nothing earlier
+- **THEN** the app returns those two tool calls, the events of the minute before the point asked for, and nothing earlier
+
+#### Scenario: Line written late
+- **WHEN** a tool result stamped 10 seconds before the last line the page holds is written after the page caught up
+- **THEN** the next catch-up returns the call with its result
 
 #### Scenario: Tool call finishes
 - **WHEN** a tool call the page received without a result later gets a failing result
@@ -90,18 +98,22 @@ For one session, the app SHALL return its events in transcript order: prompts, a
 - **THEN** the events have the same kinds and fields as for a Claude Code session
 
 ### Requirement: Group subagent work
-The events of a subagent SHALL be grouped under that subagent, with its start time, end time when it has ended, and its number of tool calls. When the transcript names the tool call that started the subagent, the group SHALL be tied to that call.
+Each event of a subagent SHALL name that subagent, so the page can group them with the subagent's start time, end time when it has ended, and number of tool calls. The tool call that started a subagent SHALL name it: from the call's result when the subagent ends, and while it runs from the start record Claude Code writes beside its transcript (`agent-<id>.meta.json`).
 
 #### Scenario: Subagent with three tool calls
 - **WHEN** a Claude Code session starts an Explore subagent that makes three tool calls
-- **THEN** the three calls are returned inside one subagent group, not among the main thread's calls
+- **THEN** the three calls are returned marked as that subagent's, not as the main thread's
+
+#### Scenario: Subagent still running
+- **WHEN** a Claude Code session started a subagent with an `Agent` call that has no result yet
+- **THEN** that call names the subagent
 
 ### Requirement: Send transcript text only on request
-By default, prompts and replies SHALL be returned as word counts and tool results as character counts, without their text. A session title made from the first prompt is prompt text, and SHALL be left out by default. Only a request that asks for text SHALL receive the prompt and reply text, up to 4 KB of each tool result, and first-prompt titles.
+By default, prompts and replies SHALL be returned as word counts and tool results as character counts, without their text. A session title made from the first prompt is prompt text, and SHALL be left out by default. A tool call's input SHALL be cut to 300 characters by default, and a subagent call (Claude Code `Agent`, Codex `spawn_agent`) SHALL carry its description instead of its prompt. Only a request that asks for text SHALL receive the prompt and reply text, whole tool inputs, up to 4 KB of each tool result, and first-prompt titles.
 
 #### Scenario: Default request
 - **WHEN** the page asks for events without asking for text
-- **THEN** no prompt, reply or tool-result text is in the response, and no first-prompt title
+- **THEN** no prompt, reply or tool-result text is in the response, no first-prompt title, no subagent prompt and no tool input longer than 300 characters
 
 #### Scenario: Text requested
 - **WHEN** the page asks for events with text

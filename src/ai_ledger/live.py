@@ -2,8 +2,8 @@
 
 Events come from the stored transcript lines through each source's live_items, so a running tool shows before the
 derived tool_calls know of it. Totals (cost, requests, tool calls, errors) come from the derived tables, as on the other
-pages. Prompt, reply and tool-output text leave this module only when the caller asks for it, and so does a session title
-made from the first prompt."""
+pages. Prompt, reply and tool-output text leave this module only when the caller asks for it, and so do a session title
+made from the first prompt, a subagent's prompt and tool inputs longer than INPUT_CAP."""
 import json
 from datetime import datetime, timedelta, timezone
 
@@ -15,8 +15,12 @@ IDLE = timedelta(minutes=5)  # no line for this long: idle, whatever else the li
 APPROVAL = timedelta(seconds=30)  # a shell call pending this long is likely waiting for approval
 APPROVAL_TOOLS = SHELL_TOOLS | {"exec"}  # Codex's exec runs a script that calls the shell
 FIRST_LOAD = 500  # events on a first load
+FIRST_LINES = FIRST_LOAD * 6  # lines read for a first load: most lines show no event
+OVERLAP = timedelta(seconds=60)  # a catch-up reads again this far before its cursor: some lines are written late
 STATE_LINES = 200  # newest lines read per session for the active list
 TEXT_CAP = 4096  # characters of one tool result sent with text
+INPUT_CAP = 300  # characters of a tool input sent without text, as Codex's live summaries
+PROMPT_TOOLS = {"Agent", "Task", "spawn_agent"}  # their input is a prompt: without text, their description stands in
 ERROR_CAP = 700  # as tool_calls.error
 SPARK_STEP = 5  # seconds per point of the tokens chart, over the last minute
 
@@ -51,9 +55,9 @@ def lane_of(path, source):
 
 def assemble(rows):
     """Events in line order from raw rows (key, file, ts, subagent, source, json). A tool use and its result become one
-    tool event; a request split over several lines counts once. Returns (events, results), where results maps a tool id
+    tool event; requests are left out, as the page shows none. Returns (events, results), where results maps a tool id
     to its result item when the use is not among the rows."""
-    events, tools, requests, results = [], {}, set(), {}
+    events, tools, results = [], {}, {}
     for key, path, ts, sub, source, text in rows:
         src = store.SOURCES.get(source or "claude")
         try:
@@ -79,11 +83,7 @@ def assemble(rows):
                     finish(tools[it["id"]], r)
                 else:
                     results[it["id"]] = r
-            elif k == "request":
-                if it["id"] not in requests:
-                    requests.add(it["id"])
-                    events.append(dict(it, key=f"{key}#{i}", ts=t, lane=lane))
-            else:
+            elif k != "request":
                 events.append(dict(it, key=f"{key}#{i}", ts=t, lane=lane))
     return events, results
 
@@ -104,10 +104,13 @@ def state(events, now, source, last):
     if last is None or now - last > IDLE:
         return dict(kind="idle", tool=None, since=iso(last), inferred=False)
     pending = [e for e in events if e["k"] == "tool" and e["end"] is None]
-    if pending:
+    if pending:  # a likely approval wait, the oldest first, else the newest call: a newer call in a subagent hides no wait
+        waits = [e for e in pending if e["tool"] in APPROVAL_TOOLS and e["start"] is not None and now - e["start"] > APPROVAL]
+        if waits:
+            p = min(waits, key=lambda e: e["start"])
+            return dict(kind="wait", tool=p["tool"], since=iso(p["start"]), inferred=True)
         p = max(pending, key=lambda e: e["start"] or now)
-        waiting = p["tool"] in APPROVAL_TOOLS and p["start"] is not None and now - p["start"] > APPROVAL
-        return dict(kind="wait" if waiting else "tool", tool=p["tool"], since=iso(p["start"]), inferred=waiting)
+        return dict(kind="tool", tool=p["tool"], since=iso(p["start"]), inferred=False)
     if source == "codex":
         turns = [e for e in events if e["k"] in ("turn_start", "turn_end")]
         if turns and turns[-1]["k"] == "turn_start":
@@ -124,11 +127,11 @@ def state(events, now, source, last):
     return dict(kind="you", tool=None, since=iso(t), inferred=False)
 
 
-def latest_action(events):
+def latest_action(events, text):
     """The newest prompt, tool call or subagent call, for a wall tile."""
     for e in reversed(events):
         if e["k"] == "tool":
-            return dict(kind="tool", tool=e["tool"], summary=e["summary"][:200], lane=e["lane"])
+            return dict(kind="tool", tool=e["tool"], summary=tool_input(e, text)[:200], lane=e["lane"])
         if e["k"] == "prompt":
             return dict(kind="prompt", tool=None, summary=None, lane=None)
     return None
@@ -183,7 +186,7 @@ def sessions(cur, project="", source="", automated=False, now=None, prices=None,
         last = s["last_ts"].replace(tzinfo=timezone.utc) if s["last_ts"] else None
         f = figs[s["session_id"]]
         out.append(dict(session_id=s["session_id"], **title_of(found, s["session_id"]), project=s["project"], source=s["source"],
-                        branch=s["git_branch"], last_ts=iso(last), state=state(events, now, s["source"], last), latest=latest_action(events),
+                        branch=s["git_branch"], last_ts=iso(last), state=state(events, now, s["source"], last), latest=latest_action(events, text),
                         window=window_of(f["model"], events, prices), **f))
     return dict(now=iso(now), sessions=out, newest=None if out else newest_session(cur, where, params))
 
@@ -215,7 +218,11 @@ def newest_session(cur, where, params):
 
 def session(cur, sid, after="", text=False, now=None, prices=None):
     """/api/live/session: one session's events after cursor `after` (a line timestamp; '' for the newest FIRST_LOAD),
-    its lanes, state and figures. None for an unknown session. Raises ValueError for a malformed cursor."""
+    its state and figures. None for an unknown session. Raises ValueError for a malformed cursor.
+
+    A catch-up reads the lines from OVERLAP before the cursor, as a line can be stored after a later-stamped one; the
+    page keeps one copy of each event by its key. A subagent's events carry its lane id, and the call that started it
+    names it in agent: the page groups them."""
     now = now or now_utc()
     prices = metrics.load_prices() if prices is None else prices
     if after and parse_ts(after) is None:
@@ -226,22 +233,28 @@ def session(cur, sid, after="", text=False, now=None, prices=None):
     s = info[0]
     if after:
         rows = cur.execute(f"""SELECT {ROW_COLS} FROM {ROW_FROM} WHERE r.session_id = ? AND r.ts >= ? AND r.parsed
-            ORDER BY r.ts, r.file, r.line_no""", [sid, after]).fetchall()
+            ORDER BY r.ts, r.file, r.line_no""", [sid, iso(parse_ts(after) - OVERLAP)]).fetchall()
         more = False
     else:
         rows = cur.execute(f"""SELECT * FROM (SELECT {ROW_COLS}, r.line_no FROM {ROW_FROM}
             WHERE r.session_id = ? AND r.ts IS NOT NULL AND r.parsed ORDER BY r.ts DESC, r.file, r.line_no DESC LIMIT ?)
-            ORDER BY 3, 2, 7""", [sid, FIRST_LOAD * 3 + 1]).fetchall()
-        more = len(rows) > FIRST_LOAD * 3
-        rows = [r[:6] for r in rows[-FIRST_LOAD * 3:]]
+            ORDER BY 3, 2, 7""", [sid, FIRST_LINES + 1]).fetchall()
+        more = len(rows) > FIRST_LINES
+        rows = [r[:6] for r in rows[-FIRST_LINES:]]
     events, results = assemble(rows)
-    if results:  # results whose use came before the rows: send those calls again, finished
-        uses, _ = assemble(earlier_uses(cur, sid, rows[0][2] if rows else after, list(results)))
+    started = started_by(rows, events)
+    missing = set(results) | (set(started) - {e["id"] for e in events if e["k"] == "tool"})
+    if missing:  # calls that came before the rows: send them again, finished or naming the subagent they started
+        uses, _ = assemble(earlier_uses(cur, sid, rows[0][2], list(missing)))
         for ev in uses:
-            if ev["k"] == "tool" and ev["id"] in results:
-                finish(ev, results[ev["id"]])
+            if ev["k"] == "tool" and ev["id"] in missing:
+                if ev["id"] in results:
+                    finish(ev, results[ev["id"]])
                 events.append(ev)
         events.sort(key=lambda e: (e["ts"] or now))
+    for ev in events:
+        if ev["k"] == "tool" and ev["id"] in started:
+            ev["agent"] = ev["agent"] or started[ev["id"]]
     if len(events) > FIRST_LOAD and not after:
         events, more = events[-FIRST_LOAD:], True
     last = s["last_ts"].replace(tzinfo=timezone.utc) if s["last_ts"] else None
@@ -250,7 +263,7 @@ def session(cur, sid, after="", text=False, now=None, prices=None):
     return dict(session_id=sid, **title_of(metrics.titles(cur, [sid], prompts=text), sid), project=s["project"], source=s["source"], branch=s["git_branch"], last_ts=iso(last),
                 now=iso(now), cursor=cursor, truncated=more,
                 state=state(assemble(recent(cur, [sid]).get(sid, []))[0], now, s["source"], last),
-                events=[public(e, text) for e in events], lanes=lanes(events),
+                events=[public(e, text) for e in events],
                 window=window_of(f["model"], events, prices), compactions=compactions(cur, sid),
                 spark=spark(cur, sid, now), limits=plan_limits(cur, s["source"], now), **f)
 
@@ -269,6 +282,7 @@ def public(e, text):
         if not text:
             del out["text"]
     elif e["k"] == "tool":
+        out["summary"] = tool_input(e, text)
         output = e["output"] or ""
         out["chars"] = len(output)
         out["output"] = output[:TEXT_CAP] if text and e["end"] else None
@@ -276,25 +290,37 @@ def public(e, text):
     return out
 
 
-def lanes(events):
-    """Subagent lanes: each lane's events are those with its lane id. A lane is tied to the main-thread call whose
-    result names it (Claude Code's agentId); otherwise it stands on its own at its first event."""
-    parents = {e["agent"]: e for e in events if e["k"] == "tool" and e.get("agent") and not e["lane"]}
-    out = {}
-    for e in events:
-        if not e["lane"]:
+def tool_input(e, text):
+    """Tool event e's input as sent: whole with text; otherwise a subagent call's description instead of its prompt, and
+    other inputs cut to INPUT_CAP."""
+    if text:
+        return e["summary"]
+    if e["tool"] in PROMPT_TOOLS:
+        return e["description"] or ""
+    return e["summary"] if len(e["summary"]) <= INPUT_CAP else e["summary"][:INPUT_CAP] + "…"
+
+
+def started_by(rows, events):
+    """For Claude Code subagents among the rows that no call in events names yet: the id of the call that started each,
+    mapped to the subagent's lane id. Its result names a subagent only when it ends; at its start Claude Code writes
+    agent-<id>.meta.json beside its lines, with that call's toolUseId."""
+    named = {e["agent"] for e in events if e["k"] == "tool" and e["agent"]}
+    out, seen = {}, set()
+    for _, path, _, sub, source, _ in rows:
+        if not sub or source != "claude" or path in seen or not path.endswith(".jsonl"):
             continue
-        lane = out.setdefault(e["lane"], dict(id=e["lane"], start=e["ts"], end=e["ts"], tools=0, running=False))
-        lane["end"] = max(x for x in (lane["end"], e["ts"]) if x) if e["ts"] else lane["end"]
-        if e["k"] == "tool":
-            lane["tools"] += 1
-            lane["running"] = lane["running"] or e["end"] is None
-    for lid, lane in out.items():
-        p = parents.get(lid)
-        lane.update(parent=p["id"] if p else None, name=p["tool"] if p else "Subagent",
-                    description=p["description"] if p else None, done=bool(p and p["end"]))
-        lane["start"], lane["end"] = iso(lane["start"]), iso(lane["end"]) if lane["done"] else None
-    return list(out.values())
+        seen.add(path)
+        lane = lane_of(path, source)
+        if lane in named:
+            continue
+        try:
+            with open(path[:-len(".jsonl")] + ".meta.json") as fh:
+                tid = json.load(fh).get("toolUseId")
+        except (OSError, ValueError, AttributeError):
+            continue
+        if isinstance(tid, str) and tid:
+            out[tid] = lane
+    return out
 
 
 def compactions(cur, sid):

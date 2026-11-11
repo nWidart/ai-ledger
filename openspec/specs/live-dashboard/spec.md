@@ -13,6 +13,14 @@ The Live page SHALL list the active sessions in a rail. Each entry SHALL show th
 - **WHEN** the user opens `/live` while sessions in `ai-ledger` and `jobdesk` are active, and `ai-ledger` wrote last
 - **THEN** the rail lists both, and the stream shows `ai-ledger`
 
+#### Scenario: Filter leaves the open session out
+- **WHEN** no session is named in the URL and the user picks a project whose sessions do not include the one in the stream
+- **THEN** the stream opens the newest session of that project
+
+#### Scenario: Count of working sessions
+- **WHEN** three sessions are active: one running a tool, two waiting for a prompt
+- **THEN** the rail's footer says 1 session working and 2 waiting for you
+
 #### Scenario: No active session
 - **WHEN** no session wrote a line in the last 10 minutes
 - **THEN** the page says no session is active and shows when the newest session last wrote, with a link to it on Activity
@@ -26,7 +34,7 @@ The Live page SHALL list the active sessions in a rail. Each entry SHALL show th
 - **THEN** its entry shows the project as its main line, and when Full text is turned on it shows the title made from its first prompt
 
 ### Requirement: Show a session's stream
-The stream SHALL show the selected session's events in order. Each tool call SHALL be a row with its tool, input summary, duration and result. A running call SHALL show a timer that counts up each second. A failed call SHALL be marked as failed. Compactions SHALL be marked between events.
+The stream SHALL show the selected session's events in order. Each tool call SHALL be a row with its tool, input summary, duration and result. A running call SHALL show a timer that counts up each second. A failed call SHALL be marked as failed. Compactions SHALL be marked between events. When older events are left out, the stream SHALL say so and link to the session's sheet on Activity.
 
 #### Scenario: Tool call starts and ends
 - **WHEN** a `Bash` call starts in the followed session and ends 8 seconds later
@@ -44,11 +52,15 @@ Selecting a tool row SHALL open its detail in place: the input summary, the star
 - **THEN** the detail shows the command, the start time and the error, and the result as a character count
 
 ### Requirement: Fold subagent lanes
-Subagent work SHALL appear as a lane inside the stream. The lane header SHALL show the subagent's name, its description, its tool-call count, its duration and whether it is still running. Selecting the header SHALL fold or unfold the lane.
+Subagent work SHALL appear as a lane inside the stream. The lane header SHALL show the subagent's name, its description, its tool-call count, its duration and whether it is still running. Selecting the header SHALL fold or unfold the lane. Updates SHALL keep every lane with all the rows the page holds for it.
 
 #### Scenario: Fold a lane
 - **WHEN** the user selects the header of an Explore lane with three tool calls
 - **THEN** the three rows are hidden and the header still shows three tool calls
+
+#### Scenario: Update brings another lane's work
+- **WHEN** a session has three lanes and an update brings new calls of one of them only
+- **THEN** all three lanes stay, each with its rows and its count
 
 ### Requirement: Show the agent panel
 Beside the stream, the page SHALL show the selected session's state with its detail, context window fill with a mark at each compaction, cost, requests, tool calls, errors, cache-read share, a tokens-per-minute chart of the last minute, and the plan-limit use for its source. An inferred state SHALL be shown as inferred.
@@ -62,11 +74,11 @@ Beside the stream, the page SHALL show the selected session's state with its det
 - **THEN** the panel and the tool row show it in the warning color, and say that it is inferred and why
 
 ### Requirement: Toggle full text
-The page SHALL offer a Full text toggle that is off on every page load. With it off, prompts and replies SHALL show as word counts and tool results as sizes. With it on, they SHALL show as written, and a banner SHALL say that secrets can appear.
+The page SHALL offer a Full text toggle that is off on every page load. With it off, prompts and replies SHALL show as word counts, tool results as sizes, tool inputs cut to 300 characters and subagent calls by their description. With it on, they SHALL show as written, and a banner SHALL say that secrets can appear. Turning it on SHALL keep open rows, folded lanes and the scroll position.
 
 #### Scenario: Turn on full text
 - **WHEN** the user turns on Full text
-- **THEN** the stream shows prompts, replies and tool results as written, and the banner appears
+- **THEN** the stream shows prompts, replies and tool results as written, the banner appears, and a row the user had open stays open
 
 #### Scenario: Reload
 - **WHEN** the user reloads the page after turning Full text on
@@ -107,6 +119,10 @@ The page SHALL keep the selected session and the view (Stream or Wall) in the UR
 #### Scenario: Selected session no longer active
 - **WHEN** the URL names a session that is no longer active
 - **THEN** the stream still shows that session's newest events, marked idle
+
+#### Scenario: Unknown session
+- **WHEN** the URL names a session the store does not hold
+- **THEN** the stream says the session was not found and offers a link back to the active sessions
 
 ### Requirement: Recover from a dropped connection
 When the update connection drops, the page SHALL say that updates are paused and SHALL reconnect on its own. After reconnecting it SHALL fetch what it missed.

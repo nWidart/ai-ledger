@@ -62,6 +62,13 @@ class StateTest(unittest.TestCase):
         st = self.state(assistant("a1", "m1", at(15), [tool_use("t1", "Bash", command="git push")]))
         self.assertEqual(st, dict(kind="wait", tool="Bash", since="2026-11-10T10:00:15.000Z", inferred=True))
 
+    def test_newer_call_does_not_hide_a_likely_wait(self):
+        text = (assistant("a1", "m1", at(15), [tool_use("t1", "Bash", command="git push")])
+                + assistant("a2", "m2", at(50), [tool_use("t2", "Read", file_path="x.py")]))
+        self.assertEqual(self.state(text), dict(kind="wait", tool="Bash", since="2026-11-10T10:00:15.000Z", inferred=True))
+        text = assistant("a1", "m1", at(45), [tool_use("t1", "Bash", command="ls")]) + assistant("a2", "m2", at(50), [tool_use("t2", "Read", file_path="x")])
+        self.assertEqual(self.state(text)["tool"], "Read")
+
     def test_slow_codex_exec_is_likely_waiting(self):
         text = codex_line(1, 15, "response_item", type="custom_tool_call", name="exec", call_id="c1", input="run")
         self.assertEqual(self.state(text, "codex")["kind"], "wait")
@@ -163,7 +170,7 @@ class SessionTest(LiveCase):
         self.write("s1.jsonl", prompt("u1", at(0), "p1", "SECRET prompt") + assistant("a1", "m1", at(1), [tool_use("t1", "Bash", command="ls")]))
         self.ingest()
         first = self.run_session()
-        self.assertEqual([e["k"] for e in first["events"]], ["prompt", "request", "tool"])
+        self.assertEqual([e["k"] for e in first["events"]], ["prompt", "tool"])
         self.assertFalse(first["truncated"])
         self.write("s1.jsonl", result("r1", at(3), "t1", "a\nb") + assistant("a2", "m2", at(4), [tool_use("t2", "Read", file_path="x"),
                                                                                                  tool_use("t3", "Grep", pattern="y")]))
@@ -171,7 +178,21 @@ class SessionTest(LiveCase):
         later = self.run_session(after=first["cursor"])
         tools = [e for e in later["events"] if e["k"] == "tool"]
         self.assertEqual([(t["id"], t["end"] is not None) for t in tools], [("t1", True), ("t2", False), ("t3", False)])
-        self.assertNotIn("u1#0", [e["key"] for e in later["events"]])
+        self.write("s1.jsonl", assistant("a3", "m3", at(200), [tool_use("t4", "Read", file_path="z")]))
+        self.ingest()
+        self.assertEqual([e["key"] for e in self.run_session(after=at(200))["events"]], ["a3#1"])  # nothing from a minute before
+
+    def test_catch_up_reads_a_line_written_late(self):
+        self.write("s1.jsonl", assistant("a1", "m1", at(0), [tool_use("t1", "Read", file_path="x")]))
+        self.write("s1/subagents/agent-a7.jsonl", line(type="assistant", uuid="x1", timestamp=at(20), message=dict(
+            id="sm1", model="claude-opus-5-5", content=[tool_use("st1", "Grep", pattern="x")]), **dict(S, isSidechain=True, agentId="a7")))
+        self.ingest()
+        first = self.run_session()
+        self.assertEqual(first["cursor"], at(20))
+        self.write("s1.jsonl", result("r1", at(4), "t1", "ok"))  # stamped before the cursor, stored after it
+        self.ingest()
+        t1, = [e for e in self.run_session(after=first["cursor"])["events"] if e["id"] == "t1"]
+        self.assertEqual(t1["end"], "2026-11-10T10:00:04.000Z")
 
     def test_call_finishing_with_a_failure_is_sent_again(self):
         self.write("s1.jsonl", assistant("a1", "m1", at(1), [tool_use("t1", "Bash", command="make")]))
@@ -200,6 +221,25 @@ class SessionTest(LiveCase):
         got = self.run_session(now=NOW + timedelta(minutes=10))
         self.assertEqual((len(got["events"]), got["truncated"], got["events"][-1]["key"]), (live.FIRST_LOAD, True, f"u{live.FIRST_LOAD + 19}#0"))
 
+    def test_first_load_counts_shown_events_only(self):
+        body = "".join(assistant(f"a{i}", f"m{i}", at(i), [tool_use(f"t{i}", "Read", file_path="x")]) for i in range(live.FIRST_LOAD))
+        self.write("s1.jsonl", prompt("u0", at(-1), "p0", "go") + body)
+        self.ingest()
+        got = self.run_session(now=NOW + timedelta(minutes=10))
+        self.assertEqual((len(got["events"]), got["truncated"], got["events"][0]["k"]), (live.FIRST_LOAD, True, "tool"))
+        self.assertNotIn("request", {e["k"] for e in got["events"]})
+
+    def test_tool_input_in_full_only_with_text(self):
+        self.write("s1.jsonl", assistant("a1", "m1", at(1), [tool_use("t1", "Agent", description="find callers", prompt="SECRET brief " * 50),
+                                                             tool_use("t2", "Bash", command="echo " + "x" * 400 + " SECRET")]))
+        self.ingest()
+        plain = self.run_session()
+        self.assertNotIn("SECRET", json.dumps(plain) + json.dumps(live.sessions(self.cur(), now=NOW, prices=PRICES)))
+        agent, bash = plain["events"]
+        self.assertEqual((agent["summary"], len(bash["summary"])), ("find callers", live.INPUT_CAP + 1))
+        agent, bash = self.run_session(text=True)["events"]
+        self.assertEqual((agent["summary"], bash["summary"][-6:]), ("SECRET brief " * 50, "SECRET"))
+
     def test_text_only_on_request(self):
         self.write("s1.jsonl", prompt("u1", at(0), "p1", "SECRET prompt") + assistant("a1", "m1", at(1), [
             dict(type="text", text="SECRET reply"), tool_use("t1", "Bash", command="cat .env")]) + result("r1", at(2), "t1", "SECRET=" + "x" * 5000))
@@ -225,14 +265,29 @@ class SessionTest(LiveCase):
         self.write("s1/subagents/agent-a7.jsonl", lines)
         self.ingest()
         running = self.run_session()
-        lane, = running["lanes"]
-        self.assertEqual((lane["id"], lane["tools"], lane["parent"], lane["done"]), ("a7", 3, None, False))
         self.assertEqual(sum(1 for e in running["events"] if e["lane"] == "a7" and e["k"] == "tool"), 3)
+        call = lambda got: next(e for e in got["events"] if e["k"] == "tool" and e["id"] == "t1")
+        self.assertEqual((call(running)["agent"], call(running)["end"]), (None, None))
         self.write("s1.jsonl", line(type="user", uuid="r1", timestamp=at(9), promptId="p1", toolUseResult=dict(agentId="a7"),
                                     message=dict(role="user", content=[dict(type="tool_result", tool_use_id="t1", content="done")]), **S))
         self.ingest()
-        lane, = self.run_session()["lanes"]
-        self.assertEqual((lane["parent"], lane["description"], lane["done"]), ("t1", "find callers", True))
+        self.assertEqual((call(self.run_session())["agent"], call(self.run_session())["description"]), ("a7", "find callers"))
+
+    def test_running_subagent_tied_through_its_meta_file(self):
+        self.write("s1.jsonl", assistant("a1", "m1", at(1), [tool_use("t1", "Agent", description="find callers", prompt="look")]))
+        sub = dict(S, isSidechain=True, agentId="a7")
+        step = lambda i: line(type="assistant", uuid=f"x{i}", timestamp=at(2 + i * 100), message=dict(
+            id=f"sm{i}", model="claude-opus-5-5", content=[tool_use(f"st{i}", "Grep", pattern="x")]), **sub)
+        self.write("s1/subagents/agent-a7.jsonl", step(0))
+        self.write("s1/subagents/agent-a7.meta.json", json.dumps(dict(agentType="Explore", description="find callers", toolUseId="t1")), mode="w")
+        self.ingest()
+        first = self.run_session()
+        call, = [e for e in first["events"] if e["k"] == "tool" and e["lane"] is None]
+        self.assertEqual((call["id"], call["agent"], call["end"]), ("t1", "a7", None))
+        self.write("s1/subagents/agent-a7.jsonl", step(1))  # the call itself is now older than the catch-up reads
+        self.ingest()
+        later = self.run_session(after=first["cursor"], now=NOW + timedelta(minutes=2))
+        self.assertEqual([(e["id"], e["agent"]) for e in later["events"] if e["lane"] is None], [("t1", "a7")])
 
     def test_figures(self):
         self.write("s1.jsonl", assistant("a1", "m1", at(30), [dict(type="text", text="hi")])
@@ -271,7 +326,7 @@ class CodexSessionTest(CodexCase):
                    + codex_line(6, 6, "token_usage_record", turn_id="t1", response_id="r1", usage=dict(input_tokens=900, output_tokens=40)))
         self.ingest()
         got = live.session(self.con.cursor(), THREAD, now=NOW - timedelta(seconds=50), prices=PRICES)  # exec pending 5 s
-        self.assertEqual([e["k"] for e in got["events"]], ["turn_start", "prompt", "tool", "tool", "request"])
+        self.assertEqual([e["k"] for e in got["events"]], ["turn_start", "prompt", "tool", "tool"])
         exec_ev = got["events"][3]
         self.assertEqual((exec_ev["tool"], exec_ev["end"]), ("exec", None))
         self.assertEqual((got["state"]["kind"], got["window"]), ("tool", 272000))
@@ -351,7 +406,7 @@ class PageFixtureTest(unittest.TestCase):
         got = page_fixtures()
         states = {s["project"]: s["state"]["kind"] for s in got["list"]["sessions"]}
         self.assertEqual(states, {"foo": "wait", "jobdesk": "thinking", "sketchbook": "you", "dotfiles": "idle", "graft": "thinking"})
-        self.assertEqual(len(got["claude"]["lanes"]), 1)
+        self.assertEqual({e["lane"] for e in got["claude"]["events"]} - {None}, {"a7"})
         self.assertTrue(any(e.get("failed") for e in got["claude"]["events"]))
         self.assertNotIn("Freeze", json.dumps(got["list"]) + json.dumps(got["claude"]))
         titles = lambda key: {s["project"]: (s["title"], s["title_from"]) for s in got[key]["sessions"]}

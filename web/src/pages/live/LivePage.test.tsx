@@ -9,7 +9,7 @@ import liveText from "../../__fixtures__/live-session-text";
 import liveCodex from "../../__fixtures__/live-session-codex";
 import { mockApi } from "../../components/sheets/testing";
 import { LivePage } from "./LivePage";
-import { mergeSession, streamRows } from "./live";
+import { lanesOf, mergeSession, streamRows } from "./live";
 import { FakeSource } from "./testing";
 
 const list = live as LivePayload, listText = liveListText as LivePayload, s1 = liveSession as LiveSession, s1text = liveText as LiveSession, codex = liveCodex as LiveSession;
@@ -40,11 +40,24 @@ describe("live.ts", () => {
     expect(mergeSession(s1, { ...s1, events: [extra] }, false).events).toEqual([extra]);
   });
 
-  it("places a tied lane after its call and leaves requests out", () => {
-    const rows = streamRows(s1.events, s1.lanes);
+  it("places a tied lane after its call", () => {
+    const rows = streamRows(s1.events);
     const at = rows.findIndex(r => r.kind === "event" && r.e.k === "tool" && r.e.id === "t2");
-    expect(rows[at + 1]).toMatchObject({ kind: "lane", lane: { id: "a7" } });
-    expect(rows.some(r => r.kind === "event" && r.e.k === "request")).toBe(false);
+    expect(rows[at + 1]).toMatchObject({ kind: "lane", lane: { id: "a7", name: "Agent", description: "find callers of ingest", tools: 3, done: true } });
+  });
+
+  it("keeps every lane whole after a catch-up that brings events of the main thread only", () => {
+    const main = s1.events.find(e => e.k === "tool" && !e.lane) as LiveToolEvent;
+    const got = mergeSession(s1, { ...s1, events: [{ ...main, key: "z#0", id: "t9" }], cursor: "c2" }, true);
+    expect(lanesOf(got.events)).toEqual(lanesOf(s1.events));
+    expect(lanesOf(got.events)[0]!.tools).toBe(3);
+  });
+
+  it("ties a lane to its call once the call names it, and marks it running until the call ends", () => {
+    const call = s1.events.find(e => e.k === "tool" && e.id === "t2") as LiveToolEvent;
+    const running = s1.events.map(e => (e === call ? { ...call, end: null } : e));
+    expect(lanesOf(running)[0]).toMatchObject({ parent: "t2", name: "Agent", done: false });
+    expect(lanesOf(running.map(e => (e.k === "tool" && e.id === "t2" ? { ...e, agent: null } : e)))[0]).toMatchObject({ parent: null, name: "Subagent" });
   });
 });
 
@@ -122,11 +135,31 @@ describe("LivePage", () => {
     expect(failed.className).toContain("failed");
     expect(within(failed).getByRole("img", { name: "failed" })).toBeTruthy();
     expect(screen.getByText("context compacted at 180.0k tokens")).toBeTruthy();
-    const lane = screen.getByRole("button", { name: /find callers of ingest/ });
+    const lane = screen.getByRole("button", { name: /^Agent find callers of ingest/ });
     expect(screen.getAllByRole("button", { name: /^Grep/ }).length).toBe(3);
     await userEvent.click(lane);
     expect(screen.queryAllByRole("button", { name: /^Grep/ }).length).toBe(0);
     expect(lane.textContent).toContain("3 tools");
+  });
+
+  it("keeps the lanes and their rows when a catch-up brings only a main-thread event", async () => {
+    const main = s1.events.find(e => e.k === "tool" && !e.lane) as LiveToolEvent;
+    let next: LiveSession | undefined;
+    show("#session=s1", { session: q => (q.get("after") && next ? next : s1) });
+    await stream();
+    expect(screen.getAllByRole("button", { name: /^Grep/ }).length).toBe(3);
+    next = { ...s1, events: [{ ...main, key: "z#0", id: "t9", summary: "ls" }], cursor: "c2" };
+    FakeSource.last!.notify(["s1"]);
+    expect(await screen.findByRole("button", { name: /^Readls/ })).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: /^Grep/ }).length).toBe(3);
+    expect(screen.getByRole("button", { name: /^Agent find callers of ingest/ }).textContent).toContain("3 tools");
+  });
+
+  it("names an MCP tool by its tool part, with the full name on hover", async () => {
+    const main = s1.events.find(e => e.k === "tool" && !e.lane) as LiveToolEvent;
+    show("#session=s1", { session: () => ({ ...s1, events: [{ ...main, tool: "mcp__docs__search_pages" }] }) });
+    const row = await screen.findByRole("button", { name: /^search_pages/ });
+    expect(row.querySelector(".nm")!.getAttribute("title")).toBe("mcp__docs__search_pages");
   });
 
   it("ticks a running call's timer every second and flags a slow shell call", async () => {
@@ -229,6 +262,56 @@ describe("LivePage", () => {
     await stream();
     expect(screen.queryByRole("meter", { name: "Context used" })).toBeNull();
     expect(screen.getByText(/window not known/)).toBeTruthy();
+  });
+
+  it("keeps open rows when Full text turns on, and shows their output once it arrives", async () => {
+    show();
+    await stream();
+    await userEvent.click(toolRow("Bash", 0));
+    await userEvent.click(screen.getByRole("checkbox", { name: "Full text" }));
+    expect(toolRow("Bash", 0).getAttribute("aria-expanded")).toBe("true");
+    const detail = toolRow("Bash", 0).nextElementSibling!;
+    await waitFor(() => expect(detail.querySelector("pre")?.textContent).toContain("AssertionError"));
+    expect(toolRow("Bash", 0).getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("links the note on older events to the session sheet", async () => {
+    show("#session=s1", { session: () => ({ ...s1, truncated: true }) });
+    await stream();
+    expect(screen.getByRole("link", { name: "session sheet on Activity" }).getAttribute("href")).toBe("/usage#range=0&session=s1");
+  });
+
+  it("says a session is not found, with a way back to the active ones", async () => {
+    show("#session=nope", { session: () => undefined });
+    expect(await screen.findByText(/Session not found/)).toBeTruthy();
+    expect(screen.queryByText("Loading…")).toBeNull();
+    FakeSource.last!.notify(null); // a list load does not clear it
+    await waitFor(() => expect(screen.getByText(/Session not found/)).toBeTruthy());
+    await userEvent.click(screen.getByRole("link", { name: "Show the active sessions" }));
+    expect(location.hash).toBe("");
+  });
+
+  it("moves off a session the list no longer holds, as after a filter change", async () => {
+    const o: { list?: LivePayload } = {};
+    const { calls } = show("", o);
+    await waitFor(() => expect(calls()).toContain("/api/live/session?id=s2"));
+    o.list = { ...list, sessions: list.sessions.filter(s => s.session_id !== "s2") };
+    FakeSource.last!.notify(null);
+    await waitFor(() => expect(calls()).toContain(`/api/live/session?id=${o.list!.sessions[0]!.session_id}`));
+    const rail = screen.getByRole("region", { name: "Active sessions" });
+    expect(within(rail).getAllByRole("button")[0]!.getAttribute("aria-current")).toBe("true");
+  });
+
+  it("counts your-turn sessions apart from working ones in the rail's footer", async () => {
+    show("");
+    const rail = await screen.findByRole("region", { name: "Active sessions" });
+    expect(rail.querySelector(".foot")!.textContent).toMatch(/^3 sessions working · 1 waiting for you · /);
+  });
+
+  it("hides Follow on the wall", async () => {
+    show("#view=wall");
+    await screen.findByRole("list", { name: "Active sessions" });
+    expect(screen.queryByRole("checkbox", { name: "Follow" })).toBeNull();
   });
 
   it("turns Full text on with its banner and a text fetch, and is off after a reload", async () => {

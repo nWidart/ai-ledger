@@ -48,7 +48,7 @@ export function AgentPanel({ s, st, now }: { s: LiveSession; st: LiveState; now:
         <div><span>Cache read</span><b>{pct(s.cache_read)}</b></div><div><span>Model</span><b className="model">{s.model ?? "–"}</b></div>
       </div>
     </section>
-    <section className="sec" aria-label="Tokens"><h2>Tokens · last minute</h2>
+    <section className="sec" aria-label="Tokens"><h2>Tokens · last minute, cache reads included</h2>
       <div className="row"><span>{big(s.spark.per_minute)} / min</span></div><Spark points={s.spark.points} />
     </section>
     {s.limits.length > 0 && <section className="sec" aria-label="Plan limits"><h2>Plan limits</h2>
