@@ -146,12 +146,15 @@ class QuietTest(unittest.TestCase):
                                    "sed -{n,i} s/a/b/ x.py", "cat 'a.py"), [False] * 9)
 
     def test_codex_shell_call(self):
-        call = lambda i, cmd: codex_line(i, i, "response_item", type="function_call", name="exec_command", call_id=f"c{i}",
-                                         arguments=json.dumps(dict(cmd=cmd, workdir="/nowhere/foo", yield_time_ms=1000)))
-        text = (call(1, "rg TODO src") + call(2, "rg TODO src && rm notes.md") + call(3, "rg TODO " + "src " * 100 + "&& rm notes.md")
-                + codex_line(4, 4, "response_item", type="custom_tool_call", name="exec", call_id="c4", input="rg TODO src"))
+        call = lambda i, **args: codex_line(i, i, "response_item", type="function_call", name="exec_command", call_id=f"c{i}",
+                                            arguments=json.dumps(dict(args, workdir="/nowhere/foo", yield_time_ms=1000)))
+        cut = "rg TODO " + "src " * 100 + "&& rm notes.md"
+        text = (call(1, cmd="rg TODO src") + call(2, cmd="rg TODO src && rm notes.md") + call(3, cmd=cut)
+                + codex_line(4, 4, "response_item", type="custom_tool_call", name="exec", call_id="c4", input="rg TODO src")
+                + call(5, command=cut) + call(6, command="rg TODO src"))
         # The third call's summary is cut before its rm, and exec runs a script, not a command line: neither can be judged.
-        self.assertEqual(self.quiet(text, "codex"), [True, False, False, False])
+        # The last two name no cmd: their summary is a line Codex may have cut, as the fifth's is.
+        self.assertEqual(self.quiet(text, "codex"), [True, False, False, False, False, False])
 
 
 class LiveCase(StoreCase):

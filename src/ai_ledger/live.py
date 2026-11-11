@@ -83,14 +83,12 @@ def quiet(tool, summary):
     if tool not in SHELL_TOOLS:
         return False
     cmd = summary
-    if cmd.startswith("{"):  # Codex's exec_command summary is its arguments as JSON, the command line under cmd
+    if tool == "exec_command":  # Codex's summary is the call's arguments as JSON, the command line under cmd, or a line it may have cut
         try:
-            cmd = json.loads(cmd)["cmd"]
+            cmd = json.loads(summary)["cmd"]
         except (ValueError, KeyError, TypeError):
             return False
-        if not isinstance(cmd, str):
-            return False
-    return reads_only(cmd)
+    return isinstance(cmd, str) and reads_only(cmd)
 
 
 def reads_only(line):
