@@ -1,14 +1,25 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import { motion } from "./chart";
-import { openDrawer } from "./Drawer";
+import { onUserScroll, openDrawer } from "./Drawer";
 import "./SectionIndex.css";
 
 export interface Section { id: string; label: string; long?: string; hidden?: boolean }
+
+// The section last jumped to stays marked until the user scrolls: near the page's end, the one in view can be another.
+let pinned = "", unpin = () => {};
+const pins = new Set<() => void>();
+const pin = (id: string) => {
+  unpin();
+  pinned = id;
+  unpin = id ? onUserScroll(() => pin("")) : () => {};
+  pins.forEach(f => f());
+};
 
 /** Scrolls to a section (opening a drawer) without touching the hash, which holds the view. */
 export function jumpTo(id: string) {
   const el = document.getElementById(id);
   if (!el || el.hidden) return;
+  pin(id);
   if (el instanceof HTMLDetailsElement) return openDrawer(id, true);
   el.scrollIntoView?.({ behavior: motion() ? "smooth" : "auto", block: "start" });
   el.querySelector<HTMLElement>("button, a, [tabindex]")?.focus({ preventScroll: true });
@@ -33,14 +44,18 @@ export function SectionIndex({ groups }: { groups: Section[][] }) {
       if (scrollY > 8) for (const id of ids) if ((document.getElementById(id)?.getBoundingClientRect().top ?? Infinity) <= line) c = id;
       if (innerHeight + scrollY >= document.documentElement.scrollHeight - 2)
         c = ids.findLast(id => (document.getElementById(id)?.getBoundingClientRect().top ?? Infinity) < innerHeight) ?? c;
-      setCur(c);
+      setCur(pinned && ids.includes(pinned) ? pinned : c);
       setStuck(el.getBoundingClientRect().top <= top + .5 && scrollY > 0);
     };
     const onScroll = () => { if (!raf) raf = requestAnimationFrame(update); };
     addEventListener("scroll", onScroll, { passive: true });
     document.addEventListener("toggle", onScroll, true); // drawers opening move what is in view
+    pins.add(onScroll);
     update();
-    return () => { ro.disconnect(); removeEventListener("scroll", onScroll); document.removeEventListener("toggle", onScroll, true); cancelAnimationFrame(raf); };
+    return () => {
+      ro.disconnect(); removeEventListener("scroll", onScroll); document.removeEventListener("toggle", onScroll, true); pins.delete(onScroll);
+      cancelAnimationFrame(raf);
+    };
   }, [key]);
   return <>
     <label className="jump"><span>Jump to</span><select aria-label="Jump to a section" value="" onChange={e => { if (e.target.value) jumpTo(e.target.value); }}>
