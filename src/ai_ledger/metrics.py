@@ -268,27 +268,27 @@ def requests_cte(pcte, where):
         WHERE {where})"""
 
 
-def scope(project, automated, source=""):
+def scope(project, automated, source="", user_projects=None):
     """The session part of every usage filter, over sessions s: the project and the source match ('' is all of them), and
     automated sessions are left out unless automated: those of AUTOMATED_PROJECTS and the user automated file's projects
-    (unless the filter names that project) and HELPER_SESSIONS. Returns (sql, params). Raises ValueError for a source not
-    in SOURCES."""
+    (user_projects, read from the file when None; unless the filter names that project) and HELPER_SESSIONS. Returns
+    (sql, params). Raises ValueError for a source not in SOURCES."""
     if source and source not in SOURCES:
         raise ValueError(f"unknown source: {source}")
-    names = [*AUTOMATED_PROJECTS, *user_automated()[0]]
+    names = [*AUTOMATED_PROJECTS, *(user_automated()[0] if user_projects is None else user_projects)]
     marks = ",".join("?" * len(names))
     return (f"(? = '' OR s.project = ?) AND (? OR (s.project = ? OR coalesce(s.project, '') NOT IN ({marks})) "
             f"AND s.session_id NOT IN ({HELPER_SESSIONS})) AND (? = '' OR s.source = ?)",
             [project, project, bool(automated), project, *names, source, source])
 
 
-def view(project, range_days, prices, today, automated=False, source=""):
+def view(project, range_days, prices, today, automated=False, source="", user_projects=None):
     """The filter shared by every usage query: a row belongs to the view when its session is in scope() and its time is in range."""
     if range_days < 0:
         raise ValueError("range must be >= 0")
     start = today - timedelta(days=range_days - 1) if range_days else None
     pcte, pparams = price_cte(prices)
-    sql, sp = scope(project, automated, source)
+    sql, sp = scope(project, automated, source, user_projects)
     fp = sp + [start, start]
     W = lambda ts: f"{sql} AND (CAST(? AS DATE) IS NULL OR {ts} >= {day_start('CAST(? AS DATE)')})"
     return start, pcte, pparams, fp, W, requests_cte(pcte, W("r.ts")), pparams + fp
@@ -297,7 +297,9 @@ def view(project, range_days, prices, today, automated=False, source=""):
 def usage(cur, project="", range_days=0, session="", prices=None, today=None, automated=False, source=""):
     prices = load_prices() if prices is None else prices
     today = today or local_today(cur)
-    start, pcte, pparams, fp, W, rq, rp = view(project, range_days, prices, today, automated, source)
+    # The user automated file, read once so the whole payload leaves out the same projects.
+    af = automated_file()
+    start, pcte, pparams, fp, W, rq, rp = view(project, range_days, prices, today, automated, source, af["projects"])
     sums = ", ".join(f"coalesce(sum({k}), 0) AS {k}" for k in TOKEN_KINDS)
 
     daily = rows(cur, f"{rq} SELECT {day('ts')} AS day, {sums}, sum(cost) AS cost, "
@@ -349,7 +351,7 @@ def usage(cur, project="", range_days=0, session="", prices=None, today=None, au
         median_session_seconds=median([x["duration_s"] for x in sess if x["duration_s"] is not None]),
         near_limit=sum(1 for x in sess if x["near_limit"]))
     out = dict(project=project, range=range_days, automated=bool(automated), source=source, start=start.isoformat() if start else None, end=today.isoformat(),
-               projects=project_list(cur, automated), project_order=project_order(cur), totals=totals, daily=daily, daily_projects=daily_projects,
+               projects=project_list(cur, automated, af["projects"]), project_order=project_order(cur, af["projects"]), totals=totals, daily=daily, daily_projects=daily_projects,
                daily_work=work, work_bucket=bucket, work=work if by is day else daily_work(cur, rq, rp, W, fp, by),
                work_projects=daily_work(cur, rq, rp, W, fp, by, by_project=True), work_hours=work_hours(cur, W, fp),
                unpriced=unpriced, models=models, by_project=by_project, **tool_rates(cur, W, fp),
@@ -357,10 +359,10 @@ def usage(cur, project="", range_days=0, session="", prices=None, today=None, au
                sessions=sorted(sess, key=lambda x: x["first_ts"] or "", reverse=True)[:300],
                top_sessions=with_titles(cur, sorted(sess, key=lambda x: -(x["cost"] or 0))[:50]),
                near_limit=sorted((x for x in sess if x["near_limit"]), key=lambda x: -x["context_share"]),
-               previous=previous_period(cur, project, range_days, prices, today, automated, source))
+               previous=previous_period(cur, project, range_days, prices, today, automated, source, af["projects"]))
     out["changes"] = project_changes(by_project, out["previous"])
     out["prices_file"] = prices_file()
-    out["automated_file"] = automated_file()
+    out["automated_file"] = af
     if session:
         out["session"] = session_detail(cur, session, requests_cte(pcte, "r.session_id = ?"), pparams + [session], prices)
     return out
@@ -429,7 +431,7 @@ def previous_dates(range_days, today):
     return end - timedelta(days=range_days - 1), end
 
 
-def previous_period(cur, project, range_days, prices, today, automated=False, source=""):
+def previous_period(cur, project, range_days, prices, today, automated=False, source="", user_projects=None):
     """The equal-length period just before the view (same scope()), for the headline comparison and its sparkline.
     None for the all-time view, which has nothing before it."""
     dates = previous_dates(range_days, today)
@@ -437,7 +439,7 @@ def previous_period(cur, project, range_days, prices, today, automated=False, so
         return None
     start, end = dates
     pcte, pparams = price_cte(prices)
-    sql, sp = scope(project, automated, source)
+    sql, sp = scope(project, automated, source, user_projects)
     W = lambda ts: f"{sql} AND {ts} >= {day_start('CAST(? AS DATE)')} AND {ts} < {day_start('CAST(? AS DATE) + 1')}"
     fp = sp + [start, end]
     rq, p = requests_cte(pcte, W("r.ts")), pparams + fp
@@ -627,16 +629,16 @@ def rate_rows(rs, n="calls"):
     return rs
 
 
-def project_list(cur, automated=False):
-    sql, sp = scope("", automated)
+def project_list(cur, automated=False, user_projects=None):
+    sql, sp = scope("", automated, "", user_projects)
     return [r[0] for r in cur.execute(f"SELECT project FROM sessions s WHERE project IS NOT NULL AND {sql} GROUP BY 1 ORDER BY count(*) DESC, 1",
                                       sp).fetchall()]
 
 
-def project_order(cur):
+def project_order(cur, user_projects=None):
     """Projects by all-time tokens, busiest first. Both pages hand out project colors in this order, so it ignores every filter,
     except that automated projects are always left out: they never take a project color."""
-    sql, sp = scope("", False)
+    sql, sp = scope("", False, "", user_projects)
     return [r[0] for r in cur.execute(f"""SELECT s.project FROM requests r JOIN sessions s USING (session_id) WHERE s.project IS NOT NULL
         AND {sql} GROUP BY 1 ORDER BY sum(r.input + r.output + r.cache_read + r.cache_5m + r.cache_1h) DESC, 1""", sp).fetchall()]
 

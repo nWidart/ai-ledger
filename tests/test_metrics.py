@@ -485,6 +485,18 @@ class MetricsTest(unittest.TestCase):
         # The id is the one the Errors page lists the failure under.
         self.assertIn("t07", {e["id"] for e in metrics.errors_payload(self.con.cursor())["errors"]})
         self.assertEqual(metrics.usage(self.con.cursor(), "bar", 0, prices=PRICES, today=TODAY)["failed_tests"], [])
+        # The newest FAILED_TESTS, newest first: two more than that on Nov 5 push out t07 and the two oldest.
+        c = self.con.cursor()
+        n = metrics.FAILED_TESTS + 2
+        store.insert(c, "tool_calls", ["tool_use_id", "session_id", "tool", "start_ts", "end_ts", "is_error", "category", "subagent",
+                                       "is_test", "test_passed"],
+                     [(f"ft{i:02d}", "s2", "Bash", f"2026-11-05 11:{i:02d}:00", f"2026-11-05 11:{i:02d}:01", True, "tests", False, True, False)
+                      for i in range(n)])
+        try:
+            got = metrics.usage(c, "foo", 7, prices=PRICES, today=TODAY)["failed_tests"]
+            self.assertEqual([r["id"] for r in got], [f"ft{i:02d}" for i in range(n - 1, 1, -1)])
+        finally:
+            c.execute("DELETE FROM tool_calls WHERE tool_use_id LIKE 'ft%'")
 
     def test_previous_matches_usage_over_previous_window(self):
         keys = ("prompts", "commits", "calls", "errors", "test_runs", "tests_passed", "interrupted", "sub_tokens",
@@ -504,7 +516,7 @@ class MetricsTest(unittest.TestCase):
 
     def test_session_sort(self):
         ids = lambda **k: [x["session_id"] for x in metrics.session_list(self.con.cursor(), prices=PRICES, today=TODAY, **k)["sessions"]]
-        self.assertEqual(ids(sort=""), ids())
+        self.assertEqual(ids(sort=""), ["s2", "s1", "s3"])  # newest first
         self.assertEqual(ids(sort="cost", desc=True), ["s1", "s3", "s2"])  # s2's cost is unknown: last either way
         self.assertEqual(ids(sort="cost"), ["s3", "s1", "s2"])
         self.assertEqual(ids(sort="tokens"), ["s3", "s2", "s1"])
@@ -564,6 +576,22 @@ class MetricsTest(unittest.TestCase):
             u = usage()
             self.assertIn(error, u["automated_file"]["error"])
             self.assertEqual((u["automated_file"]["projects"], ids(u)), ([], {"s1", "s2", "s3"}))
+        os.remove(path)
+        os.mkdir(path)  # unreadable: an OSError
+        u = usage()
+        self.assertIn("Is a directory", u["automated_file"]["error"])
+        self.assertEqual((u["automated_file"]["projects"], ids(u)), ([], {"s1", "s2", "s3"}))
+
+    def test_one_automated_list_per_payload(self):
+        # The file changes while a request runs: bar is listed at the first read, gone after. The whole payload, previous
+        # period included, uses the list it read first.
+        reads = iter([(["bar"], None)])
+        with mock.patch.object(metrics, "user_automated", side_effect=lambda path=None: next(reads, ([], None))) as read:
+            u = metrics.usage(self.con.cursor(), "", 30, prices=PRICES, today=TODAY)
+        self.assertEqual(read.call_count, 1)
+        self.assertEqual(u["automated_file"]["projects"], ["bar"])
+        self.assertNotIn("bar", u["projects"] + u["project_order"])
+        self.assertEqual([r["project"] for r in u["previous"]["by_project"]], [])  # bar's only day is in the previous period
 
     def test_api_reads_automated_param(self):
         httpd = ThreadingHTTPServer(("127.0.0.1", 0), app.handler(app.App(self.con, dict(claude=self.tmp))))
