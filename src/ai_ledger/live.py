@@ -407,7 +407,7 @@ def lanes(cur, sid, prices):
         files.setdefault(mid, set()).add(path)
     tied = [key for mid, *_, key in held if len(files[mid]) > 1]
     named = dict(cur.execute("""SELECT key, coalesce(json_extract_string(json, '$.message.id'), json_extract_string(json, '$.payload.response_id'))
-        FROM raw_lines WHERE list_contains(?, key)""", [tied]).fetchall()) if tied else {}
+        FROM raw_lines WHERE session_id = ? AND list_contains(?, key)""", [sid, tied]).fetchall()) if tied else {}
     out, owned = {}, set()
     for mid, model, cost, path, source, key in held:
         if mid in owned or len(files[mid]) > 1 and named[key] != mid:

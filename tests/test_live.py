@@ -496,6 +496,18 @@ class CodexSessionTest(CodexCase):
         self.assertEqual([e["lane"] for e in got["events"] if e["k"] == "tool"], [thread])
         self.assertAlmostEqual(got["cost"], 6.0)
 
+    def test_thread_lanes_whose_requests_share_a_time(self):
+        threads = ["0a0f9999-0000-7000-8000-000000000002", "0a0f9999-0000-7000-8000-000000000003"]
+        self.place(NAME, meta(THREAD).replace("2026-11-06T10:00:00.000Z", at(0)))
+        for thread, rid, tokens in zip(threads, ("r2", "r3"), (500000, 250000)):
+            self.place(NAME.replace(THREAD, f"{THREAD}_{thread}"), meta(THREAD, thread).replace("2026-11-06T10:00:00.000Z", at(3))
+                       + codex_line(1, 4, "turn_context", turn_id="u1", model="claude-opus-5-5")
+                       + codex_line(2, 6, "token_usage_record", turn_id="u1", response_id=rid, usage=dict(input_tokens=tokens, output_tokens=0)))
+        self.ingest()
+        got = live.session(self.con.cursor(), THREAD, now=NOW, prices=PRICES)  # the line that names the request decides its lane
+        self.assertEqual(got["lanes"], {threads[0]: dict(cost=2.0, model="claude-opus-5-5"), threads[1]: dict(cost=1.0, model="claude-opus-5-5")})
+        self.assertAlmostEqual(got["cost"], 3.0)
+
     def test_closed_is_never_read_from_a_codex_transcript(self):
         self.place(NAME, meta(THREAD).replace("2026-11-06T10:00:00.000Z", at(0))
                    + codex_line(1, 1, "event_msg", type="task_started", turn_id="t1")
