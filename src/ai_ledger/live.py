@@ -356,24 +356,30 @@ def started_by(rows, events):
 def lanes(cur, sid, prices):
     """Per subagent lane of the session with a request: its cost (None when no request of its is priced) and its newest
     request's model, keyed by the events' lane id. requests names no subagent: a request belongs to the lane whose file
-    holds its line."""
-    owner = {}
-    for path, source, text in cur.execute("""SELECT r.file, coalesce(f.source, 'claude'), r.json FROM raw_lines r
-            LEFT JOIN files f ON f.path = r.file WHERE r.session_id = ? AND r.parsed AND r.subagent
-            AND r.type IN ('assistant', 'token_usage_record')""", [sid]).fetchall():
-        for it in store.SOURCES[source].live_items(json.loads(text)):
-            if it["k"] == "request":
-                owner.setdefault(it["id"], lane_of(path, source))
-    out = {}
-    if owner:
-        pcte, pparams = metrics.price_cte(prices)
-        for mid, model, cost in cur.execute(f"""{metrics.requests_cte(pcte, "r.session_id = ? AND r.subagent")}
-                SELECT message_id, model, cost FROM rq ORDER BY ts, message_id""", pparams + [sid]).fetchall():
-            if mid in owner:
-                lane = out.setdefault(owner[mid], dict(cost=None, model=None))
-                lane["model"] = model
-                if cost is not None:
-                    lane["cost"] = (lane["cost"] or 0) + cost
+    holds a request line with the request's time (as store.ts_of reads it). No line's text is read for that, except
+    where files of several lanes hold such a line: there the line that names the request decides."""
+    pcte, pparams = metrics.price_cte(prices)
+    held = cur.execute(f"""{metrics.requests_cte(pcte, "r.session_id = ? AND r.subagent")}
+        SELECT rq.message_id, rq.model, rq.cost, l.file, coalesce(f.source, 'claude'), l.key
+        FROM rq JOIN raw_lines l ON try_cast(left(rtrim(replace(l.ts, 'T', ' '), 'Z'), 26) AS TIMESTAMP) = rq.ts
+        LEFT JOIN files f ON f.path = l.file
+        WHERE l.session_id = ? AND l.parsed AND l.subagent AND l.type IN ('assistant', 'token_usage_record')
+        ORDER BY rq.ts, rq.message_id, l.file, l.line_no""", pparams + [sid, sid]).fetchall()
+    files = {}
+    for mid, _, _, path, _, _ in held:
+        files.setdefault(mid, set()).add(path)
+    tied = [key for mid, *_, key in held if len(files[mid]) > 1]
+    named = dict(cur.execute("""SELECT key, coalesce(json_extract_string(json, '$.message.id'), json_extract_string(json, '$.payload.response_id'))
+        FROM raw_lines WHERE list_contains(?, key)""", [tied]).fetchall()) if tied else {}
+    out, owned = {}, set()
+    for mid, model, cost, path, source, key in held:
+        if mid in owned or len(files[mid]) > 1 and named[key] != mid:
+            continue
+        owned.add(mid)
+        lane = out.setdefault(lane_of(path, source), dict(cost=None, model=None))
+        lane["model"] = model
+        if cost is not None:
+            lane["cost"] = (lane["cost"] or 0) + cost
     return out
 
 
