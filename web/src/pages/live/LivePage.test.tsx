@@ -533,6 +533,56 @@ describe("LivePage", () => {
     expect([follow(), inView(toolRow("Grepg31").closest(".ev")!)]).toEqual([true, true]);
   });
 
+  it("holds one place for a followed row taller than the box, with its top in view", async () => {
+    const told = new Set<() => void>();
+    vi.spyOn(globalThis, "ResizeObserver").mockImplementation(function (cb: () => void) {
+      return { observe: () => { told.add(cb); }, unobserve() {}, disconnect: () => { told.delete(cb); } };
+    } as never);
+    const o = { s: laned(12) };
+    show("#session=s1", { session: () => o.s });
+    await stream();
+    // Each drawn row stands 30 px high under the one before, an opened one 300 px, in a box 90 px high.
+    const box = screen.getByLabelText("Session events"), drawn = () => [...box.querySelectorAll(".ev")];
+    const high = (el: Element) => (el.querySelector(":scope > div > .detail") ? 300 : 30);
+    const topOf = (el: Element) => drawn().slice(0, drawn().indexOf(el)).reduce((sum, d) => sum + high(d), 0);
+    Object.defineProperty(box, "clientHeight", { value: 90, configurable: true });
+    Object.defineProperty(box, "scrollHeight", { get: () => drawn().reduce((sum, d) => sum + high(d), 0), configurable: true });
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+      const top = this === box ? 0 : topOf(this) - box.scrollTop, height = this === box ? 90 : high(this);
+      return { top, height, bottom: top + height } as DOMRect;
+    });
+    o.s = { ...o.s, events: [laneCall(30)], cursor: "c30" };
+    FakeSource.last!.notify(["s1"]);
+    await userEvent.click(await screen.findByRole("button", { name: /^Grepg30/ })); // the lane's newest call, opened: Follow turns off
+    await userEvent.click(check("Follow"));
+    const places = [box.scrollTop], row = topOf(toolRow("Grepg30").closest(".ev")!);
+    for (let i = 0; i < 3; i++) { act(() => told.forEach(cb => cb())); places.push(box.scrollTop); } // as each render places the box
+    expect(new Set(places).size).toBe(1);
+    expect(row >= places[0]! && row < places[0]! + 90).toBe(true);
+  });
+
+  it("follows the newest row the filters leave, not a newer one they hide", async () => {
+    const failedCall = s1.events.find(e => e.k === "tool" && e.failed) as LiveToolEvent;
+    const main = (key: string, sec: number, failed: boolean): LiveToolEvent => {
+      const ts = `2026-11-10T10:00:${sec}.000Z`;
+      return { ...failedCall, key, id: key, ts, start: ts, end: ts, failed };
+    };
+    // The newest failed call is in the lane, in the middle of the stream; the newest call of all passed, on the main thread.
+    const s = { ...laned(12), events: [...laned(12).events, laneCall(30, true), main("f1#0", 15, true), main("f2#0", 16, true), main("ok#0", 50, false)] };
+    show("#session=s1", { session: () => s });
+    await stream();
+    const box = screen.getByLabelText("Session events"), drawn = () => [...box.querySelectorAll(".ev")];
+    Object.defineProperty(box, "clientHeight", { value: 60, configurable: true });
+    Object.defineProperty(box, "scrollHeight", { get: () => drawn().length * 30, configurable: true });
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+      const top = this === box ? 0 : drawn().indexOf(this) * 30 - box.scrollTop, height = this === box ? 60 : 30;
+      return { top, height, bottom: top + height } as DOMRect;
+    });
+    await userEvent.click(within(bar()).getByRole("button"));
+    const at = drawn().indexOf(toolRow("Grepg30").closest(".ev")!) * 30;
+    expect([check("Follow").checked, at >= box.scrollTop && at + 30 <= box.scrollTop + 60, drawn().length]).toEqual([true, true, 5]);
+  });
+
   it("refetches only the list for another session's notice, and catches up the followed one with the cursor", async () => {
     const { calls } = show();
     await stream();

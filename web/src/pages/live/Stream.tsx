@@ -119,15 +119,16 @@ export function Stream({ s, now, text, follow, setFollow, filters: f, setFilters
   }
   const mark = (key: string) => (key === target ? newest : undefined), foot = target === last;
   // Follow's place for the box: its foot when the newest row ends the stream, else just far enough to show that row
-  // whole. It notes where that leaves the box, and the reach the box has there, for onScroll.
+  // whole. A row too tall for the box shows from its top, wherever the box stands: a second call then moves nothing.
+  // It notes where that leaves the box, and the reach the box has there, for onScroll.
   const place = useCallback(() => {
     const el = box.current, row = newest.current;
     if (!el || !follow) return;
     if (!row || foot) el.scrollTop = el.scrollHeight;
     else {
       const r = row.getBoundingClientRect(), top = r.top - el.getBoundingClientRect().top + el.scrollTop, bottom = top + r.height;
-      if (bottom > el.scrollTop + el.clientHeight) el.scrollTop = bottom + PAD - el.clientHeight;
-      else if (top < el.scrollTop) el.scrollTop = top - PAD;
+      if (top < el.scrollTop || r.height + PAD > el.clientHeight) el.scrollTop = top - PAD;
+      else if (bottom > el.scrollTop + el.clientHeight) el.scrollTop = bottom + PAD - el.clientHeight;
     }
     put.current = { top: el.scrollTop, reach: reachOf(el) };
   }, [follow, foot]);
