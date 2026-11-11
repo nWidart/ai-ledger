@@ -16,6 +16,11 @@ window.matchMedia ??= (q: string) => ({
   matches: false, media: q, onchange: null, addListener() {}, removeListener() {}, addEventListener() {}, removeEventListener() {}, dispatchEvent: () => false,
 });
 globalThis.ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} };
+// A browser stamps animation frames on the performance.now() clock; jsdom counts from when it built the window, which is
+// later. A count-up timed from performance.now() (useCountUp) then starts late by however long the worker took to get
+// there, up to a second on a busy CI runner, and a test waiting for its final figure times out.
+const raf = window.requestAnimationFrame.bind(window);
+window.requestAnimationFrame = cb => raf(() => cb(performance.now()));
 useFakeSource(); // jsdom has no EventSource; Live tests drive FakeSource.last
 
 afterEach(() => {
