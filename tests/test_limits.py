@@ -200,6 +200,7 @@ class AnalysisCase(StoreCase):
         cur = self.con.cursor()
         sid = f"s-{source}"
         cur.execute("INSERT INTO sessions (session_id, project, source) VALUES (?, 'foo', ?) ON CONFLICT DO NOTHING", [sid, source])
+        cur.execute("INSERT INTO prompts (prompt_id, session_id) VALUES (?, ?) ON CONFLICT DO NOTHING", [f"p-{sid}", sid])
         n = self.q("SELECT count(*) FROM requests")[0][0]
         store.insert(cur, "requests", ["message_id", "session_id", "ts", "model", "subagent", "input", "output", "thinking",
                                        "cache_read", "cache_5m", "cache_1h"],
@@ -463,6 +464,7 @@ class ValueTest(AnalysisCase):
         self.snap("claude", "weekly_all", now, 10)  # $8 a point
         cur = self.con.cursor()
         cur.execute("INSERT INTO sessions (session_id, project, source) VALUES ('s-bar', 'bar', 'claude')")
+        cur.execute("INSERT INTO prompts (prompt_id, session_id) VALUES ('p-bar', 's-bar')")
         store.insert(cur, "requests", ["message_id", "session_id", "ts", "model", "subagent", "input", "output", "thinking", "cache_read",
                                        "cache_5m", "cache_1h"], [("b1", "s-bar", T0 + timedelta(days=2), "claude-opus-5-5", False, 16_000_000, 0, 0, 0, 0, 0)])
         store.insert(cur, "tool_calls", ["tool_use_id", "session_id", "tool", "start_ts", "is_commit", "test_passed"],

@@ -14,7 +14,7 @@ import { useHashState } from "../../hash";
 import { useApi } from "../../useApi";
 import { NO_FILTER, SessionsDrawer, type SessFilter } from "./SessionsDrawer";
 import { ExtDrawer, LoopsDrawer, ProjectsDrawer, ToolsDrawer } from "./tables";
-import { flakyTools, shortTool, workDays, type WorkMetric } from "./work";
+import { firstWorkDay, flakyTools, shortTool, workDays, type WorkMetric } from "./work";
 import { WorkChart } from "./WorkChart";
 import "./activity.css";
 
@@ -42,7 +42,7 @@ export function attentionInsight(d: UsagePayload, go: AttentionActs): Insight {
 function Lede({ d, before }: { d: UsagePayload; before: UsagePayload | undefined }) {
   const t = d.totals, commits = useCountUp(t.commits, before?.totals.commits);
   const where = d.project ? <> <span className="unit">on <span className="proj"><ProjectDot project={d.project} />{d.project}</span></span></> : null;
-  const since = d.range ? "" : ` since ${dayLabel(d.daily_work[0]?.day || d.end, true)}`;
+  const since = d.range ? "" : ` since ${dayLabel(firstWorkDay(d) ?? d.end, true)}`;
   return <>
     <h1 className="lede" id="lede" aria-live="polite" tabIndex={-1}>{t.requests
       ? <><span className="amt">{plural(commits, "commit")}</span> <span className="unit">from {plural(t.prompts, "prompt")}</span>{where}{since}
@@ -60,7 +60,7 @@ function Vitals({ d }: { d: UsagePayload }) {
     [t.test_runs ? pct(t.tests_passed / t.test_runs) : "n/a", "Test runs passed", t.test_runs ? `${num(t.tests_passed)} passed, ${num(t.tests_failed)} failed of ${plural(t.test_runs, "test or build run")}.` : "No test or build runs in this range.", "v-tests"],
     [pct(t.interruption_rate, 1), "Prompts interrupted", `${num(t.interrupted)} of ${plural(t.prompts, "prompt")}.`],
     [pct(t.subagent_token_share), "Subagents", "of tokens came from subagents."],
-    [dur(t.median_session_seconds), "Median session", `${plural(t.sessions, "session")}, ${dur(t.session_seconds)} active in all.`],
+    [dur(t.median_session_seconds), "Median session", `${plural(t.sessions, "session")}, ${dur(t.session_seconds)} active${t.thinking_ms ? ` and ${dur(t.thinking_ms / 1000)} thinking` : ""} in all.`],
   ];
   return <section className="vitals sect" id="vitals" aria-label="Work health">
     {vs.map(([v, l, n, id]) => <div className="vital" key={l} id={id} tabIndex={id ? -1 : undefined}><div className="v">{v}</div><div className="l">{l}</div><div className="d">{n}</div></div>)}
@@ -123,11 +123,12 @@ export function ActivityPage() {
         {has && <Vitals d={d} />}
         <WorkChart days={days} metric={metric} onMetric={setMetric} onDay={showDay} />
         <div className="drawers">
-          <SessionsDrawer view={{ project: d.project, range: d.range, automated: d.automated, source: d.source }} count={d.totals.sessions} filter={sess} onFilter={setSess} selected={h.session} />
+          <SessionsDrawer view={{ project: d.project, range: d.range, automated: d.automated, source: d.source }} count={d.totals.sessions} filter={sess} onFilter={setSess}
+            selected={h.session} usage={d} />
           <ProjectsDrawer rows={d.by_project} selected={d.project} />
           <ToolsDrawer tools={d.tools} flaky={flaky} />
           <ExtDrawer mcp={d.mcp} skills={d.skills} hooks={d.hooks} />
-          <LoopsDrawer loops={d.error_loops} range={d.range} />
+          <LoopsDrawer loops={d.error_loops} total={d.totals.error_loops} range={d.range} />
         </div>
       </>}
       <UsageSheets data={d} />

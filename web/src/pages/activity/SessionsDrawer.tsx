@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { sessionsUrl, type SessionsPage, type TitledSessionRow, type View } from "../../api";
+import { sessionsUrl, type SessionsPage, type TitledSessionRow, type UsagePayload, type View } from "../../api";
 import { Drawer } from "../../components/Drawer";
 import { ProjectName } from "../../components/ProjectDot";
 import { openSessionSheet, pickRow, sessName, shortId } from "../../components/sheets/session";
@@ -10,11 +10,12 @@ import { getJson } from "../../useApi";
 export interface SessFilter { q: string; near: boolean; day: string }
 export const NO_FILTER: SessFilter = { q: "", near: false, day: "" };
 
-const COLS = 10;
+const COLS = 11;
 
-/** Every session in the view, paged on the server so search finds old ones too. Loads when open. */
-export function SessionsDrawer({ view, count, filter, onFilter, selected }: {
-  view: View; count: number; filter: SessFilter; onFilter: (f: SessFilter) => void; selected: string;
+/** Every session in the view, paged on the server so search finds old ones too. Loads when open, and again from the first
+ *  page when usage, the page's payload, changes: an ingest or Refresh brought new data (useApi keeps an identical answer). */
+export function SessionsDrawer({ view, count, filter, onFilter, selected, usage }: {
+  view: View; count: number; filter: SessFilter; onFilter: (f: SessFilter) => void; selected: string; usage: UsagePayload;
 }) {
   const [open, setOpen] = useState(false);
   useEffect(() => { setOpen(!!(document.getElementById("d-sessions") as HTMLDetailsElement | null)?.open); }, []);
@@ -45,7 +46,7 @@ export function SessionsDrawer({ view, count, filter, onFilter, selected }: {
       setSt({ busy: false, hint: qt ? `Search for “${qt}” failed.` : "Sessions failed to load.", error: e.message });
     });
     // view is read through viewKey.
-  }, [open, viewKey, qt, filter.near, filter.day, tick]);
+  }, [open, viewKey, qt, filter.near, filter.day, tick, usage]);
   const more = () => {
     const my = ++seq.current, first = rows.length;
     setSt(s => ({ ...s, busy: true, moreError: undefined }));
@@ -78,8 +79,9 @@ export function SessionsDrawer({ view, count, filter, onFilter, selected }: {
       </div>
       <div className="hint" aria-live="polite">{hint}</div>
       <div className="scroll tall"><table>
-        <thead><tr><th>Session</th><th>Project</th><th className="num opt" title="Active time: pauses over 20 minutes left out">Active</th><th className="num opt">Prompts</th><th className="num opt">Tokens</th>
-          <th className="num">Est. cost</th><th className="num">Peak context</th><th className="num opt">Failed</th><th className="num opt">Compactions</th><th className="num opt">Commits</th></tr></thead>
+        <thead><tr><th>Session</th><th>Project</th><th className="num opt" title="Active time: pauses over 20 minutes left out">Active</th><th className="num opt">Prompts</th><th className="num opt2">Tokens</th>
+          <th className="num">Est. cost</th><th className="num">Peak context</th><th className="num opt">Failed</th><th className="num opt2">Compactions</th><th className="num opt">Commits</th>
+          <th className="num opt" title="Test and build runs: passed of run">Tests</th></tr></thead>
         <tbody ref={body} className={st.stale ? "stale" : undefined} aria-busy={st.busy || undefined} inert={st.stale || undefined}>
           {st.error ? <tr><td colSpan={COLS} className="empty" role="alert">Could not load sessions ({st.error}). <button type="button" className="linkish"
             onClick={() => { setTick(t => t + 1); search.current?.focus(); }}>Retry</button></td></tr>
@@ -87,13 +89,21 @@ export function SessionsDrawer({ view, count, filter, onFilter, selected }: {
               <td className="when sess"><button type="button" className="cellbtn" title={s.title || s.session_id}>{sessName(s)}</button>
                 <div className="muted small">{when(s.first_ts)}{s.git_branch ? ` · ${s.git_branch}` : ""}{s.title ? ` · ${shortId(s.session_id)}` : ""}</div></td>
               <td className="name"><ProjectName project={s.project} /></td><td className="num opt">{dur(s.duration_s)}</td><td className="num opt">{num(s.prompts)}</td>
-              <td className="num opt">{big(s.tokens)}</td><td className="num">{usd(s.cost)}</td>
+              <td className="num opt2">{big(s.tokens)}</td><td className="num">{usd(s.cost)}</td>
               <td className="num">{big(s.peak_context)}{s.near_limit && <> <span className="chip warn" title={`${pct(s.context_share)} of the context window`}>{pct(s.context_share)}</span></>}</td>
-              <td className={"num opt" + (s.errors ? " bad" : "")}>{num(s.errors)}</td><td className="num opt">{num(s.compactions)}</td><td className="num opt">{num(s.commits)}</td></tr>)
+              <td className={"num opt" + (s.errors ? " bad" : "")}>{num(s.errors)}</td><td className="num opt2">{num(s.compactions)}</td><td className="num opt">{num(s.commits)}</td>
+              <TestsCell passed={s.tests_passed} failed={s.tests_failed} /></tr>)
             : !st.busy && open ? <tr><td colSpan={COLS} className="empty">{narrowed ? "No sessions match." : "No sessions in this range."}</td></tr> : null}
         </tbody>
       </table></div>
       {rows.length < total && !st.error && <button type="button" className="linkish more" disabled={st.busy} onClick={more}>Show more sessions</button>}
     </Drawer>
   );
+}
+
+/** A session's test and build runs as "passed/run", marked bad when any failed; "–" when it ran none. */
+function TestsCell({ passed, failed }: { passed: number; failed: number }) {
+  const runs = passed + failed;
+  return <td className={"num opt" + (failed ? " bad" : "")} title={runs ? `${num(passed)} passed, ${num(failed)} failed` : "No test or build runs"}>
+    {runs ? `${num(passed)}/${num(runs)}` : "–"}</td>;
 }

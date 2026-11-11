@@ -616,6 +616,59 @@ class LocalDayTest(unittest.TestCase):
         self.assertEqual(metrics.local_today(cur), datetime.now(ZoneInfo("America/Los_Angeles")).date())
 
 
+class HelperSessionTest(unittest.TestCase):
+    """Automated sessions outside AUTOMATED_PROJECTS. foo: w1 (two prompts on Nov 4, a request alone on Nov 5) and n1 (no
+    prompt, a request on Nov 3). (temp): h1 (one prompt, an app's helper) and t2 (two prompts, a person's)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.mkdtemp()
+        cls.con = store.open_store(os.path.join(cls.tmp, "d", "x.duckdb"))
+        c = cls.con.cursor()
+        store.insert(c, "sessions", ["session_id", "project", "first_ts", "last_ts"], [
+            ("w1", "foo", "2026-11-04 10:00:00", "2026-11-05 10:00:00"), ("n1", "foo", "2026-11-03 10:00:00", "2026-11-03 10:00:00"),
+            ("h1", "(temp)", "2026-11-04 11:00:00", "2026-11-04 11:00:03"), ("t2", "(temp)", "2026-11-04 12:00:00", "2026-11-04 12:10:00")])
+        store.insert(c, "requests", ["message_id", "session_id", "ts", "model", "subagent", "input", "output", "thinking",
+                                     "cache_read", "cache_5m", "cache_1h"], [
+            (f"r{i}", sid, ts, "m-a", False, 1, 0, 0, 0, 0, 0) for i, (sid, ts) in enumerate([
+                ("w1", "2026-11-04 10:00:00"), ("w1", "2026-11-05 10:00:00"), ("n1", "2026-11-03 10:00:00"),
+                ("h1", "2026-11-04 11:00:00"), ("t2", "2026-11-04 12:00:00")])])
+        store.insert(c, "prompts", ["prompt_id", "session_id", "ts", "interrupted"], [
+            ("p1", "w1", "2026-11-04 10:00:00", False), ("p2", "w1", "2026-11-04 10:30:00", False),
+            ("p3", "h1", "2026-11-04 11:00:00", False),
+            ("p4", "t2", "2026-11-04 12:00:00", False), ("p5", "t2", "2026-11-04 12:05:00", False)])
+        # Bash ran 2 s; exec_command has no usable timing (start equals end).
+        store.insert(c, "tool_calls", ["tool_use_id", "session_id", "tool", "start_ts", "end_ts", "is_error", "subagent"], [
+            ("c1", "w1", "Bash", "2026-11-04 10:01:00", "2026-11-04 10:01:02", False, False),
+            ("c2", "w1", "exec_command", "2026-11-04 10:02:00", "2026-11-04 10:02:00", False, False)])
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.con.close()
+        shutil.rmtree(cls.tmp)
+
+    def usage(self, **k):
+        return metrics.usage(self.con.cursor(), **dict(prices=PRICES, today=TODAY) | k)
+
+    def test_helpers_and_promptless_sessions_are_automated(self):
+        u, auto = self.usage(), self.usage(automated=True)
+        self.assertEqual(sorted(x["session_id"] for x in u["sessions"]), ["t2", "w1"])
+        self.assertEqual(sorted(x["session_id"] for x in auto["sessions"]), ["h1", "n1", "t2", "w1"])
+        # Naming (temp) keeps its helpers out: only a whole automated project is let in by name.
+        self.assertEqual([x["session_id"] for x in self.usage(project="(temp)")["sessions"]], ["t2"])
+        listed = lambda **k: metrics.session_list(self.con.cursor(), prices=PRICES, today=TODAY, **k)["total"]
+        self.assertEqual((listed(), listed(automated=True)), (2, 4))
+        pal = metrics.palette(self.con.cursor(), today=TODAY)
+        self.assertEqual({p["name"]: p["sessions"] for p in pal["projects"]}, {"foo": 1, "(temp)": 1})
+
+    def test_active_days_count_days_with_a_prompt(self):
+        self.assertEqual(self.usage()["totals"]["active_days"], 1)  # Nov 5 has a request but no prompt
+        self.assertEqual(self.usage(range_days=1, today=date(2026, 11, 6))["previous"]["active_days"], 0)
+
+    def test_no_latency_without_timing(self):
+        self.assertEqual({t["tool"]: t["p50_ms"] for t in self.usage()["tools"]}, {"Bash": 2000, "exec_command": None})
+
+
 class SessionTimeTest(unittest.TestCase):
     """A session resumed the next day: main-thread requests and tool calls 10, 15 and 5 minutes apart, and a 22-hour
     pause between the first and second day. A subagent request in the pause doesn't end it."""
@@ -626,6 +679,7 @@ class SessionTimeTest(unittest.TestCase):
         cls.con = store.open_store(os.path.join(cls.tmp, "d", "x.duckdb"))
         c = cls.con.cursor()
         store.insert(c, "sessions", ["session_id", "project", "first_ts", "last_ts"], [("a", "foo", "2026-11-04 10:00:00", "2026-11-05 09:05:00")])
+        store.insert(c, "prompts", ["prompt_id", "session_id", "ts"], [("p", "a", "2026-11-04 10:00:00")])
         store.insert(c, "requests", ["message_id", "session_id", "ts", "model", "subagent", "input", "output", "thinking",
                                      "cache_read", "cache_5m", "cache_1h"], [
             ("q1", "a", "2026-11-04 10:00:00", "m-a", False, 1, 0, 0, 0, 0, 0),
@@ -669,6 +723,7 @@ class ToolDetailTest(unittest.TestCase):
             ("p1", "foo", "2026-09-20 09:00:00", "2026-09-20 10:00:00", "claude"),
             ("x1", "foo", "2026-11-04 09:00:00", "2026-11-04 10:00:00", "codex"),
             ("b1", "bar", "2026-11-04 09:00:00", "2026-11-04 10:00:00", "claude")])
+        store.insert(c, "prompts", ["prompt_id", "session_id"], [(f"p-{sid}", sid) for sid in ("f1", "f2", "old", "p1", "x1", "b1")])
         clock, out = {}, []
 
         def call(sid, day, tool, inp="", cat=None, sub=False, mcp=None, skill=None, test=False, commit=False, ms=1000):

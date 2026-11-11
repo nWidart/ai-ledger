@@ -75,11 +75,15 @@ The usage dashboard SHALL keep the selected project, time range, inspected proje
 - **THEN** the inspector for `Bash` opens in the same view
 
 ### Requirement: Lead with the period's work
-The usage dashboard, shown as Activity, SHALL open with the work done in the selected view: commits, prompts, sessions and active days, with turns and tool calls per prompt. The page lead SHALL NOT show an estimated cost; cost figures belong to the cost dashboard.
+The usage dashboard, shown as Activity, SHALL open with the work done in the selected view: commits, prompts, sessions and active days, with turns and tool calls per prompt. An active day SHALL be a day with at least one user prompt in the view. The page lead SHALL NOT show an estimated cost; cost figures belong to the cost dashboard.
 
 #### Scenario: Thirty-day view
 - **WHEN** the user opens Activity for the last 30 days
 - **THEN** the page heading shows the commits, prompts, sessions and active days of those 30 days, and no cost figure appears before the attention summary
+
+#### Scenario: Requests without a prompt
+- **WHEN** a session works on its own on a day with no user prompt
+- **THEN** that day is not an active day
 
 ### Requirement: Lead with what needs attention
 Activity SHALL show, directly under its lead, every problem found in the view (error loops, sessions at 80% or more of the context window, tools failing over 10% of at least 20 calls, failed test runs), each with an action that opens the matching detail. When none is found it SHALL say so.
@@ -93,7 +97,11 @@ Activity SHALL show, directly under its lead, every problem found in the view (e
 - **THEN** the attention summary says that nothing needs attention
 
 ### Requirement: Show work per day
-Activity SHALL chart commits, prompts or sessions per day across the view, with failed tool calls per day on the same chart, and selecting a day SHALL list that day's sessions.
+Activity SHALL chart commits, prompts or sessions per day across the view, from its first day with a session, with failed tool calls per day on the same chart, and selecting a day SHALL list that day's sessions. The all-time lead SHALL date the history from that same day.
+
+#### Scenario: History starts inside the range
+- **WHEN** the user opens the 90-day view and the first session in it ran 40 days ago
+- **THEN** the chart starts 40 days ago, with zeros for the idle days after that
 
 #### Scenario: Pick a busy day
 - **WHEN** the user selects a day with 40 commits on the work chart

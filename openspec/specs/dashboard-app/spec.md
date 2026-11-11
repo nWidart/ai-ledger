@@ -112,7 +112,7 @@ The app SHALL serve every dashboard page from the built files that ship with it,
 - **THEN** Activity, Cost and Errors all load and work
 
 ### Requirement: Exclude automated sessions by default
-Activity and Cost SHALL leave out sessions from known automated projects (today `observer-sessions`) from every figure, chart and table, and SHALL offer a control to include them. The choice SHALL be kept in the page URL and carried across pages. A project filter that names an automated project SHALL include that project's sessions.
+Every page with the automated filter (Activity, Cost, Insights, Live) SHALL leave out automated sessions from every figure, chart and table, and SHALL offer a control to include them. A session is automated when it belongs to a known automated project (today `observer-sessions`), when it has no user prompt, or when it ran in a temporary folder (project `(temp)`) with at most one user prompt. The choice SHALL be kept in the page URL and carried across pages. A project filter that names an automated project SHALL include that project's sessions; naming `(temp)` SHALL NOT include its automated sessions.
 
 #### Scenario: Default view
 - **WHEN** the store holds 631 `observer-sessions` sessions and 872 other sessions in the last 30 days
@@ -125,6 +125,14 @@ Activity and Cost SHALL leave out sessions from known automated projects (today 
 #### Scenario: Filter names an automated project
 - **WHEN** the user opens Activity with `#project=observer-sessions` and the control off
 - **THEN** Activity shows the `observer-sessions` sessions, and the project picker shows `observer-sessions` as the selected project
+
+#### Scenario: Helper sessions in a temporary folder
+- **WHEN** an app ran 170 one-prompt sessions in temporary folders and a person ran one session with three prompts in `/tmp`
+- **THEN** Activity leaves the 170 out and counts the person's session under `(temp)`, and the control brings the 170 back
+
+#### Scenario: Session with no prompt
+- **WHEN** a Codex session makes requests without any user prompt
+- **THEN** Activity, Cost, Insights and Live leave it out until the user turns on the control
 
 ### Requirement: Name the app AI Ledger
 Every dashboard page SHALL show the app's name, AI Ledger, in its navigation brand and in its browser title, after the page's own name.
