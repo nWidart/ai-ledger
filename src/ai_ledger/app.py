@@ -73,7 +73,10 @@ class App:
         """Poll each provider's plan limits that is due. A poller never raises, so ingest goes on whatever the endpoint does."""
         for p in self.pollers:
             if p.due():
+                was = p.state["last_ok"]
                 p.run(self.con, self.lock)
+                if p.state["last_ok"] != was:  # a stored reading changes Limits, so pages refetch
+                    self.state["last_change"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
 
     def loop(self):
         """Ingest everything and poll limits every INTERVAL; in between, ingest transcripts every LIVE_INTERVAL while a

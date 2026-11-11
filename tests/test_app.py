@@ -292,6 +292,19 @@ class LiveEventsTest(unittest.TestCase):
         self.assertEqual(self.app.state["last_change"], "2026-11-10T10:00:00+00:00")
         self.assertNotEqual(self.app.state["last_ingest"], self.app.state["last_change"])
 
+    def test_last_change_moves_when_a_limit_poll_stores_a_reading(self):
+        class Poll:
+            state = dict(last_ok=None)
+            def due(self): return True
+            def run(self, con, lock): self.state["last_ok"] = "2026-11-10T10:00:00+00:00"
+        self.app.pollers = [Poll()]
+        self.app.poll()
+        first = self.app.state["last_change"]
+        self.assertIsNotNone(first)
+        with mock.patch.object(app, "datetime", mock.Mock(now=lambda tz: datetime(2030, 1, 1, tzinfo=tz))):
+            self.app.poll()  # the poll stored nothing new
+        self.assertEqual(self.app.state["last_change"], first)
+
     def test_no_notice_when_nothing_new(self):
         with mock.patch.object(app, "KEEPALIVE", 0.2):
             h, r = self.connect()
