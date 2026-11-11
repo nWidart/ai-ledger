@@ -1,9 +1,10 @@
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import { Drawer, openDrawer } from "./Drawer";
+import { Drawer, onUserScroll, openDrawer } from "./Drawer";
 import { InsightCard, rankInsights, type Insight } from "./InsightCard";
 import { Ledger, LedgerRow } from "./Ledger";
+import { SectionIndex } from "./SectionIndex";
 
 describe("Drawer", () => {
   it("opens from its summary and remembers it", async () => {
@@ -23,6 +24,30 @@ describe("Drawer", () => {
     openDrawer("d-sessions", true);
     expect((document.getElementById("d-sessions") as HTMLDetailsElement).open).toBe(true);
     expect(document.activeElement).toBe(screen.getByLabelText("Search sessions"));
+  });
+  it("onUserScroll fires once, at the next gesture", () => {
+    const f = vi.fn();
+    onUserScroll(f);
+    dispatchEvent(new Event("scroll"));
+    expect(f).not.toHaveBeenCalled();
+    dispatchEvent(new Event("wheel"));
+    dispatchEvent(new Event("keydown"));
+    expect(f).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("SectionIndex", () => {
+  it("keeps a clicked section marked until the user scrolls", async () => {
+    vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(40);
+    vi.spyOn(Element.prototype, "scrollHeight", "get").mockReturnValue(5000); // at the top of a long page: A is in view
+    render(<><SectionIndex groups={[[{ id: "a", label: "A" }, { id: "b", label: "B" }]]} /><section id="a" /><section id="b" /></>);
+    const current = () => document.querySelector("nav.secidx a[aria-current]")?.textContent;
+    expect(current()).toBe("A");
+    await userEvent.click(screen.getByRole("link", { name: "B" }));
+    await vi.waitFor(() => expect(current()).toBe("B"));
+    act(() => { dispatchEvent(new Event("wheel")); });
+    await vi.waitFor(() => expect(current()).toBe("A"));
+    vi.restoreAllMocks();
   });
 });
 
@@ -56,5 +81,11 @@ describe("InsightCard", () => {
     await userEvent.click(screen.getByRole("button", { name: "Show that day's sessions" }));
     expect(run).toHaveBeenCalledTimes(1);
     expect(run.mock.calls[0]![0]).toBeInstanceOf(HTMLButtonElement);
+  });
+
+  it("breaks a tie in severity by what is at stake, and keeps the order without one", () => {
+    const card = (k: string, stake?: number): Insight => ({ sev: "warn", k, t: k, stake });
+    expect(rankInsights([card("small", 10), card("big", 900), { ...card("act"), sev: "info", stake: 5000 }]).lead?.k).toBe("big");
+    expect(rankInsights([card("first"), card("second")]).lead?.k).toBe("first");
   });
 });

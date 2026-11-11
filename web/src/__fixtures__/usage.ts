@@ -30,7 +30,6 @@ export default {
   "sub_tokens": 1000000,
   "sub_cost": 1.0,
   "thinking_ms": 1500,
-  "active_days": 2,
   "calls": 10,
   "errors": 6,
   "commits": 1,
@@ -40,6 +39,7 @@ export default {
   "main_calls": 10,
   "prompts": 3,
   "interrupted": 1,
+  "active_days": 2,
   "error_loops": 1,
   "sessions": 2,
   "cache_hit_ratio": 0.727266116,
@@ -54,8 +54,8 @@ export default {
   "tokens_per_commit": 12000200.0,
   "cost_per_commit": 15.8,
   "errors_per_100_calls": 60.0,
-  "session_seconds": 5400,
-  "median_session_seconds": 2700.0,
+  "session_seconds": 540,
+  "median_session_seconds": 270.0,
   "near_limit": 1
  },
  "daily": [
@@ -241,7 +241,7 @@ export default {
    "git_branch": null,
    "first_ts": "2026-11-05T09:00:00.000Z",
    "last_ts": "2026-11-05T09:30:00.000Z",
-   "duration_s": 1800,
+   "duration_s": 0,
    "compactions": 0,
    "peak_context": 100,
    "peak_model": "m-a",
@@ -270,7 +270,7 @@ export default {
    "git_branch": null,
    "first_ts": "2026-11-04T10:00:00.000Z",
    "last_ts": "2026-11-04T11:00:00.000Z",
-   "duration_s": 3600,
+   "duration_s": 540,
    "compactions": 2,
    "peak_context": 900,
    "peak_model": "m-a",
@@ -301,7 +301,7 @@ export default {
    "git_branch": null,
    "first_ts": "2026-11-04T10:00:00.000Z",
    "last_ts": "2026-11-04T11:00:00.000Z",
-   "duration_s": 3600,
+   "duration_s": 540,
    "compactions": 2,
    "peak_context": 900,
    "peak_model": "m-a",
@@ -330,7 +330,7 @@ export default {
    "git_branch": null,
    "first_ts": "2026-11-05T09:00:00.000Z",
    "last_ts": "2026-11-05T09:30:00.000Z",
-   "duration_s": 1800,
+   "duration_s": 0,
    "compactions": 0,
    "peak_context": 100,
    "peak_model": "m-a",
@@ -361,7 +361,7 @@ export default {
    "git_branch": null,
    "first_ts": "2026-11-04T10:00:00.000Z",
    "last_ts": "2026-11-04T11:00:00.000Z",
-   "duration_s": 3600,
+   "duration_s": 540,
    "compactions": 2,
    "peak_context": 900,
    "peak_model": "m-a",
@@ -424,5 +424,9 @@ export default {
    "delta": -0.00026,
    "new": false
   }
- ]
+ ],
+ "prices_file": {
+  "path": "/Users/example/Library/Application Support/ai-ledger/prices.json",
+  "error": null
+ }
 } satisfies UsagePayload;

@@ -50,19 +50,8 @@ export default {
    "agent": null,
    "chars": 17,
    "cut": false
-  },
-  {
-   "k": "request",
-   "id": "r1",
-   "model": null,
-   "output": 300,
-   "context": 22000,
-   "key": "codex:0a0f7777-0000-7000-8000-000000000007:5#0",
-   "ts": "2026-11-10T10:00:27.000Z",
-   "lane": null
   }
  ],
- "lanes": [],
  "window": 272000,
  "compactions": [],
  "spark": {

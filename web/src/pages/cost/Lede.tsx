@@ -3,14 +3,14 @@ import { useCountUp } from "../../components/chart";
 import { agentName } from "../../components/Filters";
 import { ProjectDot } from "../../components/ProjectDot";
 import { big, dayLabel, num, plural, usd } from "../../format";
-import { compareText, sparkPoints, thinHistory } from "./cost";
+import { compareText, money, periodCost, sparkPoints, thinHistory } from "./cost";
 
 const span = (a: string, b: string) => `${dayLabel(a)} – ${dayLabel(b, true)}`;
 const same = (v: number) => v;
 
 /** The heading answers "what did this period cost, and how does that compare?": "$3,429 estimated cost · 17.8× the previous
- *  30 days", with the exact windows under it, each with its count of days that have any recorded usage: a thin previous
- *  window explains a big multiple. */
+ *  30 days", with the exact windows under it, each with its count of days with a prompt: a thin previous window explains
+ *  a big multiple. */
 export function Lede({ d, before }: { d: UsagePayload; before: UsagePayload | undefined }) {
   const t = d.totals, prev = d.previous, cmp = compareText(d);
   // The figure counts up from the one shown before, so a range change reads as a change.
@@ -24,10 +24,10 @@ export function Lede({ d, before }: { d: UsagePayload; before: UsagePayload | un
         {cmp && <><span className="sr">, </span><span className="delta"><span aria-hidden="true">{cmp.text}</span><span className="sr">{cmp.sr}</span></span></>}</>
       : <>No {agentName(d.source)} usage{where} {d.range ? `in the last ${d.range} days` : "yet"}.</>}</h1>
     {t.requests > 0 && <p className="windows">{d.start
-      ? <><span>This period <b>{span(d.start, d.end)}</b> · {plural(t.active_days, "active day")} of {d.range}</span>
-        {prev && <span>Previous <b>{span(prev.start, prev.end)}</b> · {usd(prev.cost || 0)} · {plural(prev.active_days, "active day")} of {d.range}
+      ? <><span>This period <b>{span(d.start, d.end)}</b> · {num(t.active_days)} of {d.range} days with prompts</span>
+        {prev && <span>Previous <b>{span(prev.start, prev.end)}</b> · {money(periodCost(prev))} · {num(prev.active_days)} of {d.range} days with prompts
           {thinHistory(d) && <> <span className="chip warn">thin history</span></>}</span>}</>
-      : <span>All time <b>{span(first, d.end)}</b> · {plural(t.active_days, "active day")}</span>}</p>}
+      : <span>All time <b>{span(first, d.end)}</b> · {plural(t.active_days, "day")} with prompts</span>}</p>}
     {t.requests > 0 && <p className="sub">{reach}, {big(t.tokens)} tokens in {num(t.requests)} requests. Cost is estimated at API list prices{d.unpriced.length ? " and leaves out unpriced models" : ""}.</p>}
   </>;
 }
@@ -44,7 +44,7 @@ export function Spark({ d }: { d: UsagePayload }) {
   const first = pts[0]!.k;
   return (
     <figure className="spark" role="img" aria-label={prev
-      ? `Daily cost sparkline: previous ${d.range} days ${usd(prev.cost || 0)}, last ${d.range} days ${usd(d.totals.cost)}.`
+      ? `Daily cost sparkline: previous ${d.range} days ${money(periodCost(prev))}, last ${d.range} days ${usd(d.totals.cost)}.`
       : `Daily cost sparkline since ${dayLabel(first, true)}.`}>
       <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden="true">
         {prev && <>
@@ -55,7 +55,7 @@ export function Spark({ d }: { d: UsagePayload }) {
         <path d={line(split, pts.length)} fill="none" stroke="var(--text-primary)" strokeWidth="1.75" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
       </svg>
       <figcaption aria-hidden="true">{prev
-        ? <><span>Previous {d.range}d <b>{usd(prev.cost || 0)}</b></span><span>Last {d.range}d <b>{usd(d.totals.cost)}</b></span></>
+        ? <><span>Previous {d.range}d <b>{money(periodCost(prev))}</b></span><span>Last {d.range}d <b>{usd(d.totals.cost)}</b></span></>
         : <><span>{dayLabel(first)}</span><span>Daily cost</span><span>{dayLabel(d.end)}</span></>}</figcaption>
     </figure>
   );

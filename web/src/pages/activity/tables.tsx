@@ -6,7 +6,7 @@ import { Toned, ToneKey } from "../../components/tone";
 import { appLink, errorsHref, openProjectSheet, openSessionSheet, openToolSheet, pickRow, sessName, shortId, utc } from "../../components/sheets/session";
 import { RateCells } from "../../components/sheets/ToolSheet";
 import { big, median, ms, num, pct, when } from "../../format";
-import { flakyFirst } from "./work";
+import { flakyFirst, hookCommand } from "./work";
 
 /** Project metrics, work columns: sessions, tokens, subagents, tokens per prompt, commits, errors per 100 calls, error loops. */
 export function ProjectsDrawer({ rows, selected }: { rows: ProjectRow[]; selected: string }) {
@@ -53,21 +53,24 @@ export function ExtDrawer({ mcp, skills, hooks }: { mcp: NamedRateRow[]; skills:
     <tbody>{rs.length ? rs.map(r => <tr key={r.name} {...pickRow(r.name, v => openToolSheet(kind, v))}>
       <td className="name"><button type="button" className="cellbtn" title={r.name}>{r.name}</button></td><RateCells r={r} n={r.calls} /></tr>) : <None cols={3} />}</tbody></table></div></div>;
   return (
-    <Drawer id="d-ext" title="MCP servers, skills and hooks" count={`${num(mcp.length)}, ${num(skills.length)} and ${num(hooks.length)}`} bodyClassName="grid3">
+    <Drawer id="d-ext" title="MCP servers, skills and hooks" count={`${num(mcp.length)}, ${num(skills.length)} and ${num(hooks.length)}`} bodyClassName="ext">
       {rate("MCP servers", "Server", "mcp", mcp)}{rate("Skills", "Skill", "skill", skills)}
-      <div><h3>Hooks</h3><div className="scroll tall"><table>
+      {/* Full width: hook commands are long, and many share a script and differ only by event. */}
+      <div className="hooks"><h3>Hooks</h3><div className="scroll tall"><table>
         <thead><tr><th>Hook</th><th className="num">Runs</th><th className="num">Failed</th><th className="num">Avg</th></tr></thead>
-        <tbody>{hooks.length ? hooks.map((r, k) => <tr key={k}><td className="name" title={[r.name, r.event].filter(Boolean).join(" · ")}>{r.name}</td>
+        <tbody>{hooks.length ? hooks.map((r, k) => <tr key={k}><td className="name hook" title={[r.name, r.event].filter(Boolean).join(" · ")}>
+          {r.name && r.name !== r.event ? <>{hookCommand(r.name)}<div className="muted small">{r.event}</div></> : r.event}</td>
           <RateCells r={r} n={r.runs} /><td className="num">{ms(r.avg_ms)}</td></tr>) : <None cols={4} />}</tbody></table></div></div>
     </Drawer>
   );
 }
 
-/** Error loops: the same tool failing three or more times in a row, each linking to its first failure in Errors. */
-export function LoopsDrawer({ loops, range }: { loops: ErrorLoop[]; range: number }) {
+/** Error loops: the same tool failing three or more times in a row, each linking to its first failure in Errors.
+ *  loops: the newest ones the payload carries; total: every loop in the view. */
+export function LoopsDrawer({ loops, total, range }: { loops: ErrorLoop[]; total: number; range: number }) {
   return (
-    <Drawer id="d-loops" title="Error loops" count={num(loops.length)} description="Same tool failing three or more times in a row">
-      <div className="hint">Links open the first failure in the errors dashboard.</div>
+    <Drawer id="d-loops" title="Error loops" count={num(total)} description="Same tool failing three or more times in a row">
+      <div className="hint">{loops.length < total ? `Showing the ${num(loops.length)} newest of ${num(total)}. ` : ""}Links open the first failure in the errors dashboard.</div>
       <div className="scroll tall"><table>
         <thead><tr><th>When</th><th>Project</th><th>Session</th><th>Tool</th><th className="num">Failures</th><th></th></tr></thead>
         <tbody>{loops.length ? loops.map(l => <tr key={l.first_id}><td className="when">{when(utc(l.start_ts))}</td><td className="name"><ProjectName project={l.project} /></td>

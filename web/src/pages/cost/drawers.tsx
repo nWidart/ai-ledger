@@ -90,10 +90,8 @@ export function ProjectCostDrawer({ rows, selected, sort, onSort }: { rows: Proj
   );
 }
 
-const byCost = (rs: TitledSessionRow[]) => rs.slice().sort((a, b) => (b.cost ?? -1) - (a.cost ?? -1));
-
-/** The view's most expensive sessions; day: only the sessions active that day (from the chart or the peak-day card), loaded
- *  from the server and sorted by cost. */
+/** The view's most expensive sessions; day: every session active that day (from the chart or the peak-day card), loaded
+ *  from the server with its figures for that day, costliest first, so their costs add up to the day's bar. */
 export function TopSessionsDrawer({ view, top, day, onDay, selected }: {
   view: View; top: TitledSessionRow[]; day: string; onDay: (day: string) => void; selected: string;
 }) {
@@ -105,7 +103,7 @@ export function TopSessionsDrawer({ view, top, day, onDay, selected }: {
     if (!day) { setSt({ day: "" }); return; }
     setSt({ day });
     getJson<SessionsPage>(sessionsUrl(view, { day })).then(d => {
-      if (my === seq.current) setSt({ day, rows: byCost(d.sessions), total: d.total });
+      if (my === seq.current) setSt({ day, rows: d.sessions, total: d.total });
     }, (e: Error) => { if (my === seq.current) setSt({ day, error: e.message }); });
     // view is read through viewKey.
   }, [day, viewKey, tick]);
@@ -114,15 +112,15 @@ export function TopSessionsDrawer({ view, top, day, onDay, selected }: {
   if (!day) hint = `The ${plural(top.length, "most expensive session")} in this view, by estimated cost. Select a session for details.`;
   else if (st.error) hint = "";
   else if (busy) hint = `Loading sessions active on ${dayLabel(day, true)}…`;
-  else hint = `${plural(st.total ?? 0, "session")} active on ${dayLabel(day, true)}, by their estimated cost in this view${rows.length < (st.total ?? 0) ? ` (the ${num(rows.length)} newest)` : ""}. Select a session for details.`;
+  else hint = `${plural(st.total ?? 0, "session")} active on ${dayLabel(day, true)}, by their estimated cost on that day. Select a session for details.`;
   return (
-    <Drawer id="d-top" title="Most expensive sessions" count={num(top.length)} description="Estimated cost, duration and commits per session">
+    <Drawer id="d-top" title="Most expensive sessions" count={num(day ? st.total : top.length)} description="Estimated cost, duration and commits per session">
       {day && <div className="tools-row"><span className="daychip"><span>Active on {dayLabel(day, true)}</span>
         <button type="button" aria-label="Show the most expensive sessions on every day" title="Every day"
           onClick={() => { onDay(""); document.querySelector<HTMLElement>("#d-top summary")?.focus(); }}>✕</button></span></div>}
       <div className="hint" aria-live="polite">{hint}</div>
       <div className="scroll tall"><table>
-        <thead><tr><th>Session</th><th>Project</th><th className="num opt">Duration</th><th className="num opt">Prompts</th><th className="num opt">Commits</th>
+        <thead><tr><th>Session</th><th>Project</th><th className="num opt" title="Active time: pauses over 20 minutes left out">Active</th><th className="num opt">Prompts</th><th className="num opt">Commits</th>
           <th className="num">Cost / commit</th><th className="num">Est. cost</th></tr></thead>
         <tbody className={busy ? "stale" : undefined} aria-busy={busy || undefined}>
           {st.error && day ? <tr><td colSpan={7} className="empty" role="alert">Could not load sessions ({st.error}). <button type="button" className="linkish"

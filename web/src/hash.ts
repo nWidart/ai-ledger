@@ -37,6 +37,8 @@ export type HashPatch = { [k: string]: string | number | boolean | null | undefi
 const PUSH_KEYS = ["project", "range", "source", "auto", "inspect", "tool", "mcp", "skill", "session", "ex", "cat"];
 // Written in this order (as the pages wrote them), with any other keys between gran and inspect.
 const HEAD = ["project", "range", "source", "auto", "sub", "noise", "gran"], TAIL = ["inspect", "tool", "mcp", "skill", "session", "ex", "cat"];
+// The keys that open a sheet.
+const SHEET_KEYS = ["inspect", "tool", "mcp", "skill", "session"];
 /** Project, range, source and the automated toggle travel between pages; page-only keys stay behind. */
 export const SHARED_KEYS = ["project", "range", "source", "auto"] as const;
 
@@ -83,13 +85,30 @@ function subscribe(f: () => void) {
   return () => { subs.delete(f); removeEventListener("hashchange", f); removeEventListener("popstate", f); };
 }
 
+// history.state.sheets: how many entries back the view had no sheet open, when every push since only opened sheets.
+const sheetDepth = (): number | undefined => (history.state as { sheets?: number } | null)?.sheets;
+
 /** Changes the hash. Pushes when a filter or sheet key changes (or push: true), else replaces; a no-op when nothing changes. */
 export function setHash(patch: HashPatch, opts: { push?: boolean } = {}) {
   const was = parseHash(location.hash).raw, next = applyPatch(was, patch), h = formatHash(next);
   if (h === formatHash(was) && h === location.hash) return;
-  const push = opts.push ?? PUSH_KEYS.some(k => (was[k] ?? "") !== (next[k] ?? ""));
-  history[push ? "pushState" : "replaceState"](null, "", location.pathname + location.search + h);
+  const changed = PUSH_KEYS.filter(k => (was[k] ?? "") !== (next[k] ?? ""));
+  const push = opts.push ?? changed.length > 0;
+  const url = location.pathname + location.search + h;
+  if (!push) history.replaceState(history.state, "", url);
+  else {
+    const before = SHEET_KEYS.some(k => was[k]) ? sheetDepth() : 0;
+    const sheets = SHEET_KEYS.some(k => next[k]) && changed.every(k => SHEET_KEYS.includes(k)) && before != null ? before + 1 : undefined;
+    history.pushState(sheets ? { sheets } : null, "", url);
+  }
   emit();
+}
+
+/** Closes every sheet (patch clears their keys): Back to the view they opened from when this app pushed each of them,
+ *  so closing leaves no entry that reopens one; else a replace. */
+export function closeSheets(patch: HashPatch) {
+  const n = sheetDepth();
+  if (n) history.go(-n); else setHash(patch, { push: false });
 }
 
 /** The shared keys of the current hash, for a link to another page: "#project=foo&range=30" or "". */

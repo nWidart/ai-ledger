@@ -54,9 +54,14 @@
 /* What changed: each project's cost change against the previous period, as bars either side of a zero line */
 .pg-cost .changed { margin: 0 0 20px; }
 .pg-cost .daystrips { display: grid; gap: 4px; font-size: 12px; color: var(--text-secondary); flex: 0 1 420px; min-width: 0; }
-.pg-cost .daystrip { display: grid; grid-template-columns: 5.5rem minmax(0, 1fr) auto; gap: 8px; align-items: center; }
-.pg-cost .daystrip .cells { display: flex; gap: 2px; min-width: 0; }
+/* A fixed count column, so both strips get the same track and their days line up. */
+.pg-cost .daystrip { display: grid; grid-template-columns: 5.5rem minmax(0, 1fr) 6.5em; gap: 8px; align-items: center; }
+.pg-cost .daystrip > span:last-child { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pg-cost .daystrip .cells { display: flex; gap: 2px; min-width: 0; overflow: hidden; }
 .pg-cost .daystrip .cells i { flex: 1 1 0; min-width: 2px; max-width: 6px; height: 12px; border-radius: 2px; background: var(--track); }
+/* Over 60 days, 1px cells and gaps, so 90 days fit a narrow track. */
+.pg-cost .daystrip .cells.dense { gap: 1px; }
+.pg-cost .daystrip .cells.dense i { min-width: 1px; border-radius: 1px; }
 .pg-cost .daystrip .cells i.on { background: var(--text-secondary); }
 .pg-cost .daystrip b { color: var(--text-primary); font-weight: 600; }
 .pg-cost .diverge { list-style: none; margin: 12px 0 0; padding: 0; }
@@ -149,3 +154,7 @@
   .pg-cost #d-top td.when { white-space: normal; }
   .pg-cost #d-top td.when .small { overflow-wrap: anywhere; }
 }
+
+/* The tokens chart with every kind hidden: a way back in place of an empty plot. */
+.pg-cost .all-hidden { min-height: 240px; display: flex; align-items: center; justify-content: center; gap: 6px; }
+.pg-cost .chart[hidden] { display: none; }

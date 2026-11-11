@@ -12,7 +12,8 @@ import { Palette } from "../../components/palette/Palette";
 import { openPalette } from "../../components/palette/store";
 import { mockApi } from "../../components/sheets/testing";
 import { ActivityPage } from "./ActivityPage";
-import { workDays } from "./work";
+import { clearApiCache } from "../../useApi";
+import { hookCommand, workDays } from "./work";
 
 const at = (hash = "#range=30") => history.replaceState(null, "", "/usage" + hash);
 const serve = (d: UsagePayload) => mockApi({ "/api/usage": () => d, "/api/sessions": () => sessions, "/api/session": () => session });
@@ -22,15 +23,26 @@ const fetched = () => vi.mocked(fetch).mock.calls.map(c => c[0]);
 const quiet: UsagePayload = { ...usage, totals: { ...usage.totals, error_loops: 0, tests_failed: 0 }, error_loops: [], near_limit: [] };
 
 describe("work per day", () => {
-  it("covers every day of the view, with zeros for idle days", () => {
+  it("covers the view from its first day with a session, with zeros for idle days", () => {
     const ds = workDays(usage);
-    expect(ds).toHaveLength(30);
-    expect(ds[0]).toEqual({ day: "2026-10-07", sessions: 0, prompts: 0, commits: 0, failed_calls: 0 });
-    expect(ds.at(-2)).toEqual({ day: "2026-11-04", sessions: 1, prompts: 2, commits: 1, failed_calls: 6 });
-    expect(ds.at(-1)!.day).toBe("2026-11-05");
+    expect(ds.map(r => r.day)).toEqual(["2026-11-04", "2026-11-05"]);
+    expect(ds[0]).toEqual({ day: "2026-11-04", sessions: 1, prompts: 2, commits: 1, failed_calls: 6 });
     expect(ds.reduce((a, r) => a + r.commits, 0)).toBe(usage.totals.commits);
-    // All time starts at the first day with work.
-    expect(workDays(usageAll)[0]!.day).toBe(usageAll.daily_work[0]!.day);
+    const gap = workDays({ ...usage, daily_work: [{ day: "2026-11-01", sessions: 1, prompts: 1, commits: 0, failed_calls: 0 }, ...usage.daily_work] });
+    expect(gap.map(r => r.sessions)).toEqual([1, 0, 0, 1, 1]);
+    // A prompt whose session made no request does not start the axis; a view with no session keeps its whole range.
+    const orphan = { day: "2026-09-01", sessions: 0, prompts: 1, commits: 0, failed_calls: 0 };
+    expect(workDays({ ...usageAll, daily_work: [orphan, ...usageAll.daily_work] })[0]!.day).toBe(usageAll.daily_work.find(r => r.sessions)!.day);
+    expect(workDays({ ...usage, daily_work: [] })).toHaveLength(30);
+  });
+});
+
+describe("hook names", () => {
+  it("keep the end of each path and drop quotes and a closing || true", () => {
+    expect(hookCommand('node "/home/u/.claude/hooks/format-on-save.cjs" post-edit || true')).toBe("node format-on-save.cjs post-edit");
+    expect(hookCommand("'/home/u/.local/bin/runner' hook run --script '/opt/lib/node_modules/x/dist/stop-hook.js'"))
+      .toBe("runner hook run --script stop-hook.js");
+    expect(hookCommand("notify-done")).toBe("notify-done");
   });
 });
 
@@ -68,6 +80,60 @@ describe("ActivityPage", () => {
     await waitFor(() => expect(fetched()).toContain("/api/sessions?range=30&source=codex"));
   });
 
+  it("reloads an open sessions table when new data arrives", async () => {
+    let n = 0;
+    mockApi({ "/api/usage": () => ({ ...usage, totals: { ...usage.totals, sessions: 2 + n++ } }), "/api/sessions": () => sessions });
+    at();
+    render(<ActivityPage />);
+    await loaded();
+    act(() => { (document.getElementById("d-sessions") as HTMLDetailsElement).open = true; });
+    await waitFor(() => expect(fetched().filter(u => u === "/api/sessions?range=30")).toHaveLength(1));
+    act(() => clearApiCache());
+    await waitFor(() => expect(fetched()).toContain("/api/sessions?range=30&limit=100"));
+  });
+
+  it("swaps in new data from a background ingest quietly, and replays the landing only after Refresh", async () => {
+    let n = 0;
+    mockApi({ "/api/usage": () => ({ ...usage, totals: { ...usage.totals, sessions: 2 + n++ } }), "/api/sessions": () => sessions });
+    at();
+    const { container } = render(<ActivityPage />);
+    await screen.findByRole("heading", { level: 1, name: /in 2 sessions/ });
+    const page = container.querySelector(".pg-activity")!, fades = () => page.querySelectorAll(".fade-in").length;
+    await waitFor(() => expect(page.classList.contains("grow")).toBe(false), { timeout: 2000 });
+    act(() => clearApiCache());
+    await screen.findByRole("heading", { level: 1, name: /in 3 sessions/ });
+    expect(page.classList.contains("grow")).toBe(false);
+    expect(fades()).toBe(0);
+    act(() => clearApiCache(true));
+    await screen.findByRole("heading", { level: 1, name: /in 4 sessions/ });
+    expect(page.classList.contains("grow")).toBe(true);
+    expect(fades()).toBeGreaterThan(0);
+  });
+
+  it("keeps an open, paged sessions table and its focus when new data arrives", async () => {
+    let n = 0;
+    const all = Array.from({ length: 250 }, (_, k) => ({ ...sessions.sessions[0], session_id: `x${k}`, title: `Session ${k}` }));
+    const page = (q: URLSearchParams) => {
+      const from = Number(q.get("offset") ?? 0), to = from + Number(q.get("limit") ?? 100);
+      return { total: all.length, offset: from, sessions: all.slice(from, to) };
+    };
+    mockApi({ "/api/usage": () => ({ ...usage, totals: { ...usage.totals, sessions: 2 + n++ } }), "/api/sessions": page });
+    at();
+    render(<ActivityPage />);
+    await loaded();
+    act(() => { (document.getElementById("d-sessions") as HTMLDetailsElement).open = true; });
+    await screen.findByRole("button", { name: "Session 99" });
+    await userEvent.click(screen.getByRole("button", { name: "Show more sessions" }));
+    const row = await screen.findByRole("button", { name: "Session 150" });
+    act(() => row.focus());
+    act(() => clearApiCache());
+    await waitFor(() => expect(fetched()).toContain("/api/sessions?range=30&limit=200"));
+    await waitFor(() => expect(document.querySelector("#d-sessions tbody")!.getAttribute("aria-busy")).toBeNull());
+    expect(document.querySelectorAll("#d-sessions tbody tr")).toHaveLength(200);
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Session 150" }));
+    expect(document.querySelector("#d-sessions tbody")!.hasAttribute("inert")).toBe(false);
+  });
+
   it("names no agent when nothing happened in the range with every source", async () => {
     const none: UsagePayload = { ...usage, totals: { ...usage.totals, requests: 0 } };
     serve(none);
@@ -89,6 +155,10 @@ describe("ActivityPage", () => {
     expect(attention().getByText("1 failed test run").closest("li")!.textContent).toMatch(/of 2/);
     await userEvent.click(within(loops).getByRole("button", { name: "See loops" }));
     expect((document.getElementById("d-loops") as HTMLDetailsElement).open).toBe(true);
+    // The payload carries the newest loops only: the drawer counts them all and says so.
+    const drawer = document.getElementById("d-loops")!;
+    expect(drawer.querySelector("summary")!.textContent).toMatch(/Error loops\s*3/);
+    expect(within(drawer).getByText(/^Showing the 1 newest of 3\./)).toBeTruthy();
     await userEvent.click(attention().getByRole("button", { name: "See it" }));
     expect((document.getElementById("d-sessions") as HTMLDetailsElement).open).toBe(true);
     expect(screen.getByRole("checkbox", { name: "Near context limit only" })).toHaveProperty("checked", true);
@@ -137,7 +207,7 @@ describe("ActivityPage", () => {
     serve(usage);
     at();
     render(<ActivityPage />);
-    const chart = await screen.findByRole("img", { name: /^Commits and failed tool calls per day, 30 days/ });
+    const chart = await screen.findByRole("img", { name: /^Commits and failed tool calls per day, 2 days/ });
     act(() => chart.focus());
     fireEvent.keyDown(chart, { key: "End" });
     expect(screen.getByText("Nov 5, 2026: 0 commits, 1 prompt, 1 session, 0 failed calls")).toBeTruthy();
@@ -179,7 +249,7 @@ describe("ActivityPage", () => {
     expect(await dlg.findByText("Recent calls")).toBeTruthy();
     // The browser turns Escape on a modal dialog into a cancel event.
     act(() => { document.querySelector("dialog")!.dispatchEvent(new Event("cancel", { cancelable: true })); });
-    expect(location.hash).toBe("#range=30");
+    await waitFor(() => expect(location.hash).toBe("#range=30")); // closing goes Back over the entry the sheet pushed
     await waitFor(() => expect(document.activeElement).toBe(within(document.querySelector<HTMLElement>('#d-tools tr[data-v="Bash"]')!).getByRole("button", { name: "Bash" })));
   });
 

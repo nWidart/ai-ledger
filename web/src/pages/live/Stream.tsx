@@ -1,11 +1,15 @@
 import { useLayoutEffect, useRef, useState } from "react";
-import type { LiveEvent, LiveLane, LiveSession, LiveToolEvent } from "../../api";
+import type { LiveEvent, LiveSession, LiveToolEvent } from "../../api";
 import { big, plural } from "../../format";
-import { APPROVAL_MS, elapsed, isTool, since, streamRows } from "./live";
+import { appLink } from "../../components/sheets/session";
+import { sessionHref } from "../insights/InsightsPage";
+import { APPROVAL_MS, elapsed, isTool, since, streamRows, type LiveLane } from "./live";
 
 const time = (ts: string | null | undefined) =>
   ts ? new Date(ts).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }) : "";
 const SHELL = new Set(["Bash", "exec_command", "exec"]);
+/** An MCP tool (mcp__server__tool) by its tool part; the full name shows on hover. */
+const shortName = (tool: string) => (tool.startsWith("mcp__") && tool.split("__").slice(2).join("__")) || tool;
 
 function ToolRow({ e, now, text, open, onToggle }: { e: LiveToolEvent; now: number; text: boolean; open: boolean; onToggle: () => void }) {
   const running = e.end == null, took = running ? since(e.start, now) : since(e.start, Date.parse(e.end!));
@@ -15,7 +19,7 @@ function ToolRow({ e, now, text, open, onToggle }: { e: LiveToolEvent; now: numb
     ? <span className="bad" role="img" aria-label="failed">✕</span> : <span className="ok" role="img" aria-label="passed">✓</span>;
   return <>
     <button type="button" className={cls} aria-expanded={open} onClick={onToggle}>
-      <span className="nm">{e.tool}</span><span className="sum">{e.summary}</span>
+      <span className="nm" title={e.tool}>{shortName(e.tool)}</span><span className="sum">{e.summary}</span>
       <span className="dur">{elapsed(took)}</span><span className="res">{result}</span>
     </button>
     {open && <div className="detail">
@@ -65,7 +69,7 @@ export function Stream({ s, now, text, follow, setFollow }: {
   const [open, setOpen] = useState(() => new Set<string>());
   const [folded, setFolded] = useState(() => new Set<string>());
   const [seenAt, setSeenAt] = useState(s.events.length);
-  const rows = streamRows(s.events, s.lanes);
+  const rows = streamRows(s.events);
   const toggle = (k: string) => {
     setOpen(o => { const n = new Set(o); if (!n.delete(k)) n.add(k); return n; });
     if (follow) { setFollow(false); setSeenAt(s.events.length); }
@@ -80,7 +84,8 @@ export function Stream({ s, now, text, follow, setFollow }: {
   };
   const newer = !follow && s.events.length > seenAt;
   return <div className="stream" ref={box} onScroll={onScroll} tabIndex={0} aria-label="Session events">
-    {s.truncated && <p className="older muted">Older events are not shown. The session sheet on Activity has the whole session.</p>}
+    {s.truncated && <p className="older muted">Older events are not shown. The <a href={sessionHref(s.session_id)} onClick={appLink}>session sheet on Activity</a> has
+      the whole session.</p>}
     {rows.map(r => {
       if (r.kind === "lane") return <div className="ev" key={"lane:" + r.lane.id}><span className="t">{time(r.lane.start)}</span>
         <Lane lane={r.lane} events={r.events} now={now} text={text} open={open} toggle={toggle} folded={folded.has(r.lane.id)}

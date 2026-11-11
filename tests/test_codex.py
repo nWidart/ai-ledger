@@ -348,6 +348,13 @@ class ToolTest(CodexCase):
         (us,), = self.q("SELECT date_diff('microsecond', start_ts, end_ts) FROM tool_calls WHERE tool LIKE '%preview_status'")
         self.assertAlmostEqual(us, took["secs"] * 1_000_000 + took["nanos"] / 1000, delta=1)
 
+    def test_unified_exec_startup_has_no_duration(self):
+        self.place(NAME, meta(THREAD) + item(1, "t1", dict(type="CommandExecution", id="call_u", command=["/bin/zsh", "-lc", "ls"],
+                                                          source="unified_exec_startup", status="completed", exit_code=0,
+                                                          aggregated_output="a", duration=dict(secs=0, nanos=9000))))
+        self.ingest()
+        self.assertEqual(self.q("SELECT start_ts = end_ts FROM tool_calls WHERE tool_use_id = 'call_u'"), [(True,)])
+
     def test_exec_script_is_not_a_tool_call(self):
         self.place(NAME, meta(THREAD) + line(
             timestamp="2026-11-06T10:00:00.000Z", ordinal=1, type="response_item",

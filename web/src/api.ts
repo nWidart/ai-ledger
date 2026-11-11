@@ -62,7 +62,8 @@ export interface Previous {
   daily: { day: Day; cost: number | null; tokens: number }[];
   by_project: { project: string | null; cost: number | null; tokens: number; requests: number }[];
 }
-export interface Change { project: string | null; cost: number; prev_cost: number; delta: number; new: boolean }
+/** cost or prev_cost is null when that period's requests were all on unpriced models; delta is then null too. */
+export interface Change { project: string | null; cost: number | null; prev_cost: number | null; delta: number | null; new: boolean }
 
 /** The coding agent a session came from; "" in a filter is every source. */
 export type Source = "claude" | "codex";
@@ -76,6 +77,8 @@ export interface UsagePayload {
   sessions: SessionRow[]; top_sessions: TitledSessionRow[]; near_limit: SessionRow[];
   /** null for the all-time view. */
   previous: Previous | null; changes: Change[] | null;
+  /** The user prices file next to the store (path), and why it was ignored (error; null when read or absent). */
+  prices_file: { path: string; error: string | null };
   /** Present when the request named a session: null when it does not exist. */
   session?: SessionDetail | null;
 }
@@ -86,6 +89,8 @@ export interface SessionInfo {
   session_id: string; project: string | null; cwd: string | null; git_branch: string | null; first_ts: Ts | null; last_ts: Ts | null;
   entrypoint: string | null; version: string | null; compactions: number | null; peak_context: number | null; peak_model: string | null;
   source: Source; context_limit: number | null;
+  /** Active time, as the sessions table's duration_s: pauses over 20 minutes left out. */
+  active_s: number | null;
 }
 export interface SessionModelRow extends Tokens { model: string | null; effort: string; subagent: boolean; requests: number; tokens: number; cost: number | null }
 export interface SessionDetail {
@@ -118,7 +123,7 @@ export interface ErrorsPayload {
   calls: [Day, string, number, number, Source][];
   /** [day, project, category, errors, subagent errors, source] */
   error_days: [Day, string, string | null, number, number, Source][];
-  incidents: Incident[]; incident_gap_minutes: number;
+  incidents: Incident[]; incident_gap_minutes: number; incident_max_ok: number;
 }
 // Tool inspector (/api/tool, metrics.tool_detail): one tool, MCP server or skill over the view.
 export type ToolKind = "tool" | "mcp" | "skill";
@@ -171,14 +176,18 @@ export interface Forecast {
   hits_at: Ts | null; hits_at_early: Ts | null; hits_at_late: Ts | null;
   /** Percent at reset: null when the middle forecast reaches 100% first. */
   at_reset: number | null; at_reset_low: number; at_reset_high: number;
-  /** Points a day: the pace that ends at exactly 100% at reset, and the current one. */
+  /** Points a day: the pace that ends at exactly 100% at reset, and the forecast's own: halfway between the usual pace
+   *  (recent weeks) and the window's pace over its last seventh (pace_window, over pace_window_hours; null until then). */
   pace_target: number | null; pace_now: number; pace: "ahead" | "behind" | null;
+  pace_usual: number; pace_window: number | null; pace_window_hours: number | null;
 }
 export interface LimitWindow {
   provider: string; provider_label: string; limit_id: string; scope: string; label: string; window_minutes: number | null; plan: string | null;
   start: Ts; resets_at: Ts; current: number | null; measured: boolean; last_snapshot: Ts | null; series: LimitPoint[];
   calibration: { per_pct: number; points: number; windows: number } | null;
   forecast: Forecast | null; no_forecast: string | null; hit_start: Ts | null;
+  /** At 100% (or reported as reached) now, until it resets. */
+  at_limit: boolean;
 }
 export interface LimitHistoryRow {
   provider: string; provider_label: string; label: string; plan: string | null; start: Ts; closed_at: Ts; final: number;
@@ -192,10 +201,12 @@ export interface LimitsPayload {
   binding: { provider: string; limit_id: string; scope: string; runs_out: boolean } | null;
   suggestion: { provider: string; provider_label: string; label: string; unused_at_reset: number; resets_at: Ts } | null;
   history: LimitHistoryRow[]; events: PlanChange[];
-  unused: { provider: string; provider_label: string; label: string; windows: number; estimated: number; avg_unused: number }[];
+  /** Over full-length windows only: early counts those cut short, and avg_unused is null when none ran their length. */
+  unused: { provider: string; provider_label: string; label: string; windows: number; estimated: number; early: number; avg_unused: number | null }[];
   value: {
-    limits: { provider: string; provider_label: string; label: string; plan: string | null; cost_per_point: number;
-      models: { model: string; points: number; tokens_per_point: number | null }[] }[];
+    /** past_plan: calibrated on a plan the provider no longer reports. A model without a price has no points. */
+    limits: { provider: string; provider_label: string; label: string; plan: string | null; past_plan: boolean; cost_per_point: number;
+      models: { model: string; priced: boolean; points: number | null; tokens_per_point: number | null }[] }[];
     projects: { provider: string; provider_label: string; label: string; project: string; commits: number; points: number; commits_per_point: number | null }[];
   };
   freshness: { provider: string; provider_label: string; last_snapshot: Ts | null; measured: boolean; polled: boolean;
@@ -208,6 +219,8 @@ export interface FacetTally extends FacetCount { sessions: number }
 export interface InsightSession {
   session_id: string; project: string; start: Ts | null; outcome: string | null; helpfulness: string | null; session_type: string | null;
   brief_summary: string | null; friction_detail: string | null;
+  /** The session's title (session-titles), or null. */
+  title: string | null;
   /** Category names, most counted first. */
   friction: string[]; goals: string[]; satisfaction: string[];
   /** false: the facet's session has no transcript in the store, so it has no session sheet. */
@@ -261,31 +274,27 @@ export interface LivePayload {
   /** With no active session: the one in scope that wrote last. */
   newest: { session_id: string; project: string | null; last_ts: Ts | null } | null;
 }
+/** lane: the subagent whose work it is, null on the main thread. */
 interface LiveEventBase { key: string; ts: Ts | null; lane: string | null }
 export interface LiveTextEvent extends LiveEventBase { k: "prompt" | "reply"; words: number; text?: string }
 export interface LiveToolEvent extends LiveEventBase {
+  /** The input, whole only with text: without, a subagent call's description, and other inputs cut to 300 characters. */
   k: "tool"; id: string; tool: string; summary: string; description: string | null; start: Ts | null; end: Ts | null;
   failed: boolean; error: string | null;
   /** The result's size; its text (cut to 4 KB) only with text. */
   chars: number; output: string | null; cut: boolean;
-  /** The subagent this call started, when its result names it. */
+  /** The subagent this call started, when its result or the subagent's start names it. */
   agent: string | null;
 }
-export interface LiveRequestEvent extends LiveEventBase { k: "request"; id: string; model: string | null; output: number; context: number }
 export interface LiveMarkEvent extends LiveEventBase { k: "interrupt" | "turn_end" }
 export interface LiveTurnStart extends LiveEventBase { k: "turn_start"; window: number | null }
 export interface LiveCompaction extends LiveEventBase { k: "compaction"; pre: number | null }
-export type LiveEvent = LiveTextEvent | LiveToolEvent | LiveRequestEvent | LiveMarkEvent | LiveTurnStart | LiveCompaction;
-export interface LiveLane {
-  id: string; start: Ts | null; end: Ts | null; tools: number; running: boolean;
-  /** The main-thread call that started it, when known; name is that call's tool. */
-  parent: string | null; name: string; description: string | null; done: boolean;
-}
+export type LiveEvent = LiveTextEvent | LiveToolEvent | LiveMarkEvent | LiveTurnStart | LiveCompaction;
 export interface LiveSession extends LiveFigures, LiveTitle {
   session_id: string; project: string | null; source: Source; branch: string | null; last_ts: Ts | null; now: Ts;
-  /** Pass back as after= to get only newer events. */
+  /** Pass back as after= to get newer events, with those of the minute before sent again. */
   cursor: string | null; truncated: boolean; state: LiveState;
-  events: LiveEvent[]; lanes: LiveLane[];
+  events: LiveEvent[];
   compactions: { ts: Ts | null; pre: number | null }[];
   spark: { points: number[]; per_minute: number; step: number };
   limits: { label: string; used_percent: number; observed_at: Ts | null; resets_at: Ts | null }[];
@@ -294,7 +303,11 @@ export interface LiveSession extends LiveFigures, LiveTitle {
 export interface IngestStats { files: number; lines: number; inserted: number; seconds: number; usage_files?: number; usage_skipped?: number }
 export interface Status {
   ingesting: boolean; last_ingest: string | null; last_stats: IngestStats | null; error: string | null;
+  /** The last ingest that stored new lines or usage data; null until one does. */
+  last_change: string | null;
   counts: Record<string, number>; interval: number;
+  /** Projects by all-time tokens, for project colors on every page (colors.setOrder). */
+  project_order: string[];
   /** Plan-limit pollers by provider; never the credential. */
   limits?: Record<string, { last_ok: string | null; last_attempt: string | null; failures: number; error: string | null; stale: boolean }>;
 }
@@ -311,8 +324,8 @@ export const viewOf = (h: { project: string; range: number; auto: boolean; sourc
   ({ project: h.project, range: h.range, automated: h.auto, source: h.source });
 const viewQs = (v: View) => ({ project: v.project, range: v.range, automated: v.automated, source: v.source });
 export const usageUrl = (v: View, session = "") => `/api/usage?${qs({ ...viewQs(v), session })}`;
-export const sessionsUrl = (v: View, o: { q?: string; near?: boolean; offset?: number; day?: Day } = {}) =>
-  `/api/sessions?${qs({ ...viewQs(v), q: o.q, near: o.near, offset: o.offset || undefined, day: o.day })}`;
+export const sessionsUrl = (v: View, o: { q?: string; near?: boolean; offset?: number; limit?: number; day?: Day } = {}) =>
+  `/api/sessions?${qs({ ...viewQs(v), q: o.q, near: o.near, offset: o.offset || undefined, limit: o.limit, day: o.day })}`;
 export const sessionUrl = (id: string) => `/api/session?${qs({ id })}`;
 export const promptUrl = (session: string) => `/api/prompt?${qs({ session })}`;
 export const toolUrl = (kind: ToolKind, name: string, v: View) => `/api/tool?${qs({ kind, name, ...viewQs(v) })}`;

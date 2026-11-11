@@ -26,8 +26,8 @@ export function noteStatus(s: Status | null) {
 export function refresh() {
   set({ ...state, busy: true, text: "Ingesting…" });
   getJson<Status>("/api/refresh", { method: "POST" }).then(s => {
-    noteIngest(s.last_ingest);
-    clearApiCache();
+    noteIngest(s.last_change);
+    clearApiCache(true);
     set({ text: statusText(s), failed: !!s.error, busy: false, retry: false });
   }, () => set({ text: "Refresh failed. Select Retry to try again.", failed: true, busy: false, retry: true }));
 }

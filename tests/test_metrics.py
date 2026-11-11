@@ -5,9 +5,10 @@ import shutil
 import tempfile
 import threading
 import unittest
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from http.server import ThreadingHTTPServer
 from unittest import mock
+from zoneinfo import ZoneInfo
 
 from ai_ledger import app, metrics, store
 
@@ -136,9 +137,10 @@ class MetricsTest(unittest.TestCase):
         self.assertAlmostEqual(ch[0]["delta"], 15.8)
         self.assertEqual((ch[1]["cost"], ch[1]["prev_cost"]), (0, 130 * 2 / 1e6))
         self.assertAlmostEqual(ch[1]["delta"], -130 * 2 / 1e6)
-        # One day: foo's priced spend was all the day before.
+        # One day: foo's priced spend was all the day before; that day it ran only an unpriced model, so its cost and change are unknown.
         one = metrics.usage(self.con.cursor(), "", 1, prices=PRICES, today=TODAY)["changes"]
-        self.assertEqual([(r["project"], r["new"], r["cost"]) for r in one], [("foo", False, 0)])
+        self.assertEqual([(r["project"], r["new"], r["cost"], r["delta"]) for r in one], [("foo", False, None, None)])
+        self.assertAlmostEqual(one[0]["prev_cost"], 15.8)
         self.assertIsNone(self.all["changes"])
 
     def test_prompt_title(self):
@@ -168,6 +170,9 @@ class MetricsTest(unittest.TestCase):
             self.assertEqual(metrics.session(c, "s1", prices=PRICES)["title"], "auth bug fix")
             usage = metrics.usage(c, "foo", 7, prices=PRICES, today=TODAY)
             self.assertEqual(usage["error_loops"][0]["title"], "auth bug fix")
+            search = lambda q: [x["session_id"] for x in metrics.session_list(c, q=q, prices=PRICES, today=TODAY)["sessions"]]
+            self.assertEqual(search("dark MODE"), ["s2"])  # a title from the first prompt
+            self.assertEqual(search("auth bug"), ["s1"])
         finally:
             c.execute("DELETE FROM raw_lines WHERE key = 'x4'")
             c.execute("DELETE FROM session_titles")
@@ -181,6 +186,14 @@ class MetricsTest(unittest.TestCase):
     def test_session_list_by_day(self):
         day = metrics.session_list(self.con.cursor(), day="2026-11-04", prices=PRICES, today=TODAY)
         self.assertEqual([x["session_id"] for x in day["sessions"]], ["s1"])
+        # o1 has requests on Nov 4 and 5: the day's list counts only Nov 4's, costliest first, so the rows add up to the bar.
+        c = self.con.cursor()
+        bar = {d["day"]: d["cost"] for d in metrics.usage(c, prices=PRICES, today=TODAY, automated=True)["daily"]}["2026-11-04"]
+        day = metrics.session_list(c, day="2026-11-04", prices=PRICES, today=TODAY, automated=True, limit=1)
+        self.assertEqual([x["session_id"] for x in day["sessions"]], ["s1", "o1"])
+        self.assertEqual([x["requests"] for x in day["sessions"]], [2, 1])
+        self.assertEqual(day["total"], 2)
+        self.assertAlmostEqual(sum(x["cost"] for x in day["sessions"]), bar)
         with self.assertRaises(ValueError):
             metrics.session_list(self.con.cursor(), day="nope", prices=PRICES, today=TODAY)
 
@@ -249,8 +262,9 @@ class MetricsTest(unittest.TestCase):
 
     def test_time(self):
         t = self.foo7["totals"]
-        self.assertEqual(t["session_seconds"], 3600 + 1800)
-        self.assertEqual(t["median_session_seconds"], 2700)
+        # Active time: s1's request and tool calls span 10:01 to 10:10; s2 has one request.
+        self.assertEqual(t["session_seconds"], 540)
+        self.assertEqual(t["median_session_seconds"], 270)
         self.assertEqual(t["thinking_ms"], 1500)
         bash = next(x for x in self.foo7["tools"] if x["tool"] == "Bash")
         self.assertAlmostEqual(bash["p50_ms"], 4000)
@@ -339,9 +353,33 @@ class MetricsTest(unittest.TestCase):
             self.assertEqual((by[("a7",)]["outcome"], by[("a7",)]["sub"]), ("gave_up", 1))
             self.assertEqual(by[("t01", "t02", "t03", "t04")]["outcome"], "gave_up")
             self.assertEqual((by[("t08",)]["outcome"], by[("t08",)]["rid"]), ("recovered", "t09"))
-            self.assertEqual(p["incident_gap_minutes"], metrics.INCIDENT_GAP_MINUTES)
+            self.assertEqual((p["incident_gap_minutes"], p["incident_max_ok"]), (metrics.INCIDENT_GAP_MINUTES, metrics.INCIDENT_MAX_OK))
         finally:
             c.execute("DELETE FROM tool_calls WHERE tool_use_id LIKE 'a_'")
+
+    def test_incidents_are_retry_loops_of_one_agent(self):
+        c = self.con.cursor()
+        row = lambda i, s0, e0, err, cat=None, f="main": (i, "s3", "Bash", f"2026-11-05 11:{s0}", f"2026-11-05 11:{e0}", err, cat, f != "main", f)
+        store.insert(c, "tool_calls", ["tool_use_id", "session_id", "tool", "start_ts", "end_ts", "is_error", "category", "subagent", "result_file"], [
+            row("b1", "00:00", "00:05", True, "y"), row("b2", "01:00", "01:05", False), row("b3", "02:00", "02:05", False),
+            row("b4", "03:00", "03:05", True, "y"),  # two successes between: still the same retry loop
+            *[row(f"b{5 + k}", f"0{4 + k}:00", f"0{4 + k}:05", False) for k in range(metrics.INCIDENT_MAX_OK + 1)],
+            row("b9", "09:00", "09:30", True, "y"),  # more successes than INCIDENT_MAX_OK between: a new attempt
+            row("c1", "09:10", "09:12", False),  # started before b9 ended: a parallel call, not b9's next call
+            row("c2", "10:00", "10:05", False),
+            row("d1", "00:30", "00:35", True, "y", "agent-1"), row("d2", "01:30", "01:35", True, "y", "agent-2")])  # two subagents
+        try:
+            inc, of = metrics.incidents(c)
+            members = {}
+            for k, i in of.items():
+                members.setdefault(i, []).append(k)
+            by = {tuple(sorted(v)): inc[i] for i, v in members.items() if inc[i]["s"] == "s3"}
+            self.assertEqual(sorted(by), [("b1", "b4"), ("b9",), ("d1",), ("d2",)])
+            self.assertEqual((by[("b1", "b4")]["ok"], by[("b1", "b4")]["outcome"], by[("b1", "b4")]["rid"]), (2, "recovered", "b5"))
+            self.assertEqual((by[("b9",)]["outcome"], by[("b9",)]["rid"]), ("recovered", "c2"))
+            self.assertEqual([by[k]["outcome"] for k in [("d1",), ("d2",)]], ["gave_up", "gave_up"])
+        finally:
+            c.execute("DELETE FROM tool_calls WHERE session_id = 's3'")
 
     def test_automated_sessions_left_out_by_default(self):
         ids = lambda u: {x["session_id"] for x in u["sessions"]}
@@ -413,6 +451,7 @@ class MetricsTest(unittest.TestCase):
                 return json.loads(r.read())
             self.assertEqual((get("/api/usage")["totals"]["sessions"], get("/api/usage?automated=1")["totals"]["sessions"]), (3, 4))
             self.assertEqual((get("/api/sessions")["total"], get("/api/sessions?automated=1")["total"]), (3, 4))
+            self.assertEqual(len(get("/api/sessions?limit=2")["sessions"]), 2)  # a refresh refetches as many rows as are shown
         finally:
             httpd.shutdown()
             httpd.server_close()
@@ -547,6 +586,151 @@ class SourceFilterTest(unittest.TestCase):
             httpd.server_close()
 
 
+class LocalDayTest(unittest.TestCase):
+    """Days on the server's clock, here America/Los_Angeles, the day after US daylight saving starts (Mar 8, 2026).
+    z1 works at 06:30 UTC on Mar 9 (23:30 on Mar 8, local), z2 at 07:30 UTC (00:30 on Mar 9, local; 23:30 at a fixed -8)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.mkdtemp()
+        cls.con = store.open_store(os.path.join(cls.tmp, "d", "x.duckdb"))
+        cls.con.execute("SET GLOBAL TimeZone = 'America/Los_Angeles'")
+        c = cls.con.cursor()
+        store.insert(c, "sessions", ["session_id", "project", "first_ts", "last_ts"], [
+            ("z1", "foo", "2026-03-09 06:30:00", "2026-03-09 06:30:01"), ("z2", "foo", "2026-03-09 07:30:00", "2026-03-09 07:30:01")])
+        store.insert(c, "requests", ["message_id", "session_id", "ts", "model", "subagent", "input", "output", "thinking",
+                                     "cache_read", "cache_5m", "cache_1h"], [
+            ("ra", "z1", "2026-03-09 06:30:00", "m-a", False, 100, 0, 0, 0, 0, 0),
+            ("rb", "z2", "2026-03-09 07:30:00", "m-a", False, 200, 0, 0, 0, 0, 0)])
+        store.insert(c, "tool_calls", ["tool_use_id", "session_id", "tool", "start_ts", "end_ts", "is_error", "category", "subagent"], [
+            ("ta", "z1", "Bash", "2026-03-09 06:30:00", "2026-03-09 06:30:01", True, "x", False),
+            ("tb", "z2", "Bash", "2026-03-09 07:30:00", "2026-03-09 07:30:01", True, "x", False)])
+        store.insert(c, "prompts", ["prompt_id", "session_id", "ts", "interrupted"], [
+            ("pa", "z1", "2026-03-09 06:30:00", False), ("pb", "z2", "2026-03-09 07:30:00", False)])
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.con.close()
+        shutil.rmtree(cls.tmp)
+
+    def test_usage_buckets_and_bounds_local_days(self):
+        u = metrics.usage(self.con.cursor(), "", 0, prices=PRICES, today=date(2026, 3, 9))
+        self.assertEqual([(d["day"], d["input"]) for d in u["daily"]], [("2026-03-08", 100), ("2026-03-09", 200)])
+        self.assertEqual([(d["day"], d["prompts"], d["failed_calls"]) for d in u["daily_work"]], [("2026-03-08", 1, 1), ("2026-03-09", 1, 1)])
+        self.assertEqual(u["totals"]["active_days"], 2)
+        u = metrics.usage(self.con.cursor(), "", 1, prices=PRICES, today=date(2026, 3, 9))
+        self.assertEqual((u["start"], u["totals"]["tokens"], u["totals"]["prompts"], u["totals"]["errors"]), ("2026-03-09", 200, 1, 1))
+        self.assertEqual((u["previous"]["start"], u["previous"]["tokens"]), ("2026-03-08", 100))
+        self.assertEqual([d["day"] for d in u["previous"]["daily"]], ["2026-03-08"])
+
+    def test_session_list_by_local_day(self):
+        for day, sid in (("2026-03-08", "z1"), ("2026-03-09", "z2")):
+            got = metrics.session_list(self.con.cursor(), day=day, prices=PRICES, today=date(2026, 3, 9))
+            self.assertEqual([x["session_id"] for x in got["sessions"]], [sid], day)
+
+    def test_errors_payload_dates_local_days(self):
+        p = metrics.errors_payload(self.con.cursor(), today=date(2026, 3, 9))
+        self.assertEqual({e["id"]: e["d"] for e in p["errors"]}, {"ta": "2026-03-08", "tb": "2026-03-09"})
+        self.assertEqual([r[0] for r in p["calls"]], ["2026-03-08", "2026-03-09"])
+        self.assertEqual([r[0] for r in p["error_days"]], ["2026-03-08", "2026-03-09"])
+
+    def test_day_starts_follow_daylight_saving(self):
+        cur = self.con.cursor()
+        self.assertEqual(metrics.start_ts(cur, date(2026, 3, 8)), datetime(2026, 3, 8, 8))  # PST, UTC-8
+        self.assertEqual(metrics.start_ts(cur, date(2026, 3, 9)), datetime(2026, 3, 9, 7))  # PDT, UTC-7
+        self.assertEqual(metrics.local_today(cur), datetime.now(ZoneInfo("America/Los_Angeles")).date())
+
+
+class HelperSessionTest(unittest.TestCase):
+    """Automated sessions outside AUTOMATED_PROJECTS. foo: w1 (two prompts on Nov 4, a request alone on Nov 5) and n1 (no
+    prompt, a request on Nov 3). (temp): h1 (one prompt, an app's helper) and t2 (two prompts, a person's)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.mkdtemp()
+        cls.con = store.open_store(os.path.join(cls.tmp, "d", "x.duckdb"))
+        c = cls.con.cursor()
+        store.insert(c, "sessions", ["session_id", "project", "first_ts", "last_ts"], [
+            ("w1", "foo", "2026-11-04 10:00:00", "2026-11-05 10:00:00"), ("n1", "foo", "2026-11-03 10:00:00", "2026-11-03 10:00:00"),
+            ("h1", "(temp)", "2026-11-04 11:00:00", "2026-11-04 11:00:03"), ("t2", "(temp)", "2026-11-04 12:00:00", "2026-11-04 12:10:00")])
+        store.insert(c, "requests", ["message_id", "session_id", "ts", "model", "subagent", "input", "output", "thinking",
+                                     "cache_read", "cache_5m", "cache_1h"], [
+            (f"r{i}", sid, ts, "m-a", False, 1, 0, 0, 0, 0, 0) for i, (sid, ts) in enumerate([
+                ("w1", "2026-11-04 10:00:00"), ("w1", "2026-11-05 10:00:00"), ("n1", "2026-11-03 10:00:00"),
+                ("h1", "2026-11-04 11:00:00"), ("t2", "2026-11-04 12:00:00")])])
+        store.insert(c, "prompts", ["prompt_id", "session_id", "ts", "interrupted"], [
+            ("p1", "w1", "2026-11-04 10:00:00", False), ("p2", "w1", "2026-11-04 10:30:00", False),
+            ("p3", "h1", "2026-11-04 11:00:00", False),
+            ("p4", "t2", "2026-11-04 12:00:00", False), ("p5", "t2", "2026-11-04 12:05:00", False)])
+        # Bash ran 2 s; exec_command has no usable timing (start equals end).
+        store.insert(c, "tool_calls", ["tool_use_id", "session_id", "tool", "start_ts", "end_ts", "is_error", "subagent"], [
+            ("c1", "w1", "Bash", "2026-11-04 10:01:00", "2026-11-04 10:01:02", False, False),
+            ("c2", "w1", "exec_command", "2026-11-04 10:02:00", "2026-11-04 10:02:00", False, False)])
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.con.close()
+        shutil.rmtree(cls.tmp)
+
+    def usage(self, **k):
+        return metrics.usage(self.con.cursor(), **dict(prices=PRICES, today=TODAY) | k)
+
+    def test_helpers_and_promptless_sessions_are_automated(self):
+        u, auto = self.usage(), self.usage(automated=True)
+        self.assertEqual(sorted(x["session_id"] for x in u["sessions"]), ["t2", "w1"])
+        self.assertEqual(sorted(x["session_id"] for x in auto["sessions"]), ["h1", "n1", "t2", "w1"])
+        # Naming (temp) keeps its helpers out: only a whole automated project is let in by name.
+        self.assertEqual([x["session_id"] for x in self.usage(project="(temp)")["sessions"]], ["t2"])
+        listed = lambda **k: metrics.session_list(self.con.cursor(), prices=PRICES, today=TODAY, **k)["total"]
+        self.assertEqual((listed(), listed(automated=True)), (2, 4))
+        pal = metrics.palette(self.con.cursor(), today=TODAY)
+        self.assertEqual({p["name"]: p["sessions"] for p in pal["projects"]}, {"foo": 1, "(temp)": 1})
+
+    def test_active_days_count_days_with_a_prompt(self):
+        self.assertEqual(self.usage()["totals"]["active_days"], 1)  # Nov 5 has a request but no prompt
+        self.assertEqual(self.usage(range_days=1, today=date(2026, 11, 6))["previous"]["active_days"], 0)
+
+    def test_no_latency_without_timing(self):
+        self.assertEqual({t["tool"]: t["p50_ms"] for t in self.usage()["tools"]}, {"Bash": 2000, "exec_command": None})
+
+
+class SessionTimeTest(unittest.TestCase):
+    """A session resumed the next day: main-thread requests and tool calls 10, 15 and 5 minutes apart, and a 22-hour
+    pause between the first and second day. A subagent request in the pause doesn't end it."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.mkdtemp()
+        cls.con = store.open_store(os.path.join(cls.tmp, "d", "x.duckdb"))
+        c = cls.con.cursor()
+        store.insert(c, "sessions", ["session_id", "project", "first_ts", "last_ts"], [("a", "foo", "2026-11-04 10:00:00", "2026-11-05 09:05:00")])
+        store.insert(c, "prompts", ["prompt_id", "session_id", "ts"], [("p", "a", "2026-11-04 10:00:00")])
+        store.insert(c, "requests", ["message_id", "session_id", "ts", "model", "subagent", "input", "output", "thinking",
+                                     "cache_read", "cache_5m", "cache_1h"], [
+            ("q1", "a", "2026-11-04 10:00:00", "m-a", False, 1, 0, 0, 0, 0, 0),
+            ("q2", "a", "2026-11-04 10:10:00", "m-a", False, 1, 0, 0, 0, 0, 0),
+            ("q3", "a", "2026-11-04 12:00:00", "m-a", True, 1, 0, 0, 0, 0, 0),
+            ("q4", "a", "2026-11-05 09:00:00", "m-a", False, 1, 0, 0, 0, 0, 0)])
+        store.insert(c, "tool_calls", ["tool_use_id", "session_id", "tool", "start_ts", "end_ts", "is_error", "subagent"], [
+            ("c1", "a", "Bash", "2026-11-04 10:25:00", "2026-11-04 10:25:01", False, False),
+            ("c2", "a", "Bash", "2026-11-05 09:05:00", "2026-11-05 09:05:01", False, False)])
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.con.close()
+        shutil.rmtree(cls.tmp)
+
+    def test_duration_is_active_time(self):
+        u = metrics.usage(self.con.cursor(), "", 0, prices=PRICES, today=TODAY)
+        self.assertEqual(u["sessions"][0]["duration_s"], 600 + 900 + 300)
+        self.assertEqual(u["totals"]["session_seconds"], 1800)
+        # A 1-day view still measures the whole session.
+        u = metrics.usage(self.con.cursor(), "", 1, prices=PRICES, today=TODAY)
+        self.assertEqual(u["sessions"][0]["duration_s"], 1800)
+        # The session sheet shows the same active time, not first to last.
+        self.assertEqual(metrics.session(self.con.cursor(), "a", prices=PRICES)["info"]["active_s"], 1800)
+
+
 class ToolDetailTest(unittest.TestCase):
     """The tool inspector's fixture. Project foo: f1 (Nov 4) runs Bash (git 20 times, npm test 10 times with four failures
     in a row at the end, then ls), Edit, Read, Grep (failed, then recovered), WebFetch from subagents, the github MCP server
@@ -566,6 +750,7 @@ class ToolDetailTest(unittest.TestCase):
             ("p1", "foo", "2026-09-20 09:00:00", "2026-09-20 10:00:00", "claude"),
             ("x1", "foo", "2026-11-04 09:00:00", "2026-11-04 10:00:00", "codex"),
             ("b1", "bar", "2026-11-04 09:00:00", "2026-11-04 10:00:00", "claude")])
+        store.insert(c, "prompts", ["prompt_id", "session_id"], [(f"p-{sid}", sid) for sid in ("f1", "f2", "old", "p1", "x1", "b1")])
         clock, out = {}, []
 
         def call(sid, day, tool, inp="", cat=None, sub=False, mcp=None, skill=None, test=False, commit=False, ms=1000):
@@ -752,6 +937,46 @@ class ToolDetailTest(unittest.TestCase):
             self.detail("hook", "Bash")
         with self.assertRaises(ValueError):
             self.detail("tool", "Bash", source="grok")
+
+
+class UserPricesTest(unittest.TestCase):
+    """The user prices file next to the store: its models add to or replace the packaged ones; a bad file is reported and ignored."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.path = os.path.join(self.tmp, "prices.json")
+        patch = mock.patch.object(metrics, "USER_PRICES", self.path)
+        patch.start()
+        self.addCleanup(patch.stop)
+        self.addCleanup(shutil.rmtree, self.tmp)
+        self.packaged = metrics.load_prices()
+
+    def write(self, text):
+        with open(self.path, "w") as fh:
+            fh.write(text)
+
+    def test_missing_file_adds_nothing(self):
+        self.assertEqual(metrics.user_prices(), ({}, None))
+        self.assertEqual(metrics.prices_file(), dict(path=self.path, error=None))
+
+    def test_entries_add_and_override(self):
+        known = next(iter(self.packaged))
+        self.write(json.dumps({"models": {"m-new": {"input": 1, "output": 2, "cache_read": 0, "cache_5m": 0, "cache_1h": 0},
+                                          known: dict(self.packaged[known], input=999)}}))
+        got = metrics.load_prices()
+        self.assertEqual(got["m-new"]["context"], None)  # optional, as in the packaged file
+        self.assertEqual(got[known]["input"], 999)
+        self.assertEqual(len(got), len(self.packaged) + 1)
+        self.assertIsNone(metrics.prices_file()["error"])
+
+    def test_bad_file_is_reported_and_ignored(self):
+        for text, error in (("{not json", "Expecting property name"), ("[]", 'no "models" object'),
+                            ('{"models": {"m-x": {"input": 1}}}', "m-x: output, cache_read, cache_5m, cache_1h must be a number"),
+                            ('{"models": {"m-x": {"input": 1, "output": 1, "cache_read": 1, "cache_5m": 1, "cache_1h": 1, "long_above": 5}}}',
+                             "m-x: input, output, cache_read, cache_5m, cache_1h must be a number")):
+            self.write(text)
+            self.assertEqual(metrics.load_prices(), self.packaged)
+            self.assertIn(error, metrics.prices_file()["error"])
 
 
 if __name__ == "__main__":

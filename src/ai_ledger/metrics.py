@@ -11,12 +11,53 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 NEAR_LIMIT = 0.8  # share of the context window that counts as "near the limit"
 TOKEN_KINDS = ["input", "output", "thinking", "cache_read", "cache_5m", "cache_1h"]
 AUTOMATED_PROJECTS = ("observer-sessions",)  # projects whose sessions a tool starts, left out of usage unless asked for
+TEMP_PROJECT = "(temp)"  # store.project_of's name for a temporary folder, where apps run their one-prompt helpers
+# Sessions a tool started, in any project: no prompt at all, or at most one in a temporary folder (titles and other helpers
+# an app runs). Counts the whole session's prompts, so a session is automated or not whatever the range.
+HELPER_SESSIONS = f"""SELECT a.session_id FROM sessions a LEFT JOIN prompts ap USING (session_id) GROUP BY a.session_id, a.project
+    HAVING count(ap.prompt_id) < CASE WHEN a.project = '{TEMP_PROJECT}' THEN 2 ELSE 1 END"""
 SOURCES = ("claude", "codex")  # the coding agents a session can come from (sessions.source); '' in a filter is all of them
 
 
-def load_prices(path=os.path.join(HERE, "prices.json")):
+PRICE_KINDS = ("input", "output", "cache_read", "cache_5m", "cache_1h")  # USD per million tokens, every price entry has each
+# The user's prices file: the packaged prices.json's shape, its models added to or replacing the packaged ones. It sits next
+# to the store; the app points it at the --db folder.
+USER_PRICES = os.path.join(store.data_dir(), "prices.json")
+
+
+def load_prices(path=os.path.join(HERE, "prices.json"), user=None):
+    """Prices per model: the packaged file's, with the user prices file's (user, default USER_PRICES) over them. A missing,
+    unreadable or malformed user file adds nothing (prices_file says why)."""
     with open(path) as fh:
-        return json.load(fh)["models"]
+        return json.load(fh)["models"] | user_prices(user)[0]
+
+
+def user_prices(path=None):
+    """(models, error) from the user prices file: ({}, None) when there is none; ({}, a message) when it cannot be read or
+    an entry lacks a price, so a bad edit is reported and ignored instead of breaking every page."""
+    try:
+        with open(path or USER_PRICES) as fh:
+            data = json.load(fh)
+    except FileNotFoundError:
+        return {}, None
+    except (OSError, ValueError) as e:  # JSONDecodeError is a ValueError
+        return {}, str(e)
+    models = data.get("models") if isinstance(data, dict) else None
+    if not isinstance(models, dict):
+        return {}, 'no "models" object'
+    number = lambda v: isinstance(v, (int, float)) and not isinstance(v, bool)
+    for model, p in models.items():
+        tiers = [p] + ([p.get("long")] if isinstance(p, dict) and p.get("long_above") is not None else [])
+        bad = [k for t in tiers for k in PRICE_KINDS if not isinstance(t, dict) or not number(t.get(k))]
+        bad += [k for k in ("context", "long_above") if isinstance(p, dict) and p.get(k) is not None and not number(p[k])]
+        if bad:
+            return {}, f"{model}: {', '.join(dict.fromkeys(bad))} must be a number"
+    return {m: dict(p, context=p.get("context")) for m, p in models.items()}, None
+
+
+def prices_file():
+    """Where the user prices file is and why it was ignored (error is None when it was read, or there is none)."""
+    return dict(path=USER_PRICES, error=user_prices()[1])
 
 
 def rows(cur, sql, params=()):
@@ -29,68 +70,100 @@ def iso(ts):
     return ts.strftime("%Y-%m-%dT%H:%M:%S.%f")[:23] + "Z" if ts else None
 
 
+# Stored timestamps are naive UTC. A day is a calendar day in the connection's TimeZone (DuckDB's ICU zone, the system's
+# unless set), DST included, so the server buckets and bounds days on the user's own clock. Every day goes through these.
+def day(ts):
+    """SQL: the local day ('YYYY-MM-DD') of the stored timestamp ts."""
+    return f"strftime(CAST(timezone('UTC', {ts}) AS DATE), '%Y-%m-%d')"
+
+
+def day_start(d):
+    """SQL: the stored (naive UTC) timestamp at which the local day d, a DATE expression, starts."""
+    return f"timezone('UTC', CAST({d} AS TIMESTAMPTZ))"
+
+
+def local_today(cur):
+    """The local date in the connection's zone, the end of every range."""
+    return cur.execute("SELECT current_date").fetchone()[0]
+
+
+def latency(t=""):
+    """SQL: a tool call's duration in ms, from the columns of table alias t (e.g. "t."). NULL when the source gave no
+    usable timing: the call does not start before it ends (Codex records some calls with no duration)."""
+    return f"CASE WHEN {t}end_ts > {t}start_ts THEN date_diff('millisecond', {t}start_ts, {t}end_ts) END"
+
+
+def start_ts(cur, d):
+    """The stored (naive UTC) timestamp at which the local date d starts; None for None."""
+    return cur.execute(f"SELECT {day_start('CAST(? AS DATE)')}", [d]).fetchone()[0] if d else None
+
+
 # ---------- errors dashboard ----------
 
 def errors_payload(cur, last_ingest=None, today=None):
     """The JSON shape the Errors page reads (the same shape the old static page read). today anchors its ranges, as in usage()."""
-    errs = rows(cur, """
-        SELECT t.tool_use_id AS id, t.end_ts AS ts, coalesce(s.project, '(unknown)') AS p, t.session_id AS s,
+    errs = rows(cur, f"""
+        SELECT t.tool_use_id AS id, t.end_ts AS ts, {day('t.end_ts')} AS d, coalesce(s.project, '(unknown)') AS p, t.session_id AS s,
                t.tool AS t, t.category AS c, left(t.input_summary, 400) AS i, t.error AS e, coalesce(t.followup, '') AS r,
                CASE WHEN t.subagent THEN 1 ELSE 0 END AS sub, coalesce(s.source, 'claude') AS src
         FROM tool_calls t LEFT JOIN sessions s USING (session_id)
         WHERE t.is_error AND t.end_ts IS NOT NULL ORDER BY t.end_ts""")
     for e in errs:
-        e["d"] = e["ts"].strftime("%Y-%m-%d")
         e["ts"] = iso(e["ts"])
         e["e"] = e["e"] or ""
     inc, of = incidents(cur)
     for e in errs:
         e["n"] = of.get(e["id"])
-    calls = cur.execute("""
-        SELECT strftime(t.start_ts, '%Y-%m-%d') AS d, coalesce(s.project, '(unknown)') AS p, count(*),
+    calls = cur.execute(f"""
+        SELECT {day('t.start_ts')} AS d, coalesce(s.project, '(unknown)') AS p, count(*),
                count(*) FILTER (WHERE t.subagent), coalesce(s.source, 'claude') AS src
         FROM tool_calls t LEFT JOIN sessions s USING (session_id)
         WHERE t.start_ts IS NOT NULL GROUP BY 1, 2, 5 ORDER BY 1, 2, 5""").fetchall()
-    return dict(generated=last_ingest, today=(today or date.today()).isoformat(), project_order=project_order(cur), categories=[{k: r[k] for k in ("id", "label", "why", "fix", "snippet")} for r in RULES],
+    return dict(generated=last_ingest, today=(today or local_today(cur)).isoformat(), project_order=project_order(cur), categories=[{k: r[k] for k in ("id", "label", "why", "fix", "snippet")} for r in RULES],
                 errors=errs, calls=[list(c) for c in calls], error_days=error_days(cur), incidents=inc,
-                incident_gap_minutes=INCIDENT_GAP_MINUTES)
+                incident_gap_minutes=INCIDENT_GAP_MINUTES, incident_max_ok=INCIDENT_MAX_OK)
 
 
 INCIDENT_GAP_MINUTES = 10  # a failure more than this long after the previous one of the same tool starts a new incident
+INCIDENT_MAX_OK = 2  # more successful calls of the tool than this between two failures start a new incident
 
 
 def incidents(cur):
-    """Failed calls grouped into incidents: failures of one tool in one session (main thread and subagents apart) with the
-    same category, each starting at most INCIDENT_GAP_MINUTES after the previous one ended. Calls of that tool that succeed in
-    between don't end an incident (ok counts them), so an intermittent problem reads as one episode.
-    Returns (incidents, {tool_use_id: incident index}). Each incident: s session, t tool, c category, p project, sub,
-    first/last (ISO start of the first failure, end of the last), ok, outcome of the tool's next call in the session after the
-    last failure ("recovered": it succeeded; "failed_again": it failed with another error, or later than the gap; "gave_up":
-    the session never called that tool again), and for a recovery rid, ri (its input, cut to 400) and rts (its start)."""
+    """Failed calls grouped into incidents, a retry loop on one thing: failures of one tool by one agent (the main thread or
+    one subagent, told apart by the transcript file that holds its results) with the same category, each starting at most
+    INCIDENT_GAP_MINUTES after the previous one ended and with at most INCIDENT_MAX_OK successful calls of that tool in
+    between (ok counts them over the incident). More successes than that mean the agent moved on: a later failure is a new
+    attempt. Returns (incidents, {tool_use_id: incident index}). Each incident: s session, t tool, c category, p project, sub,
+    first/last (ISO start of the first failure, end of the last), ok, outcome of the agent's next call of that tool that
+    starts after the last failure ended ("recovered": it succeeded; "failed_again": it failed with another error, or later
+    than the gap or the successes allow; "gave_up": the agent never called that tool again), and for a recovery rid, ri
+    (its input, cut to 400) and rts (its start). Calls without a result yet take no part."""
     got = cur.execute(f"""
         WITH seq AS (
-          SELECT tool_use_id AS id, session_id, tool, subagent, category, is_error, end_ts, coalesce(start_ts, end_ts) AS ts,
-                 sum(CASE WHEN is_error THEN 0 ELSE 1 END) OVER w AS oks,
-                 lead(tool_use_id) OVER w AS n_id, lead(is_error) OVER w AS n_err
-          FROM tool_calls WHERE coalesce(start_ts, end_ts) IS NOT NULL
-          WINDOW w AS (PARTITION BY session_id, subagent, tool ORDER BY coalesce(start_ts, end_ts), tool_use_id)),
+          SELECT tool_use_id AS id, session_id, subagent, coalesce(result_file, '') AS agent, tool, category, is_error, end_ts,
+                 coalesce(start_ts, end_ts) AS ts, sum(CASE WHEN is_error THEN 0 ELSE 1 END) OVER w AS oks
+          FROM tool_calls WHERE end_ts IS NOT NULL
+          WINDOW w AS (PARTITION BY session_id, subagent, coalesce(result_file, ''), tool ORDER BY coalesce(start_ts, end_ts), tool_use_id)),
         fails AS (
-          SELECT *, CASE WHEN ts - lag(end_ts) OVER f <= INTERVAL {INCIDENT_GAP_MINUTES} MINUTE THEN 0 ELSE 1 END AS brk
-          FROM seq WHERE is_error AND end_ts IS NOT NULL
-          WINDOW f AS (PARTITION BY session_id, subagent, tool, category ORDER BY ts, id)),
+          SELECT *, CASE WHEN ts - lag(end_ts) OVER f <= INTERVAL {INCIDENT_GAP_MINUTES} MINUTE
+                          AND oks - lag(oks) OVER f <= {INCIDENT_MAX_OK} THEN 0 ELSE 1 END AS brk
+          FROM seq WHERE is_error
+          WINDOW f AS (PARTITION BY session_id, subagent, agent, tool, category ORDER BY ts, id)),
         grp AS (
-          SELECT *, sum(brk) OVER (PARTITION BY session_id, subagent, tool, category ORDER BY ts, id) AS g FROM fails),
+          SELECT *, sum(brk) OVER (PARTITION BY session_id, subagent, agent, tool, category ORDER BY ts, id) AS g FROM fails),
         inc AS (
-          SELECT session_id, subagent, tool, category AS c, g, list(id ORDER BY ts, id) AS ids, min(ts) AS first,
-                 max(end_ts) AS last, max(oks) - min(oks) AS ok, list(n_id ORDER BY ts, id)[-1] AS n_id,
-                 list(n_err ORDER BY ts, id)[-1] AS n_err
-          FROM grp GROUP BY 1, 2, 3, 4, 5)
+          SELECT session_id, subagent, agent, tool, category AS c, g, list(id ORDER BY ts, id) AS ids, min(ts) AS first,
+                 max(end_ts) AS last, max(oks) - min(oks) AS ok
+          FROM grp GROUP BY 1, 2, 3, 4, 5, 6),
+        nxt AS (
+          SELECT i.*, n.id AS n_id, n.is_error AS n_err FROM inc i ASOF LEFT JOIN seq n
+            ON n.session_id = i.session_id AND n.subagent = i.subagent AND n.agent = i.agent AND n.tool = i.tool AND n.ts > i.last)
         SELECT i.session_id, i.tool, i.c, coalesce(s.project, '(unknown)'), i.subagent, i.first, i.last, i.ok, i.ids,
                CASE WHEN i.n_id IS NULL THEN 'gave_up' WHEN NOT i.n_err THEN 'recovered' ELSE 'failed_again' END,
                CASE WHEN NOT i.n_err THEN i.n_id END, CASE WHEN NOT i.n_err THEN left(r.input_summary, 400) END,
                CASE WHEN NOT i.n_err THEN coalesce(r.start_ts, r.end_ts) END
-        FROM inc i LEFT JOIN sessions s USING (session_id) LEFT JOIN tool_calls r ON r.tool_use_id = i.n_id
-        ORDER BY i.first, i.session_id, i.tool, i.c""").fetchall()
+        FROM nxt i LEFT JOIN sessions s USING (session_id) LEFT JOIN tool_calls r ON r.tool_use_id = i.n_id
+        ORDER BY i.first, i.session_id, i.tool, i.c, i.ids[1]""").fetchall()
     out, of = [], {}
     for sid, tool, c, p, sub, first, last, ok, ids, outcome, rid, ri, rts in got:
         for x in ids:
@@ -103,8 +176,8 @@ def incidents(cur):
 def error_days(cur):
     """Failed calls per [day, project, category, errors, subagent errors, source], dated like an error's d (its end time),
     so the stacked chart sums counts instead of walking every error."""
-    return [list(r) for r in cur.execute("""
-        SELECT strftime(t.end_ts, '%Y-%m-%d') AS d, coalesce(s.project, '(unknown)') AS p, t.category AS c, count(*),
+    return [list(r) for r in cur.execute(f"""
+        SELECT {day('t.end_ts')} AS d, coalesce(s.project, '(unknown)') AS p, t.category AS c, count(*),
                count(*) FILTER (WHERE t.subagent), coalesce(s.source, 'claude') AS src
         FROM tool_calls t LEFT JOIN sessions s USING (session_id)
         WHERE t.is_error AND t.end_ts IS NOT NULL GROUP BY 1, 2, 3, 6 ORDER BY 1, 2, 3, 6""").fetchall()]
@@ -158,12 +231,13 @@ def requests_cte(pcte, where):
 
 def scope(project, automated, source=""):
     """The session part of every usage filter, over sessions s: the project and the source match ('' is all of them), and
-    sessions of AUTOMATED_PROJECTS are left out unless automated or the filter names that project. Returns (sql, params).
-    Raises ValueError for a source not in SOURCES."""
+    automated sessions are left out unless automated: those of AUTOMATED_PROJECTS (unless the filter names that project)
+    and HELPER_SESSIONS. Returns (sql, params). Raises ValueError for a source not in SOURCES."""
     if source and source not in SOURCES:
         raise ValueError(f"unknown source: {source}")
     marks = ",".join("?" * len(AUTOMATED_PROJECTS))
-    return (f"(? = '' OR s.project = ?) AND (? OR s.project = ? OR coalesce(s.project, '') NOT IN ({marks})) AND (? = '' OR s.source = ?)",
+    return (f"(? = '' OR s.project = ?) AND (? OR (s.project = ? OR coalesce(s.project, '') NOT IN ({marks})) "
+            f"AND s.session_id NOT IN ({HELPER_SESSIONS})) AND (? = '' OR s.source = ?)",
             [project, project, bool(automated), project, *AUTOMATED_PROJECTS, source, source])
 
 
@@ -174,27 +248,26 @@ def view(project, range_days, prices, today, automated=False, source=""):
     start = today - timedelta(days=range_days - 1) if range_days else None
     pcte, pparams = price_cte(prices)
     sql, sp = scope(project, automated, source)
-    sel = sql + " AND (CAST(? AS DATE) IS NULL OR {ts} >= CAST(? AS DATE))"
     fp = sp + [start, start]
-    W = lambda ts: sel.format(ts=ts)
+    W = lambda ts: f"{sql} AND (CAST(? AS DATE) IS NULL OR {ts} >= {day_start('CAST(? AS DATE)')})"
     return start, pcte, pparams, fp, W, requests_cte(pcte, W("r.ts")), pparams + fp
 
 
 def usage(cur, project="", range_days=0, session="", prices=None, today=None, automated=False, source=""):
     prices = load_prices() if prices is None else prices
-    today = today or date.today()
+    today = today or local_today(cur)
     start, pcte, pparams, fp, W, rq, rp = view(project, range_days, prices, today, automated, source)
     sums = ", ".join(f"coalesce(sum({k}), 0) AS {k}" for k in TOKEN_KINDS)
 
-    daily = rows(cur, f"{rq} SELECT strftime(ts, '%Y-%m-%d') AS day, {sums}, sum(cost) AS cost, "
+    daily = rows(cur, f"{rq} SELECT {day('ts')} AS day, {sums}, sum(cost) AS cost, "
                       f"count(*) FILTER (WHERE cost IS NULL) AS unpriced FROM rq GROUP BY 1 ORDER BY 1", rp)
     # The same days split by project, for the stacked cost chart.
-    daily_projects = rows(cur, f"{rq} SELECT strftime(ts, '%Y-%m-%d') AS day, project, sum(cost) AS cost, sum(tokens) AS tokens "
+    daily_projects = rows(cur, f"{rq} SELECT {day('ts')} AS day, project, sum(cost) AS cost, sum(tokens) AS tokens "
                                f"FROM rq GROUP BY 1, 2 ORDER BY 1, 2", rp)
     tot = rows(cur, f"""{rq} SELECT {sums}, coalesce(sum(tokens), 0) AS tokens, sum(cost) AS cost,
         count(*) AS requests, count(*) FILTER (WHERE NOT subagent) AS main_requests,
         coalesce(sum(tokens) FILTER (WHERE subagent), 0) AS sub_tokens, sum(cost) FILTER (WHERE subagent) AS sub_cost,
-        coalesce(sum(thinking_ms), 0) AS thinking_ms, count(DISTINCT CAST(ts AS DATE)) AS active_days FROM rq""", rp)[0]
+        coalesce(sum(thinking_ms), 0) AS thinking_ms FROM rq""", rp)[0]
     unpriced = rows(cur, f"{rq} SELECT model, count(*) AS requests, sum(tokens) AS tokens FROM rq WHERE cost IS NULL GROUP BY 1 ORDER BY 3 DESC, 1", rp)
     models = rows(cur, f"""{rq} SELECT model, coalesce(effort, '(none)') AS effort, count(*) AS requests, sum(tokens) AS tokens,
         sum(cost) AS cost FROM rq GROUP BY 1, 2 ORDER BY requests DESC, tokens DESC, model, effort""", rp)
@@ -207,8 +280,7 @@ def usage(cur, project="", range_days=0, session="", prices=None, today=None, au
         count(*) FILTER (WHERE is_test AND NOT test_passed) AS tests_failed,
         count(*) FILTER (WHERE NOT t.subagent) AS main_calls FROM {tc}""", fp)[0]
     tools = rows(cur, f"""SELECT tool, count(*) AS calls, count(*) FILTER (WHERE is_error) AS errors,
-        quantile_cont(date_diff('millisecond', start_ts, end_ts), 0.5) AS p50_ms,
-        quantile_cont(date_diff('millisecond', start_ts, end_ts), 0.95) AS p95_ms
+        quantile_cont({latency()}, 0.5) AS p50_ms, quantile_cont({latency()}, 0.95) AS p95_ms
         FROM {tc} GROUP BY 1 ORDER BY calls DESC""", fp)
     mcp = rows(cur, f"SELECT mcp_server AS name, count(*) AS calls, count(*) FILTER (WHERE is_error) AS errors "
                     f"FROM {tc} AND mcp_server IS NOT NULL GROUP BY 1 ORDER BY calls DESC", fp)
@@ -217,8 +289,9 @@ def usage(cur, project="", range_days=0, session="", prices=None, today=None, au
     hooks = rows(cur, f"""SELECT coalesce(h.command, h.hook) AS name, h.hook AS event, count(*) AS runs,
         count(*) FILTER (WHERE h.is_error) AS errors, avg(h.duration_ms) AS avg_ms
         FROM hooks h JOIN sessions s USING (session_id) WHERE {W('h.ts')} GROUP BY 1, 2 ORDER BY runs DESC""", fp)
-    pr = rows(cur, f"""SELECT count(*) AS prompts, count(*) FILTER (WHERE interrupted) AS interrupted
-        FROM prompts p JOIN sessions s USING (session_id) WHERE {W('p.ts')}""", fp)[0]
+    # An active day is a day with a prompt: a session that only works on its own (a resumed one, a background task) adds none.
+    pr = rows(cur, f"""SELECT count(*) AS prompts, count(*) FILTER (WHERE interrupted) AS interrupted,
+        count(DISTINCT {day('p.ts')}) AS active_days FROM prompts p JOIN sessions s USING (session_id) WHERE {W('p.ts')}""", fp)[0]
     loops = error_loops(cur, W, fp)
     work = daily_work(cur, rq, rp, W, fp)
 
@@ -254,6 +327,7 @@ def usage(cur, project="", range_days=0, session="", prices=None, today=None, au
                near_limit=sorted((x for x in sess if x["near_limit"]), key=lambda x: -x["context_share"]),
                previous=previous_period(cur, project, range_days, prices, today, automated, source))
     out["changes"] = project_changes(by_project, out["previous"])
+    out["prices_file"] = prices_file()
     if session:
         out["session"] = session_detail(cur, session, requests_cte(pcte, "r.session_id = ?"), pparams + [session], prices)
     return out
@@ -276,11 +350,14 @@ def previous_period(cur, project, range_days, prices, today, automated=False, so
     start, end = dates
     pcte, pparams = price_cte(prices)
     sql, sp = scope(project, automated, source)
-    rq = requests_cte(pcte, f"{sql} AND r.ts >= CAST(? AS DATE) AND r.ts < CAST(? AS DATE) + INTERVAL 1 DAY")
+    within = lambda ts: f"{sql} AND {ts} >= {day_start('CAST(? AS DATE)')} AND {ts} < {day_start('CAST(? AS DATE) + 1')}"
+    rq = requests_cte(pcte, within("r.ts"))
     p = pparams + sp + [start, end]
     tot = rows(cur, f"""{rq} SELECT coalesce(sum(tokens), 0) AS tokens, sum(cost) AS cost, count(*) AS requests,
-        count(DISTINCT session_id) AS sessions, count(DISTINCT CAST(ts AS DATE)) AS active_days FROM rq""", p)[0]
-    daily = rows(cur, f"{rq} SELECT strftime(ts, '%Y-%m-%d') AS day, sum(cost) AS cost, sum(tokens) AS tokens FROM rq GROUP BY 1 ORDER BY 1", p)
+        count(DISTINCT session_id) AS sessions FROM rq""", p)[0]
+    tot["active_days"] = cur.execute(f"""SELECT count(DISTINCT {day('p.ts')}) FROM prompts p JOIN sessions s USING (session_id)
+        WHERE {within('p.ts')}""", sp + [start, end]).fetchone()[0]
+    daily = rows(cur, f"{rq} SELECT {day('ts')} AS day, sum(cost) AS cost, sum(tokens) AS tokens FROM rq GROUP BY 1 ORDER BY 1", p)
     by_project = rows(cur, f"{rq} SELECT project, sum(cost) AS cost, sum(tokens) AS tokens, count(*) AS requests FROM rq GROUP BY 1", p)
     return dict(tot, start=start.isoformat(), end=end.isoformat(), daily=daily, by_project=by_project)
 
@@ -297,7 +374,7 @@ def tool_detail(cur, kind, name, project="", range_days=0, today=None, automated
     (as on the Errors page) that start in the view. Raises ValueError for an unknown kind or source."""
     if kind not in SUBJECTS:
         raise ValueError(f"unknown kind: {kind}")
-    today = today or date.today()
+    today = today or local_today(cur)
     start, _, _, fp, W, _, _ = view(project, range_days, {}, today, automated, source)
     ts = "coalesce(t.start_ts, t.end_ts)"
     tc = f"tool_calls t JOIN sessions s USING (session_id) WHERE {W(ts)} AND {SUBJECTS[kind]} = ?"
@@ -306,17 +383,16 @@ def tool_detail(cur, kind, name, project="", range_days=0, today=None, automated
     per = lambda a, b: a / b if b else None
 
     tot = rows(cur, f"""SELECT {rate}, count(*) FILTER (WHERE t.subagent) AS subagent_calls,
-        quantile_cont(date_diff('millisecond', t.start_ts, t.end_ts), 0.5) AS p50_ms,
-        quantile_cont(date_diff('millisecond', t.start_ts, t.end_ts), 0.95) AS p95_ms FROM {tc}""", p)[0]
+        quantile_cont({latency('t.')}, 0.5) AS p50_ms, quantile_cont({latency('t.')}, 0.95) AS p95_ms FROM {tc}""", p)[0]
     tot.update(failure_rate=per(tot["errors"], tot["calls"]), subagent_share=per(tot["subagent_calls"], tot["calls"]))
     previous = None
     if (dates := previous_dates(range_days, today)) is not None:
         sql, sp = scope(project, automated, source)
         previous = rows(cur, f"""SELECT {rate} FROM tool_calls t JOIN sessions s USING (session_id) WHERE {sql}
-            AND {ts} >= CAST(? AS DATE) AND {ts} < CAST(? AS DATE) + INTERVAL 1 DAY AND {SUBJECTS[kind]} = ?""", sp + [*dates, name])[0]
+            AND {ts} >= {day_start('CAST(? AS DATE)')} AND {ts} < {day_start('CAST(? AS DATE) + 1')} AND {SUBJECTS[kind]} = ?""", sp + [*dates, name])[0]
         previous.update(start=dates[0].isoformat(), end=dates[1].isoformat(), failure_rate=per(previous["errors"], previous["calls"]))
     by = lambda col, alias: rate_rows(rows(cur, f"SELECT {col} AS {alias}, {rate} FROM {tc} GROUP BY 1 ORDER BY calls DESC, 1", p))
-    daily = rows(cur, f"""SELECT strftime({ts}, '%Y-%m-%d') AS day, count(*) FILTER (WHERE NOT t.is_error) AS ok,
+    daily = rows(cur, f"""SELECT {day(ts)} AS day, count(*) FILTER (WHERE NOT t.is_error) AS ok,
         count(*) FILTER (WHERE t.is_error) AS failed FROM {tc} AND {ts} IS NOT NULL GROUP BY 1 ORDER BY 1""", p)
 
     # One pass over the subject's calls: input patterns in Python (categorize.input_pattern), failed ids for incidents and loops.
@@ -340,7 +416,7 @@ def tool_detail(cur, kind, name, project="", range_days=0, today=None, automated
                        errors=n)
                   for c, n in cur.execute(f"SELECT t.category, count(*) FROM {tc} AND t.is_error GROUP BY 1 ORDER BY 2 DESC, 1", p).fetchall()]
     inc, of = incidents(cur)
-    first = start.isoformat() if start else ""
+    first = iso(start_ts(cur, start)) or ""
     recovery = dict(incidents=0, recovered=0, failed_again=0, gave_up=0)
     for i in {of[x] for x in failed if x in of}:
         if (inc[i]["first"] or "") >= first:
@@ -356,13 +432,13 @@ def tool_detail(cur, kind, name, project="", range_days=0, today=None, automated
         shell["pass_rate"] = per(shell["tests_passed"], shell["test_runs"])
     recent = rows(cur, f"""SELECT t.tool_use_id AS id, {ts} AS ts, t.session_id, s.project, coalesce(s.source, 'claude') AS source,
         t.tool, left(t.input_summary, 400) AS input, t.is_error, t.category, t.subagent,
-        date_diff('millisecond', t.start_ts, t.end_ts) AS duration_ms FROM {tc} ORDER BY {ts} DESC NULLS LAST, t.tool_use_id DESC
+        {latency('t.')} AS duration_ms FROM {tc} ORDER BY {ts} DESC NULLS LAST, t.tool_use_id DESC
         LIMIT {RECENT_CALLS}""", p)
     for r in with_titles(cur, recent):
         r["ts"], r["input"] = iso(r["ts"]), r["input"] or ""
     tools = None
     if kind == "mcp":
-        tools = rate_rows(rows(cur, f"""SELECT t.tool, {rate}, quantile_cont(date_diff('millisecond', t.start_ts, t.end_ts), 0.5) AS p50_ms
+        tools = rate_rows(rows(cur, f"""SELECT t.tool, {rate}, quantile_cont({latency('t.')}, 0.5) AS p50_ms
             FROM {tc} GROUP BY 1 ORDER BY calls DESC, 1""", p))
     return dict(kind=kind, name=name, project=project, range=range_days, automated=bool(automated), source=source,
                 start=start.isoformat() if start else None, end=today.isoformat(), totals=tot, previous=previous, daily=daily,
@@ -376,7 +452,7 @@ def palette(cur, project="", range_days=0, today=None, automated=False, source="
     with requests in range), each leaving its own facet out, so another project's count shows while one is chosen. tools, mcp
     and skills: calls, failures and failure rate with usage()'s filter, called ones only. categories: failed calls per
     category as the Errors page counts them (by end time, automated sessions always in). Raises ValueError for an unknown source."""
-    today = today or date.today()
+    today = today or local_today(cur)
     _, _, _, fp, W, _, _ = view(project, range_days, {}, today, automated, source)
 
     def sessions_by(col, p, src):
@@ -401,31 +477,43 @@ def palette(cur, project="", range_days=0, today=None, automated=False, source="
 def project_changes(by_project, previous):
     """Each project's estimated-cost change against the previous period, biggest move first, for the "what changed" chart.
     new: the project had no requests at all in the previous period. Projects active only before the view count too (cost 0 now).
-    None for the all-time view."""
+    A period whose requests were all on unpriced models has an unknown (None) cost, and then the delta is None too; those
+    projects sort by the cost that is known. None for the all-time view."""
     if previous is None:
         return None
     now = {r["project"]: r for r in by_project}
     before = {r["project"]: r for r in previous["by_project"]}
     out = []
     for name in now.keys() | before.keys():
-        c, b = (now.get(name) or {}).get("cost") or 0, (before.get(name) or {}).get("cost") or 0
-        out.append(dict(project=name, cost=c, prev_cost=b, delta=c - b, new=name not in before))
-    return sorted(out, key=lambda r: (-abs(r["delta"]), r["project"] or ""))
+        c, b = (now[name]["cost"] if name in now else 0), (before[name]["cost"] if name in before else 0)
+        out.append(dict(project=name, cost=c, prev_cost=b, delta=None if c is None or b is None else c - b, new=name not in before))
+    return sorted(out, key=lambda r: (-abs(r["delta"] if r["delta"] is not None else r["cost"] or r["prev_cost"] or 0), r["project"] or ""))
 
 
 def session_list(cur, project="", range_days=0, q="", near=False, offset=0, limit=100, prices=None, today=None, day="", automated=False,
                  source=""):
-    """One page of the view's sessions, newest first (or nearest the context limit first), matching q on id, project or branch.
-    day (YYYY-MM-DD): only sessions with requests on that day."""
+    """One page of the view's sessions, newest first (or nearest the context limit first), matching q on title, id, project
+    or branch. day (YYYY-MM-DD): the sessions with requests on that day, every figure limited to that day, costliest first and
+    all of them, so their costs add up to the day's."""
     prices = load_prices() if prices is None else prices
-    _, _, _, fp, W, rq, rp = view(project, range_days, prices, today or date.today(), automated, source)
+    _, pcte, pparams, fp, W, rq, rp = view(project, range_days, prices, today or local_today(cur), automated, source)
+    if day:
+        dp, by_day = [date.fromisoformat(day)] * 2, W
+        W = lambda ts: f"{by_day(ts)} AND {ts} >= {day_start('CAST(? AS DATE)')} AND {ts} < {day_start('CAST(? AS DATE) + 1')}"
+        fp = fp + dp
+        rq, rp = requests_cte(pcte, W("r.ts")), pparams + fp
     sess = sessions(cur, rq, rp, W, fp, prices)
     q = q.strip().lower()
-    on_day = {r[0] for r in cur.execute("SELECT DISTINCT session_id FROM requests WHERE CAST(ts AS DATE) = ?",
-                                        [date.fromisoformat(day)]).fetchall()} if day else None
-    hits = [x for x in sess if (not near or x["near_limit"]) and (on_day is None or x["session_id"] in on_day)
-            and (not q or q in f"{x['session_id']} {x['project']} {x['git_branch'] or ''}".lower())]
-    hits.sort(key=(lambda x: -x["context_share"]) if near else (lambda x: x["first_ts"] or ""), reverse=not near)
+    hits = [x for x in sess if not near or x["near_limit"]]
+    named = titles(cur, [x["session_id"] for x in hits]) if q else {}
+    hits = [x for x in hits if not q or q in f"{(named.get(x['session_id']) or ('',))[0]} {x['session_id']} {x['project']} {x['git_branch'] or ''}".lower()]
+    if near:
+        hits.sort(key=lambda x: -x["context_share"])
+    elif day:
+        hits.sort(key=lambda x: -(x["cost"] or 0))
+        offset, limit = 0, len(hits)
+    else:
+        hits.sort(key=lambda x: x["first_ts"] or "", reverse=True)
     return dict(total=len(hits), offset=offset, sessions=with_titles(cur, hits[offset:offset + limit]))
 
 
@@ -461,10 +549,10 @@ def daily_work(cur, rq, rp, W, fp):
     """Work per day in the view: sessions with a request that day, prompts, commits (as in totals) and failed calls.
     A session active on two days counts on both. Days with none of these are left out."""
     days = {}
-    for got in (rows(cur, f"{rq} SELECT strftime(ts, '%Y-%m-%d') AS day, count(DISTINCT session_id) AS sessions FROM rq GROUP BY 1", rp),
-                rows(cur, f"""SELECT strftime(p.ts, '%Y-%m-%d') AS day, count(*) AS prompts
+    for got in (rows(cur, f"{rq} SELECT {day('ts')} AS day, count(DISTINCT session_id) AS sessions FROM rq GROUP BY 1", rp),
+                rows(cur, f"""SELECT {day('p.ts')} AS day, count(*) AS prompts
                     FROM prompts p JOIN sessions s USING (session_id) WHERE {W('p.ts')} GROUP BY 1""", fp),
-                rows(cur, f"""SELECT strftime(coalesce(t.start_ts, t.end_ts), '%Y-%m-%d') AS day,
+                rows(cur, f"""SELECT {day('coalesce(t.start_ts, t.end_ts)')} AS day,
                     count(*) FILTER (WHERE is_commit AND test_passed) AS commits, count(*) FILTER (WHERE is_error) AS failed_calls
                     FROM tool_calls t JOIN sessions s USING (session_id) WHERE {W('coalesce(t.start_ts, t.end_ts)')} GROUP BY 1""", fp)):
         for r in got:
@@ -486,8 +574,23 @@ def error_loops(cur, W, fp):
         FROM c WHERE is_error GROUP BY session_id, project, tool, grp HAVING count(*) >= 3 ORDER BY start_ts DESC""", fp)
 
 
+IDLE_GAP_S = 20 * 60  # a pause longer than this between a session's requests and tool calls is idle, as on its timeline
+
+
+def active_cte(ids):
+    """CTEs ending in act(session_id, active_s): the whole active time of each session that ids (SQL) selects, the time
+    between its main-thread requests and tool calls less every pause over IDLE_GAP_S."""
+    return f"""ev AS (SELECT session_id, ts AS t FROM requests WHERE NOT subagent AND ts IS NOT NULL AND session_id IN ({ids})
+               UNION ALL SELECT session_id, coalesce(start_ts, end_ts) FROM tool_calls
+               WHERE coalesce(start_ts, end_ts) IS NOT NULL AND session_id IN ({ids})),
+        gap AS (SELECT session_id, date_diff('millisecond', lag(t) OVER (PARTITION BY session_id ORDER BY t), t) AS ms FROM ev),
+        act AS (SELECT session_id, CAST(round(coalesce(sum(ms) FILTER (WHERE ms <= {IDLE_GAP_S * 1000}), 0) / 1000) AS BIGINT) AS active_s
+                FROM gap GROUP BY 1)"""
+
+
 def sessions(cur, rq, rp, W, fp, prices):
-    """Sessions with requests in the view; every count is limited to the view's range."""
+    """Sessions with requests in the view; every count is limited to the view's range. duration_s is the whole session's
+    active time (active_cte)."""
     rs = rows(cur, f"""{rq}, agg AS (
           SELECT session_id, count(*) AS requests, sum(tokens) AS tokens, sum(cost) AS cost,
                  count(*) FILTER (WHERE cost IS NULL) AS unpriced, coalesce(sum(thinking_ms), 0) AS thinking_ms
@@ -498,13 +601,15 @@ def sessions(cur, rq, rp, W, fp, prices):
                  count(*) FILTER (WHERE is_test AND NOT test_passed) AS tests_failed
                FROM tool_calls t JOIN sessions s USING (session_id) WHERE {W('coalesce(t.start_ts, t.end_ts)')} GROUP BY 1),
         pr AS (SELECT session_id, count(*) AS prompts, count(*) FILTER (WHERE interrupted) AS interrupted
-               FROM prompts p JOIN sessions s USING (session_id) WHERE {W('p.ts')} GROUP BY 1)
-        SELECT s.session_id, s.project, s.git_branch, s.first_ts, s.last_ts, date_diff('second', s.first_ts, s.last_ts) AS duration_s,
+               FROM prompts p JOIN sessions s USING (session_id) WHERE {W('p.ts')} GROUP BY 1),
+        {active_cte("SELECT session_id FROM agg")}
+        SELECT s.session_id, s.project, s.git_branch, s.first_ts, s.last_ts, act.active_s AS duration_s,
                s.compactions, s.peak_context, s.peak_model, agg.requests, agg.tokens, agg.cost, agg.unpriced, agg.thinking_ms,
                coalesce(tc.tool_calls, 0) AS tool_calls, coalesce(tc.errors, 0) AS errors, coalesce(tc.commits, 0) AS commits,
                coalesce(tc.tests_passed, 0) AS tests_passed, coalesce(tc.tests_failed, 0) AS tests_failed,
                coalesce(pr.prompts, 0) AS prompts, coalesce(pr.interrupted, 0) AS interrupted
-        FROM agg JOIN sessions s USING (session_id) LEFT JOIN tc USING (session_id) LEFT JOIN pr USING (session_id)""", rp + fp + fp)
+        FROM agg JOIN sessions s USING (session_id) LEFT JOIN tc USING (session_id) LEFT JOIN pr USING (session_id)
+        LEFT JOIN act USING (session_id)""", rp + fp + fp)
     for r in rs:
         limit = (prices.get(r["peak_model"]) or {}).get("context")
         r["context_limit"] = limit
@@ -561,6 +666,7 @@ def session_detail(cur, sid, allq, p, prices):
     info = info[0]
     info["first_ts"], info["last_ts"] = iso(info["first_ts"]), iso(info["last_ts"])
     info["context_limit"] = (prices.get(info["peak_model"]) or {}).get("context")
+    info["active_s"] = (cur.execute(f"WITH {active_cte('?')} SELECT active_s FROM act", [sid, sid]).fetchone() or (None,))[0]
     sums = ", ".join(f"sum({k}) AS {k}" for k in TOKEN_KINDS)
     return dict(
         info=info,
@@ -569,8 +675,8 @@ def session_detail(cur, sid, allq, p, prices):
         timeline=rows(cur, f"{allq} SELECT strftime(date_trunc('minute', ts), '%Y-%m-%dT%H:%M:00Z') AS minute, "
                            f"sum(tokens) AS tokens, sum(cost) AS cost, max(input + cache_read + cache_5m + cache_1h) AS context "
                            f"FROM rq GROUP BY 1 ORDER BY 1", p),
-        tools=rate_rows(rows(cur, """SELECT tool, count(*) AS calls, count(*) FILTER (WHERE is_error) AS errors,
-            quantile_cont(date_diff('millisecond', start_ts, end_ts), 0.5) AS p50_ms FROM tool_calls WHERE session_id = ?
+        tools=rate_rows(rows(cur, f"""SELECT tool, count(*) AS calls, count(*) FILTER (WHERE is_error) AS errors,
+            quantile_cont({latency()}, 0.5) AS p50_ms FROM tool_calls WHERE session_id = ?
             GROUP BY 1 ORDER BY calls DESC""", [sid])),
         commits=rows(cur, """SELECT tool_use_id, start_ts, left(input_summary, 200) AS command FROM tool_calls
             WHERE session_id = ? AND is_commit AND test_passed ORDER BY start_ts""", [sid]),

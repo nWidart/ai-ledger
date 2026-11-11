@@ -3,6 +3,37 @@
 All notable changes to AI Ledger are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+Run `ai-ledger rebuild` once after upgrading (with the app stopped): error types, test runs and Codex tool timing are stored when transcripts are read.
+
+### Added
+
+- A `prices.json` next to the store adds or overrides model prices. The Cost page names the file when a model has no price.
+- Activity shows thinking time and, per session, test runs passed of run.
+- Limits forecasts use the open window's own recent pace as well as your usual pace, and say when a limit is already reached.
+- New error types: "Command too complex for worktree check", "Network / DNS unreachable", "Browser automation failed" and "MCP tool error".
+
+### Changed
+
+- Days follow the local clock on every page, so totals and charts agree.
+- Session duration is active time: pauses over 20 minutes are left out.
+- Helper sessions (no prompt, or one prompt in a temporary directory) count as automated and are hidden by default. Active days count days with a prompt.
+- An error incident belongs to one agent and ends after more than two successful calls of that tool in between.
+- A test run is a test, build or lint command, not any command that mentions a tool name.
+- Pages refetch only when new data is stored, and update without replaying their animations.
+- Insights caps long lists at the top 12, lists sessions by title, and reports coverage as "N of M sessions analysed".
+- Live, with Full text off, sends tool inputs cut to 300 characters and an agent call's description instead of its prompt.
+
+### Fixed
+
+- Cost: a day's sessions show that day's cost and add up to the bar; an unknown previous cost is no longer shown as $0.
+- Errors: trends on a store with a thin start, the error-rate scale, and one "Change" comparison across the page.
+- Live: subagent lanes no longer vanish after an update, late-written events are no longer missed, and running subagents carry their name.
+- Limits: "Left unused" counts only full-length windows; "Points used" counts use inside the limit's own windows.
+- Activity: the error-loops count, the Sessions table after a refresh, table layout at narrow widths, and the chart start.
+- Project colours on a direct load of Insights, Live and Limits; the missing page icon; Back after closing a sheet.
+
 ## [0.1.3] - 2026-11-11
 
 ### Changed

@@ -1,6 +1,7 @@
 // GET JSON with an in-memory cache by URL, so switching between Activity and Cost, Back and Forward, and reopening a sheet
-// need no network. The cache clears when an ingest lands (the nav's status poll sees last_ingest change) or after Refresh;
-// mounted hooks then refetch and keep showing their data until the new answer arrives.
+// need no network. The cache clears when an ingest stores something (the nav's status poll sees last_change change) or
+// after Refresh; mounted hooks then refetch and keep showing their data until the new answer arrives. An answer identical
+// to the last one for its URL keeps the same object, so a page does not redraw or replay its landing for nothing.
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 
 export class ApiError extends Error {
@@ -8,7 +9,8 @@ export class ApiError extends Error {
 }
 
 const values = new Map<string, unknown>(), inflight = new Map<string, Promise<unknown>>(), subs = new Set<() => void>();
-let epoch = 0, lastIngest: string | null | undefined; // undefined: no status seen yet
+const last = new Map<string, { text: string; data: unknown }>(); // each URL's last answer, kept through clears
+let epoch = 0, askedEpoch = -1, lastChange: string | null | undefined; // undefined: no status seen yet
 
 export async function getJson<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
@@ -23,22 +25,32 @@ export function fetchCached<T>(url: string): Promise<T> {
   if (had) return had as Promise<T>;
   const ep = epoch;
   const p: Promise<T> = getJson<T>(url)
-    .then(d => { if (ep === epoch) values.set(url, d); return d; })
+    .then(got => {
+      const text = JSON.stringify(got), was = last.get(url), d = (was?.text === text ? was.data : got) as T;
+      last.set(url, { text, data: d });
+      if (ep === epoch) values.set(url, d);
+      return d;
+    })
     .finally(() => { if (inflight.get(url) === p) inflight.delete(url); });
   inflight.set(url, p);
   return p;
 }
 export const peekCache = <T,>(url: string): T | undefined => values.get(url) as T | undefined;
 
-export function clearApiCache() {
+/** asked: the user asked for this (Refresh), so answers fetched until the next clear count as asked for (askedFor). */
+export function clearApiCache(asked = false) {
   values.clear(); inflight.clear();
   epoch++;
+  if (asked) askedEpoch = epoch;
   subs.forEach(f => f());
 }
-/** Called with each /api/status answer: a changed last_ingest means new data, so the cache goes. */
-export function noteIngest(last: string | null) {
-  if (lastIngest !== undefined && last !== lastIngest) clearApiCache();
-  lastIngest = last;
+/** Whether the data cache was last cleared by Refresh rather than by an ingest in the background. */
+export const askedFor = () => epoch === askedEpoch;
+/** Called with each /api/status answer: a changed last_change means new data, so the cache goes. An ingest that stored
+ *  nothing leaves it. */
+export function noteIngest(change: string | null) {
+  if (lastChange !== undefined && change !== lastChange) clearApiCache();
+  lastChange = change;
 }
 const subscribe = (f: () => void) => { subs.add(f); return () => { subs.delete(f); }; };
 

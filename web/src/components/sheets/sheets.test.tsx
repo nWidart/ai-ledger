@@ -21,6 +21,7 @@ describe("SessionSheet", () => {
     render(<UsageSheets data={usage} />);
     expect(await sheet().findByText("$16")).toBeTruthy();
     expect(screen.getByRole("heading", { level: 2 }).textContent).toBe("Session#s1");
+    expect(sheet().getByText("active").parentElement!.textContent).toBe("9m active"); // active time, not first to last
     expect(sheet().getByRole("link", { name: "Open in Errors" }).getAttribute("href")).toBe("/errors#project=foo&range=30&ex=t01");
     expect(sheet().getByRole("group", { name: /^Session timeline\. Context grew from 10\.0M/ })).toBeTruthy();
     // Four failures in a row (one run), the commit, then two more failures with no success between them.

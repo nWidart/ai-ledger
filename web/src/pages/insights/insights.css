@@ -5,10 +5,8 @@
 .pg-insights .judged { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 500; padding: 1px 8px; border-radius: 999px;
   border: 1px dashed var(--text-muted); color: var(--text-secondary); white-space: nowrap; letter-spacing: 0; cursor: help; }
 .pg-insights .judged::before { content: "≈"; font-weight: 600; color: var(--text-muted); }
-.pg-insights .banner .when { color: inherit; font-weight: 500; }
-.pg-insights .banner b.when { color: var(--text-primary); }
 .pg-insights .cov { margin: -8px 0 16px; font-size: 13px; color: var(--text-secondary); }
-.pg-insights .banner + .cov { margin-top: -12px; }
+.pg-insights .cov b { color: var(--text-primary); font-weight: 500; }
 .pg-insights .lede { margin: 0 0 8px; max-width: 34ch; font-size: clamp(24px, 4vw, 40px); line-height: 1.14; font-weight: 400;
   letter-spacing: -.025em; text-wrap: balance; color: var(--text-secondary); }
 .pg-insights .lede:focus { outline: none; }
@@ -31,6 +29,7 @@
 .pg-insights .vital .d { color: var(--text-muted); font-size: 12.5px; margin-top: 2px; }
 .pg-insights .vital.good .v { color: var(--good-text); }
 .pg-insights .vital.bad .v { color: var(--critical-text); }
+.pg-insights .vital.bad { color: inherit; } /* the shared .bad rule would redden the label too */
 @media (max-width: 900px) {
   .pg-insights .vitals { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .pg-insights .vital:first-child { grid-column: 1 / -1; }
@@ -46,7 +45,8 @@
 
 .pg-insights h2 { font-size: 15px; font-weight: 600; margin: 0 0 2px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .pg-insights h3 { font-size: 13px; font-weight: 600; margin: 18px 0 2px; color: var(--text-secondary); }
-.pg-insights .grid2 { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 16px; margin-bottom: 16px; }
+.pg-insights .grid2 { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 16px; margin-bottom: 16px; align-items: start; }
+.pg-insights .linkish.more { margin-top: 8px; font-size: 13px; }
 .pg-insights .stack { display: grid; gap: 16px; align-content: start; }
 @media (max-width: 900px) { .pg-insights .grid2 { grid-template-columns: minmax(0, 1fr); } }
 /* Ledgers here carry "N sessions" on the side, wider than the default column. */
@@ -65,16 +65,20 @@
 .pg-insights .log-head { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; justify-content: space-between; }
 .pg-insights .log td { vertical-align: top; padding-top: 9px; padding-bottom: 9px; }
 .pg-insights .log td.when { color: var(--text-secondary); }
-.pg-insights .log td.proj { max-width: 160px; }
-.pg-insights .log td.goal .chip, .pg-insights .log td.fr .chip { margin: 0 4px 4px 0; }
-.pg-insights .log td.goal, .pg-insights .log td.fr { max-width: 200px; }
-.pg-insights .log td.detail { color: var(--text-secondary); min-width: 280px; max-width: 460px; }
-.pg-insights .log td.detail p { margin: 0; }
+.pg-insights .log td.sess { max-width: 220px; }
+.pg-insights .log td.sess > :first-child { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; text-decoration: none; }
+.pg-insights .log td.sess a:hover { text-decoration: underline; }
+.pg-insights .log td.proj { max-width: 140px; }
+.pg-insights .log td.goal .chip, .pg-insights .log td.fr .chip { margin: 0 4px 4px 0; white-space: normal; }
+/* Chips wrap side by side: the chip columns take a share of the width, not their narrowest chip's. */
+.pg-insights .log td.goal { width: 26%; }
+.pg-insights .log td.fr { width: 18%; }
+/* The summary and friction detail: a full-width second line under the session's figures. */
+.pg-insights .log tr.head td { border-bottom: 0; padding-bottom: 2px; }
+.pg-insights .log td.detail { color: var(--text-secondary); padding-top: 0; }
+.pg-insights .log td.detail p { margin: 0; max-width: 110ch; }
 .pg-insights .log td.detail p + p { margin-top: 4px; }
 .pg-insights .log td.detail .fd b { color: var(--text-primary); font-weight: 500; }
-.pg-insights .log td.go { white-space: nowrap; text-align: right; }
-.pg-insights .log td.go a { font-weight: 500; text-decoration: none; }
-.pg-insights .log td.go a:hover { text-decoration: underline; }
 .pg-insights .badge { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 999px;
   white-space: nowrap; background: var(--surface-2); color: var(--text-secondary); }
 .pg-insights .badge::before { font-size: 10px; content: "?"; }
@@ -90,12 +94,14 @@
   .pg-insights .log .scroll { overflow: visible; max-height: none; background: none; }
   .pg-insights .log thead { display: none; }
   .pg-insights .log table, .pg-insights .log tbody { display: block; }
-  .pg-insights .log tr { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 6px 10px; padding: 12px 0; border-bottom: 1px solid var(--border); }
+  .pg-insights .log tr { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 10px; padding: 12px 0; border-bottom: 1px solid var(--border); }
+  .pg-insights .log tr.head { border-bottom: 0; padding-bottom: 6px; }
+  .pg-insights .log tr.notes { padding-top: 0; }
   .pg-insights .log td { display: block; border: 0; padding: 0; min-width: 0; max-width: none; }
   .pg-insights .log td.when { grid-column: 1; }
   .pg-insights .log td.proj { grid-column: 2; }
-  .pg-insights .log td.go { grid-column: 3; }
-  .pg-insights .log td.out, .pg-insights .log td.goal, .pg-insights .log td.fr, .pg-insights .log td.detail { grid-column: 1 / -1; }
+  .pg-insights .log td.sess { order: -1; }
+  .pg-insights .log td.sess, .pg-insights .log td.out, .pg-insights .log td.goal, .pg-insights .log td.fr, .pg-insights .log td.detail { grid-column: 1 / -1; }
   .pg-insights .log td.out .dis { display: inline; margin: 0 0 0 8px; }
   .pg-insights .log td.goal::before, .pg-insights .log td.fr::before { content: attr(data-k) " "; color: var(--text-muted); font-size: 12px; margin-right: 4px; }
   .pg-insights .log td.empty { grid-column: 1 / -1; }

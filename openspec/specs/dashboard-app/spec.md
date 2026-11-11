@@ -24,6 +24,10 @@ The app SHALL ingest new transcript data when it starts and then on a fixed inte
 - **WHEN** the user clicks refresh
 - **THEN** the app ingests immediately and the page shows the new data and the time of the last ingest
 
+#### Scenario: Ingest with nothing new
+- **WHEN** a timed ingest stores no new lines and no usage data
+- **THEN** the open page does not refetch or redraw its data; only the time of the last ingest changes
+
 #### Scenario: Live page open
 - **WHEN** a Live page is connected and a session writes a line
 - **THEN** the line is in the store within 1 second of being written
@@ -108,7 +112,7 @@ The app SHALL serve every dashboard page from the built files that ship with it,
 - **THEN** Activity, Cost and Errors all load and work
 
 ### Requirement: Exclude automated sessions by default
-Activity and Cost SHALL leave out sessions from known automated projects (today `observer-sessions`) from every figure, chart and table, and SHALL offer a control to include them. The choice SHALL be kept in the page URL and carried across pages. A project filter that names an automated project SHALL include that project's sessions.
+Every page with the automated filter (Activity, Cost, Insights, Live) SHALL leave out automated sessions from every figure, chart and table, and SHALL offer a control to include them. A session is automated when it belongs to a known automated project (today `observer-sessions`), when it has no user prompt, or when it ran in a temporary folder (project `(temp)`) with at most one user prompt. The choice SHALL be kept in the page URL and carried across pages. A project filter that names an automated project SHALL include that project's sessions; naming `(temp)` SHALL NOT include its automated sessions.
 
 #### Scenario: Default view
 - **WHEN** the store holds 631 `observer-sessions` sessions and 872 other sessions in the last 30 days
@@ -121,6 +125,14 @@ Activity and Cost SHALL leave out sessions from known automated projects (today 
 #### Scenario: Filter names an automated project
 - **WHEN** the user opens Activity with `#project=observer-sessions` and the control off
 - **THEN** Activity shows the `observer-sessions` sessions, and the project picker shows `observer-sessions` as the selected project
+
+#### Scenario: Helper sessions in a temporary folder
+- **WHEN** an app ran 170 one-prompt sessions in temporary folders and a person ran one session with three prompts in `/tmp`
+- **THEN** Activity leaves the 170 out and counts the person's session under `(temp)`, and the control brings the 170 back
+
+#### Scenario: Session with no prompt
+- **WHEN** a Codex session makes requests without any user prompt
+- **THEN** Activity, Cost, Insights and Live leave it out until the user turns on the control
 
 ### Requirement: Name the app AI Ledger
 Every dashboard page SHALL show the app's name, AI Ledger, in its navigation brand and in its browser title, after the page's own name.
@@ -170,6 +182,13 @@ Activity, Cost, Errors, Limits, Insights and Live SHALL offer a source filter wi
 #### Scenario: Codex on Live
 - **WHEN** the user picks Codex on Live
 - **THEN** the rail and the wall show only Codex sessions
+
+### Requirement: Count days on the local clock
+Every page SHALL group activity into the calendar days of the machine's time zone, daylight saving included, and SHALL end every range on that zone's today. A range's totals and its charts SHALL cover the same days.
+
+#### Scenario: Evening work behind UTC
+- **WHEN** the machine's zone is America/Los_Angeles and a tool call fails at 23:30 local time on March 8 (06:30 UTC on March 9)
+- **THEN** every page counts it on March 8, and the last 7 days ending March 8 include it in both the headline and the chart
 
 ### Requirement: Describe agent work without naming one agent
 Page text that describes work from any source SHALL NOT name Claude. Text MAY name an agent when the source filter selects it.

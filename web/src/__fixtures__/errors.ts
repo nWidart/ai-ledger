@@ -12,14 +12,21 @@ export default {
   {
    "id": "worktree",
    "label": "Path outside isolated worktree",
-   "why": "Claude ran inside a worktree but touched a path in the main checkout (or another repo).",
+   "why": "The agent ran inside a worktree but touched a path in the main checkout (or another repo).",
    "fix": "Use paths relative to the worktree root, or the worktree's absolute path. Give subagents the worktree path in their brief, never the main checkout path.",
    "snippet": "- When working in a git worktree, only use paths inside that worktree. Never cd to or edit the main checkout."
   },
   {
+   "id": "worktree_verify",
+   "label": "Command too complex for worktree check",
+   "why": "The agent ran inside an isolated worktree, and the harness could not verify that a command stays inside it: compound commands, heredocs, scripts fed to an interpreter, or values computed at runtime.",
+   "fix": "Run single, simple commands with literal arguments from the worktree root: no heredocs, no `$(\u2026)` or variables, no long `&&` or `;` chains. Write longer scripts to a file and run the file.",
+   "snippet": "- In a worktree, run one simple command per call with literal arguments: no heredocs, `$(\u2026)`, variables or chained commands."
+  },
+  {
    "id": "sleep_poll",
    "label": "Sleep-then-poll blocked",
-   "why": "Claude tried to wait with `sleep N; cat output` instead of letting background work notify it.",
+   "why": "The agent tried to wait with `sleep N; cat output` instead of letting background work notify it.",
    "fix": "Run long work with run_in_background and wait for the notification, or use Monitor with an until-condition.",
    "snippet": "- Never sleep-poll. Use run_in_background and wait for the completion notice."
   },
@@ -27,14 +34,14 @@ export default {
    "id": "ls_alias",
    "label": "ls aliased to eza",
    "why": "Your shell aliases ls to eza with --icons, which swallows the next argument as its value.",
-   "fix": "Make the alias interactive-only in ~/.zshrc (`[[ -o interactive ]] && alias ls='eza --icons'`), or have Claude use `command ls`.",
+   "fix": "Make the alias interactive-only in ~/.zshrc (`[[ -o interactive ]] && alias ls='eza --icons'`), or have the agent use `command ls`.",
    "snippet": "- `ls` is aliased to eza; use `command ls` in shell commands."
   },
   {
    "id": "cli_flags",
    "label": "Wrong CLI flags (BSD vs GNU, gh)",
-   "why": "Claude used GNU syntax on macOS BSD tools (sed -i, date, stat) or invalid gh flag combos.",
-   "fix": "Note in CLAUDE.md that the machine is macOS with BSD tools (sed -i '' \u2026), or install GNU coreutils/gnu-sed.",
+   "why": "The agent used GNU syntax on macOS BSD tools (sed -i, date, stat) or invalid gh flag combos.",
+   "fix": "Note in CLAUDE.md or AGENTS.md that the machine is macOS with BSD tools (sed -i '' \u2026), or install GNU coreutils/gnu-sed.",
    "snippet": "- macOS: BSD sed/date/stat. Use sed -i '' and check `gh <cmd> --help` for flag combos."
   },
   {
@@ -47,15 +54,15 @@ export default {
   {
    "id": "cmd_not_found",
    "label": "Command not found",
-   "why": "Claude assumed a CLI was installed or on PATH.",
-   "fix": "List the project's available tooling in CLAUDE.md (e.g. pnpm vs npm, python3 vs python). Check with `command -v` before relying on a tool.",
+   "why": "The agent assumed a CLI was installed or on PATH.",
+   "fix": "List the project's available tooling in CLAUDE.md or AGENTS.md (e.g. pnpm vs npm, python3 vs python). Check with `command -v` before relying on a tool.",
    "snippet": "- Available CLIs: <list them>. Use python3 (not python). Check `command -v X` before using an unfamiliar tool."
   },
   {
    "id": "no_file",
    "label": "File or directory not found",
-   "why": "Claude guessed a path instead of looking it up first.",
-   "fix": "Locate files with Glob/ls before reading. Keep a short map of key directories in CLAUDE.md.",
+   "why": "The agent guessed a path instead of looking it up first.",
+   "fix": "Locate files with Glob/ls before reading. Keep a short map of key directories in CLAUDE.md or AGENTS.md.",
    "snippet": "- Do not guess file paths: list or glob first. Key dirs: <src/\u2026, tests/\u2026>."
   },
   {
@@ -68,14 +75,14 @@ export default {
   {
    "id": "edit_stale",
    "label": "File changed since read",
-   "why": "A formatter, hook, the user or another agent changed the file after Claude read it.",
+   "why": "A formatter, hook, the user or another agent changed the file after the agent read it.",
    "fix": "Re-read before editing. If a format-on-save hook causes this, run the formatter after edits instead of on every write.",
    "snippet": ""
   },
   {
    "id": "edit_nomatch",
    "label": "Edit old_string mismatch",
-   "why": "Claude reconstructed old_string from memory (whitespace/indent drift) or it was not unique.",
+   "why": "The agent reconstructed old_string from memory (whitespace/indent drift) or it was not unique.",
    "fix": "Copy old_string exactly from a fresh Read; include more surrounding context for uniqueness.",
    "snippet": "- For Edit, copy old_string verbatim from a recent Read, with enough context to be unique."
   },
@@ -84,41 +91,55 @@ export default {
    "label": "User rejected the action",
    "why": "You declined or interrupted a tool call.",
    "fix": "Look at the examples: recurring rejections point to a preference worth writing down (e.g. 'never push without asking').",
-   "snippet": "- <Your preference that Claude kept missing>"
+   "snippet": "- <Your preference that the agent kept missing>"
   },
   {
    "id": "perm_denied",
    "label": "Permission / safety check denied",
    "why": "Auto-mode classifier, safety check or sandbox blocked the call.",
-   "fix": "Allow recurring safe commands in settings.json permissions, or steer Claude away from the blocked pattern.",
+   "fix": "Allow recurring safe commands in settings.json permissions, or steer the agent away from the blocked pattern.",
    "snippet": ""
   },
   {
    "id": "hook_block",
    "label": "Blocked by hook or harness rule",
    "why": "A PreToolUse hook or harness guard refused the call (e.g. sleep-polling, subagent writing files).",
-   "fix": "If the hook fires often for valid work, fix the hook; otherwise add the rule it enforces to CLAUDE.md so Claude avoids it up front.",
+   "fix": "If the hook fires often for valid work, fix the hook; otherwise add the rule it enforces to CLAUDE.md or AGENTS.md so the agent avoids it up front.",
    "snippet": ""
   },
   {
    "id": "bad_call",
    "label": "Wrong tool name or parameters",
-   "why": "Claude called a tool that is not loaded, or with a malformed input.",
+   "why": "The agent called a tool that is not loaded, or with a malformed input.",
    "fix": "Mostly harness/skill-doc issues. If one tool dominates, its instructions or skill are unclear; tighten them.",
    "snippet": ""
   },
   {
    "id": "infra",
    "label": "Harness / connection failure",
-   "why": "Transient app or MCP connection issue, not Claude's reasoning.",
+   "why": "Transient app or MCP connection issue, not the agent's reasoning.",
    "fix": "Not fixable by prompting. Update the app / MCP server if it spikes.",
    "snippet": ""
   },
   {
+   "id": "network",
+   "label": "Network / DNS unreachable",
+   "why": "A command needed the network, but a host name did not resolve: the sandbox blocks network access (Codex's default), or the machine was offline.",
+   "fix": "Allow network access for sessions that need it (in Codex, the sandbox's network setting), or have the agent ask before commands that download or call remote services.",
+   "snippet": "- The sandbox has no network access. Ask before running commands that download or call remote services."
+  },
+  {
+   "id": "browser",
+   "label": "Browser automation failed",
+   "why": "A browser or UI automation tool (preview, Chrome, Playwright, computer use) failed: a stale element ref, a bad selector, a wait that timed out, or no browser available.",
+   "fix": "Take a fresh snapshot before each action and act on its refs; wait for a specific element rather than a fixed delay; check the page's server is running before driving it.",
+   "snippet": "- Browser automation: snapshot before acting, use fresh element refs, and wait for an element instead of a fixed delay."
+  },
+  {
    "id": "timeout",
    "label": "Command timed out",
-   "why": "A long-running command hit the tool timeout.",
-   "fix": "Run servers and watchers in the background; pass longer timeouts for slow test suites.",
+   "why": "A long-running command or script hit the tool's timeout.",
+   "fix": "Run servers and watchers in the background; pass longer timeouts for slow test suites or scripts.",
    "snippet": "- Run dev servers and long test suites with run_in_background."
   },
   {
@@ -145,7 +166,7 @@ export default {
   {
    "id": "git",
    "label": "git / gh error",
-   "why": "git state was not what Claude assumed (branch, remote, dirty tree, auth).",
+   "why": "git state was not what the agent assumed (branch, remote, dirty tree, auth).",
    "fix": "Check `git status` / current branch before branch-changing commands.",
    "snippet": "- Run git status before git operations that change branches or history."
   },
@@ -166,15 +187,22 @@ export default {
   {
    "id": "exit_other",
    "label": "Other non-zero exit",
-   "why": "Shell command failed for another reason. Open examples to spot new patterns.",
-   "fix": "Review examples; promote recurring patterns to their own rule in categorize.py.",
+   "why": "A shell command failed for a reason no other type covers.",
+   "fix": "Open the examples to spot a repeated cause. If one recurs, write it down in CLAUDE.md or AGENTS.md so the agent avoids it.",
+   "snippet": ""
+  },
+  {
+   "id": "mcp",
+   "label": "MCP tool error",
+   "why": "A tool from an MCP server or app connector returned an error: the server was unavailable or unauthorized, or rejected its input.",
+   "fix": "Open the examples by tool. If one server dominates, check that it is connected and authorized, or update it.",
    "snippet": ""
   },
   {
    "id": "other",
    "label": "Other",
-   "why": "Uncategorized tool error.",
-   "fix": "Review examples; add a rule in categorize.py when a pattern repeats.",
+   "why": "A tool error no other type covers.",
+   "fix": "Open the examples to spot a repeated cause. If one recurs, write it down in CLAUDE.md or AGENTS.md so the agent avoids it.",
    "snippet": ""
   }
  ],
@@ -182,6 +210,7 @@ export default {
   {
    "id": "t01",
    "ts": "2026-11-04T10:01:01.000Z",
+   "d": "2026-11-04",
    "p": "foo",
    "s": "s1",
    "t": "Edit",
@@ -191,12 +220,12 @@ export default {
    "r": "",
    "sub": 0,
    "src": "claude",
-   "d": "2026-11-04",
    "n": 0
   },
   {
    "id": "t02",
    "ts": "2026-11-04T10:02:01.000Z",
+   "d": "2026-11-04",
    "p": "foo",
    "s": "s1",
    "t": "Edit",
@@ -206,12 +235,12 @@ export default {
    "r": "",
    "sub": 0,
    "src": "claude",
-   "d": "2026-11-04",
    "n": 0
   },
   {
    "id": "t03",
    "ts": "2026-11-04T10:03:01.000Z",
+   "d": "2026-11-04",
    "p": "foo",
    "s": "s1",
    "t": "Edit",
@@ -221,12 +250,12 @@ export default {
    "r": "",
    "sub": 0,
    "src": "claude",
-   "d": "2026-11-04",
    "n": 0
   },
   {
    "id": "t04",
    "ts": "2026-11-04T10:04:01.000Z",
+   "d": "2026-11-04",
    "p": "foo",
    "s": "s1",
    "t": "Edit",
@@ -236,12 +265,12 @@ export default {
    "r": "",
    "sub": 0,
    "src": "claude",
-   "d": "2026-11-04",
    "n": 0
   },
   {
    "id": "t07",
    "ts": "2026-11-04T10:07:02.000Z",
+   "d": "2026-11-04",
    "p": "foo",
    "s": "s1",
    "t": "Bash",
@@ -251,12 +280,12 @@ export default {
    "r": "",
    "sub": 0,
    "src": "claude",
-   "d": "2026-11-04",
    "n": 1
   },
   {
    "id": "t08",
    "ts": "2026-11-04T10:08:03.000Z",
+   "d": "2026-11-04",
    "p": "foo",
    "s": "s1",
    "t": "mcp__srv__q",
@@ -266,7 +295,6 @@ export default {
    "r": "",
    "sub": 0,
    "src": "claude",
-   "d": "2026-11-04",
    "n": 2
   }
  ],
@@ -333,5 +361,6 @@ export default {
    "rts": "2026-11-04T10:09:00.000Z"
   }
  ],
- "incident_gap_minutes": 10
+ "incident_gap_minutes": 10,
+ "incident_max_ok": 2
 } satisfies ErrorsPayload;

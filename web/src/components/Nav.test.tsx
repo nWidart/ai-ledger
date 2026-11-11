@@ -1,7 +1,8 @@
-import { act, render, screen } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { App } from "../App";
+import { hasHue, setOrder } from "../colors";
 import { Nav } from "./Nav";
 import usage from "../__fixtures__/usage";
 import sessions from "../__fixtures__/sessions";
@@ -11,7 +12,7 @@ import insights from "../__fixtures__/insights";
 import live from "../__fixtures__/live";
 import liveSession from "../__fixtures__/live-session";
 
-const status = { ingesting: false, last_ingest: "2026-11-05T12:00:00+00:00", last_stats: { files: 1, lines: 2, inserted: 2, seconds: 0.1 }, error: null, counts: {}, interval: 60 };
+const status = { ingesting: false, last_ingest: "2026-11-05T12:00:00+00:00", last_change: "2026-11-05T12:00:00+00:00", last_stats: { files: 1, lines: 2, inserted: 2, seconds: 0.1 }, error: null, counts: {}, interval: 60, project_order: [] };
 const json = (body: unknown, ok = true) => Promise.resolve({ ok, status: ok ? 200 : 500, json: () => Promise.resolve(body) } as Response);
 
 describe("Nav", () => {
@@ -77,6 +78,13 @@ describe("Nav", () => {
     vi.stubGlobal("fetch", vi.fn(() => json(status)));
     const { container } = render(<Nav />);
     expect(container.querySelector(".appnav-word")?.textContent).toBe("AI Ledger");
+  });
+
+  it("colors projects from the status, on any page", async () => {
+    setOrder([]);
+    vi.stubGlobal("fetch", vi.fn(() => json({ ...status, project_order: ["foo"] })));
+    render(<Nav />);
+    await waitFor(() => expect(hasHue("foo")).toBe(true));
   });
 
   it("shows the project chip and clears the filter", async () => {

@@ -61,33 +61,45 @@ The page SHALL list friction categories by total count over the view's facets, w
 - **THEN** the section says no friction was reported, instead of an empty table
 
 ### Requirement: Show goal categories and session types
-The page SHALL list goal categories by total count over the view's facets, and the number of sessions per session type.
+The page SHALL list goal categories by total count over the view's facets, and the number of sessions per session type. A list of free-form categories (goals, friction, satisfaction signals) SHALL show its first 12 rows, with a control to show them all.
 
 #### Scenario: Goals and types
 - **WHEN** the view holds 109 `multi_task` and 16 `single_task` sessions, and goals `implement_feature` 40 and `fix_bug` 22
 - **THEN** the page lists session types multi task 109 and single task 16, and goals implement feature 40 and fix bug 22
 
+#### Scenario: Many goals
+- **WHEN** the view holds 222 goal categories
+- **THEN** the Goals list shows the 12 most counted and a "Show all 222 goals" control
+
 ### Requirement: List analysed sessions
-The page SHALL list the view's analysed sessions, newest first, each with its project, start time, outcome, brief summary and friction detail. Sessions with friction SHALL be listable on their own. Each session in the store SHALL link to its session sheet on Activity.
+The page SHALL list the view's analysed sessions, newest first, each with its title, project, start time, outcome, goals and friction categories, and its brief summary and friction detail on a full-width line below. The list SHALL scroll with the page, show its first 25 sessions with a control to show them all, and say how many sessions it lists. Sessions with friction SHALL be listable on their own, and that choice SHALL be kept in the page URL. Each session in the store SHALL link to its session sheet on Activity, in the view's project, range, source and automated filter.
 
 #### Scenario: Open a session
-- **WHEN** the user clicks a session in the list
-- **THEN** Activity opens with that session's sheet
+- **WHEN** the user views project `foo` for the last 7 days and clicks a session in the list
+- **THEN** Activity opens on project `foo` for the last 7 days with that session's sheet
 
 #### Scenario: Only sessions with friction
 - **WHEN** the user narrows the list to sessions with friction
-- **THEN** only sessions whose facet reports friction are listed, each with its friction detail
+- **THEN** only sessions whose facet reports a friction category or friction detail are listed, each with its friction detail, and the list says "N of M sessions"
 
 #### Scenario: Session missing from the store
 - **WHEN** a facet's session has no transcript in the store
 - **THEN** the session is listed with its summary and no link
 
 ### Requirement: Show coverage and staleness
-The page SHALL show how many Claude Code sessions in the view have a facet and how many have none, with the hint "run `/insights` to refresh" when any have none. It SHALL show when the newest facet in the store was written.
+The page SHALL show, in neutral text, how many of the view's Claude Code sessions have a facet, out of how many, and the share, with the note that each `/insights` run analyses more when any have none. It SHALL show when the newest facet in the store was written. Automated sessions SHALL NOT count in the coverage, whatever the automated filter, unless the project filter names their project. The page SHALL say every session is analysed only when the view has at least one analysed session and none without a facet.
 
 #### Scenario: Sessions not analysed
 - **WHEN** the view holds 400 Claude Code sessions and 150 of them have a facet
-- **THEN** the page says 250 Claude Code sessions have no facet and shows "run `/insights` to refresh"
+- **THEN** the page says "150 of 400 Claude Code sessions in this view analysed (38%)" and that each `/insights` run analyses more
+
+#### Scenario: Automated sessions included
+- **WHEN** the automated filter is on and the view holds 3,000 `observer-sessions` sessions besides 400 Claude Code sessions
+- **THEN** the coverage still counts 400 Claude Code sessions
+
+#### Scenario: No analysed session in the view
+- **WHEN** the view holds no analysed session
+- **THEN** the page says no analysed sessions are in the view, and does not say every session is analysed
 
 #### Scenario: No facets at all
 - **WHEN** the store holds no facet

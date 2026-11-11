@@ -38,7 +38,8 @@ class App:
         self.lock = threading.Lock()
         self.wake = threading.Event()
         self.stopping = threading.Event()
-        self.state = dict(ingesting=False, last_ingest=None, last_stats=None, error=None)
+        # last_change: the time of the last ingest that stored anything, so pages refetch only when data changed.
+        self.state = dict(ingesting=False, last_ingest=None, last_change=None, last_stats=None, error=None)
         # Live pages: how many are connected, and the sessions each ingest changed, numbered so each page sends a
         # notice for every change since its last one.
         self.watchers = 0
@@ -53,8 +54,10 @@ class App:
             try:
                 stats = store.ingest(self.con, self.roots, log=None, usage=usage)
                 sessions = stats.pop("sessions")
-                self.state.update(last_ingest=datetime.now(timezone.utc).isoformat(timespec="seconds"),
-                                  last_stats=stats, error=None)
+                now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+                self.state.update(last_ingest=now, last_stats=stats, error=None)
+                if stats["inserted"] or stats.get("usage_files"):
+                    self.state["last_change"] = now
                 if sessions:
                     self.publish(sessions)
                 if usage and (stats["files"] or stats.get("usage_files") or stats.get("usage_skipped")):
@@ -70,7 +73,10 @@ class App:
         """Poll each provider's plan limits that is due. A poller never raises, so ingest goes on whatever the endpoint does."""
         for p in self.pollers:
             if p.due():
+                was = p.state["last_ok"]
                 p.run(self.con, self.lock)
+                if p.state["last_ok"] != was:  # a stored reading changes Limits, so pages refetch
+                    self.state["last_change"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
 
     def loop(self):
         """Ingest everything and poll limits every INTERVAL; in between, ingest transcripts every LIVE_INTERVAL while a
@@ -122,7 +128,8 @@ class App:
     def status(self):
         cur = self.con.cursor()
         counts = {t: cur.execute(f"SELECT count(*) FROM {t}").fetchone()[0] for t in ("raw_lines", "files", "sessions", "requests", "tool_calls")}
-        return dict(self.state, counts=counts, interval=INTERVAL, limits={p.name: dict(p.state) for p in self.pollers})
+        return dict(self.state, counts=counts, interval=INTERVAL, limits={p.name: dict(p.state) for p in self.pollers},
+                    project_order=metrics.project_order(cur))
 
 
 def asset(path):
@@ -231,7 +238,8 @@ def handler(app, port=PORT):
                     self.send(404, json.dumps(dict(error="prompt not found"))) if text is None else self.json(dict(text=text))
                 elif url.path == "/api/sessions":
                     self.json(metrics.session_list(app.con.cursor(), q.get("project", ""), int(q.get("range") or 0), q.get("q", ""),
-                                                   q.get("near") == "1", int(q.get("offset") or 0), day=q.get("day", ""),
+                                                   q.get("near") == "1", int(q.get("offset") or 0), max(1, int(q.get("limit") or 100)),
+                                                   day=q.get("day", ""),
                                                    automated=q.get("automated") == "1", source=q.get("source", "")))
                 elif url.path == "/api/palette":
                     self.json(metrics.palette(app.con.cursor(), q.get("project", ""), int(q.get("range") or 0),
@@ -308,6 +316,7 @@ def main(argv=None):
     ap.add_argument("--version", action="version", version=f"ai-ledger {importlib.metadata.version('ai-ledger')}")
     a = ap.parse_args(argv)
     roots = dict(claude=a.projects, codex=a.codex, insights=a.usage_data)
+    metrics.USER_PRICES = os.path.join(os.path.dirname(os.path.abspath(a.db or store.DEFAULT_DB)), "prices.json")  # next to the store
     try:
         con = store.open_store(a.db)
     except (store.StoreBusy, store.StoreNotMoved) as e:

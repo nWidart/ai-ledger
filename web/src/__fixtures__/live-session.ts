@@ -27,16 +27,6 @@ export default {
    "words": 11
   },
   {
-   "k": "request",
-   "id": "m1",
-   "model": "claude-opus-5-5",
-   "output": 20,
-   "context": 160,
-   "key": "a1#0",
-   "ts": "2026-11-10T10:00:02.000Z",
-   "lane": null
-  },
-  {
    "k": "reply",
    "key": "a1#1",
    "ts": "2026-11-10T10:00:02.000Z",
@@ -62,23 +52,13 @@ export default {
    "cut": false
   },
   {
-   "k": "request",
-   "id": "m2",
-   "model": "claude-opus-5-5",
-   "output": 20,
-   "context": 160,
-   "key": "a2#0",
-   "ts": "2026-11-10T10:00:04.000Z",
-   "lane": null
-  },
-  {
    "key": "a2#1",
    "k": "tool",
    "ts": "2026-11-10T10:00:04.000Z",
    "lane": null,
    "id": "t2",
    "tool": "Agent",
-   "summary": "look",
+   "summary": "find callers of ingest",
    "description": "find callers of ingest",
    "start": "2026-11-10T10:00:04.000Z",
    "end": "2026-11-10T10:00:12.000Z",
@@ -88,16 +68,6 @@ export default {
    "agent": "a7",
    "chars": 9,
    "cut": false
-  },
-  {
-   "k": "request",
-   "id": "sm0",
-   "model": "claude-opus-5-5",
-   "output": 60,
-   "context": 400,
-   "key": "x0#0",
-   "ts": "2026-11-10T10:00:05.000Z",
-   "lane": "a7"
   },
   {
    "key": "x0#1",
@@ -118,16 +88,6 @@ export default {
    "cut": false
   },
   {
-   "k": "request",
-   "id": "sm1",
-   "model": "claude-opus-5-5",
-   "output": 60,
-   "context": 400,
-   "key": "x1#0",
-   "ts": "2026-11-10T10:00:07.000Z",
-   "lane": "a7"
-  },
-  {
    "key": "x1#1",
    "k": "tool",
    "ts": "2026-11-10T10:00:07.000Z",
@@ -144,16 +104,6 @@ export default {
    "agent": null,
    "chars": 9,
    "cut": false
-  },
-  {
-   "k": "request",
-   "id": "sm2",
-   "model": "claude-opus-5-5",
-   "output": 60,
-   "context": 400,
-   "key": "x2#0",
-   "ts": "2026-11-10T10:00:09.000Z",
-   "lane": "a7"
   },
   {
    "key": "x2#1",
@@ -181,16 +131,6 @@ export default {
    "lane": null
   },
   {
-   "k": "request",
-   "id": "m3",
-   "model": "claude-opus-5-5",
-   "output": 20,
-   "context": 160,
-   "key": "a3#0",
-   "ts": "2026-11-10T10:00:14.000Z",
-   "lane": null
-  },
-  {
    "key": "a3#1",
    "k": "tool",
    "ts": "2026-11-10T10:00:14.000Z",
@@ -209,16 +149,6 @@ export default {
    "cut": false
   },
   {
-   "k": "request",
-   "id": "m4",
-   "model": "claude-opus-5-5",
-   "output": 20,
-   "context": 160,
-   "key": "a4#0",
-   "ts": "2026-11-10T10:00:22.000Z",
-   "lane": null
-  },
-  {
    "key": "a4#1",
    "k": "tool",
    "ts": "2026-11-10T10:00:22.000Z",
@@ -235,19 +165,6 @@ export default {
    "agent": null,
    "chars": 0,
    "cut": false
-  }
- ],
- "lanes": [
-  {
-   "id": "a7",
-   "start": "2026-11-10T10:00:05.000Z",
-   "end": "2026-11-10T10:00:09.000Z",
-   "tools": 3,
-   "running": false,
-   "parent": "t2",
-   "name": "Agent",
-   "description": "find callers of ingest",
-   "done": true
   }
  ],
  "window": 1000000,

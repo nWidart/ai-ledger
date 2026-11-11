@@ -62,6 +62,7 @@ class ParseTest(unittest.TestCase):
         self.assertEqual(limits.label("claude", "monthly_extra", "", None), "monthly extra")
         self.assertEqual(limits.label("claude", "weekly_scoped", "Fable", 10080), "weekly · Fable")
         self.assertEqual(limits.label("codex", "premium_10080", "", 10080), "premium · weekly")
+        self.assertEqual(limits.label("codex", "codex_43200", "", 43200), "30-day")
 
 
 class CredentialTest(unittest.TestCase):
@@ -199,6 +200,7 @@ class AnalysisCase(StoreCase):
         cur = self.con.cursor()
         sid = f"s-{source}"
         cur.execute("INSERT INTO sessions (session_id, project, source) VALUES (?, 'foo', ?) ON CONFLICT DO NOTHING", [sid, source])
+        cur.execute("INSERT INTO prompts (prompt_id, session_id) VALUES (?, ?) ON CONFLICT DO NOTHING", [f"p-{sid}", sid])
         n = self.q("SELECT count(*) FROM requests")[0][0]
         store.insert(cur, "requests", ["message_id", "session_id", "ts", "model", "subagent", "input", "output", "thinking",
                                        "cache_read", "cache_5m", "cache_1h"],
@@ -218,7 +220,9 @@ class AnalysisCase(StoreCase):
         return limits.load_usage(self.con.cursor(), PRICES)
 
     def payload(self, now, **kw):
-        return limits.payload(self.con.cursor(), now=now, today=now.date(), prices=PRICES, tz=timezone.utc, **kw)
+        cur = self.con.cursor()
+        cur.execute("SET TimeZone = 'UTC'")  # the store's days in the same zone as tz
+        return limits.payload(cur, now=now, today=now.date(), prices=PRICES, tz=timezone.utc, **kw)
 
 
 class WindowTest(AnalysisCase):
@@ -360,6 +364,27 @@ class ForecastTest(AnalysisCase):
         w = self.forecast_for(now, 50, datetime(2026, 11, 9, 0, 0))
         self.assertEqual(w["forecast"]["kind"], "flat")
 
+    def test_a_hot_window_runs_out(self):
+        # A usual pace of $15 a day leaves room; the last day of this window used 30 points, which runs out first.
+        now = datetime(2026, 11, 6, 0, 0)
+        busy_days(self, "claude", "claude-opus-5-5", 30, now, 1.0)
+        self.spend("claude", "claude-opus-5-5", (now - timedelta(days=3), 40))
+        self.snap("claude", "weekly_all", now - timedelta(days=1), 20, resets=datetime(2026, 11, 9, 0, 0))
+        w = self.forecast_for(now, 50, datetime(2026, 11, 9, 0, 0))
+        f = w["forecast"]
+        self.assertEqual((f["pace_window"], f["pace_window_hours"]), (30.0, 24.0))
+        self.assertLess(f["pace_usual"], 10)
+        self.assertEqual(f["pace_now"], round((f["pace_usual"] + 30) / 2, 2))  # halfway between the two
+        self.assertIsNotNone(f["hits_at_early"])  # the range covers the window's own pace going on
+        self.assertEqual(f["pace"], "ahead")
+
+    def test_partial_first_day_is_a_day_rate(self):
+        # First use 6 hours ago: $5 in a quarter of a day is $20 a day, not $5.
+        now = datetime(2026, 11, 6, 0, 0)
+        self.spend("claude", "claude-opus-5-5", (now - timedelta(hours=6), 5))
+        mid, *_ = limits.Profile(self.usage(), now, timezone.utc).level("claude", "")
+        self.assertAlmostEqual(mid, 20.0)
+
     def test_no_calibration_no_forecast(self):
         now = datetime(2026, 11, 6, 0, 0)
         w = self.forecast_for(now, 2, datetime(2026, 11, 9, 0, 0))
@@ -386,6 +411,24 @@ class PayloadTest(AnalysisCase):
         self.assertGreater(out["suggestion"]["unused_at_reset"], 60)
         self.assertIsNone(self.payload(self.NOW, source="codex")["suggestion"])  # nothing to compare with
 
+    def test_a_window_at_its_limit_binds_and_is_never_suggested(self):
+        self.snap("codex", "codex_300", self.NOW - timedelta(minutes=30), 100, resets=self.NOW + timedelta(hours=3), minutes=300, plan="plus")
+        out = self.payload(self.NOW)
+        codex = next(w for w in out["windows"] if w["limit_id"] == "codex_300")
+        self.assertTrue(codex["at_limit"])
+        self.assertEqual(out["binding"], dict(provider="codex", limit_id="codex_300", scope="", runs_out=True))
+        self.assertIsNone(out["suggestion"])  # Claude runs out too, and Codex is out now
+
+    def test_unused_leaves_out_early_and_idle_windows(self):
+        # A plan change cuts one weekly window short; a Fable window before Fable was ever used has nothing to say.
+        self.snap("codex", "codex_10080", datetime(2026, 11, 2), 10, resets=datetime(2026, 11, 8), plan="free")
+        self.snap("claude", "weekly_scoped", datetime(2026, 10, 30), 0, resets=datetime(2026, 11, 1, 5), scope="Fable")
+        out = self.payload(self.NOW, range_days=30)
+        codex = next(u for u in out["unused"] if u["provider"] == "codex")
+        self.assertEqual((codex["windows"], codex["early"], codex["avg_unused"]), (1, 1, 60))
+        self.assertFalse([u for u in out["unused"] if "Fable" in u["label"]])
+        self.assertTrue([h for h in out["history"] if "Fable" in h["label"]])  # still in the history
+
     def test_open_windows_ignore_range(self):
         out = self.payload(self.NOW, range_days=7)
         self.assertEqual(len(out["windows"]), 2)
@@ -408,6 +451,11 @@ class PayloadTest(AnalysisCase):
         self.assertEqual(claude["flags"], ["polling failing", "old"])
         self.assertFalse(claude["measured"])
 
+    def test_an_old_codex_reading_no_longer_measures(self):
+        codex = lambda t: next(f for f in self.payload(t)["freshness"] if f["provider"] == "codex")
+        self.assertTrue(codex(self.NOW + timedelta(minutes=30))["measured"])
+        self.assertFalse(codex(self.NOW + timedelta(hours=2))["measured"])
+
 
 class ValueTest(AnalysisCase):
     def test_commits_per_point_by_project(self):
@@ -416,6 +464,7 @@ class ValueTest(AnalysisCase):
         self.snap("claude", "weekly_all", now, 10)  # $8 a point
         cur = self.con.cursor()
         cur.execute("INSERT INTO sessions (session_id, project, source) VALUES ('s-bar', 'bar', 'claude')")
+        cur.execute("INSERT INTO prompts (prompt_id, session_id) VALUES ('p-bar', 's-bar')")
         store.insert(cur, "requests", ["message_id", "session_id", "ts", "model", "subagent", "input", "output", "thinking", "cache_read",
                                        "cache_5m", "cache_1h"], [("b1", "s-bar", T0 + timedelta(days=2), "claude-opus-5-5", False, 16_000_000, 0, 0, 0, 0, 0)])
         store.insert(cur, "tool_calls", ["tool_use_id", "session_id", "tool", "start_ts", "is_commit", "test_passed"],
@@ -428,6 +477,21 @@ class ValueTest(AnalysisCase):
         self.assertEqual([p["project"] for p in only], ["bar"])
         self.assertEqual(len(self.payload(now, project="bar")["windows"]), 1)
         self.assertEqual(sorted(self.payload(now, project="bar")["projects"]), ["bar", "foo"])  # the picker keeps every project
+
+    def test_points_used_count_only_the_limits_windows_on_its_plan(self):
+        now = datetime(2026, 11, 6, 12, 0)
+        prices = dict(PRICES)
+        del prices["gpt-6-astra"]
+        self.spend("codex", "gpt-6-astra", (datetime(2026, 11, 6, 9), 1))  # no price: tokens, but no points
+        self.spend("codex", "gpt-6-nova", (datetime(2026, 10, 20), 50), (datetime(2026, 11, 6, 8), 20))
+        prices["gpt-6-nova"] = PRICES["claude-opus-5-5"]
+        self.snap("codex", "codex_300", datetime(2026, 10, 20, 1), 10, resets=datetime(2026, 10, 20, 4), minutes=300, plan="plus")
+        self.snap("codex", "codex_10080", datetime(2026, 11, 6, 10), 10, resets=datetime(2026, 11, 13), plan="pro")  # $2 a point
+        out = limits.payload(self.con.cursor(), now=now, today=now.date(), prices=prices, tz=timezone.utc)
+        weekly, five = sorted(out["value"]["limits"], key=lambda l: l["label"], reverse=True)
+        self.assertEqual([(m["model"], m["points"], m["priced"]) for m in weekly["models"]],
+                         [("gpt-6-nova", 10.0, True), ("gpt-6-astra", None, False)])  # not October's $50 on another plan
+        self.assertEqual((weekly["past_plan"], five["plan"], five["past_plan"]), (False, "plus", True))
 
 
 class ApiTest(AnalysisCase):

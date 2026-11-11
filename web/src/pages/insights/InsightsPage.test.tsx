@@ -29,10 +29,28 @@ describe("InsightsPage", () => {
     expect(f.mock.calls[0]![0]).toBe("/api/insights?range=0");
     const cov = document.getElementById("coverage")!;
     expect(cov.getAttribute("role")).toBe("status");
-    expect(cov.textContent).toBe(`2 Claude Code sessions in this view have no facet. Run /insights in Claude Code to refresh. The newest facet was written ${when(fixture.coverage.newest_facet)}.`);
+    expect(cov.textContent).toBe(`1 of 3 Claude Code sessions in this view analysed (33%). Each /insights run in Claude Code analyses more. The newest analysis was written ${when(fixture.coverage.newest_facet)}.`);
     expect(screen.getByText(/Codex session in this view is not/).textContent).toBe("1 Codex session in this view is not analysed: /insights covers Claude Code only.");
     const vitals = screen.getByRole("region", { name: "Outcomes at a glance" });
-    expect(within(vitals).getByText("Sessions analysed").parentElement!.textContent).toBe("3Sessions analysed1 of 3 stored Claude Code sessions, 2 without transcript");
+    expect(within(vitals).getByText("Sessions analysed").parentElement!.textContent).toBe("3Sessions analysed1 of 3 stored Claude Code sessions, 2 without transcript; 1 with no clear outcome"); // abandoned: not a tile of its own
+    expect(within(vitals).getByText("Fully or mostly achieved").parentElement!.textContent).toBe("1 33%Fully or mostly achieved1 fully, 0 mostly");
+  });
+
+  it("claims no full coverage for a view without analysed sessions", async () => {
+    show({ ...none, coverage: { ...fixture.coverage, claude_sessions: 0, analysed: 0, not_analysed: 0, facets: 0, orphans: 0 } }, "#project=nope");
+    expect((await lede()).textContent).toBe("No analysed sessions in this view.");
+    expect(document.getElementById("coverage")).toBeNull();
+  });
+
+  it("shows the first rows of a long ledger until asked for all", async () => {
+    const goals = Array.from({ length: 20 }, (_, i) => ({ name: `goal_${i}`, n: 20 - i, sessions: 1 }));
+    show({ ...fixture, goals });
+    await lede();
+    const panel = section(/^Goals/);
+    expect(within(panel).getAllByRole("listitem").length).toBe(12);
+    await userEvent.click(within(panel).getByRole("button", { name: "Show all 20 goals" }));
+    expect(within(panel).getAllByRole("listitem").length).toBe(20);
+    expect(within(panel).getByRole("button", { name: "Show the top 12" })).toBeTruthy();
   });
 
   it("says when there is no /insights data and names the directory", async () => {
@@ -82,31 +100,48 @@ describe("InsightsPage", () => {
     expect(within(section(/^Friction/)).getByText("No friction reported in this view.")).toBeTruthy();
   });
 
-  it("lists sessions newest first, narrows to friction, links stored sessions and not orphans", async () => {
+  it("lists sessions newest first, narrows to friction, links stored sessions by title and not orphans", async () => {
     show(fixture);
     await lede();
-    const log = section(/Analysed sessions/), body = () => within(log).getAllByRole("row").slice(1);
-    expect(body().map(r => r.querySelector(".detail p")!.textContent)).toEqual([
+    const log = section(/Analysed sessions/), body = () => [...log.querySelectorAll("tbody tr:not(.notes)")] as HTMLElement[];
+    const notes = () => [...log.querySelectorAll("tbody tr.notes")].map(r => r.querySelector("p")!.textContent);
+    expect(notes()).toEqual([
       "Synthetic: tried a layout idea and dropped it.", "Synthetic: chased a flaky date test. SENTINEL-facet-text", "Synthetic: added a theme toggle to a demo app."]);
+    expect(within(log).getByText("3 sessions")).toBeTruthy();
     expect(within(body()[0]!).queryByRole("link")).toBeNull();
     expect(within(body()[0]!).getByText("no transcript")).toBeTruthy();
     await userEvent.click(within(log).getByLabelText("Only sessions with friction"));
+    expect(location.hash).toBe("#range=0&friction=1");
     expect(body().length).toBe(2);
-    expect(within(body()[1]!).getByText(/Friction:/).parentElement!.textContent).toContain("patched the wrong time zone helper first");
+    expect(within(log).getByText("2 of 3 sessions")).toBeTruthy();
+    expect(within(log).getAllByText(/Friction:/)[1]!.parentElement!.textContent).toContain("patched the wrong time zone helper first");
     await userEvent.click(within(log).getByLabelText("Only sessions with friction"));
-    const link = within(body()[2]!).getByRole("link", { name: "Session →" });
+    const link = within(body()[2]!).getByRole("link", { name: "Add a theme toggle" });
+    expect(within(body()[2]!).getByText("#0000aaaa")).toBeTruthy();
     expect(link.getAttribute("href")).toBe("/usage#range=0&session=0000aaaa-0000-4000-8000-000000000001");
     await userEvent.click(link);
     expect(location.pathname).toBe("/usage");
     expect(location.hash).toBe("#range=0&session=0000aaaa-0000-4000-8000-000000000001");
   });
 
+  it("keeps the friction filter from the hash, matches friction text alone, and links in the view", async () => {
+    const sessions = fixture.sessions.map(s => (s.session_id.endsWith("3") ? { ...s, friction: [] } : s));
+    show({ ...fixture, sessions }, "#project=demo-app&range=7&source=claude&auto=1&friction=1");
+    await lede();
+    const log = section(/Analysed sessions/);
+    expect((within(log).getByLabelText("Only sessions with friction") as HTMLInputElement).checked).toBe(true);
+    expect(log.querySelectorAll("tbody tr:not(.notes)").length).toBe(2);
+    await userEvent.click(within(log).getByLabelText("Only sessions with friction"));
+    expect(within(log).getByRole("link", { name: "Add a theme toggle" }).getAttribute("href"))
+      .toBe("/usage#project=demo-app&range=7&source=claude&auto=1&session=0000aaaa-0000-4000-8000-000000000001");
+  });
+
   it("opens the session sheet on Activity from a session link", async () => {
     mockApi({ "/api/insights": () => fixture, "/api/usage": () => usage, "/api/sessions": () => sessions, "/api/session": () => session,
-      "/api/status": () => ({ ingesting: false, last_ingest: null, last_stats: null, error: null, counts: {}, interval: 60 }) });
+      "/api/status": () => ({ ingesting: false, last_ingest: null, last_change: null, last_stats: null, error: null, counts: {}, interval: 60, project_order: [] }) });
     history.replaceState(null, "", "/insights#range=0");
     render(<App />);
-    await userEvent.click(await screen.findByRole("link", { name: "Session →" }));
+    await userEvent.click(await screen.findByRole("link", { name: "Add a theme toggle" }));
     expect(location.pathname).toBe("/usage");
     expect(document.title).toBe("Activity · AI Ledger");
     expect(await within(document.querySelector("dialog")!).findByText("Timeline")).toBeTruthy();

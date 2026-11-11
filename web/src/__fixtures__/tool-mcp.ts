@@ -63,7 +63,7 @@ export default {
   {
    "id": "infra",
    "label": "Harness / connection failure",
-   "why": "Transient app or MCP connection issue, not Claude's reasoning.",
+   "why": "Transient app or MCP connection issue, not the agent's reasoning.",
    "fix": "Not fixable by prompting. Update the app / MCP server if it spikes.",
    "errors": 1
   }

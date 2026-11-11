@@ -28,7 +28,6 @@ export default {
   "sub_tokens": 0,
   "sub_cost": null,
   "thinking_ms": 0,
-  "active_days": 1,
   "calls": 1,
   "errors": 1,
   "commits": 0,
@@ -38,6 +37,7 @@ export default {
   "main_calls": 1,
   "prompts": 1,
   "interrupted": 0,
+  "active_days": 1,
   "error_loops": 0,
   "sessions": 1,
   "cache_hit_ratio": 0.705882353,
@@ -52,8 +52,8 @@ export default {
   "tokens_per_commit": null,
   "cost_per_commit": null,
   "errors_per_100_calls": 100.0,
-  "session_seconds": 1800,
-  "median_session_seconds": 1800,
+  "session_seconds": 60,
+  "median_session_seconds": 60,
   "near_limit": 0
  },
  "daily": [
@@ -145,7 +145,7 @@ export default {
    "git_branch": null,
    "first_ts": "2026-11-05T10:00:00.000Z",
    "last_ts": "2026-11-05T10:30:00.000Z",
-   "duration_s": 1800,
+   "duration_s": 60,
    "compactions": null,
    "peak_context": null,
    "peak_model": null,
@@ -176,7 +176,7 @@ export default {
    "git_branch": null,
    "first_ts": "2026-11-05T10:00:00.000Z",
    "last_ts": "2026-11-05T10:30:00.000Z",
-   "duration_s": 1800,
+   "duration_s": 60,
    "compactions": null,
    "peak_context": null,
    "peak_model": null,
@@ -202,5 +202,9 @@ export default {
  ],
  "near_limit": [],
  "previous": null,
- "changes": null
+ "changes": null,
+ "prices_file": {
+  "path": "/Users/example/Library/Application Support/ai-ledger/prices.json",
+  "error": null
+ }
 } satisfies UsagePayload;

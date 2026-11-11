@@ -1,7 +1,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { errorsHref, openToolSheet } from "./components/sheets/session";
-import { formatHash, go, navigate, parseHash, setHash, sharedHash, useHashState } from "./hash";
+import { closeSheets, formatHash, go, navigate, parseHash, setHash, sharedHash, useHashState } from "./hash";
 
 describe("parseHash", () => {
   it("reads a Usage URL from before the change", () => {
@@ -78,6 +78,26 @@ describe("setHash", () => {
     openToolSheet("skill", "ship");
     expect(location.hash).toBe("#range=30&skill=ship");
     expect(push).toHaveBeenCalledTimes(3);
+  });
+  it("closes sheets by going back over the entries they pushed", async () => {
+    history.replaceState(null, "", "/usage#range=30");
+    const len = history.length, clear = { inspect: null, tool: null, mcp: null, skill: null, session: null };
+    setHash({ inspect: "foo" });
+    setHash({ session: "s1" });
+    expect(history.length).toBe(len + 2);
+    const back = new Promise(r => addEventListener("popstate", r, { once: true }));
+    closeSheets(clear);
+    await back;
+    expect(location.hash).toBe("#range=30");
+    // A sheet opened from a link, or after a filter change, has no entry of its own to go back to: closing replaces.
+    history.replaceState(null, "", "/usage#range=30&session=s1");
+    closeSheets(clear);
+    expect(location.hash).toBe("#range=30");
+    setHash({ session: "s2" });
+    setHash({ range: 7 });
+    expect(history.state).toBeNull();
+    setHash({ session: "s3" });
+    expect(history.state).toBeNull();
   });
   it("links to Errors with the source and an open type", () => {
     expect(errorsHref("foo", 7, undefined, { source: "codex", cat: "tests" })).toBe("/errors#project=foo&range=7&source=codex&cat=tests");

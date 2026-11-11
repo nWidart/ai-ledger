@@ -11,10 +11,11 @@ import tempfile
 import threading
 import time
 import unittest
+from datetime import datetime
 from unittest import mock
 from http.server import ThreadingHTTPServer
 
-from ai_ledger import app, store
+from ai_ledger import app, metrics, store
 
 USAGE_DATA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "usage-data")
 
@@ -28,6 +29,7 @@ class AppTest(unittest.TestCase):
         cls.con = store.open_store(os.path.join(cls.tmp, "d", "x.duckdb"))
         store.insert(cls.con.cursor(), "sessions", ["session_id", "project", "first_ts", "last_ts"],
                      [("s1", "foo", "2026-11-04 10:00:00", "2026-11-04 11:00:00")])
+        store.insert(cls.con.cursor(), "prompts", ["prompt_id", "session_id", "ts"], [("p1", "s1", "2026-11-04 10:00:00")])
         store.insert(cls.con.cursor(), "tool_calls", ["tool_use_id", "session_id", "tool", "input_summary", "start_ts", "end_ts", "is_error"],
                      [("t1", "s1", "Bash", "npm test", "2026-11-04 10:01:00", "2026-11-04 10:01:02", False)])
         store.ingest(cls.con, dict(insights=USAGE_DATA))
@@ -93,6 +95,13 @@ class AppTest(unittest.TestCase):
         self.assertEqual((status, json.loads(body)), (400, dict(error="unknown source: grok")))
         status, _, body = self.get("/api/palette?range=-1")
         self.assertEqual((status, json.loads(body)), (400, dict(error="range must be >= 0")))
+
+    def test_status_carries_project_order(self):
+        status, _, body = self.get("/api/status")
+        got = json.loads(body)
+        self.assertEqual(status, 200)
+        self.assertEqual(got["project_order"], metrics.project_order(self.con.cursor()))
+        self.assertIn("last_change", got)
 
     def test_insights(self):
         self.assertIn("/insights", app.PAGES)
@@ -272,6 +281,30 @@ class LiveEventsTest(unittest.TestCase):
         self.assertEqual(json.loads(data[len(b"data: "):]), dict(sessions=["s1"]))
         self.assertNotIn(b"SENTINEL", data)
         h.close()
+
+    def test_last_change_moves_only_when_lines_land(self):
+        self.app.ingest(usage=False)
+        self.assertIsNone(self.app.state["last_change"])
+        self.append("a.jsonl", "s1", "hello")
+        with mock.patch.object(app, "datetime", mock.Mock(now=lambda tz: datetime(2026, 11, 10, 10, tzinfo=tz))):
+            self.app.ingest(usage=False)
+        self.assertEqual(self.app.state["last_change"], "2026-11-10T10:00:00+00:00")
+        self.app.ingest(usage=False)
+        self.assertEqual(self.app.state["last_change"], "2026-11-10T10:00:00+00:00")
+        self.assertNotEqual(self.app.state["last_ingest"], self.app.state["last_change"])
+
+    def test_last_change_moves_when_a_limit_poll_stores_a_reading(self):
+        class Poll:
+            state = dict(last_ok=None)
+            def due(self): return True
+            def run(self, con, lock): self.state["last_ok"] = "2026-11-10T10:00:00+00:00"
+        self.app.pollers = [Poll()]
+        self.app.poll()
+        first = self.app.state["last_change"]
+        self.assertIsNotNone(first)
+        with mock.patch.object(app, "datetime", mock.Mock(now=lambda tz: datetime(2030, 1, 1, tzinfo=tz))):
+            self.app.poll()  # the poll stored nothing new
+        self.assertEqual(self.app.state["last_change"], first)
 
     def test_no_notice_when_nothing_new(self):
         with mock.patch.object(app, "KEEPALIVE", 0.2):

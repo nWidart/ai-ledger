@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import fixture from "../../__fixtures__/errors";
 import type { ErrorsPayload } from "../../api";
 import {
-  beforeAfter, bucketOf, buckets, byWeight, change, chartData, emptyTypes, exList, filtered, incidentsOf, incSummary, makeModel, pointText,
+  beforeAfter, bucketOf, buckets, byWeight, change, chartData, compare, emptyTypes, exList, filtered, incidentsOf, incSummary, makeModel, midDay, pointText,
   rangeStart, series, settle, summary, typeColors, typeRows, viewTypes, whereToStart, type View,
 } from "./model";
 import { DEFAULT_VIEW, loadFixes, loadMode, readView, viewHash, viewPatch } from "./view";
@@ -47,20 +47,53 @@ describe("filtering and series", () => {
     expect(filtered(mm, v({ sub: false })).errs).toHaveLength(4);
     expect(filtered(mm, v({ noise: true })).errs).toHaveLength(5);
   });
+  it("leaves out days after today, as the chart has no bucket for them", () => {
+    const late = { ...fixture, errors: fixture.errors.map((e, i) => (i ? e : { ...e, d: "2026-11-06" })),
+      calls: [...fixture.calls, ["2026-11-06", "foo", 3, 0, "claude"]] } as ErrorsPayload;
+    const f = filtered(makeModel(late), v());
+    expect(f.errs).toHaveLength(fixture.errors.length - 1);
+    expect(f.calls).toHaveLength(fixture.calls.length);
+  });
   it("rates per bucket, null without calls", () => {
     const f = filtered(m, v({ range: 7 })), keys = buckets(m, f.start, "day");
     const pts = series(v(), f.errs, f.calls, keys);
     expect(pts.find(p => p.k === "2026-11-04")).toEqual({ k: "2026-11-04", e: 6, c: 10, r: 60 });
     expect(pts.find(p => p.k === "2026-11-05")?.r).toBeNull();
   });
-  it("change: arrows past min, New from zero, dashes without data", () => {
-    expect(change(null, 2)).toMatchObject({ text: "–", cls: "muted", title: "Not enough data in the first half" });
-    expect(change(2, null).title).toBe("Not enough data in the second half");
-    expect(change(0, 3)).toEqual({ text: "New", cls: "delta-up" });
-    expect(change(0, 0)).toEqual({ text: "–", cls: "muted" });
-    expect(change(10, 20)).toEqual({ text: "▲ +100%", cls: "delta-up" });
-    expect(change(10, 5)).toEqual({ text: "▼ -50%", cls: "delta-down" });
-    expect(change(10, 10.3, 5)).toEqual({ text: "3%", cls: "muted" });
+  it("change compares the same sides everywhere, with enough calls on both", () => {
+    // 11 calls in June, then the real activity: all time splits its calls in half, so June can't make a side of its own.
+    const ed = (d: string, c: string, n: number) => [d, "foo", c, n, 0, "claude"] as [string, string, string, number, number, "claude"];
+    const p: ErrorsPayload = { ...fixture,
+      calls: [["2026-06-01", "foo", 11, 0, "claude"], ["2026-10-20", "foo", 1000, 0, "claude"], ["2026-10-21", "foo", 1000, 0, "claude"], ["2026-11-04", "foo", 1000, 0, "claude"]],
+      error_days: [ed("2026-06-01", "y", 0), ed("2026-10-20", "x", 10), ed("2026-11-04", "x", 20), ed("2026-11-04", "y", 8), ed("2026-10-20", "z", 1), ed("2026-11-04", "z", 2)] };
+    const mm = makeModel(p), all = v({ range: 0 }), f = filtered(mm, all), x = compare(mm, all, f);
+    expect(f.from).toBe("2026-06-01");
+    expect(midDay(all, f)).toBe("2026-10-21");
+    expect(x).toMatchObject({ cmp: "vs before Oct 21", why: null, a: { c: 1011, e: 11 }, b: { c: 2000, e: 30 } });
+    expect(change(x, "x", 5)).toMatchObject({ text: "1%", cls: "muted" });
+    // Too few errors on a side for a percent: the counts, never "New".
+    expect(change(x, "y", 5)).toMatchObject({ text: "0 → 8", cls: "muted" });
+    expect(change(x, "z", 5).text).toBe("1 → 2");
+    expect(whereToStart(mm, all, f, {}).rising.map(r => [r.c, r.e1, r.e2, r.d])).toEqual([["y", 0, 8, Infinity]]);
+    // A range compares with the days before it; without enough calls there, nothing shows.
+    const wk = v({ range: 7 }), xw = compare(mm, wk, filtered(mm, wk));
+    expect(xw).toMatchObject({ cmp: "vs previous 7 days", why: "Fewer than 200 tool calls in the 7 days before" });
+    expect(change(xw, "x")).toEqual({ text: "–", cls: "muted", title: xw.why });
+    expect(whereToStart(mm, wk, filtered(mm, wk), {})).toMatchObject({ rising: [], why: xw.why });
+    const two = v({ range: 14 }), s14 = summary(mm, two, filtered(mm, two), {});
+    expect(s14).toMatchObject({ cmp: "vs previous 14 days", why: null, r0: 11 / 2000 * 100, r1: 3 });
+  });
+  it("charts start at the range's first day with calls", () => {
+    const p: ErrorsPayload = { ...fixture, calls: [["2026-11-03", "foo", 5, 0, "claude"], ["2026-11-04", "bar", 5, 0, "claude"]] };
+    const mm = makeModel(p), vv = v({ range: 30, project: "bar" }), f = filtered(mm, vv);
+    expect(f.from).toBe("2026-11-04");
+    expect(chartData(mm, vv, f, viewTypes(mm, vv, f)).keys).toEqual(["2026-11-04", "2026-11-05"]);
+    // A long stretch without calls folds into one bucket.
+    const far: ErrorsPayload = { ...fixture, calls: [["2026-10-01", "foo", 5, 0, "claude"], ...fixture.calls] }, fm = makeModel(far), all = v({ range: 0 });
+    const ff = filtered(fm, all), { keys, pts } = chartData(fm, all, ff, viewTypes(fm, all, ff));
+    expect(keys).toEqual(["2026-10-01", "2026-10-02", "2026-11-04", "2026-11-05"]);
+    expect(pts[1]).toMatchObject({ c: 0, to: "2026-11-03" });
+    expect(pointText(fm, all, pts[1]!, viewTypes(fm, all, ff))).toBe("Oct 2, 2026 – Nov 3, 2026: no activity");
   });
 });
 
@@ -82,12 +115,12 @@ describe("types", () => {
     expect(p4.other).toBe(0);
     expect(pointText(mm, vv, p4, vt)).toContain("Selected f: 1");
   });
-  it("table rows carry share, color and the half-on-half change", () => {
+  it("table rows carry share, color and the change the summary shows", () => {
     const rows = typeRows(m, v(), filtered(m, v()));
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ cid: "x", n: 6, share: 1, color: "var(--type-1)" });
-    // Every call is in the second half: no first-half rate to compare with.
-    expect(rows[0]!.delta.text).toBe("–");
+    // No calls in the 30 days before: nothing to compare with.
+    expect(rows[0]!.delta).toMatchObject({ text: "–", title: "Fewer than 200 tool calls in the 30 days before" });
   });
   it("closes a type with no errors in the view unless an example is linked", () => {
     expect(settle(m, v({ cat: "x" })).cat).toBe("x");
@@ -132,9 +165,10 @@ describe("summary and fixes", () => {
   it("sums the view: rate, previous period, incidents, open fixes", () => {
     const s = summary(m, v(), filtered(m, v()), {});
     expect(s).toMatchObject({ totalCalls: 10, n: 6, r: 60, r0: null, d: null, cmp: "vs previous 30 days", top: "x", nFix: 0, withFix: 0 });
+    expect(s.why).toBe("Fewer than 200 tool calls in the 30 days before");
     expect(s.inc.n).toBe(3);
     const all = summary(m, v({ range: 0 }), filtered(m, v({ range: 0 })), { x: "2026-11-04", gone: "2026-10-01" });
-    expect(all.cmp).toBe("vs the first half");
+    expect(all.cmp).toBe("vs before Nov 4");
     expect(all.nFix).toBe(2);
   });
   it("before and after a fix: all time, waiting for enough calls", () => {
@@ -142,7 +176,9 @@ describe("summary and fixes", () => {
     expect(ba.sides[0]).toMatchObject({ e: 0, c: 0, r: null, empty: "No calls" });
     expect(ba.sides[1]).toMatchObject({ e: 6, c: 10, r: 60 });
     expect(ba.need).toBe(200);
-    expect(ba.verdict).toEqual(["Not enough calls yet", "warn"]);
+    // No calls before the fix: there's nothing to compare with, however many come after.
+    expect(ba.verdict).toEqual(["No calls before this date", "warn"]);
+    expect(beforeAfter(m, v(), "x", "2025-12-30").sides[1].name).toBe("Since Dec 30, 2025");
     const p: ErrorsPayload = { ...fixture, calls: [["2026-10-01", "foo", 1000, 0, "claude"], ["2026-11-04", "foo", 1000, 0, "claude"]],
       errors: [...fixture.errors, ...Array.from({ length: 50 }, (_, i) => ({ ...fixture.errors[0]!, id: `old${i}`, d: "2026-10-01", n: null }))] };
     const after = beforeAfter(makeModel(p), v(), "x", "2026-11-04");

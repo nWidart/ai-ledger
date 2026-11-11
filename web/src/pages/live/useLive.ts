@@ -26,7 +26,9 @@ export interface LiveData {
   conn: Conn;
   /** Notices held while paused. */
   held: number;
-  error: Error | undefined;
+  /** The last failure of each fetch, cleared by its next success. */
+  listError: Error | undefined;
+  sessionError: Error | undefined;
 }
 
 export function useLive(view: View, selected: string, text: boolean, paused: boolean): LiveData {
@@ -34,23 +36,25 @@ export function useLive(view: View, selected: string, text: boolean, paused: boo
   const [session, setSession] = useState<LiveSession>();
   const [conn, setConn] = useState<Conn>("connecting");
   const [held, setHeld] = useState(0);
-  const [error, setError] = useState<Error>();
+  const [listError, setListError] = useState<Error>();
+  const [sessionError, setSessionError] = useState<Error>();
   const cur = useRef({ view, selected, text, paused, session, list });
   cur.current = { view, selected, text, paused, session, list };
 
   const loadList = useCallback(() => {
     const url = liveUrl(cur.current.view, cur.current.text);
-    getJson<LivePayload>(url).then(d => { if (liveUrl(cur.current.view, cur.current.text) === url) { setList(d); setError(undefined); } }, setError);
+    getJson<LivePayload>(url).then(d => { if (liveUrl(cur.current.view, cur.current.text) === url) { setList(d); setListError(undefined); } }, setListError);
   }, []);
   const loadSession = useCallback((catchUp: boolean) => {
     const { selected: sid, text: t, session: s } = cur.current;
     if (!sid) return;
     const after = catchUp && s?.session_id === sid ? s.cursor : null;
+    const moved = () => cur.current.selected !== sid || cur.current.text !== t; // the user moved on
     getJson<LiveSession>(liveSessionUrl(sid, { after, text: t })).then(d => {
-      const c = cur.current;
-      if (c.selected !== sid || c.text !== t) return; // the user moved on
+      if (moved()) return;
       setSession(prev => mergeSession(prev, d, after != null));
-    }, setError);
+      setSessionError(undefined);
+    }, e => { if (!moved()) setSessionError(e as Error); });
   }, []);
   const refresh = useCallback((sessions: string[] | null) => {
     loadList();
@@ -59,7 +63,14 @@ export function useLive(view: View, selected: string, text: boolean, paused: boo
 
   const listUrl = liveUrl(view, text);
   useEffect(() => { loadList(); }, [listUrl, loadList]);
-  useEffect(() => { setSession(undefined); loadSession(false); }, [selected, text, loadSession]);
+  // Turning Full text on keeps the events held, and with them the open rows and the scroll, until the text arrives. Any
+  // other change drops them: another session's, or text that must leave the screen now.
+  const was = useRef({ selected, text });
+  useEffect(() => {
+    if (was.current.selected !== selected || !text) { setSession(undefined); setSessionError(undefined); }
+    was.current = { selected, text };
+    loadSession(false);
+  }, [selected, text, loadSession]);
 
   useEffect(() => {
     const src = open(liveEventsUrl);
@@ -89,7 +100,7 @@ export function useLive(view: View, selected: string, text: boolean, paused: boo
     return () => clearInterval(t);
   }, [paused, refresh]);
 
-  return { list, session, conn, held, error };
+  return { list, session, conn, held, listError, sessionError };
 }
 
 /** A clock that ticks every second while not paused, shared by every running timer on the page. */

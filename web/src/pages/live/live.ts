@@ -1,6 +1,6 @@
 // Live page logic with no React: merging a catch-up into the session held, the state as shown now, and the stream's
 // layout of main-thread events and subagent lanes.
-import type { LiveEvent, LiveLane, LiveSession, LiveState, LiveToolEvent } from "../../api";
+import type { LiveEvent, LiveSession, LiveState, LiveToolEvent, Ts } from "../../api";
 
 /** Events kept in memory per session; older ones drop off the top. */
 export const KEEP = 2000;
@@ -9,7 +9,8 @@ export const APPROVAL_MS = 30_000;
 const APPROVAL_TOOLS = new Set(["Bash", "exec_command", "exec"]);
 
 /** The session after a response: a full load replaces it; a catch-up (after=cursor) adds new events and replaces ones
- *  sent again (a call that finished), keeping their place. Everything else comes from the newer response. */
+ *  sent again (a call that finished, the last minute read again), keeping their place. Everything else comes from the
+ *  newer response. */
 export function mergeSession(prev: LiveSession | undefined, next: LiveSession, catchUp: boolean): LiveSession {
   if (!catchUp || !prev || prev.session_id !== next.session_id) return next;
   const at = new Map(prev.events.map((e, i) => [e.key, i]));
@@ -64,29 +65,55 @@ export const INFERRED_WHY: Partial<Record<LiveState["kind"], string>> = {
   thinking: "Inferred: Claude Code records no request in flight; the last line is a prompt or a tool result.",
 };
 
+export const isTool = (e: LiveEvent): e is LiveToolEvent => e.k === "tool";
+
+/** A subagent's work: when its events start and end, its tool calls, and the main-thread call that started it. */
+export interface LiveLane {
+  id: string; start: Ts | null; end: Ts | null; tools: number; running: boolean;
+  /** The main-thread call that started it, when known; name is that call's tool. */
+  parent: string | null; name: string; description: string | null; done: boolean;
+}
+
+/** The lanes of the events held, in order of their first event. Built from every event held, not from one response,
+ *  so a catch-up with one lane's events leaves the other lanes whole. */
+export function lanesOf(events: readonly LiveEvent[]): LiveLane[] {
+  const parents = new Map<string, LiveToolEvent>(), out = new Map<string, LiveLane>();
+  for (const e of events) if (isTool(e) && e.agent && !e.lane) parents.set(e.agent, e);
+  for (const e of events) {
+    if (!e.lane) continue;
+    let l = out.get(e.lane);
+    if (!l) {
+      const p = parents.get(e.lane);
+      l = { id: e.lane, start: e.ts, end: e.ts, tools: 0, running: false, parent: p?.id ?? null, name: p?.tool ?? "Subagent",
+        description: p?.description ?? null, done: !!p?.end };
+      out.set(e.lane, l);
+    }
+    if (e.ts && !(ms(l.end) >= ms(e.ts))) l.end = e.ts;
+    if (isTool(e)) { l.tools++; l.running ||= e.end == null; }
+  }
+  return [...out.values()];
+}
+
 /** A row of the stream: a main-thread event, or a subagent lane with its events. */
 export type StreamRow = { kind: "event"; e: LiveEvent } | { kind: "lane"; lane: LiveLane; events: LiveEvent[] };
 
 /** The stream's rows: main-thread events in order. A lane follows the call that started it, or, untied, stands where
- *  its first event falls. Request rows carry no news in the stream and are left out. */
-export function streamRows(events: readonly LiveEvent[], lanes: readonly LiveLane[]): StreamRow[] {
-  const byLane = new Map<string, LiveEvent[]>(), laneOf = new Map(lanes.map(l => [l.id, l]));
+ *  its first event falls. */
+export function streamRows(events: readonly LiveEvent[]): StreamRow[] {
+  const lanes = lanesOf(events), byLane = new Map<string, LiveEvent[]>(), laneOf = new Map(lanes.map(l => [l.id, l]));
   for (const e of events) if (e.lane) (byLane.get(e.lane) ?? byLane.set(e.lane, []).get(e.lane)!).push(e);
   const tied = new Map(lanes.filter(l => l.parent).map(l => [l.parent!, l]));
   const rows: StreamRow[] = [], placed = new Set<string>();
-  const lane = (l: LiveLane) => { if (!placed.has(l.id)) { placed.add(l.id); rows.push({ kind: "lane", lane: l, events: byLane.get(l.id) ?? [] }); } };
+  const lane = (l: LiveLane) => { if (!placed.has(l.id)) { placed.add(l.id); rows.push({ kind: "lane", lane: l, events: byLane.get(l.id)! }); } };
   for (const e of events) {
     if (e.lane) {
-      const l = laneOf.get(e.lane);
-      if (l && !l.parent) lane(l);
+      const l = laneOf.get(e.lane)!;
+      if (!l.parent) lane(l);
       continue;
     }
-    if (e.k === "request") continue;
     rows.push({ kind: "event", e });
     if (e.k === "tool" && tied.has(e.id)) lane(tied.get(e.id)!);
   }
-  for (const l of lanes) if (byLane.has(l.id)) lane(l); // a tied lane whose parent call fell off the top
+  for (const l of lanes) lane(l); // a tied lane whose parent call fell off the top
   return rows;
 }
-
-export const isTool = (e: LiveEvent): e is LiveToolEvent => e.k === "tool";
