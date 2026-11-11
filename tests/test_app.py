@@ -150,6 +150,18 @@ class AppTest(unittest.TestCase):
         self.assertIn(f"127.0.0.1:{port}", str(cm.exception.code))
         self.assertIn("--port", str(cm.exception.code))
 
+    def test_opens_only_where_a_browser_is_visible(self):
+        with mock.patch.object(sys.stdout, "isatty", return_value=False):
+            self.assertFalse(app.can_open())
+        with mock.patch.object(sys.stdout, "isatty", return_value=True), mock.patch.object(sys, "platform", "linux"), \
+                mock.patch.dict(os.environ, {}, clear=True):
+            self.assertFalse(app.can_open())
+        with mock.patch.object(sys.stdout, "isatty", return_value=True), mock.patch.object(sys, "platform", "linux"), \
+                mock.patch.dict(os.environ, {"WAYLAND_DISPLAY": "wayland-0"}, clear=True):
+            self.assertTrue(app.can_open())
+        with mock.patch.object(sys.stdout, "isatty", return_value=True), mock.patch.object(sys, "platform", "darwin"):
+            self.assertTrue(app.can_open())
+
     def test_version_opens_no_store(self):
         out = io.StringIO()
         with mock.patch.object(store, "open_store") as opened, contextlib.redirect_stdout(out), self.assertRaises(SystemExit) as cm:

@@ -5,7 +5,7 @@ See what your coding agents did, what it cost, and where they got stuck. AI Ledg
 <picture><source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/nWidart/ai-ledger/main/docs/tour-light.gif"><img src="https://raw.githubusercontent.com/nWidart/ai-ledger/main/docs/tour.gif" alt="Tour of the pages"></picture>
 
 ```bash
-uvx ai-ledger    # open http://127.0.0.1:8765/
+uvx ai-ledger    # opens http://127.0.0.1:8765/ in your browser
 ```
 
 Needs [uv](https://docs.astral.sh/uv/). macOS and Linux. Nothing leaves your machine except the Limits check under [Privacy](https://github.com/nWidart/ai-ledger#privacy).
@@ -31,15 +31,16 @@ Your agents delete old transcripts. AI Ledger keeps every line, so the history s
 
 ```bash
 uv tool install ai-ledger
-ai-ledger                   # serve on http://127.0.0.1:8765/
+ai-ledger                   # serve on http://127.0.0.1:8765/ and open it
 uv tool upgrade ai-ledger   # new version and new prices
 ```
 
-The first start reads every transcript, about 4 minutes for 3.4 GB. After that the app picks up new lines every 60 seconds.
+The app opens Activity in your browser; `--no-open` skips it. The first start reads every transcript, about 4 minutes for 3.4 GB. After that the app picks up new lines every 60 seconds.
 
 | Option | Default |
 | --- | --- |
 | `--port` | `8765` |
+| `--no-open` | off |
 | `--projects` | `~/.claude/projects` |
 | `--codex` | `~/.codex` |
 | `--usage-data` | `~/.claude/usage-data` |

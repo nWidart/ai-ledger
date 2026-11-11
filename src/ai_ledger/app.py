@@ -1,7 +1,8 @@
 """Local app: owns the transcript store, keeps it current, serves the Activity, Cost, Errors, Limits, Insights and Live pages.
 
 Usage:
-  ai-ledger            serve on http://127.0.0.1:8765 (ingests at start and every 60 seconds, every second while Live is open)
+  ai-ledger            serve on http://127.0.0.1:8765 and open it in the browser (ingests at start and every 60 seconds, every
+                       second while Live is open)
   ai-ledger ingest     ingest new transcript lines and /insights usage data once, then exit
   ai-ledger rebuild    regenerate the derived tables from the stored raw lines
 """
@@ -13,6 +14,7 @@ import os
 import sys
 import threading
 import time
+import webbrowser
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
@@ -265,7 +267,13 @@ def handler(app, port=PORT):
     return Handler
 
 
-def serve(con, roots, port=PORT):
+def can_open():
+    """A browser the user can see: a terminal runs the app, and on Linux a display exists (webbrowser falls back to a
+    text browser that takes the terminal otherwise)."""
+    return sys.stdout.isatty() and (sys.platform != "linux" or bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")))
+
+
+def serve(con, roots, port=PORT, open_page=False):
     app = App(con, roots)
     try:
         httpd = ThreadingHTTPServer((HOST, port), handler(app, port))
@@ -274,6 +282,11 @@ def serve(con, roots, port=PORT):
     loop = threading.Thread(target=app.loop, daemon=True)
     loop.start()
     print(f"serving http://{HOST}:{port}/ (ingest every {INTERVAL}s)", flush=True)
+    if open_page and can_open():
+        try:
+            webbrowser.open(f"http://{HOST}:{port}/")
+        except Exception:  # the printed URL still works
+            pass
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
@@ -291,6 +304,7 @@ def main(argv=None):
     ap.add_argument("--usage-data", default=store.DEFAULT_USAGE_DATA, help="Claude Code /insights usage-data directory")
     ap.add_argument("--db", help=f"database file (default {store.DEFAULT_DB})")
     ap.add_argument("--port", type=int, default=PORT, help=f"port to serve on at {HOST} (default {PORT})")
+    ap.add_argument("--no-open", action="store_true", help="serve without opening the browser")
     ap.add_argument("--version", action="version", version=f"ai-ledger {importlib.metadata.version('ai-ledger')}")
     a = ap.parse_args(argv)
     roots = dict(claude=a.projects, codex=a.codex, insights=a.usage_data)
@@ -300,7 +314,7 @@ def main(argv=None):
         print(e, file=sys.stderr)
         sys.exit(1)
     if a.command == "serve":
-        serve(con, roots, a.port)
+        serve(con, roots, a.port, open_page=not a.no_open)
     elif a.command == "ingest":
         t = time.time()
         print(store.ingest(con, roots, log=print))
