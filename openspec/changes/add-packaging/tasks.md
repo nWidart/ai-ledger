@@ -28,7 +28,7 @@
 
 ## 5. CI and release
 
-- [ ] 5.1 Add `.github/workflows/ci.yml` for pushes to `main` and pull requests. It runs `npm ci`, `npm run check`, `git diff --exit-code src/ai_ledger/web`, `uv sync --locked`, the unit tests and `uv build`. Verify on a pushed branch that it passes, and that a deliberately stale build fails it.
+- [x] 5.1 Add `.github/workflows/ci.yml` for pushes to `main` and pull requests. It runs `npm ci`, `npm run check`, `git diff --exit-code src/ai_ledger/web`, `uv sync --locked`, the unit tests and `uv build`. Verify on a pushed branch that it passes, and that a deliberately stale build fails it.
 - [x] 5.2 Add `.github/workflows/release.yml` on tags `v*`, with the four jobs `check`, `smoke`, `publish` and `github-release` from design.md. `check` fails when the tag differs from `uv version --short`. `smoke` runs on `macos-latest` and `ubuntu-latest` against a temporary store and fetches `/`, one asset and `/api/usage`. `publish` uses `environment: pypi`, `id-token: write` and `uv publish`. `github-release` uses the `CHANGELOG.md` section as notes. Verify the smoke and changelog-extraction steps locally with the same commands, and that `actionlint` reports nothing.
 - [x] 5.3 Add `CHANGELOG.md` in Keep a Changelog format with a `## [0.1.0] - <release date>` section listing the six pages, both sources and the package. Verify that the release job's `awk` extraction prints exactly that section.
 

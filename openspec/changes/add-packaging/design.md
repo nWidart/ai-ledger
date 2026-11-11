@@ -70,7 +70,7 @@ Tests drop their `sys.path` inserts and use `from ai_ledger import store, metric
   3. **publish**: `environment: pypi` with `permissions: id-token: write`, then `uv publish` with trusted publishing. No token is stored.
   4. **github-release**: extracts the version's section from `CHANGELOG.md` and runs `gh release create v<version> dist/* --notes-file <section>`.
 
-The workflows pin actions to a major version (`actions/checkout`, `actions/setup-node`, `astral-sh/setup-uv`). `setup-uv` installs the uv version that `uv_build` is pinned for.
+The workflows pin `actions/checkout`, `actions/setup-node` and the artifact actions to a major version. `astral-sh/setup-uv` publishes no major tags, so it is pinned to a commit SHA, as its README recommends. `setup-uv` installs the uv version that `uv_build` is pinned for.
 
 - *Alternative: `pypa/gh-action-pypi-publish`.* It works, but `uv publish` supports trusted publishing and keeps the toolchain to uv. Rejected for now.
 
