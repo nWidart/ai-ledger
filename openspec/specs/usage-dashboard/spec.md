@@ -97,7 +97,11 @@ Activity SHALL show, directly under its lead, every problem found in the view (e
 - **THEN** the attention summary says that nothing needs attention
 
 ### Requirement: Show work per day
-Activity SHALL chart commits, prompts or sessions per day across the view, with failed tool calls per day on the same chart, and selecting a day SHALL list that day's sessions.
+Activity SHALL chart commits, prompts or sessions per day across the view, from its first day with a session, with failed tool calls per day on the same chart, and selecting a day SHALL list that day's sessions. The all-time lead SHALL date the history from that same day.
+
+#### Scenario: History starts inside the range
+- **WHEN** the user opens the 90-day view and the first session in it ran 40 days ago
+- **THEN** the chart starts 40 days ago, with zeros for the idle days after that
 
 #### Scenario: Pick a busy day
 - **WHEN** the user selects a day with 40 commits on the work chart

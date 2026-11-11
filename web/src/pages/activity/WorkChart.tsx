@@ -92,8 +92,9 @@ export function WorkChart({ days, metric, onMetric, onDay }: WorkChartProps) {
           </>}
           {pk && pk[metric] > 0 && (() => {
             const { x: lx, anchor } = peakLabelAt(a, peak);
+            // A wide halo, so the failed-calls line never strikes through the label.
             return <text x={lx} y={a.y(pk[metric]) - 7} textAnchor={anchor} fontSize="11" fontWeight="600" fill="var(--text-primary)"
-              stroke="var(--surface-1)" strokeWidth="3" paintOrder="stroke">Peak {plural(pk[metric], M.one)} · {dayLabel(pk.day)}</text>;
+              stroke="var(--surface-1)" strokeWidth="7" strokeLinejoin="round" paintOrder="stroke">Peak {plural(pk[metric], M.one)} · {dayLabel(pk.day)}</text>;
           })()}
           {at && <rect x={a.m.l + at.i * a.bw} width={a.bw} y={a.m.t} height={a.ih} fill="var(--text-primary)" opacity=".06" />}
           <rect className="hit" x={a.m.l} y={a.m.t} width={a.iw} height={a.ih} fill="transparent" style={{ cursor: "pointer" }}
