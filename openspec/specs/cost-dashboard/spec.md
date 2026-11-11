@@ -22,10 +22,10 @@ The cost dashboard SHALL open with the estimated cost of the selected view, its 
 
 #### Scenario: Thirty-day view
 - **WHEN** the user views the last 30 days
-- **THEN** the page heading shows the period's estimated cost and its change against the 30 days before, and names both windows with their count of days with recorded usage
+- **THEN** the page heading shows the period's estimated cost and its change against the 30 days before, and names both windows with their count of days with a prompt
 
 #### Scenario: Thin previous period
-- **WHEN** the previous period has usage on fewer than half as many days as the current one
+- **WHEN** the previous period has prompts on fewer than half as many days as the current one
 - **THEN** the comparison is marked as resting on thin history
 
 #### Scenario: Previous period on unpriced models only

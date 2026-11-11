@@ -8,17 +8,17 @@ import { money, moved, periodCost, thinHistory } from "./cost";
 export const CHG_TOP = 8;
 const sgn = (v: number | null) => (v == null ? "–" : (v > 0 ? "+" : v < 0 ? "−" : "") + usd0(Math.abs(v)));
 
-/** Which days of a window have any recorded usage, one cell per day. */
+/** Which days of a window have spend (any request), one cell per day. */
 function DayStrip({ label, start, n, active }: { label: string; start: string; n: number; active: readonly string[] }) {
   const on = new Set(active), last = new Date(Date.parse(start + "T00:00:00Z") + (n - 1) * 864e5).toISOString().slice(0, 10);
   const cells = dayRange(start, last).map(k => on.has(k)), count = cells.filter(Boolean).length;
-  return <div className="daystrip" role="img" aria-label={`${label}: ${count} of ${n} days with recorded usage`}><span>{label}</span>
+  return <div className="daystrip" role="img" aria-label={`${label}: ${count} of ${n} days with spend`}><span>{label}</span>
     <span className={n > 60 ? "cells dense" : "cells"} aria-hidden="true">{cells.map((c, k) => <i key={k} className={c ? "on" : undefined} />)}</span>
-    <span aria-hidden="true"><b>{num(count)}</b>/{num(n)} days</span></div>;
+    <span aria-hidden="true"><b>{num(count)}</b>/{num(n)} days with spend</span></div>;
 }
 
 /** What changed: each project's cost change against the previous period, biggest move first, as bars either side of zero.
- *  The two day strips show which days of each window have any recorded usage, so a thin previous window is visible.
+ *  The two day strips show which days of each window have spend, so a thin previous window is visible.
  *  A cost that is unknown (all of a period's requests on unpriced models) reads "–", with no change. Not shown for one project. */
 export function Changes({ d, all, onAll }: { d: UsagePayload; all: boolean; onAll: (all: boolean) => void }) {
   const color = useColors(), prev = d.previous, cs = moved(d);
@@ -38,7 +38,7 @@ export function Changes({ d, all, onAll }: { d: UsagePayload; all: boolean; onAl
           <DayStrip label="Previous" start={prev.start} n={d.range} active={prev.daily.map(r => r.day)} />
         </div>
       </div>
-      {thinHistory(d) && <div className="chg-note">The previous window has usage on only {plural(prev.active_days, "day")} against {num(t.active_days)} now.
+      {thinHistory(d) && <div className="chg-note">The previous window has prompts on only {plural(prev.active_days, "day")} against {num(t.active_days)} now.
         Older transcripts may not be in the store, so read the multiple as "more than before", not an exact growth rate.</div>}
       <ol className="diverge">
         <li className="axis" aria-hidden="true"><span /><span><span>less</span><span>more</span></span><span /><span /></li>

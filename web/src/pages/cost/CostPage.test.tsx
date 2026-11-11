@@ -38,7 +38,7 @@ describe("cost figures", () => {
     expect(compareText({ ...usage, previous: { ...usage.previous!, cost: null, requests: 0 } })!.text).toBe("nothing in the previous 30 days");
   });
 
-  it("marks a previous window with under half the active days as thin", () => {
+  it("marks a previous window with under half the days with prompts as thin", () => {
     expect(thinHistory(usage)).toBe(false); // 1 day before, 2 now
     expect(thinHistory({ ...usage, totals: { ...usage.totals, active_days: 5 } })).toBe(true);
   });
@@ -52,12 +52,12 @@ describe("cost figures", () => {
 });
 
 describe("CostPage", () => {
-  it("leads a thirty-day view with its cost, the change and both windows with their active days", async () => {
+  it("leads a thirty-day view with its cost, the change and both windows with their days with prompts", async () => {
     const lede = await show(doubled);
     expect(lede.textContent).toBe("$16 estimated cost, 2.0× the previous 30 days2.0 times the previous 30 days");
     const windows = document.querySelector(".windows")!.textContent;
-    expect(windows).toMatch(/This period Oct 7 – Nov 5, 2026 · 2 active days of 30/);
-    expect(windows).toMatch(/Previous Sep 7 – Oct 6, 2026 · \$7\.90 · 1 active day of 30/);
+    expect(windows).toMatch(/This period Oct 7 – Nov 5, 2026 · 2 of 30 days with prompts/);
+    expect(windows).toMatch(/Previous Sep 7 – Oct 6, 2026 · \$7\.90 · 1 of 30 days with prompts/);
     expect(windows).not.toMatch(/thin history/);
     expect(screen.getByRole("img", { name: "Daily cost sparkline: previous 30 days $7.90, last 30 days $16." })).toBeTruthy();
   });
@@ -91,7 +91,7 @@ describe("CostPage", () => {
   it("marks the comparison as resting on thin history", async () => {
     await show({ ...doubled, totals: { ...doubled.totals, active_days: 5 } });
     expect(within(document.querySelector(".windows")!).getByText("thin history")).toBeTruthy();
-    expect(screen.getByText(/The previous window has usage on only 1 day against 5 now/)).toBeTruthy();
+    expect(screen.getByText(/The previous window has prompts on only 1 day against 5 now/)).toBeTruthy();
   });
 
   it("shows all time since the first day, without a comparison or What changed", async () => {
@@ -148,7 +148,7 @@ describe("CostPage", () => {
 
   it("shows an unknown previous cost as unknown, with no change", async () => {
     await show({ ...usage, previous: { ...usage.previous!, cost: null }, changes: [{ project: "foo", cost: 15.8, prev_cost: null, delta: null, new: false }] });
-    expect(document.querySelector(".windows")!.textContent).toMatch(/Previous Sep 7 – Oct 6, 2026 · – · 1 active day of 30/);
+    expect(document.querySelector(".windows")!.textContent).toMatch(/Previous Sep 7 – Oct 6, 2026 · – · 1 of 30 days with prompts/);
     const changed = document.getElementById("changed")!;
     expect(changed.querySelector(".hint")!.textContent).toMatch(/^– → \$16\. Each bar/);
     expect(within(changed).getByRole("button", { name: /^foo: –, from – to \$16/ })).toBeTruthy();

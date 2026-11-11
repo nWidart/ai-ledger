@@ -65,13 +65,13 @@ export function perCommitInsight(d: UsagePayload, go: CostActs): Insight {
     b: `${mult(r)} the median ${unit} (${usd(med)}) over ${plural(top.n, "commit")}.`, act: { label: d.project ? "Open session" : "Compare projects", run: open } };
 }
 
-/** The costliest day against the median active day. */
+/** The costliest day against the median day with spend. */
 export function peakInsight(d: UsagePayload, days: readonly CostDay[], go: CostActs): Insight | null {
   const pts = days.filter(p => p.cost > 0);
   if (!pts.length) return null;
   const peak = pts.reduce((a, b) => (b.cost > a.cost ? b : a)), med = median(pts.map(p => p.cost))!, r = med ? peak.cost / med : 1;
   return { sev: pts.length >= 5 && r >= 3 ? "warn" : "info", k: "Peak day", stake: peak.cost, t: dayLabel(peak.day, true), v: usd(peak.cost),
-    b: pts.length > 1 ? `${mult(r)} the median active day (${usd(med)}), ${pct(peak.cost / (d.totals.cost || 1))} of this range.` : "The only active day in this range.",
+    b: pts.length > 1 ? `${mult(r)} the median day with spend (${usd(med)}), ${pct(peak.cost / (d.totals.cost || 1))} of this range.` : "The only day with spend in this range.",
     act: { label: "Show that day's sessions", run: () => go.day(peak.day) } };
 }
 
@@ -84,8 +84,8 @@ export function cacheInsight(d: UsagePayload, go: CostActs): Insight | null {
     act: { label: "See tokens and cache", run: go.tokens } };
 }
 
-/** The phone's metric pair beside the lead finding: active days and cost per commit. */
+/** The phone's metric pair beside the lead finding: days with prompts and cost per commit. */
 export const pairFacts = (d: UsagePayload): { v: string; of?: string; l: string }[] => [
-  { v: num(d.totals.active_days), of: d.range ? ` / ${d.range}` : undefined, l: `active days${d.previous ? `, ${num(d.previous.active_days)} before` : ""}` },
+  { v: num(d.totals.active_days), of: d.range ? ` / ${d.range}` : undefined, l: `days with prompts${d.previous ? `, ${num(d.previous.active_days)} before` : ""}` },
   { v: d.totals.commits ? usd(d.totals.cost_per_commit) : "n/a", l: `per commit, ${plural(d.totals.commits, "commit")}` },
 ];
