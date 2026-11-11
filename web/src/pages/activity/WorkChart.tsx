@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import type { DailyWorkRow, UsagePayload } from "../../api";
 import { useColors } from "../../colors";
-import { dayLabel, niceStep, num, plural } from "../../format";
+import { dayLabel, dayRange, niceStep, num, plural } from "../../format";
 import { dayAxis, peakLabelAt, tipAt, useWidth } from "../../components/chart";
 import type { Kind } from "../cost/cost";
 import { busy, failRate, METRICS, workBuckets, workKinds, workStack, type WorkMetric } from "./work";
@@ -114,8 +114,16 @@ export function WorkChart({ days, metric, onMetric, onDay }: WorkChartProps) {
   );
 }
 
-/** A bar's name: its day, or the week it starts ("Week of Oct 5"); long: with the year. */
-export const bucketLabel = (day: string, week: boolean, long = false) => (week ? `Week of ${dayLabel(day, long)}` : dayLabel(day, long));
+/** The days of a view: a week bar it cuts short is partial. */
+export interface WorkView { start: string | null; end: string }
+/** What a partial week bar covers: ", from Sep 9" when the view starts after its Monday, ", so far" when it ends before
+ *  its Sunday; "" for a whole week. */
+const weekCut = (day: string, v: WorkView) =>
+  v.start && v.start > day ? `, from ${dayLabel(v.start)}` : dayRange(day, v.end).length < 7 ? ", so far" : "";
+/** A bar's name: its day, or the week it starts ("Week of Oct 5"); long: with the year, and how much of a week the view
+ *  covers when it cuts it short ("Week of Nov 9, 2026, so far"). */
+export const bucketLabel = (day: string, week: boolean, long = false, v?: WorkView) =>
+  (week ? `Week of ${dayLabel(day, long)}${long && v ? weekCut(day, v) : ""}` : dayLabel(day, long));
 /** One bar read aloud: "12 commits, 40 prompts, 6 sessions, 9 failed calls of 120, 7.5 per 100". */
 const bucketText = (p: DailyWorkRow) => `${plural(p.commits, "commit")}, ${plural(p.prompts, "prompt")}, ${plural(p.sessions, "session")}, `
   + `${plural(p.failed_calls, "failed call")}${p.calls ? ` of ${num(p.calls)}, ${num(failRate(p), 1)} per 100` : ""}`;
@@ -134,7 +142,7 @@ export function WorkPanel({ d, metric, onMetric, onDay }: WorkPanelProps) {
   const rows = useMemo(() => workBuckets(d), [d]);
   const kinds = workKinds(d, rows, metric);
   return <>
-    <WorkBars rows={rows} week={d.work_bucket === "week"} kinds={kinds} stack={workStack(rows, d.work_projects, kinds, metric)}
+    <WorkBars rows={rows} week={d.work_bucket === "week"} view={d} kinds={kinds} stack={workStack(rows, d.work_projects, kinds, metric)}
       metric={metric} onMetric={onMetric} onDay={onDay} />
     <WorkHours cells={d.work_hours} />
   </>;
@@ -145,6 +153,7 @@ const MARGIN = { t: 22, r: 44, b: 26, l: 52 }; // room on the right for the rate
 interface WorkBarsProps extends Omit<WorkPanelProps, "d"> {
   rows: DailyWorkRow[];
   week: boolean;
+  view: WorkView;
   /** The stacked projects, none for plain bars; stack: each bar's value per kind. */
   kinds: Kind[];
   stack: Record<string, number>[];
@@ -152,7 +161,7 @@ interface WorkBarsProps extends Omit<WorkPanelProps, "d"> {
 
 /** Work per day or week: the chosen count as bars (stacked by project when there are several), errors per 100 tool calls
  *  as a line against its own right-hand axis. */
-function WorkBars({ rows, week, kinds, stack, metric, onMetric, onDay }: WorkBarsProps) {
+function WorkBars({ rows, week, view, kinds, stack, metric, onMetric, onDay }: WorkBarsProps) {
   const box = useRef<HTMLDivElement>(null), tip = useRef<HTMLDivElement>(null), svg = useRef<SVGSVGElement>(null);
   const W = useWidth(box);
   const [at, setAt] = useState<{ i: number; x: number; y: number } | null>(null);
@@ -168,7 +177,8 @@ function WorkBars({ rows, week, kinds, stack, metric, onMetric, onDay }: WorkBar
   // Week labels are longer, so fewer of them fit.
   const every = week ? Math.max(1, Math.ceil(rows.length / Math.max(2, Math.floor(a.iw / 100)))) : a.every;
   // The rate axis has as many steps as the count axis, so its ticks sit on the same grid lines.
-  const rates = rows.map(failRate), n = Math.round(a.yMax / a.step);
+  // No bar with a tool call: no rate to draw, so no line, axis or legend key.
+  const rates = rows.map(failRate), hasRate = rates.some(r => r != null), n = Math.round(a.yMax / a.step);
   const rStep = niceStep((Math.max(...rates.map(r => r ?? 0), 0) * 1.08 || 1) / n), ry = (v: number) => a.m.t + a.ih - v / (rStep * n) * a.ih;
   const rDigits = Math.max(0, -Math.floor(Math.log10(rStep))); // a step of 0.5 reads "0.5", not "1"
   const line = rates.map((v, i) => (v == null ? "" : `${rates[i - 1] != null ? "L" : "M"}${a.cx(i).toFixed(1)},${ry(v).toFixed(1)}`)).join("");
@@ -197,9 +207,10 @@ function WorkBars({ rows, week, kinds, stack, metric, onMetric, onDay }: WorkBar
   const ticks: number[] = [];
   for (let v = 0; v <= n; v++) ticks.push(v);
   const cur = at ? rows[at.i] : undefined, curParts = at && kinds.length ? parts(at.i).reverse() : [];
-  const what = `${M.label}${kinds.length ? " by project" : ""} and errors per 100 tool calls per ${unit}, ${plural(rows.length, unit)}`;
+  const name = (day: string) => bucketLabel(day, week, true, view);
+  const what = `${M.label}${kinds.length ? " by project" : ""}${hasRate ? " and errors per 100 tool calls" : ""} per ${unit}, ${plural(rows.length, unit)}`;
   const label = pk && pk[metric] > 0
-    ? `${what}, ${M.label.toLowerCase()} peaking at ${num(pk[metric])} ${week ? "in the week of" : "on"} ${dayLabel(pk.day, true)}. `
+    ? `${what}, ${M.label.toLowerCase()} peaking at ${num(pk[metric])} ${week ? "in the week of" : "on"} ${dayLabel(pk.day, true)}${week ? weekCut(pk.day, view) : ""}. `
       + (week ? "Use the left and right arrow keys to read each week. Choose a shorter range to pick a day." : "Use the left and right arrow keys to read each day and Enter to list its sessions.")
     : `${what}, no ${M.label.toLowerCase()} yet.`;
 
@@ -207,8 +218,8 @@ function WorkBars({ rows, week, kinds, stack, metric, onMetric, onDay }: WorkBar
     <section className="panel sect work" id="work" aria-labelledby="workTitle">
       <div className="chart-head">
         <div><h2 id="workTitle">Work per {unit}</h2>
-          <div className="hint">{M.label}{kinds.length ? " by project (projects with a color of their own, the rest in Other)" : ""} per {week ? "week, from Monday" : "day"}, with
-            errors per 100 tool calls against the right-hand axis. {week
+          <div className="hint">{M.label}{kinds.length ? " by project (projects with a color of their own, the rest in Other)" : ""} per {week ? "week, from Monday" : "day"}{hasRate
+            ? ", with errors per 100 tool calls against the right-hand axis" : ""}. {week
               ? "Choose a shorter range to pick a day."
               : "Select a day to list its sessions; with the keyboard, focus the chart, use the arrow keys and press Enter."}</div></div>
         <div className="seg" role="group" aria-label="Chart metric">
@@ -217,14 +228,14 @@ function WorkBars({ rows, week, kinds, stack, metric, onMetric, onDay }: WorkBar
       </div>
       <div className="legend" aria-hidden="true">
         {(kinds.length ? kinds : [plain]).map(k => <span key={k.k} className="key"><i style={{ background: k.c }} />{k.label}</span>)}
-        <span className="key"><i className="line" style={{ borderTopColor: FAIL }} />Errors per 100 calls (right axis)</span>
+        {hasRate && <span className="key"><i className="line" style={{ borderTopColor: FAIL }} />Errors per 100 calls (right axis)</span>}
       </div>
       <div className="chart" ref={box} tabIndex={0} role="img" aria-label={label} onKeyDown={onKey} onBlur={() => setAt(null)}>
         <svg ref={svg} viewBox={`0 0 ${W} ${H}`} aria-hidden="true">
           {ticks.map(t => <g key={t}><line x1={a.m.l} x2={W - a.m.r} y1={a.y(t * a.step)} y2={a.y(t * a.step)} stroke="var(--grid)" />
             <text x={a.m.l - 6} y={a.y(t * a.step) + 4} textAnchor="end" fontSize="11" fill="var(--text-muted)">{num(t * a.step)}</text>
-            <text x={W - a.m.r + 6} y={ry(t * rStep) + 4} fontSize="11" fill="var(--text-muted)">{num(t * rStep, rDigits)}</text></g>)}
-          <text transform={`translate(${W - 6},${a.m.t + a.ih / 2}) rotate(90)`} textAnchor="middle" fontSize="11" fill="var(--text-muted)">Errors per 100 calls</text>
+            {hasRate && <text className="rtick" x={W - a.m.r + 6} y={ry(t * rStep) + 4} fontSize="11" fill="var(--text-muted)">{num(t * rStep, rDigits)}</text>}</g>)}
+          {hasRate && <text transform={`translate(${W - 6},${a.m.t + a.ih / 2}) rotate(90)`} textAnchor="middle" fontSize="11" fill="var(--text-muted)">Errors per 100 calls</text>}
           {rows.map((p, i) => {
             const x = a.x(i), segs = parts(i);
             let base = 0;
@@ -243,8 +254,10 @@ function WorkBars({ rows, week, kinds, stack, metric, onMetric, onDay }: WorkBar
             </g>;
           })}
           {/* The rate line, haloed in the surface color so it stays readable across the bars. */}
-          <path d={line} fill="none" stroke="var(--surface-1)" strokeWidth="4.5" strokeLinejoin="round" strokeLinecap="round" />
-          <path className="rate" d={line} fill="none" stroke={FAIL} strokeWidth="1.75" strokeLinejoin="round" strokeLinecap="round" />
+          {hasRate && <>
+            <path d={line} fill="none" stroke="var(--surface-1)" strokeWidth="4.5" strokeLinejoin="round" strokeLinecap="round" />
+            <path className="rate" d={line} fill="none" stroke={FAIL} strokeWidth="1.75" strokeLinejoin="round" strokeLinecap="round" />
+          </>}
           {lone.map(i => <circle key={i} className="rate" cx={a.cx(i)} cy={ry(rates[i]!)} r="2.5" fill={FAIL} stroke="var(--surface-1)" strokeWidth="1.5" />)}
           {pk && pk[metric] > 0 && (() => {
             const { x: lx, anchor } = peakLabelAt(a, peak);
@@ -257,7 +270,7 @@ function WorkBars({ rows, week, kinds, stack, metric, onMetric, onDay }: WorkBar
             onPointerMove={onMove} onPointerLeave={() => setAt(null)} onClick={week ? undefined : ev => pick(indexAt(ev.clientX))} />
         </svg>
         <div className="tip" ref={tip} role="tooltip" style={{ display: cur ? "block" : "none" }}>{cur && <>
-          <div className="muted">{bucketLabel(cur.day, week, true)}</div>
+          <div className="muted">{name(cur.day)}</div>
           {METRICS.map(x => <div key={x.k} className="row"><span>{x.k === metric && !kinds.length && <i style={{ background: BAR }} />}{x.label}</span><b>{num(cur[x.k])}</b></div>)}
           {curParts.length > 0 && <div className="parts">{curParts.map(([k, v]) =>
             <div key={k.k} className="row"><span><i style={{ background: k.c }} />{k.label}</span><b>{num(v)}</b></div>)}</div>}
@@ -265,7 +278,7 @@ function WorkBars({ rows, week, kinds, stack, metric, onMetric, onDay }: WorkBar
           <div className="row"><span>Failed tool calls</span><b>{num(cur.failed_calls)}{cur.calls ? ` of ${num(cur.calls)}` : ""}</b></div>
         </>}</div>
       </div>
-      <div className="sr" aria-live="polite">{cur ? `${bucketLabel(cur.day, week, true)}: ${bucketText(cur)}`
+      <div className="sr" aria-live="polite">{cur ? `${name(cur.day)}: ${bucketText(cur)}`
         + (curParts.length ? `. ${M.label} by project: ${curParts.map(([k, v]) => `${k.label} ${num(v)}`).join(", ")}` : "") : ""}</div>
     </section>
   );
