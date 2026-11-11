@@ -118,7 +118,7 @@ export interface ErrorsPayload {
   calls: [Day, string, number, number, Source][];
   /** [day, project, category, errors, subagent errors, source] */
   error_days: [Day, string, string | null, number, number, Source][];
-  incidents: Incident[]; incident_gap_minutes: number;
+  incidents: Incident[]; incident_gap_minutes: number; incident_max_ok: number;
 }
 // Tool inspector (/api/tool, metrics.tool_detail): one tool, MCP server or skill over the view.
 export type ToolKind = "tool" | "mcp" | "skill";
