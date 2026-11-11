@@ -3,6 +3,12 @@
 All notable changes to AI Ledger are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.1.1] - 2026-11-11
+
+### Changed
+
+- A shorter README, with GIFs of every page, Live and Insights included, in light and dark mode. Its links work on PyPI.
+
 ## [0.1.0] - 2026-11-11
 
 First release on PyPI.
@@ -22,4 +28,5 @@ First release on PyPI.
   `$XDG_DATA_HOME/ai-ledger/` (or `~/.local/share/ai-ledger/`) elsewhere. A source checkout's `data/ai-ledger.duckdb`
   moves there on the first start.
 
+[0.1.1]: https://github.com/nWidart/ai-ledger/releases/tag/v0.1.1
 [0.1.0]: https://github.com/nWidart/ai-ledger/releases/tag/v0.1.0
