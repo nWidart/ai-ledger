@@ -11,7 +11,7 @@ const Vital = ({ v, l, note, cls = "" }: { v: ReactNode; l: string; note: string
 /** The briefing (the period's answer as one sentence) and the vitals; on a phone the rest of the summary waits behind More. */
 export function Summary() {
   const { m, v, f, fixes } = useErrors(), s = summary(m, v, f, fixes), [more, setMore] = useState(false);
-  const { totalCalls, n, r, r0, r1, d, cmp, top, vt, inc } = s, idle = !totalCalls;
+  const { totalCalls, n, r, r0, r1, d, cmp, why, top, vt, inc } = s, idle = !totalCalls;
   const arrow = d == null ? null : Math.abs(d) < 1 ? `, flat ${cmp}` : <>, <span className={d < 0 ? "dn" : "up"}>{d < 0 ? "↓" : "↑"}{fmt(Math.abs(d), 0)}%</span> {cmp}</>;
   const where = v.project ? <> in <b><ProjectDot project={v.project} />{v.project}</b></> : null;
   const gen = (v.range ? `${label(f.start, true)} to ${label(m.lastDay, true)}` : `All time to ${label(m.lastDay, true)}`)
@@ -28,7 +28,7 @@ export function Summary() {
     <section className={"vitals" + (more ? " open" : "")} id="kpis" aria-label="Summary">
       <Vital v={idle ? "–" : fmt(r, 1) + "%"} l="Error rate" note={idle ? "No tool calls in this period." : `${fmt(n)} of ${fmt(totalCalls)} tool calls failed.`} />
       <Vital v={d == null ? "–" : `${d > 0 ? "+" : ""}${fmt(d, 0)}%`} l="Change" cls={d == null ? "" : d < -1 ? "delta-down" : d > 1 ? "delta-up" : ""}
-        note={r0 == null || r1 == null ? "Not enough calls to compare." : `Error rate ${cmp}: ${fmt(r0, 1)}% → ${fmt(r1, 1)}%.`} />
+        note={why ? `${why}, nothing to compare.` : r0 == null || r1 == null ? "Not enough calls to compare." : `Error rate ${cmp}: ${fmt(r0, 1)}% → ${fmt(r1, 1)}%.`} />
       <Vital v={n ? fmt(inc.n) : "–"} l="Incidents" note={n ? `${fmt(n)} error${n === 1 ? "" : "s"} in ${fmt(inc.n)} incident${inc.n === 1 ? "" : "s"}, ${fmt(inc.pct, 0)}% didn't recover. ${RECOVERED_NOTE} ${fmt(types)} error types.` : "No errors in this period."} />
       <Vital v={fmt(s.nFix)} l="Fixes applied" note={`${fmt(s.withFix)} open type${s.withFix === 1 ? " has" : "s have"} a ready-made fix.`} />
     </section>

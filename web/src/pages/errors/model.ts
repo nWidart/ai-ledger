@@ -7,11 +7,17 @@ import type { Range } from "../../hash";
 export const NOISE = new Set(["infra", "user_denied"]);
 export const TOPN = 5;
 export const MIN_AFTER_CALLS = 200; // calls since a fix before its rate counts as lower or higher
+export const MIN_CMP_CALLS = 200; // tool calls each side of a change needs before the change shows
+export const MIN_PCT_ERRORS = 5; // fewer errors than this on either side: a type's change shows as counts, not a percent
+export const GAP_FOLD = 8; // a stretch of this many chart buckets or more without a call folds into one
+export const LOW_CALLS = 50; // a chart bucket with fewer calls has a noisy rate: marked, and left out of the rate scale
 export const PAYLOAD_INPUT = 400; // the payload cuts inputs here; "Show full" loads the rest from /api/error
 const DAY = 864e5;
 export const toDate = (s: string) => new Date(s + "T00:00:00Z");
 export const iso = (d: Date) => d.toISOString().slice(0, 10);
 export const label = (k: string, long = false) => dayLabel(k, long);
+/** A day, with its year when that isn't the year of the payload's today. */
+export const yearLabel = (m: Model, k: Day) => dayLabel(k, k.slice(0, 4) !== m.lastDay.slice(0, 4));
 export const shortLabel = (s: string) => (s.length > 26 ? s.slice(0, 25) + "…" : s);
 
 export type Gran = "day" | "week";
@@ -26,7 +32,7 @@ export interface Model {
   data: ErrorsPayload; errors: Err[]; cats: Record<string, Category>; byId: Record<string, Err>;
   /** Error types by all-time count: the five busiest keep their color in every view. */
   allRank: string[];
-  lastDay: Day; firstDay: Day; incidents: Incident[]; gap: number;
+  lastDay: Day; firstDay: Day; incidents: Incident[]; gap: number; maxOk: number;
   /** Every project with errors or tool calls, by all-time errors. */
   projects: [string, number][];
   /** [day, project, category, errors, subagent errors, source] with a category. */
@@ -48,6 +54,7 @@ export function makeModel(data: ErrorsPayload): Model {
   for (const c of data.calls) count[c[1]] ??= 0;
   for (const e of errors) count[e.p] = (count[e.p] || 0) + 1;
   return { data, errors, cats, byId, allRank, lastDay, firstDay, incidents: data.incidents || [], gap: data.incident_gap_minutes || 10,
+    maxOk: data.incident_max_ok ?? 2,
     projects: Object.entries(count).sort((a, b) => b[1] - a[1]), errorDays };
 }
 
@@ -67,14 +74,16 @@ export const rangeStart = (m: Model, v: View): Day => (v.range ? iso(new Date(+t
 /** The row's project and source pass the view's filters. */
 export const inScope = (v: View, project: string, src: Source) => (!v.project || project === v.project) && (!v.source || src === v.source);
 const callIn = (v: View) => (c: CallRow) => inScope(v, c[1], c[4]);
-export interface Filtered { start: Day; errs: Err[]; calls: CallRow[] }
+/** start: the range's first day; from: its first day with a tool call (start without any), where charts begin. */
+export interface Filtered { start: Day; from: Day; errs: Err[]; calls: CallRow[] }
 /** The view's errors and calls, from its first day to the last (today): a day past it, from a clock ahead of the server's,
  *  has no bucket. */
 export function filtered(m: Model, v: View): Filtered {
   const start = rangeStart(m, v), scoped = callIn(v), on = (d: Day) => d >= start && d <= m.lastDay;
   const errs = m.errors.filter(e => on(e.d) && inScope(v, e.p, e.src) && (v.sub || !e.sub) && (!v.noise || !NOISE.has(e.c)));
   const calls = m.data.calls.filter(c => on(c[0]) && scoped(c));
-  return { start, errs, calls };
+  const from = calls.reduce((s, c) => (nCalls(v, c) && (!s || c[0] < s) ? c[0] : s), "") || start;
+  return { start, from, errs, calls };
 }
 /** Tool calls in a [day, project, calls, subagent calls] row, matching the subagent toggle. */
 export const nCalls = (v: View, c: CallRow) => (v.sub ? c[2] : c[2] - c[3]);
@@ -97,16 +106,45 @@ export function series(v: View, errs: readonly Err[], calls: readonly CallRow[],
 /** No calls, no rate: null, never a 0% baseline. */
 export const rate = (e: number, c: number): number | null => (c ? e / c * 100 : null);
 export interface Delta { text: string; cls: string; title?: string }
-/** Change from rate a to rate b: "–" when either half has no calls, "New" when a is 0 and b isn't, "–" when both are 0.
- *  min: change shown without an arrow. */
-export function change(a: number | null, b: number | null, min = 0): Delta {
-  if (a == null || b == null) return { text: "–", cls: "muted", title: `Not enough data in the ${a == null ? "first" : "second"} half` };
-  if (!a) return b ? { text: "New", cls: "delta-up" } : { text: "–", cls: "muted" };
-  const d = (b - a) / a * 100;
-  return { text: `${d > min ? "▲ +" : d < -min ? "▼ " : ""}${fmt(d, 0)}%`, cls: d > min ? "delta-up" : d < -min ? "delta-down" : "muted" };
+/** One side of a comparison: tool calls, errors, and errors per type. */
+export interface Tally { c: number; e: number; by: Record<string, number> }
+/** What a change compares, the same for the vitals, the table and Rising fastest: this range against the same number of days
+ *  just before it. All time has no period before it, so it compares the calls before and since the day that splits its calls
+ *  in half (a few early calls can't make a half). why: the reason there's no change to show, or null. */
+export interface Compare { a: Tally; b: Tally; cmp: string; why: string | null }
+export function compare(m: Model, v: View, f: Filtered): Compare {
+  const span = prevSpan(m, v), mid = span ? f.start : midDay(v, f), before = iso(new Date(+toDate(mid) - DAY));
+  const [a0, a1] = span ?? [f.start, before], scoped = callIn(v);
+  const side = (from: Day, to: Day): Tally => {
+    const by: Record<string, number> = {};
+    for (const x of errorDays(m, v, from, to)) by[x.c] = (by[x.c] || 0) + x.n;
+    return { c: sumCalls(v, m.data.calls.filter(c => c[0] >= from && c[0] <= to && scoped(c))), e: Object.values(by).reduce((s, n) => s + n, 0), by };
+  };
+  const a = side(a0, a1), b = side(mid, m.lastDay);
+  const why = a.c >= MIN_CMP_CALLS && b.c >= MIN_CMP_CALLS ? null
+    : span ? `Fewer than ${fmt(MIN_CMP_CALLS)} tool calls in ${a.c < MIN_CMP_CALLS ? `the ${v.range} days before` : "this range"}`
+    : `Fewer than ${fmt(MIN_CMP_CALLS)} tool calls ${a.c < MIN_CMP_CALLS ? "before" : "since"} ${yearLabel(m, mid)}`;
+  return { a, b, cmp: span ? `vs previous ${v.range} days` : `vs before ${yearLabel(m, mid)}`, why };
 }
-/** The middle day of the range: the trend compares the halves on either side. */
-export const midDay = (m: Model, f: Filtered) => iso(new Date((+toDate(f.start) + +toDate(m.lastDay)) / 2));
+/** Change of a type's error rate between the sides: "–" with the reason when either side has too few calls; the counts
+ *  ("2 → 9") when either side has fewer than MIN_PCT_ERRORS errors, too few for a percent. min: change shown without an arrow. */
+export function change(x: Compare, cat: string, min = 0): Delta {
+  if (x.why) return { text: "–", cls: "muted", title: x.why };
+  const e0 = x.a.by[cat] || 0, e1 = x.b.by[cat] || 0, r0 = e0 / x.a.c * 100, r1 = e1 / x.b.c * 100;
+  const title = `Error rate ${x.cmp}: ${fmt(r0, 2)}% → ${fmt(r1, 2)}% (${fmt(e0)} → ${fmt(e1)} errors)`;
+  if (e0 < MIN_PCT_ERRORS || e1 < MIN_PCT_ERRORS) return { text: `${fmt(e0)} → ${fmt(e1)}`, cls: "muted", title };
+  const d = (r1 - r0) / r0 * 100;
+  return { text: `${d > min ? "▲ +" : d < -min ? "▼ " : ""}${fmt(d, 0)}%`, cls: d > min ? "delta-up" : d < -min ? "delta-down" : "muted", title };
+}
+/** The day that splits the view's calls in half: the calls before it are under half of them. */
+export function midDay(v: View, f: Filtered): Day {
+  const by: Record<string, number> = {};
+  for (const c of f.calls) by[c[0]] = (by[c[0]] || 0) + nCalls(v, c);
+  const total = Object.values(by).reduce((s, n) => s + n, 0);
+  let acc = 0;
+  for (const d of Object.keys(by).sort()) if ((acc += by[d]!) * 2 >= total) return d;
+  return f.start;
+}
 
 // ---------- per-type counts ----------
 /** The view's top types, each with a color: an all-time top-5 type takes its own slot, the rest fill free ones. */
@@ -142,30 +180,20 @@ export const settle = (m: Model, v: View): View => (v.cat && !v.focus && !countB
 // ---------- briefing and vitals ----------
 export interface Summary {
   totalCalls: number; n: number; r: number | null; r0: number | null; r1: number | null; d: number | null; cmp: string;
-  top: string | undefined; vt: ViewTypes; nFix: number; withFix: number; inc: IncSummary;
+  why: string | null; top: string | undefined; vt: ViewTypes; nFix: number; withFix: number; inc: IncSummary;
 }
 export function summary(m: Model, v: View, f: Filtered, fixes: Fixes): Summary {
   const totalCalls = sumCalls(v, f.calls), n = f.errs.length, r = rate(n, totalCalls), vt = viewTypes(m, v, f);
-  // Previous period: the same number of days just before this range. All time compares its two halves instead.
-  const span = prevSpan(m, v);
-  let r0: number | null, r1: number | null, cmp: string;
-  if (span) {
-    const scoped = callIn(v), pc = sumCalls(v, m.data.calls.filter(c => c[0] >= span[0] && c[0] <= span[1] && scoped(c)));
-    r0 = rate(errorDays(m, v, span[0], span[1]).reduce((s, x) => s + x.n, 0), pc); r1 = r; cmp = `vs previous ${v.range} days`;
-  } else {
-    const mid = midDay(m, f);
-    r0 = rate(f.errs.filter(e => e.d < mid).length, sumCalls(v, f.calls.filter(c => c[0] < mid))); cmp = "vs the first half";
-    r1 = rate(f.errs.filter(e => e.d >= mid).length, sumCalls(v, f.calls.filter(c => c[0] >= mid)));
-  }
+  const x = compare(m, v, f), r0 = x.why ? null : rate(x.a.e, x.a.c), r1 = x.why ? null : rate(x.b.e, x.b.c);
   const d = r0 && r1 != null ? (r1 - r0) / r0 * 100 : null;
-  return { totalCalls, n, r, r0, r1, d, cmp, top: vt.top[0], vt, nFix: Object.keys(fixes).length,
+  return { totalCalls, n, r, r0, r1, d, cmp: x.cmp, why: x.why, top: vt.top[0], vt, nFix: Object.keys(fixes).length,
     withFix: Object.keys(vt.counts).filter(c => !fixes[c] && m.cats[c]?.snippet).length, inc: incSummary(m, f.errs) };
 }
 
 // ---------- incidents ----------
-// The server groups failures into incidents: one tool, one session (main thread or subagents), one error type, each failure
-// within incident_gap_minutes of the last. A view's incidents come from its errors, so attempts count only the failures that
-// pass the filters. outcome is what the tool's next call in that session did after the last failure.
+// The server groups failures into incidents, a retry loop: one tool, one agent (the main thread or one subagent), one error
+// type, each failure within incident_gap_minutes of the last and at most incident_max_ok successful calls of that tool apart. A view's incidents come from its errors, so attempts count only the failures that
+// pass the filters. outcome is what the agent's next call of that tool did after the last failure ended.
 export type Group = Incident & { i: number; errs: Err[] };
 export function incidentsOf(m: Model, errs: readonly Err[]): Group[] {
   const g = new Map<number, Group>();
@@ -182,9 +210,9 @@ export function incidentsOf(m: Model, errs: readonly Err[]): Group[] {
 export const incSpan = (g: Group) => Math.max(0, Date.parse(g.last ?? "") - Date.parse(g.first ?? "")) || 0;
 /** Most attempts first, then the longest, then the latest. */
 export const byWeight = (a: Group, b: Group) => b.errs.length - a.errs.length || incSpan(b) - incSpan(a) || ((a.first ?? "") < (b.first ?? "") ? 1 : -1);
-// "recovered" means only that the tool's next call in that session succeeded, so the badge says that.
+// "recovered" means only that the agent's next call of that tool succeeded, so the badge says that.
 export const OUTCOME: Record<string, [string, string]> = { recovered: ["Next call OK", "ok"], failed_again: ["Failed again", "warn"], gave_up: ["Gave up", "bad"] };
-export const RECOVERED_NOTE = "Recovered means only that the tool's next call in that session succeeded.";
+export const RECOVERED_NOTE = "Recovered means only that the agent's next call of that tool succeeded.";
 /** Milliseconds as 42s, 7 min or 1.5 h (this page's own wording). */
 export function dur(ms: number) {
   const s = Math.round(ms / 1000);
@@ -198,12 +226,13 @@ export function incSummary(m: Model, errs: readonly Err[]): IncSummary {
 }
 
 // ---------- main chart ----------
-export interface ChartPt { k: Day; c: number; e: number; by: Record<string, number>; other: number; byAll: Record<string, number>; r: number | null }
+/** to: the last bucket a folded stretch without calls stands for. */
+export interface ChartPt { k: Day; c: number; e: number; by: Record<string, number>; other: number; byAll: Record<string, number>; r: number | null; to?: Day }
 export function chartData(m: Model, v: View, f: Filtered, vt: ViewTypes) {
-  const keys = buckets(m, f.start, v.gran), at = new Map(keys.map((k, i) => [k, i]));
+  const keys = buckets(m, f.from, v.gran), at = new Map(keys.map((k, i) => [k, i]));
   const pts: ChartPt[] = keys.map(k => ({ k, c: 0, e: 0, by: {}, other: 0, byAll: {}, r: null }));
   for (const x of f.calls) { const i = at.get(bucketOf(x[0], v.gran)); if (i != null) pts[i]!.c += nCalls(v, x); }
-  for (const x of errorDays(m, v, f.start, m.lastDay)) {
+  for (const x of errorDays(m, v, f.from, m.lastDay)) {
     const i = at.get(bucketOf(x.d, v.gran)), p = i == null ? undefined : pts[i];
     if (!p) continue;
     p.e += x.n;
@@ -211,14 +240,22 @@ export function chartData(m: Model, v: View, f: Filtered, vt: ViewTypes) {
     p.byAll[x.c] = (p.byAll[x.c] || 0) + x.n;
   }
   for (const p of pts) p.r = rate(p.e, p.c);
-  return { keys, pts };
+  // A long stretch without a call or an error folds into one bucket, so a few early calls can't push the rest into a corner.
+  const out: ChartPt[] = [];
+  for (let i = 0; i < pts.length;) {
+    let j = i;
+    while (j < pts.length && !pts[j]!.c && !pts[j]!.e) j++;
+    if (j - i >= GAP_FOLD) { out.push({ ...pts[i]!, to: pts[j - 1]!.k }); i = j; } else { out.push(...pts.slice(i, Math.max(j, i + 1))); i = Math.max(j, i + 1); }
+  }
+  return { keys: out.map(p => p.k), pts: out };
 }
 /** A point's rows in the tooltip: the view's layers, then Other. [label, count, color, selected] */
 export function pointRows(m: Model, v: View, p: ChartPt, vt: ViewTypes): [string, number, string, boolean][] {
   return [...vt.layers.filter(c => p.by[c]).map(c => [m.cats[c]!.label, p.by[c]!, typeColor(c, vt), c === v.cat] as [string, number, string, boolean]),
     ...(p.other ? [["Other types", p.other, "var(--type-other)", false] as [string, number, string, boolean]] : [])];
 }
-export const pointWhen = (v: View, p: ChartPt) => `${v.gran === "week" ? "Week of " : ""}${label(p.k, true)}`;
+export const pointWhen = (v: View, p: ChartPt) =>
+  p.to ? `${label(p.k, true)} – ${v.gran === "week" ? "week of " : ""}${label(p.to, true)}` : `${v.gran === "week" ? "Week of " : ""}${label(p.k, true)}`;
 /** What the keyboard reading of the chart announces for a point. */
 export function pointText(m: Model, v: View, p: ChartPt, vt: ViewTypes): string {
   const when = pointWhen(v, p), selN = (v.cat && p.byAll[v.cat]) || 0;
@@ -241,12 +278,9 @@ export function linePath(vals: readonly (number | null)[], x: (i: number) => num
 // ---------- category table ----------
 export interface TypeRow { cid: string; n: number; share: number; color: string; pts: Pt[]; delta: Delta }
 export function typeRows(m: Model, v: View, f: Filtered): TypeRow[] {
-  const counts = countBy(f.errs), total = f.errs.length || 1, vt = viewTypes(m, v, f), keys = buckets(m, f.start, v.gran);
-  const mid = midDay(m, f), c1 = sumCalls(v, f.calls.filter(c => c[0] < mid)), c2 = sumCalls(v, f.calls.filter(c => c[0] >= mid));
-  return Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([cid, n]) => {
-    const e1 = f.errs.filter(e => e.c === cid && e.d < mid).length;
-    return { cid, n, share: n / total, color: typeColor(cid, vt), pts: series(v, f.errs, f.calls, keys, cid), delta: change(rate(e1, c1), rate(n - e1, c2), 5) };
-  });
+  const counts = countBy(f.errs), total = f.errs.length || 1, vt = viewTypes(m, v, f), keys = buckets(m, f.from, v.gran), x = compare(m, v, f);
+  return Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([cid, n]) =>
+    ({ cid, n, share: n / total, color: typeColor(cid, vt), pts: series(v, f.errs, f.calls, keys, cid), delta: change(x, cid, 5) }));
 }
 /** The table's empty row. */
 export function emptyTypes(m: Model, v: View, f: Filtered): string {
@@ -255,18 +289,18 @@ export function emptyTypes(m: Model, v: View, f: Filtered): string {
 }
 
 // ---------- detail ----------
-export interface Rising { c: string; e1: number; e2: number; d: number }
-/** Where to start: the biggest open types with a ready-made fix, and the types rising fastest (second half against the first,
- *  among types with enough recent errors to mean it). */
+export interface Rising { c: string; e1: number; e2: number; r1: number; r2: number; d: number }
+/** Where to start: the biggest open types with a ready-made fix, and the types rising fastest: up over 10% in the change the
+ *  table shows, with enough recent errors to mean it, the biggest gain in error rate first (a type from 0 to 9 errors can't
+ *  outrank one from 1 to 128), Infinity when the side before had none of its errors. why: the reason nothing can rise, or null. */
 export function whereToStart(m: Model, v: View, f: Filtered, fixes: Fixes) {
-  const counts = countBy(f.errs);
+  const counts = countBy(f.errs), x = compare(m, v, f);
   const open = Object.entries(counts).filter(([c]) => !fixes[c] && m.cats[c]?.snippet).sort((a, b) => b[1] - a[1]).slice(0, 4);
-  const mid = midDay(m, f), c1 = sumCalls(v, f.calls.filter(c => c[0] < mid)), c2 = sumCalls(v, f.calls.filter(c => c[0] >= mid));
-  const rising: Rising[] = Object.keys(counts).map(c => {
-    const e1 = f.errs.filter(e => e.c === c && e.d < mid).length, e2 = counts[c]! - e1, r1 = rate(e1, c1), r2 = rate(e2, c2);
-    return { c, e1, e2, d: r1 == null || r2 == null ? null : r1 ? (r2 - r1) / r1 * 100 : Infinity };
-  }).filter((x): x is Rising => x.d != null && x.d > 10 && x.e2 >= 5).sort((a, b) => b.d - a.d || b.e2 - a.e2).slice(0, 4);
-  return { open, rising };
+  const rising: Rising[] = x.why ? [] : Object.keys(x.b.by).map(c => {
+    const e1 = x.a.by[c] || 0, e2 = x.b.by[c]!, r1 = e1 / x.a.c * 100, r2 = e2 / x.b.c * 100;
+    return { c, e1, e2, r1, r2, d: r1 ? (r2 - r1) / r1 * 100 : Infinity };
+  }).filter(r => r.d > 10 && r.e2 >= MIN_PCT_ERRORS).sort((a, b) => b.r2 - b.r1 - (a.r2 - a.r1) || b.e2 - a.e2).slice(0, 4);
+  return { open, rising, cmp: x.cmp, why: x.why };
 }
 export interface Side { name: string; e: number; c: number; r: number | null; empty: string }
 export interface BeforeAfter { sides: [Side, Side]; need: number; enough: boolean; verdict: [string, string] }
@@ -281,12 +315,14 @@ export function beforeAfter(m: Model, v: View, cat: string, fixDay: Day): Before
     const e = all.filter(x => x.d >= a && x.d < b).length, c = sumCalls(v, scoped.filter(x => x[0] >= a && x[0] < b));
     return { name, e, c, r: rate(e, c), empty };
   };
-  const prev = iso(new Date(+toDate(fixDay) - DAY));
-  const b4 = side(`Before fix${from && from <= prev ? ` · ${label(from)} – ${label(prev)}` : ""}`, "0000", fixDay, "No calls");
-  const af = side(`Since ${label(fixDay)}`, fixDay, "9999", "No calls yet");
+  const prev = iso(new Date(+toDate(fixDay) - DAY)), day = (d: Day) => yearLabel(m, d);
+  const b4 = side(`Before fix${from && from <= prev ? ` · ${day(from)} – ${day(prev)}` : ""}`, "0000", fixDay, "No calls");
+  const af = side(`Since ${day(fixDay)}`, fixDay, "9999", "No calls yet");
   const need = Math.ceil(Math.max(MIN_AFTER_CALLS, b4.r ? 5 / (b4.r / 100) : 0));
   const enough = b4.r != null && af.r != null && af.c >= need;
-  const verdict: [string, string] = !enough ? ["Not enough calls yet", "warn"] : af.r! < b4.r! ? ["Rate lower", "ok"] : af.r! > b4.r! ? ["Rate higher", "bad"] : ["Rate unchanged", "warn"];
+  // No calls before the fix: nothing to compare with, however many come after.
+  const verdict: [string, string] = b4.r == null ? ["No calls before this date", "warn"] : !enough ? ["Not enough calls yet", "warn"]
+    : af.r! < b4.r! ? ["Rate lower", "ok"] : af.r! > b4.r! ? ["Rate higher", "bad"] : ["Rate unchanged", "warn"];
   return { sides: [b4, af], need, enough, verdict };
 }
 /** Where a type happens, by project: the top five and the rest. */
