@@ -2,7 +2,6 @@ import glob
 import io
 import json
 import os
-import shutil
 import unittest
 from datetime import date, datetime
 from unittest import mock

@@ -1,6 +1,6 @@
 import unittest
 
-from ai_ledger.categorize import RULES, categorize, input_pattern, runs_git, runs_tests
+from ai_ledger.categorize import RULES, categorize, input_pattern, runs_tests
 
 
 class InputPatternTest(unittest.TestCase):

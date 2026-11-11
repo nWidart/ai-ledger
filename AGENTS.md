@@ -6,8 +6,9 @@ Local DuckDB store of Claude Code and Codex transcripts, served as dashboards (A
 
 - `uv sync` — install Python 3.14 and dependencies.
 - `uv run ai-ledger` — serve on `http://127.0.0.1:8765/` (use `127.0.0.1`, not `localhost`). The code lives in `src/ai_ledger/`.
+- `uv run ruff check` — lint Python.
 - `uv run python -m unittest discover -s tests` — Python tests.
-- `cd web && npm run check` — typecheck, web tests and build. Run it before committing any `web/src` change.
+- `cd web && npm run check` — typecheck, lint (oxlint; warnings do not fail it), web tests and build. Run it before committing any `web/src` change.
 - `uv run ai-ledger rebuild` — regenerate derived tables after a parser or `categorize.py` change.
 
 ## Rules

@@ -14,8 +14,83 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
-  check:
+  python-lint:
+    name: Python · lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3: setup-uv publishes no major tags
+        with:
+          version: "0.13.x" # uv_build is pinned to this minor in pyproject.toml
+      - run: uv sync --locked
+      - run: uv run ruff check --output-format github
+
+  python-tests:
+    name: Python · tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.13.x"
+      - run: uv sync --locked
+      - run: uv run python -m unittest discover -s tests
+
+  web-typecheck:
+    name: Web · typecheck
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+
+  web-lint:
+    name: Web · lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm run lint -- --format github
+
+  web-tests:
+    name: Web · tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm test
+
+  web-build:
+    name: Web · build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -26,7 +101,7 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - run: npm ci
         working-directory: web
-      - run: npm run check
+      - run: npm run build
         working-directory: web
       - name: Committed build matches the sources
         run: |
@@ -35,11 +110,16 @@ jobs:
             echo "::error::src/ai_ledger/web is stale: run npm run build in web/ and commit src/ai_ledger/web/"
             exit 1
           fi
-      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3: setup-uv publishes no major tags
+
+  package:
+    name: Package
+    needs: [python-lint, python-tests, web-typecheck, web-lint, web-tests, web-build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
-          version: "0.13.x" # uv_build is pinned to this minor in pyproject.toml
-      - run: uv sync --locked
-      - run: uv run python -m unittest discover -s tests
+          version: "0.13.x"
       - name: Tag matches the package version
         if: inputs.tag
         env:
