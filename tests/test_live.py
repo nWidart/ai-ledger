@@ -149,6 +149,23 @@ class SessionsTest(LiveCase):
         self.ingest()
         self.assertEqual(kinds()["s2"], "thinking")
 
+    def two_files(self, sid, first, second):
+        """The state kind of a session whose lines are in two main files."""
+        for name, text in ((sid, first), (sid + "b", second)):
+            self.write(f"{name}.jsonl", text.replace('"s1"', f'"{sid}"'))
+        self.ingest()
+        return {s["session_id"]: s["state"]["kind"] for s in live.sessions(self.cur(), now=NOW, prices=PRICES)["sessions"]}[sid]
+
+    def test_closed_follows_the_main_file_that_wrote_last(self):
+        earlier = "".join(prompt(f"k{i}", at(i), f"kp{i}", "go") for i in range(3))  # more lines than the file that closes
+        closing = prompt("k9", at(10), "kp9", "more") + line(type="cost-state", sessionId="s1")
+        self.assertEqual(self.two_files("s6", earlier, closing), "ended")
+
+    def test_close_line_in_an_earlier_main_file_ends_no_session(self):
+        close = line(type="cost-state", sessionId="s1")
+        self.assertEqual(self.two_files("s7", prompt("n0", at(0), "np0", "go") + close, prompt("n9", at(10), "np9", "more")), "thinking")
+        self.assertEqual(self.two_files("s8", prompt("o0", at(0), "op0", "go"), close), "thinking")  # no timed line in the close line's file
+
     def test_subagent_lines_reopen_no_closed_session(self):
         self.write("s2.jsonl", line(type="cost-state", sessionId="s2", totalCostUSD=0.1))
         self.write("s2/subagents/agent-a7.jsonl", line(type="assistant", uuid="x1", timestamp=at(10), message=dict(
