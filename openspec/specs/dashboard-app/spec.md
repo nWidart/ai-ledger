@@ -46,7 +46,7 @@ The app SHALL ingest new transcript data when it starts and then on a fixed inte
 
 #### Scenario: Paused Live page
 - **WHEN** the Live page is paused and receives change notices
-- **THEN** the navigation keeps the time it shows until the user resumes, and then shows the newest
+- **THEN** the notices do not change the time the navigation shows, the navigation's own poll still does, and resuming shows the newest
 
 ### Requirement: Single owner of the store
 Only one process SHALL write to the store at a time. A second app or command-line ingest SHALL fail with a clear message instead of corrupting or blocking the store.

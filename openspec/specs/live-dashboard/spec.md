@@ -164,7 +164,7 @@ The page SHALL offer a Full text toggle that is off on every page load. With it 
 - **THEN** Full text is off
 
 ### Requirement: Follow the newest event
-With Follow on, the stream SHALL keep the newest event in view, wherever it falls in the stream, including inside a lane in the middle of it. Scrolling up or opening a tool row SHALL turn Follow off. The page's own scrolling to the newest event SHALL NOT turn Follow off. While Follow is off and new events arrive, the page SHALL offer Jump to latest, which turns Follow back on.
+With Follow on, the stream SHALL keep the newest event in view, wherever it falls in the stream, including inside a lane in the middle of it. Scrolling up or opening a tool row SHALL turn Follow off. The page's own scrolling SHALL NOT. A size change of the stream or its rows SHALL keep Follow on and put the newest event back in view. While Follow is off and new events arrive, the page SHALL offer Jump to latest, which turns Follow back on.
 
 #### Scenario: Read back while the session runs
 - **WHEN** the user scrolls up while new tool calls arrive
@@ -173,6 +173,14 @@ With Follow on, the stream SHALL keep the newest event in view, wherever it fall
 #### Scenario: Newest event in a lane
 - **WHEN** Follow is on, a running lane stands in the middle of the stream with a main-thread event after it, and the lane gets a new tool call
 - **THEN** the stream scrolls to that call, and Follow stays on
+
+#### Scenario: Stream changes size
+- **WHEN** Follow is on and the window is resized, or a web font loads and the rows wrap anew
+- **THEN** Follow stays on, and the newest event is in view
+
+#### Scenario: Newest event taller than the stream
+- **WHEN** Follow is on and the newest event, in the middle of the stream, is opened and taller than the stream's box
+- **THEN** the stream shows that event from its top, and stays there
 
 ### Requirement: Pause updates
 The page SHALL offer Pause, which holds new events and states until Resume. While paused, the page SHALL say so, and SHALL NOT show the live indicator: the connection line has no green dot and the state dots do not pulse.
@@ -223,11 +231,11 @@ The page SHALL keep the selected session and the view (Stream or Wall) in the UR
 - **THEN** the stream says the session was not found and offers a link back to the active sessions
 
 ### Requirement: Recover from a dropped connection
-When the update connection drops, the page SHALL say that updates are paused and SHALL reconnect on its own. When the app answers the connection with an HTTP error, which ends the connection for good, the page SHALL say it is reconnecting and SHALL open a new connection after a delay that grows with each failure up to 30 seconds and starts over after a success. After reconnecting it SHALL fetch what it missed.
+When the update connection drops, the page SHALL say "Connection lost · reconnecting…" and SHALL reconnect on its own. When the app answers the connection with an HTTP error, which ends the connection for good, the page SHALL say the same and SHALL open a new connection after a delay that grows with each failure up to 30 seconds and starts over after a success. After reconnecting it SHALL fetch what it missed and the app's status, for the navigation.
 
 #### Scenario: App restarted
 - **WHEN** the app restarts while the Live page is open
-- **THEN** the page shows that it is reconnecting, then catches up without a reload
+- **THEN** the page says "Connection lost · reconnecting…", then catches up without a reload, and the navigation shows the time of the last ingest again
 
 #### Scenario: HTTP error from the events stream
 - **WHEN** the events stream answers with an HTTP 503 and the browser closes it
@@ -268,15 +276,19 @@ The stream SHALL offer filters, in a bar under its head, that change what it dra
 - **THEN** the agent panel's figures and the lane headers' tool counts do not change
 
 ### Requirement: Combine stream filters
-The stream filters SHALL combine, SHALL be off on every page load, and SHALL stay on when the user opens another session. A lane with no matching row SHALL be hidden; a lane with matching rows SHALL show them under its header. The stream SHALL say how many rows the filters hide.
+The stream filters SHALL combine, SHALL be off on every page load, and SHALL stay on when the user opens another session. A lane with no matching row SHALL be hidden; a lane with matching rows SHALL keep its header, with the matching rows under it when it is open. The Errors filter SHALL open a finished lane that holds a failed row; a lane the user folded SHALL stay folded. The stream SHALL say how many rows the filters hide.
 
 #### Scenario: Filters combine
 - **WHEN** the user filters to failed rows and turns on Main thread only, and the only failed row is inside a lane
 - **THEN** the stream shows no row, and says that the filters hide every row
 
 #### Scenario: Failed row in a lane
-- **WHEN** the user filters to failed rows and a lane holds one failed row among six
-- **THEN** the lane shows its header and that one row
+- **WHEN** the user filters to failed rows and a finished lane, folded as any finished lane, holds one failed row among six
+- **THEN** the lane opens, and shows its header and that one row
+
+#### Scenario: Lane the user folded
+- **WHEN** the user folds a lane that holds a failed row, with the stream filtered to failed rows
+- **THEN** the lane shows its header and no row
 
 #### Scenario: Another session
 - **WHEN** the user turns on Main thread only and opens another session
