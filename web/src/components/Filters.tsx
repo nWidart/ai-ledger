@@ -1,6 +1,6 @@
 import { useEffect, type ReactNode } from "react";
 import type { Source } from "../api";
-import { RANGES, SOURCES, setHash, useHashState, type HashPatch } from "../hash";
+import { RANGES, SOURCES, setHash, useHashState } from "../hash";
 import { ProjectDot } from "./ProjectDot";
 import "./Filters.css";
 
@@ -15,8 +15,6 @@ export interface FiltersProps {
   range?: boolean;
   /** Page-only controls after the range (Errors: granularity, subagents, noise). */
   children?: ReactNode;
-  /** Page-only keys that belong to the view, cleared in the same write as a project, range or source change (Activity: day). */
-  reset?: HashPatch;
 }
 
 const rangeLabel = (r: number) => (r ? `${r}d` : "All");
@@ -28,7 +26,7 @@ export const viewName = (v: { project: string; range: number; source: Source | "
 export const agentName = (source: Source | "") => (source ? SOURCE_LABELS[source] : "agent");
 
 /** Project picker with its color dot, range and source segments and the automated toggle, all writing the URL hash. */
-export function Filters({ projects, automated = false, range = true, children, reset }: FiltersProps) {
+export function Filters({ projects, automated = false, range = true, children }: FiltersProps) {
   const [h, set] = useHashState();
   // An unknown source reads as All; the URL drops it so a copied link says what the page shows.
   const badSource = !!h.raw.source && !h.source;
@@ -39,19 +37,19 @@ export function Filters({ projects, automated = false, range = true, children, r
     <div className="filters" role="group" aria-label="Filters">
       <span className={"pick-project" + (h.project ? "" : " all")} id="fProjectWrap">
         <ProjectDot project={h.project} />
-        <select id="fProject" aria-label="Project" value={h.project} onChange={e => set({ ...reset, project: e.target.value, session: null, inspect: null })}>
+        <select id="fProject" aria-label="Project" value={h.project} onChange={e => set({ project: e.target.value, session: null, inspect: null })}>
           <option value="">All projects</option>
           {opts.map(o => <option key={o.value} value={o.value}>{o.label ?? o.value}</option>)}
         </select>
       </span>
       {range && <div className="seg" id="fRange" role="group" aria-label="Time range">
         {RANGES.map(r => (
-          <button key={r} type="button" aria-pressed={h.range === r} onClick={() => set({ ...reset, range: r })}>{rangeLabel(r)}</button>
+          <button key={r} type="button" aria-pressed={h.range === r} onClick={() => set({ range: r })}>{rangeLabel(r)}</button>
         ))}
       </div>}
       <div className="seg" id="fSource" role="group" aria-label="Source">
         {(["", ...SOURCES] as const).map(s => (
-          <button key={s} type="button" aria-pressed={h.source === s} onClick={() => set({ ...reset, source: s, session: null, inspect: null })}>{s ? SOURCE_LABELS[s] : "All"}</button>
+          <button key={s} type="button" aria-pressed={h.source === s} onClick={() => set({ source: s, session: null, inspect: null })}>{s ? SOURCE_LABELS[s] : "All"}</button>
         ))}
       </div>
       {children}

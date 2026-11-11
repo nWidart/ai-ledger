@@ -47,6 +47,20 @@ describe("parseHash", () => {
 });
 
 describe("setHash", () => {
+  it("drops the day in the same write as a project, range or source change, and keeps it otherwise", () => {
+    history.replaceState(null, "", "/usage#project=foo&range=30&day=2026-11-04");
+    const push = vi.spyOn(history, "pushState"), replace = vi.spyOn(history, "replaceState");
+    for (const p of [{ project: "foo" }, { range: 30 }, { source: "" }, { q: "api" }, { near: true }, { auto: true }, { session: "s1" }, { session: null }]) setHash(p);
+    expect(location.hash).toBe("#project=foo&range=30&auto=1&day=2026-11-04&q=api&near=1");
+    setHash({ range: 7 });
+    expect(location.hash).toBe("#project=foo&range=7&auto=1&q=api&near=1");
+    for (const p of [{ project: "bar" }, { source: "codex" }]) {
+      history.replaceState(null, "", location.pathname + location.hash + "&day=2026-11-04");
+      setHash(p);
+      expect(location.hash).not.toContain("day=");
+    }
+    expect(push.mock.calls.length + replace.mock.calls.length).toBe(10); // 8 writes (the 3 same-value ones are no-ops) and 2 setups: no extra write drops the day
+  });
   it("pushes filter and sheet changes, replaces the rest", () => {
     history.replaceState(null, "", "/usage#project=foo&range=30");
     const push = vi.spyOn(history, "pushState"), replace = vi.spyOn(history, "replaceState");

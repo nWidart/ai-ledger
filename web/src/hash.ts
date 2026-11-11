@@ -66,6 +66,10 @@ export function formatHash(raw: Readonly<Record<string, string>>): string {
   return s ? "#" + s : "";
 }
 
+// Page-only keys that belong to one view (Activity's selected day): a change of project, range or source drops them in
+// the same write, so Back returns to the view with its day.
+const VIEW_KEYS = ["project", "range", "source"], VIEW_SCOPED = ["day"];
+
 export function applyPatch(raw: Readonly<Record<string, string>>, patch: HashPatch): Record<string, string> {
   const out = { ...raw };
   for (const [k, v] of Object.entries(patch)) {
@@ -73,6 +77,7 @@ export function applyPatch(raw: Readonly<Record<string, string>>, patch: HashPat
     if (v === null || v === "" || v === false) delete out[k];
     else out[k] = v === true ? "1" : String(v);
   }
+  if (VIEW_KEYS.some(k => (raw[k] ?? "") !== (out[k] ?? ""))) for (const k of VIEW_SCOPED) delete out[k];
   return out;
 }
 

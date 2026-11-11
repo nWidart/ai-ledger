@@ -235,6 +235,16 @@ describe("ActivityPage", () => {
     await waitFor(() => expect(fetched()).toContain("/api/sessions?range=30&near=1"));
     expect(document.querySelector("#d-sessions th[aria-sort]")).toBeNull();
     await waitFor(() => expect(document.querySelector("#d-sessions .hint")!.textContent).toContain("nearest the limit first"));
+    await userEvent.click(within(document.getElementById("d-sessions")!).getByRole("button", { name: "Tokens" }));
+    await waitFor(() => expect(fetched()).toContain("/api/sessions?range=30&near=1&sort=tokens&desc=1"));
+    const chart = screen.getByRole("img", { name: /^Commits/ });
+    act(() => chart.focus());
+    fireEvent.keyDown(chart, { key: "End" });
+    fireEvent.keyDown(chart, { key: "ArrowLeft" });
+    fireEvent.keyDown(chart, { key: "Enter" });
+    await waitFor(() => expect(fetched()).toContain("/api/sessions?range=30&day=2026-11-04"));
+    expect(document.querySelector("#d-sessions th[aria-sort]")).toBeNull();
+    await waitFor(() => expect(document.querySelector("#d-sessions .hint")!.textContent).toContain("by their cost on that day"));
   });
 
   it("keeps the Sessions sort when new data refreshes the table", async () => {

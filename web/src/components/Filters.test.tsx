@@ -23,21 +23,6 @@ describe("Filters", () => {
     expect(push).toHaveBeenCalledTimes(3);
   });
 
-  it("clears the reset keys in the same write as a project, range or source change", async () => {
-    history.replaceState(null, "", "/usage#range=30&day=2026-11-04&q=api");
-    const push = vi.spyOn(history, "pushState"), replace = vi.spyOn(history, "replaceState");
-    render(<Filters projects={["foo"]} reset={{ day: null }} />);
-    await userEvent.click(screen.getByRole("button", { name: "7d" }));
-    expect(location.hash).toBe("#range=7&q=api");
-    history.replaceState(null, "", "/usage#range=7&day=2026-11-04");
-    await userEvent.click(within(screen.getByRole("group", { name: "Source" })).getByRole("button", { name: "Codex" }));
-    expect(location.hash).toBe("#range=7&source=codex");
-    history.replaceState(null, "", "/usage#range=7&source=codex&day=2026-11-04");
-    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Project" }), "foo");
-    expect(location.hash).toBe("#project=foo&range=7&source=codex");
-    expect([push.mock.calls.length, replace.mock.calls.length]).toEqual([3, 2]); // replaces: the two test setups only
-  });
-
   it("writes auto=1 when automated sessions are included", async () => {
     history.replaceState(null, "", "/cost#range=30");
     render(<Filters projects={["foo"]} automated />);

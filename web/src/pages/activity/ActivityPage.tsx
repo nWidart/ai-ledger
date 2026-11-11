@@ -26,8 +26,6 @@ const loadMetric = (): WorkMetric => { try { const v = localStorage.getItem(METR
 const sessOf = (h: HashState): SessFilter => ({ q: h.raw.q ?? "", near: h.raw.near === "1", day: isDay(h.raw.day) ? h.raw.day : "" });
 // A real calendar day as YYYY-MM-DD: 2026-02-30 is not one.
 const isDay = (s: string | undefined): s is string => !!s && /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(Date.parse(s)) && new Date(s).toISOString().startsWith(s);
-// The day belongs to the view: a project, range or source change clears it in the same write, so Back restores both.
-const RESET = { day: null };
 // Replace, not push: typing a search adds no Back entries.
 const setSess = (f: SessFilter) => setHash({ q: f.q, near: f.near, day: f.day }, { push: false });
 
@@ -96,7 +94,7 @@ export function ActivityPage() {
     setFlaky(false);
   }, [viewKey]);
   // A selected day narrows tools, MCP & hooks and error loops to it; the rest stays range-wide.
-  const day = sess.day, dayApi = useApi<DayView>(day ? dayUrl(want, day) : null), dv = day && dayApi.data?.day === day ? dayApi.data : undefined;
+  const day = sess.day, dayApi = useApi<DayView>(day ? dayUrl(want, day) : null), dv = day ? dayApi.data : undefined;
 
   const { slow, grow, before, wrap, retryBtn } = useLanding(data, url, loading, error, ":scope > :is(.insights, .panel, .vitals, .drawers)");
 
@@ -122,7 +120,7 @@ export function ActivityPage() {
     <div className={cls} ref={wrap} aria-busy={loading || undefined}>
       <header className="top sect" id="overview">
         <div>{d ? <Lede d={d} before={before} /> : <h1 className="lede" id="lede" tabIndex={-1} aria-live="polite">{error ? "Activity could not be loaded." : "Loading activity…"}</h1>}</div>
-        <div className="top-side"><Filters projects={d?.projects ?? []} automated reset={RESET} /></div>
+        <div className="top-side"><Filters projects={d?.projects ?? []} automated /></div>
       </header>
       {error && <div className="banner" role="alert"><b>Could not load {viewName(want)} ({error.message}).{d ? ` Still showing ${viewName(d)}.` : ""}</b>{" "}
         <button type="button" className="linkish" ref={retryBtn} onClick={retry}>Retry</button></div>}
