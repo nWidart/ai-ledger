@@ -4,14 +4,15 @@
 # The Release PR workflow (.github/workflows/release-pr.yml) runs it, then pushes the branch and opens the PR.
 # Needs uv and python3.
 #
-# Usage: scripts/release.sh patch|minor|major
+# Usage: scripts/release.sh [auto|patch|minor|major]
+# auto (the default) picks the bump from the [Unreleased] section and the commits since the last tag.
 set -euo pipefail
 
-bump=${1:-}
+bump=${1:-auto}
 case "$bump" in
-  patch | minor | major) ;;
+  auto | patch | minor | major) ;;
   *)
-    echo "Usage: scripts/release.sh patch|minor|major" >&2
+    echo "Usage: scripts/release.sh [auto|patch|minor|major]" >&2
     exit 2
     ;;
 esac
@@ -21,6 +22,35 @@ cd "$(git rev-parse --show-toplevel)"
 if [ -n "$(git status --porcelain)" ]; then
   echo "Working tree is not clean." >&2
   exit 1
+fi
+
+# The larger of two readings. CHANGELOG.md: a Removed section or a BREAKING note is major, an Added or
+# Deprecated section is minor. Conventional Commits since the last tag: `type!:` or a BREAKING CHANGE
+# footer is major, `feat:` is minor. Anything else is patch. Before 1.0.0, major becomes minor.
+auto_bump() {
+  local section range last subjects messages
+  section=$(awk '/^## \[/ { p = $0 == "## [Unreleased]"; next } /^\[[^]]*\]: / { p = 0 } p' CHANGELOG.md)
+  range=HEAD
+  if last=$(git describe --tags --abbrev=0 --match 'v[0-9]*' 2>/dev/null); then
+    range="$last..HEAD"
+  fi
+  subjects=$(git log --format=%s "$range")
+  messages=$(git log --format=%B "$range")
+
+  if grep -qE '^### Removed|BREAKING' <<<"$section" ||
+    grep -qE '^[a-z]+(\([^)]*\))?!:' <<<"$subjects" ||
+    grep -qE '^BREAKING[ -]CHANGE:' <<<"$messages"; then
+    if [[ $(uv version --short) == 0.* ]]; then echo minor; else echo major; fi
+  elif grep -qE '^### (Added|Deprecated)' <<<"$section" || grep -qE '^feat(\([^)]*\))?:' <<<"$subjects"; then
+    echo minor
+  else
+    echo patch
+  fi
+}
+
+if [ "$bump" = auto ]; then
+  bump=$(auto_bump)
+  echo "auto picked a $bump bump."
 fi
 
 version=$(uv version --bump "$bump" --dry-run --short)
