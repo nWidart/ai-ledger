@@ -13,6 +13,11 @@ Run `ai-ledger rebuild` once after upgrading (with the app stopped): error types
 - Activity shows thinking time and, per session, test runs passed of run.
 - Limits forecasts use the open window's own recent pace as well as your usual pace, and say when a limit is already reached.
 - New error types: "Command too complex for worktree check", "Network / DNS unreachable", "Browser automation failed" and "MCP tool error".
+- Live groups sessions by who needs you first: approval?, your turn, working, idle, ended. A session keeps its place in its group until its state changes.
+- Live shows how long a session has been on your turn or thinking, and the tab title counts the sessions that need you: `(2) Live · AI Ledger`.
+- Live shows a Claude Code session you closed as ended. Codex records no close, so a Codex session goes idle.
+- Live filters the stream: failed calls only, main thread only, or without the calls that only read.
+- Live links the stream to the session sheet on Activity, and shows the date on times from another day.
 
 ### Changed
 
@@ -24,6 +29,10 @@ Run `ai-ledger rebuild` once after upgrading (with the app stopped): error types
 - Pages refetch only when new data is stored, and update without replaying their animations.
 - Insights caps long lists at the top 12, lists sessions by title, and reports coverage as "N of M sessions analysed".
 - Live, with Full text off, sends tool inputs cut to 300 characters and an agent call's description instead of its prompt.
+- Live shows a shell call's description as its row text, with the command in the opened row.
+- Live folds a finished subagent, shows the last 5 calls of a running one, and gives each subagent's cost, model and errors in its header.
+- Live, when paused, says Paused and shows no live dot.
+- The nav's "Last ingest" keeps up with Live while it is open.
 
 ### Fixed
 
@@ -33,6 +42,8 @@ Run `ai-ledger rebuild` once after upgrading (with the app stopped): error types
 - Limits: "Left unused" counts only full-length windows; "Points used" counts use inside the limit's own windows.
 - Activity: the error-loops count, the Sessions table after a refresh, table layout at narrow widths, and the chart start.
 - Project colours on a direct load of Insights, Live and Limits; the missing page icon; Back after closing a sheet.
+- Live: a shell call with a timeout above 2 minutes no longer reads as "approval?".
+- Live: the page reconnects on its own when the events stream fails with an HTTP error.
 
 ## [0.1.3] - 2026-11-11
 
