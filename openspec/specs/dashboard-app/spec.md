@@ -171,6 +171,13 @@ Activity, Cost, Errors, Limits, Insights and Live SHALL offer a source filter wi
 - **WHEN** the user picks Codex on Live
 - **THEN** the rail and the wall show only Codex sessions
 
+### Requirement: Count days on the local clock
+Every page SHALL group activity into the calendar days of the machine's time zone, daylight saving included, and SHALL end every range on that zone's today. A range's totals and its charts SHALL cover the same days.
+
+#### Scenario: Evening work behind UTC
+- **WHEN** the machine's zone is America/Los_Angeles and a tool call fails at 23:30 local time on March 8 (06:30 UTC on March 9)
+- **THEN** every page counts it on March 8, and the last 7 days ending March 8 include it in both the headline and the chart
+
 ### Requirement: Describe agent work without naming one agent
 Page text that describes work from any source SHALL NOT name Claude. Text MAY name an agent when the source filter selects it.
 

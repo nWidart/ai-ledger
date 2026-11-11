@@ -218,7 +218,9 @@ class AnalysisCase(StoreCase):
         return limits.load_usage(self.con.cursor(), PRICES)
 
     def payload(self, now, **kw):
-        return limits.payload(self.con.cursor(), now=now, today=now.date(), prices=PRICES, tz=timezone.utc, **kw)
+        cur = self.con.cursor()
+        cur.execute("SET TimeZone = 'UTC'")  # the store's days in the same zone as tz
+        return limits.payload(cur, now=now, today=now.date(), prices=PRICES, tz=timezone.utc, **kw)
 
 
 class WindowTest(AnalysisCase):

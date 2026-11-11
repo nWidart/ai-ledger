@@ -47,6 +47,13 @@ describe("filtering and series", () => {
     expect(filtered(mm, v({ sub: false })).errs).toHaveLength(4);
     expect(filtered(mm, v({ noise: true })).errs).toHaveLength(5);
   });
+  it("leaves out days after today, as the chart has no bucket for them", () => {
+    const late = { ...fixture, errors: fixture.errors.map((e, i) => (i ? e : { ...e, d: "2026-11-06" })),
+      calls: [...fixture.calls, ["2026-11-06", "foo", 3, 0, "claude"]] } as ErrorsPayload;
+    const f = filtered(makeModel(late), v());
+    expect(f.errs).toHaveLength(fixture.errors.length - 1);
+    expect(f.calls).toHaveLength(fixture.calls.length);
+  });
   it("rates per bucket, null without calls", () => {
     const f = filtered(m, v({ range: 7 })), keys = buckets(m, f.start, "day");
     const pts = series(v(), f.errs, f.calls, keys);

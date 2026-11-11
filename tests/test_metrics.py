@@ -5,9 +5,10 @@ import shutil
 import tempfile
 import threading
 import unittest
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from http.server import ThreadingHTTPServer
 from unittest import mock
+from zoneinfo import ZoneInfo
 
 from ai_ledger import app, metrics, store
 
@@ -545,6 +546,61 @@ class SourceFilterTest(unittest.TestCase):
         finally:
             httpd.shutdown()
             httpd.server_close()
+
+
+class LocalDayTest(unittest.TestCase):
+    """Days on the server's clock, here America/Los_Angeles, the day after US daylight saving starts (Mar 8, 2026).
+    z1 works at 06:30 UTC on Mar 9 (23:30 on Mar 8, local), z2 at 07:30 UTC (00:30 on Mar 9, local; 23:30 at a fixed -8)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.mkdtemp()
+        cls.con = store.open_store(os.path.join(cls.tmp, "d", "x.duckdb"))
+        cls.con.execute("SET GLOBAL TimeZone = 'America/Los_Angeles'")
+        c = cls.con.cursor()
+        store.insert(c, "sessions", ["session_id", "project", "first_ts", "last_ts"], [
+            ("z1", "foo", "2026-03-09 06:30:00", "2026-03-09 06:30:01"), ("z2", "foo", "2026-03-09 07:30:00", "2026-03-09 07:30:01")])
+        store.insert(c, "requests", ["message_id", "session_id", "ts", "model", "subagent", "input", "output", "thinking",
+                                     "cache_read", "cache_5m", "cache_1h"], [
+            ("ra", "z1", "2026-03-09 06:30:00", "m-a", False, 100, 0, 0, 0, 0, 0),
+            ("rb", "z2", "2026-03-09 07:30:00", "m-a", False, 200, 0, 0, 0, 0, 0)])
+        store.insert(c, "tool_calls", ["tool_use_id", "session_id", "tool", "start_ts", "end_ts", "is_error", "category", "subagent"], [
+            ("ta", "z1", "Bash", "2026-03-09 06:30:00", "2026-03-09 06:30:01", True, "x", False),
+            ("tb", "z2", "Bash", "2026-03-09 07:30:00", "2026-03-09 07:30:01", True, "x", False)])
+        store.insert(c, "prompts", ["prompt_id", "session_id", "ts", "interrupted"], [
+            ("pa", "z1", "2026-03-09 06:30:00", False), ("pb", "z2", "2026-03-09 07:30:00", False)])
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.con.close()
+        shutil.rmtree(cls.tmp)
+
+    def test_usage_buckets_and_bounds_local_days(self):
+        u = metrics.usage(self.con.cursor(), "", 0, prices=PRICES, today=date(2026, 3, 9))
+        self.assertEqual([(d["day"], d["input"]) for d in u["daily"]], [("2026-03-08", 100), ("2026-03-09", 200)])
+        self.assertEqual([(d["day"], d["prompts"], d["failed_calls"]) for d in u["daily_work"]], [("2026-03-08", 1, 1), ("2026-03-09", 1, 1)])
+        self.assertEqual(u["totals"]["active_days"], 2)
+        u = metrics.usage(self.con.cursor(), "", 1, prices=PRICES, today=date(2026, 3, 9))
+        self.assertEqual((u["start"], u["totals"]["tokens"], u["totals"]["prompts"], u["totals"]["errors"]), ("2026-03-09", 200, 1, 1))
+        self.assertEqual((u["previous"]["start"], u["previous"]["tokens"]), ("2026-03-08", 100))
+        self.assertEqual([d["day"] for d in u["previous"]["daily"]], ["2026-03-08"])
+
+    def test_session_list_by_local_day(self):
+        for day, sid in (("2026-03-08", "z1"), ("2026-03-09", "z2")):
+            got = metrics.session_list(self.con.cursor(), day=day, prices=PRICES, today=date(2026, 3, 9))
+            self.assertEqual([x["session_id"] for x in got["sessions"]], [sid], day)
+
+    def test_errors_payload_dates_local_days(self):
+        p = metrics.errors_payload(self.con.cursor(), today=date(2026, 3, 9))
+        self.assertEqual({e["id"]: e["d"] for e in p["errors"]}, {"ta": "2026-03-08", "tb": "2026-03-09"})
+        self.assertEqual([r[0] for r in p["calls"]], ["2026-03-08", "2026-03-09"])
+        self.assertEqual([r[0] for r in p["error_days"]], ["2026-03-08", "2026-03-09"])
+
+    def test_day_starts_follow_daylight_saving(self):
+        cur = self.con.cursor()
+        self.assertEqual(metrics.start_ts(cur, date(2026, 3, 8)), datetime(2026, 3, 8, 8))  # PST, UTC-8
+        self.assertEqual(metrics.start_ts(cur, date(2026, 3, 9)), datetime(2026, 3, 9, 7))  # PDT, UTC-7
+        self.assertEqual(metrics.local_today(cur), datetime.now(ZoneInfo("America/Los_Angeles")).date())
 
 
 class ToolDetailTest(unittest.TestCase):

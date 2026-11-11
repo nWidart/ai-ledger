@@ -11,7 +11,7 @@ import time
 import urllib.error
 import urllib.request
 from bisect import bisect_left
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Callable, NamedTuple
 
 from . import metrics, store
@@ -576,8 +576,8 @@ def payload(cur, range_days=0, source="", project="", now=None, today=None, pric
     if range_days < 0:
         raise ValueError("range must be >= 0")
     now = now or datetime.now(timezone.utc).replace(tzinfo=None)
-    today = today or date.today()
-    start = datetime.combine(today - timedelta(days=range_days - 1), datetime.min.time()) if range_days else None
+    today = today or metrics.local_today(cur)
+    start = metrics.start_ts(cur, today - timedelta(days=range_days - 1)) if range_days else None
     names = [n for n, p in PROVIDERS.items() if not source or p.source == source]
     snaps = [s for s in cur.execute(f"SELECT {', '.join(store.SNAPSHOT_COLS)} FROM limit_snapshots").fetchall() if s[0] in names]
     usage = load_usage(cur, prices)

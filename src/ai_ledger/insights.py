@@ -7,7 +7,7 @@ import json
 import os
 import re
 import sys
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 
 from . import metrics, store
 
@@ -177,15 +177,16 @@ def ordered(counts, known):
 def payload(cur, project="", range_days=0, source="", automated=False, today=None, usage_dir=None):
     """The JSON the Insights page reads. Only Claude Code sessions have facets: source codex returns coverage alone.
     underlying_goal and primary_success stay in the store. Raises ValueError for an unknown source or a negative range."""
-    today = today or date.today()
+    today = today or metrics.local_today(cur)
     start, *_ = metrics.view(project, range_days, {}, today, automated, source)
     sql, sp = metrics.scope(project, automated, source)
-    W = f"{sql} AND (CAST(? AS DATE) IS NULL OR s.start >= CAST(? AS DATE))"
+    since = metrics.day_start("CAST(? AS DATE)")
+    W = f"{sql} AND (CAST(? AS DATE) IS NULL OR s.start >= {since})"
     wp = sp + [start, start]
     in_view = f"WITH {FACETS}, v AS (SELECT * FROM f s WHERE {W})"
     ssql, ssp = metrics.scope(project, automated, "")
     per_source = dict(cur.execute(f"""SELECT s.source, count(*) FROM sessions s
-        WHERE {ssql} AND (CAST(? AS DATE) IS NULL OR s.first_ts >= CAST(? AS DATE)) AND (? = '' OR s.source = ?) GROUP BY 1""",
+        WHERE {ssql} AND (CAST(? AS DATE) IS NULL OR s.first_ts >= {since}) AND (? = '' OR s.source = ?) GROUP BY 1""",
                                   ssp + [start, start, source, source]).fetchall())
     facets, analysed, orphans = cur.execute(f"{in_view} SELECT count(*), count(*) FILTER (WHERE in_store), "
                                             f"count(*) FILTER (WHERE NOT in_store) FROM v", wp).fetchone()
