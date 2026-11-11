@@ -684,6 +684,34 @@ describe("LivePage", () => {
     await waitFor(() => expect(polls()).toBe(3));
   });
 
+  it("asks for the status when the stream reopens, as the app may be back, and not while paused", async () => {
+    const { polls } = show();
+    await stream();
+    const reopen = async () => {
+      FakeSource.last!.drop();
+      FakeSource.last!.open();
+      await act(async () => { await new Promise(r => setTimeout(r, 20)); });
+      return polls();
+    };
+    FakeSource.last!.open();
+    expect(await reopen()).toBe(1);
+    await userEvent.click(screen.getByRole("button", { name: "Pause" }));
+    expect(await reopen()).toBe(1);
+  });
+
+  it("drops the status request owed to a notice when the user pauses before it is sent", async () => {
+    let answer!: () => void;
+    const slow = new Promise(r => { answer = () => r(status); });
+    const { polls } = show("#session=s1", { status: () => slow });
+    await stream();
+    FakeSource.last!.notify(["s2"]);
+    FakeSource.last!.notify(["s2"]);
+    expect(polls()).toBe(1); // one in flight, one more owed
+    await userEvent.click(screen.getByRole("button", { name: "Pause" }));
+    await act(async () => { answer(); await new Promise(r => setTimeout(r, 20)); });
+    expect(polls()).toBe(1);
+  });
+
   it("holds updates while paused and fetches once on resume", async () => {
     const { calls } = show();
     await stream();

@@ -67,13 +67,13 @@ export function useLive(view: View, selected: string, text: boolean, paused: boo
     if (sessions === null || sessions.includes(cur.current.selected)) loadSession(true);
   }, [loadList, loadSession]);
   // The nav's "Last ingest" follows the notices: one status request at a time, and one more after it for the notices
-  // that came meanwhile.
+  // that came meanwhile, unless the user paused meanwhile.
   const poll = useRef({ busy: false, again: false });
   const status = useCallback(() => {
     const p = poll.current;
     if (p.busy) { p.again = true; return; }
     p.busy = true;
-    void (async () => { do { p.again = false; await pollStatus(); } while (p.again); p.busy = false; })();
+    void (async () => { do { p.again = false; await pollStatus(); } while (p.again && !cur.current.paused); p.busy = false; })();
   }, []);
 
   const listUrl = liveUrl(view, text);
@@ -94,7 +94,7 @@ export function useLive(view: View, selected: string, text: boolean, paused: boo
       src.onopen = () => {
         delay = RETRY_MS;
         setConn("live");
-        if (dropped) { dropped = false; if (!cur.current.paused) refresh(null); else setHeld(n => n + 1); }
+        if (dropped) { dropped = false; if (!cur.current.paused) { refresh(null); status(); } else setHeld(n => n + 1); } // the app may be back
       };
       src.onerror = () => {
         dropped = true;
