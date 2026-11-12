@@ -379,7 +379,7 @@ def ingest_chunk(cur, projects, name, path, data, offset, lines, seq, st, whole=
     Returns the lines read, the lines new to the store and the ids of the sessions those new lines belong to."""
     src = SOURCES[name]
     sub = src.subagent(path)
-    rows, parsed, seen, found = [], {}, set(), {}
+    rows, parsed, seen, found, whole_text = [], {}, set(), {}, {}
     pos = offset
     for raw in data.split(b"\n")[:-1]:
         text = raw.decode("utf-8", errors="replace")
@@ -395,6 +395,8 @@ def ingest_chunk(cur, projects, name, path, data, offset, lines, seq, st, whole=
             stored, packed, strings = blobs.pack_line(text) if ok else (text, False, {})
             rows.append((key, path, lines, pos, dd.get("type"), *src.fields(dd, path), sub, ok, stored, packed))
             found[key] = strings
+            if packed:
+                whole_text[key] = text
             if ok:
                 parsed[key] = d
         lines += 1
@@ -403,7 +405,10 @@ def ingest_chunk(cur, projects, name, path, data, offset, lines, seq, st, whole=
     try:
         new = set(insert(cur, "raw_lines", ["key", "file", "line_no", "byte_offset", "type", "session_id", "uuid",
                                             "ts", "subagent", "parsed", "json", "packed"], rows, returning="key"))
-        blobs.write(cur, {h: s for k in new for h, s in found[k].items()})  # before the deriver, which may read the lines back
+        refused = blobs.write(cur, {h: s for k in new for h, s in found[k].items()})  # before the deriver, which reads lines back
+        for k in new:  # a line with a token whose hash is stored for another token goes back to whole text
+            if refused & found[k].keys():
+                cur.execute("UPDATE raw_lines SET json = ?, packed = false WHERE key = ?", [whole_text[k], k])
         der = src.deriver(cur, projects, name, path, sub, seq)
         for r in rows:
             if r[0] in new and r[0] in parsed:
@@ -744,63 +749,71 @@ SOURCES = {"claude": Source(transcript_files, line_key, Deriver, lambda path: "/
 
 def compact(path=None, log=None):
     """Bring the store at path (closed everywhere else) to the current format with no free blocks: a new file next to it holds
-    every table, the lines still whole packed, and replaces it at the end. The old file is never written, so a failure leaves it.
-    Returns the sizes in bytes before and after, the lines and the seconds."""
+    every table, the lines still whole packed, and replaces it at the end. The old file is written only by open_store's upgrades
+    (new columns), before anything is copied; after that a failure leaves it as it was. A read-only handle on it is held until
+    after the swap, so no other process can open it for writing meanwhile (a read-only handle blocks writers; a read-write one
+    could not be attached). Returns the sizes in bytes before and after, the lines and the seconds."""
     t0 = time.time()
     open_store(path).close()  # the upgrades open_store makes, and StoreBusy when another process holds the store
     path = path or DEFAULT_DB
+    guard = duckdb.connect(path, read_only=True)
+    try:
+        return compact_to(guard, path, log, t0)
+    finally:
+        guard.close()
+
+
+def compact_to(guard, path, log, t0):
+    """compact once the old file is held through guard."""
     new = path + ".compact"
-    for leftover in (new, new + ".wal"):
-        if os.path.exists(leftover):
-            os.remove(leftover)
+    drop = lambda: [os.remove(f) for f in (new, new + ".wal") if os.path.exists(f)]
+    drop()
     size = lambda p: sum(os.path.getsize(f) for f in (p, p + ".wal") if os.path.exists(f))
     before = size(path)
-    con = open_store(new)
     try:
-        con.execute(f"ATTACH '{path.replace(chr(39), chr(39) * 2)}' AS old (READ_ONLY)")
-        mine = {r[0] for r in con.execute("SELECT table_name FROM duckdb_tables() WHERE database_name = current_database()").fetchall()}
-        tables = [r[0] for r in con.execute("SELECT table_name FROM duckdb_tables() WHERE database_name = 'old'").fetchall()]
-        if gone := sorted(set(tables) - mine):
-            raise ValueError(f"the store has tables this version does not know: {', '.join(gone)}")
-        cols = lambda t: [r[0] for r in con.execute("SELECT column_name FROM duckdb_columns() WHERE database_name = 'old' "
-                                                    "AND table_name = ? ORDER BY column_index", [t]).fetchall()]
-        for t in tables:
-            if t != "raw_lines":
-                names = ", ".join(cols(t))
-                con.execute(f"INSERT INTO {t} ({names}) SELECT {names} FROM old.{t}")
-                if log:
-                    log(f"compact: {t}")
-        lines = compact_lines(con, cols("raw_lines"), log)
-        blobs.seal(con, force=True)
-        con.execute("DETACH old")
-        con.execute("CHECKPOINT")
-    except BaseException:
-        con.close()
-        for leftover in (new, new + ".wal"):
-            if os.path.exists(leftover):
-                os.remove(leftover)
-        raise
-    con.close()
-    try:
-        old, fresh = duckdb.connect(path, read_only=True), duckdb.connect(new, read_only=True)
+        con = open_store(new)
+        try:
+            con.execute(f"ATTACH '{path.replace(chr(39), chr(39) * 2)}' AS old (READ_ONLY)")
+            mine = {r[0] for r in con.execute("SELECT table_name FROM duckdb_tables() WHERE database_name = current_database()").fetchall()}
+            tables = [r[0] for r in con.execute("SELECT table_name FROM duckdb_tables() WHERE database_name = 'old'").fetchall()]
+            if gone := sorted(set(tables) - mine):
+                raise ValueError(f"the store has tables this version does not know: {', '.join(gone)}")
+            cols = lambda t: [r[0] for r in con.execute("SELECT column_name FROM duckdb_columns() WHERE database_name = 'old' "
+                                                        "AND table_name = ? ORDER BY column_index", [t]).fetchall()]
+            for t in tables:
+                if t != "raw_lines":
+                    names = ", ".join(cols(t))
+                    con.execute(f"INSERT INTO {t} ({names}) SELECT {names} FROM old.{t}")
+                    if log:
+                        log(f"compact: {t}")
+            lines = compact_lines(con, cols("raw_lines"), log)
+            blobs.seal(con, force=True)
+            con.execute("DETACH old")
+            con.execute("CHECKPOINT")
+        finally:
+            con.close()
+        check = duckdb.connect(new, read_only=True)
         try:
             for t in tables:
                 if t not in ("blobs", "packs", "packs_open"):
-                    a, b = (c.execute(f"SELECT count(*) FROM {t}").fetchone()[0] for c in (old, fresh))
+                    a, b = (c.execute(f"SELECT count(*) FROM {t}").fetchone()[0] for c in (guard, check))
                     if a != b:
                         raise ValueError(f"compact: {t} has {b} rows, the old store {a}")
+            if log:
+                log(f"compact: {blobs.verify(check)} blobs checked")
+            else:
+                blobs.verify(check)
+            if blobs.unresolved(check):
+                raise ValueError("compact: a line refers to a blob that is not stored")
         finally:
-            old.close()
-            fresh.close()
+            check.close()
     except BaseException:
-        for leftover in (new, new + ".wal"):
-            if os.path.exists(leftover):
-                os.remove(leftover)
+        drop()
         raise
     # A clean close leaves no WAL; one that is left would be replayed against the other file, so neither stays behind.
     if os.path.exists(path + ".wal"):
         os.remove(path + ".wal")
-    os.replace(new, path)
+    os.replace(new, path)  # guard is closed by the caller after this: no writer can slip in before
     if os.path.exists(new + ".wal"):
         os.replace(new + ".wal", path + ".wal")
     os.chmod(path, 0o600)
@@ -808,55 +821,66 @@ def compact(path=None, log=None):
 
 
 def compact_lines(con, cols, log=None):
-    """Copy old.raw_lines to raw_lines RAW_BATCH lines at a time in (file, byte_offset) order, packing the parsed lines still
-    whole. Returns the lines copied."""
+    """Copy old.raw_lines to raw_lines, packing the parsed lines still whole. A line is packed only when putting its tokens
+    back gives its text exactly, and its hashes are not stored for other tokens. Returns the lines copied."""
     names = ", ".join(cols)
-    at, n, batches = ("", -1, ""), 0, 0
     j, k, ok = cols.index("json"), cols.index("packed"), cols.index("parsed")
-    while True:
-        rows = con.execute(f"SELECT {names} FROM old.raw_lines WHERE (coalesce(file, ''), coalesce(byte_offset, -1), key) > (?, ?, ?) "
-                           "ORDER BY coalesce(file, ''), coalesce(byte_offset, -1), key LIMIT ?", [*at, RAW_BATCH]).fetchall()
-        if not rows:
-            return n
-        found, out = {}, []
-        for r in rows:
-            r = list(r)
+    n = 0
+    for rows in pages(con, "old.raw_lines", names):
+        found, packed = {}, []
+        for i, r in enumerate(rows):
             if not r[k] and r[ok]:
-                r[j], r[k], strings = blobs.pack_line(r[j])
-                found.update(strings)
-            out.append(r)
+                text, was, strings = blobs.pack_line(r[j])
+                if was and blobs.substitute(text, {h: '"' + s + '"' for h, s in strings.items()}) == r[j]:
+                    found.update(strings)
+                    packed.append((i, text, strings))
         con.execute("BEGIN")
         try:
-            insert(con, "raw_lines", cols, out)
-            blobs.write(con, found)
+            refused = blobs.write(con, found)
+            rows = [list(r) for r in rows]
+            for i, text, strings in packed:
+                if not refused & strings.keys():
+                    rows[i][j], rows[i][k] = text, True
+            insert(con, "raw_lines", cols, rows)
             con.execute("COMMIT")
         except BaseException:
             con.execute("ROLLBACK")
             raise
-        last = rows[-1]
-        at = (last[cols.index("file")] or "", -1 if last[cols.index("byte_offset")] is None else last[cols.index("byte_offset")], last[cols.index("key")])
         n += len(rows)
-        batches += 1
-        if log and batches % 50 == 0:
+        if log:
             log(f"compact: raw_lines {n} lines")
+    return n
 
 
 RAW_BATCH = 2000  # lines read and expanded at a time
+RAW_SPAN = 64 << 20  # and at most this many bytes of a file's lines, by their offsets
+
+
+def pages(cur, table, cols, files=None, parsed=False):
+    """The rows of table's lines, one list per page of at most RAW_BATCH lines spanning at most RAW_SPAN bytes of a file, file by
+    file in (byte_offset, key) order; files lists the files (all, a NULL one too, when None). Only keys and offsets are read to
+    cut a page, so the text of one page is all that is in memory."""
+    where = " AND parsed" if parsed else ""
+    order = "coalesce(byte_offset, -1), key"
+    after = "(coalesce(byte_offset, -1) > ? OR coalesce(byte_offset, -1) = ? AND key > ?)"  # past a (byte_offset, key); a tuple BETWEEN fails
+    for path in files if files is not None else [r[0] for r in cur.execute(f"SELECT DISTINCT file FROM {table} ORDER BY 1").fetchall()]:
+        at = (-1, "")
+        while True:
+            keys = cur.execute(f"SELECT coalesce(byte_offset, -1), key FROM {table} WHERE file IS NOT DISTINCT FROM ?{where} "
+                               f"AND {after} ORDER BY {order} LIMIT ?", [path, at[0], *at, RAW_BATCH]).fetchall()
+            if not keys:
+                break
+            keys = [x for x in keys if x[0] - keys[0][0] <= RAW_SPAN] or keys[:1]
+            yield cur.execute(f"SELECT {cols} FROM {table} WHERE file IS NOT DISTINCT FROM ?{where} "
+                              f"AND {after} AND NOT {after} ORDER BY {order}", [path, at[0], *at, keys[-1][0], *keys[-1]]).fetchall()
+            at = keys[-1]
 
 
 def raw_rows(cur):
     """Every stored line as (key, file, line_no, byte_offset, type, session_id, uuid, ts, subagent, parsed, text), the text in
-    full, read RAW_BATCH lines at a time."""
-    cols = "key, file, line_no, byte_offset, type, session_id, uuid, ts, subagent, parsed, json, packed"
-    for (path,) in cur.execute("SELECT DISTINCT file FROM raw_lines ORDER BY 1").fetchall():
-        at = (-1, "")
-        while True:
-            rows = cur.execute(f"SELECT {cols} FROM raw_lines WHERE file = ? AND (coalesce(byte_offset, -1), key) > (?, ?) "
-                               "ORDER BY coalesce(byte_offset, -1), key LIMIT ?", [path, *at, RAW_BATCH]).fetchall()
-            if not rows:
-                break
-            yield from blobs.expand(cur, rows)
-            at = (rows[-1][3] if rows[-1][3] is not None else -1, rows[-1][0])
+    full, a page at a time."""
+    for rows in pages(cur, "raw_lines", "key, file, line_no, byte_offset, type, session_id, uuid, ts, subagent, parsed, json, packed"):
+        yield from blobs.expand(cur, rows)
 
 
 def rebuild(con, log=None):
@@ -874,9 +898,8 @@ def rebuild(con, log=None):
         cur.execute("BEGIN")
         try:
             der = src.deriver(cur, projects, name, path, src.subagent(path), 0)
-            rows = cur.execute("SELECT json, packed FROM raw_lines WHERE file = ? AND parsed ORDER BY byte_offset", [path]).fetchall()
-            for i in range(0, len(rows), RAW_BATCH):
-                for (text,) in blobs.expand(cur, rows[i:i + RAW_BATCH]):
+            for rows in pages(cur, "raw_lines", "json, packed", [path], parsed=True):
+                for (text,) in blobs.expand(cur, rows):
                     der.add(json.loads(text))
             der.flush()
             cur.execute("UPDATE files SET seq = ? WHERE path = ?", [der.seq, path])

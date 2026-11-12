@@ -2,6 +2,8 @@ import base64
 import json
 import os
 import stat
+import subprocess
+import sys
 import unittest
 from unittest import mock
 
@@ -98,6 +100,61 @@ class BlobsTest(StoreCase):
         store.rebuild(self.con)
         self.assertEqual([self.q(f"SELECT * FROM {t} ORDER BY 1") for t in tables], before)
         self.assertEqual(self.full(), {"a1": rows[0]})
+
+
+    def test_tokens_with_escapes(self):
+        cases = ['\\"' * 300, "\\\\" * 300, "\\u0000" * 300, "\\ud800" * 300, "a\\/b" * 300, "é" * 300, "\\n" * 300]  # the pattern counts units
+        texts = ['{"type":"user","uuid":"u%d","a":"%s","b":"x"}' % (i, c) for i, c in enumerate(cases)]
+        for t in texts:
+            json.loads(t)
+        self.ingest(*texts)
+        self.assertEqual(self.full(), {f"u{i}": t for i, t in enumerate(texts)})
+        self.assertEqual(self.q("SELECT count(*) FROM raw_lines WHERE packed")[0][0], len(texts))
+
+    def test_long_key(self):
+        text = '{"type":"user","uuid":"u1","%s":1}' % ("k" * 300)
+        self.ingest(text)
+        self.assertTrue(self.stored()["u1"][1])
+        self.assertEqual(self.full(), {"u1": text})
+
+    def test_size_boundary(self):
+        for n, packed in ((255, False), (256, True), (257, True)):
+            text = '{"a":"%s"}' % ("x" * n)
+            self.assertEqual(blobs.pack_line(text)[1], packed, n)
+
+    def test_rolled_back_ingest_leaves_no_blobs(self):
+        self.write("a.jsonl", line(type="user", uuid="u1", m=big("s")))
+        with mock.patch.object(store.Deriver, "flush", side_effect=RuntimeError("boom")):
+            with self.assertRaises(RuntimeError):
+                store.ingest(self.con, self.roots)
+        for t in ("raw_lines", "blobs", "packs", "packs_open"):
+            self.assertEqual(self.q(f"SELECT count(*) FROM {t}")[0][0], 0, t)
+
+    def test_stored_hash_of_another_token_keeps_line_whole(self):
+        inner = "m" * 600
+        text = '{"type":"user","uuid":"u1","a":"%s"}' % inner
+        self.con.execute("INSERT INTO blobs VALUES (?, 0, 0, 5, false)", [blobs.digest(inner)])
+        self.ingest(text)
+        self.assertEqual(self.stored()["u1"], (text, False))
+
+    def test_seal_between_lookup_and_read(self):
+        text = line(type="user", uuid="u1", m=big("s")).strip()
+        self.ingest(text)
+        self.assertGreater(self.q("SELECT count(*) FROM packs_open")[0][0], 0)
+        reader, sealer = self.con.cursor(), self.con.cursor()
+        real, calls = blobs.get, []
+
+        def get(cur, pack):  # the writer seals after the reader's lookup, before its read
+            first = not calls
+            calls.append(pack)
+            if first:
+                blobs.seal(sealer, force=True)
+            return real(cur, pack)
+
+        rows = reader.execute("SELECT json, packed FROM raw_lines").fetchall()
+        with mock.patch.object(blobs, "get", get):
+            self.assertEqual(blobs.expand(reader, rows), [(text,)])
+        self.assertEqual(len(calls), 3)  # the read, the seal's own read, the retry
 
 
 class Base64Test(StoreCase):
@@ -212,6 +269,35 @@ class CompactTest(StoreCase):
         store.compact(self.db)
         store.compact(self.db)
         self.assertEqual(self.snapshot()[0], lines)
+
+
+class CompactChecksTest(CompactTest):
+    def test_failed_verification_leaves_old_store(self):
+        self.old_store()
+        store.open_store(self.db).close()
+        with open(self.db, "rb") as fh:
+            before = fh.read()
+        with mock.patch.object(blobs, "verify", side_effect=ValueError("bad blob")):
+            with self.assertRaises(ValueError):
+                store.compact(self.db)
+        with open(self.db, "rb") as fh:
+            self.assertEqual(fh.read(), before)
+        self.assertFalse(os.path.exists(self.db + ".compact"))
+        self.assertFalse(os.path.exists(self.db + ".compact.wal"))
+
+    def test_store_stays_locked_while_compacting(self):
+        self.old_store()
+        tried = []
+
+        def log(msg):
+            if not tried:
+                r = subprocess.run([sys.executable, "-c", f"import duckdb; duckdb.connect({self.db!r})"], capture_output=True, text=True)
+                tried.append(r.returncode)
+
+        store.compact(self.db, log=log)
+        self.assertEqual(len(tried), 1)
+        self.assertNotEqual(tried[0], 0)
+        store.open_store(self.db).close()  # free again afterwards
 
 
 class PackLineTest(unittest.TestCase):

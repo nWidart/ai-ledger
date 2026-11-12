@@ -56,6 +56,8 @@ The app opens Activity in your browser; `--no-open` skips it. The first start re
 
 With the app stopped, `ai-ledger ingest` reads new lines once and `ai-ledger rebuild` recomputes the derived tables.
 
+The store keeps every line's exact text but stores each long string (256 characters or more) once, compressed, so repeated content (re-sent context, a file read twice, a screenshot) costs its size once. A store from an earlier version keeps working and packs only new lines. With the app stopped, `ai-ledger compact` rewrites it into the current format in a new file and swaps it in, which on a 690,000-line store took 14 minutes and cut the file from 3.0 GB to 1.6 GB. It needs room for a second copy while it runs, and the old file stays untouched until the swap.
+
 ### Prices
 
 Cost uses the API list prices shipped with each version (`uv tool upgrade ai-ledger` brings new ones). To price a model the Cost page lists as unpriced, or to change a price, create `prices.json` next to the store: `~/Library/Application Support/ai-ledger/prices.json` on macOS, `~/.local/share/ai-ledger/prices.json` on Linux, or the `--db` file's folder. It takes the shape of the [packaged file](src/ai_ledger/prices.json), in USD per million tokens:

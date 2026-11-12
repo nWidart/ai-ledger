@@ -7,10 +7,12 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `ai-ledger compact` (with the app stopped) rewrites an existing store into the smaller format in a new file, then swaps it in, and drops the free space DuckDB never gives back. On a store of 690,438 lines it took the file from 2.96 GB to 1.61 GB, every line identical.
 - Insights and the Activity Sessions drawer say which sessions they count: Insights counts a session by its start time, Activity by a request in the range, so the two totals can differ slightly.
 
 ### Changed
 
+- The store is smaller: each long string of a transcript line (256 characters or more) is stored once, compressed, apart from the line, so re-sent context, files read twice and repeated screenshots cost their size once. Lines read back exactly as written. Stores from earlier versions keep working and pack only new lines until you run `ai-ledger compact`.
 - The Insights page reads in a new order: vitals, outcomes beside friction, satisfaction, then the analysed sessions, with Goals and Session types folded into closed drawers, and has a section index like Activity's.
 
 ### Fixed
