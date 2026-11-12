@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { LimitHistoryRow, LimitWindow, LimitsAlert, LimitsPayload } from "../../api";
 import limits from "../../__fixtures__/limits";
-import { alertText, barKey, barName, caption, closedWindow, hasScenario, historyStrips, STRIP_BARS, stripNote, windowNotes, nearestPoint, pace, readPoints, readText, recentText, shareText, surfacesText, tipPlace, usedHint, usedHref, usedRange, usedRangeName, whenDay } from "./limits";
+import { alertKey, alertText, barKey, barName, caption, closedWindow, hasScenario, historyStrips, STRIP_BARS, stripNote, windowNotes, nearestPoint, pace, readPoints, readText, recentText, shareText, surfacesText, tipPlace, usedHint, usedHref, usedRange, usedRangeName, whenDay } from "./limits";
 
 const claude = (limits as LimitsPayload).windows[0]!;
 const win = (over: Partial<LimitWindow>): LimitWindow => ({ ...claude, ...over });
@@ -352,5 +352,22 @@ describe("alertText", () => {
   it("counts the other windows in alert", () => {
     expect(alertText(alert({ kind: "high", current: 91, count: 2 }))).toBe("Claude Code weekly is at 91% (and 1 more)");
     expect(alertText(alert({ kind: "high", current: 91, count: 4 }))).toBe("Claude Code weekly is at 91% (and 3 more)");
+  });
+});
+
+describe("alertKey", () => {
+  const alert = (over: Partial<LimitsAlert>): LimitsAlert => ({ kind: "at_limit", provider: "claude", provider_label: "Claude Code", label: "weekly", current: 100,
+    at: "2026-11-14T12:00:00.000Z", resets_at: "2026-11-14T12:00:00.000Z", measured: true, count: 1, ...over });
+  it("is empty for no alert", () => expect(alertKey(null)).toBe(""));
+  it("holds what the alert is: its kind, provider, label and measured flag", () => {
+    const key = alertKey(alert({}));
+    expect(key).not.toBe("");
+    for (const over of [{ kind: "runs_out" }, { provider: "codex" }, { label: "5-hour" }, { measured: false }] as const) expect(alertKey(alert(over))).not.toBe(key);
+  });
+  it("does not move when only the wording's figures drift: the time, the percent, the count", () => {
+    expect(alertKey(alert({ at: "2026-11-14T13:00:00.000Z", resets_at: "2026-11-14T13:00:00.000Z", current: 99.5, count: 3, provider_label: "Claude" }))).toBe(alertKey(alert({})));
+  });
+  it("tells a label that holds the separator from two labels", () => {
+    expect(alertKey(alert({ provider: "a", label: "b|c" }))).not.toBe(alertKey(alert({ provider: "a|b", label: "c" })));
   });
 });

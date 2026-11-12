@@ -18,6 +18,11 @@ export function alertText(a: LimitsAlert): string {
   return `${name} ${what}${a.count > 1 ? ` (and ${a.count - 1} more)` : ""}`;
 }
 
+/** What the nav's Limits alert is, apart from its wording: its kind, provider, window and whether its figure is measured. The nav
+ *  says the alert aloud when this changes, not when the time, the percent or the count in its sentence do (the forecast time
+ *  drifts on every cycle). "" for no alert. */
+export const alertKey = (a: LimitsAlert | null | undefined): string => a ? JSON.stringify([a.kind, a.provider, a.label, a.measured]) : "";
+
 /** A span as "1d 17h", "3h 20m" or "45m". */
 export function span(msLeft: number): string {
   const m = Math.max(0, Math.round(msLeft / 60000)), d = Math.floor(m / 1440), h = Math.floor((m % 1440) / 60), mm = m % 60;

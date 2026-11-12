@@ -1,7 +1,7 @@
-import { useEffect, useRef, type MouseEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { navigate, setHash, sharedHash, useHashState, usePathname } from "../hash";
 import { getTheme, nextTheme, setTheme, useTheme, type Theme } from "../theme";
-import { alertText } from "../pages/limits/limits";
+import { alertKey, alertText } from "../pages/limits/limits";
 import { ProjectDot } from "./ProjectDot";
 import { openPalette, shortcutHint, shortcutKeys } from "./palette/store";
 import { pollStatus, refresh, useRefreshState } from "./refresh";
@@ -31,6 +31,11 @@ export function Nav() {
   const nav = useRef<HTMLElement>(null);
   const st = useRefreshState();
   const alert = st.alert ? alertText(st.alert) : null;
+  // What a screen reader is told of the alert: its sentence, kept as it was while the alert stays the same alert (the forecast time
+  // in the sentence drifts every cycle), changed when the alert's kind, window or measured flag change, and emptied, with no
+  // announcement of its own, when it goes. Set while rendering, from the key: the usual way to derive state from a change.
+  const key = alertKey(st.alert), [said, setSaid] = useState({ key: "", text: "" });
+  if (key !== said.key) setSaid({ key, text: alert ?? "" });
 
   // Pages offset scroll targets by the sticky nav's height, which grows when it wraps on phones.
   useEffect(() => {
@@ -99,6 +104,7 @@ export function Nav() {
           <span className="lbl">Search</span><kbd>{shortcutHint()}</kbd>
         </button>
         <span className="appnav-status" id="navStatus" aria-live="polite">{st.text}</span>
+        <span className="sr" role="status">{said.text}</span>
         <button type="button" id="navRefresh" className={st.failed ? "failed" : undefined} title={st.text} disabled={st.busy} onClick={refresh}
           aria-label={st.retry ? "Retry" : "Refresh"}>
           <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9" /><path d="M13.5 2.5v3h-3" /></svg>
