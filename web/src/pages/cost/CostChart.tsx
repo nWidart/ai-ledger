@@ -44,8 +44,10 @@ export function CostChart({ d, metric, onMetric, hidden, onHidden, onProject, on
   const none = !cost && !kinds.length; // every token kind hidden
   const pts: CostDay[] = costDays(d, cost ? kinds : []);
   const total = (p: CostDay) => kinds.reduce((s, k) => s + (p.v[k.k] || 0), 0);
-  // Trailing 7-day mean of the plotted total, from the seventh day on.
-  const avg = pts.map((_, i) => (i < 6 ? null : pts.slice(i - 6, i + 1).reduce((s, q) => s + total(q), 0) / 7));
+  // The view ends today, a day still in progress: its bar is hatched and the average (the trailing 7-day mean of the plotted
+  // total, from the seventh day on) leaves it out, so the line ends yesterday.
+  const live = pts.length - 1;
+  const avg = pts.map((_, i) => (i < 6 || i === live ? null : pts.slice(i - 6, i + 1).reduce((s, q) => s + total(q), 0) / 7));
   const showAvg = pts.length >= 14;
   const a = dayAxis(W, H, pts.length, Math.max(...pts.map(total), 0), niceStep);
   const fy = cost ? usd : big, ty = cost ? usd0 : big;
@@ -80,13 +82,14 @@ export function CostChart({ d, metric, onMetric, hidden, onHidden, onProject, on
     return items.join(", ");
   };
   const partText = (p: CostDay, k: Kind) => `${k.label} ${usd(p.v[k.k])}${k.k === "p:" && p.other?.length ? ` (${otherSr(p)})` : ""}`;
+  const soFar = (i: number) => (i === live ? " so far" : "");
   const avgText = (i: number) => (showAvg && avg[i] != null ? `7-day average ${fy(avg[i])}` : "");
   const text = (p: CostDay, i: number) => (cost
     ? `${usd(p.cost)} estimated${parts(p).length > 1 || p.other?.length ? ": " + parts(p).map(k => partText(p, k)).join(", ") : ""}${p.unpriced ? `, ${p.unpriced} unpriced requests` : ""}`
     : kinds.map(k => `${k.label} ${big(p.v[k.k])}`).join(", ") + `, total ${big(total(p))}`) + (avgText(i) ? `. ${avgText(i)}` : "");
   const cur = at ? pts[at.i] : undefined;
   const what = cost ? (d.project ? "Estimated cost" : "Estimated cost by project") : "Tokens by kind";
-  const label = pk ? `${what} per day, ${pts.length} days, peaking at ${fy(total(pk))} on ${dayLabel(pk.day, true)}. Use the left and right arrow keys to read each day and Enter to list its sessions.`
+  const label = pk ? `${what} per day, ${pts.length} days, peaking at ${fy(total(pk))} on ${dayLabel(pk.day, true)}${soFar(peak)}. Use the left and right arrow keys to read each day and Enter to list its sessions.`
     : `${what} per day, no days yet.`;
   const avgLine = avg.map((v, i) => (v == null ? "" : `${i === 6 ? "M" : "L"}${a.cx(i).toFixed(1)},${a.y(v).toFixed(1)}`)).join("");
 
@@ -95,7 +98,7 @@ export function CostChart({ d, metric, onMetric, hidden, onHidden, onProject, on
       <div className="chart-head">
         <div><h2 id="chartTitle">{cost ? "Estimated cost per day" : "Tokens per day"}</h2>
           <div className="hint">{cost ? `${d.project ? "At" : "Projects with a color of their own (the busiest of all time), the rest in Other; select one to filter. At"} API list prices; unpriced models are left out.`
-            : "Select a kind to hide it. Cache reads usually dwarf the rest."} Select a day to list its sessions by cost; with the keyboard, focus the chart, use the arrow keys and press Enter.</div></div>
+            : "Select a kind to hide it. Cache reads usually dwarf the rest."}{showAvg ? " The 7-day average covers complete days." : ""} Select a day to list its sessions by cost; with the keyboard, focus the chart, use the arrow keys and press Enter.</div></div>
         <div className="seg" role="group" aria-label="Chart metric">
           {(["cost", "tokens"] as const).map(m => <button key={m} type="button" aria-pressed={m === metric} onClick={() => onMetric(m)}>{m === "cost" ? "Cost" : "Tokens"}</button>)}
         </div>
@@ -111,11 +114,15 @@ export function CostChart({ d, metric, onMetric, hidden, onHidden, onProject, on
           : KINDS.map(k => <button key={k.k} type="button" aria-pressed={!hidden.includes(k.k)}
             onClick={() => onHidden(hidden.includes(k.k) ? hidden.filter(x => x !== k.k) : [...hidden, k.k])}><i style={{ background: k.c }} />{k.label}</button>)}
         {showAvg && !none && <span className="key"><i className="line" />7-day average</span>}
+        {pts.length > 0 && !none && <span className="key"><i className="hatch" />Today so far</span>}
       </div>
       {none && <div className="empty all-hidden" role="status">All token kinds are hidden.{" "}
         <button type="button" className="linkish" onClick={() => onHidden([])}>Show every kind</button></div>}
       <div className="chart" ref={box} tabIndex={0} hidden={none} role="img" aria-label={label} onKeyDown={onKey} onBlur={() => setAt(null)}>
         <svg ref={svg} viewBox={`0 0 ${W} ${H}`} aria-hidden="true">
+          {/* Today's hatch: surface-colored stripes over each segment, so every series color shows through in either theme. */}
+          <defs><pattern id="partial-day" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+            <rect width="2.5" height="6" fill="var(--surface-1)" opacity=".6" /></pattern></defs>
           {ticks.map(v => <g key={v}><line x1={a.m.l} x2={W - a.m.r} y1={a.y(v)} y2={a.y(v)} stroke="var(--grid)" />
             <text x={a.m.l - 6} y={a.y(v) + 4} textAnchor="end" fontSize="11" fill="var(--text-muted)">{ty(v)}</text></g>)}
           {pts.map((p, i) => {
@@ -129,9 +136,10 @@ export function CostChart({ d, metric, onMetric, hidden, onHidden, onProject, on
                 base += v;
                 // 2px surface gap between stacked segments; the top segment gets rounded corners.
                 const hh = Math.max(0, h - (j ? 2 : 0));
-                return j === segs.length - 1 && hh > 4
-                  ? <path key={k.k} d={`M${x},${top + hh} V${top + 3} q0,-3 3,-3 H${x + a.w - 3} q3,0 3,3 V${top + hh} Z`} fill={k.c} />
-                  : <rect key={k.k} x={x} y={top} width={a.w} height={hh} fill={k.c} />;
+                const shape = (fill: string, cls?: string) => j === segs.length - 1 && hh > 4
+                  ? <path className={cls} d={`M${x},${top + hh} V${top + 3} q0,-3 3,-3 H${x + a.w - 3} q3,0 3,3 V${top + hh} Z`} fill={fill} />
+                  : <rect className={cls} x={x} y={top} width={a.w} height={hh} fill={fill} />;
+                return <Fragment key={k.k}>{shape(k.c)}{i === live && shape("url(#partial-day)", "partial")}</Fragment>;
               })}</g>}
             </g>;
           })}
@@ -143,14 +151,14 @@ export function CostChart({ d, metric, onMetric, hidden, onHidden, onProject, on
           {pk && total(pk) > 0 && (() => {
             const { x, anchor } = peakLabelAt(a, peak);
             return <text x={x} y={a.y(total(pk)) - 7} textAnchor={anchor} fontSize="11" fontWeight="600" fill="var(--text-primary)"
-              stroke="var(--surface-1)" strokeWidth="3" paintOrder="stroke">Peak {fy(total(pk))} · {dayLabel(pk.day)}</text>;
+              stroke="var(--surface-1)" strokeWidth="3" paintOrder="stroke">Peak {fy(total(pk))} · {dayLabel(pk.day)}{soFar(peak)}</text>;
           })()}
           {at && <rect x={a.m.l + at.i * a.bw} width={a.bw} y={a.m.t} height={a.ih} fill="var(--text-primary)" opacity=".06" />}
           <rect className="hit" x={a.m.l} y={a.m.t} width={a.iw} height={a.ih} fill="transparent" style={{ cursor: "pointer" }}
             onPointerMove={onMove} onPointerLeave={() => setAt(null)} onClick={ev => pick(indexAt(ev.clientX))} />
         </svg>
         <div className="tip" ref={tip} role="tooltip" style={{ display: cur ? "block" : "none" }}>{cur && at && <>
-          <div className="muted">{dayLabel(cur.day, true)}</div>
+          <div className="muted">{dayLabel(cur.day, true)}{soFar(at.i)}</div>
           {cost ? <>
             {parts(cur).map(k => <Fragment key={k.k}><Row k={k} v={usd(cur.v[k.k])} />
               {k.k === "p:" && topOther(cur).map(o => <div key={o.project} className="row sub"><span>{o.project}</span><span>{usd(o.cost)}</span></div>)}
@@ -165,7 +173,7 @@ export function CostChart({ d, metric, onMetric, hidden, onHidden, onProject, on
           {avgText(at.i) && <div className="muted">{avgText(at.i)}</div>}
         </>}</div>
       </div>
-      <div className="sr" aria-live="polite">{cur && at ? `${dayLabel(cur.day, true)}: ${text(cur, at.i)}` : ""}</div>
+      <div className="sr" aria-live="polite">{cur && at ? `${dayLabel(cur.day, true)}${soFar(at.i)}: ${text(cur, at.i)}` : ""}</div>
     </section>
   );
 }

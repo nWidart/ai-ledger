@@ -725,6 +725,12 @@ export default {
  ],
  "previous": null,
  "changes": null,
+ "run_rate": {
+  "month_cost": 15.8002,
+  "daily_avg": 2.257171429,
+  "days_left": 26,
+  "projected": 74.486657143
+ },
  "prices_file": {
   "path": "/Users/example/Library/Application Support/ai-ledger/prices.json",
   "error": null
