@@ -650,6 +650,13 @@ class WindowUsedTest(AnalysisCase):
         self.assertEqual([(p["project"], p["cost"], p["share"]) for p in u["projects"]], [("c", 4.0, 0.4), ("b", 3.0, 0.3), ("a", 1.0, 0.1)])
         self.assertLessEqual(sum(p["share"] for p in u["projects"]), 1)
 
+    def test_a_tiny_share_is_never_rounded_to_zero(self):
+        for project, cost in (("big", 100.0), ("small", 0.01), ("tiny", 0.001)):
+            self.use(project, "claude", "claude-opus-5-5", (self.ago(1), cost))
+        u = self.used()
+        self.assertEqual([(p["project"], p["share"]) for p in u["projects"]], [("big", 0.9999), ("small", 0.0001), ("tiny", 0.0001)])
+        self.assertTrue(all(p["share"] > 0 for p in u["projects"] + u["models"]))
+
     def test_models_take_the_top_three_too(self):
         prices = {**PRICES, "claude-sonnet-5": PRICES["claude-opus-5-5"]}
         for model, cost in (("claude-opus-5-5", 5.0), ("claude-fable-5-1", 2.0), ("claude-sonnet-5", 2.0), ("gpt-6-astra", 1.0)):

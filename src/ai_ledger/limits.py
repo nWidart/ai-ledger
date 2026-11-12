@@ -563,7 +563,7 @@ USED_TOP = 3  # projects and models listed per window
 def window_used(cur, prices, source, scope, t0, t1, per_pct):
     """What the counted, priced use from t0 to t1 was spent on, for the provider's source and the models the scope covers
     ('' is every model): its total dollars and the USED_TOP projects and models with the most cost, each with its share of
-    the total and its points (None when per_pct, the dollars a point costs, is not known). A request with no project counts
+    the total (a listed row has cost, so its share is never 0: at least 0.0001) and its points (None when per_pct, the dollars a point costs, is not known). A request with no project counts
     in the total and the models, and is no project row. Minutes are counted as Usage counts them. Names and sums only.
     None when nothing was counted."""
     if t1 <= t0:
@@ -582,7 +582,7 @@ def window_used(cur, prices, source, scope, t0, t1, per_pct):
         for row in rows:
             if row[i] and row[2] > 0:
                 costs[row[i]] = costs.get(row[i], 0.0) + row[2]
-        top[name] = [dict({name: k}, cost=round(c, 2), share=round(c / total, 3), points=round(c / per_pct, 1) if per_pct else None)
+        top[name] = [dict({name: k}, cost=round(c, 2), share=max(0.0001, round(c / total, 4)), points=round(c / per_pct, 1) if per_pct else None)
                      for k, c in sorted(costs.items(), key=lambda kv: (-kv[1], kv[0]))[:USED_TOP]]
     return dict(total=round(total, 2), projects=top["project"], models=top["model"])
 

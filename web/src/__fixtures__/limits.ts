@@ -998,13 +998,13 @@ export default {
      {
       "model": "claude-opus-5-5",
       "cost": 225.0,
-      "share": 0.991,
+      "share": 0.9912,
       "points": 89.2
      },
      {
       "model": "claude-fable-5-1",
       "cost": 2.0,
-      "share": 0.009,
+      "share": 0.0088,
       "points": 0.8
      }
     ]

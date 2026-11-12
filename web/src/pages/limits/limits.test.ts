@@ -206,6 +206,7 @@ describe("what used this window", () => {
     const row = { cost: 5, points: null };
     expect(usedHint({ total: 10, projects: [{ project: "ai-ledger", share: 0.54, ...row }], models: [] })).toBe("ai-ledger 54%");
     expect(usedHint({ total: 10, projects: [{ project: "tiny", share: 0.001, ...row }], models: [] })).toBe("tiny <1%");
+    expect(usedHint({ total: 10000, projects: [{ project: "tiny", share: 0.0001, ...row }], models: [] })).toBe("tiny <1%"); // the payload's smallest share
     expect(usedHint({ total: 10, projects: [], models: [{ model: "m", share: 1, ...row }] })).toBeNull(); // no project to name
   });
 });
