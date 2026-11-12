@@ -10,4 +10,4 @@
 
 ## 3. Docs
 
-- [x] 3.1 Update `PARITY.md` (permalinks) and the CHANGELOG `[Unreleased]` Added list. The README does not describe permalinks, so it is unchanged.
+- [x] 3.1 Update `PARITY.md` (permalinks), the README's Errors bullet and the CHANGELOG `[Unreleased]` Added list.

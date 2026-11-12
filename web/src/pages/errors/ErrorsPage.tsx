@@ -106,12 +106,18 @@ export function ErrorsPage() {
     return () => { removeEventListener("popstate", on); removeEventListener("hashchange", on); };
   }, []);
   useEffect(() => { if (error) retryBtn.current?.focus(); }, [error]);
-  // A dead link shows the notice once, and say it to screen readers once. A live link clears it; so does Dismiss.
+  // A dead link shows the notice, and #pageLive announces it: cleared first, then set on the next frame, so each dead link is
+  // read out again even when the text is the same as last time. A live link clears the notice; so does Dismiss (and its announcement).
+  const annFrame = useRef(0);
   useEffect(() => {
-    if (read.dead) { setDeadLink(true); setPageLive(DEAD_LINK); }
-    else if (read.linked) setDeadLink(false);
+    if (read.dead) {
+      setDeadLink(true);
+      cancelAnimationFrame(annFrame.current);
+      setPageLive("");
+      annFrame.current = requestAnimationFrame(() => setPageLive(DEAD_LINK));
+    } else if (read.linked) setDeadLink(false);
   }, [read.dead, read.linked]);
-  const dismissDead = () => { setDeadLink(false); $("#lede")?.focus(); };
+  const dismissDead = () => { setDeadLink(false); cancelAnimationFrame(annFrame.current); setPageLive(""); $("#lede")?.focus(); };
 
   // The mini chart shows only while the main chart is out of view.
   useEffect(() => {
@@ -204,7 +210,7 @@ export function ErrorsPage() {
           <button type="button" ref={retryBtn} onClick={() => { retried.current = true; retry(); }}>Retry</button></div>
         : <div className="card" id="load" role="status">Loading errors…</div>)}
       <div className="sr" id="pageLive" aria-live="polite">{pageLive}</div>
-      {deadLink && <div className="outnote" id="deadLink" role="status"><span>{DEAD_LINK}</span> <button type="button" onClick={dismissDead}>Dismiss</button></div>}
+      {deadLink && <div className="outnote" id="deadLink"><span>{DEAD_LINK}</span> <button type="button" onClick={dismissDead}>Dismiss</button></div>}
       {ctx && <Ctx.Provider value={ctx}>
         <Summary />
         <RateChart />

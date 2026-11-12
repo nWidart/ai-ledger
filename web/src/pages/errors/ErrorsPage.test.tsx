@@ -133,19 +133,48 @@ describe("ErrorsPage", () => {
   });
 
   const DEAD = "The linked error is no longer in the store. It may have been dropped by a rebuild, or the link is from another store. Showing the view without it.";
+  // The live regions (aria-live or role=status) that hold this text: exactly one, or a screen reader may say it twice.
+  const liveHolding = (t: string) => [...document.querySelectorAll('[aria-live], [role="status"]')].filter(e => e.textContent!.includes(t));
   it("says a permalink's example is gone, uses 30 days, and dismisses to the heading", async () => {
     history.replaceState(null, "", "/errors#ex=nope");
     await page();
     await waitFor(() => expect(document.getElementById("deadLink")).not.toBeNull());
     const note = document.getElementById("deadLink")!;
-    expect(note.getAttribute("role")).toBe("status");
+    expect(note.getAttribute("role")).toBeNull();
     expect(note.textContent).toContain(DEAD);
     expect(note.compareDocumentPosition(document.getElementById("lede")!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(document.getElementById("pageLive")!.textContent).toBe(DEAD);
+    await waitFor(() => expect(document.getElementById("pageLive")!.textContent).toBe(DEAD));
+    expect(liveHolding(DEAD)).toHaveLength(1);
     await waitFor(() => expect(location.hash).toBe("#range=30"));
     await userEvent.click(within(note).getByRole("button", { name: "Dismiss" }));
     expect(document.getElementById("deadLink")).toBeNull();
+    expect(document.getElementById("pageLive")!.textContent).toBe("");
     expect(document.activeElement).toBe(document.getElementById("lede"));
+  });
+
+  it("announces each dead link again: dismiss, then a second dead link clears the region before the text returns", async () => {
+    history.replaceState(null, "", "/errors#ex=nope");
+    await page();
+    await waitFor(() => expect(document.getElementById("pageLive")!.textContent).toBe(DEAD));
+    await userEvent.click(within(document.getElementById("deadLink")!).getByRole("button", { name: "Dismiss" }));
+    expect(document.getElementById("deadLink")).toBeNull();
+    act(() => { history.replaceState(null, "", "/errors#ex=nope2"); dispatchEvent(new PopStateEvent("popstate")); });
+    // Checked before the next frame: the region empties at once, so the same text is a change again, and returns on that frame.
+    expect(document.getElementById("pageLive")!.textContent).toBe("");
+    expect(document.getElementById("deadLink")).not.toBeNull();
+    await waitFor(() => expect(document.getElementById("pageLive")!.textContent).toBe(DEAD));
+    expect(liveHolding(DEAD)).toHaveLength(1);
+  });
+
+  it("re-announces a second dead link even without a Dismiss in between", async () => {
+    history.replaceState(null, "", "/errors#ex=nope");
+    await page();
+    await waitFor(() => expect(document.getElementById("pageLive")!.textContent).toBe(DEAD));
+    act(() => { history.replaceState(null, "", "/errors#ex=nope2"); dispatchEvent(new PopStateEvent("popstate")); });
+    // Still holding the old text when the new link arrives: the region must empty before the same text returns.
+    expect(document.getElementById("pageLive")!.textContent).toBe("");
+    await waitFor(() => expect(document.getElementById("pageLive")!.textContent).toBe(DEAD));
+    expect(liveHolding(DEAD)).toHaveLength(1);
   });
 
   it("keeps the range a dead permalink names", async () => {
