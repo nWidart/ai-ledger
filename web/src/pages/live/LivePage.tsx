@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 import { viewOf, type LiveListSession, type LiveState } from "../../api";
 import { Filters, SOURCE_LABELS } from "../../components/Filters";
 import { ProjectName } from "../../components/ProjectDot";
@@ -52,8 +52,15 @@ export function LivePage() {
     document.title = need ? `(${need}) ${base}` : base;
     return () => { document.title = document.title.replace(COUNT, ""); };
   }, [need]);
+  // A session that changes group gets a new button under the other group, in the rail and on the wall, and the button
+  // React removes drops the keyboard focus: the new one takes it. Read while rendering, before the old one is gone.
+  const focused = document.activeElement as HTMLElement | null, around = focused?.dataset?.session ? focused.closest("section") : null;
+  useLayoutEffect(() => {
+    if (!around?.isConnected || focused!.isConnected) return;
+    [...around.querySelectorAll<HTMLElement>("[data-session]")].find(b => b.dataset.session === focused!.dataset.session)?.focus();
+  });
   const entry = (s: LiveListSession) => <li key={s.session_id}>
-    <button type="button" aria-current={s.session_id === selected ? "true" : undefined} onClick={() => pick(s.session_id)}>
+    <button type="button" data-session={s.session_id} aria-current={s.session_id === selected ? "true" : undefined} onClick={() => pick(s.session_id)}>
       {s.title ? <>
         <span className="ttl" title={s.title}>{s.title}</span><span className="cost">{usd(s.cost)}</span>
         <span className="sub"><ProjectName project={s.project} /> · <StateTag st={stateNow(s.state, now)} now={now} /> · {SOURCE_LABELS[s.source]}</span>

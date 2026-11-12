@@ -29,6 +29,10 @@ The Live page SHALL list the active sessions in a rail, grouped by state in this
 - **WHEN** a third session starts while two are running
 - **THEN** it joins the end of its group and the two entries above it do not move
 
+#### Scenario: Focused session changes state
+- **WHEN** the keyboard focus is on a session's entry in the rail, or on its tile on the wall, and the session moves to another group
+- **THEN** the focus is on that session's entry or tile in its new group
+
 ### Requirement: Count the sessions in the rail's footer
 The rail's footer SHALL say how many sessions are working, those of the *working* group, and how many wait for the user: those the tab title counts, likely waiting for approval or in your turn. Idle and ended sessions SHALL count as neither.
 

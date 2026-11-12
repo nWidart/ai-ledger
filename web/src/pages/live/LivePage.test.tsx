@@ -171,6 +171,31 @@ describe("LivePage", () => {
     await after([{ ...b, state: sess("b", "you", b.first_ts).state }, c, a], ["your turn · 1 b", "working · 2 a c"]); // only b moves
   });
 
+  it.each([["the rail", "#session=a"], ["the wall", "#view=wall"]])("keeps the keyboard focus on a session that changes group, in %s", async (_where, hash) => {
+    const a = sess("a", "tool", "2026-11-10T09:00:00.000Z"), b = sess("b", "tool", "2026-11-10T09:30:00.000Z"), turn = sess("b", "you", b.first_ts);
+    const o = { list: { ...list, sessions: [a, b] } };
+    show(hash, o);
+    const el = await (hash === "#view=wall" ? wall() : rail());
+    const of = (project: string) => within(el).getAllByRole("button").find(x => x.querySelector(".pname")!.textContent === project)!;
+    const after = async (sessions: typeof o.list.sessions, want: string[]) => {
+      o.list = { ...list, sessions };
+      FakeSource.last!.notify(null);
+      await waitFor(() => expect(groups(el)).toEqual(want));
+    };
+    await waitFor(() => expect(groups(el)).toEqual(["working · 2 a b"]));
+    const was = of("b");
+    act(() => was.focus());
+    await after([a, turn], ["your turn · 1 b", "working · 1 a"]);
+    expect([of("b") === was, document.activeElement === of("b")]).toEqual([false, true]); // a new button, with the focus
+    const pause = screen.getByRole("button", { name: "Pause" });
+    act(() => pause.focus());
+    await after([a, b], ["working · 2 a b"]); // the focus is elsewhere: it stays there
+    expect(document.activeElement).toBe(pause);
+    act(() => of("a").focus());
+    await after([a, turn], ["your turn · 1 b", "working · 1 a"]); // another session moves
+    expect(document.activeElement).toBe(of("a"));
+  });
+
   it("shows how long a session has been on your turn or thinking, counting up with the clock", async () => {
     fakeClock("2026-11-10T10:04:00.000Z");
     const o = { list: { ...list, sessions: [sess("a", "you", "2026-11-10T09:00:00.000Z", "2026-11-10T10:00:00.000Z"), sess("b", "thinking", "2026-11-10T09:10:00.000Z", "2026-11-10T10:03:48.000Z")] } };
