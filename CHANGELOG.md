@@ -9,6 +9,10 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 - Insights and the Activity Sessions drawer say which sessions they count: Insights counts a session by its start time, Activity by a request in the range, so the two totals can differ slightly.
 
+### Changed
+
+- The Insights page reads in a new order: vitals, outcomes beside friction, satisfaction, then the analysed sessions, with Goals and Session types folded into closed drawers, and has a section index like Activity's.
+
 ## [0.2.0] - 2026-11-12
 
 Run `ai-ledger rebuild` once after upgrading (with the app stopped): error types, test runs, Codex tool timing and fast-mode speed are stored when transcripts are read.

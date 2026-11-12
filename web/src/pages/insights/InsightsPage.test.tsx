@@ -21,6 +21,7 @@ const show = (d: InsightsPayload, hash = "#range=0") => {
 };
 const lede = () => screen.findByText((_, el) => el?.id === "lede" && !el.textContent!.startsWith("Loading"));
 const section = (name: RegExp) => screen.getByRole("region", { name });
+const drawer = (id: string) => document.getElementById(id) as HTMLDetailsElement;
 
 describe("InsightsPage", () => {
   it("leads with the analysed counts, the unanalysed count and the newest facet", async () => {
@@ -47,7 +48,7 @@ describe("InsightsPage", () => {
     const goals = Array.from({ length: 20 }, (_, i) => ({ name: `goal_${i}`, n: 20 - i, sessions: 1 }));
     show({ ...fixture, goals });
     await lede();
-    const panel = section(/^Goals/);
+    const panel = drawer("d-goals");
     expect(within(panel).getAllByRole("listitem").length).toBe(12);
     await userEvent.click(within(panel).getByRole("button", { name: "Show all 20 goals" }));
     expect(within(panel).getAllByRole("listitem").length).toBe(20);
@@ -76,8 +77,8 @@ describe("InsightsPage", () => {
     await lede();
     expect(within(screen.getByRole("heading", { level: 1 })).getByText("model-judged")).toBeTruthy();
     const headings = screen.getAllByRole("heading", { level: 2 });
-    expect(headings.map(h => h.textContent)).toEqual(["Friction categories model-judged", "Goals model-judged", "Session types model-judged",
-      "Outcomes model-judged", "Satisfaction and helpfulness model-judged", "Analysed sessions model-judged"]);
+    expect(headings.map(h => h.textContent)).toEqual(["Outcomes model-judged", "Friction categories model-judged", "Satisfaction and helpfulness model-judged",
+      "Analysed sessions model-judged", "Goals model-judged", "Session types model-judged"]);
     expect(within(section(/^Outcomes model/)).getByText(/judged by a model from the transcript/)).toBeTruthy();
   });
 
@@ -92,7 +93,37 @@ describe("InsightsPage", () => {
     const feel = within(section(/Satisfaction/)).getAllByRole("listitem").map(li => li.textContent);
     expect(feel.slice(0, 4)).toEqual(["likely satisfied21 session", "dissatisfied11 session", "satisfied11 session", "unclear11 session"]);
     expect(feel.slice(4).map(t => t!.replace(/\d.*/, ""))).toEqual(["essential", "very helpful", "moderately helpful", "slightly helpful", "unhelpful"]);
-    expect(within(section(/Session types/)).getByRole("list").textContent).toBe("iterative refinement 1single task 1quick question 1");
+    expect(within(drawer("d-types")).getByRole("list").textContent).toBe("iterative refinement 1single task 1quick question 1");
+  });
+
+  it("orders the page: vitals, outcomes and friction, satisfaction, sessions, then Goals and Session types as closed drawers", async () => {
+    show(fixture);
+    await lede();
+    const wrap = document.querySelector(".pg-insights")!, at = (sel: string) => [...wrap.querySelectorAll("*")].indexOf(wrap.querySelector(sel)!);
+    const order = [".secidx", ".vitals", "#outcomes", "#friction", "#satisfaction", "#log", "#d-goals", "#d-types"].map(at);
+    expect(order.every(i => i >= 0)).toBe(true);
+    expect(order).toEqual([...order].sort((a, b) => a - b));
+    expect(document.querySelector("#outcomes")!.parentElement).toBe(document.querySelector("#friction")!.parentElement);
+    expect(drawer("d-goals").open).toBe(false);
+    expect(drawer("d-types").open).toBe(false);
+    for (const id of ["lede", "coverage", "friction", "outcomes", "log"]) expect(document.getElementById(id)).toBeTruthy();
+  });
+
+  it("indexes the sections and opens a drawer on a jump", async () => {
+    show(fixture);
+    await lede();
+    const nav = screen.getByRole("navigation", { name: "Page sections" });
+    expect(within(nav).getAllByRole("link").map(a => a.textContent)).toEqual(["Overview", "Outcomes", "Friction", "Satisfaction", "Sessions", "Goals", "Session types"]);
+    await userEvent.click(within(nav).getByRole("link", { name: "Session types" }));
+    expect(drawer("d-types").open).toBe(true);
+    expect(drawer("d-goals").open).toBe(false);
+  });
+
+  it("shows no section index without figures", async () => {
+    show(none);
+    await lede();
+    expect(screen.queryByRole("navigation", { name: "Page sections" })).toBeNull();
+    expect(document.getElementById("d-goals")).toBeNull();
   });
 
   it("says no friction was reported for a view without friction", async () => {
