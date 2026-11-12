@@ -468,6 +468,15 @@ class CoverageBreakdownTest(InsightsCase):
         for auto in (False, True):
             self.assertEqual([r["facets"] for r in self.runs(automated=auto)], [2], auto)  # A2 and the orphan A3
 
+    def test_undated_facets_are_left_out_of_the_runs(self):
+        self.session(A + "1", "p1", "2026-11-03 09:00:00")
+        self.session(A + "2", "p2", "2026-11-03 09:00:00")
+        self.ingest()
+        self.mtimes("2026-11-05 10:00:00", None, "2026-11-05 10:30:00")
+        self.assertEqual(self.runs(), [dict(at="2026-11-05T10:30:00.000Z", facets=2)])  # A1 and A3; A2 has no time
+        self.assertEqual(self.runs(project="p1"), [dict(at="2026-11-05T10:30:00.000Z", facets=1)])
+        self.assertEqual(self.runs(project="p2"), [])  # its only facet is undated
+
     def test_runs_stop_at_twenty(self):
         self.ingest()
         self.con.execute("INSERT INTO session_facets (session_id, file_mtime) SELECT 'extra-' || i, TIMESTAMP '2026-10-01 00:00:00' + i * INTERVAL 1 DAY "

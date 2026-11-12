@@ -206,9 +206,9 @@ def runs(cur, in_view):
     of a run, so a run is a maximal group of stored facets whose file_mtime values have no gap over RUN_GAP between neighbours.
     Groups are formed over the whole store, so a run keeps its identity whatever the view. at is the group's newest file_mtime;
     facets counts the group's facets whose session id is in in_view. A run with none is left out. A facet rewritten by a later
-    run has one stored row, with the later file_mtime: it counts in the later run only."""
+    run has one stored row, with the later file_mtime: it counts in the later run only. A facet without a file_mtime is in no run."""
     groups = []
-    for sid, mtime in cur.execute("SELECT session_id, file_mtime FROM session_facets ORDER BY file_mtime, session_id").fetchall():
+    for sid, mtime in cur.execute("SELECT session_id, file_mtime FROM session_facets WHERE file_mtime IS NOT NULL ORDER BY file_mtime, session_id").fetchall():
         if groups and mtime - groups[-1][-1][1] <= RUN_GAP:
             groups[-1].append((sid, mtime))
         else:
