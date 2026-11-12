@@ -9,6 +9,7 @@ Run `ai-ledger rebuild` once after upgrading (with the app stopped): error types
 
 ### Added
 
+- The Limits charts can be read at a time: hover or touch a chart, or focus it and use the arrow keys, Home, End and Escape. A guide and a marker show the point, and a tooltip gives its time and percent, measured or estimated, or, ahead of now, the forecast with its likely range. Keyboard changes are announced.
 - The Limits cards show the cap in money under the pace line: "100% ≈ $X a week at list prices, from N points over M windows", so a calibrated window reads as dollars with the evidence behind it.
 - The Limits page shows a status strip under its heading: one chip per open window with its percent used, the time to its reset, and an "at limit" or "runs out" warning, so every window reads without scrolling.
 - The Errors type table sorts by Type, Errors, Time lost, Change and two new columns, Rate (errors per 100 tool calls) and Didn't recover (the share of the type's incidents that did not recover); Share orders as Errors does, so it is no sort of its own. A second click flips the direction. Change sorts by the change in the type's error rate, in points, counts such as 0 → 48 included; a type with no value to sort by ("–") comes last either way. A filter box above the table narrows it to the types whose name or id contains the text. The sort and the filter last the page visit; they are not in the URL.
