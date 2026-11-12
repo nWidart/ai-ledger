@@ -11,7 +11,9 @@ export default {
   "orphans": 0,
   "newest_facet": null,
   "stored_facets": 0,
-  "dir": "/Users/example/.claude/usage-data"
+  "dir": "/Users/example/.claude/usage-data",
+  "by_project": [],
+  "runs": []
  },
  "projects": [],
  "outcomes": [],

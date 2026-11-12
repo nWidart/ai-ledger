@@ -384,5 +384,100 @@ class PayloadTest(InsightsCase):
         self.assertEqual((d["coverage"]["stored_facets"], d["coverage"]["newest_facet"], d["outcomes"]), (0, None, []))
 
 
+class CoverageBreakdownTest(InsightsCase):
+    """coverage.by_project and coverage.runs. The fixture facets are A1 to A3; file_mtime is set per test."""
+
+    def mtimes(self, *stamps):
+        for sid, ts in zip((A + "1", A + "2", A + "3"), stamps):
+            self.con.execute("UPDATE session_facets SET file_mtime = ? WHERE session_id = ?", [ts, sid])
+
+    def projects(self, **kw):
+        return self.payload(**kw)["coverage"]["by_project"]
+
+    def runs(self, **kw):
+        return self.payload(**kw)["coverage"]["runs"]
+
+    def test_by_project_lists_each_project_busiest_first_then_by_name(self):
+        for i in range(3):
+            self.session(f"b{i}", "busy", "2026-11-03 10:00:00")
+        self.session(A + "1", "demo-app", "2026-11-03 09:00:00")
+        self.session("c1", "demo-app", "2026-11-03 10:00:00")
+        self.session("z1", "zeta", "2026-11-03 10:00:00")
+        self.session("a1", "alpha", "2026-11-03 10:00:00")
+        self.ingest()
+        d = self.payload()
+        self.assertEqual(d["coverage"]["by_project"], [dict(project="busy", sessions=3, analysed=0), dict(project="demo-app", sessions=2, analysed=1),
+                                                       dict(project="alpha", sessions=1, analysed=0), dict(project="zeta", sessions=1, analysed=0)])
+        self.assertEqual(sum(r["sessions"] for r in d["coverage"]["by_project"]), d["coverage"]["claude_sessions"])
+        self.assertEqual(sum(r["analysed"] for r in d["coverage"]["by_project"]), d["coverage"]["analysed"])
+
+    def test_by_project_keeps_every_project_without_a_cap(self):
+        for i in range(30):
+            self.session(f"s{i}", f"proj-{i:02d}", "2026-11-03 10:00:00")
+        self.ingest()
+        self.assertEqual(len(self.projects()), 30)
+
+    def test_by_project_follows_the_view_and_leaves_automated_and_codex_out(self):
+        self.session(A + "1", "demo-app", "2026-11-03 09:00:00")
+        self.session("old", "demo-app", "2026-09-01 09:00:00")
+        self.session("o1", "observer-sessions", "2026-11-03 10:00:00")
+        self.session("x1", "demo-app", "2026-11-03 12:00:00", source="codex")
+        self.ingest()
+        for auto in (False, True):
+            self.assertEqual(self.projects(range_days=7, automated=auto), [dict(project="demo-app", sessions=1, analysed=1)], auto)
+        self.assertEqual(self.projects(), [dict(project="demo-app", sessions=2, analysed=1)])
+        self.assertEqual(self.projects(project="observer-sessions"), [dict(project="observer-sessions", sessions=1, analysed=0)])  # named, it counts
+        self.assertEqual(self.projects(source="claude"), self.projects())
+
+    def test_codex_source_and_an_empty_store_give_no_breakdown(self):
+        self.session("x1", "demo-app", "2026-11-03 12:00:00", source="codex")
+        self.assertEqual(self.payload()["coverage"]["runs"], [])
+        self.assertEqual(self.payload()["coverage"]["by_project"], [])  # no stored facets
+        self.ingest()
+        d = self.payload(source="codex")["coverage"]
+        self.assertEqual((d["by_project"], d["runs"]), ([], []))
+
+    def test_facets_within_an_hour_of_each_other_are_one_run(self):
+        self.ingest()
+        self.mtimes("2026-11-05 10:00:00", "2026-11-05 10:30:00", "2026-11-05 11:30:00")  # a gap of exactly one hour stays in the run
+        self.assertEqual(self.runs(), [dict(at="2026-11-05T11:30:00.000Z", facets=3)])
+
+    def test_a_gap_over_an_hour_starts_a_new_run_newest_first(self):
+        self.ingest()
+        self.mtimes("2026-11-05 10:00:00", "2026-11-05 11:00:00", "2026-11-06 12:00:00")
+        self.assertEqual(self.runs(), [dict(at="2026-11-06T12:00:00.000Z", facets=1), dict(at="2026-11-05T11:00:00.000Z", facets=2)])
+        self.mtimes("2026-11-05 10:00:00", "2026-11-05 11:00:00", "2026-11-05 12:00:01")
+        self.assertEqual([r["facets"] for r in self.runs()], [1, 2])
+
+    def test_a_run_counts_only_its_facets_in_the_view_and_keeps_its_identity(self):
+        self.session(A + "1", "p1", "2026-11-03 09:00:00")
+        self.session(A + "2", "p2", "2026-11-03 09:00:00")
+        self.session(A + "3", "p3", "2026-11-03 09:00:00")
+        self.ingest()
+        self.mtimes("2026-11-05 10:00:00", "2026-11-05 10:30:00", "2026-11-06 12:00:00")
+        self.assertEqual(self.runs(), [dict(at="2026-11-06T12:00:00.000Z", facets=1), dict(at="2026-11-05T10:30:00.000Z", facets=2)])
+        self.assertEqual(self.runs(project="p2"), [dict(at="2026-11-05T10:30:00.000Z", facets=1)])  # the run of p1 and p2 keeps its end
+        self.assertEqual(self.runs(project="p3"), [dict(at="2026-11-06T12:00:00.000Z", facets=1)])
+        self.assertEqual(self.runs(project="nope"), [])  # a run with no facet in the view is left out
+
+    def test_runs_leave_automated_sessions_out(self):
+        self.session(A + "1", "observer-sessions", "2026-11-03 09:00:00")
+        self.session(A + "2", "demo-app", "2026-11-03 09:00:00")
+        self.ingest()
+        self.mtimes("2026-11-05 10:00:00", "2026-11-05 10:30:00", "2026-11-05 10:40:00")
+        for auto in (False, True):
+            self.assertEqual([r["facets"] for r in self.runs(automated=auto)], [2], auto)  # A2 and the orphan A3
+
+    def test_runs_stop_at_twenty(self):
+        self.ingest()
+        self.con.execute("INSERT INTO session_facets (session_id, file_mtime) SELECT 'extra-' || i, TIMESTAMP '2026-10-01 00:00:00' + i * INTERVAL 1 DAY "
+                         "FROM range(30) t(i)")
+        self.mtimes("2026-09-01 00:00:00", "2026-09-02 00:00:00", "2026-09-03 00:00:00")
+        runs = self.runs()
+        self.assertEqual((len(runs), insights.RUNS), (20, 20))
+        self.assertEqual(runs[0]["at"], "2026-10-30T00:00:00.000Z")
+        self.assertEqual(runs[-1]["at"], "2026-10-11T00:00:00.000Z")
+
+
 if __name__ == "__main__":
     unittest.main()

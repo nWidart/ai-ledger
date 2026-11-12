@@ -59,7 +59,7 @@ def limits_fixtures():
 
 def insights_fixtures():
     """The Insights payloads the page tests render: the synthetic usage-data fixture (an in-store session, a worktree
-    orphan and an unknown outcome) beside two unanalysed Claude Code sessions and a Codex one; and a store with no facets."""
+    orphan and an unknown outcome) beside two unanalysed Claude Code sessions (one in a second project) and a Codex one; and a store with no facets."""
     case = ti.InsightsCase()
     case.setUp()
     try:
@@ -67,10 +67,12 @@ def insights_fixtures():
         case.session(ti.A + "1", "demo-app", "2026-11-03 09:00:00")
         store.insert(case.con.cursor(), "session_titles", ["session_id", "custom", "agent"], [(ti.A + "1", None, "Add a theme toggle")])
         case.session("c1", "demo-app", "2026-11-03 10:00:00")
-        case.session("c2", "demo-app", "2026-11-04 10:00:00")
+        case.session("c2", "docs-site", "2026-11-04 10:00:00")
         case.session("x1", "demo-app", "2026-11-04 11:00:00", source="codex")
         case.ingest()
-        case.con.execute("UPDATE session_facets SET file_mtime = TIMESTAMP '2026-11-05 18:00:00'")
+        # two runs: the first two facets 20 minutes apart, the third the next morning
+        for sid, ts in ((ti.A + "1", "2026-11-05 18:00:00"), (ti.A + "2", "2026-11-05 18:20:00"), (ti.A + "3", "2026-11-06 09:00:00")):
+            case.con.execute("UPDATE session_facets SET file_mtime = ? WHERE session_id = ?", [ts, sid])
         full = case.payload(range_days=0)
         for d in (empty, full):
             d["coverage"]["dir"] = "/Users/example/.claude/usage-data"

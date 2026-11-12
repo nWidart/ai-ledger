@@ -31,7 +31,7 @@ describe("InsightsPage", () => {
     expect(screen.getByText(/A session counts here by its start time/).textContent).toContain("so the two totals can differ slightly.");
     const cov = document.getElementById("coverage")!;
     expect(cov.getAttribute("role")).toBe("status");
-    expect(cov.textContent).toBe(`1 of 3 Claude Code sessions in this view analysed (33%). Each /insights run in Claude Code analyses more. The newest analysis was written ${when(fixture.coverage.newest_facet)}.`);
+    expect(cov.textContent).toBe(`1 of 3 Claude Code sessions in this view analysed (33%). Each /insights run in Claude Code analyses more. The newest analysis was written ${when(fixture.coverage.newest_facet)}. Coverage by project and run.`);
     expect(screen.getByText(/Codex session in this view is not/).textContent).toBe("1 Codex session in this view is not analysed: /insights covers Claude Code only.");
     const vitals = screen.getByRole("region", { name: "Outcomes at a glance" });
     expect(within(vitals).getByText("Sessions analysed").parentElement!.textContent).toBe("3Sessions analysed1 of 3 stored Claude Code sessions, 2 without transcript; 1 with no clear outcome"); // abandoned: not a tile of its own
@@ -78,7 +78,7 @@ describe("InsightsPage", () => {
     expect(within(screen.getByRole("heading", { level: 1 })).getByText("model-judged")).toBeTruthy();
     const headings = screen.getAllByRole("heading", { level: 2 });
     expect(headings.map(h => h.textContent)).toEqual(["Outcomes model-judged", "Friction categories model-judged", "Satisfaction and helpfulness model-judged",
-      "Analysed sessions model-judged", "Goals model-judged", "Session types model-judged"]);
+      "Analysed sessions model-judged", "Goals model-judged", "Session types model-judged", "Coverage"]);
     expect(within(section(/^Outcomes model/)).getByText(/judged by a model from the transcript/)).toBeTruthy();
   });
 
@@ -96,16 +96,17 @@ describe("InsightsPage", () => {
     expect(within(drawer("d-types")).getByRole("list").textContent).toBe("iterative refinement 1single task 1quick question 1");
   });
 
-  it("orders the page: vitals, outcomes and friction, satisfaction, sessions, then Goals and Session types as closed drawers", async () => {
+  it("orders the page: vitals, outcomes and friction, satisfaction, sessions, then Goals, Session types and Coverage as closed drawers", async () => {
     show(fixture);
     await lede();
     const wrap = document.querySelector(".pg-insights")!, at = (sel: string) => [...wrap.querySelectorAll("*")].indexOf(wrap.querySelector(sel)!);
-    const order = [".secidx", ".vitals", "#outcomes", "#friction", "#satisfaction", "#log", "#d-goals", "#d-types"].map(at);
+    const order = [".secidx", ".vitals", "#outcomes", "#friction", "#satisfaction", "#log", "#d-goals", "#d-types", "#d-coverage"].map(at);
     expect(order.every(i => i >= 0)).toBe(true);
     expect(order).toEqual([...order].sort((a, b) => a - b));
     expect(document.querySelector("#outcomes")!.parentElement).toBe(document.querySelector("#friction")!.parentElement);
     expect(drawer("d-goals").open).toBe(false);
     expect(drawer("d-types").open).toBe(false);
+    expect(drawer("d-coverage").open).toBe(false);
     for (const id of ["lede", "coverage", "friction", "outcomes", "log"]) expect(document.getElementById(id)).toBeTruthy();
   });
 
@@ -113,10 +114,56 @@ describe("InsightsPage", () => {
     show(fixture);
     await lede();
     const nav = screen.getByRole("navigation", { name: "Page sections" });
-    expect(within(nav).getAllByRole("link").map(a => a.textContent)).toEqual(["Overview", "Outcomes", "Friction", "Satisfaction", "Sessions", "Goals", "Session types"]);
+    expect(within(nav).getAllByRole("link").map(a => a.textContent)).toEqual(["Overview", "Outcomes", "Friction", "Satisfaction", "Sessions", "Goals", "Session types", "Coverage"]);
     await userEvent.click(within(nav).getByRole("link", { name: "Session types" }));
     expect(drawer("d-types").open).toBe(true);
     expect(drawer("d-goals").open).toBe(false);
+  });
+
+  it("breaks the coverage down by project, a project with none analysed marked, and by run", async () => {
+    show(fixture);
+    await lede();
+    const cov = drawer("d-coverage");
+    expect(within(cov).getByRole("heading", { name: "By project" })).toBeTruthy();
+    expect(within(cov).queryByText("model-judged")).toBeNull();
+    const [byProject, byRun] = within(cov).getAllByRole("list");
+    expect([...byProject!.children].map(li => li.textContent)).toEqual(["demo-app1 of 250%", "docs-site0 of 1none analysed"]);
+    expect(within(byProject!.children[1] as HTMLElement).getByText("none analysed").className).toContain("none");
+    expect(within(cov).getByRole("heading", { name: "By run" })).toBeTruthy();
+    expect(within(cov).getByText(/facets written within an hour of each other/).textContent).toContain("analysed again counts in its latest run");
+    expect([...byRun!.children].map(li => li.textContent)).toEqual(fixture.coverage.runs.map(r => `${when(r.at)}${r.facets}${r.facets === 1 ? "facet" : "facets"}`));
+    expect(fixture.coverage.runs.map(r => r.facets)).toEqual([1, 2]);
+  });
+
+  it("shows the first 12 projects until asked for all", async () => {
+    const by_project = Array.from({ length: 15 }, (_, i) => ({ project: `proj-${i}`, sessions: 15 - i, analysed: 0 }));
+    show({ ...fixture, coverage: { ...fixture.coverage, by_project } });
+    await lede();
+    const byProject = () => within(drawer("d-coverage")).getAllByRole("list")[0]!;
+    expect(byProject().children.length).toBe(12);
+    await userEvent.click(within(drawer("d-coverage")).getByRole("button", { name: "Show all 15 projects" }));
+    expect(byProject().children.length).toBe(15);
+  });
+
+  it("says when a view has no run", async () => {
+    show({ ...fixture, coverage: { ...fixture.coverage, runs: [] } });
+    await lede();
+    expect(within(drawer("d-coverage")).getByText("No runs in this view.")).toBeTruthy();
+  });
+
+  it("opens the coverage drawer from the coverage sentence", async () => {
+    show(fixture);
+    await lede();
+    expect(drawer("d-coverage").open).toBe(false);
+    await userEvent.click(within(document.getElementById("coverage")!).getByRole("button", { name: "by project and run" }));
+    expect(drawer("d-coverage").open).toBe(true);
+  });
+
+  it("offers no coverage link or drawer without figures", async () => {
+    show({ ...none, coverage: { ...fixture.coverage, facets: 0, analysed: 0, not_analysed: 3, by_project: [], runs: [] } });
+    await lede();
+    expect(document.getElementById("d-coverage")).toBeNull();
+    expect(within(document.getElementById("coverage")!).queryByRole("button")).toBeNull();
   });
 
   it("shows no section index without figures", async () => {
