@@ -19,4 +19,8 @@ Each calibrated open-window card SHALL show, under its pace line, one muted line
 
 #### Scenario: A window that is not calibrated
 - **WHEN** a window has no calibration
-- **THEN** its card shows no cap line, only its "Not calibrated yet" caption
+- **THEN** its card shows no cap-money line
+
+#### Scenario: A window at its limit that is not calibrated
+- **WHEN** a window reports 100% before any priced usage is counted, so it has no calibration
+- **THEN** its card shows no cap-money line, and its caption says "At its limit until …"

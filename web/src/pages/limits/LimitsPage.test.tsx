@@ -80,6 +80,14 @@ describe("cap in money", () => {
     expect(capText({ ...codex, calibration: null })).toBeNull();
   });
 
+  it("shows no cap line for a window at its limit that is not calibrated", async () => {
+    show({ ...fixture, windows: [{ ...capped, calibration: null }] });
+    await lede();
+    const card = screen.getByRole("region", { name: windowName(codex) });
+    expect(within(card).getByText(`At its limit until ${whenDay(codex.resets_at)}`)).toBeTruthy();
+    expect(card.querySelector(".cap-money")).toBeNull();
+  });
+
   it("shows the line under the pace line of a calibrated card, and none on an uncalibrated one", async () => {
     show(fixture);
     await lede();
