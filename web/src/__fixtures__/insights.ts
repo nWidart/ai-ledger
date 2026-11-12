@@ -9,12 +9,41 @@ export default {
   "codex_sessions": 1,
   "facets": 3,
   "orphans": 2,
-  "newest_facet": "2026-11-05T18:00:00.000Z",
+  "newest_facet": "2026-11-06T09:00:00.000Z",
   "stored_facets": 3,
-  "dir": "/Users/example/.claude/usage-data"
+  "dir": "/Users/example/.claude/usage-data",
+  "by_project": [
+   {
+    "project": "demo-app",
+    "sessions": 2,
+    "analysed": 1
+   },
+   {
+    "project": "docs-site",
+    "sessions": 1,
+    "analysed": 0
+   }
+  ],
+  "runs": [
+   {
+    "at": "2026-11-06T09:00:00.000Z",
+    "facets": 1
+   },
+   {
+    "at": "2026-11-05T18:20:00.000Z",
+    "facets": 2
+   }
+  ],
+  "run_sizes": {
+   "runs": 2,
+   "min": 1,
+   "median": 1.5,
+   "max": 2
+  }
  },
  "projects": [
   "demo-app",
+  "docs-site",
   "sketchbook"
  ],
  "outcomes": [
@@ -115,12 +144,22 @@ export default {
    "name": "wrong_approach",
    "n": 3,
    "sessions": 1
+  },
+  {
+   "name": "broken_build",
+   "n": 1,
+   "sessions": 1
   }
  ],
  "goals": [
   {
    "name": "fix_bug",
    "n": 2,
+   "sessions": 1
+  },
+  {
+   "name": "build_feature",
+   "n": 1,
    "sessions": 1
   },
   {
@@ -139,6 +178,99 @@ export default {
    "sessions": 1
   }
  ],
+ "goal_families": [
+  {
+   "family": "fix_bug",
+   "n": 2,
+   "sessions": 1,
+   "members": [
+    {
+     "name": "fix_bug",
+     "n": 2,
+     "sessions": 1
+    }
+   ]
+  },
+  {
+   "family": "implement_feature",
+   "n": 2,
+   "sessions": 1,
+   "members": [
+    {
+     "name": "build_feature",
+     "n": 1,
+     "sessions": 1
+    },
+    {
+     "name": "implement_feature",
+     "n": 1,
+     "sessions": 1
+    }
+   ]
+  },
+  {
+   "family": "research",
+   "n": 1,
+   "sessions": 1,
+   "members": [
+    {
+     "name": "explore_idea",
+     "n": 1,
+     "sessions": 1
+    }
+   ]
+  },
+  {
+   "family": "tests",
+   "n": 1,
+   "sessions": 1,
+   "members": [
+    {
+     "name": "write_tests",
+     "n": 1,
+     "sessions": 1
+    }
+   ]
+  }
+ ],
+ "friction_families": [
+  {
+   "family": "buggy_code",
+   "n": 4,
+   "sessions": 2,
+   "members": [
+    {
+     "name": "buggy_code",
+     "n": 3,
+     "sessions": 2
+    },
+    {
+     "name": "broken_build",
+     "n": 1,
+     "sessions": 1
+    }
+   ]
+  },
+  {
+   "family": "wrong_approach",
+   "n": 3,
+   "sessions": 1,
+   "members": [
+    {
+     "name": "wrong_approach",
+     "n": 3,
+     "sessions": 1
+    }
+   ]
+  }
+ ],
+ "trend": [
+  {
+   "week": "2026-11-02",
+   "n": 3,
+   "achieved": 1
+  }
+ ],
  "sessions": [
   {
    "session_id": "0000aaaa-0000-4000-8000-000000000003",
@@ -151,7 +283,8 @@ export default {
    "friction_detail": "Synthetic: the sketch did not build.",
    "in_store": false,
    "friction": [
-    "buggy_code"
+    "buggy_code",
+    "broken_build"
    ],
    "goals": [
     "explore_idea"
@@ -159,6 +292,13 @@ export default {
    "satisfaction": [
     "unclear"
    ],
+   "meta": {
+    "duration_minutes": 42,
+    "lines_added": 120,
+    "lines_removed": 30,
+    "files_modified": 4,
+    "git_pushes": 1
+   },
    "title": null
   },
   {
@@ -183,6 +323,13 @@ export default {
     "likely_satisfied",
     "dissatisfied"
    ],
+   "meta": {
+    "duration_minutes": 42,
+    "lines_added": 120,
+    "lines_removed": 30,
+    "files_modified": 4,
+    "git_pushes": 1
+   },
    "title": null
   },
   {
@@ -197,13 +344,37 @@ export default {
    "in_store": true,
    "friction": [],
    "goals": [
+    "build_feature",
     "implement_feature"
    ],
    "satisfaction": [
     "satisfied"
    ],
+   "meta": {
+    "duration_minutes": 42,
+    "lines_added": 120,
+    "lines_removed": 30,
+    "files_modified": 4,
+    "git_pushes": 1
+   },
    "title": "Add a theme toggle"
   }
  ],
- "truncated": false
+ "truncated": false,
+ "meta": {
+  "sessions": 3,
+  "lines_added": 360,
+  "lines_removed": 90,
+  "files_modified": 12,
+  "git_pushes": 3,
+  "duration_p50_min": 42.0,
+  "response_p50_s": 7.5,
+  "languages": [
+   {
+    "name": "TypeScript",
+    "n": 12,
+    "sessions": 3
+   }
+  ]
+ }
 } satisfies InsightsPayload;

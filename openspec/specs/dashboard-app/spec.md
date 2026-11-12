@@ -295,19 +295,34 @@ When the automated projects file cannot be read, is not valid JSON, has no `proj
 - **THEN** every page still loads with the built-in detection alone, and Activity says the file was ignored and why
 
 ### Requirement: Search the project picker
-Every page with the project picker SHALL offer a labelled search box next to it when the picker lists more than 12 projects. The box SHALL narrow the picker's options to the projects whose names contain the typed text, ignoring case. "All projects" and the selected project SHALL stay listed, clearing the box SHALL restore the full list, and the page SHALL say when no project matches. With 12 projects or fewer there SHALL be no search box. Selecting a project SHALL write the URL as before.
+Every page with the project picker SHALL show it as one filterable dropdown: a labelled field that holds the selected project, or "All projects", with the projects in a popup below it. Typing in the field SHALL open the popup and list the projects whose names contain the typed text, ignoring case. "All projects" SHALL stay listed, after the matches. Clearing the field SHALL list every project, and the popup SHALL say when no project matches.
 
 #### Scenario: Narrow a long list
 - **WHEN** the picker lists 14 projects and the user types `atl`
-- **THEN** it lists All projects, the selected project and the projects whose names contain `atl`
+- **THEN** the popup lists the projects whose names contain `atl`, then All projects
 
 #### Scenario: Nothing matches
 - **WHEN** the typed text matches no project
-- **THEN** the picker still lists All projects and the page says "No project matches"
+- **THEN** the popup still lists All projects and says "No project matches"
 
 #### Scenario: Short list
-- **WHEN** the picker lists 12 projects
-- **THEN** no search box is shown
+- **WHEN** the picker lists 2 projects
+- **THEN** the field filters them the same way
+
+### Requirement: Pick a project from the filterable picker
+Typing in the project picker SHALL replace the name the field holds, and Enter SHALL select the first match. The popup SHALL float over the page and the field SHALL keep its width, so typing moves no other control. Closing the popup without a selection SHALL put the selected project back in the field. Selecting a project SHALL write the URL as before.
+
+#### Scenario: Enter takes the first match
+- **WHEN** the field holds `atlas-api`, and the user types `led` and presses Enter
+- **THEN** the field held only `led`, and the first project whose name contains `led` is selected
+
+#### Scenario: Typing moves nothing
+- **WHEN** the user types in the field
+- **THEN** the controls after it stay where they were
+
+#### Scenario: Leave without selecting
+- **WHEN** the user types `atl` and presses Escape
+- **THEN** the popup closes, the field shows the selected project again and the URL is unchanged
 
 ### Requirement: Work out the limits alert once per cycle
 The app SHALL work out the limits alert after each full ingest cycle, from the Limits payload with no filters, and keep it. A full cycle ingests transcripts and usage data and polls limits; the fast pass while a Live page is connected is not one. `/api/status` SHALL return the kept alert as `limits_alert` (the alert, or null), SHALL NOT work it out per request, and SHALL return null until the first cycle ends. A manual refresh SHALL NOT work it out.

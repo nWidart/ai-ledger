@@ -78,6 +78,52 @@ describe("SessionSheet", () => {
     expect(sheet().queryByRole("button", { name: "Show the whole prompt" })).toBeNull();
   });
 
+  it("shows the session's /insights judgment between its figures and the timeline, linking to Insights in the view", async () => {
+    const insight = { outcome: "partially_achieved", helpfulness: "moderately_helpful", session_type: "iterative_refinement",
+      brief_summary: "Chased a flaky date test.", friction_detail: "Patched the wrong helper first.",
+      goals: ["fix_bug", "write_tests"], friction: ["wrong_approach"], satisfaction: ["likely_satisfied", "dissatisfied"] };
+    mockApi({ "/api/session": () => ({ ...session, insight }) });
+    at("#project=foo&range=30&source=claude&auto=1&session=s1");
+    render(<UsageSheets data={usage} />);
+    const head = await sheet().findByRole("heading", { name: /^\/insights judgment/ });
+    expect(within(head).getByText("model-judged")).toBeTruthy();
+    expect(head.compareDocumentPosition(sheet().getByRole("heading", { name: "Timeline" })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(sheet().getByText("$16").compareDocumentPosition(head) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(head.nextElementSibling!.className).toBe("judgment"); // not .insight: the dashboard cards style that
+    const block = within(head.nextElementSibling as HTMLElement);
+    expect(block.getByText("Partially achieved").className).toContain("part");
+    expect(block.getByText("dissatisfied")).toBeTruthy();
+    expect(block.getByText("moderately helpful")).toBeTruthy();
+    expect(block.getByText("iterative refinement")).toBeTruthy();
+    expect(block.getAllByText(/^(fix bug|write tests)$/).map(e => e.textContent)).toEqual(["fix bug", "write tests"]);
+    expect(block.getByText("wrong approach").className).toContain("warn");
+    expect(block.getByText("Chased a flaky date test.")).toBeTruthy();
+    expect(block.getByText(/Patched the wrong helper first\./)).toBeTruthy();
+    expect(block.getByRole("link", { name: "Open in Insights" }).getAttribute("href")).toBe("/insights#project=foo&range=30&source=claude&auto=1");
+  });
+
+  it("shows no judgment block for a session without a facet", async () => {
+    mockApi({ "/api/session": () => session });
+    at("#range=30&session=s1");
+    render(<UsageSheets data={usage} />);
+    expect(await sheet().findByText("$16")).toBeTruthy();
+    expect(session.insight).toBeNull();
+    expect(sheet().queryByText(/\/insights judgment/)).toBeNull();
+    expect(sheet().queryByRole("link", { name: "Open in Insights" })).toBeNull();
+  });
+
+  it("marks no dissatisfaction and leaves out an empty summary and empty lists", async () => {
+    const insight = { outcome: "unclear_from_transcript", helpfulness: null, session_type: null, brief_summary: null, friction_detail: null,
+      goals: [], friction: [], satisfaction: ["satisfied"] };
+    mockApi({ "/api/session": () => ({ ...session, insight }) });
+    at("#session=s1");
+    render(<UsageSheets data={usage} />);
+    await sheet().findByRole("heading", { name: /^\/insights judgment/ });
+    expect(sheet().getByText("Unclear")).toBeTruthy();
+    expect(sheet().queryByText("dissatisfied")).toBeNull();
+    expect(sheet().queryByText(/Friction:/)).toBeNull();
+  });
+
   it("says so when the session does not exist", async () => {
     mockApi({});
     at("#session=gone");

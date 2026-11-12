@@ -49,7 +49,7 @@ export function UsageSheets({ data, automated }: { data: UsagePayload | undefine
     const name = sess.data?.title || knownTitle(session);
     kind = "Session"; key = "session|" + session;
     title = name ? <>{name} <span className="sheet-sub">{shortId(session)}</span></> : shortId(session);
-    body = <SessionSheet key={session} id={session} s={sess.data} error={sess.error} retry={sess.retry} range={h.range} pageProject={pageProject} />;
+    body = <SessionSheet key={session} id={session} s={sess.data} error={sess.error} retry={sess.retry} range={h.range} pageProject={pageProject} view={view} />;
   } else if (inspect) {
     kind = "Project"; key = "project|" + inspect;
     title = <><ProjectDot project={inspect} />{inspect}</>;

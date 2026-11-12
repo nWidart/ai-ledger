@@ -122,8 +122,12 @@ export interface SessionInfo {
   active_s: number | null;
 }
 export interface SessionModelRow extends Tokens { model: string | null; effort: string; subagent: boolean; requests: number; tokens: number; cost: number | null }
+/** The session's /insights judgment (a facet): a model's opinion, not a measurement. Name lists run most counted first. */
+export type SessionInsight = Pick<InsightSession, "outcome" | "helpfulness" | "session_type" | "brief_summary" | "friction_detail" | "friction" | "goals" | "satisfaction">;
 export interface SessionDetail {
   info: SessionInfo;
+  /** null when /insights has not analysed the session (every Codex session). */
+  insight: SessionInsight | null;
   models: SessionModelRow[];
   timeline: { minute: Ts; tokens: number; cost: number | null; context: number }[];
   tools: { tool: string; calls: number; errors: number; p50_ms: number | null; failure_rate: number | null }[];
@@ -271,6 +275,13 @@ export interface LimitsPayload {
 // Insights (/api/insights, insights.py payload): Claude Code's /insights facets, a model's judgment of each analysed session.
 export interface FacetCount { name: string; n: number }
 export interface FacetTally extends FacetCount { sessions: number }
+/** A session's figures counted by /insights from the transcript (session meta); a measurement, not a judgment. null: not written. */
+export interface SessionFigures {
+  duration_minutes: number | null; lines_added: number | null; lines_removed: number | null; files_modified: number | null; git_pushes: number | null;
+}
+/** Similar goal or friction labels grouped by keyword: n sums the members' counts, sessions counts the distinct sessions with any
+ *  member. Members most counted first. A label no rule matches is a family of its own. */
+export interface FacetFamily { family: string; n: number; sessions: number; members: FacetTally[] }
 export interface InsightSession {
   session_id: string; project: string; start: Ts | null; outcome: string | null; helpfulness: string | null; session_type: string | null;
   brief_summary: string | null; friction_detail: string | null;
@@ -280,6 +291,8 @@ export interface InsightSession {
   friction: string[]; goals: string[]; satisfaction: string[];
   /** false: the facet's session has no transcript in the store, so it has no session sheet. */
   in_store: boolean;
+  /** Counted by /insights; null when the session has no session-meta row. */
+  meta: SessionFigures | null;
 }
 export interface InsightsPayload {
   coverage: {
@@ -291,6 +304,14 @@ export interface InsightsPayload {
     stored_facets: number; newest_facet: Ts | null;
     /** The usage-data directory the app reads. */
     dir: string | null;
+    /** Claude Code sessions of the view by project, and those of them analysed, busiest project first; empty for Codex or
+     *  without stored facets. */
+    by_project: { project: string; sessions: number; analysed: number }[];
+    /** The /insights runs that wrote a facet in the view, newest first, at most 20: its newest file time and the facets
+     *  of the view it wrote. A run is facets written within an hour of each other, over the whole store. */
+    runs: { at: Ts; facets: number }[];
+    /** Facets per run over the newest 20 runs of the whole store, whatever the filters; null without a dated facet. */
+    run_sizes: { runs: number; min: number; median: number; max: number } | null;
   };
   /** Every project, busiest first, then projects only facets name. */
   projects: string[];
@@ -298,8 +319,22 @@ export interface InsightsPayload {
   outcomes: FacetCount[]; helpfulness: FacetCount[]; session_types: FacetCount[];
   /** Summed counts and the sessions that reported each, most first. */
   satisfaction: FacetTally[]; friction: FacetTally[]; goals: FacetTally[];
+  /** friction and goals grouped into families, most counted first. */
+  friction_families: FacetFamily[]; goal_families: FacetFamily[];
+  /** Per week of session start (the Monday, YYYY-MM-DD), oldest first, at most 26 weeks with a session: the view's analysed
+   *  sessions and those fully or mostly achieved. */
+  trend: { week: string; n: number; achieved: number }[];
   /** Newest first, at most 200; truncated when there were more. */
   sessions: InsightSession[]; truncated: boolean;
+  /** The view's session figures, counted by /insights from each transcript (not model-judged), for Claude Code sessions with a
+   *  session-meta row, which can be more than have a facet. Sums take a missing figure as 0; the medians are null when no row
+   *  has the value, and the response time is the median of the session medians. Zero sessions for Codex. */
+  meta: {
+    sessions: number; lines_added: number; lines_removed: number; files_modified: number; git_pushes: number;
+    duration_p50_min: number | null; response_p50_s: number | null;
+    /** Every language, most counted first: its summed count and the sessions that named it. */
+    languages: { name: string; n: number; sessions: number }[];
+  };
 }
 
 // Live (/api/live, /api/live/session, live.py payloads): running sessions from the agent's side. Prompt, reply and

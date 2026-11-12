@@ -5,21 +5,35 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+Run `ai-ledger rebuild` once after upgrading (with the app stopped): Codex subagent threads stored before this version are filed under their own ids, and the rebuild moves them to their sessions.
+
 ### Added
 
 - `ai-ledger compact` (with the app stopped) rewrites an existing store into the smaller format in a new file, then swaps it in, and drops the free space DuckDB never gives back. On a store of 690,438 lines it took the file from 2.96 GB to 1.61 GB, every line identical.
+- Insights shows the figures `/insights` counts from each transcript, which were ingested and shown nowhere: a "Session figures" drawer (lines added and removed, files modified, pushes, median duration and response time, languages) over every session with session meta, and one line of those figures on each analysed session.
+- Insights has a "How this works" drawer (what `/insights` is, the directory read, the last run, how many sessions a run analyses) and an Outcome trend panel with the share of sessions fully or mostly achieved per week of session start.
+- Insights has a Coverage drawer with the analysed share of each project's sessions, so a busy project with no judgments stands out, and the facets each `/insights` run wrote. The coverage sentence links to it.
+- Insights drill-down: select a row of Outcomes, Claude's helpfulness, Friction categories or Goals, or a goal chip, friction chip or outcome badge on a session card, to list only those sessions. The filters (`outcome=`, `help=`, `goal=`, `fr=`) combine, sit in the URL, show as removable chips above the list, and say when the 200-session cut hides some. The sort now lasts the page visit.
 - Insights and the Activity Sessions drawer say which sessions they count: Insights counts a session by its start time, Activity by a request in the range, so the two totals can differ slightly.
+- The session sheet shows the session's `/insights` judgment, tagged model-judged, between its figures and its timeline: outcome, a dissatisfied marker, helpfulness, session type, goal and friction categories, the summary and the friction detail, with a link to Insights in the same filters. A session `/insights` has not analysed (every Codex session) shows none.
 
 ### Changed
 
 - The store is smaller: each long string of a transcript line (256 characters or more) is stored once, compressed, apart from the line, so re-sent context, files read twice and repeated screenshots cost their size once. Lines read back exactly as written. Stores from earlier versions keep working and pack only new lines until you run `ai-ledger compact`.
+- Insights groups similar goal and friction labels into families by keyword (pull request, git cleanup, docs, implement feature, buggy code, and so on), so the ranking is no longer fragmented. A family with several labels expands to them as `/insights` wrote them; selecting it lists the sessions with any of them (`goalf=`, `frf=` in the URL).
+- The Insights page lists analysed sessions as cards (title, outcome and chips on one line, the summary below, the friction detail on expand) and lets you sort them (newest, oldest, worst outcome first) and filter them by outcome, kept in the URL.
 - The Insights page reads in a new order: vitals, outcomes beside friction, satisfaction, then the analysed sessions, with Goals and Session types folded into closed drawers, and has a section index like Activity's.
+- The project picker is one filterable dropdown: type in it and the matching projects list below it at once, for any number of projects. It replaces the select and the separate search box, which appeared only over 12 projects, and typing no longer moves the controls beside it.
 
 ### Fixed
 
 - The Live page's Stream view fits the window: a titled session no longer makes the page scroll, and the session rail, the stream and the agent panel stay within the window and scroll inside themselves (from 721 pixels wide; below that the page scrolls as before).
 - A time with a date in the Live stream ("Nov 10, 17:40:05") stays on one line: the time column widens when an event shows a date.
 - The "Include automated" tooltip on Live names the `automated.json` file, as on Activity.
+- Codex subagents show under their session on Live. A subagent's rollout is named by its own thread id only, so ingest filed its lines as a session of its own; a thread now belongs to the session its first `session_meta` names, and the files that continue a main thread are main-thread work, no longer a lane.
+- A session with a subagent at work reads working, not your turn, for both agents. A Codex subagent's finished turn no longer ends its parent's turn, and a subagent's lines can no longer push the main thread out of the lines the state is read from, so a long Codex turn still reads working.
+- A forked Codex subagent's copy of its parent's history no longer shows as events or state of the session.
+- A failed command that a Codex `exec` script ran now has a row in the Live stream, and a Codex `spawn_agent` call names the subagent it started, so the page ties them together.
 
 ## [0.2.0] - 2026-11-12
 

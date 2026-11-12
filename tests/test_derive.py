@@ -265,7 +265,7 @@ class TwoSourceRebuildTest(StoreCase):
         other = os.path.join(self.tmp, "other")
         os.makedirs(other)
         src = store.Source(lambda root: sorted(glob.glob(os.path.join(root, "*.jsonl"))),
-                           lambda d, path, offset: "other:" + store.line_key(d, path, offset), OtherDeriver, lambda path: False)
+                           lambda d, path, offset: "other:" + store.line_key(d, path, offset), OtherDeriver, lambda cur, path, lines: (None, False))
         with mock.patch.dict(store.SOURCES, other=src):
             body = (prompt("u1", "2026-11-01T10:00:00Z", "p1", "go")
                     + assistant("a1", "m1", "2026-11-01T10:00:01Z", [tool_use("t1", "Bash", command="x")]))

@@ -271,6 +271,7 @@ describe("LimitsPage", () => {
   it("offers every project in the picker while one is chosen", async () => {
     show({ ...fixture, projects: ["foo", "bar"], value: { ...fixture.value, projects: [] } }, "#project=foo&range=30");
     await lede();
+    await userEvent.click(screen.getByRole("combobox", { name: "Project" }));
     expect(screen.getAllByRole("option").map(o => o.textContent)).toEqual(["All projects", "foo", "bar"]);
   });
 

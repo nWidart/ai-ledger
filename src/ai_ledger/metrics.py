@@ -875,8 +875,10 @@ def session_detail(cur, sid, allq, p, prices):
     info["context_limit"] = (prices.get(info["peak_model"]) or {}).get("context")
     info["active_s"] = (cur.execute(f"WITH {active_cte('?')} SELECT active_s FROM act", [sid, sid]).fetchone() or (None,))[0]
     sums = ", ".join(f"sum({k}) AS {k}" for k in TOKEN_KINDS)
+    from . import insights  # insights imports this module
     return dict(
         info=info,
+        insight=insights.insight(cur, sid),
         models=rows(cur, f"{allq} SELECT model, coalesce(effort, '(none)') AS effort, subagent, count(*) AS requests, {sums}, "
                          f"sum(tokens) AS tokens, sum(cost) AS cost FROM rq GROUP BY 1, 2, 3 ORDER BY tokens DESC, model, effort, subagent", p),
         timeline=rows(cur, f"{allq} SELECT strftime(date_trunc('minute', ts), '%Y-%m-%dT%H:%M:00Z') AS minute, "

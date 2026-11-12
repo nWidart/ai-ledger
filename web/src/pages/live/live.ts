@@ -117,7 +117,7 @@ export interface LiveLane {
   running: boolean;
   /** The main-thread call that started it, when known; name is that call's tool. */
   parent: string | null; name: string; description: string | null;
-  /** Finished: its parent call has ended. No call names a Codex lane: it is done when its last turn mark is a turn_end. */
+  /** Finished: its last turn mark is a turn_end (a Codex thread; its spawn call returns at once), else its parent call has ended. */
   done: boolean;
 }
 
@@ -137,7 +137,7 @@ export function lanesOf(events: readonly LiveEvent[]): LiveLane[] {
     }
     if (e.ts && !(ms(l.end) >= ms(e.ts))) l.end = e.ts;
     if (isTool(e)) { l.tools++; l.errors += +e.failed; l.running ||= e.end == null; }
-    else if (!l.parent && (e.k === "turn_start" || e.k === "turn_end")) turns.set(l, e.k === "turn_start");
+    else if (e.k === "turn_start" || e.k === "turn_end") turns.set(l, e.k === "turn_start");
   }
   for (const [l, open] of turns) { l.done = !open; l.running ||= open; }
   return [...out.values()];

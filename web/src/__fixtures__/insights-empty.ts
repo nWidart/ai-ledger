@@ -11,7 +11,10 @@ export default {
   "orphans": 0,
   "newest_facet": null,
   "stored_facets": 0,
-  "dir": "/Users/example/.claude/usage-data"
+  "dir": "/Users/example/.claude/usage-data",
+  "by_project": [],
+  "runs": [],
+  "run_sizes": null
  },
  "projects": [],
  "outcomes": [],
@@ -20,6 +23,19 @@ export default {
  "satisfaction": [],
  "friction": [],
  "goals": [],
+ "goal_families": [],
+ "friction_families": [],
+ "trend": [],
  "sessions": [],
- "truncated": false
+ "truncated": false,
+ "meta": {
+  "sessions": 0,
+  "lines_added": 0,
+  "lines_removed": 0,
+  "files_modified": 0,
+  "git_pushes": 0,
+  "duration_p50_min": null,
+  "response_p50_s": null,
+  "languages": []
+ }
 } satisfies InsightsPayload;

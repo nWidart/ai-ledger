@@ -1,4 +1,5 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Combobox } from "@base-ui/react/combobox";
 import type { Source } from "../api";
 import { RANGES, SOURCES, setHash, useHashState } from "../hash";
 import { ProjectDot } from "./ProjectDot";
@@ -19,8 +20,6 @@ export interface FiltersProps {
   children?: ReactNode;
 }
 
-/** Pickers with more projects than this get a search box. */
-const SEARCH_OVER = 12;
 const rangeLabel = (r: number) => (r ? `${r}d` : "All");
 export const SOURCE_LABELS: Record<Source, string> = { claude: "Claude Code", codex: "Codex" };
 /** A view in words for banners and status lines: "atlas-api, Codex, last 30 days". */
@@ -37,23 +36,9 @@ export function Filters({ projects, automated = false, autoFile, range = true, c
   useEffect(() => { if (badSource) setHash({ source: null }, { push: false }); }, [badSource]);
   const opts = projects.map(p => (typeof p === "string" ? { value: p } : p));
   if (h.project && !opts.some(o => o.value === h.project)) opts.unshift({ value: h.project });
-  // A long list gets a search box that narrows the select; the chosen project and "All projects" always stay.
-  const [q, setQ] = useState(""), searchable = opts.length > SEARCH_OVER, needle = q.trim().toLowerCase();
-  const shown = searchable && needle ? opts.filter(o => o.value === h.project || (o.label ?? o.value).toLowerCase().includes(needle)) : opts;
-  const none = searchable && !!needle && !shown.some(o => (o.label ?? o.value).toLowerCase().includes(needle));
   return (
     <div className="filters" role="group" aria-label="Filters">
-      <span className={"pick-project" + (h.project ? "" : " all")} id="fProjectWrap">
-        <ProjectDot project={h.project} />
-        <select id="fProject" aria-label="Project" value={h.project} onChange={e => set({ project: e.target.value, session: null, inspect: null })}>
-          <option value="">All projects</option>
-          {shown.map(o => <option key={o.value} value={o.value}>{o.label ?? o.value}</option>)}
-        </select>
-      </span>
-      {searchable && <span className="pick-search">
-        <input type="search" aria-label="Search projects" placeholder="Search projects" value={q} onChange={e => setQ(e.target.value)} />
-        {none && <span className="muted small" role="status">No project matches</span>}
-      </span>}
+      <ProjectPicker project={h.project} options={opts} onPick={project => set({ project, session: null, inspect: null })} />
       {range && <div className="seg" id="fRange" role="group" aria-label="Time range">
         {RANGES.map(r => (
           <button key={r} type="button" aria-pressed={h.range === r} onClick={() => set({ range: r })}>{rangeLabel(r)}</button>
@@ -72,5 +57,46 @@ export function Filters({ projects, automated = false, autoFile, range = true, c
         </label>
       )}
     </div>
+  );
+}
+
+const ALL: ProjectOption = { value: "", label: "All projects" };
+const labelOf = (o: ProjectOption) => o.label ?? o.value;
+
+/** One filterable dropdown: the field shows the selected project; typing lists the matches first, then "All projects". */
+function ProjectPicker({ project, options, onPick }: { project: string; options: ProjectOption[]; onPick: (project: string) => void }) {
+  const items = [ALL, ...options], selected = items.find(o => o.value === project) ?? ALL, name = labelOf(selected);
+  // `typed` tells the user's text from the selected project's name, which lists everything.
+  const [text, setText] = useState(name), [typed, setTyped] = useState(false), [seen, setSeen] = useState(name), [open, setOpen] = useState(false);
+  if (seen !== name) { setSeen(name); setText(name); setTyped(false); } // the hash changed: show its project
+  const needle = text.trim().toLowerCase(), hits = typed && needle ? options.filter(o => labelOf(o).toLowerCase().includes(needle)) : null;
+  // The name in the field stays selected until the user types, so typing replaces it.
+  const field = useRef<HTMLInputElement>(null);
+  useEffect(() => { if (!typed && document.activeElement === field.current) field.current?.select(); }, [typed, text]);
+  return (
+    <Combobox.Root items={hits ? [...hits, ALL] : items} filter={null} autoHighlight={!!hits?.length} value={selected} inputValue={text}
+      itemToStringLabel={labelOf} isItemEqualToValue={(a, b) => a.value === b.value}
+      onValueChange={o => o && onPick(o.value)}
+      // Emptying the field is typing too (Base UI then reports "input-clear" and leaves the popup closed): list everything.
+      onInputValueChange={(v, d) => { const t = d.reason === "input-change" || d.reason === "input-clear"; setTyped(t); setText(t ? v : name); if (t) setOpen(true); }}
+      open={open} onOpenChange={o => { setOpen(o); if (!o) { setText(name); setTyped(false); } }}>
+      <span className={"pick-project" + (project ? "" : " all")} id="fProjectWrap">
+        <ProjectDot project={project} />
+        <Combobox.Input id="fProject" aria-label="Project" className="pick-field" ref={field} onFocus={e => e.currentTarget.select()}
+          // A click would put the caret in the selected name (Chromium does it after mouseup): keep the name selected.
+          onMouseUp={e => { if (!typed) e.preventDefault(); }} onClick={e => { if (!typed) e.currentTarget.select(); }} />
+        <span className="pick-chev" aria-hidden="true" />
+      </span>
+      <Combobox.Portal>
+        <Combobox.Positioner className="pick-pos" sideOffset={4} align="start">
+          <Combobox.Popup className="pick-pop">
+            <Combobox.List>
+              {(o: ProjectOption) => <Combobox.Item key={o.value} value={o} className="pick-opt">{labelOf(o)}</Combobox.Item>}
+            </Combobox.List>
+            {hits && !hits.length && <div className="pick-none muted small" role="status">No project matches</div>}
+          </Combobox.Popup>
+        </Combobox.Positioner>
+      </Combobox.Portal>
+    </Combobox.Root>
   );
 }

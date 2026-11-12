@@ -458,7 +458,8 @@ describe("ActivityPage", () => {
     await userEvent.click(within(screen.getByRole("group", { name: "Source" })).getByRole("button", { name: "Codex" }));
     await waitFor(() => expect(location.hash).toBe("#range=7&source=codex&q=api"));
     act(() => setHash({ day: "2026-11-04" }));
-    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Project" }), "foo");
+    await userEvent.click(screen.getByRole("combobox", { name: "Project" }));
+    await userEvent.click(screen.getByRole("option", { name: "foo" }));
     await waitFor(() => expect(location.hash).toBe("#project=foo&range=7&source=codex&q=api"));
   });
 
