@@ -260,10 +260,12 @@ def closed(cur, sids):
 
 
 def latest_action(events, text):
-    """The newest prompt, tool call or subagent call, for a wall tile."""
+    """The newest prompt, tool call or subagent call, for a wall tile. A shell call is named by the description the agent
+    gave it, as its stream row is; any other call, or a shell call with none, by its input."""
     for e in reversed(events):
         if e["k"] == "tool":
-            return dict(kind="tool", tool=e["tool"], summary=tool_input(e, text)[:200], lane=e["lane"])
+            said = e["tool"] in APPROVAL_TOOLS and capped(e["description"], text)
+            return dict(kind="tool", tool=e["tool"], summary=(said or tool_input(e, text))[:200], lane=e["lane"])
         if e["k"] == "prompt":
             return dict(kind="prompt", tool=None, summary=None, lane=None)
     return None

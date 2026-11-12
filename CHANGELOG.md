@@ -29,7 +29,7 @@ Run `ai-ledger rebuild` once after upgrading (with the app stopped): error types
 - Pages refetch only when new data is stored, and update without replaying their animations.
 - Insights caps long lists at the top 12, lists sessions by title, and reports coverage as "N of M sessions analysed".
 - Live, with Full text off, sends tool inputs cut to 300 characters and an agent call's description instead of its prompt.
-- Live shows a shell call's description as its row text, with the command in the opened row.
+- Live shows a shell call's description as its row text and on its wall tile, with the command in the opened row.
 - Live folds a finished subagent, shows the last 5 calls of a running one, and gives each subagent's cost, model and errors in its header.
 - Live, when paused, says Paused and shows no live dot.
 - The nav's "Last ingest" keeps up with Live while it is open.

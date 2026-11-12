@@ -418,6 +418,20 @@ class SessionTest(LiveCase):
         self.assertEqual((wordy["description"], bare["description"]), ("list " + "x" * (live.INPUT_CAP - 5) + "…", None))
         self.assertEqual(len(self.run_session(text=True)["events"][1]["description"]), 400)
 
+    def test_wall_latest_action_is_a_shell_calls_description(self):
+        def latest(text=False, tool="Bash", **inp):
+            return live.latest_action(events(assistant("a1", "m1", at(1), [tool_use("t1", tool, **inp)])), text)
+        self.assertEqual(latest(command="cd /long/path && uv run pytest", description="Run the Python tests"),
+                         dict(kind="tool", tool="Bash", summary="Run the Python tests", lane=None))
+        wordy = dict(command="ls", description="list " + "x" * 395)  # cut as an input is, with text and without
+        self.assertEqual((latest(**wordy)["summary"], latest(text=True, **wordy)["summary"]), ("list " + "x" * 195,) * 2)
+        self.assertEqual(latest(command="git status")["summary"], "git status")  # no description: the command
+        self.assertEqual(latest(tool="Read", file_path="x.py", description="the parser")["summary"], "x.py")  # not a shell call
+        self.write("s1.jsonl", prompt("u1", at(0), "p1", "go") + assistant("a1", "m1", at(1), [
+            tool_use("t1", "Bash", command="uv run pytest", description="Run the Python tests")]))
+        self.ingest()
+        self.assertEqual(live.sessions(self.cur(), now=NOW, prices=PRICES)["sessions"][0]["latest"]["summary"], "Run the Python tests")
+
     def test_text_only_on_request(self):
         self.write("s1.jsonl", prompt("u1", at(0), "p1", "SECRET prompt") + assistant("a1", "m1", at(1), [
             dict(type="text", text="SECRET reply"), tool_use("t1", "Bash", command="cat .env")]) + result("r1", at(2), "t1", "SECRET=" + "x" * 5000))

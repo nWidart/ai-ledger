@@ -241,6 +241,17 @@ A wall tile SHALL show the project, state, title, latest action, context fill, t
 - **WHEN** a session is in your turn
 - **THEN** its tile has a border and shows how long the session has waited
 
+### Requirement: Name a tile's latest shell call by its description
+The latest action on a wall tile SHALL name a shell call that carries a description by that description, as the call's row in the stream; otherwise it SHALL show the call's input summary. The app SHALL cut either as it cuts a tool input.
+
+#### Scenario: Latest call is a shell call with a description
+- **WHEN** a session's newest call is a `Bash` call that runs `cd /long/path && uv run pytest` with the description "Run the Python tests"
+- **THEN** its tile's latest action reads "Bash · Run the Python tests"
+
+#### Scenario: Latest call is a shell call with no description
+- **WHEN** a session's newest call is a `Bash` call that carries no description
+- **THEN** its tile's latest action shows the command
+
 ### Requirement: Keep the selection in the URL
 The page SHALL keep the selected session and the view (Stream or Wall) in the URL, with the shared project, source and automated filters.
 
