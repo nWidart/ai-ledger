@@ -3,13 +3,15 @@
 import { createContext, useContext } from "react";
 import type { Day, ErrorDetail } from "../../api";
 import type { Err, Filtered, Fixes, Model, View, ViewTypes } from "./model";
-import type { FixError } from "./fixes";
+import type { FixError } from "./marks";
 import type { Mode } from "./view";
 
 export interface ErrorsCtx {
-  m: Model; v: View; f: Filtered; vt: ViewTypes; fixes: Fixes; fixError: FixError | null;
+  m: Model; v: View; f: Filtered; vt: ViewTypes; fixes: Fixes; markError: FixError | null;
   /** The types with a fix write on its way: they show "Saving…". */
-  saving: ReadonlySet<string>; mode: Mode; q: string;
+  saving: ReadonlySet<string>;
+  /** The types with a mute write on its way. */
+  muting: ReadonlySet<string>; mode: Mode; q: string;
   /** The linked example the list puts first: the focus as of the last change other than a click on an example. */
   pinned: Err | undefined;
   /** Narrow screen with a type open: the detail is in the sheet. */
@@ -22,6 +24,8 @@ export interface ErrorsCtx {
   select: (id: string) => void;
   /** Mark a type fixed on a day, or remove its marker (null); the store keeps it, and a refused write leaves the page as the store holds it. */
   setFix: (cat: string, day: Day | null) => void;
+  /** Mute a type or unmute it; leaves: it is open with "Hide noise and muted" on, so it leaves the view (the page says so). */
+  setMuted: (cat: string, muted: boolean, leaves?: boolean) => void;
   setMode: (m: Mode) => void;
   setQ: (q: string) => void;
   /** Run once after the next render (focus a control that render brings). */

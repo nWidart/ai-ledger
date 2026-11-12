@@ -1,6 +1,6 @@
 // The URL hash is the view: project, range, source, sub=0 (no subagents), noise=0 (noise hidden), gran=week, cat (open type), ex (one
 // linked example), at (the chart bucket the table and detail narrow to). The last view and the list mode live in localStorage under the old
-// page's keys and shapes. The applied fixes live in the store; FIXES_KEY is where an older page kept them, read once to move them there (see fixes.ts).
+// page's keys and shapes. The applied fixes live in the store; FIXES_KEY is where an older page kept them, read once to move them there (see marks.ts).
 import { RANGES, sourceOf, type HashPatch, type Range } from "../../hash";
 import type { Fixes, Model, View } from "./model";
 

@@ -95,7 +95,10 @@
 @media (min-width: 901px) and (max-width: 1100px) { .pg-errors .c-share { display: none; } }
 .pg-errors .tscroll { overflow-x: auto; }
 .pg-errors .tbtn .sw { margin-right: 7px; vertical-align: 0; }
-.pg-errors td .chip.fixed { margin-left: 6px; }
+.pg-errors td .chip.fixed, .pg-errors td .chip.muted-type { margin-left: 6px; }
+/* A muted type: the word "Muted" says it; the dimming only echoes it. The chip and the count keep full strength. */
+.pg-errors tr.is-muted .tbtn, .pg-errors tr.is-muted td:not(.c-share):not(.c-trend) { color: var(--text-muted); }
+.pg-errors tr.is-muted .sw, .pg-errors tr.is-muted .bar, .pg-errors tr.is-muted .spark { opacity: .45; }
 /* Where to start */
 .pg-errors .pick .phead { display: flex; gap: 12px; justify-content: space-between; align-items: baseline; }
 .pg-errors .pick .phead b { min-width: 0; }
@@ -137,6 +140,8 @@
 .pg-errors .share span { font-size: 12px; color: var(--text-muted); min-width: 2.6em; text-align: right; font-variant-numeric: tabular-nums; }
 .pg-errors .chip { padding: 2px 7px; }
 .pg-errors .chip.fixed { border-color: var(--good); color: var(--good-text); }
+.pg-errors .chip.muted-type { border-style: dashed; color: var(--text-secondary); }
+.pg-errors .mutebox { margin-bottom: 12px; }
 .pg-errors .spark { width: 84px; height: 22px; display: block; }
 .pg-errors .detail h2 { font-size: 18px; margin-bottom: 4px; }
 .pg-errors .detail .why { color: var(--text-secondary); margin: 0 0 12px; }

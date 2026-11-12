@@ -32,17 +32,22 @@ beforeEach(() => {
 });
 
 type Fix = { category: string; day: string | null };
-const FIX = "/api/errors/fix", IMPORT = "/api/errors/fixes/import", FIXES = "/api/errors/fixes";
-/** The app's Errors endpoints over fetch. The payload carries the stored fixes; POST /api/errors/fix keeps one, and POST
+type Mute = { category: string; muted: boolean };
+const FIX = "/api/errors/fix", MUTE = "/api/errors/mute", IMPORT = "/api/errors/fixes/import", MARKS = "/api/errors/marks";
+/** The app's Errors endpoints over fetch. The payload carries the stored marks (fixes and muted types); every write answers with all
+ *  of them. POST /api/errors/mute keeps a muted flag (mutes lists them; refuseMute(m) answers 500 to the ones it says yes to);
+ *  `muted` is the set of muted types in the store (serve's third argument seeds it); `payload` is what the payload carries besides the marks. POST /api/errors/fix keeps one, and POST
  *  /api/errors/fixes/import takes the ones the store has no day for (the store decides, when it gets the request). posts lists the
  *  writes in the order they arrive, imports the import bodies. refuse(f) answers 500 to the single writes f says yes to; failImport
  *  does so for the import. hold(from) makes the writes from the from-th on wait for release(); failGets(n) fails the payload fetches
  *  from the n-th on (0 is the first); holdGet(n) answers the n-th one only on release(), with what the store held when it was asked.
- *  decided is the set of types the store has a row for (the real one keeps the row of an Undo, with no date). payloadFixes, when set, is what every payload carries (another tab's view of the store); GET /api/errors/fixes (the resync) answers
+ *  decided is the set of types the store has a row for (the real one keeps the row of an Undo, with no date). payloadFixes, when set, is what every payload carries (another tab's view of the store); GET /api/errors/marks (the resync) answers
  *  the store unless failResync. */
-function serve(fixes: Record<string, string> = {}, refuse: ((b: Fix) => boolean) | null = null) {
+function serve(fixes: Record<string, string> = {}, refuse: ((b: Fix) => boolean) | null = null, muted: string[] = []) {
   let writes = 0, gets = 0;
   const api = {
+    payload: fixture as ErrorsPayload, muted: new Set(muted), mutes: [] as Mute[], refuseMute: null as ((b: Mute) => boolean) | null,
+    marks: () => ({ fixes: { ...api.store }, muted: [...api.muted].sort() }),
     store: { ...fixes }, decided: new Set(Object.keys(fixes)), posts: [] as Fix[], imports: [] as Record<string, string>[], refuse, failImport: false, requests: [] as string[],
     failGetsFrom: Infinity, payloadFixes: null as Record<string, string> | null, failResync: false,
     getGate: null as Promise<void> | null, getHeld: -1,
@@ -58,12 +63,16 @@ function serve(fixes: Record<string, string> = {}, refuse: ((b: Fix) => boolean)
   };
   const refused = () => ({ ok: false, status: 500, json: () => Promise.resolve({ error: "no" }) } as Response);
   vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
-    if (url === FIX || url === IMPORT) {
+    if (url === FIX || url === IMPORT || url === MUTE) {
       const n = writes++, body = JSON.parse(init!.body as string);
-      api.requests.push(url === FIX ? `fix ${body.category} ${body.day}` : "import");
-      if (url === FIX) api.posts.push(body as Fix); else api.imports.push(body.fixes as Record<string, string>);
+      api.requests.push(url === FIX ? `fix ${body.category} ${body.day}` : url === MUTE ? `mute ${body.category} ${body.muted}` : "import");
+      if (url === FIX) api.posts.push(body as Fix); else if (url === MUTE) api.mutes.push(body as Mute); else api.imports.push(body.fixes as Record<string, string>);
       if (api.gate && n >= api.holdFrom) await api.gate;
-      if (url === IMPORT) {
+      if (url === MUTE) {
+        if (api.refuseMute?.(body as Mute)) return refused();
+        if (body.muted) api.muted.add(body.category); else api.muted.delete(body.category);
+        api.decided.add(body.category); // a muted type has a row, so a later import skips it
+      } else if (url === IMPORT) {
         if (api.failImport) return refused();
         api.take(body.fixes as Record<string, string>);
       } else {
@@ -71,16 +80,16 @@ function serve(fixes: Record<string, string> = {}, refuse: ((b: Fix) => boolean)
         api.decided.add(body.category); // an Undo keeps the type decided, as the real store keeps its row
         if (body.day) api.store[body.category] = body.day; else delete api.store[body.category];
       }
-      return json({ ...api.store });
+      return json(api.marks());
     }
-    if (url === FIXES) {
+    if (url === MARKS) {
       api.requests.push("resync");
-      return api.failResync ? refused() : json({ ...api.store });
+      return api.failResync ? refused() : json(api.marks());
     }
     if (url.startsWith("/api/errors")) {
       const n = gets++;
       if (n >= api.failGetsFrom) return Promise.reject(new Error("down"));
-      const body = { ...fixture, fixes: { ...(api.payloadFixes ?? api.store) } };
+      const body = { ...api.payload, fixes: { ...(api.payloadFixes ?? api.store) }, muted: [...api.muted].sort() };
       if (n === api.getHeld) await api.getGate;
       return json(body);
     }
@@ -572,6 +581,218 @@ describe("ErrorsPage", () => {
       const api = serve();
       await page();
       expect(api.requests).toEqual([]);
+    });
+  });
+
+  // Two of the fixture's six errors become "git", so there is a type to mute and another that stays.
+  const mixed = withErrors(fixture.errors.map((e, i) => (i < 2 ? { ...e, c: "git" } : e)));
+  describe("muted types", () => {
+    const toggle = () => screen.getByRole("checkbox", { name: "Hide noise and muted" });
+    const lede = () => document.getElementById("lede")!.textContent;
+    const rowOf = (c: string) => document.querySelector(`#catBody tr[data-c="${c}"]`);
+    const muteBtn = () => screen.getByRole("button", { name: "Mute this type" });
+    const unmuteBtn = () => screen.getByRole("button", { name: "Unmute" });
+    const mark = () => userEvent.click(screen.getByRole("button", { name: "Mark fix applied" }));
+
+    it("calls the toggle Hide noise and muted, keeping its id and hash key", async () => {
+      serve();
+      await page();
+      expect(toggle().id).toBe("fNoise");
+      expect(toggle().closest("label")!.getAttribute("title")).toBe("Leaves out harness errors, user rejections and the types you muted");
+      await userEvent.click(toggle());
+      expect(location.hash).toContain("noise=0");
+    });
+
+    it("mutes at once, posts it, and unmutes the same way; a fix day stays", async () => {
+      const api = serve({ git: "2026-11-04" }), hold = api.hold();
+      api.payload = mixed;
+      history.replaceState(null, "", "/errors#range=7&cat=git");
+      await page();
+      expect(rowOf("git")!.querySelector(".chip.muted-type")).toBeNull();
+      await userEvent.click(muteBtn());
+      // The page does not wait for the answer: the button says Unmute, the row is marked, "Saving…" shows.
+      expect(unmuteBtn().getAttribute("aria-busy")).toBe("true");
+      expect(document.getElementById("muteSaving")?.textContent).toBe("Saving…");
+      expect(rowOf("git")!.querySelector(".chip.muted-type")?.textContent).toBe("Muted");
+      expect(rowOf("git")!.className).toContain("is-muted");
+      expect(rowOf("x")!.className).not.toContain("is-muted");
+      expect(document.activeElement?.id).toBe("mute"); // the same button: focus stays
+      expect(api.posts).toEqual([]); // not a fix write
+      hold.release();
+      await waitFor(() => expect([...api.muted]).toEqual(["git"]));
+      expect(api.mutes).toEqual([{ category: "git", muted: true }]);
+      expect(vi.mocked(fetch).mock.calls.find(c => c[0] === MUTE)![1]).toMatchObject({ method: "POST", headers: { "Content-Type": "application/json" } });
+      await waitFor(() => expect(document.getElementById("muteSaving")).toBeNull());
+      expect(document.querySelector("#detail .chip.fixed")?.textContent).toBe("✓ Fix applied Nov 4, 2026"); // the fix day stayed
+      await waitFor(() => expect(document.getElementById("detailLive")?.textContent).toBe("Type muted."));
+      await userEvent.click(unmuteBtn());
+      expect(muteBtn()).toBeTruthy();
+      expect(rowOf("git")!.querySelector(".chip.muted-type")).toBeNull();
+      await waitFor(() => expect([...api.muted]).toEqual([]));
+      expect(api.mutes[1]).toEqual({ category: "git", muted: false });
+      await waitFor(() => expect(document.getElementById("detailLive")?.textContent).toBe("Type unmuted."));
+    });
+
+    it("puts a failed mute back from the store, says so, and keeps focus on the button", async () => {
+      const api = serve();
+      api.payload = mixed;
+      api.refuseMute = () => true;
+      history.replaceState(null, "", "/errors#range=7&cat=git");
+      await page();
+      await userEvent.click(muteBtn());
+      await waitFor(() => expect(document.getElementById("muteErr")).toBeTruthy());
+      expect(api.requests).toEqual(["mute git true", "resync"]);
+      expect(muteBtn()).toBeTruthy();
+      expect(rowOf("git")!.querySelector(".chip.muted-type")).toBeNull();
+      expect(document.getElementById("muteErr")!.textContent).toMatch(/^Couldn't save the muted setting/);
+      expect(document.getElementById("fixErr")).toBeNull(); // the fix box says nothing about it
+      await waitFor(() => expect(document.getElementById("detailLive")?.textContent).toMatch(/^Couldn't save the muted setting/));
+      expect(document.activeElement?.id).toBe("mute");
+      expect([...api.muted]).toEqual([]);
+      // The next try clears the note.
+      api.refuseMute = null;
+      await userEvent.click(muteBtn());
+      await waitFor(() => expect([...api.muted]).toEqual(["git"]));
+      expect(document.getElementById("muteErr")).toBeNull();
+    });
+
+    it("shows what the store holds when the mute fails after the store took it", async () => {
+      const api = serve();
+      api.payload = mixed;
+      history.replaceState(null, "", "/errors#range=7&cat=git");
+      await page();
+      api.refuseMute = b => { api.muted.add(b.category); return true; }; // taken, but the answer lost
+      await userEvent.click(muteBtn());
+      await waitFor(() => expect(document.getElementById("muteErr")).toBeTruthy());
+      expect(unmuteBtn()).toBeTruthy();
+      expect(rowOf("git")!.querySelector(".chip.muted-type")).toBeTruthy();
+    });
+
+    it("keeps a mute and a fix in one queue, in order", async () => {
+      const api = serve(), hold = api.hold();
+      api.payload = mixed;
+      history.replaceState(null, "", "/errors#range=7&cat=git");
+      await page();
+      await userEvent.click(muteBtn());
+      await mark();
+      expect(api.requests).toEqual(["mute git true"]); // the fix waits behind the mute
+      hold.release();
+      await waitFor(() => expect(api.store).toEqual({ git: "2026-11-05" }));
+      expect(api.requests).toEqual(["mute git true", "fix git 2026-11-05"]);
+      expect([...api.muted]).toEqual(["git"]);
+    });
+
+    it("lets the toggle hide a muted type, and the rate follows", async () => {
+      stubErrors({ ...mixed, muted: ["git"] });
+      history.replaceState(null, "", "/errors#range=30");
+      await page();
+      expect(lede()).toContain("6 failed tool calls");
+      expect(rowOf("git")!.querySelector(".chip.muted-type")?.textContent).toBe("Muted");
+      expect(rowOf("x")).toBeTruthy();
+      expect(document.querySelector(".vitals")!.textContent).toContain("60.0%");
+      await userEvent.click(toggle());
+      expect(lede()).toContain("4 failed tool calls");
+      expect(rowOf("git")).toBeNull();
+      expect(rowOf("x")).toBeTruthy();
+      expect(document.querySelector(".vitals")!.textContent).toContain("40.0%");
+      expect(document.getElementById("uncat")?.textContent).toBe("Uncategorized: 0% of errors");
+      await userEvent.click(toggle());
+      expect(rowOf("git")).toBeTruthy();
+    });
+
+    it("dims a muted row and names it, and leaves a fixed noise type as it is", async () => {
+      const noisy = withErrors(fixture.errors.map((e, i) => (i < 2 ? { ...e, c: "infra" } : i < 4 ? { ...e, c: "git" } : e)));
+      stubErrors({ ...noisy, muted: ["git"] });
+      history.replaceState(null, "", "/errors#range=30");
+      await page();
+      expect(rowOf("git")!.className).toContain("is-muted");
+      expect(rowOf("git")!.querySelector(".chip.muted-type")?.textContent).toBe("Muted");
+      expect(rowOf("infra")!.className).not.toContain("is-muted");
+      expect(rowOf("infra")!.querySelector(".chip.muted-type")).toBeNull();
+      expect(rowOf("x")!.className).not.toContain("is-muted");
+    });
+
+    it("closes the open type when it is muted under the toggle, announces it, and moves focus to the type table", async () => {
+      const api = serve();
+      api.payload = mixed;
+      history.replaceState(null, "", "/errors#range=7&noise=0&cat=git");
+      await page();
+      expect(document.getElementById("detailTitle")?.textContent).toBe("git / gh error");
+      await userEvent.click(muteBtn());
+      await waitFor(() => expect(document.getElementById("detailTitle")).toBeNull());
+      expect(screen.getByRole("heading", { name: "Where to start" })).toBeTruthy();
+      expect(rowOf("git")).toBeNull();
+      expect(location.hash).toBe("#range=7&noise=0");
+      expect(document.activeElement?.closest("#catBody")).toBeTruthy();
+      await waitFor(() => expect(document.getElementById("detailLive")?.textContent).toBe("Type muted. It left the view: Hide noise and muted is on."));
+      await waitFor(() => expect([...api.muted]).toEqual(["git"]));
+    });
+
+    it("keeps the open type open when it is muted with the toggle off", async () => {
+      const api = serve();
+      api.payload = mixed;
+      history.replaceState(null, "", "/errors#range=7&cat=git");
+      await page();
+      await userEvent.click(muteBtn());
+      await waitFor(() => expect([...api.muted]).toEqual(["git"]));
+      expect(document.getElementById("detailTitle")?.textContent).toBe("git / gh error");
+      expect(location.hash).toBe("#range=7&cat=git");
+      expect(document.querySelector("#detail .chip.muted-type")?.textContent).toBe("Muted");
+    });
+
+    it("says what muting does, and offers no button for the fixed noise types", async () => {
+      const noisy = withErrors(fixture.errors.map((e, i) => (i < 2 ? { ...e, c: "infra" } : e)));
+      stubErrors(noisy);
+      history.replaceState(null, "", "/errors#range=7&cat=x");
+      await page();
+      expect(document.getElementById("detail")!.textContent).toContain('Muted types count as noise: "Hide noise and muted" leaves them out of the rate.');
+      expect(document.getElementById("alwaysNoise")).toBeNull();
+      cleanup(); clearApiCache();
+      for (const c of ["infra", "user_denied"]) {
+        stubErrors(withErrors(fixture.errors.map((e, i) => (i < 2 ? { ...e, c } : e))));
+        history.replaceState(null, "", `/errors#range=7&cat=${c}`);
+        await page();
+        expect(screen.queryByRole("button", { name: "Mute this type" })).toBeNull();
+        expect(screen.queryByRole("button", { name: "Unmute" })).toBeNull();
+        expect(document.getElementById("alwaysNoise")?.textContent).toMatch(/always noise/);
+        cleanup(); clearApiCache();
+      }
+    });
+
+    it("never suggests a muted type in Where to start", async () => {
+      stubErrors({ ...lostPayload, muted: ["git"] });
+      history.replaceState(null, "", "/errors#range=0");
+      await page();
+      const picks = () => [...document.querySelectorAll("#detail .pick")].map(p => p.getAttribute("data-c"));
+      expect(picks()).toEqual(["worktree", "tests", "sleep_poll"]);
+      expect(rowOf("git")).toBeTruthy(); // still in the table, marked
+      await userEvent.click(toggle());
+      expect(picks()).toEqual(["worktree", "tests", "sleep_poll"]);
+    });
+
+    it("keeps a linked example of a muted type working: outside the filters under the toggle, in the list without it", async () => {
+      stubErrors({ ...fixture, muted: ["x"] });
+      history.replaceState(null, "", "/errors#ex=t07&range=30&noise=0");
+      await page();
+      const note = document.getElementById("outside")!;
+      expect(note.querySelector("#ex-t07")).toBeTruthy();
+      expect(document.getElementById("detailTitle")?.textContent).toBe("x");
+      await userEvent.click(within(note).getByRole("button", { name: "Clear filters" }));
+      expect(document.getElementById("outside")).toBeNull();
+      expect(location.hash).toBe("#range=0&ex=t07");
+      expect(document.querySelector("#exList #ex-t07")).toBeTruthy();
+    });
+
+    it("seeds the muted types from the payload until a write has been answered", async () => {
+      const api = serve({}, null, ["git"]);
+      api.payload = mixed;
+      history.replaceState(null, "", "/errors#range=7&cat=git");
+      await page();
+      expect(unmuteBtn()).toBeTruthy();
+      api.muted.delete("git"); // another tab unmutes it: this page keeps its copy until it is loaded again
+      await userEvent.click(unmuteBtn());
+      await waitFor(() => expect(api.mutes).toEqual([{ category: "git", muted: false }]));
+      expect(muteBtn()).toBeTruthy();
     });
   });
 

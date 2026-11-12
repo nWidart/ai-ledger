@@ -3,7 +3,7 @@ import fixture from "../../__fixtures__/errors";
 import type { ErrorsPayload } from "../../api";
 import {
   beforeAfter, bucketLabel, bucketOf, buckets, byWeight, change, chartData, compare, emptyTypes, exList, filtered, inBucket, incidentsOf, incSummary, makeModel, midDay, pointText,
-  rangeStart, series, settle, summary, timeLost, typeColors, typeRows, uncategorized, viewTypes, whereToStart, type Err, type View,
+  rangeStart, series, settle, summary, timeLost, typeColors, typeRows, uncategorized, viewTypes, whereToStart, withMuted, errorDays, type Err, type View,
 } from "./model";
 import { lostPayload } from "./lostData";
 import { DEFAULT_VIEW, loadFixes, loadMode, readView, savedOf, viewHash, viewPatch } from "./view";
@@ -396,5 +396,63 @@ describe("hash and storage", () => {
     expect(loadMode()).toBe("inc");
     localStorage.setItem("claude-errors-fixes", "[1]");
     expect(loadFixes()).toEqual({});
+  });
+});
+
+describe("muted types", () => {
+  const min = 60e3;
+  it("come from the payload, and withMuted swaps them without touching the rest", () => {
+    expect([...makeModel({ ...fixture, muted: ["x"] }).muted]).toEqual(["x"]);
+    expect(m.muted.size).toBe(0);
+    const mm = withMuted(m, ["x", "y"]);
+    expect([...mm.muted]).toEqual(["x", "y"]);
+    expect(mm.errors).toBe(m.errors);
+  });
+  it("join the fixed noise in the errors the toggle leaves out", () => {
+    const mx = withMuted(m, ["x"]);
+    expect(filtered(mx, v({ noise: true })).errs).toHaveLength(0);
+    expect(filtered(mx, v()).errs).toHaveLength(6); // the toggle off: a muted type still counts
+    expect(filtered(m, v({ noise: true })).errs).toHaveLength(6); // not muted: it stays
+    // The fixed noise is noise with no one muting it.
+    const p: ErrorsPayload = { ...fixture, errors: fixture.errors.map((e, i) => ({ ...e, c: i === 5 ? "infra" : e.c })) };
+    expect(filtered(withMuted(makeModel(p), []), v({ noise: true })).errs).toHaveLength(5);
+    expect(filtered(withMuted(makeModel(p), ["x"]), v({ noise: true })).errs).toHaveLength(0);
+  });
+  it("join the fixed noise in the server's per-day counts, which the rate, chart and comparison read", () => {
+    const days = (mm: typeof m, o: Partial<View>) => errorDays(mm, v(o), "0").map(r => r.c);
+    expect(days(m, { noise: true })).toEqual(["x"]);
+    expect(days(withMuted(m, ["x"]), { noise: true })).toEqual([]);
+    expect(days(withMuted(m, ["x"]), {})).toEqual(["x"]);
+    // The summary's rate follows: 6 of 10 calls with the type, none without it.
+    expect(summary(m, v({ noise: true }), filtered(m, v({ noise: true })), {}).r).toBe(60);
+    const mx = withMuted(m, ["x"]);
+    expect(summary(mx, v({ noise: true }), filtered(mx, v({ noise: true })), {})).toMatchObject({ n: 0, r: 0, uncat: { n: 0, share: 0 } });
+  });
+  it("close an open muted type under the toggle, and keep a linked example's type open", () => {
+    const mx = withMuted(m, ["x"]);
+    expect(settle(mx, v({ cat: "x", noise: true })).cat).toBeNull();
+    expect(settle(mx, v({ cat: "x" })).cat).toBe("x");
+    expect(settle(mx, v({ cat: "x", focus: "t07", noise: true })).cat).toBe("x");
+  });
+  describe("in Where to start", () => {
+    const mm = makeModel(lostPayload), vv = (o: Partial<View> = {}) => v({ range: 0, ...o });
+    const names = (x: typeof mm, o: Partial<View> = {}) => whereToStart(x, vv(o), filtered(x, vv(o)), {}).open.map(r => r.c);
+    it("never suggests a muted type as an open fix, with the toggle on or off", () => {
+      expect(names(mm)).toEqual(["git", "worktree", "tests", "sleep_poll"]);
+      const mg = withMuted(mm, ["git"]);
+      expect(names(mg)).toEqual(["worktree", "tests", "sleep_poll"]);
+      expect(names(mg, { noise: true })).toEqual(["worktree", "tests", "sleep_poll"]);
+      expect(whereToStart(mg, vv(), filtered(mg, vv()), {}).open[0]).toEqual({ c: "worktree", n: 4, lost: min });
+    });
+    it("never suggests a muted type as rising fastest", () => {
+      // Two types, each from 1 to 20 errors over 300 calls a side: both rise, by the same gain.
+      const rise = makeModel({ ...fixture, calls: [["2026-10-25", "foo", 300, 0, "claude"], ["2026-11-04", "foo", 300, 0, "claude"]],
+        error_days: [["2026-10-25", "foo", "git", 1, 0, "claude"], ["2026-11-04", "foo", "git", 20, 0, "claude"],
+          ["2026-10-25", "foo", "worktree", 1, 0, "claude"], ["2026-11-04", "foo", "worktree", 20, 0, "claude"]] });
+      const rising = (x: typeof rise, o: Partial<View> = {}) => whereToStart(x, v({ range: 7, ...o }), filtered(x, v({ range: 7, ...o })), {}).rising.map(r => r.c).sort();
+      expect(rising(rise)).toEqual(["git", "worktree"]);
+      expect(rising(withMuted(rise, ["git"]))).toEqual(["worktree"]);
+      expect(rising(withMuted(rise, ["git"]), { noise: true })).toEqual(["worktree"]);
+    });
   });
 });

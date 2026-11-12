@@ -5,7 +5,7 @@ import { Spark } from "./Spark";
 
 const LOST = "Time in retry loops: from each incident's first failure to its last. An incident counts whole when any of its failures is in the view.";
 /** The view's types by count. The swatch ties a row to its chart layer; types folded into Other get Other's grey. A badge only
- *  once a fix is applied. A click anywhere on a row opens or closes the type (the type button's clicks and keys bubble to it). */
+ *  once a fix is applied or the type is muted (a muted type's row is dimmed, with the word as well). A click anywhere on a row opens or closes the type (the type button's clicks and keys bubble to it). */
 export function TypeTable() {
   const { m, v, f, fixes, pick, update, after } = useErrors(), rows = typeRows(m, v, f), { cmp } = compare(m, v, f);
   // Rows mount again when the filters change, so their share bars grow in.
@@ -23,9 +23,10 @@ export function TypeTable() {
         <thead><tr><th>Type</th><th className="num">Errors</th><th className="num c-lost" title={LOST}>Time lost</th><th className="c-share">Share</th><th className="c-trend">Rate trend</th><th className="num">Change</th></tr></thead>
         <tbody id="catBody">
           {rows.length ? rows.map(({ cid, n, lost, share, color, pts, delta }) => (
-            <tr key={cid + key} data-c={cid} className={v.cat === cid ? "sel" : ""} onClick={() => pick(v.cat === cid ? null : cid, v.cat !== cid)}>
+            <tr key={cid + key} data-c={cid} className={(v.cat === cid ? "sel " : "") + (m.muted.has(cid) ? "is-muted" : "")} onClick={() => pick(v.cat === cid ? null : cid, v.cat !== cid)}>
               <td><button type="button" className="tbtn" data-c={cid} aria-expanded={v.cat === cid} aria-controls="detail">
                 <i className="sw" style={{ background: color }} aria-hidden="true" />{m.cats[cid]!.label}</button>
+                {m.muted.has(cid) ? <span className="chip muted-type">Muted</span> : null}
                 {fixes[cid] ? <span className="chip fixed">✓ Fix applied {yearLabel(m, fixes[cid])}</span> : null}</td>
               <td className="num">{fmt(n)}</td>
               <td className="num c-lost" title={lost ? LOST : undefined}>{lost ? dur(lost) : "–"}</td>
