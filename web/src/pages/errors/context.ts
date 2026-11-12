@@ -20,7 +20,7 @@ export interface ErrorsCtx {
   /** Open (or close) a type; toDetail moves focus to it. */
   pick: (c: string | null, toDetail?: boolean) => void;
   select: (id: string) => void;
-  /** Mark a type fixed on a day, or remove its marker (null); the store keeps it, and a refused write puts it back. */
+  /** Mark a type fixed on a day, or remove its marker (null); the store keeps it, and a refused write leaves the page as the store holds it. */
   setFix: (cat: string, day: Day | null) => void;
   setMode: (m: Mode) => void;
   setQ: (q: string) => void;

@@ -5,6 +5,7 @@ import { dayLabel, num as fmt } from "../../format";
 import type { Range } from "../../hash";
 
 export const NOISE = new Set(["infra", "user_denied"]);
+export const CATCH_ALL = new Set(["other", "exit_other", "mcp"]); // the types no specific rule matched
 export const TOPN = 5;
 export const MIN_AFTER_CALLS = 200; // calls since a fix before its rate counts as lower or higher
 export const MIN_CMP_CALLS = 200; // tool calls each side of a change needs before the change shows
@@ -21,8 +22,9 @@ export const yearLabel = (m: Model, k: Day) => dayLabel(k, k.slice(0, 4) !== m.l
 export const shortLabel = (s: string) => (s.length > 26 ? s.slice(0, 25) + "…" : s);
 
 export type Gran = "day" | "week";
-/** The view the hash holds. source: "" is all; sub: include subagents; noise: hide noise; cat: the open type; focus: the linked example. */
-export interface View { project: string; source: Source | ""; range: Range; gran: Gran; sub: boolean; noise: boolean; cat: string | null; focus: string | null }
+/** The view the hash holds. source: "" is all; sub: include subagents; noise: hide noise; cat: the open type; focus: the linked example;
+ *  at: the chart bucket (as bucketOf returns it) the type table and the detail narrow to. */
+export interface View { project: string; source: Source | ""; range: Range; gran: Gran; sub: boolean; noise: boolean; cat: string | null; focus: string | null; at: Day | null }
 /** Applied fixes: type id -> YYYY-MM-DD, as the old page stored them. */
 export type Fixes = Record<string, Day>;
 
@@ -71,6 +73,10 @@ export const bucketOf = (day: Day, gran: Gran): Day => {
   return iso(new Date(+d - wd * DAY));
 };
 export const rangeStart = (m: Model, v: View): Day => (v.range ? iso(new Date(+toDate(m.lastDay) - (v.range - 1) * DAY)) : m.firstDay);
+/** The errors of the view's selected chart bucket, or all of them with none selected. */
+export const inBucket = (v: View, errs: readonly Err[]) => (v.at ? errs.filter(e => bucketOf(e.d, v.gran) === v.at) : errs);
+/** The selected bucket as the page words it: "Mar 3", or "Week of Mar 3". */
+export const bucketLabel = (m: Model, v: View) => `${v.gran === "week" ? "Week of " : ""}${yearLabel(m, v.at!)}`;
 /** The row's project and source pass the view's filters. */
 export const inScope = (v: View, project: string, src: Source) => (!v.project || project === v.project) && (!v.source || src === v.source);
 const callIn = (v: View) => (c: CallRow) => inScope(v, c[1], c[4]);
@@ -174,20 +180,41 @@ export const prevSpan = (m: Model, v: View): [Day, Day] | null => {
   const s = +toDate(rangeStart(m, v));
   return [iso(new Date(s - v.range * DAY)), iso(new Date(s - DAY))];
 };
-/** A hash cat with no errors in the view closes, unless an example is linked. */
-export const settle = (m: Model, v: View): View => (v.cat && !v.focus && !countBy(filtered(m, v).errs)[v.cat] ? { ...v, cat: null } : v);
+/** A chart point can be selected unless it stands for a folded stretch without calls. The click, the keys and `settle` share this. */
+export const selectable = (p: ChartPt) => !p.to;
+/** A selected bucket that isn't a selectable point of the chart the view draws (another granularity, outside the range, before
+ *  the first call, inside a fold) clears, so the marker and the filtered lists can't disagree. A hash cat with no errors in the
+ *  view's bucket closes, unless an example is linked. */
+export function settle(m: Model, v: View): View {
+  const f = filtered(m, v);
+  if (v.at && !chartData(m, v, f, viewTypes(m, v, f)).pts.some(p => p.k === v.at && selectable(p))) v = { ...v, at: null };
+  return v.cat && !v.focus && !countBy(inBucket(v, f.errs))[v.cat] ? { ...v, cat: null } : v;
+}
 
 // ---------- briefing and vitals ----------
 export interface Summary {
   totalCalls: number; n: number; r: number | null; r0: number | null; r1: number | null; d: number | null; cmp: string;
-  why: string | null; top: string | undefined; vt: ViewTypes; nFix: number; withFix: number; inc: IncSummary;
+  why: string | null; top: string | undefined; vt: ViewTypes; nFix: number; withFix: number; inc: IncSummary; uncat: Uncat;
 }
 export function summary(m: Model, v: View, f: Filtered, fixes: Fixes): Summary {
   const totalCalls = sumCalls(v, f.calls), n = f.errs.length, r = rate(n, totalCalls), vt = viewTypes(m, v, f);
   const x = compare(m, v, f), r0 = x.why ? null : rate(x.a.e, x.a.c), r1 = x.why ? null : rate(x.b.e, x.b.c);
   const d = r0 && r1 != null ? (r1 - r0) / r0 * 100 : null;
   return { totalCalls, n, r, r0, r1, d, cmp: x.cmp, why: x.why, top: vt.top[0], vt, nFix: Object.keys(fixes).length,
-    withFix: Object.keys(vt.counts).filter(c => !fixes[c] && m.cats[c]?.snippet).length, inc: incSummary(m, f.errs) };
+    withFix: Object.keys(vt.counts).filter(c => !fixes[c] && m.cats[c]?.snippet).length, inc: incSummary(m, f.errs), uncat: uncategorized(f.errs) };
+}
+export interface Uncat { n: number; share: number; bySource: [Source, number, number][] }
+/** The catch-all types' errors: all of them, and per source (its catch-all count and share), so a growing catch-all shows.
+ *  bySource lists the sources with errors, by name. */
+export function uncategorized(errs: readonly Err[]): Uncat {
+  const all: Partial<Record<Source, number>> = {}, ca: Partial<Record<Source, number>> = {};
+  let n = 0;
+  for (const e of errs) {
+    all[e.src] = (all[e.src] || 0) + 1;
+    if (CATCH_ALL.has(e.c)) { n++; ca[e.src] = (ca[e.src] || 0) + 1; }
+  }
+  const bySource = (Object.keys(all) as Source[]).sort().map(s => [s, ca[s] || 0, (ca[s] || 0) / all[s]!] as [Source, number, number]);
+  return { n, share: errs.length ? n / errs.length : 0, bySource };
 }
 
 // ---------- incidents ----------
@@ -217,6 +244,13 @@ export const RECOVERED_NOTE = "Recovered means only that the agent's next call o
 export function dur(ms: number) {
   const s = Math.round(ms / 1000);
   return s < 60 ? `${s}s` : s < 3600 ? `${Math.round(s / 60)} min` : `${fmt(s / 3600, s < 36000 ? 1 : 0)} h`;
+}
+/** Time lost per error type: the sum of its incidents' spans, first failure start to last failure end. An incident counts whole
+ *  when at least one of its failures is in errs; the span is not clipped to the filtered failures. */
+export function timeLost(m: Model, errs: readonly Err[]): Record<string, number> {
+  const by: Record<string, number> = {};
+  for (const g of incidentsOf(m, errs)) by[g.errs[0]!.c] = (by[g.errs[0]!.c] || 0) + incSpan(g);
+  return by;
 }
 export interface IncSummary { n: number; bad: number; pct: number; groups: Group[] }
 /** "1,078 errors in 326 incidents, 3% didn't recover" for a set of errors. */
@@ -258,7 +292,7 @@ export const pointWhen = (v: View, p: ChartPt) =>
   p.to ? `${label(p.k, true)} – ${v.gran === "week" ? "week of " : ""}${label(p.to, true)}` : `${v.gran === "week" ? "Week of " : ""}${label(p.k, true)}`;
 /** What the keyboard reading of the chart announces for a point. */
 export function pointText(m: Model, v: View, p: ChartPt, vt: ViewTypes): string {
-  const when = pointWhen(v, p), selN = (v.cat && p.byAll[v.cat]) || 0;
+  const when = pointWhen(v, p) + (p.k === v.at && !p.to ? " (selected)" : ""), selN = (v.cat && p.byAll[v.cat]) || 0;
   if (!p.c) return `${when}: no activity`;
   return `${when}: ${fmt(p.r, 2)}% rate, ${fmt(p.e)} errors of ${fmt(p.c)} calls. ` + pointRows(m, v, p, vt).map(([l, n]) => `${l} ${fmt(n)}`).join(", ")
     + (v.cat && selN ? `. Selected ${m.cats[v.cat]!.label}: ${fmt(selN)}` : "");
@@ -276,26 +310,29 @@ export function linePath(vals: readonly (number | null)[], x: (i: number) => num
 }
 
 // ---------- category table ----------
-export interface TypeRow { cid: string; n: number; share: number; color: string; pts: Pt[]; delta: Delta }
+/** lost: the type's time lost in ms (see timeLost). */
+export interface TypeRow { cid: string; n: number; lost: number; share: number; color: string; pts: Pt[]; delta: Delta }
 export function typeRows(m: Model, v: View, f: Filtered): TypeRow[] {
-  const counts = countBy(f.errs), total = f.errs.length || 1, vt = viewTypes(m, v, f), keys = buckets(m, f.from, v.gran), x = compare(m, v, f);
+  const errs = inBucket(v, f.errs), counts = countBy(errs), total = errs.length || 1, vt = viewTypes(m, v, f), keys = buckets(m, f.from, v.gran), x = compare(m, v, f), lost = timeLost(m, errs);
   return Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([cid, n]) =>
-    ({ cid, n, share: n / total, color: typeColor(cid, vt), pts: series(v, f.errs, f.calls, keys, cid), delta: change(x, cid, 5) }));
+    ({ cid, n, lost: lost[cid] || 0, share: n / total, color: typeColor(cid, vt), pts: series(v, f.errs, f.calls, keys, cid), delta: change(x, cid, 5) }));
 }
 /** The table's empty row. */
 export function emptyTypes(m: Model, v: View, f: Filtered): string {
+  if (v.at) return `No errors in this ${v.gran}.`;
   const none = v.project && !m.data.calls.some(c => inScope(v, c[1], c[4])) && !m.errors.some(e => inScope(v, e.p, e.src));
   return none ? `No tool calls recorded for ${v.project}.` : sumCalls(v, f.calls) ? "No errors in this range 🎉" : "No tool calls in this range.";
 }
 
 // ---------- detail ----------
 export interface Rising { c: string; e1: number; e2: number; r1: number; r2: number; d: number }
-/** Where to start: the biggest open types with a ready-made fix, and the types rising fastest: up over 10% in the change the
+/** Where to start: the open types with a ready-made fix that lost the most time (error count breaks a tie), and the types rising fastest: up over 10% in the change the
  *  table shows, with enough recent errors to mean it, the biggest gain in error rate first (a type from 0 to 9 errors can't
  *  outrank one from 1 to 128), Infinity when the side before had none of its errors. why: the reason nothing can rise, or null. */
 export function whereToStart(m: Model, v: View, f: Filtered, fixes: Fixes) {
-  const counts = countBy(f.errs), x = compare(m, v, f);
-  const open = Object.entries(counts).filter(([c]) => !fixes[c] && m.cats[c]?.snippet).sort((a, b) => b[1] - a[1]).slice(0, 4);
+  const counts = countBy(f.errs), x = compare(m, v, f), lost = timeLost(m, f.errs);
+  const open = Object.entries(counts).filter(([c]) => !fixes[c] && m.cats[c]?.snippet).map(([c, n]) => ({ c, n, lost: lost[c] || 0 }))
+    .sort((a, b) => b.lost - a.lost || b.n - a.n).slice(0, 4);
   const rising: Rising[] = x.why ? [] : Object.keys(x.b.by).map(c => {
     const e1 = x.a.by[c] || 0, e2 = x.b.by[c]!, r1 = e1 / x.a.c * 100, r2 = e2 / x.b.c * 100;
     return { c, e1, e2, r1, r2, d: r1 ? (r2 - r1) / r1 * 100 : Infinity };
@@ -337,16 +374,16 @@ export const topTools = (base: readonly Err[]) =>
 export const exHit = (q: string) => { const l = q.toLowerCase(); return (e: Err) => !l || (e.i + e.e + e.r + e.p + e.t).toLowerCase().includes(l); };
 export interface ExList { flat: boolean; items: Err[] | Group[]; count: string }
 /** The detail's list for a search: errors newest first, or incidents with a matching failure; the linked one first. */
-export function exList(base: readonly Err[], groups: readonly Group[], flat: boolean, q: string, focused: Err | undefined): ExList {
+export function exList(base: readonly Err[], groups: readonly Group[], flat: boolean, q: string, focused: Err | undefined, scope = "range"): ExList {
   const hit = exHit(q);
   if (flat) {
     const ex = base.filter(hit);
     if (focused) { const i = ex.indexOf(focused); if (i > 0) { ex.splice(i, 1); ex.unshift(focused); } }
-    return { flat, items: ex, count: q ? `${fmt(ex.length)} of ${fmt(base.length)} match` : `${fmt(base.length)} in range, newest first` };
+    return { flat, items: ex, count: q ? `${fmt(ex.length)} of ${fmt(base.length)} match` : `${fmt(base.length)} in ${scope}, newest first` };
   }
   const ex = groups.filter(g => g.errs.some(hit)), fi = focused?.n;
   if (fi != null) { const i = ex.findIndex(g => g.i === fi); if (i > 0) ex.unshift(...ex.splice(i, 1)); }
-  return { flat, items: ex, count: q ? `${fmt(ex.length)} of ${fmt(groups.length)} match` : `${fmt(groups.length)} in range, most attempts first` };
+  return { flat, items: ex, count: q ? `${fmt(ex.length)} of ${fmt(groups.length)} match` : `${fmt(groups.length)} in ${scope}, most attempts first` };
 }
 /** Usage shows the session's own project; only an Errors project or source filter carries over. */
 export const sessionHref = (v: View, s: string) =>

@@ -20,6 +20,7 @@ where the new code does it.
 - [x] L959–970: the picker lists every project with errors or tool calls, busiest first, as "name — N errors (all time)", plus the selected project even with no data. Port: `makeModel().projects`, `ErrorsPage` `projects`.
 - [x] L326–337: the hash holds the view: `project`, `range` (always written), `sub=0` (no subagents), `noise=0` (noise hidden), `gran=week`, then `ex` (linked example) or else `cat` (open type), in that order. Port: `view.ts` `viewPatch`, `viewHash`.
 - [x] L339–349: reading the hash: any view key makes the hash the whole view (missing keys take defaults); a bare `#ex=` link means all time; `#ex` opens that example's type; an unknown `cat` or `range` falls back (no type, 30 days). Port: `view.ts` `readView`.
+- [x] Added since: a click on a chart bucket (Enter or Space on the focused chart's current point) selects it, `at=<bucket key>` in the hash, pushed to history and left out of `claude-errors-view`. The type table (Time lost too) and the open type's errors, counts, time lost and lists narrow to it; the vitals, chart, sparklines and Change stay range-wide. A chip by the table heading clears it. It clears when it is no longer a selectable chart point (`settle`: another granularity, outside the chart's span, folded). Port: `RateChart` `toggle`, `TypeTable`, `model.ts` `inBucket`, `settle`.
 - [x] L320–321, L997: `claude-errors-view` (`{project, range, gran, sub, noise, cat}`) is written on every view change and fills an empty hash on load. Port: `ErrorsPage` effect, `readView`.
 - [x] L351–354, L1030–1034: filter, range, granularity and type changes push a history entry; Back and Forward retrace them; mark/undo fix and mode changes replace. Port: `update(patch, push)` over `setHash`.
 - [x] L1045–1047: Back, Forward and hash links re-read the hash, clear the example search, and scroll a linked example into view. Port: `ErrorsPage` popstate/hashchange listener + layout effect.
@@ -53,7 +54,7 @@ where the new code does it.
 
 ## Error types table
 
-- [x] L677–700: one row per type by count: swatch in its chart color, label button (aria-expanded, aria-controls `detail`), "✓ Fix applied <date>" chip, count, share bar with a tick under 3%, rate trend sparkline, half-on-half change (arrow past ±5%, "New", "–" with a title when a half has no calls). Port: `TypeTable`, `model.ts` `typeRows`, `change`. Changed since: Change uses the summary's comparison, shows counts under 5 errors a side and no "New".
+- [x] L677–700: one row per type by count: swatch in its chart color, label button (aria-expanded, aria-controls `detail`), "✓ Fix applied <date>" chip, count, share bar with a tick under 3%, rate trend sparkline, half-on-half change (arrow past ±5%, "New", "–" with a title when a half has no calls). Port: `TypeTable`, `model.ts` `typeRows`, `change`. Changed since: a Time lost column (the sum of the type's incident spans, "–" with none); Change uses the summary's comparison, shows counts under 5 errors a side and no "New".
 - [x] L696: empty states: "No tool calls recorded for <project>.", "No errors in this range 🎉", "No tool calls in this range.". Port: `model.ts` `emptyTypes`.
 - [x] L697–700, L130: a click anywhere on a row (or Enter/Space on its button) opens the type, selected row tinted; clicking the open type closes it; opening moves focus to the detail title. Port: `TypeTable`, `pick`.
 - [x] L123: Share and Rate trend columns hide on phones. Port: `errors.css`.
@@ -61,7 +62,7 @@ where the new code does it.
 
 ## Detail: where to start
 
-- [x] L720–740: with no type open: "Where to start" (top 4 open types with a ready-made fix and no marker) and "Rising fastest" (top 4 types up more than 10% half on half with at least 5 recent errors, "New" for types from zero, "· noise", "Check the fix" when fixed); each opens its type and focuses it; the ingest/markers footnote. Port: `Detail` `WhereToStart`, `model.ts` `whereToStart`. Changed since: the summary's comparison, biggest rate gain first, counts under 5 errors.
+- [x] L720–740: with no type open: "Where to start" (top 4 open types with a ready-made fix and no marker, by time lost then count, each with its time lost) and "Rising fastest" (top 4 types up more than 10% half on half with at least 5 recent errors, "New" for types from zero, "· noise", "Check the fix" when fixed); each opens its type and focuses it; the ingest/markers footnote. Port: `Detail` `WhereToStart`, `model.ts` `whereToStart`. Changed since: the summary's comparison, biggest rate gain first, counts under 5 errors.
 
 ## Detail: a type
 
@@ -116,6 +117,7 @@ Deliberate, small, and noted here so a reviewer can undo any of them:
 - The session link says "Open session … in Activity", and a plain click switches pages without a reload (modified clicks open a tab as before).
 - "Couldn't load full text · Retry" stays until retried; the old page reset it to "Show full" on its next render.
 - The table's rows mount again only when the filters change, so share bars grow in then, not on every click as the old innerHTML redraw did.
+- The summary's "Uncategorized" line (the share of errors in the catch-all types Other, Other non-zero exit and MCP tool error, split by agent when the view shows several) is new; the old page had no such line. Port: `Summary`, `model.ts` `uncategorized`.
 - Before the data arrives only the header and the load card show; the old page showed empty card shells.
 - New data after an ingest (the nav's status poll clears the API cache) re-renders the page in place; the old page loaded once.
 - Keys the Errors page doesn't own (`auto`, set by Activity and Cost) stay in the hash, so they carry on to the other pages.

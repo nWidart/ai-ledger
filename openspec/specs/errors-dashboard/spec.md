@@ -133,3 +133,68 @@ A failed import SHALL leave the key in place and the browser's markers shown, an
 #### Scenario: Undo after a failed import
 - **WHEN** the import failed and the user undoes a marker from the browser's copy
 - **THEN** the store drops it, the key no longer holds it, and the next load does not bring it back
+
+### Requirement: Narrow the lists to a chart bucket
+The Errors page SHALL let the user select one day or week of the errors chart by click, or by Enter or Space on the chart's current point, and clear it the same way. A folded stretch without tool calls SHALL NOT be selectable. A selected bucket SHALL narrow the type table and the open type's detail to its errors, while the summary, chart, rate trend and change stay range-wide and the table says so.
+
+#### Scenario: Select a spike
+- **WHEN** the user clicks the day's bar on the chart
+- **THEN** the type table counts only that day's errors, a chip names the day, and the change column is unchanged
+
+#### Scenario: Time lost in a bucket
+- **WHEN** a day is selected and an incident has one of its failures on that day and the rest on another
+- **THEN** the type table's Time lost and the detail's time-lost sentence count that incident whole, and Where to start and the summary stay range-wide
+
+#### Scenario: Keyboard
+- **WHEN** the user reads a point with the arrow keys and presses Enter, then Space
+- **THEN** the point is selected, then cleared
+
+#### Scenario: Folded stretch
+- **WHEN** the current point is a folded stretch without tool calls and the user presses Enter
+- **THEN** nothing is selected and the page says it cannot be
+
+### Requirement: Keep the selected bucket in the view
+The selected bucket SHALL be part of the URL view and push a history entry, and SHALL NOT be saved with the last view. The chart SHALL mark it beyond color and name it for assistive tech, and a chip by the type table SHALL name it and clear it. The selection SHALL clear when it is no longer a selectable point of the chart the view draws. An open type with no errors in the bucket SHALL close unless an example is linked.
+
+#### Scenario: Granularity changes
+- **WHEN** a day is selected and the user switches to weeks
+- **THEN** the selection clears
+
+#### Scenario: Filter moves the chart's start
+- **WHEN** a day is selected and the user picks a project whose first tool call is later than that day
+- **THEN** the selection clears, so the marker and the lists never disagree
+
+#### Scenario: Linked example outside the bucket
+- **WHEN** a link opens an example that falls outside the selected bucket
+- **THEN** the example shows under "Outside current filters", and Clear filters also clears the bucket
+
+### Requirement: Show the uncategorized share
+The Errors summary SHALL show the share of the view's errors in the catch-all types (Other, Other non-zero exit and MCP tool error), which are the errors no specific rule matched, with a title that says so. When the view is not filtered to one source and more than one source has errors, the line SHALL split the share by source. It SHALL show nothing when the view has no errors.
+
+#### Scenario: Share shows
+- **WHEN** the view has errors, and 12 of 100 of them are of catch-all types
+- **THEN** the summary shows "Uncategorized: 12% of errors", titled with the catch-all types and what they mean
+
+#### Scenario: Split by source
+- **WHEN** the view has no source filter and both Claude Code and Codex have errors in it
+- **THEN** the line adds each source's share in parentheses, such as "(Claude Code 9%, Codex 31%)"
+- **AND** a view filtered to one source shows the share alone
+
+### Requirement: State each type's time lost
+The Errors page SHALL state each error type's time lost: the sum, over the view's incidents of that type, of each incident's span, from its first failure's start to its last failure's end. An incident SHALL count whole when at least one of its failures is in the view. A type whose incidents have no measurable span SHALL show no time. The page SHALL rank the open types that have a ready-made fix by time lost, most first, then by error count, and show each one's time lost.
+
+#### Scenario: Fewer errors, more time lost
+- **WHEN** one open type has 3 errors in two incidents of 10 minutes each, and another has 4 errors in one incident of 1 minute
+- **THEN** Where to start lists the first type above the second, and the type table shows 20 min and 1 min
+
+#### Scenario: Equal time lost
+- **WHEN** two open types lost the same time
+- **THEN** the one with more errors is listed first
+
+#### Scenario: Incident partly outside the view
+- **WHEN** an incident's first failure is before the range and its last failure is inside it
+- **THEN** the incident's whole span counts toward its type's time lost
+
+#### Scenario: No measurable span
+- **WHEN** a type's only incident is one failure with no recorded duration
+- **THEN** its time lost reads "–"

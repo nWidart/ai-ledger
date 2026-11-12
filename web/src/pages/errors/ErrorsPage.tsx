@@ -55,6 +55,8 @@ export function ErrorsPage() {
   const update = useCallback((patch: Partial<View>, push = false) => {
     const cur = viewRef.current;
     if (patch.cat !== undefined && patch.cat !== cur.cat) setQ("");
+    // A bucket key belongs to its granularity: the other one starts with none selected.
+    if (patch.gran && patch.gran !== cur.gran && patch.at === undefined) patch = { ...patch, at: null };
     setHash(viewPatch({ ...cur, ...patch }), { push });
   }, []);
   const after = useCallback((fn: () => void) => { pending.current.push(fn); bump(); }, []);
@@ -79,7 +81,7 @@ export function ErrorsPage() {
   const setMode = useCallback((x: Mode) => { setModeS(x); store.set(MODE_KEY, x); }, []);
 
   // The list puts the linked example first; a click on an example moves the link, not the list, until the view next changes.
-  const fullKey = JSON.stringify([!!m, view.project, view.source, view.range, view.gran, view.sub, view.noise, view.cat, mode, fixes]);
+  const fullKey = JSON.stringify([!!m, view.project, view.source, view.range, view.gran, view.sub, view.noise, view.cat, view.at, mode, fixes]);
   const pin = useRef({ key: "", focus: null as string | null });
   if (pin.current.key !== fullKey || (pin.current.focus !== view.focus && !selecting.current)) {
     pin.current = { key: fullKey, focus: view.focus };

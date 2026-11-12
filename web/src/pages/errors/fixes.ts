@@ -35,11 +35,14 @@ export function useFixes(data: ErrorsPayload | undefined, say: (s: string) => vo
   const [error, setError] = useState<FixError | null>(null);
   const queue = useRef<Promise<unknown>>(Promise.resolve()), moved = useRef(false), seed = useRef(data?.fixes);
   useEffect(() => { seed.current = data?.fixes; }, [data]);
-  const fixes = useMemo(() => {
+  const shown = useMemo(() => {
     const f: Fixes = { ...st.local, ...(st.server ?? data?.fixes ?? {}) }; // the store wins on a type both have
     for (const o of st.ops) if (o.cat != null) { if (o.day) f[o.cat] = o.day; else delete f[o.cat]; }
     return f;
   }, [st, data]);
+  // Same markers, same object: the chart resets its hover and status when `fixes` changes, so a settled write must not do it.
+  const key = JSON.stringify(Object.entries(shown).sort());
+  const fixes = useMemo(() => shown, [key]); // eslint-disable-line react-hooks/exhaustive-deps
   const saving = useMemo(() => new Set(st.ops.flatMap(o => (o.cat != null ? [o.cat] : Object.keys(o.fixes)))), [st.ops]);
 
   /** Queue a write. It resolves to the store's answer once the page shows it; it rejects after the page shows what the store holds. */

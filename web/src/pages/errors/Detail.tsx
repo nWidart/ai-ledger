@@ -6,7 +6,7 @@ import { useErrors } from "./context";
 import { Example, Examples, Incident } from "./Examples";
 import { Spark } from "./Spark";
 import {
-  beforeAfter, bucketOf, buckets, byProject, byWeight, dur, exList, incSpan, incSummary, NOISE, RECOVERED_NOTE, series,
+  beforeAfter, bucketOf, buckets, byProject, byWeight, dur, exList, incSpan, incSummary, inBucket, NOISE, RECOVERED_NOTE, series,
   label, MIN_PCT_ERRORS, topTools, typeColor, whereToStart, yearLabel, type Err, type Group,
 } from "./model";
 
@@ -33,8 +33,8 @@ function WhereToStart() {
   return <>
     <h2>Where to start</h2>
     {!f.errs.length ? <div className="empty">No errors in this range, nothing to start on.</div> : <>
-      <p className="why">Biggest open error types that have a ready-made fix. Pick one, apply the fix, then mark it applied to watch its rate drop.</p>
-      {open.length ? open.map(([c, n]) => <Pick key={c} c={c} top={<span className="muted">{fmt(n)} errors</span>} sub={m.cats[c]!.fix} act="Open fix and examples" />)
+      <p className="why">Open error types with a ready-made fix, the most time lost in retry loops first. Pick one, apply the fix, then mark it applied to watch its rate drop.</p>
+      {open.length ? open.map(({ c, n, lost }) => <Pick key={c} c={c} top={<span className="muted">{fmt(n)} errors{lost ? ` · ${dur(lost)} lost` : ""}</span>} sub={m.cats[c]!.fix} act="Open fix and examples" />)
         : <div className="empty">Nothing open with a known fix.</div>}
       <h3 className="subh">Rising fastest</h3>
       <p className="why" style={{ fontSize: 13, marginBottom: 4 }}>{`Error rate ${cmp}, as in the table's Change.`}</p>
@@ -51,13 +51,13 @@ function WhereToStart() {
 function TypeDetail({ cat }: { cat: string }) {
   const x = useErrors(), { m, v, f, fixes, mode, q } = x, c = m.cats[cat]!, fixDay = fixes[cat], busy = x.saving.has(cat);
   const head = useRef<HTMLDivElement>(null), bar = useRef<HTMLDivElement>(null);
-  const base = f.errs.filter(e => e.c === cat).reverse(), is = incSummary(m, base), groups = is.groups.sort(byWeight), worst = groups[0];
+  const base = inBucket(v, f.errs).filter(e => e.c === cat).reverse(), is = incSummary(m, base), groups = is.groups.sort(byWeight), worst = groups[0], lost = groups.reduce((s, g) => s + incSpan(g), 0);
   // A linked example shows first; outside the current filters it gets its own note instead of joining the list.
   const focused = x.pinned, outside = !!focused && !base.includes(focused);
   const tools = topTools(base), flat = mode === "flat", PAGE = flat ? 30 : 20;
-  const list = exList(base, groups, flat, q, outside ? undefined : focused);
+  const list = exList(base, groups, flat, q, outside ? undefined : focused, v.at ? v.gran : "range");
   // List, count and Show more all come from the current search; any other change starts the list over.
-  const reset = JSON.stringify([cat, v.project, v.source, v.range, v.sub, v.noise, v.gran, mode, q, fixes]);
+  const reset = JSON.stringify([cat, v.project, v.source, v.range, v.sub, v.noise, v.gran, v.at, mode, q, fixes]);
   const [more, setMore] = useState({ reset, n: PAGE }), shown = more.reset === reset ? more.n : PAGE;
 
   // The example bar sticks below the header, and examples scroll in below both.
@@ -93,7 +93,7 @@ function TypeDetail({ cat }: { cat: string }) {
     x.after(() => document.getElementById("fix")?.focus());
   };
   const clearFilters = () => {
-    x.update({ project: "", range: 0, sub: true, noise: false }, true);
+    x.update({ project: "", range: 0, sub: true, noise: false, at: null }, true);
     x.after(() => document.getElementById("ex-" + focused!.id)?.focus());
   };
   const showMore = () => {
@@ -117,7 +117,7 @@ function TypeDetail({ cat }: { cat: string }) {
     </div>
     <p className="why">{c.why}{tools.length ? <> <span className="muted">Mostly {tools.map(t => t[0]).join(", ")}.</span></> : null}</p>
     {base.length ? <p className="istat" title={`An incident: one agent retrying one tool with this error, each failure within ${m.gap} minutes of the last and at most ${m.maxOk} successful calls of that tool apart. Recovered: the agent's next call of that tool, after the last failure, succeeded.`}>
-      <b>{fmt(base.length)}</b> error{base.length === 1 ? "" : "s"} in <b>{fmt(is.n)}</b> incident{is.n === 1 ? "" : "s"}, <b>{fmt(is.pct, 0)}%</b> didn't recover <span className="muted">({RECOVERED_NOTE.replace(/\.$/, "")})</span>.
+      <b>{fmt(base.length)}</b> error{base.length === 1 ? "" : "s"} in <b>{fmt(is.n)}</b> incident{is.n === 1 ? "" : "s"}, <b>{fmt(is.pct, 0)}%</b> didn't recover <span className="muted">({RECOVERED_NOTE.replace(/\.$/, "")})</span>.{lost ? <> <b>{dur(lost)}</b> lost in retry loops.</> : null}
       {worst && worst.errs.length > 1 ? ` Largest: ${fmt(worst.errs.length)} attempts over ${dur(incSpan(worst))}.` : ""}</p> : null}
     <div className="fixbox"><div className="t">Potential fix</div><div>{c.fix}</div>
       {c.snippet ? <><pre className="snip" id="snip">{c.snippet}</pre><div className="row" style={{ marginTop: 8 }}><button type="button" id="copy" onClick={copy}>{copied === "ok" ? "Copied ✓" : "Copy instruction line"}</button>
@@ -136,7 +136,7 @@ function TypeDetail({ cat }: { cat: string }) {
     <ByProject base={base} />
     {outside && <div className="outnote" id="outside">
       <div className="row" style={{ justifyContent: "space-between" }}><b>Outside current filters</b><button type="button" id="clearF" onClick={clearFilters}>Clear filters</button></div>
-      <div className="muted" style={{ fontSize: 12 }}>This linked example doesn't match the project, range or toggles above.</div>
+      <div className="muted" style={{ fontSize: 12 }}>This linked example doesn't match the project, range, bucket or toggles above.</div>
       <Example e={focused!} />
     </div>}
     <div className="exbar" ref={bar}>
@@ -147,7 +147,7 @@ function TypeDetail({ cat }: { cat: string }) {
       </div>
       <input type="search" id="q" placeholder="Filter by command, error or project…" value={q} style={{ width: "100%", margin: "8px 0" }}
         aria-label={`Filter ${flat ? "errors" : "incidents"}`}
-        onChange={e => { const nq = e.target.value; x.setQ(nq); x.say(exList(base, groups, flat, nq, outside ? undefined : focused).count); }} />
+        onChange={e => { const nq = e.target.value; x.setQ(nq); x.say(exList(base, groups, flat, nq, outside ? undefined : focused, v.at ? v.gran : "range").count); }} />
     </div>
     <div id="exList">
       {list.flat ? <Examples list={(list.items as Err[]).slice(0, shown)} />
