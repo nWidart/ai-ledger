@@ -84,7 +84,7 @@ For a calibrated limit, the system SHALL estimate the percent used at any time i
 - **THEN** that window shows a curve estimated from that week's counted usage
 
 ### Requirement: Forecast each open window
-For each open window, the system SHALL forecast the percent used until the window resets. The forecast SHALL follow the user's activity profile by hour of day, pooled across providers. The forecast SHALL give the time it reaches 100%, or the percent at reset if it does not, with low and high bounds. A step of the forecast SHALL add the part of a day's use that falls in it, counted hour by hour across every local hour the step crosses. The time it reaches 100% SHALL be found inside the step where the use crosses 100%, and SHALL be strictly before the reset: reaching 100% exactly at the reset is no hit. A percent at reset below 100% SHALL NOT show as 100%.
+For each open window, the system SHALL forecast the percent used until the window resets. The forecast SHALL follow the user's activity profile by hour of day, pooled across providers. The forecast SHALL give the time it reaches 100%, or the percent at reset if it does not, with low and high bounds. A step of the forecast SHALL add the part of a day's use that falls in it, counted hour by hour across every local hour the step crosses.
 
 #### Scenario: Window runs out first
 - **WHEN** a weekly window is at 57% two days before reset, and the forecast reaches 100% in 30 hours
@@ -97,6 +97,9 @@ For each open window, the system SHALL forecast the percent used until the windo
 #### Scenario: Night hours
 - **WHEN** the user's profile shows almost no activity between 01:00 and 05:00
 - **THEN** the forecast rises by almost nothing in those hours
+
+### Requirement: Place the time a forecast reaches 100%
+The time it reaches 100% SHALL be found inside the step where the use crosses 100%, and SHALL be strictly before the reset: reaching 100% exactly at the reset is no hit. A percent at reset below 100% SHALL NOT show as 100%.
 
 #### Scenario: Reaching 100% exactly at the reset
 - **WHEN** a window is at 99% with one hour left and the forecast adds 1 point in that hour
@@ -143,7 +146,18 @@ Each provider SHALL supply only its snapshots and the scope its usage maps to. C
 - **THEN** the page shows it with its window length and the provider's own label
 
 ### Requirement: Forecast a second scenario from the last 24 hours
-Each forecast SHALL carry a second scenario, "if the last 24 hours continue", beside the usual-pace forecast. Its pace SHALL be the provider's counted use over the last 24 hours, for the models the limit's scope covers, in dollars a day; a part of a day since the provider's first counted use SHALL count at its day rate. The scenario SHALL follow the same time steps and hour shape as the forecast, start at the same percent now and stop at 100%, under the same rules for the time it reaches 100% as the usual forecast. The scenario SHALL give its pace in points a day, the time it reaches 100% when that is before the reset, and the percent at reset when it is not. The scenario SHALL NOT change the usual forecast, its bounds, the time it reaches 100%, the binding window or the suggestion. A provider with no counted use has no forecast, so no scenario.
+Each forecast SHALL carry a second scenario, "if the last 24 hours continue", beside the usual-pace forecast. Its pace SHALL be the provider's counted use over the last 24 hours, for the models the limit's scope covers, in dollars a day; a part of a day since the provider's first counted use SHALL count at its day rate. A provider with no counted use has no forecast, so no scenario.
+
+#### Scenario: A model-scoped window
+- **WHEN** a window's limit covers one model
+- **THEN** the scenario's pace counts only that model's use over the last 24 hours
+
+#### Scenario: No counted use
+- **WHEN** a provider has no counted use
+- **THEN** it has no forecast, so no scenario
+
+### Requirement: Shape the last-24-hours scenario like the forecast
+The scenario SHALL follow the same time steps and hour shape as the forecast, start at the same percent now and stop at 100%, under the same rules for the time it reaches 100% as the usual forecast. It SHALL give its pace in points a day, the time it reaches 100% when that is before the reset, and the percent at reset when it is not.
 
 #### Scenario: A hot last day
 - **WHEN** the last 24 hours used 30 points and the window is at 50% two days before its reset
@@ -153,88 +167,143 @@ Each forecast SHALL carry a second scenario, "if the last 24 hours continue", be
 - **WHEN** nothing was used in the last 24 hours
 - **THEN** the scenario is a flat line at the current percent, its percent at reset is the current percent and it has no time of reaching 100%
 
-#### Scenario: A model-scoped window
-- **WHEN** a window's limit covers one model
-- **THEN** the scenario's pace counts only that model's use over the last 24 hours
+### Requirement: Keep the last-24-hours scenario from changing the usual forecast
+The scenario SHALL NOT change the usual forecast, its bounds, the time it reaches 100%, the binding window or the suggestion.
 
 #### Scenario: The usual forecast stays
 - **WHEN** the scenario is added to a forecast
 - **THEN** the middle, low and high curves, the time the forecast reaches 100% and the percent at reset are the same as without it
 
 ### Requirement: Read the usage extras of the newest Claude poll
-Each provider MAY register a reader of what a stored poll says beyond the limits' percents, so that another provider adds its own without changing the rest. The Claude reader SHALL give, from one stored poll: each scoped limit's share of the weekly allowance, and the week's use so far by surface. A share SHALL name the limit it describes as its snapshots do (kind and scope) with that limit's reset time, and give the percent of the whole weekly allowance the limit may use and the percent of the whole weekly allowance used through it. The surfaces SHALL be the response's rows in its order, each with a key, a label (the key when the response gives none) and the percent of the week's use, with the time the response gives for the reading and the reset time of the unscoped weekly limit they describe. The reader SHALL NOT fail on any response: a key that is missing, null or of another type, a limit index that names no limit (or one whose kind or scope is not text), a percent that is not a number or is below 0 or above 100, a row with no string key, and a time that does not read (one an offset carries past the range of UTC times included) SHALL each leave that entry or time out, and a response with nothing readable gives no extras. A time that does not read is no time, and costs only what needs it: an unreadable reading time or window start keeps the surfaces' rows, an unreadable reset of a scoped limit drops only that limit's share, and an unreadable reset of the unscoped weekly limit drops only the surfaces. The reader SHALL NOT change which snapshots the same response gives: its stricter rules apply to the extras only. `payload()` SHALL read only the provider's newest stored poll, and SHALL NOT store anything new, change a snapshot, the calibration or the forecast, or need a rebuild.
-
-Each open window SHALL carry `weekly_share` (the used and allowance percents) when the newest poll names its limit in a share, and `surfaces` (the reading time and the rows) when it is the provider's unscoped weekly window. A window SHALL carry them only when the newest poll describes the window open now: the poll's reset time for the limit is within the usual reset drift of the window's reset. They SHALL be empty for an estimated window, for a provider with no reader (Codex) and when there is no stored poll. The payload SHALL carry the numbers and labels only, never the rest of the poll. Whatever a provider's reader raises, `payload()` SHALL still load, with no extras for that provider.
-
-#### Scenario: A scoped limit's share
-- **WHEN** the newest poll's scoped Fable limit resets with the open Fable window and its share is 21% used of a 50% allowance
-- **THEN** the open Fable window has `weekly_share` of used 21 and allowance 50, and no other window has a share
-
-#### Scenario: The week's use by surface
-- **WHEN** the newest poll's breakdown is Claude Code 100, Chats 0, Cowork 0, Other 0 and its unscoped weekly limit resets with the open weekly window
-- **THEN** that window has those four rows in that order, and no scoped window has surfaces
-
-#### Scenario: A poll of an earlier window
-- **WHEN** the newest poll's limits reset before the open window's reset, or the open window is estimated after a reset with no newer poll
-- **THEN** no window has a share or surfaces
+Each provider MAY register a reader of what a stored poll says beyond the limits' percents, so that another provider adds its own without changing the rest. The Claude reader SHALL give, from one stored poll: each scoped limit's share of the weekly allowance, and the week's use so far by surface. `payload()` SHALL read only the provider's newest stored poll, and SHALL NOT store anything new, change a snapshot, the calibration or the forecast, or need a rebuild.
 
 #### Scenario: Only the newest poll counts
 - **WHEN** an older stored poll matches the open window and the newest one does not
 - **THEN** no window has a share or surfaces
 
-#### Scenario: Codex and no poll
-- **WHEN** a window is Codex's, or the provider has no stored poll
-- **THEN** its share and surfaces are empty
+### Requirement: Describe a scoped limit's share in the usage extras
+A share SHALL name the limit it describes as its snapshots do (kind and scope) with that limit's reset time, and give the percent of the whole weekly allowance the limit may use and the percent of the whole weekly allowance used through it.
 
-#### Scenario: A reader that fails
-- **WHEN** a provider's reader raises, or the stored poll is not JSON
-- **THEN** the Limits payload loads and no window has a share or surfaces
+#### Scenario: A share's fields
+- **WHEN** the newest poll's scoped Fable limit has 21% used of a 50% allowance
+- **THEN** its share names the limit by kind and scope with its reset time, and gives used 21 and allowance 50
+
+### Requirement: Describe the week's use by surface in the usage extras
+The surfaces SHALL be the response's rows in its order, each with a key, a label (the key when the response gives none) and the percent of the week's use, with the time the response gives for the reading and the reset time of the unscoped weekly limit they describe.
+
+#### Scenario: The week's use by surface
+- **WHEN** the newest poll's breakdown is Claude Code 100, Chats 0, Cowork 0, Other 0 and its unscoped weekly limit resets with the open weekly window
+- **THEN** that window has those four rows in that order, and no scoped window has surfaces
+
+### Requirement: Read the usage extras without failing on a response
+The reader SHALL NOT fail on any response: a key that is missing, null or of another type, a limit index that names no limit (or one whose kind or scope is not text), a percent that is not a number or is below 0 or above 100, and a row with no string key SHALL each leave that entry out, and a response with nothing readable gives no extras.
 
 #### Scenario: A response that does not read
 - **WHEN** a response lacks the keys, holds nulls, a limit index out of range or not a number, a percent out of range or not a number, or rows that are not a list
 - **THEN** reading it does not fail, and the entries that do not read are left out
 
+### Requirement: Leave out a time that does not read in the usage extras
+A time that does not read (one an offset carries past the range of UTC times included) SHALL leave that time out. It is no time, and costs only what needs it: an unreadable reading time or window start keeps the surfaces' rows, an unreadable reset of a scoped limit drops only that limit's share, and an unreadable reset of the unscoped weekly limit drops only the surfaces.
+
 #### Scenario: A time that overflows
 - **WHEN** the breakdown's reading time is `0001-01-01T00:00:00+01:00`
 - **THEN** the surfaces keep their rows with no reading time, and the shares are unchanged
+
+### Requirement: Keep the usage extras' stricter rules to the extras
+The reader SHALL NOT change which snapshots the same response gives: its stricter rules apply to the extras only.
 
 #### Scenario: A limit with a kind that is no text
 - **WHEN** a limit's kind is the number 7 and its percent and reset read
 - **THEN** it gives the snapshot it always gave, and no share or surfaces name it
 
+### Requirement: Carry the usage extras on the open windows
+Each open window SHALL carry `weekly_share` (the used and allowance percents) when the newest poll names its limit in a share, and `surfaces` (the reading time and the rows) when it is the provider's unscoped weekly window. A window SHALL carry them only when the newest poll describes the window open now: the poll's reset time for the limit is within the usual reset drift of the window's reset.
+
+#### Scenario: A scoped limit's share
+- **WHEN** the newest poll's scoped Fable limit resets with the open Fable window and its share is 21% used of a 50% allowance
+- **THEN** the open Fable window has `weekly_share` of used 21 and allowance 50, and no other window has a share
+
+#### Scenario: A poll of an earlier window
+- **WHEN** the newest poll's limits reset before the open window's reset, or the open window is estimated after a reset with no newer poll
+- **THEN** no window has a share or surfaces
+
+### Requirement: Leave the usage extras empty when there is nothing to read
+`weekly_share` and `surfaces` SHALL be empty for an estimated window, for a provider with no reader (Codex) and when there is no stored poll.
+
+#### Scenario: Codex and no poll
+- **WHEN** a window is Codex's, or the provider has no stored poll
+- **THEN** its share and surfaces are empty
+
+### Requirement: Keep the usage extras to numbers and labels and keep the payload loading
+The payload SHALL carry the numbers and labels only, never the rest of the poll. Whatever a provider's reader raises, `payload()` SHALL still load, with no extras for that provider.
+
+#### Scenario: A reader that fails
+- **WHEN** a provider's reader raises, or the stored poll is not JSON
+- **THEN** the Limits payload loads and no window has a share or surfaces
+
 ### Requirement: Serve one closed window's curve
-Each closed window in the history SHALL carry its identity (its limit id, scope, window length when known, and reset time) so that it can be asked for again, and the history SHALL NOT carry a curve. `GET /api/limits/window` with a provider, a limit id, a scope and the start of a window SHALL answer that closed window's history row, its series from its start to its close (the series an open window's card draws, ending at the close) and the provider's plan changes inside the window. It SHALL list the limit's windows the way the Limits payload does (measured windows, closed, calibrated, and the estimated windows before the first snapshot back to the provider's first counted use), so every closed window the payload lists at any range is one it can find, and SHALL pick the limit's window (closed or open) whose start is nearest the start asked for, serving it only when it is closed and its start is within the usual reset drift of the start asked for, so the start of an open window is never answered with a closed window that began a minute before it. The series of a window with readings SHALL end at its final percent, its last reading: after that reading it SHALL be flat at that percent, not an estimate from use counted since, while the estimates between readings stay; a window rebuilt from counted usage, with no readings, SHALL keep its estimates. It SHALL answer 400 for an unknown provider or a start that is not a time, and 404 when the limit has no such closed window, always for the open window. It SHALL NOT change a snapshot, the calibration or the forecast, or store anything.
+Each closed window in the history SHALL carry its identity (its limit id, scope, window length when known, and reset time) so that it can be asked for again, and the history SHALL NOT carry a curve. `GET /api/limits/window` with a provider, a limit id, a scope and the start of a window SHALL answer that closed window's history row, its series from its start to its close (the series an open window's card draws, ending at the close) and the provider's plan changes inside the window.
 
 #### Scenario: A measured window
 - **WHEN** a closed Claude weekly window was read at 40%, 50% and 70%
 - **THEN** its curve runs from its start to its close, holds those three readings as measured points and agrees with the points the open card drew before it closed
 
-#### Scenario: An estimated window
-- **WHEN** a Claude weekly window before the first snapshot was estimated at 5% from counted usage
-- **THEN** its curve runs from its start to its close with estimated points only, ending at about 5%
-
 #### Scenario: A window ended early
 - **WHEN** a Codex weekly window was ended at 22% by a plan change
 - **THEN** its curve ends at the plan change and the answer lists that plan change
 
-#### Scenario: Use counted after the last reading
-- **WHEN** a closed window's last reading was 70% and use worth another 20 points was counted after it
-- **THEN** its curve is flat at 70% after the reading and ends at 70%, as its row says
+### Requirement: List the windows a curve request can find
+The endpoint SHALL list the limit's windows the way the Limits payload does (measured windows, closed, calibrated, and the estimated windows before the first snapshot back to the provider's first counted use), so every closed window the payload lists at any range is one it can find.
 
-#### Scenario: Not served
-- **WHEN** the start asked for is the open window's, or no window of the limit starts there
-- **THEN** the answer is 404
+#### Scenario: An estimated window
+- **WHEN** a Claude weekly window before the first snapshot was estimated at 5% from counted usage
+- **THEN** its curve runs from its start to its close with estimated points only, ending at about 5%
+
+### Requirement: Pick the window a curve request names
+The endpoint SHALL pick the limit's window (closed or open) whose start is nearest the start asked for, serving it only when it is closed and its start is within the usual reset drift of the start asked for, so the start of an open window is never answered with a closed window that began a minute before it.
 
 #### Scenario: An open window starting just after a closed one
 - **WHEN** a window of unknown length opens a minute after another began, and the start asked for is the open one's
 - **THEN** the answer is 404, not the closed window
 
+### Requirement: End a closed window's curve at its final percent
+The series of a window with readings SHALL end at its final percent, its last reading: after that reading it SHALL be flat at that percent, not an estimate from use counted since, while the estimates between readings stay. A window rebuilt from counted usage, with no readings, SHALL keep its estimates.
+
+#### Scenario: Use counted after the last reading
+- **WHEN** a closed window's last reading was 70% and use worth another 20 points was counted after it
+- **THEN** its curve is flat at 70% after the reading and ends at 70%, as its row says
+
+### Requirement: Answer a curve request that names no closed window
+The endpoint SHALL answer 400 for an unknown provider or a start that is not a time, and 404 when the limit has no such closed window, always for the open window.
+
+#### Scenario: Not served
+- **WHEN** the start asked for is the open window's, or no window of the limit starts there
+- **THEN** the answer is 404
+
 #### Scenario: Bad input
 - **WHEN** the provider is unknown or the start is not a time
 - **THEN** the answer is 400
 
+### Requirement: Keep the curve request read-only
+The endpoint SHALL NOT change a snapshot, the calibration or the forecast, or store anything.
+
+#### Scenario: A curve request
+- **WHEN** a closed window's curve is requested
+- **THEN** no snapshot, calibration or forecast changes and nothing is stored
+
 ### Requirement: Define the limits alert
-The system SHALL give, from the open windows of the Limits payload, the one alert the navigation shows, or none. A window SHALL be in alert when it is at its limit, when its forecast reaches 100% before it resets, or when its percent used is 90 or more. A window with no percent and neither of the first two SHALL NOT be in alert. The alert SHALL be the worst state any window is in: `at_limit` first, then `runs_out`, then `high`. For `at_limit` it SHALL name the window that resets last, the choice the page makes for its binding window; for `runs_out`, the window forecast to reach 100% soonest; for `high`, the window with the highest percent used. It SHALL carry the window's provider, provider label, label and percent used, the time that matters (the reset for `at_limit` and `high`, the forecast time for `runs_out`), the window's reset, whether its percent is measured (the window's own `measured` flag, as the Limits payload gives it once the freshness of each provider's data has cleared it: false for an estimate, and for a provider whose last reading is too old to measure now), and how many open windows are in alert in any state, each counted once. With no window in alert it SHALL give none.
+The system SHALL give, from the open windows of the Limits payload, the one alert the navigation shows, or none. A window SHALL be in alert when it is at its limit, when its forecast reaches 100% before it resets, or when its percent used is 90 or more. A window with no percent and neither of the first two SHALL NOT be in alert. With no window in alert it SHALL give none.
+
+#### Scenario: The threshold
+- **WHEN** a window is at 90% and no other state applies
+- **THEN** it is in alert as `high`, and a window at 89.9% is not
+
+#### Scenario: Nothing in alert
+- **WHEN** no window is at its limit, forecast to run out or at 90% or more, or there are no open windows
+- **THEN** there is no alert
+
+### Requirement: Pick the window the limits alert names
+The alert SHALL be the worst state any window is in: `at_limit` first, then `runs_out`, then `high`. For `at_limit` it SHALL name the window that resets last, the choice the page makes for its binding window; for `runs_out`, the window forecast to reach 100% soonest; for `high`, the window with the highest percent used.
 
 #### Scenario: At its limit beats the rest
 - **WHEN** one window is at its limit, another is forecast to run out and a third is at 95%
@@ -244,18 +313,16 @@ The system SHALL give, from the open windows of the Limits payload, the one aler
 - **WHEN** no window is at its limit and two are forecast to reach 100% before they reset, at different times
 - **THEN** the alert is `runs_out` for the one that reaches it first, at that time
 
+### Requirement: Carry the details of the limits alert
+The alert SHALL carry the window's provider, provider label, label and percent used, the time that matters (the reset for `at_limit` and `high`, the forecast time for `runs_out`), the window's reset, and how many open windows are in alert in any state, each counted once.
+
 #### Scenario: Nearly full
 - **WHEN** no window is at its limit or forecast to run out, and windows are at 91% and 97.5%
 - **THEN** the alert is `high` for the 97.5% window, at its reset, with a count of 2
 
-#### Scenario: The threshold
-- **WHEN** a window is at 90% and no other state applies
-- **THEN** it is in alert as `high`, and a window at 89.9% is not
+### Requirement: Say whether the limits alert's percent is measured
+The alert SHALL carry whether its percent is measured: the window's own `measured` flag, as the Limits payload gives it once the freshness of each provider's data has cleared it (false for an estimate, and for a provider whose last reading is too old to measure now).
 
 #### Scenario: An estimate or an old reading
 - **WHEN** the window the alert names is estimated between readings, or its provider's last reading is too old to measure now
 - **THEN** the alert says it is not measured
-
-#### Scenario: Nothing in alert
-- **WHEN** no window is at its limit, forecast to run out or at 90% or more, or there are no open windows
-- **THEN** there is no alert
