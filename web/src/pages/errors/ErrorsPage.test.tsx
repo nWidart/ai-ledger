@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -1867,6 +1868,14 @@ describe("type table: sort and filter", () => {
     await userEvent.click(head("Rate"));
     expect(marked("c-share")).toBe(0);
     expect(marked("c-rate")).toBe(6);
+  });
+
+  // jsdom has no layout or media queries, so read the stylesheet: the breakpoints that hide Share must leave it when it is the sorted column.
+  it("hides Share at the narrow breakpoints only when it is not the sorted column", () => {
+    const css = readFileSync("src/pages/errors/errors.css", "utf8").replace(/\/\*[\s\S]*?\*\//g, ""); // vitest runs from web/
+    const hides = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter(([, sel, body]) => /display\s*:\s*none/.test(body!) && sel!.includes(".c-share"));
+    expect(hides.length).toBeGreaterThanOrEqual(2); // the mid widths and the phone
+    for (const [, sel] of hides) for (const one of sel!.split(",").filter(x => x.includes(".c-share"))) expect(one.replace(/\s+/g, "")).toContain(".c-share:not(.c-on)");
   });
 
   it("keeps the rows when only the sort or the filter changes", async () => {
