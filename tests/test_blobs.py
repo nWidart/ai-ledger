@@ -1,6 +1,8 @@
+import base64
 import json
 import os
 import unittest
+from unittest import mock
 
 import duckdb
 
@@ -95,6 +97,57 @@ class BlobsTest(StoreCase):
         store.rebuild(self.con)
         self.assertEqual([self.q(f"SELECT * FROM {t} ORDER BY 1") for t in tables], before)
         self.assertEqual(self.full(), {"a1": rows[0]})
+
+
+class Base64Test(StoreCase):
+    def ingest(self, *texts):
+        self.write("a.jsonl", "".join(t + "\n" for t in texts))
+        store.ingest(self.con, self.roots)
+
+    def full(self):
+        return {r[0]: r[10] for r in store.raw_rows(self.con.cursor())}
+
+    def test_round_trip_with_and_without_padding(self):
+        texts = []
+        for i, n in enumerate((600, 601, 602)):  # 0, 1 and 2 padding characters
+            inner = base64.b64encode(os.urandom(n)).decode()
+            texts.append(line(type="user", uuid=f"u{i}", img=inner).strip())
+        self.ingest(*texts)
+        self.assertEqual(self.q("SELECT count(*) FROM blobs WHERE b64")[0][0], 3)
+        self.assertEqual(self.full(), {f"u{i}": t for i, t in enumerate(texts)})
+
+    def test_non_canonical_base64_stays_text(self):
+        inner = "A" * 400 + "QR=="  # the last character carries bits that decoding drops
+        padless = "A" * 403  # not a multiple of 4
+        texts = [line(type="user", uuid="u1", a=inner).strip(), line(type="user", uuid="u2", a=padless).strip()]
+        self.ingest(*texts)
+        self.assertEqual(self.q("SELECT count(*) FROM blobs WHERE b64")[0][0], 0)
+        self.assertEqual(self.q("SELECT count(*) FROM blobs")[0][0], 2)
+        self.assertEqual(self.full(), {"u1": texts[0], "u2": texts[1]})
+
+    def test_seal_keeps_every_line(self):
+        def make(i, kind):
+            inner = base64.b64encode(os.urandom(500)).decode() if kind else f"text{i} " * 100
+            return line(type="user", uuid=f"u{i}", a=inner).strip()
+        with mock.patch.object(blobs, "SEAL_BYTES", 1000):
+            texts = [make(i, i % 2) for i in range(2)]
+            self.ingest(*texts)
+            self.assertEqual(self.q("SELECT count(*) FROM packs_open")[0][0], 0)  # sealed on the spot
+            self.assertGreater(self.q("SELECT count(*) FROM packs")[0][0], 0)
+        with mock.patch.object(blobs, "SEAL_BYTES", 1 << 30):
+            texts += [make(i, i % 2) for i in range(2, 4)]
+            self.write("a.jsonl", "".join(t + "\n" for t in texts[2:]))
+            store.ingest(self.con, self.roots)
+            self.assertGreater(self.q("SELECT count(*) FROM packs_open")[0][0], 0)
+            self.assertEqual(self.full(), {f"u{i}": t for i, t in enumerate(texts)})
+            before = self.q("SELECT count(*) FROM blobs")[0][0]
+            again = line(type="user", uuid="u9", a=json.loads(texts[0])["a"]).strip()  # stored before the seal
+            self.write("a.jsonl", again + "\n")
+            store.ingest(self.con, self.roots)
+            self.assertEqual(self.q("SELECT count(*) FROM blobs")[0][0], before)
+            blobs.seal(self.con.cursor(), force=True)
+            self.assertEqual(self.q("SELECT count(*) FROM packs_open")[0][0], 0)
+            self.assertEqual(self.full(), {**{f"u{i}": t for i, t in enumerate(texts)}, "u9": again})
 
 
 class PackLineTest(unittest.TestCase):

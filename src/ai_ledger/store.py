@@ -57,8 +57,9 @@ CREATE TABLE IF NOT EXISTS raw_lines (
   session_id VARCHAR, uuid VARCHAR, ts VARCHAR, subagent BOOLEAN, parsed BOOLEAN,
   json VARCHAR USING COMPRESSION zstd, packed BOOLEAN DEFAULT false);
 -- Big string tokens of raw_lines.json, one row per distinct token; see blobs.py. The 256-byte rows of packs are deliberate.
-CREATE TABLE IF NOT EXISTS blobs (hash UHUGEINT PRIMARY KEY, pack BIGINT, pos BIGINT, len BIGINT);
+CREATE TABLE IF NOT EXISTS blobs (hash UHUGEINT PRIMARY KEY, pack BIGINT, pos BIGINT, len BIGINT, b64 BOOLEAN DEFAULT false);
 CREATE TABLE IF NOT EXISTS packs (pack BIGINT, seq INTEGER, data BLOB USING COMPRESSION uncompressed);
+CREATE TABLE IF NOT EXISTS packs_open (pack BIGINT, seq INTEGER, data BLOB USING COMPRESSION uncompressed);  -- not yet sealed
 CREATE TABLE IF NOT EXISTS projects_by_cwd (cwd VARCHAR PRIMARY KEY, project VARCHAR);
 CREATE TABLE IF NOT EXISTS limit_polls (
   provider VARCHAR, polled_at TIMESTAMP, json VARCHAR, PRIMARY KEY (provider, polled_at));
@@ -175,6 +176,7 @@ def open_store(path=None):
             con.execute("ROLLBACK")
             raise
     con.execute("ALTER TABLE raw_lines ADD COLUMN IF NOT EXISTS packed BOOLEAN DEFAULT false")  # stores from before packed strings
+    con.execute("ALTER TABLE blobs ADD COLUMN IF NOT EXISTS b64 BOOLEAN DEFAULT false")  # stores from before binary base64 tokens
     con.execute("ALTER TABLE requests ADD COLUMN IF NOT EXISTS speed VARCHAR")  # stores from before fast-mode pricing; NULL until rebuild
     for old, new in PROJECT_ALIASES.items():  # names stored before the alias existed
         for table in ("projects_by_cwd", "sessions"):
