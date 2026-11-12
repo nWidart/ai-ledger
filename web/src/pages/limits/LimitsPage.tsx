@@ -27,6 +27,21 @@ function Lede({ d }: { d: LimitsPayload }) {
       ? <>, about {num(f.at_reset)}% when it resets {whenDay(w.resets_at)}.</> : <>, resetting {whenDay(w.resets_at)}.</>}</span></>}</h1>;
 }
 
+/** One chip per open window, in payload order: its percent now, the time to its reset, and a warning tone with the text
+ *  "at limit" or "runs out" for a window that stops the user, so the tone is not the only signal. */
+function StatusStrip({ d }: { d: LimitsPayload }) {
+  if (!d.windows.length) return null;
+  return <ul className="strip" aria-label="Open windows at a glance">{d.windows.map(w => {
+    const out = w.at_limit || !!w.forecast?.hits_at;
+    return <li key={`${w.provider}-${w.limit_id}-${w.scope}`} className={"strip-chip" + (out ? " out" : "")}>
+      <b>{windowName(w)}</b> <span className="strip-pct">{w.current == null ? "–" : `${num(w.current)}%`}</span>
+      {out && <span className="chip warn">{w.at_limit ? "at limit" : "runs out"}</span>}
+      {!w.measured && <span className="chip est" title="estimated">est.</span>}
+      <span className="muted">resets in <span>{span(Date.parse(w.resets_at) - Date.parse(d.now))}</span></span>
+    </li>;
+  })}</ul>;
+}
+
 /** Per provider: when the limits were last read and how long ago, measured or estimated, and what is wrong with the readings. */
 function Freshness({ d }: { d: LimitsPayload }) {
   return <ul className="fresh" aria-label="Limit data">{d.freshness.map(f => {
@@ -135,6 +150,7 @@ export function LimitsPage() {
       <header className="top sect" id="overview">
         <div>
           {d ? <Lede d={d} /> : <h1 className="lede" id="lede" tabIndex={-1}>{error ? "Limits could not be loaded." : "Loading limits…"}</h1>}
+          {d && <StatusStrip d={d} />}
           {d?.suggestion && <p className="suggest">Send work to <b>{d.suggestion.provider_label}</b>: about {num(d.suggestion.unused_at_reset)}% of
             its {d.suggestion.label} limit would go unused (resets {whenDay(d.suggestion.resets_at)}).</p>}
           {d && <Freshness d={d} />}

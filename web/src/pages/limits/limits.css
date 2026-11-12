@@ -80,3 +80,14 @@
   .pg-limits #unused .ledger .s { grid-column: 1 / -1; grid-row: 3; text-align: left; }
 }
 .pg-limits td .chip { margin-left: 6px; }
+
+/* Status strip: one chip per open window under the heading, so the whole answer reads without scrolling. Wraps on narrow screens. */
+.pg-limits .strip { list-style: none; padding: 0; margin: 12px 0 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.pg-limits .strip-chip { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; max-width: 100%; padding: 3px 10px;
+  border: 1px solid var(--border); border-radius: 8px; font-size: 13px; color: var(--text-secondary); }
+.pg-limits .strip-chip b { color: var(--text-primary); font-weight: 600; }
+.pg-limits .strip-chip .strip-pct { color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.pg-limits .strip-chip .chip { margin: 0; }
+.pg-limits .strip-chip .chip.est { border-style: dashed; }
+.pg-limits .strip-chip.out { border-color: var(--warning-text); }
+.pg-limits .strip-chip.out .strip-pct { color: var(--critical-text); }
