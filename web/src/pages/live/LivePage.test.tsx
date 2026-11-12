@@ -131,7 +131,7 @@ describe("live.ts", () => {
   it("words an ended session apart from your turn and idle", () => {
     const texts = (["ended", "you", "idle"] as const).map(kind => stateText({ ...ended.state, kind }, Date.parse(list.now)));
     expect(texts.map(t => t.label)).toEqual(["ended", "your turn 25s", "idle 25s"]);
-    expect(new Set(texts.map(t => t.detail)).size).toBe(3);
+    expect(texts.map(t => t.detail)).toEqual(["session closed", "waiting for your prompt", "no new lines for 5 minutes"]); // only one says it ended
     expect(stateNow(ended.state, Date.parse(list.now) + 3_600_000)).toBe(ended.state);
   });
 

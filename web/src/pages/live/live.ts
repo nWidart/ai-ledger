@@ -78,7 +78,7 @@ export function stateText(st: LiveState, now: number): { label: string; detail: 
     case "tool": return { label: `${st.tool} ${el}`, detail: `${st.tool} running for ${el}` };
     case "wait": return { label: STATE_LABEL.wait, detail: `${st.tool} pending ${el}: likely waiting for your approval` };
     case "thinking": return { label: timed(STATE_LABEL.thinking), detail: st.inferred ? "a request is likely in flight" : "the turn is in progress" };
-    case "you": return { label: timed(STATE_LABEL.you), detail: "turn ended, waiting for a prompt" };
+    case "you": return { label: timed(STATE_LABEL.you), detail: "waiting for your prompt" };
     case "ended": return { label: STATE_LABEL.ended, detail: "session closed" };
     default: return { label: timed(STATE_LABEL.idle), detail: "no new lines for 5 minutes" };
   }
