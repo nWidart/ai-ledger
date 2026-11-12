@@ -29,7 +29,7 @@ export interface DailyProjectRow { day: Day; project: string | null; cost: numbe
  *  commits (as in totals), tool calls and failed tool calls. Idle days are left out. */
 export interface DailyWorkRow { day: Day; sessions: number; prompts: number; commits: number; calls: number; failed_calls: number }
 export interface UnpricedRow { model: string | null; requests: number; tokens: number }
-export interface ModelRow { model: string; effort: string; requests: number; tokens: number; cost: number | null }
+export interface ModelRow { model: string; effort: string; fast: boolean; requests: number; tokens: number; cost: number | null }
 
 export interface ProjectRow {
   project: string | null; sessions: number; tokens: number; cost: number | null; unpriced: number; cache_read: number;

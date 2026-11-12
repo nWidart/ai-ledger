@@ -102,6 +102,22 @@ class DeriveTest(StoreCase):
     def ingest(self):
         store.ingest(self.con, self.roots)
 
+    def test_speed_is_stored_as_written_and_null_when_absent(self):
+        self.write("a.jsonl", assistant("a1", "m1", "2026-11-01T10:00:00Z", [dict(type="text", text="hi")], speed="fast")
+                   + assistant("a2", "m2", "2026-11-01T10:00:01Z", [dict(type="text", text="hi")], speed="standard")
+                   + assistant("a3", "m3", "2026-11-01T10:00:02Z", [dict(type="text", text="hi")]))
+        self.ingest()
+        want = [("m1", "fast"), ("m2", "standard"), ("m3", None)]
+        self.assertEqual(self.q("SELECT message_id, speed FROM requests ORDER BY 1"), want)
+        store.rebuild(self.con)
+        self.assertEqual(self.q("SELECT message_id, speed FROM requests ORDER BY 1"), want)
+
+    def test_store_from_before_speed_gains_the_column_on_open(self):
+        self.con.execute("ALTER TABLE requests DROP COLUMN speed")
+        self.con.close()
+        self.con = store.open_store(self.db)
+        self.assertEqual(self.q("SELECT count(speed) FROM requests"), [(0,)])
+
     def test_split_response_counts_usage_once(self):
         self.write("a.jsonl", assistant("a1", "m1", "2026-11-01T10:00:00Z", [dict(type="thinking", thinking="")])
                    + assistant("a2", "m1", "2026-11-01T10:00:01Z", [dict(type="text", text="hi")])

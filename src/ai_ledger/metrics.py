@@ -64,8 +64,10 @@ def read_user_prices(path=None):
         return {}, {}, '"models" and "plans" must be objects'
     number = lambda v: isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)  # 1e309 parses to inf, which is not JSON
     for model, p in models.items():
-        tiers = [p] + ([p.get("long")] if isinstance(p, dict) and p.get("long_above") is not None else [])
-        bad = [k for t in tiers for k in PRICE_KINDS if not isinstance(t, dict) or not number(t.get(k))]
+        ok = isinstance(p, dict)
+        tiers = [("", p)] + ([("", p.get("long"))] if ok and p.get("long_above") is not None else []) \
+            + ([("fast.", p["fast"])] if ok and p.get("fast") is not None else [])
+        bad = [f"{pre}{k}" for pre, t in tiers for k in PRICE_KINDS if not isinstance(t, dict) or not number(t.get(k))]
         bad += [k for k in ("context", "long_above") if isinstance(p, dict) and p.get(k) is not None and not number(p[k])]
         if bad:
             return {}, {}, f"{model}: {', '.join(dict.fromkeys(bad))} must be a number"
@@ -281,32 +283,37 @@ def error_detail(cur, tool_use_id):
 # ---------- usage dashboard ----------
 
 def price_cte(prices):
-    """A VALUES table of prices per model. Each model has a base tier and, optionally, a long-prompt tier."""
+    """A VALUES table of prices per model. Each model has a base tier and, optionally, a long-prompt tier and a fast-mode tier."""
     vals, params = [], []
     for model, p in prices.items():
-        long = p.get("long") or {}
-        vals.append("(" + ",".join("?" * 13) + ")")
+        long, fast = p.get("long") or {}, p.get("fast") or {}
+        vals.append("(" + ",".join("?" * 18) + ")")
         params += [model, p["context"], p.get("long_above"), p["input"], p["output"], p["cache_read"], p["cache_5m"], p["cache_1h"],
-                   long.get("input"), long.get("output"), long.get("cache_read"), long.get("cache_5m"), long.get("cache_1h")]
+                   *(long.get(k) for k in PRICE_KINDS), *(fast.get(k) for k in PRICE_KINDS)]
     if not vals:
-        vals, params = ["(NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL)"], []
-    sql = ("price(model, context, long_above, p_in, p_out, p_cr, p_5m, p_1h, l_in, l_out, l_cr, l_5m, l_1h) AS "
+        vals, params = ["(" + ",".join(["NULL"] * 18) + ")"], []
+    sql = ("price(model, context, long_above, p_in, p_out, p_cr, p_5m, p_1h, l_in, l_out, l_cr, l_5m, l_1h, f_in, f_out, f_cr, f_5m, f_1h) AS "
            f"(SELECT * FROM (VALUES {','.join(vals)}))")
     return sql, params
 
 
-# The price columns of each kind (base tier, long-prompt tier).
-_RATE = dict(input=("p_in", "l_in"), output=("p_out", "l_out"), cache_read=("p_cr", "l_cr"), cache_5m=("p_5m", "l_5m"), cache_1h=("p_1h", "l_1h"))
+# The price columns of each kind (base tier, long-prompt tier, fast-mode tier).
+_RATE = dict(input=("p_in", "l_in", "f_in"), output=("p_out", "l_out", "f_out"), cache_read=("p_cr", "l_cr", "f_cr"),
+             cache_5m=("p_5m", "l_5m", "f_5m"), cache_1h=("p_1h", "l_1h", "f_1h"))
 
 
 def requests_cte(pcte, where):
     """Requests with their session's project, total tokens, the estimated cost of each priced kind (cost_input, cost_output,
-    cost_cache_read, cost_cache_5m, cost_cache_1h) and their sum as cost. All are NULL when the model is unpriced; the
-    long-prompt tier is chosen once, so the kinds always add up to cost. Thinking tokens are billed as output."""
-    parts = ", ".join(f"r.{k} * CASE WHEN lg THEN p.{_RATE[k][1]} ELSE p.{_RATE[k][0]} END / 1e6 AS cost_{k}" for k in PRICE_KINDS)
+    cost_cache_read, cost_cache_5m, cost_cache_1h) and their sum as cost. All are NULL when the model is unpriced; the tier
+    is chosen once per request, so the kinds always add up to cost. Thinking tokens are billed as output.
+    A fast-mode request (speed 'fast') on a model with fast rates costs those rates at any prompt size: fast pricing applies
+    across the full context window, so it replaces the long-prompt tier. Without fast rates it costs as any other request."""
+    rate = lambda k: f"CASE WHEN fst THEN p.{_RATE[k][2]} WHEN lg THEN p.{_RATE[k][1]} ELSE p.{_RATE[k][0]} END"
+    parts = ", ".join(f"r.{k} * {rate(k)} / 1e6 AS cost_{k}" for k in PRICE_KINDS)
     return f"""WITH {pcte}, rq AS (
         SELECT *, {" + ".join(f"cost_{k}" for k in PRICE_KINDS)} AS cost FROM (
           SELECT r.*, s.project, r.input + r.output + r.cache_read + r.cache_5m + r.cache_1h AS tokens,
+            coalesce(r.speed = 'fast' AND p.f_in IS NOT NULL, false) AS fst,
             coalesce(p.long_above IS NOT NULL AND r.input + r.cache_read + r.cache_5m + r.cache_1h > p.long_above, false) AS lg,
             {parts}
           FROM requests r JOIN sessions s USING (session_id) LEFT JOIN price p ON p.model = r.model
@@ -358,8 +365,9 @@ def usage(cur, project="", range_days=0, session="", prices=None, today=None, au
         coalesce(sum(tokens) FILTER (WHERE subagent), 0) AS sub_tokens, sum(cost) FILTER (WHERE subagent) AS sub_cost,
         coalesce(sum(thinking_ms), 0) AS thinking_ms, {costs} FROM rq""", rp)[0]
     unpriced = rows(cur, f"{rq} SELECT model, count(*) AS requests, sum(tokens) AS tokens FROM rq WHERE cost IS NULL GROUP BY 1 ORDER BY 3 DESC, 1", rp)
-    models = rows(cur, f"""{rq} SELECT model, coalesce(effort, '(none)') AS effort, count(*) AS requests, sum(tokens) AS tokens,
-        sum(cost) AS cost FROM rq GROUP BY 1, 2 ORDER BY requests DESC, tokens DESC, model, effort""", rp)
+    models = rows(cur, f"""{rq} SELECT model, coalesce(effort, '(none)') AS effort, coalesce(speed = 'fast', false) AS fast,
+        count(*) AS requests, sum(tokens) AS tokens, sum(cost) AS cost FROM rq GROUP BY 1, 2, 3
+        ORDER BY requests DESC, tokens DESC, model, effort, fast""", rp)
 
     tc = f"tool_calls t JOIN sessions s USING (session_id) WHERE {W('coalesce(t.start_ts, t.end_ts)')}"
     calls, pr = call_totals(cur, W, fp), prompt_totals(cur, W, fp)

@@ -73,7 +73,7 @@ CREATE TABLE IF NOT EXISTS sessions (
 CREATE TABLE IF NOT EXISTS requests (
   message_id VARCHAR PRIMARY KEY, session_id VARCHAR, ts TIMESTAMP, model VARCHAR, effort VARCHAR,
   subagent BOOLEAN, input BIGINT, output BIGINT, thinking BIGINT, cache_read BIGINT,
-  cache_5m BIGINT, cache_1h BIGINT, thinking_ms BIGINT, stop_reason VARCHAR);
+  cache_5m BIGINT, cache_1h BIGINT, thinking_ms BIGINT, stop_reason VARCHAR, speed VARCHAR);
 CREATE TABLE IF NOT EXISTS tool_calls (
   tool_use_id VARCHAR PRIMARY KEY, session_id VARCHAR, tool VARCHAR, mcp_server VARCHAR,
   skill VARCHAR, input_summary VARCHAR, start_ts TIMESTAMP, end_ts TIMESTAMP, is_error BOOLEAN,
@@ -153,6 +153,7 @@ def open_store(path=None):
     con.execute(DERIVED_SCHEMA)
     for table in ("files", "sessions"):  # stores from before sources hold only Claude Code's
         con.execute(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS source VARCHAR DEFAULT 'claude'")
+    con.execute("ALTER TABLE requests ADD COLUMN IF NOT EXISTS speed VARCHAR")  # stores from before fast-mode pricing; NULL until rebuild
     for old, new in PROJECT_ALIASES.items():  # names stored before the alias existed
         for table in ("projects_by_cwd", "sessions"):
             con.execute(f"UPDATE {table} SET project = ? WHERE project = ?", [new, old])
@@ -475,7 +476,7 @@ class Deriver:
             sub = self.sub or bool(d.get("isSidechain"))
             self.requests[mid] = (mid, sid, ts, model, d.get("effort"), sub, inp, u.get("output_tokens") or 0,
                                   (u.get("output_tokens_details") or {}).get("thinking_tokens") or 0, cr, c5m or 0, c1h,
-                                  d.get("thinkingDurationMs"), msg.get("stop_reason"))
+                                  d.get("thinkingDurationMs"), msg.get("stop_reason"), u.get("speed"))
             if s and not sub and inp + cr + cw > s["peak"]:
                 s["peak"], s["peak_model"] = inp + cr + cw, model
         if not isinstance(content, list):
@@ -545,7 +546,7 @@ class Deriver:
                     "peak_model = CASE WHEN excluded.peak_context > sessions.peak_context THEN excluded.peak_model ELSE sessions.peak_model END, "
                     "peak_context = greatest(sessions.peak_context, excluded.peak_context)")
         insert(cur, "requests", ["message_id", "session_id", "ts", "model", "effort", "subagent", "input", "output",
-                                 "thinking", "cache_read", "cache_5m", "cache_1h", "thinking_ms", "stop_reason"],
+                                 "thinking", "cache_read", "cache_5m", "cache_1h", "thinking_ms", "stop_reason", "speed"],
                list(self.requests.values()))
         self.flush_tools()
         insert(cur, "prompts", ["prompt_id", "session_id", "ts", "interrupted"], list(self.prompts.values()))
