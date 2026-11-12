@@ -23,10 +23,11 @@ describe("costDays", () => {
     expect(de!.other).toEqual([{ name: "(no project)", cost: 2 }, { name: "B", cost: 1 }]);
   });
 
-  it("reads a remainder under half a cent as nothing, not a float leftover", () => {
+  it("reads a float leftover as nothing but keeps a real sub-cent remainder", () => {
     const [de] = costDays(view([pd("A", 0.3)], 0.1 + 0.2), [named("A"), other]); // 0.1 + 0.2 is 0.30000000000000004
     expect(de!.v["p:"]).toBe(0);
     expect(costDays(view([pd("A", 0.3)], 0.31), [named("A"), other])[0]!.v["p:"]).toBeCloseTo(0.01);
+    expect(costDays(view([], 0.004), [named("A"), other])[0]!.v["p:"]).toBeCloseTo(0.004);
   });
 
   it("names the models inside Other without the claude- prefix, as the legend does", () => {

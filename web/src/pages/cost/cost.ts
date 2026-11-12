@@ -57,7 +57,7 @@ export function costDays(d: Pick<UsagePayload, "start" | "end" | "daily"> & Stac
     for (const t of tops) if (!isOther(t)) { v[t.k] = pd?.get(t.k.slice(pre.length)) || 0; sum += v[t.k]!; }
     if (!tops.some(isOther)) return { day, cost, unpriced: r?.unpriced || 0, v };
     const rest = cost - sum;
-    v[pre] = rest < .005 ? 0 : rest; // float leftovers of the subtraction are not a remainder
+    v[pre] = rest < 1e-9 ? 0 : rest; // float leftovers of the subtraction are not a remainder; a real sub-cent cost is
     const other = [...(pd ?? [])].filter(([n, c]) => c > 0 && !named.has(n))
       .sort((a, b) => b[1] - a[1]).map(([n, c]) => ({ name: n ? (by === "model" ? n.replace(/^claude-/, "") : n) : "(no project)", cost: c }));
     return { day, cost, unpriced: r?.unpriced || 0, v, other };
