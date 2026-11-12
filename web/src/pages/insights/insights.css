@@ -42,6 +42,10 @@
 .pg-insights h2 { font-size: 15px; font-weight: 600; margin: 0 0 2px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .pg-insights h3 { font-size: 13px; font-weight: 600; margin: 18px 0 2px; color: var(--text-secondary); }
 .pg-insights .grid2 { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 16px; margin-bottom: 16px; align-items: start; }
+/* Wider value and side columns: "120 of 400" and "none analysed". */
+.pg-insights #d-coverage .ledger li { grid-template-columns: minmax(0, 13rem) minmax(40px, 1fr) 6rem 6.5rem; }
+@media (max-width: 520px) { .pg-insights #d-coverage .ledger li { grid-template-columns: minmax(0, 1fr) 6rem 6.5rem; } }
+.pg-insights .ledger .none { color: var(--warning-text); font-weight: 500; }
 .pg-insights .linkish.more { margin-top: 8px; font-size: 13px; }
 @media (max-width: 900px) { .pg-insights .grid2 { grid-template-columns: minmax(0, 1fr); } }
 /* Ledgers here carry "N sessions" on the side, wider than the default column. */
@@ -58,37 +62,22 @@
 
 /* Session log */
 .pg-insights .log-head { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; justify-content: space-between; }
-.pg-insights .log td { vertical-align: top; padding-top: 9px; padding-bottom: 9px; }
-.pg-insights .log td.when { color: var(--text-secondary); }
-.pg-insights .log td.sess { max-width: 220px; }
-.pg-insights .log td.sess > :first-child { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; text-decoration: none; }
-.pg-insights .log td.sess a:hover { text-decoration: underline; }
-.pg-insights .log td.proj { max-width: 140px; }
-.pg-insights .log td.goal .chip, .pg-insights .log td.fr .chip { margin: 0 4px 4px 0; white-space: normal; }
-/* Chips wrap side by side: the chip columns take a share of the width, not their narrowest chip's. */
-.pg-insights .log td.goal { width: 26%; }
-.pg-insights .log td.fr { width: 18%; }
-/* The summary and friction detail: a full-width second line under the session's figures. */
-.pg-insights .log tr.head td { border-bottom: 0; padding-bottom: 2px; }
-.pg-insights .log td.detail { color: var(--text-secondary); padding-top: 0; }
-.pg-insights .log td.detail p { margin: 0; max-width: 110ch; }
-.pg-insights .log td.detail p + p { margin-top: 4px; }
-.pg-insights .log td.detail .fd b { color: var(--text-primary); font-weight: 500; }
-.pg-insights .dis { display: block; margin-top: 3px; font-size: 11.5px; color: var(--critical-text); }
-/* Phones: each session becomes a card; the labels the header gave move next to the values. */
-@media (max-width: 720px) {
-  .pg-insights .log .scroll { overflow: visible; max-height: none; background: none; }
-  .pg-insights .log thead { display: none; }
-  .pg-insights .log table, .pg-insights .log tbody { display: block; }
-  .pg-insights .log tr { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 10px; padding: 12px 0; border-bottom: 1px solid var(--border); }
-  .pg-insights .log tr.head { border-bottom: 0; padding-bottom: 6px; }
-  .pg-insights .log tr.notes { padding-top: 0; }
-  .pg-insights .log td { display: block; border: 0; padding: 0; min-width: 0; max-width: none; }
-  .pg-insights .log td.when { grid-column: 1; }
-  .pg-insights .log td.proj { grid-column: 2; }
-  .pg-insights .log td.sess { order: -1; }
-  .pg-insights .log td.sess, .pg-insights .log td.out, .pg-insights .log td.goal, .pg-insights .log td.fr, .pg-insights .log td.detail { grid-column: 1 / -1; }
-  .pg-insights .log td.out .dis { display: inline; margin: 0 0 0 8px; }
-  .pg-insights .log td.goal::before, .pg-insights .log td.fr::before { content: attr(data-k) " "; color: var(--text-muted); font-size: 12px; margin-right: 4px; }
-  .pg-insights .log td.empty { grid-column: 1 / -1; }
-}
+.pg-insights .log-ctl { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; color: var(--text-secondary); font-size: 13px; }
+.pg-insights .log-ctl select { margin-left: 4px; }
+/* A session card: title, outcome and chips on one wrapping line, the summary full width below. */
+.pg-insights .scards { list-style: none; margin: 0; padding: 0; }
+.pg-insights .scard { padding: 11px 0; border-top: 1px solid var(--border); }
+.pg-insights .scard:first-child { border-top: 0; }
+.pg-insights .scard .top { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; }
+.pg-insights .scard .ttl { font-weight: 500; min-width: 0; overflow-wrap: anywhere; }
+.pg-insights .scard .ttl a { text-decoration: none; }
+.pg-insights .scard .ttl a:hover { text-decoration: underline; }
+.pg-insights .scard .ttl .muted { font-weight: 400; }
+.pg-insights .scard .chip { white-space: normal; }
+/* Date and project: quiet, at the end of the line. */
+.pg-insights .scard .meta { min-width: 0; max-width: 100%; margin-left: auto; color: var(--text-muted); font-size: 12.5px; }
+.pg-insights .scard .sum { margin: 4px 0 0; color: var(--text-secondary); max-width: 110ch; }
+.pg-insights .scard .fd { margin-top: 4px; color: var(--text-secondary); max-width: 110ch; }
+.pg-insights .scard .fd summary { cursor: pointer; font-size: 12.5px; color: var(--text-muted); }
+.pg-insights .scard .fd p { margin: 4px 0 0; }
+.pg-insights .dis { font-size: 11.5px; color: var(--critical-text); }

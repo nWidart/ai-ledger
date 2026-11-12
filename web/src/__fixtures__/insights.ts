@@ -9,12 +9,35 @@ export default {
   "codex_sessions": 1,
   "facets": 3,
   "orphans": 2,
-  "newest_facet": "2026-11-05T18:00:00.000Z",
+  "newest_facet": "2026-11-06T09:00:00.000Z",
   "stored_facets": 3,
-  "dir": "/Users/example/.claude/usage-data"
+  "dir": "/Users/example/.claude/usage-data",
+  "by_project": [
+   {
+    "project": "demo-app",
+    "sessions": 2,
+    "analysed": 1
+   },
+   {
+    "project": "docs-site",
+    "sessions": 1,
+    "analysed": 0
+   }
+  ],
+  "runs": [
+   {
+    "at": "2026-11-06T09:00:00.000Z",
+    "facets": 1
+   },
+   {
+    "at": "2026-11-05T18:20:00.000Z",
+    "facets": 2
+   }
+  ]
  },
  "projects": [
   "demo-app",
+  "docs-site",
   "sketchbook"
  ],
  "outcomes": [
