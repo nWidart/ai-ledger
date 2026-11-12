@@ -346,6 +346,27 @@ def view(project, range_days, prices, today, automated=False, source="", user_pr
     return start, pcte, pparams, fp, W, requests_cte(pcte, W("r.ts")), pparams + fp
 
 
+RUN_RATE_DAYS = 7  # the complete days whose mean cost projects the rest of the month
+
+
+def run_rate(cur, project, prices, today, automated=False, source="", user_projects=None):
+    """The month's run rate under the view's scope (project, source, automated; not its range): the cost so far this month up
+    to yesterday, the mean daily cost of the last 7 complete days, the days left counting today, and their projection. None
+    without 7 complete days of history or without a priced request among them."""
+    _, _, _, _, _, rq, rp = view(project, 0, prices, today, automated, source, user_projects)
+    first_of = today.replace(day=1)
+    since = today - timedelta(days=RUN_RATE_DAYS)
+    row = rows(cur, f"""{rq} SELECT min(day) AS first, sum(cost) FILTER (WHERE day >= ? AND day < ?) AS avg_sum,
+        sum(cost) FILTER (WHERE day >= ? AND day < ?) AS month_sum FROM (SELECT {day('ts')} AS day, cost FROM rq)""",
+        rp + [since.isoformat(), today.isoformat(), first_of.isoformat(), today.isoformat()])[0]
+    if row["first"] is None or row["first"] > since.isoformat() or row["avg_sum"] is None:
+        return None
+    left = (first_of.replace(year=first_of.year + first_of.month // 12, month=first_of.month % 12 + 1) - today).days
+    daily_avg = row["avg_sum"] / RUN_RATE_DAYS
+    month_cost = row["month_sum"] or 0
+    return dict(month_cost=month_cost, daily_avg=daily_avg, days_left=left, projected=month_cost + daily_avg * left)
+
+
 def usage(cur, project="", range_days=0, session="", prices=None, today=None, automated=False, source=""):
     prices = load_prices() if prices is None else prices
     today = today or local_today(cur)
@@ -415,6 +436,7 @@ def usage(cur, project="", range_days=0, session="", prices=None, today=None, au
                near_limit=sorted((x for x in sess if x["near_limit"]), key=lambda x: -x["context_share"]),
                previous=previous_period(cur, project, range_days, prices, today, automated, source, af["projects"]))
     out["changes"] = project_changes(by_project, out["previous"])
+    out["run_rate"] = run_rate(cur, project, prices, today, automated, source, af["projects"])
     out["prices_file"] = prices_file()
     out["plans"] = view_plans(cur, source)
     out["automated_file"] = af

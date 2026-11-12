@@ -728,6 +728,64 @@ class MetricsTest(unittest.TestCase):
         self.assertIsNone(m["gpt-5.5"]["cost"])
 
 
+class RunRateTest(unittest.TestCase):
+    """Project foo (Claude) costs $1 a day on Nov 1-19 and $100 today (Nov 20), and $5 on Oct 25; project bar (Codex) costs $2
+    a day on Nov 10-19; project u has only an unpriced model. A request costs its input tokens in millions at $1."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.mkdtemp()
+        cls.con = store.open_store(os.path.join(cls.tmp, "d", "x.duckdb"))
+        c = cls.con.cursor()
+        store.insert(c, "sessions", ["session_id", "project", "first_ts", "last_ts", "source"], [
+            ("f", "foo", "2026-10-25 09:00:00", "2026-11-20 09:30:00", "claude"),
+            ("b", "bar", "2026-11-10 09:00:00", "2026-11-19 09:30:00", "codex"),
+            ("u", "u", "2026-10-01 09:00:00", "2026-11-19 09:30:00", "claude")])
+        M = 1_000_000
+        req = lambda i, sid, ts, model, cost: (i, sid, ts, model, False, int(cost * M), 0, 0, 0, 0, 0)
+        reqs = [req("o", "f", "2026-10-25 12:00:00", "m-a", 5), req("t", "f", "2026-11-20 12:00:00", "m-a", 100)]
+        reqs += [req(f"f{n}", "f", f"2026-11-{n:02d} 12:00:00", "m-a", 1) for n in range(1, 20)]
+        reqs += [req(f"b{n}", "b", f"2026-11-{n:02d} 12:00:00", "m-a", 2) for n in range(10, 20)]
+        reqs += [req(f"u{n}", "u", f"2026-11-{n:02d} 12:00:00", "m-unknown", 1) for n in range(1, 20)]
+        store.insert(c, "requests", ["message_id", "session_id", "ts", "model", "subagent", "input", "output", "thinking",
+                                     "cache_read", "cache_5m", "cache_1h"], reqs)
+        store.insert(c, "prompts", ["prompt_id", "session_id", "ts", "interrupted"],
+                     [(f"p{s}", s, "2026-10-25 09:00:00", False) for s in "fbu"])  # a session with no prompt is a helper
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.con.close()
+        shutil.rmtree(cls.tmp)
+
+    def rate(self, today=date(2026, 11, 20), **k):
+        return metrics.run_rate(self.con.cursor(), k.pop("project", ""), PRICES, today, **k)
+
+    def test_month_so_far_plus_recent_mean_over_days_left(self):
+        r = self.rate()  # today's $100 is left out; Nov 13-19 average $3; Nov 1-19 cost 19 + 20; Nov 20-30 is 11 days
+        self.assertEqual((r["month_cost"], r["daily_avg"], r["days_left"], r["projected"]), (39, 3, 11, 72))
+
+    def test_project_and_source_filters_apply(self):
+        self.assertEqual(self.rate(project="foo")["projected"], 19 + 11)
+        self.assertEqual(self.rate(source="codex")["projected"], 20 + 2 * 11)
+        self.assertEqual(self.rate(project="foo", source="codex"), None)
+
+    def test_range_does_not_change_it(self):
+        u = metrics.usage(self.con.cursor(), "foo", 7, prices=PRICES, today=date(2026, 11, 20))
+        self.assertEqual(u["run_rate"], self.rate(project="foo"))
+
+    def test_first_of_the_month_projects_from_the_average_alone(self):
+        r = self.rate(date(2026, 11, 1), project="foo")  # Oct 25-31 holds one $5 day
+        self.assertEqual((r["month_cost"], r["days_left"]), (0, 30))
+        self.assertAlmostEqual(r["projected"], 5 / 7 * 30)
+
+    def test_needs_seven_days_of_history(self):
+        self.assertIsNone(self.rate(date(2026, 10, 28), project="foo"))
+        self.assertIsNone(self.rate(project="nope"))
+
+    def test_unpriced_history_has_no_projection(self):
+        self.assertIsNone(self.rate(project="u"))
+
+
 class SourceFilterTest(unittest.TestCase):
     """One day (Nov 5) with a Claude session (c1, 1,000,000 tokens) and a Codex session (x1, 200,000 tokens) in project foo,
     each with one failed tool call."""

@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { UsagePayload } from "../../api";
 import usage from "../../__fixtures__/usage";
 import { setOrder } from "../../colors";
-import { usd } from "../../format";
+import { dayRange, usd } from "../../format";
 import { CostChart } from "./CostChart";
 
 const day = "2026-11-04";
@@ -39,5 +39,42 @@ describe("cost tooltip: Other's projects", () => {
   it("reads the same list in the screen-reader text", () => {
     open();
     expect(document.querySelector(".sr")!.textContent).toContain(`Other (4) ${usd(9.5)} (B ${usd(5)}, C ${usd(3)}, D ${usd(1)}, and 1 more)`);
+  });
+});
+
+describe("cost chart: today so far", () => {
+  // 20 days ending today ($1 a day, today $40): the average covers complete days only.
+  const days = dayRange("2026-10-16", "2026-11-04");
+  const long: UsagePayload = { ...d, start: days[0]!, end: days.at(-1)!, range: 20,
+    daily: days.map((x, i) => ({ ...usage.daily[0]!, day: x, cost: i === 19 ? 40 : 1, unpriced: 0 })),
+    daily_projects: days.map((x, i) => ({ day: x, project: "A", cost: i === 19 ? 40 : 1, tokens: 1 })), by_project: [proj("A", 59)] };
+  const show = (data = long) => render(<CostChart d={data} metric="cost" onMetric={() => {}} hidden={[]} onHidden={() => {}} onProject={() => {}} onDay={() => {}} />);
+
+  it("hatches only today's bar and keys it in the legend", () => {
+    show();
+    expect(document.querySelectorAll(".partial")).toHaveLength(1);
+    expect(document.querySelector(".partial")!.getAttribute("fill")).toBe("url(#partial-day)");
+    expect(screen.getByText("Today so far")).toBeTruthy();
+  });
+
+  it("labels today 'so far' in the tooltip and the screen-reader text, and yesterday not", () => {
+    show();
+    act(() => chart().focus());
+    fireEvent.keyDown(chart(), { key: "End" });
+    expect(screen.getByRole("tooltip").textContent).toContain("so far");
+    expect(document.querySelector(".sr")!.textContent).toContain("so far");
+    fireEvent.keyDown(chart(), { key: "ArrowLeft" });
+    expect(document.querySelector(".sr")!.textContent).not.toContain("so far");
+  });
+
+  it("leaves today out of the average: the line ends yesterday and has no point for today", () => {
+    show();
+    act(() => chart().focus());
+    fireEvent.keyDown(chart(), { key: "End" });
+    expect(document.querySelector(".sr")!.textContent).not.toContain("7-day average");
+    fireEvent.keyDown(chart(), { key: "ArrowLeft" });
+    expect(document.querySelector(".sr")!.textContent).toContain(`7-day average ${usd(1)}`); // not dragged up by today's $40
+    const line = document.querySelectorAll("svg path[stroke='var(--text-primary)']")[0]!.getAttribute("d")!;
+    expect(line.split("L")).toHaveLength(13); // the 7th to the 19th day
   });
 });

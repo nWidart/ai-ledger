@@ -51,6 +51,20 @@ describe("plan context", () => {
   });
 });
 
+describe("cost run rate", () => {
+  const rate = { month_cost: 120, daily_avg: 10, days_left: 18, projected: 300 };
+
+  it("says how the month is on pace, as an estimate at list prices", async () => {
+    await show({ ...usage, run_rate: rate });
+    expect(screen.getByText(/Cost is estimated at API list prices.* On pace for about \$300 this month\./)).toBeTruthy();
+  });
+
+  it("says nothing without a projection", async () => {
+    await show({ ...usage, run_rate: null });
+    expect(screen.queryByText(/On pace/)).toBeNull();
+  });
+});
+
 describe("cost figures", () => {
   it("compares with the previous period as a multiple from 2x, a percentage below", () => {
     expect(compareText(doubled)).toEqual({ text: "2.0× the previous 30 days", sr: "2.0 times the previous 30 days" });

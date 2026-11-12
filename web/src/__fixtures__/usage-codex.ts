@@ -240,6 +240,7 @@ export default {
  "near_limit": [],
  "previous": null,
  "changes": null,
+ "run_rate": null,
  "prices_file": {
   "path": "/Users/example/Library/Application Support/ai-ledger/prices.json",
   "error": null
