@@ -61,24 +61,28 @@ The `ai-ledger --version` command SHALL print the installed package version and 
 - **WHEN** the app is serving and the user runs `ai-ledger --version` in another terminal
 - **THEN** the command prints the version, for example `ai-ledger 0.1.0`, and exits with status 0
 
-### Requirement: Release from a version tag
-Pushing a tag `v<version>` SHALL publish that version only after the web checks and the Python tests pass and the built package runs on macOS and Linux. The release SHALL publish the package to PyPI without a stored token and SHALL create a GitHub release whose notes are that version's `CHANGELOG.md` section.
+### Requirement: Release when a release pull request merges
+Merging a pull request from `release/v<version>` into `main` SHALL tag the merge commit `v<version>` and publish it only after the checks pass on that commit and the built package runs on macOS and Linux. The release SHALL publish to PyPI without a stored token and SHALL create a GitHub release whose notes are that version's `CHANGELOG.md` section. The maintainer SHALL be able to start the same release by hand on `main` with a tag.
 
 #### Scenario: Successful release
-- **WHEN** the maintainer pushes tag `v0.1.0` on a commit where every check passes and the package version is `0.1.0`
-- **THEN** `ai-ledger` 0.1.0 is on PyPI, and the GitHub release `v0.1.0` carries the wheel, the source archive and the 0.1.0 changelog notes
+- **WHEN** the maintainer merges the PR from `release/v0.2.0`, every check passes and the package version is `0.2.0`
+- **THEN** the merge commit is tagged `v0.2.0`, `ai-ledger` 0.2.0 is on PyPI, and the GitHub release `v0.2.0` carries the wheel, the source archive and the 0.2.0 changelog notes
 
 #### Scenario: Failing check
-- **WHEN** a test fails on the tagged commit
-- **THEN** nothing is published to PyPI and no GitHub release is created
+- **WHEN** a test fails on the merge commit
+- **THEN** no tag is pushed, nothing is published to PyPI and no GitHub release is created
 
 #### Scenario: Tag and version differ
-- **WHEN** the tag is `v0.2.0` and the package version is `0.1.0`
-- **THEN** the release stops before publishing and reports the mismatch
+- **WHEN** the branch is `release/v0.2.0` and the package version is `0.1.0`
+- **THEN** the release stops before tagging and reports the mismatch
+
+#### Scenario: Other pull requests
+- **WHEN** a PR from any branch not named `release/v<version>` merges, or a release PR closes without merging
+- **THEN** no release runs
 
 #### Scenario: Smoke test of the built package
 - **WHEN** the release has built the wheel
-- **THEN** on macOS and on Linux, running the wheel with `uvx` prints the version and serves the Activity page from a temporary store, before anything is published
+- **THEN** on macOS and on Linux, running the wheel with `uvx` prints the version and serves the Activity page from a temporary store, before anything is tagged or published
 
 ### Requirement: Check every change
 Every push to `main` and every pull request SHALL run the web checks, the Python tests and a package build, and SHALL report failure when any of them fails.
@@ -112,3 +116,30 @@ The app SHALL read an optional `prices.json` from the folder that holds the stor
 #### Scenario: Upgrade keeps user prices
 - **WHEN** the user upgrades the package
 - **THEN** the user prices file is unchanged and still applies
+
+### Requirement: Open a release pull request
+Starting the Release PR workflow on `main` SHALL open a pull request from `release/v<version>` that sets the next version in `pyproject.toml` and `uv.lock` and renames `[Unreleased]` in `CHANGELOG.md` to that version and date. The bump SHALL be `patch`, `minor` or `major` as named, or with `auto`, the default, the larger of what `[Unreleased]` and the Conventional Commits since the last tag call for. The PR body SHALL show that section, and CI SHALL run on it.
+
+#### Scenario: Minor release
+- **WHEN** the version is `0.1.3`, `[Unreleased]` has entries, and the maintainer starts the workflow with `minor`
+- **THEN** a pull request from `release/v0.2.0` sets version `0.2.0`, moves the entries under `## [0.2.0] - <today>`, leaves an empty `[Unreleased]`, and adds the `[0.2.0]` link
+
+#### Scenario: Nothing to release
+- **WHEN** `[Unreleased]` has no entries
+- **THEN** the workflow fails and opens no pull request
+
+#### Scenario: Auto picks minor for an added feature
+- **WHEN** `[Unreleased]` has an `### Added` section and every commit since the last tag is a `fix:`
+- **THEN** `auto` bumps minor
+
+#### Scenario: Auto picks patch for fixes
+- **WHEN** `[Unreleased]` has only `### Changed` and `### Fixed` sections and no commit since the last tag is a `feat:` or breaking
+- **THEN** `auto` bumps patch
+
+#### Scenario: Auto picks major for a breaking change
+- **WHEN** the version is `1.2.3` and a commit since the last tag has a `BREAKING CHANGE:` footer
+- **THEN** `auto` bumps to `2.0.0`
+
+#### Scenario: Breaking change before 1.0.0
+- **WHEN** the version is `0.4.1` and a commit since the last tag is `feat!: drop the old store path`
+- **THEN** `auto` bumps to `0.5.0`

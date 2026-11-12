@@ -147,7 +147,7 @@ Every page with the automated filter (Activity, Cost, Insights, Live) SHALL leav
 - **THEN** Activity shows the `observer-sessions` sessions, and the project picker shows `observer-sessions` as the selected project
 
 ### Requirement: Tell which sessions are automated
-The app SHALL treat a session as automated when it belongs to a known automated project (today `observer-sessions`), when it has no user prompt, or when it ran in a temporary folder (project `(temp)`) with at most one user prompt.
+The app SHALL treat a session as automated when it belongs to a known automated project (today `observer-sessions`, and every project listed in the automated projects file), when it has no user prompt, or when it ran in a temporary folder (project `(temp)`) with at most one user prompt.
 
 #### Scenario: Helper sessions in a temporary folder
 - **WHEN** an app ran 170 one-prompt sessions in temporary folders and a person ran one session with three prompts in `/tmp`
@@ -156,6 +156,10 @@ The app SHALL treat a session as automated when it belongs to a known automated 
 #### Scenario: Session with no prompt
 - **WHEN** a Codex session makes requests without any user prompt
 - **THEN** Activity, Cost, Insights and Live leave it out until the user turns on the control
+
+#### Scenario: Project from the automated projects file
+- **WHEN** the automated projects file lists `docs-bot` and the user reloads Activity with the control off
+- **THEN** `docs-bot` sessions are left out of every figure and the project picker, with no rebuild, and the control brings them back
 
 ### Requirement: Name the app AI Ledger
 Every dashboard page SHALL show the app's name, AI Ledger, in its navigation brand and in its browser title, after the page's own name.
@@ -271,3 +275,21 @@ A saved Light or Dark choice SHALL be applied before the page first paints, so t
 - **GIVEN** the user chose Dark and the operating system is light
 - **WHEN** they load any dashboard page
 - **THEN** the first painted frame already uses the dark colors
+
+### Requirement: Read automated projects from a user file
+The app SHALL read a user automated projects file, `automated.json` next to the store, holding `{"projects": ["name", ...]}`, on every request, and SHALL treat each listed project as automated in addition to the built-in ones. The "Include automated" control's tooltip SHALL name the file's path. A missing file SHALL be no error.
+
+#### Scenario: File added
+- **WHEN** the user creates the file with `{"projects": ["docs-bot"]}` and reloads Activity
+- **THEN** `docs-bot` is automated
+
+#### Scenario: No file
+- **WHEN** there is no file
+- **THEN** Activity shows no banner
+
+### Requirement: Ignore an automated projects file that cannot be used
+When the automated projects file cannot be read, is not valid JSON, has no `projects` list, or has an entry that is not a string, the app SHALL ignore the whole file and the Activity page SHALL show a banner with the file's path and the reason, saying that only the built-in detection applies.
+
+#### Scenario: Malformed file
+- **WHEN** the file holds invalid JSON
+- **THEN** every page still loads with the built-in detection alone, and Activity says the file was ignored and why

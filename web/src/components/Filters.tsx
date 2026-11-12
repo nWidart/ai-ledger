@@ -11,6 +11,8 @@ export interface FiltersProps {
   projects: readonly (string | ProjectOption)[];
   /** Show "Include automated sessions" (Activity and Cost; Errors is never filtered). */
   automated?: boolean;
+  /** The file that lists more automated projects, named in the toggle's hint. */
+  autoFile?: string;
   /** Show the time range (Live has none: it keeps the range in the URL for the other pages). */
   range?: boolean;
   /** Page-only controls after the range (Errors: granularity, subagents, noise). */
@@ -26,7 +28,7 @@ export const viewName = (v: { project: string; range: number; source: Source | "
 export const agentName = (source: Source | "") => (source ? SOURCE_LABELS[source] : "agent");
 
 /** Project picker with its color dot, range and source segments and the automated toggle, all writing the URL hash. */
-export function Filters({ projects, automated = false, range = true, children }: FiltersProps) {
+export function Filters({ projects, automated = false, autoFile, range = true, children }: FiltersProps) {
   const [h, set] = useHashState();
   // An unknown source reads as All; the URL drops it so a copied link says what the page shows.
   const badSource = !!h.raw.source && !h.source;
@@ -54,7 +56,7 @@ export function Filters({ projects, automated = false, range = true, children }:
       </div>
       {children}
       {automated && (
-        <label className="chk" title="Sessions that tools start in the background, such as claude-mem's observer-sessions">
+        <label className="chk" title={"Sessions that tools start in the background, such as claude-mem's observer-sessions." + (autoFile ? ` Add more projects in ${autoFile}.` : "")}>
           <input type="checkbox" id="fAuto" checked={h.auto} onChange={e => set({ auto: e.target.checked })} />
           <span>Include automated <span className="long">sessions</span></span>
         </label>

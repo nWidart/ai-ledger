@@ -81,6 +81,8 @@ class WebFixturesTest(unittest.TestCase):
         tm.SourceFilterTest.setUpClass()
         tm.ToolDetailTest.setUpClass()
         cls.cur = tm.MetricsTest.con.cursor()
+        for con in (tm.MetricsTest.con, tm.SourceFilterTest.con, tm.ToolDetailTest.con):  # local hours the same on every machine
+            con.execute("SET GLOBAL TimeZone = 'UTC'")
 
     @classmethod
     def tearDownClass(cls):
@@ -97,6 +99,7 @@ class WebFixturesTest(unittest.TestCase):
             "usage-all.ts": ("UsagePayload", metrics.usage(c, "", 0, "s1", prices=tm.PRICES, today=tm.TODAY, automated=True)),
             "palette.ts": ("PalettePayload", metrics.palette(c, "", 30, tm.TODAY)),
             "sessions.ts": ("SessionsPage", metrics.session_list(c, prices=tm.PRICES, today=tm.TODAY)),
+            "day.ts": ("DayView", metrics.day_view(c, "", 30, "2026-11-04", tm.TODAY)),
             "session.ts": ("SessionDetail", metrics.session(c, "s1", prices=tm.PRICES)),
             # A Claude and a Codex session on one day, filtered to Codex.
             "usage-codex.ts": ("UsagePayload", metrics.usage(tm.SourceFilterTest.con.cursor(), "", 0, prices=tm.PRICES,
@@ -119,6 +122,7 @@ class WebFixturesTest(unittest.TestCase):
         got["live-session-codex.ts"] = ("LiveSession", lv["codex"])
         for name in ("usage.ts", "usage-all.ts", "usage-codex.ts"):  # not the machine's own data folder
             got[name][1]["prices_file"] = dict(path="/Users/example/Library/Application Support/ai-ledger/prices.json", error=None)
+            got[name][1]["automated_file"] = dict(path="/Users/example/Library/Application Support/ai-ledger/automated.json", error=None, projects=[])
         for name, (typ, obj) in got.items():
             write(name, typ, obj)
         self.assertIn("daily_work", got["usage.ts"][1])

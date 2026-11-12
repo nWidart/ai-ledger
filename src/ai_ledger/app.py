@@ -239,8 +239,11 @@ def handler(app, port=PORT):
                 elif url.path == "/api/sessions":
                     self.json(metrics.session_list(app.con.cursor(), q.get("project", ""), int(q.get("range") or 0), q.get("q", ""),
                                                    q.get("near") == "1", int(q.get("offset") or 0), max(1, int(q.get("limit") or 100)),
-                                                   day=q.get("day", ""),
-                                                   automated=q.get("automated") == "1", source=q.get("source", "")))
+                                                   day=q.get("day", ""), automated=q.get("automated") == "1", source=q.get("source", ""),
+                                                   sort=q.get("sort", ""), desc=q.get("desc") == "1"))
+                elif url.path == "/api/day":
+                    self.json(metrics.day_view(app.con.cursor(), q.get("project", ""), int(q.get("range") or 0), q.get("day", ""),
+                                               automated=q.get("automated") == "1", source=q.get("source", "")))
                 elif url.path == "/api/palette":
                     self.json(metrics.palette(app.con.cursor(), q.get("project", ""), int(q.get("range") or 0),
                                               automated=q.get("automated") == "1", source=q.get("source", "")))
@@ -316,7 +319,8 @@ def main(argv=None):
     ap.add_argument("--version", action="version", version=f"ai-ledger {importlib.metadata.version('ai-ledger')}")
     a = ap.parse_args(argv)
     roots = dict(claude=a.projects, codex=a.codex, insights=a.usage_data)
-    metrics.USER_PRICES = os.path.join(os.path.dirname(os.path.abspath(a.db or store.DEFAULT_DB)), "prices.json")  # next to the store
+    folder = os.path.dirname(os.path.abspath(a.db or store.DEFAULT_DB))  # the user files sit next to the store
+    metrics.USER_PRICES, metrics.USER_AUTOMATED = os.path.join(folder, "prices.json"), os.path.join(folder, "automated.json")
     try:
         con = store.open_store(a.db)
     except (store.StoreBusy, store.StoreNotMoved) as e:

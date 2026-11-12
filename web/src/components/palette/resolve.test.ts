@@ -34,6 +34,14 @@ describe("prefill", () => {
 });
 
 describe("resolve", () => {
+  it("drops the Activity day with a project, range or source chip, and keeps it otherwise", () => {
+    const here = "/usage#range=30&day=2026-10-20";
+    expect(commit(here, c.d7).href).toBe("/usage#range=7");
+    expect(commit(here, c.my).href).toBe("/usage#project=myproject&range=30");
+    expect(commit(here, c.codex).href).toBe("/usage#range=30&source=codex");
+    expect(commit(here, c.auto).href).toBe("/usage#range=30&auto=1&day=2026-10-20");
+    expect(commit(here, c.bash).href).toBe("/usage#range=30&day=2026-10-20&tool=Bash");
+  });
   it(">errors keeps the filters", () => {
     expect(commit("/usage#project=myproject&range=14", c.errors).href).toBe("/errors#project=myproject&range=14");
   });

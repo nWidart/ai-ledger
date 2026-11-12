@@ -1,0 +1,101 @@
+# Opens a release PR: scripts/release.sh bumps the version and turns the [Unreleased] section of
+# CHANGELOG.md into that version's section, on the branch release/vX.Y.Z.
+# Merging that PR checks, tags and publishes the release (see release.yml).
+# The RELEASE_TOKEN secret (a fine-grained PAT) pushes the branch and opens the PR, so CI runs on it.
+name: Release PR
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: 'Version bump. auto: picked from CHANGELOG.md and the commits since the last tag.'
+        type: choice
+        options:
+          - auto
+          - patch
+          - minor
+          - major
+        default: auto
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-pr
+  cancel-in-progress: false
+
+jobs:
+  release-pr:
+    name: Open release PR
+    runs-on: ubuntu-latest
+    # Only the Open release PR step gets RELEASE_TOKEN.
+    steps:
+      - name: Check branch
+        env:
+          REF: ${{ github.ref }}
+        run: |
+          if [ "$REF" != refs/heads/main ]; then
+            echo "::error::Run this workflow on main, not on '$REF'."
+            exit 1
+          fi
+
+      - name: Check RELEASE_TOKEN
+        env:
+          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          if [ -z "$RELEASE_TOKEN" ]; then
+            echo "::error::The RELEASE_TOKEN secret is empty. Store a fine-grained personal access token with Contents and Pull requests read/write on this repository: gh secret set RELEASE_TOKEN."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.13.x"
+
+      - name: Prepare the release commit
+        id: version
+        env:
+          BUMP: ${{ inputs.bump }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          scripts/release.sh "$BUMP"
+
+          branch=$(git branch --show-current)
+          tag=${branch#release/}
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" > /dev/null; then
+            echo "::error::Tag $tag already exists on origin."
+            exit 1
+          fi
+          if git ls-remote --exit-code --heads origin "refs/heads/$branch" > /dev/null; then
+            echo "::error::Branch $branch already exists on origin. Merge or close its PR and delete the branch first."
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      # A PR opened with GITHUB_TOKEN would start no CI, so the RELEASE_TOKEN PAT pushes the branch and opens it.
+      # git asks gh for credentials, and gh answers with this step's GH_TOKEN.
+      - name: Open release PR
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          gh auth setup-git
+          git push origin "release/$TAG"
+
+          body="$RUNNER_TEMP/body.md"
+          {
+            awk -v v="${TAG#v}" '/^## \[/ { p = index($0, "## [" v "]") == 1; next } /^\[[^]]*\]: / { p = 0 } p' CHANGELOG.md
+            echo
+            echo '---'
+            echo
+            echo '- [ ] Review the CHANGELOG.md section. Edit it on this branch if needed: the GitHub release notes are read from CHANGELOG.md when the PR merges.'
+            echo "- [ ] Merging runs the checks and the smoke test on the merge commit, then tags \`$TAG\`, publishes it to PyPI and creates the GitHub release (release.yml)."
+          } > "$body"
+
+          gh pr create --base main --head "release/$TAG" --title "chore: release ${TAG#v}" --body-file "$body"

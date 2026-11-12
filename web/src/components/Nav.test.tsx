@@ -98,6 +98,14 @@ describe("Nav", () => {
     expect(screen.getByRole("link", { name: "Errors" }).getAttribute("aria-current")).toBe("page");
   });
 
+  it("clears the Activity day with the project filter", async () => {
+    vi.stubGlobal("fetch", vi.fn(() => json(status)));
+    history.replaceState(null, "", "/usage#project=foo&range=30&day=2026-11-04&q=api");
+    render(<Nav />);
+    await userEvent.click(screen.getByRole("button", { name: "Clear project filter" }));
+    expect(location.hash).toBe("#range=30&q=api");
+  });
+
   it("shows the ingest status, and a failed Refresh offers Retry until it is retried, whatever a status poll answers", async () => {
     setOrder([]);
     let down = true, order: string[] = [];

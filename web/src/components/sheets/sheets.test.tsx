@@ -118,6 +118,14 @@ describe("ProjectSheet", () => {
     expect(location.hash).toBe("#project=foo");
     expect(document.querySelector("dialog")!.open).toBe(false);
   });
+
+  it("clears the Activity day when it filters the page", async () => {
+    mockApi({ "/api/usage": () => usage });
+    at("#range=30&day=2026-11-04&inspect=foo");
+    render(<UsageSheets data={usage} />);
+    await userEvent.click(await sheet().findByRole("button", { name: "Filter dashboard to foo" }));
+    expect(location.hash).toBe("#project=foo&range=30");
+  });
 });
 
 describe("ToolSheet", () => {

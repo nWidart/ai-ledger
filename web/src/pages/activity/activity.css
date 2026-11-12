@@ -12,6 +12,8 @@
 .pg-activity .lede .proj { color: var(--text-primary); font-weight: 500; white-space: nowrap; }
 .pg-activity .lede .pdot { width: .32em; height: .32em; vertical-align: .2em; margin: 0 .18em 0 .05em; }
 .pg-activity .lede .unit { white-space: nowrap; }
+/* The commits' change against the period before, small beside the big count. */
+.pg-activity .lede .chg { font-size: .45em; font-weight: 500; letter-spacing: 0; color: var(--text-muted); }
 /* Sessions and active days take their own line, so the commit count never breaks mid-phrase. */
 .pg-activity .lede .delta { display: block; color: var(--text-primary); font-weight: 500; font-size: .62em; letter-spacing: -.015em; margin-top: 4px; }
 .pg-activity .sub { color: var(--text-muted); font-size: 13px; margin: 8px 0 0; }
@@ -49,6 +51,22 @@
   .pg-activity .vital .v { font-size: 24px; }
 }
 
+
+/* Work chart: the project parts of a bar in its tooltip */
+.pg-activity .work .tip .parts { padding-left: 14px; color: var(--text-secondary); }
+
+/* Prompts by hour: a weekday by hour grid, darker for more */
+.pg-activity .hours { margin-top: 16px; }
+.pg-activity .hours .hint { margin: 4px 0 8px; }
+.pg-activity .heat { width: 100%; table-layout: fixed; border-collapse: separate; border-spacing: 2px; }
+.pg-activity .heat:focus-visible { outline-offset: 4px; border-radius: 4px; }
+.pg-activity .heat th { font-size: 11px; font-weight: 400; color: var(--text-muted); padding: 0; }
+.pg-activity .heat thead th { text-align: left; }
+.pg-activity .heat tbody th { width: 3em; text-align: left; padding-right: 4px; }
+.pg-activity .heat td { height: 18px; padding: 0; border-radius: 3px; background: var(--surface-2); }
+.pg-activity .heat td.at { outline: 2px solid var(--text-primary); outline-offset: -1px; }
+.pg-activity .hours .readout { min-height: 1.5em; margin-top: 6px; font-size: 12.5px; color: var(--text-secondary); }
+@media (max-width: 520px) { .pg-activity .heat { border-spacing: 1px; } .pg-activity .heat td { height: 14px; } }
 
 /* Drawers: the full tables */
 .pg-activity .tools-row { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin-bottom: 6px; }
