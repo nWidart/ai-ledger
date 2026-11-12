@@ -1,4 +1,4 @@
-import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
+import { Fragment, useEffect, useState, type MouseEvent, type ReactNode } from "react";
 import { insightsUrl, viewOf, type FacetTally, type InsightSession, type InsightsPayload, type View } from "../../api";
 import { Drawer } from "../../components/Drawer";
 import { Judged, label, outcomeLabel, outcomeTone } from "../../components/facets";
@@ -11,6 +11,7 @@ import { useLanding } from "../../components/useLanding";
 import { dayLabel, num, pct, plural, when } from "../../format";
 import { formatHash, navigate, setHash, useHashState } from "../../hash";
 import { useApi } from "../../useApi";
+import { DRILL_KEYS, drillsOf, passes, pickProps, toggleDrill, type DrillKind } from "./drill";
 import { countOf, headline } from "./insights";
 import "./insights.css";
 
@@ -96,24 +97,24 @@ function TopLedger<T>({ rows, empty, noun, row }: { rows: T[]; empty: string; no
 }
 
 function Friction({ d }: { d: InsightsPayload }) {
-  const max = d.friction[0]?.n ?? 0;
+  const [h] = useHashState(), max = d.friction[0]?.n ?? 0;
   return (
     <section className="panel sect" id="friction" aria-labelledby="frictionTitle">
       <h2 id="frictionTitle">Friction categories <Judged /></h2>
       <p className="hint">What got in the way, by times reported, with the sessions that reported it. A session can carry several.</p>
       <TopLedger rows={d.friction} empty="No friction reported in this view." noun="categories" row={r => <LedgerRow key={r.name} name={label(r.name)}
-        title={r.name} share={max ? r.n / max : 0} value={num(r.n)} side={sessionsSide(r)} />} />
+        title={r.name} share={max ? r.n / max : 0} value={num(r.n)} side={sessionsSide(r)} {...pickProps(h.raw, "fr", r.name, r.sessions)} />} />
     </section>
   );
 }
 
 function Goals({ d }: { d: InsightsPayload }) {
-  const max = d.goals[0]?.n ?? 0;
+  const [h] = useHashState(), max = d.goals[0]?.n ?? 0;
   return (
     <Drawer id="d-goals" title={<>Goals <Judged /></>}>
       <p className="hint">What each session set out to do.</p>
       <TopLedger rows={d.goals} empty="No goals recorded in this view." noun="goals" row={r => <LedgerRow key={r.name} name={label(r.name)} title={r.name}
-        share={max ? r.n / max : 0} value={num(r.n)} side={sessionsSide(r)} />} />
+        share={max ? r.n / max : 0} value={num(r.n)} side={sessionsSide(r)} {...pickProps(h.raw, "goal", r.name, r.sessions)} />} />
     </Drawer>
   );
 }
@@ -179,19 +180,19 @@ function Trend({ d }: { d: InsightsPayload }) {
 }
 
 function Outcomes({ d }: { d: InsightsPayload }) {
-  const n = d.coverage.facets;
+  const [h] = useHashState(), n = d.coverage.facets;
   return (
     <section className="panel sect" id="outcomes" aria-labelledby="outcomesTitle">
       <h2 id="outcomesTitle">Outcomes <Judged /></h2>
       <p className="hint">Whether each session met its goal, as judged by a model from the transcript. Share of the {plural(n, "analysed session")}.</p>
       <Ledger empty="No outcomes in this view.">{d.outcomes.map(o => <LedgerRow key={o.name} name={outcomeLabel(o.name)} title={o.name}
-        share={n ? o.n / n : 0} value={pct(n ? o.n / n : 0)} side={num(o.n)} />)}</Ledger>
+        share={n ? o.n / n : 0} value={pct(n ? o.n / n : 0)} side={num(o.n)} {...pickProps(h.raw, "outcome", o.name, o.n)} />)}</Ledger>
     </section>
   );
 }
 
 function Feelings({ d }: { d: InsightsPayload }) {
-  const n = d.coverage.facets, smax = Math.max(0, ...d.satisfaction.map(s => s.n));
+  const [h] = useHashState(), n = d.coverage.facets, smax = Math.max(0, ...d.satisfaction.map(s => s.n));
   return (
     <section className="panel sect" id="satisfaction" aria-labelledby="feelTitle">
       <h2 id="feelTitle">Satisfaction and helpfulness <Judged /></h2>
@@ -200,8 +201,8 @@ function Feelings({ d }: { d: InsightsPayload }) {
         title={s.name} share={smax ? s.n / smax : 0} value={num(s.n)} side={sessionsSide(s)} />} />
       <h3>Claude's helpfulness</h3>
       <p className="hint">Sessions per rating, from essential to unhelpful.</p>
-      <Ledger empty="No ratings in this view.">{d.helpfulness.map(h => <LedgerRow key={h.name} name={label(h.name)} title={h.name}
-        share={n ? h.n / n : 0} value={num(h.n)} side={pct(n ? h.n / n : 0)} />)}</Ledger>
+      <Ledger empty="No ratings in this view.">{d.helpfulness.map(x => <LedgerRow key={x.name} name={label(x.name)} title={x.name}
+        share={n ? x.n / n : 0} value={num(x.n)} side={pct(n ? x.n / n : 0)} {...pickProps(h.raw, "help", x.name, x.n)} />)}</Ledger>
     </section>
   );
 }
@@ -209,7 +210,10 @@ function Feelings({ d }: { d: InsightsPayload }) {
 const plain = (e: MouseEvent) => !(e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey);
 
 /** One session as a card: title, outcome and chips on the first line, the model's summary below, friction detail on expand. */
-function SessionCard({ s, view }: { s: InsightSession; view: View }) {
+function SessionCard({ s, view, raw }: { s: InsightSession; view: View; raw: Readonly<Record<string, string>> }) {
+  /** A chip or badge that sets, or clears, the filter of its kind. */
+  const pick = (kind: DrillKind, name: string, text: ReactNode, cls: string) =>
+    <button type="button" className={cls + (raw[kind] === name ? " on" : "")} title={name} aria-pressed={raw[kind] === name} onClick={() => toggleDrill(kind, name)}>{text}</button>;
   const open = (e: MouseEvent<HTMLAnchorElement>) => { if (plain(e)) { e.preventDefault(); navigate(e.currentTarget.getAttribute("href")!); } };
   return (
     <li className="scard">
@@ -219,10 +223,11 @@ function SessionCard({ s, view }: { s: InsightSession; view: View }) {
           : <span title={s.title ?? s.session_id}>{sessName(s)}</span>}
           {(s.title || !s.in_store) && <span className="muted small"> {s.title && shortId(s.session_id)}{s.title && !s.in_store && " · "}
             {!s.in_store && <span title="This session's transcript is not in the store">no transcript</span>}</span>}</span>
-        <span className={"badge " + outcomeTone(s.outcome)} title={s.outcome ?? undefined}>{outcomeLabel(s.outcome)}</span>
+        {s.outcome != null ? pick("outcome", s.outcome, outcomeLabel(s.outcome), "badge " + outcomeTone(s.outcome))
+          : <span className={"badge " + outcomeTone(s.outcome)}>{outcomeLabel(s.outcome)}</span>}
         {s.satisfaction.includes("dissatisfied") && <span className="dis">dissatisfied</span>}
-        {s.goals.map(g => <span key={g} className="chip" title={g}>{label(g)}</span>)}
-        {s.friction.map(f => <span key={f} className="chip warn" title={f}>{label(f)}</span>)}
+        {s.goals.map(g => <Fragment key={g}>{pick("goal", g, label(g), "chip")}</Fragment>)}
+        {s.friction.map(f => <Fragment key={f}>{pick("fr", f, label(f), "chip warn")}</Fragment>)}
         <span className="meta"><span className="when">{when(s.start)}</span> · <ProjectName project={s.project} /></span>
       </div>
       {s.brief_summary && <p className="sum">{s.brief_summary}</p>}
@@ -250,30 +255,37 @@ type SortId = keyof typeof SORTS;
 /** The list's filters as the URL holds them. */
 const filtersOf = (raw: Readonly<Record<string, string>>) => ({ friction: raw.friction === "1", outcome: raw.outcome ?? "" });
 
-function Sessions({ d, view }: { d: InsightsPayload; view: View }) {
-  const [h] = useHashState(), { friction, outcome } = filtersOf(h.raw), [all, setAll] = useState(false), [sort, setSort] = useState<SortId>("newest");
-  const filtered = friction || outcome !== "";
-  const rows = d.sessions.filter(s => (!friction || hasFriction(s)) && (!outcome || s.outcome === outcome)).sort(SORTS[sort].cmp);
+function Sessions({ d, view, sort, onSort }: { d: InsightsPayload; view: View; sort: SortId; onSort: (s: SortId) => void }) {
+  const [h] = useHashState(), { friction, outcome } = filtersOf(h.raw), drills = drillsOf(h.raw), [all, setAll] = useState(false);
+  const filtered = friction || drills.length > 0;
+  const rows = d.sessions.filter(s => (!friction || hasFriction(s)) && passes(s, drills)).sort(SORTS[sort].cmp);
   const listed = all ? rows : rows.slice(0, SESSIONS_TOP);
   // Each outcome the view has; the one in the URL too, so the select never shows another than the list is narrowed to.
   const outcomes = d.outcomes.filter(o => o.n > 0).map(o => o.name);
   if (outcome && !outcomes.includes(outcome)) outcomes.push(outcome);
+  const chips = [...drills.map(x => ({ key: x.kind, text: x.chip })), ...(friction ? [{ key: "friction", text: "Only sessions with friction" }] : [])];
   return (
     <section className="panel log sect" id="log" aria-labelledby="logTitle">
       <div className="log-head">
         <h2 id="logTitle">Analysed sessions <Judged /></h2>
         <div className="log-ctl">
-          <label>Sort <select value={sort} onChange={e => setSort(e.target.value as SortId)}>
+          <label>Sort <select value={sort} onChange={e => onSort(e.target.value as SortId)}>
             {(Object.keys(SORTS) as SortId[]).map(k => <option key={k} value={k}>{SORTS[k].label}</option>)}</select></label>
           <label>Outcome <select value={outcome} onChange={e => setHash({ outcome: e.target.value }, { push: true })}>
             <option value="">All outcomes</option>{outcomes.map(o => <option key={o} value={o}>{outcomeLabel(o)}</option>)}</select></label>
           <label className="chk"><input type="checkbox" checked={friction} onChange={e => setHash({ friction: e.target.checked }, { push: true })} /> Only sessions with friction</label>
         </div>
       </div>
+      {chips.length > 0 && <div className="fchips" role="group" aria-label="Active filters">
+        {chips.map(c => <button key={c.key} type="button" className="chip fx" aria-label={"Remove filter " + c.text}
+          onClick={() => setHash({ [c.key]: null }, { push: true })}>{c.text} <span aria-hidden="true">✕</span></button>)}
+        {chips.length > 1 && <button type="button" className="linkish" onClick={() => setHash(Object.fromEntries([...DRILL_KEYS, "friction"].map(k => [k, null])), { push: true })}>Clear filters</button>}
+      </div>}
       <p className="hint"><span className="count">{filtered ? `${num(rows.length)} of ${plural(d.sessions.length, "session")}` : plural(rows.length, "session")}</span>,
-        {" "}{SORTS[sort].words}{d.truncated ? `: the newest ${num(d.sessions.length)} of the view` : ""}. The summary and friction detail are the model's words.</p>
-      {listed.length ? <ul className="scards" role="list">{listed.map(s => <SessionCard key={s.session_id} s={s} view={view} />)}</ul>
-        : <p className="empty">{outcome ? "No session in this view matches the filters." : friction ? "No session in this view reports friction." : "No analysed sessions in this view."}</p>}
+        {" "}{SORTS[sort].words}{d.truncated ? `: the newest ${num(d.sessions.length)} of the view` : ""}. The summary and friction detail are the model's words.
+        {d.truncated && filtered && ` Filters cover only the newest ${num(d.sessions.length)} analysed sessions of the view, so a ledger count can exceed the sessions listed.`}</p>
+      {listed.length ? <ul className="scards" role="list">{listed.map(s => <SessionCard key={s.session_id} s={s} view={view} raw={h.raw} />)}</ul>
+        : <p className="empty">{drills.length ? "No session in this view matches the filters." : friction ? "No session in this view reports friction." : "No analysed sessions in this view."}</p>}
       {rows.length > SESSIONS_TOP && <button type="button" className="linkish more" onClick={() => setAll(!all)}>
         {all ? `Show the first ${SESSIONS_TOP}` : `Show all ${num(rows.length)} sessions`}</button>}
     </section>
@@ -287,6 +299,8 @@ export function InsightsPage() {
   const want = viewOf(h);
   const url = insightsUrl(want), { data: d, error, loading, retry } = useApi<InsightsPayload>(url, { keepPrevious: true });
   const [shown, setShown] = useState(want);
+  // Held here, not in Sessions: the list unmounts for a view with no analysed session, and the choice lasts the page visit.
+  const [sort, setSort] = useState<SortId>("newest");
   useEffect(() => { if (d && !loading && !error) setShown(want); }, [d, loading, error, url]); // want is read through url
   const { slow, grow, wrap, retryBtn } = useLanding(d, url, loading, error, ":scope > :is(.grid2, .panel, .vitals, .drawers)");
   const howto = d && shown.source !== "codex" && d.coverage.stored_facets > 0;
@@ -320,7 +334,7 @@ export function InsightsPage() {
           </div>
           <Trend d={d} />
           <Feelings d={d} />
-          <Sessions d={d} view={shown} />
+          <Sessions d={d} view={shown} sort={sort} onSort={setSort} />
           <div className="drawers"><Goals d={d} /><SessionTypes d={d} /><CoverageDrawer d={d} />{howto && <HowItWorks d={d} />}</div>
         </>}
         {!figures && howto && <div className="drawers"><HowItWorks d={d} /></div>}

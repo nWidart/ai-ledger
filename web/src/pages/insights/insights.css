@@ -81,3 +81,15 @@
 .pg-insights .scard .fd summary { cursor: pointer; font-size: 12.5px; color: var(--text-muted); }
 .pg-insights .scard .fd p { margin: 4px 0 0; }
 .pg-insights .dis { font-size: 11.5px; color: var(--critical-text); }
+
+/* Drill-down: ledger rows, chips and the outcome badge are buttons that set a filter. */
+.pg-insights .ledger li.pick.on .rowbtn { background: var(--accent-soft); box-shadow: inset 2px 0 0 var(--accent); }
+.pg-insights .ledger li.pick.on .n { font-weight: 600; }
+.pg-insights button.chip, .pg-insights button.badge { font-family: inherit; line-height: inherit; border: 1px solid var(--border); cursor: pointer; }
+.pg-insights button.chip { background: none; }
+.pg-insights button.badge { border-color: transparent; }
+.pg-insights button.chip:hover, .pg-insights button.badge:hover { border-color: var(--text-muted); }
+.pg-insights button.chip.on, .pg-insights button.badge.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.pg-insights .fchips { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; margin: 8px 0 0; }
+.pg-insights .fchips .chip.fx { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-ink); }
+.pg-insights .fchips .linkish { font-size: 13px; }
