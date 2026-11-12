@@ -149,6 +149,27 @@ describe("types", () => {
     const none = makeModel({ ...fixture, errors: [e("z", "2026-11-04", null)], error_days: [["2026-11-04", "foo", "x", 1, 0, "claude"]] });
     expect(typeRows(none, v(), filtered(none, v()))[0]).toMatchObject({ inc: 0, bad: 0, unrec: null });
   });
+  it("divides a type's errors by the calls the subagent toggle counts", () => {
+    const e = (id: string, sub: 0 | 1) => ({ id, ts: "2026-11-04T10:00:00.000Z", d: "2026-11-04", p: "foo", s: "s1", t: "Edit", c: "x", i: "", e: "", r: "", sub, src: "claude" as const, n: null });
+    // Nov 4: 100 calls, 60 of them by subagents; 2 errors by the main thread, 2 by a subagent.
+    const mm = makeModel({ ...fixture, errors: [e("a", 0), e("b", 0), e("c", 1), e("d", 1)], error_days: [["2026-11-04", "foo", "x", 4, 2, "claude"]], calls: [["2026-11-04", "foo", 100, 60, "claude"]] });
+    const rateOf = (o: Partial<View>) => typeRows(mm, v(o), filtered(mm, v(o)))[0]!.rate;
+    expect(rateOf({ sub: true })).toBe(4); // 4 errors over 100 calls
+    expect(rateOf({ sub: false })).toBe(5); // 2 errors over the 40 main-thread calls
+  });
+  it("gives a week bucket that starts before the range the rate of the chart's point for it", () => {
+    const e = (id: string, d: string) => ({ id, ts: `${d}T10:00:00.000Z`, d, p: "foo", s: "s1", t: "Edit", c: "x", i: "", e: "", r: "", sub: 0 as const, src: "claude" as const, n: null });
+    // A 7-day range ends Nov 5 and starts Fri Oct 30; its first week (Monday Oct 26) holds Oct 30, 31 and Nov 1. Oct 28 is outside the range:
+    // its 1000 calls and its error must not count.
+    const mm = makeModel({ ...fixture, errors: [e("a", "2026-10-28"), e("b", "2026-10-30"), e("c", "2026-11-01"), e("d", "2026-11-03")],
+      error_days: [["2026-10-28", "foo", "x", 1, 0, "claude"], ["2026-10-30", "foo", "x", 1, 0, "claude"], ["2026-11-01", "foo", "x", 1, 0, "claude"], ["2026-11-03", "foo", "x", 1, 0, "claude"]],
+      calls: [["2026-10-28", "foo", 1000, 0, "claude"], ["2026-10-30", "foo", 10, 0, "claude"], ["2026-11-01", "foo", 10, 0, "claude"], ["2026-11-03", "foo", 50, 0, "claude"]] });
+    const vv = v({ range: 7, gran: "week", at: "2026-10-26" }), f = filtered(mm, vv);
+    const pt = chartData(mm, vv, f, viewTypes(mm, vv, f)).pts.find(p => p.k === "2026-10-26")!;
+    expect(pt).toMatchObject({ c: 20, e: 2 });
+    expect(typeRows(mm, vv, f)[0]).toMatchObject({ n: 2, rate: 10 });
+    expect(typeRows(mm, vv, f)[0]!.rate).toBe(pt.r);
+  });
   it("carries the percent the change cell shows, and none for counts or a missing comparison", () => {
     const r = typeRows(m, v(), filtered(m, v()))[0]!;
     expect(r.delta.pct).toBeNull(); // "–": no calls in the 30 days before

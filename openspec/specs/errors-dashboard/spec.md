@@ -360,7 +360,7 @@ The app SHALL answer 400 with an error message, and store nothing, unless the re
 - **THEN** the endpoint answers 400 and stores nothing
 
 ### Requirement: Sort the type table
-The type table SHALL sort by every column but the rate trend: Type (A to Z first), Errors, Time lost, Rate, Didn't recover, Share and Change. The default is Errors, most first. A second click on a header SHALL flip the direction. Only the sorted header SHALL carry `aria-sort`. Ties SHALL keep the default order, and a row with no value for the sorted column SHALL come last in either direction.
+The type table SHALL sort by every column but the rate trend: Type (A to Z first), Errors, Time lost, Rate, Didn't recover, Share and Change. The default is Errors, most first. A second click on a header SHALL flip the direction. Only the sorted header SHALL carry `aria-sort`. Ties SHALL keep the default order, and a row with no value for the sorted column SHALL come last in either direction. The sorted column SHALL stay visible at every width.
 
 #### Scenario: Sort by Didn't recover
 - **WHEN** the user selects the "Didn't recover" header
@@ -385,11 +385,15 @@ The Change column SHALL sort by the percent its cell shows. A cell that shows co
 - **THEN** the order is "+100%", "-50%", "1 → 3", and sorting least first puts "1 → 3" last again
 
 ### Requirement: Filter the type table by name
-The type table card SHALL have a search field "Filter types…" with an accessible name. It SHALL list only the types whose label or id contains the text, ignoring case, and show and announce "N of M types". With no match the table SHALL show an empty row that says so, with a "Clear filter" button. The filter SHALL NOT change the summary, the chart, Where to start or the open type: an open type the filter hides stays open.
+The type table card SHALL have a search field "Filter types…" with an accessible name. It SHALL list only the types whose label or id contains the text, ignoring case, and show and announce "N of M types". The field SHALL show while the view has types or the text is set. An empty row with text set (no match, or no types) SHALL offer a "Clear filter" button. The filter SHALL NOT change the summary, the chart, Where to start or the open type: an open type the filter hides stays open.
 
 #### Scenario: No match
 - **WHEN** the user types "zzz" and no type matches
 - **THEN** the table shows "No types match", the count reads "0 of 5 types", and "Clear filter" lists every type again
+
+#### Scenario: A view with no types
+- **WHEN** the user has typed "git" and then selects a range with no types
+- **THEN** the field keeps "git", the empty row says the range has no tool calls, and "Clear filter" is offered
 
 ### Requirement: Keep the sort and the filter for the page visit
 The sort and the filter text SHALL be page state: not in the URL, not saved. They SHALL survive a change of project, range or granularity and the detail moving into the sheet, and reset on reload.

@@ -262,9 +262,9 @@ export function dur(ms: number) {
 }
 /** Time lost per error type: the sum of its incidents' spans, first failure start to last failure end. An incident counts whole
  *  when at least one of its failures is in errs; the span is not clipped to the filtered failures. */
-export function timeLost(m: Model, errs: readonly Err[]): Record<string, number> {
+export function timeLost(m: Model, errs: readonly Err[], groups: readonly Group[] = incidentsOf(m, errs)): Record<string, number> {
   const by: Record<string, number> = {};
-  for (const g of incidentsOf(m, errs)) by[g.errs[0]!.c] = (by[g.errs[0]!.c] || 0) + incSpan(g);
+  for (const g of groups) by[g.errs[0]!.c] = (by[g.errs[0]!.c] || 0) + incSpan(g);
   return by;
 }
 export interface IncSummary { n: number; bad: number; pct: number; groups: Group[] }
@@ -330,9 +330,9 @@ export function linePath(vals: readonly (number | null)[], x: (i: number) => num
  *  delta.pct: the numeric change. */
 export interface TypeRow { cid: string; n: number; lost: number; share: number; rate: number | null; inc: number; bad: number; unrec: number | null; color: string; pts: Pt[]; delta: Delta }
 export function typeRows(m: Model, v: View, f: Filtered): TypeRow[] {
-  const errs = inBucket(v, f.errs), counts = countBy(errs), total = errs.length || 1, vt = viewTypes(m, v, f), keys = buckets(m, f.from, v.gran), x = compare(m, v, f), lost = timeLost(m, errs);
+  const errs = inBucket(v, f.errs), counts = countBy(errs), total = errs.length || 1, vt = viewTypes(m, v, f), keys = buckets(m, f.from, v.gran), x = compare(m, v, f), groups = incidentsOf(m, errs), lost = timeLost(m, errs, groups);
   const calls = sumCalls(v, v.at ? f.calls.filter(c => bucketOf(c[0], v.gran) === v.at) : f.calls), inc: Record<string, [number, number]> = {};
-  for (const g of incidentsOf(m, errs)) { const t = inc[g.errs[0]!.c] ??= [0, 0]; t[0]++; if (g.outcome !== "recovered") t[1]++; }
+  for (const g of groups) { const t = inc[g.errs[0]!.c] ??= [0, 0]; t[0]++; if (g.outcome !== "recovered") t[1]++; }
   return Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([cid, n]) => {
     const [i, bad] = inc[cid] ?? [0, 0];
     return { cid, n, lost: lost[cid] || 0, share: n / total, rate: rate(n, calls), inc: i, bad, unrec: i ? bad / i * 100 : null, color: typeColor(cid, vt),

@@ -10,8 +10,12 @@ import { openPalette } from "../../components/palette/store";
 import { clearApiCache } from "../../useApi";
 import { tableFocus } from "./context";
 import { ErrorsPage } from "./ErrorsPage";
+import { typeRows } from "./model";
 import { lostPayload } from "./lostData";
 import { VIEW_KEY } from "./view";
+
+// typeRows runs through its own implementation; the mock only counts the calls.
+vi.mock("./model", async orig => { const a = await orig<typeof import("./model")>(); return { ...a, typeRows: vi.fn(a.typeRows) }; });
 
 const json = (body: unknown) => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) } as Response);
 /** The fixture with its errors replaced; error_days is rebuilt from them, as the server builds it. */
@@ -1834,6 +1838,49 @@ describe("type table: sort and filter", () => {
     expect(sortedHeads()).toEqual([[name, aria2]]);
     // The header button keeps the focus: it is not rebuilt.
     expect(document.activeElement).toBe(head(name));
+  });
+
+  it("marks the sorted column's header and cells, so the breakpoints that hide columns leave it", async () => {
+    await open();
+    const marked = (cls: string) => [...document.querySelectorAll(`.types .${cls}`)].filter(c => c.classList.contains("c-on")).length;
+    expect(marked("c-share")).toBe(0);
+    await userEvent.click(head("Share"));
+    expect(marked("c-share")).toBe(6); // the header and the five cells
+    expect(document.querySelector("th.c-share")!.classList.contains("c-on")).toBe(true);
+    await userEvent.click(head("Rate"));
+    expect(marked("c-share")).toBe(0);
+    expect(marked("c-rate")).toBe(6);
+  });
+
+  it("keeps the rows when only the sort or the filter changes", async () => {
+    await open();
+    const calls = () => vi.mocked(typeRows).mock.calls.length, n = calls();
+    expect(n).toBeGreaterThan(0);
+    await userEvent.type(screen.getByRole("searchbox", { name: /filter types/i }), "git");
+    await userEvent.click(head("Rate"));
+    await userEvent.click(head("Type"));
+    expect(calls()).toBe(n);
+    // A change of view does compute them again.
+    await userEvent.click(screen.getByRole("button", { name: "Week" }));
+    expect(calls()).toBeGreaterThan(n);
+  });
+
+  it("keeps the filter and its Clear button in a view with no types", async () => {
+    await open();
+    const box = () => screen.getByRole("searchbox", { name: /filter types/i }) as HTMLInputElement;
+    await userEvent.type(box(), "git");
+    await userEvent.click(screen.getByRole("button", { name: "7d" })); // Oct 30 to Nov 5: no calls, no errors
+    expect(order()).toEqual([]);
+    expect(box().value).toBe("git");
+    expect(document.getElementById("typeCount")!.textContent).toBe("0 of 0 types");
+    expect(document.querySelector("#catBody .empty")!.textContent).toMatch(/^No tool calls in this range\./);
+    await userEvent.click(within(document.getElementById("catBody")!).getByRole("button", { name: "Clear filter" }));
+    // With no text left the field goes with the rows (focus falls back to the chart), and comes back with them.
+    expect(screen.queryByRole("searchbox", { name: /filter types/i })).toBeNull();
+    expect(document.activeElement).toBe(document.getElementById("chart"));
+    await userEvent.click(screen.getByRole("button", { name: "30d" }));
+    expect(order()).toEqual(DEFAULT);
+    expect(box().value).toBe("");
   });
 
   it("keeps the focus on a header sorted from the keyboard", async () => {
