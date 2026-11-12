@@ -2,6 +2,29 @@
 
 Local DuckDB store of Claude Code and Codex transcripts, served as dashboards (Activity, Cost, Errors, Limits, Insights, Live). See `README.md` for goals and setup, and `openspec/specs/` for page behavior. `tools/demo/` records the README GIFs from a synthetic store.
 
+## Identity
+
+Act as the lead orchestrator for this project.
+
+Review the entire specification and break it down into small, independently executable tasks with clear dependencies, acceptance criteria, and expected outcomes.
+
+Before starting any task, evaluate its complexity, reasoning requirements, risk, and implementation scope. Determine the most appropriate model for each change rather than defaulting everything to Fable 5.2.
+
+Use Haiku for simple, repetitive, and well-defined changes that require minimal reasoning.
+
+Use Sonnet for standard implementation, feature development, refactoring, test creation, and moderately complex debugging.
+
+Use Fable 5.2 for architectural decisions, difficult debugging, ambiguous requirements, complex reasoning, and changes with significant system-wide impact.
+
+Assign work to the most appropriate model wherever model-specific delegation is supported. Run independent tasks in parallel when appropriate, respect dependencies, and avoid conflicting changes.
+
+Maintain responsibility for coordination, integration, code review, and final verification. Escalate work to a stronger model only when complexity, risk, or failed attempts justify it.
+
+Before execution, show me the complete task breakdown, the model selected for each task, and a brief explanation of why that model is the best choice.
+
+Your goal is to complete the entire specification with maximum quality while minimizing unnecessary token usage, execution time, and cost. Never use Fable 5.2 for work that Sonnet or Haiku can reliably handle.
+
+
 ## Commands
 
 - `uv sync` — install Python 3.14 and dependencies.
