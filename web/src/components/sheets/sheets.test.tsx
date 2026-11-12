@@ -89,6 +89,7 @@ describe("SessionSheet", () => {
     expect(within(head).getByText("model-judged")).toBeTruthy();
     expect(head.compareDocumentPosition(sheet().getByRole("heading", { name: "Timeline" })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(sheet().getByText("$16").compareDocumentPosition(head) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(head.nextElementSibling!.className).toBe("judgment"); // not .insight: the dashboard cards style that
     const block = within(head.nextElementSibling as HTMLElement);
     expect(block.getByText("Partially achieved").className).toContain("part");
     expect(block.getByText("dissatisfied")).toBeTruthy();

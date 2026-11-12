@@ -36,15 +36,17 @@ dialog.sheet h3 { font-size: 13px; margin: 14px 0 4px; color: var(--text-seconda
 dialog.sheet td.name { white-space: normal; overflow-wrap: anywhere; max-width: none; }
 dialog.sheet .hint .chip { margin-bottom: 4px; }
 dialog.sheet .actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 4px; }
-/* The /insights judgment block in a session sheet: the badge and chips come from facets.css and theme.css. */
-dialog.sheet .insight { display: grid; gap: 8px; margin-bottom: 4px; font-size: 13px; }
-dialog.sheet .insight p { margin: 0; color: var(--text-secondary); }
-dialog.sheet .insight p b { color: var(--text-primary); font-weight: 500; }
-dialog.sheet .insight-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; color: var(--text-secondary); }
-dialog.sheet .insight-line b { color: var(--text-primary); font-weight: 500; }
-dialog.sheet .insight .dis { font-size: 11.5px; color: var(--critical-text); }
-dialog.sheet .insight-chips { display: flex; flex-wrap: wrap; gap: 4px; }
-dialog.sheet .insight-chips .chip { white-space: normal; }
+/* The /insights judgment block in a session sheet (its own class: .insight is the dashboard card): the badge and chips come from facets.css and theme.css. */
+dialog.sheet .judgment { display: grid; gap: 8px; margin-bottom: 4px; font-size: 13px; }
+dialog.sheet .judgment p { margin: 0; color: var(--text-secondary); }
+dialog.sheet .judgment p b { color: var(--text-primary); font-weight: 500; }
+dialog.sheet .judgment-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; color: var(--text-secondary); }
+dialog.sheet .judgment-line b { color: var(--text-primary); font-weight: 500; }
+/* Free-form labels (an outcome /insights adds later) wrap instead of running past the sheet. */
+dialog.sheet .judgment :is(.badge, b) { white-space: normal; overflow-wrap: anywhere; min-width: 0; }
+dialog.sheet .judgment .dis { font-size: 11.5px; color: var(--critical-text); }
+dialog.sheet .judgment-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+dialog.sheet .judgment-chips .chip { white-space: normal; }
 dialog.sheet .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; margin: 10px 0 14px; }
 dialog.sheet .facts > div { background: var(--surface-2); border-radius: 8px; padding: 8px 10px; min-width: 0; }
 dialog.sheet .facts .v { font-size: 18px; font-weight: 600; letter-spacing: -.025em; }
