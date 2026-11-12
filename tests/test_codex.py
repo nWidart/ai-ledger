@@ -9,7 +9,7 @@ from unittest import mock
 from compression import zstd
 
 from ai_ledger import metrics, store
-from ai_ledger.codex import live_items as codex_live
+from ai_ledger.codex import live_items as codex_live, placement, thread_class
 from test_store import StoreCase
 
 FIXTURES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "codex")
@@ -50,6 +50,14 @@ def context(ordinal, turn, model, effort=None):
 def meta(sid, thread=None):
     return line(timestamp="2026-11-06T10:00:00.000Z", ordinal=0, type="session_meta",
                 payload=dict(session_id=sid, id=thread or sid, cwd="/nowhere/foo", originator="codex-tui", cli_version="0.166.0"))
+
+
+def meta_at(ordinal, ts, sid, thread=None, **extra):
+    """A session_meta line at ordinal: a thread's own (thread given, as a subagent's) or a copy of its parent's."""
+    d = json.loads(meta(sid, thread))
+    d.update(ordinal=ordinal, timestamp=ts)
+    d["payload"].update(extra)
+    return line(**d)
 
 
 THREAD = "0a0f9999-0000-7000-8000-000000000001"
@@ -199,10 +207,12 @@ class ArchiveTest(CodexCase):
         overlap = self.q("SELECT count(*) FROM raw_lines WHERE key LIKE 'codex:%:146'")
         self.assertEqual(overlap, [(2,)])
         self.assertEqual(self.q("SELECT session_id, source FROM sessions"), [(SESSION["v0153"], "codex")])
+        # Its session_meta has session_id == id: it continues the main thread, whatever its name says.
         self.assertEqual(self.q("SELECT session_id, subagent, model, effort FROM requests WHERE message_id = 'resp_thread'"),
-                         [(SESSION["v0153"], True, "gpt-5.6-sol", "low")])
-        self.assertEqual(self.q("SELECT session_id, subagent FROM tool_calls WHERE tool_use_id = 'call_thread'"), [(SESSION["v0153"], True)])
-        self.assertEqual(self.q("SELECT count(*) FROM requests WHERE NOT subagent"), [(3,)])
+                         [(SESSION["v0153"], False, "gpt-5.6-sol", "low")])
+        self.assertEqual(self.q("SELECT session_id, subagent FROM tool_calls WHERE tool_use_id = 'call_thread'"), [(SESSION["v0153"], False)])
+        self.assertEqual(self.q("SELECT count(*) FROM requests WHERE NOT subagent"), [(4,)])
+        self.assertEqual(self.q("SELECT DISTINCT session_id, subagent FROM raw_lines"), [(SESSION["v0153"], False)])
 
     def test_spawned_thread_is_subagent_work(self):
         parent = "0a0f9999-0000-7000-8000-000000000002"
@@ -211,6 +221,66 @@ class ArchiveTest(CodexCase):
         self.ingest()
         self.assertEqual(self.q("SELECT session_id, subagent FROM requests"), [(parent, True)])
         self.assertEqual(self.q("SELECT session_id, peak_context FROM sessions"), [(parent, 0)])
+        # A file named by its own thread only: its lines belong to the parent session, not to a session of their own.
+        self.assertEqual(self.q("SELECT DISTINCT session_id, subagent FROM raw_lines"), [(parent, True)])
+
+    def test_chunk_without_session_meta_keeps_the_threads_owner(self):
+        parent = "0a0f9999-0000-7000-8000-000000000002"
+        path = self.place(NAME, meta(parent, THREAD) + context(1, "t1", "gpt-6-astra"))
+        self.ingest()
+        self.place(NAME, record(2, "t1", "r1", usage(100, 0, 10)), mode="a")
+        self.ingest()
+        self.assertEqual(self.q("SELECT count(*), min(session_id), bool_and(subagent) FROM raw_lines WHERE file = ?", path), [(3, parent, True)])
+        self.assertEqual(self.q("SELECT session_id, subagent FROM requests"), [(parent, True)])
+
+    def test_file_with_no_session_meta_is_placed_by_its_name(self):
+        parent = "0a0f9999-0000-7000-8000-000000000002"
+        self.place(NAME.replace(THREAD, f"{parent}_{THREAD}"), context(1, "t1", "gpt-6-astra"))
+        self.ingest()
+        self.assertEqual(self.q("SELECT DISTINCT session_id, subagent FROM raw_lines"), [(parent, True)])
+
+    def test_rebuild_places_lines_stored_under_the_thread(self):
+        parent = "0a0f9999-0000-7000-8000-000000000002"
+        self.place(NAME, meta(parent, THREAD) + context(1, "t1", "gpt-6-astra") + record(2, "t1", "r1", usage(100, 0, 10)))
+        self.place("session_index.jsonl", line(id=parent, thread_name="Review", updated_at="2026-11-06T10:00:00Z"), where="")
+        self.ingest()
+        before = {t: self.q(f"SELECT * FROM {t} ORDER BY ALL") for t in store.DERIVED}
+        # As stores written before this version hold it: the thread's own id as the session, and no subagent flag.
+        self.q("UPDATE raw_lines SET session_id = ?, subagent = false WHERE file LIKE '%rollout-%'", THREAD)
+        store.rebuild(self.con)
+        self.assertEqual(self.q("SELECT DISTINCT session_id, subagent FROM raw_lines WHERE file LIKE '%rollout-%'"), [(parent, True)])
+        self.assertEqual(self.q("SELECT session_id, subagent FROM raw_lines WHERE file LIKE '%session_index%'"), [(parent, False)])
+        self.assertEqual({t: self.q(f"SELECT * FROM {t} ORDER BY ALL") for t in store.DERIVED}, before)
+
+    def test_thread_class(self):
+        a, b = "0a0f9999-0000-7000-8000-00000000000a", "0a0f9999-0000-7000-8000-00000000000b"
+        path = f"/x/rollout-2026-11-06T10-00-00-{b}.jsonl"
+        self.assertEqual(thread_class(path, dict(session_id=a, id=b)), (a, True))  # a subagent
+        self.assertEqual(thread_class(path, dict(session_id=b, id=b)), (b, False))
+        self.assertEqual(thread_class(path, dict(id=b)), (b, False))
+        self.assertEqual(thread_class(path.replace(b, f"{a}_{b}"), dict(session_id=a, id=a)), (a, False))  # a continuation
+        self.assertEqual(thread_class(path.replace(b, f"{a}_{b}"), None), (a, True))  # no record: the file name
+        self.assertEqual(thread_class(path, None), (b, False))
+
+    def test_placement_reads_the_threads_own_session_meta(self):  # a forked subagent's file also holds its parent's
+        a, b = "0a0f9999-0000-7000-8000-00000000000a", "0a0f9999-0000-7000-8000-00000000000b"
+        path = f"/x/rollout-2026-11-06T10-00-00-{b}.jsonl"
+        metas = [json.loads(meta(a)), json.loads(meta(a, b))]
+        self.assertEqual(placement(None, path, metas), (a, True))
+        self.assertEqual(placement(None, path, metas[::-1]), (a, True))
+
+
+class ForkedChunkTest(CodexCase):
+    def test_chunk_holding_only_the_parents_copy_of_session_meta_is_subagent_work(self):
+        parent = "0a0f9999-0000-7000-8000-0000000000aa"
+        ts = "2026-11-06T10:00:00.000Z"
+        self.place(NAME, meta_at(0, ts, parent, THREAD, subagent_history_start_ordinal=3))
+        self.ingest()
+        self.place(NAME, meta_at(1, ts, parent) + context(2, "t1", "gpt-6-astra") + record(3, "t1", "r1", usage(100, 0, 10)), mode="a")
+        self.ingest()
+        self.assertEqual(self.q("SELECT DISTINCT session_id, subagent FROM raw_lines"), [(parent, True)])
+        self.assertEqual(self.q("SELECT session_id, subagent FROM requests"), [(parent, True)])
+        self.assertEqual(self.q("SELECT session_id FROM sessions"), [(parent,)])
 
 
 class TokenTest(CodexCase):
@@ -559,6 +629,23 @@ class LiveItemsTest(unittest.TestCase):
         res, = self.items(type="event_msg", payload=dict(type="item_completed", turn_id="t1", item=dict(
             type="McpToolCall", id="c4", server="node_repl", tool="js", status="failed", error=dict(message="boom"))))
         self.assertEqual((res["id"], res["error"]), ("c4", "boom"))
+        self.assertEqual((res["tool"], res["summary"]), ("mcp__node_repl__js", ""))
+
+    def test_failed_item_carries_its_tool_and_input(self):
+        res, = self.items(type="event_msg", payload=dict(type="item_completed", turn_id="t1", item=dict(
+            type="CommandExecution", id="c5", command=["/bin/zsh", "-lc", "ls nowhere"], status="failed", exit_code=2, aggregated_output="no such file")))
+        self.assertEqual(res, dict(k="tool_result", id="c5", error="Exit code 2\nno such file", output="", agent=None,
+                                   tool="exec_command", summary="ls nowhere"))
+        ok = self.items(type="event_msg", payload=dict(type="item_completed", turn_id="t1", item=dict(
+            type="CommandExecution", id="c6", command=["/bin/zsh", "-lc", "ls"], status="completed", exit_code=0)))
+        self.assertEqual(ok, [])
+
+    def test_subagent_start_names_the_call_and_the_thread(self):
+        started = lambda kind: self.items(type="event_msg", payload=dict(type="item_completed", turn_id="t1", item=dict(
+            type="SubAgentActivity", id="c3", kind=kind, agent_thread_id="0a0f9999-0000-7000-8000-000000000002", agent_path="/root/a")))
+        self.assertEqual(started("started"), [dict(k="agent", id="c3", agent="0a0f9999-0000-7000-8000-000000000002")])
+        for kind in ("completed", "interacted", "interrupted"):
+            self.assertEqual(started(kind), [])
 
     def test_turns_prompts_and_replies(self):
         self.assertEqual(self.items(type="event_msg", payload=dict(type="task_started", turn_id="t1", model_context_window=272000)),

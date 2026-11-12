@@ -115,13 +115,15 @@ describe("live.ts", () => {
     expect(lanesOf(running.map(e => (e.k === "tool" && e.id === "t2" ? { ...e, agent: null } : e)))[0]).toMatchObject({ parent: null, name: "Subagent" });
   });
 
-  it("tells a lane no call names done by its last turn mark, and a lane with a call by that call", () => {
+  it("tells a lane with turn marks done by its last one, and a lane with none by its call", () => {
     const lane = (...events: LiveEvent[]) => lanesOf(events)[0];
     expect(lane(turn("turn_start", 0), threadCall(1), turn("turn_end", 3))).toMatchObject({ parent: null, done: true, running: false, end: at30(3) });
     expect(lane(turn("turn_start", 0), threadCall(1), turn("turn_end", 3), turn("turn_start", 9))).toMatchObject({ done: false, running: true });
     expect(lane(threadCall(1))).toMatchObject({ done: false, running: false }); // no mark held: not known
-    const marked = [...s1.events.map(e => (e === agentCall ? { ...agentCall, end: null } : e)), { ...turn("turn_end", 9), lane: "a7" }];
-    expect(lanesOf(marked)[0]).toMatchObject({ parent: "t2", done: false });
+    // A Codex spawn call returns at once: its thread's turn marks tell, not the call's end.
+    const spawned = (...marks: LiveEvent[]) => lanesOf([...s1.events, ...marks.map(m => ({ ...m, lane: "a7" }))])[0];
+    expect(spawned(turn("turn_start", 9))).toMatchObject({ parent: "t2", done: false, running: true });
+    expect(spawned(turn("turn_start", 9), turn("turn_end", 12))).toMatchObject({ parent: "t2", done: true, running: false });
   });
 
   it("reads a shell call pending past 30 s as a likely approval wait, unless it is a long one", () => {

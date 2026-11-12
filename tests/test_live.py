@@ -1,11 +1,12 @@
 import json
 import os
+import shutil
 import unittest
 from unittest import mock
 from datetime import datetime, timedelta, timezone
 
 from ai_ledger import live, store
-from test_codex import CodexCase, LIVE, NAME, THREAD, meta
+from test_codex import CodexCase, LIVE, NAME, THREAD, meta, meta_at
 from test_derive import S, assistant, prompt, result, tool_use
 from test_store import StoreCase, line
 
@@ -104,13 +105,51 @@ class StateTest(unittest.TestCase):
                 + codex_line(2, 9, "event_msg", type="task_complete", turn_id="t1"))
         self.assertEqual(self.state(text, "codex")["kind"], "you")
 
-    def test_codex_turn_started_in_a_thread_file_is_thinking(self):  # a <session>_<thread> file can continue the main thread
-        thread_file = NAME.replace(THREAD, THREAD + "_0a0f9999-0000-7000-8000-000000000002")
+    def test_codex_turn_started_in_a_thread_file_is_thinking(self):  # a file that continues the main thread has no lane
         evs = events(codex_line(1, 0, "event_msg", type="task_started", turn_id="t1")
                      + codex_line(2, 9, "event_msg", type="task_complete", turn_id="t1"), "codex")
-        evs += events(codex_line(1, 12, "event_msg", type="task_started", turn_id="t2"), "codex", lane_file=thread_file)
+        evs += events(codex_line(1, 12, "event_msg", type="task_started", turn_id="t2"), "codex")
         st = live.state(evs, NOW, "codex", max(e["ts"] for e in evs))
-        self.assertEqual((st["kind"], st["since"], evs[-1]["lane"] is not None), ("thinking", "2026-11-10T10:00:12.000Z", True))
+        self.assertEqual((st["kind"], st["since"], st["inferred"], evs[-1]["lane"]), ("thinking", "2026-11-10T10:00:12.000Z", False, None))
+
+    def lanes(self, main, sub, source="codex", now=NOW):
+        """The state of a session whose main thread holds the lines main and a subagent the lines sub."""
+        lane_file = "/x/agent-a1.jsonl" if source == "claude" else NAME.replace(THREAD, "0a0f9999-0000-7000-8000-000000000002")
+        evs = events(main, source) + events(sub, source, lane_file=lane_file)
+        evs.sort(key=lambda e: e["ts"])
+        return live.state(evs, now, source, max(e["ts"] for e in evs))
+
+    def test_codex_child_turn_end_leaves_a_working_parent_as_it_is(self):
+        st = self.lanes(codex_line(1, 0, "event_msg", type="task_started", turn_id="t1"),
+                        codex_line(1, 1, "event_msg", type="task_started", turn_id="u1") + codex_line(2, 5, "event_msg", type="task_complete", turn_id="u1"))
+        self.assertEqual(st, dict(kind="thinking", tool=None, since="2026-11-10T10:00:00.000Z", inferred=False, long=False))
+
+    def test_codex_subagent_at_work_keeps_the_session_thinking(self):
+        main = codex_line(1, 0, "event_msg", type="task_started", turn_id="t1") + codex_line(2, 9, "event_msg", type="task_complete", turn_id="t1")
+        started = codex_line(1, 12, "event_msg", type="task_started", turn_id="u1")
+        self.assertEqual(self.lanes(main, started), dict(kind="thinking", tool=None, since="2026-11-10T10:00:12.000Z", inferred=True, long=False))
+        done = started + codex_line(2, 15, "event_msg", type="task_complete", turn_id="u1")
+        self.assertEqual(self.lanes(main, done), dict(kind="you", tool=None, since="2026-11-10T10:00:09.000Z", inferred=False, long=False))
+        older = codex_line(1, 3, "event_msg", type="task_started", turn_id="u1")  # the main thread wrote after it
+        self.assertEqual(self.lanes(main, older)["kind"], "you")
+
+    def test_subagent_pending_call_is_running_a_tool(self):
+        main = codex_line(1, 0, "event_msg", type="task_started", turn_id="t1") + codex_line(2, 9, "event_msg", type="task_complete", turn_id="t1")
+        st = self.lanes(main, codex_line(1, 12, "response_item", type="function_call", name="update_plan", call_id="c1", arguments="{}") + codex_line(
+            2, 13, "event_msg", type="task_started", turn_id="u1"))
+        self.assertEqual((st["kind"], st["tool"]), ("tool", "update_plan"))
+
+    def test_claude_subagent_between_calls_keeps_the_session_thinking(self):
+        main = prompt("u1", at(0), "p1", "go") + assistant("a1", "m1", at(5), [dict(type="text", text="Running it in the background.")])
+        call = assistant("b1", "m2", at(10), [tool_use("t1", "Read", file_path="x")])
+        between = call + result("r1", at(11), "t1", "ok")
+        at_work = self.lanes(main, between, "claude")
+        self.assertEqual(at_work, dict(kind="thinking", tool=None, since="2026-11-10T10:00:11.000Z", inferred=True, long=False))
+        done = between + assistant("b2", "m3", at(12), [dict(type="text", text="Done.")])
+        self.assertEqual(self.lanes(main, done, "claude")["kind"], "you")
+        self.assertEqual(self.lanes(main, call, "claude")["kind"], "tool")  # the pending call keeps its own state
+        older = assistant("b3", "m4", at(2), [tool_use("t2", "Read", file_path="x")]) + result("r2", at(3), "t2", "ok")
+        self.assertEqual(self.lanes(main, older, "claude")["kind"], "you")
 
     def test_closed_session_is_ended_whatever_its_lines_say(self):
         text = prompt("u1", at(0), "p1", "go") + assistant("a1", "m1", at(5), [tool_use("t1", "Bash", command="sleep 999")])
@@ -569,7 +608,7 @@ class CodexSessionTest(CodexCase):
         self.place(NAME, meta(THREAD).replace("2026-11-06T10:00:00.000Z", at(0))
                    + codex_line(1, 1, "turn_context", turn_id="t1", model="claude-opus-5-5")
                    + codex_line(2, 2, "token_usage_record", turn_id="t1", response_id="r1", usage=dict(input_tokens=1000000, output_tokens=0)))
-        self.place(NAME.replace(THREAD, f"{THREAD}_{thread}"), meta(THREAD, thread).replace("2026-11-06T10:00:00.000Z", at(3))
+        self.place(NAME.replace(THREAD, thread), meta(THREAD, thread).replace("2026-11-06T10:00:00.000Z", at(3))
                    + codex_line(1, 4, "turn_context", turn_id="u1", model="claude-opus-5-5")
                    + codex_line(2, 5, "response_item", type="function_call", name="exec_command", call_id="c1", arguments=json.dumps(dict(cmd="ls")))
                    + codex_line(3, 6, "token_usage_record", turn_id="u1", response_id="r2", usage=dict(input_tokens=500000, output_tokens=0)))
@@ -581,7 +620,7 @@ class CodexSessionTest(CodexCase):
 
     def test_thread_turn_marks_carry_its_lane(self):  # no call names a Codex lane: the page tells it done by these
         thread = "0a0f9999-0000-7000-8000-000000000002"
-        child = NAME.replace(THREAD, f"{THREAD}_{thread}")
+        child = NAME.replace(THREAD, thread)
         self.place(NAME, meta(THREAD).replace("2026-11-06T10:00:00.000Z", at(0)) + codex_line(1, 1, "event_msg", type="task_started", turn_id="t1"))
         self.place(child, meta(THREAD, thread).replace("2026-11-06T10:00:00.000Z", at(3))
                    + codex_line(1, 4, "event_msg", type="task_started", turn_id="u1")
@@ -596,11 +635,222 @@ class CodexSessionTest(CodexCase):
         later = live.session(self.con.cursor(), THREAD, after=first["cursor"], now=NOW, prices=PRICES)
         self.assertEqual(marks(later)[-1], ("turn_end", thread))
 
+    def test_continuation_file_is_main_thread_work_not_a_lane(self):
+        later = "0a0f9999-0000-7000-8000-000000000002"
+        self.place(NAME, meta(THREAD).replace("2026-11-06T10:00:00.000Z", at(0)) + codex_line(1, 1, "event_msg", type="task_started", turn_id="t1"))
+        self.place(NAME.replace(THREAD, f"{THREAD}_{later}"), meta(THREAD).replace("2026-11-06T10:00:00.000Z", at(3))
+                   + codex_line(1, 4, "turn_context", turn_id="u1", model="claude-opus-5-5")
+                   + codex_line(2, 5, "response_item", type="function_call", name="exec_command", call_id="c1", arguments=json.dumps(dict(cmd="ls")))
+                   + codex_line(3, 6, "token_usage_record", turn_id="u1", response_id="r2", usage=dict(input_tokens=500000, output_tokens=0)))
+        self.ingest()
+        got = live.session(self.con.cursor(), THREAD, now=NOW, prices=PRICES)
+        self.assertEqual(([e["lane"] for e in got["events"]], got["lanes"]), ([None, None], {}))
+        self.assertEqual(self.q("SELECT count(*), count(*) FILTER (WHERE NOT subagent) FROM requests"), [(1, 1)])
+
+    def test_forked_subagent_copied_history_shows_nothing(self):
+        thread = "0a0f9999-0000-7000-8000-000000000002"
+        child_meta = json.loads(meta(THREAD, thread))
+        child_meta["payload"]["subagent_history_start_ordinal"] = 5  # the lines below 5 copy the parent's history
+        call = lambda i, secs, cid: codex_line(i, secs, "response_item", type="function_call", name="exec_command", call_id=cid, arguments=json.dumps(dict(cmd="ls")))
+        history = (codex_line(1, 1, "event_msg", type="task_started", turn_id="t1")
+                   + codex_line(2, 2, "event_msg", type="item_completed", turn_id="t1", item=dict(type="UserMessage", content=[dict(type="text", text="go")]))
+                   + call(3, 3, "c1") + codex_line(4, 4, "response_item", type="function_call_output", call_id="c1", output="a"))
+        self.place(NAME, meta(THREAD).replace("2026-11-06T10:00:00.000Z", at(0)) + history + codex_line(5, 5, "event_msg", type="task_complete", turn_id="t1"))
+        self.place(NAME.replace(THREAD, thread), json.dumps(child_meta | dict(timestamp=at(1))) + "\n" + history
+                   + codex_line(5, 6, "event_msg", type="task_started", turn_id="u1") + call(6, 7, "c9"))
+        self.ingest()
+        marks = lambda got: [(e["k"], e["lane"]) for e in got["events"]]
+        got = live.session(self.con.cursor(), THREAD, now=NOW, prices=PRICES)
+        self.assertEqual(marks(got), [("turn_start", None), ("prompt", None), ("tool", None), ("turn_end", None),
+                                      ("turn_start", thread), ("tool", thread)])
+        self.assertEqual(live.session(self.con.cursor(), THREAD, after=at(0), now=NOW, prices=PRICES)["events"], got["events"])
+        listed, = live.sessions(self.con.cursor(), now=NOW, prices=PRICES)["sessions"]
+        self.assertEqual((listed["latest"]["lane"], listed["latest"]["summary"]), (thread, json.dumps(dict(cmd="ls"))))
+
+    def prompted(self, text=""):
+        return codex_line(1, 1, "event_msg", type="item_completed", turn_id="t1", item=dict(type="UserMessage", content=[dict(type="text", text="go")]))
+
+    def test_continuation_file_turn_counts_for_the_main_thread(self):
+        later = "0a0f9999-0000-7000-8000-000000000002"
+        self.place(NAME, meta(THREAD).replace("2026-11-06T10:00:00.000Z", at(0)) + self.prompted()
+                   + codex_line(2, 2, "event_msg", type="task_started", turn_id="t1") + codex_line(3, 9, "event_msg", type="task_complete", turn_id="t1"))
+        self.place(NAME.replace(THREAD, f"{THREAD}_{later}"), meta(THREAD).replace("2026-11-06T10:00:00.000Z", at(11))
+                   + codex_line(1, 12, "event_msg", type="task_started", turn_id="t2"))
+        self.ingest()
+        want = dict(kind="thinking", tool=None, since="2026-11-10T10:00:12.000Z", inferred=False, long=False)
+        self.assertEqual(live.session(self.con.cursor(), THREAD, now=NOW, prices=PRICES)["state"], want)
+        self.assertEqual(live.sessions(self.con.cursor(), now=NOW, prices=PRICES)["sessions"][0]["state"], want)
+
+    def child_of(self, thread, lines):
+        self.place(NAME.replace(THREAD, thread), meta(THREAD, thread).replace("2026-11-06T10:00:00.000Z", at(3)) + lines)
+
+    def test_subagent_traffic_does_not_push_the_main_thread_out_of_the_state(self):
+        self.place(NAME, meta(THREAD).replace("2026-11-06T10:00:00.000Z", at(0)) + self.prompted()
+                   + codex_line(2, 2, "event_msg", type="task_started", turn_id="t1"))
+        self.child_of("0a0f9999-0000-7000-8000-000000000002", "".join(codex_line(i, 10, "turn_context", turn_id="u1") for i in range(1, 260)))
+        self.ingest()
+        want = dict(kind="thinking", tool=None, since="2026-11-10T10:00:02.000Z", inferred=False, long=False)
+        self.assertEqual(live.session(self.con.cursor(), THREAD, now=NOW, prices=PRICES)["state"], want)
+        self.assertEqual(live.sessions(self.con.cursor(), now=NOW, prices=PRICES)["sessions"][0]["state"], want)
+
+    CHILD = "0a0f9999-0000-7000-8000-000000000002"
+
+    def fork(self, lines, start=None, **extra):
+        """The file of subagent CHILD, forked from THREAD: its own session_meta, then lines."""
+        if start is not None:
+            extra["subagent_history_start_ordinal"] = start
+        return self.place(NAME.replace(THREAD, self.CHILD), meta_at(0, at(1), THREAD, self.CHILD, **extra) + lines)
+
+    def marks(self):
+        got = live.session(self.con.cursor(), THREAD, now=NOW, prices=PRICES)
+        return [(e["k"], e["lane"]) for e in got["events"]]
+
+    def test_forked_copied_history_stays_hidden_when_its_lines_are_stored_under_another_path(self):
+        started = lambda i, secs: codex_line(i, secs, "event_msg", type="task_started", turn_id="t1")
+        self.place(NAME, meta_at(0, at(0), THREAD))
+        self.fork(started(1, 1), start=4)
+        self.ingest()
+        full = meta_at(0, at(1), THREAD, self.CHILD, subagent_history_start_ordinal=4) + started(1, 1) + started(2, 2) \
+            + meta_at(3, at(2), THREAD) + started(4, 6)
+        self.place(NAME.replace(THREAD, self.CHILD), full, where="archived_sessions", zst=True)
+        shutil.rmtree(os.path.join(self.home, LIVE))
+        self.place(NAME, meta_at(0, at(0), THREAD))
+        self.ingest()
+        self.assertEqual(self.marks(), [("turn_start", self.CHILD)])
+
+    def test_forked_start_ordinal_that_is_null_or_only_mentioned_is_ignored(self):
+        for extra in (dict(subagent_history_start_ordinal=None), dict(instructions="mentions subagent_history_start_ordinal")):
+            with self.subTest(extra=extra):
+                self.place(NAME, meta_at(0, at(0), THREAD))
+                self.fork(codex_line(1, 2, "event_msg", type="task_started", turn_id="u1"), **extra)
+                self.ingest()
+                self.assertEqual(self.marks(), [("turn_start", self.CHILD)])
+
+    def test_subagent_turn_older_than_the_shared_window_still_counts_as_at_work(self):
+        self.place(NAME, meta_at(0, at(0), THREAD) + self.prompted() + codex_line(2, 2, "event_msg", type="task_started", turn_id="t1")
+                   + codex_line(3, 3, "event_msg", type="task_complete", turn_id="t1"))
+        self.fork(codex_line(1, 10, "event_msg", type="task_started", turn_id="u1")
+                  + "".join(codex_line(i, 11 + i // 10, "turn_context", turn_id="u1") for i in range(2, 300)))
+        self.ingest()
+        self.assertEqual(live.session(self.con.cursor(), THREAD, now=NOW, prices=PRICES)["state"]["kind"], "thinking")
+        self.assertEqual(live.sessions(self.con.cursor(), now=NOW, prices=PRICES)["sessions"][0]["state"]["kind"], "thinking")
+
+    def test_spawn_call_older_than_the_loaded_rows_is_sent_again_naming_its_lane(self):
+        spawn = codex_line(2, 3, "response_item", type="function_call", name="spawn_agent", call_id="c3", arguments="{}")
+        started = codex_line(3, 4, "event_msg", type="item_completed", turn_id="t1",
+                             item=dict(type="SubAgentActivity", id="c3", kind="started", agent_thread_id=self.CHILD))
+        chatter = "".join(codex_line(i, 5 + i // 1000, "turn_context", turn_id="t1") for i in range(4, 3200)) \
+            + "".join(codex_line(i, 20, "response_item", type="function_call", name="update_plan", call_id=f"x{i}", arguments="{}") for i in range(3200, 3300))
+        self.place(NAME, meta_at(0, at(0), THREAD) + spawn + started + chatter)
+        self.fork(codex_line(1, 30, "response_item", type="function_call", name="update_plan", call_id="k1", arguments="{}"))
+        self.ingest()
+        got = live.session(self.con.cursor(), THREAD, now=NOW, prices=PRICES)
+        self.assertEqual([(e["id"], e["agent"]) for e in got["events"] if e["k"] == "tool" and e["id"] in ("c3", "k1")],
+                         [("c3", self.CHILD), ("k1", None)])
+
+    def test_long_turn_still_reads_thinking(self):
+        self.place(NAME, meta(THREAD).replace("2026-11-06T10:00:00.000Z", at(0)) + self.prompted()
+                   + codex_line(2, 2, "event_msg", type="task_started", turn_id="t1")
+                   + "".join(codex_line(i, 10, "turn_context", turn_id="t1") for i in range(3, 300)))
+        self.ingest()
+        want = dict(kind="thinking", tool=None, since="2026-11-10T10:00:02.000Z", inferred=False, long=False)
+        self.assertEqual(live.session(self.con.cursor(), THREAD, now=NOW, prices=PRICES)["state"], want)
+        self.assertEqual(live.sessions(self.con.cursor(), now=NOW, prices=PRICES)["sessions"][0]["state"], want)
+
+    def test_child_turn_end_leaves_a_working_parent_as_it_is_in_a_store(self):
+        self.place(NAME, meta(THREAD).replace("2026-11-06T10:00:00.000Z", at(0)) + self.prompted()
+                   + codex_line(2, 2, "event_msg", type="task_started", turn_id="t1"))
+        self.child_of("0a0f9999-0000-7000-8000-000000000002", codex_line(1, 4, "event_msg", type="task_started", turn_id="u1")
+                      + codex_line(2, 8, "event_msg", type="task_complete", turn_id="u1"))
+        self.ingest()
+        self.assertEqual(live.session(self.con.cursor(), THREAD, now=NOW, prices=PRICES)["state"]["kind"], "thinking")
+        self.assertFalse(live.sessions(self.con.cursor(), now=NOW, prices=PRICES)["sessions"][0]["state"]["inferred"])
+
+    def inner(self, ordinal, secs, cid, status="failed", cmd="ls nowhere"):
+        """An item_completed line of a command an exec script ran."""
+        return codex_line(ordinal, secs, "event_msg", type="item_completed", turn_id="t1", item=dict(
+            type="CommandExecution", id=cid, command=["/bin/zsh", "-lc", cmd], status=status, exit_code=2 if status == "failed" else 0,
+            aggregated_output="no such file", duration=dict(secs=0, nanos=5000000)))
+
+    def test_failed_command_inside_an_exec_script_is_a_row(self):
+        thread = "0a0f9999-0000-7000-8000-000000000002"
+        exec_call = lambda cid, secs: codex_line(2, secs, "response_item", type="custom_tool_call", name="exec", call_id=cid, input="run it")
+        self.place(NAME, meta(THREAD).replace("2026-11-06T10:00:00.000Z", at(0)) + self.prompted() + exec_call("c1", 2)
+                   + self.inner(3, 3, "inner1") + self.inner(4, 4, "inner2", status="completed", cmd="ls")  # a success: nothing
+                   + codex_line(5, 5, "response_item", type="custom_tool_call_output", call_id="c1", output="done"))
+        self.child_of(thread, self.inner(1, 6, "inner3", cmd="rg x"))
+        self.ingest()
+        got = live.session(self.con.cursor(), THREAD, now=NOW, prices=PRICES)
+        self.assertEqual([(e["tool"], e["id"], e["lane"], e["failed"]) for e in got["events"] if e["k"] == "tool"],
+                         [("exec", "c1", None, False), ("exec_command", "inner1", None, True), ("exec_command", "inner3", thread, True)])
+        failed = got["events"][2]
+        self.assertEqual((failed["summary"], failed["error"], failed["start"], failed["end"], failed["ts"]),
+                         ("ls nowhere", "Exit code 2\nno such file", "2026-11-10T10:00:03.000Z", "2026-11-10T10:00:03.000Z", "2026-11-10T10:00:03.000Z"))
+        self.assertTrue(failed["key"].endswith("#0") and failed["key"].startswith("codex:"))
+        again = live.session(self.con.cursor(), THREAD, after=at(2), now=NOW, prices=PRICES)  # a catch-up holds the same key
+        self.assertEqual([e["key"] for e in again["events"] if e.get("id") == "inner1"], [failed["key"]])
+
+    def test_failed_inner_call_changes_no_state(self):
+        self.place(NAME, meta(THREAD).replace("2026-11-06T10:00:00.000Z", at(0)) + self.prompted()
+                   + codex_line(2, 2, "event_msg", type="task_started", turn_id="t1")
+                   + codex_line(3, 3, "response_item", type="custom_tool_call", name="update_plan", call_id="c1", input="plan") + self.inner(4, 4, "inner1"))
+        self.ingest()
+        want = dict(kind="tool", tool="update_plan", since="2026-11-10T10:00:03.000Z", inferred=False, long=False)
+        self.assertEqual(live.session(self.con.cursor(), THREAD, now=NOW, prices=PRICES)["state"], want)
+        self.assertEqual(live.sessions(self.con.cursor(), now=NOW, prices=PRICES)["sessions"][0]["state"], want)
+
+    def test_failed_item_of_a_known_call_marks_that_call_and_adds_no_row(self):
+        self.place(NAME, meta(THREAD).replace("2026-11-06T10:00:00.000Z", at(0)) + self.prompted()
+                   + codex_line(2, 2, "response_item", type="function_call", name="exec_command", call_id="c1", arguments=json.dumps(dict(cmd="ls nowhere")))
+                   + self.inner(3, 3, "c1"))
+        self.ingest()
+        tools = [e for e in live.session(self.con.cursor(), THREAD, now=NOW, prices=PRICES)["events"] if e["k"] == "tool"]
+        self.assertEqual([(e["id"], e["failed"], e["error"]) for e in tools], [("c1", True, "Exit code 2\nno such file")])
+
+    def test_failed_item_of_a_call_before_the_rows_marks_that_call(self):
+        self.place(NAME, meta(THREAD).replace("2026-11-06T10:00:00.000Z", at(0)) + self.prompted()
+                   + codex_line(2, 2, "response_item", type="function_call", name="exec_command", call_id="c1", arguments=json.dumps(dict(cmd="ls nowhere"))))
+        self.ingest()
+        first = live.session(self.con.cursor(), THREAD, now=NOW, prices=PRICES)
+        self.place(NAME, self.inner(3, 130, "c1"), mode="a")
+        self.ingest()
+        later = live.session(self.con.cursor(), THREAD, after=at(125), now=NOW, prices=PRICES)
+        self.assertEqual([(e["id"], e["failed"]) for e in later["events"] if e["k"] == "tool"], [("c1", True)])
+        self.assertEqual(len(first["events"]), 2)
+
+    def spawn(self, ordinal, secs, thread, call="c3"):
+        return codex_line(ordinal, secs, "event_msg", type="item_completed", turn_id="t1", item=dict(
+            type="SubAgentActivity", id=call, kind="started", agent_thread_id=thread, agent_path="/root/a"))
+
+    def test_spawn_call_names_its_codex_lane(self):
+        thread = "0a0f9999-0000-7000-8000-000000000002"
+        self.place(NAME, meta(THREAD).replace("2026-11-06T10:00:00.000Z", at(0)) + self.prompted()
+                   + codex_line(2, 3, "response_item", type="function_call", name="spawn_agent", call_id="c3", arguments=json.dumps(dict(task_name="review")))
+                   + self.spawn(3, 4, thread))
+        self.child_of(thread, codex_line(1, 5, "response_item", type="function_call", name="update_plan", call_id="c9", arguments="{}"))
+        self.ingest()
+        got = live.session(self.con.cursor(), THREAD, now=NOW, prices=PRICES)
+        tools = {e["id"]: e for e in got["events"] if e["k"] == "tool"}
+        self.assertEqual((tools["c3"]["agent"], tools["c3"]["end"], tools["c9"]["lane"]), (thread, None, thread))
+        self.assertEqual([e["k"] for e in got["events"]], ["prompt", "tool", "tool"])  # the start item shows no event of its own
+
+    def test_spawn_call_before_the_rows_is_sent_again_naming_its_lane(self):
+        thread = "0a0f9999-0000-7000-8000-000000000002"
+        self.place(NAME, meta(THREAD).replace("2026-11-06T10:00:00.000Z", at(0)) + self.prompted()
+                   + codex_line(2, 3, "response_item", type="function_call", name="spawn_agent", call_id="c3", arguments=json.dumps(dict(task_name="review"))))
+        self.ingest()
+        self.assertIsNone(live.session(self.con.cursor(), THREAD, now=NOW, prices=PRICES)["events"][1]["agent"])
+        self.place(NAME, self.spawn(3, 130, thread), mode="a")
+        self.ingest()
+        later = live.session(self.con.cursor(), THREAD, after=at(125), now=NOW, prices=PRICES)
+        call, = [e for e in later["events"] if e["k"] == "tool"]
+        self.assertEqual((call["id"], call["agent"], call["end"]), ("c3", thread, None))
+
     def test_thread_lanes_whose_requests_share_a_time(self):
         threads = ["0a0f9999-0000-7000-8000-000000000002", "0a0f9999-0000-7000-8000-000000000003"]
         self.place(NAME, meta(THREAD).replace("2026-11-06T10:00:00.000Z", at(0)))
         for thread, rid, tokens in zip(threads, ("r2", "r3"), (500000, 250000)):
-            self.place(NAME.replace(THREAD, f"{THREAD}_{thread}"), meta(THREAD, thread).replace("2026-11-06T10:00:00.000Z", at(3))
+            self.place(NAME.replace(THREAD, thread), meta(THREAD, thread).replace("2026-11-06T10:00:00.000Z", at(3))
                        + codex_line(1, 4, "turn_context", turn_id="u1", model="claude-opus-5-5")
                        + codex_line(2, 6, "token_usage_record", turn_id="u1", response_id=rid, usage=dict(input_tokens=tokens, output_tokens=0)))
         self.ingest()

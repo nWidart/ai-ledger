@@ -5,6 +5,8 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+Run `ai-ledger rebuild` once after upgrading (with the app stopped): Codex subagent threads stored before this version are filed under their own ids, and the rebuild moves them to their sessions.
+
 ### Added
 
 - Insights has a Coverage drawer with the analysed share of each project's sessions, so a busy project with no judgments stands out, and the facets each `/insights` run wrote. The coverage sentence links to it.
@@ -21,6 +23,10 @@ and versions follow [Semantic Versioning](https://semver.org/).
 - The Live page's Stream view fits the window: a titled session no longer makes the page scroll, and the session rail, the stream and the agent panel stay within the window and scroll inside themselves (from 721 pixels wide; below that the page scrolls as before).
 - A time with a date in the Live stream ("Nov 10, 17:40:05") stays on one line: the time column widens when an event shows a date.
 - The "Include automated" tooltip on Live names the `automated.json` file, as on Activity.
+- Codex subagents show under their session on Live. A subagent's rollout is named by its own thread id only, so ingest filed its lines as a session of its own; a thread now belongs to the session its first `session_meta` names, and the files that continue a main thread are main-thread work, no longer a lane.
+- A session with a subagent at work reads working, not your turn, for both agents. A Codex subagent's finished turn no longer ends its parent's turn, and a subagent's lines can no longer push the main thread out of the lines the state is read from, so a long Codex turn still reads working.
+- A forked Codex subagent's copy of its parent's history no longer shows as events or state of the session.
+- A failed command that a Codex `exec` script ran now has a row in the Live stream, and a Codex `spawn_agent` call names the subagent it started, so the page ties them together.
 
 ## [0.2.0] - 2026-11-12
 
