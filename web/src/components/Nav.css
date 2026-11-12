@@ -10,6 +10,12 @@
 /* The current page's tab takes that page's tint: clay for Activity and Cost, coral red for Errors. */
 .appnav a[aria-current=page] { background: var(--accent-soft); color: var(--accent-ink); font-weight: 600; }
 .appnav a[href^="/errors"][aria-current=page] { background: var(--critical-soft); color: var(--critical-text); }
+/* The alert dot on the Limits tab sits in the tab's corner, out of the flow: it never moves a tab or the wrapping. The ring is the
+   bar's color, so the dot reads on any tab tint; both tones clear 3:1 against it in both themes. */
+.appnav a:has(.appnav-badge) { position: relative; }
+.appnav-badge { position: absolute; top: 3px; right: 3px; width: 7px; height: 7px; border-radius: 50%; box-shadow: 0 0 0 1.5px var(--surface-1); }
+.appnav-badge[data-tone=critical] { background: var(--critical); }
+.appnav-badge[data-tone=warning] { background: var(--warning); }
 .appnav-filter { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; padding: 2px 4px 2px 10px; border-radius: 999px;
   background: var(--surface-2); border: 1px solid var(--border); color: var(--text-primary); font-size: 13px; max-width: 100%; min-width: 0; }
 .appnav-filter .pdot { margin-right: 2px; }

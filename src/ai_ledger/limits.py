@@ -701,22 +701,52 @@ def history_row(w):
                 early=w.early, reason=w.reason, estimated=w.estimated)
 
 
+def last_to_reset(windows):
+    """Of the windows already at their limit, the one that resets last; None when none is."""
+    out = [w for w in windows if w["at_limit"]]
+    return max(out, key=lambda w: w["resets_at"]) if out else None
+
+
+def soonest_run_out(windows):
+    """Of the windows forecast to reach 100% before they reset, the one that does so first; None when none is."""
+    out = [w for w in windows if w["forecast"] and w["forecast"]["hits_at"]]
+    return min(out, key=lambda w: w["forecast"]["hits_at"]) if out else None
+
+
 def binding_of(windows):
     """The window that stops the user first: one already at its limit (the last to reset), else the soonest forecast to
     reach 100%, else the fullest (forecast at reset)."""
-    out = [w for w in windows if w["at_limit"]]
-    if out:
-        w = max(out, key=lambda w: w["resets_at"])
-        return dict(provider=w["provider"], limit_id=w["limit_id"], scope=w["scope"], runs_out=True)
-    runs_out = [w for w in windows if w["forecast"] and w["forecast"]["hits_at"]]
-    if runs_out:
-        w = min(runs_out, key=lambda w: w["forecast"]["hits_at"])
+    w = last_to_reset(windows) or soonest_run_out(windows)
+    if w:
         return dict(provider=w["provider"], limit_id=w["limit_id"], scope=w["scope"], runs_out=True)
     level = lambda w: (w["forecast"] or {}).get("at_reset") or w["current"] or 0
     if not windows:
         return None
     w = max(windows, key=level)
     return dict(provider=w["provider"], limit_id=w["limit_id"], scope=w["scope"], runs_out=False)
+
+
+ALERT_PERCENT = 90  # a window at or above this many percent used is in alert, though no forecast says it runs out
+
+
+def alert_of(windows):
+    """The one alert the nav shows, from the open windows' rows, or None when no window is in alert. A window is in alert
+    when it is at its limit, is forecast to reach 100% before it resets, or is at ALERT_PERCENT or more used. The alert is
+    the worst state any window is in: at_limit (the window that resets last, as binding_of picks it), else runs_out (the
+    soonest), else high (the fullest). count is every open window in any of the three states."""
+    count = sum(1 for w in windows if w["at_limit"] or (w["forecast"] and w["forecast"]["hits_at"])
+                or (w["current"] is not None and w["current"] >= ALERT_PERCENT))
+    if (w := last_to_reset(windows)):
+        kind, at = "at_limit", w["resets_at"]
+    elif (w := soonest_run_out(windows)):
+        kind, at = "runs_out", w["forecast"]["hits_at"]
+    elif (high := [w for w in windows if w["current"] is not None and w["current"] >= ALERT_PERCENT]):
+        w = max(high, key=lambda w: w["current"])
+        kind, at = "high", w["resets_at"]
+    else:
+        return None
+    return dict(kind=kind, provider=w["provider"], provider_label=w["provider_label"], label=w["label"], current=w["current"],
+                at=at, resets_at=w["resets_at"], count=count)
 
 
 def suggestion_of(windows):

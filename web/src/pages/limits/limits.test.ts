@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import type { LimitHistoryRow, LimitWindow, LimitsPayload } from "../../api";
+import type { LimitHistoryRow, LimitWindow, LimitsAlert, LimitsPayload } from "../../api";
 import limits from "../../__fixtures__/limits";
-import { barKey, barName, caption, closedWindow, hasScenario, historyStrips, STRIP_BARS, stripNote, windowNotes, nearestPoint, pace, readPoints, readText, recentText, shareText, surfacesText, tipPlace, usedHint, usedHref, usedRange, usedRangeName, whenDay } from "./limits";
+import { alertText, barKey, barName, caption, closedWindow, hasScenario, historyStrips, STRIP_BARS, stripNote, windowNotes, nearestPoint, pace, readPoints, readText, recentText, shareText, surfacesText, tipPlace, usedHint, usedHref, usedRange, usedRangeName, whenDay } from "./limits";
 
 const claude = (limits as LimitsPayload).windows[0]!;
 const win = (over: Partial<LimitWindow>): LimitWindow => ({ ...claude, ...over });
@@ -331,5 +331,19 @@ describe("past-window bars", () => {
     expect([w.start, w.resets_at, w.current, w.forecast, w.series, w.at_limit]).toEqual([h.start, h.closed_at, 82, null, past, true]);
     expect(windowNotes(h)).toEqual(["at its limit", "ended early by an early reset", "estimated from counted usage"]);
     expect(windowNotes(row({}))).toEqual([]);
+  });
+});
+
+describe("alertText", () => {
+  const alert = (over: Partial<LimitsAlert>): LimitsAlert => ({ kind: "at_limit", provider: "claude", provider_label: "Claude Code", label: "weekly", current: 100,
+    at: "2026-11-14T12:00:00.000Z", resets_at: "2026-11-14T12:00:00.000Z", count: 1, ...over });
+  it("says what each kind is, with the time in the page's format", () => {
+    expect(alertText(alert({}))).toBe(`Claude Code weekly is at its limit until ${whenDay("2026-11-14T12:00:00.000Z")}`);
+    expect(alertText(alert({ kind: "runs_out", current: 64, at: "2026-11-13T08:00:00.000Z" }))).toBe(`Claude Code weekly is forecast to run out ${whenDay("2026-11-13T08:00:00.000Z")}`);
+    expect(alertText(alert({ kind: "high", provider_label: "Codex", label: "5-hour", current: 93.4 }))).toBe("Codex 5-hour is at 93%");
+  });
+  it("counts the other windows in alert", () => {
+    expect(alertText(alert({ kind: "high", current: 91, count: 2 }))).toBe("Claude Code weekly is at 91% (and 1 more)");
+    expect(alertText(alert({ kind: "high", current: 91, count: 4 }))).toBe("Claude Code weekly is at 91% (and 3 more)");
   });
 });

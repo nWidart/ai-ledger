@@ -1,6 +1,7 @@
 import { useEffect, useRef, type MouseEvent, type ReactNode } from "react";
 import { navigate, setHash, sharedHash, useHashState, usePathname } from "../hash";
 import { getTheme, nextTheme, setTheme, useTheme, type Theme } from "../theme";
+import { alertText } from "../pages/limits/limits";
 import { ProjectDot } from "./ProjectDot";
 import { openPalette, shortcutHint, shortcutKeys } from "./palette/store";
 import { pollStatus, refresh, useRefreshState } from "./refresh";
@@ -29,6 +30,7 @@ export function Nav() {
   const path = usePathname(), [h] = useHashState(), shared = sharedHash(), theme = useTheme(), next = nextTheme(theme);
   const nav = useRef<HTMLElement>(null);
   const st = useRefreshState();
+  const alert = st.alert ? alertText(st.alert) : null;
 
   // Pages offset scroll targets by the sticky nav's height, which grows when it wraps on phones.
   useEffect(() => {
@@ -68,9 +70,16 @@ export function Nav() {
           <rect x="12.9" y="4.5" width="2.6" height="11" rx="1.1" fill="var(--surface-1)" opacity=".7" />
         </svg><span className="appnav-word">AI <b>Ledger</b></span></span>
         <span className="appnav-tabs">
-          {PAGES.map(p => (
-            <a key={p.path} href={p.path + shared} aria-current={p.path === path ? "page" : undefined} onClick={e => go(e, p.path)}>{p.label}</a>
-          ))}
+          {PAGES.map(p => {
+            // The Limits tab carries the alert: a dot, with the sentence as its name and title, so color is never the only signal.
+            const badge = p.path === "/limits" && st.alert && alert;
+            return (
+              <a key={p.path} href={p.path + shared} aria-current={p.path === path ? "page" : undefined} onClick={e => go(e, p.path)}
+                aria-label={badge ? `${p.label}: ${alert}` : undefined} title={badge || undefined}>
+                {p.label}{badge && <span className="appnav-badge" data-tone={st.alert!.kind === "high" ? "warning" : "critical"} aria-hidden="true" />}
+              </a>
+            );
+          })}
         </span>
         {h.project && (
           <span className="appnav-filter" id="navFilter">

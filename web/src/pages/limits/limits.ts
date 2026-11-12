@@ -1,11 +1,20 @@
 // Text for the Limits page: names, captions and pace, from the /api/limits payload.
-import type { LimitHistoryRow, LimitPoint, LimitWindow, LimitsPayload } from "../../api";
+import type { LimitHistoryRow, LimitPoint, LimitWindow, LimitsAlert, LimitsPayload } from "../../api";
 import { num, plural, usd } from "../../format";
 import { formatHash, RANGES, sourceOf, type Range } from "../../hash";
 
 /** A timestamp as "Sat, Nov 7, 2:00 PM" in the reader's zone: every time on the page reads this way. */
 export const whenDay = (ts: string | null | undefined): string =>
   ts ? new Date(ts).toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "–";
+
+/** The nav's Limits alert as one sentence, which is the tab's name and title: "Claude Code weekly is at its limit until Sat, Nov 7,
+ *  2:00 PM", "… is forecast to run out …" or "… is at 92%", and " (and 2 more)" when other windows are in alert too. */
+export function alertText(a: LimitsAlert): string {
+  const name = windowName(a);
+  const what = a.kind === "at_limit" ? `is at its limit until ${whenDay(a.at)}`
+    : a.kind === "runs_out" ? `is forecast to run out ${whenDay(a.at)}` : `is at ${num(a.current)}%`;
+  return `${name} ${what}${a.count > 1 ? ` (and ${a.count - 1} more)` : ""}`;
+}
 
 /** A span as "1d 17h", "3h 20m" or "45m". */
 export function span(msLeft: number): string {

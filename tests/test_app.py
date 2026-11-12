@@ -17,7 +17,7 @@ from http.server import ThreadingHTTPServer
 
 import duckdb
 
-from ai_ledger import app, metrics, store
+from ai_ledger import app, limits, metrics, store
 
 USAGE_DATA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "usage-data")
 
@@ -35,7 +35,8 @@ class AppTest(unittest.TestCase):
         store.insert(cls.con.cursor(), "tool_calls", ["tool_use_id", "session_id", "tool", "input_summary", "start_ts", "end_ts", "is_error"],
                      [("t1", "s1", "Bash", "npm test", "2026-11-04 10:01:00", "2026-11-04 10:01:02", False)])
         store.ingest(cls.con, dict(insights=USAGE_DATA))
-        cls.httpd = ThreadingHTTPServer(("127.0.0.1", 0), app.handler(app.App(cls.con, dict(claude=cls.tmp, insights=USAGE_DATA))))
+        cls.app = app.App(cls.con, dict(claude=cls.tmp, insights=USAGE_DATA))
+        cls.httpd = ThreadingHTTPServer(("127.0.0.1", 0), app.handler(cls.app))
         threading.Thread(target=cls.httpd.serve_forever, daemon=True).start()
 
     @classmethod
@@ -104,6 +105,17 @@ class AppTest(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(got["project_order"], metrics.project_order(self.con.cursor()))
         self.assertIn("last_change", got)
+
+    def test_status_carries_the_limits_alert(self):
+        alert = dict(kind="runs_out", provider="claude", provider_label="Claude Code", label="weekly", current=64.0,
+                     at="2026-11-13T08:00:00", resets_at="2026-11-14T12:00:00", count=1)
+        self.assertIsNone(json.loads(self.get("/api/status")[2])["limits_alert"])  # no cycle has run
+        self.app.limits_alert = alert
+        try:
+            status, _, body = self.get("/api/status")
+        finally:
+            self.app.limits_alert = None
+        self.assertEqual((status, json.loads(body)["limits_alert"]), (200, alert))
 
     def test_insights(self):
         self.assertIn("/insights", app.PAGES)
@@ -453,13 +465,15 @@ class LoopTest(unittest.TestCase):
     """App.loop: everything every INTERVAL; transcripts every LIVE_INTERVAL only while a Live page is connected."""
 
     def run_loop(self, steps):
-        calls = []
+        calls = self.calls = []
+        self.alerts = []
 
         def ingest(con, roots, log=None, usage=True):
             calls.append(usage)
             return dict(files=0, lines=0, inserted=0, sessions=set(), seconds=0)
 
         a = app.App(None, {}, pollers=[])
+        a.refresh_alert = lambda: self.alerts.append(1)
         with mock.patch.object(app, "INTERVAL", 0.5), mock.patch.object(app, "LIVE_INTERVAL", 0.05), \
                 mock.patch.object(store, "ingest", side_effect=ingest):
             t = threading.Thread(target=a.loop)
@@ -480,6 +494,11 @@ class LoopTest(unittest.TestCase):
         self.assertLessEqual(watched.count(True), 1)  # usage data stays on INTERVAL
         self.assertLessEqual(after.count(False), 1)  # at most the pass already waiting when the page left
 
+    def test_alert_is_computed_once_per_full_cycle_not_per_fast_pass(self):
+        self.run_loop([lambda a: a.watch(1), lambda a: a.watch(-1)])
+        self.assertGreaterEqual(self.calls.count(False), 4)  # fast passes ran
+        self.assertEqual(len(self.alerts), self.calls.count(True))  # one alert per full cycle, none per fast pass
+
     def test_changes_since(self):
         a = app.App(None, {}, pollers=[])
         a.publish({"s1"})
@@ -490,6 +509,61 @@ class LoopTest(unittest.TestCase):
         for i in range(70):
             a.publish({f"x{i}"})
         self.assertEqual(a.changes_since(2, 0), (72, None))  # older than the log: refetch everything
+
+
+class LimitsAlertTest(unittest.TestCase):
+    """App.refresh_alert: the nav's alert, computed after a full cycle and kept for /api/status."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.con = store.open_store(os.path.join(self.tmp, "d", "x.duckdb"))
+        self.addCleanup(self.con.close)
+        self.app = app.App(self.con, {}, pollers=[])
+
+    def window(self, **kw):
+        return dict(dict(provider="codex", provider_label="Codex", label="weekly", current=95.0, at_limit=False, forecast=None,
+                         resets_at="2026-11-14T12:00:00"), **kw)
+
+    def test_none_before_a_cycle(self):
+        self.assertIsNone(self.app.limits_alert)
+        self.assertIsNone(self.app.status()["limits_alert"])
+
+    def test_kept_after_a_cycle(self):
+        with mock.patch.object(limits, "payload", return_value=dict(windows=[self.window()])) as payload:
+            self.app.refresh_alert()
+        self.assertEqual(self.app.status()["limits_alert"], dict(kind="high", provider="codex", provider_label="Codex", label="weekly",
+                                                                  current=95.0, at="2026-11-14T12:00:00", resets_at="2026-11-14T12:00:00", count=1))
+        args, kwargs = payload.call_args  # the /api/limits route's call, with no filters
+        self.assertEqual((args[1:], kwargs), ((), dict(polls={})))
+
+    def test_clears_when_no_window_is_in_alert(self):
+        with mock.patch.object(limits, "payload", return_value=dict(windows=[self.window()])):
+            self.app.refresh_alert()
+        with mock.patch.object(limits, "payload", return_value=dict(windows=[self.window(current=10.0)])):
+            self.app.refresh_alert()
+        self.assertIsNone(self.app.limits_alert)
+
+    def test_a_failure_leaves_none_and_raises_nothing(self):
+        with mock.patch.object(limits, "payload", return_value=dict(windows=[self.window()])):
+            self.app.refresh_alert()
+        self.assertIsNotNone(self.app.limits_alert)
+        err = io.StringIO()
+        with mock.patch.object(limits, "payload", side_effect=RuntimeError("secret text")), contextlib.redirect_stderr(err):
+            self.app.refresh_alert()
+        self.assertIsNone(self.app.limits_alert)
+        self.assertEqual(err.getvalue(), "limits alert failed: RuntimeError\n")  # the type only, never the message
+
+    def test_the_loop_goes_on_after_a_failure(self):
+        cycles = []
+        with mock.patch.object(app, "INTERVAL", 0.05), mock.patch.object(limits, "payload", side_effect=lambda *a, **k: cycles.append(1) or 1 / 0), \
+                mock.patch.object(store, "ingest", return_value=dict(files=0, lines=0, inserted=0, sessions=set(), seconds=0)), \
+                contextlib.redirect_stderr(io.StringIO()):
+            t = threading.Thread(target=self.app.loop)
+            t.start()
+            time.sleep(0.3)
+            self.app.stop(t)
+        self.assertGreaterEqual(len(cycles), 2)
+        self.assertIsNone(self.app.limits_alert)
 
 
 class LiveEventsTest(unittest.TestCase):

@@ -1243,5 +1243,68 @@ class PageFixtureTest(AnalysisCase):
         self.assertTrue(full and all(h["hit"] and h["hit_minutes"] > 0 for h in full))
 
 
+class AlertTest(unittest.TestCase):
+    """alert_of: the one alert the nav shows, from the open windows' rows."""
+
+    def win(self, provider="claude", label="weekly", current=10.0, at_limit=False, hits=None, resets="2026-11-14T12:00:00"):
+        fc = dict(hits_at=hits) if hits is not None else None
+        return dict(provider=provider, provider_label=limits.provider_label(provider), limit_id=label, scope="",
+                    label=label, current=current, at_limit=at_limit, forecast=fc, resets_at=resets)
+
+    def test_nothing_in_alert(self):
+        self.assertIsNone(limits.alert_of([]))
+        self.assertIsNone(limits.alert_of([self.win(current=89.9), self.win(provider="codex", current=0)]))
+        self.assertIsNone(limits.alert_of([self.win(current=None)]))  # a window with no reading says nothing
+
+    def test_at_limit(self):
+        got = limits.alert_of([self.win(current=100, at_limit=True)])
+        self.assertEqual(got, dict(kind="at_limit", provider="claude", provider_label="Claude Code", label="weekly", current=100,
+                                   at="2026-11-14T12:00:00", resets_at="2026-11-14T12:00:00", count=1))
+
+    def test_at_limit_without_a_reading_still_counts(self):
+        self.assertEqual(limits.alert_of([self.win(current=None, at_limit=True)])["kind"], "at_limit")
+
+    def test_runs_out_is_at_the_hit(self):
+        got = limits.alert_of([self.win(current=50, hits="2026-11-13T08:00:00")])
+        self.assertEqual((got["kind"], got["at"], got["resets_at"], got["count"]), ("runs_out", "2026-11-13T08:00:00", "2026-11-14T12:00:00", 1))
+
+    def test_high_is_at_the_threshold_and_up(self):
+        self.assertEqual(limits.ALERT_PERCENT, 90)
+        got = limits.alert_of([self.win(current=90.0)])
+        self.assertEqual((got["kind"], got["current"], got["at"]), ("high", 90.0, "2026-11-14T12:00:00"))
+
+    def test_precedence_across_windows(self):
+        high, runs, capped = self.win(label="a", current=95), self.win(label="b", current=50, hits="2026-11-13T08:00:00"), \
+            self.win(label="c", current=100, at_limit=True)
+        self.assertEqual(limits.alert_of([high, runs, capped])["label"], "c")
+        self.assertEqual(limits.alert_of([high, runs])["label"], "b")
+        self.assertEqual(limits.alert_of([high])["label"], "a")
+
+    def test_choice_among_windows_of_a_kind(self):
+        late, soon = self.win(label="late", at_limit=True, resets="2026-11-15T00:00:00"), self.win(label="soon", at_limit=True, resets="2026-11-14T00:00:00")
+        self.assertEqual(limits.alert_of([soon, late])["label"], "late")  # the one that resets last, as binding_of picks it
+        first, second = self.win(label="first", hits="2026-11-13T01:00:00"), self.win(label="second", hits="2026-11-13T09:00:00")
+        self.assertEqual(limits.alert_of([second, first])["label"], "first")
+        full, fuller = self.win(label="full", current=91), self.win(label="fuller", current=97.5)
+        self.assertEqual(limits.alert_of([full, fuller])["label"], "fuller")
+
+    def test_count_is_every_window_in_any_state(self):
+        ws = [self.win(label="a", current=100, at_limit=True), self.win(label="b", hits="2026-11-13T08:00:00"), self.win(label="c", current=92),
+              self.win(label="d", current=40), self.win(label="e", current=None)]
+        self.assertEqual(limits.alert_of(ws)["count"], 3)
+
+    def test_a_window_counts_once(self):
+        both = self.win(current=100, at_limit=True, hits="2026-11-13T08:00:00")
+        got = limits.alert_of([both, self.win(current=95)])
+        self.assertEqual((got["kind"], got["count"]), ("at_limit", 2))
+
+    def test_binding_and_alert_pick_the_same_window(self):
+        ws = [self.win(provider="claude", label="x", at_limit=True, resets="2026-11-14T00:00:00"),
+              self.win(provider="codex", label="y", at_limit=True, resets="2026-11-16T00:00:00")]
+        self.assertEqual((limits.binding_of(ws)["provider"], limits.alert_of(ws)["provider"]), ("codex", "codex"))
+        ws = [self.win(provider="claude", hits="2026-11-13T09:00:00"), self.win(provider="codex", hits="2026-11-13T01:00:00")]
+        self.assertEqual((limits.binding_of(ws)["provider"], limits.alert_of(ws)["provider"]), ("codex", "codex"))
+
+
 if __name__ == "__main__":
     unittest.main()
