@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { LimitWindow, LimitsPayload } from "../../api";
 import limits from "../../__fixtures__/limits";
-import { caption, hasScenario, nearestPoint, pace, readPoints, readText, recentText, tipPlace, whenDay } from "./limits";
+import { caption, hasScenario, nearestPoint, pace, readPoints, readText, recentText, tipPlace, usedHint, usedHref, usedRange, usedRangeName, whenDay } from "./limits";
 
 const claude = (limits as LimitsPayload).windows[0]!;
 const win = (over: Partial<LimitWindow>): LimitWindow => ({ ...claude, ...over });
@@ -155,5 +155,37 @@ describe("a percent at the reset never reads 100 unless it is 100", () => {
     expect(verdict(99.9)).toBe("behind pace: about 1% would go unused");
     expect(verdict(66.4)).toBe("behind pace: about 34% would go unused");
     expect(verdict(100)).toBe("behind pace: about 0% would go unused");
+  });
+});
+
+describe("what used this window", () => {
+  const DAY = 86400000, now = "2026-11-06T12:00:00.000Z";
+  const began = (days: number) => win({ start: new Date(Date.parse(now) - days * DAY).toISOString() });
+
+  it("picks the smallest range preset that covers the window's start", () => {
+    expect([0.01, 1, 7].map(d => usedRange(began(d), now))).toEqual([7, 7, 7]);
+    expect([7.01, 14].map(d => usedRange(began(d), now))).toEqual([14, 14]);
+    expect([14.01, 30].map(d => usedRange(began(d), now))).toEqual([30, 30]);
+    expect([30.01, 90].map(d => usedRange(began(d), now))).toEqual([90, 90]);
+    expect([90.01, 400].map(d => usedRange(began(d), now))).toEqual([0, 0]);
+  });
+
+  it("names the range as the nearest preset", () => {
+    expect(usedRangeName(7)).toBe("last 7 days");
+    expect(usedRangeName(0)).toBe("all time");
+  });
+
+  it("links to Cost with the project, the range and the window's source", () => {
+    const w = win({ provider: "codex", start: began(10).start });
+    expect(usedHref(w, now, "ai-ledger")).toBe("/cost#project=ai-ledger&range=14&source=codex");
+    expect(usedHref(w, now)).toBe("/cost#range=14&source=codex");
+    expect(usedHref(win({ provider: "claude", start: began(200).start }), now, "a b&c")).toBe("/cost#project=a+b%26c&range=0&source=claude");
+  });
+
+  it("hints with the top project and its share", () => {
+    const row = { cost: 5, points: null };
+    expect(usedHint({ total: 10, projects: [{ project: "ai-ledger", share: 0.54, ...row }], models: [] })).toBe("ai-ledger 54%");
+    expect(usedHint({ total: 10, projects: [{ project: "tiny", share: 0.001, ...row }], models: [] })).toBe("tiny <1%");
+    expect(usedHint({ total: 10, projects: [], models: [{ model: "m", share: 1, ...row }] })).toBeNull(); // no project to name
   });
 });

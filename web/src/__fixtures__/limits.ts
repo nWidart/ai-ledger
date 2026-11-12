@@ -983,7 +983,32 @@ export default {
    },
    "no_forecast": null,
    "hit_start": null,
-   "at_limit": false
+   "at_limit": false,
+   "used": {
+    "total": 227.0,
+    "projects": [
+     {
+      "project": "foo",
+      "cost": 227.0,
+      "share": 1.0,
+      "points": 90.0
+     }
+    ],
+    "models": [
+     {
+      "model": "claude-opus-5-5",
+      "cost": 225.0,
+      "share": 0.991,
+      "points": 89.2
+     },
+     {
+      "model": "claude-fable-5-1",
+      "cost": 2.0,
+      "share": 0.009,
+      "points": 0.8
+     }
+    ]
+   }
   },
   {
    "provider": "claude",
@@ -1009,7 +1034,26 @@ export default {
    "forecast": null,
    "no_forecast": "Not calibrated yet: a window has to reach 5% while its usage is counted",
    "hit_start": null,
-   "at_limit": false
+   "at_limit": false,
+   "used": {
+    "total": 2.0,
+    "projects": [
+     {
+      "project": "foo",
+      "cost": 2.0,
+      "share": 1.0,
+      "points": null
+     }
+    ],
+    "models": [
+     {
+      "model": "claude-fable-5-1",
+      "cost": 2.0,
+      "share": 1.0,
+      "points": null
+     }
+    ]
+   }
   },
   {
    "provider": "codex",
@@ -2232,7 +2276,26 @@ export default {
    },
    "no_forecast": null,
    "hit_start": null,
-   "at_limit": false
+   "at_limit": false,
+   "used": {
+    "total": 0.45,
+    "projects": [
+     {
+      "project": "foo",
+      "cost": 0.45,
+      "share": 1.0,
+      "points": 9.0
+     }
+    ],
+    "models": [
+     {
+      "model": "gpt-6-astra",
+      "cost": 0.45,
+      "share": 1.0,
+      "points": 9.0
+     }
+    ]
+   }
   }
  ],
  "binding": {

@@ -1,6 +1,7 @@
 // Text for the Limits page: names, captions and pace, from the /api/limits payload.
 import type { LimitWindow, LimitsPayload } from "../../api";
 import { num, plural, usd } from "../../format";
+import { formatHash, RANGES, sourceOf, type Range } from "../../hash";
 
 /** A timestamp as "Sat, Nov 7, 2:00 PM" in the reader's zone: every time on the page reads this way. */
 export const whenDay = (ts: string | null | undefined): string =>
@@ -120,3 +121,24 @@ const sameLimit = (w: LimitWindow, b: { provider: string; limit_id: string; scop
 
 export const bindingWindow = (d: LimitsPayload): LimitWindow | undefined =>
   d.binding ? d.windows.find(w => sameLimit(w, d.binding!)) : undefined;
+
+/** The smallest Cost range preset that covers the window's start (days since it, rounded up): 7, 14, 30, 90, else 0 (all time). */
+export function usedRange(w: LimitWindow, now: string): Range {
+  const days = Math.ceil((Date.parse(now) - Date.parse(w.start)) / 86400000);
+  return RANGES.find(r => r !== 0 && days <= r) ?? 0;
+}
+
+export const usedRangeName = (range: Range): string => (range ? `last ${range} days` : "all time");
+
+/** The Cost page filtered to the window's source and its nearest range preset, and to one project when given. */
+export const usedHref = (w: LimitWindow, now: string, project = ""): string =>
+  "/cost" + formatHash({ project, range: String(usedRange(w, now)), source: sourceOf(w.provider) });
+
+/** A share as a whole percent: "54%", and "<1%" for a share that rounds to nothing. */
+export const sharePct = (share: number): string => (share > 0 && share < 0.005 ? "<1%" : `${Math.round(share * 100)}%`);
+
+/** The closed summary's hint, "ai-ledger 54%": the window's top project and its share; null when no project is named. */
+export function usedHint(u: NonNullable<LimitWindow["used"]>): string | null {
+  const top = u.projects[0];
+  return top ? `${top.project} ${sharePct(top.share)}` : null;
+}

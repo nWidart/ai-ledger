@@ -1,14 +1,14 @@
-import { useEffect, useState } from "react";
-import { limitsUrl, viewOf, type LimitsPayload, type LimitWindow, type View } from "../../api";
+import { useEffect, useState, type MouseEvent } from "react";
+import { limitsUrl, viewOf, type LimitsPayload, type LimitWindow, type View, type WindowUsedRow } from "../../api";
 import { Drawer } from "../../components/Drawer";
 import { Filters, viewName } from "../../components/Filters";
 import { useLanding } from "../../components/useLanding";
 import { Ledger, LedgerRow } from "../../components/Ledger";
 import { big, dur, num, plural, usd } from "../../format";
-import { useHashState } from "../../hash";
+import { navigate, useHashState } from "../../hash";
 import { useApi } from "../../useApi";
 import { LimitChart, planMarks } from "./LimitChart";
-import { bindingWindow, caption, capText, hasScenario, pace, planName, recentText, resetPct, span, whenDay, windowName } from "./limits";
+import { bindingWindow, caption, capText, hasScenario, pace, planName, recentText, resetPct, sharePct, span, usedHint, usedHref, usedRange, usedRangeName, whenDay, windowName } from "./limits";
 import "./limits.css";
 
 const rangeName = (range: number) => (range ? `the last ${range} days` : "all time");
@@ -54,6 +54,34 @@ function Freshness({ d }: { d: LimitsPayload }) {
   })}</ul>;
 }
 
+/** What the window's use was spent on: a closed-by-default drawer with its top projects and models, linking to Cost. */
+function Used({ w, now }: { w: LimitWindow; now: string }) {
+  const u = w.used;
+  if (!u) return null;
+  const hint = usedHint(u), range = usedRangeName(usedRange(w, now));
+  const open = (e: MouseEvent<HTMLAnchorElement>) => {
+    if (!(e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey)) { e.preventDefault(); navigate(e.currentTarget.getAttribute("href")!); }
+  };
+  const list = (title: string, rows: { key: string; r: WindowUsedRow; link?: string }[]) => rows.length > 0 && <div>
+    <h4>{title}</h4>
+    <ul>{rows.map(({ key, r, link }) => <li key={key} title={`${usd(r.cost)}, estimated at API list prices`}>
+      {link ? <a href={link} onClick={open}>{key}</a> : <span>{key}</span>}
+      <span className="used-share">{sharePct(r.share)}</span>
+      {r.points != null && <span className="muted">≈ {num(r.points, 1)} points</span>}</li>)}</ul>
+  </div>;
+  return (
+    <details className="lim-used">
+      <summary>What used this window{hint && <span className="muted"> · {hint}</span>}</summary>
+      <div className="used-lists">
+        {list("Projects", u.projects.map(r => ({ key: r.project, r, link: usedHref(w, now, r.project) })))}
+        {list("Models", u.models.map(r => ({ key: r.model, r })))}
+      </div>
+      <p className="muted used-note">Counted local agent use only, at API list prices ({usd(u.total)} here); use elsewhere is not in it.</p>
+      <a className="used-open" href={usedHref(w, now)} title={`Cost has no custom ranges: this is the nearest preset, ${range}`} onClick={open}>Open in Cost · {range}</a>
+    </details>
+  );
+}
+
 function WindowCard({ w, d }: { w: LimitWindow; d: LimitsPayload }) {
   const p = pace(w, d.now), f = w.forecast, cap = capText(w), recent = recentText(w);
   return (
@@ -67,6 +95,7 @@ function WindowCard({ w, d }: { w: LimitWindow; d: LimitsPayload }) {
       {recent && <p className={"cap-text recent" + (f?.recent_hits_at ? " out" : "")}>{recent}</p>}
       <p className="pace">{p.left} · {p.reset}{p.rate && <> · {p.rate}</>}{p.verdict && <> · <b>{p.verdict}</b></>}</p>
       {cap && <p className="cap-money">{cap}</p>}
+      <Used w={w} now={d.now} />
     </section>
   );
 }

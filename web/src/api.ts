@@ -227,7 +227,11 @@ export interface LimitWindow {
   forecast: Forecast | null; no_forecast: string | null; hit_start: Ts | null;
   /** At 100% (or reported as reached) now, until it resets. */
   at_limit: boolean;
+  /** What the counted, priced use since the window started was spent on, at list prices: the top three projects and models
+   *  by cost. points is null until the window is calibrated. null when nothing was counted. */
+  used: { total: number; projects: (WindowUsedRow & { project: string })[]; models: (WindowUsedRow & { model: string })[] } | null;
 }
+export interface WindowUsedRow { cost: number; share: number; points: number | null }
 export interface LimitHistoryRow {
   provider: string; provider_label: string; label: string; plan: string | null; start: Ts; closed_at: Ts; final: number;
   hit: boolean; hit_minutes: number | null; early: boolean; reason: string | null; estimated: boolean;

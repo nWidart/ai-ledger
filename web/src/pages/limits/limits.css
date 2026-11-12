@@ -46,6 +46,16 @@
 .pg-limits .lim-card h3 { margin: 0; font-size: 14px; font-weight: 600; }
 .pg-limits .now-pct b { font-size: 24px; font-weight: 600; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
 .pg-limits .chip.est { border-style: dashed; }
+/* What used this window: closed by default, under the cap-money line. */
+.pg-limits .lim-used { margin-top: 8px; font-size: 13px; color: var(--text-secondary); }
+.pg-limits .lim-used > summary { cursor: pointer; }
+.pg-limits .lim-used .used-lists { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px 20px; margin-top: 8px; }
+.pg-limits .lim-used h4 { margin: 0 0 2px; font-size: 12px; font-weight: 600; color: var(--text-muted); }
+.pg-limits .lim-used ul { list-style: none; margin: 0; padding: 0; }
+.pg-limits .lim-used li { display: flex; flex-wrap: wrap; gap: 0 8px; align-items: baseline; }
+.pg-limits .lim-used li > :first-child { min-width: 0; overflow-wrap: anywhere; color: var(--text-primary); }
+.pg-limits .lim-used .used-share { font-variant-numeric: tabular-nums; }
+.pg-limits .lim-used .used-note { margin: 6px 0 4px; font-size: 12px; }
 .pg-limits .cap-text { margin: 6px 0 2px; font-size: 13.5px; color: var(--text-primary); }
 .pg-limits .cap-text.out { color: var(--critical-text); font-weight: 500; }
 .pg-limits .cap-text.recent { margin-top: 0; font-size: 12.5px; color: var(--text-secondary); }

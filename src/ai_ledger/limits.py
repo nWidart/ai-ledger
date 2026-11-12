@@ -557,6 +557,36 @@ def open_window(ws, now, latest_plan):
     return Window(last.key, last.minutes, reset, estimated=True)
 
 
+USED_TOP = 3  # projects and models listed per window
+
+
+def window_used(cur, prices, source, scope, t0, t1, per_pct):
+    """What the counted, priced use from t0 to t1 was spent on, for the provider's source and the models the scope covers
+    ('' is every model): its total dollars and the USED_TOP projects and models with the most cost, each with its share of
+    the total and its points (None when per_pct, the dollars a point costs, is not known). A request with no project counts
+    in the total and the models, and is no project row. Minutes are counted as Usage counts them. Names and sums only.
+    None when nothing was counted."""
+    if t1 <= t0:
+        return None
+    pcte, pparams = metrics.price_cte(prices)
+    rq = metrics.requests_cte(pcte, "date_trunc('minute', r.ts) >= ? AND date_trunc('minute', r.ts) < ?")
+    rows = cur.execute(f"""{rq} SELECT rq.project, rq.model, sum(coalesce(rq.cost, 0)) FROM rq JOIN sessions s USING (session_id)
+        WHERE s.source = ? AND (? = '' OR contains(lower(coalesce(rq.model, '')), ?)) GROUP BY ALL""",
+                       pparams + [t0, t1, source, scope, scope.lower()]).fetchall()
+    total = sum(c for _, _, c in rows)
+    if total <= 0:
+        return None
+    top = {}
+    for i, name in ((0, "project"), (1, "model")):
+        costs = {}
+        for row in rows:
+            if row[i] and row[2] > 0:
+                costs[row[i]] = costs.get(row[i], 0.0) + row[2]
+        top[name] = [dict({name: k}, cost=round(c, 2), share=round(c / total, 3), points=round(c / per_pct, 1) if per_pct else None)
+                     for k, c in sorted(costs.items(), key=lambda kv: (-kv[1], kv[0]))[:USED_TOP]]
+    return dict(total=round(total, 2), projects=top["project"], models=top["model"])
+
+
 def window_row(w, now, usage, cal, profile):
     pts = w.points
     current, _ = estimate(w, now, usage, cal) if (pts or cal) else (None, False)
@@ -636,6 +666,7 @@ def payload(cur, range_days=0, source="", project="", now=None, today=None, pric
     start = metrics.start_ts(cur, today - timedelta(days=range_days - 1)) if range_days else None
     names = [n for n, p in PROVIDERS.items() if not source or p.source == source]
     snaps = [s for s in cur.execute(f"SELECT {', '.join(store.SNAPSHOT_COLS)} FROM limit_snapshots").fetchall() if s[0] in names]
+    prices = metrics.load_prices() if prices is None else prices
     usage = load_usage(cur, prices)
     profile = Profile(usage, now, tz)
     latest_plan = {}
@@ -658,7 +689,8 @@ def payload(cur, range_days=0, source="", project="", now=None, today=None, pric
                     closed.append(history[-1])
         w = open_window(ws, now, latest_plan.get(key[0]))
         if w:
-            windows.append(window_row(w, now, usage, cal, profile))
+            windows.append(dict(window_row(w, now, usage, cal, profile),
+                                used=window_used(cur, prices, source_of(w.provider), w.scope, w.start, now, cal and cal["per_pct"])))
         # Where the limit counted use on its calibration's plan: its windows on that plan (an estimated one has no plan).
         spans[key] = sorted((v.start, v.closed_at or now) for v in past + [w] if v and cal and v.plan in (None, cal["plan"]))
     windows.sort(key=lambda w: (names.index(w["provider"]), -(w["window_minutes"] or 0), w["scope"]))
@@ -715,7 +747,7 @@ def value(cur, usage, cals, spans, latest_plan, start, now, project, prices):
             main[provider] = (minutes, cal, label(provider, limit_id, scope, minutes))
     projects = []
     if main:
-        pcte, pparams = metrics.price_cte(metrics.load_prices() if prices is None else prices)
+        pcte, pparams = metrics.price_cte(prices)
         rq = metrics.requests_cte(pcte, "(CAST(? AS TIMESTAMP) IS NULL OR r.ts >= ?) AND (? = '' OR s.project = ?)")
         f = [start, start, project, project]
         cost = {(r[0], r[1]): r[2] for r in cur.execute(
