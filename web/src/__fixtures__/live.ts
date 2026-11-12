@@ -191,5 +191,10 @@ export default {
    "errors": 0
   }
  ],
- "newest": null
+ "newest": null,
+ "automated_file": {
+  "path": "/Users/example/Library/Application Support/ai-ledger/automated.json",
+  "error": null,
+  "projects": []
+ }
 } satisfies LivePayload;

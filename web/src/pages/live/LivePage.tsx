@@ -77,7 +77,7 @@ export function LivePage() {
           <button type="button" aria-pressed={mode === "stream"} onClick={() => set({ view: null })}>Stream</button>
           <button type="button" aria-pressed={mode === "wall"} onClick={() => set({ view: "wall" })}>Wall</button>
         </div>
-        <Filters projects={projects} automated range={false} />
+        <Filters projects={projects} automated autoFile={list?.automated_file.path} range={false} />
         <span className="spacer" />
         {mode === "stream" && <label className="chk"><input type="checkbox" checked={follow} onChange={e => setFollow(e.target.checked)} /> Follow</label>}
         <label className="chk"><input type="checkbox" checked={text} onChange={e => setText(e.target.checked)} /> Full text</label>
