@@ -9,7 +9,8 @@
 
 - [x] 2.1 Add `POST /api/errors/fix` in `app.py`: host check, `application/json` only, 4096-byte cap, validation, the write under `app.lock`, the full map as the answer.
 - [x] 2.2 Add `POST /api/errors/fixes/import`: the same validation shared, invalid entries skipped, a marker only for a type with no fix day, in one statement under `app.lock`.
-- [x] 2.3 Test set, replace, remove, every refusal, the host check and a write that waits for a running ingest.
+- [x] 2.3 Keep a type's row on undo (day NULL), import with `ON CONFLICT DO NOTHING`, add `GET /api/errors/fixes`.
+- [x] 2.4 Test set, replace, remove, every refusal, the host check and a write that waits for a running ingest.
 
 ## 3. Page
 

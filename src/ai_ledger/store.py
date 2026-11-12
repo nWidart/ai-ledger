@@ -163,19 +163,18 @@ def open_store(path=None):
 
 
 def set_error_fix(cur, category, day):
-    """Mark the error type fixed on day (a date), or remove its fix marker when day is None. Other state of the row stays."""
-    if day is None:
-        cur.execute("DELETE FROM error_marks WHERE category = ?", [category])
-    else:
-        cur.execute("INSERT INTO error_marks (category, fixed_on) VALUES (?, ?) ON CONFLICT (category) DO UPDATE SET fixed_on = excluded.fixed_on",
-                    [category, day])
+    """Mark the error type fixed on day (a date), or take the marker off (day None). An undo keeps the row, with no fix day: the
+    row records that the store has decided about this type, so a late import from another tab cannot bring the marker back.
+    Other state of the row stays."""
+    cur.execute("INSERT INTO error_marks (category, fixed_on) VALUES (?, ?) ON CONFLICT (category) DO UPDATE SET fixed_on = excluded.fixed_on",
+                [category, day])
 
 
 def import_error_fixes(cur, fixes):
-    """Take the markers {category: date} for the error types that have no fix day yet; the ones that have one keep it. One
-    statement, so one transaction: the app's cap on the markers of an import keeps it within one insert chunk."""
-    insert(cur, "error_marks", ["category", "fixed_on"], list(fixes.items()),
-           "ON CONFLICT (category) DO UPDATE SET fixed_on = coalesce(error_marks.fixed_on, excluded.fixed_on)")
+    """Take the markers {category: date} for the error types the store has no row for: a type it has marked, or marked and
+    undone, keeps what it has. One statement, so one transaction: the app's cap on the markers of an import keeps it within one
+    insert chunk."""
+    insert(cur, "error_marks", ["category", "fixed_on"], list(fixes.items()))
 
 
 def insert(cur, table, cols, rows, tail="ON CONFLICT DO NOTHING", returning=None):

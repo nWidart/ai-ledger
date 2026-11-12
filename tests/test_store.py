@@ -71,16 +71,21 @@ class ErrorMarksTest(StoreCase):
         store.set_error_fix(cur, "y", date(2026, 11, 3))
         store.set_error_fix(cur, "x", date(2026, 11, 5))
         self.assertEqual(self.marks(), [("x", date(2026, 11, 5)), ("y", date(2026, 11, 3))])
-        store.set_error_fix(cur, "x", None)
+        store.set_error_fix(cur, "x", None)  # the row stays: it records that the store has decided about this type
         store.set_error_fix(cur, "never-marked", None)
-        self.assertEqual(self.marks(), [("y", date(2026, 11, 3))])
+        self.assertEqual(self.marks(), [("never-marked", None), ("x", None), ("y", date(2026, 11, 3))])
+        store.set_error_fix(cur, "x", date(2026, 11, 6))  # a mark after an undo works
+        self.assertEqual(self.marks()[1], ("x", date(2026, 11, 6)))
+        self.assertEqual(metrics.error_fixes(cur), {"x": "2026-11-06", "y": "2026-11-03"})
 
-    def test_import_adds_only_what_has_no_fix_day(self):
+    def test_import_adds_only_a_type_the_store_has_no_row_for(self):
         cur = self.con.cursor()
         store.set_error_fix(cur, "kept", date(2026, 11, 1))
-        self.con.execute("INSERT INTO error_marks (category, fixed_on) VALUES ('muted-only', NULL)")  # a row with no fix day takes one
-        store.import_error_fixes(cur, {"kept": date(2026, 10, 1), "new": date(2026, 10, 2), "muted-only": date(2026, 10, 3)})
-        self.assertEqual(self.marks(), [("kept", date(2026, 11, 1)), ("muted-only", date(2026, 10, 3)), ("new", date(2026, 10, 2))])
+        store.set_error_fix(cur, "undone", date(2026, 11, 2))
+        store.set_error_fix(cur, "undone", None)
+        self.con.execute("INSERT INTO error_marks (category, fixed_on) VALUES ('muted-only', NULL)")
+        store.import_error_fixes(cur, {"kept": date(2026, 10, 1), "new": date(2026, 10, 2), "undone": date(2026, 10, 3), "muted-only": date(2026, 10, 4)})
+        self.assertEqual(self.marks(), [("kept", date(2026, 11, 1)), ("muted-only", None), ("new", date(2026, 10, 2)), ("undone", None)])
         store.import_error_fixes(cur, {})
         store.import_error_fixes(cur, {"new": date(2026, 9, 1)})  # a second import changes nothing
         self.assertEqual(self.marks()[2], ("new", date(2026, 10, 2)))

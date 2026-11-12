@@ -21,17 +21,21 @@ beforeEach(() => {
 });
 
 type Fix = { category: string; day: string | null };
-const FIX = "/api/errors/fix", IMPORT = "/api/errors/fixes/import";
+const FIX = "/api/errors/fix", IMPORT = "/api/errors/fixes/import", FIXES = "/api/errors/fixes";
 /** The app's Errors endpoints over fetch. The payload carries the stored fixes; POST /api/errors/fix keeps one, and POST
  *  /api/errors/fixes/import takes the ones the store has no day for (the store decides, when it gets the request). posts lists the
  *  writes in the order they arrive, imports the import bodies. refuse(f) answers 500 to the single writes f says yes to; failImport
  *  does so for the import. hold(from) makes the writes from the from-th on wait for release(); failGets(n) fails the payload fetches
- *  from the n-th on (0 is the first). */
+ *  from the n-th on (0 is the first); holdGet(n) answers the n-th one only on release(), with what the store held when it was asked.
+ *  payloadFixes, when set, is what every payload carries (another tab's view of the store); GET /api/errors/fixes (the resync) answers
+ *  the store unless failResync. */
 function serve(fixes: Record<string, string> = {}, refuse: ((b: Fix) => boolean) | null = null) {
   let writes = 0, gets = 0;
   const api = {
     store: { ...fixes }, posts: [] as Fix[], imports: [] as Record<string, string>[], refuse, failImport: false, requests: [] as string[],
-    failGetsFrom: Infinity,
+    failGetsFrom: Infinity, payloadFixes: null as Record<string, string> | null, failResync: false,
+    getGate: null as Promise<void> | null, getHeld: -1,
+    holdGet(n: number) { let release!: () => void; api.getHeld = n; api.getGate = new Promise<void>(r => { release = r; }); return { release }; },
     fail(f: ((b: Fix) => boolean) | null) { api.refuse = f; },
     gate: null as Promise<void> | null, holdFrom: 0,
     hold(from = 0) { let release!: () => void; api.holdFrom = from; api.gate = new Promise<void>(r => { release = r; }); return { release }; },
@@ -53,9 +57,16 @@ function serve(fixes: Record<string, string> = {}, refuse: ((b: Fix) => boolean)
       }
       return json({ ...api.store });
     }
+    if (url === FIXES) {
+      api.requests.push("resync");
+      return api.failResync ? refused() : json({ ...api.store });
+    }
     if (url.startsWith("/api/errors")) {
-      if (gets++ >= api.failGetsFrom) return Promise.reject(new Error("down"));
-      return json({ ...fixture, fixes: { ...api.store } });
+      const n = gets++;
+      if (n >= api.failGetsFrom) return Promise.reject(new Error("down"));
+      const body = { ...fixture, fixes: { ...(api.payloadFixes ?? api.store) } };
+      if (n === api.getHeld) await api.getGate;
+      return json(body);
     }
     return json({ id: "t07", i: "full input", e: "full error", r: "", cut: [] });
   }));
@@ -197,6 +208,107 @@ describe("ErrorsPage", () => {
       expect(fixes()).toContain("0Fixes applied");
       expect(document.querySelector("#catBody .chip.fixed")).toBeNull();
     });
+
+    // Finding 4, the ordering the first test misses: an older payload and the last write's answer settle together.
+    it("keeps the last write's answer when an older payload resolves in the same tick", async () => {
+      const api = serve(), hold = api.hold(1), held = api.holdGet(1); // the Undo and the Mark's refresh both wait
+      api.failGets(2); // no payload after them answers
+      history.replaceState(null, "", hash);
+      await page();
+      fireEvent.click(screen.getByRole("button", { name: "Mark fix applied" }));
+      fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+      await waitFor(() => expect(api.posts.length).toBe(2));
+      await waitFor(() => expect(vi.mocked(fetch).mock.calls.filter(c => c[0] === "/api/errors").length).toBe(2)); // the refresh asked while x was marked
+      await act(async () => { held.release(); hold.release(); });
+      await waitFor(() => expect(api.store).toEqual({}));
+      await waitFor(() => expect(vi.mocked(fetch).mock.calls.filter(c => c[0] === "/api/errors").length).toBe(3)); // the one after the Undo failed
+      expect(screen.getByRole("button", { name: "Mark fix applied" })).toBeTruthy();
+      expect(fixes()).toContain("0Fixes applied");
+    });
+
+    // N2: a payload no longer applies once the first write is done, so one equal to the first cannot be mistaken for a repeat.
+    it("shows the write's answer when the payload after it is another tab's older view", async () => {
+      const api = serve();
+      history.replaceState(null, "", hash);
+      await page();
+      api.payloadFixes = { worktree: "2026-10-01" }; // the payload after the write is another tab's view: no x, another type marked
+      await mark();
+      await waitFor(() => expect(api.store).toEqual({ x: "2026-11-05" }));
+      await waitFor(() => expect(vi.mocked(fetch).mock.calls.filter(c => c[0] === "/api/errors").length).toBe(2));
+      expect(screen.getByRole("button", { name: "Undo" })).toBeTruthy();
+      expect(fixes()).toContain("1Fixes applied");
+      api.payloadFixes = {}; // and one equal to the first payload, which the cache hands back as the same object
+      await act(async () => { clearApiCache(); });
+      await waitFor(() => expect(vi.mocked(fetch).mock.calls.filter(c => c[0] === "/api/errors").length).toBe(3));
+      expect(screen.getByRole("button", { name: "Undo" })).toBeTruthy(); // the next load shows what the store holds now
+    });
+
+    it("takes every payload before the first write as the seed", async () => {
+      const api = serve();
+      history.replaceState(null, "", hash);
+      await page();
+      api.store.x = "2026-11-03"; // another tab marks x
+      await act(async () => { clearApiCache(); });
+      await waitFor(() => expect(screen.getByRole("button", { name: "Undo" })).toBeTruthy());
+      expect(fixes()).toContain("1Fixes applied");
+    });
+
+    it("reads the store after a failed write and shows what it holds", async () => {
+      const api = serve({}, b => { api.store.x = "2026-11-03"; return !!b; }); // refused after the store took it: the answer was lost
+      history.replaceState(null, "", hash);
+      await page();
+      await mark();
+      await waitFor(() => expect(document.getElementById("fixErr")).toBeTruthy());
+      expect(api.requests).toEqual(["fix x 2026-11-05", "resync"]);
+      expect(screen.getByRole("button", { name: "Undo" })).toBeTruthy();
+      expect(document.querySelector("#detail .chip.fixed")?.textContent).toBe("✓ Fix applied Nov 3, 2026");
+    });
+
+    it("keeps what it showed when the read after a failed write fails too", async () => {
+      const api = serve({ x: "2026-11-04" }, () => true);
+      api.failResync = true;
+      history.replaceState(null, "", hash);
+      await page();
+      await undo();
+      await waitFor(() => expect(document.getElementById("fixErr")).toBeTruthy());
+      expect(api.requests).toEqual(["fix x null", "resync"]);
+      expect(document.querySelector("#detail .chip.fixed")?.textContent).toBe("✓ Fix applied Nov 4, 2026"); // the seed
+      // A write queued behind it runs after it.
+      api.fail(null);
+      await undo();
+      await waitFor(() => expect(api.store).toEqual({}));
+      expect(screen.getByRole("button", { name: "Mark fix applied" })).toBeTruthy();
+    });
+
+    // N3: no timeout; a write that waits is said to wait.
+    it("says Saving… while a write is pending, and no longer after", async () => {
+      const api = serve(), hold = api.hold();
+      history.replaceState(null, "", hash);
+      await page();
+      expect(screen.queryByText("Saving…")).toBeNull();
+      await mark();
+      expect(screen.getByText("Saving…")).toBeTruthy();
+      expect(screen.getByRole("button", { name: "Undo" }).getAttribute("aria-busy")).toBe("true");
+      hold.release();
+      await waitFor(() => expect(screen.queryByText("Saving…")).toBeNull());
+      expect(api.store).toEqual({ x: "2026-11-05" });
+      expect(screen.getByRole("button", { name: "Undo" }).getAttribute("aria-busy")).toBeNull();
+    });
+
+    it("says Saving… for a type while an import that never answers is queued ahead of its write", async () => {
+      localStorage.setItem("claude-errors-fixes", JSON.stringify({ worktree: "2026-10-01" }));
+      const api = serve(), hold = api.hold();
+      history.replaceState(null, "", hash);
+      await page();
+      await waitFor(() => expect(api.requests).toEqual(["import"]));
+      await mark();
+      expect(screen.getByText("Saving…")).toBeTruthy();
+      expect(document.getElementById("fixErr")).toBeNull(); // not a failure: a long ingest may hold the store
+      expect(api.requests).toEqual(["import"]); // the mark waits behind the import
+      hold.release();
+      await waitFor(() => expect(api.store).toEqual({ worktree: "2026-10-01", x: "2026-11-05" }));
+      await waitFor(() => expect(screen.queryByText("Saving…")).toBeNull());
+    });
   });
 
   describe("fix markers kept by an older page in localStorage", () => {
@@ -250,19 +362,20 @@ describe("ErrorsPage", () => {
       expect(fixes()).toContain("1Fixes applied");
     });
 
-    // Finding 5: once the import is done the browser's copy is gone from memory too.
+    // Finding 5: once the import is done the browser's copy is gone from memory too, so a later answer does not merge it back.
     it("does not bring a marker back that another tab removed after the import", async () => {
-      localStorage.setItem(KEY, JSON.stringify({ x: "2026-11-04" }));
-      const api = serve({ x: "2026-11-04" });
-      history.replaceState(null, "", hash);
+      localStorage.setItem(KEY, JSON.stringify({ worktree: "2026-10-01" }));
+      const api = serve({ worktree: "2026-10-01" });
+      history.replaceState(null, "", "/errors#range=7&cat=x");
       await page();
       await waitFor(() => expect(localStorage.getItem(KEY)).toBeNull());
       expect(api.requests).toEqual(["import"]);
       await waitFor(() => expect(fixes()).toContain("1Fixes applied"));
-      delete api.store.x; // another tab undoes it
-      act(() => clearApiCache()); // and this page refetches
-      await waitFor(() => expect(fixes()).toContain("0Fixes applied"));
-      expect(document.querySelector("#catBody .chip.fixed")).toBeNull();
+      delete api.store.worktree; // another tab undoes it
+      await userEvent.click(screen.getByRole("button", { name: "Mark fix applied" }));
+      await waitFor(() => expect(api.store).toEqual({ x: "2026-11-05" }));
+      await waitFor(() => expect(fixes()).toContain("1Fixes applied")); // x only
+      expect(screen.getByRole("button", { name: "Undo" })).toBeTruthy();
     });
 
     it("leaves the key after a failed import, shows the markers meanwhile, and imports again on the next load", async () => {
@@ -294,7 +407,7 @@ describe("ErrorsPage", () => {
       await undo(); // the Undo reaches the store; the key must not hand the marker back later
       await waitFor(() => expect(JSON.parse(localStorage.getItem(KEY)!)).toEqual({ worktree: "2026-10-01" }));
       expect(screen.getByRole("button", { name: "Mark fix applied" })).toBeTruthy();
-      expect(api.requests).toEqual(["import", "fix x null"]);
+      expect(api.requests).toEqual(["import", "resync", "fix x null"]); // the failed import is followed by a read of the store
       cleanup();
       api.failImport = false;
       await page();

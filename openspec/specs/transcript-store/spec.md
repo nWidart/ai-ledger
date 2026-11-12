@@ -189,7 +189,7 @@ Each derived request SHALL carry the `speed` its response's `usage` reports (`fa
 - **THEN** its request record has no speed
 
 ### Requirement: Keep the Errors page's marks through a rebuild
-The store SHALL hold the fix markers the user sets on the Errors page in an `error_marks` table, one row per error type with the day the fix went in. The table SHALL NOT be derived from transcript lines: `ai-ledger rebuild` SHALL leave its rows as they are. A store created before the table existed SHALL gain it, empty, when opened.
+The store SHALL hold the fix markers the user sets on the Errors page in an `error_marks` table, one row per error type the user has marked or unmarked, with the day the fix went in or none after an undo. The table SHALL NOT be derived from transcript lines: `ai-ledger rebuild` SHALL leave its rows as they are. A store created before the table existed SHALL gain it, empty, when opened.
 
 #### Scenario: Rebuild
 - **WHEN** the user has marked `worktree` fixed on Nov 4 and runs a rebuild

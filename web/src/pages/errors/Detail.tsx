@@ -49,7 +49,7 @@ function WhereToStart() {
 }
 
 function TypeDetail({ cat }: { cat: string }) {
-  const x = useErrors(), { m, v, f, fixes, mode, q } = x, c = m.cats[cat]!, fixDay = fixes[cat];
+  const x = useErrors(), { m, v, f, fixes, mode, q } = x, c = m.cats[cat]!, fixDay = fixes[cat], busy = x.saving.has(cat);
   const head = useRef<HTMLDivElement>(null), bar = useRef<HTMLDivElement>(null);
   const base = f.errs.filter(e => e.c === cat).reverse(), is = incSummary(m, base), groups = is.groups.sort(byWeight), worst = groups[0];
   // A linked example shows first; outside the current filters it gets its own note instead of joining the list.
@@ -122,10 +122,12 @@ function TypeDetail({ cat }: { cat: string }) {
     <div className="fixbox"><div className="t">Potential fix</div><div>{c.fix}</div>
       {c.snippet ? <><pre className="snip" id="snip">{c.snippet}</pre><div className="row" style={{ marginTop: 8 }}><button type="button" id="copy" onClick={copy}>{copied === "ok" ? "Copied ✓" : "Copy instruction line"}</button>
         <span role="status" className={copied === "fail" ? "muted" : "sr"}>{copied === "fail" ? "Could not copy: select the line above and copy it." : copied === "ok" ? "Copied." : ""}</span></div></> : null}
-      <div className="row" style={{ marginTop: 10 }}>
-        {fixDay ? <><span className="chip fixed">✓ Fix applied {label(fixDay, true)}</span><button type="button" id="unfix" onClick={undo}>Undo</button></>
-          : <><label className="chk">Applied on <input type="date" id="fixDate" ref={date} defaultValue={m.lastDay} min={m.firstDay} max={m.lastDay} /></label><button type="button" id="fix" onClick={mark}>Mark fix applied</button></>}
+      <div className="row" style={{ marginTop: 10 }} aria-busy={busy || undefined}>
+        {fixDay ? <><span className="chip fixed">✓ Fix applied {label(fixDay, true)}</span><button type="button" id="unfix" aria-busy={busy || undefined} onClick={undo}>Undo</button></>
+          : <><label className="chk">Applied on <input type="date" id="fixDate" ref={date} defaultValue={m.lastDay} min={m.firstDay} max={m.lastDay} /></label><button type="button" id="fix" aria-busy={busy || undefined} onClick={mark}>Mark fix applied</button></>}
         <span className="muted" style={{ fontSize: 12 }}>Applies to all projects</span>
+        {/* No timeout: a write may wait for a long ingest. Say so, so a write that waits is never silent. */}
+        {busy && <span className="muted" id="fixSaving" style={{ fontSize: 12 }}>Saving…</span>}
         {x.fixError?.cat === cat && <span className="fixerr" id="fixErr">{x.fixError.text}</span>}
       </div>
     </div>

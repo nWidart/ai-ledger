@@ -230,8 +230,18 @@ class FixEndpointTest(unittest.TestCase):
         text = r.read()
         return r.status, json.loads(text) if text and r.getheader("Content-Type", "").startswith("application/json") else text
 
+    def get(self, path, host=f"{app.HOST}:{app.PORT}"):
+        h = http.client.HTTPConnection("127.0.0.1", self.httpd.server_address[1])
+        h.request("GET", path, headers={"Host": host})
+        r = h.getresponse()
+        text = r.read()
+        return r.status, json.loads(text) if text and r.getheader("Content-Type", "").startswith("application/json") else text
+
     def marks(self):
-        return {c: d.isoformat() for c, d in self.con.execute("SELECT category, fixed_on FROM error_marks").fetchall()}
+        return {c: d.isoformat() for c, d in self.con.execute("SELECT category, fixed_on FROM error_marks WHERE fixed_on IS NOT NULL").fetchall()}
+
+    def rows(self):
+        return self.con.execute("SELECT category, fixed_on IS NULL FROM error_marks ORDER BY 1").fetchall()
 
     def test_sets_replaces_and_removes_a_marker(self):
         today = self.today.isoformat()
@@ -287,6 +297,24 @@ class FixEndpointTest(unittest.TestCase):
                          (200, {"kept": "2026-11-01", "new": "2026-10-02"}))
         self.assertEqual(self.marks(), {"kept": "2026-11-01", "new": "2026-10-02"})
         self.assertEqual(self.post({"fixes": {}}, path=self.IMPORT), (200, {"kept": "2026-11-01", "new": "2026-10-02"}))
+
+    def test_an_import_after_an_undo_changes_nothing(self):
+        """Another tab's import, delayed behind this tab's Undo, must not bring the marker back."""
+        self.post({"category": "x", "day": "2026-11-04"})
+        self.post({"category": "x", "day": None})
+        self.assertEqual(self.rows(), [("x", True)])
+        self.assertEqual(self.post({"fixes": {"x": "2026-11-04", "y": "2026-11-03"}}, path=self.IMPORT), (200, {"y": "2026-11-03"}))
+        self.assertEqual(self.marks(), {"y": "2026-11-03"})
+        self.assertEqual(self.post({"category": "x", "day": "2026-11-05"})[1], {"x": "2026-11-05", "y": "2026-11-03"})  # a mark after the undo
+
+    def test_fixes_are_read_alone(self):
+        self.assertEqual(self.get("/api/errors/fixes"), (200, {}))
+        self.post({"category": "x", "day": "2026-11-04"})
+        self.post({"category": "y", "day": "2026-11-04"})
+        self.post({"category": "y", "day": None})
+        self.assertEqual(self.get("/api/errors/fixes"), (200, {"x": "2026-11-04"}))
+        self.assertEqual(self.get("/api/errors/fixes", host="example.com")[0], 403)
+        self.assertEqual(self.get("/api/errors/fixes", host="localhost:8765")[0], 301)
 
     def test_import_skips_an_entry_that_is_not_valid_and_takes_the_rest(self):
         tomorrow = (self.today + timedelta(days=1)).isoformat()

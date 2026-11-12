@@ -75,7 +75,7 @@ export function ErrorsPage() {
   }, [update, after, focusDetail]);
   // A click on an example selects it: its permalink goes in the address bar, and the list stays where it is.
   const select = useCallback((id: string) => { selecting.current = true; update({ focus: id }, true); }, [update]);
-  const { fixes, setFix, fixError } = useFixes(data, say, after);
+  const { fixes, saving, setFix, fixError } = useFixes(data, say, after);
   const setMode = useCallback((x: Mode) => { setModeS(x); store.set(MODE_KEY, x); }, []);
 
   // The list puts the linked example first; a click on an example moves the link, not the list, until the view next changes.
@@ -172,7 +172,7 @@ export function ErrorsPage() {
   }, [m, view.project]);
 
   const ctx: ErrorsCtx | null = m && f && vt ? {
-    m, v: view, f, vt, fixes, fixError, mode, q, pinned: pin.current.focus ? m.byId[pin.current.focus] : undefined, inSheet: toSheet, chartInView,
+    m, v: view, f, vt, fixes, fixError, saving, mode, q, pinned: pin.current.focus ? m.byId[pin.current.focus] : undefined, inSheet: toSheet, chartInView,
     update, pick, select, setFix, setMode, setQ, after, say, bump, ...sets,
   } : null;
   const detailLive = <div className="sr" id="detailLive" aria-live="polite">{live}</div>;

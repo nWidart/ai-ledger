@@ -7,7 +7,9 @@ import type { FixError } from "./fixes";
 import type { Mode } from "./view";
 
 export interface ErrorsCtx {
-  m: Model; v: View; f: Filtered; vt: ViewTypes; fixes: Fixes; fixError: FixError | null; mode: Mode; q: string;
+  m: Model; v: View; f: Filtered; vt: ViewTypes; fixes: Fixes; fixError: FixError | null;
+  /** The types with a fix write on its way: they show "Saving…". */
+  saving: ReadonlySet<string>; mode: Mode; q: string;
   /** The linked example the list puts first: the focus as of the last change other than a click on an example. */
   pinned: Err | undefined;
   /** Narrow screen with a type open: the detail is in the sheet. */

@@ -3,7 +3,7 @@
 ## ADDED Requirements
 
 ### Requirement: Keep fix markers in the store
-The Errors page SHALL keep its "fix applied" markers in the store, one per error type and for all projects, and read them from the page's data, so a marker follows the user to another port, browser or profile. Marking or undoing SHALL show at once and be stored. When the write fails, the page SHALL restore the previous state, show a message beside the marker and announce it in the status region.
+The Errors page SHALL keep its "fix applied" markers in the store, one per error type and for all projects, and read them from the page's data, so a marker follows the user to another port, browser or profile. Marking or undoing SHALL show at once and be stored. When the write fails, the page SHALL show a message beside the marker and announce it in the status region.
 
 #### Scenario: Another browser
 - **WHEN** the user marks `worktree` fixed on Nov 4 in one browser and opens the Errors page on another port or in another browser
@@ -11,25 +11,47 @@ The Errors page SHALL keep its "fix applied" markers in the store, one per error
 
 #### Scenario: Undo
 - **WHEN** the user selects Undo on a marked type
-- **THEN** the marker goes at once, the store drops it, and the other markers stay
+- **THEN** the marker goes at once, the store takes the day off that type, and the other markers stay
 
 #### Scenario: The write fails
 - **WHEN** the user marks a type and the app refuses or does not answer
-- **THEN** the type shows as not fixed again, a message says the marker was not saved, the status region announces it and focus lands on "Mark fix applied"
+- **THEN** the page shows the type as the store holds it, a message says the marker was not saved, the status region announces it and focus lands on "Mark fix applied"
+
+### Requirement: Settle the page's markers by its writes
+The Errors page SHALL take the markers of its data as a seed only until its first write step, the import or a mark or undo, has completed. After that its copy of the store SHALL change only through its writes, one after another: a write's answer, the import's answer, or a read of the store (`GET /api/errors/fixes`) that follows a write that failed. If that read fails, the page SHALL keep its copy. A marker changed in another tab or browser then shows on the next load.
+
+#### Scenario: A write that failed
+- **WHEN** a mark is refused after the store had taken it
+- **THEN** the page reads the store and shows the marker the store holds
+
+#### Scenario: Another tab, after a write
+- **WHEN** this page has stored a marker and another tab then marks a different type
+- **THEN** this page keeps showing its own answer until it is loaded again
+
+### Requirement: Say when a fix write waits
+The page SHALL NOT time a fix write out, because a long ingest may hold the store and the write then still lands. While a write for the open type is pending, the page SHALL show the text "Saving…" and mark the fix controls `aria-busy`.
+
+#### Scenario: A write waits
+- **WHEN** the user marks a type and the answer has not come
+- **THEN** "Saving…" shows beside the marker and goes when the write is answered
 
 ### Requirement: Write a fix marker
-The app SHALL store a fix marker through `POST /api/errors/fix` with `{"category": string, "day": "YYYY-MM-DD" | null}` (null removes the marker), and SHALL answer with every marker. A write SHALL wait for a running ingest to release the store.
+The app SHALL store a fix marker through `POST /api/errors/fix` with `{"category": string, "day": "YYYY-MM-DD" | null}` (null takes the day off, keeping the type's row), and SHALL answer with every marker. `GET /api/errors/fixes` SHALL answer with every marker alone. A write SHALL wait for a running ingest to release the store.
 
 #### Scenario: During an ingest
 - **WHEN** a marker is posted while an ingest runs
 - **THEN** the write waits for the ingest to release the store and is stored right after
 
 ### Requirement: Import fix markers
-The app SHALL accept `POST /api/errors/fixes/import` with `{"fixes": {category: "YYYY-MM-DD"}}` and answer with every marker. In one transaction it SHALL store a marker only for a type that has no fix day at the moment of the write, and it SHALL leave out an entry that is not valid instead of refusing the rest.
+The app SHALL accept `POST /api/errors/fixes/import` with `{"fixes": {category: "YYYY-MM-DD"}}` and answer with every marker. In one transaction it SHALL store a marker only for a type the store has no row for at the moment of the write, so a type marked, or marked and undone, keeps what it has, and it SHALL leave out an entry that is not valid instead of refusing the rest.
 
 #### Scenario: Import over a marker set meanwhile
 - **WHEN** another browser marks `x` for Nov 1 and then an import names `x` for Nov 4 and `worktree` for Oct 1
 - **THEN** the store keeps `x` for Nov 1, takes `worktree` for Oct 1 and answers both
+
+#### Scenario: Import after an undo
+- **WHEN** a tab undoes `x` and an import from another tab, sent earlier, then names `x`
+- **THEN** `x` stays unmarked
 
 #### Scenario: One bad entry in an import
 - **WHEN** an import holds a marker with a date after today and a valid one

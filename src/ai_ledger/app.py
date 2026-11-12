@@ -291,6 +291,8 @@ def handler(app, port=PORT):
                     self.json(app.status())
                 elif url.path == "/api/errors":
                     self.json(metrics.errors_payload(app.con.cursor(), app.state["last_ingest"]))
+                elif url.path == "/api/errors/fixes":  # the markers alone: the page's resync after a write it cannot account for
+                    self.json(metrics.error_fixes(app.con.cursor()))
                 elif url.path == "/api/error":
                     detail = metrics.error_detail(app.con.cursor(), q.get("id", ""))
                     self.send(404, json.dumps(dict(error="error not found"))) if detail is None else self.json(detail)
