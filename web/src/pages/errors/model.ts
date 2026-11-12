@@ -398,7 +398,9 @@ const WRAPPER = /^(?:error|exit code \d+|<tool_use_error>)\s*:?$/i;
 // The rules, in order: each replaces incidental detail so errors that differ only by it fall together. Each is linear in the line's
 // length (a segment is always told from the next by a character the segment cannot hold), as a line can be 700 characters of anything.
 const sub = (s: string) => () => s;
-const trail = (m: string) => /\.*$/.exec(m)![0]; // a sentence's final dot stays out of a path
+// A sentence's final dots stay out of a path. Plain loops, not an end-anchored regex: that rescans the dots at each start, quadratic on "…....a".
+const dotsAt = (m: string) => { let i = m.length; while (i > 0 && m[i - 1] === ".") i--; return i; };
+const trail = (m: string) => m.slice(dotsAt(m));
 const RULES: [RegExp, (m: string) => string][] = [
   // A quoted string that starts like a path is a path, whatever its length and whatever is in it (spaces, Unicode, backslashes).
   [/(?<!\w)(["'`])(?=(?:~|\.{1,2})?\/(?!\1)|[A-Za-z]:[\\/])(?:(?!\1).)*\1(?!\w)/g, (m: string) => `${m[0]}<path>${m[0]}`],
@@ -411,7 +413,7 @@ const RULES: [RegExp, (m: string) => string][] = [
   [/(?<![\p{L}\p{N}_<>:/.~@-])(?:~|\.{1,2})?(?:\/[\p{L}\p{N}_.@+%~-]+)+\/?/gu, (m: string) => "<path>" + trail(m)],
   // Relative paths: two slashes or more, or a final extension, and a letter somewhere ("and/or" and "3/4" are not paths).
   [/(?<![\p{L}\p{N}_<>:/.~@-])(?:[\p{L}\p{N}_.@-]+\/)+[\p{L}\p{N}_.@-]+/gu, (m: string) => {
-    const t = m.replace(/\.+$/, "");
+    const t = m.slice(0, dotsAt(m));
     return /\p{L}/u.test(t) && (t.split("/").length > 2 || /\.[\p{L}\p{N}_]{1,8}$/u.test(t)) ? "<path>" + m.slice(t.length) : m;
   }],
   [/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, sub("<id>")], // UUIDs
@@ -421,7 +423,8 @@ const RULES: [RegExp, (m: string) => string][] = [
   // 7+ hex characters with a digit and a letter: a git hash or an address. Plain digits are a number, plain letters a word.
   [/\b(?:0x)?(?=[0-9a-f]*\d)(?=[0-9a-f]*[a-f])[0-9a-f]{7,}\b/gi, sub("<id>")],
   // An ISO 8601 date, or date-time (T or space, with or without seconds, fraction and zone): one number, so the hour doesn't split a group.
-  [/\b\d{4}-\d\d-\d\d(?:[T ]\d\d:\d\d(?::\d\d(?:[.,]\d+)?)?(?:Z|[+-]\d\d(?::?\d\d)?)?)?/g, sub("<n>")],
+  // A real date shape (month 01-12, day 01-31, time within range) not followed by a letter, digit or "-": "2026-99-99" and "2026-11-04beta" are not dates.
+  [/\b\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])(?:[T ](?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:[.,]\d+)?)?(?:Z|[+-](?:[01]\d|2[0-3])(?::?[0-5]\d)?)?)?(?![\p{L}\p{N}-])/gu, sub("<n>")],
   // Numbers: line:col, clock times, decimals, thousands, ports, sizes, durations (the unit stays). Not the digits of a word (utf8, sha256, E2BIG).
   [/\b0x[0-9a-f]+\b|(?<![A-Za-z_\d])\d+(?:[.,:]\d+)*/gi, sub("<n>")],
 ];
@@ -433,13 +436,15 @@ export function messageOf(e: Err): Msg {
   if (!r) msgs.set(e, r = normalize(e.e));
   return r;
 }
-/** The text of the first non-empty line, plus the next non-empty one when the first is only a wrapper; the rules applied; whitespace collapsed. */
+const MAX_TEXT = 700; // the ingest's cap on an error's text: normalizing no more bounds the cost whatever a payload holds
+/** The rules applied to a line, uncapped (normalize caps it). Exported for the cost test. */
+export const applyRules = (t: string) => RULES.reduce((x, [re, to]) => x.replace(re, to), t);
+/** The text of the first non-empty line, plus the next non-empty one when the first is only a wrapper; cut at MAX_TEXT; the rules applied; whitespace collapsed. */
 export function normalize(text: string): Msg {
   const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
   let t = lines[0] ?? "";
   if (WRAPPER.test(t) && lines[1]) t += " " + lines[1];
-  for (const [re, to] of RULES) t = t.replace(re, to);
-  const key = t.replace(/\s+/g, " ").trim() || NO_TEXT;
+  const key = applyRules(t.slice(0, MAX_TEXT)).replace(/\s+/g, " ").trim() || NO_TEXT;
   return { key, label: key.length > LABEL_MAX ? key.slice(0, LABEL_MAX - 1) + "…" : key };
 }
 /** One message's errors, newest first, with what the row shows. share: of the grouped errors; tools: by count, then name. */

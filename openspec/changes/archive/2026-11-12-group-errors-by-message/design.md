@@ -26,13 +26,20 @@ The function works on the first non-empty line of the text, trimmed. If that lin
 6. UUIDs become `<id>`.
 7. A lower-case word, `_` or `-`, then 8 or more letters and digits holding both a letter and a digit, becomes `<id>` (`toolu_…`, `call_…`, `msg_…`, `req_…`, `sess_…`, `chatcmpl-…`). `old_string`, `no_such_file` and `utf_8` stay.
 8. Hex runs of 7 or more characters holding a digit and a letter (git hashes, `0x` addresses) become `<id>`. A plain number stays a number.
-9. An ISO 8601 date or date-time (`T` or space, with or without seconds, fraction and zone) becomes one `<n>`, so the hour does not split a group.
+9. An ISO 8601 date or date-time (`T` or space, with or without seconds, fraction and zone) becomes one `<n>`, so the hour does not split a group. It needs a real shape (month 01-12, day 01-31, time in range) and no letter, digit or `-` after it: `2026-99-99` and `2026-11-04beta` fall to the number rule.
 10. Numbers (also `10:01:02`, `1.5`, `0x1f`, and the digits before a unit: `30s`) become `<n>`. Digits inside a word (`utf8`, `E2BIG`) stay.
 11. Whitespace collapses to single spaces.
 
-Every rule is linear in the line's length: the segments of a path are told apart by a character the segment cannot hold, and a test normalizes 700-character adversarial lines. 50,000 errors normalize in about 0.4 to 0.7 seconds, once.
+The text is cut at 700 characters (the ingest cap) before the rules run, so the cost is bounded whatever a payload holds. Trailing dots are trimmed with a loop, never an end-anchored regex, which rescans the dots at each start. Every rule is linear in the line's length: the segments of a path are told apart by a character the segment cannot hold, and a test compares the per-call cost of adversarial lines at 700 and 5,600 characters (best of several runs; under 20x for 8x the length). 50,000 errors normalize in about 0.4 to 0.7 seconds, once.
 
 The key is the result; the label is the key cut at 120 characters with `…`. The row shows the label with the key in its `title`; the copy button copies the key. An empty text has the key and label "(no error text)".
+
+## Known limits
+
+Normalization is a heuristic, and inside one error type it can over-merge. Accepted, because the group still opens to its examples and its copied key is what the user pastes:
+
+- A quoted expression that starts with `/` is a path: `Invalid regex '/foo bar/'` and `Invalid regex '/foo baz/'` are one group, `Invalid regex '<path>'`.
+- A prefix-id-shaped name is an id: `Cannot load lodash-4x17x21abc` and `Cannot load express-5x00x00abc` are one group, as are `Env foo_HTTP2SETTINGS is missing` and `Env foo_HTTP3SETTINGS is missing`.
 
 ## Risks
 

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import fixture from "../../__fixtures__/errors";
 import type { ErrorsPayload } from "../../api";
 import {
-  beforeAfter, breakdown, bucketLabel, bucketOf, buckets, byWeight, change, chartData, compare, emptyTypes, exList, filtered, inBucket, incidentsOf, inTool, incSummary, makeModel, messageOf, midDay, msgGroups, msgList, normalize, pointText,
+  applyRules, beforeAfter, breakdown, bucketLabel, bucketOf, buckets, byWeight, change, chartData, compare, emptyTypes, exList, filtered, inBucket, incidentsOf, inTool, incSummary, makeModel, messageOf, midDay, msgGroups, msgList, normalize, pointText,
   rangeStart, series, settle, summary, timeLost, typeColors, typeRows, uncategorized, viewTypes, whereToStart, type Err, type View,
 } from "./model";
 import { lostPayload } from "./lostData";
@@ -526,6 +526,13 @@ describe("normalized messages", () => {
     expect(key("Failed at 2026-11-04T10:01:02.000Z")).toBe(key("Failed at 2026-11-04T11:01:02.000Z"));
     expect(key("at 2026-11-04 10:01:02+01:00 and 2026-11-04T10:01Z and 2026-11-04T10:01:02,5")).toBe("at <n> and <n> and <n>");
     expect(key("on 2026-11-04 it broke")).toBe("on <n> it broke");
+    // Not a date: no month 13 or day 32, and no date glued to letters or more digits, so a number rule decides as before.
+    expect(key("Invalid version 2026-99-99")).toBe("Invalid version <n>-<n>-<n>");
+    expect(key("Invalid version 2026-99-99")).not.toBe(key("Invalid version 5"));
+    expect(key("Invalid version 2026-11-04beta")).toBe("Invalid version <n>-<n>-<n>beta");
+    expect(key("Invalid version 2026-11-04beta")).not.toBe(key("Invalid version 5beta"));
+    expect(key("x 2026-00-10 y 2026-13-01 z 2026-02-32 w 2026-11-04-1 v 2026-11-041")).toBe("x <n>-<n>-<n> y <n>-<n>-<n> z <n>-<n>-<n> w <n>-<n>-<n>-<n> v <n>-<n>-<n>");
+    expect(key("t 2026-11-04T25:61 u")).toBe("t <n>-<n>-<n>T25:<n> u"); // an impossible time is no date-time either
   });
   it("replaces prefixed ids, and keeps ordinary identifiers", () => {
     expect(key("Unknown session sess_Abc12345")).toBe("Unknown session <id>");
@@ -536,12 +543,25 @@ describe("normalized messages", () => {
     expect(key("sess_abcdefgh")).toBe("sess_abcdefgh"); // letters only: a word
     expect(key("sess_12345678")).toBe("sess_12345678"); // digits only: no id, and no number either (digits after "_" belong to the word)
   });
-  it("normalizes an adversarial 700-character line quickly", () => {
-    const lines = ["/", "/.", "~/", "'/", "\"/a\"b", "'/ '", "`", "C:\\", "C:/", "0", "a0", "a-", "a_", "1.", "1:", "2026-11-04T", "0x", "x/", "日/", "a'", "toolu_"].map(u => u.repeat(Math.ceil(700 / u.length)).slice(0, 700));
-    lines.push(("'/" + "a ".repeat(10)).repeat(40).slice(0, 700), ("1" + "a").repeat(350), "Exit code 1\n" + "/".repeat(690));
-    const t = performance.now();
-    for (const l of lines) normalize(l);
-    expect(performance.now() - t).toBeLessThan(2000);
+  it("costs linear time on adversarial lines: 8x the length costs well under 20x", () => {
+    // Shapes that make a rule rescan: runs of one character a segment can hold, with a failing end. Each is cut to length n.
+    const shapes: ((n: number) => string)[] = [n => "C:\\" + ".".repeat(n - 4) + "a", n => "a/" + ".".repeat(n - 3) + "a", n => "/" + ".".repeat(n - 2) + "a",
+      ...["/", "/.", "~/", "'/", "\"/a\"b", "'/ '", "`", "C:\\", "C:/", "0", "a0", "a-", "a_", "1.", "1:", "2026-11-04T", "0x", "x/", "日/", "a'", "toolu_", "1-", "a.", "\\"]
+        .map(u => (n: number) => u.repeat(Math.ceil(n / u.length)).slice(0, n)),
+      n => ("'/" + "a ".repeat(10)).repeat(Math.ceil(n / 22)).slice(0, n), n => ("1" + "a").repeat(n / 2), n => "/".repeat(n - 1) + "a", n => "a".repeat(n - 1) + "/"];
+    // Per-call cost, best of several samples (CI noise only adds time), at the cap (700) and at 8x it.
+    const cost = (line: string, reps: number) => {
+      let best = Infinity;
+      for (let k = 0; k < 7; k++) { const t = performance.now(); for (let r = 0; r < reps; r++) applyRules(line); best = Math.min(best, (performance.now() - t) / reps); }
+      return best;
+    };
+    for (const [i, shape] of shapes.entries()) {
+      const short = cost(shape(700), 40), long = cost(shape(5600), 5);
+      expect(long / Math.max(short, 0.005), `shape ${i}: ${JSON.stringify(shape(12))}…`).toBeLessThan(20);
+    }
+  });
+  it("normalizes only the first 700 characters, so a huge text costs no more", () => {
+    expect(normalize("a ".repeat(2000) + "/x/y/z").key).toBe(normalize("a ".repeat(350)).key);
   });
   it("collapses whitespace", () => {
     expect(key("a   b\t c ")).toBe("a b c");
