@@ -7,7 +7,7 @@ import json
 import os
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from . import metrics, store
 
@@ -18,6 +18,8 @@ OUTCOMES = ["fully_achieved", "mostly_achieved", "partially_achieved", "not_achi
 HELPFULNESS = ["essential", "very_helpful", "moderately_helpful", "slightly_helpful", "unhelpful"]
 SESSION_TYPES = ["multi_task", "iterative_refinement", "single_task", "quick_question"]
 SESSION_ROWS = 200  # analysed sessions in the payload, newest first; more sets truncated
+RUN_GAP = timedelta(hours=1)  # facets written further apart than this belong to different /insights runs
+RUNS = 20  # runs in the payload, newest first
 
 
 def files(root):
@@ -199,6 +201,22 @@ def insight(cur, sid):
     return got[0] | session_names(names, sid)
 
 
+def runs(cur, in_view):
+    """[{at, facets}], newest first, at most RUNS: the /insights runs that wrote a facet in the view. /insights leaves no record
+    of a run, so a run is a maximal group of stored facets whose file_mtime values have no gap over RUN_GAP between neighbours.
+    Groups are formed over the whole store, so a run keeps its identity whatever the view. at is the group's newest file_mtime;
+    facets counts the group's facets whose session id is in in_view. A run with none is left out. A facet rewritten by a later
+    run has one stored row, with the later file_mtime: it counts in the later run only. A facet without a file_mtime is in no run."""
+    groups = []
+    for sid, mtime in cur.execute("SELECT session_id, file_mtime FROM session_facets WHERE file_mtime IS NOT NULL ORDER BY file_mtime, session_id").fetchall():
+        if groups and mtime - groups[-1][-1][1] <= RUN_GAP:
+            groups[-1].append((sid, mtime))
+        else:
+            groups.append([(sid, mtime)])
+    got = [dict(at=metrics.iso(g[-1][1]), facets=sum(sid in in_view for sid, _ in g)) for g in reversed(groups)]
+    return [r for r in got if r["facets"]][:RUNS]
+
+
 def payload(cur, project="", range_days=0, source="", automated=False, today=None, usage_dir=None):
     """The JSON the Insights page reads. Only Claude Code sessions have facets: source codex returns coverage alone.
     Coverage counts leave automated sessions out, whatever automated says. underlying_goal and primary_success stay in the
@@ -218,10 +236,20 @@ def payload(cur, project="", range_days=0, source="", automated=False, today=Non
     facets, analysed, orphans = cur.execute(f"{in_view} SELECT count(*), count(*) FILTER (WHERE in_store AND {asql}), "
                                             f"count(*) FILTER (WHERE NOT in_store) FROM v s", wp + asp).fetchone()
     claude = per_source.get("claude", 0)
+    by_project, run_list = [], []
+    if source != "codex" and cur.execute("SELECT count(*) FROM session_facets").fetchone()[0]:
+        by_project = metrics.rows(cur, f"""SELECT coalesce(s.project, '(unknown)') AS project, count(*) AS sessions, count(sf.session_id) AS analysed
+            FROM sessions s LEFT JOIN session_facets sf USING (session_id)
+            WHERE {asql} AND s.source = 'claude' AND (CAST(? AS DATE) IS NULL OR s.first_ts >= {since}) GROUP BY 1 ORDER BY 2 DESC, 1""",
+                                  asp + [start, start])
+        in_view_ids = {r[0] for r in cur.execute(f"WITH {FACETS} SELECT s.session_id FROM f s WHERE {asql} AND (CAST(? AS DATE) IS NULL OR s.start >= {since})",
+                                                 asp + [start, start]).fetchall()}
+        run_list = runs(cur, in_view_ids)
     newest = cur.execute("SELECT max(file_mtime) FROM session_facets").fetchone()[0]
     coverage = dict(claude_sessions=claude, analysed=analysed, not_analysed=max(claude - analysed, 0),
                     codex_sessions=per_source.get("codex", 0), facets=facets, orphans=orphans, newest_facet=metrics.iso(newest),
-                    stored_facets=cur.execute("SELECT count(*) FROM session_facets").fetchone()[0], dir=usage_dir)
+                    stored_facets=cur.execute("SELECT count(*) FROM session_facets").fetchone()[0], dir=usage_dir,
+                    by_project=by_project, runs=run_list)
     facet_projects = [r[0] for r in cur.execute(f"WITH {FACETS} SELECT DISTINCT project FROM f ORDER BY 1").fetchall()]
     projects = metrics.project_list(cur, automated)
     projects += [p for p in facet_projects if p not in projects]

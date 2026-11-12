@@ -295,6 +295,12 @@ export interface InsightsPayload {
     stored_facets: number; newest_facet: Ts | null;
     /** The usage-data directory the app reads. */
     dir: string | null;
+    /** Claude Code sessions of the view by project, and those of them analysed, busiest project first; empty for Codex or
+     *  without stored facets. */
+    by_project: { project: string; sessions: number; analysed: number }[];
+    /** The /insights runs that wrote a facet in the view, newest first, at most 20: its newest file time and the facets
+     *  of the view it wrote. A run is facets written within an hour of each other, over the whole store. */
+    runs: { at: Ts; facets: number }[];
   };
   /** Every project, busiest first, then projects only facets name. */
   projects: string[];

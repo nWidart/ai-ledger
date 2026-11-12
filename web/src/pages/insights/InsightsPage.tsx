@@ -5,7 +5,7 @@ import { Judged, label, outcomeLabel, outcomeTone } from "../../components/facet
 import { Filters, viewName } from "../../components/Filters";
 import { Ledger, LedgerRow } from "../../components/Ledger";
 import { ProjectName } from "../../components/ProjectDot";
-import { SectionIndex } from "../../components/SectionIndex";
+import { jumpTo, SectionIndex } from "../../components/SectionIndex";
 import { sessName, shortId } from "../../components/sheets/session";
 import { useLanding } from "../../components/useLanding";
 import { num, pct, plural, when } from "../../format";
@@ -29,10 +29,11 @@ const TOP = 12;
 // Sessions listed until asked for all.
 const SESSIONS_TOP = 25;
 
-function Coverage({ d, view }: { d: InsightsPayload; view: View }) {
+function Coverage({ d, view, drawer }: { d: InsightsPayload; view: View; drawer: boolean }) {
   const c = d.coverage;
   if (view.source === "codex") return null;
-  const newest = c.newest_facet && <> The newest analysis was written <b className="when">{when(c.newest_facet)}</b>.</>;
+  const newest = <>{c.newest_facet && <> The newest analysis was written <b className="when">{when(c.newest_facet)}</b>.</>}
+    {drawer && <> Coverage <button type="button" className="linkish" onClick={() => jumpTo("d-coverage")}>by project and run</button>.</>}</>;
   return <>
     {c.not_analysed > 0 && <p className="cov" role="status" id="coverage">
       <b>{num(c.analysed)} of {plural(c.claude_sessions, "Claude Code session")}</b> in this view analysed ({pct(c.analysed / c.claude_sessions)}).
@@ -85,7 +86,7 @@ function Vitals({ d }: { d: InsightsPayload }) {
 const sessionsSide = (r: FacetTally) => plural(r.sessions, "session");
 
 /** A ledger of the first TOP rows, with a control to show them all. */
-function TopLedger({ rows, empty, noun, row }: { rows: FacetTally[]; empty: string; noun: string; row: (r: FacetTally) => ReactNode }) {
+function TopLedger<T>({ rows, empty, noun, row }: { rows: T[]; empty: string; noun: string; row: (r: T) => ReactNode }) {
   const [all, setAll] = useState(false);
   return <>
     <Ledger empty={empty}>{(all ? rows : rows.slice(0, TOP)).map(row)}</Ledger>
@@ -125,6 +126,26 @@ function SessionTypes({ d }: { d: InsightsPayload }) {
         <div className="strip" aria-hidden="true">{types.map((t, i) => <i key={t.name} style={{ flex: t.n, background: color(i) }} />)}</div>
         <ul className="key">{types.map((t, i) => <li key={t.name}><i className="sw" style={{ background: color(i) }} /><Cat name={t.name} /> <b>{num(t.n)}</b></li>)}</ul>
       </> : <p className="empty">No session types recorded in this view.</p>}
+    </Drawer>
+  );
+}
+
+/** How much of the view /insights analysed, by project and by run. Counts of sessions and facets, so not model-judged. */
+function CoverageDrawer({ d }: { d: InsightsPayload }) {
+  const { by_project, runs } = d.coverage, max = Math.max(0, ...runs.map(r => r.facets));
+  return (
+    <Drawer id="d-coverage" title="Coverage">
+      <h3>By project</h3>
+      <p className="hint">Claude Code sessions of this view that /insights analysed, busiest project first. A project with none analysed has no judgments at all.</p>
+      <TopLedger rows={by_project} empty="No Claude Code sessions in this view." noun="projects" row={r => {
+        const share = r.sessions ? r.analysed / r.sessions : 0;
+        return <LedgerRow key={r.project} name={r.project} project={r.project} share={share} value={`${num(r.analysed)} of ${num(r.sessions)}`}
+          side={r.analysed ? pct(share) : <span className="none">none analysed</span>} />;
+      }} />
+      <h3>By run</h3>
+      <p className="hint">A run is the facets written within an hour of each other, newest first, with those in this view. A session analysed again counts in its latest run.</p>
+      <Ledger empty="No runs in this view.">{runs.map(r => <LedgerRow key={r.at} name={when(r.at)} share={max ? r.facets / max : 0}
+        value={num(r.facets)} side={r.facets === 1 ? "facet" : "facets"} />)}</Ledger>
     </Drawer>
   );
 }
@@ -232,7 +253,7 @@ function Sessions({ d, view }: { d: InsightsPayload; view: View }) {
 }
 
 /** Insights (/insights): how Claude Code's /insights judged the view's sessions (outcome, satisfaction, helpfulness,
- *  friction, goals and session types), the analysed sessions, and how much of the view is not analysed yet. */
+ *  friction, goals and session types), the analysed sessions, and how much of the view is not analysed yet, by project and by run. */
 export function InsightsPage() {
   const [h] = useHashState();
   const want = viewOf(h);
@@ -251,14 +272,14 @@ export function InsightsPage() {
         <button type="button" className="linkish" ref={retryBtn} onClick={retry}>Retry</button></div>}
       <p className="pending" role="status">{loading && d ? `Loading insights for ${viewName(want)}…` : ""}</p>
       {!d ? <p className="lede" id="lede" tabIndex={-1}>{error ? "Insights could not be loaded." : "Loading insights…"}</p> : <>
-        <Coverage d={d} view={shown} />
+        <Coverage d={d} view={shown} drawer={!!figures} />
         <Lede d={d} view={shown} />
         <Sub d={d} view={shown} />
         {figures && <>
           <SectionIndex groups={[
             [{ id: "overview", label: "Overview" }, { id: "outcomes", label: "Outcomes" }, { id: "friction", label: "Friction" },
               { id: "satisfaction", label: "Satisfaction", long: "Satisfaction and helpfulness" }, { id: "log", label: "Sessions", long: "Analysed sessions" }],
-            [{ id: "d-goals", label: "Goals" }, { id: "d-types", label: "Session types" }],
+            [{ id: "d-goals", label: "Goals" }, { id: "d-types", label: "Session types" }, { id: "d-coverage", label: "Coverage" }],
           ]} />
           <Vitals d={d} />
           <div className="grid2">
@@ -267,7 +288,7 @@ export function InsightsPage() {
           </div>
           <Feelings d={d} />
           <Sessions d={d} view={shown} />
-          <div className="drawers"><Goals d={d} /><SessionTypes d={d} /></div>
+          <div className="drawers"><Goals d={d} /><SessionTypes d={d} /><CoverageDrawer d={d} /></div>
         </>}
       </>}
     </div>
