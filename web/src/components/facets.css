@@ -1,0 +1,14 @@
+/* Shared by the Insights page and the session sheet. */
+/* The model-judged tag: dashed, so it never reads as a measured chip. */
+:is(.pg-insights, dialog.sheet) .judged { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 500; padding: 1px 8px; border-radius: 999px;
+  border: 1px dashed var(--text-muted); color: var(--text-secondary); white-space: nowrap; letter-spacing: 0; cursor: help; }
+:is(.pg-insights, dialog.sheet) .judged::before { content: "≈"; font-weight: 600; color: var(--text-muted); }
+:is(.pg-insights, dialog.sheet) .badge { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 999px;
+  white-space: nowrap; background: var(--surface-2); color: var(--text-secondary); }
+:is(.pg-insights, dialog.sheet) .badge::before { font-size: 10px; content: "?"; }
+:is(.pg-insights, dialog.sheet) .badge.full { background: var(--good-soft); color: var(--good-text); }
+:is(.pg-insights, dialog.sheet) .badge.full::before { content: "✓"; }
+:is(.pg-insights, dialog.sheet) .badge.part { background: var(--warning-soft); color: var(--warning-text); }
+:is(.pg-insights, dialog.sheet) .badge.part::before { content: "◐"; }
+:is(.pg-insights, dialog.sheet) .badge.not { background: var(--critical-soft); color: var(--critical-text); }
+:is(.pg-insights, dialog.sheet) .badge.not::before { content: "✕"; }

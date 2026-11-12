@@ -1,6 +1,7 @@
 import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
 import { insightsUrl, viewOf, type FacetTally, type InsightSession, type InsightsPayload, type View } from "../../api";
 import { Drawer } from "../../components/Drawer";
+import { Judged, label, outcomeLabel, outcomeTone } from "../../components/facets";
 import { Filters, viewName } from "../../components/Filters";
 import { Ledger, LedgerRow } from "../../components/Ledger";
 import { ProjectName } from "../../components/ProjectDot";
@@ -10,12 +11,9 @@ import { useLanding } from "../../components/useLanding";
 import { num, pct, plural, when } from "../../format";
 import { formatHash, navigate, setHash, useHashState } from "../../hash";
 import { useApi } from "../../useApi";
-import { countOf, headline, label, outcomeLabel, outcomeTone } from "./insights";
+import { countOf, headline } from "./insights";
 import "./insights.css";
 
-const JUDGED_TITLE = "/insights asks a model to read each session's transcript and judge it: these are its opinions, not measurements";
-/** The tag every facet figure carries, so nobody reads it as measured. */
-const Judged = () => <span className="judged" title={JUDGED_TITLE}>model-judged</span>;
 // Session-type strip colors, in the payload's fixed order; unknown types share the last.
 const TYPE_COLORS = ["var(--proj-2)", "var(--proj-4)", "var(--proj-5)", "var(--proj-1)", "var(--proj-other)"];
 

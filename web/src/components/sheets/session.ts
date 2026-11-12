@@ -1,8 +1,8 @@
 // Pieces the sheets and the pages share: session names, links to Errors, opening a sheet, and the session timeline's model.
 import type { MouseEvent } from "react";
-import type { SessionDetail, Source, ToolKind } from "../../api";
+import type { SessionDetail, Source, ToolKind, View } from "../../api";
 import { big, num, pct, plural, usd } from "../../format";
-import { navigate, setHash } from "../../hash";
+import { formatHash, navigate, setHash } from "../../hash";
 
 // A session's readable name: the title the server took from its first prompt, else its short id. Remembered so a sheet
 // can name a session before its details arrive.
@@ -33,6 +33,8 @@ export function errorsHref(project: string | null | undefined, range?: number | 
   const s = String(p);
   return "/errors" + (s ? "#" + s : "");
 }
+/** The Insights page in view v's project, range, source and automated toggle. */
+export const insightsHref = (v: View) => "/insights" + formatHash({ project: v.project, range: String(v.range), source: v.source, auto: v.automated ? "1" : "" });
 /** Follows an in-app link without a reload; modified clicks open as the browser does. */
 export function appLink(e: MouseEvent<HTMLAnchorElement>) {
   if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
