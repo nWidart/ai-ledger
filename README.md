@@ -66,6 +66,14 @@ Cost uses the API list prices shipped with each version (`uv tool upgrade ai-led
 
 Its entries add to the packaged prices, or replace a model of the same name, and survive upgrades. Costs are computed from the stored token counts on every page load, so reload the page; no `rebuild` is needed. If the file cannot be used, the app ignores it and the Cost page says why.
 
+The Cost page also compares the estimate with your plan: "You pay about $200 a month (Claude Max 20x); at list prices this period is 4.2× your plan." The plan comes from the newest plan-limit snapshot of each provider, and its monthly price from the packaged `plans` table (Claude Pro and Max, ChatGPT Plus and Pro). To add a plan or change a price, put a `plans` object in the same `prices.json`, keyed by provider and then by the plan name the snapshots record (`pro`, `max/default_claude_max_20x`, `plus`, `prolite`):
+
+```json
+{"plans": {"claude": {"pro": {"label": "Claude Pro (annual)", "monthly": 17}}, "codex": {"team": {"label": "ChatGPT Team", "monthly": 30}}}}
+```
+
+A file may hold `models`, `plans` or both. The line is left out when the plan is unknown.
+
 ## Privacy
 
 - The server listens on `127.0.0.1` only.

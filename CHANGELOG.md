@@ -10,6 +10,7 @@ Run `ai-ledger rebuild` once after upgrading (with the app stopped): error types
 ### Added
 
 - The project sheet shows the project's change against the previous period: previous and current cost, the change (marked new when it had no usage before) and a daily cost sparkline over both windows.
+- The Cost heading compares the list-price estimate with your plan's monthly price ("4.2× your plan"), for Claude Pro and Max and ChatGPT Plus and Pro. A `plans` object in `prices.json` adds or overrides plans.
 - A `prices.json` next to the store adds or overrides model prices. The Cost page names the file when a model has no price.
 - Activity shows thinking time and, per session, test runs passed of run.
 - Limits forecasts use the open window's own recent pace as well as your usual pace, and say when a limit is already reached.

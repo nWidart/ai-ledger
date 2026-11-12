@@ -1,7 +1,7 @@
 // Cost's figures from the usage payload: the headline comparison, the daily series and the chart's stack.
 import type { Change, UsagePayload } from "../../api";
 import { color, hasHue } from "../../colors";
-import { dayRange, mult, num, pct, usd0 } from "../../format";
+import { dayRange, mult, num, pct, usd, usd0 } from "../../format";
 
 /** A series in the chart: a token kind, or a project ("p:<name>"; "p:" is Other). */
 export interface Kind { k: string; label: string; c: string; project?: string }
@@ -61,6 +61,14 @@ export const money = (n: number | null | undefined): string => (n == null ? "–
 
 /** A change in cost with its sign ("+$12", "−$3"), "–" when unknown. */
 export const sgn = (v: number | null): string => (v == null ? "–" : (v > 0 ? "+" : v < 0 ? "−" : "") + usd0(Math.abs(v)));
+
+/** The plan line: what the plan(s) in the view cost a month, and the list-price cost as a multiple of that price prorated to
+ *  the view's days (30 to the month). null without a known plan, a priced cost or days to compare. */
+export function planText(d: Pick<UsagePayload, "plans" | "totals" | "range" | "daily" | "end">): string | null {
+  const cost = d.totals.cost, days = d.range || dayRange(d.daily[0]?.day || d.end, d.end).length, monthly = d.plans.reduce((a, p) => a + p.monthly, 0);
+  if (!d.plans.length || !d.totals.requests || !cost || !monthly) return null;
+  return `You pay about ${usd(monthly)} a month (${d.plans.map(p => p.label).join(" + ")}); at list prices this period is ${mult(cost / (monthly * days / 30))} your plan${d.plans.length > 1 ? "s" : ""}.`;
+}
 
 /** The headline's comparison: "17.8× the previous 30 days" from 2× up, a percentage below; sr: the same, read aloud. */
 export function compareText(d: Pick<UsagePayload, "totals" | "previous" | "range">): { text: string; sr: string } | null {

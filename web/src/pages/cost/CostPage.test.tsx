@@ -7,7 +7,7 @@ import usageAll from "../../__fixtures__/usage-all";
 import sessions from "../../__fixtures__/sessions";
 import session from "../../__fixtures__/session";
 import { mockApi } from "../../components/sheets/testing";
-import { compareText, costDays, thinHistory } from "./cost";
+import { compareText, costDays, planText, thinHistory } from "./cost";
 import { CostPage } from "./CostPage";
 
 const at = (hash = "#range=30") => history.replaceState(null, "", "/cost" + hash);
@@ -27,6 +27,29 @@ const proj = (project: string, cost: number, commits: number): ProjectRow =>
 const withProjects = (rows: ProjectRow[]): UsagePayload => ({ ...usage, projects: rows.map(p => p.project!), by_project: rows,
   totals: { ...usage.totals, commits: rows.reduce((a, p) => a + p.commits, 0), cost: rows.reduce((a, p) => a + (p.cost ?? 0), 0) } });
 const doubled: UsagePayload = { ...usage, previous: { ...usage.previous!, cost: 7.9 } };
+
+describe("plan context", () => {
+  const max = { provider: "claude" as const, label: "Claude Max 20x", monthly: 200 };
+  const priced = { ...usage, plans: [max], totals: { ...usage.totals, cost: 840 } };
+
+  it("shows the list-price cost as a multiple of the plan prorated to the view", async () => {
+    await show(priced);
+    expect(screen.getByText(/You pay about \$200 a month \(Claude Max 20x\); at list prices this period is 4\.2× your plan\./)).toBeTruthy();
+  });
+
+  it("is absent when the payload has no plan", async () => {
+    await show({ ...priced, plans: [] });
+    expect(screen.queryByText(/You pay about/)).toBeNull();
+  });
+
+  it("sums two plans, prorates all time, says a multiple below 1 plainly and is silent without a cost", () => {
+    const codex = { provider: "codex" as const, label: "ChatGPT Plus", monthly: 20 };
+    expect(planText({ ...priced, plans: [max, codex] })).toBe("You pay about $220 a month (Claude Max 20x + ChatGPT Plus); at list prices this period is 3.8× your plans.");
+    expect(planText({ ...priced, totals: { ...priced.totals, cost: 120 } })).toContain("0.6× your plan");
+    expect(planText({ ...priced, range: 0, daily: [{ ...priced.daily[0]!, day: "2026-09-12" }], end: "2026-11-10" })).toContain("2.1× your plan");
+    expect(planText({ ...priced, totals: { ...priced.totals, cost: null } })).toBeNull();
+  });
+});
 
 describe("cost figures", () => {
   it("compares with the previous period as a multiple from 2x, a percentage below", () => {
