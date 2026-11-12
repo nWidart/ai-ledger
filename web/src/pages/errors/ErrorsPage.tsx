@@ -9,7 +9,7 @@ import { useApi } from "../../useApi";
 import { Ctx, tableFocus, type ErrorsCtx } from "./context";
 import { Detail } from "./Detail";
 import { useMarks } from "./marks";
-import { filtered, makeModel, settle, viewTypes, withMuted, type View } from "./model";
+import { filtered, makeModel, messageOf, settle, viewTypes, withMuted, type View } from "./model";
 import { RateChart } from "./RateChart";
 import { Summary } from "./Summary";
 import { TypeTable } from "./TypeTable";
@@ -25,7 +25,7 @@ const useMedia = (q: string) => useSyncExternalStore(
 const $ = (s: string | null | undefined) => (s ? document.querySelector<HTMLElement>(s) : null);
 // A selector that finds the same control again after a re-render.
 const focusKey = (el: HTMLElement) => el.id ? "#" + CSS.escape(el.id)
-  : ["c", "copy", "link", "full", "inc", "m"].map(k => el.dataset[k] != null && `${el.tagName}[data-${k}="${CSS.escape(el.dataset[k])}"]`).find(Boolean) || null;
+  : ["c", "copy", "link", "full", "inc", "m", "msg"].map(k => el.dataset[k] != null && `${el.tagName}[data-${k}="${CSS.escape(el.dataset[k])}"]`).find(Boolean) || null;
 
 /** Errors (/errors): failed tool calls of every coding agent (or the one the source filter picks), by type, with fixes. */
 export function ErrorsPage() {
@@ -48,7 +48,7 @@ export function ErrorsPage() {
   viewRef.current = view;
 
   const [mode, setModeS] = useState<Mode>(loadMode), [q, setQ] = useState("");
-  const sets = useRef({ openInc: new Set<number>(), opened: new Set<string>(), fullText: new Map<string, ErrorDetail>(), loading: new Set<string>(), failed: new Set<string>() }).current;
+  const sets = useRef({ openInc: new Set<number>(), openMsg: new Set<string>(), opened: new Set<string>(), fullText: new Map<string, ErrorDetail>(), loading: new Set<string>(), failed: new Set<string>() }).current;
   const narrow = useMedia(NARROW), toSheet = !!m && narrow && !!view.cat;
   const [chartInView, setChartInView] = useState(true), [pageLive, setPageLive] = useState("");
   // A dead link's notice is page state: the write-back below drops its ex from the hash, so the hash can't say it any more.
@@ -91,8 +91,9 @@ export function ErrorsPage() {
   const pin = useRef({ key: "", focus: null as string | null });
   if (pin.current.key !== fullKey || (pin.current.focus !== view.focus && !selecting.current)) {
     pin.current = { key: fullKey, focus: view.focus };
-    const n = view.focus ? m?.byId[view.focus]?.n : null;
-    if (n != null) sets.openInc.add(n); // the linked example's incident opens
+    const linked = view.focus ? m?.byId[view.focus] : undefined;
+    if (linked?.n != null) sets.openInc.add(linked.n); // the linked example's incident opens
+    if (linked) sets.openMsg.add(messageOf(linked).key); // and its message group
   }
   useEffect(() => { selecting.current = false; });
 

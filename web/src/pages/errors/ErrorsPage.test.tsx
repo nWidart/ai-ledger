@@ -9,6 +9,7 @@ import { Palette } from "../../components/palette/Palette";
 import { openPalette } from "../../components/palette/store";
 import { clearApiCache } from "../../useApi";
 import { ErrorsPage } from "./ErrorsPage";
+import { when } from "../../format";
 import { lostPayload } from "./lostData";
 import { VIEW_KEY } from "./view";
 
@@ -1754,5 +1755,231 @@ describe("ErrorsPage tool and agent breakdown", () => {
     const posts = vi.mocked(fetch).mock.calls.filter(c => c[0] === "/api/errors/fix").map(c => JSON.parse((c[1] as RequestInit).body as string));
     expect(posts).toEqual([{ category: "x", day: null }, { category: "x", day: "2026-11-05" }]);
     expect(hashOf().etool).toBe("Edit");
+  });
+});
+
+// Type x: ENOENT ×4 (paths differ; Edit ×3 and Read in foo and bar), an "Exit code" pair, a lone message, an empty text, and 35 timeouts
+// that differ only by a number (Bash ×20, Edit ×10, Read ×3, Write ×2; one in bar). Nov 3: a1, a2, c1; the rest are on Nov 4.
+describe("ErrorsPage by message", () => {
+  type Row = ErrorsPayload["errors"][number];
+  const E = (id: string, ts: string, e: string, o: Partial<Row> = {}): Row =>
+    ({ id, ts, d: ts.slice(0, 10), p: "foo", s: "s1", t: "Bash", c: "x", i: "", e, r: "", sub: 0, src: "claude", n: null, ...o });
+  const enoent = (p: string) => `ENOENT: no such file or directory, open '${p}'`;
+  const ts = (i: number) => `2026-11-04T13:${String(i).padStart(2, "0")}:00.000Z`;
+  const base: Row[] = [
+    E("a1", "2026-11-03T09:00:00.000Z", enoent("/Users/me/one/a.ts"), { t: "Edit" }), E("a2", "2026-11-03T09:05:00.000Z", enoent("/Users/me/two/b.ts"), { t: "Edit" }),
+    E("a3", "2026-11-04T10:01:00.000Z", enoent("/Users/me/three/c.ts"), { t: "Edit" }), E("a4", "2026-11-04T10:02:00.000Z", enoent("/Users/me/four/d.ts"), { t: "Read", p: "bar" }),
+    E("b1", "2026-11-04T11:00:00.000Z", "Exit code 1\nzsh: command not found: pnpm"), E("b2", "2026-11-04T11:05:00.000Z", "Exit code 127\nzsh: command not found: pnpm"),
+    E("c1", "2026-11-03T08:00:00.000Z", "Permission denied", { t: "Write" }), E("d1", "2026-11-04T12:00:00.000Z", ""),
+    ...Array.from({ length: 35 }, (_, i) => E("p" + i, ts(i), `Request timed out after ${30 + i}s on attempt ${i}`,
+      { t: i < 20 ? "Bash" : i < 30 ? "Edit" : i < 33 ? "Read" : "Write", p: i === 0 ? "bar" : "foo" })),
+  ];
+  const calls: ErrorsPayload["calls"] = [["2026-11-03", "foo", 10, 0, "claude"], ["2026-11-04", "foo", 10, 0, "claude"]];
+  const msgs: ErrorsPayload = { ...withErrors(base), calls };
+  const TIMEOUT = "Request timed out after <n>s on attempt <n>", ENOENT = "ENOENT: no such file or directory, open '<path>'";
+  /** Opens the page; mode "msg" is saved first, as a reader's earlier choice. */
+  const open = async (hash: string, payload = msgs, mode = "msg", muted: string[] = []) => {
+    cleanup();
+    if (mode) localStorage.setItem("claude-errors-mode", JSON.stringify(mode));
+    serve({}, null, muted).payload = payload;
+    history.replaceState(null, "", "/errors" + hash);
+    await page();
+  };
+  const heads = () => [...document.querySelectorAll<HTMLElement>("#exList .msg-h")];
+  const count = (h: HTMLElement) => h.querySelector(".att")!.textContent!.replace(/errors?$/, "");
+  const list = () => heads().map(h => [count(h), h.querySelector(".lbl")!.textContent]);
+  const shares = () => heads().map(h => h.querySelector(".shr")!.textContent);
+  const exCount = () => document.getElementById("exCount")!.textContent;
+  const examples = () => [...document.querySelectorAll("#exList .ex")].map(e => e.id);
+
+  it("switches to By message, keeps the mode in the old key, restores it, and leaves focus on the button", async () => {
+    await open("#range=30&cat=x", msgs, "");
+    const btn = screen.getByRole("button", { name: "By message" });
+    expect(btn.getAttribute("aria-pressed")).toBe("false");
+    expect(heads()).toHaveLength(0);
+    await userEvent.click(btn);
+    expect(localStorage.getItem("claude-errors-mode")).toBe('"msg"');
+    expect(btn.getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "Incidents" }).getAttribute("aria-pressed")).toBe("false");
+    expect(screen.getByRole("button", { name: "Every error, newest first" }).getAttribute("aria-pressed")).toBe("false");
+    expect(document.activeElement).toBe(btn);
+    expect(document.getElementById("exHead")!.textContent).toBe("Messages");
+    expect(exCount()).toBe("5 messages in range, most errors first");
+    // The next visit opens in it; another mode replaces it.
+    await open("#range=30&cat=x", msgs, "");
+    expect(screen.getByRole("button", { name: "By message" }).getAttribute("aria-pressed")).toBe("true");
+    expect(heads()).toHaveLength(5);
+    await userEvent.click(screen.getByRole("button", { name: "Incidents" }));
+    expect(localStorage.getItem("claude-errors-mode")).toBe('"inc"');
+    expect(heads()).toHaveLength(0);
+  });
+
+  it("lists one row per message, most errors first and the most recent first on a tie, with its share, projects, tools and newest time", async () => {
+    await open("#range=30&cat=x");
+    expect(list()).toEqual([["35×", TIMEOUT], ["4×", ENOENT], ["2×", "Exit code <n> zsh: command not found: pnpm"], ["1×", "(no error text)"], ["1×", "Permission denied"]]);
+    expect(shares()).toEqual(["81%", "9%", "5%", "2%", "2%"]); // of the 43 listed errors
+    const meta = (h: HTMLElement) => h.querySelector(".when")!.textContent;
+    expect(meta(heads()[0]!)).toBe(`2 projects · Bash, Edit +2 · newest ${when(ts(34))}›`);
+    expect(meta(heads()[1]!)).toBe(`2 projects · Edit, Read · newest ${when("2026-11-04T10:02:00.000Z")}›`);
+    expect(meta(heads()[2]!)).toBe(`1 project · Bash · newest ${when("2026-11-04T11:05:00.000Z")}›`);
+    expect(heads()[1]!.querySelector(".lbl")!.getAttribute("title")).toBe(ENOENT); // the full text, for a label that was cut
+  });
+
+  it("opens a group into its examples, newest first, and closes it", async () => {
+    await open("#range=30&cat=x");
+    const h = heads()[1]!, body = () => document.getElementById(h.getAttribute("aria-controls")!)!;
+    expect(h.getAttribute("aria-expanded")).toBe("false");
+    expect(body().hidden).toBe(true);
+    expect(examples()).toEqual([]);
+    await userEvent.click(h);
+    expect(h.getAttribute("aria-expanded")).toBe("true");
+    expect(body().hidden).toBe(false);
+    expect(examples()).toEqual(["ex-a4", "ex-a3", "ex-a2", "ex-a1"]);
+    await userEvent.click(h);
+    expect(h.getAttribute("aria-expanded")).toBe("false");
+    expect(examples()).toEqual([]);
+  });
+
+  it("pages a group's examples thirty at a time, and focuses the first new one", async () => {
+    await open("#range=30&cat=x");
+    await userEvent.click(heads()[0]!);
+    expect(examples()).toHaveLength(30);
+    expect(examples()[0]).toBe("ex-p34");
+    const more = screen.getByRole("button", { name: "Show more examples" });
+    await userEvent.click(more);
+    expect(examples()).toHaveLength(35);
+    await waitFor(() => expect(document.activeElement).toBe(document.getElementById("ex-p4"))); // the 31st, newest first
+    expect(screen.queryByRole("button", { name: "Show more examples" })).toBeNull();
+  });
+
+  it("pages the rows twenty at a time, and focuses the first new one", async () => {
+    const many = { ...withErrors(Array.from({ length: 25 }, (_, i) => E("m" + i, ts(i), `${String.fromCharCode(97 + i).repeat(5)} failed`))), calls };
+    await open("#range=30&cat=x", many);
+    expect(heads()).toHaveLength(20);
+    expect(exCount()).toBe("25 messages in range, most errors first");
+    await userEvent.click(document.getElementById("more")!);
+    expect(heads()).toHaveLength(25);
+    await waitFor(() => expect(document.activeElement).toBe(heads()[20]));
+    expect(document.getElementById("more")!.hidden).toBe(true);
+  });
+
+  it("filters the groups to those with a matching example, counts them, and announces the count", async () => {
+    await open("#range=30&cat=x");
+    await userEvent.type(screen.getByRole("searchbox"), "pnpm");
+    expect(exCount()).toBe("1 of 5 match");
+    expect(list()).toEqual([["2×", "Exit code <n> zsh: command not found: pnpm"]]);
+    await waitFor(() => expect(document.getElementById("detailLive")!.textContent).toBe("1 of 5 match"));
+    // A group's share is of the type's errors in the view: the search leaves it as it was (2 of 43).
+    expect(shares()).toEqual(["5%"]);
+    expect(heads()[0]!.querySelector(".shr")!.getAttribute("title")).toBe("Share of this type's errors in the view; the search does not change it");
+    // The project of one example is enough: foo's timeouts and ENOENTs both have one in bar.
+    await userEvent.clear(screen.getByRole("searchbox"));
+    await userEvent.type(screen.getByRole("searchbox"), "bar");
+    expect(list().map(r => r[1])).toEqual([TIMEOUT, ENOENT]);
+    expect(exCount()).toBe("2 of 5 match");
+    await userEvent.clear(screen.getByRole("searchbox"));
+    await userEvent.type(screen.getByRole("searchbox"), "no such text anywhere");
+    expect(exCount()).toBe("0 of 5 match");
+    expect(document.querySelector("#exList .empty")!.textContent).toBe("No messages match.");
+  });
+
+  it("puts a linked example's group first, open, with the example first in it and in view", async () => {
+    await open("#ex=c1");
+    expect(list()[0]).toEqual(["1×", "Permission denied"]);
+    expect(heads()[0]!.getAttribute("aria-expanded")).toBe("true");
+    expect(heads()[1]!.getAttribute("aria-expanded")).toBe("false");
+    const ex = document.getElementById("ex-c1")!;
+    expect(examples()).toEqual(["ex-c1"]);
+    expect(ex.classList.contains("focus")).toBe(true);
+    expect(document.activeElement).toBe(ex);
+  });
+
+  it("lists a linked example first within its group, though it is the oldest of 35", async () => {
+    await open("#ex=p0");
+    expect(heads()[0]!.getAttribute("aria-expanded")).toBe("true");
+    expect(examples()).toHaveLength(30);
+    expect(examples()[0]).toBe("ex-p0");
+    expect(examples()[1]).toBe("ex-p34");
+    expect(document.activeElement).toBe(document.getElementById("ex-p0"));
+  });
+
+  it("shows a linked example outside the tool filter in its note, not in the list, and does not move its group", async () => {
+    await open("#ex=a1&range=30&etool=Read"); // a1 is an Edit error; its group has a Read error, and ranks below the timeouts
+    expect(document.getElementById("outside")!.querySelector("#ex-a1")).toBeTruthy();
+    expect(list().map(r => r[0])).toEqual(["3×", "1×"]);
+    expect(list()[1]![1]).toBe(ENOENT);
+    expect(document.querySelectorAll("#exList #ex-a1")).toHaveLength(0);
+  });
+
+  it("copies a group's normalized message, and says so", async () => {
+    const writeText = vi.fn(() => Promise.resolve());
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    await open("#range=30&cat=x");
+    const btn = screen.getAllByRole("button", { name: "Copy message" })[1]!, status = btn.parentElement!.querySelector('[role="status"]')!;
+    expect(status.textContent).toBe("");
+    await userEvent.click(btn);
+    expect(writeText).toHaveBeenCalledWith(ENOENT);
+    expect(await screen.findByRole("button", { name: "Copied ✓" })).toBe(btn);
+    expect(status.textContent).toBe("Message copied.");
+    expect(btn.getAttribute("aria-expanded")).toBeNull(); // a copy is not an expand
+    expect(heads()[1]!.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("says when copying a message fails", async () => {
+    Object.defineProperty(navigator, "clipboard", { value: { writeText: () => Promise.reject(new Error("denied")) }, configurable: true });
+    await open("#range=30&cat=x");
+    const btn = screen.getAllByRole("button", { name: "Copy message" })[0]!;
+    await userEvent.click(btn);
+    expect(await screen.findByRole("button", { name: "Copy failed" })).toBe(btn);
+    expect(btn.parentElement!.querySelector('[role="status"]')!.textContent).toBe("Could not copy the message.");
+  });
+
+  it("groups only the selected bucket's errors, and shares count them", async () => {
+    await open("#range=30&cat=x&at=2026-11-03");
+    expect(list()).toEqual([["2×", ENOENT], ["1×", "Permission denied"]]);
+    expect(shares()).toEqual(["67%", "33%"]);
+    expect(exCount()).toBe("2 messages in day, most errors first");
+    await userEvent.click(heads()[0]!);
+    expect(examples()).toEqual(["ex-a2", "ex-a1"]);
+  });
+
+  it("groups only the selected tool's errors, and its chip clears the tool", async () => {
+    await open("#range=30&cat=x&etool=Edit");
+    expect(list()).toEqual([["10×", TIMEOUT], ["3×", ENOENT]]);
+    expect(shares()).toEqual(["77%", "23%"]);
+    expect(exCount()).toBe("2 messages in range, most errors first");
+    await userEvent.click(heads()[0]!);
+    expect(examples()).toHaveLength(10);
+    await userEvent.click(document.getElementById("toolClr")!);
+    expect(exCount()).toBe("5 messages in range, most errors first");
+    expect(list()[0]).toEqual(["35×", TIMEOUT]);
+  });
+
+  it("says 1 message, and the bucket and tool narrow it together", async () => {
+    await open("#range=30&cat=x&at=2026-11-03&etool=Edit");
+    expect(list()).toEqual([["2×", ENOENT]]);
+    expect(exCount()).toBe("1 message in day, most errors first");
+  });
+  it("lists a muted type's errors like the other modes while noise shows, and mute leaves the list and its open group alone", async () => {
+    await open("#range=30&cat=x", msgs, "msg", ["x"]);
+    expect(document.getElementById("mute")!.textContent).toBe("Unmute");
+    expect(list()).toEqual([["35×", TIMEOUT], ["4×", ENOENT], ["2×", "Exit code <n> zsh: command not found: pnpm"], ["1×", "(no error text)"], ["1×", "Permission denied"]]);
+    expect(exCount()).toBe("5 messages in range, most errors first");
+    expect(screen.getAllByRole("button", { name: "Copy message" })).toHaveLength(5);
+    await userEvent.click(heads()[1]!);
+    expect(examples()).toEqual(["ex-a4", "ex-a3", "ex-a2", "ex-a1"]);
+    await userEvent.click(document.getElementById("mute")!); // unmute: the store answers, the detail stays as it was
+    await waitFor(() => expect(document.getElementById("mute")!.textContent).toBe("Mute this type"));
+    expect(heads()).toHaveLength(5);
+    expect(heads()[1]!.getAttribute("aria-expanded")).toBe("true");
+    expect(examples()).toEqual(["ex-a4", "ex-a3", "ex-a2", "ex-a1"]);
+    expect(document.querySelector("#exList")!.contains(document.getElementById("mute"))).toBe(false);
+  });
+
+  it("closes a muted type's list when noise is hidden, as the other modes do", async () => {
+    await open("#range=30&cat=x&noise=0", msgs, "msg", ["x"]);
+    await waitFor(() => expect(location.hash).not.toContain("cat=x"));
+    expect(document.getElementById("exList")).toBeNull();
+    expect(heads()).toHaveLength(0);
   });
 });

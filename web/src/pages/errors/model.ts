@@ -1,6 +1,6 @@
 // Errors data logic, ported from dashboard_template.html: the payload indexed once, then pure functions of it and the view.
 // /api/errors returns every error; the page filters on the client, by project and source among others.
-import type { Category, Day, ErrorRow, ErrorsPayload, Incident, Source } from "../../api";
+import type { Category, Day, ErrorRow, ErrorsPayload, Incident, Source, Ts } from "../../api";
 import { dayLabel, num as fmt } from "../../format";
 import type { Range } from "../../hash";
 
@@ -387,7 +387,7 @@ export function breakdown(base: readonly Err[], key: (e: Err) => string, keep?: 
 }
 /** The example search: command, error, follow-up, project and tool. */
 export const exHit = (q: string) => { const l = q.toLowerCase(); return (e: Err) => !l || (e.i + e.e + e.r + e.p + e.t).toLowerCase().includes(l); };
-export interface ExList { flat: boolean; items: Err[] | Group[]; count: string }
+export interface ExList { flat: boolean; items: Err[] | Group[] | MsgGroup[]; count: string }
 /** The detail's list for a search: errors newest first, or incidents with a matching failure; the linked one first. */
 export function exList(base: readonly Err[], groups: readonly Group[], flat: boolean, q: string, focused: Err | undefined, scope = "range"): ExList {
   const hit = exHit(q);
@@ -399,6 +399,83 @@ export function exList(base: readonly Err[], groups: readonly Group[], flat: boo
   const ex = groups.filter(g => g.errs.some(hit)), fi = focused?.n;
   if (fi != null) { const i = ex.findIndex(g => g.i === fi); if (i > 0) ex.unshift(...ex.splice(i, 1)); }
   return { flat, items: ex, count: q ? `${fmt(ex.length)} of ${fmt(groups.length)} match` : `${fmt(groups.length)} in ${scope}, most attempts first` };
+}
+// ---------- messages ----------
+export const NO_TEXT = "(no error text)";
+const LABEL_MAX = 120; // the label is the key cut here for display
+/** A first line that says nothing alone: "Error:", "Exit code 1", "<tool_use_error>". The next line carries the message. */
+const WRAPPER = /^(?:error|exit code \d+|<tool_use_error>)\s*:?$/i;
+// The rules, in order: each replaces incidental detail so errors that differ only by it fall together. Each is linear in the line's
+// length (a segment is always told from the next by a character the segment cannot hold), as a line can be 700 characters of anything.
+const sub = (s: string) => () => s;
+// A sentence's final dots stay out of a path. Plain loops, not an end-anchored regex: that rescans the dots at each start, quadratic on "…....a".
+const dotsAt = (m: string) => { let i = m.length; while (i > 0 && m[i - 1] === ".") i--; return i; };
+const trail = (m: string) => m.slice(dotsAt(m));
+const RULES: [RegExp, (m: string) => string][] = [
+  // A quoted string that starts like a path is a path, whatever its length and whatever is in it (spaces, Unicode, backslashes).
+  [/(?<!\w)(["'`])(?=(?:~|\.{1,2})?\/(?!\1)|[A-Za-z]:[\\/])(?:(?!\1).)*\1(?!\w)/g, (m: string) => `${m[0]}<path>${m[0]}`],
+  // Any other quoted string is detail when long; a short one (a command, a flag) is the message. A quote inside a word (don't) is no quote.
+  [/(?<!\w)(["'`])(?:(?!\1).){41,}\1(?!\w)/g, (m: string) => `${m[0]}<…>${m[0]}`],
+  // Windows paths: a drive letter, then anything up to a space or a quote. (A drive letter is no scheme: "s://" is not one.)
+  [/(?<![\p{L}\p{N}_<>])[A-Za-z](?::\\|:\/(?!\/))[^\s"'`<>|*?:]*/gu, (m: string) => "<path>" + trail(m)],
+  // Absolute, ~/, ./ and ../ paths, Unicode letters included. Not after a word, ":" or "/", so a URL stays whole. A path with spaces
+  // can't be told from prose: unquoted, its first part is replaced and the rest stays.
+  [/(?<![\p{L}\p{N}_<>:/.~@-])(?:~|\.{1,2})?(?:\/[\p{L}\p{N}_.@+%~-]+)+\/?/gu, (m: string) => "<path>" + trail(m)],
+  // Relative paths: two slashes or more, or a final extension, and a letter somewhere ("and/or" and "3/4" are not paths).
+  [/(?<![\p{L}\p{N}_<>:/.~@-])(?:[\p{L}\p{N}_.@-]+\/)+[\p{L}\p{N}_.@-]+/gu, (m: string) => {
+    const t = m.slice(0, dotsAt(m));
+    return /\p{L}/u.test(t) && (t.split("/").length > 2 || /\.[\p{L}\p{N}_]{1,8}$/u.test(t)) ? "<path>" + m.slice(t.length) : m;
+  }],
+  [/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, sub("<id>")], // UUIDs
+  // A lower-case word, "_" or "-", then 8+ letters and digits with both: toolu_…, call_…, msg_…, req_…, sess_…, chatcmpl-…
+  // Ordinary identifiers (old_string, no_such_file, utf_8) have no such run.
+  [/\b[a-z]+[_-](?=[A-Za-z0-9]*\d)(?=[A-Za-z0-9]*[A-Za-z])[A-Za-z0-9]{8,}\b/g, sub("<id>")],
+  // 7+ hex characters with a digit and a letter: a git hash or an address. Plain digits are a number, plain letters a word.
+  [/\b(?:0x)?(?=[0-9a-f]*\d)(?=[0-9a-f]*[a-f])[0-9a-f]{7,}\b/gi, sub("<id>")],
+  // An ISO 8601 date, or date-time (T or space, with or without seconds, fraction and zone): one number, so the hour doesn't split a group.
+  // A real date shape (month 01-12, day 01-31, time within range) not followed by a letter, digit or "-": "2026-99-99" and "2026-11-04beta" are not dates.
+  [/\b\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])(?:[T ](?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:[.,]\d+)?)?(?:Z|[+-](?:[01]\d|2[0-3])(?::?[0-5]\d)?)?)?(?![\p{L}\p{N}-])/gu, sub("<n>")],
+  // Numbers: line:col, clock times, decimals, thousands, ports, sizes, durations (the unit stays). Not the digits of a word (utf8, sha256, E2BIG).
+  [/\b0x[0-9a-f]+\b|(?<![A-Za-z_\d])\d+(?:[.,:]\d+)*/gi, sub("<n>")],
+];
+export interface Msg { key: string; label: string }
+const msgs = new WeakMap<Err, Msg>();
+/** An error's group key (its normalized text) and its label (the key cut for display). Computed once per error. */
+export function messageOf(e: Err): Msg {
+  let r = msgs.get(e);
+  if (!r) msgs.set(e, r = normalize(e.e));
+  return r;
+}
+const MAX_TEXT = 700; // the ingest's cap on an error's text: normalizing no more bounds the cost whatever a payload holds
+/** The rules applied to a line, uncapped (normalize caps it). Exported for the cost test. */
+export const applyRules = (t: string) => RULES.reduce((x, [re, to]) => x.replace(re, to), t);
+/** The text of the first non-empty line, plus the next non-empty one when the first is only a wrapper; cut at MAX_TEXT; the rules applied; whitespace collapsed. */
+export function normalize(text: string): Msg {
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  let t = lines[0] ?? "";
+  if (WRAPPER.test(t) && lines[1]) t += " " + lines[1];
+  const key = applyRules(t.slice(0, MAX_TEXT)).replace(/\s+/g, " ").trim() || NO_TEXT;
+  return { key, label: key.length > LABEL_MAX ? key.slice(0, LABEL_MAX - 1) + "…" : key };
+}
+/** One message's errors, newest first, with what the row shows. share: of the grouped errors; tools: by count, then name. */
+export interface MsgGroup extends Msg { errs: Err[]; n: number; share: number; last: Ts; projects: number; tools: [string, number][] }
+/** The errors grouped by message in one pass: most errors first, the most recent first on a tie. */
+export function msgGroups(errs: readonly Err[]): MsgGroup[] {
+  const by = new Map<string, Err[]>(), total = errs.length || 1;
+  for (const e of errs) { const k = messageOf(e).key, a = by.get(k); if (a) a.push(e); else by.set(k, [e]); }
+  return [...by.values()].map(list => {
+    list.sort((a, b) => (a.ts < b.ts ? 1 : a.ts > b.ts ? -1 : 0));
+    const t = new Map<string, number>();
+    for (const e of list) t.set(e.t, (t.get(e.t) || 0) + 1);
+    return { ...messageOf(list[0]!), errs: list, n: list.length, share: list.length / total, last: list[0]!.ts, projects: new Set(list.map(e => e.p)).size,
+      tools: [...t].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1)) };
+  }).sort((a, b) => b.n - a.n || (a.last < b.last ? 1 : a.last > b.last ? -1 : 0));
+}
+/** The By message list for a search: the groups with a matching example, the linked example's group first. */
+export function msgList(groups: readonly MsgGroup[], q: string, focused: Err | undefined, scope = "range"): ExList {
+  const hit = exHit(q), ex = groups.filter(g => g.errs.some(hit)), fk = focused && messageOf(focused).key;
+  if (fk != null) { const i = ex.findIndex(g => g.key === fk); if (i > 0) ex.unshift(...ex.splice(i, 1)); }
+  return { flat: false, items: ex, count: q ? `${fmt(ex.length)} of ${fmt(groups.length)} match` : `${fmt(groups.length)} message${groups.length === 1 ? "" : "s"} in ${scope}, most errors first` };
 }
 /** Usage shows the session's own project; only an Errors project or source filter carries over. */
 export const sessionHref = (v: View, s: string) =>
