@@ -71,7 +71,7 @@ Selecting a rail entry SHALL open that session in the stream. With no session se
 - **THEN** the stream opens the newest session of that project
 
 ### Requirement: Show a session's stream
-The stream SHALL show the selected session's events in order. Each tool call SHALL be a row with its tool, row text, duration and result. A running call SHALL show a timer that counts up each second. A failed call SHALL be marked as failed. Compactions SHALL be marked between events. The time of an event SHALL include its date when the event is not from today.
+The stream SHALL show the selected session's events in order. Each tool call SHALL be a row with its tool, row text, duration and result. A running call SHALL show a timer that counts up each second. A failed call SHALL be marked as failed. Compactions SHALL be marked between events. The time of an event SHALL include its date when the event is not from today. A time SHALL stay on one line, and the time column SHALL be wide enough for it.
 
 #### Scenario: Tool call starts and ends
 - **WHEN** a `Bash` call starts in the followed session and ends 8 seconds later
@@ -353,3 +353,10 @@ The browser tab title SHALL carry the number of listed sessions that need the us
 #### Scenario: Leave Live
 - **WHEN** the tab title shows (1) and the user opens Cost
 - **THEN** the title is Cost's, with no count
+
+### Requirement: Fit the stream page to the window
+At 721 pixels wide and up, the Live page's Stream view SHALL fit the window's height, so the page does not scroll: the rail, the stream and the agent panel SHALL stay within it and scroll inside themselves. Below that width the page scrolls as any other.
+
+#### Scenario: Titled session in a short window
+- **WHEN** the user opens a session with a title in a window 720 pixels high
+- **THEN** the page does not scroll, and the rail, the stream and the agent panel each end above the bottom of the window

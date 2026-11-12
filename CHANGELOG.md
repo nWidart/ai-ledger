@@ -13,6 +13,12 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 - The Insights page reads in a new order: vitals, outcomes beside friction, satisfaction, then the analysed sessions, with Goals and Session types folded into closed drawers, and has a section index like Activity's.
 
+### Fixed
+
+- The Live page's Stream view fits the window: a titled session no longer makes the page scroll, and the session rail, the stream and the agent panel stay within the window and scroll inside themselves (from 721 pixels wide; below that the page scrolls as before).
+- A time with a date in the Live stream ("Nov 10, 17:40:05") stays on one line: the time column widens when an event shows a date.
+- The "Include automated" tooltip on Live names the `automated.json` file, as on Activity.
+
 ## [0.2.0] - 2026-11-12
 
 Run `ai-ledger rebuild` once after upgrading (with the app stopped): error types, test runs, Codex tool timing and fast-mode speed are stored when transcripts are read.

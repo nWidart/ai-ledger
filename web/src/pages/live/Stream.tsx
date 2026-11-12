@@ -7,11 +7,11 @@ import { elapsed, isRow, isTool, labelOf, likelyWaiting, passes, since, streamRo
 
 const CLOCK = { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false } as const;
 /** An event's time on the reader's clock, with its date when the event is not from the day of now: "Nov 9, 14:03:12". */
+const dated = (ts: string | null | undefined, now: number) => !!ts && new Date(ts).toDateString() !== new Date(now).toDateString();
 const time = (ts: string | null | undefined, now: number) => {
   if (!ts) return "";
   const d = new Date(ts);
-  return d.toDateString() === new Date(now).toDateString() ? d.toLocaleTimeString(undefined, CLOCK)
-    : d.toLocaleString(undefined, { month: "short", day: "numeric", ...CLOCK });
+  return dated(ts, now) ? d.toLocaleString(undefined, { month: "short", day: "numeric", ...CLOCK }) : d.toLocaleTimeString(undefined, CLOCK);
 };
 /** An MCP tool (mcp__server__tool) by its tool part; the full name shows on hover. */
 const shortName = (tool: string) => (tool.startsWith("mcp__") && tool.split("__").slice(2).join("__")) || tool;
@@ -157,7 +157,7 @@ export function Stream({ s, now, text, follow, setFollow, filters: f, setFilters
       <label className="chk"><input type="checkbox" checked={f.quiet} onChange={e => setFilters({ ...f, quiet: e.target.checked })} /> Hide read-only</label>
       {hidden > 0 && <span className="hid muted">{plural(hidden, "row")} hidden</span>}
     </div>
-    <div className="stream" ref={box} onScroll={onScroll} tabIndex={0} aria-label="Session events"><div ref={drawn}>
+    <div className={"stream" + (s.events.some(e => dated(e.ts, now)) ? " dated" : "")} ref={box} onScroll={onScroll} tabIndex={0} aria-label="Session events"><div ref={drawn}>
       {s.truncated && <p className="older muted">Older events are not shown. The <a href={sessionHref(s.session_id)} onClick={appLink}>session sheet on Activity</a> has
         the whole session.</p>}
       {rows.map(r => {

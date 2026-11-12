@@ -130,6 +130,7 @@ class AppTest(unittest.TestCase):
         self.assertIn("/live", app.PAGES)
         status, _, body = self.get("/api/live")
         self.assertEqual((status, json.loads(body)["sessions"]), (200, []))
+        self.assertEqual(json.loads(body)["automated_file"], metrics.automated_file())
         self.assertEqual(self.get("/api/live?source=grok")[0], 400)
         with mock.patch.object(app.live, "sessions", wraps=app.live.sessions) as listed:
             self.assertEqual(self.get("/api/live?text=1")[0], 200)

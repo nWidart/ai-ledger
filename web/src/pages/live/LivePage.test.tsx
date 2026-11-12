@@ -155,6 +155,14 @@ describe("live.ts", () => {
 });
 
 describe("LivePage", () => {
+  it("names the automated projects file on the automated toggle", async () => {
+    show("");
+    await rail();
+    const title = document.querySelector("label.chk")!.getAttribute("title")!;
+    expect(list.automated_file.path).toMatch(/automated\.json$/);
+    expect(title).toContain(list.automated_file.path);
+  });
+
   it("lists the active sessions and opens the newest when the URL names none", async () => {
     const { calls } = show("");
     expect(groups(await rail())).toEqual(["approval? · 1 foo", "your turn · 1 sketchbook", "working · 2 graft jobdesk", "idle · 1 dotfiles", "ended · 1 notes"]);
@@ -215,6 +223,21 @@ describe("LivePage", () => {
     show("#view=wall", o);
     await tick(10);
     expect(states()).toEqual(["your turn 4m 01s", "thinking 13s"]);
+  });
+
+  it("dates an event's time only when it is not from today, and widens the time column for it", async () => {
+    show("#session=s1");
+    const box = (await stream()).querySelector(".stream")!;
+    const times = () => [...box.querySelectorAll(".ev .t")].map(t => t.textContent!).filter(Boolean);
+    expect(box.classList.contains("dated")).toBe(true); // the fixture's events are from Nov 10, the clock is not
+    expect(times().every(t => /^\D+ \d+, \d\d:\d\d:\d\d$/.test(t))).toBe(true);
+    cleanup();
+    fakeClock("2026-11-10T10:01:00.000Z");
+    show("#session=s1");
+    await tick(10);
+    const same = screen.getByRole("region", { name: "Session" }).querySelector(".stream")!;
+    expect(same.classList.contains("dated")).toBe(false);
+    expect([...same.querySelectorAll(".ev .t")].every(t => /^\d\d:\d\d:\d\d$/.test(t.textContent!))).toBe(true);
   });
 
   it("groups the wall as the rail, and frames the tiles that need the user", async () => {
@@ -302,7 +325,7 @@ describe("LivePage", () => {
   });
 
   it("says no session is active and links the newest one to Activity", async () => {
-    show("", { list: { now: list.now, sessions: [], newest: { session_id: "s4", project: "dotfiles", last_ts: "2026-11-10T09:53:00.000Z" } } });
+    show("", { list: { now: list.now, automated_file: list.automated_file, sessions: [], newest: { session_id: "s4", project: "dotfiles", last_ts: "2026-11-10T09:53:00.000Z" } } });
     const lede = await screen.findByText(/No session is active/);
     expect(within(lede).getByRole("link", { name: "dotfiles" }).getAttribute("href")).toBe("/usage#range=0&session=s4");
   });
