@@ -206,7 +206,7 @@ class AppTest(unittest.TestCase):
 
 
 class FixEndpointTest(unittest.TestCase):
-    """POST /api/errors/fix: the Errors page's fix markers, written to the store and answered as the full map."""
+    """POST /api/errors/fix, /mute and /fixes/import: the Errors page's marks, written to the store and answered as the full marks object."""
 
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
@@ -240,16 +240,19 @@ class FixEndpointTest(unittest.TestCase):
     def marks(self):
         return {c: d.isoformat() for c, d in self.con.execute("SELECT category, fixed_on FROM error_marks WHERE fixed_on IS NOT NULL").fetchall()}
 
+    def answer(self, fixes=None, muted=None):
+        return {"fixes": fixes or {}, "muted": muted or []}
+
     def rows(self):
         return self.con.execute("SELECT category, fixed_on IS NULL FROM error_marks ORDER BY 1").fetchall()
 
     def test_sets_replaces_and_removes_a_marker(self):
         today = self.today.isoformat()
-        self.assertEqual(self.post({"category": "x", "day": "2026-11-04"}), (200, {"x": "2026-11-04"}))
-        self.assertEqual(self.post({"category": "y", "day": today}), (200, {"x": "2026-11-04", "y": today}))
-        self.assertEqual(self.post({"category": "x", "day": "2026-10-01"}), (200, {"x": "2026-10-01", "y": today}))
-        self.assertEqual(self.post({"category": "x", "day": None}), (200, {"y": today}))
-        self.assertEqual(self.post({"category": "x", "day": None}), (200, {"y": today}))  # removing a missing one is fine
+        self.assertEqual(self.post({"category": "x", "day": "2026-11-04"}), (200, self.answer({"x": "2026-11-04"})))
+        self.assertEqual(self.post({"category": "y", "day": today}), (200, self.answer({"x": "2026-11-04", "y": today})))
+        self.assertEqual(self.post({"category": "x", "day": "2026-10-01"}), (200, self.answer({"x": "2026-10-01", "y": today})))
+        self.assertEqual(self.post({"category": "x", "day": None}), (200, self.answer({"y": today})))
+        self.assertEqual(self.post({"category": "x", "day": None}), (200, self.answer({"y": today})))  # removing a missing one is fine
         self.assertEqual(self.marks(), {"y": today})
         self.assertEqual(metrics.errors_payload(self.con.cursor())["fixes"], {"y": today})
 
@@ -268,7 +271,7 @@ class FixEndpointTest(unittest.TestCase):
             self.assertEqual(status, 400, why)
             self.assertIsInstance(got["error"], str, why)
         today = self.today.isoformat()
-        self.assertEqual(self.post({"category": "c" * 100, "day": today}), (200, {"c" * 100: today}))
+        self.assertEqual(self.post({"category": "c" * 100, "day": today}), (200, self.answer({"c" * 100: today})))
         self.assertEqual(self.marks(), {"c" * 100: today})  # none of the refused ones wrote
 
     def test_refuses_what_is_not_json_or_too_big(self):
@@ -294,35 +297,78 @@ class FixEndpointTest(unittest.TestCase):
     def test_import_adds_what_the_store_lacks_and_keeps_what_it_has(self):
         self.post({"category": "kept", "day": "2026-11-01"})
         self.assertEqual(self.post({"fixes": {"kept": "2026-10-01", "new": "2026-10-02"}}, path=self.IMPORT),
-                         (200, {"kept": "2026-11-01", "new": "2026-10-02"}))
+                         (200, self.answer({"kept": "2026-11-01", "new": "2026-10-02"})))
         self.assertEqual(self.marks(), {"kept": "2026-11-01", "new": "2026-10-02"})
-        self.assertEqual(self.post({"fixes": {}}, path=self.IMPORT), (200, {"kept": "2026-11-01", "new": "2026-10-02"}))
+        self.assertEqual(self.post({"fixes": {}}, path=self.IMPORT), (200, self.answer({"kept": "2026-11-01", "new": "2026-10-02"})))
 
     def test_an_import_after_an_undo_changes_nothing(self):
         """Another tab's import, delayed behind this tab's Undo, must not bring the marker back."""
         self.post({"category": "x", "day": "2026-11-04"})
         self.post({"category": "x", "day": None})
         self.assertEqual(self.rows(), [("x", True)])
-        self.assertEqual(self.post({"fixes": {"x": "2026-11-04", "y": "2026-11-03"}}, path=self.IMPORT), (200, {"y": "2026-11-03"}))
+        self.assertEqual(self.post({"fixes": {"x": "2026-11-04", "y": "2026-11-03"}}, path=self.IMPORT), (200, self.answer({"y": "2026-11-03"})))
         self.assertEqual(self.marks(), {"y": "2026-11-03"})
-        self.assertEqual(self.post({"category": "x", "day": "2026-11-05"})[1], {"x": "2026-11-05", "y": "2026-11-03"})  # a mark after the undo
+        self.assertEqual(self.post({"category": "x", "day": "2026-11-05"})[1], self.answer({"x": "2026-11-05", "y": "2026-11-03"}))  # a mark after the undo
 
-    def test_fixes_are_read_alone(self):
-        self.assertEqual(self.get("/api/errors/fixes"), (200, {}))
+    def test_marks_are_read_alone(self):
+        self.assertEqual(self.get("/api/errors/marks"), (200, self.answer()))
         self.post({"category": "x", "day": "2026-11-04"})
         self.post({"category": "y", "day": "2026-11-04"})
         self.post({"category": "y", "day": None})
-        self.assertEqual(self.get("/api/errors/fixes"), (200, {"x": "2026-11-04"}))
-        self.assertEqual(self.get("/api/errors/fixes", host="example.com")[0], 403)
-        self.assertEqual(self.get("/api/errors/fixes", host="localhost:8765")[0], 301)
+        self.post({"category": "z", "muted": True}, path=self.MUTE)
+        self.post({"category": "w", "muted": True}, path=self.MUTE)
+        self.post({"category": "w", "muted": False}, path=self.MUTE)
+        self.assertEqual(self.get("/api/errors/marks"), (200, self.answer({"x": "2026-11-04"}, ["z"])))
+        self.assertEqual(self.get("/api/errors/marks", host="example.com")[0], 403)
+        self.assertEqual(self.get("/api/errors/marks", host="localhost:8765")[0], 301)
+        self.assertEqual(self.get("/api/errors/fixes")[0], 404)  # replaced: the endpoint was never released
+
+    MUTE = "/api/errors/mute"
+
+    def test_mutes_and_unmutes_a_type_and_keeps_its_fix_day(self):
+        self.post({"category": "x", "day": "2026-11-04"})
+        self.assertEqual(self.post({"category": "x", "muted": True}, path=self.MUTE), (200, self.answer({"x": "2026-11-04"}, ["x"])))
+        self.assertEqual(self.post({"category": "b", "muted": True}, path=self.MUTE), (200, self.answer({"x": "2026-11-04"}, ["b", "x"])))
+        self.assertEqual(self.post({"category": "x", "muted": True}, path=self.MUTE)[0], 200)  # twice is fine
+        self.assertEqual(self.post({"category": "x", "day": None})[1], self.answer({}, ["b", "x"]))  # an undo keeps muted
+        self.assertEqual(self.post({"category": "b", "muted": False}, path=self.MUTE), (200, self.answer({}, ["x"])))
+        self.assertEqual(metrics.errors_payload(self.con.cursor())["muted"], ["x"])
+
+    def test_refuses_a_mute_that_is_not_valid(self):
+        good = {"category": "x", "muted": True}
+        bad = [({**good, "muted": "true"}, "string"), ({**good, "muted": 1}, "number"), ({**good, "muted": None}, "null"), ({"category": "x"}, "no muted"),
+               ({**good, "category": ""}, "empty"), ({**good, "category": "c" * 101}, "too long"), ({**good, "category": 7}, "number category"),
+               ({"muted": True}, "no category"), ([good], "array"), ("x", "string body"), (None, "null body")]
+        for body, why in bad:
+            status, got = self.post(body, path=self.MUTE)
+            self.assertEqual(status, 400, why)
+            self.assertIsInstance(got["error"], str, why)
+        self.assertEqual(self.post(good, ctype="text/plain", path=self.MUTE)[0], 400)
+        self.assertEqual(self.post(good, ctype=None, path=self.MUTE)[0], 400)
+        self.assertEqual(self.post({**good, "pad": "p" * app.MAX_BODY}, path=self.MUTE)[0], 400)
+        self.assertEqual(self.post(good, host="example.com", path=self.MUTE)[0], 403)
+        self.assertEqual(self.post(good, host="localhost:8765", path=self.MUTE)[0], 301)
+        self.assertEqual(self.rows(), [])  # none of the refused ones wrote
+        self.assertEqual(self.post({"category": "c" * 100, "muted": True}, path=self.MUTE)[0], 200)
+
+    def test_a_mute_waits_for_a_running_ingest(self):
+        self.app.lock.acquire()
+        done = []
+        t = threading.Thread(target=lambda: done.append(self.post({"category": "x", "muted": True}, path=self.MUTE)))
+        t.start()
+        time.sleep(0.3)
+        self.assertEqual((done, self.rows()), ([], []))
+        self.app.lock.release()
+        t.join(5)
+        self.assertEqual((done, self.rows()), ([(200, self.answer({}, ["x"]))], [("x", True)]))
 
     def test_import_skips_an_entry_that_is_not_valid_and_takes_the_rest(self):
         tomorrow = (self.today + timedelta(days=1)).isoformat()
         got = self.post({"fixes": {"ok": "2026-11-04", "": "2026-11-04", "c" * 101: "2026-11-04", "future": tomorrow, "notdate": "2026-02-30",
                                    "basic": "20261104", "num": 20261104, "none": None, "list": ["2026-11-04"], "c" * 100: "2026-11-03"}},
                          path=self.IMPORT)
-        self.assertEqual(got, (200, {"ok": "2026-11-04", "c" * 100: "2026-11-03"}))
-        self.assertEqual(self.marks(), got[1])
+        self.assertEqual(got, (200, self.answer({"ok": "2026-11-04", "c" * 100: "2026-11-03"})))
+        self.assertEqual(self.marks(), got[1]["fixes"])
 
     def test_import_refuses_what_is_not_valid_as_a_body(self):
         big = {"fixes": {f"c{i}": "2026-11-04" for i in range(app.MAX_IMPORT + 1)}}
@@ -347,7 +393,7 @@ class FixEndpointTest(unittest.TestCase):
         self.assertEqual((done, self.marks()), ([], {}))
         self.app.lock.release()
         t.join(5)
-        self.assertEqual((done, self.marks()), ([(200, {"x": "2026-11-04"})], {"x": "2026-11-04"}))
+        self.assertEqual((done, self.marks()), ([(200, self.answer({"x": "2026-11-04"}))], {"x": "2026-11-04"}))
 
     def test_other_posts_are_not_found(self):
         self.assertEqual(self.post({}, path="/api/errors/other")[0], 404)
@@ -362,7 +408,7 @@ class FixEndpointTest(unittest.TestCase):
         self.assertEqual((done, self.marks()), ([], {}))
         self.app.lock.release()
         t.join(5)
-        self.assertEqual((done, self.marks()), ([(200, {"x": "2026-11-04"})], {"x": "2026-11-04"}))
+        self.assertEqual((done, self.marks()), ([(200, self.answer({"x": "2026-11-04"}))], {"x": "2026-11-04"}))
 
     def test_stays_consistent_next_to_a_busy_ingest(self):
         stop = threading.Event()

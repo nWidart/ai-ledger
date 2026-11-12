@@ -362,6 +362,7 @@ export default {
   }
  ],
  "fixes": {},
+ "muted": [],
  "incident_gap_minutes": 10,
  "incident_max_ok": 2
 } satisfies ErrorsPayload;
