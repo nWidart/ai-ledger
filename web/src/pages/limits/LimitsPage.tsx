@@ -8,7 +8,7 @@ import { big, dur, num, plural, usd } from "../../format";
 import { navigate, useHashState } from "../../hash";
 import { useApi } from "../../useApi";
 import { LimitChart, planMarks } from "./LimitChart";
-import { bindingWindow, caption, capText, hasScenario, pace, planName, recentText, resetPct, sharePct, span, usedHint, usedHref, usedRange, usedRangeName, whenDay, windowName } from "./limits";
+import { bindingWindow, caption, capText, hasScenario, pace, planName, recentText, resetPct, sharePct, shareText, span, surfacesText, usedHint, usedHref, usedRange, usedRangeName, whenDay, windowName } from "./limits";
 import "./limits.css";
 
 const rangeName = (range: number) => (range ? `the last ${range} days` : "all time");
@@ -84,7 +84,7 @@ function Used({ w, now }: { w: LimitWindow; now: string }) {
 }
 
 function WindowCard({ w, d }: { w: LimitWindow; d: LimitsPayload }) {
-  const p = pace(w, d.now), f = w.forecast, cap = capText(w), recent = recentText(w);
+  const p = pace(w, d.now), f = w.forecast, cap = capText(w), recent = recentText(w), share = shareText(w), surfaces = surfacesText(w);
   return (
     <section className="panel lim-card" aria-label={windowName(w)}>
       <header>
@@ -94,6 +94,8 @@ function WindowCard({ w, d }: { w: LimitWindow; d: LimitsPayload }) {
       <LimitChart w={w} now={d.now} events={d.events} />
       <p className={"cap-text" + (w.at_limit || f?.hits_at ? " out" : "")}>{caption(w)}{!w.at_limit && f?.kind === "flat" && <> <span className="chip">flat rate</span></>}</p>
       {recent && <p className={"cap-text recent" + (f?.recent_hits_at ? " out" : "")}>{recent}</p>}
+      {share && <p className="cap-note">{share}</p>}
+      {surfaces && <p className="cap-note">{surfaces}</p>}
       <p className="pace">{p.left} · {p.reset}{p.rate && <> · {p.rate}</>}{p.verdict && <> · <b>{p.verdict}</b></>}</p>
       {cap && <p className="cap-money">{cap}</p>}
       <Used w={w} now={d.now} />

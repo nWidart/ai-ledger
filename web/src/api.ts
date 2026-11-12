@@ -230,6 +230,14 @@ export interface LimitWindow {
   /** What the counted, priced use since the window started was spent on, at list prices: the top three projects and models
    *  by cost. points is null until the window is calibrated. null when nothing was counted. */
   used: { total: number; projects: (WindowUsedRow & { project: string })[]; models: (WindowUsedRow & { model: string })[] } | null;
+  /** A scoped limit's share of the weekly allowance, from the provider's newest poll of this window: the part of the whole
+   *  allowance the limit may use, and the part of it used through the limit (both percents of the whole weekly allowance).
+   *  null for any other window, and when the newest poll is of another window or has no share. */
+  weekly_share: { used: number; allowance: number } | null;
+  /** The weekly window's use so far by surface (Claude Code, chat, cowork), each row's percent of that use, in the
+   *  provider's order; as_of is when the provider measured it. null on any window but the unscoped weekly one, and when the
+   *  newest poll is of another window or has no breakdown. */
+  surfaces: { as_of: Ts | null; rows: { key: string; label: string; percent: number }[] } | null;
 }
 export interface WindowUsedRow { cost: number; share: number; points: number | null }
 export interface LimitHistoryRow {

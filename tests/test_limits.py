@@ -22,6 +22,19 @@ def usage_body():
         return json.load(fh)
 
 
+def extras_body(**over):
+    """A hand-written usage response with a scoped limit's share of the weekly allowance and a breakdown by surface."""
+    body = dict(
+        limits=[dict(kind="weekly_all", group="weekly", percent=65, resets_at="2026-11-15T04:59:59.755590+00:00", scope=None),
+                dict(kind="weekly_scoped", group="weekly", percent=42, resets_at="2026-11-15T04:59:59.755746+00:00",
+                     scope=dict(model=dict(id=None, display_name="Fable"), surface=None))],
+        weekly_scoped_shares=[dict(limit_index=1, used_percent_of_weekly=21, allowance_percent_of_weekly=50)],
+        seven_day_breakdown=dict(as_of="2026-11-12T12:21:37.774782+00:00", window_started_at="2026-11-08T04:59:59.755590+00:00",
+                                 rows=[dict(key="claude_code", display_name="Claude Code", percent=100), dict(key="chat", display_name="Chats", percent=0),
+                                       dict(key="cowork", display_name="Cowork", percent=0), dict(key="other", display_name="Other", percent=0)]))
+    return dict(body, **over)
+
+
 def keychain(expires_in=3600, token=TOKEN):
     cred = dict(claudeAiOauth=dict(accessToken=token, refreshToken="rt-SENTINEL", expiresAt=(1_800_000_000 + expires_in) * 1000,
                                    subscriptionType="max", rateLimitTier="default_claude_max_20x"))
@@ -64,6 +77,97 @@ class ParseTest(unittest.TestCase):
         self.assertEqual(limits.label("claude", "weekly_scoped", "Fable", 10080), "weekly · Fable")
         self.assertEqual(limits.label("codex", "premium_10080", "", 10080), "premium · weekly")
         self.assertEqual(limits.label("codex", "codex_43200", "", 43200), "30-day")
+
+
+class ExtrasParseTest(unittest.TestCase):
+    def extras(self, body):
+        return limits.claude_extras(dict(plan="max", response=body))
+
+    def test_the_scoped_share_and_the_surfaces(self):
+        self.assertEqual(self.extras(extras_body()), dict(
+            shares=[dict(kind="weekly_scoped", scope="Fable", resets_at=datetime(2026, 11, 15, 4, 59, 59, 755746), used=21, allowance=50)],
+            surfaces=dict(as_of=datetime(2026, 11, 12, 12, 21, 37, 774782), reset=datetime(2026, 11, 15, 4, 59, 59, 755590),
+                          window_started_at=datetime(2026, 11, 8, 4, 59, 59, 755590),
+                          rows=[dict(key="claude_code", label="Claude Code", percent=100), dict(key="chat", label="Chats", percent=0),
+                                dict(key="cowork", label="Cowork", percent=0), dict(key="other", label="Other", percent=0)])))
+
+    def test_a_response_without_the_keys_has_none(self):
+        body = extras_body()
+        del body["weekly_scoped_shares"], body["seven_day_breakdown"]
+        self.assertIsNone(self.extras(body))
+        self.assertIsNone(self.extras(dict(five_hour=dict(utilization=12.0, resets_at="2026-11-06T18:00:00+00:00"))))
+        for poll in ({}, dict(plan="max"), dict(response=None), dict(response=["x"]), dict(response="x")):
+            self.assertIsNone(limits.claude_extras(poll))
+
+    def test_only_one_of_them_is_kept_alone(self):
+        shares = self.extras(extras_body(seven_day_breakdown=None))
+        self.assertEqual((len(shares["shares"]), shares["surfaces"]), (1, None))
+        surfaces = self.extras(extras_body(weekly_scoped_shares=None))
+        self.assertEqual((surfaces["shares"], len(surfaces["surfaces"]["rows"])), ([], 4))
+
+    def test_nulls_have_none(self):
+        self.assertIsNone(self.extras(extras_body(weekly_scoped_shares=None, seven_day_breakdown=None)))
+        self.assertIsNone(self.extras(extras_body(weekly_scoped_shares=[None, 3, "x", dict(), dict(limit_index=None)],
+                                                  seven_day_breakdown=dict(as_of=None, rows=None))))
+        self.assertIsNone(self.extras(extras_body(limits=None)))
+        self.assertIsNone(self.extras(extras_body(limits=7)))
+
+    def test_a_limit_index_must_name_a_limit(self):
+        share = lambda i: dict(limit_index=i, used_percent_of_weekly=21, allowance_percent_of_weekly=50)
+        for bad in (2, 99, -1, "1", 1.0, True, None, [1]):
+            self.assertEqual(self.extras(extras_body(weekly_scoped_shares=[share(bad)], seven_day_breakdown=None)), None, bad)
+        # An index that names an item the parser does not read as a limit.
+        body = extras_body(weekly_scoped_shares=[share(2)])
+        body["limits"].append(dict(kind="weekly_scoped", group="weekly", resets_at="2026-11-15T05:00:00Z"))
+        self.assertEqual(self.extras(body)["shares"], [])
+
+    def test_an_invalid_share_is_dropped_and_the_others_stay(self):
+        shares = [dict(limit_index=1, used_percent_of_weekly=-3, allowance_percent_of_weekly=50),
+                  dict(limit_index=0, used_percent_of_weekly=5, allowance_percent_of_weekly=100)]
+        out = self.extras(extras_body(weekly_scoped_shares=shares))["shares"]
+        self.assertEqual([(s["kind"], s["used"], s["allowance"]) for s in out], [("weekly_all", 5, 100)])
+
+    def test_percents_out_of_range_or_not_numbers_are_dropped(self):
+        shares = lambda used, allowance: [dict(limit_index=1, used_percent_of_weekly=used, allowance_percent_of_weekly=allowance)]
+        for used, allowance in ((120, 50), (-1, 50), (21, 101), (21, -50), ("21", 50), (21, "50"), (None, 50), (21, None), (True, 50),
+                                (float("nan"), 50), ([], 50), (21, {})):
+            self.assertEqual(self.extras(extras_body(weekly_scoped_shares=shares(used, allowance), seven_day_breakdown=None)), None,
+                             (used, allowance))
+        for used, allowance in ((0, 0), (0, 100), (12.5, 50)):
+            self.assertEqual(len(self.extras(extras_body(weekly_scoped_shares=shares(used, allowance)))["shares"]), 1)
+
+    def test_surface_rows_are_the_valid_ones_in_order(self):
+        rows = [dict(key="chat", percent=60), dict(key="claude_code", display_name="Claude Code", percent=40.5),
+                dict(key="x", percent=101), dict(key="y", percent=-1), dict(key="z", percent="3"), dict(key="w", percent=None),
+                dict(key=3, percent=1), dict(percent=1), None, "row", dict(key="b", display_name=7, percent=True)]
+        got = self.extras(extras_body(seven_day_breakdown=dict(rows=rows)))["surfaces"]["rows"]
+        self.assertEqual(got, [dict(key="chat", label="chat", percent=60), dict(key="claude_code", label="Claude Code", percent=40.5)])
+
+    def test_unreadable_breakdowns_have_none(self):
+        for breakdown in (dict(rows="chat"), dict(rows=dict(key="chat", percent=1)), dict(rows=[]), dict(rows=[None]), dict(), [], "x", 5):
+            self.assertIsNone(self.extras(extras_body(weekly_scoped_shares=None, seven_day_breakdown=breakdown)), breakdown)
+
+    def test_a_breakdown_needs_the_weekly_limit_it_describes(self):
+        body = extras_body(weekly_scoped_shares=None)
+        body["limits"] = [body["limits"][1]]  # only the scoped one
+        self.assertIsNone(self.extras(body))
+        body["limits"] = [dict(kind="five_hour", group="five_hour", percent=3, resets_at="2026-11-12T15:00:00Z", scope=None)]
+        self.assertIsNone(self.extras(body))
+
+    def test_unreadable_times_are_none(self):
+        body = extras_body(seven_day_breakdown=dict(as_of=5, window_started_at="soon", rows=[dict(key="chat", percent=1)]))
+        s = self.extras(body)["surfaces"]
+        self.assertEqual((s["as_of"], s["window_started_at"], len(s["rows"])), (None, None, 1))
+        body = extras_body()
+        body["limits"][1]["resets_at"] = "tomorrow"
+        self.assertEqual(self.extras(body)["shares"], [])
+
+    def test_the_stored_poll_is_the_one_the_rows_parse(self):
+        # A share is keyed like the snapshot of the limit it names, so the two can be matched.
+        body = extras_body()
+        rows = limits.claude_rows(dict(plan="max", response=body), NOW)
+        share = self.extras(body)["shares"][0]
+        self.assertIn((share["kind"], share["scope"]), [(r[1], r[2]) for r in rows])
 
 
 class CredentialTest(unittest.TestCase):
@@ -596,6 +700,101 @@ class PayloadTest(AnalysisCase):
         self.assertFalse(codex(self.NOW + timedelta(hours=2))["measured"])
 
 
+class UsageExtrasPayloadTest(AnalysisCase):
+    """The scoped limit's share of the weekly allowance and the breakdown by surface, from the newest stored poll."""
+    NOW = datetime(2026, 11, 6, 12, 0)
+    RESET = "2026-11-08T05:00:00+00:00"
+
+    def setUp(self):
+        super().setUp()
+        self.snap("claude", "weekly_all", self.NOW, 65, resets=datetime(2026, 11, 8, 5, 0))
+        self.snap("claude", "weekly_scoped", self.NOW, 42, resets=datetime(2026, 11, 8, 5, 0), scope="Fable")
+        self.snap("codex", "codex_10080", self.NOW, 28, resets=datetime(2026, 11, 7, 0, 0), plan="plus")
+
+    def poll(self, polled_at, reset=RESET, shares=(21, 50), provider="claude", **over):
+        body = extras_body(weekly_scoped_shares=[dict(limit_index=1, used_percent_of_weekly=shares[0], allowance_percent_of_weekly=shares[1])], **over)
+        for it in body["limits"]:
+            it["resets_at"] = reset
+        poll = dict(plan="max", response=body)
+        store.insert(self.con.cursor(), "limit_polls", ["provider", "polled_at", "json"], [(provider, polled_at, json.dumps(poll))])
+
+    def windows(self, now=None, **kw):
+        return {(w["provider"], w["limit_id"]): w for w in self.payload(now or self.NOW, **kw)["windows"]}
+
+    def test_a_scoped_window_has_its_share_and_the_unscoped_weekly_its_surfaces(self):
+        self.poll(self.NOW)
+        ws = self.windows()
+        scoped, weekly = ws["claude", "weekly_scoped"], ws["claude", "weekly_all"]
+        self.assertEqual(scoped["weekly_share"], dict(used=21, allowance=50))
+        self.assertIsNone(scoped["surfaces"])
+        self.assertIsNone(weekly["weekly_share"])
+        self.assertEqual(weekly["surfaces"], dict(as_of="2026-11-12T12:21:37.774Z", rows=[
+            dict(key="claude_code", label="Claude Code", percent=100), dict(key="chat", label="Chats", percent=0),
+            dict(key="cowork", label="Cowork", percent=0), dict(key="other", label="Other", percent=0)]))
+
+    def test_only_the_extras_and_labels_leave_the_store(self):
+        self.poll(self.NOW)
+        self.assertEqual(sorted(self.windows()["claude", "weekly_all"]["surfaces"]), ["as_of", "rows"])
+        self.assertEqual(sorted(self.windows()["claude", "weekly_scoped"]["weekly_share"]), ["allowance", "used"])
+
+    def test_a_codex_window_has_neither(self):
+        self.poll(self.NOW)
+        codex = self.windows()["codex", "codex_10080"]
+        self.assertEqual((codex["weekly_share"], codex["surfaces"]), (None, None))
+        self.poll(self.NOW, provider="codex")  # a poll stored under Codex has no parser either
+        codex = self.windows()["codex", "codex_10080"]
+        self.assertEqual((codex["weekly_share"], codex["surfaces"]), (None, None))
+
+    def test_no_stored_poll_has_none(self):
+        for w in self.windows().values():
+            self.assertEqual((w["weekly_share"], w["surfaces"]), (None, None))
+
+    def test_a_poll_of_an_older_window_has_none(self):
+        self.poll(self.NOW, reset="2026-11-01T05:00:00+00:00")
+        for w in self.windows().values():
+            self.assertEqual((w["weekly_share"], w["surfaces"]), (None, None))
+
+    def test_a_reset_that_drifts_a_few_seconds_is_the_same_window(self):
+        self.poll(self.NOW, reset="2026-11-08T05:00:40+00:00")
+        ws = self.windows()
+        self.assertEqual(ws["claude", "weekly_scoped"]["weekly_share"], dict(used=21, allowance=50))
+        self.assertIsNotNone(ws["claude", "weekly_all"]["surfaces"])
+
+    def test_only_the_newest_poll_is_read(self):
+        self.poll(self.NOW - timedelta(minutes=10), shares=(10, 50))
+        self.poll(self.NOW, shares=(21, 50))
+        self.assertEqual(self.windows()["claude", "weekly_scoped"]["weekly_share"], dict(used=21, allowance=50))
+        # An older poll that matches does not stand in for a newest one that does not.
+        self.poll(self.NOW + timedelta(minutes=10), reset="2026-11-01T05:00:00+00:00")
+        for w in self.windows(self.NOW + timedelta(minutes=20)).values():
+            self.assertEqual((w["weekly_share"], w["surfaces"]), (None, None))
+
+    def test_a_window_after_its_reset_with_no_newer_poll_has_none(self):
+        self.poll(self.NOW)
+        ws = self.windows(datetime(2026, 11, 9, 12, 0))  # the open window is the next, estimated one
+        self.assertTrue(ws["claude", "weekly_all"]["resets_at"] > self.RESET)
+        for w in ws.values():
+            self.assertEqual((w["weekly_share"], w["surfaces"]), (None, None))
+
+    def test_a_poll_without_the_keys_has_none(self):
+        body = extras_body()
+        del body["weekly_scoped_shares"], body["seven_day_breakdown"]
+        store.insert(self.con.cursor(), "limit_polls", ["provider", "polled_at", "json"], [("claude", self.NOW, json.dumps(dict(plan="max", response=body)))])
+        for w in self.windows().values():
+            self.assertEqual((w["weekly_share"], w["surfaces"]), (None, None))
+
+    def test_a_scoped_share_never_lands_on_another_scope(self):
+        self.snap("claude", "weekly_scoped", self.NOW, 10, resets=datetime(2026, 11, 8, 5, 0), scope="Opus")
+        self.poll(self.NOW)
+        opus = next(w for w in self.payload(self.NOW)["windows"] if w["scope"] == "Opus")
+        self.assertEqual((opus["weekly_share"], opus["surfaces"]), (None, None))
+
+    def test_the_source_filter_leaves_it_off_codex_only(self):
+        self.poll(self.NOW)
+        self.assertEqual({w["provider"] for w in self.payload(self.NOW, source="codex")["windows"]}, {"codex"})
+        self.assertEqual(self.windows(source="claude")["claude", "weekly_scoped"]["weekly_share"], dict(used=21, allowance=50))
+
+
 class WindowUsedTest(AnalysisCase):
     """What used an open window: the counted, priced use from its start to now, by project and by model."""
     NOW = datetime(2026, 11, 6, 12, 0)
@@ -779,6 +978,15 @@ def page_fixture(case):
     case.snap("codex", "codex_10080", now - timedelta(hours=1), 9, resets=datetime(2026, 11, 13, 4, 56), plan="prolite")
     case.snap("codex", "codex_10080", datetime(2026, 10, 25, 9), 30, resets=datetime(2026, 10, 28, 6, 0), plan="plus")
     case.snap("codex", "codex_10080", datetime(2026, 10, 18, 9), 50, resets=datetime(2026, 10, 21, 6, 0), plan="plus")
+    # The newest Claude poll holds the scoped limit's share of the weekly allowance and the week's use by surface.
+    body = extras_body(weekly_scoped_shares=[dict(limit_index=1, used_percent_of_weekly=2, allowance_percent_of_weekly=50)],
+                       seven_day_breakdown=dict(as_of="2026-11-06T11:20:00+00:00", window_started_at="2026-11-01T05:00:00+00:00", rows=[
+                           dict(key="claude_code", display_name="Claude Code", percent=80), dict(key="chat", display_name="Chats", percent=15),
+                           dict(key="cowork", display_name="Cowork", percent=5), dict(key="other", display_name="Other", percent=0)]))
+    for it in body["limits"]:
+        it["resets_at"] = "2026-11-08T05:00:00+00:00"
+    store.insert(case.con.cursor(), "limit_polls", ["provider", "polled_at", "json"],
+                 [("claude", now - timedelta(minutes=40), json.dumps(dict(plan="max", response=body)))])
     polls = dict(claude=dict(last_ok=limits.metrics.iso(now - timedelta(minutes=40)), last_attempt=limits.metrics.iso(now),
                              failures=3, error="usage endpoint unreachable", stale=False))
     return case.payload(now, range_days=30, polls=polls)
@@ -794,6 +1002,9 @@ class PageFixtureTest(AnalysisCase):
         self.assertTrue(out["events"])
         self.assertTrue(out["value"]["limits"])
         self.assertIn("polling failing", out["freshness"][0]["flags"])
+        claude = {w["scope"]: w for w in out["windows"] if w["provider"] == "claude"}
+        self.assertEqual(claude["Fable"]["weekly_share"], dict(used=2, allowance=50))
+        self.assertEqual([r["percent"] for r in claude[""]["surfaces"]["rows"]], [80, 15, 5, 0])
         full = [h for h in out["history"] if h["estimated"] and h["final"] == 100]
         self.assertTrue(full and all(h["hit"] and h["hit_minutes"] > 0 for h in full))
 

@@ -114,19 +114,24 @@ def parse_iso(s):
     return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
 
 
+def claude_limit(it):
+    """(kind, scope, minutes, resets_at, percent) of one item of the response's limits list; None for an item that is no limit."""
+    if not isinstance(it, dict) or not isinstance(it.get("percent"), (int, float)) or not isinstance(it.get("kind"), str) or not it["kind"]:
+        return None
+    model = (it.get("scope") or {}).get("model") if isinstance(it.get("scope"), dict) else None
+    model = model if isinstance(model, dict) else {}
+    group = it.get("group")
+    minutes = (GROUP_MINUTES.get(group) if isinstance(group, str) else None) or GROUP_MINUTES.get(it["kind"])
+    return it["kind"], model.get("display_name") or model.get("id") or "", minutes, it.get("resets_at"), it["percent"]
+
+
 def claude_rows(poll, observed_at):
     """limit_snapshots rows from one stored poll ({plan, response}). Reads the generic limits list; a response without
     one falls back to the older five_hour / seven_day / seven_day_<model> keys."""
     body, plan = poll.get("response"), poll.get("plan")
     if not isinstance(body, dict):
         return []
-    found = []
-    for it in body.get("limits") or []:
-        if not isinstance(it, dict) or not isinstance(it.get("percent"), (int, float)) or not it.get("kind"):
-            continue
-        model = ((it.get("scope") or {}).get("model") or {}) if isinstance(it.get("scope"), dict) else {}
-        minutes = GROUP_MINUTES.get(it.get("group")) or GROUP_MINUTES.get(it["kind"])
-        found.append((it["kind"], model.get("display_name") or model.get("id") or "", minutes, it.get("resets_at"), it["percent"]))
+    found = [x for x in map(claude_limit, body.get("limits") or []) if x]
     if not found:
         for key, v in body.items():
             if not isinstance(v, dict) or not isinstance(v.get("utilization"), (int, float)):
@@ -143,6 +148,52 @@ def claude_rows(poll, observed_at):
 
 
 POLL_PARSERS = {"claude": claude_rows}
+
+
+def percent_of(v):
+    """v when it is a whole-or-decimal percent from 0 to 100, else None (a bool, a string, NaN and out-of-range values are not)."""
+    return v if isinstance(v, (int, float)) and not isinstance(v, bool) and 0 <= v <= 100 else None
+
+
+def as_list(v):
+    return v if isinstance(v, list) else []
+
+
+def utc_naive(s):
+    d = parse_iso(s)
+    return d.astimezone(timezone.utc).replace(tzinfo=None) if d else None
+
+
+def claude_extras(poll):
+    """What a stored poll says beyond the limits' percents, or None: shares, how much of the weekly allowance each scoped
+    limit may use and has used (keyed like the limit's snapshots: kind and scope, with the limit's reset), and surfaces, the
+    week's use so far by surface (Claude Code, chat, cowork) with the reset of the unscoped weekly limit it describes.
+    The endpoint is undocumented: every key may be missing or hold anything, and what does not read is left out."""
+    body = poll.get("response") if isinstance(poll, dict) else None
+    if not isinstance(body, dict):
+        return None
+    items = body.get("limits")
+    listed = [claude_limit(it) for it in items] if isinstance(items, list) else []  # by index: shares name a limit by its place
+    shares = []
+    for sh in as_list(body.get("weekly_scoped_shares")):
+        i = sh.get("limit_index") if isinstance(sh, dict) else None
+        lim = listed[i] if isinstance(i, int) and not isinstance(i, bool) and 0 <= i < len(listed) else None
+        if not lim:
+            continue
+        used, allowance, reset = percent_of(sh.get("used_percent_of_weekly")), percent_of(sh.get("allowance_percent_of_weekly")), utc_naive(lim[3])
+        if used is not None and allowance is not None and reset:
+            shares.append(dict(kind=lim[0], scope=lim[1], resets_at=reset, used=used, allowance=allowance))
+    br = body.get("seven_day_breakdown")
+    br = br if isinstance(br, dict) else {}
+    rows = [dict(key=r["key"], label=r["display_name"] if isinstance(r.get("display_name"), str) and r["display_name"] else r["key"], percent=r["percent"])
+            for r in as_list(br.get("rows")) if isinstance(r, dict) and isinstance(r.get("key"), str) and percent_of(r.get("percent")) is not None]
+    weekly = next((utc_naive(lim[3]) for lim in listed if lim and not lim[1] and lim[2] == 10080 and utc_naive(lim[3])), None)
+    surfaces = dict(as_of=utc_naive(br.get("as_of")), window_started_at=utc_naive(br.get("window_started_at")), reset=weekly, rows=rows) \
+        if rows and weekly else None
+    return dict(shares=shares, surfaces=surfaces) if shares or surfaces else None
+
+
+POLL_EXTRAS = {"claude": claude_extras}  # provider -> (stored poll) -> its extras; a provider without one has none
 
 
 def store_poll(cur, provider, polled_at, poll):
@@ -587,6 +638,30 @@ def window_used(cur, prices, source, scope, t0, t1, per_pct):
     return dict(total=round(total, 2), projects=top["project"], models=top["model"])
 
 
+def newest_extras(cur, provider):
+    """The extras of the provider's newest stored poll, or None: no parser, no poll, or nothing in it. Older polls are not read."""
+    if provider not in POLL_EXTRAS:
+        return None
+    row = cur.execute("SELECT json FROM limit_polls WHERE provider = ? ORDER BY polled_at DESC LIMIT 1", [provider]).fetchone()
+    try:
+        return POLL_EXTRAS[provider](json.loads(row[0])) if row else None
+    except ValueError:
+        return None
+
+
+def poll_extras(w, extras):
+    """(weekly_share, surfaces) of an open window from its provider's newest poll, each None unless that poll describes this
+    window: the same limit, its reset within SAME_RESET of the window's. An estimated window has no poll of its own."""
+    if not extras or w.estimated:
+        return None, None
+    same = lambda reset: reset is not None and abs(reset - w.resets_at) <= SAME_RESET
+    share = next((dict(used=x["used"], allowance=x["allowance"]) for x in extras["shares"]
+                  if (x["kind"], x["scope"]) == (w.limit_id, w.scope) and same(x["resets_at"])), None)
+    sf = extras["surfaces"]
+    surfaces = dict(as_of=metrics.iso(sf["as_of"]), rows=sf["rows"]) if sf and not w.scope and w.minutes == 10080 and same(sf["reset"]) else None
+    return share, surfaces
+
+
 def window_row(w, now, usage, cal, profile):
     pts = w.points
     current, _ = estimate(w, now, usage, cal) if (pts or cal) else (None, False)
@@ -673,6 +748,7 @@ def payload(cur, range_days=0, source="", project="", now=None, today=None, pric
     for s in sorted(snaps, key=lambda s: s[5]):
         if s[7]:
             latest_plan[s[0]] = s[7]
+    extras = {n: newest_extras(cur, n) for n in names}
     windows, history, cals, spans, closed = [], [], {}, {}, []
     for key, ws in group_windows(snaps).items():
         close_windows(ws, now)
@@ -689,8 +765,10 @@ def payload(cur, range_days=0, source="", project="", now=None, today=None, pric
                     closed.append(history[-1])
         w = open_window(ws, now, latest_plan.get(key[0]))
         if w:
+            share, surfaces = poll_extras(w, extras.get(key[0]))
             windows.append(dict(window_row(w, now, usage, cal, profile),
-                                used=window_used(cur, prices, source_of(w.provider), w.scope, w.start, now, cal and cal["per_pct"])))
+                                used=window_used(cur, prices, source_of(w.provider), w.scope, w.start, now, cal and cal["per_pct"]),
+                                weekly_share=share, surfaces=surfaces))
         # Where the limit counted use on its calibration's plan: its windows on that plan (an estimated one has no plan).
         spans[key] = sorted((v.start, v.closed_at or now) for v in past + [w] if v and cal and v.plan in (None, cal["plan"]))
     windows.sort(key=lambda w: (names.index(w["provider"]), -(w["window_minutes"] or 0), w["scope"]))
