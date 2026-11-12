@@ -56,9 +56,10 @@ export function costDays(d: Pick<UsagePayload, "start" | "end" | "daily"> & Stac
     let sum = 0;
     for (const t of tops) if (!isOther(t)) { v[t.k] = pd?.get(t.k.slice(pre.length)) || 0; sum += v[t.k]!; }
     if (!tops.some(isOther)) return { day, cost, unpriced: r?.unpriced || 0, v };
-    v[pre] = Math.max(0, cost - sum);
+    const rest = cost - sum;
+    v[pre] = rest < 1e-9 ? 0 : rest; // float leftovers of the subtraction are not a remainder; a real sub-cent cost is
     const other = [...(pd ?? [])].filter(([n, c]) => c > 0 && !named.has(n))
-      .sort((a, b) => b[1] - a[1]).map(([n, c]) => ({ name: n || "(no project)", cost: c }));
+      .sort((a, b) => b[1] - a[1]).map(([n, c]) => ({ name: n ? (by === "model" ? n.replace(/^claude-/, "") : n) : "(no project)", cost: c }));
     return { day, cost, unpriced: r?.unpriced || 0, v, other };
   });
 }
@@ -109,22 +110,27 @@ export const sgn = (v: number | null): string => (v == null ? "–" : (v > 0 ? "
 
 /** The plan line: what the plan(s) in the view cost a month, and the list-price cost as a multiple of that price prorated to
  *  the view's days (30 to the month). null without a known plan, a priced cost or days to compare. */
-export function planText(d: Pick<UsagePayload, "plans" | "totals" | "range" | "daily" | "end">): string | null {
-  const cost = d.totals.cost, days = d.range || dayRange(d.daily[0]?.day || d.end, d.end).length, monthly = d.plans.reduce((a, p) => a + p.monthly, 0);
+export function planText(d: Pick<UsagePayload, "plans" | "totals" | "range" | "daily" | "end" | "daily_sources">): string | null {
+  // Only the agents with a known plan count: the server leaves the others' plans out, so the whole cost would overstate the multiple.
+  const covered = new Set<string>(d.plans.map(p => p.provider)), cost = d.daily_sources.reduce((a, r) => a + (covered.has(r.source) ? r.cost || 0 : 0), 0), days = d.range || dayRange(d.daily[0]?.day || d.end, d.end).length, monthly = d.plans.reduce((a, p) => a + p.monthly, 0);
   if (!d.plans.length || !d.totals.requests || !cost || !monthly) return null;
-  return `You pay about ${usd(monthly)} a month (${d.plans.map(p => p.label).join(" + ")}); at list prices this period is ${mult(cost / (monthly * days / 30))} your plan${d.plans.length > 1 ? "s" : ""}.`;
+  // When an agent without a plan also spent, name the agents counted, so the multiple does not read as the whole headline cost.
+  const partial = d.daily_sources.some(r => !covered.has(r.source) && (r.cost || 0) > 0);
+  const what = partial ? `this period's ${d.plans.map(p => SOURCE_LABELS[p.provider]).join(" + ")} use` : "this period";
+  return `You pay about ${usd(monthly)} a month (${d.plans.map(p => p.label).join(" + ")}); at list prices ${what} is ${mult(cost / (monthly * days / 30))} your plan${d.plans.length > 1 ? "s" : ""}.`;
 }
 
 /** The headline's comparison: "17.8× the previous 30 days" from 2× up, a percentage below; sr: the same, read aloud. */
 export function compareText(d: Pick<UsagePayload, "totals" | "previous" | "range">): { text: string; sr: string } | null {
   const t = d.totals, prev = d.previous;
   if (!prev || !t.requests) return null;
+  if (t.cost == null) return { text: "no priced usage in this period", sr: "no priced usage in this period" };
   const was = `the previous ${d.range} days`;
   if (!((prev.cost ?? 0) > 0)) {
     const none = `${prev.requests ? "no priced usage" : "nothing"} in ${was}`;
     return { text: none, sr: none };
   }
-  const r = (t.cost || 0) / prev.cost!;
+  const r = t.cost / prev.cost!;
   if (Math.abs(r - 1) < .005) return { text: `flat vs ${was}`, sr: `flat versus ${was}` };
   if (r >= 2) return { text: `${mult(r)} ${was}`, sr: `${num(r, 1)} times ${was}` };
   const up = r > 1;
@@ -136,7 +142,7 @@ export const thinHistory = (d: Pick<UsagePayload, "totals" | "previous" | "range
   !!d.previous && d.previous.active_days < Math.min(d.totals.active_days, d.range) / 2;
 
 /** Projects whose cost moved, biggest move first (the server's order). */
-export const moved = (d: Pick<UsagePayload, "changes">): Change[] => (d.changes ?? []).filter(c => c.cost || c.prev_cost);
+export const moved = (d: Pick<UsagePayload, "changes">): Change[] => (d.changes ?? []).filter(c => c.cost !== 0 || c.prev_cost !== 0);
 
 /** Daily cost across twice the range: the previous period, then this one (all time: the whole history). split: where this one starts. */
 export function sparkPoints(d: Pick<UsagePayload, "previous" | "daily" | "start" | "end">): { pts: { k: string; v: number }[]; split: number } | null {

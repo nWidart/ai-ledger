@@ -74,7 +74,7 @@ The Cost page also compares the estimate with your plan: "You pay about $200 a m
 {"plans": {"claude": {"pro": {"label": "Claude Pro (annual)", "monthly": 17}}, "codex": {"team": {"label": "ChatGPT Team", "monthly": 30}}}}
 ```
 
-A file may hold `models`, `plans` or both. The line is left out when the plan is unknown.
+A file may hold `models`, `plans` or both. The line is left out when the plan is unknown. When an agent without a known plan also spent, the multiple counts only the agents with a known plan and names them: "at list prices this period's Codex use is 0.7× your plan."
 
 ## Privacy
 

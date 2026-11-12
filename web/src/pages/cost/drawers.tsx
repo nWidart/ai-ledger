@@ -76,6 +76,7 @@ export function ProjectCostDrawer({ rows, selected, sort, onSort, spot: pin, onS
   const head = fold ? sorted.filter(p => m.big.has(p)) : sorted, ps = fold ? [...head, ...small] : sorted;
   const forced = fold && small.some(p => (selected && p.project === selected) || p.project === pin?.spot), open = fold && (smallOpen || forced);
   const sum = (f: (p: ProjectRow) => number | null) => small.reduce((a, p) => a + (f(p) ?? 0), 0);
+  const smallCost = small.every(p => p.cost == null) ? null : sum(p => p.cost); // unknown when every folded project's is
   const exported = ps.map(p => [p.project, r4(p.cost), p.tokens, r4(p.cache_hit_ratio), r4(p.write_1h_share), r4(p.subagent_cost_share), p.commits,
     r4(perCommit(p)), r4(perPrompt(p))]);
   const maxCost = Math.max(...ps.map(p => p.cost || 0), 0) || 1, spot = pin ? ps.find(p => p.project === pin.spot) : undefined;
@@ -93,20 +94,20 @@ export function ProjectCostDrawer({ rows, selected, sort, onSort, spot: pin, onS
   }, [pin]);
   const row = (p: ProjectRow) => { const cmp = m.big.has(p); return <tr key={p.project ?? ""} {...pickRow(p.project ?? "", v => openProjectSheet(v),
           [p.project === selected && selected ? "sel" : "", spot === p ? "spot" : ""].filter(Boolean).join(" "))}>
-          <td className="name"><ProjectName project={p.project}><button type="button" className="cellbtn" title={p.project ?? ""}>{p.project}</button></ProjectName></td>
+          <td className="name"><ProjectName project={p.project}><button type="button" className="cellbtn" title={p.project ?? ""}>{p.project ?? "(no project)"}</button></ProjectName></td>
           <td className="num"><span className="ibar" aria-hidden="true"><i style={{ width: `${Math.max(2, (p.cost || 0) / maxCost * 100)}%`, background: color(p.project) }} /></span>
             {usd(p.cost)}<Unpriced n={p.unpriced} /></td>
           <td className="num">{big(p.tokens)}</td>
           <Toned v={p.cache_hit_ratio} text={pct(p.cache_hit_ratio)} med={cmp ? m.hit : null} better="up" kind="points" medText={pct(m.hit)} />
           <td className="num">{pct(p.write_1h_share)}</td><td className="num">{pct(p.subagent_cost_share)}</td><td className="num">{num(p.commits)}</td>
-          {perCommit(p) == null ? <td className="num"><NA /></td>
+          {!p.commits ? <td className="num"><NA /></td> : perCommit(p) == null ? <td className="num">{usd(null)}</td>
             : <Toned v={perCommit(p)} text={usd(perCommit(p))} med={cmp && p.commits >= 3 ? m.cpc : null} better="down" kind="ratio" medText={usd(m.cpc)} zeroText={`no cost; median ${usd(m.cpc)} per commit`} />}
           <Toned v={perPrompt(p)} text={usd(perPrompt(p))} med={cmp ? m.cpp : null} better="down" kind="ratio" medText={usd(m.cpp)} zeroText={`no cost; median ${usd(m.cpp)} per prompt`} />
         </tr>; };
   const bucket = <tr key="small-projects" className="small-bucket"><td className="name"><b>Small projects ({small.length})</b>{" "}
     <button type="button" className="linkish" aria-expanded={open} disabled={forced} title={forced ? "A selected or ringed project is small" : undefined}
       onClick={() => onSmallOpen(!open)}>{open ? "Hide small projects" : `Show ${small.length} small projects`}</button></td>
-    <td className="num">{usd(sum(p => p.cost))}<Unpriced n={sum(p => p.unpriced)} /></td><td className="num">{big(sum(p => p.tokens))}</td>
+    <td className="num">{usd(smallCost)}<Unpriced n={sum(p => p.unpriced)} /></td><td className="num">{big(sum(p => p.tokens))}</td>
     <td /><td /><td /><td className="num">{num(sum(p => p.commits))}</td><td /><td /></tr>;
   const r = spot && perCommit(spot) != null && pin ? perCommit(spot)! / pin.med : null;
   return (

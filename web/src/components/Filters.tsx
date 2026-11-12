@@ -40,7 +40,7 @@ export function Filters({ projects, automated = false, autoFile, range = true, c
   // A long list gets a search box that narrows the select; the chosen project and "All projects" always stay.
   const [q, setQ] = useState(""), searchable = opts.length > SEARCH_OVER, needle = q.trim().toLowerCase();
   const shown = searchable && needle ? opts.filter(o => o.value === h.project || (o.label ?? o.value).toLowerCase().includes(needle)) : opts;
-  const none = searchable && !!needle && !shown.some(o => o.value !== h.project && (o.label ?? o.value).toLowerCase().includes(needle));
+  const none = searchable && !!needle && !shown.some(o => (o.label ?? o.value).toLowerCase().includes(needle));
   return (
     <div className="filters" role="group" aria-label="Filters">
       <span className={"pick-project" + (h.project ? "" : " all")} id="fProjectWrap">

@@ -84,6 +84,13 @@ describe("Filters project search", () => {
     await user.clear(box);
     expect(options()).toHaveLength(many.length + 2 - 1 + 1 - 1); // All + 14 projects, proj-3 already listed
   });
+  it("does not say nothing matches when the selected project is the match", async () => {
+    history.replaceState(null, "", "/cost#project=atlas-api");
+    render(<Filters projects={Array.from({ length: 13 }, (_, i) => `proj-${i}`).concat("atlas-api")} />);
+    await userEvent.type(screen.getByRole("searchbox", { name: "Search projects" }), "atlas");
+    expect(options()).toEqual(["All projects", "atlas-api"]);
+    expect(screen.queryByRole("status")).toBeNull();
+  });
   it("says when nothing matches and keeps All projects", async () => {
     history.replaceState(null, "", "/cost");
     render(<Filters projects={many} />);

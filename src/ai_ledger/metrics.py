@@ -435,10 +435,10 @@ def usage(cur, project="", range_days=0, session="", prices=None, today=None, au
         write_1h_share=per(tot["cache_1h"], tot["cache_5m"] + tot["cache_1h"]),
         subagent_token_share=per(tot["sub_tokens"], tot["tokens"]),
         subagent_cost_share=per(tot["sub_cost"] or 0, tot["cost"]) if tot["cost"] else None,
-        tokens_per_prompt=per(tot["tokens"], pr["prompts"]), cost_per_prompt=per(tot["cost"] or 0, pr["prompts"]),
+        tokens_per_prompt=per(tot["tokens"], pr["prompts"]), cost_per_prompt=per(tot["cost"], pr["prompts"]) if tot["cost"] is not None else None,
         turns_per_prompt=per(tot["main_requests"], pr["prompts"]), tool_calls_per_prompt=per(calls["main_calls"], pr["prompts"]),
         interruption_rate=per(pr["interrupted"], pr["prompts"]),
-        tokens_per_commit=per(tot["tokens"], calls["commits"]), cost_per_commit=per(tot["cost"] or 0, calls["commits"]) if calls["commits"] else None,
+        tokens_per_commit=per(tot["tokens"], calls["commits"]), cost_per_commit=per(tot["cost"], calls["commits"]) if calls["commits"] and tot["cost"] is not None else None,
         errors_per_100_calls=per(100 * calls["errors"], calls["calls"]),
         session_seconds=sum(x["duration_s"] or 0 for x in sess),
         median_session_seconds=median([x["duration_s"] for x in sess if x["duration_s"] is not None]),
@@ -853,7 +853,7 @@ def projects(cur, rq, rp, W, fp, loops):
                  cache_hit_ratio=per(r["cache_read"], r["prompt_tokens"]), write_1h_share=per(r["cache_1h"], r["cache_writes"]),
                  subagent_share=per(r["sub_tokens"] or 0, r["tokens"]),
                  subagent_cost_share=per(r["sub_cost"] or 0, r["cost"]) if r["cost"] else None,
-                 tokens_per_commit=per(r["tokens"], c["commits"]), cost_per_commit=per(r["cost"] or 0, c["commits"]) if c["commits"] else None,
+                 tokens_per_commit=per(r["tokens"], c["commits"]), cost_per_commit=per(r["cost"], c["commits"]) if c["commits"] and r["cost"] is not None else None,
                  errors_per_100_calls=per(100 * c["errors"], c["calls"]), tokens_per_prompt=per(r["tokens"], prompts.get(r["project"], 0)))
     return rs
 

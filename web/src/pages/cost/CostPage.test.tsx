@@ -8,7 +8,7 @@ import sessions from "../../__fixtures__/sessions";
 import session from "../../__fixtures__/session";
 import { mockApi } from "../../components/sheets/testing";
 import { dayStamp, download } from "../../components/export";
-import { compareText, costDays, planText, thinHistory } from "./cost";
+import { compareText, costDays, moved, planText, thinHistory } from "./cost";
 import { CostPage } from "./CostPage";
 
 vi.mock("../../components/export", async orig => ({ ...(await orig<typeof import("../../components/export")>()), download: vi.fn() }));
@@ -33,7 +33,10 @@ const doubled: UsagePayload = { ...usage, previous: { ...usage.previous!, cost: 
 
 describe("plan context", () => {
   const max = { provider: "claude" as const, label: "Claude Max 20x", monthly: 200 };
-  const priced = { ...usage, plans: [max], totals: { ...usage.totals, cost: 840 } };
+  // The plan's multiple counts the cost of the agents that have a plan (daily_sources), not the whole view's.
+  const spend = (claude: number, other: { source: "claude" | "codex"; cost: number }[] = []) =>
+    ({ daily_sources: [{ day: "2026-11-04", source: "claude" as const, cost: claude }, ...other.map(o => ({ day: "2026-11-04", ...o }))] });
+  const priced = { ...usage, plans: [max], totals: { ...usage.totals, cost: 840 }, ...spend(840) };
 
   it("shows the list-price cost as a multiple of the plan prorated to the view", async () => {
     await show(priced);
@@ -48,9 +51,17 @@ describe("plan context", () => {
   it("sums two plans, prorates all time, says a multiple below 1 plainly and is silent without a cost", () => {
     const codex = { provider: "codex" as const, label: "ChatGPT Plus", monthly: 20 };
     expect(planText({ ...priced, plans: [max, codex] })).toBe("You pay about $220 a month (Claude Max 20x + ChatGPT Plus); at list prices this period is 3.8× your plans.");
-    expect(planText({ ...priced, totals: { ...priced.totals, cost: 120 } })).toContain("0.6× your plan");
+    expect(planText({ ...priced, ...spend(120) })).toContain("0.6× your plan");
     expect(planText({ ...priced, range: 0, daily: [{ ...priced.daily[0]!, day: "2026-09-12" }], end: "2026-11-10" })).toContain("2.1× your plan");
-    expect(planText({ ...priced, totals: { ...priced.totals, cost: null } })).toBeNull();
+    expect(planText({ ...priced, totals: { ...priced.totals, cost: null }, daily_sources: [] })).toBeNull();
+  });
+
+  it("leaves the cost of an agent without a plan out of the multiple", () => {
+    const codex = { provider: "codex" as const, label: "ChatGPT Plus", monthly: 20 };
+    // Claude has no plan here: only Codex's $20 over the 30 days counts against its $20 a month.
+    const mixed = { ...priced, plans: [codex], totals: { ...priced.totals, cost: 1000 }, ...spend(980, [{ source: "codex", cost: 20 }]) };
+    expect(planText(mixed)).toBe("You pay about $20 a month (ChatGPT Plus); at list prices this period's Codex use is 1.0× your plan.");
+    expect(planText({ ...mixed, ...spend(980) })).toBeNull(); // no cost from a covered agent
   });
 });
 
@@ -76,6 +87,25 @@ describe("cost figures", () => {
     // A previous window with requests, all on unpriced models: its cost is unknown, not nothing.
     expect(compareText({ ...usage, previous: { ...usage.previous!, cost: null } })!.text).toBe("no priced usage in the previous 30 days");
     expect(compareText({ ...usage, previous: { ...usage.previous!, cost: null, requests: 0 } })!.text).toBe("nothing in the previous 30 days");
+  });
+
+  it("makes no change of a current period with no priced cost, and keeps projects with an unknown cost", () => {
+    expect(compareText({ ...doubled, totals: { ...doubled.totals, cost: null } })).toEqual({ text: "no priced usage in this period", sr: "no priced usage in this period" });
+    const ch = (project: string, cost: number | null, prev_cost: number | null) => ({ project, cost, prev_cost, delta: null, new: false });
+    expect(moved({ changes: [ch("a", null, 0), ch("b", 0, 0), ch("c", 5, null), ch("d", 0, 3)] }).map(c => c.project)).toEqual(["a", "c", "d"]);
+  });
+
+  describe("rollup of the other projects' change", () => {
+    const ch = (project: string, delta: number | null) => ({ project, cost: delta == null ? null : 20 + delta, prev_cost: 20, delta, new: false });
+    const changes = [..."abcdefgh"].map((p, i) => ch(p, 50 - i)).concat(ch("i", 4), ch("j", null));
+    it("is unknown when one of them is", async () => {
+      await show({ ...usage, changes });
+      expect(document.querySelector("#changed .rest .d")!.textContent).toBe("–");
+    });
+    it("is their sum when all are known", async () => {
+      await show({ ...usage, changes: changes.slice(0, 9) });
+      expect(document.querySelector("#changed .rest .d")!.textContent).toBe("+$4.00");
+    });
   });
 
   it("marks a previous window with under half the days with prompts as thin", () => {
@@ -267,6 +297,12 @@ describe("CostPage", () => {
       expect(within(drawer("d-projcost")).getByRole("button", { name: "Hide small projects" }).getAttribute("aria-expanded")).toBe("true");
       expect(names()).toContain("t2");
     });
+    it("reads a bucket of projects with unknown costs as unknown, not $0", async () => {
+      const unknown = (n: string) => ({ ...tiny(n), cost: null, cost_per_commit: null });
+      await show(withProjects([real("r1", 100), real("r2", 90), real("r3", 80), unknown("t1"), unknown("t2"), unknown("t3")]));
+      const cost = within(drawer("d-projcost")).getByText("Small projects (3)").closest("tr")!.querySelectorAll("td")[1]!.textContent;
+      expect(cost).toBe("–");
+    });
     it("does not fold fewer than 3 small projects", async () => {
       await show(withProjects([real("r1", 100), real("r2", 90), real("r3", 80), tiny("t1"), tiny("t2")]));
       expect(names()).toEqual(["r1", "r2", "r3", "t1", "t2"]);
@@ -374,6 +410,15 @@ describe("CostPage", () => {
     await show(withProjects([proj("a", 6, 3), proj("idle", 20, 0)]));
     const idle = drawer("d-projcost").querySelector('tbody tr[data-v="idle"]')!;
     expect(idle.querySelectorAll("td")[7]!.textContent).toBe("n/a");
+  });
+
+  it("shows an unknown cost per commit as a dash, not n/a, and names the project-less row", async () => {
+    const d = withProjects([proj("a", 6, 3), { ...proj("ghost", 0, 3), cost: null, cost_per_commit: null }, { ...proj("x", 2, 1), project: null }]);
+    await show({ ...d, projects: ["a", "ghost"] }); // the picker lists named projects only
+    const rows = drawer("d-projcost").querySelectorAll("tbody tr");
+    const ghost = drawer("d-projcost").querySelector('tbody tr[data-v="ghost"]')!;
+    expect(ghost.querySelectorAll("td")[7]!.textContent).toBe("–");
+    expect([...rows].some(r => r.querySelector("td.name")!.textContent === "(no project)")).toBe(true);
   });
 
   it("says cost per commit is not available when nothing was committed", async () => {
