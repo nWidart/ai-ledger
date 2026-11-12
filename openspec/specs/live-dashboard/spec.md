@@ -130,6 +130,21 @@ Subagent work SHALL appear as a lane inside the stream. Selecting the lane heade
 - **WHEN** the user unfolds a running lane and the lane then finishes
 - **THEN** the lane stays unfolded
 
+### Requirement: Tell when a lane is finished
+A lane SHALL be finished when the call that started it has ended. A lane no call names, as every Codex lane, SHALL be finished when the newest turn among its own events has ended, and running while that turn goes on. A finished lane's duration SHALL stop at its last event.
+
+#### Scenario: Codex lane whose turn ended
+- **WHEN** a Codex subagent thread made twelve tool calls and its turn has completed
+- **THEN** its lane is folded and marked done, and its duration is the time from its first event to its last
+
+#### Scenario: Codex lane in a turn
+- **WHEN** a Codex subagent thread ended a turn and started another that has not completed
+- **THEN** its lane is unfolded and marked running, shows its last 5 rows, and its duration counts up
+
+#### Scenario: Lane with a call still running
+- **WHEN** the `Agent` call that started a Claude Code lane has no result yet
+- **THEN** the lane is running
+
 ### Requirement: Show a lane's figures in its header
 The lane header SHALL show the subagent's name, its description, its tool-call count, its duration, its cost and its model when the app gives them, its error count when above zero, and whether it is still running.
 

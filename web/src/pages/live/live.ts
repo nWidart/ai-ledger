@@ -111,15 +111,19 @@ export interface LaneChoices { folds: ReadonlyMap<string, boolean>; whole: Reado
 /** A subagent's work: when its events start and end, its tool calls and how many failed, and the main-thread call that
  *  started it. */
 export interface LiveLane {
-  id: string; start: Ts | null; end: Ts | null; tools: number; errors: number; running: boolean;
+  id: string; start: Ts | null; end: Ts | null; tools: number; errors: number;
+  /** A call of its has no result, or, with no parent, its turn goes on. */
+  running: boolean;
   /** The main-thread call that started it, when known; name is that call's tool. */
-  parent: string | null; name: string; description: string | null; done: boolean;
+  parent: string | null; name: string; description: string | null;
+  /** Finished: its parent call has ended. No call names a Codex lane: it is done when its last turn mark is a turn_end. */
+  done: boolean;
 }
 
 /** The lanes of the events held, in order of their first event. Built from every event held, not from one response,
  *  so a catch-up with one lane's events leaves the other lanes whole. */
 export function lanesOf(events: readonly LiveEvent[]): LiveLane[] {
-  const parents = new Map<string, LiveToolEvent>(), out = new Map<string, LiveLane>();
+  const parents = new Map<string, LiveToolEvent>(), out = new Map<string, LiveLane>(), turns = new Map<LiveLane, boolean>();
   for (const e of events) if (isTool(e) && e.agent && !e.lane) parents.set(e.agent, e);
   for (const e of events) {
     if (!e.lane) continue;
@@ -132,7 +136,9 @@ export function lanesOf(events: readonly LiveEvent[]): LiveLane[] {
     }
     if (e.ts && !(ms(l.end) >= ms(e.ts))) l.end = e.ts;
     if (isTool(e)) { l.tools++; l.errors += +e.failed; l.running ||= e.end == null; }
+    else if (!l.parent && (e.k === "turn_start" || e.k === "turn_end")) turns.set(l, e.k === "turn_start");
   }
+  for (const [l, open] of turns) { l.done = !open; l.running ||= open; }
   return [...out.values()];
 }
 

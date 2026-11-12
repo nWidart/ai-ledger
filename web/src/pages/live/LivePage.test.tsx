@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { LivePayload, LiveSession, LiveState, LiveToolEvent } from "../../api";
+import type { LiveEvent, LivePayload, LiveSession, LiveState, LiveToolEvent } from "../../api";
 import live from "../../__fixtures__/live";
 import liveListText from "../../__fixtures__/live-text";
 import liveSession from "../../__fixtures__/live-session";
@@ -56,6 +56,16 @@ const laneCall = (n: number, failed = false): LiveToolEvent => {
 /** s1 with n calls in its lane (g1 to gn), `failed` of them failed; the lane runs unless done. */
 const laned = (n: number, o: { done?: boolean; failed?: number } = {}): LiveSession => ({ ...s1, events: s1.events.flatMap(e => (e.lane ? []
   : e === agentCall ? [{ ...agentCall, end: o.done ? "2026-11-10T10:00:11.000Z" : null }, ...Array.from({ length: n }, (_, i) => laneCall(i + 1, i < (o.failed ?? 0)))] : [e])) });
+/** Codex ties no lane to a call: a thread's own turn marks tell whether it is done. A mark and a call of thread th2, n
+ *  seconds after 10:00:30, and the Codex session with them. */
+const at30 = (n: number) => new Date(Date.parse("2026-11-10T10:00:30.000Z") + n * 1000).toISOString();
+const turn = (k: "turn_start" | "turn_end", n: number): LiveEvent => ({ key: `m${n}#0`, k, ts: at30(n), lane: "th2", ...(k === "turn_start" ? { window: null } : {}) } as LiveEvent);
+const threadCall = (n: number): LiveToolEvent => ({ ...(codex.events.find(e => e.k === "tool") as LiveToolEvent), key: `c${n}#0`, id: `c${n}`, lane: "th2", summary: `c${n}`,
+  ts: at30(n), start: at30(n), end: at30(n + 1) });
+const threadCalls = (from: number, to: number) => Array.from({ length: to - from + 1 }, (_, i) => threadCall(from + i));
+const threaded = (...lane: LiveEvent[]): LiveSession => ({ ...codex, events: [...codex.events, ...lane] });
+const threadHead = () => screen.getByRole("button", { name: /^Subagent/ });
+const threadRows = () => screen.queryAllByRole("button", { name: /^exec_commandc/ }).map(b => b.querySelector(".sum")!.textContent);
 /** The lane's header, and the input texts of the Grep rows drawn. */
 const laneHead = (name = /^Agent find callers of ingest/) => screen.getByRole("button", { name });
 const greps = () => screen.queryAllByRole("button", { name: /^Grep/ }).map(b => b.querySelector(".sum")!.textContent);
@@ -97,6 +107,15 @@ describe("live.ts", () => {
     const running = s1.events.map(e => (e === call ? { ...call, end: null } : e));
     expect(lanesOf(running)[0]).toMatchObject({ parent: "t2", name: "Agent", done: false });
     expect(lanesOf(running.map(e => (e.k === "tool" && e.id === "t2" ? { ...e, agent: null } : e)))[0]).toMatchObject({ parent: null, name: "Subagent" });
+  });
+
+  it("tells a lane no call names done by its last turn mark, and a lane with a call by that call", () => {
+    const lane = (...events: LiveEvent[]) => lanesOf(events)[0];
+    expect(lane(turn("turn_start", 0), threadCall(1), turn("turn_end", 3))).toMatchObject({ parent: null, done: true, running: false, end: at30(3) });
+    expect(lane(turn("turn_start", 0), threadCall(1), turn("turn_end", 3), turn("turn_start", 9))).toMatchObject({ done: false, running: true });
+    expect(lane(threadCall(1))).toMatchObject({ done: false, running: false }); // no mark held: not known
+    const marked = [...s1.events.map(e => (e === agentCall ? { ...agentCall, end: null } : e)), { ...turn("turn_end", 9), lane: "a7" }];
+    expect(lanesOf(marked)[0]).toMatchObject({ parent: "t2", done: false });
   });
 
   it("reads a shell call pending past 30 s as a likely approval wait, unless it is a long one", () => {
@@ -371,6 +390,35 @@ describe("LivePage", () => {
     show("#session=s1", { session: () => ({ ...laned(8, { done: true }), lanes: { a7: { cost: null, model: "mystery-1" } } }) }); // an unpriced model
     await stream();
     expect(figures().textContent).toBe("8 tools · 7.0s · mystery-1");
+  });
+
+  it("folds a Codex lane whose turn ended, with its duration up to its last event", async () => {
+    show("#session=" + codex.session_id, { session: () => threaded(turn("turn_start", 0), ...threadCalls(1, 12), turn("turn_end", 14)) });
+    await stream();
+    expect([threadRows(), threadHead().getAttribute("aria-expanded"), screen.queryByRole("button", { name: /^Show / })]).toEqual([[], "false", null]);
+    expect(threadHead().querySelector(".muted")!.textContent).toBe("12 tools · 14s");
+    expect(within(threadHead()).getByRole("img", { name: "done" })).toBeTruthy();
+  });
+
+  it("keeps a Codex lane open and running while its turn goes on, and folds it when a catch-up brings the turn's end", async () => {
+    fakeClock("2026-11-10T10:01:00.000Z");
+    // A first turn that ended, then a second one in progress: the last mark decides.
+    const o = { s: threaded(turn("turn_start", 0), ...threadCalls(1, 6), turn("turn_end", 8), turn("turn_start", 9), ...threadCalls(10, 15)) };
+    show("#session=" + codex.session_id, { session: () => o.s });
+    await tick(10);
+    const figures = () => threadHead().querySelector(".muted")!.textContent;
+    expect([threadRows(), threadHead().getAttribute("aria-expanded")]).toEqual([["c11", "c12", "c13", "c14", "c15"], "true"]);
+    expect(screen.getByRole("button", { name: "Show all 12 rows" })).toBeTruthy();
+    expect([figures(), within(threadHead()).getByRole("img").getAttribute("aria-label")]).toEqual(["12 tools · 30s", "running"]);
+    await tick(1000);
+    expect(figures()).toBe("12 tools · 31s");
+    o.s = { ...o.s, events: [turn("turn_end", 20)], cursor: "c2" };
+    FakeSource.last!.notify([codex.session_id]);
+    await tick(10);
+    expect([threadRows(), threadHead().getAttribute("aria-expanded"), figures()]).toEqual([[], "false", "12 tools · 20s"]);
+    expect(within(threadHead()).getByRole("img").getAttribute("aria-label")).toBe("done");
+    await tick(5000);
+    expect(figures()).toBe("12 tools · 20s");
   });
 
   it("keeps the lanes and their rows when a catch-up brings only a main-thread event", async () => {

@@ -18,12 +18,13 @@ def at(seconds):
     return (datetime(2026, 11, 10, 10, 0, 0) + timedelta(seconds=seconds)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
 
 
-def events(text, source="claude"):
-    """Events assembled from transcript text, as live.state sees them."""
+def events(text, source="claude", lane_file=None):
+    """Events assembled from transcript text, as live.state sees them: the main thread's, or those of the subagent whose
+    lines lane_file holds."""
     rows = []
     for i, raw in enumerate(text.splitlines()):
         d = json.loads(raw)
-        rows.append((f"k{i}", "/x/a.jsonl", d.get("timestamp"), False, source, raw))
+        rows.append((f"k{i}", lane_file or "/x/a.jsonl", d.get("timestamp"), lane_file is not None, source, raw))
     return live.assemble(rows)[0]
 
 
@@ -102,6 +103,16 @@ class StateTest(unittest.TestCase):
         text = (codex_line(1, 0, "event_msg", type="task_started", turn_id="t1")
                 + codex_line(2, 9, "event_msg", type="task_complete", turn_id="t1"))
         self.assertEqual(self.state(text, "codex")["kind"], "you")
+
+    def test_codex_state_follows_the_main_thread_turns_only(self):
+        child = NAME.replace(THREAD, THREAD + "_0a0f9999-0000-7000-8000-000000000002")
+        turn = lambda start, end=None, **kw: events(codex_line(1, start, "event_msg", type="task_started", turn_id="t1") + (
+            codex_line(2, end, "event_msg", type="task_complete", turn_id="t1") if end else ""), "codex", **kw)
+        state = lambda evs: live.state(evs, NOW, "codex", max(e["ts"] for e in evs))
+        st = state(turn(0) + turn(5, 20, lane_file=child))  # the child's turn ended; the parent's goes on
+        self.assertEqual(st, dict(kind="thinking", tool=None, since="2026-11-10T10:00:00.000Z", inferred=False, long=False))
+        st = state(turn(0, 9) + turn(12, lane_file=child))
+        self.assertEqual((st["kind"], st["since"]), ("you", "2026-11-10T10:00:09.000Z"))
 
     def test_closed_session_is_ended_whatever_its_lines_say(self):
         text = prompt("u1", at(0), "p1", "go") + assistant("a1", "m1", at(5), [tool_use("t1", "Bash", command="sleep 999")])
@@ -555,6 +566,23 @@ class CodexSessionTest(CodexCase):
         self.assertEqual(got["lanes"], {thread: dict(cost=2.0, model="claude-opus-5-5")})
         self.assertEqual([e["lane"] for e in got["events"] if e["k"] == "tool"], [thread])
         self.assertAlmostEqual(got["cost"], 6.0)
+
+    def test_thread_turn_marks_carry_its_lane(self):  # no call names a Codex lane: the page tells it done by these
+        thread = "0a0f9999-0000-7000-8000-000000000002"
+        child = NAME.replace(THREAD, f"{THREAD}_{thread}")
+        self.place(NAME, meta(THREAD).replace("2026-11-06T10:00:00.000Z", at(0)) + codex_line(1, 1, "event_msg", type="task_started", turn_id="t1"))
+        self.place(child, meta(THREAD, thread).replace("2026-11-06T10:00:00.000Z", at(3))
+                   + codex_line(1, 4, "event_msg", type="task_started", turn_id="u1")
+                   + codex_line(2, 5, "response_item", type="function_call", name="exec_command", call_id="c1", arguments=json.dumps(dict(cmd="ls"))))
+        self.ingest()
+        marks = lambda got: [(e["k"], e["lane"]) for e in got["events"]]
+        first = live.session(self.con.cursor(), THREAD, now=NOW, prices=PRICES)
+        self.assertEqual(marks(first), [("turn_start", None), ("turn_start", thread), ("tool", thread)])
+        self.place(child, codex_line(3, 6, "response_item", type="function_call_output", call_id="c1", output="a.py")
+                   + codex_line(4, 7, "event_msg", type="task_complete", turn_id="u1"), mode="a")
+        self.ingest()
+        later = live.session(self.con.cursor(), THREAD, after=first["cursor"], now=NOW, prices=PRICES)
+        self.assertEqual((marks(later)[-1], later["state"]["kind"], later["state"]["since"]), (("turn_end", thread), "thinking", "2026-11-10T10:00:01.000Z"))
 
     def test_thread_lanes_whose_requests_share_a_time(self):
         threads = ["0a0f9999-0000-7000-8000-000000000002", "0a0f9999-0000-7000-8000-000000000003"]
