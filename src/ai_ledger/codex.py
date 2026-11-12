@@ -67,12 +67,13 @@ def thread_class(path, meta=None):
 
 def placement(cur, path, lines):
     """(session of the lines of rollout file path or None, subagent), as store.Source.placement. The session_meta is the
-    first of lines, else the thread's stored one: a chunk can start after it."""
+    thread's own among lines, else among its stored ones: a chunk can start after it."""
     if indexed(path):
         return None, False
-    meta = next((d for d in lines if d.get("type") == "session_meta"), None)
-    if meta is None:
-        meta = next(iter(thread_lines(cur, ids(path)[1], "session_meta")), None)
+    thread = ids(path)[1]
+    metas = [d for d in lines if d.get("type") == "session_meta"] or thread_lines(cur, thread, "session_meta")
+    own = [d for d in metas if isinstance(d.get("payload"), dict) and d["payload"].get("id") == thread]
+    meta = (own or metas or [None])[0]  # a forked subagent's file also holds a copy of its parent's
     return thread_class(path, meta.get("payload") if meta else None)
 
 

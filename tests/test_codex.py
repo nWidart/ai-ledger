@@ -9,7 +9,7 @@ from unittest import mock
 from compression import zstd
 
 from ai_ledger import metrics, store
-from ai_ledger.codex import live_items as codex_live, thread_class
+from ai_ledger.codex import live_items as codex_live, placement, thread_class
 from test_store import StoreCase
 
 FIXTURES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "codex")
@@ -253,6 +253,13 @@ class ArchiveTest(CodexCase):
         self.assertEqual(thread_class(path.replace(b, f"{a}_{b}"), dict(session_id=a, id=a)), (a, False))  # a continuation
         self.assertEqual(thread_class(path.replace(b, f"{a}_{b}"), None), (a, True))  # no record: the file name
         self.assertEqual(thread_class(path, None), (b, False))
+
+    def test_placement_reads_the_threads_own_session_meta(self):  # a forked subagent's file also holds its parent's
+        a, b = "0a0f9999-0000-7000-8000-00000000000a", "0a0f9999-0000-7000-8000-00000000000b"
+        path = f"/x/rollout-2026-11-06T10-00-00-{b}.jsonl"
+        metas = [json.loads(meta(a)), json.loads(meta(a, b))]
+        self.assertEqual(placement(None, path, metas), (a, True))
+        self.assertEqual(placement(None, path, metas[::-1]), (a, True))
 
 
 class TokenTest(CodexCase):
