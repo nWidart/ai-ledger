@@ -10,7 +10,7 @@ import { useApi } from "../../useApi";
 import { Ctx, tableFocus, type ErrorsCtx } from "./context";
 import { Detail } from "./Detail";
 import { useMarks } from "./marks";
-import { filtered, makeModel, messageOf, settle, TYPE_SORT, viewTypes, withMuted, type TypeKey, type View } from "./model";
+import { bucketLabel, countBy, filtered, inBucket, makeModel, messageOf, msgOpenKey, settle, TYPE_SORT, viewTypes, withMuted, type TypeKey, type View } from "./model";
 import { RateChart } from "./RateChart";
 import { Summary } from "./Summary";
 import { TypeTable } from "./TypeTable";
@@ -80,11 +80,19 @@ export function ErrorsPage() {
     if (r.top < parseFloat(getComputedStyle(t).scrollMarginTop) || r.bottom > innerHeight) t.scrollIntoView({ block: "start", behavior: reduced() ? "auto" : "smooth" });
     t.focus({ preventScroll: true });
   }, []);
+  // Opening a type is an explicit request: it wins over the selected chart bucket. A type with errors in the range but none in the
+  // bucket clears the bucket (and says so), where `settle` would close the type again. The type table's rows are bucket-narrowed: never that.
   const pick = useCallback((c: string | null, toDetail = false) => {
-    update({ cat: c, focus: null }, true);
+    const cur = viewRef.current;
+    let patch: Partial<View> = { cat: c, focus: null };
+    if (c && cur.at && m && f && countBy(f.errs)[c] && !countBy(inBucket(cur, f.errs))[c]) {
+      patch = { ...patch, at: null };
+      say(`Selection cleared: ${m.cats[c]?.label ?? c} has no errors in ${bucketLabel(m, cur)}.`);
+    }
+    update(patch, true);
     setQ("");
     if (toDetail && c) after(focusDetail);
-  }, [update, after, focusDetail]);
+  }, [m, f, update, after, focusDetail, say]);
   // A click on an example selects it: its permalink goes in the address bar, and the list stays where it is.
   const select = useCallback((id: string) => { selecting.current = true; update({ focus: id }, true); }, [update]);
   const setMode = useCallback((x: Mode) => { setModeS(x); store.set(MODE_KEY, x); }, []);
@@ -96,7 +104,7 @@ export function ErrorsPage() {
     pin.current = { key: fullKey, focus: view.focus };
     const linked = view.focus ? m?.byId[view.focus] : undefined;
     if (linked?.n != null) sets.openInc.add(linked.n); // the linked example's incident opens
-    if (linked) sets.openMsg.add(messageOf(linked).key); // and its message group
+    if (linked) sets.openMsg.add(msgOpenKey(linked.c, messageOf(linked).key)); // and its message group
   }
   useEffect(() => { selecting.current = false; });
 

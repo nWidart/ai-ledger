@@ -93,8 +93,7 @@
 }
 /* Two columns at mid widths: the share bar and the trend give their room to the type names and the figures. Neither is the only place
    a value shows: the share follows the count, the trend's last step is the change. */
-@media (min-width: 901px) and (max-width: 1100px) { .pg-errors .c-share:not(.c-on), .pg-errors .c-trend { display: none; } }
-/* The sorted column (c-on, set by TypeTable) never hides: the active sort stays visible and can be flipped. Share is the one that can be sorted and hidden. */
+@media (min-width: 901px) and (max-width: 1100px) { .pg-errors .c-share, .pg-errors .c-trend { display: none; } }
 /* The type filter, above the table. */
 .pg-errors .tfilter { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
 .pg-errors .tfilter input { flex: 1; min-width: 0; max-width: 260px; }
@@ -132,7 +131,7 @@
 .pg-errors .mini[hidden] { display: none; }
 /* Phone: the share and the trend hide as before. The rate and the share that didn't recover stay (no other place shows them): the table
    scrolls in .tscroll, with tighter cells, and a sort brings its header into view. */
-@media (max-width: 520px) { .pg-errors .c-share:not(.c-on), .pg-errors .c-trend { display: none; } .pg-errors .types th, .pg-errors .types td { padding-left: 5px; padding-right: 5px; } }
+@media (max-width: 520px) { .pg-errors .c-share, .pg-errors .c-trend { display: none; } .pg-errors .types th, .pg-errors .types td { padding-left: 5px; padding-right: 5px; } }
 .pg-errors table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .pg-errors th { text-align: left; color: var(--text-muted); font-weight: 500; font-size: 12px; padding: 6px 8px; border-bottom: 1px solid var(--border); }
 .pg-errors td { padding: 8px; border-bottom: 1px solid var(--border); vertical-align: middle; }

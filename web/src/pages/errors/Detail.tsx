@@ -4,7 +4,7 @@ import { agentName } from "../../components/Filters";
 import { ProjectName } from "../../components/ProjectDot";
 import { useColors } from "../../colors";
 import { num as fmt } from "../../format";
-import { useErrors } from "./context";
+import { tableFocus, useErrors } from "./context";
 import { errorText } from "./marks";
 import { Example, Examples, Incident, MsgRow } from "./Examples";
 import { Spark } from "./Spark";
@@ -85,8 +85,9 @@ function TypeDetail({ cat }: { cat: string }) {
     return () => ro.disconnect();
   }, []);
 
+  // The type's own row, or when the type filter hides it, where the page's focus falls back to: the first listed type, else the chart.
   const back = () => {
-    const b = document.querySelector<HTMLElement>(`#catBody button[data-c="${CSS.escape(cat)}"]`);
+    const b = document.querySelector<HTMLElement>(`#catBody button[data-c="${CSS.escape(cat)}"]`) ?? tableFocus();
     b?.scrollIntoView({ block: "center", behavior: reduced() ? "auto" : "smooth" });
     b?.focus({ preventScroll: true });
   };
@@ -110,7 +111,7 @@ function TypeDetail({ cat }: { cat: string }) {
   // (a removed control's focus moves to the type table, as the closed type's row is gone too) lands focus on the table.
   const toggleMute = () => x.setMuted(cat, !isMuted, !isMuted && v.noise);
   const clearFilters = () => {
-    x.update({ project: "", range: 0, sub: true, noise: false, at: null, tool: null }, true);
+    x.update({ project: "", source: "", range: 0, sub: true, noise: false, at: null, tool: null }, true);
     x.after(() => document.getElementById("ex-" + focused!.id)?.focus());
   };
   // The tool's row of By tool keeps focus (it hides when the type has one tool only: then the title takes it).
@@ -170,7 +171,7 @@ function TypeDetail({ cat }: { cat: string }) {
     <ByAgent base={base} />
     {outside && <div className="outnote" id="outside">
       <div className="row" style={{ justifyContent: "space-between" }}><b>Outside current filters</b><button type="button" id="clearF" onClick={clearFilters}>Clear filters</button></div>
-      <div className="muted" style={{ fontSize: 12 }}>This linked example doesn't match the project, range, bucket, tool or toggles above.</div>
+      <div className="muted" style={{ fontSize: 12 }}>This linked example doesn't match the project, agent, range, bucket, tool or toggles above.</div>
       <Example e={focused!} />
     </div>}
     <div className="exbar" ref={bar}>
