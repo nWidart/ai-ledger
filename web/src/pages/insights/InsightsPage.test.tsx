@@ -615,6 +615,8 @@ describe("InsightsPage", () => {
       await vi.waitFor(() => expect(screen.queryByRole("region", { name: /Analysed sessions/ })).toBeTruthy());
       expect((within(logOf()).getByLabelText("Sort") as HTMLSelectElement).value).toBe("oldest");
       expect(order()[0]).toBe("Synthetic: added a theme toggle to a demo app.");
+    });
+  });
 
   describe("session figures", () => {
     const figures = (over: Partial<InsightsPayload["meta"]> = {}): InsightsPayload => ({ ...fixture, meta: { ...fixture.meta, ...over } });
