@@ -44,7 +44,7 @@ function WhereToStart() {
         act={fixes[x.c] ? "Check the fix" : "See what changed"} />)
         : <div className="empty" style={{ padding: "12px 0" }}>{why ? `${why}, nothing to compare.` : "Nothing is rising in this range."}</div>}
     </>}
-    <div className="ex" style={{ borderBottom: 0 }}><div className="muted" style={{ fontSize: 12 }}>The app ingests new transcript lines every minute; use Refresh above to ingest now. Fix markers live in this browser.</div></div>
+    <div className="ex" style={{ borderBottom: 0 }}><div className="muted" style={{ fontSize: 12 }}>The app ingests new transcript lines every minute; use Refresh above to ingest now. Fix markers are kept in the store, so they follow you to another port or browser.</div></div>
   </>;
 }
 

@@ -62,7 +62,7 @@ where the new code does it.
 
 ## Detail: where to start
 
-- [x] L720–740: with no type open: "Where to start" (top 4 open types with a ready-made fix and no marker, by time lost then count, each with its time lost) and "Rising fastest" (top 4 types up more than 10% half on half with at least 5 recent errors, "New" for types from zero, "· noise", "Check the fix" when fixed); each opens its type and focuses it; the ingest/markers footnote. Port: `Detail` `WhereToStart`, `model.ts` `whereToStart`. Changed since: the summary's comparison, biggest rate gain first, counts under 5 errors.
+- [x] L720–740: with no type open: "Where to start" (top 4 open types with a ready-made fix and no marker, by time lost then count, each with its time lost) and "Rising fastest" (top 4 types up more than 10% half on half with at least 5 recent errors, "New" for types from zero, "· noise", "Check the fix" when fixed); each opens its type and focuses it; the ingest/markers footnote. Port: `Detail` `WhereToStart`, `model.ts` `whereToStart`. Changed since: the summary's comparison, biggest rate gain first, counts under 5 errors. The footnote says the markers are kept in the store (they were "in this browser").
 
 ## Detail: a type
 

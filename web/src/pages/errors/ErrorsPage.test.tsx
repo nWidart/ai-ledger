@@ -125,6 +125,14 @@ describe("ErrorsPage", () => {
     expect(document.querySelector("#detail .istat")!.textContent).toContain("10 min lost in retry loops");
   });
 
+  it("says in the footnote of Where to start that fix markers are kept in the store", async () => {
+    serve();
+    await page();
+    const note = [...document.querySelectorAll("#detail .muted")].find(e => /ingests new transcript lines/.test(e.textContent ?? ""));
+    expect(note?.textContent).toBe("The app ingests new transcript lines every minute; use Refresh above to ingest now. Fix markers are kept in the store, so they follow you to another port or browser.");
+    expect(document.body.textContent).not.toContain("live in this browser");
+  });
+
   it("shows the fix markers of the payload, with their before and after rate", async () => {
     serve({ x: "2026-11-04" });
     await page();
