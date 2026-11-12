@@ -195,6 +195,15 @@ describe("ActivityPage", () => {
     expect(fetched()).toContain("/api/usage?range=30&source=codex");
   });
 
+  it("says the Sessions drawer counts a session by a request in the range", async () => {
+    serve(usage);
+    at();
+    render(<ActivityPage />);
+    await loaded();
+    openSessions();
+    expect(screen.getByText(/A session counts here when it has a request in the range/).textContent).toContain("Insights counts sessions by their start time");
+  });
+
   it("reloads an open sessions table when the source changes", async () => {
     mockApi({ "/api/usage": q => (q.get("source") === "codex" ? { ...usage, source: "codex" } : usage), "/api/sessions": () => sessions, "/api/session": () => session });
     at();

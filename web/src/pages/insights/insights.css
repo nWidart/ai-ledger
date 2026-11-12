@@ -47,7 +47,6 @@
 .pg-insights h3 { font-size: 13px; font-weight: 600; margin: 18px 0 2px; color: var(--text-secondary); }
 .pg-insights .grid2 { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 16px; margin-bottom: 16px; align-items: start; }
 .pg-insights .linkish.more { margin-top: 8px; font-size: 13px; }
-.pg-insights .stack { display: grid; gap: 16px; align-content: start; }
 @media (max-width: 900px) { .pg-insights .grid2 { grid-template-columns: minmax(0, 1fr); } }
 /* Ledgers here carry "N sessions" on the side, wider than the default column. */
 .pg-insights .ledger li { grid-template-columns: minmax(0, 13rem) minmax(40px, 1fr) 3.5rem 5.5rem; }

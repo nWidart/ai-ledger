@@ -127,9 +127,21 @@ jobs:
             exit 1
           fi
 
+  specs:
+    name: Specs · validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+      - run: npx --yes @fission-ai/openspec@1.16.0 validate --specs --strict
+
   package:
     name: Package
-    needs: [python-lint, python-tests, web-typecheck, web-lint, web-tests, web-build]
+    needs: [python-lint, python-tests, web-typecheck, web-lint, web-tests, web-build, specs]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

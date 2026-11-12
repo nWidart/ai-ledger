@@ -310,7 +310,7 @@ Every page with the project picker SHALL offer a labelled search box next to it 
 - **THEN** no search box is shown
 
 ### Requirement: Work out the limits alert once per cycle
-The app SHALL work out the limits alert after each full ingest cycle (the one that ingests transcripts and usage data and polls limits, not the fast pass while a Live page is connected), from the Limits payload with no filters, and keep it. `/api/status` SHALL return it as `limits_alert` (the alert, or null), and SHALL NOT work it out per request. It SHALL be null until the first cycle ends. When working it out fails, the alert SHALL be null, the failure SHALL be logged by its type only, and ingest SHALL go on. A manual refresh SHALL NOT work it out: the alert changes with the next cycle.
+The app SHALL work out the limits alert after each full ingest cycle, from the Limits payload with no filters, and keep it. A full cycle ingests transcripts and usage data and polls limits; the fast pass while a Live page is connected is not one. `/api/status` SHALL return the kept alert as `limits_alert` (the alert, or null), SHALL NOT work it out per request, and SHALL return null until the first cycle ends. A manual refresh SHALL NOT work it out.
 
 #### Scenario: Once per cycle
 - **WHEN** a Live page is connected and the app ingests every second
@@ -320,41 +320,105 @@ The app SHALL work out the limits alert after each full ingest cycle (the one th
 - **WHEN** the app has just started
 - **THEN** `/api/status` has `limits_alert` null
 
+#### Scenario: A manual refresh
+- **WHEN** the user runs a manual refresh
+- **THEN** the alert is not worked out, and it changes with the next cycle
+
 #### Scenario: A slow computation
 - **WHEN** working the alert out takes some time
 - **THEN** it runs in the ingest loop's thread, so the next fast pass of a Live page waits that long; it does not run per status request
+
+### Requirement: Keep a failed limits alert computation from stopping ingest
+When working out the limits alert fails, the alert SHALL be null, the failure SHALL be logged by its type only, and ingest SHALL go on.
 
 #### Scenario: A failing computation
 - **WHEN** the Limits payload raises during a cycle
 - **THEN** `limits_alert` is null, the next cycle ingests as usual, and the log names the exception's type and not its message
 
 ### Requirement: Show the limits alert on the Limits tab
-The shared navigation SHALL show a small dot on the Limits tab while the latest status it has carries a limits alert, on every page, the Limits page included: in the critical color for `at_limit` and `runs_out`, in the warning color for `high`. The dot SHALL NOT be a number, SHALL NOT change the size or place of any tab or the navigation's wrapping, and SHALL clear 3:1 contrast against the navigation in both themes. The Limits tab's accessible name SHALL be "Limits alert: " and a sentence (the sentence in text visually hidden, after the visible label), and the tab's visible label and its dot SHALL together hold that sentence as their hover text, as the title of one plain element around them that is no part of the tab's name or description, so that the sentence is exposed once: the tab itself has no title or label of its own, and the dot is hidden from assistive technology. There is no tooltip on keyboard focus. The sentence SHALL be "<provider> <label> is at its limit until <time>", "<provider> <label> is forecast to run out <time>" or "<provider> <label> is at <N>%", with " (and <count − 1> more)" appended when more than one window is in alert, and the time in the format of the Limits page. A figure that is not measured SHALL say so: "<provider> <label> is estimated to be at its limit until <time>" and "<provider> <label> is at an estimated <N>%"; a forecast reads the same either way. A status with no alert, or from an app that sends none, SHALL show no dot and leave the tab's name "Limits" with no title. The dot SHALL follow the navigation's status poll and a manual refresh's answer, with no page reload and no poll of its own, and an app that does not answer SHALL leave it as it was. The navigation SHALL also say the alert aloud to assistive technology, without moving focus, in a visually hidden polite status region of its own that is always present and separate from the ingest status: it SHALL hold the alert's sentence, and change only when what the alert is changes (its kind, provider, label or whether its figure is measured), not when the time, the percent or the count in its sentence change; an alert present at the first status after load SHALL be said once, and when the alert goes the region SHALL empty without saying anything. The app SHALL NOT send a browser notification.
+The shared navigation SHALL show a small dot on the Limits tab, on every page, the Limits page included, while the latest status it has carries a limits alert, and no dot otherwise, including for an app that sends none. The dot SHALL be in the critical color for `at_limit` and `runs_out` and in the warning color for `high`. It SHALL NOT be a number, SHALL NOT change the size or place of any tab or the navigation's wrapping, and SHALL clear 3:1 contrast against the navigation in both themes.
 
 #### Scenario: At its limit
 - **WHEN** the status says Codex weekly is at its limit until Saturday 12:00
-- **THEN** the Limits tab has a critical dot and is named "Limits alert: Codex weekly is at its limit until Sat, Nov 14, 12:00 PM" on any page
+- **THEN** the Limits tab has a critical dot on any page
 
 #### Scenario: Nearly full
 - **WHEN** the status says Codex weekly is at 92% and no window is at its limit or forecast to run out
-- **THEN** the Limits tab has a warning dot, is named "Limits alert: Codex weekly is at 92%", and hovering its label or its dot shows "Codex weekly is at 92%"
+- **THEN** the Limits tab has a warning dot
 
-#### Scenario: An estimate
-- **WHEN** the status says the alert's window is not measured, and it is at its limit or at 93%
-- **THEN** the tab is named "Limits alert: Codex weekly is estimated to be at its limit until …" or "Limits alert: Codex weekly is at an estimated 93%"
+#### Scenario: The alert goes
+- **WHEN** a later status poll carries no alert
+- **THEN** the dot is gone
+
+#### Scenario: An older app
+- **WHEN** the status has no `limits_alert`
+- **THEN** the navigation shows no dot
+
+### Requirement: Name the Limits tab after its alert
+The Limits tab's accessible name SHALL be "Limits alert: " and the alert's sentence, the sentence in text visually hidden, after the visible label. A status with no alert, or from an app that sends none, SHALL leave the tab's name "Limits" with no title.
+
+#### Scenario: At its limit
+- **WHEN** the status says Codex weekly is at its limit until Saturday 12:00
+- **THEN** the tab is named "Limits alert: Codex weekly is at its limit until Sat, Nov 14, 12:00 PM" on any page
+
+#### Scenario: Nearly full
+- **WHEN** the status says Codex weekly is at 92% and no window is at its limit or forecast to run out
+- **THEN** the tab is named "Limits alert: Codex weekly is at 92%"
+
+#### Scenario: The alert goes
+- **WHEN** a later status poll carries no alert
+- **THEN** the tab is named "Limits"
+
+#### Scenario: An older app
+- **WHEN** the status has no `limits_alert`
+- **THEN** the tab is named "Limits" with no title
+
+### Requirement: Show the limits alert sentence on hover
+The Limits tab's visible label and its dot SHALL together hold the alert's sentence as their hover text, as the title of one plain element around them that is no part of the tab's name or description, so that the sentence is exposed once. The tab itself SHALL have no title or label of its own, and the dot SHALL be hidden from assistive technology. There is no tooltip on keyboard focus.
+
+#### Scenario: Hover
+- **WHEN** the status says Codex weekly is at 92% and the user hovers the tab's label or its dot
+- **THEN** the hover text is "Codex weekly is at 92%"
+
+### Requirement: Word the limits alert sentence
+The alert's sentence SHALL be "<provider> <label> is at its limit until <time>", "<provider> <label> is forecast to run out <time>" or "<provider> <label> is at <N>%", with " (and <count − 1> more)" appended when more than one window is in alert, and the time in the format of the Limits page.
 
 #### Scenario: More windows
 - **WHEN** three windows are in alert
 - **THEN** the sentence ends " (and 2 more)"
 
-#### Scenario: Said once
-- **WHEN** an alert appears, and a later status carries the same alert for the same window with a different forecast time
-- **THEN** the status region holds the alert's sentence from when it appeared and is not changed by the later status, and a status whose alert is of another kind, for another window, or measured differently changes it
+### Requirement: Say when a limits alert figure is estimated
+A figure that is not measured SHALL say so: "<provider> <label> is estimated to be at its limit until <time>" and "<provider> <label> is at an estimated <N>%". A forecast SHALL read the same either way.
+
+#### Scenario: An estimate
+- **WHEN** the status says the alert's window is not measured, and it is at its limit or at 93%
+- **THEN** the tab is named "Limits alert: Codex weekly is estimated to be at its limit until …" or "Limits alert: Codex weekly is at an estimated 93%"
+
+### Requirement: Follow the status poll with the limits alert dot
+The dot SHALL follow the navigation's status poll and a manual refresh's answer, with no page reload and no poll of its own, and an app that does not answer SHALL leave it as it was.
+
+#### Scenario: A new alert arrives
+- **WHEN** a status poll or a manual refresh's answer carries an alert the dot did not show
+- **THEN** the dot appears without a page reload
+
+#### Scenario: No answer
+- **WHEN** the app does not answer a status poll
+- **THEN** the dot stays as it was
+
+### Requirement: Say the limits alert aloud
+The navigation SHALL say the alert aloud to assistive technology, without moving focus, in a visually hidden polite status region of its own that is always present and separate from the ingest status, and SHALL hold the alert's sentence in it. An alert present at the first status after load SHALL be said once, and when the alert goes the region SHALL empty without saying anything. The app SHALL NOT send a browser notification.
+
+#### Scenario: Present at load
+- **WHEN** the first status after load carries an alert
+- **THEN** the status region holds its sentence, said once
 
 #### Scenario: The alert goes
 - **WHEN** a later status poll carries no alert
-- **THEN** the dot is gone and the tab is named "Limits"
+- **THEN** the status region empties and says nothing
 
-#### Scenario: An older app
-- **WHEN** the status has no `limits_alert`
-- **THEN** the navigation shows no dot
+### Requirement: Say the limits alert again only when it changes
+The status region SHALL change only when what the alert is changes (its kind, provider, label or whether its figure is measured), not when the time, the percent or the count in its sentence change.
+
+#### Scenario: Said once
+- **WHEN** an alert appears, and a later status carries the same alert for the same window with a different forecast time
+- **THEN** the status region holds the alert's sentence from when it appeared and is not changed by the later status, and a status whose alert is of another kind, for another window, or measured differently changes it
