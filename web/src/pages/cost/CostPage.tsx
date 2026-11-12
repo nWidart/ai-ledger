@@ -18,7 +18,8 @@ import { costDays, moved } from "./cost";
 import { CostChart, type CostMetric } from "./CostChart";
 import { ProjectCostDrawer, TokensDrawer, TopSessionsDrawer, type CostSort } from "./drawers";
 import { cacheInsight, pairFacts, peakInsight, perCommitInsight, spenderInsight, type CostActs } from "./insights";
-import { Lede, Spark } from "./Lede";
+import { Spark } from "../../components/Spark";
+import { Lede } from "./Lede";
 import "./cost.css";
 
 const LEDGER_TOP = 8;

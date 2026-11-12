@@ -118,6 +118,14 @@ class MetricsTest(unittest.TestCase):
         self.assertEqual([u["model"] for u in self.foo7["unpriced"]], ["m-unknown"])
         self.assertAlmostEqual(self.all["totals"]["cost"], 15.8 + 130 * 2 / 1e6)
 
+    def test_project_view_carries_its_change_for_the_project_sheet(self):
+        # The project sheet reads a one-project payload: its previous daily costs add up to the previous cost it reports.
+        u = metrics.usage(self.con.cursor(), "foo", 1, prices=PRICES, today=TODAY)
+        prev = u["previous"]
+        self.assertAlmostEqual(sum(d["cost"] for d in prev["daily"]), prev["cost"])
+        self.assertEqual([(c["project"], c["new"]) for c in u["changes"]], [("foo", False)])
+        self.assertAlmostEqual(u["changes"][0]["prev_cost"], prev["cost"])
+
     def test_previous_period(self):
         # One day ending today (s2) against the day before it (s1); same project filter, nothing before all time.
         prev = metrics.usage(self.con.cursor(), "foo", 1, prices=PRICES, today=TODAY)["previous"]

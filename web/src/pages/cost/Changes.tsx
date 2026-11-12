@@ -3,10 +3,9 @@ import { useColors } from "../../colors";
 import { ProjectDot } from "../../components/ProjectDot";
 import { openProjectSheet } from "../../components/sheets/session";
 import { dayRange, num, plural, usd0 } from "../../format";
-import { money, moved, periodCost, thinHistory } from "./cost";
+import { money, moved, periodCost, sgn, thinHistory } from "./cost";
 
 export const CHG_TOP = 8;
-const sgn = (v: number | null) => (v == null ? "–" : (v > 0 ? "+" : v < 0 ? "−" : "") + usd0(Math.abs(v)));
 
 /** Which days of a window have spend (any request), one cell per day. */
 function DayStrip({ label, start, n, active }: { label: string; start: string; n: number; active: readonly string[] }) {
