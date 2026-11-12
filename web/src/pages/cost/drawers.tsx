@@ -5,9 +5,11 @@ import { motion } from "../../components/chart";
 import { Drawer } from "../../components/Drawer";
 import { ProjectName } from "../../components/ProjectDot";
 import { openProjectSheet, openSessionSheet, pickRow, sessName, shortId } from "../../components/sheets/session";
+import { sortRows, SortTh, type SortBy } from "../../components/Sort";
 import { Toned, ToneKey } from "../../components/tone";
-import { big, dayLabel, dur, median, mult, num, pct, plural, usd, when } from "../../format";
+import { big, dayLabel, dur, mult, num, pct, plural, usd, when } from "../../format";
 import { getJson } from "../../useApi";
+import { COMPARE_PROMPTS, OUTLIER_SHARE, perCommit, perPrompt, projectMedians } from "./insights";
 
 const Unpriced = ({ n }: { n: number }) => n ? <> <span className="chip warn" title={`${n} requests from unpriced models`}>+?</span></> : null;
 const NA = () => <span className="muted">n/a</span>;
@@ -44,54 +46,59 @@ export function TokensDrawer({ t }: { t: Totals }) {
   );
 }
 
-/** From "Compare projects": sort by cost per commit, ring this project, and say how far it sits from the median. */
-export interface CostSort { spot: string; med: number }
+/** From "Compare projects": ring this project, and say how far it sits from the median. The table is sorted by cost per commit. */
+export interface CostSpot { spot: string; med: number }
+export type ProjectKey = "project" | "cost" | "tokens" | "hit" | "w1h" | "sub" | "commits" | "cpc" | "cpp";
+export const COST_SORT: SortBy<ProjectKey> = { key: "cost", desc: true };
 
-const cpp = (p: ProjectRow) => (p.cost != null && p.prompts ? p.cost / p.prompts : null);
-const cpc = (p: ProjectRow) => (p.commits && p.cost_per_commit != null ? p.cost_per_commit : null);
+const GET: Record<ProjectKey, (p: ProjectRow) => number | string | null> = {
+  project: p => p.project, cost: p => p.cost, tokens: p => p.tokens, hit: p => p.cache_hit_ratio, w1h: p => p.write_1h_share,
+  sub: p => p.subagent_cost_share, commits: p => p.commits, cpc: perCommit, cpp: perPrompt,
+};
 
-/** Cost by project: cost, cost per commit and per prompt, cache hit, 1-hour writes and subagent cost share, each compared with the median project. */
-export function ProjectCostDrawer({ rows, selected, sort, onSort }: { rows: ProjectRow[]; selected: string; sort: CostSort | null; onSort: (s: CostSort | null) => void }) {
-  const color = useColors(), many = rows.length >= 3, el = useRef<HTMLTableSectionElement>(null);
-  // Sorted by cost per commit (from "Compare projects"): highest first, projects without commits last.
-  const ps = sort ? rows.slice().sort((a, b) => (cpc(b) ?? -1) - (cpc(a) ?? -1)) : rows;
-  // Cost per commit only compares projects with 3+ commits, as the outlier card does.
-  const m = { hit: many ? median(ps.map(p => p.cache_hit_ratio)) : null, cpp: many ? median(ps.map(cpp)) : null,
-    cpc: many ? median(ps.filter(p => p.commits >= 3).map(cpc)) : null };
-  const maxCost = Math.max(...ps.map(p => p.cost || 0), 0) || 1, spot = sort ? ps.find(p => p.project === sort.spot) : undefined;
+/** Cost by project: cost, cost per commit and per prompt, cache hit, 1-hour writes and subagent cost share, sortable by any column. The
+ *  per-prompt, per-commit and cache-hit cells are compared with the median of the projects big enough to compare. */
+export function ProjectCostDrawer({ rows, selected, sort, onSort, spot: pin, onSpot }: {
+  rows: ProjectRow[]; selected: string; sort: SortBy<ProjectKey>; onSort: (s: SortBy<ProjectKey>) => void; spot: CostSpot | null; onSpot: (s: CostSpot | null) => void;
+}) {
+  const color = useColors(), el = useRef<HTMLTableSectionElement>(null);
+  const ps = sortRows(rows, GET[sort.key], sort.desc), m = projectMedians(rows), many = m.n >= 3;
+  const maxCost = Math.max(...ps.map(p => p.cost || 0), 0) || 1, spot = pin ? ps.find(p => p.project === pin.spot) : undefined;
+  const th = (k: ProjectKey, label: string, asc?: boolean) =>
+    <SortTh k={k} sort={sort} onSort={s => { onSort(s); onSpot(null); }} asc={asc} className={k === "project" ? undefined : "num"}>{label}</SortTh>;
   // The outlier row in view and focused, once the drawer shows it.
   useEffect(() => {
-    if (!sort) return;
+    if (!pin) return;
     const d = document.getElementById("d-projcost") as HTMLDetailsElement | null;
     if (!d) return;
     d.open = true;
-    const row = el.current?.querySelector<HTMLElement>(`tr[data-v="${CSS.escape(sort.spot)}"]`);
+    const row = el.current?.querySelector<HTMLElement>(`tr[data-v="${CSS.escape(pin.spot)}"]`);
     (row ?? d).scrollIntoView?.({ behavior: motion() ? "smooth" : "auto", block: row ? "center" : "start" });
     (row?.querySelector("button") ?? d.querySelector("summary"))?.focus({ preventScroll: true });
-  }, [sort]);
-  const r = spot && cpc(spot) != null && sort ? cpc(spot)! / sort.med : null;
+  }, [pin]);
+  const r = spot && perCommit(spot) != null && pin ? perCommit(spot)! / pin.med : null;
   return (
     <Drawer id="d-projcost" title="Cost by project" count={num(rows.length)} description="Cost, cost per commit and per prompt, cache hit, 1-hour writes and subagent cost">
-      {sort && <div className="proj-note" role="status"><span>Sorted by cost per commit, highest first.</span>
-        {spot && <span><ProjectName project={spot.project}><b>{spot.project}</b></ProjectName>: <b>{usd(cpc(spot))}</b> per commit over {plural(spot.commits, "commit")}
-          {r ? `, ${mult(r)} the median project with 3+ commits (${usd(sort.med)})` : ""}.</span>}
-        <button type="button" className="linkish" onClick={() => { onSort(null); document.querySelector<HTMLElement>("#d-projcost summary")?.focus(); }}>Sort by cost again</button></div>}
-      {many && <ToneKey />}
+      {pin && <div className="proj-note" role="status"><span>Sorted by cost per commit, highest first.</span>
+        {spot && <span><ProjectName project={spot.project}><b>{spot.project}</b></ProjectName>: <b>{usd(perCommit(spot))}</b> per commit over {plural(spot.commits, "commit")}
+          {r ? `, ${mult(r)} the median project with 3+ commits (${usd(pin.med)})` : ""}.</span>}
+        <button type="button" className="linkish" onClick={() => { onSort(COST_SORT); onSpot(null); document.querySelector<HTMLElement>("#d-projcost summary")?.focus(); }}>Sort by cost again</button></div>}
+      {many && <ToneKey note={`median of the ${m.n} projects with ${pct(OUTLIER_SHARE)}+ of cost or ${COMPARE_PROMPTS}+ prompts`} />}
       <div className="scroll"><table>
-        <thead><tr><th>Project</th><th className="num">Est. cost</th><th className="num">Tokens</th><th className="num">Cache hit</th><th className="num">1h writes</th><th className="num">Subagent cost</th>
-          <th className="num">Commits</th><th className="num" aria-sort={sort ? "descending" : "none"}>Cost / commit</th><th className="num">Cost / prompt</th></tr></thead>
-        <tbody ref={el}>{ps.length ? ps.map(p => <tr key={p.project ?? ""} {...pickRow(p.project ?? "", v => openProjectSheet(v),
+        <thead><tr>{th("project", "Project", true)}{th("cost", "Est. cost")}{th("tokens", "Tokens")}{th("hit", "Cache hit")}{th("w1h", "1h writes")}{th("sub", "Subagent cost")}
+          {th("commits", "Commits")}{th("cpc", "Cost / commit")}{th("cpp", "Cost / prompt")}</tr></thead>
+        <tbody ref={el}>{ps.length ? ps.map(p => { const cmp = m.big.has(p); return <tr key={p.project ?? ""} {...pickRow(p.project ?? "", v => openProjectSheet(v),
           [p.project === selected && selected ? "sel" : "", spot === p ? "spot" : ""].filter(Boolean).join(" "))}>
           <td className="name"><ProjectName project={p.project}><button type="button" className="cellbtn" title={p.project ?? ""}>{p.project}</button></ProjectName></td>
           <td className="num"><span className="ibar" aria-hidden="true"><i style={{ width: `${Math.max(2, (p.cost || 0) / maxCost * 100)}%`, background: color(p.project) }} /></span>
             {usd(p.cost)}<Unpriced n={p.unpriced} /></td>
           <td className="num">{big(p.tokens)}</td>
-          <Toned v={p.cache_hit_ratio} text={pct(p.cache_hit_ratio)} med={m.hit} better="up" kind="points" medText={pct(m.hit)} />
+          <Toned v={p.cache_hit_ratio} text={pct(p.cache_hit_ratio)} med={cmp ? m.hit : null} better="up" kind="points" medText={pct(m.hit)} />
           <td className="num">{pct(p.write_1h_share)}</td><td className="num">{pct(p.subagent_cost_share)}</td><td className="num">{num(p.commits)}</td>
-          {cpc(p) == null ? <td className="num"><NA /></td>
-            : <Toned v={cpc(p)} text={usd(cpc(p))} med={p.commits >= 3 ? m.cpc : null} better="down" kind="ratio" medText={usd(m.cpc)} zeroText={`no cost; median ${usd(m.cpc)} per commit`} />}
-          <Toned v={cpp(p)} text={usd(cpp(p))} med={m.cpp} better="down" kind="ratio" medText={usd(m.cpp)} zeroText={`no cost; median ${usd(m.cpp)} per prompt`} />
-        </tr>) : <tr><td colSpan={9} className="empty">No usage in this range.</td></tr>}</tbody>
+          {perCommit(p) == null ? <td className="num"><NA /></td>
+            : <Toned v={perCommit(p)} text={usd(perCommit(p))} med={cmp && p.commits >= 3 ? m.cpc : null} better="down" kind="ratio" medText={usd(m.cpc)} zeroText={`no cost; median ${usd(m.cpc)} per commit`} />}
+          <Toned v={perPrompt(p)} text={usd(perPrompt(p))} med={cmp ? m.cpp : null} better="down" kind="ratio" medText={usd(m.cpp)} zeroText={`no cost; median ${usd(m.cpp)} per prompt`} />
+        </tr>; }) : <tr><td colSpan={9} className="empty">No usage in this range.</td></tr>}</tbody>
       </table></div>
     </Drawer>
   );

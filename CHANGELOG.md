@@ -15,6 +15,7 @@ Run `ai-ledger rebuild` once after upgrading (with the app stopped): error types
 - A `prices.json` next to the store adds or overrides model prices. The Cost page names the file when a model has no price.
 - Activity shows thinking time and, per session, test runs passed of run.
 - Limits forecasts use the open window's own recent pace as well as your usual pace, and say when a limit is already reached.
+- Cost by project sorts by any column, and its tints compare each project with the median of the projects big enough to compare (2% of cost or 10 prompts), so scratch projects no longer make every real project look worse.
 - Activity sorts its Sessions, Project metrics and Tools tables by column, lists failed test runs, shows the change against the previous period, charts errors per 100 calls, stacks the work chart by project, groups long ranges by week, adds a prompts-by-hour heatmap, and narrows Tools, MCP & hooks and Error loops to a selected day. The Sessions filters are kept in the URL.
 - An `automated.json` next to the store lists more projects to treat as automated. Activity names the file when it cannot be used.
 - New error types: "Command too complex for worktree check", "Network / DNS unreachable", "Browser automation failed" and "MCP tool error".

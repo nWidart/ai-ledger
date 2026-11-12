@@ -28,5 +28,6 @@ export function Toned({ v, text, med, better, kind, medText, zeroText }: {
     : `${t.above ? "above" : "below"} the median (${medText}) by ${t.by}, ${t.worse ? "worse" : "better"}`;
   return <td className={`num tone ${t.worse ? "worse" : "better"}`} title={what}>{text}<span className="mk" aria-hidden="true">{t.above ? "▲" : "▼"}</span><span className="sr">, {what}</span></td>;
 }
-export const ToneKey = () => <div className="tone-key">Compared with the median project: <span className="worse">worse ▲▼</span><span className="better">better ▲▼</span>
+/** The key to the tints; note says which projects the median covers when it is not all of them. */
+export const ToneKey = ({ note }: { note?: string }) => <div className="tone-key">Compared with the median project{note ? ` (${note})` : ""}: <span className="worse">worse ▲▼</span><span className="better">better ▲▼</span>
   ▲ above, ▼ below the median. Hover a tinted cell for how far.</div>;
