@@ -1,11 +1,12 @@
 import json
 import os
+import shutil
 import unittest
 from unittest import mock
 from datetime import datetime, timedelta, timezone
 
 from ai_ledger import live, store
-from test_codex import CodexCase, LIVE, NAME, THREAD, meta
+from test_codex import CodexCase, LIVE, NAME, THREAD, meta, meta_at
 from test_derive import S, assistant, prompt, result, tool_use
 from test_store import StoreCase, line
 
@@ -691,6 +692,61 @@ class CodexSessionTest(CodexCase):
         want = dict(kind="thinking", tool=None, since="2026-11-10T10:00:02.000Z", inferred=False, long=False)
         self.assertEqual(live.session(self.con.cursor(), THREAD, now=NOW, prices=PRICES)["state"], want)
         self.assertEqual(live.sessions(self.con.cursor(), now=NOW, prices=PRICES)["sessions"][0]["state"], want)
+
+    CHILD = "0a0f9999-0000-7000-8000-000000000002"
+
+    def fork(self, lines, start=None, **extra):
+        """The file of subagent CHILD, forked from THREAD: its own session_meta, then lines."""
+        if start is not None:
+            extra["subagent_history_start_ordinal"] = start
+        return self.place(NAME.replace(THREAD, self.CHILD), meta_at(0, at(1), THREAD, self.CHILD, **extra) + lines)
+
+    def marks(self):
+        got = live.session(self.con.cursor(), THREAD, now=NOW, prices=PRICES)
+        return [(e["k"], e["lane"]) for e in got["events"]]
+
+    def test_forked_copied_history_stays_hidden_when_its_lines_are_stored_under_another_path(self):
+        started = lambda i, secs: codex_line(i, secs, "event_msg", type="task_started", turn_id="t1")
+        self.place(NAME, meta_at(0, at(0), THREAD))
+        self.fork(started(1, 1), start=4)
+        self.ingest()
+        full = meta_at(0, at(1), THREAD, self.CHILD, subagent_history_start_ordinal=4) + started(1, 1) + started(2, 2) \
+            + meta_at(3, at(2), THREAD) + started(4, 6)
+        self.place(NAME.replace(THREAD, self.CHILD), full, where="archived_sessions", zst=True)
+        shutil.rmtree(os.path.join(self.home, LIVE))
+        self.place(NAME, meta_at(0, at(0), THREAD))
+        self.ingest()
+        self.assertEqual(self.marks(), [("turn_start", self.CHILD)])
+
+    def test_forked_start_ordinal_that_is_null_or_only_mentioned_is_ignored(self):
+        for extra in (dict(subagent_history_start_ordinal=None), dict(instructions="mentions subagent_history_start_ordinal")):
+            with self.subTest(extra=extra):
+                self.place(NAME, meta_at(0, at(0), THREAD))
+                self.fork(codex_line(1, 2, "event_msg", type="task_started", turn_id="u1"), **extra)
+                self.ingest()
+                self.assertEqual(self.marks(), [("turn_start", self.CHILD)])
+
+    def test_subagent_turn_older_than_the_shared_window_still_counts_as_at_work(self):
+        self.place(NAME, meta_at(0, at(0), THREAD) + self.prompted() + codex_line(2, 2, "event_msg", type="task_started", turn_id="t1")
+                   + codex_line(3, 3, "event_msg", type="task_complete", turn_id="t1"))
+        self.fork(codex_line(1, 10, "event_msg", type="task_started", turn_id="u1")
+                  + "".join(codex_line(i, 11 + i // 10, "turn_context", turn_id="u1") for i in range(2, 300)))
+        self.ingest()
+        self.assertEqual(live.session(self.con.cursor(), THREAD, now=NOW, prices=PRICES)["state"]["kind"], "thinking")
+        self.assertEqual(live.sessions(self.con.cursor(), now=NOW, prices=PRICES)["sessions"][0]["state"]["kind"], "thinking")
+
+    def test_spawn_call_older_than_the_loaded_rows_is_sent_again_naming_its_lane(self):
+        spawn = codex_line(2, 3, "response_item", type="function_call", name="spawn_agent", call_id="c3", arguments="{}")
+        started = codex_line(3, 4, "event_msg", type="item_completed", turn_id="t1",
+                             item=dict(type="SubAgentActivity", id="c3", kind="started", agent_thread_id=self.CHILD))
+        chatter = "".join(codex_line(i, 5 + i // 1000, "turn_context", turn_id="t1") for i in range(4, 3200)) \
+            + "".join(codex_line(i, 20, "response_item", type="function_call", name="update_plan", call_id=f"x{i}", arguments="{}") for i in range(3200, 3300))
+        self.place(NAME, meta_at(0, at(0), THREAD) + spawn + started + chatter)
+        self.fork(codex_line(1, 30, "response_item", type="function_call", name="update_plan", call_id="k1", arguments="{}"))
+        self.ingest()
+        got = live.session(self.con.cursor(), THREAD, now=NOW, prices=PRICES)
+        self.assertEqual([(e["id"], e["agent"]) for e in got["events"] if e["k"] == "tool" and e["id"] in ("c3", "k1")],
+                         [("c3", self.CHILD), ("k1", None)])
 
     def test_long_turn_still_reads_thinking(self):
         self.place(NAME, meta(THREAD).replace("2026-11-06T10:00:00.000Z", at(0)) + self.prompted()

@@ -65,15 +65,20 @@ def thread_class(path, meta=None):
     return session, session != thread
 
 
+def own_meta(metas, thread):
+    """The thread's record among session_meta lines: the first whose payload id is the thread's, else the first. A forked
+    subagent's file also holds a copy of its parent's session_meta."""
+    return next((d for d in metas if isinstance(d.get("payload"), dict) and d["payload"].get("id") == thread), metas[0] if metas else None)
+
+
 def placement(cur, path, lines):
     """(session of the lines of rollout file path or None, subagent), as store.Source.placement. The session_meta is the
-    thread's own among lines, else among its stored ones: a chunk can start after it."""
+    thread's own among its stored ones and those of lines: a chunk can start after it, or hold only a copy of its parent's."""
     if indexed(path):
         return None, False
     thread = ids(path)[1]
-    metas = [d for d in lines if d.get("type") == "session_meta"] or thread_lines(cur, thread, "session_meta")
-    own = [d for d in metas if isinstance(d.get("payload"), dict) and d["payload"].get("id") == thread]
-    meta = (own or metas or [None])[0]  # a forked subagent's file also holds a copy of its parent's
+    stored = thread_lines(cur, thread, "session_meta") if cur is not None else []
+    meta = own_meta(stored + [d for d in lines if d.get("type") == "session_meta"], thread)
     return thread_class(path, meta.get("payload") if meta else None)
 
 
@@ -283,15 +288,15 @@ class CodexDeriver(store.Deriver):
             return
         if not isinstance(p, dict):
             return
-        if t == "session_meta":
-            if not self.started:
-                self.start(d)
-            return
-        if not self.started:
+        if not self.started:  # the chunk can start after the thread's session_meta, or hold only a copy of its parent's
             metas = self.thread_lines("session_meta")
             if metas:
-                self.start(metas[0])
+                self.start(own_meta(metas, self.thread))
+            elif t == "session_meta":
+                self.start(d)
             self.started = True
+        if t == "session_meta":
+            return
         s = self.session(dict(sessionId=self.sid, timestamp=d.get("timestamp")))
         ts = store.ts_of(d.get("timestamp"))
         if t == "turn_context":

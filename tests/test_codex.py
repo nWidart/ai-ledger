@@ -52,6 +52,14 @@ def meta(sid, thread=None):
                 payload=dict(session_id=sid, id=thread or sid, cwd="/nowhere/foo", originator="codex-tui", cli_version="0.166.0"))
 
 
+def meta_at(ordinal, ts, sid, thread=None, **extra):
+    """A session_meta line at ordinal: a thread's own (thread given, as a subagent's) or a copy of its parent's."""
+    d = json.loads(meta(sid, thread))
+    d.update(ordinal=ordinal, timestamp=ts)
+    d["payload"].update(extra)
+    return line(**d)
+
+
 THREAD = "0a0f9999-0000-7000-8000-000000000001"
 NAME = f"rollout-2026-11-06T10-00-00-{THREAD}.jsonl"
 
@@ -260,6 +268,19 @@ class ArchiveTest(CodexCase):
         metas = [json.loads(meta(a)), json.loads(meta(a, b))]
         self.assertEqual(placement(None, path, metas), (a, True))
         self.assertEqual(placement(None, path, metas[::-1]), (a, True))
+
+
+class ForkedChunkTest(CodexCase):
+    def test_chunk_holding_only_the_parents_copy_of_session_meta_is_subagent_work(self):
+        parent = "0a0f9999-0000-7000-8000-0000000000aa"
+        ts = "2026-11-06T10:00:00.000Z"
+        self.place(NAME, meta_at(0, ts, parent, THREAD, subagent_history_start_ordinal=3))
+        self.ingest()
+        self.place(NAME, meta_at(1, ts, parent) + context(2, "t1", "gpt-6-astra") + record(3, "t1", "r1", usage(100, 0, 10)), mode="a")
+        self.ingest()
+        self.assertEqual(self.q("SELECT DISTINCT session_id, subagent FROM raw_lines"), [(parent, True)])
+        self.assertEqual(self.q("SELECT session_id, subagent FROM requests"), [(parent, True)])
+        self.assertEqual(self.q("SELECT session_id FROM sessions"), [(parent,)])
 
 
 class TokenTest(CodexCase):

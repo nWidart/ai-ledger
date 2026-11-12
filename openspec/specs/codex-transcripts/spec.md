@@ -109,7 +109,7 @@ The store SHALL ingest the Codex session index, `session_index.jsonl` in the Cod
 - **THEN** ingest reads the rollout files as before, and Codex sessions are titled from their first prompt
 
 ### Requirement: Place each thread by its own session record
-A Codex thread SHALL belong to the session its first `session_meta` states, and be subagent work only when that record's `session_id` is set and differs from its `id`. This holds for the stored lines (`session_id`, `subagent`) and the derived rows, whatever the file is named. With no `session_meta`, the file name decides: `<session>_<thread>` is subagent work of `<session>`. `rebuild` SHALL set it again on lines stored before.
+A Codex thread SHALL belong to the session its own `session_meta` (the one whose `id` is the thread's, else the first) states, and be subagent work only when that record's `session_id` is set and differs from its `id`. This holds for the stored lines (`session_id`, `subagent`) and the derived rows, whatever the file is named. With no `session_meta`, the file name decides: `<session>_<thread>` is subagent work of `<session>`. `rebuild` SHALL set it again on lines stored before.
 
 #### Scenario: Subagent in a file named by its own thread
 - **WHEN** a file `rollout-<time>-<thread>.jsonl` has a `session_meta` with `session_id` `<parent>` and `id` `<thread>`

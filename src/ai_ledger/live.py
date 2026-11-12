@@ -166,20 +166,21 @@ def simple_commands(line):
 
 
 def forked(cur, sids):
-    """{file: first line of its own} for the forked Codex subagent files of the sessions sids: the lines of such a file
-    below its subagent_history_start_ordinal copy the parent's history."""
+    """{thread: first line of its own} for the forked Codex subagent threads of the sessions sids: the lines of such a
+    thread below its subagent_history_start_ordinal copy the parent's history, in whichever file they are stored."""
     if not sids:
         return {}
-    return dict(cur.execute("""SELECT file, min(try_cast(json_extract_string(json, '$.payload.subagent_history_start_ordinal') AS BIGINT))
-        FROM raw_lines WHERE list_contains(?, session_id) AND subagent AND type = 'session_meta' AND parsed
-        AND contains(json, 'subagent_history_start_ordinal') GROUP BY 1""", [list(sids)]).fetchall())
+    return dict(cur.execute("""SELECT split_part(key, ':', 2), min(try_cast(json_extract_string(json, '$.payload.subagent_history_start_ordinal') AS BIGINT))
+        FROM raw_lines WHERE list_contains(?, session_id) AND subagent AND type = 'session_meta' AND parsed AND starts_with(key, 'codex:')
+        AND contains(json, 'subagent_history_start_ordinal') GROUP BY 1
+        HAVING min(try_cast(json_extract_string(json, '$.payload.subagent_history_start_ordinal') AS BIGINT)) IS NOT NULL""", [list(sids)]).fetchall())
 
 
 def assemble(rows, copied=None):
     """Events in line order from raw rows (key, file, ts, subagent, source, json). A tool use and its result become one
     tool event; requests are left out, as the page shows none. A tool event is long when its input sets a timeout above
-    LONG; a background call is not, as it returns at once. Lines of a file of `copied` (as forked tells) below its
-    first line of its own give no event. Returns (events, results), where results maps a tool id to its result item
+    LONG; a background call is not, as it returns at once. Lines of a subagent thread of `copied` (as forked tells) below
+    its first line of its own give no event. Returns (events, results), where results maps a tool id to its result item
     when the use is not among the rows."""
     events, tools, results = [], {}, {}
     for key, path, ts, sub, source, text in rows:
@@ -190,10 +191,10 @@ def assemble(rows, copied=None):
             continue
         if src is None or not isinstance(d, dict):
             continue
-        if copied and path in copied and isinstance(d.get("ordinal"), int) and d["ordinal"] < copied[path]:
+        lane = lane_of(path, source) if sub else None
+        if copied and lane in copied and isinstance(d.get("ordinal"), int) and d["ordinal"] < copied[lane]:
             continue
         t = parse_ts(ts)
-        lane = lane_of(path, source) if sub else None
         for i, it in enumerate(src.live_items(d)):
             k = it["k"]
             if k == "tool_use":
@@ -397,8 +398,9 @@ TURN_MARKS = ("task_started", "task_complete", "turn_aborted")  # the event_msg 
 
 def recent(cur, sids):
     """The newest STATE_LINES lines of each session's main thread and, apart, of its subagents, in line order: enough to
-    tell what it is doing now, and subagent traffic never pushes the main thread out. A Codex main thread's newest turn
-    mark is read too, whatever its age: a long turn still reads thinking."""
+    tell what it is doing now, and subagent traffic never pushes the main thread out. The newest turn mark of a Codex
+    session's main thread and of each of its subagent files is read too, whatever its age: a long turn still reads
+    thinking, and a subagent in one still counts as at work."""
     lines = {}
     if sids:
         rows = cur.execute(f"""SELECT r.session_id, {ROW_COLS}, r.line_no FROM {ROW_FROM}
@@ -406,10 +408,10 @@ def recent(cur, sids):
                 QUALIFY row_number() OVER (PARTITION BY r.session_id, r.subagent ORDER BY r.ts DESC, r.file, r.line_no DESC) <= {STATE_LINES}""",
                            [sids]).fetchall()
         rows += cur.execute(f"""SELECT r.session_id, {ROW_COLS}, r.line_no FROM {ROW_FROM}
-                WHERE list_contains(?, r.session_id) AND r.ts IS NOT NULL AND r.parsed AND NOT r.subagent AND r.type = 'event_msg'
+                WHERE list_contains(?, r.session_id) AND r.ts IS NOT NULL AND r.parsed AND r.type = 'event_msg'
                 AND list_bool_or(list_transform(?, lambda x: contains(r.json, x)))
                 AND list_contains(?, json_extract_string(r.json, '$.payload.type'))
-                QUALIFY row_number() OVER (PARTITION BY r.session_id ORDER BY r.ts DESC, r.file, r.line_no DESC) = 1""",
+                QUALIFY row_number() OVER (PARTITION BY r.session_id, r.file ORDER BY r.ts DESC, r.line_no DESC) = 1""",
                             [sids, [f'"{m}"' for m in TURN_MARKS], list(TURN_MARKS)]).fetchall()
         seen = set()
         for row in sorted(rows, key=lambda r: (r[0], r[3], r[2], r[7])):
@@ -455,6 +457,7 @@ def session(cur, sid, after="", text=False, now=None, prices=None):
     copied = forked(cur, [sid])
     events, results = assemble(rows, copied)
     started = started_by(rows, events)
+    started |= spawned(cur, sid, rows, events, started)
     missing = set(results) | (set(started) - {e["id"] for e in events if e["k"] == "tool"})
     if missing:  # calls that came before the rows: send them again, finished or naming the subagent they started
         uses, _ = assemble(earlier_uses(cur, sid, rows[0][2], list(missing)), copied)
@@ -544,6 +547,23 @@ def started_by(rows, events):
             continue
         if isinstance(tid, str) and tid:
             out[tid] = lane
+    return out
+
+
+def spawned(cur, sid, rows, events, started):
+    """The spawn calls of Codex subagent lanes among the rows that no call names yet, as started_by tells them: the
+    SubAgentActivity item of such a call can be older than the rows, and in any thread of the session, as a subagent can
+    spawn one."""
+    named = set(started.values()) | {e["agent"] for e in events if e["k"] == "tool" and e["agent"]}
+    unnamed = sorted({lane_of(path, source) for _, path, _, sub, source, _ in rows if sub and source == "codex"} - named)
+    out = {}
+    if unnamed:
+        for (text,) in cur.execute("""SELECT json FROM raw_lines WHERE session_id = ? AND type = 'event_msg' AND parsed
+                AND contains(json, '"SubAgentActivity"') AND list_bool_or(list_transform(?, lambda x: contains(json, x)))""",
+                                   [sid, unnamed]).fetchall():
+            for it in store.SOURCES["codex"].live_items(json.loads(text)):
+                if it["k"] == "agent" and it["agent"] in unnamed:
+                    out[it["id"]] = it["agent"]
     return out
 
 

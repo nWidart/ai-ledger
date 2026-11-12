@@ -18,6 +18,7 @@ Run `ai-ledger rebuild` once after upgrading (with the app stopped): Codex subag
 
 ### Fixed
 
+- Live reads forked and long-running Codex subagents correctly: a subagent file that holds a copy of its parent's `session_meta` is placed by its own, its copied history stays hidden when its lines are stored under a second path, a subagent mid-turn keeps the session working however old its turn start, and a `spawn_agent` call older than the loaded lines still names its lane.
 - The Live page's Stream view fits the window: a titled session no longer makes the page scroll, and the session rail, the stream and the agent panel stay within the window and scroll inside themselves (from 721 pixels wide; below that the page scrolls as before).
 - A time with a date in the Live stream ("Nov 10, 17:40:05") stays on one line: the time column widens when an event shows a date.
 - The "Include automated" tooltip on Live names the `automated.json` file, as on Activity.

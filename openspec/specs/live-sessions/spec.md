@@ -419,7 +419,7 @@ When the main thread reads *your turn* and a subagent's newest line is newer tha
 - **THEN** the state is your turn
 
 ### Requirement: Keep the main thread in the state window
-The newest lines read for a session's state SHALL be taken apart for the main thread and for its subagents, so subagent traffic never pushes main-thread lines out. For Codex, the main thread's newest turn mark SHALL be read whatever its age.
+The newest lines read for a session's state SHALL be taken apart for the main thread and for its subagents, so subagent traffic never pushes main-thread lines out. For Codex, the newest turn mark of the main thread and of each subagent file SHALL be read whatever its age.
 
 #### Scenario: Busy subagent
 - **WHEN** a subagent wrote more than 200 lines after the main thread's last line
