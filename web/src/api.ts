@@ -13,6 +13,8 @@ export interface Tokens {
 export interface Totals extends Tokens {
   tokens: number; cost: number | null; requests: number; main_requests: number; sub_tokens: number; sub_cost: number | null;
   thinking_ms: number; active_days: number;
+  /** Estimated cost of each billed kind (thinking is billed as output); they add up to cost, and are null when no request is priced. */
+  cost_input: number | null; cost_output: number | null; cost_cache_read: number | null; cost_cache_5m: number | null; cost_cache_1h: number | null;
   calls: number; errors: number; commits: number; test_runs: number; tests_passed: number; tests_failed: number; main_calls: number;
   prompts: number; interrupted: number; error_loops: number; sessions: number;
   cache_hit_ratio: number | null; write_1h_share: number | null; subagent_token_share: number | null; subagent_cost_share: number | null;

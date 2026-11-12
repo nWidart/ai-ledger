@@ -266,4 +266,22 @@ describe("CostPage", () => {
     expect(screen.getByRole("img", { name: /^Tokens by kind per day/ })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Cache read" }).getAttribute("aria-pressed")).toBe("true");
   });
+
+  it("splits the Tokens and cache drawer by estimated cost, biggest first, with thinking billed as output", async () => {
+    await show(usage);
+    const rows = [...drawer("d-tokens").querySelectorAll(".by-kind > div")].map(d => d.textContent!);
+    expect(rows[0]).toMatch(/^Output \+ thinking\$1063\.3% of \$16 estimated cost/);
+    expect(rows[0]).toMatch(/of the tokens are thinking, billed as output/);
+    const cr = rows.find(r => r.startsWith("Cache read"))!;
+    expect(cr).toMatch(/\$0\.80.*5\.1% of \$16 estimated cost8\.0M tokens, 66\.7% of 12\.0M/);
+    expect(rows.some(r => r.startsWith("Thinking"))).toBe(false);
+  });
+
+  it("shows an unknown cost by kind as a dash, not $0", async () => {
+    const none = { cost: null, cost_input: null, cost_output: null, cost_cache_read: null, cost_cache_5m: null, cost_cache_1h: null };
+    await show({ ...usage, totals: { ...usage.totals, ...none } });
+    const first = drawer("d-tokens").querySelector(".by-kind > div")!.textContent!;
+    expect(first).toMatch(/–cost unknown/);
+    expect(drawer("d-tokens").querySelector(".by-kind")!.textContent).not.toMatch(/\$0/);
+  });
 });

@@ -17,6 +17,7 @@ Run `ai-ledger rebuild` once after upgrading (with the app stopped): error types
 - Activity sorts its Sessions, Project metrics and Tools tables by column, lists failed test runs, shows the change against the previous period, charts errors per 100 calls, stacks the work chart by project, groups long ranges by week, adds a prompts-by-hour heatmap, and narrows Tools, MCP & hooks and Error loops to a selected day. The Sessions filters are kept in the URL.
 - An `automated.json` next to the store lists more projects to treat as automated. Activity names the file when it cannot be used.
 - New error types: "Command too complex for worktree check", "Network / DNS unreachable", "Browser automation failed" and "MCP tool error".
+- The Cost page's Tokens and cache drawer shows each token kind's estimated cost and share of cost next to its tokens, biggest cost first.
 - Live groups sessions by who needs you first: approval?, your turn, working, idle, ended. A session keeps its place in its group until its state changes.
 - Live shows how long a session has been on your turn or thinking, and the tab title counts the sessions that need you: `(2) Live · AI Ledger`.
 - Live shows a Claude Code session you closed as ended. Codex records no close, so a Codex session goes idle.

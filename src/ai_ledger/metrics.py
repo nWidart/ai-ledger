@@ -295,16 +295,22 @@ def price_cte(prices):
     return sql, params
 
 
+# The price columns of each kind (base tier, long-prompt tier).
+_RATE = dict(input=("p_in", "l_in"), output=("p_out", "l_out"), cache_read=("p_cr", "l_cr"), cache_5m=("p_5m", "l_5m"), cache_1h=("p_1h", "l_1h"))
+
+
 def requests_cte(pcte, where):
-    """Requests with their session's project, total tokens and estimated cost (NULL when the model is unpriced)."""
+    """Requests with their session's project, total tokens, the estimated cost of each priced kind (cost_input, cost_output,
+    cost_cache_read, cost_cache_5m, cost_cache_1h) and their sum as cost. All are NULL when the model is unpriced; the
+    long-prompt tier is chosen once, so the kinds always add up to cost. Thinking tokens are billed as output."""
+    parts = ", ".join(f"r.{k} * CASE WHEN lg THEN p.{_RATE[k][1]} ELSE p.{_RATE[k][0]} END / 1e6 AS cost_{k}" for k in PRICE_KINDS)
     return f"""WITH {pcte}, rq AS (
-        SELECT r.*, s.project, r.input + r.output + r.cache_read + r.cache_5m + r.cache_1h AS tokens,
-          CASE WHEN p.model IS NULL THEN NULL
-               WHEN p.long_above IS NOT NULL AND r.input + r.cache_read + r.cache_5m + r.cache_1h > p.long_above
-               THEN (r.input * p.l_in + r.output * p.l_out + r.cache_read * p.l_cr + r.cache_5m * p.l_5m + r.cache_1h * p.l_1h) / 1e6
-               ELSE (r.input * p.p_in + r.output * p.p_out + r.cache_read * p.p_cr + r.cache_5m * p.p_5m + r.cache_1h * p.p_1h) / 1e6 END AS cost
-        FROM requests r JOIN sessions s USING (session_id) LEFT JOIN price p ON p.model = r.model
-        WHERE {where})"""
+        SELECT *, {" + ".join(f"cost_{k}" for k in PRICE_KINDS)} AS cost FROM (
+          SELECT r.*, s.project, r.input + r.output + r.cache_read + r.cache_5m + r.cache_1h AS tokens,
+            coalesce(p.long_above IS NOT NULL AND r.input + r.cache_read + r.cache_5m + r.cache_1h > p.long_above, false) AS lg,
+            {parts}
+          FROM requests r JOIN sessions s USING (session_id) LEFT JOIN price p ON p.model = r.model
+          WHERE {where}))"""
 
 
 def scope(project, automated, source="", user_projects=None):
@@ -346,10 +352,11 @@ def usage(cur, project="", range_days=0, session="", prices=None, today=None, au
     # The same days split by project, for the stacked cost chart.
     daily_projects = rows(cur, f"{rq} SELECT {day('ts')} AS day, project, sum(cost) AS cost, sum(tokens) AS tokens "
                                f"FROM rq GROUP BY 1, 2 ORDER BY 1, 2", rp)
+    costs = ", ".join(f"sum(cost_{k}) AS cost_{k}" for k in PRICE_KINDS)
     tot = rows(cur, f"""{rq} SELECT {sums}, coalesce(sum(tokens), 0) AS tokens, sum(cost) AS cost,
         count(*) AS requests, count(*) FILTER (WHERE NOT subagent) AS main_requests,
         coalesce(sum(tokens) FILTER (WHERE subagent), 0) AS sub_tokens, sum(cost) FILTER (WHERE subagent) AS sub_cost,
-        coalesce(sum(thinking_ms), 0) AS thinking_ms FROM rq""", rp)[0]
+        coalesce(sum(thinking_ms), 0) AS thinking_ms, {costs} FROM rq""", rp)[0]
     unpriced = rows(cur, f"{rq} SELECT model, count(*) AS requests, sum(tokens) AS tokens FROM rq WHERE cost IS NULL GROUP BY 1 ORDER BY 3 DESC, 1", rp)
     models = rows(cur, f"""{rq} SELECT model, coalesce(effort, '(none)') AS effort, count(*) AS requests, sum(tokens) AS tokens,
         sum(cost) AS cost FROM rq GROUP BY 1, 2 ORDER BY requests DESC, tokens DESC, model, effort""", rp)

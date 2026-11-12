@@ -158,3 +158,5 @@
 /* The tokens chart with every kind hidden: a way back in place of an empty plot. */
 .pg-cost .all-hidden { min-height: 240px; display: flex; align-items: center; justify-content: center; gap: 6px; }
 .pg-cost .chart[hidden] { display: none; }
+.pg-cost .totals.by-kind dd { font-size: 20px; }
+.pg-cost .totals.by-kind dd small.cost-share { color: var(--text); font-weight: 600; }
