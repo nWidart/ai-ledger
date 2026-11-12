@@ -307,6 +307,8 @@ def payload(cur, project="", range_days=0, source="", automated=False, today=Non
     facet_projects = [r[0] for r in cur.execute(f"WITH {FACETS} SELECT DISTINCT project FROM f ORDER BY 1").fetchall()]
     projects = metrics.project_list(cur, automated)
     projects += [p for p in facet_projects if p not in projects]
+    meta_projects = [r[0] for r in cur.execute(f"WITH {METAS} SELECT DISTINCT project FROM mr ORDER BY 1").fetchall()]
+    projects += [p for p in meta_projects if p not in projects]
     out = dict(coverage=coverage, projects=projects, outcomes=[], helpfulness=[], session_types=[], satisfaction=[], friction=[],
                goals=[], trend=[], sessions=[], truncated=False, meta=session_figures(cur, W, wp))
     if not facets:

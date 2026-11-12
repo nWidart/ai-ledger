@@ -29,6 +29,9 @@ describe("InsightsPage", () => {
     expect((await lede()).textContent).toBe("1 of 3 analysed sessions fully achieved their goal; buggy code caused the most friction.");
     expect(f.mock.calls[0]![0]).toBe("/api/insights?range=0");
     expect(screen.getByText(/A session counts here by its start time/).textContent).toContain("so the two totals can differ slightly.");
+    const sub = screen.getByText(/Figures tagged model-judged/).textContent!;
+    expect(sub).toContain("Figures tagged model-judged come from /insights facets: a model's reading of each session, not a measurement. Codex sessions have no facets.");
+    expect(sub).not.toContain("Every figure on this page");
     const cov = document.getElementById("coverage")!;
     expect(cov.getAttribute("role")).toBe("status");
     expect(cov.textContent).toBe(`1 of 3 Claude Code sessions in this view analysed (33%). Each /insights run in Claude Code analyses more. The newest analysis was written ${when(fixture.coverage.newest_facet)}. Coverage by project and run.`);
@@ -59,6 +62,14 @@ describe("InsightsPage", () => {
     show(none);
     expect((await lede()).textContent).toBe("No /insights data found.");
     expect(screen.getByText(/The app reads/).textContent).toBe("The app reads /Users/example/.claude/usage-data. Run /insights in Claude Code, then Refresh.");
+    expect(screen.queryByRole("region", { name: /Outcomes/ })).toBeNull();
+  });
+
+  it("says no judgments were found, and where the session figures come from, when only session meta is stored", async () => {
+    show({ ...none, meta: fixture.meta });
+    expect((await lede()).textContent).toBe("No /insights judgments found.");
+    expect(screen.getByText(/The app reads/).textContent).toBe("The app reads /Users/example/.claude/usage-data. Run /insights in Claude Code, then Refresh. The session figures below are counted from transcripts.");
+    expect(drawer("d-figures")).toBeTruthy();
     expect(screen.queryByRole("region", { name: /Outcomes/ })).toBeNull();
   });
 

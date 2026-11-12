@@ -112,6 +112,10 @@ The page SHALL show, in neutral text, how many of the view's Claude Code session
 - **WHEN** the store holds no facet
 - **THEN** the page says no `/insights` data was found, names the directory it reads, and says to run `/insights` in Claude Code
 
+#### Scenario: Session meta without facets
+- **WHEN** the store holds no facet and the view has session-meta rows
+- **THEN** the page says no `/insights` judgments were found, still says to run `/insights`, and says the session figures are counted from transcripts
+
 ### Requirement: Leave automated sessions out of the coverage
 Automated sessions SHALL NOT count in the coverage, whatever the automated filter, unless the project filter names their project.
 

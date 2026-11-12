@@ -661,6 +661,17 @@ class SessionMetaTest(InsightsCase):
         self.assertEqual(self.figures(project="nope")["sessions"], 0)
         self.assertIsNotNone(next(r for r in d["sessions"] if r["session_id"] == sid)["meta"])
 
+    def test_a_project_only_session_meta_names_is_offered_after_the_facet_only_ones(self):
+        self.session("s1", "stored-app", "2026-11-03 09:00:00")
+        self.add(1, path="/Users/example/Sites/meta-only-app")
+        self.add(2, path="/Users/example/Sites/another-meta-app")
+        self.add(3, path="/Users/example/Sites/with-facet", facet_too=True)
+        self.ingest()
+        got = self.payload()["projects"]
+        self.assertEqual(got[-3:], ["with-facet", "another-meta-app", "meta-only-app"])
+        self.assertEqual(len(got), len(set(got)))
+        self.assertEqual(self.figures(project="meta-only-app")["sessions"], 1)
+
     def test_figures_show_in_a_view_with_no_facet(self):
         self.add(1, lines_added=9)
         self.ingest()

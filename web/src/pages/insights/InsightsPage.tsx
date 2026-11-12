@@ -48,7 +48,8 @@ function Coverage({ d, view, drawer }: { d: InsightsPayload; view: View; drawer:
 function Lede({ d, view }: { d: InsightsPayload; view: View }) {
   const c = d.coverage;
   if (view.source === "codex") return <p className="lede" id="lede" tabIndex={-1}><code>/insights</code> analyses only Claude Code sessions.</p>;
-  if (!c.stored_facets) return <p className="lede" id="lede" tabIndex={-1}>No <code>/insights</code> data found.</p>;
+  if (!c.stored_facets) return <p className="lede" id="lede" tabIndex={-1}>{d.meta.sessions > 0 ? <>No <code>/insights</code> judgments found.</>
+    : <>No <code>/insights</code> data found.</>}</p>;
   if (!c.facets) return <p className="lede" id="lede" tabIndex={-1}>No analysed sessions in this view.</p>;
   const h = headline(d);
   return <p className="lede" id="lede" tabIndex={-1} aria-live="polite"><b>{num(h.full)} of {num(h.n)}</b> analysed sessions fully achieved their
@@ -60,8 +61,8 @@ function Sub({ d, view }: { d: InsightsPayload; view: View }) {
   if (view.source === "codex") return <p className="sub">{viewName(view)}. Codex writes no facets: {plural(c.codex_sessions, "Codex session")} in this view,
     none analysed. Pick Claude Code or All to see the judgments.</p>;
   if (!c.stored_facets) return <p className="sub">The app reads <code>{c.dir ?? "~/.claude/usage-data"}</code>. Run <code>/insights</code> in Claude Code,
-    then Refresh.</p>;
-  return <p className="sub">{viewName(view)}. Every figure on this page comes from <code>/insights</code> facets: a model's reading of each session,
+    then Refresh.{d.meta.sessions > 0 && " The session figures below are counted from transcripts."}</p>;
+  return <p className="sub">{viewName(view)}. Figures tagged model-judged come from <code>/insights</code> facets: a model's reading of each session,
     not a measurement. Codex sessions have no facets. A session counts here by its start time; Activity counts a session with a request in the range, so the two totals can differ slightly.</p>;
 }
 
