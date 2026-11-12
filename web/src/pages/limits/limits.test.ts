@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { LimitWindow, LimitsPayload } from "../../api";
 import limits from "../../__fixtures__/limits";
-import { nearestPoint, readPoints, readText, tipPlace, whenDay } from "./limits";
+import { caption, hasScenario, nearestPoint, pace, readPoints, readText, recentText, tipPlace, whenDay } from "./limits";
 
 const claude = (limits as LimitsPayload).windows[0]!;
 const win = (over: Partial<LimitWindow>): LimitWindow => ({ ...claude, ...over });
@@ -10,9 +10,9 @@ const past = [
   { t: "2026-11-07T11:00:00.000Z", pct: 42, measured: false },
 ];
 const curve = [
-  { t: "2026-11-07T11:00:00.000Z", mid: 42, lo: 42, hi: 42 }, // "now" again, as the payload sends it
-  { t: "2026-11-07T12:00:00.000Z", mid: 50, lo: 45.04, hi: 60.46 },
-  { t: "2026-11-07T13:00:00.000Z", mid: 58, lo: 58, hi: 58 },
+  { t: "2026-11-07T11:00:00.000Z", mid: 42, lo: 42, hi: 42, recent: null }, // "now" again, as the payload sends it
+  { t: "2026-11-07T12:00:00.000Z", mid: 50, lo: 45.04, hi: 60.46, recent: null },
+  { t: "2026-11-07T13:00:00.000Z", mid: 58, lo: 58, hi: 58, recent: 72.34 },
 ];
 const fc = (c: typeof curve) => ({ ...claude.forecast!, curve: c });
 
@@ -65,8 +65,13 @@ describe("readText", () => {
     expect(readText(f[2]!)).toBe(`${whenDay(curve[1]!.t)} · forecast 50% (45–60.5%)`);
   });
 
-  it("leaves out the range when low and high read the same", () => {
-    expect(readText(f[3]!)).toBe(`${whenDay(curve[2]!.t)} · forecast 58%`);
+  it("leaves out the range when low and high read the same, and adds the last-24-hours line when the point has one", () => {
+    expect(readText(f[3]!)).toBe(`${whenDay(curve[2]!.t)} · forecast 58% · last 24 h pace 72.3%`);
+  });
+
+  it("carries the last-24-hours value through readPoints, and leaves it out when null", () => {
+    expect(f.map(p => (p.kind === "forecast" ? p.recent : "past"))).toEqual(["past", "past", null, 72.34]);
+    expect(readText(f[2]!)).not.toMatch(/last 24 h/);
   });
 });
 
@@ -97,5 +102,58 @@ describe("tipPlace", () => {
     expect(tipPlace(box, tip, { x: 100, y: 3 }).top).toBe(0);
     expect(tipPlace(box, tip, { x: 100, y: 400 }).top).toBe(148);
     expect(tipPlace({ w: 300, h: 10 }, tip, { x: 100, y: 5 }).top).toBe(0);
+  });
+});
+
+describe("recentText", () => {
+  const f = claude.forecast!;
+  const hot = win({ at_limit: false, forecast: { ...f, recent_pace: 20, recent_hits_at: "2026-11-07T20:00:00.000Z", recent_at_reset: null } });
+  const calm = win({ at_limit: false, forecast: { ...f, recent_pace: 3, recent_hits_at: null, recent_at_reset: 41.26 } });
+
+  it("says when the last 24 hours reach 100%, or where they stand at the reset", () => {
+    expect(recentText(hot)).toBe(`If the last 24 hours continue: reaches 100% at ${whenDay("2026-11-07T20:00:00.000Z")}`);
+    expect(recentText(calm)).toBe("If the last 24 hours continue: about 41% at its reset");
+  });
+
+  it("says nothing at the limit, without a forecast or without a scenario", () => {
+    expect(recentText({ ...hot, at_limit: true })).toBeNull();
+    expect(recentText(win({ forecast: null }))).toBeNull();
+    expect(recentText(win({ at_limit: false, forecast: { ...f, recent_pace: null, recent_hits_at: null, recent_at_reset: null } }))).toBeNull();
+  });
+});
+
+describe("hasScenario", () => {
+  it("is true when a curve point carries the last-24-hours value, even for a window at its limit", () => {
+    expect(hasScenario(win({ forecast: fc(curve) }))).toBe(true);
+    expect(hasScenario(win({ at_limit: true, forecast: fc(curve) }))).toBe(true);
+  });
+
+  it("is false without a forecast or when no point carries it", () => {
+    expect(hasScenario(win({ forecast: null }))).toBe(false);
+    expect(hasScenario(win({ forecast: fc(curve.map(p => ({ ...p, recent: null }))) }))).toBe(false);
+  });
+});
+
+describe("a percent at the reset never reads 100 unless it is 100", () => {
+  const f = claude.forecast!;
+  const reset = (at: number, low = at, high = at, rest: Partial<typeof f> = {}) => win({ at_limit: false,
+    forecast: { ...f, hits_at: null, hits_at_early: null, hits_at_late: null, at_reset: at, at_reset_low: low, at_reset_high: high, recent_pace: 3, recent_hits_at: null, recent_at_reset: at, ...rest } });
+
+  it("reads 99% for 99.9 and 99.5, 100% for 100 and what num reads for the rest", () => {
+    expect(recentText(reset(99.9))).toBe("If the last 24 hours continue: about 99% at its reset");
+    expect(recentText(reset(99.5))).toBe("If the last 24 hours continue: about 99% at its reset");
+    expect(recentText(reset(100))).toBe("If the last 24 hours continue: about 100% at its reset");
+    expect(recentText(reset(66.4))).toBe("If the last 24 hours continue: about 66% at its reset");
+    expect(caption(reset(99.9))).toBe("Resets first at about 99%");
+    expect(caption(reset(99.9, 97.2, 99.9))).toBe("Resets first at about 99% (97–99%)");
+    expect(caption(reset(100))).toBe("Resets first at about 100%");
+    expect(caption(reset(66.4, 60.2, 80))).toBe("Resets first at about 66% (60–80%)");
+  });
+
+  it("never says nothing would go unused from a value below 100", () => {
+    const verdict = (at: number) => pace(reset(at, at, at, { pace: "behind", pace_target: 10 }), (limits as LimitsPayload).now).verdict;
+    expect(verdict(99.9)).toBe("behind pace: about 1% would go unused");
+    expect(verdict(66.4)).toBe("behind pace: about 34% would go unused");
+    expect(verdict(100)).toBe("behind pace: about 0% would go unused");
   });
 });

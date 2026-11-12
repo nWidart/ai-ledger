@@ -9,6 +9,7 @@ Run `ai-ledger rebuild` once after upgrading (with the app stopped): error types
 
 ### Added
 
+- The Limits page adds a second line to each open window, "if the last 24 hours continue": your use over the last 24 hours carried on to the reset, with its own run-out time on the card ("If the last 24 hours continue: reaches 100% at …", or the percent at the reset) and in the chart readout. The usual forecast, the heading and the suggestion do not change.
 - The Limits charts can be read at a time: hover or touch a chart, or focus it and use the arrow keys, Home, End and Escape. A guide and a marker show the point, and a tooltip gives its time and percent, measured or estimated, or, ahead of now, the forecast with its likely range. Keyboard changes are announced.
 - The Limits cards show the cap in money under the pace line: "100% ≈ $X a week at list prices, from N points over M windows", so a calibrated window reads as dollars with the evidence behind it.
 - The Limits page shows a status strip under its heading: one chip per open window with its percent used, the time to its reset, and an "at limit" or "runs out" warning, so every window reads without scrolling.
@@ -60,6 +61,7 @@ Run `ai-ledger rebuild` once after upgrading (with the app stopped): error types
 
 ### Fixed
 
+- Limits: the forecast's run-out time was up to one chart step late, and a 30-day window's forecast could miss the busy hours of the day. A forecast that reaches 100% exactly at the reset, or rounds to 100%, is no longer reported as a run-out.
 - Cost: a day's sessions show that day's cost and add up to the bar; an unknown previous cost is no longer shown as $0.
 - Cost: the plan multiple counts only the agents with a known plan and names them when another agent also spent. An unknown cost no longer reads as $0: per prompt and per commit show "–", the small-projects row shows "–", What changed keeps projects with an unknown cost, and the comparison says there was no priced usage instead of −100%. The day tooltip no longer lists a $0.00 Other, drops `claude-` from model names inside Other and says "1 unpriced request". The project-less row in Cost by project reads "(no project)", and the project search no longer says "No project matches" when the selected project matches.
 - Errors: trends on a store with a thin start, the error-rate scale, and one "Change" comparison across the page.

@@ -17,6 +17,10 @@ export const planName = (plan: string | null) => plan?.split("/")[0] ?? null;
 
 export const windowName = (w: { provider_label: string; label: string }) => `${w.provider_label} ${w.label}`;
 
+/** A percent at a reset, for a line that has no hit: never "100" unless it is 100, so 99.5 to 99.9 reads 99. */
+const atReset = (v: number): number => (v >= 99.5 && v < 100 ? 99 : v);
+export const resetPct = (v: number | null): string => num(v == null ? v : atReset(v));
+
 /** "At its limit until …", "Reaches 100% at Sat 2:00 PM", "Resets first at about 66%", or why there is no forecast. */
 export function caption(w: LimitWindow): string {
   if (w.at_limit) return `At its limit until ${whenDay(w.resets_at)}`;
@@ -26,9 +30,20 @@ export function caption(w: LimitWindow): string {
     const late = f.hits_at_late ? whenDay(f.hits_at_late) : "after the reset";
     return `Reaches 100% at ${whenDay(f.hits_at)} (between ${whenDay(f.hits_at_early)} and ${late})`;
   }
-  const lo = num(f.at_reset_low), hi = num(f.at_reset_high);
-  return `Resets first at about ${num(f.at_reset)}%${lo === hi ? "" : ` (${lo}–${hi}%)`}`;
+  const lo = resetPct(f.at_reset_low), hi = resetPct(f.at_reset_high);
+  return `Resets first at about ${resetPct(f.at_reset)}%${lo === hi ? "" : ` (${lo}–${hi}%)`}`;
 }
+
+/** The second forecast line, "If the last 24 hours continue: reaches 100% at Sat 2:00 PM" or "… about 41% at its reset";
+ *  null for a window at its limit or without a forecast or scenario. */
+export function recentText(w: LimitWindow): string | null {
+  const f = w.forecast;
+  if (w.at_limit || !f || f.recent_pace == null) return null;
+  return `If the last 24 hours continue: ${f.recent_hits_at ? `reaches 100% at ${whenDay(f.recent_hits_at)}` : `about ${resetPct(f.recent_at_reset)}% at its reset`}`;
+}
+
+/** Whether the window's chart draws the last-24-hours line: the one condition the chart and the chart key share. */
+export const hasScenario = (w: LimitWindow): boolean => !!w.forecast?.curve.some(p => p.recent != null);
 
 /** A window length as the cap-money line names its period: "a week", "per 5 hours", "a window" when unknown. */
 const capPeriod = (minutes: number | null): string =>
@@ -57,14 +72,14 @@ export function pace(w: LimitWindow, now: string): { left: string; reset: string
   return {
     left, reset,
     rate: `usual pace ${rate(f.pace_usual)}${own}; ${rate(f.pace_target)} would use it all`,
-    verdict: f.pace === "ahead" ? "ahead of pace: runs out before the reset" : `behind pace: about ${num(100 - (f.at_reset ?? 100))}% would go unused`,
+    verdict: f.pace === "ahead" ? "ahead of pace: runs out before the reset" : `behind pace: about ${num(100 - atReset(f.at_reset ?? 100))}% would go unused`,
   };
 }
 
 /** One point a reader can land on: a past reading or estimate, or a forecast point after now. */
 export type ReadPoint =
   | { kind: "past"; t: string; pct: number; measured: boolean }
-  | { kind: "forecast"; t: string; mid: number; lo: number; hi: number };
+  | { kind: "forecast"; t: string; mid: number; lo: number; hi: number; recent: number | null };
 
 /** A window's readable points in time order: the past series, then the forecast after its last point (the curve starts at
  *  now, which the series already holds). */
@@ -89,7 +104,7 @@ const pct1 = (v: number): string => { const r = Math.round(v * 10) / 10; return 
 export function readText(p: ReadPoint): string {
   if (p.kind === "past") return `${whenDay(p.t)} · ${pct1(p.pct)}% · ${p.measured ? "measured" : "estimated"}`;
   const lo = pct1(p.lo), hi = pct1(p.hi);
-  return `${whenDay(p.t)} · forecast ${pct1(p.mid)}%${lo === hi ? "" : ` (${lo}–${hi}%)`}`;
+  return `${whenDay(p.t)} · forecast ${pct1(p.mid)}%${lo === hi ? "" : ` (${lo}–${hi}%)`}${p.recent == null ? "" : ` · last 24 h pace ${pct1(p.recent)}%`}`;
 }
 
 /** Where a tooltip goes inside its box, in box pixels: right of the point (left of it near the right edge), kept inside

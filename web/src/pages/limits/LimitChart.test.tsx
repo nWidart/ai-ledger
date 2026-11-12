@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { LimitWindow, LimitsPayload } from "../../api";
 import limits from "../../__fixtures__/limits";
@@ -12,9 +12,9 @@ const past = [
   { t: "2026-11-07T11:00:00.000Z", pct: 42, measured: false },
 ];
 const curve = [
-  { t: "2026-11-07T11:00:00.000Z", mid: 42, lo: 42, hi: 42 },
-  { t: "2026-11-07T12:00:00.000Z", mid: 50, lo: 45, hi: 60 },
-  { t: "2026-11-07T13:00:00.000Z", mid: 58, lo: 58, hi: 58 },
+  { t: "2026-11-07T11:00:00.000Z", mid: 42, lo: 42, hi: 42, recent: null },
+  { t: "2026-11-07T12:00:00.000Z", mid: 50, lo: 45, hi: 60, recent: null },
+  { t: "2026-11-07T13:00:00.000Z", mid: 58, lo: 58, hi: 58, recent: null },
 ];
 const w: LimitWindow = { ...claude, start: "2026-11-07T00:00:00.000Z", resets_at: "2026-11-08T00:00:00.000Z", series: past,
   forecast: { ...claude.forecast!, curve } };
@@ -101,6 +101,20 @@ describe("LimitChart readout", () => {
     expect(tip().textContent).toMatch(/ · 40% · measured$/);
     fireEvent.keyDown(g, { key: "ArrowRight" });
     expect(tip().textContent).toMatch(/ · 42% · estimated$/);
+  });
+
+  it("draws the last-24-hours line only when the curve carries it, and reads it in the tooltip", () => {
+    draw();
+    expect(document.querySelector(".lim-chart .recent")).toBeNull();
+    cleanup();
+    const withRecent = { ...w, forecast: { ...w.forecast!, curve: curve.map((p, i) => ({ ...p, recent: 42 + i * 29 })) } };
+    const g = draw(withRecent)!;
+    expect(document.querySelectorAll(".lim-chart .recent")).toHaveLength(1);
+    act(() => g.focus());
+    fireEvent.keyDown(g, { key: "End" });
+    expect(tip().textContent).toBe(readText(readPoints(withRecent).at(-1)!));
+    expect(tip().textContent).toMatch(/forecast 58% · last 24 h pace 100%$/);
+    expect(plot().getAttribute("aria-label")).not.toMatch(/last 24/);
   });
 
   it("ends at the last past point without a forecast", () => {

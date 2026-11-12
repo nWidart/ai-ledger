@@ -1,7 +1,7 @@
 import { useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import type { LimitWindow, PlanChange } from "../../api";
 import { useWidth } from "../../components/chart";
-import { caption, nearestPoint, planName, readPoints, readText, tipPlace, whenDay, windowName } from "./limits";
+import { caption, hasScenario, nearestPoint, planName, readPoints, readText, tipPlace, whenDay, windowName } from "./limits";
 
 const H = 168, M = { t: 12, r: 10, b: 24, l: 36 }, DOT_GAP = 7;
 
@@ -29,6 +29,7 @@ export function LimitChart({ w, now, events }: { w: LimitWindow; now: string; ev
   const dots = measured.filter(p => x(p.t) - lastX >= DOT_GAP && (lastX = x(p.t), true));
   const f = w.forecast;
   const pctOf = (i: number) => { const p = pts[i]!; return p.kind === "past" ? p.pct : p.mid; };
+  const recent = f && hasScenario(w) ? path(f.curve.flatMap(p => p.recent == null ? [] : [{ t: p.t, v: p.recent }])) : null;
   const band = f && `${path(f.curve.map(p => ({ t: p.t, v: p.hi })))}L${f.curve.slice().reverse().map(p => `${x(p.t).toFixed(1)},${y(p.lo).toFixed(1)}`).join("L")}Z`;
   // The page's one time format; a narrow chart keeps the date of a long window, or the time of a short one.
   const at = W >= 360 ? whenDay : (w.window_minutes ?? 0) >= 1440
@@ -81,6 +82,7 @@ export function LimitChart({ w, now, events }: { w: LimitWindow; now: string; ev
         </g>)}
         {band && <path d={band} className="band" />}
         {f && <path d={path(f.curve.map(p => ({ t: p.t, v: p.mid })))} className="fc" />}
+        {recent && <path d={recent} className="recent" />}
         {est && <path d={est} className="est" />}
         {measured.length > 1 && <path d={path(measured.map(p => ({ t: p.t, v: p.pct })))} className="meas" />}
         {dots.map(p => <circle key={p.t} cx={x(p.t)} cy={y(p.pct)} r={2.6} className="dot" />)}
