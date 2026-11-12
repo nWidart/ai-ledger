@@ -2,7 +2,7 @@
 @media (max-width: 520px) {
   .filters { gap: 6px; }
   .filters .seg button { padding: 5px 9px; font-size: 13px; }
-  .filters select { padding-top: 5px; padding-bottom: 5px; font-size: 13px; }
+  .filters select, .filters .pick-field { padding-top: 5px; padding-bottom: 5px; font-size: 13px; }
   .filters .long { display: none; }
   .filters label.chk { font-size: 12.5px; }
 }

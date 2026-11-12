@@ -21,6 +21,7 @@ Run `ai-ledger rebuild` once after upgrading (with the app stopped): Codex subag
 - Insights groups similar goal and friction labels into families by keyword (pull request, git cleanup, docs, implement feature, buggy code, and so on), so the ranking is no longer fragmented. A family with several labels expands to them as `/insights` wrote them; selecting it lists the sessions with any of them (`goalf=`, `frf=` in the URL).
 - The Insights page lists analysed sessions as cards (title, outcome and chips on one line, the summary below, the friction detail on expand) and lets you sort them (newest, oldest, worst outcome first) and filter them by outcome, kept in the URL.
 - The Insights page reads in a new order: vitals, outcomes beside friction, satisfaction, then the analysed sessions, with Goals and Session types folded into closed drawers, and has a section index like Activity's.
+- The project picker is one filterable dropdown: type in it and the matching projects list below it at once, for any number of projects. It replaces the select and the separate search box, which appeared only over 12 projects, and typing no longer moves the controls beside it.
 
 ### Fixed
 

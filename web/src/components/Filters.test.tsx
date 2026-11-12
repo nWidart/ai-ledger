@@ -1,7 +1,10 @@
-import { render, screen, within } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
+import { setHash } from "../hash";
 import { Filters } from "./Filters";
+
+const options = () => screen.queryAllByRole("option").map(o => o.textContent);
 
 describe("Filters", () => {
   it("selects a range and a project from the keyboard, pushing each change", async () => {
@@ -18,7 +21,8 @@ describe("Filters", () => {
     expect(document.activeElement?.textContent).toBe("All");
     await user.keyboard(" ");
     expect(location.hash).toBe("#range=0&session=s1");
-    await user.selectOptions(screen.getByRole("combobox", { name: "Project" }), "bar");
+    await user.click(screen.getByRole("combobox", { name: "Project" }));
+    await user.click(screen.getByRole("option", { name: "bar" }));
     expect(location.hash).toBe("#project=bar&range=0"); // a new project closes the open sheet
     expect(push).toHaveBeenCalledTimes(3);
   });
@@ -55,52 +59,135 @@ describe("Filters", () => {
     expect(location.hash).toBe("#range=30");
   });
 
-  it("keeps the hash's project selected when the list leaves it out", () => {
+  it("lists the hash's project when the list leaves it out", async () => {
     history.replaceState(null, "", "/usage#project=observer-sessions&range=30");
     render(<Filters projects={["foo", "bar"]} automated />);
-    const sel = screen.getByRole("combobox", { name: "Project" }) as HTMLSelectElement;
-    expect(sel.value).toBe("observer-sessions");
-    expect([...sel.options].map(o => o.value)).toEqual(["", "observer-sessions", "foo", "bar"]);
+    const field = screen.getByRole("combobox", { name: "Project" }) as HTMLInputElement;
+    expect(field.value).toBe("observer-sessions");
+    await userEvent.click(field);
+    expect(options()).toEqual(["All projects", "observer-sessions", "foo", "bar"]);
   });
 
   it("hides the automated toggle where it does not apply", () => {
     render(<Filters projects={[{ value: "foo", label: "foo — 3 errors (all time)" }]} />);
     expect(screen.queryByRole("checkbox")).toBeNull();
+  });
+
+  it("shows a label in the field and in the list", async () => {
+    history.replaceState(null, "", "/errors#project=foo");
+    render(<Filters projects={[{ value: "foo", label: "foo — 3 errors (all time)" }]} />);
+    const field = screen.getByRole("combobox", { name: "Project" }) as HTMLInputElement;
+    expect(field.value).toBe("foo — 3 errors (all time)");
+    await userEvent.click(field);
     expect(screen.getByRole("option", { name: "foo — 3 errors (all time)" })).toBeTruthy();
+  });
+
+  it("follows a hash change from elsewhere", async () => {
+    history.replaceState(null, "", "/cost");
+    render(<Filters projects={["foo", "bar"]} />);
+    const field = screen.getByRole("combobox", { name: "Project" }) as HTMLInputElement;
+    expect(field.value).toBe("All projects");
+    await act(async () => { setHash({ project: "bar" }); });
+    expect(field.value).toBe("bar");
   });
 });
 
 describe("Filters project search", () => {
   const many = Array.from({ length: 13 }, (_, i) => `proj-${i}`).concat("atlas");
-  const options = () => within(screen.getByRole("combobox", { name: "Project" })).getAllByRole("option").map(o => o.textContent);
-  it("narrows a long list, keeps the selection and All, and restores on clear", async () => {
+  const field = () => screen.getByRole("combobox", { name: "Project" }) as HTMLInputElement;
+  it("narrows the list as the user types, ignoring case, and picks a project", async () => {
     history.replaceState(null, "", "/cost#project=proj-3");
     render(<Filters projects={many} />);
-    const user = userEvent.setup(), box = screen.getByRole("searchbox", { name: "Search projects" });
-    await user.type(box, "ATL");
-    expect(options()).toEqual(["All projects", "proj-3", "atlas"]);
-    await user.selectOptions(screen.getByRole("combobox", { name: "Project" }), "atlas");
+    const user = userEvent.setup();
+    await user.click(field());
+    expect(options()).toHaveLength(many.length + 1);
+    await user.keyboard("ATL");
+    expect(options()).toEqual(["atlas", "All projects"]);
+    await user.click(screen.getByRole("option", { name: "atlas" }));
     expect(location.hash).toBe("#project=atlas");
-    await user.clear(box);
-    expect(options()).toHaveLength(many.length + 2 - 1 + 1 - 1); // All + 14 projects, proj-3 already listed
+    expect(field().value).toBe("atlas");
   });
-  it("does not say nothing matches when the selected project is the match", async () => {
-    history.replaceState(null, "", "/cost#project=atlas-api");
-    render(<Filters projects={Array.from({ length: 13 }, (_, i) => `proj-${i}`).concat("atlas-api")} />);
-    await userEvent.type(screen.getByRole("searchbox", { name: "Search projects" }), "atlas");
-    expect(options()).toEqual(["All projects", "atlas-api"]);
-    expect(screen.queryByRole("status")).toBeNull();
+  it("picks the first match on Enter, then takes a new search in the same field", async () => {
+    history.replaceState(null, "", "/cost");
+    render(<Filters projects={many} />);
+    const user = userEvent.setup();
+    await user.click(field());
+    await user.keyboard("atl{Enter}");
+    expect(location.hash).toBe("#project=atlas");
+    await user.keyboard("proj-12{Enter}"); // the field kept focus with the name selected
+    expect(location.hash).toBe("#project=proj-12");
+    await user.click(field());
+    await user.keyboard("atl");
+    expect(field().value).toBe("atl");
+  });
+  it("lists every project when the field is cleared, and keeps the project until one is picked", async () => {
+    history.replaceState(null, "", "/cost#project=atlas");
+    render(<Filters projects={many} />);
+    const user = userEvent.setup();
+    await user.tab();
+    await user.keyboard("{Backspace}"); // the name was selected
+    expect(field().value).toBe("");
+    expect(options()).toHaveLength(many.length + 1);
+    await user.keyboard("pr{Backspace}{Backspace}");
+    expect(field().value).toBe("");
+    expect(options()).toHaveLength(many.length + 1);
+    expect(location.hash).toBe("#project=atlas");
+    await user.keyboard("{Escape}");
+    expect(field().value).toBe("atlas");
+  });
+  it("selects the text on focus so typing replaces the project's name", async () => {
+    history.replaceState(null, "", "/cost#project=atlas");
+    render(<Filters projects={many} />);
+    await userEvent.tab(); // the project field comes first
+    expect(document.activeElement).toBe(field());
+    await userEvent.keyboard("proj-1");
+    expect(field().value).toBe("proj-1");
+    expect(options()).toEqual(["proj-1", "proj-10", "proj-11", "proj-12", "All projects"]);
+  });
+  it("picks with the arrows and Enter, and All projects clears the project", async () => {
+    history.replaceState(null, "", "/cost#project=foo&range=7");
+    render(<Filters projects={["foo", "bar"]} />);
+    const user = userEvent.setup();
+    await user.click(field());
+    await user.keyboard("{ArrowUp}{Enter}");
+    expect(location.hash).toBe("#range=7");
+    expect(field().value).toBe("All projects");
   });
   it("says when nothing matches and keeps All projects", async () => {
     history.replaceState(null, "", "/cost");
     render(<Filters projects={many} />);
-    await userEvent.type(screen.getByRole("searchbox", { name: "Search projects" }), "zzz");
+    await userEvent.click(field());
+    await userEvent.keyboard("zzz");
     expect(options()).toEqual(["All projects"]);
     expect(screen.getByRole("status").textContent).toBe("No project matches");
   });
-  it("has no search with 12 projects or fewer", () => {
+  it("filters a short list too", async () => {
     history.replaceState(null, "", "/cost");
-    render(<Filters projects={many.slice(0, 12)} />);
-    expect(screen.queryByRole("searchbox")).toBeNull();
+    render(<Filters projects={["foo", "bar"]} />);
+    await userEvent.click(field());
+    await userEvent.keyboard("ba");
+    expect(options()).toEqual(["bar", "All projects"]);
+  });
+  it("puts the selected project back on Escape and leaves the URL alone", async () => {
+    history.replaceState(null, "", "/cost#project=foo");
+    render(<Filters projects={["foo", "bar"]} />);
+    const user = userEvent.setup();
+    await user.click(field());
+    await user.keyboard("ba");
+    expect(options()).toEqual(["bar", "All projects"]);
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("option")).toBeNull();
+    expect(field().value).toBe("foo");
+    expect(location.hash).toBe("#project=foo");
+  });
+  it("puts the selected project back on blur", async () => {
+    history.replaceState(null, "", "/cost#project=foo");
+    render(<Filters projects={["foo", "bar"]} />);
+    const user = userEvent.setup();
+    await user.click(field());
+    await user.keyboard("ba");
+    await user.tab();
+    expect(field().value).toBe("foo");
+    expect(location.hash).toBe("#project=foo");
   });
 });
