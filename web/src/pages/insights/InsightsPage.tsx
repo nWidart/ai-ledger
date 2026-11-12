@@ -1,8 +1,10 @@
 import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
 import { insightsUrl, viewOf, type FacetTally, type InsightSession, type InsightsPayload, type View } from "../../api";
+import { Drawer } from "../../components/Drawer";
 import { Filters, viewName } from "../../components/Filters";
 import { Ledger, LedgerRow } from "../../components/Ledger";
 import { ProjectName } from "../../components/ProjectDot";
+import { SectionIndex } from "../../components/SectionIndex";
 import { sessName, shortId } from "../../components/sheets/session";
 import { useLanding } from "../../components/useLanding";
 import { num, pct, plural, when } from "../../format";
@@ -69,7 +71,7 @@ function Vitals({ d }: { d: InsightsPayload }) {
   const dis = d.satisfaction.find(s => s.name === "dissatisfied")?.sessions ?? 0;
   const unclear = n - full - mostly - partly - not; // unclear_from_transcript, or an outcome this page does not know
   return (
-    <section className="vitals" aria-label="Outcomes at a glance">
+    <section className="vitals sect" id="vitals" aria-label="Outcomes at a glance">
       <div className="vital"><div className="v">{num(n)}</div><div className="l">Sessions analysed</div>
         <div className="d">{num(c.analysed)} of {num(c.claude_sessions)} stored Claude Code sessions{c.orphans > 0 && `, ${num(c.orphans)} without transcript`}
           {unclear > 0 && `; ${num(unclear)} with no clear outcome`}</div></div>
@@ -97,7 +99,7 @@ function TopLedger({ rows, empty, noun, row }: { rows: FacetTally[]; empty: stri
 function Friction({ d }: { d: InsightsPayload }) {
   const max = d.friction[0]?.n ?? 0;
   return (
-    <section className="panel" id="friction" aria-labelledby="frictionTitle">
+    <section className="panel sect" id="friction" aria-labelledby="frictionTitle">
       <h2 id="frictionTitle">Friction categories <Judged /></h2>
       <p className="hint">What got in the way, by times reported, with the sessions that reported it. A session can carry several.</p>
       <TopLedger rows={d.friction} empty="No friction reported in this view." noun="categories" row={r => <LedgerRow key={r.name} name={label(r.name)}
@@ -109,32 +111,30 @@ function Friction({ d }: { d: InsightsPayload }) {
 function Goals({ d }: { d: InsightsPayload }) {
   const max = d.goals[0]?.n ?? 0;
   return (
-    <section className="panel" aria-labelledby="goalsTitle">
-      <h2 id="goalsTitle">Goals <Judged /></h2>
+    <Drawer id="d-goals" title={<>Goals <Judged /></>}>
       <p className="hint">What each session set out to do.</p>
       <TopLedger rows={d.goals} empty="No goals recorded in this view." noun="goals" row={r => <LedgerRow key={r.name} name={label(r.name)} title={r.name}
         share={max ? r.n / max : 0} value={num(r.n)} side={sessionsSide(r)} />} />
-    </section>
+    </Drawer>
   );
 }
 
 function SessionTypes({ d }: { d: InsightsPayload }) {
   const types = d.session_types.filter(t => t.n > 0), color = (i: number) => TYPE_COLORS[Math.min(i, TYPE_COLORS.length - 1)];
   return (
-    <section className="panel" aria-labelledby="typesTitle">
-      <h2 id="typesTitle">Session types <Judged /></h2>
+    <Drawer id="d-types" title={<>Session types <Judged /></>}>
       {types.length ? <>
         <div className="strip" aria-hidden="true">{types.map((t, i) => <i key={t.name} style={{ flex: t.n, background: color(i) }} />)}</div>
         <ul className="key">{types.map((t, i) => <li key={t.name}><i className="sw" style={{ background: color(i) }} /><Cat name={t.name} /> <b>{num(t.n)}</b></li>)}</ul>
       </> : <p className="empty">No session types recorded in this view.</p>}
-    </section>
+    </Drawer>
   );
 }
 
 function Outcomes({ d }: { d: InsightsPayload }) {
   const n = d.coverage.facets;
   return (
-    <section className="panel" id="outcomes" aria-labelledby="outcomesTitle">
+    <section className="panel sect" id="outcomes" aria-labelledby="outcomesTitle">
       <h2 id="outcomesTitle">Outcomes <Judged /></h2>
       <p className="hint">Whether each session met its goal, as judged by a model from the transcript. Share of the {plural(n, "analysed session")}.</p>
       <Ledger empty="No outcomes in this view.">{d.outcomes.map(o => <LedgerRow key={o.name} name={outcomeLabel(o.name)} title={o.name}
@@ -146,7 +146,7 @@ function Outcomes({ d }: { d: InsightsPayload }) {
 function Feelings({ d }: { d: InsightsPayload }) {
   const n = d.coverage.facets, smax = Math.max(0, ...d.satisfaction.map(s => s.n));
   return (
-    <section className="panel" aria-labelledby="feelTitle">
+    <section className="panel sect" id="satisfaction" aria-labelledby="feelTitle">
       <h2 id="feelTitle">Satisfaction and helpfulness <Judged /></h2>
       <p className="hint">User satisfaction signals the model saw, summed over the sessions.</p>
       <TopLedger rows={d.satisfaction} empty="No satisfaction signals in this view." noun="signals" row={s => <LedgerRow key={s.name} name={label(s.name)}
@@ -191,7 +191,7 @@ function Sessions({ d, view }: { d: InsightsPayload; view: View }) {
   const [h] = useHashState(), only = h.raw.friction === "1", [all, setAll] = useState(false);
   const rows = only ? d.sessions.filter(hasFriction) : d.sessions, listed = all ? rows : rows.slice(0, SESSIONS_TOP);
   return (
-    <section className="panel log" id="log" aria-labelledby="logTitle">
+    <section className="panel log sect" id="log" aria-labelledby="logTitle">
       <div className="log-head">
         <h2 id="logTitle">Analysed sessions <Judged /></h2>
         <label className="chk"><input type="checkbox" checked={only} onChange={e => setHash({ friction: e.target.checked }, { push: true })} /> Only sessions with friction</label>
@@ -217,11 +217,11 @@ export function InsightsPage() {
   const url = insightsUrl(want), { data: d, error, loading, retry } = useApi<InsightsPayload>(url, { keepPrevious: true });
   const [shown, setShown] = useState(want);
   useEffect(() => { if (d && !loading && !error) setShown(want); }, [d, loading, error, url]); // want is read through url
-  const { slow, grow, wrap, retryBtn } = useLanding(d, url, loading, error, ":scope > :is(.grid2, .panel, .vitals)");
+  const { slow, grow, wrap, retryBtn } = useLanding(d, url, loading, error, ":scope > :is(.grid2, .panel, .vitals, .drawers)");
   const figures = d && shown.source !== "codex" && d.coverage.facets > 0;
   return (
     <div className={"wrap pg-insights" + (slow ? " loading" : "") + (grow ? " grow" : "")} ref={wrap} aria-busy={loading || undefined}>
-      <header className="top">
+      <header className="top sect" id="overview">
         <h1 className="kicker">Insights <Judged /></h1>
         <Filters projects={d?.projects ?? []} automated />
       </header>
@@ -233,16 +233,19 @@ export function InsightsPage() {
         <Lede d={d} view={shown} />
         <Sub d={d} view={shown} />
         {figures && <>
+          <SectionIndex groups={[
+            [{ id: "overview", label: "Overview" }, { id: "outcomes", label: "Outcomes" }, { id: "friction", label: "Friction" },
+              { id: "satisfaction", label: "Satisfaction", long: "Satisfaction and helpfulness" }, { id: "log", label: "Sessions", long: "Analysed sessions" }],
+            [{ id: "d-goals", label: "Goals" }, { id: "d-types", label: "Session types" }],
+          ]} />
           <Vitals d={d} />
           <div className="grid2">
-            <Friction d={d} />
-            <div className="stack"><Goals d={d} /><SessionTypes d={d} /></div>
-          </div>
-          <div className="grid2">
             <Outcomes d={d} />
-            <Feelings d={d} />
+            <Friction d={d} />
           </div>
+          <Feelings d={d} />
           <Sessions d={d} view={shown} />
+          <div className="drawers"><Goals d={d} /><SessionTypes d={d} /></div>
         </>}
       </>}
     </div>
