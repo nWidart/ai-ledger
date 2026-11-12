@@ -2,6 +2,8 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { sessionsUrl, type ProjectRow, type SessionsPage, type Totals, type TitledSessionRow, type View } from "../../api";
 import { useColors } from "../../colors";
 import { motion } from "../../components/chart";
+import { ExportButtons } from "../../components/ExportButtons";
+import { dayStamp } from "../../components/export";
 import { Drawer } from "../../components/Drawer";
 import { ProjectName } from "../../components/ProjectDot";
 import { openProjectSheet, openSessionSheet, pickRow, sessName, shortId } from "../../components/sheets/session";
@@ -51,6 +53,11 @@ export interface CostSpot { spot: string; med: number }
 export type ProjectKey = "project" | "cost" | "tokens" | "hit" | "w1h" | "sub" | "commits" | "cpc" | "cpp";
 export const COST_SORT: SortBy<ProjectKey> = { key: "cost", desc: true };
 
+/** A value rounded to 4 decimals for export; null stays an empty cell. */
+const r4 = (n: number | null): number | null => (n == null ? null : Math.round(n * 1e4) / 1e4);
+const PROJECT_HEAD = ["Project", "Est. cost (USD)", "Tokens", "Cache hit", "1h writes", "Subagent cost share", "Commits", "Cost per commit (USD)", "Cost per prompt (USD)"];
+const SESSION_HEAD = ["Session id", "Title", "Project", "Started", "Branch", "Active seconds", "Prompts", "Commits", "Cost per commit (USD)", "Est. cost (USD)"];
+
 const GET: Record<ProjectKey, (p: ProjectRow) => number | string | null> = {
   project: p => p.project, cost: p => p.cost, tokens: p => p.tokens, hit: p => p.cache_hit_ratio, w1h: p => p.write_1h_share,
   sub: p => p.subagent_cost_share, commits: p => p.commits, cpc: perCommit, cpp: perPrompt,
@@ -63,6 +70,8 @@ export function ProjectCostDrawer({ rows, selected, sort, onSort, spot: pin, onS
 }) {
   const color = useColors(), el = useRef<HTMLTableSectionElement>(null);
   const ps = sortRows(rows, GET[sort.key], sort.desc), m = projectMedians(rows), many = m.n >= 3;
+  const exported = ps.map(p => [p.project, r4(p.cost), p.tokens, r4(p.cache_hit_ratio), r4(p.write_1h_share), r4(p.subagent_cost_share), p.commits,
+    r4(perCommit(p)), r4(perPrompt(p))]);
   const maxCost = Math.max(...ps.map(p => p.cost || 0), 0) || 1, spot = pin ? ps.find(p => p.project === pin.spot) : undefined;
   const th = (k: ProjectKey, label: string, asc?: boolean) =>
     <SortTh k={k} sort={sort} onSort={s => { onSort(s); onSpot(null); }} asc={asc} className={k === "project" ? undefined : "num"}>{label}</SortTh>;
@@ -84,6 +93,7 @@ export function ProjectCostDrawer({ rows, selected, sort, onSort, spot: pin, onS
           {r ? `, ${mult(r)} the median project with 3+ commits (${usd(pin.med)})` : ""}.</span>}
         <button type="button" className="linkish" onClick={() => { onSort(COST_SORT); onSpot(null); document.querySelector<HTMLElement>("#d-projcost summary")?.focus(); }}>Sort by cost again</button></div>}
       {many && <ToneKey note={`median of the ${m.n} projects with ${pct(OUTLIER_SHARE)}+ of cost or ${COMPARE_PROMPTS}+ prompts`} />}
+      {ps.length > 0 && <div className="tools-row"><ExportButtons name={`ai-ledger-cost-projects-${dayStamp()}.csv`} headers={PROJECT_HEAD} rows={exported} /></div>}
       <div className="scroll"><table>
         <thead><tr>{th("project", "Project", true)}{th("cost", "Est. cost")}{th("tokens", "Tokens")}{th("hit", "Cache hit")}{th("w1h", "1h writes")}{th("sub", "Subagent cost")}
           {th("commits", "Commits")}{th("cpc", "Cost / commit")}{th("cpp", "Cost / prompt")}</tr></thead>
@@ -129,9 +139,13 @@ export function TopSessionsDrawer({ view, top, day, onDay, selected }: {
   else hint = `${plural(st.total ?? 0, "session")} active on ${dayLabel(day, true)}, by their estimated cost on that day. Select a session for details.`;
   return (
     <Drawer id="d-top" title="Most expensive sessions" count={num(day ? st.total : top.length)} description="Estimated cost, duration and commits per session">
-      {day && <div className="tools-row"><span className="daychip"><span>Active on {dayLabel(day, true)}</span>
-        <button type="button" aria-label="Show the most expensive sessions on every day" title="Every day"
-          onClick={() => { onDay(""); document.querySelector<HTMLElement>("#d-top summary")?.focus(); }}>✕</button></span></div>}
+      {(day || rows.length > 0) && <div className="tools-row">
+        {day && <span className="daychip"><span>Active on {dayLabel(day, true)}</span>
+          <button type="button" aria-label="Show the most expensive sessions on every day" title="Every day"
+            onClick={() => { onDay(""); document.querySelector<HTMLElement>("#d-top summary")?.focus(); }}>✕</button></span>}
+        {rows.length > 0 && <ExportButtons name={`ai-ledger-cost-sessions-${day || dayStamp()}.csv`} headers={SESSION_HEAD} rows={rows.map(s => [s.session_id, s.title ?? null,
+          s.project, s.first_ts, s.git_branch, s.duration_s, s.prompts, s.commits, r4(s.commits && s.cost != null ? s.cost / s.commits : null), r4(s.cost)])} />}
+      </div>}
       <div className="hint" aria-live="polite">{hint}</div>
       <div className="scroll tall"><table>
         <thead><tr><th>Session</th><th>Project</th><th className="num opt" title="Active time: pauses over 20 minutes left out">Active</th><th className="num opt">Prompts</th><th className="num opt">Commits</th>
