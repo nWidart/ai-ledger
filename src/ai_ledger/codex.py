@@ -153,6 +153,8 @@ def live_items(d):
     it = p.get("item") if pt == "item_completed" and isinstance(p.get("item"), dict) else None
     if it is None:
         return []
+    if it.get("type") == "SubAgentActivity" and it.get("kind") == "started" and it.get("id") and it.get("agent_thread_id"):
+        return [dict(k="agent", id=it["id"], agent=it["agent_thread_id"])]  # CLI 0.156 and later: the spawn call's id, the thread
     if it.get("type") == "UserMessage":
         text = typed(it)
         return [dict(k="prompt", text=text)] if text else []

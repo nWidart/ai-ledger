@@ -210,7 +210,7 @@ def assemble(rows, copied=None):
                     finish(tools[it["id"]], r)
                 else:
                     results[it["id"]] = r
-            elif k != "request":
+            elif k not in ("request", "agent"):
                 events.append(dict(it, key=f"{key}#{i}", ts=t, lane=lane))
     return events, results
 
@@ -518,12 +518,19 @@ def tool_input(e, text):
 
 
 def started_by(rows, events):
-    """For Claude Code subagents among the rows that no call in events names yet: the id of the call that started each,
-    mapped to the subagent's lane id. Its result names a subagent only when it ends; at its start Claude Code writes
-    agent-<id>.meta.json beside its lines, with that call's toolUseId."""
+    """For the subagents among the rows that no call in events names yet: the id of the call that started each, mapped
+    to the subagent's lane id. Claude Code's call result names a subagent only when it ends; at its start it writes
+    agent-<id>.meta.json beside its lines, with that call's toolUseId. Codex writes a SubAgentActivity start item in the
+    parent's transcript, with the call's id and the subagent's thread (CLI 0.156 and later)."""
     named = {e["agent"] for e in events if e["k"] == "tool" and e["agent"]}
     out, seen = {}, set()
-    for _, path, _, sub, source, _ in rows:
+    for _, path, _, sub, source, text in rows:
+        if source == "codex":
+            if '"SubAgentActivity"' in text:
+                for it in store.SOURCES["codex"].live_items(json.loads(text)):
+                    if it["k"] == "agent":
+                        out[it["id"]] = it["agent"]
+            continue
         if not sub or source != "claude" or path in seen or not path.endswith(".jsonl"):
             continue
         seen.add(path)

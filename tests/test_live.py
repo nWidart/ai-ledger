@@ -762,6 +762,34 @@ class CodexSessionTest(CodexCase):
         self.assertEqual([(e["id"], e["failed"]) for e in later["events"] if e["k"] == "tool"], [("c1", True)])
         self.assertEqual(len(first["events"]), 2)
 
+    def spawn(self, ordinal, secs, thread, call="c3"):
+        return codex_line(ordinal, secs, "event_msg", type="item_completed", turn_id="t1", item=dict(
+            type="SubAgentActivity", id=call, kind="started", agent_thread_id=thread, agent_path="/root/a"))
+
+    def test_spawn_call_names_its_codex_lane(self):
+        thread = "0a0f9999-0000-7000-8000-000000000002"
+        self.place(NAME, meta(THREAD).replace("2026-11-06T10:00:00.000Z", at(0)) + self.prompted()
+                   + codex_line(2, 3, "response_item", type="function_call", name="spawn_agent", call_id="c3", arguments=json.dumps(dict(task_name="review")))
+                   + self.spawn(3, 4, thread))
+        self.child_of(thread, codex_line(1, 5, "response_item", type="function_call", name="update_plan", call_id="c9", arguments="{}"))
+        self.ingest()
+        got = live.session(self.con.cursor(), THREAD, now=NOW, prices=PRICES)
+        tools = {e["id"]: e for e in got["events"] if e["k"] == "tool"}
+        self.assertEqual((tools["c3"]["agent"], tools["c3"]["end"], tools["c9"]["lane"]), (thread, None, thread))
+        self.assertEqual([e["k"] for e in got["events"]], ["prompt", "tool", "tool"])  # the start item shows no event of its own
+
+    def test_spawn_call_before_the_rows_is_sent_again_naming_its_lane(self):
+        thread = "0a0f9999-0000-7000-8000-000000000002"
+        self.place(NAME, meta(THREAD).replace("2026-11-06T10:00:00.000Z", at(0)) + self.prompted()
+                   + codex_line(2, 3, "response_item", type="function_call", name="spawn_agent", call_id="c3", arguments=json.dumps(dict(task_name="review"))))
+        self.ingest()
+        self.assertIsNone(live.session(self.con.cursor(), THREAD, now=NOW, prices=PRICES)["events"][1]["agent"])
+        self.place(NAME, self.spawn(3, 130, thread), mode="a")
+        self.ingest()
+        later = live.session(self.con.cursor(), THREAD, after=at(125), now=NOW, prices=PRICES)
+        call, = [e for e in later["events"] if e["k"] == "tool"]
+        self.assertEqual((call["id"], call["agent"], call["end"]), ("c3", thread, None))
+
     def test_thread_lanes_whose_requests_share_a_time(self):
         threads = ["0a0f9999-0000-7000-8000-000000000002", "0a0f9999-0000-7000-8000-000000000003"]
         self.place(NAME, meta(THREAD).replace("2026-11-06T10:00:00.000Z", at(0)))

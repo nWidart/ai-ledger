@@ -612,6 +612,13 @@ class LiveItemsTest(unittest.TestCase):
             type="CommandExecution", id="c6", command=["/bin/zsh", "-lc", "ls"], status="completed", exit_code=0)))
         self.assertEqual(ok, [])
 
+    def test_subagent_start_names_the_call_and_the_thread(self):
+        started = lambda kind: self.items(type="event_msg", payload=dict(type="item_completed", turn_id="t1", item=dict(
+            type="SubAgentActivity", id="c3", kind=kind, agent_thread_id="0a0f9999-0000-7000-8000-000000000002", agent_path="/root/a")))
+        self.assertEqual(started("started"), [dict(k="agent", id="c3", agent="0a0f9999-0000-7000-8000-000000000002")])
+        for kind in ("completed", "interacted", "interrupted"):
+            self.assertEqual(started(kind), [])
+
     def test_turns_prompts_and_replies(self):
         self.assertEqual(self.items(type="event_msg", payload=dict(type="task_started", turn_id="t1", model_context_window=272000)),
                          [dict(k="turn_start", window=272000)])
