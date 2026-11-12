@@ -85,8 +85,8 @@ describe("resolve", () => {
     expect(r.href).toBe("/errors#range=7&cat=timeout");
     expect(r.footer).toBe("Enter: open Errors on Command timed out · 7d");
   });
-  it(">timeout on Errors drops the previous type's tool filter, and keeps the rest", () => {
-    expect(commit("/errors#range=30&at=2026-11-03&cat=x&etool=Edit", c.timeout).href).toBe("/errors#range=30&at=2026-11-03&cat=timeout");
+  it(">timeout on Errors drops the previous type's tool filter and the selected chart bucket, and keeps the rest", () => {
+    expect(commit("/errors#range=30&gran=week&at=2026-11-02&cat=x&etool=Edit", c.timeout).href).toBe("/errors#range=30&gran=week&cat=timeout");
   });
   it(">timeout >cost drops the category", () => {
     const r = commit("/usage", c.timeout, c.cost);

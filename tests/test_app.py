@@ -15,6 +15,8 @@ from datetime import datetime, timedelta
 from unittest import mock
 from http.server import ThreadingHTTPServer
 
+import duckdb
+
 from ai_ledger import app, metrics, store
 
 USAGE_DATA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "usage-data")
@@ -309,6 +311,26 @@ class FixEndpointTest(unittest.TestCase):
         self.assertEqual(self.post({"fixes": {"x": "2026-11-04", "y": "2026-11-03"}}, path=self.IMPORT), (200, self.answer({"y": "2026-11-03"})))
         self.assertEqual(self.marks(), {"y": "2026-11-03"})
         self.assertEqual(self.post({"category": "x", "day": "2026-11-05"})[1], self.answer({"x": "2026-11-05", "y": "2026-11-03"}))  # a mark after the undo
+
+    def test_an_import_adds_the_marker_of_a_type_another_browser_muted(self):
+        """Browser B mutes git; browser A, which kept a fix day in its storage, imports it: the marker must not be lost."""
+        self.post({"category": "git", "muted": True}, path=self.MUTE)
+        self.assertEqual(self.post({"fixes": {"git": "2026-11-04"}}, path=self.IMPORT), (200, self.answer({"git": "2026-11-04"}, ["git"])))
+        self.post({"category": "git", "day": None})
+        self.assertEqual(self.post({"fixes": {"git": "2026-11-04"}}, path=self.IMPORT), (200, self.answer({}, ["git"])))  # an undone one stays so
+
+    def test_a_store_error_answers_500_and_frees_the_lock(self):
+        for path, body, fn in (("/api/errors/fix", {"category": "x", "day": None}, "set_error_fix"),
+                               (self.MUTE, {"category": "x", "muted": True}, "set_error_muted"),
+                               (self.IMPORT, {"fixes": {"x": "2026-11-04"}}, "import_error_fixes")):
+            err = io.StringIO()
+            with mock.patch.object(store, fn, side_effect=duckdb.Error("secret-detail")), contextlib.redirect_stderr(err):
+                self.assertEqual(self.post(body, path=path), (500, {"error": "internal error"}), fn)
+            self.assertIn("Error: secret-detail", err.getvalue())
+            self.assertNotIn("category", err.getvalue())  # the request body is not logged
+            self.assertTrue(self.app.lock.acquire(timeout=1), fn)
+            self.app.lock.release()
+        self.assertEqual(self.post({"category": "x", "day": None})[0], 200)  # the server still answers
 
     def test_marks_are_read_alone(self):
         self.assertEqual(self.get("/api/errors/marks"), (200, self.answer()))

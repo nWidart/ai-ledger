@@ -80,17 +80,16 @@ class ErrorMarksTest(StoreCase):
         self.assertEqual(self.marks()[1], ("x", date(2026, 11, 6)))
         self.assertEqual(metrics.error_fixes(cur), {"x": "2026-11-06", "y": "2026-11-03"})
 
-    def test_import_adds_only_a_type_the_store_has_no_row_for(self):
+    def test_import_adds_only_a_type_the_store_has_not_decided(self):
         cur = self.con.cursor()
         store.set_error_fix(cur, "kept", date(2026, 11, 1))
         store.set_error_fix(cur, "undone", date(2026, 11, 2))
         store.set_error_fix(cur, "undone", None)
-        self.con.execute("INSERT INTO error_marks (category, fixed_on) VALUES ('muted-only', NULL)")
-        store.import_error_fixes(cur, {"kept": date(2026, 10, 1), "new": date(2026, 10, 2), "undone": date(2026, 10, 3), "muted-only": date(2026, 10, 4)})
-        self.assertEqual(self.marks(), [("kept", date(2026, 11, 1)), ("muted-only", None), ("new", date(2026, 10, 2)), ("undone", None)])
+        store.import_error_fixes(cur, {"kept": date(2026, 10, 1), "new": date(2026, 10, 2), "undone": date(2026, 10, 3)})
+        self.assertEqual(self.marks(), [("kept", date(2026, 11, 1)), ("new", date(2026, 10, 2)), ("undone", None)])
         store.import_error_fixes(cur, {})
         store.import_error_fixes(cur, {"new": date(2026, 9, 1)})  # a second import changes nothing
-        self.assertEqual(self.marks()[2], ("new", date(2026, 10, 2)))
+        self.assertEqual(self.marks()[1], ("new", date(2026, 10, 2)))
 
     def test_survive_rebuild(self):
         self.assertNotIn("error_marks", store.DERIVED)
@@ -133,11 +132,99 @@ class ErrorMarksTest(StoreCase):
         self.assertEqual(self.muted(), [("x", None, True), ("y", date(2026, 11, 1), False), ("z", None, False)])
         self.assertEqual(metrics.error_marks(cur), {"fixes": {"y": "2026-11-01"}, "muted": ["x"]})
 
-    def test_import_keeps_a_muted_type_as_it_is(self):
+    def test_import_adds_the_marker_of_a_type_that_is_only_muted(self):
+        cur = self.con.cursor()
+        store.set_error_muted(cur, "x", True)  # a mute decides nothing about the fix marker
+        store.import_error_fixes(cur, {"x": date(2026, 10, 1), "new": date(2026, 10, 2)})
+        self.assertEqual(self.muted(), [("new", date(2026, 10, 2), False), ("x", date(2026, 10, 1), True)])
+        self.assertEqual(self.decided(), [("new", True), ("x", True)])
+
+    def test_import_after_a_mute_then_an_unmute_adds_the_marker(self):
         cur = self.con.cursor()
         store.set_error_muted(cur, "x", True)
-        store.import_error_fixes(cur, {"x": date(2026, 10, 1), "new": date(2026, 10, 2)})
-        self.assertEqual(self.muted(), [("new", date(2026, 10, 2), False), ("x", None, True)])
+        store.set_error_muted(cur, "x", False)
+        store.import_error_fixes(cur, {"x": date(2026, 10, 1)})
+        self.assertEqual(self.muted(), [("x", date(2026, 10, 1), False)])
+
+    def test_import_after_an_undo_leaves_the_marker_absent(self):
+        cur = self.con.cursor()
+        store.set_error_fix(cur, "x", date(2026, 11, 4))
+        store.set_error_fix(cur, "x", None)
+        store.set_error_muted(cur, "x", True)  # an undo, then a mute: still decided
+        store.import_error_fixes(cur, {"x": date(2026, 10, 1)})
+        self.assertEqual(self.muted(), [("x", None, True)])
+
+    def test_mute_keeps_a_decision_and_a_mark_makes_one(self):
+        cur = self.con.cursor()
+        store.set_error_muted(cur, "x", True)
+        store.set_error_muted(cur, "y", False)
+        self.assertEqual(self.decided(), [("x", False), ("y", False)])
+        store.set_error_fix(cur, "x", date(2026, 11, 4))
+        store.set_error_fix(cur, "y", None)
+        store.set_error_muted(cur, "x", False)
+        self.assertEqual(self.decided(), [("x", True), ("y", True)])
+
+    def decided(self):
+        return self.q("SELECT category, fix_decided FROM error_marks ORDER BY 1")
+
+    def reopen(self):
+        self.con.close()
+        self.con = store.open_store(self.db)
+
+    def old_store(self, ddl, rows):
+        """Rewrite the store as a file made before fix_decided: the table in an older shape, filled with raw SQL."""
+        self.con.close()
+        old = duckdb.connect(self.db)
+        old.execute("DROP TABLE error_marks")
+        old.execute(ddl)
+        for r in rows:
+            old.execute("INSERT INTO error_marks VALUES (" + ",".join("?" * len(r)) + ")", r)
+        old.close()
+
+    def test_a_store_with_two_columns_gets_fix_decided_for_every_row(self):
+        self.old_store("CREATE TABLE error_marks (category VARCHAR PRIMARY KEY, fixed_on DATE)", [("a", date(2026, 11, 4)), ("b", None)])
+        self.con = store.open_store(self.db)
+        self.assertEqual(self.decided(), [("a", True), ("b", True)])  # no muted column: a row without a fix day is an undo
+        self.assertEqual(self.muted(), [("a", date(2026, 11, 4), False), ("b", None, False)])
+
+    def test_a_store_with_three_columns_backfills_fix_decided_once(self):
+        self.old_store("CREATE TABLE error_marks (category VARCHAR PRIMARY KEY, fixed_on DATE, muted BOOLEAN DEFAULT false)",
+                       [("fixed", date(2026, 11, 4), False), ("undone", None, False), ("fixed-muted", date(2026, 11, 3), True),
+                        ("muted", None, True)])
+        self.con = store.open_store(self.db)
+        self.assertEqual(self.decided(), [("fixed", True), ("fixed-muted", True), ("muted", False), ("undone", True)])
+        store.set_error_muted(self.con.cursor(), "muted", False)  # a mute then an unmute: a row with no fix day, not muted, undecided
+        self.reopen()  # a second open does not backfill: it would read this row as an undo
+        self.assertEqual(self.decided()[2], ("muted", False))
+        store.import_error_fixes(self.con.cursor(), {"muted": date(2026, 10, 1)})
+        self.assertEqual(self.muted()[2], ("muted", date(2026, 10, 1), False))
+
+    def test_the_column_and_its_backfill_are_one_transaction(self):
+        """A backfill that fails leaves no column behind, so the next open backfills instead of skipping it."""
+        self.old_store("CREATE TABLE error_marks (category VARCHAR PRIMARY KEY, fixed_on DATE, muted VARCHAR)", [("a", None, "not a flag")])
+        with self.assertRaises(duckdb.Error):
+            store.open_store(self.db)
+        raw = duckdb.connect(self.db)
+        cols = [c for (c,) in raw.execute("SELECT column_name FROM information_schema.columns WHERE table_name = 'error_marks'").fetchall()]
+        raw.close()
+        self.assertEqual(cols, ["category", "fixed_on", "muted"])
+        self.con = duckdb.connect(":memory:")  # the case's cleanup closes self.con
+
+    def test_after_opening_an_old_store_no_row_breaks_the_rule(self):
+        self.old_store("CREATE TABLE error_marks (category VARCHAR PRIMARY KEY, fixed_on DATE, muted BOOLEAN DEFAULT false)",
+                       [("a", date(2026, 11, 4), False), ("b", None, False), ("c", date(2026, 11, 3), True), ("d", None, True)])
+        self.con = store.open_store(self.db)
+        bad = self.q("SELECT category FROM error_marks WHERE fix_decided != (fixed_on IS NOT NULL OR NOT muted) ORDER BY 1")
+        self.assertEqual(bad, [])
+
+    def test_the_finding_sequence_keeps_the_marker(self):
+        """Browser B mutes git before browser A, which kept a fix day in its legacy storage, imports it."""
+        cur = self.con.cursor()
+        store.set_error_muted(cur, "git", True)
+        store.import_error_fixes(cur, {"git": date(2026, 11, 4)})
+        self.assertEqual(metrics.error_marks(cur), {"fixes": {"git": "2026-11-04"}, "muted": ["git"]})
+        store.import_error_fixes(cur, {"git": date(2026, 9, 1)})  # a second import changes nothing
+        self.assertEqual(metrics.error_marks(cur)["fixes"], {"git": "2026-11-04"})
 
     def test_payload_carries_the_muted_types_sorted(self):
         self.assertEqual(metrics.errors_payload(self.con.cursor())["muted"], [])

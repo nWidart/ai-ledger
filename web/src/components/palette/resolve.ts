@@ -81,7 +81,8 @@ export function resolve(chips: readonly Chip[], here: Here): Resolved {
   if ((raw.project ?? "") !== (here.hash.raw.project ?? "") || (raw.source ?? "") !== (here.hash.raw.source ?? "")) raw = applyPatch(raw, { session: null, inspect: null });
   if (open) {
     raw = applyPatch(raw, { inspect: null, tool: null, mcp: null, skill: null, session: null });
-    raw = applyPatch(raw, open.kind === "category" ? { cat: open.value, ex: null, etool: null } : { [open.kind]: open.value });
+    // Opening a type is an explicit request: it wins over a selected chart bucket, which the palette cannot see the errors of.
+    raw = applyPatch(raw, open.kind === "category" ? { cat: open.value, ex: null, etool: null, at: null } : { [open.kind]: open.value });
   }
   if (path === "/errors" && !ERRORS_KEYS.some(k => k in raw)) raw.range = String(DEFAULT_RANGE);
   const href = path + formatHash(raw), moved = href !== here.path + formatHash(here.hash.raw);

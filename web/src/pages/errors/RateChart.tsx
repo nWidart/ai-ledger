@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import { num as fmt, niceStep } from "../../format";
 import { useErrors } from "./context";
-import { bucketLabel, bucketOf, chartData, incSummary, label, linePath, LOW_CALLS, pointRows, pointText, pointWhen, selectable, shortLabel, sumCalls, TOPN, typeColor } from "./model";
+import { bucketLabel, bucketOf, chartData, idle, incSummary, label, linePath, LOW_CALLS, noCalls, pointRows, pointText, pointWhen, selectable, shortLabel, sumCalls, TOPN, typeColor } from "./model";
 
 // Two panels on one time axis, each with its own labeled scale: error rate (line) above, error counts by type (stacked bars) below.
 const H = 320, ML = 40, MR = 10, rT = 18, rH = 100, bT = rT + rH + 26, bH = H - bT - 24;
@@ -50,11 +50,11 @@ export function RateChart() {
     const Wd = W || 800, g: ReactNode[] = [];
     // No activity: faint bands over buckets without a single tool call, labeled when there's room.
     for (let i = 0; i < n; i++) {
-      if (pts[i]!.c) continue;
+      if (!idle(pts[i]!)) continue;
       let j = i;
-      while (j + 1 < n && !pts[j + 1]!.c) j++;
+      while (j + 1 < n && idle(pts[j + 1]!)) j++;
       const x0 = ML + i * bw, w = (j - i + 1) * bw;
-      g.push(<rect key={"na" + i} x={x0} y={rT} width={w} height={bT + bH - rT} fill="var(--surface-2)" opacity=".75" />);
+      g.push(<rect key={"na" + i} className="noact" x={x0} y={rT} width={w} height={bT + bH - rT} fill="var(--surface-2)" opacity=".75" />);
       if (w > 64) g.push(<T key={"nt" + i} x={x0 + w / 2} y={bT + bH / 2} a="middle">no activity</T>);
       // A folded stretch: a break in the axis, two slashes on its baseline.
       for (let k = i; k <= j; k++) if (pts[k]!.to) g.push(<T key={"fold" + k} x={cx(k)} y={bT + bH + 4} a="middle">//</T>);
@@ -92,6 +92,8 @@ export function RateChart() {
   const lineColor = cat ? typeColor(cat, vt) : "var(--text-primary)";
   const sel = v.at ? pts.findIndex(p => p.k === v.at && selectable(p)) : -1;
   const empty = !pts.some(p => p.c), noErrors = !pts.some(p => p.e);
+  // Without the SVG (no calls, or no errors to draw) there is nothing to read or select: the render and the keys share this.
+  const bare = empty || noErrors;
 
   const show = (i: number, sx: number, sy: number) => { setHover({ i, sx, sy }); return pointText(m, v, pts[i]!, vt); };
   const hide = () => setHover(null), blur = () => { hide(); cur.current = null; };
@@ -111,7 +113,7 @@ export function RateChart() {
   const key = (ev: KeyboardEvent<HTMLDivElement>) => {
     const pick = ev.key === "Enter" || ev.key === " ";
     if (pick) ev.preventDefault(); // Space would scroll the page
-    if (empty) return;
+    if (bare) return;
     const k = cur.current == null ? -1 : pts.findIndex(p => p.k === cur.current), ci = k >= 0 ? k : hover?.i ?? -1;
     if (pick) return ci >= 0 ? toggle(ci) : undefined;
     const i = ({ ArrowLeft: ci < 0 ? n - 1 : ci - 1, ArrowRight: ci + 1, Home: 0, End: n - 1 } as Record<string, number>)[ev.key];
@@ -135,11 +137,11 @@ export function RateChart() {
     <section className="card chart-card" aria-labelledby="chartTitle">
       <h2 id="chartTitle">{cat ? `Errors by type · ${m.cats[cat]!.label} selected` : "Errors by type"}</h2>
       <div className="hint" id="chartHint">{`Failed tool calls per ${per}, top ${TOPN} types and Other, with ${cat ? "the selected type's" : "the"} error rate (errors per 100 tool calls) above. Dashed lines mark fixes you applied.`}</div>
-      {!noErrors && legend(pts.some(p => !p.c), low.some(Boolean))}
+      {!noErrors && legend(pts.some(idle), low.some(Boolean))}
       {selOut()}
-      <div id="chart" ref={box} tabIndex={0} role="img" aria-label={`Errors by type and error rate. Use the left and right arrow keys to read each point, Enter or Space to select the ${per} for the table and examples.${v.at ? ` Selected: ${bucketLabel(m, v)}.` : ""}`}
+      <div id="chart" ref={box} tabIndex={0} role="application" aria-roledescription="chart" aria-describedby="chartHint" aria-label={`Errors by type and error rate. Use the left and right arrow keys to read each point, Enter or Space to select the ${per} for the table and examples.${v.at ? ` Selected: ${bucketLabel(m, v)}.` : ""}`}
         onKeyDown={key} onBlur={blur}>
-        {empty || noErrors ? <div className="empty">{empty ? "No tool calls in this range." : `No failed tool calls in this range, out of ${fmt(sumCalls(v, f.calls))}.`}</div>
+        {bare ? <div className="empty">{empty ? "No tool calls in this range." : `No failed tool calls in this range, out of ${fmt(sumCalls(v, f.calls))}.`}</div>
           : <svg key={dataKey} ref={svg} viewBox={`0 0 ${W || 800} ${H}`} aria-hidden="true" className={"grow" + (cat ? " has-sel" : "")}>
             {drawn.g}
             <g className="bars" style={{ transformOrigin: `0 ${bT + bH}px` }}>
@@ -171,8 +173,9 @@ export function RateChart() {
     const p = pts[i]!, rows = pointRows(m, v, p, vt), selN = (cat && p.byAll[cat]) || 0, inOther = cat && !vt.layers.includes(cat);
     return <>
       <div className="muted">{pointWhen(v, p)}</div>
-      {!p.c ? <div><b>No activity</b> · no tool calls</div> : <>
-        <div className="tot"><b>{fmt(p.r, 2)}%</b> rate · <b>{fmt(p.e)}</b> errors · {fmt(p.c)} calls{low[i] ? " · too few calls for a steady rate" : ""}</div>
+      {idle(p) ? <div><b>No activity</b> · no tool calls</div> : <>
+        {p.c ? <div className="tot"><b>{fmt(p.r, 2)}%</b> rate · <b>{fmt(p.e)}</b> errors · {fmt(p.c)} calls{low[i] ? " · too few calls for a steady rate" : ""}</div>
+          : <div className="tot">{noCalls(v, p)}</div>}
         {rows.map(([l, k, c, on]) => <div key={l} className={"trow" + (on ? " on" : "")}><span><i className="sw" style={{ background: c }} />{shortLabel(l)}</span><b>{fmt(k)}</b></div>)}
         {inOther && selN ? <div className="trow on"><span>{shortLabel(m.cats[cat]!.label)}</span><b>{fmt(selN)}</b></div> : null}
       </>}

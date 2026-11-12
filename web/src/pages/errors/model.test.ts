@@ -84,7 +84,7 @@ describe("filtering and series", () => {
     // A range compares with the days before it; without enough calls there, nothing shows.
     const wk = v({ range: 7 }), xw = compare(mm, wk, filtered(mm, wk));
     expect(xw).toMatchObject({ cmp: "vs previous 7 days", why: "Fewer than 200 tool calls in the 7 days before" });
-    expect(change(xw, "x")).toEqual({ text: "–", cls: "muted", title: xw.why, pct: null });
+    expect(change(xw, "x")).toEqual({ text: "–", cls: "muted", title: xw.why, pts: null });
     expect(whereToStart(mm, wk, filtered(mm, wk), {})).toMatchObject({ rising: [], why: xw.why });
     const two = v({ range: 14 }), s14 = summary(mm, two, filtered(mm, two), {});
     expect(s14).toMatchObject({ cmp: "vs previous 14 days", why: null, r0: 11 / 2000 * 100, r1: 3 });
@@ -100,6 +100,17 @@ describe("filtering and series", () => {
     expect(keys).toEqual(["2026-10-01", "2026-10-02", "2026-11-04", "2026-11-05"]);
     expect(pts[1]).toMatchObject({ c: 0, to: "2026-11-03" });
     expect(pointText(fm, all, pts[1]!, viewTypes(fm, all, ff))).toBe("Oct 2, 2026 – Nov 3, 2026: no activity");
+  });
+  it("says a chart point with errors and no calls has errors and no call that started, not no activity", () => {
+    // A failed call counts its call on the day it started (Nov 3) and its error on the day it ended (Nov 4).
+    const mm = makeModel({ ...fixture, calls: [["2026-11-03", "foo", 10, 0, "claude"], ["2026-11-05", "foo", 10, 0, "claude"]] });
+    const vv = v(), f = filtered(mm, vv), vt = viewTypes(mm, vv, f), { pts } = chartData(mm, vv, f, vt), p = pts.find(x => x.k === "2026-11-04")!;
+    expect(p).toMatchObject({ c: 0, e: 6 });
+    const text = pointText(mm, vv, p, vt);
+    expect(text).toBe("Nov 4, 2026: 6 errors, no tool call started in this day. x 6");
+    expect(text).not.toMatch(/no activity/);
+    expect(pointText(mm, v({ gran: "week" }), { ...p, e: 1, by: { x: 1 } }, vt)).toContain("1 error, no tool call started in this week");
+    expect(pointText(mm, vv, { ...p, e: 0, by: {}, byAll: {}, other: 0 }, vt)).toBe("Nov 4, 2026: no activity"); // neither: no activity
   });
 });
 
@@ -170,15 +181,33 @@ describe("types", () => {
     expect(typeRows(mm, vv, f)[0]).toMatchObject({ n: 2, rate: 10 });
     expect(typeRows(mm, vv, f)[0]!.rate).toBe(pt.r);
   });
-  it("carries the percent the change cell shows, and none for counts or a missing comparison", () => {
+  it("carries the change in rate in points, also for counts, and none only for a missing comparison", () => {
     const r = typeRows(m, v(), filtered(m, v()))[0]!;
-    expect(r.delta.pct).toBeNull(); // "–": no calls in the 30 days before
-    const c = (a: number, b: number) => ({ a: { c: 1000, e: a, by: { x: a } }, b: { c: 1000, e: b, by: { x: b } }, cmp: "", why: null });
-    expect(change(c(6, 12), "x", 5)).toMatchObject({ text: "▲ +100%", pct: 100 });
-    expect(change(c(18, 9), "x", 5)).toMatchObject({ text: "▼ -50%", pct: -50 });
-    expect(change(c(6, 6), "x", 5)).toMatchObject({ text: "0%", pct: 0 });
-    expect(change(c(1, 3), "x", 5)).toMatchObject({ text: "1 → 3", pct: null });
-    expect(change({ ...c(6, 12), why: "no" }, "x", 5)).toMatchObject({ text: "–", pct: null });
+    expect(r.delta.pts).toBeNull(); // "–": no calls in the 30 days before
+    const c = (a: number, b: number, ca = 1000, cb = 1000) => ({ a: { c: ca, e: a, by: { x: a } }, b: { c: cb, e: b, by: { x: b } }, cmp: "", why: null });
+    expect(change(c(6, 12), "x", 5)).toMatchObject({ text: "▲ +100%", pts: expect.closeTo(.6) });
+    expect(change(c(18, 9), "x", 5)).toMatchObject({ text: "▼ -50%", pts: expect.closeTo(-.9) });
+    expect(change(c(6, 6), "x", 5)).toMatchObject({ text: "0%", pts: 0 });
+    expect(change(c(1, 3), "x", 5)).toMatchObject({ text: "1 → 3", pts: expect.closeTo(.2) });
+    expect(change(c(0, 48), "x", 5)).toMatchObject({ text: "0 → 48", pts: expect.closeTo(4.8) });
+    // The rate, not the count: the same errors over more calls after the change is a drop.
+    expect(change(c(2, 2, 1000, 4000), "x", 5).pts).toBeCloseTo(-.15);
+    expect(change({ ...c(6, 12), why: "no" }, "x", 5)).toMatchObject({ text: "–", pts: null });
+  });
+  it("orders +12%, -40% and 0 → 48 by their change in points: the biggest gain is 0 → 48", () => {
+    const row = (id: string, c: string, d: string) => ({ id, ts: `${d}T10:00:00.000Z`, d, p: "foo", s: "s1", t: "Edit", c, i: "", e: "", r: "", sub: 0 as const, src: "claude" as const, n: null });
+    const errors = [["up", 100, 112], ["down", 100, 60], ["fresh", 0, 48]].flatMap(([c, a, b]) =>
+      [...Array.from({ length: a as number }, (_, i) => row(`${c}a${i}`, c as string, "2026-10-01")), ...Array.from({ length: b as number }, (_, i) => row(`${c}b${i}`, c as string, "2026-11-04"))]);
+    const days = [["up", 100, 112], ["down", 100, 60], ["fresh", 0, 48]].flatMap(([c, a, b]) =>
+      [["2026-10-01", "foo", c, a, 0, "claude"], ["2026-11-04", "foo", c, b, 0, "claude"]].filter(d => d[3]) as ErrorsPayload["error_days"]);
+    const mm = makeModel({ ...fixture, errors, error_days: days, calls: [["2026-10-01", "foo", 1000, 0, "claude"], ["2026-11-04", "foo", 1000, 0, "claude"]] });
+    const vv = v({ range: 30 }), rows = Object.fromEntries(typeRows(mm, vv, filtered(mm, vv)).map(r => [r.cid, r.delta]));
+    expect(rows.up!.text).toBe("▲ +12%");
+    expect(rows.down!.text).toBe("▼ -40%");
+    expect(rows.fresh!.text).toBe("0 → 48");
+    const pts = (c: string) => rows[c]!.pts!;
+    expect(pts("fresh")).toBeGreaterThan(pts("up"));
+    expect(pts("up")).toBeGreaterThan(pts("down"));
   });
   it("closes a type with no errors in the view unless an example is linked", () => {
     expect(settle(m, v({ cat: "x" })).cat).toBe("x");
@@ -384,6 +413,14 @@ describe("summary and fixes", () => {
     expect(after.sides[0].r).toBe(5);
     expect(after.sides[1].r).toBeCloseTo(0.6);
     expect(after.verdict).toEqual(["Rate lower", "ok"]);
+  });
+  it("counts the open types with a fix as Where to start lists them: a muted type is not one", () => {
+    const p: ErrorsPayload = { ...fixture, errors: fixture.errors.map(e => ({ ...e, c: "worktree" })) }, mm = makeModel(p), vv = v();
+    const withFix = (mod: typeof mm, fixes = {}) => summary(mod, vv, filtered(mod, vv), fixes).withFix;
+    expect(withFix(mm)).toBe(1);
+    expect(withFix(withMuted(mm, ["worktree"]))).toBe(0);
+    expect(whereToStart(withMuted(mm, ["worktree"]), vv, filtered(mm, vv), {}).open).toEqual([]);
+    expect(withFix(mm, { worktree: "2026-11-04" })).toBe(0);
   });
   it("where to start skips fixed types and types without a snippet", () => {
     const p: ErrorsPayload = { ...fixture, errors: fixture.errors.map(e => ({ ...e, c: "worktree" })) };
@@ -601,14 +638,15 @@ describe("normalized messages", () => {
       ...["/", "/.", "~/", "'/", "\"/a\"b", "'/ '", "`", "C:\\", "C:/", "0", "a0", "a-", "a_", "1.", "1:", "2026-11-04T", "0x", "x/", "日/", "a'", "toolu_", "1-", "a.", "\\"]
         .map(u => (n: number) => u.repeat(Math.ceil(n / u.length)).slice(0, n)),
       n => ("'/" + "a ".repeat(10)).repeat(Math.ceil(n / 22)).slice(0, n), n => ("1" + "a").repeat(n / 2), n => "/".repeat(n - 1) + "a", n => "a".repeat(n - 1) + "/"];
-    // Per-call cost, best of several samples (CI noise only adds time), at the cap (700) and at 8x it.
-    const cost = (line: string, reps: number) => {
+    // Per-call cost, best of several samples (CI noise only adds time), at the cap (700) and at 8x it: the same reps and samples for both,
+    // so noise cannot fall on one side only.
+    const cost = (line: string, reps = 10) => {
       let best = Infinity;
       for (let k = 0; k < 7; k++) { const t = performance.now(); for (let r = 0; r < reps; r++) applyRules(line); best = Math.min(best, (performance.now() - t) / reps); }
       return best;
     };
     for (const [i, shape] of shapes.entries()) {
-      const short = cost(shape(700), 40), long = cost(shape(5600), 5);
+      const short = cost(shape(700)), long = cost(shape(5600));
       expect(long / Math.max(short, 0.005), `shape ${i}: ${JSON.stringify(shape(12))}…`).toBeLessThan(20);
     }
   });

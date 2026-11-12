@@ -6,7 +6,7 @@ import { num as fmt, plural, when as at } from "../../format";
 import { navigate } from "../../hash";
 import { getJson } from "../../useApi";
 import { useErrors, type ErrorsCtx } from "./context";
-import { dur, incSpan, OUTCOME, PAYLOAD_INPUT, sessionHref, type Err, type Group, type MsgGroup } from "./model";
+import { dur, incSpan, msgOpenKey, OUTCOME, PAYLOAD_INPUT, sessionHref, type Err, type Group, type MsgGroup } from "./model";
 import { viewHash } from "./view";
 
 // Examples opened with "Show full", by id (or time and tool for an example without one).
@@ -127,8 +127,8 @@ const MSG_PAGE = 30; // examples a message group shows at a time, as the flat li
 /** One message: its error count, text, share, projects, tools and newest time; open, its examples newest first. The copy button copies
  *  the normalized message. reset starts the group's examples over at the first page when the list changes. */
 export function MsgRow({ g, focused, reset }: { g: MsgGroup; focused: Err | undefined; reset: string }) {
-  const x = useErrors(), open = x.openMsg.has(g.key), id = useId(), [copied, setCopied] = useState<"" | "ok" | "fail">("");
-  const toggle = () => { if (open) x.openMsg.delete(g.key); else x.openMsg.add(g.key); x.bump(); };
+  const x = useErrors(), ok = msgOpenKey(g.errs[0]!.c, g.key), open = x.openMsg.has(ok), id = useId(), [copied, setCopied] = useState<"" | "ok" | "fail">("");
+  const toggle = () => { if (open) x.openMsg.delete(ok); else x.openMsg.add(ok); x.bump(); };
   const copy = () => {
     const done = (r: "ok" | "fail") => { setCopied(r); setTimeout(() => setCopied(""), r === "ok" ? 1500 : 4000); };
     // No clipboard API (or a refusal) throws inside the chain, so both end in the failed state.

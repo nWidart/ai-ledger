@@ -78,7 +78,7 @@ function serve(fixes: Record<string, string> = {}, refuse: ((b: Fix) => boolean)
       if (url === MUTE) {
         if (api.refuseMute?.(body as Mute)) return refused();
         if (body.muted) api.muted.add(body.category); else api.muted.delete(body.category);
-        api.decided.add(body.category); // a muted type has a row, so a later import skips it
+        // A mute decides nothing about the type's fix marker: a later import still adds it.
       } else if (url === IMPORT) {
         if (api.failImport) return refused();
         api.take(body.fixes as Record<string, string>);
@@ -603,6 +603,25 @@ describe("ErrorsPage", () => {
     const muteBtn = () => screen.getByRole("button", { name: "Mute this type" });
     const unmuteBtn = () => screen.getByRole("button", { name: "Unmute" });
     const mark = () => userEvent.click(screen.getByRole("button", { name: "Mark fix applied" }));
+
+    it("leaves the chart's keys alone once the last visible type is muted out and no errors are left to draw", async () => {
+      serve();
+      history.replaceState(null, "", "/errors#range=7&cat=x&noise=0");
+      await page();
+      await userEvent.click(muteBtn());
+      await waitFor(() => expect(document.querySelector("#chart svg")).toBeNull());
+      const chart = document.getElementById("chart")!, hash = location.hash;
+      expect(chart.textContent).toMatch(/No failed tool calls in this range/);
+      chart.focus();
+      // React reports an error thrown in a handler on the window, not out of fireEvent.
+      const thrown: string[] = [], onError = (e: ErrorEvent) => { e.preventDefault(); thrown.push(e.message); };
+      addEventListener("error", onError);
+      for (const key of ["ArrowRight", "ArrowLeft", "Home", "End", "Enter", " "]) fireEvent.keyDown(chart, { key });
+      removeEventListener("error", onError);
+      expect(thrown).toEqual([]);
+      expect(location.hash).toBe(hash); // nothing selected
+      expect(chart.getAttribute("aria-label")).not.toContain("Selected:");
+    });
 
     it("calls the toggle Hide noise and muted, keeping its id and hash key", async () => {
       serve();
@@ -1406,7 +1425,7 @@ describe("ErrorsPage bucket selection", () => {
     // The vitals, the chart and the Change column stay range-wide; the hint says so.
     expect(screen.getByRole("heading", { level: 1 }).textContent).toMatch(/^6 failed tool calls/);
     expect(document.querySelector("#catBody td.num:last-child")!.textContent).toBe(change);
-    expect(document.querySelector(".types .hint")!.textContent).toContain("only the selected day; the trend and change stay range-wide");
+    expect(document.querySelector(".types .hint")!.textContent).toContain("With a day selected, the types, Errors, Time lost, Rate, Didn't recover and Share follow it; Rate trend and Change stay range-wide.");
     // Marked on the chart by an outline and a marker, and for assistive tech.
     expect(document.getElementById("atMark")?.getAttribute("data-at")).toBe("2026-11-03");
     expect(document.getElementById("chart")!.getAttribute("aria-label")).toContain("Selected: Nov 3.");
@@ -1501,6 +1520,105 @@ describe("ErrorsPage bucket selection", () => {
     expect(location.hash).toBe("#range=0&ex=t07");
     expect(document.getElementById("outside")).toBeNull();
     expect(document.getElementById("exCount")!.textContent).toMatch(/^3 in range/);
+  });
+
+  // Nov 3 holds only "tests" errors (2), Nov 4 only "x" (4): a type chosen from outside the table can have none in the selected day.
+  const split: ErrorsPayload = { ...two, errors: two.errors.map(e => (e.id === "t01" || e.id === "t02" ? { ...e, c: "tests" } : e)),
+    error_days: [["2026-11-03", "foo", "tests", 2, 0, "claude"], ["2026-11-04", "foo", "x", 4, 0, "claude"]] };
+  const live = () => document.getElementById("detailLive")!.textContent;
+
+  it("opens a type chosen in the chart legend over a bucket without it: the bucket clears, and the page says so", async () => {
+    await open("#range=30&at=2026-11-04", split);
+    expect(rows()).toEqual([["x", "4"]]);
+    await userEvent.click(within(document.getElementById("legend")!).getByRole("button", { name: /^Tests \/ build/ }));
+    await waitFor(() => expect(hashOf()).toEqual({ range: "30", cat: "tests" }));
+    expect(document.getElementById("detailTitle")?.textContent).toBe("Tests / build / lint failed");
+    expect(document.getElementById("atClr")).toBeNull();
+    await waitFor(() => expect(live()).toBe("Selection cleared: Tests / build / lint failed has no errors in Nov 4."));
+  });
+
+  it("keeps the bucket when the legend's type has errors in it", async () => {
+    await open("#range=30&at=2026-11-04", split);
+    await userEvent.click(within(document.getElementById("legend")!).getByRole("button", { name: /^x/ }));
+    expect(hashOf()).toEqual({ range: "30", at: "2026-11-04", cat: "x" });
+    expect(live()).toBe("");
+  });
+
+  it("opens a type picked in Where to start over a bucket without it", async () => {
+    await open("#range=30&at=2026-11-04", split);
+    await userEvent.click(within(document.getElementById("detail")!).getByRole("button", { name: /^Tests \/ build/ }));
+    await waitFor(() => expect(hashOf()).toEqual({ range: "30", cat: "tests" }));
+    expect(document.getElementById("detailTitle")?.textContent).toBe("Tests / build / lint failed");
+    await waitFor(() => expect(live()).toBe("Selection cleared: Tests / build / lint failed has no errors in Nov 4."));
+  });
+
+  it("opens a type chosen in the palette over the selected bucket, whatever the bucket holds", async () => {
+    const pal = { ...palette, categories: [{ id: "tests", label: "tests", errors: 2 }, { id: "x", label: "x", errors: 4 }] };
+    vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/errors") ? split : url.startsWith("/api/palette") ? pal : {})));
+    history.replaceState(null, "", "/errors#range=30&at=2026-11-04");
+    render(<><ErrorsPage /><Palette /></>);
+    await screen.findByRole("heading", { level: 1, name: /failed tool calls/ });
+    act(() => openPalette());
+    await userEvent.type(await screen.findByRole("combobox", { name: "Filters, pages, inspectors and commands" }), "tests{Enter}");
+    await waitFor(() => expect(hashOf()).toEqual({ range: "30", cat: "tests" }));
+    expect(document.getElementById("detailTitle")?.textContent).toBe("Tests / build / lint failed");
+  });
+
+  it("clears the agent filter too with Clear filters, as the note says it may not match", async () => {
+    vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/errors") ? two : {})));
+    history.replaceState(null, "", "/errors#ex=t07&range=30&source=codex");
+    render(<ErrorsPage />);
+    await screen.findByRole("heading", { level: 1 });
+    const note = document.getElementById("outside")!;
+    expect(note.textContent).toContain("project, agent, range");
+    await userEvent.click(within(note).getByRole("button", { name: "Clear filters" }));
+    expect(location.hash).toBe("#range=0&ex=t07");
+    expect(document.getElementById("outside")).toBeNull();
+    expect(document.querySelector("#exList #ex-t07")).toBeTruthy();
+  });
+
+  it("draws the no-activity band and legend key only for buckets with neither calls nor errors", async () => {
+    const calls = (days: string[]): ErrorsPayload["calls"] => days.map(d => [d, "foo", 10, 0, "claude"]);
+    const bands = () => document.querySelectorAll("#chart svg rect.noact").length;
+    const key = () => [...document.querySelectorAll("#legend .key")].some(k => k.textContent === "No activity");
+    // Weeks: a call on Oct 28 (week of Oct 26) and its error on Nov 4 (week of Nov 2): errors and no calls in the second week, so no band.
+    await open("#range=30&gran=week", { ...fixture, calls: calls(["2026-10-28"]) });
+    expect([bands(), key()]).toEqual([0, false]);
+    cleanup();
+    clearApiCache();
+    // Days: the same errors, and a call on Nov 5: Oct 29 to Nov 3 have neither (one merged band), Nov 4 has errors only.
+    await open("#range=30", { ...fixture, calls: calls(["2026-10-28", "2026-11-05"]) });
+        expect([bands(), key()]).toEqual([1, true]);
+    const band = document.querySelector("#chart svg rect.noact")!;
+    expect(Number(band.getAttribute("width"))).toBeCloseTo(6 * (800 - 40 - 10) / 9); // six of the nine days
+  });
+
+  it("tells a screen reader the chart is an application with its own keys, and describes it", async () => {
+    await open("#range=30&at=2026-11-03");
+    const chart = document.getElementById("chart")!;
+    expect(chart.getAttribute("role")).toBe("application");
+    expect(chart.getAttribute("aria-roledescription")).toBe("chart");
+    expect(chart.getAttribute("aria-describedby")).toBe("chartHint");
+    expect(document.getElementById("chartHint")).toBeTruthy();
+    expect(chart.getAttribute("aria-label")).toMatch(/^Errors by type and error rate\. Use the left and right arrow keys.*Selected: Nov 3\.$/);
+    expect(screen.queryByRole("img", { name: /Errors by type/ })).toBeNull();
+    expect(document.getElementById("chartLive")!.getAttribute("aria-live")).toBe("polite");
+  });
+
+  it("reads a point with errors and no calls as errors and no call that started, in the keyboard reading and the tooltip, never as no activity", async () => {
+    // A failed call counts its call on the day it started (Nov 3) and its error on the day it ended (Nov 4): Nov 4 has errors and no calls.
+    await open("#range=30", withDays([["2026-11-03", "foo", 10, 0, "claude"], ["2026-11-05", "foo", 10, 0, "claude"]]));
+    keys();
+    await userEvent.keyboard("{Home}{ArrowRight}");
+    const live = document.getElementById("chartLive")!.textContent!;
+    expect(live).toMatch(/^Nov 4, 2026: 4 errors, no tool call started in this day\./);
+    expect(live).not.toMatch(/no activity/i);
+    const tip = document.getElementById("tip")!;
+    expect(tip.textContent).toContain("4 errors, no tool call started in this day");
+    expect(tip.textContent).not.toMatch(/no activity/i);
+    expect(tip.textContent).toContain("x"); // its type rows still show
+    await userEvent.keyboard("{ArrowRight}"); // Nov 5: calls, no errors
+    expect(document.getElementById("chartLive")!.textContent).toMatch(/^Nov 5, 2026: 0\.00% rate, 0 errors of 10 calls/);
   });
 
   it("keeps Space working on the current point after Enter closes the open type", async () => {
@@ -1841,11 +1959,12 @@ describe("type table: sort and filter", () => {
   it.each([
     ["Type", ["build", "git", "worktree", "lint", "tests"], "ascending", ["tests", "lint", "worktree", "git", "build"], "descending"], // by label: "Git worktree" after "git"
     ["Errors", ASC, "ascending", DEFAULT, "descending"],
-    ["Time lost", ["worktree", "build", "tests", "git", "lint"], "descending", ["git", "lint", "tests", "build", "worktree"], "ascending"],
+    // git's incidents are single failures (no time lost: "–") and lint has no incident: missing values, last both ways in their listed order.
+    ["Time lost", ["worktree", "build", "tests", "git", "lint"], "descending", ["tests", "build", "worktree", "git", "lint"], "ascending"],
     ["Rate", DEFAULT, "descending", ASC, "ascending"],
     ["Didn't recover", ["git", "worktree", "tests", "build", "lint"], "descending", ["build", "tests", "worktree", "git", "lint"], "ascending"], // lint has no incident: last both ways
-    ["Share", DEFAULT, "descending", ASC, "ascending"],
-    ["Change", ["tests", "worktree", "git", "build", "lint"], "descending", ["git", "worktree", "tests", "build", "lint"], "ascending"], // counts come last both ways
+    // The change in rate in points: tests +0.6, build +0.2 (shown as counts), worktree and lint 0 (their tie keeps the listed order), git -0.9.
+    ["Change", ["tests", "build", "worktree", "lint", "git"], "descending", ["git", "worktree", "lint", "build", "tests"], "ascending"],
   ] as const)("sorts by %s, and a second click flips it", async (name, first, aria1, second, aria2) => {
     await open();
     await userEvent.click(head(name));
@@ -1858,24 +1977,31 @@ describe("type table: sort and filter", () => {
     expect(document.activeElement).toBe(head(name));
   });
 
-  it("marks the sorted column's header and cells, so the breakpoints that hide columns leave it", async () => {
+  it("sorts by Share no more: it orders as Errors does, and the header is no button", async () => {
     await open();
-    const marked = (cls: string) => [...document.querySelectorAll(`.types .${cls}`)].filter(c => c.classList.contains("c-on")).length;
-    expect(marked("c-share")).toBe(0);
-    await userEvent.click(head("Share"));
-    expect(marked("c-share")).toBe(6); // the header and the five cells
-    expect(document.querySelector("th.c-share")!.classList.contains("c-on")).toBe(true);
-    await userEvent.click(head("Rate"));
-    expect(marked("c-share")).toBe(0);
-    expect(marked("c-rate")).toBe(6);
+    expect(within(document.querySelector("thead")!).queryByRole("button", { name: "Share" })).toBeNull();
+    expect(document.querySelector("th.c-share")!.getAttribute("aria-sort")).toBeNull();
+    expect(document.querySelector("th.c-share")!.textContent).toBe("Share");
+    expect(document.querySelectorAll("thead th button")).toHaveLength(6); // Type, Errors, Time lost, Rate, Didn't recover, Change
   });
 
-  // jsdom has no layout or media queries, so read the stylesheet: the breakpoints that hide Share must leave it when it is the sorted column.
-  it("hides Share at the narrow breakpoints only when it is not the sorted column", () => {
+  it("explains the Change sort in its header, which names the unit", async () => {
+    await open();
+    expect(head("Change").closest("th")!.getAttribute("title")).toMatch(/^Sorts by the change in error rate, in points/);
+  });
+
+  // jsdom has no layout or media queries, so read the stylesheet: the only columns a breakpoint hides are Share and the trend, and neither sorts.
+  it("hides only columns that are not sortable, with no exemption for the sorted one", async () => {
+    await open();
     const css = readFileSync("src/pages/errors/errors.css", "utf8").replace(/\/\*[\s\S]*?\*\//g, ""); // vitest runs from web/
-    const hides = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter(([, sel, body]) => /display\s*:\s*none/.test(body!) && sel!.includes(".c-share"));
-    expect(hides.length).toBeGreaterThanOrEqual(2); // the mid widths and the phone
-    for (const [, sel] of hides) for (const one of sel!.split(",").filter(x => x.includes(".c-share"))) expect(one.replace(/\s+/g, "")).toContain(".c-share:not(.c-on)");
+    expect(css).not.toContain("c-on");
+    const hidden = new Set<string>();
+    for (const [, sel, body] of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      if (!/display\s*:\s*none/.test(body!)) continue;
+      for (const [, c] of sel!.matchAll(/\.(c-[a-z]+)/g)) hidden.add(c!);
+    }
+    expect([...hidden].sort()).toEqual(["c-share", "c-trend"]);
+    for (const c of hidden) expect(document.querySelector(`thead th.${c} button`), c).toBeNull();
   });
 
   it("keeps the rows when only the sort or the filter changes", async () => {
@@ -1945,6 +2071,24 @@ describe("type table: sort and filter", () => {
       await userEvent.click(head("Rate"));
       await userEvent.click(head("Rate"));
       expect(order()).toEqual(["lint", "worktree", "git", "tests"]);
+    });
+
+    it("sends Back to types to the first listed type when the filter hides the open type's row, and to the chart with none listed", async () => {
+      await open("#range=30&cat=lint");
+      await userEvent.type(box(), "git");
+      expect(order()).toEqual(["git", "worktree"]);
+      const scroll = vi.spyOn(Element.prototype, "scrollIntoView");
+      await userEvent.click(screen.getByRole("button", { name: "Back to types" }));
+      expect(document.activeElement).toBe(document.querySelector('#catBody button[data-c="git"]'));
+      expect(scroll.mock.contexts.at(-1)).toBe(document.activeElement);
+      await userEvent.clear(box());
+      await userEvent.type(box(), "zzz");
+      await userEvent.click(screen.getByRole("button", { name: "Back to types" }));
+      expect(document.activeElement).toBe(document.getElementById("chart"));
+      await userEvent.clear(box());
+      await userEvent.click(screen.getByRole("button", { name: "Back to types" })); // the row is listed again: it is the target
+      expect(document.activeElement).toBe(document.querySelector('#catBody button[data-c="lint"]'));
+      scroll.mockRestore();
     });
 
     it("says so with no match, and a Clear filter button lists every type again and returns the focus to the field", async () => {
@@ -2078,6 +2222,19 @@ describe("ErrorsPage by message", () => {
     expect(meta(heads()[1]!)).toBe(`2 projects · Edit, Read · newest ${when("2026-11-04T10:02:00.000Z")}›`);
     expect(meta(heads()[2]!)).toBe(`1 project · Bash · newest ${when("2026-11-04T11:05:00.000Z")}›`);
     expect(heads()[1]!.querySelector(".lbl")!.getAttribute("title")).toBe(ENOENT); // the full text, for a label that was cut
+  });
+
+  it("keeps a group open per type: (no error text) open in one type is closed in another", async () => {
+    await open("#range=30&cat=x", { ...withErrors([...base, E("e1", "2026-11-04T12:30:00.000Z", "", { c: "tests" })]), calls });
+    const none = () => heads().find(h => h.querySelector(".lbl")!.textContent === "(no error text)")!;
+    await userEvent.click(none());
+    expect(none().getAttribute("aria-expanded")).toBe("true");
+    await userEvent.click(document.querySelector('#catBody button[data-c="tests"]')!);
+    expect(document.getElementById("detailTitle")!.textContent).toBe("Tests / build / lint failed");
+    expect(none().getAttribute("aria-expanded")).toBe("false");
+    expect(examples()).toEqual([]);
+    await userEvent.click(document.querySelector('#catBody button[data-c="x"]')!);
+    expect(none().getAttribute("aria-expanded")).toBe("true"); // x's group is still open
   });
 
   it("opens a group into its examples, newest first, and closes it", async () => {

@@ -124,8 +124,9 @@ export function series(v: View, errs: readonly Err[], calls: readonly CallRow[],
 }
 /** No calls, no rate: null, never a 0% baseline. */
 export const rate = (e: number, c: number): number | null => (c ? e / c * 100 : null);
-/** pct: the percent the cell shows, null when it shows counts or "–" (the table sorts by it). */
-export interface Delta { text: string; cls: string; title?: string; pct: number | null }
+/** pts: the change in the type's error rate in percentage points (the rate after minus the rate before: what Rising fastest ranks by),
+ *  whatever the cell shows; null only with no comparison ("–"). The table sorts by it. */
+export interface Delta { text: string; cls: string; title?: string; pts: number | null }
 /** One side of a comparison: tool calls, errors, and errors per type. */
 export interface Tally { c: number; e: number; by: Record<string, number> }
 /** What a change compares, the same for the vitals, the table and Rising fastest: this range against the same number of days
@@ -149,12 +150,13 @@ export function compare(m: Model, v: View, f: Filtered): Compare {
 /** Change of a type's error rate between the sides: "–" with the reason when either side has too few calls; the counts
  *  ("2 → 9") when either side has fewer than MIN_PCT_ERRORS errors, too few for a percent. min: change shown without an arrow. */
 export function change(x: Compare, cat: string, min = 0): Delta {
-  if (x.why) return { text: "–", cls: "muted", title: x.why, pct: null };
+  if (x.why) return { text: "–", cls: "muted", title: x.why, pts: null };
   const e0 = x.a.by[cat] || 0, e1 = x.b.by[cat] || 0, r0 = e0 / x.a.c * 100, r1 = e1 / x.b.c * 100;
   const title = `Error rate ${x.cmp}: ${fmt(r0, 2)}% → ${fmt(r1, 2)}% (${fmt(e0)} → ${fmt(e1)} errors)`;
-  if (e0 < MIN_PCT_ERRORS || e1 < MIN_PCT_ERRORS) return { text: `${fmt(e0)} → ${fmt(e1)}`, cls: "muted", title, pct: null };
+  const pts = r1 - r0;
+  if (e0 < MIN_PCT_ERRORS || e1 < MIN_PCT_ERRORS) return { text: `${fmt(e0)} → ${fmt(e1)}`, cls: "muted", title, pts };
   const d = (r1 - r0) / r0 * 100;
-  return { text: `${d > min ? "▲ +" : d < -min ? "▼ " : ""}${fmt(d, 0)}%`, cls: d > min ? "delta-up" : d < -min ? "delta-down" : "muted", title, pct: d };
+  return { text: `${d > min ? "▲ +" : d < -min ? "▼ " : ""}${fmt(d, 0)}%`, cls: d > min ? "delta-up" : d < -min ? "delta-down" : "muted", title, pts };
 }
 /** The day that splits the view's calls in half: the calls before it are under half of them. */
 export function midDay(v: View, f: Filtered): Day {
@@ -216,7 +218,7 @@ export function summary(m: Model, v: View, f: Filtered, fixes: Fixes): Summary {
   const x = compare(m, v, f), r0 = x.why ? null : rate(x.a.e, x.a.c), r1 = x.why ? null : rate(x.b.e, x.b.c);
   const d = r0 && r1 != null ? (r1 - r0) / r0 * 100 : null;
   return { totalCalls, n, r, r0, r1, d, cmp: x.cmp, why: x.why, top: vt.top[0], vt, nFix: Object.keys(fixes).length,
-    withFix: Object.keys(vt.counts).filter(c => !fixes[c] && m.cats[c]?.snippet).length, inc: incSummary(m, f.errs), uncat: uncategorized(f.errs) };
+    withFix: Object.keys(vt.counts).filter(c => !fixes[c] && !m.muted.has(c) && m.cats[c]?.snippet).length, inc: incSummary(m, f.errs), uncat: uncategorized(f.errs) };
 }
 export interface Uncat { n: number; share: number; bySource: [Source, number, number][] }
 /** The catch-all types' errors: all of them, and per source (its catch-all count and share), so a growing catch-all shows.
@@ -305,11 +307,15 @@ export function pointRows(m: Model, v: View, p: ChartPt, vt: ViewTypes): [string
 }
 export const pointWhen = (v: View, p: ChartPt) =>
   p.to ? `${label(p.k, true)} – ${v.gran === "week" ? "week of " : ""}${label(p.to, true)}` : `${v.gran === "week" ? "Week of " : ""}${label(p.k, true)}`;
+/** A point with neither calls nor errors (a folded stretch included): the only one the chart calls "no activity", in its band, its legend key, its reading and its tooltip. */
+export const idle = (p: ChartPt) => !p.c && !p.e;
+/** What a point with errors and no calls says: a failed call counts its call on the day it started and its error on the day it ended. */
+export const noCalls = (v: View, p: ChartPt) => `${fmt(p.e)} error${p.e === 1 ? "" : "s"}, no tool call started in this ${v.gran}`;
 /** What the keyboard reading of the chart announces for a point. */
 export function pointText(m: Model, v: View, p: ChartPt, vt: ViewTypes): string {
   const when = pointWhen(v, p) + (p.k === v.at && !p.to ? " (selected)" : ""), selN = (v.cat && p.byAll[v.cat]) || 0;
-  if (!p.c) return `${when}: no activity`;
-  return `${when}: ${fmt(p.r, 2)}% rate, ${fmt(p.e)} errors of ${fmt(p.c)} calls. ` + pointRows(m, v, p, vt).map(([l, n]) => `${l} ${fmt(n)}`).join(", ")
+  if (idle(p)) return `${when}: no activity`;
+  return `${when}: ${p.c ? `${fmt(p.r, 2)}% rate, ${fmt(p.e)} errors of ${fmt(p.c)} calls` : noCalls(v, p)}. ` + pointRows(m, v, p, vt).map(([l, n]) => `${l} ${fmt(n)}`).join(", ")
     + (v.cat && selN ? `. Selected ${m.cats[v.cat]!.label}: ${fmt(selN)}` : "");
 }
 /** Rate line: solid across buckets with a value; a bridge over a gap, never a lone dot. */
@@ -327,7 +333,7 @@ export function linePath(vals: readonly (number | null)[], x: (i: number) => num
 // ---------- category table ----------
 /** lost: the type's time lost in ms (see timeLost). rate: errors per 100 tool calls in the view (the selected bucket's, with one), null
  *  with no calls. inc, bad: its incidents and those whose outcome isn't "recovered"; unrec: bad as a percent of inc, null with no incident.
- *  delta.pct: the numeric change. */
+ *  delta.pts: the change in rate, in points (the Change column's sort). */
 export interface TypeRow { cid: string; n: number; lost: number; share: number; rate: number | null; inc: number; bad: number; unrec: number | null; color: string; pts: Pt[]; delta: Delta }
 export function typeRows(m: Model, v: View, f: Filtered): TypeRow[] {
   const errs = inBucket(v, f.errs), counts = countBy(errs), total = errs.length || 1, vt = viewTypes(m, v, f), keys = buckets(m, f.from, v.gran), x = compare(m, v, f), groups = incidentsOf(m, errs), lost = timeLost(m, errs, groups);
@@ -339,8 +345,10 @@ export function typeRows(m: Model, v: View, f: Filtered): TypeRow[] {
       pts: series(v, f.errs, f.calls, keys, cid), delta: change(x, cid, 5) };
   });
 }
-/** The type table's sortable columns, and its default: Errors, most first (typeRows' own order). */
-export type TypeKey = "type" | "n" | "lost" | "rate" | "unrec" | "share" | "change";
+/** The type table's sortable columns, and its default: Errors, most first (typeRows' own order). Share orders as Errors does: no column of its own. */
+export type TypeKey = "type" | "n" | "lost" | "rate" | "unrec" | "change";
+/** The key of an open By message group: the message alone is not one, as "(no error text)" occurs in every type. */
+export const msgOpenKey = (cat: string, key: string) => `${cat}\n${key}`;
 export const TYPE_SORT: SortBy<TypeKey> = { key: "n", desc: true };
 /** The table's empty row. */
 export function emptyTypes(m: Model, v: View, f: Filtered): string {
