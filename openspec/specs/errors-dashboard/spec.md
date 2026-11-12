@@ -42,6 +42,18 @@ The Errors page SHALL compare error rates the same way in the summary, the type 
 - **WHEN** a type had 2 errors in the previous 30 days and 9 in this range
 - **THEN** the table shows "2 → 9"
 
+### Requirement: Show the uncategorized share
+The Errors summary SHALL show the share of the view's errors in the catch-all types (Other, Other non-zero exit and MCP tool error), which are the errors no specific rule matched, with a title that says so. When the view is not filtered to one source and more than one source has errors, the line SHALL split the share by source. It SHALL show nothing when the view has no errors.
+
+#### Scenario: Share shows
+- **WHEN** the view has errors, and 12 of 100 of them are of catch-all types
+- **THEN** the summary shows "Uncategorized: 12% of errors", titled with the catch-all types and what they mean
+
+#### Scenario: Split by source
+- **WHEN** the view has no source filter and both Claude Code and Codex have errors in it
+- **THEN** the line adds each source's share in parentheses, such as "(Claude Code 9%, Codex 31%)"
+- **AND** a view filtered to one source shows the share alone
+
 ### Requirement: State each type's time lost
 The Errors page SHALL state each error type's time lost: the sum, over the view's incidents of that type, of each incident's span, from its first failure's start to its last failure's end. An incident SHALL count whole when at least one of its failures is in the view. A type whose incidents have no measurable span SHALL show no time. The page SHALL rank the open types that have a ready-made fix by time lost, most first, then by error count, and show each one's time lost.
 

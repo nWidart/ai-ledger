@@ -3,7 +3,7 @@ import fixture from "../../__fixtures__/errors";
 import type { ErrorsPayload } from "../../api";
 import {
   beforeAfter, bucketOf, buckets, byWeight, change, chartData, compare, emptyTypes, exList, filtered, incidentsOf, incSummary, makeModel, midDay, pointText,
-  rangeStart, series, settle, summary, timeLost, typeColors, typeRows, viewTypes, whereToStart, type View,
+  rangeStart, series, settle, summary, timeLost, typeColors, typeRows, uncategorized, viewTypes, whereToStart, type Err, type View,
 } from "./model";
 import { lostPayload } from "./lostData";
 import { DEFAULT_VIEW, loadFixes, loadMode, readView, viewHash, viewPatch } from "./view";
@@ -159,6 +159,34 @@ describe("incidents", () => {
     const flat = exList(base, groups, true, "", m.byId.t01);
     expect(flat.items.map(e => (e as { id: string }).id)).toEqual(["t01", "t08", "t07", "t04", "t03", "t02"]);
     expect(flat.count).toBe("6 in range, newest first");
+  });
+});
+
+describe("uncategorized", () => {
+  const e = (c: string, src: "claude" | "codex") => ({ c, src }) as Err;
+  it("is empty with no errors", () => {
+    expect(uncategorized([])).toEqual({ n: 0, share: 0, bySource: [] });
+  });
+  it("counts the catch-all types of one source", () => {
+    const u = uncategorized([e("other", "claude"), e("x", "claude"), e("mcp", "claude"), e("x", "claude")]);
+    expect(u.n).toBe(2);
+    expect(u.share).toBe(0.5);
+    expect(u.bySource).toEqual([["claude", 2, 0.5]]);
+  });
+  it("splits the share by source, ordered by source name", () => {
+    // Codex first in the input, so the order comes from the sort, not from insertion.
+    const u = uncategorized([e("exit_other", "codex"), e("mcp", "codex"), e("x", "codex"), e("other", "claude"), e("x", "claude"), e("x", "claude"), e("x", "claude")]);
+    expect(u.n).toBe(3);
+    expect(u.share).toBeCloseTo(3 / 7);
+    expect(u.bySource.map(([s]) => s)).toEqual(["claude", "codex"]);
+    expect(u.bySource[0]![1]).toBe(1);
+    expect(u.bySource[0]![2]).toBeCloseTo(0.25);
+    expect(u.bySource[1]![1]).toBe(2);
+    expect(u.bySource[1]![2]).toBeCloseTo(2 / 3);
+  });
+  it("is zero when no error is a catch-all", () => {
+    const u = uncategorized([e("x", "claude"), e("y", "codex")]);
+    expect(u).toEqual({ n: 0, share: 0, bySource: [["claude", 0, 0], ["codex", 0, 0]] });
   });
 });
 
