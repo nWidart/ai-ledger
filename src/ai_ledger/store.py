@@ -84,7 +84,7 @@ CREATE TABLE IF NOT EXISTS requests (
   cache_5m BIGINT, cache_1h BIGINT, thinking_ms BIGINT, stop_reason VARCHAR, speed VARCHAR);
 CREATE TABLE IF NOT EXISTS tool_calls (
   tool_use_id VARCHAR PRIMARY KEY, session_id VARCHAR, tool VARCHAR, mcp_server VARCHAR,
-  skill VARCHAR, input_summary VARCHAR, start_ts TIMESTAMP, end_ts TIMESTAMP, is_error BOOLEAN,
+  skill VARCHAR, input_summary VARCHAR USING COMPRESSION zstd, start_ts TIMESTAMP, end_ts TIMESTAMP, is_error BOOLEAN,
   error VARCHAR, category VARCHAR, followup VARCHAR, subagent BOOLEAN, is_commit BOOLEAN,
   is_test BOOLEAN, test_passed BOOLEAN, result_file VARCHAR, result_seq BIGINT);
 CREATE TABLE IF NOT EXISTS prompts (
