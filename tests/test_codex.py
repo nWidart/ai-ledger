@@ -601,6 +601,16 @@ class LiveItemsTest(unittest.TestCase):
         res, = self.items(type="event_msg", payload=dict(type="item_completed", turn_id="t1", item=dict(
             type="McpToolCall", id="c4", server="node_repl", tool="js", status="failed", error=dict(message="boom"))))
         self.assertEqual((res["id"], res["error"]), ("c4", "boom"))
+        self.assertEqual((res["tool"], res["summary"]), ("mcp__node_repl__js", ""))
+
+    def test_failed_item_carries_its_tool_and_input(self):
+        res, = self.items(type="event_msg", payload=dict(type="item_completed", turn_id="t1", item=dict(
+            type="CommandExecution", id="c5", command=["/bin/zsh", "-lc", "ls nowhere"], status="failed", exit_code=2, aggregated_output="no such file")))
+        self.assertEqual(res, dict(k="tool_result", id="c5", error="Exit code 2\nno such file", output="", agent=None,
+                                   tool="exec_command", summary="ls nowhere"))
+        ok = self.items(type="event_msg", payload=dict(type="item_completed", turn_id="t1", item=dict(
+            type="CommandExecution", id="c6", command=["/bin/zsh", "-lc", "ls"], status="completed", exit_code=0)))
+        self.assertEqual(ok, [])
 
     def test_turns_prompts_and_replies(self):
         self.assertEqual(self.items(type="event_msg", payload=dict(type="task_started", turn_id="t1", model_context_window=272000)),

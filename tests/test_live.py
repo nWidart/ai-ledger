@@ -710,6 +710,58 @@ class CodexSessionTest(CodexCase):
         self.assertEqual(live.session(self.con.cursor(), THREAD, now=NOW, prices=PRICES)["state"]["kind"], "thinking")
         self.assertFalse(live.sessions(self.con.cursor(), now=NOW, prices=PRICES)["sessions"][0]["state"]["inferred"])
 
+    def inner(self, ordinal, secs, cid, status="failed", cmd="ls nowhere"):
+        """An item_completed line of a command an exec script ran."""
+        return codex_line(ordinal, secs, "event_msg", type="item_completed", turn_id="t1", item=dict(
+            type="CommandExecution", id=cid, command=["/bin/zsh", "-lc", cmd], status=status, exit_code=2 if status == "failed" else 0,
+            aggregated_output="no such file", duration=dict(secs=0, nanos=5000000)))
+
+    def test_failed_command_inside_an_exec_script_is_a_row(self):
+        thread = "0a0f9999-0000-7000-8000-000000000002"
+        exec_call = lambda cid, secs: codex_line(2, secs, "response_item", type="custom_tool_call", name="exec", call_id=cid, input="run it")
+        self.place(NAME, meta(THREAD).replace("2026-11-06T10:00:00.000Z", at(0)) + self.prompted() + exec_call("c1", 2)
+                   + self.inner(3, 3, "inner1") + self.inner(4, 4, "inner2", status="completed", cmd="ls")  # a success: nothing
+                   + codex_line(5, 5, "response_item", type="custom_tool_call_output", call_id="c1", output="done"))
+        self.child_of(thread, self.inner(1, 6, "inner3", cmd="rg x"))
+        self.ingest()
+        got = live.session(self.con.cursor(), THREAD, now=NOW, prices=PRICES)
+        self.assertEqual([(e["tool"], e["id"], e["lane"], e["failed"]) for e in got["events"] if e["k"] == "tool"],
+                         [("exec", "c1", None, False), ("exec_command", "inner1", None, True), ("exec_command", "inner3", thread, True)])
+        failed = got["events"][2]
+        self.assertEqual((failed["summary"], failed["error"], failed["start"], failed["end"], failed["ts"]),
+                         ("ls nowhere", "Exit code 2\nno such file", "2026-11-10T10:00:03.000Z", "2026-11-10T10:00:03.000Z", "2026-11-10T10:00:03.000Z"))
+        self.assertTrue(failed["key"].endswith("#0") and failed["key"].startswith("codex:"))
+        again = live.session(self.con.cursor(), THREAD, after=at(2), now=NOW, prices=PRICES)  # a catch-up holds the same key
+        self.assertEqual([e["key"] for e in again["events"] if e.get("id") == "inner1"], [failed["key"]])
+
+    def test_failed_inner_call_changes_no_state(self):
+        self.place(NAME, meta(THREAD).replace("2026-11-06T10:00:00.000Z", at(0)) + self.prompted()
+                   + codex_line(2, 2, "event_msg", type="task_started", turn_id="t1")
+                   + codex_line(3, 3, "response_item", type="custom_tool_call", name="update_plan", call_id="c1", input="plan") + self.inner(4, 4, "inner1"))
+        self.ingest()
+        want = dict(kind="tool", tool="update_plan", since="2026-11-10T10:00:03.000Z", inferred=False, long=False)
+        self.assertEqual(live.session(self.con.cursor(), THREAD, now=NOW, prices=PRICES)["state"], want)
+        self.assertEqual(live.sessions(self.con.cursor(), now=NOW, prices=PRICES)["sessions"][0]["state"], want)
+
+    def test_failed_item_of_a_known_call_marks_that_call_and_adds_no_row(self):
+        self.place(NAME, meta(THREAD).replace("2026-11-06T10:00:00.000Z", at(0)) + self.prompted()
+                   + codex_line(2, 2, "response_item", type="function_call", name="exec_command", call_id="c1", arguments=json.dumps(dict(cmd="ls nowhere")))
+                   + self.inner(3, 3, "c1"))
+        self.ingest()
+        tools = [e for e in live.session(self.con.cursor(), THREAD, now=NOW, prices=PRICES)["events"] if e["k"] == "tool"]
+        self.assertEqual([(e["id"], e["failed"], e["error"]) for e in tools], [("c1", True, "Exit code 2\nno such file")])
+
+    def test_failed_item_of_a_call_before_the_rows_marks_that_call(self):
+        self.place(NAME, meta(THREAD).replace("2026-11-06T10:00:00.000Z", at(0)) + self.prompted()
+                   + codex_line(2, 2, "response_item", type="function_call", name="exec_command", call_id="c1", arguments=json.dumps(dict(cmd="ls nowhere"))))
+        self.ingest()
+        first = live.session(self.con.cursor(), THREAD, now=NOW, prices=PRICES)
+        self.place(NAME, self.inner(3, 130, "c1"), mode="a")
+        self.ingest()
+        later = live.session(self.con.cursor(), THREAD, after=at(125), now=NOW, prices=PRICES)
+        self.assertEqual([(e["id"], e["failed"]) for e in later["events"] if e["k"] == "tool"], [("c1", True)])
+        self.assertEqual(len(first["events"]), 2)
+
     def test_thread_lanes_whose_requests_share_a_time(self):
         threads = ["0a0f9999-0000-7000-8000-000000000002", "0a0f9999-0000-7000-8000-000000000003"]
         self.place(NAME, meta(THREAD).replace("2026-11-06T10:00:00.000Z", at(0)))

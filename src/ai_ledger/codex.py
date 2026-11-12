@@ -116,7 +116,8 @@ def live_items(d):
     """What the Live page shows of Codex line d, in store.live_items' shape, plus turn_start and turn_end.
 
     Tools come from response_item calls and their *_output lines, keyed by call_id: item_completed arrives only once a
-    tool ends, and many calls never get one. A failed item_completed with the same id marks its call failed. No shell
+    tool ends, and many calls never get one. A failed item_completed with the same id marks its call failed; one that
+    no call has the id of (a command an exec script ran) carries its tool and input, to stand as a call of its own. No shell
     tool's input has a timeout (exec_command's yield_time_ms is how long the call waits for output), and no line says
     the session closed."""
     t, p = d.get("type"), d.get("payload")
@@ -159,7 +160,8 @@ def live_items(d):
         said = text_of(it.get("content")).strip()
         return [dict(k="reply", text=said)] if said else []
     if it.get("status") == "failed" and it.get("id") and tool_of(it):
-        return [dict(k="tool_result", id=it["id"], error=error_of(it), output="", agent=None)]
+        name, summary = tool_of(it)  # the call these name is not always a line: one an exec script ran has no tool_use
+        return [dict(k="tool_result", id=it["id"], error=error_of(it), output="", agent=None, tool=name, summary=summary[:300])]
     return []
 
 

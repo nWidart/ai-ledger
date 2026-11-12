@@ -205,7 +205,7 @@ def assemble(rows, copied=None):
                 tools[it["id"]] = ev
                 events.append(ev)
             elif k == "tool_result":
-                r = dict(it, ts=t)
+                r = dict(it, ts=t, key=f"{key}#{i}", lane=lane)
                 if it["id"] in tools:
                     finish(tools[it["id"]], r)
                 else:
@@ -213,6 +213,13 @@ def assemble(rows, copied=None):
             elif k != "request":
                 events.append(dict(it, key=f"{key}#{i}", ts=t, lane=lane))
     return events, results
+
+
+def inner_call(r):
+    """The finished, failed tool event of result r: a failed Codex item that no call has the id of, such as a command an
+    exec script ran, with its tool and input. It is no pending call, so it moves no state."""
+    return dict(key=r["key"], k="tool", ts=r["ts"], lane=r["lane"], id=r["id"], tool=r["tool"], summary=r["summary"], description=None,
+                start=r["ts"], end=r["ts"], failed=True, error=r["error"][:ERROR_CAP], output=None, agent=None, long=False)
 
 
 def finish(ev, r):
@@ -454,8 +461,9 @@ def session(cur, sid, after="", text=False, now=None, prices=None):
         for ev in uses:
             if ev["k"] == "tool" and ev["id"] in missing:
                 if ev["id"] in results:
-                    finish(ev, results[ev["id"]])
+                    finish(ev, results.pop(ev["id"]))
                 events.append(ev)
+        events += [inner_call(r) for r in results.values() if r.get("tool")]
         events.sort(key=lambda e: (e["ts"] or now))
     for ev in events:
         if ev["k"] == "tool" and ev["id"] in started:
