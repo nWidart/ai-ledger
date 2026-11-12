@@ -440,6 +440,64 @@ describe("InsightsPage", () => {
       expect(within(drawer("d-types")).queryByRole("button")).toBeNull();
     });
 
+    const heading = () => document.getElementById("logTitle")!;
+
+    it("moves focus to the list heading once the filtered list has rendered, not to a card that may unmount", async () => {
+      show(fixture);
+      await lede();
+      const btn = row(goals(), /^implement feature/);
+      btn.focus();
+      await userEvent.click(btn);
+      expect(order()).toEqual(["Synthetic: added a theme toggle to a demo app."]);
+      expect(heading().getAttribute("tabindex")).toBe("-1");
+      expect(document.activeElement).toBe(heading());
+    });
+
+    it("keeps focus where it is when a filter changes by other means", async () => {
+      show(fixture, "#range=0&fr=buggy_code");
+      await lede();
+      expect(document.activeElement).toBe(document.body);
+      act(() => { history.replaceState(null, "", "/insights#range=0&fr=wrong_approach"); dispatchEvent(new HashChangeEvent("hashchange")); });
+      expect(document.activeElement).toBe(document.body);
+      const sel = within(logOf()).getByLabelText("Outcome");
+      await userEvent.selectOptions(sel, "partially_achieved");
+      expect(document.activeElement).toBe(sel);
+      const box = within(logOf()).getByLabelText("Only sessions with friction");
+      await userEvent.click(box);
+      expect(document.activeElement).toBe(box);
+      // Clearing from a ledger row leaves focus on that row, which stays.
+      const btn = row(section(/^Friction/), /^wrong approach/);
+      await userEvent.click(btn);
+      expect(document.activeElement).toBe(btn);
+    });
+
+    it("sends focus to the list heading when a filter chip or Clear filters removes the focused button", async () => {
+      show(fixture, "#range=0&fr=buggy_code&goal=fix_bug");
+      await lede();
+      const remove = within(logOf()).getByRole("button", { name: "Remove filter Goal: fix bug" });
+      remove.focus();
+      await userEvent.click(remove);
+      expect(within(logOf()).queryByRole("button", { name: "Remove filter Goal: fix bug" })).toBeNull();
+      expect(document.activeElement).toBe(heading());
+      await userEvent.click(row(goals(), /^fix bug/));
+      (document.activeElement as HTMLElement).blur();
+      const clear = within(logOf()).getByRole("button", { name: "Clear filters" });
+      clear.focus();
+      await userEvent.click(clear);
+      expect(within(logOf()).queryByRole("button", { name: "Clear filters" })).toBeNull();
+      expect(document.activeElement).toBe(heading());
+    });
+
+    it("never makes a button of a row with no sessions, even when it is the active filter, but still marks it", async () => {
+      show(fixture, "#range=0&outcome=mostly_achieved");
+      await lede();
+      const out = section(/^Outcomes model/);
+      expect(within(out).queryByRole("button", { name: /^Mostly achieved/ })).toBeNull();
+      expect(within(out).getByText("Mostly achieved").closest("li")!.classList.contains("on")).toBe(true);
+      expect(within(out).getByText("Fully achieved").closest("li")!.classList.contains("on")).toBe(false);
+      expect(within(logOf()).getByRole("button", { name: "Remove filter Outcome: Mostly achieved" })).toBeTruthy();
+    });
+
     it("filters from the chips and the outcome badge of a card, and clears from them", async () => {
       show(fixture);
       await lede();

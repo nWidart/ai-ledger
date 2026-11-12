@@ -11,7 +11,7 @@ import { useLanding } from "../../components/useLanding";
 import { dayLabel, num, pct, plural, when } from "../../format";
 import { formatHash, navigate, setHash, useHashState } from "../../hash";
 import { useApi } from "../../useApi";
-import { DRILL_KEYS, drillsOf, passes, pickProps, toggleDrill, type DrillKind } from "./drill";
+import { armFocus, DRILL_KEYS, drillsOf, focusList, passes, pickProps, takeFocus, toggleDrill, type DrillKind } from "./drill";
 import { countOf, headline } from "./insights";
 import "./insights.css";
 
@@ -263,11 +263,15 @@ function Sessions({ d, view, sort, onSort }: { d: InsightsPayload; view: View; s
   // Each outcome the view has; the one in the URL too, so the select never shows another than the list is narrowed to.
   const outcomes = d.outcomes.filter(o => o.n > 0).map(o => o.name);
   if (outcome && !outcomes.includes(outcome)) outcomes.push(outcome);
+  // After a click changed the filters (not a URL change, Back or the select), focus the heading: the clicked chip may be gone.
+  const key = [...DRILL_KEYS.map(k => h.raw[k] ?? ""), friction].join("\0");
+  useEffect(() => { const to = takeFocus(); if (to) focusList(to); }, [key]);
+  const drop = (keys: string[]) => { armFocus("heading"); setHash(Object.fromEntries(keys.map(k => [k, null])), { push: true }); };
   const chips = [...drills.map(x => ({ key: x.kind, text: x.chip })), ...(friction ? [{ key: "friction", text: "Only sessions with friction" }] : [])];
   return (
     <section className="panel log sect" id="log" aria-labelledby="logTitle">
       <div className="log-head">
-        <h2 id="logTitle">Analysed sessions <Judged /></h2>
+        <h2 id="logTitle" tabIndex={-1}>Analysed sessions <Judged /></h2>
         <div className="log-ctl">
           <label>Sort <select value={sort} onChange={e => onSort(e.target.value as SortId)}>
             {(Object.keys(SORTS) as SortId[]).map(k => <option key={k} value={k}>{SORTS[k].label}</option>)}</select></label>
@@ -278,8 +282,8 @@ function Sessions({ d, view, sort, onSort }: { d: InsightsPayload; view: View; s
       </div>
       {chips.length > 0 && <div className="fchips" role="group" aria-label="Active filters">
         {chips.map(c => <button key={c.key} type="button" className="chip fx" aria-label={"Remove filter " + c.text}
-          onClick={() => setHash({ [c.key]: null }, { push: true })}>{c.text} <span aria-hidden="true">✕</span></button>)}
-        {chips.length > 1 && <button type="button" className="linkish" onClick={() => setHash(Object.fromEntries([...DRILL_KEYS, "friction"].map(k => [k, null])), { push: true })}>Clear filters</button>}
+          onClick={() => drop([c.key])}>{c.text} <span aria-hidden="true">✕</span></button>)}
+        {chips.length > 1 && <button type="button" className="linkish" onClick={() => drop([...DRILL_KEYS, "friction"])}>Clear filters</button>}
       </div>}
       <p className="hint"><span className="count">{filtered ? `${num(rows.length)} of ${plural(d.sessions.length, "session")}` : plural(rows.length, "session")}</span>,
         {" "}{SORTS[sort].words}{d.truncated ? `: the newest ${num(d.sessions.length)} of the view` : ""}. The summary and friction detail are the model's words.

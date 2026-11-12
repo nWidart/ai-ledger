@@ -30,9 +30,21 @@ export function toggleDrill(kind: DrillKind, name: string): boolean {
   return !on;
 }
 
-/** What a ledger row needs to filter the list: marked when it is the filter, a button when it has sessions (or is the
- *  filter, so it can be cleared). Setting a filter moves to the list; clearing one stays. */
-export const pickProps = (active: Readonly<Record<string, string>>, kind: DrillKind, name: string, sessions: number) => {
-  const on = active[kind] === name;
-  return { active: on, onPick: on || sessions > 0 ? () => { if (toggleDrill(kind, name)) jumpTo("log"); } : undefined };
+// Where focus goes once the list has rendered the change a click made: "jump" scrolls to the list, "heading" only focuses it.
+// Set by the click, taken by the list's effect; a filter changed any other way (URL, Back, the select) leaves focus alone.
+let pending: "jump" | "heading" | null = null;
+export const armFocus = (to: "jump" | "heading") => { pending = to; };
+export const takeFocus = () => { const p = pending; pending = null; return p; };
+/** Moves focus to the list heading (or scrolls to the list, which focuses it: it is the first focusable element in it). */
+export const focusList = (to: "jump" | "heading") => {
+  if (to === "jump") jumpTo("log");
+  else document.getElementById("logTitle")?.focus({ preventScroll: true });
 };
+
+/** What a ledger row needs to filter the list: marked when it is the filter, a button when it has sessions. Setting a
+ *  filter moves to the list once it has rendered; clearing one leaves focus on the row. A row with no sessions is never a
+ *  button; the filter chip clears its filter. */
+export const pickProps = (active: Readonly<Record<string, string>>, kind: DrillKind, name: string, sessions: number) => ({
+  active: active[kind] === name,
+  onPick: sessions > 0 ? () => { if (toggleDrill(kind, name)) armFocus("jump"); } : undefined,
+});

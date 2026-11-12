@@ -16,7 +16,7 @@ export interface LedgerRowProps {
   color?: string;
   /** Makes the row a button; gets the button, to return focus to it later. */
   onPick?: (el: HTMLButtonElement) => void;
-  /** With onPick: this row is the active choice (marks the row, aria-pressed on its button). */
+  /** This row is the active choice: marks the row, and with onPick sets aria-pressed on its button. */
   active?: boolean;
   /** data-v on the row, so a re-rendered page can find the row again. */
   pickKey?: string;
@@ -31,7 +31,7 @@ export function LedgerRow({ name, title, share, value, side, project, color, onP
   </>;
   return onPick
     ? <li className={active ? "pick on" : "pick"} data-v={pickKey}><button type="button" className="rowbtn" aria-pressed={active} onClick={e => onPick(e.currentTarget)}>{cells}</button></li>
-    : <li data-v={pickKey}>{cells}</li>;
+    : <li className={active ? "on" : undefined} data-v={pickKey}>{cells}</li>;
 }
 
 /** A ranked list of LedgerRows; empty: what to say when there are none. */
