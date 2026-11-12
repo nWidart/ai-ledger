@@ -17,15 +17,26 @@ The Errors page SHALL keep its "fix applied" markers in the store, one per error
 - **WHEN** the user marks a type and the app refuses or does not answer
 - **THEN** the type shows as not fixed again, a message says the marker was not saved, the status region announces it and focus lands on "Mark fix applied"
 
-### Requirement: Write fix markers through one endpoint
-The app SHALL store a fix marker only through `POST /api/errors/fix` with `{"category": string, "day": "YYYY-MM-DD" | null}` (null removes the marker), and SHALL answer with every marker. The write SHALL wait for a running ingest to release the store.
+### Requirement: Write a fix marker
+The app SHALL store a fix marker through `POST /api/errors/fix` with `{"category": string, "day": "YYYY-MM-DD" | null}` (null removes the marker), and SHALL answer with every marker. A write SHALL wait for a running ingest to release the store.
 
 #### Scenario: During an ingest
 - **WHEN** a marker is posted while an ingest runs
 - **THEN** the write waits for the ingest to release the store and is stored right after
 
+### Requirement: Import fix markers
+The app SHALL accept `POST /api/errors/fixes/import` with `{"fixes": {category: "YYYY-MM-DD"}}` and answer with every marker. In one transaction it SHALL store a marker only for a type that has no fix day at the moment of the write, and it SHALL leave out an entry that is not valid instead of refusing the rest.
+
+#### Scenario: Import over a marker set meanwhile
+- **WHEN** another browser marks `x` for Nov 1 and then an import names `x` for Nov 4 and `worktree` for Oct 1
+- **THEN** the store keeps `x` for Nov 1, takes `worktree` for Oct 1 and answers both
+
+#### Scenario: One bad entry in an import
+- **WHEN** an import holds a marker with a date after today and a valid one
+- **THEN** the valid one is stored and the answer is 200
+
 ### Requirement: Refuse invalid fix marker writes
-The app SHALL answer 400 with an error message, and store nothing, unless the request comes from the app's own host with an `application/json` body of at most 4096 bytes that holds a JSON object. Its `category` SHALL be a string of 1 to 100 characters. Its `day` SHALL be null or a real date, written `YYYY-MM-DD`, not after the server's today.
+The app SHALL answer 400 with an error message, and store nothing, unless the request comes from the app's own host with an `application/json` body that holds a JSON object. A single write SHALL be at most 4096 bytes with a `category` of 1 to 100 characters and a `day` that is null or a real `YYYY-MM-DD` date not after the server's today. An import SHALL be at most 65536 bytes and 500 markers, with `fixes` an object.
 
 #### Scenario: A day that is not allowed
 - **WHEN** a request names a day after today, `2026-02-30`, `20261104` or a number
@@ -36,12 +47,27 @@ The app SHALL answer 400 with an error message, and store nothing, unless the re
 - **THEN** the endpoint answers 400 and stores nothing
 
 ### Requirement: Move markers saved in the browser to the store
-When localStorage holds fix markers from an earlier version of the page (`claude-errors-fixes`), the Errors page SHALL send each marker for a type the store has none for, and keep the store's marker for a type both have. It SHALL remove the key only after every write succeeded. Until then it SHALL show those markers, and an Undo of one SHALL also drop it from the key. A failed move SHALL leave the key and be tried again on the next load.
+When localStorage holds fix markers from an earlier version of the page (`claude-errors-fixes`), the Errors page SHALL send them in one import, queued before any later mark or undo so that those run after it, and SHALL show them until the import succeeds. The store SHALL keep its own marker for a type both have, decided when it receives the import. After the import succeeds the page SHALL remove the key and forget the browser's markers.
 
 #### Scenario: First load after the upgrade
 - **WHEN** localStorage holds `{"x": "2026-11-04", "worktree": "2026-10-01"}` and the store holds `x` for Nov 1
-- **THEN** the page sends `worktree` for Oct 1 only, shows `x` as Nov 1, and removes the key
+- **THEN** the page sends one import, shows `x` as Nov 1 and `worktree` as Oct 1, and removes the key
 
-#### Scenario: The move fails
-- **WHEN** a write of the move fails
-- **THEN** the key stays, the page still shows the browser's markers, and the next load sends the types the store still lacks
+#### Scenario: Undo while the import is pending
+- **WHEN** the user undoes a marker from the browser's copy before the import is stored
+- **THEN** the import is stored first, then the undo, and the marker is absent
+
+#### Scenario: Another browser removes a marker
+- **WHEN** the import succeeded and another browser then removes a marker
+- **THEN** this page, once it reads the store again, no longer shows it
+
+### Requirement: Retry a failed move
+A failed import SHALL leave the key in place and the browser's markers shown, and be tried again on the next load. A mark or undo that succeeds for a type SHALL also drop that type from the key, so an undone marker cannot come back from it.
+
+#### Scenario: The import fails
+- **WHEN** the import is refused
+- **THEN** the key stays, the page still shows the browser's markers, and the next load sends the import again
+
+#### Scenario: Undo after a failed import
+- **WHEN** the import failed and the user undoes a marker from the browser's copy
+- **THEN** the store drops it, the key no longer holds it, and the next load does not bring it back

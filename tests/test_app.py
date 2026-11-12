@@ -279,6 +279,48 @@ class FixEndpointTest(unittest.TestCase):
         self.assertEqual(self.post({"category": "x", "day": None}, host="localhost:8765")[0], 301)
         self.assertEqual(self.marks(), {})
 
+    IMPORT = "/api/errors/fixes/import"
+
+    def test_import_adds_what_the_store_lacks_and_keeps_what_it_has(self):
+        self.post({"category": "kept", "day": "2026-11-01"})
+        self.assertEqual(self.post({"fixes": {"kept": "2026-10-01", "new": "2026-10-02"}}, path=self.IMPORT),
+                         (200, {"kept": "2026-11-01", "new": "2026-10-02"}))
+        self.assertEqual(self.marks(), {"kept": "2026-11-01", "new": "2026-10-02"})
+        self.assertEqual(self.post({"fixes": {}}, path=self.IMPORT), (200, {"kept": "2026-11-01", "new": "2026-10-02"}))
+
+    def test_import_skips_an_entry_that_is_not_valid_and_takes_the_rest(self):
+        tomorrow = (self.today + timedelta(days=1)).isoformat()
+        got = self.post({"fixes": {"ok": "2026-11-04", "": "2026-11-04", "c" * 101: "2026-11-04", "future": tomorrow, "notdate": "2026-02-30",
+                                   "basic": "20261104", "num": 20261104, "none": None, "list": ["2026-11-04"], "c" * 100: "2026-11-03"}},
+                         path=self.IMPORT)
+        self.assertEqual(got, (200, {"ok": "2026-11-04", "c" * 100: "2026-11-03"}))
+        self.assertEqual(self.marks(), got[1])
+
+    def test_import_refuses_what_is_not_valid_as_a_body(self):
+        big = {"fixes": {f"c{i}": "2026-11-04" for i in range(app.MAX_IMPORT + 1)}}
+        for body, why in [({}, "no fixes"), ({"fixes": [["x", "2026-11-04"]]}, "array"), ({"fixes": "x"}, "string"), ({"fixes": None}, "null"),
+                          ([], "array body"), (big, "too many")]:
+            self.assertEqual(self.post(body, path=self.IMPORT)[0], 400, why)
+        self.assertEqual(self.post({"fixes": {}}, ctype="text/plain", path=self.IMPORT)[0], 400)
+        self.assertEqual(self.post(b"x" * (app.MAX_IMPORT_BODY + 1), path=self.IMPORT)[0], 400)
+        self.assertEqual(self.post(b"{nope", path=self.IMPORT)[0], 400)
+        self.assertEqual(self.post({"fixes": {"x": "2026-11-04"}}, host="example.com", path=self.IMPORT)[0], 403)
+        # The body of the single write is still capped at 4096 bytes, the import's is larger.
+        self.assertEqual(self.post({"category": "x", "day": None, "pad": "p" * app.MAX_BODY})[0], 400)
+        self.assertEqual(self.post({"fixes": {"x": "2026-11-04"}, "pad": "p" * app.MAX_BODY}, path=self.IMPORT)[0], 200)
+        self.assertEqual(self.marks(), {"x": "2026-11-04"})
+
+    def test_import_waits_for_a_running_ingest(self):
+        self.app.lock.acquire()
+        done = []
+        t = threading.Thread(target=lambda: done.append(self.post({"fixes": {"x": "2026-11-04"}}, path=self.IMPORT)))
+        t.start()
+        time.sleep(0.3)
+        self.assertEqual((done, self.marks()), ([], {}))
+        self.app.lock.release()
+        t.join(5)
+        self.assertEqual((done, self.marks()), ([(200, {"x": "2026-11-04"})], {"x": "2026-11-04"}))
+
     def test_other_posts_are_not_found(self):
         self.assertEqual(self.post({}, path="/api/errors/other")[0], 404)
 

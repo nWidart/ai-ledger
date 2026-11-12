@@ -171,6 +171,13 @@ def set_error_fix(cur, category, day):
                     [category, day])
 
 
+def import_error_fixes(cur, fixes):
+    """Take the markers {category: date} for the error types that have no fix day yet; the ones that have one keep it. One
+    statement, so one transaction: the app's cap on the markers of an import keeps it within one insert chunk."""
+    insert(cur, "error_marks", ["category", "fixed_on"], list(fixes.items()),
+           "ON CONFLICT (category) DO UPDATE SET fixed_on = coalesce(error_marks.fixed_on, excluded.fixed_on)")
+
+
 def insert(cur, table, cols, rows, tail="ON CONFLICT DO NOTHING", returning=None):
     """Multi-row insert; executemany is too slow in DuckDB. Returns the RETURNING values, if asked."""
     out = []

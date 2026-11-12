@@ -75,6 +75,16 @@ class ErrorMarksTest(StoreCase):
         store.set_error_fix(cur, "never-marked", None)
         self.assertEqual(self.marks(), [("y", date(2026, 11, 3))])
 
+    def test_import_adds_only_what_has_no_fix_day(self):
+        cur = self.con.cursor()
+        store.set_error_fix(cur, "kept", date(2026, 11, 1))
+        self.con.execute("INSERT INTO error_marks (category, fixed_on) VALUES ('muted-only', NULL)")  # a row with no fix day takes one
+        store.import_error_fixes(cur, {"kept": date(2026, 10, 1), "new": date(2026, 10, 2), "muted-only": date(2026, 10, 3)})
+        self.assertEqual(self.marks(), [("kept", date(2026, 11, 1)), ("muted-only", date(2026, 10, 3)), ("new", date(2026, 10, 2))])
+        store.import_error_fixes(cur, {})
+        store.import_error_fixes(cur, {"new": date(2026, 9, 1)})  # a second import changes nothing
+        self.assertEqual(self.marks()[2], ("new", date(2026, 10, 2)))
+
     def test_survive_rebuild(self):
         self.assertNotIn("error_marks", store.DERIVED)
         store.set_error_fix(self.con.cursor(), "x", date(2026, 11, 4))

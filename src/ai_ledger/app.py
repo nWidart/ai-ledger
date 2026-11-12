@@ -31,18 +31,18 @@ PAGES = ("/usage", "/cost", "/errors", "/limits", "/insights", "/live")  # one a
 ASSET_TYPES = {".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml",
                ".png": "image/png", ".woff2": "font/woff2", ".json": "application/json; charset=utf-8"}
 MAX_BODY = 4096  # a POST body is one small JSON object
+MAX_IMPORT_BODY, MAX_IMPORT = 65536, 500  # the import carries a marker per error type the browser kept: far fewer than this
 MAX_CATEGORY = 100
 
 
-def parse_fix(body, today):
-    """(error type, day) from the JSON body of POST /api/errors/fix; day None removes the marker. Raises ValueError."""
-    if not isinstance(body, dict):
-        raise ValueError("body must be a JSON object")
-    category, day = body.get("category"), body.get("day", "")
+def check_category(category):
     if not isinstance(category, str) or not 0 < len(category) <= MAX_CATEGORY:
         raise ValueError(f"category must be a string of 1 to {MAX_CATEGORY} characters")
-    if day is None:
-        return category, None
+    return category
+
+
+def check_day(day, today):
+    """The date of a YYYY-MM-DD string that is not after today. Raises ValueError."""
     # fromisoformat also reads 20261104 and 2026-W45-3, and \d reads any script's digits: ask for the one form the page sends.
     if not isinstance(day, str) or not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", day):
         raise ValueError("day must be YYYY-MM-DD or null")
@@ -52,7 +52,31 @@ def parse_fix(body, today):
         raise ValueError("day is not a real date") from None
     if day > today:
         raise ValueError("day is after today")
-    return category, day
+    return day
+
+
+def parse_fix(body, today):
+    """(error type, day) from the JSON body of POST /api/errors/fix; day None removes the marker. Raises ValueError."""
+    if not isinstance(body, dict):
+        raise ValueError("body must be a JSON object")
+    category, day = check_category(body.get("category")), body.get("day", "")
+    return category, None if day is None else check_day(day, today)
+
+
+def parse_import(body, today):
+    """{error type: date} from the JSON body of POST /api/errors/fixes/import. A marker that is not valid is left out, so one bad
+    entry in a browser's old copy cannot keep the rest from moving. Raises ValueError for a body that is not an object of fixes."""
+    if not isinstance(body, dict) or not isinstance(body.get("fixes"), dict):
+        raise ValueError("body must be a JSON object with a fixes object")
+    if len(body["fixes"]) > MAX_IMPORT:
+        raise ValueError(f"fixes must hold at most {MAX_IMPORT} markers")
+    out = {}
+    for category, day in body["fixes"].items():
+        try:
+            out[check_category(category)] = check_day(day, today)
+        except ValueError:
+            pass
+    return out
 
 
 class App:
@@ -207,7 +231,7 @@ def handler(app, port=PORT):
             finally:
                 app.watch(-1)
 
-        def json_body(self):
+        def json_body(self, limit=MAX_BODY):
             """The request's JSON body. Only application/json: a form post from another site cannot send it without a CORS
             preflight, which this server never answers."""
             if self.headers.get("Content-Type", "").split(";")[0].strip().lower() != "application/json":
@@ -216,8 +240,8 @@ def handler(app, port=PORT):
                 n = int(self.headers.get("Content-Length", ""))
             except ValueError:
                 raise ValueError("Content-Length is missing") from None
-            if not 0 <= n <= MAX_BODY:
-                raise ValueError(f"body must be at most {MAX_BODY} bytes")
+            if not 0 <= n <= limit:
+                raise ValueError(f"body must be at most {limit} bytes")
             try:
                 return json.loads(self.rfile.read(n))
             except (ValueError, RecursionError):
@@ -311,16 +335,22 @@ def handler(app, port=PORT):
             if path == "/api/refresh":
                 app.ingest()
                 self.json(app.status())
-            elif path == "/api/errors/fix":
+            elif path in ("/api/errors/fix", "/api/errors/fixes/import"):
+                one = path == "/api/errors/fix"
                 try:
-                    category, day = parse_fix(self.json_body(), metrics.local_today(app.con.cursor()))
+                    today = metrics.local_today(app.con.cursor())
+                    got = parse_fix(self.json_body(), today) if one else parse_import(self.json_body(MAX_IMPORT_BODY), today)
                 except ValueError as e:
                     return self.send(400, json.dumps(dict(error=str(e))))
                 # The ingest thread writes through app.con under app.lock, as the limit pollers do: take it for the write, so a
-                # marker never lands in the middle of an ingest's transaction and two markers on one type cannot conflict.
+                # marker never lands in the middle of an ingest's transaction and two writes cannot conflict. The import decides
+                # what the store already has here, at write time, not from what the page saw when it loaded.
                 with app.lock:
                     cur = app.con.cursor()
-                    store.set_error_fix(cur, category, day)
+                    if one:
+                        store.set_error_fix(cur, *got)
+                    else:
+                        store.import_error_fixes(cur, got)
                     self.json(metrics.error_fixes(cur))
             else:
                 self.send(404, "not found\n", "text/plain")
