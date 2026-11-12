@@ -345,12 +345,23 @@ describe("summary and fixes", () => {
 describe("hash and storage", () => {
   const raw = (h: string) => Object.fromEntries(new URLSearchParams(h));
   it("reads the old page's keys; a bare #ex= link is all time and opens its type", () => {
-    expect(readView(raw("ex=t07"), {}, m)).toEqual({ linked: true, view: { ...DEFAULT_VIEW, range: 0, cat: "x", focus: "t07" } });
+    expect(readView(raw("ex=t07"), {}, m)).toEqual({ linked: true, dead: false, view: { ...DEFAULT_VIEW, range: 0, cat: "x", focus: "t07" } });
     expect(readView(raw("project=foo&range=7&sub=0&noise=0&gran=week&cat=x"), {}, m).view)
       .toEqual({ project: "foo", source: "", range: 7, sub: false, noise: true, gran: "week", cat: "x", focus: null, at: null });
     expect(readView(raw("source=codex"), {}, m).view).toEqual({ ...DEFAULT_VIEW, source: "codex" });
     expect(readView(raw("source=grok&range=7"), {}, m).view).toEqual({ ...DEFAULT_VIEW, range: 7 });
     expect(readView(raw("cat=nope&range=5"), {}, m).view).toMatchObject({ cat: null, range: 30 });
+  });
+  it("flags a permalink to an example the store lacks; a dead bare #ex= keeps the default 30 days, not all time", () => {
+    expect(readView(raw("ex=nope"), {}, m)).toEqual({ linked: false, dead: true, view: { ...DEFAULT_VIEW, range: 30 } });
+    expect(readView(raw("ex=nope&range=7"), {}, m)).toMatchObject({ dead: true, view: { range: 7, focus: null } });
+    expect(readView(raw("range=30"), {}, m).dead).toBe(false);
+    expect(readView(raw("ex="), {}, m)).toMatchObject({ dead: false, view: { range: 0 } });
+    expect(readView({}, { range: 7 }, m).dead).toBe(false);
+  });
+  it("flags nothing before the payload loads, so a permalink does not flash the notice", () => {
+    expect(readView(raw("ex=nope"), {}, undefined)).toEqual({ linked: false, dead: false, view: { ...DEFAULT_VIEW, range: 0 } });
+    expect(readView(raw("ex=t07"), {}, undefined).dead).toBe(false);
   });
   it("fills an empty hash from the saved view, and only an empty one", () => {
     const saved = { project: "foo", range: 90, source: "codex", gran: "week", sub: false, noise: true, cat: "x" };

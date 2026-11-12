@@ -612,6 +612,84 @@ describe("ErrorsPage", () => {
     expect(document.querySelector("#exList .ex")).toBe(first);
   });
 
+  const DEAD = "The linked error is no longer in the store. It may have been dropped by a rebuild, or the link is from another store. Showing the view without it.";
+  // The live regions (aria-live or role=status) that hold this text: exactly one, or a screen reader may say it twice.
+  const liveHolding = (t: string) => [...document.querySelectorAll('[aria-live], [role="status"]')].filter(e => e.textContent!.includes(t));
+  it("says a permalink's example is gone, uses 30 days, and dismisses to the heading", async () => {
+    history.replaceState(null, "", "/errors#ex=nope");
+    await page();
+    await waitFor(() => expect(document.getElementById("deadLink")).not.toBeNull());
+    const note = document.getElementById("deadLink")!;
+    expect(note.getAttribute("role")).toBeNull();
+    expect(note.textContent).toContain(DEAD);
+    expect(note.compareDocumentPosition(document.getElementById("lede")!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    await waitFor(() => expect(document.getElementById("pageLive")!.textContent).toBe(DEAD));
+    expect(liveHolding(DEAD)).toHaveLength(1);
+    await waitFor(() => expect(location.hash).toBe("#range=30"));
+    await userEvent.click(within(note).getByRole("button", { name: "Dismiss" }));
+    expect(document.getElementById("deadLink")).toBeNull();
+    expect(document.getElementById("pageLive")!.textContent).toBe("");
+    expect(document.activeElement).toBe(document.getElementById("lede"));
+  });
+
+  it("announces each dead link again: dismiss, then a second dead link clears the region before the text returns", async () => {
+    history.replaceState(null, "", "/errors#ex=nope");
+    await page();
+    await waitFor(() => expect(document.getElementById("pageLive")!.textContent).toBe(DEAD));
+    await userEvent.click(within(document.getElementById("deadLink")!).getByRole("button", { name: "Dismiss" }));
+    expect(document.getElementById("deadLink")).toBeNull();
+    act(() => { history.replaceState(null, "", "/errors#ex=nope2"); dispatchEvent(new PopStateEvent("popstate")); });
+    // Checked before the next frame: the region empties at once, so the same text is a change again, and returns on that frame.
+    expect(document.getElementById("pageLive")!.textContent).toBe("");
+    expect(document.getElementById("deadLink")).not.toBeNull();
+    await waitFor(() => expect(document.getElementById("pageLive")!.textContent).toBe(DEAD));
+    expect(liveHolding(DEAD)).toHaveLength(1);
+  });
+
+  it("re-announces a second dead link even without a Dismiss in between", async () => {
+    history.replaceState(null, "", "/errors#ex=nope");
+    await page();
+    await waitFor(() => expect(document.getElementById("pageLive")!.textContent).toBe(DEAD));
+    act(() => { history.replaceState(null, "", "/errors#ex=nope2"); dispatchEvent(new PopStateEvent("popstate")); });
+    // Still holding the old text when the new link arrives: the region must empty before the same text returns.
+    expect(document.getElementById("pageLive")!.textContent).toBe("");
+    await waitFor(() => expect(document.getElementById("pageLive")!.textContent).toBe(DEAD));
+    expect(liveHolding(DEAD)).toHaveLength(1);
+  });
+
+  it("keeps the range a dead permalink names", async () => {
+    history.replaceState(null, "", "/errors#ex=nope&range=7");
+    await page();
+    await waitFor(() => expect(location.hash).toBe("#range=7"));
+    expect(document.getElementById("deadLink")).not.toBeNull();
+  });
+
+  it("shows no notice for a live permalink", async () => {
+    history.replaceState(null, "", "/errors#ex=t07");
+    await page();
+    await waitFor(() => expect(location.hash).toBe("#range=0&ex=t07"));
+    expect(document.getElementById("deadLink")).toBeNull();
+    expect(document.getElementById("pageLive")!.textContent).toBe("");
+  });
+
+  it("shows no notice while the payload loads", async () => {
+    vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => {})));
+    history.replaceState(null, "", "/errors#ex=nope");
+    render(<ErrorsPage />);
+    expect(document.getElementById("load")!.textContent).toContain("Loading errors");
+    expect(document.getElementById("deadLink")).toBeNull();
+    expect(location.hash).toBe("#ex=nope");
+  });
+
+  it("clears the notice when a later hash names a live example", async () => {
+    history.replaceState(null, "", "/errors#ex=nope");
+    await page();
+    await waitFor(() => expect(document.getElementById("deadLink")).not.toBeNull());
+    act(() => { history.replaceState(null, "", "/errors#ex=t07"); dispatchEvent(new PopStateEvent("popstate")); });
+    await waitFor(() => expect(document.getElementById("deadLink")).toBeNull());
+    expect(document.getElementById("ex-t07")!.classList.contains("focus")).toBe(true);
+  });
+
   it("shows the uncategorized share in the summary", async () => {
     await page();
     // The fixture's errors all have one rule-matched type, so the share is zero and there is no split for one source.
@@ -766,6 +844,75 @@ describe("ErrorsPage", () => {
 });
 
 // t01 and t02 move to Nov 3, the rest stay on Nov 4 (today is Nov 5): two buckets with errors, one without.
+// The dead-link announcement runs on an animation frame: the test holds frames back and runs them when it says, so it can end the
+// announcement before its frame fires.
+describe("ErrorsPage dead-link frames", () => {
+  const DEAD = "The linked error is no longer in the store. It may have been dropped by a rebuild, or the link is from another store. Showing the view without it.";
+  let frames: Map<number, FrameRequestCallback>, run: () => void;
+  beforeEach(() => {
+    frames = new Map();
+    let id = 1;
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation(cb => { frames.set(id, cb); return id++; });
+    vi.spyOn(window, "cancelAnimationFrame").mockImplementation(n => { frames.delete(n); });
+    run = () => { const cbs = [...frames.values()]; frames.clear(); act(() => cbs.forEach(cb => cb(0))); };
+  });
+  afterEach(() => { vi.mocked(window.requestAnimationFrame).mockRestore(); vi.mocked(window.cancelAnimationFrame).mockRestore(); });
+  const go = (h: string) => act(() => { history.replaceState(null, "", "/errors" + h); dispatchEvent(new PopStateEvent("popstate")); });
+
+  it("a live link before the pending frame cancels the announcement, so the region never says the link is dead", async () => {
+    history.replaceState(null, "", "/errors#ex=nope");
+    await page();
+    await waitFor(() => expect(document.getElementById("deadLink")).not.toBeNull());
+    expect(frames.size).toBe(1);
+    go("#ex=t07");
+    await waitFor(() => expect(document.getElementById("deadLink")).toBeNull());
+    expect(frames.size).toBe(0);
+    run();
+    expect(document.getElementById("pageLive")!.textContent).not.toContain(DEAD);
+  });
+
+  it("a live link after the announcement clears the region", async () => {
+    history.replaceState(null, "", "/errors#ex=nope");
+    await page();
+    await waitFor(() => expect(document.getElementById("deadLink")).not.toBeNull());
+    run();
+    expect(document.getElementById("pageLive")!.textContent).toBe(DEAD);
+    go("#ex=t07");
+    await waitFor(() => expect(document.getElementById("deadLink")).toBeNull());
+    expect(document.getElementById("pageLive")!.textContent).toBe("");
+  });
+
+  it("a second dead link cancels the first frame, so one announcement is pending", async () => {
+    history.replaceState(null, "", "/errors#ex=nope");
+    await page();
+    await waitFor(() => expect(document.getElementById("deadLink")).not.toBeNull());
+    go("#ex=nope2");
+    expect(frames.size).toBe(1);
+    run();
+    expect(document.getElementById("pageLive")!.textContent).toBe(DEAD);
+  });
+
+  it("Dismiss before the pending frame cancels the announcement", async () => {
+    history.replaceState(null, "", "/errors#ex=nope");
+    await page();
+    await waitFor(() => expect(document.getElementById("deadLink")).not.toBeNull());
+    await userEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+    expect(frames.size).toBe(0);
+    run();
+    expect(document.getElementById("pageLive")!.textContent).toBe("");
+  });
+
+  it("unmounting cancels the pending frame", async () => {
+    history.replaceState(null, "", "/errors#ex=nope");
+    const { unmount } = render(<ErrorsPage />);
+    await screen.findByRole("heading", { level: 1, name: /failed tool calls/ });
+    await waitFor(() => expect(document.getElementById("deadLink")).not.toBeNull());
+    expect(frames.size).toBe(1);
+    unmount();
+    expect(frames.size).toBe(0);
+  });
+});
+
 describe("ErrorsPage bucket selection", () => {
   const withDays = (calls: ErrorsPayload["calls"]): ErrorsPayload => ({ ...fixture,
     errors: fixture.errors.map(e => (e.id === "t01" || e.id === "t02" ? { ...e, d: "2026-11-03" } : e)),

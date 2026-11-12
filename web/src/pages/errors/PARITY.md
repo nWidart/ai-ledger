@@ -94,6 +94,7 @@ where the new code does it.
 ## Permalinks
 
 - [x] L1021–1027, L1077: opening `#ex=<tool_use_id>` opens its type, puts its incident first and open (or the example first in the flat list), scrolls it to the center and focuses it. Port: `ErrorsPage` layout effect, `pin`.
+- [x] Added since: a permalink to an example the store no longer holds (`dead`) shows a notice above the summary (`#deadLink`, a plain block), announces it once through `#pageLive` (cleared, then set on the next frame, so each dead link is read again; a new dead link, a live link, Dismiss or unmount cancels a pending frame), and keeps the range the hash names (30 days when none), not all time. Dismiss focuses the heading. The notice is page state, since the hash loses its `ex`; a live link or Dismiss clears it, and nothing shows before the payload loads. Port: `readView` `dead`, `ErrorsPage` `deadLink`.
 - [x] L774, L790–792, L804: a linked example outside the filters shows in an "Outside current filters" note; "Clear filters" resets project, range (all), subagents and noise and focuses the example. Port: `TypeDetail`.
 - [x] L335, L1031: `#cat=<type>` opens that type. Port: `readView`.
 
