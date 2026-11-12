@@ -1,5 +1,5 @@
 // Text for the Limits page: names, captions and pace, from the /api/limits payload.
-import type { LimitWindow, LimitsPayload } from "../../api";
+import type { LimitHistoryRow, LimitPoint, LimitWindow, LimitsPayload } from "../../api";
 import { num, plural, usd } from "../../format";
 import { formatHash, RANGES, sourceOf, type Range } from "../../hash";
 
@@ -164,4 +164,61 @@ export const sharePct = (share: number): string => (share > 0 && share < 0.005 ?
 export function usedHint(u: NonNullable<LimitWindow["used"]>): string | null {
   const top = u.projects[0];
   return top ? `${top.project} ${sharePct(top.share)}` : null;
+}
+
+// ---------- the strips of past windows ----------
+
+/** The bars one limit's strip shows: its most recent closed windows. */
+export const STRIP_BARS = 60;
+/** The shortest bar, as a percent of the strip's height: a window at 0% is still something to point at. */
+export const MIN_BAR = 6;
+
+/** A closed window's identity: a window is its limit and its start. */
+export const barKey = (h: LimitHistoryRow): string => `${h.provider}|${h.limit_id}|${h.scope}|${h.start}`;
+
+/** Why a window ended early, in the words of a bar's name: "a plan change" or "an early reset". */
+const earlyBy = (h: LimitHistoryRow): string => (h.reason?.startsWith("plan change") ? "a plan change" : "an early reset");
+
+/** The bar's accessible name and tooltip, so the colour and the hatching are never the only signal: "Claude Code weekly, ended
+ *  Sat, Nov 7, 2:00 PM: 82%, hit its limit for 3h 20m, ended early by a plan change, estimated". */
+export function barName(h: LimitHistoryRow): string {
+  return [`${windowName(h)}, ended ${whenDay(h.closed_at)}: ${num(h.final)}%`,
+    h.hit && `hit its limit${h.hit_minutes != null ? ` for ${span(h.hit_minutes * 60000)}` : ""}`,
+    h.early && `ended early by ${earlyBy(h)}`, h.estimated && "estimated"].filter(Boolean).join(", ");
+}
+
+/** The note after a strip that does not show all its limit's windows, or null when it does. */
+export const stripNote = (shown: number, total: number): string | null => (shown < total ? `${shown} most recent of ${total}; the table lists all` : null);
+
+export interface Strip { key: string; name: string; bars: LimitHistoryRow[]; total: number }
+
+/** One strip per limit with closed windows, in the order the open windows use: provider (in the given order, the payload's
+ *  providers; any other last), then longest window first, then scope. Bars run oldest to newest, the STRIP_BARS most recent. */
+export function historyStrips(history: LimitHistoryRow[], providers: string[]): Strip[] {
+  const by = new Map<string, LimitHistoryRow[]>();
+  for (const h of history) { const k = `${h.provider}|${h.label}`; by.set(k, [...(by.get(k) ?? []), h]); }
+  const rank = (p: string) => { const i = providers.indexOf(p); return i < 0 ? providers.length : i; };
+  const minutes = (rows: LimitHistoryRow[]) => Math.max(...rows.map(h => h.window_minutes ?? 0));
+  return [...by.entries()]
+    .sort(([, a], [, b]) => rank(a[0]!.provider) - rank(b[0]!.provider) || minutes(b) - minutes(a) || (a[0]!.scope < b[0]!.scope ? -1 : a[0]!.scope > b[0]!.scope ? 1 : 0)
+      || (a[0]!.label < b[0]!.label ? -1 : 1))
+    .map(([key, rows]) => {
+      const old = rows.slice().sort((a, b) => Date.parse(a.closed_at) - Date.parse(b.closed_at) || Date.parse(a.start) - Date.parse(b.start));
+      return { key, name: windowName(rows[0]!), bars: old.slice(-STRIP_BARS), total: rows.length };
+    });
+}
+
+/** A closed window as the open-window chart takes a window: it runs from its start to its close, ends at its final percent,
+ *  and has no forecast. */
+export function closedWindow(h: LimitHistoryRow, series: LimitPoint[]): LimitWindow {
+  return { provider: h.provider, provider_label: h.provider_label, limit_id: h.limit_id, scope: h.scope, label: h.label,
+    window_minutes: h.window_minutes, plan: h.plan, start: h.start, resets_at: h.closed_at, current: h.final, measured: !h.estimated,
+    last_snapshot: null, series, calibration: null, forecast: null, no_forecast: null, hit_start: null, at_limit: h.hit, used: null,
+    weekly_share: null, surfaces: null };
+}
+
+/** The panel heading's notes for a picked window: the hit, the early end, and that it is rebuilt. */
+export function windowNotes(h: LimitHistoryRow): string[] {
+  return [h.hit && `at its limit${h.hit_minutes != null ? ` for ${span(h.hit_minutes * 60000)}` : ""}`,
+    h.early && `ended early by ${earlyBy(h)}`, h.estimated && "estimated from counted usage"].filter((x): x is string => !!x);
 }

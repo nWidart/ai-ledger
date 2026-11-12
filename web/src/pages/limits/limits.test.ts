@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import type { LimitWindow, LimitsPayload } from "../../api";
+import type { LimitHistoryRow, LimitWindow, LimitsPayload } from "../../api";
 import limits from "../../__fixtures__/limits";
-import { caption, hasScenario, nearestPoint, pace, readPoints, readText, recentText, shareText, surfacesText, tipPlace, usedHint, usedHref, usedRange, usedRangeName, whenDay } from "./limits";
+import { barKey, barName, caption, closedWindow, hasScenario, historyStrips, STRIP_BARS, stripNote, windowNotes, nearestPoint, pace, readPoints, readText, recentText, shareText, surfacesText, tipPlace, usedHint, usedHref, usedRange, usedRangeName, whenDay } from "./limits";
 
 const claude = (limits as LimitsPayload).windows[0]!;
 const win = (over: Partial<LimitWindow>): LimitWindow => ({ ...claude, ...over });
@@ -260,5 +260,61 @@ describe("surfacesText", () => {
     expect(surfacesText(rows(["Claude Code", 0], ["Chats", 0]))).toBeNull();
     expect(surfacesText(rows())).toBeNull();
     expect(surfacesText(win({ surfaces: null }))).toBeNull();
+  });
+});
+
+describe("past-window bars", () => {
+  const row = (over: Partial<LimitHistoryRow>): LimitHistoryRow => ({
+    provider: "claude", provider_label: "Claude Code", label: "weekly", limit_id: "weekly_all", scope: "", window_minutes: 10080, plan: "max",
+    start: "2026-10-31T14:00:00.000Z", closed_at: "2026-11-07T14:00:00.000Z", resets_at: "2026-11-07T14:00:00.000Z", final: 82,
+    hit: false, hit_minutes: null, early: false, reason: null, estimated: false, ...over });
+
+  it("names a bar with every signal its colour and hatching carry", () => {
+    expect(barName(row({}))).toBe(`Claude Code weekly, ended ${whenDay("2026-11-07T14:00:00.000Z")}: 82%`);
+    expect(barName(row({ hit: true, hit_minutes: 200, final: 100, early: true, reason: "plan change from max to pro", estimated: true })))
+      .toBe(`Claude Code weekly, ended ${whenDay("2026-11-07T14:00:00.000Z")}: 100%, hit its limit for 3h 20m, ended early by a plan change, estimated`);
+    expect(barName(row({ hit: true }))).toMatch(/: 82%, hit its limit$/);
+    expect(barName(row({ early: true, reason: "early reset" }))).toMatch(/, ended early by an early reset$/);
+    expect(barName(row({ estimated: true }))).toMatch(/: 82%, estimated$/);
+  });
+
+  it("tells a window from another by its limit and start", () => {
+    expect(barKey(row({}))).not.toBe(barKey(row({ scope: "Fable" })));
+    expect(barKey(row({}))).not.toBe(barKey(row({ start: "2026-11-07T14:00:00.000Z" })));
+    expect(barKey(row({}))).toBe(barKey(row({ final: 3, hit: true })));
+  });
+
+  it("makes one strip per limit: provider in the given order, longest window first, then scope", () => {
+    const rows = [row({ provider: "codex", provider_label: "Codex", label: "5-hour", window_minutes: 300 }),
+      row({ label: "weekly · Fable", scope: "Fable" }), row({ provider: "codex", provider_label: "Codex", label: "weekly" }),
+      row({ label: "5-hour", window_minutes: 300 }), row({}), row({ label: "weekly · Fable", scope: "Fable", closed_at: "2026-11-08T00:00:00.000Z" })];
+    expect(historyStrips(rows, ["claude", "codex"]).map(s => [s.name, s.bars.length])).toEqual([
+      ["Claude Code weekly", 1], ["Claude Code weekly · Fable", 2], ["Claude Code 5-hour", 1], ["Codex weekly", 1], ["Codex 5-hour", 1]]);
+    expect(historyStrips(rows, ["codex", "claude"]).map(s => s.name)[0]).toBe("Codex weekly");
+    expect(historyStrips(rows, ["claude"]).map(s => s.name).slice(-2)).toEqual(["Codex weekly", "Codex 5-hour"]); // an unlisted provider goes last
+    expect(historyStrips([], ["claude"])).toEqual([]);
+  });
+
+  it("runs a strip oldest to newest, whatever order the history came in", () => {
+    const days = [3, 1, 2].map(d => row({ start: `2026-10-0${d}T00:00:00.000Z`, closed_at: `2026-10-0${d + 1}T00:00:00.000Z` }));
+    expect(historyStrips(days, ["claude"])[0]!.bars.map(h => h.closed_at.slice(8, 10))).toEqual(["02", "03", "04"]);
+  });
+
+  it("keeps the most recent bars of a long history, and says so", () => {
+    const many = Array.from({ length: 70 }, (_, i) => row({ start: new Date(Date.UTC(2026, 0, 1 + i)).toISOString(), closed_at: new Date(Date.UTC(2026, 0, 2 + i)).toISOString() }));
+    const [strip] = historyStrips(many, ["claude"]);
+    expect([strip!.bars.length, strip!.total, STRIP_BARS]).toEqual([60, 70, 60]);
+    expect(strip!.bars[59]!.closed_at).toBe(many[69]!.closed_at);
+    expect(strip!.bars[0]!.closed_at).toBe(many[10]!.closed_at);
+    expect(stripNote(60, 70)).toBe("60 most recent of 70; the table lists all");
+    expect(stripNote(60, 60)).toBeNull();
+  });
+
+  it("gives the chart a closed window: to its close, at its final percent, with no forecast", () => {
+    const h = row({ hit: true, estimated: true, early: true, reason: "early reset", closed_at: "2026-11-05T00:00:00.000Z" });
+    const w = closedWindow(h, past);
+    expect([w.start, w.resets_at, w.current, w.forecast, w.series, w.at_limit]).toEqual([h.start, h.closed_at, 82, null, past, true]);
+    expect(windowNotes(h)).toEqual(["at its limit", "ended early by an early reset", "estimated from counted usage"]);
+    expect(windowNotes(row({}))).toEqual([]);
   });
 });

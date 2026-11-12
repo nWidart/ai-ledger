@@ -1,14 +1,15 @@
 import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import type { LimitWindow, LimitsPayload } from "../../api";
+import type { LimitHistoryRow, LimitWindow, LimitWindowCurve, LimitsPayload } from "../../api";
 import limits from "../../__fixtures__/limits";
+import windowCurve from "../../__fixtures__/limit-window";
 import palette from "../../__fixtures__/palette";
 import { Palette } from "../../components/palette/Palette";
 import { openPalette } from "../../components/palette/store";
 import { mockApi } from "../../components/sheets/testing";
 import { num, usd } from "../../format";
-import { caption, capText, pace, recentText, shareText, span, surfacesText, whenDay, windowName } from "./limits";
+import { barName, caption, capText, historyStrips, pace, recentText, shareText, span, surfacesText, whenDay, windowName } from "./limits";
 import { LimitsPage } from "./LimitsPage";
 
 const fixture = limits as LimitsPayload;
@@ -433,5 +434,193 @@ describe("what used this window", () => {
     show(only({ ...claude, used: bare }));
     await lede();
     expect(document.querySelector(".lim-used")!.textContent).not.toContain("points");
+  });
+});
+
+describe("past windows strips", () => {
+  const curve = windowCurve as LimitWindowCurve;
+  const early = curve.window; // the Codex weekly window a plan change ended early
+  const row = (h: LimitHistoryRow) => screen.getByRole("button", { name: barName(h) });
+  const hist = () => within(document.getElementById("history")!);
+  const showCurve = (d: LimitsPayload = fixture, answer: () => unknown = () => curve) => {
+    const f = mockApi({ "/api/limits": () => d, "/api/limits/window": answer });
+    history.replaceState(null, "", "/limits#range=30");
+    render(<LimitsPage />);
+    return f;
+  };
+
+  it("shows a strip per limit above the table, a button per window, named by what it shows", async () => {
+    showCurve();
+    await lede();
+    const groups = hist().getAllByRole("group", { name: /past windows/ });
+    expect(groups.map(g => g.getAttribute("aria-label")!.split(", past")[0])).toEqual(historyStrips(fixture.history, fixture.freshness.map(f => f.provider)).map(s => s.name));
+    expect(groups[0]!.compareDocumentPosition(hist().getByRole("table")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const hit = fixture.history.find(h => h.hit && !h.estimated)!, est = fixture.history.find(h => h.estimated)!;
+    expect(row(early).className).toContain("early");
+    expect(row(hit).className).toContain("hit");
+    expect(row(est).className).toContain("est");
+    expect(row(early).className).not.toMatch(/hit|est/);
+    expect(row(early).getAttribute("aria-label")).toMatch(/, ended early by a plan change$/);
+    expect(row(early).getAttribute("title")).toBe(row(early).getAttribute("aria-label"));
+    expect(row(early).querySelector("i")!.style.height).toBe("22%");
+  });
+
+  it("keeps a 0% window a visible target", async () => {
+    showCurve({ ...fixture, history: [{ ...early, final: 0 }] });
+    await lede();
+    expect(hist().getByRole("button").querySelector("i")!.style.height).toBe("6%");
+  });
+
+  it("has no strips, and no key, without closed windows", async () => {
+    showCurve({ ...fixture, history: [] });
+    await lede();
+    expect(hist().queryByRole("group")).toBeNull();
+    expect(hist().queryByRole("list", { name: "Bar key" })).toBeNull();
+    expect(hist().getByText("No closed windows in this range.")).toBeTruthy();
+  });
+
+  it("explains hit, ended early and estimated in a key", async () => {
+    showCurve();
+    await lede();
+    expect(within(hist().getByRole("list", { name: "Bar key" })).getAllByRole("listitem").map(li => li.textContent)).toEqual(["hit its limit", "ended early", "estimated"]);
+  });
+
+  it("draws the 60 most recent bars of a limit and says how many there are", async () => {
+    const many = Array.from({ length: 70 }, (_, i) => ({ ...early, start: new Date(Date.UTC(2026, 0, 1 + i)).toISOString(), closed_at: new Date(Date.UTC(2026, 0, 2 + i)).toISOString() }));
+    showCurve({ ...fixture, history: many });
+    await lede();
+    const group = hist().getByRole("group", { name: /past windows/ });
+    expect(within(group).getAllByRole("button")).toHaveLength(60);
+    expect(hist().getByText("60 most recent of 70; the table lists all")).toBeTruthy();
+    expect(hist().getAllByRole("row")).toHaveLength(71); // the table lists all of them (and its head)
+    expect(hist().queryByText(/most recent of 60/)).toBeNull();
+  });
+
+  it("makes each strip one tab stop, on its newest bar", async () => {
+    showCurve();
+    await lede();
+    for (const g of hist().getAllByRole("group", { name: /past windows/ })) {
+      const bars = within(g).getAllByRole("button");
+      expect(bars.filter(b => b.tabIndex === 0)).toEqual([bars.at(-1)]);
+    }
+  });
+
+  it("moves between a strip's bars with the arrows, Home and End", async () => {
+    const many = Array.from({ length: 5 }, (_, i) => ({ ...early, start: `2026-01-0${i + 1}T00:00:00.000Z`, closed_at: `2026-01-0${i + 2}T00:00:00.000Z` }));
+    showCurve({ ...fixture, history: many });
+    await lede();
+    const bars = within(hist().getByRole("group", { name: /past windows/ })).getAllByRole("button");
+    act(() => bars[4]!.focus());
+    await userEvent.keyboard("{ArrowLeft}");
+    expect(document.activeElement).toBe(bars[3]);
+    expect(bars.map(b => b.tabIndex)).toEqual([-1, -1, -1, 0, -1]);
+    await userEvent.keyboard("{Home}");
+    expect(document.activeElement).toBe(bars[0]);
+    await userEvent.keyboard("{ArrowLeft}");
+    expect(document.activeElement).toBe(bars[0]); // no wrapping
+    await userEvent.keyboard("{End}");
+    expect(document.activeElement).toBe(bars[4]);
+    await userEvent.keyboard("{ArrowRight}{ArrowLeft}{ArrowLeft}");
+    expect(document.activeElement).toBe(bars[2]);
+    await userEvent.keyboard("{Enter}"); // a bar is a button: Enter picks it
+    expect(bars[2]!.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("picks a window: loading, then its curve; picking it again closes the panel", async () => {
+    let finish!: (c: LimitWindowCurve) => void;
+    const f = mockApi({ "/api/limits": () => fixture });
+    vi.mocked(f).mockImplementation((input: string) => new Promise(resolve => {
+      const u = new URL(input, "http://localhost");
+      if (u.pathname === "/api/limits") resolve({ ok: true, status: 200, json: () => Promise.resolve(fixture) } as Response);
+      else finish = c => resolve({ ok: true, status: 200, json: () => Promise.resolve(c) } as Response);
+    }));
+    history.replaceState(null, "", "/limits#range=30");
+    render(<LimitsPage />);
+    await lede();
+    expect(hist().queryByRole("region")).toBeNull();
+    await userEvent.click(row(early));
+    expect(row(early).getAttribute("aria-pressed")).toBe("true");
+    expect(vi.mocked(f).mock.calls.at(-1)![0]).toBe(`/api/limits/window?provider=codex&limit_id=codex_10080&start=${encodeURIComponent(early.start)}`);
+    const panel = hist().getByRole("region", { name: /Codex weekly/ });
+    expect(within(panel).getByText("Loading the curve…")).toBeTruthy();
+    expect(within(panel).getByText(/22%/)).toBeTruthy();
+    expect(within(panel).getByText(/ended early by a plan change/)).toBeTruthy();
+    expect(within(panel).queryByRole("img")).toBeNull();
+    await act(async () => finish(curve));
+    expect(within(panel).queryByText("Loading the curve…")).toBeNull();
+    expect(within(panel).getByRole("img", { name: /^Codex weekly: 22% used when it ended .*Plan change from plus to prolite/ })).toBeTruthy();
+    expect(panel.querySelector(".lim-chart .now")).toBeNull();
+    expect(hist().getAllByRole("row").filter(r => r.getAttribute("aria-current") === "true")).toHaveLength(1); // its row in the table
+    await userEvent.click(row(early));
+    expect(row(early).getAttribute("aria-pressed")).toBe("false");
+    expect(hist().queryByRole("region")).toBeNull();
+    expect(hist().getAllByRole("row").filter(r => r.getAttribute("aria-current") === "true")).toHaveLength(0);
+  });
+
+  it("moves to another window's curve when another bar is picked", async () => {
+    const f = showCurve();
+    await lede();
+    const other = fixture.history.find(h => h.hit && !h.estimated)!;
+    await userEvent.click(row(early));
+    await hist().findByRole("img", { name: /used when it ended/ });
+    await userEvent.click(row(other));
+    expect(row(early).getAttribute("aria-pressed")).toBe("false");
+    expect(row(other).getAttribute("aria-pressed")).toBe("true");
+    expect(hist().getAllByRole("region")).toHaveLength(1);
+    expect(vi.mocked(f).mock.calls.at(-1)![0]).toContain(`limit_id=${other.limit_id}`);
+  });
+
+  it("closes with its button and gives focus back to the bar", async () => {
+    showCurve();
+    await lede();
+    await userEvent.click(row(early));
+    await hist().findByRole("img", { name: /used when it ended/ });
+    await userEvent.click(hist().getByRole("button", { name: "Close" }));
+    expect(hist().queryByRole("region")).toBeNull();
+    expect(document.activeElement).toBe(row(early));
+    expect(row(early).getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("shows an error with Retry when the curve cannot be fetched, then the chart", async () => {
+    let fail = true;
+    showCurve(fixture, () => (fail ? undefined : curve));
+    await lede();
+    await userEvent.click(row(early));
+    const alert = await hist().findByRole("alert");
+    expect(alert.textContent).toMatch(/Could not load this window's curve \(HTTP 404\)/);
+    fail = false;
+    await userEvent.click(within(alert).getByRole("button", { name: "Retry" }));
+    expect(await hist().findByRole("img", { name: /used when it ended/ })).toBeTruthy();
+    expect(hist().queryByRole("alert")).toBeNull();
+  });
+
+  it("closes the panel when the range or source no longer holds the window", async () => {
+    const claudeRow = fixture.history.find(h => h.provider === "claude")!;
+    mockApi({ "/api/limits": q => (q.get("source") === "codex" ? { ...fixture, history: fixture.history.filter(h => h.provider === "codex"), windows: [codex] } : fixture),
+      "/api/limits/window": () => ({ ...curve, window: claudeRow }) });
+    history.replaceState(null, "", "/limits#range=30");
+    render(<LimitsPage />);
+    await lede();
+    await userEvent.click(row(claudeRow));
+    await hist().findByRole("img", { name: /used when it ended/ });
+    await userEvent.click(screen.getByRole("button", { name: "Codex" }));
+    await vi.waitFor(() => expect(location.hash).toBe("#range=30&source=codex"));
+    await vi.waitFor(() => expect(hist().queryByRole("region")).toBeNull());
+    expect(screen.queryByRole("button", { name: barName(claudeRow) })).toBeNull();
+  });
+
+  it("keeps the panel when the new range still holds the window", async () => {
+    mockApi({ "/api/limits": q => (q.get("source") === "codex" ? { ...fixture, history: fixture.history.filter(h => h.provider === "codex"), windows: [codex] } : fixture),
+      "/api/limits/window": () => curve });
+    history.replaceState(null, "", "/limits#range=30");
+    render(<LimitsPage />);
+    await lede();
+    await userEvent.click(row(early));
+    await hist().findByRole("img", { name: /used when it ended/ });
+    await userEvent.click(screen.getByRole("button", { name: "Codex" }));
+    await vi.waitFor(() => expect(location.hash).toBe("#range=30&source=codex"));
+    await vi.waitFor(() => expect(vi.mocked(fetch).mock.calls.at(-1)![0]).toBe("/api/limits?range=30&source=codex"));
+    expect(row(early).getAttribute("aria-pressed")).toBe("true");
+    expect(hist().getByRole("region", { name: /Codex weekly/ })).toBeTruthy();
   });
 });

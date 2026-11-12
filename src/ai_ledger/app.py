@@ -325,6 +325,9 @@ def handler(app, port=PORT):
                 elif url.path == "/api/limits":
                     self.json(limits.payload(app.con.cursor(), int(q.get("range") or 0), q.get("source", ""), q.get("project", ""),
                                              polls={p.name: dict(p.state) for p in app.pollers}))
+                elif url.path == "/api/limits/window":  # one closed window's curve, for the history strip
+                    got = limits.window_curve(app.con.cursor(), q.get("provider", ""), q.get("limit_id", ""), q.get("scope", ""), q.get("start", ""))
+                    self.send(404, json.dumps(dict(error="window not found"))) if got is None else self.json(got)
                 elif url.path == "/api/insights":
                     self.json(insights.payload(app.con.cursor(), q.get("project", ""), int(q.get("range") or 0), q.get("source", ""),
                                                automated=q.get("automated") == "1", usage_dir=app.roots.get("insights")))

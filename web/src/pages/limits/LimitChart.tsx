@@ -12,8 +12,9 @@ export const planMarks = (w: LimitWindow, events: PlanChange[]) =>
 const KEYS: Record<string, number> = { ArrowLeft: -1, ArrowRight: 1, Home: -Infinity, End: Infinity };
 
 /** One window from its start to its reset: the percent used so far (estimates dotted, measured snapshots as dots and a
- *  solid line), the forecast with its band, the 100% line, now, and plan changes inside the window. */
-export function LimitChart({ w, now, events }: { w: LimitWindow; now: string; events: PlanChange[] }) {
+ *  solid line), the forecast with its band, the 100% line, now, and plan changes inside the window. now: null for a closed
+ *  window (closedWindow): it runs to its close, which is its resets_at here, and has no forecast and no now. */
+export function LimitChart({ w, now, events }: { w: LimitWindow; now: string | null; events: PlanChange[] }) {
   const box = useRef<HTMLDivElement>(null), tip = useRef<HTMLDivElement>(null), svg = useRef<SVGSVGElement>(null), W = useWidth(box, 420);
   // The point being read, and where its tooltip goes (client pixels). key: set by the keyboard, so only that is announced.
   const [read, setRead] = useState<{ i: number; x: number; y: number; key: boolean } | null>(null);
@@ -75,7 +76,8 @@ export function LimitChart({ w, now, events }: { w: LimitWindow; now: string; ev
   return (
     <div className="lim-chart" ref={box} {...reader}>
       <svg ref={svg} width={W} height={H} role="img" onPointerMove={onMove} onPointerLeave={() => setRead(null)}
-        aria-label={[`${w.provider_label} ${w.label}: ${w.current ?? "–"}% used. ${caption(w)}.`, ...marks.map(e => `${said(e)}.`)].join(" ")}>
+        aria-label={[now == null ? `${w.provider_label} ${w.label}: ${w.current ?? "–"}% used when it ended ${whenDay(w.resets_at)}.`
+          : `${w.provider_label} ${w.label}: ${w.current ?? "–"}% used. ${caption(w)}.`, ...marks.map(e => `${said(e)}.`)].join(" ")}>
         {[0, 50, 100].map(p => <g key={p}>
           <line x1={M.l} x2={W - M.r} y1={y(p)} y2={y(p)} className={p === 100 ? "cap" : "grid"} />
           <text x={M.l - 6} y={y(p) + 4} textAnchor="end" className="ax">{p}%</text>
@@ -90,13 +92,13 @@ export function LimitChart({ w, now, events }: { w: LimitWindow; now: string; ev
           <line x1={x(e.at)} x2={x(e.at)} y1={M.t} y2={M.t + ih} />
           <line x1={x(e.at)} x2={x(e.at)} y1={M.t} y2={M.t + ih} className="hit" />
           <text x={x(e.at) + (x(e.at) > W / 2 ? -4 : 4)} y={M.t + 10} textAnchor={x(e.at) > W / 2 ? "end" : "start"}>{`plan: ${planName(e.plan_to)}`}</text></g>)}
-        <line x1={x(now)} x2={x(now)} y1={M.t} y2={M.t + ih} className="now" />
+        {now != null && <line x1={x(now)} x2={x(now)} y1={M.t} y2={M.t + ih} className="now" />}
         {cur && read && <>
           <line x1={x(cur.t)} x2={x(cur.t)} y1={M.t} y2={M.t + ih} className="guide" />
           <circle cx={x(cur.t)} cy={y(pctOf(read.i))} r={4} className={"pick" + (cur.kind === "forecast" ? " ahead" : "")} />
         </>}
         <text x={M.l} y={H - 6} className="ax">{at(w.start)}</text>
-        <text x={W - M.r} y={H - 6} textAnchor="end" className="ax">resets {at(w.resets_at)}</text>
+        <text x={W - M.r} y={H - 6} textAnchor="end" className="ax">{now == null ? "ended" : "resets"} {at(w.resets_at)}</text>
       </svg>
       {pts.length > 0 && <>
         <div className="tip" ref={tip} aria-hidden="true" style={{ display: cur ? "block" : "none" }}>{cur && readText(cur)}</div>
