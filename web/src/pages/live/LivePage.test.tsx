@@ -581,6 +581,23 @@ describe("LivePage", () => {
     expect([follow(), inView(toolRow("Grepg31").closest(".ev")!)]).toEqual([true, true]);
   });
 
+  it("follows a row with no time to the foot when it ends the stream", async () => {
+    const mark = { key: "c9#0", k: "compaction", ts: null, lane: null, pre: null } as LiveEvent; // a compaction that carries no time
+    show("#session=s1", { session: () => ({ ...s1, events: [...s1.events, mark] }) });
+    await stream();
+    const box = screen.getByLabelText("Session events"), drawn = () => [...box.querySelectorAll(".ev, .compact")];
+    Object.defineProperty(box, "clientHeight", { value: 90, configurable: true });
+    Object.defineProperty(box, "scrollHeight", { get: () => drawn().length * 30, configurable: true });
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+      const top = this === box ? 0 : drawn().indexOf(this) * 30 - box.scrollTop, height = this === box ? 90 : 30;
+      return { top, height, bottom: top + height } as DOMRect;
+    });
+    expect(drawn().at(-1)!.textContent).toBe("context compacted");
+    await userEvent.click(check("Follow"));
+    await userEvent.click(check("Follow")); // places the box anew, in this layout
+    expect(box.scrollTop).toBe(box.scrollHeight);
+  });
+
   it("holds one place for a followed row taller than the box, with its top in view", async () => {
     const told = new Set<() => void>();
     vi.spyOn(globalThis, "ResizeObserver").mockImplementation(function (cb: () => void) {

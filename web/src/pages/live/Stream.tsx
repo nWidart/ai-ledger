@@ -107,9 +107,9 @@ export function Stream({ s, now, text, follow, setFollow, filters: f, setFilters
   };
   const views = new Map(rows.flatMap(r => (r.kind === "lane" ? [[r.lane.id, view(r.lane, r.events)] as const] : [])));
   // The row Follow keeps in view: the newest event drawn, or the header of its lane when the lane shows no row. last is
-  // the row the stream ends with.
-  let target = "", last = "", at = -Infinity;
-  const see = (key: string, ts: Ts | null) => { const t = ts ? Date.parse(ts) : NaN; last = key; if (t >= at) { at = t; target = key; } };
+  // the row the stream ends with: it is the newest when it carries no time to compare.
+  let target = "", last = "", at = -Infinity, timed = true;
+  const see = (key: string, ts: Ts | null) => { const t = ts ? Date.parse(ts) : NaN; last = key; timed = !Number.isNaN(t); if (t >= at) { at = t; target = key; } };
   for (const r of rows) {
     if (r.kind === "event") { if (isRow(r.e) && passes(r.e, f)) see(r.e.key, r.e.ts); continue; }
     const v = views.get(r.lane.id)!;
@@ -117,6 +117,7 @@ export function Stream({ s, now, text, follow, setFollow, filters: f, setFilters
     if (!v.shown.length) see("lane:" + r.lane.id, r.lane.end);
     for (const e of v.shown) see(e.key, e.ts);
   }
+  if (!timed) target = last;
   const mark = (key: string) => (key === target ? newest : undefined), foot = target === last;
   // Follow's place for the box: its foot when the newest row ends the stream, else just far enough to show that row
   // whole. A row too tall for the box shows from its top, wherever the box stands: a second call then moves nothing.
