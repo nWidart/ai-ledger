@@ -122,8 +122,12 @@ export interface SessionInfo {
   active_s: number | null;
 }
 export interface SessionModelRow extends Tokens { model: string | null; effort: string; subagent: boolean; requests: number; tokens: number; cost: number | null }
+/** The session's /insights judgment (a facet): a model's opinion, not a measurement. Name lists run most counted first. */
+export type SessionInsight = Pick<InsightSession, "outcome" | "helpfulness" | "session_type" | "brief_summary" | "friction_detail" | "friction" | "goals" | "satisfaction">;
 export interface SessionDetail {
   info: SessionInfo;
+  /** null when /insights has not analysed the session (every Codex session). */
+  insight: SessionInsight | null;
   models: SessionModelRow[];
   timeline: { minute: Ts; tokens: number; cost: number | null; context: number }[];
   tools: { tool: string; calls: number; errors: number; p50_ms: number | null; failure_rate: number | null }[];

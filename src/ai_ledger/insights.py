@@ -174,6 +174,31 @@ def ordered(counts, known):
     return [dict(name=n, n=counts.get(n, 0)) for n in known] + [dict(name=n, n=c) for n, c in rest]
 
 
+def name_lists(rows):
+    """{(session_id, kind): [name]} from (session_id, kind, name) rows already ordered most counted first."""
+    names = {}
+    for sid, kind, name in rows:
+        names.setdefault((sid, kind), []).append(name)
+    return names
+
+
+def session_names(names, sid):
+    """A session's goals, friction and satisfaction name lists, as the payload and the session sheet name them."""
+    return {key: names.get((sid, kind), []) for kind, key in (("friction", "friction"), ("goal", "goals"), ("satisfaction", "satisfaction"))}
+
+
+def insight(cur, sid):
+    """One session's judgment for the session sheet, in the shape of an Insights payload session, or None when it has no
+    facet. underlying_goal and primary_success stay in the store."""
+    got = metrics.rows(cur, """SELECT outcome, helpfulness, session_type, brief_summary, friction_detail FROM session_facets
+        WHERE session_id = ?""", [sid])
+    if not got:
+        return None
+    names = name_lists(cur.execute("""SELECT session_id, kind, name FROM facet_counts WHERE session_id = ?
+        ORDER BY kind, n DESC, name""", [sid]).fetchall())
+    return got[0] | session_names(names, sid)
+
+
 def payload(cur, project="", range_days=0, source="", automated=False, today=None, usage_dir=None):
     """The JSON the Insights page reads. Only Claude Code sessions have facets: source codex returns coverage alone.
     Coverage counts leave automated sessions out, whatever automated says. underlying_goal and primary_success stay in the
@@ -210,15 +235,12 @@ def payload(cur, project="", range_days=0, source="", automated=False, today=Non
     for kind, key in (("satisfaction", "satisfaction"), ("friction", "friction"), ("goal", "goals")):
         out[key] = metrics.rows(cur, f"""{in_view} SELECT c.name, sum(c.n)::BIGINT AS n, count(DISTINCT c.session_id) AS sessions
             FROM facet_counts c JOIN v USING (session_id) WHERE c.kind = ? GROUP BY 1 ORDER BY 2 DESC, 3 DESC, 1""", wp + [kind])
-    names = {}
-    for sid, kind, name in cur.execute(f"""{in_view} SELECT c.session_id, c.kind, c.name FROM facet_counts c JOIN v USING (session_id)
-            ORDER BY c.session_id, c.kind, c.n DESC, c.name""", wp).fetchall():
-        names.setdefault((sid, kind), []).append(name)
+    names = name_lists(cur.execute(f"""{in_view} SELECT c.session_id, c.kind, c.name FROM facet_counts c JOIN v USING (session_id)
+            ORDER BY c.session_id, c.kind, c.n DESC, c.name""", wp).fetchall())
     sess = metrics.rows(cur, f"""{in_view} SELECT session_id, project, start, outcome, helpfulness, session_type, brief_summary,
         friction_detail, in_store FROM v ORDER BY start DESC NULLS LAST, session_id LIMIT ?""", wp + [SESSION_ROWS + 1])
     for r in sess[:SESSION_ROWS]:
         r["start"] = metrics.iso(r["start"])
-        for kind, key in (("friction", "friction"), ("goal", "goals"), ("satisfaction", "satisfaction")):
-            r[key] = names.get((r["session_id"], kind), [])
+        r.update(session_names(names, r["session_id"]))
     out.update(sessions=metrics.with_titles(cur, sess[:SESSION_ROWS]), truncated=len(sess) > SESSION_ROWS)
     return out

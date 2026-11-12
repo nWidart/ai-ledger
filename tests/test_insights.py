@@ -11,7 +11,7 @@ import unittest
 from datetime import date
 from unittest import mock
 
-from ai_ledger import insights, store
+from ai_ledger import insights, metrics, store
 
 FIXTURES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "usage-data")
 SENTINEL = "SENTINEL-facet-text"
@@ -348,6 +348,33 @@ class PayloadTest(InsightsCase):
     def test_goal_and_success_text_not_sent(self):
         self.ingest()
         text = json.dumps(self.payload(), default=str)
+        self.assertNotIn("underlying_goal", text)
+        self.assertNotIn("primary_success", text)
+        self.assertNotIn("The toggle shipped with tests", text)
+
+    def test_session_payload_carries_its_insight(self):
+        self.session(A + "2", "demo-app", "2026-11-03 09:00:00")
+        self.ingest()
+        got = metrics.session(self.con.cursor(), A + "2", prices={})["insight"]
+        self.assertEqual(got, dict(
+            outcome="partially_achieved", helpfulness="moderately_helpful", session_type="iterative_refinement",
+            brief_summary="Synthetic: chased a flaky date test. SENTINEL-facet-text",
+            friction_detail="Synthetic: patched the wrong time zone helper first. SENTINEL-facet-text",
+            goals=["fix_bug", "write_tests"], friction=["wrong_approach", "buggy_code"], satisfaction=["likely_satisfied", "dissatisfied"]))
+        row = next(r for r in self.payload()["sessions"] if r["session_id"] == A + "2")  # the Insights page's row says the same
+        self.assertEqual(got, {k: row[k] for k in got})
+
+    def test_session_payload_without_a_facet_has_no_insight(self):
+        self.session("c1", "demo-app", "2026-11-03 10:00:00")
+        self.session("x1", "demo-app", "2026-11-03 12:00:00", source="codex")
+        self.ingest()
+        for sid in ("c1", "x1"):
+            self.assertIsNone(metrics.session(self.con.cursor(), sid, prices={})["insight"], sid)
+
+    def test_session_insight_leaves_goal_and_success_text_out(self):
+        self.session(A + "1", "demo-app", "2026-11-03 09:00:00")
+        self.ingest()
+        text = json.dumps(metrics.session(self.con.cursor(), A + "1", prices={}), default=str)
         self.assertNotIn("underlying_goal", text)
         self.assertNotIn("primary_success", text)
         self.assertNotIn("The toggle shipped with tests", text)

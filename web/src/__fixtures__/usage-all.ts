@@ -792,6 +792,7 @@ export default {
    "context_limit": 1000,
    "active_s": 540
   },
+  "insight": null,
   "models": [
    {
     "model": "m-a",
