@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import { num as fmt, niceStep } from "../../format";
 import { useErrors } from "./context";
-import { bucketOf, chartData, incSummary, label, linePath, LOW_CALLS, pointRows, pointText, pointWhen, shortLabel, sumCalls, TOPN, typeColor } from "./model";
+import { bucketLabel, bucketOf, chartData, incSummary, label, linePath, LOW_CALLS, pointRows, pointText, pointWhen, shortLabel, sumCalls, TOPN, typeColor } from "./model";
 
 // Two panels on one time axis, each with its own labeled scale: error rate (line) above, error counts by type (stacked bars) below.
 const H = 320, ML = 40, MR = 10, rT = 18, rH = 100, bT = rT + rH + 26, bH = H - bT - 24;
@@ -10,7 +10,7 @@ const T = ({ x, y, a = "end", strong, children }: { x: number; y: number; a?: "s
 );
 
 export function RateChart() {
-  const { m, v, f, vt, fixes, pick, after } = useErrors();
+  const { m, v, f, vt, fixes, pick, after, update, say } = useErrors();
   const box = useRef<HTMLDivElement>(null), svg = useRef<SVGSVGElement>(null), tipEl = useRef<HTMLDivElement>(null);
   const [W, setW] = useState(0);
   const [hover, setHover] = useState<{ i: number; sx: number; sy: number } | null>(null), [live, setLive] = useState("");
@@ -87,16 +87,27 @@ export function RateChart() {
   }, [pts, W, fixes, vt, cat]); // the scales and labels follow from these
 
   const lineColor = cat ? typeColor(cat, vt) : "var(--text-primary)";
+  const sel = v.at ? pts.findIndex(p => p.k === v.at && !p.to) : -1;
   const empty = !pts.some(p => p.c), noErrors = !pts.some(p => p.e);
 
   const show = (i: number, sx: number, sy: number) => { setHover({ i, sx, sy }); return pointText(m, v, pts[i]!, vt); };
   const hide = () => setHover(null);
-  const move = (ev: MouseEvent<SVGRectElement>) => {
+  const at = (ev: MouseEvent<SVGRectElement>) => {
     const r = svg.current!.getBoundingClientRect(), px = (ev.clientX - r.left) * (W || 800) / r.width;
-    show(Math.max(0, Math.min(n - 1, Math.floor((px - ML) / bw))), ev.clientX, ev.clientY);
+    return Math.max(0, Math.min(n - 1, Math.floor((px - ML) / bw)));
+  };
+  const move = (ev: MouseEvent<SVGRectElement>) => show(at(ev), ev.clientX, ev.clientY);
+  // Selects a bucket for the type table and the detail, or clears it when it is the selected one. A folded stretch has no calls to explain.
+  const toggle = (i: number) => {
+    const p = pts[i]!;
+    if (p.to) return say("A stretch without tool calls can't be selected.");
+    const on = v.at === p.k;
+    update({ at: on ? null : p.k }, true);
+    say(on ? "Selection cleared: the table and detail cover the whole range." : `Selected ${pointWhen(v, p)}: the table and detail show only its errors.`);
   };
   const key = (ev: KeyboardEvent<HTMLDivElement>) => {
     if (empty) return;
+    if ((ev.key === "Enter" || ev.key === " ") && hover) { ev.preventDefault(); return toggle(hover.i); }
     const ci = hover?.i ?? -1, i = ({ ArrowLeft: ci < 0 ? n - 1 : ci - 1, ArrowRight: ci + 1, Home: 0, End: n - 1 } as Record<string, number>)[ev.key];
     if (i == null) return;
     ev.preventDefault();
@@ -119,7 +130,7 @@ export function RateChart() {
       <div className="hint" id="chartHint">{`Failed tool calls per ${per}, top ${TOPN} types and Other, with ${cat ? "the selected type's" : "the"} error rate (errors per 100 tool calls) above. Dashed lines mark fixes you applied.`}</div>
       {!noErrors && legend(pts.some(p => !p.c), low.some(Boolean))}
       {selOut()}
-      <div id="chart" ref={box} tabIndex={0} role="img" aria-label="Errors by type and error rate. Use the left and right arrow keys to read each point."
+      <div id="chart" ref={box} tabIndex={0} role="img" aria-label={`Errors by type and error rate. Use the left and right arrow keys to read each point, Enter or Space to select the ${per} for the table and examples.${v.at ? ` Selected: ${bucketLabel(m, v)}.` : ""}`}
         onKeyDown={key} onBlur={hide}>
         {empty || noErrors ? <div className="empty">{empty ? "No tool calls in this range." : `No failed tool calls in this range, out of ${fmt(sumCalls(v, f.calls))}.`}</div>
           : <svg key={dataKey} ref={svg} viewBox={`0 0 ${W || 800} ${H}`} aria-hidden="true" className={"grow" + (cat ? " has-sel" : "")}>
@@ -135,7 +146,10 @@ export function RateChart() {
             <rect id="xh" x={hover ? ML + hover.i * bw : 0} y={rT} height={bT + bH - rT} width={bw} fill="var(--text-primary)" opacity=".06" visibility={hover ? "visible" : "hidden"} />
             <circle id="xd" r="4.5" cx={hp && hr != null ? cx(hover.i) : 0} cy={hp && hr != null ? yR(hr) : 0} fill={lineColor} stroke="var(--surface-1)" strokeWidth="2"
               visibility={hp && hr != null ? "visible" : "hidden"} />
-            <rect x={ML} y={rT} width={iw} height={bT + bH - rT} fill="transparent" id="hit" onMouseMove={move} onMouseLeave={hide} />
+            {sel >= 0 && <g id="atMark" data-at={v.at}>
+              <rect x={ML + sel * bw} y={rT} width={bw} height={bT + bH - rT} fill="var(--text-primary)" opacity=".08" stroke="var(--text-primary)" strokeWidth="1.5" />
+              <path d={`M${cx(sel) - 5},${bT + bH + 12}L${cx(sel) + 5},${bT + bH + 12}L${cx(sel)},${bT + bH + 4}Z`} fill="var(--text-primary)" /></g>}
+            <rect x={ML} y={rT} width={iw} height={bT + bH - rT} fill="transparent" id="hit" onMouseMove={move} onMouseLeave={hide} onClick={ev => toggle(at(ev))} style={{ cursor: "pointer" }} />
           </svg>}
       </div>
       <div className="sr" id="chartLive" aria-live="polite">{live}</div>

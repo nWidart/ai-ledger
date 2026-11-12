@@ -6,7 +6,7 @@ import { useErrors } from "./context";
 import { Example, Examples, Incident } from "./Examples";
 import { Spark } from "./Spark";
 import {
-  beforeAfter, bucketOf, buckets, byProject, byWeight, dur, exList, incSpan, incSummary, NOISE, RECOVERED_NOTE, series,
+  beforeAfter, bucketOf, buckets, byProject, byWeight, dur, exList, incSpan, incSummary, inBucket, NOISE, RECOVERED_NOTE, series,
   label, MIN_PCT_ERRORS, topTools, typeColor, whereToStart, yearLabel, type Err, type Group,
 } from "./model";
 
@@ -51,13 +51,13 @@ function WhereToStart() {
 function TypeDetail({ cat }: { cat: string }) {
   const x = useErrors(), { m, v, f, fixes, mode, q } = x, c = m.cats[cat]!, fixDay = fixes[cat];
   const head = useRef<HTMLDivElement>(null), bar = useRef<HTMLDivElement>(null);
-  const base = f.errs.filter(e => e.c === cat).reverse(), is = incSummary(m, base), groups = is.groups.sort(byWeight), worst = groups[0];
+  const base = inBucket(v, f.errs).filter(e => e.c === cat).reverse(), is = incSummary(m, base), groups = is.groups.sort(byWeight), worst = groups[0];
   // A linked example shows first; outside the current filters it gets its own note instead of joining the list.
   const focused = x.pinned, outside = !!focused && !base.includes(focused);
   const tools = topTools(base), flat = mode === "flat", PAGE = flat ? 30 : 20;
-  const list = exList(base, groups, flat, q, outside ? undefined : focused);
+  const list = exList(base, groups, flat, q, outside ? undefined : focused, v.at ? v.gran : "range");
   // List, count and Show more all come from the current search; any other change starts the list over.
-  const reset = JSON.stringify([cat, v.project, v.source, v.range, v.sub, v.noise, v.gran, mode, q, fixes]);
+  const reset = JSON.stringify([cat, v.project, v.source, v.range, v.sub, v.noise, v.gran, v.at, mode, q, fixes]);
   const [more, setMore] = useState({ reset, n: PAGE }), shown = more.reset === reset ? more.n : PAGE;
 
   // The example bar sticks below the header, and examples scroll in below both.
@@ -94,7 +94,7 @@ function TypeDetail({ cat }: { cat: string }) {
     x.after(() => document.getElementById("fix")?.focus());
   };
   const clearFilters = () => {
-    x.update({ project: "", range: 0, sub: true, noise: false }, true);
+    x.update({ project: "", range: 0, sub: true, noise: false, at: null }, true);
     x.after(() => document.getElementById("ex-" + focused!.id)?.focus());
   };
   const showMore = () => {
@@ -134,7 +134,7 @@ function TypeDetail({ cat }: { cat: string }) {
     <ByProject base={base} />
     {outside && <div className="outnote" id="outside">
       <div className="row" style={{ justifyContent: "space-between" }}><b>Outside current filters</b><button type="button" id="clearF" onClick={clearFilters}>Clear filters</button></div>
-      <div className="muted" style={{ fontSize: 12 }}>This linked example doesn't match the project, range or toggles above.</div>
+      <div className="muted" style={{ fontSize: 12 }}>This linked example doesn't match the project, range, bucket or toggles above.</div>
       <Example e={focused!} />
     </div>}
     <div className="exbar" ref={bar}>
@@ -145,7 +145,7 @@ function TypeDetail({ cat }: { cat: string }) {
       </div>
       <input type="search" id="q" placeholder="Filter by command, error or project…" value={q} style={{ width: "100%", margin: "8px 0" }}
         aria-label={`Filter ${flat ? "errors" : "incidents"}`}
-        onChange={e => { const nq = e.target.value; x.setQ(nq); x.say(exList(base, groups, flat, nq, outside ? undefined : focused).count); }} />
+        onChange={e => { const nq = e.target.value; x.setQ(nq); x.say(exList(base, groups, flat, nq, outside ? undefined : focused, v.at ? v.gran : "range").count); }} />
     </div>
     <div id="exList">
       {list.flat ? <Examples list={(list.items as Err[]).slice(0, shown)} />

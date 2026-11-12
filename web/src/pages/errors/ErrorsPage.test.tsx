@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import fixture from "../../__fixtures__/errors";
@@ -179,5 +179,141 @@ describe("ErrorsPage", () => {
       expect(detail.open).toBe(true);
       expect(location.hash).toBe("#range=30&cat=x");
     });
+  });
+});
+
+// t01 and t02 move to Nov 3, the rest stay on Nov 4 (today is Nov 5): two buckets with errors, one without.
+describe("ErrorsPage bucket selection", () => {
+  const withDays = (calls: ErrorsPayload["calls"]): ErrorsPayload => ({ ...fixture,
+    errors: fixture.errors.map(e => (e.id === "t01" || e.id === "t02" ? { ...e, d: "2026-11-03" } : e)),
+    error_days: [["2026-11-03", "foo", "x", 2, 0, "claude"], ["2026-11-04", "foo", "x", 4, 0, "claude"]], calls });
+  const two = withDays([["2026-11-03", "foo", 10, 0, "claude"], ["2026-11-04", "foo", 10, 0, "claude"]]);
+  const open = async (hash: string, payload = two) => {
+    vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/errors") ? payload : {})));
+    history.replaceState(null, "", "/errors" + hash);
+    await page();
+  };
+  // jsdom has no layout: the chart is 800 wide, three buckets of 250 from x=40.
+  const clickBucket = (i: number) => {
+    const svg = document.querySelector("#chart svg")!;
+    svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 800, height: 320, right: 800, bottom: 320, x: 0, y: 0, toJSON() {} });
+    fireEvent.click(document.getElementById("hit")!, { clientX: 40 + 250 * i + 100, clientY: 50 });
+  };
+  const rows = () => [...document.querySelectorAll("#catBody tr")].map(r => [r.querySelector(".tbtn")?.textContent, r.querySelector("td.num")?.textContent]);
+  const keys = () => { document.getElementById("chart")!.focus(); };
+
+  it("selects a bucket with a click, narrows the table, and clears with a second click", async () => {
+    await open("#range=30");
+    const change = document.querySelector("#catBody td.num:last-child")!.textContent;
+    expect(rows()).toEqual([["x", "6"]]);
+    clickBucket(0);
+    expect(location.hash).toBe("#range=30&at=2026-11-03");
+    expect(rows()).toEqual([["x", "2"]]);
+    expect(document.getElementById("atClr")?.textContent).toBe("Nov 3 ✕");
+    expect(document.getElementById("atClr")?.getAttribute("aria-label")).toBe("Selected: Nov 3. Show the whole range");
+    // The vitals, the chart and the Change column stay range-wide; the hint says so.
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toMatch(/^6 failed tool calls/);
+    expect(document.querySelector("#catBody td.num:last-child")!.textContent).toBe(change);
+    expect(document.querySelector(".types .hint")!.textContent).toContain("only the selected day; the trend and change stay range-wide");
+    // Marked on the chart by an outline and a marker, and for assistive tech.
+    expect(document.getElementById("atMark")?.getAttribute("data-at")).toBe("2026-11-03");
+    expect(document.getElementById("chart")!.getAttribute("aria-label")).toContain("Selected: Nov 3.");
+    expect(JSON.parse(localStorage.getItem("claude-errors-view")!)).not.toHaveProperty("at");
+    clickBucket(0);
+    expect(location.hash).toBe("#range=30");
+    expect(document.getElementById("atClr")).toBeNull();
+    expect(document.getElementById("atMark")).toBeNull();
+    expect(rows()).toEqual([["x", "6"]]);
+  });
+
+  it("selects and clears from the keyboard with Enter and Space", async () => {
+    await open("#range=30");
+    keys();
+    await userEvent.keyboard("{Enter}"); // no current point yet
+    expect(location.hash).toBe("#range=30");
+    await userEvent.keyboard("{Home}{Enter}");
+    expect(location.hash).toBe("#range=30&at=2026-11-03");
+    expect(document.getElementById("chart")!.getAttribute("aria-label")).toContain("Selected: Nov 3.");
+    await waitFor(() => expect(document.getElementById("detailLive")!.textContent).toMatch(/^Selected Nov 3, 2026/));
+    await userEvent.keyboard(" ");
+    expect(location.hash).toBe("#range=30");
+  });
+
+  it("can't select a folded stretch without calls", async () => {
+    await open("#range=30", withDays([["2026-10-10", "foo", 10, 0, "claude"], ["2026-11-04", "foo", 10, 0, "claude"]]));
+    keys();
+    await userEvent.keyboard("{Home}{ArrowRight}");
+    expect(document.getElementById("chartLive")!.textContent).toContain(" – ");
+    await userEvent.keyboard("{Enter}");
+    expect(location.hash).toBe("#range=30");
+    await waitFor(() => expect(document.getElementById("detailLive")!.textContent).toBe("A stretch without tool calls can't be selected."));
+  });
+
+  it("Back clears a selection, and the chip's button clears it and keeps focus in the table", async () => {
+    await open("#range=30");
+    clickBucket(1);
+    expect(location.hash).toBe("#range=30&at=2026-11-04");
+    await act(async () => { history.back(); });
+    await waitFor(() => expect(location.hash).toBe("#range=30"));
+    expect(document.getElementById("atClr")).toBeNull();
+    clickBucket(1);
+    await userEvent.click(document.getElementById("atClr")!);
+    expect(location.hash).toBe("#range=30");
+    expect(document.activeElement).toBe(document.querySelector("#catBody button"));
+  });
+
+  it("words a week's chip, and clears the selection when the granularity changes", async () => {
+    await open("#range=30&gran=week&at=2026-11-02");
+    expect(document.getElementById("atClr")?.textContent).toBe("Week of Nov 2 ✕");
+    expect(rows()).toEqual([["x", "6"]]);
+    await userEvent.click(screen.getByRole("button", { name: "Day" }));
+    expect(location.hash).toBe("#range=30");
+    expect(document.getElementById("atClr")).toBeNull();
+    clickBucket(0);
+    await userEvent.click(screen.getByRole("button", { name: "Week" }));
+    expect(location.hash).toBe("#range=30&gran=week");
+  });
+
+  it("clears a bucket the range doesn't hold", async () => {
+    await open("#range=7&at=2026-09-01");
+    await waitFor(() => expect(location.hash).toBe("#range=7"));
+    expect(document.getElementById("atClr")).toBeNull();
+  });
+
+  it("narrows the type detail: the incident sentence, By project, and the list", async () => {
+    await open("#range=30&cat=x&at=2026-11-03");
+    const d = document.getElementById("detail")!;
+    expect(d.querySelector(".istat b")!.textContent).toBe("2");
+    expect(d.querySelector(".byproj .v")!.textContent).toBe("2");
+    expect(document.getElementById("exCount")!.textContent).toMatch(/ in day, most attempts first$/);
+    await userEvent.click(screen.getByRole("button", { name: "Every error, newest first" }));
+    expect(document.getElementById("exCount")!.textContent).toBe("2 in day, newest first");
+    expect(document.querySelectorAll("#exList .ex")).toHaveLength(2);
+    expect(location.hash).toContain("at=2026-11-03");
+  });
+
+  it("closes an open type with no errors in the bucket", async () => {
+    await open("#range=30&cat=x&at=2026-11-05");
+    await waitFor(() => expect(location.hash).toBe("#range=30&at=2026-11-05"));
+    expect(document.getElementById("detailTitle")?.textContent).not.toBe("x");
+    expect(document.querySelector("#catBody .empty")!.textContent).toBe("No errors in this day.");
+  });
+
+  it("keeps an example's permalink working: outside the bucket it gets the note, and Clear filters clears the bucket", async () => {
+    await open("#ex=t07&range=30&at=2026-11-03");
+    const note = document.getElementById("outside")!;
+    expect(within(note).getByText("Outside current filters")).toBeTruthy();
+    expect(note.querySelector("#ex-t07")).toBeTruthy();
+    expect(document.getElementById("exCount")!.textContent).toMatch(/^1 in day/);
+    await userEvent.click(within(note).getByRole("button", { name: "Clear filters" }));
+    expect(location.hash).toBe("#range=0&ex=t07");
+    expect(document.getElementById("outside")).toBeNull();
+    expect(document.getElementById("exCount")!.textContent).toMatch(/^3 in range/);
+  });
+
+  it("writes a permalink without the bucket", async () => {
+    await open("#range=30&at=2026-11-04&ex=t07");
+    expect(document.getElementById("outside")).toBeNull();
+    expect(document.querySelector("#ex-t07 a[data-link]")!.getAttribute("href")).toBe("#range=30&ex=t07");
   });
 });

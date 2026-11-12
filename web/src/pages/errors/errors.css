@@ -233,3 +233,4 @@
   .pg-errors .sheet .exbar { position: static; }
   .pg-errors .sheet .ex, .pg-errors .sheet .inc { scroll-margin-top: calc(var(--dhead-h, 0px) + 12px); }
 }
+.pg-errors .chip.bucket { font: inherit; font-size: 12px; cursor: pointer; white-space: nowrap; }
