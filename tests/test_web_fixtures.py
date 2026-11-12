@@ -127,6 +127,8 @@ class WebFixturesTest(unittest.TestCase):
         got["live-session.ts"] = ("LiveSession", lv["claude"])
         got["live-session-text.ts"] = ("LiveSession", lv["text"])
         got["live-session-codex.ts"] = ("LiveSession", lv["codex"])
+        for name in ("live.ts", "live-text.ts"):  # what app adds to /api/live
+            got[name][1]["automated_file"] = dict(path="/Users/example/Library/Application Support/ai-ledger/automated.json", error=None, projects=[])
         for name in ("usage.ts", "usage-all.ts", "usage-codex.ts"):  # not the machine's own data folder
             got[name][1]["prices_file"] = dict(path="/Users/example/Library/Application Support/ai-ledger/prices.json", error=None)
             got[name][1]["automated_file"] = dict(path="/Users/example/Library/Application Support/ai-ledger/automated.json", error=None, projects=[])

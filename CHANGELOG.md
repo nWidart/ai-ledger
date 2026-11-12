@@ -7,8 +7,20 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 Run `ai-ledger rebuild` once after upgrading (with the app stopped): Codex subagent threads stored before this version are filed under their own ids, and the rebuild moves them to their sessions.
 
+### Added
+
+- Insights and the Activity Sessions drawer say which sessions they count: Insights counts a session by its start time, Activity by a request in the range, so the two totals can differ slightly.
+- The session sheet shows the session's `/insights` judgment, tagged model-judged, between its figures and its timeline: outcome, a dissatisfied marker, helpfulness, session type, goal and friction categories, the summary and the friction detail, with a link to Insights in the same filters. A session `/insights` has not analysed (every Codex session) shows none.
+
+### Changed
+
+- The Insights page reads in a new order: vitals, outcomes beside friction, satisfaction, then the analysed sessions, with Goals and Session types folded into closed drawers, and has a section index like Activity's.
+
 ### Fixed
 
+- The Live page's Stream view fits the window: a titled session no longer makes the page scroll, and the session rail, the stream and the agent panel stay within the window and scroll inside themselves (from 721 pixels wide; below that the page scrolls as before).
+- A time with a date in the Live stream ("Nov 10, 17:40:05") stays on one line: the time column widens when an event shows a date.
+- The "Include automated" tooltip on Live names the `automated.json` file, as on Activity.
 - Codex subagents show under their session on Live. A subagent's rollout is named by its own thread id only, so ingest filed its lines as a session of its own; a thread now belongs to the session its first `session_meta` names, and the files that continue a main thread are main-thread work, no longer a lane.
 - A session with a subagent at work reads working, not your turn, for both agents. A Codex subagent's finished turn no longer ends its parent's turn, and a subagent's lines can no longer push the main thread out of the lines the state is read from, so a long Codex turn still reads working.
 - A forked Codex subagent's copy of its parent's history no longer shows as events or state of the session.

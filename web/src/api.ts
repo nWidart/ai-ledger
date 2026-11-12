@@ -101,8 +101,7 @@ export interface UsagePayload {
   prices_file: { path: string; error: string | null };
   /** The plan each provider in the view is on (from its newest limit snapshot), priced monthly in USD; none when unknown. */
   plans: { provider: Source; label: string; monthly: number }[];
-  /** The user automated projects file next to the store, why it was ignored, and the projects it adds. */
-  automated_file: { path: string; error: string | null; projects: string[] };
+  automated_file: AutomatedFile;
   /** Present when the request named a session: null when it does not exist. */
   session?: SessionDetail | null;
 }
@@ -123,8 +122,12 @@ export interface SessionInfo {
   active_s: number | null;
 }
 export interface SessionModelRow extends Tokens { model: string | null; effort: string; subagent: boolean; requests: number; tokens: number; cost: number | null }
+/** The session's /insights judgment (a facet): a model's opinion, not a measurement. Name lists run most counted first. */
+export type SessionInsight = Pick<InsightSession, "outcome" | "helpfulness" | "session_type" | "brief_summary" | "friction_detail" | "friction" | "goals" | "satisfaction">;
 export interface SessionDetail {
   info: SessionInfo;
+  /** null when /insights has not analysed the session (every Codex session). */
+  insight: SessionInsight | null;
   models: SessionModelRow[];
   timeline: { minute: Ts; tokens: number; cost: number | null; context: number }[];
   tools: { tool: string; calls: number; errors: number; p50_ms: number | null; failure_rate: number | null }[];
@@ -330,8 +333,10 @@ export interface LiveListSession extends LiveFigures, LiveTitle {
   first_ts: Ts | null; last_ts: Ts | null; state: LiveState;
   latest: { kind: "tool" | "prompt"; tool: string | null; summary: string | null; lane: string | null } | null;
 }
+/** The user automated projects file next to the store, why it was ignored, and the projects it adds. */
+export interface AutomatedFile { path: string; error: string | null; projects: string[] }
 export interface LivePayload {
-  now: Ts; sessions: LiveListSession[];
+  now: Ts; sessions: LiveListSession[]; automated_file: AutomatedFile;
   /** With no active session: the one in scope that wrote last. */
   newest: { session_id: string; project: string | null; last_ts: Ts | null } | null;
 }

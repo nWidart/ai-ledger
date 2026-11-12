@@ -71,11 +71,13 @@
 .pg-live .stream-filters label.chk { font-size: 12.5px; }
 .pg-live .stream-filters .hid { margin-left: auto; }
 .pg-live .stream-filters button[aria-pressed=true], .pg-live .kv .fig[aria-pressed=true] { background: var(--critical-soft); border-color: var(--critical-text); color: var(--critical-text); }
-.pg-live .stream { height: max(420px, calc(100dvh - 298px)); overflow: auto; padding: 8px 0 14px; position: relative; }
+.pg-live .stream { overflow: auto; padding: 8px 0 14px; position: relative; --tw: 64px; --twl: 56px; }
+/* A dated time ("Nov 10, 17:40:05") needs a wider column: Stream sets .dated on the stream when any event shows one, so the rows stay aligned. */
+.pg-live .stream.dated { --tw: 112px; --twl: 104px; }
 .pg-live .loading { padding: 16px; }
 .pg-live .older { font-size: 12px; margin: 4px 14px 8px; }
-.pg-live .ev { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 10px; padding: 3px 14px; }
-.pg-live .ev .t { color: var(--text-muted); font-size: 11.5px; padding-top: 4px; }
+.pg-live .ev { display: grid; grid-template-columns: var(--tw) minmax(0, 1fr); gap: 10px; padding: 3px 14px; }
+.pg-live .ev .t { color: var(--text-muted); font-size: 11.5px; padding-top: 4px; white-space: nowrap; }
 .pg-live .ev.turn { margin-top: 12px; }
 .pg-live .prompt { background: var(--accent-soft); border-radius: 10px; padding: 8px 12px; }
 .pg-live .reply { border-left: 2px solid var(--border); padding: 4px 12px; }
@@ -109,7 +111,7 @@
 .pg-live .lane-head .muted { font-size: 12px; }
 .pg-live .lane .more { border: 0; background: none; margin: 0; padding: 0 10px 3px; font-size: 12px; color: var(--accent-ink); }
 .pg-live .lane .more:hover { text-decoration: underline; }
-.pg-live .lane .ev { grid-template-columns: 56px minmax(0, 1fr); padding: 2px 6px; }
+.pg-live .lane .ev { grid-template-columns: var(--twl) minmax(0, 1fr); padding: 2px 6px; }
 .pg-live .compact { text-align: center; font-size: 12px; color: var(--warning-text); margin: 12px 14px; border-top: 1px dashed var(--warning-text); line-height: 0; }
 .pg-live .compact span { background: var(--surface-1); padding: 0 8px; }
 .pg-live .jump { position: sticky; bottom: 8px; display: block; margin: 8px auto 0; background: var(--accent); color: var(--on-accent); border-color: var(--accent); font-size: 12.5px; box-shadow: var(--shadow-pop); }
@@ -154,9 +156,20 @@
 .pg-live .tile .meter { height: 6px; margin: 2px 0; }
 .pg-live .tile .row { font-size: 12px; }
 
+/* From tablet width up the stream page fits the viewport: the rail, the stream and the agent panel scroll inside themselves,
+   so the document does not (--appnav-h is the nav's height, set by Nav). Below that, the page scrolls as any other. */
+@media (min-width: 721px) {
+  .pg-live:has(> .grid) { display: flex; flex-direction: column; box-sizing: border-box; height: calc(100dvh - var(--appnav-h, 56px)); padding-bottom: 16px; }
+  .pg-live > .grid { flex: 1; min-height: 420px; align-items: stretch; }
+  .pg-live .rail, .pg-live .head { overflow: auto; min-height: 0; }
+  .pg-live .main { display: flex; flex-direction: column; min-height: 0; }
+  .pg-live .main > .stream { flex: 1; min-height: 0; }
+}
+
 @media (max-width: 1100px) {
   .pg-live .grid { grid-template-columns: 220px minmax(0, 1fr); }
-  .pg-live .head { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+  .pg-live .grid { grid-template-rows: minmax(0, 1fr) auto; }
+  .pg-live .head { grid-column: 1 / -1; max-height: 26dvh; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
   .pg-live .head .sec { border-bottom: 0; border-right: 1px solid var(--border); }
 }
 @media (max-width: 720px) {
@@ -165,7 +178,9 @@
   .pg-live .rail li button { min-width: 190px; }
   .pg-live .rail .foot { display: none; }
   .pg-live .stream { height: 60dvh; }
-  .pg-live .ev { grid-template-columns: 48px minmax(0, 1fr); gap: 6px; }
+  .pg-live .stream { --tw: 48px; }
+  .pg-live .stream.dated { --tw: 104px; }
+  .pg-live .ev { gap: 6px; }
   .pg-live .tool { grid-template-columns: 64px minmax(0, 1fr) auto 16px; gap: 6px; }
   .pg-live .head .sec { border-right: 0; border-bottom: 1px solid var(--border); }
 }

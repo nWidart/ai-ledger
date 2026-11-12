@@ -1,10 +1,11 @@
 import { useRef, useState, type ReactNode } from "react";
-import { promptUrl, type SessionDetail } from "../../api";
+import { promptUrl, type SessionDetail, type View } from "../../api";
 import { big, dur, ms, num, pct, plural, usd, when } from "../../format";
 import { ApiError, getJson } from "../../useApi";
 import { ProjectDot } from "../ProjectDot";
 import { appLink, errorsHref, openProjectSheet, openToolSheet, pickRow } from "./session";
 import { FilterButton } from "./FilterButton";
+import { SessionInsight } from "./SessionInsight";
 import { Timeline } from "./Timeline";
 
 // The session payload caps the first prompt; the whole text comes from /api/prompt on demand, remembered by session.
@@ -29,10 +30,12 @@ export interface SessionSheetProps {
   range: number;
   /** The project the page is filtered to, so the filter button can offer to clear it. */
   pageProject: string;
+  /** The page's filters, for the link to Insights. */
+  view: View;
 }
 
 /** The session sheet's body: the whole session, whatever the range filter says. */
-export function SessionSheet({ id, s, error, retry, range, pageProject }: SessionSheetProps) {
+export function SessionSheet({ id, s, error, retry, range, pageProject, view }: SessionSheetProps) {
   const [full, setFull] = useState(() => fullPrompts.get(id));
   const [fp, setFp] = useState<{ busy?: boolean; failed?: boolean; status: string }>({ status: "" });
   const pre = useRef<HTMLPreElement>(null);
@@ -72,6 +75,7 @@ export function SessionSheet({ id, s, error, retry, range, pageProject }: Sessio
       <Stat v={num(s.commits.length)} l={s.commits.length === 1 ? "commit" : "commits"} />
       <Stat v={dur(i.active_s)} l={<span title="Pauses over 20 minutes left out">active</span>} />
     </div>
+    {s.insight && <SessionInsight i={s.insight} view={view} />}
     <h3>Timeline</h3>
     <Timeline s={s} project={i.project} />
     {s.error_loops.length > 0 && <><h3>Error loops</h3>{s.error_loops.map(l => (

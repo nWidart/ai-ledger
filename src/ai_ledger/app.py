@@ -307,8 +307,8 @@ def handler(app, port=PORT):
                 elif url.path == "/api/live/events":
                     self.live_events()
                 elif url.path == "/api/live":
-                    self.json(live.sessions(app.con.cursor(), q.get("project", ""), q.get("source", ""), automated=q.get("automated") == "1",
-                                           text=q.get("text") == "1"))
+                    self.json(dict(live.sessions(app.con.cursor(), q.get("project", ""), q.get("source", ""), automated=q.get("automated") == "1",
+                                                 text=q.get("text") == "1"), automated_file=metrics.automated_file()))
                 elif url.path == "/api/live/session":
                     detail = live.session(app.con.cursor(), q.get("id", ""), q.get("after", ""), text=q.get("text") == "1")
                     self.send(404, json.dumps(dict(error="session not found"))) if detail is None else self.json(detail)
