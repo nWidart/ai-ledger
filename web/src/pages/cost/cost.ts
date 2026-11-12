@@ -59,6 +59,9 @@ export const periodCost = (p: { cost: number | null; requests: number }): number
 /** A cost that may be unknown: "–", else as usd0 ("$0" for nothing). */
 export const money = (n: number | null | undefined): string => (n == null ? "–" : usd0(n));
 
+/** A change in cost with its sign ("+$12", "−$3"), "–" when unknown. */
+export const sgn = (v: number | null): string => (v == null ? "–" : (v > 0 ? "+" : v < 0 ? "−" : "") + usd0(Math.abs(v)));
+
 /** The headline's comparison: "17.8× the previous 30 days" from 2× up, a percentage below; sr: the same, read aloud. */
 export function compareText(d: Pick<UsagePayload, "totals" | "previous" | "range">): { text: string; sr: string } | null {
   const t = d.totals, prev = d.previous;

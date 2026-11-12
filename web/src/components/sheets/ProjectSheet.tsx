@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import type { ModelRow, UsagePayload } from "../../api";
 import { big, dur, num, pct, usd, when } from "../../format";
+import { money, sgn } from "../../pages/cost/cost";
+import { Spark } from "../Spark";
 import { Ledger, LedgerRow } from "../Ledger";
 import { FilterButton } from "./FilterButton";
 import { appLink, errorsHref, pickRow, sessName } from "./session";
@@ -45,6 +47,19 @@ export interface ProjectSheetProps {
   backTo?: RefObject<BackTo | null>;
 }
 
+/** The project's change against the previous period: both costs, the change (marked new without earlier usage) and the daily
+ *  cost of both windows. d is the project's own payload, so its previous period and daily series are the project's. None for all time. */
+function ChangeDetail({ d, name }: { d: UsagePayload; name: string }) {
+  const c = d.changes?.find(x => x.project === name);
+  if (!d.previous || !d.start || !c) return null;
+  return <>
+    <h3>Change vs the previous {d.range} days</h3>
+    <Facts facts={[[money(c.prev_cost), `previous ${d.range} days`], [money(c.cost), `last ${d.range} days`],
+      [<>{sgn(c.delta)}{c.new && <> <span className="chip new">new</span></>}</>, c.new ? "no usage before" : "change"]]} />
+    <Spark d={d} />
+  </>;
+}
+
 /** The project sheet's body: its summary over the page's range, models and its most expensive sessions. */
 /** Back from a session: the scroll and the row it was opened from (after the sheet's own scroll-to-top for new content). */
 export function useBackTo(d: unknown, backTo: RefObject<BackTo | null> | undefined, body: RefObject<HTMLElement | null>) {
@@ -73,6 +88,7 @@ export function ProjectSheet({ name, d, error, retry, range, pageProject, onSess
       [pct(t.subagent_token_share), "tokens from subagents"], [t.commits ? usd(t.cost_per_commit) : "n/a", `per commit, ${num(t.commits)} commits`],
       [num(t.errors_per_100_calls, 1), "errors per 100 calls"], [num(t.error_loops), "error loops"],
     ]} />
+    <ChangeDetail d={d} name={name} />
     <h3>Models and effort</h3>
     <ModelLedger models={d.models} />
     <h3>Most expensive sessions</h3>

@@ -7,6 +7,7 @@ import tool from "../../__fixtures__/tool";
 import toolMcp from "../../__fixtures__/tool-mcp";
 import toolSkill from "../../__fixtures__/tool-skill";
 import usage from "../../__fixtures__/usage";
+import usageAll from "../../__fixtures__/usage-all";
 import { EV_TOP } from "./session";
 import { mockApi } from "./testing";
 import { UsageSheets } from "./UsageSheets";
@@ -108,6 +109,40 @@ describe("ProjectSheet", () => {
     await userEvent.click(sheet().getByRole("button", { name: "← Back" }));
     expect(location.hash).toBe("#range=30&inspect=foo");
     await waitFor(() => expect(document.activeElement?.textContent).toBe("#s1"));
+  });
+
+  it("shows the project's change against the previous period with a daily sparkline, marking a new project", async () => {
+    mockApi({ "/api/usage": q => ({ ...usage, project: q.get("project") }) });
+    at("#range=30&inspect=foo");
+    render(<UsageSheets data={usage} />);
+    await sheet().findByRole("heading", { name: "Change vs the previous 30 days" });
+    const v = (l: string) => sheet().getByText(l).previousElementSibling!.textContent;
+    expect([v("previous 30 days"), v("last 30 days"), v("no usage before")]).toEqual(["$0", "$16", "+$16 new"]);
+    expect(sheet().getByRole("img", { name: /^Daily cost sparkline: previous 30 days \$0\.00, last 30 days \$16\./ })).toBeTruthy();
+  });
+
+  it("shows a known change with its sign, not marked new", async () => {
+    mockApi({ "/api/usage": () => ({ ...usage, changes: [{ project: "foo", cost: 1.5, prev_cost: 4, delta: -2.5, new: false }] }) });
+    at("#range=30&inspect=foo");
+    render(<UsageSheets data={usage} />);
+    expect((await sheet().findByText("change")).previousElementSibling!.textContent).toBe("−$2.50");
+    expect(sheet().queryByText("new")).toBeNull();
+  });
+
+  it("shows an unknown previous cost as unknown, with no change", async () => {
+    mockApi({ "/api/usage": () => ({ ...usage, changes: [{ project: "foo", cost: 10, prev_cost: null, delta: null, new: false }] }) });
+    at("#range=30&inspect=foo");
+    render(<UsageSheets data={usage} />);
+    const prev = await sheet().findByText("previous 30 days");
+    expect([prev.previousElementSibling!.textContent, sheet().getByText("change").previousElementSibling!.textContent]).toEqual(["–", "–"]);
+  });
+
+  it("leaves the change out of the all-time view", async () => {
+    mockApi({ "/api/usage": () => usageAll });
+    at("#inspect=foo");
+    render(<UsageSheets data={usageAll} />);
+    await sheet().findByText("errors per 100 calls");
+    expect(sheet().queryByText(/^Change vs the previous/)).toBeNull();
   });
 
   it("filters the page to the project and closes", async () => {

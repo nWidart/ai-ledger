@@ -111,6 +111,15 @@ describe("CostPage", () => {
     expect(location.hash).toBe("#range=30&inspect=foo");
   });
 
+  it("opens a project from What changed with its change against the previous period", async () => {
+    await show(usage);
+    await userEvent.click(within(document.getElementById("changed")!).getByRole("button", { name: /^foo, new/ }));
+    const dlg = within(document.querySelector("dialog")!);
+    await dlg.findByRole("heading", { name: "Change vs the previous 30 days" });
+    expect(dlg.getByText("+$16", { exact: false }).textContent).toContain("new");
+    expect(dlg.getByRole("img", { name: /^Daily cost sparkline: previous 30 days \$0\.00, last 30 days \$16\./ })).toBeTruthy();
+  });
+
   it("names a cost-per-commit outlier and compares projects on request", async () => {
     await show(withProjects([proj("a", 6, 3), proj("b", 8, 4), proj("c", 10, 5), proj("d", 40, 5)]));
     const card = (await insights().findByText("Cost-per-commit outlier")).closest("article")!;

@@ -86,3 +86,8 @@ dialog.sheet .evlink:hover { background: var(--surface-2); }
 dialog.sheet .evhead { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; margin: 10px 0 4px; }
 dialog.sheet .evhead h4 { flex: none; margin: 0; font-size: 13px; color: var(--text-secondary); }
 dialog.sheet .evhead .c { min-width: 0; color: var(--text-muted); font-size: 12.5px; }
+dialog.sheet .spark { margin: 0 0 14px; width: 100%; }
+dialog.sheet .spark svg { display: block; width: 100%; height: 48px; overflow: visible; }
+dialog.sheet .spark figcaption { display: flex; justify-content: space-between; gap: 8px; font-size: 11.5px; color: var(--text-muted); margin-top: 4px; }
+dialog.sheet .spark figcaption b { color: var(--text-secondary); font-weight: 500; }
+dialog.sheet .chip.new { border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
