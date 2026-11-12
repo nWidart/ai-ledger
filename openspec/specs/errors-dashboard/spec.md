@@ -91,7 +91,7 @@ The app SHALL store a fix marker through `POST /api/errors/fix` with `{"category
 - **THEN** the answer lists the fix and the type is still in `muted`
 
 ### Requirement: Import fix markers
-The app SHALL accept `POST /api/errors/fixes/import` with `{"fixes": {category: "YYYY-MM-DD"}}` and answer with every mark. In one transaction it SHALL store a marker only for a type the store has no row for at that moment, so a type marked, muted, or marked and undone keeps what it has, and it SHALL leave out an invalid entry instead of refusing the rest.
+The app SHALL accept `POST /api/errors/fixes/import` with `{"fixes": {category: "YYYY-MM-DD"}}` and answer with every mark. In one transaction it SHALL store a marker for each type whose fix marker the store has not decided (no row, or a row that is only a mute), and keep a type that was marked or marked and undone. It SHALL leave out an invalid entry instead of refusing the rest.
 
 #### Scenario: Import over a marker set meanwhile
 - **WHEN** another browser marks `x` for Nov 1 and then an import names `x` for Nov 4 and `worktree` for Oct 1
@@ -107,7 +107,11 @@ The app SHALL accept `POST /api/errors/fixes/import` with `{"fixes": {category: 
 
 #### Scenario: Import after a mute
 - **WHEN** another tab mutes `x`, which has no fix day, and an import then names `x` for Nov 4
-- **THEN** the store keeps `x` muted with no fix day
+- **THEN** the store keeps `x` muted and marks it fixed on Nov 4
+
+#### Scenario: Import after a mute and an unmute
+- **WHEN** another tab mutes and unmutes `x`, and an import then names `x` for Nov 4
+- **THEN** `x` is marked fixed on Nov 4
 
 ### Requirement: Refuse invalid fix marker writes
 The app SHALL answer 400 with an error message, and store nothing, unless the request comes from the app's own host with an `application/json` body that holds a JSON object. A single write SHALL be at most 4096 bytes with a `category` of 1 to 100 characters and a `day` that is null or a real `YYYY-MM-DD` date not after the server's today. An import SHALL be at most 65536 bytes and 500 markers, with `fixes` an object.
@@ -147,7 +151,7 @@ A failed import SHALL leave the key in place and the browser's markers shown, an
 - **THEN** the store drops it, the key no longer holds it, and the next load does not bring it back
 
 ### Requirement: Narrow the lists to a chart bucket
-The Errors page SHALL let the user select one day or week of the errors chart by click, or by Enter or Space on the chart's current point, and clear it the same way. A folded stretch without tool calls SHALL NOT be selectable. A selected bucket SHALL narrow the type table and the open type's detail to its errors, while the summary, chart, rate trend and change stay range-wide and the table says so.
+The Errors page SHALL let the user select one day or week of the errors chart by click, or by Enter or Space on the chart's current point, and clear it the same way. A folded stretch without tool calls SHALL NOT be selectable. A selected bucket SHALL narrow the type table and the open type's detail to its errors; the summary, chart, rate trend and change stay range-wide. The table's hint SHALL name the columns that follow the bucket and those that do not.
 
 #### Scenario: Select a spike
 - **WHEN** the user clicks the day's bar on the chart
@@ -164,6 +168,10 @@ The Errors page SHALL let the user select one day or week of the errors chart by
 #### Scenario: Folded stretch
 - **WHEN** the current point is a folded stretch without tool calls and the user presses Enter
 - **THEN** nothing is selected and the page says it cannot be
+
+#### Scenario: The hint
+- **WHEN** a day is selected
+- **THEN** the table's hint says that the types, Errors, Time lost, Rate, Didn't recover and Share follow it, and Rate trend and Change stay range-wide
 
 ### Requirement: Keep the selected bucket in the view
 The selected bucket SHALL be part of the URL view and push a history entry, and SHALL NOT be saved with the last view. The chart SHALL mark it beyond color and name it for assistive tech, and a chip by the type table SHALL name it and clear it. The selection SHALL clear when it is no longer a selectable point of the chart the view draws. An open type with no errors in the bucket SHALL close unless an example is linked.
@@ -366,11 +374,15 @@ A muted type SHALL count as noise, with `infra` and `user_denied`. The toggle SH
 - **THEN** the `git` row shows with a "Muted" chip, dimmed, and its errors count in the rate
 
 ### Requirement: Never suggest a muted type
-Where to start SHALL NOT list a muted type, neither among the open fixes nor under Rising fastest, whatever the toggle says.
+Where to start SHALL NOT list a muted type, neither among the open fixes nor under Rising fastest, whatever the toggle says. The summary's count of open types with a ready-made fix SHALL leave a muted type out too, so the two agree.
 
 #### Scenario: Where to start
 - **WHEN** `git` is muted and has a ready-made fix and the most time lost
 - **THEN** Where to start does not list it, with the toggle on or off
+
+#### Scenario: The summary's count
+- **WHEN** `git` is the one open type with a ready-made fix and the user mutes it
+- **THEN** the summary counts no open type with a ready-made fix
 
 ### Requirement: Settle a failed write by what the store holds
 When a fix or mute write fails, the page SHALL read the store. If the store shows the write's effect, the write counts as saved: the saved announcement, no message. If it shows the write did not happen, the page SHALL say so beside the control and in the status region. If the read fails too, the page SHALL say it could not confirm the change, and assert nothing about the state.
@@ -416,7 +428,7 @@ The app SHALL answer 400 with an error message, and store nothing, unless the re
 - **THEN** the endpoint answers 400 and stores nothing
 
 ### Requirement: Sort the type table
-The type table SHALL sort by every column but the rate trend: Type (A to Z first), Errors, Time lost, Rate, Didn't recover, Share and Change. The default is Errors, most first. A second click on a header SHALL flip the direction. Only the sorted header SHALL carry `aria-sort`. Ties SHALL keep the default order, and a row with no value for the sorted column SHALL come last in either direction. The sorted column SHALL stay visible at every width.
+The type table SHALL sort by Type (A to Z first), Errors, Time lost, Rate, Didn't recover and Change. Share and the rate trend are plain headers: Share orders as Errors does. The default is Errors, most first. A second click on a header SHALL flip the direction. Only the sorted header SHALL carry `aria-sort`. Ties SHALL keep the default order, and a row whose cell shows "–" for the sorted column SHALL come last in either direction.
 
 #### Scenario: Sort by Didn't recover
 - **WHEN** the user selects the "Didn't recover" header
@@ -426,19 +438,16 @@ The type table SHALL sort by every column but the rate trend: Type (A to Z first
 - **WHEN** the user selects the sorted header again
 - **THEN** the order reverses, a type with no value is still last, and keyboard focus stays on the header button
 
+#### Scenario: No time lost
+- **WHEN** the user sorts by Time lost, least first, and a type with no measurable time lost shows "–"
+- **THEN** that type comes after the type that shows "1 min"
+
 ### Requirement: Show each type's rate and share that did not recover
 The type table SHALL show Rate: the type's errors per 100 tool calls in the view, with two decimals and "%", or "–" with no calls. It SHALL show Didn't recover: the percent of the type's incidents whose outcome is not recovered, with "N of M incidents" as its title, or "–" with no incident. With a chart bucket selected, both SHALL count only that bucket's errors, and Rate SHALL use that bucket's calls.
 
 #### Scenario: A bucket is selected
 - **WHEN** the type has 2 errors on Mar 3 and 4 on Mar 4, there are 10 calls on each day, and the user selects Mar 3
 - **THEN** the type's Rate reads 20.00%, not the range's 30.00%
-
-### Requirement: Sort Change by its percent
-The Change column SHALL sort by the percent its cell shows. A cell that shows counts ("2 → 9") or "–" has no percent and SHALL sort last in either direction.
-
-#### Scenario: Counts sort last
-- **WHEN** the user sorts by Change, most first, and one type shows "+100%", one "-50%" and one "1 → 3"
-- **THEN** the order is "+100%", "-50%", "1 → 3", and sorting least first puts "1 → 3" last again
 
 ### Requirement: Filter the type table by name
 The type table card SHALL have a search field "Filter types…" with an accessible name. It SHALL list only the types whose label or id contains the text, ignoring case, and show and announce "N of M types". The field SHALL show while the view has types or the text is set. An empty row with text set (no match, or no types) SHALL offer a "Clear filter" button. The filter SHALL NOT change the summary, the chart, Where to start or the open type: an open type the filter hides stays open.
@@ -457,3 +466,67 @@ The sort and the filter text SHALL be page state: not in the URL, not saved. The
 #### Scenario: Change the range
 - **WHEN** the user sorts by Rate, types "git" and then picks another range
 - **THEN** the table is still sorted by Rate and filtered by "git"
+
+### Requirement: Sort Change by its change in points
+The Change column SHALL sort by the change in the type's error rate, in percentage points (the rate after minus the rate before, as Rising fastest ranks), for every row with a comparison, a cell that shows counts included. Only a "–" cell SHALL sort last in either direction. The header's title SHALL say that it sorts by the change in error rate, in points.
+
+#### Scenario: Counts sort by their points
+- **WHEN** the user sorts by Change, most first, and one type shows "+12%", one "▼ -40%" and one "0 → 48", the last with the largest rise in rate
+- **THEN** the order is "0 → 48", "+12%", "▼ -40%"
+
+#### Scenario: No comparison
+- **WHEN** the view has too few tool calls to compare and every Change cell shows "–"
+- **THEN** the rows keep the default order
+
+### Requirement: Open a type over a chart bucket
+Choosing a type from the chart legend or Where to start SHALL open it, and SHALL clear a selected bucket that holds none of its errors, saying "Selection cleared: <type> has no errors in <bucket>." Choosing a type in the command palette SHALL always clear the bucket. A row of the type table is not affected, as its rows are the bucket's.
+
+#### Scenario: A type with no errors that day
+- **WHEN** a day is selected and the user chooses a type with no errors that day from the chart legend
+- **THEN** the type opens, the selection clears and the status region says so
+
+#### Scenario: A type with errors that day
+- **WHEN** the type has errors in the selected day
+- **THEN** the type opens and the day stays selected
+
+### Requirement: Clear every filter a linked example misses
+The "Outside current filters" note SHALL name the project, agent, range, bucket, tool and toggles, and its Clear filters button SHALL reset all of them, the agent filter included.
+
+#### Scenario: Another agent
+- **WHEN** a link opens an example of Claude Code under an agent filter of Codex, and the user selects Clear filters
+- **THEN** the agent filter clears and the example shows in the list
+
+### Requirement: Go back to a listed type
+"Back to types" SHALL scroll to and focus the open type's row in the type table. When the type filter hides that row, it SHALL do so for the first listed type, or for the chart when no type is listed.
+
+#### Scenario: Filtered out
+- **WHEN** the filter box hides the open type and the user selects Back to types
+- **THEN** focus lands on the first listed type's button
+
+### Requirement: Read a chart point with errors and no calls
+A chart point with errors and no tool calls SHALL be read, in the keyboard reading and the tooltip, as its errors and that no tool call started in that bucket, because a failed call counts on the day it started and its error on the day it ended. Only a point with neither SHALL read "no activity".
+
+#### Scenario: Errors the day after the call
+- **WHEN** a day has 4 errors and no tool call started in it
+- **THEN** its reading says "4 errors, no tool call started in this day" and does not say "no activity"
+
+### Requirement: Announce the chart as an application
+The chart box SHALL have `role="application"` and `aria-roledescription="chart"`, as it handles arrow keys, Enter and Space itself. It SHALL keep its label (the instructions and the selected bucket), be described by the chart's hint, and keep its live region for the keyboard reading.
+
+#### Scenario: Role
+- **WHEN** a screen reader reaches the chart
+- **THEN** it exposes an application described as a chart, and the arrow keys reach the page
+
+### Requirement: Keep open message groups per type
+An open By message group SHALL be remembered by type and message: "(no error text)" open in one type SHALL NOT be open in another.
+
+#### Scenario: Two types with no error text
+- **WHEN** the user opens "(no error text)" in one type and then opens another type that has it
+- **THEN** the group is closed in the other type and still open when the first type is opened again
+
+### Requirement: Answer an unexpected marks error
+When a marks write raises an unexpected error, the app SHALL answer 500 with `{"error": "internal error"}`, release the store's lock, and log the error's type and message to stderr, never the request body.
+
+#### Scenario: A store error
+- **WHEN** the store raises an error while a mute is written
+- **THEN** the endpoint answers 500, the next write is answered, and stderr names the error but not the type
