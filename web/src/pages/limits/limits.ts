@@ -92,6 +92,13 @@ export function readText(p: ReadPoint): string {
   return `${whenDay(p.t)} · forecast ${pct1(p.mid)}%${lo === hi ? "" : ` (${lo}–${hi}%)`}`;
 }
 
+/** Where a tooltip goes inside its box, in box pixels: right of the point (left of it near the right edge), kept wholly inside
+ *  the box across and down. A tip wider or taller than the box sits at the origin. */
+export function tipPlace(box: { w: number; h: number }, tip: { w: number; h: number }, at: { x: number; y: number }): { left: number; top: number } {
+  const w = Math.min(tip.w, box.w), flip = at.x + 14 + w > box.w;
+  return { left: Math.max(0, Math.min(box.w - w, flip ? at.x - 14 - w : at.x + 14)), top: Math.max(0, Math.min(box.h - tip.h, at.y - 10)) };
+}
+
 const sameLimit = (w: LimitWindow, b: { provider: string; limit_id: string; scope: string }) =>
   w.provider === b.provider && w.limit_id === b.limit_id && w.scope === b.scope;
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { LimitWindow, LimitsPayload } from "../../api";
 import limits from "../../__fixtures__/limits";
-import { nearestPoint, readPoints, readText, whenDay } from "./limits";
+import { nearestPoint, readPoints, readText, tipPlace, whenDay } from "./limits";
 
 const claude = (limits as LimitsPayload).windows[0]!;
 const win = (over: Partial<LimitWindow>): LimitWindow => ({ ...claude, ...over });
@@ -67,5 +67,35 @@ describe("readText", () => {
 
   it("leaves out the range when low and high read the same", () => {
     expect(readText(f[3]!)).toBe(`${whenDay(curve[2]!.t)} · forecast 58%`);
+  });
+});
+
+describe("tipPlace", () => {
+  const box = { w: 300, h: 168 }, tip = { w: 120, h: 20 };
+
+  it("puts the tip right of a point at the left edge, inside the box", () => {
+    expect(tipPlace(box, tip, { x: 0, y: 60 })).toEqual({ left: 14, top: 50 });
+    expect(tipPlace(box, tip, { x: -40, y: 60 }).left).toBe(0);
+  });
+
+  it("flips a long tip left of a point near the middle, and never past the box's left edge", () => {
+    expect(tipPlace(box, { w: 200, h: 20 }, { x: 150, y: 60 }).left).toBe(0); // 150 - 14 - 200 would be negative
+    expect(tipPlace(box, tip, { x: 200, y: 60 }).left).toBe(66); // 200 - 14 - 120
+  });
+
+  it("keeps the tip inside the box at the right edge", () => {
+    expect(tipPlace(box, tip, { x: 300, y: 60 }).left).toBe(166);
+    expect(tipPlace(box, tip, { x: 900, y: 60 }).left).toBe(180); // box.w - tip.w
+  });
+
+  it("puts a tip wider than the box at the origin", () => {
+    expect(tipPlace(box, { w: 500, h: 20 }, { x: 150, y: 60 }).left).toBe(0);
+    expect(tipPlace({ w: 100, h: 168 }, { w: 500, h: 20 }, { x: 99, y: 60 }).left).toBe(0);
+  });
+
+  it("keeps the tip from the top and the bottom of the box", () => {
+    expect(tipPlace(box, tip, { x: 100, y: 3 }).top).toBe(0);
+    expect(tipPlace(box, tip, { x: 100, y: 400 }).top).toBe(148);
+    expect(tipPlace({ w: 300, h: 10 }, tip, { x: 100, y: 5 }).top).toBe(0);
   });
 });

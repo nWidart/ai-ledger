@@ -1,7 +1,7 @@
 import { useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import type { LimitWindow, PlanChange } from "../../api";
-import { tipAt, useWidth } from "../../components/chart";
-import { caption, nearestPoint, planName, readPoints, readText, whenDay, windowName } from "./limits";
+import { useWidth } from "../../components/chart";
+import { caption, nearestPoint, planName, readPoints, readText, tipPlace, whenDay, windowName } from "./limits";
 
 const H = 168, M = { t: 12, r: 10, b: 24, l: 36 }, DOT_GAP = 7;
 
@@ -35,11 +35,15 @@ export function LimitChart({ w, now, events }: { w: LimitWindow; now: string; ev
     ? (t: string) => new Date(t).toLocaleDateString(undefined, { month: "short", day: "numeric" })
     : (t: string) => new Date(t).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
   const marks = planMarks(w, events), said = (e: PlanChange) => `Plan change from ${e.plan_from} to ${e.plan_to}, ${whenDay(e.at)}`;
+  // A click or tap focuses the chart too: it keeps what the pointer shows. Only focus from the keyboard reads now.
+  const pointed = useRef(false);
   const cur = read ? pts[read.i] : undefined;
   useLayoutEffect(() => {
     if (!cur || !read || !tip.current || !box.current) return;
-    const p = tipAt(box.current, tip.current, read.x, read.y);
-    tip.current.style.left = p.left + "px"; tip.current.style.top = p.top + "px";
+    const el = tip.current, r = box.current.getBoundingClientRect();
+    el.style.left = "0px"; // the old left would narrow the room the text wraps in
+    const p = tipPlace({ w: r.width, h: r.height }, { w: el.offsetWidth, h: el.offsetHeight }, { x: read.x - r.left, y: read.y - r.top });
+    el.style.left = p.left + "px"; el.style.top = p.top + "px";
   }, [read, cur]);
   const scale = () => { const r = svg.current!.getBoundingClientRect(); return { r, k: r.width ? r.width / W : 1 }; };
   const onMove = (ev: PointerEvent) => {
@@ -52,6 +56,7 @@ export function LimitChart({ w, now, events }: { w: LimitWindow; now: string; ev
     setRead({ i, x: r.left + x(pts[i]!.t) * k, y: r.top + y(pctOf(i)) * k, key: true });
   };
   const onKey = (ev: KeyboardEvent) => {
+    if (ev.altKey || ev.ctrlKey || ev.metaKey || ev.shiftKey) return; // Alt+Left is history, Ctrl+Home the page: not ours
     if (ev.key === "Escape") return setRead(null);
     const step = KEYS[ev.key];
     if (step == null) return;
@@ -60,7 +65,9 @@ export function LimitChart({ w, now, events }: { w: LimitWindow; now: string; ev
   };
   // A chart with points is one tab stop: a labelled group around the image, since an image takes no keys.
   const reader = pts.length ? {
-    tabIndex: 0, role: "group", onKeyDown: onKey, onFocus: () => show(nowAt), onBlur: () => setRead(null),
+    tabIndex: 0, role: "group", onKeyDown: onKey, onPointerDown: () => { pointed.current = true; },
+    onFocus: () => { if (!pointed.current) show(nowAt); pointed.current = false; },
+    onBlur: () => { pointed.current = false; setRead(null); },
     "aria-label": `${windowName(w)} chart. Use the left and right arrow keys to read each point, Home and End for the first and last, Escape to clear.`,
   } : {};
   return (

@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { LimitWindow, LimitsPayload } from "../../api";
 import limits from "../../__fixtures__/limits";
 import { LimitChart } from "./LimitChart";
@@ -117,5 +117,51 @@ describe("LimitChart readout", () => {
     expect(screen.getByRole("img")).toBeTruthy();
     fireEvent.pointerMove(plot(), { clientX: 100, clientY: 60 });
     expect(document.querySelector(".tip")).toBeNull();
+  });
+
+  it("keeps what the pointer shows when a click or tap focuses the chart, and announces nothing", () => {
+    const g = draw()!, live = () => document.querySelector("[aria-live]")!.textContent;
+    fireEvent.pointerMove(plot(), { clientX: clientX(past[0]!.t), clientY: 60 });
+    fireEvent.pointerDown(plot());
+    act(() => g.focus());
+    expect(tip().textContent).toBe(say(0));
+    expect(live()).toBe("");
+    fireEvent.keyDown(g, { key: "ArrowRight" }); // keys go on from the point shown
+    expect(tip().textContent).toBe(say(1));
+    expect(live()).toBe(say(1));
+  });
+
+  it("reads now on keyboard focus even after an earlier click", () => {
+    const g = draw()!;
+    fireEvent.pointerDown(plot());
+    act(() => g.focus());
+    act(() => g.blur());
+    act(() => g.focus());
+    expect(tip().textContent).toBe(say(1));
+  });
+
+  it("leaves modified keys to the browser and the readout alone", () => {
+    const g = draw()!;
+    act(() => g.focus());
+    for (const init of [{ key: "ArrowLeft", altKey: true }, { key: "Home", ctrlKey: true }, { key: "End", metaKey: true }, { key: "ArrowRight", shiftKey: true }]) {
+      expect(fireEvent.keyDown(g, init)).toBe(true); // true: not default-prevented
+      expect(tip().textContent).toBe(say(1));
+    }
+    expect(fireEvent.keyDown(g, { key: "ArrowRight" })).toBe(false); // a plain key is ours
+  });
+});
+
+describe("LimitChart tooltip placement", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("keeps a long tooltip inside the chart box", () => {
+    // A 200px-wide box whose tooltip is 320px wide (as if its text did not wrap), read from the middle of the plot.
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({ left: 10, top: 10, right: 210, bottom: 178, width: 200, height: 168, x: 10, y: 10, toJSON: () => ({}) });
+    vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockReturnValue(320);
+    vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(20);
+    draw();
+    fireEvent.pointerMove(plot(), { clientX: 110, clientY: 14 });
+    expect(tip().style.left).toBe("0px");
+    expect(tip().style.top).toBe("0px");
   });
 });
