@@ -116,6 +116,7 @@ Deliberate, small, and noted here so a reviewer can undo any of them:
 - The session link says "Open session … in Activity", and a plain click switches pages without a reload (modified clicks open a tab as before).
 - "Couldn't load full text · Retry" stays until retried; the old page reset it to "Show full" on its next render.
 - The table's rows mount again only when the filters change, so share bars grow in then, not on every click as the old innerHTML redraw did.
+- The summary's "Uncategorized" line (the share of errors in the catch-all types Other, Other non-zero exit and MCP tool error, split by agent when the view shows several) is new; the old page had no such line. Port: `Summary`, `model.ts` `uncategorized`.
 - Before the data arrives only the header and the load card show; the old page showed empty card shells.
 - New data after an ingest (the nav's status poll clears the API cache) re-renders the page in place; the old page loaded once.
 - Keys the Errors page doesn't own (`auto`, set by Activity and Cost) stay in the hash, so they carry on to the other pages.

@@ -5,6 +5,7 @@ import { dayLabel, num as fmt } from "../../format";
 import type { Range } from "../../hash";
 
 export const NOISE = new Set(["infra", "user_denied"]);
+export const CATCH_ALL = new Set(["other", "exit_other", "mcp"]); // the types no specific rule matched
 export const TOPN = 5;
 export const MIN_AFTER_CALLS = 200; // calls since a fix before its rate counts as lower or higher
 export const MIN_CMP_CALLS = 200; // tool calls each side of a change needs before the change shows
@@ -180,14 +181,27 @@ export const settle = (m: Model, v: View): View => (v.cat && !v.focus && !countB
 // ---------- briefing and vitals ----------
 export interface Summary {
   totalCalls: number; n: number; r: number | null; r0: number | null; r1: number | null; d: number | null; cmp: string;
-  why: string | null; top: string | undefined; vt: ViewTypes; nFix: number; withFix: number; inc: IncSummary;
+  why: string | null; top: string | undefined; vt: ViewTypes; nFix: number; withFix: number; inc: IncSummary; uncat: Uncat;
 }
 export function summary(m: Model, v: View, f: Filtered, fixes: Fixes): Summary {
   const totalCalls = sumCalls(v, f.calls), n = f.errs.length, r = rate(n, totalCalls), vt = viewTypes(m, v, f);
   const x = compare(m, v, f), r0 = x.why ? null : rate(x.a.e, x.a.c), r1 = x.why ? null : rate(x.b.e, x.b.c);
   const d = r0 && r1 != null ? (r1 - r0) / r0 * 100 : null;
   return { totalCalls, n, r, r0, r1, d, cmp: x.cmp, why: x.why, top: vt.top[0], vt, nFix: Object.keys(fixes).length,
-    withFix: Object.keys(vt.counts).filter(c => !fixes[c] && m.cats[c]?.snippet).length, inc: incSummary(m, f.errs) };
+    withFix: Object.keys(vt.counts).filter(c => !fixes[c] && m.cats[c]?.snippet).length, inc: incSummary(m, f.errs), uncat: uncategorized(f.errs) };
+}
+export interface Uncat { n: number; share: number; bySource: [Source, number, number][] }
+/** The catch-all types' errors: all of them, and per source (its catch-all count and share), so a growing catch-all shows.
+ *  bySource lists the sources with errors, by name. */
+export function uncategorized(errs: readonly Err[]): Uncat {
+  const all: Partial<Record<Source, number>> = {}, ca: Partial<Record<Source, number>> = {};
+  let n = 0;
+  for (const e of errs) {
+    all[e.src] = (all[e.src] || 0) + 1;
+    if (CATCH_ALL.has(e.c)) { n++; ca[e.src] = (ca[e.src] || 0) + 1; }
+  }
+  const bySource = (Object.keys(all) as Source[]).sort().map(s => [s, ca[s] || 0, (ca[s] || 0) / all[s]!] as [Source, number, number]);
+  return { n, share: errs.length ? n / errs.length : 0, bySource };
 }
 
 // ---------- incidents ----------

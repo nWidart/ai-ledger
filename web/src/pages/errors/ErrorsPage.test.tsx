@@ -90,6 +90,32 @@ describe("ErrorsPage", () => {
     expect(document.querySelector("#exList .ex")).toBe(first);
   });
 
+  it("shows the uncategorized share in the summary", async () => {
+    await page();
+    // The fixture's errors all have one rule-matched type, so the share is zero and there is no split for one source.
+    expect(document.getElementById("uncat")?.textContent).toBe("Uncategorized: 0% of errors");
+    expect(document.getElementById("uncat")?.title).toMatch(/^Share of errors in catch-all types/);
+  });
+
+  it("splits the uncategorized share by source, and narrows to one source without the split", async () => {
+    // t07 (Codex) becomes MCP tool error, t01 (Claude) Other: 2 of the 6 errors in range are catch-alls.
+    const codexIds = new Set(["t07", "t08"]);
+    const errors = fixture.errors.map(e => ({ ...e, src: codexIds.has(e.id) ? "codex" as const : "claude" as const,
+      c: e.id === "t07" ? "mcp" : e.id === "t01" ? "other" : e.c }));
+    const days = new Map<string, ErrorsPayload["error_days"][number]>();
+    for (const e of errors) {
+      const k = [e.d, e.p, e.c, e.src].join("|"), r = days.get(k) ?? [e.d, e.p, e.c, 0, 0, e.src];
+      r[3]++; r[4] += e.sub; days.set(k, r);
+    }
+    const mixed: ErrorsPayload = { ...fixture, errors, error_days: [...days.values()],
+      calls: [["2026-11-04", "foo", 7, 0, "claude"], ["2026-11-04", "foo", 3, 0, "codex"]] };
+    vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/errors") ? mixed : {})));
+    await page();
+    expect(document.getElementById("uncat")?.textContent).toBe("Uncategorized: 33% of errors (Claude Code 25%, Codex 50%)");
+    await userEvent.click(within(screen.getByRole("group", { name: "Source" })).getByRole("button", { name: "Codex" }));
+    expect(document.getElementById("uncat")?.textContent).toBe("Uncategorized: 50% of errors");
+  });
+
   it("says Agent tool errors for every source, and narrows to Codex in the browser", async () => {
     // t07 and t08 (and 3 of the 10 calls) from Codex; the rest stay Claude's.
     const codexIds = new Set(["t07", "t08"]), errors = fixture.errors.map(e => ({ ...e, src: codexIds.has(e.id) ? "codex" as const : "claude" as const }));
