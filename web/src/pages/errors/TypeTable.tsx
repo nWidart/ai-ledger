@@ -1,21 +1,33 @@
+import { useRef } from "react";
+import { sortRows, SortTh, type SortBy } from "../../components/Sort";
 import { num as fmt } from "../../format";
 import { tableFocus, useErrors } from "./context";
 import { errorText } from "./marks";
-import { bucketLabel, compare, dur, emptyTypes, MIN_PCT_ERRORS, typeRows, yearLabel } from "./model";
+import { bucketLabel, compare, dur, emptyTypes, MIN_PCT_ERRORS, RECOVERED_NOTE, typeRows, yearLabel, type TypeKey, type TypeRow } from "./model";
 import { Spark } from "./Spark";
 
 const LOST = "Time in retry loops: from each incident's first failure to its last. An incident counts whole when any of its failures is in the view.";
-/** The view's types by count. The swatch ties a row to its chart layer; types folded into Other get Other's grey. A badge only
+const UNREC = `The share of the type's incidents whose outcome is not recovered. ${RECOVERED_NOTE}`;
+/** The view's types, by errors until a header sorts them (ties keep that order; a type with no value for the column comes last either way),
+ *  narrowed by the filter box to the labels and ids that contain its text. The swatch ties a row to its chart layer; types folded into Other get Other's grey. A badge only
  *  once a fix is applied or the type is muted (a muted type's row is dimmed, with the word as well). A click anywhere on a row opens or closes the type (the type button's clicks and keys bubble to it). */
 export function TypeTable() {
-  const { m, v, f, fixes, pick, update, after, muting, markErrors, dismissError } = useErrors(), rows = typeRows(m, v, f), { cmp } = compare(m, v, f);
+  const { m, v, f, fixes, pick, update, after, say, muting, markErrors, dismissError, typeSort, setTypeSort, typeQ, setTypeQ } = useErrors(), all = typeRows(m, v, f), { cmp } = compare(m, v, f);
+  const name = (c: string) => m.cats[c]?.label ?? c, box = useRef<HTMLInputElement>(null);
+  const get: Record<TypeKey, (r: TypeRow) => number | string | null> = { type: r => name(r.cid), n: r => r.n, lost: r => r.lost, rate: r => r.rate, unrec: r => r.unrec, share: r => r.share, change: r => r.delta.pct };
+  const hit = (q: string) => { const l = q.trim().toLowerCase(); return (r: TypeRow) => !l || name(r.cid).toLowerCase().includes(l) || r.cid.toLowerCase().includes(l); };
+  const rows = sortRows(all.filter(hit(typeQ)), get[typeSort.key], typeSort.desc);
+  const count = (q: string) => { const t = `type${all.length === 1 ? "" : "s"}`; return q.trim() ? `${fmt(all.filter(hit(q)).length)} of ${fmt(all.length)} ${t}` : `${fmt(all.length)} ${t}`; };
+  const filter = (q: string) => { setTypeQ(q); say(count(q)); };
+  // A sorted column on a narrow screen may sit past the table's scroll: bring its header into view.
+  const sort = (s: SortBy<TypeKey>) => { setTypeSort(s); after(() => document.querySelector(".types th[aria-sort] button")?.scrollIntoView?.({ block: "nearest", inline: "nearest" })); };
+  const th = (k: TypeKey, label: string, cls?: string, title?: string, asc?: boolean) => <SortTh k={k} sort={typeSort} onSort={sort} asc={asc} className={cls} title={title}>{label}</SortTh>;
   // Rows mount again when the filters change, so their share bars grow in.
   const key = JSON.stringify([f.start, v.project, v.source, v.sub, v.noise, v.gran, v.at]);
   // An empty table has no type button: the chart takes the focus.
   const clear = () => { update({ at: null }, true); after(() => tableFocus()?.focus()); };
   // A mute's feedback is the open detail's own; once the type has left the view the detail is gone, so it shows here.
   const pending = [...muting].filter(([c]) => c !== v.cat), failed = markErrors.filter(e => e.kind === "mute" && e.cat !== v.cat);
-  const name = (c: string) => m.cats[c]?.label ?? c;
   return (
     <section className="card types">
       <div className="row" style={{ justifyContent: "space-between" }}>
@@ -27,10 +39,14 @@ export function TypeTable() {
         {failed.map(e => <div key={e.cat} className="outnote"><span className="fixerr">{e.unknown ? errorText(e, name(e.cat)) : e.mute === false ? `Couldn't unmute ${name(e.cat)}. It is still muted.` : `Couldn't mute ${name(e.cat)}. It is back in the list.`}</span> <button type="button" onClick={() => { dismissError(e.cat, "mute"); after(() => tableFocus()?.focus()); }}>Dismiss</button></div>)}
       </div>}
       <div className="hint muted" style={{ fontSize: 12, marginBottom: 8 }}>{v.at && <>Types, errors and share count only the selected {v.gran}; the trend and change stay range-wide. </>}Change: the type's error rate {cmp}, as in the summary; counts when either side has under {MIN_PCT_ERRORS} errors. Click a row for fixes and examples.</div>
+      {all.length > 0 && <div className="tfilter">
+        <input type="search" ref={box} aria-label="Filter types" placeholder="Filter types…" value={typeQ} onChange={e => filter(e.target.value)} />
+        <span id="typeCount" className="muted">{count(typeQ)}</span></div>}
       <div className="tscroll"><table>
-        <thead><tr><th>Type</th><th className="num">Errors</th><th className="num c-lost" title={LOST}>Time lost</th><th className="c-share">Share</th><th className="c-trend">Rate trend</th><th className="num">Change</th></tr></thead>
+        <thead><tr>{th("type", "Type", undefined, undefined, true)}{th("n", "Errors", "num")}{th("lost", "Time lost", "num c-lost", LOST)}{th("rate", "Rate", "num c-rate", "Errors per 100 tool calls")}
+          {th("unrec", "Didn't recover", "num c-unrec", UNREC)}{th("share", "Share", "c-share")}<th className="c-trend">Rate trend</th>{th("change", "Change", "num")}</tr></thead>
         <tbody id="catBody">
-          {rows.length ? rows.map(({ cid, n, lost, share, color, pts, delta }) => (
+          {rows.length ? rows.map(({ cid, n, lost, rate, inc, bad, unrec, share, color, pts, delta }) => (
             <tr key={cid + key} data-c={cid} className={(v.cat === cid ? "sel " : "") + (m.muted.has(cid) ? "is-muted" : "")} onClick={() => pick(v.cat === cid ? null : cid, v.cat !== cid)}>
               <td><button type="button" className="tbtn" data-c={cid} aria-expanded={v.cat === cid} aria-controls="detail">
                 <i className="sw" style={{ background: color }} aria-hidden="true" />{m.cats[cid]!.label}</button>
@@ -38,12 +54,14 @@ export function TypeTable() {
                 {fixes[cid] ? <span className="chip fixed">✓ Fix applied {yearLabel(m, fixes[cid])}</span> : null}</td>
               <td className="num">{fmt(n)}</td>
               <td className="num c-lost" title={lost ? LOST : undefined}>{lost ? dur(lost) : "–"}</td>
+              <td className="num c-rate">{rate == null ? "–" : `${fmt(rate, 2)}%`}</td>
+              <td className="num c-unrec" title={inc ? `${fmt(bad)} of ${fmt(inc)} incident${inc === 1 ? "" : "s"}` : undefined}>{unrec == null ? "–" : `${fmt(unrec, 0)}%`}</td>
               <td className="c-share"><div className="share"><div className="bar" aria-hidden="true"><i style={{ width: `${share * 100}%`, background: color }} />
                 {share < .03 ? <b className="tick" style={{ background: color }} /> : null}</div><span>{fmt(share * 100, share < .01 ? 1 : 0)}%</span></div></td>
               <td className="c-trend"><Spark pts={pts} /></td>
               <td className={"num " + delta.cls} title={delta.title}>{delta.text}</td>
             </tr>
-          )) : <tr><td colSpan={6} className="empty">{emptyTypes(m, v, f)}</td></tr>}
+          )) : <tr><td colSpan={8} className="empty">{all.length ? <>No types match “{typeQ.trim()}”. <button type="button" onClick={() => { filter(""); box.current?.focus(); }}>Clear filter</button></> : emptyTypes(m, v, f)}</td></tr>}
         </tbody>
       </table></div>
     </section>

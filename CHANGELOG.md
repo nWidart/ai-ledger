@@ -9,6 +9,7 @@ Run `ai-ledger rebuild` once after upgrading (with the app stopped): error types
 
 ### Added
 
+- The Errors type table sorts by any column: Type, Errors, Time lost, Share, Change and two new ones, Rate (errors per 100 tool calls) and Didn't recover (the share of the type's incidents that did not recover). A second click flips the direction; Change sorts by its percent and puts counts last. A filter box above the table narrows it to the types whose name or id contains the text. The sort and the filter last the page visit; they are not in the URL.
 - The Errors type detail breaks the type down by tool and by agent next to By project, each with count and share. A By agent row filters the page to that agent. A By tool row narrows that type's detail (incident count, By project, incidents and examples) to the tool, on top of a selected day or week; a chip or a second click clears it, and it lives in the URL (`etool=`). It replaces the "Mostly ..." phrase.
 - The Errors page keeps its "fix applied" markers in the store, not in the browser, so they follow you to another port or browser and survive `ai-ledger rebuild`. Markers saved by an earlier version move to the store the first time the page loads.
 - The Errors page can mute an error type you expect, such as a grep that finds nothing. A muted type counts as noise: the toggle, now "Hide noise and muted", leaves it out of the error rate, the chart and the table; with the toggle off it shows with a "Muted" chip. Where to start never suggests a muted type. Muted types are kept in the store, like the fix markers.

@@ -91,8 +91,15 @@
   .pg-errors .types .tscroll { overflow-y: auto; min-height: 0; }
   .pg-errors .types thead th { position: sticky; top: 0; z-index: 1; background: var(--surface-1); }
 }
-/* Two columns at mid widths: the share bar gives its room to the type names. */
-@media (min-width: 901px) and (max-width: 1100px) { .pg-errors .c-share { display: none; } }
+/* Two columns at mid widths: the share bar and the trend give their room to the type names and the figures. Neither is the only place
+   a value shows: the share follows the count, the trend's last step is the change. */
+@media (min-width: 901px) and (max-width: 1100px) { .pg-errors .c-share, .pg-errors .c-trend { display: none; } }
+/* The type filter, above the table. */
+.pg-errors .tfilter { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.pg-errors .tfilter input { flex: 1; min-width: 0; max-width: 260px; }
+.pg-errors .tfilter .muted { font-size: 12px; white-space: nowrap; }
+/* The longest header wraps rather than widening the table. */
+.pg-errors th.num.c-unrec { white-space: normal; }
 .pg-errors .tscroll { overflow-x: auto; }
 .pg-errors .tbtn .sw { margin-right: 7px; vertical-align: 0; }
 .pg-errors td .chip.fixed, .pg-errors td .chip.muted-type { margin-left: 6px; }
@@ -122,7 +129,9 @@
 .pg-errors .mini { margin: 4px 0 12px; }
 .pg-errors .mini svg { display: block; width: 100%; height: 64px; overflow: visible; }
 .pg-errors .mini[hidden] { display: none; }
-@media (max-width: 520px) { .pg-errors .c-share, .pg-errors .c-trend { display: none; } }
+/* Phone: the share and the trend hide as before. The rate and the share that didn't recover stay (no other place shows them): the table
+   scrolls in .tscroll, with tighter cells, and a sort brings its header into view. */
+@media (max-width: 520px) { .pg-errors .c-share, .pg-errors .c-trend { display: none; } .pg-errors .types th, .pg-errors .types td { padding-left: 5px; padding-right: 5px; } }
 .pg-errors table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .pg-errors th { text-align: left; color: var(--text-muted); font-weight: 500; font-size: 12px; padding: 6px 8px; border-bottom: 1px solid var(--border); }
 .pg-errors td { padding: 8px; border-bottom: 1px solid var(--border); vertical-align: middle; }

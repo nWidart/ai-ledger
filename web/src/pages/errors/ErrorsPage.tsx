@@ -3,13 +3,14 @@ import { errorsUrl, type ErrorDetail, type ErrorsPayload } from "../../api";
 import { setOrder } from "../../colors";
 import { agentName, Filters } from "../../components/Filters";
 import { UsageSheets } from "../../components/sheets/UsageSheets";
+import type { SortBy } from "../../components/Sort";
 import { num as fmt } from "../../format";
 import { setHash, useHashState } from "../../hash";
 import { useApi } from "../../useApi";
 import { Ctx, tableFocus, type ErrorsCtx } from "./context";
 import { Detail } from "./Detail";
 import { useMarks } from "./marks";
-import { filtered, makeModel, settle, viewTypes, withMuted, type View } from "./model";
+import { filtered, makeModel, settle, TYPE_SORT, viewTypes, withMuted, type TypeKey, type View } from "./model";
 import { RateChart } from "./RateChart";
 import { Summary } from "./Summary";
 import { TypeTable } from "./TypeTable";
@@ -48,6 +49,8 @@ export function ErrorsPage() {
   viewRef.current = view;
 
   const [mode, setModeS] = useState<Mode>(loadMode), [q, setQ] = useState("");
+  // The type table's sort and filter text last the page visit, across view changes (not in the hash, not saved).
+  const [typeSort, setTypeSort] = useState<SortBy<TypeKey>>(TYPE_SORT), [typeQ, setTypeQ] = useState("");
   const sets = useRef({ openInc: new Set<number>(), opened: new Set<string>(), fullText: new Map<string, ErrorDetail>(), loading: new Set<string>(), failed: new Set<string>() }).current;
   const narrow = useMedia(NARROW), toSheet = !!m && narrow && !!view.cat;
   const [chartInView, setChartInView] = useState(true), [pageLive, setPageLive] = useState("");
@@ -199,7 +202,7 @@ export function ErrorsPage() {
 
   const ctx: ErrorsCtx | null = m && f && vt ? {
     m, v: view, f, vt, fixes, markErrors, dismissError, saving, muting, mode, q, pinned: pin.current.focus ? m.byId[pin.current.focus] : undefined, inSheet: toSheet, chartInView,
-    update, pick, select, setFix, setMuted, setMode, setQ, after, say, bump, ...sets,
+    update, pick, select, setFix, setMuted, setMode, setQ, typeSort, setTypeSort, typeQ, setTypeQ, after, say, bump, ...sets,
   } : null;
   const detailLive = <div className="sr" id="detailLive" aria-live="polite">{live}</div>;
 
