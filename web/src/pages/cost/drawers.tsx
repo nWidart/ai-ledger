@@ -65,11 +65,17 @@ const GET: Record<ProjectKey, (p: ProjectRow) => number | string | null> = {
 
 /** Cost by project: cost, cost per commit and per prompt, cache hit, 1-hour writes and subagent cost share, sortable by any column. The
  *  per-prompt, per-commit and cache-hit cells are compared with the median of the projects big enough to compare. */
-export function ProjectCostDrawer({ rows, selected, sort, onSort, spot: pin, onSpot }: {
+export function ProjectCostDrawer({ rows, selected, sort, onSort, spot: pin, onSpot, smallOpen, onSmallOpen }: {
   rows: ProjectRow[]; selected: string; sort: SortBy<ProjectKey>; onSort: (s: SortBy<ProjectKey>) => void; spot: CostSpot | null; onSpot: (s: CostSpot | null) => void;
+  smallOpen: boolean; onSmallOpen: (open: boolean) => void;
 }) {
   const color = useColors(), el = useRef<HTMLTableSectionElement>(null);
-  const ps = sortRows(rows, GET[sort.key], sort.desc), m = projectMedians(rows), many = m.n >= 3;
+  const sorted = sortRows(rows, GET[sort.key], sort.desc), m = projectMedians(rows), many = m.n >= 3;
+  // Projects too small to compare fold into one row (3+ of them, beside at least one big one); sorting never lifts them above the big ones.
+  const small = sorted.filter(p => !m.big.has(p)), fold = small.length >= 3 && m.big.size > 0;
+  const head = fold ? sorted.filter(p => m.big.has(p)) : sorted, ps = fold ? [...head, ...small] : sorted;
+  const forced = fold && small.some(p => (selected && p.project === selected) || p.project === pin?.spot), open = fold && (smallOpen || forced);
+  const sum = (f: (p: ProjectRow) => number | null) => small.reduce((a, p) => a + (f(p) ?? 0), 0);
   const exported = ps.map(p => [p.project, r4(p.cost), p.tokens, r4(p.cache_hit_ratio), r4(p.write_1h_share), r4(p.subagent_cost_share), p.commits,
     r4(perCommit(p)), r4(perPrompt(p))]);
   const maxCost = Math.max(...ps.map(p => p.cost || 0), 0) || 1, spot = pin ? ps.find(p => p.project === pin.spot) : undefined;
@@ -85,6 +91,23 @@ export function ProjectCostDrawer({ rows, selected, sort, onSort, spot: pin, onS
     (row ?? d).scrollIntoView?.({ behavior: motion() ? "smooth" : "auto", block: row ? "center" : "start" });
     (row?.querySelector("button") ?? d.querySelector("summary"))?.focus({ preventScroll: true });
   }, [pin]);
+  const row = (p: ProjectRow) => { const cmp = m.big.has(p); return <tr key={p.project ?? ""} {...pickRow(p.project ?? "", v => openProjectSheet(v),
+          [p.project === selected && selected ? "sel" : "", spot === p ? "spot" : ""].filter(Boolean).join(" "))}>
+          <td className="name"><ProjectName project={p.project}><button type="button" className="cellbtn" title={p.project ?? ""}>{p.project}</button></ProjectName></td>
+          <td className="num"><span className="ibar" aria-hidden="true"><i style={{ width: `${Math.max(2, (p.cost || 0) / maxCost * 100)}%`, background: color(p.project) }} /></span>
+            {usd(p.cost)}<Unpriced n={p.unpriced} /></td>
+          <td className="num">{big(p.tokens)}</td>
+          <Toned v={p.cache_hit_ratio} text={pct(p.cache_hit_ratio)} med={cmp ? m.hit : null} better="up" kind="points" medText={pct(m.hit)} />
+          <td className="num">{pct(p.write_1h_share)}</td><td className="num">{pct(p.subagent_cost_share)}</td><td className="num">{num(p.commits)}</td>
+          {perCommit(p) == null ? <td className="num"><NA /></td>
+            : <Toned v={perCommit(p)} text={usd(perCommit(p))} med={cmp && p.commits >= 3 ? m.cpc : null} better="down" kind="ratio" medText={usd(m.cpc)} zeroText={`no cost; median ${usd(m.cpc)} per commit`} />}
+          <Toned v={perPrompt(p)} text={usd(perPrompt(p))} med={cmp ? m.cpp : null} better="down" kind="ratio" medText={usd(m.cpp)} zeroText={`no cost; median ${usd(m.cpp)} per prompt`} />
+        </tr>; };
+  const bucket = <tr key="small-projects" className="small-bucket"><td className="name"><b>Small projects ({small.length})</b>{" "}
+    <button type="button" className="linkish" aria-expanded={open} disabled={forced} title={forced ? "A selected or ringed project is small" : undefined}
+      onClick={() => onSmallOpen(!open)}>{open ? "Hide small projects" : `Show ${small.length} small projects`}</button></td>
+    <td className="num">{usd(sum(p => p.cost))}<Unpriced n={sum(p => p.unpriced)} /></td><td className="num">{big(sum(p => p.tokens))}</td>
+    <td /><td /><td /><td className="num">{num(sum(p => p.commits))}</td><td /><td /></tr>;
   const r = spot && perCommit(spot) != null && pin ? perCommit(spot)! / pin.med : null;
   return (
     <Drawer id="d-projcost" title="Cost by project" count={num(rows.length)} description="Cost, cost per commit and per prompt, cache hit, 1-hour writes and subagent cost">
@@ -97,18 +120,7 @@ export function ProjectCostDrawer({ rows, selected, sort, onSort, spot: pin, onS
       <div className="scroll"><table>
         <thead><tr>{th("project", "Project", true)}{th("cost", "Est. cost")}{th("tokens", "Tokens")}{th("hit", "Cache hit")}{th("w1h", "1h writes")}{th("sub", "Subagent cost")}
           {th("commits", "Commits")}{th("cpc", "Cost / commit")}{th("cpp", "Cost / prompt")}</tr></thead>
-        <tbody ref={el}>{ps.length ? ps.map(p => { const cmp = m.big.has(p); return <tr key={p.project ?? ""} {...pickRow(p.project ?? "", v => openProjectSheet(v),
-          [p.project === selected && selected ? "sel" : "", spot === p ? "spot" : ""].filter(Boolean).join(" "))}>
-          <td className="name"><ProjectName project={p.project}><button type="button" className="cellbtn" title={p.project ?? ""}>{p.project}</button></ProjectName></td>
-          <td className="num"><span className="ibar" aria-hidden="true"><i style={{ width: `${Math.max(2, (p.cost || 0) / maxCost * 100)}%`, background: color(p.project) }} /></span>
-            {usd(p.cost)}<Unpriced n={p.unpriced} /></td>
-          <td className="num">{big(p.tokens)}</td>
-          <Toned v={p.cache_hit_ratio} text={pct(p.cache_hit_ratio)} med={cmp ? m.hit : null} better="up" kind="points" medText={pct(m.hit)} />
-          <td className="num">{pct(p.write_1h_share)}</td><td className="num">{pct(p.subagent_cost_share)}</td><td className="num">{num(p.commits)}</td>
-          {perCommit(p) == null ? <td className="num"><NA /></td>
-            : <Toned v={perCommit(p)} text={usd(perCommit(p))} med={cmp && p.commits >= 3 ? m.cpc : null} better="down" kind="ratio" medText={usd(m.cpc)} zeroText={`no cost; median ${usd(m.cpc)} per commit`} />}
-          <Toned v={perPrompt(p)} text={usd(perPrompt(p))} med={cmp ? m.cpp : null} better="down" kind="ratio" medText={usd(m.cpp)} zeroText={`no cost; median ${usd(m.cpp)} per prompt`} />
-        </tr>; }) : <tr><td colSpan={9} className="empty">No usage in this range.</td></tr>}</tbody>
+        <tbody ref={el}>{ps.length ? <>{head.map(row)}{fold && bucket}{open && small.map(row)}</> : <tr><td colSpan={9} className="empty">No usage in this range.</td></tr>}</tbody>
       </table></div>
     </Drawer>
   );

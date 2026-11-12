@@ -70,14 +70,14 @@ export function CostPage() {
   useEffect(() => { if (data) setOrder(data.project_order); }, [data]);
   const narrow = useNarrow();
 
-  // Page-only state, reset when the view changes: Show all, the project table's sort and the day of the sessions drawer.
+  // Page-only state, reset when the view changes: Show all, the project table's sort and small projects, and the day of the sessions drawer.
   const [chgAll, setChgAll] = useState(false), [ledgerAll, setLedgerAll] = useState(false);
-  const [sort, setSort] = useState<SortBy<ProjectKey>>(COST_SORT), [spot, setSpot] = useState<CostSpot | null>(null), [day, setDay] = useState("");
+  const [sort, setSort] = useState<SortBy<ProjectKey>>(COST_SORT), [spot, setSpot] = useState<CostSpot | null>(null), [day, setDay] = useState(""), [smallOpen, setSmallOpen] = useState(false);
   const lastView = useRef(viewKey);
   useEffect(() => {
     if (lastView.current === viewKey) return;
     lastView.current = viewKey;
-    setChgAll(false); setLedgerAll(false); setSort(COST_SORT); setSpot(null); setDay("");
+    setChgAll(false); setLedgerAll(false); setSort(COST_SORT); setSpot(null); setDay(""); setSmallOpen(false);
   }, [viewKey]);
   const [metric, setMetricState] = useState<CostMetric>(() => stored(METRIC_KEY, isMetric, "cost"));
   const [hidden, setHiddenState] = useState<string[]>(() => stored(HIDDEN_KEY, isList, []));
@@ -141,7 +141,7 @@ export function CostPage() {
         </div>
         <div className="drawers">
           <TokensDrawer t={d.totals} />
-          <ProjectCostDrawer rows={d.by_project} selected={d.project} sort={sort} onSort={setSort} spot={spot} onSpot={setSpot} />
+          <ProjectCostDrawer rows={d.by_project} selected={d.project} sort={sort} onSort={setSort} spot={spot} onSpot={setSpot} smallOpen={smallOpen} onSmallOpen={setSmallOpen} />
           <TopSessionsDrawer view={{ project: d.project, range: d.range, automated: d.automated, source: d.source }} top={d.top_sessions} day={day} onDay={setDay} selected={h.session} />
         </div>
       </>}

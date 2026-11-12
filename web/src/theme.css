@@ -134,3 +134,5 @@ dialog.sheet::backdrop { background: rgba(0,0,0,.3); }
 @keyframes fade-in { from { opacity: .4; } }
 @keyframes grow-x { from { transform: scaleX(0); } }
 @keyframes grow-y { from { transform: scaleY(0); } }
+.pick-search { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.pick-search input { width: 150px; min-width: 0; }

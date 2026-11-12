@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { Source } from "../api";
 import { RANGES, SOURCES, setHash, useHashState } from "../hash";
 import { ProjectDot } from "./ProjectDot";
@@ -19,6 +19,8 @@ export interface FiltersProps {
   children?: ReactNode;
 }
 
+/** Pickers with more projects than this get a search box. */
+const SEARCH_OVER = 12;
 const rangeLabel = (r: number) => (r ? `${r}d` : "All");
 export const SOURCE_LABELS: Record<Source, string> = { claude: "Claude Code", codex: "Codex" };
 /** A view in words for banners and status lines: "atlas-api, Codex, last 30 days". */
@@ -35,15 +37,23 @@ export function Filters({ projects, automated = false, autoFile, range = true, c
   useEffect(() => { if (badSource) setHash({ source: null }, { push: false }); }, [badSource]);
   const opts = projects.map(p => (typeof p === "string" ? { value: p } : p));
   if (h.project && !opts.some(o => o.value === h.project)) opts.unshift({ value: h.project });
+  // A long list gets a search box that narrows the select; the chosen project and "All projects" always stay.
+  const [q, setQ] = useState(""), searchable = opts.length > SEARCH_OVER, needle = q.trim().toLowerCase();
+  const shown = searchable && needle ? opts.filter(o => o.value === h.project || (o.label ?? o.value).toLowerCase().includes(needle)) : opts;
+  const none = searchable && !!needle && !shown.some(o => o.value !== h.project && (o.label ?? o.value).toLowerCase().includes(needle));
   return (
     <div className="filters" role="group" aria-label="Filters">
       <span className={"pick-project" + (h.project ? "" : " all")} id="fProjectWrap">
         <ProjectDot project={h.project} />
         <select id="fProject" aria-label="Project" value={h.project} onChange={e => set({ project: e.target.value, session: null, inspect: null })}>
           <option value="">All projects</option>
-          {opts.map(o => <option key={o.value} value={o.value}>{o.label ?? o.value}</option>)}
+          {shown.map(o => <option key={o.value} value={o.value}>{o.label ?? o.value}</option>)}
         </select>
       </span>
+      {searchable && <span className="pick-search">
+        <input type="search" aria-label="Search projects" placeholder="Search projects" value={q} onChange={e => setQ(e.target.value)} />
+        {none && <span className="muted small" role="status">No project matches</span>}
+      </span>}
       {range && <div className="seg" id="fRange" role="group" aria-label="Time range">
         {RANGES.map(r => (
           <button key={r} type="button" aria-pressed={h.range === r} onClick={() => set({ range: r })}>{rangeLabel(r)}</button>
