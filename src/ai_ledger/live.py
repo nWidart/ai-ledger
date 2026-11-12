@@ -52,7 +52,7 @@ QUOTED = re.compile(r"""'[^']*'|"[^"]*\"""")  # exact on a line with nothing of 
 UNREAD = re.compile(r"[\\`$%s]" % "".join(map(chr, UNMASK)))
 SEPARATORS = {";", "&&", "||", "|"}
 NO_WRITE = {">": {"/dev/null"}, ">&": {"1", "2"}}  # a redirection that writes no file, by the word after it
-SHELLS = {"bash", "sh", "zsh"}  # `bash -lc '…'` runs its last word as a line of its own
+SHELLS = {"bash", "sh", "zsh"}  # `bash -lc '…'` runs its last word as a line of its own, when the word is whole in quotes
 
 def now_utc():
     return datetime.now(timezone.utc)
@@ -105,12 +105,15 @@ def quiet(tool, summary):
 
 
 def reads_only(line):
-    """Whether every simple command of a shell line reads, as reads tells."""
+    """Whether every simple command of a shell line reads, as reads tells. A shell of SHELLS with a script is read by its
+    script, unless the script word holds an expansion character in clear: the outer shell then makes the script from
+    file names, and a file can be named `cat a;rm -rf build`."""
     simple = simple_commands(line)
     if not simple:
         return False
     if len(simple) == 1 and len(simple[0]) == 3 and simple[0][0] in SHELLS and simple[0][1] in ("-c", "-lc"):
-        return reads_only(simple[0][2].translate(UNMASK))
+        script = simple[0][2]
+        return not any(c in script for c in EXPANSIONS) and reads_only(script.translate(UNMASK))
     return all(reads(words) for words in simple)
 
 
@@ -165,8 +168,8 @@ def simple_commands(line):
 def assemble(rows):
     """Events in line order from raw rows (key, file, ts, subagent, source, json). A tool use and its result become one
     tool event; requests are left out, as the page shows none. A tool event is long when its input sets a timeout above
-    LONG; a background call is not, as it returns at once. It is quiet when it only reads. Returns (events, results),
-    where results maps a tool id to its result item when the use is not among the rows."""
+    LONG; a background call is not, as it returns at once. Returns (events, results), where results maps a tool id to
+    its result item when the use is not among the rows."""
     events, tools, results = [], {}, {}
     for key, path, ts, sub, source, text in rows:
         src = store.SOURCES.get(source or "claude")
@@ -183,7 +186,7 @@ def assemble(rows):
             if k == "tool_use":
                 ev = dict(key=f"{key}#{i}", k="tool", ts=t, lane=lane, id=it["id"], tool=it["tool"], summary=it["summary"],
                           description=it.get("description"), start=t, end=None, failed=False, error=None, output=None, agent=None,
-                          long=(it.get("timeout") or 0) > LONG.total_seconds() * 1000, quiet=quiet(it["tool"], it["summary"]))
+                          long=(it.get("timeout") or 0) > LONG.total_seconds() * 1000)
                 if it["id"] in results:
                     finish(ev, results.pop(it["id"]))
                 tools[it["id"]] = ev
@@ -408,13 +411,15 @@ def earlier_uses(cur, sid, before, ids):
 
 
 def public(e, text):
-    """Event e as sent: times as ISO strings, and text only when asked for (counts otherwise)."""
+    """Event e as sent: times as ISO strings, and text only when asked for (counts otherwise). A tool event is quiet when
+    it only reads: told here, as the active list sends no event."""
     out = {k: iso(v) if isinstance(v, datetime) else v for k, v in e.items()}
     if e["k"] in ("prompt", "reply"):
         out["words"] = len(e["text"].split())
         if not text:
             del out["text"]
     elif e["k"] == "tool":
+        out["quiet"] = quiet(e["tool"], e["summary"])
         out["summary"] = tool_input(e, text)
         out["description"] = capped(e["description"], text)  # the label the agent gave the call: a shell call's row text
         output = e["output"] or ""

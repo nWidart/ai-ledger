@@ -283,7 +283,7 @@ The app SHALL take as evidence of a close the `cost-state` line Claude Code writ
 - **THEN** the state is your turn, then idle after 5 minutes, and never ended
 
 ### Requirement: Mark tool calls that only read
-The app SHALL mark a tool call as read-only when its tool is `Read`, `Grep` or `Glob`, or when it is a shell call (Claude Code `Bash`, Codex `exec_command`) whose every command, named without a path, is `grep`, `cat`, `ls`, `head`, `tail`, `wc`, `nl`, `cd`, `pwd` or `echo`, or is `rg`, `sort` or `find` with only flags the app lists as reading, or is `sed -n` with a script that only prints lines by number. A `bash`, `sh` or `zsh` script given with `-c` or `-lc` SHALL be read as the line.
+The app SHALL mark a tool call as read-only when its tool is `Read`, `Grep` or `Glob`, or when it is a shell call (Claude Code `Bash`, Codex `exec_command`) whose every command, named without a path, is `grep`, `cat`, `ls`, `head`, `tail`, `wc`, `nl`, `cd`, `pwd` or `echo`, or is `rg`, `sort` or `find` with only flags the app lists as reading, or is `sed -n` with a script that only prints lines by number.
 
 #### Scenario: Read-only call
 - **WHEN** a session makes a `Grep` call and a `Bash` call that runs `git commit`
@@ -312,6 +312,21 @@ The app SHALL mark a tool call as read-only when its tool is `Read`, `Grep` or `
 #### Scenario: sed script
 - **WHEN** `Bash` calls run `sed -n '1,50p' a.py`, `sed -n '10p;20p' a.py`, `sed -n 'w out.txt' a.py` and `sed 1e a.py`
 - **THEN** the first two are marked as read-only and the last two are not
+
+### Requirement: Read a shell wrapper by its script
+A shell call that is one `bash`, `sh` or `zsh` command with `-c` or `-lc` and one script word SHALL be read as its script. The app SHALL NOT mark a wrapper of any other shape as read-only, nor one whose script word holds an unquoted `*`, `?`, `[`, `{`, `^` or `#`: the outer shell expands it against file names, and a file name can hold a command.
+
+#### Scenario: Wrapped read-only line
+- **WHEN** `Bash` calls run `bash -lc 'grep -rn "x > y" src'`, `sh -c 'ls'` and `zsh -c 'ls'`
+- **THEN** each is marked as read-only
+
+#### Scenario: Wrapper of another shape
+- **WHEN** `Bash` calls run `bash -ic 'ls'`, `bash -lc 'ls' x` and `bash -c -c 'rm -rf build'`
+- **THEN** none is marked as read-only
+
+#### Scenario: Glob outside the script's quotes
+- **WHEN** a `Bash` call runs `bash -c 'cat '*`, where a file can be named `cat a;rm -rf build`
+- **THEN** its event is not marked as read-only
 
 ### Requirement: Mark no shell call that cannot be read for certain
 The app SHALL mark a shell call as read-only only when it reads its whole line for certain. It SHALL read words, quotes, `;`, `&&`, `||`, `|`, a newline, and a redirection to `/dev/null`, descriptor 1 or 2. It SHALL NOT mark a line with more: a lone `&`, another redirection, a heredoc, parentheses, a `\`, a backtick, a `$`, an unpaired quote, or an unquoted `*`, `?`, `[`, `{`, `^` or `#` on `rg`, `sort`, `find` or `sed`; nor Codex's `exec`, nor a call cut short or with no `cmd`.

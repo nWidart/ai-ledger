@@ -1,6 +1,7 @@
 import json
 import os
 import unittest
+from unittest import mock
 from datetime import datetime, timedelta, timezone
 
 from ai_ledger import live, store
@@ -114,7 +115,7 @@ class QuietTest(unittest.TestCase):
     """Which tool calls only read: the Live page can hide them."""
 
     def quiet(self, text, source="claude"):
-        return [e["quiet"] for e in events(text, source) if e["k"] == "tool"]
+        return [live.public(e, False)["quiet"] for e in events(text, source) if e["k"] == "tool"]
 
     def bash(self, *cmds):
         return self.quiet(assistant("a1", "m1", at(1), [tool_use(f"t{i}", "Bash", command=c) for i, c in enumerate(cmds)]))
@@ -129,6 +130,13 @@ class QuietTest(unittest.TestCase):
         self.assertEqual(self.bash("rg TODO src", "cd web && rg -n 'a|b' src | head -5", "cat a.py; echo ---; sed -n '1,9p' b.py | nl",
                                    "ls -la 2>/dev/null", "find . -name \"*.py\" | sort | wc -l", "bash -lc 'grep -rn \"x > y\" src'",
                                    "rg -n TODO src 2>&1 | head -5", "ls web &&\ncat a.py\n"), [True] * 8)
+
+    def test_shell_wrapper_read_as_its_script_only_in_its_exact_shape(self):
+        self.assertEqual(self.bash("sh -c 'ls'", "zsh -c 'ls'", "bash -lc 'ls *.py | wc -l'"), [True] * 3)
+        self.assertEqual(self.bash("bash -c -c 'rm -rf build'", "bash -ic 'ls'", "bash -lc 'ls' x", "dash -c 'ls'"), [False] * 4)
+        # A glob outside the quotes is the outer shell's: it makes the script from file names, and a file can be named
+        # `cat a;rm -rf build`.
+        self.assertEqual(self.bash("bash -c 'cat '*", "sh -c 'ls '?", "zsh -lc 'cat a'[bc]"), [False] * 3)
 
     def test_command_with_flags_that_write_reads_under_its_listed_flags(self):
         self.assertEqual(self.bash("sed -n '1,50p' a.py", "sed -n '10p;20p' a.py", "nl -ba a.py | sed -n 10,40p", "rg -n TODO src",
@@ -197,6 +205,13 @@ class SessionsTest(LiveCase):
         self.assertEqual([s["session_id"] for s in got["sessions"]], ["s1", "s2"])
         s1 = got["sessions"][0]
         self.assertEqual((s1["state"]["kind"], s1["latest"]["tool"], s1["window"], s1["requests"]), ("tool", "Read", 1000000, 1))
+
+    def test_list_reads_no_call_for_quiet(self):  # the list sends no event, and reading a shell line costs a parse
+        with mock.patch.object(live, "quiet") as quiet:
+            live.sessions(self.cur(), now=NOW, prices=PRICES)
+            quiet.assert_not_called()
+            self.assertEqual([e["quiet"] for e in live.session(self.cur(), "s1", now=NOW, prices=PRICES)["events"] if e["k"] == "tool"],
+                             [quiet.return_value])
 
     def test_start_time_is_the_first_line(self):
         got = live.sessions(self.cur(), now=NOW, prices=PRICES)
