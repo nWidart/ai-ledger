@@ -46,12 +46,12 @@ function WhereToStart() {
         act={fixes[x.c] ? "Check the fix" : "See what changed"} />)
         : <div className="empty" style={{ padding: "12px 0" }}>{why ? `${why}, nothing to compare.` : "Nothing is rising in this range."}</div>}
     </>}
-    <div className="ex" style={{ borderBottom: 0 }}><div className="muted" style={{ fontSize: 12 }}>The app ingests new transcript lines every minute; use Refresh above to ingest now. Fix markers live in this browser.</div></div>
+    <div className="ex" style={{ borderBottom: 0 }}><div className="muted" style={{ fontSize: 12 }}>The app ingests new transcript lines every minute; use Refresh above to ingest now. Fix markers are kept in the store, so they follow you to another port or browser.</div></div>
   </>;
 }
 
 function TypeDetail({ cat }: { cat: string }) {
-  const x = useErrors(), { m, v, f, fixes, mode, q } = x, c = m.cats[cat]!, fixDay = fixes[cat];
+  const x = useErrors(), { m, v, f, fixes, mode, q } = x, c = m.cats[cat]!, fixDay = fixes[cat], busy = x.saving.has(cat);
   const head = useRef<HTMLDivElement>(null), bar = useRef<HTMLDivElement>(null);
   // ofType: the type's errors in the bucket; base: those of the selected tool too, which every list and count of the detail uses.
   const ofType = inBucket(v, f.errs).filter(e => e.c === cat).reverse(), base = inTool(v, ofType), is = incSummary(m, base), groups = is.groups.sort(byWeight), worst = groups[0], lost = groups.reduce((s, g) => s + incSpan(g), 0);
@@ -88,12 +88,11 @@ function TypeDetail({ cat }: { cat: string }) {
   const mark = () => {
     const di = date.current!;
     if (!di.reportValidity() || di.value > m.lastDay) return;
-    x.setFixes({ ...fixes, [cat]: di.value || m.lastDay });
+    x.setFix(cat, di.value || m.lastDay);
     x.after(() => document.getElementById("unfix")?.focus());
   };
   const undo = () => {
-    const { [cat]: _, ...rest } = fixes;
-    x.setFixes(rest);
+    x.setFix(cat, null);
     x.after(() => document.getElementById("fix")?.focus());
   };
   const clearFilters = () => {
@@ -132,10 +131,13 @@ function TypeDetail({ cat }: { cat: string }) {
     <div className="fixbox"><div className="t">Potential fix</div><div>{c.fix}</div>
       {c.snippet ? <><pre className="snip" id="snip">{c.snippet}</pre><div className="row" style={{ marginTop: 8 }}><button type="button" id="copy" onClick={copy}>{copied === "ok" ? "Copied ✓" : "Copy instruction line"}</button>
         <span role="status" className={copied === "fail" ? "muted" : "sr"}>{copied === "fail" ? "Could not copy: select the line above and copy it." : copied === "ok" ? "Copied." : ""}</span></div></> : null}
-      <div className="row" style={{ marginTop: 10 }}>
-        {fixDay ? <><span className="chip fixed">✓ Fix applied {label(fixDay, true)}</span><button type="button" id="unfix" onClick={undo}>Undo</button></>
-          : <><label className="chk">Applied on <input type="date" id="fixDate" ref={date} defaultValue={m.lastDay} min={m.firstDay} max={m.lastDay} /></label><button type="button" id="fix" onClick={mark}>Mark fix applied</button></>}
+      <div className="row" style={{ marginTop: 10 }} aria-busy={busy || undefined}>
+        {fixDay ? <><span className="chip fixed">✓ Fix applied {label(fixDay, true)}</span><button type="button" id="unfix" aria-busy={busy || undefined} onClick={undo}>Undo</button></>
+          : <><label className="chk">Applied on <input type="date" id="fixDate" ref={date} defaultValue={m.lastDay} min={m.firstDay} max={m.lastDay} /></label><button type="button" id="fix" aria-busy={busy || undefined} onClick={mark}>Mark fix applied</button></>}
         <span className="muted" style={{ fontSize: 12 }}>Applies to all projects</span>
+        {/* No timeout: a write may wait for a long ingest. Say so, so a write that waits is never silent. */}
+        {busy && <span className="muted" id="fixSaving" style={{ fontSize: 12 }}>Saving…</span>}
+        {x.fixError?.cat === cat && <span className="fixerr" id="fixErr">{x.fixError.text}</span>}
       </div>
     </div>
     {fixDay && <FixResult cat={cat} fixDay={fixDay} />}

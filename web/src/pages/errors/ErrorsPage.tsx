@@ -8,14 +8,16 @@ import { setHash, useHashState } from "../../hash";
 import { useApi } from "../../useApi";
 import { Ctx, type ErrorsCtx } from "./context";
 import { Detail } from "./Detail";
-import { filtered, makeModel, settle, viewTypes, type Fixes, type View } from "./model";
+import { useFixes } from "./fixes";
+import { filtered, makeModel, settle, viewTypes, type View } from "./model";
 import { RateChart } from "./RateChart";
 import { Summary } from "./Summary";
 import { TypeTable } from "./TypeTable";
-import { FIXES_KEY, loadFixes, loadMode, MODE_KEY, readView, savedOf, store, VIEW_KEY, viewPatch, type Mode, type SavedView } from "./view";
+import { loadMode, MODE_KEY, readView, savedOf, store, VIEW_KEY, viewPatch, type Mode, type SavedView } from "./view";
 import "./errors.css";
 
-const NARROW = "(max-width: 900px)", EMPTY = { cats: {}, byId: {} };
+const NARROW = "(max-width: 900px)";
+const DEAD_LINK = "The linked error is no longer in the store. It may have been dropped by a rebuild, or the link is from another store. Showing the view without it.";
 const reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 const useMedia = (q: string) => useSyncExternalStore(
   f => { const mq = matchMedia(q); mq.addEventListener("change", f); return () => mq.removeEventListener("change", f); },
@@ -33,16 +35,18 @@ export function ErrorsPage() {
   useEffect(() => { if (data) setOrder(data.project_order); }, [data]);
   const [h] = useHashState();
   const saved = useRef<SavedView>(store.get<SavedView>(VIEW_KEY, {}));
-  const read = useMemo(() => readView(h.raw, saved.current, m ?? EMPTY), [h.raw, m]);
+  const read = useMemo(() => readView(h.raw, saved.current, m), [h.raw, m]);
   const view = useMemo(() => (m ? settle(m, read.view) : read.view), [m, read.view]);
   const viewRef = useRef(view);
   viewRef.current = view;
 
-  const [fixes, setFixesS] = useState<Fixes>(loadFixes), [mode, setModeS] = useState<Mode>(loadMode), [q, setQ] = useState("");
+  const [mode, setModeS] = useState<Mode>(loadMode), [q, setQ] = useState("");
   const [, bump] = useReducer((x: number) => x + 1, 0);
   const sets = useRef({ openInc: new Set<number>(), opened: new Set<string>(), fullText: new Map<string, ErrorDetail>(), loading: new Set<string>(), failed: new Set<string>() }).current;
   const narrow = useMedia(NARROW), toSheet = !!m && narrow && !!view.cat;
   const [chartInView, setChartInView] = useState(true), [live, setLive] = useState(""), [pageLive, setPageLive] = useState("");
+  // A dead link's notice is page state: the write-back below drops its ex from the hash, so the hash can't say it any more.
+  const [deadLink, setDeadLink] = useState(false);
   const sheet = useRef<HTMLDialogElement>(null), retryBtn = useRef<HTMLButtonElement>(null);
   const pending = useRef<(() => void)[]>([]), selecting = useRef(false), navd = useRef(false), retried = useRef(false), init = useRef(false);
   const lastHash = useRef(""), sheetCat = useRef<string | null>(null), prevCat = useRef<string | null>(null), shownCat = useRef<string | null>(null);
@@ -77,7 +81,7 @@ export function ErrorsPage() {
   }, [update, after, focusDetail]);
   // A click on an example selects it: its permalink goes in the address bar, and the list stays where it is.
   const select = useCallback((id: string) => { selecting.current = true; update({ focus: id }, true); }, [update]);
-  const setFixes = useCallback((x: Fixes) => { setFixesS(x); store.set(FIXES_KEY, x); }, []);
+  const { fixes, saving, setFix, fixError } = useFixes(data, say, after);
   const setMode = useCallback((x: Mode) => { setModeS(x); store.set(MODE_KEY, x); }, []);
 
   // The list puts the linked example first; a click on an example moves the link, not the list, until the view next changes.
@@ -104,6 +108,24 @@ export function ErrorsPage() {
     return () => { removeEventListener("popstate", on); removeEventListener("hashchange", on); };
   }, []);
   useEffect(() => { if (error) retryBtn.current?.focus(); }, [error]);
+  // A dead link shows the notice, and #pageLive announces it: cleared first, then set on the next frame, so each dead link is
+  // read out again even when the text is the same as last time. Every way the announcement ends goes through endAnnounce:
+  // a new dead link, a live link, Dismiss, and unmount (which cancels the frame only: nothing may set state after unmount).
+  const annFrame = useRef(0);
+  const endAnnounce = useCallback(() => {
+    cancelAnimationFrame(annFrame.current);
+    setPageLive(s => (s === DEAD_LINK ? "" : s));
+  }, []);
+  useEffect(() => () => cancelAnimationFrame(annFrame.current), []);
+  useEffect(() => {
+    if (read.dead) {
+      setDeadLink(true);
+      endAnnounce();
+      setPageLive("");
+      annFrame.current = requestAnimationFrame(() => setPageLive(DEAD_LINK));
+    } else if (read.linked) { setDeadLink(false); endAnnounce(); }
+  }, [read.dead, read.linked, endAnnounce]);
+  const dismissDead = () => { setDeadLink(false); endAnnounce(); $("#lede")?.focus(); };
 
   // The mini chart shows only while the main chart is out of view.
   useEffect(() => {
@@ -174,8 +196,8 @@ export function ErrorsPage() {
   }, [m, view.project]);
 
   const ctx: ErrorsCtx | null = m && f && vt ? {
-    m, v: view, f, vt, fixes, mode, q, pinned: pin.current.focus ? m.byId[pin.current.focus] : undefined, inSheet: toSheet, chartInView,
-    update, pick, select, setFixes, setMode, setQ, after, say, bump, ...sets,
+    m, v: view, f, vt, fixes, fixError, saving, mode, q, pinned: pin.current.focus ? m.byId[pin.current.focus] : undefined, inSheet: toSheet, chartInView,
+    update, pick, select, setFix, setMode, setQ, after, say, bump, ...sets,
   } : null;
   const detailLive = <div className="sr" id="detailLive" aria-live="polite">{live}</div>;
 
@@ -196,6 +218,7 @@ export function ErrorsPage() {
           <button type="button" ref={retryBtn} onClick={() => { retried.current = true; retry(); }}>Retry</button></div>
         : <div className="card" id="load" role="status">Loading errors…</div>)}
       <div className="sr" id="pageLive" aria-live="polite">{pageLive}</div>
+      {deadLink && <div className="outnote" id="deadLink"><span>{DEAD_LINK}</span> <button type="button" onClick={dismissDead}>Dismiss</button></div>}
       {ctx && <Ctx.Provider value={ctx}>
         <Summary />
         <RateChart />

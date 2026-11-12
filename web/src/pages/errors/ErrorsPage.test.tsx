@@ -7,8 +7,8 @@ import type { ErrorsPayload } from "../../api";
 import palette from "../../__fixtures__/palette";
 import { Palette } from "../../components/palette/Palette";
 import { openPalette } from "../../components/palette/store";
-import { ErrorsPage } from "./ErrorsPage";
 import { clearApiCache } from "../../useApi";
+import { ErrorsPage } from "./ErrorsPage";
 import { lostPayload } from "./lostData";
 import { VIEW_KEY } from "./view";
 
@@ -30,6 +30,64 @@ beforeEach(() => {
   Element.prototype.scrollIntoView ??= () => {};
   history.replaceState(null, "", "/errors");
 });
+
+type Fix = { category: string; day: string | null };
+const FIX = "/api/errors/fix", IMPORT = "/api/errors/fixes/import", FIXES = "/api/errors/fixes";
+/** The app's Errors endpoints over fetch. The payload carries the stored fixes; POST /api/errors/fix keeps one, and POST
+ *  /api/errors/fixes/import takes the ones the store has no day for (the store decides, when it gets the request). posts lists the
+ *  writes in the order they arrive, imports the import bodies. refuse(f) answers 500 to the single writes f says yes to; failImport
+ *  does so for the import. hold(from) makes the writes from the from-th on wait for release(); failGets(n) fails the payload fetches
+ *  from the n-th on (0 is the first); holdGet(n) answers the n-th one only on release(), with what the store held when it was asked.
+ *  decided is the set of types the store has a row for (the real one keeps the row of an Undo, with no date). payloadFixes, when set, is what every payload carries (another tab's view of the store); GET /api/errors/fixes (the resync) answers
+ *  the store unless failResync. payload is the rest of what the payload carries (the fixture). */
+function serve(fixes: Record<string, string> = {}, refuse: ((b: Fix) => boolean) | null = null) {
+  let writes = 0, gets = 0;
+  const api = {
+    store: { ...fixes }, decided: new Set(Object.keys(fixes)), posts: [] as Fix[], imports: [] as Record<string, string>[], refuse, failImport: false, requests: [] as string[],
+    payload: fixture as ErrorsPayload, failGetsFrom: Infinity, payloadFixes: null as Record<string, string> | null, failResync: false,
+    getGate: null as Promise<void> | null, getHeld: -1,
+    holdGet(n: number) { let release!: () => void; api.getHeld = n; api.getGate = new Promise<void>(r => { release = r; }); return { release }; },
+    fail(f: ((b: Fix) => boolean) | null) { api.refuse = f; },
+    gate: null as Promise<void> | null, holdFrom: 0,
+    hold(from = 0) { let release!: () => void; api.holdFrom = from; api.gate = new Promise<void>(r => { release = r; }); return { release }; },
+    failGets(n: number) { api.failGetsFrom = n; },
+    /** An import as another tab sends it, outside this page's queue. */
+    late(f: Record<string, string>) { api.take(f); },
+    /** The store's import rule: a type it has never decided about takes the marker; one it marked, or marked and undid, keeps what it has. */
+    take(f: Record<string, string>) { for (const [c, d] of Object.entries(f)) if (!api.decided.has(c)) { api.decided.add(c); api.store[c] = d; } },
+  };
+  const refused = () => ({ ok: false, status: 500, json: () => Promise.resolve({ error: "no" }) } as Response);
+  vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
+    if (url === FIX || url === IMPORT) {
+      const n = writes++, body = JSON.parse(init!.body as string);
+      api.requests.push(url === FIX ? `fix ${body.category} ${body.day}` : "import");
+      if (url === FIX) api.posts.push(body as Fix); else api.imports.push(body.fixes as Record<string, string>);
+      if (api.gate && n >= api.holdFrom) await api.gate;
+      if (url === IMPORT) {
+        if (api.failImport) return refused();
+        api.take(body.fixes as Record<string, string>);
+      } else {
+        if (api.refuse?.(body as Fix)) return refused();
+        api.decided.add(body.category); // an Undo keeps the type decided, as the real store keeps its row
+        if (body.day) api.store[body.category] = body.day; else delete api.store[body.category];
+      }
+      return json({ ...api.store });
+    }
+    if (url === FIXES) {
+      api.requests.push("resync");
+      return api.failResync ? refused() : json({ ...api.store });
+    }
+    if (url.startsWith("/api/errors")) {
+      const n = gets++;
+      if (n >= api.failGetsFrom) return Promise.reject(new Error("down"));
+      const body = { ...api.payload, fixes: { ...(api.payloadFixes ?? api.store) } };
+      if (n === api.getHeld) await api.getGate;
+      return json(body);
+    }
+    return json({ id: "t07", i: "full input", e: "full error", r: "", cut: [] });
+  }));
+  return api;
+}
 
 const page = async () => {
   render(<ErrorsPage />);
@@ -67,9 +125,16 @@ describe("ErrorsPage", () => {
     expect(document.querySelector("#detail .istat")!.textContent).toContain("10 min lost in retry loops");
   });
 
-  it("shows a fix marker saved by the old page, with its before and after rate", async () => {
-    // Exactly what dashboard_template.html wrote: JSON.stringify({ [type id]: "YYYY-MM-DD" }).
-    localStorage.setItem("claude-errors-fixes", JSON.stringify({ x: "2026-11-04" }));
+  it("says in the footnote of Where to start that fix markers are kept in the store", async () => {
+    serve();
+    await page();
+    const note = [...document.querySelectorAll("#detail .muted")].find(e => /ingests new transcript lines/.test(e.textContent ?? ""));
+    expect(note?.textContent).toBe("The app ingests new transcript lines every minute; use Refresh above to ingest now. Fix markers are kept in the store, so they follow you to another port or browser.");
+    expect(document.body.textContent).not.toContain("live in this browser");
+  });
+
+  it("shows the fix markers of the payload, with their before and after rate", async () => {
+    serve({ x: "2026-11-04" });
     await page();
     expect(document.querySelector("#catBody .chip.fixed")?.textContent).toBe("✓ Fix applied Nov 4");
     expect(document.querySelector('#chart .fix[data-c="x"]')?.textContent).toBe("✓ x");
@@ -81,18 +146,433 @@ describe("ErrorsPage", () => {
     expect(d.querySelector(".fixout")?.textContent).toBe("No calls before this date No tool calls before Nov 4 to compare with; pick the day the fix went in.");
     expect(document.activeElement?.id).toBe("detailTitle");
     expect(location.hash).toBe("#range=30&cat=x");
+    expect(localStorage.getItem("claude-errors-fixes")).toBeNull();
   });
 
-  it("marks and undoes a fix in the old page's format", async () => {
-    history.replaceState(null, "", "/errors#range=7&cat=x");
-    await page();
-    await userEvent.click(screen.getByRole("button", { name: "Mark fix applied" }));
-    expect(localStorage.getItem("claude-errors-fixes")).toBe('{"x":"2026-11-05"}');
-    expect(document.activeElement?.id).toBe("unfix");
-    await userEvent.click(screen.getByRole("button", { name: "Undo" }));
-    expect(localStorage.getItem("claude-errors-fixes")).toBe("{}");
-    expect(document.activeElement?.id).toBe("fix");
-    expect(JSON.parse(localStorage.getItem("claude-errors-view")!)).toEqual({ project: "", range: 7, source: "", gran: "day", sub: true, noise: false, cat: "x" });
+  describe("fix markers", () => {
+    const fixes = () => document.querySelector(".vitals")?.textContent ?? "";
+    const hash = "/errors#range=7&cat=x";
+    const mark = () => userEvent.click(screen.getByRole("button", { name: "Mark fix applied" }));
+    const undo = () => userEvent.click(screen.getByRole("button", { name: "Undo" }));
+
+    it("marks at once, posts the day, and undoes the same way", async () => {
+      const api = serve(), hold = api.hold();
+      history.replaceState(null, "", hash);
+      await page();
+      await mark();
+      // The page does not wait for the answer.
+      expect(screen.getByRole("button", { name: "Undo" })).toBeTruthy();
+      expect(document.activeElement?.id).toBe("unfix");
+      expect(fixes()).toContain("1Fixes applied");
+      hold.release();
+      await waitFor(() => expect(api.store).toEqual({ x: "2026-11-05" }));
+      expect(api.posts).toEqual([{ category: "x", day: "2026-11-05" }]);
+      expect(vi.mocked(fetch).mock.calls.find(c => c[0] === FIX)![1]).toMatchObject({ method: "POST", headers: { "Content-Type": "application/json" } });
+      expect(localStorage.getItem("claude-errors-fixes")).toBeNull();
+      await undo();
+      expect(screen.getByRole("button", { name: "Mark fix applied" })).toBeTruthy();
+      expect(document.activeElement?.id).toBe("fix");
+      await waitFor(() => expect(api.store).toEqual({}));
+      expect(api.posts[1]).toEqual({ category: "x", day: null });
+      expect(JSON.parse(localStorage.getItem("claude-errors-view")!)).toEqual({ project: "", range: 7, source: "", gran: "day", sub: true, noise: false, cat: "x" });
+    });
+
+    // The chart-bucket selection (`at`) narrows the table and the detail's lists; the fix box and the markers stay as they are.
+    it("marks and undoes with a chart bucket selected, which stays selected", async () => {
+      const api = serve(), hold = api.hold();
+      history.replaceState(null, "", "/errors#range=30&at=2026-11-04&cat=x");
+      await page();
+      await mark();
+      expect(screen.getByText("Saving…")).toBeTruthy();
+      expect(document.querySelector("#catBody .chip.fixed")?.textContent).toBe("✓ Fix applied Nov 5"); // the table and the vital read the hook's markers
+      expect(fixes()).toContain("1Fixes applied");
+      hold.release();
+      await waitFor(() => expect(api.store).toEqual({ x: "2026-11-05" }));
+      await waitFor(() => expect(screen.queryByText("Saving…")).toBeNull());
+      expect(location.hash).toBe("#range=30&at=2026-11-04&cat=x");
+      await undo();
+      await waitFor(() => expect(api.store).toEqual({}));
+      expect(document.querySelector("#catBody .chip.fixed")).toBeNull();
+      expect(location.hash).toBe("#range=30&at=2026-11-04&cat=x");
+    });
+
+    // Review B: a type marked and then undone stays decided in the store, so an import that arrives later leaves it unmarked.
+    it("keeps a marker absent after an Undo when another tab's import arrives later", async () => {
+      const api = serve();
+      history.replaceState(null, "", hash);
+      await page();
+      await mark();
+      await waitFor(() => expect(api.store).toEqual({ x: "2026-11-05" }));
+      await undo();
+      await waitFor(() => expect(api.store).toEqual({}));
+      api.late({ x: "2026-11-04" });
+      expect(api.store).toEqual({});
+      cleanup();
+      await page(); // loaded again: the payload is the store's
+      expect(screen.getByRole("button", { name: "Mark fix applied" })).toBeTruthy();
+      expect(fixes()).toContain("0Fixes applied");
+    });
+
+    // Review C: the error of a Mark that failed is gone once the queued Undo of the same type has been saved.
+    it("clears a failed Mark's error when the Undo queued behind it is saved", async () => {
+      const api = serve({}, b => b.day !== null), hold = api.hold();
+      history.replaceState(null, "", hash);
+      await page();
+      fireEvent.click(screen.getByRole("button", { name: "Mark fix applied" }));
+      fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+      await waitFor(() => expect(api.posts.length).toBe(1)); // the Undo is queued behind the held Mark
+      hold.release();
+      await waitFor(() => expect(api.requests).toEqual(["fix x 2026-11-05", "resync", "fix x null"]));
+      await waitFor(() => expect(screen.queryByText("Saving…")).toBeNull());
+      expect(document.getElementById("fixErr")).toBeNull();
+      expect(screen.getByRole("button", { name: "Mark fix applied" })).toBeTruthy();
+      expect(api.store).toEqual({});
+    });
+
+    it("keeps the error of a failed write when nothing saved after it", async () => {
+      const api = serve({}, () => true);
+      history.replaceState(null, "", hash);
+      await page();
+      await mark();
+      await waitFor(() => expect(document.getElementById("fixErr")).toBeTruthy());
+      expect(api.store).toEqual({});
+    });
+
+    // Review A: the wait and its outcome are announced, not only shown.
+    it("announces saving, and the saved result, in the status region", async () => {
+      const api = serve(), hold = api.hold();
+      history.replaceState(null, "", hash);
+      await page();
+      const live = () => document.getElementById("detailLive")?.textContent;
+      await mark();
+      await waitFor(() => expect(live()).toBe("Saving the fix marker…"));
+      hold.release();
+      await waitFor(() => expect(live()).toBe("Fix marked."));
+      await undo();
+      await waitFor(() => expect(live()).toBe("Fix marker removed."));
+      expect(api.store).toEqual({});
+    });
+
+    it("posts the day the user picked", async () => {
+      const api = serve();
+      history.replaceState(null, "", hash);
+      await page();
+      fireEvent.change(document.getElementById("fixDate")!, { target: { value: "2026-11-04" } });
+      await mark();
+      await waitFor(() => expect(api.store).toEqual({ x: "2026-11-04" }));
+    });
+
+    it("shows a marker after the page is left and reopened", async () => {
+      const api = serve();
+      history.replaceState(null, "", hash);
+      await page();
+      await mark();
+      await waitFor(() => expect(api.store).toEqual({ x: "2026-11-05" }));
+      cleanup();
+      await page(); // the cache was cleared by the write: the payload is fetched again
+      expect(screen.getByRole("button", { name: "Undo" })).toBeTruthy();
+    });
+
+    it("puts a failed mark back, says so, and returns focus to Mark", async () => {
+      const api = serve({}, () => true);
+      history.replaceState(null, "", hash);
+      await page();
+      await mark();
+      await waitFor(() => expect(document.getElementById("fixErr")).toBeTruthy());
+      expect(screen.getByRole("button", { name: "Mark fix applied" })).toBeTruthy();
+      expect(fixes()).toContain("0Fixes applied");
+      expect(document.getElementById("fixErr")?.textContent).toMatch(/^Couldn't save the fix marker/);
+      await waitFor(() => expect(document.getElementById("detailLive")?.textContent).toMatch(/^Couldn't save the fix marker/));
+      expect(document.activeElement?.id).toBe("fix");
+      expect(api.store).toEqual({});
+      // The next try clears the note.
+      api.fail(null);
+      await mark();
+      await waitFor(() => expect(api.store).toEqual({ x: "2026-11-05" }));
+      expect(document.getElementById("fixErr")).toBeNull();
+    });
+
+    it("puts a failed undo back", async () => {
+      const api = serve({ x: "2026-11-04" }, () => true);
+      history.replaceState(null, "", hash);
+      await page();
+      await undo();
+      await waitFor(() => expect(document.getElementById("fixErr")).toBeTruthy());
+      expect(screen.getByRole("button", { name: "Undo" })).toBeTruthy();
+      expect(document.querySelector("#detail .chip.fixed")?.textContent).toBe("✓ Fix applied Nov 4, 2026");
+      expect(document.activeElement?.id).toBe("unfix");
+      expect(api.store).toEqual({ x: "2026-11-04" });
+    });
+
+    // Finding 3: a rollback comes from what the store holds, never from a snapshot taken when the user clicked.
+    it("shows no marker after a Mark and an Undo that both fail", async () => {
+      const api = serve({}, () => true), hold = api.hold();
+      history.replaceState(null, "", hash);
+      await page();
+      await mark();
+      await undo();
+      hold.release();
+      await waitFor(() => expect(api.posts.length).toBe(2));
+      await waitFor(() => expect(document.getElementById("fixErr")).toBeTruthy());
+      expect(screen.getByRole("button", { name: "Mark fix applied" })).toBeTruthy();
+      expect(fixes()).toContain("0Fixes applied");
+      expect(document.querySelector("#catBody .chip.fixed")).toBeNull();
+      expect(api.store).toEqual({});
+    });
+
+    // Finding 4: a payload that was asked for before the last write finished never overrides that write's answer.
+    it("keeps the answer of the last write over the payload an earlier write asked for", async () => {
+      const api = serve(), hold = api.hold(1); // the Undo waits; the Mark's answer is quick
+      api.failGets(2); // the payload fetched after the Mark answers; no later one does
+      history.replaceState(null, "", hash);
+      await page();
+      // Both clicks come before any answer: the Undo is queued behind the Mark, and held at the server.
+      fireEvent.click(screen.getByRole("button", { name: "Mark fix applied" }));
+      fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+      await waitFor(() => expect(vi.mocked(fetch).mock.calls.filter(c => c[0] === "/api/errors").length).toBe(2)); // the Mark's refresh is back, with the marker
+      await waitFor(() => expect(api.posts.length).toBe(2));
+      hold.release();
+      await waitFor(() => expect(api.store).toEqual({}));
+      await waitFor(() => expect(vi.mocked(fetch).mock.calls.filter(c => c[0] === "/api/errors").length).toBe(3)); // the refresh after the Undo failed
+      expect(screen.getByRole("button", { name: "Mark fix applied" })).toBeTruthy();
+      expect(fixes()).toContain("0Fixes applied");
+      expect(document.querySelector("#catBody .chip.fixed")).toBeNull();
+    });
+
+    // Finding 4, the ordering the first test misses: an older payload and the last write's answer settle together.
+    it("keeps the last write's answer when an older payload resolves in the same tick", async () => {
+      const api = serve(), hold = api.hold(1), held = api.holdGet(1); // the Undo and the Mark's refresh both wait
+      api.failGets(2); // no payload after them answers
+      history.replaceState(null, "", hash);
+      await page();
+      fireEvent.click(screen.getByRole("button", { name: "Mark fix applied" }));
+      fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+      await waitFor(() => expect(api.posts.length).toBe(2));
+      await waitFor(() => expect(vi.mocked(fetch).mock.calls.filter(c => c[0] === "/api/errors").length).toBe(2)); // the refresh asked while x was marked
+      await act(async () => { held.release(); hold.release(); });
+      await waitFor(() => expect(api.store).toEqual({}));
+      await waitFor(() => expect(vi.mocked(fetch).mock.calls.filter(c => c[0] === "/api/errors").length).toBe(3)); // the one after the Undo failed
+      expect(screen.getByRole("button", { name: "Mark fix applied" })).toBeTruthy();
+      expect(fixes()).toContain("0Fixes applied");
+    });
+
+    // N2: a payload no longer applies once the first write is done, so one equal to the first cannot be mistaken for a repeat.
+    it("shows the write's answer when the payload after it is another tab's older view", async () => {
+      const api = serve();
+      history.replaceState(null, "", hash);
+      await page();
+      api.payloadFixes = { worktree: "2026-10-01" }; // the payload after the write is another tab's view: no x, another type marked
+      await mark();
+      await waitFor(() => expect(api.store).toEqual({ x: "2026-11-05" }));
+      await waitFor(() => expect(vi.mocked(fetch).mock.calls.filter(c => c[0] === "/api/errors").length).toBe(2));
+      expect(screen.getByRole("button", { name: "Undo" })).toBeTruthy();
+      expect(fixes()).toContain("1Fixes applied");
+      api.payloadFixes = {}; // and one equal to the first payload, which the cache hands back as the same object
+      await act(async () => { clearApiCache(); });
+      await waitFor(() => expect(vi.mocked(fetch).mock.calls.filter(c => c[0] === "/api/errors").length).toBe(3));
+      expect(screen.getByRole("button", { name: "Undo" })).toBeTruthy(); // the next load shows what the store holds now
+    });
+
+    it("takes every payload before the first write as the seed", async () => {
+      const api = serve();
+      history.replaceState(null, "", hash);
+      await page();
+      api.store.x = "2026-11-03"; // another tab marks x
+      await act(async () => { clearApiCache(); });
+      await waitFor(() => expect(screen.getByRole("button", { name: "Undo" })).toBeTruthy());
+      expect(fixes()).toContain("1Fixes applied");
+    });
+
+    it("reads the store after a failed write and shows what it holds", async () => {
+      const api = serve({}, b => { api.store.x = "2026-11-03"; return !!b; }); // refused after the store took it: the answer was lost
+      history.replaceState(null, "", hash);
+      await page();
+      await mark();
+      await waitFor(() => expect(document.getElementById("fixErr")).toBeTruthy());
+      expect(api.requests).toEqual(["fix x 2026-11-05", "resync"]);
+      expect(screen.getByRole("button", { name: "Undo" })).toBeTruthy();
+      expect(document.querySelector("#detail .chip.fixed")?.textContent).toBe("✓ Fix applied Nov 3, 2026");
+    });
+
+    it("keeps what it showed when the read after a failed write fails too", async () => {
+      const api = serve({ x: "2026-11-04" }, () => true);
+      api.failResync = true;
+      history.replaceState(null, "", hash);
+      await page();
+      await undo();
+      await waitFor(() => expect(document.getElementById("fixErr")).toBeTruthy());
+      expect(api.requests).toEqual(["fix x null", "resync"]);
+      expect(document.querySelector("#detail .chip.fixed")?.textContent).toBe("✓ Fix applied Nov 4, 2026"); // the seed
+      // A write queued behind it runs after it.
+      api.fail(null);
+      await undo();
+      await waitFor(() => expect(api.store).toEqual({}));
+      expect(screen.getByRole("button", { name: "Mark fix applied" })).toBeTruthy();
+    });
+
+    // N3: no timeout; a write that waits is said to wait.
+    it("says Saving… while a write is pending, and no longer after", async () => {
+      const api = serve(), hold = api.hold();
+      history.replaceState(null, "", hash);
+      await page();
+      expect(screen.queryByText("Saving…")).toBeNull();
+      await mark();
+      expect(screen.getByText("Saving…")).toBeTruthy();
+      expect(screen.getByRole("button", { name: "Undo" }).getAttribute("aria-busy")).toBe("true");
+      hold.release();
+      await waitFor(() => expect(screen.queryByText("Saving…")).toBeNull());
+      expect(api.store).toEqual({ x: "2026-11-05" });
+      expect(screen.getByRole("button", { name: "Undo" }).getAttribute("aria-busy")).toBeNull();
+    });
+
+    it("says Saving… for a type while an import that never answers is queued ahead of its write", async () => {
+      localStorage.setItem("claude-errors-fixes", JSON.stringify({ worktree: "2026-10-01" }));
+      const api = serve(), hold = api.hold();
+      history.replaceState(null, "", hash);
+      await page();
+      await waitFor(() => expect(api.requests).toEqual(["import"]));
+      await mark();
+      expect(screen.getByText("Saving…")).toBeTruthy();
+      expect(document.getElementById("fixErr")).toBeNull(); // not a failure: a long ingest may hold the store
+      expect(api.requests).toEqual(["import"]); // the mark waits behind the import
+      hold.release();
+      await waitFor(() => expect(api.store).toEqual({ worktree: "2026-10-01", x: "2026-11-05" }));
+      await waitFor(() => expect(screen.queryByText("Saving…")).toBeNull());
+    });
+  });
+
+  describe("fix markers kept by an older page in localStorage", () => {
+    const KEY = "claude-errors-fixes";
+    const hash = "/errors#range=30";
+    const fixes = () => document.querySelector(".vitals")?.textContent ?? "";
+    const undo = () => userEvent.click(screen.getByRole("button", { name: "Undo" }));
+
+    it("moves in one import: the store keeps what it has, the key goes after it succeeded", async () => {
+      localStorage.setItem(KEY, JSON.stringify({ x: "2026-11-04", worktree: "2026-10-01" }));
+      const api = serve({ x: "2026-11-01" });
+      history.replaceState(null, "", hash);
+      await page();
+      await waitFor(() => expect(localStorage.getItem(KEY)).toBeNull());
+      expect(api.requests).toEqual(["import"]);
+      expect(api.imports).toEqual([{ x: "2026-11-04", worktree: "2026-10-01" }]); // the store decides which it lacks
+      expect(api.store).toEqual({ x: "2026-11-01", worktree: "2026-10-01" });
+      await waitFor(() => expect(document.querySelector("#catBody .chip.fixed")?.textContent).toBe("✓ Fix applied Nov 1"));
+      expect(document.querySelector(".vitals")?.textContent).toContain("2Fixes applied");
+    });
+
+    // Finding 1: the store's marker at the time of the import wins, not the one the page loaded.
+    it("keeps a marker another tab stored while the import was on its way", async () => {
+      localStorage.setItem(KEY, JSON.stringify({ x: "2026-11-04" }));
+      const api = serve(), hold = api.hold();
+      history.replaceState(null, "", hash);
+      await page();
+      await waitFor(() => expect(api.requests).toEqual(["import"]));
+      api.store.x = "2026-11-01"; // another tab marks x while the import waits
+      api.decided.add("x");
+      hold.release();
+      await waitFor(() => expect(localStorage.getItem(KEY)).toBeNull());
+      expect(api.store).toEqual({ x: "2026-11-01" });
+      expect(api.requests).toEqual(["import"]);
+      await waitFor(() => expect(document.querySelector("#catBody .chip.fixed")?.textContent).toBe("✓ Fix applied Nov 1"));
+    });
+
+    // Finding 2: an Undo made while the import is pending runs after it.
+    it("ends with the marker absent when it is undone while the import is pending", async () => {
+      localStorage.setItem(KEY, JSON.stringify({ x: "2026-11-04", worktree: "2026-10-01" }));
+      const api = serve(), hold = api.hold();
+      history.replaceState(null, "", "/errors#range=30&cat=x");
+      await page();
+      await waitFor(() => expect(api.requests).toEqual(["import"]));
+      await undo(); // the marker from the browser's copy shows until the import is stored
+      expect(screen.getByRole("button", { name: "Mark fix applied" })).toBeTruthy();
+      hold.release();
+      await waitFor(() => expect(api.requests).toEqual(["import", "fix x null"]));
+      await waitFor(() => expect(api.store).toEqual({ worktree: "2026-10-01" }));
+      await waitFor(() => expect(localStorage.getItem(KEY)).toBeNull());
+      expect(screen.getByRole("button", { name: "Mark fix applied" })).toBeTruthy(); // not back from the import's answer
+      expect(fixes()).toContain("1Fixes applied");
+    });
+
+    // Finding 5: once the import is done the browser's copy is gone from memory too, so a later answer does not merge it back.
+    it("does not bring a marker back that another tab removed after the import", async () => {
+      localStorage.setItem(KEY, JSON.stringify({ worktree: "2026-10-01" }));
+      const api = serve({ worktree: "2026-10-01" });
+      history.replaceState(null, "", "/errors#range=7&cat=x");
+      await page();
+      await waitFor(() => expect(localStorage.getItem(KEY)).toBeNull());
+      expect(api.requests).toEqual(["import"]);
+      await waitFor(() => expect(fixes()).toContain("1Fixes applied"));
+      delete api.store.worktree; // another tab undoes it
+      await userEvent.click(screen.getByRole("button", { name: "Mark fix applied" }));
+      await waitFor(() => expect(api.store).toEqual({ x: "2026-11-05" }));
+      await waitFor(() => expect(fixes()).toContain("1Fixes applied")); // x only
+      expect(screen.getByRole("button", { name: "Undo" })).toBeTruthy();
+    });
+
+    it("leaves the key after a failed import, shows the markers meanwhile, and imports again on the next load", async () => {
+      localStorage.setItem(KEY, JSON.stringify({ x: "2026-11-04", worktree: "2026-10-01" }));
+      const api = serve();
+      api.failImport = true;
+      history.replaceState(null, "", hash);
+      await page();
+      await waitFor(() => expect(document.getElementById("detailLive")?.textContent).toMatch(/fix markers/));
+      expect(JSON.parse(localStorage.getItem(KEY)!)).toEqual({ x: "2026-11-04", worktree: "2026-10-01" });
+      expect(api.store).toEqual({});
+      expect(fixes()).toContain("2Fixes applied"); // the browser's markers still show
+      expect(document.querySelector("#catBody .chip.fixed")?.textContent).toBe("✓ Fix applied Nov 4");
+      cleanup();
+      api.failImport = false;
+      await page();
+      await waitFor(() => expect(localStorage.getItem(KEY)).toBeNull());
+      expect(api.imports.length).toBe(2);
+      expect(api.store).toEqual({ x: "2026-11-04", worktree: "2026-10-01" });
+    });
+
+    it("keeps an undone marker from coming back when the import failed, in the page and on the next load", async () => {
+      localStorage.setItem(KEY, JSON.stringify({ x: "2026-11-04", worktree: "2026-10-01" }));
+      const api = serve();
+      api.failImport = true;
+      history.replaceState(null, "", "/errors#range=30&cat=x");
+      await page();
+      await waitFor(() => expect(api.imports.length).toBe(1));
+      await undo(); // the Undo reaches the store; the key must not hand the marker back later
+      await waitFor(() => expect(JSON.parse(localStorage.getItem(KEY)!)).toEqual({ worktree: "2026-10-01" }));
+      expect(screen.getByRole("button", { name: "Mark fix applied" })).toBeTruthy();
+      expect(api.requests).toEqual(["import", "resync", "fix x null"]); // the failed import is followed by a read of the store
+      cleanup();
+      api.failImport = false;
+      await page();
+      await waitFor(() => expect(localStorage.getItem(KEY)).toBeNull());
+      expect(api.imports[1]).toEqual({ worktree: "2026-10-01" });
+      expect(api.store).toEqual({ worktree: "2026-10-01" });
+    });
+
+    it("does not send a failed Undo's marker away from the key", async () => {
+      localStorage.setItem(KEY, JSON.stringify({ x: "2026-11-04" }));
+      const api = serve({}, () => true);
+      api.failImport = true;
+      history.replaceState(null, "", "/errors#range=30&cat=x");
+      await page();
+      await waitFor(() => expect(api.imports.length).toBe(1));
+      await undo();
+      await waitFor(() => expect(document.getElementById("fixErr")).toBeTruthy());
+      expect(screen.getByRole("button", { name: "Undo" })).toBeTruthy();
+      expect(JSON.parse(localStorage.getItem(KEY)!)).toEqual({ x: "2026-11-04" });
+    });
+
+    it("sends no import for a key that holds no markers, and removes it", async () => {
+      localStorage.setItem(KEY, "[1]");
+      const api = serve();
+      await page();
+      await waitFor(() => expect(localStorage.getItem(KEY)).toBeNull());
+      expect(api.requests).toEqual([]);
+    });
+
+    it("sends no import when there is no key", async () => {
+      const api = serve();
+      await page();
+      expect(api.requests).toEqual([]);
+    });
   });
 
   it("says when copying an example's URL fails", async () => {
@@ -130,6 +610,84 @@ describe("ErrorsPage", () => {
     await userEvent.click(document.getElementById("ex-t07")!.querySelector(".err")!);
     expect(location.hash).toBe("#range=30&ex=t07");
     expect(document.querySelector("#exList .ex")).toBe(first);
+  });
+
+  const DEAD = "The linked error is no longer in the store. It may have been dropped by a rebuild, or the link is from another store. Showing the view without it.";
+  // The live regions (aria-live or role=status) that hold this text: exactly one, or a screen reader may say it twice.
+  const liveHolding = (t: string) => [...document.querySelectorAll('[aria-live], [role="status"]')].filter(e => e.textContent!.includes(t));
+  it("says a permalink's example is gone, uses 30 days, and dismisses to the heading", async () => {
+    history.replaceState(null, "", "/errors#ex=nope");
+    await page();
+    await waitFor(() => expect(document.getElementById("deadLink")).not.toBeNull());
+    const note = document.getElementById("deadLink")!;
+    expect(note.getAttribute("role")).toBeNull();
+    expect(note.textContent).toContain(DEAD);
+    expect(note.compareDocumentPosition(document.getElementById("lede")!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    await waitFor(() => expect(document.getElementById("pageLive")!.textContent).toBe(DEAD));
+    expect(liveHolding(DEAD)).toHaveLength(1);
+    await waitFor(() => expect(location.hash).toBe("#range=30"));
+    await userEvent.click(within(note).getByRole("button", { name: "Dismiss" }));
+    expect(document.getElementById("deadLink")).toBeNull();
+    expect(document.getElementById("pageLive")!.textContent).toBe("");
+    expect(document.activeElement).toBe(document.getElementById("lede"));
+  });
+
+  it("announces each dead link again: dismiss, then a second dead link clears the region before the text returns", async () => {
+    history.replaceState(null, "", "/errors#ex=nope");
+    await page();
+    await waitFor(() => expect(document.getElementById("pageLive")!.textContent).toBe(DEAD));
+    await userEvent.click(within(document.getElementById("deadLink")!).getByRole("button", { name: "Dismiss" }));
+    expect(document.getElementById("deadLink")).toBeNull();
+    act(() => { history.replaceState(null, "", "/errors#ex=nope2"); dispatchEvent(new PopStateEvent("popstate")); });
+    // Checked before the next frame: the region empties at once, so the same text is a change again, and returns on that frame.
+    expect(document.getElementById("pageLive")!.textContent).toBe("");
+    expect(document.getElementById("deadLink")).not.toBeNull();
+    await waitFor(() => expect(document.getElementById("pageLive")!.textContent).toBe(DEAD));
+    expect(liveHolding(DEAD)).toHaveLength(1);
+  });
+
+  it("re-announces a second dead link even without a Dismiss in between", async () => {
+    history.replaceState(null, "", "/errors#ex=nope");
+    await page();
+    await waitFor(() => expect(document.getElementById("pageLive")!.textContent).toBe(DEAD));
+    act(() => { history.replaceState(null, "", "/errors#ex=nope2"); dispatchEvent(new PopStateEvent("popstate")); });
+    // Still holding the old text when the new link arrives: the region must empty before the same text returns.
+    expect(document.getElementById("pageLive")!.textContent).toBe("");
+    await waitFor(() => expect(document.getElementById("pageLive")!.textContent).toBe(DEAD));
+    expect(liveHolding(DEAD)).toHaveLength(1);
+  });
+
+  it("keeps the range a dead permalink names", async () => {
+    history.replaceState(null, "", "/errors#ex=nope&range=7");
+    await page();
+    await waitFor(() => expect(location.hash).toBe("#range=7"));
+    expect(document.getElementById("deadLink")).not.toBeNull();
+  });
+
+  it("shows no notice for a live permalink", async () => {
+    history.replaceState(null, "", "/errors#ex=t07");
+    await page();
+    await waitFor(() => expect(location.hash).toBe("#range=0&ex=t07"));
+    expect(document.getElementById("deadLink")).toBeNull();
+    expect(document.getElementById("pageLive")!.textContent).toBe("");
+  });
+
+  it("shows no notice while the payload loads", async () => {
+    vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => {})));
+    history.replaceState(null, "", "/errors#ex=nope");
+    render(<ErrorsPage />);
+    expect(document.getElementById("load")!.textContent).toContain("Loading errors");
+    expect(document.getElementById("deadLink")).toBeNull();
+    expect(location.hash).toBe("#ex=nope");
+  });
+
+  it("clears the notice when a later hash names a live example", async () => {
+    history.replaceState(null, "", "/errors#ex=nope");
+    await page();
+    await waitFor(() => expect(document.getElementById("deadLink")).not.toBeNull());
+    act(() => { history.replaceState(null, "", "/errors#ex=t07"); dispatchEvent(new PopStateEvent("popstate")); });
+    await waitFor(() => expect(document.getElementById("deadLink")).toBeNull());
+    expect(document.getElementById("ex-t07")!.classList.contains("focus")).toBe(true);
   });
 
   it("shows the uncategorized share in the summary", async () => {
@@ -286,6 +844,75 @@ describe("ErrorsPage", () => {
 });
 
 // t01 and t02 move to Nov 3, the rest stay on Nov 4 (today is Nov 5): two buckets with errors, one without.
+// The dead-link announcement runs on an animation frame: the test holds frames back and runs them when it says, so it can end the
+// announcement before its frame fires.
+describe("ErrorsPage dead-link frames", () => {
+  const DEAD = "The linked error is no longer in the store. It may have been dropped by a rebuild, or the link is from another store. Showing the view without it.";
+  let frames: Map<number, FrameRequestCallback>, run: () => void;
+  beforeEach(() => {
+    frames = new Map();
+    let id = 1;
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation(cb => { frames.set(id, cb); return id++; });
+    vi.spyOn(window, "cancelAnimationFrame").mockImplementation(n => { frames.delete(n); });
+    run = () => { const cbs = [...frames.values()]; frames.clear(); act(() => cbs.forEach(cb => cb(0))); };
+  });
+  afterEach(() => { vi.mocked(window.requestAnimationFrame).mockRestore(); vi.mocked(window.cancelAnimationFrame).mockRestore(); });
+  const go = (h: string) => act(() => { history.replaceState(null, "", "/errors" + h); dispatchEvent(new PopStateEvent("popstate")); });
+
+  it("a live link before the pending frame cancels the announcement, so the region never says the link is dead", async () => {
+    history.replaceState(null, "", "/errors#ex=nope");
+    await page();
+    await waitFor(() => expect(document.getElementById("deadLink")).not.toBeNull());
+    expect(frames.size).toBe(1);
+    go("#ex=t07");
+    await waitFor(() => expect(document.getElementById("deadLink")).toBeNull());
+    expect(frames.size).toBe(0);
+    run();
+    expect(document.getElementById("pageLive")!.textContent).not.toContain(DEAD);
+  });
+
+  it("a live link after the announcement clears the region", async () => {
+    history.replaceState(null, "", "/errors#ex=nope");
+    await page();
+    await waitFor(() => expect(document.getElementById("deadLink")).not.toBeNull());
+    run();
+    expect(document.getElementById("pageLive")!.textContent).toBe(DEAD);
+    go("#ex=t07");
+    await waitFor(() => expect(document.getElementById("deadLink")).toBeNull());
+    expect(document.getElementById("pageLive")!.textContent).toBe("");
+  });
+
+  it("a second dead link cancels the first frame, so one announcement is pending", async () => {
+    history.replaceState(null, "", "/errors#ex=nope");
+    await page();
+    await waitFor(() => expect(document.getElementById("deadLink")).not.toBeNull());
+    go("#ex=nope2");
+    expect(frames.size).toBe(1);
+    run();
+    expect(document.getElementById("pageLive")!.textContent).toBe(DEAD);
+  });
+
+  it("Dismiss before the pending frame cancels the announcement", async () => {
+    history.replaceState(null, "", "/errors#ex=nope");
+    await page();
+    await waitFor(() => expect(document.getElementById("deadLink")).not.toBeNull());
+    await userEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+    expect(frames.size).toBe(0);
+    run();
+    expect(document.getElementById("pageLive")!.textContent).toBe("");
+  });
+
+  it("unmounting cancels the pending frame", async () => {
+    history.replaceState(null, "", "/errors#ex=nope");
+    const { unmount } = render(<ErrorsPage />);
+    await screen.findByRole("heading", { level: 1, name: /failed tool calls/ });
+    await waitFor(() => expect(document.getElementById("deadLink")).not.toBeNull());
+    expect(frames.size).toBe(1);
+    unmount();
+    expect(frames.size).toBe(0);
+  });
+});
+
 describe("ErrorsPage bucket selection", () => {
   const withDays = (calls: ErrorsPayload["calls"]): ErrorsPayload => ({ ...fixture,
     errors: fixture.errors.map(e => (e.id === "t01" || e.id === "t02" ? { ...e, d: "2026-11-03" } : e)),
@@ -503,9 +1130,9 @@ describe("ErrorsPage tool and agent breakdown", () => {
     errors: fixture.errors.map(e => ({ ...e, d: e.id === "t01" || e.id === "t02" ? "2026-11-03" : e.d, c: e.id === "t07" ? "tests" : e.c, src: e.id === "t07" || e.id === "t08" ? "codex" as const : "claude" as const })),
     error_days: [["2026-11-03", "foo", "x", 2, 0, "claude"], ["2026-11-04", "foo", "x", 2, 0, "claude"], ["2026-11-04", "foo", "x", 1, 0, "codex"], ["2026-11-04", "foo", "tests", 1, 0, "codex"]],
     calls: [["2026-11-03", "foo", 10, 0, "claude"], ["2026-11-04", "foo", 10, 0, "claude"], ["2026-11-04", "foo", 5, 0, "codex"]] };
-  const open = async (hash: string, payload = mix) => {
+  const open = async (hash: string, payload = mix, fixes: Record<string, string> = {}) => {
     cleanup();
-    vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/errors") ? payload : {})));
+    serve(fixes).payload = payload;
     history.replaceState(null, "", "/errors" + hash);
     await page();
   };
@@ -673,5 +1300,21 @@ describe("ErrorsPage tool and agent breakdown", () => {
     const chip = document.getElementById("toolClr")!;
     expect(chip.getAttribute("title")).toBe("mcp__srv__q");
     expect(chip.querySelector(".nm")!.textContent).toBe("mcp__srv__q");
+  });
+
+  it("keeps the fix marker per type, whatever the tool filter: the box, Undo and Mark write and show the same", async () => {
+    await open("#range=30&cat=x&etool=Edit", mix, { x: "2026-11-04" });
+    const d = document.getElementById("detail")!;
+    expect(d.querySelector(".chip.fixed")?.textContent).toBe("✓ Fix applied Nov 4, 2026");
+    // The before and after rate counts the whole type, not the selected tool's errors.
+    const ba = [...d.querySelectorAll(".ba .l")].map(x => x.textContent).filter(t => /error/.test(t ?? ""));
+    expect(ba).toEqual(["2 errors · 10 calls", "3 errors · 15 calls"]); // Edit alone would be 2 and 2
+    await userEvent.click(screen.getByRole("button", { name: "Undo" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Mark fix applied" })).toBeTruthy());
+    expect(hashOf().etool).toBe("Edit");
+    await userEvent.click(screen.getByRole("button", { name: "Mark fix applied" }));
+    const posts = vi.mocked(fetch).mock.calls.filter(c => c[0] === "/api/errors/fix").map(c => JSON.parse((c[1] as RequestInit).body as string));
+    expect(posts).toEqual([{ category: "x", day: null }, { category: "x", day: "2026-11-05" }]);
+    expect(hashOf().etool).toBe("Edit");
   });
 });

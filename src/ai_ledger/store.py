@@ -61,6 +61,8 @@ CREATE TABLE IF NOT EXISTS limit_polls (
 CREATE TABLE IF NOT EXISTS usage_files (
   path VARCHAR PRIMARY KEY, kind VARCHAR, session_id VARCHAR, size BIGINT, mtime DOUBLE,
   json VARCHAR USING COMPRESSION zstd, ingested_at TIMESTAMP);
+-- What the user told the Errors page, one row per error type. Nothing derives it, so it is not in DERIVED: rebuild keeps it.
+CREATE TABLE IF NOT EXISTS error_marks (category VARCHAR PRIMARY KEY, fixed_on DATE);
 """
 
 DERIVED = ["sessions", "requests", "tool_calls", "prompts", "hooks", "limit_snapshots", "session_facets", "facet_counts", "session_meta",
@@ -158,6 +160,21 @@ def open_store(path=None):
         for table in ("projects_by_cwd", "sessions"):
             con.execute(f"UPDATE {table} SET project = ? WHERE project = ?", [new, old])
     return con
+
+
+def set_error_fix(cur, category, day):
+    """Mark the error type fixed on day (a date), or take the marker off (day None). An undo keeps the row, with no fix day: the
+    row records that the store has decided about this type, so a late import from another tab cannot bring the marker back.
+    Other state of the row stays."""
+    cur.execute("INSERT INTO error_marks (category, fixed_on) VALUES (?, ?) ON CONFLICT (category) DO UPDATE SET fixed_on = excluded.fixed_on",
+                [category, day])
+
+
+def import_error_fixes(cur, fixes):
+    """Take the markers {category: date} for the error types the store has no row for: a type it has marked, or marked and
+    undone, keeps what it has. One statement, so one transaction: the app's cap on the markers of an import keeps it within one
+    insert chunk."""
+    insert(cur, "error_marks", ["category", "fixed_on"], list(fixes.items()))
 
 
 def insert(cur, table, cols, rows, tail="ON CONFLICT DO NOTHING", returning=None):

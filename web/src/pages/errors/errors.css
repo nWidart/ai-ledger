@@ -142,6 +142,7 @@
 .pg-errors .spark { width: 84px; height: 22px; display: block; }
 .pg-errors .detail h2 { font-size: 18px; margin-bottom: 4px; }
 .pg-errors .detail .why { color: var(--text-secondary); margin: 0 0 12px; }
+.pg-errors .fixerr { color: var(--critical-text); font-size: 12px; }
 .pg-errors .fixbox { background: var(--surface-2); border-radius: 10px; padding: 12px; margin-bottom: 12px; }
 .pg-errors .fixbox .t { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); margin-bottom: 4px; }
 .pg-errors pre.snip { margin: 8px 0 0; padding: 10px; background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px;

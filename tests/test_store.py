@@ -8,10 +8,10 @@ import sys
 import subprocess
 import tempfile
 import unittest
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from unittest import mock
 
-from ai_ledger import limits, store
+from ai_ledger import limits, metrics, store
 
 
 def line(**kw):
@@ -57,6 +57,60 @@ class SchemaTest(StoreCase):
         self.assertEqual(pk[0][0], ["key"])
         self.assertEqual(stat.S_IMODE(os.stat(self.db).st_mode), 0o600)
         self.assertEqual(stat.S_IMODE(os.stat(os.path.dirname(self.db)).st_mode), 0o700)
+
+
+class ErrorMarksTest(StoreCase):
+    """error_marks holds what the user told the Errors page; nothing in the transcripts derives it."""
+
+    def marks(self):
+        return self.q("SELECT category, fixed_on FROM error_marks ORDER BY 1")
+
+    def test_set_replace_and_remove(self):
+        cur = self.con.cursor()
+        store.set_error_fix(cur, "x", date(2026, 11, 4))
+        store.set_error_fix(cur, "y", date(2026, 11, 3))
+        store.set_error_fix(cur, "x", date(2026, 11, 5))
+        self.assertEqual(self.marks(), [("x", date(2026, 11, 5)), ("y", date(2026, 11, 3))])
+        store.set_error_fix(cur, "x", None)  # the row stays: it records that the store has decided about this type
+        store.set_error_fix(cur, "never-marked", None)
+        self.assertEqual(self.marks(), [("never-marked", None), ("x", None), ("y", date(2026, 11, 3))])
+        store.set_error_fix(cur, "x", date(2026, 11, 6))  # a mark after an undo works
+        self.assertEqual(self.marks()[1], ("x", date(2026, 11, 6)))
+        self.assertEqual(metrics.error_fixes(cur), {"x": "2026-11-06", "y": "2026-11-03"})
+
+    def test_import_adds_only_a_type_the_store_has_no_row_for(self):
+        cur = self.con.cursor()
+        store.set_error_fix(cur, "kept", date(2026, 11, 1))
+        store.set_error_fix(cur, "undone", date(2026, 11, 2))
+        store.set_error_fix(cur, "undone", None)
+        self.con.execute("INSERT INTO error_marks (category, fixed_on) VALUES ('muted-only', NULL)")
+        store.import_error_fixes(cur, {"kept": date(2026, 10, 1), "new": date(2026, 10, 2), "undone": date(2026, 10, 3), "muted-only": date(2026, 10, 4)})
+        self.assertEqual(self.marks(), [("kept", date(2026, 11, 1)), ("muted-only", None), ("new", date(2026, 10, 2)), ("undone", None)])
+        store.import_error_fixes(cur, {})
+        store.import_error_fixes(cur, {"new": date(2026, 9, 1)})  # a second import changes nothing
+        self.assertEqual(self.marks()[2], ("new", date(2026, 10, 2)))
+
+    def test_survive_rebuild(self):
+        self.assertNotIn("error_marks", store.DERIVED)
+        store.set_error_fix(self.con.cursor(), "x", date(2026, 11, 4))
+        store.rebuild(self.con)
+        self.assertEqual(self.marks(), [("x", date(2026, 11, 4))])
+
+    def test_survive_reopening_the_store(self):
+        store.set_error_fix(self.con.cursor(), "x", date(2026, 11, 4))
+        self.con.close()
+        self.con = store.open_store(self.db)
+        self.assertEqual(self.marks(), [("x", date(2026, 11, 4))])
+
+    def test_payload_carries_the_fixes_by_day(self):
+        self.assertEqual(metrics.errors_payload(self.con.cursor())["fixes"], {})
+        store.set_error_fix(self.con.cursor(), "x", date(2026, 11, 4))
+        store.set_error_fix(self.con.cursor(), "path_missing", date(2026, 10, 1))
+        self.assertEqual(metrics.errors_payload(self.con.cursor())["fixes"], {"path_missing": "2026-10-01", "x": "2026-11-04"})
+
+    def test_a_mark_without_a_fix_day_is_no_fix(self):  # a later change keeps other state in this table
+        self.con.execute("INSERT INTO error_marks (category, fixed_on) VALUES ('muted-only', NULL)")
+        self.assertEqual(metrics.errors_payload(self.con.cursor())["fixes"], {})
 
 
 class IngestTest(StoreCase):
