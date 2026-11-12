@@ -12,6 +12,7 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- The Insights page lists analysed sessions as cards (title, outcome and chips on one line, the summary below, the friction detail on expand) and lets you sort them (newest, oldest, worst outcome first) and filter them by outcome, kept in the URL.
 - The Insights page reads in a new order: vitals, outcomes beside friction, satisfaction, then the analysed sessions, with Goals and Session types folded into closed drawers, and has a section index like Activity's.
 
 ### Fixed

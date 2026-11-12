@@ -159,48 +159,72 @@ function Feelings({ d }: { d: InsightsPayload }) {
 
 const plain = (e: MouseEvent) => !(e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey);
 
-/** One session: its figures on the first line, the model's summary and friction detail on a full-width second line. */
-function SessionRow({ s, view }: { s: InsightSession; view: View }) {
+/** One session as a card: title, outcome and chips on the first line, the model's summary below, friction detail on expand. */
+function SessionCard({ s, view }: { s: InsightSession; view: View }) {
   const open = (e: MouseEvent<HTMLAnchorElement>) => { if (plain(e)) { e.preventDefault(); navigate(e.currentTarget.getAttribute("href")!); } };
-  const detail = s.brief_summary || s.friction_detail;
-  return <>
-    <tr className={detail ? "head" : undefined}>
-      <td className="when" data-k="Date">{when(s.start)}</td>
-      <td className="sess" data-k="Session">{s.in_store
-        ? <a href={sessionHref(s.session_id, view)} title={`${s.title ? s.title + " · " : ""}Open session ${s.session_id} in Activity`} onClick={open}>{sessName(s)}</a>
-        : <span title={s.title ?? s.session_id}>{sessName(s)}</span>}
-        {(s.title || !s.in_store) && <div className="muted small">{s.title && shortId(s.session_id)}{s.title && !s.in_store && " · "}
-          {!s.in_store && <span title="This session's transcript is not in the store">no transcript</span>}</div>}</td>
-      <td className="proj" data-k="Project"><ProjectName project={s.project} /></td>
-      <td className="out" data-k="Outcome"><span className={"badge " + outcomeTone(s.outcome)} title={s.outcome ?? undefined}>{outcomeLabel(s.outcome)}</span>
-        {s.satisfaction.includes("dissatisfied") && <span className="dis">dissatisfied</span>}</td>
-      <td className="goal" data-k="Goal">{s.goals.length ? s.goals.map(g => <span key={g} className="chip" title={g}>{label(g)}</span>) : "–"}</td>
-      <td className="fr" data-k="Friction">{s.friction.length ? s.friction.map(f => <span key={f} className="chip warn" title={f}>{label(f)}</span>) : "–"}</td>
-    </tr>
-    {detail && <tr className="notes"><td className="detail" colSpan={6}>{s.brief_summary && <p>{s.brief_summary}</p>}
-      {s.friction_detail && <p className="fd"><b>Friction:</b> {s.friction_detail}</p>}</td></tr>}
-  </>;
+  return (
+    <li className="scard">
+      <div className="top">
+        <span className="ttl">{s.in_store
+          ? <a href={sessionHref(s.session_id, view)} title={`${s.title ? s.title + " · " : ""}Open session ${s.session_id} in Activity`} onClick={open}>{sessName(s)}</a>
+          : <span title={s.title ?? s.session_id}>{sessName(s)}</span>}
+          {(s.title || !s.in_store) && <span className="muted small"> {s.title && shortId(s.session_id)}{s.title && !s.in_store && " · "}
+            {!s.in_store && <span title="This session's transcript is not in the store">no transcript</span>}</span>}</span>
+        <span className={"badge " + outcomeTone(s.outcome)} title={s.outcome ?? undefined}>{outcomeLabel(s.outcome)}</span>
+        {s.satisfaction.includes("dissatisfied") && <span className="dis">dissatisfied</span>}
+        {s.goals.map(g => <span key={g} className="chip" title={g}>{label(g)}</span>)}
+        {s.friction.map(f => <span key={f} className="chip warn" title={f}>{label(f)}</span>)}
+        <span className="meta"><span className="when">{when(s.start)}</span> · <ProjectName project={s.project} /></span>
+      </div>
+      {s.brief_summary && <p className="sum">{s.brief_summary}</p>}
+      {s.friction_detail && <details className="fd"><summary>Friction detail</summary><p>{s.friction_detail}</p></details>}
+    </li>
+  );
 }
 
 /** Whether a session reports friction: a category or friction text. */
 const hasFriction = (s: InsightSession) => s.friction.length > 0 || !!s.friction_detail;
 
+// Outcomes worst first; one /insights adds later, and none, rank with "unclear".
+const OUTCOME_RANK: Record<string, number> = { not_achieved: 0, partially_achieved: 1, unclear_from_transcript: 2, mostly_achieved: 3, fully_achieved: 4 };
+const UNKNOWN_RANK = OUTCOME_RANK.unclear_from_transcript!;
+const newestFirst = (a: InsightSession, b: InsightSession) => (b.start ?? "").localeCompare(a.start ?? "");
+/** The orders of the list: the select's text, the hint's words and the comparison. */
+const SORTS = {
+  newest: { label: "Newest", words: "newest first", cmp: newestFirst },
+  oldest: { label: "Oldest", words: "oldest first", cmp: (a: InsightSession, b: InsightSession) => -newestFirst(a, b) },
+  outcome: { label: "Outcome", words: "worst outcome first, newest first within an outcome",
+    cmp: (a: InsightSession, b: InsightSession) => (OUTCOME_RANK[a.outcome ?? ""] ?? UNKNOWN_RANK) - (OUTCOME_RANK[b.outcome ?? ""] ?? UNKNOWN_RANK) || newestFirst(a, b) },
+} as const;
+type SortId = keyof typeof SORTS;
+
+/** The list's filters as the URL holds them. */
+const filtersOf = (raw: Readonly<Record<string, string>>) => ({ friction: raw.friction === "1", outcome: raw.outcome ?? "" });
+
 function Sessions({ d, view }: { d: InsightsPayload; view: View }) {
-  const [h] = useHashState(), only = h.raw.friction === "1", [all, setAll] = useState(false);
-  const rows = only ? d.sessions.filter(hasFriction) : d.sessions, listed = all ? rows : rows.slice(0, SESSIONS_TOP);
+  const [h] = useHashState(), { friction, outcome } = filtersOf(h.raw), [all, setAll] = useState(false), [sort, setSort] = useState<SortId>("newest");
+  const filtered = friction || outcome !== "";
+  const rows = d.sessions.filter(s => (!friction || hasFriction(s)) && (!outcome || s.outcome === outcome)).sort(SORTS[sort].cmp);
+  const listed = all ? rows : rows.slice(0, SESSIONS_TOP);
+  // Each outcome the view has; the one in the URL too, so the select never shows another than the list is narrowed to.
+  const outcomes = d.outcomes.filter(o => o.n > 0).map(o => o.name);
+  if (outcome && !outcomes.includes(outcome)) outcomes.push(outcome);
   return (
     <section className="panel log sect" id="log" aria-labelledby="logTitle">
       <div className="log-head">
         <h2 id="logTitle">Analysed sessions <Judged /></h2>
-        <label className="chk"><input type="checkbox" checked={only} onChange={e => setHash({ friction: e.target.checked }, { push: true })} /> Only sessions with friction</label>
+        <div className="log-ctl">
+          <label>Sort <select value={sort} onChange={e => setSort(e.target.value as SortId)}>
+            {(Object.keys(SORTS) as SortId[]).map(k => <option key={k} value={k}>{SORTS[k].label}</option>)}</select></label>
+          <label>Outcome <select value={outcome} onChange={e => setHash({ outcome: e.target.value }, { push: true })}>
+            <option value="">All outcomes</option>{outcomes.map(o => <option key={o} value={o}>{outcomeLabel(o)}</option>)}</select></label>
+          <label className="chk"><input type="checkbox" checked={friction} onChange={e => setHash({ friction: e.target.checked }, { push: true })} /> Only sessions with friction</label>
+        </div>
       </div>
-      <p className="hint"><span className="count">{only ? `${num(rows.length)} of ${plural(d.sessions.length, "session")}` : plural(rows.length, "session")}</span>,
-        newest first{d.truncated ? `: the newest ${num(d.sessions.length)} of the view` : ""}. The summary and friction detail are the model's words.</p>
-      <div className="scroll"><table>
-        <thead><tr><th>Date</th><th>Session</th><th>Project</th><th>Outcome</th><th>Goal</th><th>Friction</th></tr></thead>
-        <tbody>{listed.length ? listed.map(s => <SessionRow key={s.session_id} s={s} view={view} />)
-          : <tr><td colSpan={6} className="empty">{only ? "No session in this view reports friction." : "No analysed sessions in this view."}</td></tr>}</tbody>
-      </table></div>
+      <p className="hint"><span className="count">{filtered ? `${num(rows.length)} of ${plural(d.sessions.length, "session")}` : plural(rows.length, "session")}</span>,
+        {" "}{SORTS[sort].words}{d.truncated ? `: the newest ${num(d.sessions.length)} of the view` : ""}. The summary and friction detail are the model's words.</p>
+      {listed.length ? <ul className="scards">{listed.map(s => <SessionCard key={s.session_id} s={s} view={view} />)}</ul>
+        : <p className="empty">{outcome ? "No session in this view matches the filters." : friction ? "No session in this view reports friction." : "No analysed sessions in this view."}</p>}
       {rows.length > SESSIONS_TOP && <button type="button" className="linkish more" onClick={() => setAll(!all)}>
         {all ? `Show the newest ${SESSIONS_TOP}` : `Show all ${num(rows.length)} sessions`}</button>}
     </section>
