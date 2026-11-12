@@ -167,8 +167,41 @@ describe("bucket selection", () => {
   });
   it("closes an open type with no errors in the bucket, unless an example is linked", () => {
     expect(settle(two, v({ cat: "x", at: "2026-11-03" })).cat).toBe("x");
-    expect(settle(two, v({ cat: "x", at: "2026-11-02" })).cat).toBeNull(); // in range, no errors that day
-    expect(settle(two, v({ cat: "x", at: "2026-11-02", focus: "t01" }))).toMatchObject({ cat: "x", at: "2026-11-02" });
+    expect(settle(two, v({ cat: "x", at: "2026-11-05" })).cat).toBeNull(); // a drawn day without errors
+    expect(settle(two, v({ cat: "x", at: "2026-11-05", focus: "t01" }))).toMatchObject({ cat: "x", at: "2026-11-05" });
+  });
+  it("clears a bucket the chart doesn't draw as a selectable point", () => {
+    // Project bar's first call is Nov 4: its chart starts there, so Nov 3 is no point of it.
+    const late = makeModel({ ...fixture, calls: [["2026-11-03", "foo", 10, 0, "claude"], ["2026-11-04", "foo", 10, 0, "claude"], ["2026-11-04", "bar", 10, 0, "claude"]] });
+    expect(settle(late, v({ at: "2026-11-03" })).at).toBe("2026-11-03");
+    expect(settle(late, v({ at: "2026-11-03", project: "bar" })).at).toBeNull();
+    expect(settle(late, v({ at: "2026-11-04", project: "bar" })).at).toBe("2026-11-04");
+    // Calls on Oct 10 and Nov 4 only: the stretch between folds into one point keyed by its first day.
+    const fold = makeModel({ ...fixture, calls: [["2026-10-10", "foo", 10, 0, "claude"], ["2026-11-04", "foo", 10, 0, "claude"]] });
+    expect(settle(fold, v({ at: "2026-10-10" })).at).toBe("2026-10-10");
+    expect(settle(fold, v({ at: "2026-10-11" })).at).toBeNull(); // the fold's own key
+    expect(settle(fold, v({ at: "2026-10-20" })).at).toBeNull(); // inside it
+    expect(settle(fold, v({ at: "2026-11-04" })).at).toBe("2026-11-04");
+    // A project filter folding the selected day into a gap clears it too.
+    const gap = makeModel({ ...fixture, calls: [["2026-10-10", "foo", 10, 0, "claude"], ["2026-10-20", "bar", 10, 0, "claude"], ["2026-11-04", "foo", 10, 0, "claude"]] });
+    expect(settle(gap, v({ at: "2026-10-20" })).at).toBe("2026-10-20");
+    expect(settle(gap, v({ at: "2026-10-20", project: "foo" })).at).toBeNull();
+  });
+  it("narrows a week to its own errors, a week that starts before the range included", () => {
+    // Range 7 starts Fri Oct 30: the week of Mon Oct 26 is cut by it, and its Oct 28 error lies before the range.
+    const day = (id: string, d: string) => ({ ...fixture.errors.find(e => e.id === id)!, d });
+    const wk = makeModel({ ...fixture,
+      errors: [day("t01", "2026-10-28"), day("t02", "2026-10-30"), day("t03", "2026-10-31"), day("t04", "2026-11-03"), day("t07", "2026-11-04"), day("t08", "2026-11-04")],
+      error_days: [["2026-10-28", "foo", "x", 1, 0, "claude"], ["2026-10-30", "foo", "x", 1, 0, "claude"], ["2026-10-31", "foo", "x", 1, 0, "claude"],
+        ["2026-11-03", "foo", "x", 1, 0, "claude"], ["2026-11-04", "foo", "x", 2, 0, "claude"]],
+      calls: ["2026-10-30", "2026-10-31", "2026-11-03", "2026-11-04"].map(d => [d, "foo", 10, 0, "claude"] as [string, string, number, number, "claude"]) });
+    const first = v({ range: 7, gran: "week", at: "2026-10-26" }), second = v({ range: 7, gran: "week", at: "2026-11-02" });
+    expect(settle(wk, first).at).toBe("2026-10-26");
+    expect(filtered(wk, first).errs).toHaveLength(5);
+    expect(inBucket(first, filtered(wk, first).errs).map(e => e.id)).toEqual(["t02", "t03"]);
+    expect(inBucket(second, filtered(wk, second).errs).map(e => e.id)).toEqual(["t04", "t07", "t08"]);
+    expect(typeRows(wk, first, filtered(wk, first))[0]).toMatchObject({ n: 2, share: 1 });
+    expect(typeRows(wk, second, filtered(wk, second))[0]).toMatchObject({ n: 3, share: 1 });
   });
   it("words an empty bucket", () => {
     const vv = v({ at: "2026-11-02" });

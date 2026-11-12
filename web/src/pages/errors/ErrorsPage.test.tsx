@@ -200,6 +200,7 @@ describe("ErrorsPage bucket selection", () => {
     fireEvent.click(document.getElementById("hit")!, { clientX: 40 + 250 * i + 100, clientY: 50 });
   };
   const rows = () => [...document.querySelectorAll("#catBody tr")].map(r => [r.querySelector(".tbtn")?.textContent, r.querySelector("td.num")?.textContent]);
+  const hashOf = () => Object.fromEntries(new URLSearchParams(location.hash.slice(1)));
   const keys = () => { document.getElementById("chart")!.focus(); };
 
   it("selects a bucket with a click, narrows the table, and clears with a second click", async () => {
@@ -309,6 +310,45 @@ describe("ErrorsPage bucket selection", () => {
     expect(location.hash).toBe("#range=0&ex=t07");
     expect(document.getElementById("outside")).toBeNull();
     expect(document.getElementById("exCount")!.textContent).toMatch(/^3 in range/);
+  });
+
+  it("keeps Space working on the current point after Enter closes the open type", async () => {
+    // Nov 3 holds only "tests" errors, Nov 4 only "x": selecting Nov 4 closes the open "tests" type and drops the chart's reading.
+    const mixed: ErrorsPayload = { ...two, errors: two.errors.map(e => (e.id === "t01" || e.id === "t02" ? { ...e, c: "tests" } : e)),
+      error_days: [["2026-11-03", "foo", "tests", 2, 0, "claude"], ["2026-11-04", "foo", "x", 4, 0, "claude"]] };
+    await open("#range=30&cat=tests", mixed);
+    keys();
+    await userEvent.keyboard("{Home}{ArrowRight}{Enter}");
+    await waitFor(() => expect(location.hash).toBe("#range=30&at=2026-11-04"));
+    await userEvent.keyboard(" ");
+    expect(location.hash).toBe("#range=30");
+  });
+
+  it("clears a bucket the chart no longer draws after a project filter", async () => {
+    // Project bar's first call is on Nov 4, so Nov 3 is no point of its chart.
+    await open("#range=30&project=bar&at=2026-11-03", { ...two, calls: [...two.calls, ["2026-11-04", "bar", 10, 0, "claude"]] });
+    await waitFor(() => expect(hashOf()).toEqual({ range: "30", project: "bar" }));
+    expect(document.getElementById("atClr")).toBeNull();
+  });
+
+  it("keeps focus on the chart when the chip clears over an empty table", async () => {
+    await open("#range=30&project=bar&at=2026-11-03", { ...two, calls: [...two.calls, ["2026-11-03", "bar", 10, 0, "claude"]] });
+    expect(document.querySelector("#catBody button")).toBeNull();
+    await userEvent.click(document.getElementById("atClr")!);
+    expect(hashOf()).toEqual({ range: "30", project: "bar" });
+    expect(document.activeElement).toBe(document.getElementById("chart"));
+  });
+
+  it("narrows a week to its own errors, not the whole range", async () => {
+    // Nov 2 week: Nov 3 (2 errors) and Nov 4 (4); the week of Oct 26 holds one, on Oct 29.
+    const wk: ErrorsPayload = { ...two, errors: two.errors.map(e => (e.id === "t01" ? { ...e, d: "2026-10-29" } : e)),
+      error_days: [["2026-10-29", "foo", "x", 1, 0, "claude"], ["2026-11-03", "foo", "x", 1, 0, "claude"], ["2026-11-04", "foo", "x", 4, 0, "claude"]],
+      calls: [["2026-10-29", "foo", 10, 0, "claude"], ...two.calls] };
+    await open("#range=30&gran=week&at=2026-11-02", wk);
+    expect(rows()).toEqual([["x", "5"]]);
+    expect(document.getElementById("atClr")?.textContent).toBe("Week of Nov 2 ✕");
+    await userEvent.click(document.getElementById("atClr")!);
+    expect(rows()).toEqual([["x", "6"]]);
   });
 
   it("writes a permalink without the bucket", async () => {

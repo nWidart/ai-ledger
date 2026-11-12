@@ -179,11 +179,15 @@ export const prevSpan = (m: Model, v: View): [Day, Day] | null => {
   const s = +toDate(rangeStart(m, v));
   return [iso(new Date(s - v.range * DAY)), iso(new Date(s - DAY))];
 };
-/** A hash bucket the view doesn't have (another granularity, outside the range) clears. A hash cat with no errors in the view's
- *  bucket closes, unless an example is linked. */
+/** A chart point can be selected unless it stands for a folded stretch without calls. The click, the keys and `settle` share this. */
+export const selectable = (p: ChartPt) => !p.to;
+/** A selected bucket that isn't a selectable point of the chart the view draws (another granularity, outside the range, before
+ *  the first call, inside a fold) clears, so the marker and the filtered lists can't disagree. A hash cat with no errors in the
+ *  view's bucket closes, unless an example is linked. */
 export function settle(m: Model, v: View): View {
-  if (v.at && !buckets(m, rangeStart(m, v), v.gran).includes(v.at)) v = { ...v, at: null };
-  return v.cat && !v.focus && !countBy(inBucket(v, filtered(m, v).errs))[v.cat] ? { ...v, cat: null } : v;
+  const f = filtered(m, v);
+  if (v.at && !chartData(m, v, f, viewTypes(m, v, f)).pts.some(p => p.k === v.at && selectable(p))) v = { ...v, at: null };
+  return v.cat && !v.focus && !countBy(inBucket(v, f.errs))[v.cat] ? { ...v, cat: null } : v;
 }
 
 // ---------- briefing and vitals ----------

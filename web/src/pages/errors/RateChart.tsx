@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import { num as fmt, niceStep } from "../../format";
 import { useErrors } from "./context";
-import { bucketLabel, bucketOf, chartData, incSummary, label, linePath, LOW_CALLS, pointRows, pointText, pointWhen, shortLabel, sumCalls, TOPN, typeColor } from "./model";
+import { bucketLabel, bucketOf, chartData, incSummary, label, linePath, LOW_CALLS, pointRows, pointText, pointWhen, selectable, shortLabel, sumCalls, TOPN, typeColor } from "./model";
 
 // Two panels on one time axis, each with its own labeled scale: error rate (line) above, error counts by type (stacked bars) below.
 const H = 320, ML = 40, MR = 10, rT = 18, rH = 100, bT = rT + rH + 26, bH = H - bT - 24;
@@ -27,8 +27,12 @@ export function RateChart() {
     ro.observe(el);
     return () => { ro.disconnect(); clearTimeout(t); };
   }, []);
+  // The keyboard's current point survives the reading: selecting it can close the open type, which drops the reading, and
+  // Space must still clear the selection.
+  const cur = useRef(-1);
   // A redraw drops the reading.
   useEffect(() => { setHover(null); setLive(""); }, [dataKey, cat, W, fixes]);
+  useEffect(() => { cur.current = -1; }, [dataKey, W, fixes]);
 
   const n = keys.length, iw = (W || 800) - ML - MR, bw = iw / n, cx = (i: number) => ML + (i + .5) * bw;
   // The rate panel shows the selected type's rate on its own scale, or the overall rate. Buckets with under LOW_CALLS calls
@@ -87,11 +91,11 @@ export function RateChart() {
   }, [pts, W, fixes, vt, cat]); // the scales and labels follow from these
 
   const lineColor = cat ? typeColor(cat, vt) : "var(--text-primary)";
-  const sel = v.at ? pts.findIndex(p => p.k === v.at && !p.to) : -1;
+  const sel = v.at ? pts.findIndex(p => p.k === v.at && selectable(p)) : -1;
   const empty = !pts.some(p => p.c), noErrors = !pts.some(p => p.e);
 
   const show = (i: number, sx: number, sy: number) => { setHover({ i, sx, sy }); return pointText(m, v, pts[i]!, vt); };
-  const hide = () => setHover(null);
+  const hide = () => setHover(null), blur = () => { hide(); cur.current = -1; };
   const at = (ev: MouseEvent<SVGRectElement>) => {
     const r = svg.current!.getBoundingClientRect(), px = (ev.clientX - r.left) * (W || 800) / r.width;
     return Math.max(0, Math.min(n - 1, Math.floor((px - ML) / bw)));
@@ -100,18 +104,20 @@ export function RateChart() {
   // Selects a bucket for the type table and the detail, or clears it when it is the selected one. A folded stretch has no calls to explain.
   const toggle = (i: number) => {
     const p = pts[i]!;
-    if (p.to) return say("A stretch without tool calls can't be selected.");
+    if (!selectable(p)) return say("A stretch without tool calls can't be selected.");
     const on = v.at === p.k;
     update({ at: on ? null : p.k }, true);
     say(on ? "Selection cleared: the table and detail cover the whole range." : `Selected ${pointWhen(v, p)}: the table and detail show only its errors.`);
   };
   const key = (ev: KeyboardEvent<HTMLDivElement>) => {
     if (empty) return;
-    if ((ev.key === "Enter" || ev.key === " ") && hover) { ev.preventDefault(); return toggle(hover.i); }
-    const ci = hover?.i ?? -1, i = ({ ArrowLeft: ci < 0 ? n - 1 : ci - 1, ArrowRight: ci + 1, Home: 0, End: n - 1 } as Record<string, number>)[ev.key];
+    const ci = hover?.i ?? cur.current;
+    if ((ev.key === "Enter" || ev.key === " ") && ci >= 0) { ev.preventDefault(); return toggle(ci); }
+    const i = ({ ArrowLeft: ci < 0 ? n - 1 : ci - 1, ArrowRight: ci + 1, Home: 0, End: n - 1 } as Record<string, number>)[ev.key];
     if (i == null) return;
     ev.preventDefault();
     const j = Math.max(0, Math.min(n - 1, i)), y = rates[j], r = svg.current!.getBoundingClientRect();
+    cur.current = j;
     setLive(show(j, r.left + cx(j) * r.width / (W || 800), r.top + (y == null ? rT + rH / 2 : yR(y)) * r.height / H));
   };
   // The tooltip sits right of the pointer, or left of it near the window's edge; above it near the bottom edge.
@@ -131,7 +137,7 @@ export function RateChart() {
       {!noErrors && legend(pts.some(p => !p.c), low.some(Boolean))}
       {selOut()}
       <div id="chart" ref={box} tabIndex={0} role="img" aria-label={`Errors by type and error rate. Use the left and right arrow keys to read each point, Enter or Space to select the ${per} for the table and examples.${v.at ? ` Selected: ${bucketLabel(m, v)}.` : ""}`}
-        onKeyDown={key} onBlur={hide}>
+        onKeyDown={key} onBlur={blur}>
         {empty || noErrors ? <div className="empty">{empty ? "No tool calls in this range." : `No failed tool calls in this range, out of ${fmt(sumCalls(v, f.calls))}.`}</div>
           : <svg key={dataKey} ref={svg} viewBox={`0 0 ${W || 800} ${H}`} aria-hidden="true" className={"grow" + (cat ? " has-sel" : "")}>
             {drawn.g}

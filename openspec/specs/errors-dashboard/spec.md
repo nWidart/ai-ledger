@@ -58,11 +58,15 @@ The Errors page SHALL let the user select one day or week of the errors chart by
 - **THEN** nothing is selected and the page says it cannot be
 
 ### Requirement: Keep the selected bucket in the view
-The selected bucket SHALL be part of the URL view and push a history entry, and SHALL NOT be saved with the last view. The chart SHALL mark it beyond color and name it for assistive tech, and a chip by the type table SHALL name it and clear it. The selection SHALL clear when the view no longer has that bucket. An open type with no errors in the bucket SHALL close unless an example is linked.
+The selected bucket SHALL be part of the URL view and push a history entry, and SHALL NOT be saved with the last view. The chart SHALL mark it beyond color and name it for assistive tech, and a chip by the type table SHALL name it and clear it. The selection SHALL clear when it is no longer a selectable point of the chart the view draws. An open type with no errors in the bucket SHALL close unless an example is linked.
 
 #### Scenario: Granularity changes
 - **WHEN** a day is selected and the user switches to weeks
 - **THEN** the selection clears
+
+#### Scenario: Filter moves the chart's start
+- **WHEN** a day is selected and the user picks a project whose first tool call is later than that day
+- **THEN** the selection clears, so the marker and the lists never disagree
 
 #### Scenario: Linked example outside the bucket
 - **WHEN** a link opens an example that falls outside the selected bucket

@@ -9,7 +9,8 @@ export function TypeTable() {
   const { m, v, f, fixes, pick, update, after } = useErrors(), rows = typeRows(m, v, f), { cmp } = compare(m, v, f);
   // Rows mount again when the filters change, so their share bars grow in.
   const key = JSON.stringify([f.start, v.project, v.source, v.sub, v.noise, v.gran, v.at]);
-  const clear = () => { update({ at: null }, true); after(() => document.querySelector<HTMLElement>("#catBody button")?.focus()); };
+  // An empty table has no type button: the chart takes the focus.
+  const clear = () => { update({ at: null }, true); after(() => (document.querySelector<HTMLElement>("#catBody button") ?? document.getElementById("chart"))?.focus()); };
   return (
     <section className="card types">
       <div className="row" style={{ justifyContent: "space-between" }}>
