@@ -8,6 +8,7 @@ import palette from "../../__fixtures__/palette";
 import { Palette } from "../../components/palette/Palette";
 import { openPalette } from "../../components/palette/store";
 import { mockApi } from "../../components/sheets/testing";
+import { clearApiCache } from "../../useApi";
 import { num, usd } from "../../format";
 import { barName, caption, capText, historyStrips, pace, recentText, shareText, span, surfacesText, whenDay, windowName } from "./limits";
 import { LimitsPage } from "./LimitsPage";
@@ -570,6 +571,65 @@ describe("past windows strips", () => {
     expect(vi.mocked(f).mock.calls.at(-1)![0]).toContain(`limit_id=${other.limit_id}`);
   });
 
+  it("scrolls inside its own box: it opens on the newest bars, and keyboard movement brings the focused bar into view", async () => {
+    const width = vi.spyOn(HTMLElement.prototype, "scrollWidth", "get").mockReturnValue(480);
+    const left = vi.spyOn(Element.prototype, "scrollLeft", "set");
+    const into = vi.fn<() => void>();
+    Element.prototype.scrollIntoView = into;
+    try {
+      const many = Array.from({ length: 5 }, (_, i) => ({ ...early, start: `2026-01-0${i + 1}T00:00:00.000Z`, closed_at: `2026-01-0${i + 2}T00:00:00.000Z` }));
+      showCurve({ ...fixture, history: many });
+      await lede();
+      const group = hist().getByRole("group", { name: /past windows/ });
+      expect(group.className).toBe("hs-bars"); // the box that scrolls (limits.css: overflow-x)
+      expect(left).toHaveBeenCalledWith(480); // scrolled to its right end
+      act(() => within(group).getAllByRole("button")[4]!.focus());
+      into.mockClear();
+      await userEvent.keyboard("{ArrowLeft}");
+      expect(into).toHaveBeenCalledTimes(1);
+      expect(into.mock.contexts[0]).toBe(within(group).getAllByRole("button")[3]);
+    } finally {
+      width.mockRestore();
+      delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+    }
+  });
+
+  it("keeps roving focus on the window, not its place, when a refresh adds a window and drops the oldest", async () => {
+    const day = (i: number) => new Date(Date.UTC(2026, 0, 1 + i)).toISOString();
+    const win = (i: number) => ({ ...early, start: day(i), closed_at: day(i + 1) });
+    let shown = Array.from({ length: 60 }, (_, i) => win(i));
+    mockApi({ "/api/limits": () => ({ ...fixture, history: shown }), "/api/limits/window": () => curve });
+    history.replaceState(null, "", "/limits#range=30");
+    render(<LimitsPage />);
+    await lede();
+    const group = () => hist().getByRole("group", { name: /past windows/ });
+    act(() => within(group()).getByRole("button", { name: barName(win(30)) }).focus());
+    shown = Array.from({ length: 60 }, (_, i) => win(i + 1)); // window 60 is new, window 0 is gone
+    act(() => clearApiCache());
+    await within(group()).findByRole("button", { name: barName(win(60)) });
+    expect((document.activeElement as HTMLElement).getAttribute("aria-label")).toBe(barName(win(30)));
+    await userEvent.keyboard("{ArrowLeft}");
+    expect((document.activeElement as HTMLElement).getAttribute("aria-label")).toBe(barName(win(29)));
+    await userEvent.keyboard("{ArrowRight}{ArrowRight}");
+    expect((document.activeElement as HTMLElement).getAttribute("aria-label")).toBe(barName(win(31)));
+  });
+
+  it("falls back to the newest bar for the tab stop when the focused window leaves the strip", async () => {
+    const day = (i: number) => new Date(Date.UTC(2026, 0, 1 + i)).toISOString();
+    const win = (i: number) => ({ ...early, start: day(i), closed_at: day(i + 1) });
+    let shown = [0, 1, 2, 3].map(win);
+    mockApi({ "/api/limits": () => ({ ...fixture, history: shown }), "/api/limits/window": () => curve });
+    history.replaceState(null, "", "/limits#range=30");
+    render(<LimitsPage />);
+    await lede();
+    act(() => hist().getByRole("button", { name: barName(win(0)) }).focus());
+    act(() => (document.activeElement as HTMLElement).blur());
+    shown = [1, 2, 3, 4].map(win);
+    act(() => clearApiCache());
+    await hist().findByRole("button", { name: barName(win(4)) });
+    expect(hist().getAllByRole("button").filter(b => b.tabIndex === 0).map(b => b.getAttribute("aria-label"))).toEqual([barName(win(4))]);
+  });
+
   it("closes with its button and gives focus back to the bar", async () => {
     showCurve();
     await lede();
@@ -588,6 +648,23 @@ describe("past windows strips", () => {
     await userEvent.click(row(early));
     const alert = await hist().findByRole("alert");
     expect(alert.textContent).toMatch(/Could not load this window's curve \(HTTP 404\)/);
+    fail = false;
+    await userEvent.click(within(alert).getByRole("button", { name: "Retry" }));
+    expect(await hist().findByRole("img", { name: /used when it ended/ })).toBeTruthy();
+    expect(hist().queryByRole("alert")).toBeNull();
+  });
+
+  it("shows the error and Retry when a refetch of a loaded curve fails, not the old chart, then the chart again", async () => {
+    let fail = false;
+    showCurve(fixture, () => (fail ? undefined : curve));
+    await lede();
+    await userEvent.click(row(early));
+    await hist().findByRole("img", { name: /used when it ended/ });
+    fail = true;
+    act(() => clearApiCache()); // an ingest or Refresh: the curve is asked for again
+    const alert = await hist().findByRole("alert");
+    expect(alert.textContent).toMatch(/Could not load this window's curve \(HTTP 404\)/);
+    expect(hist().queryByRole("img", { name: /used when it ended/ })).toBeNull();
     fail = false;
     await userEvent.click(within(alert).getByRole("button", { name: "Retry" }));
     expect(await hist().findByRole("img", { name: /used when it ended/ })).toBeTruthy();

@@ -192,20 +192,22 @@ export const stripNote = (shown: number, total: number): string | null => (shown
 
 export interface Strip { key: string; name: string; bars: LimitHistoryRow[]; total: number }
 
-/** One strip per limit with closed windows, in the order the open windows use: provider (in the given order, the payload's
- *  providers; any other last), then longest window first, then scope. Bars run oldest to newest, the STRIP_BARS most recent. */
+/** One strip per limit with closed windows (provider, limit id and scope: two limits can share a label), in the order the open
+ *  windows use: provider (in the given order, the payload's providers; any other last), then longest window first, then scope.
+ *  A strip is named as its newest window is, so a limit whose label changed is still one strip. Bars run oldest to newest, the
+ *  STRIP_BARS most recent. */
 export function historyStrips(history: LimitHistoryRow[], providers: string[]): Strip[] {
   const by = new Map<string, LimitHistoryRow[]>();
-  for (const h of history) { const k = `${h.provider}|${h.label}`; by.set(k, [...(by.get(k) ?? []), h]); }
+  for (const h of history) { const k = `${h.provider}|${h.limit_id}|${h.scope}`; by.set(k, [...(by.get(k) ?? []), h]); }
   const rank = (p: string) => { const i = providers.indexOf(p); return i < 0 ? providers.length : i; };
-  const minutes = (rows: LimitHistoryRow[]) => Math.max(...rows.map(h => h.window_minutes ?? 0));
-  return [...by.entries()]
-    .sort(([, a], [, b]) => rank(a[0]!.provider) - rank(b[0]!.provider) || minutes(b) - minutes(a) || (a[0]!.scope < b[0]!.scope ? -1 : a[0]!.scope > b[0]!.scope ? 1 : 0)
-      || (a[0]!.label < b[0]!.label ? -1 : 1))
-    .map(([key, rows]) => {
-      const old = rows.slice().sort((a, b) => Date.parse(a.closed_at) - Date.parse(b.closed_at) || Date.parse(a.start) - Date.parse(b.start));
-      return { key, name: windowName(rows[0]!), bars: old.slice(-STRIP_BARS), total: rows.length };
-    });
+  const order = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
+  return [...by.entries()].map(([key, rows]) => {
+    const old = rows.slice().sort((a, b) => Date.parse(a.closed_at) - Date.parse(b.closed_at) || Date.parse(a.start) - Date.parse(b.start));
+    const newest = old.at(-1)!;
+    return { sort: { rank: rank(newest.provider), minutes: Math.max(...rows.map(h => h.window_minutes ?? 0)), scope: newest.scope },
+      strip: { key, name: windowName(newest), bars: old.slice(-STRIP_BARS), total: rows.length } };
+  }).sort((a, b) => a.sort.rank - b.sort.rank || b.sort.minutes - a.sort.minutes || order(a.sort.scope, b.sort.scope) || order(a.strip.key, b.strip.key))
+    .map(x => x.strip);
 }
 
 /** A closed window as the open-window chart takes a window: it runs from its start to its close, ends at its final percent,

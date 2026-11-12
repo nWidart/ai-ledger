@@ -285,14 +285,29 @@ describe("past-window bars", () => {
   });
 
   it("makes one strip per limit: provider in the given order, longest window first, then scope", () => {
-    const rows = [row({ provider: "codex", provider_label: "Codex", label: "5-hour", window_minutes: 300 }),
-      row({ label: "weekly · Fable", scope: "Fable" }), row({ provider: "codex", provider_label: "Codex", label: "weekly" }),
-      row({ label: "5-hour", window_minutes: 300 }), row({}), row({ label: "weekly · Fable", scope: "Fable", closed_at: "2026-11-08T00:00:00.000Z" })];
+    const codex = { provider: "codex", provider_label: "Codex" };
+    const rows = [row({ ...codex, label: "5-hour", limit_id: "codex_300", window_minutes: 300 }),
+      row({ label: "weekly · Fable", limit_id: "weekly_scoped", scope: "Fable" }), row({ ...codex, label: "weekly", limit_id: "codex_10080" }),
+      row({ label: "5-hour", limit_id: "five_hour", window_minutes: 300 }), row({}),
+      row({ label: "weekly · Fable", limit_id: "weekly_scoped", scope: "Fable", closed_at: "2026-11-08T00:00:00.000Z" })];
     expect(historyStrips(rows, ["claude", "codex"]).map(s => [s.name, s.bars.length])).toEqual([
       ["Claude Code weekly", 1], ["Claude Code weekly · Fable", 2], ["Claude Code 5-hour", 1], ["Codex weekly", 1], ["Codex 5-hour", 1]]);
     expect(historyStrips(rows, ["codex", "claude"]).map(s => s.name)[0]).toBe("Codex weekly");
     expect(historyStrips(rows, ["claude"]).map(s => s.name).slice(-2)).toEqual(["Codex weekly", "Codex 5-hour"]); // an unlisted provider goes last
     expect(historyStrips([], ["claude"])).toEqual([]);
+  });
+
+  it("makes a strip per limit id, even when two limits read alike, and one strip of a limit whose label changed", () => {
+    const a = row({ limit_id: "codex_a_10080" }), b = row({ limit_id: "codex_b_10080", closed_at: "2026-11-08T00:00:00.000Z" });
+    const strips = historyStrips([a, b, row({ limit_id: "codex_a_10080", closed_at: "2026-10-31T00:00:00.000Z", start: "2026-10-24T00:00:00.000Z" })], ["claude"]);
+    expect(strips.map(s => [s.key, s.name, s.bars.length, s.total])).toEqual([
+      ["claude|codex_a_10080|", "Claude Code weekly", 2, 2], ["claude|codex_b_10080|", "Claude Code weekly", 1, 1]]);
+    // One limit whose window length (and label) changed: one strip, named as its newest window is, and one cap for all of it.
+    const old = row({ label: "daily", window_minutes: 1440, start: "2026-10-01T00:00:00.000Z", closed_at: "2026-10-02T00:00:00.000Z" });
+    const [one, ...rest] = historyStrips([old, row({})], ["claude"]);
+    expect([rest.length, one!.name, one!.bars.length]).toEqual([0, "Claude Code weekly", 2]);
+    const many = Array.from({ length: 70 }, (_, i) => row({ limit_id: i < 35 ? "a" : "b", closed_at: new Date(Date.UTC(2026, 0, 2 + i)).toISOString(), start: new Date(Date.UTC(2026, 0, 1 + i)).toISOString() }));
+    expect(historyStrips(many, ["claude"]).map(s => [s.bars.length, s.total])).toEqual([[35, 35], [35, 35]]); // one limit cannot crowd out the other
   });
 
   it("runs a strip oldest to newest, whatever order the history came in", () => {

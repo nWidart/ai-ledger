@@ -1035,6 +1035,30 @@ class WindowCurveTest(AnalysisCase):
         self.assertEqual(series[:len(open_series)], open_series)  # the points that were drawn while it was open are the same
         self.assertEqual(got["events"], [])
 
+    def test_the_curve_ends_at_the_final_percent_whatever_was_counted_after_the_last_reading(self):
+        self.measured_week()
+        self.spend("claude", "claude-opus-5-5", (T0 + timedelta(days=5), 160))
+        self.snap("claude", "weekly_all", T0 + timedelta(days=6), 70)
+        self.spend("claude", "claude-opus-5-5", (T0 + timedelta(days=6, hours=12), 160))  # $20 of points no reading ever saw
+        got = self.curve("2026-11-01T05:00:00.000Z", T0 + timedelta(days=10))
+        after = [p for p in got["series"] if p["t"] > "2026-11-07T05:00:00.000Z"]
+        self.assertTrue(after)
+        self.assertEqual({p["pct"] for p in after}, {70.0})  # not 90
+        self.assertFalse(any(p["measured"] for p in after))
+        self.assertEqual(got["series"][-1], dict(t=got["window"]["closed_at"], pct=got["window"]["final"], measured=False))
+        # between readings the estimates stay: the 50% reading at day 4 and the use before it keep their line
+        self.assertIn(dict(t="2026-11-05T05:00:00.000Z", pct=50, measured=True), got["series"])
+
+    def test_a_start_nearest_an_open_window_is_not_a_closed_one(self):
+        # Unknown window length: a window starts at its first reading, so two can start a minute apart and reset a day apart.
+        self.snap("codex", "codex_x", datetime(2026, 11, 6, 10, 0), 10, resets=datetime(2026, 11, 6, 15, 0), minutes=None, plan="plus")
+        self.snap("codex", "codex_x", datetime(2026, 11, 6, 10, 1), 3, resets=datetime(2026, 11, 7, 15, 0), minutes=None, plan="plus")
+        now = datetime(2026, 11, 6, 12)
+        ask = lambda start: self.curve(start, now, provider="codex", limit_id="codex_x")
+        self.assertEqual(ask("2026-11-06T10:00:00.000Z")["window"]["final"], 10.0)  # the closed one
+        self.assertIsNone(ask("2026-11-06T10:01:00.000Z"))  # the open one: not the closed one a minute away
+        self.assertEqual(ask("2026-11-06T10:00:30.000Z")["window"]["final"], 10.0)  # nearer the closed one
+
     def test_a_start_a_little_off_finds_the_window_and_a_far_one_does_not(self):
         self.measured_week()
         now = T0 + timedelta(days=10)

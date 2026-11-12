@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
 import { limitsUrl, limitWindowUrl, viewOf, type LimitHistoryRow, type LimitsPayload, type LimitWindow, type LimitWindowCurve, type View, type WindowUsedRow } from "../../api";
 import { Drawer } from "../../components/Drawer";
 import { Filters, viewName } from "../../components/Filters";
@@ -108,27 +108,32 @@ function WindowCard({ w, d }: { w: LimitWindow; d: LimitsPayload }) {
 function HistoryStrip({ strip, selected, onPick, refs }: { strip: Strip; selected: string | null; onPick: (key: string) => void;
   refs: { current: Map<string, HTMLButtonElement> } }) {
   const { bars } = strip, note = stripNote(bars.length, strip.total);
-  const [active, setActive] = useState<number | null>(null);
-  const picked = bars.findIndex(h => barKey(h) === selected);
+  // The window last focused, by identity: a refresh can add a window and drop the oldest, and an index would then name a neighbour.
+  const [active, setActive] = useState<string | null>(null);
+  const scroller = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => { const el = scroller.current; if (el) el.scrollLeft = el.scrollWidth; }, []); // a strip too wide for its box opens on the newest bars
   // The one tab stop: the bar last focused, else the picked one, else the newest.
-  const stop = Math.min(active ?? (picked >= 0 ? picked : bars.length - 1), bars.length - 1);
+  const at = (key: string | null) => (key == null ? -1 : bars.findIndex(h => barKey(h) === key));
+  const stop = [at(active), at(selected), bars.length - 1].find(i => i >= 0)!;
   const onKey = (ev: KeyboardEvent) => {
     if (ev.altKey || ev.ctrlKey || ev.metaKey || ev.shiftKey) return; // Alt+Left is history: not ours
     const to = ev.key === "ArrowLeft" ? stop - 1 : ev.key === "ArrowRight" ? stop + 1 : ev.key === "Home" ? 0 : ev.key === "End" ? bars.length - 1 : null;
     if (to == null) return;
     ev.preventDefault();
-    refs.current.get(barKey(bars[Math.max(0, Math.min(bars.length - 1, to))]!))?.focus();
+    const el = refs.current.get(barKey(bars[Math.max(0, Math.min(bars.length - 1, to))]!));
+    el?.focus({ preventScroll: true });
+    el?.scrollIntoView?.({ block: "nearest", inline: "nearest" }); // the strip scrolls, so keep the focused bar in view
   };
   return (
     <div className="hs-row">
       <div className="hs-name">{strip.name}</div>
-      <div className="hs-bars" role="group" aria-label={`${strip.name}, past windows, oldest first. Left and Right arrow keys move between them.`} onKeyDown={onKey}>
+      <div className="hs-bars" ref={scroller} role="group" aria-label={`${strip.name}, past windows, oldest first. Left and Right arrow keys move between them.`} onKeyDown={onKey}>
         {bars.map((h, i) => {
           const key = barKey(h), name = barName(h);
           return <button key={key} type="button" className={"hs-bar" + (h.hit ? " hit" : "") + (h.early ? " early" : "") + (h.estimated ? " est" : "")}
             ref={el => { if (el) refs.current.set(key, el); else refs.current.delete(key); }}
             aria-label={name} title={name} aria-pressed={key === selected} tabIndex={i === stop ? 0 : -1}
-            onFocus={() => setActive(i)} onClick={() => onPick(key)}>
+            onFocus={() => setActive(key)} onClick={() => onPick(key)}>
             <i style={{ height: `${Math.max(MIN_BAR, Math.min(100, h.final))}%` }} />
           </button>;
         })}
@@ -152,8 +157,8 @@ function WindowPanel({ h, onClose }: { h: LimitHistoryRow; onClose: () => void }
         </div>
         <button type="button" className="linkish" onClick={onClose}>Close</button>
       </header>
-      {w && data ? <LimitChart w={w} now={null} events={data.events} />
-        : error ? <p role="alert">Could not load this window's curve ({error.message}). <button type="button" className="linkish" onClick={retry}>Retry</button></p>
+      {error ? <p role="alert">Could not load this window's curve ({error.message}). <button type="button" className="linkish" onClick={retry}>Retry</button></p>
+        : w && data ? <LimitChart w={w} now={null} events={data.events} />
         : <p className="muted" role="status">{loading ? "Loading the curve…" : ""}</p>}
     </section>
   );

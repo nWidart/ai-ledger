@@ -749,11 +749,24 @@ def limit_windows(ws, usage, now, start=None):
     return cal, earlier_windows(ws, usage, cal, horizon) + ws
 
 
+def closed_series(w, usage, cal):
+    """The series of a closed window from its start to its close. Its final percent is its last reading, so after that reading
+    the curve is flat at the final percent, not an estimate from use counted since (a window that stopped getting readings, as
+    after a plan change, would otherwise climb past what its heading says). Between readings the estimates stay. An estimated
+    window has no readings and no change."""
+    out = series(w, usage, cal, w.closed_at)
+    if w.points:
+        last, final = metrics.iso(w.points[-1][0]), round(w.final, 1)
+        out = [dict(p, pct=final) if p["t"] > last else p for p in out]
+    return out
+
+
 def window_curve(cur, provider, limit_id, scope, start, now=None, prices=None):
     """One closed window's curve, for the page to draw when a bar of its history is picked: {window, series, events} with
     the window as history_row gives it, its series from its start to its close (no forecast), and the plan changes of its
-    provider inside it. The window is the limit's closed one whose start is within SAME_RESET of start (an ISO time); None when
-    there is none, and always for the open window. Raises ValueError for an unknown provider or a start that is no time."""
+    provider inside it. The window is the limit's one nearest to start (an ISO time), when it is closed and its start is within
+    SAME_RESET of start; None when it is not, and so always for the open window. A measured window's curve is flat at its final
+    percent after its last reading (closed_series). Raises ValueError for an unknown provider or a start that is no time."""
     if provider not in PROVIDERS:
         raise ValueError(f"unknown provider: {provider}")
     at = utc_naive(start)
@@ -766,11 +779,10 @@ def window_curve(cur, provider, limit_id, scope, start, now=None, prices=None):
         return None
     usage = load_usage(cur, metrics.load_prices() if prices is None else prices)
     cal, past = limit_windows(ws, usage, now)
-    found = [w for w in past if w.closed_at and abs(w.start - at) <= SAME_RESET]
-    if not found:
+    w = min(past, key=lambda w: abs(w.start - at))  # the nearest of all, so an open window's start is never taken for a closed one's
+    if not w.closed_at or abs(w.start - at) > SAME_RESET:
         return None
-    w = min(found, key=lambda w: abs(w.start - at))
-    return dict(window=history_row(w), series=series(w, usage, cal, w.closed_at),
+    return dict(window=history_row(w), series=closed_series(w, usage, cal),
                 events=[e for e in plan_changes(snaps) if metrics.iso(w.start) <= e["at"] <= metrics.iso(w.closed_at)])
 
 
