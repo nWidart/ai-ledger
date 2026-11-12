@@ -69,3 +69,31 @@ describe("Filters", () => {
     expect(screen.getByRole("option", { name: "foo — 3 errors (all time)" })).toBeTruthy();
   });
 });
+
+describe("Filters project search", () => {
+  const many = Array.from({ length: 13 }, (_, i) => `proj-${i}`).concat("atlas");
+  const options = () => within(screen.getByRole("combobox", { name: "Project" })).getAllByRole("option").map(o => o.textContent);
+  it("narrows a long list, keeps the selection and All, and restores on clear", async () => {
+    history.replaceState(null, "", "/cost#project=proj-3");
+    render(<Filters projects={many} />);
+    const user = userEvent.setup(), box = screen.getByRole("searchbox", { name: "Search projects" });
+    await user.type(box, "ATL");
+    expect(options()).toEqual(["All projects", "proj-3", "atlas"]);
+    await user.selectOptions(screen.getByRole("combobox", { name: "Project" }), "atlas");
+    expect(location.hash).toBe("#project=atlas");
+    await user.clear(box);
+    expect(options()).toHaveLength(many.length + 2 - 1 + 1 - 1); // All + 14 projects, proj-3 already listed
+  });
+  it("says when nothing matches and keeps All projects", async () => {
+    history.replaceState(null, "", "/cost");
+    render(<Filters projects={many} />);
+    await userEvent.type(screen.getByRole("searchbox", { name: "Search projects" }), "zzz");
+    expect(options()).toEqual(["All projects"]);
+    expect(screen.getByRole("status").textContent).toBe("No project matches");
+  });
+  it("has no search with 12 projects or fewer", () => {
+    history.replaceState(null, "", "/cost");
+    render(<Filters projects={many.slice(0, 12)} />);
+    expect(screen.queryByRole("searchbox")).toBeNull();
+  });
+});

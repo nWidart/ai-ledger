@@ -234,11 +234,57 @@ describe("CostPage", () => {
     expect(lines[1]!.split(",")[0]).toBe(usage.top_sessions[0]!.session_id);
   });
 
+  describe("small projects bucket", () => {
+    const real = (n: string, cost: number) => ({ ...proj(n, cost, 10), prompts: 50, tokens: 1000 });
+    const tiny = (n: string, cost = 0.01) => ({ ...proj(n, cost, 1), prompts: 1, tokens: 10 });
+    const seven = () => withProjects([real("r1", 100), real("r2", 90), real("r3", 80), tiny("t1"), tiny("t2"), tiny("t3"), tiny("t4")]);
+    const names = () => within(drawer("d-projcost")).getAllByRole("row").slice(1).map(r => r.querySelector(".name")?.textContent);
+    it("folds scratch projects into one row with their sums, and expands it", async () => {
+      await show(seven());
+      const d = within(drawer("d-projcost"));
+      expect(names()).toEqual(["r1", "r2", "r3", "Small projects (4) Show 4 small projects"]);
+      const bucket = d.getByText("Small projects (4)").closest("tr")!;
+      expect(bucket.textContent).toContain("$0.04");
+      expect(bucket.querySelectorAll("td")[6]!.textContent).toBe("4");
+      const btn = d.getByRole("button", { name: "Show 4 small projects" });
+      expect(btn.getAttribute("aria-expanded")).toBe("false");
+      await userEvent.click(btn);
+      expect(d.getByRole("button", { name: "Hide small projects" }).getAttribute("aria-expanded")).toBe("true");
+      expect(names().map(n => n?.slice(0, 2))).toEqual(["r1", "r2", "r3", "Sm", "t1", "t2", "t3", "t4"]);
+      await userEvent.click(d.getByRole("button", { name: "Hide small projects" }));
+      expect(names()).toHaveLength(4);
+      expect(d.getByText("7")).toBeTruthy(); // the count is every project
+    });
+    it("keeps big projects above the small ones whatever the sort", async () => {
+      await show(seven());
+      const d = within(drawer("d-projcost"));
+      await userEvent.click(d.getByRole("button", { name: "Est. cost" }));
+      expect(names().slice(0, 3)).toEqual(["r3", "r2", "r1"]);
+      expect(names()[3]).toMatch(/^Small projects/);
+    });
+    it("opens for a small selected project", async () => {
+      serve({ ...seven(), project: "t2" }); at("#range=30&project=t2"); render(<CostPage />); await loaded();
+      expect(within(drawer("d-projcost")).getByRole("button", { name: "Hide small projects" }).getAttribute("aria-expanded")).toBe("true");
+      expect(names()).toContain("t2");
+    });
+    it("does not fold fewer than 3 small projects", async () => {
+      await show(withProjects([real("r1", 100), real("r2", 90), real("r3", 80), tiny("t1"), tiny("t2")]));
+      expect(names()).toEqual(["r1", "r2", "r3", "t1", "t2"]);
+    });
+    it("exports every project, folded or not", async () => {
+      await show(seven());
+      await userEvent.click(within(drawer("d-projcost")).getByRole("button", { name: "Download CSV" }));
+      const lines = vi.mocked(download).mock.calls.at(-1)![1].split("\r\n").filter(Boolean).slice(1);
+      expect(lines.map(l => l.split(",")[0])).toEqual(["r1", "r2", "r3", "t1", "t2", "t3", "t4"]);
+    });
+  });
+
   it("tints against the median of projects big enough to compare, not the scratch ones", async () => {
     const real = (n: string, cost: number) => ({ ...proj(n, cost, 10), prompts: 50 });
     const tiny = (n: string) => ({ ...proj(n, 0.01, 0), prompts: 1, cache_hit_ratio: 0.5 });
     const scratch = Array.from({ length: 10 }, (_, i) => tiny(`t${i}`));
     await show(withProjects([real("r1", 100), real("r2", 100), real("r3", 300), ...scratch]));
+    await userEvent.click(within(drawer("d-projcost")).getByRole("button", { name: "Show 10 small projects" }));
     const cell = (p: string, i: number) => drawer("d-projcost").querySelector(`tbody tr[data-v="${p}"]`)!.querySelectorAll("td")[i]!;
     expect(cell("r1", 8).className).not.toMatch(/tone/);
     expect(cell("r3", 8).className).toMatch(/tone worse/); // $6 a prompt against a $2 median
