@@ -798,6 +798,45 @@ describe("ErrorsPage", () => {
       await waitFor(() => expect([...api.muted]).toEqual(["x"]));
     });
 
+    // Marks belong to a type, not to a tool: a tool filter on the open type changes neither the mute nor the fix box.
+    it("mutes and marks a fix with a tool filter set, which stays while the type is open and goes with the type when it leaves", async () => {
+      const api = serve();
+      history.replaceState(null, "", "/errors#range=30&cat=x&etool=Edit");
+      await page();
+      expect(document.getElementById("toolClr")).toBeTruthy();
+      await userEvent.click(muteBtn());
+      await waitFor(() => expect([...api.muted]).toEqual(["x"]));
+      expect(api.mutes).toEqual([{ category: "x", muted: true }]);
+      expect(location.hash).toBe("#range=30&etool=Edit&cat=x");
+      expect(document.getElementById("toolClr")).toBeTruthy();
+      await mark();
+      await waitFor(() => expect(api.store).toEqual({ x: "2026-11-05" }));
+      expect(api.posts).toEqual([{ category: "x", day: "2026-11-05" }]);
+      expect([...api.muted]).toEqual(["x"]); // the fix kept the mute
+      expect(unmuteBtn()).toBeTruthy();
+      // Under the toggle the muted type leaves the view, and the tool filter that belonged to it clears with it.
+      history.replaceState(null, "", "/errors#range=30&noise=0&cat=x&etool=Edit");
+      cleanup(); clearApiCache();
+      const api2 = serve({}, null, ["x"]);
+      api2.payload = fixture;
+      await page();
+      expect(document.getElementById("detailTitle")).toBeNull();
+      expect(location.hash).toBe("#range=30&noise=0");
+      expect(document.getElementById("toolClr")).toBeNull();
+    });
+
+    it("closes a muted open type with a bucket and a tool selected, and clears both", async () => {
+      const api = serve();
+      history.replaceState(null, "", "/errors#range=30&noise=0&cat=x&at=2026-11-04&etool=Edit");
+      await page();
+      expect(document.getElementById("toolClr")).toBeTruthy();
+      await userEvent.click(muteBtn());
+      await waitFor(() => expect(document.getElementById("detailTitle")).toBeNull());
+      expect(location.hash).toBe("#range=30&noise=0&at=2026-11-04");
+      expect(document.getElementById("toolClr")).toBeNull();
+      await waitFor(() => expect([...api.muted]).toEqual(["x"]));
+    });
+
     it("keeps the open type open when it is muted with the toggle off", async () => {
       const api = serve();
       api.payload = mixed;
@@ -1306,7 +1345,7 @@ describe("ErrorsPage bucket selection", () => {
     await open("#range=30&cat=x&at=2026-11-03");
     const d = document.getElementById("detail")!;
     expect(d.querySelector(".istat b")!.textContent).toBe("2");
-    expect(d.querySelector(".byproj .v")!.textContent).toBe("2");
+    expect(d.querySelector(".byset[data-by='project'] .v")!.textContent).toBe("2");
     expect(document.getElementById("exCount")!.textContent).toMatch(/ in day, most attempts first$/);
     await userEvent.click(screen.getByRole("button", { name: "Every error, newest first" }));
     expect(document.getElementById("exCount")!.textContent).toBe("2 in day, newest first");
@@ -1412,5 +1451,200 @@ describe("ErrorsPage bucket selection", () => {
     await open("#range=30&at=2026-11-04&ex=t07");
     expect(document.getElementById("outside")).toBeNull();
     expect(document.querySelector("#ex-t07 a[data-link]")!.getAttribute("href")).toBe("#range=30&ex=t07");
+  });
+});
+
+// Type x: Edit ×4 (t01, t02 on Nov 3; t03, t04 on Nov 4, Claude Code), mcp__srv__q (t08, Codex); type tests: Bash (t07, Codex).
+describe("ErrorsPage tool and agent breakdown", () => {
+  const mix: ErrorsPayload = { ...fixture,
+    errors: fixture.errors.map(e => ({ ...e, d: e.id === "t01" || e.id === "t02" ? "2026-11-03" : e.d, c: e.id === "t07" ? "tests" : e.c, src: e.id === "t07" || e.id === "t08" ? "codex" as const : "claude" as const })),
+    error_days: [["2026-11-03", "foo", "x", 2, 0, "claude"], ["2026-11-04", "foo", "x", 2, 0, "claude"], ["2026-11-04", "foo", "x", 1, 0, "codex"], ["2026-11-04", "foo", "tests", 1, 0, "codex"]],
+    calls: [["2026-11-03", "foo", 10, 0, "claude"], ["2026-11-04", "foo", 10, 0, "claude"], ["2026-11-04", "foo", 5, 0, "codex"]] };
+  const open = async (hash: string, payload = mix, fixes: Record<string, string> = {}) => {
+    cleanup();
+    serve(fixes).payload = payload;
+    history.replaceState(null, "", "/errors" + hash);
+    await page();
+  };
+  const set = (by: string) => document.querySelector<HTMLElement>(`#detail .byset[data-by="${by}"]`);
+  const rowsOf = (by: string) => [...(set(by)?.querySelectorAll("li button") ?? [])].map(b => [b.getAttribute("data-k"), b.querySelector(".v")!.textContent, b.querySelector(".s")!.textContent]);
+  const types = () => [...document.querySelectorAll("#catBody tr")].map(r => [r.getAttribute("data-c"), r.querySelector("td.num")!.textContent]);
+  const hashOf = () => Object.fromEntries(new URLSearchParams(location.hash.slice(1)));
+  const tool = (t: string) => set("tool")!.querySelector<HTMLElement>(`button[data-k="${t}"]`)!;
+
+  it("lists the type's tools with count and share, and its agents, next to By project", async () => {
+    await open("#range=30&cat=x");
+    expect([...document.querySelectorAll("#detail .byset b")].map(b => b.textContent)).toEqual(["By project", "By tool", "By agent"]);
+    expect(rowsOf("tool")).toEqual([["Edit", "4", "80%"], ["mcp__srv__q", "1", "20%"]]);
+    expect(rowsOf("agent")).toEqual([["claude", "4", "80%"], ["codex", "1", "20%"]]);
+    expect(set("agent")!.textContent).toContain("Claude Code");
+    expect(set("tool")!.textContent).toContain("2 tools");
+    expect(document.querySelector("#detail .why")!.textContent).not.toMatch(/Mostly/);
+  });
+
+  it("folds the tools past the top five", async () => {
+    const t01 = mix.errors[0]!, names = ["a", "b", "c", "d", "e", "f", "g"];
+    await open("#range=30&cat=x", withErrors([...mix.errors.filter(e => e.c === "x"), { ...t01, id: "z1" }, { ...t01, id: "z2" }].map((e, i) => ({ ...e, t: names[i]! }))));
+    expect(rowsOf("tool")).toHaveLength(5);
+    expect(set("tool")!.querySelector("li.muted")!.textContent).toBe("2 more: 2 errors");
+  });
+
+  it("narrows the detail, not the page, to the clicked tool, and a second click clears it", async () => {
+    await open("#range=30&cat=x");
+    const before = types(), len = history.length;
+    await userEvent.click(tool("mcp__srv__q"));
+    expect(hashOf()).toMatchObject({ range: "30", cat: "x", etool: "mcp__srv__q" });
+    expect(history.length).toBe(len + 1);
+    const d = document.getElementById("detail")!;
+    expect(d.querySelector(".istat b")!.textContent).toBe("1");
+    expect(rowsOf("project")).toEqual([["foo", "1", "100%"]]);
+    expect(set("agent")).toBeNull(); // one agent left
+    expect(document.getElementById("exCount")!.textContent).toMatch(/^1 in range/);
+    expect(tool("mcp__srv__q").getAttribute("aria-pressed")).toBe("true");
+    expect(tool("Edit").getAttribute("aria-pressed")).toBe("false");
+    expect(rowsOf("tool")).toHaveLength(2); // By tool keeps the type's tools
+    expect(types()).toEqual(before); // the table, summary and chart stay page-wide
+    expect(document.getElementById("toolClr")!.textContent).toBe("mcp__srv__q ✕");
+    await userEvent.click(tool("mcp__srv__q"));
+    expect(hashOf().etool).toBeUndefined();
+    expect(d.querySelector(".istat b")!.textContent).toBe("5");
+    expect(document.getElementById("toolClr")).toBeNull();
+    expect(document.activeElement).toBe(tool("mcp__srv__q"));
+  });
+
+  it("clears with the chip, which keeps focus on the tool's row", async () => {
+    await open("#range=30&cat=x&etool=Edit");
+    expect(document.querySelector("#detail .istat b")!.textContent).toBe("4");
+    await userEvent.click(document.getElementById("toolClr")!);
+    expect(hashOf().etool).toBeUndefined();
+    expect(document.querySelector("#detail .istat b")!.textContent).toBe("5");
+    expect(document.activeElement).toBe(tool("Edit"));
+  });
+
+  it("puts the tool filter on the bucket selection", async () => {
+    await open("#range=30&cat=x&at=2026-11-03&etool=Edit");
+    expect(document.querySelector("#detail .istat b")!.textContent).toBe("2");
+    await open("#range=30&cat=x&at=2026-11-04&etool=Edit");
+    expect(document.querySelector("#detail .istat b")!.textContent).toBe("2");
+    expect(rowsOf("tool")).toEqual([["Edit", "2", "67%"], ["mcp__srv__q", "1", "33%"]]);
+  });
+
+  it("hides By tool when the type has one tool, unless a tool is selected", async () => {
+    await open("#range=30&cat=tests");
+    expect(set("tool")).toBeNull();
+    await open("#range=30&cat=x&at=2026-11-03"); // Nov 3: Edit only
+    expect(set("tool")).toBeNull();
+    await open("#range=30&cat=x&at=2026-11-03&etool=Edit");
+    expect(set("tool")).toBeTruthy();
+    expect(tool("Edit").getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("clears a tool the open type has no errors of in the view, or with no type open", async () => {
+    await open("#range=30&cat=x&at=2026-11-03&etool=mcp__srv__q");
+    await waitFor(() => expect(hashOf().etool).toBeUndefined());
+    await open("#range=30&etool=Edit");
+    await waitFor(() => expect(hashOf()).toEqual({ range: "30" }));
+  });
+
+  it("drops the tool when the type closes or another opens", async () => {
+    // The other type has Edit errors too, so only opening it can clear the tool.
+    await open("#range=30&cat=x&etool=Edit", { ...mix, errors: mix.errors.map(e => (e.id === "t07" ? { ...e, t: "Edit" } : e)) });
+    await userEvent.click(document.querySelector('#catBody button[data-c="tests"]')!);
+    expect(hashOf()).toEqual({ range: "30", cat: "tests" });
+    await userEvent.click(document.querySelector('#catBody button[data-c="x"]')!);
+    await userEvent.click(tool("Edit"));
+    expect(hashOf().etool).toBe("Edit");
+    await userEvent.click(document.getElementById("clr")!);
+    expect(hashOf()).toEqual({ range: "30" });
+  });
+
+  it("treats a linked example of another tool as outside the filters; Clear filters clears the tool; the permalink leaves it out", async () => {
+    await open("#ex=t08&range=30&etool=Edit");
+    const note = document.getElementById("outside")!;
+    expect(note.querySelector("#ex-t08")).toBeTruthy();
+    expect(document.querySelector("#detail .istat b")!.textContent).toBe("4");
+    await userEvent.click(within(note).getByRole("button", { name: "Clear filters" }));
+    expect(hashOf()).toEqual({ range: "0", ex: "t08" });
+    expect(document.getElementById("outside")).toBeNull();
+    await open("#ex=t01&range=30&etool=Edit");
+    expect(document.getElementById("outside")).toBeNull();
+    expect(document.querySelector("#ex-t01 a[data-link]")!.getAttribute("href")).toBe("#range=30&ex=t01");
+  });
+
+  it("filters the page to an agent, and hides By agent under a source filter or with one agent", async () => {
+    await open("#range=30&cat=x");
+    await userEvent.click(set("agent")!.querySelector('button[data-k="codex"]')!);
+    expect(hashOf()).toMatchObject({ source: "codex", cat: "x" });
+    expect(set("agent")).toBeNull();
+    expect(types().sort()).toEqual([["tests", "1"], ["x", "1"]]);
+    await open("#range=30&cat=x&source=claude");
+    expect(set("agent")).toBeNull();
+    await open("#range=30&cat=tests"); // codex only
+    expect(set("agent")).toBeNull();
+  });
+  it("lists only the tool's errors in Every error mode, and the count says so", async () => {
+    await open("#range=30&cat=x&etool=Edit");
+    await userEvent.click(screen.getByRole("button", { name: "Every error, newest first" }));
+    expect(document.getElementById("exCount")!.textContent).toBe("4 in range, newest first");
+    const ex = [...document.querySelectorAll("#exList .ex")];
+    expect(ex).toHaveLength(4);
+    expect(ex.some(e => e.textContent!.includes("mcp__srv__q"))).toBe(false);
+    await userEvent.click(document.getElementById("toolClr")!);
+    expect(document.getElementById("exCount")!.textContent).toBe("5 in range, newest first");
+    expect(document.querySelectorAll("#exList .ex")).toHaveLength(5);
+  });
+
+  it("leaves the summary, chart, type table and the chart's point reading as they are under a tool filter", async () => {
+    // Everything on the page but the open type's detail, and what the keyboard reading says of the first point.
+    const page_ = async () => {
+      const root = document.querySelector(".pg-errors")!.cloneNode(true) as HTMLElement;
+      root.querySelectorAll("#detail, #detailLive").forEach(n => n.remove());
+      document.getElementById("chart")!.focus();
+      await userEvent.keyboard("{Home}");
+      return [root.innerHTML.replace(/_r_\w+_/g, "id"), document.getElementById("chartLive")!.textContent];
+    };
+    await open("#range=30&cat=x");
+    const plain = await page_();
+    expect(plain[1]).toMatch(/rate/);
+    await open("#range=30&cat=x&etool=Edit");
+    expect(document.getElementById("toolClr")).toBeTruthy();
+    expect(await page_()).toEqual(plain);
+  });
+
+  it("keeps the selected tool's row when it ranks below the top five, with the fold counting the rest", async () => {
+    const t01 = mix.errors[0]!, names = ["a", "b", "c", "d", "e", "f", "g"];
+    const seven = withErrors([...mix.errors.filter(e => e.c === "x"), { ...t01, id: "z1" }, { ...t01, id: "z2" }].map((e, i) => ({ ...e, t: names[i]! })));
+    await open("#range=30&cat=x&etool=a", seven); // ties list the later error first: g f e d c, then b and a
+    expect(rowsOf("tool").map(r => r[0])).toEqual(["g", "f", "e", "d", "c", "a"]);
+    expect(tool("a").getAttribute("aria-pressed")).toBe("true");
+    expect(set("tool")!.querySelector("li.muted")!.textContent).toBe("1 more: 1 errors");
+    expect(set("tool")!.textContent).toContain("7 tools");
+    await userEvent.click(tool("a"));
+    expect(hashOf().etool).toBeUndefined();
+    expect(rowsOf("tool")).toHaveLength(5);
+    expect(set("tool")!.querySelector("li.muted")!.textContent).toBe("2 more: 2 errors");
+  });
+
+  it("names the tool in the chip's title, so a long name can be cut to fit", async () => {
+    await open("#range=30&cat=x&etool=mcp__srv__q");
+    const chip = document.getElementById("toolClr")!;
+    expect(chip.getAttribute("title")).toBe("mcp__srv__q");
+    expect(chip.querySelector(".nm")!.textContent).toBe("mcp__srv__q");
+  });
+
+  it("keeps the fix marker per type, whatever the tool filter: the box, Undo and Mark write and show the same", async () => {
+    await open("#range=30&cat=x&etool=Edit", mix, { x: "2026-11-04" });
+    const d = document.getElementById("detail")!;
+    expect(d.querySelector(".chip.fixed")?.textContent).toBe("✓ Fix applied Nov 4, 2026");
+    // The before and after rate counts the whole type, not the selected tool's errors.
+    const ba = [...d.querySelectorAll(".ba .l")].map(x => x.textContent).filter(t => /error/.test(t ?? ""));
+    expect(ba).toEqual(["2 errors · 10 calls", "3 errors · 15 calls"]); // Edit alone would be 2 and 2
+    await userEvent.click(screen.getByRole("button", { name: "Undo" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Mark fix applied" })).toBeTruthy());
+    expect(hashOf().etool).toBe("Edit");
+    await userEvent.click(screen.getByRole("button", { name: "Mark fix applied" }));
+    const posts = vi.mocked(fetch).mock.calls.filter(c => c[0] === "/api/errors/fix").map(c => JSON.parse((c[1] as RequestInit).body as string));
+    expect(posts).toEqual([{ category: "x", day: null }, { category: "x", day: "2026-11-05" }]);
+    expect(hashOf().etool).toBe("Edit");
   });
 });

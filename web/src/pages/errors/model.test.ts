@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import fixture from "../../__fixtures__/errors";
 import type { ErrorsPayload } from "../../api";
 import {
-  beforeAfter, bucketLabel, bucketOf, buckets, byWeight, change, chartData, compare, emptyTypes, exList, filtered, inBucket, incidentsOf, incSummary, makeModel, midDay, pointText,
+  beforeAfter, breakdown, bucketLabel, bucketOf, buckets, byWeight, change, chartData, compare, emptyTypes, exList, filtered, inBucket, incidentsOf, inTool, incSummary, makeModel, midDay, pointText,
   rangeStart, series, settle, summary, timeLost, typeColors, typeRows, uncategorized, viewTypes, whereToStart, withMuted, errorDays, type Err, type View,
 } from "./model";
 import { lostPayload } from "./lostData";
@@ -342,12 +342,49 @@ describe("summary and fixes", () => {
   });
 });
 
+describe("tool breakdown", () => {
+  const errs = (ts: string[]) => ts.map(t => ({ ...m.errors[0]!, t }));
+  it("counts a key's errors, most first, with the top five and the rest folded", () => {
+    const b = breakdown(errs(["a", "b", "b", "c", "c", "c", "d", "e", "f", "g"]), e => e.t);
+    expect(b.top).toEqual([["c", 3], ["b", 2], ["a", 1], ["d", 1], ["e", 1]]);
+    expect(b).toMatchObject({ rest: 2, n: 10 });
+    expect(b.rows).toHaveLength(7);
+    // A kept row below the top five is listed after them and leaves the rest.
+    const k = breakdown(errs(["a", "b", "b", "c", "c", "c", "d", "e", "f", "g"]), e => e.t, "g");
+    expect(k.top.map(r => r[0])).toEqual(["c", "b", "a", "d", "e", "g"]);
+    expect(k).toMatchObject({ rest: 1, folded: 1 });
+    expect(breakdown(errs(["a", "b", "b", "c", "c", "c", "d", "e", "f", "g"]), e => e.t, "c").top).toHaveLength(5); // already in the top five
+    expect(breakdown(errs(["a", "a"]), e => e.src)).toMatchObject({ rows: [["claude", 2]], rest: 0 });
+  });
+  it("narrows to the selected tool, or keeps everything", () => {
+    const all = filtered(m, v()).errs;
+    expect(inTool(v(), all)).toBe(all);
+    expect(inTool(v({ tool: "Edit" }), all)).toHaveLength(4);
+    expect(inTool(v({ tool: "Nope" }), all)).toEqual([]);
+    // It narrows the detail only: the page's errors and calls are the same under it.
+    expect(filtered(m, v({ tool: "Edit" }))).toEqual(filtered(m, v()));
+  });
+  it("applies on top of the bucket", () => {
+    const f = filtered(two, v({ at: "2026-11-03", tool: "Edit" }));
+    expect(inTool(v({ at: "2026-11-03", tool: "Edit" }), inBucket(v({ at: "2026-11-03" }), f.errs))).toHaveLength(2);
+    expect(inTool(v({ tool: "Bash" }), inBucket(v({ at: "2026-11-03" }), f.errs))).toHaveLength(0);
+  });
+  it("settles: a tool with no errors in the open type's bucket, or with no type open, clears", () => {
+    expect(settle(m, v({ cat: "x", tool: "Edit" })).tool).toBe("Edit");
+    expect(settle(m, v({ cat: "x", tool: "Nope" })).tool).toBeNull();
+    expect(settle(m, v({ tool: "Edit" })).tool).toBeNull();
+    expect(settle(two, v({ cat: "x", at: "2026-11-03", tool: "Edit" })).tool).toBe("Edit");
+    expect(settle(two, v({ cat: "x", at: "2026-11-03", tool: "Bash" })).tool).toBeNull(); // Bash is Nov 4
+    expect(settle(m, v({ cat: "x", tool: "Edit", focus: "t07" }))).toMatchObject({ tool: "Edit", focus: "t07" }); // another tool's example stays linked
+  });
+});
+
 describe("hash and storage", () => {
   const raw = (h: string) => Object.fromEntries(new URLSearchParams(h));
   it("reads the old page's keys; a bare #ex= link is all time and opens its type", () => {
     expect(readView(raw("ex=t07"), {}, m)).toEqual({ linked: true, dead: false, view: { ...DEFAULT_VIEW, range: 0, cat: "x", focus: "t07" } });
     expect(readView(raw("project=foo&range=7&sub=0&noise=0&gran=week&cat=x"), {}, m).view)
-      .toEqual({ project: "foo", source: "", range: 7, sub: false, noise: true, gran: "week", cat: "x", focus: null, at: null });
+      .toEqual({ project: "foo", source: "", range: 7, sub: false, noise: true, gran: "week", cat: "x", focus: null, at: null, tool: null });
     expect(readView(raw("source=codex"), {}, m).view).toEqual({ ...DEFAULT_VIEW, source: "codex" });
     expect(readView(raw("source=grok&range=7"), {}, m).view).toEqual({ ...DEFAULT_VIEW, range: 7 });
     expect(readView(raw("cat=nope&range=5"), {}, m).view).toMatchObject({ cat: null, range: 30 });
@@ -365,7 +402,7 @@ describe("hash and storage", () => {
   });
   it("fills an empty hash from the saved view, and only an empty one", () => {
     const saved = { project: "foo", range: 90, source: "codex", gran: "week", sub: false, noise: true, cat: "x" };
-    expect(readView({}, saved, m).view).toEqual({ project: "foo", source: "codex", range: 90, gran: "week", sub: false, noise: true, cat: "x", focus: null, at: null });
+    expect(readView({}, saved, m).view).toEqual({ project: "foo", source: "codex", range: 90, gran: "week", sub: false, noise: true, cat: "x", focus: null, at: null, tool: null });
     expect(readView(raw("auto=1"), saved, m).view.range).toBe(90);
     expect(readView(raw("range=7"), saved, m).view).toEqual({ ...DEFAULT_VIEW, range: 7 });
   });
@@ -386,6 +423,19 @@ describe("hash and storage", () => {
     expect(viewHash(v({ cat: "x", at: "2026-11-03" }))).toBe("#range=30&cat=x&at=2026-11-03");
     expect(viewHash(v({ at: "2026-11-03" }), "t01")).toBe("#range=30&ex=t01");
     expect(savedOf(v({ at: "2026-11-03" }))).not.toHaveProperty("at");
+  });
+  it("holds the tool under etool (the tool sheet owns tool), in the patch and the hash but not the saved view; a permalink leaves it out", () => {
+    expect(readView(raw("range=30&cat=x&etool=Edit"), {}, m).view.tool).toBe("Edit");
+    expect(readView(raw("range=30&tool=Edit"), {}, m).view.tool).toBeNull();
+    expect(readView(raw("etool=Edit"), {}, m).view.tool).toBe("Edit"); // a view key: the hash is the whole view
+    expect(readView(raw("ex=t01&etool=Bash"), {}, m).view).toMatchObject({ cat: "x", focus: "t01", tool: "Bash" });
+    expect(readView({}, { range: 7 }, m).view.tool).toBeNull();
+    expect(viewPatch(v({ cat: "x", tool: "Edit" })).etool).toBe("Edit");
+    expect(viewPatch(v()).etool).toBeNull();
+    expect(viewPatch(v({ cat: "x", tool: "Bash", focus: "t01" }))).toMatchObject({ ex: "t01", etool: "Bash" });
+    expect(viewHash(v({ cat: "x", at: "2026-11-03", tool: "Edit" }))).toBe("#range=30&cat=x&at=2026-11-03&etool=Edit");
+    expect(viewHash(v({ cat: "x", tool: "Edit" }), "t01")).toBe("#range=30&ex=t01");
+    expect(savedOf(v({ tool: "Edit" }))).not.toHaveProperty("tool");
   });
   it("reads fixes and the list mode in the old page's JSON", () => {
     localStorage.setItem("claude-errors-fixes", '{"x":"2026-11-04","worktree":"2026-10-01"}');

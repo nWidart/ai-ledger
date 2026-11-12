@@ -1,4 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import type { Source } from "../../api";
+import { agentName } from "../../components/Filters";
 import { ProjectName } from "../../components/ProjectDot";
 import { useColors } from "../../colors";
 import { num as fmt } from "../../format";
@@ -6,8 +8,8 @@ import { useErrors } from "./context";
 import { Example, Examples, Incident } from "./Examples";
 import { Spark } from "./Spark";
 import {
-  beforeAfter, bucketOf, buckets, byProject, byWeight, dur, exList, incSpan, incSummary, inBucket, NOISE, RECOVERED_NOTE, series,
-  label, MIN_PCT_ERRORS, topTools, typeColor, whereToStart, yearLabel, type Err, type Group,
+  beforeAfter, bucketOf, buckets, breakdown, byWeight, dur, exList, incSpan, incSummary, inBucket, inTool, NOISE, RECOVERED_NOTE, series,
+  label, MIN_PCT_ERRORS, typeColor, whereToStart, yearLabel, type Err, type Group,
 } from "./model";
 
 const reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -52,13 +54,14 @@ function TypeDetail({ cat }: { cat: string }) {
   const x = useErrors(), { m, v, f, fixes, mode, q } = x, c = m.cats[cat]!, fixDay = fixes[cat], busy = x.saving.has(cat);
   const isMuted = m.muted.has(cat), muteBusy = x.muting.has(cat), fixedNoise = NOISE.has(cat);
   const head = useRef<HTMLDivElement>(null), bar = useRef<HTMLDivElement>(null);
-  const base = inBucket(v, f.errs).filter(e => e.c === cat).reverse(), is = incSummary(m, base), groups = is.groups.sort(byWeight), worst = groups[0], lost = groups.reduce((s, g) => s + incSpan(g), 0);
+  // ofType: the type's errors in the bucket; base: those of the selected tool too, which every list and count of the detail uses.
+  const ofType = inBucket(v, f.errs).filter(e => e.c === cat).reverse(), base = inTool(v, ofType), is = incSummary(m, base), groups = is.groups.sort(byWeight), worst = groups[0], lost = groups.reduce((s, g) => s + incSpan(g), 0);
   // A linked example shows first; outside the current filters it gets its own note instead of joining the list.
   const focused = x.pinned, outside = !!focused && !base.includes(focused);
-  const tools = topTools(base), flat = mode === "flat", PAGE = flat ? 30 : 20;
+  const flat = mode === "flat", PAGE = flat ? 30 : 20;
   const list = exList(base, groups, flat, q, outside ? undefined : focused, v.at ? v.gran : "range");
   // List, count and Show more all come from the current search; any other change starts the list over.
-  const reset = JSON.stringify([cat, v.project, v.source, v.range, v.sub, v.noise, v.gran, v.at, mode, q, fixes]);
+  const reset = JSON.stringify([cat, v.project, v.source, v.range, v.sub, v.noise, v.gran, v.at, v.tool, mode, q, fixes]);
   const [more, setMore] = useState({ reset, n: PAGE }), shown = more.reset === reset ? more.n : PAGE;
 
   // The example bar sticks below the header, and examples scroll in below both.
@@ -97,8 +100,14 @@ function TypeDetail({ cat }: { cat: string }) {
   // (a removed control's focus moves to the type table, as the closed type's row is gone too) lands focus on the table.
   const toggleMute = () => x.setMuted(cat, !isMuted, !isMuted && v.noise);
   const clearFilters = () => {
-    x.update({ project: "", range: 0, sub: true, noise: false, at: null }, true);
+    x.update({ project: "", range: 0, sub: true, noise: false, at: null, tool: null }, true);
     x.after(() => document.getElementById("ex-" + focused!.id)?.focus());
+  };
+  // The tool's row of By tool keeps focus (it hides when the type has one tool only: then the title takes it).
+  const clearTool = (t: string) => {
+    x.update({ tool: null }, true);
+    x.say("All tools");
+    x.after(() => (document.querySelector<HTMLElement>(`.byset[data-by="tool"] button[data-k="${CSS.escape(t)}"]`) ?? document.getElementById("detailTitle"))?.focus());
   };
   const showMore = () => {
     const from = shown;
@@ -119,7 +128,7 @@ function TypeDetail({ cat }: { cat: string }) {
         <button type="button" id="clr" aria-label="Close detail" onClick={() => x.update({ cat: null, focus: null }, true)}>✕</button>
       </span>
     </div>
-    <p className="why">{c.why}{tools.length ? <> <span className="muted">Mostly {tools.map(t => t[0]).join(", ")}.</span></> : null}</p>
+    <p className="why">{c.why}</p>
     {base.length ? <p className="istat" title={`An incident: one agent retrying one tool with this error, each failure within ${m.gap} minutes of the last and at most ${m.maxOk} successful calls of that tool apart. Recovered: the agent's next call of that tool, after the last failure, succeeded.`}>
       <b>{fmt(base.length)}</b> error{base.length === 1 ? "" : "s"} in <b>{fmt(is.n)}</b> incident{is.n === 1 ? "" : "s"}, <b>{fmt(is.pct, 0)}%</b> didn't recover <span className="muted">({RECOVERED_NOTE.replace(/\.$/, "")})</span>.{lost ? <> <b>{dur(lost)}</b> lost in retry loops.</> : null}
       {worst && worst.errs.length > 1 ? ` Largest: ${fmt(worst.errs.length)} attempts over ${dur(incSpan(worst))}.` : ""}</p> : null}
@@ -147,13 +156,16 @@ function TypeDetail({ cat }: { cat: string }) {
     {fixDay && <FixResult cat={cat} fixDay={fixDay} />}
     <div className="mini" id="mini" hidden={x.chartInView && !x.inSheet}><MiniRate cat={cat} /></div>
     <ByProject base={base} />
+    <ByTool ofType={ofType} />
+    <ByAgent base={base} />
     {outside && <div className="outnote" id="outside">
       <div className="row" style={{ justifyContent: "space-between" }}><b>Outside current filters</b><button type="button" id="clearF" onClick={clearFilters}>Clear filters</button></div>
-      <div className="muted" style={{ fontSize: 12 }}>This linked example doesn't match the project, range, bucket or toggles above.</div>
+      <div className="muted" style={{ fontSize: 12 }}>This linked example doesn't match the project, range, bucket, tool or toggles above.</div>
       <Example e={focused!} />
     </div>}
     <div className="exbar" ref={bar}>
-      <div className="row" style={{ justifyContent: "space-between", marginTop: 4 }}><b id="exHead">{flat ? "Errors" : "Incidents"}</b><span className="muted" style={{ fontSize: 12 }} id="exCount">{list.count}</span></div>
+      <div className="row" style={{ justifyContent: "space-between", marginTop: 4 }}><span className="row" style={{ minWidth: 0 }}><b id="exHead">{flat ? "Errors" : "Incidents"}</b>
+        {v.tool && <button type="button" className="chip bucket tool" id="toolClr" title={v.tool} aria-label={`Only ${v.tool}. Show all tools`} onClick={() => clearTool(v.tool!)}><span className="nm">{v.tool}</span> <span aria-hidden="true">✕</span></button>}</span><span className="muted" style={{ fontSize: 12 }} id="exCount">{list.count}</span></div>
       <div className="seg exmode" id="exMode" role="group" aria-label="List">
         <button type="button" data-m="inc" aria-pressed={!flat} onClick={() => setMode("inc")}>Incidents</button>
         <button type="button" data-m="flat" aria-pressed={flat} onClick={() => setMode("flat")}>Every error, newest first</button>
@@ -201,20 +213,50 @@ function MiniRate({ cat }: { cat: string }) {
   </>;
 }
 
-/** Where this type happens, by project: a share bar in project colors and the top five, each a filter. */
-function ByProject({ base }: { base: readonly Err[] }) {
-  const { v, update } = useErrors(), color = useColors();
-  if (v.project || !base.length) return null;
-  const { rows, top, rest, n } = byProject(base);
+/** One breakdown of where a type happens: a share bar and the top five, each a button. A click runs pick(key); the pressed row,
+ *  when there is one, marks the selection (aria-pressed). */
+function Breakdown({ by, title, noun, base, of, color, name, pick, pressed }: {
+  by: string; title: string; noun: string; base: readonly Err[]; of: (e: Err) => string; color: (k: string, i: number) => string;
+  name: (k: string) => ReactNode; pick: (k: string, n: number) => void; pressed?: string | null;
+}) {
+  const { rows, top, rest, folded, n } = breakdown(base, of, pressed);
   return (
-    <div className="byproj">
-      <div className="row" style={{ justifyContent: "space-between" }}><b style={{ fontSize: 13 }}>By project</b><span className="muted" style={{ fontSize: 12 }}>{fmt(rows.length)} project{rows.length === 1 ? "" : "s"}</span></div>
-      <div className="stack" aria-hidden="true">{top.map(([p, k]) => <i key={p} style={{ flex: k, background: color(p) }} title={p} />)}{rest ? <i style={{ flex: rest, background: "var(--proj-other)" }} /> : null}</div>
+    <div className="byset" data-by={by}>
+      <div className="row" style={{ justifyContent: "space-between" }}><b style={{ fontSize: 13 }}>{title}</b><span className="muted" style={{ fontSize: 12 }}>{fmt(rows.length)} {noun}{rows.length === 1 ? "" : "s"}</span></div>
+      <div className="stack" aria-hidden="true">{top.map(([k, c], i) => <i key={k} style={{ flex: c, background: color(k, i) }} title={k} />)}{rest ? <i style={{ flex: rest, background: "var(--proj-other)" }} /> : null}</div>
       <ul>
-        {top.map(([p, k]) => <li key={p}><button type="button" data-p={p} title={`Show only ${p}`} onClick={() => update({ project: p }, true)}>
-          <ProjectName project={p} /><span className="v">{fmt(k)}</span><span className="s">{fmt(k / n * 100, 0)}%</span></button></li>)}
-        {rest ? <li className="muted" style={{ fontSize: 12, padding: "4px 0" }}>{fmt(rows.length - 5)} more: {fmt(rest)} errors</li> : null}
+        {top.map(([k, c]) => <li key={k}><button type="button" data-k={k} title={pressed === k ? `Show every ${noun}` : `Show only ${k}`} aria-pressed={pressed === undefined ? undefined : pressed === k} onClick={() => pick(k, c)}>
+          {name(k)}<span className="v">{fmt(c)}</span><span className="s">{fmt(c / n * 100, 0)}%</span></button></li>)}
+        {rest ? <li className="muted" style={{ fontSize: 12, padding: "4px 0" }}>{fmt(folded)} more: {fmt(rest)} errors</li> : null}
       </ul>
     </div>
   );
+}
+const series5 = (_: string, i: number) => `var(--series-${i + 1})`;
+
+/** Where this type happens, by project: each row filters the page to that project. */
+function ByProject({ base }: { base: readonly Err[] }) {
+  const { v, update } = useErrors(), color = useColors();
+  if (v.project || !base.length) return null;
+  return <Breakdown by="project" title="By project" noun="project" base={base} of={e => e.p} color={k => color(k)} name={k => <ProjectName project={k} />} pick={k => update({ project: k }, true)} />;
+}
+
+/** By tool: each row narrows this type's detail to that tool (not the page); the pressed row clears it. Counts the type's errors before the
+ *  tool filter, so the rows stay put while one is selected. Hidden when the type has one tool only. */
+function ByTool({ ofType }: { ofType: readonly Err[] }) {
+  const { v, update, say } = useErrors();
+  if (!v.tool && new Set(ofType.map(e => e.t)).size < 2) return null;
+  const pick = (t: string, n: number) => {
+    const off = v.tool === t;
+    update({ tool: off ? null : t }, true);
+    say(off ? "All tools" : `Only ${t}: ${fmt(n)} error${n === 1 ? "" : "s"}`);
+  };
+  return <Breakdown by="tool" title="By tool" noun="tool" base={ofType} of={e => e.t} color={series5} name={k => <span className="nm">{k}</span>} pick={pick} pressed={v.tool ?? ""} />;
+}
+
+/** By agent: each row sets the source filter. Hidden under a source filter, and when one agent only has the type's errors. */
+function ByAgent({ base }: { base: readonly Err[] }) {
+  const { v, update } = useErrors();
+  if (v.source || new Set(base.map(e => e.src)).size < 2) return null;
+  return <Breakdown by="agent" title="By agent" noun="agent" base={base} of={e => e.src} color={series5} name={k => <span className="nm">{agentName(k as Source)}</span>} pick={k => update({ source: k as Source }, true)} />;
 }
