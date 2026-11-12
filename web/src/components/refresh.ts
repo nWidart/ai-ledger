@@ -1,13 +1,14 @@
 // Ingest status and Refresh, shared by the nav (status text, Refresh button) and the palette's >refresh command, so both
 // run the same request and the nav shows the same status whichever started it.
 import { useSyncExternalStore } from "react";
-import { statusUrl, type Status } from "../api";
+import { statusUrl, type LimitsAlert, type Status } from "../api";
 import { setOrder } from "../colors";
 import { clearApiCache, getJson, noteIngest } from "../useApi";
 
-export interface RefreshState { text: string; failed: boolean; busy: boolean; retry: boolean }
+/** alert: the Limits tab's alert from the newest status answered (null for none, and for an older app that sends none). */
+export interface RefreshState { text: string; failed: boolean; busy: boolean; retry: boolean; alert: LimitsAlert | null }
 
-let state: RefreshState = { text: "", failed: false, busy: false, retry: false };
+let state: RefreshState = { text: "", failed: false, busy: false, retry: false, alert: null };
 // Status requests by the order sent, and the newest one answered: the answer to an older one tells of an earlier time.
 // A Refresh's answer counts as sent when it ends, as it tells of the time after its ingest.
 let sent = 0, shown = 0;
@@ -24,13 +25,15 @@ export const statusText = (s: Status) => {
 /** The answer to status request n (null: the app did not answer). It does nothing once a request sent after it was
  *  answered: the nav's poll, sent before Live's and answered after it, does not put the older text back, clear the data
  *  cache for an older last_change or set an older project order. The text is a Refresh's while it runs and while its
- *  failure waits for Retry: no poll replaces it then, the nav's or Live's, but its ingest and order still count. */
+ *  failure waits for Retry: no poll replaces it then, the nav's or Live's, but its ingest, order and alert still count.
+ *  An app that does not answer leaves the alert as it was. */
 function noteStatus(n: number, s: Status | null) {
   if (n < shown) return;
   shown = n;
   if (s) { noteIngest(s.last_change); setOrder(s.project_order); }
-  if (state.busy || state.retry) return;
-  set(s ? { ...state, text: statusText(s), failed: !!s.error } : { ...state, text: "App not reachable", failed: true });
+  const alert = s ? s.limits_alert ?? null : state.alert;
+  if (state.busy || state.retry) { if (alert !== state.alert) set({ ...state, alert }); return; }
+  set(s ? { ...state, text: statusText(s), failed: !!s.error, alert } : { ...state, text: "App not reachable", failed: true });
 }
 
 /** Asks the app for its status and shows it: the nav on its schedule, Live on each change notice. A new last_change
@@ -46,8 +49,8 @@ export function refresh() {
   getJson<Status>("/api/refresh", { method: "POST" }).then(s => {
     noteIngest(s.last_change);
     clearApiCache(true);
-    return { text: statusText(s), failed: !!s.error, busy: false, retry: false };
-  }, () => ({ text: "Refresh failed. Select Retry to try again.", failed: true, busy: false, retry: true })).then(s => { shown = ++sent; set(s); });
+    return { text: statusText(s), failed: !!s.error, busy: false, retry: false, alert: s.limits_alert ?? null };
+  }, () => ({ text: "Refresh failed. Select Retry to try again.", failed: true, busy: false, retry: true, alert: state.alert })).then(s => { shown = ++sent; set(s); });
 }
 
 export const useRefreshState = (): RefreshState => useSyncExternalStore(subscribe, () => state, () => state);

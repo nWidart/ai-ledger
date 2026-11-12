@@ -369,6 +369,14 @@ export interface LiveSession extends LiveFigures, LiveTitle {
 }
 
 export interface IngestStats { files: number; lines: number; inserted: number; seconds: number; usage_files?: number; usage_skipped?: number }
+/** The one alert the nav's Limits tab shows (limits.alert_of): the worst state any open window is in. at is when the window
+ *  resets (at_limit, high) or is forecast to run out (runs_out); count is every open window in alert. */
+export interface LimitsAlert {
+  kind: "at_limit" | "runs_out" | "high"; provider: string; provider_label: string; label: string; current: number | null;
+  at: Ts; resets_at: Ts;
+  /** Whether the window's percent is a reading (false: an estimate, or a reading too old to measure now). */
+  measured: boolean; count: number;
+}
 export interface Status {
   ingesting: boolean; last_ingest: string | null; last_stats: IngestStats | null; error: string | null;
   /** The last ingest that stored new lines or usage data; null until one does. */
@@ -376,6 +384,9 @@ export interface Status {
   counts: Record<string, number>; interval: number;
   /** Projects by all-time tokens, for project colors on every page (colors.setOrder). */
   project_order: string[];
+  /** The Limits tab's alert, worked out once per ingest cycle; null when no window is in alert or before the first cycle ends.
+   *  Absent from an older app. */
+  limits_alert?: LimitsAlert | null;
   /** Plan-limit pollers by provider; never the credential. */
   limits?: Record<string, { last_ok: string | null; last_attempt: string | null; failures: number; error: string | null; stale: boolean }>;
 }

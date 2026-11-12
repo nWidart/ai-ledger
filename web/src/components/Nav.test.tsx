@@ -3,6 +3,8 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { App } from "../App";
 import { hasHue, setOrder } from "../colors";
+import type { LimitsAlert } from "../api";
+import { alertText, whenDay } from "../pages/limits/limits";
 import { Nav } from "./Nav";
 import { pollStatus } from "./refresh";
 import { fetchCached, peekCache } from "../useApi";
@@ -229,6 +231,198 @@ describe("Nav", () => {
     f.mockImplementation(() => Promise.reject(new Error("down")));
     await act(async () => { expect(await pollStatus()).toBeNull(); });
     expect(screen.getByText("App not reachable")).toBeTruthy();
+  });
+
+  describe("Limits badge", () => {
+    const alert = (over: Partial<LimitsAlert>): LimitsAlert => ({ kind: "at_limit", provider: "codex", provider_label: "Codex", label: "weekly", current: 100,
+      at: "2026-11-14T12:00:00.000Z", resets_at: "2026-11-14T12:00:00.000Z", measured: true, count: 1, ...over });
+    const badge = () => document.querySelector<HTMLElement>(".appnav-badge");
+    const tab = (name: string | RegExp) => screen.getByRole("link", { name });
+
+    it.each([
+      ["at_limit", { kind: "at_limit" }, "critical", `Codex weekly is at its limit until ${whenDay("2026-11-14T12:00:00.000Z")}`],
+      ["runs_out", { kind: "runs_out", current: 60, at: "2026-11-13T08:00:00.000Z" }, "critical", `Codex weekly is forecast to run out ${whenDay("2026-11-13T08:00:00.000Z")}`],
+      ["high", { kind: "high", current: 92 }, "warning", "Codex weekly is at 92%"],
+    ] as const)("marks the Limits tab for %s: a dot in the right tone, the sentence in its name and title", async (_kind, over, tone, sentence) => {
+      vi.stubGlobal("fetch", vi.fn(() => json({ ...status, limits_alert: alert(over) })));
+      history.replaceState(null, "", "/usage");
+      render(<Nav />);
+      const link = await screen.findByRole("link", { name: `Limits alert: ${sentence}` });
+      expect(sentence).toBe(alertText(alert(over)));
+      // Exposed once: the sentence is in the link's name (a hidden span after the label), the link has no title to read again as a
+      // description, and a plain span around the visible label and the dot carries the hover text, so it covers the whole tab.
+      expect(link.hasAttribute("title")).toBe(false);
+      expect(link.hasAttribute("aria-label")).toBe(false);
+      expect(link.textContent).toBe(`Limits alert: ${sentence}`); // one space, a text node of the link before the hidden span
+      expect(link.textContent!.split(sentence).length - 1).toBe(1);
+      const wrap = link.querySelector<HTMLElement>("span[title]")!;
+      expect(wrap.getAttribute("title")).toBe(sentence);
+      expect(link.querySelectorAll("[title]").length).toBe(1);
+      expect(wrap.textContent).toBe("Limits");
+      expect(wrap.contains(badge())).toBe(true);
+      expect(badge()?.hasAttribute("title")).toBe(false);
+      expect(wrap.querySelector(".sr")).toBeNull();
+      expect(link.querySelector(".sr")?.textContent).toBe(`alert: ${sentence}`);
+      expect(badge()?.dataset.tone).toBe(tone);
+      expect(link.contains(badge())).toBe(true);
+      expect(badge()?.textContent).toBe(""); // a dot, not a number
+      expect(badge()?.getAttribute("aria-hidden")).toBe("true");
+      expect(document.querySelectorAll(".appnav-badge").length).toBe(1);
+      expect(tab("Activity").textContent).toBe("Activity");
+    });
+
+    it("marks an estimate in the name and the hover text", async () => {
+      vi.stubGlobal("fetch", vi.fn(() => json({ ...status, limits_alert: alert({ kind: "high", current: 95, measured: false }) })));
+      render(<Nav />);
+      const link = await screen.findByRole("link", { name: "Limits alert: Codex weekly is at an estimated 95%" });
+      expect(link.querySelector("span[title]")?.getAttribute("title")).toBe("Codex weekly is at an estimated 95%");
+    });
+
+    it("says how many more windows are in alert", async () => {
+      vi.stubGlobal("fetch", vi.fn(() => json({ ...status, limits_alert: alert({ kind: "high", current: 95, count: 3 }) })));
+      render(<Nav />);
+      expect(await screen.findByRole("link", { name: "Limits alert: Codex weekly is at 95% (and 2 more)" })).toBeTruthy();
+    });
+
+    it("shows none when limits_alert is null, or missing as an older server sends it", async () => {
+      const f = vi.fn(() => json({ ...status, limits_alert: alert({}) }));
+      vi.stubGlobal("fetch", f);
+      render(<Nav />);
+      await screen.findByRole("link", { name: /^Limits alert: / });
+      f.mockImplementation(() => json({ ...status, limits_alert: null }));
+      await act(async () => { await pollStatus(); });
+      expect(badge()).toBeNull();
+      expect(tab("Limits").textContent).toBe("Limits");
+      f.mockImplementation(() => json({ ...status, limits_alert: alert({}) }));
+      await act(async () => { await pollStatus(); });
+      expect(badge()).not.toBeNull();
+      f.mockImplementation(() => json(status)); // no field at all
+      await act(async () => { await pollStatus(); });
+      expect(badge()).toBeNull();
+      expect(tab("Limits")).toBeTruthy();
+    });
+
+    it("follows the status poll: it appears, changes and goes, with no reload", async () => {
+      const f = vi.fn(() => json({ ...status, limits_alert: null }));
+      vi.stubGlobal("fetch", f);
+      render(<Nav />);
+      expect(await screen.findByText(/Last ingest/)).toBeTruthy();
+      expect(badge()).toBeNull();
+      f.mockImplementation(() => json({ ...status, limits_alert: alert({ kind: "high", current: 91 }) }));
+      await act(async () => { await pollStatus(); });
+      expect([badge()?.dataset.tone, document.querySelector("a span[title]")?.getAttribute("title")]).toEqual(["warning", "Codex weekly is at 91%"]);
+      f.mockImplementation(() => json({ ...status, limits_alert: alert({ kind: "at_limit" }) }));
+      await act(async () => { await pollStatus(); });
+      expect(badge()?.dataset.tone).toBe("critical");
+      f.mockImplementation(() => json({ ...status, limits_alert: null }));
+      await act(async () => { await pollStatus(); });
+      expect(badge()).toBeNull();
+    });
+
+    it("keeps the badge when the app does not answer, and takes a Refresh's answer", async () => {
+      const f = vi.fn((_url: string, _init?: RequestInit) => json({ ...status, limits_alert: alert({ kind: "high", current: 91 }) }));
+      vi.stubGlobal("fetch", f);
+      render(<Nav />);
+      await screen.findByRole("link", { name: /^Limits alert: / });
+      f.mockImplementation(() => Promise.reject(new Error("down")));
+      await act(async () => { await pollStatus(); });
+      expect(badge()).not.toBeNull();
+      f.mockImplementation(() => json({ ...status, limits_alert: null }));
+      await userEvent.click(screen.getByRole("button", { name: "Refresh" }));
+      await waitFor(() => expect(badge()).toBeNull());
+    });
+
+    describe("announcement", () => {
+      const region = () => screen.getByRole("status");
+      const poll = async (f: ReturnType<typeof vi.fn>, limits_alert: LimitsAlert | null | undefined) => {
+        f.mockImplementation(() => json(limits_alert === undefined ? status : { ...status, limits_alert }));
+        await act(async () => { await pollStatus(); });
+      };
+      const setup = async (first: LimitsAlert | null) => {
+        const f = vi.fn((_url: string, _init?: RequestInit) => json({ ...status, limits_alert: first }));
+        vi.stubGlobal("fetch", f);
+        history.replaceState(null, "", "/usage");
+        render(<Nav />);
+        await screen.findByText(/Last ingest/);
+        return f;
+      };
+
+      it("is a persistent polite status region of its own, hidden from sight, that holds no alert until there is one", async () => {
+        await setup(null);
+        expect(region().className).toBe("sr");
+        expect(region().textContent).toBe("");
+        expect(region().id).not.toBe("navStatus");
+        expect(document.getElementById("navStatus")!.getAttribute("role")).toBeNull();
+      });
+
+      it("says the sentence when an alert appears", async () => {
+        const f = await setup(null);
+        await poll(f, alert({ kind: "at_limit" }));
+        expect(region().textContent).toBe(alertText(alert({ kind: "at_limit" })));
+      });
+
+      it("announces an alert that is there on the first status after load", async () => {
+        const first = alert({ kind: "high", current: 92 });
+        await setup(first);
+        await waitFor(() => expect(region().textContent).toBe(alertText(first)));
+      });
+
+      it("leaves the text alone when only the time, the percent or the count drift, and does not touch the node", async () => {
+        const f = await setup(alert({ kind: "runs_out", current: 60, at: "2026-11-13T08:00:00.000Z" }));
+        const was = (await waitFor(() => { expect(region().textContent).not.toBe(""); return region().textContent; }));
+        const seen: MutationRecord[] = [];
+        const mo = new MutationObserver(r => seen.push(...r));
+        mo.observe(region(), { childList: true, characterData: true, subtree: true });
+        await poll(f, alert({ kind: "runs_out", current: 71, at: "2026-11-13T09:30:00.000Z", count: 2 }));
+        expect(region().textContent).toBe(was);
+        expect(seen.concat(mo.takeRecords())).toEqual([]);
+        mo.disconnect();
+        // the link's name still follows the newest sentence
+        expect(screen.getByRole("link", { name: /^Limits alert: .*\(and 1 more\)$/ })).toBeTruthy();
+      });
+
+      it("says it again when the kind, the window or the measured flag changes", async () => {
+        const f = await setup(alert({ kind: "high", current: 92 }));
+        await waitFor(() => expect(region().textContent).toBe("Codex weekly is at 92%"));
+        await poll(f, alert({ kind: "at_limit" }));
+        expect(region().textContent).toBe(alertText(alert({ kind: "at_limit" })));
+        await poll(f, alert({ kind: "at_limit", label: "5-hour" }));
+        expect(region().textContent).toBe(alertText(alert({ kind: "at_limit", label: "5-hour" })));
+        await poll(f, alert({ kind: "at_limit", label: "5-hour", measured: false }));
+        expect(region().textContent).toBe(alertText(alert({ kind: "at_limit", label: "5-hour", measured: false })));
+        await poll(f, alert({ kind: "at_limit", provider: "claude", provider_label: "Claude Code", label: "5-hour", measured: false }));
+        expect(region().textContent).toBe("Claude Code 5-hour is estimated to be at its limit until " + whenDay("2026-11-14T12:00:00.000Z"));
+      });
+
+      it("empties when the alert goes, and says the next one when it comes back", async () => {
+        const f = await setup(alert({ kind: "high", current: 92 }));
+        await waitFor(() => expect(region().textContent).not.toBe(""));
+        await poll(f, null);
+        expect(region().textContent).toBe("");
+        await poll(f, alert({ kind: "high", current: 92 }));
+        expect(region().textContent).toBe("Codex weekly is at 92%");
+        await poll(f, undefined); // an older app's status: no field
+        expect(region().textContent).toBe("");
+      });
+
+      it("leaves the link's name, the dot and the hover text as they were", async () => {
+        const a = alert({ kind: "high", current: 92 });
+        await setup(a);
+        const link = await screen.findByRole("link", { name: "Limits alert: Codex weekly is at 92%" });
+        expect(link.hasAttribute("title")).toBe(false);
+        expect(link.querySelector("span[title]")?.getAttribute("title")).toBe(alertText(a));
+        expect(link.contains(region())).toBe(false);
+      });
+    });
+
+    it("shows on the Limits page, whose tab is the current one", async () => {
+      vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/status") ? { ...status, limits_alert: alert({}) } : limits)));
+      history.replaceState(null, "", "/limits");
+      render(<App />);
+      const link = await screen.findByRole("link", { name: /^Limits alert: / });
+      expect(link.getAttribute("aria-current")).toBe("page");
+      expect(badge()).not.toBeNull();
+    });
   });
 
   it("steps the theme through light, dark and back to system", async () => {

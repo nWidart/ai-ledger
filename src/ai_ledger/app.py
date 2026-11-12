@@ -97,6 +97,8 @@ class App:
         self.stopping = threading.Event()
         # last_change: the time of the last ingest that stored anything, so pages refetch only when data changed.
         self.state = dict(ingesting=False, last_ingest=None, last_change=None, last_stats=None, error=None)
+        # The nav's Limits badge: limits.alert_of over the open windows, worked out after each full cycle (see refresh_alert).
+        self.limits_alert = None
         # Live pages: how many are connected, and the sessions each ingest changed, numbered so each page sends a
         # notice for every change since its last one.
         self.watchers = 0
@@ -135,14 +137,28 @@ class App:
                 if p.state["last_ok"] != was:  # a stored reading changes Limits, so pages refetch
                     self.state["last_change"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
 
+    def refresh_alert(self):
+        """Work out the nav's limits alert, as the Limits page's payload gives it with no filters. Run once per full cycle,
+        not per /api/status request: the payload scans the whole request history and every open page polls status. A read, as
+        the routes do it: no store lock. It runs in the loop thread, so it delays the next fast pass of a Live page by the
+        payload's duration (about 0.14 s on a store of 90,000 requests, once per INTERVAL); if a store ever makes it slow, the
+        remedy is a thread of its own. Never raises: whatever the payload does, the alert is None and ingest goes on."""
+        try:
+            payload = limits.payload(self.con.cursor(), polls={p.name: dict(p.state) for p in self.pollers})
+            self.limits_alert = limits.alert_of(payload["windows"])
+        except Exception as e:  # the type only: the message could carry stored text
+            self.limits_alert = None
+            print(f"limits alert failed: {type(e).__name__}", file=sys.stderr, flush=True)
+
     def loop(self):
-        """Ingest everything and poll limits every INTERVAL; in between, ingest transcripts every LIVE_INTERVAL while a
-        Live page is connected."""
+        """Ingest everything and poll limits every INTERVAL, then refresh the limits alert; in between, ingest transcripts
+        every LIVE_INTERVAL while a Live page is connected."""
         due = 0
         while not self.stopping.is_set():
             if time.monotonic() >= due:
                 self.ingest()
                 self.poll()
+                self.refresh_alert()
                 due = time.monotonic() + INTERVAL
             elif self.watchers:
                 self.ingest(usage=False)
@@ -186,7 +202,7 @@ class App:
         cur = self.con.cursor()
         counts = {t: cur.execute(f"SELECT count(*) FROM {t}").fetchone()[0] for t in ("raw_lines", "files", "sessions", "requests", "tool_calls")}
         return dict(self.state, counts=counts, interval=INTERVAL, limits={p.name: dict(p.state) for p in self.pollers},
-                    project_order=metrics.project_order(cur))
+                    limits_alert=self.limits_alert, project_order=metrics.project_order(cur))
 
 
 def asset(path):

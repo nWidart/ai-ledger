@@ -1,11 +1,27 @@
 // Text for the Limits page: names, captions and pace, from the /api/limits payload.
-import type { LimitHistoryRow, LimitPoint, LimitWindow, LimitsPayload } from "../../api";
+import type { LimitHistoryRow, LimitPoint, LimitWindow, LimitsAlert, LimitsPayload } from "../../api";
 import { num, plural, usd } from "../../format";
 import { formatHash, RANGES, sourceOf, type Range } from "../../hash";
 
 /** A timestamp as "Sat, Nov 7, 2:00 PM" in the reader's zone: every time on the page reads this way. */
 export const whenDay = (ts: string | null | undefined): string =>
   ts ? new Date(ts).toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "–";
+
+/** The nav's Limits alert as one sentence, which is the tab's accessible name after "Limits: " and the dot's hover text: "Claude Code
+ *  weekly is at its limit until Sat, Nov 7, 2:00 PM", "… is forecast to run out …" or "… is at 92%", and " (and 2 more)" when other
+ *  windows are in alert too. A figure that is an estimate, not a reading, says so ("is estimated to be at its limit", "is at an
+ *  estimated 92%"); a forecast is one already. */
+export function alertText(a: LimitsAlert): string {
+  const name = windowName(a);
+  const what = a.kind === "at_limit" ? `is ${a.measured ? "" : "estimated to be "}at its limit until ${whenDay(a.at)}`
+    : a.kind === "runs_out" ? `is forecast to run out ${whenDay(a.at)}` : `is at ${a.measured ? "" : "an estimated "}${num(a.current)}%`;
+  return `${name} ${what}${a.count > 1 ? ` (and ${a.count - 1} more)` : ""}`;
+}
+
+/** What the nav's Limits alert is, apart from its wording: its kind, provider, window and whether its figure is measured. The nav
+ *  says the alert aloud when this changes, not when the time, the percent or the count in its sentence do (the forecast time
+ *  drifts on every cycle). "" for no alert. */
+export const alertKey = (a: LimitsAlert | null | undefined): string => a ? JSON.stringify([a.kind, a.provider, a.label, a.measured]) : "";
 
 /** A span as "1d 17h", "3h 20m" or "45m". */
 export function span(msLeft: number): string {

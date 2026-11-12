@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import type { LimitHistoryRow, LimitWindow, LimitsPayload } from "../../api";
+import type { LimitHistoryRow, LimitWindow, LimitsAlert, LimitsPayload } from "../../api";
 import limits from "../../__fixtures__/limits";
-import { barKey, barName, caption, closedWindow, hasScenario, historyStrips, STRIP_BARS, stripNote, windowNotes, nearestPoint, pace, readPoints, readText, recentText, shareText, surfacesText, tipPlace, usedHint, usedHref, usedRange, usedRangeName, whenDay } from "./limits";
+import { alertKey, alertText, barKey, barName, caption, closedWindow, hasScenario, historyStrips, STRIP_BARS, stripNote, windowNotes, nearestPoint, pace, readPoints, readText, recentText, shareText, surfacesText, tipPlace, usedHint, usedHref, usedRange, usedRangeName, whenDay } from "./limits";
 
 const claude = (limits as LimitsPayload).windows[0]!;
 const win = (over: Partial<LimitWindow>): LimitWindow => ({ ...claude, ...over });
@@ -331,5 +331,43 @@ describe("past-window bars", () => {
     expect([w.start, w.resets_at, w.current, w.forecast, w.series, w.at_limit]).toEqual([h.start, h.closed_at, 82, null, past, true]);
     expect(windowNotes(h)).toEqual(["at its limit", "ended early by an early reset", "estimated from counted usage"]);
     expect(windowNotes(row({}))).toEqual([]);
+  });
+});
+
+describe("alertText", () => {
+  const alert = (over: Partial<LimitsAlert>): LimitsAlert => ({ kind: "at_limit", provider: "claude", provider_label: "Claude Code", label: "weekly", current: 100,
+    at: "2026-11-14T12:00:00.000Z", resets_at: "2026-11-14T12:00:00.000Z", measured: true, count: 1, ...over });
+  it("says what each kind is, with the time in the page's format", () => {
+    expect(alertText(alert({}))).toBe(`Claude Code weekly is at its limit until ${whenDay("2026-11-14T12:00:00.000Z")}`);
+    expect(alertText(alert({ kind: "runs_out", current: 64, at: "2026-11-13T08:00:00.000Z" }))).toBe(`Claude Code weekly is forecast to run out ${whenDay("2026-11-13T08:00:00.000Z")}`);
+    expect(alertText(alert({ kind: "high", provider_label: "Codex", label: "5-hour", current: 93.4 }))).toBe("Codex 5-hour is at 93%");
+  });
+  it("says when the figure is an estimate, not a reading", () => {
+    expect(alertText(alert({ measured: false }))).toBe(`Claude Code weekly is estimated to be at its limit until ${whenDay("2026-11-14T12:00:00.000Z")}`);
+    expect(alertText(alert({ kind: "high", current: 93.4, measured: false }))).toBe("Claude Code weekly is at an estimated 93%");
+    expect(alertText(alert({ kind: "high", current: 93.4, measured: false, count: 2 }))).toBe("Claude Code weekly is at an estimated 93% (and 1 more)");
+    // a forecast is an estimate already
+    expect(alertText(alert({ kind: "runs_out", at: "2026-11-13T08:00:00.000Z", measured: false }))).toBe(alertText(alert({ kind: "runs_out", at: "2026-11-13T08:00:00.000Z" })));
+  });
+  it("counts the other windows in alert", () => {
+    expect(alertText(alert({ kind: "high", current: 91, count: 2 }))).toBe("Claude Code weekly is at 91% (and 1 more)");
+    expect(alertText(alert({ kind: "high", current: 91, count: 4 }))).toBe("Claude Code weekly is at 91% (and 3 more)");
+  });
+});
+
+describe("alertKey", () => {
+  const alert = (over: Partial<LimitsAlert>): LimitsAlert => ({ kind: "at_limit", provider: "claude", provider_label: "Claude Code", label: "weekly", current: 100,
+    at: "2026-11-14T12:00:00.000Z", resets_at: "2026-11-14T12:00:00.000Z", measured: true, count: 1, ...over });
+  it("is empty for no alert", () => expect(alertKey(null)).toBe(""));
+  it("holds what the alert is: its kind, provider, label and measured flag", () => {
+    const key = alertKey(alert({}));
+    expect(key).not.toBe("");
+    for (const over of [{ kind: "runs_out" }, { provider: "codex" }, { label: "5-hour" }, { measured: false }] as const) expect(alertKey(alert(over))).not.toBe(key);
+  });
+  it("does not move when only the wording's figures drift: the time, the percent, the count", () => {
+    expect(alertKey(alert({ at: "2026-11-14T13:00:00.000Z", resets_at: "2026-11-14T13:00:00.000Z", current: 99.5, count: 3, provider_label: "Claude" }))).toBe(alertKey(alert({})));
+  });
+  it("tells a label that holds the separator from two labels", () => {
+    expect(alertKey(alert({ provider: "a", label: "b|c" }))).not.toBe(alertKey(alert({ provider: "a|b", label: "c" })));
   });
 });

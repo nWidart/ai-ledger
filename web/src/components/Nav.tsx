@@ -1,6 +1,7 @@
-import { useEffect, useRef, type MouseEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { navigate, setHash, sharedHash, useHashState, usePathname } from "../hash";
 import { getTheme, nextTheme, setTheme, useTheme, type Theme } from "../theme";
+import { alertKey, alertText } from "../pages/limits/limits";
 import { ProjectDot } from "./ProjectDot";
 import { openPalette, shortcutHint, shortcutKeys } from "./palette/store";
 import { pollStatus, refresh, useRefreshState } from "./refresh";
@@ -29,6 +30,12 @@ export function Nav() {
   const path = usePathname(), [h] = useHashState(), shared = sharedHash(), theme = useTheme(), next = nextTheme(theme);
   const nav = useRef<HTMLElement>(null);
   const st = useRefreshState();
+  const alert = st.alert ? alertText(st.alert) : null;
+  // What a screen reader is told of the alert: its sentence, kept as it was while the alert stays the same alert (the forecast time
+  // in the sentence drifts every cycle), changed when the alert's kind, window or measured flag change, and emptied, with no
+  // announcement of its own, when it goes. Set while rendering, from the key: the usual way to derive state from a change.
+  const key = alertKey(st.alert), [said, setSaid] = useState({ key: "", text: "" });
+  if (key !== said.key) setSaid({ key, text: alert ?? "" });
 
   // Pages offset scroll targets by the sticky nav's height, which grows when it wraps on phones.
   useEffect(() => {
@@ -68,9 +75,22 @@ export function Nav() {
           <rect x="12.9" y="4.5" width="2.6" height="11" rx="1.1" fill="var(--surface-1)" opacity=".7" />
         </svg><span className="appnav-word">AI <b>Ledger</b></span></span>
         <span className="appnav-tabs">
-          {PAGES.map(p => (
-            <a key={p.path} href={p.path + shared} aria-current={p.path === path ? "page" : undefined} onClick={e => go(e, p.path)}>{p.label}</a>
-          ))}
+          {PAGES.map(p => {
+            // The Limits tab carries the alert. Its spoken form is a visually hidden span in the link ("Limits alert: <sentence>"). The
+            // hover text is the title of a plain span around the visible label and the dot, which is no part of the link's name or
+            // description, so the sentence is read once and the whole tab explains itself. The space before the hidden span is a text node of the
+            // link: it ends the line, so it takes no room, and it keeps the name "Limits alert: …" whatever the engine does for a hidden span.
+            // Color is never the only signal.
+            const badge = p.path === "/limits" && alert;
+            return (
+              <a key={p.path} href={p.path + shared} aria-current={p.path === path ? "page" : undefined} onClick={e => go(e, p.path)}>
+                {badge ? <>
+                  <span title={badge}>{p.label}<span className="appnav-badge" data-tone={st.alert!.kind === "high" ? "warning" : "critical"} aria-hidden="true" /></span>
+                  {" "}<span className="sr">alert: {badge}</span>
+                </> : p.label}
+              </a>
+            );
+          })}
         </span>
         {h.project && (
           <span className="appnav-filter" id="navFilter">
@@ -84,6 +104,7 @@ export function Nav() {
           <span className="lbl">Search</span><kbd>{shortcutHint()}</kbd>
         </button>
         <span className="appnav-status" id="navStatus" aria-live="polite">{st.text}</span>
+        <span className="sr" role="status">{said.text}</span>
         <button type="button" id="navRefresh" className={st.failed ? "failed" : undefined} title={st.text} disabled={st.busy} onClick={refresh}
           aria-label={st.retry ? "Retry" : "Refresh"}>
           <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9" /><path d="M13.5 2.5v3h-3" /></svg>
