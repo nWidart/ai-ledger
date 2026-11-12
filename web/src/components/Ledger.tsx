@@ -20,17 +20,19 @@ export interface LedgerRowProps {
   active?: boolean;
   /** data-v on the row, so a re-rendered page can find the row again. */
   pickKey?: string;
+  /** A button row only: controls after the button in the row's item, never nested in the button. */
+  children?: ReactNode;
 }
 
 /** One row of a ledger: name, share bar, value and a side figure. A selectable row is a real button. */
-export function LedgerRow({ name, title, share, value, side, project, color, onPick, active, pickKey }: LedgerRowProps) {
+export function LedgerRow({ name, title, share, value, side, project, color, onPick, active, pickKey, children }: LedgerRowProps) {
   const cells = <>
     <span className="n" title={title ?? (typeof name === "string" ? name : undefined)}>{project != null && <ProjectDot project={project} />}{name}</span>
     <span className="bar" aria-hidden="true"><span style={{ width: `${Math.max(share * 100, share > 0 ? 1 : 0)}%`, ...(color ? { background: color } : {}) }} /></span>
     <span className="v">{value}</span><span className="s">{side}</span>
   </>;
   return onPick
-    ? <li className={active ? "pick on" : "pick"} data-v={pickKey}><button type="button" className="rowbtn" aria-pressed={active} onClick={e => onPick(e.currentTarget)}>{cells}</button></li>
+    ? <li className={active ? "pick on" : "pick"} data-v={pickKey}><button type="button" className="rowbtn" aria-pressed={active} onClick={e => onPick(e.currentTarget)}>{cells}</button>{children}</li>
     : <li className={active ? "on" : undefined} data-v={pickKey}>{cells}</li>;
 }
 

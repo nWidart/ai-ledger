@@ -69,6 +69,12 @@ def insights_fixtures():
         case.session("c1", "demo-app", "2026-11-03 10:00:00")
         case.session("c2", "docs-site", "2026-11-04 10:00:00")
         case.session("x1", "demo-app", "2026-11-04 11:00:00", source="codex")
+        # label families with two members: a second implement-feature goal, and a second buggy-code friction on a session that already has one
+        for sid, key, extra in ((ti.A + "1", "goal_categories", dict(build_feature=1)), (ti.A + "3", "friction_counts", dict(broken_build=1))):
+            path = os.path.join(case.usage, "facets", sid + ".json")
+            with open(path) as fh:
+                facet = json.load(fh)
+            case.put("facets", sid + ".json", dict(facet, **{key: dict(facet[key], **extra)}))
         case.ingest()
         # two runs: the first two facets 20 minutes apart, the third the next morning
         for sid, ts in ((ti.A + "1", "2026-11-05 18:00:00"), (ti.A + "2", "2026-11-05 18:20:00"), (ti.A + "3", "2026-11-06 09:00:00")):

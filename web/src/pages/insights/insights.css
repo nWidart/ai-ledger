@@ -112,3 +112,7 @@
 }
 /* A session card's measured figures: the last line, quiet and apart from the model's summary. */
 .pg-insights .scard .measured { margin: 6px 0 0; color: var(--text-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+/* A family row's expander and its labels, under the row. */
+.pg-insights .ledger li.pick .exp { margin: 0 0 4px 8px; font-size: 12.5px; }
+.pg-insights .ledger li.pick .members { margin: 0 0 6px 18px; padding: 0; }
+.pg-insights .ledger li.pick .members[hidden] { display: none; }

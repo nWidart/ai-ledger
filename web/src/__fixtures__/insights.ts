@@ -144,12 +144,22 @@ export default {
    "name": "wrong_approach",
    "n": 3,
    "sessions": 1
+  },
+  {
+   "name": "broken_build",
+   "n": 1,
+   "sessions": 1
   }
  ],
  "goals": [
   {
    "name": "fix_bug",
    "n": 2,
+   "sessions": 1
+  },
+  {
+   "name": "build_feature",
+   "n": 1,
    "sessions": 1
   },
   {
@@ -166,6 +176,92 @@ export default {
    "name": "write_tests",
    "n": 1,
    "sessions": 1
+  }
+ ],
+ "goal_families": [
+  {
+   "family": "fix_bug",
+   "n": 2,
+   "sessions": 1,
+   "members": [
+    {
+     "name": "fix_bug",
+     "n": 2,
+     "sessions": 1
+    }
+   ]
+  },
+  {
+   "family": "implement_feature",
+   "n": 2,
+   "sessions": 1,
+   "members": [
+    {
+     "name": "build_feature",
+     "n": 1,
+     "sessions": 1
+    },
+    {
+     "name": "implement_feature",
+     "n": 1,
+     "sessions": 1
+    }
+   ]
+  },
+  {
+   "family": "research",
+   "n": 1,
+   "sessions": 1,
+   "members": [
+    {
+     "name": "explore_idea",
+     "n": 1,
+     "sessions": 1
+    }
+   ]
+  },
+  {
+   "family": "tests",
+   "n": 1,
+   "sessions": 1,
+   "members": [
+    {
+     "name": "write_tests",
+     "n": 1,
+     "sessions": 1
+    }
+   ]
+  }
+ ],
+ "friction_families": [
+  {
+   "family": "buggy_code",
+   "n": 4,
+   "sessions": 2,
+   "members": [
+    {
+     "name": "buggy_code",
+     "n": 3,
+     "sessions": 2
+    },
+    {
+     "name": "broken_build",
+     "n": 1,
+     "sessions": 1
+    }
+   ]
+  },
+  {
+   "family": "wrong_approach",
+   "n": 3,
+   "sessions": 1,
+   "members": [
+    {
+     "name": "wrong_approach",
+     "n": 3,
+     "sessions": 1
+    }
+   ]
   }
  ],
  "trend": [
@@ -187,7 +283,8 @@ export default {
    "friction_detail": "Synthetic: the sketch did not build.",
    "in_store": false,
    "friction": [
-    "buggy_code"
+    "buggy_code",
+    "broken_build"
    ],
    "goals": [
     "explore_idea"
@@ -247,6 +344,7 @@ export default {
    "in_store": true,
    "friction": [],
    "goals": [
+    "build_feature",
     "implement_feature"
    ],
    "satisfaction": [

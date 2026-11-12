@@ -23,6 +23,8 @@ export default {
  "satisfaction": [],
  "friction": [],
  "goals": [],
+ "goal_families": [],
+ "friction_families": [],
  "trend": [],
  "sessions": [],
  "truncated": false,

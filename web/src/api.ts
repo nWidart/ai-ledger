@@ -279,6 +279,9 @@ export interface FacetTally extends FacetCount { sessions: number }
 export interface SessionFigures {
   duration_minutes: number | null; lines_added: number | null; lines_removed: number | null; files_modified: number | null; git_pushes: number | null;
 }
+/** Similar goal or friction labels grouped by keyword: n sums the members' counts, sessions counts the distinct sessions with any
+ *  member. Members most counted first. A label no rule matches is a family of its own. */
+export interface FacetFamily { family: string; n: number; sessions: number; members: FacetTally[] }
 export interface InsightSession {
   session_id: string; project: string; start: Ts | null; outcome: string | null; helpfulness: string | null; session_type: string | null;
   brief_summary: string | null; friction_detail: string | null;
@@ -316,6 +319,8 @@ export interface InsightsPayload {
   outcomes: FacetCount[]; helpfulness: FacetCount[]; session_types: FacetCount[];
   /** Summed counts and the sessions that reported each, most first. */
   satisfaction: FacetTally[]; friction: FacetTally[]; goals: FacetTally[];
+  /** friction and goals grouped into families, most counted first. */
+  friction_families: FacetFamily[]; goal_families: FacetFamily[];
   /** Per week of session start (the Monday, YYYY-MM-DD), oldest first, at most 26 weeks with a session: the view's analysed
    *  sessions and those fully or mostly achieved. */
   trend: { week: string; n: number; achieved: number }[];

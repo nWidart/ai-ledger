@@ -9,7 +9,7 @@ import re
 import sys
 from datetime import datetime, timedelta, timezone
 
-from . import metrics, store
+from . import families, metrics, store
 
 KINDS = {"facets": "facet", "session-meta": "meta"}  # directory -> usage_files.kind; report*.html is never read
 SESSION_ID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
@@ -310,15 +310,19 @@ def payload(cur, project="", range_days=0, source="", automated=False, today=Non
     meta_projects = [r[0] for r in cur.execute(f"WITH {METAS} SELECT DISTINCT project FROM mr ORDER BY 1").fetchall()]
     projects += [p for p in meta_projects if p not in projects]
     out = dict(coverage=coverage, projects=projects, outcomes=[], helpfulness=[], session_types=[], satisfaction=[], friction=[],
-               goals=[], trend=[], sessions=[], truncated=False, meta=session_figures(cur, W, wp))
+               goals=[], goal_families=[], friction_families=[], trend=[], sessions=[], truncated=False, meta=session_figures(cur, W, wp))
     if not facets:
         return out
     by = lambda col: dict(cur.execute(f"{in_view} SELECT {col}, count(*) FROM v WHERE {col} IS NOT NULL GROUP BY 1", wp).fetchall())
     out.update(outcomes=ordered(by("outcome"), OUTCOMES), helpfulness=ordered(by("helpfulness"), HELPFULNESS),
                session_types=ordered(by("session_type"), SESSION_TYPES))
-    for kind, key in (("satisfaction", "satisfaction"), ("friction", "friction"), ("goal", "goals")):
+    for kind, key, fam in (("satisfaction", "satisfaction", None), ("friction", "friction", "friction_families"), ("goal", "goals", "goal_families")):
         out[key] = metrics.rows(cur, f"""{in_view} SELECT c.name, sum(c.n)::BIGINT AS n, count(DISTINCT c.session_id) AS sessions
             FROM facet_counts c JOIN v USING (session_id) WHERE c.kind = ? GROUP BY 1 ORDER BY 2 DESC, 3 DESC, 1""", wp + [kind])
+        if fam:
+            pairs = cur.execute(f"""{in_view} SELECT DISTINCT c.name, c.session_id FROM facet_counts c JOIN v USING (session_id)
+                WHERE c.kind = ?""", wp + [kind]).fetchall()
+            out[fam] = families.group(kind, out[key], pairs)
     out["trend"] = [dict(zip(("week", "n", "achieved"), r)) for r in reversed(cur.execute(f"""{in_view}
         SELECT {metrics.week('start')} AS week, count(*), count(*) FILTER (WHERE outcome IN ('fully_achieved', 'mostly_achieved'))
         FROM v WHERE start IS NOT NULL GROUP BY 1 ORDER BY 1 DESC LIMIT ?""", wp + [TREND_WEEKS]).fetchall())]

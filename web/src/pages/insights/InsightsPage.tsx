@@ -1,5 +1,5 @@
-import { Fragment, useEffect, useState, type MouseEvent, type ReactNode } from "react";
-import { insightsUrl, viewOf, type InsightSession, type InsightsPayload, type View } from "../../api";
+import { Fragment, useEffect, useId, useState, type MouseEvent, type ReactNode } from "react";
+import { insightsUrl, viewOf, type FacetFamily, type InsightSession, type InsightsPayload, type View } from "../../api";
 import { Drawer } from "../../components/Drawer";
 import { Judged, label, outcomeLabel, outcomeTone } from "../../components/facets";
 import { Filters, viewName } from "../../components/Filters";
@@ -97,25 +97,48 @@ function TopLedger<T>({ rows, empty, noun, row }: { rows: T[]; empty: string; no
   </>;
 }
 
+const FAMILY_HINT = "Similar labels are grouped into families by keyword; a family with several labels expands to them as /insights wrote them.";
+
+/** A row of a family ledger. With 2 or more labels it filters by the family (`family` kind) and has an expander, a separate button,
+ *  that lists the labels as /insights wrote them, each filtering by its raw name (`raw` kind). A family of one label is that label's
+ *  plain row, with the raw filter. */
+function FamilyRow({ f, max, raw, kind }: { f: FacetFamily; max: number; raw: Readonly<Record<string, string>>; kind: { raw: DrillKind; family: DrillKind } }) {
+  const [open, setOpen] = useState(false), id = useId(), share = (n: number) => max ? n / max : 0;
+  if (f.members.length === 1) {
+    const m = f.members[0]!;
+    return <LedgerRow name={label(m.name)} title={m.name} share={share(f.n)} value={num(f.n)} side={sessionsSide(f)} {...pickProps(raw, kind.raw, m.name, f.sessions)} />;
+  }
+  return (
+    <LedgerRow name={label(f.family)} title={f.family} share={share(f.n)} value={num(f.n)} side={sessionsSide(f)} {...pickProps(raw, kind.family, f.family, f.sessions)}>
+      <button type="button" className="linkish exp" aria-expanded={open} aria-controls={id} aria-label={`${f.members.length} labels in ${label(f.family)}`}
+        onClick={() => setOpen(!open)}>{f.members.length} labels <span aria-hidden="true">{open ? "▴" : "▾"}</span></button>
+      <ol className="ledger members" id={id} hidden={!open} aria-label={`Labels in ${label(f.family)}`}>
+        {open && f.members.map(m => <LedgerRow key={m.name} name={label(m.name)} title={m.name} share={share(m.n)} value={num(m.n)} side={sessionsSide(m)}
+          {...pickProps(raw, kind.raw, m.name, m.sessions)} />)}
+      </ol>
+    </LedgerRow>
+  );
+}
+
 function Friction({ d }: { d: InsightsPayload }) {
-  const [h] = useHashState(), max = d.friction[0]?.n ?? 0;
+  const [h] = useHashState(), max = d.friction_families[0]?.n ?? 0;
   return (
     <section className="panel sect" id="friction" aria-labelledby="frictionTitle">
       <h2 id="frictionTitle">Friction categories <Judged /></h2>
-      <p className="hint">What got in the way, by times reported, with the sessions that reported it. A session can carry several.</p>
-      <TopLedger rows={d.friction} empty="No friction reported in this view." noun="categories" row={r => <LedgerRow key={r.name} name={label(r.name)}
-        title={r.name} share={max ? r.n / max : 0} value={num(r.n)} side={sessionsSide(r)} {...pickProps(h.raw, "fr", r.name, r.sessions)} />} />
+      <p className="hint">What got in the way, by times reported, with the sessions that reported it. A session can carry several. {FAMILY_HINT}</p>
+      <TopLedger rows={d.friction_families} empty="No friction reported in this view." noun="friction families" row={f =>
+        <FamilyRow key={f.family} f={f} max={max} raw={h.raw} kind={{ raw: "fr", family: "frf" }} />} />
     </section>
   );
 }
 
 function Goals({ d }: { d: InsightsPayload }) {
-  const [h] = useHashState(), max = d.goals[0]?.n ?? 0;
+  const [h] = useHashState(), max = d.goal_families[0]?.n ?? 0;
   return (
     <Drawer id="d-goals" title={<>Goals <Judged /></>}>
-      <p className="hint">What each session set out to do.</p>
-      <TopLedger rows={d.goals} empty="No goals recorded in this view." noun="goals" row={r => <LedgerRow key={r.name} name={label(r.name)} title={r.name}
-        share={max ? r.n / max : 0} value={num(r.n)} side={sessionsSide(r)} {...pickProps(h.raw, "goal", r.name, r.sessions)} />} />
+      <p className="hint">What each session set out to do. {FAMILY_HINT}</p>
+      <TopLedger rows={d.goal_families} empty="No goals recorded in this view." noun="goal families" row={f =>
+        <FamilyRow key={f.family} f={f} max={max} raw={h.raw} kind={{ raw: "goal", family: "goalf" }} />} />
     </Drawer>
   );
 }
@@ -283,7 +306,7 @@ const filtersOf = (raw: Readonly<Record<string, string>>) => ({ friction: raw.fr
 function Sessions({ d, view, sort, onSort }: { d: InsightsPayload; view: View; sort: SortId; onSort: (s: SortId) => void }) {
   const [h] = useHashState(), { friction, outcome } = filtersOf(h.raw), drills = drillsOf(h.raw), [all, setAll] = useState(false);
   const filtered = friction || drills.length > 0;
-  const rows = d.sessions.filter(s => (!friction || hasFriction(s)) && passes(s, drills)).sort(SORTS[sort].cmp);
+  const rows = d.sessions.filter(s => (!friction || hasFriction(s)) && passes(s, drills, d)).sort(SORTS[sort].cmp);
   const listed = all ? rows : rows.slice(0, SESSIONS_TOP);
   // Each outcome the view has; the one in the URL too, so the select never shows another than the list is narrowed to.
   const outcomes = d.outcomes.filter(o => o.n > 0).map(o => o.name);
