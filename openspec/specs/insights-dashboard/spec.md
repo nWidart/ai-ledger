@@ -152,7 +152,7 @@ When the view has analysed sessions, the Insights page SHALL show, in this order
 - **THEN** the sections read in the order Outcomes, Friction categories, Satisfaction and helpfulness, Analysed sessions, Goals, Session types, and Goals and Session types are closed
 
 ### Requirement: Index the page's sections
-When the view has analysed sessions, the Insights page SHALL show a section index after the sub line, listing Overview, Outcomes, Friction, Satisfaction and Sessions, then the drawers Goals and Session types. Choosing a drawer SHALL open it and scroll to it. The index SHALL NOT be shown when the page shows no figures (source Codex, or no analysed sessions).
+The Insights page SHALL show a section index after the sub line when the view has analysed sessions: Overview, Outcomes, Friction, Satisfaction and Sessions, then the drawers. Without analysed sessions, it SHALL show one only for How this works. Choosing a drawer SHALL open it and scroll to it. It SHALL NOT be shown for source Codex or an empty store.
 
 #### Scenario: Jump to a drawer
 - **WHEN** the user chooses Goals in the section index
@@ -161,6 +161,10 @@ When the view has analysed sessions, the Insights page SHALL show a section inde
 #### Scenario: No figures
 - **WHEN** the source is Codex
 - **THEN** no section index is shown
+
+#### Scenario: No analysed sessions
+- **WHEN** the store has facets but the view has no analysed session
+- **THEN** the index lists Overview and How this works only
 
 ### Requirement: Sort analysed sessions
 The page SHALL let the user order the listed sessions by Newest (the default), Oldest or Outcome. Outcome SHALL put the worst first: not achieved, partially achieved, unclear or unknown, mostly achieved, fully achieved, and sessions with the same outcome newest first. The choice SHALL last for the page visit and SHALL NOT be kept in the page URL. The list's description SHALL say the order in words.

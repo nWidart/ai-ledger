@@ -547,11 +547,12 @@ class TrendTest(InsightsCase):
     def trend(self, **kw):
         return self.payload(**kw)["trend"]
 
-    def test_weeks_start_on_monday_and_count_achieved(self):
-        self.add(1, "2026-11-01 12:00:00")  # a Sunday
-        self.add(2, "2026-11-02 12:00:00", "mostly_achieved")  # the next Monday
-        self.add(3, "2026-11-08 12:00:00", "not_achieved")  # Sunday
-        self.add(4, "2026-11-09 12:00:00", "partially_achieved")
+    def test_weeks_start_on_local_monday(self):
+        self.con.execute("SET GLOBAL TimeZone = 'Pacific/Auckland'")  # UTC+13 in November: local Monday 2 Nov starts at 1 Nov 11:00 UTC
+        self.add(1, "2026-11-01 10:59:00")  # Sunday 23:59 local
+        self.add(2, "2026-11-01 11:01:00", "mostly_achieved")  # Monday 00:01 local
+        self.add(3, "2026-11-08 10:59:00", "not_achieved")  # Sunday 23:59 local
+        self.add(4, "2026-11-08 11:00:00", "partially_achieved")  # Monday 00:00 local
         self.ingest()
         self.assertEqual(self.trend(), [dict(week="2026-10-26", n=1, achieved=1), dict(week="2026-11-02", n=2, achieved=1),
                                         dict(week="2026-11-09", n=1, achieved=0)])

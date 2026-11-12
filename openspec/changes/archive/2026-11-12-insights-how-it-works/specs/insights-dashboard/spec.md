@@ -41,3 +41,20 @@ The trend panel SHALL be shown only when the view's analysed sessions span 2 or 
 #### Scenario: One week
 - **WHEN** all analysed sessions of the view started in one week
 - **THEN** the panel is not shown
+
+## MODIFIED Requirements
+
+### Requirement: Index the page's sections
+The Insights page SHALL show a section index after the sub line when the view has analysed sessions: Overview, Outcomes, Friction, Satisfaction and Sessions, then the drawers. Without analysed sessions, it SHALL show one only for How this works. Choosing a drawer SHALL open it and scroll to it. It SHALL NOT be shown for source Codex or an empty store.
+
+#### Scenario: Jump to a drawer
+- **WHEN** the user chooses Goals in the section index
+- **THEN** the Goals drawer opens and scrolls into view
+
+#### Scenario: No figures
+- **WHEN** the source is Codex
+- **THEN** no section index is shown
+
+#### Scenario: No analysed sessions
+- **WHEN** the store has facets but the view has no analysed session
+- **THEN** the index lists Overview and How this works only
