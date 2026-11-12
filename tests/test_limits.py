@@ -596,6 +596,108 @@ class PayloadTest(AnalysisCase):
         self.assertFalse(codex(self.NOW + timedelta(hours=2))["measured"])
 
 
+class WindowUsedTest(AnalysisCase):
+    """What used an open window: the counted, priced use from its start to now, by project and by model."""
+    NOW = datetime(2026, 11, 6, 12, 0)
+    RESETS = datetime(2026, 11, 9, 0, 0)  # a weekly window from Nov 2, 00:00
+
+    def use(self, project, source, model, *uses):
+        """Requests of a session of the given project (None: no project), costing the given dollars at the given times."""
+        cur = self.con.cursor()
+        sid = f"s-{source}-{project}"
+        cur.execute("INSERT INTO sessions (session_id, project, source) VALUES (?, ?, ?) ON CONFLICT DO NOTHING", [sid, project, source])
+        cur.execute("INSERT INTO prompts (prompt_id, session_id) VALUES (?, ?) ON CONFLICT DO NOTHING", [f"p-{sid}", sid])
+        n = self.q("SELECT count(*) FROM requests")[0][0]
+        store.insert(cur, "requests", ["message_id", "session_id", "ts", "model", "subagent", "input", "output", "thinking",
+                                       "cache_read", "cache_5m", "cache_1h"],
+                     [(f"m{n + i}", sid, t, model, False, int(c * 1e6), 0, 0, 0, 0, 0) for i, (t, c) in enumerate(uses)])
+
+    def used(self, pct=50, scope="", prices=None, **kw):
+        self.snap("claude", "weekly_scoped" if scope else "weekly_all", self.NOW, pct, resets=self.RESETS, scope=scope)
+        cur = self.con.cursor()
+        cur.execute("SET TimeZone = 'UTC'")
+        d = limits.payload(cur, now=self.NOW, today=self.NOW.date(), prices=prices or PRICES, tz=timezone.utc, **kw)
+        return d["windows"][0]["used"]
+
+    def ago(self, hours):
+        return self.NOW - timedelta(hours=hours)
+
+    def test_sums_only_use_inside_the_window_of_the_providers_source(self):
+        self.use("foo", "claude", "claude-opus-5-5", (self.ago(1), 10.0), (self.ago(2), 5.0))
+        self.use("foo", "claude", "claude-opus-5-5", (datetime(2026, 11, 1, 23, 0), 40.0))  # before the window starts
+        self.use("foo", "claude", "claude-opus-5-5", (self.NOW + timedelta(hours=1), 40.0))  # after now
+        self.use("foo", "codex", "gpt-6-astra", (self.ago(1), 7.0))  # another provider
+        u = self.used()
+        self.assertEqual(u["total"], 15.0)
+        self.assertEqual(u["projects"], [dict(project="foo", cost=15.0, share=1.0, points=50.0)])
+        self.assertEqual(u["models"], [dict(model="claude-opus-5-5", cost=15.0, share=1.0, points=50.0)])
+        self.assertEqual(u["total"], round(self.usage().cost("claude", "", datetime(2026, 11, 2), self.NOW), 2))
+
+    def test_a_scoped_window_counts_only_its_models(self):
+        self.use("foo", "claude", "claude-opus-5-5", (self.ago(1), 30.0))
+        self.use("foo", "claude", "claude-fable-5-1", (self.ago(2), 6.0))
+        self.use("bar", "claude", "claude-opus-5-5", (self.ago(3), 30.0))
+        u = self.used(scope="Fable")
+        self.assertEqual(u["total"], 6.0)
+        self.assertEqual([p["project"] for p in u["projects"]], ["foo"])
+        self.assertEqual([m["model"] for m in u["models"]], ["claude-fable-5-1"])
+
+    def test_top_three_most_first_and_ties_by_name(self):
+        for project, cost in (("e", 1.0), ("d", 1.0), ("c", 4.0), ("b", 3.0), ("a", 1.0)):
+            self.use(project, "claude", "claude-opus-5-5", (self.ago(1), cost))
+        u = self.used()
+        self.assertEqual(u["total"], 10.0)
+        self.assertEqual([(p["project"], p["cost"], p["share"]) for p in u["projects"]], [("c", 4.0, 0.4), ("b", 3.0, 0.3), ("a", 1.0, 0.1)])
+        self.assertLessEqual(sum(p["share"] for p in u["projects"]), 1)
+
+    def test_a_tiny_share_is_never_rounded_to_zero(self):
+        for project, cost in (("big", 100.0), ("small", 0.01), ("tiny", 0.001)):
+            self.use(project, "claude", "claude-opus-5-5", (self.ago(1), cost))
+        u = self.used()
+        self.assertEqual([(p["project"], p["share"]) for p in u["projects"]], [("big", 0.9999), ("small", 0.0001), ("tiny", 0.0001)])
+        self.assertTrue(all(p["share"] > 0 for p in u["projects"] + u["models"]))
+
+    def test_models_take_the_top_three_too(self):
+        prices = {**PRICES, "claude-sonnet-5": PRICES["claude-opus-5-5"]}
+        for model, cost in (("claude-opus-5-5", 5.0), ("claude-fable-5-1", 2.0), ("claude-sonnet-5", 2.0), ("gpt-6-astra", 1.0)):
+            self.use("foo", "claude", model, (self.ago(1), cost))
+        u = self.used(prices=prices)
+        self.assertEqual([(m["model"], m["share"]) for m in u["models"]],
+                         [("claude-opus-5-5", 0.5), ("claude-fable-5-1", 0.2), ("claude-sonnet-5", 0.2)])
+        self.assertLessEqual(sum(m["share"] for m in u["models"]), 1)
+
+    def test_points_only_when_the_window_is_calibrated(self):
+        self.use("foo", "claude", "claude-opus-5-5", (self.ago(1), 9.0))
+        self.use("bar", "claude", "claude-opus-5-5", (self.ago(2), 1.0))
+        u = self.used(pct=50)  # $10 moved 50 points: $0.20 a point
+        self.assertEqual([p["points"] for p in u["projects"]], [45.0, 5.0])
+        self.assertEqual(u["models"][0]["points"], 50.0)
+
+    def test_no_points_without_a_calibration(self):
+        self.use("foo", "claude", "claude-opus-5-5", (self.ago(1), 9.0))
+        u = self.used(pct=2)  # under MIN_POINTS: not calibrated
+        self.assertEqual(u["total"], 9.0)
+        self.assertEqual((u["projects"][0]["points"], u["models"][0]["points"]), (None, None))
+        self.assertEqual(u["projects"][0]["share"], 1.0)
+
+    def test_none_when_nothing_was_counted(self):
+        self.use("foo", "claude", "claude-opus-5-5", (datetime(2026, 11, 1, 23, 0), 40.0), (self.NOW + timedelta(hours=1), 40.0))
+        self.assertIsNone(self.used(pct=2))
+
+    def test_a_request_without_a_project_counts_but_is_no_project_row(self):
+        self.use(None, "claude", "claude-opus-5-5", (self.ago(1), 6.0))
+        self.use("foo", "claude", "claude-opus-5-5", (self.ago(2), 4.0))
+        u = self.used()
+        self.assertEqual(u["total"], 10.0)
+        self.assertEqual([(p["project"], p["share"]) for p in u["projects"]], [("foo", 0.4)])
+        self.assertEqual(u["models"][0]["cost"], 10.0)
+
+    def test_the_filters_do_not_apply(self):
+        self.use("foo", "claude", "claude-opus-5-5", (self.ago(1), 4.0))
+        self.use("bar", "claude", "claude-opus-5-5", (self.ago(2), 6.0))
+        self.assertEqual(self.used(range_days=1, project="foo")["total"], 10.0)
+
+
 class ValueTest(AnalysisCase):
     def test_commits_per_point_by_project(self):
         now = datetime(2026, 11, 6, 12, 0)

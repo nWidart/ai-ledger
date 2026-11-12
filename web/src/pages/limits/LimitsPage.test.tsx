@@ -315,3 +315,82 @@ describe("status strip", () => {
     expect(screen.queryByRole("list", { name: "Open windows at a glance" })).toBeNull();
   });
 });
+
+describe("what used this window", () => {
+  const used: NonNullable<LimitWindow["used"]> = { total: 12.34,
+    projects: [{ project: "ai-ledger", cost: 6.7, share: 0.543, points: 12.3 }, { project: "other app", cost: 3, share: 0.243, points: 5.5 }],
+    models: [{ model: "claude-opus-5-5", cost: 12, share: 0.972, points: 22 }, { model: "claude-fable-5-1", cost: 0.34, share: 0.028, points: null }] };
+  const card = (w: LimitWindow) => within(screen.getByRole("region", { name: windowName(w) }));
+  const only = (w: LimitWindow): LimitsPayload => ({ ...fixture, windows: [w] });
+
+  it("is closed, with the top project and its share in the summary", async () => {
+    show(only({ ...claude, used }));
+    await lede();
+    const d = document.querySelector<HTMLDetailsElement>(".lim-card details.lim-used")!;
+    expect(d.open).toBe(false);
+    expect(d.querySelector("summary")!.textContent).toBe("What used this window · ai-ledger 54%");
+    expect(d.previousElementSibling!.className).toBe("cap-money");
+  });
+
+  it("lists projects and models with shares, points and the cost as a title", async () => {
+    show(only({ ...claude, used }));
+    await lede();
+    const lists = card(claude);
+    expect(lists.getByRole("heading", { name: "Projects" })).toBeTruthy();
+    expect(lists.getByRole("heading", { name: "Models" })).toBeTruthy();
+    const row = lists.getByText("ai-ledger", { selector: "a" }).closest("li")!;
+    expect(row.textContent).toBe("ai-ledger54%≈ 12.3 points");
+    expect(row.title).toBe(`${usd(6.7)}, estimated at API list prices`);
+    expect(lists.getByText("claude-opus-5-5").closest("li")!.textContent).toBe("claude-opus-5-597%≈ 22.0 points");
+    expect(lists.getByText("claude-fable-5-1").closest("li")!.textContent).toBe("claude-fable-5-13%"); // no points, none shown
+    expect(lists.getByText(/use elsewhere is not in it/).textContent).toBe(`Counted local agent use only, at API list prices (${usd(12.34)} here); use elsewhere is not in it.`);
+  });
+
+  it("links each project and the whole window to Cost with the source and the nearest range", async () => {
+    show(only({ ...claude, used }));
+    await lede();
+    const lists = card(claude);
+    expect(lists.getByText("ai-ledger", { selector: "a" }).getAttribute("href")).toBe("/cost#project=ai-ledger&range=7&source=claude&auto=1");
+    expect(lists.getByText("other app", { selector: "a" }).getAttribute("href")).toBe("/cost#project=other+app&range=7&source=claude&auto=1");
+    const all = lists.getByRole("link", { name: "Open in Cost · last 7 days" });
+    expect(all.getAttribute("href")).toBe("/cost#range=7&source=claude&auto=1");
+    expect(all.title).toContain("nearest preset");
+    expect(lists.queryByText("claude-opus-5-5", { selector: "a" })).toBeNull(); // models are not links
+  });
+
+  it("says on each project link that its range is the nearest preset", async () => {
+    show(only({ ...claude, used }));
+    await lede();
+    const link = card(claude).getByRole("link", { name: "ai-ledger in Cost, last 7 days" });
+    expect(link.textContent).toBe("ai-ledger");
+    expect(link.title).toBe("Open ai-ledger in Cost: last 7 days, the nearest preset to this window's start (Cost has no custom ranges)");
+    expect(card(claude).getByRole("link", { name: "Open in Cost · last 7 days" }).title).toBe(
+      "Open in Cost: last 7 days, the nearest preset to this window's start (Cost has no custom ranges)");
+  });
+
+  it("goes to Cost without a page reload", async () => {
+    show(only({ ...claude, used }));
+    await lede();
+    await userEvent.click(card(claude).getByText("ai-ledger", { selector: "a" }));
+    expect(location.pathname + location.hash).toBe("/cost#project=ai-ledger&range=7&source=claude&auto=1");
+  });
+
+  it("reads all time for a window that began more than 90 days ago, and takes the window's provider as the source", async () => {
+    show(only({ ...codex, start: "2026-06-01T00:00:00.000Z", used }));
+    await lede();
+    expect(card(codex).getByRole("link", { name: "Open in Cost · all time" }).getAttribute("href")).toBe("/cost#range=0&source=codex&auto=1");
+  });
+
+  it("has no drawer when nothing was counted", async () => {
+    show(only({ ...claude, used: null }));
+    await lede();
+    expect(document.querySelector(".lim-used")).toBeNull();
+  });
+
+  it("shows no points for a window that is not calibrated", async () => {
+    const bare = { ...used, projects: used.projects.map(p => ({ ...p, points: null })), models: used.models.map(m => ({ ...m, points: null })) };
+    show(only({ ...claude, used: bare }));
+    await lede();
+    expect(document.querySelector(".lim-used")!.textContent).not.toContain("points");
+  });
+});

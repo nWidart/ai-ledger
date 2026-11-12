@@ -1,7 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { LimitWindow, LimitsPayload } from "../../api";
 import limits from "../../__fixtures__/limits";
-import { caption, hasScenario, nearestPoint, pace, readPoints, readText, recentText, tipPlace, whenDay } from "./limits";
+import { caption, hasScenario, nearestPoint, pace, readPoints, readText, recentText, tipPlace, usedHint, usedHref, usedRange, usedRangeName, whenDay } from "./limits";
 
 const claude = (limits as LimitsPayload).windows[0]!;
 const win = (over: Partial<LimitWindow>): LimitWindow => ({ ...claude, ...over });
@@ -155,5 +155,58 @@ describe("a percent at the reset never reads 100 unless it is 100", () => {
     expect(verdict(99.9)).toBe("behind pace: about 1% would go unused");
     expect(verdict(66.4)).toBe("behind pace: about 34% would go unused");
     expect(verdict(100)).toBe("behind pace: about 0% would go unused");
+  });
+});
+
+describe("what used this window", () => {
+  const now = "2026-11-06T12:00:00.000Z", zone = process.env.TZ;
+  // The window's start at the beginning of the date that makes it `dates` local dates through today, inclusive.
+  const began = (dates: number) => win({ start: new Date(Date.UTC(2026, 10, 6 - (dates - 1))).toISOString() });
+  beforeAll(() => { process.env.TZ = "UTC"; });
+  afterAll(() => { if (zone === undefined) delete process.env.TZ; else process.env.TZ = zone; });
+
+  it("picks the smallest range preset that covers every date from the window's start", () => {
+    expect([1, 7].map(n => usedRange(began(n), now))).toEqual([7, 7]);
+    expect([8, 14].map(n => usedRange(began(n), now))).toEqual([14, 14]);
+    expect([15, 30].map(n => usedRange(began(n), now))).toEqual([30, 30]);
+    expect([31, 90].map(n => usedRange(began(n), now))).toEqual([90, 90]);
+    expect([91, 400].map(n => usedRange(began(n), now))).toEqual([0, 0]);
+  });
+
+  it("counts calendar dates, as Cost's range does: 7 days and 0 hours ago starts a date Cost's 7 days leave out", () => {
+    // Cost's last 7 days begin at Oct 31 00:00: a window that began Oct 30 at noon is in 8 dates, so it needs 14.
+    expect(usedRange(win({ start: "2026-10-30T12:00:00.000Z" }), now)).toBe(14);
+    expect(usedRange(win({ start: "2026-10-30T23:59:00.000Z" }), now)).toBe(14);
+    expect(usedRange(win({ start: "2026-10-31T00:00:00.000Z" }), now)).toBe(7);
+    expect(usedRange(win({ start: "2026-11-05T23:00:00.000Z" }), now)).toBe(7); // an hour into yesterday
+  });
+
+  it("reads the dates in the reader's zone", () => {
+    process.env.TZ = "America/Los_Angeles";
+    try {
+      // Nov 5, 8 PM in Los Angeles; the window began Oct 30 at midnight there: 7 local dates, though 8 in UTC.
+      expect(usedRange(win({ start: "2026-10-30T07:00:00.000Z" }), "2026-11-06T04:00:00.000Z")).toBe(7);
+    } finally { process.env.TZ = "UTC"; }
+    expect(usedRange(win({ start: "2026-10-30T07:00:00.000Z" }), "2026-11-06T04:00:00.000Z")).toBe(14);
+  });
+
+  it("names the range as the nearest preset", () => {
+    expect(usedRangeName(7)).toBe("last 7 days");
+    expect(usedRangeName(0)).toBe("all time");
+  });
+
+  it("links to Cost with the project, the range, the window's source and automated sessions, which the drawer counts", () => {
+    const w = win({ provider: "codex", start: began(10).start });
+    expect(usedHref(w, now, "ai-ledger")).toBe("/cost#project=ai-ledger&range=14&source=codex&auto=1");
+    expect(usedHref(w, now)).toBe("/cost#range=14&source=codex&auto=1");
+    expect(usedHref(win({ provider: "claude", start: began(200).start }), now, "a b&c")).toBe("/cost#project=a+b%26c&range=0&source=claude&auto=1");
+  });
+
+  it("hints with the top project and its share", () => {
+    const row = { cost: 5, points: null };
+    expect(usedHint({ total: 10, projects: [{ project: "ai-ledger", share: 0.54, ...row }], models: [] })).toBe("ai-ledger 54%");
+    expect(usedHint({ total: 10, projects: [{ project: "tiny", share: 0.001, ...row }], models: [] })).toBe("tiny <1%");
+    expect(usedHint({ total: 10000, projects: [{ project: "tiny", share: 0.0001, ...row }], models: [] })).toBe("tiny <1%"); // the payload's smallest share
+    expect(usedHint({ total: 10, projects: [], models: [{ model: "m", share: 1, ...row }] })).toBeNull(); // no project to name
   });
 });
