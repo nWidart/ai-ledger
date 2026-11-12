@@ -275,6 +275,10 @@ export interface LimitsPayload {
 // Insights (/api/insights, insights.py payload): Claude Code's /insights facets, a model's judgment of each analysed session.
 export interface FacetCount { name: string; n: number }
 export interface FacetTally extends FacetCount { sessions: number }
+/** A session's figures counted by /insights from the transcript (session meta); a measurement, not a judgment. null: not written. */
+export interface SessionFigures {
+  duration_minutes: number | null; lines_added: number | null; lines_removed: number | null; files_modified: number | null; git_pushes: number | null;
+}
 export interface InsightSession {
   session_id: string; project: string; start: Ts | null; outcome: string | null; helpfulness: string | null; session_type: string | null;
   brief_summary: string | null; friction_detail: string | null;
@@ -284,6 +288,8 @@ export interface InsightSession {
   friction: string[]; goals: string[]; satisfaction: string[];
   /** false: the facet's session has no transcript in the store, so it has no session sheet. */
   in_store: boolean;
+  /** Counted by /insights; null when the session has no session-meta row. */
+  meta: SessionFigures | null;
 }
 export interface InsightsPayload {
   coverage: {
@@ -315,6 +321,15 @@ export interface InsightsPayload {
   trend: { week: string; n: number; achieved: number }[];
   /** Newest first, at most 200; truncated when there were more. */
   sessions: InsightSession[]; truncated: boolean;
+  /** The view's session figures, counted by /insights from each transcript (not model-judged), for Claude Code sessions with a
+   *  session-meta row, which can be more than have a facet. Sums take a missing figure as 0; the medians are null when no row
+   *  has the value, and the response time is the median of the session medians. Zero sessions for Codex. */
+  meta: {
+    sessions: number; lines_added: number; lines_removed: number; files_modified: number; git_pushes: number;
+    duration_p50_min: number | null; response_p50_s: number | null;
+    /** Every language, most counted first: its summed count and the sessions that named it. */
+    languages: { name: string; n: number; sessions: number }[];
+  };
 }
 
 // Live (/api/live, /api/live/session, live.py payloads): running sessions from the agent's side. Prompt, reply and

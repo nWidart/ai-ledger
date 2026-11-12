@@ -585,5 +585,137 @@ class TrendTest(InsightsCase):
         self.assertEqual(self.trend(source="codex"), [])
 
 
+class SessionMetaTest(InsightsCase):
+    """payload meta (the view's session figures) and each listed session's meta. Session meta is counted from the transcript,
+    for more sessions than have a facet. Only the files a test adds are ingested."""
+
+    def setUp(self):
+        super().setUp()
+        for sub in ("facets", "session-meta"):
+            shutil.rmtree(os.path.join(self.usage, sub), ignore_errors=True)
+
+    def add(self, i, path="/Users/example/Sites/demo-app", start="2026-11-03T09:00:00.000Z", times=(), facet_too=False, **over):
+        sid = f"0000dddd-0000-4000-8000-{i:012d}"
+        self.put("session-meta", sid + ".json", {**meta(sid, path, start, times), **over})
+        if facet_too:
+            self.put("facets", sid + ".json", facet(sid))
+        return sid
+
+    def figures(self, **kw):
+        return self.payload(**kw)["meta"]
+
+    def test_sums_treat_null_as_zero_and_count_every_row(self):
+        self.add(1, lines_added=100, lines_removed=10, files_modified=3, git_pushes=1)
+        self.add(2, lines_added=None, lines_removed=5, files_modified=None, git_pushes=2)
+        self.ingest()
+        got = self.figures()
+        self.assertEqual({k: got[k] for k in ("sessions", "lines_added", "lines_removed", "files_modified", "git_pushes")},
+                         dict(sessions=2, lines_added=100, lines_removed=15, files_modified=3, git_pushes=3))
+
+    def test_duration_median_is_over_rows_with_a_duration_and_averages_the_middle_pair(self):
+        for i, d in enumerate((10, 20, 30, 40)):
+            self.add(i, duration_minutes=d)
+        self.add(9, duration_minutes=None)
+        self.ingest()
+        self.assertEqual(self.figures()["duration_p50_min"], 25)
+        self.add(10, duration_minutes=100)
+        self.ingest()
+        self.assertEqual(self.figures()["duration_p50_min"], 30)
+
+    def test_response_time_is_the_median_of_the_session_medians(self):
+        self.add(1, times=[1, 2, 3, 100])  # 2.5
+        self.add(2, times=[10])  # 10
+        self.add(3, times=[])  # no median: left out, not counted as 0
+        self.ingest()
+        self.assertEqual(self.figures()["response_p50_s"], 6.25)
+
+    def test_medians_are_null_when_no_row_has_the_value(self):
+        self.add(1, duration_minutes=None, times=[])
+        self.ingest()
+        got = self.figures()
+        self.assertEqual((got["sessions"], got["duration_p50_min"], got["response_p50_s"]), (1, None, None))
+
+    def test_languages_are_summed_most_counted_first_ties_by_name(self):
+        self.add(1, languages=dict(Python=5, TypeScript=2, Go=2))
+        self.add(2, languages=dict(Python=1, TypeScript=3, Rust=0, Zig="x", Bad=-1))
+        self.add(3, languages={})
+        self.ingest()
+        self.assertEqual(self.figures()["languages"], [dict(name="Python", n=6, sessions=2), dict(name="TypeScript", n=5, sessions=2),
+                                                       dict(name="Go", n=2, sessions=1)])
+
+    def test_malformed_languages_text_is_skipped_without_failing_the_payload(self):
+        a, b, c, d = (self.add(i, languages=dict(Python=2), lines_added=7) for i in range(4))
+        self.ingest()
+        for sid, text in ((b, "not json"), (c, "[1, 2]"), (d, '{"Go": "many", "Rust": true}')):
+            self.con.execute("UPDATE session_meta SET languages = ? WHERE session_id = ?", [text, sid])
+        got = self.figures()
+        self.assertEqual((got["sessions"], got["lines_added"], got["languages"]), (4, 28, [dict(name="Python", n=2, sessions=1)]))
+
+    def test_a_meta_row_without_a_facet_counts_and_a_facet_without_meta_does_not(self):
+        self.add(1)
+        sid = self.add(2, facet_too=True)
+        self.put("facets", "0000dddd-0000-4000-8000-000000000003.json", facet("0000dddd-0000-4000-8000-000000000003"))
+        self.ingest()
+        d = self.payload()
+        self.assertEqual((d["coverage"]["facets"], d["meta"]["sessions"]), (2, 2))
+        self.assertEqual(self.figures(project="nope")["sessions"], 0)
+        self.assertIsNotNone(next(r for r in d["sessions"] if r["session_id"] == sid)["meta"])
+
+    def test_figures_show_in_a_view_with_no_facet(self):
+        self.add(1, lines_added=9)
+        self.ingest()
+        d = self.payload()
+        self.assertEqual((d["coverage"]["facets"], d["sessions"], d["meta"]["sessions"], d["meta"]["lines_added"]), (0, [], 1, 9))
+
+    def test_project_and_start_come_from_the_stored_session_else_the_meta(self):
+        stored = self.add(1, path="/Users/example/Sites/meta-says", start="2026-01-01T09:00:00.000Z", lines_added=1)
+        self.session(stored, "store-says", "2026-11-03 09:00:00")
+        self.add(2, path="/Users/example/Sites/orphan-app", start="2026-11-04T09:00:00.000Z", lines_added=10)
+        self.ingest()
+        self.assertEqual(self.figures(project="store-says")["lines_added"], 1)
+        self.assertEqual(self.figures(project="meta-says")["sessions"], 0)
+        self.assertEqual(self.figures(project="orphan-app")["lines_added"], 10)
+        self.assertEqual(self.figures(range_days=7)["sessions"], 2)  # the stored session started 3 Nov, not 1 Jan
+        self.assertEqual(self.figures(range_days=2)["lines_added"], 0)  # 2 days back from 6 Nov: only 5 and 6 Nov
+        self.assertEqual(self.figures(range_days=3)["lines_added"], 10)  # the orphan's start: 4 Nov
+
+    def test_automated_sessions_are_left_out_unless_asked_for(self):
+        sid = self.add(1, lines_added=1)
+        auto = metrics.AUTOMATED_PROJECTS[0]
+        self.session(sid, auto, "2026-11-03 09:00:00")
+        self.add(2, lines_added=10)
+        self.ingest()
+        self.assertEqual(self.figures()["lines_added"], 10)
+        self.assertEqual(self.figures(automated=True)["lines_added"], 11)
+        self.assertEqual(self.figures(project=auto)["lines_added"], 1)
+
+    def test_codex_source_and_a_store_without_meta_have_empty_figures(self):
+        empty = dict(sessions=0, lines_added=0, lines_removed=0, files_modified=0, git_pushes=0, duration_p50_min=None,
+                     response_p50_s=None, languages=[])
+        self.assertEqual(self.figures(), empty)
+        self.add(1)
+        self.ingest()
+        self.assertEqual(self.figures(source="codex"), empty)
+        self.assertEqual(self.figures(source="claude")["sessions"], 1)
+
+    def test_a_listed_session_carries_its_meta_or_null(self):
+        a = self.add(1, facet_too=True, duration_minutes=35, lines_added=120, lines_removed=30, files_modified=4, git_pushes=1)
+        self.put("facets", "0000dddd-0000-4000-8000-000000000002.json", facet("0000dddd-0000-4000-8000-000000000002"))
+        self.add(3, duration_minutes=None, lines_added=None)
+        self.ingest()
+        rows = {r["session_id"]: r["meta"] for r in self.payload()["sessions"]}
+        self.assertEqual(rows[a], dict(duration_minutes=35, lines_added=120, lines_removed=30, files_modified=4, git_pushes=1))
+        self.assertIsNone(rows["0000dddd-0000-4000-8000-000000000002"])
+        self.assertEqual(set(rows), {a, "0000dddd-0000-4000-8000-000000000002"})
+
+    def test_a_listed_orphan_keeps_its_meta_under_a_project_filter(self):
+        a = self.add(1, facet_too=True, path="/Users/example/Sites/orphan-app", lines_added=3)
+        self.ingest()
+        got = self.payload(project="orphan-app")
+        self.assertEqual([r["meta"]["lines_added"] for r in got["sessions"]], [3])
+        self.assertEqual(got["meta"]["sessions"], 1)
+        self.assertEqual(a, got["sessions"][0]["session_id"])
+
+
 if __name__ == "__main__":
     unittest.main()

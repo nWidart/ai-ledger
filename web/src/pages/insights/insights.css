@@ -97,3 +97,18 @@
 /* A pickable row's button has its own columns in Ledger.css; give it the same ones as the rows above (wider side figure). */
 .pg-insights .ledger li.pick .rowbtn { grid-template-columns: minmax(0, 13rem) minmax(40px, 1fr) 3.5rem 5.5rem; }
 @media (max-width: 520px) { .pg-insights .ledger li.pick .rowbtn { grid-template-columns: minmax(0, 1fr) 3.5rem 5.5rem; } }
+/* Session figures drawer: six counted figures in the vitals strip. */
+.pg-insights .vitals.figs { grid-template-columns: repeat(6, minmax(0, 1fr)); margin: 10px 0 4px; }
+@media (max-width: 900px) {
+  .pg-insights .vitals.figs { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .pg-insights .vitals.figs .vital:first-child { grid-column: auto; }
+  .pg-insights .vitals.figs .vital:nth-child(n) { padding-left: 16px; }
+  .pg-insights .vitals.figs .vital:nth-child(3n + 1) { padding-left: 0; }
+}
+@media (max-width: 520px) {
+  .pg-insights .vitals.figs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pg-insights .vitals.figs .vital:nth-child(n) { padding-left: 12px; }
+  .pg-insights .vitals.figs .vital:nth-child(odd) { padding-left: 0; }
+}
+/* A session card's measured figures: the last line, quiet and apart from the model's summary. */
+.pg-insights .scard .measured { margin: 6px 0 0; color: var(--text-muted); font-size: 12px; font-variant-numeric: tabular-nums; }

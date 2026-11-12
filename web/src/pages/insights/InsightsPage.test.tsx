@@ -78,7 +78,7 @@ describe("InsightsPage", () => {
     expect(within(screen.getByRole("heading", { level: 1 })).getByText("model-judged")).toBeTruthy();
     const headings = screen.getAllByRole("heading", { level: 2 });
     expect(headings.map(h => h.textContent)).toEqual(["Outcomes model-judged", "Friction categories model-judged", "Satisfaction and helpfulness model-judged",
-      "Analysed sessions model-judged", "Goals model-judged", "Session types model-judged", "Coverage", "How this works"]);
+      "Analysed sessions model-judged", "Goals model-judged", "Session types model-judged", "Session figures", "Coverage", "How this works"]);
     expect(within(section(/^Outcomes model/)).getByText(/judged by a model from the transcript/)).toBeTruthy();
   });
 
@@ -96,16 +96,17 @@ describe("InsightsPage", () => {
     expect(within(drawer("d-types")).getByRole("list").textContent).toBe("iterative refinement 1single task 1quick question 1");
   });
 
-  it("orders the page: vitals, outcomes and friction, satisfaction, sessions, then Goals, Session types and Coverage as closed drawers", async () => {
+  it("orders the page: vitals, outcomes and friction, satisfaction, sessions, then Goals, Session types, Session figures and Coverage as closed drawers", async () => {
     show(fixture);
     await lede();
     const wrap = document.querySelector(".pg-insights")!, at = (sel: string) => [...wrap.querySelectorAll("*")].indexOf(wrap.querySelector(sel)!);
-    const order = [".secidx", ".vitals", "#outcomes", "#friction", "#satisfaction", "#log", "#d-goals", "#d-types", "#d-coverage", "#d-how"].map(at);
+    const order = [".secidx", ".vitals", "#outcomes", "#friction", "#satisfaction", "#log", "#d-goals", "#d-types", "#d-figures", "#d-coverage", "#d-how"].map(at);
     expect(order.every(i => i >= 0)).toBe(true);
     expect(order).toEqual([...order].sort((a, b) => a - b));
     expect(document.querySelector("#outcomes")!.parentElement).toBe(document.querySelector("#friction")!.parentElement);
     expect(drawer("d-goals").open).toBe(false);
     expect(drawer("d-types").open).toBe(false);
+    expect(drawer("d-figures").open).toBe(false);
     expect(drawer("d-coverage").open).toBe(false);
     expect(drawer("d-how").open).toBe(false);
     for (const id of ["lede", "coverage", "friction", "outcomes", "log"]) expect(document.getElementById(id)).toBeTruthy();
@@ -115,7 +116,7 @@ describe("InsightsPage", () => {
     show(fixture);
     await lede();
     const nav = screen.getByRole("navigation", { name: "Page sections" });
-    expect(within(nav).getAllByRole("link").map(a => a.textContent)).toEqual(["Overview", "Outcomes", "Friction", "Satisfaction", "Sessions", "Goals", "Session types", "Coverage", "How this works"]);
+    expect(within(nav).getAllByRole("link").map(a => a.textContent)).toEqual(["Overview", "Outcomes", "Friction", "Satisfaction", "Sessions", "Goals", "Session types", "Session figures", "Coverage", "How this works"]);
     await userEvent.click(within(nav).getByRole("link", { name: "Session types" }));
     expect(drawer("d-types").open).toBe(true);
     expect(drawer("d-goals").open).toBe(false);
@@ -603,6 +604,120 @@ describe("InsightsPage", () => {
       await vi.waitFor(() => expect(screen.queryByRole("region", { name: /Analysed sessions/ })).toBeTruthy());
       expect((within(logOf()).getByLabelText("Sort") as HTMLSelectElement).value).toBe("oldest");
       expect(order()[0]).toBe("Synthetic: added a theme toggle to a demo app.");
+
+  describe("session figures", () => {
+    const figures = (over: Partial<InsightsPayload["meta"]> = {}): InsightsPayload => ({ ...fixture, meta: { ...fixture.meta, ...over } });
+    const stat = (d: HTMLElement, name: string) => within(d).getByText(name).parentElement!.textContent;
+
+    it("shows the counted figures in a closed drawer that is not model-judged, and says what they are", async () => {
+      show(fixture);
+      await lede();
+      const d = drawer("d-figures");
+      expect(d.open).toBe(false);
+      expect(within(d).getByRole("heading", { level: 2 }).textContent).toBe("Session figures");
+      expect(within(d).queryByText("model-judged")).toBeNull();
+      const hint = within(d).getByText(/Counted by/).textContent!;
+      expect(hint).toContain("/insights from each transcript for 3 sessions");
+      expect(hint).toContain("more sessions than were judged");
+      expect(hint).toContain("median of session medians");
+      expect(fixture.meta).toMatchObject({ sessions: 3, lines_added: 360, lines_removed: 90, files_modified: 12, git_pushes: 3 });
+      expect([["Lines added", "360Lines added"], ["Lines removed", "90Lines removed"], ["Files modified", "12Files modified"], ["Git pushes", "3Git pushes"],
+        ["Median session duration", "42mMedian session duration"], ["Median response time", "8sMedian response time"]]
+        .map(([l]) => stat(d, l!))).toEqual(["360Lines added", "90Lines removed", "12Files modified", "3Git pushes", "42mMedian session duration", "8sMedian response time"]);
+      expect([...d.querySelectorAll(".vital")].length).toBe(6);
+    });
+
+    it("says one session in the singular and shows a missing median as a dash", async () => {
+      show(figures({ sessions: 1, duration_p50_min: null, response_p50_s: null }));
+      await lede();
+      expect(within(drawer("d-figures")).getByText(/Counted by/).textContent).toContain("for 1 session,");
+      expect(stat(drawer("d-figures"), "Median session duration")).toBe("–Median session duration");
+      expect(stat(drawer("d-figures"), "Median response time")).toBe("–Median response time");
+    });
+
+    it("lists the languages with their count and sessions, the first 12 until asked for all", async () => {
+      show(fixture);
+      await lede();
+      expect(within(drawer("d-figures")).getByRole("heading", { level: 3 }).textContent).toBe("Languages");
+      expect(within(drawer("d-figures")).getAllByRole("listitem").map(li => li.textContent)).toEqual(["TypeScript123 sessions"]);
+    });
+
+    it("shows the first 12 languages until asked for all", async () => {
+      const languages = Array.from({ length: 15 }, (_, i) => ({ name: `Lang${i}`, n: 15 - i, sessions: 1 }));
+      show(figures({ languages }));
+      await lede();
+      const panel = drawer("d-figures");
+      expect(within(panel).getAllByRole("listitem").length).toBe(12);
+      await userEvent.click(within(panel).getByRole("button", { name: "Show all 15 languages" }));
+      expect(within(panel).getAllByRole("listitem").length).toBe(15);
+    });
+
+    it("says when no language was counted", async () => {
+      show(figures({ languages: [] }));
+      await lede();
+      expect(within(drawer("d-figures")).getByText("No languages counted in this view.")).toBeTruthy();
+    });
+
+    it("is not shown without a session-meta row", async () => {
+      show(figures({ sessions: 0 }));
+      await lede();
+      expect(document.getElementById("d-figures")).toBeNull();
+      expect(within(screen.getByRole("navigation", { name: "Page sections" })).queryByRole("link", { name: "Session figures" })).toBeNull();
+    });
+
+    it("is not shown for Codex, whatever the payload holds", async () => {
+      show({ ...none, meta: fixture.meta, coverage: { ...fixture.coverage, claude_sessions: 0, analysed: 0, not_analysed: 0, facets: 0, orphans: 0 } }, "#range=0&source=codex");
+      await lede();
+      expect(document.getElementById("d-figures")).toBeNull();
+    });
+
+    it("stays in a view with no analysed session, with its place in the index", async () => {
+      show({ ...none, meta: fixture.meta, coverage: { ...fixture.coverage, facets: 0, analysed: 0, not_analysed: 3 } }, "#project=nope");
+      await lede();
+      expect(drawer("d-figures").open).toBe(false);
+      expect(within(screen.getByRole("navigation", { name: "Page sections" })).getAllByRole("link").map(a => a.textContent)).toEqual(["Overview", "Session figures", "How this works"]);
+    });
+  });
+
+  describe("measured figures on a session card", () => {
+    const withMeta = (meta: InsightsPayload["sessions"][number]["meta"]): InsightsPayload => ({ ...fixture, sessions: fixture.sessions.map(s => ({ ...s, meta })) });
+    const lines = () => [...document.querySelectorAll(".scard .measured")] as HTMLElement[];
+    const FIG = { duration_minutes: 35, lines_added: 120, lines_removed: 30, files_modified: 4, git_pushes: 1 };
+
+    it("gives each card with meta one quiet line, apart from the summary and titled as counted", async () => {
+      show(withMeta(FIG));
+      await lede();
+      expect(lines().map(l => l.textContent)).toEqual(Array(3).fill("+120 −30 lines · 4 files · 35m · 1 push"));
+      const card = document.querySelector(".scard")!, line = lines()[0]!;
+      expect(line.title).toBe("Counted by /insights from the transcript");
+      expect(card.querySelector(".top")!.contains(line)).toBe(false);
+      expect(card.querySelector(".sum")!.contains(line)).toBe(false);
+      expect(line.textContent).not.toContain(card.querySelector(".sum")!.textContent!);
+    });
+
+    it("leaves out a part that is null or 0, and the line when nothing is left", async () => {
+      show(withMeta({ duration_minutes: null, lines_added: 120, lines_removed: 0, files_modified: 0, git_pushes: 3 }));
+      await lede();
+      expect(lines().map(l => l.textContent)).toEqual(Array(3).fill("+120 lines · 3 pushes"));
+    });
+
+    it("writes one removed-only line and one file in the singular", async () => {
+      show(withMeta({ duration_minutes: 0, lines_added: 0, lines_removed: 12, files_modified: 1, git_pushes: null }));
+      await lede();
+      expect(lines().map(l => l.textContent)).toEqual(Array(3).fill("−12 lines · 1 file"));
+    });
+
+    it("has no line when every part is null or 0", async () => {
+      show(withMeta({ duration_minutes: null, lines_added: null, lines_removed: 0, files_modified: 0, git_pushes: 0 }));
+      await lede();
+      expect(lines().length).toBe(0);
+    });
+
+    it("has no line for a session without a session-meta row", async () => {
+      show({ ...fixture, sessions: fixture.sessions.map((s, i) => ({ ...s, meta: i === 1 ? null : FIG })) });
+      await lede();
+      const cards = [...document.querySelectorAll(".scard")];
+      expect(cards.map(c => c.querySelector(".measured") != null)).toEqual([true, false, true]);
     });
   });
 

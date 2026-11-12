@@ -171,6 +171,13 @@ FACETS = """f AS (SELECT sf.*, coalesce(se.project, m.project, '(unknown)') AS p
   FROM session_facets sf LEFT JOIN sessions se USING (session_id) LEFT JOIN session_meta m USING (session_id))"""
 
 
+# Every session-meta row with the project and start time it filters by, as for FACETS. Written for more sessions than have a facet.
+METAS = """mr AS (SELECT m.session_id, m.duration_minutes, m.lines_added, m.lines_removed, m.files_modified, m.git_pushes, m.languages,
+    m.response_p50_s, coalesce(se.project, m.project, '(unknown)') AS project, 'claude' AS source, coalesce(se.first_ts, m.start_time) AS start
+  FROM session_meta m LEFT JOIN sessions se USING (session_id))"""
+META_COLUMNS = ("duration_minutes", "lines_added", "lines_removed", "files_modified", "git_pushes")
+
+
 def ordered(counts, known):
     """[{name, n}]: the known names in their order (zeros included), then any other name by count."""
     rest = sorted(((n, c) for n, c in counts.items() if n not in known), key=lambda x: (-x[1], x[0]))
@@ -202,6 +209,38 @@ def insight(cur, sid):
     return got[0] | session_names(names, sid)
 
 
+def language_tally(texts):
+    """[{name, n, sessions}] from the languages texts of session-meta rows ({language: count} as JSON): the summed counts and the
+    sessions naming each language, most counted first, ties by name. A text that is not a JSON object is skipped, and so is a count
+    that is not a positive integer."""
+    n, sessions = {}, {}
+    for text in texts:
+        try:
+            langs = json.loads(text)
+        except ValueError:
+            continue
+        for name, c in (langs.items() if isinstance(langs, dict) else ()):
+            if int_of(c) and c > 0:
+                n[name] = n.get(name, 0) + c
+                sessions[name] = sessions.get(name, 0) + 1
+    return [dict(name=k, n=n[k], sessions=sessions[k]) for k in sorted(n, key=lambda k: (-n[k], k))]
+
+
+def session_figures(cur, W, wp):
+    """The view's session meta, counted by /insights from each transcript: {sessions, lines_added, lines_removed, files_modified,
+    git_pushes, duration_p50_min, response_p50_s, languages}. W is the view filter over rows s of METAS, wp its parameters. sessions
+    counts the meta rows in the view, which can be more than the facets; sums take a missing figure as 0. duration_p50_min is the
+    median duration over rows that have one; response_p50_s the median of the per-session median response times over rows that
+    have one; both None without such a row. languages is every language, see language_tally."""
+    in_view = f"WITH {METAS}, mv AS (SELECT * FROM mr s WHERE {W})"
+    got = metrics.rows(cur, f"""{in_view} SELECT count(*) AS sessions, coalesce(sum(lines_added), 0)::BIGINT AS lines_added,
+        coalesce(sum(lines_removed), 0)::BIGINT AS lines_removed, coalesce(sum(files_modified), 0)::BIGINT AS files_modified,
+        coalesce(sum(git_pushes), 0)::BIGINT AS git_pushes, median(duration_minutes) AS duration_p50_min,
+        median(response_p50_s) AS response_p50_s FROM mv""", wp)[0]
+    got["languages"] = language_tally(r[0] for r in cur.execute(f"{in_view} SELECT languages FROM mv WHERE languages IS NOT NULL", wp).fetchall())
+    return got
+
+
 def run_groups(cur):
     """Every /insights run, oldest first, as [(session_id, file_mtime)]. /insights leaves no record of a run, so a run is a
     maximal group of stored facets whose file_mtime values have no gap over RUN_GAP between neighbours. Groups are formed over
@@ -230,7 +269,9 @@ def run_sizes(groups):
 
 
 def payload(cur, project="", range_days=0, source="", automated=False, today=None, usage_dir=None):
-    """The JSON the Insights page reads. Only Claude Code sessions have facets: source codex returns coverage alone.
+    """The JSON the Insights page reads. Only Claude Code sessions have facets: source codex returns coverage alone, and empty
+    session figures. meta holds the view's session figures (see session_figures; median response time is the median of session
+    medians), and each listed session's meta its own figures, or None without a session-meta row.
     Coverage counts leave automated sessions out, whatever automated says. underlying_goal and primary_success stay in the
     store. Raises ValueError for an unknown source or a negative range."""
     today = today or metrics.local_today(cur)
@@ -267,7 +308,7 @@ def payload(cur, project="", range_days=0, source="", automated=False, today=Non
     projects = metrics.project_list(cur, automated)
     projects += [p for p in facet_projects if p not in projects]
     out = dict(coverage=coverage, projects=projects, outcomes=[], helpfulness=[], session_types=[], satisfaction=[], friction=[],
-               goals=[], trend=[], sessions=[], truncated=False)
+               goals=[], trend=[], sessions=[], truncated=False, meta=session_figures(cur, W, wp))
     if not facets:
         return out
     by = lambda col: dict(cur.execute(f"{in_view} SELECT {col}, count(*) FROM v WHERE {col} IS NOT NULL GROUP BY 1", wp).fetchall())
@@ -283,8 +324,11 @@ def payload(cur, project="", range_days=0, source="", automated=False, today=Non
             ORDER BY c.session_id, c.kind, c.n DESC, c.name""", wp).fetchall())
     sess = metrics.rows(cur, f"""{in_view} SELECT session_id, project, start, outcome, helpfulness, session_type, brief_summary,
         friction_detail, in_store FROM v ORDER BY start DESC NULLS LAST, session_id LIMIT ?""", wp + [SESSION_ROWS + 1])
+    ids = [r["session_id"] for r in sess[:SESSION_ROWS]]
+    own = {r[0]: dict(zip(META_COLUMNS, r[1:])) for r in cur.execute(f"SELECT session_id, {', '.join(META_COLUMNS)} FROM session_meta "
+                                                                     f"WHERE session_id IN ({','.join('?' * len(ids))})", ids).fetchall()}
     for r in sess[:SESSION_ROWS]:
         r["start"] = metrics.iso(r["start"])
-        r.update(session_names(names, r["session_id"]))
+        r.update(session_names(names, r["session_id"]), meta=own.get(r["session_id"]))
     out.update(sessions=metrics.with_titles(cur, sess[:SESSION_ROWS]), truncated=len(sess) > SESSION_ROWS)
     return out
