@@ -235,7 +235,7 @@ describe("Nav", () => {
 
   describe("Limits badge", () => {
     const alert = (over: Partial<LimitsAlert>): LimitsAlert => ({ kind: "at_limit", provider: "codex", provider_label: "Codex", label: "weekly", current: 100,
-      at: "2026-11-14T12:00:00.000Z", resets_at: "2026-11-14T12:00:00.000Z", count: 1, ...over });
+      at: "2026-11-14T12:00:00.000Z", resets_at: "2026-11-14T12:00:00.000Z", measured: true, count: 1, ...over });
     const badge = () => document.querySelector<HTMLElement>(".appnav-badge");
     const tab = (name: string | RegExp) => screen.getByRole("link", { name });
 
@@ -248,14 +248,27 @@ describe("Nav", () => {
       history.replaceState(null, "", "/usage");
       render(<Nav />);
       const link = await screen.findByRole("link", { name: `Limits: ${sentence}` });
-      expect(link.getAttribute("title")).toBe(sentence);
-      expect(link.getAttribute("title")).toBe(alertText(alert(over)));
+      expect(sentence).toBe(alertText(alert(over)));
+      // Exposed once: the sentence is the link's name (its content), the link has no title to read again as a description,
+      // and the dot, hidden from assistive tech, carries the hover text.
+      expect(link.hasAttribute("title")).toBe(false);
+      expect(link.hasAttribute("aria-label")).toBe(false);
+      expect(link.textContent).toBe(`Limits: ${sentence}`);
+      expect(link.textContent!.split(sentence).length - 1).toBe(1);
+      expect(badge()?.getAttribute("title")).toBe(sentence);
       expect(badge()?.dataset.tone).toBe(tone);
       expect(link.contains(badge())).toBe(true);
       expect(badge()?.textContent).toBe(""); // a dot, not a number
       expect(badge()?.getAttribute("aria-hidden")).toBe("true");
       expect(document.querySelectorAll(".appnav-badge").length).toBe(1);
-      expect(tab("Activity").getAttribute("title")).toBeNull();
+      expect(tab("Activity").textContent).toBe("Activity");
+    });
+
+    it("marks an estimate in the name and the hover text", async () => {
+      vi.stubGlobal("fetch", vi.fn(() => json({ ...status, limits_alert: alert({ kind: "high", current: 95, measured: false }) })));
+      render(<Nav />);
+      const link = await screen.findByRole("link", { name: "Limits: Codex weekly is at an estimated 95%" });
+      expect(link.querySelector(".appnav-badge")?.getAttribute("title")).toBe("Codex weekly is at an estimated 95%");
     });
 
     it("says how many more windows are in alert", async () => {
@@ -272,7 +285,7 @@ describe("Nav", () => {
       f.mockImplementation(() => json({ ...status, limits_alert: null }));
       await act(async () => { await pollStatus(); });
       expect(badge()).toBeNull();
-      expect(tab("Limits").getAttribute("title")).toBeNull();
+      expect(tab("Limits").textContent).toBe("Limits");
       f.mockImplementation(() => json({ ...status, limits_alert: alert({}) }));
       await act(async () => { await pollStatus(); });
       expect(badge()).not.toBeNull();
@@ -290,7 +303,7 @@ describe("Nav", () => {
       expect(badge()).toBeNull();
       f.mockImplementation(() => json({ ...status, limits_alert: alert({ kind: "high", current: 91 }) }));
       await act(async () => { await pollStatus(); });
-      expect([badge()?.dataset.tone, tab(/^Limits/).getAttribute("title")]).toEqual(["warning", "Codex weekly is at 91%"]);
+      expect([badge()?.dataset.tone, badge()?.getAttribute("title")]).toEqual(["warning", "Codex weekly is at 91%"]);
       f.mockImplementation(() => json({ ...status, limits_alert: alert({ kind: "at_limit" }) }));
       await act(async () => { await pollStatus(); });
       expect(badge()?.dataset.tone).toBe("critical");

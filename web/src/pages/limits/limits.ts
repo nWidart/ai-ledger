@@ -7,12 +7,14 @@ import { formatHash, RANGES, sourceOf, type Range } from "../../hash";
 export const whenDay = (ts: string | null | undefined): string =>
   ts ? new Date(ts).toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "–";
 
-/** The nav's Limits alert as one sentence, which is the tab's name and title: "Claude Code weekly is at its limit until Sat, Nov 7,
- *  2:00 PM", "… is forecast to run out …" or "… is at 92%", and " (and 2 more)" when other windows are in alert too. */
+/** The nav's Limits alert as one sentence, which is the tab's accessible name after "Limits: " and the dot's hover text: "Claude Code
+ *  weekly is at its limit until Sat, Nov 7, 2:00 PM", "… is forecast to run out …" or "… is at 92%", and " (and 2 more)" when other
+ *  windows are in alert too. A figure that is an estimate, not a reading, says so ("is estimated to be at its limit", "is at an
+ *  estimated 92%"); a forecast is one already. */
 export function alertText(a: LimitsAlert): string {
   const name = windowName(a);
-  const what = a.kind === "at_limit" ? `is at its limit until ${whenDay(a.at)}`
-    : a.kind === "runs_out" ? `is forecast to run out ${whenDay(a.at)}` : `is at ${num(a.current)}%`;
+  const what = a.kind === "at_limit" ? `is ${a.measured ? "" : "estimated to be "}at its limit until ${whenDay(a.at)}`
+    : a.kind === "runs_out" ? `is forecast to run out ${whenDay(a.at)}` : `is at ${a.measured ? "" : "an estimated "}${num(a.current)}%`;
   return `${name} ${what}${a.count > 1 ? ` (and ${a.count - 1} more)` : ""}`;
 }
 

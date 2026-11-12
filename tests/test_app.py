@@ -522,7 +522,7 @@ class LimitsAlertTest(unittest.TestCase):
 
     def window(self, **kw):
         return dict(dict(provider="codex", provider_label="Codex", label="weekly", current=95.0, at_limit=False, forecast=None,
-                         resets_at="2026-11-14T12:00:00"), **kw)
+                         resets_at="2026-11-14T12:00:00", measured=True), **kw)
 
     def test_none_before_a_cycle(self):
         self.assertIsNone(self.app.limits_alert)
@@ -532,7 +532,7 @@ class LimitsAlertTest(unittest.TestCase):
         with mock.patch.object(limits, "payload", return_value=dict(windows=[self.window()])) as payload:
             self.app.refresh_alert()
         self.assertEqual(self.app.status()["limits_alert"], dict(kind="high", provider="codex", provider_label="Codex", label="weekly",
-                                                                  current=95.0, at="2026-11-14T12:00:00", resets_at="2026-11-14T12:00:00", count=1))
+                                                                  current=95.0, at="2026-11-14T12:00:00", resets_at="2026-11-14T12:00:00", measured=True, count=1))
         args, kwargs = payload.call_args  # the /api/limits route's call, with no filters
         self.assertEqual((args[1:], kwargs), ((), dict(polls={})))
 

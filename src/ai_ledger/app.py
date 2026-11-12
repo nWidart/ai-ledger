@@ -140,7 +140,9 @@ class App:
     def refresh_alert(self):
         """Work out the nav's limits alert, as the Limits page's payload gives it with no filters. Run once per full cycle,
         not per /api/status request: the payload scans the whole request history and every open page polls status. A read, as
-        the routes do it: no store lock. Never raises: whatever the payload does, the alert is None and ingest goes on."""
+        the routes do it: no store lock. It runs in the loop thread, so it delays the next fast pass of a Live page by the
+        payload's duration (about 0.14 s on a store of 90,000 requests, once per INTERVAL); if a store ever makes it slow, the
+        remedy is a thread of its own. Never raises: whatever the payload does, the alert is None and ingest goes on."""
         try:
             payload = limits.payload(self.con.cursor(), polls={p.name: dict(p.state) for p in self.pollers})
             self.limits_alert = limits.alert_of(payload["windows"])

@@ -336,11 +336,18 @@ describe("past-window bars", () => {
 
 describe("alertText", () => {
   const alert = (over: Partial<LimitsAlert>): LimitsAlert => ({ kind: "at_limit", provider: "claude", provider_label: "Claude Code", label: "weekly", current: 100,
-    at: "2026-11-14T12:00:00.000Z", resets_at: "2026-11-14T12:00:00.000Z", count: 1, ...over });
+    at: "2026-11-14T12:00:00.000Z", resets_at: "2026-11-14T12:00:00.000Z", measured: true, count: 1, ...over });
   it("says what each kind is, with the time in the page's format", () => {
     expect(alertText(alert({}))).toBe(`Claude Code weekly is at its limit until ${whenDay("2026-11-14T12:00:00.000Z")}`);
     expect(alertText(alert({ kind: "runs_out", current: 64, at: "2026-11-13T08:00:00.000Z" }))).toBe(`Claude Code weekly is forecast to run out ${whenDay("2026-11-13T08:00:00.000Z")}`);
     expect(alertText(alert({ kind: "high", provider_label: "Codex", label: "5-hour", current: 93.4 }))).toBe("Codex 5-hour is at 93%");
+  });
+  it("says when the figure is an estimate, not a reading", () => {
+    expect(alertText(alert({ measured: false }))).toBe(`Claude Code weekly is estimated to be at its limit until ${whenDay("2026-11-14T12:00:00.000Z")}`);
+    expect(alertText(alert({ kind: "high", current: 93.4, measured: false }))).toBe("Claude Code weekly is at an estimated 93%");
+    expect(alertText(alert({ kind: "high", current: 93.4, measured: false, count: 2 }))).toBe("Claude Code weekly is at an estimated 93% (and 1 more)");
+    // a forecast is an estimate already
+    expect(alertText(alert({ kind: "runs_out", at: "2026-11-13T08:00:00.000Z", measured: false }))).toBe(alertText(alert({ kind: "runs_out", at: "2026-11-13T08:00:00.000Z" })));
   });
   it("counts the other windows in alert", () => {
     expect(alertText(alert({ kind: "high", current: 91, count: 2 }))).toBe("Claude Code weekly is at 91% (and 1 more)");

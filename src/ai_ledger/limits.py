@@ -733,7 +733,8 @@ def alert_of(windows):
     """The one alert the nav shows, from the open windows' rows, or None when no window is in alert. A window is in alert
     when it is at its limit, is forecast to reach 100% before it resets, or is at ALERT_PERCENT or more used. The alert is
     the worst state any window is in: at_limit (the window that resets last, as binding_of picks it), else runs_out (the
-    soonest), else high (the fullest). count is every open window in any of the three states."""
+    soonest), else high (the fullest). measured is that window's own flag, as the rows carry it once freshness() has cleared it
+    for a provider whose reading is old: take the rows from a finished payload. count is every open window in any of the three states."""
     count = sum(1 for w in windows if w["at_limit"] or (w["forecast"] and w["forecast"]["hits_at"])
                 or (w["current"] is not None and w["current"] >= ALERT_PERCENT))
     if (w := last_to_reset(windows)):
@@ -746,7 +747,7 @@ def alert_of(windows):
     else:
         return None
     return dict(kind=kind, provider=w["provider"], provider_label=w["provider_label"], label=w["label"], current=w["current"],
-                at=at, resets_at=w["resets_at"], count=count)
+                at=at, resets_at=w["resets_at"], measured=w["measured"], count=count)
 
 
 def suggestion_of(windows):

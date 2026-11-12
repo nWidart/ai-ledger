@@ -320,12 +320,16 @@ The app SHALL work out the limits alert after each full ingest cycle (the one th
 - **WHEN** the app has just started
 - **THEN** `/api/status` has `limits_alert` null
 
+#### Scenario: A slow computation
+- **WHEN** working the alert out takes some time
+- **THEN** it runs in the ingest loop's thread, so the next fast pass of a Live page waits that long; it does not run per status request
+
 #### Scenario: A failing computation
 - **WHEN** the Limits payload raises during a cycle
 - **THEN** `limits_alert` is null, the next cycle ingests as usual, and the log names the exception's type and not its message
 
 ### Requirement: Show the limits alert on the Limits tab
-The shared navigation SHALL show a small dot on the Limits tab while the latest status it has carries a limits alert, on every page, the Limits page included: in the critical color for `at_limit` and `runs_out`, in the warning color for `high`. The dot SHALL NOT be a number, SHALL NOT change the size or place of any tab or the navigation's wrapping, and SHALL clear 3:1 contrast against the navigation in both themes. The Limits tab's accessible name SHALL be "Limits: " and a sentence, and its title SHALL be that sentence: "<provider> <label> is at its limit until <time>", "<provider> <label> is forecast to run out <time>" or "<provider> <label> is at <N>%", with " (and <count − 1> more)" appended when more than one window is in alert, and the time in the format of the Limits page. A status with no alert, or from an app that sends none, SHALL show no dot and leave the tab's name "Limits" with no title. The dot SHALL follow the navigation's status poll and a manual refresh's answer, with no page reload and no poll of its own, and an app that does not answer SHALL leave it as it was. The app SHALL NOT send a browser notification.
+The shared navigation SHALL show a small dot on the Limits tab while the latest status it has carries a limits alert, on every page, the Limits page included: in the critical color for `at_limit` and `runs_out`, in the warning color for `high`. The dot SHALL NOT be a number, SHALL NOT change the size or place of any tab or the navigation's wrapping, and SHALL clear 3:1 contrast against the navigation in both themes. The Limits tab's accessible name SHALL be "Limits: " and a sentence, and the dot SHALL hold that sentence as its title, hidden from assistive technology, so that it is exposed once: the tab itself has no title. The sentence SHALL be "<provider> <label> is at its limit until <time>", "<provider> <label> is forecast to run out <time>" or "<provider> <label> is at <N>%", with " (and <count − 1> more)" appended when more than one window is in alert, and the time in the format of the Limits page. A figure that is not measured SHALL say so: "<provider> <label> is estimated to be at its limit until <time>" and "<provider> <label> is at an estimated <N>%"; a forecast reads the same either way. A status with no alert, or from an app that sends none, SHALL show no dot and leave the tab's name "Limits" with no title. The dot SHALL follow the navigation's status poll and a manual refresh's answer, with no page reload and no poll of its own, and an app that does not answer SHALL leave it as it was. The app SHALL NOT send a browser notification.
 
 #### Scenario: At its limit
 - **WHEN** the status says Codex weekly is at its limit until Saturday 12:00
@@ -334,6 +338,10 @@ The shared navigation SHALL show a small dot on the Limits tab while the latest 
 #### Scenario: Nearly full
 - **WHEN** the status says Codex weekly is at 92% and no window is at its limit or forecast to run out
 - **THEN** the Limits tab has a warning dot, with the title "Codex weekly is at 92%"
+
+#### Scenario: An estimate
+- **WHEN** the status says the alert's window is not measured, and it is at its limit or at 93%
+- **THEN** the tab is named "Limits: Codex weekly is estimated to be at its limit until …" or "Limits: Codex weekly is at an estimated 93%"
 
 #### Scenario: More windows
 - **WHEN** three windows are in alert

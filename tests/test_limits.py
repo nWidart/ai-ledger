@@ -751,6 +751,24 @@ class PayloadTest(AnalysisCase):
         self.assertFalse(codex(self.NOW + timedelta(hours=2))["measured"])
 
 
+class AlertPayloadTest(AnalysisCase):
+    """The alert is taken from the payload's windows after freshness() has cleared `measured` for a stale provider."""
+    NOW = datetime(2026, 11, 6, 12, 0)
+
+    def setUp(self):
+        super().setUp()
+        busy_days(self, "codex", "gpt-6-astra", 30, self.NOW, 0.01)
+        self.snap("codex", "codex_300", self.NOW - timedelta(minutes=30), 100, resets=self.NOW + timedelta(hours=3), minutes=300, plan="plus")
+
+    def test_a_fresh_reading_is_measured(self):
+        alert = limits.alert_of(self.payload(self.NOW)["windows"])
+        self.assertEqual((alert["kind"], alert["provider"], alert["measured"]), ("at_limit", "codex", True))
+
+    def test_an_old_reading_is_not(self):
+        alert = limits.alert_of(self.payload(self.NOW + timedelta(hours=2))["windows"])  # Codex is not polled: an hour-old reading no longer measures now
+        self.assertEqual((alert["kind"], alert["provider"], alert["measured"]), ("at_limit", "codex", False))
+
+
 class UsageExtrasPayloadTest(AnalysisCase):
     """The scoped limit's share of the weekly allowance and the breakdown by surface, from the newest stored poll."""
     NOW = datetime(2026, 11, 6, 12, 0)
@@ -1246,10 +1264,10 @@ class PageFixtureTest(AnalysisCase):
 class AlertTest(unittest.TestCase):
     """alert_of: the one alert the nav shows, from the open windows' rows."""
 
-    def win(self, provider="claude", label="weekly", current=10.0, at_limit=False, hits=None, resets="2026-11-14T12:00:00"):
+    def win(self, provider="claude", label="weekly", current=10.0, at_limit=False, hits=None, resets="2026-11-14T12:00:00", measured=True):
         fc = dict(hits_at=hits) if hits is not None else None
         return dict(provider=provider, provider_label=limits.provider_label(provider), limit_id=label, scope="",
-                    label=label, current=current, at_limit=at_limit, forecast=fc, resets_at=resets)
+                    label=label, current=current, at_limit=at_limit, forecast=fc, resets_at=resets, measured=measured)
 
     def test_nothing_in_alert(self):
         self.assertIsNone(limits.alert_of([]))
@@ -1259,7 +1277,16 @@ class AlertTest(unittest.TestCase):
     def test_at_limit(self):
         got = limits.alert_of([self.win(current=100, at_limit=True)])
         self.assertEqual(got, dict(kind="at_limit", provider="claude", provider_label="Claude Code", label="weekly", current=100,
-                                   at="2026-11-14T12:00:00", resets_at="2026-11-14T12:00:00", count=1))
+                                   at="2026-11-14T12:00:00", resets_at="2026-11-14T12:00:00", measured=True, count=1))
+
+    def test_the_alert_carries_the_chosen_windows_measured_flag(self):
+        self.assertFalse(limits.alert_of([self.win(current=100, at_limit=True, measured=False)])["measured"])
+        self.assertFalse(limits.alert_of([self.win(current=95, measured=False)])["measured"])
+        self.assertTrue(limits.alert_of([self.win(current=95, measured=True)])["measured"])
+        # the flag of the window the alert names, not of another one in alert
+        ws = [self.win(label="est", current=100, at_limit=True, measured=False, resets="2026-11-15T00:00:00"),
+              self.win(label="read", current=100, at_limit=True, measured=True, resets="2026-11-14T00:00:00")]
+        self.assertEqual(limits.alert_of(ws)["measured"], False)
 
     def test_at_limit_without_a_reading_still_counts(self):
         self.assertEqual(limits.alert_of([self.win(current=None, at_limit=True)])["kind"], "at_limit")

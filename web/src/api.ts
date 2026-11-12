@@ -373,7 +373,9 @@ export interface IngestStats { files: number; lines: number; inserted: number; s
  *  resets (at_limit, high) or is forecast to run out (runs_out); count is every open window in alert. */
 export interface LimitsAlert {
   kind: "at_limit" | "runs_out" | "high"; provider: string; provider_label: string; label: string; current: number | null;
-  at: Ts; resets_at: Ts; count: number;
+  at: Ts; resets_at: Ts;
+  /** Whether the window's percent is a reading (false: an estimate, or a reading too old to measure now). */
+  measured: boolean; count: number;
 }
 export interface Status {
   ingesting: boolean; last_ingest: string | null; last_stats: IngestStats | null; error: string | null;

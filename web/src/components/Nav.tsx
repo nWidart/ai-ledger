@@ -71,12 +71,14 @@ export function Nav() {
         </svg><span className="appnav-word">AI <b>Ledger</b></span></span>
         <span className="appnav-tabs">
           {PAGES.map(p => {
-            // The Limits tab carries the alert: a dot, with the sentence as its name and title, so color is never the only signal.
-            const badge = p.path === "/limits" && st.alert && alert;
+            // The Limits tab carries the alert. Its sentence is part of the link's name, in a visually hidden span; the dot is hidden from
+            // assistive tech and holds the hover text, so the sentence is read once. Color is never the only signal.
+            const badge = p.path === "/limits" && alert;
             return (
-              <a key={p.path} href={p.path + shared} aria-current={p.path === path ? "page" : undefined} onClick={e => go(e, p.path)}
-                aria-label={badge ? `${p.label}: ${alert}` : undefined} title={badge || undefined}>
-                {p.label}{badge && <span className="appnav-badge" data-tone={st.alert!.kind === "high" ? "warning" : "critical"} aria-hidden="true" />}
+              <a key={p.path} href={p.path + shared} aria-current={p.path === path ? "page" : undefined} onClick={e => go(e, p.path)}>
+                {p.label}
+                {badge && <><span className="sr">: {badge}</span>
+                  <span className="appnav-badge" data-tone={st.alert!.kind === "high" ? "warning" : "critical"} title={badge} aria-hidden="true" /></>}
               </a>
             );
           })}
