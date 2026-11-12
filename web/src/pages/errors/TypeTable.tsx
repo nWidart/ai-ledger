@@ -1,5 +1,6 @@
 import { num as fmt } from "../../format";
 import { tableFocus, useErrors } from "./context";
+import { errorText } from "./marks";
 import { bucketLabel, compare, dur, emptyTypes, MIN_PCT_ERRORS, typeRows, yearLabel } from "./model";
 import { Spark } from "./Spark";
 
@@ -7,13 +8,13 @@ const LOST = "Time in retry loops: from each incident's first failure to its las
 /** The view's types by count. The swatch ties a row to its chart layer; types folded into Other get Other's grey. A badge only
  *  once a fix is applied or the type is muted (a muted type's row is dimmed, with the word as well). A click anywhere on a row opens or closes the type (the type button's clicks and keys bubble to it). */
 export function TypeTable() {
-  const { m, v, f, fixes, pick, update, after, muting, markError, dismissError } = useErrors(), rows = typeRows(m, v, f), { cmp } = compare(m, v, f);
+  const { m, v, f, fixes, pick, update, after, muting, markErrors, dismissError } = useErrors(), rows = typeRows(m, v, f), { cmp } = compare(m, v, f);
   // Rows mount again when the filters change, so their share bars grow in.
   const key = JSON.stringify([f.start, v.project, v.source, v.sub, v.noise, v.gran, v.at]);
   // An empty table has no type button: the chart takes the focus.
   const clear = () => { update({ at: null }, true); after(() => tableFocus()?.focus()); };
   // A mute's feedback is the open detail's own; once the type has left the view the detail is gone, so it shows here.
-  const pending = [...muting].filter(([c]) => c !== v.cat), failed = markError?.kind === "mute" && markError.cat !== v.cat ? markError : null;
+  const pending = [...muting].filter(([c]) => c !== v.cat), failed = markErrors.filter(e => e.kind === "mute" && e.cat !== v.cat);
   const name = (c: string) => m.cats[c]?.label ?? c;
   return (
     <section className="card types">
@@ -21,9 +22,9 @@ export function TypeTable() {
         <h2>Error types</h2>
         {v.at && <button type="button" className="chip bucket" id="atClr" aria-label={`Selected: ${bucketLabel(m, v)}. Show the whole range`} onClick={clear}>{bucketLabel(m, v)} <span aria-hidden="true">✕</span></button>}
       </div>
-      {(pending.length > 0 || failed) && <div id="muteNote">
+      {(pending.length > 0 || failed.length > 0) && <div id="muteNote">
         {pending.map(([c, on]) => <div key={c} className="muted" style={{ fontSize: 12, marginBottom: 8 }}>{on ? "Muting" : "Unmuting"} {name(c)}… Saving…</div>)}
-        {failed && <div className="outnote"><span className="fixerr">{failed.mute === false ? `Couldn't unmute ${name(failed.cat)}. It is still muted.` : `Couldn't mute ${name(failed.cat)}. It is back in the list.`}</span> <button type="button" id="muteDismiss" onClick={() => { dismissError(); after(() => tableFocus()?.focus()); }}>Dismiss</button></div>}
+        {failed.map(e => <div key={e.cat} className="outnote"><span className="fixerr">{e.unknown ? errorText(e, name(e.cat)) : e.mute === false ? `Couldn't unmute ${name(e.cat)}. It is still muted.` : `Couldn't mute ${name(e.cat)}. It is back in the list.`}</span> <button type="button" onClick={() => { dismissError(e.cat, "mute"); after(() => tableFocus()?.focus()); }}>Dismiss</button></div>)}
       </div>}
       <div className="hint muted" style={{ fontSize: 12, marginBottom: 8 }}>{v.at && <>Types, errors and share count only the selected {v.gran}; the trend and change stay range-wide. </>}Change: the type's error rate {cmp}, as in the summary; counts when either side has under {MIN_PCT_ERRORS} errors. Click a row for fixes and examples.</div>
       <div className="tscroll"><table>

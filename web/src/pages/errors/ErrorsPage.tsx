@@ -35,7 +35,7 @@ export function ErrorsPage() {
   const after = useCallback((fn: () => void) => { pending.current.push(fn); bump(); }, []);
   // Concise status for screen readers: counts, loading, failures. The detail itself isn't live.
   const say = useCallback((s: string) => { setLive(""); requestAnimationFrame(() => setLive(s)); }, []);
-  const { fixes, muted, saving, muting, setFix, setMuted, markError, dismissError } = useMarks(data, say, after);
+  const { fixes, muted, saving, muting, setFix, setMuted, markErrors, dismissError } = useMarks(data, say, after);
   const base = useMemo(() => (data ? makeModel(data) : undefined), [data]);
   const m = useMemo(() => base && withMuted(base, muted), [base, muted]); // the model with the types muted as of now
   // Project colors match Activity: the nav hands them out in the server's all-time order.
@@ -198,7 +198,7 @@ export function ErrorsPage() {
   }, [m, view.project]);
 
   const ctx: ErrorsCtx | null = m && f && vt ? {
-    m, v: view, f, vt, fixes, markError, dismissError, saving, muting, mode, q, pinned: pin.current.focus ? m.byId[pin.current.focus] : undefined, inSheet: toSheet, chartInView,
+    m, v: view, f, vt, fixes, markErrors, dismissError, saving, muting, mode, q, pinned: pin.current.focus ? m.byId[pin.current.focus] : undefined, inSheet: toSheet, chartInView,
     update, pick, select, setFix, setMuted, setMode, setQ, after, say, bump, ...sets,
   } : null;
   const detailLive = <div className="sr" id="detailLive" aria-live="polite">{live}</div>;

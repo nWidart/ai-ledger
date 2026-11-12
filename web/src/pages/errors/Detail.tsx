@@ -5,6 +5,7 @@ import { ProjectName } from "../../components/ProjectDot";
 import { useColors } from "../../colors";
 import { num as fmt } from "../../format";
 import { useErrors } from "./context";
+import { errorText } from "./marks";
 import { Example, Examples, Incident } from "./Examples";
 import { Spark } from "./Spark";
 import {
@@ -52,6 +53,7 @@ function WhereToStart() {
 
 function TypeDetail({ cat }: { cat: string }) {
   const x = useErrors(), { m, v, f, fixes, mode, q } = x, c = m.cats[cat]!, fixDay = fixes[cat], busy = x.saving.has(cat);
+  const fixErr = x.markErrors.find(e => e.cat === cat && e.kind === "fix"), muteErr = x.markErrors.find(e => e.cat === cat && e.kind === "mute");
   const isMuted = m.muted.has(cat), muteBusy = x.muting.has(cat), fixedNoise = NOISE.has(cat);
   const head = useRef<HTMLDivElement>(null), bar = useRef<HTMLDivElement>(null);
   // ofType: the type's errors in the bucket; base: those of the selected tool too, which every list and count of the detail uses.
@@ -141,7 +143,7 @@ function TypeDetail({ cat }: { cat: string }) {
         <span className="muted" style={{ fontSize: 12 }}>Applies to all projects</span>
         {/* No timeout: a write may wait for a long ingest. Say so, so a write that waits is never silent. */}
         {busy && <span className="muted" id="fixSaving" style={{ fontSize: 12 }}>Saving…</span>}
-        {x.markError?.cat === cat && x.markError.kind === "fix" && <span className="fixerr" id="fixErr">{x.markError.text}</span>}
+        {fixErr && <span className="fixerr" id="fixErr">{errorText(fixErr, c.label)}</span>}
       </div>
     </div>
     <div className="row mutebox" aria-busy={muteBusy || undefined}>
@@ -150,7 +152,7 @@ function TypeDetail({ cat }: { cat: string }) {
         {isMuted && <span className="chip muted-type">Muted</span>}
         <span className="muted" style={{ fontSize: 12 }}>Muted types count as noise: "Hide noise and muted" leaves them out of the rate.</span>
         {muteBusy && <span className="muted" id="muteSaving" style={{ fontSize: 12 }}>Saving…</span>}
-        {x.markError?.cat === cat && x.markError.kind === "mute" && <span className="fixerr" id="muteErr">{x.markError.text}</span>}
+        {muteErr && <span className="fixerr" id="muteErr">{errorText(muteErr, c.label)}</span>}
       </>}
     </div>
     {fixDay && <FixResult cat={cat} fixDay={fixDay} />}

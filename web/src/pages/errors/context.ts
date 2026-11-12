@@ -7,7 +7,9 @@ import type { FixError } from "./marks";
 import type { Mode } from "./view";
 
 export interface ErrorsCtx {
-  m: Model; v: View; f: Filtered; vt: ViewTypes; fixes: Fixes; markError: FixError | null;
+  m: Model; v: View; f: Filtered; vt: ViewTypes; fixes: Fixes;
+  /** The failed writes not yet dismissed or saved, one per type and kind. */
+  markErrors: FixError[];
   /** The types with a fix write on its way: they show "Saving…". */
   saving: ReadonlySet<string>;
   /** The types with a mute write on its way, each with its direction (true: muting). */
@@ -26,8 +28,8 @@ export interface ErrorsCtx {
   setFix: (cat: string, day: Day | null) => void;
   /** Mute a type or unmute it; leaves: it is open with "Hide noise and muted" on, so it leaves the view (the page says so). */
   setMuted: (cat: string, muted: boolean, leaves?: boolean) => void;
-  /** Drop the failure message of a write. */
-  dismissError: () => void;
+  /** Drop the failure message of a type's write of this kind. */
+  dismissError: (cat: string, kind: FixError["kind"]) => void;
   setMode: (m: Mode) => void;
   setQ: (q: string) => void;
   /** Run once after the next render (focus a control that render brings). */

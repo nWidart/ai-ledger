@@ -314,7 +314,8 @@ describe("ErrorsPage", () => {
     });
 
     // Finding 3: a rollback comes from what the store holds, never from a snapshot taken when the user clicked.
-    it("shows no marker after a Mark and an Undo that both fail", async () => {
+    // The resync shows the Undo's intent holds (no marker), so it counts as saved and clears the failed Mark's message.
+    it("shows no marker after a Mark and an Undo that both fail, and no message: the store has no marker, as the Undo asked", async () => {
       const api = serve({}, () => true), hold = api.hold();
       history.replaceState(null, "", hash);
       await page();
@@ -322,7 +323,9 @@ describe("ErrorsPage", () => {
       await undo();
       hold.release();
       await waitFor(() => expect(api.posts.length).toBe(2));
-      await waitFor(() => expect(document.getElementById("fixErr")).toBeTruthy());
+      await waitFor(() => expect(api.requests.filter(r => r === "resync")).toHaveLength(2));
+      await waitFor(() => expect(document.getElementById("detailLive")?.textContent).toBe("Fix marker removed."));
+      expect(document.getElementById("fixErr")).toBeNull();
       expect(screen.getByRole("button", { name: "Mark fix applied" })).toBeTruthy();
       expect(fixes()).toContain("0Fixes applied");
       expect(document.querySelector("#catBody .chip.fixed")).toBeNull();
@@ -558,7 +561,7 @@ describe("ErrorsPage", () => {
 
     it("does not send a failed Undo's marker away from the key", async () => {
       localStorage.setItem(KEY, JSON.stringify({ x: "2026-11-04" }));
-      const api = serve({}, () => true);
+      const api = serve({ x: "2026-11-04" }, () => true); // the store holds it, so a refused Undo did not happen
       api.failImport = true;
       history.replaceState(null, "", "/errors#range=30&cat=x");
       await page();
@@ -657,16 +660,121 @@ describe("ErrorsPage", () => {
       expect(document.getElementById("muteErr")).toBeNull();
     });
 
-    it("shows what the store holds when the mute fails after the store took it", async () => {
+    // A step whose answer is lost may have been taken: the resync decides, and a write the store took is a saved write.
+    it("counts a mute as saved when its answer is lost but the resync shows the store took it", async () => {
       const api = serve();
       api.payload = mixed;
       history.replaceState(null, "", "/errors#range=7&cat=git");
       await page();
       api.refuseMute = b => { api.muted.add(b.category); return true; }; // taken, but the answer lost
       await userEvent.click(muteBtn());
-      await waitFor(() => expect(document.getElementById("muteErr")).toBeTruthy());
+      await waitFor(() => expect(api.requests).toEqual(["mute git true", "resync"]));
+      await waitFor(() => expect(document.getElementById("detailLive")?.textContent).toBe("Type muted."));
+      expect(document.getElementById("muteErr")).toBeNull();
       expect(unmuteBtn()).toBeTruthy();
       expect(rowOf("git")!.querySelector(".chip.muted-type")).toBeTruthy();
+    });
+
+    it("keeps a type hidden and says nothing wrong when the mute under the toggle was taken but its answer lost", async () => {
+      const api = serve();
+      api.payload = mixed;
+      api.refuseMute = b => { api.muted.add(b.category); return true; };
+      history.replaceState(null, "", "/errors#range=7&noise=0&cat=git");
+      await page();
+      await userEvent.click(muteBtn());
+      await waitFor(() => expect(api.requests).toEqual(["mute git true", "resync"]));
+      await waitFor(() => expect(document.getElementById("detailLive")?.textContent).toBe("Type muted. It left the view: Hide noise and muted is on."));
+      expect(document.getElementById("muteNote")).toBeNull();
+      expect(rowOf("git")).toBeNull();
+      expect(document.getElementById("detailTitle")).toBeNull();
+    });
+
+    it("counts an unmute as saved when its answer is lost but the store took it", async () => {
+      const api = serve({}, null, ["git"]);
+      api.payload = mixed;
+      api.refuseMute = b => { api.muted.delete(b.category); return true; };
+      history.replaceState(null, "", "/errors#range=7&cat=git");
+      await page();
+      await userEvent.click(unmuteBtn());
+      await waitFor(() => expect(document.getElementById("detailLive")?.textContent).toBe("Type unmuted."));
+      expect(document.getElementById("muteErr")).toBeNull();
+      expect(muteBtn()).toBeTruthy();
+      expect(rowOf("git")!.querySelector(".chip.muted-type")).toBeNull();
+    });
+
+    it("counts a fix mark as saved when its answer is lost but the resync shows the store took it", async () => {
+      const api = serve();
+      history.replaceState(null, "", "/errors#range=7&cat=x");
+      await page();
+      api.fail(b => { api.decided.add(b.category); api.store[b.category] = b.day!; return true; });
+      await mark();
+      await waitFor(() => expect(api.requests).toEqual(["fix x 2026-11-05", "resync"]));
+      await waitFor(() => expect(document.getElementById("detailLive")?.textContent).toBe("Fix marked."));
+      expect(document.getElementById("fixErr")).toBeNull();
+      expect(screen.getByRole("button", { name: "Undo" })).toBeTruthy();
+    });
+
+    it("says nothing about the state when the resync fails too, in the detail and in the table note", async () => {
+      const api = serve();
+      api.payload = mixed;
+      api.refuseMute = () => true;
+      api.failResync = true;
+      history.replaceState(null, "", "/errors#range=7&cat=git");
+      await page();
+      await userEvent.click(muteBtn());
+      const text = "Couldn't confirm the change to git / gh error. Reload to see what the store holds.";
+      await waitFor(() => expect(document.getElementById("muteErr")?.textContent).toBe(text));
+      await waitFor(() => expect(document.getElementById("detailLive")?.textContent).toMatch(/^Couldn't confirm the change\. Reload/));
+      cleanup(); clearApiCache();
+      const api2 = serve();
+      api2.payload = mixed;
+      api2.refuseMute = () => true;
+      api2.failResync = true;
+      history.replaceState(null, "", "/errors#range=7&noise=0&cat=git");
+      await page();
+      await userEvent.click(muteBtn());
+      await waitFor(() => expect(document.getElementById("muteNote")?.textContent).toContain(text));
+      expect(document.getElementById("muteNote")?.textContent).not.toMatch(/back in the list|still muted/);
+    });
+
+    it("says nothing about the state for a fix whose resync fails", async () => {
+      const api = serve({}, () => true);
+      api.failResync = true;
+      history.replaceState(null, "", "/errors#range=7&cat=x");
+      await page();
+      await mark();
+      await waitFor(() => expect(document.getElementById("fixErr")?.textContent).toBe("Couldn't confirm the change to x. Reload to see what the store holds."));
+    });
+
+    // The failures are kept by type until dismissed or retried: a second failure, or an unrelated write, doesn't take one away.
+    it("keeps each closed type's failed mute as its own line, with its own Dismiss, through an unrelated write", async () => {
+      const api = serve(), hold = api.hold();
+      api.payload = mixed;
+      api.refuseMute = () => true;
+      history.replaceState(null, "", "/errors#range=7&noise=0&cat=git");
+      await page();
+      await userEvent.click(muteBtn()); // git leaves the view while its write waits
+      await userEvent.click(within(rowOf("x") as HTMLElement).getByRole("button"));
+      await userEvent.click(muteBtn()); // x leaves it too: both pending
+      await waitFor(() => expect(document.querySelectorAll("#muteNote .muted")).toHaveLength(2));
+      expect([...document.querySelectorAll("#muteNote .muted")].map(e => e.textContent)).toEqual(["Muting git / gh error… Saving…", "Muting x… Saving…"]);
+      hold.release();
+      await waitFor(() => expect(document.querySelectorAll("#muteNote .outnote")).toHaveLength(2));
+      const lines = () => [...document.querySelectorAll("#muteNote .outnote")].map(e => e.querySelector(".fixerr")!.textContent);
+      expect(lines()).toEqual(["Couldn't mute git / gh error. It is back in the list.", "Couldn't mute x. It is back in the list."]);
+      await userEvent.click(within(document.querySelectorAll<HTMLElement>("#muteNote .outnote")[0]!).getByRole("button", { name: "Dismiss" }));
+      expect(lines()).toEqual(["Couldn't mute x. It is back in the list."]);
+      // An unrelated write, a fix on git, clears nothing.
+      api.refuseMute = null;
+      await userEvent.click(within(rowOf("git") as HTMLElement).getByRole("button"));
+      await mark();
+      await waitFor(() => expect(api.store).toEqual({ git: "2026-11-05" }));
+      expect(lines()).toEqual(["Couldn't mute x. It is back in the list."]);
+      // A later mute of x that is saved clears its line.
+      await userEvent.click(within(rowOf("x") as HTMLElement).getByRole("button"));
+      await userEvent.click(muteBtn());
+      await waitFor(() => expect([...api.muted]).toEqual(["x"]));
+      await waitFor(() => expect(document.getElementById("muteNote")).toBeNull());
     });
 
     it("keeps a mute and a fix in one queue, in order", async () => {

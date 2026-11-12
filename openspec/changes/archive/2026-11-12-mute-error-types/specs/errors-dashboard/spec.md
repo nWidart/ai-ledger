@@ -10,7 +10,7 @@ The Errors page SHALL let the user mute an error type they expect, and unmute it
 - **THEN** the button reads "Unmute" at once, the type's row shows a "Muted" chip, and the store keeps the type muted
 
 ### Requirement: Keep a mute in the marks' write queue
-A mute SHALL be written in the same queue as the fix markers, with the same rules. While the write is pending the page SHALL show "Saving…" and mark the button `aria-busy`, and it SHALL announce in the status region that it is saving and again when saved. When the write fails the page SHALL show the type as the store holds it, a message beside the button, and announce the failure.
+A mute SHALL be written in the same queue as the fix markers, with the same rules. While the write is pending the page SHALL show "Saving…" and mark the button `aria-busy`, and it SHALL announce in the status region that it is saving and again when saved.
 
 #### Scenario: The write fails
 - **WHEN** the user mutes a type and the app refuses or does not answer
@@ -48,6 +48,24 @@ Where to start SHALL NOT list a muted type, neither among the open fixes nor und
 #### Scenario: Where to start
 - **WHEN** `git` is muted and has a ready-made fix and the most time lost
 - **THEN** Where to start does not list it, with the toggle on or off
+
+### Requirement: Settle a failed write by what the store holds
+When a fix or mute write fails, the page SHALL read the store. If the store shows the write's effect, the write counts as saved: the saved announcement, no message. If it shows the write did not happen, the page SHALL say so beside the control and in the status region. If the read fails too, the page SHALL say it could not confirm the change, and assert nothing about the state.
+
+#### Scenario: The answer is lost
+- **WHEN** the store takes a mute and the answer is lost, with the toggle on
+- **THEN** the type stays muted and hidden, the status region says "Type muted. It left the view: Hide noise and muted is on.", and no message shows
+
+#### Scenario: Not confirmed
+- **WHEN** a mute fails and the read of the store fails too
+- **THEN** the message reads "Couldn't confirm the change to" the type's label, "Reload to see what the store holds.", and says neither "back in the list" nor "still muted"
+
+### Requirement: Keep failed writes by type until dismissed
+The page SHALL keep a failed write's message per type and kind (fix or mute) until the user dismisses it or a later write of the same kind for that type is saved. Another write SHALL NOT clear it. For types whose detail is closed, the type table card SHALL list each pending mute and each failed mute on its own line, a failed one with its own Dismiss. The open type's detail shows its own.
+
+#### Scenario: Two failures
+- **WHEN** the toggle is on, the user mutes `git` and then `x` before either is answered, and both writes fail
+- **THEN** the card lists two failure lines, dismissing one leaves the other, and a fix marked on another type clears neither
 
 ### Requirement: Close a type that is muted out of the view
 When the user mutes the open type while the toggle is on, the page SHALL close it, announce in the status region that it left the view, and move focus to the type table. A linked example of a muted type SHALL be outside the current filters while the toggle is on, as an example of a fixed noise type is.
