@@ -43,11 +43,16 @@ def write(name, typ, obj):
         fh.write(text)
 
 
-def limits_fixture():
+def limits_fixtures():
+    """The Limits payload, and the curve /api/limits/window answers for its window that a plan change ended early."""
     case = tl.AnalysisCase()
     case.setUp()
     try:
-        return tl.page_fixture(case)
+        payload = tl.page_fixture(case)
+        row = next(h for h in payload["history"] if h["early"])
+        curve = tl.limits.window_curve(case.con.cursor(), row["provider"], row["limit_id"], row["scope"], row["start"],
+                                       now=tl.FIXTURE_NOW, prices=tl.PRICES)
+        return payload, curve
     finally:
         case.tearDown()
 
@@ -93,6 +98,7 @@ class WebFixturesTest(unittest.TestCase):
     def test_write_fixtures(self):
         os.makedirs(OUT, exist_ok=True)
         c, t = self.cur, tm.ToolDetailTest.con.cursor()
+        limits = limits_fixtures()
         got = {
             # 30 days: previous period and changes are set; all time with a session: they are null and the drill-in is in.
             "usage.ts": ("UsagePayload", metrics.usage(c, "", 30, prices=tm.PRICES, today=tm.TODAY)),
@@ -105,12 +111,13 @@ class WebFixturesTest(unittest.TestCase):
             "usage-codex.ts": ("UsagePayload", metrics.usage(tm.SourceFilterTest.con.cursor(), "", 0, prices=tm.PRICES,
                                                              today=tm.TODAY, source="codex")),
             "errors.ts": ("ErrorsPayload", metrics.errors_payload(c, "2026-11-05T12:00:00+00:00", today=tm.TODAY)),
-            "limits.ts": ("LimitsPayload", limits_fixture()),
             # The tool inspector: Bash over 30 days (a previous period, npm at 40% failed), an MCP server and a skill.
             "tool.ts": ("ToolPayload", metrics.tool_detail(t, "tool", "Bash", "", 30, tm.TODAY)),
             "tool-mcp.ts": ("ToolPayload", metrics.tool_detail(t, "mcp", "github", "", 0, tm.TODAY)),
             "tool-skill.ts": ("ToolPayload", metrics.tool_detail(t, "skill", "ship", "", 0, tm.TODAY)),
         }
+        got["limits.ts"] = ("LimitsPayload", limits[0])
+        got["limit-window.ts"] = ("LimitWindowCurve", limits[1])
         full, empty = insights_fixtures()
         got["insights.ts"] = ("InsightsPayload", full)
         got["insights-empty.ts"] = ("InsightsPayload", empty)

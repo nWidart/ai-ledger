@@ -115,3 +115,40 @@
 .pg-limits .strip-chip .chip.est { border-style: dashed; }
 .pg-limits .strip-chip.out { border-color: var(--warning-text); }
 .pg-limits .strip-chip.out .strip-pct { color: var(--critical-text); }
+
+/* Past windows: a strip of bars per limit above the table, and the picked window's curve under the strips. */
+.pg-limits .hs { margin: 4px 0 18px; }
+.pg-limits .hs > .hint { margin: 0 0 8px; }
+.pg-limits .hs-row { display: grid; grid-template-columns: minmax(0, 11rem) minmax(0, 1fr); gap: 0 14px; align-items: end; margin-top: 8px; }
+.pg-limits .hs-name { font-size: 13px; color: var(--text-primary); padding-bottom: 2px; }
+/* 60 bars do not fit a phone: the strip scrolls inside its own box (the page never does). */
+.pg-limits .hs-bars { display: flex; align-items: stretch; height: 40px; min-width: 0; overflow-x: auto; overscroll-behavior-x: contain; }
+.pg-limits .hs-note { grid-column: 2; margin: 2px 0 0; font-size: 12px; }
+/* The button is the whole column, so a short bar is as easy to hit as a tall one; its <i> is the bar. 8px apart, with a 6px bar
+ * inside: neighbours touch, so a thumb picks the one it lands on. */
+.pg-limits .hs-bar { flex: 0 0 8px; box-sizing: border-box; padding: 0 1px; border: 0; border-radius: 2px; background: transparent; cursor: pointer;
+  display: flex; align-items: flex-end; color: var(--series-1); }
+.pg-limits .hs-bar i { display: block; width: 100%; border-radius: 2px 2px 0 0; background: currentColor; }
+.pg-limits .hs-bar:hover { background: var(--accent-soft); }
+.pg-limits .hs-bar:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.pg-limits .hs-bar[aria-pressed="true"] { background: var(--accent-soft); box-shadow: inset 0 -2px 0 var(--text-primary); }
+/* The key's swatch is the same marks on one box. Its colour is a base of two classes and each mark below has three, so a mark wins
+ * whatever the order; the size needs three to beat ".lim-key i" (two classes and an element). No background shorthand anywhere
+ * here: it would reset the hatching. */
+.pg-limits .hk { color: var(--series-1); background-color: currentColor; }
+.pg-limits .hs-key .hk { display: inline-block; width: 10px; height: 12px; border-radius: 2px; }
+.pg-limits .hs-bar.hit, .pg-limits .hk.hit { color: var(--critical); }
+/* Ended early: hatched. Estimated: a tint with an outline, not a solid fill. Any of them can combine. */
+.pg-limits .hs-bar.early i, .pg-limits .hk.early { background-image: repeating-linear-gradient(135deg, var(--surface-1) 0 1.5px, transparent 1.5px 3.5px); }
+.pg-limits .hs-bar.est i, .pg-limits .hk.est { background-color: color-mix(in srgb, currentColor 30%, transparent); box-shadow: inset 0 0 0 1px currentColor; }
+.pg-limits .hs-key { margin: 10px 0 0; }
+.pg-limits .hs-panel { margin-top: 14px; }
+.pg-limits .hs-panel header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.pg-limits .hs-panel h3 { margin: 0; font-size: 14px; font-weight: 600; }
+.pg-limits .hs-panel header p { margin: 2px 0 0; font-size: 12.5px; }
+.pg-limits .hs-panel header p b { color: var(--text-primary); font-weight: 600; }
+.pg-limits tr.sel td { background: var(--accent-soft); }
+@media (max-width: 720px) {
+  .pg-limits .hs-row { grid-template-columns: minmax(0, 1fr); }
+  .pg-limits .hs-note { grid-column: 1; }
+}

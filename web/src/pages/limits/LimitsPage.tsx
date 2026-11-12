@@ -1,5 +1,5 @@
-import { useEffect, useState, type MouseEvent } from "react";
-import { limitsUrl, viewOf, type LimitsPayload, type LimitWindow, type View, type WindowUsedRow } from "../../api";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
+import { limitsUrl, limitWindowUrl, viewOf, type LimitHistoryRow, type LimitsPayload, type LimitWindow, type LimitWindowCurve, type View, type WindowUsedRow } from "../../api";
 import { Drawer } from "../../components/Drawer";
 import { Filters, viewName } from "../../components/Filters";
 import { useLanding } from "../../components/useLanding";
@@ -8,7 +8,7 @@ import { big, dur, num, plural, usd } from "../../format";
 import { navigate, useHashState } from "../../hash";
 import { useApi } from "../../useApi";
 import { LimitChart, planMarks } from "./LimitChart";
-import { bindingWindow, caption, capText, hasScenario, pace, planName, recentText, resetPct, sharePct, shareText, span, surfacesText, usedHint, usedHref, usedRange, usedRangeName, whenDay, windowName } from "./limits";
+import { barKey, barName, bindingWindow, caption, capText, closedWindow, hasScenario, historyStrips, MIN_BAR, pace, planName, recentText, resetPct, sharePct, shareText, span, stripNote, surfacesText, usedHint, usedHref, usedRange, usedRangeName, whenDay, windowName, windowNotes, type Strip } from "./limits";
 import "./limits.css";
 
 const rangeName = (range: number) => (range ? `the last ${range} days` : "all time");
@@ -103,13 +103,106 @@ function WindowCard({ w, d }: { w: LimitWindow; d: LimitsPayload }) {
   );
 }
 
+/** One limit's closed windows as a row of bars, oldest left. The bars are buttons in one tab stop (a roving tabindex): Left and
+ *  Right move between them, Home and End go to the first and last, and Tab leaves the strip. */
+function HistoryStrip({ strip, selected, onPick, refs }: { strip: Strip; selected: string | null; onPick: (key: string) => void;
+  refs: { current: Map<string, HTMLButtonElement> } }) {
+  const { bars } = strip, note = stripNote(bars.length, strip.total);
+  // The window last focused, by identity: a refresh can add a window and drop the oldest, and an index would then name a neighbour.
+  const [active, setActive] = useState<string | null>(null);
+  const scroller = useRef<HTMLDivElement>(null);
+  // A strip too wide for its box opens on its newest bars. The drawer can be closed at mount (a hidden box has no width to
+  // scroll), so the scroll waits for the box to get one, once; the user's own scroll, focus or key press settles it first.
+  const settled = useRef(false);
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el) return;
+    const watch = new ResizeObserver(() => {
+      if (settled.current || !el.clientWidth) return;
+      settled.current = true;
+      el.scrollLeft = el.scrollWidth;
+      watch.disconnect();
+    });
+    watch.observe(el);
+    return () => watch.disconnect();
+  }, []);
+  const settle = () => { settled.current = true; };
+  // The one tab stop: the bar last focused, else the picked one, else the newest.
+  const at = (key: string | null) => (key == null ? -1 : bars.findIndex(h => barKey(h) === key));
+  const stop = [at(active), at(selected), bars.length - 1].find(i => i >= 0)!;
+  const onKey = (ev: KeyboardEvent) => {
+    settle();
+    if (ev.altKey || ev.ctrlKey || ev.metaKey || ev.shiftKey) return; // Alt+Left is history: not ours
+    const to = ev.key === "ArrowLeft" ? stop - 1 : ev.key === "ArrowRight" ? stop + 1 : ev.key === "Home" ? 0 : ev.key === "End" ? bars.length - 1 : null;
+    if (to == null) return;
+    ev.preventDefault();
+    const el = refs.current.get(barKey(bars[Math.max(0, Math.min(bars.length - 1, to))]!));
+    el?.focus({ preventScroll: true });
+    el?.scrollIntoView?.({ block: "nearest", inline: "nearest" }); // the strip scrolls, so keep the focused bar in view
+  };
+  return (
+    <div className="hs-row">
+      <div className="hs-name">{strip.name}</div>
+      <div className="hs-bars" ref={scroller} onPointerDown={settle} onWheel={settle} onTouchStart={settle} onFocus={settle} role="group" aria-label={`${strip.name}, past windows, oldest first. Left and Right arrow keys move between them.`} onKeyDown={onKey}>
+        {bars.map((h, i) => {
+          const key = barKey(h), name = barName(h);
+          return <button key={key} type="button" className={"hs-bar" + (h.hit ? " hit" : "") + (h.early ? " early" : "") + (h.estimated ? " est" : "")}
+            ref={el => { if (el) refs.current.set(key, el); else refs.current.delete(key); }}
+            aria-label={name} title={name} aria-pressed={key === selected} tabIndex={i === stop ? 0 : -1}
+            onFocus={() => setActive(key)} onClick={() => onPick(key)}>
+            <i style={{ height: `${Math.max(MIN_BAR, Math.min(100, h.final))}%` }} />
+          </button>;
+        })}
+      </div>
+      {note && <p className="hs-note muted">{note}</p>}
+    </div>
+  );
+}
+
+/** The curve of the picked window, fetched when it is picked: heading, chart and a close button. */
+function WindowPanel({ h, onClose }: { h: LimitHistoryRow; onClose: () => void }) {
+  const { data, error, loading, retry } = useApi<LimitWindowCurve>(limitWindowUrl(h));
+  const w = useMemo(() => data && closedWindow(h, data.series), [h, data]);
+  const notes = windowNotes(h);
+  return (
+    <section className="panel hs-panel" aria-labelledby="hsTitle">
+      <header>
+        <div>
+          <h3 id="hsTitle">{windowName(h)}{h.plan && <span className="muted" title={h.plan}> · {planName(h.plan)}</span>}</h3>
+          <p className="muted">{whenDay(h.start)} to {whenDay(h.closed_at)} · <b>{num(h.final)}%</b> used{notes.length > 0 && ` · ${notes.join(" · ")}`}</p>
+        </div>
+        <button type="button" className="linkish" onClick={onClose}>Close</button>
+      </header>
+      {error ? <p role="alert">Could not load this window's curve ({error.message}). <button type="button" className="linkish" onClick={retry}>Retry</button></p>
+        : w && data ? <LimitChart w={w} now={null} events={data.events} />
+        : <p className="muted" role="status">{loading ? "Loading the curve…" : ""}</p>}
+    </section>
+  );
+}
+
 function History({ d }: { d: LimitsPayload }) {
+  const strips = useMemo(() => historyStrips(d.history, d.freshness.map(f => f.provider)), [d.history, d.freshness]);
+  const [selected, setSelected] = useState<string | null>(null);
+  const refs = useRef(new Map<string, HTMLButtonElement>());
+  const pick = strips.flatMap(s => s.bars).find(h => barKey(h) === selected);
+  // A range or source that leaves the window out of the strips takes its panel with it (state adjusted while rendering).
+  if (selected && !pick) setSelected(null);
+  const close = () => { const el = selected ? refs.current.get(selected) : undefined; setSelected(null); el?.focus(); };
   return (
     <Drawer id="history" title="Past windows" count={num(d.history.length)} description="Closed windows: final use, hits and early resets">
       <div className="hint">Closed windows in {d.history.length ? "the range" : "this range"}, newest first. Estimated windows are rebuilt from counted usage.</div>
+      {strips.length > 0 && <div className="hs">
+        <p className="hint">Each bar is one closed window, oldest left, as tall as its final percent. Pick one to see its curve.</p>
+        {strips.map(s => <HistoryStrip key={s.key} strip={s} selected={selected} refs={refs} onPick={k => setSelected(selected === k ? null : k)} />)}
+        <ul className="lim-key hs-key" aria-label="Bar key">
+          <li><i className="hk hit" />hit its limit</li><li><i className="hk early" />ended early</li><li><i className="hk est" />estimated</li>
+        </ul>
+        {pick && <WindowPanel key={barKey(pick)} h={pick} onClose={close} />}
+      </div>}
       <div className="scroll tall"><table>
         <thead><tr><th>Window</th><th>Plan</th><th>Ended</th><th className="num">Final</th><th>At 100% for</th><th>Note</th></tr></thead>
-        <tbody>{d.history.length ? d.history.map(h => <tr key={`${h.provider}-${h.label}-${h.closed_at}`}>
+        <tbody>{d.history.length ? d.history.map(h => <tr key={`${h.provider}-${h.label}-${h.closed_at}`} className={barKey(h) === selected ? "sel" : undefined}
+          aria-current={barKey(h) === selected || undefined}>
           <td>{windowName(h)}</td><td title={h.plan ?? undefined}>{planName(h.plan) ?? "–"}</td><td>{whenDay(h.closed_at)}</td><td className="num">{num(h.final)}%</td>
           <td>{h.hit ? <b className="bad">{h.hit_minutes != null ? dur(h.hit_minutes * 60) : "yes"}</b> : "–"}</td>
           <td>{h.early && <span>{h.reason?.startsWith("plan change") ? `ended early by a ${h.reason}` : "reset early"}</span>}{h.estimated && <span className="chip est">estimated</span>}</td>

@@ -393,6 +393,16 @@ class WindowTest(AnalysisCase):
         row = limits.history_row(by[("codex", "codex_300", "")][0])
         self.assertEqual((row["hit"], row["hit_minutes"], row["final"]), (True, 255, 100))
 
+    def test_a_history_row_names_the_window_it_describes(self):
+        self.snap("claude", "weekly_scoped", T0 + timedelta(days=1), 10, scope="Fable")
+        self.snap("codex", "codex_300", datetime(2026, 11, 5, 23, 52), 40, resets=datetime(2026, 11, 6, 4, 7), minutes=300, plan="plus")
+        by, _ = self.windows(T0 + timedelta(days=9))
+        row = limits.history_row(by[("claude", "weekly_scoped", "Fable")][0])
+        self.assertEqual((row["limit_id"], row["scope"], row["window_minutes"], row["resets_at"], row["start"]),
+                         ("weekly_scoped", "Fable", 10080, "2026-11-08T05:00:00.000Z", "2026-11-01T05:00:00.000Z"))
+        row = limits.history_row(by[("codex", "codex_300", "")][0])
+        self.assertEqual((row["limit_id"], row["scope"], row["window_minutes"], row["resets_at"]), ("codex_300", "", 300, "2026-11-06T04:07:00.000Z"))
+
     def test_reset_drift_is_one_window(self):
         self.snap("codex", "codex_10080", datetime(2026, 10, 21, 6, 0, 32), 0, resets=datetime(2026, 10, 28, 6, 0), plan="prolite")
         self.snap("codex", "codex_10080", datetime(2026, 10, 21, 6, 0, 41), 1, resets=datetime(2026, 10, 28, 6, 1), plan="prolite")
@@ -993,6 +1003,136 @@ class ValueTest(AnalysisCase):
         self.assertEqual((weekly["past_plan"], five["plan"], five["past_plan"]), (False, "plus", True))
 
 
+class WindowCurveTest(AnalysisCase):
+    """One closed window's curve, asked for when a bar of the history is picked."""
+    ID = ("claude", "weekly_all", "")
+
+    def curve(self, start, now, **kw):
+        cur = self.con.cursor()
+        return limits.window_curve(cur, kw.pop("provider", "claude"), kw.pop("limit_id", "weekly_all"), kw.pop("scope", ""), start,
+                                   now=now, prices=PRICES)
+
+    def measured_week(self):
+        """A weekly window at 8 dollars a point, read at 40%, 50% and 70%."""
+        self.spend("claude", "claude-opus-5-5", (T0 + timedelta(days=1), 320), (T0 + timedelta(days=3), 80))
+        self.snap("claude", "weekly_all", T0 + timedelta(days=2), 40)
+        self.snap("claude", "weekly_all", T0 + timedelta(days=4), 50)
+
+    def test_a_measured_window_runs_from_its_start_to_its_close(self):
+        self.measured_week()
+        open_at = T0 + timedelta(days=4)
+        open_series = self.payload(open_at)["windows"][0]["series"]  # what the open card drew
+        self.spend("claude", "claude-opus-5-5", (T0 + timedelta(days=5), 160))
+        self.snap("claude", "weekly_all", T0 + timedelta(days=6), 70)
+        got = self.curve("2026-11-01T05:00:00.000Z", T0 + timedelta(days=10))
+        w, series = got["window"], got["series"]
+        self.assertEqual((w["start"], w["closed_at"], w["final"], w["estimated"], w["early"], w["hit"]),
+                         ("2026-11-01T05:00:00.000Z", "2026-11-08T05:00:00.000Z", 70.0, False, False, False))
+        self.assertEqual((w["limit_id"], w["scope"], w["window_minutes"], w["resets_at"]), ("weekly_all", "", 10080, "2026-11-08T05:00:00.000Z"))
+        self.assertEqual((series[0]["t"], series[-1]["t"]), (w["start"], w["closed_at"]))
+        self.assertEqual([(p["t"], p["pct"]) for p in series if p["measured"]],
+                         [("2026-11-03T05:00:00.000Z", 40), ("2026-11-05T05:00:00.000Z", 50), ("2026-11-07T05:00:00.000Z", 70)])
+        self.assertEqual(series[:len(open_series)], open_series)  # the points that were drawn while it was open are the same
+        self.assertEqual(got["events"], [])
+
+    def test_the_curve_ends_at_the_final_percent_whatever_was_counted_after_the_last_reading(self):
+        self.measured_week()
+        self.spend("claude", "claude-opus-5-5", (T0 + timedelta(days=5), 160))
+        self.snap("claude", "weekly_all", T0 + timedelta(days=6), 70)
+        self.spend("claude", "claude-opus-5-5", (T0 + timedelta(days=6, hours=12), 160))  # $20 of points no reading ever saw
+        got = self.curve("2026-11-01T05:00:00.000Z", T0 + timedelta(days=10))
+        after = [p for p in got["series"] if p["t"] > "2026-11-07T05:00:00.000Z"]
+        self.assertTrue(after)
+        self.assertEqual({p["pct"] for p in after}, {70.0})  # not 90
+        self.assertFalse(any(p["measured"] for p in after))
+        self.assertEqual(got["series"][-1], dict(t=got["window"]["closed_at"], pct=got["window"]["final"], measured=False))
+        # between readings the estimates stay: the 50% reading at day 4 and the use before it keep their line
+        self.assertIn(dict(t="2026-11-05T05:00:00.000Z", pct=50, measured=True), got["series"])
+
+    def test_a_start_nearest_an_open_window_is_not_a_closed_one(self):
+        # Unknown window length: a window starts at its first reading, so two can start a minute apart and reset a day apart.
+        self.snap("codex", "codex_x", datetime(2026, 11, 6, 10, 0), 10, resets=datetime(2026, 11, 6, 15, 0), minutes=None, plan="plus")
+        self.snap("codex", "codex_x", datetime(2026, 11, 6, 10, 1), 3, resets=datetime(2026, 11, 7, 15, 0), minutes=None, plan="plus")
+        now = datetime(2026, 11, 6, 12)
+        ask = lambda start: self.curve(start, now, provider="codex", limit_id="codex_x")
+        self.assertEqual(ask("2026-11-06T10:00:00.000Z")["window"]["final"], 10.0)  # the closed one
+        self.assertIsNone(ask("2026-11-06T10:01:00.000Z"))  # the open one: not the closed one a minute away
+        self.assertEqual(ask("2026-11-06T10:00:30.000Z")["window"]["final"], 10.0)  # nearer the closed one
+
+    def test_a_start_a_little_off_finds_the_window_and_a_far_one_does_not(self):
+        self.measured_week()
+        now = T0 + timedelta(days=10)
+        self.assertEqual(self.curve("2026-11-01T05:01:00Z", now)["window"]["start"], "2026-11-01T05:00:00.000Z")
+        self.assertIsNone(self.curve("2026-11-01T05:10:00.000Z", now))
+        self.assertIsNone(self.curve("2026-11-08T05:00:00.000Z", now))
+        self.assertIsNone(self.curve("2026-11-01T05:00:00.000Z", now, limit_id="weekly_scoped"))
+        self.assertIsNone(self.curve("2026-11-01T05:00:00.000Z", now, scope="Fable"))
+        self.assertIsNone(self.curve("2026-11-01T05:00:00.000Z", now, provider="codex"))
+
+    def test_the_open_window_is_not_served(self):
+        self.measured_week()
+        self.assertIsNone(self.curve("2026-11-01T05:00:00.000Z", T0 + timedelta(days=5)))  # resets at T0 + 7 days
+        self.assertIsNotNone(self.curve("2026-11-01T05:00:00.000Z", T0 + timedelta(days=7)))
+
+    def test_an_estimated_window_before_the_first_snapshot_has_a_curve(self):
+        self.spend("claude", "claude-opus-5-5", (T0 - timedelta(days=5), 40), (T0 - timedelta(days=12), 0.5), (T0 + timedelta(days=1), 200))
+        self.snap("claude", "weekly_all", T0 + timedelta(days=5), 25)
+        now = T0 + timedelta(days=5)
+        listed = [h for h in self.payload(now)["history"] if h["estimated"]]
+        self.assertEqual([h["start"] for h in listed], ["2026-10-25T05:00:00.000Z", "2026-10-18T05:00:00.000Z"])
+        for h in listed:  # every estimated window of the history can be asked for, from the row's own start
+            got = self.curve(h["start"], now)
+            self.assertEqual(got["window"], h)
+            self.assertEqual((got["series"][0]["t"], got["series"][-1]["t"]), (h["start"], h["closed_at"]))
+            self.assertFalse(any(p["measured"] for p in got["series"]))
+            self.assertAlmostEqual(got["series"][-1]["pct"], h["final"], delta=0.05)  # the series keeps 2 decimals, the row 1
+
+    def test_every_window_the_payload_lists_can_be_asked_for_at_any_range(self):
+        self.spend("claude", "claude-opus-5-5", (T0 - timedelta(days=5), 40), (T0 - timedelta(days=12), 0.5), (T0 + timedelta(days=1), 200))
+        self.snap("claude", "weekly_all", T0 + timedelta(days=5), 25)
+        now = T0 + timedelta(days=9)
+        for days in (7, 14, 30):
+            for h in self.payload(now, range_days=days)["history"]:
+                self.assertEqual(self.curve(h["start"], now, limit_id=h["limit_id"], scope=h["scope"])["window"], h, days)
+
+    def test_a_window_ended_early_has_its_plan_change(self):
+        old, new = datetime(2026, 11, 11, 15, 22), datetime(2026, 11, 13, 4, 56)
+        self.snap("codex", "codex_10080", datetime(2026, 11, 6, 3, 22), 22, resets=old, plan="plus")
+        self.snap("codex", "codex_10080", datetime(2026, 11, 6, 4, 56, 45), 2, resets=new, plan="prolite")
+        self.snap("codex", "codex_10080", datetime(2026, 11, 6, 6), 5, resets=new, plan="prolite")
+        now = datetime(2026, 11, 6, 8)
+        got = self.curve("2026-11-04T15:22:00.000Z", now, provider="codex", limit_id="codex_10080")
+        self.assertEqual((got["window"]["early"], got["window"]["reason"], got["window"]["closed_at"], got["window"]["final"]),
+                         (True, "plan change from plus to prolite", "2026-11-06T04:56:45.000Z", 22.0))
+        self.assertEqual(got["series"][-1], dict(t="2026-11-06T04:56:45.000Z", pct=22.0, measured=False))
+        self.assertEqual(got["events"], [dict(kind="plan_change", provider="codex", at="2026-11-06T04:56:45.000Z", plan_from="plus", plan_to="prolite")])
+        self.assertIsNone(self.curve("2026-11-06T04:56:45.000Z", now, provider="codex", limit_id="codex_10080"))  # the window now open
+
+    def test_a_window_that_hit_its_limit_says_so(self):
+        reset = datetime(2026, 11, 6, 4, 7)
+        for t, pct in ((datetime(2026, 11, 5, 22, 53), 49), (datetime(2026, 11, 5, 23, 52), 100)):
+            self.snap("codex", "codex_300", t, pct, resets=reset, minutes=300, plan="plus")
+        w = self.curve("2026-11-05T23:07:00.000Z", datetime(2026, 11, 6, 9), provider="codex", limit_id="codex_300")["window"]
+        self.assertEqual((w["hit"], w["hit_minutes"], w["final"], w["window_minutes"]), (True, 255, 100.0, 300))
+
+    def test_bad_input(self):
+        self.measured_week()
+        now = T0 + timedelta(days=10)
+        for kw in (dict(provider="grok"), dict(provider=""), dict(start="")):
+            with self.assertRaises(ValueError, msg=kw):
+                self.curve(kw.pop("start", "2026-11-01T05:00:00.000Z"), now, **kw)
+        for start in ("yesterday", "2026-13-45", "11/01/2026"):
+            with self.assertRaises(ValueError, msg=start):
+                self.curve(start, now)
+
+    def test_the_payload_history_carries_no_curve(self):
+        self.measured_week()
+        history = self.payload(T0 + timedelta(days=10))["history"]
+        self.assertEqual(len(history), 1)
+        self.assertEqual(sorted(history[0]), sorted(["provider", "provider_label", "limit_id", "scope", "label", "window_minutes", "resets_at", "plan",
+                                                     "start", "closed_at", "final", "hit", "hit_minutes", "early", "reason", "estimated"]))
+
+
 class ApiTest(AnalysisCase):
     def test_endpoint_and_unknown_source(self):
         import http.client
@@ -1011,6 +1151,41 @@ class ApiTest(AnalysisCase):
             self.assertEqual((status, json.loads(body)["windows"]), (200, []))
             self.assertEqual(get("/api/limits?source=grok")[0], 400)
             self.assertEqual(get("/limits")[0] in (200, 503), True)
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
+
+    def test_window_route(self):
+        import http.client
+        from http.server import ThreadingHTTPServer
+        from ai_ledger import app
+        # Long past, so it is closed whenever the test runs; no usage, so no prices are needed: every point is a reading.
+        for t, pct in ((datetime(2026, 1, 5, 6), 20), (datetime(2026, 1, 7, 6), 35)):
+            self.snap("codex", "codex_10080", t, pct, resets=datetime(2026, 1, 10, 6), plan="plus")
+        self.snap("codex", "codex_10080", datetime(2026, 1, 12, 6), 5, resets=datetime(2026, 1, 17, 6), plan="plus")
+        httpd = ThreadingHTTPServer(("127.0.0.1", 0), app.handler(app.App(self.con, self.roots, pollers=[])))
+        threading.Thread(target=httpd.serve_forever, daemon=True).start()
+        try:
+            def get(path):
+                h = http.client.HTTPConnection("127.0.0.1", httpd.server_address[1])
+                h.request("GET", path, headers={"Host": f"{app.HOST}:{app.PORT}"})
+                r = h.getresponse()
+                return r.status, json.loads(r.read())
+            q = "/api/limits/window?provider=codex&limit_id=codex_10080&scope=&start="
+            history = get("/api/limits")[1]["history"]
+            self.assertEqual(len(history), 2)
+            row = next(h for h in history if h["final"] == 35)
+            status, body = get(q + row["start"])
+            self.assertEqual((status, body["window"], body["events"]), (200, row, []))
+            self.assertEqual(body["series"][-1]["t"], row["closed_at"])  # it starts at the first reading: nothing is calibrated
+            self.assertIn(dict(t="2026-01-07T06:00:00.000Z", pct=35, measured=True), body["series"])
+            self.assertEqual(get(q + "2026-01-01T00:00:00Z")[0], 404)  # no window starts there
+            self.assertEqual(get(q + "2026-01-12T00:00:00Z")[0], 404)  # that one is open or was never there
+            self.assertEqual(get("/api/limits/window?provider=codex&limit_id=nope&scope=&start=" + row["start"])[0], 404)
+            for bad in (q + "soon", q, "/api/limits/window?provider=grok&limit_id=codex_10080&start=" + row["start"],
+                        "/api/limits/window?limit_id=codex_10080&start=" + row["start"]):
+                status, body = get(bad)
+                self.assertEqual((status, bool(body["error"])), (400, True), bad)
         finally:
             httpd.shutdown()
             httpd.server_close()

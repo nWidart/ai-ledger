@@ -243,7 +243,12 @@ export interface WindowUsedRow { cost: number; share: number; points: number | n
 export interface LimitHistoryRow {
   provider: string; provider_label: string; label: string; plan: string | null; start: Ts; closed_at: Ts; final: number;
   hit: boolean; hit_minutes: number | null; early: boolean; reason: string | null; estimated: boolean;
+  /** Which window it was, so /api/limits/window can be asked for its curve: the limit, and the window's length (null when
+   *  the provider gave none) and reset. A window that ended early closed before its resets_at. */
+  limit_id: string; scope: string; window_minutes: number | null; resets_at: Ts;
 }
+/** /api/limits/window (limits.py window_curve): one closed window of the history, with its curve and the plan changes inside it. */
+export interface LimitWindowCurve { window: LimitHistoryRow; series: LimitPoint[]; events: PlanChange[] }
 export interface PlanChange { kind: "plan_change"; provider: string; at: Ts; plan_from: string; plan_to: string }
 export interface LimitsPayload {
   now: Ts; windows: LimitWindow[];
@@ -395,6 +400,8 @@ export const promptUrl = (session: string) => `/api/prompt?${qs({ session })}`;
 export const toolUrl = (kind: ToolKind, name: string, v: View) => `/api/tool?${qs({ kind, name, ...viewQs(v) })}`;
 export const paletteUrl = (v: View) => `/api/palette?${qs(viewQs(v))}`;
 export const limitsUrl = (v: View) => `/api/limits?${qs({ project: v.project, range: v.range, source: v.source })}`;
+export const limitWindowUrl = (h: Pick<LimitHistoryRow, "provider" | "limit_id" | "scope" | "start">) =>
+  `/api/limits/window?${qs({ provider: h.provider, limit_id: h.limit_id, scope: h.scope, start: h.start })}`;
 export const insightsUrl = (v: View) => `/api/insights?${qs(viewQs(v))}`;
 export const liveUrl = (v: View, text = false) => {
   const q = qs({ project: v.project, automated: v.automated, source: v.source, text });

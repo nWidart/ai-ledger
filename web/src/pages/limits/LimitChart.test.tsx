@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { LimitWindow, LimitsPayload } from "../../api";
 import limits from "../../__fixtures__/limits";
 import { LimitChart } from "./LimitChart";
-import { readPoints, readText } from "./limits";
+import { closedWindow, readPoints, readText } from "./limits";
 
 const fixture = limits as LimitsPayload;
 const claude = fixture.windows[0]!;
@@ -186,5 +186,35 @@ describe("LimitChart tooltip placement", () => {
     fireEvent.pointerMove(plot(), { clientX: 110, clientY: 14 });
     expect(tip().style.left).toBe("0px");
     expect(tip().style.top).toBe("0px");
+  });
+});
+
+describe("LimitChart for a closed window", () => {
+  const row = { ...(limits as LimitsPayload).history[0]!, start: "2026-11-07T00:00:00.000Z", closed_at: "2026-11-07T12:00:00.000Z", final: 42, hit: false, estimated: false };
+  const closed = closedWindow(row, past);
+  const events = [{ kind: "plan_change" as const, provider: row.provider, at: "2026-11-07T06:00:00.000Z", plan_from: "plus", plan_to: "prolite" }];
+  const drawClosed = () => { render(<LimitChart w={closed} now={null} events={events} />); return screen.getByRole("group"); };
+
+  it("has no now line and no forecast, and ends at its close", () => {
+    drawClosed();
+    expect(document.querySelector(".lim-chart .now")).toBeNull();
+    expect(document.querySelector(".lim-chart .fc")).toBeNull();
+    expect(document.querySelector(".lim-chart .band")).toBeNull();
+    expect(plot().textContent).toMatch(/ended /);
+    expect(plot().textContent).not.toMatch(/resets /);
+  });
+
+  it("says what it ended at, and marks the plan change inside it", () => {
+    drawClosed();
+    expect(screen.getByRole("img").getAttribute("aria-label")).toMatch(/^Codex weekly: 42% used when it ended .*\. Plan change from plus to prolite, /);
+    expect(document.querySelectorAll(".lim-chart .plan")).toHaveLength(1);
+  });
+
+  it("reads its points from the keyboard, starting at the last", () => {
+    const g = drawClosed(), pts = readPoints(closed);
+    act(() => g.focus());
+    expect(tip().textContent).toBe(readText(pts.at(-1)!));
+    fireEvent.keyDown(g, { key: "Home" });
+    expect(tip().textContent).toBe(readText(pts[0]!));
   });
 });

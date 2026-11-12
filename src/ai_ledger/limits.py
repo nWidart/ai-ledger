@@ -691,8 +691,11 @@ def window_row(w, now, usage, cal, profile):
 
 
 def history_row(w):
+    """A closed window as the history lists it. Its identity (limit_id, scope, window_minutes, resets_at) and start let
+    window_curve find it again; the row carries no curve, which the page asks for when a window is picked."""
     hit = w.hit_start is not None
-    return dict(provider=w.provider, provider_label=provider_label(w.provider), label=label(w.provider, w.limit_id, w.scope, w.minutes),
+    return dict(provider=w.provider, provider_label=provider_label(w.provider), limit_id=w.limit_id, scope=w.scope,
+                label=label(w.provider, w.limit_id, w.scope, w.minutes), window_minutes=w.minutes, resets_at=metrics.iso(w.resets_at),
                 plan=w.plan, start=metrics.iso(w.start), closed_at=metrics.iso(w.closed_at), final=round(w.final, 1),
                 hit=hit, hit_minutes=round((w.closed_at - w.hit_start).total_seconds() / 60) if hit else None,
                 early=w.early, reason=w.reason, estimated=w.estimated)
@@ -735,6 +738,54 @@ def suggestion_of(windows):
     return best
 
 
+def limit_windows(ws, usage, now, start=None):
+    """(calibration, windows) of one limit from its measured windows ws (as group_windows returns them): ws closed as of
+    now, and the estimated windows before the first snapshot back to start, or to the provider's first counted use when
+    start is None. The Limits payload and window_curve both list a limit's windows through this, so they cannot disagree."""
+    close_windows(ws, now)
+    cal = calibrate(ws, usage)
+    ts, _ = usage.series(source_of(ws[0].provider), ws[0].scope)
+    horizon = max(start or datetime.min, ts[0] if ts else now)
+    return cal, earlier_windows(ws, usage, cal, horizon) + ws
+
+
+def closed_series(w, usage, cal):
+    """The series of a closed window from its start to its close. Its final percent is its last reading, so after that reading
+    the curve is flat at the final percent, not an estimate from use counted since (a window that stopped getting readings, as
+    after a plan change, would otherwise climb past what its heading says). Between readings the estimates stay. An estimated
+    window has no readings and no change."""
+    out = series(w, usage, cal, w.closed_at)
+    if w.points:
+        last, final = metrics.iso(w.points[-1][0]), round(w.final, 1)
+        out = [dict(p, pct=final) if p["t"] > last else p for p in out]
+    return out
+
+
+def window_curve(cur, provider, limit_id, scope, start, now=None, prices=None):
+    """One closed window's curve, for the page to draw when a bar of its history is picked: {window, series, events} with
+    the window as history_row gives it, its series from its start to its close (no forecast), and the plan changes of its
+    provider inside it. The window is the limit's one nearest to start (an ISO time), when it is closed and its start is within
+    SAME_RESET of start; None when it is not, and so always for the open window. A measured window's curve is flat at its final
+    percent after its last reading (closed_series). Raises ValueError for an unknown provider or a start that is no time."""
+    if provider not in PROVIDERS:
+        raise ValueError(f"unknown provider: {provider}")
+    at = utc_naive(start)
+    if at is None:
+        raise ValueError("start must be an ISO time")
+    now = now or datetime.now(timezone.utc).replace(tzinfo=None)
+    snaps = cur.execute(f"SELECT {', '.join(store.SNAPSHOT_COLS)} FROM limit_snapshots WHERE provider = ?", [provider]).fetchall()
+    ws = group_windows([s for s in snaps if s[1] == limit_id and s[2] == scope]).get((provider, limit_id, scope))
+    if not ws:
+        return None
+    usage = load_usage(cur, metrics.load_prices() if prices is None else prices)
+    cal, past = limit_windows(ws, usage, now)
+    w = min(past, key=lambda w: abs(w.start - at))  # the nearest of all, so an open window's start is never taken for a closed one's
+    if not w.closed_at or abs(w.start - at) > SAME_RESET:
+        return None
+    return dict(window=history_row(w), series=closed_series(w, usage, cal),
+                events=[e for e in plan_changes(snaps) if metrics.iso(w.start) <= e["at"] <= metrics.iso(w.closed_at)])
+
+
 def payload(cur, range_days=0, source="", project="", now=None, today=None, prices=None, tz=None, polls=None):
     """The JSON the Limits page reads. Open windows ignore range_days; history, unused capacity and value use it.
     project narrows only commits per point: limits are per account. projects lists every project for the picker, whatever
@@ -758,12 +809,8 @@ def payload(cur, range_days=0, source="", project="", now=None, today=None, pric
     extras = {n: newest_extras(cur, n) for n in names}
     windows, history, cals, spans, closed = [], [], {}, {}, []
     for key, ws in group_windows(snaps).items():
-        close_windows(ws, now)
-        cal = calibrate(ws, usage)
+        cal, past = limit_windows(ws, usage, now, start)
         cals[key] = (ws[-1].minutes, cal)
-        ts, _ = usage.series(source_of(key[0]), key[2])
-        horizon = max(start or datetime.min, ts[0] if ts else now)
-        past = earlier_windows(ws, usage, cal, horizon) + ws
         for w in past:
             if w.closed_at and (start is None or w.closed_at >= start):
                 history.append(history_row(w))
