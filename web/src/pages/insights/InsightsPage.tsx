@@ -8,7 +8,7 @@ import { ProjectName } from "../../components/ProjectDot";
 import { jumpTo, SectionIndex } from "../../components/SectionIndex";
 import { sessName, shortId } from "../../components/sheets/session";
 import { useLanding } from "../../components/useLanding";
-import { num, pct, plural, when } from "../../format";
+import { dayLabel, num, pct, plural, when } from "../../format";
 import { formatHash, navigate, setHash, useHashState } from "../../hash";
 import { useApi } from "../../useApi";
 import { countOf, headline } from "./insights";
@@ -150,6 +150,34 @@ function CoverageDrawer({ d }: { d: InsightsPayload }) {
   );
 }
 
+/** What /insights is and how much one run covers, from the store. Process text, not a judgment, so not tagged model-judged. */
+function HowItWorks({ d }: { d: InsightsPayload }) {
+  const { dir, newest_facet: newest, run_sizes: z } = d.coverage;
+  return (
+    <Drawer id="d-how" title="How this works">
+      <p><code>/insights</code> is a Claude Code command. A model reads each session's transcript and writes one judgment file, a facet, per
+        session. This app only reads those files and never calls a model.</p>
+      <p>The app reads <code>{dir ?? "~/.claude/usage-data"}</code>.{newest && <> The last run wrote <b className="when">{when(newest)}</b>.</>}</p>
+      {z && <p>{z.runs === 1 ? <>The one run so far wrote {plural(z.min, "session")}.</>
+        : <>The last {z.runs} runs each wrote between {num(z.min)} and {num(z.max)} sessions (median {num(z.median, z.median % 1 ? 1 : 0)}).</>}</p>}
+      <p>For more coverage, run <code>/insights</code> again in Claude Code, then Refresh.</p>
+    </Drawer>
+  );
+}
+
+/** The share of analysed sessions fully or mostly achieved, per week of session start. Shown from 2 weeks. */
+function Trend({ d }: { d: InsightsPayload }) {
+  if (d.trend.length < 2) return null;
+  return (
+    <section className="panel sect" id="trend" aria-labelledby="trendTitle">
+      <h2 id="trendTitle">Outcome trend <Judged /></h2>
+      <p className="hint">Share of analysed sessions fully or mostly achieved, per week. Weeks are by session start, and a week with few sessions swings.</p>
+      <Ledger empty="No weeks in this view.">{d.trend.map(w => <LedgerRow key={w.week} name={`Week of ${dayLabel(w.week)}`} title={w.week}
+        share={w.n ? w.achieved / w.n : 0} value={pct(w.n ? w.achieved / w.n : 0)} side={`${num(w.achieved)} of ${num(w.n)}`} />)}</Ledger>
+    </section>
+  );
+}
+
 function Outcomes({ d }: { d: InsightsPayload }) {
   const n = d.coverage.facets;
   return (
@@ -261,6 +289,7 @@ export function InsightsPage() {
   const [shown, setShown] = useState(want);
   useEffect(() => { if (d && !loading && !error) setShown(want); }, [d, loading, error, url]); // want is read through url
   const { slow, grow, wrap, retryBtn } = useLanding(d, url, loading, error, ":scope > :is(.grid2, .panel, .vitals, .drawers)");
+  const howto = d && shown.source !== "codex" && d.coverage.stored_facets > 0;
   const figures = d && shown.source !== "codex" && d.coverage.facets > 0;
   return (
     <div className={"wrap pg-insights" + (slow ? " loading" : "") + (grow ? " grow" : "")} ref={wrap} aria-busy={loading || undefined}>
@@ -275,21 +304,26 @@ export function InsightsPage() {
         <Coverage d={d} view={shown} drawer={!!figures} />
         <Lede d={d} view={shown} />
         <Sub d={d} view={shown} />
+        {(figures || howto) && <SectionIndex groups={[
+          figures ? [{ id: "overview", label: "Overview" }, { id: "outcomes", label: "Outcomes" }, { id: "friction", label: "Friction" },
+            ...(d.trend.length > 1 ? [{ id: "trend", label: "Trend" }] : []),
+            { id: "satisfaction", label: "Satisfaction", long: "Satisfaction and helpfulness" }, { id: "log", label: "Sessions", long: "Analysed sessions" }]
+            : [{ id: "overview", label: "Overview" }],
+          [...(figures ? [{ id: "d-goals", label: "Goals" }, { id: "d-types", label: "Session types" }, { id: "d-coverage", label: "Coverage" }] : []),
+            ...(howto ? [{ id: "d-how", label: "How this works" }] : [])],
+        ]} />}
         {figures && <>
-          <SectionIndex groups={[
-            [{ id: "overview", label: "Overview" }, { id: "outcomes", label: "Outcomes" }, { id: "friction", label: "Friction" },
-              { id: "satisfaction", label: "Satisfaction", long: "Satisfaction and helpfulness" }, { id: "log", label: "Sessions", long: "Analysed sessions" }],
-            [{ id: "d-goals", label: "Goals" }, { id: "d-types", label: "Session types" }, { id: "d-coverage", label: "Coverage" }],
-          ]} />
           <Vitals d={d} />
           <div className="grid2">
             <Outcomes d={d} />
             <Friction d={d} />
           </div>
+          <Trend d={d} />
           <Feelings d={d} />
           <Sessions d={d} view={shown} />
-          <div className="drawers"><Goals d={d} /><SessionTypes d={d} /><CoverageDrawer d={d} /></div>
+          <div className="drawers"><Goals d={d} /><SessionTypes d={d} /><CoverageDrawer d={d} />{howto && <HowItWorks d={d} />}</div>
         </>}
+        {!figures && howto && <div className="drawers"><HowItWorks d={d} /></div>}
       </>}
     </div>
   );

@@ -78,7 +78,7 @@ describe("InsightsPage", () => {
     expect(within(screen.getByRole("heading", { level: 1 })).getByText("model-judged")).toBeTruthy();
     const headings = screen.getAllByRole("heading", { level: 2 });
     expect(headings.map(h => h.textContent)).toEqual(["Outcomes model-judged", "Friction categories model-judged", "Satisfaction and helpfulness model-judged",
-      "Analysed sessions model-judged", "Goals model-judged", "Session types model-judged", "Coverage"]);
+      "Analysed sessions model-judged", "Goals model-judged", "Session types model-judged", "Coverage", "How this works"]);
     expect(within(section(/^Outcomes model/)).getByText(/judged by a model from the transcript/)).toBeTruthy();
   });
 
@@ -100,13 +100,14 @@ describe("InsightsPage", () => {
     show(fixture);
     await lede();
     const wrap = document.querySelector(".pg-insights")!, at = (sel: string) => [...wrap.querySelectorAll("*")].indexOf(wrap.querySelector(sel)!);
-    const order = [".secidx", ".vitals", "#outcomes", "#friction", "#satisfaction", "#log", "#d-goals", "#d-types", "#d-coverage"].map(at);
+    const order = [".secidx", ".vitals", "#outcomes", "#friction", "#satisfaction", "#log", "#d-goals", "#d-types", "#d-coverage", "#d-how"].map(at);
     expect(order.every(i => i >= 0)).toBe(true);
     expect(order).toEqual([...order].sort((a, b) => a - b));
     expect(document.querySelector("#outcomes")!.parentElement).toBe(document.querySelector("#friction")!.parentElement);
     expect(drawer("d-goals").open).toBe(false);
     expect(drawer("d-types").open).toBe(false);
     expect(drawer("d-coverage").open).toBe(false);
+    expect(drawer("d-how").open).toBe(false);
     for (const id of ["lede", "coverage", "friction", "outcomes", "log"]) expect(document.getElementById(id)).toBeTruthy();
   });
 
@@ -114,10 +115,63 @@ describe("InsightsPage", () => {
     show(fixture);
     await lede();
     const nav = screen.getByRole("navigation", { name: "Page sections" });
-    expect(within(nav).getAllByRole("link").map(a => a.textContent)).toEqual(["Overview", "Outcomes", "Friction", "Satisfaction", "Sessions", "Goals", "Session types", "Coverage"]);
+    expect(within(nav).getAllByRole("link").map(a => a.textContent)).toEqual(["Overview", "Outcomes", "Friction", "Satisfaction", "Sessions", "Goals", "Session types", "Coverage", "How this works"]);
     await userEvent.click(within(nav).getByRole("link", { name: "Session types" }));
     expect(drawer("d-types").open).toBe(true);
     expect(drawer("d-goals").open).toBe(false);
+  });
+
+  it("explains how /insights works in a closed drawer, with the run sizes from the store", async () => {
+    show(fixture);
+    await lede();
+    const how = drawer("d-how");
+    expect(how.open).toBe(false);
+    expect(within(how).getByRole("heading", { level: 2 }).textContent).toBe("How this works");
+    const text = how.textContent!;
+    expect(text).toContain("/insights is a Claude Code command. A model reads each session's transcript and writes one judgment file, a facet, per session. This app only reads those files and never calls a model.");
+    expect(within(how).getByText(fixture.coverage.dir!).tagName).toBe("CODE");
+    expect(text).toContain(`The last run wrote ${when(fixture.coverage.newest_facet)}.`);
+    expect(text).toContain("The last 2 runs each wrote between 1 and 2 sessions (median 1.5).");
+    expect(text).toContain("For more coverage, run /insights again in Claude Code, then Refresh.");
+  });
+
+  it("says how large the one run so far is", async () => {
+    show({ ...fixture, coverage: { ...fixture.coverage, run_sizes: { runs: 1, min: 12, median: 12, max: 12 } } });
+    await lede();
+    expect(drawer("d-how").textContent).toContain("The one run so far wrote 12 sessions.");
+  });
+
+  it("keeps the How this works drawer when the view has no analysed session, and drops it for Codex or an empty store", async () => {
+    show({ ...none, coverage: { ...fixture.coverage, facets: 0, analysed: 0, not_analysed: 0 } }, "#project=nope");
+    await lede();
+    expect(drawer("d-how")).toBeTruthy();
+    expect(within(screen.getByRole("navigation", { name: "Page sections" })).getAllByRole("link").map(a => a.textContent)).toEqual(["Overview", "How this works"]);
+  });
+
+  it("hides How this works for Codex and without stored facets", async () => {
+    show(none);
+    await lede();
+    expect(document.getElementById("d-how")).toBeNull();
+  });
+
+  it("shows the outcome trend under outcomes and friction with two weeks, and not with one", async () => {
+    const trend = [{ week: "2026-10-26", n: 5, achieved: 4 }, { week: "2026-11-02", n: 2, achieved: 1 }];
+    show({ ...fixture, trend });
+    await lede();
+    const panel = section(/^Outcome trend model-judged/);
+    expect(within(panel).getAllByRole("listitem").map(li => li.textContent)).toEqual(["Week of Oct 2680%4 of 5", "Week of Nov 250%1 of 2"]);
+    expect(within(panel).getByText(/Weeks are by session start, and a week with few sessions swings/)).toBeTruthy();
+    expect(panel.previousElementSibling).toBe(document.querySelector(".grid2"));
+    const nav = screen.getByRole("navigation", { name: "Page sections" });
+    expect(within(nav).getAllByRole("link").map(a => a.textContent)).toContain("Trend");
+  });
+
+  it("leaves the trend out with one week", async () => {
+    show(fixture);
+    await lede();
+    expect(fixture.trend.length).toBe(1);
+    expect(document.getElementById("trend")).toBeNull();
+    expect(within(screen.getByRole("navigation", { name: "Page sections" })).queryByRole("link", { name: "Trend" })).toBeNull();
   });
 
   it("breaks the coverage down by project, a project with none analysed marked, and by run", async () => {

@@ -33,7 +33,13 @@ export default {
     "at": "2026-11-05T18:20:00.000Z",
     "facets": 2
    }
-  ]
+  ],
+  "run_sizes": {
+   "runs": 2,
+   "min": 1,
+   "median": 1.5,
+   "max": 2
+  }
  },
  "projects": [
   "demo-app",
@@ -160,6 +166,13 @@ export default {
    "name": "write_tests",
    "n": 1,
    "sessions": 1
+  }
+ ],
+ "trend": [
+  {
+   "week": "2026-11-02",
+   "n": 3,
+   "achieved": 1
   }
  ],
  "sessions": [

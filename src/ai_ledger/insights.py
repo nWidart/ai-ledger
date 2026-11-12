@@ -20,6 +20,7 @@ SESSION_TYPES = ["multi_task", "iterative_refinement", "single_task", "quick_que
 SESSION_ROWS = 200  # analysed sessions in the payload, newest first; more sets truncated
 RUN_GAP = timedelta(hours=1)  # facets written further apart than this belong to different /insights runs
 RUNS = 20  # runs in the payload, newest first
+TREND_WEEKS = 26  # weeks in the outcome trend, newest kept
 
 
 def files(root):
@@ -201,20 +202,31 @@ def insight(cur, sid):
     return got[0] | session_names(names, sid)
 
 
-def runs(cur, in_view):
-    """[{at, facets}], newest first, at most RUNS: the /insights runs that wrote a facet in the view. /insights leaves no record
-    of a run, so a run is a maximal group of stored facets whose file_mtime values have no gap over RUN_GAP between neighbours.
-    Groups are formed over the whole store, so a run keeps its identity whatever the view. at is the group's newest file_mtime;
-    facets counts the group's facets whose session id is in in_view. A run with none is left out. A facet rewritten by a later
-    run has one stored row, with the later file_mtime: it counts in the later run only. A facet without a file_mtime is in no run."""
+def run_groups(cur):
+    """Every /insights run, oldest first, as [(session_id, file_mtime)]. /insights leaves no record of a run, so a run is a
+    maximal group of stored facets whose file_mtime values have no gap over RUN_GAP between neighbours. Groups are formed over
+    the whole store, so a run keeps its identity whatever the view. A facet rewritten by a later run has one stored row, with the
+    later file_mtime: it counts in the later run only. A facet without a file_mtime is in no run."""
     groups = []
     for sid, mtime in cur.execute("SELECT session_id, file_mtime FROM session_facets WHERE file_mtime IS NOT NULL ORDER BY file_mtime, session_id").fetchall():
         if groups and mtime - groups[-1][-1][1] <= RUN_GAP:
             groups[-1].append((sid, mtime))
         else:
             groups.append([(sid, mtime)])
+    return groups
+
+
+def runs(groups, in_view):
+    """[{at, facets}], newest first, at most RUNS: the runs that wrote a facet in the view. at is the group's newest file_mtime;
+    facets counts the group's facets whose session id is in in_view. A run with none is left out."""
     got = [dict(at=metrics.iso(g[-1][1]), facets=sum(sid in in_view for sid, _ in g)) for g in reversed(groups)]
     return [r for r in got if r["facets"]][:RUNS]
+
+
+def run_sizes(groups):
+    """{runs, min, median, max} of the facets per run over the newest RUNS runs of the whole store, or None without a run."""
+    sizes = [len(g) for g in groups[-RUNS:]]
+    return dict(runs=len(sizes), min=min(sizes), median=metrics.median(sizes), max=max(sizes)) if sizes else None
 
 
 def payload(cur, project="", range_days=0, source="", automated=False, today=None, usage_dir=None):
@@ -236,7 +248,7 @@ def payload(cur, project="", range_days=0, source="", automated=False, today=Non
     facets, analysed, orphans = cur.execute(f"{in_view} SELECT count(*), count(*) FILTER (WHERE in_store AND {asql}), "
                                             f"count(*) FILTER (WHERE NOT in_store) FROM v s", wp + asp).fetchone()
     claude = per_source.get("claude", 0)
-    by_project, run_list = [], []
+    by_project, run_list, sizes = [], [], None
     if source != "codex" and cur.execute("SELECT count(*) FROM session_facets").fetchone()[0]:
         by_project = metrics.rows(cur, f"""SELECT coalesce(s.project, '(unknown)') AS project, count(*) AS sessions, count(sf.session_id) AS analysed
             FROM sessions s LEFT JOIN session_facets sf USING (session_id)
@@ -244,17 +256,18 @@ def payload(cur, project="", range_days=0, source="", automated=False, today=Non
                                   asp + [start, start])
         in_view_ids = {r[0] for r in cur.execute(f"WITH {FACETS} SELECT s.session_id FROM f s WHERE {asql} AND (CAST(? AS DATE) IS NULL OR s.start >= {since})",
                                                  asp + [start, start]).fetchall()}
-        run_list = runs(cur, in_view_ids)
+        groups = run_groups(cur)
+        run_list, sizes = runs(groups, in_view_ids), run_sizes(groups)
     newest = cur.execute("SELECT max(file_mtime) FROM session_facets").fetchone()[0]
     coverage = dict(claude_sessions=claude, analysed=analysed, not_analysed=max(claude - analysed, 0),
                     codex_sessions=per_source.get("codex", 0), facets=facets, orphans=orphans, newest_facet=metrics.iso(newest),
                     stored_facets=cur.execute("SELECT count(*) FROM session_facets").fetchone()[0], dir=usage_dir,
-                    by_project=by_project, runs=run_list)
+                    by_project=by_project, runs=run_list, run_sizes=sizes)
     facet_projects = [r[0] for r in cur.execute(f"WITH {FACETS} SELECT DISTINCT project FROM f ORDER BY 1").fetchall()]
     projects = metrics.project_list(cur, automated)
     projects += [p for p in facet_projects if p not in projects]
     out = dict(coverage=coverage, projects=projects, outcomes=[], helpfulness=[], session_types=[], satisfaction=[], friction=[],
-               goals=[], sessions=[], truncated=False)
+               goals=[], trend=[], sessions=[], truncated=False)
     if not facets:
         return out
     by = lambda col: dict(cur.execute(f"{in_view} SELECT {col}, count(*) FROM v WHERE {col} IS NOT NULL GROUP BY 1", wp).fetchall())
@@ -263,6 +276,9 @@ def payload(cur, project="", range_days=0, source="", automated=False, today=Non
     for kind, key in (("satisfaction", "satisfaction"), ("friction", "friction"), ("goal", "goals")):
         out[key] = metrics.rows(cur, f"""{in_view} SELECT c.name, sum(c.n)::BIGINT AS n, count(DISTINCT c.session_id) AS sessions
             FROM facet_counts c JOIN v USING (session_id) WHERE c.kind = ? GROUP BY 1 ORDER BY 2 DESC, 3 DESC, 1""", wp + [kind])
+    out["trend"] = [dict(zip(("week", "n", "achieved"), r)) for r in reversed(cur.execute(f"""{in_view}
+        SELECT {metrics.week('start')} AS week, count(*), count(*) FILTER (WHERE outcome IN ('fully_achieved', 'mostly_achieved'))
+        FROM v WHERE start IS NOT NULL GROUP BY 1 ORDER BY 1 DESC LIMIT ?""", wp + [TREND_WEEKS]).fetchall())]
     names = name_lists(cur.execute(f"""{in_view} SELECT c.session_id, c.kind, c.name FROM facet_counts c JOIN v USING (session_id)
             ORDER BY c.session_id, c.kind, c.n DESC, c.name""", wp).fetchall())
     sess = metrics.rows(cur, f"""{in_view} SELECT session_id, project, start, outcome, helpfulness, session_type, brief_summary,

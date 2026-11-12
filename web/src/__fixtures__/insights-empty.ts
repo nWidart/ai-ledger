@@ -13,7 +13,8 @@ export default {
   "stored_facets": 0,
   "dir": "/Users/example/.claude/usage-data",
   "by_project": [],
-  "runs": []
+  "runs": [],
+  "run_sizes": null
  },
  "projects": [],
  "outcomes": [],
@@ -22,6 +23,7 @@ export default {
  "satisfaction": [],
  "friction": [],
  "goals": [],
+ "trend": [],
  "sessions": [],
  "truncated": false
 } satisfies InsightsPayload;

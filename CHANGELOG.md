@@ -9,6 +9,7 @@ Run `ai-ledger rebuild` once after upgrading (with the app stopped): Codex subag
 
 ### Added
 
+- Insights has a "How this works" drawer (what `/insights` is, the directory read, the last run, how many sessions a run analyses) and an Outcome trend panel with the share of sessions fully or mostly achieved per week of session start.
 - Insights has a Coverage drawer with the analysed share of each project's sessions, so a busy project with no judgments stands out, and the facets each `/insights` run wrote. The coverage sentence links to it.
 - Insights and the Activity Sessions drawer say which sessions they count: Insights counts a session by its start time, Activity by a request in the range, so the two totals can differ slightly.
 - The session sheet shows the session's `/insights` judgment, tagged model-judged, between its figures and its timeline: outcome, a dissatisfied marker, helpfulness, session type, goal and friction categories, the summary and the friction detail, with a link to Insights in the same filters. A session `/insights` has not analysed (every Codex session) shows none.

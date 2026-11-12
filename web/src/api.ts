@@ -301,6 +301,8 @@ export interface InsightsPayload {
     /** The /insights runs that wrote a facet in the view, newest first, at most 20: its newest file time and the facets
      *  of the view it wrote. A run is facets written within an hour of each other, over the whole store. */
     runs: { at: Ts; facets: number }[];
+    /** Facets per run over the newest 20 runs of the whole store, whatever the filters; null without a dated facet. */
+    run_sizes: { runs: number; min: number; median: number; max: number } | null;
   };
   /** Every project, busiest first, then projects only facets name. */
   projects: string[];
@@ -308,6 +310,9 @@ export interface InsightsPayload {
   outcomes: FacetCount[]; helpfulness: FacetCount[]; session_types: FacetCount[];
   /** Summed counts and the sessions that reported each, most first. */
   satisfaction: FacetTally[]; friction: FacetTally[]; goals: FacetTally[];
+  /** Per week of session start (the Monday, YYYY-MM-DD), oldest first, at most 26 weeks with a session: the view's analysed
+   *  sessions and those fully or mostly achieved. */
+  trend: { week: string; n: number; achieved: number }[];
   /** Newest first, at most 200; truncated when there were more. */
   sessions: InsightSession[]; truncated: boolean;
 }
