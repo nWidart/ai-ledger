@@ -16,7 +16,8 @@ export default {
   "kind": "wait",
   "tool": "Bash",
   "since": "2026-11-10T10:00:22.000Z",
-  "inferred": true
+  "inferred": true,
+  "long": false
  },
  "events": [
   {
@@ -48,6 +49,8 @@ export default {
    "error": null,
    "output": null,
    "agent": null,
+   "long": false,
+   "quiet": true,
    "chars": 31,
    "cut": false
   },
@@ -66,6 +69,8 @@ export default {
    "error": null,
    "output": null,
    "agent": "a7",
+   "long": false,
+   "quiet": false,
    "chars": 9,
    "cut": false
   },
@@ -84,6 +89,8 @@ export default {
    "error": null,
    "output": null,
    "agent": null,
+   "long": false,
+   "quiet": true,
    "chars": 9,
    "cut": false
   },
@@ -102,6 +109,8 @@ export default {
    "error": null,
    "output": null,
    "agent": null,
+   "long": false,
+   "quiet": true,
    "chars": 9,
    "cut": false
   },
@@ -120,6 +129,8 @@ export default {
    "error": null,
    "output": null,
    "agent": null,
+   "long": false,
+   "quiet": true,
    "chars": 9,
    "cut": false
   },
@@ -138,13 +149,15 @@ export default {
    "id": "t3",
    "tool": "Bash",
    "summary": "uv run python -m unittest",
-   "description": null,
+   "description": "Run the Python tests",
    "start": "2026-11-10T10:00:14.000Z",
    "end": "2026-11-10T10:00:20.000Z",
    "failed": true,
    "error": "FAIL: test_hot_pass\nAssertionError: 3 != 1",
    "output": null,
    "agent": null,
+   "long": false,
+   "quiet": false,
    "chars": 42,
    "cut": false
   },
@@ -163,10 +176,18 @@ export default {
    "error": null,
    "output": null,
    "agent": null,
+   "long": false,
+   "quiet": false,
    "chars": 0,
    "cut": false
   }
  ],
+ "lanes": {
+  "a7": {
+   "cost": 0.0084,
+   "model": "claude-opus-5-5"
+  }
+ },
  "window": 1000000,
  "compactions": [
   {

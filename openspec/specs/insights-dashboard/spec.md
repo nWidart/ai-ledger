@@ -72,30 +72,29 @@ The page SHALL list goal categories by total count over the view's facets, and t
 - **THEN** the Goals list shows the 12 most counted and a "Show all 222 goals" control
 
 ### Requirement: List analysed sessions
-The page SHALL list the view's analysed sessions, newest first, each with its title, project, start time, outcome, goals and friction categories, and its brief summary and friction detail on a full-width line below. The list SHALL scroll with the page, show its first 25 sessions with a control to show them all, and say how many sessions it lists. Sessions with friction SHALL be listable on their own, and that choice SHALL be kept in the page URL. Each session in the store SHALL link to its session sheet on Activity, in the view's project, range, source and automated filter.
-
-#### Scenario: Open a session
-- **WHEN** the user views project `foo` for the last 7 days and clicks a session in the list
-- **THEN** Activity opens on project `foo` for the last 7 days with that session's sheet
+The page SHALL list the view's analysed sessions, newest first, each with its title, project, start time, outcome, goals and friction categories, and its brief summary and friction detail on a full-width line below. The list SHALL scroll with the page, show its first 25 sessions with a control to show them all, and say how many sessions it lists. Sessions with friction SHALL be listable on their own, and that choice SHALL be kept in the page URL.
 
 #### Scenario: Only sessions with friction
 - **WHEN** the user narrows the list to sessions with friction
 - **THEN** only sessions whose facet reports a friction category or friction detail are listed, each with its friction detail, and the list says "N of M sessions"
+
+### Requirement: Link analysed sessions to their sheets
+Each session in the store SHALL link to its session sheet on Activity, in the view's project, range, source and automated filter.
+
+#### Scenario: Open a session
+- **WHEN** the user views project `foo` for the last 7 days and clicks a session in the list
+- **THEN** Activity opens on project `foo` for the last 7 days with that session's sheet
 
 #### Scenario: Session missing from the store
 - **WHEN** a facet's session has no transcript in the store
 - **THEN** the session is listed with its summary and no link
 
 ### Requirement: Show coverage and staleness
-The page SHALL show, in neutral text, how many of the view's Claude Code sessions have a facet, out of how many, and the share, with the note that each `/insights` run analyses more when any have none. It SHALL show when the newest facet in the store was written. Automated sessions SHALL NOT count in the coverage, whatever the automated filter, unless the project filter names their project. The page SHALL say every session is analysed only when the view has at least one analysed session and none without a facet.
+The page SHALL show, in neutral text, how many of the view's Claude Code sessions have a facet, out of how many, and the share, with the note that each `/insights` run analyses more when any have none. It SHALL show when the newest facet in the store was written. The page SHALL say every session is analysed only when the view has at least one analysed session and none without a facet.
 
 #### Scenario: Sessions not analysed
 - **WHEN** the view holds 400 Claude Code sessions and 150 of them have a facet
 - **THEN** the page says "150 of 400 Claude Code sessions in this view analysed (38%)" and that each `/insights` run analyses more
-
-#### Scenario: Automated sessions included
-- **WHEN** the automated filter is on and the view holds 3,000 `observer-sessions` sessions besides 400 Claude Code sessions
-- **THEN** the coverage still counts 400 Claude Code sessions
 
 #### Scenario: No analysed session in the view
 - **WHEN** the view holds no analysed session
@@ -104,6 +103,13 @@ The page SHALL show, in neutral text, how many of the view's Claude Code session
 #### Scenario: No facets at all
 - **WHEN** the store holds no facet
 - **THEN** the page says no `/insights` data was found, names the directory it reads, and says to run `/insights` in Claude Code
+
+### Requirement: Leave automated sessions out of the coverage
+Automated sessions SHALL NOT count in the coverage, whatever the automated filter, unless the project filter names their project.
+
+#### Scenario: Automated sessions included
+- **WHEN** the automated filter is on and the view holds 3,000 `observer-sessions` sessions besides 400 Claude Code sessions
+- **THEN** the coverage still counts 400 Claude Code sessions
 
 ### Requirement: Treat Codex sessions as not analysed
 Codex sessions SHALL never count in a facet figure. With source All, the coverage line SHALL count Codex sessions apart from Claude Code sessions as not analysed by `/insights`. With source Codex, the page SHALL say that `/insights` analyses only Claude Code sessions, and show no figures.

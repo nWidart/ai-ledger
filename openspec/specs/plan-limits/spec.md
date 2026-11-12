@@ -84,7 +84,7 @@ For a calibrated limit, the system SHALL estimate the percent used at any time i
 - **THEN** that window shows a curve estimated from that week's counted usage
 
 ### Requirement: Forecast each open window
-For each open window, the system SHALL forecast the percent used until the window resets. The forecast SHALL follow the user's activity profile by hour of day, pooled across providers. The usual rate SHALL be per provider and weighted toward recent weeks; a partial first day of use SHALL count at its rate for a whole day. Once the window has been open for a seventh of its length (at most a day), the forecast pace SHALL be halfway between the usual rate and the window's own rate over that last seventh, and the low and high bounds SHALL cover both. The forecast SHALL give the time it reaches 100%, or the percent at reset if it does not, with low and high bounds.
+For each open window, the system SHALL forecast the percent used until the window resets. The forecast SHALL follow the user's activity profile by hour of day, pooled across providers. The forecast SHALL give the time it reaches 100%, or the percent at reset if it does not, with low and high bounds.
 
 #### Scenario: Window runs out first
 - **WHEN** a weekly window is at 57% two days before reset, and the forecast reaches 100% in 30 hours
@@ -97,6 +97,9 @@ For each open window, the system SHALL forecast the percent used until the windo
 #### Scenario: Night hours
 - **WHEN** the user's profile shows almost no activity between 01:00 and 05:00
 - **THEN** the forecast rises by almost nothing in those hours
+
+### Requirement: Set the forecast pace
+The forecast's usual rate SHALL be per provider and weighted toward recent weeks; a partial first day of use SHALL count at its rate for a whole day. Once the window has been open for a seventh of its length (at most a day), the forecast pace SHALL be halfway between the usual rate and the window's own rate over that last seventh, and the low and high bounds SHALL cover both.
 
 #### Scenario: A hot window
 - **WHEN** the usual pace is 7 points a day and a weekly window used 34 points over its last day

@@ -14,7 +14,7 @@ The app SHALL listen only on `127.0.0.1` and SHALL NOT expose transcript data on
 - **THEN** the connection is refused
 
 ### Requirement: Keep the store current
-The app SHALL ingest new transcript data when it starts and then on a fixed interval while it runs, and SHALL offer a manual refresh. While at least one Live page is connected, the app SHALL ingest transcripts every second. Usage data and plan limits SHALL keep their own interval.
+The app SHALL ingest new transcript data when it starts and then on a fixed interval while it runs, and SHALL offer a manual refresh. While at least one Live page is connected, the app SHALL ingest transcripts every second. Usage data and plan limits SHALL keep their own interval. The time of the last ingest in the navigation SHALL stay current: it follows the app's status on a fixed interval, and while the Live page is open it also follows each change notice the page receives.
 
 #### Scenario: New session while app runs
 - **WHEN** a new Claude Code session writes transcript lines while the app is running
@@ -23,6 +23,14 @@ The app SHALL ingest new transcript data when it starts and then on a fixed inte
 #### Scenario: Manual refresh
 - **WHEN** the user clicks refresh
 - **THEN** the app ingests immediately and the page shows the new data and the time of the last ingest
+
+#### Scenario: Failed refresh waits for Retry
+- **WHEN** a manual refresh fails, and the app's status then arrives, on the navigation's interval or after a change notice on the Live page
+- **THEN** the navigation still says the refresh failed and offers Retry, until the user retries
+
+#### Scenario: Status asked while a refresh runs
+- **WHEN** the navigation asks for the app's status during a manual refresh, and the answer says an ingest is running
+- **THEN** the navigation shows the refresh's own result when it ends, not that answer
 
 #### Scenario: Ingest with nothing new
 - **WHEN** a timed ingest stores no new lines and no usage data
@@ -35,6 +43,18 @@ The app SHALL ingest new transcript data when it starts and then on a fixed inte
 #### Scenario: Live page closed
 - **WHEN** the last Live page disconnects
 - **THEN** the app goes back to ingesting on its fixed interval
+
+#### Scenario: Last ingest follows Live
+- **WHEN** the Live page is open, the navigation shows "Last ingest" with a time 50 seconds old, and the page receives a change notice
+- **THEN** the navigation shows the time of the ingest that stored those lines, within 2 seconds, without waiting for its own poll
+
+#### Scenario: Notices in quick succession
+- **WHEN** the Live page receives a change notice each second for ten seconds
+- **THEN** the page asks for the app's status at most once at a time, and the navigation shows the newest ingest time
+
+#### Scenario: Paused Live page
+- **WHEN** the Live page is paused and receives change notices
+- **THEN** the notices do not change the time the navigation shows, the navigation's own poll still does, and resuming shows the newest
 
 ### Requirement: Single owner of the store
 Only one process SHALL write to the store at a time. A second app or command-line ingest SHALL fail with a clear message instead of corrupting or blocking the store.
@@ -112,7 +132,7 @@ The app SHALL serve every dashboard page from the built files that ship with it,
 - **THEN** Activity, Cost and Errors all load and work
 
 ### Requirement: Exclude automated sessions by default
-Every page with the automated filter (Activity, Cost, Insights, Live) SHALL leave out automated sessions from every figure, chart and table, and SHALL offer a control to include them. A session is automated when it belongs to a known automated project (today `observer-sessions`, and every project listed in the automated projects file), when it has no user prompt, or when it ran in a temporary folder (project `(temp)`) with at most one user prompt. The choice SHALL be kept in the page URL and carried across pages. A project filter that names an automated project SHALL include that project's sessions; naming `(temp)` SHALL NOT include its automated sessions.
+Every page with the automated filter (Activity, Cost, Insights, Live) SHALL leave out automated sessions from every figure, chart and table, and SHALL offer a control to include them. The choice SHALL be kept in the page URL and carried across pages. A project filter that names an automated project SHALL include that project's sessions; naming `(temp)` SHALL NOT include its automated sessions.
 
 #### Scenario: Default view
 - **WHEN** the store holds 631 `observer-sessions` sessions and 872 other sessions in the last 30 days
@@ -125,6 +145,9 @@ Every page with the automated filter (Activity, Cost, Insights, Live) SHALL leav
 #### Scenario: Filter names an automated project
 - **WHEN** the user opens Activity with `#project=observer-sessions` and the control off
 - **THEN** Activity shows the `observer-sessions` sessions, and the project picker shows `observer-sessions` as the selected project
+
+### Requirement: Tell which sessions are automated
+The app SHALL treat a session as automated when it belongs to a known automated project (today `observer-sessions`, and every project listed in the automated projects file), when it has no user prompt, or when it ran in a temporary folder (project `(temp)`) with at most one user prompt.
 
 #### Scenario: Helper sessions in a temporary folder
 - **WHEN** an app ran 170 one-prompt sessions in temporary folders and a person ran one session with three prompts in `/tmp`
@@ -254,16 +277,19 @@ A saved Light or Dark choice SHALL be applied before the page first paints, so t
 - **THEN** the first painted frame already uses the dark colors
 
 ### Requirement: Read automated projects from a user file
-The app SHALL read a user automated projects file, `automated.json` next to the store, holding `{"projects": ["name", ...]}`, on every request, and SHALL treat each listed project as automated in addition to the built-in ones. When the file cannot be read, is not valid JSON, has no `projects` list, or has an entry that is not a string, the app SHALL ignore the whole file and the Activity page SHALL show a banner with the file's path and the reason, saying that only the built-in detection applies. The "Include automated" control's tooltip SHALL name the file's path. A missing file SHALL be no error.
+The app SHALL read a user automated projects file, `automated.json` next to the store, holding `{"projects": ["name", ...]}`, on every request, and SHALL treat each listed project as automated in addition to the built-in ones. The "Include automated" control's tooltip SHALL name the file's path. A missing file SHALL be no error.
 
 #### Scenario: File added
 - **WHEN** the user creates the file with `{"projects": ["docs-bot"]}` and reloads Activity
 - **THEN** `docs-bot` is automated
 
-#### Scenario: Malformed file
-- **WHEN** the file holds invalid JSON
-- **THEN** every page still loads with the built-in detection alone, and Activity says the file was ignored and why
-
 #### Scenario: No file
 - **WHEN** there is no file
 - **THEN** Activity shows no banner
+
+### Requirement: Ignore an automated projects file that cannot be used
+When the automated projects file cannot be read, is not valid JSON, has no `projects` list, or has an entry that is not a string, the app SHALL ignore the whole file and the Activity page SHALL show a banner with the file's path and the reason, saying that only the built-in detection applies.
+
+#### Scenario: Malformed file
+- **WHEN** the file holds invalid JSON
+- **THEN** every page still loads with the built-in detection alone, and Activity says the file was ignored and why

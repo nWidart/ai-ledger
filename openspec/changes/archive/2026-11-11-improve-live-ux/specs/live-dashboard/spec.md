@@ -1,0 +1,238 @@
+# Spec Delta
+
+## MODIFIED Requirements
+
+### Requirement: Show active sessions in a rail
+The Live page SHALL list the active sessions in a rail, grouped by state in this order: *approval?*, *your turn*, *working* (running a tool or thinking), *idle*, *ended*. A group with no session SHALL NOT be drawn. Inside a group, sessions SHALL be ordered by session start, oldest first, not by last write, so an entry moves only when its state changes. Each entry SHALL show the session's title as its main line, then the project with its color, the source and the state on its second line, and the cost so far. An entry in *your turn* or *thinking* SHALL show how long the session has been in that state. An entry with no title SHALL show the project as its main line. Selecting an entry SHALL open that session in the stream. With no session selected, the page SHALL open the newest active session, the one that wrote last.
+
+#### Scenario: Open Live with two running sessions
+- **WHEN** the user opens `/live` while sessions in `ai-ledger` and `jobdesk` are active, and `ai-ledger` wrote last
+- **THEN** the rail lists both, and the stream shows `ai-ledger`
+
+#### Scenario: Filter leaves the open session out
+- **WHEN** no session is named in the URL and the user picks a project whose sessions do not include the one in the stream
+- **THEN** the stream opens the newest session of that project
+
+#### Scenario: Count of working sessions
+- **WHEN** three sessions are active: one running a tool, two waiting for a prompt
+- **THEN** the rail's footer says 1 session working and 2 waiting for you
+
+#### Scenario: No active session
+- **WHEN** no session wrote a line in the last 10 minutes
+- **THEN** the page says no session is active and shows when the newest session last wrote, with a link to it on Activity
+
+#### Scenario: Two sessions in one project
+- **WHEN** two `ai-ledger` sessions are active with the AI titles "Add session titles" and "Fix Cost test"
+- **THEN** their rail entries show those titles as their main lines, and `ai-ledger` on their second lines
+
+#### Scenario: Prompt title under Full text
+- **WHEN** an active session has no agent title and Full text is off
+- **THEN** its entry shows the project as its main line, and when Full text is turned on it shows the title made from its first prompt
+
+#### Scenario: Groups by state
+- **WHEN** five sessions are active: one ended, one idle, one thinking, one in your turn and one likely waiting for approval
+- **THEN** the rail lists them from the top in this order: approval?, your turn, working, idle, ended, each under its own heading
+
+#### Scenario: Order does not follow writes
+- **WHEN** two sessions are running, A started at 09:00 and B at 09:30, and A writes a line
+- **THEN** A stays above B
+
+#### Scenario: Session changes state
+- **WHEN** a session in the working group finishes its turn
+- **THEN** its entry moves to the your turn group, and no other entry changes place
+
+#### Scenario: New session joins
+- **WHEN** a third session starts while two are running
+- **THEN** it joins the end of its group and the two entries above it do not move
+
+#### Scenario: How long on your turn
+- **WHEN** a session has been in your turn for 4 minutes
+- **THEN** its entry shows 4m 00s beside the state, and the figure counts up
+
+### Requirement: Show a session's stream
+The stream SHALL show the selected session's events in order. Each tool call SHALL be a row with its tool, row text, duration and result. The row text of a shell call that carries a description SHALL be that description; otherwise it SHALL be the input summary. A running call SHALL show a timer that counts up each second. A failed call SHALL be marked as failed. Compactions SHALL be marked between events. The time of an event SHALL include its date when the event is not from today. The stream head SHALL link to the session's sheet on Activity. When older events are left out, the stream SHALL say so and link to the session's sheet on Activity.
+
+#### Scenario: Tool call starts and ends
+- **WHEN** a `Bash` call starts in the followed session and ends 8 seconds later
+- **THEN** its row appears within 3 seconds of its transcript line being written, with a running timer, and when the result arrives it shows 8s and passed
+
+#### Scenario: Failed tool call
+- **WHEN** a tool call fails
+- **THEN** its row is marked as failed, and the agent panel's error count goes up by one
+
+#### Scenario: Shell call with a description
+- **WHEN** a `Bash` call runs `cd /long/path && uv run pytest` with the description "Run the Python tests"
+- **THEN** its row text is "Run the Python tests"
+
+#### Scenario: Shell call with no description
+- **WHEN** a `Bash` call carries no description
+- **THEN** its row text is its command
+
+#### Scenario: Event from another day
+- **WHEN** the user views an idle session whose last event was yesterday at 14:03:12
+- **THEN** the times in the stream show yesterday's date with the time, and events from today show the time alone
+
+#### Scenario: Link to the session sheet
+- **WHEN** the user selects the session sheet link in the stream head
+- **THEN** the session's sheet opens on Activity
+
+### Requirement: Open a tool call's detail
+Selecting a tool row SHALL open its detail in place: the input summary, the start time, the error when it failed, and the result. For a shell call that carries a description, the detail SHALL show the description and the command. With Full text off, the result SHALL show only its size.
+
+#### Scenario: Open a failed call
+- **WHEN** the user selects a failed `Bash` row with Full text off
+- **THEN** the detail shows the command, the start time and the error, and the result as a character count
+
+#### Scenario: Open a call with a description
+- **WHEN** the user selects a `Bash` row whose row text is its description
+- **THEN** the detail shows the description and, apart from it, the command
+
+### Requirement: Fold subagent lanes
+Subagent work SHALL appear as a lane inside the stream. The lane header SHALL show the subagent's name, its description, its tool-call count, its duration, its cost and its model when the app gives them, its error count when above zero, and whether it is still running. Selecting the header SHALL fold or unfold the lane. A finished lane SHALL be folded by default. A running lane with more than 5 rows SHALL show its last 5 and a control to show all of them, and to go back to the last 5. A fold or an expansion the user chose SHALL be kept while the page is open. Updates SHALL keep every lane with all the rows the page holds for it.
+
+#### Scenario: Fold a lane
+- **WHEN** the user selects the header of an Explore lane with three tool calls
+- **THEN** the three rows are hidden and the header still shows three tool calls
+
+#### Scenario: Update brings another lane's work
+- **WHEN** a session has three lanes and an update brings new calls of one of them only
+- **THEN** all three lanes stay, each with its rows and its count
+
+#### Scenario: Finished lane
+- **WHEN** the user opens a session with a finished Explore lane of twelve calls
+- **THEN** the lane is folded, and its header shows twelve tool calls, its cost, its model and its duration
+
+#### Scenario: Running lane
+- **WHEN** a running lane holds twelve tool rows
+- **THEN** the stream shows its last 5, and a control that says it shows all 12
+
+#### Scenario: Show all rows
+- **WHEN** the user selects the control of a running lane
+- **THEN** all twelve rows show, and the control offers the last 5 again
+
+#### Scenario: Lane header figures
+- **WHEN** a lane made 8 tool calls, 2 of them failed, on `claude-haiku-5-5` for $0.05
+- **THEN** its header shows 8 tools, 2 errors, `claude-haiku-5-5` and $0.05
+
+#### Scenario: Lane with no cost
+- **WHEN** the app gives no cost and no model for a lane
+- **THEN** its header shows neither, and still shows its tool count and duration
+
+#### Scenario: Lane the user opened finishes
+- **WHEN** the user unfolds a running lane and the lane then finishes
+- **THEN** the lane stays unfolded
+
+### Requirement: Follow the newest event
+With Follow on, the stream SHALL keep the newest event in view, wherever it falls in the stream, including inside a lane in the middle of it. Scrolling up or opening a tool row SHALL turn Follow off. The page's own scrolling to the newest event SHALL NOT turn Follow off. While Follow is off and new events arrive, the page SHALL offer Jump to latest, which turns Follow back on.
+
+#### Scenario: Read back while the session runs
+- **WHEN** the user scrolls up while new tool calls arrive
+- **THEN** the stream stays where the user scrolled, and Jump to latest appears
+
+#### Scenario: Newest event in a lane
+- **WHEN** Follow is on, a running lane stands in the middle of the stream with a main-thread event after it, and the lane gets a new tool call
+- **THEN** the stream scrolls to that call, and Follow stays on
+
+### Requirement: Pause updates
+The page SHALL offer Pause, which holds new events and states until Resume. While paused, the page SHALL say so, and SHALL NOT show the live indicator: the connection line has no green dot and the state dots do not pulse.
+
+#### Scenario: Pause and resume
+- **WHEN** the user pauses, three tool calls arrive, and the user resumes
+- **THEN** nothing changes while paused, and the three calls appear on resume
+
+#### Scenario: Paused page
+- **WHEN** the user pauses while a session is running a tool
+- **THEN** the connection line says Paused with no green dot, the session's state dot does not pulse, and both are back when the user resumes
+
+### Requirement: Show all sessions on a wall
+The page SHALL offer a Wall view with one tile per active session, grouped by state in the rail's order, with the same headings. Inside a group, tiles SHALL be ordered by session start, oldest first. A tile SHALL show the project, state, title, latest action, context fill, tool count, errors, cost, branch, source and model. A tile in *your turn* or *thinking* SHALL show how long the session has been in that state. A tile in *your turn* SHALL have a border. The title SHALL take one line under the project, cut with an ellipsis when it does not fit, with the full title on hover. A tile with no title SHALL leave that line out. Selecting a tile SHALL open that session in the stream view.
+
+#### Scenario: Pick a session from the wall
+- **WHEN** the user selects the `graft` tile on the wall
+- **THEN** the stream view opens on `graft`
+
+#### Scenario: Long title on a tile
+- **WHEN** a session's title is wider than its tile
+- **THEN** the tile shows the title on one line, cut with an ellipsis, and hovering it shows the full title
+
+#### Scenario: Your turn tile
+- **WHEN** a session is in your turn
+- **THEN** its tile has a border and shows how long the session has waited
+
+#### Scenario: Wall groups
+- **WHEN** one session is likely waiting for approval and two are running
+- **THEN** the wall shows the approval tile under its heading, then the two running tiles under theirs
+
+### Requirement: Recover from a dropped connection
+When the update connection drops, the page SHALL say that updates are paused and SHALL reconnect on its own. When the app answers the connection with an HTTP error, which ends the connection for good, the page SHALL say it is reconnecting and SHALL open a new connection after a delay that grows with each failure up to 30 seconds and starts over after a success. After reconnecting it SHALL fetch what it missed.
+
+#### Scenario: App restarted
+- **WHEN** the app restarts while the Live page is open
+- **THEN** the page shows that it is reconnecting, then catches up without a reload
+
+#### Scenario: HTTP error from the events stream
+- **WHEN** the events stream answers with an HTTP 503 and the browser closes it
+- **THEN** the page shows reconnecting, retries after 1 second, then 2, then 4, and when a retry succeeds it shows Updating live and fetches what it missed
+
+## ADDED Requirements
+
+### Requirement: Filter the stream
+The stream SHALL offer filters, in a bar under its head, that change what it draws and nothing it holds. Selecting the Errors count, there or in the agent panel, SHALL filter the stream to failed tool rows, and selecting it again SHALL clear the filter. A Main thread only toggle SHALL hide every lane. A Hide read-only toggle SHALL hide the tool rows the app marks as read-only: `Read`, `Grep`, `Glob`, and shell calls whose every command only reads or searches.
+
+#### Scenario: Filter to failed rows
+- **WHEN** the user selects the Errors count while the stream holds two failed rows among forty
+- **THEN** the stream shows the two failed rows, and selecting the count again shows all rows
+
+#### Scenario: Main thread only
+- **WHEN** the user turns on Main thread only with two lanes in the stream
+- **THEN** no lane shows, and the main-thread rows do
+
+#### Scenario: Hide read-only rows
+- **WHEN** the user turns on Hide read-only with `Read`, `Grep`, `Glob` and `Edit` rows in the stream
+- **THEN** only the `Edit` row shows among them
+
+#### Scenario: Hide read-only shell rows
+- **WHEN** the user turns on Hide read-only with a shell row that runs `rg TODO src` and one that runs `git commit`
+- **THEN** only the `git commit` row shows among them
+
+#### Scenario: Errors count pressed
+- **WHEN** the user selects the Errors count in the agent panel
+- **THEN** the stream shows failed rows only, and the count shows as pressed in the agent panel and in the stream's bar
+
+#### Scenario: Filters do not change figures
+- **WHEN** the user turns on any filter
+- **THEN** the agent panel's figures and the lane headers' tool counts do not change
+
+### Requirement: Combine stream filters
+The stream filters SHALL combine, SHALL be off on every page load, and SHALL stay on when the user opens another session. A lane with no matching row SHALL be hidden; a lane with matching rows SHALL show them under its header. The stream SHALL say how many rows the filters hide.
+
+#### Scenario: Filters combine
+- **WHEN** the user filters to failed rows and turns on Main thread only, and the only failed row is inside a lane
+- **THEN** the stream shows no row, and says that the filters hide every row
+
+#### Scenario: Failed row in a lane
+- **WHEN** the user filters to failed rows and a lane holds one failed row among six
+- **THEN** the lane shows its header and that one row
+
+#### Scenario: Another session
+- **WHEN** the user turns on Main thread only and opens another session
+- **THEN** Main thread only is still on
+
+#### Scenario: Reload
+- **WHEN** the user reloads the page after turning a filter on
+- **THEN** every filter is off
+
+### Requirement: Show who needs you in the tab title
+The browser tab title SHALL carry the number of listed sessions that need the user, those likely waiting for approval and those in your turn, while that number is above zero. With none, the title SHALL be the page's usual title. Leaving the Live page SHALL restore the title of the page the user goes to.
+
+#### Scenario: Two sessions need the user
+- **WHEN** one session is likely waiting for approval and one is in your turn
+- **THEN** the tab title starts with (2)
+
+#### Scenario: Nobody needs the user
+- **WHEN** every active session is running or idle
+- **THEN** the tab title has no count
+
+#### Scenario: Leave Live
+- **WHEN** the tab title shows (1) and the user opens Cost
+- **THEN** the title is Cost's, with no count

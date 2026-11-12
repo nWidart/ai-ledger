@@ -619,7 +619,8 @@ def prompt_text(d, pid):
 
 def live_items(d):
     """What the Live page shows of Claude Code line d, as dicts keyed by k: prompt, reply, interrupt, request, tool_use,
-    tool_result and compaction. Text stays in the items; live.py drops it unless the page asks for it."""
+    tool_result and compaction. Text stays in the items; live.py drops it unless the page asks for it. A tool_use
+    carries its input's timeout in milliseconds, when it has one."""
     t = d.get("type")
     msg = d.get("message") if isinstance(d.get("message"), dict) else {}
     content = msg.get("content")
@@ -640,7 +641,8 @@ def live_items(d):
             if x.get("type") == "tool_use" and x.get("id"):
                 inp = x.get("input") if isinstance(x.get("input"), dict) else {}
                 items.append(dict(k="tool_use", id=x["id"], tool=x.get("name") or "?", summary=summarize_input(x.get("name"), inp),
-                                  description=inp.get("description") if isinstance(inp.get("description"), str) else None))
+                                  description=inp.get("description") if isinstance(inp.get("description"), str) else None,
+                                  timeout=inp.get("timeout") if isinstance(inp.get("timeout"), (int, float)) else None))
         return items
     if t != "user":
         return []
@@ -675,6 +677,9 @@ class Source(NamedTuple):
     prompt_text: Callable = prompt_text  # (line, prompt_id) -> the prompt's text if the line holds it, else None
     prompt_type: str = "user"  # raw_lines.type of the lines that hold prompt text
     live_items: Callable = live_items  # line -> what the Live page shows of it
+    # raw_lines.type of the line written as a session closes, or None for a source that writes none. Claude Code writes
+    # cost-state (no timestamp) when it exits; a resumed session writes on after it.
+    close_type: str | None = "cost-state"
 
 
 from . import codex  # noqa: E402  (it subclasses Deriver)
@@ -683,7 +688,7 @@ from . import insights  # noqa: E402  (it reads usage data through this module)
 
 SOURCES = {"claude": Source(transcript_files, line_key, Deriver, lambda path: "/subagents/" in path),
            "codex": Source(codex.files, codex.key, codex.CodexDeriver, codex.subagent, codex.fields, codex.read,
-                            codex.prompt_text, "event_msg", codex.live_items)}
+                            codex.prompt_text, "event_msg", codex.live_items, None)}
 
 
 def rebuild(con, log=None):

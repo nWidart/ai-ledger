@@ -16,7 +16,8 @@ export default {
   "kind": "thinking",
   "tool": null,
   "since": "2026-11-10T10:00:20.000Z",
-  "inferred": false
+  "inferred": false,
+  "long": false
  },
  "events": [
   {
@@ -48,10 +49,13 @@ export default {
    "error": null,
    "output": null,
    "agent": null,
+   "long": false,
+   "quiet": true,
    "chars": 17,
    "cut": false
   }
  ],
+ "lanes": {},
  "window": 272000,
  "compactions": [],
  "spark": {

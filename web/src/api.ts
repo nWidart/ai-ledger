@@ -269,12 +269,15 @@ export interface InsightsPayload {
 
 // Live (/api/live, /api/live/session, live.py payloads): running sessions from the agent's side. Prompt, reply and
 // tool-output text are only present when the session was fetched with text.
-export type LiveStateKind = "idle" | "wait" | "tool" | "thinking" | "you";
+export type LiveStateKind = "idle" | "wait" | "tool" | "thinking" | "you" | "ended";
 export interface LiveState {
-  /** wait: a shell call pending past 30 s, likely waiting for approval. */
+  /** wait: a shell call pending past 30 s, likely waiting for approval. ended: the transcript shows the session closed
+   *  (Claude Code only; Codex writes no such line). */
   kind: LiveStateKind; tool: string | null; since: Ts | null;
   /** The transcript does not record this state; it is read from the last lines. */
   inferred: boolean;
+  /** tool: the running call is a long one (see LiveToolEvent.long), which never turns into wait. */
+  long: boolean;
 }
 export interface LiveFigures {
   cost: number | null; requests: number; model: string | null;
@@ -286,7 +289,9 @@ export interface LiveFigures {
 /** The session's title and where it came from; a title made from the first prompt only with text. */
 export interface LiveTitle { title: string | null; title_from: "agent" | "prompt" | null }
 export interface LiveListSession extends LiveFigures, LiveTitle {
-  session_id: string; project: string | null; source: Source; branch: string | null; last_ts: Ts | null; state: LiveState;
+  session_id: string; project: string | null; source: Source; branch: string | null;
+  /** Its first line's time (the session's start) and its newest line's. */
+  first_ts: Ts | null; last_ts: Ts | null; state: LiveState;
   latest: { kind: "tool" | "prompt"; tool: string | null; summary: string | null; lane: string | null } | null;
 }
 export interface LivePayload {
@@ -298,13 +303,18 @@ export interface LivePayload {
 interface LiveEventBase { key: string; ts: Ts | null; lane: string | null }
 export interface LiveTextEvent extends LiveEventBase { k: "prompt" | "reply"; words: number; text?: string }
 export interface LiveToolEvent extends LiveEventBase {
-  /** The input, whole only with text: without, a subagent call's description, and other inputs cut to 300 characters. */
+  /** The input, whole only with text: without, a subagent call's description, and other inputs cut to 300 characters.
+   *  description: the label the agent gave the call (a shell call's row text), cut the same way. */
   k: "tool"; id: string; tool: string; summary: string; description: string | null; start: Ts | null; end: Ts | null;
   failed: boolean; error: string | null;
   /** The result's size; its text (cut to 4 KB) only with text. */
   chars: number; output: string | null; cut: boolean;
   /** The subagent this call started, when its result or the subagent's start names it. */
   agent: string | null;
+  /** Its input sets a timeout above 120 s: pending past 30 s, such a call does not read as waiting for approval. */
+  long: boolean;
+  /** It only reads: Read, Grep or Glob, or a shell call whose every command reads or searches. Hide read-only leaves it out. */
+  quiet: boolean;
 }
 export interface LiveMarkEvent extends LiveEventBase { k: "interrupt" | "turn_end" }
 export interface LiveTurnStart extends LiveEventBase { k: "turn_start"; window: number | null }
@@ -315,6 +325,8 @@ export interface LiveSession extends LiveFigures, LiveTitle {
   /** Pass back as after= to get newer events, with those of the minute before sent again. */
   cursor: string | null; truncated: boolean; state: LiveState;
   events: LiveEvent[];
+  /** Per subagent lane with a request, by the events' lane id: its cost (null when unpriced) and its newest request's model. */
+  lanes: Record<string, { cost: number | null; model: string | null }>;
   compactions: { ts: Ts | null; pre: number | null }[];
   spark: { points: number[]; per_minute: number; step: number };
   limits: { label: string; used_percent: number; observed_at: Ts | null; resets_at: Ts | null }[];

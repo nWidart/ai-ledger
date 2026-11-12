@@ -4,6 +4,8 @@ import { describe, expect, it, vi } from "vitest";
 import { App } from "../App";
 import { hasHue, setOrder } from "../colors";
 import { Nav } from "./Nav";
+import { pollStatus } from "./refresh";
+import { fetchCached, peekCache } from "../useApi";
 import usage from "../__fixtures__/usage";
 import sessions from "../__fixtures__/sessions";
 import session from "../__fixtures__/session";
@@ -67,7 +69,7 @@ describe("Nav", () => {
     render(<App />);
     await userEvent.click(screen.getByRole("link", { name: "Live" }));
     expect(location.pathname).toBe("/live");
-    expect(document.title).toBe("Live · AI Ledger");
+    await waitFor(() => expect(document.title).toBe("(2) Live · AI Ledger")); // one approval wait and one your turn in the list
     expect(vi.mocked(fetch).mock.calls.some(c => String(c[0]) === "/api/live?project=foo&source=claude")).toBe(true);
     expect(screen.queryByRole("group", { name: "Time range" })).toBeNull();
     await userEvent.click(screen.getByRole("link", { name: "Cost" }));
@@ -105,8 +107,10 @@ describe("Nav", () => {
     expect(location.hash).toBe("#range=30&q=api");
   });
 
-  it("shows the ingest status, and a failed Refresh offers Retry", async () => {
-    const f = vi.fn((_url: string, init?: RequestInit) => init?.method === "POST" ? Promise.reject(new Error("down")) : json(status));
+  it("shows the ingest status, and a failed Refresh offers Retry until it is retried, whatever a status poll answers", async () => {
+    setOrder([]);
+    let down = true, order: string[] = [];
+    const f = vi.fn((_url: string, init?: RequestInit) => init?.method === "POST" && down ? Promise.reject(new Error("down")) : json({ ...status, project_order: order }));
     vi.stubGlobal("fetch", f);
     history.replaceState(null, "", "/usage");
     render(<Nav />);
@@ -116,6 +120,115 @@ describe("Nav", () => {
     expect(btn.className).toBe("failed");
     expect(screen.getByText("Refresh failed. Select Retry to try again.")).toBeTruthy();
     expect(f).toHaveBeenCalledWith("/api/refresh", { method: "POST" });
+    order = ["foo"]; // the app is up: the nav's poll, or Live's on a change notice, still does its other work
+    await act(async () => { expect(await pollStatus()).not.toBeNull(); });
+    expect([screen.getByRole("button", { name: "Retry" }).className, hasHue("foo")]).toEqual(["failed", true]);
+    expect(screen.getByText("Refresh failed. Select Retry to try again.")).toBeTruthy();
+    down = false;
+    await userEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect((await screen.findByRole("button", { name: "Refresh" })).className).toBe("");
+    expect(screen.getByText(/Last ingest .* · 2 new lines/)).toBeTruthy();
+  });
+
+  it("leaves the text to a running Refresh: no status poll replaces it, nor the answer to one asked before it ended", async () => {
+    const answers: Record<string, () => void> = {}, later = (key: string, body: unknown) => new Promise<Response>(r => { answers[key] = () => r(json(body)); });
+    const f = vi.fn((_url: string, _init?: RequestInit) => json(status));
+    vi.stubGlobal("fetch", f);
+    render(<Nav />);
+    expect(await screen.findByText(/Last ingest .* · 2 new lines/)).toBeTruthy();
+    f.mockImplementation((_url, init) => init?.method === "POST" ? later("refresh", { ...status, last_stats: { ...status.last_stats, inserted: 5 } }) : json({ ...status, ingesting: true }));
+    await userEvent.click(screen.getByRole("button", { name: "Refresh" }));
+    await act(async () => { await pollStatus(); }); // answered while the ingest runs
+    expect(screen.getByText("Ingesting…")).toBeTruthy();
+    f.mockImplementation(() => later("status", { ...status, ingesting: true }));
+    let asked!: Promise<unknown>;
+    act(() => { asked = pollStatus(); }); // asked while it runs, answered after
+    await act(async () => { answers.refresh!(); });
+    expect(await screen.findByText(/Last ingest .* · 5 new lines/)).toBeTruthy();
+    await act(async () => { answers.status!(); await asked; });
+    expect(screen.getByText(/Last ingest .* · 5 new lines/)).toBeTruthy();
+    f.mockImplementation(() => json({ ...status, last_stats: { ...status.last_stats, inserted: 7 } }));
+    await act(async () => { await pollStatus(); }); // asked after: shown
+    expect(screen.getByText(/Last ingest .* · 7 new lines/)).toBeTruthy();
+  });
+
+  it("keeps a status when the answer to a request sent before it arrives after it", async () => {
+    const answers: Record<string, () => void> = {}, later = (key: string, body: unknown) => new Promise<Response>(r => { answers[key] = () => r(json(body)); });
+    const f = vi.fn((_url: string, _init?: RequestInit) => json(status));
+    vi.stubGlobal("fetch", f);
+    render(<Nav />);
+    expect(await screen.findByText(/Last ingest .* · 2 new lines/)).toBeTruthy();
+    f.mockImplementation(() => later("nav", { ...status, ingesting: true }));
+    let asked!: Promise<unknown>;
+    act(() => { asked = pollStatus(); }); // the nav's, sent while an ingest runs
+    f.mockImplementation(() => json({ ...status, last_stats: { ...status.last_stats, inserted: 7 } }));
+    await act(async () => { await pollStatus(); }); // Live's on the change notice: sent after, answered before
+    expect(screen.getByText(/Last ingest .* · 7 new lines/)).toBeTruthy();
+    await act(async () => { answers.nav!(); await asked; });
+    expect(screen.getByText(/Last ingest .* · 7 new lines/)).toBeTruthy();
+    f.mockImplementation(() => new Promise<Response>((_, no) => { answers.down = () => no(new Error("down")); }));
+    act(() => { asked = pollStatus(); }); // sent before the next one, and it fails after it
+    f.mockImplementation(() => json({ ...status, last_stats: { ...status.last_stats, inserted: 9 } }));
+    await act(async () => { await pollStatus(); });
+    await act(async () => { answers.down!(); await asked; });
+    expect(screen.getByText(/Last ingest .* · 9 new lines/)).toBeTruthy();
+  });
+
+  it("does nothing with the answer to a status request sent before one already answered: no cache clear, no project order", async () => {
+    setOrder([]);
+    let answer = () => {};
+    const f = vi.fn((_url: string, _init?: RequestInit) => json(status));
+    vi.stubGlobal("fetch", f);
+    render(<Nav />);
+    expect(await screen.findByText(/Last ingest .* · 2 new lines/)).toBeTruthy();
+    f.mockImplementation(() => new Promise<Response>(r => { answer = () => r(json({ ...status, project_order: ["old"] })); }));
+    let asked!: Promise<unknown>;
+    act(() => { asked = pollStatus(); }); // the nav's, sent before an ingest stores something
+    const stored = { ...status, last_change: "2026-11-05T12:05:00+00:00", project_order: ["new"] };
+    f.mockImplementation(url => json(url === "/api/x" ? { a: 1 } : stored));
+    await act(async () => { await pollStatus(); }); // Live's, sent after the ingest: clears the cache
+    await fetchCached("/api/x");
+    await act(async () => { answer(); await asked; });
+    expect([peekCache("/api/x"), hasHue("old"), hasHue("new")]).toEqual([{ a: 1 }, false, true]);
+    await act(async () => { await pollStatus(); }); // the same last_change as the newest answer: nothing new
+    expect(peekCache("/api/x")).toEqual({ a: 1 });
+  });
+
+  it("polls the status every minute, every 3 s while an ingest runs, and stops on unmount", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    let ingesting = true;
+    const f = vi.fn(() => json({ ...status, ingesting }));
+    vi.stubGlobal("fetch", f);
+    const { unmount } = render(<Nav />);
+    const tick = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
+    await tick(0);
+    expect([f.mock.calls.length, screen.getByText("Ingesting transcripts…") != null]).toEqual([1, true]);
+    ingesting = false;
+    await tick(3000);
+    expect(f.mock.calls.length).toBe(2);
+    await tick(59_999);
+    expect(f.mock.calls.length).toBe(2);
+    await tick(1);
+    expect(f.mock.calls.length).toBe(3);
+    unmount();
+    await tick(120_000);
+    expect(f.mock.calls.length).toBe(3);
+    vi.useRealTimers();
+  });
+
+  it("shows a status poll asked from outside the nav, and says when the app does not answer", async () => {
+    setOrder([]);
+    const f = vi.fn(() => json(status));
+    vi.stubGlobal("fetch", f);
+    render(<Nav />);
+    expect(await screen.findByText(/Last ingest .* · 2 new lines/)).toBeTruthy();
+    f.mockImplementation(() => json({ ...status, last_stats: { ...status.last_stats, inserted: 7 }, project_order: ["foo"] }));
+    await act(async () => { expect((await pollStatus())?.project_order).toEqual(["foo"]); });
+    expect(screen.getByText(/Last ingest .* · 7 new lines/)).toBeTruthy();
+    expect(hasHue("foo")).toBe(true);
+    f.mockImplementation(() => Promise.reject(new Error("down")));
+    await act(async () => { expect(await pollStatus()).toBeNull(); });
+    expect(screen.getByText("App not reachable")).toBeTruthy();
   });
 
   it("steps the theme through light, dark and back to system", async () => {
