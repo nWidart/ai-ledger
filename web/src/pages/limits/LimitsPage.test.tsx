@@ -112,6 +112,12 @@ describe("LimitsPage", () => {
     expect((await lede()).textContent).toBe(`No limit runs out at the current pace. Fullest: Claude Code weekly, at 90% now, about 96% when it resets ${whenDay(claude.resets_at)}.`);
   });
 
+  it("never reads 100% at the reset for a window that stays just short of it", async () => {
+    const near: LimitsPayload = { ...calm, windows: [{ ...calm.windows[0]!, forecast: { ...calm.windows[0]!.forecast!, at_reset: 99.9, at_reset_high: 99.9 } }, codex] };
+    show(near);
+    expect((await lede()).textContent).toMatch(/about 99% when it resets/);
+  });
+
   it("leads with a window already at its limit, never as one that does not run out", async () => {
     show(out);
     expect((await lede()).textContent).toBe(`Codex weekly is at its limit (100% used) until ${whenDay(codex.resets_at)}.`);

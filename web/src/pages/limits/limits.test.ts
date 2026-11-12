@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { LimitWindow, LimitsPayload } from "../../api";
 import limits from "../../__fixtures__/limits";
-import { hasScenario, nearestPoint, readPoints, readText, recentText, tipPlace, whenDay } from "./limits";
+import { caption, hasScenario, nearestPoint, pace, readPoints, readText, recentText, tipPlace, whenDay } from "./limits";
 
 const claude = (limits as LimitsPayload).windows[0]!;
 const win = (over: Partial<LimitWindow>): LimitWindow => ({ ...claude, ...over });
@@ -131,5 +131,29 @@ describe("hasScenario", () => {
   it("is false without a forecast or when no point carries it", () => {
     expect(hasScenario(win({ forecast: null }))).toBe(false);
     expect(hasScenario(win({ forecast: fc(curve.map(p => ({ ...p, recent: null }))) }))).toBe(false);
+  });
+});
+
+describe("a percent at the reset never reads 100 unless it is 100", () => {
+  const f = claude.forecast!;
+  const reset = (at: number, low = at, high = at, rest: Partial<typeof f> = {}) => win({ at_limit: false,
+    forecast: { ...f, hits_at: null, hits_at_early: null, hits_at_late: null, at_reset: at, at_reset_low: low, at_reset_high: high, recent_pace: 3, recent_hits_at: null, recent_at_reset: at, ...rest } });
+
+  it("reads 99% for 99.9 and 99.5, 100% for 100 and what num reads for the rest", () => {
+    expect(recentText(reset(99.9))).toBe("If the last 24 hours continue: about 99% at its reset");
+    expect(recentText(reset(99.5))).toBe("If the last 24 hours continue: about 99% at its reset");
+    expect(recentText(reset(100))).toBe("If the last 24 hours continue: about 100% at its reset");
+    expect(recentText(reset(66.4))).toBe("If the last 24 hours continue: about 66% at its reset");
+    expect(caption(reset(99.9))).toBe("Resets first at about 99%");
+    expect(caption(reset(99.9, 97.2, 99.9))).toBe("Resets first at about 99% (97–99%)");
+    expect(caption(reset(100))).toBe("Resets first at about 100%");
+    expect(caption(reset(66.4, 60.2, 80))).toBe("Resets first at about 66% (60–80%)");
+  });
+
+  it("never says nothing would go unused from a value below 100", () => {
+    const verdict = (at: number) => pace(reset(at, at, at, { pace: "behind", pace_target: 10 }), (limits as LimitsPayload).now).verdict;
+    expect(verdict(99.9)).toBe("behind pace: about 1% would go unused");
+    expect(verdict(66.4)).toBe("behind pace: about 34% would go unused");
+    expect(verdict(100)).toBe("behind pace: about 0% would go unused");
   });
 });

@@ -8,7 +8,7 @@ import { big, dur, num, plural, usd } from "../../format";
 import { useHashState } from "../../hash";
 import { useApi } from "../../useApi";
 import { LimitChart, planMarks } from "./LimitChart";
-import { bindingWindow, caption, capText, hasScenario, pace, planName, recentText, span, whenDay, windowName } from "./limits";
+import { bindingWindow, caption, capText, hasScenario, pace, planName, recentText, resetPct, span, whenDay, windowName } from "./limits";
 import "./limits.css";
 
 const rangeName = (range: number) => (range ? `the last ${range} days` : "all time");
@@ -24,7 +24,7 @@ function Lede({ d }: { d: LimitsPayload }) {
     : d.binding!.runs_out && f?.hits_at
     ? <><b>{windowName(w)}</b>, at {num(w.current)}% now, reaches 100% <span className="when">{whenDay(f.hits_at)}</span>, before its reset {whenDay(w.resets_at)}.</>
     : <>No limit runs out at the current pace. <span className="then">Fullest: <b>{windowName(w)}</b>, at {num(w.current)}% now{f?.at_reset != null
-      ? <>, about {num(f.at_reset)}% when it resets {whenDay(w.resets_at)}.</> : <>, resetting {whenDay(w.resets_at)}.</>}</span></>}</h1>;
+      ? <>, about {resetPct(f.at_reset)}% when it resets {whenDay(w.resets_at)}.</> : <>, resetting {whenDay(w.resets_at)}.</>}</span></>}</h1>;
 }
 
 /** One chip per open window, in payload order: its percent now, the time to its reset, and a warning tone with the text
