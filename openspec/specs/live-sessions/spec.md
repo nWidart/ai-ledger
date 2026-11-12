@@ -207,7 +207,7 @@ By default, prompts and replies SHALL be returned as word counts and tool result
 - **THEN** prompts and replies come as written and each tool result is cut to 4 KB
 
 ### Requirement: Cut tool inputs by default
-A tool call's input SHALL be cut to 300 characters by default, and a subagent call (Claude Code `Agent`, Codex `spawn_agent`) SHALL carry its description instead of its prompt.
+A tool call's input SHALL be cut to 300 characters by default, and a subagent call (Claude Code `Agent`, Codex `spawn_agent`) SHALL carry its description instead of its prompt. A description SHALL be cut to 300 characters as an input is: a subagent call's, and the one the agent gave a shell call.
 
 #### Scenario: Long tool input
 - **WHEN** the page asks for events without asking for text, and a `Bash` call has an input of 800 characters
@@ -216,6 +216,10 @@ A tool call's input SHALL be cut to 300 characters by default, and a subagent ca
 #### Scenario: Subagent call
 - **WHEN** the page asks for events without asking for text, and the session made an `Agent` call
 - **THEN** the call carries its description and not its prompt
+
+#### Scenario: Long description
+- **WHEN** the page asks for events without asking for text, and an `Agent` call has a description of 2,000 characters
+- **THEN** the call's description in the response is cut to 300 characters, and whole when the page asks for text
 
 ### Requirement: Report the agent's figures
 For one session, the app SHALL report:
