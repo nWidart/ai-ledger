@@ -156,8 +156,47 @@ describe("CostPage", () => {
     expect(rows[0]!.className).toMatch(/spot/);
     expect(document.activeElement).toBe(within(rows[0] as HTMLElement).getByRole("button", { name: "d" }));
     expect(drawer("d-projcost").querySelector(".proj-note")!.textContent).toMatch(/d: \$8\.00 per commit over 5 commits, 4\.0× the median project with 3\+ commits \(\$2\.00\)/);
+    expect(within(drawer("d-projcost")).getByRole("button", { name: /Cost \/ commit/ }).closest("th")!.getAttribute("aria-sort")).toBe("descending");
     await userEvent.click(screen.getByRole("button", { name: "Sort by cost again" }));
     expect(drawer("d-projcost").querySelector(".proj-note")).toBeNull();
+    expect([...drawer("d-projcost").querySelectorAll("tbody tr")].map(r => r.getAttribute("data-v"))).toEqual(["d", "c", "b", "a"]);
+  });
+
+  it("sorts the project table by any column, no value last either way", async () => {
+    await show(withProjects([proj("a", 6, 3), proj("b", 8, 4), proj("idle", 20, 0)]));
+    const names = () => [...drawer("d-projcost").querySelectorAll("tbody tr")].map(r => r.getAttribute("data-v"));
+    const th = (name: string) => within(drawer("d-projcost")).getByRole("button", { name: new RegExp(name) }).closest("th")!;
+    expect(names()).toEqual(["idle", "b", "a"]);
+    expect(th("Est. cost").getAttribute("aria-sort")).toBe("descending");
+    await userEvent.click(within(th("Cost / commit")).getByRole("button"));
+    expect(names()).toEqual(["a", "b", "idle"]); // $2 each, ties keep order; n/a last
+    expect(th("Cost / commit").getAttribute("aria-sort")).toBe("descending");
+    expect(th("Est. cost").getAttribute("aria-sort")).toBeNull();
+    await userEvent.click(within(th("Cost / commit")).getByRole("button"));
+    expect(th("Cost / commit").getAttribute("aria-sort")).toBe("ascending");
+    expect(names().at(-1)).toBe("idle");
+    await userEvent.click(within(th("Project")).getByRole("button"));
+    expect(names()).toEqual(["a", "b", "idle"]);
+  });
+
+  it("tints against the median of projects big enough to compare, not the scratch ones", async () => {
+    const real = (n: string, cost: number) => ({ ...proj(n, cost, 10), prompts: 50 });
+    const tiny = (n: string) => ({ ...proj(n, 0.01, 0), prompts: 1, cache_hit_ratio: 0.5 });
+    const scratch = Array.from({ length: 10 }, (_, i) => tiny(`t${i}`));
+    await show(withProjects([real("r1", 100), real("r2", 100), real("r3", 300), ...scratch]));
+    const cell = (p: string, i: number) => drawer("d-projcost").querySelector(`tbody tr[data-v="${p}"]`)!.querySelectorAll("td")[i]!;
+    expect(cell("r1", 8).className).not.toMatch(/tone/);
+    expect(cell("r3", 8).className).toMatch(/tone worse/); // $6 a prompt against a $2 median
+    expect(cell("r3", 7).className).toMatch(/tone worse/); // $30 a commit against $10
+    expect(cell("t0", 8).className).not.toMatch(/tone/);
+    expect(drawer("d-projcost").querySelector(".tone-key")!.textContent).toMatch(/median of the 3 projects with 2%\+ of cost or 10\+ prompts/);
+  });
+
+  it("does not tint when fewer than three projects are big enough", async () => {
+    const tiny = (n: string) => ({ ...proj(n, 0.01, 0), prompts: 1 });
+    await show(withProjects([{ ...proj("r1", 100, 10), prompts: 50 }, { ...proj("r2", 300, 10), prompts: 50 }, tiny("a"), tiny("b")]));
+    expect(drawer("d-projcost").querySelector(".tone-key")).toBeNull();
+    expect(drawer("d-projcost").querySelector("td.tone")).toBeNull();
   });
 
   it("names no cost-per-commit outlier under 2% of spend", async () => {
@@ -269,7 +308,7 @@ describe("CostPage", () => {
     await userEvent.click(screen.getByRole("button", { name: "Show the most expensive sessions on every day" }));
     expect(within(drawer("d-top")).getByText(/The 2 most expensive sessions in this view/)).toBeTruthy();
     // Tokens: one series per kind.
-    await userEvent.click(screen.getByRole("button", { name: "Tokens" }));
+    await userEvent.click(within(screen.getByRole("group", { name: "Chart metric" })).getByRole("button", { name: "Tokens" }));
     expect(screen.getByRole("img", { name: /^Tokens by kind per day/ })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Cache read" }).getAttribute("aria-pressed")).toBe("true");
   });

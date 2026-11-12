@@ -1,5 +1,5 @@
 // What stands out in the view's spend, each with one way to act on it.
-import type { UsagePayload } from "../../api";
+import type { ProjectRow, UsagePayload } from "../../api";
 import type { Insight } from "../../components/InsightCard";
 import { ProjectName } from "../../components/ProjectDot";
 import { knownTitle, sessName, shortId } from "../../components/sheets/session";
@@ -7,6 +7,22 @@ import { dayLabel, dur, median, mult, num, pct, plural, usd } from "../../format
 import type { CostDay } from "./cost";
 
 export const OUTLIER_SHARE = 0.02;
+// A project is big enough to compare with when it holds OUTLIER_SHARE of the view's cost or has this many prompts.
+export const COMPARE_PROMPTS = 10;
+
+export const perPrompt = (p: ProjectRow) => (p.cost != null && p.prompts ? p.cost / p.prompts : null);
+export const perCommit = (p: ProjectRow) => (p.commits && p.cost_per_commit != null ? p.cost_per_commit : null);
+
+/** The medians the project table and the cost-per-commit insights share, over the projects big enough to compare (so one-prompt
+ *  scratch projects do not pull them down). With fewer than 3 such projects there is no median; cost per commit also needs 3+ commits
+ *  and some cost per project, and its pool of 3+ projects is returned. */
+export function projectMedians(rows: readonly ProjectRow[]) {
+  const total = rows.reduce((a, p) => a + (p.cost ?? 0), 0);
+  const big = rows.filter(p => ((p.cost ?? 0) > 0 && (p.cost ?? 0) >= OUTLIER_SHARE * total) || p.prompts >= COMPARE_PROMPTS), ok = big.length >= 3;
+  const pool = big.filter(p => p.commits >= 3 && (p.cost ?? 0) > 0 && perCommit(p) != null);
+  return { n: big.length, big: new Set(big), pool: pool.length >= 3 ? pool : [], hit: ok ? median(big.map(p => p.cache_hit_ratio)) : null,
+    cpp: ok ? median(big.map(perPrompt)) : null, cpc: pool.length >= 3 ? median(pool.map(perCommit)) : null };
+}
 
 /** Ways to act on a finding: each opens the sheet or the table that explains it. */
 export interface CostActs {
@@ -32,7 +48,7 @@ export function spenderInsight(d: UsagePayload, go: CostActs): Insight | null {
   }
   const p = d.by_project.filter(x => (x.cost ?? 0) > 0).sort((a, b) => b.cost! - a.cost!)[0];
   if (!p) return null;
-  const med = median(d.by_project.map(x => x.cost_per_commit));
+  const med = projectMedians(d.by_project).cpc;
   const high = p.cost_per_commit != null && !!med && p.cost_per_commit > 2 * med;
   return { sev: high ? "warn" : "info", k: "Biggest spender", stake: p.cost!, t: <ProjectName project={p.project} />,
     v: <>{usd(p.cost)} <span className="muted">{pct(p.cost! / total)} of spend</span></>,
@@ -42,7 +58,7 @@ export function spenderInsight(d: UsagePayload, go: CostActs): Insight | null {
     act: { label: "Inspect project", run: () => go.project(p.project ?? "") } };
 }
 
-/** Cost per commit against the median: projects with 3+ commits (inside one project, sessions with 2+), so one lucky or
+/** Cost per commit against the median: projects with 3+ commits that are big enough to compare (inside one project, sessions with 2+), so one lucky or
  *  unlucky commit is not an outlier. An outlier costs more than twice the median and holds at least OUTLIER_SHARE of the
  *  spend, so it is worth acting on; four times is critical. */
 export function perCommitInsight(d: UsagePayload, go: CostActs): Insight {
@@ -51,7 +67,7 @@ export function perCommitInsight(d: UsagePayload, go: CostActs): Insight {
     act: { label: "See cost per prompt", run: go.tokens } };
   const pool = d.project
     ? d.sessions.filter(s => s.commits >= 2 && (s.cost ?? 0) > 0).map(s => ({ id: s.session_id, cpc: s.cost! / s.commits, n: s.commits, cost: s.cost! }))
-    : d.by_project.filter(p => p.commits >= 3 && (p.cost ?? 0) > 0 && p.cost_per_commit != null)
+    : projectMedians(d.by_project).pool
       .map(p => ({ id: p.project ?? "", cpc: p.cost_per_commit!, n: p.commits, cost: p.cost! }));
   if (pool.length < 3) return { sev: "info", k: "Cost per commit", t: plural(t.commits, "commit"), v: usd(t.cost_per_commit),
     b: `Too few ${unit}s with commits to compare against a median.`, act: { label: "See cost per prompt", run: go.tokens } };

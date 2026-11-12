@@ -6,6 +6,7 @@ import { Filters, viewName } from "../../components/Filters";
 import { InsightCard, rankInsights } from "../../components/InsightCard";
 import { Ledger, LedgerRow } from "../../components/Ledger";
 import { SectionIndex } from "../../components/SectionIndex";
+import type { SortBy } from "../../components/Sort";
 import { ModelLedger } from "../../components/sheets/ProjectSheet";
 import { openProjectSheet, openSessionSheet, sessName } from "../../components/sheets/session";
 import { UsageSheets } from "../../components/sheets/UsageSheets";
@@ -16,7 +17,7 @@ import { useApi } from "../../useApi";
 import { Changes } from "./Changes";
 import { costDays, moved } from "./cost";
 import { CostChart, type CostMetric } from "./CostChart";
-import { ProjectCostDrawer, TokensDrawer, TopSessionsDrawer, type CostSort } from "./drawers";
+import { COST_SORT, ProjectCostDrawer, TokensDrawer, TopSessionsDrawer, type CostSpot, type ProjectKey } from "./drawers";
 import { cacheInsight, pairFacts, peakInsight, perCommitInsight, spenderInsight, type CostActs } from "./insights";
 import { Spark } from "../../components/Spark";
 import { Lede } from "./Lede";
@@ -68,14 +69,14 @@ export function CostPage() {
   useEffect(() => { if (data) setOrder(data.project_order); }, [data]);
   const narrow = useNarrow();
 
-  // Page-only state, reset when the view changes: Show all, the cost-per-commit sort and the day of the sessions drawer.
+  // Page-only state, reset when the view changes: Show all, the project table's sort and the day of the sessions drawer.
   const [chgAll, setChgAll] = useState(false), [ledgerAll, setLedgerAll] = useState(false);
-  const [sort, setSort] = useState<CostSort | null>(null), [day, setDay] = useState("");
+  const [sort, setSort] = useState<SortBy<ProjectKey>>(COST_SORT), [spot, setSpot] = useState<CostSpot | null>(null), [day, setDay] = useState("");
   const lastView = useRef(viewKey);
   useEffect(() => {
     if (lastView.current === viewKey) return;
     lastView.current = viewKey;
-    setChgAll(false); setLedgerAll(false); setSort(null); setDay("");
+    setChgAll(false); setLedgerAll(false); setSort(COST_SORT); setSpot(null); setDay("");
   }, [viewKey]);
   const [metric, setMetricState] = useState<CostMetric>(() => stored(METRIC_KEY, isMetric, "cost"));
   const [hidden, setHiddenState] = useState<string[]>(() => stored(HIDDEN_KEY, isList, []));
@@ -89,7 +90,7 @@ export function CostPage() {
   const showDay = (v: string) => { setDay(v); openDrawer("d-top", true); };
   const acts: CostActs = {
     project: openProjectSheet, session: openSessionSheet, day: showDay,
-    compare: (spot, med) => setSort({ spot, med }),
+    compare: (name, med) => { setSort({ key: "cpc", desc: true }); setSpot({ spot: name, med }); },
     tokens: () => openDrawer("d-tokens", true),
   };
   const { lead, rest } = d && has
@@ -137,7 +138,7 @@ export function CostPage() {
         </div>
         <div className="drawers">
           <TokensDrawer t={d.totals} />
-          <ProjectCostDrawer rows={d.by_project} selected={d.project} sort={sort} onSort={setSort} />
+          <ProjectCostDrawer rows={d.by_project} selected={d.project} sort={sort} onSort={setSort} spot={spot} onSpot={setSpot} />
           <TopSessionsDrawer view={{ project: d.project, range: d.range, automated: d.automated, source: d.source }} top={d.top_sessions} day={day} onDay={setDay} selected={h.session} />
         </div>
       </>}
