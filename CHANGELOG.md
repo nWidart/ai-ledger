@@ -5,6 +5,10 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Insights and the Activity Sessions drawer say which sessions they count: Insights counts a session by its start time, Activity by a request in the range, so the two totals can differ slightly.
+
 ## [0.2.0] - 2026-11-12
 
 Run `ai-ledger rebuild` once after upgrading (with the app stopped): error types, test runs, Codex tool timing and fast-mode speed are stored when transcripts are read.

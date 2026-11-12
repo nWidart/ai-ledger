@@ -27,6 +27,7 @@ describe("InsightsPage", () => {
     const f = show(fixture);
     expect((await lede()).textContent).toBe("1 of 3 analysed sessions fully achieved their goal; buggy code caused the most friction.");
     expect(f.mock.calls[0]![0]).toBe("/api/insights?range=0");
+    expect(screen.getByText(/A session counts here by its start time/).textContent).toContain("so the two totals can differ slightly.");
     const cov = document.getElementById("coverage")!;
     expect(cov.getAttribute("role")).toBe("status");
     expect(cov.textContent).toBe(`1 of 3 Claude Code sessions in this view analysed (33%). Each /insights run in Claude Code analyses more. The newest analysis was written ${when(fixture.coverage.newest_facet)}.`);

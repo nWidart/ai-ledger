@@ -128,3 +128,10 @@ The Insights page SHALL read its data from the store through the app, and SHALL 
 #### Scenario: Usage data deleted
 - **WHEN** the usage-data directory is deleted while the app runs
 - **THEN** the page shows the same figures as before
+
+### Requirement: Say how sessions are counted
+The Insights page SHALL say that it counts a session by its start time, and that Activity counts a session with a request in the range, so the two totals can differ slightly.
+
+#### Scenario: Subtitle names the counting rule
+- **WHEN** the user opens Insights with a view that has facets
+- **THEN** the subtitle says a session counts by its start time and that Activity counts a session with a request in the range
