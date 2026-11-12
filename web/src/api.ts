@@ -154,6 +154,8 @@ export interface ErrorsPayload {
   /** [day, project, category, errors, subagent errors, source] */
   error_days: [Day, string, string | null, number, number, Source][];
   incidents: Incident[]; incident_gap_minutes: number; incident_max_ok: number;
+  /** The fix markers kept in the store, error type -> the day the fix went in; they follow the user across ports and browsers. */
+  fixes: Record<string, Day>;
 }
 // Tool inspector (/api/tool, metrics.tool_detail): one tool, MCP server or skill over the view.
 export type ToolKind = "tool" | "mcp" | "skill";
@@ -383,5 +385,11 @@ export const liveSessionUrl = (id: string, o: { after?: string | null; text?: bo
   `/api/live/session?${qs({ id, after: o.after, text: o.text })}`;
 export const liveEventsUrl = "/api/live/events";
 export const errorsUrl = "/api/errors";
+/** POST {category, day: Day | null} (null removes the marker); answers the full fixes map. */
+export const errorFixUrl = "/api/errors/fix";
+/** GET: the fixes map alone, the page's read of the store after a write it cannot account for. */
+export const errorFixesUrl = "/api/errors/fixes";
+/** POST {fixes: {category: Day}}: the store takes the ones it has no row for (never marked, or marked and undone) and answers the full fixes map; an invalid one is skipped. */
+export const errorFixesImportUrl = "/api/errors/fixes/import";
 export const errorUrl = (id: string) => `/api/error?${qs({ id })}`;
 export const statusUrl = "/api/status";

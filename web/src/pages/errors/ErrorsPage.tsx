@@ -8,11 +8,12 @@ import { setHash, useHashState } from "../../hash";
 import { useApi } from "../../useApi";
 import { Ctx, type ErrorsCtx } from "./context";
 import { Detail } from "./Detail";
-import { filtered, makeModel, settle, viewTypes, type Fixes, type View } from "./model";
+import { useFixes } from "./fixes";
+import { filtered, makeModel, settle, viewTypes, type View } from "./model";
 import { RateChart } from "./RateChart";
 import { Summary } from "./Summary";
 import { TypeTable } from "./TypeTable";
-import { FIXES_KEY, loadFixes, loadMode, MODE_KEY, readView, savedOf, store, VIEW_KEY, viewPatch, type Mode, type SavedView } from "./view";
+import { loadMode, MODE_KEY, readView, savedOf, store, VIEW_KEY, viewPatch, type Mode, type SavedView } from "./view";
 import "./errors.css";
 
 const NARROW = "(max-width: 900px)";
@@ -39,7 +40,7 @@ export function ErrorsPage() {
   const viewRef = useRef(view);
   viewRef.current = view;
 
-  const [fixes, setFixesS] = useState<Fixes>(loadFixes), [mode, setModeS] = useState<Mode>(loadMode), [q, setQ] = useState("");
+  const [mode, setModeS] = useState<Mode>(loadMode), [q, setQ] = useState("");
   const [, bump] = useReducer((x: number) => x + 1, 0);
   const sets = useRef({ openInc: new Set<number>(), opened: new Set<string>(), fullText: new Map<string, ErrorDetail>(), loading: new Set<string>(), failed: new Set<string>() }).current;
   const narrow = useMedia(NARROW), toSheet = !!m && narrow && !!view.cat;
@@ -79,7 +80,7 @@ export function ErrorsPage() {
   }, [update, after, focusDetail]);
   // A click on an example selects it: its permalink goes in the address bar, and the list stays where it is.
   const select = useCallback((id: string) => { selecting.current = true; update({ focus: id }, true); }, [update]);
-  const setFixes = useCallback((x: Fixes) => { setFixesS(x); store.set(FIXES_KEY, x); }, []);
+  const { fixes, saving, setFix, fixError } = useFixes(data, say, after);
   const setMode = useCallback((x: Mode) => { setModeS(x); store.set(MODE_KEY, x); }, []);
 
   // The list puts the linked example first; a click on an example moves the link, not the list, until the view next changes.
@@ -194,8 +195,8 @@ export function ErrorsPage() {
   }, [m, view.project]);
 
   const ctx: ErrorsCtx | null = m && f && vt ? {
-    m, v: view, f, vt, fixes, mode, q, pinned: pin.current.focus ? m.byId[pin.current.focus] : undefined, inSheet: toSheet, chartInView,
-    update, pick, select, setFixes, setMode, setQ, after, say, bump, ...sets,
+    m, v: view, f, vt, fixes, fixError, saving, mode, q, pinned: pin.current.focus ? m.byId[pin.current.focus] : undefined, inSheet: toSheet, chartInView,
+    update, pick, select, setFix, setMode, setQ, after, say, bump, ...sets,
   } : null;
   const detailLive = <div className="sr" id="detailLive" aria-live="polite">{live}</div>;
 

@@ -9,6 +9,7 @@ Run `ai-ledger rebuild` once after upgrading (with the app stopped): error types
 
 ### Added
 
+- The Errors page keeps its "fix applied" markers in the store, not in the browser, so they follow you to another port or browser and survive `ai-ledger rebuild`. Markers saved by an earlier version move to the store the first time the page loads.
 - An Errors permalink to an error the store no longer holds says so: a notice above the summary, with Dismiss, shows the view without it, over the range the link names (30 days when none) rather than all time.
 - A click on a day or week of the Errors chart narrows the type table and the open type's incidents and examples to it. Enter or Space does it from the keyboard, a chip by the table clears it, and it lives in the URL (`at=`).
 - The Errors summary shows the uncategorized share: the errors in the catch-all types (Other, Other non-zero exit, MCP tool error) that no specific rule matched, split by agent when both have errors.
