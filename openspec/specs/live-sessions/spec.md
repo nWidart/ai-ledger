@@ -30,7 +30,7 @@ The app SHALL give each active session one state, checked in this order:
 - *ended*: the transcript shows the session closed, and no timed line of the main thread follows the close.
 - *idle*: no line for 5 minutes.
 - *running a tool*: a tool call has no result. The state names the tool and when it started.
-- *thinking*: the newest line is a human prompt or a tool result, or, for Codex, the main thread's newest turn has started and not completed.
+- *thinking*: the newest line is a human prompt or a tool result, or, for Codex, the newest turn has started and not completed.
 - *your turn*: otherwise.
 
 #### Scenario: Tool running
@@ -49,9 +49,9 @@ The app SHALL give each active session one state, checked in this order:
 - **WHEN** a session's newest line is 7 minutes old, even with a pending tool call
 - **THEN** the state is idle
 
-#### Scenario: Codex subagent's turn ends
-- **WHEN** a Codex session's main thread is in a turn with no pending tool call, and a subagent thread's turn completes
-- **THEN** the state is still thinking
+#### Scenario: Codex turn started in a thread file
+- **WHEN** a Codex session's newest turn started in a `<session>_<thread>` rollout file and has not completed, with no pending tool call
+- **THEN** the state is thinking
 
 ### Requirement: Give each state its start time
 Each state SHALL carry the time it began.

@@ -46,7 +46,7 @@ Run `ai-ledger rebuild` once after upgrading (with the app stopped): error types
 - Project colours on a direct load of Insights, Live and Limits; the missing page icon; Back after closing a sheet.
 - Live: a shell call with a timeout above 2 minutes no longer reads as "approval?".
 - Live: the page reconnects on its own when the events stream fails with an HTTP error.
-- Live: a Codex session no longer reads "your turn" when a subagent's turn ends while the main thread goes on, and a finished Codex subagent folds as any other.
+- Live: a finished Codex subagent folds as any other.
 - Live: the rail's footer counts a session waiting for approval as waiting for you, not as working.
 - A failed Refresh keeps its Retry until you retry; the status the nav polls no longer clears it.
 

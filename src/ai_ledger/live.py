@@ -230,8 +230,8 @@ def state(events, now, source, last, closed=False):
             return st("wait", p["start"], p["tool"], inferred=True)
         p = max(pending, key=lambda e: e["start"] or now)
         return st("tool", p["start"], p["tool"], long=p["long"])
-    if source == "codex":  # the main thread's turns: a subagent's turn that ends leaves the session's open
-        turns = [e for e in events if e["k"] in ("turn_start", "turn_end") and not e["lane"]]
+    if source == "codex":  # every thread's turns: a <session>_<thread> file can continue the main thread
+        turns = [e for e in events if e["k"] in ("turn_start", "turn_end")]
         if turns and turns[-1]["k"] == "turn_start":
             return st("thinking", turns[-1]["ts"])
         return st("you", turns[-1]["ts"] if turns else last)

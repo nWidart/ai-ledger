@@ -104,15 +104,13 @@ class StateTest(unittest.TestCase):
                 + codex_line(2, 9, "event_msg", type="task_complete", turn_id="t1"))
         self.assertEqual(self.state(text, "codex")["kind"], "you")
 
-    def test_codex_state_follows_the_main_thread_turns_only(self):
-        child = NAME.replace(THREAD, THREAD + "_0a0f9999-0000-7000-8000-000000000002")
-        turn = lambda start, end=None, **kw: events(codex_line(1, start, "event_msg", type="task_started", turn_id="t1") + (
-            codex_line(2, end, "event_msg", type="task_complete", turn_id="t1") if end else ""), "codex", **kw)
-        state = lambda evs: live.state(evs, NOW, "codex", max(e["ts"] for e in evs))
-        st = state(turn(0) + turn(5, 20, lane_file=child))  # the child's turn ended; the parent's goes on
-        self.assertEqual(st, dict(kind="thinking", tool=None, since="2026-11-10T10:00:00.000Z", inferred=False, long=False))
-        st = state(turn(0, 9) + turn(12, lane_file=child))
-        self.assertEqual((st["kind"], st["since"]), ("you", "2026-11-10T10:00:09.000Z"))
+    def test_codex_turn_started_in_a_thread_file_is_thinking(self):  # a <session>_<thread> file can continue the main thread
+        thread_file = NAME.replace(THREAD, THREAD + "_0a0f9999-0000-7000-8000-000000000002")
+        evs = events(codex_line(1, 0, "event_msg", type="task_started", turn_id="t1")
+                     + codex_line(2, 9, "event_msg", type="task_complete", turn_id="t1"), "codex")
+        evs += events(codex_line(1, 12, "event_msg", type="task_started", turn_id="t2"), "codex", lane_file=thread_file)
+        st = live.state(evs, NOW, "codex", max(e["ts"] for e in evs))
+        self.assertEqual((st["kind"], st["since"], evs[-1]["lane"] is not None), ("thinking", "2026-11-10T10:00:12.000Z", True))
 
     def test_closed_session_is_ended_whatever_its_lines_say(self):
         text = prompt("u1", at(0), "p1", "go") + assistant("a1", "m1", at(5), [tool_use("t1", "Bash", command="sleep 999")])
@@ -596,7 +594,7 @@ class CodexSessionTest(CodexCase):
                    + codex_line(4, 7, "event_msg", type="task_complete", turn_id="u1"), mode="a")
         self.ingest()
         later = live.session(self.con.cursor(), THREAD, after=first["cursor"], now=NOW, prices=PRICES)
-        self.assertEqual((marks(later)[-1], later["state"]["kind"], later["state"]["since"]), (("turn_end", thread), "thinking", "2026-11-10T10:00:01.000Z"))
+        self.assertEqual(marks(later)[-1], ("turn_end", thread))
 
     def test_thread_lanes_whose_requests_share_a_time(self):
         threads = ["0a0f9999-0000-7000-8000-000000000002", "0a0f9999-0000-7000-8000-000000000003"]
