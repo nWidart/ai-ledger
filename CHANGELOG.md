@@ -9,6 +9,7 @@ Run `ai-ledger rebuild` once after upgrading (with the app stopped): Codex subag
 
 ### Added
 
+- Insights shows the figures `/insights` counts from each transcript, which were ingested and shown nowhere: a "Session figures" drawer (lines added and removed, files modified, pushes, median duration and response time, languages) over every session with session meta, and one line of those figures on each analysed session.
 - Insights has a "How this works" drawer (what `/insights` is, the directory read, the last run, how many sessions a run analyses) and an Outcome trend panel with the share of sessions fully or mostly achieved per week of session start.
 - Insights has a Coverage drawer with the analysed share of each project's sessions, so a busy project with no judgments stands out, and the facets each `/insights` run wrote. The coverage sentence links to it.
 - Insights drill-down: select a row of Outcomes, Claude's helpfulness, Friction categories or Goals, or a goal chip, friction chip or outcome badge on a session card, to list only those sessions. The filters (`outcome=`, `help=`, `goal=`, `fr=`) combine, sit in the URL, show as removable chips above the list, and say when the 200-session cut hides some. The sort now lasts the page visit.

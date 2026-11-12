@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useState, type MouseEvent, type ReactNode } from "react";
-import { insightsUrl, viewOf, type FacetTally, type InsightSession, type InsightsPayload, type View } from "../../api";
+import { insightsUrl, viewOf, type InsightSession, type InsightsPayload, type View } from "../../api";
 import { Drawer } from "../../components/Drawer";
 import { Judged, label, outcomeLabel, outcomeTone } from "../../components/facets";
 import { Filters, viewName } from "../../components/Filters";
@@ -8,11 +8,11 @@ import { ProjectName } from "../../components/ProjectDot";
 import { jumpTo, SectionIndex } from "../../components/SectionIndex";
 import { sessName, shortId } from "../../components/sheets/session";
 import { useLanding } from "../../components/useLanding";
-import { dayLabel, num, pct, plural, when } from "../../format";
+import { dayLabel, dur, num, pct, plural, when } from "../../format";
 import { formatHash, navigate, setHash, useHashState } from "../../hash";
 import { useApi } from "../../useApi";
 import { armFocus, DRILL_KEYS, drillsOf, focusList, passes, pickProps, takeFocus, toggleDrill, type DrillKind } from "./drill";
-import { countOf, headline } from "./insights";
+import { countOf, headline, measured } from "./insights";
 import "./insights.css";
 
 // Session-type strip colors, in the payload's fixed order; unknown types share the last.
@@ -48,7 +48,8 @@ function Coverage({ d, view, drawer }: { d: InsightsPayload; view: View; drawer:
 function Lede({ d, view }: { d: InsightsPayload; view: View }) {
   const c = d.coverage;
   if (view.source === "codex") return <p className="lede" id="lede" tabIndex={-1}><code>/insights</code> analyses only Claude Code sessions.</p>;
-  if (!c.stored_facets) return <p className="lede" id="lede" tabIndex={-1}>No <code>/insights</code> data found.</p>;
+  if (!c.stored_facets) return <p className="lede" id="lede" tabIndex={-1}>{d.meta.sessions > 0 ? <>No <code>/insights</code> judgments found.</>
+    : <>No <code>/insights</code> data found.</>}</p>;
   if (!c.facets) return <p className="lede" id="lede" tabIndex={-1}>No analysed sessions in this view.</p>;
   const h = headline(d);
   return <p className="lede" id="lede" tabIndex={-1} aria-live="polite"><b>{num(h.full)} of {num(h.n)}</b> analysed sessions fully achieved their
@@ -60,8 +61,8 @@ function Sub({ d, view }: { d: InsightsPayload; view: View }) {
   if (view.source === "codex") return <p className="sub">{viewName(view)}. Codex writes no facets: {plural(c.codex_sessions, "Codex session")} in this view,
     none analysed. Pick Claude Code or All to see the judgments.</p>;
   if (!c.stored_facets) return <p className="sub">The app reads <code>{c.dir ?? "~/.claude/usage-data"}</code>. Run <code>/insights</code> in Claude Code,
-    then Refresh.</p>;
-  return <p className="sub">{viewName(view)}. Every figure on this page comes from <code>/insights</code> facets: a model's reading of each session,
+    then Refresh.{d.meta.sessions > 0 && " The session figures below are counted from transcripts."}</p>;
+  return <p className="sub">{viewName(view)}. Figures tagged model-judged come from <code>/insights</code> facets: a model's reading of each session,
     not a measurement. Codex sessions have no facets. A session counts here by its start time; Activity counts a session with a request in the range, so the two totals can differ slightly.</p>;
 }
 
@@ -84,7 +85,7 @@ function Vitals({ d }: { d: InsightsPayload }) {
   );
 }
 
-const sessionsSide = (r: FacetTally) => plural(r.sessions, "session");
+const sessionsSide = (r: { sessions: number }) => plural(r.sessions, "session");
 
 /** A ledger of the first TOP rows, with a control to show them all. */
 function TopLedger<T>({ rows, empty, noun, row }: { rows: T[]; empty: string; noun: string; row: (r: T) => ReactNode }) {
@@ -127,6 +128,28 @@ function SessionTypes({ d }: { d: InsightsPayload }) {
         <div className="strip" aria-hidden="true">{types.map((t, i) => <i key={t.name} style={{ flex: t.n, background: color(i) }} />)}</div>
         <ul className="key">{types.map((t, i) => <li key={t.name}><i className="sw" style={{ background: color(i) }} /><Cat name={t.name} /> <b>{num(t.n)}</b></li>)}</ul>
       </> : <p className="empty">No session types recorded in this view.</p>}
+    </Drawer>
+  );
+}
+
+/** What /insights counted from each session's transcript: lines, files, pushes, duration, response time and languages. A measurement,
+ *  not a judgment, so not tagged model-judged; it covers every session with a session-meta row, not only the judged ones. */
+function SessionFigures({ d }: { d: InsightsPayload }) {
+  const m = d.meta, max = m.languages[0]?.n ?? 0;
+  const vital = (v: ReactNode, l: string) => <div className="vital"><div className="v">{v}</div><div className="l">{l}</div></div>;
+  return (
+    <Drawer id="d-figures" title="Session figures">
+      <p className="hint">Counted by <code>/insights</code> from each transcript for {plural(m.sessions, "session")}, which can be more sessions than were judged.
+        Response time is the median of session medians.</p>
+      <div className="vitals figs">
+        {vital(num(m.lines_added), "Lines added")}{vital(num(m.lines_removed), "Lines removed")}{vital(num(m.files_modified), "Files modified")}
+        {vital(num(m.git_pushes), "Git pushes")}{vital(dur(m.duration_p50_min == null ? null : m.duration_p50_min * 60), "Median session duration")}
+        {vital(dur(m.response_p50_s), "Median response time")}
+      </div>
+      <h3>Languages</h3>
+      <p className="hint">Summed counts, with the sessions that named each language.</p>
+      <TopLedger rows={m.languages} empty="No languages counted in this view." noun="languages" row={r => <LedgerRow key={r.name} name={r.name}
+        share={max ? r.n / max : 0} value={num(r.n)} side={sessionsSide(r)} />} />
     </Drawer>
   );
 }
@@ -211,6 +234,7 @@ const plain = (e: MouseEvent) => !(e.defaultPrevented || e.button !== 0 || e.met
 
 /** One session as a card: title, outcome and chips on the first line, the model's summary below, friction detail on expand. */
 function SessionCard({ s, view, raw }: { s: InsightSession; view: View; raw: Readonly<Record<string, string>> }) {
+  const line = s.meta ? measured(s.meta) : "";
   /** A chip or badge that sets, or clears, the filter of its kind. */
   const pick = (kind: DrillKind, name: string, text: ReactNode, cls: string) =>
     <button type="button" className={cls + (raw[kind] === name ? " on" : "")} title={name} aria-pressed={raw[kind] === name} onClick={() => toggleDrill(kind, name)}>{text}</button>;
@@ -232,6 +256,7 @@ function SessionCard({ s, view, raw }: { s: InsightSession; view: View; raw: Rea
       </div>
       {s.brief_summary && <p className="sum">{s.brief_summary}</p>}
       {s.friction_detail && <details className="fd"><summary>Friction detail</summary><p>{s.friction_detail}</p></details>}
+      {line && <p className="measured" title="Counted by /insights from the transcript">{line}</p>}
     </li>
   );
 }
@@ -309,6 +334,7 @@ export function InsightsPage() {
   const { slow, grow, wrap, retryBtn } = useLanding(d, url, loading, error, ":scope > :is(.grid2, .panel, .vitals, .drawers)");
   const howto = d && shown.source !== "codex" && d.coverage.stored_facets > 0;
   const figures = d && shown.source !== "codex" && d.coverage.facets > 0;
+  const counted = d && shown.source !== "codex" && d.meta.sessions > 0;
   return (
     <div className={"wrap pg-insights" + (slow ? " loading" : "") + (grow ? " grow" : "")} ref={wrap} aria-busy={loading || undefined}>
       <header className="top sect" id="overview">
@@ -322,12 +348,13 @@ export function InsightsPage() {
         <Coverage d={d} view={shown} drawer={!!figures} />
         <Lede d={d} view={shown} />
         <Sub d={d} view={shown} />
-        {(figures || howto) && <SectionIndex groups={[
+        {(figures || howto || counted) && <SectionIndex groups={[
           figures ? [{ id: "overview", label: "Overview" }, { id: "outcomes", label: "Outcomes" }, { id: "friction", label: "Friction" },
             ...(d.trend.length > 1 ? [{ id: "trend", label: "Trend" }] : []),
             { id: "satisfaction", label: "Satisfaction", long: "Satisfaction and helpfulness" }, { id: "log", label: "Sessions", long: "Analysed sessions" }]
             : [{ id: "overview", label: "Overview" }],
-          [...(figures ? [{ id: "d-goals", label: "Goals" }, { id: "d-types", label: "Session types" }, { id: "d-coverage", label: "Coverage" }] : []),
+          [...(figures ? [{ id: "d-goals", label: "Goals" }, { id: "d-types", label: "Session types" }] : []),
+            ...(counted ? [{ id: "d-figures", label: "Session figures" }] : []), ...(figures ? [{ id: "d-coverage", label: "Coverage" }] : []),
             ...(howto ? [{ id: "d-how", label: "How this works" }] : [])],
         ]} />}
         {figures && <>
@@ -339,9 +366,9 @@ export function InsightsPage() {
           <Trend d={d} />
           <Feelings d={d} />
           <Sessions d={d} view={shown} sort={sort} onSort={setSort} />
-          <div className="drawers"><Goals d={d} /><SessionTypes d={d} /><CoverageDrawer d={d} />{howto && <HowItWorks d={d} />}</div>
+          <div className="drawers"><Goals d={d} /><SessionTypes d={d} />{counted && <SessionFigures d={d} />}<CoverageDrawer d={d} />{howto && <HowItWorks d={d} />}</div>
         </>}
-        {!figures && howto && <div className="drawers"><HowItWorks d={d} /></div>}
+        {!figures && (counted || howto) && <div className="drawers">{counted && <SessionFigures d={d} />}{howto && <HowItWorks d={d} />}</div>}
       </>}
     </div>
   );

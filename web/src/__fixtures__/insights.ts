@@ -195,6 +195,13 @@ export default {
    "satisfaction": [
     "unclear"
    ],
+   "meta": {
+    "duration_minutes": 42,
+    "lines_added": 120,
+    "lines_removed": 30,
+    "files_modified": 4,
+    "git_pushes": 1
+   },
    "title": null
   },
   {
@@ -219,6 +226,13 @@ export default {
     "likely_satisfied",
     "dissatisfied"
    ],
+   "meta": {
+    "duration_minutes": 42,
+    "lines_added": 120,
+    "lines_removed": 30,
+    "files_modified": 4,
+    "git_pushes": 1
+   },
    "title": null
   },
   {
@@ -238,8 +252,31 @@ export default {
    "satisfaction": [
     "satisfied"
    ],
+   "meta": {
+    "duration_minutes": 42,
+    "lines_added": 120,
+    "lines_removed": 30,
+    "files_modified": 4,
+    "git_pushes": 1
+   },
    "title": "Add a theme toggle"
   }
  ],
- "truncated": false
+ "truncated": false,
+ "meta": {
+  "sessions": 3,
+  "lines_added": 360,
+  "lines_removed": 90,
+  "files_modified": 12,
+  "git_pushes": 3,
+  "duration_p50_min": 42.0,
+  "response_p50_s": 7.5,
+  "languages": [
+   {
+    "name": "TypeScript",
+    "n": 12,
+    "sessions": 3
+   }
+  ]
+ }
 } satisfies InsightsPayload;
