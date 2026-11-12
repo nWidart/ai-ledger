@@ -3,8 +3,9 @@ import fixture from "../../__fixtures__/errors";
 import type { ErrorsPayload } from "../../api";
 import {
   beforeAfter, bucketLabel, bucketOf, buckets, byWeight, change, chartData, compare, emptyTypes, exList, filtered, inBucket, incidentsOf, incSummary, makeModel, midDay, pointText,
-  rangeStart, series, settle, summary, typeColors, typeRows, viewTypes, whereToStart, type View,
+  rangeStart, series, settle, summary, timeLost, typeColors, typeRows, uncategorized, viewTypes, whereToStart, type Err, type View,
 } from "./model";
+import { lostPayload } from "./lostData";
 import { DEFAULT_VIEW, loadFixes, loadMode, readView, savedOf, viewHash, viewPatch } from "./view";
 
 const m = makeModel(fixture);
@@ -123,7 +124,7 @@ describe("types", () => {
   it("table rows carry share, color and the change the summary shows", () => {
     const rows = typeRows(m, v(), filtered(m, v()));
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ cid: "x", n: 6, share: 1, color: "var(--type-1)" });
+    expect(rows[0]).toMatchObject({ cid: "x", n: 6, lost: 186e3, share: 1, color: "var(--type-1)" });
     // No calls in the 30 days before: nothing to compare with.
     expect(rows[0]!.delta).toMatchObject({ text: "–", title: "Fewer than 200 tool calls in the 30 days before" });
   });
@@ -245,6 +246,67 @@ describe("incidents", () => {
   });
 });
 
+describe("uncategorized", () => {
+  const e = (c: string, src: "claude" | "codex") => ({ c, src }) as Err;
+  it("is empty with no errors", () => {
+    expect(uncategorized([])).toEqual({ n: 0, share: 0, bySource: [] });
+  });
+  it("counts the catch-all types of one source", () => {
+    const u = uncategorized([e("other", "claude"), e("x", "claude"), e("mcp", "claude"), e("x", "claude")]);
+    expect(u.n).toBe(2);
+    expect(u.share).toBe(0.5);
+    expect(u.bySource).toEqual([["claude", 2, 0.5]]);
+  });
+  it("splits the share by source, ordered by source name", () => {
+    // Codex first in the input, so the order comes from the sort, not from insertion.
+    const u = uncategorized([e("exit_other", "codex"), e("mcp", "codex"), e("x", "codex"), e("other", "claude"), e("x", "claude"), e("x", "claude"), e("x", "claude")]);
+    expect(u.n).toBe(3);
+    expect(u.share).toBeCloseTo(3 / 7);
+    expect(u.bySource.map(([s]) => s)).toEqual(["claude", "codex"]);
+    expect(u.bySource[0]![1]).toBe(1);
+    expect(u.bySource[0]![2]).toBeCloseTo(0.25);
+    expect(u.bySource[1]![1]).toBe(2);
+    expect(u.bySource[1]![2]).toBeCloseTo(2 / 3);
+  });
+  it("is zero when no error is a catch-all", () => {
+    const u = uncategorized([e("x", "claude"), e("y", "codex")]);
+    expect(u).toEqual({ n: 0, share: 0, bySource: [["claude", 0, 0], ["codex", 0, 0]] });
+  });
+});
+
+describe("time lost", () => {
+  const mm = makeModel(lostPayload), vv = v({ range: 0 }), min = 60e3;
+  it("sums each type's incident spans; no span reads as none", () => {
+    expect(timeLost(mm, filtered(mm, vv).errs)).toEqual({ worktree: min, git: 20 * min, sleep_poll: 0, tests: min });
+    const rows = Object.fromEntries(typeRows(mm, vv, filtered(mm, vv)).map(r => [r.cid, r.lost]));
+    expect(rows).toEqual({ worktree: min, git: 20 * min, sleep_poll: 0, tests: min });
+    // The table keeps its order by error count.
+    expect(typeRows(mm, vv, filtered(mm, vv)).map(r => r.cid).slice(0, 2)).toEqual(["worktree", "git"]);
+  });
+  it("counts an incident whole when one of its failures is in the view", () => {
+    // Range 7 days (from Oct 30): git's second incident has only its Oct 30 failure in the view, yet its whole 10 min counts.
+    const one = v({ range: 7 }), f = filtered(mm, one);
+    expect(f.errs.map(e => e.id)).not.toContain("g2");
+    expect(f.errs.map(e => e.id)).toContain("g3");
+    expect(timeLost(mm, f.errs).git).toBe(20 * min);
+  });
+  it("follows a selected bucket: its errors' incidents, each whole, while Where to start stays range-wide", () => {
+    const lostOf = (at: string) => { const x = v({ range: 0, at }), f = filtered(mm, x); return Object.fromEntries(typeRows(mm, x, f).map(r => [r.cid, r.lost])); };
+    // Oct 30 holds only g3, the end of git's midnight incident: all 10 min of it, not the 20 of the range.
+    expect(lostOf("2026-10-30")).toEqual({ git: 10 * min });
+    expect(lostOf("2026-10-29")).toEqual({ git: 10 * min });
+    expect(lostOf("2026-11-04")).toEqual({ worktree: min, git: 10 * min, sleep_poll: 0, tests: min });
+    const x = v({ range: 0, at: "2026-10-30" });
+    expect(whereToStart(mm, x, filtered(mm, x), {}).open[0]).toEqual({ c: "git", n: 3, lost: 20 * min });
+  });
+  it("ranks open fixes by time lost, then by error count", () => {
+    const f = filtered(mm, vv);
+    // git has fewer errors than worktree but lost far more time; tests ties worktree on time and has fewer errors.
+    expect(whereToStart(mm, vv, f, {}).open).toEqual([
+      { c: "git", n: 3, lost: 20 * min }, { c: "worktree", n: 4, lost: min }, { c: "tests", n: 1, lost: min }, { c: "sleep_poll", n: 1, lost: 0 }]);
+  });
+});
+
 describe("summary and fixes", () => {
   it("sums the view: rate, previous period, incidents, open fixes", () => {
     const s = summary(m, v(), filtered(m, v()), {});
@@ -274,7 +336,7 @@ describe("summary and fixes", () => {
   it("where to start skips fixed types and types without a snippet", () => {
     const p: ErrorsPayload = { ...fixture, errors: fixture.errors.map(e => ({ ...e, c: "worktree" })) };
     const mm = makeModel(p), f = filtered(mm, v());
-    expect(whereToStart(mm, v(), f, {}).open).toEqual([["worktree", 6]]);
+    expect(whereToStart(mm, v(), f, {}).open).toEqual([{ c: "worktree", n: 6, lost: 186e3 }]);
     expect(whereToStart(mm, v(), f, { worktree: "2026-11-04" }).open).toEqual([]);
     expect(whereToStart(m, v(), filtered(m, v()), {}).open).toEqual([]);
   });

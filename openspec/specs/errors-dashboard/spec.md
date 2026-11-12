@@ -49,6 +49,10 @@ The Errors page SHALL let the user select one day or week of the errors chart by
 - **WHEN** the user clicks the day's bar on the chart
 - **THEN** the type table counts only that day's errors, a chip names the day, and the change column is unchanged
 
+#### Scenario: Time lost in a bucket
+- **WHEN** a day is selected and an incident has one of its failures on that day and the rest on another
+- **THEN** the type table's Time lost and the detail's time-lost sentence count that incident whole, and Where to start and the summary stay range-wide
+
 #### Scenario: Keyboard
 - **WHEN** the user reads a point with the arrow keys and presses Enter, then Space
 - **THEN** the point is selected, then cleared
@@ -71,3 +75,34 @@ The selected bucket SHALL be part of the URL view and push a history entry, and 
 #### Scenario: Linked example outside the bucket
 - **WHEN** a link opens an example that falls outside the selected bucket
 - **THEN** the example shows under "Outside current filters", and Clear filters also clears the bucket
+
+### Requirement: Show the uncategorized share
+The Errors summary SHALL show the share of the view's errors in the catch-all types (Other, Other non-zero exit and MCP tool error), which are the errors no specific rule matched, with a title that says so. When the view is not filtered to one source and more than one source has errors, the line SHALL split the share by source. It SHALL show nothing when the view has no errors.
+
+#### Scenario: Share shows
+- **WHEN** the view has errors, and 12 of 100 of them are of catch-all types
+- **THEN** the summary shows "Uncategorized: 12% of errors", titled with the catch-all types and what they mean
+
+#### Scenario: Split by source
+- **WHEN** the view has no source filter and both Claude Code and Codex have errors in it
+- **THEN** the line adds each source's share in parentheses, such as "(Claude Code 9%, Codex 31%)"
+- **AND** a view filtered to one source shows the share alone
+
+### Requirement: State each type's time lost
+The Errors page SHALL state each error type's time lost: the sum, over the view's incidents of that type, of each incident's span, from its first failure's start to its last failure's end. An incident SHALL count whole when at least one of its failures is in the view. A type whose incidents have no measurable span SHALL show no time. The page SHALL rank the open types that have a ready-made fix by time lost, most first, then by error count, and show each one's time lost.
+
+#### Scenario: Fewer errors, more time lost
+- **WHEN** one open type has 3 errors in two incidents of 10 minutes each, and another has 4 errors in one incident of 1 minute
+- **THEN** Where to start lists the first type above the second, and the type table shows 20 min and 1 min
+
+#### Scenario: Equal time lost
+- **WHEN** two open types lost the same time
+- **THEN** the one with more errors is listed first
+
+#### Scenario: Incident partly outside the view
+- **WHEN** an incident's first failure is before the range and its last failure is inside it
+- **THEN** the incident's whole span counts toward its type's time lost
+
+#### Scenario: No measurable span
+- **WHEN** a type's only incident is one failure with no recorded duration
+- **THEN** its time lost reads "–"

@@ -5,6 +5,7 @@ import { dayLabel, num as fmt } from "../../format";
 import type { Range } from "../../hash";
 
 export const NOISE = new Set(["infra", "user_denied"]);
+export const CATCH_ALL = new Set(["other", "exit_other", "mcp"]); // the types no specific rule matched
 export const TOPN = 5;
 export const MIN_AFTER_CALLS = 200; // calls since a fix before its rate counts as lower or higher
 export const MIN_CMP_CALLS = 200; // tool calls each side of a change needs before the change shows
@@ -193,14 +194,27 @@ export function settle(m: Model, v: View): View {
 // ---------- briefing and vitals ----------
 export interface Summary {
   totalCalls: number; n: number; r: number | null; r0: number | null; r1: number | null; d: number | null; cmp: string;
-  why: string | null; top: string | undefined; vt: ViewTypes; nFix: number; withFix: number; inc: IncSummary;
+  why: string | null; top: string | undefined; vt: ViewTypes; nFix: number; withFix: number; inc: IncSummary; uncat: Uncat;
 }
 export function summary(m: Model, v: View, f: Filtered, fixes: Fixes): Summary {
   const totalCalls = sumCalls(v, f.calls), n = f.errs.length, r = rate(n, totalCalls), vt = viewTypes(m, v, f);
   const x = compare(m, v, f), r0 = x.why ? null : rate(x.a.e, x.a.c), r1 = x.why ? null : rate(x.b.e, x.b.c);
   const d = r0 && r1 != null ? (r1 - r0) / r0 * 100 : null;
   return { totalCalls, n, r, r0, r1, d, cmp: x.cmp, why: x.why, top: vt.top[0], vt, nFix: Object.keys(fixes).length,
-    withFix: Object.keys(vt.counts).filter(c => !fixes[c] && m.cats[c]?.snippet).length, inc: incSummary(m, f.errs) };
+    withFix: Object.keys(vt.counts).filter(c => !fixes[c] && m.cats[c]?.snippet).length, inc: incSummary(m, f.errs), uncat: uncategorized(f.errs) };
+}
+export interface Uncat { n: number; share: number; bySource: [Source, number, number][] }
+/** The catch-all types' errors: all of them, and per source (its catch-all count and share), so a growing catch-all shows.
+ *  bySource lists the sources with errors, by name. */
+export function uncategorized(errs: readonly Err[]): Uncat {
+  const all: Partial<Record<Source, number>> = {}, ca: Partial<Record<Source, number>> = {};
+  let n = 0;
+  for (const e of errs) {
+    all[e.src] = (all[e.src] || 0) + 1;
+    if (CATCH_ALL.has(e.c)) { n++; ca[e.src] = (ca[e.src] || 0) + 1; }
+  }
+  const bySource = (Object.keys(all) as Source[]).sort().map(s => [s, ca[s] || 0, (ca[s] || 0) / all[s]!] as [Source, number, number]);
+  return { n, share: errs.length ? n / errs.length : 0, bySource };
 }
 
 // ---------- incidents ----------
@@ -230,6 +244,13 @@ export const RECOVERED_NOTE = "Recovered means only that the agent's next call o
 export function dur(ms: number) {
   const s = Math.round(ms / 1000);
   return s < 60 ? `${s}s` : s < 3600 ? `${Math.round(s / 60)} min` : `${fmt(s / 3600, s < 36000 ? 1 : 0)} h`;
+}
+/** Time lost per error type: the sum of its incidents' spans, first failure start to last failure end. An incident counts whole
+ *  when at least one of its failures is in errs; the span is not clipped to the filtered failures. */
+export function timeLost(m: Model, errs: readonly Err[]): Record<string, number> {
+  const by: Record<string, number> = {};
+  for (const g of incidentsOf(m, errs)) by[g.errs[0]!.c] = (by[g.errs[0]!.c] || 0) + incSpan(g);
+  return by;
 }
 export interface IncSummary { n: number; bad: number; pct: number; groups: Group[] }
 /** "1,078 errors in 326 incidents, 3% didn't recover" for a set of errors. */
@@ -289,11 +310,12 @@ export function linePath(vals: readonly (number | null)[], x: (i: number) => num
 }
 
 // ---------- category table ----------
-export interface TypeRow { cid: string; n: number; share: number; color: string; pts: Pt[]; delta: Delta }
+/** lost: the type's time lost in ms (see timeLost). */
+export interface TypeRow { cid: string; n: number; lost: number; share: number; color: string; pts: Pt[]; delta: Delta }
 export function typeRows(m: Model, v: View, f: Filtered): TypeRow[] {
-  const errs = inBucket(v, f.errs), counts = countBy(errs), total = errs.length || 1, vt = viewTypes(m, v, f), keys = buckets(m, f.from, v.gran), x = compare(m, v, f);
+  const errs = inBucket(v, f.errs), counts = countBy(errs), total = errs.length || 1, vt = viewTypes(m, v, f), keys = buckets(m, f.from, v.gran), x = compare(m, v, f), lost = timeLost(m, errs);
   return Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([cid, n]) =>
-    ({ cid, n, share: n / total, color: typeColor(cid, vt), pts: series(v, f.errs, f.calls, keys, cid), delta: change(x, cid, 5) }));
+    ({ cid, n, lost: lost[cid] || 0, share: n / total, color: typeColor(cid, vt), pts: series(v, f.errs, f.calls, keys, cid), delta: change(x, cid, 5) }));
 }
 /** The table's empty row. */
 export function emptyTypes(m: Model, v: View, f: Filtered): string {
@@ -304,12 +326,13 @@ export function emptyTypes(m: Model, v: View, f: Filtered): string {
 
 // ---------- detail ----------
 export interface Rising { c: string; e1: number; e2: number; r1: number; r2: number; d: number }
-/** Where to start: the biggest open types with a ready-made fix, and the types rising fastest: up over 10% in the change the
+/** Where to start: the open types with a ready-made fix that lost the most time (error count breaks a tie), and the types rising fastest: up over 10% in the change the
  *  table shows, with enough recent errors to mean it, the biggest gain in error rate first (a type from 0 to 9 errors can't
  *  outrank one from 1 to 128), Infinity when the side before had none of its errors. why: the reason nothing can rise, or null. */
 export function whereToStart(m: Model, v: View, f: Filtered, fixes: Fixes) {
-  const counts = countBy(f.errs), x = compare(m, v, f);
-  const open = Object.entries(counts).filter(([c]) => !fixes[c] && m.cats[c]?.snippet).sort((a, b) => b[1] - a[1]).slice(0, 4);
+  const counts = countBy(f.errs), x = compare(m, v, f), lost = timeLost(m, f.errs);
+  const open = Object.entries(counts).filter(([c]) => !fixes[c] && m.cats[c]?.snippet).map(([c, n]) => ({ c, n, lost: lost[c] || 0 }))
+    .sort((a, b) => b.lost - a.lost || b.n - a.n).slice(0, 4);
   const rising: Rising[] = x.why ? [] : Object.keys(x.b.by).map(c => {
     const e1 = x.a.by[c] || 0, e2 = x.b.by[c]!, r1 = e1 / x.a.c * 100, r2 = e2 / x.b.c * 100;
     return { c, e1, e2, r1, r2, d: r1 ? (r2 - r1) / r1 * 100 : Infinity };
