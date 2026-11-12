@@ -38,13 +38,16 @@ class FamilyTest(unittest.TestCase):
 
     def test_first_matching_rule_wins(self):
         self.check("goal", [
-            ("fix_failing_test", "tests"),  # tests comes before fix_bug
+            ("fix_failing_test", "fix_bug"), ("debug_flaky_test", "fix_bug"),  # fix_bug comes before tests
+            ("add_tests", "tests"), ("improve_test_coverage", "tests"),
             ("create_pull_request", "pull_request"),  # pull_request before implement_feature
             ("write_docs", "docs"),  # docs before implement_feature
             ("merge_pull_request", "pull_request"),  # pull_request before git_cleanup
             ("debug_ci_failure", "fix_bug"),  # fix_bug before configure
         ])
-        self.check("friction", [("tool_error", "buggy_code"), ("wrong_test_failure", "wrong_approach")])
+        self.check("friction", [("tool_error", "tooling"), ("tool_failure", "tooling"),  # tooling comes before buggy_code
+                                ("wrong_test_failure", "wrong_approach"), ("build_error", "buggy_code")])
+        self.check("goal", [("merge_config", "git_cleanup")])
 
     def test_sequences_match_consecutive_tokens_only(self):
         self.check("goal", [

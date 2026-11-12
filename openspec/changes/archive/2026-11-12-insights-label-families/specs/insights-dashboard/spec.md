@@ -56,8 +56,8 @@ The payload SHALL group the goal labels and the friction labels of the view into
 - **THEN** both belong to the family "pull request"
 
 #### Scenario: First matching rule wins
-- **WHEN** the view holds the goal `fix_failing_test`, which matches the tests rule and the fix bug rule
-- **THEN** it belongs to the family of the rule that comes first, "tests"
+- **WHEN** the view holds the goal `fix_failing_test`, which matches the fix bug rule and the tests rule
+- **THEN** it belongs to the family of the rule that comes first, "fix bug"
 
 #### Scenario: Whole words only
 - **WHEN** the view holds the goals `express_routes` and `address_feedback`

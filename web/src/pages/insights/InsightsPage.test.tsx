@@ -780,6 +780,25 @@ describe("InsightsPage", () => {
       expect(within(fr()).queryByText("broken build")).toBeNull();
     });
 
+    it("marks only the selected row as active, not the labels nested under a selected family, and the reverse", async () => {
+      show(fixture, "#range=0&frf=buggy_code");
+      await lede();
+      const family = rowBtn(fr(), /^buggy code/).closest("li")!;
+      await userEvent.click(within(family).getByRole("button", { name: "2 labels in buggy code" }));
+      const members = [...family.querySelectorAll<HTMLElement>(":scope > ol.members > li")];
+      expect(members.length).toBe(2);
+      expect(family.classList.contains("on")).toBe(true);
+      for (const li of members) {
+        expect(li.classList.contains("on")).toBe(false); // the CSS highlights a row through its own li.on
+        expect(li.querySelector(":scope > .rowbtn")!.getAttribute("aria-pressed")).toBe("false");
+      }
+      await userEvent.click(rowBtn(fr(), /^broken build/));
+      expect(hashOf()).toBe("#range=0&frf=buggy_code&fr=broken_build");
+      expect(members.map(li => li.classList.contains("on"))).toEqual([false, true]);
+      expect(members[1]!.querySelector(":scope > .rowbtn")!.getAttribute("aria-pressed")).toBe("true");
+      expect(family.classList.contains("on")).toBe(true);
+    });
+
     it("reaches the expander and the row by keyboard as two stops", async () => {
       show(fixture);
       await lede();
