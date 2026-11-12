@@ -9,6 +9,7 @@ Run `ai-ledger rebuild` once after upgrading (with the app stopped): error types
 
 ### Added
 
+- The Errors page keeps its "fix applied" markers in the store, not in the browser, so they follow you to another port or browser and survive `ai-ledger rebuild`. Markers saved by an earlier version move to the store the first time the page loads.
 - The project sheet shows the project's change against the previous period: previous and current cost, the change (marked new when it had no usage before) and a daily cost sparkline over both windows.
 - The Cost heading compares the list-price estimate with your plan's monthly price ("4.2× your plan"), for Claude Pro and Max and ChatGPT Plus and Pro. A `plans` object in `prices.json` adds or overrides plans.
 - Fast-mode requests are priced at the fast rates (Fable 5.2, Opus 5.5) and show as their own "fast" rows in the Cost page's Models and effort. A `fast` object in a `prices.json` entry sets the rates for other models.

@@ -11,11 +11,12 @@ import collections
 import importlib.metadata
 import json
 import os
+import re
 import sys
 import threading
 import time
 import webbrowser
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 
@@ -29,6 +30,29 @@ WEB = os.path.join(store.HERE, "web")  # the committed frontend build (npm run b
 PAGES = ("/usage", "/cost", "/errors", "/limits", "/insights", "/live")  # one app; it picks the page from the path
 ASSET_TYPES = {".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml",
                ".png": "image/png", ".woff2": "font/woff2", ".json": "application/json; charset=utf-8"}
+MAX_BODY = 4096  # a POST body is one small JSON object
+MAX_CATEGORY = 100
+
+
+def parse_fix(body, today):
+    """(error type, day) from the JSON body of POST /api/errors/fix; day None removes the marker. Raises ValueError."""
+    if not isinstance(body, dict):
+        raise ValueError("body must be a JSON object")
+    category, day = body.get("category"), body.get("day", "")
+    if not isinstance(category, str) or not 0 < len(category) <= MAX_CATEGORY:
+        raise ValueError(f"category must be a string of 1 to {MAX_CATEGORY} characters")
+    if day is None:
+        return category, None
+    # fromisoformat also reads 20261104 and 2026-W45-3, and \d reads any script's digits: ask for the one form the page sends.
+    if not isinstance(day, str) or not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", day):
+        raise ValueError("day must be YYYY-MM-DD or null")
+    try:
+        day = date.fromisoformat(day)
+    except ValueError:
+        raise ValueError("day is not a real date") from None
+    if day > today:
+        raise ValueError("day is after today")
+    return category, day
 
 
 class App:
@@ -183,6 +207,22 @@ def handler(app, port=PORT):
             finally:
                 app.watch(-1)
 
+        def json_body(self):
+            """The request's JSON body. Only application/json: a form post from another site cannot send it without a CORS
+            preflight, which this server never answers."""
+            if self.headers.get("Content-Type", "").split(";")[0].strip().lower() != "application/json":
+                raise ValueError("content type must be application/json")
+            try:
+                n = int(self.headers.get("Content-Length", ""))
+            except ValueError:
+                raise ValueError("Content-Length is missing") from None
+            if not 0 <= n <= MAX_BODY:
+                raise ValueError(f"body must be at most {MAX_BODY} bytes")
+            try:
+                return json.loads(self.rfile.read(n))
+            except (ValueError, RecursionError):
+                raise ValueError("body must be JSON") from None
+
         def checked_host(self):
             """Serve only 127.0.0.1; send localhost there (fix markers live in that origin); refuse other hosts."""
             host = (self.headers.get("Host") or "").lower()
@@ -267,10 +307,23 @@ def handler(app, port=PORT):
         def do_POST(self):
             if not self.checked_host():
                 return
-            if urlsplit(self.path).path != "/api/refresh":
-                return self.send(404, "not found\n", "text/plain")
-            app.ingest()
-            self.json(app.status())
+            path = urlsplit(self.path).path
+            if path == "/api/refresh":
+                app.ingest()
+                self.json(app.status())
+            elif path == "/api/errors/fix":
+                try:
+                    category, day = parse_fix(self.json_body(), metrics.local_today(app.con.cursor()))
+                except ValueError as e:
+                    return self.send(400, json.dumps(dict(error=str(e))))
+                # The ingest thread writes through app.con under app.lock, as the limit pollers do: take it for the write, so a
+                # marker never lands in the middle of an ingest's transaction and two markers on one type cannot conflict.
+                with app.lock:
+                    cur = app.con.cursor()
+                    store.set_error_fix(cur, category, day)
+                    self.json(metrics.error_fixes(cur))
+            else:
+                self.send(404, "not found\n", "text/plain")
 
         def log_message(self, fmt, *args):
             pass

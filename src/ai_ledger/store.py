@@ -61,6 +61,8 @@ CREATE TABLE IF NOT EXISTS limit_polls (
 CREATE TABLE IF NOT EXISTS usage_files (
   path VARCHAR PRIMARY KEY, kind VARCHAR, session_id VARCHAR, size BIGINT, mtime DOUBLE,
   json VARCHAR USING COMPRESSION zstd, ingested_at TIMESTAMP);
+-- What the user told the Errors page, one row per error type. Nothing derives it, so it is not in DERIVED: rebuild keeps it.
+CREATE TABLE IF NOT EXISTS error_marks (category VARCHAR PRIMARY KEY, fixed_on DATE);
 """
 
 DERIVED = ["sessions", "requests", "tool_calls", "prompts", "hooks", "limit_snapshots", "session_facets", "facet_counts", "session_meta",
@@ -158,6 +160,15 @@ def open_store(path=None):
         for table in ("projects_by_cwd", "sessions"):
             con.execute(f"UPDATE {table} SET project = ? WHERE project = ?", [new, old])
     return con
+
+
+def set_error_fix(cur, category, day):
+    """Mark the error type fixed on day (a date), or remove its fix marker when day is None. Other state of the row stays."""
+    if day is None:
+        cur.execute("DELETE FROM error_marks WHERE category = ?", [category])
+    else:
+        cur.execute("INSERT INTO error_marks (category, fixed_on) VALUES (?, ?) ON CONFLICT (category) DO UPDATE SET fixed_on = excluded.fixed_on",
+                    [category, day])
 
 
 def insert(cur, table, cols, rows, tail="ON CONFLICT DO NOTHING", returning=None):

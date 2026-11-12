@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import fixture from "../../__fixtures__/errors";
@@ -19,15 +19,38 @@ beforeEach(() => {
   history.replaceState(null, "", "/errors");
 });
 
+type Fix = { category: string; day: string | null };
+/** The app's Errors endpoints over fetch: the payload carries the stored fixes, and POST /api/errors/fix keeps them. fail(f) refuses
+ *  the writes f says yes to (null: none); hold() makes writes wait for release(). */
+function serve(fixes: Record<string, string> = {}, refuse: ((b: Fix) => boolean) | null = null) {
+  const api = {
+    store: { ...fixes }, posts: [] as Fix[], refuse,
+    fail(f: ((b: Fix) => boolean) | null) { api.refuse = f; },
+    gate: null as Promise<void> | null,
+    hold() { let release!: () => void; api.gate = new Promise<void>(r => { release = r; }); return { release }; },
+  };
+  vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
+    if (url === "/api/errors/fix") {
+      const b = JSON.parse(init!.body as string) as Fix;
+      api.posts.push(b);
+      await api.gate;
+      if (api.refuse?.(b)) return { ok: false, status: 500, json: () => Promise.resolve({ error: "no" }) } as Response;
+      if (b.day) api.store[b.category] = b.day; else delete api.store[b.category];
+      return json({ ...api.store });
+    }
+    return json(url.startsWith("/api/errors") ? { ...fixture, fixes: { ...api.store } } : { id: "t07", i: "full input", e: "full error", r: "", cut: [] });
+  }));
+  return api;
+}
+
 const page = async () => {
   render(<ErrorsPage />);
   await screen.findByRole("heading", { level: 1, name: /failed tool calls/ });
 };
 
 describe("ErrorsPage", () => {
-  it("shows a fix marker saved by the old page, with its before and after rate", async () => {
-    // Exactly what dashboard_template.html wrote: JSON.stringify({ [type id]: "YYYY-MM-DD" }).
-    localStorage.setItem("claude-errors-fixes", JSON.stringify({ x: "2026-11-04" }));
+  it("shows the fix markers of the payload, with their before and after rate", async () => {
+    serve({ x: "2026-11-04" });
     await page();
     expect(document.querySelector("#catBody .chip.fixed")?.textContent).toBe("✓ Fix applied Nov 4");
     expect(document.querySelector('#chart .fix[data-c="x"]')?.textContent).toBe("✓ x");
@@ -39,18 +62,153 @@ describe("ErrorsPage", () => {
     expect(d.querySelector(".fixout")?.textContent).toBe("No calls before this date No tool calls before Nov 4 to compare with; pick the day the fix went in.");
     expect(document.activeElement?.id).toBe("detailTitle");
     expect(location.hash).toBe("#range=30&cat=x");
+    expect(localStorage.getItem("claude-errors-fixes")).toBeNull();
   });
 
-  it("marks and undoes a fix in the old page's format", async () => {
-    history.replaceState(null, "", "/errors#range=7&cat=x");
-    await page();
-    await userEvent.click(screen.getByRole("button", { name: "Mark fix applied" }));
-    expect(localStorage.getItem("claude-errors-fixes")).toBe('{"x":"2026-11-05"}');
-    expect(document.activeElement?.id).toBe("unfix");
-    await userEvent.click(screen.getByRole("button", { name: "Undo" }));
-    expect(localStorage.getItem("claude-errors-fixes")).toBe("{}");
-    expect(document.activeElement?.id).toBe("fix");
-    expect(JSON.parse(localStorage.getItem("claude-errors-view")!)).toEqual({ project: "", range: 7, source: "", gran: "day", sub: true, noise: false, cat: "x" });
+  describe("fix markers", () => {
+    const fixes = () => document.querySelector(".vitals")?.textContent ?? "";
+    const hash = "/errors#range=7&cat=x";
+
+    it("marks at once, posts the day, and undoes the same way", async () => {
+      const api = serve(), hold = api.hold();
+      history.replaceState(null, "", hash);
+      await page();
+      await userEvent.click(screen.getByRole("button", { name: "Mark fix applied" }));
+      // The page does not wait for the answer.
+      expect(screen.getByRole("button", { name: "Undo" })).toBeTruthy();
+      expect(document.activeElement?.id).toBe("unfix");
+      expect(fixes()).toContain("1Fixes applied");
+      hold.release();
+      await waitFor(() => expect(api.store).toEqual({ x: "2026-11-05" }));
+      expect(api.posts).toEqual([{ category: "x", day: "2026-11-05" }]);
+      expect(vi.mocked(fetch).mock.calls.find(c => c[0] === "/api/errors/fix")![1]).toMatchObject({ method: "POST", headers: { "Content-Type": "application/json" } });
+      expect(localStorage.getItem("claude-errors-fixes")).toBeNull();
+      await userEvent.click(screen.getByRole("button", { name: "Undo" }));
+      expect(screen.getByRole("button", { name: "Mark fix applied" })).toBeTruthy();
+      expect(document.activeElement?.id).toBe("fix");
+      await waitFor(() => expect(api.store).toEqual({}));
+      expect(api.posts[1]).toEqual({ category: "x", day: null });
+      expect(JSON.parse(localStorage.getItem("claude-errors-view")!)).toEqual({ project: "", range: 7, source: "", gran: "day", sub: true, noise: false, cat: "x" });
+    });
+
+    it("posts the day the user picked", async () => {
+      const api = serve();
+      history.replaceState(null, "", hash);
+      await page();
+      fireEvent.change(document.getElementById("fixDate")!, { target: { value: "2026-11-04" } });
+      await userEvent.click(screen.getByRole("button", { name: "Mark fix applied" }));
+      await waitFor(() => expect(api.store).toEqual({ x: "2026-11-04" }));
+    });
+
+    it("shows a marker set elsewhere after a reload, and keeps it after the page is left and reopened", async () => {
+      const api = serve();
+      history.replaceState(null, "", hash);
+      await page();
+      await userEvent.click(screen.getByRole("button", { name: "Mark fix applied" }));
+      await waitFor(() => expect(api.store).toEqual({ x: "2026-11-05" }));
+      cleanup();
+      await page(); // the cache was cleared by the write: the payload is fetched again
+      expect(screen.getByRole("button", { name: "Undo" })).toBeTruthy();
+    });
+
+    it("puts a failed mark back, says so, and returns focus to Mark", async () => {
+      const api = serve({}, () => true);
+      history.replaceState(null, "", hash);
+      await page();
+      await userEvent.click(screen.getByRole("button", { name: "Mark fix applied" }));
+      await waitFor(() => expect(document.getElementById("fixErr")).toBeTruthy());
+      expect(fixes()).toContain("0Fixes applied");
+      expect(document.getElementById("fixErr")?.textContent).toMatch(/^Couldn't save the fix marker/);
+      await waitFor(() => expect(document.getElementById("detailLive")?.textContent).toMatch(/^Couldn't save the fix marker/));
+      expect(document.activeElement?.id).toBe("fix");
+      expect(api.store).toEqual({});
+      // The next try clears the note.
+      api.fail(null);
+      await userEvent.click(screen.getByRole("button", { name: "Mark fix applied" }));
+      await waitFor(() => expect(api.store).toEqual({ x: "2026-11-05" }));
+      expect(document.getElementById("fixErr")).toBeNull();
+    });
+
+    it("puts a failed undo back", async () => {
+      const api = serve({ x: "2026-11-04" }, () => true);
+      history.replaceState(null, "", hash);
+      await page();
+      await userEvent.click(screen.getByRole("button", { name: "Undo" }));
+      await waitFor(() => expect(document.getElementById("fixErr")).toBeTruthy());
+      expect(screen.getByRole("button", { name: "Undo" })).toBeTruthy();
+      expect(document.querySelector("#detail .chip.fixed")?.textContent).toBe("✓ Fix applied Nov 4, 2026");
+      expect(document.activeElement?.id).toBe("unfix");
+      expect(api.store).toEqual({ x: "2026-11-04" });
+    });
+  });
+
+  describe("fix markers kept by an older page in localStorage", () => {
+    const KEY = "claude-errors-fixes";
+    const hash = "/errors#range=30";
+
+    it("moves to the store: only the types it lacks are sent, the store wins on the rest, and the key goes after they are written", async () => {
+      localStorage.setItem(KEY, JSON.stringify({ x: "2026-11-04", worktree: "2026-10-01" }));
+      const api = serve({ x: "2026-11-01" });
+      history.replaceState(null, "", hash);
+      await page();
+      await waitFor(() => expect(localStorage.getItem(KEY)).toBeNull());
+      expect(api.posts).toEqual([{ category: "worktree", day: "2026-10-01" }]);
+      expect(api.store).toEqual({ x: "2026-11-01", worktree: "2026-10-01" });
+      expect(document.querySelector("#catBody .chip.fixed")?.textContent).toBe("✓ Fix applied Nov 1");
+      expect(document.querySelector(".vitals")?.textContent).toContain("2Fixes applied");
+    });
+
+    it("removes the key without a write when the store has every type", async () => {
+      localStorage.setItem(KEY, JSON.stringify({ x: "2026-11-04" }));
+      const api = serve({ x: "2026-11-02" });
+      history.replaceState(null, "", hash);
+      await page();
+      await waitFor(() => expect(localStorage.getItem(KEY)).toBeNull());
+      expect(api.posts).toEqual([]);
+      expect(document.querySelector("#catBody .chip.fixed")?.textContent).toBe("✓ Fix applied Nov 2");
+    });
+
+    it("leaves the key after a failed write, shows the markers meanwhile, and retries on the next load", async () => {
+      localStorage.setItem(KEY, JSON.stringify({ x: "2026-11-04", worktree: "2026-10-01" }));
+      const api = serve({}, b => b.category === "worktree");
+      history.replaceState(null, "", hash);
+      await page();
+      await waitFor(() => expect(api.posts.length).toBe(2));
+      await waitFor(() => expect(document.getElementById("detailLive")?.textContent).toMatch(/fix markers/));
+      expect(JSON.parse(localStorage.getItem(KEY)!)).toEqual({ x: "2026-11-04", worktree: "2026-10-01" });
+      expect(api.store).toEqual({ x: "2026-11-04" });
+      expect(document.querySelector(".vitals")?.textContent).toContain("2Fixes applied"); // the local one still shows
+      cleanup();
+      api.fail(null);
+      api.posts.length = 0;
+      await page();
+      await waitFor(() => expect(localStorage.getItem(KEY)).toBeNull());
+      expect(api.posts).toEqual([{ category: "worktree", day: "2026-10-01" }]); // x is in the store now
+      expect(api.store).toEqual({ x: "2026-11-04", worktree: "2026-10-01" });
+    });
+
+    it("keeps a marker the user undoes from coming back, and the key until the undo is stored", async () => {
+      localStorage.setItem(KEY, JSON.stringify({ x: "2026-11-04" }));
+      const api = serve({}, () => true);
+      history.replaceState(null, "", "/errors#range=7&cat=x");
+      await page();
+      await waitFor(() => expect(api.posts.length).toBe(1));
+      await userEvent.click(await screen.findByRole("button", { name: "Undo" }));
+      await waitFor(() => expect(document.getElementById("fixErr")).toBeTruthy()); // refused: back as it was
+      expect(screen.getByRole("button", { name: "Undo" })).toBeTruthy();
+      expect(localStorage.getItem(KEY)).not.toBeNull();
+      api.fail(null);
+      await userEvent.click(screen.getByRole("button", { name: "Undo" }));
+      await waitFor(() => expect(localStorage.getItem(KEY)).toBeNull());
+      expect(screen.getByRole("button", { name: "Mark fix applied" })).toBeTruthy();
+    });
+
+    it("ignores a key that holds no markers", async () => {
+      localStorage.setItem(KEY, "[1]");
+      const api = serve();
+      await page();
+      expect(api.posts).toEqual([]);
+    });
   });
 
   it("says when copying an example's URL fails", async () => {

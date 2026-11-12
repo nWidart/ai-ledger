@@ -180,6 +180,11 @@ def start_ts(cur, d):
 
 # ---------- errors dashboard ----------
 
+def error_fixes(cur):
+    """The fix markers the user set on the Errors page: {error type: "YYYY-MM-DD"}."""
+    return {c: d.isoformat() for c, d in cur.execute("SELECT category, fixed_on FROM error_marks WHERE fixed_on IS NOT NULL ORDER BY 1").fetchall()}
+
+
 def errors_payload(cur, last_ingest=None, today=None):
     """The JSON shape the Errors page reads (the same shape the old static page read). today anchors its ranges, as in usage()."""
     errs = rows(cur, f"""
@@ -200,7 +205,7 @@ def errors_payload(cur, last_ingest=None, today=None):
         FROM tool_calls t LEFT JOIN sessions s USING (session_id)
         WHERE t.start_ts IS NOT NULL GROUP BY 1, 2, 5 ORDER BY 1, 2, 5""").fetchall()
     return dict(generated=last_ingest, today=(today or local_today(cur)).isoformat(), project_order=project_order(cur), categories=[{k: r[k] for k in ("id", "label", "why", "fix", "snippet")} for r in RULES],
-                errors=errs, calls=[list(c) for c in calls], error_days=error_days(cur), incidents=inc,
+                errors=errs, calls=[list(c) for c in calls], error_days=error_days(cur), incidents=inc, fixes=error_fixes(cur),
                 incident_gap_minutes=INCIDENT_GAP_MINUTES, incident_max_ok=INCIDENT_MAX_OK)
 
 

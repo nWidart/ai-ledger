@@ -85,12 +85,11 @@ function TypeDetail({ cat }: { cat: string }) {
   const mark = () => {
     const di = date.current!;
     if (!di.reportValidity() || di.value > m.lastDay) return;
-    x.setFixes({ ...fixes, [cat]: di.value || m.lastDay });
+    x.setFix(cat, di.value || m.lastDay);
     x.after(() => document.getElementById("unfix")?.focus());
   };
   const undo = () => {
-    const { [cat]: _, ...rest } = fixes;
-    x.setFixes(rest);
+    x.setFix(cat, null);
     x.after(() => document.getElementById("fix")?.focus());
   };
   const clearFilters = () => {
@@ -127,6 +126,7 @@ function TypeDetail({ cat }: { cat: string }) {
         {fixDay ? <><span className="chip fixed">✓ Fix applied {label(fixDay, true)}</span><button type="button" id="unfix" onClick={undo}>Undo</button></>
           : <><label className="chk">Applied on <input type="date" id="fixDate" ref={date} defaultValue={m.lastDay} min={m.firstDay} max={m.lastDay} /></label><button type="button" id="fix" onClick={mark}>Mark fix applied</button></>}
         <span className="muted" style={{ fontSize: 12 }}>Applies to all projects</span>
+        {x.fixError?.cat === cat && <span className="fixerr" id="fixErr">{x.fixError.text}</span>}
       </div>
     </div>
     {fixDay && <FixResult cat={cat} fixDay={fixDay} />}

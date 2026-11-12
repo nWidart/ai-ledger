@@ -361,6 +361,7 @@ export default {
    "rts": "2026-11-04T10:09:00.000Z"
   }
  ],
+ "fixes": {},
  "incident_gap_minutes": 10,
  "incident_max_ok": 2
 } satisfies ErrorsPayload;

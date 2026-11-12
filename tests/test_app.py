@@ -11,7 +11,7 @@ import tempfile
 import threading
 import time
 import unittest
-from datetime import datetime
+from datetime import datetime, timedelta
 from unittest import mock
 from http.server import ThreadingHTTPServer
 
@@ -203,6 +203,112 @@ class AppTest(unittest.TestCase):
                 contextlib.redirect_stderr(err), self.assertRaises(SystemExit) as cm:
             app.main([])
         self.assertEqual((cm.exception.code, err.getvalue()), (1, "cannot move the store a to b\n"))
+
+
+class FixEndpointTest(unittest.TestCase):
+    """POST /api/errors/fix: the Errors page's fix markers, written to the store and answered as the full map."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.con = store.open_store(os.path.join(self.tmp, "d", "x.duckdb"))
+        self.app = app.App(self.con, {}, pollers=[])
+        self.httpd = ThreadingHTTPServer(("127.0.0.1", 0), app.handler(self.app))
+        threading.Thread(target=self.httpd.serve_forever, daemon=True).start()
+        self.addCleanup(self.con.close)
+        self.addCleanup(self.httpd.server_close)
+        self.addCleanup(self.httpd.shutdown)
+        self.today = metrics.local_today(self.con.cursor())
+
+    def post(self, body, host=f"{app.HOST}:{app.PORT}", ctype="application/json", path="/api/errors/fix", length=None):
+        raw = body if isinstance(body, bytes) else json.dumps(body).encode()
+        h = http.client.HTTPConnection("127.0.0.1", self.httpd.server_address[1])
+        headers = {"Host": host, "Content-Length": str(len(raw) if length is None else length)}
+        if ctype:
+            headers["Content-Type"] = ctype
+        h.request("POST", path, body=raw, headers=headers)
+        r = h.getresponse()
+        text = r.read()
+        return r.status, json.loads(text) if text and r.getheader("Content-Type", "").startswith("application/json") else text
+
+    def marks(self):
+        return {c: d.isoformat() for c, d in self.con.execute("SELECT category, fixed_on FROM error_marks").fetchall()}
+
+    def test_sets_replaces_and_removes_a_marker(self):
+        today = self.today.isoformat()
+        self.assertEqual(self.post({"category": "x", "day": "2026-11-04"}), (200, {"x": "2026-11-04"}))
+        self.assertEqual(self.post({"category": "y", "day": today}), (200, {"x": "2026-11-04", "y": today}))
+        self.assertEqual(self.post({"category": "x", "day": "2026-10-01"}), (200, {"x": "2026-10-01", "y": today}))
+        self.assertEqual(self.post({"category": "x", "day": None}), (200, {"y": today}))
+        self.assertEqual(self.post({"category": "x", "day": None}), (200, {"y": today}))  # removing a missing one is fine
+        self.assertEqual(self.marks(), {"y": today})
+        self.assertEqual(metrics.errors_payload(self.con.cursor())["fixes"], {"y": today})
+
+    def test_refuses_what_is_not_valid(self):
+        tomorrow = (self.today + timedelta(days=1)).isoformat()
+        good = {"category": "x", "day": "2026-11-04"}
+        bad = [
+            ({**good, "day": tomorrow}, "future"), ({**good, "day": "2026-02-30"}, "not a date"), ({**good, "day": "20261104"}, "basic format"),
+            ({**good, "day": "2026-W45-3"}, "week format"), ({**good, "day": "２０２６-１１-０４"}, "full-width digits"),
+            ({**good, "day": " 2026-11-04"}, "space"), ({**good, "day": 20261104}, "number"), ({"category": "x"}, "no day"),
+            ({**good, "category": ""}, "empty"), ({**good, "category": "c" * 101}, "too long"), ({**good, "category": 7}, "number category"),
+            ({"day": "2026-11-04"}, "no category"), ([good], "array"), ("x", "string"), (None, "null"),
+        ]
+        for body, why in bad:
+            status, got = self.post(body)
+            self.assertEqual(status, 400, why)
+            self.assertIsInstance(got["error"], str, why)
+        today = self.today.isoformat()
+        self.assertEqual(self.post({"category": "c" * 100, "day": today}), (200, {"c" * 100: today}))
+        self.assertEqual(self.marks(), {"c" * 100: today})  # none of the refused ones wrote
+
+    def test_refuses_what_is_not_json_or_too_big(self):
+        self.assertEqual(self.post(b"{nope", length=5)[0], 400)
+        self.assertEqual(self.post(b"\xff\xfe")[0], 400)
+        self.assertEqual(self.post(b"[" * 3000)[0], 400)  # deeper than the JSON parser goes
+        self.assertEqual(self.post(b"")[0], 400)
+        self.assertEqual(self.post({"category": "x" * app.MAX_BODY, "day": None})[0], 400)
+        self.assertEqual(self.post({"category": "x", "day": None}, ctype="text/plain")[0], 400)  # a form post from another site
+        self.assertEqual(self.post({"category": "x", "day": None}, ctype=None)[0], 400)
+        self.assertEqual(self.post({"category": "x", "day": "2026-11-04"}, ctype="application/json; charset=utf-8")[0], 200)
+        self.assertEqual(self.marks(), {"x": "2026-11-04"})
+
+    def test_checks_the_host(self):
+        h = http.client.HTTPConnection("127.0.0.1", self.httpd.server_address[1])
+        h.request("POST", "/api/errors/fix", body=b"{}", headers={"Host": "example.com", "Content-Type": "application/json"})
+        self.assertEqual(h.getresponse().status, 403)
+        self.assertEqual(self.post({"category": "x", "day": None}, host="localhost:8765")[0], 301)
+        self.assertEqual(self.marks(), {})
+
+    def test_other_posts_are_not_found(self):
+        self.assertEqual(self.post({}, path="/api/errors/other")[0], 404)
+
+    def test_waits_for_a_running_ingest(self):
+        """The ingest holds app.lock while it writes: a marker waits for it and is stored right after."""
+        self.app.lock.acquire()
+        done = []
+        t = threading.Thread(target=lambda: done.append(self.post({"category": "x", "day": "2026-11-04"})))
+        t.start()
+        time.sleep(0.3)
+        self.assertEqual((done, self.marks()), ([], {}))
+        self.app.lock.release()
+        t.join(5)
+        self.assertEqual((done, self.marks()), ([(200, {"x": "2026-11-04"})], {"x": "2026-11-04"}))
+
+    def test_stays_consistent_next_to_a_busy_ingest(self):
+        stop = threading.Event()
+
+        def ingest():
+            while not stop.is_set():
+                self.app.ingest(usage=False)
+        t = threading.Thread(target=ingest)
+        t.start()
+        try:
+            for i in range(30):
+                self.assertEqual(self.post({"category": f"c{i % 3}", "day": "2026-11-04" if i % 2 else None})[0], 200)
+        finally:
+            stop.set()
+            t.join(10)
+        self.assertEqual(self.marks(), {"c0": "2026-11-04", "c2": "2026-11-04"})  # the last write for each of the three
 
 
 class LoopTest(unittest.TestCase):
