@@ -142,7 +142,7 @@ Subagent work SHALL appear as a lane inside the stream. Selecting the lane heade
 - **THEN** the lane stays unfolded
 
 ### Requirement: Tell when a lane is finished
-A lane SHALL be finished when the call that started it has ended. A lane no call names, as every Codex lane, SHALL be finished when the newest turn among its own events has ended, and running while that turn goes on. A finished lane's duration SHALL stop at its last event.
+A lane whose own events hold a turn start or end, as a Codex lane, SHALL be finished when its newest turn has ended, and running while that turn goes on: a Codex spawn call returns at once. Any other lane SHALL be finished when the call that started it has ended. A finished lane's duration SHALL stop at its last event.
 
 #### Scenario: Codex lane whose turn ended
 - **WHEN** a Codex subagent thread made twelve tool calls and its turn has completed
