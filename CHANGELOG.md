@@ -26,6 +26,7 @@ Run `ai-ledger rebuild` once after upgrading (with the app stopped): error types
 - Live shows a Claude Code session you closed as ended. Codex records no close, so a Codex session goes idle.
 - The Cost chart's day tooltip lists the three costliest projects inside Other, with their cost, and how many more there are.
 - The Cost chart hatches today's bar and keys it "Today so far", leaves today out of the 7-day average, and the heading says what the month is on pace for at list prices.
+- The Cost chart stacks by project, model or agent: a Stack by switch beside Cost and Tokens, remembered in the browser. An agent's key in the legend filters the page to it, and the models inside Other list in the tooltip.
 - Live filters the stream: failed calls only, main thread only, or without the calls that only read, except a failed one.
 - Live links the stream to the session sheet on Activity, and shows the date on times from another day.
 

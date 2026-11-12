@@ -13,14 +13,14 @@ describe("costDays", () => {
   it("lists the projects inside Other, costliest first, and sums them into Other", () => {
     const rows = [pd("A", 10), pd("B", 5), pd("C", 3), pd("D", 1), pd("E", 0.5), pd("F", 0)];
     const [de] = costDays(view(rows, 19.5), [named("A"), other]);
-    expect(de!.other).toEqual([{ project: "B", cost: 5 }, { project: "C", cost: 3 }, { project: "D", cost: 1 }, { project: "E", cost: 0.5 }]);
+    expect(de!.other).toEqual([{ name: "B", cost: 5 }, { name: "C", cost: 3 }, { name: "D", cost: 1 }, { name: "E", cost: 0.5 }]);
     expect(de!.v["p:"]).toBeCloseTo(9.5);
     expect(de!.v["p:A"]).toBe(10);
   });
 
   it("names a project with no name as (no project)", () => {
     const [de] = costDays(view([pd(null, 2), pd("B", 1)], 3), [named("A"), other]);
-    expect(de!.other).toEqual([{ project: "(no project)", cost: 2 }, { project: "B", cost: 1 }]);
+    expect(de!.other).toEqual([{ name: "(no project)", cost: 2 }, { name: "B", cost: 1 }]);
   });
 
   it("leaves Other's list out when Other is not stacked", () => {

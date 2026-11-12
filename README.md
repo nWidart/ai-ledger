@@ -13,7 +13,7 @@ Needs [uv](https://docs.astral.sh/uv/). macOS and Linux. Nothing leaves your mac
 ## What you get
 
 - **Activity**: what got done per day or week, stacked by project, with errors per 100 calls on the chart, prompts by hour and weekday, and the change against the period before. It lists what needs attention, down to the failed test runs. Tables sort by column, a day on the chart narrows Tools, MCP & hooks and Error loops to it, and the Sessions filters live in the URL.
-- **Cost**: estimated spend at API list prices, per project, model and session, against the period before, with today's bar hatched as a partial day and the month's run rate. Its project and session tables download as CSV or copy to the clipboard.
+- **Cost**: estimated spend at API list prices, per project, model and session, against the period before, with the daily chart stackable by project, model or agent, today's bar hatched as a partial day, and the month's run rate. Its project and session tables download as CSV or copy to the clipboard.
 - **Errors**: failed tool calls by type, with a fix to paste into `CLAUDE.md` or `AGENTS.md`.
 - **Limits**: each plan limit window, with a forecast to its reset.
 - **Insights**: how Claude Code's `/insights` judged your sessions.

@@ -15,7 +15,7 @@ import { big, num, pct, usd, when } from "../../format";
 import { useHashState } from "../../hash";
 import { useApi } from "../../useApi";
 import { Changes } from "./Changes";
-import { costDays, moved } from "./cost";
+import { costDays, moved, STACKS, type Stack } from "./cost";
 import { CostChart, type CostMetric } from "./CostChart";
 import { COST_SORT, ProjectCostDrawer, TokensDrawer, TopSessionsDrawer, type CostSpot, type ProjectKey } from "./drawers";
 import { cacheInsight, pairFacts, peakInsight, perCommitInsight, spenderInsight, type CostActs } from "./insights";
@@ -24,11 +24,12 @@ import { Lede } from "./Lede";
 import "./cost.css";
 
 const LEDGER_TOP = 8;
-// The chart's metric and hidden token kinds, under the keys the Usage page kept them in.
-const METRIC_KEY = "claude-usage-metric", HIDDEN_KEY = "claude-usage-hidden";
+// The chart's metric, hidden token kinds and cost stacking, under the keys the Usage page kept them in (the stacking is newer).
+const METRIC_KEY = "claude-usage-metric", HIDDEN_KEY = "claude-usage-hidden", STACK_KEY = "claude-usage-stack";
 const stored = <T,>(k: string, ok: (v: unknown) => v is T, d: T): T => { try { const v: unknown = JSON.parse(localStorage.getItem(k) || "null"); return ok(v) ? v : d; } catch { return d; } };
 const store = (k: string, v: unknown) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* storage off */ } };
 const isMetric = (v: unknown): v is CostMetric => v === "cost" || v === "tokens";
+const isStack = (v: unknown): v is Stack => STACKS.includes(v as Stack);
 const isList = (v: unknown): v is string[] => Array.isArray(v) && v.every(x => typeof x === "string");
 
 // Phones show What changed after the chart and its insights, and fold the supporting cards under the chart.
@@ -80,6 +81,8 @@ export function CostPage() {
   }, [viewKey]);
   const [metric, setMetricState] = useState<CostMetric>(() => stored(METRIC_KEY, isMetric, "cost"));
   const [hidden, setHiddenState] = useState<string[]>(() => stored(HIDDEN_KEY, isList, []));
+  const [stack, setStackState] = useState<Stack>(() => stored(STACK_KEY, isStack, "project"));
+  const setStack = (s: Stack) => { setStackState(s); store(STACK_KEY, s); };
   const setMetric = (m: CostMetric) => { setMetricState(m); store(METRIC_KEY, m); };
   const setHidden = (ks: string[]) => { setHiddenState(ks); store(HIDDEN_KEY, ks); };
 
@@ -127,8 +130,8 @@ export function CostPage() {
           {narrow && <div className="mpair">{pairFacts(d).map(f => <div key={f.l}><div className="v">{f.v}{f.of && <span className="muted">{f.of}</span>}</div><div className="l">{f.l}</div></div>)}</div>}
           {!narrow && rest.length > 0 && <div className="support">{rest.map(c => <InsightCard key={c.k} insight={c} />)}</div>}
         </section>}
-        <CostChart d={d} metric={metric} onMetric={setMetric} hidden={hidden} onHidden={setHidden} onDay={showDay}
-          onProject={p => set({ project: p, session: null, inspect: null })} />
+        <CostChart d={d} metric={metric} onMetric={setMetric} hidden={hidden} onHidden={setHidden} onDay={showDay} stack={stack} onStack={setStack}
+          onProject={p => set({ project: p, session: null, inspect: null })} onSource={s => set({ source: s, session: null, inspect: null })} />
         {narrow && rest.length > 0 && <details className="more-ins"><summary>More insights <span className="muted">({rest.length})</span></summary>
           <div className="support">{rest.map(c => <InsightCard key={c.k} insight={c} />)}</div></details>}
         {narrow && changes}
