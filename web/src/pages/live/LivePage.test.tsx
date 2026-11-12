@@ -497,7 +497,7 @@ describe("LivePage", () => {
   it("opens a failed call's detail in place with the error and the result size only", async () => {
     show();
     await stream();
-    await userEvent.click(toolRow("Bash", 0));
+    await userEvent.click((await screen.findAllByRole("button", { name: /^Bash/ }))[0]!); // the session loads after the stream shows
     const detail = toolRow("Bash", 0).nextElementSibling!;
     expect(detail.textContent).toContain("uv run python -m unittest");
     expect(detail.textContent).toContain("FAIL: test_hot_pass");
