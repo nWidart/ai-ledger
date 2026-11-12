@@ -9,7 +9,7 @@ from unittest import mock
 from compression import zstd
 
 from ai_ledger import metrics, store
-from ai_ledger.codex import live_items as codex_live
+from ai_ledger.codex import live_items as codex_live, thread_class
 from test_store import StoreCase
 
 FIXTURES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "codex")
@@ -199,10 +199,12 @@ class ArchiveTest(CodexCase):
         overlap = self.q("SELECT count(*) FROM raw_lines WHERE key LIKE 'codex:%:146'")
         self.assertEqual(overlap, [(2,)])
         self.assertEqual(self.q("SELECT session_id, source FROM sessions"), [(SESSION["v0153"], "codex")])
+        # Its session_meta has session_id == id: it continues the main thread, whatever its name says.
         self.assertEqual(self.q("SELECT session_id, subagent, model, effort FROM requests WHERE message_id = 'resp_thread'"),
-                         [(SESSION["v0153"], True, "gpt-5.6-sol", "low")])
-        self.assertEqual(self.q("SELECT session_id, subagent FROM tool_calls WHERE tool_use_id = 'call_thread'"), [(SESSION["v0153"], True)])
-        self.assertEqual(self.q("SELECT count(*) FROM requests WHERE NOT subagent"), [(3,)])
+                         [(SESSION["v0153"], False, "gpt-5.6-sol", "low")])
+        self.assertEqual(self.q("SELECT session_id, subagent FROM tool_calls WHERE tool_use_id = 'call_thread'"), [(SESSION["v0153"], False)])
+        self.assertEqual(self.q("SELECT count(*) FROM requests WHERE NOT subagent"), [(4,)])
+        self.assertEqual(self.q("SELECT DISTINCT session_id, subagent FROM raw_lines"), [(SESSION["v0153"], False)])
 
     def test_spawned_thread_is_subagent_work(self):
         parent = "0a0f9999-0000-7000-8000-000000000002"
@@ -211,6 +213,46 @@ class ArchiveTest(CodexCase):
         self.ingest()
         self.assertEqual(self.q("SELECT session_id, subagent FROM requests"), [(parent, True)])
         self.assertEqual(self.q("SELECT session_id, peak_context FROM sessions"), [(parent, 0)])
+        # A file named by its own thread only: its lines belong to the parent session, not to a session of their own.
+        self.assertEqual(self.q("SELECT DISTINCT session_id, subagent FROM raw_lines"), [(parent, True)])
+
+    def test_chunk_without_session_meta_keeps_the_threads_owner(self):
+        parent = "0a0f9999-0000-7000-8000-000000000002"
+        path = self.place(NAME, meta(parent, THREAD) + context(1, "t1", "gpt-6-astra"))
+        self.ingest()
+        self.place(NAME, record(2, "t1", "r1", usage(100, 0, 10)), mode="a")
+        self.ingest()
+        self.assertEqual(self.q("SELECT count(*), min(session_id), bool_and(subagent) FROM raw_lines WHERE file = ?", path), [(3, parent, True)])
+        self.assertEqual(self.q("SELECT session_id, subagent FROM requests"), [(parent, True)])
+
+    def test_file_with_no_session_meta_is_placed_by_its_name(self):
+        parent = "0a0f9999-0000-7000-8000-000000000002"
+        self.place(NAME.replace(THREAD, f"{parent}_{THREAD}"), context(1, "t1", "gpt-6-astra"))
+        self.ingest()
+        self.assertEqual(self.q("SELECT DISTINCT session_id, subagent FROM raw_lines"), [(parent, True)])
+
+    def test_rebuild_places_lines_stored_under_the_thread(self):
+        parent = "0a0f9999-0000-7000-8000-000000000002"
+        self.place(NAME, meta(parent, THREAD) + context(1, "t1", "gpt-6-astra") + record(2, "t1", "r1", usage(100, 0, 10)))
+        self.place("session_index.jsonl", line(id=parent, thread_name="Review", updated_at="2026-11-06T10:00:00Z"), where="")
+        self.ingest()
+        before = {t: self.q(f"SELECT * FROM {t} ORDER BY ALL") for t in store.DERIVED}
+        # As stores written before this version hold it: the thread's own id as the session, and no subagent flag.
+        self.q("UPDATE raw_lines SET session_id = ?, subagent = false WHERE file LIKE '%rollout-%'", THREAD)
+        store.rebuild(self.con)
+        self.assertEqual(self.q("SELECT DISTINCT session_id, subagent FROM raw_lines WHERE file LIKE '%rollout-%'"), [(parent, True)])
+        self.assertEqual(self.q("SELECT session_id, subagent FROM raw_lines WHERE file LIKE '%session_index%'"), [(parent, False)])
+        self.assertEqual({t: self.q(f"SELECT * FROM {t} ORDER BY ALL") for t in store.DERIVED}, before)
+
+    def test_thread_class(self):
+        a, b = "0a0f9999-0000-7000-8000-00000000000a", "0a0f9999-0000-7000-8000-00000000000b"
+        path = f"/x/rollout-2026-11-06T10-00-00-{b}.jsonl"
+        self.assertEqual(thread_class(path, dict(session_id=a, id=b)), (a, True))  # a subagent
+        self.assertEqual(thread_class(path, dict(session_id=b, id=b)), (b, False))
+        self.assertEqual(thread_class(path, dict(id=b)), (b, False))
+        self.assertEqual(thread_class(path.replace(b, f"{a}_{b}"), dict(session_id=a, id=a)), (a, False))  # a continuation
+        self.assertEqual(thread_class(path.replace(b, f"{a}_{b}"), None), (a, True))  # no record: the file name
+        self.assertEqual(thread_class(path, None), (b, False))
 
 
 class TokenTest(CodexCase):

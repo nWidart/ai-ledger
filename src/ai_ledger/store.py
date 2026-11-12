@@ -371,9 +371,7 @@ def ingest_chunk(cur, projects, name, path, data, offset, lines, seq, st, whole=
     """Store and derive the complete lines in data, which starts at offset. A whole file's read_offset is its size.
     Returns the lines read, the lines new to the store and the ids of the sessions those new lines belong to."""
     src = SOURCES[name]
-    sub = src.subagent(path)
-    rows, parsed, seen = [], {}, set()
-    pos = offset
+    decoded = []
     for raw in data.split(b"\n")[:-1]:
         text = raw.decode("utf-8", errors="replace")
         try:
@@ -381,11 +379,17 @@ def ingest_chunk(cur, projects, name, path, data, offset, lines, seq, st, whole=
             ok = isinstance(d, dict)
         except ValueError:
             d, ok = None, False
+        decoded.append((raw, text, d, ok))
+    session, sub = src.placement(cur, path, (d for _, _, d, ok in decoded if ok))
+    rows, parsed, seen = [], {}, set()
+    pos = offset
+    for raw, text, d, ok in decoded:
         key = src.key(d, path, pos)
         if key not in seen:
             seen.add(key)
             dd = d if ok else {}
-            rows.append((key, path, lines, pos, dd.get("type"), *src.fields(dd, path), sub, ok, text))
+            sid, *rest = src.fields(dd, path)
+            rows.append((key, path, lines, pos, dd.get("type"), session or sid, *rest, sub, ok, text))
             if ok:
                 parsed[key] = d
         lines += 1
@@ -712,7 +716,9 @@ class Source(NamedTuple):
     files: Callable  # root -> transcript paths
     key: Callable  # (line, path, offset) -> dedup key
     deriver: type  # Deriver or a subclass
-    subagent: Callable  # path -> whether the file holds subagent work
+    # (cur, path, lines) -> (the session of the file's raw lines, or None for what fields gives, whether the file holds subagent
+    # work). lines are the parsed lines of the chunk being stored, none when the file is stored already.
+    placement: Callable
     fields: Callable = line_fields  # (line, path) -> raw_lines session_id, uuid, ts
     read: Callable = read_from  # (path, offset, size) -> (bytes, whole); whole: the file decompressed from its start
     prompt_text: Callable = prompt_text  # (line, prompt_id) -> the prompt's text if the line holds it, else None
@@ -727,8 +733,8 @@ from . import codex  # noqa: E402  (it subclasses Deriver)
 from . import limits  # noqa: E402  (it writes snapshots through this module)
 from . import insights  # noqa: E402  (it reads usage data through this module)
 
-SOURCES = {"claude": Source(transcript_files, line_key, Deriver, lambda path: "/subagents/" in path),
-           "codex": Source(codex.files, codex.key, codex.CodexDeriver, codex.subagent, codex.fields, codex.read,
+SOURCES = {"claude": Source(transcript_files, line_key, Deriver, lambda cur, path, lines: (None, "/subagents/" in path)),
+           "codex": Source(codex.files, codex.key, codex.CodexDeriver, codex.placement, codex.fields, codex.read,
                             codex.prompt_text, "event_msg", codex.live_items, None)}
 
 
@@ -746,7 +752,10 @@ def rebuild(con, log=None):
         src = SOURCES[name]
         cur.execute("BEGIN")
         try:
-            der = src.deriver(cur, projects, name, path, src.subagent(path), 0)
+            session, sub = src.placement(cur, path, ())
+            if session is not None:  # lines stored before a source placed its files by their own records
+                cur.execute("UPDATE raw_lines SET session_id = ?, subagent = ? WHERE file = ?", [session, sub, path])
+            der = src.deriver(cur, projects, name, path, sub, 0)
             for (text,) in cur.execute("SELECT json FROM raw_lines WHERE file = ? AND parsed ORDER BY byte_offset", [path]).fetchall():
                 der.add(json.loads(text))
             der.flush()

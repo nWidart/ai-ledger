@@ -569,7 +569,7 @@ class CodexSessionTest(CodexCase):
         self.place(NAME, meta(THREAD).replace("2026-11-06T10:00:00.000Z", at(0))
                    + codex_line(1, 1, "turn_context", turn_id="t1", model="claude-opus-5-5")
                    + codex_line(2, 2, "token_usage_record", turn_id="t1", response_id="r1", usage=dict(input_tokens=1000000, output_tokens=0)))
-        self.place(NAME.replace(THREAD, f"{THREAD}_{thread}"), meta(THREAD, thread).replace("2026-11-06T10:00:00.000Z", at(3))
+        self.place(NAME.replace(THREAD, thread), meta(THREAD, thread).replace("2026-11-06T10:00:00.000Z", at(3))
                    + codex_line(1, 4, "turn_context", turn_id="u1", model="claude-opus-5-5")
                    + codex_line(2, 5, "response_item", type="function_call", name="exec_command", call_id="c1", arguments=json.dumps(dict(cmd="ls")))
                    + codex_line(3, 6, "token_usage_record", turn_id="u1", response_id="r2", usage=dict(input_tokens=500000, output_tokens=0)))
@@ -581,7 +581,7 @@ class CodexSessionTest(CodexCase):
 
     def test_thread_turn_marks_carry_its_lane(self):  # no call names a Codex lane: the page tells it done by these
         thread = "0a0f9999-0000-7000-8000-000000000002"
-        child = NAME.replace(THREAD, f"{THREAD}_{thread}")
+        child = NAME.replace(THREAD, thread)
         self.place(NAME, meta(THREAD).replace("2026-11-06T10:00:00.000Z", at(0)) + codex_line(1, 1, "event_msg", type="task_started", turn_id="t1"))
         self.place(child, meta(THREAD, thread).replace("2026-11-06T10:00:00.000Z", at(3))
                    + codex_line(1, 4, "event_msg", type="task_started", turn_id="u1")
@@ -596,11 +596,23 @@ class CodexSessionTest(CodexCase):
         later = live.session(self.con.cursor(), THREAD, after=first["cursor"], now=NOW, prices=PRICES)
         self.assertEqual(marks(later)[-1], ("turn_end", thread))
 
+    def test_continuation_file_is_main_thread_work_not_a_lane(self):
+        later = "0a0f9999-0000-7000-8000-000000000002"
+        self.place(NAME, meta(THREAD).replace("2026-11-06T10:00:00.000Z", at(0)) + codex_line(1, 1, "event_msg", type="task_started", turn_id="t1"))
+        self.place(NAME.replace(THREAD, f"{THREAD}_{later}"), meta(THREAD).replace("2026-11-06T10:00:00.000Z", at(3))
+                   + codex_line(1, 4, "turn_context", turn_id="u1", model="claude-opus-5-5")
+                   + codex_line(2, 5, "response_item", type="function_call", name="exec_command", call_id="c1", arguments=json.dumps(dict(cmd="ls")))
+                   + codex_line(3, 6, "token_usage_record", turn_id="u1", response_id="r2", usage=dict(input_tokens=500000, output_tokens=0)))
+        self.ingest()
+        got = live.session(self.con.cursor(), THREAD, now=NOW, prices=PRICES)
+        self.assertEqual(([e["lane"] for e in got["events"]], got["lanes"]), ([None, None], {}))
+        self.assertEqual(self.q("SELECT count(*), count(*) FILTER (WHERE NOT subagent) FROM requests"), [(1, 1)])
+
     def test_thread_lanes_whose_requests_share_a_time(self):
         threads = ["0a0f9999-0000-7000-8000-000000000002", "0a0f9999-0000-7000-8000-000000000003"]
         self.place(NAME, meta(THREAD).replace("2026-11-06T10:00:00.000Z", at(0)))
         for thread, rid, tokens in zip(threads, ("r2", "r3"), (500000, 250000)):
-            self.place(NAME.replace(THREAD, f"{THREAD}_{thread}"), meta(THREAD, thread).replace("2026-11-06T10:00:00.000Z", at(3))
+            self.place(NAME.replace(THREAD, thread), meta(THREAD, thread).replace("2026-11-06T10:00:00.000Z", at(3))
                        + codex_line(1, 4, "turn_context", turn_id="u1", model="claude-opus-5-5")
                        + codex_line(2, 6, "token_usage_record", turn_id="u1", response_id=rid, usage=dict(input_tokens=tokens, output_tokens=0)))
         self.ingest()

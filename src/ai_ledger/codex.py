@@ -1,8 +1,9 @@
 """Codex CLI transcripts (~/.codex): where they are, how their lines are keyed, and the parser that derives them.
 
 Codex writes one rollout file per thread: sessions/YYYY/MM/DD/rollout-<time>-<thread>.jsonl, compressed to .jsonl.zst
-once the thread is old, and moved to archived_sessions/ when archived. A file named <session>_<thread> continues
-session <session> in another thread. Every line has timestamp, ordinal, type and payload. A thread's usage is in its
+once the thread is old, and moved to archived_sessions/ when archived. The file's first session_meta says what the thread
+is: a subagent another thread spawned has a session_id (its parent's session) that differs from its id, and a thread that
+continues the main thread (a file named <session>_<thread>) has the same session_id and id. Every line has timestamp, ordinal, type and payload. A thread's usage is in its
 token_usage_record lines, its tools and prompts in event_msg / item_completed lines. CLIs before 0.153 write no
 token_usage_record; their usage comes from the token_count events instead. session_index.jsonl names threads: each line
 is {id, thread_name, updated_at}, and a rename appends a line.
@@ -54,9 +55,32 @@ def key(d, path, offset):
     return f"{path}:{offset}"
 
 
-def subagent(path):
+def thread_class(path, meta=None):
+    """(session, whether the thread is a subagent's) from the payload of its first session_meta: a subagent when session_id
+    is set and differs from id, else main-thread work of session_id or id. With no payload, from the file name."""
     session, thread = ids(path)
-    return session != thread
+    if isinstance(meta, dict) and (meta.get("session_id") or meta.get("id")):
+        own, parent = meta.get("id") or thread, meta.get("session_id")
+        return parent or own, bool(parent) and parent != own
+    return session, session != thread
+
+
+def placement(cur, path, lines):
+    """(session of the lines of rollout file path or None, subagent), as store.Source.placement. The session_meta is the
+    first of lines, else the thread's stored one: a chunk can start after it."""
+    if indexed(path):
+        return None, False
+    meta = next((d for d in lines if d.get("type") == "session_meta"), None)
+    if meta is None:
+        meta = next(iter(thread_lines(cur, ids(path)[1], "session_meta")), None)
+    return thread_class(path, meta.get("payload") if meta else None)
+
+
+def thread_lines(cur, thread, t, limit=None):
+    """The stored lines of type t of a thread, from any of its files, in ordinal order."""
+    return sorted((json.loads(r[0]) for r in cur.execute(
+        "SELECT json FROM raw_lines WHERE starts_with(key, ?) AND type = ? AND parsed LIMIT ?",
+        [f"codex:{thread}:", t, limit]).fetchall()), key=lambda d: d.get("ordinal") or 0)
 
 
 def fields(d, path):
@@ -211,17 +235,13 @@ class CodexDeriver(store.Deriver):
         self.records = None  # whether the thread has token_usage_record lines; None until asked
 
     def thread_lines(self, t, limit=None):
-        """This thread's stored lines of type t, from any of its files, in ordinal order."""
-        return sorted((json.loads(r[0]) for r in self.cur.execute(
-            "SELECT json FROM raw_lines WHERE starts_with(key, ?) AND type = ? AND parsed LIMIT ?",
-            [f"codex:{self.thread}:", t, limit]).fetchall()), key=lambda d: d.get("ordinal") or 0)
+        return thread_lines(self.cur, self.thread, t, limit)
 
     def start(self, d):
         """The thread's session from its own session_meta. A thread another thread spawned is subagent work."""
         self.started = True
         p = d["payload"]
-        self.sid = p.get("session_id") or p.get("id") or self.sid
-        self.sub = self.sub or self.sid != self.thread
+        self.sid, self.sub = thread_class(self.path, p)
         self.session(dict(sessionId=self.sid, timestamp=d.get("timestamp"), cwd=p.get("cwd"),
                           gitBranch=(p.get("git") or {}).get("branch"), entrypoint=p.get("originator"),
                           version=p.get("cli_version")))
