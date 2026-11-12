@@ -247,15 +247,22 @@ describe("Nav", () => {
       vi.stubGlobal("fetch", vi.fn(() => json({ ...status, limits_alert: alert(over) })));
       history.replaceState(null, "", "/usage");
       render(<Nav />);
-      const link = await screen.findByRole("link", { name: `Limits: ${sentence}` });
+      const link = await screen.findByRole("link", { name: `Limits alert: ${sentence}` });
       expect(sentence).toBe(alertText(alert(over)));
-      // Exposed once: the sentence is the link's name (its content), the link has no title to read again as a description,
-      // and the dot, hidden from assistive tech, carries the hover text.
+      // Exposed once: the sentence is in the link's name (a hidden span after the label), the link has no title to read again as a
+      // description, and a plain span around the visible label and the dot carries the hover text, so it covers the whole tab.
       expect(link.hasAttribute("title")).toBe(false);
       expect(link.hasAttribute("aria-label")).toBe(false);
-      expect(link.textContent).toBe(`Limits: ${sentence}`);
+      expect(link.textContent).toBe(`Limits alert: ${sentence}`); // one space, a text node of the link before the hidden span
       expect(link.textContent!.split(sentence).length - 1).toBe(1);
-      expect(badge()?.getAttribute("title")).toBe(sentence);
+      const wrap = link.querySelector<HTMLElement>("span[title]")!;
+      expect(wrap.getAttribute("title")).toBe(sentence);
+      expect(link.querySelectorAll("[title]").length).toBe(1);
+      expect(wrap.textContent).toBe("Limits");
+      expect(wrap.contains(badge())).toBe(true);
+      expect(badge()?.hasAttribute("title")).toBe(false);
+      expect(wrap.querySelector(".sr")).toBeNull();
+      expect(link.querySelector(".sr")?.textContent).toBe(`alert: ${sentence}`);
       expect(badge()?.dataset.tone).toBe(tone);
       expect(link.contains(badge())).toBe(true);
       expect(badge()?.textContent).toBe(""); // a dot, not a number
@@ -267,21 +274,21 @@ describe("Nav", () => {
     it("marks an estimate in the name and the hover text", async () => {
       vi.stubGlobal("fetch", vi.fn(() => json({ ...status, limits_alert: alert({ kind: "high", current: 95, measured: false }) })));
       render(<Nav />);
-      const link = await screen.findByRole("link", { name: "Limits: Codex weekly is at an estimated 95%" });
-      expect(link.querySelector(".appnav-badge")?.getAttribute("title")).toBe("Codex weekly is at an estimated 95%");
+      const link = await screen.findByRole("link", { name: "Limits alert: Codex weekly is at an estimated 95%" });
+      expect(link.querySelector("span[title]")?.getAttribute("title")).toBe("Codex weekly is at an estimated 95%");
     });
 
     it("says how many more windows are in alert", async () => {
       vi.stubGlobal("fetch", vi.fn(() => json({ ...status, limits_alert: alert({ kind: "high", current: 95, count: 3 }) })));
       render(<Nav />);
-      expect(await screen.findByRole("link", { name: "Limits: Codex weekly is at 95% (and 2 more)" })).toBeTruthy();
+      expect(await screen.findByRole("link", { name: "Limits alert: Codex weekly is at 95% (and 2 more)" })).toBeTruthy();
     });
 
     it("shows none when limits_alert is null, or missing as an older server sends it", async () => {
       const f = vi.fn(() => json({ ...status, limits_alert: alert({}) }));
       vi.stubGlobal("fetch", f);
       render(<Nav />);
-      await screen.findByRole("link", { name: /^Limits: / });
+      await screen.findByRole("link", { name: /^Limits alert: / });
       f.mockImplementation(() => json({ ...status, limits_alert: null }));
       await act(async () => { await pollStatus(); });
       expect(badge()).toBeNull();
@@ -303,7 +310,7 @@ describe("Nav", () => {
       expect(badge()).toBeNull();
       f.mockImplementation(() => json({ ...status, limits_alert: alert({ kind: "high", current: 91 }) }));
       await act(async () => { await pollStatus(); });
-      expect([badge()?.dataset.tone, badge()?.getAttribute("title")]).toEqual(["warning", "Codex weekly is at 91%"]);
+      expect([badge()?.dataset.tone, document.querySelector("a span[title]")?.getAttribute("title")]).toEqual(["warning", "Codex weekly is at 91%"]);
       f.mockImplementation(() => json({ ...status, limits_alert: alert({ kind: "at_limit" }) }));
       await act(async () => { await pollStatus(); });
       expect(badge()?.dataset.tone).toBe("critical");
@@ -316,7 +323,7 @@ describe("Nav", () => {
       const f = vi.fn((_url: string, _init?: RequestInit) => json({ ...status, limits_alert: alert({ kind: "high", current: 91 }) }));
       vi.stubGlobal("fetch", f);
       render(<Nav />);
-      await screen.findByRole("link", { name: /^Limits: / });
+      await screen.findByRole("link", { name: /^Limits alert: / });
       f.mockImplementation(() => Promise.reject(new Error("down")));
       await act(async () => { await pollStatus(); });
       expect(badge()).not.toBeNull();
@@ -329,7 +336,7 @@ describe("Nav", () => {
       vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/status") ? { ...status, limits_alert: alert({}) } : limits)));
       history.replaceState(null, "", "/limits");
       render(<App />);
-      const link = await screen.findByRole("link", { name: /^Limits: / });
+      const link = await screen.findByRole("link", { name: /^Limits alert: / });
       expect(link.getAttribute("aria-current")).toBe("page");
       expect(badge()).not.toBeNull();
     });

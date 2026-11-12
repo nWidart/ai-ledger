@@ -71,14 +71,18 @@ export function Nav() {
         </svg><span className="appnav-word">AI <b>Ledger</b></span></span>
         <span className="appnav-tabs">
           {PAGES.map(p => {
-            // The Limits tab carries the alert. Its sentence is part of the link's name, in a visually hidden span; the dot is hidden from
-            // assistive tech and holds the hover text, so the sentence is read once. Color is never the only signal.
+            // The Limits tab carries the alert. Its spoken form is a visually hidden span in the link ("Limits alert: <sentence>"). The
+            // hover text is the title of a plain span around the visible label and the dot, which is no part of the link's name or
+            // description, so the sentence is read once and the whole tab explains itself. The space before the hidden span is a text node of the
+            // link: it ends the line, so it takes no room, and it keeps the name "Limits alert: …" whatever the engine does for a hidden span.
+            // Color is never the only signal.
             const badge = p.path === "/limits" && alert;
             return (
               <a key={p.path} href={p.path + shared} aria-current={p.path === path ? "page" : undefined} onClick={e => go(e, p.path)}>
-                {p.label}
-                {badge && <><span className="sr">: {badge}</span>
-                  <span className="appnav-badge" data-tone={st.alert!.kind === "high" ? "warning" : "critical"} title={badge} aria-hidden="true" /></>}
+                {badge ? <>
+                  <span title={badge}>{p.label}<span className="appnav-badge" data-tone={st.alert!.kind === "high" ? "warning" : "critical"} aria-hidden="true" /></span>
+                  {" "}<span className="sr">alert: {badge}</span>
+                </> : p.label}
               </a>
             );
           })}
