@@ -21,12 +21,14 @@ export const statusText = (s: Status) => {
     : s.last_ingest ? `Last ingest ${new Date(s.last_ingest).toLocaleTimeString()}${st}` : "";
 };
 
-/** The answer to status request n (null: the app did not answer). It is not shown once a request sent after it was
- *  answered: the nav's poll, sent before Live's and answered after it, does not put the older text back. The text is a
- *  Refresh's while it runs and while its failure waits for Retry: no poll replaces it then, the nav's or Live's. */
+/** The answer to status request n (null: the app did not answer). It does nothing once a request sent after it was
+ *  answered: the nav's poll, sent before Live's and answered after it, does not put the older text back, clear the data
+ *  cache for an older last_change or set an older project order. The text is a Refresh's while it runs and while its
+ *  failure waits for Retry: no poll replaces it then, the nav's or Live's, but its ingest and order still count. */
 function noteStatus(n: number, s: Status | null) {
   if (n < shown) return;
   shown = n;
+  if (s) { noteIngest(s.last_change); setOrder(s.project_order); }
   if (state.busy || state.retry) return;
   set(s ? { ...state, text: statusText(s), failed: !!s.error } : { ...state, text: "App not reachable", failed: true });
 }
@@ -35,12 +37,7 @@ function noteStatus(n: number, s: Status | null) {
  *  clears the data cache. Gives the status, or null when the app did not answer. */
 export function pollStatus(): Promise<Status | null> {
   const n = ++sent;
-  return getJson<Status>(statusUrl).then(s => {
-    noteIngest(s.last_change);
-    noteStatus(n, s);
-    setOrder(s.project_order);
-    return s;
-  }, () => { noteStatus(n, null); return null; });
+  return getJson<Status>(statusUrl).then(s => { noteStatus(n, s); return s; }, () => { noteStatus(n, null); return null; });
 }
 
 /** Runs an ingest now, then drops the data cache so every page refetches. */

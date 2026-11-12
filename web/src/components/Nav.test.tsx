@@ -5,6 +5,7 @@ import { App } from "../App";
 import { hasHue, setOrder } from "../colors";
 import { Nav } from "./Nav";
 import { pollStatus } from "./refresh";
+import { fetchCached, peekCache } from "../useApi";
 import usage from "../__fixtures__/usage";
 import sessions from "../__fixtures__/sessions";
 import session from "../__fixtures__/session";
@@ -171,6 +172,26 @@ describe("Nav", () => {
     await act(async () => { await pollStatus(); });
     await act(async () => { answers.down!(); await asked; });
     expect(screen.getByText(/Last ingest .* · 9 new lines/)).toBeTruthy();
+  });
+
+  it("does nothing with the answer to a status request sent before one already answered: no cache clear, no project order", async () => {
+    setOrder([]);
+    let answer = () => {};
+    const f = vi.fn((_url: string, _init?: RequestInit) => json(status));
+    vi.stubGlobal("fetch", f);
+    render(<Nav />);
+    expect(await screen.findByText(/Last ingest .* · 2 new lines/)).toBeTruthy();
+    f.mockImplementation(() => new Promise<Response>(r => { answer = () => r(json({ ...status, project_order: ["old"] })); }));
+    let asked!: Promise<unknown>;
+    act(() => { asked = pollStatus(); }); // the nav's, sent before an ingest stores something
+    const stored = { ...status, last_change: "2026-11-05T12:05:00+00:00", project_order: ["new"] };
+    f.mockImplementation(url => json(url === "/api/x" ? { a: 1 } : stored));
+    await act(async () => { await pollStatus(); }); // Live's, sent after the ingest: clears the cache
+    await fetchCached("/api/x");
+    await act(async () => { answer(); await asked; });
+    expect([peekCache("/api/x"), hasHue("old"), hasHue("new")]).toEqual([{ a: 1 }, false, true]);
+    await act(async () => { await pollStatus(); }); // the same last_change as the newest answer: nothing new
+    expect(peekCache("/api/x")).toEqual({ a: 1 });
   });
 
   it("polls the status every minute, every 3 s while an ingest runs, and stops on unmount", async () => {
