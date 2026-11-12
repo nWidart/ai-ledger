@@ -90,7 +90,7 @@ When the main thread reads *your turn* and a subagent's newest line is newer tha
 - **THEN** the state is thinking since 10:00:12, marked as inferred
 
 #### Scenario: Claude Code subagent between calls
-- **WHEN** the main thread's newest event is the `Agent` call and a subagent's newest event is a finished tool call, newer than it
+- **WHEN** the main thread's newest event is a reply, after a background `Agent` call returned, and a subagent's newest event is a finished tool call, newer than it
 - **THEN** the state is thinking, inferred
 
 #### Scenario: Subagent done

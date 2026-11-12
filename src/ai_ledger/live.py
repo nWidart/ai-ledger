@@ -243,18 +243,55 @@ def state(events, now, source, last, closed=False):
             return st("wait", p["start"], p["tool"], inferred=True)
         p = max(pending, key=lambda e: e["start"] or now)
         return st("tool", p["start"], p["tool"], long=p["long"])
-    if source == "codex":  # every thread's turns: a <session>_<thread> file can continue the main thread
-        turns = [e for e in events if e["k"] in ("turn_start", "turn_end")]
+    main = [e for e in events if e["lane"] is None]  # a subagent's turn or reply says nothing of the main thread's
+    if source == "codex":
+        turns = [e for e in main if e["k"] in ("turn_start", "turn_end")]
         if turns and turns[-1]["k"] == "turn_start":
             return st("thinking", turns[-1]["ts"])
-        return st("you", turns[-1]["ts"] if turns else last)
-    # Claude Code: whatever happened last among the prompts, replies, interruptions and tool results.
+        kind, since, inferred = "you", turns[-1]["ts"] if turns else last, False
+    else:  # Claude Code: whatever happened last among the prompts, replies, interruptions and tool results.
+        marks = turn_marks(main)
+        if not marks:
+            kind, since, inferred = "you", last, False
+        else:
+            t, k = max(marks, key=lambda m: m[0])
+            kind, since, inferred = ("thinking", t, True) if k in ("prompt", "result") else ("you", t, False)
+    if kind == "you":  # a subagent at work, with evidence newer than the main thread's, keeps the session working
+        worked = subagent_work(events, source, newest(main))
+        if worked:
+            return st("thinking", worked, inferred=True)
+    return st(kind, since, inferred=inferred)
+
+
+def turn_marks(events):
+    """(time, kind) of what a Claude Code thread did: prompt, reply, interrupt, and the result of a tool call."""
     marks = [(e["ts"], e["k"]) for e in events if e["k"] in ("prompt", "reply", "interrupt") and e["ts"]]
-    marks += [(e["end"], "result") for e in events if e["k"] == "tool" and e["end"]]
-    if not marks:
-        return st("you", last)
-    t, k = max(marks, key=lambda m: m[0])
-    return st("thinking", t, inferred=True) if k in ("prompt", "result") else st("you", t)
+    return marks + [(e["end"], "result") for e in events if e["k"] == "tool" and e["end"]]
+
+
+def newest(events):
+    """The time of the newest of events: a tool call counts from its result when it has one."""
+    times = [(e["end"] if e["k"] == "tool" else None) or e["ts"] for e in events]
+    return max((t for t in times if t), default=None)
+
+
+def subagent_work(events, source, since):
+    """The time of the newest evidence of a subagent at work that is newer than `since`, or None. At work: for Codex the
+    lane's newest turn mark is a turn start; for Claude Code its newest event is a finished tool call, as the reply that
+    follows has not come."""
+    worked = []
+    for lane in {e["lane"] for e in events if e["lane"]}:
+        mine = [e for e in events if e["lane"] == lane]
+        if source == "codex":
+            turns = [e for e in mine if e["k"] in ("turn_start", "turn_end")]
+            at_work = bool(turns) and turns[-1]["k"] == "turn_start"
+        else:
+            marks = turn_marks(mine)
+            at_work = bool(marks) and max(marks, key=lambda m: m[0])[1] == "result"
+        t = newest(mine)
+        if at_work and t and (since is None or t > since):
+            worked.append(t)
+    return max(worked, default=None)
 
 
 def closed(cur, sids):
@@ -348,15 +385,30 @@ def title_of(found, sid):
     return dict(title=title, title_from=origin)
 
 
+TURN_MARKS = ("task_started", "task_complete", "turn_aborted")  # the event_msg types of a Codex turn's start and end
+
+
 def recent(cur, sids):
-    """The newest STATE_LINES lines of each session, in line order: enough to tell what it is doing now."""
+    """The newest STATE_LINES lines of each session's main thread and, apart, of its subagents, in line order: enough to
+    tell what it is doing now, and subagent traffic never pushes the main thread out. A Codex main thread's newest turn
+    mark is read too, whatever its age: a long turn still reads thinking."""
     lines = {}
     if sids:
-        for row in cur.execute(f"""SELECT r.session_id, {ROW_COLS} FROM {ROW_FROM}
+        rows = cur.execute(f"""SELECT r.session_id, {ROW_COLS}, r.line_no FROM {ROW_FROM}
                 WHERE list_contains(?, r.session_id) AND r.ts IS NOT NULL AND r.parsed
-                QUALIFY row_number() OVER (PARTITION BY r.session_id ORDER BY r.ts DESC, r.file, r.line_no DESC) <= {STATE_LINES}
-                ORDER BY r.session_id, r.ts, r.file, r.line_no""", [sids]).fetchall():
-            lines.setdefault(row[0], []).append(row[1:])
+                QUALIFY row_number() OVER (PARTITION BY r.session_id, r.subagent ORDER BY r.ts DESC, r.file, r.line_no DESC) <= {STATE_LINES}""",
+                           [sids]).fetchall()
+        rows += cur.execute(f"""SELECT r.session_id, {ROW_COLS}, r.line_no FROM {ROW_FROM}
+                WHERE list_contains(?, r.session_id) AND r.ts IS NOT NULL AND r.parsed AND NOT r.subagent AND r.type = 'event_msg'
+                AND list_bool_or(list_transform(?, lambda x: contains(r.json, x)))
+                AND list_contains(?, json_extract_string(r.json, '$.payload.type'))
+                QUALIFY row_number() OVER (PARTITION BY r.session_id ORDER BY r.ts DESC, r.file, r.line_no DESC) = 1""",
+                            [sids, [f'"{m}"' for m in TURN_MARKS], list(TURN_MARKS)]).fetchall()
+        seen = set()
+        for row in sorted(rows, key=lambda r: (r[0], r[3], r[2], r[7])):
+            if row[1] not in seen:  # a turn mark can be among the newest lines already
+                seen.add(row[1])
+                lines.setdefault(row[0], []).append(row[1:7])
     return lines
 
 

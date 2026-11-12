@@ -104,13 +104,51 @@ class StateTest(unittest.TestCase):
                 + codex_line(2, 9, "event_msg", type="task_complete", turn_id="t1"))
         self.assertEqual(self.state(text, "codex")["kind"], "you")
 
-    def test_codex_turn_started_in_a_thread_file_is_thinking(self):  # a <session>_<thread> file can continue the main thread
-        thread_file = NAME.replace(THREAD, THREAD + "_0a0f9999-0000-7000-8000-000000000002")
+    def test_codex_turn_started_in_a_thread_file_is_thinking(self):  # a file that continues the main thread has no lane
         evs = events(codex_line(1, 0, "event_msg", type="task_started", turn_id="t1")
                      + codex_line(2, 9, "event_msg", type="task_complete", turn_id="t1"), "codex")
-        evs += events(codex_line(1, 12, "event_msg", type="task_started", turn_id="t2"), "codex", lane_file=thread_file)
+        evs += events(codex_line(1, 12, "event_msg", type="task_started", turn_id="t2"), "codex")
         st = live.state(evs, NOW, "codex", max(e["ts"] for e in evs))
-        self.assertEqual((st["kind"], st["since"], evs[-1]["lane"] is not None), ("thinking", "2026-11-10T10:00:12.000Z", True))
+        self.assertEqual((st["kind"], st["since"], st["inferred"], evs[-1]["lane"]), ("thinking", "2026-11-10T10:00:12.000Z", False, None))
+
+    def lanes(self, main, sub, source="codex", now=NOW):
+        """The state of a session whose main thread holds the lines main and a subagent the lines sub."""
+        lane_file = "/x/agent-a1.jsonl" if source == "claude" else NAME.replace(THREAD, "0a0f9999-0000-7000-8000-000000000002")
+        evs = events(main, source) + events(sub, source, lane_file=lane_file)
+        evs.sort(key=lambda e: e["ts"])
+        return live.state(evs, now, source, max(e["ts"] for e in evs))
+
+    def test_codex_child_turn_end_leaves_a_working_parent_as_it_is(self):
+        st = self.lanes(codex_line(1, 0, "event_msg", type="task_started", turn_id="t1"),
+                        codex_line(1, 1, "event_msg", type="task_started", turn_id="u1") + codex_line(2, 5, "event_msg", type="task_complete", turn_id="u1"))
+        self.assertEqual(st, dict(kind="thinking", tool=None, since="2026-11-10T10:00:00.000Z", inferred=False, long=False))
+
+    def test_codex_subagent_at_work_keeps_the_session_thinking(self):
+        main = codex_line(1, 0, "event_msg", type="task_started", turn_id="t1") + codex_line(2, 9, "event_msg", type="task_complete", turn_id="t1")
+        started = codex_line(1, 12, "event_msg", type="task_started", turn_id="u1")
+        self.assertEqual(self.lanes(main, started), dict(kind="thinking", tool=None, since="2026-11-10T10:00:12.000Z", inferred=True, long=False))
+        done = started + codex_line(2, 15, "event_msg", type="task_complete", turn_id="u1")
+        self.assertEqual(self.lanes(main, done), dict(kind="you", tool=None, since="2026-11-10T10:00:09.000Z", inferred=False, long=False))
+        older = codex_line(1, 3, "event_msg", type="task_started", turn_id="u1")  # the main thread wrote after it
+        self.assertEqual(self.lanes(main, older)["kind"], "you")
+
+    def test_subagent_pending_call_is_running_a_tool(self):
+        main = codex_line(1, 0, "event_msg", type="task_started", turn_id="t1") + codex_line(2, 9, "event_msg", type="task_complete", turn_id="t1")
+        st = self.lanes(main, codex_line(1, 12, "response_item", type="function_call", name="update_plan", call_id="c1", arguments="{}") + codex_line(
+            2, 13, "event_msg", type="task_started", turn_id="u1"))
+        self.assertEqual((st["kind"], st["tool"]), ("tool", "update_plan"))
+
+    def test_claude_subagent_between_calls_keeps_the_session_thinking(self):
+        main = prompt("u1", at(0), "p1", "go") + assistant("a1", "m1", at(5), [dict(type="text", text="Running it in the background.")])
+        call = assistant("b1", "m2", at(10), [tool_use("t1", "Read", file_path="x")])
+        between = call + result("r1", at(11), "t1", "ok")
+        at_work = self.lanes(main, between, "claude")
+        self.assertEqual(at_work, dict(kind="thinking", tool=None, since="2026-11-10T10:00:11.000Z", inferred=True, long=False))
+        done = between + assistant("b2", "m3", at(12), [dict(type="text", text="Done.")])
+        self.assertEqual(self.lanes(main, done, "claude")["kind"], "you")
+        self.assertEqual(self.lanes(main, call, "claude")["kind"], "tool")  # the pending call keeps its own state
+        older = assistant("b3", "m4", at(2), [tool_use("t2", "Read", file_path="x")]) + result("r2", at(3), "t2", "ok")
+        self.assertEqual(self.lanes(main, older, "claude")["kind"], "you")
 
     def test_closed_session_is_ended_whatever_its_lines_say(self):
         text = prompt("u1", at(0), "p1", "go") + assistant("a1", "m1", at(5), [tool_use("t1", "Bash", command="sleep 999")])
@@ -627,6 +665,50 @@ class CodexSessionTest(CodexCase):
         self.assertEqual(live.session(self.con.cursor(), THREAD, after=at(0), now=NOW, prices=PRICES)["events"], got["events"])
         listed, = live.sessions(self.con.cursor(), now=NOW, prices=PRICES)["sessions"]
         self.assertEqual((listed["latest"]["lane"], listed["latest"]["summary"]), (thread, json.dumps(dict(cmd="ls"))))
+
+    def prompted(self, text=""):
+        return codex_line(1, 1, "event_msg", type="item_completed", turn_id="t1", item=dict(type="UserMessage", content=[dict(type="text", text="go")]))
+
+    def test_continuation_file_turn_counts_for_the_main_thread(self):
+        later = "0a0f9999-0000-7000-8000-000000000002"
+        self.place(NAME, meta(THREAD).replace("2026-11-06T10:00:00.000Z", at(0)) + self.prompted()
+                   + codex_line(2, 2, "event_msg", type="task_started", turn_id="t1") + codex_line(3, 9, "event_msg", type="task_complete", turn_id="t1"))
+        self.place(NAME.replace(THREAD, f"{THREAD}_{later}"), meta(THREAD).replace("2026-11-06T10:00:00.000Z", at(11))
+                   + codex_line(1, 12, "event_msg", type="task_started", turn_id="t2"))
+        self.ingest()
+        want = dict(kind="thinking", tool=None, since="2026-11-10T10:00:12.000Z", inferred=False, long=False)
+        self.assertEqual(live.session(self.con.cursor(), THREAD, now=NOW, prices=PRICES)["state"], want)
+        self.assertEqual(live.sessions(self.con.cursor(), now=NOW, prices=PRICES)["sessions"][0]["state"], want)
+
+    def child_of(self, thread, lines):
+        self.place(NAME.replace(THREAD, thread), meta(THREAD, thread).replace("2026-11-06T10:00:00.000Z", at(3)) + lines)
+
+    def test_subagent_traffic_does_not_push_the_main_thread_out_of_the_state(self):
+        self.place(NAME, meta(THREAD).replace("2026-11-06T10:00:00.000Z", at(0)) + self.prompted()
+                   + codex_line(2, 2, "event_msg", type="task_started", turn_id="t1"))
+        self.child_of("0a0f9999-0000-7000-8000-000000000002", "".join(codex_line(i, 10, "turn_context", turn_id="u1") for i in range(1, 260)))
+        self.ingest()
+        want = dict(kind="thinking", tool=None, since="2026-11-10T10:00:02.000Z", inferred=False, long=False)
+        self.assertEqual(live.session(self.con.cursor(), THREAD, now=NOW, prices=PRICES)["state"], want)
+        self.assertEqual(live.sessions(self.con.cursor(), now=NOW, prices=PRICES)["sessions"][0]["state"], want)
+
+    def test_long_turn_still_reads_thinking(self):
+        self.place(NAME, meta(THREAD).replace("2026-11-06T10:00:00.000Z", at(0)) + self.prompted()
+                   + codex_line(2, 2, "event_msg", type="task_started", turn_id="t1")
+                   + "".join(codex_line(i, 10, "turn_context", turn_id="t1") for i in range(3, 300)))
+        self.ingest()
+        want = dict(kind="thinking", tool=None, since="2026-11-10T10:00:02.000Z", inferred=False, long=False)
+        self.assertEqual(live.session(self.con.cursor(), THREAD, now=NOW, prices=PRICES)["state"], want)
+        self.assertEqual(live.sessions(self.con.cursor(), now=NOW, prices=PRICES)["sessions"][0]["state"], want)
+
+    def test_child_turn_end_leaves_a_working_parent_as_it_is_in_a_store(self):
+        self.place(NAME, meta(THREAD).replace("2026-11-06T10:00:00.000Z", at(0)) + self.prompted()
+                   + codex_line(2, 2, "event_msg", type="task_started", turn_id="t1"))
+        self.child_of("0a0f9999-0000-7000-8000-000000000002", codex_line(1, 4, "event_msg", type="task_started", turn_id="u1")
+                      + codex_line(2, 8, "event_msg", type="task_complete", turn_id="u1"))
+        self.ingest()
+        self.assertEqual(live.session(self.con.cursor(), THREAD, now=NOW, prices=PRICES)["state"]["kind"], "thinking")
+        self.assertFalse(live.sessions(self.con.cursor(), now=NOW, prices=PRICES)["sessions"][0]["state"]["inferred"])
 
     def test_thread_lanes_whose_requests_share_a_time(self):
         threads = ["0a0f9999-0000-7000-8000-000000000002", "0a0f9999-0000-7000-8000-000000000003"]
