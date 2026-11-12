@@ -80,6 +80,29 @@ Each event of a subagent SHALL name that subagent, so the page can group them wi
 - **WHEN** a subagent of a Codex CLI that writes no `SubAgentActivity` start item runs
 - **THEN** its lane is named by no call, and the page tells it done by its last turn mark
 
+### Requirement: Report a closed session as ended
+The app SHALL take as evidence of a close the `cost-state` line Claude Code writes as it exits, when it comes after the last timed line of the session's main transcript file. A subagent's lines SHALL NOT reopen a closed session, nor a line with no time. Codex writes no close line: a Codex session SHALL never be *ended*. An *ended* state SHALL carry the time of the newest timed line, as the close line has none.
+
+#### Scenario: Closed session
+- **WHEN** a Claude Code session's main transcript ends with a `cost-state` line
+- **THEN** the state is ended, with the time of the session's newest timed line, and not your turn or idle
+
+#### Scenario: Closed session resumed
+- **WHEN** a timed line follows the `cost-state` line in the session's main transcript
+- **THEN** the state comes from the other rules, as for any session
+
+#### Scenario: Subagent writes after the close
+- **WHEN** a subagent's transcript gains a line after the session's `cost-state` line
+- **THEN** the state stays ended
+
+#### Scenario: Codex session
+- **WHEN** a Codex session's last turn has completed and its rollout is not written to again
+- **THEN** the state is your turn, then idle after 5 minutes, and never ended
+
+#### Scenario: Resumed session before its first timed line
+- **WHEN** a resumed Claude Code session has written only lines with no time, such as `mode` or `tools-used`, after its `cost-state` line
+- **THEN** the state is ended until its first timed line, a known limit: Claude Code writes such lines at exit as well, so none marks a resume
+
 ## ADDED Requirements
 
 ### Requirement: Keep a session working while a subagent works

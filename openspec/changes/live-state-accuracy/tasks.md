@@ -16,7 +16,7 @@
 
 ## 4. Resumed session (D7)
 
-- [ ] 4.1 State the limit in the spec.
+- [x] 4.1 State the limit in the spec (no code: no untimed line marks a resume).
 
 ## 5. Verify
 
