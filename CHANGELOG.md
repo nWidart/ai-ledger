@@ -5,6 +5,15 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+Run `ai-ledger rebuild` once after upgrading (with the app stopped): Codex subagent threads stored before this version are filed under their own ids, and the rebuild moves them to their sessions.
+
+### Fixed
+
+- Codex subagents show under their session on Live. A subagent's rollout is named by its own thread id only, so ingest filed its lines as a session of its own; a thread now belongs to the session its first `session_meta` names, and the files that continue a main thread are main-thread work, no longer a lane.
+- A session with a subagent at work reads working, not your turn, for both agents. A Codex subagent's finished turn no longer ends its parent's turn, and a subagent's lines can no longer push the main thread out of the lines the state is read from, so a long Codex turn still reads working.
+- A forked Codex subagent's copy of its parent's history no longer shows as events or state of the session.
+- A failed command that a Codex `exec` script ran now has a row in the Live stream, and a Codex `spawn_agent` call names the subagent it started, so the page ties them together.
+
 ## [0.2.0] - 2026-11-12
 
 Run `ai-ledger rebuild` once after upgrading (with the app stopped): error types, test runs, Codex tool timing and fast-mode speed are stored when transcripts are read.
