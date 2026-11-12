@@ -140,6 +140,15 @@ describe("LimitChart readout", () => {
     expect(tip().textContent).toBe(say(1));
   });
 
+  it("does not let a cancelled pointer (a touch scroll) suppress the next keyboard focus", () => {
+    const g = draw()!, live = () => document.querySelector("[aria-live]")!.textContent;
+    fireEvent.pointerDown(plot());
+    fireEvent.pointerCancel(plot()); // the browser took the touch for a scroll: no focus follows
+    act(() => g.focus());
+    expect(tip().textContent).toBe(say(1));
+    expect(live()).toBe(say(1));
+  });
+
   it("leaves modified keys to the browser and the readout alone", () => {
     const g = draw()!;
     act(() => g.focus());

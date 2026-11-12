@@ -66,6 +66,7 @@ export function LimitChart({ w, now, events }: { w: LimitWindow; now: string; ev
   // A chart with points is one tab stop: a labelled group around the image, since an image takes no keys.
   const reader = pts.length ? {
     tabIndex: 0, role: "group", onKeyDown: onKey, onPointerDown: () => { pointed.current = true; },
+    onPointerCancel: () => { pointed.current = false; }, // a touch scroll ends here with no focus
     onFocus: () => { if (!pointed.current) show(nowAt); pointed.current = false; },
     onBlur: () => { pointed.current = false; setRead(null); },
     "aria-label": `${windowName(w)} chart. Use the left and right arrow keys to read each point, Home and End for the first and last, Escape to clear.`,
