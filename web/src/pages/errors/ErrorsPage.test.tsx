@@ -38,12 +38,12 @@ const FIX = "/api/errors/fix", IMPORT = "/api/errors/fixes/import", FIXES = "/ap
  *  writes in the order they arrive, imports the import bodies. refuse(f) answers 500 to the single writes f says yes to; failImport
  *  does so for the import. hold(from) makes the writes from the from-th on wait for release(); failGets(n) fails the payload fetches
  *  from the n-th on (0 is the first); holdGet(n) answers the n-th one only on release(), with what the store held when it was asked.
- *  payloadFixes, when set, is what every payload carries (another tab's view of the store); GET /api/errors/fixes (the resync) answers
+ *  decided is the set of types the store has a row for (the real one keeps the row of an Undo, with no date). payloadFixes, when set, is what every payload carries (another tab's view of the store); GET /api/errors/fixes (the resync) answers
  *  the store unless failResync. */
 function serve(fixes: Record<string, string> = {}, refuse: ((b: Fix) => boolean) | null = null) {
   let writes = 0, gets = 0;
   const api = {
-    store: { ...fixes }, posts: [] as Fix[], imports: [] as Record<string, string>[], refuse, failImport: false, requests: [] as string[],
+    store: { ...fixes }, decided: new Set(Object.keys(fixes)), posts: [] as Fix[], imports: [] as Record<string, string>[], refuse, failImport: false, requests: [] as string[],
     failGetsFrom: Infinity, payloadFixes: null as Record<string, string> | null, failResync: false,
     getGate: null as Promise<void> | null, getHeld: -1,
     holdGet(n: number) { let release!: () => void; api.getHeld = n; api.getGate = new Promise<void>(r => { release = r; }); return { release }; },
@@ -51,6 +51,10 @@ function serve(fixes: Record<string, string> = {}, refuse: ((b: Fix) => boolean)
     gate: null as Promise<void> | null, holdFrom: 0,
     hold(from = 0) { let release!: () => void; api.holdFrom = from; api.gate = new Promise<void>(r => { release = r; }); return { release }; },
     failGets(n: number) { api.failGetsFrom = n; },
+    /** An import as another tab sends it, outside this page's queue. */
+    late(f: Record<string, string>) { api.take(f); },
+    /** The store's import rule: a type it has never decided about takes the marker; one it marked, or marked and undid, keeps what it has. */
+    take(f: Record<string, string>) { for (const [c, d] of Object.entries(f)) if (!api.decided.has(c)) { api.decided.add(c); api.store[c] = d; } },
   };
   const refused = () => ({ ok: false, status: 500, json: () => Promise.resolve({ error: "no" }) } as Response);
   vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
@@ -61,9 +65,10 @@ function serve(fixes: Record<string, string> = {}, refuse: ((b: Fix) => boolean)
       if (api.gate && n >= api.holdFrom) await api.gate;
       if (url === IMPORT) {
         if (api.failImport) return refused();
-        for (const [c, d] of Object.entries(body.fixes as Record<string, string>)) api.store[c] ??= d;
+        api.take(body.fixes as Record<string, string>);
       } else {
         if (api.refuse?.(body as Fix)) return refused();
+        api.decided.add(body.category); // an Undo keeps the type decided, as the real store keeps its row
         if (body.day) api.store[body.category] = body.day; else delete api.store[body.category];
       }
       return json({ ...api.store });
@@ -181,6 +186,63 @@ describe("ErrorsPage", () => {
       await waitFor(() => expect(api.store).toEqual({}));
       expect(document.querySelector("#catBody .chip.fixed")).toBeNull();
       expect(location.hash).toBe("#range=30&at=2026-11-04&cat=x");
+    });
+
+    // Review B: a type marked and then undone stays decided in the store, so an import that arrives later leaves it unmarked.
+    it("keeps a marker absent after an Undo when another tab's import arrives later", async () => {
+      const api = serve();
+      history.replaceState(null, "", hash);
+      await page();
+      await mark();
+      await waitFor(() => expect(api.store).toEqual({ x: "2026-11-05" }));
+      await undo();
+      await waitFor(() => expect(api.store).toEqual({}));
+      api.late({ x: "2026-11-04" });
+      expect(api.store).toEqual({});
+      cleanup();
+      await page(); // loaded again: the payload is the store's
+      expect(screen.getByRole("button", { name: "Mark fix applied" })).toBeTruthy();
+      expect(fixes()).toContain("0Fixes applied");
+    });
+
+    // Review C: the error of a Mark that failed is gone once the queued Undo of the same type has been saved.
+    it("clears a failed Mark's error when the Undo queued behind it is saved", async () => {
+      const api = serve({}, b => b.day !== null), hold = api.hold();
+      history.replaceState(null, "", hash);
+      await page();
+      fireEvent.click(screen.getByRole("button", { name: "Mark fix applied" }));
+      fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+      await waitFor(() => expect(api.posts.length).toBe(1)); // the Undo is queued behind the held Mark
+      hold.release();
+      await waitFor(() => expect(api.requests).toEqual(["fix x 2026-11-05", "resync", "fix x null"]));
+      await waitFor(() => expect(screen.queryByText("Saving…")).toBeNull());
+      expect(document.getElementById("fixErr")).toBeNull();
+      expect(screen.getByRole("button", { name: "Mark fix applied" })).toBeTruthy();
+      expect(api.store).toEqual({});
+    });
+
+    it("keeps the error of a failed write when nothing saved after it", async () => {
+      const api = serve({}, () => true);
+      history.replaceState(null, "", hash);
+      await page();
+      await mark();
+      await waitFor(() => expect(document.getElementById("fixErr")).toBeTruthy());
+      expect(api.store).toEqual({});
+    });
+
+    // Review A: the wait and its outcome are announced, not only shown.
+    it("announces saving, and the saved result, in the status region", async () => {
+      const api = serve(), hold = api.hold();
+      history.replaceState(null, "", hash);
+      await page();
+      const live = () => document.getElementById("detailLive")?.textContent;
+      await mark();
+      await waitFor(() => expect(live()).toBe("Saving the fix marker…"));
+      hold.release();
+      await waitFor(() => expect(live()).toBe("Fix marked."));
+      await undo();
+      await waitFor(() => expect(live()).toBe("Fix marker removed."));
+      expect(api.store).toEqual({});
     });
 
     it("posts the day the user picked", async () => {
@@ -398,6 +460,7 @@ describe("ErrorsPage", () => {
       await page();
       await waitFor(() => expect(api.requests).toEqual(["import"]));
       api.store.x = "2026-11-01"; // another tab marks x while the import waits
+      api.decided.add("x");
       hold.release();
       await waitFor(() => expect(localStorage.getItem(KEY)).toBeNull());
       expect(api.store).toEqual({ x: "2026-11-01" });

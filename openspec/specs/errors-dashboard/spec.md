@@ -53,6 +53,10 @@ The Errors page SHALL keep its "fix applied" markers in the store, one per error
 - **WHEN** the user selects Undo on a marked type
 - **THEN** the marker goes at once, the store takes the day off that type, and the other markers stay
 
+#### Scenario: A failure, then a saved write
+- **WHEN** a mark fails and the undo of the same type queued behind it is saved
+- **THEN** the failure message goes, because the type's last write was saved
+
 #### Scenario: The write fails
 - **WHEN** the user marks a type and the app refuses or does not answer
 - **THEN** the page shows the type as the store holds it, a message says the marker was not saved, the status region announces it and focus lands on "Mark fix applied"
@@ -69,11 +73,11 @@ The Errors page SHALL take the markers of its data as a seed only until its firs
 - **THEN** this page keeps showing its own answer until it is loaded again
 
 ### Requirement: Say when a fix write waits
-The page SHALL NOT time a fix write out, because a long ingest may hold the store and the write then still lands. While a write for the open type is pending, the page SHALL show the text "Saving…" and mark the fix controls `aria-busy`.
+The page SHALL NOT time a fix write out, because a long ingest may hold the store and the write then still lands. While a write for the open type is pending, the page SHALL show the text "Saving…" and mark the fix controls `aria-busy`. It SHALL announce in the status region that a mark or undo is being saved, and again when it was saved.
 
 #### Scenario: A write waits
 - **WHEN** the user marks a type and the answer has not come
-- **THEN** "Saving…" shows beside the marker and goes when the write is answered
+- **THEN** "Saving…" shows beside the marker and goes when the write is answered, and the status region said "Saving the fix marker…" and then "Fix marked."
 
 ### Requirement: Write a fix marker
 The app SHALL store a fix marker through `POST /api/errors/fix` with `{"category": string, "day": "YYYY-MM-DD" | null}` (null takes the day off, keeping the type's row), and SHALL answer with every marker. `GET /api/errors/fixes` SHALL answer with every marker alone. A write SHALL wait for a running ingest to release the store.

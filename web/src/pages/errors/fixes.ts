@@ -62,7 +62,11 @@ export function useFixes(data: ErrorsPayload | undefined, say: (s: string) => vo
   /** Mark cat fixed on day, or remove its marker (day null). */
   const setFix = useCallback((cat: string, day: Day | null) => {
     setError(null);
+    say(day ? "Saving the fix marker…" : "Removing the fix marker…"); // the visible "Saving…" is not announced by itself
     write({ cat, day }, errorFixUrl, { category: cat, day }).then(() => {
+      say(day ? "Fix marked." : "Fix marker removed.");
+      // The queue is serial: a failure of this type from before this write is older than it, so saving it clears the error.
+      setError(e => (e?.cat === cat ? null : e));
       // The store has it now: the browser's old copy of this type must not hand it back, in the page or on the next load.
       const left = without(loadFixes(), cat);
       if (Object.keys(left).length) store.set(FIXES_KEY, left); else store.remove(FIXES_KEY);
