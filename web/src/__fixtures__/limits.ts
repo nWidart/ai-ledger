@@ -1008,6 +1008,32 @@ export default {
       "points": 0.8
      }
     ]
+   },
+   "weekly_share": null,
+   "surfaces": {
+    "as_of": "2026-11-06T11:20:00.000Z",
+    "rows": [
+     {
+      "key": "claude_code",
+      "label": "Claude Code",
+      "percent": 80
+     },
+     {
+      "key": "chat",
+      "label": "Chats",
+      "percent": 15
+     },
+     {
+      "key": "cowork",
+      "label": "Cowork",
+      "percent": 5
+     },
+     {
+      "key": "other",
+      "label": "Other",
+      "percent": 0
+     }
+    ]
    }
   },
   {
@@ -1053,7 +1079,12 @@ export default {
       "points": null
      }
     ]
-   }
+   },
+   "weekly_share": {
+    "used": 2,
+    "allowance": 50
+   },
+   "surfaces": null
   },
   {
    "provider": "codex",
@@ -2295,7 +2326,9 @@ export default {
       "points": 9.0
      }
     ]
-   }
+   },
+   "weekly_share": null,
+   "surfaces": null
   }
  ],
  "binding": {

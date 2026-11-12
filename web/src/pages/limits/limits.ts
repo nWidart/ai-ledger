@@ -58,6 +58,24 @@ export function capText(w: LimitWindow): string | null {
   return `100% ≈ ${usd(c.per_pct * 100)} ${capPeriod(w.window_minutes)} at list prices, from ${plural(Math.round(c.points), "point")} over ${plural(c.windows, "window")}`;
 }
 
+/** What a scoped limit is of the weekly allowance: "This limit is 50% of the weekly allowance; 21% of the weekly allowance is
+ *  used through it". null for a window without a share. */
+export function shareText(w: LimitWindow): string | null {
+  const s = w.weekly_share;
+  return s ? `This limit is ${num(s.allowance)}% of the weekly allowance; ${num(s.used)}% of the weekly allowance is used through it` : null;
+}
+
+/** The week's use by surface: "All of this week's use so far came from Claude Code" when exactly one surface has any, else
+ *  "This week's use by surface: Chats 60%, Claude Code 40%" (every surface with use, most first; one that rounds to nothing
+ *  reads "<1%", and none reads 100% beside another). null without a breakdown or with no use yet. */
+export function surfacesText(w: LimitWindow): string | null {
+  const used = (w.surfaces?.rows ?? []).filter(r => r.percent > 0).sort((a, b) => b.percent - a.percent);
+  if (!used.length) return null;
+  if (used.length === 1) return `All of this week's use so far came from ${used[0]!.label}`;
+  const pct = (p: number) => (Math.round(p) < 1 ? "<1%" : `${num(Math.min(99, Math.round(p)))}%`);
+  return `This week's use by surface: ${used.map(r => `${r.label} ${pct(r.percent)}`).join(", ")}`;
+}
+
 /** Headroom and pace: what is left, how long to reset, the usual pace and this window's own against the pace that
  *  ends at exactly 100%. A window at its limit has no pace, only the wait. */
 export function pace(w: LimitWindow, now: string): { left: string; reset: string; rate: string | null; verdict: string | null } {

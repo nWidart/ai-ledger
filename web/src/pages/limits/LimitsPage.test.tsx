@@ -8,7 +8,7 @@ import { Palette } from "../../components/palette/Palette";
 import { openPalette } from "../../components/palette/store";
 import { mockApi } from "../../components/sheets/testing";
 import { num, usd } from "../../format";
-import { caption, capText, pace, recentText, span, whenDay, windowName } from "./limits";
+import { caption, capText, pace, recentText, shareText, span, surfacesText, whenDay, windowName } from "./limits";
 import { LimitsPage } from "./LimitsPage";
 
 const fixture = limits as LimitsPayload;
@@ -96,6 +96,47 @@ describe("cap in money", () => {
     expect(line.textContent).toBe(`100% ≈ ${usd(252.22)} a week at list prices, from 90 points over 1 window`);
     expect(line.previousElementSibling!.classList.contains("pace")).toBe(true);
     expect(screen.getByRole("region", { name: "Claude Code weekly · Fable" }).querySelector(".cap-money")).toBeNull();
+  });
+});
+
+describe("usage response lines", () => {
+  const card = (name: string) => screen.getByRole("region", { name });
+  const bare = (w: LimitWindow): LimitWindow => ({ ...w, weekly_share: null, surfaces: null });
+
+  it("shows the share on the scoped card and the surfaces on the unscoped weekly card, under the forecast lines", async () => {
+    show(fixture);
+    await lede();
+    const share = within(card("Claude Code weekly · Fable")).getByText(shareText(fable)!);
+    expect(share.textContent).toBe("This limit is 50% of the weekly allowance; 2% of the weekly allowance is used through it");
+    expect(share.className).toBe("cap-note");
+    const surfaces = within(card("Claude Code weekly")).getByText(surfacesText(claude)!);
+    expect(surfaces.textContent).toBe("This week's use by surface: Claude Code 80%, Chats 15%, Cowork 5%");
+    expect(surfaces.nextElementSibling!.className).toBe("pace"); // under the caption and the last-24-hours line, above the pace
+    expect(surfaces.previousElementSibling!.className).toBe("cap-text recent out");
+    expect(within(card("Claude Code weekly")).queryByText(/weekly allowance/)).toBeNull();
+    expect(within(card("Claude Code weekly · Fable")).queryByText(/use by surface|came from/)).toBeNull();
+  });
+
+  it("shows neither line on a card without the field", async () => {
+    show({ ...fixture, windows: fixture.windows.map(bare) });
+    await lede();
+    expect(screen.queryByText(/weekly allowance/)).toBeNull();
+    expect(screen.queryByText(/use by surface|came from/)).toBeNull();
+  });
+
+  it("shows only the surfaces line when the card has no share, and only the share when it has no surfaces", async () => {
+    show({ ...fixture, windows: [{ ...claude, weekly_share: null }, { ...fable, surfaces: null }, codex] });
+    await lede();
+    expect(within(card("Claude Code weekly")).getByText(/use by surface/)).toBeTruthy();
+    expect(within(card("Claude Code weekly · Fable")).getByText(/weekly allowance/)).toBeTruthy();
+  });
+
+  it("says when one surface made all the use, and shows no surfaces line when every surface is 0", async () => {
+    const rows = (...p: number[]) => ({ as_of: null, rows: p.map((percent, i) => ({ key: `s${i}`, label: ["Claude Code", "Chats"][i]!, percent })) });
+    show({ ...fixture, windows: [{ ...claude, surfaces: rows(100, 0) }, { ...codex, surfaces: rows(0, 0) }] });
+    await lede();
+    expect(within(card("Claude Code weekly")).getByText("All of this week's use so far came from Claude Code")).toBeTruthy();
+    expect(within(card("Codex weekly")).queryByText(/use by surface|came from/)).toBeNull();
   });
 });
 

@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { LimitWindow, LimitsPayload } from "../../api";
 import limits from "../../__fixtures__/limits";
-import { caption, hasScenario, nearestPoint, pace, readPoints, readText, recentText, tipPlace, usedHint, usedHref, usedRange, usedRangeName, whenDay } from "./limits";
+import { caption, hasScenario, nearestPoint, pace, readPoints, readText, recentText, shareText, surfacesText, tipPlace, usedHint, usedHref, usedRange, usedRangeName, whenDay } from "./limits";
 
 const claude = (limits as LimitsPayload).windows[0]!;
 const win = (over: Partial<LimitWindow>): LimitWindow => ({ ...claude, ...over });
@@ -208,5 +208,57 @@ describe("what used this window", () => {
     expect(usedHint({ total: 10, projects: [{ project: "tiny", share: 0.001, ...row }], models: [] })).toBe("tiny <1%");
     expect(usedHint({ total: 10000, projects: [{ project: "tiny", share: 0.0001, ...row }], models: [] })).toBe("tiny <1%"); // the payload's smallest share
     expect(usedHint({ total: 10, projects: [], models: [{ model: "m", share: 1, ...row }] })).toBeNull(); // no project to name
+  });
+});
+
+describe("shareText", () => {
+  it("says how much of the weekly allowance the limit is and how much is used through it", () => {
+    expect(shareText(win({ weekly_share: { used: 21, allowance: 50 } })))
+      .toBe("This limit is 50% of the weekly allowance; 21% of the weekly allowance is used through it");
+    expect(shareText(win({ weekly_share: { used: 0, allowance: 100 } })))
+      .toBe("This limit is 100% of the weekly allowance; 0% of the weekly allowance is used through it");
+  });
+
+  it("rounds to whole percents", () => {
+    expect(shareText(win({ weekly_share: { used: 20.6, allowance: 49.5 } }))).toBe("This limit is 50% of the weekly allowance; 21% of the weekly allowance is used through it");
+  });
+
+  it("is null for a window without a share", () => {
+    expect(shareText(win({ weekly_share: null }))).toBeNull();
+  });
+});
+
+describe("surfacesText", () => {
+  const rows = (...p: [string, number][]) => win({ surfaces: { as_of: "2026-11-06T11:20:00.000Z", rows: p.map(([label, percent]) => ({ key: label.toLowerCase(), label, percent })) } });
+
+  it("says when one surface made all the use", () => {
+    expect(surfacesText(rows(["Claude Code", 100], ["Chats", 0], ["Cowork", 0]))).toBe("All of this week's use so far came from Claude Code");
+    expect(surfacesText(rows(["Claude Code", 0], ["Chats", 100]))).toBe("All of this week's use so far came from Chats");
+  });
+
+  it("lists the surfaces with use, most first", () => {
+    expect(surfacesText(rows(["Claude Code", 40], ["Chats", 60], ["Cowork", 0], ["Other", 0]))).toBe("This week's use by surface: Chats 60%, Claude Code 40%");
+    expect(surfacesText(rows(["Claude Code", 80], ["Chats", 15], ["Cowork", 5]))).toBe("This week's use by surface: Claude Code 80%, Chats 15%, Cowork 5%");
+  });
+
+  it("rounds to whole percents, and a surface that rounds to nothing reads <1%", () => {
+    expect(surfacesText(rows(["Claude Code", 60.4], ["Chats", 39.2], ["Cowork", 0.4]))).toBe("This week's use by surface: Claude Code 60%, Chats 39%, Cowork <1%");
+  });
+
+  it("never says all from one surface while another has use, and never reads 100% beside it", () => {
+    expect(surfacesText(rows(["Claude Code", 99.5], ["Chats", 0.5]))).toBe("This week's use by surface: Claude Code 99%, Chats 1%");
+    expect(surfacesText(rows(["Claude Code", 99.9], ["Chats", 0.1]))).toBe("This week's use by surface: Claude Code 99%, Chats <1%");
+    expect(surfacesText(rows(["Claude Code", 100], ["Chats", 0.2]))).toBe("This week's use by surface: Claude Code 99%, Chats <1%");
+  });
+
+  it("says all from one surface when it is the only one with use", () => {
+    expect(surfacesText(rows(["Claude Code", 0], ["Chats", 100], ["Cowork", 0]))).toBe("All of this week's use so far came from Chats");
+    expect(surfacesText(rows(["Claude Code", 0.4], ["Chats", 0]))).toBe("All of this week's use so far came from Claude Code");
+  });
+
+  it("is null when every surface is 0, with no rows or without a breakdown", () => {
+    expect(surfacesText(rows(["Claude Code", 0], ["Chats", 0]))).toBeNull();
+    expect(surfacesText(rows())).toBeNull();
+    expect(surfacesText(win({ surfaces: null }))).toBeNull();
   });
 });

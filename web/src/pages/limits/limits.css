@@ -63,6 +63,7 @@
 .pg-limits .pace { margin: 0; font-size: 12.5px; color: var(--text-muted); }
 .pg-limits .pace b { color: var(--text-secondary); font-weight: 500; }
 .pg-limits .cap-money { margin: 2px 0 0; font-size: 12.5px; color: var(--text-muted); }
+.pg-limits .cap-note { margin: 2px 0 0; font-size: 12.5px; color: var(--text-muted); } /* the weekly share and the surfaces, under the forecast lines */
 
 .pg-limits .lim-chart { position: relative; margin-top: 8px; width: 100%; overflow: hidden; }
 .pg-limits .lim-chart svg { display: block; touch-action: pan-y; } /* a sideways drag reads the chart; a vertical one still scrolls */
