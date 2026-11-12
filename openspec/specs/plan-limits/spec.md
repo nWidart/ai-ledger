@@ -84,7 +84,7 @@ For a calibrated limit, the system SHALL estimate the percent used at any time i
 - **THEN** that window shows a curve estimated from that week's counted usage
 
 ### Requirement: Forecast each open window
-For each open window, the system SHALL forecast the percent used until the window resets. The forecast SHALL follow the user's activity profile by hour of day, pooled across providers. The forecast SHALL give the time it reaches 100%, or the percent at reset if it does not, with low and high bounds.
+For each open window, the system SHALL forecast the percent used until the window resets. The forecast SHALL follow the user's activity profile by hour of day, pooled across providers. The forecast SHALL give the time it reaches 100%, or the percent at reset if it does not, with low and high bounds. A step of the forecast SHALL add the part of a day's use that falls in it, counted hour by hour across every local hour the step crosses. The time it reaches 100% SHALL be found inside the step where the use crosses 100%, and SHALL be strictly before the reset: reaching 100% exactly at the reset is no hit. A percent at reset below 100% SHALL NOT show as 100%.
 
 #### Scenario: Window runs out first
 - **WHEN** a weekly window is at 57% two days before reset, and the forecast reaches 100% in 30 hours
@@ -97,6 +97,18 @@ For each open window, the system SHALL forecast the percent used until the windo
 #### Scenario: Night hours
 - **WHEN** the user's profile shows almost no activity between 01:00 and 05:00
 - **THEN** the forecast rises by almost nothing in those hours
+
+#### Scenario: Reaching 100% exactly at the reset
+- **WHEN** a window is at 99% with one hour left and the forecast adds 1 point in that hour
+- **THEN** the forecast has no time of reaching 100% and reports 100% at reset
+
+#### Scenario: Just short of 100%
+- **WHEN** the forecast ends at 99.996% at the reset
+- **THEN** it reports 99.9% at reset and no time of reaching 100%
+
+#### Scenario: Crossing 100% inside a step
+- **WHEN** a step of one hour rises 10 points from 95%
+- **THEN** the forecast reaches 100% half an hour into the step
 
 ### Requirement: Set the forecast pace
 The forecast's usual rate SHALL be per provider and weighted toward recent weeks; a partial first day of use SHALL count at its rate for a whole day. Once the window has been open for a seventh of its length (at most a day), the forecast pace SHALL be halfway between the usual rate and the window's own rate over that last seventh, and the low and high bounds SHALL cover both.
@@ -131,11 +143,11 @@ Each provider SHALL supply only its snapshots and the scope its usage maps to. C
 - **THEN** the page shows it with its window length and the provider's own label
 
 ### Requirement: Forecast a second scenario from the last 24 hours
-Each forecast SHALL carry a second scenario, "if the last 24 hours continue", beside the usual-pace forecast. Its pace SHALL be the provider's counted use over the last 24 hours, for the models the limit's scope covers, in dollars a day; a part of a day since the provider's first counted use SHALL count at its day rate. The scenario SHALL follow the same time steps and hour shape as the forecast, start at the same percent now and stop at 100%. The scenario SHALL give its pace in points a day, the time it reaches 100% when that is before the reset, and the percent at reset when it is not. The scenario SHALL NOT change the usual forecast, its bounds, the time it reaches 100%, the binding window or the suggestion. A provider with no counted use has no forecast, so no scenario.
+Each forecast SHALL carry a second scenario, "if the last 24 hours continue", beside the usual-pace forecast. Its pace SHALL be the provider's counted use over the last 24 hours, for the models the limit's scope covers, in dollars a day; a part of a day since the provider's first counted use SHALL count at its day rate. The scenario SHALL follow the same time steps and hour shape as the forecast, start at the same percent now and stop at 100%, under the same rules for the time it reaches 100% as the usual forecast. The scenario SHALL give its pace in points a day, the time it reaches 100% when that is before the reset, and the percent at reset when it is not. The scenario SHALL NOT change the usual forecast, its bounds, the time it reaches 100%, the binding window or the suggestion. A provider with no counted use has no forecast, so no scenario.
 
 #### Scenario: A hot last day
-- **WHEN** the last 24 hours used more than the usual pace and the window is at 50% two days before its reset
-- **THEN** the scenario reaches 100% and reports that time, earlier than the usual forecast's, and the curve ends at 100%
+- **WHEN** the last 24 hours used 30 points and the window is at 50% two days before its reset
+- **THEN** the scenario reaches 100% before the reset and reports that time, and the curve ends at 100%
 
 #### Scenario: A quiet last day
 - **WHEN** nothing was used in the last 24 hours

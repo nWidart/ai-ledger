@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { LimitWindow, LimitsPayload } from "../../api";
 import limits from "../../__fixtures__/limits";
-import { nearestPoint, readPoints, readText, recentText, tipPlace, whenDay } from "./limits";
+import { hasScenario, nearestPoint, readPoints, readText, recentText, tipPlace, whenDay } from "./limits";
 
 const claude = (limits as LimitsPayload).windows[0]!;
 const win = (over: Partial<LimitWindow>): LimitWindow => ({ ...claude, ...over });
@@ -119,5 +119,17 @@ describe("recentText", () => {
     expect(recentText({ ...hot, at_limit: true })).toBeNull();
     expect(recentText(win({ forecast: null }))).toBeNull();
     expect(recentText(win({ at_limit: false, forecast: { ...f, recent_pace: null, recent_hits_at: null, recent_at_reset: null } }))).toBeNull();
+  });
+});
+
+describe("hasScenario", () => {
+  it("is true when a curve point carries the last-24-hours value, even for a window at its limit", () => {
+    expect(hasScenario(win({ forecast: fc(curve) }))).toBe(true);
+    expect(hasScenario(win({ at_limit: true, forecast: fc(curve) }))).toBe(true);
+  });
+
+  it("is false without a forecast or when no point carries it", () => {
+    expect(hasScenario(win({ forecast: null }))).toBe(false);
+    expect(hasScenario(win({ forecast: fc(curve.map(p => ({ ...p, recent: null }))) }))).toBe(false);
   });
 });

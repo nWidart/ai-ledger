@@ -8,7 +8,7 @@ import { big, dur, num, plural, usd } from "../../format";
 import { useHashState } from "../../hash";
 import { useApi } from "../../useApi";
 import { LimitChart, planMarks } from "./LimitChart";
-import { bindingWindow, caption, capText, pace, planName, recentText, span, whenDay, windowName } from "./limits";
+import { bindingWindow, caption, capText, hasScenario, pace, planName, recentText, span, whenDay, windowName } from "./limits";
 import "./limits.css";
 
 const rangeName = (range: number) => (range ? `the last ${range} days` : "all time");
@@ -171,7 +171,7 @@ export function LimitsPage() {
             Hover or focus a chart for the value at a time.</p>
           {d.windows.length > 0 && <ul className="lim-key" aria-label="Chart key">
             <li><i className="k-used" />measured</li><li><i className="k-dot" />reading</li><li><i className="k-est" />estimated</li>
-            <li><i className="k-fc" />forecast</li>{d.windows.some(w => recentText(w)) && <li><i className="k-recent" />last 24 h pace</li>}<li><i className="k-band" />likely range</li><li><i className="k-now" />now</li>
+            <li><i className="k-fc" />forecast</li>{d.windows.some(hasScenario) && <li><i className="k-recent" />last 24 h pace</li>}<li><i className="k-band" />likely range</li><li><i className="k-now" />now</li>
             <li><i className="k-cap" />limit</li>{d.windows.some(w => planMarks(w, d.events).length > 0) && <li><i className="k-plan" />plan change</li>}
           </ul>}
         </div>

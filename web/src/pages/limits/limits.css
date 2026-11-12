@@ -34,7 +34,7 @@
 .pg-limits .lim-key .k-est { border-top: 2px dotted var(--series-1); opacity: .8; }
 .pg-limits .lim-key .k-plan { width: 0; height: 12px; border-left: 2px solid var(--warning); }
 .pg-limits .lim-key .k-fc { border-top: 2px dashed var(--accent); }
-.pg-limits .lim-key .k-recent { border-top: 2px dashed var(--series-6); }
+.pg-limits .lim-key .k-recent { height: 2px; background: repeating-linear-gradient(to right, var(--series-6) 0 9px, transparent 9px 12px, var(--series-6) 12px 14px, transparent 14px 17px); } /* the path's 9 3 2 3 dash-dot */
 .pg-limits .lim-key .k-band { height: 10px; background: var(--accent-soft); border-radius: 2px; }
 .pg-limits .lim-key .k-now { width: 0; height: 12px; border-left: 1px dotted var(--text-muted); }
 .pg-limits .lim-key .k-cap { border-top: 1px dashed var(--critical); }

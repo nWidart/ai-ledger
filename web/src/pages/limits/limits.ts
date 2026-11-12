@@ -38,6 +38,9 @@ export function recentText(w: LimitWindow): string | null {
   return `If the last 24 hours continue: ${f.recent_hits_at ? `reaches 100% at ${whenDay(f.recent_hits_at)}` : `about ${num(f.recent_at_reset)}% at its reset`}`;
 }
 
+/** Whether the window's chart draws the last-24-hours line: the one condition the chart and the chart key share. */
+export const hasScenario = (w: LimitWindow): boolean => !!w.forecast?.curve.some(p => p.recent != null);
+
 /** A window length as the cap-money line names its period: "a week", "per 5 hours", "a window" when unknown. */
 const capPeriod = (minutes: number | null): string =>
   minutes === 10080 ? "a week" : minutes === 1440 ? "a day" : minutes === 43200 ? "per 30 days" : minutes === 300 ? "per 5 hours"

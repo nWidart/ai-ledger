@@ -156,6 +156,14 @@ describe("LimitsPage", () => {
     expect(document.querySelectorAll(".lim-chart .recent")).toHaveLength(2);
   });
 
+  it("labels a drawn scenario line in the key even when only a window at its limit has one", async () => {
+    show({ ...out, windows: [capped] });
+    await lede();
+    expect(screen.queryByText(/last 24 hours continue/)).toBeNull(); // no card line at the limit
+    expect(document.querySelectorAll(".lim-chart .recent")).toHaveLength(1);
+    expect(within(screen.getByRole("list", { name: "Chart key" })).getByText("last 24 h pace")).toBeTruthy();
+  });
+
   it("shows no last-24-hours line, key entry or path without a scenario", async () => {
     const none = (w: LimitWindow): LimitWindow => w.forecast ? { ...w, forecast: { ...w.forecast, recent_pace: null, recent_hits_at: null,
       recent_at_reset: null, curve: w.forecast.curve.map(p => ({ ...p, recent: null })) } } : w;

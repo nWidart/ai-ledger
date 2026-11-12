@@ -61,6 +61,7 @@ Run `ai-ledger rebuild` once after upgrading (with the app stopped): error types
 
 ### Fixed
 
+- Limits: the forecast's run-out time was up to one chart step late, and a 30-day window's forecast could miss the busy hours of the day. A forecast that reaches 100% exactly at the reset, or rounds to 100%, is no longer reported as a run-out.
 - Cost: a day's sessions show that day's cost and add up to the bar; an unknown previous cost is no longer shown as $0.
 - Cost: the plan multiple counts only the agents with a known plan and names them when another agent also spent. An unknown cost no longer reads as $0: per prompt and per commit show "–", the small-projects row shows "–", What changed keeps projects with an unknown cost, and the comparison says there was no priced usage instead of −100%. The day tooltip no longer lists a $0.00 Other, drops `claude-` from model names inside Other and says "1 unpriced request". The project-less row in Cost by project reads "(no project)", and the project search no longer says "No project matches" when the selected project matches.
 - Errors: trends on a store with a thin start, the error-rate scale, and one "Change" comparison across the page.

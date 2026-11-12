@@ -6,6 +6,7 @@ import threading
 import unittest
 import urllib.error
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 from unittest import mock
 
 from ai_ledger import limits, store
@@ -390,6 +391,79 @@ class ForecastTest(AnalysisCase):
         w = self.forecast_for(now, 2, datetime(2026, 11, 9, 0, 0))
         self.assertIsNone(w["forecast"])
         self.assertIn("Not calibrated", w["no_forecast"])
+
+
+class SteppingTest(unittest.TestCase):
+    """The loop that steps every forecast line: a hit time inside its step, a day's use over the hour shape, the reset."""
+    NOW = datetime(2026, 11, 6, 0, 0)
+
+    class Profile(limits.Profile):
+        """A profile with the paces set directly, in dollars a day (a point costs $1 in these tests)."""
+        def __init__(self, now, pace, recent, shape=None, tz=timezone.utc):
+            self.now, self.tz, self.pace, self.recent = now, tz, pace, recent
+            self.shape = shape or [1 / 24] * 24
+
+        def level(self, source, scope):
+            return self.pace, self.pace, self.pace, bool(self.shape != [1 / 24] * 24)
+
+        def days(self, source, scope, n):
+            return [(self.recent, 1.0)]
+
+    def fc(self, current, hours, pace, recent, minutes=10080, **kw):
+        w = SimpleNamespace(provider="claude", scope="", minutes=minutes, resets_at=self.NOW + timedelta(hours=hours))
+        return limits.forecast(w, current, dict(per_pct=1.0), self.Profile(self.NOW, pace, recent, **kw))
+
+    def test_a_hit_is_found_inside_its_step(self):
+        # One-hour steps rising 10 points each: from 95%, 100% comes half an hour in, not at the end of the step.
+        f = self.fc(95, 5, 240, 240)
+        self.assertEqual(f["hits_at"], "2026-11-06T00:30:00.000Z")
+        self.assertEqual(f["hits_at_early"], "2026-11-06T00:30:00.000Z")
+        self.assertEqual(f["recent_hits_at"], "2026-11-06T00:30:00.000Z")
+        g = self.fc(92, 5, 240, 480)  # the scenario rises 20 points an hour, the usual line 10
+        self.assertEqual((g["recent_hits_at"], g["hits_at"]), ("2026-11-06T00:24:00.000Z", "2026-11-06T00:48:00.000Z"))
+
+    def test_reaching_100_exactly_at_the_reset_is_no_hit(self):
+        f = self.fc(99, 1, 24, 24)  # 1 point in the one hour left
+        self.assertIsNone(f["hits_at"])
+        self.assertIsNone(f["recent_hits_at"])
+        self.assertEqual((f["at_reset"], f["at_reset_low"], f["at_reset_high"], f["recent_at_reset"]), (100, 100, 100, 100))
+        self.assertIsNotNone(self.fc(99, 1, 25, 25)["hits_at"])  # a hair more is a hit, an instant before the reset
+
+    def test_a_near_hit_does_not_round_up_to_100(self):
+        f = self.fc(99, 1, 23.904, 23.904)  # ends at 99.996
+        self.assertIsNone(f["hits_at"])
+        self.assertIsNone(f["recent_hits_at"])
+        self.assertEqual((f["at_reset"], f["at_reset_low"], f["at_reset_high"], f["recent_at_reset"]), (99.9, 99.9, 99.9, 99.9))
+        self.assertEqual(f["curve"][-1]["recent"], 100)  # the curve's rounding is its own
+
+    def test_a_busy_hour_inside_a_long_step_counts(self):
+        # A 30-day window steps 4h17m: all use in 08:00-09:00 falls in steps whose midpoints miss it. A day still adds a day's pace.
+        busy = [0.0] * 24
+        busy[8] = 1.0
+        f = self.fc(10, 24, 24, 24, minutes=43200, shape=busy)
+        self.assertAlmostEqual(f["curve"][-1]["mid"], 34, places=1)
+        self.assertAlmostEqual(f["curve"][-1]["recent"], 34, places=1)
+        self.assertEqual(f["curve"][1]["mid"], 10)  # the step to 04:17 holds no busy hour; the next, to 08:34, does
+        self.assertGreater(f["curve"][2]["mid"], 10)
+
+    def test_a_day_of_steps_adds_the_days_use_for_any_shape_and_zone(self):
+        shape = [i + 1 for i in range(24)]
+        shape = [v / sum(shape) for v in shape]
+        for tz in (timezone.utc, timezone(timedelta(hours=5, minutes=30)), timezone(timedelta(hours=-3))):
+            for minutes in (10080, 43200, 300):
+                with self.subTest(tz=tz, minutes=minutes):
+                    f = self.fc(10, 24, 36, 36, minutes=minutes, shape=shape, tz=tz)
+                    self.assertAlmostEqual(f["curve"][-1]["mid"], 46, places=1)
+                    self.assertAlmostEqual(f["curve"][-1]["recent"], 46, places=1)
+
+    def test_day_share_crosses_hour_boundaries(self):
+        shape = [0.0] * 24
+        shape[8], shape[9] = 0.5, 0.25
+        p = self.Profile(self.NOW, 1, 1, shape=shape, tz=timezone(timedelta(minutes=30)))  # local 08:00 is 07:30 UTC
+        share = lambda h, m, minutes: limits.day_share(p, shape, self.NOW.replace(hour=h, minute=m), timedelta(minutes=minutes))
+        self.assertAlmostEqual(share(7, 30, 60), 0.5)
+        self.assertAlmostEqual(share(8, 0, 60), 0.375)  # half of local hour 8, then half of hour 9
+        self.assertAlmostEqual(share(0, 0, 1440), 0.75)
 
 
 class RecentScenarioTest(AnalysisCase):
