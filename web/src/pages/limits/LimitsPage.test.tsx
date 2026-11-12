@@ -7,6 +7,7 @@ import palette from "../../__fixtures__/palette";
 import { Palette } from "../../components/palette/Palette";
 import { openPalette } from "../../components/palette/store";
 import { mockApi } from "../../components/sheets/testing";
+import { num } from "../../format";
 import { caption, pace, span, whenDay, windowName } from "./limits";
 import { LimitsPage } from "./LimitsPage";
 
@@ -171,5 +172,65 @@ describe("LimitsPage", () => {
     expect(document.getElementById(screen.getByRole("combobox", { name: "Filters, pages, inspectors and commands" }).getAttribute("aria-describedby")!)!.textContent).toBe("Enter: open Bash inspector on Activity · 30d");
     await userEvent.keyboard("{Enter}");
     expect(location.pathname + location.hash).toBe("/usage#tool=Bash");
+  });
+});
+
+describe("status strip", () => {
+  const strip = () => within(screen.getByRole("list", { name: "Open windows at a glance" }));
+  const chip = (name: string) => strip().getAllByRole("listitem").find(li => li.textContent!.startsWith(name))!;
+
+  it("shows one chip per open window, with its percent and time to reset", async () => {
+    show(fixture);
+    await lede();
+    expect(strip().getAllByRole("listitem")).toHaveLength(fixture.windows.length);
+    const c = chip(windowName(claude));
+    expect(c.textContent).toContain(`${windowName(claude)} 90%`);
+    expect(c.textContent).toContain(`resets in ${span(Date.parse(claude.resets_at) - Date.parse(fixture.now))}`);
+    expect(within(c).getByTitle("estimated").textContent).toBe("est.");
+    expect(chip(windowName(codex)).textContent).toContain(`${windowName(codex)} 9%`);
+    expect(within(chip(windowName(codex))).queryByTitle("estimated")).toBeNull();
+    expect(chip(windowName(fable)).textContent).toContain(`${windowName(fable)} ${num(fable.current)}%`);
+  });
+
+  it("lists the chips in payload order", async () => {
+    show(fixture);
+    await lede();
+    const names = strip().getAllByRole("listitem").map(li => li.querySelector("b")!.textContent);
+    expect(names).toEqual(fixture.windows.map(windowName));
+  });
+
+  it("sits in the header between the heading and the suggestion", async () => {
+    show(fixture);
+    await lede();
+    const header = document.getElementById("overview")!, list = screen.getByRole("list", { name: "Open windows at a glance" });
+    const lead = document.getElementById("lede")!, suggest = header.querySelector(".suggest")!;
+    expect(suggest).toBeTruthy();
+    expect(header.contains(list)).toBe(true);
+    expect(lead.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(list.compareDocumentPosition(suggest) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("says at limit for a window at its limit, and runs out for one forecast to hit 100%", async () => {
+    show(out);
+    await lede();
+    const atLimit = chip(windowName(capped));
+    expect(atLimit.textContent).toContain("at limit");
+    expect(atLimit.classList.contains("out")).toBe(true);
+    const runsOut = chip(windowName(claude));
+    expect(runsOut.textContent).toContain("runs out");
+    expect(runsOut.classList.contains("out")).toBe(true);
+    expect(chip(windowName(fable)).classList.contains("out")).toBe(false);
+  });
+
+  it("shows a dash for a window with no reading yet", async () => {
+    show({ ...fixture, windows: [{ ...fable, current: null }] });
+    await lede();
+    expect(chip(windowName(fable)).textContent).toContain(`${windowName(fable)} –`);
+  });
+
+  it("renders no strip without open windows", async () => {
+    show({ ...fixture, windows: [] });
+    await lede();
+    expect(screen.queryByRole("list", { name: "Open windows at a glance" })).toBeNull();
   });
 });
