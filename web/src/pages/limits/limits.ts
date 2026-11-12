@@ -1,6 +1,6 @@
 // Text for the Limits page: names, captions and pace, from the /api/limits payload.
 import type { LimitWindow, LimitsPayload } from "../../api";
-import { num } from "../../format";
+import { num, plural, usd } from "../../format";
 
 /** A timestamp as "Sat, Nov 7, 2:00 PM" in the reader's zone: every time on the page reads this way. */
 export const whenDay = (ts: string | null | undefined): string =>
@@ -28,6 +28,18 @@ export function caption(w: LimitWindow): string {
   }
   const lo = num(f.at_reset_low), hi = num(f.at_reset_high);
   return `Resets first at about ${num(f.at_reset)}%${lo === hi ? "" : ` (${lo}–${hi}%)`}`;
+}
+
+/** A window length as the cap-money line names its period: "a week", "per 5 hours", "a window" when unknown. */
+const capPeriod = (minutes: number | null): string =>
+  minutes === 10080 ? "a week" : minutes === 1440 ? "a day" : minutes === 43200 ? "per 30 days" : minutes === 300 ? "per 5 hours"
+  : minutes && minutes % 60 === 0 ? `per ${minutes / 60} hours` : "a window";
+
+/** The whole cap in money at list prices, with the calibration behind it; null while the window is not calibrated. */
+export function capText(w: LimitWindow): string | null {
+  const c = w.calibration;
+  if (!c) return null;
+  return `100% ≈ ${usd(c.per_pct * 100)} ${capPeriod(w.window_minutes)} at list prices, from ${plural(Math.round(c.points), "point")} over ${plural(c.windows, "window")}`;
 }
 
 /** Headroom and pace: what is left, how long to reset, the usual pace and this window's own against the pace that

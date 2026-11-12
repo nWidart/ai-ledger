@@ -8,7 +8,7 @@ import { big, dur, num, plural, usd } from "../../format";
 import { useHashState } from "../../hash";
 import { useApi } from "../../useApi";
 import { LimitChart, planMarks } from "./LimitChart";
-import { bindingWindow, caption, pace, planName, span, whenDay, windowName } from "./limits";
+import { bindingWindow, caption, capText, pace, planName, span, whenDay, windowName } from "./limits";
 import "./limits.css";
 
 const rangeName = (range: number) => (range ? `the last ${range} days` : "all time");
@@ -55,7 +55,7 @@ function Freshness({ d }: { d: LimitsPayload }) {
 }
 
 function WindowCard({ w, d }: { w: LimitWindow; d: LimitsPayload }) {
-  const p = pace(w, d.now), f = w.forecast;
+  const p = pace(w, d.now), f = w.forecast, cap = capText(w);
   return (
     <section className="panel lim-card" aria-label={windowName(w)}>
       <header>
@@ -65,6 +65,7 @@ function WindowCard({ w, d }: { w: LimitWindow; d: LimitsPayload }) {
       <LimitChart w={w} now={d.now} events={d.events} />
       <p className={"cap-text" + (w.at_limit || f?.hits_at ? " out" : "")}>{caption(w)}{!w.at_limit && f?.kind === "flat" && <> <span className="chip">flat rate</span></>}</p>
       <p className="pace">{p.left} · {p.reset}{p.rate && <> · {p.rate}</>}{p.verdict && <> · <b>{p.verdict}</b></>}</p>
+      {cap && <p className="cap-money">{cap}</p>}
     </section>
   );
 }
