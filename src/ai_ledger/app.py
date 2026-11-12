@@ -349,23 +349,28 @@ def handler(app, port=PORT):
             elif path in ("/api/errors/fix", "/api/errors/mute", "/api/errors/fixes/import"):
                 kind = path.rsplit("/", 1)[1]  # fix, mute or import
                 try:
-                    today = metrics.local_today(app.con.cursor())
-                    got = (parse_fix(self.json_body(), today) if kind == "fix" else parse_mute(self.json_body()) if kind == "mute"
-                           else parse_import(self.json_body(MAX_IMPORT_BODY), today))
-                except ValueError as e:
-                    return self.send(400, json.dumps(dict(error=str(e))))
-                # The ingest thread writes through app.con under app.lock, as the limit pollers do: take it for the write, so a
-                # mark never lands in the middle of an ingest's transaction and two writes cannot conflict. The import decides
-                # what the store already has here, at write time, not from what the page saw when it loaded.
-                with app.lock:
-                    cur = app.con.cursor()
-                    if kind == "fix":
-                        store.set_error_fix(cur, *got)
-                    elif kind == "mute":
-                        store.set_error_muted(cur, *got)
-                    else:
-                        store.import_error_fixes(cur, got)
-                    self.json(metrics.error_marks(cur))
+                    try:
+                        today = metrics.local_today(app.con.cursor())
+                        got = (parse_fix(self.json_body(), today) if kind == "fix" else parse_mute(self.json_body()) if kind == "mute"
+                               else parse_import(self.json_body(MAX_IMPORT_BODY), today))
+                    except ValueError as e:
+                        return self.send(400, json.dumps(dict(error=str(e))))
+                    # The ingest thread writes through app.con under app.lock, as the limit pollers do: take it for the write, so a
+                    # mark never lands in the middle of an ingest's transaction and two writes cannot conflict. The import decides
+                    # what the store already has here, at write time, not from what the page saw when it loaded.
+                    with app.lock:
+                        cur = app.con.cursor()
+                        if kind == "fix":
+                            store.set_error_fix(cur, *got)
+                        elif kind == "mute":
+                            store.set_error_muted(cur, *got)
+                        else:
+                            store.import_error_fixes(cur, got)
+                        marks = metrics.error_marks(cur)
+                except Exception as e:  # a store error: answer, instead of dropping the connection. Never the body: it names types
+                    print(f"marks request failed: {type(e).__name__}: {e}", file=sys.stderr, flush=True)
+                    return self.send(500, json.dumps(dict(error="internal error")))
+                self.json(marks)
             else:
                 self.send(404, "not found\n", "text/plain")
 

@@ -62,7 +62,8 @@ CREATE TABLE IF NOT EXISTS usage_files (
   path VARCHAR PRIMARY KEY, kind VARCHAR, session_id VARCHAR, size BIGINT, mtime DOUBLE,
   json VARCHAR USING COMPRESSION zstd, ingested_at TIMESTAMP);
 -- What the user told the Errors page, one row per error type. Nothing derives it, so it is not in DERIVED: rebuild keeps it.
-CREATE TABLE IF NOT EXISTS error_marks (category VARCHAR PRIMARY KEY, fixed_on DATE, muted BOOLEAN DEFAULT false);
+CREATE TABLE IF NOT EXISTS error_marks (category VARCHAR PRIMARY KEY, fixed_on DATE, muted BOOLEAN DEFAULT false,
+  fix_decided BOOLEAN DEFAULT false);
 """
 
 DERIVED = ["sessions", "requests", "tool_calls", "prompts", "hooks", "limit_snapshots", "session_facets", "facet_counts", "session_meta",
@@ -156,6 +157,11 @@ def open_store(path=None):
     for table in ("files", "sessions"):  # stores from before sources hold only Claude Code's
         con.execute(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS source VARCHAR DEFAULT 'claude'")
     con.execute("ALTER TABLE error_marks ADD COLUMN IF NOT EXISTS muted BOOLEAN DEFAULT false")  # stores from before muted types
+    if not con.execute("SELECT 1 FROM information_schema.columns WHERE table_name = 'error_marks' AND column_name = 'fix_decided'").fetchone():
+        # Stores from before fix_decided. Backfilled once, as the column is added: later, a row with no fix day and not muted is
+        # a mute then an unmute, which decided nothing. A muted row with no fix day stays undecided: keeping a marker beats losing one.
+        con.execute("ALTER TABLE error_marks ADD COLUMN fix_decided BOOLEAN DEFAULT false")
+        con.execute("UPDATE error_marks SET fix_decided = true WHERE fixed_on IS NOT NULL OR NOT muted")
     con.execute("ALTER TABLE requests ADD COLUMN IF NOT EXISTS speed VARCHAR")  # stores from before fast-mode pricing; NULL until rebuild
     for old, new in PROJECT_ALIASES.items():  # names stored before the alias existed
         for table in ("projects_by_cwd", "sessions"):
@@ -164,25 +170,26 @@ def open_store(path=None):
 
 
 def set_error_fix(cur, category, day):
-    """Mark the error type fixed on day (a date), or take the marker off (day None). An undo keeps the row, with no fix day: the
-    row records that the store has decided about this type, so a late import from another tab cannot bring the marker back.
-    Other state of the row stays."""
-    cur.execute("INSERT INTO error_marks (category, fixed_on) VALUES (?, ?) ON CONFLICT (category) DO UPDATE SET fixed_on = excluded.fixed_on",
-                [category, day])
+    """Mark the error type fixed on day (a date), or take the marker off (day None). Either way the store has now decided about
+    the type's marker (fix_decided), so a late import from another tab cannot bring back a marker that was undone. An undo keeps
+    the row, with no fix day. Other state of the row stays."""
+    cur.execute("INSERT INTO error_marks (category, fixed_on, fix_decided) VALUES (?, ?, true) "
+                "ON CONFLICT (category) DO UPDATE SET fixed_on = excluded.fixed_on, fix_decided = true", [category, day])
 
 
 def set_error_muted(cur, category, muted):
-    """Mute the error type (the page counts it as noise) or unmute it. Only `muted` changes: a fix day on the row stays, and the
-    row stays after an unmute, as after an undo."""
+    """Mute the error type (the page counts it as noise) or unmute it. Only `muted` changes: a fix day on the row stays, the row
+    stays after an unmute, and a mute decides nothing about the type's fix marker (fix_decided stays as it is)."""
     cur.execute("INSERT INTO error_marks (category, muted) VALUES (?, ?) ON CONFLICT (category) DO UPDATE SET muted = excluded.muted",
                 [category, muted])
 
 
 def import_error_fixes(cur, fixes):
-    """Take the markers {category: date} for the error types the store has no row for: a type it has marked, or marked and
-    undone, keeps what it has. One statement, so one transaction: the app's cap on the markers of an import keeps it within one
-    insert chunk."""
-    insert(cur, "error_marks", ["category", "fixed_on"], list(fixes.items()))
+    """Take the markers {category: date} for the error types whose marker the store has not decided: no row, or a row that is only
+    a mute. A type it has marked, or marked and undone, keeps what it has. One statement, so one transaction: the app's cap on
+    the markers of an import keeps it within one insert chunk."""
+    insert(cur, "error_marks", ["category", "fixed_on", "fix_decided"], [(c, d, True) for c, d in fixes.items()],
+           tail="ON CONFLICT (category) DO UPDATE SET fixed_on = excluded.fixed_on, fix_decided = true WHERE NOT error_marks.fix_decided")
 
 
 def insert(cur, table, cols, rows, tail="ON CONFLICT DO NOTHING", returning=None):
