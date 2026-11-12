@@ -107,17 +107,23 @@ export function ErrorsPage() {
   }, []);
   useEffect(() => { if (error) retryBtn.current?.focus(); }, [error]);
   // A dead link shows the notice, and #pageLive announces it: cleared first, then set on the next frame, so each dead link is
-  // read out again even when the text is the same as last time. A live link clears the notice; so does Dismiss (and its announcement).
+  // read out again even when the text is the same as last time. Every way the announcement ends goes through endAnnounce:
+  // a new dead link, a live link, Dismiss, and unmount (which cancels the frame only: nothing may set state after unmount).
   const annFrame = useRef(0);
+  const endAnnounce = useCallback(() => {
+    cancelAnimationFrame(annFrame.current);
+    setPageLive(s => (s === DEAD_LINK ? "" : s));
+  }, []);
+  useEffect(() => () => cancelAnimationFrame(annFrame.current), []);
   useEffect(() => {
     if (read.dead) {
       setDeadLink(true);
-      cancelAnimationFrame(annFrame.current);
+      endAnnounce();
       setPageLive("");
       annFrame.current = requestAnimationFrame(() => setPageLive(DEAD_LINK));
-    } else if (read.linked) setDeadLink(false);
-  }, [read.dead, read.linked]);
-  const dismissDead = () => { setDeadLink(false); cancelAnimationFrame(annFrame.current); setPageLive(""); $("#lede")?.focus(); };
+    } else if (read.linked) { setDeadLink(false); endAnnounce(); }
+  }, [read.dead, read.linked, endAnnounce]);
+  const dismissDead = () => { setDeadLink(false); endAnnounce(); $("#lede")?.focus(); };
 
   // The mini chart shows only while the main chart is out of view.
   useEffect(() => {
