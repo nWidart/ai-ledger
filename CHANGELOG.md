@@ -9,6 +9,7 @@ Run `ai-ledger rebuild` once after upgrading (with the app stopped): error types
 
 ### Added
 
+- The Errors type detail breaks the type down by tool and by agent next to By project, each with count and share. A By agent row filters the page to that agent. A By tool row narrows that type's detail (incident count, By project, incidents and examples) to the tool, on top of a selected day or week; a chip or a second click clears it, and it lives in the URL (`etool=`). It replaces the "Mostly ..." phrase.
 - A click on a day or week of the Errors chart narrows the type table and the open type's incidents and examples to it. Enter or Space does it from the keyboard, a chip by the table clears it, and it lives in the URL (`at=`).
 - The Errors summary shows the uncategorized share: the errors in the catch-all types (Other, Other non-zero exit, MCP tool error) that no specific rule matched, split by agent when both have errors.
 - The Errors type table shows each type's time lost (the time in its retry loops, first failure to last), the type detail adds the total, and Where to start ranks open fixes by time lost instead of error count.

@@ -53,7 +53,8 @@ export function ErrorsPage() {
   // push: add a history entry (Back retraces it). A new type starts its search over.
   const update = useCallback((patch: Partial<View>, push = false) => {
     const cur = viewRef.current;
-    if (patch.cat !== undefined && patch.cat !== cur.cat) setQ("");
+    // The tool filter belongs to the open type: another type, or none, starts without it.
+    if (patch.cat !== undefined && patch.cat !== cur.cat) { setQ(""); if (patch.tool === undefined) patch = { ...patch, tool: null }; }
     // A bucket key belongs to its granularity: the other one starts with none selected.
     if (patch.gran && patch.gran !== cur.gran && patch.at === undefined) patch = { ...patch, at: null };
     setHash(viewPatch({ ...cur, ...patch }), { push });
@@ -80,7 +81,7 @@ export function ErrorsPage() {
   const setMode = useCallback((x: Mode) => { setModeS(x); store.set(MODE_KEY, x); }, []);
 
   // The list puts the linked example first; a click on an example moves the link, not the list, until the view next changes.
-  const fullKey = JSON.stringify([!!m, view.project, view.source, view.range, view.gran, view.sub, view.noise, view.cat, view.at, mode, fixes]);
+  const fullKey = JSON.stringify([!!m, view.project, view.source, view.range, view.gran, view.sub, view.noise, view.cat, view.at, view.tool, mode, fixes]);
   const pin = useRef({ key: "", focus: null as string | null });
   if (pin.current.key !== fullKey || (pin.current.focus !== view.focus && !selecting.current)) {
     pin.current = { key: fullKey, focus: view.focus };

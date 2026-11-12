@@ -23,8 +23,8 @@ export const shortLabel = (s: string) => (s.length > 26 ? s.slice(0, 25) + "…"
 
 export type Gran = "day" | "week";
 /** The view the hash holds. source: "" is all; sub: include subagents; noise: hide noise; cat: the open type; focus: the linked example;
- *  at: the chart bucket (as bucketOf returns it) the type table and the detail narrow to. */
-export interface View { project: string; source: Source | ""; range: Range; gran: Gran; sub: boolean; noise: boolean; cat: string | null; focus: string | null; at: Day | null }
+ *  at: the chart bucket (as bucketOf returns it) the type table and the detail narrow to; tool: the tool the open type's detail narrows to. */
+export interface View { project: string; source: Source | ""; range: Range; gran: Gran; sub: boolean; noise: boolean; cat: string | null; focus: string | null; at: Day | null; tool: string | null }
 /** Applied fixes: type id -> YYYY-MM-DD, as the old page stored them. */
 export type Fixes = Record<string, Day>;
 
@@ -75,6 +75,9 @@ export const bucketOf = (day: Day, gran: Gran): Day => {
 export const rangeStart = (m: Model, v: View): Day => (v.range ? iso(new Date(+toDate(m.lastDay) - (v.range - 1) * DAY)) : m.firstDay);
 /** The errors of the view's selected chart bucket, or all of them with none selected. */
 export const inBucket = (v: View, errs: readonly Err[]) => (v.at ? errs.filter(e => bucketOf(e.d, v.gran) === v.at) : errs);
+/** The errors of the view's selected tool, or all of them with none selected. Only the type detail applies it: the page's error rate
+ *  needs tool calls per tool, which the payload doesn't carry. */
+export const inTool = (v: View, errs: readonly Err[]) => (v.tool ? errs.filter(e => e.t === v.tool) : errs);
 /** The selected bucket as the page words it: "Mar 3", or "Week of Mar 3". */
 export const bucketLabel = (m: Model, v: View) => `${v.gran === "week" ? "Week of " : ""}${yearLabel(m, v.at!)}`;
 /** The row's project and source pass the view's filters. */
@@ -184,11 +187,12 @@ export const prevSpan = (m: Model, v: View): [Day, Day] | null => {
 export const selectable = (p: ChartPt) => !p.to;
 /** A selected bucket that isn't a selectable point of the chart the view draws (another granularity, outside the range, before
  *  the first call, inside a fold) clears, so the marker and the filtered lists can't disagree. A hash cat with no errors in the
- *  view's bucket closes, unless an example is linked. */
+ *  view's bucket closes, unless an example is linked. A tool with no errors in the open type's bucket (or no open type) clears. */
 export function settle(m: Model, v: View): View {
   const f = filtered(m, v);
   if (v.at && !chartData(m, v, f, viewTypes(m, v, f)).pts.some(p => p.k === v.at && selectable(p))) v = { ...v, at: null };
-  return v.cat && !v.focus && !countBy(inBucket(v, f.errs))[v.cat] ? { ...v, cat: null } : v;
+  if (v.cat && !v.focus && !countBy(inBucket(v, f.errs))[v.cat]) v = { ...v, cat: null };
+  return v.tool && !(v.cat && inBucket(v, f.errs).some(e => e.c === v.cat && e.t === v.tool)) ? { ...v, tool: null } : v;
 }
 
 // ---------- briefing and vitals ----------
@@ -362,14 +366,13 @@ export function beforeAfter(m: Model, v: View, cat: string, fixDay: Day): Before
     : af.r! < b4.r! ? ["Rate lower", "ok"] : af.r! > b4.r! ? ["Rate higher", "bad"] : ["Rate unchanged", "warn"];
   return { sides: [b4, af], need, enough, verdict };
 }
-/** Where a type happens, by project: the top five and the rest. */
-export function byProject(base: readonly Err[]) {
-  const rows = Object.entries(countBy(base.map(e => ({ c: e.p })))).sort((a, b) => b[1] - a[1]);
-  return { rows, top: rows.slice(0, 5), rest: rows.slice(5).reduce((s, r) => s + r[1], 0), n: base.length };
+/** Where a type happens, by a key of its errors (project, tool, agent): the top five and the rest. */
+export function breakdown(base: readonly Err[], key: (e: Err) => string) {
+  const by: Record<string, number> = {};
+  for (const e of base) by[key(e)] = (by[key(e)] || 0) + 1;
+  const rows = Object.entries(by).sort((a, b) => b[1] - a[1]);
+  return { rows, top: rows.slice(0, TOPN), rest: rows.slice(TOPN).reduce((s, r) => s + r[1], 0), n: base.length };
 }
-/** The type's three busiest tools. */
-export const topTools = (base: readonly Err[]) =>
-  Object.entries(base.reduce<Record<string, number>>((s, e) => (s[e.t] = (s[e.t] || 0) + 1, s), {})).sort((a, b) => b[1] - a[1]).slice(0, 3);
 /** The example search: command, error, follow-up, project and tool. */
 export const exHit = (q: string) => { const l = q.toLowerCase(); return (e: Err) => !l || (e.i + e.e + e.r + e.p + e.t).toLowerCase().includes(l); };
 export interface ExList { flat: boolean; items: Err[] | Group[]; count: string }

@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import fixture from "../../__fixtures__/errors";
@@ -388,7 +388,7 @@ describe("ErrorsPage bucket selection", () => {
     await open("#range=30&cat=x&at=2026-11-03");
     const d = document.getElementById("detail")!;
     expect(d.querySelector(".istat b")!.textContent).toBe("2");
-    expect(d.querySelector(".byproj .v")!.textContent).toBe("2");
+    expect(d.querySelector(".byset[data-by='project'] .v")!.textContent).toBe("2");
     expect(document.getElementById("exCount")!.textContent).toMatch(/ in day, most attempts first$/);
     await userEvent.click(screen.getByRole("button", { name: "Every error, newest first" }));
     expect(document.getElementById("exCount")!.textContent).toBe("2 in day, newest first");
@@ -494,5 +494,135 @@ describe("ErrorsPage bucket selection", () => {
     await open("#range=30&at=2026-11-04&ex=t07");
     expect(document.getElementById("outside")).toBeNull();
     expect(document.querySelector("#ex-t07 a[data-link]")!.getAttribute("href")).toBe("#range=30&ex=t07");
+  });
+});
+
+// Type x: Edit ×4 (t01, t02 on Nov 3; t03, t04 on Nov 4, Claude Code), mcp__srv__q (t08, Codex); type tests: Bash (t07, Codex).
+describe("ErrorsPage tool and agent breakdown", () => {
+  const mix: ErrorsPayload = { ...fixture,
+    errors: fixture.errors.map(e => ({ ...e, d: e.id === "t01" || e.id === "t02" ? "2026-11-03" : e.d, c: e.id === "t07" ? "tests" : e.c, src: e.id === "t07" || e.id === "t08" ? "codex" as const : "claude" as const })),
+    error_days: [["2026-11-03", "foo", "x", 2, 0, "claude"], ["2026-11-04", "foo", "x", 2, 0, "claude"], ["2026-11-04", "foo", "x", 1, 0, "codex"], ["2026-11-04", "foo", "tests", 1, 0, "codex"]],
+    calls: [["2026-11-03", "foo", 10, 0, "claude"], ["2026-11-04", "foo", 10, 0, "claude"], ["2026-11-04", "foo", 5, 0, "codex"]] };
+  const open = async (hash: string, payload = mix) => {
+    cleanup();
+    vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/errors") ? payload : {})));
+    history.replaceState(null, "", "/errors" + hash);
+    await page();
+  };
+  const set = (by: string) => document.querySelector<HTMLElement>(`#detail .byset[data-by="${by}"]`);
+  const rowsOf = (by: string) => [...(set(by)?.querySelectorAll("li button") ?? [])].map(b => [b.getAttribute("data-k"), b.querySelector(".v")!.textContent, b.querySelector(".s")!.textContent]);
+  const types = () => [...document.querySelectorAll("#catBody tr")].map(r => [r.getAttribute("data-c"), r.querySelector("td.num")!.textContent]);
+  const hashOf = () => Object.fromEntries(new URLSearchParams(location.hash.slice(1)));
+  const tool = (t: string) => set("tool")!.querySelector<HTMLElement>(`button[data-k="${t}"]`)!;
+
+  it("lists the type's tools with count and share, and its agents, next to By project", async () => {
+    await open("#range=30&cat=x");
+    expect([...document.querySelectorAll("#detail .byset b")].map(b => b.textContent)).toEqual(["By project", "By tool", "By agent"]);
+    expect(rowsOf("tool")).toEqual([["Edit", "4", "80%"], ["mcp__srv__q", "1", "20%"]]);
+    expect(rowsOf("agent")).toEqual([["claude", "4", "80%"], ["codex", "1", "20%"]]);
+    expect(set("agent")!.textContent).toContain("Claude Code");
+    expect(set("tool")!.textContent).toContain("2 tools");
+    expect(document.querySelector("#detail .why")!.textContent).not.toMatch(/Mostly/);
+  });
+
+  it("folds the tools past the top five", async () => {
+    const t01 = mix.errors[0]!, names = ["a", "b", "c", "d", "e", "f", "g"];
+    await open("#range=30&cat=x", withErrors([...mix.errors.filter(e => e.c === "x"), { ...t01, id: "z1" }, { ...t01, id: "z2" }].map((e, i) => ({ ...e, t: names[i]! }))));
+    expect(rowsOf("tool")).toHaveLength(5);
+    expect(set("tool")!.querySelector("li.muted")!.textContent).toBe("2 more: 2 errors");
+  });
+
+  it("narrows the detail, not the page, to the clicked tool, and a second click clears it", async () => {
+    await open("#range=30&cat=x");
+    const before = types(), len = history.length;
+    await userEvent.click(tool("mcp__srv__q"));
+    expect(hashOf()).toMatchObject({ range: "30", cat: "x", etool: "mcp__srv__q" });
+    expect(history.length).toBe(len + 1);
+    const d = document.getElementById("detail")!;
+    expect(d.querySelector(".istat b")!.textContent).toBe("1");
+    expect(rowsOf("project")).toEqual([["foo", "1", "100%"]]);
+    expect(set("agent")).toBeNull(); // one agent left
+    expect(document.getElementById("exCount")!.textContent).toMatch(/^1 in range/);
+    expect(tool("mcp__srv__q").getAttribute("aria-pressed")).toBe("true");
+    expect(tool("Edit").getAttribute("aria-pressed")).toBe("false");
+    expect(rowsOf("tool")).toHaveLength(2); // By tool keeps the type's tools
+    expect(types()).toEqual(before); // the table, summary and chart stay page-wide
+    expect(document.getElementById("toolClr")!.textContent).toBe("mcp__srv__q ✕");
+    await userEvent.click(tool("mcp__srv__q"));
+    expect(hashOf().etool).toBeUndefined();
+    expect(d.querySelector(".istat b")!.textContent).toBe("5");
+    expect(document.getElementById("toolClr")).toBeNull();
+    expect(document.activeElement).toBe(tool("mcp__srv__q"));
+  });
+
+  it("clears with the chip, which keeps focus on the tool's row", async () => {
+    await open("#range=30&cat=x&etool=Edit");
+    expect(document.querySelector("#detail .istat b")!.textContent).toBe("4");
+    await userEvent.click(document.getElementById("toolClr")!);
+    expect(hashOf().etool).toBeUndefined();
+    expect(document.querySelector("#detail .istat b")!.textContent).toBe("5");
+    expect(document.activeElement).toBe(tool("Edit"));
+  });
+
+  it("puts the tool filter on the bucket selection", async () => {
+    await open("#range=30&cat=x&at=2026-11-03&etool=Edit");
+    expect(document.querySelector("#detail .istat b")!.textContent).toBe("2");
+    await open("#range=30&cat=x&at=2026-11-04&etool=Edit");
+    expect(document.querySelector("#detail .istat b")!.textContent).toBe("2");
+    expect(rowsOf("tool")).toEqual([["Edit", "2", "67%"], ["mcp__srv__q", "1", "33%"]]);
+  });
+
+  it("hides By tool when the type has one tool, unless a tool is selected", async () => {
+    await open("#range=30&cat=tests");
+    expect(set("tool")).toBeNull();
+    await open("#range=30&cat=x&at=2026-11-03"); // Nov 3: Edit only
+    expect(set("tool")).toBeNull();
+    await open("#range=30&cat=x&at=2026-11-03&etool=Edit");
+    expect(set("tool")).toBeTruthy();
+    expect(tool("Edit").getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("clears a tool the open type has no errors of in the view, or with no type open", async () => {
+    await open("#range=30&cat=x&at=2026-11-03&etool=mcp__srv__q");
+    await waitFor(() => expect(hashOf().etool).toBeUndefined());
+    await open("#range=30&etool=Edit");
+    await waitFor(() => expect(hashOf()).toEqual({ range: "30" }));
+  });
+
+  it("drops the tool when the type closes or another opens", async () => {
+    // The other type has Edit errors too, so only opening it can clear the tool.
+    await open("#range=30&cat=x&etool=Edit", { ...mix, errors: mix.errors.map(e => (e.id === "t07" ? { ...e, t: "Edit" } : e)) });
+    await userEvent.click(document.querySelector('#catBody button[data-c="tests"]')!);
+    expect(hashOf()).toEqual({ range: "30", cat: "tests" });
+    await userEvent.click(document.querySelector('#catBody button[data-c="x"]')!);
+    await userEvent.click(tool("Edit"));
+    expect(hashOf().etool).toBe("Edit");
+    await userEvent.click(document.getElementById("clr")!);
+    expect(hashOf()).toEqual({ range: "30" });
+  });
+
+  it("treats a linked example of another tool as outside the filters; Clear filters clears the tool; the permalink leaves it out", async () => {
+    await open("#ex=t08&range=30&etool=Edit");
+    const note = document.getElementById("outside")!;
+    expect(note.querySelector("#ex-t08")).toBeTruthy();
+    expect(document.querySelector("#detail .istat b")!.textContent).toBe("4");
+    await userEvent.click(within(note).getByRole("button", { name: "Clear filters" }));
+    expect(hashOf()).toEqual({ range: "0", ex: "t08" });
+    expect(document.getElementById("outside")).toBeNull();
+    await open("#ex=t01&range=30&etool=Edit");
+    expect(document.getElementById("outside")).toBeNull();
+    expect(document.querySelector("#ex-t01 a[data-link]")!.getAttribute("href")).toBe("#range=30&ex=t01");
+  });
+
+  it("filters the page to an agent, and hides By agent under a source filter or with one agent", async () => {
+    await open("#range=30&cat=x");
+    await userEvent.click(set("agent")!.querySelector('button[data-k="codex"]')!);
+    expect(hashOf()).toMatchObject({ source: "codex", cat: "x" });
+    expect(set("agent")).toBeNull();
+    expect(types().sort()).toEqual([["tests", "1"], ["x", "1"]]);
+    await open("#range=30&cat=x&source=claude");
+    expect(set("agent")).toBeNull();
+    await open("#range=30&cat=tests"); // codex only
+    expect(set("agent")).toBeNull();
   });
 });
