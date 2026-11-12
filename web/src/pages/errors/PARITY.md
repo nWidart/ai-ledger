@@ -53,7 +53,7 @@ where the new code does it.
 
 ## Error types table
 
-- [x] L677–700: one row per type by count: swatch in its chart color, label button (aria-expanded, aria-controls `detail`), "✓ Fix applied <date>" chip, count, share bar with a tick under 3%, rate trend sparkline, half-on-half change (arrow past ±5%, "New", "–" with a title when a half has no calls). Port: `TypeTable`, `model.ts` `typeRows`, `change`. Changed since: Change uses the summary's comparison, shows counts under 5 errors a side and no "New".
+- [x] L677–700: one row per type by count: swatch in its chart color, label button (aria-expanded, aria-controls `detail`), "✓ Fix applied <date>" chip, count, share bar with a tick under 3%, rate trend sparkline, half-on-half change (arrow past ±5%, "New", "–" with a title when a half has no calls). Port: `TypeTable`, `model.ts` `typeRows`, `change`. Changed since: a Time lost column (the sum of the type's incident spans, "–" with none); Change uses the summary's comparison, shows counts under 5 errors a side and no "New".
 - [x] L696: empty states: "No tool calls recorded for <project>.", "No errors in this range 🎉", "No tool calls in this range.". Port: `model.ts` `emptyTypes`.
 - [x] L697–700, L130: a click anywhere on a row (or Enter/Space on its button) opens the type, selected row tinted; clicking the open type closes it; opening moves focus to the detail title. Port: `TypeTable`, `pick`.
 - [x] L123: Share and Rate trend columns hide on phones. Port: `errors.css`.
@@ -61,7 +61,7 @@ where the new code does it.
 
 ## Detail: where to start
 
-- [x] L720–740: with no type open: "Where to start" (top 4 open types with a ready-made fix and no marker) and "Rising fastest" (top 4 types up more than 10% half on half with at least 5 recent errors, "New" for types from zero, "· noise", "Check the fix" when fixed); each opens its type and focuses it; the ingest/markers footnote. Port: `Detail` `WhereToStart`, `model.ts` `whereToStart`. Changed since: the summary's comparison, biggest rate gain first, counts under 5 errors.
+- [x] L720–740: with no type open: "Where to start" (top 4 open types with a ready-made fix and no marker, by time lost then count, each with its time lost) and "Rising fastest" (top 4 types up more than 10% half on half with at least 5 recent errors, "New" for types from zero, "· noise", "Check the fix" when fixed); each opens its type and focuses it; the ingest/markers footnote. Port: `Detail` `WhereToStart`, `model.ts` `whereToStart`. Changed since: the summary's comparison, biggest rate gain first, counts under 5 errors.
 
 ## Detail: a type
 

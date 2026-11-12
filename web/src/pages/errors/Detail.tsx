@@ -33,8 +33,8 @@ function WhereToStart() {
   return <>
     <h2>Where to start</h2>
     {!f.errs.length ? <div className="empty">No errors in this range, nothing to start on.</div> : <>
-      <p className="why">Biggest open error types that have a ready-made fix. Pick one, apply the fix, then mark it applied to watch its rate drop.</p>
-      {open.length ? open.map(([c, n]) => <Pick key={c} c={c} top={<span className="muted">{fmt(n)} errors</span>} sub={m.cats[c]!.fix} act="Open fix and examples" />)
+      <p className="why">Open error types with a ready-made fix, the most time lost in retry loops first. Pick one, apply the fix, then mark it applied to watch its rate drop.</p>
+      {open.length ? open.map(({ c, n, lost }) => <Pick key={c} c={c} top={<span className="muted">{fmt(n)} errors{lost ? ` · ${dur(lost)} lost` : ""}</span>} sub={m.cats[c]!.fix} act="Open fix and examples" />)
         : <div className="empty">Nothing open with a known fix.</div>}
       <h3 className="subh">Rising fastest</h3>
       <p className="why" style={{ fontSize: 13, marginBottom: 4 }}>{`Error rate ${cmp}, as in the table's Change.`}</p>
@@ -51,7 +51,7 @@ function WhereToStart() {
 function TypeDetail({ cat }: { cat: string }) {
   const x = useErrors(), { m, v, f, fixes, mode, q } = x, c = m.cats[cat]!, fixDay = fixes[cat];
   const head = useRef<HTMLDivElement>(null), bar = useRef<HTMLDivElement>(null);
-  const base = f.errs.filter(e => e.c === cat).reverse(), is = incSummary(m, base), groups = is.groups.sort(byWeight), worst = groups[0];
+  const base = f.errs.filter(e => e.c === cat).reverse(), is = incSummary(m, base),  groups = is.groups.sort(byWeight), worst = groups[0], lost = groups.reduce((s, g) => s + incSpan(g), 0);
   // A linked example shows first; outside the current filters it gets its own note instead of joining the list.
   const focused = x.pinned, outside = !!focused && !base.includes(focused);
   const tools = topTools(base), flat = mode === "flat", PAGE = flat ? 30 : 20;
@@ -118,7 +118,7 @@ function TypeDetail({ cat }: { cat: string }) {
     </div>
     <p className="why">{c.why}{tools.length ? <> <span className="muted">Mostly {tools.map(t => t[0]).join(", ")}.</span></> : null}</p>
     {base.length ? <p className="istat" title={`An incident: one agent retrying one tool with this error, each failure within ${m.gap} minutes of the last and at most ${m.maxOk} successful calls of that tool apart. Recovered: the agent's next call of that tool, after the last failure, succeeded.`}>
-      <b>{fmt(base.length)}</b> error{base.length === 1 ? "" : "s"} in <b>{fmt(is.n)}</b> incident{is.n === 1 ? "" : "s"}, <b>{fmt(is.pct, 0)}%</b> didn't recover <span className="muted">({RECOVERED_NOTE.replace(/\.$/, "")})</span>.
+      <b>{fmt(base.length)}</b> error{base.length === 1 ? "" : "s"} in <b>{fmt(is.n)}</b> incident{is.n === 1 ? "" : "s"}, <b>{fmt(is.pct, 0)}%</b> didn't recover <span className="muted">({RECOVERED_NOTE.replace(/\.$/, "")})</span>.{lost ? <> <b>{dur(lost)}</b> lost in retry loops.</> : null}
       {worst && worst.errs.length > 1 ? ` Largest: ${fmt(worst.errs.length)} attempts over ${dur(incSpan(worst))}.` : ""}</p> : null}
     <div className="fixbox"><div className="t">Potential fix</div><div>{c.fix}</div>
       {c.snippet ? <><pre className="snip" id="snip">{c.snippet}</pre><div className="row" style={{ marginTop: 8 }}><button type="button" id="copy" onClick={copy}>{copied === "ok" ? "Copied ✓" : "Copy instruction line"}</button>

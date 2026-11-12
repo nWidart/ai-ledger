@@ -8,6 +8,7 @@ import palette from "../../__fixtures__/palette";
 import { Palette } from "../../components/palette/Palette";
 import { openPalette } from "../../components/palette/store";
 import { ErrorsPage } from "./ErrorsPage";
+import { lostPayload } from "./lostData";
 import { VIEW_KEY } from "./view";
 
 const json = (body: unknown) => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) } as Response);
@@ -35,6 +36,24 @@ const page = async () => {
 };
 
 describe("ErrorsPage", () => {
+  it("states each type's time lost and ranks open fixes by it", async () => {
+    vi.stubGlobal("fetch", vi.fn(() => json(lostPayload)));
+    history.replaceState(null, "", "/errors#range=0");
+    await page();
+    const table = document.getElementById("catBody")!, lost = (c: string) => table.querySelector(`tr[data-c="${c}"] td.c-lost`)!;
+    expect(screen.getByRole("columnheader", { name: "Time lost" }).getAttribute("title")).toMatch(/^Time in retry loops: from each incident's first failure to its last/);
+    expect([...table.querySelectorAll("tr")].map(r => r.getAttribute("data-c")).slice(0, 2)).toEqual(["worktree", "git"]);
+    expect(lost("worktree").textContent).toBe("1 min");
+    expect(lost("git").textContent).toBe("20 min");
+    expect(lost("sleep_poll").textContent).toBe("–");
+    const picks = [...document.querySelectorAll("#detail .pick")];
+    expect(picks.slice(0, 3).map(p => [p.getAttribute("data-c"), p.querySelector(".phead .muted")!.textContent])).toEqual([
+      ["git", "3 errors · 20 min lost"], ["worktree", "4 errors · 1 min lost"], ["tests", "1 errors · 1 min lost"]]);
+    expect(picks[3]!.querySelector(".phead .muted")!.textContent).toBe("1 errors");
+    await userEvent.click(picks[0] as HTMLElement);
+    expect(document.querySelector("#detail .istat")!.textContent).toContain("20 min lost in retry loops");
+  });
+
   it("shows a fix marker saved by the old page, with its before and after rate", async () => {
     // Exactly what dashboard_template.html wrote: JSON.stringify({ [type id]: "YYYY-MM-DD" }).
     localStorage.setItem("claude-errors-fixes", JSON.stringify({ x: "2026-11-04" }));
