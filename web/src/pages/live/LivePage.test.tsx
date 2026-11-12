@@ -863,6 +863,18 @@ describe("LivePage", () => {
     expect(screen.getByText(/11 words/)).toBeTruthy(); // prompts and replies stay
   });
 
+  it("keeps a failed row that only reads under Hide read-only, with the Errors filter and without it", async () => {
+    const read = s1.events.find(e => e.k === "tool" && !e.lane) as LiveToolEvent;
+    const lost = { ...read, key: "lost#0", id: "lost", failed: true, error: "File does not exist." };
+    show("#session=s1", { session: () => ({ ...s1, errors: 2, events: [...s1.events, lost] }) });
+    await stream();
+    await waitFor(() => expect([read.quiet, drawn()]).toEqual([true, ["Read", "Agent", "Bash", "Bash", "Read"]]));
+    await userEvent.click(check("Hide read-only"));
+    expect([drawn(), toolRow("Read").className, hidden()]).toEqual([["Agent", "Bash", "Bash", "Read"], "tool failed", "4 rows hidden"]); // the Read that passed and the lane's three
+    await userEvent.click(within(bar()).getByRole("button", { name: "2 errors" }));
+    expect(drawn()).toEqual(["Bash", "Read"]);
+  });
+
   it("shows a lane's matching rows under its header, and says when the filters hide every row", async () => {
     // The session's only failed call is in its finished lane, one of six.
     const one = { ...laned(6, { done: true, failed: 1 }), errors: 1 };

@@ -275,7 +275,7 @@ The stream SHALL show the selected session's title as a heading above its projec
 - **THEN** the stream's heading is "release notes", with the project and branch below it
 
 ### Requirement: Filter the stream
-The stream SHALL offer filters, in a bar under its head, that change what it draws and nothing it holds. Selecting the Errors count, there or in the agent panel, SHALL filter the stream to failed tool rows, and selecting it again SHALL clear the filter. A Main thread only toggle SHALL hide every lane. A Hide read-only toggle SHALL hide the tool rows the app marks as read-only: `Read`, `Grep`, `Glob`, and shell calls whose every command only reads or searches.
+The stream SHALL offer filters, in a bar under its head, that change what it draws and nothing it holds. Selecting the Errors count, there or in the agent panel, SHALL filter the stream to failed tool rows, and selecting it again SHALL clear the filter. A Main thread only toggle SHALL hide every lane. A Hide read-only toggle SHALL hide the tool rows the app marks as read-only: `Read`, `Grep`, `Glob`, and shell calls whose every command only reads or searches. It SHALL NOT hide a failed row.
 
 #### Scenario: Filter to failed rows
 - **WHEN** the user selects the Errors count while the stream holds two failed rows among forty
@@ -292,6 +292,10 @@ The stream SHALL offer filters, in a bar under its head, that change what it dra
 #### Scenario: Hide read-only shell rows
 - **WHEN** the user turns on Hide read-only with a shell row that runs `rg TODO src` and one that runs `git commit`
 - **THEN** only the `git commit` row shows among them
+
+#### Scenario: Failed read-only row
+- **WHEN** the user turns on Hide read-only, with the Errors filter or without it, and a `Read` row failed
+- **THEN** the failed `Read` row shows
 
 #### Scenario: Errors count pressed
 - **WHEN** the user selects the Errors count in the agent panel

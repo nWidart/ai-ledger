@@ -93,16 +93,17 @@ export const isTool = (e: LiveEvent): e is LiveToolEvent => e.k === "tool";
 /** The label the agent gave a shell call, which is its row text in place of the command; null for any other call. */
 export const labelOf = (e: LiveToolEvent): string | null => (APPROVAL_TOOLS.has(e.tool) && e.description) || null;
 
-/** The stream's filters: failed calls only, no lane, no call that only reads. They change what the stream draws, not
- *  what the page holds. */
+/** The stream's filters: failed calls only, no lane, no call that only reads unless it failed. They change what the
+ *  stream draws, not what the page holds. */
 export interface StreamFilters { errors: boolean; main: boolean; quiet: boolean }
 export const NO_FILTERS: StreamFilters = { errors: false, main: false, quiet: false };
 /** Whether the stream draws event e as a row: a main-thread prompt, reply, call, compaction or interruption, or a
  *  lane's call. */
 export const isRow = (e: LiveEvent): boolean => (e.lane ? isTool(e) : e.k !== "turn_start" && e.k !== "turn_end");
-/** Whether the filters leave row e in. With errors on, only failed calls stay: no prompt, reply or mark. */
+/** Whether the filters leave row e in. With errors on, only failed calls stay: no prompt, reply or mark. A failed call
+ *  is never left out as one that only reads. */
 export const passes = (e: LiveEvent, f: StreamFilters): boolean =>
-  !(f.main && e.lane) && (isTool(e) ? (!f.errors || e.failed) && !(f.quiet && e.quiet) : !f.errors);
+  !(f.main && e.lane) && (isTool(e) ? e.failed || !f.errors && !(f.quiet && e.quiet) : !f.errors);
 
 /** The user's choices per lane, kept while the page is open: folded or not (none: a finished lane is folded), and
  *  every row of a running lane instead of its last few. */
