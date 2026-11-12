@@ -8,7 +8,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
-from datetime import date
+from datetime import date, timedelta
 from unittest import mock
 
 from ai_ledger import insights, metrics, store
@@ -486,6 +486,103 @@ class CoverageBreakdownTest(InsightsCase):
         self.assertEqual((len(runs), insights.RUNS), (20, 20))
         self.assertEqual(runs[0]["at"], "2026-10-30T00:00:00.000Z")
         self.assertEqual(runs[-1]["at"], "2026-10-11T00:00:00.000Z")
+
+
+class RunSizesTest(InsightsCase):
+    """coverage.run_sizes: the sizes of the newest 20 runs over the whole store."""
+
+    def sizes(self, **kw):
+        return self.payload(**kw)["coverage"]["run_sizes"]
+
+    def stamp(self, *stamps):
+        for sid, ts in zip((A + "1", A + "2", A + "3"), stamps):
+            self.con.execute("UPDATE session_facets SET file_mtime = ? WHERE session_id = ?", [ts, sid])
+
+    def test_one_run(self):
+        self.ingest()
+        self.stamp("2026-11-05 10:00:00", "2026-11-05 10:10:00", "2026-11-05 10:20:00")
+        self.assertEqual(self.sizes(), dict(runs=1, min=3, median=3, max=3))
+
+    def test_several_runs(self):
+        self.ingest()
+        self.con.execute("INSERT INTO session_facets (session_id, file_mtime) VALUES ('x1', TIMESTAMP '2026-11-01 10:00:00')")
+        self.stamp("2026-11-05 10:00:00", "2026-11-05 10:10:00", "2026-11-06 12:00:00")
+        self.assertEqual(self.sizes(), dict(runs=3, min=1, median=1, max=2))
+        self.con.execute("INSERT INTO session_facets (session_id, file_mtime) VALUES ('x2', TIMESTAMP '2026-11-06 12:05:00')")
+        self.assertEqual(self.sizes(), dict(runs=3, min=1, median=2, max=2))
+
+    def test_none_without_a_dated_facet(self):
+        self.assertIsNone(self.sizes())
+        self.ingest()
+        self.stamp(None, None, None)
+        self.assertIsNone(self.sizes())
+
+    def test_filters_do_not_change_it(self):
+        self.session(A + "1", "p1", "2026-11-03 09:00:00")
+        self.ingest()
+        self.stamp("2026-11-05 10:00:00", "2026-11-05 10:10:00", "2026-11-06 12:00:00")
+        want = dict(runs=2, min=1, median=1.5, max=2)
+        for kw in ({}, dict(project="p1"), dict(project="nope"), dict(range_days=1), dict(automated=True)):
+            self.assertEqual(self.sizes(**kw), want, kw)
+
+    def test_codex_source_has_none(self):
+        self.ingest()
+        self.assertIsNone(self.sizes(source="codex"))
+
+
+class TrendTest(InsightsCase):
+    """trend: the view's facets per week of session start, as [{week, n, achieved}], oldest first."""
+
+    def setUp(self):
+        super().setUp()
+        for sub in ("facets", "session-meta"):  # only the facets a test adds
+            shutil.rmtree(os.path.join(self.usage, sub), ignore_errors=True)
+
+    def add(self, i, start, outcome="fully_achieved", project="p"):
+        sid = f"0000cccc-0000-4000-8000-{i:012d}"
+        if start:
+            self.session(sid, project, start)
+        self.put("facets", sid + ".json", facet(sid, outcome=outcome))
+
+    def trend(self, **kw):
+        return self.payload(**kw)["trend"]
+
+    def test_weeks_start_on_local_monday(self):
+        self.con.execute("SET GLOBAL TimeZone = 'Pacific/Auckland'")  # UTC+13 in November: local Monday 2 Nov starts at 1 Nov 11:00 UTC
+        self.add(1, "2026-11-01 10:59:00")  # Sunday 23:59 local
+        self.add(2, "2026-11-01 11:01:00", "mostly_achieved")  # Monday 00:01 local
+        self.add(3, "2026-11-08 10:59:00", "not_achieved")  # Sunday 23:59 local
+        self.add(4, "2026-11-08 11:00:00", "partially_achieved")  # Monday 00:00 local
+        self.ingest()
+        self.assertEqual(self.trend(), [dict(week="2026-10-26", n=1, achieved=1), dict(week="2026-11-02", n=2, achieved=1),
+                                        dict(week="2026-11-09", n=1, achieved=0)])
+
+    def test_follows_the_view(self):
+        self.add(1, "2026-10-20 12:00:00", project="p1")
+        self.add(2, "2026-11-03 12:00:00", project="p2")
+        self.ingest()
+        self.assertEqual([w["week"] for w in self.trend(project="p1")], ["2026-10-19"])
+        self.assertEqual(self.trend(project="nope"), [])
+        self.assertEqual([w["week"] for w in self.trend(range_days=7)], ["2026-11-02"])
+
+    def test_keeps_the_newest_26_weeks(self):
+        for i in range(30):
+            self.add(i, (date(2026, 1, 5) + timedelta(weeks=i)).isoformat() + " 12:00:00")
+        self.ingest()
+        t = self.trend()
+        self.assertEqual((len(t), t[0]["week"], t[-1]["week"]), (26, "2026-02-02", "2026-07-27"))
+
+    def test_sessions_without_a_start_are_left_out(self):
+        self.add(1, None)
+        self.add(2, "2026-11-03 12:00:00")
+        self.ingest()
+        self.assertEqual(self.trend(), [dict(week="2026-11-02", n=1, achieved=1)])
+
+    def test_empty_for_codex_and_without_facets(self):
+        self.assertEqual(self.trend(), [])
+        self.add(1, "2026-11-03 12:00:00")
+        self.ingest()
+        self.assertEqual(self.trend(source="codex"), [])
 
 
 if __name__ == "__main__":
