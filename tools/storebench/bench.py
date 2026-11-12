@@ -3,7 +3,8 @@ as the files grow, and proof that the store still holds and serves the same thin
 
     uv run python tools/storebench/bench.py [--data DIR] [--make-ref]
 
-The last line of output is the score: the bytes of the store file (and its write-ahead log) after the last ingest.
+The last line of output is the score: the bytes of the store file's used blocks after the last ingest. Its free blocks
+are slack that later writes reuse; they must stay under FREE_LIMIT.
 The run fails (exit 1) when anything differs from the reference a run with --make-ref wrote from the code of `main`:
 
 - raw: every stored line's key, columns and exact text (store.raw_rows(cur) when the store defines it, else raw_lines.json)
@@ -11,7 +12,7 @@ The run fails (exit 1) when anything differs from the reference a run with --mak
 - payloads: what the pages read (sessions, prompts, errors, usage, the Live stream with its text)
 - an older store: the reference run's store, taken before the last round, opened by this code, then given the last
   round. It must end the same. When the store defines compact(path), the compacted old store must also be no larger
-  than 1.15 times the fresh one.
+  than 1.15 times the fresh one's file.
 - time: ingest, payloads and rebuild each within 3 times the reference plus 3 seconds
 
 The corpus is real transcript text. Nothing here prints it: only digests, sizes and seconds.
@@ -73,6 +74,22 @@ def grow(data, roots, files, plan, r):
 
 def size_of(path):
     return sum(os.path.getsize(p) for p in (path, path + ".wal") if os.path.exists(p))
+
+
+FREE_LIMIT = 48 << 20  # free bytes a store may hold: the slack of rewriting the last row group of its tables, not growth
+
+
+def blocks_of(path):
+    """(used bytes, free bytes) of the store file. A checkpoint rewrites the last row group of each table that got rows
+    and frees the old blocks, which later writes reuse: the file's free part moves by tens of MB with where a row group
+    happens to end. The score counts the used part; the free part must stay under FREE_LIMIT."""
+    import duckdb
+    con = duckdb.connect(path, read_only=True)
+    try:
+        r = con.execute("PRAGMA database_size").fetchone()
+        return r[2] * r[4], r[2] * r[5]
+    finally:
+        con.close()
 
 
 def digest(rows):
@@ -205,6 +222,7 @@ def run(data, make_ref):
     con.close()
     seconds["ingest"] = time.time() - t
     size = size_of(db)
+    used, free = blocks_of(db)
 
     con = store.open_store(db)
     cur = con.cursor()
@@ -226,7 +244,7 @@ def run(data, make_ref):
         with open(ref_path, "w") as fh:
             json.dump(dict(got=got, seconds=seconds, size=size), fh, indent=1, sort_keys=True)
         print(f"reference written: {got['lines']} lines, {size / 1e6:.1f} MB, " + ", ".join(f"{k} {v:.1f}s" for k, v in seconds.items()))
-        print(size)
+        print(used)
         return 0
 
     with open(ref_path) as fh:
@@ -277,11 +295,14 @@ def run(data, make_ref):
         if old_size > 1.15 * size:
             failures.append(f"compacted old store is {old_size / 1e6:.1f} MB, over 1.15 times the fresh store's {size / 1e6:.1f} MB")
 
+    if free > FREE_LIMIT:
+        failures.append(f"the fresh store holds {free / 1e6:.1f} MB of free blocks, over {FREE_LIMIT / 1e6:.0f} MB")
     for k in ("ingest", "payloads", "rebuild"):
         if seconds[k] > 3 * ref["seconds"][k] + 3:
             failures.append(f"{k} took {seconds[k]:.1f}s, over 3 times the reference's {ref['seconds'][k]:.1f}s plus 3s")
 
-    print(f"lines {got['lines']}  fresh store {size / 1e6:.2f} MB (reference {ref['size'] / 1e6:.2f} MB)  old store after open"
+    print(f"lines {got['lines']}  fresh store {size / 1e6:.2f} MB file, {used / 1e6:.2f} MB used, {free / 1e6:.2f} MB free "
+          f"(reference file {ref['size'] / 1e6:.2f} MB)  old store after open"
           f"{' and compact' if hasattr(store, 'compact') else ''} {old_size / 1e6:.2f} MB")
     print("seconds: " + ", ".join(f"{k} {v:.1f}" + (f" (reference {ref['seconds'][k]:.1f})" if k in ref["seconds"] else "") for k, v in seconds.items()))
     for f in failures:
@@ -289,7 +310,7 @@ def run(data, make_ref):
     shutil.rmtree(work, ignore_errors=True)
     if failures:
         return 1
-    print(size)
+    print(used)
     return 0
 
 
