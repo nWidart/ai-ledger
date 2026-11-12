@@ -1,6 +1,6 @@
 import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { InsightsPayload } from "../../api";
 import insights from "../../__fixtures__/insights";
 import empty from "../../__fixtures__/insights-empty";
@@ -368,6 +368,242 @@ describe("InsightsPage", () => {
     expect(within(logOf()).getByText("0 of 2 sessions")).toBeTruthy();
     expect((within(logOf()).getByLabelText("Outcome") as HTMLSelectElement).value).toBe("gone");
     expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  describe("drill-down", () => {
+    const row = (sec: Element, name: RegExp) => within(sec as HTMLElement).getByRole("button", { name });
+    const goals = () => drawer("d-goals");
+    const hashOf = () => location.hash;
+    const orphan = "Synthetic: tried a layout idea and dropped it.", mid = "Synthetic: chased a flaky date test. SENTINEL-facet-text";
+
+    it("filters from a friction row, moves to the list and marks the row", async () => {
+      const scroll = vi.fn();
+      Element.prototype.scrollIntoView = scroll;
+      try {
+        show(fixture);
+        await lede();
+        const btn = row(section(/^Friction/), /^buggy code/);
+        expect(btn.getAttribute("aria-pressed")).toBe("false");
+        await userEvent.click(btn);
+        expect(hashOf()).toBe("#range=0&fr=buggy_code");
+        expect(order()).toEqual([orphan, mid]);
+        expect(within(logOf()).getByText("2 of 3 sessions")).toBeTruthy();
+        expect(btn.getAttribute("aria-pressed")).toBe("true");
+        expect(btn.closest("li")!.classList.contains("on")).toBe(true);
+        expect(scroll).toHaveBeenCalled();
+        expect(scroll.mock.contexts.at(-1)).toBe(document.getElementById("log"));
+      } finally { delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView; }
+    });
+
+    it("clears the filter on a second click on the active row, and Back undoes a click", async () => {
+      show(fixture);
+      await lede();
+      const before = history.length, btn = row(section(/^Friction/), /^buggy code/);
+      await userEvent.click(btn);
+      expect(history.length).toBe(before + 1);
+      await userEvent.click(btn);
+      expect(hashOf()).toBe("#range=0");
+      expect(btn.getAttribute("aria-pressed")).toBe("false");
+      expect(cards().length).toBe(3);
+      await userEvent.click(btn);
+      act(() => { history.back(); });
+      await vi.waitFor(() => expect(cards().length).toBe(3));
+    });
+
+    it("filters from an outcome, a helpfulness and a goal row, by raw name", async () => {
+      show(fixture);
+      await lede();
+      await userEvent.click(row(section(/^Outcomes model/), /^Partially achieved/));
+      expect(hashOf()).toBe("#range=0&outcome=partially_achieved");
+      expect(order()).toEqual([mid]);
+      expect((within(logOf()).getByLabelText("Outcome") as HTMLSelectElement).value).toBe("partially_achieved");
+      await userEvent.click(row(section(/^Outcomes model/), /^abandoned/));
+      expect(hashOf()).toBe("#range=0&outcome=abandoned"); // one value per kind
+      await userEvent.click(row(section(/Satisfaction/), /^essential/));
+      expect(hashOf()).toBe("#range=0&outcome=abandoned&help=essential");
+      expect(cards().length).toBe(0);
+      await userEvent.click(row(section(/Satisfaction/), /^essential/));
+      await userEvent.click(row(section(/^Outcomes model/), /^abandoned/));
+      await userEvent.click(row(goals(), /^fix bug/));
+      expect(hashOf()).toBe("#range=0&goal=fix_bug");
+      expect(order()).toEqual([mid]);
+    });
+
+    it("makes no button of a row with no sessions or of the satisfaction signals", async () => {
+      show(fixture);
+      await lede();
+      const out = section(/^Outcomes model/);
+      expect(within(out).queryByRole("button", { name: /^Mostly achieved/ })).toBeNull();
+      expect(within(out).getByText("Mostly achieved")).toBeTruthy();
+      expect(within(section(/Satisfaction/)).queryByRole("button", { name: /^very helpful/ })).toBeNull();
+      expect(within(section(/Satisfaction/)).queryByRole("button", { name: /^likely satisfied/ })).toBeNull();
+      expect(within(drawer("d-types")).queryByRole("button")).toBeNull();
+    });
+
+    const heading = () => document.getElementById("logTitle")!;
+
+    it("moves focus to the list heading once the filtered list has rendered, not to a card that may unmount", async () => {
+      show(fixture);
+      await lede();
+      const btn = row(goals(), /^implement feature/);
+      btn.focus();
+      await userEvent.click(btn);
+      expect(order()).toEqual(["Synthetic: added a theme toggle to a demo app."]);
+      expect(heading().getAttribute("tabindex")).toBe("-1");
+      expect(document.activeElement).toBe(heading());
+    });
+
+    it("keeps focus where it is when a filter changes by other means", async () => {
+      show(fixture, "#range=0&fr=buggy_code");
+      await lede();
+      expect(document.activeElement).toBe(document.body);
+      act(() => { history.replaceState(null, "", "/insights#range=0&fr=wrong_approach"); dispatchEvent(new HashChangeEvent("hashchange")); });
+      expect(document.activeElement).toBe(document.body);
+      const sel = within(logOf()).getByLabelText("Outcome");
+      await userEvent.selectOptions(sel, "partially_achieved");
+      expect(document.activeElement).toBe(sel);
+      const box = within(logOf()).getByLabelText("Only sessions with friction");
+      await userEvent.click(box);
+      expect(document.activeElement).toBe(box);
+      // Clearing from a ledger row leaves focus on that row, which stays.
+      const btn = row(section(/^Friction/), /^wrong approach/);
+      await userEvent.click(btn);
+      expect(document.activeElement).toBe(btn);
+    });
+
+    it("sends focus to the list heading when a filter chip or Clear filters removes the focused button", async () => {
+      show(fixture, "#range=0&fr=buggy_code&goal=fix_bug");
+      await lede();
+      const remove = within(logOf()).getByRole("button", { name: "Remove filter Goal: fix bug" });
+      remove.focus();
+      await userEvent.click(remove);
+      expect(within(logOf()).queryByRole("button", { name: "Remove filter Goal: fix bug" })).toBeNull();
+      expect(document.activeElement).toBe(heading());
+      await userEvent.click(row(goals(), /^fix bug/));
+      (document.activeElement as HTMLElement).blur();
+      const clear = within(logOf()).getByRole("button", { name: "Clear filters" });
+      clear.focus();
+      await userEvent.click(clear);
+      expect(within(logOf()).queryByRole("button", { name: "Clear filters" })).toBeNull();
+      expect(document.activeElement).toBe(heading());
+    });
+
+    it("never makes a button of a row with no sessions, even when it is the active filter, but still marks it", async () => {
+      show(fixture, "#range=0&outcome=mostly_achieved");
+      await lede();
+      const out = section(/^Outcomes model/);
+      expect(within(out).queryByRole("button", { name: /^Mostly achieved/ })).toBeNull();
+      expect(within(out).getByText("Mostly achieved").closest("li")!.classList.contains("on")).toBe(true);
+      expect(within(out).getByText("Fully achieved").closest("li")!.classList.contains("on")).toBe(false);
+      expect(within(logOf()).getByRole("button", { name: "Remove filter Outcome: Mostly achieved" })).toBeTruthy();
+    });
+
+    it("filters from the chips and the outcome badge of a card, and clears from them", async () => {
+      show(fixture);
+      await lede();
+      const [, second] = cards(), chip = (c: HTMLElement, name: string) => within(c).getByRole("button", { name });
+      await userEvent.click(chip(second!, "fix bug"));
+      expect(hashOf()).toBe("#range=0&goal=fix_bug");
+      expect(order()).toEqual([mid]);
+      expect(chip(cards()[0]!, "fix bug").getAttribute("aria-pressed")).toBe("true");
+      await userEvent.click(chip(cards()[0]!, "wrong approach"));
+      expect(hashOf()).toBe("#range=0&goal=fix_bug&fr=wrong_approach");
+      await userEvent.click(chip(cards()[0]!, "Partially achieved"));
+      expect(hashOf()).toBe("#range=0&goal=fix_bug&fr=wrong_approach&outcome=partially_achieved");
+      await userEvent.click(chip(cards()[0]!, "fix bug"));
+      expect(hashOf()).toBe("#range=0&fr=wrong_approach&outcome=partially_achieved");
+      expect(cards().length).toBe(1);
+      expect(chip(cards()[0]!, "fix bug").getAttribute("aria-pressed")).toBe("false");
+    });
+
+    it("reads filters from the URL, ANDs them, and writes the same names back", async () => {
+      show(fixture, "#range=0&fr=buggy_code&goal=fix_bug&help=moderately_helpful&outcome=partially_achieved");
+      await lede();
+      expect(order()).toEqual([mid]);
+      expect(within(logOf()).getByText("1 of 3 sessions")).toBeTruthy();
+      expect(row(section(/^Friction/), /^buggy code/).getAttribute("aria-pressed")).toBe("true");
+      expect(row(section(/^Friction/), /^wrong approach/).getAttribute("aria-pressed")).toBe("false");
+      expect(row(goals(), /^fix bug/).getAttribute("aria-pressed")).toBe("true");
+      expect((within(logOf()).getByLabelText("Outcome") as HTMLSelectElement).value).toBe("partially_achieved");
+      await userEvent.click(row(goals(), /^write tests/));
+      expect(hashOf()).toBe("#range=0&fr=buggy_code&goal=write_tests&help=moderately_helpful&outcome=partially_achieved");
+    });
+
+    it("combines a drill-down filter with the friction box, and removes it from its chip", async () => {
+      show(fixture, "#range=0&friction=1&goal=write_tests");
+      await lede();
+      expect(order()).toEqual([mid]);
+      await userEvent.click(within(logOf()).getByRole("button", { name: "Remove filter Goal: write tests" }));
+      expect(cards().length).toBe(2);
+    });
+
+    it("lists the active filters as removable chips, and clears them all from two on", async () => {
+      show(fixture, "#range=0&fr=buggy_code");
+      await lede();
+      const bar = () => within(logOf()).getByRole("group", { name: "Active filters" });
+      expect(within(bar()).getByRole("button", { name: "Remove filter Friction: buggy code" }).textContent).toContain("Friction: buggy code");
+      expect(within(logOf()).queryByRole("button", { name: "Clear filters" })).toBeNull();
+      await userEvent.click(row(goals(), /^fix bug/));
+      await userEvent.click(within(logOf()).getByLabelText("Only sessions with friction"));
+      expect(within(bar()).getAllByRole("button", { name: /^Remove filter/ }).map(b => b.getAttribute("aria-label"))).toEqual([
+        "Remove filter Goal: fix bug", "Remove filter Friction: buggy code", "Remove filter Only sessions with friction"]);
+      await userEvent.click(within(bar()).getByRole("button", { name: "Remove filter Goal: fix bug" }));
+      expect(hashOf()).toBe("#range=0&fr=buggy_code&friction=1");
+      await userEvent.click(within(logOf()).getByRole("button", { name: "Clear filters" }));
+      expect(hashOf()).toBe("#range=0");
+      expect(cards().length).toBe(3);
+      expect(within(logOf()).queryByRole("group", { name: "Active filters" })).toBeNull();
+      expect(within(logOf()).queryByRole("button", { name: "Clear filters" })).toBeNull();
+    });
+
+    it("shows the empty state, not an error, for a value no session has, and the chip to remove it", async () => {
+      show(fixture, "#range=0&fr=gone&help=nope");
+      await lede();
+      expect(cards().length).toBe(0);
+      expect(within(logOf()).getByText("No session in this view matches the filters.")).toBeTruthy();
+      expect(within(logOf()).getByText("0 of 3 sessions")).toBeTruthy();
+      expect(screen.queryByRole("alert")).toBeNull();
+      await userEvent.click(within(logOf()).getByRole("button", { name: "Remove filter Friction: gone" }));
+      expect(hashOf()).toBe("#range=0&help=nope");
+    });
+
+    it("says a filter covers only the newest listed sessions when the payload is cut", async () => {
+      show({ ...fixture, truncated: true }, "#range=0");
+      await lede();
+      expect(within(logOf()).queryByText(/Filters cover only/)).toBeNull();
+      await userEvent.click(row(section(/^Friction/), /^buggy code/));
+      expect(within(logOf()).getByText(/Filters cover only the newest 3 analysed sessions of the view, so a ledger count can exceed the sessions listed/)).toBeTruthy();
+    });
+
+    it("says nothing about a cut when nothing is cut", async () => {
+      show(fixture, "#range=0&fr=buggy_code");
+      await lede();
+      expect(within(logOf()).queryByText(/Filters cover only/)).toBeNull();
+    });
+
+    it("leaves project, range, source and auto in the hash when a filter changes, and the filters when they change", async () => {
+      show(fixture, "#project=demo-app&range=7&source=claude&auto=1");
+      await lede();
+      await userEvent.click(row(section(/^Friction/), /^buggy code/));
+      expect(hashOf()).toBe("#project=demo-app&range=7&source=claude&auto=1&fr=buggy_code");
+      await userEvent.click(screen.getByRole("button", { name: "30d" }));
+      expect(hashOf()).toBe("#project=demo-app&range=30&source=claude&auto=1&fr=buggy_code");
+      await userEvent.click(row(section(/^Friction/), /^buggy code/));
+      expect(hashOf()).toBe("#project=demo-app&range=30&source=claude&auto=1");
+    });
+
+    it("keeps the sort for the page visit when the list unmounts and comes back", async () => {
+      show(fixture);
+      await lede();
+      await pick("Sort", "oldest");
+      expect(order()[0]).toBe("Synthetic: added a theme toggle to a demo app.");
+      await userEvent.click(screen.getByRole("button", { name: "Codex" }));
+      await vi.waitFor(() => expect(screen.queryByRole("region", { name: /Analysed sessions/ })).toBeNull());
+      await userEvent.click(screen.getByRole("button", { name: "Claude Code" }));
+      await vi.waitFor(() => expect(screen.queryByRole("region", { name: /Analysed sessions/ })).toBeTruthy());
+      expect((within(logOf()).getByLabelText("Sort") as HTMLSelectElement).value).toBe("oldest");
+      expect(order()[0]).toBe("Synthetic: added a theme toggle to a demo app.");
+    });
   });
 
   it("opens the session sheet on Activity from a session link", async () => {
