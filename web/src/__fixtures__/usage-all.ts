@@ -720,6 +720,7 @@ export default {
   "path": "/Users/example/Library/Application Support/ai-ledger/prices.json",
   "error": null
  },
+ "plans": [],
  "automated_file": {
   "path": "/Users/example/Library/Application Support/ai-ledger/automated.json",
   "error": null,

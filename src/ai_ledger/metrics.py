@@ -1,5 +1,6 @@
 """Queries behind the dashboards: the errors payload and the usage metrics. SQL over the derived tables."""
 import json
+import math
 import os
 import re
 from datetime import date, timedelta
@@ -32,27 +33,65 @@ def load_prices(path=os.path.join(HERE, "prices.json"), user=None):
         return json.load(fh)["models"] | user_prices(user)[0]
 
 
+def load_plans(path=os.path.join(HERE, "prices.json"), user=None):
+    """Subscription plans, {provider: {plan: {label, monthly}}}: the packaged file's, with the user prices file's over them."""
+    with open(path) as fh:
+        packaged = json.load(fh)["plans"]
+    mine = read_user_prices(user)[1]
+    return {p: packaged.get(p, {}) | mine.get(p, {}) for p in packaged.keys() | mine.keys()}
+
+
 def user_prices(path=None):
     """(models, error) from the user prices file: ({}, None) when there is none; ({}, a message) when it cannot be read or
     an entry lacks a price, so a bad edit is reported and ignored instead of breaking every page."""
+    models, _, error = read_user_prices(path)
+    return models, error
+
+
+def read_user_prices(path=None):
+    """(models, plans, error) from the user prices file; a file with any bad entry gives ({}, {}, a message), so it is ignored whole."""
     try:
         with open(path or USER_PRICES) as fh:
             data = json.load(fh)
     except FileNotFoundError:
-        return {}, None
+        return {}, {}, None
     except (OSError, ValueError) as e:  # JSONDecodeError is a ValueError
-        return {}, str(e)
-    models = data.get("models") if isinstance(data, dict) else None
-    if not isinstance(models, dict):
-        return {}, 'no "models" object'
-    number = lambda v: isinstance(v, (int, float)) and not isinstance(v, bool)
+        return {}, {}, str(e)
+    if not isinstance(data, dict) or not (isinstance(data.get("models"), dict) or isinstance(data.get("plans"), dict)):
+        return {}, {}, 'no "models" object'
+    models, plans = data.get("models", {}), data.get("plans", {})
+    if not isinstance(models, dict) or not isinstance(plans, dict):
+        return {}, {}, '"models" and "plans" must be objects'
+    number = lambda v: isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)  # 1e309 parses to inf, which is not JSON
     for model, p in models.items():
         tiers = [p] + ([p.get("long")] if isinstance(p, dict) and p.get("long_above") is not None else [])
         bad = [k for t in tiers for k in PRICE_KINDS if not isinstance(t, dict) or not number(t.get(k))]
         bad += [k for k in ("context", "long_above") if isinstance(p, dict) and p.get(k) is not None and not number(p[k])]
         if bad:
-            return {}, f"{model}: {', '.join(dict.fromkeys(bad))} must be a number"
-    return {m: dict(p, context=p.get("context")) for m, p in models.items()}, None
+            return {}, {}, f"{model}: {', '.join(dict.fromkeys(bad))} must be a number"
+    for provider, by_plan in plans.items():
+        if not isinstance(by_plan, dict):
+            return {}, {}, f"plans.{provider} must be an object"
+        for plan, p in by_plan.items():
+            if not isinstance(p, dict) or not number(p.get("monthly")) or not isinstance(p.get("label"), str):
+                return {}, {}, f"plans.{provider}.{plan}: needs a label (text) and a monthly price (number)"
+    return {m: dict(p, context=p.get("context")) for m, p in models.items()}, plans, None
+
+
+def plan_for(plans, provider, plan):
+    """The plan entry for a snapshot's plan string ("max/default_claude_max_20x"): an exact match, else its part before the "/"."""
+    by_plan = plans.get(provider, {})
+    return by_plan.get(plan) or by_plan.get(plan.split("/")[0])
+
+
+def view_plans(cur, source=""):
+    """The plans that apply to a view: each provider's newest plan on a limit snapshot (only the source's when one is chosen)
+    that the plan prices know. [{provider, label, monthly}]; none when no snapshot names a known plan."""
+    seen = rows(cur, "SELECT provider, arg_max(plan, observed_at) AS plan FROM limit_snapshots WHERE coalesce(plan, '') <> '' "
+                     "AND (? = '' OR provider = ?) GROUP BY provider ORDER BY provider", [source, source])
+    plans = load_plans()
+    found = [(r["provider"], plan_for(plans, r["provider"], r["plan"])) for r in seen]
+    return [dict(provider=p, label=e["label"], monthly=e["monthly"]) for p, e in found if e]
 
 
 def prices_file():
@@ -362,6 +401,7 @@ def usage(cur, project="", range_days=0, session="", prices=None, today=None, au
                previous=previous_period(cur, project, range_days, prices, today, automated, source, af["projects"]))
     out["changes"] = project_changes(by_project, out["previous"])
     out["prices_file"] = prices_file()
+    out["plans"] = view_plans(cur, source)
     out["automated_file"] = af
     if session:
         out["session"] = session_detail(cur, session, requests_cte(pcte, "r.session_id = ?"), pparams + [session], prices)

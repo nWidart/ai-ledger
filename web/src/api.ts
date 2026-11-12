@@ -91,6 +91,8 @@ export interface UsagePayload {
   previous: Previous | null; changes: Change[] | null;
   /** The user prices file next to the store (path), and why it was ignored (error; null when read or absent). */
   prices_file: { path: string; error: string | null };
+  /** The plan each provider in the view is on (from its newest limit snapshot), priced monthly in USD; none when unknown. */
+  plans: { provider: Source; label: string; monthly: number }[];
   /** The user automated projects file next to the store, why it was ignored, and the projects it adds. */
   automated_file: { path: string; error: string | null; projects: string[] };
   /** Present when the request named a session: null when it does not exist. */

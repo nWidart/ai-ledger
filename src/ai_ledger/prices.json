@@ -1,6 +1,7 @@
 {
   "source": "https://platform.claude.com/docs/en/about-claude/pricing and https://platform.claude.com/docs/en/about-claude/models/overview, read 2026-11-11; OpenAI: https://developers.openai.com/api/docs/pricing (Standard tier), read 2026-11-06",
   "openai": "cache_5m is the 30-minute cache write rate; cache_1h is 0 because Codex reports a single cache-write count. long applies above 272K input tokens.",
+  "plans_source": "Monthly consumer plan prices in USD, billed monthly: https://claude.com/pricing and https://chatgpt.com/pricing (Codex is included in each ChatGPT plan listed), checked 2026-11-12. Keys are the plan string the limit snapshots record: Claude's is subscriptionType or subscriptionType/rateLimitTier, Codex's is its plan_type.",
   "unit": "USD per million tokens; context in tokens (null when the docs do not state it)",
   "models": {
     "claude-fable-5-2": {"input": 8, "output": 40, "cache_read": 0.2, "cache_5m": 10, "cache_1h": 16, "context": 1000000},
@@ -17,5 +18,17 @@
     "gpt-6.1-sol": {"input": 2, "output": 10, "cache_read": 0.1, "cache_5m": 2.5, "cache_1h": 0, "context": null,
       "long_above": 272000,
       "long": {"input": 4, "output": 15, "cache_read": 0.2, "cache_5m": 5, "cache_1h": 0}}
+  },
+  "plans": {
+    "claude": {
+      "pro": {"label": "Claude Pro", "monthly": 20},
+      "max/default_claude_max_5x": {"label": "Claude Max 5x", "monthly": 100},
+      "max/default_claude_max_20x": {"label": "Claude Max 20x", "monthly": 200}
+    },
+    "codex": {
+      "plus": {"label": "ChatGPT Plus", "monthly": 20},
+      "prolite": {"label": "ChatGPT Pro 5x", "monthly": 100},
+      "pro": {"label": "ChatGPT Pro 20x", "monthly": 200}
+    }
   }
 }

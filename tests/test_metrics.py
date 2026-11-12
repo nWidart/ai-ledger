@@ -1186,5 +1186,65 @@ class UserPricesTest(unittest.TestCase):
             self.assertIn(error, metrics.prices_file()["error"])
 
 
+class PlansTest(unittest.TestCase):
+    """The plans a view shows come from the newest limit snapshot with a plan per provider, priced by the plans table."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.path = os.path.join(self.tmp, "prices.json")
+        patch = mock.patch.object(metrics, "USER_PRICES", self.path)
+        patch.start()
+        self.addCleanup(patch.stop)
+        self.addCleanup(shutil.rmtree, self.tmp)
+        self.cur = store.open_store(os.path.join(self.tmp, "d", "x.duckdb")).cursor()
+
+    def snap(self, provider, plan, observed, limit_id="weekly"):
+        store.write_snapshots(self.cur, [store.snapshot(provider, limit_id, "", 10080, datetime(2026, 11, 9), observed, 5, plan, False)])
+
+    def plans(self, source=""):
+        return metrics.usage(self.cur, prices=PRICES, today=TODAY, source=source)["plans"]
+
+    def test_newest_plan_wins_per_provider(self):
+        self.snap("claude", "pro", datetime(2026, 10, 1))
+        self.snap("claude", "max/default_claude_max_20x", datetime(2026, 11, 1))
+        self.snap("claude", None, datetime(2026, 11, 2), "other")  # a snapshot without a plan does not count
+        self.snap("codex", "plus", datetime(2026, 10, 20))
+        self.assertEqual(self.plans(), [dict(provider="claude", label="Claude Max 20x", monthly=200),
+                                        dict(provider="codex", label="ChatGPT Plus", monthly=20)])
+
+    def test_source_filter_keeps_that_providers_plan(self):
+        self.snap("claude", "pro", datetime(2026, 11, 1))
+        self.snap("codex", "prolite", datetime(2026, 11, 1))
+        self.assertEqual(self.plans("codex"), [dict(provider="codex", label="ChatGPT Pro 5x", monthly=100)])
+        self.assertEqual(self.plans("claude"), [dict(provider="claude", label="Claude Pro", monthly=20)])
+
+    def test_unknown_plan_or_no_snapshot_gives_nothing(self):
+        self.assertEqual(self.plans(), [])
+        self.snap("claude", "enterprise/custom", datetime(2026, 11, 1))
+        self.snap("codex", "free", datetime(2026, 11, 1))
+        self.assertEqual(self.plans(), [])
+
+    def test_user_file_adds_and_overrides_plans(self):
+        self.snap("claude", "pro", datetime(2026, 11, 1))
+        self.snap("codex", "team", datetime(2026, 11, 1))
+        with open(self.path, "w") as fh:
+            json.dump({"plans": {"claude": {"pro": {"label": "Claude Pro (annual)", "monthly": 17}},
+                                 "codex": {"team": {"label": "ChatGPT Team", "monthly": 30}}}}, fh)
+        self.assertEqual(self.plans(), [dict(provider="claude", label="Claude Pro (annual)", monthly=17),
+                                        dict(provider="codex", label="ChatGPT Team", monthly=30)])
+        self.assertIsNone(metrics.prices_file()["error"])
+
+    def test_bad_user_file_is_reported_and_ignored(self):
+        self.snap("claude", "pro", datetime(2026, 11, 1))
+        for text, error in (('{"plans": {"claude": {"pro": {"label": "x"}}}}', "plans.claude.pro: needs a label"),
+                            ('{"plans": {"claude": []}}', "plans.claude must be an object"),
+                            ('{"plans": {"claude": {"pro": {"label": "x", "monthly": "5"}}}}', "plans.claude.pro"),
+                            ('{"plans": {"claude": {"pro": {"label": "x", "monthly": 1e309}}}}', "plans.claude.pro")):
+            with open(self.path, "w") as fh:
+                fh.write(text)
+            self.assertEqual(self.plans(), [dict(provider="claude", label="Claude Pro", monthly=20)])
+            self.assertIn(error, metrics.prices_file()["error"])
+
+
 if __name__ == "__main__":
     unittest.main()
