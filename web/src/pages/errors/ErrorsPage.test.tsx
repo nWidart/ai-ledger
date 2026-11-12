@@ -1,17 +1,23 @@
+import { readFileSync } from "node:fs";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import fixture from "../../__fixtures__/errors";
 import tool from "../../__fixtures__/tool";
-import type { ErrorsPayload } from "../../api";
+import type { ErrorRow, ErrorsPayload, Incident } from "../../api";
 import palette from "../../__fixtures__/palette";
 import { Palette } from "../../components/palette/Palette";
 import { openPalette } from "../../components/palette/store";
 import { clearApiCache } from "../../useApi";
+import { tableFocus } from "./context";
 import { ErrorsPage } from "./ErrorsPage";
+import { typeRows } from "./model";
 import { when } from "../../format";
 import { lostPayload } from "./lostData";
 import { VIEW_KEY } from "./view";
+
+// typeRows runs through its own implementation; the mock only counts the calls.
+vi.mock("./model", async orig => { const a = await orig<typeof import("./model")>(); return { ...a, typeRows: vi.fn(a.typeRows) }; });
 
 const json = (body: unknown) => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) } as Response);
 /** The fixture with its errors replaced; error_days is rebuilt from them, as the server builds it. */
@@ -607,6 +613,22 @@ describe("ErrorsPage", () => {
       expect(location.hash).toContain("noise=0");
     });
 
+    // The table memoizes its rows per view: a mute swaps the model (and the filtered errors), and the rows must follow.
+    it("updates the table's rows when a mute under the toggle changes the model", async () => {
+      const api = serve();
+      api.payload = mixed;
+      history.replaceState(null, "", "/errors#range=7&cat=git&noise=0");
+      await page();
+      const cell = (c: string, cls: string) => rowOf(c)!.querySelector(`.${cls}`)!.textContent;
+      expect([cell("git", "c-share"), cell("x", "c-share"), cell("git", "c-rate"), cell("x", "c-rate")]).toEqual(["33%", "67%", "20.00%", "40.00%"]);
+      await userEvent.click(muteBtn());
+      await waitFor(() => expect(rowOf("git")).toBeNull());
+      expect([cell("x", "c-share"), cell("x", "c-rate")]).toEqual(["100%", "40.00%"]);
+      await userEvent.click(toggle()); // noise off: the muted type is listed again, with its chip
+      expect(rowOf("git")!.querySelector(".chip.muted-type")?.textContent).toBe("Muted");
+      expect([cell("git", "c-share"), cell("x", "c-share")]).toEqual(["33%", "67%"]);
+    });
+
     it("mutes at once, posts it, and unmutes the same way; a fix day stays", async () => {
       const api = serve({ git: "2026-11-04" }), hold = api.hold();
       api.payload = mixed;
@@ -1042,7 +1064,7 @@ describe("ErrorsPage", () => {
     await userEvent.click(screen.getByRole("button", { name: "Every error, newest first" }));
     expect(localStorage.getItem("claude-errors-mode")).toBe('"flat"');
     expect(document.getElementById("exCount")?.textContent).toBe("6 in range, newest first");
-    await userEvent.type(screen.getByRole("searchbox"), "bash");
+    await userEvent.type(document.getElementById("q")!, "bash");
     expect(document.getElementById("exCount")?.textContent).toBe("1 of 6 match");
     // A click on an example links it without moving the list.
     const first = document.querySelector<HTMLElement>("#exList .ex")!;
@@ -1758,6 +1780,239 @@ describe("ErrorsPage tool and agent breakdown", () => {
   });
 });
 
+// Five types whose order differs by key. In the last 30 days (Oct 7 to Nov 5, 1000 calls) and the 30 before (1000 calls):
+//   type      errors  rate   incidents (bad)  lost    change
+//   tests       12   1.20%   4 (1) 25%         4 min   +100% (6 -> 12)
+//   git          9   0.90%   3 (3) 100%        –      -50% (18 -> 9)
+//   worktree     6   0.60%   2 (1) 50%        20 min  0% (6 -> 6), labelled "Git worktree"
+//   build        3   0.30%   1 (0) 0%          5 min  counts (1 -> 3)
+//   lint         3   0.30%   none              –      counts (3 -> 3)
+// So the default order (errors; build and lint tie) differs from the order of every other key.
+describe("type table: sort and filter", () => {
+  afterEach(() => { vi.unstubAllGlobals(); });
+  const NOW = "2026-10-20", PREV = "2026-09-20";
+  const sortData = (): ErrorsPayload => {
+    const incidents: Incident[] = [], errors: ErrorRow[] = [];
+    let k = 0;
+    const row = (c: string, d: string, n: number | null, ts: string): ErrorRow => ({ id: `e${k++}`, ts, d, p: "foo", s: "s1", t: "Edit", c, i: "", e: "", r: "", sub: 0, src: "claude", n });
+    /** Incidents of one type on a day: [outcome, minutes, failures]. */
+    const inc = (c: string, d: string, specs: [Incident["outcome"], number, number][]) => specs.forEach(([outcome, mins, size]) => {
+      const first = `${d}T10:00:00.000Z`, last = new Date(Date.parse(first) + mins * 6e4).toISOString();
+      incidents.push({ s: "s1", t: "Edit", c, p: "foo", sub: 0, first, last, ok: 0, outcome, rid: null, ri: "", rts: null });
+      for (let i = 0; i < size; i++) errors.push(row(c, d, incidents.length - 1, first));
+    });
+    const plain = (c: string, d: string, n: number) => { for (let i = 0; i < n; i++) errors.push(row(c, d, null, `${d}T11:00:00.000Z`)); };
+    inc("tests", NOW, [["recovered", 1, 3], ["recovered", 1, 3], ["recovered", 1, 3], ["gave_up", 1, 3]]);
+    inc("git", NOW, [["gave_up", 0, 3], ["failed_again", 0, 3], ["gave_up", 0, 3]]);
+    inc("worktree", NOW, [["recovered", 10, 3], ["failed_again", 10, 3]]);
+    inc("build", NOW, [["recovered", 5, 3]]);
+    plain("lint", NOW, 3);
+    for (const [c, n] of [["tests", 6], ["git", 18], ["worktree", 6], ["build", 1], ["lint", 3]] as const) plain(c, PREV, n);
+    const base = withErrors(errors);
+    return { ...base, incidents, calls: [[PREV, "foo", 1000, 0, "claude"], [NOW, "foo", 1000, 0, "claude"]],
+      categories: [...base.categories, ...["tests", "git", "worktree", "build", "lint"].map(id => ({ id, label: id === "worktree" ? "Git worktree" : id, why: "", fix: "", snippet: "" }))] };
+  };
+  const open = async (hash = "#range=30", payload = sortData()) => {
+    vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/errors") ? payload : {})));
+    history.replaceState(null, "", "/errors" + hash);
+    await page();
+  };
+  const order = () => [...document.querySelectorAll("#catBody tr[data-c]")].map(r => r.getAttribute("data-c"));
+  const cells = (cls: string) => [...document.querySelectorAll(`#catBody td.${cls}`)].map(c => c.textContent);
+  const head = (name: string) => within(document.querySelector("thead")!).getByRole("button", { name });
+  const sortedHeads = () => [...document.querySelectorAll("thead th[aria-sort]")].map(h => [h.querySelector("button")!.textContent!.replace(/[↑↓]/, ""), h.getAttribute("aria-sort")]);
+  const DEFAULT = ["tests", "git", "worktree", "build", "lint"];
+
+  it("lists the types by errors, most first, with Rate, Didn't recover and Change", async () => {
+    await open();
+    expect(order()).toEqual(DEFAULT);
+    expect(sortedHeads()).toEqual([["Errors", "descending"]]);
+    expect(cells("c-rate")).toEqual(["1.20%", "0.90%", "0.60%", "0.30%", "0.30%"]);
+    expect(cells("c-unrec")).toEqual(["25%", "100%", "50%", "0%", "–"]);
+    const t = (c: string) => document.querySelector(`#catBody tr[data-c="${c}"] td.c-unrec`)!.getAttribute("title");
+    expect([t("tests"), t("git"), t("build"), t("lint")]).toEqual(["1 of 4 incidents", "3 of 3 incidents", "0 of 1 incident", null]);
+    expect(cells("num").filter((_, i) => i % 5 === 4)).toEqual(["▲ +100%", "▼ -50%", "0%", "1 → 3", "3 → 3"]);
+    // The trend is a picture, not a column to sort by.
+    expect(within(document.querySelector("thead")!).queryByRole("button", { name: /trend/i })).toBeNull();
+  });
+
+  const ASC = ["build", "lint", "worktree", "git", "tests"]; // errors, fewest first: the tie of build and lint keeps the default order
+  // [header, order after the first click, aria-sort then, order after the second click, aria-sort then]. Errors starts sorted, so its first click flips it.
+  it.each([
+    ["Type", ["build", "git", "worktree", "lint", "tests"], "ascending", ["tests", "lint", "worktree", "git", "build"], "descending"], // by label: "Git worktree" after "git"
+    ["Errors", ASC, "ascending", DEFAULT, "descending"],
+    ["Time lost", ["worktree", "build", "tests", "git", "lint"], "descending", ["git", "lint", "tests", "build", "worktree"], "ascending"],
+    ["Rate", DEFAULT, "descending", ASC, "ascending"],
+    ["Didn't recover", ["git", "worktree", "tests", "build", "lint"], "descending", ["build", "tests", "worktree", "git", "lint"], "ascending"], // lint has no incident: last both ways
+    ["Share", DEFAULT, "descending", ASC, "ascending"],
+    ["Change", ["tests", "worktree", "git", "build", "lint"], "descending", ["git", "worktree", "tests", "build", "lint"], "ascending"], // counts come last both ways
+  ] as const)("sorts by %s, and a second click flips it", async (name, first, aria1, second, aria2) => {
+    await open();
+    await userEvent.click(head(name));
+    expect(order()).toEqual(first);
+    expect(sortedHeads()).toEqual([[name, aria1]]);
+    await userEvent.click(head(name));
+    expect(order()).toEqual(second);
+    expect(sortedHeads()).toEqual([[name, aria2]]);
+    // The header button keeps the focus: it is not rebuilt.
+    expect(document.activeElement).toBe(head(name));
+  });
+
+  it("marks the sorted column's header and cells, so the breakpoints that hide columns leave it", async () => {
+    await open();
+    const marked = (cls: string) => [...document.querySelectorAll(`.types .${cls}`)].filter(c => c.classList.contains("c-on")).length;
+    expect(marked("c-share")).toBe(0);
+    await userEvent.click(head("Share"));
+    expect(marked("c-share")).toBe(6); // the header and the five cells
+    expect(document.querySelector("th.c-share")!.classList.contains("c-on")).toBe(true);
+    await userEvent.click(head("Rate"));
+    expect(marked("c-share")).toBe(0);
+    expect(marked("c-rate")).toBe(6);
+  });
+
+  // jsdom has no layout or media queries, so read the stylesheet: the breakpoints that hide Share must leave it when it is the sorted column.
+  it("hides Share at the narrow breakpoints only when it is not the sorted column", () => {
+    const css = readFileSync("src/pages/errors/errors.css", "utf8").replace(/\/\*[\s\S]*?\*\//g, ""); // vitest runs from web/
+    const hides = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter(([, sel, body]) => /display\s*:\s*none/.test(body!) && sel!.includes(".c-share"));
+    expect(hides.length).toBeGreaterThanOrEqual(2); // the mid widths and the phone
+    for (const [, sel] of hides) for (const one of sel!.split(",").filter(x => x.includes(".c-share"))) expect(one.replace(/\s+/g, "")).toContain(".c-share:not(.c-on)");
+  });
+
+  it("keeps the rows when only the sort or the filter changes", async () => {
+    await open();
+    const calls = () => vi.mocked(typeRows).mock.calls.length, n = calls();
+    expect(n).toBeGreaterThan(0);
+    await userEvent.type(screen.getByRole("searchbox", { name: /filter types/i }), "git");
+    await userEvent.click(head("Rate"));
+    await userEvent.click(head("Type"));
+    expect(calls()).toBe(n);
+    // A change of view does compute them again.
+    await userEvent.click(screen.getByRole("button", { name: "Week" }));
+    expect(calls()).toBeGreaterThan(n);
+  });
+
+  it("keeps the filter and its Clear button in a view with no types", async () => {
+    await open();
+    const box = () => screen.getByRole("searchbox", { name: /filter types/i }) as HTMLInputElement;
+    await userEvent.type(box(), "git");
+    await userEvent.click(screen.getByRole("button", { name: "7d" })); // Oct 30 to Nov 5: no calls, no errors
+    expect(order()).toEqual([]);
+    expect(box().value).toBe("git");
+    expect(document.getElementById("typeCount")!.textContent).toBe("0 of 0 types");
+    expect(document.querySelector("#catBody .empty")!.textContent).toMatch(/^No tool calls in this range\./);
+    await userEvent.click(within(document.getElementById("catBody")!).getByRole("button", { name: "Clear filter" }));
+    // With no text left the field goes with the rows (focus falls back to the chart), and comes back with them.
+    expect(screen.queryByRole("searchbox", { name: /filter types/i })).toBeNull();
+    expect(document.activeElement).toBe(document.getElementById("chart"));
+    await userEvent.click(screen.getByRole("button", { name: "30d" }));
+    expect(order()).toEqual(DEFAULT);
+    expect(box().value).toBe("");
+  });
+
+  it("keeps the focus on a header sorted from the keyboard", async () => {
+    await open();
+    head("Time lost").focus();
+    await userEvent.keyboard("{Enter}");
+    expect(order()[0]).toBe("worktree");
+    expect(document.activeElement).toBe(head("Time lost"));
+    // The first listed row's button is where the page's focus fallback goes.
+    expect(tableFocus()).toBe(document.querySelector('#catBody button[data-c="worktree"]'));
+  });
+
+  describe("filter", () => {
+    const box = () => screen.getByRole("searchbox", { name: /filter types/i }) as HTMLInputElement;
+    const count = () => document.getElementById("typeCount")!.textContent;
+    const live = () => document.getElementById("detailLive")!.textContent;
+
+    it("narrows the rows to the labels and ids that contain the text, ignoring case, and says how many", async () => {
+      await open();
+      expect(box().getAttribute("placeholder")).toBe("Filter types…");
+      expect(count()).toBe("5 types");
+      await userEvent.type(box(), "GIT");
+      expect(order()).toEqual(["git", "worktree"]); // the id git, and the label "Git worktree" of worktree
+      expect(count()).toBe("2 of 5 types");
+      await waitFor(() => expect(live()).toBe("2 of 5 types"));
+      await userEvent.clear(box());
+      await userEvent.type(box(), "git work"); // the label only
+      expect(order()).toEqual(["worktree"]);
+      await userEvent.clear(box());
+      await userEvent.type(box(), "lin");
+      expect(order()).toEqual(["lint"]);
+      // It sorts what it keeps.
+      await userEvent.clear(box());
+      await userEvent.type(box(), "t"); // everything but build
+      expect(order()).toEqual(["tests", "git", "worktree", "lint"]);
+      await userEvent.click(head("Rate"));
+      await userEvent.click(head("Rate"));
+      expect(order()).toEqual(["lint", "worktree", "git", "tests"]);
+    });
+
+    it("says so with no match, and a Clear filter button lists every type again and returns the focus to the field", async () => {
+      await open();
+      await userEvent.type(box(), "zzz");
+      expect(order()).toEqual([]);
+      expect(count()).toBe("0 of 5 types");
+      expect(document.querySelector("#catBody .empty")!.textContent).toMatch(/^No types match “zzz”/);
+      // With no row, the page's focus fallback is the chart, not the clear button.
+      expect(tableFocus()).toBe(document.getElementById("chart"));
+      await userEvent.click(within(document.getElementById("catBody")!).getByRole("button", { name: "Clear filter" }));
+      expect(order()).toEqual(DEFAULT);
+      expect(box().value).toBe("");
+      expect(count()).toBe("5 types");
+      expect(document.activeElement).toBe(box());
+      await waitFor(() => expect(live()).toBe("5 types"));
+    });
+
+    it("leaves the summary, the chart and the open type alone: an open type it hides stays open", async () => {
+      await open("#range=30&cat=lint");
+      const h1 = screen.getByRole("heading", { level: 1 }).textContent, detail = document.getElementById("detail")!.textContent, chart = document.getElementById("chart")!.innerHTML;
+      expect(document.querySelector('#catBody tr[data-c="lint"]')!.className).toContain("sel");
+      await userEvent.type(box(), "git");
+      expect(order()).toEqual(["git", "worktree"]);
+      expect(document.querySelector("#catBody .sel")).toBeNull();
+      expect(document.getElementById("detailTitle")!.textContent).toBe("lint");
+      expect(location.hash).toContain("cat=lint");
+      expect(screen.getByRole("heading", { level: 1 }).textContent).toBe(h1);
+      expect(document.getElementById("detail")!.textContent).toBe(detail);
+      expect(document.getElementById("chart")!.innerHTML).toBe(chart);
+      await userEvent.clear(box());
+      expect(document.querySelector('#catBody tr[data-c="lint"]')!.className).toContain("sel");
+    });
+  });
+
+  it("keeps the sort and the filter across a change of view, in page state only", async () => {
+    await open();
+    await userEvent.click(head("Didn't recover"));
+    await userEvent.type(screen.getByRole("searchbox", { name: /filter types/i }), "t");
+    expect(order()).toEqual(["git", "worktree", "tests", "lint"]);
+    await userEvent.click(screen.getByRole("button", { name: "Week" }));
+    expect(location.hash).toContain("gran=week");
+    expect(sortedHeads()).toEqual([["Didn't recover", "descending"]]);
+    expect((screen.getByRole("searchbox", { name: /filter types/i }) as HTMLInputElement).value).toBe("t");
+    expect(order()).toEqual(["git", "worktree", "tests", "lint"]);
+    // Not in the URL, not saved.
+    expect(location.hash).not.toMatch(/sort|filter|recover/i);
+    expect(localStorage.getItem(VIEW_KEY) ?? "").not.toMatch(/sort|"t"|recover/i);
+    // A reload starts over.
+    cleanup();
+    await page();
+    expect(sortedHeads()).toEqual([["Errors", "descending"]]);
+    expect((screen.getByRole("searchbox", { name: /filter types/i }) as HTMLInputElement).value).toBe("");
+  });
+
+  it("keeps the sort and the filter when the detail moves into the sheet", async () => {
+    vi.stubGlobal("matchMedia", (q: string) => ({ matches: q.includes("max-width"), media: q, addEventListener() {}, removeEventListener() {} }));
+    await open();
+    await userEvent.click(head("Time lost"));
+    await userEvent.type(screen.getByRole("searchbox", { name: /filter types/i }), "t");
+    await userEvent.click(document.querySelector('#catBody button[data-c="tests"]')!);
+    expect((document.getElementById("sheet") as HTMLDialogElement).open).toBe(true);
+    expect(sortedHeads()).toEqual([["Time lost", "descending"]]);
+    expect((screen.getByRole("searchbox", { name: /filter types/i }) as HTMLInputElement).value).toBe("t");
+    expect(order()).toEqual(["worktree", "tests", "git", "lint"]);
+  });
+});
+
 // Type x: ENOENT ×4 (paths differ; Edit ×3 and Read in foo and bar), an "Exit code" pair, a lone message, an empty text, and 35 timeouts
 // that differ only by a number (Bash ×20, Edit ×10, Read ×3, Write ×2; one in bar). Nov 3: a1, a2, c1; the rest are on Nov 4.
 describe("ErrorsPage by message", () => {
@@ -1865,7 +2120,7 @@ describe("ErrorsPage by message", () => {
 
   it("filters the groups to those with a matching example, counts them, and announces the count", async () => {
     await open("#range=30&cat=x");
-    await userEvent.type(screen.getByRole("searchbox"), "pnpm");
+    await userEvent.type(document.getElementById("q")!, "pnpm");
     expect(exCount()).toBe("1 of 5 match");
     expect(list()).toEqual([["2×", "Exit code <n> zsh: command not found: pnpm"]]);
     await waitFor(() => expect(document.getElementById("detailLive")!.textContent).toBe("1 of 5 match"));
@@ -1873,12 +2128,12 @@ describe("ErrorsPage by message", () => {
     expect(shares()).toEqual(["5%"]);
     expect(heads()[0]!.querySelector(".shr")!.getAttribute("title")).toBe("Share of this type's errors in the view; the search does not change it");
     // The project of one example is enough: foo's timeouts and ENOENTs both have one in bar.
-    await userEvent.clear(screen.getByRole("searchbox"));
-    await userEvent.type(screen.getByRole("searchbox"), "bar");
+    await userEvent.clear(document.getElementById("q")!);
+    await userEvent.type(document.getElementById("q")!, "bar");
     expect(list().map(r => r[1])).toEqual([TIMEOUT, ENOENT]);
     expect(exCount()).toBe("2 of 5 match");
-    await userEvent.clear(screen.getByRole("searchbox"));
-    await userEvent.type(screen.getByRole("searchbox"), "no such text anywhere");
+    await userEvent.clear(document.getElementById("q")!);
+    await userEvent.type(document.getElementById("q")!, "no such text anywhere");
     expect(exCount()).toBe("0 of 5 match");
     expect(document.querySelector("#exList .empty")!.textContent).toBe("No messages match.");
   });

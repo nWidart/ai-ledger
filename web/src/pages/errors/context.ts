@@ -2,7 +2,8 @@
 // moving into the sheet (open incidents and message groups, opened examples, loaded full text).
 import { createContext, useContext } from "react";
 import type { Day, ErrorDetail } from "../../api";
-import type { Err, Filtered, Fixes, Model, View, ViewTypes } from "./model";
+import type { SortBy } from "../../components/Sort";
+import type { Err, Filtered, Fixes, Model, TypeKey, View, ViewTypes } from "./model";
 import type { FixError } from "./marks";
 import type { Mode } from "./view";
 
@@ -32,6 +33,8 @@ export interface ErrorsCtx {
   dismissError: (cat: string, kind: FixError["kind"]) => void;
   setMode: (m: Mode) => void;
   setQ: (q: string) => void;
+  /** The type table's sort and filter text: page state, so they outlive a re-render and a change of view (not in the hash, not saved). */
+  typeSort: SortBy<TypeKey>; setTypeSort: (s: SortBy<TypeKey>) => void; typeQ: string; setTypeQ: (q: string) => void;
   /** Run once after the next render (focus a control that render brings). */
   after: (fn: () => void) => void;
   say: (s: string) => void;
@@ -40,8 +43,9 @@ export interface ErrorsCtx {
   bump: () => void;
 }
 
-/** Where focus goes when the control that had it leaves: the first type button, or the chart when the table is empty. */
-export const tableFocus = (): HTMLElement | null => document.querySelector<HTMLElement>("#catBody button") ?? document.getElementById("chart");
+/** Where focus goes when the control that had it leaves: the first listed type's button, or the chart when no type is listed (an empty
+ *  filter's Clear button is not one). */
+export const tableFocus = (): HTMLElement | null => document.querySelector<HTMLElement>("#catBody .tbtn") ?? document.getElementById("chart");
 
 export const Ctx = createContext<ErrorsCtx | null>(null);
 export const useErrors = (): ErrorsCtx => {

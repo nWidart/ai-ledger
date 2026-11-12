@@ -84,7 +84,7 @@ describe("filtering and series", () => {
     // A range compares with the days before it; without enough calls there, nothing shows.
     const wk = v({ range: 7 }), xw = compare(mm, wk, filtered(mm, wk));
     expect(xw).toMatchObject({ cmp: "vs previous 7 days", why: "Fewer than 200 tool calls in the 7 days before" });
-    expect(change(xw, "x")).toEqual({ text: "–", cls: "muted", title: xw.why });
+    expect(change(xw, "x")).toEqual({ text: "–", cls: "muted", title: xw.why, pct: null });
     expect(whereToStart(mm, wk, filtered(mm, wk), {})).toMatchObject({ rising: [], why: xw.why });
     const two = v({ range: 14 }), s14 = summary(mm, two, filtered(mm, two), {});
     expect(s14).toMatchObject({ cmp: "vs previous 14 days", why: null, r0: 11 / 2000 * 100, r1: 3 });
@@ -127,6 +127,58 @@ describe("types", () => {
     expect(rows[0]).toMatchObject({ cid: "x", n: 6, lost: 186e3, share: 1, color: "var(--type-1)" });
     // No calls in the 30 days before: nothing to compare with.
     expect(rows[0]!.delta).toMatchObject({ text: "–", title: "Fewer than 200 tool calls in the 30 days before" });
+  });
+  it("table rows carry the rate, the share of incidents that didn't recover and the change's percent, under a bucket too", () => {
+    const e = (id: string, d: string, n: number | null) => ({ id, ts: `${d}T10:00:00.000Z`, d, p: "foo", s: "s1", t: "Edit", c: "x", i: "", e: "", r: "", sub: 0 as const, src: "claude" as const, n });
+    const inc = (outcome: string) => ({ s: "s1", t: "Edit", c: "x", p: "foo", sub: 0, first: null, last: null, ok: 0, outcome, rid: null, ri: "", rts: null });
+    const errors = [e("a", "2026-11-03", 0), e("b", "2026-11-03", 0), e("c", "2026-11-04", 1), e("d", "2026-11-04", 2), e("f", "2026-11-04", null)];
+    const mm = makeModel({ ...fixture, errors, incidents: [inc("recovered"), inc("gave_up"), inc("failed_again")] as ErrorsPayload["incidents"],
+      error_days: [["2026-11-03", "foo", "x", 2, 0, "claude"], ["2026-11-04", "foo", "x", 3, 0, "claude"]],
+      calls: [["2026-11-03", "foo", 10, 0, "claude"], ["2026-11-04", "foo", 40, 0, "claude"]] });
+    const row = (o: Partial<View> = {}) => typeRows(mm, v(o), filtered(mm, v(o)))[0]!;
+    // The view: 5 errors over 50 calls; 3 incidents, 2 of them not recovered.
+    expect(row()).toMatchObject({ rate: 10, inc: 3, bad: 2 });
+    expect(row().unrec).toBeCloseTo(200 / 3);
+    // Nov 3: its 2 errors over its 10 calls, one incident that recovered. Nov 4: 3 errors over 40 calls, 2 incidents, both bad.
+    expect(row({ at: "2026-11-03" })).toMatchObject({ rate: 20, inc: 1, bad: 0, unrec: 0 });
+    expect(row({ at: "2026-11-04" })).toMatchObject({ rate: 7.5, inc: 2, bad: 2, unrec: 100 });
+    // A week holds both days.
+    expect(row({ gran: "week", at: "2026-11-02" })).toMatchObject({ rate: 10, inc: 3, bad: 2 });
+    // No calls: no rate. No incident: no share.
+    expect(typeRows(mm, v(), { ...filtered(mm, v()), calls: [] })[0]!.rate).toBeNull();
+    const none = makeModel({ ...fixture, errors: [e("z", "2026-11-04", null)], error_days: [["2026-11-04", "foo", "x", 1, 0, "claude"]] });
+    expect(typeRows(none, v(), filtered(none, v()))[0]).toMatchObject({ inc: 0, bad: 0, unrec: null });
+  });
+  it("divides a type's errors by the calls the subagent toggle counts", () => {
+    const e = (id: string, sub: 0 | 1) => ({ id, ts: "2026-11-04T10:00:00.000Z", d: "2026-11-04", p: "foo", s: "s1", t: "Edit", c: "x", i: "", e: "", r: "", sub, src: "claude" as const, n: null });
+    // Nov 4: 100 calls, 60 of them by subagents; 2 errors by the main thread, 2 by a subagent.
+    const mm = makeModel({ ...fixture, errors: [e("a", 0), e("b", 0), e("c", 1), e("d", 1)], error_days: [["2026-11-04", "foo", "x", 4, 2, "claude"]], calls: [["2026-11-04", "foo", 100, 60, "claude"]] });
+    const rateOf = (o: Partial<View>) => typeRows(mm, v(o), filtered(mm, v(o)))[0]!.rate;
+    expect(rateOf({ sub: true })).toBe(4); // 4 errors over 100 calls
+    expect(rateOf({ sub: false })).toBe(5); // 2 errors over the 40 main-thread calls
+  });
+  it("gives a week bucket that starts before the range the rate of the chart's point for it", () => {
+    const e = (id: string, d: string) => ({ id, ts: `${d}T10:00:00.000Z`, d, p: "foo", s: "s1", t: "Edit", c: "x", i: "", e: "", r: "", sub: 0 as const, src: "claude" as const, n: null });
+    // A 7-day range ends Nov 5 and starts Fri Oct 30; its first week (Monday Oct 26) holds Oct 30, 31 and Nov 1. Oct 28 is outside the range:
+    // its 1000 calls and its error must not count.
+    const mm = makeModel({ ...fixture, errors: [e("a", "2026-10-28"), e("b", "2026-10-30"), e("c", "2026-11-01"), e("d", "2026-11-03")],
+      error_days: [["2026-10-28", "foo", "x", 1, 0, "claude"], ["2026-10-30", "foo", "x", 1, 0, "claude"], ["2026-11-01", "foo", "x", 1, 0, "claude"], ["2026-11-03", "foo", "x", 1, 0, "claude"]],
+      calls: [["2026-10-28", "foo", 1000, 0, "claude"], ["2026-10-30", "foo", 10, 0, "claude"], ["2026-11-01", "foo", 10, 0, "claude"], ["2026-11-03", "foo", 50, 0, "claude"]] });
+    const vv = v({ range: 7, gran: "week", at: "2026-10-26" }), f = filtered(mm, vv);
+    const pt = chartData(mm, vv, f, viewTypes(mm, vv, f)).pts.find(p => p.k === "2026-10-26")!;
+    expect(pt).toMatchObject({ c: 20, e: 2 });
+    expect(typeRows(mm, vv, f)[0]).toMatchObject({ n: 2, rate: 10 });
+    expect(typeRows(mm, vv, f)[0]!.rate).toBe(pt.r);
+  });
+  it("carries the percent the change cell shows, and none for counts or a missing comparison", () => {
+    const r = typeRows(m, v(), filtered(m, v()))[0]!;
+    expect(r.delta.pct).toBeNull(); // "–": no calls in the 30 days before
+    const c = (a: number, b: number) => ({ a: { c: 1000, e: a, by: { x: a } }, b: { c: 1000, e: b, by: { x: b } }, cmp: "", why: null });
+    expect(change(c(6, 12), "x", 5)).toMatchObject({ text: "▲ +100%", pct: 100 });
+    expect(change(c(18, 9), "x", 5)).toMatchObject({ text: "▼ -50%", pct: -50 });
+    expect(change(c(6, 6), "x", 5)).toMatchObject({ text: "0%", pct: 0 });
+    expect(change(c(1, 3), "x", 5)).toMatchObject({ text: "1 → 3", pct: null });
+    expect(change({ ...c(6, 12), why: "no" }, "x", 5)).toMatchObject({ text: "–", pct: null });
   });
   it("closes a type with no errors in the view unless an example is linked", () => {
     expect(settle(m, v({ cat: "x" })).cat).toBe("x");
