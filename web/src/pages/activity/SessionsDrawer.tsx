@@ -111,6 +111,7 @@ export function SessionsDrawer({ view, count, filter, onFilter, sort, onSort, se
           <button type="button" aria-label="Show sessions on every day" title="Every day" onClick={() => { onFilter({ ...filter, day: "" }); search.current?.focus(); }}>✕</button></span>}
       </div>
       <div className="hint" aria-live="polite">{hint}</div>
+      <p className="hint">A session counts here when it has a request in the range; Insights counts sessions by their start time, so the two totals can differ slightly.</p>
       <div className="scroll tall"><table>
         <thead><tr>{HEAD.map(([label, k, cls, title, whole]) => {
           const t = whole && filter.day ? WHOLE : title;

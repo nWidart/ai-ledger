@@ -60,7 +60,7 @@ function Sub({ d, view }: { d: InsightsPayload; view: View }) {
   if (!c.stored_facets) return <p className="sub">The app reads <code>{c.dir ?? "~/.claude/usage-data"}</code>. Run <code>/insights</code> in Claude Code,
     then Refresh.</p>;
   return <p className="sub">{viewName(view)}. Every figure on this page comes from <code>/insights</code> facets: a model's reading of each session,
-    not a measurement. Codex sessions have no facets.</p>;
+    not a measurement. Codex sessions have no facets. A session counts here by its start time; Activity counts a session with a request in the range, so the two totals can differ slightly.</p>;
 }
 
 function Vitals({ d }: { d: InsightsPayload }) {
