@@ -132,6 +132,55 @@ describe("ErrorsPage", () => {
     expect(document.querySelector("#exList .ex")).toBe(first);
   });
 
+  const DEAD = "The linked error is no longer in the store. It may have been dropped by a rebuild, or the link is from another store. Showing the view without it.";
+  it("says a permalink's example is gone, uses 30 days, and dismisses to the heading", async () => {
+    history.replaceState(null, "", "/errors#ex=nope");
+    await page();
+    await waitFor(() => expect(document.getElementById("deadLink")).not.toBeNull());
+    const note = document.getElementById("deadLink")!;
+    expect(note.getAttribute("role")).toBe("status");
+    expect(note.textContent).toContain(DEAD);
+    expect(note.compareDocumentPosition(document.getElementById("lede")!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(document.getElementById("pageLive")!.textContent).toBe(DEAD);
+    await waitFor(() => expect(location.hash).toBe("#range=30"));
+    await userEvent.click(within(note).getByRole("button", { name: "Dismiss" }));
+    expect(document.getElementById("deadLink")).toBeNull();
+    expect(document.activeElement).toBe(document.getElementById("lede"));
+  });
+
+  it("keeps the range a dead permalink names", async () => {
+    history.replaceState(null, "", "/errors#ex=nope&range=7");
+    await page();
+    await waitFor(() => expect(location.hash).toBe("#range=7"));
+    expect(document.getElementById("deadLink")).not.toBeNull();
+  });
+
+  it("shows no notice for a live permalink", async () => {
+    history.replaceState(null, "", "/errors#ex=t07");
+    await page();
+    await waitFor(() => expect(location.hash).toBe("#range=0&ex=t07"));
+    expect(document.getElementById("deadLink")).toBeNull();
+    expect(document.getElementById("pageLive")!.textContent).toBe("");
+  });
+
+  it("shows no notice while the payload loads", async () => {
+    vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => {})));
+    history.replaceState(null, "", "/errors#ex=nope");
+    render(<ErrorsPage />);
+    expect(document.getElementById("load")!.textContent).toContain("Loading errors");
+    expect(document.getElementById("deadLink")).toBeNull();
+    expect(location.hash).toBe("#ex=nope");
+  });
+
+  it("clears the notice when a later hash names a live example", async () => {
+    history.replaceState(null, "", "/errors#ex=nope");
+    await page();
+    await waitFor(() => expect(document.getElementById("deadLink")).not.toBeNull());
+    act(() => { history.replaceState(null, "", "/errors#ex=t07"); dispatchEvent(new PopStateEvent("popstate")); });
+    await waitFor(() => expect(document.getElementById("deadLink")).toBeNull());
+    expect(document.getElementById("ex-t07")!.classList.contains("focus")).toBe(true);
+  });
+
   it("shows the uncategorized share in the summary", async () => {
     await page();
     // The fixture's errors all have one rule-matched type, so the share is zero and there is no split for one source.
