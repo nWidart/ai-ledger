@@ -1,15 +1,16 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Source } from "../../api";
 import { agentName } from "../../components/Filters";
 import { ProjectName } from "../../components/ProjectDot";
 import { useColors } from "../../colors";
 import { num as fmt } from "../../format";
 import { useErrors } from "./context";
-import { Example, Examples, Incident } from "./Examples";
+import { Example, Examples, Incident, MsgRow } from "./Examples";
 import { Spark } from "./Spark";
+import type { Mode } from "./view";
 import {
   beforeAfter, bucketOf, buckets, breakdown, byWeight, dur, exList, incSpan, incSummary, inBucket, inTool, NOISE, RECOVERED_NOTE, series,
-  label, MIN_PCT_ERRORS, typeColor, whereToStart, yearLabel, type Err, type Group,
+  label, MIN_PCT_ERRORS, msgGroups, msgList, typeColor, whereToStart, yearLabel, type Err, type Group, type MsgGroup,
 } from "./model";
 
 const reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -54,11 +55,18 @@ function TypeDetail({ cat }: { cat: string }) {
   const x = useErrors(), { m, v, f, fixes, mode, q } = x, c = m.cats[cat]!, fixDay = fixes[cat], busy = x.saving.has(cat);
   const head = useRef<HTMLDivElement>(null), bar = useRef<HTMLDivElement>(null);
   // ofType: the type's errors in the bucket; base: those of the selected tool too, which every list and count of the detail uses.
-  const ofType = inBucket(v, f.errs).filter(e => e.c === cat).reverse(), base = inTool(v, ofType), is = incSummary(m, base), groups = is.groups.sort(byWeight), worst = groups[0], lost = groups.reduce((s, g) => s + incSpan(g), 0);
+  // The message groups follow base only: a keystroke in the search box, or a click that doesn't change the errors, never groups them again.
+  const flat = mode === "flat", msg = mode === "msg", PAGE = flat ? 30 : 20;
+  const { ofType, base, byMsg } = useMemo(() => {
+    const ofType = inBucket(v, f.errs).filter(e => e.c === cat).reverse(), base = inTool(v, ofType);
+    return { ofType, base, byMsg: msg ? msgGroups(base) : [] };
+  }, [f, cat, v.at, v.gran, v.tool, msg]); // eslint-disable-line react-hooks/exhaustive-deps
+  const is = incSummary(m, base), groups = is.groups.sort(byWeight), worst = groups[0], lost = groups.reduce((s, g) => s + incSpan(g), 0);
   // A linked example shows first; outside the current filters it gets its own note instead of joining the list.
   const focused = x.pinned, outside = !!focused && !base.includes(focused);
-  const flat = mode === "flat", PAGE = flat ? 30 : 20;
-  const list = exList(base, groups, flat, q, outside ? undefined : focused, v.at ? v.gran : "range");
+  const listFor = (s: string) => msg ? msgList(byMsg, s, outside ? undefined : focused, v.at ? v.gran : "range")
+    : exList(base, groups, flat, s, outside ? undefined : focused, v.at ? v.gran : "range");
+  const list = listFor(q);
   // List, count and Show more all come from the current search; any other change starts the list over.
   const reset = JSON.stringify([cat, v.project, v.source, v.range, v.sub, v.noise, v.gran, v.at, v.tool, mode, q, fixes]);
   const [more, setMore] = useState({ reset, n: PAGE }), shown = more.reset === reset ? more.n : PAGE;
@@ -110,7 +118,7 @@ function TypeDetail({ cat }: { cat: string }) {
     setMore({ reset, n: shown + PAGE });
     x.after(() => document.querySelectorAll<HTMLElement>(flat ? "#exList .ex" : "#exList .inc-h")[from]?.focus());
   };
-  const setMode = (md: "inc" | "flat") => {
+  const setMode = (md: Mode) => {
     if (mode === md) return;
     x.setMode(md);
     x.after(() => document.querySelector<HTMLElement>(`#exMode button[data-m="${md}"]`)?.focus());
@@ -151,18 +159,20 @@ function TypeDetail({ cat }: { cat: string }) {
       <Example e={focused!} />
     </div>}
     <div className="exbar" ref={bar}>
-      <div className="row" style={{ justifyContent: "space-between", marginTop: 4 }}><span className="row" style={{ minWidth: 0 }}><b id="exHead">{flat ? "Errors" : "Incidents"}</b>
+      <div className="row" style={{ justifyContent: "space-between", marginTop: 4 }}><span className="row" style={{ minWidth: 0 }}><b id="exHead">{flat ? "Errors" : msg ? "Messages" : "Incidents"}</b>
         {v.tool && <button type="button" className="chip bucket tool" id="toolClr" title={v.tool} aria-label={`Only ${v.tool}. Show all tools`} onClick={() => clearTool(v.tool!)}><span className="nm">{v.tool}</span> <span aria-hidden="true">✕</span></button>}</span><span className="muted" style={{ fontSize: 12 }} id="exCount">{list.count}</span></div>
       <div className="seg exmode" id="exMode" role="group" aria-label="List">
-        <button type="button" data-m="inc" aria-pressed={!flat} onClick={() => setMode("inc")}>Incidents</button>
+        <button type="button" data-m="inc" aria-pressed={mode === "inc"} onClick={() => setMode("inc")}>Incidents</button>
         <button type="button" data-m="flat" aria-pressed={flat} onClick={() => setMode("flat")}>Every error, newest first</button>
+        <button type="button" data-m="msg" aria-pressed={msg} onClick={() => setMode("msg")}>By message</button>
       </div>
       <input type="search" id="q" placeholder="Filter by command, error or project…" value={q} style={{ width: "100%", margin: "8px 0" }}
-        aria-label={`Filter ${flat ? "errors" : "incidents"}`}
-        onChange={e => { const nq = e.target.value; x.setQ(nq); x.say(exList(base, groups, flat, nq, outside ? undefined : focused, v.at ? v.gran : "range").count); }} />
+        aria-label={`Filter ${flat ? "errors" : msg ? "messages" : "incidents"}`}
+        onChange={e => { const nq = e.target.value; x.setQ(nq); x.say(listFor(nq).count); }} />
     </div>
     <div id="exList">
-      {list.flat ? <Examples list={(list.items as Err[]).slice(0, shown)} />
+      {flat ? <Examples list={(list.items as Err[]).slice(0, shown)} />
+        : msg ? list.items.length ? (list.items as MsgGroup[]).slice(0, shown).map(g => <MsgRow key={g.key} g={g} focused={outside ? undefined : focused} reset={reset} />) : <div className="empty">No messages match.</div>
         : list.items.length ? (list.items as Group[]).slice(0, shown).map(g => <Incident key={g.i} g={g} />) : <div className="empty">No incidents match.</div>}
     </div>
     <button type="button" id="more" style={{ width: "100%", marginTop: 8 }} hidden={list.items.length <= shown} onClick={showMore}>Show more</button>

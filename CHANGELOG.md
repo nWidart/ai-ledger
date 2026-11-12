@@ -9,6 +9,7 @@ Run `ai-ledger rebuild` once after upgrading (with the app stopped): error types
 
 ### Added
 
+- The Errors type detail has a third list, By message, beside Incidents and Every error. It groups the type's errors by normalized message (paths, ids, numbers and long quoted strings set aside), most errors first, each row with its count, share, projects, tools and newest time. A row opens its examples, and a button copies the normalized message. The search, the selected day or week and tool, and a linked example work in it as in the other lists.
 - The Errors type detail breaks the type down by tool and by agent next to By project, each with count and share. A By agent row filters the page to that agent. A By tool row narrows that type's detail (incident count, By project, incidents and examples) to the tool, on top of a selected day or week; a chip or a second click clears it, and it lives in the URL (`etool=`). It replaces the "Mostly ..." phrase.
 - The Errors page keeps its "fix applied" markers in the store, not in the browser, so they follow you to another port or browser and survive `ai-ledger rebuild`. Markers saved by an earlier version move to the store the first time the page loads.
 - An Errors permalink to an error the store no longer holds says so: a notice above the summary, with Dismiss, shows the view without it, over the range the link names (30 days when none) rather than all time.

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import fixture from "../../__fixtures__/errors";
 import type { ErrorsPayload } from "../../api";
 import {
-  beforeAfter, breakdown, bucketLabel, bucketOf, buckets, byWeight, change, chartData, compare, emptyTypes, exList, filtered, inBucket, incidentsOf, inTool, incSummary, makeModel, midDay, pointText,
+  beforeAfter, breakdown, bucketLabel, bucketOf, buckets, byWeight, change, chartData, compare, emptyTypes, exList, filtered, inBucket, incidentsOf, inTool, incSummary, makeModel, messageOf, midDay, msgGroups, msgList, normalize, pointText,
   rangeStart, series, settle, summary, timeLost, typeColors, typeRows, uncategorized, viewTypes, whereToStart, type Err, type View,
 } from "./model";
 import { lostPayload } from "./lostData";
@@ -446,5 +446,119 @@ describe("hash and storage", () => {
     expect(loadMode()).toBe("inc");
     localStorage.setItem("claude-errors-fixes", "[1]");
     expect(loadFixes()).toEqual({});
+  });
+});
+
+describe("normalized messages", () => {
+  const key = (t: string) => normalize(t).key;
+  it("takes the first non-empty line, and leaves the rest", () => {
+    expect(key("\n\n  boom here  \nsecond line\nthird")).toBe("boom here");
+    expect(key("fatal: not a git repository\nExit code 128")).toBe("fatal: not a git repository");
+  });
+  it("adds the next line when the first is only a wrapper", () => {
+    expect(key("Exit code 1\nzsh: command not found: pnpm\nmore")).toBe("Exit code <n> zsh: command not found: pnpm");
+    expect(key("Error:\n  Something broke\nmore")).toBe("Error: Something broke");
+    expect(key("<tool_use_error>\nFile is too large")).toBe("<tool_use_error> File is too large");
+    expect(key("Error\n\nbad things")).toBe("Error bad things");
+    expect(key("Exit code 2")).toBe("Exit code <n>"); // nothing to add
+    expect(key("Error: bad things\nsecond")).toBe("Error: bad things"); // a first line with a message is not a wrapper
+  });
+  it("replaces absolute, home and dot paths", () => {
+    expect(key("ENOENT: no such file or directory, open '/Users/me/app/src/a.ts'")).toBe("ENOENT: no such file or directory, open '<path>'");
+    expect(key("cat ~/notes/x.md ./a ../b/c /tmp")).toBe("cat <path> <path> <path> <path>");
+    expect(key("Cannot read /tmp/x/y.")).toBe("Cannot read <path>."); // the sentence's dot stays out of the path
+    expect(key("failed at /usr/lib/x.so:12:5")).toBe("failed at <path>:<n>");
+  });
+  it("replaces relative paths with a slash pair or an extension, and leaves prose and URLs", () => {
+    expect(key("Cannot find src/components/Foo.tsx(12,5)")).toBe("Cannot find <path>(<n>)");
+    expect(key("no such file: web/main.ts")).toBe("no such file: <path>");
+    expect(key("no such dir a/b/c")).toBe("no such dir <path>");
+    expect(key("read and/or write via stdin/stdout, 3/4 done")).toBe("read and/or write via stdin/stdout, <n>/<n> done");
+    expect(key("GET https://example.com/a/b.js failed")).toBe("GET https://example.com/a/b.js failed");
+  });
+  it("replaces UUIDs, tool-use ids and long hex with <id>", () => {
+    expect(key("session 3f2a9c1e-7b4d-4e8a-9c0d-1a2b3c4d5e6f not found")).toBe("session <id> not found");
+    expect(key("tool_use_id toolu_01AbCdEfGhIjKlMn and call_Abc12345xyz missing")).toBe("tool_use_id <id> and <id> missing");
+    expect(key("commit 9fceb02d at 0x7ffd5c3a1b")).toBe("commit <id> at <id>");
+    expect(key("a deadbeef and decade word")).toBe("a deadbeef and decade word"); // hex letters only: a word
+    expect(key("pid 12345678")).toBe("pid <n>"); // digits only: a number
+    expect(key("abcde1 is short")).toBe("abcde1 is short"); // under 7 characters is not an id, and the digit of a word is no number
+  });
+  it("replaces numbers, with their line:col, clock and decimal parts, and keeps the digits of words", () => {
+    expect(key("Timed out after 30s at 10:01:02 on port 8080 (line 12:5), 2.5GB, 1,234 B, 0x1f")).toBe("Timed out after <n>s at <n> on port <n> (line <n>), <n>GB, <n> B, <n>");
+    expect(key("utf8 sha256 E2BIG python3 x86_64")).toBe("utf8 sha256 E2BIG python3 x86_64");
+  });
+  it("shortens quoted strings over 40 characters only", () => {
+    const q40 = "a".repeat(40), q41 = "a".repeat(41);
+    expect(key(`grep "${q40}" failed`)).toBe(`grep "${q40}" failed`);
+    expect(key(`grep "${q41}" failed`)).toBe('grep "<…>" failed');
+    expect(key(`run '${q41}' and \`${q41}\``)).toBe("run '<…>' and `<…>`");
+    expect(key("unknown option '--force', command not found: 'pnpm'")).toBe("unknown option '--force', command not found: 'pnpm'");
+    expect(key("can't find 'x' and don't know why")).toBe("can't find 'x' and don't know why"); // an apostrophe inside a word is no quote
+    expect(key(`the "${"b".repeat(60)} 1234" ends`)).toBe('the "<…>" ends'); // what is inside a long quote goes with it
+  });
+  it("collapses whitespace", () => {
+    expect(key("a   b\t c ")).toBe("a b c");
+  });
+  it("names an empty text, and cuts a long label but not its key", () => {
+    expect(normalize("")).toEqual({ key: "(no error text)", label: "(no error text)" });
+    expect(normalize(" \n  \n")).toEqual({ key: "(no error text)", label: "(no error text)" });
+    const n = normalize("word ".repeat(100));
+    expect(n.key).toBe("word ".repeat(100).trim());
+    expect(n.label).toBe(n.key.slice(0, 119) + "…");
+    expect(n.label).toHaveLength(120);
+    expect(normalize("short").label).toBe("short");
+  });
+  it("makes one group of messages that differ only by detail, and keeps different messages apart", () => {
+    expect(key("ENOENT open '/a/b/one.ts' after 3 tries (toolu_01AbCdEfGhIjKlMn)")).toBe(key("ENOENT open '/c/d/two.ts' after 12 tries (toolu_99ZyXwVuTsRqPoNm)"));
+    expect(key("Exit code 1\nnpm ERR! code 127")).toBe(key("Exit code 2\nnpm ERR! code 1"));
+    expect(key("command not found: pnpm")).not.toBe(key("command not found: yarn")); // a short quoted or bare token is the message
+    expect(key("command not found: 'pnpm'")).not.toBe(key("command not found: 'yarn'"));
+    expect(key("File not found")).not.toBe(key("File too large"));
+  });
+  it("is computed once per error", () => {
+    const e = { ...m.errors[0]!, e: "boom 12" };
+    expect(messageOf(e)).toBe(messageOf(e));
+    expect(messageOf(e).key).toBe("boom <n>");
+    expect(messageOf({ ...e })).not.toBe(messageOf(e)); // another error is its own entry
+  });
+});
+
+describe("message groups", () => {
+  const E = (id: string, e: string, o: Partial<Err> = {}): Err => ({ ...m.errors[0]!, id, e, ts: `2026-11-04T10:${id.slice(1).padStart(2, "0")}:00.000Z`, ...o });
+  // Oldest first, the order the model holds them in. "a" has three errors, "b", "c" and the empty text one each.
+  const errs = [E("e1", "a 1", { t: "Edit", p: "foo" }), E("e2", "b 1"), E("e3", "a 2", { t: "Bash", p: "bar" }), E("e4", "a 3", { t: "Edit", p: "foo" }), E("e5", "c 1"), E("e6", "")];
+  it("lists the biggest group first, then the most recent on a tie", () => {
+    expect(msgGroups(errs).map(g => [g.key, g.n])).toEqual([["a <n>", 3], ["(no error text)", 1], ["c <n>", 1], ["b <n>", 1]]);
+  });
+  it("holds each group's errors newest first, whatever the input order", () => {
+    expect(msgGroups(errs.slice().reverse())[0]!.errs.map(e => e.id)).toEqual(["e4", "e3", "e1"]);
+    expect(msgGroups(errs)[0]!.errs.map(e => e.id)).toEqual(["e4", "e3", "e1"]);
+  });
+  it("gives each row its share, projects, tools and newest time", () => {
+    expect(msgGroups(errs)[0]).toMatchObject({ n: 3, share: 0.5, last: errs[3]!.ts, projects: 2, tools: [["Edit", 2], ["Bash", 1]], label: "a <n>" });
+    expect(msgGroups(errs)[1]).toMatchObject({ share: 1 / 6, projects: 1 });
+  });
+  it("orders a group's tools by count, then by name", () => {
+    const g = msgGroups([E("e1", "z", { t: "Write" }), E("e2", "z", { t: "Bash" }), E("e3", "z", { t: "Edit" }), E("e4", "z", { t: "Edit" })])[0]!;
+    expect(g.tools).toEqual([["Edit", 2], ["Bash", 1], ["Write", 1]]);
+  });
+  it("makes no group of no errors", () => {
+    expect(msgGroups([])).toEqual([]);
+    expect(msgList([], "", undefined).count).toBe("0 messages in range, most errors first");
+  });
+  it("counts and words the list, and filters it by a matching example", () => {
+    const g = msgGroups(errs);
+    expect(msgList(g, "", undefined).count).toBe("4 messages in range, most errors first");
+    expect(msgList(g.slice(0, 1), "", undefined, "day").count).toBe("1 message in day, most errors first");
+    const l = msgList(g, "bash", undefined); // only a's example from the Bash tool matches
+    expect(l.count).toBe("1 of 4 match");
+    expect((l.items as { key: string }[]).map(x => x.key)).toEqual(["a <n>"]);
+    expect(msgList(g, "nothing like it", undefined)).toMatchObject({ items: [], count: "0 of 4 match" });
+  });
+  it("puts the linked example's group first", () => {
+    const g = msgGroups(errs);
+    expect((msgList(g, "", errs[1]).items as { key: string }[]).map(x => x.key)).toEqual(["b <n>", "a <n>", "(no error text)", "c <n>"]);
+    expect((msgList(g, "", errs[0]).items as { key: string }[])[0]!.key).toBe("a <n>");
   });
 });

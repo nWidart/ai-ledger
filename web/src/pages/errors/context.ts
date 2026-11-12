@@ -1,5 +1,5 @@
 // What the Errors components share: the model and view, and the page-level state that outlives a re-render or the detail
-// moving into the sheet (open incidents, opened examples, loaded full text).
+// moving into the sheet (open incidents and message groups, opened examples, loaded full text).
 import { createContext, useContext } from "react";
 import type { Day, ErrorDetail } from "../../api";
 import type { Err, Filtered, Fixes, Model, View, ViewTypes } from "./model";
@@ -27,7 +27,7 @@ export interface ErrorsCtx {
   /** Run once after the next render (focus a control that render brings). */
   after: (fn: () => void) => void;
   say: (s: string) => void;
-  openInc: Set<number>; opened: Set<string>; fullText: Map<string, ErrorDetail>; loading: Set<string>; failed: Set<string>;
+  openInc: Set<number>; openMsg: Set<string>; opened: Set<string>; fullText: Map<string, ErrorDetail>; loading: Set<string>; failed: Set<string>;
   /** Re-render after changing one of the sets above. */
   bump: () => void;
 }

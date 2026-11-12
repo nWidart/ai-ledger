@@ -1,6 +1,6 @@
 // Errors data logic, ported from dashboard_template.html: the payload indexed once, then pure functions of it and the view.
 // /api/errors returns every error; the page filters on the client, by project and source among others.
-import type { Category, Day, ErrorRow, ErrorsPayload, Incident, Source } from "../../api";
+import type { Category, Day, ErrorRow, ErrorsPayload, Incident, Source, Ts } from "../../api";
 import { dayLabel, num as fmt } from "../../format";
 import type { Range } from "../../hash";
 
@@ -377,7 +377,7 @@ export function breakdown(base: readonly Err[], key: (e: Err) => string, keep?: 
 }
 /** The example search: command, error, follow-up, project and tool. */
 export const exHit = (q: string) => { const l = q.toLowerCase(); return (e: Err) => !l || (e.i + e.e + e.r + e.p + e.t).toLowerCase().includes(l); };
-export interface ExList { flat: boolean; items: Err[] | Group[]; count: string }
+export interface ExList { flat: boolean; items: Err[] | Group[] | MsgGroup[]; count: string }
 /** The detail's list for a search: errors newest first, or incidents with a matching failure; the linked one first. */
 export function exList(base: readonly Err[], groups: readonly Group[], flat: boolean, q: string, focused: Err | undefined, scope = "range"): ExList {
   const hit = exHit(q);
@@ -389,6 +389,67 @@ export function exList(base: readonly Err[], groups: readonly Group[], flat: boo
   const ex = groups.filter(g => g.errs.some(hit)), fi = focused?.n;
   if (fi != null) { const i = ex.findIndex(g => g.i === fi); if (i > 0) ex.unshift(...ex.splice(i, 1)); }
   return { flat, items: ex, count: q ? `${fmt(ex.length)} of ${fmt(groups.length)} match` : `${fmt(groups.length)} in ${scope}, most attempts first` };
+}
+// ---------- messages ----------
+export const NO_TEXT = "(no error text)";
+const LABEL_MAX = 120; // the label is the key cut here for display
+/** A first line that says nothing alone: "Error:", "Exit code 1", "<tool_use_error>". The next line carries the message. */
+const WRAPPER = /^(?:error|exit code \d+|<tool_use_error>)\s*:?$/i;
+// The rules, in order: each replaces incidental detail so errors that differ only by it fall together.
+const sub = (s: string) => () => s;
+const RULES: [RegExp, (m: string) => string][] = [
+  // A long quoted string is detail; a short one (a command, a flag) is the message. A quote inside a word (don't) is no quote.
+  [/(?<!\w)(["'`])(?:(?!\1).){41,}\1(?!\w)/g, (m: string) => `${m[0]}<…>${m[0]}`],
+  // Absolute, ~/, ./ and ../ paths. Not after a word, ":" or "/", so a URL stays whole. A sentence's final dot stays out of the path.
+  [/(?<![\w<>:/.~@-])(?:~|\.{1,2})?(?:\/[\w.@+%~-]+)+\/?/g, (m: string) => "<path>" + /\.*$/.exec(m)![0]],
+  // Relative paths: two slashes or more, or a final extension, and a letter somewhere ("and/or" and "3/4" are not paths).
+  [/(?<![\w<>:/.~@-])(?:[\w.@-]+\/)+[\w.@-]+/g, (m: string) => {
+    const t = m.replace(/\.+$/, "");
+    return /[A-Za-z]/.test(t) && (t.split("/").length > 2 || /\.\w{1,8}$/.test(t)) ? "<path>" + m.slice(t.length) : m;
+  }],
+  [/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, sub("<id>")], // UUIDs
+  [/\b(?:toolu|call|msg|req)_\w{8,}/g, sub("<id>")], // tool-use, message and request ids
+  // 7+ hex characters with a digit and a letter: a git hash or an address. Plain digits are a number, plain letters a word.
+  [/\b(?:0x)?(?=[0-9a-f]*\d)(?=[0-9a-f]*[a-f])[0-9a-f]{7,}\b/gi, sub("<id>")],
+  // Numbers: line:col, clock times, decimals, thousands, ports, sizes, durations (the unit stays). Not the digits of a word (utf8, sha256, E2BIG).
+  [/\b0x[0-9a-f]+\b|(?<![A-Za-z_\d])\d+(?:[.,:]\d+)*/gi, sub("<n>")],
+];
+export interface Msg { key: string; label: string }
+const msgs = new WeakMap<Err, Msg>();
+/** An error's group key (its normalized text) and its label (the key cut for display). Computed once per error. */
+export function messageOf(e: Err): Msg {
+  let r = msgs.get(e);
+  if (!r) msgs.set(e, r = normalize(e.e));
+  return r;
+}
+/** The text of the first non-empty line, plus the next non-empty one when the first is only a wrapper; the rules applied; whitespace collapsed. */
+export function normalize(text: string): Msg {
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  let t = lines[0] ?? "";
+  if (WRAPPER.test(t) && lines[1]) t += " " + lines[1];
+  for (const [re, to] of RULES) t = t.replace(re, to);
+  const key = t.replace(/\s+/g, " ").trim() || NO_TEXT;
+  return { key, label: key.length > LABEL_MAX ? key.slice(0, LABEL_MAX - 1) + "…" : key };
+}
+/** One message's errors, newest first, with what the row shows. share: of the grouped errors; tools: by count, then name. */
+export interface MsgGroup extends Msg { errs: Err[]; n: number; share: number; last: Ts; projects: number; tools: [string, number][] }
+/** The errors grouped by message in one pass: most errors first, the most recent first on a tie. */
+export function msgGroups(errs: readonly Err[]): MsgGroup[] {
+  const by = new Map<string, Err[]>(), total = errs.length || 1;
+  for (const e of errs) { const k = messageOf(e).key, a = by.get(k); if (a) a.push(e); else by.set(k, [e]); }
+  return [...by.values()].map(list => {
+    list.sort((a, b) => (a.ts < b.ts ? 1 : a.ts > b.ts ? -1 : 0));
+    const t = new Map<string, number>();
+    for (const e of list) t.set(e.t, (t.get(e.t) || 0) + 1);
+    return { ...messageOf(list[0]!), errs: list, n: list.length, share: list.length / total, last: list[0]!.ts, projects: new Set(list.map(e => e.p)).size,
+      tools: [...t].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1)) };
+  }).sort((a, b) => b.n - a.n || (a.last < b.last ? 1 : a.last > b.last ? -1 : 0));
+}
+/** The By message list for a search: the groups with a matching example, the linked example's group first. */
+export function msgList(groups: readonly MsgGroup[], q: string, focused: Err | undefined, scope = "range"): ExList {
+  const hit = exHit(q), ex = groups.filter(g => g.errs.some(hit)), fk = focused && messageOf(focused).key;
+  if (fk != null) { const i = ex.findIndex(g => g.key === fk); if (i > 0) ex.unshift(...ex.splice(i, 1)); }
+  return { flat: false, items: ex, count: q ? `${fmt(ex.length)} of ${fmt(groups.length)} match` : `${fmt(groups.length)} message${groups.length === 1 ? "" : "s"} in ${scope}, most errors first` };
 }
 /** Usage shows the session's own project; only an Errors project or source filter carries over. */
 export const sessionHref = (v: View, s: string) =>

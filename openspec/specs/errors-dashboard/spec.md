@@ -260,3 +260,51 @@ The Errors page SHALL show a notice when the hash names an example that the load
 #### Scenario: Live link shows none
 - **WHEN** the user opens `#ex=<id>` for an example the store holds
 - **THEN** the page shows no notice and the example opens as before
+
+### Requirement: List a type's errors by message
+The open type's detail SHALL offer a third list, "By message", beside Incidents and Every error, saved with the other list modes. It SHALL hold the errors the other lists hold (the type's errors in the view, narrowed by the selected bucket and tool), one row per normalized message: count, message, share of the listed errors, project count, top two tools with "+N", newest time. Rows SHALL be ordered most errors first, the most recent first on a tie.
+
+#### Scenario: Group by message
+- **WHEN** a type holds 35 errors with one message that differs only by a number, and 8 others
+- **THEN** By message lists "35×" first with its share, and the other messages after it
+
+#### Scenario: Switch and restore
+- **WHEN** the user picks By message and reloads the page
+- **THEN** By message is pressed again, and focus stayed on its button when it was picked
+
+#### Scenario: Bucket and tool
+- **WHEN** a bucket or tool is selected
+- **THEN** only that bucket's and tool's errors are grouped, and the shares count them
+
+### Requirement: Search and count messages
+In By message the search box SHALL keep the groups that have an example matching it. The count line SHALL read "N messages in range, most errors first" (the bucket's granularity in place of "range" when one is selected), and "N of M match" while searching. Each search change SHALL be announced like the other lists.
+
+#### Scenario: Search
+- **WHEN** the user types a word that one group's example holds
+- **THEN** only that group is listed, and the count reads "1 of 5 match"
+
+### Requirement: Open a message group
+A message row SHALL be a button with `aria-expanded` that opens the group's examples, newest first, thirty at a time with a "Show more examples" button that moves focus to the first new example. A linked example SHALL open its group, listed first and first within it. A copy button on each row SHALL copy the normalized message and say whether it worked, to sight and to screen readers.
+
+#### Scenario: Open and page
+- **WHEN** the user opens a group of 35 errors
+- **THEN** 30 examples show, newest first, and Show more examples adds the other 5
+
+#### Scenario: Linked example
+- **WHEN** a link names an example in a small group of a type with a larger one
+- **THEN** its group is listed first and open, and the example is first, focused and in view
+
+#### Scenario: Copy
+- **WHEN** the user presses a row's copy button
+- **THEN** the normalized message is on the clipboard and the button reads "Copied ✓"; a refused write reads "Copy failed"
+
+### Requirement: Normalize an error message
+The page SHALL group errors by a normalized form of the error text: its first non-empty line, plus the next when the first is only a wrapper (`Error:`, `Exit code N`); paths replaced by `<path>`; UUIDs, tool-use ids and hex runs of 7 or more by `<id>`; numbers by `<n>`; quoted strings over 40 characters by `<…>`; whitespace collapsed. An empty text SHALL group as "(no error text)". Each error SHALL be normalized once.
+
+#### Scenario: Incidental detail
+- **WHEN** two errors differ only by a path, a number or an id
+- **THEN** they are one group
+
+#### Scenario: Different messages
+- **WHEN** two errors differ in their words, or in a short quoted command name
+- **THEN** they are two groups
