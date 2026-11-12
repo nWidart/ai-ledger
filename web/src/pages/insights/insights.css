@@ -93,7 +93,6 @@
 .pg-insights .fchips { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; margin: 8px 0 0; }
 .pg-insights .fchips .chip.fx { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-ink); }
 .pg-insights .fchips .linkish { font-size: 13px; }
-.pg-insights #logTitle:focus { outline: none; }
 .pg-insights .ledger li.on:not(.pick) { background: var(--accent-soft); box-shadow: inset 2px 0 0 var(--accent); font-weight: 600; }
 /* A pickable row's button has its own columns in Ledger.css; give it the same ones as the rows above (wider side figure). */
 .pg-insights .ledger li.pick .rowbtn { grid-template-columns: minmax(0, 13rem) minmax(40px, 1fr) 3.5rem 5.5rem; }
