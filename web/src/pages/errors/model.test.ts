@@ -349,6 +349,11 @@ describe("tool breakdown", () => {
     expect(b.top).toEqual([["c", 3], ["b", 2], ["a", 1], ["d", 1], ["e", 1]]);
     expect(b).toMatchObject({ rest: 2, n: 10 });
     expect(b.rows).toHaveLength(7);
+    // A kept row below the top five is listed after them and leaves the rest.
+    const k = breakdown(errs(["a", "b", "b", "c", "c", "c", "d", "e", "f", "g"]), e => e.t, "g");
+    expect(k.top.map(r => r[0])).toEqual(["c", "b", "a", "d", "e", "g"]);
+    expect(k).toMatchObject({ rest: 1, folded: 1 });
+    expect(breakdown(errs(["a", "b", "b", "c", "c", "c", "d", "e", "f", "g"]), e => e.t, "c").top).toHaveLength(5); // already in the top five
     expect(breakdown(errs(["a", "a"]), e => e.src)).toMatchObject({ rows: [["claude", 2]], rest: 0 });
   });
   it("narrows to the selected tool, or keeps everything", () => {

@@ -366,12 +366,14 @@ export function beforeAfter(m: Model, v: View, cat: string, fixDay: Day): Before
     : af.r! < b4.r! ? ["Rate lower", "ok"] : af.r! > b4.r! ? ["Rate higher", "bad"] : ["Rate unchanged", "warn"];
   return { sides: [b4, af], need, enough, verdict };
 }
-/** Where a type happens, by a key of its errors (project, tool, agent): the top five and the rest. */
-export function breakdown(base: readonly Err[], key: (e: Err) => string) {
+/** Where a type happens, by a key of its errors (project, tool, agent): the top five and the rest. keep: a row that shows even
+ *  outside the top five (the selected tool), listed after them; folded counts the rows left in the rest. */
+export function breakdown(base: readonly Err[], key: (e: Err) => string, keep?: string | null) {
   const by: Record<string, number> = {};
   for (const e of base) by[key(e)] = (by[key(e)] || 0) + 1;
-  const rows = Object.entries(by).sort((a, b) => b[1] - a[1]);
-  return { rows, top: rows.slice(0, TOPN), rest: rows.slice(TOPN).reduce((s, r) => s + r[1], 0), n: base.length };
+  const rows = Object.entries(by).sort((a, b) => b[1] - a[1]), kept = keep ? rows.slice(TOPN).find(r => r[0] === keep) : undefined;
+  const top = kept ? [...rows.slice(0, TOPN), kept] : rows.slice(0, TOPN), hidden = rows.slice(TOPN).filter(r => r !== kept);
+  return { rows, top, rest: hidden.reduce((s, r) => s + r[1], 0), folded: hidden.length, n: base.length };
 }
 /** The example search: command, error, follow-up, project and tool. */
 export const exHit = (q: string) => { const l = q.toLowerCase(); return (e: Err) => !l || (e.i + e.e + e.r + e.p + e.t).toLowerCase().includes(l); };

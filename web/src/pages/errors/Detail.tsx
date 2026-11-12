@@ -9,7 +9,7 @@ import { Example, Examples, Incident } from "./Examples";
 import { Spark } from "./Spark";
 import {
   beforeAfter, bucketOf, buckets, breakdown, byWeight, dur, exList, incSpan, incSummary, inBucket, inTool, NOISE, RECOVERED_NOTE, series,
-  label, MIN_PCT_ERRORS, TOPN, typeColor, whereToStart, yearLabel, type Err, type Group,
+  label, MIN_PCT_ERRORS, typeColor, whereToStart, yearLabel, type Err, type Group,
 } from "./model";
 
 const reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -149,8 +149,8 @@ function TypeDetail({ cat }: { cat: string }) {
       <Example e={focused!} />
     </div>}
     <div className="exbar" ref={bar}>
-      <div className="row" style={{ justifyContent: "space-between", marginTop: 4 }}><span className="row" style={{ flexWrap: "nowrap" }}><b id="exHead">{flat ? "Errors" : "Incidents"}</b>
-        {v.tool && <button type="button" className="chip bucket" id="toolClr" aria-label={`Only ${v.tool}. Show all tools`} onClick={() => clearTool(v.tool!)}>{v.tool} <span aria-hidden="true">✕</span></button>}</span><span className="muted" style={{ fontSize: 12 }} id="exCount">{list.count}</span></div>
+      <div className="row" style={{ justifyContent: "space-between", marginTop: 4 }}><span className="row" style={{ minWidth: 0 }}><b id="exHead">{flat ? "Errors" : "Incidents"}</b>
+        {v.tool && <button type="button" className="chip bucket tool" id="toolClr" title={v.tool} aria-label={`Only ${v.tool}. Show all tools`} onClick={() => clearTool(v.tool!)}><span className="nm">{v.tool}</span> <span aria-hidden="true">✕</span></button>}</span><span className="muted" style={{ fontSize: 12 }} id="exCount">{list.count}</span></div>
       <div className="seg exmode" id="exMode" role="group" aria-label="List">
         <button type="button" data-m="inc" aria-pressed={!flat} onClick={() => setMode("inc")}>Incidents</button>
         <button type="button" data-m="flat" aria-pressed={flat} onClick={() => setMode("flat")}>Every error, newest first</button>
@@ -204,7 +204,7 @@ function Breakdown({ by, title, noun, base, of, color, name, pick, pressed }: {
   by: string; title: string; noun: string; base: readonly Err[]; of: (e: Err) => string; color: (k: string, i: number) => string;
   name: (k: string) => ReactNode; pick: (k: string, n: number) => void; pressed?: string | null;
 }) {
-  const { rows, top, rest, n } = breakdown(base, of);
+  const { rows, top, rest, folded, n } = breakdown(base, of, pressed);
   return (
     <div className="byset" data-by={by}>
       <div className="row" style={{ justifyContent: "space-between" }}><b style={{ fontSize: 13 }}>{title}</b><span className="muted" style={{ fontSize: 12 }}>{fmt(rows.length)} {noun}{rows.length === 1 ? "" : "s"}</span></div>
@@ -212,7 +212,7 @@ function Breakdown({ by, title, noun, base, of, color, name, pick, pressed }: {
       <ul>
         {top.map(([k, c]) => <li key={k}><button type="button" data-k={k} title={pressed === k ? `Show every ${noun}` : `Show only ${k}`} aria-pressed={pressed === undefined ? undefined : pressed === k} onClick={() => pick(k, c)}>
           {name(k)}<span className="v">{fmt(c)}</span><span className="s">{fmt(c / n * 100, 0)}%</span></button></li>)}
-        {rest ? <li className="muted" style={{ fontSize: 12, padding: "4px 0" }}>{fmt(rows.length - TOPN)} more: {fmt(rest)} errors</li> : null}
+        {rest ? <li className="muted" style={{ fontSize: 12, padding: "4px 0" }}>{fmt(folded)} more: {fmt(rest)} errors</li> : null}
       </ul>
     </div>
   );

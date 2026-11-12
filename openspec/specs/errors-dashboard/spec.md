@@ -123,11 +123,15 @@ The open type's detail SHALL list, next to By project, the type's top five tools
 - **THEN** the page's source filter is that agent and By agent is hidden
 
 ### Requirement: Narrow the type detail to a tool
-A By tool row SHALL narrow the open type's detail, and only it, to the errors of that tool: the incident sentence, By project, By agent, and the incidents and examples with their counts. The summary, chart and type table SHALL NOT change. The selection SHALL apply on top of a selected chart bucket. The selected row SHALL be marked pressed, and a click on it, or on a chip by the list header that names the tool, SHALL clear the selection.
+A By tool row SHALL narrow the open type's detail, and only it, to the errors of that tool, on top of a selected chart bucket: the incident sentence, By project, By agent, and the incidents and examples with their counts. The summary, chart and type table SHALL NOT change. The selected row SHALL stay listed and pressed, and a click on it or on a chip naming the tool SHALL clear the selection.
 
 #### Scenario: Select a tool
 - **WHEN** the user clicks a tool in By tool
 - **THEN** the detail counts only that tool's errors, the row is pressed, a chip names the tool, and the type table is unchanged
+
+#### Scenario: Selected tool below the top five
+- **WHEN** a link selects a tool that ranks sixth or lower in the type
+- **THEN** its row is listed after the top five, pressed, and the fold counts the other rows
 
 #### Scenario: One tool
 - **WHEN** a type's errors come from one tool only and none is selected
@@ -138,7 +142,7 @@ A By tool row SHALL narrow the open type's detail, and only it, to the errors of
 - **THEN** the detail returns to all tools and focus stays on a control that still exists
 
 ### Requirement: Keep the selected tool in the view
-The selected tool SHALL be part of the URL view under `etool`, push a history entry, and SHALL NOT be saved with the last view. It SHALL clear when the type closes, another type opens, or the open type has no error of that tool in the view. A linked example of another tool SHALL show under "Outside current filters", Clear filters SHALL also clear the tool, and an example's permalink SHALL leave it out.
+The selected tool SHALL be part of the URL view under `etool`, push a history entry, and SHALL NOT be saved with the last view. It SHALL clear when the type closes, another type opens, or the open type has no error of that tool in the view. Opening a type from the command palette SHALL clear it too. A linked example of another tool SHALL show under "Outside current filters", Clear filters SHALL also clear the tool, and an example's permalink SHALL leave it out.
 
 #### Scenario: Another type opens
 - **WHEN** a tool is selected and the user opens another type

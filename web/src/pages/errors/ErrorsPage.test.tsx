@@ -625,4 +625,53 @@ describe("ErrorsPage tool and agent breakdown", () => {
     await open("#range=30&cat=tests"); // codex only
     expect(set("agent")).toBeNull();
   });
+  it("lists only the tool's errors in Every error mode, and the count says so", async () => {
+    await open("#range=30&cat=x&etool=Edit");
+    await userEvent.click(screen.getByRole("button", { name: "Every error, newest first" }));
+    expect(document.getElementById("exCount")!.textContent).toBe("4 in range, newest first");
+    const ex = [...document.querySelectorAll("#exList .ex")];
+    expect(ex).toHaveLength(4);
+    expect(ex.some(e => e.textContent!.includes("mcp__srv__q"))).toBe(false);
+    await userEvent.click(document.getElementById("toolClr")!);
+    expect(document.getElementById("exCount")!.textContent).toBe("5 in range, newest first");
+    expect(document.querySelectorAll("#exList .ex")).toHaveLength(5);
+  });
+
+  it("leaves the summary, chart, type table and the chart's point reading as they are under a tool filter", async () => {
+    // Everything on the page but the open type's detail, and what the keyboard reading says of the first point.
+    const page_ = async () => {
+      const root = document.querySelector(".pg-errors")!.cloneNode(true) as HTMLElement;
+      root.querySelectorAll("#detail, #detailLive").forEach(n => n.remove());
+      document.getElementById("chart")!.focus();
+      await userEvent.keyboard("{Home}");
+      return [root.innerHTML.replace(/_r_\w+_/g, "id"), document.getElementById("chartLive")!.textContent];
+    };
+    await open("#range=30&cat=x");
+    const plain = await page_();
+    expect(plain[1]).toMatch(/rate/);
+    await open("#range=30&cat=x&etool=Edit");
+    expect(document.getElementById("toolClr")).toBeTruthy();
+    expect(await page_()).toEqual(plain);
+  });
+
+  it("keeps the selected tool's row when it ranks below the top five, with the fold counting the rest", async () => {
+    const t01 = mix.errors[0]!, names = ["a", "b", "c", "d", "e", "f", "g"];
+    const seven = withErrors([...mix.errors.filter(e => e.c === "x"), { ...t01, id: "z1" }, { ...t01, id: "z2" }].map((e, i) => ({ ...e, t: names[i]! })));
+    await open("#range=30&cat=x&etool=a", seven); // ties list the later error first: g f e d c, then b and a
+    expect(rowsOf("tool").map(r => r[0])).toEqual(["g", "f", "e", "d", "c", "a"]);
+    expect(tool("a").getAttribute("aria-pressed")).toBe("true");
+    expect(set("tool")!.querySelector("li.muted")!.textContent).toBe("1 more: 1 errors");
+    expect(set("tool")!.textContent).toContain("7 tools");
+    await userEvent.click(tool("a"));
+    expect(hashOf().etool).toBeUndefined();
+    expect(rowsOf("tool")).toHaveLength(5);
+    expect(set("tool")!.querySelector("li.muted")!.textContent).toBe("2 more: 2 errors");
+  });
+
+  it("names the tool in the chip's title, so a long name can be cut to fit", async () => {
+    await open("#range=30&cat=x&etool=mcp__srv__q");
+    const chip = document.getElementById("toolClr")!;
+    expect(chip.getAttribute("title")).toBe("mcp__srv__q");
+    expect(chip.querySelector(".nm")!.textContent).toBe("mcp__srv__q");
+  });
 });
