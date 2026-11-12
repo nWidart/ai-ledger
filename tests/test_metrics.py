@@ -126,6 +126,21 @@ class MetricsTest(unittest.TestCase):
         self.assertEqual([(c["project"], c["new"]) for c in u["changes"]], [("foo", False)])
         self.assertAlmostEqual(u["changes"][0]["prev_cost"], prev["cost"])
 
+    def test_cost_by_kind(self):
+        # The five kinds add up to the cost, on the base tier (r1, r2), the long tier (r4) and with an unpriced request (r3).
+        for v in (self.foo7, self.all):
+            t = v["totals"]
+            self.assertAlmostEqual(sum(t[f"cost_{k}"] for k in metrics.PRICE_KINDS), t["cost"])
+        t = self.foo7["totals"]
+        self.assertEqual({k: round(t[f"cost_{k}"], 6) for k in metrics.PRICE_KINDS},
+                         dict(input=2.0, output=10.0, cache_read=0.8, cache_5m=1.0, cache_1h=2.0))
+        a = self.all["totals"]  # r4 on the long tier adds 60 input, 10 output, 60 cache read at 2 per MTok
+        self.assertAlmostEqual(a["cost_input"], 2.0 + 120 / 1e6)
+        self.assertAlmostEqual(a["cost_output"], 10.0 + 20 / 1e6)
+        self.assertAlmostEqual(a["cost_cache_read"], 0.8 + 120 / 1e6)
+        none = metrics.usage(self.con.cursor(), "foo", 1, prices=PRICES, today=TODAY)  # Nov 5 only: the unpriced request
+        self.assertEqual([none["totals"][f"cost_{k}"] for k in metrics.PRICE_KINDS], [None] * 5)
+
     def test_previous_period(self):
         # One day ending today (s2) against the day before it (s1); same project filter, nothing before all time.
         prev = metrics.usage(self.con.cursor(), "foo", 1, prices=PRICES, today=TODAY)["previous"]
@@ -143,7 +158,8 @@ class MetricsTest(unittest.TestCase):
         ch = metrics.usage(self.con.cursor(), "", 35, prices=PRICES, today=TODAY)["changes"]
         self.assertEqual([(r["project"], r["new"]) for r in ch], [("foo", True), ("bar", False)])
         self.assertAlmostEqual(ch[0]["delta"], 15.8)
-        self.assertEqual((ch[1]["cost"], ch[1]["prev_cost"]), (0, 130 * 2 / 1e6))
+        self.assertEqual(ch[1]["cost"], 0)
+        self.assertAlmostEqual(ch[1]["prev_cost"], 130 * 2 / 1e6)
         self.assertAlmostEqual(ch[1]["delta"], -130 * 2 / 1e6)
         # One day: foo's priced spend was all the day before; that day it ran only an unpriced model, so its cost and change are unknown.
         one = metrics.usage(self.con.cursor(), "", 1, prices=PRICES, today=TODAY)["changes"]
