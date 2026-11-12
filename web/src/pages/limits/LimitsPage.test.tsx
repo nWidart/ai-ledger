@@ -192,6 +192,24 @@ describe("status strip", () => {
     expect(chip(windowName(fable)).textContent).toContain(`${windowName(fable)} ${num(fable.current)}%`);
   });
 
+  it("lists the chips in payload order", async () => {
+    show(fixture);
+    await lede();
+    const names = strip().getAllByRole("listitem").map(li => li.querySelector("b")!.textContent);
+    expect(names).toEqual(fixture.windows.map(windowName));
+  });
+
+  it("sits in the header between the heading and the suggestion", async () => {
+    show(fixture);
+    await lede();
+    const header = document.getElementById("overview")!, list = screen.getByRole("list", { name: "Open windows at a glance" });
+    const lead = document.getElementById("lede")!, suggest = header.querySelector(".suggest")!;
+    expect(suggest).toBeTruthy();
+    expect(header.contains(list)).toBe(true);
+    expect(lead.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(list.compareDocumentPosition(suggest) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("says at limit for a window at its limit, and runs out for one forecast to hit 100%", async () => {
     show(out);
     await lede();
