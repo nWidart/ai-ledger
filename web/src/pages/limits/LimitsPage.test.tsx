@@ -8,7 +8,7 @@ import { Palette } from "../../components/palette/Palette";
 import { openPalette } from "../../components/palette/store";
 import { mockApi } from "../../components/sheets/testing";
 import { num, usd } from "../../format";
-import { caption, capText, pace, span, whenDay, windowName } from "./limits";
+import { caption, capText, pace, recentText, span, whenDay, windowName } from "./limits";
 import { LimitsPage } from "./LimitsPage";
 
 const fixture = limits as LimitsPayload;
@@ -141,6 +141,29 @@ describe("LimitsPage", () => {
     expect(within(screen.getByRole("list", { name: "Chart key" })).getByText("plan change")).toBeTruthy();
     expect(within(screen.getByRole("region", { name: "Claude Code weekly · Fable" })).getByText(/Not calibrated yet/)).toBeTruthy();
     expect(document.querySelectorAll(".lim-chart .band")).toHaveLength(2);
+  });
+
+  it("adds the last-24-hours line and its key entry only for a window with that scenario", async () => {
+    show(fixture);
+    await lede();
+    const claudeCard = within(screen.getByRole("region", { name: "Claude Code weekly" })), key = within(screen.getByRole("list", { name: "Chart key" }));
+    const line = claudeCard.getByText(recentText(claude)!);
+    expect(line.textContent).toBe(`If the last 24 hours continue: reaches 100% at ${whenDay(claude.forecast!.recent_hits_at)}`);
+    expect(line.className).toBe("cap-text recent out");
+    expect(within(screen.getByRole("region", { name: "Codex weekly" })).getByText(recentText(codex)!).className).toBe("cap-text recent");
+    expect(within(screen.getByRole("region", { name: "Claude Code weekly · Fable" })).queryByText(/last 24 hours continue/)).toBeNull();
+    expect(key.getByText("last 24 h pace")).toBeTruthy();
+    expect(document.querySelectorAll(".lim-chart .recent")).toHaveLength(2);
+  });
+
+  it("shows no last-24-hours line, key entry or path without a scenario", async () => {
+    const none = (w: LimitWindow): LimitWindow => w.forecast ? { ...w, forecast: { ...w.forecast, recent_pace: null, recent_hits_at: null,
+      recent_at_reset: null, curve: w.forecast.curve.map(p => ({ ...p, recent: null })) } } : w;
+    show({ ...fixture, windows: fixture.windows.map(none) });
+    await lede();
+    expect(screen.queryByText(/last 24 hours continue/)).toBeNull();
+    expect(within(screen.getByRole("list", { name: "Chart key" })).queryByText("last 24 h pace")).toBeNull();
+    expect(document.querySelector(".lim-chart .recent")).toBeNull();
   });
 
   it("lists past windows with hits, early resets and unused capacity", async () => {

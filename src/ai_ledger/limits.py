@@ -469,20 +469,25 @@ def forecast(w, current, cal, profile, recent=None):
         mid, lo, hi = (mid + r) / 2, min(lo, r), max(hi, r)
     shape = profile.shape if shaped else [1 / 24] * 24
     step = step_of(w)
-    t, vals, curve = profile.now, dict(mid=current, lo=current, hi=current), []
-    hits = dict(mid=None, lo=None, hi=None)
-    curve.append(dict(t=metrics.iso(t), **{k: round(v, 2) for k, v in vals.items()}))
+    last_day = profile.days(source, w.scope, 1)  # the second line: the last 24 hours go on, spread by the same shape
+    paces = dict(mid=mid, lo=lo, hi=hi)
+    if last_day:
+        paces["recent"] = last_day[0][0] / last_day[0][1]
+    point = lambda t: {"t": metrics.iso(t), "recent": None, **{k: round(v, 2) for k, v in vals.items()}}
+    t, vals, curve = profile.now, dict.fromkeys(paces, current), []
+    hits = dict.fromkeys(paces)
+    curve.append(point(t))
     while t < w.resets_at:
         dt = min(step, w.resets_at - t)
         share = shape[profile.hour(t + dt / 2)] * dt.total_seconds() / 3600
-        for k, per_day in (("mid", mid), ("lo", lo), ("hi", hi)):
+        for k, per_day in paces.items():
             before = vals[k]
             vals[k] = min(100.0, before + per_day * share / cal["per_pct"])
             if hits[k] is None and vals[k] >= 100 > before:
                 frac = (100 - before) / (vals[k] - before) if vals[k] > before else 0
                 hits[k] = t + dt * frac
         t += dt
-        curve.append(dict(t=metrics.iso(t), **{k: round(v, 2) for k, v in vals.items()}))
+        curve.append(point(t))
     left = (w.resets_at - profile.now).total_seconds() / 86400
     target = (100 - current) / left if left > 0 else None
     now_pace = mid / cal["per_pct"]
@@ -491,7 +496,10 @@ def forecast(w, current, cal, profile, recent=None):
                 hits_at=metrics.iso(hits["mid"]), hits_at_early=metrics.iso(hits["hi"]), hits_at_late=metrics.iso(hits["lo"]),
                 at_reset=None if hits["mid"] else round(vals["mid"], 1), at_reset_low=round(vals["lo"], 1),
                 at_reset_high=round(vals["hi"], 1), pace_target=None if target is None else round(target, 2),
-                pace_now=round(now_pace, 2), pace=None if target is None else ("ahead" if now_pace > target else "behind"))
+                pace_now=round(now_pace, 2), pace=None if target is None else ("ahead" if now_pace > target else "behind"),
+                recent_pace=round(paces["recent"] / cal["per_pct"], 2) if "recent" in paces else None,
+                recent_hits_at=metrics.iso(hits.get("recent")),
+                recent_at_reset=None if "recent" not in paces or hits["recent"] else round(vals["recent"], 1))
 
 
 # ---------- the Limits page payload ----------

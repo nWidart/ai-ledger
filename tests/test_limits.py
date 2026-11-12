@@ -392,6 +392,71 @@ class ForecastTest(AnalysisCase):
         self.assertIn("Not calibrated", w["no_forecast"])
 
 
+class RecentScenarioTest(AnalysisCase):
+    """The second line, "if the last 24 hours continue": it never moves the usual-pace forecast."""
+    NOW = datetime(2026, 11, 6, 0, 0)
+    RESETS = datetime(2026, 11, 9, 0, 0)
+
+    def forecast_for(self, pct, scope=""):
+        self.snap("claude", "weekly_scoped" if scope else "weekly_all", self.NOW, pct, resets=self.RESETS, scope=scope)
+        return self.payload(self.NOW)["windows"][0]["forecast"]
+
+    def hot_day(self):
+        busy_days(self, "claude", "claude-opus-5-5", 30, self.NOW, 1.0)
+        self.spend("claude", "claude-opus-5-5", *[(self.NOW - timedelta(hours=h), 4.0) for h in range(1, 13)])
+
+    def test_a_hot_day_runs_out_before_the_usual_pace_does(self):
+        self.hot_day()
+        f = self.forecast_for(50)
+        self.assertEqual(f["curve"][0]["recent"], 50)
+        self.assertEqual(f["curve"][-1]["recent"], 100)
+        self.assertIsNotNone(f["recent_hits_at"])
+        self.assertIsNone(f["recent_at_reset"])
+        self.assertTrue(f["hits_at"] is None or f["recent_hits_at"] < f["hits_at"])
+        self.assertGreater(f["recent_pace"], f["pace_usual"])
+
+    def test_a_quiet_day_is_a_flat_line(self):
+        busy_days(self, "claude", "claude-opus-5-5", 30, self.NOW - timedelta(days=1), 1.0)  # nothing in the last 24 hours
+        self.spend("claude", "claude-opus-5-5", (self.NOW - timedelta(hours=30), 1.0))
+        f = self.forecast_for(50)
+        self.assertEqual(f["recent_pace"], 0)
+        self.assertEqual({p["recent"] for p in f["curve"]}, {50})
+        self.assertEqual(f["recent_at_reset"], 50)
+        self.assertIsNone(f["recent_hits_at"])
+        self.assertGreater(f["curve"][-1]["mid"], 50)  # the usual pace still moves
+
+    def test_no_last_day_no_scenario(self):
+        busy_days(self, "claude", "claude-opus-5-5", 30, self.NOW, 1.0)
+        days = limits.Profile.days
+        with mock.patch.object(limits.Profile, "days", lambda p, source, scope, n: [] if n == 1 else days(p, source, scope, n)):
+            f = self.forecast_for(50)
+        self.assertEqual((f["recent_pace"], f["recent_hits_at"], f["recent_at_reset"]), (None, None, None))
+        self.assertEqual({p["recent"] for p in f["curve"]}, {None})
+        self.assertIsNotNone(f["hits_at"] or f["at_reset"])
+
+    def test_no_forecast_no_scenario(self):
+        self.assertIsNone(self.forecast_for(2))  # no counted use, so no calibration and no forecast
+
+    def test_the_usual_forecast_is_the_same_with_or_without_it(self):
+        self.hot_day()
+        self.snap("claude", "weekly_all", self.NOW, 50, resets=self.RESETS)
+        both = self.payload(self.NOW)["windows"][0]["forecast"]
+        days = limits.Profile.days
+        with mock.patch.object(limits.Profile, "days", lambda p, source, scope, n: [] if n == 1 else days(p, source, scope, n)):
+            usual = self.payload(self.NOW)["windows"][0]["forecast"]
+        keep = lambda f: {k: v for k, v in f.items() if not k.startswith("recent") and k != "curve"}
+        self.assertEqual(keep(both), keep(usual))
+        self.assertEqual([{k: v for k, v in p.items() if k != "recent"} for p in both["curve"]],
+                         [{k: v for k, v in p.items() if k != "recent"} for p in usual["curve"]])
+
+    def test_a_scoped_window_counts_only_its_model(self):
+        busy_days(self, "claude", "claude-opus-5-5", 30, self.NOW, 5.0)  # a heavy model the limit does not cover
+        busy_days(self, "claude", "claude-fable-5-1", 10, self.NOW, 1.0)  # $15 a day: 4 days in the window cost $60
+        f = self.forecast_for(50, scope="Fable")
+        self.assertEqual(f["recent_pace"], round(15 / (60 / 50), 2))
+        self.assertEqual(f["recent_pace"], 12.5)
+
+
 class PayloadTest(AnalysisCase):
     NOW = datetime(2026, 11, 6, 12, 0)
 

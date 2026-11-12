@@ -30,6 +30,14 @@ export function caption(w: LimitWindow): string {
   return `Resets first at about ${num(f.at_reset)}%${lo === hi ? "" : ` (${lo}–${hi}%)`}`;
 }
 
+/** The second forecast line, "If the last 24 hours continue: reaches 100% at Sat 2:00 PM" or "… about 41% at its reset";
+ *  null for a window at its limit or without a forecast or scenario. */
+export function recentText(w: LimitWindow): string | null {
+  const f = w.forecast;
+  if (w.at_limit || !f || f.recent_pace == null) return null;
+  return `If the last 24 hours continue: ${f.recent_hits_at ? `reaches 100% at ${whenDay(f.recent_hits_at)}` : `about ${num(f.recent_at_reset)}% at its reset`}`;
+}
+
 /** A window length as the cap-money line names its period: "a week", "per 5 hours", "a window" when unknown. */
 const capPeriod = (minutes: number | null): string =>
   minutes === 10080 ? "a week" : minutes === 1440 ? "a day" : minutes === 43200 ? "per 30 days" : minutes === 300 ? "per 5 hours"
@@ -64,7 +72,7 @@ export function pace(w: LimitWindow, now: string): { left: string; reset: string
 /** One point a reader can land on: a past reading or estimate, or a forecast point after now. */
 export type ReadPoint =
   | { kind: "past"; t: string; pct: number; measured: boolean }
-  | { kind: "forecast"; t: string; mid: number; lo: number; hi: number };
+  | { kind: "forecast"; t: string; mid: number; lo: number; hi: number; recent: number | null };
 
 /** A window's readable points in time order: the past series, then the forecast after its last point (the curve starts at
  *  now, which the series already holds). */
@@ -89,7 +97,7 @@ const pct1 = (v: number): string => { const r = Math.round(v * 10) / 10; return 
 export function readText(p: ReadPoint): string {
   if (p.kind === "past") return `${whenDay(p.t)} · ${pct1(p.pct)}% · ${p.measured ? "measured" : "estimated"}`;
   const lo = pct1(p.lo), hi = pct1(p.hi);
-  return `${whenDay(p.t)} · forecast ${pct1(p.mid)}%${lo === hi ? "" : ` (${lo}–${hi}%)`}`;
+  return `${whenDay(p.t)} · forecast ${pct1(p.mid)}%${lo === hi ? "" : ` (${lo}–${hi}%)`}${p.recent == null ? "" : ` · last 24 h pace ${pct1(p.recent)}%`}`;
 }
 
 /** Where a tooltip goes inside its box, in box pixels: right of the point (left of it near the right edge), kept inside

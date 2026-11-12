@@ -202,7 +202,8 @@ export interface ErrorDetail { id: string; i: string; e: string; r: string; cut:
 
 // Limits (/api/limits, limits.py payload): plan-limit windows per provider, their forecast, history and value.
 export interface LimitPoint { t: Ts; pct: number; measured: boolean }
-export interface ForecastPoint { t: Ts; mid: number; lo: number; hi: number }
+/** recent: the "if the last 24 hours continue" line; null when the forecast has no such scenario. */
+export interface ForecastPoint { t: Ts; mid: number; lo: number; hi: number; recent: number | null }
 export interface Forecast {
   /** shaped: follows the user's hour-of-day profile; flat: a constant rate (too little history). */
   kind: "shaped" | "flat"; curve: ForecastPoint[];
@@ -214,6 +215,10 @@ export interface Forecast {
    *  (recent weeks) and the window's pace over its last seventh (pace_window, over pace_window_hours; null until then). */
   pace_target: number | null; pace_now: number; pace: "ahead" | "behind" | null;
   pace_usual: number; pace_window: number | null; pace_window_hours: number | null;
+  /** The scenario "if the last 24 hours continue": the provider's counted use over the last 24 hours (for the models the
+   *  limit covers) carried to the reset on the same hour shape. Points a day, when it reaches 100% (null: resets first) and
+   *  the percent at reset (null when it reaches 100% first). All null when there is no scenario. */
+  recent_pace: number | null; recent_hits_at: Ts | null; recent_at_reset: number | null;
 }
 export interface LimitWindow {
   provider: string; provider_label: string; limit_id: string; scope: string; label: string; window_minutes: number | null; plan: string | null;
