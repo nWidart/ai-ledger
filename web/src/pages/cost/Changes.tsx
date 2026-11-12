@@ -49,7 +49,7 @@ export function Changes({ d, all, onAll }: { d: UsagePayload; all: boolean; onAl
             <span className="dv" aria-hidden="true"><span className="neg">{(c.delta ?? 0) < 0 && bar}</span><span className="pos">{(c.delta ?? 0) > 0 && bar}</span></span>
             <span className="d">{sgn(c.delta)}</span><span className="s">{money(c.prev_cost)} → {money(c.cost)}</span></button></li>;
         })}
-        {rest.length > 0 && <li className="rest"><span className="n">{plural(rest.length, "other project")}</span><span /><span className="d">{sgn(rest.reduce((a, c) => a + (c.delta ?? 0), 0))}</span><span className="s" /></li>}
+        {rest.length > 0 && <li className="rest"><span className="n">{plural(rest.length, "other project")}</span><span /><span className="d">{sgn(rest.some(c => c.delta == null) ? null : rest.reduce((a, c) => a + c.delta!, 0))}</span><span className="s" /></li>}
       </ol>
       {cs.length > CHG_TOP && <button type="button" className="linkish more" onClick={() => onAll(!all)}>{all ? `Show the top ${CHG_TOP}` : `Show all ${num(cs.length)} projects`}</button>}
     </section>

@@ -45,6 +45,23 @@ describe("cost tooltip: Other's projects", () => {
   });
 });
 
+describe("cost chart: unpriced requests", () => {
+  const read = (unpriced: number) => {
+    render(<CostChart d={{ ...d, daily: [{ ...d.daily[0]!, unpriced }] }} metric="cost" onMetric={() => {}} hidden={[]} onHidden={() => {}} stack="project" onStack={() => {}} onProject={() => {}} onSource={() => {}} onDay={() => {}} />);
+    act(() => chart().focus());
+    fireEvent.keyDown(chart(), { key: "Home" });
+    return document.querySelector(".sr")!.textContent;
+  };
+  it("says 1 unpriced request in the singular", () => {
+    const text = read(1);
+    expect(text).toContain(", 1 unpriced request");
+    expect(text).not.toContain("1 unpriced requests");
+    expect(screen.getByRole("tooltip").textContent).toContain("1 unpriced request");
+    expect(screen.getByRole("tooltip").textContent).not.toContain("1 unpriced requests");
+  });
+  it("says 3 unpriced requests in the plural", () => expect(read(3)).toContain(", 3 unpriced requests"));
+});
+
 describe("cost chart: today so far", () => {
   // 20 days ending today ($1 a day, today $40): the average covers complete days only.
   const days = dayRange("2026-10-16", "2026-11-04");

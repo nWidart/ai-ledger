@@ -62,6 +62,29 @@ class FastPricingTest(unittest.TestCase):
         self.assertEqual([r["fast"] for r in self.cost("m-fast", None)["models"]], [False])
 
 
+class UnpricedRatiosTest(unittest.TestCase):
+    """Cost per prompt and per commit are unknown (null), not $0, when every request is on an unpriced model."""
+
+    def test_unknown_cost_gives_null_per_prompt_and_per_commit(self):
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp)
+        con = store.open_store(os.path.join(tmp, "x.duckdb"))
+        self.addCleanup(con.close)
+        c = con.cursor()
+        store.insert(c, "sessions", ["session_id", "project", "first_ts", "last_ts"], [("s", "foo", "2026-11-05 09:00:00", "2026-11-05 09:30:00")])
+        store.insert(c, "prompts", ["prompt_id", "session_id", "ts", "interrupted"], [("p", "s", "2026-11-05 09:00:00", False)])
+        store.insert(c, "requests", ["message_id", "session_id", "ts", "model", "subagent", "input", "output", "thinking", "cache_read",
+                                     "cache_5m", "cache_1h", "thinking_ms"], [("r", "s", "2026-11-05 09:01:00", "m-unknown", False, 60, 10, 0, 0, 0, 0, 0)])
+        store.insert(c, "tool_calls", ["tool_use_id", "session_id", "tool", "input_summary", "start_ts", "end_ts", "is_error", "subagent", "is_commit", "is_test", "test_passed"],
+                     [("t", "s", "Bash", "", "2026-11-05 09:02:00", "2026-11-05 09:02:01", False, False, True, False, True)])
+        u = metrics.usage(con.cursor(), prices=PRICES, today=TODAY)
+        self.assertIsNone(u["totals"]["cost"])
+        self.assertEqual(u["totals"]["commits"], 1)
+        self.assertIsNone(u["totals"]["cost_per_prompt"])
+        self.assertIsNone(u["totals"]["cost_per_commit"])
+        self.assertIsNone(u["by_project"][0]["cost_per_commit"])
+
+
 class MetricsTest(unittest.TestCase):
     """Fixture: project foo (sessions s1, s2), project bar (s3, outside a 7-day range), and the automated project
     observer-sessions (o1, with a request and a prompt on each of Nov 4 and 5), which every view leaves out by default."""

@@ -2,7 +2,7 @@ import { Fragment, useEffect, useLayoutEffect, useRef, useState, type KeyboardEv
 import type { Source, UsagePayload } from "../../api";
 import { useColors } from "../../colors";
 import { dayAxis, peakLabelAt, tipAt, useWidth } from "../../components/chart";
-import { big, dayLabel, niceStep, usd, usd0 } from "../../format";
+import { big, dayLabel, niceStep, plural, usd, usd0 } from "../../format";
 import { costDays, costKinds, isOther, KINDS, STACKS, STACK_WORD, type CostDay, type Kind, type Stack } from "./cost";
 
 const H = 240;
@@ -100,7 +100,7 @@ export function CostChart({ d, metric, onMetric, hidden, onHidden, stack, onStac
   const soFar = (i: number) => (i === live ? " so far" : "");
   const avgText = (i: number) => (showAvg && avg[i] != null ? `7-day average ${fy(avg[i])}` : "");
   const text = (p: CostDay, i: number) => (cost
-    ? `${usd(p.cost)} estimated${parts(p).length > 1 || p.other?.length ? ` by ${STACK_WORD[stack].noun}: ` + parts(p).map(k => partText(p, k)).join(", ") : ""}${p.unpriced ? `, ${p.unpriced} unpriced requests` : ""}`
+    ? `${usd(p.cost)} estimated${parts(p).length > 1 || p.other?.length ? ` by ${STACK_WORD[stack].noun}: ` + parts(p).map(k => partText(p, k)).join(", ") : ""}${p.unpriced ? `, ${plural(p.unpriced, "unpriced request")}` : ""}`
     : kinds.map(k => `${k.label} ${big(p.v[k.k])}`).join(", ") + `, total ${big(total(p))}`) + (avgText(i) ? `. ${avgText(i)}` : "");
   const cur = at ? pts[at.i] : undefined;
   const what = cost ? (d.project && stack === "project" ? "Estimated cost" : `Estimated cost by ${STACK_WORD[stack].noun}`) : "Tokens by kind";
@@ -189,7 +189,7 @@ export function CostChart({ d, metric, onMetric, hidden, onHidden, stack, onStac
               {isOther(k) && moreOther(cur) > 0 && <div className="row sub"><span>{`+ ${moreOther(cur)} more`}</span></div>}
             </Fragment>)}
             <div className={"row" + (parts(cur).length ? " tot" : "")}><span>Total</span><b>{usd(cur.cost)}</b></div>
-            {cur.unpriced > 0 && <div className="muted">{cur.unpriced} unpriced requests</div>}
+            {cur.unpriced > 0 && <div className="muted">{plural(cur.unpriced, "unpriced request")}</div>}
           </> : <>
             {kinds.slice().reverse().map(k => <Row key={k.k} k={k} v={big(cur.v[k.k])} />)}
             <div className="row tot"><span>Total</span><b>{big(total(cur))}</b></div>

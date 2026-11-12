@@ -23,6 +23,19 @@ describe("costDays", () => {
     expect(de!.other).toEqual([{ name: "(no project)", cost: 2 }, { name: "B", cost: 1 }]);
   });
 
+  it("reads a remainder under half a cent as nothing, not a float leftover", () => {
+    const [de] = costDays(view([pd("A", 0.3)], 0.1 + 0.2), [named("A"), other]); // 0.1 + 0.2 is 0.30000000000000004
+    expect(de!.v["p:"]).toBe(0);
+    expect(costDays(view([pd("A", 0.3)], 0.31), [named("A"), other])[0]!.v["p:"]).toBeCloseTo(0.01);
+  });
+
+  it("names the models inside Other without the claude- prefix, as the legend does", () => {
+    const md = (model: string, cost: number) => ({ day, model, cost } as UsagePayload["daily_models"][number]);
+    const [de] = costDays({ ...view([], 6), daily_models: [md("claude-opus-4-7", 5), md("claude-haiku-4-5-20251001", 1)] },
+      [{ k: "m:claude-opus-4-7", label: "opus-4-7", c: "" }, { k: "m:", label: "Other", c: "" }], "model");
+    expect(de!.other).toEqual([{ name: "haiku-4-5-20251001", cost: 1 }]);
+  });
+
   it("leaves Other's list out when Other is not stacked", () => {
     const [de] = costDays(view([pd("A", 10), pd("B", 5)], 15), [named("A")]);
     expect(de!.other).toBeUndefined();
