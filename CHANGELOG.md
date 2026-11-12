@@ -22,6 +22,7 @@ Run `ai-ledger rebuild` once after upgrading (with the app stopped): error types
 - Live groups sessions by who needs you first: approval?, your turn, working, idle, ended. A session keeps its place in its group until its state changes.
 - Live shows how long a session has been on your turn or thinking, and the tab title counts the sessions that need you: `(2) Live · AI Ledger`.
 - Live shows a Claude Code session you closed as ended. Codex records no close, so a Codex session goes idle.
+- The Cost chart's day tooltip lists the three costliest projects inside Other, with their cost, and how many more there are.
 - Live filters the stream: failed calls only, main thread only, or without the calls that only read, except a failed one.
 - Live links the stream to the session sheet on Activity, and shows the date on times from another day.
 

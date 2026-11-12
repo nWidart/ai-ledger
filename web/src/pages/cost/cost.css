@@ -160,3 +160,5 @@
 .pg-cost .chart[hidden] { display: none; }
 .pg-cost .totals.by-kind dd { font-size: 20px; }
 .pg-cost .totals.by-kind dd small.cost-share { color: var(--text); font-weight: 600; }
+/* Other's projects under its row in the cost tooltip: indented, muted, a step smaller */
+.pg-cost .tip .sub { color: var(--text-muted); font-size: 12px; padding-left: 14px; }
