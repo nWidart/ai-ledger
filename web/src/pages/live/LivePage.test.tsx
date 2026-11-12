@@ -747,6 +747,8 @@ describe("LivePage", () => {
     expect(polls()).toBe(2);
     await userEvent.click(screen.getByRole("button", { name: "Resume" }));
     await waitFor(() => expect(polls()).toBe(3));
+    await act(async () => { await new Promise(r => setTimeout(r, 20)); });
+    expect(polls()).toBe(3); // once for all that was held
   });
 
   it("asks for the status when the stream reopens, as the app may be back, and not while paused", async () => {
@@ -764,7 +766,7 @@ describe("LivePage", () => {
     expect(await reopen()).toBe(1);
   });
 
-  it("drops the status request owed to a notice when the user pauses before it is sent", async () => {
+  it("drops the status request owed to a notice when the user pauses before it is sent, and asks on resume with no notice held", async () => {
     let answer!: () => void;
     const slow = new Promise(r => { answer = () => r(status); });
     const { polls } = show("#session=s1", { status: () => slow });
@@ -774,7 +776,10 @@ describe("LivePage", () => {
     expect(polls()).toBe(1); // one in flight, one more owed
     await userEvent.click(screen.getByRole("button", { name: "Pause" }));
     await act(async () => { answer(); await new Promise(r => setTimeout(r, 20)); });
-    expect(polls()).toBe(1);
+    expect([polls(), screen.getByRole("status").textContent]).toEqual([1, "Paused"]);
+    await userEvent.click(screen.getByRole("button", { name: "Resume" }));
+    await act(async () => { await new Promise(r => setTimeout(r, 20)); });
+    expect(polls()).toBe(2); // once: the nav would else show the time before the second notice's ingest
   });
 
   it("holds updates while paused and fetches once on resume", async () => {

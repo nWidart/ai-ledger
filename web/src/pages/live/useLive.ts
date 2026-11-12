@@ -115,9 +115,14 @@ export function useLive(view: View, selected: string, text: boolean, paused: boo
     return () => { clearTimeout(timer); src.close(); };
   }, [refresh, status]);
 
-  // Resume: one refetch for everything held.
+  // Resume: one refetch for everything held, and one status request whatever is held, as pausing drops the one owed to
+  // a notice.
+  const stopped = useRef(paused);
   useEffect(() => {
-    if (!paused && held) { setHeld(0); refresh(null); status(); }
+    if (paused) { stopped.current = true; return; }
+    if (held) { setHeld(0); refresh(null); }
+    if (held || stopped.current) status();
+    stopped.current = false;
   }, [paused, held, refresh, status]);
 
   useEffect(() => {

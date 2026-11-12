@@ -98,8 +98,10 @@ describe("Nav", () => {
     expect(screen.getByRole("link", { name: "Errors" }).getAttribute("aria-current")).toBe("page");
   });
 
-  it("shows the ingest status, and a failed Refresh offers Retry", async () => {
-    const f = vi.fn((_url: string, init?: RequestInit) => init?.method === "POST" ? Promise.reject(new Error("down")) : json(status));
+  it("shows the ingest status, and a failed Refresh offers Retry until it is retried, whatever a status poll answers", async () => {
+    setOrder([]);
+    let down = true, order: string[] = [];
+    const f = vi.fn((_url: string, init?: RequestInit) => init?.method === "POST" && down ? Promise.reject(new Error("down")) : json({ ...status, project_order: order }));
     vi.stubGlobal("fetch", f);
     history.replaceState(null, "", "/usage");
     render(<Nav />);
@@ -109,6 +111,36 @@ describe("Nav", () => {
     expect(btn.className).toBe("failed");
     expect(screen.getByText("Refresh failed. Select Retry to try again.")).toBeTruthy();
     expect(f).toHaveBeenCalledWith("/api/refresh", { method: "POST" });
+    order = ["foo"]; // the app is up: the nav's poll, or Live's on a change notice, still does its other work
+    await act(async () => { expect(await pollStatus()).not.toBeNull(); });
+    expect([screen.getByRole("button", { name: "Retry" }).className, hasHue("foo")]).toEqual(["failed", true]);
+    expect(screen.getByText("Refresh failed. Select Retry to try again.")).toBeTruthy();
+    down = false;
+    await userEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect((await screen.findByRole("button", { name: "Refresh" })).className).toBe("");
+    expect(screen.getByText(/Last ingest .* · 2 new lines/)).toBeTruthy();
+  });
+
+  it("leaves the text to a running Refresh: no status poll replaces it, nor the answer to one asked before it ended", async () => {
+    const answers: Record<string, () => void> = {}, later = (key: string, body: unknown) => new Promise<Response>(r => { answers[key] = () => r(json(body)); });
+    const f = vi.fn((_url: string, _init?: RequestInit) => json(status));
+    vi.stubGlobal("fetch", f);
+    render(<Nav />);
+    expect(await screen.findByText(/Last ingest .* · 2 new lines/)).toBeTruthy();
+    f.mockImplementation((_url, init) => init?.method === "POST" ? later("refresh", { ...status, last_stats: { ...status.last_stats, inserted: 5 } }) : json({ ...status, ingesting: true }));
+    await userEvent.click(screen.getByRole("button", { name: "Refresh" }));
+    await act(async () => { await pollStatus(); }); // answered while the ingest runs
+    expect(screen.getByText("Ingesting…")).toBeTruthy();
+    f.mockImplementation(() => later("status", { ...status, ingesting: true }));
+    let asked!: Promise<unknown>;
+    act(() => { asked = pollStatus(); }); // asked while it runs, answered after
+    await act(async () => { answers.refresh!(); });
+    expect(await screen.findByText(/Last ingest .* · 5 new lines/)).toBeTruthy();
+    await act(async () => { answers.status!(); await asked; });
+    expect(screen.getByText(/Last ingest .* · 5 new lines/)).toBeTruthy();
+    f.mockImplementation(() => json({ ...status, last_stats: { ...status.last_stats, inserted: 7 } }));
+    await act(async () => { await pollStatus(); }); // asked after: shown
+    expect(screen.getByText(/Last ingest .* · 7 new lines/)).toBeTruthy();
   });
 
   it("polls the status every minute, every 3 s while an ingest runs, and stops on unmount", async () => {

@@ -24,6 +24,14 @@ The app SHALL ingest new transcript data when it starts and then on a fixed inte
 - **WHEN** the user clicks refresh
 - **THEN** the app ingests immediately and the page shows the new data and the time of the last ingest
 
+#### Scenario: Failed refresh waits for Retry
+- **WHEN** a manual refresh fails, and the app's status then arrives, on the navigation's interval or after a change notice on the Live page
+- **THEN** the navigation still says the refresh failed and offers Retry, until the user retries
+
+#### Scenario: Status asked while a refresh runs
+- **WHEN** the navigation asks for the app's status during a manual refresh, and the answer says an ingest is running
+- **THEN** the navigation shows the refresh's own result when it ends, not that answer
+
 #### Scenario: Ingest with nothing new
 - **WHEN** a timed ingest stores no new lines and no usage data
 - **THEN** the open page does not refetch or redraw its data; only the time of the last ingest changes
