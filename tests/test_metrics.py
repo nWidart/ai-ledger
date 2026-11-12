@@ -1238,7 +1238,8 @@ class PlansTest(unittest.TestCase):
         self.snap("claude", "pro", datetime(2026, 11, 1))
         for text, error in (('{"plans": {"claude": {"pro": {"label": "x"}}}}', "plans.claude.pro: needs a label"),
                             ('{"plans": {"claude": []}}', "plans.claude must be an object"),
-                            ('{"plans": {"claude": {"pro": {"label": "x", "monthly": "5"}}}}', "plans.claude.pro")):
+                            ('{"plans": {"claude": {"pro": {"label": "x", "monthly": "5"}}}}', "plans.claude.pro"),
+                            ('{"plans": {"claude": {"pro": {"label": "x", "monthly": 1e309}}}}', "plans.claude.pro")):
             with open(self.path, "w") as fh:
                 fh.write(text)
             self.assertEqual(self.plans(), [dict(provider="claude", label="Claude Pro", monthly=20)])

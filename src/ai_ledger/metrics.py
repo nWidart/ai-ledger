@@ -1,5 +1,6 @@
 """Queries behind the dashboards: the errors payload and the usage metrics. SQL over the derived tables."""
 import json
+import math
 import os
 import re
 from datetime import date, timedelta
@@ -61,7 +62,7 @@ def read_user_prices(path=None):
     models, plans = data.get("models", {}), data.get("plans", {})
     if not isinstance(models, dict) or not isinstance(plans, dict):
         return {}, {}, '"models" and "plans" must be objects'
-    number = lambda v: isinstance(v, (int, float)) and not isinstance(v, bool)
+    number = lambda v: isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)  # 1e309 parses to inf, which is not JSON
     for model, p in models.items():
         tiers = [p] + ([p.get("long")] if isinstance(p, dict) and p.get("long_above") is not None else [])
         bad = [k for t in tiers for k in PRICE_KINDS if not isinstance(t, dict) or not number(t.get(k))]
