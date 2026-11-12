@@ -185,6 +185,16 @@ def error_fixes(cur):
     return {c: d.isoformat() for c, d in cur.execute("SELECT category, fixed_on FROM error_marks WHERE fixed_on IS NOT NULL ORDER BY 1").fetchall()}
 
 
+def error_muted(cur):
+    """The error types the user muted on the Errors page, sorted."""
+    return [c for (c,) in cur.execute("SELECT category FROM error_marks WHERE muted ORDER BY 1").fetchall()]
+
+
+def error_marks(cur):
+    """What the user told the Errors page, the one shape every marks endpoint answers: {fixes: {type: day}, muted: [type]}."""
+    return dict(fixes=error_fixes(cur), muted=error_muted(cur))
+
+
 def errors_payload(cur, last_ingest=None, today=None):
     """The JSON shape the Errors page reads (the same shape the old static page read). today anchors its ranges, as in usage()."""
     errs = rows(cur, f"""
@@ -205,7 +215,7 @@ def errors_payload(cur, last_ingest=None, today=None):
         FROM tool_calls t LEFT JOIN sessions s USING (session_id)
         WHERE t.start_ts IS NOT NULL GROUP BY 1, 2, 5 ORDER BY 1, 2, 5""").fetchall()
     return dict(generated=last_ingest, today=(today or local_today(cur)).isoformat(), project_order=project_order(cur), categories=[{k: r[k] for k in ("id", "label", "why", "fix", "snippet")} for r in RULES],
-                errors=errs, calls=[list(c) for c in calls], error_days=error_days(cur), incidents=inc, fixes=error_fixes(cur),
+                errors=errs, calls=[list(c) for c in calls], error_days=error_days(cur), incidents=inc, **error_marks(cur),
                 incident_gap_minutes=INCIDENT_GAP_MINUTES, incident_max_ok=INCIDENT_MAX_OK)
 
 

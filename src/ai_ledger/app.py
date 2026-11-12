@@ -63,6 +63,15 @@ def parse_fix(body, today):
     return category, None if day is None else check_day(day, today)
 
 
+def parse_mute(body):
+    """(error type, muted) from the JSON body of POST /api/errors/mute; muted must be a JSON boolean. Raises ValueError."""
+    if not isinstance(body, dict):
+        raise ValueError("body must be a JSON object")
+    if not isinstance(body.get("muted"), bool):
+        raise ValueError("muted must be true or false")
+    return check_category(body.get("category")), body["muted"]
+
+
 def parse_import(body, today):
     """{error type: date} from the JSON body of POST /api/errors/fixes/import. A marker that is not valid is left out, so one bad
     entry in a browser's old copy cannot keep the rest from moving. Raises ValueError for a body that is not an object of fixes."""
@@ -291,8 +300,8 @@ def handler(app, port=PORT):
                     self.json(app.status())
                 elif url.path == "/api/errors":
                     self.json(metrics.errors_payload(app.con.cursor(), app.state["last_ingest"]))
-                elif url.path == "/api/errors/fixes":  # the markers alone: the page's resync after a write it cannot account for
-                    self.json(metrics.error_fixes(app.con.cursor()))
+                elif url.path == "/api/errors/marks":  # the marks alone: the page's resync after a write it cannot account for
+                    self.json(metrics.error_marks(app.con.cursor()))
                 elif url.path == "/api/error":
                     detail = metrics.error_detail(app.con.cursor(), q.get("id", ""))
                     self.send(404, json.dumps(dict(error="error not found"))) if detail is None else self.json(detail)
@@ -337,23 +346,26 @@ def handler(app, port=PORT):
             if path == "/api/refresh":
                 app.ingest()
                 self.json(app.status())
-            elif path in ("/api/errors/fix", "/api/errors/fixes/import"):
-                one = path == "/api/errors/fix"
+            elif path in ("/api/errors/fix", "/api/errors/mute", "/api/errors/fixes/import"):
+                kind = path.rsplit("/", 1)[1]  # fix, mute or import
                 try:
                     today = metrics.local_today(app.con.cursor())
-                    got = parse_fix(self.json_body(), today) if one else parse_import(self.json_body(MAX_IMPORT_BODY), today)
+                    got = (parse_fix(self.json_body(), today) if kind == "fix" else parse_mute(self.json_body()) if kind == "mute"
+                           else parse_import(self.json_body(MAX_IMPORT_BODY), today))
                 except ValueError as e:
                     return self.send(400, json.dumps(dict(error=str(e))))
                 # The ingest thread writes through app.con under app.lock, as the limit pollers do: take it for the write, so a
-                # marker never lands in the middle of an ingest's transaction and two writes cannot conflict. The import decides
+                # mark never lands in the middle of an ingest's transaction and two writes cannot conflict. The import decides
                 # what the store already has here, at write time, not from what the page saw when it loaded.
                 with app.lock:
                     cur = app.con.cursor()
-                    if one:
+                    if kind == "fix":
                         store.set_error_fix(cur, *got)
+                    elif kind == "mute":
+                        store.set_error_muted(cur, *got)
                     else:
                         store.import_error_fixes(cur, got)
-                    self.json(metrics.error_fixes(cur))
+                    self.json(metrics.error_marks(cur))
             else:
                 self.send(404, "not found\n", "text/plain")
 

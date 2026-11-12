@@ -62,7 +62,7 @@ CREATE TABLE IF NOT EXISTS usage_files (
   path VARCHAR PRIMARY KEY, kind VARCHAR, session_id VARCHAR, size BIGINT, mtime DOUBLE,
   json VARCHAR USING COMPRESSION zstd, ingested_at TIMESTAMP);
 -- What the user told the Errors page, one row per error type. Nothing derives it, so it is not in DERIVED: rebuild keeps it.
-CREATE TABLE IF NOT EXISTS error_marks (category VARCHAR PRIMARY KEY, fixed_on DATE);
+CREATE TABLE IF NOT EXISTS error_marks (category VARCHAR PRIMARY KEY, fixed_on DATE, muted BOOLEAN DEFAULT false);
 """
 
 DERIVED = ["sessions", "requests", "tool_calls", "prompts", "hooks", "limit_snapshots", "session_facets", "facet_counts", "session_meta",
@@ -155,6 +155,7 @@ def open_store(path=None):
     con.execute(DERIVED_SCHEMA)
     for table in ("files", "sessions"):  # stores from before sources hold only Claude Code's
         con.execute(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS source VARCHAR DEFAULT 'claude'")
+    con.execute("ALTER TABLE error_marks ADD COLUMN IF NOT EXISTS muted BOOLEAN DEFAULT false")  # stores from before muted types
     con.execute("ALTER TABLE requests ADD COLUMN IF NOT EXISTS speed VARCHAR")  # stores from before fast-mode pricing; NULL until rebuild
     for old, new in PROJECT_ALIASES.items():  # names stored before the alias existed
         for table in ("projects_by_cwd", "sessions"):
@@ -168,6 +169,13 @@ def set_error_fix(cur, category, day):
     Other state of the row stays."""
     cur.execute("INSERT INTO error_marks (category, fixed_on) VALUES (?, ?) ON CONFLICT (category) DO UPDATE SET fixed_on = excluded.fixed_on",
                 [category, day])
+
+
+def set_error_muted(cur, category, muted):
+    """Mute the error type (the page counts it as noise) or unmute it. Only `muted` changes: a fix day on the row stays, and the
+    row stays after an unmute, as after an undo."""
+    cur.execute("INSERT INTO error_marks (category, muted) VALUES (?, ?) ON CONFLICT (category) DO UPDATE SET muted = excluded.muted",
+                [category, muted])
 
 
 def import_error_fixes(cur, fixes):

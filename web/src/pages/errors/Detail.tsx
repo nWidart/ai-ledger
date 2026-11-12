@@ -5,6 +5,7 @@ import { ProjectName } from "../../components/ProjectDot";
 import { useColors } from "../../colors";
 import { num as fmt } from "../../format";
 import { useErrors } from "./context";
+import { errorText } from "./marks";
 import { Example, Examples, Incident, MsgRow } from "./Examples";
 import { Spark } from "./Spark";
 import type { Mode } from "./view";
@@ -53,6 +54,8 @@ function WhereToStart() {
 
 function TypeDetail({ cat }: { cat: string }) {
   const x = useErrors(), { m, v, f, fixes, mode, q } = x, c = m.cats[cat]!, fixDay = fixes[cat], busy = x.saving.has(cat);
+  const fixErr = x.markErrors.find(e => e.cat === cat && e.kind === "fix"), muteErr = x.markErrors.find(e => e.cat === cat && e.kind === "mute");
+  const isMuted = m.muted.has(cat), muteBusy = x.muting.has(cat), fixedNoise = NOISE.has(cat);
   const head = useRef<HTMLDivElement>(null), bar = useRef<HTMLDivElement>(null);
   // ofType: the type's errors in the bucket; base: those of the selected tool too, which every list and count of the detail uses.
   // The message groups follow base only: a keystroke in the search box, or a click that doesn't change the errors, never groups them again.
@@ -103,6 +106,9 @@ function TypeDetail({ cat }: { cat: string }) {
     x.setFix(cat, null);
     x.after(() => document.getElementById("fix")?.focus());
   };
+  // Muting the open type with "Hide noise and muted" on takes it out of the view: the page closes it, and the page's focus rule
+  // (a removed control's focus moves to the type table, as the closed type's row is gone too) lands focus on the table.
+  const toggleMute = () => x.setMuted(cat, !isMuted, !isMuted && v.noise);
   const clearFilters = () => {
     x.update({ project: "", range: 0, sub: true, noise: false, at: null, tool: null }, true);
     x.after(() => document.getElementById("ex-" + focused!.id)?.focus());
@@ -145,8 +151,17 @@ function TypeDetail({ cat }: { cat: string }) {
         <span className="muted" style={{ fontSize: 12 }}>Applies to all projects</span>
         {/* No timeout: a write may wait for a long ingest. Say so, so a write that waits is never silent. */}
         {busy && <span className="muted" id="fixSaving" style={{ fontSize: 12 }}>Saving…</span>}
-        {x.fixError?.cat === cat && <span className="fixerr" id="fixErr">{x.fixError.text}</span>}
+        {fixErr && <span className="fixerr" id="fixErr">{errorText(fixErr, c.label)}</span>}
       </div>
+    </div>
+    <div className="row mutebox" aria-busy={muteBusy || undefined}>
+      {fixedNoise ? <span className="muted" id="alwaysNoise" style={{ fontSize: 12 }}>This type is always noise: "Hide noise and muted" leaves it out, and it can't be muted.</span> : <>
+        <button type="button" id="mute" aria-busy={muteBusy || undefined} onClick={toggleMute}>{isMuted ? "Unmute" : "Mute this type"}</button>
+        {isMuted && <span className="chip muted-type">Muted</span>}
+        <span className="muted" style={{ fontSize: 12 }}>Muted types count as noise: "Hide noise and muted" leaves them out of the rate.</span>
+        {muteBusy && <span className="muted" id="muteSaving" style={{ fontSize: 12 }}>Saving…</span>}
+        {muteErr && <span className="fixerr" id="muteErr">{errorText(muteErr, c.label)}</span>}
+      </>}
     </div>
     {fixDay && <FixResult cat={cat} fixDay={fixDay} />}
     <div className="mini" id="mini" hidden={x.chartInView && !x.inSheet}><MiniRate cat={cat} /></div>

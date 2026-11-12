@@ -4,7 +4,7 @@ import type { Category, Day, ErrorRow, ErrorsPayload, Incident, Source, Ts } fro
 import { dayLabel, num as fmt } from "../../format";
 import type { Range } from "../../hash";
 
-export const NOISE = new Set(["infra", "user_denied"]);
+export const NOISE = new Set(["infra", "user_denied"]); // always noise; the types the user muted join them (Model.muted)
 export const CATCH_ALL = new Set(["other", "exit_other", "mcp"]); // the types no specific rule matched
 export const TOPN = 5;
 export const MIN_AFTER_CALLS = 200; // calls since a fix before its rate counts as lower or higher
@@ -27,6 +27,8 @@ export type Gran = "day" | "week";
 export interface View { project: string; source: Source | ""; range: Range; gran: Gran; sub: boolean; noise: boolean; cat: string | null; focus: string | null; at: Day | null; tool: string | null }
 /** Applied fixes: type id -> YYYY-MM-DD, as the old page stored them. */
 export type Fixes = Record<string, Day>;
+/** What the store keeps for the page: the applied fixes and the muted types (the page's "marks"). */
+export interface Marks { fixes: Fixes; muted: string[] }
 
 export type Err = ErrorRow & { c: string };
 type CallRow = ErrorsPayload["calls"][number];
@@ -34,6 +36,8 @@ export interface Model {
   data: ErrorsPayload; errors: Err[]; cats: Record<string, Category>; byId: Record<string, Err>;
   /** Error types by all-time count: the five busiest keep their color in every view. */
   allRank: string[];
+  /** The types the user muted: noise, beside NOISE. The page swaps its copy in with withMuted as the store's changes. */
+  muted: ReadonlySet<string>;
   lastDay: Day; firstDay: Day; incidents: Incident[]; gap: number; maxOk: number;
   /** Every project with errors or tool calls, by all-time errors. */
   projects: [string, number][];
@@ -55,10 +59,15 @@ export function makeModel(data: ErrorsPayload): Model {
   const count: Record<string, number> = {};
   for (const c of data.calls) count[c[1]] ??= 0;
   for (const e of errors) count[e.p] = (count[e.p] || 0) + 1;
-  return { data, errors, cats, byId, allRank, lastDay, firstDay, incidents: data.incidents || [], gap: data.incident_gap_minutes || 10,
+  return { data, errors, cats, byId, allRank, muted: new Set(data.muted), lastDay, firstDay, incidents: data.incidents || [], gap: data.incident_gap_minutes || 10,
     maxOk: data.incident_max_ok ?? 2,
     projects: Object.entries(count).sort((a, b) => b[1] - a[1]), errorDays };
 }
+
+/** The same model with another set of muted types: the rest is shared, so a mute doesn't index the payload again. */
+export const withMuted = (m: Model, muted: Iterable<string>): Model => ({ ...m, muted: new Set(muted) });
+/** Noise: a fixed noise type or a muted one. The "Hide noise and muted" toggle leaves these out. */
+export const isNoise = (m: Model, c: string) => NOISE.has(c) || m.muted.has(c);
 
 export function countBy(errs: readonly { c: string }[]): Record<string, number> {
   const m: Record<string, number> = {};
@@ -89,7 +98,7 @@ export interface Filtered { start: Day; from: Day; errs: Err[]; calls: CallRow[]
  *  has no bucket. */
 export function filtered(m: Model, v: View): Filtered {
   const start = rangeStart(m, v), scoped = callIn(v), on = (d: Day) => d >= start && d <= m.lastDay;
-  const errs = m.errors.filter(e => on(e.d) && inScope(v, e.p, e.src) && (v.sub || !e.sub) && (!v.noise || !NOISE.has(e.c)));
+  const errs = m.errors.filter(e => on(e.d) && inScope(v, e.p, e.src) && (v.sub || !e.sub) && (!v.noise || !isNoise(m, e.c)));
   const calls = m.data.calls.filter(c => on(c[0]) && scoped(c));
   const from = calls.reduce((s, c) => (nCalls(v, c) && (!s || c[0] < s) ? c[0] : s), "") || start;
   return { start, from, errs, calls };
@@ -165,7 +174,7 @@ export function typeColors(allRank: readonly string[], top: readonly string[]): 
 }
 /** Errors per [day, category] from the server's error_days, under the project, source, subagent and noise filters. */
 export function errorDays(m: Model, v: View, from: Day, to: Day = "9999") {
-  return m.errorDays.filter(r => r[0] >= from && r[0] <= to && inScope(v, r[1], r[5]) && (!v.noise || !NOISE.has(r[2])))
+  return m.errorDays.filter(r => r[0] >= from && r[0] <= to && inScope(v, r[1], r[5]) && (!v.noise || !isNoise(m, r[2])))
     .map(r => ({ d: r[0], c: r[2], n: v.sub ? r[3] : r[3] - r[4] })).filter(r => r.n);
 }
 export interface ViewTypes { counts: Record<string, number>; top: string[]; extra: string | null; layers: string[]; colors: Record<string, string> }
@@ -332,12 +341,13 @@ export function emptyTypes(m: Model, v: View, f: Filtered): string {
 export interface Rising { c: string; e1: number; e2: number; r1: number; r2: number; d: number }
 /** Where to start: the open types with a ready-made fix that lost the most time (error count breaks a tie), and the types rising fastest: up over 10% in the change the
  *  table shows, with enough recent errors to mean it, the biggest gain in error rate first (a type from 0 to 9 errors can't
- *  outrank one from 1 to 128), Infinity when the side before had none of its errors. why: the reason nothing can rise, or null. */
+ *  outrank one from 1 to 128), Infinity when the side before had none of its errors. A muted type is never suggested, whatever the
+ *  noise toggle says. why: the reason nothing can rise, or null. */
 export function whereToStart(m: Model, v: View, f: Filtered, fixes: Fixes) {
   const counts = countBy(f.errs), x = compare(m, v, f), lost = timeLost(m, f.errs);
-  const open = Object.entries(counts).filter(([c]) => !fixes[c] && m.cats[c]?.snippet).map(([c, n]) => ({ c, n, lost: lost[c] || 0 }))
+  const open = Object.entries(counts).filter(([c]) => !fixes[c] && !m.muted.has(c) && m.cats[c]?.snippet).map(([c, n]) => ({ c, n, lost: lost[c] || 0 }))
     .sort((a, b) => b.lost - a.lost || b.n - a.n).slice(0, 4);
-  const rising: Rising[] = x.why ? [] : Object.keys(x.b.by).map(c => {
+  const rising: Rising[] = x.why ? [] : Object.keys(x.b.by).filter(c => !m.muted.has(c)).map(c => {
     const e1 = x.a.by[c] || 0, e2 = x.b.by[c]!, r1 = e1 / x.a.c * 100, r2 = e2 / x.b.c * 100;
     return { c, e1, e2, r1, r2, d: r1 ? (r2 - r1) / r1 * 100 : Infinity };
   }).filter(r => r.d > 10 && r.e2 >= MIN_PCT_ERRORS).sort((a, b) => b.r2 - b.r1 - (a.r2 - a.r1) || b.e2 - a.e2).slice(0, 4);

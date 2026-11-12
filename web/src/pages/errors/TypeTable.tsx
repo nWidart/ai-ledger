@@ -1,31 +1,40 @@
 import { num as fmt } from "../../format";
-import { useErrors } from "./context";
+import { tableFocus, useErrors } from "./context";
+import { errorText } from "./marks";
 import { bucketLabel, compare, dur, emptyTypes, MIN_PCT_ERRORS, typeRows, yearLabel } from "./model";
 import { Spark } from "./Spark";
 
 const LOST = "Time in retry loops: from each incident's first failure to its last. An incident counts whole when any of its failures is in the view.";
 /** The view's types by count. The swatch ties a row to its chart layer; types folded into Other get Other's grey. A badge only
- *  once a fix is applied. A click anywhere on a row opens or closes the type (the type button's clicks and keys bubble to it). */
+ *  once a fix is applied or the type is muted (a muted type's row is dimmed, with the word as well). A click anywhere on a row opens or closes the type (the type button's clicks and keys bubble to it). */
 export function TypeTable() {
-  const { m, v, f, fixes, pick, update, after } = useErrors(), rows = typeRows(m, v, f), { cmp } = compare(m, v, f);
+  const { m, v, f, fixes, pick, update, after, muting, markErrors, dismissError } = useErrors(), rows = typeRows(m, v, f), { cmp } = compare(m, v, f);
   // Rows mount again when the filters change, so their share bars grow in.
   const key = JSON.stringify([f.start, v.project, v.source, v.sub, v.noise, v.gran, v.at]);
   // An empty table has no type button: the chart takes the focus.
-  const clear = () => { update({ at: null }, true); after(() => (document.querySelector<HTMLElement>("#catBody button") ?? document.getElementById("chart"))?.focus()); };
+  const clear = () => { update({ at: null }, true); after(() => tableFocus()?.focus()); };
+  // A mute's feedback is the open detail's own; once the type has left the view the detail is gone, so it shows here.
+  const pending = [...muting].filter(([c]) => c !== v.cat), failed = markErrors.filter(e => e.kind === "mute" && e.cat !== v.cat);
+  const name = (c: string) => m.cats[c]?.label ?? c;
   return (
     <section className="card types">
       <div className="row" style={{ justifyContent: "space-between" }}>
         <h2>Error types</h2>
         {v.at && <button type="button" className="chip bucket" id="atClr" aria-label={`Selected: ${bucketLabel(m, v)}. Show the whole range`} onClick={clear}>{bucketLabel(m, v)} <span aria-hidden="true">✕</span></button>}
       </div>
+      {(pending.length > 0 || failed.length > 0) && <div id="muteNote">
+        {pending.map(([c, on]) => <div key={c} className="muted" style={{ fontSize: 12, marginBottom: 8 }}>{on ? "Muting" : "Unmuting"} {name(c)}… Saving…</div>)}
+        {failed.map(e => <div key={e.cat} className="outnote"><span className="fixerr">{e.unknown ? errorText(e, name(e.cat)) : e.mute === false ? `Couldn't unmute ${name(e.cat)}. It is still muted.` : `Couldn't mute ${name(e.cat)}. It is back in the list.`}</span> <button type="button" onClick={() => { dismissError(e.cat, "mute"); after(() => tableFocus()?.focus()); }}>Dismiss</button></div>)}
+      </div>}
       <div className="hint muted" style={{ fontSize: 12, marginBottom: 8 }}>{v.at && <>Types, errors and share count only the selected {v.gran}; the trend and change stay range-wide. </>}Change: the type's error rate {cmp}, as in the summary; counts when either side has under {MIN_PCT_ERRORS} errors. Click a row for fixes and examples.</div>
       <div className="tscroll"><table>
         <thead><tr><th>Type</th><th className="num">Errors</th><th className="num c-lost" title={LOST}>Time lost</th><th className="c-share">Share</th><th className="c-trend">Rate trend</th><th className="num">Change</th></tr></thead>
         <tbody id="catBody">
           {rows.length ? rows.map(({ cid, n, lost, share, color, pts, delta }) => (
-            <tr key={cid + key} data-c={cid} className={v.cat === cid ? "sel" : ""} onClick={() => pick(v.cat === cid ? null : cid, v.cat !== cid)}>
+            <tr key={cid + key} data-c={cid} className={(v.cat === cid ? "sel " : "") + (m.muted.has(cid) ? "is-muted" : "")} onClick={() => pick(v.cat === cid ? null : cid, v.cat !== cid)}>
               <td><button type="button" className="tbtn" data-c={cid} aria-expanded={v.cat === cid} aria-controls="detail">
                 <i className="sw" style={{ background: color }} aria-hidden="true" />{m.cats[cid]!.label}</button>
+                {m.muted.has(cid) ? <span className="chip muted-type">Muted</span> : null}
                 {fixes[cid] ? <span className="chip fixed">✓ Fix applied {yearLabel(m, fixes[cid])}</span> : null}</td>
               <td className="num">{fmt(n)}</td>
               <td className="num c-lost" title={lost ? LOST : undefined}>{lost ? dur(lost) : "–"}</td>

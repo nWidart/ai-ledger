@@ -6,10 +6,10 @@ import { UsageSheets } from "../../components/sheets/UsageSheets";
 import { num as fmt } from "../../format";
 import { setHash, useHashState } from "../../hash";
 import { useApi } from "../../useApi";
-import { Ctx, type ErrorsCtx } from "./context";
+import { Ctx, tableFocus, type ErrorsCtx } from "./context";
 import { Detail } from "./Detail";
-import { useFixes } from "./fixes";
-import { filtered, makeModel, messageOf, settle, viewTypes, type View } from "./model";
+import { useMarks } from "./marks";
+import { filtered, makeModel, messageOf, settle, viewTypes, withMuted, type View } from "./model";
 import { RateChart } from "./RateChart";
 import { Summary } from "./Summary";
 import { TypeTable } from "./TypeTable";
@@ -30,28 +30,34 @@ const focusKey = (el: HTMLElement) => el.id ? "#" + CSS.escape(el.id)
 /** Errors (/errors): failed tool calls of every coding agent (or the one the source filter picks), by type, with fixes. */
 export function ErrorsPage() {
   const { data, error, retry } = useApi<ErrorsPayload>(errorsUrl);
-  const m = useMemo(() => (data ? makeModel(data) : undefined), [data]);
+  // Status for screen readers (say) and the run-after-render queue (after): the marks' writes use them, so they come first.
+  const pending = useRef<(() => void)[]>([]), [, bump] = useReducer((x: number) => x + 1, 0), [live, setLive] = useState("");
+  const after = useCallback((fn: () => void) => { pending.current.push(fn); bump(); }, []);
+  // Concise status for screen readers: counts, loading, failures. The detail itself isn't live.
+  const say = useCallback((s: string) => { setLive(""); requestAnimationFrame(() => setLive(s)); }, []);
+  const { fixes, muted, saving, muting, setFix, setMuted, markErrors, dismissError } = useMarks(data, say, after);
+  const base = useMemo(() => (data ? makeModel(data) : undefined), [data]);
+  const m = useMemo(() => base && withMuted(base, muted), [base, muted]); // the model with the types muted as of now
   // Project colors match Activity: the nav hands them out in the server's all-time order.
   useEffect(() => { if (data) setOrder(data.project_order); }, [data]);
   const [h] = useHashState();
   const saved = useRef<SavedView>(store.get<SavedView>(VIEW_KEY, {}));
-  const read = useMemo(() => readView(h.raw, saved.current, m), [h.raw, m]);
+  const read = useMemo(() => readView(h.raw, saved.current, base), [h.raw, base]);
   const view = useMemo(() => (m ? settle(m, read.view) : read.view), [m, read.view]);
   const viewRef = useRef(view);
   viewRef.current = view;
 
   const [mode, setModeS] = useState<Mode>(loadMode), [q, setQ] = useState("");
-  const [, bump] = useReducer((x: number) => x + 1, 0);
   const sets = useRef({ openInc: new Set<number>(), openMsg: new Set<string>(), opened: new Set<string>(), fullText: new Map<string, ErrorDetail>(), loading: new Set<string>(), failed: new Set<string>() }).current;
   const narrow = useMedia(NARROW), toSheet = !!m && narrow && !!view.cat;
-  const [chartInView, setChartInView] = useState(true), [live, setLive] = useState(""), [pageLive, setPageLive] = useState("");
+  const [chartInView, setChartInView] = useState(true), [pageLive, setPageLive] = useState("");
   // A dead link's notice is page state: the write-back below drops its ex from the hash, so the hash can't say it any more.
   const [deadLink, setDeadLink] = useState(false);
   const sheet = useRef<HTMLDialogElement>(null), retryBtn = useRef<HTMLButtonElement>(null);
-  const pending = useRef<(() => void)[]>([]), selecting = useRef(false), navd = useRef(false), retried = useRef(false), init = useRef(false);
+  const selecting = useRef(false), navd = useRef(false), retried = useRef(false), init = useRef(false);
   const lastHash = useRef(""), sheetCat = useRef<string | null>(null), prevCat = useRef<string | null>(null), shownCat = useRef<string | null>(null);
 
-  const f = useMemo(() => m && filtered(m, view), [m, view.project, view.source, view.range, view.sub, view.noise]); // the type and the link don't filter
+  const f = useMemo(() => m && filtered(m, view), [m, view.project, view.source, view.range, view.sub, view.noise]); // the type and the link don't filter; m changes with the muted types
   const vt = useMemo(() => m && f && viewTypes(m, view, f), [m, f, view]);
 
   // push: add a history entry (Back retraces it). A new type starts its search over.
@@ -63,9 +69,6 @@ export function ErrorsPage() {
     if (patch.gran && patch.gran !== cur.gran && patch.at === undefined) patch = { ...patch, at: null };
     setHash(viewPatch({ ...cur, ...patch }), { push });
   }, []);
-  const after = useCallback((fn: () => void) => { pending.current.push(fn); bump(); }, []);
-  // Concise status for screen readers: counts, loading, failures. The detail itself isn't live.
-  const say = useCallback((s: string) => { setLive(""); requestAnimationFrame(() => setLive(s)); }, []);
   const focusDetail = useCallback(() => {
     const t = $("#detailTitle");
     if (!t) return;
@@ -81,7 +84,6 @@ export function ErrorsPage() {
   }, [update, after, focusDetail]);
   // A click on an example selects it: its permalink goes in the address bar, and the list stays where it is.
   const select = useCallback((id: string) => { selecting.current = true; update({ focus: id }, true); }, [update]);
-  const { fixes, saving, setFix, fixError } = useFixes(data, say, after);
   const setMode = useCallback((x: Mode) => { setModeS(x); store.set(MODE_KEY, x); }, []);
 
   // The list puts the linked example first; a click on an example moves the link, not the list, until the view next changes.
@@ -130,12 +132,12 @@ export function ErrorsPage() {
 
   // The mini chart shows only while the main chart is out of view.
   useEffect(() => {
-    const el = m && document.getElementById("chart");
+    const el = base && document.getElementById("chart");
     if (!el) return;
     const io = new IntersectionObserver(es => setChartInView(es[es.length - 1]!.isIntersecting), { threshold: .25 });
     io.observe(el);
     return () => io.disconnect();
-  }, [m]);
+  }, [base]);
   // Esc, the backdrop and ✕ close the sheet; closing it closes the type, and focus returns to that type's button.
   useEffect(() => {
     const d = sheet.current;
@@ -184,7 +186,7 @@ export function ErrorsPage() {
     if (lost && !placed && blank()) {
       const k = lost.key;
       ($(lost.box && k ? `#${CSS.escape(lost.box)} ${k}` : null) || $(k)
-        || (view.cat ? $("#detailTitle") : $(`#catBody button[data-c="${CSS.escape(prevCat.current ?? "")}"]`) || $("#catBody button")))?.focus();
+        || (view.cat ? $("#detailTitle") : $(`#catBody button[data-c="${CSS.escape(prevCat.current ?? "")}"]`) || tableFocus()))?.focus();
     }
     prevCat.current = view.cat;
     lastHash.current = location.hash;
@@ -197,8 +199,8 @@ export function ErrorsPage() {
   }, [m, view.project]);
 
   const ctx: ErrorsCtx | null = m && f && vt ? {
-    m, v: view, f, vt, fixes, fixError, saving, mode, q, pinned: pin.current.focus ? m.byId[pin.current.focus] : undefined, inSheet: toSheet, chartInView,
-    update, pick, select, setFix, setMode, setQ, after, say, bump, ...sets,
+    m, v: view, f, vt, fixes, markErrors, dismissError, saving, muting, mode, q, pinned: pin.current.focus ? m.byId[pin.current.focus] : undefined, inSheet: toSheet, chartInView,
+    update, pick, select, setFix, setMuted, setMode, setQ, after, say, bump, ...sets,
   } : null;
   const detailLive = <div className="sr" id="detailLive" aria-live="polite">{live}</div>;
 
@@ -211,7 +213,7 @@ export function ErrorsPage() {
             {(["day", "week"] as const).map(g => <button key={g} type="button" aria-pressed={view.gran === g} onClick={() => update({ gran: g }, true)}>{g === "day" ? "Day" : "Week"}</button>)}
           </div>
           <label className="chk"><input type="checkbox" id="fSub" checked={view.sub} onChange={e => update({ sub: e.target.checked }, true)} /> <span><span className="long">Include </span>subagents</span></label>
-          <label className="chk" title="Harness errors and user rejections"><input type="checkbox" id="fNoise" checked={view.noise} onChange={e => update({ noise: e.target.checked }, true)} /> <span>Hide noise<span className="long"> (harness, user rejections)</span></span></label>
+          <label className="chk" title="Leaves out harness errors, user rejections and the types you muted"><input type="checkbox" id="fNoise" checked={view.noise} onChange={e => update({ noise: e.target.checked }, true)} /> <span>Hide noise and muted</span></label>
         </Filters>
       </header>
       {!m && (error

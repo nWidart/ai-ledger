@@ -11,6 +11,8 @@ import unittest
 from datetime import date, datetime, timezone
 from unittest import mock
 
+import duckdb
+
 from ai_ledger import limits, metrics, store
 
 
@@ -108,9 +110,61 @@ class ErrorMarksTest(StoreCase):
         store.set_error_fix(self.con.cursor(), "path_missing", date(2026, 10, 1))
         self.assertEqual(metrics.errors_payload(self.con.cursor())["fixes"], {"path_missing": "2026-10-01", "x": "2026-11-04"})
 
-    def test_a_mark_without_a_fix_day_is_no_fix(self):  # a later change keeps other state in this table
+    def test_a_mark_without_a_fix_day_is_no_fix(self):  # a muted type has a row and no fix day
         self.con.execute("INSERT INTO error_marks (category, fixed_on) VALUES ('muted-only', NULL)")
         self.assertEqual(metrics.errors_payload(self.con.cursor())["fixes"], {})
+
+    def muted(self):
+        return self.q("SELECT category, fixed_on, muted FROM error_marks ORDER BY 1")
+
+    def test_mute_and_unmute_touch_only_muted(self):
+        cur = self.con.cursor()
+        store.set_error_fix(cur, "x", date(2026, 11, 4))
+        store.set_error_muted(cur, "x", True)  # a mute keeps the fix day
+        store.set_error_muted(cur, "y", True)  # a type with no row gets one
+        self.assertEqual(self.muted(), [("x", date(2026, 11, 4), True), ("y", None, True)])
+        store.set_error_fix(cur, "x", date(2026, 11, 5))  # a mark keeps muted
+        self.assertEqual(self.muted()[0], ("x", date(2026, 11, 5), True))
+        store.set_error_fix(cur, "x", None)  # an undo keeps muted
+        self.assertEqual(self.muted()[0], ("x", None, True))
+        store.set_error_fix(cur, "y", date(2026, 11, 1))
+        store.set_error_muted(cur, "y", False)  # an unmute keeps the fix day, and the row
+        store.set_error_muted(cur, "z", False)
+        self.assertEqual(self.muted(), [("x", None, True), ("y", date(2026, 11, 1), False), ("z", None, False)])
+        self.assertEqual(metrics.error_marks(cur), {"fixes": {"y": "2026-11-01"}, "muted": ["x"]})
+
+    def test_import_keeps_a_muted_type_as_it_is(self):
+        cur = self.con.cursor()
+        store.set_error_muted(cur, "x", True)
+        store.import_error_fixes(cur, {"x": date(2026, 10, 1), "new": date(2026, 10, 2)})
+        self.assertEqual(self.muted(), [("new", date(2026, 10, 2), False), ("x", None, True)])
+
+    def test_payload_carries_the_muted_types_sorted(self):
+        self.assertEqual(metrics.errors_payload(self.con.cursor())["muted"], [])
+        for c in ("b", "a"):
+            store.set_error_muted(self.con.cursor(), c, True)
+        store.set_error_muted(self.con.cursor(), "c", False)
+        self.assertEqual(metrics.errors_payload(self.con.cursor())["muted"], ["a", "b"])
+
+    def test_survive_rebuild_and_reopening_with_muted(self):
+        store.set_error_muted(self.con.cursor(), "x", True)
+        store.rebuild(self.con)
+        self.con.close()
+        self.con = store.open_store(self.db)
+        self.assertEqual(self.muted(), [("x", None, True)])
+
+    def test_a_store_without_the_column_gets_it(self):
+        self.con.close()
+        old = duckdb.connect(self.db)  # a store from before muted types: the table without the column, one marked type
+        old.execute("DROP TABLE error_marks")
+        old.execute("CREATE TABLE error_marks (category VARCHAR PRIMARY KEY, fixed_on DATE)")
+        old.execute("INSERT INTO error_marks VALUES ('x', DATE '2026-11-04')")
+        old.close()
+        self.con = store.open_store(self.db)
+        self.assertEqual(self.muted(), [("x", date(2026, 11, 4), False)])
+        self.assertEqual(metrics.error_marks(self.con.cursor()), {"fixes": {"x": "2026-11-04"}, "muted": []})
+        store.set_error_muted(self.con.cursor(), "x", True)
+        self.assertEqual(metrics.error_marks(self.con.cursor()), {"fixes": {"x": "2026-11-04"}, "muted": ["x"]})
 
 
 class IngestTest(StoreCase):
