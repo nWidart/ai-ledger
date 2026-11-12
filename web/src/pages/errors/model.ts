@@ -395,22 +395,33 @@ export const NO_TEXT = "(no error text)";
 const LABEL_MAX = 120; // the label is the key cut here for display
 /** A first line that says nothing alone: "Error:", "Exit code 1", "<tool_use_error>". The next line carries the message. */
 const WRAPPER = /^(?:error|exit code \d+|<tool_use_error>)\s*:?$/i;
-// The rules, in order: each replaces incidental detail so errors that differ only by it fall together.
+// The rules, in order: each replaces incidental detail so errors that differ only by it fall together. Each is linear in the line's
+// length (a segment is always told from the next by a character the segment cannot hold), as a line can be 700 characters of anything.
 const sub = (s: string) => () => s;
+const trail = (m: string) => /\.*$/.exec(m)![0]; // a sentence's final dot stays out of a path
 const RULES: [RegExp, (m: string) => string][] = [
-  // A long quoted string is detail; a short one (a command, a flag) is the message. A quote inside a word (don't) is no quote.
+  // A quoted string that starts like a path is a path, whatever its length and whatever is in it (spaces, Unicode, backslashes).
+  [/(?<!\w)(["'`])(?=(?:~|\.{1,2})?\/(?!\1)|[A-Za-z]:[\\/])(?:(?!\1).)*\1(?!\w)/g, (m: string) => `${m[0]}<path>${m[0]}`],
+  // Any other quoted string is detail when long; a short one (a command, a flag) is the message. A quote inside a word (don't) is no quote.
   [/(?<!\w)(["'`])(?:(?!\1).){41,}\1(?!\w)/g, (m: string) => `${m[0]}<…>${m[0]}`],
-  // Absolute, ~/, ./ and ../ paths. Not after a word, ":" or "/", so a URL stays whole. A sentence's final dot stays out of the path.
-  [/(?<![\w<>:/.~@-])(?:~|\.{1,2})?(?:\/[\w.@+%~-]+)+\/?/g, (m: string) => "<path>" + /\.*$/.exec(m)![0]],
+  // Windows paths: a drive letter, then anything up to a space or a quote. (A drive letter is no scheme: "s://" is not one.)
+  [/(?<![\p{L}\p{N}_<>])[A-Za-z](?::\\|:\/(?!\/))[^\s"'`<>|*?:]*/gu, (m: string) => "<path>" + trail(m)],
+  // Absolute, ~/, ./ and ../ paths, Unicode letters included. Not after a word, ":" or "/", so a URL stays whole. A path with spaces
+  // can't be told from prose: unquoted, its first part is replaced and the rest stays.
+  [/(?<![\p{L}\p{N}_<>:/.~@-])(?:~|\.{1,2})?(?:\/[\p{L}\p{N}_.@+%~-]+)+\/?/gu, (m: string) => "<path>" + trail(m)],
   // Relative paths: two slashes or more, or a final extension, and a letter somewhere ("and/or" and "3/4" are not paths).
-  [/(?<![\w<>:/.~@-])(?:[\w.@-]+\/)+[\w.@-]+/g, (m: string) => {
+  [/(?<![\p{L}\p{N}_<>:/.~@-])(?:[\p{L}\p{N}_.@-]+\/)+[\p{L}\p{N}_.@-]+/gu, (m: string) => {
     const t = m.replace(/\.+$/, "");
-    return /[A-Za-z]/.test(t) && (t.split("/").length > 2 || /\.\w{1,8}$/.test(t)) ? "<path>" + m.slice(t.length) : m;
+    return /\p{L}/u.test(t) && (t.split("/").length > 2 || /\.[\p{L}\p{N}_]{1,8}$/u.test(t)) ? "<path>" + m.slice(t.length) : m;
   }],
   [/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, sub("<id>")], // UUIDs
-  [/\b(?:toolu|call|msg|req)_\w{8,}/g, sub("<id>")], // tool-use, message and request ids
+  // A lower-case word, "_" or "-", then 8+ letters and digits with both: toolu_…, call_…, msg_…, req_…, sess_…, chatcmpl-…
+  // Ordinary identifiers (old_string, no_such_file, utf_8) have no such run.
+  [/\b[a-z]+[_-](?=[A-Za-z0-9]*\d)(?=[A-Za-z0-9]*[A-Za-z])[A-Za-z0-9]{8,}\b/g, sub("<id>")],
   // 7+ hex characters with a digit and a letter: a git hash or an address. Plain digits are a number, plain letters a word.
   [/\b(?:0x)?(?=[0-9a-f]*\d)(?=[0-9a-f]*[a-f])[0-9a-f]{7,}\b/gi, sub("<id>")],
+  // An ISO 8601 date, or date-time (T or space, with or without seconds, fraction and zone): one number, so the hour doesn't split a group.
+  [/\b\d{4}-\d\d-\d\d(?:[T ]\d\d:\d\d(?::\d\d(?:[.,]\d+)?)?(?:Z|[+-]\d\d(?::?\d\d)?)?)?/g, sub("<n>")],
   // Numbers: line:col, clock times, decimals, thousands, ports, sizes, durations (the unit stays). Not the digits of a word (utf8, sha256, E2BIG).
   [/\b0x[0-9a-f]+\b|(?<![A-Za-z_\d])\d+(?:[.,:]\d+)*/gi, sub("<n>")],
 ];

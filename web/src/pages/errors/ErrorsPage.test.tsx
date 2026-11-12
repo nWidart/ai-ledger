@@ -1431,6 +1431,9 @@ describe("ErrorsPage by message", () => {
     expect(exCount()).toBe("1 of 5 match");
     expect(list()).toEqual([["2×", "Exit code <n> zsh: command not found: pnpm"]]);
     await waitFor(() => expect(document.getElementById("detailLive")!.textContent).toBe("1 of 5 match"));
+    // A group's share is of the type's errors in the view: the search leaves it as it was (2 of 43).
+    expect(shares()).toEqual(["5%"]);
+    expect(heads()[0]!.querySelector(".shr")!.getAttribute("title")).toBe("Share of this type's errors in the view; the search does not change it");
     // The project of one example is enough: foo's timeouts and ENOENTs both have one in bar.
     await userEvent.clear(screen.getByRole("searchbox"));
     await userEvent.type(screen.getByRole("searchbox"), "bar");

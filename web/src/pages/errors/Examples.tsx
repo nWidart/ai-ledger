@@ -141,7 +141,7 @@ export function MsgRow({ g, focused, reset }: { g: MsgGroup; focused: Err | unde
         <button type="button" className="inc-h msg-h" data-msg={g.key} aria-expanded={open} aria-controls={id} onClick={toggle}>
           <span className="att">{fmt(g.n)}×<small>{g.n === 1 ? "error" : "errors"}</small></span>
           <span className="lbl" title={g.key}>{g.label}</span>
-          <span className="shr" title="Share of the listed errors">{g.share < .01 ? "<1" : fmt(g.share * 100, 0)}%</span>
+          <span className="shr" title="Share of this type's errors in the view; the search does not change it">{g.share < .01 ? "<1" : fmt(g.share * 100, 0)}%</span>
           <span className="when">{plural(g.projects, "project")} · {tools} · newest {at(g.last)}<span className="chev" aria-hidden="true">›</span></span>
         </button>
         <button type="button" className="msgcopy" onClick={copy}>{copied === "ok" ? "Copied ✓" : copied === "fail" ? "Copy failed" : <>Copy <span className="sr">message</span></>}</button>

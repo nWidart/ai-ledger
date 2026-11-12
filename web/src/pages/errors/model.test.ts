@@ -497,6 +497,52 @@ describe("normalized messages", () => {
     expect(key("can't find 'x' and don't know why")).toBe("can't find 'x' and don't know why"); // an apostrophe inside a word is no quote
     expect(key(`the "${"b".repeat(60)} 1234" ends`)).toBe('the "<…>" ends'); // what is inside a long quote goes with it
   });
+  it("replaces a quoted path whole, whatever its length, spaces or characters, and Windows paths", () => {
+    const same = (a: string, b: string, k: string) => { expect(key(a)).toBe(k); expect(key(b)).toBe(k); };
+    same("ENOENT 'C:\\Users\\alice\\a.ts'", "ENOENT 'C:\\Users\\bob\\b.ts'", "ENOENT '<path>'");
+    same("ENOENT '/tmp/My Project/a.ts'", "ENOENT '/tmp/Other Project/a.ts'", "ENOENT '<path>'");
+    same("ENOENT '/short/a.ts'", "ENOENT '/abcdefghijklmnopqrstuvwxyz/abcdefghijklmnop/a.ts'", "ENOENT '<path>'"); // not "<…>" for the long one
+    expect(key('open "~/Documents/été 2026/x.md"')).toBe('open "<path>"');
+    expect(key("open `../up one/y.md` too")).toBe("open `<path>` too");
+  });
+  it("keeps a short quoted token that is no path", () => {
+    expect(key("unknown option '--flag', 'npm' and '/'")).toBe("unknown option '--flag', 'npm' and '/'");
+    expect(key("split on '..' and \"./\"")).toBe("split on '..' and \"./\"");
+  });
+  it("replaces an unquoted Windows path, and a POSIX path with Unicode letters", () => {
+    expect(key("cannot open C:\\Users\\alice\\app\\a.ts.")).toBe("cannot open <path>.");
+    expect(key("cannot open C:\\Users\\alice\\app\\a.ts")).toBe(key("cannot open D:\\work\\b.ts"));
+    expect(key("cannot open C:/Users/alice/a.ts")).toBe("cannot open <path>");
+    expect(key("open /tmp/日本語/ファイル.ts")).toBe(key("open /tmp/中文/x.ts"));
+    expect(key("open /tmp/日本語/ファイル.ts")).toBe("open <path>");
+    expect(key("open src/café/été.ts")).toBe("open <path>");
+    expect(key("fetch s://x/y and a:b")).toBe("fetch s://x/y and a:b"); // a scheme is no drive letter
+  });
+  it("leaves an unquoted path with spaces: it can't be told from prose", () => {
+    expect(key("open /tmp/My Project/a.ts")).toBe("open <path> <path>"); // "/tmp/My" and "Project/a.ts"
+  });
+  it("replaces ISO date-times and dates", () => {
+    expect(key("Failed at 2026-11-04T10:01:02.000Z")).toBe("Failed at <n>");
+    expect(key("Failed at 2026-11-04T10:01:02.000Z")).toBe(key("Failed at 2026-11-04T11:01:02.000Z"));
+    expect(key("at 2026-11-04 10:01:02+01:00 and 2026-11-04T10:01Z and 2026-11-04T10:01:02,5")).toBe("at <n> and <n> and <n>");
+    expect(key("on 2026-11-04 it broke")).toBe("on <n> it broke");
+  });
+  it("replaces prefixed ids, and keeps ordinary identifiers", () => {
+    expect(key("Unknown session sess_Abc12345")).toBe("Unknown session <id>");
+    expect(key("Unknown session sess_Abc12345")).toBe(key("Unknown session sess_Def67890"));
+    expect(key("chatcmpl-9AbCdEf1234 and msg_01XyZ9876543 and req_abc12345def")).toBe("<id> and <id> and <id>");
+    expect(key("agent-a1b2c3d4e5 lost")).toBe("<id> lost");
+    for (const w of ["old_string", "tool_use_error", "no_such_file", "utf_8", "max-retries", "file_path2", "read_only_1"]) expect(key(`bad ${w} here`)).toBe(`bad ${w} here`);
+    expect(key("sess_abcdefgh")).toBe("sess_abcdefgh"); // letters only: a word
+    expect(key("sess_12345678")).toBe("sess_12345678"); // digits only: no id, and no number either (digits after "_" belong to the word)
+  });
+  it("normalizes an adversarial 700-character line quickly", () => {
+    const lines = ["/", "/.", "~/", "'/", "\"/a\"b", "'/ '", "`", "C:\\", "C:/", "0", "a0", "a-", "a_", "1.", "1:", "2026-11-04T", "0x", "x/", "日/", "a'", "toolu_"].map(u => u.repeat(Math.ceil(700 / u.length)).slice(0, 700));
+    lines.push(("'/" + "a ".repeat(10)).repeat(40).slice(0, 700), ("1" + "a").repeat(350), "Exit code 1\n" + "/".repeat(690));
+    const t = performance.now();
+    for (const l of lines) normalize(l);
+    expect(performance.now() - t).toBeLessThan(2000);
+  });
   it("collapses whitespace", () => {
     expect(key("a   b\t c ")).toBe("a b c");
   });
@@ -553,6 +599,7 @@ describe("message groups", () => {
     expect(msgList(g.slice(0, 1), "", undefined, "day").count).toBe("1 message in day, most errors first");
     const l = msgList(g, "bash", undefined); // only a's example from the Bash tool matches
     expect(l.count).toBe("1 of 4 match");
+    expect(l.items[0]).toMatchObject({ key: "a <n>", share: 0.5 }); // the search leaves the share alone
     expect((l.items as { key: string }[]).map(x => x.key)).toEqual(["a <n>"]);
     expect(msgList(g, "nothing like it", undefined)).toMatchObject({ items: [], count: "0 of 4 match" });
   });
