@@ -11,7 +11,7 @@ const TOP_MODELS = 8;
 /** A share as a whole percentage, "<1%" for a non-zero share that would round to 0%. */
 const share = (v: number | null) => (v != null && v > 0 && v < .005 ? "<1%" : pct(v));
 
-/** Models and effort as ledger rows: share of requests, with estimated cost. by="cost" (the Cost page): ranked and drawn by
+/** Models, effort and fast mode as ledger rows: share of requests, with estimated cost. by="cost" (the Cost page): ranked and drawn by
  *  share of estimated cost, unpriced last, the top TOP_MODELS until Show all. */
 export function ModelLedger({ models, by = "requests" }: { models: readonly ModelRow[]; by?: "requests" | "cost" }) {
   const [all, setAll] = useState(false), cost = by === "cost";
@@ -20,9 +20,9 @@ export function ModelLedger({ models, by = "requests" }: { models: readonly Mode
   const sum = rs.reduce((s, r) => s + v(r), 0) || 1, max = Math.max(...rs.map(v), 0) || 1;
   const shown = cost && !all ? rs.slice(0, TOP_MODELS) : rs;
   return <>
-    <Ledger empty="No requests in this range.">{shown.map(r => <LedgerRow key={r.model + "|" + r.effort}
-      name={r.model.replace(/^claude-/, "") + (r.effort && r.effort !== "(none)" ? ` · ${r.effort}` : "")}
-      title={`${r.model}, ${r.effort} effort, ${num(r.requests)} requests, ${big(r.tokens)} tokens`}
+    <Ledger empty="No requests in this range.">{shown.map(r => <LedgerRow key={r.model + "|" + r.effort + "|" + r.fast}
+      name={r.model.replace(/^claude-/, "") + (r.effort && r.effort !== "(none)" ? ` · ${r.effort}` : "") + (r.fast ? " · fast" : "")}
+      title={`${r.model}, ${r.effort} effort${r.fast ? ", fast mode" : ""}, ${num(r.requests)} requests, ${big(r.tokens)} tokens`}
       share={v(r) / max} value={cost && r.cost == null ? "–" : share(v(r) / sum)}
       side={r.cost == null ? <span className="chip warn">unpriced</span> : usd(r.cost)} />)}</Ledger>
     {cost && rs.length > TOP_MODELS && <button type="button" className="linkish more" onClick={() => setAll(!all)}>

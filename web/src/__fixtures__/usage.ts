@@ -181,6 +181,7 @@ export default {
   {
    "model": "m-a",
    "effort": "high",
+   "fast": false,
    "requests": 2,
    "tokens": 12000000,
    "cost": 15.8
@@ -188,6 +189,7 @@ export default {
   {
    "model": "m-unknown",
    "effort": "medium",
+   "fast": false,
    "requests": 1,
    "tokens": 200,
    "cost": null

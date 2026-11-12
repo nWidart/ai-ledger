@@ -290,7 +290,7 @@ class CodexDeriver(store.Deriver):
         model, effort = self.turn_of(turn)
         inp, cr, cw = u.get("input_tokens") or 0, u.get("cached_input_tokens") or 0, u.get("cache_write_input_tokens") or 0
         self.requests[mid] = (mid, self.sid, ts, model, effort, self.sub, inp - cr - cw, u.get("output_tokens") or 0,
-                              u.get("reasoning_output_tokens") or 0, cr, cw, 0, None, None)
+                              u.get("reasoning_output_tokens") or 0, cr, cw, 0, None, None, None)
         if s and not self.sub and inp > s["peak"]:
             s["peak"], s["peak_model"] = inp, model
 

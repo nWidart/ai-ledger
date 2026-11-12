@@ -167,7 +167,7 @@ describe("CostPage", () => {
   });
 
   it("ranks models by their share of cost, under 1% as <1%, the top 8 until Show all", async () => {
-    const m = (model: string, cost: number | null, requests: number): ModelRow => ({ model, effort: "(none)", requests, tokens: 1, cost });
+    const m = (model: string, cost: number | null, requests: number): ModelRow => ({ model, effort: "(none)", fast: false, requests, tokens: 1, cost });
     const models = [m("cheap-busy", 1, 900), m("dear", 300, 10), m("dust", 0.5, 5), m("free", null, 50),
       ...[1, 2, 3, 4, 5, 6, 7].map(k => m(`mid-${k}`, 20, 1))];
     await show({ ...usage, models });
@@ -176,6 +176,13 @@ describe("CostPage", () => {
     expect(rows().map(r => r.querySelector(".n")!.textContent)).toEqual(["dear", ...[1, 2, 3, 4, 5, 6, 7].map(k => `mid-${k}`)]);
     await userEvent.click(within(panel).getByRole("button", { name: "Show all 11" }));
     expect(rows().slice(-3).map(r => [r.querySelector(".n")!.textContent, r.querySelector(".v")!.textContent])).toEqual([["cheap-busy", "<1%"], ["dust", "<1%"], ["free", "–"]]);
+  });
+
+  it("marks fast-mode requests in the models ledger as their own row", async () => {
+    const m = (fast: boolean, cost: number): ModelRow => ({ model: "claude-opus-5-5", effort: "high", fast, requests: 1, tokens: 1, cost });
+    await show({ ...usage, models: [m(false, 10), m(true, 20)] });
+    const panel = screen.getByRole("heading", { name: "Models and effort" }).closest("section")!;
+    expect([...panel.querySelectorAll(".ledger li .n")].map(n => n.textContent)).toEqual(["opus-5-5 · high · fast", "opus-5-5 · high"]);
   });
 
   it("shows an unknown previous cost as unknown, with no change", async () => {

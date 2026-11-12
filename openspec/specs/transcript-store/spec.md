@@ -176,3 +176,14 @@ The default store SHALL live in a per-user data folder outside the installed cod
 #### Scenario: Upgrade keeps the store
 - **WHEN** the user upgrades the package to a new version
 - **THEN** the app opens the same store with every stored line
+
+### Requirement: Record the speed of each request
+Each derived request SHALL carry the `speed` its response's `usage` reports (`fast` or `standard` for Claude Code), as written, or none when the transcript has none. Requests from sources without a speed SHALL carry none. A store created before the column existed SHALL keep working when opened, with no speed until the user runs a rebuild.
+
+#### Scenario: Fast-mode response
+- **WHEN** a Claude Code response's `usage.speed` is `fast`
+- **THEN** its request record has speed `fast`
+
+#### Scenario: Response without a speed
+- **WHEN** a response's `usage` has no `speed`, or the request comes from Codex
+- **THEN** its request record has no speed

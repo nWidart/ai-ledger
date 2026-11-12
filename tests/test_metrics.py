@@ -14,10 +14,52 @@ from ai_ledger import app, metrics, store
 
 PRICES = {
     "m-a": {"input": 1, "output": 10, "cache_read": 0.1, "cache_5m": 2, "cache_1h": 4, "context": 1000},
+    "m-fast": {"input": 1, "output": 10, "cache_read": 0.1, "cache_5m": 2, "cache_1h": 4, "context": 1000,
+               "fast": {"input": 2, "output": 20, "cache_read": 0.2, "cache_5m": 4, "cache_1h": 8}},
+    "m-both": {"input": 1, "output": 1, "cache_read": 1, "cache_5m": 1, "cache_1h": 1, "context": 1000,
+               "long_above": 100, "long": {"input": 3, "output": 3, "cache_read": 3, "cache_5m": 3, "cache_1h": 3},
+               "fast": {"input": 2, "output": 2, "cache_read": 2, "cache_5m": 2, "cache_1h": 2}},
     "m-tier": {"input": 1, "output": 1, "cache_read": 1, "cache_5m": 1, "cache_1h": 1, "context": 1000,
                "long_above": 100, "long": {"input": 2, "output": 2, "cache_read": 2, "cache_5m": 2, "cache_1h": 2}},
 }
 TODAY = date(2026, 11, 5)
+
+
+class FastPricingTest(unittest.TestCase):
+    """A request costs the fast rates when its speed is 'fast' and its model has them; fast replaces the long-prompt tier."""
+
+    def cost(self, model, speed, inp=60, cr=60):
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp)
+        con = store.open_store(os.path.join(tmp, "x.duckdb"))
+        self.addCleanup(con.close)
+        c = con.cursor()
+        store.insert(c, "sessions", ["session_id", "project", "first_ts", "last_ts"], [("s", "foo", "2026-11-05 09:00:00", "2026-11-05 09:30:00")])
+        store.insert(c, "prompts", ["prompt_id", "session_id", "ts", "interrupted"], [("p", "s", "2026-11-05 09:00:00", False)])  # not a helper session
+        store.insert(c, "requests", ["message_id", "session_id", "ts", "model", "subagent", "input", "output", "thinking", "cache_read",
+                                     "cache_5m", "cache_1h", "thinking_ms", "speed"],
+                     [("r", "s", "2026-11-05 09:01:00", model, False, inp, 10, 0, cr, 0, 0, 0, speed)])
+        return metrics.usage(con.cursor(), prices=PRICES, today=TODAY)
+
+    def test_fast_costs_the_fast_rates_and_otherwise_the_standard_ones(self):
+        self.assertAlmostEqual(self.cost("m-fast", "fast")["totals"]["cost"], (60 * 2 + 10 * 20 + 60 * 0.2) / 1e6)
+        for speed in ("standard", None):
+            self.assertAlmostEqual(self.cost("m-fast", speed)["totals"]["cost"], (60 * 1 + 10 * 10 + 60 * 0.1) / 1e6)
+
+    def test_fast_on_a_model_without_fast_rates_keeps_the_standard_price(self):
+        got = self.cost("m-a", "fast")
+        self.assertAlmostEqual(got["totals"]["cost"], (60 * 1 + 10 * 10 + 60 * 0.1) / 1e6)
+        self.assertEqual(got["unpriced"], [])
+
+    def test_fast_replaces_the_long_prompt_tier(self):
+        self.assertAlmostEqual(self.cost("m-both", "fast")["totals"]["cost"], 130 * 2 / 1e6)  # 120 > long_above, still fast
+        self.assertAlmostEqual(self.cost("m-both", "standard")["totals"]["cost"], 130 * 3 / 1e6)
+        self.assertAlmostEqual(self.cost("m-both", "standard", inp=10, cr=10)["totals"]["cost"], 30 / 1e6)
+
+    def test_models_ledger_separates_fast_requests(self):
+        m = self.cost("m-fast", "fast")["models"]
+        self.assertEqual([(r["model"], r["fast"], r["requests"]) for r in m], [("m-fast", True, 1)])
+        self.assertEqual([r["fast"] for r in self.cost("m-fast", None)["models"]], [False])
 
 
 class MetricsTest(unittest.TestCase):
@@ -1192,11 +1234,21 @@ class UserPricesTest(unittest.TestCase):
         self.assertEqual(len(got), len(self.packaged) + 1)
         self.assertIsNone(metrics.prices_file()["error"])
 
+    def test_fast_rates_are_kept(self):
+        fast = {"input": 2, "output": 2, "cache_read": 2, "cache_5m": 2, "cache_1h": 2}
+        self.write(json.dumps({"models": {"m-new": {"input": 1, "output": 1, "cache_read": 1, "cache_5m": 1, "cache_1h": 1, "fast": fast}}}))
+        self.assertEqual(metrics.load_prices()["m-new"]["fast"], fast)
+        self.assertIsNone(metrics.prices_file()["error"])
+
     def test_bad_file_is_reported_and_ignored(self):
         for text, error in (("{not json", "Expecting property name"), ("[]", 'no "models" object'),
                             ('{"models": {"m-x": {"input": 1}}}', "m-x: output, cache_read, cache_5m, cache_1h must be a number"),
                             ('{"models": {"m-x": {"input": 1, "output": 1, "cache_read": 1, "cache_5m": 1, "cache_1h": 1, "long_above": 5}}}',
-                             "m-x: input, output, cache_read, cache_5m, cache_1h must be a number")):
+                             "m-x: input, output, cache_read, cache_5m, cache_1h must be a number"),
+                            ('{"models": {"m-x": {"input": 1, "output": 1, "cache_read": 1, "cache_5m": 1, "cache_1h": 1, "fast": {"input": 2}}}}',
+                             "m-x: fast.output, fast.cache_read, fast.cache_5m, fast.cache_1h must be a number"),
+                            ('{"models": {"m-x": {"input": 1, "output": 1, "cache_read": 1, "cache_5m": 1, "cache_1h": 1, "fast": 5}}}',
+                             "m-x: fast.input, fast.output, fast.cache_read, fast.cache_5m, fast.cache_1h must be a number")):
             self.write(text)
             self.assertEqual(metrics.load_prices(), self.packaged)
             self.assertIn(error, metrics.prices_file()["error"])

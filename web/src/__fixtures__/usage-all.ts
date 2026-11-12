@@ -264,6 +264,7 @@ export default {
   {
    "model": "m-a",
    "effort": "high",
+   "fast": false,
    "requests": 2,
    "tokens": 12000000,
    "cost": 15.8
@@ -271,6 +272,7 @@ export default {
   {
    "model": "m-a",
    "effort": "(none)",
+   "fast": false,
    "requests": 2,
    "tokens": 220,
    "cost": 0.0004
@@ -278,6 +280,7 @@ export default {
   {
    "model": "m-unknown",
    "effort": "medium",
+   "fast": false,
    "requests": 1,
    "tokens": 200,
    "cost": null
@@ -285,6 +288,7 @@ export default {
   {
    "model": "m-tier",
    "effort": "(none)",
+   "fast": false,
    "requests": 1,
    "tokens": 130,
    "cost": 0.00026

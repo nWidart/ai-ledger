@@ -126,6 +126,7 @@ export default {
   {
    "model": "m-a",
    "effort": "(none)",
+   "fast": false,
    "requests": 1,
    "tokens": 200000,
    "cost": 0.362

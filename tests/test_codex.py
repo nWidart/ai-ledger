@@ -169,6 +169,11 @@ class ArchiveTest(CodexCase):
         self.assertEqual((self.derived(), self.count()), before)
         self.assertEqual(self.q("SELECT count(*) FROM files"), [(2,)])
 
+    def test_requests_have_no_speed(self):
+        self.put("v0166")
+        self.ingest()
+        self.assertEqual(self.q("SELECT count(*), count(speed) FROM requests"), [(2, 0)])
+
     def test_archive_adds_lines_missing_live(self):
         name, text = fixture("v0166")
         lines = text.splitlines(keepends=True)

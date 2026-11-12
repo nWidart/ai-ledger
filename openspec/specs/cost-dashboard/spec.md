@@ -54,7 +54,7 @@ The dashboard SHALL show input, output, thinking, cache read, 5-minute cache wri
 - **THEN** a chart shows each token kind per day
 
 ### Requirement: Show estimated cost
-The dashboard SHALL show an estimated cost per project, model and day, computed from per-model prices for each token kind, and SHALL label the value as an API-price estimate. When a model has no price, the dashboard SHALL name the user prices file by its full path as the place to add one.
+The dashboard SHALL show an estimated cost per project, model and day, computed from per-model prices for each token kind, and SHALL label the value as an API-price estimate. When a model has no price, the dashboard SHALL name the user prices file by its full path as the place to add one. A price entry MAY carry fast-mode rates: a request in fast mode on such a model SHALL cost those rates at any prompt size, replacing the long-prompt tier, because fast pricing applies across the full context window. A fast-mode request on a model without fast rates SHALL cost its standard price.
 
 #### Scenario: Model without a price
 - **WHEN** a request used a model missing from the price table
@@ -63,6 +63,14 @@ The dashboard SHALL show an estimated cost per project, model and day, computed 
 #### Scenario: Price added by the user
 - **WHEN** the user adds the model to the user prices file and reloads the page
 - **THEN** the model's requests are priced, with no rebuild
+
+#### Scenario: Fast-mode request
+- **WHEN** a request in fast mode used a model with fast rates, and an identical request used standard speed
+- **THEN** the first costs the fast rates and the second the standard rates
+
+#### Scenario: Fast mode on a model without fast rates
+- **WHEN** a request in fast mode used a model with no fast rates
+- **THEN** it costs the model's standard price and is not listed as unpriced
 
 ### Requirement: Show cache efficiency
 The dashboard SHALL show the cache hit ratio (cache read tokens divided by all input tokens) and the share of cache writes that used the 1-hour lifetime.
@@ -94,11 +102,15 @@ The cost dashboard SHALL show cost per commit and cost per prompt per project, a
 - **THEN** its cost per commit shows as not available, not as zero or infinity
 
 ### Requirement: Show model mix
-The cost dashboard SHALL show each model and effort level's share of estimated cost, costliest first, with its cost, the top 8 until the user asks for all. A share that is above zero but rounds to 0% SHALL read "<1%".
+The cost dashboard SHALL show each model and effort level's share of estimated cost, costliest first, with its cost, the top 8 until the user asks for all. Fast-mode requests SHALL form their own rows, marked "fast". A share that is above zero but rounds to 0% SHALL read "<1%".
 
 #### Scenario: Two models
 - **WHEN** 70% of the estimated cost in the view came from one model and 30% from another
 - **THEN** the cost dashboard lists the first model above the second, with both shares and each model's estimated cost
+
+#### Scenario: Fast mode in the mix
+- **WHEN** a model had requests in fast mode and in standard mode at the same effort
+- **THEN** the cost dashboard lists two rows for it, one marked "fast", each with its own share and cost
 
 ### Requirement: Link to a cost view
 The cost dashboard SHALL keep the selected project, time range, inspected project and open session in the page URL, so a view can be reopened or shared, and browser Back SHALL retrace filter and sheet changes.
@@ -154,3 +166,10 @@ The dashboard SHALL show, for the view, the estimated cost of each billed kind (
 #### Scenario: Unpriced view
 - **WHEN** every request in the view used a model with no price
 - **THEN** each kind's cost shows as a dash
+
+### Requirement: Validate fast-mode rates in the user prices file
+An entry's `fast` object, when present, SHALL hold a number for each price kind; otherwise the whole file is ignored and reported as for any other bad entry.
+
+#### Scenario: Incomplete fast rates
+- **WHEN** an entry's `fast` object lacks `output`
+- **THEN** the file is ignored and the Cost page says `fast.output must be a number` for that model
