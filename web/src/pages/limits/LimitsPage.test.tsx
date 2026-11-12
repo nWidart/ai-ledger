@@ -350,25 +350,35 @@ describe("what used this window", () => {
     show(only({ ...claude, used }));
     await lede();
     const lists = card(claude);
-    expect(lists.getByText("ai-ledger", { selector: "a" }).getAttribute("href")).toBe("/cost#project=ai-ledger&range=7&source=claude");
-    expect(lists.getByText("other app", { selector: "a" }).getAttribute("href")).toBe("/cost#project=other+app&range=7&source=claude");
+    expect(lists.getByText("ai-ledger", { selector: "a" }).getAttribute("href")).toBe("/cost#project=ai-ledger&range=7&source=claude&auto=1");
+    expect(lists.getByText("other app", { selector: "a" }).getAttribute("href")).toBe("/cost#project=other+app&range=7&source=claude&auto=1");
     const all = lists.getByRole("link", { name: "Open in Cost · last 7 days" });
-    expect(all.getAttribute("href")).toBe("/cost#range=7&source=claude");
+    expect(all.getAttribute("href")).toBe("/cost#range=7&source=claude&auto=1");
     expect(all.title).toContain("nearest preset");
     expect(lists.queryByText("claude-opus-5-5", { selector: "a" })).toBeNull(); // models are not links
+  });
+
+  it("says on each project link that its range is the nearest preset", async () => {
+    show(only({ ...claude, used }));
+    await lede();
+    const link = card(claude).getByRole("link", { name: "ai-ledger in Cost, last 7 days" });
+    expect(link.textContent).toBe("ai-ledger");
+    expect(link.title).toBe("Open ai-ledger in Cost: last 7 days, the nearest preset to this window's start (Cost has no custom ranges)");
+    expect(card(claude).getByRole("link", { name: "Open in Cost · last 7 days" }).title).toBe(
+      "Open in Cost: last 7 days, the nearest preset to this window's start (Cost has no custom ranges)");
   });
 
   it("goes to Cost without a page reload", async () => {
     show(only({ ...claude, used }));
     await lede();
     await userEvent.click(card(claude).getByText("ai-ledger", { selector: "a" }));
-    expect(location.pathname + location.hash).toBe("/cost#project=ai-ledger&range=7&source=claude");
+    expect(location.pathname + location.hash).toBe("/cost#project=ai-ledger&range=7&source=claude&auto=1");
   });
 
   it("reads all time for a window that began more than 90 days ago, and takes the window's provider as the source", async () => {
     show(only({ ...codex, start: "2026-06-01T00:00:00.000Z", used }));
     await lede();
-    expect(card(codex).getByRole("link", { name: "Open in Cost · all time" }).getAttribute("href")).toBe("/cost#range=0&source=codex");
+    expect(card(codex).getByRole("link", { name: "Open in Cost · all time" }).getAttribute("href")).toBe("/cost#range=0&source=codex&auto=1");
   });
 
   it("has no drawer when nothing was counted", async () => {

@@ -59,13 +59,14 @@ function Used({ w, now }: { w: LimitWindow; now: string }) {
   const u = w.used;
   if (!u) return null;
   const hint = usedHint(u), range = usedRangeName(usedRange(w, now));
+  const near = `${range}, the nearest preset to this window's start (Cost has no custom ranges)`;
   const open = (e: MouseEvent<HTMLAnchorElement>) => {
     if (!(e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey)) { e.preventDefault(); navigate(e.currentTarget.getAttribute("href")!); }
   };
   const list = (title: string, rows: { key: string; r: WindowUsedRow; link?: string }[]) => rows.length > 0 && <div>
     <h4>{title}</h4>
     <ul>{rows.map(({ key, r, link }) => <li key={key} title={`${usd(r.cost)}, estimated at API list prices`}>
-      {link ? <a href={link} onClick={open}>{key}</a> : <span>{key}</span>}
+      {link ? <a href={link} onClick={open} aria-label={`${key} in Cost, ${range}`} title={`Open ${key} in Cost: ${near}`}>{key}</a> : <span>{key}</span>}
       <span className="used-share">{sharePct(r.share)}</span>
       {r.points != null && <span className="muted">≈ {num(r.points, 1)} points</span>}</li>)}</ul>
   </div>;
@@ -77,7 +78,7 @@ function Used({ w, now }: { w: LimitWindow; now: string }) {
         {list("Models", u.models.map(r => ({ key: r.model, r })))}
       </div>
       <p className="muted used-note">Counted local agent use only, at API list prices ({usd(u.total)} here); use elsewhere is not in it.</p>
-      <a className="used-open" href={usedHref(w, now)} title={`Cost has no custom ranges: this is the nearest preset, ${range}`} onClick={open}>Open in Cost · {range}</a>
+      <a className="used-open" href={usedHref(w, now)} title={`Open in Cost: ${near}`} onClick={open}>Open in Cost · {range}</a>
     </details>
   );
 }

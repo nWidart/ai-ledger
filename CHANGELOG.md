@@ -9,7 +9,7 @@ Run `ai-ledger rebuild` once after upgrading (with the app stopped): error types
 
 ### Added
 
-- The Limits cards have a drawer, "What used this window", closed by default: the top projects and models of the window's counted use so far, with their shares and points. Each project links to Cost with that project, the agent and the nearest range preset (7, 14, 30 or 90 days, else all time), and "Open in Cost" does the same for the whole window.
+- The Limits cards have a drawer, "What used this window", closed by default: the top projects and models of the window's counted use so far, with their shares and points. Each project links to Cost with that project, the agent, automated sessions and the nearest range preset (7, 14, 30 or 90 days, else all time; each link says so), and "Open in Cost" does the same for the whole window.
 - The Limits page adds a second line to each open window, "if the last 24 hours continue": your use over the last 24 hours carried on to the reset, with its own run-out time on the card ("If the last 24 hours continue: reaches 100% at …", or the percent at the reset) and in the chart readout. The usual forecast, the heading and the suggestion do not change.
 - The Limits charts can be read at a time: hover or touch a chart, or focus it and use the arrow keys, Home, End and Escape. A guide and a marker show the point, and a tooltip gives its time and percent, measured or estimated, or, ahead of now, the forecast with its likely range. Keyboard changes are announced.
 - The Limits cards show the cap in money under the pace line: "100% ≈ $X a week at list prices, from N points over M windows", so a calibrated window reads as dollars with the evidence behind it.

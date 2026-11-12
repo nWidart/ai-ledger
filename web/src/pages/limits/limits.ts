@@ -122,17 +122,22 @@ const sameLimit = (w: LimitWindow, b: { provider: string; limit_id: string; scop
 export const bindingWindow = (d: LimitsPayload): LimitWindow | undefined =>
   d.binding ? d.windows.find(w => sameLimit(w, d.binding!)) : undefined;
 
-/** The smallest Cost range preset that covers the window's start (days since it, rounded up): 7, 14, 30, 90, else 0 (all time). */
+/** The smallest Cost range preset that covers the window's start. Cost's range of N days is today and the N-1 dates before it,
+ *  from the start of the first date, so count the dates from the window's start date through the date of now, inclusive: 7, 14,
+ *  30 or 90 when that many dates or fewer, else 0 (all time). Cost's dates are the store's local days; the reader's local
+ *  dates are the closest the page has, and match them when the browser and the store share a zone. */
 export function usedRange(w: LimitWindow, now: string): Range {
-  const days = Math.ceil((Date.parse(now) - Date.parse(w.start)) / 86400000);
-  return RANGES.find(r => r !== 0 && days <= r) ?? 0;
+  const date = (ts: string) => { const d = new Date(ts); return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()); };
+  const dates = Math.round((date(now) - date(w.start)) / 86400000) + 1;
+  return RANGES.find(r => r !== 0 && dates <= r) ?? 0;
 }
 
 export const usedRangeName = (range: Range): string => (range ? `last ${range} days` : "all time");
 
-/** The Cost page filtered to the window's source and its nearest range preset, and to one project when given. */
+/** The Cost page filtered to the window's source and its nearest range preset, and to one project when given. The drawer counts
+ *  automated and helper sessions, and Cost leaves them out unless auto=1, so the link asks for them. */
 export const usedHref = (w: LimitWindow, now: string, project = ""): string =>
-  "/cost" + formatHash({ project, range: String(usedRange(w, now)), source: sourceOf(w.provider) });
+  "/cost" + formatHash({ project, range: String(usedRange(w, now)), source: sourceOf(w.provider), auto: "1" });
 
 /** A share as a whole percent: "54%", and "<1%" for a share that rounds to nothing. */
 export const sharePct = (share: number): string => (share > 0 && share < 0.005 ? "<1%" : `${Math.round(share * 100)}%`);
