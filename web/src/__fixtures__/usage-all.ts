@@ -131,6 +131,40 @@ export default {
    "tokens": 110
   }
  ],
+ "daily_models": [
+  {
+   "day": "2026-10-01",
+   "model": "m-tier",
+   "cost": 0.00026
+  },
+  {
+   "day": "2026-11-04",
+   "model": "m-a",
+   "cost": 15.8002
+  },
+  {
+   "day": "2026-11-05",
+   "model": "m-a",
+   "cost": 0.0002
+  }
+ ],
+ "daily_sources": [
+  {
+   "day": "2026-10-01",
+   "source": "claude",
+   "cost": 0.00026
+  },
+  {
+   "day": "2026-11-04",
+   "source": "claude",
+   "cost": 15.8002
+  },
+  {
+   "day": "2026-11-05",
+   "source": "claude",
+   "cost": 0.0002
+  }
+ ],
  "daily_work": [
   {
    "day": "2026-10-01",

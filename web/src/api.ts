@@ -25,6 +25,9 @@ export interface Totals extends Tokens {
 
 export interface DailyRow extends Tokens { day: Day; cost: number | null; unpriced: number }
 export interface DailyProjectRow { day: Day; project: string | null; cost: number | null; tokens: number }
+/** A day's cost by model, and by agent: priced requests only, so a day's rows add up to its cost in daily. */
+export interface DailyModelRow { day: Day; model: string; cost: number }
+export interface DailySourceRow { day: Day; source: Source; cost: number }
 /** Work per day (or per week, named by its Monday, in work): sessions with a request in it, each counted once, prompts,
  *  commits (as in totals), tool calls and failed tool calls. Idle days are left out. */
 export interface DailyWorkRow { day: Day; sessions: number; prompts: number; commits: number; calls: number; failed_calls: number }
@@ -77,7 +80,7 @@ export type Source = "claude" | "codex";
 export interface UsagePayload {
   project: string; range: number; automated: boolean; source: Source | ""; start: Day | null; end: Day;
   projects: string[]; project_order: string[]; totals: Totals;
-  daily: DailyRow[]; daily_projects: DailyProjectRow[]; daily_work: DailyWorkRow[];
+  daily: DailyRow[]; daily_projects: DailyProjectRow[]; daily_models: DailyModelRow[]; daily_sources: DailySourceRow[]; daily_work: DailyWorkRow[];
   /** The work rows by work_bucket: weeks (Monday start, local) when the first work day is over 60 days before the end. */
   work_bucket: "day" | "week"; work: DailyWorkRow[];
   /** work split by project; a bucket's rows add up to its work row. */

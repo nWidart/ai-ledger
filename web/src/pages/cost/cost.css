@@ -95,7 +95,7 @@
 }
 @media (max-width: 520px) { .pg-cost .changed { margin: 16px 0 0; } }
 
-/* Daily chart: a project's legend key filters the page; a token kind's key toggles it */
+/* Daily chart: the stacking and metric switches sit together; a project's legend key filters the page; a token kind's key toggles it */
 .pg-cost .legend button { font-size: 12px; padding: 2px 8px; display: inline-flex; gap: 6px; align-items: center; border-radius: 999px; min-width: 0; }
 .pg-cost .legend button[aria-pressed=false] { color: var(--text-muted); }
 .pg-cost .legend button[aria-pressed=false] i { opacity: .25; }
@@ -162,3 +162,5 @@
 .pg-cost .totals.by-kind dd small.cost-share { color: var(--text-primary); font-weight: 600; }
 /* Other's projects under its row in the cost tooltip: indented, muted, a step smaller */
 .pg-cost .tip .sub { color: var(--text-muted); font-size: 12px; padding-left: 14px; }
+
+.pg-cost .chart-ctl { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; font-size: 13px; }

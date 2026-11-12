@@ -1,10 +1,12 @@
 // Cost's figures from the usage payload: the headline comparison, the daily series and the chart's stack.
-import type { Change, UsagePayload } from "../../api";
+import type { Change, Source, UsagePayload } from "../../api";
 import { color, hasHue } from "../../colors";
+import { SOURCE_LABELS } from "../../components/Filters";
 import { dayRange, mult, num, pct, usd, usd0 } from "../../format";
 
-/** A series in the chart: a token kind, or a project ("p:<name>"; "p:" is Other). */
-export interface Kind { k: string; label: string; c: string; project?: string }
+/** A series in the chart: a token kind, or one of a cost stacking's ("p:<project>", "m:<model>", "s:<source>"; the bare
+ *  prefix is Other). project and source: the filter the legend key sets. */
+export interface Kind { k: string; label: string; c: string; project?: string; source?: Source }
 export const KINDS: Kind[] = [
   { k: "input", label: "Input", c: "var(--series-1)" },
   { k: "text_out", label: "Output", c: "var(--series-2)" },
@@ -14,19 +16,37 @@ export const KINDS: Kind[] = [
   { k: "cache_1h", label: "Cache write 1h", c: "var(--series-6)" },
 ];
 
-/** One day of the view: its cost, unpriced requests, a value per series key (token kinds, plus the stacked projects), and
- *  with Other stacked, the projects inside it, costliest first. */
-export interface CostDay { day: string; cost: number; unpriced: number; v: Record<string, number>; other?: { project: string; cost: number }[] }
+/** What the cost chart stacks by: the project, the model or the agent (the session's source). */
+export type Stack = "project" | "model" | "source";
+export const STACKS: readonly Stack[] = ["project", "model", "source"];
+const PREFIX: Record<Stack, string> = { project: "p:", model: "m:", source: "s:" };
+/** The stacking in words, for titles and hints; label: its switch button. */
+export const STACK_WORD: Record<Stack, { label: string; noun: string }> = {
+  project: { label: "Project", noun: "project" }, model: { label: "Model", noun: "model" }, source: { label: "Agent", noun: "agent" },
+};
+/** The series that holds the rest of a stacking (a bare prefix). */
+export const isOther = (k: Kind): boolean => k.k.length === 2;
 
-/** Every day of the view, with zeros for idle days. tops: the stacked projects; Other ("p:") takes the remainder of the
- *  day's cost, never below zero from rounding, and lists the projects inside it. */
-export function costDays(d: Pick<UsagePayload, "start" | "end" | "daily" | "daily_projects">, tops: readonly Kind[] = []): CostDay[] {
-  const have = new Map(d.daily.map(r => [r.day, r])), byDay = new Map<string, Map<string, number>>();
-  for (const r of d.daily_projects) {
+/** One day of the view: its cost, unpriced requests, a value per series key (token kinds, plus the stacked series), and
+ *  with Other stacked, the names inside it, costliest first. */
+export interface CostDay { day: string; cost: number; unpriced: number; v: Record<string, number>; other?: { name: string; cost: number }[] }
+
+type StackRows = Partial<Pick<UsagePayload, "daily_projects" | "daily_models" | "daily_sources">>;
+/** The per-day cost rows of a stacking, named (a project with no name is ""). */
+const stackRows = (d: StackRows, by: Stack): { day: string; name: string; cost: number }[] =>
+  (by === "project" ? (d.daily_projects ?? []).map(r => ({ ...r, name: r.project ?? "" }))
+    : by === "model" ? (d.daily_models ?? []).map(r => ({ ...r, name: r.model }))
+      : (d.daily_sources ?? []).map(r => ({ ...r, name: r.source }))).map(r => ({ day: r.day, name: r.name, cost: r.cost || 0 }));
+
+/** Every day of the view, with zeros for idle days. tops: the stacked series of stacking `by`; Other (if stacked) takes the
+ *  remainder of the day's cost, never below zero from rounding, and lists the names inside it. */
+export function costDays(d: Pick<UsagePayload, "start" | "end" | "daily"> & StackRows, tops: readonly Kind[] = [], by: Stack = "project"): CostDay[] {
+  const have = new Map(d.daily.map(r => [r.day, r])), byDay = new Map<string, Map<string, number>>(), pre = PREFIX[by];
+  for (const r of stackRows(d, by)) {
     if (!byDay.has(r.day)) byDay.set(r.day, new Map());
-    byDay.get(r.day)!.set(r.project ?? "", r.cost || 0);
+    byDay.get(r.day)!.set(r.name, r.cost);
   }
-  const named = new Set(tops.flatMap(t => (t.project ? [t.project] : [])));
+  const named = new Set(tops.filter(t => !isOther(t)).map(t => t.k.slice(pre.length)));
   return dayRange(d.start || d.daily[0]?.day || d.end, d.end).map(day => {
     const r = have.get(day), pd = byDay.get(day), cost = r?.cost || 0;
     const v: Record<string, number> = {
@@ -34,20 +54,40 @@ export function costDays(d: Pick<UsagePayload, "start" | "end" | "daily" | "dail
       cache_read: r?.cache_read || 0, cache_5m: r?.cache_5m || 0, cache_1h: r?.cache_1h || 0,
     };
     let sum = 0;
-    for (const t of tops) if (t.project) { v[t.k] = pd?.get(t.project) || 0; sum += v[t.k]!; }
-    if (!tops.some(t => t.k === "p:")) return { day, cost, unpriced: r?.unpriced || 0, v };
-    v["p:"] = Math.max(0, cost - sum);
-    const other = [...(pd ?? [])].filter(([p, c]) => c > 0 && !named.has(p))
-      .sort((a, b) => b[1] - a[1]).map(([p, c]) => ({ project: p || "(no project)", cost: c }));
+    for (const t of tops) if (!isOther(t)) { v[t.k] = pd?.get(t.k.slice(pre.length)) || 0; sum += v[t.k]!; }
+    if (!tops.some(isOther)) return { day, cost, unpriced: r?.unpriced || 0, v };
+    v[pre] = Math.max(0, cost - sum);
+    const other = [...(pd ?? [])].filter(([n, c]) => c > 0 && !named.has(n))
+      .sort((a, b) => b[1] - a[1]).map(([n, c]) => ({ name: n || "(no project)", cost: c }));
     return { day, cost, unpriced: r?.unpriced || 0, v, other };
   });
 }
 
-/** The cost chart's stack: the projects that own a hue (the all-time busiest) by spend in this view, then Other in grey for
- *  everyone else, so a color means the same project in every range. One project selected: just that project. */
-export function costKinds(d: Pick<UsagePayload, "project" | "by_project">): Kind[] {
+/** The cost chart's stack. project: the projects that own a hue (the all-time busiest) by spend in this view, then Other in
+ *  grey for everyone else, so a color means the same project in every range; one project selected: just that project.
+ *  model: the costliest models of the view, one series color each, then Other. source: one series per agent, no Other. */
+export function costKinds(d: Pick<UsagePayload, "project" | "by_project"> & StackRows, by: Stack = "project"): Kind[] {
+  if (by === "model") return modelKinds(spend(stackRows(d, "model")));
+  if (by === "source") return spend(stackRows(d, "source")).filter(r => r.v > 0)
+    .map(r => ({ k: PREFIX.source + r.name, label: SOURCE_LABELS[r.name as Source] ?? r.name, c: SOURCE_COLORS[r.name as Source] ?? color(""), source: r.name as Source }));
   if (d.project) return [{ k: "p:" + d.project, label: d.project, c: color(d.project), project: d.project }];
   return projectKinds(d.by_project.map(p => ({ project: p.project, v: p.cost ?? 0 })));
+}
+
+const SOURCE_COLORS: Record<Source, string> = { claude: "var(--series-1)", codex: "var(--series-2)" };
+/** A stacking's total cost per name over the view, costliest first. */
+const spend = (rows: { name: string; cost: number }[]): { name: string; v: number }[] => {
+  const by = new Map<string, number>();
+  for (const r of rows) by.set(r.name, (by.get(r.name) ?? 0) + r.cost);
+  return [...by].map(([name, v]) => ({ name, v })).sort((a, b) => b.v - a.v || (a.name < b.name ? -1 : 1));
+};
+const MODEL_COLORS = 6; // the --series-N colors in theme.css
+
+/** The models of the view with a cost, costliest first: the top few each in a series color, the rest counted in Other (grey). */
+function modelKinds(ranked: { name: string; v: number }[]): Kind[] {
+  const on = ranked.filter(m => m.v > 0), tops = on.slice(0, MODEL_COLORS);
+  const out = tops.map((m, i) => ({ k: PREFIX.model + m.name, label: m.name.replace(/^claude-/, ""), c: `var(--series-${i + 1})` }));
+  return on.length > tops.length ? [...out, { k: PREFIX.model, label: `Other (${num(on.length - tops.length)})`, c: color("") }] : out;
 }
 
 /** A chart stack of projects with a value, most first: the ones that own a hue in their colors, then Other in grey for

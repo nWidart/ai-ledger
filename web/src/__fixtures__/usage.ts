@@ -101,6 +101,20 @@ export default {
    "tokens": 200
   }
  ],
+ "daily_models": [
+  {
+   "day": "2026-11-04",
+   "model": "m-a",
+   "cost": 15.8
+  }
+ ],
+ "daily_sources": [
+  {
+   "day": "2026-11-04",
+   "source": "claude",
+   "cost": 15.8
+  }
+ ],
  "daily_work": [
   {
    "day": "2026-11-04",

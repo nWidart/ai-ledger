@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { ModelRow, ProjectRow, SessionsPage, UsagePayload } from "../../api";
@@ -303,6 +303,22 @@ describe("CostPage", () => {
       await userEvent.click(screen.getByRole("button", { name: "Show every kind" }));
       expect(screen.queryByText("All token kinds are hidden.")).toBeNull();
       expect(screen.getByRole("button", { name: "Input" }).getAttribute("aria-pressed")).toBe("true");
+    } finally {
+      localStorage.clear();
+    }
+  });
+
+  it("remembers the stacking across a remount and filters to an agent from its key", async () => {
+    try {
+      await show(usage);
+      await userEvent.click(screen.getByRole("button", { name: "Agent" }));
+      expect(screen.getByRole("img", { name: /^Estimated cost by agent per day/ })).toBeTruthy();
+      await userEvent.click(within(document.querySelector(".legend") as HTMLElement).getByRole("button", { name: "Claude Code" }));
+      expect(location.hash).toBe("#range=30&source=claude");
+      cleanup();
+      await show(usage);
+      expect(screen.getByRole("button", { name: "Agent" }).getAttribute("aria-pressed")).toBe("true");
+      expect(screen.getByRole("img", { name: /^Estimated cost by agent per day/ })).toBeTruthy();
     } finally {
       localStorage.clear();
     }

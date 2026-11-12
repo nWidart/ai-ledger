@@ -82,6 +82,20 @@ export default {
    "tokens": 200000
   }
  ],
+ "daily_models": [
+  {
+   "day": "2026-11-05",
+   "model": "m-a",
+   "cost": 0.362
+  }
+ ],
+ "daily_sources": [
+  {
+   "day": "2026-11-05",
+   "source": "codex",
+   "cost": 0.362
+  }
+ ],
  "daily_work": [
   {
    "day": "2026-11-05",

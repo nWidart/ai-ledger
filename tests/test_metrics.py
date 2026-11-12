@@ -150,6 +150,18 @@ class MetricsTest(unittest.TestCase):
         self.assertAlmostEqual(by[("2026-10-01", "bar")]["cost"], 130 * 2 / 1e6)
         self.assertEqual({d["project"] for d in self.foo7["daily_projects"]}, {"foo"})
 
+    def test_cost_per_day_and_model(self):
+        for u in (self.all, self.foo7, self.auto):
+            by = {}
+            for r in u["daily_models"]:
+                by[r["day"]] = by.get(r["day"], 0) + r["cost"]
+            self.assertEqual(set(by), {d["day"] for d in u["daily"] if d["cost"] is not None})  # an unpriced day has no row
+            for d in u["daily"]:
+                if d["cost"] is not None:
+                    self.assertAlmostEqual(by[d["day"]], d["cost"])
+        self.assertEqual({(r["day"], r["model"]) for r in self.foo7["daily_models"]}, {("2026-11-04", "m-a")})  # m-unknown adds none
+        self.assertEqual({(r["day"], r["source"]) for r in self.all["daily_sources"]}, {("2026-11-04", "claude"), ("2026-10-01", "claude")})
+
     def test_project_order_ignores_filters(self):
         self.assertEqual(self.foo7["project_order"], ["foo", "bar"])
         self.assertEqual(metrics.errors_payload(self.con.cursor())["project_order"], ["foo", "bar"])
@@ -821,6 +833,15 @@ class SourceFilterTest(unittest.TestCase):
         self.assertEqual(u["source"], "")
         self.assertEqual({d["day"]: d["input"] + d["output"] + d["cache_read"] for d in u["daily"]}, {"2026-11-05": 1_200_000})
         self.assertEqual((u["totals"]["tokens"], u["totals"]["sessions"], u["totals"]["prompts"], u["totals"]["errors"]), (1_200_000, 2, 2, 2))
+
+    def test_cost_per_day_by_model_and_source(self):
+        u = self.usage()
+        cost = {d["day"]: d["cost"] for d in u["daily"]}
+        for rows in (u["daily_models"], u["daily_sources"]):
+            self.assertAlmostEqual(sum(r["cost"] for r in rows), cost["2026-11-05"])
+        self.assertEqual({r["source"] for r in u["daily_sources"]}, {"claude", "codex"})  # the Codex session lands under codex
+        self.assertEqual([r["model"] for r in u["daily_models"]], ["m-a"])
+        self.assertEqual({r["source"] for r in self.usage("codex")["daily_sources"]}, {"codex"})
 
     def test_each_source_alone(self):
         for source, sid, tokens, tool in (("claude", "c1", 1_000_000, "Bash"), ("codex", "x1", 200_000, "exec_command")):

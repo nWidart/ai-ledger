@@ -303,7 +303,7 @@ _RATE = dict(input=("p_in", "l_in", "f_in"), output=("p_out", "l_out", "f_out"),
 
 
 def requests_cte(pcte, where):
-    """Requests with their session's project, total tokens, the estimated cost of each priced kind (cost_input, cost_output,
+    """Requests with their session's project and source, total tokens, the estimated cost of each priced kind (cost_input, cost_output,
     cost_cache_read, cost_cache_5m, cost_cache_1h) and their sum as cost. All are NULL when the model is unpriced; the tier
     is chosen once per request, so the kinds always add up to cost. Thinking tokens are billed as output.
     A fast-mode request (speed 'fast') on a model with fast rates costs those rates at any prompt size: fast pricing applies
@@ -312,7 +312,7 @@ def requests_cte(pcte, where):
     parts = ", ".join(f"r.{k} * {rate(k)} / 1e6 AS cost_{k}" for k in PRICE_KINDS)
     return f"""WITH {pcte}, rq AS (
         SELECT *, {" + ".join(f"cost_{k}" for k in PRICE_KINDS)} AS cost FROM (
-          SELECT r.*, s.project, r.input + r.output + r.cache_read + r.cache_5m + r.cache_1h AS tokens,
+          SELECT r.*, s.project, coalesce(s.source, 'claude') AS source, r.input + r.output + r.cache_read + r.cache_5m + r.cache_1h AS tokens,
             coalesce(r.speed = 'fast' AND p.f_in IS NOT NULL, false) AS fst,
             coalesce(p.long_above IS NOT NULL AND r.input + r.cache_read + r.cache_5m + r.cache_1h > p.long_above, false) AS lg,
             {parts}
@@ -381,6 +381,9 @@ def usage(cur, project="", range_days=0, session="", prices=None, today=None, au
     daily_projects = rows(cur, f"{rq} SELECT {day('ts')} AS day, project, sum(cost) AS cost, sum(tokens) AS tokens "
                                f"FROM rq GROUP BY 1, 2 ORDER BY 1, 2", rp)
     costs = ", ".join(f"sum(cost_{k}) AS cost_{k}" for k in PRICE_KINDS)
+    # And by model and by agent (a Codex session is source 'codex'); unpriced requests add no row, as they add no cost.
+    daily_models = rows(cur, f"{rq} SELECT {day('ts')} AS day, model, sum(cost) AS cost FROM rq WHERE cost IS NOT NULL GROUP BY 1, 2 ORDER BY 1, 2", rp)
+    daily_sources = rows(cur, f"{rq} SELECT {day('ts')} AS day, source, sum(cost) AS cost FROM rq WHERE cost IS NOT NULL GROUP BY 1, 2 ORDER BY 1, 2", rp)
     tot = rows(cur, f"""{rq} SELECT {sums}, coalesce(sum(tokens), 0) AS tokens, sum(cost) AS cost,
         count(*) AS requests, count(*) FILTER (WHERE NOT subagent) AS main_requests,
         coalesce(sum(tokens) FILTER (WHERE subagent), 0) AS sub_tokens, sum(cost) FILTER (WHERE subagent) AS sub_cost,
@@ -427,6 +430,7 @@ def usage(cur, project="", range_days=0, session="", prices=None, today=None, au
         near_limit=sum(1 for x in sess if x["near_limit"]))
     out = dict(project=project, range=range_days, automated=bool(automated), source=source, start=start.isoformat() if start else None, end=today.isoformat(),
                projects=project_list(cur, automated, af["projects"]), project_order=project_order(cur, af["projects"]), totals=totals, daily=daily, daily_projects=daily_projects,
+               daily_models=daily_models, daily_sources=daily_sources,
                daily_work=work, work_bucket=bucket, work=work if by is day else daily_work(cur, rq, rp, W, fp, by),
                work_projects=daily_work(cur, rq, rp, W, fp, by, by_project=True), work_hours=work_hours(cur, W, fp),
                unpriced=unpriced, models=models, by_project=by_project, **tool_rates(cur, W, fp),
