@@ -7,8 +7,11 @@ import usageAll from "../../__fixtures__/usage-all";
 import sessions from "../../__fixtures__/sessions";
 import session from "../../__fixtures__/session";
 import { mockApi } from "../../components/sheets/testing";
+import { dayStamp, download } from "../../components/export";
 import { compareText, costDays, planText, thinHistory } from "./cost";
 import { CostPage } from "./CostPage";
+
+vi.mock("../../components/export", async orig => ({ ...(await orig<typeof import("../../components/export")>()), download: vi.fn() }));
 
 const at = (hash = "#range=30") => history.replaceState(null, "", "/cost" + hash);
 // The day's sessions as the server sends them: costliest on that day first.
@@ -191,6 +194,44 @@ describe("CostPage", () => {
     expect(names().at(-1)).toBe("idle");
     await userEvent.click(within(th("Project")).getByRole("button"));
     expect(names()).toEqual(["a", "b", "idle"]);
+  });
+
+  it("downloads the project table in the order it shows, and copies it tab-separated", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    await show(withProjects([proj("a", 6, 3), proj("b", 8, 4), proj("idle", 20, 0)]));
+    const d = drawer("d-projcost");
+    await userEvent.click(within(within(d).getByRole("button", { name: /Cost \/ commit/ }).closest("th")!).getByRole("button"));
+    const names = (t: string, sep: string) => t.split(/\r?\n/).filter(Boolean).slice(1).map(l => l.split(sep)[0]);
+    await userEvent.click(within(d).getByRole("button", { name: "Download CSV" }));
+    expect(download).toHaveBeenCalledWith(`ai-ledger-cost-projects-${dayStamp()}.csv`, expect.any(String));
+    const csv = vi.mocked(download).mock.calls.at(-1)![1];
+    expect(csv.split("\r\n")[0]).toBe("Project,Est. cost (USD),Tokens,Cache hit,1h writes,Subagent cost share,Commits,Cost per commit (USD),Cost per prompt (USD)");
+    expect(names(csv, ",")).toEqual(["a", "b", "idle"]);
+    expect(csv.split("\r\n")[3]!.split(",")[7]).toBe(""); // no commits: cost per commit is empty
+    fireEvent.click(within(d).getByRole("button", { name: "Copy" }));
+    expect(await within(d).findByRole("button", { name: "Copied" })).toBeTruthy();
+    expect(within(d).getByText("Copied to clipboard.")).toBeTruthy();
+    const tsv = writeText.mock.calls[0]![0] as string;
+    expect(tsv.split("\n")[0]!.split("\t")[0]).toBe("Project");
+    expect(names(tsv, "\t")).toEqual(["a", "b", "idle"]);
+    await waitFor(() => expect(within(d).getByRole("button", { name: "Copy" })).toBeTruthy(), { timeout: 3000 });
+  });
+
+  it("offers no export when the project table has no rows", async () => {
+    await show(withProjects([]));
+    expect(within(drawer("d-projcost")).queryByRole("button", { name: "Download CSV" })).toBeNull();
+  });
+
+  it("downloads the most expensive sessions with their figures", async () => {
+    await show(usage);
+    const d = drawer("d-top");
+    await userEvent.click(within(d).getByRole("button", { name: "Download CSV" }));
+    expect(download).toHaveBeenLastCalledWith(`ai-ledger-cost-sessions-${dayStamp()}.csv`, expect.any(String));
+    const lines = vi.mocked(download).mock.calls.at(-1)![1].split("\r\n").filter(Boolean);
+    expect(lines[0]).toBe("Session id,Title,Project,Started,Branch,Active seconds,Prompts,Commits,Cost per commit (USD),Est. cost (USD)");
+    expect(lines).toHaveLength(usage.top_sessions.length + 1);
+    expect(lines[1]!.split(",")[0]).toBe(usage.top_sessions[0]!.session_id);
   });
 
   it("tints against the median of projects big enough to compare, not the scratch ones", async () => {
