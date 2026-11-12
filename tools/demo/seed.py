@@ -121,7 +121,7 @@ for d in range(DAYS, -1, -1):
                         commit = tool in categorize.SHELL_TOOLS and err is None and rnd.random() < 0.12
                         if commit:
                             inp, commits = "git commit -m \"wip\"", commits + 1
-                        test = tool in categorize.SHELL_TOOLS and bool(categorize.TEST_CMD.search(inp))
+                        test = tool in categorize.SHELL_TOOLS and categorize.runs_tests(inp)
                         mcp = "github" if tool.startswith("mcp__") else None
                         skill = rnd.choice(["review-change", "ship", "frontend-design"]) if tool == "Read" and rnd.random() < 0.05 else None
                         if skill:
