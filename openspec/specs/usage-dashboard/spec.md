@@ -64,7 +64,7 @@ The dashboard SHALL show usage and failure rates per tool, MCP server, skill and
 - **THEN** the dashboard shows that server's call count and failure rate
 
 ### Requirement: Link to a project or session
-The usage dashboard SHALL keep the selected project, time range, inspected project, inspected tool, MCP server or skill, and open session in the page URL, so a view can be reopened or shared into an agent prompt, and browser Back SHALL retrace filter and sheet changes. The Sessions drawer's day, search text and near-context-limit filter SHALL also be kept in the URL, written without adding history entries, and restored on reload. The day SHALL be cleared in the same URL write as any change of project, range or source, from whichever control makes it, so browser Back restores the earlier view with its day. A day that is not a real calendar date SHALL read as no day.
+The usage dashboard SHALL keep the selected project, time range, inspected project, inspected tool, MCP server or skill, and open session in the page URL, so a view can be reopened or shared into an agent prompt, and browser Back SHALL retrace filter and sheet changes.
 
 #### Scenario: Open a copied URL
 - **WHEN** the user opens a copied usage dashboard URL
@@ -74,17 +74,23 @@ The usage dashboard SHALL keep the selected project, time range, inspected proje
 - **WHEN** the user opens a copied usage dashboard URL that was taken with the inspector open for `Bash`
 - **THEN** the inspector for `Bash` opens in the same view
 
+### Requirement: Keep the Sessions filters in the URL
+The Sessions drawer's day, search text and near-context-limit filter SHALL also be kept in the URL, written without adding history entries, and restored on reload. A day that is not a real calendar date SHALL read as no day.
+
 #### Scenario: Reload with Sessions filters
 - **WHEN** the user filters Sessions to March 3 with the text `api` and near-limit only, then reloads the page
 - **THEN** the Sessions drawer opens with the same three filters, and typing in the search added no Back entries
 
-#### Scenario: Day outside the new view
-- **WHEN** a day is selected and the user changes the range
-- **THEN** the day filter is cleared in the same step, and Back returns to the earlier range with its day
-
 #### Scenario: Impossible day
 - **WHEN** the user opens a URL with `day=2026-02-30`
 - **THEN** Activity shows no selected day
+
+### Requirement: Clear the day when the view changes
+The day SHALL be cleared in the same URL write as any change of project, range or source, from whichever control makes it, so browser Back restores the earlier view with its day.
+
+#### Scenario: Day outside the new view
+- **WHEN** a day is selected and the user changes the range
+- **THEN** the day filter is cleared in the same step, and Back returns to the earlier range with its day
 
 ### Requirement: Lead with the period's work
 The usage dashboard, shown as Activity, SHALL open with the work done in the selected view: commits, prompts, sessions and active days, with turns and tool calls per prompt. An active day SHALL be a day with at least one user prompt in the view. The page lead SHALL NOT show an estimated cost; cost figures belong to the cost dashboard. When the view has a previous period, the commits, sessions and active days SHALL each show their change against it, or "unchanged" when both periods read the same.
@@ -106,7 +112,7 @@ The usage dashboard, shown as Activity, SHALL open with the work done in the sel
 - **THEN** the headline shows no change
 
 ### Requirement: Lead with what needs attention
-Activity SHALL show, directly under its lead, every problem found in the view (error loops, sessions at 80% or more of the context window, tools failing over 10% of at least 20 calls, failed test runs), each with an action that opens the matching detail. The failed test runs action SHALL open a list of the newest failed runs, each with its session, command and time and a link to its error on the Errors page; its count SHALL be every failed run in the view, and a list cut at the newest 50 SHALL say so. When none is found it SHALL say so.
+Activity SHALL show, directly under its lead, every problem found in the view (error loops, sessions at 80% or more of the context window, tools failing over 10% of at least 20 calls, failed test runs), each with an action that opens the matching detail. When none is found it SHALL say so.
 
 #### Scenario: Error loops present
 - **WHEN** the view contains 3 error loops and 1 session near the context limit
@@ -115,6 +121,9 @@ Activity SHALL show, directly under its lead, every problem found in the view (e
 #### Scenario: Nothing found
 - **WHEN** the view has no error loops, sessions near the limit, flaky tools or failed tests
 - **THEN** the attention summary says that nothing needs attention
+
+### Requirement: List the failed test runs
+The failed test runs action SHALL open a list of the newest failed runs, each with its session, command and time and a link to its error on the Errors page; its count SHALL be every failed run in the view, and a list cut at the newest 50 SHALL say so.
 
 #### Scenario: Open the failed test runs
 - **WHEN** the view has 4 failed test runs and the user chooses "See tests"
@@ -125,7 +134,7 @@ Activity SHALL show, directly under its lead, every problem found in the view (e
 - **THEN** the drawer's count is 60 and it lists the 50 newest, saying "Showing the 50 newest of 60"
 
 ### Requirement: Show work per day
-Activity SHALL chart commits, prompts or sessions across the view, from its first day with a session, with errors per 100 tool calls on the same chart against its own axis (the failed count stays in the tooltip); a view with no tool calls SHALL show no rate line, axis or legend entry. Selecting a day SHALL list that day's sessions. The all-time lead SHALL date the history from that same day. When the span from the first day with a session to the end of the range is over 60 days, the chart SHALL show one bar per week (Monday start, local time) instead of per day, and its totals for commits and prompts SHALL equal the sum of its bars; a session counts once in each bucket it touches, so the bars for sessions can add up to more than the total. The week that holds the end of the range SHALL read "so far", and a first week cut by the start of the range SHALL read "from" that date.
+Activity SHALL chart commits, prompts or sessions across the view, from its first day with a session, with errors per 100 tool calls on the same chart against its own axis (the failed count stays in the tooltip); a view with no tool calls SHALL show no rate line, axis or legend entry. Selecting a day SHALL list that day's sessions. The all-time lead SHALL date the history from that same day.
 
 #### Scenario: History starts inside the range
 - **WHEN** the user opens the 90-day view and the first session in it ran 40 days ago
@@ -139,6 +148,9 @@ Activity SHALL chart commits, prompts or sessions across the view, from its firs
 - **WHEN** a quiet day has 2 failed calls of 4 and a busy day has 6 of 200
 - **THEN** the line shows 50 errors per 100 calls for the quiet day and 3 for the busy day, and each tooltip also gives the failed count
 
+### Requirement: Chart a long range by week
+When the span from the first day with a session to the end of the range is over 60 days, the chart SHALL show one bar per week (Monday start, local time) instead of per day, and its totals for commits and prompts SHALL equal the sum of its bars; a session counts once in each bucket it touches, so the bars for sessions can add up to more than the total. The week that holds the end of the range SHALL read "so far", and a first week cut by the start of the range SHALL read "from" that date.
+
 #### Scenario: Partial weeks
 - **WHEN** the weekly chart's range ends on a Wednesday
 - **THEN** that week's label reads "so far"
@@ -148,30 +160,39 @@ Activity SHALL chart commits, prompts or sessions across the view, from its firs
 - **THEN** the chart shows one bar per week, a hint says to choose a shorter range to pick a day, and week bars cannot be selected
 
 ### Requirement: Sort tables by column
-Activity SHALL let the user sort the Sessions, Project metrics and Tools tables by a column, and the sorted header SHALL carry `aria-sort`. Project metrics and Tools SHALL sort every row in the browser. Sessions SHALL sort the whole matching list on the server, not the loaded page; the server SHALL answer 400 for a sort it does not know. The "near limit" attention action and a day picked on the chart SHALL clear the Sessions sort, since they set the list's own order. Project metrics SHALL open ordered by sessions, descending, and SHALL NOT show a cost column. The Sessions sort SHALL NOT be kept in the URL.
+Activity SHALL let the user sort the Sessions, Project metrics and Tools tables by a column, and the sorted header SHALL carry `aria-sort`. Project metrics and Tools SHALL sort every row in the browser.
+
+#### Scenario: Most failing tool
+- **WHEN** the user sorts Tools by failure rate
+- **THEN** the tool with the highest rate is first and the header reads as sorted
+
+### Requirement: Sort Sessions over the whole list
+Sessions SHALL sort the whole matching list on the server, not the loaded page; the server SHALL answer 400 for a sort it does not know. The "near limit" attention action and a day picked on the chart SHALL clear the Sessions sort, since they set the list's own order. The Sessions sort SHALL NOT be kept in the URL.
 
 #### Scenario: Costliest session
 - **WHEN** the view has 250 sessions and the user sorts Sessions by cost, descending
 - **THEN** the first rows are the 250 sessions' costliest, not the costliest of the first 100
 
-#### Scenario: Most failing tool
-- **WHEN** the user sorts Tools by failure rate
-- **THEN** the tool with the highest rate is first and the header reads as sorted
+### Requirement: Order Project metrics by sessions
+Project metrics SHALL open ordered by sessions, descending, and SHALL NOT show a cost column.
 
 #### Scenario: Default project order
 - **WHEN** the user opens Project metrics
 - **THEN** projects are ordered by sessions, most first, and no cost column appears
 
 ### Requirement: Show change against the previous period
-Activity SHALL show, on each of its five tiles (errors per 100 calls, test runs passed, prompts interrupted, subagent share, median session), the change against the equal-length period before the view, and SHALL show nothing for the All range. A figure that reads the same in both periods SHALL show "unchanged". A change in the worse direction (errors per 100 calls up, test runs passed down, prompts interrupted up) SHALL be marked as worse; the subagent share and median session SHALL NOT be judged.
-
-#### Scenario: Errors rise
-- **WHEN** errors per 100 calls were 4 in the previous period and are 6 now
-- **THEN** the tile shows the rise and marks it as worse
+Activity SHALL show, on each of its five tiles (errors per 100 calls, test runs passed, prompts interrupted, subagent share, median session), the change against the equal-length period before the view, and SHALL show nothing for the All range. A figure that reads the same in both periods SHALL show "unchanged".
 
 #### Scenario: No previous period
 - **WHEN** the user opens the All range
 - **THEN** no tile shows a change
+
+### Requirement: Mark a change for the worse
+A change in the worse direction (errors per 100 calls up, test runs passed down, prompts interrupted up) SHALL be marked as worse; the subagent share and median session SHALL NOT be judged.
+
+#### Scenario: Errors rise
+- **WHEN** errors per 100 calls were 4 in the previous period and are 6 now
+- **THEN** the tile shows the rise and marks it as worse
 
 ### Requirement: Show work by hour and weekday
 Activity SHALL show, under the work chart, a heatmap of prompts by weekday and hour on the machine's local clock, and SHALL give it a text alternative that names the busiest hour and day, and counts the ties for them. The heatmap SHALL be one tab stop, and the arrow keys SHALL move between its cells.
