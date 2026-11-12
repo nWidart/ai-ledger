@@ -270,6 +270,35 @@ class PayloadTest(InsightsCase):
         self.ingest()
         self.assertEqual(self.payload()["friction"], [dict(name="buggy_code", n=3, sessions=2), dict(name="wrong_approach", n=3, sessions=1)])
 
+    def test_families_group_raw_rows(self):
+        self.put("facets", A + "5.json", facet(A + "5", goals=dict(create_pull_request=2, open_pr=1, fix_bug=1),
+                                                friction=dict(broken_build=1, buggy_code=2, mood=1)))
+        self.put("facets", A + "6.json", facet(A + "6", goals=dict(open_pr=3), friction=dict(broken_build=1)))
+        self.ingest()
+        d = self.payload()
+        self.assertEqual(d["goals"][0], dict(name="open_pr", n=4, sessions=2))  # the raw rows stay
+        pr = next(f for f in d["goal_families"] if f["family"] == "pull_request")
+        self.assertEqual(pr, dict(family="pull_request", n=6, sessions=2, members=[dict(name="open_pr", n=4, sessions=2),
+                                                                                  dict(name="create_pull_request", n=2, sessions=1)]))
+        bug = next(f for f in d["friction_families"] if f["family"] == "buggy_code")  # A5 carries two members: 4 sessions, not 3 + 2
+        self.assertEqual((bug["n"], bug["sessions"], [m["name"] for m in bug["members"]]), (7, 4, ["buggy_code", "broken_build"]))
+        self.assertEqual([f["family"] for f in d["friction_families"]], ["buggy_code", "wrong_approach", "mood"])
+        self.assertEqual(sum(f["n"] for f in d["goal_families"]), sum(g["n"] for g in d["goals"]))
+        self.assertEqual([f["family"] for f in d["goal_families"]][:2], ["pull_request", "fix_bug"])
+
+    def test_families_follow_the_view(self):
+        self.ingest()
+        d = self.payload(range_days=2)  # only the sketchbook session
+        self.assertEqual(d["friction_families"], [dict(family="buggy_code", n=2, sessions=1, members=[dict(name="buggy_code", n=2, sessions=1)])])
+        self.assertEqual(d["goal_families"], [dict(family="research", n=1, sessions=1, members=[dict(name="explore_idea", n=1, sessions=1)])])
+
+    def test_families_empty_without_facets(self):
+        self.ingest()
+        d = self.payload(project="nope")
+        self.assertEqual((d["goals"], d["friction"], d["goal_families"], d["friction_families"]), ([], [], [], []))
+        d = self.payload(source="codex")
+        self.assertEqual((d["goal_families"], d["friction_families"]), ([], []))
+
     def test_goals_and_session_types(self):
         self.ingest()
         d = self.payload()
@@ -338,7 +367,7 @@ class PayloadTest(InsightsCase):
         d = self.payload(source="codex")
         self.assertEqual(d["coverage"]["codex_sessions"], 1)
         self.assertEqual(d["coverage"]["claude_sessions"], 0)
-        for k in ("outcomes", "helpfulness", "session_types", "satisfaction", "friction", "goals", "sessions"):
+        for k in ("outcomes", "helpfulness", "session_types", "satisfaction", "friction", "goals", "goal_families", "friction_families", "sessions"):
             self.assertEqual(d[k], [], k)
 
     def test_unknown_source_raises(self):

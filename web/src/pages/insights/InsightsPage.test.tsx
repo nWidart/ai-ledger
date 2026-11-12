@@ -48,12 +48,12 @@ describe("InsightsPage", () => {
   });
 
   it("shows the first rows of a long ledger until asked for all", async () => {
-    const goals = Array.from({ length: 20 }, (_, i) => ({ name: `goal_${i}`, n: 20 - i, sessions: 1 }));
-    show({ ...fixture, goals });
+    const goal_families = Array.from({ length: 20 }, (_, i) => ({ family: `goal_${i}`, n: 20 - i, sessions: 1, members: [{ name: `goal_${i}`, n: 20 - i, sessions: 1 }] }));
+    show({ ...fixture, goal_families });
     await lede();
     const panel = drawer("d-goals");
     expect(within(panel).getAllByRole("listitem").length).toBe(12);
-    await userEvent.click(within(panel).getByRole("button", { name: "Show all 20 goals" }));
+    await userEvent.click(within(panel).getByRole("button", { name: "Show all 20 goal families" }));
     expect(within(panel).getAllByRole("listitem").length).toBe(20);
     expect(within(panel).getByRole("button", { name: "Show the top 12" })).toBeTruthy();
   });
@@ -99,7 +99,7 @@ describe("InsightsPage", () => {
     const rows = within(section(/^Outcomes model/)).getAllByRole("listitem").map(li => li.textContent);
     expect(rows).toEqual(["Fully achieved33%1", "Mostly achieved0%0", "Partially achieved33%1", "Not achieved0%0", "Unclear0%0", "abandoned33%1"]);
     const fr = within(section(/^Friction/)).getAllByRole("listitem");
-    expect(fr.map(li => li.textContent)).toEqual(["buggy code32 sessions", "wrong approach31 session"]);
+    expect(fr.map(li => li.textContent)).toEqual(["buggy code42 sessions2 labels ▾", "wrong approach31 session"]);
     expect(within(fr[0]!).getByTitle("buggy_code")).toBeTruthy();
     const feel = within(section(/Satisfaction/)).getAllByRole("listitem").map(li => li.textContent);
     expect(feel.slice(0, 4)).toEqual(["likely satisfied21 session", "dissatisfied11 session", "satisfied11 session", "unclear11 session"]);
@@ -240,7 +240,7 @@ describe("InsightsPage", () => {
   });
 
   it("says no friction was reported for a view without friction", async () => {
-    show({ ...fixture, friction: [], sessions: fixture.sessions.map(s => ({ ...s, friction: [] })) });
+    show({ ...fixture, friction: [], friction_families: [], sessions: fixture.sessions.map(s => ({ ...s, friction: [] })) });
     expect((await lede()).textContent).toBe("1 of 3 analysed sessions fully achieved their goal; no friction reported.");
     expect(within(section(/^Friction/)).getByText("No friction reported in this view.")).toBeTruthy();
   });
@@ -397,7 +397,7 @@ describe("InsightsPage", () => {
         const btn = row(section(/^Friction/), /^buggy code/);
         expect(btn.getAttribute("aria-pressed")).toBe("false");
         await userEvent.click(btn);
-        expect(hashOf()).toBe("#range=0&fr=buggy_code");
+        expect(hashOf()).toBe("#range=0&frf=buggy_code");
         expect(order()).toEqual([orphan, mid]);
         expect(within(logOf()).getByText("2 of 3 sessions")).toBeTruthy();
         expect(btn.getAttribute("aria-pressed")).toBe("true");
@@ -529,7 +529,7 @@ describe("InsightsPage", () => {
     });
 
     it("reads filters from the URL, ANDs them, and writes the same names back", async () => {
-      show(fixture, "#range=0&fr=buggy_code&goal=fix_bug&help=moderately_helpful&outcome=partially_achieved");
+      show(fixture, "#range=0&frf=buggy_code&goal=fix_bug&help=moderately_helpful&outcome=partially_achieved");
       await lede();
       expect(order()).toEqual([mid]);
       expect(within(logOf()).getByText("1 of 3 sessions")).toBeTruthy();
@@ -538,7 +538,7 @@ describe("InsightsPage", () => {
       expect(row(goals(), /^fix bug/).getAttribute("aria-pressed")).toBe("true");
       expect((within(logOf()).getByLabelText("Outcome") as HTMLSelectElement).value).toBe("partially_achieved");
       await userEvent.click(row(goals(), /^write tests/));
-      expect(hashOf()).toBe("#range=0&fr=buggy_code&goal=write_tests&help=moderately_helpful&outcome=partially_achieved");
+      expect(hashOf()).toBe("#range=0&frf=buggy_code&goal=write_tests&help=moderately_helpful&outcome=partially_achieved");
     });
 
     it("combines a drill-down filter with the friction box, and removes it from its chip", async () => {
@@ -597,9 +597,9 @@ describe("InsightsPage", () => {
       show(fixture, "#project=demo-app&range=7&source=claude&auto=1");
       await lede();
       await userEvent.click(row(section(/^Friction/), /^buggy code/));
-      expect(hashOf()).toBe("#project=demo-app&range=7&source=claude&auto=1&fr=buggy_code");
+      expect(hashOf()).toBe("#project=demo-app&range=7&source=claude&auto=1&frf=buggy_code");
       await userEvent.click(screen.getByRole("button", { name: "30d" }));
-      expect(hashOf()).toBe("#project=demo-app&range=30&source=claude&auto=1&fr=buggy_code");
+      expect(hashOf()).toBe("#project=demo-app&range=30&source=claude&auto=1&frf=buggy_code");
       await userEvent.click(row(section(/^Friction/), /^buggy code/));
       expect(hashOf()).toBe("#project=demo-app&range=30&source=claude&auto=1");
     });
@@ -731,6 +731,163 @@ describe("InsightsPage", () => {
       await lede();
       const cards = [...document.querySelectorAll(".scard")];
       expect(cards.map(c => c.querySelector(".measured") != null)).toEqual([true, false, true]);
+    });
+  });
+
+  describe("label families", () => {
+    const goals = () => drawer("d-goals"), fr = () => section(/^Friction/), hashOf = () => location.hash;
+    const logOf = () => section(/Analysed sessions/);
+    const summaries = () => [...logOf().querySelectorAll("ul.scards > li .sum")].map(e => e.textContent);
+    const rowBtn = (sec: HTMLElement, name: RegExp) => within(sec).getByRole("button", { name });
+    const orphan = "Synthetic: tried a layout idea and dropped it.", mid = "Synthetic: chased a flaky date test. SENTINEL-facet-text";
+    const theme = "Synthetic: added a theme toggle to a demo app.";
+
+    it("ranks families instead of raw names, and says labels are grouped by keyword", async () => {
+      show(fixture);
+      await lede();
+      expect(within(goals()).getAllByRole("listitem").map(li => li.textContent)).toEqual([
+        "fix bug21 session", "implement feature21 session2 labels ▾", "explore idea11 session", "write tests11 session"]); // a family of one label shows the label as written
+      expect(within(fr()).getAllByRole("listitem").map(li => li.textContent)).toEqual(["buggy code42 sessions2 labels ▾", "wrong approach31 session"]);
+      for (const sec of [goals(), fr()]) expect(within(sec).getByText(/grouped into families by keyword.*as \/insights wrote them/)).toBeTruthy();
+      expect(within(fr()).getByRole("heading", { level: 2 }).textContent).toContain("model-judged");
+    });
+
+    it("counts the 12-row cap in families", async () => {
+      const friction_families = Array.from({ length: 13 }, (_, i) => ({ family: `f${i}`, n: 13 - i, sessions: 1, members: [{ name: `f${i}`, n: 13 - i, sessions: 1 }] }));
+      show({ ...fixture, friction_families });
+      await lede();
+      expect(within(fr()).getAllByRole("listitem").length).toBe(12);
+      await userEvent.click(within(fr()).getByRole("button", { name: "Show all 13 friction families" }));
+      expect(within(fr()).getAllByRole("listitem").length).toBe(13);
+    });
+
+    it("expands a family to its labels as written, closed by default, with an expander only on a family of several", async () => {
+      show(fixture);
+      await lede();
+      const row = rowBtn(fr(), /^buggy code/).closest("li")!, exp = within(row).getByRole("button", { name: "2 labels in buggy code" });
+      expect(exp.getAttribute("aria-expanded")).toBe("false");
+      expect(within(fr()).queryByText("broken build")).toBeNull();
+      expect(exp.closest(".rowbtn")).toBeNull(); // a separate control, not nested in the row's button
+      expect(within(fr()).getAllByRole("button", { name: /labels in/ }).length).toBe(1); // wrong approach: one label, no expander
+      await userEvent.click(exp);
+      expect(exp.getAttribute("aria-expanded")).toBe("true");
+      const members = within(row).getByRole("list", { name: "Labels in buggy code" });
+      expect(within(members).getAllByRole("listitem").map(li => li.textContent)).toEqual(["buggy code32 sessions", "broken build11 session"]);
+      expect(within(members).getByTitle("broken_build")).toBeTruthy();
+      expect(hashOf()).toBe("#range=0"); // expanding filters nothing
+      await userEvent.click(exp);
+      expect(exp.getAttribute("aria-expanded")).toBe("false");
+      expect(within(fr()).queryByText("broken build")).toBeNull();
+    });
+
+    it("marks only the selected row as active, not the labels nested under a selected family, and the reverse", async () => {
+      show(fixture, "#range=0&frf=buggy_code");
+      await lede();
+      const family = rowBtn(fr(), /^buggy code/).closest("li")!;
+      await userEvent.click(within(family).getByRole("button", { name: "2 labels in buggy code" }));
+      const members = [...family.querySelectorAll<HTMLElement>(":scope > ol.members > li")];
+      expect(members.length).toBe(2);
+      expect(family.classList.contains("on")).toBe(true);
+      for (const li of members) {
+        expect(li.classList.contains("on")).toBe(false); // the CSS highlights a row through its own li.on
+        expect(li.querySelector(":scope > .rowbtn")!.getAttribute("aria-pressed")).toBe("false");
+      }
+      await userEvent.click(rowBtn(fr(), /^broken build/));
+      expect(hashOf()).toBe("#range=0&frf=buggy_code&fr=broken_build");
+      expect(members.map(li => li.classList.contains("on"))).toEqual([false, true]);
+      expect(members[1]!.querySelector(":scope > .rowbtn")!.getAttribute("aria-pressed")).toBe("true");
+      expect(family.classList.contains("on")).toBe(true);
+    });
+
+    it("reaches the expander and the row by keyboard as two stops", async () => {
+      show(fixture);
+      await lede();
+      rowBtn(fr(), /^buggy code/).focus();
+      await userEvent.tab();
+      expect(document.activeElement).toBe(within(fr()).getByRole("button", { name: "2 labels in buggy code" }));
+      await userEvent.keyboard("{Enter}");
+      expect(within(fr()).getByText("broken build")).toBeTruthy();
+      expect(hashOf()).toBe("#range=0");
+    });
+
+    it("filters by family from a family row: URL, chip, any member, and clears on a second click", async () => {
+      const sessions = fixture.sessions.map(s => s.session_id.endsWith("2") ? { ...s, friction: ["wrong_approach", "broken_build"] } : s);
+      show({ ...fixture, sessions });
+      await lede();
+      const btn = rowBtn(fr(), /^buggy code/);
+      await userEvent.click(btn);
+      expect(hashOf()).toBe("#range=0&frf=buggy_code");
+      expect(summaries()).toEqual([orphan, mid]); // mid carries broken build only
+      expect(btn.getAttribute("aria-pressed")).toBe("true");
+      expect(within(logOf()).getByRole("button", { name: "Remove filter Friction family: buggy code" })).toBeTruthy();
+      expect(within(logOf()).getByText("2 of 3 sessions")).toBeTruthy();
+      await userEvent.click(btn);
+      expect(hashOf()).toBe("#range=0");
+      expect(summaries().length).toBe(3);
+    });
+
+    it("filters by goal family, and reads goalf from the URL", async () => {
+      show(fixture, "#range=0&goalf=implement_feature");
+      await lede();
+      expect(summaries()).toEqual([theme]);
+      expect(within(logOf()).getByRole("button", { name: "Remove filter Goal family: implement feature" })).toBeTruthy();
+      expect(rowBtn(goals(), /^implement feature/).getAttribute("aria-pressed")).toBe("true");
+      await userEvent.click(rowBtn(goals(), /^implement feature/));
+      expect(hashOf()).toBe("#range=0");
+    });
+
+    it("keeps raw filters for a label row inside a family, a card chip and a family of one label", async () => {
+      show(fixture);
+      await lede();
+      await userEvent.click(within(fr()).getByRole("button", { name: "2 labels in buggy code" }));
+      await userEvent.click(rowBtn(fr(), /^broken build/));
+      expect(hashOf()).toBe("#range=0&fr=broken_build");
+      expect(summaries()).toEqual([orphan]);
+      expect(within(logOf()).getByRole("button", { name: "Remove filter Friction: broken build" })).toBeTruthy();
+      await userEvent.click(rowBtn(fr(), /^broken build/));
+      await userEvent.click(rowBtn(fr(), /^wrong approach/)); // one label: the raw filter, not a family one
+      expect(hashOf()).toBe("#range=0&fr=wrong_approach");
+      await userEvent.click(rowBtn(fr(), /^wrong approach/));
+      await userEvent.click(rowBtn(logOf(), /^build feature/));
+      expect(hashOf()).toBe("#range=0&goal=build_feature");
+      expect(summaries()).toEqual([theme]);
+    });
+
+    it("combines a family filter with the others, and keeps it through a range change", async () => {
+      show(fixture, "#range=0&frf=buggy_code&outcome=partially_achieved");
+      await lede();
+      expect(summaries()).toEqual([mid]);
+      await userEvent.click(rowBtn(goals(), /^fix bug/));
+      expect(hashOf()).toBe("#range=0&frf=buggy_code&outcome=partially_achieved&goal=fix_bug");
+      await userEvent.click(screen.getByRole("button", { name: "30d" }));
+      expect(hashOf()).toBe("#range=30&frf=buggy_code&outcome=partially_achieved&goal=fix_bug");
+    });
+
+    it("shows the empty state, not an error, for a family the view does not have", async () => {
+      show(fixture, "#range=0&goalf=gone&frf=nope");
+      await lede();
+      expect(summaries()).toEqual([]);
+      expect(within(logOf()).getByText("No session in this view matches the filters.")).toBeTruthy();
+      expect(screen.queryByRole("alert")).toBeNull();
+      await userEvent.click(within(logOf()).getByRole("button", { name: "Remove filter Goal family: gone" }));
+      expect(hashOf()).toBe("#range=0&frf=nope");
+    });
+
+    it("names the top friction family in the lede when it groups several labels", async () => {
+      show(fixture);
+      expect((await lede()).textContent).toContain("buggy code caused the most friction.");
+    });
+
+    it("names the top friction label as written in the lede when its family has one label", async () => {
+      const one = [{ family: "environment", n: 5, sessions: 2, members: [{ name: "environment", n: 5, sessions: 2 }] }];
+      show({ ...fixture, friction: [{ name: "environment", n: 5, sessions: 2 }], friction_families: one });
+      expect((await lede()).textContent).toContain("environment caused the most friction.");
+    });
+
+    it("names a family the labels of which are not named like it in the lede", async () => {
+      const several = [{ family: "tooling", n: 6, sessions: 3, members: [{ name: "environment", n: 4, sessions: 2 }, { name: "flaky_ci", n: 2, sessions: 1 }] }];
+      show({ ...fixture, friction: [{ name: "environment", n: 4, sessions: 2 }, { name: "flaky_ci", n: 2, sessions: 1 }], friction_families: several });
+      expect((await lede()).textContent).toContain("tooling caused the most friction.");
     });
   });
 
