@@ -367,7 +367,7 @@ def handler(app, port=PORT):
                         else:
                             store.import_error_fixes(cur, got)
                         marks = metrics.error_marks(cur)
-                except Exception as e:  # a store error: answer, instead of dropping the connection. Never the body: it names types
+                except Exception as e:  # a store error: answer, instead of dropping the connection. The request body is never logged; the error's own text may name a type id
                     print(f"marks request failed: {type(e).__name__}: {e}", file=sys.stderr, flush=True)
                     return self.send(500, json.dumps(dict(error="internal error")))
                 self.json(marks)

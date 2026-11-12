@@ -199,6 +199,24 @@ class ErrorMarksTest(StoreCase):
         store.import_error_fixes(self.con.cursor(), {"muted": date(2026, 10, 1)})
         self.assertEqual(self.muted()[2], ("muted", date(2026, 10, 1), False))
 
+    def test_the_column_and_its_backfill_are_one_transaction(self):
+        """A backfill that fails leaves no column behind, so the next open backfills instead of skipping it."""
+        self.old_store("CREATE TABLE error_marks (category VARCHAR PRIMARY KEY, fixed_on DATE, muted VARCHAR)", [("a", None, "not a flag")])
+        with self.assertRaises(duckdb.Error):
+            store.open_store(self.db)
+        raw = duckdb.connect(self.db)
+        cols = [c for (c,) in raw.execute("SELECT column_name FROM information_schema.columns WHERE table_name = 'error_marks'").fetchall()]
+        raw.close()
+        self.assertEqual(cols, ["category", "fixed_on", "muted"])
+        self.con = duckdb.connect(":memory:")  # the case's cleanup closes self.con
+
+    def test_after_opening_an_old_store_no_row_breaks_the_rule(self):
+        self.old_store("CREATE TABLE error_marks (category VARCHAR PRIMARY KEY, fixed_on DATE, muted BOOLEAN DEFAULT false)",
+                       [("a", date(2026, 11, 4), False), ("b", None, False), ("c", date(2026, 11, 3), True), ("d", None, True)])
+        self.con = store.open_store(self.db)
+        bad = self.q("SELECT category FROM error_marks WHERE fix_decided != (fixed_on IS NOT NULL OR NOT muted) ORDER BY 1")
+        self.assertEqual(bad, [])
+
     def test_the_finding_sequence_keeps_the_marker(self):
         """Browser B mutes git before browser A, which kept a fix day in its legacy storage, imports it."""
         cur = self.con.cursor()

@@ -158,10 +158,18 @@ def open_store(path=None):
         con.execute(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS source VARCHAR DEFAULT 'claude'")
     con.execute("ALTER TABLE error_marks ADD COLUMN IF NOT EXISTS muted BOOLEAN DEFAULT false")  # stores from before muted types
     if not con.execute("SELECT 1 FROM information_schema.columns WHERE table_name = 'error_marks' AND column_name = 'fix_decided'").fetchone():
-        # Stores from before fix_decided. Backfilled once, as the column is added: later, a row with no fix day and not muted is
-        # a mute then an unmute, which decided nothing. A muted row with no fix day stays undecided: keeping a marker beats losing one.
-        con.execute("ALTER TABLE error_marks ADD COLUMN fix_decided BOOLEAN DEFAULT false")
-        con.execute("UPDATE error_marks SET fix_decided = true WHERE fixed_on IS NOT NULL OR NOT muted")
+        # Stores from before fix_decided. The column and its backfill are one transaction, so a crash between them leaves no column
+        # that later opens would skip. Backfilled once, as the column is added: a row with a fix day, or with no fix day and not muted
+        # (an undo, or a mute then an unmute that ran before this column existed), is decided. A muted row with no fix day stays
+        # undecided: keeping a marker beats losing one.
+        con.execute("BEGIN")
+        try:
+            con.execute("ALTER TABLE error_marks ADD COLUMN fix_decided BOOLEAN DEFAULT false")
+            con.execute("UPDATE error_marks SET fix_decided = true WHERE fixed_on IS NOT NULL OR NOT muted")
+            con.execute("COMMIT")
+        except BaseException:
+            con.execute("ROLLBACK")
+            raise
     con.execute("ALTER TABLE requests ADD COLUMN IF NOT EXISTS speed VARCHAR")  # stores from before fast-mode pricing; NULL until rebuild
     for old, new in PROJECT_ALIASES.items():  # names stored before the alias existed
         for table in ("projects_by_cwd", "sessions"):

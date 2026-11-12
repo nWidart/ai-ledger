@@ -307,12 +307,14 @@ export function pointRows(m: Model, v: View, p: ChartPt, vt: ViewTypes): [string
 }
 export const pointWhen = (v: View, p: ChartPt) =>
   p.to ? `${label(p.k, true)} – ${v.gran === "week" ? "week of " : ""}${label(p.to, true)}` : `${v.gran === "week" ? "Week of " : ""}${label(p.k, true)}`;
+/** A point with neither calls nor errors (a folded stretch included): the only one the chart calls "no activity", in its band, its legend key, its reading and its tooltip. */
+export const idle = (p: ChartPt) => !p.c && !p.e;
 /** What a point with errors and no calls says: a failed call counts its call on the day it started and its error on the day it ended. */
 export const noCalls = (v: View, p: ChartPt) => `${fmt(p.e)} error${p.e === 1 ? "" : "s"}, no tool call started in this ${v.gran}`;
 /** What the keyboard reading of the chart announces for a point. */
 export function pointText(m: Model, v: View, p: ChartPt, vt: ViewTypes): string {
   const when = pointWhen(v, p) + (p.k === v.at && !p.to ? " (selected)" : ""), selN = (v.cat && p.byAll[v.cat]) || 0;
-  if (!p.c && !p.e) return `${when}: no activity`;
+  if (idle(p)) return `${when}: no activity`;
   return `${when}: ${p.c ? `${fmt(p.r, 2)}% rate, ${fmt(p.e)} errors of ${fmt(p.c)} calls` : noCalls(v, p)}. ` + pointRows(m, v, p, vt).map(([l, n]) => `${l} ${fmt(n)}`).join(", ")
     + (v.cat && selN ? `. Selected ${m.cats[v.cat]!.label}: ${fmt(selN)}` : "");
 }

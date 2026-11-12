@@ -604,6 +604,25 @@ describe("ErrorsPage", () => {
     const unmuteBtn = () => screen.getByRole("button", { name: "Unmute" });
     const mark = () => userEvent.click(screen.getByRole("button", { name: "Mark fix applied" }));
 
+    it("leaves the chart's keys alone once the last visible type is muted out and no errors are left to draw", async () => {
+      serve();
+      history.replaceState(null, "", "/errors#range=7&cat=x&noise=0");
+      await page();
+      await userEvent.click(muteBtn());
+      await waitFor(() => expect(document.querySelector("#chart svg")).toBeNull());
+      const chart = document.getElementById("chart")!, hash = location.hash;
+      expect(chart.textContent).toMatch(/No failed tool calls in this range/);
+      chart.focus();
+      // React reports an error thrown in a handler on the window, not out of fireEvent.
+      const thrown: string[] = [], onError = (e: ErrorEvent) => { e.preventDefault(); thrown.push(e.message); };
+      addEventListener("error", onError);
+      for (const key of ["ArrowRight", "ArrowLeft", "Home", "End", "Enter", " "]) fireEvent.keyDown(chart, { key });
+      removeEventListener("error", onError);
+      expect(thrown).toEqual([]);
+      expect(location.hash).toBe(hash); // nothing selected
+      expect(chart.getAttribute("aria-label")).not.toContain("Selected:");
+    });
+
     it("calls the toggle Hide noise and muted, keeping its id and hash key", async () => {
       serve();
       await page();
@@ -1556,6 +1575,22 @@ describe("ErrorsPage bucket selection", () => {
     expect(location.hash).toBe("#range=0&ex=t07");
     expect(document.getElementById("outside")).toBeNull();
     expect(document.querySelector("#exList #ex-t07")).toBeTruthy();
+  });
+
+  it("draws the no-activity band and legend key only for buckets with neither calls nor errors", async () => {
+    const calls = (days: string[]): ErrorsPayload["calls"] => days.map(d => [d, "foo", 10, 0, "claude"]);
+    const bands = () => document.querySelectorAll("#chart svg rect.noact").length;
+    const key = () => [...document.querySelectorAll("#legend .key")].some(k => k.textContent === "No activity");
+    // Weeks: a call on Oct 28 (week of Oct 26) and its error on Nov 4 (week of Nov 2): errors and no calls in the second week, so no band.
+    await open("#range=30&gran=week", { ...fixture, calls: calls(["2026-10-28"]) });
+    expect([bands(), key()]).toEqual([0, false]);
+    cleanup();
+    clearApiCache();
+    // Days: the same errors, and a call on Nov 5: Oct 29 to Nov 3 have neither (one merged band), Nov 4 has errors only.
+    await open("#range=30", { ...fixture, calls: calls(["2026-10-28", "2026-11-05"]) });
+        expect([bands(), key()]).toEqual([1, true]);
+    const band = document.querySelector("#chart svg rect.noact")!;
+    expect(Number(band.getAttribute("width"))).toBeCloseTo(6 * (800 - 40 - 10) / 9); // six of the nine days
   });
 
   it("tells a screen reader the chart is an application with its own keys, and describes it", async () => {
