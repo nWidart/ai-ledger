@@ -51,7 +51,7 @@ class SchemaTest(StoreCase):
     def test_schema_and_modes(self):
         cols = {r[0] for r in self.q("SELECT column_name FROM information_schema.columns WHERE table_name = 'raw_lines'")}
         self.assertEqual(cols, {"key", "file", "line_no", "byte_offset", "type", "session_id", "uuid", "ts",
-                                "subagent", "parsed", "json"})
+                                "subagent", "parsed", "json", "packed"})
         cols = {r[0] for r in self.q("SELECT column_name FROM information_schema.columns WHERE table_name = 'files'")}
         self.assertTrue({"path", "size", "read_offset", "mtime", "last_ingest"} <= cols)
         pk = self.q("SELECT constraint_column_names FROM duckdb_constraints() WHERE table_name = 'raw_lines' "

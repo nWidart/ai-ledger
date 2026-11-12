@@ -17,6 +17,7 @@ from typing import Callable, NamedTuple
 
 import duckdb
 
+from . import blobs
 from .categorize import GIT_COMMIT, SHELL_TOOLS, categorize, error_text, runs_tests, summarize_input, text_of
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -54,7 +55,10 @@ CREATE TABLE IF NOT EXISTS files (
 CREATE TABLE IF NOT EXISTS raw_lines (
   key VARCHAR PRIMARY KEY, file VARCHAR, line_no BIGINT, byte_offset BIGINT, type VARCHAR,
   session_id VARCHAR, uuid VARCHAR, ts VARCHAR, subagent BOOLEAN, parsed BOOLEAN,
-  json VARCHAR USING COMPRESSION zstd);
+  json VARCHAR USING COMPRESSION zstd, packed BOOLEAN DEFAULT false);
+-- Big string tokens of raw_lines.json, one row per distinct token; see blobs.py. The 256-byte rows of packs are deliberate.
+CREATE TABLE IF NOT EXISTS blobs (hash UHUGEINT PRIMARY KEY, pack BIGINT, pos BIGINT, len BIGINT);
+CREATE TABLE IF NOT EXISTS packs (pack BIGINT, seq INTEGER, data BLOB USING COMPRESSION uncompressed);
 CREATE TABLE IF NOT EXISTS projects_by_cwd (cwd VARCHAR PRIMARY KEY, project VARCHAR);
 CREATE TABLE IF NOT EXISTS limit_polls (
   provider VARCHAR, polled_at TIMESTAMP, json VARCHAR, PRIMARY KEY (provider, polled_at));
@@ -170,6 +174,7 @@ def open_store(path=None):
         except BaseException:
             con.execute("ROLLBACK")
             raise
+    con.execute("ALTER TABLE raw_lines ADD COLUMN IF NOT EXISTS packed BOOLEAN DEFAULT false")  # stores from before packed strings
     con.execute("ALTER TABLE requests ADD COLUMN IF NOT EXISTS speed VARCHAR")  # stores from before fast-mode pricing; NULL until rebuild
     for old, new in PROJECT_ALIASES.items():  # names stored before the alias existed
         for table in ("projects_by_cwd", "sessions"):
@@ -372,7 +377,7 @@ def ingest_chunk(cur, projects, name, path, data, offset, lines, seq, st, whole=
     Returns the lines read, the lines new to the store and the ids of the sessions those new lines belong to."""
     src = SOURCES[name]
     sub = src.subagent(path)
-    rows, parsed, seen = [], {}, set()
+    rows, parsed, seen, found = [], {}, set(), {}
     pos = offset
     for raw in data.split(b"\n")[:-1]:
         text = raw.decode("utf-8", errors="replace")
@@ -385,7 +390,9 @@ def ingest_chunk(cur, projects, name, path, data, offset, lines, seq, st, whole=
         if key not in seen:
             seen.add(key)
             dd = d if ok else {}
-            rows.append((key, path, lines, pos, dd.get("type"), *src.fields(dd, path), sub, ok, text))
+            stored, packed, strings = blobs.pack_line(text) if ok else (text, False, {})
+            rows.append((key, path, lines, pos, dd.get("type"), *src.fields(dd, path), sub, ok, stored, packed))
+            found[key] = strings
             if ok:
                 parsed[key] = d
         lines += 1
@@ -393,7 +400,8 @@ def ingest_chunk(cur, projects, name, path, data, offset, lines, seq, st, whole=
     cur.execute("BEGIN")
     try:
         new = set(insert(cur, "raw_lines", ["key", "file", "line_no", "byte_offset", "type", "session_id", "uuid",
-                                            "ts", "subagent", "parsed", "json"], rows, returning="key"))
+                                            "ts", "subagent", "parsed", "json", "packed"], rows, returning="key"))
+        blobs.write(cur, {h: s for k in new for h, s in found[k].items()})  # before the deriver, which may read the lines back
         der = src.deriver(cur, projects, name, path, sub, seq)
         for r in rows:
             if r[0] in new and r[0] in parsed:
@@ -732,6 +740,24 @@ SOURCES = {"claude": Source(transcript_files, line_key, Deriver, lambda path: "/
                             codex.prompt_text, "event_msg", codex.live_items, None)}
 
 
+RAW_BATCH = 2000  # lines read and expanded at a time
+
+
+def raw_rows(cur):
+    """Every stored line as (key, file, line_no, byte_offset, type, session_id, uuid, ts, subagent, parsed, text), the text in
+    full, read RAW_BATCH lines at a time."""
+    cols = "key, file, line_no, byte_offset, type, session_id, uuid, ts, subagent, parsed, json, packed"
+    for (path,) in cur.execute("SELECT DISTINCT file FROM raw_lines ORDER BY 1").fetchall():
+        at = (-1, "")
+        while True:
+            rows = cur.execute(f"SELECT {cols} FROM raw_lines WHERE file = ? AND (coalesce(byte_offset, -1), key) > (?, ?) "
+                               "ORDER BY coalesce(byte_offset, -1), key LIMIT ?", [path, *at, RAW_BATCH]).fetchall()
+            if not rows:
+                break
+            yield from blobs.expand(cur, rows)
+            at = (rows[-1][3] if rows[-1][3] is not None else -1, rows[-1][0])
+
+
 def rebuild(con, log=None):
     """Drop the derived tables and replay them from raw_lines, file by file in byte order."""
     t0 = time.time()
@@ -747,8 +773,10 @@ def rebuild(con, log=None):
         cur.execute("BEGIN")
         try:
             der = src.deriver(cur, projects, name, path, src.subagent(path), 0)
-            for (text,) in cur.execute("SELECT json FROM raw_lines WHERE file = ? AND parsed ORDER BY byte_offset", [path]).fetchall():
-                der.add(json.loads(text))
+            rows = cur.execute("SELECT json, packed FROM raw_lines WHERE file = ? AND parsed ORDER BY byte_offset", [path]).fetchall()
+            for i in range(0, len(rows), RAW_BATCH):
+                for (text,) in blobs.expand(cur, rows[i:i + RAW_BATCH]):
+                    der.add(json.loads(text))
             der.flush()
             cur.execute("UPDATE files SET seq = ? WHERE path = ?", [der.seq, path])
             cur.execute("COMMIT")

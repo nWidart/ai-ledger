@@ -9,7 +9,7 @@ import re
 import shlex
 from datetime import datetime, timedelta, timezone
 
-from . import limits, metrics, store
+from . import blobs, limits, metrics, store
 from .categorize import SHELL_TOOLS
 
 ACTIVE = timedelta(minutes=10)  # a session with a line this recent is listed
@@ -271,7 +271,7 @@ def latest_action(events, text):
     return None
 
 
-ROW_COLS = "r.key, r.file, r.ts, r.subagent, coalesce(f.source, 'claude'), r.json"
+ROW_COLS = "r.key, r.file, r.ts, r.subagent, coalesce(f.source, 'claude'), r.json, r.packed"
 ROW_FROM = "raw_lines r LEFT JOIN files f ON f.path = r.file"
 
 
@@ -338,10 +338,10 @@ def recent(cur, sids):
     """The newest STATE_LINES lines of each session, in line order: enough to tell what it is doing now."""
     lines = {}
     if sids:
-        for row in cur.execute(f"""SELECT r.session_id, {ROW_COLS} FROM {ROW_FROM}
+        for row in blobs.expand(cur, cur.execute(f"""SELECT r.session_id, {ROW_COLS} FROM {ROW_FROM}
                 WHERE list_contains(?, r.session_id) AND r.ts IS NOT NULL AND r.parsed
                 QUALIFY row_number() OVER (PARTITION BY r.session_id ORDER BY r.ts DESC, r.file, r.line_no DESC) <= {STATE_LINES}
-                ORDER BY r.session_id, r.ts, r.file, r.line_no""", [sids]).fetchall():
+                ORDER BY r.session_id, r.ts, r.file, r.line_no""", [sids]).fetchall()):
             lines.setdefault(row[0], []).append(row[1:])
     return lines
 
@@ -370,15 +370,15 @@ def session(cur, sid, after="", text=False, now=None, prices=None):
         return None
     s = info[0]
     if after:
-        rows = cur.execute(f"""SELECT {ROW_COLS} FROM {ROW_FROM} WHERE r.session_id = ? AND r.ts >= ? AND r.parsed
-            ORDER BY r.ts, r.file, r.line_no""", [sid, iso(parse_ts(after) - OVERLAP)]).fetchall()
+        rows = blobs.expand(cur, cur.execute(f"""SELECT {ROW_COLS} FROM {ROW_FROM} WHERE r.session_id = ? AND r.ts >= ? AND r.parsed
+            ORDER BY r.ts, r.file, r.line_no""", [sid, iso(parse_ts(after) - OVERLAP)]).fetchall())
         more = False
     else:
-        rows = cur.execute(f"""SELECT * FROM (SELECT {ROW_COLS}, r.line_no FROM {ROW_FROM}
+        rows = cur.execute(f"""SELECT * FROM (SELECT r.line_no, {ROW_COLS} FROM {ROW_FROM}
             WHERE r.session_id = ? AND r.ts IS NOT NULL AND r.parsed ORDER BY r.ts DESC, r.file, r.line_no DESC LIMIT ?)
-            ORDER BY 3, 2, 7""", [sid, FIRST_LINES + 1]).fetchall()
+            ORDER BY 4, 3, 1""", [sid, FIRST_LINES + 1]).fetchall()
         more = len(rows) > FIRST_LINES
-        rows = [r[:6] for r in rows[-FIRST_LINES:]]
+        rows = [r[1:] for r in blobs.expand(cur, rows[-FIRST_LINES:])]
     events, results = assemble(rows)
     started = started_by(rows, events)
     missing = set(results) | (set(started) - {e["id"] for e in events if e["k"] == "tool"})
@@ -408,8 +408,8 @@ def session(cur, sid, after="", text=False, now=None, prices=None):
 
 def earlier_uses(cur, sid, before, ids):
     """The lines before `before` that hold the tool uses ids."""
-    return cur.execute(f"""SELECT {ROW_COLS} FROM {ROW_FROM} WHERE r.session_id = ? AND r.ts < ? AND r.parsed
-        AND list_bool_or(list_transform(?, lambda x: contains(r.json, x))) ORDER BY r.ts, r.file, r.line_no""", [sid, before, ids]).fetchall()
+    return blobs.expand(cur, cur.execute(f"""SELECT {ROW_COLS} FROM {ROW_FROM} WHERE r.session_id = ? AND r.ts < ? AND r.parsed
+        AND list_bool_or(list_transform(?, lambda x: contains(r.json, x))) ORDER BY r.ts, r.file, r.line_no""", [sid, before, ids]).fetchall())
 
 
 def public(e, text):
@@ -498,9 +498,9 @@ def lanes(cur, sid, prices):
 def compactions(cur, sid):
     """Every compaction of the session: when, and the context before it when the source says."""
     out = []
-    for path, ts, source, text in cur.execute("""SELECT r.file, r.ts, coalesce(f.source, 'claude'), r.json FROM raw_lines r
+    for path, ts, source, text in blobs.expand(cur, cur.execute("""SELECT r.file, r.ts, coalesce(f.source, 'claude'), r.json, r.packed FROM raw_lines r
             LEFT JOIN files f ON f.path = r.file WHERE r.session_id = ? AND r.parsed AND NOT r.subagent
-            AND (r.type = 'compacted' OR r.type = 'system' AND contains(r.json, '"compact_boundary"')) ORDER BY r.ts""", [sid]).fetchall():
+            AND (r.type = 'compacted' OR r.type = 'system' AND contains(r.json, '"compact_boundary"')) ORDER BY r.ts""", [sid]).fetchall()):
         for it in store.SOURCES[source].live_items(json.loads(text)):
             if it["k"] == "compaction":
                 out.append(dict(ts=iso(parse_ts(ts)), pre=it["pre"]))

@@ -16,7 +16,7 @@ from functools import lru_cache
 
 from compression import zstd
 
-from . import store
+from . import blobs, store
 from .categorize import GIT_COMMIT, SHELL_TOOLS, runs_tests, summarize_input, text_of
 
 UUID = r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
@@ -212,9 +212,9 @@ class CodexDeriver(store.Deriver):
 
     def thread_lines(self, t, limit=None):
         """This thread's stored lines of type t, from any of its files, in ordinal order."""
-        return sorted((json.loads(r[0]) for r in self.cur.execute(
-            "SELECT json FROM raw_lines WHERE starts_with(key, ?) AND type = ? AND parsed LIMIT ?",
-            [f"codex:{self.thread}:", t, limit]).fetchall()), key=lambda d: d.get("ordinal") or 0)
+        rows = self.cur.execute("SELECT json, packed FROM raw_lines WHERE starts_with(key, ?) AND type = ? AND parsed LIMIT ?",
+                                [f"codex:{self.thread}:", t, limit]).fetchall()
+        return sorted((json.loads(r[0]) for r in blobs.expand(self.cur, rows)), key=lambda d: d.get("ordinal") or 0)
 
     def start(self, d):
         """The thread's session from its own session_meta. A thread another thread spawned is subagent work."""

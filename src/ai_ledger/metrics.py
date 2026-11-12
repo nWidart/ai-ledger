@@ -5,7 +5,7 @@ import os
 import re
 from datetime import date, timedelta
 
-from . import store
+from . import blobs, store
 from .categorize import RULES, SHELL_TOOLS, input_pattern
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -925,13 +925,13 @@ def first_prompts(cur, sids):
         return {}
     found = {}
     types = sorted({src.prompt_type for src in store.SOURCES.values()})
-    for sid, pid, source, line in cur.execute("""
+    for sid, pid, source, line in blobs.expand(cur, cur.execute("""
             WITH fp AS (SELECT session_id, arg_min(prompt_id, ts) AS pid FROM prompts WHERE list_contains(?, session_id) GROUP BY 1)
-            SELECT r.session_id, fp.pid, coalesce(f.source, 'claude'), r.json FROM raw_lines r JOIN fp USING (session_id)
+            SELECT r.session_id, fp.pid, coalesce(f.source, 'claude'), r.json, r.packed FROM raw_lines r JOIN fp USING (session_id)
             LEFT JOIN files f ON f.path = r.file
             WHERE list_contains(?, r.type) AND contains(r.json, fp.pid)
             QUALIFY row_number() OVER (PARTITION BY r.session_id ORDER BY r.ts) <= 20
-            ORDER BY r.session_id, r.ts""", [list(sids), types]).fetchall():
+            ORDER BY r.session_id, r.ts""", [list(sids), types]).fetchall()):
         src = store.SOURCES.get(source)
         if sid in found or src is None:
             continue
