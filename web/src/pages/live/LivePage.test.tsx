@@ -31,7 +31,13 @@ function show(hash = "#session=s1", o: Opts = {}) {
   const urls = () => f.mock.calls.map(c => String(c[0]));
   return { f, r, calls: () => urls().filter(u => u !== "/api/status"), polls: () => urls().filter(u => u === "/api/status").length };
 }
-const stream = () => screen.findByRole("region", { name: "Session" });
+/** The Session region once its session has loaded: the region itself shows from the first render, with "Loading…" in it, so
+ *  a query made on its heels would race the fetch. */
+const stream = async () => {
+  const region = await screen.findByRole("region", { name: "Session" });
+  await within(region).findByLabelText("Session events");
+  return region;
+};
 const rail = () => screen.findByRole("region", { name: "Active sessions" });
 const wall = rail; // the wall takes the rail's place, under the same name
 /** The rail or the wall as text: each group's heading, then its sessions' projects. */
