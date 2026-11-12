@@ -51,8 +51,10 @@
 .pg-limits .pace b { color: var(--text-secondary); font-weight: 500; }
 .pg-limits .cap-money { margin: 2px 0 0; font-size: 12.5px; color: var(--text-muted); }
 
-.pg-limits .lim-chart { margin-top: 8px; width: 100%; overflow: hidden; }
-.pg-limits .lim-chart svg { display: block; }
+.pg-limits .lim-chart { position: relative; margin-top: 8px; width: 100%; overflow: hidden; }
+.pg-limits .lim-chart svg { display: block; touch-action: pan-y; } /* a sideways drag reads the chart; a vertical one still scrolls */
+/* The ring sits inside the box: the card clips what draws outside it. */
+.pg-limits .lim-chart:focus-visible { outline-offset: -2px; border-radius: 4px; }
 .pg-limits .lim-chart .grid { stroke: var(--grid); }
 .pg-limits .lim-chart .cap { stroke: var(--critical); stroke-dasharray: 4 3; }
 .pg-limits .lim-chart .ax { fill: var(--text-muted); font-size: 11.5px; }
@@ -62,6 +64,10 @@
 .pg-limits .lim-chart .meas { fill: none; stroke: var(--series-1); stroke-width: 2; }
 .pg-limits .lim-chart .dot { fill: var(--series-1); stroke: var(--surface-1); stroke-width: 1; }
 .pg-limits .lim-chart .now { stroke: var(--text-muted); stroke-dasharray: 1 3; }
+/* The readout: a guide at the point being read and a marker on its curve; its tooltip is the shared .tip. */
+.pg-limits .lim-chart .guide { stroke: var(--text-secondary); stroke-width: 1; }
+.pg-limits .lim-chart .pick { fill: var(--series-1); stroke: var(--surface-1); stroke-width: 2; }
+.pg-limits .lim-chart .pick.ahead { fill: var(--accent); }
 .pg-limits .lim-chart .plan line { stroke: var(--warning); stroke-width: 1.5; }
 /* A wide, invisible stroke so the 1.5px plan line can be pointed at; its label says what changed without hovering. */
 .pg-limits .lim-chart .plan .hit { stroke: transparent; stroke-width: 14; }

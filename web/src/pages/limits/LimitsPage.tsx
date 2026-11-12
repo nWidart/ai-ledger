@@ -165,7 +165,8 @@ export function LimitsPage() {
         <div className="sect-head sect" id="windows">
           <h2>Open windows</h2>
           <p className="hint">Now, for the whole account: the range and project filters do not apply. Forecasts run halfway between your
-            usual pace and the window's own over its last seventh (a weekly window's last day); the likely range covers both.</p>
+            usual pace and the window's own over its last seventh (a weekly window's last day); the likely range covers both.
+            Hover or focus a chart for the value at a time.</p>
           {d.windows.length > 0 && <ul className="lim-key" aria-label="Chart key">
             <li><i className="k-used" />measured</li><li><i className="k-dot" />reading</li><li><i className="k-est" />estimated</li>
             <li><i className="k-fc" />forecast</li><li><i className="k-band" />likely range</li><li><i className="k-now" />now</li>

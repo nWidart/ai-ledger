@@ -61,6 +61,37 @@ export function pace(w: LimitWindow, now: string): { left: string; reset: string
   };
 }
 
+/** One point a reader can land on: a past reading or estimate, or a forecast point after now. */
+export type ReadPoint =
+  | { kind: "past"; t: string; pct: number; measured: boolean }
+  | { kind: "forecast"; t: string; mid: number; lo: number; hi: number };
+
+/** A window's readable points in time order: the past series, then the forecast after its last point (the curve starts at
+ *  now, which the series already holds). */
+export function readPoints(w: LimitWindow): ReadPoint[] {
+  const past = w.series.map((p): ReadPoint => ({ kind: "past", ...p }));
+  const last = w.series.length ? Date.parse(w.series[w.series.length - 1]!.t) : -Infinity;
+  const ahead = (w.forecast?.curve ?? []).filter(p => Date.parse(p.t) > last).map((p): ReadPoint => ({ kind: "forecast", ...p }));
+  return [...past, ...ahead];
+}
+
+/** The index of the point nearest in time to ms (the earlier one on a tie), or -1 with no points. */
+export function nearestPoint(pts: ReadPoint[], ms: number): number {
+  let best = -1, gap = Infinity;
+  pts.forEach((p, i) => { const d = Math.abs(Date.parse(p.t) - ms); if (d < gap) { gap = d; best = i; } });
+  return best;
+}
+
+/** A percent with at most one decimal: "42", "42.3". */
+const pct1 = (v: number): string => { const r = Math.round(v * 10) / 10; return Number.isInteger(r) ? num(r) : num(r, 1); };
+
+/** "Sat, Nov 7, 2:00 PM · 42% · measured", or "… · forecast 71% (60–85%)" with the likely range when it reads wider than a point. */
+export function readText(p: ReadPoint): string {
+  if (p.kind === "past") return `${whenDay(p.t)} · ${pct1(p.pct)}% · ${p.measured ? "measured" : "estimated"}`;
+  const lo = pct1(p.lo), hi = pct1(p.hi);
+  return `${whenDay(p.t)} · forecast ${pct1(p.mid)}%${lo === hi ? "" : ` (${lo}–${hi}%)`}`;
+}
+
 const sameLimit = (w: LimitWindow, b: { provider: string; limit_id: string; scope: string }) =>
   w.provider === b.provider && w.limit_id === b.limit_id && w.scope === b.scope;
 
