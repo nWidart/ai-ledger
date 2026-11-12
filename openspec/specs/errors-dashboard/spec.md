@@ -42,6 +42,40 @@ The Errors page SHALL compare error rates the same way in the summary, the type 
 - **WHEN** a type had 2 errors in the previous 30 days and 9 in this range
 - **THEN** the table shows "2 → 9"
 
+### Requirement: Narrow the lists to a chart bucket
+The Errors page SHALL let the user select one day or week of the errors chart by click, or by Enter or Space on the chart's current point, and clear it the same way. A folded stretch without tool calls SHALL NOT be selectable. A selected bucket SHALL narrow the type table and the open type's detail to its errors, while the summary, chart, rate trend and change stay range-wide and the table says so.
+
+#### Scenario: Select a spike
+- **WHEN** the user clicks the day's bar on the chart
+- **THEN** the type table counts only that day's errors, a chip names the day, and the change column is unchanged
+
+#### Scenario: Time lost in a bucket
+- **WHEN** a day is selected and an incident has one of its failures on that day and the rest on another
+- **THEN** the type table's Time lost and the detail's time-lost sentence count that incident whole, and Where to start and the summary stay range-wide
+
+#### Scenario: Keyboard
+- **WHEN** the user reads a point with the arrow keys and presses Enter, then Space
+- **THEN** the point is selected, then cleared
+
+#### Scenario: Folded stretch
+- **WHEN** the current point is a folded stretch without tool calls and the user presses Enter
+- **THEN** nothing is selected and the page says it cannot be
+
+### Requirement: Keep the selected bucket in the view
+The selected bucket SHALL be part of the URL view and push a history entry, and SHALL NOT be saved with the last view. The chart SHALL mark it beyond color and name it for assistive tech, and a chip by the type table SHALL name it and clear it. The selection SHALL clear when it is no longer a selectable point of the chart the view draws. An open type with no errors in the bucket SHALL close unless an example is linked.
+
+#### Scenario: Granularity changes
+- **WHEN** a day is selected and the user switches to weeks
+- **THEN** the selection clears
+
+#### Scenario: Filter moves the chart's start
+- **WHEN** a day is selected and the user picks a project whose first tool call is later than that day
+- **THEN** the selection clears, so the marker and the lists never disagree
+
+#### Scenario: Linked example outside the bucket
+- **WHEN** a link opens an example that falls outside the selected bucket
+- **THEN** the example shows under "Outside current filters", and Clear filters also clears the bucket
+
 ### Requirement: Show the uncategorized share
 The Errors summary SHALL show the share of the view's errors in the catch-all types (Other, Other non-zero exit and MCP tool error), which are the errors no specific rule matched, with a title that says so. When the view is not filtered to one source and more than one source has errors, the line SHALL split the share by source. It SHALL show nothing when the view has no errors.
 
