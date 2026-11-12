@@ -14,8 +14,9 @@ import { useLive, useNow } from "./useLive";
 import { Wall } from "./Wall";
 import "./live.css";
 
-/** The states the rail's footer counts as working; your turn counts as waiting for you, idle and ended as neither. */
-const WORKING = new Set<LiveState["kind"]>(["tool", "thinking", "wait"]);
+/** The states the rail's footer counts as working, as the rail's working group. approval? and your turn count as waiting
+ *  for you, as in the tab title; idle and ended as neither. */
+const WORKING = new Set<LiveState["kind"]>(["tool", "thinking"]);
 /** The tab title's count of sessions that need the user, before the page's own title. */
 const COUNT = /^\(\d+\) /;
 
@@ -43,10 +44,9 @@ export function LivePage() {
   const shown = session && session.session_id === selected ? session : undefined;
   const missing = !shown && sessionError instanceof ApiError && sessionError.status === 404;
   const error = listError ?? (missing ? undefined : sessionError);
-  const states = sessions.map(s => stateNow(s.state, now).kind), waiting = states.filter(k => k === "you").length;
-  // The tab title says how many listed sessions need the user. App sets the page's own title on each route, so this only
-  // adds the count to whatever title is there, and takes it off on leaving.
-  const need = states.filter(needsYou).length;
+  // The tab title says how many listed sessions need the user, as the rail's footer does. App sets the page's own title
+  // on each route, so this only adds the count to whatever title is there, and takes it off on leaving.
+  const states = sessions.map(s => stateNow(s.state, now).kind), need = states.filter(needsYou).length;
   useEffect(() => {
     const base = document.title.replace(COUNT, "");
     document.title = need ? `(${need}) ${base}` : base;
@@ -90,7 +90,7 @@ export function LivePage() {
             <ul>{g.sessions.map(entry)}</ul>
           </div>)}
           <p className="foot">{plural(states.filter(k => WORKING.has(k)).length, "session")} working
-            {waiting ? ` · ${waiting} waiting for you` : ""} · {usd(sessions.reduce((a, s) => a + (s.cost ?? 0), 0))} so far</p>
+            {need ? ` · ${need} waiting for you` : ""} · {usd(sessions.reduce((a, s) => a + (s.cost ?? 0), 0))} so far</p>
         </section>
         <section className="panel main" aria-label="Session">
           {shown ? <>

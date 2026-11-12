@@ -953,10 +953,11 @@ describe("LivePage", () => {
     expect(screen.getByRole("button", { current: true }).querySelector(".pname")!.textContent).toBe(o.list.sessions[0]!.project);
   });
 
-  it("counts your-turn sessions apart from working ones in the rail's footer", async () => {
-    show("");
+  it("counts in the rail's footer the sessions that need the user as the tab title does, apart from the working ones", async () => {
+    show("", { app: true }); // one approval wait, one your turn, two thinking, one idle and one ended
     const rail = await screen.findByRole("region", { name: "Active sessions" });
-    expect(rail.querySelector(".foot")!.textContent).toMatch(/^3 sessions working · 1 waiting for you · /);
+    expect(rail.querySelector(".foot")!.textContent).toMatch(/^2 sessions working · 2 waiting for you · /);
+    expect(document.title).toBe("(2) Live · AI Ledger");
   });
 
   it("shows an ended session as ended in the rail, in the agent panel and on the wall", async () => {

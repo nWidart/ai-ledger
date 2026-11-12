@@ -9,10 +9,6 @@ The Live page: watch running sessions as they happen from the agent's side, one 
 ### Requirement: Show active sessions in a rail
 The Live page SHALL list the active sessions in a rail, grouped by state in this order: *approval?*, *your turn*, *working* (running a tool or thinking), *idle*, *ended*. A group with no session SHALL NOT be drawn. Inside a group, sessions SHALL be ordered by session start, oldest first, not by last write, so an entry moves only when its state changes.
 
-#### Scenario: Count of working sessions
-- **WHEN** three sessions are active: one running a tool, two waiting for a prompt
-- **THEN** the rail's footer says 1 session working and 2 waiting for you
-
 #### Scenario: No active session
 - **WHEN** no session wrote a line in the last 10 minutes
 - **THEN** the page says no session is active and shows when the newest session last wrote, with a link to it on Activity
@@ -32,6 +28,17 @@ The Live page SHALL list the active sessions in a rail, grouped by state in this
 #### Scenario: New session joins
 - **WHEN** a third session starts while two are running
 - **THEN** it joins the end of its group and the two entries above it do not move
+
+### Requirement: Count the sessions in the rail's footer
+The rail's footer SHALL say how many sessions are working, those of the *working* group, and how many wait for the user: those the tab title counts, likely waiting for approval or in your turn. Idle and ended sessions SHALL count as neither.
+
+#### Scenario: Count of working sessions
+- **WHEN** three sessions are active: one running a tool, two waiting for a prompt
+- **THEN** the rail's footer says 1 session working and 2 waiting for you
+
+#### Scenario: Session likely waiting for approval
+- **WHEN** one session is likely waiting for approval, one is in your turn and one is thinking
+- **THEN** the rail's footer says 1 session working and 2 waiting for you, and the tab title starts with (2)
 
 ### Requirement: Show each session in its rail entry
 Each rail entry SHALL show the session's title as its main line, then the project with its color, the source and the state on its second line, and the cost so far. An entry in *your turn* or *thinking* SHALL show how long the session has been in that state. An entry with no title SHALL show the project as its main line.
