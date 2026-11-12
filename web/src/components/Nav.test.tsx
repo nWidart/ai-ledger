@@ -143,6 +143,28 @@ describe("Nav", () => {
     expect(screen.getByText(/Last ingest .* · 7 new lines/)).toBeTruthy();
   });
 
+  it("keeps a status when the answer to a request sent before it arrives after it", async () => {
+    const answers: Record<string, () => void> = {}, later = (key: string, body: unknown) => new Promise<Response>(r => { answers[key] = () => r(json(body)); });
+    const f = vi.fn((_url: string, _init?: RequestInit) => json(status));
+    vi.stubGlobal("fetch", f);
+    render(<Nav />);
+    expect(await screen.findByText(/Last ingest .* · 2 new lines/)).toBeTruthy();
+    f.mockImplementation(() => later("nav", { ...status, ingesting: true }));
+    let asked!: Promise<unknown>;
+    act(() => { asked = pollStatus(); }); // the nav's, sent while an ingest runs
+    f.mockImplementation(() => json({ ...status, last_stats: { ...status.last_stats, inserted: 7 } }));
+    await act(async () => { await pollStatus(); }); // Live's on the change notice: sent after, answered before
+    expect(screen.getByText(/Last ingest .* · 7 new lines/)).toBeTruthy();
+    await act(async () => { answers.nav!(); await asked; });
+    expect(screen.getByText(/Last ingest .* · 7 new lines/)).toBeTruthy();
+    f.mockImplementation(() => new Promise<Response>((_, no) => { answers.down = () => no(new Error("down")); }));
+    act(() => { asked = pollStatus(); }); // sent before the next one, and it fails after it
+    f.mockImplementation(() => json({ ...status, last_stats: { ...status.last_stats, inserted: 9 } }));
+    await act(async () => { await pollStatus(); });
+    await act(async () => { answers.down!(); await asked; });
+    expect(screen.getByText(/Last ingest .* · 9 new lines/)).toBeTruthy();
+  });
+
   it("polls the status every minute, every 3 s while an ingest runs, and stops on unmount", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     let ingesting = true;
