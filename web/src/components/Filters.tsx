@@ -67,7 +67,7 @@ const labelOf = (o: ProjectOption) => o.label ?? o.value;
 function ProjectPicker({ project, options, onPick }: { project: string; options: ProjectOption[]; onPick: (project: string) => void }) {
   const items = [ALL, ...options], selected = items.find(o => o.value === project) ?? ALL, name = labelOf(selected);
   // `typed` tells the user's text from the selected project's name, which lists everything.
-  const [text, setText] = useState(name), [typed, setTyped] = useState(false), [seen, setSeen] = useState(name);
+  const [text, setText] = useState(name), [typed, setTyped] = useState(false), [seen, setSeen] = useState(name), [open, setOpen] = useState(false);
   if (seen !== name) { setSeen(name); setText(name); setTyped(false); } // the hash changed: show its project
   const needle = text.trim().toLowerCase(), hits = typed && needle ? options.filter(o => labelOf(o).toLowerCase().includes(needle)) : null;
   // The name in the field stays selected until the user types, so typing replaces it.
@@ -77,8 +77,9 @@ function ProjectPicker({ project, options, onPick }: { project: string; options:
     <Combobox.Root items={hits ? [...hits, ALL] : items} filter={null} autoHighlight={!!hits?.length} value={selected} inputValue={text}
       itemToStringLabel={labelOf} isItemEqualToValue={(a, b) => a.value === b.value}
       onValueChange={o => o && onPick(o.value)}
-      onInputValueChange={(v, d) => { const t = d.reason === "input-change"; setTyped(t); setText(t ? v : name); }}
-      onOpenChange={open => { if (!open) { setText(name); setTyped(false); } }}>
+      // Emptying the field is typing too (Base UI then reports "input-clear" and leaves the popup closed): list everything.
+      onInputValueChange={(v, d) => { const t = d.reason === "input-change" || d.reason === "input-clear"; setTyped(t); setText(t ? v : name); if (t) setOpen(true); }}
+      open={open} onOpenChange={o => { setOpen(o); if (!o) { setText(name); setTyped(false); } }}>
       <span className={"pick-project" + (project ? "" : " all")} id="fProjectWrap">
         <ProjectDot project={project} />
         <Combobox.Input id="fProject" aria-label="Project" className="pick-field" ref={field} onFocus={e => e.currentTarget.select()}

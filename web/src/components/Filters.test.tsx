@@ -120,6 +120,21 @@ describe("Filters project search", () => {
     await user.keyboard("atl");
     expect(field().value).toBe("atl");
   });
+  it("lists every project when the field is cleared, and keeps the project until one is picked", async () => {
+    history.replaceState(null, "", "/cost#project=atlas");
+    render(<Filters projects={many} />);
+    const user = userEvent.setup();
+    await user.tab();
+    await user.keyboard("{Backspace}"); // the name was selected
+    expect(field().value).toBe("");
+    expect(options()).toHaveLength(many.length + 1);
+    await user.keyboard("pr{Backspace}{Backspace}");
+    expect(field().value).toBe("");
+    expect(options()).toHaveLength(many.length + 1);
+    expect(location.hash).toBe("#project=atlas");
+    await user.keyboard("{Escape}");
+    expect(field().value).toBe("atlas");
+  });
   it("selects the text on focus so typing replaces the project's name", async () => {
     history.replaceState(null, "", "/cost#project=atlas");
     render(<Filters projects={many} />);
