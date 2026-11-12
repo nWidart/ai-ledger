@@ -8,6 +8,7 @@ import palette from "../../__fixtures__/palette";
 import { Palette } from "../../components/palette/Palette";
 import { openPalette } from "../../components/palette/store";
 import { ErrorsPage } from "./ErrorsPage";
+import { clearApiCache } from "../../useApi";
 import { VIEW_KEY } from "./view";
 
 const json = (body: unknown) => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) } as Response);
@@ -321,6 +322,42 @@ describe("ErrorsPage bucket selection", () => {
     await userEvent.keyboard("{Home}{ArrowRight}{Enter}");
     await waitFor(() => expect(location.hash).toBe("#range=30&at=2026-11-04"));
     await userEvent.keyboard(" ");
+    expect(location.hash).toBe("#range=30");
+  });
+
+  it("keeps Space working when the closed type was outside the top five", async () => {
+    // Six types, one error each: f is the sixth, so opening it gives it its own layer, and closing it changes the chart's layers.
+    const ids = ["t01", "t02", "t03", "t04", "t07", "t08"], ty = ["a", "b", "c", "d", "e", "f"];
+    const six: ErrorsPayload = { ...two, errors: two.errors.map(e => ({ ...e, c: ty[ids.indexOf(e.id)]!, d: e.id === "t08" ? "2026-11-03" : "2026-11-04" })),
+      error_days: ty.map(c => [c === "f" ? "2026-11-03" : "2026-11-04", "foo", c, 1, 0, "claude"] as ErrorsPayload["error_days"][number]) };
+    await open("#range=30&cat=f", six);
+    expect(document.querySelector('#chart .layer[data-c="f"]')).toBeTruthy();
+    keys();
+    await userEvent.keyboard("{Home}{ArrowRight}{Enter}");
+    await waitFor(() => expect(location.hash).toBe("#range=30&at=2026-11-04"));
+    expect(document.querySelector('#chart .layer[data-c="f"]')).toBeNull();
+    await userEvent.keyboard(" ");
+    expect(location.hash).toBe("#range=30");
+  });
+
+  it("keeps the current point when new data shifts the chart's points", async () => {
+    await open("#range=30");
+    keys();
+    await userEvent.keyboard("{Home}{ArrowRight}{Enter}"); // Nov 4
+    expect(location.hash).toBe("#range=30&at=2026-11-04");
+    // Ingestion adds an earlier first-call day: Nov 4 moves from the second point to the third.
+    vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/errors") ? { ...two, calls: [["2026-11-02", "foo", 10, 0, "claude"], ...two.calls] } : {})));
+    await act(async () => { clearApiCache(true); });
+    await waitFor(() => expect(document.getElementById("chart")!.textContent).toContain("Nov 2"));
+    expect(document.getElementById("atMark")?.getAttribute("data-at")).toBe("2026-11-04");
+    await userEvent.keyboard(" ");
+    expect(location.hash).toBe("#range=30");
+  });
+
+  it("never lets Enter or Space scroll the focused chart", async () => {
+    await open("#range=30");
+    keys();
+    for (const k of ["Enter", " "]) expect(fireEvent.keyDown(document.getElementById("chart")!, { key: k })).toBe(false);
     expect(location.hash).toBe("#range=30");
   });
 

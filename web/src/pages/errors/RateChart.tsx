@@ -27,12 +27,11 @@ export function RateChart() {
     ro.observe(el);
     return () => { ro.disconnect(); clearTimeout(t); };
   }, []);
-  // The keyboard's current point survives the reading: selecting it can close the open type, which drops the reading, and
-  // Space must still clear the selection.
-  const cur = useRef(-1);
+  // The keyboard's current point, by its bucket key: it outlives the reading (selecting a point can close the open type, which
+  // drops the reading) and a redraw that shifts the points, and resolves to a point only while the chart still has that key.
+  const cur = useRef<string | null>(null);
   // A redraw drops the reading.
-  useEffect(() => { setHover(null); setLive(""); }, [dataKey, cat, W, fixes]);
-  useEffect(() => { cur.current = -1; }, [dataKey, W, fixes]);
+  useEffect(() => { setHover(null); setLive(""); }, [dataKey, cat, W, fixes, pts]);
 
   const n = keys.length, iw = (W || 800) - ML - MR, bw = iw / n, cx = (i: number) => ML + (i + .5) * bw;
   // The rate panel shows the selected type's rate on its own scale, or the overall rate. Buckets with under LOW_CALLS calls
@@ -95,12 +94,12 @@ export function RateChart() {
   const empty = !pts.some(p => p.c), noErrors = !pts.some(p => p.e);
 
   const show = (i: number, sx: number, sy: number) => { setHover({ i, sx, sy }); return pointText(m, v, pts[i]!, vt); };
-  const hide = () => setHover(null), blur = () => { hide(); cur.current = -1; };
+  const hide = () => setHover(null), blur = () => { hide(); cur.current = null; };
   const at = (ev: MouseEvent<SVGRectElement>) => {
     const r = svg.current!.getBoundingClientRect(), px = (ev.clientX - r.left) * (W || 800) / r.width;
     return Math.max(0, Math.min(n - 1, Math.floor((px - ML) / bw)));
   };
-  const move = (ev: MouseEvent<SVGRectElement>) => show(at(ev), ev.clientX, ev.clientY);
+  const move = (ev: MouseEvent<SVGRectElement>) => { cur.current = null; show(at(ev), ev.clientX, ev.clientY); };
   // Selects a bucket for the type table and the detail, or clears it when it is the selected one. A folded stretch has no calls to explain.
   const toggle = (i: number) => {
     const p = pts[i]!;
@@ -110,14 +109,16 @@ export function RateChart() {
     say(on ? "Selection cleared: the table and detail cover the whole range." : `Selected ${pointWhen(v, p)}: the table and detail show only its errors.`);
   };
   const key = (ev: KeyboardEvent<HTMLDivElement>) => {
+    const pick = ev.key === "Enter" || ev.key === " ";
+    if (pick) ev.preventDefault(); // Space would scroll the page
     if (empty) return;
-    const ci = hover?.i ?? cur.current;
-    if ((ev.key === "Enter" || ev.key === " ") && ci >= 0) { ev.preventDefault(); return toggle(ci); }
+    const k = cur.current == null ? -1 : pts.findIndex(p => p.k === cur.current), ci = k >= 0 ? k : hover?.i ?? -1;
+    if (pick) return ci >= 0 ? toggle(ci) : undefined;
     const i = ({ ArrowLeft: ci < 0 ? n - 1 : ci - 1, ArrowRight: ci + 1, Home: 0, End: n - 1 } as Record<string, number>)[ev.key];
     if (i == null) return;
     ev.preventDefault();
     const j = Math.max(0, Math.min(n - 1, i)), y = rates[j], r = svg.current!.getBoundingClientRect();
-    cur.current = j;
+    cur.current = pts[j]!.k;
     setLive(show(j, r.left + cx(j) * r.width / (W || 800), r.top + (y == null ? rT + rH / 2 : yR(y)) * r.height / H));
   };
   // The tooltip sits right of the pointer, or left of it near the window's edge; above it near the bottom edge.
