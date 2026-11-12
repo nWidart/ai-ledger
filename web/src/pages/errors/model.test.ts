@@ -173,7 +173,8 @@ describe("uncategorized", () => {
     expect(u.bySource).toEqual([["claude", 2, 0.5]]);
   });
   it("splits the share by source, ordered by source name", () => {
-    const u = uncategorized([e("other", "claude"), e("x", "claude"), e("x", "claude"), e("x", "claude"), e("exit_other", "codex"), e("mcp", "codex"), e("x", "codex")]);
+    // Codex first in the input, so the order comes from the sort, not from insertion.
+    const u = uncategorized([e("exit_other", "codex"), e("mcp", "codex"), e("x", "codex"), e("other", "claude"), e("x", "claude"), e("x", "claude"), e("x", "claude")]);
     expect(u.n).toBe(3);
     expect(u.share).toBeCloseTo(3 / 7);
     expect(u.bySource.map(([s]) => s)).toEqual(["claude", "codex"]);

@@ -11,6 +11,16 @@ import { ErrorsPage } from "./ErrorsPage";
 import { VIEW_KEY } from "./view";
 
 const json = (body: unknown) => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) } as Response);
+/** The fixture with its errors replaced; error_days is rebuilt from them, as the server builds it. */
+const withErrors = (errors: ErrorsPayload["errors"]): ErrorsPayload => {
+  const days = new Map<string, ErrorsPayload["error_days"][number]>();
+  for (const e of errors) {
+    const k = [e.d, e.p, e.c, e.src].join("|"), r = days.get(k) ?? [e.d, e.p, e.c, 0, 0, e.src];
+    r[3]++; r[4] += e.sub; days.set(k, r);
+  }
+  return { ...fixture, errors, error_days: [...days.values()] };
+};
+const stubErrors = (payload: ErrorsPayload) => vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/errors") ? payload : {})));
 
 beforeEach(() => {
   vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/errors") ? fixture : { id: "t07", i: "full input", e: "full error", r: "", cut: [] })));
@@ -97,6 +107,33 @@ describe("ErrorsPage", () => {
     expect(document.getElementById("uncat")?.title).toMatch(/^Share of errors in catch-all types/);
   });
 
+  it("shows a share under 1% with one decimal, not 0%", async () => {
+    // One catch-all among 206 errors in range: 0.485%.
+    const base = fixture.errors[0]!;
+    stubErrors(withErrors([...fixture.errors, ...Array.from({ length: 199 }, (_, i) => ({ ...base, id: `x${i}`, c: "x" })), { ...base, id: "o1", c: "other" }]));
+    await page();
+    expect(document.getElementById("uncat")?.textContent).toBe("Uncategorized: 0.5% of errors");
+  });
+
+  it("hides the line when the view has no errors", async () => {
+    stubErrors(withErrors([]));
+    render(<ErrorsPage />);
+    await screen.findByRole("heading", { level: 1, name: /No failed tool calls/ });
+    expect(document.getElementById("uncat")).toBeNull();
+  });
+
+  it("folds the line on a phone with the rest of the summary, and More summary controls it", async () => {
+    await page();
+    const line = document.getElementById("uncat")!, more = document.getElementById("moreSum")!;
+    expect(line.className).toBe("sub folded");
+    const controls = more.getAttribute("aria-controls")!.split(" ");
+    expect(controls).toEqual(["kpis", "gen", "uncat"]);
+    for (const id of controls) expect(document.getElementById(id)).not.toBeNull();
+    await userEvent.click(more);
+    expect(line.className).toBe("sub folded open");
+    expect(more.getAttribute("aria-expanded")).toBe("true");
+  });
+
   it("splits the uncategorized share by source, and narrows to one source without the split", async () => {
     // t07 (Codex) becomes MCP tool error, t01 (Claude) Other: 2 of the 6 errors in range are catch-alls.
     const codexIds = new Set(["t07", "t08"]);
@@ -137,11 +174,19 @@ describe("ErrorsPage", () => {
   });
 
   it("filters with the page's own hash keys and pushes them", async () => {
+    // Two catch-all subagent errors and one noise error on top of the fixture's six: the share counts only what the filters keep.
+    const base = fixture.errors[0]!;
+    stubErrors(withErrors([...fixture.errors, { ...base, id: "s1", c: "other", sub: 1 }, { ...base, id: "s2", c: "mcp", sub: 1 }, { ...base, id: "n1", c: "user_denied" }]));
     await page();
+    const uncat = () => document.getElementById("uncat")?.textContent;
+    expect(uncat()).toBe("Uncategorized: 22% of errors"); // 2 of 9
+
     const n = history.length;
     await userEvent.click(screen.getByRole("button", { name: "Week" }));
-    await userEvent.click(screen.getByRole("checkbox", { name: /subagents/ }));
     await userEvent.click(screen.getByRole("checkbox", { name: /Hide noise/ }));
+    expect(uncat()).toBe("Uncategorized: 25% of errors"); // noise out of the denominator: 2 of 8
+    await userEvent.click(screen.getByRole("checkbox", { name: /subagents/ }));
+    expect(uncat()).toBe("Uncategorized: 0% of errors"); // subagent catch-alls out of both: 0 of 6
     expect(location.hash).toBe("#range=30&sub=0&noise=0&gran=week");
     expect(history.length).toBe(n + 3);
   });
