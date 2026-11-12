@@ -8,7 +8,8 @@ const KEYS = ["project", "range", "source", "sub", "noise", "gran", "cat", "ex",
 export const FIXES_KEY = "claude-errors-fixes", VIEW_KEY = "claude-errors-view", MODE_KEY = "claude-errors-mode";
 /** What claude-errors-view holds. */
 export interface SavedView { project?: string; range?: number; source?: string; gran?: string; sub?: boolean; noise?: boolean; cat?: string | null }
-export type Mode = "inc" | "flat";
+/** The detail's list: incidents, every error newest first, or the errors grouped by message. */
+export type Mode = "inc" | "flat" | "msg";
 
 export const store = {
   get<T>(k: string, d: T): T { try { const v = localStorage.getItem(k); return v ? (JSON.parse(v) as T) : d; } catch { return d; } },
@@ -20,7 +21,7 @@ export const loadFixes = (): Fixes => {
   return f && typeof f === "object" && !Array.isArray(f)
     ? Object.fromEntries(Object.entries(f).filter((x): x is [string, string] => typeof x[1] === "string")) : {};
 };
-export const loadMode = (): Mode => (store.get<string>(MODE_KEY, "inc") === "flat" ? "flat" : "inc");
+export const loadMode = (): Mode => { const m = store.get<string>(MODE_KEY, "inc"); return m === "flat" || m === "msg" ? m : "inc"; };
 
 const isRange = (n: number): n is Range => (RANGES as readonly number[]).includes(n);
 export const DEFAULT_VIEW: View = { project: "", source: "", range: 30, gran: "day", sub: true, noise: false, cat: null, focus: null, at: null, tool: null };

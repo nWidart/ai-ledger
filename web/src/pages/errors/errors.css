@@ -217,6 +217,13 @@
 .pg-errors .recov { margin-top: 6px; padding: 8px 10px; border-radius: 8px; background: var(--good-soft); font-size: 13px; }
 .pg-errors .recov.none { background: var(--surface-2); color: var(--text-secondary); }
 .pg-errors .recov code { display: block; white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; background: var(--surface-1); border-radius: 6px; padding: 6px 8px; margin-top: 6px; }
+/* By message: a message row is an incident row whose text is the message, with the copy button beside it. */
+.pg-errors .msg-row { display: flex; align-items: flex-start; gap: 4px; }
+.pg-errors .msg-h { flex: 1; min-width: 0; }
+.pg-errors .msg-h .lbl { min-width: 0; font: 12px/1.4 ui-monospace, "SF Mono", Menlo, monospace; overflow-wrap: anywhere; }
+.pg-errors .msg-h .shr { font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.pg-errors .msgcopy { flex: none; margin-top: 9px; font-size: 11px; padding: 1px 7px; border-radius: 6px; }
+.pg-errors .msgmore { display: block; width: 100%; margin-top: 8px; }
 .pg-errors .exmode { margin: 8px 0 0; }
 .pg-errors .exmode button { font-size: 12px; padding: 3px 10px; }
 .pg-errors .fixout { font-size: 13px; margin: 0 0 12px; }

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import fixture from "../../__fixtures__/errors";
 import type { ErrorsPayload } from "../../api";
 import {
-  beforeAfter, breakdown, bucketLabel, bucketOf, buckets, byWeight, change, chartData, compare, emptyTypes, exList, filtered, inBucket, incidentsOf, inTool, incSummary, makeModel, midDay, pointText,
+  applyRules, beforeAfter, breakdown, bucketLabel, bucketOf, buckets, byWeight, change, chartData, compare, emptyTypes, exList, filtered, inBucket, incidentsOf, inTool, incSummary, makeModel, messageOf, midDay, msgGroups, msgList, normalize, pointText,
   rangeStart, series, settle, summary, timeLost, typeColors, typeRows, uncategorized, viewTypes, whereToStart, withMuted, errorDays, type Err, type View,
 } from "./model";
 import { lostPayload } from "./lostData";
@@ -498,6 +498,187 @@ describe("hash and storage", () => {
     expect(loadMode()).toBe("inc");
     localStorage.setItem("claude-errors-fixes", "[1]");
     expect(loadFixes()).toEqual({});
+  });
+});
+
+describe("normalized messages", () => {
+  const key = (t: string) => normalize(t).key;
+  it("takes the first non-empty line, and leaves the rest", () => {
+    expect(key("\n\n  boom here  \nsecond line\nthird")).toBe("boom here");
+    expect(key("fatal: not a git repository\nExit code 128")).toBe("fatal: not a git repository");
+  });
+  it("adds the next line when the first is only a wrapper", () => {
+    expect(key("Exit code 1\nzsh: command not found: pnpm\nmore")).toBe("Exit code <n> zsh: command not found: pnpm");
+    expect(key("Error:\n  Something broke\nmore")).toBe("Error: Something broke");
+    expect(key("<tool_use_error>\nFile is too large")).toBe("<tool_use_error> File is too large");
+    expect(key("Error\n\nbad things")).toBe("Error bad things");
+    expect(key("Exit code 2")).toBe("Exit code <n>"); // nothing to add
+    expect(key("Error: bad things\nsecond")).toBe("Error: bad things"); // a first line with a message is not a wrapper
+  });
+  it("replaces absolute, home and dot paths", () => {
+    expect(key("ENOENT: no such file or directory, open '/Users/me/app/src/a.ts'")).toBe("ENOENT: no such file or directory, open '<path>'");
+    expect(key("cat ~/notes/x.md ./a ../b/c /tmp")).toBe("cat <path> <path> <path> <path>");
+    expect(key("Cannot read /tmp/x/y.")).toBe("Cannot read <path>."); // the sentence's dot stays out of the path
+    expect(key("failed at /usr/lib/x.so:12:5")).toBe("failed at <path>:<n>");
+  });
+  it("replaces relative paths with a slash pair or an extension, and leaves prose and URLs", () => {
+    expect(key("Cannot find src/components/Foo.tsx(12,5)")).toBe("Cannot find <path>(<n>)");
+    expect(key("no such file: web/main.ts")).toBe("no such file: <path>");
+    expect(key("no such dir a/b/c")).toBe("no such dir <path>");
+    expect(key("read and/or write via stdin/stdout, 3/4 done")).toBe("read and/or write via stdin/stdout, <n>/<n> done");
+    expect(key("GET https://example.com/a/b.js failed")).toBe("GET https://example.com/a/b.js failed");
+  });
+  it("replaces UUIDs, tool-use ids and long hex with <id>", () => {
+    expect(key("session 3f2a9c1e-7b4d-4e8a-9c0d-1a2b3c4d5e6f not found")).toBe("session <id> not found");
+    expect(key("tool_use_id toolu_01AbCdEfGhIjKlMn and call_Abc12345xyz missing")).toBe("tool_use_id <id> and <id> missing");
+    expect(key("commit 9fceb02d at 0x7ffd5c3a1b")).toBe("commit <id> at <id>");
+    expect(key("a deadbeef and decade word")).toBe("a deadbeef and decade word"); // hex letters only: a word
+    expect(key("pid 12345678")).toBe("pid <n>"); // digits only: a number
+    expect(key("abcde1 is short")).toBe("abcde1 is short"); // under 7 characters is not an id, and the digit of a word is no number
+  });
+  it("replaces numbers, with their line:col, clock and decimal parts, and keeps the digits of words", () => {
+    expect(key("Timed out after 30s at 10:01:02 on port 8080 (line 12:5), 2.5GB, 1,234 B, 0x1f")).toBe("Timed out after <n>s at <n> on port <n> (line <n>), <n>GB, <n> B, <n>");
+    expect(key("utf8 sha256 E2BIG python3 x86_64")).toBe("utf8 sha256 E2BIG python3 x86_64");
+  });
+  it("shortens quoted strings over 40 characters only", () => {
+    const q40 = "a".repeat(40), q41 = "a".repeat(41);
+    expect(key(`grep "${q40}" failed`)).toBe(`grep "${q40}" failed`);
+    expect(key(`grep "${q41}" failed`)).toBe('grep "<…>" failed');
+    expect(key(`run '${q41}' and \`${q41}\``)).toBe("run '<…>' and `<…>`");
+    expect(key("unknown option '--force', command not found: 'pnpm'")).toBe("unknown option '--force', command not found: 'pnpm'");
+    expect(key("can't find 'x' and don't know why")).toBe("can't find 'x' and don't know why"); // an apostrophe inside a word is no quote
+    expect(key(`the "${"b".repeat(60)} 1234" ends`)).toBe('the "<…>" ends'); // what is inside a long quote goes with it
+  });
+  it("replaces a quoted path whole, whatever its length, spaces or characters, and Windows paths", () => {
+    const same = (a: string, b: string, k: string) => { expect(key(a)).toBe(k); expect(key(b)).toBe(k); };
+    same("ENOENT 'C:\\Users\\alice\\a.ts'", "ENOENT 'C:\\Users\\bob\\b.ts'", "ENOENT '<path>'");
+    same("ENOENT '/tmp/My Project/a.ts'", "ENOENT '/tmp/Other Project/a.ts'", "ENOENT '<path>'");
+    same("ENOENT '/short/a.ts'", "ENOENT '/abcdefghijklmnopqrstuvwxyz/abcdefghijklmnop/a.ts'", "ENOENT '<path>'"); // not "<…>" for the long one
+    expect(key('open "~/Documents/été 2026/x.md"')).toBe('open "<path>"');
+    expect(key("open `../up one/y.md` too")).toBe("open `<path>` too");
+  });
+  it("keeps a short quoted token that is no path", () => {
+    expect(key("unknown option '--flag', 'npm' and '/'")).toBe("unknown option '--flag', 'npm' and '/'");
+    expect(key("split on '..' and \"./\"")).toBe("split on '..' and \"./\"");
+  });
+  it("replaces an unquoted Windows path, and a POSIX path with Unicode letters", () => {
+    expect(key("cannot open C:\\Users\\alice\\app\\a.ts.")).toBe("cannot open <path>.");
+    expect(key("cannot open C:\\Users\\alice\\app\\a.ts")).toBe(key("cannot open D:\\work\\b.ts"));
+    expect(key("cannot open C:/Users/alice/a.ts")).toBe("cannot open <path>");
+    expect(key("open /tmp/日本語/ファイル.ts")).toBe(key("open /tmp/中文/x.ts"));
+    expect(key("open /tmp/日本語/ファイル.ts")).toBe("open <path>");
+    expect(key("open src/café/été.ts")).toBe("open <path>");
+    expect(key("fetch s://x/y and a:b")).toBe("fetch s://x/y and a:b"); // a scheme is no drive letter
+  });
+  it("leaves an unquoted path with spaces: it can't be told from prose", () => {
+    expect(key("open /tmp/My Project/a.ts")).toBe("open <path> <path>"); // "/tmp/My" and "Project/a.ts"
+  });
+  it("replaces ISO date-times and dates", () => {
+    expect(key("Failed at 2026-11-04T10:01:02.000Z")).toBe("Failed at <n>");
+    expect(key("Failed at 2026-11-04T10:01:02.000Z")).toBe(key("Failed at 2026-11-04T11:01:02.000Z"));
+    expect(key("at 2026-11-04 10:01:02+01:00 and 2026-11-04T10:01Z and 2026-11-04T10:01:02,5")).toBe("at <n> and <n> and <n>");
+    expect(key("on 2026-11-04 it broke")).toBe("on <n> it broke");
+    // Not a date: no month 13 or day 32, and no date glued to letters or more digits, so a number rule decides as before.
+    expect(key("Invalid version 2026-99-99")).toBe("Invalid version <n>-<n>-<n>");
+    expect(key("Invalid version 2026-99-99")).not.toBe(key("Invalid version 5"));
+    expect(key("Invalid version 2026-11-04beta")).toBe("Invalid version <n>-<n>-<n>beta");
+    expect(key("Invalid version 2026-11-04beta")).not.toBe(key("Invalid version 5beta"));
+    expect(key("x 2026-00-10 y 2026-13-01 z 2026-02-32 w 2026-11-04-1 v 2026-11-041")).toBe("x <n>-<n>-<n> y <n>-<n>-<n> z <n>-<n>-<n> w <n>-<n>-<n>-<n> v <n>-<n>-<n>");
+    expect(key("t 2026-11-04T25:61 u")).toBe("t <n>-<n>-<n>T25:<n> u"); // an impossible time is no date-time either
+  });
+  it("replaces prefixed ids, and keeps ordinary identifiers", () => {
+    expect(key("Unknown session sess_Abc12345")).toBe("Unknown session <id>");
+    expect(key("Unknown session sess_Abc12345")).toBe(key("Unknown session sess_Def67890"));
+    expect(key("chatcmpl-9AbCdEf1234 and msg_01XyZ9876543 and req_abc12345def")).toBe("<id> and <id> and <id>");
+    expect(key("agent-a1b2c3d4e5 lost")).toBe("<id> lost");
+    for (const w of ["old_string", "tool_use_error", "no_such_file", "utf_8", "max-retries", "file_path2", "read_only_1"]) expect(key(`bad ${w} here`)).toBe(`bad ${w} here`);
+    expect(key("sess_abcdefgh")).toBe("sess_abcdefgh"); // letters only: a word
+    expect(key("sess_12345678")).toBe("sess_12345678"); // digits only: no id, and no number either (digits after "_" belong to the word)
+  });
+  it("costs linear time on adversarial lines: 8x the length costs well under 20x", () => {
+    // Shapes that make a rule rescan: runs of one character a segment can hold, with a failing end. Each is cut to length n.
+    const shapes: ((n: number) => string)[] = [n => "C:\\" + ".".repeat(n - 4) + "a", n => "a/" + ".".repeat(n - 3) + "a", n => "/" + ".".repeat(n - 2) + "a",
+      ...["/", "/.", "~/", "'/", "\"/a\"b", "'/ '", "`", "C:\\", "C:/", "0", "a0", "a-", "a_", "1.", "1:", "2026-11-04T", "0x", "x/", "日/", "a'", "toolu_", "1-", "a.", "\\"]
+        .map(u => (n: number) => u.repeat(Math.ceil(n / u.length)).slice(0, n)),
+      n => ("'/" + "a ".repeat(10)).repeat(Math.ceil(n / 22)).slice(0, n), n => ("1" + "a").repeat(n / 2), n => "/".repeat(n - 1) + "a", n => "a".repeat(n - 1) + "/"];
+    // Per-call cost, best of several samples (CI noise only adds time), at the cap (700) and at 8x it.
+    const cost = (line: string, reps: number) => {
+      let best = Infinity;
+      for (let k = 0; k < 7; k++) { const t = performance.now(); for (let r = 0; r < reps; r++) applyRules(line); best = Math.min(best, (performance.now() - t) / reps); }
+      return best;
+    };
+    for (const [i, shape] of shapes.entries()) {
+      const short = cost(shape(700), 40), long = cost(shape(5600), 5);
+      expect(long / Math.max(short, 0.005), `shape ${i}: ${JSON.stringify(shape(12))}…`).toBeLessThan(20);
+    }
+  });
+  it("normalizes only the first 700 characters, so a huge text costs no more", () => {
+    expect(normalize("a ".repeat(2000) + "/x/y/z").key).toBe(normalize("a ".repeat(350)).key);
+  });
+  it("collapses whitespace", () => {
+    expect(key("a   b\t c ")).toBe("a b c");
+  });
+  it("names an empty text, and cuts a long label but not its key", () => {
+    expect(normalize("")).toEqual({ key: "(no error text)", label: "(no error text)" });
+    expect(normalize(" \n  \n")).toEqual({ key: "(no error text)", label: "(no error text)" });
+    const n = normalize("word ".repeat(100));
+    expect(n.key).toBe("word ".repeat(100).trim());
+    expect(n.label).toBe(n.key.slice(0, 119) + "…");
+    expect(n.label).toHaveLength(120);
+    expect(normalize("short").label).toBe("short");
+  });
+  it("makes one group of messages that differ only by detail, and keeps different messages apart", () => {
+    expect(key("ENOENT open '/a/b/one.ts' after 3 tries (toolu_01AbCdEfGhIjKlMn)")).toBe(key("ENOENT open '/c/d/two.ts' after 12 tries (toolu_99ZyXwVuTsRqPoNm)"));
+    expect(key("Exit code 1\nnpm ERR! code 127")).toBe(key("Exit code 2\nnpm ERR! code 1"));
+    expect(key("command not found: pnpm")).not.toBe(key("command not found: yarn")); // a short quoted or bare token is the message
+    expect(key("command not found: 'pnpm'")).not.toBe(key("command not found: 'yarn'"));
+    expect(key("File not found")).not.toBe(key("File too large"));
+  });
+  it("is computed once per error", () => {
+    const e = { ...m.errors[0]!, e: "boom 12" };
+    expect(messageOf(e)).toBe(messageOf(e));
+    expect(messageOf(e).key).toBe("boom <n>");
+    expect(messageOf({ ...e })).not.toBe(messageOf(e)); // another error is its own entry
+  });
+});
+
+describe("message groups", () => {
+  const E = (id: string, e: string, o: Partial<Err> = {}): Err => ({ ...m.errors[0]!, id, e, ts: `2026-11-04T10:${id.slice(1).padStart(2, "0")}:00.000Z`, ...o });
+  // Oldest first, the order the model holds them in. "a" has three errors, "b", "c" and the empty text one each.
+  const errs = [E("e1", "a 1", { t: "Edit", p: "foo" }), E("e2", "b 1"), E("e3", "a 2", { t: "Bash", p: "bar" }), E("e4", "a 3", { t: "Edit", p: "foo" }), E("e5", "c 1"), E("e6", "")];
+  it("lists the biggest group first, then the most recent on a tie", () => {
+    expect(msgGroups(errs).map(g => [g.key, g.n])).toEqual([["a <n>", 3], ["(no error text)", 1], ["c <n>", 1], ["b <n>", 1]]);
+  });
+  it("holds each group's errors newest first, whatever the input order", () => {
+    expect(msgGroups(errs.slice().reverse())[0]!.errs.map(e => e.id)).toEqual(["e4", "e3", "e1"]);
+    expect(msgGroups(errs)[0]!.errs.map(e => e.id)).toEqual(["e4", "e3", "e1"]);
+  });
+  it("gives each row its share, projects, tools and newest time", () => {
+    expect(msgGroups(errs)[0]).toMatchObject({ n: 3, share: 0.5, last: errs[3]!.ts, projects: 2, tools: [["Edit", 2], ["Bash", 1]], label: "a <n>" });
+    expect(msgGroups(errs)[1]).toMatchObject({ share: 1 / 6, projects: 1 });
+  });
+  it("orders a group's tools by count, then by name", () => {
+    const g = msgGroups([E("e1", "z", { t: "Write" }), E("e2", "z", { t: "Bash" }), E("e3", "z", { t: "Edit" }), E("e4", "z", { t: "Edit" })])[0]!;
+    expect(g.tools).toEqual([["Edit", 2], ["Bash", 1], ["Write", 1]]);
+  });
+  it("makes no group of no errors", () => {
+    expect(msgGroups([])).toEqual([]);
+    expect(msgList([], "", undefined).count).toBe("0 messages in range, most errors first");
+  });
+  it("counts and words the list, and filters it by a matching example", () => {
+    const g = msgGroups(errs);
+    expect(msgList(g, "", undefined).count).toBe("4 messages in range, most errors first");
+    expect(msgList(g.slice(0, 1), "", undefined, "day").count).toBe("1 message in day, most errors first");
+    const l = msgList(g, "bash", undefined); // only a's example from the Bash tool matches
+    expect(l.count).toBe("1 of 4 match");
+    expect(l.items[0]).toMatchObject({ key: "a <n>", share: 0.5 }); // the search leaves the share alone
+    expect((l.items as { key: string }[]).map(x => x.key)).toEqual(["a <n>"]);
+    expect(msgList(g, "nothing like it", undefined)).toMatchObject({ items: [], count: "0 of 4 match" });
+  });
+  it("puts the linked example's group first", () => {
+    const g = msgGroups(errs);
+    expect((msgList(g, "", errs[1]).items as { key: string }[]).map(x => x.key)).toEqual(["b <n>", "a <n>", "(no error text)", "c <n>"]);
+    expect((msgList(g, "", errs[0]).items as { key: string }[])[0]!.key).toBe("a <n>");
   });
 });
 
