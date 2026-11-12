@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
 import { limitsUrl, limitWindowUrl, viewOf, type LimitHistoryRow, type LimitsPayload, type LimitWindow, type LimitWindowCurve, type View, type WindowUsedRow } from "../../api";
 import { Drawer } from "../../components/Drawer";
 import { Filters, viewName } from "../../components/Filters";
@@ -111,11 +111,27 @@ function HistoryStrip({ strip, selected, onPick, refs }: { strip: Strip; selecte
   // The window last focused, by identity: a refresh can add a window and drop the oldest, and an index would then name a neighbour.
   const [active, setActive] = useState<string | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
-  useLayoutEffect(() => { const el = scroller.current; if (el) el.scrollLeft = el.scrollWidth; }, []); // a strip too wide for its box opens on the newest bars
+  // A strip too wide for its box opens on its newest bars. The drawer can be closed at mount (a hidden box has no width to
+  // scroll), so the scroll waits for the box to get one, once; the user's own scroll, focus or key press settles it first.
+  const settled = useRef(false);
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el) return;
+    const watch = new ResizeObserver(() => {
+      if (settled.current || !el.clientWidth) return;
+      settled.current = true;
+      el.scrollLeft = el.scrollWidth;
+      watch.disconnect();
+    });
+    watch.observe(el);
+    return () => watch.disconnect();
+  }, []);
+  const settle = () => { settled.current = true; };
   // The one tab stop: the bar last focused, else the picked one, else the newest.
   const at = (key: string | null) => (key == null ? -1 : bars.findIndex(h => barKey(h) === key));
   const stop = [at(active), at(selected), bars.length - 1].find(i => i >= 0)!;
   const onKey = (ev: KeyboardEvent) => {
+    settle();
     if (ev.altKey || ev.ctrlKey || ev.metaKey || ev.shiftKey) return; // Alt+Left is history: not ours
     const to = ev.key === "ArrowLeft" ? stop - 1 : ev.key === "ArrowRight" ? stop + 1 : ev.key === "Home" ? 0 : ev.key === "End" ? bars.length - 1 : null;
     if (to == null) return;
@@ -127,7 +143,7 @@ function HistoryStrip({ strip, selected, onPick, refs }: { strip: Strip; selecte
   return (
     <div className="hs-row">
       <div className="hs-name">{strip.name}</div>
-      <div className="hs-bars" ref={scroller} role="group" aria-label={`${strip.name}, past windows, oldest first. Left and Right arrow keys move between them.`} onKeyDown={onKey}>
+      <div className="hs-bars" ref={scroller} onPointerDown={settle} onWheel={settle} onTouchStart={settle} onFocus={settle} role="group" aria-label={`${strip.name}, past windows, oldest first. Left and Right arrow keys move between them.`} onKeyDown={onKey}>
         {bars.map((h, i) => {
           const key = barKey(h), name = barName(h);
           return <button key={key} type="button" className={"hs-bar" + (h.hit ? " hit" : "") + (h.early ? " early" : "") + (h.estimated ? " est" : "")}

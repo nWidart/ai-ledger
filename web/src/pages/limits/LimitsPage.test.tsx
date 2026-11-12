@@ -1,4 +1,4 @@
-import { act, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { LimitHistoryRow, LimitWindow, LimitWindowCurve, LimitsPayload } from "../../api";
@@ -571,27 +571,85 @@ describe("past windows strips", () => {
     expect(vi.mocked(f).mock.calls.at(-1)![0]).toContain(`limit_id=${other.limit_id}`);
   });
 
-  it("scrolls inside its own box: it opens on the newest bars, and keyboard movement brings the focused bar into view", async () => {
-    const width = vi.spyOn(HTMLElement.prototype, "scrollWidth", "get").mockReturnValue(480);
-    const left = vi.spyOn(Element.prototype, "scrollLeft", "set");
+  // jsdom has no layout: a ResizeObserver that holds its callbacks, and a box width the test sets.
+  const resizes = () => {
+    const seen: (() => void)[] = [];
+    vi.stubGlobal("ResizeObserver", class { constructor(private cb: () => void) {} observe() { seen.push(this.cb); } unobserve() {} disconnect() {} });
+    return { fire: () => seen.forEach(f => f()) };
+  };
+  const fiveBars = Array.from({ length: 5 }, (_, i) => ({ ...early, start: `2026-01-0${i + 1}T00:00:00.000Z`, closed_at: `2026-01-0${i + 2}T00:00:00.000Z` }));
+
+  it("scrolls inside its own box, and brings the focused bar into view on keyboard movement", async () => {
+    vi.spyOn(HTMLElement.prototype, "scrollWidth", "get").mockReturnValue(480);
+    vi.spyOn(Element.prototype, "clientWidth", "get").mockReturnValue(300);
     const into = vi.fn<() => void>();
     Element.prototype.scrollIntoView = into;
     try {
-      const many = Array.from({ length: 5 }, (_, i) => ({ ...early, start: `2026-01-0${i + 1}T00:00:00.000Z`, closed_at: `2026-01-0${i + 2}T00:00:00.000Z` }));
-      showCurve({ ...fixture, history: many });
+      showCurve({ ...fixture, history: fiveBars });
       await lede();
       const group = hist().getByRole("group", { name: /past windows/ });
       expect(group.className).toBe("hs-bars"); // the box that scrolls (limits.css: overflow-x)
-      expect(left).toHaveBeenCalledWith(480); // scrolled to its right end
       act(() => within(group).getAllByRole("button")[4]!.focus());
       into.mockClear();
       await userEvent.keyboard("{ArrowLeft}");
       expect(into).toHaveBeenCalledTimes(1);
       expect(into.mock.contexts[0]).toBe(within(group).getAllByRole("button")[3]);
     } finally {
-      width.mockRestore();
       delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
     }
+  });
+
+  it("opens on the newest bars once its box has a width, even when the drawer was closed at mount", async () => {
+    vi.spyOn(HTMLElement.prototype, "scrollWidth", "get").mockReturnValue(480);
+    const width = vi.spyOn(Element.prototype, "clientWidth", "get").mockReturnValue(0); // hidden inside the closed drawer
+    const left = vi.spyOn(Element.prototype, "scrollLeft", "set");
+    const box = resizes();
+    showCurve({ ...fixture, history: fiveBars });
+    await lede();
+    box.fire();
+    expect(left).not.toHaveBeenCalled(); // no width yet: nothing to scroll
+    width.mockReturnValue(300); // the drawer opens
+    box.fire();
+    expect(left).toHaveBeenCalledExactlyOnceWith(480);
+    box.fire();
+    expect(left).toHaveBeenCalledTimes(1); // once
+  });
+
+  it.each([
+    ["scrolled", (g: HTMLElement) => { fireEvent.wheel(g); }],
+    ["touched", (g: HTMLElement) => { fireEvent.touchStart(g); }],
+    ["moved focus into it", (g: HTMLElement) => { act(() => within(g).getAllByRole("button")[2]!.focus()); }],
+    ["pressed a key in it", (g: HTMLElement) => { fireEvent.keyDown(g, { key: "ArrowLeft" }); }],
+  ])("does not pull a strip to its end once the user %s, even before its box had a width", async (_, act1) => {
+    vi.spyOn(HTMLElement.prototype, "scrollWidth", "get").mockReturnValue(480);
+    const width = vi.spyOn(Element.prototype, "clientWidth", "get").mockReturnValue(0);
+    const left = vi.spyOn(Element.prototype, "scrollLeft", "set");
+    const box = resizes();
+    showCurve({ ...fixture, history: fiveBars });
+    await lede();
+    act1(hist().getByRole("group", { name: /past windows/ }));
+    width.mockReturnValue(300); // the drawer opens
+    box.fire();
+    expect(left).not.toHaveBeenCalled();
+  });
+
+  it("does not scroll again when a refresh follows the first scroll", async () => {
+    vi.spyOn(HTMLElement.prototype, "scrollWidth", "get").mockReturnValue(480);
+    vi.spyOn(Element.prototype, "clientWidth", "get").mockReturnValue(300);
+    const left = vi.spyOn(Element.prototype, "scrollLeft", "set");
+    const box = resizes();
+    let shown = fiveBars;
+    mockApi({ "/api/limits": () => ({ ...fixture, history: shown }), "/api/limits/window": () => curve });
+    history.replaceState(null, "", "/limits#range=30");
+    render(<LimitsPage />);
+    await lede();
+    box.fire();
+    expect(left).toHaveBeenCalledTimes(1);
+    shown = [...fiveBars, { ...early, start: "2026-01-06T00:00:00.000Z", closed_at: "2026-01-07T00:00:00.000Z" }];
+    act(() => clearApiCache());
+    await hist().findByRole("button", { name: barName(shown[5]!) });
+    box.fire();
+    expect(left).toHaveBeenCalledTimes(1);
   });
 
   it("keeps roving focus on the window, not its place, when a refresh adds a window and drops the oldest", async () => {
