@@ -5,6 +5,8 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-12
+
 Run `ai-ledger rebuild` once after upgrading (with the app stopped): error types, test runs, Codex tool timing and fast-mode speed are stored when transcripts are read.
 
 ### Added
@@ -116,6 +118,7 @@ First release on PyPI.
   `$XDG_DATA_HOME/ai-ledger/` (or `~/.local/share/ai-ledger/`) elsewhere. A source checkout's `data/ai-ledger.duckdb`
   moves there on the first start.
 
+[0.2.0]: https://github.com/nWidart/ai-ledger/releases/tag/v0.2.0
 [0.1.3]: https://github.com/nWidart/ai-ledger/releases/tag/v0.1.3
 [0.1.2]: https://github.com/nWidart/ai-ledger/releases/tag/v0.1.2
 [0.1.1]: https://github.com/nWidart/ai-ledger/releases/tag/v0.1.1
