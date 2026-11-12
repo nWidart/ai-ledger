@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import type { UsagePayload } from "../../api";
 import { useColors } from "../../colors";
 import { dayAxis, peakLabelAt, tipAt, useWidth } from "../../components/chart";
@@ -71,9 +71,18 @@ export function CostChart({ d, metric, onMetric, hidden, onHidden, onProject, on
 
   // Parts in stack order, top first, as the eye reads the bar; zero parts left out.
   const parts = (p: CostDay) => kinds.slice().reverse().filter(k => (p.v[k.k] ?? 0) > 0);
+  // Other's projects of a day: the top three by cost, and how many more follow.
+  const topOther = (p: CostDay) => (p.other ?? []).slice(0, 3);
+  const moreOther = (p: CostDay) => (p.other?.length ?? 0) - 3;
+  const otherSr = (p: CostDay) => {
+    const items = topOther(p).map(o => `${o.project} ${usd(o.cost)}`);
+    if (moreOther(p) > 0) items.push(`and ${moreOther(p)} more`);
+    return items.join(", ");
+  };
+  const partText = (p: CostDay, k: Kind) => `${k.label} ${usd(p.v[k.k])}${k.k === "p:" && p.other?.length ? ` (${otherSr(p)})` : ""}`;
   const avgText = (i: number) => (showAvg && avg[i] != null ? `7-day average ${fy(avg[i])}` : "");
   const text = (p: CostDay, i: number) => (cost
-    ? `${usd(p.cost)} estimated${parts(p).length > 1 ? ": " + parts(p).map(k => `${k.label} ${usd(p.v[k.k])}`).join(", ") : ""}${p.unpriced ? `, ${p.unpriced} unpriced requests` : ""}`
+    ? `${usd(p.cost)} estimated${parts(p).length > 1 || p.other?.length ? ": " + parts(p).map(k => partText(p, k)).join(", ") : ""}${p.unpriced ? `, ${p.unpriced} unpriced requests` : ""}`
     : kinds.map(k => `${k.label} ${big(p.v[k.k])}`).join(", ") + `, total ${big(total(p))}`) + (avgText(i) ? `. ${avgText(i)}` : "");
   const cur = at ? pts[at.i] : undefined;
   const what = cost ? (d.project ? "Estimated cost" : "Estimated cost by project") : "Tokens by kind";
@@ -143,7 +152,10 @@ export function CostChart({ d, metric, onMetric, hidden, onHidden, onProject, on
         <div className="tip" ref={tip} role="tooltip" style={{ display: cur ? "block" : "none" }}>{cur && at && <>
           <div className="muted">{dayLabel(cur.day, true)}</div>
           {cost ? <>
-            {parts(cur).map(k => <Row key={k.k} k={k} v={usd(cur.v[k.k])} />)}
+            {parts(cur).map(k => <Fragment key={k.k}><Row k={k} v={usd(cur.v[k.k])} />
+              {k.k === "p:" && topOther(cur).map(o => <div key={o.project} className="row sub"><span>{o.project}</span><span>{usd(o.cost)}</span></div>)}
+              {k.k === "p:" && moreOther(cur) > 0 && <div className="row sub"><span>{`+ ${moreOther(cur)} more`}</span></div>}
+            </Fragment>)}
             <div className={"row" + (parts(cur).length ? " tot" : "")}><span>Total</span><b>{usd(cur.cost)}</b></div>
             {cur.unpriced > 0 && <div className="muted">{cur.unpriced} unpriced requests</div>}
           </> : <>

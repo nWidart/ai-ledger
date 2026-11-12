@@ -14,27 +14,32 @@ export const KINDS: Kind[] = [
   { k: "cache_1h", label: "Cache write 1h", c: "var(--series-6)" },
 ];
 
-/** One day of the view: its cost, unpriced requests, and a value per series key (token kinds, plus the stacked projects). */
-export interface CostDay { day: string; cost: number; unpriced: number; v: Record<string, number> }
+/** One day of the view: its cost, unpriced requests, a value per series key (token kinds, plus the stacked projects), and
+ *  with Other stacked, the projects inside it, costliest first. */
+export interface CostDay { day: string; cost: number; unpriced: number; v: Record<string, number>; other?: { project: string; cost: number }[] }
 
 /** Every day of the view, with zeros for idle days. tops: the stacked projects; Other ("p:") takes the remainder of the
- *  day's cost, never below zero from rounding. */
+ *  day's cost, never below zero from rounding, and lists the projects inside it. */
 export function costDays(d: Pick<UsagePayload, "start" | "end" | "daily" | "daily_projects">, tops: readonly Kind[] = []): CostDay[] {
   const have = new Map(d.daily.map(r => [r.day, r])), byDay = new Map<string, Map<string, number>>();
   for (const r of d.daily_projects) {
     if (!byDay.has(r.day)) byDay.set(r.day, new Map());
     byDay.get(r.day)!.set(r.project ?? "", r.cost || 0);
   }
+  const named = new Set(tops.flatMap(t => (t.project ? [t.project] : [])));
   return dayRange(d.start || d.daily[0]?.day || d.end, d.end).map(day => {
     const r = have.get(day), pd = byDay.get(day), cost = r?.cost || 0;
     const v: Record<string, number> = {
       input: r?.input || 0, text_out: (r?.output || 0) - (r?.thinking || 0), thinking: r?.thinking || 0,
       cache_read: r?.cache_read || 0, cache_5m: r?.cache_5m || 0, cache_1h: r?.cache_1h || 0,
     };
-    let named = 0;
-    for (const t of tops) if (t.project) { v[t.k] = pd?.get(t.project) || 0; named += v[t.k]!; }
-    if (tops.some(t => t.k === "p:")) v["p:"] = Math.max(0, cost - named);
-    return { day, cost, unpriced: r?.unpriced || 0, v };
+    let sum = 0;
+    for (const t of tops) if (t.project) { v[t.k] = pd?.get(t.project) || 0; sum += v[t.k]!; }
+    if (!tops.some(t => t.k === "p:")) return { day, cost, unpriced: r?.unpriced || 0, v };
+    v["p:"] = Math.max(0, cost - sum);
+    const other = [...(pd ?? [])].filter(([p, c]) => c > 0 && !named.has(p))
+      .sort((a, b) => b[1] - a[1]).map(([p, c]) => ({ project: p || "(no project)", cost: c }));
+    return { day, cost, unpriced: r?.unpriced || 0, v, other };
   });
 }
 
