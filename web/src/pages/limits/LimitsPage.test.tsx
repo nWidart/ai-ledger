@@ -7,8 +7,8 @@ import palette from "../../__fixtures__/palette";
 import { Palette } from "../../components/palette/Palette";
 import { openPalette } from "../../components/palette/store";
 import { mockApi } from "../../components/sheets/testing";
-import { num } from "../../format";
-import { caption, pace, span, whenDay, windowName } from "./limits";
+import { num, usd } from "../../format";
+import { caption, capText, pace, span, whenDay, windowName } from "./limits";
 import { LimitsPage } from "./LimitsPage";
 
 const fixture = limits as LimitsPayload;
@@ -52,6 +52,50 @@ describe("limit text", () => {
     expect(pace(hour, "2026-11-06T00:00:00.000Z").rate).toBe("usual pace 1.0% an hour; this window 55.0% an hour over its last 43m; 1.0% an hour would use it all");
     expect(pace(capped, fixture.now)).toEqual({ left: "0% left", reset: "6d 16h to reset", rate: null, verdict: null });
     expect(span(45 * 60000)).toBe("45m");
+  });
+});
+
+describe("cap in money", () => {
+  const cal = (calibration: LimitWindow["calibration"], window_minutes: number | null = 10080): LimitWindow => ({ ...codex, calibration, window_minutes });
+
+  it("states the cap in money, the period and the calibration behind it", () => {
+    expect(capText(cal({ per_pct: 4.2, points: 37, windows: 2 }))).toBe(`100% ≈ ${usd(420)} a week at list prices, from 37 points over 2 windows`);
+    expect(capText(cal({ per_pct: 0.05, points: 9.4, windows: 3 }, 300))).toBe(`100% ≈ ${usd(5)} per 5 hours at list prices, from 9 points over 3 windows`);
+    expect(capText(cal({ per_pct: 1, points: 40, windows: 4 }, null))).toBe(`100% ≈ ${usd(100)} a window at list prices, from 40 points over 4 windows`);
+  });
+
+  it("reads one window as one window, with no extra wording", () => {
+    expect(capText(cal({ per_pct: 2.5222, points: 90, windows: 1 }))).toBe(`100% ≈ ${usd(252.22)} a week at list prices, from 90 points over 1 window`);
+  });
+
+  it("names the period for daily, 30-day and other whole-hour windows", () => {
+    const text = (minutes: number) => capText(cal({ per_pct: 1, points: 10, windows: 2 }, minutes));
+    expect(text(1440)).toBe(`100% ≈ ${usd(100)} a day at list prices, from 10 points over 2 windows`);
+    expect(text(43200)).toBe(`100% ≈ ${usd(100)} per 30 days at list prices, from 10 points over 2 windows`);
+    expect(text(720)).toBe(`100% ≈ ${usd(100)} per 12 hours at list prices, from 10 points over 2 windows`);
+    expect(text(90)).toBe(`100% ≈ ${usd(100)} a window at list prices, from 10 points over 2 windows`);
+  });
+
+  it("has no line without a calibration", () => {
+    expect(capText({ ...codex, calibration: null })).toBeNull();
+  });
+
+  it("shows no cap line for a window at its limit that is not calibrated", async () => {
+    show({ ...fixture, windows: [{ ...capped, calibration: null }] });
+    await lede();
+    const card = screen.getByRole("region", { name: windowName(codex) });
+    expect(within(card).getByText(`At its limit until ${whenDay(codex.resets_at)}`)).toBeTruthy();
+    expect(card.querySelector(".cap-money")).toBeNull();
+  });
+
+  it("shows the line under the pace line of a calibrated card, and none on an uncalibrated one", async () => {
+    show(fixture);
+    await lede();
+    const calibrated = screen.getByRole("region", { name: "Claude Code weekly" });
+    const line = calibrated.querySelector(".cap-money")!;
+    expect(line.textContent).toBe(`100% ≈ ${usd(252.22)} a week at list prices, from 90 points over 1 window`);
+    expect(line.previousElementSibling!.classList.contains("pace")).toBe(true);
+    expect(screen.getByRole("region", { name: "Claude Code weekly · Fable" }).querySelector(".cap-money")).toBeNull();
   });
 });
 
