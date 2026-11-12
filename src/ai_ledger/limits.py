@@ -115,14 +115,15 @@ def parse_iso(s):
 
 
 def claude_limit(it):
-    """(kind, scope, minutes, resets_at, percent) of one item of the response's limits list; None for an item that is no limit."""
-    if not isinstance(it, dict) or not isinstance(it.get("percent"), (int, float)) or not isinstance(it.get("kind"), str) or not it["kind"]:
+    """(kind, scope, minutes, resets_at, percent) of one item of the response's limits list; None for an item that is no
+    limit. Any truthy kind is one, used as it is: snapshots keep what they always did for any response."""
+    if not isinstance(it, dict) or not isinstance(it.get("percent"), (int, float)) or not it.get("kind"):
         return None
     model = (it.get("scope") or {}).get("model") if isinstance(it.get("scope"), dict) else None
     model = model if isinstance(model, dict) else {}
-    group = it.get("group")
-    minutes = (GROUP_MINUTES.get(group) if isinstance(group, str) else None) or GROUP_MINUTES.get(it["kind"])
-    return it["kind"], model.get("display_name") or model.get("id") or "", minutes, it.get("resets_at"), it["percent"]
+    group, kind = it.get("group"), it["kind"]
+    minutes = (GROUP_MINUTES.get(group) if isinstance(group, str) else None) or (GROUP_MINUTES.get(kind) if isinstance(kind, str) else None)
+    return kind, model.get("display_name") or model.get("id") or "", minutes, it.get("resets_at"), it["percent"]
 
 
 def claude_rows(poll, observed_at):
@@ -160,8 +161,12 @@ def as_list(v):
 
 
 def utc_naive(s):
+    """A time as naive UTC, or None when it does not read (an offset that carries it past the year range included)."""
     d = parse_iso(s)
-    return d.astimezone(timezone.utc).replace(tzinfo=None) if d else None
+    try:
+        return d.astimezone(timezone.utc).replace(tzinfo=None) if d else None
+    except (OverflowError, ValueError):
+        return None
 
 
 def claude_extras(poll):
@@ -173,7 +178,9 @@ def claude_extras(poll):
     if not isinstance(body, dict):
         return None
     items = body.get("limits")
-    listed = [claude_limit(it) for it in items] if isinstance(items, list) else []  # by index: shares name a limit by its place
+    # By index: shares name a limit by its place. A limit the extras can match to a window has a text kind and scope.
+    listed = [lim if lim and isinstance(lim[0], str) and isinstance(lim[1], str) else None
+              for lim in map(claude_limit, items)] if isinstance(items, list) else []
     shares = []
     for sh in as_list(body.get("weekly_scoped_shares")):
         i = sh.get("limit_index") if isinstance(sh, dict) else None
@@ -645,7 +652,7 @@ def newest_extras(cur, provider):
     row = cur.execute("SELECT json FROM limit_polls WHERE provider = ? ORDER BY polled_at DESC LIMIT 1", [provider]).fetchone()
     try:
         return POLL_EXTRAS[provider](json.loads(row[0])) if row else None
-    except ValueError:
+    except Exception:  # optional data: whatever a provider's reader fails on, the page still loads
         return None
 
 

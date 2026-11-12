@@ -69,6 +69,22 @@ class ParseTest(unittest.TestCase):
         self.assertEqual(self.rows(dict(limits=[dict(kind="x")], tangelo=None, pace="fast")), [])
         self.assertEqual(self.rows(["not", "an", "object"]), [])
 
+    def test_any_truthy_kind_still_gives_its_snapshot(self):
+        # Snapshots keep what they always did: a kind that is no string is a limit, and stays as it is.
+        resets = "2026-11-08T05:00:00+00:00"
+        mixed = dict(limits=[dict(kind="weekly_all", group="weekly", percent=57, resets_at=resets),
+                             dict(kind=7, group="weekly", percent=30, resets_at=resets),
+                             dict(kind=0, group="weekly", percent=1, resets_at=resets),  # falsy: never a limit
+                             dict(kind="", group="weekly", percent=1, resets_at=resets),
+                             dict(kind=7.5, percent=2, resets_at=resets),
+                             dict(kind="weekly_scoped", group=["weekly"], percent=4, resets_at=resets, scope=dict(model="Fable"))])
+        self.assertEqual(self.rows(mixed), [("weekly_all", "", 10080, "2026-11-08T05:00:00", 57.0, "max"),
+                                            (7, "", 10080, "2026-11-08T05:00:00", 30.0, "max"),
+                                            (7.5, "", None, "2026-11-08T05:00:00", 2.0, "max"),
+                                            ("weekly_scoped", "", None, "2026-11-08T05:00:00", 4.0, "max")])
+        only = dict(limits=[dict(kind=7, group="weekly", percent=30, resets_at=resets)], five_hour=dict(utilization=9.0, resets_at=resets))
+        self.assertEqual(self.rows(only), [(7, "", 10080, "2026-11-08T05:00:00", 30.0, "max")])  # no legacy fallback
+
     def test_unknown_kind_keeps_its_name(self):
         body = dict(limits=[dict(kind="monthly_extra", group="monthly", percent=4, resets_at="2026-12-01T00:00:00Z")])
         rows = limits.claude_rows(dict(plan=None, response=body), NOW)
@@ -161,6 +177,31 @@ class ExtrasParseTest(unittest.TestCase):
         body = extras_body()
         body["limits"][1]["resets_at"] = "tomorrow"
         self.assertEqual(self.extras(body)["shares"], [])
+
+    def test_a_limit_with_no_text_kind_is_a_snapshot_but_no_share_target(self):
+        body = extras_body()
+        body["limits"].append(dict(kind=7, group="weekly", percent=3, resets_at="2026-11-15T05:00:00Z"))
+        body["weekly_scoped_shares"].append(dict(limit_index=2, used_percent_of_weekly=1, allowance_percent_of_weekly=10))
+        self.assertEqual([s["used"] for s in self.extras(body)["shares"]], [21])
+        self.assertEqual(len(limits.claude_rows(dict(plan="max", response=body), NOW)), 3)
+
+    def test_a_time_that_overflows_is_no_time(self):
+        far = "0001-01-01T00:00:00+01:00"  # parses, but is before the first UTC instant
+        self.assertIsNone(limits.utc_naive(far))
+        # A bad as_of leaves the rows, a bad share reset only that share, a bad weekly reset only the surfaces.
+        body = extras_body()
+        body["seven_day_breakdown"]["as_of"] = far
+        body["seven_day_breakdown"]["window_started_at"] = far
+        got = self.extras(body)
+        self.assertEqual((got["surfaces"]["as_of"], got["surfaces"]["window_started_at"], len(got["surfaces"]["rows"]), len(got["shares"])), (None, None, 4, 1))
+        body = extras_body()
+        body["limits"][1]["resets_at"] = far
+        got = self.extras(body)
+        self.assertEqual((got["shares"], len(got["surfaces"]["rows"])), ([], 4))
+        body = extras_body()
+        body["limits"][0]["resets_at"] = far
+        got = self.extras(body)
+        self.assertEqual((len(got["shares"]), got["surfaces"]), (1, None))
 
     def test_the_stored_poll_is_the_one_the_rows_parse(self):
         # A share is keyed like the snapshot of the limit it names, so the two can be matched.
@@ -782,6 +823,24 @@ class UsageExtrasPayloadTest(AnalysisCase):
         store.insert(self.con.cursor(), "limit_polls", ["provider", "polled_at", "json"], [("claude", self.NOW, json.dumps(dict(plan="max", response=body)))])
         for w in self.windows().values():
             self.assertEqual((w["weekly_share"], w["surfaces"]), (None, None))
+
+    def test_a_bad_time_in_the_breakdown_does_not_break_the_payload(self):
+        self.poll(self.NOW, seven_day_breakdown=dict(as_of="0001-01-01T00:00:00+01:00", rows=[dict(key="chat", percent=100)]))
+        ws = self.windows()
+        self.assertEqual(ws["claude", "weekly_all"]["surfaces"], dict(as_of=None, rows=[dict(key="chat", label="chat", percent=100)]))
+        self.assertEqual(ws["claude", "weekly_scoped"]["weekly_share"], dict(used=21, allowance=50))
+
+    def test_a_reader_that_raises_never_breaks_the_payload(self):
+        self.poll(self.NOW)
+        with mock.patch.dict(limits.POLL_EXTRAS, claude=mock.Mock(side_effect=OverflowError("boom"))):
+            ws = self.windows()
+        self.assertEqual(sorted(k for k in ws), [("claude", "weekly_all"), ("claude", "weekly_scoped"), ("codex", "codex_10080")])
+        for w in ws.values():
+            self.assertEqual((w["weekly_share"], w["surfaces"]), (None, None))
+
+    def test_a_stored_poll_that_is_not_json_never_breaks_the_payload(self):
+        store.insert(self.con.cursor(), "limit_polls", ["provider", "polled_at", "json"], [("claude", self.NOW, "{not json")])
+        self.assertEqual(self.windows()["claude", "weekly_all"]["surfaces"], None)
 
     def test_a_scoped_share_never_lands_on_another_scope(self):
         self.snap("claude", "weekly_scoped", self.NOW, 10, resets=datetime(2026, 11, 8, 5, 0), scope="Opus")

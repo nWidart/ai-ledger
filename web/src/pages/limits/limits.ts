@@ -65,13 +65,15 @@ export function shareText(w: LimitWindow): string | null {
   return s ? `This limit is ${num(s.allowance)}% of the weekly allowance; ${num(s.used)}% of the weekly allowance is used through it` : null;
 }
 
-/** The week's use by surface: "All of this week's use so far came from Claude Code", or "This week's use by surface: Chats 60%,
- *  Claude Code 40%" (the surfaces with use, most first); null without a breakdown or with no use yet. */
+/** The week's use by surface: "All of this week's use so far came from Claude Code" when exactly one surface has any, else
+ *  "This week's use by surface: Chats 60%, Claude Code 40%" (every surface with use, most first; one that rounds to nothing
+ *  reads "<1%", and none reads 100% beside another). null without a breakdown or with no use yet. */
 export function surfacesText(w: LimitWindow): string | null {
-  const used = (w.surfaces?.rows ?? []).filter(r => Math.round(r.percent) > 0).sort((a, b) => b.percent - a.percent);
+  const used = (w.surfaces?.rows ?? []).filter(r => r.percent > 0).sort((a, b) => b.percent - a.percent);
   if (!used.length) return null;
-  return used[0]!.percent >= 99.5 ? `All of this week's use so far came from ${used[0]!.label}`
-    : `This week's use by surface: ${used.map(r => `${r.label} ${num(r.percent)}%`).join(", ")}`;
+  if (used.length === 1) return `All of this week's use so far came from ${used[0]!.label}`;
+  const pct = (p: number) => (Math.round(p) < 1 ? "<1%" : `${num(Math.min(99, Math.round(p)))}%`);
+  return `This week's use by surface: ${used.map(r => `${r.label} ${pct(r.percent)}`).join(", ")}`;
 }
 
 /** Headroom and pace: what is left, how long to reset, the usual pace and this window's own against the pace that

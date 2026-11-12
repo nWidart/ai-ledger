@@ -241,8 +241,19 @@ describe("surfacesText", () => {
     expect(surfacesText(rows(["Claude Code", 80], ["Chats", 15], ["Cowork", 5]))).toBe("This week's use by surface: Claude Code 80%, Chats 15%, Cowork 5%");
   });
 
-  it("rounds to whole percents and leaves out a surface that rounds to nothing", () => {
-    expect(surfacesText(rows(["Claude Code", 60.4], ["Chats", 39.2], ["Cowork", 0.4]))).toBe("This week's use by surface: Claude Code 60%, Chats 39%");
+  it("rounds to whole percents, and a surface that rounds to nothing reads <1%", () => {
+    expect(surfacesText(rows(["Claude Code", 60.4], ["Chats", 39.2], ["Cowork", 0.4]))).toBe("This week's use by surface: Claude Code 60%, Chats 39%, Cowork <1%");
+  });
+
+  it("never says all from one surface while another has use, and never reads 100% beside it", () => {
+    expect(surfacesText(rows(["Claude Code", 99.5], ["Chats", 0.5]))).toBe("This week's use by surface: Claude Code 99%, Chats 1%");
+    expect(surfacesText(rows(["Claude Code", 99.9], ["Chats", 0.1]))).toBe("This week's use by surface: Claude Code 99%, Chats <1%");
+    expect(surfacesText(rows(["Claude Code", 100], ["Chats", 0.2]))).toBe("This week's use by surface: Claude Code 99%, Chats <1%");
+  });
+
+  it("says all from one surface when it is the only one with use", () => {
+    expect(surfacesText(rows(["Claude Code", 0], ["Chats", 100], ["Cowork", 0]))).toBe("All of this week's use so far came from Chats");
+    expect(surfacesText(rows(["Claude Code", 0.4], ["Chats", 0]))).toBe("All of this week's use so far came from Claude Code");
   });
 
   it("is null when every surface is 0, with no rows or without a breakdown", () => {
