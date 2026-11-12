@@ -608,6 +608,26 @@ class CodexSessionTest(CodexCase):
         self.assertEqual(([e["lane"] for e in got["events"]], got["lanes"]), ([None, None], {}))
         self.assertEqual(self.q("SELECT count(*), count(*) FILTER (WHERE NOT subagent) FROM requests"), [(1, 1)])
 
+    def test_forked_subagent_copied_history_shows_nothing(self):
+        thread = "0a0f9999-0000-7000-8000-000000000002"
+        child_meta = json.loads(meta(THREAD, thread))
+        child_meta["payload"]["subagent_history_start_ordinal"] = 5  # the lines below 5 copy the parent's history
+        call = lambda i, secs, cid: codex_line(i, secs, "response_item", type="function_call", name="exec_command", call_id=cid, arguments=json.dumps(dict(cmd="ls")))
+        history = (codex_line(1, 1, "event_msg", type="task_started", turn_id="t1")
+                   + codex_line(2, 2, "event_msg", type="item_completed", turn_id="t1", item=dict(type="UserMessage", content=[dict(type="text", text="go")]))
+                   + call(3, 3, "c1") + codex_line(4, 4, "response_item", type="function_call_output", call_id="c1", output="a"))
+        self.place(NAME, meta(THREAD).replace("2026-11-06T10:00:00.000Z", at(0)) + history + codex_line(5, 5, "event_msg", type="task_complete", turn_id="t1"))
+        self.place(NAME.replace(THREAD, thread), json.dumps(child_meta | dict(timestamp=at(1))) + "\n" + history
+                   + codex_line(5, 6, "event_msg", type="task_started", turn_id="u1") + call(6, 7, "c9"))
+        self.ingest()
+        marks = lambda got: [(e["k"], e["lane"]) for e in got["events"]]
+        got = live.session(self.con.cursor(), THREAD, now=NOW, prices=PRICES)
+        self.assertEqual(marks(got), [("turn_start", None), ("prompt", None), ("tool", None), ("turn_end", None),
+                                      ("turn_start", thread), ("tool", thread)])
+        self.assertEqual(live.session(self.con.cursor(), THREAD, after=at(0), now=NOW, prices=PRICES)["events"], got["events"])
+        listed, = live.sessions(self.con.cursor(), now=NOW, prices=PRICES)["sessions"]
+        self.assertEqual((listed["latest"]["lane"], listed["latest"]["summary"]), (thread, json.dumps(dict(cmd="ls"))))
+
     def test_thread_lanes_whose_requests_share_a_time(self):
         threads = ["0a0f9999-0000-7000-8000-000000000002", "0a0f9999-0000-7000-8000-000000000003"]
         self.place(NAME, meta(THREAD).replace("2026-11-06T10:00:00.000Z", at(0)))

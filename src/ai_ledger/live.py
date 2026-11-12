@@ -165,11 +165,22 @@ def simple_commands(line):
     return [words for words in out if words]
 
 
-def assemble(rows):
+def forked(cur, sids):
+    """{file: first line of its own} for the forked Codex subagent files of the sessions sids: the lines of such a file
+    below its subagent_history_start_ordinal copy the parent's history."""
+    if not sids:
+        return {}
+    return dict(cur.execute("""SELECT file, min(try_cast(json_extract_string(json, '$.payload.subagent_history_start_ordinal') AS BIGINT))
+        FROM raw_lines WHERE list_contains(?, session_id) AND subagent AND type = 'session_meta' AND parsed
+        AND contains(json, 'subagent_history_start_ordinal') GROUP BY 1""", [list(sids)]).fetchall())
+
+
+def assemble(rows, copied=None):
     """Events in line order from raw rows (key, file, ts, subagent, source, json). A tool use and its result become one
     tool event; requests are left out, as the page shows none. A tool event is long when its input sets a timeout above
-    LONG; a background call is not, as it returns at once. Returns (events, results), where results maps a tool id to
-    its result item when the use is not among the rows."""
+    LONG; a background call is not, as it returns at once. Lines of a file of `copied` (as forked tells) below its
+    first line of its own give no event. Returns (events, results), where results maps a tool id to its result item
+    when the use is not among the rows."""
     events, tools, results = [], {}, {}
     for key, path, ts, sub, source, text in rows:
         src = store.SOURCES.get(source or "claude")
@@ -178,6 +189,8 @@ def assemble(rows):
         except ValueError:
             continue
         if src is None or not isinstance(d, dict):
+            continue
+        if copied and path in copied and isinstance(d.get("ordinal"), int) and d["ordinal"] < copied[path]:
             continue
         t = parse_ts(ts)
         lane = lane_of(path, source) if sub else None
@@ -316,10 +329,11 @@ def sessions(cur, project="", source="", automated=False, now=None, prices=None,
     figs = figures(cur, sids, prices)
     found = metrics.titles(cur, sids, prompts=text)
     ended = closed(cur, sids)
+    copied = forked(cur, sids)
     out = []
     for s in info:
         sid = s["session_id"]
-        events, _ = assemble(lines.get(sid, []))
+        events, _ = assemble(lines.get(sid, []), copied)
         last = aware(s["last_ts"])
         f = figs[sid]
         out.append(dict(session_id=sid, **title_of(found, sid), project=s["project"], source=s["source"], branch=s["git_branch"],
@@ -379,11 +393,12 @@ def session(cur, sid, after="", text=False, now=None, prices=None):
             ORDER BY 3, 2, 7""", [sid, FIRST_LINES + 1]).fetchall()
         more = len(rows) > FIRST_LINES
         rows = [r[:6] for r in rows[-FIRST_LINES:]]
-    events, results = assemble(rows)
+    copied = forked(cur, [sid])
+    events, results = assemble(rows, copied)
     started = started_by(rows, events)
     missing = set(results) | (set(started) - {e["id"] for e in events if e["k"] == "tool"})
     if missing:  # calls that came before the rows: send them again, finished or naming the subagent they started
-        uses, _ = assemble(earlier_uses(cur, sid, rows[0][2], list(missing)))
+        uses, _ = assemble(earlier_uses(cur, sid, rows[0][2], list(missing)), copied)
         for ev in uses:
             if ev["k"] == "tool" and ev["id"] in missing:
                 if ev["id"] in results:
@@ -400,7 +415,7 @@ def session(cur, sid, after="", text=False, now=None, prices=None):
     f = figures(cur, [sid], prices)[sid]
     return dict(session_id=sid, **title_of(metrics.titles(cur, [sid], prompts=text), sid), project=s["project"], source=s["source"], branch=s["git_branch"], last_ts=iso(last),
                 now=iso(now), cursor=cursor, truncated=more,
-                state=state(assemble(recent(cur, [sid]).get(sid, []))[0], now, s["source"], last, sid in closed(cur, [sid])),
+                state=state(assemble(recent(cur, [sid]).get(sid, []), copied)[0], now, s["source"], last, sid in closed(cur, [sid])),
                 events=[public(e, text) for e in events], lanes=lanes(cur, sid, prices),
                 window=window_of(f["model"], events, prices), compactions=compactions(cur, sid),
                 spark=spark(cur, sid, now), limits=plan_limits(cur, s["source"], now), **f)
