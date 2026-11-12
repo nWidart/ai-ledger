@@ -1,6 +1,7 @@
 import base64
 import json
 import os
+import stat
 import unittest
 from unittest import mock
 
@@ -148,6 +149,69 @@ class Base64Test(StoreCase):
             blobs.seal(self.con.cursor(), force=True)
             self.assertEqual(self.q("SELECT count(*) FROM packs_open")[0][0], 0)
             self.assertEqual(self.full(), {**{f"u{i}": t for i, t in enumerate(texts)}, "u9": again})
+
+
+class CompactTest(StoreCase):
+    def old_store(self):
+        """Ingest lines with big repeated strings, then turn the store back into one from before packing."""
+        a = base64.b64encode(os.urandom(900)).decode()
+        shared = [os.urandom(10000).hex() for _ in range(40)]
+        texts = [line(type="user", uuid=f"u{i}", sessionId="s1", timestamp=f"2025-01-01T00:00:{i % 60:02d}Z", cwd="/x", img=a,
+                      a=shared[i % 40], b=shared[(i * 7) % 40], c=shared[(i * 11 + 3) % 40], message=dict(content="hi")).strip()
+                 for i in range(400)]
+        self.write("a.jsonl", "".join(t + "\n" for t in texts) + "not json\n")
+        store.ingest(self.con, self.roots)
+        c = self.con.cursor()
+        rows = list(store.raw_rows(c))
+        for r in rows:
+            c.execute("UPDATE raw_lines SET json = ?, packed = false WHERE key = ?", [r[10], r[0]])
+        for t in ("blobs", "packs", "packs_open"):
+            c.execute(f"DELETE FROM {t}")
+        c.execute("INSERT INTO error_marks (category, muted) VALUES ('x', true)")
+        c.execute("INSERT INTO limit_polls VALUES ('p', '2025-01-01', '{}')")
+        c.execute("INSERT INTO usage_files (path, kind, json) VALUES ('f', 'facet', '{}')")
+        self.con.close()
+        return texts
+
+    def snapshot(self):
+        con = store.open_store(self.db)
+        try:
+            c = con.cursor()
+            lines = sorted(store.raw_rows(c), key=lambda r: r[0])
+            others = {t: sorted(map(repr, c.execute(f"SELECT * FROM {t}").fetchall()))
+                      for t in store.DERIVED + ["files", "error_marks", "limit_polls", "usage_files"]}
+            return lines, others, c.execute("SELECT count(*) FROM packs_open").fetchone()[0]
+        finally:
+            con.close()
+
+    def test_compact_keeps_everything(self):
+        self.old_store()
+        lines, others, _ = self.snapshot()
+        meta = lambda rows: [r[:10] for r in rows]
+        stats = store.compact(self.db)
+        self.assertLess(stats["after"], stats["before"])
+        self.assertEqual(stats["lines"], len(lines))
+        got, after, open_rows = self.snapshot()
+        self.assertEqual(got, lines)
+        self.assertEqual(meta(got), meta(lines))
+        self.assertEqual(after, others)
+        self.assertEqual(open_rows, 0)
+        con = store.open_store(self.db)
+        try:
+            self.assertEqual(con.execute("SELECT count(*) FILTER (WHERE packed), count(*) FILTER (WHERE NOT packed) FROM raw_lines").fetchone(), (400, 1))
+        finally:
+            con.close()
+        self.assertEqual(stat.S_IMODE(os.stat(self.db).st_mode), 0o600)
+        self.assertFalse(os.path.exists(self.db + ".compact"))
+
+    def test_compact_twice_and_leftover(self):
+        self.old_store()
+        lines = self.snapshot()[0]
+        with open(self.db + ".compact", "wb") as fh:
+            fh.write(b"crashed")
+        store.compact(self.db)
+        store.compact(self.db)
+        self.assertEqual(self.snapshot()[0], lines)
 
 
 class PackLineTest(unittest.TestCase):

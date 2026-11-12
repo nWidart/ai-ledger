@@ -5,6 +5,7 @@ Usage:
                        second while Live is open)
   ai-ledger ingest     ingest new transcript lines and /insights usage data once, then exit
   ai-ledger rebuild    regenerate the derived tables from the stored raw lines
+  ai-ledger compact    bring the store to the current format and drop its free space (the app must be stopped)
 """
 import argparse
 import collections
@@ -430,7 +431,7 @@ def serve(con, roots, port=PORT, open_page=False):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("command", nargs="?", choices=["serve", "ingest", "rebuild"], default="serve")
+    ap.add_argument("command", nargs="?", choices=["serve", "ingest", "rebuild", "compact"], default="serve")
     ap.add_argument("--projects", default=store.DEFAULT_ROOT, help="Claude Code transcript root")
     ap.add_argument("--codex", default=store.DEFAULT_CODEX, help="Codex home")
     ap.add_argument("--usage-data", default=store.DEFAULT_USAGE_DATA, help="Claude Code /insights usage-data directory")
@@ -442,6 +443,14 @@ def main(argv=None):
     roots = dict(claude=a.projects, codex=a.codex, insights=a.usage_data)
     folder = os.path.dirname(os.path.abspath(a.db or store.DEFAULT_DB))  # the user files sit next to the store
     metrics.USER_PRICES, metrics.USER_AUTOMATED = os.path.join(folder, "prices.json"), os.path.join(folder, "automated.json")
+    if a.command == "compact":
+        try:
+            got = store.compact(a.db, log=print)
+        except (store.StoreBusy, store.StoreNotMoved) as e:
+            print(e, file=sys.stderr)
+            sys.exit(1)
+        print(f"{got['lines']} lines, {got['before'] / 1e6:.1f} MB before, {got['after'] / 1e6:.1f} MB after, {got['seconds']}s")
+        return
     try:
         con = store.open_store(a.db)
     except (store.StoreBusy, store.StoreNotMoved) as e:
