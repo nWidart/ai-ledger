@@ -223,10 +223,10 @@ function Sessions({ d, view }: { d: InsightsPayload; view: View }) {
       </div>
       <p className="hint"><span className="count">{filtered ? `${num(rows.length)} of ${plural(d.sessions.length, "session")}` : plural(rows.length, "session")}</span>,
         {" "}{SORTS[sort].words}{d.truncated ? `: the newest ${num(d.sessions.length)} of the view` : ""}. The summary and friction detail are the model's words.</p>
-      {listed.length ? <ul className="scards">{listed.map(s => <SessionCard key={s.session_id} s={s} view={view} />)}</ul>
+      {listed.length ? <ul className="scards" role="list">{listed.map(s => <SessionCard key={s.session_id} s={s} view={view} />)}</ul>
         : <p className="empty">{outcome ? "No session in this view matches the filters." : friction ? "No session in this view reports friction." : "No analysed sessions in this view."}</p>}
       {rows.length > SESSIONS_TOP && <button type="button" className="linkish more" onClick={() => setAll(!all)}>
-        {all ? `Show the newest ${SESSIONS_TOP}` : `Show all ${num(rows.length)} sessions`}</button>}
+        {all ? `Show the first ${SESSIONS_TOP}` : `Show all ${num(rows.length)} sessions`}</button>}
     </section>
   );
 }

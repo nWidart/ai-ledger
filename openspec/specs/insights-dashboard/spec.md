@@ -72,7 +72,7 @@ The page SHALL list goal categories by total count over the view's facets, and t
 - **THEN** the Goals list shows the 12 most counted and a "Show all 222 goals" control
 
 ### Requirement: List analysed sessions
-The page SHALL list the view's analysed sessions as cards: title, outcome, goals and friction categories with the project and start time on a first line, and the brief summary full width below. The friction detail SHALL stay hidden until the user expands it. The list SHALL show its first 25 sessions with a control to show them all, and say how many it lists and in what order. Sessions with friction SHALL be listable on their own, kept in the page URL.
+The page SHALL list the view's analysed sessions as cards: title, outcome, goals and friction categories with the project and start time on a first line, and the brief summary full width below. The friction detail SHALL stay hidden until the user expands it. The list SHALL scroll with the page, show its first 25 sessions with a control to show them all, and say how many it lists and in what order. Sessions with friction SHALL be listable on their own, kept in the page URL.
 
 #### Scenario: Only sessions with friction
 - **WHEN** the user narrows the list to sessions with friction

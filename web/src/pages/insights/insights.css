@@ -71,7 +71,7 @@
 .pg-insights .scard .ttl .muted { font-weight: 400; }
 .pg-insights .scard .chip { white-space: normal; }
 /* Date and project: quiet, at the end of the line. */
-.pg-insights .scard .meta { margin-left: auto; color: var(--text-muted); font-size: 12.5px; }
+.pg-insights .scard .meta { min-width: 0; max-width: 100%; margin-left: auto; color: var(--text-muted); font-size: 12.5px; }
 .pg-insights .scard .sum { margin: 4px 0 0; color: var(--text-secondary); max-width: 110ch; }
 .pg-insights .scard .fd { margin-top: 4px; color: var(--text-secondary); max-width: 110ch; }
 .pg-insights .scard .fd summary { cursor: pointer; font-size: 12.5px; color: var(--text-muted); }

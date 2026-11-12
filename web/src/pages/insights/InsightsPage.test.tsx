@@ -149,6 +149,8 @@ describe("InsightsPage", () => {
     await lede();
     const log = logOf(), [orphan, mid, last] = cards();
     expect(log.querySelector("table")).toBeNull();
+    expect(within(log).getByRole("list").tagName).toBe("UL"); // list-style: none drops it in Safari without the role
+    expect(within(log).getAllByRole("listitem").length).toBe(3);
     expect(order()).toEqual([
       "Synthetic: tried a layout idea and dropped it.", "Synthetic: chased a flaky date test. SENTINEL-facet-text", "Synthetic: added a theme toggle to a demo app."]);
     expect(within(log).getByText("3 sessions")).toBeTruthy();
@@ -199,6 +201,20 @@ describe("InsightsPage", () => {
     await userEvent.click(within(log).getByLabelText("Only sessions with friction"));
     expect(within(log).getByRole("link", { name: "Add a theme toggle" }).getAttribute("href"))
       .toBe("/usage#project=demo-app&range=7&source=claude&auto=1&session=0000aaaa-0000-4000-8000-000000000001");
+  });
+
+  it("shows the first 25 sessions of the chosen order until asked for all, and names the collapse by position, not age", async () => {
+    const d = ranked(Array.from({ length: 30 }, () => "fully_achieved"));
+    d.sessions.forEach((s, i) => { s.start = `2026-10-${String(30 - i).padStart(2, "0")}T08:00:00.000Z`; s.brief_summary = `s${i}`; });
+    show(d);
+    await lede();
+    await pick("Sort", "oldest");
+    expect(cards().length).toBe(25);
+    expect(order()[0]).toBe("s29");
+    await userEvent.click(within(logOf()).getByRole("button", { name: "Show all 30 sessions" }));
+    expect(cards().length).toBe(30);
+    expect(within(logOf()).getByRole("button", { name: "Show the first 25" })).toBeTruthy();
+    expect(within(logOf()).queryByRole("button", { name: /newest 25/ })).toBeNull();
   });
 
   it("sorts newest first, oldest first, or worst outcome first and says so", async () => {
