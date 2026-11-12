@@ -6,7 +6,7 @@ import { UsageSheets } from "../../components/sheets/UsageSheets";
 import { num as fmt } from "../../format";
 import { setHash, useHashState } from "../../hash";
 import { useApi } from "../../useApi";
-import { Ctx, type ErrorsCtx } from "./context";
+import { Ctx, tableFocus, type ErrorsCtx } from "./context";
 import { Detail } from "./Detail";
 import { useMarks } from "./marks";
 import { filtered, makeModel, settle, viewTypes, withMuted, type View } from "./model";
@@ -35,7 +35,7 @@ export function ErrorsPage() {
   const after = useCallback((fn: () => void) => { pending.current.push(fn); bump(); }, []);
   // Concise status for screen readers: counts, loading, failures. The detail itself isn't live.
   const say = useCallback((s: string) => { setLive(""); requestAnimationFrame(() => setLive(s)); }, []);
-  const { fixes, muted, saving, muting, setFix, setMuted, markError } = useMarks(data, say, after);
+  const { fixes, muted, saving, muting, setFix, setMuted, markError, dismissError } = useMarks(data, say, after);
   const base = useMemo(() => (data ? makeModel(data) : undefined), [data]);
   const m = useMemo(() => base && withMuted(base, muted), [base, muted]); // the model with the types muted as of now
   // Project colors match Activity: the nav hands them out in the server's all-time order.
@@ -184,7 +184,7 @@ export function ErrorsPage() {
     if (lost && !placed && blank()) {
       const k = lost.key;
       ($(lost.box && k ? `#${CSS.escape(lost.box)} ${k}` : null) || $(k)
-        || (view.cat ? $("#detailTitle") : $(`#catBody button[data-c="${CSS.escape(prevCat.current ?? "")}"]`) || $("#catBody button")))?.focus();
+        || (view.cat ? $("#detailTitle") : $(`#catBody button[data-c="${CSS.escape(prevCat.current ?? "")}"]`) || tableFocus()))?.focus();
     }
     prevCat.current = view.cat;
     lastHash.current = location.hash;
@@ -197,7 +197,7 @@ export function ErrorsPage() {
   }, [m, view.project]);
 
   const ctx: ErrorsCtx | null = m && f && vt ? {
-    m, v: view, f, vt, fixes, markError, saving, muting, mode, q, pinned: pin.current.focus ? m.byId[pin.current.focus] : undefined, inSheet: toSheet, chartInView,
+    m, v: view, f, vt, fixes, markError, dismissError, saving, muting, mode, q, pinned: pin.current.focus ? m.byId[pin.current.focus] : undefined, inSheet: toSheet, chartInView,
     update, pick, select, setFix, setMuted, setMode, setQ, after, say, bump, ...sets,
   } : null;
   const detailLive = <div className="sr" id="detailLive" aria-live="polite">{live}</div>;

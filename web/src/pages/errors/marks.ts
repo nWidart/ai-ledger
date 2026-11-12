@@ -30,8 +30,8 @@ const MOVE_FAILED = "Couldn't move the fix markers saved in this browser to the 
 type Op = { cat: string; day: Day | null } | { cat: string; muted: boolean } | { cat?: undefined; fixes: Fixes };
 /** server: the store as the last queue step left it; null until the first step is done, when the payload is the seed. */
 interface State { server: Marks | null; ops: Op[]; local: Fixes }
-/** kind: which write failed, so each control shows its own message. */
-export interface FixError { cat: string; kind: "fix" | "mute"; text: string }
+/** kind: which write failed, so each control shows its own message. mute: for a mute write, whether it was a mute (not an unmute). */
+export interface FixError { cat: string; kind: "fix" | "mute"; text: string; mute?: boolean }
 const EMPTY: Marks = { fixes: {}, muted: [] };
 const seedOf = (d: ErrorsPayload | undefined): Marks | undefined => d && { fixes: d.fixes ?? {}, muted: d.muted ?? [] };
 
@@ -55,7 +55,8 @@ export function useMarks(data: ErrorsPayload | undefined, say: (s: string) => vo
   const fixes = useMemo(() => shown.fixes, [fixKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const muted = useMemo(() => shown.muted, [mutedKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const saving = useMemo(() => new Set(st.ops.flatMap(o => ("muted" in o ? [] : o.cat != null ? [o.cat] : Object.keys(o.fixes)))), [st.ops]);
-  const muting = useMemo(() => new Set(st.ops.flatMap(o => ("muted" in o ? [o.cat] : []))), [st.ops]);
+  /** The types with a mute write on its way, each with its direction (true: muting). */
+  const muting = useMemo(() => new Map(st.ops.flatMap(o => ("muted" in o ? [[o.cat, o.muted] as const] : []))), [st.ops]);
 
   /** Queue a write. It resolves to the store's answer once the page shows it; it rejects after the page shows what the store holds. */
   const write = useCallback((op: Op, url: string, body: unknown) => {
@@ -99,11 +100,13 @@ export function useMarks(data: ErrorsPayload | undefined, say: (s: string) => vo
       say(mute ? `Type muted.${leaves ? " It left the view: Hide noise and muted is on." : ""}` : "Type unmuted.");
       setError(e => (e?.cat === cat && e.kind === "mute" ? null : e));
     }, () => {
-      setError({ cat, kind: "mute", text: MUTE_FAILED });
+      setError({ cat, kind: "mute", text: MUTE_FAILED, mute });
       say(MUTE_FAILED);
       after(() => { if (!document.activeElement || document.activeElement === document.body) document.getElementById("mute")?.focus(); });
     });
   }, [write, say, after]);
+
+  const dismissError = useCallback(() => setError(null), []);
 
   useEffect(() => {
     if (!data || moved.current) return;
@@ -115,5 +118,5 @@ export function useMarks(data: ErrorsPayload | undefined, say: (s: string) => vo
     }, () => say(MOVE_FAILED));
   }, [data, st.local, write, say]);
 
-  return { fixes, muted, saving, muting, setFix, setMuted, markError: error };
+  return { fixes, muted, saving, muting, setFix, setMuted, markError: error, dismissError };
 }

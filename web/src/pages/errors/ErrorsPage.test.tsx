@@ -646,6 +646,7 @@ describe("ErrorsPage", () => {
       expect(rowOf("git")!.querySelector(".chip.muted-type")).toBeNull();
       expect(document.getElementById("muteErr")!.textContent).toMatch(/^Couldn't save the muted setting/);
       expect(document.getElementById("fixErr")).toBeNull(); // the fix box says nothing about it
+      expect(document.getElementById("muteNote")).toBeNull(); // the open detail has it, so the table card does not
       await waitFor(() => expect(document.getElementById("detailLive")?.textContent).toMatch(/^Couldn't save the muted setting/));
       expect(document.activeElement?.id).toBe("mute");
       expect([...api.muted]).toEqual([]);
@@ -726,6 +727,75 @@ describe("ErrorsPage", () => {
       expect(document.activeElement?.closest("#catBody")).toBeTruthy();
       await waitFor(() => expect(document.getElementById("detailLive")?.textContent).toBe("Type muted. It left the view: Hide noise and muted is on."));
       await waitFor(() => expect([...api.muted]).toEqual(["git"]));
+    });
+
+    // The detail is gone once the type leaves the view, so the type table card carries the pending and failure feedback then.
+    it("shows the pending mute in the type table card when the detail has closed, and not in the detail while it is open", async () => {
+      const api = serve(), hold = api.hold();
+      api.payload = mixed;
+      history.replaceState(null, "", "/errors#range=7&noise=0&cat=git");
+      await page();
+      await userEvent.click(muteBtn());
+      await waitFor(() => expect(document.getElementById("detailTitle")).toBeNull());
+      expect(document.querySelector(".types #muteNote")?.textContent).toBe("Muting git / gh error… Saving…");
+      hold.release();
+      await waitFor(() => expect(document.getElementById("muteNote")).toBeNull());
+      // With the detail open (toggle off) the detail says it, and the table card does not.
+      cleanup(); clearApiCache();
+      history.replaceState(null, "", "/errors#range=7&cat=x");
+      const api2 = serve(), hold2 = api2.hold();
+      api2.payload = mixed;
+      await page();
+      await userEvent.click(muteBtn());
+      expect(document.getElementById("muteSaving")).toBeTruthy();
+      expect(document.getElementById("muteNote")).toBeNull();
+      hold2.release();
+      await waitFor(() => expect([...api2.muted]).toEqual(["x"]));
+    });
+
+    it("shows a failed mute in the type table card when the detail has closed, the row comes back, and Dismiss clears it", async () => {
+      const api = serve();
+      api.payload = mixed;
+      api.refuseMute = () => true;
+      history.replaceState(null, "", "/errors#range=7&noise=0&cat=git");
+      await page();
+      await userEvent.click(muteBtn());
+      await waitFor(() => expect(document.getElementById("muteNote")?.textContent).toMatch(/^Couldn't mute git \/ gh error\. It is back in the list\./));
+      expect(api.requests).toEqual(["mute git true", "resync"]);
+      expect(rowOf("git")).toBeTruthy();
+      expect(document.getElementById("detailTitle")).toBeNull(); // the detail stays closed
+      expect(document.getElementById("muteErr")).toBeNull();
+      await waitFor(() => expect(document.getElementById("detailLive")?.textContent).toMatch(/^Couldn't save the muted setting/));
+      await userEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+      expect(document.getElementById("muteNote")).toBeNull();
+      expect(document.activeElement?.closest("#catBody")).toBeTruthy();
+    });
+
+    it("clears the table card's failure with the next successful mute of that type", async () => {
+      const api = serve();
+      api.payload = mixed;
+      api.refuseMute = () => true;
+      history.replaceState(null, "", "/errors#range=7&noise=0&cat=git");
+      await page();
+      await userEvent.click(muteBtn());
+      await waitFor(() => expect(document.getElementById("muteNote")).toBeTruthy());
+      api.refuseMute = null;
+      await userEvent.click(within(rowOf("git") as HTMLElement).getByRole("button"));
+      await userEvent.click(muteBtn());
+      await waitFor(() => expect([...api.muted]).toEqual(["git"]));
+      await waitFor(() => expect(document.getElementById("muteNote")).toBeNull());
+    });
+
+    it("moves focus to the chart when the muted type was the only one in the view", async () => {
+      const api = serve();
+      history.replaceState(null, "", "/errors#range=7&noise=0&cat=x");
+      await page();
+      expect(document.querySelectorAll("#catBody .tbtn")).toHaveLength(1);
+      await userEvent.click(muteBtn());
+      await waitFor(() => expect(document.getElementById("detailTitle")).toBeNull());
+      expect(document.querySelectorAll("#catBody .tbtn")).toHaveLength(0);
+      expect(document.activeElement?.id).toBe("chart");
+      await waitFor(() => expect([...api.muted]).toEqual(["x"]));
     });
 
     it("keeps the open type open when it is muted with the toggle off", async () => {

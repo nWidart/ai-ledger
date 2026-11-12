@@ -16,6 +16,10 @@ A mute SHALL be written in the same queue as the fix markers, with the same rule
 - **WHEN** the user mutes a type and the app refuses or does not answer
 - **THEN** the page shows the type as the store holds it, a message says the muted setting was not saved, the status region announces it and focus stays on the button
 
+#### Scenario: The detail has closed
+- **WHEN** the toggle is on, the user mutes the open type, and the type's detail closes before the write is answered or after it fails
+- **THEN** one line in the type table card says, by the type's label, that the mute is saving or that it failed and the type is back in the list (the failure with a Dismiss button), and the detail does not show the same message
+
 #### Scenario: A mute, then a fix
 - **WHEN** the user mutes a type and marks a fix for it before the mute is answered
 - **THEN** the fix is sent after the mute, and the type ends muted and fixed
