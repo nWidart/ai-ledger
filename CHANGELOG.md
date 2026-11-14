@@ -13,9 +13,21 @@ Run `ai-ledger rebuild` once after upgrading (with the app stopped): the Context
 - The Context page's tips come from fixed rules. Each shows only when it fires on the filtered view, with its evidence, its advice and the sessions that match, which open in the session sheet.
 - The store keeps the size of each tool result, the context window a Codex session states and the time of each session's first compaction. Until the rebuild, the Context page says those figures are not yet available.
 - The command palette's `>context` term opens the Context page, keeping the project and range filters.
+- Each page has a skip link and one main landmark, and a nav switch moves focus to the new page's heading.
+- Explanations that only showed on hover (column headers, filter options, the Live agent panel) open from a "?" button by keyboard or touch, or show as visible hints.
+- The Cost, Activity and Context charts have a "Show data table" under them, and Escape dismisses a chart's readout.
+- Windows high contrast and other forced-colors modes keep pressed, selected and current states and data bars visible.
 
 ### Changed
 
+- Drawer titles are headings with a toggle button, and a drawer draws its table only once opened.
+- Every data table has a name and row headers, and scrollable tables can be focused and scrolled by keyboard.
+- Inputs and selects have a 3:1 border, the command palette's input shows a focus ring, and Live's tool text reaches 4.5:1 in the light theme.
+- Refresh stays focusable while it runs, and loading states are no longer read out by screen readers.
+- Sheet and insight titles wrap instead of being cut off.
+- Pages and the command palette load on first use: the first download is about a third of what it was.
+- In a background tab, Live closes its event stream and stops its clock, and the status poll pauses; both catch up on return. Background polls go out at low priority.
+- Hovering the charts, opening Errors examples and scrolling pages with a section index do far less work.
 - The page is revalidated with an ETag (`304` when unchanged) instead of being sent again on every visit.
 
 ### Security

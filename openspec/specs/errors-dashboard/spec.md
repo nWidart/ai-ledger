@@ -514,12 +514,16 @@ A chart point with errors and no tool calls SHALL be read, in the keyboard readi
 - **WHEN** the week view has a call in one week and its error in the next, and no other week
 - **THEN** no no-activity band is drawn over the second week and the legend has no "No activity" key
 
-### Requirement: Announce the chart as an application
-The chart box SHALL have `role="application"` and `aria-roledescription="chart"`, as it handles arrow keys, Enter and Space itself. It SHALL keep its label (the instructions and the selected bucket), be described by the chart's hint, and keep its live region for the keyboard reading.
+### Requirement: Announce the chart as a labelled group
+The chart box SHALL have `role="group"`, as it is a control the user reads with arrow keys, Enter and Space, and SHALL NOT have `role="application"` or `aria-roledescription`. It SHALL keep its label (the instructions and the selected bucket), be described by the chart's hint, and keep its live region for the keyboard reading. Escape SHALL dismiss its tooltip.
 
 #### Scenario: Role
 - **WHEN** a screen reader reaches the chart
-- **THEN** it exposes an application described as a chart, and the arrow keys reach the page
+- **THEN** it exposes a group with the chart's label and hint, and the arrow keys read each point
+
+#### Scenario: Escape
+- **WHEN** the chart's tooltip is open and the user presses Escape
+- **THEN** the tooltip closes and the selected bucket is unchanged
 
 ### Requirement: Keep open message groups per type
 An open By message group SHALL be remembered by type and message: "(no error text)" open in one type SHALL NOT be open in another.

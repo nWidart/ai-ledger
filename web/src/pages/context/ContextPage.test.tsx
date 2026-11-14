@@ -6,18 +6,24 @@ import context from "../../__fixtures__/context";
 import session from "../../__fixtures__/session";
 import { mockApi } from "../../components/sheets/testing";
 import { App } from "../../App";
+import { openDrawer } from "../../components/Drawer";
 import { ContextPage } from "./ContextPage";
 
 const fixture: ContextPayload = context;
 const serve = (d: ContextPayload) => mockApi({ "/api/context": () => d, "/api/session": () => session });
-const show = async (d: ContextPayload = fixture, hash = "#range=0") => {
+/** The page loaded, with these drawers open (a closed drawer renders no table). */
+const show = async (d: ContextPayload = fixture, hash = "#range=0", open = ["d-largest", "d-breaks"]) => {
   const f = serve(d);
   history.replaceState(null, "", "/context" + hash);
   render(<ContextPage />);
   await screen.findByText((_, el) => el?.id === "lede" && !el.textContent!.startsWith("Loading"));
+  act(() => open.forEach(id => openDrawer(id)));
   return f;
 };
-const drawer = (id: string) => document.getElementById(id) as HTMLDetailsElement;
+const drawer = (id: string) => document.getElementById(id)!;
+const isOpen = (id: string) => drawer(id).hasAttribute("data-open");
+/** A row's header and data cells, in order. */
+const cells = (row: HTMLElement) => [...row.querySelectorAll("th[scope=row], td")].map(c => c.textContent);
 const hash = () => new URLSearchParams(location.hash.slice(1));
 const section = (id: string) => within(document.getElementById(id)!);
 const tipCard = (title: string) => within(screen.getByText(title).closest("article") as HTMLElement);
@@ -34,10 +40,50 @@ describe("ContextPage", () => {
   it("shows every section, in order, with a heading", async () => {
     await show();
     const heads = ["Tips", "Starting context", "Growth", "What fills context", "Cost"].map(n => screen.getByRole("heading", { level: 2, name: n }));
+    expect(screen.getByRole("main")).toBeTruthy();
     for (let i = 1; i < heads.length; i++) expect(heads[i - 1]!.compareDocumentPosition(heads[i]!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(screen.getByRole("heading", { level: 2, name: "Largest tool results" })).toBeTruthy();
-    expect(screen.getByRole("heading", { level: 2, name: "Sessions where caching broke" })).toBeTruthy();
+    // A drawer's title is a heading whose button opens it, never a heading inside a summary.
+    expect(screen.getByRole("heading", { level: 2, name: /^Largest tool results/ })).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 2, name: /^Sessions where caching broke/ })).toBeTruthy();
+    expect(document.querySelector("summary h2, summary h3")).toBeNull();
     expect(screen.getByRole("navigation", { name: "Page sections" })).toBeTruthy();
+  });
+
+  it("names its tables, scrolls them in focusable regions and heads rows and columns", async () => {
+    await show();
+    for (const name of ["Starting context by project", "Growth by project", "Tool results by tool", "Tool results by MCP server", "Cost by project", "Largest tool results", "Sessions where caching broke"]) {
+      const table = screen.getByRole("table", { name }), region = screen.getByRole("region", { name });
+      expect(region.contains(table)).toBe(true);
+      expect(region.tabIndex).toBe(0);
+      expect(within(table).getAllByRole("columnheader").every(h => h.getAttribute("scope") === "col")).toBe(true);
+      expect(within(table).getAllByRole("rowheader").every(h => h.getAttribute("scope") === "row")).toBe(true);
+    }
+  });
+
+  it("explains a column behind a toggletip, not a hover title", async () => {
+    await show();
+    const head = within(screen.getByRole("table", { name: "Cost by project" })).getByRole("columnheader", { name: /^Cache-hit ratio/ });
+    expect(head.querySelector("[title]")).toBeNull();
+    await userEvent.click(within(head).getByRole("button", { name: "About cache-hit ratio" }));
+    expect(within(head).getByRole("status").textContent).toBe("Cache read tokens over all prompt tokens");
+    // Only a row with calls that carry no result size has one on its call count.
+    const bash = section("fills").getAllByText("Bash")[0]!.closest("tr")!;
+    await userEvent.click(within(bash).getByRole("button", { name: "About calls" }));
+    expect(within(bash).getByRole("status").textContent).toBe("1 with a result size");
+  });
+
+  it("marks the content busy while loading, with no live region announcing it", async () => {
+    mockApi({ "/api/context": () => new Promise(() => {}) as never });
+    history.replaceState(null, "", "/context#range=0");
+    render(<ContextPage />);
+    const main = screen.getByRole("main");
+    expect(main.id).toBe("content");
+    expect(main.getAttribute("aria-busy")).toBe("true");
+    const lede = document.getElementById("lede")!;
+    expect(lede.textContent).toBe("Loading context…");
+    expect(lede.hasAttribute("aria-live")).toBe(false);
+    expect(main.querySelector(".pending")!.hasAttribute("role")).toBe(false);
+    expect(main.querySelector("[aria-live]")).toBeNull();
   });
 
   it("names no agent in text that covers every source", async () => {
@@ -112,19 +158,23 @@ describe("tips", () => {
     await userEvent.click(tipCard("Sessions reach the limit of the window").getByRole("button", { name: "1 session" }));
     expect(hash().get("tip")).toBe("near_limit");
     const d = drawer("d-tip");
-    expect(d.open).toBe(true);
-    expect(within(d).getByRole("heading", { level: 2, name: "Sessions matching Sessions reach the limit of the window" })).toBeTruthy();
+    expect(isOpen("d-tip")).toBe(true);
+    expect(within(d).getByRole("heading", { level: 2, name: /^Sessions matching Sessions reach the limit of the window/ })).toBeTruthy();
     expect(within(d).getByRole("button", { name: "Fix the importer" })).toBeTruthy();
     expect(within(d).getByText("Claude Code")).toBeTruthy();
+    const table = within(d).getByRole("table", { name: /^Sessions matching Sessions reach the limit/ });
+    expect(within(d).getByRole("region", { name: /^Sessions matching/ }).contains(table)).toBe(true);
+    expect(within(table).getAllByRole("columnheader").every(h => h.getAttribute("scope") === "col")).toBe(true);
+    expect(within(table).getByRole("rowheader").getAttribute("scope")).toBe("row");
     await back();
     await waitFor(() => expect(drawer("d-tip")).toBeNull());
     expect(hash().get("tip")).toBeNull();
   });
 
-  it("clears the hash when the list is closed from its summary", async () => {
+  it("clears the hash when the list is closed from its title", async () => {
     await show(fixture, "#range=0&tip=near_limit");
-    await waitFor(() => expect(drawer("d-tip").open).toBe(true));
-    await userEvent.click(drawer("d-tip").querySelector("summary")!);
+    await waitFor(() => expect(isOpen("d-tip")).toBe(true));
+    await userEvent.click(within(drawer("d-tip")).getByRole("button", { name: /^Sessions matching/ }));
     await waitFor(() => expect(drawer("d-tip")).toBeNull());
     expect(hash().get("tip")).toBeNull();
     expect(hash().get("range")).toBe("0");
@@ -142,7 +192,8 @@ describe("tips", () => {
     const tip: Tip = { ...fixture.tips[0]!, matched: 25, sessions: Array.from({ length: 20 }, (_, i) => ({ ...fixture.tips[0]!.sessions[0]!, session_id: `s${i}`, title: `Session ${i}` })) };
     await show({ ...fixture, tips: [tip] }, "#range=0&tip=near_limit");
     const d = drawer("d-tip");
-    expect(within(d).getAllByRole("button")).toHaveLength(20);
+    // Twenty session buttons, beside the drawer's own title button.
+    expect(within(d).getAllByRole("button").filter(b => b.classList.contains("cellbtn"))).toHaveLength(20);
     expect(within(d).getByText("and 5 more.")).toBeTruthy();
     expect(within(screen.getByRole("button", { name: "25 sessions" }).closest("article")!).getByText("Highest share of the window")).toBeTruthy();
   });
@@ -163,7 +214,7 @@ describe("starting context", () => {
   it("lists each project's median, 10th percentile, share of its window and sessions, and the whole view", async () => {
     await show();
     const s = section("starting");
-    const row = (name: string) => within(s.getByText(name).closest("tr")!).getAllByRole("cell").map(c => c.textContent);
+    const row = (name: string) => cells(s.getByText(name).closest("tr")!);
     expect(row("foo")).toEqual(["foo", "24,000", "20,800", "10% of 200k", "3"]);
     expect(row("codex-app")).toEqual(["codex-app", "15,000", "15,000", "5.8% of 258.4k", "1"]);
     expect(row("Whole view")).toEqual(["Whole view", "15,000", "7,600", "4.5%", "7"]);
@@ -173,7 +224,7 @@ describe("starting context", () => {
   it("shows no figure for a project without a window share", async () => {
     const by = fixture.starting.by_project.map(p => (p.project === "bar" ? { ...p, window: null, window_share: null } : p));
     await show({ ...fixture, starting: { ...fixture.starting, by_project: by } });
-    expect(within(section("starting").getByText("bar").closest("tr")!).getAllByRole("cell")[3]!.textContent).toBe("–");
+    expect(cells(section("starting").getByText("bar").closest("tr")!)[3]).toBe("–");
   });
 
   it("charts the weekly median", async () => {
@@ -181,10 +232,13 @@ describe("starting context", () => {
     const s = section("starting"), fig = s.getByRole("figure");
     expect(fig.querySelectorAll("rect")).toHaveLength(2);
     expect(fig.querySelector("svg")!.getAttribute("aria-hidden")).toBe("true");
-    // A screen reader gets every week as a table, not just the two ends.
+    // Every week is in a table, not just the two ends: closed until asked for.
+    expect(s.queryByRole("table", { name: /Median starting context per week/ })).toBeNull();
+    await userEvent.click(s.getByRole("button", { name: "Show data table" }));
     const rows = within(s.getByRole("table", { name: /Median starting context per week/ })).getAllByRole("row").slice(1);
     expect(rows).toHaveLength(2);
-    expect(within(rows[0]!).getAllByRole("cell")[1]!.textContent).toBe("7,000");
+    expect(cells(rows[0]!)[1]).toBe("7,000");
+    expect(within(rows[0]!).getByRole("rowheader").getAttribute("scope")).toBe("row");
   });
 
   it("opens a project's sheet from its row", async () => {
@@ -205,14 +259,14 @@ describe("growth", () => {
   it("draws the curve with its text alternative and the added-per-prompt and compaction figures", async () => {
     await show();
     const g = section("growth");
-    expect(g.getByRole("img", { name: /Median context at each turn: 15k tokens at turn 1, 30k at turn 2/ })).toBeTruthy();
+    expect(g.getByRole("group", { name: /Median context at each turn: 15k tokens at turn 1, 30k at turn 2/ })).toBeTruthy();
     const tile = (l: string) => g.getByText(l, { selector: ".vital .l" }).previousElementSibling!.textContent;
     expect(tile("Added per prompt")).toBe("16,000 tokens");
     expect(tile("Before the first compaction")).toBe("5 turns");
     expect(tile("Active time before it")).toBe("5m");
-    const foo = within(g.getByText("foo").closest("tr")!).getAllByRole("cell").map(c => c.textContent);
+    const foo = cells(g.getByText("foo").closest("tr")!);
     expect(foo).toEqual(["foo", "3", "33,000", "1", "5", "5m"]);
-    expect(within(g.getByText("bar").closest("tr")!).getAllByRole("cell").map(c => c.textContent)).toEqual(["bar", "3", "3,000", "0", "–", "–"]);
+    expect(cells(g.getByText("bar").closest("tr")!)).toEqual(["bar", "3", "3,000", "0", "–", "–"]);
   });
 
   it("says when no session compacted, and shows no medians for it", async () => {
@@ -232,7 +286,7 @@ describe("growth", () => {
   it("explains an empty curve", async () => {
     await show({ ...fixture, growth: { ...fixture.growth, curve: [], by_project_curves: [] } });
     expect(section("growth").getByText(/No turn is shared by 5 or more sessions/)).toBeTruthy();
-    expect(section("growth").queryByRole("img", { name: /Median context at each turn/ })).toBeNull();
+    expect(section("growth").queryByRole("group", { name: /Median context at each turn/ })).toBeNull();
   });
 
   it("draws a project curve for each the payload holds, which may be fewer than five", async () => {
@@ -244,7 +298,10 @@ describe("growth", () => {
   it("shows five bars per window, labelled by window size, counts adding up to its sessions", async () => {
     await show();
     const w = section("growth").getByRole("group", { name: "200k window, 5 sessions" });
-    expect([...w.querySelectorAll("li")].map(li => li.textContent)).toEqual(["3<25%", "125–50%", "050–75%", "175–90%", "0≥90%"]);
+    expect([...w.querySelectorAll("li")].map(li => [...li.children].filter(c => !c.classList.contains("sr")).map(c => c.textContent).join(""))).toEqual(["3<25%", "125–50%", "050–75%", "175–90%", "0≥90%"]);
+    // A screen reader reads each bin as one sentence (the figures themselves are hidden from it), not as a hover title.
+    expect(w.querySelector("li")!.querySelector(".sr")!.textContent).toBe("3 sessions (60%) peaked at <25% of the window");
+    expect(w.querySelector("li[title]")).toBeNull();
     expect(section("growth").getByRole("group", { name: "2M window, 1 session" })).toBeTruthy();
     expect(section("growth").getByRole("group", { name: "258.4k window, 1 session" })).toBeTruthy();
   });
@@ -255,11 +312,13 @@ describe("what fills context", () => {
     await show();
     const f = section("fills");
     const bash = f.getAllByText("Bash")[0]!.closest("tr")!;
-    expect(within(bash).getAllByRole("cell").map(c => c.textContent)).toEqual(["Bash", "2", "250 KB", "250 KB", "250 KB", "≈62,500 estimate"]);
-    expect(within(f.getByText("github").closest("tr")!).getAllByRole("cell")[5]!.textContent).toBe("≈250 estimate");
+    expect(cells(bash)).toEqual(["Bash", "2?", "250 KB", "250 KB", "250 KB", "≈62,500 estimate"]);
+    expect(cells(f.getByText("github").closest("tr")!)[5]).toBe("≈250 estimate");
     const badges = [...document.querySelectorAll("#fills .chip.est")];
     expect(badges.length).toBe(fixture.fills.tools.length + fixture.fills.mcp.length + 1);
-    for (const b of badges) expect(b.getAttribute("title")).toBe("bytes ÷ 4");
+    // The badge is text, not a hover title: the hint above each table says what it means.
+    for (const b of badges) expect(b.hasAttribute("title")).toBe(false);
+    expect(f.getByText(/the bytes divided by 4, an estimate/)).toBeTruthy();
     for (const c of document.querySelectorAll("#fills td:last-child")) expect(c.querySelector(".chip.est")).toBeTruthy();
   });
 
@@ -281,9 +340,9 @@ describe("what fills context", () => {
   it("lists the largest results with their session, and a session button opens its sheet", async () => {
     await show();
     const d = drawer("d-largest");
-    const rows = within(d).getAllByRole("row").slice(1);
+    const rows = within(within(d).getByRole("table", { name: "Largest tool results" })).getAllByRole("row").slice(1);
     expect(rows).toHaveLength(fixture.fills.largest.length);
-    expect(within(rows[0]!).getAllByRole("cell").map(c => c.textContent)).toEqual([
+    expect(cells(rows[0]!)).toEqual([
       "Bash", "npm test", "250 KB", "≈62,500 estimate", expect.any(String), "fooClaude Code", "Fix the importer#f1"]);
     expect(within(rows[3]!).getByText("github")).toBeTruthy();
     await userEvent.click(within(rows[0]!).getByRole("button", { name: "Fix the importer" }));
@@ -301,26 +360,26 @@ describe("what fills context", () => {
 describe("cost", () => {
   it("shows the view and each project with its cache reads, long-tier cost and requests, and cache-hit ratio", async () => {
     await show();
-    const c = section("cost"), cells = (name: string) => within(c.getByText(name).closest("tr")!).getAllByRole("cell").map(x => x.textContent);
-    expect(cells("Whole view")).toEqual(["Whole view", "$2.25", "$0.09", "$1.50", "1", "38%"]);
-    expect(cells("foo")).toEqual(["foo", "$2.17", "$0.09", "$1.50", "1", "42%"]);
+    const c = section("cost"), row = (name: string) => cells(c.getByText(name).closest("tr")!);
+    expect(row("Whole view")).toEqual(["Whole view", "$2.25", "$0.09", "$1.50", "1", "38%"]);
+    expect(row("foo")).toEqual(["foo", "$2.17", "$0.09", "$1.50", "1", "42%"]);
     // No long-tier request in a priced project is $0, not unknown.
-    expect(cells("codex-app")).toEqual(["codex-app", "$0.04", "$0.00", "$0", "0", "0%"]);
+    expect(row("codex-app")).toEqual(["codex-app", "$0.04", "$0.00", "$0", "0", "0%"]);
   });
 
   it("reads unknown costs as –, never zero", async () => {
     const none = { cost: null, cache_read_cost: null, long_cost: null, long_requests: 0, cache_hit_ratio: null };
     await show({ ...fixture, cost: { ...fixture.cost, ...none, by_project: fixture.cost.by_project.map(p => ({ ...p, ...none })) } });
     const c = section("cost");
-    for (const name of ["Whole view", "foo", "bar"]) expect(within(c.getByText(name).closest("tr")!).getAllByRole("cell").slice(1).map(x => x.textContent)).toEqual(["–", "–", "–", "0", "–"]);
+    for (const name of ["Whole view", "foo", "bar"]) expect(cells(c.getByText(name).closest("tr")!).slice(1)).toEqual(["–", "–", "–", "0", "–"]);
   });
 
   it("lists the sessions where caching broke, with their causes and uncached tokens", async () => {
     await show();
     const d = drawer("d-breaks");
-    expect(d.querySelector("summary .c")!.textContent).toBe("3");
+    expect(d.querySelector(".drawer-toggle .c")!.textContent).toBe("3");
     const first = within(d).getAllByRole("row")[1]!;
-    expect(within(first).getAllByRole("cell").map(c => c.textContent)).toEqual(["#f2", "fooClaude Code", "2", "1 model switch, 1 expired", "174,000", "$0.52"]);
+    expect(cells(first)).toEqual(["#f2", "fooClaude Code", "2", "1 model switch, 1 expired", "174,000", "$0.52"]);
     await userEvent.click(within(first).getByRole("button"));
     expect(hash().get("session")).toBe("f2");
   });

@@ -1,6 +1,7 @@
 // The tips: each rule's finding as an InsightCard, and the drawer listing its sessions.
-import { useLayoutEffect } from "react";
+import { useEffect } from "react";
 import type { Tip, TipId } from "../../api";
+import { DataTable } from "../../components/DataTable";
 import { Drawer, openDrawer } from "../../components/Drawer";
 import type { Insight } from "../../components/InsightCard";
 import { openSessionSheet, pickRow, sessName, shortId } from "../../components/sheets/session";
@@ -25,19 +26,20 @@ export function tipInsight(t: Tip, open: (id: TipId) => void): Insight {
 
 /** The sessions a tip matches (the newest 20), each opening its sheet. Mounted while the hash names the tip; closing it clears the hash. */
 export function TipSessions({ tip, onClose }: { tip: Tip; onClose: () => void }) {
-  useLayoutEffect(() => { openDrawer("d-tip", true); }, [tip.id]);
+  // An effect, not a layout effect: the drawer registers itself in its own effect, which runs first (a child's before its parent's).
+  useEffect(() => { openDrawer("d-tip", true); }, [tip.id]);
   const left = tip.matched - tip.sessions.length;
   return (
     <Drawer id="d-tip" title={`Sessions matching ${tip.title}`} count={num(tip.matched)} onToggle={o => { if (!o) onClose(); }}>
       <div className="hint">{tip.sessions.length < tip.matched ? `The ${num(tip.sessions.length)} newest of ${num(tip.matched)}` : plural(tip.matched, "session")}, newest first. Select one for details.</div>
-      <div className="scroll"><table>
-        <thead><tr><th>Session</th><th>Project</th><th>Source</th><th>Started</th></tr></thead>
+      <DataTable name={`Sessions matching ${tip.title}`}>
+        <thead><tr><th scope="col">Session</th><th scope="col">Project</th><th scope="col">Source</th><th scope="col">Started</th></tr></thead>
         <tbody>{tip.sessions.map(s => <tr key={s.session_id} {...pickRow(s.session_id, openSessionSheet)}>
-          <td className="when sess"><button type="button" className="cellbtn" data-session={s.session_id} title={s.title || s.session_id}>{sessName(s)}</button>
-            {s.title && <div className="muted small">{shortId(s.session_id)}</div>}</td>
+          <th scope="row" className="when sess"><button type="button" className="cellbtn" data-session={s.session_id} title={s.title || s.session_id}>{sessName(s)}</button>
+            {s.title && <div className="muted small">{shortId(s.session_id)}</div>}</th>
           <td className="name"><Proj project={s.project} /></td>
           <td><SourceName source={s.source} /></td><td className="when">{when(s.first_ts)}</td></tr>)}</tbody>
-      </table></div>
+      </DataTable>
       {left > 0 && <p className="hint">and {num(left)} more.</p>}
     </Drawer>
   );

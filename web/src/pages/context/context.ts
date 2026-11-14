@@ -6,8 +6,6 @@ import { big, num, pct, plural } from "../../format";
 export const FILL_LABELS = ["<25%", "25–50%", "50–75%", "75–90%", "≥90%"] as const;
 /** A curve point needs this many sessions (the server's GROWTH_MIN_SESSIONS). */
 export const CURVE_MIN_SESSIONS = 5;
-/** A token figure from result bytes is bytes ÷ 4, rounded down: an estimate wherever it shows. */
-export const EST_TITLE = "bytes ÷ 4";
 
 /** A size in bytes as "812 B", "250 KB" or "1.4 MB" (decimal units, as the figures are counts, not memory). */
 export function bytes(n: number | null | undefined): string {

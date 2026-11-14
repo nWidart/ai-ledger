@@ -1,4 +1,5 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import type { GrowthPoint } from "../../api";
 import { setOrder } from "../../colors";
@@ -25,7 +26,7 @@ describe("GrowthChart", () => {
 
   it("describes itself, naming the median at the last turn shown", () => {
     render(<GrowthChart curve={view} projects={[foo]} />);
-    const chart = screen.getByRole("img");
+    const chart = screen.getByRole("group");
     const label = chart.getAttribute("aria-label")!;
     expect(label).toContain("70k at turn 5");
     expect(label).toContain("30k tokens at turn 1");
@@ -35,7 +36,7 @@ describe("GrowthChart", () => {
 
   it("reads a turn with the arrow keys", () => {
     render(<GrowthChart curve={view} projects={[foo]} />);
-    const chart = screen.getByRole("img");
+    const chart = screen.getByRole("group");
     act(() => chart.focus());
     fireEvent.keyDown(chart, { key: "ArrowRight" });
     expect(document.querySelector(".readout")!.textContent).toBe(`${readTurn(view[0]!)}; foo ${"36k"}`);
@@ -43,6 +44,30 @@ describe("GrowthChart", () => {
     expect(document.querySelector(".readout")!.textContent).toContain("Turn 5: median 70k tokens (25th to 75th percentile 49k to 98k), 9 sessions");
     fireEvent.blur(chart);
     expect(document.querySelector(".readout")!.textContent).toBe("");
+  });
+
+  it("dismisses the reading with Escape", () => {
+    render(<GrowthChart curve={view} projects={[]} />);
+    const chart = screen.getByRole("group");
+    fireEvent.keyDown(chart, { key: "ArrowRight" });
+    expect(document.querySelector(".readout")!.textContent).not.toBe("");
+    fireEvent.keyDown(chart, { key: "Escape" });
+    expect(document.querySelector(".readout")!.textContent).toBe("");
+  });
+
+  it("offers every turn as a table, closed until asked for, with each project's median", async () => {
+    render(<GrowthChart curve={view} projects={[foo, bar]} />);
+    expect(screen.queryByRole("table")).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Show data table" }));
+    const table = screen.getByRole("table", { name: "Median context at each turn" });
+    expect(within(table).getAllByRole("columnheader").map(h => h.textContent)).toEqual(["Turn", "Median", "25th percentile", "75th percentile", "Sessions", "foo", "bar"]);
+    const rows = within(table).getAllByRole("row").slice(1);
+    expect(rows).toHaveLength(view.length);
+    expect(within(rows[0]!).getByRole("rowheader").textContent).toBe("1");
+    expect(within(rows[0]!).getAllByRole("cell").map(c => c.textContent)).toEqual(["30k", "21k", "42k", "9", "36k", "18k"]);
+    // bar's curve stops after turn 3.
+    expect(within(rows[4]!).getAllByRole("cell").at(-1)!.textContent).toBe("–");
+    expect(screen.getByRole("button", { name: "Hide data table" }).getAttribute("aria-expanded")).toBe("true");
   });
 
   it("reads the turn under the pointer, away from the endpoints", () => {
@@ -58,7 +83,7 @@ describe("GrowthChart", () => {
   it("draws a curve of one point, and nothing without one", () => {
     const { container, rerender } = render(<GrowthChart curve={[pt(1, 12_000)]} projects={[]} />);
     expect(container.querySelectorAll("path.curve.view")).toHaveLength(2);
-    expect(screen.getByRole("img").getAttribute("aria-label")).toContain("12k tokens");
+    expect(screen.getByRole("group").getAttribute("aria-label")).toContain("12k tokens");
     rerender(<GrowthChart curve={[]} projects={[]} />);
     expect(container.querySelector("svg")).toBeNull();
   });

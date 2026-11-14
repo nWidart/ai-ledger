@@ -40,13 +40,13 @@
 .pg-context .advice { margin: 0; }
 .pg-context .advice code { background: var(--surface-2); padding: 0 4px; border-radius: 4px; }
 .pg-context .tip-drawer { margin-top: 12px; }
-.pg-context .tip-drawer details.drawer[open] { background: var(--surface-1); }
+.pg-context .tip-drawer .drawer[data-open] { background: var(--surface-1); }
 
 /* Tables: the whole view's row reads as a total, a figure with its bar */
-.pg-context tr.all td { color: var(--text-secondary); font-weight: 500; background: var(--surface-2); }
+.pg-context .panel tr.all :is(td, th) { color: var(--text-secondary); font-weight: 500; background: var(--surface-2); }
 .pg-context td.input { max-width: 280px; }
 .pg-context td.input code { font-size: 12px; }
-.pg-context td.name .ibar { margin-right: 8px; }
+.pg-context :is(td, th).name .ibar { margin-right: 8px; }
 .pg-context .ibar { width: 56px; }
 .pg-context .chip.est { border-style: dashed; margin-left: 4px; font-size: 10.5px; }
 .pg-context .lead-line { margin: 10px 0 0; color: var(--text-secondary); max-width: 90ch; }
@@ -56,7 +56,6 @@
 /* Starting context: the median start per week */
 .pg-context .trend { margin: 6px 0 0; max-width: 560px; }
 .pg-context .trend svg { display: block; width: 100%; height: 96px; overflow: visible; }
-.pg-context .trend table.sr { width: 1px; } /* the shared table width would stretch the visually hidden one */
 .pg-context .trend figcaption { display: flex; justify-content: space-between; gap: 8px; font-size: 11.5px; color: var(--text-muted); margin-top: 2px; }
 
 /* Growth: the chart, then the vitals */
@@ -109,5 +108,5 @@
 /* Phones: the wide tables lose their least needed columns' room by scrolling sideways */
 @media (max-width: 700px) {
   .pg-context td.input { max-width: 150px; }
-  .pg-context td.sess { max-width: 200px; }
+  .pg-context :is(td, th).sess { max-width: 200px; }
 }

@@ -27,6 +27,7 @@
 - [x] 3.3 Keep drawer titles as real headings: no `h2` inside `summary`.
 - [x] 3.4 Add a data-table alternative to the Cost and Work charts.
 - [x] 3.5 Make scrollable table wrappers focusable, named regions.
+- [x] 3.6 Bring the Context page (merged after this change began) up to the same patterns: `<main>`, named tables with `th scope`, toggletips for hover-only column text, a data-table alternative for its charts, no loading live region, and the drawer and forced-colors styles it relies on.
 
 ## 4. CSS and theming
 

@@ -1,7 +1,9 @@
 // Context's sections: starting context, growth, what fills context and cost.
 import type { ContextPayload, FillRow } from "../../api";
 import { useColors } from "../../colors";
+import { DataTable } from "../../components/DataTable";
 import { openProjectSheet, openToolSheet, pickRow } from "../../components/sheets/session";
+import { Toggletip } from "../../components/Toggletip";
 import { dur, num, pct, plural, usd, usd0 } from "../../format";
 import { Proj, Est } from "./cells";
 import { FillBars, StartTrend } from "./Charts";
@@ -23,19 +25,19 @@ export function Starting({ d }: { d: D }) {
       <div className="hint">The prompt tokens of each session's first turn: what the model read before any work, from the system prompt and tool definitions to the project's instructions.
         The median is the typical start; the 10th percentile approximates the fixed overhead, since the sessions with the smallest first prompt start with little else.
         {" "}{num(s.sessions)} of {plural(c.sessions, "session")} in this view have a measured start; {num(c.with_window)} have a known window, which is all a share of the window can cover.</div>
-      {s.by_project.length ? <div className="scroll"><table>
-        <thead><tr><th>Project</th><th className="num">Median</th><th className="num" title="Approximates the fixed overhead">10th percentile</th>
-          <th className="num">Share of window</th><th className="num">Sessions</th></tr></thead>
+      {s.by_project.length ? <DataTable name="Starting context by project">
+        <thead><tr><th scope="col">Project</th><th scope="col" className="num">Median</th><th scope="col" className="num">10th percentile</th>
+          <th scope="col" className="num">Share of window</th><th scope="col" className="num">Sessions</th></tr></thead>
         <tbody>
-          {s.by_project.length > 1 && <tr key="total" className="all"><td className="name">Whole view</td><td className="num">{num(s.median)}</td><td className="num">{num(s.p10)}</td>
+          {s.by_project.length > 1 && <tr key="total" className="all"><th scope="row" className="name">Whole view</th><td className="num">{num(s.median)}</td><td className="num">{num(s.p10)}</td>
             <td className="num">{share(s.window_share)}</td><td className="num">{num(s.sessions)}</td></tr>}
           {s.by_project.map(p => <tr key={`project:${p.project ?? ""}`} {...(p.project ? pickRow(p.project, v => openProjectSheet(v)) : {})}>
-            <td className="name"><Proj project={p.project} button={!!p.project} /></td>
+            <th scope="row" className="name"><Proj project={p.project} button={!!p.project} /></th>
             <td className="num"><Ibar share={p.median / max} color={color(p.project)} />{num(p.median)}</td><td className="num">{num(p.p10)}</td>
             <td className="num">{share(p.window_share)}{p.window != null && p.window_share != null && <span className="muted small"> of {windowLabel(p.window)}</span>}</td>
             <td className="num">{num(p.sessions)}</td></tr>)}
         </tbody>
-      </table></div> : <p className="empty">No session in this view has a measured start.</p>}
+      </DataTable> : <p className="empty">No session in this view has a measured start.</p>}
       {s.trend.length > 1 && <><h3>Median start by week</h3><StartTrend trend={s.trend} /></>}
     </section>
   );
@@ -65,14 +67,14 @@ export function Growth({ d }: { d: D }) {
       {!tiles && <p className="hint">{c.compacted > 0
         ? `${plural(c.compacted, "session")} compacted, but none has a recorded first compaction yet, so there is no way-to-compaction figure.`
         : "No session in this view compacted, so there is no figure for the way to a first compaction."}</p>}
-      {tiles && by.length > 1 && <div className="scroll"><table>
-        <thead><tr><th>Project</th><th className="num">Sessions</th><th className="num">Added per prompt</th><th className="num">Compacted</th>
-          <th className="num">Turns to first compaction</th><th className="num">Active time to it</th></tr></thead>
+      {tiles && by.length > 1 && <DataTable name="Growth by project">
+        <thead><tr><th scope="col">Project</th><th scope="col" className="num">Sessions</th><th scope="col" className="num">Added per prompt</th><th scope="col" className="num">Compacted</th>
+          <th scope="col" className="num">Turns to first compaction</th><th scope="col" className="num">Active time to it</th></tr></thead>
         <tbody>{by.map(p => <tr key={`project:${p.project ?? ""}`} {...(p.project ? pickRow(p.project, v => openProjectSheet(v)) : {})}>
-          <td className="name"><Proj project={p.project} button={!!p.project} /></td><td className="num">{num(p.sessions)}</td><td className="num">{num(p.added_per_prompt)}</td>
+          <th scope="row" className="name"><Proj project={p.project} button={!!p.project} /></th><td className="num">{num(p.sessions)}</td><td className="num">{num(p.added_per_prompt)}</td>
           <td className="num">{num(p.compacted)}</td><td className="num">{num(p.turns_to_compaction)}</td>
           <td className="num">{p.minutes_to_compaction == null ? "–" : dur(p.minutes_to_compaction * 60)}</td></tr>)}</tbody>
-      </table></div>}
+      </DataTable>}
       <h3>Peak fill by window size</h3>
       <div className="hint">How many sessions peaked in each fifth of their model's window. {num(c.with_window)} of {plural(c.sessions, "session")} have a known window.</div>
       {g.fill.length ? <FillBars fill={g.fill} /> : <p className="empty">No session in this view has a known window.</p>}
@@ -83,15 +85,15 @@ export function Growth({ d }: { d: D }) {
 /** Tool results by tool or MCP server: the main thread's summed size, with an estimated token count. */
 function FillTable({ rows, head, kind }: { rows: FillRow[]; head: string; kind: "tool" | "mcp" }) {
   const max = Math.max(...rows.map(r => r.bytes), 1);
-  return <div className="scroll tall"><table>
-    <thead><tr><th>{head}</th><th className="num">Calls</th><th className="num">Median</th><th className="num">Largest</th><th className="num">Total</th>
-      <th className="num" title="Result bytes ÷ 4">Estimated tokens</th></tr></thead>
+  return <DataTable name={`Tool results ${kind === "mcp" ? "by MCP server" : "by tool"}`} region="scroll tall">
+    <thead><tr><th scope="col">{head}</th><th scope="col" className="num">Calls</th><th scope="col" className="num">Median</th><th scope="col" className="num">Largest</th><th scope="col" className="num">Total</th>
+      <th scope="col" className="num">Estimated tokens</th></tr></thead>
     <tbody>{rows.map(r => <tr key={r.name} {...pickRow(r.name, v => openToolSheet(kind, v))}>
-      <td className="name"><Ibar share={r.bytes / max} /><button type="button" className="cellbtn" title={r.name}>{r.name}</button></td>
-      <td className="num" title={r.with_bytes < r.calls ? `${num(r.with_bytes)} with a result size` : undefined}>{num(r.calls)}</td>
+      <th scope="row" className="name"><Ibar share={r.bytes / max} /><button type="button" className="cellbtn" title={r.name}>{r.name}</button></th>
+      <td className="num">{num(r.calls)}{r.with_bytes < r.calls && <Toggletip term="calls">{num(r.with_bytes)} with a result size</Toggletip>}</td>
       <td className="num">{bytes(r.p50_bytes)}</td><td className="num">{bytes(r.max_bytes)}</td><td className="num">{bytes(r.bytes)}</td>
       <td className="num"><Est tokens={r.est_tokens} /></td></tr>)}</tbody>
-  </table></div>;
+  </DataTable>;
 }
 
 /** What the tool results put in context, by tool and MCP server, and the subagents' results kept apart. */
@@ -121,15 +123,15 @@ export function CostSection({ d }: { d: D }) {
     <section className="panel sect" id="cost" aria-labelledby="costTitle">
       <h2 id="costTitle">Cost</h2>
       <div className="hint">Estimated at API list prices, as on the Cost page; an unpriced model reads as unknown (–), never as zero. The long-prompt tier prices the whole request higher once the prompt passes a model's threshold.</div>
-      <div className="scroll"><table>
-        <thead><tr><th>Project</th><th className="num">Estimated cost</th><th className="num">Cache reads</th><th className="num">Long-prompt tier</th>
-          <th className="num">Long-tier requests</th><th className="num" title="Cache read tokens over all prompt tokens">Cache-hit ratio</th></tr></thead>
+      <DataTable name="Cost by project">
+        <thead><tr><th scope="col">Project</th><th scope="col" className="num">Estimated cost</th><th scope="col" className="num">Cache reads</th><th scope="col" className="num">Long-prompt tier</th>
+          <th scope="col" className="num">Long-tier requests</th><th scope="col" className="num">Cache-hit ratio<Toggletip term="cache-hit ratio">Cache read tokens over all prompt tokens</Toggletip></th></tr></thead>
         <tbody>{rows.map(r => <tr key={r.whole ? "total" : `project:${r.project ?? ""}`} className={r.whole ? "all" : undefined}
           {...(!r.whole && r.project ? pickRow(r.project, v => openProjectSheet(v)) : {})}>
-          <td className="name">{r.whole ? "Whole view" : <Proj project={r.project} button={!!r.project} />}</td>
+          <th scope="row" className="name">{r.whole ? "Whole view" : <Proj project={r.project} button={!!r.project} />}</th>
           <td className="num">{usd(r.cost)}</td><td className="num">{usd(r.cache_read_cost)}</td><td className="num">{longCost(r)}</td>
           <td className="num">{num(r.long_requests)}</td><td className="num">{pct(r.cache_hit_ratio)}</td></tr>)}</tbody>
-      </table></div>
+      </DataTable>
     </section>
   );
 }
