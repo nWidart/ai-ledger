@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "re
 import { navigate, setHash, sharedHash, useHashState, usePathname } from "../hash";
 import { getTheme, nextTheme, setTheme, useTheme, type Theme } from "../theme";
 import { alertKey, alertText } from "../pages/limits/limits";
+import { usePageVisible } from "../usePageVisible";
 import { ProjectDot } from "./ProjectDot";
 import { openPalette, shortcutHint, shortcutKeys } from "./palette/store";
 import { pollStatus, refresh, useRefreshState } from "./refresh";
@@ -46,15 +47,20 @@ export function Nav() {
   }, []);
 
   // Ingest status: every minute, and every few seconds while an ingest runs. A new last_change clears the data cache.
+  // Stopped while the tab is hidden; on return it asks at once when a poll came due meanwhile, else on the old schedule.
+  const visible = usePageVisible(), sched = useRef({ at: -Infinity, wait: POLL_MS });
   useEffect(() => {
+    if (!visible) return;
     let live = true, timer = 0;
     const poll = () => {
       clearTimeout(timer);
-      void pollStatus().then(s => { if (live) timer = window.setTimeout(poll, s?.ingesting ? INGESTING_MS : POLL_MS); });
+      sched.current.at = Date.now();
+      void pollStatus().then(s => { if (live) { sched.current.wait = s?.ingesting ? INGESTING_MS : POLL_MS; timer = window.setTimeout(poll, sched.current.wait); } });
     };
-    poll();
+    const left = sched.current.at + sched.current.wait - Date.now();
+    if (left <= 0) poll(); else timer = window.setTimeout(poll, left);
     return () => { live = false; clearTimeout(timer); };
-  }, []);
+  }, [visible]);
 
   const go = (e: MouseEvent<HTMLAnchorElement>, to: string) => {
     if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
@@ -99,14 +105,14 @@ export function Nav() {
             <button type="button" aria-label="Clear project filter" title="Show all projects" onClick={clear}>✕<span className="lbl"> Clear</span></button>
           </span>
         )}
-        <button type="button" className="appnav-palette" aria-label={`Open command palette (${shortcutHint()})`} aria-haspopup="dialog"
+        <button type="button" className="appnav-palette" aria-label={`Search, open command palette (${shortcutHint()})`} aria-haspopup="dialog"
           aria-keyshortcuts={shortcutKeys()} title={`Filter, go to a page or open an inspector (${shortcutHint()})`} onClick={openPalette}>
           <svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5" fill="none" stroke="currentColor" strokeWidth="1.8" /><path d="m13 13 4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>
           <span className="lbl">Search</span><kbd>{shortcutHint()}</kbd>
         </button>
         <span className="appnav-status" id="navStatus" aria-live="polite">{st.text}</span>
         <span className="sr" role="status">{said.text}</span>
-        <button type="button" id="navRefresh" className={st.failed ? "failed" : undefined} title={st.text} disabled={st.busy} onClick={refresh}
+        <button type="button" id="navRefresh" className={st.failed ? "failed" : undefined} title={st.text} aria-disabled={st.busy || undefined} onClick={refresh}
           aria-label={st.retry ? "Retry" : "Refresh"}>
           <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9" /><path d="M13.5 2.5v3h-3" /></svg>
           <span className="lbl">{st.retry ? "Retry" : "Refresh"}</span>

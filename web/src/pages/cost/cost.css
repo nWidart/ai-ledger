@@ -134,11 +134,11 @@
 /* Cost by project: the first column stays put while the table scrolls sideways */
 .pg-cost #d-projcost th:first-child, .pg-cost #d-projcost td:first-child { position: sticky; left: 0; background: var(--bg); z-index: 1; box-shadow: 1px 0 0 var(--border); }
 .pg-cost #d-projcost th:first-child { z-index: 2; }
-.pg-cost #d-projcost tr.sel td:first-child { background: color-mix(in srgb, var(--accent) 11%, var(--bg)); }
+.pg-cost #d-projcost tr.sel :is(td, th):first-child { background: color-mix(in srgb, var(--accent) 11%, var(--bg)); }
 /* From "Compare projects": the outlier row, ringed and tinted, with a note above the table saying why. */
-.pg-cost #d-projcost tr.spot td { background: var(--accent-soft); }
+.pg-cost #d-projcost tr.spot :is(td, th) { background: var(--accent-soft); }
 .pg-cost #d-projcost tr.spot td.tone.worse { background: var(--critical-soft); }
-.pg-cost #d-projcost tr.spot td:first-child { background: color-mix(in srgb, var(--accent) 12%, var(--bg)); box-shadow: inset 3px 0 0 var(--accent), 1px 0 0 var(--border); }
+.pg-cost #d-projcost tr.spot :is(td, th):first-child { background: color-mix(in srgb, var(--accent) 12%, var(--bg)); box-shadow: inset 3px 0 0 var(--accent), 1px 0 0 var(--border); }
 .pg-cost .proj-note { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; margin: 0 0 10px; padding: 8px 12px; border-radius: 8px;
   background: var(--surface-1); border: 1px solid var(--border); font-size: 13px; color: var(--text-secondary); }
 .pg-cost .proj-note b { color: var(--text-primary); }
@@ -150,9 +150,9 @@
 .pg-cost .daychip button { border: 0; background: none; padding: 1px 6px; border-radius: 999px; font-size: 12px; color: inherit; }
 @media (max-width: 520px) {
   .pg-cost #d-top .opt { display: none; }
-  .pg-cost #d-top td.name { max-width: 90px; }
-  .pg-cost #d-top td.when { white-space: normal; }
-  .pg-cost #d-top td.when .small { overflow-wrap: anywhere; }
+  .pg-cost #d-top :is(td, th).name { max-width: 90px; }
+  .pg-cost #d-top :is(td, th).when { white-space: normal; }
+  .pg-cost #d-top :is(td, th).when .small { overflow-wrap: anywhere; }
 }
 
 /* The tokens chart with every kind hidden: a way back in place of an empty plot. */

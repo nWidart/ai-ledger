@@ -1,8 +1,9 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import type { DailyWorkRow, UsagePayload } from "../../api";
 import { useColors } from "../../colors";
 import { dayLabel, niceStep, num, plural } from "../../format";
 import { dayAxis, peakLabelAt, tipAt, useWidth } from "../../components/chart";
+import { ChartTable, DataTable } from "../../components/DataTable";
 import type { Kind } from "../cost/cost";
 import { busy, failRate, METRICS, monday, workBuckets, workKinds, workStack, type WorkMetric } from "./work";
 import { WorkHours } from "./WorkHours";
@@ -60,16 +61,19 @@ interface WorkBarsProps extends Omit<WorkPanelProps, "d"> {
 function WorkBars({ rows, week, view, kinds, stack, metric, onMetric, onDay }: WorkBarsProps) {
   const box = useRef<HTMLDivElement>(null), tip = useRef<HTMLDivElement>(null), svg = useRef<SVGSVGElement>(null);
   const W = useWidth(box);
-  const [at, setAt] = useState<{ i: number; x: number; y: number } | null>(null);
-  useEffect(() => setAt(null), [rows, metric]);
-  useLayoutEffect(() => {
-    if (!at || !tip.current || !box.current) return;
-    const p = tipAt(box.current, tip.current, at.x, at.y);
+  // The bar read (an index) is state; the pointer's position is not, so a move inside one bar re-renders nothing: the
+  // tooltip is only moved by hand.
+  const [at, setAt] = useState<number | null>(null), pos = useRef({ x: 0, y: 0 });
+  const place = () => {
+    if (!tip.current || !box.current) return;
+    const p = tipAt(box.current, tip.current, pos.current.x, pos.current.y);
     tip.current.style.left = p.left + "px"; tip.current.style.top = p.top + "px";
-  }, [at]);
+  };
+  useEffect(() => setAt(null), [rows, metric]);
+  useLayoutEffect(() => { if (at != null) place(); }, [at]);
 
   const M = METRICS.find(x => x.k === metric)!, unit = week ? "week" : "day";
-  const a = dayAxis(W, H, rows.length, Math.max(...rows.map(p => p[metric]), 0), niceStep, MARGIN);
+  const a = useMemo(() => dayAxis(W, H, rows.length, Math.max(...rows.map(p => p[metric]), 0), niceStep, MARGIN), [W, rows, metric]);
   // Week labels are longer, so fewer of them fit.
   const every = week ? Math.max(1, Math.ceil(rows.length / Math.max(2, Math.floor(a.iw / 100)))) : a.every;
   // The rate axis has as many steps as the count axis, so its ticks sit on the same grid lines.
@@ -79,30 +83,55 @@ function WorkBars({ rows, week, view, kinds, stack, metric, onMetric, onDay }: W
   const rDigits = Math.max(0, -Math.floor(Math.log10(rStep))); // a step of 0.5 reads "0.5", not "1"
   const line = rates.map((v, i) => (v == null ? "" : `${rates[i - 1] != null ? "L" : "M"}${a.cx(i).toFixed(1)},${ry(v).toFixed(1)}`)).join("");
   const lone = rates.flatMap((v, i) => (v != null && rates[i - 1] == null && rates[i + 1] == null ? [i] : [])); // no line reaches these
-  const plain: Kind = { k: metric, label: M.label, c: BAR };
+  const plain = useMemo<Kind>(() => ({ k: metric, label: M.label, c: BAR }), [metric, M.label]);
   // A bar's parts, bottom first; zero parts left out.
-  const parts = (i: number): [Kind, number][] =>
-    (kinds.length ? kinds.map((k): [Kind, number] => [k, stack[i]?.[k.k] ?? 0]) : [[plain, rows[i]![metric]] as [Kind, number]]).filter(([, v]) => v > 0);
+  const parts = useCallback((i: number): [Kind, number][] =>
+    (kinds.length ? kinds.map((k): [Kind, number] => [k, stack[i]?.[k.k] ?? 0]) : [[plain, rows[i]![metric]] as [Kind, number]]).filter(([, v]) => v > 0),
+  [kinds, stack, plain, rows, metric]);
   const peak = rows.reduce((b, p, i) => (p[metric] > rows[b]![metric] ? i : b), 0), pk = rows[peak];
   const indexAt = (clientX: number) => {
     const r = svg.current!.getBoundingClientRect(), px = (clientX - r.left) * W / r.width;
     return Math.max(0, Math.min(rows.length - 1, Math.floor((px - a.m.l) / a.bw)));
   };
   const pick = (i: number) => { const p = rows[i]; if (!week && p && busy(p)) { setAt(null); onDay(p.day); } };
-  const onMove = (ev: PointerEvent) => setAt({ i: indexAt(ev.clientX), x: ev.clientX, y: ev.clientY });
+  const onMove = (ev: PointerEvent) => {
+    const i = indexAt(ev.clientX);
+    pos.current = { x: ev.clientX, y: ev.clientY };
+    if (i === at) place(); else setAt(i); // a new bar: the layout effect places the tooltip once it shows that bar
+  };
   const onKey = (ev: KeyboardEvent) => {
-    if (ev.key === "Enter" && at) { ev.preventDefault(); return pick(at.i); }
+    if (ev.key === "Escape") return setAt(null);
+    if (ev.key === "Enter" && at != null) { ev.preventDefault(); return pick(at); }
     const step = ({ ArrowLeft: -1, ArrowRight: 1, Home: -Infinity, End: Infinity } as Record<string, number>)[ev.key];
     if (step == null || !rows.length) return;
     ev.preventDefault();
-    const from = at?.i ?? (step > 0 ? -1 : rows.length); // first Right picks the first bar, first Left the last
+    const from = at ?? (step > 0 ? -1 : rows.length); // first Right picks the first bar, first Left the last
     const i = Math.max(0, Math.min(rows.length - 1, from + step));
     const r = svg.current!.getBoundingClientRect(), s = r.width / W;
-    setAt({ i, x: r.left + a.cx(i) * s, y: r.top + a.m.t * s + 20 });
+    pos.current = { x: r.left + a.cx(i) * s, y: r.top + a.m.t * s + 20 };
+    if (i === at) place(); else setAt(i);
   };
+  // The bars and their axis labels: drawn again only with the data, the size or the metric, not on every pointer move.
+  const bars = useMemo(() => rows.map((p, i) => {
+    const x = a.x(i), segs = parts(i);
+    let base = 0;
+    return <g key={p.day}>
+      {i % every === 0 && <text x={x + a.w / 2} y={H - 6} textAnchor="middle" fontSize="11" fill="var(--text-muted)">{bucketLabel(p.day, week)}</text>}
+      {/* One group per bar, so the whole stack grows from the baseline when data lands. */}
+      {segs.length > 0 && <g className="bar-seg" style={{ ["--i" as string]: Math.min(i, 60) }}>{segs.map(([k, v], j) => {
+        const top = a.y(base + v), h = v / a.yMax * a.ih;
+        base += v;
+        // 2px surface gap between stacked segments; the top segment gets rounded corners.
+        const hh = Math.max(0, h - (j ? 2 : 0));
+        return j === segs.length - 1 && hh > 4
+          ? <path key={k.k} d={`M${x},${top + hh} V${top + 3} q0,-3 3,-3 H${x + a.w - 3} q3,0 3,3 V${top + hh} Z`} fill={k.c} />
+          : <rect key={k.k} x={x} y={top} width={a.w} height={hh} fill={k.c} />;
+      })}</g>}
+    </g>;
+  }), [rows, a, every, week, parts]);
   const ticks: number[] = [];
   for (let v = 0; v <= n; v++) ticks.push(v);
-  const cur = at ? rows[at.i] : undefined, curParts = at && kinds.length ? parts(at.i).reverse() : [];
+  const cur = at != null ? rows[at] : undefined, curParts = at != null && kinds.length ? parts(at).reverse() : [];
   const name = (day: string) => bucketLabel(day, week, true, view);
   const what = `${M.label}${kinds.length ? " by project" : ""}${hasRate ? " and errors per 100 tool calls" : ""} per ${unit}, ${plural(rows.length, unit)}`;
   const label = pk && pk[metric] > 0
@@ -124,31 +153,15 @@ function WorkBars({ rows, week, view, kinds, stack, metric, onMetric, onDay }: W
       </div>
       <div className="legend" aria-hidden="true">
         {(kinds.length ? kinds : [plain]).map(k => <span key={k.k} className="key"><i style={{ background: k.c }} />{k.label}</span>)}
-        {hasRate && <span className="key"><i className="line" style={{ borderTopColor: FAIL }} />Errors per 100 calls (right axis)</span>}
+        {hasRate && <span className="key"><i className="line fail" />Errors per 100 calls (right axis)</span>}
       </div>
-      <div className="chart" ref={box} tabIndex={0} role="img" aria-label={label} onKeyDown={onKey} onBlur={() => setAt(null)}>
+      <div className="chart" ref={box} tabIndex={0} role="group" aria-label={label} onKeyDown={onKey} onBlur={() => setAt(null)}>
         <svg ref={svg} viewBox={`0 0 ${W} ${H}`} aria-hidden="true">
           {ticks.map(t => <g key={t}><line x1={a.m.l} x2={W - a.m.r} y1={a.y(t * a.step)} y2={a.y(t * a.step)} stroke="var(--grid)" />
             <text x={a.m.l - 6} y={a.y(t * a.step) + 4} textAnchor="end" fontSize="11" fill="var(--text-muted)">{num(t * a.step)}</text>
             {hasRate && <text className="rtick" x={W - a.m.r + 6} y={ry(t * rStep) + 4} fontSize="11" fill="var(--text-muted)">{num(t * rStep, rDigits)}</text>}</g>)}
           {hasRate && <text transform={`translate(${W - 6},${a.m.t + a.ih / 2}) rotate(90)`} textAnchor="middle" fontSize="11" fill="var(--text-muted)">Errors per 100 calls</text>}
-          {rows.map((p, i) => {
-            const x = a.x(i), segs = parts(i);
-            let base = 0;
-            return <g key={p.day}>
-              {i % every === 0 && <text x={x + a.w / 2} y={H - 6} textAnchor="middle" fontSize="11" fill="var(--text-muted)">{bucketLabel(p.day, week)}</text>}
-              {/* One group per bar, so the whole stack grows from the baseline when data lands. */}
-              {segs.length > 0 && <g className="bar-seg" style={{ ["--i" as string]: Math.min(i, 60) }}>{segs.map(([k, v], j) => {
-                const top = a.y(base + v), h = v / a.yMax * a.ih;
-                base += v;
-                // 2px surface gap between stacked segments; the top segment gets rounded corners.
-                const hh = Math.max(0, h - (j ? 2 : 0));
-                return j === segs.length - 1 && hh > 4
-                  ? <path key={k.k} d={`M${x},${top + hh} V${top + 3} q0,-3 3,-3 H${x + a.w - 3} q3,0 3,3 V${top + hh} Z`} fill={k.c} />
-                  : <rect key={k.k} x={x} y={top} width={a.w} height={hh} fill={k.c} />;
-              })}</g>}
-            </g>;
-          })}
+          {bars}
           {/* The rate line, haloed in the surface color so it stays readable across the bars. */}
           {hasRate && <>
             <path d={line} fill="none" stroke="var(--surface-1)" strokeWidth="4.5" strokeLinejoin="round" strokeLinecap="round" />
@@ -161,8 +174,8 @@ function WorkBars({ rows, week, view, kinds, stack, metric, onMetric, onDay }: W
             return <text x={lx} y={a.y(pk[metric]) - 7} textAnchor={anchor} fontSize="11" fontWeight="600" fill="var(--text-primary)"
               stroke="var(--surface-1)" strokeWidth="7" strokeLinejoin="round" paintOrder="stroke">Peak {plural(pk[metric], M.one)} · {bucketLabel(pk.day, week)}</text>;
           })()}
-          {at && <rect x={a.m.l + at.i * a.bw} width={a.bw} y={a.m.t} height={a.ih} fill="var(--text-primary)" opacity=".06" />}
-          <rect className="hit" x={a.m.l} y={a.m.t} width={a.iw} height={a.ih} fill="transparent" style={week ? undefined : { cursor: "pointer" }}
+          {at != null && <rect x={a.m.l + at * a.bw} width={a.bw} y={a.m.t} height={a.ih} fill="var(--text-primary)" opacity=".06" />}
+          <rect x={a.m.l} y={a.m.t} width={a.iw} height={a.ih} fill="transparent" className={week ? "hit" : "hit pick"}
             onPointerMove={onMove} onPointerLeave={() => setAt(null)} onClick={week ? undefined : ev => pick(indexAt(ev.clientX))} />
         </svg>
         <div className="tip" ref={tip} role="tooltip" style={{ display: cur ? "block" : "none" }}>{cur && <>
@@ -176,6 +189,13 @@ function WorkBars({ rows, week, view, kinds, stack, metric, onMetric, onDay }: W
       </div>
       <div className="sr" aria-live="polite">{cur ? `${name(cur.day)}: ${bucketText(cur)}`
         + (curParts.length ? `. ${M.label} by project: ${curParts.map(([k, v]) => `${k.label} ${num(v)}`).join(", ")}` : "") : ""}</div>
+      {/* The chart's text alternative: the measure per bucket (by project when stacked), its total and errors per 100 tool calls. */}
+      <ChartTable><DataTable name={`${M.label}${kinds.length ? " by project" : ""} and errors per 100 tool calls per ${unit}`} region="scroll tall">
+        <thead><tr><th scope="col">{week ? "Week" : "Day"}</th>{kinds.map(k => <th key={k.k} scope="col" className="num">{k.label}</th>)}
+          <th scope="col" className="num">{kinds.length ? "Total" : M.label}</th><th scope="col" className="num">Errors per 100 calls</th></tr></thead>
+        <tbody>{rows.map((p, i) => <tr key={p.day}><th scope="row">{name(p.day)}</th>
+          {kinds.map(k => <td key={k.k} className="num">{num(stack[i]?.[k.k] ?? 0)}</td>)}<td className="num">{num(p[metric])}</td><td className="num">{num(failRate(p), 1)}</td></tr>)}</tbody>
+      </DataTable></ChartTable>
     </section>
   );
 }

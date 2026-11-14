@@ -2,7 +2,6 @@
 import { ProjectName } from "../../components/ProjectDot";
 import { SOURCE_LABELS } from "../../components/Filters";
 import type { Source } from "../../api";
-import { EST_TITLE } from "./context";
 import { num } from "../../format";
 
 /** A project with its dot; a session with no project reads "(no project)". With `button`, the name is a native button,
@@ -14,6 +13,6 @@ export const Proj = ({ project, button }: { project: string | null; button?: boo
 /** An agent by its name, for a session's own row (a figure over every source never names one). */
 export const SourceName = ({ source }: { source: Source }) => <>{SOURCE_LABELS[source]}</>;
 
-/** An estimated token count from result bytes, always carrying its badge. */
+/** An estimated token count from result bytes, always carrying its badge (what it means, bytes ÷ 4, is in the hint above each table). */
 export const Est = ({ tokens }: { tokens: number }) =>
-  <>≈{num(tokens)} <span className="chip est" title={EST_TITLE}>estimate</span></>;
+  <>≈{num(tokens)} <span className="chip est">estimate</span></>;

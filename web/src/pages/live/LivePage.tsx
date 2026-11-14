@@ -11,7 +11,7 @@ import { AgentPanel, StateTag } from "./AgentPanel";
 import { groupSessions, needsYou, NO_FILTERS, stateNow, type LaneChoices } from "./live";
 import { Stream } from "./Stream";
 import { useLive, useNow } from "./useLive";
-import { Wall } from "./Wall";
+import { StateNote, Wall } from "./Wall";
 import "./live.css";
 
 /** The states the rail's footer counts as working, as the rail's working group. approval? and your turn count as waiting
@@ -63,16 +63,16 @@ export function LivePage() {
     <button type="button" data-session={s.session_id} aria-current={s.session_id === selected ? "true" : undefined} onClick={() => pick(s.session_id)}>
       {s.title ? <>
         <span className="ttl" title={s.title}>{s.title}</span><span className="cost">{usd(s.cost)}</span>
-        <span className="sub"><ProjectName project={s.project} /> · <StateTag st={stateNow(s.state, now)} now={now} /> · {SOURCE_LABELS[s.source]}</span>
+        <span className="sub"><ProjectName project={s.project} /> · <StateNote st={stateNow(s.state, now)} now={now} /> · {SOURCE_LABELS[s.source]}</span>
       </> : <>
         <ProjectName project={s.project} /><span className="cost">{usd(s.cost)}</span>
-        <span className="sub"><StateTag st={stateNow(s.state, now)} now={now} /> · {SOURCE_LABELS[s.source]}{s.branch ? <> · <code>{s.branch}</code></> : null}</span>
+        <span className="sub"><StateNote st={stateNow(s.state, now)} now={now} /> · {SOURCE_LABELS[s.source]}{s.branch ? <> · <code>{s.branch}</code></> : null}</span>
       </>}
     </button></li>;
   return (
-    <main className={"wrap pg-live" + (paused ? " paused" : "")}>
+    <main id="content" className={"wrap pg-live" + (paused ? " paused" : "")}>
       <div className="top">
-        <h1>Live</h1>
+        <h1 id={list && !sessions.length && !h.session ? undefined : "lede"} tabIndex={-1}>Live</h1>
         <div className="seg" role="group" aria-label="View">
           <button type="button" aria-pressed={mode === "stream"} onClick={() => set({ view: null })}>Stream</button>
           <button type="button" aria-pressed={mode === "wall"} onClick={() => set({ view: "wall" })}>Wall</button>
@@ -107,7 +107,7 @@ export function LivePage() {
               {shown.branch && <code className="chip">{shown.branch}</code>}<span className="chip">{SOURCE_LABELS[shown.source]}</span>
               {shown.model && <span className="chip">{shown.model}</span>}
               <a href={sessionHref(shown.session_id)} onClick={appLink}>Session sheet</a>
-              <span className="spacer" /><StateTag st={stateNow(shown.state, now)} now={now} />
+              <span className="spacer" /><StateTag st={stateNow(shown.state, now)} now={now} plain />
             </div>
             <Stream key={shown.session_id} s={shown} now={now} text={text} follow={follow} setFollow={setFollow} filters={filters} setFilters={setFilters}
               choices={choices} setChoices={setChoices} />
@@ -123,6 +123,6 @@ export function LivePage() {
 }
 
 function Empty({ newest }: { newest: { session_id: string; project: string | null; last_ts: string | null } | null }) {
-  return <p className="empty-live" id="lede">No session is active in this view.
+  return <p className="empty-live" id="lede" tabIndex={-1}>No session is active in this view.
     {newest && <> The newest, <a href={sessionHref(newest.session_id)}>{newest.project ?? "a session"}</a>, last wrote {when(newest.last_ts)}.</>}</p>;
 }

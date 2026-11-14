@@ -11,13 +11,13 @@ import { openPalette } from "../../components/palette/store";
 import { clearApiCache } from "../../useApi";
 import { tableFocus } from "./context";
 import { ErrorsPage } from "./ErrorsPage";
-import { typeRows } from "./model";
+import { sessionHref, typeRows } from "./model";
 import { when } from "../../format";
 import { lostPayload } from "./lostData";
 import { VIEW_KEY } from "./view";
 
-// typeRows runs through its own implementation; the mock only counts the calls.
-vi.mock("./model", async orig => { const a = await orig<typeof import("./model")>(); return { ...a, typeRows: vi.fn(a.typeRows) }; });
+// typeRows and sessionHref (one call per example render) run through their own implementation; the mock only counts the calls.
+vi.mock("./model", async orig => { const a = await orig<typeof import("./model")>(); return { ...a, typeRows: vi.fn(a.typeRows), sessionHref: vi.fn(a.sessionHref) }; });
 
 const json = (body: unknown) => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) } as Response);
 /** The fixture with its errors replaced; error_days is rebuilt from them, as the server builds it. */
@@ -116,7 +116,9 @@ describe("ErrorsPage", () => {
     history.replaceState(null, "", "/errors#range=0");
     await page();
     const table = document.getElementById("catBody")!, lost = (c: string) => table.querySelector(`tr[data-c="${c}"] td.c-lost`)!;
-    expect(screen.getByRole("columnheader", { name: "Time lost" }).getAttribute("title")).toMatch(/^Time in retry loops: from each incident's first failure to its last/);
+    const lostHead = screen.getByRole("columnheader", { name: /^Time lost/ });
+    await userEvent.click(within(lostHead).getByRole("button", { name: "About Time lost" }));
+    expect(within(lostHead).getByRole("status").textContent).toMatch(/^Time in retry loops: from each incident's first failure to its last/);
     expect([...table.querySelectorAll("tr")].map(r => r.getAttribute("data-c")).slice(0, 2)).toEqual(["worktree", "git"]);
     expect(lost("worktree").textContent).toBe("1 min");
     expect(lost("git").textContent).toBe("20 min");
@@ -627,7 +629,8 @@ describe("ErrorsPage", () => {
       serve();
       await page();
       expect(toggle().id).toBe("fNoise");
-      expect(toggle().closest("label")!.getAttribute("title")).toBe("Leaves out harness errors, user rejections and the types you muted");
+      await userEvent.click(screen.getByRole("button", { name: "About hiding noise and muted types" }));
+      expect(screen.getByText("Leaves out harness errors, user rejections and the types you muted", { selector: "[role=status]" })).toBeTruthy();
       await userEvent.click(toggle());
       expect(location.hash).toContain("noise=0");
     });
@@ -1593,10 +1596,10 @@ describe("ErrorsPage bucket selection", () => {
     expect(Number(band.getAttribute("width"))).toBeCloseTo(6 * (800 - 40 - 10) / 9); // six of the nine days
   });
 
-  it("tells a screen reader the chart is an application with its own keys, and describes it", async () => {
+  it("tells a screen reader the chart is a labelled group with its own keys, and describes it", async () => {
     await open("#range=30&at=2026-11-03");
     const chart = document.getElementById("chart")!;
-    expect(chart.getAttribute("role")).toBe("application");
+    expect(chart.getAttribute("role")).toBe("group");
     expect(chart.getAttribute("aria-roledescription")).toBe("chart");
     expect(chart.getAttribute("aria-describedby")).toBe("chartHint");
     expect(document.getElementById("chartHint")).toBeTruthy();
@@ -1619,6 +1622,17 @@ describe("ErrorsPage bucket selection", () => {
     expect(tip.textContent).toContain("x"); // its type rows still show
     await userEvent.keyboard("{ArrowRight}"); // Nov 5: calls, no errors
     expect(document.getElementById("chartLive")!.textContent).toMatch(/^Nov 5, 2026: 0\.00% rate, 0 errors of 10 calls/);
+  });
+
+  it("dismisses the tooltip and the reading with Escape, and the keys start over", async () => {
+    await open("#range=30", withDays([["2026-11-03", "foo", 10, 0, "claude"], ["2026-11-05", "foo", 10, 0, "claude"]]));
+    keys();
+    await userEvent.keyboard("{Home}");
+    expect(document.getElementById("tip")!.style.display).toBe("block");
+    await userEvent.keyboard("{Escape}");
+    expect(document.getElementById("tip")!.style.display).toBe("none");
+    await userEvent.keyboard("{ArrowLeft}"); // no point is current any more: Left starts from the last
+    expect(document.getElementById("tip")!.style.display).toBe("block");
   });
 
   it("keeps Space working on the current point after Enter closes the open type", async () => {
@@ -1941,15 +1955,25 @@ describe("type table: sort and filter", () => {
   const sortedHeads = () => [...document.querySelectorAll("thead th[aria-sort]")].map(h => [h.querySelector("button")!.textContent!.replace(/[↑↓]/, ""), h.getAttribute("aria-sort")]);
   const DEFAULT = ["tests", "git", "worktree", "build", "lint"];
 
+  it("names the type table, in a focusable region, with column scopes and the figures behind a title as text", async () => {
+    await open();
+    const region = screen.getByRole("region", { name: "Error types" }), table = within(region).getByRole("table", { name: "Error types" });
+    expect(region.tabIndex).toBe(0);
+    expect(within(table).getAllByRole("columnheader").every(h => h.getAttribute("scope") === "col")).toBe(true);
+    // The incident counts the title shows are text too, for a screen reader.
+    expect(table.querySelector('tr[data-c="tests"] td.c-unrec .sr')!.textContent).toBe(", 1 of 4 incidents");
+    expect(table.querySelector('tr[data-c="tests"] td.c-lost')!.hasAttribute("title")).toBe(false);
+  });
+
   it("lists the types by errors, most first, with Rate, Didn't recover and Change", async () => {
     await open();
     expect(order()).toEqual(DEFAULT);
     expect(sortedHeads()).toEqual([["Errors", "descending"]]);
     expect(cells("c-rate")).toEqual(["1.20%", "0.90%", "0.60%", "0.30%", "0.30%"]);
-    expect(cells("c-unrec")).toEqual(["25%", "100%", "50%", "0%", "–"]);
+    expect(cells("c-unrec").map(c => c.split(",")[0])).toEqual(["25%", "100%", "50%", "0%", "–"]); // the screen-reader text follows the comma
     const t = (c: string) => document.querySelector(`#catBody tr[data-c="${c}"] td.c-unrec`)!.getAttribute("title");
     expect([t("tests"), t("git"), t("build"), t("lint")]).toEqual(["1 of 4 incidents", "3 of 3 incidents", "0 of 1 incident", null]);
-    expect(cells("num").filter((_, i) => i % 5 === 4)).toEqual(["▲ +100%", "▼ -50%", "0%", "1 → 3", "3 → 3"]);
+    expect(cells("num").filter((_, i) => i % 5 === 4).map(c => c.split(". ")[0])).toEqual(["▲ +100%", "▼ -50%", "0%", "1 → 3", "3 → 3"]);
     // The trend is a picture, not a column to sort by.
     expect(within(document.querySelector("thead")!).queryByRole("button", { name: /trend/i })).toBeNull();
   });
@@ -1982,12 +2006,14 @@ describe("type table: sort and filter", () => {
     expect(within(document.querySelector("thead")!).queryByRole("button", { name: "Share" })).toBeNull();
     expect(document.querySelector("th.c-share")!.getAttribute("aria-sort")).toBeNull();
     expect(document.querySelector("th.c-share")!.textContent).toBe("Share");
-    expect(document.querySelectorAll("thead th button")).toHaveLength(6); // Type, Errors, Time lost, Rate, Didn't recover, Change
+    expect(document.querySelectorAll("thead th .sortbtn")).toHaveLength(6); // Type, Errors, Time lost, Rate, Didn't recover, Change
   });
 
   it("explains the Change sort in its header, which names the unit", async () => {
     await open();
-    expect(head("Change").closest("th")!.getAttribute("title")).toMatch(/^Sorts by the change in error rate, in points/);
+    const th = head("Change").closest("th")!;
+    await userEvent.click(within(th).getByRole("button", { name: "About Change" }));
+    expect(within(th).getByRole("status").textContent).toMatch(/^Sorts by the change in error rate, in points/);
   });
 
   // jsdom has no layout or media queries, so read the stylesheet: the only columns a breakpoint hides are Share and the trend, and neither sorts.
@@ -2393,5 +2419,55 @@ describe("ErrorsPage by message", () => {
     await waitFor(() => expect(location.hash).not.toContain("cat=x"));
     expect(document.getElementById("exList")).toBeNull();
     expect(heads()).toHaveLength(0);
+  });
+});
+
+describe("ErrorsPage render cost", () => {
+  const exRenders = () => vi.mocked(sessionHref).mock.calls.length; // each Example render links its session once
+
+  it("re-renders only the incident a toggle opens, not the examples of the others", async () => {
+    history.replaceState(null, "", "/errors#cat=x");
+    await page();
+    const heads = () => [...document.querySelectorAll<HTMLElement>("#exList .inc-h")];
+    expect(heads().map(h => h.getAttribute("aria-expanded"))).toEqual(["false", "false", "false"]);
+    await userEvent.click(heads()[0]!); // Edit: four examples
+    expect(document.querySelectorAll("#incb-0 .ex")).toHaveLength(4);
+    vi.mocked(sessionHref).mockClear();
+    await userEvent.click(heads()[1]!); // one example, which mounts; the four above stay as they are
+    expect(heads()[1]!.parentElement!.querySelectorAll(".ex")).toHaveLength(1);
+    expect(exRenders()).toBe(1);
+    vi.mocked(sessionHref).mockClear();
+    await userEvent.click(heads()[1]!); // closing it renders no example at all
+    expect(heads().map(h => h.getAttribute("aria-expanded"))).toEqual(["true", "false", "false"]);
+    expect(exRenders()).toBe(0);
+  });
+
+  it("re-renders only the example that loads its full text", async () => {
+    localStorage.setItem("claude-errors-mode", '"flat"');
+    history.replaceState(null, "", "/errors#cat=x");
+    await page();
+    expect(document.querySelectorAll("#exList .ex")).toHaveLength(6);
+    vi.mocked(sessionHref).mockClear();
+    const ex = document.getElementById("ex-t07")!;
+    // Nothing clamps in jsdom, so the button is hidden: show it, as the clamp check does where a body is cut.
+    ex.querySelector<HTMLButtonElement>("button.full")!.hidden = false;
+    await userEvent.click(ex.querySelector("button.full")!);
+    await waitFor(() => expect(ex.classList.contains("open")).toBe(true));
+    // Its own renders (loading, loaded, open) and none of the other five's: a page-wide render per step would be six times as many.
+    expect(exRenders()).toBeLessThanOrEqual(4);
+  });
+
+  it("watches every example's size with one ResizeObserver", async () => {
+    const Real = globalThis.ResizeObserver;
+    let made = 0;
+    vi.stubGlobal("ResizeObserver", class { constructor() { made++; } observe() {} unobserve() {} disconnect() {} });
+    try {
+      localStorage.setItem("claude-errors-mode", '"flat"');
+      history.replaceState(null, "", "/errors#cat=x");
+      await page();
+      expect(document.querySelectorAll("#exList .ex")).toHaveLength(6);
+      // The Detail's own header observer is one; the examples add none of their own (the shared one may predate this test).
+      expect(made).toBeLessThanOrEqual(2);
+    } finally { vi.stubGlobal("ResizeObserver", Real); }
   });
 });

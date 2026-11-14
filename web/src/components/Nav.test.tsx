@@ -1,6 +1,6 @@
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "../App";
 import { hasHue, setOrder } from "../colors";
 import type { LimitsAlert } from "../api";
@@ -51,7 +51,8 @@ describe("Nav", () => {
     expect(location.pathname).toBe("/limits");
     expect(location.hash).toBe("#project=foo&range=30&source=codex");
     expect(document.title).toBe("Limits · AI Ledger");
-    expect(vi.mocked(fetch).mock.calls.some(c => String(c[0]) === "/api/limits?project=foo&range=30&source=codex")).toBe(true);
+    // The page's chunk loads on first show, so its fetch follows the click a tick later.
+    await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(c => String(c[0]) === "/api/limits?project=foo&range=30&source=codex")).toBe(true));
   });
 
   it("opens Insights with the project, range and source from Cost", async () => {
@@ -62,7 +63,8 @@ describe("Nav", () => {
     expect(location.pathname).toBe("/insights");
     expect(location.hash).toBe("#project=foo&range=30&source=codex");
     expect(document.title).toBe("Insights · AI Ledger");
-    expect(vi.mocked(fetch).mock.calls.some(c => String(c[0]) === "/api/insights?project=foo&range=30&source=codex")).toBe(true);
+    // The page's chunk loads on first show, so its fetch follows the click a tick later.
+    await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(c => String(c[0]) === "/api/insights?project=foo&range=30&source=codex")).toBe(true));
   });
 
   it("opens Context from Cost with the project and range kept, after Cost in the nav", async () => {
@@ -181,6 +183,27 @@ describe("Nav", () => {
     expect(screen.getByText(/Last ingest .* · 7 new lines/)).toBeTruthy();
   });
 
+  it("keeps Refresh focused and focusable while it runs, ignores activation, and names the search button by its label", async () => {
+    const answers: Record<string, () => void> = {}, later = (body: unknown) => new Promise<Response>(r => { answers.refresh = () => r(json(body)); });
+    const f = vi.fn((_url: string, _init?: RequestInit) => json(status));
+    vi.stubGlobal("fetch", f);
+    render(<Nav />);
+    expect(await screen.findByText(/Last ingest .* · 2 new lines/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^Search/ }).getAttribute("aria-label")).toMatch(/^Search, open command palette \(/);
+    f.mockImplementation((_url, init) => init?.method === "POST" ? later(status) : json(status));
+    const btn = screen.getByRole("button", { name: "Refresh" });
+    btn.focus();
+    await userEvent.click(btn);
+    const posts = () => f.mock.calls.filter(c => c[1]?.method === "POST").length;
+    expect([posts(), btn.getAttribute("aria-disabled"), btn.hasAttribute("disabled"), document.activeElement]).toEqual([1, "true", false, btn]);
+    await userEvent.click(btn); // a second press while it runs starts nothing
+    await userEvent.keyboard("{Enter}");
+    expect(posts()).toBe(1);
+    await act(async () => { answers.refresh!(); });
+    await waitFor(() => expect(btn.getAttribute("aria-disabled")).toBeNull());
+    expect(document.activeElement).toBe(btn);
+  });
+
   it("keeps a status when the answer to a request sent before it arrives after it", async () => {
     const answers: Record<string, () => void> = {}, later = (key: string, body: unknown) => new Promise<Response>(r => { answers[key] = () => r(json(body)); });
     const f = vi.fn((_url: string, _init?: RequestInit) => json(status));
@@ -243,6 +266,60 @@ describe("Nav", () => {
     await tick(120_000);
     expect(f.mock.calls.length).toBe(3);
     vi.useRealTimers();
+  });
+
+  it("sends the status poll at low priority", async () => {
+    const f = vi.fn((_url: string, _init?: RequestInit) => json(status));
+    vi.stubGlobal("fetch", f);
+    render(<Nav />);
+    await waitFor(() => expect(f).toHaveBeenCalled());
+    expect(f.mock.calls[0]).toEqual(["/api/status", { priority: "low" }]);
+  });
+
+  describe("in a background tab", () => {
+    const setHidden = (hidden: boolean) => {
+      Object.defineProperty(document, "hidden", { configurable: true, get: () => hidden });
+      act(() => { document.dispatchEvent(new Event("visibilitychange")); });
+    };
+    const tick = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
+    const setup = async () => {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+      const f = vi.fn(() => json(status));
+      vi.stubGlobal("fetch", f);
+      const view = render(<Nav />);
+      await tick(0);
+      expect(f.mock.calls.length).toBe(1);
+      return { f, ...view };
+    };
+    afterEach(() => { vi.useRealTimers(); Reflect.deleteProperty(document, "hidden"); });
+
+    it("sends no status request while hidden, and asks at once on return when a poll came due", async () => {
+      const { f } = await setup();
+      setHidden(true);
+      await tick(600_000);
+      expect(f.mock.calls.length).toBe(1);
+      setHidden(false);
+      await tick(0);
+      expect(f.mock.calls.length).toBe(2);
+      await tick(59_999);
+      expect(f.mock.calls.length).toBe(2);
+      await tick(1); // and the interval goes on
+      expect(f.mock.calls.length).toBe(3);
+    });
+
+    it("keeps its schedule when the tab returns before a poll came due", async () => {
+      const { f } = await setup();
+      await tick(20_000);
+      setHidden(true);
+      await tick(10_000);
+      setHidden(false);
+      await tick(0);
+      expect(f.mock.calls.length).toBe(1);
+      await tick(29_999);
+      expect(f.mock.calls.length).toBe(1);
+      await tick(1); // a minute after the first
+      expect(f.mock.calls.length).toBe(2);
+    });
   });
 
   it("shows a status poll asked from outside the nav, and says when the app does not answer", async () => {

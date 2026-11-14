@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import { motion } from "./chart";
-import { onUserScroll, openDrawer } from "./Drawer";
+import { isDrawer, onUserScroll, openDrawer } from "./Drawer";
 import "./SectionIndex.css";
 
 export interface Section { id: string; label: string; long?: string; hidden?: boolean }
@@ -20,7 +20,7 @@ export function jumpTo(id: string) {
   const el = document.getElementById(id);
   if (!el || el.hidden) return;
   pin(id);
-  if (el instanceof HTMLDetailsElement) return openDrawer(id, true);
+  if (isDrawer(el)) return openDrawer(id, true);
   el.scrollIntoView?.({ behavior: motion() ? "smooth" : "auto", block: "start" });
   el.querySelector<HTMLElement>("button, a, [tabindex]")?.focus({ preventScroll: true });
 }
@@ -33,28 +33,63 @@ export function SectionIndex({ groups }: { groups: Section[][] }) {
   const live = groups.flat().filter(s => !s.hidden), key = live.map(s => s.id).join();
   useEffect(() => {
     const el = idx.current!, ids = key.split(",");
-    const ro = new ResizeObserver(() => document.documentElement.style.setProperty("--secidx-h", el.offsetHeight + "px"));
+    // What the observers last saw: sections whose top is above the index's line (or above the viewport's bottom), and whether
+    // the index sits at its stuck position.
+    const above = new Set<string>(), shown = new Set<string>();
+    let stuckAt = false;
+    const update = () => {
+      if (!el.offsetHeight) return;
+      let c = ids[0]!;
+      if (scrollY > 8) for (const id of ids) if (above.has(id)) c = id;
+      if (innerHeight + scrollY >= document.documentElement.scrollHeight - 2) c = ids.findLast(id => shown.has(id)) ?? c;
+      setCur(pinned && ids.includes(pinned) ? pinned : c);
+      setStuck(stuckAt && scrollY > 0);
+    };
+    // A section's top above a line is "it intersects a region reaching up from that line": a margin of BIG above the
+    // viewport stands in for "everything above", so the callbacks fire as tops cross the line, however far a scroll jumps.
+    const BIG = 1e6;
+    let io: IntersectionObserver[] = [], height = el.offsetHeight;
+    const connect = () => {
+      io.forEach(o => o.disconnect());
+      io = [];
+      if (typeof IntersectionObserver === "undefined") return update(); // no observer (a test DOM): the state stays as it was
+      const top = parseFloat(getComputedStyle(el).top) || 0, line = top + el.offsetHeight + 24; // where the index sits once stuck
+      const track = (set: Set<string>, bottom: number) => {
+        const o = new IntersectionObserver(es => {
+          for (const e of es) if (e.isIntersecting) set.add(e.target.id); else set.delete(e.target.id);
+          update();
+        }, { rootMargin: `${BIG}px 0px ${bottom}px 0px` });
+        for (const id of ids) { const sec = document.getElementById(id); if (sec) o.observe(sec); }
+        io.push(o);
+      };
+      track(above, line - innerHeight);
+      track(shown, 0);
+      // The index is stuck when it is cut by the line one pixel under its sticky top.
+      const o = new IntersectionObserver(([e]) => { stuckAt = !!e && e.intersectionRatio < 1 && e.boundingClientRect.top <= top + .5; update(); },
+        { rootMargin: `${-(top + 1)}px 0px 0px 0px`, threshold: [1] });
+      o.observe(el);
+      io.push(o);
+    };
+    const ro = new ResizeObserver(() => {
+      document.documentElement.style.setProperty("--secidx-h", el.offsetHeight + "px");
+      if (el.offsetHeight !== height) { height = el.offsetHeight; connect(); }
+    });
     ro.observe(el);
     let raf = 0;
-    const update = () => {
-      raf = 0;
-      if (!el.offsetHeight) return;
-      const top = parseFloat(getComputedStyle(el).top) || 0, line = top + el.offsetHeight + 24; // where the index sits once stuck
-      let c = ids[0]!;
-      if (scrollY > 8) for (const id of ids) if ((document.getElementById(id)?.getBoundingClientRect().top ?? Infinity) <= line) c = id;
-      if (innerHeight + scrollY >= document.documentElement.scrollHeight - 2)
-        c = ids.findLast(id => (document.getElementById(id)?.getBoundingClientRect().top ?? Infinity) < innerHeight) ?? c;
-      setCur(pinned && ids.includes(pinned) ? pinned : c);
-      setStuck(el.getBoundingClientRect().top <= top + .5 && scrollY > 0);
-    };
-    const onScroll = () => { if (!raf) raf = requestAnimationFrame(update); };
-    addEventListener("scroll", onScroll, { passive: true });
-    document.addEventListener("toggle", onScroll, true); // drawers opening move what is in view
-    pins.add(onScroll);
-    update();
+    const onResize = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(connect); };
+    addEventListener("resize", onResize);
+    // Reaching the top or the bottom of the page moves no section across a line: read those once a scroll rests.
+    let rest = 0;
+    const onScroll = () => { clearTimeout(rest); rest = window.setTimeout(update, 100); };
+    const native = "onscrollend" in window;
+    addEventListener(native ? "scrollend" : "scroll", native ? update : onScroll, { passive: true });
+    document.addEventListener("toggle", update, true); // drawers opening move what is in view
+    pins.add(update);
+    connect();
     return () => {
-      ro.disconnect(); removeEventListener("scroll", onScroll); document.removeEventListener("toggle", onScroll, true); pins.delete(onScroll);
-      cancelAnimationFrame(raf);
+      io.forEach(o => o.disconnect()); ro.disconnect(); cancelAnimationFrame(raf); clearTimeout(rest);
+      removeEventListener("resize", onResize); removeEventListener(native ? "scrollend" : "scroll", native ? update : onScroll);
+      document.removeEventListener("toggle", update, true); pins.delete(update);
     };
   }, [key]);
   return <>

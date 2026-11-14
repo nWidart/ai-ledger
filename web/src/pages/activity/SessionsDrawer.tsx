@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { sessionsUrl, type SessionSort, type SessionsPage, type TitledSessionRow, type UsagePayload, type View } from "../../api";
-import { Drawer } from "../../components/Drawer";
+import { DataTable } from "../../components/DataTable";
+import { Drawer, savedOpen } from "../../components/Drawer";
+import { Toggletip } from "../../components/Toggletip";
 import { SortTh, type SortBy } from "../../components/Sort";
 import { ProjectName } from "../../components/ProjectDot";
 import { openSessionSheet, pickRow, sessName, shortId } from "../../components/sheets/session";
@@ -36,8 +38,7 @@ export function SessionsDrawer({ view, count, filter, onFilter, sort, onSort, se
   view: View; count: number; filter: SessFilter; onFilter: (f: SessFilter) => void; sort: SortBy<SessionSort> | null; onSort: (s: SortBy<SessionSort>) => void;
   selected: string; usage: UsagePayload;
 }) {
-  const [open, setOpen] = useState(false);
-  useEffect(() => { setOpen(!!(document.getElementById("d-sessions") as HTMLDetailsElement | null)?.open); }, []);
+  const [open, setOpen] = useState(() => savedOpen("d-sessions"));
   const [rows, setRows] = useState<TitledSessionRow[]>([]), [total, setTotal] = useState(0);
   // stale: a new query is under way, so the rows shown go inert; busy: any request, Show more included.
   const [st, setSt] = useState<{ busy: boolean; stale?: boolean; hint: string; error?: string; moreError?: string }>({ busy: false, hint: "" });
@@ -112,18 +113,18 @@ export function SessionsDrawer({ view, count, filter, onFilter, sort, onSort, se
       </div>
       <div className="hint" aria-live="polite">{hint}</div>
       <p className="hint">A session counts here when it has a request in the range; Insights counts sessions by their start time, so the two totals can differ slightly.</p>
-      <div className="scroll tall"><table>
+      <DataTable name="Sessions" region="scroll tall">
         <thead><tr>{HEAD.map(([label, k, cls, title, whole]) => {
           const t = whole && filter.day ? WHOLE : title;
           return k ? <SortTh key={label} k={k} sort={sort} onSort={onSort} className={cls || undefined} title={t}>{label}</SortTh>
-            : <th key={label} className={cls || undefined} title={t}>{label}</th>;
+            : <th key={label} scope="col" className={cls || undefined}>{label}{t && <Toggletip term={label}>{t}</Toggletip>}</th>;
         })}</tr></thead>
         <tbody ref={body} className={st.stale ? "stale" : undefined} aria-busy={st.busy || undefined} inert={st.stale || undefined}>
           {st.error ? <tr><td colSpan={COLS} className="empty" role="alert">Could not load sessions ({st.error}). <button type="button" className="linkish"
             onClick={() => { setTick(t => t + 1); search.current?.focus(); }}>Retry</button></td></tr>
             : rows.length ? rows.map(s => <tr key={s.session_id} {...pickRow(s.session_id, openSessionSheet, s.session_id === selected ? "sel" : "")}>
-              <td className="when sess"><button type="button" className="cellbtn" title={s.title || s.session_id}>{sessName(s)}</button>
-                <div className="muted small">{when(s.first_ts)}{s.git_branch ? ` · ${s.git_branch}` : ""}{s.title ? ` · ${shortId(s.session_id)}` : ""}</div></td>
+              <th scope="row" className="when sess"><button type="button" className="cellbtn" title={s.title || s.session_id}>{sessName(s)}</button>
+                <div className="muted small">{when(s.first_ts)}{s.git_branch ? ` · ${s.git_branch}` : ""}{s.title ? ` · ${shortId(s.session_id)}` : ""}</div></th>
               <td className="name"><ProjectName project={s.project} /></td><td className="num opt">{dur(s.duration_s)}</td><td className="num opt">{num(s.prompts)}</td>
               <td className="num opt2">{big(s.tokens)}</td><td className="num">{usd(s.cost)}</td>
               <td className="num">{big(s.peak_context)}{s.near_limit && <> <span className="chip warn" title={`${pct(s.context_share)} of the context window`}>{pct(s.context_share)}</span></>}</td>
@@ -131,7 +132,7 @@ export function SessionsDrawer({ view, count, filter, onFilter, sort, onSort, se
               <TestsCell passed={s.tests_passed} failed={s.tests_failed} /></tr>)
             : !st.busy && open ? <tr><td colSpan={COLS} className="empty">{narrowed ? "No sessions match." : "No sessions in this range."}</td></tr> : null}
         </tbody>
-      </table></div>
+      </DataTable>
       {rows.length < total && !st.error && <button type="button" className="linkish more" disabled={st.busy} onClick={more}>Show more sessions</button>}
     </Drawer>
   );

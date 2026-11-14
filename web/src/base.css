@@ -8,3 +8,15 @@
 .more { margin-top: 10px; font-size: 13px; }
 .banner { border-left: 3px solid var(--warning-text); background: var(--surface-1); padding: 8px 12px; margin-bottom: 20px; font-size: 13px; color: var(--text-secondary); }
 .banner b { color: var(--warning-text); }
+/* Skip link: off-screen until focused by keyboard, then above the sticky nav. It lands on the page heading, which takes focus
+   without a ring. */
+.skip { position: fixed; top: 8px; left: 8px; z-index: 50; padding: 8px 14px; border-radius: 8px; background: var(--surface-1); color: var(--accent);
+  border: 2px solid var(--accent); font-weight: 600; transform: translateY(-200%); }
+.skip:focus-visible { transform: none; }
+/* The sticky nav (--appnav-h, kept by Nav) and, where a page mounts one, the stuck section index (--secidx-h, kept by SectionIndex) cover
+   the top of the viewport: every scroll target and every tabbed-to control clears them, so no element needs its own scroll-margin-top for
+   them (the skip link's #lede, the drawers, the Insights sections). SectionIndex never resets --secidx-h when it unmounts, so the index's
+   share counts only while a .secidx is in the page. Elements that stick lower still, like the Errors example bar, add their own margin. */
+html { scroll-padding-top: calc(var(--appnav-h, 56px) + 12px); }
+html:has(.secidx) { scroll-padding-top: calc(var(--appnav-h, 56px) + var(--secidx-h, 0px) + 12px); }
+#lede:focus { outline: none; }

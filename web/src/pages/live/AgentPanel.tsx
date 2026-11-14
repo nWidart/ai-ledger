@@ -1,3 +1,4 @@
+import { useId } from "react";
 import type { LiveSession, LiveState } from "../../api";
 import { big, num, pct, plural, usd, when } from "../../format";
 import { INFERRED_WHY, stateText } from "./live";
@@ -5,9 +6,10 @@ import { INFERRED_WHY, stateText } from "./live";
 /** The near-full line, as the session sheet's (metrics.NEAR_LIMIT). */
 export const NEAR_FULL = 0.8;
 
-export function StateTag({ st, now }: { st: LiveState; now: number }) {
+/** A state's tag, with its detail as hover text; plain: the page shows the detail beside it, so no hover text. */
+export function StateTag({ st, now, plain }: { st: LiveState; now: number; plain?: boolean }) {
   const t = stateText(st, now);
-  return <span className={"state st-" + st.kind} title={st.inferred ? INFERRED_WHY[st.kind] : t.detail}>
+  return <span className={"state st-" + st.kind} title={plain ? undefined : st.inferred ? INFERRED_WHY[st.kind] : t.detail}>
     <i aria-hidden="true" />{t.label}{st.inferred && <span className="inf"> (inferred)</span>}</span>;
 }
 
@@ -25,10 +27,11 @@ function Spark({ points }: { points: number[] }) {
 export function AgentPanel({ s, st, now, failedOnly, setFailedOnly }: {
   s: LiveSession; st: LiveState; now: number; failedOnly: boolean; setFailedOnly: (on: boolean) => void;
 }) {
-  const t = stateText(st, now), share = s.context != null && s.window ? s.context / s.window : null;
+  const t = stateText(st, now), share = s.context != null && s.window ? s.context / s.window : null, why = useId();
+  const packed = s.compactions.filter(c => c.pre);
   return <aside className="panel head" aria-label="Agent">
     <section className="sec"><h2>Doing now</h2>
-      <div className={"now" + (st.kind === "wait" ? " warn" : st.kind === "ended" ? " ended" : "")}><StateTag st={st} now={now} /><div className="muted">{t.detail}</div>
+      <div className={"now" + (st.kind === "wait" ? " warn" : st.kind === "ended" ? " ended" : "")}><StateTag st={st} now={now} plain /><div className="muted">{t.detail}</div>
         {st.inferred && <div className="why">{INFERRED_WHY[st.kind]}</div>}</div>
     </section>
     <section className="sec" aria-label="Context window"><h2>Context window</h2>
@@ -37,10 +40,11 @@ export function AgentPanel({ s, st, now, failedOnly, setFailedOnly }: {
         <div className={"meter" + (share > NEAR_FULL ? " warn" : "")} role="meter" aria-label="Context used" aria-valuemin={0} aria-valuemax={100}
           aria-valuenow={Math.round(share * 100)}>
           <i style={{ width: `${Math.min(100, share * 100)}%` }} />
-          {s.compactions.filter(c => c.pre).map((c, i) => <span key={i} className="mark" title={`compacted at ${big(c.pre)} tokens`}
+          {packed.map((c, i) => <span key={i} className="mark" aria-hidden="true" title={`compacted at ${big(c.pre)} tokens`}
             style={{ left: `${Math.min(100, (c.pre! / s.window!) * 100)}%` }} />)}
         </div>
-        <div className="row"><span>{pct(share)} used</span><span>{s.compactions.length} compaction{s.compactions.length === 1 ? "" : "s"}</span></div>
+        <div className="row"><span>{pct(share)} used</span><span>{s.compactions.length} compaction{s.compactions.length === 1 ? "" : "s"}
+          {packed.length > 0 && <span className="sr">, at {packed.map(c => big(c.pre)).join(", ")} tokens</span>}</span></div>
       </>}
       {share == null && <div className="row"><span>window not known for {s.model ?? "this model"}</span><span>{s.compactions.length} compactions</span></div>}
     </section>
@@ -48,7 +52,7 @@ export function AgentPanel({ s, st, now, failedOnly, setFailedOnly }: {
       <div className="kv">
         <div><span>Cost</span><b>{usd(s.cost)}</b></div><div><span>Requests</span><b>{num(s.requests)}</b></div>
         <div><span>Tool calls</span><b>{num(s.tools)}</b></div><div><span>Errors</span><button type="button" className={"fig" + (s.errors ? " bad" : "")} aria-pressed={failedOnly} aria-label={plural(s.errors, "error")}
-          title="Show failed calls only" onClick={() => setFailedOnly(!failedOnly)}>{num(s.errors)}</button></div>
+          aria-describedby={why} title="Show failed calls only" onClick={() => setFailedOnly(!failedOnly)}>{num(s.errors)}</button><span className="sr" id={why}>Show failed calls only</span></div>
         <div><span>Cache read</span><b>{pct(s.cache_read)}</b></div><div><span>Model</span><b className="model">{s.model ?? "–"}</b></div>
       </div>
     </section>

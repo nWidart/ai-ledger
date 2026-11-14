@@ -2,7 +2,9 @@ import { useEffect, useRef, useState, type ReactNode, type RefObject } from "rea
 import type { ModelRow, UsagePayload } from "../../api";
 import { big, dur, num, pct, usd, when } from "../../format";
 import { money, sgn } from "../../pages/cost/cost";
+import { DataTable } from "../DataTable";
 import { Spark } from "../Spark";
+import { Toggletip } from "../Toggletip";
 import { Ledger, LedgerRow } from "../Ledger";
 import { FilterButton } from "./FilterButton";
 import { appLink, errorsHref, pickRow, sessName } from "./session";
@@ -92,11 +94,12 @@ export function ProjectSheet({ name, d, error, retry, range, pageProject, onSess
     <h3>Models and effort</h3>
     <ModelLedger models={d.models} />
     <h3>Most expensive sessions</h3>
-    <div className="scroll"><table><thead><tr><th>Session</th><th>Branch</th><th className="num" title="Active time: pauses over 20 minutes left out">Active</th><th className="num">Est. cost</th></tr></thead>
+    <DataTable name="Most expensive sessions"><thead><tr><th scope="col">Session</th><th scope="col">Branch</th>
+      <th scope="col" className="num">Active<Toggletip term="Active time">Active time: pauses over 20 minutes left out</Toggletip></th><th scope="col" className="num">Est. cost</th></tr></thead>
       <tbody ref={body}>{top.length ? top.map(s => <tr key={s.session_id} {...pickRow(s.session_id, onSession)}>
-        <td className="when sess"><button type="button" className="cellbtn" title={s.title || s.session_id}>{sessName(s)}</button><div className="muted small">{when(s.first_ts)}</div></td>
+        <th scope="row" className="when sess"><button type="button" className="cellbtn" title={s.title || s.session_id}>{sessName(s)}</button><div className="muted small">{when(s.first_ts)}</div></th>
         <td className="name">{s.git_branch || "–"}</td><td className="num">{dur(s.duration_s)}</td><td className="num">{usd(s.cost)}</td></tr>)
         : <tr><td colSpan={4} className="empty">No sessions in this range.</td></tr>}</tbody>
-    </table></div>
+    </DataTable>
   </>;
 }

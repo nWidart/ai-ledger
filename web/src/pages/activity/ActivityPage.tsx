@@ -130,16 +130,16 @@ export function ActivityPage() {
   const cls = "wrap pg-activity" + (slow ? " loading" : "") + (grow ? " grow" : "");
 
   return (
-    <div className={cls} ref={wrap} aria-busy={loading || undefined}>
+    <main id="content" className={cls} ref={wrap} aria-busy={loading || undefined}>
       <header className="top sect" id="overview">
-        <div>{d ? <Lede d={d} before={before} /> : <h1 className="lede" id="lede" tabIndex={-1} aria-live="polite">{error ? "Activity could not be loaded." : "Loading activity…"}</h1>}</div>
+        <div>{d ? <Lede d={d} before={before} /> : <h1 className="lede" id="lede" tabIndex={-1}>{error ? "Activity could not be loaded." : "Loading activity…"}</h1>}</div>
         <div className="top-side"><Filters projects={d?.projects ?? []} automated autoFile={d?.automated_file.path} /></div>
       </header>
       {error && <div className="banner" role="alert"><b>Could not load {viewName(want)} ({error.message}).{d ? ` Still showing ${viewName(d)}.` : ""}</b>{" "}
         <button type="button" className="linkish" ref={retryBtn} onClick={retry}>Retry</button></div>}
       {d?.automated_file.error && <div className="banner" role="alert"><b>Automated projects file ignored:</b> <code>{d.automated_file.path}</code> could not be used
         ({d.automated_file.error}). The file is ignored until it is fixed; only the built-in detection applies.</div>}
-      <p className="pending" role="status">{loading && d ? `Loading ${viewName(want)}…` : ""}</p>
+      <p className="pending">{loading && d ? `Loading ${viewName(want)}…` : ""}</p>
       {d && <>
         <SectionIndex groups={[
           [{ id: "overview", label: "Overview" }, { id: "attention", label: "Attention", hidden: !has }, { id: "vitals", label: "Health", long: "Work health", hidden: !has },
@@ -161,6 +161,6 @@ export function ActivityPage() {
         </div>
       </>}
       <UsageSheets data={d} />
-    </div>
+    </main>
   );
 }

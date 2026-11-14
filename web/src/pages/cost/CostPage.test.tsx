@@ -6,6 +6,7 @@ import usage from "../../__fixtures__/usage";
 import usageAll from "../../__fixtures__/usage-all";
 import sessions from "../../__fixtures__/sessions";
 import session from "../../__fixtures__/session";
+import { openDrawer } from "../../components/Drawer";
 import { mockApi } from "../../components/sheets/testing";
 import { dayStamp, download } from "../../components/export";
 import { compareText, costDays, moved, planText, thinHistory } from "./cost";
@@ -19,9 +20,12 @@ const byDay: SessionsPage = { ...sessions, sessions: ["s1", "s3", "s2"].map(id =
 const serve = (d: UsagePayload) => mockApi({ "/api/usage": () => d, "/api/sessions": q => (q.get("day") ? byDay : sessions), "/api/session": () => session });
 const loaded = () => screen.findByRole("heading", { level: 1, name: /estimated cost/ });
 const fetched = () => vi.mocked(fetch).mock.calls.map(c => c[0]);
-const show = (d: UsagePayload) => { serve(d); at(); render(<CostPage />); return loaded(); };
+/** The page loaded, with these drawers open (a closed drawer renders no table). */
+const show = async (d: UsagePayload, open = ["d-projcost", "d-top", "d-tokens"]) => { serve(d); at(); render(<CostPage />); const lede = await loaded(); act(() => open.forEach(id => openDrawer(id))); return lede; };
+/** Whether a drawer is open. */
+const isOpen = (id: string) => document.getElementById(id)!.hasAttribute("data-open");
 const insights = () => within(document.getElementById("insights")!);
-const drawer = (id: string) => document.getElementById(id) as HTMLDetailsElement;
+const drawer = (id: string) => document.getElementById(id)!;
 
 // Variants of the 30-day fixture for cases it lacks.
 const base = usage.by_project[0]!;
@@ -190,14 +194,39 @@ describe("CostPage", () => {
     expect(dlg.getByRole("img", { name: /^Daily cost sparkline: previous 30 days \$0\.00, last 30 days \$16\./ })).toBeTruthy();
   });
 
+  it("keeps a closed drawer's title a heading without rendering its table, and names the tables once open", async () => {
+    await show(usage, []);
+    expect(screen.getByRole("heading", { level: 2, name: /^Cost by project/ }).querySelector("button")!.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByRole("table", { name: "Cost by project" })).toBeNull();
+    act(() => openDrawer("d-projcost"));
+    act(() => openDrawer("d-top"));
+    for (const name of ["Cost by project", "Most expensive sessions"]) {
+      const table = screen.getByRole("table", { name }), region = screen.getByRole("region", { name });
+      expect(region.contains(table)).toBe(true);
+      expect(region.tabIndex).toBe(0); // a keyboard user can scroll it
+      expect(within(table).getAllByRole("columnheader").every(h => h.getAttribute("scope") === "col")).toBe(true);
+    }
+    const foo = within(screen.getByRole("table", { name: "Cost by project" })).getByRole("rowheader", { name: /foo/ });
+    expect(foo.getAttribute("scope")).toBe("row");
+    expect(within(screen.getByRole("table", { name: "Most expensive sessions" })).getAllByRole("rowheader").length).toBe(usage.top_sessions.length);
+  });
+
+  it("explains the Active column behind a toggletip, not a hover title", async () => {
+    await show(usage);
+    const head = within(screen.getByRole("table", { name: "Most expensive sessions" })).getByRole("columnheader", { name: /^Active/ });
+    expect(head.hasAttribute("title")).toBe(false);
+    await userEvent.click(within(head).getByRole("button", { name: "About Active time" }));
+    expect(within(head).getByRole("status").textContent).toBe("Active time: pauses over 20 minutes left out");
+  });
+
   it("names a cost-per-commit outlier and compares projects on request", async () => {
-    await show(withProjects([proj("a", 6, 3), proj("b", 8, 4), proj("c", 10, 5), proj("d", 40, 5)]));
+    await show(withProjects([proj("a", 6, 3), proj("b", 8, 4), proj("c", 10, 5), proj("d", 40, 5)]), []);
     const card = (await insights().findByText("Cost-per-commit outlier")).closest("article")!;
     expect(card.className).toMatch(/critical/);
     expect(within(card).getByText("d")).toBeTruthy();
     expect(card.textContent).toMatch(/4\.0× the median project \(\$2\.00\) over 5 commits/);
     await userEvent.click(within(card).getByRole("button", { name: "Compare projects" }));
-    expect(drawer("d-projcost").open).toBe(true);
+    expect(isOpen("d-projcost")).toBe(true);
     const rows = [...drawer("d-projcost").querySelectorAll("tbody tr")];
     expect(rows.map(r => r.getAttribute("data-v"))).toEqual(["d", "a", "b", "c"]);
     expect(rows[0]!.className).toMatch(/spot/);
@@ -233,30 +262,30 @@ describe("CostPage", () => {
     const d = drawer("d-projcost");
     await userEvent.click(within(within(d).getByRole("button", { name: /Cost \/ commit/ }).closest("th")!).getByRole("button"));
     const names = (t: string, sep: string) => t.split(/\r?\n/).filter(Boolean).slice(1).map(l => l.split(sep)[0]);
-    await userEvent.click(within(d).getByRole("button", { name: "Download CSV" }));
+    await userEvent.click(within(d).getByRole("button", { name: "Download CSV cost projects" }));
     expect(download).toHaveBeenCalledWith(`ai-ledger-cost-projects-${dayStamp()}.csv`, expect.any(String));
     const csv = vi.mocked(download).mock.calls.at(-1)![1];
     expect(csv.split("\r\n")[0]).toBe("Project,Est. cost (USD),Tokens,Cache hit,1h writes,Subagent cost share,Commits,Cost per commit (USD),Cost per prompt (USD)");
     expect(names(csv, ",")).toEqual(["a", "b", "idle"]);
     expect(csv.split("\r\n")[3]!.split(",")[7]).toBe(""); // no commits: cost per commit is empty
-    fireEvent.click(within(d).getByRole("button", { name: "Copy" }));
-    expect(await within(d).findByRole("button", { name: "Copied" })).toBeTruthy();
+    fireEvent.click(within(d).getByRole("button", { name: "Copy cost projects" }));
+    expect(await within(d).findByRole("button", { name: "Copied cost projects" })).toBeTruthy();
     expect(within(d).getByText("Copied to clipboard.")).toBeTruthy();
     const tsv = writeText.mock.calls[0]![0] as string;
     expect(tsv.split("\n")[0]!.split("\t")[0]).toBe("Project");
     expect(names(tsv, "\t")).toEqual(["a", "b", "idle"]);
-    await waitFor(() => expect(within(d).getByRole("button", { name: "Copy" })).toBeTruthy(), { timeout: 3000 });
+    await waitFor(() => expect(within(d).getByRole("button", { name: "Copy cost projects" })).toBeTruthy(), { timeout: 3000 });
   });
 
   it("offers no export when the project table has no rows", async () => {
     await show(withProjects([]));
-    expect(within(drawer("d-projcost")).queryByRole("button", { name: "Download CSV" })).toBeNull();
+    expect(within(drawer("d-projcost")).queryByRole("button", { name: "Download CSV cost projects" })).toBeNull();
   });
 
   it("downloads the most expensive sessions with their figures", async () => {
     await show(usage);
     const d = drawer("d-top");
-    await userEvent.click(within(d).getByRole("button", { name: "Download CSV" }));
+    await userEvent.click(within(d).getByRole("button", { name: "Download CSV cost sessions" }));
     expect(download).toHaveBeenLastCalledWith(`ai-ledger-cost-sessions-${dayStamp()}.csv`, expect.any(String));
     const lines = vi.mocked(download).mock.calls.at(-1)![1].split("\r\n").filter(Boolean);
     expect(lines[0]).toBe("Session id,Title,Project,Started,Branch,Active seconds,Prompts,Commits,Cost per commit (USD),Est. cost (USD)");
@@ -275,7 +304,7 @@ describe("CostPage", () => {
       expect(names()).toEqual(["r1", "r2", "r3", "Small projects (4) Show 4 small projects"]);
       const bucket = d.getByText("Small projects (4)").closest("tr")!;
       expect(bucket.textContent).toContain("$0.04");
-      expect(bucket.querySelectorAll("td")[6]!.textContent).toBe("4");
+      expect(bucket.querySelectorAll("td")[5]!.textContent).toBe("4");
       const btn = d.getByRole("button", { name: "Show 4 small projects" });
       expect(btn.getAttribute("aria-expanded")).toBe("false");
       await userEvent.click(btn);
@@ -293,14 +322,14 @@ describe("CostPage", () => {
       expect(names()[3]).toMatch(/^Small projects/);
     });
     it("opens for a small selected project", async () => {
-      serve({ ...seven(), project: "t2" }); at("#range=30&project=t2"); render(<CostPage />); await loaded();
+      serve({ ...seven(), project: "t2" }); at("#range=30&project=t2"); render(<CostPage />); await loaded(); act(() => openDrawer("d-projcost"));
       expect(within(drawer("d-projcost")).getByRole("button", { name: "Hide small projects" }).getAttribute("aria-expanded")).toBe("true");
       expect(names()).toContain("t2");
     });
     it("reads a bucket of projects with unknown costs as unknown, not $0", async () => {
       const unknown = (n: string) => ({ ...tiny(n), cost: null, cost_per_commit: null });
       await show(withProjects([real("r1", 100), real("r2", 90), real("r3", 80), unknown("t1"), unknown("t2"), unknown("t3")]));
-      const cost = within(drawer("d-projcost")).getByText("Small projects (3)").closest("tr")!.querySelectorAll("td")[1]!.textContent;
+      const cost = within(drawer("d-projcost")).getByText("Small projects (3)").closest("tr")!.querySelectorAll("td")[0]!.textContent;
       expect(cost).toBe("–");
     });
     it("does not fold fewer than 3 small projects", async () => {
@@ -309,7 +338,7 @@ describe("CostPage", () => {
     });
     it("exports every project, folded or not", async () => {
       await show(seven());
-      await userEvent.click(within(drawer("d-projcost")).getByRole("button", { name: "Download CSV" }));
+      await userEvent.click(within(drawer("d-projcost")).getByRole("button", { name: "Download CSV cost projects" }));
       const lines = vi.mocked(download).mock.calls.at(-1)![1].split("\r\n").filter(Boolean).slice(1);
       expect(lines.map(l => l.split(",")[0])).toEqual(["r1", "r2", "r3", "t1", "t2", "t3", "t4"]);
     });
@@ -322,10 +351,10 @@ describe("CostPage", () => {
     await show(withProjects([real("r1", 100), real("r2", 100), real("r3", 300), ...scratch]));
     await userEvent.click(within(drawer("d-projcost")).getByRole("button", { name: "Show 10 small projects" }));
     const cell = (p: string, i: number) => drawer("d-projcost").querySelector(`tbody tr[data-v="${p}"]`)!.querySelectorAll("td")[i]!;
-    expect(cell("r1", 8).className).not.toMatch(/tone/);
-    expect(cell("r3", 8).className).toMatch(/tone worse/); // $6 a prompt against a $2 median
-    expect(cell("r3", 7).className).toMatch(/tone worse/); // $30 a commit against $10
-    expect(cell("t0", 8).className).not.toMatch(/tone/);
+    expect(cell("r1", 7).className).not.toMatch(/tone/);
+    expect(cell("r3", 7).className).toMatch(/tone worse/); // $6 a prompt against a $2 median
+    expect(cell("r3", 6).className).toMatch(/tone worse/); // $30 a commit against $10
+    expect(cell("t0", 7).className).not.toMatch(/tone/);
     expect(drawer("d-projcost").querySelector(".tone-key")!.textContent).toMatch(/median of the 3 projects with 2%\+ of cost or 10\+ prompts/);
   });
 
@@ -394,13 +423,13 @@ describe("CostPage", () => {
     try {
       await show(usage);
       await userEvent.click(screen.getByRole("button", { name: "Agent" }));
-      expect(screen.getByRole("img", { name: /^Estimated cost by agent per day/ })).toBeTruthy();
+      expect(screen.getByRole("group", { name: /^Estimated cost by agent per day/ })).toBeTruthy();
       await userEvent.click(within(document.querySelector(".legend") as HTMLElement).getByRole("button", { name: "Claude Code" }));
       expect(location.hash).toBe("#range=30&source=claude");
       cleanup();
       await show(usage);
       expect(screen.getByRole("button", { name: "Agent" }).getAttribute("aria-pressed")).toBe("true");
-      expect(screen.getByRole("img", { name: /^Estimated cost by agent per day/ })).toBeTruthy();
+      expect(screen.getByRole("group", { name: /^Estimated cost by agent per day/ })).toBeTruthy();
     } finally {
       localStorage.clear();
     }
@@ -409,7 +438,7 @@ describe("CostPage", () => {
   it("shows cost per commit as not available for a project with no commits", async () => {
     await show(withProjects([proj("a", 6, 3), proj("idle", 20, 0)]));
     const idle = drawer("d-projcost").querySelector('tbody tr[data-v="idle"]')!;
-    expect(idle.querySelectorAll("td")[7]!.textContent).toBe("n/a");
+    expect(idle.querySelectorAll("td")[6]!.textContent).toBe("n/a");
   });
 
   it("shows an unknown cost per commit as a dash, not n/a, and names the project-less row", async () => {
@@ -417,8 +446,8 @@ describe("CostPage", () => {
     await show({ ...d, projects: ["a", "ghost"] }); // the picker lists named projects only
     const rows = drawer("d-projcost").querySelectorAll("tbody tr");
     const ghost = drawer("d-projcost").querySelector('tbody tr[data-v="ghost"]')!;
-    expect(ghost.querySelectorAll("td")[7]!.textContent).toBe("–");
-    expect([...rows].some(r => r.querySelector("td.name")!.textContent === "(no project)")).toBe(true);
+    expect(ghost.querySelectorAll("td")[6]!.textContent).toBe("–");
+    expect([...rows].some(r => r.querySelector(".name")!.textContent === "(no project)")).toBe(true);
   });
 
   it("says cost per commit is not available when nothing was committed", async () => {
@@ -434,7 +463,7 @@ describe("CostPage", () => {
     expect(banner).toMatch(/m-unknown \(200 tokens\)/);
     expect(banner).toMatch(/add them to \/Users\/example\/Library\/Application Support\/ai-ledger\/prices\.json/);
     const row = document.querySelector('#where [data-v="foo"]')!;
-    expect(within(row as HTMLElement).getByTitle("1 requests from unpriced models").textContent).toBe("+?");
+    expect(within(row as HTMLElement).getByTitle("1 requests from unpriced models").textContent).toBe("+?1 requests from unpriced models");
     expect(screen.getByText("unpriced").className).toMatch(/chip warn/);
     expect(document.querySelector('#d-projcost tr[data-v="foo"]')!.textContent).toMatch(/\$16 \+\?/);
   });
@@ -453,25 +482,25 @@ describe("CostPage", () => {
   });
 
   it("selecting a day on the chart lists that day's sessions by cost", async () => {
-    await show(usage);
-    const chart = screen.getByRole("img", { name: /^Estimated cost by project per day, 30 days, peaking at \$16 on Nov 4, 2026/ });
+    await show(usage, []);
+    const chart = screen.getByRole("group", { name: /^Estimated cost by project per day, 30 days, peaking at \$16 on Nov 4, 2026/ });
     act(() => chart.focus());
     fireEvent.keyDown(chart, { key: "End" });
     fireEvent.keyDown(chart, { key: "ArrowLeft" });
     expect(screen.getByText("Nov 4, 2026: $16 estimated. 7-day average $2.26")).toBeTruthy();
     fireEvent.keyDown(chart, { key: "Enter" });
-    expect(drawer("d-top").open).toBe(true);
+    expect(isOpen("d-top")).toBe(true);
     expect(screen.getByText("Active on Nov 4, 2026")).toBeTruthy();
     await waitFor(() => expect(fetched()).toContain("/api/sessions?range=30&day=2026-11-04"));
     // The server costs each session on that day and orders them; the drawer keeps its order and counts them all.
     expect(await within(drawer("d-top")).findByText("3 sessions active on Nov 4, 2026, by their estimated cost on that day. Select a session for details.")).toBeTruthy();
     expect([...drawer("d-top").querySelectorAll("tbody tr")].map(r => r.getAttribute("data-v"))).toEqual(["s1", "s3", "s2"]);
-    expect(drawer("d-top").querySelector("summary .c")!.textContent).toBe("3");
+    expect(drawer("d-top").querySelector(".drawer-head .c")!.textContent).toBe("3");
     await userEvent.click(screen.getByRole("button", { name: "Show the most expensive sessions on every day" }));
     expect(within(drawer("d-top")).getByText(/The 2 most expensive sessions in this view/)).toBeTruthy();
     // Tokens: one series per kind.
     await userEvent.click(within(screen.getByRole("group", { name: "Chart metric" })).getByRole("button", { name: "Tokens" }));
-    expect(screen.getByRole("img", { name: /^Tokens by kind per day/ })).toBeTruthy();
+    expect(screen.getByRole("group", { name: /^Tokens by kind per day/ })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Cache read" }).getAttribute("aria-pressed")).toBe("true");
   });
 

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Source } from "../../api";
 import { agentName } from "../../components/Filters";
 import { ProjectName } from "../../components/ProjectDot";
@@ -17,17 +17,17 @@ import {
 const reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 /** Nothing open: where to start. A type open: its fix, before and after, incidents and examples. */
-export function Detail() {
+export const Detail = memo(function Detail() {
   const { v } = useErrors();
   return v.cat ? <TypeDetail cat={v.cat} /> : <WhereToStart />;
-}
+});
 
 function Pick({ c, top, sub, act }: { c: string; top: ReactNode; sub: string; act: string }) {
   const { m, vt, pick } = useErrors();
   return (
     <button type="button" className="pick" data-c={c} onClick={() => pick(c, true)}>
-      <span className="phead"><b><i className="sw" style={{ background: typeColor(c, vt), marginRight: 7 }} aria-hidden="true" />{m.cats[c]!.label}</b>{top}</span>
-      {sub && <span className="muted" style={{ fontSize: 13, marginTop: 2 }}>{sub}</span>}<span className="act">{act} →</span>
+      <span className="phead"><b><i className="sw" style={{ background: typeColor(c, vt) }} aria-hidden="true" />{m.cats[c]!.label}</b>{top}</span>
+      {sub && <span className="muted sub">{sub}</span>}<span className="act">{act} →</span>
     </button>
   );
 }
@@ -41,14 +41,14 @@ function WhereToStart() {
       {open.length ? open.map(({ c, n, lost }) => <Pick key={c} c={c} top={<span className="muted">{fmt(n)} errors{lost ? ` · ${dur(lost)} lost` : ""}</span>} sub={m.cats[c]!.fix} act="Open fix and examples" />)
         : <div className="empty">Nothing open with a known fix.</div>}
       <h3 className="subh">Rising fastest</h3>
-      <p className="why" style={{ fontSize: 13, marginBottom: 4 }}>{`Error rate ${cmp}, as in the table's Change.`}</p>
+      <p className="why tight">{`Error rate ${cmp}, as in the table's Change.`}</p>
       {/* Too few errors before for a percent: the counts, as in the table. */}
       {rising.length ? rising.map(x => <Pick key={x.c} c={x.c} top={<span className="rise">{x.e1 < MIN_PCT_ERRORS ? `${fmt(x.e1)} → ${fmt(x.e2)}` : `+${fmt(x.d, 0)}%`}</span>}
         sub={`${x.e1 < MIN_PCT_ERRORS ? `Error rate ${fmt(x.r1, 2)}% → ${fmt(x.r2, 2)}%` : `${fmt(x.e1)} → ${fmt(x.e2)} errors`}${NOISE.has(x.c) ? " · noise" : ""}`}
         act={fixes[x.c] ? "Check the fix" : "See what changed"} />)
-        : <div className="empty" style={{ padding: "12px 0" }}>{why ? `${why}, nothing to compare.` : "Nothing is rising in this range."}</div>}
+        : <div className="empty slim">{why ? `${why}, nothing to compare.` : "Nothing is rising in this range."}</div>}
     </>}
-    <div className="ex" style={{ borderBottom: 0 }}><div className="muted" style={{ fontSize: 12 }}>The app ingests new transcript lines every minute; use Refresh above to ingest now. Fix markers are kept in the store, so they follow you to another port or browser.</div></div>
+    <div className="ex"><div className="muted xs">The app ingests new transcript lines every minute; use Refresh above to ingest now. Fix markers are kept in the store, so they follow you to another port or browser.</div></div>
   </>;
 }
 
@@ -64,7 +64,11 @@ function TypeDetail({ cat }: { cat: string }) {
     const ofType = inBucket(v, f.errs).filter(e => e.c === cat).reverse(), base = inTool(v, ofType);
     return { ofType, base, byMsg: msg ? msgGroups(base) : [] };
   }, [f, cat, v.at, v.gran, v.tool, msg]); // eslint-disable-line react-hooks/exhaustive-deps
-  const is = incSummary(m, base), groups = is.groups.sort(byWeight), worst = groups[0], lost = groups.reduce((s, g) => s + incSpan(g), 0);
+  // The incidents are built once per list of errors: the rows are memoized on them, so a keystroke in the search leaves them be.
+  const { is, groups, worst, lost } = useMemo(() => {
+    const is = incSummary(m, base), groups = is.groups.sort(byWeight);
+    return { is, groups, worst: groups[0], lost: groups.reduce((s, g) => s + incSpan(g), 0) };
+  }, [m, base]);
   // A linked example shows first; outside the current filters it gets its own note instead of joining the list.
   const focused = x.pinned, outside = !!focused && !base.includes(focused);
   const listFor = (s: string) => msg ? msgList(byMsg, s, outside ? undefined : focused, v.at ? v.gran : "range")
@@ -132,9 +136,9 @@ function TypeDetail({ cat }: { cat: string }) {
   };
 
   return <>
-    <div className="row dhead" ref={head} style={{ justifyContent: "space-between" }}>
+    <div className="row between dhead" ref={head}>
       <h2 id="detailTitle" tabIndex={-1}>{c.label}</h2>
-      <span className="row" style={{ flexWrap: "nowrap" }}>
+      <span className="row nowrap">
         <button type="button" id="back" className="linkbtn" onClick={back}>Back to types</button>
         <button type="button" id="clr" aria-label="Close detail" onClick={() => x.update({ cat: null, focus: null }, true)}>✕</button>
       </span>
@@ -144,23 +148,23 @@ function TypeDetail({ cat }: { cat: string }) {
       <b>{fmt(base.length)}</b> error{base.length === 1 ? "" : "s"} in <b>{fmt(is.n)}</b> incident{is.n === 1 ? "" : "s"}, <b>{fmt(is.pct, 0)}%</b> didn't recover <span className="muted">({RECOVERED_NOTE.replace(/\.$/, "")})</span>.{lost ? <> <b>{dur(lost)}</b> lost in retry loops.</> : null}
       {worst && worst.errs.length > 1 ? ` Largest: ${fmt(worst.errs.length)} attempts over ${dur(incSpan(worst))}.` : ""}</p> : null}
     <div className="fixbox"><div className="t">Potential fix</div><div>{c.fix}</div>
-      {c.snippet ? <><pre className="snip" id="snip">{c.snippet}</pre><div className="row" style={{ marginTop: 8 }}><button type="button" id="copy" onClick={copy}>{copied === "ok" ? "Copied ✓" : "Copy instruction line"}</button>
+      {c.snippet ? <><pre className="snip" id="snip">{c.snippet}</pre><div className="row"><button type="button" id="copy" onClick={copy}>{copied === "ok" ? "Copied ✓" : "Copy instruction line"}</button>
         <span role="status" className={copied === "fail" ? "muted" : "sr"}>{copied === "fail" ? "Could not copy: select the line above and copy it." : copied === "ok" ? "Copied." : ""}</span></div></> : null}
-      <div className="row" style={{ marginTop: 10 }} aria-busy={busy || undefined}>
+      <div className="row fixact" aria-busy={busy || undefined}>
         {fixDay ? <><span className="chip fixed">✓ Fix applied {label(fixDay, true)}</span><button type="button" id="unfix" aria-busy={busy || undefined} onClick={undo}>Undo</button></>
           : <><label className="chk">Applied on <input type="date" id="fixDate" ref={date} defaultValue={m.lastDay} min={m.firstDay} max={m.lastDay} /></label><button type="button" id="fix" aria-busy={busy || undefined} onClick={mark}>Mark fix applied</button></>}
-        <span className="muted" style={{ fontSize: 12 }}>Applies to all projects</span>
+        <span className="muted xs">Applies to all projects</span>
         {/* No timeout: a write may wait for a long ingest. Say so, so a write that waits is never silent. */}
-        {busy && <span className="muted" id="fixSaving" style={{ fontSize: 12 }}>Saving…</span>}
+        {busy && <span className="muted xs" id="fixSaving">Saving…</span>}
         {fixErr && <span className="fixerr" id="fixErr">{errorText(fixErr, c.label)}</span>}
       </div>
     </div>
     <div className="row mutebox" aria-busy={muteBusy || undefined}>
-      {fixedNoise ? <span className="muted" id="alwaysNoise" style={{ fontSize: 12 }}>This type is always noise: "Hide noise and muted" leaves it out, and it can't be muted.</span> : <>
+      {fixedNoise ? <span className="muted xs" id="alwaysNoise">This type is always noise: "Hide noise and muted" leaves it out, and it can't be muted.</span> : <>
         <button type="button" id="mute" aria-busy={muteBusy || undefined} onClick={toggleMute}>{isMuted ? "Unmute" : "Mute this type"}</button>
         {isMuted && <span className="chip muted-type">Muted</span>}
-        <span className="muted" style={{ fontSize: 12 }}>Muted types count as noise: "Hide noise and muted" leaves them out of the rate.</span>
-        {muteBusy && <span className="muted" id="muteSaving" style={{ fontSize: 12 }}>Saving…</span>}
+        <span className="muted xs">Muted types count as noise: "Hide noise and muted" leaves them out of the rate.</span>
+        {muteBusy && <span className="muted xs" id="muteSaving">Saving…</span>}
         {muteErr && <span className="fixerr" id="muteErr">{errorText(muteErr, c.label)}</span>}
       </>}
     </div>
@@ -170,19 +174,19 @@ function TypeDetail({ cat }: { cat: string }) {
     <ByTool ofType={ofType} />
     <ByAgent base={base} />
     {outside && <div className="outnote" id="outside">
-      <div className="row" style={{ justifyContent: "space-between" }}><b>Outside current filters</b><button type="button" id="clearF" onClick={clearFilters}>Clear filters</button></div>
-      <div className="muted" style={{ fontSize: 12 }}>This linked example doesn't match the project, agent, range, bucket, tool or toggles above.</div>
+      <div className="row between"><b>Outside current filters</b><button type="button" id="clearF" onClick={clearFilters}>Clear filters</button></div>
+      <div className="muted xs">This linked example doesn't match the project, agent, range, bucket, tool or toggles above.</div>
       <Example e={focused!} />
     </div>}
     <div className="exbar" ref={bar}>
-      <div className="row" style={{ justifyContent: "space-between", marginTop: 4 }}><span className="row" style={{ minWidth: 0 }}><b id="exHead">{flat ? "Errors" : msg ? "Messages" : "Incidents"}</b>
-        {v.tool && <button type="button" className="chip bucket tool" id="toolClr" title={v.tool} aria-label={`Only ${v.tool}. Show all tools`} onClick={() => clearTool(v.tool!)}><span className="nm">{v.tool}</span> <span aria-hidden="true">✕</span></button>}</span><span className="muted" style={{ fontSize: 12 }} id="exCount">{list.count}</span></div>
+      <div className="row between exhead"><span className="row shrink"><b id="exHead">{flat ? "Errors" : msg ? "Messages" : "Incidents"}</b>
+        {v.tool && <button type="button" className="chip bucket tool" id="toolClr" title={v.tool} aria-label={`Only ${v.tool}. Show all tools`} onClick={() => clearTool(v.tool!)}><span className="nm">{v.tool}</span> <span aria-hidden="true">✕</span></button>}</span><span className="muted xs" id="exCount">{list.count}</span></div>
       <div className="seg exmode" id="exMode" role="group" aria-label="List">
         <button type="button" data-m="inc" aria-pressed={mode === "inc"} onClick={() => setMode("inc")}>Incidents</button>
         <button type="button" data-m="flat" aria-pressed={flat} onClick={() => setMode("flat")}>Every error, newest first</button>
         <button type="button" data-m="msg" aria-pressed={msg} onClick={() => setMode("msg")}>By message</button>
       </div>
-      <input type="search" id="q" placeholder="Filter by command, error or project…" value={q} style={{ width: "100%", margin: "8px 0" }}
+      <input type="search" id="q" placeholder="Filter by command, error or project…" value={q}
         aria-label={`Filter ${flat ? "errors" : msg ? "messages" : "incidents"}`}
         onChange={e => { const nq = e.target.value; x.setQ(nq); x.say(listFor(nq).count); }} />
     </div>
@@ -191,7 +195,7 @@ function TypeDetail({ cat }: { cat: string }) {
         : msg ? list.items.length ? (list.items as MsgGroup[]).slice(0, shown).map(g => <MsgRow key={g.key} g={g} focused={outside ? undefined : focused} reset={reset} />) : <div className="empty">No messages match.</div>
         : list.items.length ? (list.items as Group[]).slice(0, shown).map(g => <Incident key={g.i} g={g} />) : <div className="empty">No incidents match.</div>}
     </div>
-    <button type="button" id="more" style={{ width: "100%", marginTop: 8 }} hidden={list.items.length <= shown} onClick={showMore}>Show more</button>
+    <button type="button" id="more" hidden={list.items.length <= shown} onClick={showMore}>Show more</button>
   </>;
 }
 
@@ -199,8 +203,8 @@ function FixResult({ cat, fixDay }: { cat: string; fixDay: string }) {
   const { m, v } = useErrors(), { sides, enough, need, verdict } = beforeAfter(m, v, cat, fixDay), [b4, af] = sides;
   const pct = (s: typeof b4) => (s.r == null ? "–" : fmt(s.r, 2) + "%"), den = (s: typeof b4) => `${fmt(s.e)} of ${fmt(s.c)} call${s.c === 1 ? "" : "s"}`;
   return <>
-    <div className="l muted" style={{ fontSize: 12, marginTop: 12 }}>Before and after the fix · all time · {v.project || "all projects"}{v.sub ? "" : " · without subagents"}</div>
-    <div className="ba" style={{ marginTop: 6 }}>{sides.map((s, i) => (
+    <div className="l muted ba-h">Before and after the fix · all time · {v.project || "all projects"}{v.sub ? "" : " · without subagents"}</div>
+    <div className="ba">{sides.map((s, i) => (
       <div key={i}><div className="l">{s.name}</div>
         <div className={"v " + (s.r == null ? "muted" : i && enough ? verdict[1] === "ok" ? "delta-down" : verdict[1] === "bad" ? "delta-up" : "" : "")}>{s.r == null ? s.empty : pct(s)}</div>
         <div className="l">{fmt(s.e)} error{s.e === 1 ? "" : "s"} · {fmt(s.c)} call{s.c === 1 ? "" : "s"}</div></div>
@@ -218,7 +222,7 @@ function MiniRate({ cat }: { cat: string }) {
   const pts = series(v, f.errs, f.calls, buckets(m, f.from, v.gran), cat), i = fix ? pts.findIndex(p => p.k === bucketOf(fix, v.gran)) : -1;
   const max = Math.max(...pts.map(p => p.r || 0));
   return <>
-    <div className="row" style={{ justifyContent: "space-between", fontSize: 12 }}>
+    <div className="row between xs">
       <span className="muted">Error rate, {v.range ? `last ${v.range} days` : "all time"}{fix && i >= 0 ? " · dashed line: fix applied" : ""}</span>
       <span className="muted">peak {fmt(max, 2)}%</span>
     </div>
@@ -235,12 +239,12 @@ function Breakdown({ by, title, noun, base, of, color, name, pick, pressed }: {
   const { rows, top, rest, folded, n } = breakdown(base, of, pressed);
   return (
     <div className="byset" data-by={by}>
-      <div className="row" style={{ justifyContent: "space-between" }}><b style={{ fontSize: 13 }}>{title}</b><span className="muted" style={{ fontSize: 12 }}>{fmt(rows.length)} {noun}{rows.length === 1 ? "" : "s"}</span></div>
+      <div className="row between"><b className="sm">{title}</b><span className="muted xs">{fmt(rows.length)} {noun}{rows.length === 1 ? "" : "s"}</span></div>
       <div className="stack" aria-hidden="true">{top.map(([k, c], i) => <i key={k} style={{ flex: c, background: color(k, i) }} title={k} />)}{rest ? <i style={{ flex: rest, background: "var(--proj-other)" }} /> : null}</div>
       <ul>
         {top.map(([k, c]) => <li key={k}><button type="button" data-k={k} title={pressed === k ? `Show every ${noun}` : `Show only ${k}`} aria-pressed={pressed === undefined ? undefined : pressed === k} onClick={() => pick(k, c)}>
           {name(k)}<span className="v">{fmt(c)}</span><span className="s">{fmt(c / n * 100, 0)}%</span></button></li>)}
-        {rest ? <li className="muted" style={{ fontSize: 12, padding: "4px 0" }}>{fmt(folded)} more: {fmt(rest)} errors</li> : null}
+        {rest ? <li className="muted rest">{fmt(folded)} more: {fmt(rest)} errors</li> : null}
       </ul>
     </div>
   );

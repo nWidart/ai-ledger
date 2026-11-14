@@ -1,11 +1,11 @@
-import { useId, useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import { memo, useId, useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { errorUrl, type ErrorDetail } from "../../api";
 import { ProjectName } from "../../components/ProjectDot";
 import { openToolSheet } from "../../components/sheets/session";
 import { num as fmt, plural, when as at } from "../../format";
 import { navigate } from "../../hash";
 import { getJson } from "../../useApi";
-import { useErrors, type ErrorsCtx } from "./context";
+import { useKeyed, useRow, type RowCtx } from "./context";
 import { dur, incSpan, msgOpenKey, OUTCOME, PAYLOAD_INPUT, sessionHref, type Err, type Group, type MsgGroup } from "./model";
 import { viewHash } from "./view";
 
@@ -14,42 +14,51 @@ export const exKey = (e: Err) => e.id || e.ts + e.t;
 const plain = (ev: MouseEvent) => !(ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey) && ev.button === 0;
 
 /** The payload cuts inputs at PAYLOAD_INPUT characters; "Show full" loads the rest once per id from /api/error. */
-async function loadFull(x: ErrorsCtx, id: string) {
+async function loadFull(x: RowCtx, id: string) {
   if (x.loading.has(id)) return;
-  x.loading.add(id); x.failed.delete(id); x.bump();
+  x.loading.add(id); x.failed.delete(id);
   x.say("Loading full example…");
   try {
     x.fullText.set(id, await getJson<ErrorDetail>(errorUrl(id)));
   } catch {
-    x.loading.delete(id); x.failed.add(id); x.bump();
+    x.loading.delete(id); x.failed.add(id);
     return x.say("Couldn't load the full example. Use Retry to try again.");
   }
   x.loading.delete(id);
-  x.opened.add(id); x.bump();
+  x.opened.add(id);
   x.say("Full example shown");
 }
 
-export function Example({ e }: { e: Err }) {
-  const x = useErrors(), key = exKey(e), open = x.opened.has(key), ref = useRef<HTMLDivElement>(null);
+// One observer for every example: each reports its own fit, and only the examples whose size changed run it.
+const fits = new Map<Element, () => void>();
+let sizes: ResizeObserver | undefined;
+function watchSize(el: Element, fit: () => void) {
+  sizes ??= new ResizeObserver(es => es.forEach(r => fits.get(r.target)?.()));
+  fits.set(el, fit);
+  sizes.observe(el);
+  return () => { fits.delete(el); sizes?.unobserve(el); };
+}
+
+/** One example. It reads its own entries of the keyed state (opened, loaded text, loading, failed), so opening one re-renders that one. */
+export const Example = memo(function Example({ e }: { e: Err }) {
+  const x = useRow(), key = exKey(e), open = !!useKeyed(x.opened, key), ref = useRef<HTMLDivElement>(null);
+  const loaded = useKeyed(x.fullText, e.id);
   // Loaded full text replaces the payload's; a field cut when it was recorded says so.
-  const t: { i: string; e: string; r: string; cut?: string[] } = (e.id && x.fullText.get(e.id)) || e;
+  const t: { i: string; e: string; r: string; cut?: string[] } = loaded || e;
   const note = (k: string) => t.cut?.includes(k) ? <div className="cutnote">(summary as recorded)</div> : null;
-  const cut = !!e.id && !x.fullText.has(e.id) && e.i.length >= PAYLOAD_INPUT;
-  const busy = x.loading.has(e.id), failed = x.failed.has(e.id);
+  const cut = !!e.id && !loaded && e.i.length >= PAYLOAD_INPUT;
+  const busy = !!useKeyed(x.loading, e.id), failed = !!useKeyed(x.failed, e.id);
   const [clamped, setClamped] = useState(false), [copied, setCopied] = useState<"" | "ok" | "fail">("");
   // "Show full" only where a clamped body is cut off, the payload cut the input, or the example is already open.
   useLayoutEffect(() => {
     const el = ref.current!;
     const fit = () => { if (!el.classList.contains("open")) setClamped([...el.querySelectorAll("code, .err, blockquote")].some(b => b.scrollHeight > b.clientHeight + 1)); };
     fit();
-    const ro = new ResizeObserver(fit);
-    ro.observe(el);
-    return () => ro.disconnect();
+    return watchSize(el, fit);
   }, [t.i, t.e, t.r, open]);
   const full = () => {
     if (!open && e.id && x.m.byId[e.id] && !x.fullText.has(e.id)) return void loadFull(x, e.id);
     if (open) x.opened.delete(key); else x.opened.add(key);
-    x.bump();
     const el = ref.current;
     if (open && el && el.getBoundingClientRect().top < 0) el.scrollIntoView({ block: "start" });
   };
@@ -86,19 +95,19 @@ export function Example({ e }: { e: Err }) {
       </button>
     </div>
   );
-}
+});
 
 export function Examples({ list }: { list: readonly Err[] }) {
   return list.length ? <>{list.map(e => <Example key={exKey(e)} e={e} />)}</> : <div className="empty">No examples match.</div>;
 }
 
 /** One incident: attempts, where, when, how it ended; open, its failures in order and the call that recovered. */
-export function Incident({ g }: { g: Group }) {
-  const x = useErrors(), open = x.openInc.has(g.i), [ol, oc] = OUTCOME[g.outcome] || ["", ""], n = g.errs.length;
+export const Incident = memo(function Incident({ g }: { g: Group }) {
+  const x = useRow(), open = !!useKeyed(x.openInc, g.i), [ol, oc] = OUTCOME[g.outcome] || ["", ""], n = g.errs.length;
   const t0 = new Date(g.first ?? ""), t1 = new Date(g.last ?? ""), sameDay = t0.toDateString() === t1.toDateString();
   const when = t0.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
     + (n > 1 ? ` – ${t1.toLocaleString(undefined, sameDay ? { hour: "2-digit", minute: "2-digit" } : { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })} · ${dur(incSpan(g))}` : "");
-  const toggle = () => { if (open) x.openInc.delete(g.i); else x.openInc.add(g.i); x.bump(); };
+  const toggle = () => { if (open) x.openInc.delete(g.i); else x.openInc.add(g.i); };
   return (
     <div className="inc" id={`inc-${g.i}`}>
       <button type="button" className="inc-h" data-inc={g.i} aria-expanded={open} aria-controls={`incb-${g.i}`} onClick={toggle}>
@@ -110,10 +119,10 @@ export function Incident({ g }: { g: Group }) {
       <div className="inc-b" id={`incb-${g.i}`} hidden={!open}>{open && <IncBody g={g} />}</div>
     </div>
   );
-}
+});
 
 function IncBody({ g }: { g: Group }) {
-  const { m } = useErrors(), after = g.rts ? dur(Math.max(0, Date.parse(g.rts) - Date.parse(g.last ?? ""))) : "";
+  const { m } = useRow(), after = g.rts ? dur(Math.max(0, Date.parse(g.rts) - Date.parse(g.last ?? ""))) : "";
   return <>
     <Examples list={g.errs} />
     {g.outcome === "recovered"
@@ -126,9 +135,9 @@ function IncBody({ g }: { g: Group }) {
 const MSG_PAGE = 30; // examples a message group shows at a time, as the flat list
 /** One message: its error count, text, share, projects, tools and newest time; open, its examples newest first. The copy button copies
  *  the normalized message. reset starts the group's examples over at the first page when the list changes. */
-export function MsgRow({ g, focused, reset }: { g: MsgGroup; focused: Err | undefined; reset: string }) {
-  const x = useErrors(), ok = msgOpenKey(g.errs[0]!.c, g.key), open = x.openMsg.has(ok), id = useId(), [copied, setCopied] = useState<"" | "ok" | "fail">("");
-  const toggle = () => { if (open) x.openMsg.delete(ok); else x.openMsg.add(ok); x.bump(); };
+export const MsgRow = memo(function MsgRow({ g, focused, reset }: { g: MsgGroup; focused: Err | undefined; reset: string }) {
+  const x = useRow(), ok = msgOpenKey(g.errs[0]!.c, g.key), open = !!useKeyed(x.openMsg, ok), id = useId(), [copied, setCopied] = useState<"" | "ok" | "fail">("");
+  const toggle = () => { if (open) x.openMsg.delete(ok); else x.openMsg.add(ok); };
   const copy = () => {
     const done = (r: "ok" | "fail") => { setCopied(r); setTimeout(() => setCopied(""), r === "ok" ? 1500 : 4000); };
     // No clipboard API (or a refusal) throws inside the chain, so both end in the failed state.
@@ -150,10 +159,10 @@ export function MsgRow({ g, focused, reset }: { g: MsgGroup; focused: Err | unde
       <div className="inc-b" id={id} hidden={!open}>{open && <MsgBody g={g} focused={focused} reset={reset} id={id} />}</div>
     </div>
   );
-}
+});
 
 function MsgBody({ g, focused, reset, id }: { g: MsgGroup; focused: Err | undefined; reset: string; id: string }) {
-  const x = useErrors(), [more, setMore] = useState({ reset, n: MSG_PAGE }), shown = more.reset === reset ? more.n : MSG_PAGE;
+  const x = useRow(), [more, setMore] = useState({ reset, n: MSG_PAGE }), shown = more.reset === reset ? more.n : MSG_PAGE;
   // The linked example is first, so it is on the page whatever its age.
   const errs = useMemo(() => (focused && g.errs.includes(focused) ? [focused, ...g.errs.filter(e => e !== focused)] : g.errs), [g, focused]);
   const showMore = () => {

@@ -1,4 +1,4 @@
-import { act, render, screen, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { InsightsPayload } from "../../api";
@@ -8,12 +8,16 @@ import session from "../../__fixtures__/session";
 import sessions from "../../__fixtures__/sessions";
 import usage from "../../__fixtures__/usage";
 import { App } from "../../App";
+import { openDrawer } from "../../components/Drawer";
 import { mockApi } from "../../components/sheets/testing";
 import { when } from "../../format";
 import { InsightsPage } from "./InsightsPage";
 
 const fixture = insights as InsightsPayload, none = empty as InsightsPayload;
-const show = (d: InsightsPayload, hash = "#range=0") => {
+/** A closed drawer renders no body: show() starts these open, as a reload that left them open would. */
+const DRAWERS = ["d-goals", "d-types", "d-figures", "d-coverage", "d-how"];
+const show = (d: InsightsPayload, hash = "#range=0", open = DRAWERS) => {
+  localStorage.setItem("claude-usage-open", JSON.stringify(open));
   const f = mockApi({ "/api/insights": () => d });
   history.replaceState(null, "", "/insights" + hash);
   render(<InsightsPage />);
@@ -21,7 +25,8 @@ const show = (d: InsightsPayload, hash = "#range=0") => {
 };
 const lede = () => screen.findByText((_, el) => el?.id === "lede" && !el.textContent!.startsWith("Loading"));
 const section = (name: RegExp) => screen.getByRole("region", { name });
-const drawer = (id: string) => document.getElementById(id) as HTMLDetailsElement;
+const drawer = (id: string) => document.getElementById(id)!;
+const isOpen = (id: string) => drawer(id).hasAttribute("data-open");
 
 describe("InsightsPage", () => {
   it("leads with the analysed counts, the unanalysed count and the newest facet", async () => {
@@ -108,36 +113,37 @@ describe("InsightsPage", () => {
   });
 
   it("orders the page: vitals, outcomes and friction, satisfaction, sessions, then Goals, Session types, Session figures and Coverage as closed drawers", async () => {
-    show(fixture);
+    show(fixture, "#range=0", []);
     await lede();
     const wrap = document.querySelector(".pg-insights")!, at = (sel: string) => [...wrap.querySelectorAll("*")].indexOf(wrap.querySelector(sel)!);
     const order = [".secidx", ".vitals", "#outcomes", "#friction", "#satisfaction", "#log", "#d-goals", "#d-types", "#d-figures", "#d-coverage", "#d-how"].map(at);
     expect(order.every(i => i >= 0)).toBe(true);
     expect(order).toEqual([...order].sort((a, b) => a - b));
     expect(document.querySelector("#outcomes")!.parentElement).toBe(document.querySelector("#friction")!.parentElement);
-    expect(drawer("d-goals").open).toBe(false);
-    expect(drawer("d-types").open).toBe(false);
-    expect(drawer("d-figures").open).toBe(false);
-    expect(drawer("d-coverage").open).toBe(false);
-    expect(drawer("d-how").open).toBe(false);
+    expect(isOpen("d-goals")).toBe(false);
+    expect(isOpen("d-types")).toBe(false);
+    expect(isOpen("d-figures")).toBe(false);
+    expect(isOpen("d-coverage")).toBe(false);
+    expect(isOpen("d-how")).toBe(false);
     for (const id of ["lede", "coverage", "friction", "outcomes", "log"]) expect(document.getElementById(id)).toBeTruthy();
   });
 
   it("indexes the sections and opens a drawer on a jump", async () => {
-    show(fixture);
+    show(fixture, "#range=0", []);
     await lede();
     const nav = screen.getByRole("navigation", { name: "Page sections" });
     expect(within(nav).getAllByRole("link").map(a => a.textContent)).toEqual(["Overview", "Outcomes", "Friction", "Satisfaction", "Sessions", "Goals", "Session types", "Session figures", "Coverage", "How this works"]);
     await userEvent.click(within(nav).getByRole("link", { name: "Session types" }));
-    expect(drawer("d-types").open).toBe(true);
-    expect(drawer("d-goals").open).toBe(false);
+    expect(isOpen("d-types")).toBe(true);
+    expect(isOpen("d-goals")).toBe(false);
   });
 
   it("explains how /insights works in a closed drawer, with the run sizes from the store", async () => {
-    show(fixture);
+    show(fixture, "#range=0", []);
     await lede();
     const how = drawer("d-how");
-    expect(how.open).toBe(false);
+    expect(isOpen("d-how")).toBe(false);
+    act(() => openDrawer("d-how"));
     expect(within(how).getByRole("heading", { level: 2 }).textContent).toBe("How this works");
     const text = how.textContent!;
     expect(text).toContain("/insights is a Claude Code command. A model reads each session's transcript and writes one judgment file, a facet, per session. This app only reads those files and never calls a model.");
@@ -218,11 +224,11 @@ describe("InsightsPage", () => {
   });
 
   it("opens the coverage drawer from the coverage sentence", async () => {
-    show(fixture);
+    show(fixture, "#range=0", []);
     await lede();
-    expect(drawer("d-coverage").open).toBe(false);
+    expect(isOpen("d-coverage")).toBe(false);
     await userEvent.click(within(document.getElementById("coverage")!).getByRole("button", { name: "by project and run" }));
-    expect(drawer("d-coverage").open).toBe(true);
+    expect(isOpen("d-coverage")).toBe(true);
   });
 
   it("offers no coverage link or drawer without figures", async () => {
@@ -449,7 +455,7 @@ describe("InsightsPage", () => {
       expect(within(out).getByText("Mostly achieved")).toBeTruthy();
       expect(within(section(/Satisfaction/)).queryByRole("button", { name: /^very helpful/ })).toBeNull();
       expect(within(section(/Satisfaction/)).queryByRole("button", { name: /^likely satisfied/ })).toBeNull();
-      expect(within(drawer("d-types")).queryByRole("button")).toBeNull();
+      expect(within(document.getElementById("d-types-body")!).queryByRole("button")).toBeNull();
     });
 
     const heading = () => document.getElementById("logTitle")!;
@@ -623,10 +629,11 @@ describe("InsightsPage", () => {
     const stat = (d: HTMLElement, name: string) => within(d).getByText(name).parentElement!.textContent;
 
     it("shows the counted figures in a closed drawer that is not model-judged, and says what they are", async () => {
-      show(fixture);
+      show(fixture, "#range=0", []);
       await lede();
       const d = drawer("d-figures");
-      expect(d.open).toBe(false);
+      expect(isOpen("d-figures")).toBe(false);
+      act(() => openDrawer("d-figures"));
       expect(within(d).getByRole("heading", { level: 2 }).textContent).toBe("Session figures");
       expect(within(d).queryByText("model-judged")).toBeNull();
       const hint = within(d).getByText(/Counted by/).textContent!;
@@ -685,9 +692,9 @@ describe("InsightsPage", () => {
     });
 
     it("stays in a view with no analysed session, with its place in the index", async () => {
-      show({ ...none, meta: fixture.meta, coverage: { ...fixture.coverage, facets: 0, analysed: 0, not_analysed: 3 } }, "#project=nope");
+      show({ ...none, meta: fixture.meta, coverage: { ...fixture.coverage, facets: 0, analysed: 0, not_analysed: 3 } }, "#project=nope", []);
       await lede();
-      expect(drawer("d-figures").open).toBe(false);
+      expect(isOpen("d-figures")).toBe(false);
       expect(within(screen.getByRole("navigation", { name: "Page sections" })).getAllByRole("link").map(a => a.textContent)).toEqual(["Overview", "Session figures", "How this works"]);
     });
   });
@@ -899,6 +906,7 @@ describe("InsightsPage", () => {
     await userEvent.click(await screen.findByRole("link", { name: "Add a theme toggle" }));
     expect(location.pathname).toBe("/usage");
     expect(document.title).toBe("Activity · AI Ledger");
+    await waitFor(() => expect(document.querySelector("dialog")).toBeTruthy()); // Activity loads as its own chunk
     expect(await within(document.querySelector("dialog")!).findByText("Timeline")).toBeTruthy();
   });
 });

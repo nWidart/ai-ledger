@@ -10,5 +10,4 @@
 :is(.pg-activity, .pg-cost, .pg-insights, .pg-context) .jump { display: none; align-items: center; gap: 8px; margin: 0 0 16px; font-size: 13px; color: var(--text-secondary); }
 :is(.pg-activity, .pg-cost, .pg-insights, .pg-context) .jump select { flex: 1; min-width: 0; min-height: 40px; }
 @media (max-width: 899px) { :is(.pg-activity, .pg-cost, .pg-insights, .pg-context) .secidx { display: none; } :is(.pg-activity, .pg-cost, .pg-insights, .pg-context) .jump { display: flex; } }
-:is(.pg-activity, .pg-cost, .pg-insights, .pg-context) .sect { scroll-margin-top: calc(var(--appnav-h, 49px) + var(--secidx-h, 0px) + 12px); }
 @media (prefers-reduced-motion: reduce) { :is(.pg-activity, .pg-cost, .pg-insights, .pg-context) .secidx { transition: none; } }

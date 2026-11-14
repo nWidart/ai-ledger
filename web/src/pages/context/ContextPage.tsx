@@ -57,14 +57,14 @@ export function ContextPage() {
   const cls = "wrap pg-context" + (slow ? " loading" : "") + (grow ? " grow" : "");
 
   return (
-    <div className={cls} ref={wrap} aria-busy={loading || undefined}>
+    <main id="content" className={cls} ref={wrap} aria-busy={loading || undefined}>
       <header className="top sect" id="overview">
-        <div>{d ? <Lede d={d} /> : <h1 className="lede" id="lede" tabIndex={-1} aria-live="polite">{error ? "Context could not be loaded." : "Loading context…"}</h1>}</div>
+        <div>{d ? <Lede d={d} /> : <h1 className="lede" id="lede" tabIndex={-1}>{error ? "Context could not be loaded." : "Loading context…"}</h1>}</div>
         <div className="top-side"><Filters projects={d?.projects ?? []} automated autoFile={d?.automated_file.path} /></div>
       </header>
       {error && <div className="banner" role="alert"><b>Could not load {viewName(want)} ({error.message}).{d ? ` Still showing ${viewName(d)}.` : ""}</b>{" "}
         <button type="button" className="linkish" ref={retryBtn} onClick={retry}>Retry</button></div>}
-      <p className="pending" role="status">{loading && d ? `Loading ${viewName(want)}…` : ""}</p>
+      <p className="pending">{loading && d ? `Loading ${viewName(want)}…` : ""}</p>
       {d && <>
         <RebuildNotice d={d} />
         <SectionIndex groups={[
@@ -87,6 +87,6 @@ export function ContextPage() {
         <div className="drawers"><LargestDrawer rows={d.fills.largest} /><BreaksDrawer cost={d.cost} /></div>
       </>}
       <UsageSheets data={undefined} />
-    </div>
+    </main>
   );
 }

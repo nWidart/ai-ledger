@@ -41,7 +41,7 @@ const stream = async () => {
 const rail = () => screen.findByRole("region", { name: "Active sessions" });
 const wall = rail; // the wall takes the rail's place, under the same name
 /** The rail or the wall as text: each group's heading, then its sessions' projects. */
-const groups = (el: HTMLElement) => [...el.querySelectorAll("h3")].map(h =>
+const groups = (el: HTMLElement) => [...el.querySelectorAll(".group > h2, .group > h3")].map(h =>
   [h.textContent, ...[...h.nextElementSibling!.querySelectorAll("button")].map(b => b.querySelector(".pname")!.textContent)].join(" "));
 /** A list session of the given state that started at `first`. */
 const sess = (id: string, kind: LiveState["kind"], first: string, since = first) => ({ ...list.sessions[0]!, session_id: id, project: id, title: null,
@@ -77,11 +77,18 @@ const laneHead = (name = /^Agent find callers of ingest/) => screen.getByRole("b
 const greps = () => screen.queryAllByRole("button", { name: /^Grep/ }).map(b => b.querySelector(".sum")!.textContent);
 /** The stream's filter bar, the tools of the rows drawn, and what the bar says is hidden. */
 const bar = () => screen.getByRole("group", { name: "Stream filters" });
+/** The connection line ("Paused", "Connection lost · reconnecting…"): the stream has a status of its own for new events. */
+const conn = () => document.querySelector<HTMLElement>("p.conn")!;
 const drawn = () => [...screen.getByLabelText("Session events").querySelectorAll(".tool .nm")].map(n => n.textContent);
 const hidden = () => bar().querySelector(".hid")?.textContent ?? null;
 const check = (name: string) => screen.getByRole("checkbox", { name }) as HTMLInputElement;
 
-afterEach(() => { vi.useRealTimers(); });
+afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); Reflect.deleteProperty(document, "hidden"); });
+/** The tab goes to the background (or comes back): document.hidden as the browser says it, and its event. */
+const setHidden = (hidden: boolean) => {
+  Object.defineProperty(document, "hidden", { configurable: true, get: () => hidden });
+  act(() => { document.dispatchEvent(new Event("visibilitychange")); });
+};
 
 describe("live.ts", () => {
   it("merges a catch-up: new events appended, a finished call replaced in place", () => {
@@ -160,9 +167,9 @@ describe("LivePage", () => {
   it("names the automated projects file on the automated toggle", async () => {
     show("");
     await rail();
-    const title = document.querySelector("label.chk")!.getAttribute("title")!;
     expect(list.automated_file.path).toMatch(/automated\.json$/);
-    expect(title).toContain(list.automated_file.path);
+    await userEvent.click(screen.getByRole("button", { name: "About automated sessions" }));
+    expect(within(screen.getByRole("group", { name: "Filters" })).getByRole("status").textContent).toContain(list.automated_file.path);
   });
 
   it("lists the active sessions and opens the newest when the URL names none", async () => {
@@ -565,6 +572,25 @@ describe("LivePage", () => {
     expect((screen.getByRole("checkbox", { name: "Follow" }) as HTMLInputElement).checked).toBe(true);
   });
 
+  it("is a silent log, and a polite status counts the events that came while Follow is off, once", async () => {
+    const more = { ...s1, events: [...s1.events, { ...(s1.events.at(-1) as LiveToolEvent), key: "n#0", id: "t10", summary: "ls" }], cursor: "c3" };
+    let fresh = false;
+    show("#session=s1", { session: () => (fresh ? more : s1) });
+    const box = await screen.findByRole("log", { name: "Session events" });
+    expect([box.getAttribute("aria-live"), box.tabIndex]).toEqual(["off", 0]);
+    const said = () => screen.getAllByRole("status").map(e => e.textContent);
+    expect(said()).not.toContain("1 new event");
+    box.scrollTop = 100; // no size changed: the scroll is the user's
+    fireEvent.scroll(box);
+    fresh = true;
+    FakeSource.last!.notify(["s1"]);
+    await screen.findByRole("button", { name: "Jump to latest ↓" });
+    expect(said()).not.toContain("1 new event"); // not on the tick: only once the count holds still
+    await waitFor(() => expect(said()).toContain("1 new event"), { timeout: 3000 });
+    await userEvent.click(screen.getByRole("button", { name: "Jump to latest ↓" }));
+    expect(said()).not.toContain("1 new event");
+  });
+
   it("keeps following when the box or its rows change size, and puts the newest event back in view", async () => {
     // jsdom has no layout and no ResizeObserver: a box `room` px high over rows `rows` px high in all, which keeps its
     // scrollTop in bounds as a browser does, and the observers the page starts.
@@ -720,10 +746,10 @@ describe("LivePage", () => {
     await stream();
     FakeSource.last!.open();
     FakeSource.last!.drop();
-    expect(screen.getByRole("status").textContent).toBe("Connection lost · reconnecting…");
+    expect(conn().textContent).toBe("Connection lost · reconnecting…");
     const n = calls().length;
     FakeSource.last!.open();
-    expect(screen.getByRole("status").textContent).toBe("Updating live");
+    expect(conn().textContent).toBe("Updating live");
     await waitFor(() => expect(calls().length).toBeGreaterThanOrEqual(n + 2));
   });
 
@@ -734,7 +760,7 @@ describe("LivePage", () => {
     const retried = async (ms: number) => {
       const was = FakeSource.last!;
       was.fail();
-      expect([was.closed, screen.getByRole("status").textContent]).toEqual([true, "Connection lost · reconnecting…"]);
+      expect([was.closed, conn().textContent]).toEqual([true, "Connection lost · reconnecting…"]);
       await tick(ms - 1);
       expect(FakeSource.last).toBe(was);
       await tick(1);
@@ -746,7 +772,7 @@ describe("LivePage", () => {
     await retried(4000);
     const n = calls().length;
     FakeSource.last!.open();
-    expect(screen.getByRole("status").textContent).toBe("Updating live");
+    expect(conn().textContent).toBe("Updating live");
     await tick(10);
     expect(calls().slice(n)).toEqual(["/api/live", `/api/live/session?id=s1&after=${encodeURIComponent(s1.cursor!)}`]); // what it missed
     await retried(1000);
@@ -773,9 +799,9 @@ describe("LivePage", () => {
     const page = screen.getByRole("main");
     expect(page.className).toBe("wrap pg-live");
     await userEvent.click(screen.getByRole("button", { name: "Pause" }));
-    expect([page.className, screen.getByRole("status").textContent]).toEqual(["wrap pg-live paused", "Paused"]);
+    expect([page.className, conn().textContent]).toEqual(["wrap pg-live paused", "Paused"]);
     await userEvent.click(screen.getByRole("button", { name: "Resume" }));
-    expect([page.className, screen.getByRole("status").textContent]).toEqual(["wrap pg-live", "Connecting…"]);
+    expect([page.className, conn().textContent]).toEqual(["wrap pg-live", "Connecting…"]);
   });
 
   it("updates the nav's Last ingest on a change notice, without waiting for the nav's poll", async () => {
@@ -832,7 +858,7 @@ describe("LivePage", () => {
     expect(polls()).toBe(1); // one in flight, one more owed
     await userEvent.click(screen.getByRole("button", { name: "Pause" }));
     await act(async () => { answer(); await new Promise(r => setTimeout(r, 20)); });
-    expect([polls(), screen.getByRole("status").textContent]).toEqual([1, "Paused"]);
+    expect([polls(), conn().textContent]).toEqual([1, "Paused"]);
     await userEvent.click(screen.getByRole("button", { name: "Resume" }));
     await act(async () => { await new Promise(r => setTimeout(r, 20)); });
     expect(polls()).toBe(2); // once: the nav would else show the time before the second notice's ingest
@@ -847,7 +873,7 @@ describe("LivePage", () => {
     FakeSource.last!.notify(["s1"]);
     FakeSource.last!.notify(["s2"]);
     expect(calls().length).toBe(n);
-    expect(screen.getByRole("status").textContent).toBe("Paused · 3 updates held");
+    expect(conn().textContent).toBe("Paused · 3 updates held");
     await userEvent.click(screen.getByRole("button", { name: "Resume" }));
     await waitFor(() => expect(calls().length).toBe(n + 2));
   });
@@ -1094,5 +1120,99 @@ describe("LivePage", () => {
     await userEvent.click(within(el).getByRole("button", { name: "Open graft" }));
     expect(location.hash).toBe("#session=0a0f7777-0000-7000-8000-000000000007");
     expect(await stream()).toBeTruthy();
+  });
+});
+
+describe("Live in a background tab", () => {
+  const clock = (at = "2026-11-10T10:00:25.000Z") => { vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "Date"] }); vi.setSystemTime(Date.parse(at)); };
+  const flush = (ms = 10) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
+  /** The init each fetch got, by URL path. */
+  const inits = (f: ReturnType<typeof show>["f"], path: string) => f.mock.calls.filter(c => String(c[0]).startsWith(path)).map(c => (c as unknown[])[1]);
+
+  it("closes the notice stream, stops the timers and requests while hidden, and fetches once on return", async () => {
+    clock();
+    const { f, calls, polls } = show();
+    await flush();
+    const first = FakeSource.last!;
+    first.open();
+    const n = calls().length;
+    setHidden(true);
+    expect(first.closed).toBe(true); // the app stops ingesting every second for a page nobody sees
+    await flush(60_000);
+    expect([calls().length, polls()]).toEqual([n, 0]); // no recheck, no status request
+    expect(FakeSource.last).toBe(first);
+    setHidden(false);
+    await flush();
+    expect(calls().length).toBe(n + 2); // the list and the session, once
+    expect(polls()).toBe(1);
+    expect(inits(f, "/api/live")[2]).toBeUndefined(); // on return they are the page's own request, at normal priority
+    expect(FakeSource.last).not.toBe(first); // and the stream is open again
+    expect(FakeSource.last!.closed).toBe(false);
+    FakeSource.last!.open();
+    expect(conn().textContent).toBe("Updating live");
+    await flush(10_000); // the recheck runs again
+    expect(calls().length).toBe(n + 4);
+    await flush(10_000);
+    expect(calls().length).toBe(n + 6);
+  });
+
+  it("sends the timer's recheck and the status polls at low priority, and the page's own requests at normal priority", async () => {
+    clock();
+    const { f, calls } = show();
+    await flush();
+    FakeSource.last!.open();
+    expect(inits(f, "/api/live")).toEqual([undefined, undefined]); // the first load of the list and of the session
+    FakeSource.last!.notify(["s1"]);
+    await flush();
+    expect(inits(f, "/api/live")).toEqual([undefined, undefined, undefined, undefined]); // a notice is news the user waits on
+    expect(inits(f, "/api/status")).toEqual([{ priority: "low" }]);
+    const n = calls().length;
+    await flush(10_000);
+    expect(calls().length).toBe(n + 2);
+    expect(inits(f, "/api/live").slice(-2)).toEqual([{ priority: "low" }, { priority: "low" }]);
+  });
+
+  it("stops the clock while hidden and shows the real elapsed time on return", async () => {
+    clock();
+    show();
+    await flush();
+    const push = () => within(toolRow("Bash", 1));
+    expect(push().getByText("3.0s")).toBeTruthy();
+    setHidden(true);
+    await flush(30_000);
+    expect(push().getByText("3.0s")).toBeTruthy(); // no tick drew meanwhile
+    setHidden(false);
+    await flush();
+    expect(push().getByText("33s")).toBeTruthy();
+    await flush(2000);
+    expect(push().getByText("35s")).toBeTruthy();
+  });
+
+  it("stays paused through a hidden tab, and holds what the closed stream missed for Resume", async () => {
+    clock();
+    const { calls, polls } = show();
+    await flush();
+    FakeSource.last!.open();
+    await userEvent.setup({ advanceTimers: vi.advanceTimersByTime }).click(screen.getByRole("button", { name: "Pause" }));
+    const n = calls().length;
+    setHidden(true);
+    setHidden(false);
+    await flush(30_000);
+    expect([calls().length, polls(), conn().textContent]).toEqual([n, 0, "Paused · 1 update held"]);
+    await userEvent.setup({ advanceTimers: vi.advanceTimersByTime }).click(screen.getByRole("button", { name: "Resume" }));
+    await flush();
+    expect(calls().length).toBe(n + 2);
+  });
+
+  it("draws finished rows once: a tick formats no date for them", async () => {
+    clock();
+    const done = s1.events.find(e => e.k === "tool" && e.end != null && !e.lane) as LiveToolEvent;
+    const many = { ...s1, events: [...s1.events, ...Array.from({ length: 300 }, (_, i) => ({ ...done, key: `m${i}#0`, id: `m${i}` }))] };
+    show("#session=s1", { session: () => many });
+    await flush();
+    expect(document.querySelectorAll(".stream .ev").length).toBeGreaterThan(300);
+    const day = vi.spyOn(Date.prototype, "toDateString");
+    await flush(3000); // three ticks
+    expect(day.mock.calls.length).toBeLessThanOrEqual(3); // the stream's key for the day, not two per row
   });
 });

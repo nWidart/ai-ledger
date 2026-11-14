@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { PalettePayload } from "../../api";
@@ -177,7 +177,8 @@ describe("Palette", () => {
     await userEvent.type(box(), "#foo{Tab}>errors{Tab}>copy link{Enter}");
     expect(location.pathname + location.hash).toBe("/errors#project=foo&range=30");
     expect(write).toHaveBeenCalledWith(location.origin + "/errors#project=foo&range=30");
-    expect((await screen.findByRole("alert")).textContent).toBe("Link copied");
+    const toast = await screen.findByText("Link copied");
+    expect(toast.getAttribute("role")).toBe("status"); // a result, not an emergency: polite, not assertive
   });
 
   it("announces a refused copy and still applies the view", async () => {
@@ -186,7 +187,7 @@ describe("Palette", () => {
     await show("/usage#range=30");
     await userEvent.type(box(), ">cost{Tab}>copy link{Enter}");
     expect(location.pathname).toBe("/cost");
-    expect((await screen.findByRole("alert")).textContent).toBe(`Could not copy the link. It is ${location.origin}/cost#range=30`);
+    expect((await screen.findByText(`Could not copy the link. It is ${location.origin}/cost#range=30`)).getAttribute("role")).toBe("status");
   });
 });
 
@@ -228,8 +229,8 @@ describe("Palette clicks and the copy result", () => {
     await userEvent.click(screen.getByRole("option", { name: "foo, project, 2 sessions" }));
     expect(chips("Filters")).toEqual(["#30d", "#foo"]);
     await userEvent.type(box(), ">bash{Tab}>copy link{Enter}");
-    const alert = await screen.findByRole("alert");
-    expect([alert.textContent, alert.closest("dialog")?.className]).toEqual(["Link copied", "sheet"]);
+    const toast = await screen.findByText("Link copied");
+    expect([toast.getAttribute("role"), toast.closest("dialog")?.className]).toEqual(["status", "sheet"]);
   });
 });
 
@@ -268,14 +269,14 @@ describe("Palette shortcut and button", () => {
     platform("MacIntel");
     history.replaceState(null, "", "/usage#range=30");
     const { unmount } = render(<><Nav /><Palette /></>);
-    const btn = screen.getByRole("button", { name: "Open command palette (⌘K)" });
+    const btn = screen.getByRole("button", { name: "Search, open command palette (⌘K)" });
     expect(btn.querySelector("kbd")!.textContent).toBe("⌘K");
     await userEvent.click(btn);
     expect(document.activeElement).toBe(box());
     unmount();
     platform("Win32");
     render(<Nav />);
-    expect(screen.getByRole("button", { name: "Open command palette (Ctrl K)" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Search, open command palette (Ctrl K)" })).toBeTruthy();
   });
 });
 
@@ -334,6 +335,18 @@ describe("Palette accessibility", () => {
     const dlg = document.querySelector<HTMLDialogElement>("dialog.palette")!;
     act(() => { dlg.dispatchEvent(new Event("close")); });
     expect(screen.getByRole("combobox")).toBeTruthy();
+  });
+
+  it("leaves the keys an IME is using alone: a composing Enter or Tab (keyCode 229) neither applies nor adds a chip", async () => {
+    serve();
+    await show("/usage#range=30");
+    await userEvent.type(box(), "#foo");
+    for (const init of [{ key: "Enter", isComposing: true }, { key: "Enter", keyCode: 229 }, { key: "Tab", isComposing: true }, { key: "ArrowDown", keyCode: 229 }]) {
+      expect(fireEvent.keyDown(box(), init)).toBe(true); // not ours: no preventDefault
+    }
+    expect([location.hash, chips("Filters"), screen.queryByRole("combobox") != null]).toEqual(["#range=30", ["#30d"], true]);
+    await userEvent.keyboard("{Tab}"); // a plain Tab is ours again
+    expect(chips("Filters")).toEqual(["#30d", "#foo"]);
   });
 
   it("closes on Escape without changing the URL, and returns focus", async () => {

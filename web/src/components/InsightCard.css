@@ -10,7 +10,7 @@
 .insight .k { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; font-weight: 500; color: var(--text-secondary);
   text-transform: uppercase; letter-spacing: .05em; }
 .insight .sev { font-size: 11px; text-transform: none; letter-spacing: 0; font-weight: 600; color: var(--sev-text); white-space: nowrap; }
-.insight .t { font-weight: 500; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.insight .t { font-weight: 500; min-width: 0; overflow-wrap: anywhere; }
 .insight .v { font-size: 24px; font-weight: 600; letter-spacing: -.03em; line-height: 1.15; }
 .insight .v .muted { font-size: 14px; font-weight: 500; }
 .insight .b { color: var(--text-secondary); font-size: 13px; flex: 1; overflow-wrap: anywhere; }

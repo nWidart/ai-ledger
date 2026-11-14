@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import { num as fmt, niceStep } from "../../format";
 import { useErrors } from "./context";
 import { bucketLabel, bucketOf, chartData, idle, incSummary, label, linePath, LOW_CALLS, noCalls, pointRows, pointText, pointWhen, selectable, shortLabel, sumCalls, TOPN, typeColor } from "./model";
@@ -9,7 +9,7 @@ const T = ({ x, y, a = "end", strong, children }: { x: number; y: number; a?: "s
   <text x={x} y={y} textAnchor={a} fontSize="11" fill={strong ? "var(--text-secondary)" : "var(--text-muted)"} fontWeight={strong ? 500 : undefined}>{children}</text>
 );
 
-export function RateChart() {
+export const RateChart = memo(function RateChart() {
   const { m, v, f, vt, fixes, pick, after, update, say } = useErrors();
   const box = useRef<HTMLDivElement>(null), svg = useRef<SVGSVGElement>(null), tipEl = useRef<HTMLDivElement>(null);
   const [W, setW] = useState(0);
@@ -111,6 +111,7 @@ export function RateChart() {
     say(on ? "Selection cleared: the table and detail cover the whole range." : `Selected ${pointWhen(v, p)}: the table and detail show only its errors.`);
   };
   const key = (ev: KeyboardEvent<HTMLDivElement>) => {
+    if (ev.key === "Escape") return blur();
     const pick = ev.key === "Enter" || ev.key === " ";
     if (pick) ev.preventDefault(); // Space would scroll the page
     if (bare) return;
@@ -139,7 +140,7 @@ export function RateChart() {
       <div className="hint" id="chartHint">{`Failed tool calls per ${per}, top ${TOPN} types and Other, with ${cat ? "the selected type's" : "the"} error rate (errors per 100 tool calls) above. Dashed lines mark fixes you applied.`}</div>
       {!noErrors && legend(pts.some(idle), low.some(Boolean))}
       {selOut()}
-      <div id="chart" ref={box} tabIndex={0} role="application" aria-roledescription="chart" aria-describedby="chartHint" aria-label={`Errors by type and error rate. Use the left and right arrow keys to read each point, Enter or Space to select the ${per} for the table and examples.${v.at ? ` Selected: ${bucketLabel(m, v)}.` : ""}`}
+      <div id="chart" ref={box} tabIndex={0} role="group" aria-roledescription="chart" aria-describedby="chartHint" aria-label={`Errors by type and error rate. Use the left and right arrow keys to read each point, Enter or Space to select the ${per} for the table and examples.${v.at ? ` Selected: ${bucketLabel(m, v)}.` : ""}`}
         onKeyDown={key} onBlur={blur}>
         {bare ? <div className="empty">{empty ? "No tool calls in this range." : `No failed tool calls in this range, out of ${fmt(sumCalls(v, f.calls))}.`}</div>
           : <svg key={dataKey} ref={svg} viewBox={`0 0 ${W || 800} ${H}`} aria-hidden="true" className={"grow" + (cat ? " has-sel" : "")}>
@@ -158,7 +159,7 @@ export function RateChart() {
             {sel >= 0 && <g id="atMark" data-at={v.at}>
               <rect x={ML + sel * bw} y={rT} width={bw} height={bT + bH - rT} fill="var(--text-primary)" opacity=".08" stroke="var(--text-primary)" strokeWidth="1.5" />
               <path d={`M${cx(sel) - 5},${bT + bH + 12}L${cx(sel) + 5},${bT + bH + 12}L${cx(sel)},${bT + bH + 4}Z`} fill="var(--text-primary)" /></g>}
-            <rect x={ML} y={rT} width={iw} height={bT + bH - rT} fill="transparent" id="hit" onMouseMove={move} onMouseLeave={hide} onClick={ev => toggle(at(ev))} style={{ cursor: "pointer" }} />
+            <rect x={ML} y={rT} width={iw} height={bT + bH - rT} fill="transparent" id="hit" onMouseMove={move} onMouseLeave={hide} onClick={ev => toggle(at(ev))} />
           </svg>}
       </div>
       <div className="sr" id="chartLive" aria-live="polite">{live}</div>
@@ -211,4 +212,4 @@ export function RateChart() {
       </div>
     );
   }
-}
+});

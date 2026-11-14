@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { memo, useState, type ReactNode } from "react";
 import { agentName } from "../../components/Filters";
 import { ProjectDot } from "../../components/ProjectDot";
 import { num as fmt } from "../../format";
@@ -13,7 +13,7 @@ const pct = (x: number) => { const p = x * 100; return fmt(p, p > 0 && p < 1 ? 1
 const UNCAT_TITLE = "Share of errors in catch-all types (Other, Other non-zero exit, MCP tool error): errors no specific rule matched";
 
 /** The briefing (the period's answer as one sentence) and the vitals; on a phone the rest of the summary waits behind More. */
-export function Summary() {
+export const Summary = memo(function Summary() {
   const { m, v, f, fixes } = useErrors(), s = summary(m, v, f, fixes), [more, setMore] = useState(false);
   const { totalCalls, n, r, r0, r1, d, cmp, why, top, vt, inc, uncat } = s, idle = !totalCalls;
   // The split names each agent only when the view shows several; a source filter already names one.
@@ -43,4 +43,4 @@ export function Summary() {
       {more ? "Less summary" : "More summary"}
     </button>
   </>;
-}
+});

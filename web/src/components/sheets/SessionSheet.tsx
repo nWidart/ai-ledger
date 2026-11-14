@@ -2,7 +2,9 @@ import { useRef, useState, type ReactNode } from "react";
 import { promptUrl, type SessionDetail, type View } from "../../api";
 import { big, dur, ms, num, pct, plural, usd, when } from "../../format";
 import { ApiError, getJson } from "../../useApi";
+import { DataTable } from "../DataTable";
 import { ProjectDot } from "../ProjectDot";
+import { Toggletip } from "../Toggletip";
 import { appLink, errorsHref, openProjectSheet, openToolSheet, pickRow } from "./session";
 import { FilterButton } from "./FilterButton";
 import { SessionInsight } from "./SessionInsight";
@@ -73,7 +75,7 @@ export function SessionSheet({ id, s, error, retry, range, pageProject, view }: 
       <Stat v={big(i.peak_context)} l={`peak context${i.context_limit && i.peak_context != null ? ` (${pct(i.peak_context / i.context_limit)})` : ""}`} />
       <Stat v={num(i.compactions)} l={i.compactions === 1 ? "compaction" : "compactions"} />
       <Stat v={num(s.commits.length)} l={s.commits.length === 1 ? "commit" : "commits"} />
-      <Stat v={dur(i.active_s)} l={<span title="Pauses over 20 minutes left out">active</span>} />
+      <Stat v={dur(i.active_s)} l={<>active<Toggletip term="active time">Pauses over 20 minutes left out</Toggletip></>} />
     </div>
     {s.insight && <SessionInsight i={s.insight} view={view} />}
     <h3>Timeline</h3>
@@ -82,19 +84,19 @@ export function SessionSheet({ id, s, error, retry, range, pageProject, view }: 
       <div key={l.first_id}>{l.tool} failed {l.failures}× in a row. <a href={errorsHref(i.project, range, l.first_id)} onClick={appLink}>Open in Errors</a></div>))}</>}
     {s.commits.length > 0 && <details className="sd"><summary>Commits<span className="c">{num(s.commits.length)}</span></summary>
       {s.commits.map(c => <div key={c.tool_use_id} className="muted commit"><code>{c.command}</code></div>)}</details>}
-    <details className="sd"><summary>Models<span className="c">{num(s.models.length)}</span></summary><div className="scroll"><table>
-      <thead><tr><th>Model</th><th className="num">Requests</th><th className="num">Tokens</th><th className="num">Est. cost</th></tr></thead>
+    <details className="sd"><summary>Models<span className="c">{num(s.models.length)}</span></summary><DataTable name="Models">
+      <thead><tr><th scope="col">Model</th><th scope="col" className="num">Requests</th><th scope="col" className="num">Tokens</th><th scope="col" className="num">Est. cost</th></tr></thead>
       <tbody>{s.models.map((r, k) => <tr key={k}>
-        <td>{(r.model ?? "").replace(/^claude-/, "")}<div className="muted small">{[r.effort !== "(none)" && r.effort, r.subagent ? "subagent" : "main thread"].filter(Boolean).join(" · ")}</div></td>
+        <th scope="row" className="name">{(r.model ?? "").replace(/^claude-/, "")}<div className="muted small">{[r.effort !== "(none)" && r.effort, r.subagent ? "subagent" : "main thread"].filter(Boolean).join(" · ")}</div></th>
         <td className="num">{num(r.requests)}</td><td className="num">{big(r.tokens)}</td><td className="num">{usd(r.cost)}</td></tr>)}</tbody>
-    </table></div></details>
-    <details className="sd"><summary>Tools<span className="c">{num(s.tools.length)}</span></summary><div className="scroll"><table>
-      <thead><tr><th>Tool</th><th className="num">Calls</th><th className="num">Failed</th><th className="num">p50</th></tr></thead>
+    </DataTable></details>
+    <details className="sd"><summary>Tools<span className="c">{num(s.tools.length)}</span></summary><DataTable name="Tools">
+      <thead><tr><th scope="col">Tool</th><th scope="col" className="num">Calls</th><th scope="col" className="num">Failed</th><th scope="col" className="num">p50</th></tr></thead>
       <tbody>{s.tools.length ? s.tools.map(r => <tr key={r.tool} {...pickRow(r.tool, v => openToolSheet("tool", v))}>
-        <td className="name"><button type="button" className="cellbtn">{r.tool}</button></td><td className="num">{num(r.calls)}</td>
+        <th scope="row" className="name"><button type="button" className="cellbtn">{r.tool}</button></th><td className="num">{num(r.calls)}</td>
         <td className={"num" + ((r.failure_rate ?? 0) > .1 ? " bad" : "")}>{pct(r.failure_rate, 1)}</td><td className="num">{ms(r.p50_ms)}</td></tr>)
         : <tr><td colSpan={4} className="empty">No tool calls.</td></tr>}</tbody>
-    </table></div></details>
+    </DataTable></details>
     <p><code className="muted sid">{i.session_id}</code></p>
   </>;
 }

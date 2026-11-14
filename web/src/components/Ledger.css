@@ -1,12 +1,12 @@
 /* Ledgers: one row per project or model, bar = share */
-.ledger { list-style: none; margin: 8px 0 0; padding: 0; }
-.ledger li { display: grid; grid-template-columns: minmax(0, 13rem) minmax(40px, 1fr) 4.5rem 3rem; gap: 12px; align-items: center;
+.ledger { list-style: none; margin: 8px 0 0; padding: 0; --ledger-cols: minmax(0, 13rem) minmax(40px, 1fr) 4.5rem 3rem; }
+.ledger li { display: grid; grid-template-columns: var(--ledger-cols); gap: 12px; align-items: center;
   padding: 6px 8px; margin: 0 -8px; border-radius: 6px; }
 .ledger li.pick { display: block; padding: 0; }
 .ledger li.empty { display: block; }
 .ledger .rowbtn { display: grid; grid-template-columns: inherit; width: 100%; gap: 12px; align-items: center; padding: 6px 8px;
   border: 0; border-radius: 6px; background: none; color: inherit; text-align: left; font: inherit; }
-.ledger li.pick .rowbtn { grid-template-columns: minmax(0, 13rem) minmax(40px, 1fr) 4.5rem 3rem; }
+.ledger li.pick .rowbtn { grid-template-columns: var(--ledger-cols); }
 .ledger .rowbtn:hover { background: var(--surface-2); }
 .ledger .n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ledger .bar { height: 8px; background: var(--track); border-radius: 4px; overflow: hidden; }
@@ -16,7 +16,8 @@
 .ledger .s { text-align: right; color: var(--text-muted); font-size: 12.5px; }
 /* Phones: the share bar moves under the name instead of squeezing between name and value. */
 @media (max-width: 520px) {
-  .ledger li, .ledger li.pick .rowbtn { grid-template-columns: minmax(0, 1fr) 4.5rem 3rem; row-gap: 5px; }
+  .ledger { --ledger-cols: minmax(0, 1fr) 4.5rem 3rem; }
+  .ledger li, .ledger li.pick .rowbtn { row-gap: 5px; }
   .ledger .bar { grid-column: 1 / -1; grid-row: 2; height: 6px; }
 }
 /* Bars grow in when new data lands (a page sets .grow on an ancestor for one render). */
