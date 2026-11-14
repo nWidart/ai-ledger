@@ -3,16 +3,18 @@ import { Nav } from "./components/Nav";
 import { Palette } from "./components/palette/Palette";
 import { usePathname } from "./hash";
 import { ActivityPage } from "./pages/activity/ActivityPage";
+import { ContextPage } from "./pages/context/ContextPage";
 import { CostPage } from "./pages/cost/CostPage";
 import { ErrorsPage } from "./pages/errors/ErrorsPage";
 import { InsightsPage } from "./pages/insights/InsightsPage";
 import { LimitsPage } from "./pages/limits/LimitsPage";
 import { LivePage } from "./pages/live/LivePage";
 
-// One app, six pages: the path picks the page; the nav switches with pushState, so payloads stay in memory between them.
+// One app, seven pages: the path picks the page; the nav switches with pushState, so payloads stay in memory between them.
 const ROUTES = {
   "/usage": { title: "Activity · AI Ledger", Page: ActivityPage },
   "/cost": { title: "Cost · AI Ledger", Page: CostPage },
+  "/context": { title: "Context · AI Ledger", Page: ContextPage },
   "/errors": { title: "Errors · AI Ledger", Page: ErrorsPage },
   "/limits": { title: "Limits · AI Ledger", Page: LimitsPage },
   "/insights": { title: "Insights · AI Ledger", Page: InsightsPage },

@@ -7,6 +7,7 @@ const at = (href: string) => { const [path, hash = ""] = href.split("#"); return
 const c = {
   errors: { kind: "page", value: "/errors", label: "Errors" },
   cost: { kind: "page", value: "/cost", label: "Cost" },
+  context: { kind: "page", value: "/context", label: "Context" },
   my: { kind: "project", value: "myproject", label: "myproject" },
   alpha: { kind: "project", value: "alpha", label: "alpha" },
   beta: { kind: "project", value: "beta", label: "beta" },
@@ -41,6 +42,14 @@ describe("resolve", () => {
     expect(commit(here, c.codex).href).toBe("/usage#range=30&source=codex");
     expect(commit(here, c.auto).href).toBe("/usage#range=30&auto=1&day=2026-10-20");
     expect(commit(here, c.bash).href).toBe("/usage#range=30&day=2026-10-20&tool=Bash");
+  });
+  it(">context keeps the project and range", () => {
+    const r = commit("/cost#project=myproject&range=7", c.context);
+    expect(r.href).toBe("/context#project=myproject&range=7");
+    expect(r.footer).toBe("Enter: open Context · myproject · 7d");
+  });
+  it(">bash on Context stays on Context with the inspector", () => {
+    expect(commit("/context#range=30", c.bash).href).toBe("/context#range=30&tool=Bash");
   });
   it(">errors keeps the filters", () => {
     expect(commit("/usage#project=myproject&range=14", c.errors).href).toBe("/errors#project=myproject&range=14");

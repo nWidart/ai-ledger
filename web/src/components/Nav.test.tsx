@@ -64,6 +64,32 @@ describe("Nav", () => {
     expect(vi.mocked(fetch).mock.calls.some(c => String(c[0]) === "/api/insights?project=foo&range=30&source=codex")).toBe(true);
   });
 
+  it("opens Context from Cost with the project and range kept, after Cost in the nav", async () => {
+    vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/status") ? status : usage)));
+    history.replaceState(null, "", "/cost#project=foo&range=30");
+    render(<App />);
+    const tabs = screen.getAllByRole("link").map(a => a.textContent);
+    expect(tabs.slice(tabs.indexOf("Cost"), tabs.indexOf("Cost") + 2)).toEqual(["Cost", "Context"]);
+    await userEvent.click(screen.getByRole("link", { name: "Context" }));
+    expect(location.pathname).toBe("/context");
+    expect(location.hash).toBe("#project=foo&range=30");
+    expect(document.title).toBe("Context · AI Ledger");
+    expect(screen.getByRole("link", { name: "Context" }).getAttribute("aria-current")).toBe("page");
+    expect(screen.getByRole("link", { name: "Cost" }).getAttribute("aria-current")).toBeNull();
+  });
+
+  it("keeps the automated toggle from Context to Cost and back", async () => {
+    vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/status") ? status : usage)));
+    history.replaceState(null, "", "/context#project=foo&range=30&auto=1");
+    render(<App />);
+    await userEvent.click(screen.getByRole("link", { name: "Cost" }));
+    expect(location.pathname).toBe("/cost");
+    expect(location.hash).toBe("#project=foo&range=30&auto=1");
+    await userEvent.click(screen.getByRole("link", { name: "Context" }));
+    expect(location.pathname).toBe("/context");
+    expect(location.hash).toBe("#project=foo&range=30&auto=1");
+  });
+
   it("opens Live with the project and source from Cost, and gives Cost its range back", async () => {
     vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/status") ? status : url.startsWith("/api/live/session") ? liveSession
       : url.startsWith("/api/live") ? live : usage)));
