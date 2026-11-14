@@ -45,6 +45,16 @@ describe("GrowthChart", () => {
     expect(document.querySelector(".readout")!.textContent).toBe("");
   });
 
+  it("reads the turn under the pointer, away from the endpoints", () => {
+    const long = Array.from({ length: 101 }, (_, i) => pt(i + 1, 10_000 + i * 100));
+    const { container } = render(<GrowthChart curve={long} projects={[]} />);
+    // jsdom has no layout: the plot rect starts at the left margin and spans the inner width, as in the browser.
+    const rect = container.querySelector("svg rect")!;
+    rect.getBoundingClientRect = () => ({ left: 52, right: 786, width: 734, top: 12, bottom: 230, height: 218, x: 52, y: 12, toJSON: () => ({}) });
+    fireEvent.pointerMove(rect, { clientX: 52 + 25 / 100 * 734 });
+    expect(document.querySelector(".readout")!.textContent).toMatch(/^Turn 26:/);
+  });
+
   it("draws a curve of one point, and nothing without one", () => {
     const { container, rerender } = render(<GrowthChart curve={[pt(1, 12_000)]} projects={[]} />);
     expect(container.querySelectorAll("path.curve.view")).toHaveLength(2);

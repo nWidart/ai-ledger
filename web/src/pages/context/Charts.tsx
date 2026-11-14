@@ -3,14 +3,13 @@ import type { ContextPayload } from "../../api";
 import { dayLabel, num, pct, plural } from "../../format";
 import { FILL_LABELS, short, windowLabel } from "./context";
 
-/** The median starting context per week of session start, as bars; the figure reads its own text for a screen reader. */
+/** The median starting context per week of session start, as bars; the svg is decorative, a visually hidden table gives a screen reader every week. */
 export function StartTrend({ trend }: { trend: ContextPayload["starting"]["trend"] }) {
   if (!trend.length) return null;
   const W = 520, H = 96, m = { t: 14, b: 18, l: 0 }, max = Math.max(...trend.map(t => t.median)) || 1, ih = H - m.t - m.b;
   const bw = W / trend.length, w = Math.min(36, bw * .7), first = trend[0]!, lastW = trend[trend.length - 1]!;
   return (
-    <figure className="trend" role="img" aria-label={`Median starting context per week: ${short(first.median)} tokens the week of ${dayLabel(first.week, true)}`
-      + (trend.length > 1 ? `, ${short(lastW.median)} the week of ${dayLabel(lastW.week, true)}` : "") + `, over ${plural(trend.length, "week")} with sessions.`}>
+    <figure className="trend">
       <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden="true">
         {trend.map((t, i) => {
           const h = Math.max(2, t.median / max * ih), x = i * bw + (bw - w) / 2;
@@ -19,6 +18,11 @@ export function StartTrend({ trend }: { trend: ContextPayload["starting"]["trend
             <text x={x + w / 2} y={m.t + ih - h - 3} textAnchor="middle" fontSize="10.5" fill="var(--text-secondary)">{short(t.median)}</text></g>;
         })}
       </svg>
+      <table className="sr">
+        <caption>Median starting context per week of session start</caption>
+        <thead><tr><th>Week of</th><th>Median tokens</th><th>Sessions</th></tr></thead>
+        <tbody>{trend.map(t => <tr key={t.week}><td>{dayLabel(t.week, true)}</td><td>{num(t.median)}</td><td>{num(t.sessions)}</td></tr>)}</tbody>
+      </table>
       <figcaption aria-hidden="true"><span>Week of {dayLabel(first.week)}</span><span>Median start per week of session start</span>{trend.length > 1 && <span>{dayLabel(lastW.week)}</span>}</figcaption>
     </figure>
   );

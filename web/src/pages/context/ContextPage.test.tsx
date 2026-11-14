@@ -178,13 +178,25 @@ describe("starting context", () => {
 
   it("charts the weekly median", async () => {
     await show();
-    const fig = section("starting").getByRole("img", { name: /Median starting context per week: 7k tokens the week of .*, 17\.5k the week of/ });
+    const s = section("starting"), fig = s.getByRole("figure");
     expect(fig.querySelectorAll("rect")).toHaveLength(2);
+    expect(fig.querySelector("svg")!.getAttribute("aria-hidden")).toBe("true");
+    // A screen reader gets every week as a table, not just the two ends.
+    const rows = within(s.getByRole("table", { name: /Median starting context per week/ })).getAllByRole("row").slice(1);
+    expect(rows).toHaveLength(2);
+    expect(within(rows[0]!).getAllByRole("cell")[1]!.textContent).toBe("7,000");
   });
 
   it("opens a project's sheet from its row", async () => {
     await show();
     await userEvent.click(section("starting").getByText("foo"));
+    expect(hash().get("inspect")).toBe("foo");
+  });
+
+  it("opens a project's sheet from its name button with the keyboard", async () => {
+    await show();
+    section("starting").getByRole("button", { name: "foo" }).focus();
+    await userEvent.keyboard("{Enter}");
     expect(hash().get("inspect")).toBe("foo");
   });
 });

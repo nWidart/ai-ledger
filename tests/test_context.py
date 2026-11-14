@@ -493,7 +493,7 @@ class TipsTest(unittest.TestCase):
         self.assertEqual((t["severity"], t["matched"], [s["session_id"] for s in t["sessions"]]), ("warn", 1, ["a"]))
         ev = {e["label"]: e["value"] for e in t["evidence"]}
         self.assertEqual((ev["Sessions"], ev["Most compactions in one session"]), ("1", "3"))
-        self.assertIn("Median turns before the first compaction", ev)
+        self.assertIn("Median turns before the first compaction (every compacted session)", ev)
         self.assertIn("`/clear`", t["advice"])
         b.session("c", "foo", peak=10_000, compactions=6)
         b.turn("c", 0, 10_000)

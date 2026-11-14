@@ -221,6 +221,11 @@ class ArchiveTest(CodexCase):
         self.ingest()
         self.assertEqual(self.q("SELECT session_id, subagent FROM requests"), [(parent, True)])
         self.assertEqual(self.q("SELECT session_id, peak_context FROM sessions"), [(parent, 0)])
+        self.place(NAME, line(timestamp="2026-11-06T09:00:00.000Z", ordinal=3, type="event_msg",
+                              payload=dict(type="task_started", turn_id="t2", model_context_window=400000))
+                   + line(timestamp="2026-11-06T09:10:00.000Z", ordinal=4, type="compacted", payload=dict(message="")), mode="a")
+        self.ingest()  # the subagent's own window and compaction are not the session's
+        self.assertEqual(self.q("SELECT compactions, first_compaction_ts, context_window FROM sessions"), [(0, None, None)])
         # A file named by its own thread only: its lines belong to the parent session, not to a session of their own.
         self.assertEqual(self.q("SELECT DISTINCT session_id, subagent FROM raw_lines"), [(parent, True)])
 

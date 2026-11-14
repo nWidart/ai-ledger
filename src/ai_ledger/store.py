@@ -494,7 +494,7 @@ class Deriver:
             if isinstance(content, list) and any(isinstance(x, dict) and x.get("type") == "tool_result" for x in content):
                 self.seq += 1
             self.user(d, sid, ts, content)
-        elif t == "system" and d.get("subtype") == "compact_boundary" and s:
+        elif t == "system" and d.get("subtype") == "compact_boundary" and s and not (self.sub or d.get("isSidechain")):
             s["compactions"] += 1
             if ts:
                 s["first_compaction"] = min(s["first_compaction"] or ts, ts)

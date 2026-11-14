@@ -319,11 +319,11 @@ class CodexDeriver(store.Deriver):
         elif t == "token_usage_record":
             self.records = True
             self.request(p.get("response_id"), p.get("turn_id"), p.get("usage"), s, ts)
-        elif t == "compacted" and s:
+        elif t == "compacted" and s and not self.sub:  # a subagent compacts its own context, not the session's
             s["compactions"] += 1
             if ts:
                 s["first_compaction"] = min(s["first_compaction"] or ts, ts)
-        elif t == "event_msg" and p.get("type") == "task_started" and s and isinstance(p.get("model_context_window"), int):
+        elif t == "event_msg" and p.get("type") == "task_started" and s and not self.sub and isinstance(p.get("model_context_window"), int):
             s["window"] = p["model_context_window"]
         elif t == "event_msg" and p.get("type") == "token_count":
             self.token_count(p, s, ts, d.get("ordinal"))

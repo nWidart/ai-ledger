@@ -27,10 +27,10 @@ export function Starting({ d }: { d: D }) {
         <thead><tr><th>Project</th><th className="num">Median</th><th className="num" title="Approximates the fixed overhead">10th percentile</th>
           <th className="num">Share of window</th><th className="num">Sessions</th></tr></thead>
         <tbody>
-          {s.by_project.length > 1 && <tr className="all"><td className="name">Whole view</td><td className="num">{num(s.median)}</td><td className="num">{num(s.p10)}</td>
+          {s.by_project.length > 1 && <tr key="total" className="all"><td className="name">Whole view</td><td className="num">{num(s.median)}</td><td className="num">{num(s.p10)}</td>
             <td className="num">{share(s.window_share)}</td><td className="num">{num(s.sessions)}</td></tr>}
-          {s.by_project.map(p => <tr key={p.project ?? ""} {...(p.project ? pickRow(p.project, v => openProjectSheet(v)) : {})}>
-            <td className="name"><Proj project={p.project} /></td>
+          {s.by_project.map(p => <tr key={`project:${p.project ?? ""}`} {...(p.project ? pickRow(p.project, v => openProjectSheet(v)) : {})}>
+            <td className="name"><Proj project={p.project} button={!!p.project} /></td>
             <td className="num"><Ibar share={p.median / max} color={color(p.project)} />{num(p.median)}</td><td className="num">{num(p.p10)}</td>
             <td className="num">{share(p.window_share)}{p.window != null && p.window_share != null && <span className="muted small"> of {windowLabel(p.window)}</span>}</td>
             <td className="num">{num(p.sessions)}</td></tr>)}
@@ -68,8 +68,8 @@ export function Growth({ d }: { d: D }) {
       {tiles && by.length > 1 && <div className="scroll"><table>
         <thead><tr><th>Project</th><th className="num">Sessions</th><th className="num">Added per prompt</th><th className="num">Compacted</th>
           <th className="num">Turns to first compaction</th><th className="num">Active time to it</th></tr></thead>
-        <tbody>{by.map(p => <tr key={p.project ?? ""} {...(p.project ? pickRow(p.project, v => openProjectSheet(v)) : {})}>
-          <td className="name"><Proj project={p.project} /></td><td className="num">{num(p.sessions)}</td><td className="num">{num(p.added_per_prompt)}</td>
+        <tbody>{by.map(p => <tr key={`project:${p.project ?? ""}`} {...(p.project ? pickRow(p.project, v => openProjectSheet(v)) : {})}>
+          <td className="name"><Proj project={p.project} button={!!p.project} /></td><td className="num">{num(p.sessions)}</td><td className="num">{num(p.added_per_prompt)}</td>
           <td className="num">{num(p.compacted)}</td><td className="num">{num(p.turns_to_compaction)}</td>
           <td className="num">{p.minutes_to_compaction == null ? "–" : dur(p.minutes_to_compaction * 60)}</td></tr>)}</tbody>
       </table></div>}
@@ -124,7 +124,7 @@ export function CostSection({ d }: { d: D }) {
       <div className="scroll"><table>
         <thead><tr><th>Project</th><th className="num">Estimated cost</th><th className="num">Cache reads</th><th className="num">Long-prompt tier</th>
           <th className="num">Long-tier requests</th><th className="num" title="Cache read tokens over all prompt tokens">Cache-hit ratio</th></tr></thead>
-        <tbody>{rows.map(r => <tr key={r.whole ? "all" : (r.project ?? "")} className={r.whole ? "all" : undefined}
+        <tbody>{rows.map(r => <tr key={r.whole ? "total" : `project:${r.project ?? ""}`} className={r.whole ? "all" : undefined}
           {...(!r.whole && r.project ? pickRow(r.project, v => openProjectSheet(v)) : {})}>
           <td className="name">{r.whole ? "Whole view" : <Proj project={r.project} />}</td>
           <td className="num">{usd(r.cost)}</td><td className="num">{usd(r.cache_read_cost)}</td><td className="num">{longCost(r)}</td>

@@ -37,7 +37,8 @@ export function GrowthChart({ curve, projects }: { curve: GrowthPoint[]; project
     + `The band shows the 25th to 75th percentile, ${short(last.p25)} to ${short(last.p75)} at turn ${last.turn}.`
     + (projects.length ? ` ${plural(projects.length, "project")} drawn separately.` : "") + " Use the left and right arrow keys to read each turn.";
   const near = (ev: PointerEvent) => {
-    const r = ev.currentTarget.getBoundingClientRect(), px = (ev.clientX - r.left) * W / r.width;
+    // The pointer's x in the svg's own units: the plot rect starts at M.l and is iw wide, so offset and scale within it.
+    const r = ev.currentTarget.getBoundingClientRect(), px = M.l + (ev.clientX - r.left) * iw / r.width;
     let best = 0;
     curve.forEach((p, i) => { if (Math.abs(x(p.turn) - px) < Math.abs(x(curve[best]!.turn) - px)) best = i; });
     return best;
