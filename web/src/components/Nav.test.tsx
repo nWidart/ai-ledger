@@ -12,6 +12,7 @@ import usage from "../__fixtures__/usage";
 import sessions from "../__fixtures__/sessions";
 import session from "../__fixtures__/session";
 import limits from "../__fixtures__/limits";
+import context from "../__fixtures__/context";
 import insights from "../__fixtures__/insights";
 import live from "../__fixtures__/live";
 import liveSession from "../__fixtures__/live-session";
@@ -65,7 +66,7 @@ describe("Nav", () => {
   });
 
   it("opens Context from Cost with the project and range kept, after Cost in the nav", async () => {
-    vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/status") ? status : usage)));
+    vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/status") ? status : url.startsWith("/api/context") ? context : usage)));
     history.replaceState(null, "", "/cost#project=foo&range=30");
     render(<App />);
     const tabs = screen.getAllByRole("link").map(a => a.textContent);
@@ -79,7 +80,7 @@ describe("Nav", () => {
   });
 
   it("keeps the automated toggle from Context to Cost and back", async () => {
-    vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/status") ? status : usage)));
+    vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/status") ? status : url.startsWith("/api/context") ? context : usage)));
     history.replaceState(null, "", "/context#project=foo&range=30&auto=1");
     render(<App />);
     await userEvent.click(screen.getByRole("link", { name: "Cost" }));
