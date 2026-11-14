@@ -3,11 +3,13 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import type { GrowthPoint } from "../../api";
 import { setOrder } from "../../colors";
-import { GrowthChart, readTurn } from "./GrowthChart";
+import { GrowthChart, readShare, readTurn } from "./GrowthChart";
 
 const pt = (turn: number, median: number, sessions = 9): GrowthPoint => ({ turn, median, p25: median * .7, p75: median * 1.4, sessions });
 const view = [1, 2, 3, 4, 5].map(t => pt(t, 20_000 + t * 10_000));
-const foo = { project: "foo", sessions: 6, curve: view.map(p => ({ ...p, median: p.median * 1.2 })), share_curve: [] };
+const sp = (turn: number, median: number, sessions = 7): GrowthPoint => ({ turn, median, p25: median * .7, p75: median * 1.3, sessions });
+const shareView = [1, 2, 3, 4].map(t => sp(t, .1 + t * .1));
+const foo = { project: "foo", sessions: 6, curve: view.map(p => ({ ...p, median: p.median * 1.2 })), share_curve: shareView.map(p => ({ ...p, median: p.median * 1.1 })) };
 const bar = { project: "bar", sessions: 5, curve: view.slice(0, 3).map(p => ({ ...p, median: p.median * .6 })), share_curve: [] };
 
 describe("GrowthChart", () => {
@@ -86,5 +88,84 @@ describe("GrowthChart", () => {
     expect(screen.getByRole("group").getAttribute("aria-label")).toContain("12k tokens");
     rerender(<GrowthChart curve={[]} projects={[]} />);
     expect(container.querySelector("svg")).toBeNull();
+  });
+
+  it("draws a strip with one bar per turn, taller for more sessions", () => {
+    const fading = [pt(1, 20_000, 20), pt(2, 30_000, 10), pt(3, 40_000, 5)];
+    const { container } = render(<GrowthChart curve={fading} projects={[]} />);
+    const bars = [...container.querySelectorAll("rect.strip-bar")].map(r => Number(r.getAttribute("height")));
+    expect(bars).toHaveLength(3);
+    expect(bars[0]).toBeGreaterThan(bars[1]!);
+    expect(bars[1]).toBeGreaterThan(bars[2]!);
+    expect(container.querySelector(".strip")!.textContent).toContain("Sessions still running at each turn");
+    expect(container.querySelector(".strip")!.textContent).toContain("20 at turn 1 to 5 at turn 3");
+  });
+
+  it("offers the share switch only with a share curve", () => {
+    const { rerender } = render(<GrowthChart curve={view} projects={[foo]} />);
+    expect(screen.queryByRole("button", { name: "Share of window" })).toBeNull();
+    rerender(<GrowthChart curve={view} projects={[foo]} share={[]} />);
+    expect(screen.queryByRole("button", { name: "Share of window" })).toBeNull();
+    rerender(<GrowthChart curve={view} projects={[foo]} share={shareView} />);
+    expect(screen.getByRole("button", { name: "Tokens" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "Share of window" }).getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("switches to share: the 80% line, percentage axis, share readout and table", async () => {
+    setOrder(["foo", "bar"]);
+    const { container } = render(<GrowthChart curve={view} projects={[foo, bar]} share={shareView} />);
+    expect(container.querySelector("g.limit")).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Share of window" }));
+    expect(screen.getByRole("button", { name: "Share of window" }).getAttribute("aria-pressed")).toBe("true");
+    expect(container.querySelector("g.limit")!.textContent).toBe("80% of the window");
+    expect(container.querySelector("svg")!.textContent).toMatch(/\d+%/);
+    // bar has no share curve: only foo is drawn.
+    expect(container.querySelectorAll("path.curve.proj")).toHaveLength(1);
+    expect(container.querySelectorAll("rect.strip-bar")).toHaveLength(shareView.length);
+    const chart = screen.getByRole("group", { name: /^Median share/ });
+    expect(chart.getAttribute("aria-label")).toContain("Median share of the window");
+    fireEvent.keyDown(chart, { key: "End" });
+    expect(document.querySelector(".readout")!.textContent).toBe(`${readShare(shareView[3]!)}; foo 55%`);
+    expect(document.querySelector(".readout")!.textContent).toContain("median 50% of the window");
+    await userEvent.click(screen.getByRole("button", { name: "Show data table" }));
+    const table = screen.getByRole("table", { name: "Median share of the window at each turn" });
+    expect(within(table).getAllByRole("columnheader").map(h => h.textContent)).toEqual(["Turn", "Median", "25th percentile", "75th percentile", "Sessions", "foo"]);
+    expect(within(within(table).getAllByRole("row")[1]!).getAllByRole("cell").map(c => c.textContent)).toEqual(["20%", "14%", "26%", "7", "22%"]);
+    await userEvent.click(screen.getByRole("button", { name: "Tokens" }));
+    expect(container.querySelector("g.limit")).toBeNull();
+  });
+
+  it("isolates a project with its own band, and restores every project", async () => {
+    setOrder(["foo", "bar"]);
+    const { container } = render(<GrowthChart curve={view} projects={[foo, bar]} />);
+    const fooKey = screen.getByRole("button", { name: /^foo/ }), barKey = screen.getByRole("button", { name: /^bar/ });
+    expect(fooKey.getAttribute("aria-pressed")).toBe("false");
+    expect(container.querySelectorAll("path.band")).toHaveLength(1);
+    await userEvent.click(fooKey);
+    expect(fooKey.getAttribute("aria-pressed")).toBe("true");
+    expect(container.querySelectorAll("path.curve.proj")).toHaveLength(1);
+    expect(container.querySelector("path.curve.proj")!.getAttribute("stroke")).toBe(container.querySelector("path.proj-band")!.getAttribute("fill"));
+    // The view's band is hidden, the project's is drawn, and the view's median stays.
+    expect(container.querySelectorAll("path.band")).toHaveLength(1);
+    expect(container.querySelectorAll("path.proj-band")).toHaveLength(1);
+    expect(container.querySelectorAll("path.curve.view")).toHaveLength(2);
+    fireEvent.keyDown(screen.getByRole("group", { name: /^Median context/ }), { key: "ArrowRight" });
+    expect(document.querySelector(".readout")!.textContent).toBe(`${readTurn(view[0]!)}; foo 36k`);
+    await userEvent.click(fooKey);
+    expect(fooKey.getAttribute("aria-pressed")).toBe("false");
+    expect(barKey.getAttribute("aria-pressed")).toBe("false");
+    expect(container.querySelectorAll("path.curve.proj")).toHaveLength(2);
+    expect(container.querySelectorAll("path.proj-band")).toHaveLength(0);
+  });
+
+  it("clears an isolated project that has no share curve when switching mode", async () => {
+    setOrder(["foo", "bar"]);
+    const { container } = render(<GrowthChart curve={view} projects={[foo, bar]} share={shareView} />);
+    await userEvent.click(screen.getByRole("button", { name: /^bar/ }));
+    expect(container.querySelectorAll("path.curve.proj")).toHaveLength(1);
+    await userEvent.click(screen.getByRole("button", { name: "Share of window" }));
+    expect(container.querySelectorAll("path.curve.proj")).toHaveLength(1);
+    expect(container.querySelectorAll("path.proj-band")).toHaveLength(0);
+    expect(screen.getByRole("button", { name: /^foo/ }).getAttribute("aria-pressed")).toBe("false");
   });
 });
