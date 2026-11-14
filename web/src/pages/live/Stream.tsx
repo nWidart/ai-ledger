@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import type { LiveEvent, LiveSession, LiveToolEvent, Ts } from "../../api";
 import { big, plural, usd } from "../../format";
 import { appLink } from "../../components/sheets/session";
@@ -52,6 +52,8 @@ function Said({ e, text }: { e: Extract<LiveEvent, { k: "prompt" | "reply" }>; t
 
 /** Tool rows a running lane shows, unless the user asks for all of them. */
 const LAST = 5;
+/** How long the count of new events must hold still before it is announced. */
+const NEWS_MS = 1500;
 /** Follow: the room left around a row scrolled into view. */
 const PAD = 8;
 /** How far a box can scroll: another reach means the box or what it draws changed size. */
@@ -150,6 +152,14 @@ export function Stream({ s, now, text, follow, setFollow, filters: f, setFilters
     if (follow && reachOf(el) === reach && Math.abs(el.scrollTop - top) > 1) { setFollow(false); setSeenAt(s.events.length); }
   };
   const newer = !follow && s.events.length > seenAt;
+  // One polite status for the rows that came while Follow is off, said once the count has held still, so a busy stream is not
+  // read out tick by tick (the stream itself is a log that stays silent). told is the count the timer last saw settle.
+  const fresh = newer ? s.events.slice(seenAt).filter(isRow).length : 0, [told, setTold] = useState(0);
+  useEffect(() => {
+    const t = setTimeout(() => setTold(fresh), NEWS_MS);
+    return () => clearTimeout(t);
+  }, [fresh]);
+  const said = fresh && told === fresh ? plural(fresh, "new event") : "";
   return <>
     <div className="stream-filters" role="group" aria-label="Stream filters">
       <button type="button" aria-pressed={f.errors} title="Show failed calls only" onClick={() => setFilters({ ...f, errors: !f.errors })}>{plural(s.errors, "error")}</button>
@@ -157,7 +167,8 @@ export function Stream({ s, now, text, follow, setFollow, filters: f, setFilters
       <label className="chk"><input type="checkbox" checked={f.quiet} onChange={e => setFilters({ ...f, quiet: e.target.checked })} /> Hide read-only</label>
       {hidden > 0 && <span className="hid muted">{plural(hidden, "row")} hidden</span>}
     </div>
-    <div className={"stream" + (s.events.some(e => dated(e.ts, now)) ? " dated" : "")} ref={box} onScroll={onScroll} tabIndex={0} aria-label="Session events"><div ref={drawn}>
+    <span className="sr" role="status">{said}</span>
+    <div className={"stream" + (s.events.some(e => dated(e.ts, now)) ? " dated" : "")} ref={box} onScroll={onScroll} tabIndex={0} role="log" aria-live="off" aria-label="Session events"><div ref={drawn}>
       {s.truncated && <p className="older muted">Older events are not shown. The <a href={sessionHref(s.session_id)} onClick={appLink}>session sheet on Activity</a> has
         the whole session.</p>}
       {rows.map(r => {

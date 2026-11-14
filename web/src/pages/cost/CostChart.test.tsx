@@ -18,7 +18,7 @@ const d: UsagePayload = { ...usage, start: day, end: day, range: 1, project: "",
   daily_projects: [pd("A", 10), pd("B", 5), pd("C", 3), pd("D", 1), pd("E", 0.5)],
   by_project: [proj("A", 10), proj("B", 5), proj("C", 3), proj("D", 1), proj("E", 0.5)] };
 
-const chart = () => screen.getByRole("img", { name: /Estimated cost by project/ });
+const chart = () => screen.getByRole("group", { name: /Estimated cost by project/ });
 const open = () => {
   render(<CostChart d={d} metric="cost" onMetric={() => {}} hidden={[]} onHidden={() => {}} stack="project" onStack={() => {}} onProject={() => {}} onSource={() => {}} onDay={() => {}} />);
   act(() => chart().focus());
@@ -117,9 +117,19 @@ describe("cost chart: stack by", () => {
   }
   const keys = () => [...document.querySelectorAll(".legend .proj, .legend .key")].map(k => k.textContent);
   const tipRows = () => [...screen.getByRole("tooltip").querySelectorAll(".row:not(.sub)")].map(r => r.textContent);
-  const hover = () => { act(() => screen.getByRole("img", { name: /Estimated cost/ }).focus()); fireEvent.keyDown(screen.getByRole("img", { name: /Estimated cost/ }), { key: "Home" }); };
+  const hover = () => { act(() => screen.getByRole("group", { name: /Estimated cost/ }).focus()); fireEvent.keyDown(screen.getByRole("group", { name: /Estimated cost/ }), { key: "Home" }); };
   const sel = (name: string) => userEvent.click(screen.getByRole("button", { name }));
   afterEach(() => vi.clearAllMocks());
+
+  it("is a labelled group, and Escape dismisses the tooltip the arrow keys opened", () => {
+    render(<Host data={split} />);
+    expect(screen.queryByRole("tooltip")).toBeNull();
+    hover();
+    expect(screen.getByRole("tooltip")).toBeTruthy();
+    fireEvent.keyDown(screen.getByRole("group", { name: /Estimated cost/ }), { key: "Escape" });
+    expect(screen.queryByRole("tooltip")).toBeNull();
+    expect(screen.queryByRole("img", { name: /Estimated cost/ })).toBeNull();
+  });
 
   it("restacks the bars and the legend, and names the stacking", async () => {
     render(<Host data={split} />);
@@ -131,10 +141,10 @@ describe("cost chart: stack by", () => {
     expect(keys().slice(0, 3)).toEqual(["opus-4", "sonnet-4", "gpt-6"]);
     expect(fills()).toEqual(["var(--series-1)", "var(--series-2)", "var(--series-3)"]);
     expect(screen.getByRole("heading", { level: 2 }).textContent).toBe("Estimated cost per day by model");
-    expect(screen.getByRole("img", { name: /^Estimated cost by model per day, 1 days/ })).toBeTruthy();
+    expect(screen.getByRole("group", { name: /^Estimated cost by model per day, 1 days/ })).toBeTruthy();
     await sel("Agent");
     expect(keys().slice(0, 2)).toEqual(["Claude Code", "Codex"]);
-    expect(screen.getByRole("img", { name: /^Estimated cost by agent per day/ })).toBeTruthy();
+    expect(screen.getByRole("group", { name: /^Estimated cost by agent per day/ })).toBeTruthy();
   });
 
   it("keeps the day's total the same in every stacking", async () => {
@@ -198,11 +208,11 @@ describe("cost chart: stack by", () => {
     render(<Host data={long} first="model" />);
     expect(document.querySelectorAll(".partial")).toHaveLength(1);
     expect(screen.getByText("Today so far")).toBeTruthy();
-    act(() => screen.getByRole("img", { name: /Estimated cost by model/ }).focus());
-    fireEvent.keyDown(screen.getByRole("img", { name: /Estimated cost by model/ }), { key: "End" });
+    act(() => screen.getByRole("group", { name: /Estimated cost by model/ }).focus());
+    fireEvent.keyDown(screen.getByRole("group", { name: /Estimated cost by model/ }), { key: "End" });
     expect(document.querySelector(".sr")!.textContent).toContain("so far");
     expect(document.querySelector(".sr")!.textContent).not.toContain("7-day average");
-    fireEvent.keyDown(screen.getByRole("img", { name: /Estimated cost by model/ }), { key: "ArrowLeft" });
+    fireEvent.keyDown(screen.getByRole("group", { name: /Estimated cost by model/ }), { key: "ArrowLeft" });
     expect(document.querySelector(".sr")!.textContent).toContain(`7-day average ${usd(1)}`);
   });
 });

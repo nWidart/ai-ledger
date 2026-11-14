@@ -359,14 +359,14 @@ export function InsightsPage() {
   const figures = d && shown.source !== "codex" && d.coverage.facets > 0;
   const counted = d && shown.source !== "codex" && d.meta.sessions > 0;
   return (
-    <div className={"wrap pg-insights" + (slow ? " loading" : "") + (grow ? " grow" : "")} ref={wrap} aria-busy={loading || undefined}>
+    <main id="content" className={"wrap pg-insights" + (slow ? " loading" : "") + (grow ? " grow" : "")} ref={wrap} aria-busy={loading || undefined}>
       <header className="top sect" id="overview">
         <h1 className="kicker">Insights <Judged /></h1>
         <Filters projects={d?.projects ?? []} automated />
       </header>
       {error && <div className="banner" role="alert"><b>Could not load insights for {viewName(want)} ({error.message}).{d ? ` Still showing ${viewName(shown)}.` : ""}</b>{" "}
         <button type="button" className="linkish" ref={retryBtn} onClick={retry}>Retry</button></div>}
-      <p className="pending" role="status">{loading && d ? `Loading insights for ${viewName(want)}…` : ""}</p>
+      <p className="pending">{loading && d ? `Loading insights for ${viewName(want)}…` : ""}</p>
       {!d ? <p className="lede" id="lede" tabIndex={-1}>{error ? "Insights could not be loaded." : "Loading insights…"}</p> : <>
         <Coverage d={d} view={shown} drawer={!!figures} />
         <Lede d={d} view={shown} />
@@ -393,6 +393,6 @@ export function InsightsPage() {
         </>}
         {!figures && (counted || howto) && <div className="drawers">{counted && <SessionFigures d={d} />}{howto && <HowItWorks d={d} />}</div>}
       </>}
-    </div>
+    </main>
   );
 }

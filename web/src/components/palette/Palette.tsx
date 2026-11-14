@@ -10,6 +10,7 @@ import { closePalette, isMac, openPalette, usePaletteOpen } from "./store";
 import { BADGES, isFilter, noToolCalls, rowName, searchesSessions, suggest, type Chip, type Row } from "./suggest";
 import { autoChip, termAt, terms } from "./terms";
 import "./palette.css";
+import { focusLede } from "../focusLede";
 
 const SEARCH_MS = 150, SETTLE_MS = 700;
 // A clicked filter row becomes a chip, a clicked destination applies. On touch screens every tapped row becomes a chip
@@ -41,19 +42,6 @@ function Marked({ text, ranges }: { text: string; ranges: Ranges }) {
   });
   if (at < text.length) out.push(text.slice(at));
   return <>{out}</>;
-}
-
-/** Focus the page heading, and follow it while the page swaps its loading heading for the answer, until focus moves on. */
-function landOnLede() {
-  let at = document.getElementById("lede");
-  at?.focus({ preventScroll: true });
-  const mo = new MutationObserver(() => {
-    if (document.activeElement !== document.body && document.activeElement !== at) { mo.disconnect(); return; }
-    const now = document.getElementById("lede");
-    if (now && now !== at) { at = now; now.focus({ preventScroll: true }); }
-  });
-  mo.observe(document.body, { childList: true, subtree: true });
-  setTimeout(() => mo.disconnect(), 10_000);
 }
 
 /**
@@ -109,7 +97,7 @@ export function Palette() {
       closePalette();
       if (opener.current?.isConnected) opener.current.focus();
       // The opener left with its page: start the reader at the new page's heading, unless an inspector took focus.
-      else if (!document.querySelector("dialog[open]")) landOnLede();
+      else if (!document.querySelector("dialog[open]")) focusLede();
       opener.current = null;
     };
     d.addEventListener("cancel", cancel); d.addEventListener("close", closed);
@@ -210,6 +198,7 @@ export function Palette() {
     }
   };
   const onKey = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.nativeEvent.isComposing || e.keyCode === 229) return; // an IME confirming a candidate with Enter, Tab or arrows is not ours
     const n = rows.length;
     const move = (to: number) => { e.preventDefault(); setBrowsing(true); setHi(to); say.current ??= { what: "", moved: true }; };
     if (e.key === "ArrowDown" && n) move(row ? (at + 1) % n : 0);
@@ -284,7 +273,7 @@ export function Palette() {
           <div className="sr" role="status" aria-live="polite">{said}</div>
         </div>}
       </dialog>
-      {toast && createPortal(<div className="pal-toast" role="alert">{toast.text}</div>, toast.host)}
+      {toast && createPortal(<div className="pal-toast" role="status">{toast.text}</div>, toast.host)}
     </>
   );
 }

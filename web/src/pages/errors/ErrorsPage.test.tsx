@@ -1593,10 +1593,10 @@ describe("ErrorsPage bucket selection", () => {
     expect(Number(band.getAttribute("width"))).toBeCloseTo(6 * (800 - 40 - 10) / 9); // six of the nine days
   });
 
-  it("tells a screen reader the chart is an application with its own keys, and describes it", async () => {
+  it("tells a screen reader the chart is a labelled group with its own keys, and describes it", async () => {
     await open("#range=30&at=2026-11-03");
     const chart = document.getElementById("chart")!;
-    expect(chart.getAttribute("role")).toBe("application");
+    expect(chart.getAttribute("role")).toBe("group");
     expect(chart.getAttribute("aria-roledescription")).toBe("chart");
     expect(chart.getAttribute("aria-describedby")).toBe("chartHint");
     expect(document.getElementById("chartHint")).toBeTruthy();
@@ -1619,6 +1619,17 @@ describe("ErrorsPage bucket selection", () => {
     expect(tip.textContent).toContain("x"); // its type rows still show
     await userEvent.keyboard("{ArrowRight}"); // Nov 5: calls, no errors
     expect(document.getElementById("chartLive")!.textContent).toMatch(/^Nov 5, 2026: 0\.00% rate, 0 errors of 10 calls/);
+  });
+
+  it("dismisses the tooltip and the reading with Escape, and the keys start over", async () => {
+    await open("#range=30", withDays([["2026-11-03", "foo", 10, 0, "claude"], ["2026-11-05", "foo", 10, 0, "claude"]]));
+    keys();
+    await userEvent.keyboard("{Home}");
+    expect(document.getElementById("tip")!.style.display).toBe("block");
+    await userEvent.keyboard("{Escape}");
+    expect(document.getElementById("tip")!.style.display).toBe("none");
+    await userEvent.keyboard("{ArrowLeft}"); // no point is current any more: Left starts from the last
+    expect(document.getElementById("tip")!.style.display).toBe("block");
   });
 
   it("keeps Space working on the current point after Enter closes the open type", async () => {

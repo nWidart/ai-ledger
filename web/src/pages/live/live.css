@@ -22,14 +22,14 @@
 .pg-live .panel { padding: 0; }
 .pg-live .panel h2 { font-size: 11.5px; text-transform: uppercase; letter-spacing: .06em; font-weight: 600; color: var(--text-secondary); margin: 0 0 6px; }
 /* A state group's heading, in the rail and on the wall. */
-.pg-live .group h3 { font-size: 11.5px; font-weight: 600; color: var(--text-muted); margin: 0; }
+.pg-live .group h3, .pg-live .walls h2 { font-size: 11.5px; font-weight: 600; color: var(--text-muted); margin: 0; }
 
 /* States: one color per state; inferred ones say so in words, not only in color. Ended is a square, and dashed where it
    frames a tile or the panel's box: a closed session, apart from the round green of your turn and the round gray of idle. */
 .pg-live .state { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 500; white-space: nowrap; }
 .pg-live .state i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; }
 .pg-live .state .inf { font-weight: 400; color: var(--text-muted); }
-.pg-live .st-tool { color: var(--series-1); } .pg-live .st-tool i { background: var(--series-1); }
+.pg-live .st-tool { color: var(--series-1-ink); } .pg-live .st-tool i { background: var(--series-1); }
 .pg-live .st-thinking { color: var(--accent-ink); } .pg-live .st-thinking i { background: var(--accent); }
 .pg-live .st-you { color: var(--good-text); } .pg-live .st-you i { background: var(--good); }
 .pg-live .st-wait { color: var(--warning-text); } .pg-live .st-wait i { background: var(--warning); }
@@ -95,7 +95,7 @@
 .pg-live .tool .sum.said { font: inherit; font-size: 12.5px; } /* a description is prose, not a command */
 .pg-live .tool .dur { font-size: 12px; color: var(--text-muted); min-width: 44px; text-align: right; }
 .pg-live .tool .res { text-align: center; font-size: 13px; }
-.pg-live .tool.running .dur { color: var(--series-1); font-weight: 600; }
+.pg-live .tool.running .dur { color: var(--series-1-ink); font-weight: 600; }
 .pg-live .tool.failed { background: var(--critical-soft); }
 .pg-live .tool.waiting { background: var(--warning-soft); }
 .pg-live .tool.waiting .dur { color: var(--warning-text); }
@@ -142,8 +142,8 @@
 
 /* Wall */
 .pg-live .walls .group + .group { margin-top: 16px; }
-.pg-live .walls h3 { margin-bottom: 6px; }
-.pg-live .wall { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.pg-live .walls h2 { margin-bottom: 6px; }
+.pg-live .wall { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
 .pg-live .tile { width: 100%; text-align: left; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; font: inherit; color: inherit; }
 .pg-live .tile:hover { background: var(--surface-2); }
 .pg-live .tile.st-tool { border-color: var(--series-1); }

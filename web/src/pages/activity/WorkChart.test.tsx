@@ -29,7 +29,7 @@ const panel = (d: UsagePayload, metric: WorkMetric = "commits", onDay = vi.fn())
   render(<WorkPanel d={d} metric={metric} onMetric={() => {}} onDay={onDay} />);
   return onDay;
 };
-const chart = () => screen.getByRole("img", { name: /per (day|week)/ });
+const chart = () => screen.getByRole("group", { name: /per (day|week)/ });
 
 beforeEach(() => {
   // The plot reads its size from the svg; jsdom lays nothing out.
@@ -175,6 +175,19 @@ describe("failure rate line", () => {
     expect(tip.getByText("Failed tool calls").nextSibling!.textContent).toBe("2 of 4");
     fireEvent.keyDown(chart(), { key: "ArrowRight" });
     expect(tip.getByText("Errors per 100 calls").nextSibling!.textContent).toBe("–");
+  });
+});
+
+describe("chart keys", () => {
+  it("is a labelled group, and Escape dismisses the tooltip the arrow keys opened", () => {
+    panel(many);
+    expect(screen.queryByRole("tooltip")).toBeNull();
+    act(() => chart().focus());
+    fireEvent.keyDown(chart(), { key: "Home" });
+    expect(screen.getByRole("tooltip")).toBeTruthy();
+    fireEvent.keyDown(chart(), { key: "Escape" });
+    expect(screen.queryByRole("tooltip")).toBeNull();
+    expect(screen.queryByRole("img", { name: /per (day|week)/ })).toBeNull();
   });
 });
 

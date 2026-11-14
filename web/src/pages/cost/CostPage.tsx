@@ -54,7 +54,7 @@ function SpendLedger({ d, all, onAll }: { d: UsagePayload; all: boolean; onAll: 
       <Ledger empty="No usage in this range.">{shown.map(r => <LedgerRow key={r.key} name={r.name} title={r.title} share={(r.cost || 0) / total}
         project={bySession ? undefined : r.key} color={color(bySession ? d.project : r.key)} pickKey={r.key}
         onPick={() => (bySession ? openSessionSheet(r.key) : openProjectSheet(r.key))}
-        value={<>{usd(r.cost)}{r.unpriced > 0 && <> <span className="chip warn" title={`${r.unpriced} requests from unpriced models`}>+?</span></>}</>}
+        value={<>{usd(r.cost)}{r.unpriced > 0 && <> <span className="chip warn" title={`${r.unpriced} requests from unpriced models`}>+?<span className="sr">{r.unpriced} requests from unpriced models</span></span></>}</>}
         side={pct((r.cost || 0) / total)} />)}</Ledger>
       {rs.length > LEDGER_TOP && <button type="button" className="linkish more" onClick={() => onAll(!all)}>
         {all ? `Show top ${LEDGER_TOP}` : `Show all ${num(count)} ${bySession ? "sessions" : "projects"}`}</button>}
@@ -104,9 +104,9 @@ export function CostPage() {
   const cls = "wrap pg-cost" + (slow ? " loading" : "") + (grow ? " grow" : "");
 
   return (
-    <div className={cls} ref={wrap} aria-busy={loading || undefined}>
+    <main id="content" className={cls} ref={wrap} aria-busy={loading || undefined}>
       <header className="top sect" id="overview">
-        <div>{d ? <Lede d={d} before={before} /> : <h1 className="lede" id="lede" tabIndex={-1} aria-live="polite">{error ? "Cost could not be loaded." : "Loading cost…"}</h1>}</div>
+        <div>{d ? <Lede d={d} before={before} /> : <h1 className="lede" id="lede" tabIndex={-1}>{error ? "Cost could not be loaded." : "Loading cost…"}</h1>}</div>
         <div className="top-side"><Filters projects={d?.projects ?? []} automated />{d && <Spark d={d} />}</div>
       </header>
       {error && <div className="banner" role="alert"><b>Could not load {viewName(want)} ({error.message}).{d ? ` Still showing ${viewName(d)}.` : ""}</b>{" "}
@@ -116,7 +116,7 @@ export function CostPage() {
         in the shape of the packaged <code>prices.json</code>; the next page load uses them, with no rebuild.</div>}
       {d?.prices_file.error && <div className="banner" role="alert"><b>Prices file ignored:</b> <code>{d.prices_file.path}</code> could not be used
         ({d.prices_file.error}). Packaged prices apply until it is fixed.</div>}
-      <p className="pending" role="status">{loading && d ? `Loading ${viewName(want)}…` : ""}</p>
+      <p className="pending">{loading && d ? `Loading ${viewName(want)}…` : ""}</p>
       {d && <>
         <SectionIndex groups={[
           [{ id: "overview", label: "Overview" }, { id: "changed", label: "Changes", long: "What changed", hidden: !showChanges }, { id: "insights", label: "Insights", hidden: !has },
@@ -146,6 +146,6 @@ export function CostPage() {
         </div>
       </>}
       <UsageSheets data={d} />
-    </div>
+    </main>
   );
 }

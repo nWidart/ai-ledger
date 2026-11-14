@@ -71,6 +71,7 @@ export function CostChart({ d, metric, onMetric, hidden, onHidden, stack, onStac
   const pick = (i: number) => { const p = pts[i]; if (p && (p.cost || total(p))) { setAt(null); onDay(p.day); } };
   const onMove = (ev: PointerEvent) => setAt({ i: indexAt(ev.clientX), x: ev.clientX, y: ev.clientY });
   const onKey = (ev: KeyboardEvent) => {
+    if (ev.key === "Escape") return setAt(null);
     if (ev.key === "Enter" && at) { ev.preventDefault(); return pick(at.i); }
     const step = ({ ArrowLeft: -1, ArrowRight: 1, Home: -Infinity, End: Infinity } as Record<string, number>)[ev.key];
     if (step == null || !pts.length) return;
@@ -142,7 +143,7 @@ export function CostChart({ d, metric, onMetric, hidden, onHidden, stack, onStac
       </div>
       {none && <div className="empty all-hidden" role="status">All token kinds are hidden.{" "}
         <button type="button" className="linkish" onClick={() => onHidden([])}>Show every kind</button></div>}
-      <div className="chart" ref={box} tabIndex={0} hidden={none} role="img" aria-label={label} onKeyDown={onKey} onBlur={() => setAt(null)}>
+      <div className="chart" ref={box} tabIndex={0} hidden={none} role="group" aria-label={label} onKeyDown={onKey} onBlur={() => setAt(null)}>
         <svg ref={svg} viewBox={`0 0 ${W} ${H}`} aria-hidden="true">
           {/* Today's hatch: surface-colored stripes over each segment, so every series color shows through in either theme. */}
           <defs><pattern id="partial-day" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">

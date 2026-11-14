@@ -43,8 +43,10 @@ export function pollStatus(): Promise<Status | null> {
   return getJson<Status>(statusUrl).then(s => { noteStatus(n, s); return s; }, () => { noteStatus(n, null); return null; });
 }
 
-/** Runs an ingest now, then drops the data cache so every page refetches. */
+/** Runs an ingest now, then drops the data cache so every page refetches. Does nothing while one runs: the nav's button
+ *  stays focusable then (aria-disabled), so its activation is ignored here. */
 export function refresh() {
+  if (state.busy) return;
   set({ ...state, busy: true, text: "Ingesting…" });
   getJson<Status>("/api/refresh", { method: "POST" }).then(s => {
     noteIngest(s.last_change);

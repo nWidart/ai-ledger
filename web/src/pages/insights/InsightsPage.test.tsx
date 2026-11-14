@@ -1,4 +1,4 @@
-import { act, render, screen, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { InsightsPayload } from "../../api";
@@ -899,6 +899,7 @@ describe("InsightsPage", () => {
     await userEvent.click(await screen.findByRole("link", { name: "Add a theme toggle" }));
     expect(location.pathname).toBe("/usage");
     expect(document.title).toBe("Activity · AI Ledger");
+    await waitFor(() => expect(document.querySelector("dialog")).toBeTruthy()); // Activity loads as its own chunk
     expect(await within(document.querySelector("dialog")!).findByText("Timeline")).toBeTruthy();
   });
 });

@@ -175,7 +175,7 @@ function WindowPanel({ h, onClose }: { h: LimitHistoryRow; onClose: () => void }
       </header>
       {error ? <p role="alert">Could not load this window's curve ({error.message}). <button type="button" className="linkish" onClick={retry}>Retry</button></p>
         : w && data ? <LimitChart w={w} now={null} events={data.events} />
-        : <p className="muted" role="status">{loading ? "Loading the curve…" : ""}</p>}
+        : <p className="muted">{loading ? "Loading the curve…" : ""}</p>}
     </section>
   );
 }
@@ -273,7 +273,7 @@ export function LimitsPage() {
   useEffect(() => { if (d && !loading && !error) setShown(want); }, [d, loading, error, url]); // want is read through url
   const { slow, wrap, retryBtn } = useLanding(d, url, loading, error, ":scope > :is(.lim-grid, .panel, .drawers)");
   return (
-    <div className={"wrap pg-limits" + (slow ? " loading" : "")} ref={wrap} aria-busy={loading || undefined}>
+    <main id="content" className={"wrap pg-limits" + (slow ? " loading" : "")} ref={wrap} aria-busy={loading || undefined}>
       <header className="top sect" id="overview">
         <div>
           {d ? <Lede d={d} /> : <h1 className="lede" id="lede" tabIndex={-1}>{error ? "Limits could not be loaded." : "Loading limits…"}</h1>}
@@ -286,7 +286,7 @@ export function LimitsPage() {
       </header>
       {error && <div className="banner" role="alert"><b>Could not load limits for {viewName(want)} ({error.message}).{d ? ` Still showing ${viewName(shown)}.` : ""}</b>{" "}
         <button type="button" className="linkish" ref={retryBtn} onClick={retry}>Retry</button></div>}
-      <p className="pending" role="status">{loading && d ? `Loading limits for ${viewName(want)}…` : ""}</p>
+      <p className="pending">{loading && d ? `Loading limits for ${viewName(want)}…` : ""}</p>
       {d && <>
         <div className="sect-head sect" id="windows">
           <h2>Open windows</h2>
@@ -311,6 +311,6 @@ export function LimitsPage() {
           <Value d={d} project={shown.project} />
         </div>
       </>}
-    </div>
+    </main>
   );
 }

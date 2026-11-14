@@ -70,9 +70,9 @@ export function LivePage() {
       </>}
     </button></li>;
   return (
-    <main className={"wrap pg-live" + (paused ? " paused" : "")}>
+    <main id="content" className={"wrap pg-live" + (paused ? " paused" : "")}>
       <div className="top">
-        <h1>Live</h1>
+        <h1 id={list && !sessions.length && !h.session ? undefined : "lede"} tabIndex={-1}>Live</h1>
         <div className="seg" role="group" aria-label="View">
           <button type="button" aria-pressed={mode === "stream"} onClick={() => set({ view: null })}>Stream</button>
           <button type="button" aria-pressed={mode === "wall"} onClick={() => set({ view: "wall" })}>Wall</button>
@@ -123,6 +123,6 @@ export function LivePage() {
 }
 
 function Empty({ newest }: { newest: { session_id: string; project: string | null; last_ts: string | null } | null }) {
-  return <p className="empty-live" id="lede">No session is active in this view.
+  return <p className="empty-live" id="lede" tabIndex={-1}>No session is active in this view.
     {newest && <> The newest, <a href={sessionHref(newest.session_id)}>{newest.project ?? "a session"}</a>, last wrote {when(newest.last_ts)}.</>}</p>;
 }

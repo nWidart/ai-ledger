@@ -233,30 +233,30 @@ describe("CostPage", () => {
     const d = drawer("d-projcost");
     await userEvent.click(within(within(d).getByRole("button", { name: /Cost \/ commit/ }).closest("th")!).getByRole("button"));
     const names = (t: string, sep: string) => t.split(/\r?\n/).filter(Boolean).slice(1).map(l => l.split(sep)[0]);
-    await userEvent.click(within(d).getByRole("button", { name: "Download CSV" }));
+    await userEvent.click(within(d).getByRole("button", { name: "Download CSV cost projects" }));
     expect(download).toHaveBeenCalledWith(`ai-ledger-cost-projects-${dayStamp()}.csv`, expect.any(String));
     const csv = vi.mocked(download).mock.calls.at(-1)![1];
     expect(csv.split("\r\n")[0]).toBe("Project,Est. cost (USD),Tokens,Cache hit,1h writes,Subagent cost share,Commits,Cost per commit (USD),Cost per prompt (USD)");
     expect(names(csv, ",")).toEqual(["a", "b", "idle"]);
     expect(csv.split("\r\n")[3]!.split(",")[7]).toBe(""); // no commits: cost per commit is empty
-    fireEvent.click(within(d).getByRole("button", { name: "Copy" }));
-    expect(await within(d).findByRole("button", { name: "Copied" })).toBeTruthy();
+    fireEvent.click(within(d).getByRole("button", { name: "Copy cost projects" }));
+    expect(await within(d).findByRole("button", { name: "Copied cost projects" })).toBeTruthy();
     expect(within(d).getByText("Copied to clipboard.")).toBeTruthy();
     const tsv = writeText.mock.calls[0]![0] as string;
     expect(tsv.split("\n")[0]!.split("\t")[0]).toBe("Project");
     expect(names(tsv, "\t")).toEqual(["a", "b", "idle"]);
-    await waitFor(() => expect(within(d).getByRole("button", { name: "Copy" })).toBeTruthy(), { timeout: 3000 });
+    await waitFor(() => expect(within(d).getByRole("button", { name: "Copy cost projects" })).toBeTruthy(), { timeout: 3000 });
   });
 
   it("offers no export when the project table has no rows", async () => {
     await show(withProjects([]));
-    expect(within(drawer("d-projcost")).queryByRole("button", { name: "Download CSV" })).toBeNull();
+    expect(within(drawer("d-projcost")).queryByRole("button", { name: "Download CSV cost projects" })).toBeNull();
   });
 
   it("downloads the most expensive sessions with their figures", async () => {
     await show(usage);
     const d = drawer("d-top");
-    await userEvent.click(within(d).getByRole("button", { name: "Download CSV" }));
+    await userEvent.click(within(d).getByRole("button", { name: "Download CSV cost sessions" }));
     expect(download).toHaveBeenLastCalledWith(`ai-ledger-cost-sessions-${dayStamp()}.csv`, expect.any(String));
     const lines = vi.mocked(download).mock.calls.at(-1)![1].split("\r\n").filter(Boolean);
     expect(lines[0]).toBe("Session id,Title,Project,Started,Branch,Active seconds,Prompts,Commits,Cost per commit (USD),Est. cost (USD)");
@@ -309,7 +309,7 @@ describe("CostPage", () => {
     });
     it("exports every project, folded or not", async () => {
       await show(seven());
-      await userEvent.click(within(drawer("d-projcost")).getByRole("button", { name: "Download CSV" }));
+      await userEvent.click(within(drawer("d-projcost")).getByRole("button", { name: "Download CSV cost projects" }));
       const lines = vi.mocked(download).mock.calls.at(-1)![1].split("\r\n").filter(Boolean).slice(1);
       expect(lines.map(l => l.split(",")[0])).toEqual(["r1", "r2", "r3", "t1", "t2", "t3", "t4"]);
     });
@@ -394,13 +394,13 @@ describe("CostPage", () => {
     try {
       await show(usage);
       await userEvent.click(screen.getByRole("button", { name: "Agent" }));
-      expect(screen.getByRole("img", { name: /^Estimated cost by agent per day/ })).toBeTruthy();
+      expect(screen.getByRole("group", { name: /^Estimated cost by agent per day/ })).toBeTruthy();
       await userEvent.click(within(document.querySelector(".legend") as HTMLElement).getByRole("button", { name: "Claude Code" }));
       expect(location.hash).toBe("#range=30&source=claude");
       cleanup();
       await show(usage);
       expect(screen.getByRole("button", { name: "Agent" }).getAttribute("aria-pressed")).toBe("true");
-      expect(screen.getByRole("img", { name: /^Estimated cost by agent per day/ })).toBeTruthy();
+      expect(screen.getByRole("group", { name: /^Estimated cost by agent per day/ })).toBeTruthy();
     } finally {
       localStorage.clear();
     }
@@ -434,7 +434,7 @@ describe("CostPage", () => {
     expect(banner).toMatch(/m-unknown \(200 tokens\)/);
     expect(banner).toMatch(/add them to \/Users\/example\/Library\/Application Support\/ai-ledger\/prices\.json/);
     const row = document.querySelector('#where [data-v="foo"]')!;
-    expect(within(row as HTMLElement).getByTitle("1 requests from unpriced models").textContent).toBe("+?");
+    expect(within(row as HTMLElement).getByTitle("1 requests from unpriced models").textContent).toBe("+?1 requests from unpriced models");
     expect(screen.getByText("unpriced").className).toMatch(/chip warn/);
     expect(document.querySelector('#d-projcost tr[data-v="foo"]')!.textContent).toMatch(/\$16 \+\?/);
   });
@@ -454,7 +454,7 @@ describe("CostPage", () => {
 
   it("selecting a day on the chart lists that day's sessions by cost", async () => {
     await show(usage);
-    const chart = screen.getByRole("img", { name: /^Estimated cost by project per day, 30 days, peaking at \$16 on Nov 4, 2026/ });
+    const chart = screen.getByRole("group", { name: /^Estimated cost by project per day, 30 days, peaking at \$16 on Nov 4, 2026/ });
     act(() => chart.focus());
     fireEvent.keyDown(chart, { key: "End" });
     fireEvent.keyDown(chart, { key: "ArrowLeft" });
@@ -471,7 +471,7 @@ describe("CostPage", () => {
     expect(within(drawer("d-top")).getByText(/The 2 most expensive sessions in this view/)).toBeTruthy();
     // Tokens: one series per kind.
     await userEvent.click(within(screen.getByRole("group", { name: "Chart metric" })).getByRole("button", { name: "Tokens" }));
-    expect(screen.getByRole("img", { name: /^Tokens by kind per day/ })).toBeTruthy();
+    expect(screen.getByRole("group", { name: /^Tokens by kind per day/ })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Cache read" }).getAttribute("aria-pressed")).toBe("true");
   });
 

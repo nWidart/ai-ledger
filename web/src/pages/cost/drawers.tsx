@@ -13,7 +13,7 @@ import { big, dayLabel, dur, mult, num, pct, plural, usd, when } from "../../for
 import { getJson } from "../../useApi";
 import { COMPARE_PROMPTS, OUTLIER_SHARE, perCommit, perPrompt, projectMedians } from "./insights";
 
-const Unpriced = ({ n }: { n: number }) => n ? <> <span className="chip warn" title={`${n} requests from unpriced models`}>+?</span></> : null;
+const Unpriced = ({ n }: { n: number }) => n ? <> <span className="chip warn" title={`${n} requests from unpriced models`}>+?<span className="sr">{n} requests from unpriced models</span></span></> : null;
 const NA = () => <span className="muted">n/a</span>;
 
 /** Tokens and cache: cache efficiency, subagent and per-outcome cost, then each billed kind by estimated cost and token share. */

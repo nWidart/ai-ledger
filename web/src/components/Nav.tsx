@@ -99,14 +99,14 @@ export function Nav() {
             <button type="button" aria-label="Clear project filter" title="Show all projects" onClick={clear}>✕<span className="lbl"> Clear</span></button>
           </span>
         )}
-        <button type="button" className="appnav-palette" aria-label={`Open command palette (${shortcutHint()})`} aria-haspopup="dialog"
+        <button type="button" className="appnav-palette" aria-label={`Search, open command palette (${shortcutHint()})`} aria-haspopup="dialog"
           aria-keyshortcuts={shortcutKeys()} title={`Filter, go to a page or open an inspector (${shortcutHint()})`} onClick={openPalette}>
           <svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5" fill="none" stroke="currentColor" strokeWidth="1.8" /><path d="m13 13 4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>
           <span className="lbl">Search</span><kbd>{shortcutHint()}</kbd>
         </button>
         <span className="appnav-status" id="navStatus" aria-live="polite">{st.text}</span>
         <span className="sr" role="status">{said.text}</span>
-        <button type="button" id="navRefresh" className={st.failed ? "failed" : undefined} title={st.text} disabled={st.busy} onClick={refresh}
+        <button type="button" id="navRefresh" className={st.failed ? "failed" : undefined} title={st.text} aria-disabled={st.busy || undefined} onClick={refresh}
           aria-label={st.retry ? "Retry" : "Refresh"}>
           <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9" /><path d="M13.5 2.5v3h-3" /></svg>
           <span className="lbl">{st.retry ? "Retry" : "Refresh"}</span>

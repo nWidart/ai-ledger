@@ -362,7 +362,7 @@ describe("ActivityPage", () => {
     await waitFor(() => expect(document.querySelector("#d-sessions .hint")!.textContent).toContain("nearest the limit first"));
     await userEvent.click(within(document.getElementById("d-sessions")!).getByRole("button", { name: "Tokens" }));
     await waitFor(() => expect(fetched()).toContain("/api/sessions?range=30&near=1&sort=tokens&desc=1"));
-    const chart = screen.getByRole("img", { name: /^Commits/ });
+    const chart = screen.getByRole("group", { name: /^Commits/ });
     act(() => chart.focus());
     fireEvent.keyDown(chart, { key: "End" });
     fireEvent.keyDown(chart, { key: "ArrowLeft" });
@@ -641,7 +641,7 @@ describe("ActivityPage", () => {
     serve(usage);
     at();
     render(<ActivityPage />);
-    const chart = await screen.findByRole("img", { name: /^Commits and errors per 100 tool calls per day, 2 days/ });
+    const chart = await screen.findByRole("group", { name: /^Commits and errors per 100 tool calls per day, 2 days/ });
     act(() => chart.focus());
     fireEvent.keyDown(chart, { key: "End" });
     expect(screen.getByText("Nov 5, 2026: 0 commits, 1 prompt, 1 session, 0 failed calls")).toBeTruthy();
@@ -652,7 +652,7 @@ describe("ActivityPage", () => {
     await waitFor(() => expect(fetched()).toContain("/api/sessions?range=30&day=2026-11-04"));
     // The bars follow the chosen count.
     await userEvent.click(within(screen.getByRole("group", { name: "Chart metric" })).getByRole("button", { name: "Prompts" }));
-    expect(screen.getByRole("img", { name: /^Prompts and errors per 100 tool calls per day/ })).toBeTruthy();
+    expect(screen.getByRole("group", { name: /^Prompts and errors per 100 tool calls per day/ })).toBeTruthy();
   });
 
   it("opens a session sheet from the sessions table and closes it again", async () => {

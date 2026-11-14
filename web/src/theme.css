@@ -1,53 +1,48 @@
 /* Shared by every page (imported once in main.tsx): tokens, base type, controls, cards, KPIs, chips, tooltips, sheets.
    Page styles stay in each page; anything several pages draw the same way lives here. */
 :root {
-  color-scheme: light;
-  --bg: #f6f5f2; --surface-1: #fcfcfb; --surface-2: #f0efec; --border: #e2e0da;
-  --text-primary: #0b0b0b; --text-secondary: #52514e; --text-muted: #66655f;
-  --series-1: #2a78d6; --series-1-soft: rgba(42,120,214,.12); --series-2: #eb6834; --series-3: #1baf7a;
-  --series-4: #eda100; --series-5: #e87ba4; --series-6: #008300;
-  --grid: #e8e6e1; --track: #ebe9e4; --good: #0ca30c; --good-text: #006300; --critical: #d03b3b; --critical-text: #b42318;
-  --critical-soft: rgba(208,59,59,.1); --warning: #c98500; --warning-text: #8a5a00; --warning-soft: rgba(201,133,0,.12);
-  --good-soft: rgba(12,163,12,.1);
+  /* One token set: each color is light-dark(light, dark), which follows color-scheme. "light dark" follows the OS; the
+     data-theme rules below pin one side (index.html sets them before paint). light-dark() is Baseline 2024 and the app
+     targets evergreen browsers, so there is no prefers-color-scheme fallback. Tokens that are the same in both stay plain. */
+  color-scheme: light dark;
+  --bg: light-dark(#f6f5f2, #121211); --surface-1: light-dark(#fcfcfb, #1a1a19); --surface-2: light-dark(#f0efec, #242422);
+  --border: light-dark(#e2e0da, #33332f);
+  /* Control borders (inputs, selects, the project picker) need 3:1 on surface-1 (WCAG 1.4.11); --border is for dividers
+     and stays soft (1.29:1 light, 1.37:1 dark). 3.28:1 light, 3.71:1 dark; on a hovered surface-2 2.93:1 / 3.31:1. */
+  --control-border: light-dark(#8e8c85, #75746d);
+  --text-primary: light-dark(#0b0b0b, #f0efec); --text-secondary: light-dark(#52514e, #c3c2b7); --text-muted: light-dark(#66655f, #9d9c94);
+  --series-1: light-dark(#2a78d6, #3987e5); --series-1-soft: light-dark(rgba(42,120,214,.12), rgba(57,135,229,.18));
+  /* --series-1 as text: 4.30:1 on surface-1 in light, short of 4.5, so light gets a darker ink (6.39:1); dark keeps the series
+     blue (4.79:1). */
+  --series-1-ink: light-dark(#1c5dab, var(--series-1));
+  /* Filter badges in the palette sit on --series-1-soft and highlighted rows, so dark needs a lighter ink (7.62:1 on surface-1);
+     light is the same ink as above. */
+  --pal-filter-ink: light-dark(var(--series-1-ink), #74aff5);
+  --series-2: light-dark(#eb6834, #d95926); --series-3: light-dark(#1baf7a, #199e70);
+  --series-4: light-dark(#eda100, #c98500); --series-5: light-dark(#e87ba4, #d55181); --series-6: #008300;
+  --grid: light-dark(#e8e6e1, #2b2b28); --track: light-dark(#ebe9e4, #262624); --good: #0ca30c; --good-text: light-dark(#006300, #4cc94c);
+  --critical: light-dark(#d03b3b, #e66767); --critical-text: light-dark(#b42318, #f08080);
+  --critical-soft: light-dark(rgba(208,59,59,.1), rgba(230,103,103,.16));
+  --warning: light-dark(#c98500, #d99a1e); --warning-text: light-dark(#8a5a00, #e0b04a); --warning-soft: light-dark(rgba(201,133,0,.12), rgba(217,154,30,.16));
+  --good-soft: light-dark(rgba(12,163,12,.1), rgba(76,201,76,.13));
   /* Brand: one fired-clay accent (4.96:1 on surface-1) for everything interactive: focus, links, pressed segments,
      checkboxes, primary buttons, the mark and the active Usage tab. Data series keep their own hues. */
-  --accent: #b4502a; --accent-soft: rgba(180,80,42,.11); --accent-ink: #8f3d1e; --on-accent: #ffffff; --link: var(--accent-ink);
+  --accent: light-dark(#b4502a, #e8895f); --accent-soft: light-dark(rgba(180,80,42,.11), rgba(232,137,95,.16));
+  --accent-ink: light-dark(#8f3d1e, #f0a582); --on-accent: light-dark(#ffffff, #1a1a19); --link: var(--accent-ink);
   /* Project colors: six hues for the busiest projects (none near the clay accent), each at least 3.6:1 on surface-1
      (graphics need 3:1); every other project shares the grey of the charts' "Other". */
-  --proj-1: #2a64c8; --proj-2: #0f8574; --proj-3: #c4378a; --proj-4: #7a52d9; --proj-5: #a67c00; --proj-6: #4f8a1f;
-  --proj-other: #8e8c85;
-  --shadow-card: 0 1px 2px rgba(20,18,12,.04); --shadow-pop: 0 6px 24px rgba(20,18,12,.14); --scroll-shadow: rgba(20,18,12,.16);
+  --proj-1: light-dark(#2a64c8, #5d9bf2); --proj-2: light-dark(#0f8574, #2ab59f); --proj-3: light-dark(#c4378a, #e66db3);
+  --proj-4: light-dark(#7a52d9, #a48cf5); --proj-5: light-dark(#a67c00, #d9ab33); --proj-6: light-dark(#4f8a1f, #82c24f);
+  --proj-other: light-dark(#8e8c85, #75746d);
+  /* Shadows: light-dark() only takes colors, so a shadow that differs in size by theme is two layers, one transparent per theme. */
+  --shadow-card: 0 1px 2px light-dark(rgba(20,18,12,.04), transparent);
+  --shadow-pop: 0 6px 24px light-dark(rgba(20,18,12,.14), transparent), 0 8px 28px light-dark(transparent, rgba(0,0,0,.5));
+  --shadow-sheet: -8px 0 32px rgba(0,0,0,.16);
+  --scroll-shadow: light-dark(rgba(20,18,12,.16), rgba(0,0,0,.55));
+  --scrim: rgba(0,0,0,.3); /* behind the sheet and the command palette */
 }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    color-scheme: dark;
-    --bg: #121211; --surface-1: #1a1a19; --surface-2: #242422; --border: #33332f;
-    --text-primary: #f0efec; --text-secondary: #c3c2b7; --text-muted: #9d9c94;
-    --series-1: #3987e5; --series-1-soft: rgba(57,135,229,.18); --series-2: #d95926; --series-3: #199e70;
-    --series-4: #c98500; --series-5: #d55181; --series-6: #008300;
-    --grid: #2b2b28; --track: #262624; --good: #0ca30c; --good-text: #4cc94c; --critical: #e66767; --critical-text: #f08080;
-    --critical-soft: rgba(230,103,103,.16); --warning: #d99a1e; --warning-text: #e0b04a; --warning-soft: rgba(217,154,30,.16);
-    --good-soft: rgba(76,201,76,.13);
-    --accent: #e8895f; --accent-soft: rgba(232,137,95,.16); --accent-ink: #f0a582; --on-accent: #1a1a19; --link: var(--accent-ink);
-    --proj-1: #5d9bf2; --proj-2: #2ab59f; --proj-3: #e66db3; --proj-4: #a48cf5; --proj-5: #d9ab33; --proj-6: #82c24f;
-    --proj-other: #75746d;
-    --shadow-card: none; --shadow-pop: 0 8px 28px rgba(0,0,0,.5); --scroll-shadow: rgba(0,0,0,.55);
-  }
-}
-:root[data-theme="dark"] {
-  color-scheme: dark;
-  --bg: #121211; --surface-1: #1a1a19; --surface-2: #242422; --border: #33332f;
-  --text-primary: #f0efec; --text-secondary: #c3c2b7; --text-muted: #9d9c94;
-  --series-1: #3987e5; --series-1-soft: rgba(57,135,229,.18); --series-2: #d95926; --series-3: #199e70;
-  --series-4: #c98500; --series-5: #d55181; --series-6: #008300;
-  --grid: #2b2b28; --track: #262624; --good: #0ca30c; --good-text: #4cc94c; --critical: #e66767; --critical-text: #f08080;
-  --critical-soft: rgba(230,103,103,.16); --warning: #d99a1e; --warning-text: #e0b04a; --warning-soft: rgba(217,154,30,.16);
-  --good-soft: rgba(76,201,76,.13);
-  --accent: #e8895f; --accent-soft: rgba(232,137,95,.16); --accent-ink: #f0a582; --on-accent: #1a1a19; --link: var(--accent-ink);
-  --proj-1: #5d9bf2; --proj-2: #2ab59f; --proj-3: #e66db3; --proj-4: #a48cf5; --proj-5: #d9ab33; --proj-6: #82c24f;
-  --proj-other: #75746d;
-  --shadow-card: none; --shadow-pop: 0 8px 28px rgba(0,0,0,.5); --scroll-shadow: rgba(0,0,0,.55);
-}
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
 
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--text-primary);
@@ -66,6 +61,7 @@ code { font: 12px/1.4 ui-monospace, "SF Mono", Menlo, monospace; }
 select, input[type=date], input[type=search], button {
   font: inherit; color: var(--text-primary); background: var(--surface-1);
   border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; }
+select, input[type=date], input[type=search] { border-color: var(--control-border); }
 select { max-width: 100%; }
 button { cursor: pointer; }
 button:hover { background: var(--surface-2); }
@@ -87,7 +83,7 @@ label.chk input, input[type=checkbox], input[type=radio] { accent-color: var(--a
 
 /* A project picker with its color dot in front. */
 .pick-project { position: relative; display: inline-flex; align-items: center; width: 240px; max-width: 100%; min-width: 0; }
-.pick-field { font: inherit; color: var(--text-primary); background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px;
+.pick-field { font: inherit; color: var(--text-primary); background: var(--surface-1); border: 1px solid var(--control-border); border-radius: 8px;
   padding: 6px 28px 6px 26px; width: 100%; min-width: 0; text-overflow: ellipsis; }
 .pick-project.all .pick-field { padding-left: 10px; }
 .pick-project .pdot { position: absolute; left: 10px; pointer-events: none; }
@@ -128,18 +124,16 @@ label.chk input, input[type=checkbox], input[type=radio] { accent-color: var(--a
 /* Sheet: details over the page from the right */
 dialog.sheet { inset: 0 0 0 auto; margin: 0; width: min(640px, 100%); max-width: 100%; height: 100dvh; max-height: 100dvh;
   padding: 0; border: 0; border-left: 1px solid var(--border); color: var(--text-primary);
-  overflow: auto; overscroll-behavior: contain; box-shadow: -8px 0 32px rgba(0,0,0,.16); }
-dialog.sheet::backdrop { background: rgba(0,0,0,.3); }
+  overflow: auto; overscroll-behavior: contain; box-shadow: var(--shadow-sheet); }
+dialog.sheet::backdrop { background: var(--scrim); }
 
 /* errors page */
 /* Error types: a second categorical palette for the stacked errors chart, kept apart from the project hues (petrol, mustard,
    indigo, emerald, plum; no blue, orange, teal, magenta or violet step of --proj-*). Validated as a stack in this order:
    adjacent CVD ΔE ≥ 9.1 light / 8.7 dark, normal vision ≥ 21, every step ≥ 3:1 on surface-1. Grey folds the rest into "Other" (3.15:1 light, 3.21:1 dark on surface-1). */
-:root { --type-1: #00749a; --type-2: #9a7a1c; --type-3: #4651a8; --type-4: #2f8f5b; --type-5: #a8488f; --type-other: #918f88; --type-sel: #52514e; }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) { --type-1: #2a95bd; --type-2: #a8882a; --type-3: #7682e0; --type-4: #3aa872; --type-5: #c868b0; --type-other: #6b6a64; --type-sel: #c3c2b7; }
-}
-:root[data-theme="dark"] { --type-1: #2a95bd; --type-2: #a8882a; --type-3: #7682e0; --type-4: #3aa872; --type-5: #c868b0; --type-other: #6b6a64; --type-sel: #c3c2b7; }
+:root { --type-1: light-dark(#00749a, #2a95bd); --type-2: light-dark(#9a7a1c, #a8882a); --type-3: light-dark(#4651a8, #7682e0);
+  --type-4: light-dark(#2f8f5b, #3aa872); --type-5: light-dark(#a8488f, #c868b0); --type-other: light-dark(#918f88, #6b6a64);
+  --type-sel: light-dark(#52514e, #c3c2b7); }
 
 /* Motion: every animation sits behind this guard; reduced motion gets the end state at once. */
 @media (prefers-reduced-motion: no-preference) {

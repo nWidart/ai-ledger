@@ -216,7 +216,7 @@ export function ErrorsPage() {
   const detailLive = <div className="sr" id="detailLive" aria-live="polite">{live}</div>;
 
   return (
-    <div className="wrap pg-errors">
+    <main id="content" className="wrap pg-errors">
       <header className="top">
         <p className="kicker">{view.source ? agentName(view.source) : "Agent"} tool errors</p>
         <Filters projects={projects}>
@@ -230,7 +230,7 @@ export function ErrorsPage() {
       {!m && (error
         ? <div className="card" id="load" role="alert"><b>Couldn't load errors.</b> <span className="muted">{error.message}. Check that the app is running.</span>{" "}
           <button type="button" ref={retryBtn} onClick={() => { retried.current = true; retry(); }}>Retry</button></div>
-        : <div className="card" id="load" role="status">Loading errors…</div>)}
+        : <div className="card" id="load" aria-busy="true">Loading errors…</div>)}
       <div className="sr" id="pageLive" aria-live="polite">{pageLive}</div>
       {deadLink && <div className="outnote" id="deadLink"><span>{DEAD_LINK}</span> <button type="button" onClick={dismissDead}>Dismiss</button></div>}
       {ctx && <Ctx.Provider value={ctx}>
@@ -246,6 +246,6 @@ export function ErrorsPage() {
         </dialog>
       </Ctx.Provider>}
       <UsageSheets data={undefined} automated />
-    </div>
+    </main>
   );
 }

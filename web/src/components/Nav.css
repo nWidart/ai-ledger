@@ -35,7 +35,9 @@
 #navTheme svg { display: block; margin: 1.5px 0; }
 #navTheme:hover { color: var(--text-primary); }
 #navRefresh svg { display: none; }
-#navRefresh.failed { border-color: var(--critical-text, #b42318); color: var(--critical-text, #b42318); }
+#navRefresh.failed { border-color: var(--critical-text); color: var(--critical-text); }
+/* Busy: aria-disabled keeps the button focusable while it shows as unavailable. */
+#navRefresh[aria-disabled="true"] { opacity: .55; cursor: default; }
 /* Phones: one row of 36px targets. The tabs share what the icon buttons leave; Refresh drops its label for an icon.
    The project chip wraps to its own row below; ingest status moves into the Refresh button's tooltip. */
 @media (max-width: 520px) {

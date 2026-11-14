@@ -91,6 +91,7 @@ function WorkBars({ rows, week, view, kinds, stack, metric, onMetric, onDay }: W
   const pick = (i: number) => { const p = rows[i]; if (!week && p && busy(p)) { setAt(null); onDay(p.day); } };
   const onMove = (ev: PointerEvent) => setAt({ i: indexAt(ev.clientX), x: ev.clientX, y: ev.clientY });
   const onKey = (ev: KeyboardEvent) => {
+    if (ev.key === "Escape") return setAt(null);
     if (ev.key === "Enter" && at) { ev.preventDefault(); return pick(at.i); }
     const step = ({ ArrowLeft: -1, ArrowRight: 1, Home: -Infinity, End: Infinity } as Record<string, number>)[ev.key];
     if (step == null || !rows.length) return;
@@ -126,7 +127,7 @@ function WorkBars({ rows, week, view, kinds, stack, metric, onMetric, onDay }: W
         {(kinds.length ? kinds : [plain]).map(k => <span key={k.k} className="key"><i style={{ background: k.c }} />{k.label}</span>)}
         {hasRate && <span className="key"><i className="line" style={{ borderTopColor: FAIL }} />Errors per 100 calls (right axis)</span>}
       </div>
-      <div className="chart" ref={box} tabIndex={0} role="img" aria-label={label} onKeyDown={onKey} onBlur={() => setAt(null)}>
+      <div className="chart" ref={box} tabIndex={0} role="group" aria-label={label} onKeyDown={onKey} onBlur={() => setAt(null)}>
         <svg ref={svg} viewBox={`0 0 ${W} ${H}`} aria-hidden="true">
           {ticks.map(t => <g key={t}><line x1={a.m.l} x2={W - a.m.r} y1={a.y(t * a.step)} y2={a.y(t * a.step)} stroke="var(--grid)" />
             <text x={a.m.l - 6} y={a.y(t * a.step) + 4} textAnchor="end" fontSize="11" fill="var(--text-muted)">{num(t * a.step)}</text>

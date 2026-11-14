@@ -51,7 +51,8 @@ describe("Nav", () => {
     expect(location.pathname).toBe("/limits");
     expect(location.hash).toBe("#project=foo&range=30&source=codex");
     expect(document.title).toBe("Limits · AI Ledger");
-    expect(vi.mocked(fetch).mock.calls.some(c => String(c[0]) === "/api/limits?project=foo&range=30&source=codex")).toBe(true);
+    // The page's chunk loads on first show, so its fetch follows the click a tick later.
+    await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(c => String(c[0]) === "/api/limits?project=foo&range=30&source=codex")).toBe(true));
   });
 
   it("opens Insights with the project, range and source from Cost", async () => {
@@ -62,7 +63,8 @@ describe("Nav", () => {
     expect(location.pathname).toBe("/insights");
     expect(location.hash).toBe("#project=foo&range=30&source=codex");
     expect(document.title).toBe("Insights · AI Ledger");
-    expect(vi.mocked(fetch).mock.calls.some(c => String(c[0]) === "/api/insights?project=foo&range=30&source=codex")).toBe(true);
+    // The page's chunk loads on first show, so its fetch follows the click a tick later.
+    await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(c => String(c[0]) === "/api/insights?project=foo&range=30&source=codex")).toBe(true));
   });
 
   it("opens Context from Cost with the project and range kept, after Cost in the nav", async () => {
@@ -179,6 +181,27 @@ describe("Nav", () => {
     f.mockImplementation(() => json({ ...status, last_stats: { ...status.last_stats, inserted: 7 } }));
     await act(async () => { await pollStatus(); }); // asked after: shown
     expect(screen.getByText(/Last ingest .* · 7 new lines/)).toBeTruthy();
+  });
+
+  it("keeps Refresh focused and focusable while it runs, ignores activation, and names the search button by its label", async () => {
+    const answers: Record<string, () => void> = {}, later = (body: unknown) => new Promise<Response>(r => { answers.refresh = () => r(json(body)); });
+    const f = vi.fn((_url: string, _init?: RequestInit) => json(status));
+    vi.stubGlobal("fetch", f);
+    render(<Nav />);
+    expect(await screen.findByText(/Last ingest .* · 2 new lines/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^Search/ }).getAttribute("aria-label")).toMatch(/^Search, open command palette \(/);
+    f.mockImplementation((_url, init) => init?.method === "POST" ? later(status) : json(status));
+    const btn = screen.getByRole("button", { name: "Refresh" });
+    btn.focus();
+    await userEvent.click(btn);
+    const posts = () => f.mock.calls.filter(c => c[1]?.method === "POST").length;
+    expect([posts(), btn.getAttribute("aria-disabled"), btn.hasAttribute("disabled"), document.activeElement]).toEqual([1, "true", false, btn]);
+    await userEvent.click(btn); // a second press while it runs starts nothing
+    await userEvent.keyboard("{Enter}");
+    expect(posts()).toBe(1);
+    await act(async () => { answers.refresh!(); });
+    await waitFor(() => expect(btn.getAttribute("aria-disabled")).toBeNull());
+    expect(document.activeElement).toBe(btn);
   });
 
   it("keeps a status when the answer to a request sent before it arrives after it", async () => {
