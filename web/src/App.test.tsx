@@ -70,7 +70,7 @@ describe("App", () => {
       const { unmount } = pending(path);
       const main = await page(cls);
       expect(main.querySelector("#lede, #load")?.textContent, path).toMatch(/^Loading/);
-      expect(within(main).queryAllByRole("status"), path).toEqual([]);
+      expect(within(main).queryAllByRole("status").filter(e => e.textContent), path).toEqual([]); // an empty one (a toggletip's) says nothing
       expect([...main.querySelectorAll("[aria-live]")].filter(e => e.textContent), path).toEqual([]); // an empty announcer is fine
       expect(main.getAttribute("aria-busy") === "true" || main.querySelector("#load")?.getAttribute("aria-busy") === "true", path).toBe(true);
       unmount();

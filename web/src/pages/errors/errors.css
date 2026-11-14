@@ -173,8 +173,8 @@
   overflow-wrap: anywhere; background: var(--surface-2); border-radius: 6px; padding: 6px 8px; margin-top: 6px; }
 .pg-errors .ex .err { color: var(--critical-text); }
 /* Long bodies start clamped; "Show full" opens one example. */
-.pg-errors .ex:not(.open) code, .pg-errors .ex:not(.open) .err, .pg-errors .ex:not(.open) blockquote { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
-.pg-errors .ex:not(.open) .err { -webkit-line-clamp: 4; }
+.pg-errors .ex:not(.open) code, .pg-errors .ex:not(.open) .err, .pg-errors .ex:not(.open) blockquote { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
+.pg-errors .ex:not(.open) .err { -webkit-line-clamp: 4; line-clamp: 4; }
 .pg-errors .ex .full { display: block; font-size: 11px; padding: 1px 7px; border-radius: 6px; margin-top: 6px; }
 .pg-errors .ex .full[hidden] { display: none; }
 .pg-errors .ex .full[aria-busy=true] { cursor: progress; color: var(--text-muted); }
@@ -230,7 +230,6 @@
 @media (min-width: 521px) { .pg-errors .moresum { display: none; } }
 .pg-errors .outnote { background: var(--surface-2); border-radius: 10px; padding: 10px 12px; margin: 8px 0; }
 .pg-errors #load { margin-bottom: 16px; }
-.pg-errors #detailTitle, .pg-errors .ex, .pg-errors .inc { scroll-margin-top: calc(var(--appnav-h, 56px) + 12px); }
 .pg-errors .linkbtn { background: none; border: 0; padding: 0; color: var(--link); font-size: 13px; }
 .pg-errors .linkbtn:hover { background: none; text-decoration: underline; }
 /* Wide screens: the type header and the example search stay in view while the examples scroll. */
@@ -239,7 +238,7 @@
   .pg-errors #detail .dhead { top: var(--appnav-h, 56px); flex-wrap: nowrap; border-bottom: 1px solid var(--border); margin-bottom: 12px; }
   .pg-errors #detail .dhead h2 { margin: 0; min-width: 0; }
   .pg-errors #detail .exbar { top: calc(var(--appnav-h, 56px) + var(--dhead-h, 0px)); border-bottom: 1px solid var(--border); padding-bottom: 0; }
-  .pg-errors #detail .ex, .pg-errors #detail .inc { scroll-margin-top: calc(var(--appnav-h, 56px) + var(--dhead-h, 0px) + var(--exbar-h, 0px) + 12px); }
+  .pg-errors #detail .ex, .pg-errors #detail .inc { scroll-margin-top: calc(var(--dhead-h, 0px) + var(--exbar-h, 0px)); }
 }
 .pg-errors .sheet #back { display: none; }
 .pg-errors #detailTitle:focus { outline: none; }

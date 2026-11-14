@@ -37,10 +37,11 @@ function noteStatus(n: number, s: Status | null) {
 }
 
 /** Asks the app for its status and shows it: the nav on its schedule, Live on each change notice. A new last_change
- *  clears the data cache. Gives the status, or null when the app did not answer. */
+ *  clears the data cache. Gives the status, or null when the app did not answer. Low priority: it never delays the
+ *  page's own data requests. */
 export function pollStatus(): Promise<Status | null> {
   const n = ++sent;
-  return getJson<Status>(statusUrl).then(s => { noteStatus(n, s); return s; }, () => { noteStatus(n, null); return null; });
+  return getJson<Status>(statusUrl, { priority: "low" }).then(s => { noteStatus(n, s); return s; }, () => { noteStatus(n, null); return null; });
 }
 
 /** Runs an ingest now, then drops the data cache so every page refetches. Does nothing while one runs: the nav's button

@@ -83,7 +83,12 @@ const drawn = () => [...screen.getByLabelText("Session events").querySelectorAll
 const hidden = () => bar().querySelector(".hid")?.textContent ?? null;
 const check = (name: string) => screen.getByRole("checkbox", { name }) as HTMLInputElement;
 
-afterEach(() => { vi.useRealTimers(); });
+afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); Reflect.deleteProperty(document, "hidden"); });
+/** The tab goes to the background (or comes back): document.hidden as the browser says it, and its event. */
+const setHidden = (hidden: boolean) => {
+  Object.defineProperty(document, "hidden", { configurable: true, get: () => hidden });
+  act(() => { document.dispatchEvent(new Event("visibilitychange")); });
+};
 
 describe("live.ts", () => {
   it("merges a catch-up: new events appended, a finished call replaced in place", () => {
@@ -162,9 +167,9 @@ describe("LivePage", () => {
   it("names the automated projects file on the automated toggle", async () => {
     show("");
     await rail();
-    const title = document.querySelector("label.chk")!.getAttribute("title")!;
     expect(list.automated_file.path).toMatch(/automated\.json$/);
-    expect(title).toContain(list.automated_file.path);
+    await userEvent.click(screen.getByRole("button", { name: "About automated sessions" }));
+    expect(within(screen.getByRole("group", { name: "Filters" })).getByRole("status").textContent).toContain(list.automated_file.path);
   });
 
   it("lists the active sessions and opens the newest when the URL names none", async () => {
@@ -1115,5 +1120,99 @@ describe("LivePage", () => {
     await userEvent.click(within(el).getByRole("button", { name: "Open graft" }));
     expect(location.hash).toBe("#session=0a0f7777-0000-7000-8000-000000000007");
     expect(await stream()).toBeTruthy();
+  });
+});
+
+describe("Live in a background tab", () => {
+  const clock = (at = "2026-11-10T10:00:25.000Z") => { vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "Date"] }); vi.setSystemTime(Date.parse(at)); };
+  const flush = (ms = 10) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
+  /** The init each fetch got, by URL path. */
+  const inits = (f: ReturnType<typeof show>["f"], path: string) => f.mock.calls.filter(c => String(c[0]).startsWith(path)).map(c => (c as unknown[])[1]);
+
+  it("closes the notice stream, stops the timers and requests while hidden, and fetches once on return", async () => {
+    clock();
+    const { f, calls, polls } = show();
+    await flush();
+    const first = FakeSource.last!;
+    first.open();
+    const n = calls().length;
+    setHidden(true);
+    expect(first.closed).toBe(true); // the app stops ingesting every second for a page nobody sees
+    await flush(60_000);
+    expect([calls().length, polls()]).toEqual([n, 0]); // no recheck, no status request
+    expect(FakeSource.last).toBe(first);
+    setHidden(false);
+    await flush();
+    expect(calls().length).toBe(n + 2); // the list and the session, once
+    expect(polls()).toBe(1);
+    expect(inits(f, "/api/live")[2]).toBeUndefined(); // on return they are the page's own request, at normal priority
+    expect(FakeSource.last).not.toBe(first); // and the stream is open again
+    expect(FakeSource.last!.closed).toBe(false);
+    FakeSource.last!.open();
+    expect(conn().textContent).toBe("Updating live");
+    await flush(10_000); // the recheck runs again
+    expect(calls().length).toBe(n + 4);
+    await flush(10_000);
+    expect(calls().length).toBe(n + 6);
+  });
+
+  it("sends the timer's recheck and the status polls at low priority, and the page's own requests at normal priority", async () => {
+    clock();
+    const { f, calls } = show();
+    await flush();
+    FakeSource.last!.open();
+    expect(inits(f, "/api/live")).toEqual([undefined, undefined]); // the first load of the list and of the session
+    FakeSource.last!.notify(["s1"]);
+    await flush();
+    expect(inits(f, "/api/live")).toEqual([undefined, undefined, undefined, undefined]); // a notice is news the user waits on
+    expect(inits(f, "/api/status")).toEqual([{ priority: "low" }]);
+    const n = calls().length;
+    await flush(10_000);
+    expect(calls().length).toBe(n + 2);
+    expect(inits(f, "/api/live").slice(-2)).toEqual([{ priority: "low" }, { priority: "low" }]);
+  });
+
+  it("stops the clock while hidden and shows the real elapsed time on return", async () => {
+    clock();
+    show();
+    await flush();
+    const push = () => within(toolRow("Bash", 1));
+    expect(push().getByText("3.0s")).toBeTruthy();
+    setHidden(true);
+    await flush(30_000);
+    expect(push().getByText("3.0s")).toBeTruthy(); // no tick drew meanwhile
+    setHidden(false);
+    await flush();
+    expect(push().getByText("33s")).toBeTruthy();
+    await flush(2000);
+    expect(push().getByText("35s")).toBeTruthy();
+  });
+
+  it("stays paused through a hidden tab, and holds what the closed stream missed for Resume", async () => {
+    clock();
+    const { calls, polls } = show();
+    await flush();
+    FakeSource.last!.open();
+    await userEvent.setup({ advanceTimers: vi.advanceTimersByTime }).click(screen.getByRole("button", { name: "Pause" }));
+    const n = calls().length;
+    setHidden(true);
+    setHidden(false);
+    await flush(30_000);
+    expect([calls().length, polls(), conn().textContent]).toEqual([n, 0, "Paused · 1 update held"]);
+    await userEvent.setup({ advanceTimers: vi.advanceTimersByTime }).click(screen.getByRole("button", { name: "Resume" }));
+    await flush();
+    expect(calls().length).toBe(n + 2);
+  });
+
+  it("draws finished rows once: a tick formats no date for them", async () => {
+    clock();
+    const done = s1.events.find(e => e.k === "tool" && e.end != null && !e.lane) as LiveToolEvent;
+    const many = { ...s1, events: [...s1.events, ...Array.from({ length: 300 }, (_, i) => ({ ...done, key: `m${i}#0`, id: `m${i}` }))] };
+    show("#session=s1", { session: () => many });
+    await flush();
+    expect(document.querySelectorAll(".stream .ev").length).toBeGreaterThan(300);
+    const day = vi.spyOn(Date.prototype, "toDateString");
+    await flush(3000); // three ticks
+    expect(day.mock.calls.length).toBeLessThanOrEqual(3); // the stream's key for the day, not two per row
   });
 });

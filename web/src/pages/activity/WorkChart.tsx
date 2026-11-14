@@ -3,6 +3,7 @@ import type { DailyWorkRow, UsagePayload } from "../../api";
 import { useColors } from "../../colors";
 import { dayLabel, niceStep, num, plural } from "../../format";
 import { dayAxis, peakLabelAt, tipAt, useWidth } from "../../components/chart";
+import { ChartTable, DataTable } from "../../components/DataTable";
 import type { Kind } from "../cost/cost";
 import { busy, failRate, METRICS, monday, workBuckets, workKinds, workStack, type WorkMetric } from "./work";
 import { WorkHours } from "./WorkHours";
@@ -177,6 +178,13 @@ function WorkBars({ rows, week, view, kinds, stack, metric, onMetric, onDay }: W
       </div>
       <div className="sr" aria-live="polite">{cur ? `${name(cur.day)}: ${bucketText(cur)}`
         + (curParts.length ? `. ${M.label} by project: ${curParts.map(([k, v]) => `${k.label} ${num(v)}`).join(", ")}` : "") : ""}</div>
+      {/* The chart's text alternative: the measure per bucket (by project when stacked), its total and errors per 100 tool calls. */}
+      <ChartTable><DataTable name={`${M.label}${kinds.length ? " by project" : ""} and errors per 100 tool calls per ${unit}`} region="scroll tall">
+        <thead><tr><th scope="col">{week ? "Week" : "Day"}</th>{kinds.map(k => <th key={k.k} scope="col" className="num">{k.label}</th>)}
+          <th scope="col" className="num">{kinds.length ? "Total" : M.label}</th><th scope="col" className="num">Errors per 100 calls</th></tr></thead>
+        <tbody>{rows.map((p, i) => <tr key={p.day}><th scope="row">{name(p.day)}</th>
+          {kinds.map(k => <td key={k.k} className="num">{num(stack[i]?.[k.k] ?? 0)}</td>)}<td className="num">{num(p[metric])}</td><td className="num">{num(failRate(p), 1)}</td></tr>)}</tbody>
+      </DataTable></ChartTable>
     </section>
   );
 }

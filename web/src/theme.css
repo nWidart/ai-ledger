@@ -142,3 +142,47 @@ dialog.sheet::backdrop { background: var(--scrim); }
 @keyframes fade-in { from { opacity: .4; } }
 @keyframes grow-x { from { transform: scaleX(0); } }
 @keyframes grow-y { from { transform: scaleY(0); } }
+
+/* Forced colors (Windows high contrast): the browser swaps every author color for a system one and drops box-shadow and
+   gradients, so a state shown by a background tint or an inset shadow vanishes. Pressed, selected and current states take an
+   outline in system colors; data bars and series keys keep their own colors (the color is the data) inside a CanvasText frame, so
+   they stand out whatever the user's Canvas is. Focus rings are never suppressed here: the states below step aside while their
+   element has keyboard focus, and the global :focus-visible ring (an outline, which this mode keeps) shows instead. */
+@media (forced-colors: active) {
+  /* Pressed segment: the system selection pair; its focus ring turns to the text color so it reads on that fill. */
+  .seg button[aria-pressed=true] { forced-color-adjust: none; background: Highlight; color: HighlightText; }
+  .seg button[aria-pressed=true]:focus-visible { outline-color: HighlightText; }
+  /* The project picker's highlighted option is a fill, its selected one a weight and a color. */
+  .pick-opt[data-highlighted] { forced-color-adjust: none; background: Highlight; color: HighlightText; }
+  .pick-opt[data-selected] { outline: 1px solid CanvasText; outline-offset: -1px; }
+
+  /* Current page, current section, selected row, pressed toggle, selected bucket. */
+  :is(
+    .appnav a[aria-current=page],
+    :is(.pg-activity, .pg-cost, .pg-insights) .secidx a[aria-current=true],
+    .pal-opt[aria-selected=true],
+    dialog.sheet .evbtn[aria-pressed=true],
+    .pg-live .stream-filters button[aria-pressed=true], .pg-live .kv .fig[aria-pressed=true],
+    .pg-live .rail li button[aria-current=true],
+    .pg-errors .legend button[aria-pressed=true],
+    .pg-errors .byset li button[aria-pressed="true"],
+    .pg-cost .legend button.proj[aria-current=true],
+    .pg-insights .ledger li.pick.on > .rowbtn, .pg-insights .ledger li.on:not(.pick),
+    .pg-insights button.chip.on, .pg-insights button.badge.on,
+    .pg-limits .hs-bar[aria-pressed="true"],
+    :is(.pg-activity, .pg-cost, .pg-limits, .pg-insights, dialog.sheet) tbody tr.sel, .pg-errors tbody tr.sel
+  ):not(:focus-visible) { outline: 2px solid Highlight; outline-offset: -2px; }
+  /* The bucket under the keyboard or pointer on the Activity and Cost charts is a 6% wash; frame it instead. */
+  :is(.pg-activity, .pg-cost) .chart svg > rect:not(.hit) { stroke: Highlight; stroke-width: 2px; }
+
+  /* Bars: the fill keeps its color, the track and the fill sit in a frame. */
+  .ledger .bar, :is(.pg-activity, .pg-cost) .ibar, .pg-errors .bar, .pg-live .meter { forced-color-adjust: none; outline: 1px solid CanvasText; }
+  .pg-cost .daystrip .cells i { forced-color-adjust: none; background: GrayText; }
+  .pg-cost .daystrip .cells i.on { background: CanvasText; }
+  .pg-limits .hs-bar i { forced-color-adjust: none; }
+  .pg-limits .hk { forced-color-adjust: none; outline: 1px solid CanvasText; }
+  /* The charts' stacked bars: series colors kept, each segment edged in the text color. */
+  :is(.pg-activity, .pg-cost) .chart .bar-seg, .pg-errors #chart .layer { forced-color-adjust: none; stroke: CanvasText; stroke-width: .75px; }
+  /* Keys and dots that name a series or a project by color alone. */
+  .pdot, :is(.pg-activity, .pg-cost) .legend i:not(.line), .pg-errors .sw:not(.line), .pg-insights .key .sw { forced-color-adjust: none; outline: 1px solid CanvasText; }
+}

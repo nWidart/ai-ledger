@@ -1,29 +1,68 @@
-import { act, render, screen } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Drawer, onUserScroll, openDrawer } from "./Drawer";
 import { InsightCard, rankInsights, type Insight } from "./InsightCard";
 import { Ledger, LedgerRow } from "./Ledger";
 import { SectionIndex } from "./SectionIndex";
 
 describe("Drawer", () => {
-  it("opens from its summary and remembers it", async () => {
-    const onToggle = vi.fn();
+  beforeEach(() => localStorage.clear());
+  it("has a real heading holding the toggle, and opens from it and remembers it", async () => {
+    const onToggle = vi.fn<(open: boolean) => void>();
     const { unmount } = render(<Drawer id="d-tools" title="Tools" count="4" description="Calls and failures" onToggle={onToggle}><p>table</p></Drawer>);
-    const d = document.getElementById("d-tools") as HTMLDetailsElement;
-    expect(d.open).toBe(false);
-    await userEvent.click(screen.getByText("Tools"));
-    await vi.waitFor(() => expect(onToggle).toHaveBeenCalledWith(true));
+    const h = screen.getByRole("heading", { level: 2, name: "Tools 4" }), toggle = within(h).getByRole("button");
+    expect(h.closest("summary")).toBeNull();
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(toggle.getAttribute("aria-controls")).toBe("d-tools-body");
+    await userEvent.click(toggle);
+    expect(onToggle).toHaveBeenCalledWith(true);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(document.getElementById("d-tools")!.hasAttribute("data-open")).toBe(true);
     expect(JSON.parse(localStorage.getItem("claude-usage-open")!)).toEqual(["d-tools"]);
     unmount();
     render(<Drawer id="d-tools" title="Tools"><input aria-label="Search" /></Drawer>);
-    expect((document.getElementById("d-tools") as HTMLDetailsElement).open).toBe(true);
+    expect(screen.getByRole("button", { name: "Tools" }).getAttribute("aria-expanded")).toBe("true");
+  });
+  it("toggles from the keyboard", async () => {
+    render(<Drawer id="d-keys" title="Keys"><p>table</p></Drawer>);
+    await userEvent.tab();
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Keys" }));
+    await userEvent.keyboard("{Enter}");
+    expect(screen.getByRole("button", { name: "Keys" }).getAttribute("aria-expanded")).toBe("true");
+    await userEvent.keyboard(" ");
+    expect(screen.getByRole("button", { name: "Keys" }).getAttribute("aria-expanded")).toBe("false");
+  });
+  it("renders its body only once it has been open, then keeps it", async () => {
+    render(<Drawer id="d-lazy" title="Lazy"><table><tbody><tr><td>row</td></tr></tbody></table></Drawer>);
+    expect(screen.queryByText("row")).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Lazy" }));
+    expect(screen.getByText("row")).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Lazy" }));
+    expect((document.getElementById("d-lazy-body") as HTMLElement).hidden).toBe(true);
+    expect(document.getElementById("d-lazy-body")!.textContent).toBe("row");
+  });
+  it("renders a drawer saved as open with its body", () => {
+    localStorage.setItem("claude-usage-open", JSON.stringify(["d-saved"]));
+    render(<Drawer id="d-saved" title="Saved"><p>shown</p></Drawer>);
+    expect(screen.getByText("shown")).toBeTruthy();
+  });
+  it("keeps a control beside the title out of the toggle", () => {
+    render(<Drawer id="d-after" title="Goals" after={<button type="button">About</button>}><p>x</p></Drawer>);
+    expect(screen.getByRole("button", { name: "Goals" }).contains(screen.getByRole("button", { name: "About" }))).toBe(false);
   });
   it("openDrawer opens it and focuses its first input", async () => {
     render(<Drawer id="d-sessions" title="Sessions"><input aria-label="Search sessions" /></Drawer>);
-    openDrawer("d-sessions", true);
-    expect((document.getElementById("d-sessions") as HTMLDetailsElement).open).toBe(true);
+    act(() => openDrawer("d-sessions", true));
+    expect(screen.getByRole("button", { name: "Sessions" }).getAttribute("aria-expanded")).toBe("true");
     expect(document.activeElement).toBe(screen.getByLabelText("Search sessions"));
+  });
+  it("openDrawer without a scroll only opens it, and ignores an id that is no drawer", () => {
+    const onToggle = vi.fn<(open: boolean) => void>();
+    render(<Drawer id="d-quiet" title="Quiet" onToggle={onToggle}><input aria-label="Q" /></Drawer>);
+    act(() => { openDrawer("d-quiet"); openDrawer("nope"); });
+    expect(onToggle).toHaveBeenCalledWith(true);
+    expect(document.activeElement).toBe(document.body);
   });
   it("onUserScroll fires once, at the next gesture", () => {
     const f = vi.fn();

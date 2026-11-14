@@ -1,6 +1,7 @@
 import { useRef, type ReactNode, type RefObject } from "react";
 import type { RateRow, ToolKind, ToolPayload } from "../../api";
 import { dayLabel, dayRange, ms, num, pct, plural, when } from "../../format";
+import { DataTable } from "../DataTable";
 import { agentName } from "../Filters";
 import { ProjectName } from "../ProjectDot";
 import { Facts, useBackTo, type BackTo } from "./ProjectSheet";
@@ -83,17 +84,17 @@ export function ToolSheet({ kind, name, d, error, retry, onSession, backTo }: To
       {d.sources.map(s => <span key={s.source}>{agentName(s.source)}: {rate(s)}</span>)}
       {d.threads.map(s => <span key={String(s.subagent)}>{s.subagent ? "Subagents" : "Main thread"}: {rate(s)}</span>)}
     </div>
-    <div className="scroll"><table><thead><tr><th>Project</th><th className="num">Calls</th><th className="num">Failed</th></tr></thead>
-      <tbody>{d.projects.map(r => <tr key={r.project ?? ""}><td className="name"><ProjectName project={r.project} /></td><RateCells r={r} n={r.calls} /></tr>)}</tbody></table></div>
-    {d.tools && <><h3>Tools</h3><div className="scroll"><table>
-      <thead><tr><th>Tool</th><th className="num">Calls</th><th className="num">Failed</th><th className="num">p50</th></tr></thead>
+    <DataTable name="Projects"><thead><tr><th scope="col">Project</th><th scope="col" className="num">Calls</th><th scope="col" className="num">Failed</th></tr></thead>
+      <tbody>{d.projects.map(r => <tr key={r.project ?? ""}><th scope="row" className="name"><ProjectName project={r.project} /></th><RateCells r={r} n={r.calls} /></tr>)}</tbody></DataTable>
+    {d.tools && <><h3>Tools</h3><DataTable name="Tools">
+      <thead><tr><th scope="col">Tool</th><th scope="col" className="num">Calls</th><th scope="col" className="num">Failed</th><th scope="col" className="num">p50</th></tr></thead>
       <tbody>{d.tools.length ? d.tools.map(r => <tr key={r.tool} {...pickRow(r.tool, v => openToolSheet("tool", v))}>
-        <td className="name"><button type="button" className="cellbtn">{r.tool}</button></td><RateCells r={r} n={r.calls} /><td className="num">{ms(r.p50_ms)}</td></tr>)
-        : <None cols={4} />}</tbody></table></div></>}
-    {d.patterns && <><h3>Inputs</h3><div className="scroll"><table>
-      <thead><tr><th>Pattern</th><th className="num">Calls</th><th className="num">Failed</th></tr></thead>
-      <tbody>{d.patterns.length ? d.patterns.map(r => <tr key={r.pattern}><td className="name"><code>{r.pattern}</code></td><RateCells r={r} n={r.calls} /></tr>)
-        : <None cols={3} />}</tbody></table></div></>}
+        <th scope="row" className="name"><button type="button" className="cellbtn">{r.tool}</button></th><RateCells r={r} n={r.calls} /><td className="num">{ms(r.p50_ms)}</td></tr>)
+        : <None cols={4} />}</tbody></DataTable></>}
+    {d.patterns && <><h3>Inputs</h3><DataTable name="Inputs">
+      <thead><tr><th scope="col">Pattern</th><th scope="col" className="num">Calls</th><th scope="col" className="num">Failed</th></tr></thead>
+      <tbody>{d.patterns.length ? d.patterns.map(r => <tr key={r.pattern}><th scope="row" className="name"><code>{r.pattern}</code></th><RateCells r={r} n={r.calls} /></tr>)
+        : <None cols={3} />}</tbody></DataTable></>}
     {d.shell && <><h3>Tests and commits</h3><div className="statline">
       <Stat v={num(d.shell.test_runs)} l={d.shell.test_runs === 1 ? "test run" : "test runs"} />
       <Stat v={pct(d.shell.pass_rate)} l="passed" />
@@ -112,12 +113,12 @@ export function ToolSheet({ kind, name, d, error, retry, onSession, backTo }: To
         <button type="button" className="linkish" title={l.title || l.session_id} onClick={e => onSession(l.session_id, e.currentTarget)}>{sessName(l)}</button>, {when(utc(l.start_ts))}.{" "}
         <a href={err(l.first_id)} onClick={appLink}>Open in Errors</a></div>))}</>}
     <h3>Recent calls</h3>
-    <div className="scroll"><table className="recent"><thead><tr><th>Session</th><th>Project</th><th>Input</th><th></th></tr></thead>
+    <DataTable name="Recent calls" className="recent"><thead><tr><th scope="col">Session</th><th scope="col">Project</th><th scope="col">Input</th><th scope="col"><span className="sr">Result</span></th></tr></thead>
       <tbody>{d.recent.map(c => <tr key={c.id} {...pickRow(c.id, (_, el) => onSession(c.session_id, el))}>
-        <td className="when sess"><button type="button" className="cellbtn" title={c.title || c.session_id}>{sessName(c)}</button>
-          <div className="muted small">{when(c.ts)}{c.title ? ` · ${shortId(c.session_id)}` : ""}</div></td>
+        <th scope="row" className="when sess"><button type="button" className="cellbtn" title={c.title || c.session_id}>{sessName(c)}</button>
+          <div className="muted small">{when(c.ts)}{c.title ? ` · ${shortId(c.session_id)}` : ""}</div></th>
         <td className="name"><ProjectName project={c.project} /></td>
         <td className="name"><code>{c.input}</code>{kind !== "tool" && <div className="muted small">{c.tool}</div>}</td>
-        <td className="when">{c.is_error ? <a href={err(c.id)} onClick={appLink}>In Errors</a> : <span className="muted small">{ms(c.duration_ms)}</span>}</td></tr>)}</tbody></table></div>
+        <td className="when">{c.is_error ? <a href={err(c.id)} onClick={appLink}>In Errors</a> : <span className="muted small">{ms(c.duration_ms)}</span>}</td></tr>)}</tbody></DataTable>
   </div>;
 }

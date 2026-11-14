@@ -3,6 +3,7 @@ import { Combobox } from "@base-ui/react/combobox";
 import type { Source } from "../api";
 import { RANGES, SOURCES, setHash, useHashState } from "../hash";
 import { ProjectDot } from "./ProjectDot";
+import { Toggletip } from "./Toggletip";
 import "./Filters.css";
 
 export interface ProjectOption { value: string; label?: string }
@@ -50,12 +51,13 @@ export function Filters({ projects, automated = false, autoFile, range = true, c
         ))}
       </div>
       {children}
-      {automated && (
-        <label className="chk" title={"Sessions that tools start in the background, such as claude-mem's observer-sessions." + (autoFile ? ` Add more projects in ${autoFile}.` : "")}>
+      {automated && <>
+        <label className="chk">
           <input type="checkbox" id="fAuto" checked={h.auto} onChange={e => set({ auto: e.target.checked })} />
           <span>Include automated <span className="long">sessions</span></span>
         </label>
-      )}
+        <Toggletip term="automated sessions">{"Sessions that tools start in the background, such as claude-mem's observer-sessions." + (autoFile ? ` Add more projects in ${autoFile}.` : "")}</Toggletip>
+      </>}
     </div>
   );
 }

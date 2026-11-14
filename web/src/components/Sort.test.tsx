@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { describe, expect, it } from "vitest";
@@ -33,5 +33,24 @@ describe("SortTh", () => {
     // asc: a name column sorts A to Z first.
     await userEvent.click(screen.getByRole("button", { name: "B" }));
     expect([th("A").getAttribute("aria-sort"), th("B").getAttribute("aria-sort")]).toEqual([null, "ascending"]);
+  });
+});
+
+describe("SortTh title", () => {
+  it("scopes the header to its column and puts the explanation behind a toggletip beside the sort button", async () => {
+    render(<table><thead><tr><SortTh k="a" sort={null} onSort={() => {}} title="Active time: pauses over 20 minutes left out">Active</SortTh></tr></thead></table>);
+    const th = screen.getByRole("columnheader");
+    expect(th.getAttribute("scope")).toBe("col");
+    expect(th.hasAttribute("title")).toBe(false);
+    await userEvent.tab(); // the sort button
+    await userEvent.tab(); // the toggletip
+    const tt = screen.getByRole("button", { name: "About Active" });
+    expect(document.activeElement).toBe(tt);
+    await userEvent.keyboard("{Enter}");
+    expect(tt.getAttribute("aria-expanded")).toBe("true");
+    expect(within(th).getByRole("status").textContent).toBe("Active time: pauses over 20 minutes left out");
+    await userEvent.keyboard("{Escape}");
+    expect(tt.getAttribute("aria-expanded")).toBe("false");
+    expect(document.activeElement).toBe(tt);
   });
 });

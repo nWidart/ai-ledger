@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
 import { limitsUrl, limitWindowUrl, viewOf, type LimitHistoryRow, type LimitsPayload, type LimitWindow, type LimitWindowCurve, type View, type WindowUsedRow } from "../../api";
+import { DataTable } from "../../components/DataTable";
 import { Drawer } from "../../components/Drawer";
 import { Filters, viewName } from "../../components/Filters";
 import { useLanding } from "../../components/useLanding";
@@ -199,15 +200,15 @@ function History({ d }: { d: LimitsPayload }) {
         </ul>
         {pick && <WindowPanel key={barKey(pick)} h={pick} onClose={close} />}
       </div>}
-      <div className="scroll tall"><table>
-        <thead><tr><th>Window</th><th>Plan</th><th>Ended</th><th className="num">Final</th><th>At 100% for</th><th>Note</th></tr></thead>
+      <DataTable name="Closed windows" region="scroll tall">
+        <thead><tr><th scope="col">Window</th><th scope="col">Plan</th><th scope="col">Ended</th><th scope="col" className="num">Final</th><th scope="col">At 100% for</th><th scope="col">Note</th></tr></thead>
         <tbody>{d.history.length ? d.history.map(h => <tr key={`${h.provider}-${h.label}-${h.closed_at}`} className={barKey(h) === selected ? "sel" : undefined}
           aria-current={barKey(h) === selected || undefined}>
           <td>{windowName(h)}</td><td title={h.plan ?? undefined}>{planName(h.plan) ?? "–"}</td><td>{whenDay(h.closed_at)}</td><td className="num">{num(h.final)}%</td>
           <td>{h.hit ? <b className="bad">{h.hit_minutes != null ? dur(h.hit_minutes * 60) : "yes"}</b> : "–"}</td>
           <td>{h.early && <span>{h.reason?.startsWith("plan change") ? `ended early by a ${h.reason}` : "reset early"}</span>}{h.estimated && <span className="chip est">estimated</span>}</td>
         </tr>) : <tr><td colSpan={6} className="empty">No closed windows in this range.</td></tr>}</tbody>
-      </table></div>
+      </DataTable>
     </Drawer>
   );
 }
@@ -243,20 +244,20 @@ function Value({ d, project }: { d: LimitsPayload; project: string }) {
         windows on its plan, over the range; a model without a price has no points.</div>
       {v.limits.length ? v.limits.map(l => <div key={`${l.provider}-${l.label}`} className="val">
         <h3>{windowName(l)}: {usd(l.cost_per_point)} a point{l.plan && <span className="muted" title={l.plan}> · {planName(l.plan)}{l.past_plan && ", an earlier plan"}</span>}</h3>
-        <div className="scroll"><table>
-          <thead><tr><th>Model</th><th className="num">Points used</th><th className="num">Tokens a point</th></tr></thead>
-          <tbody>{l.models.map(m => <tr key={m.model}><td>{m.model}{!m.priced && <span className="chip">unpriced</span>}</td>
+        <DataTable name={`Points by model, ${windowName(l)}`}>
+          <thead><tr><th scope="col">Model</th><th scope="col" className="num">Points used</th><th scope="col" className="num">Tokens a point</th></tr></thead>
+          <tbody>{l.models.map(m => <tr key={m.model}><th scope="row">{m.model}{!m.priced && <span className="chip">unpriced</span>}</th>
             <td className="num">{num(m.points, 1)}</td><td className="num">{big(m.tokens_per_point)}</td></tr>)}</tbody>
-        </table></div>
+        </DataTable>
       </div>) : <p className="empty">No calibrated limit yet.</p>}
       {v.projects.length > 0 && <div className="val">
         <h3>Commits a point, by project{project && <span className="muted"> · {project} only</span>}</h3>
-        <div className="scroll"><table>
-          <thead><tr><th>Project</th><th>Limit</th><th className="num">Points</th><th className="num">Commits</th><th className="num">Commits a point</th></tr></thead>
+        <DataTable name="Commits a point, by project">
+          <thead><tr><th scope="col">Project</th><th scope="col">Limit</th><th scope="col" className="num">Points</th><th scope="col" className="num">Commits</th><th scope="col" className="num">Commits a point</th></tr></thead>
           <tbody>{(project ? v.projects.map(p => ({ ...p, key: `${p.provider}-${p.project}`, name: p.project })) : projectRows(v.projects)).map(p =>
-            <tr key={p.key}><td>{p.name}</td><td>{windowName(p)}</td>
+            <tr key={p.key}><th scope="row">{p.name}</th><td>{windowName(p)}</td>
             <td className="num">{num(p.points, 1)}</td><td className="num">{num(p.commits)}</td><td className="num">{num(p.commits_per_point, 2)}</td></tr>)}</tbody>
-        </table></div>
+        </DataTable>
       </div>}
     </Drawer>
   );

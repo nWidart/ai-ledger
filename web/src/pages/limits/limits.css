@@ -97,10 +97,10 @@
 .pg-limits .val h3 { margin: 6px 0 4px; font-size: 13px; font-weight: 600; }
 .pg-limits td .bad { color: var(--critical-text); }
 /* Left unused: "100% unused" and "12 windows, 3 estimated" need wider value and side columns than the shared ledger's. */
-.pg-limits #unused .ledger li { grid-template-columns: minmax(0, 13rem) minmax(40px, 1fr) 6.5rem 10.5rem; }
+.pg-limits #unused .ledger { --ledger-cols: minmax(0, 13rem) minmax(40px, 1fr) 6.5rem 10.5rem; }
 .pg-limits #unused .ledger .v, .pg-limits #unused .ledger .s { white-space: nowrap; }
 @media (max-width: 520px) {
-  .pg-limits #unused .ledger li { grid-template-columns: minmax(0, 1fr) auto; }
+  .pg-limits #unused .ledger { --ledger-cols: minmax(0, 1fr) auto; }
   .pg-limits #unused .ledger .s { grid-column: 1 / -1; grid-row: 3; text-align: left; }
 }
 .pg-limits td .chip { margin-left: 6px; }

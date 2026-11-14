@@ -1,4 +1,5 @@
 import { useMemo, useRef } from "react";
+import { DataTable } from "../../components/DataTable";
 import { sortRows, SortTh, type SortBy } from "../../components/Sort";
 import { num as fmt } from "../../format";
 import { tableFocus, useErrors } from "./context";
@@ -47,9 +48,9 @@ export function TypeTable() {
       {(all.length > 0 || typeQ !== "") && <div className="tfilter">
         <input type="search" ref={box} aria-label="Filter types" placeholder="Filter types…" value={typeQ} onChange={e => filter(e.target.value)} />
         <span id="typeCount" className="muted">{count(typeQ)}</span></div>}
-      <div className="tscroll"><table>
+      <DataTable name="Error types" region="tscroll">
         <thead><tr>{th("type", "Type", undefined, undefined, true)}{th("n", "Errors", "num")}{th("lost", "Time lost", "num c-lost", LOST)}{th("rate", "Rate", "num c-rate", "Errors per 100 tool calls")}
-          {th("unrec", "Didn't recover", "num c-unrec", UNREC)}<th className="c-share">Share</th><th className="c-trend">Rate trend</th>{th("change", "Change", "num", CHANGE)}</tr></thead>
+          {th("unrec", "Didn't recover", "num c-unrec", UNREC)}<th scope="col" className="c-share">Share</th><th scope="col" className="c-trend">Rate trend</th>{th("change", "Change", "num", CHANGE)}</tr></thead>
         <tbody id="catBody">
           {rows.length ? rows.map(({ cid, n, lost, rate, inc, bad, unrec, share, color, pts, delta }) => (
             <tr key={cid + key} data-c={cid} className={(v.cat === cid ? "sel " : "") + (m.muted.has(cid) ? "is-muted" : "")} onClick={() => pick(v.cat === cid ? null : cid, v.cat !== cid)}>
@@ -58,17 +59,18 @@ export function TypeTable() {
                 {m.muted.has(cid) ? <span className="chip muted-type">Muted</span> : null}
                 {fixes[cid] ? <span className="chip fixed">✓ Fix applied {yearLabel(m, fixes[cid])}</span> : null}</td>
               <td className="num">{fmt(n)}</td>
-              <td className="num c-lost" title={lost ? LOST : undefined}>{lost ? dur(lost) : "–"}</td>
+              <td className="num c-lost">{lost ? dur(lost) : "–"}</td>
               <td className="num c-rate">{rate == null ? "–" : `${fmt(rate, 2)}%`}</td>
-              <td className="num c-unrec" title={inc ? `${fmt(bad)} of ${fmt(inc)} incident${inc === 1 ? "" : "s"}` : undefined}>{unrec == null ? "–" : `${fmt(unrec, 0)}%`}</td>
+              <td className="num c-unrec" title={inc ? `${fmt(bad)} of ${fmt(inc)} incident${inc === 1 ? "" : "s"}` : undefined}>{unrec == null ? "–" : `${fmt(unrec, 0)}%`}
+                {inc > 0 && <span className="sr">, {fmt(bad)} of {fmt(inc)} incident{inc === 1 ? "" : "s"}</span>}</td>
               <td className="c-share"><div className="share"><div className="bar" aria-hidden="true"><i style={{ width: `${share * 100}%`, background: color }} />
                 {share < .03 ? <b className="tick" style={{ background: color }} /> : null}</div><span>{fmt(share * 100, share < .01 ? 1 : 0)}%</span></div></td>
               <td className="c-trend"><Spark pts={pts} /></td>
-              <td className={"num " + delta.cls} title={delta.title}>{delta.text}</td>
+              <td className={"num " + delta.cls} title={delta.title}>{delta.text}{delta.title && <span className="sr">. {delta.title}</span>}</td>
             </tr>
           )) : <tr><td colSpan={8} className="empty">{all.length ? `No types match “${typeQ.trim()}”.` : emptyTypes(m, v, f)}{typeQ !== "" && <> <button type="button" onClick={() => { filter(""); box.current?.focus(); }}>Clear filter</button></>}</td></tr>}
         </tbody>
-      </table></div>
+      </DataTable>
     </section>
   );
 }

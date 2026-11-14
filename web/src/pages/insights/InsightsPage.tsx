@@ -135,7 +135,7 @@ function Friction({ d }: { d: InsightsPayload }) {
 function Goals({ d }: { d: InsightsPayload }) {
   const [h] = useHashState(), max = d.goal_families[0]?.n ?? 0;
   return (
-    <Drawer id="d-goals" title={<>Goals <Judged /></>}>
+    <Drawer id="d-goals" title="Goals" after={<Judged />}>
       <p className="hint">What each session set out to do. {FAMILY_HINT}</p>
       <TopLedger rows={d.goal_families} empty="No goals recorded in this view." noun="goal families" row={f =>
         <FamilyRow key={f.family} f={f} max={max} raw={h.raw} kind={{ raw: "goal", family: "goalf" }} />} />
@@ -146,7 +146,7 @@ function Goals({ d }: { d: InsightsPayload }) {
 function SessionTypes({ d }: { d: InsightsPayload }) {
   const types = d.session_types.filter(t => t.n > 0), color = (i: number) => TYPE_COLORS[Math.min(i, TYPE_COLORS.length - 1)];
   return (
-    <Drawer id="d-types" title={<>Session types <Judged /></>}>
+    <Drawer id="d-types" title="Session types" after={<Judged />}>
       {types.length ? <>
         <div className="strip" aria-hidden="true">{types.map((t, i) => <i key={t.name} style={{ flex: t.n, background: color(i) }} />)}</div>
         <ul className="key">{types.map((t, i) => <li key={t.name}><i className="sw" style={{ background: color(i) }} /><Cat name={t.name} /> <b>{num(t.n)}</b></li>)}</ul>

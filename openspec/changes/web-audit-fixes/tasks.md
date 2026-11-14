@@ -22,11 +22,11 @@
 
 ## 3. Accessibility, tables and tooltips
 
-- [ ] 3.1 Turn hover-only `title=` explanations into keyboard-reachable toggletips or visible hints: column headers, filter labels, facets, the Live agent panel.
-- [ ] 3.2 Give data tables an accessible name and `th scope`.
-- [ ] 3.3 Keep drawer titles as real headings: no `h2` inside `summary`.
-- [ ] 3.4 Add a data-table alternative to the Cost and Work charts.
-- [ ] 3.5 Make scrollable table wrappers focusable, named regions.
+- [x] 3.1 Turn hover-only `title=` explanations into keyboard-reachable toggletips or visible hints: column headers, filter labels, facets, the Live agent panel.
+- [x] 3.2 Give data tables an accessible name and `th scope`.
+- [x] 3.3 Keep drawer titles as real headings: no `h2` inside `summary`.
+- [x] 3.4 Add a data-table alternative to the Cost and Work charts.
+- [x] 3.5 Make scrollable table wrappers focusable, named regions.
 
 ## 4. CSS and theming
 
@@ -35,8 +35,8 @@
 - [ ] 4.3 Give the palette input a focus ring.
 - [ ] 4.4 Darken the series-1 text ink so Live tool text reaches 4.5:1 in light mode.
 - [ ] 4.5 Replace hard-coded scrim and sheet-shadow values with tokens.
-- [ ] 4.6 Add a `forced-colors` block that keeps pressed, selected and current states and bars visible.
-- [ ] 4.7 Set one `scroll-padding-top` for the sticky nav and the section index.
+- [x] 4.6 Add a `forced-colors` block that keeps pressed, selected and current states and bars visible.
+- [x] 4.7 Set one `scroll-padding-top` for the sticky nav and the section index.
 - [ ] 4.8 Use unprefixed `line-clamp`.
 - [ ] 4.9 Add a `--ledger-cols` variable for the ledger's columns.
 - [ ] 4.10 Let sheet and insight titles wrap instead of truncating.
@@ -44,9 +44,9 @@
 
 ## 5. Performance
 
-- [ ] 5.1 Pause Live and the nav status poll while the tab is hidden, and refetch on return.
-- [ ] 5.2 Send background polls with fetch priority `low`.
-- [ ] 5.3 Memoize Live stream rows, tick only running rows each second, and use one cached `Intl.DateTimeFormat`.
+- [x] 5.1 Pause Live and the nav status poll while the tab is hidden, and refetch on return.
+- [x] 5.2 Send background polls with fetch priority `low`.
+- [x] 5.3 Memoize Live stream rows, tick only running rows each second, and use one cached `Intl.DateTimeFormat`.
 - [ ] 5.4 Load pages and the command palette on demand with `React.lazy`.
 - [ ] 5.5 Re-render only the hover marker on chart hover: Timeline, Work chart, Cost chart.
 - [ ] 5.6 Memoize the Errors page context so a toggle re-renders only its row.
@@ -54,7 +54,7 @@
 - [ ] 5.8 Scope the Palette landing observer to `main`.
 - [ ] 5.9 Use an `IntersectionObserver` in `SectionIndex`.
 - [ ] 5.10 Share one `ResizeObserver` across the Errors examples.
-- [ ] 5.11 Do not render the tables of closed drawers.
+- [x] 5.11 Do not render the tables of closed drawers.
 - [ ] 5.12 Apply `content-visibility: auto` to long lists.
 
 ## 6. Docs and verify

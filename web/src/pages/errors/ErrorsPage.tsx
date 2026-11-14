@@ -4,6 +4,7 @@ import { setOrder } from "../../colors";
 import { agentName, Filters } from "../../components/Filters";
 import { UsageSheets } from "../../components/sheets/UsageSheets";
 import type { SortBy } from "../../components/Sort";
+import { Toggletip } from "../../components/Toggletip";
 import { num as fmt } from "../../format";
 import { setHash, useHashState } from "../../hash";
 import { useApi } from "../../useApi";
@@ -77,7 +78,8 @@ export function ErrorsPage() {
     if (!t) return;
     if (sheet.current?.open) return t.focus({ preventScroll: true });
     const r = t.getBoundingClientRect();
-    if (r.top < parseFloat(getComputedStyle(t).scrollMarginTop) || r.bottom > innerHeight) t.scrollIntoView({ block: "start", behavior: reduced() ? "auto" : "smooth" });
+    // Under the sticky bars: the page's scroll-padding-top is what they cover.
+    if (r.top < (parseFloat(getComputedStyle(document.documentElement).scrollPaddingTop) || 0) || r.bottom > innerHeight) t.scrollIntoView({ block: "start", behavior: reduced() ? "auto" : "smooth" });
     t.focus({ preventScroll: true });
   }, []);
   // Opening a type is an explicit request: it wins over the selected chart bucket. A type with errors in the range but none in the
@@ -224,7 +226,8 @@ export function ErrorsPage() {
             {(["day", "week"] as const).map(g => <button key={g} type="button" aria-pressed={view.gran === g} onClick={() => update({ gran: g }, true)}>{g === "day" ? "Day" : "Week"}</button>)}
           </div>
           <label className="chk"><input type="checkbox" id="fSub" checked={view.sub} onChange={e => update({ sub: e.target.checked }, true)} /> <span><span className="long">Include </span>subagents</span></label>
-          <label className="chk" title="Leaves out harness errors, user rejections and the types you muted"><input type="checkbox" id="fNoise" checked={view.noise} onChange={e => update({ noise: e.target.checked }, true)} /> <span>Hide noise and muted</span></label>
+          <label className="chk"><input type="checkbox" id="fNoise" checked={view.noise} onChange={e => update({ noise: e.target.checked }, true)} /> <span>Hide noise and muted</span></label>
+          <Toggletip term="hiding noise and muted types">Leaves out harness errors, user rejections and the types you muted</Toggletip>
         </Filters>
       </header>
       {!m && (error

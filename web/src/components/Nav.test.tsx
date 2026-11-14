@@ -1,6 +1,6 @@
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "../App";
 import { hasHue, setOrder } from "../colors";
 import type { LimitsAlert } from "../api";
@@ -266,6 +266,60 @@ describe("Nav", () => {
     await tick(120_000);
     expect(f.mock.calls.length).toBe(3);
     vi.useRealTimers();
+  });
+
+  it("sends the status poll at low priority", async () => {
+    const f = vi.fn((_url: string, _init?: RequestInit) => json(status));
+    vi.stubGlobal("fetch", f);
+    render(<Nav />);
+    await waitFor(() => expect(f).toHaveBeenCalled());
+    expect(f.mock.calls[0]).toEqual(["/api/status", { priority: "low" }]);
+  });
+
+  describe("in a background tab", () => {
+    const setHidden = (hidden: boolean) => {
+      Object.defineProperty(document, "hidden", { configurable: true, get: () => hidden });
+      act(() => { document.dispatchEvent(new Event("visibilitychange")); });
+    };
+    const tick = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
+    const setup = async () => {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+      const f = vi.fn(() => json(status));
+      vi.stubGlobal("fetch", f);
+      const view = render(<Nav />);
+      await tick(0);
+      expect(f.mock.calls.length).toBe(1);
+      return { f, ...view };
+    };
+    afterEach(() => { vi.useRealTimers(); Reflect.deleteProperty(document, "hidden"); });
+
+    it("sends no status request while hidden, and asks at once on return when a poll came due", async () => {
+      const { f } = await setup();
+      setHidden(true);
+      await tick(600_000);
+      expect(f.mock.calls.length).toBe(1);
+      setHidden(false);
+      await tick(0);
+      expect(f.mock.calls.length).toBe(2);
+      await tick(59_999);
+      expect(f.mock.calls.length).toBe(2);
+      await tick(1); // and the interval goes on
+      expect(f.mock.calls.length).toBe(3);
+    });
+
+    it("keeps its schedule when the tab returns before a poll came due", async () => {
+      const { f } = await setup();
+      await tick(20_000);
+      setHidden(true);
+      await tick(10_000);
+      setHidden(false);
+      await tick(0);
+      expect(f.mock.calls.length).toBe(1);
+      await tick(29_999);
+      expect(f.mock.calls.length).toBe(1);
+      await tick(1); // a minute after the first
+      expect(f.mock.calls.length).toBe(2);
+    });
   });
 
   it("shows a status poll asked from outside the nav, and says when the app does not answer", async () => {

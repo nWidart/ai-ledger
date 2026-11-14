@@ -22,7 +22,7 @@ describe("SessionSheet", () => {
     render(<UsageSheets data={usage} />);
     expect(await sheet().findByText("$16")).toBeTruthy();
     expect(screen.getByRole("heading", { level: 2 }).textContent).toBe("Session#s1");
-    expect(sheet().getByText("active").parentElement!.textContent).toBe("9m active"); // active time, not first to last
+    expect(sheet().getByText("active").textContent).toMatch(/^9m active/); // active time, not first to last
     expect(sheet().getByRole("link", { name: "Open in Errors" }).getAttribute("href")).toBe("/errors#project=foo&range=30&ex=t01");
     expect(sheet().getByRole("group", { name: /^Session timeline\. Context grew from 10\.0M/ })).toBeTruthy();
     // Four failures in a row (one run), the commit, then two more failures with no success between them.
@@ -209,6 +209,35 @@ describe("ProjectSheet", () => {
   });
 });
 
+describe("sheet tables", () => {
+  it("names a project sheet's table and its region, with row headers and a toggletip on Active", async () => {
+    mockApi({ "/api/usage": q => ({ ...usage, project: q.get("project") }) });
+    at("#range=30&inspect=foo");
+    render(<UsageSheets data={usage} />);
+    const name = "Most expensive sessions", table = await sheet().findByRole("table", { name });
+    expect(sheet().getByRole("region", { name }).tabIndex).toBe(0);
+    expect(within(table).getAllByRole("rowheader").length).toBeGreaterThan(0);
+    const head = within(table).getByRole("columnheader", { name: /^Active/ });
+    expect(head.getAttribute("scope")).toBe("col");
+    await userEvent.click(within(head).getByRole("button", { name: "About Active time" }));
+    expect(within(head).getByRole("status").textContent).toBe("Active time: pauses over 20 minutes left out");
+    await userEvent.keyboard("{Escape}");
+    expect(within(head).getByRole("button", { name: "About Active time" }).getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("names a tool sheet's tables and their scroll regions", async () => {
+    mockApi({ "/api/tool": q => ({ ...tool, kind: q.get("kind"), name: q.get("name") }) });
+    at("#range=30&tool=Bash");
+    render(<UsageSheets data={usage} />);
+    await sheet().findByText("12.1%");
+    for (const name of ["Projects", "Inputs", "Recent calls"]) {
+      expect(sheet().getByRole("region", { name }).tabIndex).toBe(0);
+      expect(sheet().getByRole("table", { name })).toBeTruthy();
+    }
+    expect(within(sheet().getByRole("table", { name: "Projects" })).getAllByRole("rowheader")[0]!.getAttribute("scope")).toBe("row");
+  });
+});
+
 describe("ToolSheet", () => {
   const serve = (d: ToolPayload = tool) => mockApi({ "/api/tool": q => ({ ...d, kind: q.get("kind"), name: q.get("name"), source: q.get("source") ?? "" }), "/api/session": () => session });
 
@@ -222,7 +251,8 @@ describe("ToolSheet", () => {
     expect(sheet().getByText("12.1%").nextElementSibling!.textContent).toBe("failed, up from 5.0%");
     expect(sheet().getByText("33").nextElementSibling!.textContent).toBe("calls, up from 20");
     const npm = sheet().getByRole("row", { name: /^npm/ });
-    expect([...npm.querySelectorAll("td")].map(td => td.textContent)).toEqual(["npm", "10", "40.0%"]);
+    expect([...npm.querySelectorAll("th, td")].map(td => td.textContent)).toEqual(["npm", "10", "40.0%"]);
+    expect(npm.querySelector("th")!.getAttribute("scope")).toBe("row");
     expect(sheet().getByText(/test runs/).parentElement!.textContent).toMatch(/10 test runs.*60% passed.*1 commit/);
   });
 

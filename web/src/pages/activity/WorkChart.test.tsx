@@ -1,4 +1,5 @@
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DailyWorkRow, UsagePayload } from "../../api";
 import usage from "../../__fixtures__/usage";
@@ -128,6 +129,57 @@ describe("chart by project", () => {
       segs.forEach((s, j) => expect(s.bottom - s.top + (j ? 2 : 0)).toBeCloseTo(st[i]![ks[j]!.k]! * scale!));
       expect(segs.at(-1)!.top).toBeGreaterThanOrEqual(plotTop);
     });
+  });
+});
+
+describe("work data table", () => {
+  beforeEach(() => setOrder(["a", "c", "e", "g"]));
+  afterEach(() => setOrder([]));
+  const open = () => userEvent.click(screen.getByRole("button", { name: "Show data table" }));
+  const NAME = /errors per 100 tool calls per (day|week)$/; // the hours heat map is a table too
+  const table = () => within(screen.getByRole("table", { name: NAME }));
+
+  it("is closed and absent on load, and opens and closes from its button", async () => {
+    panel(many);
+    const btn = screen.getByRole("button", { name: "Show data table" });
+    expect(btn.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByRole("table", { name: NAME })).toBeNull();
+    await userEvent.click(btn);
+    expect(screen.getByRole("button", { name: "Hide data table" }).getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByRole("table", { name: "Commits by project and errors per 100 tool calls per day" })).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Hide data table" }));
+    expect(screen.queryByRole("table", { name: NAME })).toBeNull();
+  });
+
+  it("lists each day with the measure by project, its total and the error rate", async () => {
+    panel(many);
+    await open();
+    expect(table().getAllByRole("columnheader").map(h => h.textContent)).toEqual(["Day", "a", "c", "e", "g", "Other (3)", "Total", "Errors per 100 calls"]);
+    const rows = table().getAllByRole("row").slice(1), first = workBuckets(many)[0]!;
+    expect(rows).toHaveLength(2);
+    expect(within(rows[0]!).getByRole("rowheader").textContent).toBe("Nov 4, 2026");
+    const cells = [...rows[0]!.querySelectorAll("td")].map(c => c.textContent);
+    expect(cells.at(-2)).toBe(String(first.commits));
+    expect(cells.at(-1)).toBe("10.0"); // 1 failed call in 10
+    expect(cells.slice(0, 5).reduce((s, v) => s + Number(v), 0)).toBe(first.commits); // the parts add up to the bar
+  });
+
+  it("follows the chosen measure, and shows plain bars as one column", async () => {
+    panel({ ...many, project: "a" }, "prompts");
+    await open();
+    expect(table().getAllByRole("columnheader").map(h => h.textContent)).toEqual(["Day", "Prompts", "Errors per 100 calls"]);
+    expect(screen.getByRole("table", { name: "Prompts and errors per 100 tool calls per day" })).toBeTruthy();
+  });
+
+  it("labels each week as the chart does, with a dash for a week without calls", async () => {
+    panel(weekly);
+    await open();
+    expect(screen.getByRole("table", { name: /per week$/ })).toBeTruthy();
+    const rows = table().getAllByRole("row").slice(1);
+    expect(rows).toHaveLength(10);
+    expect(within(rows[0]!).getByRole("rowheader").textContent).toBe("Week of Sep 7, 2026");
+    expect(within(rows.at(-1)!).getByRole("rowheader").textContent).toBe("Week of Nov 9, 2026, so far");
+    expect(rows[1]!.querySelectorAll("td")[1]!.textContent).toBe("–");
   });
 });
 

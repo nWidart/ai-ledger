@@ -5,6 +5,7 @@ import type { LimitHistoryRow, LimitWindow, LimitWindowCurve, LimitsPayload } fr
 import limits from "../../__fixtures__/limits";
 import windowCurve from "../../__fixtures__/limit-window";
 import palette from "../../__fixtures__/palette";
+import { openDrawer } from "../../components/Drawer";
 import { Palette } from "../../components/palette/Palette";
 import { openPalette } from "../../components/palette/store";
 import { mockApi } from "../../components/sheets/testing";
@@ -15,12 +16,17 @@ import { LimitsPage } from "./LimitsPage";
 
 const fixture = limits as LimitsPayload;
 const claude = fixture.windows[0]!, fable = fixture.windows[1]!, codex = fixture.windows[2]!;
+/** A closed drawer renders no table: these start open, as a reload that left them open would. */
+const openDrawers = () => localStorage.setItem("claude-usage-open", JSON.stringify(["history", "value"]));
 const show = (d: LimitsPayload, hash = "#range=30") => {
+  openDrawers();
   const f = mockApi({ "/api/limits": () => d });
   history.replaceState(null, "", "/limits" + hash);
   render(<LimitsPage />);
   return f;
 };
+/** A window's panel (not the table's scroll region, which is named for the table). */
+const WINDOW = /^(Claude Code|Codex)/;
 const lede = () => screen.findByRole("heading", { level: 1, name: /reaches|runs out|at its limit|seen yet/ });
 // Every window resets first: the fixture's Claude forecast, moved below 100%.
 const calm: LimitsPayload = {
@@ -236,6 +242,16 @@ describe("LimitsPage", () => {
     expect(unused.getByText(/Left out: 1 window that ended early/)).toBeTruthy();
   });
 
+  it("names the closed-windows and value tables, with scroll regions and row headers", async () => {
+    show(fixture);
+    await lede();
+    for (const name of ["Closed windows", "Commits a point, by project"]) {
+      expect(screen.getByRole("region", { name }).tabIndex).toBe(0);
+      expect(within(screen.getByRole("table", { name })).getAllByRole("columnheader").every(h => h.getAttribute("scope") === "col")).toBe(true);
+    }
+    expect(within(screen.getByRole("table", { name: "Commits a point, by project" })).getAllByRole("rowheader").length).toBeGreaterThan(0);
+  });
+
   it("shows what a point buys, by model and by project", async () => {
     show(fixture);
     await lede();
@@ -444,7 +460,8 @@ describe("past windows strips", () => {
   const early = curve.window; // the Codex weekly window a plan change ended early
   const row = (h: LimitHistoryRow) => screen.getByRole("button", { name: barName(h) });
   const hist = () => within(document.getElementById("history")!);
-  const showCurve = (d: LimitsPayload = fixture, answer: () => unknown = () => curve) => {
+  const showCurve = (d: LimitsPayload = fixture, answer: () => unknown = () => curve, open = true) => {
+    if (open) openDrawers();
     const f = mockApi({ "/api/limits": () => d, "/api/limits/window": answer });
     history.replaceState(null, "", "/limits#range=30");
     render(<LimitsPage />);
@@ -470,7 +487,7 @@ describe("past windows strips", () => {
   it("keeps a 0% window a visible target", async () => {
     showCurve({ ...fixture, history: [{ ...early, final: 0 }] });
     await lede();
-    expect(hist().getByRole("button").querySelector("i")!.style.height).toBe("6%");
+    expect(hist().getByRole("button", { name: /, ended / }).querySelector("i")!.style.height).toBe("6%");
   });
 
   it("has no strips, and no key, without closed windows", async () => {
@@ -536,10 +553,11 @@ describe("past windows strips", () => {
       if (u.pathname === "/api/limits") resolve({ ok: true, status: 200, json: () => Promise.resolve(fixture) } as Response);
       else finish = c => resolve({ ok: true, status: 200, json: () => Promise.resolve(c) } as Response);
     }));
+    openDrawers();
     history.replaceState(null, "", "/limits#range=30");
     render(<LimitsPage />);
     await lede();
-    expect(hist().queryByRole("region")).toBeNull();
+    expect(hist().queryByRole("region", { name: /Codex weekly/ })).toBeNull();
     await userEvent.click(row(early));
     expect(row(early).getAttribute("aria-pressed")).toBe("true");
     expect(vi.mocked(f).mock.calls.at(-1)![0]).toBe(`/api/limits/window?provider=codex&limit_id=codex_10080&start=${encodeURIComponent(early.start)}`);
@@ -555,7 +573,7 @@ describe("past windows strips", () => {
     expect(hist().getAllByRole("row").filter(r => r.getAttribute("aria-current") === "true")).toHaveLength(1); // its row in the table
     await userEvent.click(row(early));
     expect(row(early).getAttribute("aria-pressed")).toBe("false");
-    expect(hist().queryByRole("region")).toBeNull();
+    expect(hist().queryByRole("region", { name: WINDOW })).toBeNull();
     expect(hist().getAllByRole("row").filter(r => r.getAttribute("aria-current") === "true")).toHaveLength(0);
   });
 
@@ -568,7 +586,7 @@ describe("past windows strips", () => {
     await userEvent.click(row(other));
     expect(row(early).getAttribute("aria-pressed")).toBe("false");
     expect(row(other).getAttribute("aria-pressed")).toBe("true");
-    expect(hist().getAllByRole("region")).toHaveLength(1);
+    expect(hist().getAllByRole("region", { name: WINDOW })).toHaveLength(1);
     expect(vi.mocked(f).mock.calls.at(-1)![0]).toContain(`limit_id=${other.limit_id}`);
   });
 
@@ -605,11 +623,12 @@ describe("past windows strips", () => {
     const width = vi.spyOn(Element.prototype, "clientWidth", "get").mockReturnValue(0); // hidden inside the closed drawer
     const left = vi.spyOn(Element.prototype, "scrollLeft", "set");
     const box = resizes();
-    showCurve({ ...fixture, history: fiveBars });
+    showCurve({ ...fixture, history: fiveBars }, undefined, false);
     await lede();
     box.fire();
-    expect(left).not.toHaveBeenCalled(); // no width yet: nothing to scroll
-    width.mockReturnValue(300); // the drawer opens
+    expect(left).not.toHaveBeenCalled(); // closed: no strip yet, so nothing to scroll
+    width.mockReturnValue(300);
+    act(() => openDrawer("history")); // the drawer opens and its strips mount
     box.fire();
     expect(left).toHaveBeenCalledExactlyOnceWith(480);
     box.fire();
@@ -641,6 +660,7 @@ describe("past windows strips", () => {
     const box = resizes();
     let shown = fiveBars;
     mockApi({ "/api/limits": () => ({ ...fixture, history: shown }), "/api/limits/window": () => curve });
+    openDrawers();
     history.replaceState(null, "", "/limits#range=30");
     render(<LimitsPage />);
     await lede();
@@ -658,6 +678,7 @@ describe("past windows strips", () => {
     const win = (i: number) => ({ ...early, start: day(i), closed_at: day(i + 1) });
     let shown = Array.from({ length: 60 }, (_, i) => win(i));
     mockApi({ "/api/limits": () => ({ ...fixture, history: shown }), "/api/limits/window": () => curve });
+    openDrawers();
     history.replaceState(null, "", "/limits#range=30");
     render(<LimitsPage />);
     await lede();
@@ -678,6 +699,7 @@ describe("past windows strips", () => {
     const win = (i: number) => ({ ...early, start: day(i), closed_at: day(i + 1) });
     let shown = [0, 1, 2, 3].map(win);
     mockApi({ "/api/limits": () => ({ ...fixture, history: shown }), "/api/limits/window": () => curve });
+    openDrawers();
     history.replaceState(null, "", "/limits#range=30");
     render(<LimitsPage />);
     await lede();
@@ -686,7 +708,7 @@ describe("past windows strips", () => {
     shown = [1, 2, 3, 4].map(win);
     act(() => clearApiCache());
     await hist().findByRole("button", { name: barName(win(4)) });
-    expect(hist().getAllByRole("button").filter(b => b.tabIndex === 0).map(b => b.getAttribute("aria-label"))).toEqual([barName(win(4))]);
+    expect(hist().getAllByRole("button", { name: /, ended / }).filter(b => b.tabIndex === 0).map(b => b.getAttribute("aria-label"))).toEqual([barName(win(4))]);
   });
 
   it("closes with its button and gives focus back to the bar", async () => {
@@ -695,7 +717,7 @@ describe("past windows strips", () => {
     await userEvent.click(row(early));
     await hist().findByRole("img", { name: /used when it ended/ });
     await userEvent.click(hist().getByRole("button", { name: "Close" }));
-    expect(hist().queryByRole("region")).toBeNull();
+    expect(hist().queryByRole("region", { name: WINDOW })).toBeNull();
     expect(document.activeElement).toBe(row(early));
     expect(row(early).getAttribute("aria-pressed")).toBe("false");
   });
@@ -734,6 +756,7 @@ describe("past windows strips", () => {
     const claudeRow = fixture.history.find(h => h.provider === "claude")!;
     mockApi({ "/api/limits": q => (q.get("source") === "codex" ? { ...fixture, history: fixture.history.filter(h => h.provider === "codex"), windows: [codex] } : fixture),
       "/api/limits/window": () => ({ ...curve, window: claudeRow }) });
+    openDrawers();
     history.replaceState(null, "", "/limits#range=30");
     render(<LimitsPage />);
     await lede();
@@ -741,13 +764,14 @@ describe("past windows strips", () => {
     await hist().findByRole("img", { name: /used when it ended/ });
     await userEvent.click(screen.getByRole("button", { name: "Codex" }));
     await vi.waitFor(() => expect(location.hash).toBe("#range=30&source=codex"));
-    await vi.waitFor(() => expect(hist().queryByRole("region")).toBeNull());
+    await vi.waitFor(() => expect(hist().queryByRole("region", { name: WINDOW })).toBeNull());
     expect(screen.queryByRole("button", { name: barName(claudeRow) })).toBeNull();
   });
 
   it("keeps the panel when the new range still holds the window", async () => {
     mockApi({ "/api/limits": q => (q.get("source") === "codex" ? { ...fixture, history: fixture.history.filter(h => h.provider === "codex"), windows: [codex] } : fixture),
       "/api/limits/window": () => curve });
+    openDrawers();
     history.replaceState(null, "", "/limits#range=30");
     render(<LimitsPage />);
     await lede();

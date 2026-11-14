@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "re
 import { navigate, setHash, sharedHash, useHashState, usePathname } from "../hash";
 import { getTheme, nextTheme, setTheme, useTheme, type Theme } from "../theme";
 import { alertKey, alertText } from "../pages/limits/limits";
+import { usePageVisible } from "../usePageVisible";
 import { ProjectDot } from "./ProjectDot";
 import { openPalette, shortcutHint, shortcutKeys } from "./palette/store";
 import { pollStatus, refresh, useRefreshState } from "./refresh";
@@ -46,15 +47,20 @@ export function Nav() {
   }, []);
 
   // Ingest status: every minute, and every few seconds while an ingest runs. A new last_change clears the data cache.
+  // Stopped while the tab is hidden; on return it asks at once when a poll came due meanwhile, else on the old schedule.
+  const visible = usePageVisible(), sched = useRef({ at: -Infinity, wait: POLL_MS });
   useEffect(() => {
+    if (!visible) return;
     let live = true, timer = 0;
     const poll = () => {
       clearTimeout(timer);
-      void pollStatus().then(s => { if (live) timer = window.setTimeout(poll, s?.ingesting ? INGESTING_MS : POLL_MS); });
+      sched.current.at = Date.now();
+      void pollStatus().then(s => { if (live) { sched.current.wait = s?.ingesting ? INGESTING_MS : POLL_MS; timer = window.setTimeout(poll, sched.current.wait); } });
     };
-    poll();
+    const left = sched.current.at + sched.current.wait - Date.now();
+    if (left <= 0) poll(); else timer = window.setTimeout(poll, left);
     return () => { live = false; clearTimeout(timer); };
-  }, []);
+  }, [visible]);
 
   const go = (e: MouseEvent<HTMLAnchorElement>, to: string) => {
     if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;

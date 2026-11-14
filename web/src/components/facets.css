@@ -1,7 +1,8 @@
 /* Shared by the Insights page and the session sheet. */
-/* The model-judged tag: dashed, so it never reads as a measured chip. */
+/* The model-judged tag: dashed, so it never reads as a measured chip. It is a toggletip button. */
 :is(.pg-insights, dialog.sheet) .judged { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 500; padding: 1px 8px; border-radius: 999px;
-  border: 1px dashed var(--text-muted); color: var(--text-secondary); white-space: nowrap; letter-spacing: 0; cursor: help; }
+  border: 1px dashed var(--text-muted); color: var(--text-secondary); white-space: nowrap; letter-spacing: 0; cursor: help; background: none; font-family: inherit; }
+:is(.pg-insights, dialog.sheet) .judged:hover { background: var(--surface-2); }
 :is(.pg-insights, dialog.sheet) .judged::before { content: "≈"; font-weight: 600; color: var(--text-muted); }
 :is(.pg-insights, dialog.sheet) .badge { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 999px;
   white-space: nowrap; background: var(--surface-2); color: var(--text-secondary); }

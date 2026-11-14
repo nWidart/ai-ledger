@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import { motion } from "./chart";
-import { onUserScroll, openDrawer } from "./Drawer";
+import { isDrawer, onUserScroll, openDrawer } from "./Drawer";
 import "./SectionIndex.css";
 
 export interface Section { id: string; label: string; long?: string; hidden?: boolean }
@@ -20,7 +20,7 @@ export function jumpTo(id: string) {
   const el = document.getElementById(id);
   if (!el || el.hidden) return;
   pin(id);
-  if (el instanceof HTMLDetailsElement) return openDrawer(id, true);
+  if (isDrawer(el)) return openDrawer(id, true);
   el.scrollIntoView?.({ behavior: motion() ? "smooth" : "auto", block: "start" });
   el.querySelector<HTMLElement>("button, a, [tabindex]")?.focus({ preventScroll: true });
 }

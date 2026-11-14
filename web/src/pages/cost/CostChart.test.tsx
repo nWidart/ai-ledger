@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -129,6 +129,24 @@ describe("cost chart: stack by", () => {
     fireEvent.keyDown(screen.getByRole("group", { name: /Estimated cost/ }), { key: "Escape" });
     expect(screen.queryByRole("tooltip")).toBeNull();
     expect(screen.queryByRole("img", { name: /Estimated cost/ })).toBeNull();
+  });
+
+  it("offers a data table that follows the stacking and keeps the day's total", async () => {
+    render(<Host data={split} />);
+    expect(screen.queryByRole("table")).toBeNull(); // closed on load, and not rendered
+    await userEvent.click(screen.getByRole("button", { name: "Show data table" }));
+    const heads = () => within(screen.getByRole("table")).getAllByRole("columnheader").map(h => h.textContent);
+    expect(screen.getByRole("table", { name: "Estimated cost by project per day" })).toBeTruthy();
+    expect(heads()).toEqual(["Day", "A", "Other (4)", "Total"]);
+    const row = () => within(screen.getByRole("table")).getAllByRole("row")[1]!;
+    expect(within(row()).getByRole("rowheader").textContent).toBe("Nov 4, 2026 so far"); // the view ends that day
+    expect([...row().querySelectorAll("td")].map(c => c.textContent)).toEqual([usd(10), usd(9.5), usd(19.5)]);
+    await sel("Model");
+    expect(screen.getByRole("table", { name: "Estimated cost by model per day" })).toBeTruthy();
+    expect(heads()).toEqual(["Day", "opus-4", "sonnet-4", "gpt-6", "Total"]);
+    expect([...row().querySelectorAll("td")].at(-1)!.textContent).toBe(usd(19.5));
+    await userEvent.click(screen.getByRole("button", { name: "Hide data table" }));
+    expect(screen.queryByRole("table")).toBeNull();
   });
 
   it("restacks the bars and the legend, and names the stacking", async () => {

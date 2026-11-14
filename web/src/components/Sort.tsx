@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Toggletip } from "./Toggletip";
 import "./Sort.css";
 
 /** A table's sort: the column and its direction. */
@@ -15,12 +16,14 @@ export function sortRows<T>(rows: readonly T[], get: (r: T) => number | string |
   });
 }
 
-/** A header cell that sorts by k: most first (asc: A to Z first), flipping on a second click. Only the sorted one carries aria-sort. */
+/** A header cell that sorts by k: most first (asc: A to Z first), flipping on a second click. Only the sorted one carries aria-sort.
+ *  title: what the column means, behind a toggletip beside the sort button (a title on the header would be hover-only). */
 export function SortTh<K extends string>({ k, sort, onSort, asc, className, title, children }: {
   k: K; sort: SortBy<K> | null; onSort: (s: SortBy<K>) => void; asc?: boolean; className?: string; title?: string; children: ReactNode;
 }) {
   const on = sort?.key === k;
-  return <th className={className} title={title} aria-sort={on ? (sort.desc ? "descending" : "ascending") : undefined}>
+  return <th scope="col" className={className} aria-sort={on ? (sort.desc ? "descending" : "ascending") : undefined}>
     <button type="button" className="sortbtn" onClick={() => onSort({ key: k, desc: on ? !sort.desc : !asc })}>{children}
-      <span className="sortmark" aria-hidden="true">{on ? (sort.desc ? "↓" : "↑") : ""}</span></button></th>;
+      <span className="sortmark" aria-hidden="true">{on ? (sort.desc ? "↓" : "↑") : ""}</span></button>
+    {title && <Toggletip term={typeof children === "string" ? children : "this column"}>{title}</Toggletip>}</th>;
 }

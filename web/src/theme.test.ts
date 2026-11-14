@@ -153,3 +153,41 @@ describe("theme.css tokens", () => {
     expect(css).toMatch(/\.pick-field \{[^}]*border: 1px solid var\(--control-border\)/);
   });
 });
+
+describe("forced colors", () => {
+  const block = () => {
+    const css = themeCss(), at = css.indexOf("@media (forced-colors: active)");
+    expect(at).toBeGreaterThan(-1);
+    return css.slice(at);
+  };
+  it("has one forced-colors block, last in theme.css", () => {
+    expect(themeCss().match(/@media \(forced-colors: active\)/g)).toHaveLength(1);
+    expect(block().trimEnd().endsWith("}")).toBe(true);
+  });
+  it("marks pressed, current and selected states with system colors, not the theme's", () => {
+    const css = block();
+    expect(css).toMatch(/\.seg button\[aria-pressed=true\] \{[^}]*background: Highlight; color: HighlightText/);
+    expect(css).toContain(".appnav a[aria-current=page]");
+    expect(css).toContain(".pg-limits .hs-bar[aria-pressed=\"true\"]");
+    expect(css).toMatch(/:not\(:focus-visible\) \{ outline: 2px solid Highlight;/);
+    expect(css).not.toMatch(/var\(--/);
+  });
+  it("keeps bars visible and never suppresses a focus ring", () => {
+    const css = block();
+    expect(css).toMatch(/\.ledger \.bar[^{]*\{ forced-color-adjust: none; outline: 1px solid CanvasText; \}/);
+    expect(css).toContain(".bar-seg");
+    expect(css).not.toMatch(/outline: *(none|0)/);
+  });
+});
+
+describe("scroll padding", () => {
+  it("reserves the sticky nav and the stuck section index once, on the page", () => {
+    const base = strip(readFileSync("src/base.css", "utf8"));
+    expect(base).toMatch(/html \{ scroll-padding-top: calc\(var\(--appnav-h, 56px\) \+ 12px\); \}/);
+    expect(base).toMatch(/html:has\(\.secidx\) \{ scroll-padding-top: calc\(var\(--appnav-h, 56px\) \+ var\(--secidx-h, 0px\) \+ 12px\); \}/);
+    expect(base).not.toContain("scroll-margin-top");
+  });
+  it("leaves no per-element copy of that offset", () => {
+    for (const f of ["src/components/Drawer.css", "src/components/SectionIndex.css"]) expect(readFileSync(f, "utf8")).not.toContain("scroll-margin-top");
+  });
+});

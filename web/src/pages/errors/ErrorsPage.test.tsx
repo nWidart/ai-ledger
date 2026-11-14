@@ -116,7 +116,9 @@ describe("ErrorsPage", () => {
     history.replaceState(null, "", "/errors#range=0");
     await page();
     const table = document.getElementById("catBody")!, lost = (c: string) => table.querySelector(`tr[data-c="${c}"] td.c-lost`)!;
-    expect(screen.getByRole("columnheader", { name: "Time lost" }).getAttribute("title")).toMatch(/^Time in retry loops: from each incident's first failure to its last/);
+    const lostHead = screen.getByRole("columnheader", { name: /^Time lost/ });
+    await userEvent.click(within(lostHead).getByRole("button", { name: "About Time lost" }));
+    expect(within(lostHead).getByRole("status").textContent).toMatch(/^Time in retry loops: from each incident's first failure to its last/);
     expect([...table.querySelectorAll("tr")].map(r => r.getAttribute("data-c")).slice(0, 2)).toEqual(["worktree", "git"]);
     expect(lost("worktree").textContent).toBe("1 min");
     expect(lost("git").textContent).toBe("20 min");
@@ -627,7 +629,8 @@ describe("ErrorsPage", () => {
       serve();
       await page();
       expect(toggle().id).toBe("fNoise");
-      expect(toggle().closest("label")!.getAttribute("title")).toBe("Leaves out harness errors, user rejections and the types you muted");
+      await userEvent.click(screen.getByRole("button", { name: "About hiding noise and muted types" }));
+      expect(screen.getByText("Leaves out harness errors, user rejections and the types you muted", { selector: "[role=status]" })).toBeTruthy();
       await userEvent.click(toggle());
       expect(location.hash).toContain("noise=0");
     });
@@ -1952,15 +1955,25 @@ describe("type table: sort and filter", () => {
   const sortedHeads = () => [...document.querySelectorAll("thead th[aria-sort]")].map(h => [h.querySelector("button")!.textContent!.replace(/[↑↓]/, ""), h.getAttribute("aria-sort")]);
   const DEFAULT = ["tests", "git", "worktree", "build", "lint"];
 
+  it("names the type table, in a focusable region, with column scopes and the figures behind a title as text", async () => {
+    await open();
+    const region = screen.getByRole("region", { name: "Error types" }), table = within(region).getByRole("table", { name: "Error types" });
+    expect(region.tabIndex).toBe(0);
+    expect(within(table).getAllByRole("columnheader").every(h => h.getAttribute("scope") === "col")).toBe(true);
+    // The incident counts the title shows are text too, for a screen reader.
+    expect(table.querySelector('tr[data-c="tests"] td.c-unrec .sr')!.textContent).toBe(", 1 of 4 incidents");
+    expect(table.querySelector('tr[data-c="tests"] td.c-lost')!.hasAttribute("title")).toBe(false);
+  });
+
   it("lists the types by errors, most first, with Rate, Didn't recover and Change", async () => {
     await open();
     expect(order()).toEqual(DEFAULT);
     expect(sortedHeads()).toEqual([["Errors", "descending"]]);
     expect(cells("c-rate")).toEqual(["1.20%", "0.90%", "0.60%", "0.30%", "0.30%"]);
-    expect(cells("c-unrec")).toEqual(["25%", "100%", "50%", "0%", "–"]);
+    expect(cells("c-unrec").map(c => c.split(",")[0])).toEqual(["25%", "100%", "50%", "0%", "–"]); // the screen-reader text follows the comma
     const t = (c: string) => document.querySelector(`#catBody tr[data-c="${c}"] td.c-unrec`)!.getAttribute("title");
     expect([t("tests"), t("git"), t("build"), t("lint")]).toEqual(["1 of 4 incidents", "3 of 3 incidents", "0 of 1 incident", null]);
-    expect(cells("num").filter((_, i) => i % 5 === 4)).toEqual(["▲ +100%", "▼ -50%", "0%", "1 → 3", "3 → 3"]);
+    expect(cells("num").filter((_, i) => i % 5 === 4).map(c => c.split(". ")[0])).toEqual(["▲ +100%", "▼ -50%", "0%", "1 → 3", "3 → 3"]);
     // The trend is a picture, not a column to sort by.
     expect(within(document.querySelector("thead")!).queryByRole("button", { name: /trend/i })).toBeNull();
   });
@@ -1993,12 +2006,14 @@ describe("type table: sort and filter", () => {
     expect(within(document.querySelector("thead")!).queryByRole("button", { name: "Share" })).toBeNull();
     expect(document.querySelector("th.c-share")!.getAttribute("aria-sort")).toBeNull();
     expect(document.querySelector("th.c-share")!.textContent).toBe("Share");
-    expect(document.querySelectorAll("thead th button")).toHaveLength(6); // Type, Errors, Time lost, Rate, Didn't recover, Change
+    expect(document.querySelectorAll("thead th .sortbtn")).toHaveLength(6); // Type, Errors, Time lost, Rate, Didn't recover, Change
   });
 
   it("explains the Change sort in its header, which names the unit", async () => {
     await open();
-    expect(head("Change").closest("th")!.getAttribute("title")).toMatch(/^Sorts by the change in error rate, in points/);
+    const th = head("Change").closest("th")!;
+    await userEvent.click(within(th).getByRole("button", { name: "About Change" }));
+    expect(within(th).getByRole("status").textContent).toMatch(/^Sorts by the change in error rate, in points/);
   });
 
   // jsdom has no layout or media queries, so read the stylesheet: the only columns a breakpoint hides are Share and the trend, and neither sorts.

@@ -2,6 +2,7 @@ import { Fragment, useEffect, useLayoutEffect, useRef, useState, type KeyboardEv
 import type { Source, UsagePayload } from "../../api";
 import { useColors } from "../../colors";
 import { dayAxis, peakLabelAt, tipAt, useWidth } from "../../components/chart";
+import { ChartTable, DataTable } from "../../components/DataTable";
 import { big, dayLabel, niceStep, plural, usd, usd0 } from "../../format";
 import { costDays, costKinds, isOther, KINDS, STACKS, STACK_WORD, type CostDay, type Kind, type Stack } from "./cost";
 
@@ -199,6 +200,12 @@ export function CostChart({ d, metric, onMetric, hidden, onHidden, stack, onStac
         </>}</div>
       </div>
       <div className="sr" aria-live="polite">{cur && at ? `${dayLabel(cur.day, true)}${soFar(at.i)}: ${text(cur, at.i)}` : ""}</div>
+      {/* The chart's text alternative: a figure per day and series in the current stacking, in the chart's units. */}
+      {!none && <ChartTable><DataTable name={`${what} per day`} region="scroll tall">
+        <thead><tr><th scope="col">Day</th>{kinds.map(k => <th key={k.k} scope="col" className="num">{k.label}</th>)}<th scope="col" className="num">Total</th></tr></thead>
+        <tbody>{pts.map((p, i) => <tr key={p.day}><th scope="row">{dayLabel(p.day, true)}{soFar(i)}</th>
+          {kinds.map(k => <td key={k.k} className="num">{fy(p.v[k.k] ?? 0)}</td>)}<td className="num">{cost ? usd(p.cost) : big(total(p))}</td></tr>)}</tbody>
+      </DataTable></ChartTable>}
     </section>
   );
 }
