@@ -93,7 +93,7 @@ The page SHALL show, over the view's main-thread tool calls with a known result 
 ## ADDED Requirements
 
 ### Requirement: Map the view's sessions
-The page SHALL chart the view's sessions that have a measured start, a known window and a recorded peak as one mark each, placed by starting context and by peak context as a share of the window, with the 30,000-token and 80% thresholds drawn, and SHALL mark the sessions that compacted in a way that does not rely on colour alone. Each mark SHALL give the session's project, source, start date, starting context, peak, window, turns and compactions, and selecting a mark SHALL open that session's sheet. The chart SHALL show at most the 1,000 newest such sessions and SHALL say how many it shows of how many. Sessions without a measured start, a known window or a peak SHALL take no part.
+The page SHALL chart each of the view's sessions with a measured start, a known window and a recorded peak as one mark, placed by starting context and by peak share of the window, with the 30,000-token and 80% thresholds drawn. A compacted session's mark SHALL differ by more than colour. A mark SHALL give the session's details, and selecting it SHALL open the session's sheet. The chart SHALL show at most the 1,000 newest such sessions and SHALL say how many it shows of how many.
 
 #### Scenario: Heavy start, full window
 - **WHEN** a session starts at 60,000 tokens and peaks at 180,000 of a 200,000-token window
