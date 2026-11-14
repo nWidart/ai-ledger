@@ -7,7 +7,9 @@ Usage:
   ai-ledger rebuild    regenerate the derived tables from the stored raw lines
 """
 import argparse
+import base64
 import collections
+import hashlib
 import importlib.metadata
 import json
 import os
@@ -33,6 +35,38 @@ ASSET_TYPES = {".js": "text/javascript; charset=utf-8", ".css": "text/css; chars
 MAX_BODY = 4096  # a POST body is one small JSON object
 MAX_IMPORT_BODY, MAX_IMPORT = 65536, 500  # the import carries a marker per error type the browser kept: far fewer than this
 MAX_CATEGORY = 100
+# Sent with every response. The page is never framed, opened from or embedded by another site, and needs no device feature; it
+# sends no referrer, since it asks nothing of Google Fonts that needs one.
+SECURITY_HEADERS = (
+    ("X-Content-Type-Options", "nosniff"),
+    ("Referrer-Policy", "no-referrer"),
+    ("Cross-Origin-Opener-Policy", "same-origin"),
+    ("Cross-Origin-Resource-Policy", "same-origin"),
+    ("X-Frame-Options", "DENY"),
+    ("Permissions-Policy", "accelerometer=(), camera=(), display-capture=(), geolocation=(), gyroscope=(), magnetometer=(), "
+                           "microphone=(), midi=(), payment=(), usb=(), interest-cohort=()"),
+)
+INLINE_SCRIPT = re.compile(rb"<script(?![^>]*\ssrc=)[^>]*>(.*?)</script>", re.DOTALL | re.IGNORECASE)
+
+
+def csp(index):
+    """The page's Content-Security-Policy. Scripts come from this origin or are an inline script of index.html, named by hash, worked
+    out from the file being served so a rebuild cannot leave the policy behind. Styles allow inline: React sets style attributes.
+    Google Fonts is the one outside origin. require-trusted-types-for is left out: React DOM's bundle assigns strings to innerHTML."""
+    hashes = " ".join("'sha256-" + base64.b64encode(hashlib.sha256(m.group(1)).digest()).decode() + "'" for m in INLINE_SCRIPT.finditer(index))
+    return "; ".join(["default-src 'none'", f"script-src 'self' {hashes}".rstrip(),
+                      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com", "font-src https://fonts.gstatic.com",
+                      "connect-src 'self'", "img-src 'self' data:", "object-src 'none'", "base-uri 'none'", "form-action 'self'",
+                      "frame-ancestors 'none'"])
+
+
+def etag_of(body):
+    return '"' + hashlib.sha256(body).hexdigest()[:32] + '"'
+
+
+def etag_matches(header, etag):
+    """Whether an If-None-Match value names etag (weak comparison, as RFC 9110 asks for it)."""
+    return any(t.strip() in ("*", etag, "W/" + etag) for t in (header or "").split(","))
 
 
 def check_category(category):
@@ -221,10 +255,20 @@ def handler(app, port=PORT):
             self.send_header("Content-Type", ctype)
             self.send_header("Content-Length", str(len(data)))
             self.send_header("Cache-Control", cache)
-            for k, v in headers:
+            for k, v in (*SECURITY_HEADERS, *headers):
                 self.send_header(k, v)
             self.end_headers()
-            self.wfile.write(data)
+            if code != 304:
+                self.wfile.write(data)
+
+        def send_page(self, index):
+            """index.html with its policy. no-cache with an ETag: the browser revalidates, so a rebuild shows at once, and an
+            unchanged page costs a 304."""
+            etag = etag_of(index)
+            headers = [("Content-Security-Policy", csp(index)), ("ETag", etag)]
+            if etag_matches(self.headers.get("If-None-Match"), etag):
+                return self.send(304, b"", "text/html; charset=utf-8", headers, cache="no-cache")
+            self.send(200, index, "text/html; charset=utf-8", headers, cache="no-cache")
 
         def json(self, obj):
             self.send(200, json.dumps(obj, separators=(",", ":"), default=str))
@@ -233,7 +277,7 @@ def handler(app, port=PORT):
             """Server-Sent Events for a Live page: a changed notice naming the sessions that gained lines (never their
             content), or a keep-alive comment every KEEPALIVE seconds. Runs until the page goes or the app stops."""
             self.send_response(200)
-            for k, v in (("Content-Type", "text/event-stream"), ("Cache-Control", "no-store"), ("X-Accel-Buffering", "no")):
+            for k, v in (("Content-Type", "text/event-stream"), ("Cache-Control", "no-store"), ("X-Accel-Buffering", "no"), *SECURITY_HEADERS):
                 self.send_header(k, v)
             self.end_headers()
             app.watch(1)
@@ -283,8 +327,26 @@ def handler(app, port=PORT):
                 return False
             return True
 
+        def same_site_only(self, method, path):
+            """Refuse a request another site made, before it runs. /api and every POST are for this page's own scripts: a
+            cross-site page can still send them (a form post, a no-cors fetch, an EventSource), and /api/refresh needs no body.
+            Sec-Fetch-Site says who sent it; a browser without it sends Origin on a POST. Requests with neither (curl, the
+            command line) and page navigations pass."""
+            if method == "GET" and not path.startswith("/api"):
+                return True
+            site, origin = self.headers.get("Sec-Fetch-Site"), self.headers.get("Origin")
+            if site is not None:
+                ok = site.lower() in ("same-origin", "none")
+            else:
+                ok = origin is None or origin == f"http://{HOST}:{port}"
+            if not ok:
+                self.send(403, "forbidden cross-site request\n", "text/plain")
+            return ok
+
         def do_GET(self):
             if not self.checked_host():
+                return
+            if not self.same_site_only("GET", urlsplit(self.path).path):
                 return
             url = urlsplit(self.path)
             q = {k: v[0] for k, v in parse_qs(url.query).items()}
@@ -294,7 +356,7 @@ def handler(app, port=PORT):
                 elif url.path in PAGES:
                     try:
                         with open(os.path.join(WEB, "index.html"), "rb") as fh:
-                            self.send(200, fh.read(), "text/html; charset=utf-8")
+                            self.send_page(fh.read())
                     except FileNotFoundError:
                         self.send(503, "frontend build missing: run npm install && npm run build in web/\n", "text/plain")
                 elif url.path.startswith("/assets/"):
@@ -365,6 +427,8 @@ def handler(app, port=PORT):
             if not self.checked_host():
                 return
             path = urlsplit(self.path).path
+            if not self.same_site_only("POST", path):
+                return
             if path == "/api/refresh":
                 app.ingest()
                 self.json(app.status())

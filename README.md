@@ -79,7 +79,7 @@ A file may hold `models`, `plans` or both. The line is left out when the plan is
 
 ## Privacy
 
-- The server listens on `127.0.0.1` only.
+- The server listens on `127.0.0.1` only, and refuses requests that another site makes from your browser.
 - The store keeps every transcript line, **including any secrets** that appeared in a session. Only your user can read it. Do not share it.
 - On macOS, the Limits page sends your Claude Code OAuth token from the Keychain to Anthropic's undocumented usage endpoint every 5 minutes. The token goes nowhere else and is never stored or logged. Off macOS, Limits estimates from transcripts.
 - Live shows word counts, shortened tool inputs and subagent descriptions by default. **Full text** puts transcript content on screen, secrets included: turn it off before you share your screen.

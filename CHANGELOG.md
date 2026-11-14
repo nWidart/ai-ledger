@@ -14,6 +14,16 @@ Run `ai-ledger rebuild` once after upgrading (with the app stopped): the Context
 - The store keeps the size of each tool result, the context window a Codex session states and the time of each session's first compaction. Until the rebuild, the Context page says those figures are not yet available.
 - The command palette's `>context` term opens the Context page, keeping the project and range filters.
 
+### Changed
+
+- The page is revalidated with an ETag (`304` when unchanged) instead of being sent again on every visit.
+
+### Security
+
+- The app refuses requests another site makes to `/api` (403), so a page you have open cannot start ingests or read the store through your browser. `curl` and the command line are unaffected.
+- Every response carries security headers, and the page carries a Content Security Policy: it cannot be framed, and runs only its own scripts. The font still loads from Google Fonts.
+- Table export also guards a cell that starts with a tab or a carriage return against being read as a spreadsheet formula.
+
 ## [0.3.0] - 2026-11-12
 
 Run `ai-ledger rebuild` once after upgrading (with the app stopped): Codex subagent threads stored before this version are filed under their own ids, and the rebuild moves them to their sessions.

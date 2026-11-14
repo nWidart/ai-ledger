@@ -1,9 +1,12 @@
+import base64
 import contextlib
+import hashlib
 import http.client
 import importlib.metadata
 import io
 import json
 import os
+import re
 import socket
 import subprocess
 import sys
@@ -56,7 +59,107 @@ class AppTest(unittest.TestCase):
             index = fh.read()
         for path in app.PAGES:
             status, headers, body = self.get(path)
-            self.assertEqual((status, headers["Content-Type"], headers["Cache-Control"], body), (200, "text/html; charset=utf-8", "no-store", index))
+            self.assertEqual((status, headers["Content-Type"], headers["Cache-Control"], body), (200, "text/html; charset=utf-8", "no-cache", index))
+
+    def request(self, method, path, headers=None, body=None):
+        h = http.client.HTTPConnection("127.0.0.1", self.httpd.server_address[1])
+        h.request(method, path, body=body, headers={"Host": f"{app.HOST}:{app.PORT}", **(headers or {})})
+        r = h.getresponse()
+        return r.status, dict(r.getheaders()), r.read()
+
+    def test_every_response_carries_the_security_headers(self):
+        for path in ("/usage", "/assets/" + next(n for n in os.listdir(os.path.join(app.WEB, "assets")) if n.endswith(".js")),
+                     "/api/status", "/api/nothing", "/"):
+            _, headers, _ = self.get(path)
+            for name, value in app.SECURITY_HEADERS:
+                self.assertEqual(headers.get(name), value, f"{name} on {path}")
+        headers = dict(app.SECURITY_HEADERS)
+        self.assertEqual((headers["X-Content-Type-Options"], headers["X-Frame-Options"], headers["Cross-Origin-Opener-Policy"],
+                          headers["Cross-Origin-Resource-Policy"], headers["Referrer-Policy"]),
+                         ("nosniff", "DENY", "same-origin", "same-origin", "no-referrer"))
+        for feature in ("camera=()", "microphone=()", "geolocation=()"):
+            self.assertIn(feature, headers["Permissions-Policy"])
+        self.assertEqual(self.request("POST", "/api/nothing")[1]["X-Content-Type-Options"], "nosniff")
+        self.assertEqual(self.get("/api/status", host=f"localhost:{app.PORT}")[1]["X-Content-Type-Options"], "nosniff")
+
+    def test_only_html_carries_a_policy(self):
+        self.assertIn("script-src", self.get("/usage")[1]["Content-Security-Policy"])
+        self.assertNotIn("Content-Security-Policy", self.get("/api/status")[1])
+
+    def test_policy_names_the_inline_script_the_page_serves(self):
+        _, headers, body = self.get("/usage")
+        scripts = re.findall(rb"<script(?![^>]*\ssrc=)[^>]*>(.*?)</script>", body, re.DOTALL)
+        self.assertEqual(len(scripts), 1)  # the theme script: anything else inline needs a decision
+        digest = "'sha256-" + base64.b64encode(hashlib.sha256(scripts[0]).digest()).decode() + "'"
+        policy = {d.split()[0]: d.split()[1:] for d in headers["Content-Security-Policy"].split("; ")}
+        self.assertIn(digest, policy["script-src"])
+        self.assertEqual(policy["script-src"], ["'self'", digest])
+        self.assertEqual((policy["default-src"], policy["frame-ancestors"], policy["base-uri"], policy["object-src"]),
+                         (["'none'"], ["'none'"], ["'none'"], ["'none'"]))
+        self.assertNotIn("'unsafe-inline'", policy["script-src"])
+        self.assertEqual(policy["connect-src"], ["'self'"])
+
+    def test_policy_follows_a_rebuilt_page(self):
+        a = b'<!doctype html><script>var a = 1;</script><script type="module" src="/assets/x.js"></script>'
+        b = b'<!doctype html><script>var a = 2;</script>'
+        self.assertNotEqual(app.csp(a), app.csp(b))
+        self.assertEqual(app.csp(a).count("sha256-"), 1)
+        self.assertIn("script-src 'self';", app.csp(b"<!doctype html><p>no script</p>"))
+
+    def test_page_revalidates_with_an_etag(self):
+        status, headers, body = self.get("/usage")
+        etag = headers["ETag"]
+        self.assertEqual((status, headers["Cache-Control"]), (200, "no-cache"))
+        self.assertRegex(etag, r'^"[0-9a-f]{32}"$')
+        self.assertEqual(self.get("/live")[1]["ETag"], etag)
+        for sent in (etag, f"W/{etag}", f'"other", {etag}', "*"):
+            status, headers, body = self.request("GET", "/usage", {"If-None-Match": sent})
+            self.assertEqual((status, body, headers["ETag"], headers["Cache-Control"]), (304, b"", etag, "no-cache"), sent)
+            self.assertIn("Content-Security-Policy", headers)
+            self.assertEqual(headers["X-Content-Type-Options"], "nosniff")
+        status, _, body = self.request("GET", "/usage", {"If-None-Match": '"stale"'})
+        self.assertEqual((status, bool(body)), (200, True))
+
+    def test_api_and_assets_keep_their_cache_headers(self):
+        self.assertEqual(self.get("/api/status")[1]["Cache-Control"], "no-store")
+        self.assertNotIn("ETag", self.get("/api/status")[1])
+        js = next(n for n in os.listdir(os.path.join(app.WEB, "assets")) if n.endswith(".js"))
+        self.assertIn("immutable", self.get(f"/assets/{js}")[1]["Cache-Control"])
+
+    def test_cross_site_requests_to_the_api_are_refused(self):
+        for site in ("cross-site", "same-site", "CROSS-SITE"):
+            for method, path in (("GET", "/api/status"), ("POST", "/api/refresh"), ("GET", "/api/live/events"),
+                                 ("POST", "/api/errors/mute")):
+                status, headers, _ = self.request(method, path, {"Sec-Fetch-Site": site, "Content-Type": "application/json"}, b"{}")
+                self.assertEqual(status, 403, f"{method} {path} {site}")
+                self.assertEqual(headers["X-Content-Type-Options"], "nosniff")
+
+    def test_refused_refresh_does_not_ingest(self):
+        with mock.patch.object(self.app, "ingest") as ingest:
+            self.assertEqual(self.request("POST", "/api/refresh", {"Sec-Fetch-Site": "cross-site"})[0], 403)
+            self.assertEqual(self.request("POST", "/api/refresh", {"Origin": "https://evil.example"})[0], 403)
+            ingest.assert_not_called()
+
+    def test_origin_decides_when_fetch_metadata_is_missing(self):
+        mine = f"http://{app.HOST}:{app.PORT}"
+        for origin in ("https://evil.example", "null", f"http://localhost:{app.PORT}", "http://127.0.0.1:1", f"https://{app.HOST}:{app.PORT}"):
+            self.assertEqual(self.request("GET", "/api/status", {"Origin": origin})[0], 403, origin)
+            self.assertEqual(self.request("POST", "/api/refresh", {"Origin": origin})[0], 403, origin)
+        self.assertEqual(self.request("GET", "/api/status", {"Origin": mine})[0], 200)
+
+    def test_same_origin_and_headerless_requests_pass(self):
+        for headers in ({}, {"Sec-Fetch-Site": "same-origin"}, {"Sec-Fetch-Site": "none"},
+                        {"Sec-Fetch-Site": "same-origin", "Origin": f"http://{app.HOST}:{app.PORT}"}):
+            self.assertEqual(self.request("GET", "/api/status", headers)[0], 200, headers)
+        with mock.patch.object(self.app, "ingest") as ingest:
+            self.assertEqual(self.request("POST", "/api/refresh")[0], 200)
+            self.assertEqual(self.request("POST", "/api/refresh", {"Sec-Fetch-Site": "same-origin"})[0], 200)
+            self.assertEqual(ingest.call_count, 2)
+
+    def test_pages_and_assets_open_from_other_sites(self):
+        js = next(n for n in os.listdir(os.path.join(app.WEB, "assets")) if n.endswith(".js"))
+        for path in ("/usage", "/live", f"/assets/{js}"):
+            self.assertEqual(self.request("GET", path, {"Sec-Fetch-Site": "cross-site", "Sec-Fetch-Mode": "navigate"})[0], 200, path)
 
     def test_root_opens_activity(self):
         status, headers, _ = self.get("/")
@@ -621,6 +724,16 @@ class LiveEventsTest(unittest.TestCase):
         with open(os.path.join(self.root, "proj", name), "a") as fh:
             fh.write(json.dumps(dict(type="user", uuid=f"{sid}-{text}", sessionId=sid, timestamp="2026-11-10T10:00:00Z",
                                      message=dict(role="user", content=text))) + "\n")
+
+    def test_stream_carries_the_security_headers_and_refuses_cross_site(self):
+        h, r = self.connect()
+        self.assertEqual((r.getheader("X-Content-Type-Options"), r.getheader("Cross-Origin-Resource-Policy")), ("nosniff", "same-origin"))
+        refused = http.client.HTTPConnection("127.0.0.1", self.httpd.server_address[1], timeout=5)
+        refused.request("GET", "/api/live/events", headers={"Host": f"{app.HOST}:{app.PORT}", "Sec-Fetch-Site": "cross-site"})
+        self.assertEqual(refused.getresponse().status, 403)
+        self.assertEqual(self.app.watchers, 1)  # the refused request never counted as a Live page
+        refused.close()
+        h.close()
 
     def test_notice_names_the_session_and_holds_no_text(self):
         h, r = self.connect()
