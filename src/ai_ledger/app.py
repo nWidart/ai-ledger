@@ -1,4 +1,4 @@
-"""Local app: owns the transcript store, keeps it current, serves the Activity, Cost, Errors, Limits, Insights and Live pages.
+"""Local app: owns the transcript store, keeps it current, serves the Activity, Cost, Context, Errors, Limits, Insights and Live pages.
 
 Usage:
   ai-ledger            serve on http://127.0.0.1:8765 and open it in the browser (ingests at start and every 60 seconds, every
@@ -20,7 +20,7 @@ from datetime import date, datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 
-from . import insights, limits, live, metrics, store
+from . import context, insights, limits, live, metrics, store
 
 HOST, PORT = "127.0.0.1", 8765  # PORT is the default; --port changes it
 INTERVAL = 60
@@ -347,6 +347,9 @@ def handler(app, port=PORT):
                 elif url.path == "/api/insights":
                     self.json(insights.payload(app.con.cursor(), q.get("project", ""), int(q.get("range") or 0), q.get("source", ""),
                                                automated=q.get("automated") == "1", usage_dir=app.roots.get("insights")))
+                elif url.path == "/api/context":
+                    self.json(context.payload(app.con.cursor(), q.get("project", ""), int(q.get("range") or 0), q.get("source", ""),
+                                              automated=q.get("automated") == "1"))
                 elif url.path == "/api/tool":
                     self.json(metrics.tool_detail(app.con.cursor(), q.get("kind", ""), q.get("name", ""), q.get("project", ""),
                                                   int(q.get("range") or 0), automated=q.get("automated") == "1", source=q.get("source", "")))

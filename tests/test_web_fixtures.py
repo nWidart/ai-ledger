@@ -13,6 +13,7 @@ from ai_ledger import metrics, store  # noqa: E402
 import test_limits as tl  # noqa: E402
 import test_insights as ti  # noqa: E402
 import test_live as tlv  # noqa: E402
+import test_context as tc  # noqa: E402
 
 OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "web", "src", "__fixtures__")
 
@@ -87,6 +88,20 @@ def insights_fixtures():
         case.tearDown()
 
 
+def context_fixture():
+    """The Context payload the page tests render: test_context's rich store, with every section populated and five tips firing."""
+    case = unittest.TestCase()
+    b = tc.Builder(case)
+    try:
+        tc.rich(b)
+        b.con.execute("SET GLOBAL TimeZone = 'UTC'")
+        payload = b.payload()
+        payload["automated_file"] = dict(path="/Users/example/Library/Application Support/ai-ledger/automated.json", error=None, projects=[])
+        return payload
+    finally:
+        case.doCleanups()
+
+
 class WebFixturesTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -129,6 +144,7 @@ class WebFixturesTest(unittest.TestCase):
         full, empty = insights_fixtures()
         got["insights.ts"] = ("InsightsPayload", full)
         got["insights-empty.ts"] = ("InsightsPayload", empty)
+        got["context.ts"] = ("ContextPayload", context_fixture())
         lv = tlv.page_fixtures()
         got["live.ts"] = ("LivePayload", lv["list"])
         got["live-text.ts"] = ("LivePayload", lv["list_text"])

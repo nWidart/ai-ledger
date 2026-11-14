@@ -1,6 +1,7 @@
 // The fixtures are TypeScript modules whose payloads `satisfies` the api.ts types, so tsc fails on drift; this checks
 // the runtime shape the pages lean on.
 import { describe, expect, it } from "vitest";
+import context from "./__fixtures__/context";
 import errors from "./__fixtures__/errors";
 import palette from "./__fixtures__/palette";
 import session from "./__fixtures__/session";
@@ -8,7 +9,7 @@ import sessions from "./__fixtures__/sessions";
 import usageAll from "./__fixtures__/usage-all";
 import usageCodex from "./__fixtures__/usage-codex";
 import usage from "./__fixtures__/usage";
-import type { ErrorsPayload, PalettePayload, SessionDetail, SessionsPage, UsagePayload } from "./api";
+import type { ContextPayload, ErrorsPayload, PalettePayload, SessionDetail, SessionsPage, UsagePayload } from "./api";
 
 describe("fixtures", () => {
   it("match the payload types", () => {
@@ -25,5 +26,11 @@ describe("fixtures", () => {
     const p: PalettePayload = palette;
     expect(p.tools.map(t => t.name)).toEqual(u.tools.map(t => t.tool));
     expect(p.projects.length).toBeGreaterThan(0);
+    const c: ContextPayload = context;
+    expect(c.tips.length).toBeGreaterThanOrEqual(2);
+    expect(c.tips[0]?.severity).toBe("critical");
+    expect(c.growth.curve.length).toBeGreaterThan(0);
+    expect(c.fills.largest.length).toBeGreaterThan(0);
+    expect(c.coverage.rebuild_needed).toBe(false);
   });
 });
