@@ -6,8 +6,8 @@ const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"
 const HOURS = Array.from({ length: 24 }, (_, h) => h);
 
 /** Prompts by local weekday (Monday first) and hour, darker for more. A table, so each cell is read with its weekday and
- *  hour. Hovering a cell shows its title; focusing the table outlines a cell (Monday 0:00, or the last one read), the arrow
- *  keys move it, and the cell is read out under the grid. */
+ *  hour, and says its prompts in words. Hovering a cell shows its title too; focusing the table outlines a cell (Monday 0:00,
+ *  or the last one read), the arrow keys move it, and the cell is read out under the grid. */
 export function WorkHours({ cells }: { cells: UsagePayload["work_hours"] }) {
   const [at, setAt] = useState({ r: 0, c: 0 }), [focused, setFocused] = useState(false);
   const grid = DAYS.map(() => HOURS.map(() => 0));
@@ -38,7 +38,7 @@ export function WorkHours({ cells }: { cells: UsagePayload["work_hours"] }) {
             <th scope="row" abbr={DAYS[r]}>{DAYS[r]!.slice(0, 3)}</th>
             {row.map((v, c) => <td key={c} title={cellText(r, c)} className={focused && at.r === r && at.c === c ? "at" : undefined}
               style={v ? { background: `color-mix(in srgb, var(--series-1) ${Math.round(15 + 85 * v / max)}%, var(--surface-2))` } : undefined}>
-              <span className="sr">{v}</span></td>)}
+              <span className="sr">{plural(v, "prompt")}</span></td>)}
           </tr>)}</tbody>
         </table>
         <div className="readout" aria-live="polite">{focused ? cellText(at.r, at.c) : ""}</div>

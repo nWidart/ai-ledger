@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import type { Source, UsagePayload } from "../../api";
 import { useColors } from "../../colors";
 import { dayAxis, peakLabelAt, tipAt, useWidth } from "../../components/chart";
@@ -41,28 +41,31 @@ export function CostChart({ d, metric, onMetric, hidden, onHidden, stack, onStac
   useColors();
   const box = useRef<HTMLDivElement>(null), tip = useRef<HTMLDivElement>(null), svg = useRef<SVGSVGElement>(null), legend = useRef<HTMLDivElement>(null);
   const W = useWidth(box);
-  const [at, setAt] = useState<{ i: number; x: number; y: number } | null>(null);
-  useEffect(() => setAt(null), [d, metric, hidden, stack]);
-  useLayoutEffect(() => {
-    if (!at || !tip.current || !box.current) return;
-    const p = tipAt(box.current, tip.current, at.x, at.y);
+  // The day read (an index) is state; the pointer's position is not, so a move inside one bar re-renders nothing: the
+  // tooltip is only moved by hand.
+  const [at, setAt] = useState<number | null>(null), pos = useRef({ x: 0, y: 0 });
+  const place = () => {
+    if (!tip.current || !box.current) return;
+    const p = tipAt(box.current, tip.current, pos.current.x, pos.current.y);
     tip.current.style.left = p.left + "px"; tip.current.style.top = p.top + "px";
-  }, [at]);
+  };
+  useEffect(() => setAt(null), [d, metric, hidden, stack]);
+  useLayoutEffect(() => { if (at != null) place(); }, [at]);
   // A project or agent key re-renders the legend for the new view: its first key is the way back.
   const refocus = useRef(false);
   useEffect(() => { if (refocus.current) { refocus.current = false; legend.current?.querySelector("button")?.focus(); } }, [d]);
 
   const cost = metric === "cost";
-  const kinds: Kind[] = cost ? costKinds(d, stack) : KINDS.filter(k => !hidden.includes(k.k));
+  const kinds = useMemo<Kind[]>(() => (cost ? costKinds(d, stack) : KINDS.filter(k => !hidden.includes(k.k))), [d, cost, stack, hidden]);
   const none = !cost && !kinds.length; // every token kind hidden
-  const pts: CostDay[] = costDays(d, cost ? kinds : [], stack);
-  const total = (p: CostDay) => kinds.reduce((s, k) => s + (p.v[k.k] || 0), 0);
+  const pts = useMemo<CostDay[]>(() => costDays(d, cost ? kinds : [], stack), [d, cost, kinds, stack]);
+  const total = useCallback((p: CostDay) => kinds.reduce((s, k) => s + (p.v[k.k] || 0), 0), [kinds]);
   // The view ends today, a day still in progress: its bar is hatched and the average (the trailing 7-day mean of the plotted
   // total, from the seventh day on) leaves it out, so the line ends yesterday.
   const live = pts.length - 1;
   const avg = pts.map((_, i) => (i < 6 || i === live ? null : pts.slice(i - 6, i + 1).reduce((s, q) => s + total(q), 0) / 7));
   const showAvg = pts.length >= 14;
-  const a = dayAxis(W, H, pts.length, Math.max(...pts.map(total), 0), niceStep);
+  const a = useMemo(() => dayAxis(W, H, pts.length, Math.max(...pts.map(total), 0), niceStep), [W, pts, total]);
   const fy = cost ? usd : big, ty = cost ? usd0 : big;
   const peak = pts.reduce((b, p, i) => (total(p) > total(pts[b]!) ? i : b), 0), pk = pts[peak];
   const indexAt = (clientX: number) => {
@@ -70,18 +73,42 @@ export function CostChart({ d, metric, onMetric, hidden, onHidden, stack, onStac
     return Math.max(0, Math.min(pts.length - 1, Math.floor((px - a.m.l) / a.bw)));
   };
   const pick = (i: number) => { const p = pts[i]; if (p && (p.cost || total(p))) { setAt(null); onDay(p.day); } };
-  const onMove = (ev: PointerEvent) => setAt({ i: indexAt(ev.clientX), x: ev.clientX, y: ev.clientY });
+  const onMove = (ev: PointerEvent) => {
+    const i = indexAt(ev.clientX);
+    pos.current = { x: ev.clientX, y: ev.clientY };
+    if (i === at) place(); else setAt(i); // a new bar: the layout effect places the tooltip once it shows that bar
+  };
   const onKey = (ev: KeyboardEvent) => {
     if (ev.key === "Escape") return setAt(null);
-    if (ev.key === "Enter" && at) { ev.preventDefault(); return pick(at.i); }
+    if (ev.key === "Enter" && at != null) { ev.preventDefault(); return pick(at); }
     const step = ({ ArrowLeft: -1, ArrowRight: 1, Home: -Infinity, End: Infinity } as Record<string, number>)[ev.key];
     if (step == null || !pts.length) return;
     ev.preventDefault();
-    const from = at?.i ?? (step > 0 ? -1 : pts.length); // first Right picks the first day, first Left the last
+    const from = at ?? (step > 0 ? -1 : pts.length); // first Right picks the first day, first Left the last
     const i = Math.max(0, Math.min(pts.length - 1, from + step));
     const r = svg.current!.getBoundingClientRect(), s = r.width / W;
-    setAt({ i, x: r.left + a.cx(i) * s, y: r.top + a.m.t * s + 20 });
+    pos.current = { x: r.left + a.cx(i) * s, y: r.top + a.m.t * s + 20 };
+    if (i === at) place(); else setAt(i);
   };
+  // The bars and their axis labels: drawn again only with the data, the size or the stacking, not on every pointer move.
+  const bars = useMemo(() => pts.map((p, i) => {
+    const x = a.x(i), segs = kinds.filter(k => (p.v[k.k] ?? 0) > 0);
+    let base = 0;
+    return <g key={p.day}>
+      {i % a.every === 0 && <text x={x + a.w / 2} y={H - 6} textAnchor="middle" fontSize="11" fill="var(--text-muted)">{dayLabel(p.day)}</text>}
+      {/* One group per bar, so the whole stack grows from the baseline when data lands. */}
+      {segs.length > 0 && <g className="bar-seg" style={{ ["--i" as string]: Math.min(i, 60) }}>{segs.map((k, j) => {
+        const v = p.v[k.k]!, top = a.y(base + v), h = v / a.yMax * a.ih;
+        base += v;
+        // 2px surface gap between stacked segments; the top segment gets rounded corners.
+        const hh = Math.max(0, h - (j ? 2 : 0));
+        const shape = (fill: string, cls?: string) => j === segs.length - 1 && hh > 4
+          ? <path className={cls} d={`M${x},${top + hh} V${top + 3} q0,-3 3,-3 H${x + a.w - 3} q3,0 3,3 V${top + hh} Z`} fill={fill} />
+          : <rect className={cls} x={x} y={top} width={a.w} height={hh} fill={fill} />;
+        return <Fragment key={k.k}>{shape(k.c)}{i === live && shape("url(#partial-day)", "partial")}</Fragment>;
+      })}</g>}
+    </g>;
+  }), [pts, kinds, a, live]);
   const ticks: number[] = [];
   for (let v = 0; v <= a.yMax + 1e-9; v += a.step) ticks.push(v);
 
@@ -104,7 +131,7 @@ export function CostChart({ d, metric, onMetric, hidden, onHidden, stack, onStac
   const text = (p: CostDay, i: number) => (cost
     ? `${usd(p.cost)} estimated${parts(p).length > 1 || p.other?.length ? ` by ${STACK_WORD[stack].noun}: ` + parts(p).map(k => partText(p, k)).join(", ") : ""}${p.unpriced ? `, ${plural(p.unpriced, "unpriced request")}` : ""}`
     : kinds.map(k => `${k.label} ${big(p.v[k.k])}`).join(", ") + `, total ${big(total(p))}`) + (avgText(i) ? `. ${avgText(i)}` : "");
-  const cur = at ? pts[at.i] : undefined;
+  const cur = at != null ? pts[at] : undefined;
   const what = cost ? (d.project && stack === "project" ? "Estimated cost" : `Estimated cost by ${STACK_WORD[stack].noun}`) : "Tokens by kind";
   const label = pk ? `${what} per day, ${pts.length} days, peaking at ${fy(total(pk))} on ${dayLabel(pk.day, true)}${soFar(peak)}. Use the left and right arrow keys to read each day and Enter to list its sessions.`
     : `${what} per day, no days yet.`;
@@ -151,24 +178,7 @@ export function CostChart({ d, metric, onMetric, hidden, onHidden, stack, onStac
             <rect width="2.5" height="6" fill="var(--surface-1)" opacity=".6" /></pattern></defs>
           {ticks.map(v => <g key={v}><line x1={a.m.l} x2={W - a.m.r} y1={a.y(v)} y2={a.y(v)} stroke="var(--grid)" />
             <text x={a.m.l - 6} y={a.y(v) + 4} textAnchor="end" fontSize="11" fill="var(--text-muted)">{ty(v)}</text></g>)}
-          {pts.map((p, i) => {
-            const x = a.x(i), segs = kinds.filter(k => (p.v[k.k] ?? 0) > 0);
-            let base = 0;
-            return <g key={p.day}>
-              {i % a.every === 0 && <text x={x + a.w / 2} y={H - 6} textAnchor="middle" fontSize="11" fill="var(--text-muted)">{dayLabel(p.day)}</text>}
-              {/* One group per bar, so the whole stack grows from the baseline when data lands. */}
-              {segs.length > 0 && <g className="bar-seg" style={{ ["--i" as string]: Math.min(i, 60) }}>{segs.map((k, j) => {
-                const v = p.v[k.k]!, top = a.y(base + v), h = v / a.yMax * a.ih;
-                base += v;
-                // 2px surface gap between stacked segments; the top segment gets rounded corners.
-                const hh = Math.max(0, h - (j ? 2 : 0));
-                const shape = (fill: string, cls?: string) => j === segs.length - 1 && hh > 4
-                  ? <path className={cls} d={`M${x},${top + hh} V${top + 3} q0,-3 3,-3 H${x + a.w - 3} q3,0 3,3 V${top + hh} Z`} fill={fill} />
-                  : <rect className={cls} x={x} y={top} width={a.w} height={hh} fill={fill} />;
-                return <Fragment key={k.k}>{shape(k.c)}{i === live && shape("url(#partial-day)", "partial")}</Fragment>;
-              })}</g>}
-            </g>;
-          })}
+          {bars}
           {/* The average line, haloed in the surface color so it stays readable across bars of any hue. */}
           {showAvg && <>
             <path d={avgLine} fill="none" stroke="var(--surface-1)" strokeWidth="4.5" strokeLinejoin="round" strokeLinecap="round" />
@@ -179,12 +189,12 @@ export function CostChart({ d, metric, onMetric, hidden, onHidden, stack, onStac
             return <text x={x} y={a.y(total(pk)) - 7} textAnchor={anchor} fontSize="11" fontWeight="600" fill="var(--text-primary)"
               stroke="var(--surface-1)" strokeWidth="3" paintOrder="stroke">Peak {fy(total(pk))} · {dayLabel(pk.day)}{soFar(peak)}</text>;
           })()}
-          {at && <rect x={a.m.l + at.i * a.bw} width={a.bw} y={a.m.t} height={a.ih} fill="var(--text-primary)" opacity=".06" />}
-          <rect className="hit" x={a.m.l} y={a.m.t} width={a.iw} height={a.ih} fill="transparent" style={{ cursor: "pointer" }}
+          {at != null && <rect x={a.m.l + at * a.bw} width={a.bw} y={a.m.t} height={a.ih} fill="var(--text-primary)" opacity=".06" />}
+          <rect className="hit pick" x={a.m.l} y={a.m.t} width={a.iw} height={a.ih} fill="transparent"
             onPointerMove={onMove} onPointerLeave={() => setAt(null)} onClick={ev => pick(indexAt(ev.clientX))} />
         </svg>
-        <div className="tip" ref={tip} role="tooltip" style={{ display: cur ? "block" : "none" }}>{cur && at && <>
-          <div className="muted">{dayLabel(cur.day, true)}{soFar(at.i)}</div>
+        <div className="tip" ref={tip} role="tooltip" style={{ display: cur ? "block" : "none" }}>{cur && at != null && <>
+          <div className="muted">{dayLabel(cur.day, true)}{soFar(at)}</div>
           {cost ? <>
             {parts(cur).map(k => <Fragment key={k.k}><Row k={k} v={usd(cur.v[k.k])} />
               {isOther(k) && topOther(cur).map(o => <div key={o.name} className="row sub"><span>{o.name}</span><span>{usd(o.cost)}</span></div>)}
@@ -196,10 +206,10 @@ export function CostChart({ d, metric, onMetric, hidden, onHidden, stack, onStac
             {kinds.slice().reverse().map(k => <Row key={k.k} k={k} v={big(cur.v[k.k])} />)}
             <div className="row tot"><span>Total</span><b>{big(total(cur))}</b></div>
           </>}
-          {avgText(at.i) && <div className="muted">{avgText(at.i)}</div>}
+          {avgText(at) && <div className="muted">{avgText(at)}</div>}
         </>}</div>
       </div>
-      <div className="sr" aria-live="polite">{cur && at ? `${dayLabel(cur.day, true)}${soFar(at.i)}: ${text(cur, at.i)}` : ""}</div>
+      <div className="sr" aria-live="polite">{cur && at != null ? `${dayLabel(cur.day, true)}${soFar(at)}: ${text(cur, at)}` : ""}</div>
       {/* The chart's text alternative: a figure per day and series in the current stacking, in the chart's units. */}
       {!none && <ChartTable><DataTable name={`${what} per day`} region="scroll tall">
         <thead><tr><th scope="col">Day</th>{kinds.map(k => <th key={k.k} scope="col" className="num">{k.label}</th>)}<th scope="col" className="num">Total</th></tr></thead>

@@ -1,6 +1,7 @@
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
+import limits from "./__fixtures__/limits";
 import usage from "./__fixtures__/usage";
 import { App } from "./App";
 import { closePalette } from "./components/palette/store";
@@ -78,8 +79,9 @@ describe("App", () => {
   });
 
   describe("focus", () => {
+    // Limits answers here: a failed load focuses its Retry button, which raced the heading and made this flaky.
     const show = (path: string) => {
-      mockApi({ "/api/usage": () => usage, "/api/status": () => status });
+      mockApi({ "/api/usage": () => usage, "/api/limits": () => limits, "/api/status": () => status });
       history.replaceState(null, "", path);
       return render(<App />);
     };

@@ -77,7 +77,7 @@
 .pg-activity .daychip button { border: 0; background: none; padding: 1px 6px; border-radius: 999px; font-size: 12px; color: inherit; }
 /* MCP servers and skills side by side, hooks on a full-width row below. */
 .pg-activity .ext { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
-.pg-activity .ext .hooks { grid-column: 1 / -1; }
+.pg-activity .ext :is(.hooks, .note) { grid-column: 1 / -1; }
 .pg-activity .ext h3 { font-size: 14px; margin: 0 0 6px; }
 .pg-activity .ext :is(td, th).hook { max-width: 640px; }
 @media (max-width: 900px) { .pg-activity .ext { grid-template-columns: minmax(0, 1fr); } .pg-activity .ext :is(td, th).hook { max-width: 300px; } }

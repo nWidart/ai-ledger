@@ -1,9 +1,17 @@
-import type { LiveListSession } from "../../api";
+import type { LiveListSession, LiveState } from "../../api";
 import { SOURCE_LABELS } from "../../components/Filters";
 import { ProjectName } from "../../components/ProjectDot";
 import { num, pct, usd } from "../../format";
 import { NEAR_FULL, StateTag } from "./AgentPanel";
-import { groupSessions, stateNow } from "./live";
+import { groupSessions, INFERRED_WHY, stateNow, stateText } from "./live";
+
+/** What a state's hover text says, for where it is no hover: a state's detail, or why it is inferred. */
+const stateWhy = (st: LiveState, now: number) => (st.inferred ? INFERRED_WHY[st.kind] : undefined) ?? stateText(st, now).detail;
+
+/** A state's tag with its detail as text a screen reader gets, in place of the hover-only title: where the page shows no detail. */
+export function StateNote({ st, now }: { st: LiveState; now: number }) {
+  return <><StateTag st={st} now={now} plain /><span className="sr">: {stateWhy(st, now)}</span></>;
+}
 
 /** One tile per active session, grouped as the rail is; picking one opens it in the stream. A tile names its session
  *  (data-session), as a rail entry does: LivePage keeps the keyboard focus on one that changes group. */
@@ -14,8 +22,8 @@ export function Wall({ sessions, now, pick }: { sessions: LiveListSession[]; now
       const st = stateNow(s.state, now), share = s.context != null && s.window ? s.context / s.window : null;
       const act = !s.latest ? "" : s.latest.kind === "prompt" ? "▸ prompt" : `${s.latest.lane ? "⤷ " : ""}${s.latest.tool} · ${s.latest.summary ?? ""}`;
       return <li key={s.session_id}>
-        <button type="button" data-session={s.session_id} className={"panel tile st-" + st.kind} onClick={() => pick(s.session_id)} aria-label={`Open ${s.title ?? s.project ?? "session"}`}>
-          <span className="top"><ProjectName project={s.project} /><StateTag st={st} now={now} /></span>
+        <button type="button" data-session={s.session_id} className={"panel tile st-" + st.kind} onClick={() => pick(s.session_id)} aria-label={`Open ${s.title ?? s.project ?? "session"}`} aria-description={stateWhy(st, now)}>
+          <span className="top"><ProjectName project={s.project} /><StateTag st={st} now={now} plain /></span>
           {s.title && <span className="ttl" title={s.title}>{s.title}</span>}
           <code className="act">{act}</code>
           {share != null && <span className={"meter" + (share > NEAR_FULL ? " warn" : "")}><i style={{ width: `${Math.min(100, share * 100)}%` }} /></span>}

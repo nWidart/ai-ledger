@@ -11,13 +11,13 @@ import { openPalette } from "../../components/palette/store";
 import { clearApiCache } from "../../useApi";
 import { tableFocus } from "./context";
 import { ErrorsPage } from "./ErrorsPage";
-import { typeRows } from "./model";
+import { sessionHref, typeRows } from "./model";
 import { when } from "../../format";
 import { lostPayload } from "./lostData";
 import { VIEW_KEY } from "./view";
 
-// typeRows runs through its own implementation; the mock only counts the calls.
-vi.mock("./model", async orig => { const a = await orig<typeof import("./model")>(); return { ...a, typeRows: vi.fn(a.typeRows) }; });
+// typeRows and sessionHref (one call per example render) run through their own implementation; the mock only counts the calls.
+vi.mock("./model", async orig => { const a = await orig<typeof import("./model")>(); return { ...a, typeRows: vi.fn(a.typeRows), sessionHref: vi.fn(a.sessionHref) }; });
 
 const json = (body: unknown) => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) } as Response);
 /** The fixture with its errors replaced; error_days is rebuilt from them, as the server builds it. */
@@ -2419,5 +2419,55 @@ describe("ErrorsPage by message", () => {
     await waitFor(() => expect(location.hash).not.toContain("cat=x"));
     expect(document.getElementById("exList")).toBeNull();
     expect(heads()).toHaveLength(0);
+  });
+});
+
+describe("ErrorsPage render cost", () => {
+  const exRenders = () => vi.mocked(sessionHref).mock.calls.length; // each Example render links its session once
+
+  it("re-renders only the incident a toggle opens, not the examples of the others", async () => {
+    history.replaceState(null, "", "/errors#cat=x");
+    await page();
+    const heads = () => [...document.querySelectorAll<HTMLElement>("#exList .inc-h")];
+    expect(heads().map(h => h.getAttribute("aria-expanded"))).toEqual(["false", "false", "false"]);
+    await userEvent.click(heads()[0]!); // Edit: four examples
+    expect(document.querySelectorAll("#incb-0 .ex")).toHaveLength(4);
+    vi.mocked(sessionHref).mockClear();
+    await userEvent.click(heads()[1]!); // one example, which mounts; the four above stay as they are
+    expect(heads()[1]!.parentElement!.querySelectorAll(".ex")).toHaveLength(1);
+    expect(exRenders()).toBe(1);
+    vi.mocked(sessionHref).mockClear();
+    await userEvent.click(heads()[1]!); // closing it renders no example at all
+    expect(heads().map(h => h.getAttribute("aria-expanded"))).toEqual(["true", "false", "false"]);
+    expect(exRenders()).toBe(0);
+  });
+
+  it("re-renders only the example that loads its full text", async () => {
+    localStorage.setItem("claude-errors-mode", '"flat"');
+    history.replaceState(null, "", "/errors#cat=x");
+    await page();
+    expect(document.querySelectorAll("#exList .ex")).toHaveLength(6);
+    vi.mocked(sessionHref).mockClear();
+    const ex = document.getElementById("ex-t07")!;
+    // Nothing clamps in jsdom, so the button is hidden: show it, as the clamp check does where a body is cut.
+    ex.querySelector<HTMLButtonElement>("button.full")!.hidden = false;
+    await userEvent.click(ex.querySelector("button.full")!);
+    await waitFor(() => expect(ex.classList.contains("open")).toBe(true));
+    // Its own renders (loading, loaded, open) and none of the other five's: a page-wide render per step would be six times as many.
+    expect(exRenders()).toBeLessThanOrEqual(4);
+  });
+
+  it("watches every example's size with one ResizeObserver", async () => {
+    const Real = globalThis.ResizeObserver;
+    let made = 0;
+    vi.stubGlobal("ResizeObserver", class { constructor() { made++; } observe() {} unobserve() {} disconnect() {} });
+    try {
+      localStorage.setItem("claude-errors-mode", '"flat"');
+      history.replaceState(null, "", "/errors#cat=x");
+      await page();
+      expect(document.querySelectorAll("#exList .ex")).toHaveLength(6);
+      // The Detail's own header observer is one; the examples add none of their own (the shared one may predate this test).
+      expect(made).toBeLessThanOrEqual(2);
+    } finally { vi.stubGlobal("ResizeObserver", Real); }
   });
 });

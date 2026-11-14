@@ -26,9 +26,13 @@ export function useLanding<T>(data: T | undefined, url: string, loading: boolean
     if (failed.current) { failed.current = false; document.getElementById("lede")?.focus(); }
     if (shown.current.quiet || !motion()) return;
     setGrow(true);
-    if (shown.current.before) wrap.current?.querySelectorAll(fade).forEach(el => {
-      el.classList.remove("fade-in"); void (el as HTMLElement).offsetWidth; el.classList.add("fade-in");
-    });
+    if (shown.current.before && wrap.current) {
+      // Restart the fade on every match with one forced layout, not one per element: remove all, read once, add all.
+      const els = wrap.current.querySelectorAll(fade);
+      els.forEach(el => el.classList.remove("fade-in"));
+      void wrap.current.offsetWidth;
+      els.forEach(el => el.classList.add("fade-in"));
+    }
     const t = setTimeout(() => setGrow(false), 1100);
     return () => clearTimeout(t);
     // fade is a constant selector.

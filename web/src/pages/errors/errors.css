@@ -162,12 +162,38 @@
 .pg-errors pre.snip { margin: 8px 0 0; padding: 10px; background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px;
   font: 12px/1.4 ui-monospace, "SF Mono", Menlo, monospace; white-space: pre-wrap; word-break: break-word; }
 .pg-errors .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.pg-errors .row.between { justify-content: space-between; }
+.pg-errors .row.nowrap { flex-wrap: nowrap; }
+.pg-errors .row.shrink { min-width: 0; }
+.pg-errors .snip + .row { margin-top: 8px; }
+.pg-errors .row.fixact { margin-top: 10px; }
+.pg-errors .row.exhead { margin-top: 4px; }
+/* Type sizes the detail repeats: 13px (sm) and 12px (xs). */
+.pg-errors .sm { font-size: 13px; }
+.pg-errors .xs { font-size: 12px; }
+.pg-errors .mb8 { margin-bottom: 8px; }
+.pg-errors .pick .sw { margin-right: 7px; }
+.pg-errors .pick .sub { font-size: 13px; margin-top: 2px; }
+.pg-errors .detail .why.tight { font-size: 13px; margin-bottom: 4px; }
+.pg-errors .empty.slim { padding: 12px 0; }
+.pg-errors .ba-h { margin-top: 12px; }
+.pg-errors .ba-h + .ba { margin-top: 6px; }
+.pg-errors .byset li.rest { padding: 4px 0; }
+.pg-errors #q { width: 100%; margin: 8px 0; }
+.pg-errors #more { width: 100%; margin-top: 8px; }
 .pg-errors .ba { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 12px 0; }
 .pg-errors .ba div { background: var(--surface-2); border-radius: 8px; padding: 8px 10px; }
 .pg-errors .ba .v { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .pg-errors .ba .l { font-size: 12px; color: var(--text-muted); }
 .pg-errors .ba .v.muted { font-size: 15px; font-weight: 500; padding: 3px 0; }
-.pg-errors .ex { border-top: 1px solid var(--border); padding: 10px 0; }
+/* contain: an example's text measure (the clamp check) and its changes stay inside it. A control's focus ring sits inside its box, as paint
+   containment clips what is outside the example. */
+.pg-errors .ex { border-top: 1px solid var(--border); padding: 10px 0; contain: content; }
+.pg-errors .ex :focus-visible, .pg-errors .inc :focus-visible { outline-offset: -2px; }
+/* The lists grow with "Show more": rows off screen skip layout and paint (find, focus and Tab still reach them). auto keeps the size a row had
+   once seen; until then a clamped example is about 7.5rem tall, a closed incident or message 3.5rem. */
+.pg-errors #exList .ex { content-visibility: auto; contain-intrinsic-size: auto 7.5rem; }
+.pg-errors #exList .inc { content-visibility: auto; contain-intrinsic-size: auto 3.5rem; }
 .pg-errors .ex .meta { font-size: 12px; color: var(--text-muted); display: flex; gap: 8px; flex-wrap: wrap; overflow-wrap: anywhere; }
 .pg-errors .ex code, .pg-errors .ex .err { display: block; font: 12px/1.4 ui-monospace, "SF Mono", Menlo, monospace; white-space: pre-wrap; word-break: break-word;
   overflow-wrap: anywhere; background: var(--surface-2); border-radius: 6px; padding: 6px 8px; margin-top: 6px; }
@@ -260,3 +286,5 @@
 /* A tool name can be long (an MCP tool): the name shrinks and cuts, the clear mark stays. */
 .pg-errors .chip.tool { display: inline-flex; gap: 4px; min-width: 0; max-width: 100%; }
 .pg-errors .chip.tool .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* The chart's click target picks a bucket. */
+.pg-errors #hit { cursor: pointer; }

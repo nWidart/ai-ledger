@@ -72,7 +72,7 @@ export function ExtDrawer({ mcp, skills, hooks, scope = RANGE }: { mcp: NamedRat
       <th scope="row" className="name"><button type="button" className="cellbtn" title={r.name}>{r.name}</button></th><RateCells r={r} n={r.calls} /></tr>) : <None cols={3} on={scope.on} />}</tbody></DataTable></div>;
   return (
     <Drawer id="d-ext" title="MCP servers, skills and hooks" count={`${num(mcp.length)}, ${num(skills.length)} and ${num(hooks.length)}`} bodyClassName="ext">
-      {scope.note && <div style={{ gridColumn: "1 / -1" }}>{scope.note}</div>}
+      {scope.note && <div className="note">{scope.note}</div>}
       {rate("MCP servers", "Server", "mcp", mcp)}{rate("Skills", "Skill", "skill", skills)}
       {/* Full width: hook commands are long, and many share a script and differ only by event. */}
       <div className="hooks"><h3>Hooks</h3><DataTable name="Hooks" region="scroll tall">

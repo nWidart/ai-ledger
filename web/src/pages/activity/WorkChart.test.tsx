@@ -230,6 +230,23 @@ describe("failure rate line", () => {
   });
 });
 
+describe("chart pointer", () => {
+  it("moves the tooltip with the pointer inside one bar, and re-reads it on the next", () => {
+    panel(many);
+    const hit = document.querySelector<SVGRectElement>("#work .hit")!, tip = () => screen.getByRole("tooltip") as HTMLElement;
+    fireEvent.pointerMove(hit, { clientX: 100, clientY: 50 });
+    const first = within(tip()).getByText(/^[A-Z][a-z]{2} \d+, 2026$/).textContent;
+    expect([tip().style.left, tip().style.top]).toEqual(["114px", "40px"]);
+    fireEvent.pointerMove(hit, { clientX: 101, clientY: 60 });
+    expect([tip().style.left, tip().style.top]).toEqual(["115px", "50px"]);
+    expect(within(tip()).getByText(first!)).toBeTruthy();
+    fireEvent.pointerMove(hit, { clientX: 700, clientY: 60 });
+    expect(within(tip()).queryByText(first!)).toBeNull();
+    fireEvent.pointerLeave(hit);
+    expect(screen.queryByRole("tooltip")).toBeNull();
+  });
+});
+
 describe("chart keys", () => {
   it("is a labelled group, and Escape dismisses the tooltip the arrow keys opened", () => {
     panel(many);
@@ -303,7 +320,7 @@ describe("hours", () => {
     rows.forEach(r => expect(r.querySelectorAll("td")).toHaveLength(24));
     const late = rows[1]!.querySelectorAll("td")[23]!;
     expect(late.getAttribute("title")).toBe("Tuesday 23:00: 30 prompts");
-    expect(late.textContent).toBe("30");
+    expect(late.textContent).toBe("30 prompts");
     expect(rows[0]!.querySelectorAll("td")[0]!.getAttribute("title")).toBe("Monday 0:00: 0 prompts");
     expect(box.textContent).toMatch(/Busiest hour: Tuesdays at 23:00, 30 prompts\. Busiest day: Tuesday, 34 prompts\. 46 prompts in all\./);
   });

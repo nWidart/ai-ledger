@@ -39,8 +39,8 @@ function Days({ d }: { d: ToolPayload }) {
           <rect x={x} width={w} y={(H - h(r.failed) - h(r.ok)).toFixed(1)} height={h(r.ok).toFixed(1)} fill="var(--text-muted)" opacity=".55" /></g>;
       })}
     </svg>
-    <div className="tl-key" aria-hidden="true"><span><i style={{ width: 10, height: 10, background: "var(--text-muted)", opacity: .55 }} />Succeeded</span>
-      <span><i style={{ width: 10, height: 10, background: "var(--critical)" }} />Failed</span></div>
+    <div className="tl-key" aria-hidden="true"><span><i className="k-ok" />Succeeded</span>
+      <span><i className="k-fail-box" />Failed</span></div>
   </div>;
 }
 

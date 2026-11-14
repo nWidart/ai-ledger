@@ -90,6 +90,50 @@ describe("SectionIndex", () => {
   });
 });
 
+describe("SectionIndex observers", () => {
+  type Cb = (es: Partial<IntersectionObserverEntry>[]) => void;
+  const made: { cb: Cb; opts: IntersectionObserverInit; targets: Element[] }[] = [];
+  class FakeIO {
+    constructor(cb: Cb, opts: IntersectionObserverInit) { made.push({ cb, opts, targets: [] }); this.i = made.length - 1; }
+    i: number;
+    observe(el: Element) { made[this.i]!.targets.push(el); }
+    disconnect() {}
+  }
+  it("marks the section whose top passed the index's line, and the index once it is stuck, without reading layout on scroll", () => {
+    made.length = 0;
+    vi.stubGlobal("IntersectionObserver", FakeIO);
+    vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(40);
+    vi.spyOn(Element.prototype, "scrollHeight", "get").mockReturnValue(5000);
+    const was = Object.getOwnPropertyDescriptor(window, "scrollY")!;
+    Object.defineProperty(window, "scrollY", { value: 300, configurable: true });
+    try {
+      render(<><SectionIndex groups={[[{ id: "a", label: "A" }, { id: "b", label: "B" }]]} /><section id="a" /><section id="b" /></>);
+      const [above, shown, stuck] = made as [typeof made[number], typeof made[number], typeof made[number]];
+      expect(above.targets.map(t => t.id)).toEqual(["a", "b"]);
+      expect(above.opts.rootMargin).toMatch(/^1000000px 0px -?\d+px 0px$/); // everything above, down to the line
+      expect(shown.opts.rootMargin).toBe("1000000px 0px 0px 0px");
+      expect(stuck.targets[0]!.tagName).toBe("NAV");
+      const sec = (id: string, isIntersecting: boolean) => ({ target: document.getElementById(id)!, isIntersecting });
+      const current = () => document.querySelector("nav.secidx a[aria-current]")?.textContent;
+      act(() => above.cb([sec("a", true), sec("b", false)]));
+      expect(current()).toBe("A");
+      act(() => above.cb([sec("b", true)]));
+      expect(current()).toBe("B");
+      act(() => above.cb([sec("b", false)]));
+      expect(current()).toBe("A");
+      const nav = document.querySelector("nav.secidx")!;
+      expect(nav.classList.contains("stuck")).toBe(false);
+      act(() => stuck.cb([{ intersectionRatio: .97, boundingClientRect: { top: 0 } as DOMRect }]));
+      expect(nav.classList.contains("stuck")).toBe(true);
+      act(() => stuck.cb([{ intersectionRatio: 1, boundingClientRect: { top: 90 } as DOMRect }]));
+      expect(nav.classList.contains("stuck")).toBe(false);
+    } finally {
+      Object.defineProperty(window, "scrollY", was);
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
 describe("Ledger", () => {
   it("renders selectable rows as buttons and an empty line", async () => {
     const pick = vi.fn();

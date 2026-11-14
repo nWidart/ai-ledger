@@ -8,7 +8,7 @@ import { Toggletip } from "../../components/Toggletip";
 import { num as fmt } from "../../format";
 import { setHash, useHashState } from "../../hash";
 import { useApi } from "../../useApi";
-import { Ctx, tableFocus, type ErrorsCtx } from "./context";
+import { Ctx, Keyed, RowContext, tableFocus, type ErrorsCtx, type RowCtx } from "./context";
 import { Detail } from "./Detail";
 import { useMarks } from "./marks";
 import { bucketLabel, countBy, filtered, inBucket, makeModel, messageOf, msgOpenKey, settle, TYPE_SORT, viewTypes, withMuted, type TypeKey, type View } from "./model";
@@ -52,7 +52,8 @@ export function ErrorsPage() {
   const [mode, setModeS] = useState<Mode>(loadMode), [q, setQ] = useState("");
   // The type table's sort and filter text last the page visit, across view changes (not in the hash, not saved).
   const [typeSort, setTypeSort] = useState<SortBy<TypeKey>>(TYPE_SORT), [typeQ, setTypeQ] = useState("");
-  const sets = useRef({ openInc: new Set<number>(), openMsg: new Set<string>(), opened: new Set<string>(), fullText: new Map<string, ErrorDetail>(), loading: new Set<string>(), failed: new Set<string>() }).current;
+  // Open incidents and message groups, opened examples and loaded text: each row reads its own entry, so a toggle re-renders one row, not the page.
+  const sets = useRef({ openInc: new Keyed<number, true>(), openMsg: new Keyed<string, true>(), opened: new Keyed<string, true>(), fullText: new Keyed<string, ErrorDetail>(), loading: new Keyed<string, true>(), failed: new Keyed<string, true>() }).current;
   const narrow = useMedia(NARROW), toSheet = !!m && narrow && !!view.cat;
   const [chartInView, setChartInView] = useState(true), [pageLive, setPageLive] = useState("");
   // A dead link's notice is page state: the write-back below drops its ex from the hash, so the hash can't say it any more.
@@ -100,14 +101,17 @@ export function ErrorsPage() {
   const setMode = useCallback((x: Mode) => { setModeS(x); store.set(MODE_KEY, x); }, []);
 
   // The list puts the linked example first; a click on an example moves the link, not the list, until the view next changes.
-  const fullKey = JSON.stringify([!!m, view.project, view.source, view.range, view.gran, view.sub, view.noise, view.cat, view.at, view.tool, mode, fixes]);
+  const fullKey = useMemo(() => JSON.stringify([!!m, view.project, view.source, view.range, view.gran, view.sub, view.noise, view.cat, view.at, view.tool, mode, fixes]), [m, view, mode, fixes]);
   const pin = useRef({ key: "", focus: null as string | null });
   if (pin.current.key !== fullKey || (pin.current.focus !== view.focus && !selecting.current)) {
     pin.current = { key: fullKey, focus: view.focus };
     const linked = view.focus ? m?.byId[view.focus] : undefined;
-    if (linked?.n != null) sets.openInc.add(linked.n); // the linked example's incident opens
-    if (linked) sets.openMsg.add(msgOpenKey(linked.c, messageOf(linked).key)); // and its message group
+    // Silent: a row is not told in the middle of this render. A row rendered after reads it; flushed below, a row that is not re-rendered does too.
+    if (linked?.n != null) sets.openInc.add(linked.n, true); // the linked example's incident opens
+    if (linked) sets.openMsg.add(msgOpenKey(linked.c, messageOf(linked).key), true); // and its message group
   }
+  const pinned = pin.current;
+  useLayoutEffect(() => { sets.openInc.flush(); sets.openMsg.flush(); }, [pinned, sets]);
   useEffect(() => { selecting.current = false; });
 
   // The view is the hash: write it back whole (a closed type drops out, an empty hash takes the saved view), and remember it.
@@ -171,6 +175,7 @@ export function ErrorsPage() {
   const was = had instanceof HTMLElement && had !== document.body ? { el: had, key: focusKey(had), box: had.closest("[id]")?.id } : null;
   const wasRef = useRef(was);
   wasRef.current = was;
+  // The sheet follows the open type.
   useLayoutEffect(() => {
     if (!m) return;
     // Narrow screens show an open type in the sheet: the detail renders there, the same either way.
@@ -183,6 +188,11 @@ export function ErrorsPage() {
     // A new type fades in over the old one's place.
     if (shownCat.current !== view.cat && !reduced()) document.getElementById("detail")?.animate?.([{ opacity: 0, transform: "translateY(4px)" }, { opacity: 1, transform: "none" }], { duration: 200, easing: "ease-out" });
     shownCat.current = view.cat;
+  }, [m, toSheet, view.cat]);
+  // After every commit of the page: what the render queued (`after`), a deep link, and focus that fell off a removed control. Cheap: each
+  // step does nothing unless it has something to do (a toggle in a row doesn't render the page, so it doesn't come here).
+  useLayoutEffect(() => {
+    if (!m) return;
     const w = wasRef.current, blank = () => !document.activeElement || document.activeElement === document.body;
     const lost = w && !w.el.isConnected && blank() ? w : null;
     const fns = pending.current.splice(0);
@@ -211,10 +221,15 @@ export function ErrorsPage() {
     return ps;
   }, [m, view.project]);
 
-  const ctx: ErrorsCtx | null = m && f && vt ? {
-    m, v: view, f, vt, fixes, markErrors, dismissError, saving, muting, mode, q, pinned: pin.current.focus ? m.byId[pin.current.focus] : undefined, inSheet: toSheet, chartInView,
-    update, pick, select, setFix, setMuted, setMode, setQ, typeSort, setTypeSort, typeQ, setTypeQ, after, say, bump, ...sets,
-  } : null;
+  // The context changes only with what it holds: the page re-renders for its own state (the status regions, a toggle's focus) without
+  // re-rendering the components that read it.
+  const pinnedId = pin.current.focus;
+  const ctx = useMemo<ErrorsCtx | null>(() => m && f && vt ? {
+    m, v: view, f, vt, fixes, markErrors, dismissError, saving, muting, mode, q, pinned: pinnedId ? m.byId[pinnedId] : undefined, inSheet: toSheet, chartInView,
+    update, pick, select, setFix, setMuted, setMode, setQ, typeSort, setTypeSort, typeQ, setTypeQ, after, say, ...sets,
+  } : null, [m, view, f, vt, fixes, markErrors, dismissError, saving, muting, mode, q, pinnedId, toSheet, chartInView, update, pick, select, setFix, setMuted, setMode, typeSort, typeQ, after, say, sets]);
+  // The rows (examples, incidents, messages) read this one: it moves with the model and the view, not with the search, the list mode or the marks.
+  const rows = useMemo<RowCtx | null>(() => m ? { m, v: view, select, say, after, ...sets } : null, [m, view, select, say, after, sets]);
   const detailLive = <div className="sr" id="detailLive" aria-live="polite">{live}</div>;
 
   return (
@@ -236,7 +251,7 @@ export function ErrorsPage() {
         : <div className="card" id="load" aria-busy="true">Loading errors…</div>)}
       <div className="sr" id="pageLive" aria-live="polite">{pageLive}</div>
       {deadLink && <div className="outnote" id="deadLink"><span>{DEAD_LINK}</span> <button type="button" onClick={dismissDead}>Dismiss</button></div>}
-      {ctx && <Ctx.Provider value={ctx}>
+      {ctx && <Ctx.Provider value={ctx}><RowContext.Provider value={rows}>
         <Summary />
         <RateChart />
         <div className="grid2">
@@ -247,7 +262,7 @@ export function ErrorsPage() {
         <dialog className="sheet" id="sheet" aria-labelledby="detailTitle" ref={sheet} onClick={e => { if (e.target === e.currentTarget) e.currentTarget.close(); }}>
           {toSheet && <><section className="card detail" id="detail"><Detail /></section>{detailLive}</>}
         </dialog>
-      </Ctx.Provider>}
+      </RowContext.Provider></Ctx.Provider>}
       <UsageSheets data={undefined} automated />
     </main>
   );
