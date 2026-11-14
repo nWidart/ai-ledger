@@ -41,7 +41,7 @@ A `#` term SHALL select a filter: a project, a source (`#claude` for Claude Code
 - **THEN** the URL records the choice, Errors keeps showing automated sessions as it always does, and the choice applies on Activity and Cost
 
 ### Requirement: Go to a page with `>`
-A `>` term naming a page (Activity, Cost, Errors, Limits, Insights, Live) SHALL open that page. Filters that are not changed in the palette SHALL be carried over as the navigation carries them.
+A `>` term naming a page (Activity, Cost, Context, Errors, Limits, Insights, Live) SHALL open that page. Filters that are not changed in the palette SHALL be carried over as the navigation carries them.
 
 #### Scenario: Page only
 - **WHEN** the user views project `myproject` for the last 14 days on Activity and commits `>errors`
@@ -58,6 +58,10 @@ A `>` term naming a page (Activity, Cost, Errors, Limits, Insights, Live) SHALL 
 #### Scenario: Go to Live
 - **WHEN** the user views project `myproject` on Cost and commits `>live`
 - **THEN** Live opens and shows only `myproject` sessions
+
+#### Scenario: Go to Context
+- **WHEN** the user views project `myproject` for the last 7 days on Cost and commits `>context`
+- **THEN** Context opens filtered to `myproject` and the last 7 days
 
 ### Requirement: Open an inspector with `>`
 A `>` term naming a tool, an MCP server, a skill, a session or an error category SHALL open that subject's sheet: the tool inspector for a tool, MCP server or skill, the session sheet for a session, and the category on Errors for an error category. The sheet SHALL reflect the committed filters.
@@ -218,11 +222,15 @@ A sheet that only one page hosts SHALL take the commit to that page. Error categ
 - **THEN** the category chip shows as dropped, and Enter opens Cost with no category
 
 ### Requirement: A sheet without a page stays where it can
-A `>` sheet without a page SHALL open on the current page when that page hosts the sheet, and otherwise on Activity. Activity, Cost and Errors host the tool, MCP server, skill and session sheets. Limits hosts none.
+A `>` sheet without a page SHALL open on the current page when that page hosts the sheet, and otherwise on Activity. Activity, Cost, Context and Errors host the tool, MCP server, skill and session sheets. Limits hosts none.
 
 #### Scenario: On a hosting page
 - **WHEN** the user on Errors commits `>bash`
 - **THEN** the `Bash` inspector opens over Errors
+
+#### Scenario: On Context
+- **WHEN** the user on Context commits `>bash`
+- **THEN** the `Bash` inspector opens over Context
 
 #### Scenario: On Limits
 - **WHEN** the user on Limits commits `>bash`
