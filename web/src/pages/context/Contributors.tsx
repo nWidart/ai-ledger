@@ -73,7 +73,7 @@ export function Contributors({ fills }: { fills: Fills }) {
         <Split main={fills.main_bytes} sub={fills.subagent_bytes} />
         <p className="hint">Results of calls made inside subagent transcripts never entered the main thread's context.</p>
       </>}
-      {hasMcp && <div className="ctr-switch" role="group" aria-label="Group tool results">
+      {hasMcp && <div className="seg ctr-switch" role="group" aria-label="Group tool results">
         {(["tool", "mcp"] as const).map(k => <button key={k} type="button" aria-pressed={kind === k} onClick={() => setPick(k)}>{k === "tool" ? "By tool" : "By MCP server"}</button>)}
       </div>}
       {rows.length === 0 ? <p className="empty">No tool result with a known size in this view.</p> :

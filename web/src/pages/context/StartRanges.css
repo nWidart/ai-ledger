@@ -1,5 +1,4 @@
 .pg-context .start-ranges th.rng-head { min-width: 12rem; }
-.pg-context .start-ranges .rng-head .scale { display: flex; justify-content: space-between; font-weight: 400; font-size: 11px; color: var(--text-muted); margin-top: 2px; }
 .pg-context .start-ranges td.rng { min-width: 12rem; }
 .pg-context .rng-track { position: relative; height: 14px; border-radius: 3px; background: var(--grid); }
 .pg-context .rng-bar { position: absolute; top: 3px; bottom: 3px; border-radius: 3px; opacity: .55; }

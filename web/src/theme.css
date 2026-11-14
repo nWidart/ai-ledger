@@ -176,7 +176,7 @@ dialog.sheet::backdrop { background: var(--scrim); }
   :is(.pg-activity, .pg-cost) .chart svg > rect:not(.hit) { stroke: Highlight; stroke-width: 2px; }
 
   /* Bars: the fill keeps its color, the track and the fill sit in a frame. */
-  .ledger .bar, :is(.pg-activity, .pg-cost, .pg-context) .ibar, .pg-context .bins .bar, .pg-errors .bar, .pg-live .meter { forced-color-adjust: none; outline: 1px solid CanvasText; }
+  .ledger .bar, :is(.pg-activity, .pg-cost) .ibar, .pg-context :is(.pressure .seg, .rng-bar, .ctr-bar i, .ctr-rbar), .pg-errors .bar, .pg-live .meter { forced-color-adjust: none; outline: 1px solid CanvasText; }
   .pg-cost .daystrip .cells i { forced-color-adjust: none; background: GrayText; }
   .pg-cost .daystrip .cells i.on { background: CanvasText; }
   .pg-limits .hs-bar i { forced-color-adjust: none; }
@@ -184,5 +184,5 @@ dialog.sheet::backdrop { background: var(--scrim); }
   /* The charts' stacked bars: series colors kept, each segment edged in the text color. */
   :is(.pg-activity, .pg-cost) .chart .bar-seg, .pg-errors #chart .layer { forced-color-adjust: none; stroke: CanvasText; stroke-width: .75px; }
   /* Keys and dots that name a series or a project by color alone. */
-  .pdot, :is(.pg-activity, .pg-cost) .legend i:not(.line), .pg-context .growth .legend i:not(.line), .pg-errors .sw:not(.line), .pg-insights .key .sw { forced-color-adjust: none; outline: 1px solid CanvasText; }
+  .pdot, :is(.pg-activity, .pg-cost) .legend i:not(.line), .pg-context .legend i:not(.line), .pg-errors .sw:not(.line), .pg-insights .key .sw { forced-color-adjust: none; outline: 1px solid CanvasText; }
 }

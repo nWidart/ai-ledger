@@ -1,10 +1,1 @@
 .pg-context .start-trend { margin-top: 6px; }
-.pg-context .start-trend .legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 8px 0; }
-.pg-context .start-trend .legend .key { font-size: 12px; display: inline-flex; gap: 6px; align-items: center; color: var(--text-secondary); }
-.pg-context .start-trend .legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; flex: none; }
-.pg-context .start-trend .legend i.line { width: 14px; height: 0; border-radius: 0; border-top: 2px solid var(--text-primary); }
-.pg-context .start-trend .legend i.band { background: var(--text-secondary); opacity: .25; }
-.pg-context .start-trend .chart { position: relative; }
-.pg-context .start-trend .chart svg { display: block; width: 100%; height: 180px; overflow: visible; }
-.pg-context .start-trend .chart:focus-visible { outline-offset: 4px; border-radius: 4px; }
-.pg-context .start-trend .readout { min-height: 1.5em; margin-top: 4px; font-size: 12.5px; color: var(--text-secondary); }

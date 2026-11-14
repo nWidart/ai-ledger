@@ -46,9 +46,9 @@ Group 1 comes first. Groups 2 to 7 need only group 1 and touch separate files, s
 
 ## 8. Wiring
 
-- [ ] 8.1 `sections.tsx`, `ContextPage.tsx`, `context.css` (D7, D8): use the new components; add the Window pressure section with id `pressure` and its section-index entry; show the per-project growth table whenever the view has more than one project; drop the inline bars from the tool tables and add the 95th percentile column; delete `Charts.tsx` and the styles only it used.
-- [ ] 8.2 Update `ContextPage.test.tsx` for the new page: every section renders from the fixture; the empty states; the section index.
-- [ ] 8.3 `cd web && npm run check`; commit the build in `src/ai_ledger/web/`. `uv run python -m unittest discover -s tests` passes with the fresh build.
+- [x] 8.1 `sections.tsx`, `ContextPage.tsx`, `context.css` (D7, D8): use the new components; add the Window pressure section with id `pressure` and its section-index entry; show the per-project growth table whenever the view has more than one project; drop the inline bars from the tool tables and add the 95th percentile column; delete `Charts.tsx` and the styles only it used.
+- [x] 8.2 Update `ContextPage.test.tsx` for the new page: every section renders from the fixture; the empty states; the section index.
+- [x] 8.3 `cd web && npm run check`; commit the build in `src/ai_ledger/web/`. `uv run python -m unittest discover -s tests` passes with the fresh build.
 
 ## 9. Docs and verification
 
