@@ -161,7 +161,7 @@ Tips SHALL be ordered by severity, critical before warning, and within a severit
 - **THEN** the near-limit tip is listed first
 
 ### Requirement: Tip about a large starting context
-The large-start rule SHALL fire when a project in the view has a median starting context of at least 30,000 tokens. Its evidence SHALL name the projects, their medians and their window shares, and its advice SHALL say to trim `CLAUDE.md` or `AGENTS.md` and to review the MCP servers configured for the project.
+The large-start rule SHALL fire when a project in the view has a median starting context of at least 30,000 tokens. Its evidence SHALL name the 5 projects with the largest medians, their medians and their window shares, and count the others, and its advice SHALL say to trim `CLAUDE.md` or `AGENTS.md` and to review the MCP servers configured for the project.
 
 #### Scenario: Rule fires
 - **WHEN** project `foo` sessions start at a median of 42,000 tokens

@@ -475,6 +475,14 @@ class TipsTest(unittest.TestCase):
         self.assertIn("CLAUDE.md", t["advice"])
         self.assertEqual({s["session_id"] for s in t["sessions"]}, {"b", "c", "d"})  # starts of 30,000 or more
 
+    def test_large_start_names_the_five_largest_projects(self):
+        b = Builder(self)
+        for i in range(7):
+            b.session(f"s{i}", f"p{i}", peak=40_000 + i * 1000)
+            b.turn(f"s{i}", 0, 40_000 + i * 1000)
+        ev = [e["label"] for e in self.tip(b.payload(), "large_start")["evidence"]]
+        self.assertEqual(ev[:6], ["p6", "p5", "p4", "p3", "p2", "Other projects"])
+
     def test_frequent_compactions(self):
         b = Builder(self)
         b.session("a", "foo", peak=10_000, compactions=3, compaction_at=20)

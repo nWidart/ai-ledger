@@ -29,6 +29,7 @@ CACHE_BREAKS_MANY = 2  # cache_breaks: breaks in one session
 LONG_TIER_MIN_USD = 1.0  # long_tier: long-prompt-tier cost at least this
 LONG_TIER_SHARE = 0.10  # ... and at least this share of the view's cost
 TIP_SESSIONS = 20  # the newest matching sessions a tip lists
+TIP_PROJECTS = 5  # large_start names the projects with the largest medians, and counts the rest
 
 
 # ---------- the shared CTEs ----------
@@ -275,12 +276,14 @@ def called_servers(ctx):
 
 
 def large_start_evidence(ctx):
-    out = []
-    for r in large_projects(ctx):
+    out, projects = [], sorted(large_projects(ctx), key=lambda r: (-r["median"], r["project"] or ""))
+    for r in projects[:TIP_PROJECTS]:
         value = f"median {tokens(r['median'])}, 10th percentile {tokens(r['p10'])}"
         if r["window_share"] is not None:
             value += f", {percent(r['window_share'])} of the window"
         out.append(dict(label=r["project"] or "(no project)", value=value))
+    if len(projects) > TIP_PROJECTS:
+        out.append(dict(label="Other projects", value=f"{len(projects) - TIP_PROJECTS:,} more at {tokens(START_LARGE_TOKENS)} or over"))
     servers = called_servers(ctx)
     out.append(dict(label="MCP servers called (fewest calls first)", value=counted((r["name"], r["calls"]) for r in servers) if servers else "none"))
     return out
