@@ -234,6 +234,15 @@ class DeriveTest(StoreCase):
         self.ingest()
         self.assertEqual(self.q("SELECT first_compaction_ts FROM sessions"), [(datetime(2026, 11, 1, 11, 0),)])
 
+    def test_store_from_before_the_column_keeps_the_first_compaction_unknown(self):
+        cb = lambda u, ts: line(type="system", subtype="compact_boundary", uuid=u, timestamp=ts, **S)
+        self.write("a.jsonl", cb("c1", "2026-11-01T10:42:00Z"))
+        self.ingest()
+        self.con.execute("UPDATE sessions SET first_compaction_ts = NULL")  # as an upgraded store holds it before rebuild
+        self.write("a.jsonl", cb("c2", "2026-11-01T12:00:00Z"))
+        self.ingest()
+        self.assertEqual(self.q("SELECT compactions, first_compaction_ts FROM sessions"), [(2, None)])
+
     def test_prompts_and_interruptions(self):
         self.write("a.jsonl", prompt("u1", "2026-11-01T10:00:00Z", "p1", "fix the bug")
                    + prompt("u2", "2026-11-01T10:01:00Z", "p1", [dict(type="text", text="[Request interrupted by user]")])

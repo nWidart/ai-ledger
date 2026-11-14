@@ -130,6 +130,14 @@ A cache break SHALL be a main-thread request, not the session's first turn, with
 - **WHEN** two consecutive turns on the same model are 12 minutes apart and the second has 60,000 prompt tokens with 1,000 cache reads
 - **THEN** the second turn is a cache break with cause `expired`
 
+#### Scenario: One-hour cache
+- **WHEN** a turn writes its prompt to the 1-hour cache, and the next turn on the same model, 12 minutes later, has 60,000 prompt tokens with no cache reads
+- **THEN** the second turn is a cache break with cause `other`, not `expired`
+
+#### Scenario: Cache writes are uncached
+- **WHEN** a break turn has 60,000 prompt tokens, 59,990 of them written to the cache and 10 plain input
+- **THEN** the break counts 60,000 uncached tokens
+
 #### Scenario: Small request
 - **WHEN** a request has 9,000 prompt tokens and no cache reads
 - **THEN** it is not a cache break

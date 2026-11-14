@@ -45,11 +45,12 @@ class Builder:
         store.insert(self.c, "prompts", ["prompt_id", "session_id", "ts", "interrupted"],
                      [(f"{sid}-p{i}", sid, at(minute + i, base), False) for i in range(prompts)])
 
-    def turn(self, sid, minute, prompt, model="m-a", cache_read=0, subagent=False, output=10, base=T0):
+    def turn(self, sid, minute, prompt, model="m-a", cache_read=0, subagent=False, output=10, base=T0, cache_5m=0, cache_1h=0):
         self.n += 1
         store.insert(self.c, "requests", ["message_id", "session_id", "ts", "model", "subagent", "input", "output", "thinking", "cache_read",
                                           "cache_5m", "cache_1h", "thinking_ms"],
-                     [(f"r{self.n:05d}", sid, at(minute, base), model, subagent, prompt - cache_read, output, 0, cache_read, 0, 0, 0)])
+                     [(f"r{self.n:05d}", sid, at(minute, base), model, subagent, prompt - cache_read - cache_5m - cache_1h, output, 0, cache_read,
+                       cache_5m, cache_1h, 0)])
 
     def turns(self, sid, prompts, minute=0.0, step=1.0, **kw):
         for i, prompt in enumerate(prompts):
@@ -398,6 +399,27 @@ class CostTest(unittest.TestCase):
         self.assertEqual((got["sw"]["uncached_tokens"], got["ex"]["uncached_tokens"], got["ot"]["uncached_tokens"]), (85_000, 59_000, 40_000))
         self.assertAlmostEqual(got["sw"]["cost"], 85_000 * 3 / 1e6)  # m-b: 3 USD per million input tokens
         self.assertEqual([r["session_id"] for r in c["breaks"]], ["sw", "ex", "ot"])  # most uncached tokens first
+
+    def test_break_counts_cache_writes_as_uncached(self):
+        # Claude Code writes the re-read prompt back to the cache: only a few tokens are plain input
+        b = Builder(self)
+        b.session("cw", "foo", peak=60_000)
+        b.turn("cw", 0, 60_000, cache_5m=60_000)
+        b.turn("cw", 1, 60_000, cache_5m=59_990)
+        got = b.payload()["cost"]["breaks"][0]
+        self.assertEqual((got["breaks"], got["other"], got["uncached_tokens"]), (1, 1, 60_000))
+
+    def test_one_hour_cache_does_not_expire_in_minutes(self):
+        b = Builder(self)
+        b.session("h1", "foo", peak=60_000)
+        b.turn("h1", 0, 60_000, cache_1h=60_000)
+        b.turn("h1", 12, 60_000, cache_1h=60_000)  # 12 minutes after a 1-hour write: the cache was still there
+        b.session("h2", "foo", peak=60_000)
+        b.turn("h2", 0, 60_000, cache_1h=60_000)
+        b.turn("h2", 70, 60_000, cache_1h=60_000)  # 70 minutes: expired
+        got = {r["session_id"]: r for r in b.payload()["cost"]["breaks"]}
+        self.assertEqual((got["h1"]["expired"], got["h1"]["other"]), (0, 1))
+        self.assertEqual((got["h2"]["expired"], got["h2"]["other"]), (1, 0))
 
     def test_break_cost_is_unknown_for_unpriced_models(self):
         b = Builder(self)

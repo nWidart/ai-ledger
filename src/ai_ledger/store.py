@@ -599,7 +599,8 @@ class Deriver:
                     "peak_model = CASE WHEN excluded.peak_context > sessions.peak_context THEN excluded.peak_model ELSE sessions.peak_model END, "
                     "peak_context = greatest(sessions.peak_context, excluded.peak_context), "
                     "context_window = coalesce(excluded.context_window, sessions.context_window), "
-                    "first_compaction_ts = least(sessions.first_compaction_ts, excluded.first_compaction_ts)")
+                    "first_compaction_ts = CASE WHEN sessions.compactions > 0 AND sessions.first_compaction_ts IS NULL THEN NULL "  # an un-rebuilt store: the first is unknown
+                    "ELSE least(sessions.first_compaction_ts, excluded.first_compaction_ts) END")
         insert(cur, "requests", ["message_id", "session_id", "ts", "model", "effort", "subagent", "input", "output",
                                  "thinking", "cache_read", "cache_5m", "cache_1h", "thinking_ms", "stop_reason", "speed"],
                list(self.requests.values()))
