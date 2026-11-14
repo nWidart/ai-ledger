@@ -439,6 +439,52 @@ class ToolTest(CodexCase):
         self.assertEqual(self.q("SELECT count(*) FROM tool_calls"), [(0,)])
 
 
+    def test_result_bytes(self):
+        self.put("v0153")
+        self.put("v0155_heartbeat")
+        self.place(NAME, meta(THREAD)
+                   + item(1, "t1", dict(type="FileChange", id="call_fc", changes={"a.py": {}}, status="completed"))
+                   + item(2, "t1", dict(type="McpToolCall", id="call_big", server="s", tool="t", arguments={}, status="completed",
+                                        result=dict(content=[dict(type="text", text="é" * 10)])))
+                   + item(3, "t1", dict(type="McpToolCall", id="call_raw", server="s", tool="t", arguments={}, status="completed",
+                                        result=["ab"]))
+                   + item(4, "t1", dict(type="McpToolCall", id="call_none", server="s", tool="t", arguments={}, status="completed")))
+        self.ingest()
+        for tid, want in (("call_fc", None), ("call_big", 20), ("call_raw", len('["ab"]')), ("call_none", None)):
+            self.assertEqual(self.q("SELECT result_bytes FROM tool_calls WHERE tool_use_id = ?", tid), [(want,)], tid)
+        self.assertEqual(self.q("SELECT result_bytes FROM tool_calls WHERE tool_use_id LIKE 'exec-%'"), [(len("Action completed."),)])
+        for r in (self.q("SELECT tool_use_id, result_bytes FROM tool_calls WHERE tool = 'exec_command'")):
+            self.assertEqual(r[1], {"call_h66JGjXm2Fit9VjJZJANlZ3g": 127, "call_cyDR5qHsSjbZ8n2DFSWS0GxM": 177}[r[0]])
+        self.assertEqual(self.q("SELECT count(*) FROM tool_calls WHERE tool = 'exec_command'"), [(2,)])
+
+
+class WindowTest(CodexCase):
+    def started(self, ordinal, turn, window, ts="2026-11-06T10:00:00.000Z"):
+        return line(timestamp=ts, ordinal=ordinal, type="event_msg",
+                    payload=dict(type="task_started", turn_id=turn, model_context_window=window))
+
+    def test_window_from_fixture_and_a_later_turn_replaces_it(self):
+        self.put("v0153")
+        self.ingest()
+        self.assertEqual(self.q("SELECT context_window, first_compaction_ts FROM sessions"), [(258400, None)])
+        self.place(NAME, meta(THREAD) + self.started(1, "t1", 200000) + self.started(2, "t2", 258400))
+        self.ingest()
+        self.assertEqual(self.q("SELECT context_window FROM sessions WHERE session_id = ?", THREAD), [(258400,)])
+        self.place(NAME, self.started(3, "t3", 100000) + self.started(4, "t4", None), mode="a")
+        self.ingest()
+        self.assertEqual(self.q("SELECT context_window FROM sessions WHERE session_id = ?", THREAD), [(100000,)])
+
+    def test_compacted_sets_the_first_compaction(self):
+        compacted = lambda n, ts: line(timestamp=ts, ordinal=n, type="compacted", payload=dict(message=""))
+        self.place(NAME, meta(THREAD) + compacted(2, "2026-11-06T09:50:00.000Z") + compacted(1, "2026-11-06T09:10:00.000Z"))
+        self.ingest()
+        self.assertEqual(self.q("SELECT compactions, first_compaction_ts FROM sessions"), [(2, datetime(2026, 11, 6, 9, 10))])
+        self.put("v0155_heartbeat")
+        self.ingest()
+        self.assertEqual(self.q("SELECT compactions, first_compaction_ts, context_window FROM sessions WHERE source = 'codex' "
+                                "AND session_id != ?", THREAD), [(1, datetime(2026, 10, 8, 6, 2, 11, 935000), 258400)])
+
+
 class PromptTest(CodexCase):
     def prompts(self):
         return self.q("SELECT prompt_id, interrupted FROM prompts ORDER BY ts")
