@@ -24,6 +24,11 @@ describe("toTsv", () => {
     expect(toTsv(["a", "b"], [["x\ty", "two\r\nlines"], [null, 2]])).toBe("a\tb\n" + "x y\ttwo  lines\n" + "\t2\n");
   });
 
+  it("guards text that starts with a tab or carriage return", () => {
+    expect(toCsv(["v"], [["\t=1+1"], ["\r=1+1"]])).toBe("v\r\n'\t=1+1\r\n\"'\r=1+1\"\r\n");
+    expect(toTsv(["v"], [["\t=1+1"], ["\r@x"]])).toBe("v\n' =1+1\n' @x\n");
+  });
+
   it("applies the same formula guard and leaves numbers alone", () => {
     expect(toTsv(["v"], [["=1+1"], [-4]])).toBe("v\n'=1+1\n-4\n");
   });

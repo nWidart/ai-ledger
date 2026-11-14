@@ -8,7 +8,7 @@ const pad = (n: number) => String(n).padStart(2, "0");
 export const dayStamp = (d = new Date()): string => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
 /** A text cell with a leading quote when a spreadsheet would read it as a formula (numbers are never guarded). */
-const guard = (s: string): string => (/^[=+\-@]/.test(s) ? `'${s}` : s);
+const guard = (s: string): string => (/^[=+\-@\t\r]/.test(s) ? `'${s}` : s);
 /** A cell's plain text: empty for null or a non-finite number, numbers without separators, text guarded against formulas. */
 const text = (v: Cell): string => (v == null || (typeof v === "number" && !Number.isFinite(v)) ? "" : typeof v === "number" ? String(v) : guard(v));
 
