@@ -418,11 +418,11 @@ export default {
      "value": "3"
     },
     {
-     "label": "Median turns before the first compaction (every compacted session)",
+     "label": "Median turns before the first compaction (compacted sessions with a known first compaction)",
      "value": "5"
     },
     {
-     "label": "Median active minutes before the first compaction (every compacted session)",
+     "label": "Median active minutes before the first compaction (compacted sessions with a known first compaction)",
      "value": "5"
     }
    ],

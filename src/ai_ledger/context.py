@@ -314,9 +314,9 @@ def compactions_evidence(ctx):
     f, to = compaction_facts(ctx), ctx.data["growth"]["to_compaction"]
     out = [dict(label="Sessions", value=f"{f['n']:,}"), dict(label="Most compactions in one session", value=str(f["most"]))]
     if to["turns"] is not None:
-        out.append(dict(label="Median turns before the first compaction (every compacted session)", value=f"{round(to['turns']):,}"))
+        out.append(dict(label="Median turns before the first compaction (compacted sessions with a known first compaction)", value=f"{round(to['turns']):,}"))
     if to["minutes"] is not None:
-        out.append(dict(label="Median active minutes before the first compaction (every compacted session)", value=f"{round(to['minutes']):,}"))
+        out.append(dict(label="Median active minutes before the first compaction (compacted sessions with a known first compaction)", value=f"{round(to['minutes']):,}"))
     return out
 
 

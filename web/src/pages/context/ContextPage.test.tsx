@@ -193,9 +193,9 @@ describe("starting context", () => {
     expect(hash().get("inspect")).toBe("foo");
   });
 
-  it("opens a project's sheet from its name button with the keyboard", async () => {
+  it.each(["starting", "cost"])("opens a project's sheet from its name button in %s with the keyboard", async id => {
     await show();
-    section("starting").getByRole("button", { name: "foo" }).focus();
+    section(id).getByRole("button", { name: "foo" }).focus();
     await userEvent.keyboard("{Enter}");
     expect(hash().get("inspect")).toBe("foo");
   });

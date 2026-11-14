@@ -126,7 +126,7 @@ export function CostSection({ d }: { d: D }) {
           <th className="num">Long-tier requests</th><th className="num" title="Cache read tokens over all prompt tokens">Cache-hit ratio</th></tr></thead>
         <tbody>{rows.map(r => <tr key={r.whole ? "total" : `project:${r.project ?? ""}`} className={r.whole ? "all" : undefined}
           {...(!r.whole && r.project ? pickRow(r.project, v => openProjectSheet(v)) : {})}>
-          <td className="name">{r.whole ? "Whole view" : <Proj project={r.project} />}</td>
+          <td className="name">{r.whole ? "Whole view" : <Proj project={r.project} button={!!r.project} />}</td>
           <td className="num">{usd(r.cost)}</td><td className="num">{usd(r.cache_read_cost)}</td><td className="num">{longCost(r)}</td>
           <td className="num">{num(r.long_requests)}</td><td className="num">{pct(r.cache_hit_ratio)}</td></tr>)}</tbody>
       </table></div>
