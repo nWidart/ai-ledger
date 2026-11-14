@@ -72,7 +72,8 @@ DERIVED_SCHEMA = """
 CREATE TABLE IF NOT EXISTS sessions (
   session_id VARCHAR PRIMARY KEY, project VARCHAR, cwd VARCHAR, git_branch VARCHAR,
   first_ts TIMESTAMP, last_ts TIMESTAMP, entrypoint VARCHAR, version VARCHAR,
-  compactions INTEGER, peak_context BIGINT, peak_model VARCHAR, source VARCHAR DEFAULT 'claude');
+  compactions INTEGER, peak_context BIGINT, peak_model VARCHAR, source VARCHAR DEFAULT 'claude',
+  context_window BIGINT, first_compaction_ts TIMESTAMP);
 CREATE TABLE IF NOT EXISTS requests (
   message_id VARCHAR PRIMARY KEY, session_id VARCHAR, ts TIMESTAMP, model VARCHAR, effort VARCHAR,
   subagent BOOLEAN, input BIGINT, output BIGINT, thinking BIGINT, cache_read BIGINT,
@@ -81,7 +82,7 @@ CREATE TABLE IF NOT EXISTS tool_calls (
   tool_use_id VARCHAR PRIMARY KEY, session_id VARCHAR, tool VARCHAR, mcp_server VARCHAR,
   skill VARCHAR, input_summary VARCHAR, start_ts TIMESTAMP, end_ts TIMESTAMP, is_error BOOLEAN,
   error VARCHAR, category VARCHAR, followup VARCHAR, subagent BOOLEAN, is_commit BOOLEAN,
-  is_test BOOLEAN, test_passed BOOLEAN, result_file VARCHAR, result_seq BIGINT);
+  is_test BOOLEAN, test_passed BOOLEAN, result_file VARCHAR, result_seq BIGINT, result_bytes BIGINT);
 CREATE TABLE IF NOT EXISTS prompts (
   prompt_id VARCHAR PRIMARY KEY, session_id VARCHAR, ts TIMESTAMP, interrupted BOOLEAN);
 CREATE TABLE IF NOT EXISTS hooks (
@@ -171,6 +172,9 @@ def open_store(path=None):
             con.execute("ROLLBACK")
             raise
     con.execute("ALTER TABLE requests ADD COLUMN IF NOT EXISTS speed VARCHAR")  # stores from before fast-mode pricing; NULL until rebuild
+    con.execute("ALTER TABLE tool_calls ADD COLUMN IF NOT EXISTS result_bytes BIGINT")  # stores from before the Context page; NULL until rebuild
+    con.execute("ALTER TABLE sessions ADD COLUMN IF NOT EXISTS context_window BIGINT")
+    con.execute("ALTER TABLE sessions ADD COLUMN IF NOT EXISTS first_compaction_ts TIMESTAMP")
     for old, new in PROJECT_ALIASES.items():  # names stored before the alias existed
         for table in ("projects_by_cwd", "sessions"):
             con.execute(f"UPDATE {table} SET project = ? WHERE project = ?", [new, old])
@@ -461,7 +465,8 @@ class Deriver:
         s = self.sessions.get(sid)
         if s is None:
             s = self.sessions[sid] = dict(cwd=None, git_branch=None, first=None, last=None, entrypoint=None,
-                                          version=None, compactions=0, peak=0, peak_model=None)
+                                          version=None, compactions=0, peak=0, peak_model=None,
+                                          first_compaction=None, window=None)
         ts = ts_of(d.get("timestamp"))
         if ts:
             s["first"] = min(s["first"] or ts, ts)
@@ -489,8 +494,10 @@ class Deriver:
             if isinstance(content, list) and any(isinstance(x, dict) and x.get("type") == "tool_result" for x in content):
                 self.seq += 1
             self.user(d, sid, ts, content)
-        elif t == "system" and d.get("subtype") == "compact_boundary" and s:
+        elif t == "system" and d.get("subtype") == "compact_boundary" and s and not (self.sub or d.get("isSidechain")):
             s["compactions"] += 1
+            if ts:
+                s["first_compaction"] = min(s["first_compaction"] or ts, ts)
         elif t == "system" and d.get("subtype") == "stop_hook_summary":
             errs = bool(d.get("hookErrors"))
             for h in d.get("hookInfos") or []:
@@ -563,6 +570,7 @@ class Deriver:
                     self.results[x["tool_use_id"]] = dict(end_ts=ts, is_error=err,
                                                          error=error_text(x.get("content")) if err else None,
                                                          prompt_id=pid, session_id=sid, seq=self.seq,
+                                                         bytes=text_bytes(x.get("content")),
                                                          sub=self.sub or bool(d.get("isSidechain")))
                     if err:
                         self.pending[x["tool_use_id"]] = self.seq
@@ -579,16 +587,20 @@ class Deriver:
         for sid, s in self.sessions.items():
             proj = self.projects.get(cur, s["cwd"]) if s["cwd"] else None
             srows.append((sid, proj, s["cwd"], s["git_branch"], s["first"], s["last"], s["entrypoint"], s["version"],
-                          s["compactions"], s["peak"], s["peak_model"], self.source))
+                          s["compactions"], s["peak"], s["peak_model"], self.source, s["window"], s["first_compaction"]))
         insert(cur, "sessions", ["session_id", "project", "cwd", "git_branch", "first_ts", "last_ts", "entrypoint",
-                                 "version", "compactions", "peak_context", "peak_model", "source"], srows,
+                                 "version", "compactions", "peak_context", "peak_model", "source", "context_window",
+                                 "first_compaction_ts"], srows,
                tail="ON CONFLICT (session_id) DO UPDATE SET project = coalesce(sessions.project, excluded.project), "
                     "cwd = coalesce(sessions.cwd, excluded.cwd), git_branch = coalesce(sessions.git_branch, excluded.git_branch), "
                     "first_ts = least(sessions.first_ts, excluded.first_ts), last_ts = greatest(sessions.last_ts, excluded.last_ts), "
                     "entrypoint = coalesce(sessions.entrypoint, excluded.entrypoint), version = coalesce(sessions.version, excluded.version), "
                     "compactions = sessions.compactions + excluded.compactions, "
                     "peak_model = CASE WHEN excluded.peak_context > sessions.peak_context THEN excluded.peak_model ELSE sessions.peak_model END, "
-                    "peak_context = greatest(sessions.peak_context, excluded.peak_context)")
+                    "peak_context = greatest(sessions.peak_context, excluded.peak_context), "
+                    "context_window = coalesce(excluded.context_window, sessions.context_window), "
+                    "first_compaction_ts = CASE WHEN sessions.compactions > 0 AND sessions.first_compaction_ts IS NULL THEN NULL "  # an un-rebuilt store: the first is unknown
+                    "ELSE least(sessions.first_compaction_ts, excluded.first_compaction_ts) END")
         insert(cur, "requests", ["message_id", "session_id", "ts", "model", "effort", "subagent", "input", "output",
                                  "thinking", "cache_read", "cache_5m", "cache_1h", "thinking_ms", "stop_reason", "speed"],
                list(self.requests.values()))
@@ -614,7 +626,8 @@ class Deriver:
             earlier.update({r[0]: r[1:] for r in cur.execute(
                 f"SELECT tool_use_id, tool, input_summary, end_ts IS NOT NULL FROM tool_calls WHERE tool_use_id IN ({','.join('?' * len(ids))})", ids).fetchall()})
         cols = ["tool_use_id", "session_id", "tool", "mcp_server", "skill", "input_summary", "start_ts", "end_ts", "is_error",
-                "error", "category", "followup", "subagent", "is_commit", "is_test", "test_passed", "result_file", "result_seq"]
+                "error", "category", "followup", "subagent", "is_commit", "is_test", "test_passed", "result_file", "result_seq",
+                "result_bytes"]
         new, done = [], []
         denied = set()
         for tid, u in self.uses.items():
@@ -644,7 +657,16 @@ class Deriver:
                 u.get("start_ts"), r and r["end_ts"], r and r["is_error"], r and r["error"] and r["error"][:700], cat,
                 None, u.get("subagent"), u.get("is_commit"), u.get("is_test"),
                 None if not r else not r["is_error"], self.path if r else None,
-                r and r["seq"])
+                r and r["seq"], r and r["bytes"])
+
+
+def text_bytes(content):
+    """The UTF-8 length of the text of a tool result's content: a string, or the text blocks of a list (an image counts nothing)."""
+    if isinstance(content, str):
+        return len(content.encode("utf-8"))
+    if isinstance(content, list):
+        return len("\n".join(x["text"] for x in content if isinstance(x, dict) and isinstance(x.get("text"), str)).encode("utf-8"))
+    return 0
 
 
 def line_fields(d, path):

@@ -1,0 +1,113 @@
+/* Context (/context): every rule sits under .pg-context, since every page's CSS is loaded at once. Tables come from sheets.css, cards from InsightCard.css. */
+
+/* Briefing: the median start as the page heading, then filters */
+.pg-context .top { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px 32px; align-items: end; margin-bottom: 20px; }
+.pg-context .top-side { display: flex; flex-direction: column; align-items: flex-end; gap: 12px; min-width: 0; max-width: 600px; }
+.pg-context .top-side .filters { justify-content: flex-end; }
+.pg-context .lede { margin: 0; max-width: 26ch; font-size: clamp(26px, 4.2vw, 42px); line-height: 1.12;
+  font-weight: 400; letter-spacing: -.025em; text-wrap: balance; color: var(--text-secondary); }
+.pg-context .lede:focus { outline: none; }
+.pg-context .lede .amt { font-weight: 600; letter-spacing: -.04em; color: var(--text-primary); white-space: nowrap; }
+.pg-context .lede .proj { color: var(--text-primary); font-weight: 500; white-space: nowrap; }
+.pg-context .lede .pdot { width: .32em; height: .32em; vertical-align: .2em; margin: 0 .18em 0 .05em; }
+.pg-context .lede .unit { white-space: nowrap; }
+.pg-context .lede .delta { display: block; color: var(--text-primary); font-weight: 500; font-size: .62em; letter-spacing: -.015em; margin-top: 4px; }
+.pg-context .sub { color: var(--text-muted); font-size: 13px; margin: 8px 0 0; max-width: 90ch; }
+@media (max-width: 1040px) {
+  .pg-context .top { grid-template-columns: minmax(0, 1fr); align-items: start; }
+  .pg-context .top-side { max-width: none; align-items: stretch; }
+  .pg-context .top-side .filters { justify-content: flex-start; }
+}
+.pg-context h2 { font-size: 16px; font-weight: 600; margin: 0; letter-spacing: -.005em; }
+.pg-context h3 { font-size: 13px; font-weight: 600; margin: 20px 0 2px; color: var(--text-secondary); }
+.pg-context .pending { margin: -12px 0 12px; min-height: 1.5em; color: var(--text-secondary); font-size: 13px; }
+.pg-context .pending:empty { visibility: hidden; }
+.pg-context.loading > :not(.top):not(.secidx) { opacity: .55; }
+@media (prefers-reduced-motion: no-preference) { .pg-context > :not(.top):not(.secidx) { transition: opacity .2s; } }
+.pg-context .banner code { overflow-wrap: anywhere; }
+.pg-context .panel { margin-top: 16px; }
+.pg-context .panel > .hint { max-width: 90ch; }
+.pg-context .empty { padding: 16px 0; }
+
+/* Tips: one card each, the evidence as a list and the advice under it */
+.pg-context .tips { margin: 0 0 4px; }
+.pg-context .tips .insights { margin-top: 10px; }
+.pg-context .insight .v:empty { display: none; }
+.pg-context .evidence { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 6px 20px; margin: 0 0 8px; }
+.pg-context .evidence div { min-width: 0; }
+.pg-context .evidence dt { font-size: 12px; color: var(--text-muted); }
+.pg-context .evidence dd { margin: 0; font-weight: 500; color: var(--text-primary); overflow-wrap: anywhere; }
+.pg-context .advice { margin: 0; }
+.pg-context .advice code { background: var(--surface-2); padding: 0 4px; border-radius: 4px; }
+.pg-context .tip-drawer { margin-top: 12px; }
+.pg-context .tip-drawer details.drawer[open] { background: var(--surface-1); }
+
+/* Tables: the whole view's row reads as a total, a figure with its bar */
+.pg-context tr.all td { color: var(--text-secondary); font-weight: 500; background: var(--surface-2); }
+.pg-context td.input { max-width: 280px; }
+.pg-context td.input code { font-size: 12px; }
+.pg-context td.name .ibar { margin-right: 8px; }
+.pg-context .ibar { width: 56px; }
+.pg-context .chip.est { border-style: dashed; margin-left: 4px; font-size: 10.5px; }
+.pg-context .lead-line { margin: 10px 0 0; color: var(--text-secondary); max-width: 90ch; }
+.pg-context .lead-line b { color: var(--text-primary); font-weight: 600; }
+.pg-context .panel .scroll { margin-top: 8px; }
+
+/* Starting context: the median start per week */
+.pg-context .trend { margin: 6px 0 0; max-width: 560px; }
+.pg-context .trend svg { display: block; width: 100%; height: 96px; overflow: visible; }
+.pg-context .trend table.sr { width: 1px; } /* the shared table width would stretch the visually hidden one */
+.pg-context .trend figcaption { display: flex; justify-content: space-between; gap: 8px; font-size: 11.5px; color: var(--text-muted); margin-top: 2px; }
+
+/* Growth: the chart, then the vitals */
+.pg-context .growth .legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 8px 0; }
+.pg-context .growth .legend .key { font-size: 12px; display: inline-flex; gap: 6px; align-items: center; color: var(--text-secondary); max-width: 16rem; }
+.pg-context .growth .legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; flex: none; }
+.pg-context .growth .legend i.line { width: 14px; height: 0; border-radius: 0; border-top: 2px solid var(--text-primary); }
+.pg-context .growth .legend i.band { background: var(--text-secondary); opacity: .25; }
+.pg-context .growth .chart { position: relative; }
+.pg-context .growth .chart svg { display: block; width: 100%; height: 260px; overflow: visible; }
+.pg-context .growth .chart:focus-visible { outline-offset: 4px; border-radius: 4px; }
+.pg-context .growth .axis-note { margin-top: 2px; }
+.pg-context .growth .readout { min-height: 1.5em; margin-top: 4px; font-size: 12.5px; color: var(--text-secondary); }
+.pg-context .vitals { display: grid; grid-template-columns: repeat(var(--n, 4), minmax(0, 1fr)); gap: 1px; margin: 16px 0 12px;
+  background: var(--border); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.pg-context .vital { padding: 16px 16px 16px 0; background: var(--surface-1); min-width: 0; }
+.pg-context .vital + .vital { padding-left: 16px; }
+.pg-context .vital .v { font-size: 28px; font-weight: 600; letter-spacing: -.035em; line-height: 1.1; }
+.pg-context .vital .v small { font-size: 15px; font-weight: 500; color: var(--text-muted); letter-spacing: -.01em; }
+.pg-context .vital .l { font-weight: 500; margin-top: 4px; }
+.pg-context .vital .d { color: var(--text-muted); font-size: 12.5px; margin-top: 2px; }
+@media (max-width: 900px) {
+  .pg-context .vitals { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pg-context .vital:nth-child(odd) { padding-left: 0; }
+  .pg-context .vital:last-child:nth-child(odd) { grid-column: 1 / -1; }
+}
+@media (max-width: 520px) {
+  .pg-context .vital { padding-right: 12px; }
+  .pg-context .vital + .vital:nth-child(even) { padding-left: 12px; }
+  .pg-context .vital .v { font-size: 22px; }
+  .pg-context .lede { font-size: 22px; }
+}
+
+/* Peak fill by window: one row of five bars per window size */
+.pg-context .fills { display: grid; gap: 14px; margin-top: 8px; }
+.pg-context .fill { display: grid; grid-template-columns: minmax(8rem, 12rem) minmax(0, 1fr); gap: 8px 16px; align-items: end; }
+.pg-context .fw { font-size: 13px; color: var(--text-secondary); padding-bottom: 20px; }
+.pg-context .fw b { color: var(--text-primary); font-weight: 600; }
+.pg-context .bins { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; max-width: 480px; }
+.pg-context .bins li { display: grid; grid-template-rows: auto 56px auto; gap: 2px; justify-items: center; text-align: center; min-width: 0; }
+.pg-context .bins b { font-size: 13px; font-weight: 600; }
+.pg-context .bins .bar { display: flex; align-items: flex-end; width: 100%; max-width: 44px; height: 56px; background: var(--track); border-radius: 4px; overflow: hidden; }
+.pg-context .bins .bar i { display: block; width: 100%; border-radius: 4px 4px 0 0; }
+.pg-context .bins .l { font-size: 11.5px; color: var(--text-muted); white-space: nowrap; }
+@media (max-width: 640px) { .pg-context .fill { grid-template-columns: minmax(0, 1fr); } .pg-context .fw { padding-bottom: 0; } }
+@media (prefers-reduced-motion: no-preference) {
+  .pg-context.grow .bins .bar i { transform-origin: bottom; animation: grow-y .5s cubic-bezier(.2,.7,.2,1) both; }
+}
+
+/* Phones: the wide tables lose their least needed columns' room by scrolling sideways */
+@media (max-width: 700px) {
+  .pg-context td.input { max-width: 150px; }
+  .pg-context td.sess { max-width: 200px; }
+}

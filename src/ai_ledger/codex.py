@@ -215,6 +215,21 @@ def error_of(item):
     return (text if isinstance(text, str) else json.dumps(text)).strip()
 
 
+def result_bytes(item):
+    """The size in bytes of the output text of a completed item: a command's aggregated output, or an MCP call's result text
+    (its content's text, else the result as JSON). None for items with no result text (FileChange, WebSearch)."""
+    t = item.get("type")
+    if t == "CommandExecution":
+        out = item.get("aggregated_output")
+        return len(out.encode("utf-8")) if isinstance(out, str) else None
+    if t == "McpToolCall":
+        result = item.get("result")
+        if isinstance(result, dict) and "content" in result:
+            return store.text_bytes(result["content"])
+        return len(json.dumps(result).encode("utf-8")) if result is not None else None
+    return None
+
+
 def limit_rows(rl, ts):
     """limit_snapshots rows from a token_count's rate_limits: one per window it reports (primary, secondary).
     A limit is its limit_id and window length, so the 5-hour and weekly windows of one plan stay apart."""
@@ -304,8 +319,12 @@ class CodexDeriver(store.Deriver):
         elif t == "token_usage_record":
             self.records = True
             self.request(p.get("response_id"), p.get("turn_id"), p.get("usage"), s, ts)
-        elif t == "compacted" and s:
+        elif t == "compacted" and s and not self.sub:  # a subagent compacts its own context, not the session's
             s["compactions"] += 1
+            if ts:
+                s["first_compaction"] = min(s["first_compaction"] or ts, ts)
+        elif t == "event_msg" and p.get("type") == "task_started" and s and not self.sub and isinstance(p.get("model_context_window"), int):
+            s["window"] = p["model_context_window"]
         elif t == "event_msg" and p.get("type") == "token_count":
             self.token_count(p, s, ts, d.get("ordinal"))
         elif t == "event_msg" and p.get("type") == "item_completed" and isinstance(p.get("item"), dict):
@@ -362,6 +381,7 @@ class CodexDeriver(store.Deriver):
                                   subagent=self.sub, is_commit=shell and GIT_COMMIT.search(summary) is not None,
                                   is_test=shell and runs_tests(summary))
             self.results[tid] = dict(end_ts=ts, is_error=failed, error=error_of(it) if failed else None,
-                                     prompt_id=p.get("turn_id"), session_id=self.sid, seq=self.seq, sub=self.sub)
+                                     prompt_id=p.get("turn_id"), session_id=self.sid, seq=self.seq, sub=self.sub,
+                                     bytes=result_bytes(it))
             if failed:
                 self.pending[tid] = self.seq

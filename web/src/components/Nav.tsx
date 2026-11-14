@@ -10,6 +10,7 @@ import "./Nav.css";
 export const PAGES = [
   { path: "/usage", label: "Activity" },
   { path: "/cost", label: "Cost" },
+  { path: "/context", label: "Context" },
   { path: "/errors", label: "Errors" },
   { path: "/limits", label: "Limits" },
   { path: "/insights", label: "Insights" },

@@ -118,6 +118,8 @@ export interface SessionInfo {
   session_id: string; project: string | null; cwd: string | null; git_branch: string | null; first_ts: Ts | null; last_ts: Ts | null;
   entrypoint: string | null; version: string | null; compactions: number | null; peak_context: number | null; peak_model: string | null;
   source: Source; context_limit: number | null;
+  /** The window the source stated (Codex), else null; first_compaction_ts: when the first compaction was recorded. */
+  context_window: number | null; first_compaction_ts: Ts | null;
   /** Active time, as the sessions table's duration_s: pauses over 20 minutes left out. */
   active_s: number | null;
 }
@@ -427,6 +429,53 @@ export interface Status {
   limits?: Record<string, { last_ok: string | null; last_attempt: string | null; failures: number; error: string | null; stale: boolean }>;
 }
 
+// Context page: /api/context. Numbers are tokens unless the name says bytes, dollars (cost), minutes or a ratio; null is unknown
+// (no data, no price, no window), never zero. A project of null is a session with no project.
+export interface GrowthPoint { turn: number; median: number; p25: number; p75: number; sessions: number }
+/** name: the tool, or the MCP server. est_tokens is bytes / 4, an estimate. */
+export interface FillRow { name: string; calls: number; with_bytes: number; bytes: number; est_tokens: number; p50_bytes: number | null; max_bytes: number | null }
+export type TipId = "large_start" | "frequent_compactions" | "near_limit" | "large_results" | "cache_breaks" | "long_tier";
+export interface Tip {
+  id: TipId; severity: "warn" | "critical"; title: string;
+  /** Preformatted by the server ("42,000 tokens", "24%", "$10.20"). */
+  evidence: { label: string; value: string }[];
+  advice: string;
+  /** The newest 20 matching sessions; matched is how many there are in all. */
+  sessions: { session_id: string; title: string | null; project: string | null; source: Source; first_ts: Ts | null }[]; matched: number;
+}
+export interface ContextPayload {
+  project: string; range: number; automated: boolean; source: Source | ""; start: Day | null; end: Day;
+  projects: string[]; project_order: string[]; automated_file: AutomatedFile;
+  /** How much of the view the new columns cover; rebuild_needed when a completed call lacks a size or a compacted session lacks a first compaction. */
+  coverage: { sessions: number; with_window: number; calls: number; with_bytes: number; compacted: number; with_first_compaction: number; rebuild_needed: boolean };
+  starting: {
+    sessions: number; median: number | null; p10: number | null; p90: number | null; window_share: number | null;
+    by_project: { project: string | null; sessions: number; median: number; p10: number; p90: number; window: number | null; window_share: number | null }[];
+    trend: { week: Day; median: number; sessions: number }[];
+  };
+  growth: {
+    curve: GrowthPoint[];
+    by_project_curves: { project: string | null; sessions: number; curve: GrowthPoint[] }[];
+    added_per_prompt: number | null;
+    by_project: { project: string | null; sessions: number; added_per_prompt: number | null; compacted: number; turns_to_compaction: number | null; minutes_to_compaction: number | null }[];
+    to_compaction: { sessions: number; turns: number | null; minutes: number | null };
+    /** Five counts per window: <25%, 25-50%, 50-75%, 75-90%, >=90% of the window. */
+    fill: { window: number; sessions: number; bins: [number, number, number, number, number] }[];
+  };
+  fills: {
+    main_bytes: number; subagent_bytes: number;
+    tools: FillRow[]; mcp: FillRow[];
+    largest: { id: string; session_id: string; title: string | null; project: string | null; source: Source; tool: string; mcp_server: string | null; input: string; bytes: number; est_tokens: number; ts: Ts | null }[];
+  };
+  cost: {
+    cost: number | null; cache_read_cost: number | null; long_cost: number | null; long_requests: number; cache_hit_ratio: number | null;
+    by_project: { project: string | null; cost: number | null; cache_read_cost: number | null; long_cost: number | null; long_requests: number; cache_hit_ratio: number | null; prompt_tokens: number; cache_read: number }[];
+    break_sessions: number;
+    breaks: { session_id: string; title: string | null; project: string | null; source: Source; breaks: number; model_switch: number; expired: number; other: number; uncached_tokens: number; cost: number | null }[];
+  };
+  tips: Tip[];
+}
+
 // URLs. automated: Activity and Cost leave automated sessions out unless asked (auto=1 in the page hash). source: "" is all.
 const qs = (o: Record<string, string | number | boolean | null | undefined>) => {
   const p = new URLSearchParams();
@@ -449,6 +498,7 @@ export const paletteUrl = (v: View) => `/api/palette?${qs(viewQs(v))}`;
 export const limitsUrl = (v: View) => `/api/limits?${qs({ project: v.project, range: v.range, source: v.source })}`;
 export const limitWindowUrl = (h: Pick<LimitHistoryRow, "provider" | "limit_id" | "scope" | "start">) =>
   `/api/limits/window?${qs({ provider: h.provider, limit_id: h.limit_id, scope: h.scope, start: h.start })}`;
+export const contextUrl = (v: View) => `/api/context?${qs(viewQs(v))}`;
 export const insightsUrl = (v: View) => `/api/insights?${qs(viewQs(v))}`;
 export const liveUrl = (v: View, text = false) => {
   const q = qs({ project: v.project, automated: v.automated, source: v.source, text });

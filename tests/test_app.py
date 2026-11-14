@@ -126,6 +126,19 @@ class AppTest(unittest.TestCase):
         status, _, body = self.get("/api/insights?source=grok")
         self.assertEqual((status, json.loads(body)), (400, dict(error="unknown source: grok")))
 
+    def test_context(self):
+        status, _, body = self.get("/api/context?range=7")
+        got = json.loads(body)
+        self.assertEqual(status, 200)
+        self.assertEqual(sorted(got), sorted(["project", "range", "automated", "source", "start", "end", "projects", "project_order", "automated_file",
+                                              "coverage", "starting", "growth", "fills", "cost", "tips"]))
+        self.assertEqual((got["range"], got["tips"], got["starting"]["sessions"]), (7, [], 0))
+        self.assertEqual(self.get("/api/context?project=foo&source=codex&automated=1")[0], 200)
+        status, _, body = self.get("/api/context?source=grok")
+        self.assertEqual((status, json.loads(body)), (400, dict(error="unknown source: grok")))
+        status, _, body = self.get("/api/context?range=-1")
+        self.assertEqual((status, json.loads(body)), (400, dict(error="range must be >= 0")))
+
     def test_live(self):
         self.assertIn("/live", app.PAGES)
         status, _, body = self.get("/api/live")

@@ -5,6 +5,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+from datetime import datetime
 from unittest import mock
 
 from ai_ledger import store
@@ -118,6 +119,39 @@ class DeriveTest(StoreCase):
         self.con = store.open_store(self.db)
         self.assertEqual(self.q("SELECT count(speed) FROM requests"), [(0,)])
 
+    def test_store_from_before_the_context_columns_gains_them_on_open(self):
+        self.write("a.jsonl", prompt("u1", "2026-11-01T10:00:00Z", "p1", "go")
+                   + assistant("a1", "m1", "2026-11-01T10:00:01Z", [tool_use("t1", "Bash", command="x")])
+                   + result("r1", "2026-11-01T10:00:02Z", "t1", "ok"))
+        self.ingest()
+        counts = "SELECT (SELECT count(*) FROM raw_lines), (SELECT count(*) FROM sessions), (SELECT count(*) FROM requests), (SELECT count(*) FROM tool_calls)"
+        before = self.q(counts)
+        self.assertEqual(before, [(3, 1, 1, 1)])
+        self.con.execute("ALTER TABLE tool_calls DROP COLUMN result_bytes")
+        self.con.execute("ALTER TABLE sessions DROP COLUMN context_window")
+        self.con.execute("ALTER TABLE sessions DROP COLUMN first_compaction_ts")
+        self.con.close()
+        self.con = store.open_store(self.db)
+        self.assertEqual(self.q("SELECT count(result_bytes), count(*) FROM tool_calls"), [(0, 1)])
+        self.assertEqual(self.q("SELECT count(context_window), count(first_compaction_ts), count(*) FROM sessions"), [(0, 0, 1)])
+        self.assertEqual(self.q(counts), before)
+        self.con.close()
+        self.con = store.open_store(self.db)  # opening again adds nothing and breaks nothing
+        self.assertEqual(self.q(counts), before)
+
+    def test_result_bytes(self):
+        text = "é" * 6000 + "x" * 345  # 12,345 bytes: each é is two
+        blocks = [dict(type="text", text="abcde"), dict(type="image", source=dict(type="base64", data="A" * 5000))]
+        self.write("a.jsonl", assistant("a1", "m1", "2026-11-01T10:00:00Z", [tool_use("t1", "Read", file_path="/x"),
+                                                                              tool_use("t2", "Read", file_path="/y"),
+                                                                              tool_use("t3", "Read", file_path="/z")])
+                   + result("r1", "2026-11-01T10:00:01Z", "t1", text)
+                   + result("r2", "2026-11-01T10:00:02Z", "t2", blocks))
+        self.ingest()
+        self.assertEqual(self.q("SELECT tool_use_id, result_bytes FROM tool_calls ORDER BY 1"), [("t1", 12345), ("t2", 5), ("t3", None)])
+        store.rebuild(self.con)
+        self.assertEqual(self.q("SELECT tool_use_id, result_bytes FROM tool_calls ORDER BY 1"), [("t1", 12345), ("t2", 5), ("t3", None)])
+
     def test_split_response_counts_usage_once(self):
         self.write("a.jsonl", assistant("a1", "m1", "2026-11-01T10:00:00Z", [dict(type="thinking", thinking="")])
                    + assistant("a2", "m1", "2026-11-01T10:00:01Z", [dict(type="text", text="hi")])
@@ -153,6 +187,7 @@ class DeriveTest(StoreCase):
         self.ingest()
         self.assertEqual(self.q("SELECT tool, is_error, category, end_ts IS NOT NULL FROM tool_calls"),
                          [("Edit", True, "edit_nomatch", True)])
+        self.assertEqual(self.q("SELECT result_bytes FROM tool_calls"), [(len("String to replace not found in file."),)])
 
     def test_commit_and_test_runs_flagged(self):
         self.write("a.jsonl", assistant("a1", "m1", "2026-11-01T10:00:00Z", [
@@ -180,6 +215,33 @@ class DeriveTest(StoreCase):
         self.write("a.jsonl", cb("c3"))
         self.ingest()
         self.assertEqual(self.q("SELECT compactions FROM sessions"), [(3,)])
+
+    def test_first_compaction_is_the_earliest_and_a_claude_session_has_no_window(self):
+        cb = lambda u, ts: line(type="system", subtype="compact_boundary", uuid=u, timestamp=ts, **S)
+        self.write("a.jsonl", cb("c2", "2026-11-01T11:30:00Z") + cb("c1", "2026-11-01T10:42:00Z"))
+        self.ingest()
+        self.assertEqual(self.q("SELECT compactions, first_compaction_ts, context_window FROM sessions"),
+                         [(2, datetime(2026, 11, 1, 10, 42), None)])
+        self.write("a.jsonl", cb("c3", "2026-11-01T12:00:00Z"))  # a later ingest keeps the earliest
+        self.ingest()
+        self.assertEqual(self.q("SELECT compactions, first_compaction_ts FROM sessions"), [(3, datetime(2026, 11, 1, 10, 42))])
+
+    def test_first_compaction_in_a_later_ingest_fills_the_session(self):
+        self.write("a.jsonl", prompt("u1", "2026-11-01T10:00:00Z", "p1", "go"))
+        self.ingest()
+        self.assertEqual(self.q("SELECT first_compaction_ts FROM sessions"), [(None,)])
+        self.write("a.jsonl", line(type="system", subtype="compact_boundary", uuid="c1", timestamp="2026-11-01T11:00:00Z", **S))
+        self.ingest()
+        self.assertEqual(self.q("SELECT first_compaction_ts FROM sessions"), [(datetime(2026, 11, 1, 11, 0),)])
+
+    def test_store_from_before_the_column_keeps_the_first_compaction_unknown(self):
+        cb = lambda u, ts: line(type="system", subtype="compact_boundary", uuid=u, timestamp=ts, **S)
+        self.write("a.jsonl", cb("c1", "2026-11-01T10:42:00Z"))
+        self.ingest()
+        self.con.execute("UPDATE sessions SET first_compaction_ts = NULL")  # as an upgraded store holds it before rebuild
+        self.write("a.jsonl", cb("c2", "2026-11-01T12:00:00Z"))
+        self.ingest()
+        self.assertEqual(self.q("SELECT compactions, first_compaction_ts FROM sessions"), [(2, None)])
 
     def test_prompts_and_interruptions(self):
         self.write("a.jsonl", prompt("u1", "2026-11-01T10:00:00Z", "p1", "fix the bug")
@@ -228,7 +290,9 @@ class RebuildTest(StoreCase):
             "errors": self.q("SELECT count(*) FROM tool_calls WHERE is_error")[0][0],
             "followups": self.q("SELECT count(followup) FROM tool_calls")[0][0],
             "tokens": self.q("SELECT sum(input + output) FROM requests")[0][0],
-            "compactions": self.q("SELECT sum(compactions) FROM sessions")[0][0]}
+            "compactions": self.q("SELECT sum(compactions) FROM sessions")[0][0],
+            "context": self.q("SELECT session_id, context_window, first_compaction_ts FROM sessions ORDER BY ALL"),
+            "result_bytes": self.q("SELECT tool_use_id, result_bytes FROM tool_calls ORDER BY ALL")}
 
     def test_rebuild_matches_incremental(self):
         a = self.write("a.jsonl", prompt("u1", "2026-11-01T10:00:00Z", "p1", "go")
@@ -247,6 +311,8 @@ class RebuildTest(StoreCase):
         self.assertEqual(self.counts(), before)
         self.assertEqual(before["requests"], 3)
         self.assertEqual(before["followups"], 1)
+        self.assertEqual(before["result_bytes"], [("t1", len("Exit code 1")), ("t2", None)])
+        self.assertEqual(before["context"], [("s1", None, datetime(2026, 11, 1, 10, 5))])
 
 
 class OtherDeriver(store.Deriver):

@@ -5,6 +5,15 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+Run `ai-ledger rebuild` once after upgrading (with the app stopped): the Context page needs the size of each tool result, the context window of each Codex session and the time of each session's first compaction, which earlier versions did not store. The rebuild fills them from the transcripts already read.
+
+### Added
+
+- A Context page shows how context fills up in Claude Code and Codex sessions: where each project's sessions start and what share of the model's window that is, how fast context grows per turn and per prompt, how far sessions get before their first compaction, what fills context (tool and MCP results, with the largest linked to their sessions), what caching costs, and the sessions where caching broke and why. Token figures from result sizes are estimates (bytes ÷ 4).
+- The Context page's tips come from fixed rules. Each shows only when it fires on the filtered view, with its evidence, its advice and the sessions that match, which open in the session sheet.
+- The store keeps the size of each tool result, the context window a Codex session states and the time of each session's first compaction. Until the rebuild, the Context page says those figures are not yet available.
+- The command palette's `>context` term opens the Context page, keeping the project and range filters.
+
 ## [0.3.0] - 2026-11-12
 
 Run `ai-ledger rebuild` once after upgrading (with the app stopped): Codex subagent threads stored before this version are filed under their own ids, and the rebuild moves them to their sessions.
