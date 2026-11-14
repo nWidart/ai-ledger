@@ -44,7 +44,7 @@ SECURITY_HEADERS = (
     ("Cross-Origin-Resource-Policy", "same-origin"),
     ("X-Frame-Options", "DENY"),
     ("Permissions-Policy", "accelerometer=(), camera=(), display-capture=(), geolocation=(), gyroscope=(), magnetometer=(), "
-                           "microphone=(), midi=(), payment=(), usb=(), interest-cohort=()"),
+                           "microphone=(), midi=(), payment=(), usb=()"),
 )
 INLINE_SCRIPT = re.compile(rb"<script(?![^>]*\ssrc=)[^>]*>(.*?)</script>", re.DOTALL | re.IGNORECASE)
 
