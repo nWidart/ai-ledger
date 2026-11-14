@@ -76,7 +76,7 @@ export function Growth({ d }: { d: D }) {
           <td className="num">{p.minutes_to_compaction == null ? "–" : dur(p.minutes_to_compaction * 60)}</td></tr>)}</tbody>
       </DataTable>}
       <h3>Peak fill by window size</h3>
-      <div className="hint">How many sessions peaked in each fifth of their model's window. {num(c.with_window)} of {plural(c.sessions, "session")} have a known window.</div>
+      <div className="hint">How many sessions peaked in each band of their model's window. {num(c.with_window)} of {plural(c.sessions, "session")} have a known window.</div>
       {g.fill.length ? <FillBars fill={g.fill} /> : <p className="empty">No session in this view has a known window.</p>}
     </section>
   );

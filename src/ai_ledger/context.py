@@ -2,6 +2,7 @@
 tips the figures give. Everything comes from the derived tables and the price table, through metrics.view as the other pages
 do. Token figures from tool result sizes are estimates (bytes / BYTES_PER_TOKEN)."""
 from dataclasses import dataclass, field
+from datetime import date
 from typing import Callable
 
 from . import metrics
@@ -12,7 +13,8 @@ BYTES_PER_TOKEN = 4  # estimated tokens of a tool result: its bytes // this
 GROWTH_MAX_TURN = 100  # the growth curve stops at this turn
 GROWTH_MIN_SESSIONS = 5  # a curve point needs at least this many sessions
 GROWTH_PROJECTS = 5  # the projects that get a curve of their own
-FILL_BINS = (0.25, 0.5, 0.75, 0.9)  # peak context as a share of the window: <25%, 25-50%, 50-75%, 75-90%, >=90%
+FILL_BINS = (0.25, 0.5, metrics.NEAR_LIMIT, 0.9)  # peak context as a share of the window: <25%, 25-50%, 50-80%, 80-90%, >=90%
+SESSION_POINTS = 1000  # the newest sessions the session map carries
 LARGEST_RESULTS = 25  # the largest main-thread tool results listed
 CACHE_MIN_PROMPT = 20_000  # a request with fewer prompt tokens is no cache break
 CACHE_BREAK_SHARE = 0.5  # a cache break reads less than this share of its prompt from the cache
@@ -67,7 +69,8 @@ def starting(q):
     by_project = q(stat("project, ") + " GROUP BY project ORDER BY sessions DESC, project NULLS LAST")
     for r in by_project:
         r["window"] = r.pop("win")
-    trend = q(f"""SELECT {metrics.week('first_ts')} AS week, quantile_cont(start_prompt, 0.5) AS median, count(*) AS sessions
+    trend = q(f"""SELECT {metrics.week('first_ts')} AS week, quantile_cont(start_prompt, 0.5) AS median,
+        quantile_cont(start_prompt, 0.25) AS p25, quantile_cont(start_prompt, 0.75) AS p75, count(*) AS sessions
         FROM starts JOIN sess USING (session_id) WHERE first_ts IS NOT NULL GROUP BY 1 ORDER BY 1""")
     return dict(sessions=total["sessions"], median=total["median"], p10=total["p10"], p90=total["p90"],
                 window_share=total["window_share"], by_project=by_project, trend=trend)
@@ -80,15 +83,22 @@ def curve_rows(rs):
 
 
 def growth(q):
-    point = f"""quantile_cont(prompt, 0.5) AS median, quantile_cont(prompt, 0.25) AS p25, quantile_cont(prompt, 0.75) AS p75,
-        count(*) AS sessions FROM turns WHERE turn <= {GROWTH_MAX_TURN}"""
+    point = lambda src: f"""quantile_cont(prompt, 0.5) AS median, quantile_cont(prompt, 0.25) AS p25, quantile_cont(prompt, 0.75) AS p75,
+        count(*) AS sessions FROM {src} WHERE turn <= {GROWTH_MAX_TURN}"""
     having = f"HAVING count(*) >= {GROWTH_MIN_SESSIONS}"
-    curve = curve_rows(q(f"SELECT turn, {point} GROUP BY turn {having} ORDER BY turn"))
+    curve = curve_rows(q(f"SELECT turn, {point('turns')} GROUP BY turn {having} ORDER BY turn"))
     curves = {}
-    for r in q(f"SELECT project, turn, {point} GROUP BY project, turn {having} ORDER BY turn"):
+    for r in q(f"SELECT project, turn, {point('turns')} GROUP BY project, turn {having} ORDER BY turn"):
         curves.setdefault(r["project"], []).append(r)
+    # The same curves as a share of the window, over the sessions with a known window (turns carry none, so they join sess).
+    share = "shr AS (SELECT t.session_id, t.project, t.turn, t.prompt / s.win AS prompt FROM turns t JOIN sess s USING (session_id) WHERE s.win IS NOT NULL)"
+    share_curve = curve_rows(q(f"SELECT turn, {point('shr')} GROUP BY turn {having} ORDER BY turn", pre=share))
+    share_curves = {}
+    for r in q(f"SELECT project, turn, {point('shr')} GROUP BY project, turn {having} ORDER BY turn", pre=share):
+        share_curves.setdefault(r["project"], []).append(r)
     top = q(f"SELECT project, count(*) AS sessions FROM sess GROUP BY project ORDER BY sessions DESC, project NULLS LAST LIMIT {GROWTH_PROJECTS}")
-    by_project_curves = [dict(project=r["project"], sessions=r["sessions"], curve=curve_rows(curves[r["project"]]))
+    by_project_curves = [dict(project=r["project"], sessions=r["sessions"], curve=curve_rows(curves[r["project"]]),
+                              share_curve=curve_rows(share_curves.get(r["project"], [])))
                          for r in top if r["project"] in curves]
 
     # Tokens added per prompt: the rises between consecutive turns of a session over its prompts; a fall adds nothing.
@@ -131,8 +141,21 @@ def growth(q):
     fill = {}
     for r in q(f"SELECT win, {over} AS bin, count(*) AS n FROM sess WHERE win IS NOT NULL AND peak_context IS NOT NULL GROUP BY 1, 2"):
         fill.setdefault(r["win"], [0] * (len(FILL_BINS) + 1))[r["bin"]] = r["n"]
-    return dict(curve=curve, by_project_curves=by_project_curves, added_per_prompt=added_total, by_project=by_project,
+    return dict(curve=curve, share_curve=share_curve, by_project_curves=by_project_curves, added_per_prompt=added_total, by_project=by_project,
                 to_compaction=to_compaction, fill=[dict(window=w, sessions=sum(b), bins=b) for w, b in sorted(fill.items())])
+
+
+# ---------- the session map ----------
+
+def sessions_map(q):
+    """The view's sessions with a measured start, a known window and a peak, the newest SESSION_POINTS of them as points, and how many there are in all."""
+    rs = q(f"""SELECT sess.session_id, sess.project, sess.source, sess.first_ts, starts.start_prompt AS start, sess.peak_context AS peak, sess.win AS window,
+          n.turns, sess.compactions, count(*) OVER () AS total
+        FROM sess JOIN starts USING (session_id) JOIN (SELECT session_id, max(turn) AS turns FROM turns GROUP BY 1) n USING (session_id)
+        WHERE sess.win IS NOT NULL AND sess.peak_context IS NOT NULL
+        ORDER BY sess.first_ts DESC NULLS LAST, sess.session_id LIMIT {SESSION_POINTS}""")
+    points = [{k: (metrics.iso(v) if k == "first_ts" else v) for k, v in r.items() if k != "total"} for r in rs]
+    return dict(total=rs[0]["total"] if rs else 0, points=points)
 
 
 # ---------- what fills context ----------
@@ -140,14 +163,16 @@ def growth(q):
 def fill_rows(rs):
     for r in rs:
         r["est_tokens"] = r["bytes"] // BYTES_PER_TOKEN
-        r["p50_bytes"] = None if r["p50_bytes"] is None else round(r["p50_bytes"])
+        for k in ("p50_bytes", "p95_bytes"):
+            r[k] = None if r[k] is None else round(r[k])
     return rs
 
 
 def fills(cur, W, fp):
     calls = f"tool_calls t JOIN sessions s USING (session_id) WHERE {W('coalesce(t.start_ts, t.end_ts)')}"
     one = lambda by, extra: metrics.rows(cur, f"""SELECT {by} AS name, count(*) AS calls, count(t.result_bytes) AS with_bytes,
-        sum(t.result_bytes) AS bytes, quantile_cont(t.result_bytes, 0.5) AS p50_bytes, max(t.result_bytes) AS max_bytes
+        sum(t.result_bytes) AS bytes, quantile_cont(t.result_bytes, 0.5) AS p50_bytes,
+        quantile_cont(t.result_bytes, 0.95) AS p95_bytes, max(t.result_bytes) AS max_bytes
         FROM {calls} AND NOT t.subagent {extra} GROUP BY 1 HAVING count(t.result_bytes) > 0 ORDER BY bytes DESC, name""", fp)
     tools = fill_rows(one("t.tool", ""))
     mcp = fill_rows(one("t.mcp_server", "AND t.mcp_server IS NOT NULL"))
@@ -165,7 +190,7 @@ def fills(cur, W, fp):
 
 # ---------- cost and cache breaks ----------
 
-def cost(q):
+def cost(q, today):
     sums = """sum(cost) AS cost, sum(cost_cache_read) AS cache_read_cost, sum(cost) FILTER (WHERE lg) AS long_cost,
         count(*) FILTER (WHERE lg) AS long_requests, sum(cache_read) AS cache_read,
         sum(input + cache_read + cache_5m + cache_1h) AS prompt_tokens FROM rq"""
@@ -173,25 +198,44 @@ def cost(q):
     by_project = q(f"SELECT project, {sums} GROUP BY project ORDER BY cost DESC NULLS LAST, project NULLS LAST")
     for r in by_project:
         r["cache_hit_ratio"] = r["cache_read"] / r["prompt_tokens"] if r["prompt_tokens"] else None
-    return dict(cost=total["cost"], cache_read_cost=total["cache_read_cost"], long_cost=total["long_cost"],
+    return dict(cost=total["cost"], series=cache_series(q, today), cache_read_cost=total["cache_read_cost"], long_cost=total["long_cost"],
                 long_requests=total["long_requests"], cache_hit_ratio=total["cache_read"] / total["prompt_tokens"] if total["prompt_tokens"] else None,
                 by_project=by_project)
+
+
+def cache_series(q, today):
+    """The view's prompt tokens per day (per week when its first request is more than metrics.WEEKLY_AFTER_DAYS before today) split into
+    input, cache reads and cache writes, with the cache breaks of the bucket by cause. Buckets with no request are left out."""
+    first = q(f"SELECT {metrics.day('min(ts)')} AS day FROM rq WHERE ts IS NOT NULL")[0]["day"]
+    bucket = "week" if first and (today - date.fromisoformat(first)).days > metrics.WEEKLY_AFTER_DAYS else "day"
+    by = metrics.week if bucket == "week" else metrics.day
+    rows = {r["day"]: dict(r, model_switch=0, expired=0, other=0) for r in q(f"""SELECT {by('ts')} AS day, sum(input) AS input, sum(cache_read) AS cache_read,
+        sum(cache_5m + cache_1h) AS cache_write FROM rq WHERE ts IS NOT NULL GROUP BY 1 ORDER BY 1""")}
+    for r in q(f"""SELECT {by('ts')} AS day, count(*) FILTER (WHERE cause = 'model_switch') AS model_switch, count(*) FILTER (WHERE cause = 'expired') AS expired,
+        count(*) FILTER (WHERE cause = 'other') AS other FROM brk GROUP BY 1""", pre=breaks_cte()):
+        rows[r.pop("day")].update(r)
+    return dict(bucket=bucket, rows=list(rows.values()))
+
+
+def breaks_cte():
+    """The CTEs lagged and brk: every main-thread turn after the first with at least CACHE_MIN_PROMPT prompt tokens, less than
+    CACHE_BREAK_SHARE of them read from the cache, with its uncached tokens and cost, its cause and its ts."""
+    return f"""lagged AS (SELECT session_id, message_id, model, ts, prompt, input, cache_read, turn,
+          lag(model) OVER w AS prev_model, lag(ts) OVER w AS prev_ts, lag(cache_1h) OVER w AS prev_1h FROM turns WINDOW w AS (PARTITION BY session_id ORDER BY turn)),
+        brk AS (SELECT l.session_id, l.ts, l.prompt - l.cache_read AS uncached, rq.cost_input + rq.cost_cache_5m + rq.cost_cache_1h AS uncached_cost,
+            CASE WHEN l.model <> l.prev_model THEN 'model_switch'
+                 WHEN date_diff('second', l.prev_ts, l.ts) > CASE WHEN l.prev_1h > 0 THEN {CACHE_TTL_1H_S} ELSE {CACHE_TTL_S} END THEN 'expired' ELSE 'other' END AS cause
+          FROM lagged l JOIN rq ON rq.message_id = l.message_id
+          WHERE l.turn > 1 AND l.prompt >= {CACHE_MIN_PROMPT} AND l.cache_read < {CACHE_BREAK_SHARE} * l.prompt)"""
 
 
 def session_breaks(q):
     """Every session with a cache break (a main-thread turn after the first with at least CACHE_MIN_PROMPT prompt tokens, less than
     CACHE_BREAK_SHARE of them read from the cache) in the view's range, most uncached tokens first."""
-    pre = f"""lagged AS (SELECT session_id, message_id, model, ts, prompt, input, cache_read, turn,
-          lag(model) OVER w AS prev_model, lag(ts) OVER w AS prev_ts, lag(cache_1h) OVER w AS prev_1h FROM turns WINDOW w AS (PARTITION BY session_id ORDER BY turn)),
-        brk AS (SELECT l.session_id, l.prompt - l.cache_read AS uncached, rq.cost_input + rq.cost_cache_5m + rq.cost_cache_1h AS uncached_cost,
-            CASE WHEN l.model <> l.prev_model THEN 'model_switch'
-                 WHEN date_diff('second', l.prev_ts, l.ts) > CASE WHEN l.prev_1h > 0 THEN {CACHE_TTL_1H_S} ELSE {CACHE_TTL_S} END THEN 'expired' ELSE 'other' END AS cause
-          FROM lagged l JOIN rq ON rq.message_id = l.message_id
-          WHERE l.turn > 1 AND l.prompt >= {CACHE_MIN_PROMPT} AND l.cache_read < {CACHE_BREAK_SHARE} * l.prompt)"""
     return q("""SELECT sess.session_id, sess.project, sess.source, sess.first_ts, count(*) AS breaks,
           count(*) FILTER (WHERE cause = 'model_switch') AS model_switch, count(*) FILTER (WHERE cause = 'expired') AS expired,
           count(*) FILTER (WHERE cause = 'other') AS other, sum(brk.uncached) AS uncached_tokens, sum(brk.uncached_cost) AS cost
-        FROM brk JOIN sess USING (session_id) GROUP BY ALL ORDER BY uncached_tokens DESC, session_id""", pre=pre)
+        FROM brk JOIN sess USING (session_id) GROUP BY ALL ORDER BY uncached_tokens DESC, session_id""", pre=breaks_cte())
 
 
 # ---------- coverage ----------
@@ -490,9 +534,9 @@ def payload(cur, project="", range_days=0, source="", automated=False, today=Non
     data = dict(project=project, range=range_days, automated=bool(automated), source=source,
                 start=start.isoformat() if start else None, end=today.isoformat(),
                 projects=metrics.project_list(cur, automated, af["projects"]), project_order=metrics.project_order(cur, af["projects"]),
-                automated_file=af, coverage=coverage(cur, q, W, fp), starting=starting(q), growth=growth(q), fills=fills(cur, W, fp))
+                automated_file=af, coverage=coverage(cur, q, W, fp), starting=starting(q), growth=growth(q), sessions_map=sessions_map(q), fills=fills(cur, W, fp))
     brk = session_breaks(q)
-    data["cost"] = dict(cost(q), break_sessions=len(brk), breaks=[{k: v for k, v in r.items() if k != "first_ts"} for r in brk[:BREAK_SESSIONS]])
+    data["cost"] = dict(cost(q, today), break_sessions=len(brk), breaks=[{k: v for k, v in r.items() if k != "first_ts"} for r in brk[:BREAK_SESSIONS]])
     data["tips"] = tips(Ctx(cur, q, shared, rp, W, fp, prices, data, brk))
     # One title lookup for every session row on the payload: it reads the first prompt of each session that has no title.
     metrics.with_titles(cur, [*data["fills"]["largest"], *data["cost"]["breaks"], *(x for t in data["tips"] for x in t["sessions"])])

@@ -3,9 +3,17 @@ import type { ContextPayload, TipId } from "../../api";
 import { big, num, pct, plural } from "../../format";
 
 /** The five peak-fill bins of `growth.fill`, as the API orders them. */
-export const FILL_LABELS = ["<25%", "25–50%", "50–75%", "75–90%", "≥90%"] as const;
+export const FILL_LABELS = ["<25%", "25–50%", "50–80%", "80–90%", "≥90%"] as const;
 /** A curve point needs this many sessions (the server's GROWTH_MIN_SESSIONS). */
 export const CURVE_MIN_SESSIONS = 5;
+/** A project's median start at or over this fires the large-start tip (the server's START_LARGE_TOKENS). */
+export const START_LARGE_TOKENS = 30_000;
+/** A week of the starting trend with fewer sessions than this rests on few sessions. */
+export const TREND_MIN_SESSIONS = 3;
+/** A peak at or over this share of the window is near the limit (the server's metrics.NEAR_LIMIT). */
+export const NEAR_LIMIT = .8;
+/** A main-thread tool result at or over this many bytes fires the large-results tip (the server's RESULT_LARGE_BYTES). */
+export const RESULT_LARGE_BYTES = 100_000;
 
 /** A size in bytes as "812 B", "250 KB" or "1.4 MB" (decimal units, as the figures are counts, not memory). */
 export function bytes(n: number | null | undefined): string {

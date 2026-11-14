@@ -7,8 +7,8 @@ import { GrowthChart, readTurn } from "./GrowthChart";
 
 const pt = (turn: number, median: number, sessions = 9): GrowthPoint => ({ turn, median, p25: median * .7, p75: median * 1.4, sessions });
 const view = [1, 2, 3, 4, 5].map(t => pt(t, 20_000 + t * 10_000));
-const foo = { project: "foo", sessions: 6, curve: view.map(p => ({ ...p, median: p.median * 1.2 })) };
-const bar = { project: "bar", sessions: 5, curve: view.slice(0, 3).map(p => ({ ...p, median: p.median * .6 })) };
+const foo = { project: "foo", sessions: 6, curve: view.map(p => ({ ...p, median: p.median * 1.2 })), share_curve: [] };
+const bar = { project: "bar", sessions: 5, curve: view.slice(0, 3).map(p => ({ ...p, median: p.median * .6 })), share_curve: [] };
 
 describe("GrowthChart", () => {
   it("draws the view's median with its band and one line per project", () => {
