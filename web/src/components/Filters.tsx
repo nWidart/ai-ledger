@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Combobox } from "@base-ui/react/combobox";
 import type { Source } from "../api";
-import { RANGES, SOURCES, setSearch, useView } from "../url";
+import { RANGES, SOURCES, rootState, setSearch, useSearchOf, validateRoot } from "../url";
 import { ProjectDot } from "./ProjectDot";
 import { Toggletip } from "./Toggletip";
 import "./Filters.css";
@@ -29,11 +29,17 @@ export const viewName = (v: { project: string; range: number; source: Source | "
 /** Who did the work, for page text: the selected agent, or "agent" for every source. */
 export const agentName = (source: Source | "") => (source ? SOURCE_LABELS[source] : "agent");
 
+// What the filters show of the URL; a session or sheet key is not in it, so opening a sheet does not render them.
+// badSource: the URL names a source that is not valid.
+const filterSearch = (raw: Readonly<Record<string, string>>) => {
+  const s = validateRoot(raw), { project, range, source, auto } = rootState(s);
+  return { project, range, source, auto, badSource: !!raw.source && !s.source };
+};
+
 /** Project picker with its color dot, range and source segments and the automated toggle, all writing the URL hash. */
 export function Filters({ projects, automated = false, autoFile, range = true, children }: FiltersProps) {
-  const [h, set] = useView();
+  const h = useSearchOf(filterSearch), { badSource } = h, set = setSearch;
   // An unknown source reads as All; the URL drops it so a copied link says what the page shows.
-  const badSource = !!h.raw.source && !h.source;
   useEffect(() => { if (badSource) setSearch({ source: null }, { push: false }); }, [badSource]);
   const opts = projects.map(p => (typeof p === "string" ? { value: p } : p));
   if (h.project && !opts.some(o => o.value === h.project)) opts.unshift({ value: h.project });

@@ -86,11 +86,19 @@ Alternative considered: Router's default JSON serializer with `stripSearchParams
 - The root route validates the keys every page shares and the sheet keys (`project`, `range`, `source`, `auto`, `inspect`, `tool`, `mcp`, `skill`, `session`): the code is today's `parseHash` body, returning optional fields.
 - Each page route validates its own keys in a `search.ts` beside the page (`pages/errors/search.ts` and so on), moved from where they are read today (`errors/view.ts`'s `readView`, `insights/drill.ts`, `sessOf` in `ActivityPage.tsx`, `h.raw.tip`, `h.raw.view`).
 - A value that is not valid is dropped, not an error: an unknown `source` reads as all sources, an unknown `range` as absent. A validator that threw would put the route's error component in place of the page, for a mistyped link.
-- A key no validator names is dropped from the next URL the app writes. Today `raw` carries unknown keys along; nothing reads them, and the spec delta says an unknown key is ignored.
+- A key no validator names is ignored: nothing reads it. It stays in the URL as written (changed in phase 2, below).
 
 No validation library: seven small validators are less code than a schema dependency and its adapter, and Router accepts a plain function.
 
 Phase 1 as built carries no route validator yet: the router's search is the record of strings `parseSearch` returns, which is what `hash.ts` called `raw`, and `parseView` (the old `parseHash`) reads it. Behaviour is the old behaviour with `?` for `#`, unknown keys carried along included. The typed validators arrive in phase 2, one page at a time.
+
+Phase 2 as built:
+
+- **Every validator accepts a value as the URL writes it or already typed**, because Router calls a route's validator both with the parsed URL and with the search a navigation passes.
+- **A typed value is one `formatSearch` writes back as it was read.** Router lays the validated values over the search before it writes the URL. `formatSearch` drops `false`, so a flag whose URL text is `0` stays the string `"0"` (Errors: `sub`, `noise`); a flag whose URL text is `1` is `true`; ids and names stay strings. `router.test.tsx` opens each page with every key it reads and asserts the URL is unchanged.
+- **Unknown keys and values that are not valid stay in the URL as written.** The plan was to drop unknown keys from the next write. Router does not do this: it spreads the validated values over the keys as they are, so a route match's search holds the typed values plus the rest as strings. Dropping them would need `setSearch` to know every route's validator, for a key nothing reads. A loader that reads a match's search (phase 4) must take its fields through the validator, not trust the record.
+- **A value that is not valid reads as absent, everywhere.** Two small differences from `hash.ts` follow. On Errors, a key with a bad value no longer counts as "the URL names a view", so the saved view can fill in, and a link to an example with a bad `range` opens all time, as a link with no range does. An empty `range=` reads as 30 days, not all time.
+- **Cost and Limits have no page-only key**, so they have no `search.ts`.
 
 ### 5. The old hash form redirects in the root route's `beforeLoad`
 
@@ -130,8 +138,8 @@ Alternative considered: search middleware on each route for the dropped day and 
 ### 7. Components read typed search, each only what it uses
 
 - Every read comes from the router's location (`useRouterState({ select: s => s.location.search })`), not from a route match. Found while building phase 1: a match's search (`Route.useSearch()`) is committed after the route's load, a few microtasks after the write, and an input bound to the view (the Sessions search box) would then render its old value once and lose the caret's place. The location changes in the same task as the write. A real-browser check types in the middle of that box and passes.
-- So a page reads its typed search through one hook over the location: `useSearchOf(validate, select?)`, which applies the page's validator and an optional selector, with structural sharing from Router's store. `h.raw.sub` becomes `search.sub`. The route still carries the validator (`validateSearch`), so links and loaders are typed by it.
-- Shared components (`Nav`, `Filters`, the sheets, the palette) read the root keys the same way with a selector, so a component re-renders only when its selection changes, where `useHashState()` re-rendered every reader on any change.
+- So a page reads its typed search through one hook over the location: `useSearchOf(validate, select?)` in `url.ts`, which applies a validator and an optional selector. Its result is compared deeply (Router's structural sharing), so a component re-renders only when what it selected changes. `h.raw.sub` became `search.sub`. `useView()` is `useSearchOf(parseView)`: the shared keys with their defaults. The route carries the same validator (`validateSearch`), so links and loaders are typed by it.
+- Shared components read only what they show: `Filters` the four filter keys, `Nav` the shared query string and the project, the sheets the root keys. Opening a session sheet does not re-render `Filters` (a test counts its commits). The palette reads the whole record of keys, because it builds the next URL from the current one.
 - `web/src/api.ts`'s `View` (project, range, automated, source) is built by `viewOf(rootState(search))`: `rootState` in `url.ts` applies the defaults, as `parseHash` does today.
 
 ### 8. Links

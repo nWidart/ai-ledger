@@ -1,12 +1,13 @@
 // From the palette's chips and the current location to the URL one commit writes, the footer that says so, and how each
 // chip fared. Pure: no React, no DOM. Pages already read every key written here; nothing new goes in the hash.
 import { viewOf, type View } from "../../api";
-import { DEFAULT_RANGE, SHARED_KEYS, applyPatch, formatSearch, parseView, type ViewState } from "../../url";
+import { DEFAULT_RANGE, SHARED_KEYS, applyPatch, formatSearch, parseView, rootState, validateRoot } from "../../url";
 import { SOURCE_LABELS } from "../Filters";
 import { PAGES } from "../Nav";
 import { isFilter, rangeName, sourceLabel, type Chip, type Command, type FilterKind } from "./suggest";
 
-export interface Here { path: string; hash: ViewState }
+/** search: every key of the current URL, as written (page-only ones too). */
+export interface Here { path: string; search: Readonly<Record<string, string>> }
 export type ChipStatus = { state: "applied" } | { state: "replaced"; by: string } | { state: "dropped" };
 export interface Resolved {
   path: string;
@@ -32,11 +33,11 @@ const pageLabel = (path: string) => PAGES.find(p => p.path === path)?.label ?? p
 const isPage = (path: string) => PAGES.some(p => p.path === path);
 
 /** Chips for the filters the hash sets: project, source, range (only when the hash names one) and the automated toggle. */
-export function prefill(h: ViewState): Chip[] {
-  const out: Chip[] = [];
+export function prefill(search: Readonly<Record<string, string>>): Chip[] {
+  const s = validateRoot(search), h = rootState(s), out: Chip[] = [];
   if (h.project) out.push({ kind: "project", value: h.project, label: h.project, prefilled: true });
   if (h.source) out.push({ kind: "source", value: h.source, label: SOURCE_LABELS[h.source], prefilled: true });
-  if (h.raw.range != null && String(h.range) === h.raw.range) out.push({ kind: "range", value: String(h.range), label: rangeName(h.range), prefilled: true });
+  if (s.range !== undefined && String(s.range) === search.range) out.push({ kind: "range", value: String(h.range), label: rangeName(h.range), prefilled: true });
   if (h.auto) out.push({ kind: "automated", value: "1", label: "automated", prefilled: true });
   return out;
 }
@@ -74,18 +75,18 @@ export function resolve(chips: readonly Chip[], here: Here): Resolved {
 
   // The hash: staying keeps every key, moving carries the shared ones (as the nav does); then the filters and the sheet.
   let raw: Record<string, string> = {};
-  if (path === cur) raw = { ...here.hash.raw };
-  else for (const k of SHARED_KEYS) if (here.hash.raw[k]) raw[k] = here.hash.raw[k]!;
+  if (path === cur) raw = { ...here.search };
+  else for (const k of SHARED_KEYS) if (here.search[k]) raw[k] = here.search[k]!;
   const value = (k: FilterKind) => { const i = slot.get(k); return i == null ? null : chips[i]!.value; };
   raw = applyPatch(raw, Object.fromEntries((Object.keys(HASH_KEY) as FilterKind[]).map(k => [HASH_KEY[k], value(k)])));
-  if ((raw.project ?? "") !== (here.hash.raw.project ?? "") || (raw.source ?? "") !== (here.hash.raw.source ?? "")) raw = applyPatch(raw, { session: null, inspect: null });
+  if ((raw.project ?? "") !== (here.search.project ?? "") || (raw.source ?? "") !== (here.search.source ?? "")) raw = applyPatch(raw, { session: null, inspect: null });
   if (open) {
     raw = applyPatch(raw, { inspect: null, tool: null, mcp: null, skill: null, session: null });
     // Opening a type is an explicit request: it wins over a selected chart bucket, which the palette cannot see the errors of.
     raw = applyPatch(raw, open.kind === "category" ? { cat: open.value, ex: null, etool: null, at: null } : { [open.kind]: open.value });
   }
   if (path === "/errors" && !ERRORS_KEYS.some(k => k in raw)) raw.range = String(DEFAULT_RANGE);
-  const href = path + formatSearch(raw), moved = href !== here.path + formatSearch(here.hash.raw);
+  const href = path + formatSearch(raw), moved = href !== here.path + formatSearch(here.search);
   const ci = slot.get("command"), command = ci == null ? null : (chips[ci]!.value as Command);
 
   // The footer: the action, then the filters that apply, then anything that will not.

@@ -1,10 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { parseSearch, parseView } from "../../url";
+import { parseSearch } from "../../url";
 import { prefill, resolve } from "./resolve";
 import type { Chip } from "./suggest";
 
-const view = (search: string) => parseView(parseSearch(search));
-const at = (href: string) => { const [path, search = ""] = href.split("?"); return { path: path!, hash: view(search) }; };
+const at = (href: string) => { const [path, search = ""] = href.split("?"); return { path: path!, search: parseSearch(search) }; };
 const c = {
   errors: { kind: "page", value: "/errors", label: "Errors" },
   cost: { kind: "page", value: "/cost", label: "Cost" },
@@ -24,14 +23,14 @@ const c = {
   refresh: { kind: "command", value: "refresh", label: "Refresh" },
 } satisfies Record<string, Chip>;
 /** The chips the palette opens with on here, then the picked ones. */
-const commit = (here: string, ...picked: Chip[]) => { const h = at(here); return resolve([...prefill(h.hash), ...picked], h); };
+const commit = (here: string, ...picked: Chip[]) => { const h = at(here); return resolve([...prefill(h.search), ...picked], h); };
 
 describe("prefill", () => {
   it("makes a chip per shared filter the hash sets", () => {
-    expect(prefill(view("?project=myproject&source=codex&session=s1")).map(x => x.label)).toEqual(["myproject", "Codex"]);
-    expect(prefill(view("?range=7&auto=1")).map(x => [x.kind, x.value])).toEqual([["range", "7"], ["automated", "1"]]);
-    expect(prefill(view("")).length).toBe(0);
-    expect(prefill(view("?range=12")).length).toBe(0); // an unknown range reads as the default; no chip
+    expect(prefill(parseSearch("?project=myproject&source=codex&session=s1")).map(x => x.label)).toEqual(["myproject", "Codex"]);
+    expect(prefill(parseSearch("?range=7&auto=1")).map(x => [x.kind, x.value])).toEqual([["range", "7"], ["automated", "1"]]);
+    expect(prefill(parseSearch("")).length).toBe(0);
+    expect(prefill(parseSearch("?range=12")).length).toBe(0); // an unknown range reads as the default; no chip
   });
 });
 
@@ -121,7 +120,7 @@ describe("resolve", () => {
   });
   it("clears the key of a removed pre-filled chip", () => {
     const h = at("/usage?project=myproject&source=codex&range=30");
-    const r = resolve(prefill(h.hash).filter(x => x.kind !== "source"), h);
+    const r = resolve(prefill(h.search).filter(x => x.kind !== "source"), h);
     expect(r.href).toBe("/usage?project=myproject&range=30");
     expect(r.footer).toBe("Enter: update Activity · myproject · 30d");
   });

@@ -5,6 +5,7 @@ import { label, outcomeLabel } from "../../components/facets";
 import { jumpTo } from "../../components/SectionIndex";
 import type { InsightSession, InsightsPayload } from "../../api";
 import { currentRaw, setSearch } from "../../url";
+import { validateSearch, type InsightsSearch } from "./search";
 
 export type DrillKind = "outcome" | "help" | "goal" | "goalf" | "fr" | "frf";
 /** The names of the labels in a family of the view; none for a family the view does not have. */
@@ -24,13 +25,13 @@ const KEYS = DRILL_KEYS;
 
 export interface Drill { kind: DrillKind; value: string; chip: string }
 /** The filters the hash holds, in chip order. */
-export const drillsOf = (raw: Readonly<Record<string, string>>): Drill[] =>
-  KEYS.filter(k => raw[k]).map(k => ({ kind: k, value: raw[k]!, chip: `${KINDS[k].name}: ${KINDS[k].text(raw[k]!)}` }));
+export const drillsOf = (search: InsightsSearch): Drill[] =>
+  KEYS.filter(k => search[k]).map(k => ({ kind: k, value: search[k]!, chip: `${KINDS[k].name}: ${KINDS[k].text(search[k]!)}` }));
 /** Whether a session of view d passes every filter. */
 export const passes = (s: InsightSession, drills: Drill[], d: InsightsPayload) => drills.every(x => KINDS[x.kind].match(s, x.value, d));
 /** Sets a filter to name, or clears it when it already is name; one history entry. Read from the live hash, not a render. */
 export function toggleDrill(kind: DrillKind, name: string): boolean {
-  const on = currentRaw()[kind] === name;
+  const on = validateSearch(currentRaw())[kind] === name;
   setSearch({ [kind]: on ? null : name }, { push: true });
   return !on;
 }
@@ -49,7 +50,7 @@ export const focusList = (to: "jump" | "heading") => {
 /** What a ledger row needs to filter the list: marked when it is the filter, a button when it has sessions. Setting a
  *  filter moves to the list once it has rendered; clearing one leaves focus on the row. A row with no sessions is never a
  *  button; the filter chip clears its filter. */
-export const pickProps = (active: Readonly<Record<string, string>>, kind: DrillKind, name: string, sessions: number) => ({
+export const pickProps = (active: InsightsSearch, kind: DrillKind, name: string, sessions: number) => ({
   active: active[kind] === name,
   onPick: sessions > 0 ? () => { if (toggleDrill(kind, name)) armFocus("jump"); } : undefined,
 });

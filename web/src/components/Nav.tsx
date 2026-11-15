@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
-import { navigate, setSearch, sharedSearch, useView, usePathname } from "../url";
+import { navigate, setSearch, sharedSearch, useSearchOf, usePathname } from "../url";
 import { getTheme, nextTheme, setTheme, useTheme, type Theme } from "../theme";
 import { alertKey, alertText } from "../pages/limits/limits";
 import { ProjectDot } from "./ProjectDot";
@@ -24,10 +24,13 @@ const THEME_ICON: Record<Theme, ReactNode> = {
   dark: <path d="M13.5 9.5A5.5 5.5 0 0 1 6.5 2.5a5.5 5.5 0 1 0 7 7Z" />,
 };
 
+// What the bar reads of the URL: the shared query string its links carry, and the project its chip shows.
+const navSearch = (raw: Readonly<Record<string, string>>) => ({ shared: sharedSearch(raw), project: raw.project || "" });
+
 /** The shared top bar: brand, page tabs (keeping project, range and auto), the project filter chip, the palette button,
  *  ingest status and Refresh. */
 export function Nav() {
-  const path = usePathname(), [h] = useView(), shared = sharedSearch(), theme = useTheme(), next = nextTheme(theme);
+  const path = usePathname(), { shared, project } = useSearchOf(navSearch), theme = useTheme(), next = nextTheme(theme);
   const nav = useRef<HTMLElement>(null);
   const { refresh, state: st } = useRefresh();
   const alert = st.alert ? alertText(st.alert) : null;
@@ -81,9 +84,9 @@ export function Nav() {
             );
           })}
         </span>
-        {h.project && (
+        {project && (
           <span className="appnav-filter" id="navFilter">
-            <span className="k">Project</span><ProjectDot project={h.project} /><b>{h.project}</b>
+            <span className="k">Project</span><ProjectDot project={project} /><b>{project}</b>
             <button type="button" aria-label="Clear project filter" title="Show all projects" onClick={clear}>✕<span className="lbl"> Clear</span></button>
           </span>
         )}

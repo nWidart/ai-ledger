@@ -1,10 +1,15 @@
 // The app's router: one root route (the shell: navigation, the page, the palette) and one lazy route per page. The view
-// lives in the query string, read and written by url.ts's plain serializer. Routes are built per router, so each test
+// lives in the query string, read and written by url.ts's plain serializer and typed by each route's validator. Routes are built per router, so each test
 // has its own.
 import type { QueryClient } from "@tanstack/react-query";
 import { createRootRouteWithContext, createRoute, createRouter, redirect, type ParsedLocation, type RouterHistory } from "@tanstack/react-router";
 import { App, ROUTES, type PagePath } from "./App";
-import { bindRouter, formatSearch, parseSearch } from "./url";
+import { validateSearch as activitySearch } from "./pages/activity/search";
+import { validateSearch as contextSearch } from "./pages/context/search";
+import { validateSearch as errorsSearch } from "./pages/errors/search";
+import { validateSearch as insightsSearch } from "./pages/insights/search";
+import { validateSearch as liveSearch } from "./pages/live/search";
+import { bindRouter, formatSearch, parseSearch, validateRoot } from "./url";
 
 export interface RouterContext { queryClient: QueryClient }
 
@@ -23,10 +28,15 @@ const toActivity = ({ location }: { location: ParsedLocation }) => {
 const Pending = () => <main id="content" className="wrap" aria-busy="true" />;
 
 export function makeRouter(o: { queryClient: QueryClient; history?: RouterHistory }) {
-  const root = createRootRouteWithContext<RouterContext>()({ component: App, beforeLoad: fromOldHash });
-  const page = <const P extends PagePath>(path: P) => createRoute({ getParentRoute: () => root, path, component: ROUTES[path].Page });
+  // Each route types its own keys: the root the ones every page shares, a page the ones only it reads (Cost and Limits
+  // have none). The validators drop what is not valid and never throw, so a mistyped link opens the page, not an error.
+  // The pages read the URL through the same validators (useSearchOf), from the location.
+  const root = createRootRouteWithContext<RouterContext>()({ component: App, beforeLoad: fromOldHash, validateSearch: validateRoot });
+  const page = <const P extends PagePath, S = {}>(path: P, validateSearch?: (raw: Record<string, unknown>) => S) =>
+    createRoute({ getParentRoute: () => root, path, component: ROUTES[path].Page, validateSearch });
   const routeTree = root.addChildren([
-    page("/usage"), page("/cost"), page("/context"), page("/errors"), page("/limits"), page("/insights"), page("/live"),
+    page("/usage", activitySearch), page("/cost"), page("/context", contextSearch), page("/errors", errorsSearch), page("/limits"),
+    page("/insights", insightsSearch), page("/live", liveSearch),
     createRoute({ getParentRoute: () => root, path: "/", beforeLoad: toActivity }),
     createRoute({ getParentRoute: () => root, path: "$", beforeLoad: toActivity }),
   ]);

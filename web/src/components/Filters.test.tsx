@@ -1,3 +1,4 @@
+import { Profiler } from "react";
 import { act, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
@@ -90,6 +91,19 @@ describe("Filters", () => {
     expect(field.value).toBe("All projects");
     await act(async () => { setSearch({ project: "bar" }); });
     expect(field.value).toBe("bar");
+  });
+});
+
+describe("Filters renders", () => {
+  it("re-renders for a key it shows, not for a sheet opening", async () => {
+    history.replaceState(null, "", "/usage?range=30");
+    let commits = 0;
+    renderApp(<Profiler id="f" onRender={() => { commits++; }}><Filters projects={["foo", "bar"]} automated /></Profiler>);
+    const before = commits;
+    await act(async () => { setSearch({ session: "s1" }); });
+    expect(commits).toBe(before);
+    await act(async () => { setSearch({ project: "bar" }); });
+    expect(commits).toBeGreaterThan(before);
   });
 });
 

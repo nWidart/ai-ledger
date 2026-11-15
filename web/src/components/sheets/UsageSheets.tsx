@@ -1,6 +1,6 @@
 import { useRef, type ReactNode } from "react";
 import { viewOf, type ToolKind, type UsagePayload } from "../../api";
-import { closeSheets, useView } from "../../url";
+import { closeSheets, parseView, setSearch, useSearchOf } from "../../url";
 import { queries } from "../../queries";
 import { useApi } from "../../useApi";
 import { ProjectDot } from "../ProjectDot";
@@ -26,7 +26,7 @@ const twin = (v: string) => {
  * automated: the page shows automated sessions whatever the hash says (Errors), so its sheets do too.
  */
 export function UsageSheets({ data, automated }: { data: UsagePayload | undefined; automated?: boolean }) {
-  const [h, set] = useView();
+  const h = useSearchOf(parseView), set = setSearch;
   const view = { ...viewOf(h), automated: automated || h.auto };
   const { session, inspect } = h;
   const [tk, tn]: [ToolKind, string] = h.tool ? ["tool", h.tool] : h.mcp ? ["mcp", h.mcp] : ["skill", h.skill];

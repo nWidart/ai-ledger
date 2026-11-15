@@ -5,7 +5,8 @@ import { UsageSheets } from "../../components/sheets/UsageSheets";
 import type { SortBy } from "../../components/Sort";
 import { Toggletip } from "../../components/Toggletip";
 import { num as fmt } from "../../format";
-import { onNavigate, setSearch, useView } from "../../url";
+import { onNavigate, setSearch, useSearchOf, validateRoot } from "../../url";
+import { validateSearch } from "./search";
 import { queries } from "../../queries";
 import { useApi } from "../../useApi";
 import { Ctx, Keyed, RowContext, tableFocus, type ErrorsCtx, type RowCtx } from "./context";
@@ -42,9 +43,9 @@ export function ErrorsPage() {
   const m = useMemo(() => base && withMuted(base, muted), [base, muted]); // the model with the types muted as of now
   // Project colors match Activity: the nav hands them out in the server's all-time order.
   useEffect(() => { if (data) setOrder(data.project_order); }, [data]);
-  const [h] = useView();
+  const search = useSearchOf(raw => ({ ...validateRoot(raw), ...validateSearch(raw) }));
   const saved = useRef<SavedView>(store.get<SavedView>(VIEW_KEY, {}));
-  const read = useMemo(() => readView(h.raw, saved.current, base), [h.raw, base]);
+  const read = useMemo(() => readView(search, saved.current, base), [search, base]);
   const view = useMemo(() => (m ? settle(m, read.view) : read.view), [m, read.view]);
   const viewRef = useRef(view);
   viewRef.current = view;

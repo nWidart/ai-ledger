@@ -22,14 +22,14 @@ Model per task: **Haiku** for mechanical, well-defined edits; **Sonnet** for sta
 
 ## 2. Typed search per page (phase 2)
 
-Tasks 2.1 to 2.7 touch separate folders and can run in parallel; each adds its route's validator to `router.tsx` in a one-line change. Reads go through `useSearchOf(validate, select?)` over the router's location, not `Route.useSearch()` (design decision 7); 2.5 adds that hook first.
+Tasks 2.1 to 2.5 touch separate folders and ran in parallel. Reads go through `useSearchOf(validate, select?)` over the router's location, not `Route.useSearch()` (design decision 7); the hook was added first, and the validators were wired into `router.tsx` together in 2.6, with a test that opens each page with every key it reads and asserts the URL is unchanged.
 
-- [ ] 2.1 Errors: `pages/errors/search.ts` validates `sub`, `noise`, `gran`, `cat`, `ex`, `at`, `etool`; `view.ts`'s `readView` and `viewPatch` take the typed search; the page reads its typed search with `useSearchOf`. — **Sonnet**: the largest page and the permalink logic. Depends on: group 1. Done when: `model.test.ts` and `ErrorsPage.test.tsx` pass; a bad `gran` or `at` reads as its default without an error component.
-- [ ] 2.2 Insights: `pages/insights/search.ts` validates `outcome`, `friction`, `help`, `goal`, `fr`, `goalf`, `frf`; `drill.ts` and `filtersOf` take the typed search. — **Sonnet**. Depends on: group 1. Done when: `InsightsPage.test.tsx` passes, with the drill-down URL scenarios.
-- [ ] 2.3 Activity: `pages/activity/search.ts` validates `q`, `near`, `day`; `sessOf` takes the typed search. — **Haiku**: three keys, one reader. Depends on: group 1. Done when: `ActivityPage.test.tsx` passes.
-- [ ] 2.4 Context (`tip`), Live (`view`), Limits and Cost (whatever page-only keys they read; none is expected for Cost): a `search.ts` each and typed reads. — **Haiku**. Depends on: group 1. Done when: their page tests pass.
-- [ ] 2.5 Shared components read the root search with selectors (design decision 7): add `useSearchOf(validate, select?)` to `url.ts`, then `Nav`, `Filters`, `UsageSheets`, `Palette`. — **Sonnet**. Depends on: group 1. Done when: their tests pass and a test shows that a change of `session` does not re-render `Filters` (a render counter).
-- [ ] 2.6 Delete `raw` and `useView()`'s untyped fields once 2.1 to 2.5 are merged. — **Haiku**. Depends on: 2.1 to 2.5. Done when: `grep -rn "\.raw\b" web/src` returns nothing from the URL model and `npm run check` is green.
+- [x] 2.1 Errors: `pages/errors/search.ts` validates `sub`, `noise`, `gran`, `cat`, `ex`, `at`, `etool`; `view.ts`'s `readView` and `viewPatch` take the typed search; the page reads its typed search with `useSearchOf`. — **Sonnet**: the largest page and the permalink logic. Depends on: group 1. Done when: `model.test.ts` and `ErrorsPage.test.tsx` pass; a bad `gran` or `at` reads as its default without an error component.
+- [x] 2.2 Insights: `pages/insights/search.ts` validates `outcome`, `friction`, `help`, `goal`, `fr`, `goalf`, `frf`; `drill.ts` and `filtersOf` take the typed search. — **Sonnet**. Depends on: group 1. Done when: `InsightsPage.test.tsx` passes, with the drill-down URL scenarios.
+- [x] 2.3 Activity: `pages/activity/search.ts` validates `q`, `near`, `day`; `sessOf` takes the typed search. — **Haiku**: three keys, one reader. Depends on: group 1. Done when: `ActivityPage.test.tsx` passes.
+- [x] 2.4 Context (`tip`), Live (`view`), Limits and Cost (whatever page-only keys they read; none is expected for Cost): a `search.ts` each and typed reads. — **Haiku**. Depends on: group 1. Done when: their page tests pass.
+- [x] 2.5 Shared components read the root search with selectors (design decision 7): add `useSearchOf(validate, select?)` to `url.ts`, then `Nav`, `Filters`, `UsageSheets`, `Palette`. — **Sonnet**. Depends on: group 1. Done when: their tests pass and a test shows that a change of `session` does not re-render `Filters` (a render counter).
+- [x] 2.6 Delete `raw` and `useView()`'s untyped fields once 2.1 to 2.5 are merged. — **Haiku**. Depends on: 2.1 to 2.5. Done when: `grep -rn "\.raw\b" web/src` returns nothing from the URL model and `npm run check` is green.
 
 ## 3. Navigation (phase 3)
 

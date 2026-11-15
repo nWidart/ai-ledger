@@ -44,7 +44,7 @@ Every page with the automated filter (Activity, Cost, Context, Insights, Live) S
 ## ADDED Requirements
 
 ### Requirement: Keep the view in the query string
-The app SHALL keep the page in the URL path and the view in the URL query string: the project, range, source and automated toggle, the open sheet, and each page's own keys. Reloading the page or opening a copied URL SHALL show the same view. Keys and values SHALL be written as plain text, with no quoting added to a value. A key the page does not know SHALL be ignored.
+The app SHALL keep the page in the URL path and the view in the URL query string: the project, range, source and automated toggle, the open sheet, and each page's own keys. Reloading the page or opening a copied URL SHALL show the same view. Keys and values SHALL be written as plain text, with no quoting added to a value. A key the page does not know SHALL be ignored. A value that is not valid SHALL be read as if its key were absent.
 
 #### Scenario: Reload keeps the view
 - **WHEN** the user on `/usage?project=myproject&range=7&session=<id>` reloads the page
@@ -57,6 +57,10 @@ The app SHALL keep the page in the URL path and the view in the URL query string
 #### Scenario: Unknown key
 - **WHEN** the user opens `/cost?project=myproject&nosuchkey=1`
 - **THEN** Cost shows `myproject` as it would without `nosuchkey`
+
+#### Scenario: Value that is not valid
+- **WHEN** the user opens `/usage?range=abc`
+- **THEN** Activity opens over 30 days, as it would with no range, and shows no error
 
 ### Requirement: Open links in the earlier hash form
 The app SHALL open a URL whose hash holds a view in the form used before the query string, such as `/usage#project=myproject&range=7`, as the same view. It SHALL rewrite the URL to the query-string form in place, with no reload and no added history entry. A hash that holds no `=` SHALL be left as it is.

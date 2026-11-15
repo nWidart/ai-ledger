@@ -5,7 +5,7 @@ import { errorsHref, openToolSheet } from "./components/sheets/session";
 import { makeTestClient, routerOf, wrapper } from "./testing";
 import {
   applyPatch, closeSheets, currentRaw, formatSearch, go, navigate, onNavigate, parseSearch, parseView, rootState, setSearch, sharedOf, sharedSearch,
-  useView, usePathname, validateRoot, type RootSearch,
+  useView, useSearchOf, usePathname, validateRoot, type RootSearch,
 } from "./url";
 
 /** The URL a test starts at, and the router over it. */
@@ -55,16 +55,16 @@ describe("formatSearch", () => {
 describe("parseView", () => {
   it("reads a Usage URL from before the change", () => {
     const s = view("?project=foo&range=14&inspect=bar&session=abc");
-    expect(s).toMatchObject({ project: "foo", range: 14, inspect: "bar", session: "abc", ex: "", cat: "", auto: false });
+    expect(s).toEqual({ project: "foo", range: 14, source: "", auto: false, inspect: "bar", tool: "", mcp: "", skill: "", session: "abc" });
   });
-  it("reads an Errors URL with its page-only keys", () => {
+  it("reads the shared keys of an Errors URL and leaves its page-only keys out", () => {
     const s = view("?project=foo&range=0&sub=0&noise=0&gran=week&ex=toolu_1");
-    expect(s).toMatchObject({ project: "foo", range: 0, ex: "toolu_1" });
-    expect(s.raw).toEqual({ project: "foo", range: "0", sub: "0", noise: "0", gran: "week", ex: "toolu_1" });
+    expect(s).toMatchObject({ project: "foo", range: 0 });
+    expect(Object.keys(s)).toEqual(["project", "range", "source", "auto", "inspect", "tool", "mcp", "skill", "session"]);
   });
-  it("defaults the range to 30 and says when the URL had none", () => {
-    expect(view("?ex=toolu_1")).toMatchObject({ range: 30, ex: "toolu_1" });
-    expect(view("?ex=toolu_1").raw.range).toBeUndefined();
+  it("defaults the range to 30", () => {
+    expect(view("?ex=toolu_1").range).toBe(30);
+    expect(view("?range=").range).toBe(30);
     expect(view("?range=12").range).toBe(30);
     expect(view("").range).toBe(30);
   });
@@ -75,7 +75,7 @@ describe("parseView", () => {
   it("reads a known source, and an unknown one as All", () => {
     expect(view("?source=codex").source).toBe("codex");
     expect(view("?source=claude").source).toBe("claude");
-    expect(view("?source=grok")).toMatchObject({ source: "", raw: { source: "grok" } });
+    expect(view("?source=grok").source).toBe("");
     expect(view("").source).toBe("");
   });
   it("reads the inspected tool, MCP server and skill", () => {
@@ -332,6 +332,33 @@ describe("setSearch", () => {
   });
 });
 
+describe("useSearchOf", () => {
+  const pick = (raw: Readonly<Record<string, string>>) => ({ project: raw.project ?? "", q: raw.q ?? "" });
+
+  it("reads the keys its validator names and re-renders only when the selection changes", () => {
+    history.replaceState(null, "", "/usage?project=foo&q=a");
+    let renders = 0;
+    const { result } = renderHook(() => { renders++; return useSearchOf(pick, s => s.project); }, { wrapper: wrapper(makeTestClient()) });
+    expect(result.current).toBe("foo");
+    const before = renders;
+    act(() => setSearch({ q: "ab" }));
+    expect(renders).toBe(before);
+    act(() => setSearch({ project: "bar" }));
+    expect(result.current).toBe("bar");
+    expect(renders).toBe(before + 1);
+  });
+
+  it("keeps the same object while the validated keys are equal", () => {
+    history.replaceState(null, "", "/usage?project=foo");
+    const { result } = renderHook(() => useSearchOf(pick), { wrapper: wrapper(makeTestClient()) });
+    const first = result.current;
+    act(() => setSearch({ session: "s1" }));
+    expect(result.current).toBe(first);
+    act(() => setSearch({ q: "x" }));
+    expect(result.current).toEqual({ project: "foo", q: "x" });
+  });
+});
+
 describe("useView", () => {
   it("re-renders on setSearch, Back and links", async () => {
     history.replaceState(null, "", "/usage?range=30");
@@ -345,10 +372,19 @@ describe("useView", () => {
     });
     expect(result.current[0]).toMatchObject({ project: "bar", range: 90 });
     await act(async () => {
-      history.replaceState(null, "", "/usage?cat=x");
+      history.replaceState(null, "", "/usage?auto=1");
       dispatchEvent(new PopStateEvent("popstate"));
     });
-    expect(result.current[0]).toMatchObject({ project: "", range: 30, cat: "x" });
+    expect(result.current[0]).toMatchObject({ project: "", range: 30, auto: true });
+  });
+  it("keeps the same view while only a page's own key changes", () => {
+    history.replaceState(null, "", "/usage?project=foo");
+    const { result } = renderHook(() => useView(), { wrapper: wrapper(makeTestClient()) });
+    const first = result.current[0];
+    act(() => setSearch({ q: "x" }));
+    expect(result.current[0]).toBe(first);
+    act(() => setSearch({ session: "s1" }));
+    expect(result.current[0]).toEqual({ ...first, session: "s1" });
   });
   it("shows the new view after setSearch within the same act", () => {
     history.replaceState(null, "", "/usage?range=30");

@@ -9,7 +9,8 @@ import { jumpTo, SectionIndex } from "../../components/SectionIndex";
 import { sessName, shortId } from "../../components/sheets/session";
 import { useLanding } from "../../components/useLanding";
 import { dayLabel, dur, num, pct, plural, when } from "../../format";
-import { formatSearch, navigate, setSearch, useView } from "../../url";
+import { formatSearch, navigate, setSearch, useSearchOf, useView } from "../../url";
+import { validateSearch, type InsightsSearch } from "./search";
 import { queries } from "../../queries";
 import { useApi } from "../../useApi";
 import { armFocus, DRILL_KEYS, drillsOf, focusList, passes, pickProps, takeFocus, toggleDrill, type DrillKind } from "./drill";
@@ -103,7 +104,7 @@ const FAMILY_HINT = "Similar labels are grouped into families by keyword; a fami
 /** A row of a family ledger. With 2 or more labels it filters by the family (`family` kind) and has an expander, a separate button,
  *  that lists the labels as /insights wrote them, each filtering by its raw name (`raw` kind). A family of one label is that label's
  *  plain row, with the raw filter. */
-function FamilyRow({ f, max, raw, kind }: { f: FacetFamily; max: number; raw: Readonly<Record<string, string>>; kind: { raw: DrillKind; family: DrillKind } }) {
+function FamilyRow({ f, max, raw, kind }: { f: FacetFamily; max: number; raw: InsightsSearch; kind: { raw: DrillKind; family: DrillKind } }) {
   const [open, setOpen] = useState(false), id = useId(), share = (n: number) => max ? n / max : 0;
   if (f.members.length === 1) {
     const m = f.members[0]!;
@@ -122,24 +123,24 @@ function FamilyRow({ f, max, raw, kind }: { f: FacetFamily; max: number; raw: Re
 }
 
 function Friction({ d }: { d: InsightsPayload }) {
-  const [h] = useView(), max = d.friction_families[0]?.n ?? 0;
+  const raw = useSearchOf(validateSearch), max = d.friction_families[0]?.n ?? 0;
   return (
     <section className="panel sect" id="friction" aria-labelledby="frictionTitle">
       <h2 id="frictionTitle">Friction categories <Judged /></h2>
       <p className="hint">What got in the way, by times reported, with the sessions that reported it. A session can carry several. {FAMILY_HINT}</p>
       <TopLedger rows={d.friction_families} empty="No friction reported in this view." noun="friction families" row={f =>
-        <FamilyRow key={f.family} f={f} max={max} raw={h.raw} kind={{ raw: "fr", family: "frf" }} />} />
+        <FamilyRow key={f.family} f={f} max={max} raw={raw} kind={{ raw: "fr", family: "frf" }} />} />
     </section>
   );
 }
 
 function Goals({ d }: { d: InsightsPayload }) {
-  const [h] = useView(), max = d.goal_families[0]?.n ?? 0;
+  const raw = useSearchOf(validateSearch), max = d.goal_families[0]?.n ?? 0;
   return (
     <Drawer id="d-goals" title="Goals" after={<Judged />}>
       <p className="hint">What each session set out to do. {FAMILY_HINT}</p>
       <TopLedger rows={d.goal_families} empty="No goals recorded in this view." noun="goal families" row={f =>
-        <FamilyRow key={f.family} f={f} max={max} raw={h.raw} kind={{ raw: "goal", family: "goalf" }} />} />
+        <FamilyRow key={f.family} f={f} max={max} raw={raw} kind={{ raw: "goal", family: "goalf" }} />} />
     </Drawer>
   );
 }
@@ -227,19 +228,19 @@ function Trend({ d }: { d: InsightsPayload }) {
 }
 
 function Outcomes({ d }: { d: InsightsPayload }) {
-  const [h] = useView(), n = d.coverage.facets;
+  const raw = useSearchOf(validateSearch), n = d.coverage.facets;
   return (
     <section className="panel sect" id="outcomes" aria-labelledby="outcomesTitle">
       <h2 id="outcomesTitle">Outcomes <Judged /></h2>
       <p className="hint">Whether each session met its goal, as judged by a model from the transcript. Share of the {plural(n, "analysed session")}.</p>
       <Ledger empty="No outcomes in this view.">{d.outcomes.map(o => <LedgerRow key={o.name} name={outcomeLabel(o.name)} title={o.name}
-        share={n ? o.n / n : 0} value={pct(n ? o.n / n : 0)} side={num(o.n)} {...pickProps(h.raw, "outcome", o.name, o.n)} />)}</Ledger>
+        share={n ? o.n / n : 0} value={pct(n ? o.n / n : 0)} side={num(o.n)} {...pickProps(raw, "outcome", o.name, o.n)} />)}</Ledger>
     </section>
   );
 }
 
 function Feelings({ d }: { d: InsightsPayload }) {
-  const [h] = useView(), n = d.coverage.facets, smax = Math.max(0, ...d.satisfaction.map(s => s.n));
+  const raw = useSearchOf(validateSearch), n = d.coverage.facets, smax = Math.max(0, ...d.satisfaction.map(s => s.n));
   return (
     <section className="panel sect" id="satisfaction" aria-labelledby="feelTitle">
       <h2 id="feelTitle">Satisfaction and helpfulness <Judged /></h2>
@@ -249,7 +250,7 @@ function Feelings({ d }: { d: InsightsPayload }) {
       <h3>Claude's helpfulness</h3>
       <p className="hint">Sessions per rating, from essential to unhelpful.</p>
       <Ledger empty="No ratings in this view.">{d.helpfulness.map(x => <LedgerRow key={x.name} name={label(x.name)} title={x.name}
-        share={n ? x.n / n : 0} value={num(x.n)} side={pct(n ? x.n / n : 0)} {...pickProps(h.raw, "help", x.name, x.n)} />)}</Ledger>
+        share={n ? x.n / n : 0} value={num(x.n)} side={pct(n ? x.n / n : 0)} {...pickProps(raw, "help", x.name, x.n)} />)}</Ledger>
     </section>
   );
 }
@@ -257,7 +258,7 @@ function Feelings({ d }: { d: InsightsPayload }) {
 const plain = (e: MouseEvent) => !(e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey);
 
 /** One session as a card: title, outcome and chips on the first line, the model's summary below, friction detail on expand. */
-function SessionCard({ s, view, raw }: { s: InsightSession; view: View; raw: Readonly<Record<string, string>> }) {
+function SessionCard({ s, view, raw }: { s: InsightSession; view: View; raw: InsightsSearch }) {
   const line = s.meta ? measured(s.meta) : "";
   /** A chip or badge that sets, or clears, the filter of its kind. */
   const pick = (kind: DrillKind, name: string, text: ReactNode, cls: string) =>
@@ -302,10 +303,10 @@ const SORTS = {
 type SortId = keyof typeof SORTS;
 
 /** The list's filters as the URL holds them. */
-const filtersOf = (raw: Readonly<Record<string, string>>) => ({ friction: raw.friction === "1", outcome: raw.outcome ?? "" });
+const filtersOf = (search: InsightsSearch) => ({ friction: search.friction === true, outcome: search.outcome ?? "" });
 
 function Sessions({ d, view, sort, onSort }: { d: InsightsPayload; view: View; sort: SortId; onSort: (s: SortId) => void }) {
-  const [h] = useView(), { friction, outcome } = filtersOf(h.raw), drills = drillsOf(h.raw), [all, setAll] = useState(false);
+  const search = useSearchOf(validateSearch), { friction, outcome } = filtersOf(search), drills = drillsOf(search), [all, setAll] = useState(false);
   const filtered = friction || drills.length > 0;
   const rows = d.sessions.filter(s => (!friction || hasFriction(s)) && passes(s, drills, d)).sort(SORTS[sort].cmp);
   const listed = all ? rows : rows.slice(0, SESSIONS_TOP);
@@ -313,7 +314,7 @@ function Sessions({ d, view, sort, onSort }: { d: InsightsPayload; view: View; s
   const outcomes = d.outcomes.filter(o => o.n > 0).map(o => o.name);
   if (outcome && !outcomes.includes(outcome)) outcomes.push(outcome);
   // After a click changed the filters (not a URL change, Back or the select), focus the heading: the clicked chip may be gone.
-  const key = [...DRILL_KEYS.map(k => h.raw[k] ?? ""), friction].join("\0");
+  const key = [...DRILL_KEYS.map(k => search[k] ?? ""), friction].join("\0");
   useEffect(() => { const to = takeFocus(); if (to) focusList(to); }, [key]);
   const drop = (keys: string[]) => { armFocus("heading"); setSearch(Object.fromEntries(keys.map(k => [k, null])), { push: true }); };
   const chips = [...drills.map(x => ({ key: x.kind, text: x.chip })), ...(friction ? [{ key: "friction", text: "Only sessions with friction" }] : [])];
@@ -337,7 +338,7 @@ function Sessions({ d, view, sort, onSort }: { d: InsightsPayload; view: View; s
       <p className="hint"><span className="count">{filtered ? `${num(rows.length)} of ${plural(d.sessions.length, "session")}` : plural(rows.length, "session")}</span>,
         {" "}{SORTS[sort].words}{d.truncated ? `: the newest ${num(d.sessions.length)} of the view` : ""}. The summary and friction detail are the model's words.
         {d.truncated && filtered && ` Filters cover only the newest ${num(d.sessions.length)} analysed sessions of the view, so a ledger count can exceed the sessions listed.`}</p>
-      {listed.length ? <ul className="scards" role="list">{listed.map(s => <SessionCard key={s.session_id} s={s} view={view} raw={h.raw} />)}</ul>
+      {listed.length ? <ul className="scards" role="list">{listed.map(s => <SessionCard key={s.session_id} s={s} view={view} raw={search} />)}</ul>
         : <p className="empty">{drills.length ? "No session in this view matches the filters." : friction ? "No session in this view reports friction." : "No analysed sessions in this view."}</p>}
       {rows.length > SESSIONS_TOP && <button type="button" className="linkish more" onClick={() => setAll(!all)}>
         {all ? `Show the first ${SESSIONS_TOP}` : `Show all ${num(rows.length)} sessions`}</button>}
