@@ -13,11 +13,11 @@ import { Palette } from "../../components/palette/Palette";
 import { openPalette } from "../../components/palette/store";
 import { mockApi } from "../../components/sheets/testing";
 import { ActivityPage } from "./ActivityPage";
-import { setHash } from "../../hash";
+import { setSearch } from "../../url";
 import { hookCommand, workDays } from "./work";
 import { ingested, refreshed, renderApp } from "../../testing";
 
-const at = (hash = "#range=30") => history.replaceState(null, "", "/usage" + hash);
+const at = (hash = "?range=30") => history.replaceState(null, "", "/usage" + hash);
 const serve = (d: UsagePayload) => mockApi({ "/api/usage": () => d, "/api/sessions": () => sessions, "/api/session": () => session });
 const attention = () => within(document.getElementById("attention")!);
 const loaded = () => screen.findByRole("heading", { level: 1, name: /commit/ });
@@ -108,7 +108,7 @@ describe("change against the previous period", () => {
 
   it("shows no change in the All range", async () => {
     serve(usageAll);
-    at("#range=0");
+    at("?range=0");
     renderApp(<ActivityPage />);
     await loaded();
     expect(document.querySelector("#lede")!.textContent).not.toMatch(change);
@@ -227,7 +227,7 @@ describe("ActivityPage", () => {
     renderApp(<ActivityPage />);
     await loaded();
     await userEvent.click(within(screen.getByRole("group", { name: "Source" })).getByRole("button", { name: "Codex" }));
-    expect(location.hash).toBe("#range=30&source=codex");
+    expect(location.search).toBe("?range=30&source=codex");
     expect((await screen.findByRole("heading", { level: 1, name: /^0 commits/ })).textContent).toBe("0 commits from 1 prompt, unchanged, in 1 session, unchanged, 1 active day, unchanged");
     expect(fetched()).toContain("/api/usage?range=30&source=codex");
   });
@@ -311,7 +311,7 @@ describe("ActivityPage", () => {
   it("says a search failed, with Retry, and shows no rows of the earlier query", async () => {
     let down = true;
     mockApi({ "/api/usage": () => usage, "/api/sessions": q => (q.get("q") && down ? undefined : { total: 100, offset: 0, sessions: many(100) }) });
-    at("#range=30&q=needle");
+    at("?range=30&q=needle");
     renderApp(<ActivityPage />);
     await loaded();
     openSessions();
@@ -445,7 +445,7 @@ describe("ActivityPage", () => {
     await userEvent.click(cost);
     await waitFor(() => expect(fetched()).toContain("/api/sessions?range=30&sort=cost"));
     expect(cost.closest("th")!.getAttribute("aria-sort")).toBe("ascending");
-    expect(location.hash).toBe("#range=30");
+    expect(location.search).toBe("?range=30");
   });
 
   it("sends each sortable Sessions column's own key, and the hint says the order", async () => {
@@ -552,7 +552,7 @@ describe("ActivityPage", () => {
 
   it("restores the sessions filters from the hash and writes them without new history entries", async () => {
     mockApi({ "/api/usage": () => usage, "/api/sessions": () => sessions, "/api/day": () => noDay("2026-11-04") });
-    at("#range=30&day=2026-11-04&q=api&near=1");
+    at("?range=30&day=2026-11-04&q=api&near=1");
     renderApp(<ActivityPage />);
     await loaded();
     act(() => { openDrawer("d-sessions"); });
@@ -564,38 +564,38 @@ describe("ActivityPage", () => {
     const n = history.length;
     await userEvent.type(search, "x");
     await userEvent.click(screen.getByRole("checkbox", { name: "Near context limit only" }));
-    expect(location.hash).toBe("#range=30&day=2026-11-04&q=apix");
+    expect(location.search).toBe("?range=30&day=2026-11-04&q=apix");
     expect(history.length).toBe(n);
   });
 
   it("clears the day when the project, range or source changes", async () => {
     mockApi({ "/api/usage": () => usage, "/api/sessions": () => sessions, "/api/day": () => noDay("2026-11-04") });
-    at("#range=30&day=2026-11-04&q=api");
+    at("?range=30&day=2026-11-04&q=api");
     renderApp(<ActivityPage />);
     await loaded();
     await userEvent.click(within(screen.getByRole("group", { name: "Time range" })).getByRole("button", { name: "7d" }));
-    await waitFor(() => expect(location.hash).toBe("#range=7&q=api"));
-    act(() => setHash({ day: "2026-11-04" }));
+    await waitFor(() => expect(location.search).toBe("?range=7&q=api"));
+    act(() => setSearch({ day: "2026-11-04" }));
     await userEvent.click(within(screen.getByRole("group", { name: "Source" })).getByRole("button", { name: "Codex" }));
-    await waitFor(() => expect(location.hash).toBe("#range=7&source=codex&q=api"));
-    act(() => setHash({ day: "2026-11-04" }));
+    await waitFor(() => expect(location.search).toBe("?range=7&source=codex&q=api"));
+    act(() => setSearch({ day: "2026-11-04" }));
     await userEvent.click(screen.getByRole("combobox", { name: "Project" }));
     await userEvent.click(screen.getByRole("option", { name: "foo" }));
-    await waitFor(() => expect(location.hash).toBe("#project=foo&range=7&source=codex&q=api"));
+    await waitFor(() => expect(location.search).toBe("?project=foo&range=7&source=codex&q=api"));
   });
 
   it("keeps the day on the earlier history entry after a filter change and Back", async () => {
     mockApi({ "/api/usage": () => usage, "/api/sessions": () => sessions, "/api/day": () => noDay("2026-11-04") });
-    at("#range=30&day=2026-11-04");
+    at("?range=30&day=2026-11-04");
     renderApp(<ActivityPage />);
     await loaded();
     await userEvent.click(within(screen.getByRole("group", { name: "Time range" })).getByRole("button", { name: "7d" }));
-    await waitFor(() => expect(location.hash).toBe("#range=7"));
+    await waitFor(() => expect(location.search).toBe("?range=7"));
     const days = () => fetched().filter(u => String(u).startsWith("/api/day")).length, n = days();
     act(() => history.back());
-    await waitFor(() => expect(location.hash).toMatch(/range=30/));
+    await waitFor(() => expect(location.search).toMatch(/range=30/));
     await act(async () => {});
-    expect(location.hash).toBe("#range=30&day=2026-11-04");
+    expect(location.search).toBe("?range=30&day=2026-11-04");
     expect(days()).toBe(n);
   });
 
@@ -606,7 +606,7 @@ describe("ActivityPage", () => {
       error_loops: [{ ...usage.error_loops[0]!, first_id: "dl1" }], error_loops_total: 7,
     };
     mockApi({ "/api/usage": () => usage, "/api/sessions": () => sessions, "/api/day": () => day });
-    at("#range=30&day=2026-11-04");
+    at("?range=30&day=2026-11-04");
     renderApp(<ActivityPage />);
     await loaded();
     act(() => { openDrawer("d-tools"); openDrawer("d-ext"); openDrawer("d-loops"); openDrawer("d-sessions"); });
@@ -624,7 +624,7 @@ describe("ActivityPage", () => {
     await userEvent.click(screen.getByRole("button", { name: "About Peak context" }));
     expect(screen.getByRole("button", { name: "Peak context" }).closest("th")!.querySelector("[role=status]")!.textContent).toMatch(/whole-session/i);
     await userEvent.click(tools.getByRole("button", { name: "Show the whole range" }));
-    expect(location.hash).toBe("#range=30");
+    expect(location.search).toBe("?range=30");
     expect(await tools.findByRole("button", { name: "Edit" })).toBeTruthy();
     expect(tools.queryByRole("button", { name: "Grep" })).toBeNull();
     expect(within(document.getElementById("d-ext")!).getByRole("button", { name: "srv" })).toBeTruthy();
@@ -635,7 +635,7 @@ describe("ActivityPage", () => {
     const wait = held<unknown>();
     let fail = false;
     mockApi({ "/api/usage": () => ({ ...usage, hooks: [] }), "/api/sessions": () => sessions, "/api/day": () => (fail ? undefined : wait.p) });
-    at("#range=30&day=2026-11-04");
+    at("?range=30&day=2026-11-04");
     renderApp(<ActivityPage />);
     await loaded();
     act(() => { openDrawer("d-tools"); openDrawer("d-ext"); });
@@ -645,7 +645,7 @@ describe("ActivityPage", () => {
     expect(within(ext).getByText("None in this range.")).toBeTruthy();
     expect(document.body.textContent).not.toMatch(/Nov 4, 2026 only|None on Nov 4/);
     fail = true;
-    act(() => setHash({ day: "2026-11-05" }));
+    act(() => setSearch({ day: "2026-11-05" }));
     expect(await tools.findByText(/^Could not load Nov 5, 2026 \(HTTP 404\); showing the whole range\./)).toBeTruthy();
     expect(within(ext).getByText("None in this range.")).toBeTruthy();
     expect(document.body.textContent).not.toMatch(/Nov 5, 2026 only|None on Nov 5/);
@@ -655,13 +655,13 @@ describe("ActivityPage", () => {
     const second = held<unknown>(), grep = { tool: "Grep", calls: 2, errors: 0, failure_rate: 0, p50_ms: 10, p95_ms: 20 };
     mockApi({ "/api/usage": () => usage, "/api/sessions": () => sessions,
       "/api/day": q => (q.get("day") === "2026-11-04" ? { ...noDay("2026-11-04"), tools: [grep] } : second.p) });
-    at("#range=30&day=2026-11-04");
+    at("?range=30&day=2026-11-04");
     renderApp(<ActivityPage />);
     await loaded();
     act(() => { openDrawer("d-tools"); });
     const tools = within(document.getElementById("d-tools")!);
     expect(await tools.findByRole("button", { name: "Grep" })).toBeTruthy();
-    act(() => setHash({ day: "2026-11-05" }));
+    act(() => setSearch({ day: "2026-11-05" }));
     await waitFor(() => expect(tools.queryByRole("button", { name: "Grep" })).toBeNull());
     await act(async () => { second.resolve({ ...noDay("2026-11-05"), tools: [{ ...grep, tool: "Glob" }] }); await second.p; });
     expect(await tools.findByRole("button", { name: "Glob" })).toBeTruthy();
@@ -670,7 +670,7 @@ describe("ActivityPage", () => {
 
   it("treats a day that does not exist as no day", async () => {
     mockApi({ "/api/usage": () => usage, "/api/sessions": () => sessions, "/api/day": () => noDay("2026-02-30") });
-    at("#range=30&day=2026-02-30");
+    at("?range=30&day=2026-02-30");
     renderApp(<ActivityPage />);
     await loaded();
     act(() => { openDrawer("d-tools"); });
@@ -705,7 +705,7 @@ describe("ActivityPage", () => {
     const row = within(drawer.querySelector("tbody")!);
     expect(row.getByText("npm test")).toBeTruthy();
     expect(row.getByRole("button", { name: "Fix upload" })).toBeTruthy();
-    expect(row.getByRole("link", { name: "Open in Errors" }).getAttribute("href")).toBe("/errors#project=bar&range=30&source=codex&ex=t9");
+    expect(row.getByRole("link", { name: "Open in Errors" }).getAttribute("href")).toBe("/errors?project=bar&range=30&source=codex&ex=t9");
     expect(within(screen.getByRole("navigation", { name: "Page sections" })).getByRole("link", { name: "Tests" }).getAttribute("href")).toBe("#d-tests");
   });
 
@@ -718,7 +718,7 @@ describe("ActivityPage", () => {
     act(() => { openDrawer("d-tests"); });
     const row = within(document.getElementById("d-tests")!.querySelector("tbody")!);
     expect(row.getByText("npm test")).toBeTruthy();
-    expect(row.getByRole("link", { name: "Open in Errors" }).getAttribute("href")).toBe("/errors#project=bar&range=30&source=claude&ex=t8");
+    expect(row.getByRole("link", { name: "Open in Errors" }).getAttribute("href")).toBe("/errors?project=bar&range=30&source=claude&ex=t8");
     expect(document.querySelector("#d-tests td.when")!.textContent).toBe("–");
   });
 
@@ -734,7 +734,7 @@ describe("ActivityPage", () => {
     expect(cell.getAttribute("title")).toBe("Fix flaky upload test");
     expect(cell.nextElementSibling!.textContent).toBe("#" + first!.session_id.slice(0, 8));
     await userEvent.click(cell);
-    expect(location.hash).toContain("session=" + first!.session_id);
+    expect(location.search).toContain("session=" + first!.session_id);
   });
 
   it("says when nothing needs attention", async () => {
@@ -793,11 +793,11 @@ describe("ActivityPage", () => {
     act(() => { openDrawer("d-sessions"); });
     const row = await within(document.getElementById("d-sessions")!).findByRole("button", { name: "#s1" });
     await userEvent.click(row);
-    expect(location.hash).toBe("#range=30&session=s1");
+    expect(location.search).toBe("?range=30&session=s1");
     const dlg = within(document.querySelector("dialog")!);
     expect(await dlg.findByText("Timeline")).toBeTruthy();
     await userEvent.click(dlg.getByRole("button", { name: "Close" }));
-    expect(location.hash).toBe("#range=30");
+    expect(location.search).toBe("?range=30");
   });
 
   it("opens a tool sheet from the tools drawer, and Escape returns focus to the row", async () => {
@@ -808,12 +808,12 @@ describe("ActivityPage", () => {
     act(() => { openDrawer("d-tools"); });
     const row = document.querySelector<HTMLElement>('#d-tools tr[data-v="Bash"]')!;
     await userEvent.click(row.querySelector("button")!);
-    expect(location.hash).toBe("#range=30&tool=Bash");
+    expect(location.search).toBe("?range=30&tool=Bash");
     const dlg = within(document.querySelector("dialog")!);
     expect(await dlg.findByText("Recent calls")).toBeTruthy();
     // The browser turns Escape on a modal dialog into a cancel event.
     act(() => { document.querySelector("dialog")!.dispatchEvent(new Event("cancel", { cancelable: true })); });
-    await waitFor(() => expect(location.hash).toBe("#range=30")); // closing goes Back over the entry the sheet pushed
+    await waitFor(() => expect(location.search).toBe("?range=30")); // closing goes Back over the entry the sheet pushed
     await waitFor(() => expect(document.activeElement).toBe(within(document.querySelector<HTMLElement>('#d-tools tr[data-v="Bash"]')!).getByRole("button", { name: "Bash" })));
   });
 
@@ -825,16 +825,16 @@ describe("ActivityPage", () => {
     act(() => { openDrawer("d-ext"); });
     const ext = within(document.getElementById("d-ext")!);
     await userEvent.click(ext.getByRole("button", { name: "srv" }));
-    expect(location.hash).toBe("#range=30&mcp=srv");
+    expect(location.search).toBe("?range=30&mcp=srv");
     expect((await within(document.querySelector("dialog")!).findByRole("heading", { level: 2 })).textContent).toBe("MCP serversrv");
     await userEvent.click(within(document.querySelector("dialog")!).getByRole("button", { name: "Close" }));
     await userEvent.click(ext.getByRole("button", { name: "review" }));
-    expect(location.hash).toBe("#range=30&skill=review");
+    expect(location.search).toBe("?range=30&skill=review");
   });
 
   it("opens the palette over an open tool sheet, and Escape leaves the sheet open", async () => {
     mockApi({ "/api/usage": () => usage, "/api/tool": () => tool, "/api/palette": () => palette });
-    at("#range=30&tool=Bash");
+    at("?range=30&tool=Bash");
     renderApp(<><ActivityPage /><Palette /></>);
     const sheet = document.querySelector<HTMLDialogElement>("dialog.sheet")!;
     expect(await within(sheet).findByText("Recent calls")).toBeTruthy();
@@ -844,6 +844,6 @@ describe("ActivityPage", () => {
     // Both are modal; the palette's showModal() comes later, so it is on top and holds focus.
     expect(pal.contains(document.activeElement)).toBe(true);
     await userEvent.keyboard("{Escape}");
-    expect([sheet.open, pal.open, location.hash]).toEqual([true, false, "#range=30&tool=Bash"]);
+    expect([sheet.open, pal.open, location.search]).toEqual([true, false, "?range=30&tool=Bash"]);
   });
 });

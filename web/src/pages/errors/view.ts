@@ -1,7 +1,7 @@
 // The URL hash is the view: project, range, source, sub=0 (no subagents), noise=0 (noise hidden), gran=week, cat (open type), ex (one
 // linked example), at (the chart bucket the table and detail narrow to), etool (the tool the open type's detail narrows to; tool is the tool sheet's key). The last view and the list mode live in localStorage under the old
 // page's keys and shapes. The applied fixes live in the store; FIXES_KEY is where an older page kept them, read once to move them there (see marks.ts).
-import { RANGES, sourceOf, type HashPatch, type Range } from "../../hash";
+import { RANGES, sourceOf, type SearchPatch, type Range } from "../../url";
 import type { Fixes, Model, View } from "./model";
 
 const KEYS = ["project", "range", "source", "sub", "noise", "gran", "cat", "ex", "at", "etool"];
@@ -44,12 +44,12 @@ export function readView(raw: Readonly<Record<string, string>>, saved: SavedView
     cat: ex ? ex.c : cat && m?.cats[cat] ? cat : null, focus: ex ? ex.id : null, at: /^\d{4}-\d\d-\d\d$/.test(raw.at ?? "") ? raw.at! : null, tool: raw.etool || null } };
 }
 /** The hash keys for a view (others, such as auto, stay as they are). */
-export const viewPatch = (v: View, focus = v.focus): HashPatch => ({
+export const viewPatch = (v: View, focus = v.focus): SearchPatch => ({
   project: v.project || null, range: v.range, source: v.source || null, sub: v.sub ? null : "0", noise: v.noise ? "0" : null, gran: v.gran === "week" ? "week" : null,
   ex: focus || null, cat: focus ? null : v.cat, at: v.at, etool: v.tool,
 });
-/** The hash for a view on its own, as the old page wrote it: an example's permalink and Copy URL. */
-export function viewHash(v: View, focus = v.focus): string {
+/** The query string for a view on its own, keys in the order the old page wrote them: an example's permalink and Copy URL. */
+export function viewLink(v: View, focus = v.focus): string {
   const p = new URLSearchParams();
   if (v.project) p.set("project", v.project);
   p.set("range", String(v.range));
@@ -58,6 +58,6 @@ export function viewHash(v: View, focus = v.focus): string {
   if (v.noise) p.set("noise", "0");
   if (v.gran === "week") p.set("gran", "week");
   if (focus) p.set("ex", focus); else { if (v.cat) p.set("cat", v.cat); if (v.at) p.set("at", v.at); if (v.tool) p.set("etool", v.tool); }
-  return "#" + p;
+  return "?" + p;
 }
 export const savedOf = (v: View): SavedView => ({ project: v.project, range: v.range, source: v.source, gran: v.gran, sub: v.sub, noise: v.noise, cat: v.cat });

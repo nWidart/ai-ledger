@@ -6,7 +6,7 @@ import {
   rangeStart, series, settle, summary, timeLost, typeColors, typeRows, uncategorized, viewTypes, whereToStart, withMuted, errorDays, type Err, type View,
 } from "./model";
 import { lostPayload } from "./lostData";
-import { DEFAULT_VIEW, loadFixes, loadMode, readView, savedOf, viewHash, viewPatch } from "./view";
+import { DEFAULT_VIEW, loadFixes, loadMode, readView, savedOf, viewLink, viewPatch } from "./view";
 
 const m = makeModel(fixture);
 const v = (o: Partial<View> = {}): View => ({ ...DEFAULT_VIEW, ...o });
@@ -470,7 +470,7 @@ describe("tool breakdown", () => {
 
 describe("hash and storage", () => {
   const raw = (h: string) => Object.fromEntries(new URLSearchParams(h));
-  it("reads the old page's keys; a bare #ex= link is all time and opens its type", () => {
+  it("reads the old page's keys; a bare ?ex= link is all time and opens its type", () => {
     expect(readView(raw("ex=t07"), {}, m)).toEqual({ linked: true, dead: false, view: { ...DEFAULT_VIEW, range: 0, cat: "x", focus: "t07" } });
     expect(readView(raw("project=foo&range=7&sub=0&noise=0&gran=week&cat=x"), {}, m).view)
       .toEqual({ project: "foo", source: "", range: 7, sub: false, noise: true, gran: "week", cat: "x", focus: null, at: null, tool: null });
@@ -478,7 +478,7 @@ describe("hash and storage", () => {
     expect(readView(raw("source=grok&range=7"), {}, m).view).toEqual({ ...DEFAULT_VIEW, range: 7 });
     expect(readView(raw("cat=nope&range=5"), {}, m).view).toMatchObject({ cat: null, range: 30 });
   });
-  it("flags a permalink to an example the store lacks; a dead bare #ex= keeps the default 30 days, not all time", () => {
+  it("flags a permalink to an example the store lacks; a dead bare ?ex= keeps the default 30 days, not all time", () => {
     expect(readView(raw("ex=nope"), {}, m)).toEqual({ linked: false, dead: true, view: { ...DEFAULT_VIEW, range: 30 } });
     expect(readView(raw("ex=nope&range=7"), {}, m)).toMatchObject({ dead: true, view: { range: 7, focus: null } });
     expect(readView(raw("range=30"), {}, m).dead).toBe(false);
@@ -497,10 +497,10 @@ describe("hash and storage", () => {
   });
   it("writes the hash as the old page did", () => {
     const vv = v({ project: "foo", range: 0, sub: false, noise: true, gran: "week", cat: "x" });
-    expect(viewHash(vv)).toBe("#project=foo&range=0&sub=0&noise=0&gran=week&cat=x");
-    expect(viewHash(vv, "t01")).toBe("#project=foo&range=0&sub=0&noise=0&gran=week&ex=t01");
+    expect(viewLink(vv)).toBe("?project=foo&range=0&sub=0&noise=0&gran=week&cat=x");
+    expect(viewLink(vv, "t01")).toBe("?project=foo&range=0&sub=0&noise=0&gran=week&ex=t01");
     expect(viewPatch(v({ cat: "x", focus: "t01" }))).toMatchObject({ ex: "t01", cat: null, sub: null, range: 30, source: null });
-    expect(viewHash(v({ source: "codex" }))).toBe("#range=30&source=codex");
+    expect(viewLink(v({ source: "codex" }))).toBe("?range=30&source=codex");
   });
   it("holds the bucket under at, in the patch and the hash but not the saved view; a permalink leaves it out", () => {
     expect(readView(raw("range=30&at=2026-11-03"), {}, m).view.at).toBe("2026-11-03");
@@ -509,8 +509,8 @@ describe("hash and storage", () => {
     expect(viewPatch(v({ at: "2026-11-03" })).at).toBe("2026-11-03");
     expect(viewPatch(v()).at).toBeNull();
     expect(viewPatch(v({ at: "2026-11-03", focus: "t01" }))).toMatchObject({ ex: "t01", at: "2026-11-03" });
-    expect(viewHash(v({ cat: "x", at: "2026-11-03" }))).toBe("#range=30&cat=x&at=2026-11-03");
-    expect(viewHash(v({ at: "2026-11-03" }), "t01")).toBe("#range=30&ex=t01");
+    expect(viewLink(v({ cat: "x", at: "2026-11-03" }))).toBe("?range=30&cat=x&at=2026-11-03");
+    expect(viewLink(v({ at: "2026-11-03" }), "t01")).toBe("?range=30&ex=t01");
     expect(savedOf(v({ at: "2026-11-03" }))).not.toHaveProperty("at");
   });
   it("holds the tool under etool (the tool sheet owns tool), in the patch and the hash but not the saved view; a permalink leaves it out", () => {
@@ -522,8 +522,8 @@ describe("hash and storage", () => {
     expect(viewPatch(v({ cat: "x", tool: "Edit" })).etool).toBe("Edit");
     expect(viewPatch(v()).etool).toBeNull();
     expect(viewPatch(v({ cat: "x", tool: "Bash", focus: "t01" }))).toMatchObject({ ex: "t01", etool: "Bash" });
-    expect(viewHash(v({ cat: "x", at: "2026-11-03", tool: "Edit" }))).toBe("#range=30&cat=x&at=2026-11-03&etool=Edit");
-    expect(viewHash(v({ cat: "x", tool: "Edit" }), "t01")).toBe("#range=30&ex=t01");
+    expect(viewLink(v({ cat: "x", at: "2026-11-03", tool: "Edit" }))).toBe("?range=30&cat=x&at=2026-11-03&etool=Edit");
+    expect(viewLink(v({ cat: "x", tool: "Edit" }), "t01")).toBe("?range=30&ex=t01");
     expect(savedOf(v({ tool: "Edit" }))).not.toHaveProperty("tool");
   });
   it("reads fixes and the list mode in the old page's JSON", () => {

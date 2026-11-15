@@ -25,7 +25,7 @@ const chips = (group: "Filters" | "Destination") => {
 };
 const clipboard = (writeText: (s: string) => Promise<void>) =>
   Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
-const show = async (href = "/usage#range=30") => {
+const show = async (href = "/usage?range=30") => {
   history.replaceState(null, "", href);
   renderApp(<Palette />);
   act(() => openPalette());
@@ -40,7 +40,7 @@ beforeEach(() => {
 describe("Palette", () => {
   it("pre-fills a chip per filter in the URL", async () => {
     serve();
-    await show("/usage#project=foo&source=codex");
+    await show("/usage?project=foo&source=codex");
     expect(chips("Filters")).toEqual(["#foo", "#Codex"]);
     expect(document.activeElement).toBe(box());
     expect(fetched()).toContain("/api/palette?project=foo&range=30&source=codex");
@@ -48,7 +48,7 @@ describe("Palette", () => {
 
   it("adds a chip with Tab and removes the last one with Backspace", async () => {
     serve();
-    await show("/usage#range=7");
+    await show("/usage?range=7");
     await userEvent.type(box(), "#fo");
     expect(options()[0]).toBe("foo, project, 2 sessions");
     await userEvent.keyboard("{Tab}");
@@ -79,24 +79,24 @@ describe("Palette", () => {
 
   it("states what Enter will do", async () => {
     serve();
-    await show("/usage#project=foo&range=30&source=claude");
+    await show("/usage?project=foo&range=30&source=claude");
     await userEvent.type(box(), ">bash");
     expect(document.getElementById(box().getAttribute("aria-describedby")!)!.textContent).toBe("Enter: open Bash inspector · foo · Claude Code · 30d");
   });
 
   it("commits page, filters and sheet as one history entry, and Back undoes it", async () => {
     serve();
-    await show("/usage#range=30");
+    await show("/usage?range=30");
     const len = history.length;
     await userEvent.type(box(), "#foo{Tab}#codex{Tab}#7d{Tab}>cost{Tab}>bash{Enter}");
-    expect(location.pathname + location.hash).toBe("/cost#project=foo&range=7&source=codex&tool=Bash");
+    expect(location.pathname + location.search).toBe("/cost?project=foo&range=7&source=codex&tool=Bash");
     expect(history.length).toBe(len + 1);
     expect(screen.queryByRole("combobox")).toBeNull();
     await act(async () => {
       history.back();
       await new Promise(r => addEventListener("popstate", r, { once: true }));
     });
-    expect(location.pathname + location.hash).toBe("/usage#range=30");
+    expect(location.pathname + location.search).toBe("/usage?range=30");
   });
 
   it("turns typed terms into chips once the next sigil is typed", async () => {
@@ -106,12 +106,12 @@ describe("Palette", () => {
     expect(chips("Destination")).toEqual([">Errors"]);
     expect(box()).toHaveProperty("value", "#fo");
     await userEvent.keyboard("{Enter}");
-    expect(location.pathname + location.hash).toBe("/errors#project=foo&range=30");
+    expect(location.pathname + location.search).toBe("/errors?project=foo&range=30");
   });
 
   it("waits on Enter until every typed term is picked or deleted", async () => {
     serve();
-    await show("/usage#range=30");
+    await show("/usage?range=30");
     await userEvent.type(box(), "#fo >errors");
     await userEvent.keyboard("{Enter}");
     expect(box()).toBeTruthy();
@@ -125,18 +125,18 @@ describe("Palette", () => {
 
   it("forgets the highlight when the chips change, so Enter applies only what they say", async () => {
     serve();
-    await show("/usage#source=codex");
+    await show("/usage?source=codex");
     await userEvent.hover(screen.getAllByRole("option")[0]!);
     expect(box().getAttribute("aria-activedescendant")).not.toBeNull();
     await userEvent.type(box(), "{Backspace}");
     expect(box().getAttribute("aria-activedescendant")).toBeNull();
     await userEvent.keyboard("{Enter}");
-    expect(location.pathname + location.hash).toBe("/usage");
+    expect(location.pathname + location.search).toBe("/usage");
   });
 
   it("marks counts from another view as updating", async () => {
     serve(q => (q.get("project") === "foo" ? new Promise(() => {}) : palette));
-    await show("/usage#range=30");
+    await show("/usage?range=30");
     await userEvent.type(box(), "#foo{Tab}>");
     expect(screen.getByText("Updating counts for this view…")).toBeTruthy();
     expect(screen.getByRole("listbox").getAttribute("aria-busy")).toBe("true");
@@ -145,7 +145,7 @@ describe("Palette", () => {
   it("says when the counts fail to load, and retries", async () => {
     let up = false;
     const f = serve(q => (q.get("project") !== "foo" ? palette : up ? fooOnly : undefined));
-    await show("/usage#range=30");
+    await show("/usage?range=30");
     await userEvent.type(box(), "#foo{Tab}>");
     expect(await screen.findByText(/Could not load the counts for this view/)).toBeTruthy();
     up = true;
@@ -156,11 +156,11 @@ describe("Palette", () => {
 
   it("adds no history entry when nothing changed", async () => {
     serve();
-    await show("/usage#project=foo&range=30");
+    await show("/usage?project=foo&range=30");
     const push = vi.spyOn(history, "pushState");
     await userEvent.keyboard("{Enter}");
     expect(push).not.toHaveBeenCalled();
-    expect(location.hash).toBe("#project=foo&range=30");
+    expect(location.search).toBe("?project=foo&range=30");
   });
 
   it("runs >refresh like the nav's Refresh", async () => {
@@ -174,10 +174,10 @@ describe("Palette", () => {
     serve();
     const write = vi.fn((_: string) => Promise.resolve());
     clipboard(write);
-    await show("/usage#range=30");
+    await show("/usage?range=30");
     await userEvent.type(box(), "#foo{Tab}>errors{Tab}>copy link{Enter}");
-    expect(location.pathname + location.hash).toBe("/errors#project=foo&range=30");
-    expect(write).toHaveBeenCalledWith(location.origin + "/errors#project=foo&range=30");
+    expect(location.pathname + location.search).toBe("/errors?project=foo&range=30");
+    expect(write).toHaveBeenCalledWith(location.origin + "/errors?project=foo&range=30");
     const toast = await screen.findByText("Link copied");
     expect(toast.getAttribute("role")).toBe("status"); // a result, not an emergency: polite, not assertive
   });
@@ -185,20 +185,20 @@ describe("Palette", () => {
   it("announces a refused copy and still applies the view", async () => {
     serve();
     clipboard(() => Promise.reject(new Error("denied")));
-    await show("/usage#range=30");
+    await show("/usage?range=30");
     await userEvent.type(box(), ">cost{Tab}>copy link{Enter}");
     expect(location.pathname).toBe("/cost");
-    expect((await screen.findByText(`Could not copy the link. It is ${location.origin}/cost#range=30`)).getAttribute("role")).toBe("status");
+    expect((await screen.findByText(`Could not copy the link. It is ${location.origin}/cost?range=30`)).getAttribute("role")).toBe("status");
   });
 });
 
 describe("Palette by pointer", () => {
   it("closes with its Close button and applies with Apply", async () => {
     serve();
-    await show("/usage#range=30");
+    await show("/usage?range=30");
     await userEvent.type(box(), "#foo{Tab}");
     await userEvent.click(screen.getByRole("button", { name: "Apply" }));
-    expect(location.hash).toBe("#project=foo&range=30");
+    expect(location.search).toBe("?project=foo&range=30");
     act(() => openPalette());
     await userEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(screen.queryByRole("combobox")).toBeNull();
@@ -206,16 +206,16 @@ describe("Palette by pointer", () => {
 
   it("commits a clicked row with a mouse, and adds it as a chip on a touch screen", async () => {
     serve();
-    await show("/usage#range=30");
+    await show("/usage?range=30");
     await userEvent.type(box(), "#fo");
     vi.spyOn(window, "matchMedia").mockImplementation(q => ({ matches: q === "(pointer: coarse)" }) as MediaQueryList);
     await userEvent.click(screen.getByRole("option", { name: "foo, project, 2 sessions" }));
     expect(chips("Filters")).toEqual(["#30d", "#foo"]);
-    expect(location.hash).toBe("#range=30");
+    expect(location.search).toBe("?range=30");
     vi.mocked(window.matchMedia).mockRestore();
     await userEvent.type(box(), ">cos");
     await userEvent.click(screen.getByRole("option", { name: /^Cost, page/ }));
-    expect(location.pathname + location.hash).toBe("/cost#project=foo&range=30");
+    expect(location.pathname + location.search).toBe("/cost?project=foo&range=30");
   });
 });
 
@@ -223,7 +223,7 @@ describe("Palette clicks and the copy result", () => {
   it("adds a clicked filter as a chip, and shows the copy result inside a sheet the commit opened", async () => {
     serve();
     clipboard(() => Promise.resolve());
-    history.replaceState(null, "", "/usage#range=30");
+    history.replaceState(null, "", "/usage?range=30");
     renderApp(<><dialog className="sheet" ref={d => { if (d && !d.open) d.showModal(); }} /><Palette /></>);
     act(() => openPalette());
     await userEvent.type(box(), "#fo");
@@ -240,7 +240,7 @@ describe("Palette shortcut and button", () => {
   it("opens on Cmd+K on macOS, focused, and not on Ctrl+K", async () => {
     serve();
     platform("MacIntel");
-    history.replaceState(null, "", "/usage#range=30");
+    history.replaceState(null, "", "/usage?range=30");
     renderApp(<><button>page control</button><Palette /></>);
     screen.getByRole("button", { name: "page control" }).focus();
     const ctrl = new KeyboardEvent("keydown", { key: "k", ctrlKey: true, bubbles: true, cancelable: true });
@@ -268,7 +268,7 @@ describe("Palette shortcut and button", () => {
   it("shows the system's hint on the nav button, which opens the palette", async () => {
     serve();
     platform("MacIntel");
-    history.replaceState(null, "", "/usage#range=30");
+    history.replaceState(null, "", "/usage?range=30");
     const { unmount } = renderApp(<><Nav /><Palette /></>);
     const btn = screen.getByRole("button", { name: "Search, open command palette (⌘K)" });
     expect(btn.querySelector("kbd")!.textContent).toBe("⌘K");
@@ -306,7 +306,7 @@ describe("Palette accessibility", () => {
 
   it("names chips by what removing them does, replaced ones included", async () => {
     serve();
-    await show("/usage#source=codex");
+    await show("/usage?source=codex");
     await userEvent.type(box(), ">errors{Tab}>cost{Tab}");
     expect(screen.getByRole("button", { name: "Remove source filter Codex" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Remove page Errors, replaced by Cost" })).toBeTruthy();
@@ -318,7 +318,7 @@ describe("Palette accessibility", () => {
 
   it("announces what Enter does with the typed text left, and the highlight once it settles", async () => {
     serve();
-    await show("/usage#source=codex");
+    await show("/usage?source=codex");
     await userEvent.type(box(), "#fo >errors");
     await userEvent.click(screen.getByRole("button", { name: "Remove source filter Codex" }));
     expect(screen.getAllByRole("status")[0]!.textContent).toBe("Codex filter removed. Enter: pick or delete “#fo” first");
@@ -340,31 +340,31 @@ describe("Palette accessibility", () => {
 
   it("leaves the keys an IME is using alone: a composing Enter or Tab (keyCode 229) neither applies nor adds a chip", async () => {
     serve();
-    await show("/usage#range=30");
+    await show("/usage?range=30");
     await userEvent.type(box(), "#foo");
     for (const init of [{ key: "Enter", isComposing: true }, { key: "Enter", keyCode: 229 }, { key: "Tab", isComposing: true }, { key: "ArrowDown", keyCode: 229 }]) {
       expect(fireEvent.keyDown(box(), init)).toBe(true); // not ours: no preventDefault
     }
-    expect([location.hash, chips("Filters"), screen.queryByRole("combobox") != null]).toEqual(["#range=30", ["#30d"], true]);
+    expect([location.search, chips("Filters"), screen.queryByRole("combobox") != null]).toEqual(["?range=30", ["#30d"], true]);
     await userEvent.keyboard("{Tab}"); // a plain Tab is ours again
     expect(chips("Filters")).toEqual(["#30d", "#foo"]);
   });
 
   it("closes on Escape without changing the URL, and returns focus", async () => {
     serve();
-    history.replaceState(null, "", "/usage#range=30");
+    history.replaceState(null, "", "/usage?range=30");
     renderApp(<><button>opener</button><Palette /></>);
     screen.getByRole("button", { name: "opener" }).focus();
     act(() => openPalette());
     await userEvent.type(box(), "#foo{Tab}{Escape}");
     expect(screen.queryByRole("combobox")).toBeNull();
-    expect(location.hash).toBe("#range=30");
+    expect(location.search).toBe("?range=30");
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "opener" }));
   });
 
   it("focuses the page heading when its opener is gone on close, and follows it when the page replaces it", async () => {
     serve();
-    history.replaceState(null, "", "/usage#range=30");
+    history.replaceState(null, "", "/usage?range=30");
     const page = (opener: boolean, heading: string) =>
       <>{opener && <button>opener</button>}<h1 key={heading} id="lede" tabIndex={-1}>{heading}</h1><Palette /></>;
     const { rerender } = renderApp(page(true, "Loading…"));

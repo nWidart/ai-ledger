@@ -18,7 +18,7 @@ const fixture = limits as LimitsPayload;
 const claude = fixture.windows[0]!, fable = fixture.windows[1]!, codex = fixture.windows[2]!;
 /** A closed drawer renders no table: these start open, as a reload that left them open would. */
 const openDrawers = () => localStorage.setItem("claude-usage-open", JSON.stringify(["history", "value"]));
-const show = (d: LimitsPayload, hash = "#range=30") => {
+const show = (d: LimitsPayload, hash = "?range=30") => {
   openDrawers();
   const f = mockApi({ "/api/limits": () => d });
   history.replaceState(null, "", "/limits" + hash);
@@ -280,12 +280,12 @@ describe("LimitsPage", () => {
     const f = show(fixture);
     await lede();
     await userEvent.click(screen.getByRole("button", { name: "Codex" }));
-    expect(location.hash).toBe("#range=30&source=codex");
+    expect(location.search).toBe("?range=30&source=codex");
     expect(vi.mocked(f).mock.calls.at(-1)![0]).toBe("/api/limits?range=30&source=codex");
   });
 
   it("offers every project in the picker while one is chosen", async () => {
-    show({ ...fixture, projects: ["foo", "bar"], value: { ...fixture.value, projects: [] } }, "#project=foo&range=30");
+    show({ ...fixture, projects: ["foo", "bar"], value: { ...fixture.value, projects: [] } }, "?project=foo&range=30");
     await lede();
     await userEvent.click(screen.getByRole("combobox", { name: "Project" }));
     expect(screen.getAllByRole("option").map(o => o.textContent)).toEqual(["All projects", "foo", "bar"]);
@@ -294,7 +294,7 @@ describe("LimitsPage", () => {
   it("after a failure, Retry lands focus on the new heading", async () => {
     let fail = true;
     mockApi({ "/api/limits": () => (fail ? undefined : fixture) });
-    history.replaceState(null, "", "/limits#range=30");
+    history.replaceState(null, "", "/limits?range=30");
     renderApp(<LimitsPage />);
     const retry = await screen.findByRole("button", { name: "Retry" });
     expect(document.activeElement).toBe(retry);
@@ -312,7 +312,7 @@ describe("LimitsPage", () => {
     await userEvent.type(screen.getByRole("combobox", { name: "Filters, pages, inspectors and commands" }), ">bash");
     expect(document.getElementById(screen.getByRole("combobox", { name: "Filters, pages, inspectors and commands" }).getAttribute("aria-describedby")!)!.textContent).toBe("Enter: open Bash inspector on Activity · 30d");
     await userEvent.keyboard("{Enter}");
-    expect(location.pathname + location.hash).toBe("/usage#tool=Bash");
+    expect(location.pathname + location.search).toBe("/usage?tool=Bash");
   });
 });
 
@@ -410,10 +410,10 @@ describe("what used this window", () => {
     show(only({ ...claude, used }));
     await lede();
     const lists = card(claude);
-    expect(lists.getByText("ai-ledger", { selector: "a" }).getAttribute("href")).toBe("/cost#project=ai-ledger&range=7&source=claude&auto=1");
-    expect(lists.getByText("other app", { selector: "a" }).getAttribute("href")).toBe("/cost#project=other+app&range=7&source=claude&auto=1");
+    expect(lists.getByText("ai-ledger", { selector: "a" }).getAttribute("href")).toBe("/cost?project=ai-ledger&range=7&source=claude&auto=1");
+    expect(lists.getByText("other app", { selector: "a" }).getAttribute("href")).toBe("/cost?project=other+app&range=7&source=claude&auto=1");
     const all = lists.getByRole("link", { name: "Open in Cost · last 7 days" });
-    expect(all.getAttribute("href")).toBe("/cost#range=7&source=claude&auto=1");
+    expect(all.getAttribute("href")).toBe("/cost?range=7&source=claude&auto=1");
     expect(all.title).toContain("nearest preset");
     expect(lists.queryByText("claude-opus-5-5", { selector: "a" })).toBeNull(); // models are not links
   });
@@ -432,13 +432,13 @@ describe("what used this window", () => {
     show(only({ ...claude, used }));
     await lede();
     await userEvent.click(card(claude).getByText("ai-ledger", { selector: "a" }));
-    expect(location.pathname + location.hash).toBe("/cost#project=ai-ledger&range=7&source=claude&auto=1");
+    expect(location.pathname + location.search).toBe("/cost?project=ai-ledger&range=7&source=claude&auto=1");
   });
 
   it("reads all time for a window that began more than 90 days ago, and takes the window's provider as the source", async () => {
     show(only({ ...codex, start: "2026-06-01T00:00:00.000Z", used }));
     await lede();
-    expect(card(codex).getByRole("link", { name: "Open in Cost · all time" }).getAttribute("href")).toBe("/cost#range=0&source=codex&auto=1");
+    expect(card(codex).getByRole("link", { name: "Open in Cost · all time" }).getAttribute("href")).toBe("/cost?range=0&source=codex&auto=1");
   });
 
   it("has no drawer when nothing was counted", async () => {
@@ -463,7 +463,7 @@ describe("past windows strips", () => {
   const showCurve = (d: LimitsPayload = fixture, answer: () => unknown = () => curve, open = true) => {
     if (open) openDrawers();
     const f = mockApi({ "/api/limits": () => d, "/api/limits/window": answer });
-    history.replaceState(null, "", "/limits#range=30");
+    history.replaceState(null, "", "/limits?range=30");
     renderApp(<LimitsPage />);
     return f;
   };
@@ -554,7 +554,7 @@ describe("past windows strips", () => {
       else finish = c => resolve({ ok: true, status: 200, json: () => Promise.resolve(c) } as Response);
     }));
     openDrawers();
-    history.replaceState(null, "", "/limits#range=30");
+    history.replaceState(null, "", "/limits?range=30");
     renderApp(<LimitsPage />);
     await lede();
     expect(hist().queryByRole("region", { name: /Codex weekly/ })).toBeNull();
@@ -661,7 +661,7 @@ describe("past windows strips", () => {
     let shown = fiveBars;
     mockApi({ "/api/limits": () => ({ ...fixture, history: shown }), "/api/limits/window": () => curve });
     openDrawers();
-    history.replaceState(null, "", "/limits#range=30");
+    history.replaceState(null, "", "/limits?range=30");
     const { client } = renderApp(<LimitsPage />);
     await lede();
     box.fire();
@@ -679,7 +679,7 @@ describe("past windows strips", () => {
     let shown = Array.from({ length: 60 }, (_, i) => win(i));
     mockApi({ "/api/limits": () => ({ ...fixture, history: shown }), "/api/limits/window": () => curve });
     openDrawers();
-    history.replaceState(null, "", "/limits#range=30");
+    history.replaceState(null, "", "/limits?range=30");
     const { client } = renderApp(<LimitsPage />);
     await lede();
     const group = () => hist().getByRole("group", { name: /past windows/ });
@@ -700,7 +700,7 @@ describe("past windows strips", () => {
     let shown = [0, 1, 2, 3].map(win);
     mockApi({ "/api/limits": () => ({ ...fixture, history: shown }), "/api/limits/window": () => curve });
     openDrawers();
-    history.replaceState(null, "", "/limits#range=30");
+    history.replaceState(null, "", "/limits?range=30");
     const { client } = renderApp(<LimitsPage />);
     await lede();
     act(() => hist().getByRole("button", { name: barName(win(0)) }).focus());
@@ -739,7 +739,7 @@ describe("past windows strips", () => {
     let fail = false;
     openDrawers();
     mockApi({ "/api/limits": () => fixture, "/api/limits/window": () => (fail ? undefined : curve) });
-    history.replaceState(null, "", "/limits#range=30");
+    history.replaceState(null, "", "/limits?range=30");
     const { client } = renderApp(<LimitsPage />);
     await lede();
     await userEvent.click(row(early));
@@ -760,13 +760,13 @@ describe("past windows strips", () => {
     mockApi({ "/api/limits": q => (q.get("source") === "codex" ? { ...fixture, history: fixture.history.filter(h => h.provider === "codex"), windows: [codex] } : fixture),
       "/api/limits/window": () => ({ ...curve, window: claudeRow }) });
     openDrawers();
-    history.replaceState(null, "", "/limits#range=30");
+    history.replaceState(null, "", "/limits?range=30");
     renderApp(<LimitsPage />);
     await lede();
     await userEvent.click(row(claudeRow));
     await hist().findByRole("img", { name: /used when it ended/ });
     await userEvent.click(screen.getByRole("button", { name: "Codex" }));
-    await vi.waitFor(() => expect(location.hash).toBe("#range=30&source=codex"));
+    await vi.waitFor(() => expect(location.search).toBe("?range=30&source=codex"));
     await vi.waitFor(() => expect(hist().queryByRole("region", { name: WINDOW })).toBeNull());
     expect(screen.queryByRole("button", { name: barName(claudeRow) })).toBeNull();
   });
@@ -775,13 +775,13 @@ describe("past windows strips", () => {
     mockApi({ "/api/limits": q => (q.get("source") === "codex" ? { ...fixture, history: fixture.history.filter(h => h.provider === "codex"), windows: [codex] } : fixture),
       "/api/limits/window": () => curve });
     openDrawers();
-    history.replaceState(null, "", "/limits#range=30");
+    history.replaceState(null, "", "/limits?range=30");
     renderApp(<LimitsPage />);
     await lede();
     await userEvent.click(row(early));
     await hist().findByRole("img", { name: /used when it ended/ });
     await userEvent.click(screen.getByRole("button", { name: "Codex" }));
-    await vi.waitFor(() => expect(location.hash).toBe("#range=30&source=codex"));
+    await vi.waitFor(() => expect(location.search).toBe("?range=30&source=codex"));
     await vi.waitFor(() => expect(vi.mocked(fetch).mock.calls.at(-1)![0]).toBe("/api/limits?range=30&source=codex"));
     expect(row(early).getAttribute("aria-pressed")).toBe("true");
     expect(hist().getByRole("region", { name: /Codex weekly/ })).toBeTruthy();

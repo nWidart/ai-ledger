@@ -19,23 +19,23 @@ const sheet = () => within(document.querySelector("dialog")!);
 describe("SessionSheet", () => {
   it("shows the session with its timeline, events and error-loop link to Errors", async () => {
     mockApi({ "/api/session": q => (q.get("id") === "s1" ? session : undefined) });
-    at("#range=30&session=s1");
+    at("?range=30&session=s1");
     renderApp(<UsageSheets data={usage} />);
     expect(await sheet().findByText("$16")).toBeTruthy();
     expect(screen.getByRole("heading", { level: 2 }).textContent).toBe("Session#s1");
     expect(sheet().getByText("active").textContent).toMatch(/^9m active/); // active time, not first to last
-    expect(sheet().getByRole("link", { name: "Open in Errors" }).getAttribute("href")).toBe("/errors#project=foo&range=30&ex=t01");
+    expect(sheet().getByRole("link", { name: "Open in Errors" }).getAttribute("href")).toBe("/errors?project=foo&range=30&ex=t01");
     expect(sheet().getByRole("group", { name: /^Session timeline\. Context grew from 10\.0M/ })).toBeTruthy();
     // Four failures in a row (one run), the commit, then two more failures with no success between them.
     const evs = sheet().getAllByRole("button", { pressed: false }).filter(b => b.classList.contains("evbtn"));
     expect(evs.map(b => b.textContent)).toEqual([expect.stringMatching(/Edit failed 4× in a row/), expect.stringMatching(/^.*Commit/),
       expect.stringMatching(/Bash, mcp__srv__q failed 2× in a row/)]);
-    expect(sheet().getAllByRole("link", { name: "Open the first of these failures in Errors" })[0]!.getAttribute("href")).toBe("/errors#project=foo&ex=t01");
+    expect(sheet().getAllByRole("link", { name: "Open the first of these failures in Errors" })[0]!.getAttribute("href")).toBe("/errors?project=foo&ex=t01");
   });
 
   it("reads requests with the arrow keys and marks a selected event on the timeline", async () => {
     mockApi({ "/api/session": () => session });
-    at("#session=s1");
+    at("?session=s1");
     renderApp(<UsageSheets data={usage} />);
     const svg = await sheet().findByRole("group", { name: /^Session timeline/ });
     act(() => svg.focus());
@@ -55,7 +55,7 @@ describe("SessionSheet", () => {
     // Failures and successes alternating: one failure run each.
     const calls = Array.from({ length: 24 }, (_, k) => ({ ...session.calls[0]!, id: `c${k}`, is_error: k % 2 === 0, start_ts: `2026-11-04T10:${String(k + 10).padStart(2, "0")}:00.000Z` }));
     mockApi({ "/api/session": () => ({ ...session, calls }) });
-    at("#session=s1");
+    at("?session=s1");
     renderApp(<UsageSheets data={usage} />);
     const more = await sheet().findByRole("button", { name: "Show all 12 events" });
     const items = () => [...document.querySelectorAll<HTMLLIElement>(".evlist li")];
@@ -68,7 +68,7 @@ describe("SessionSheet", () => {
   it("shows the whole first prompt from /api/prompt", async () => {
     const s: SessionDetail = { ...session, first_prompt: "Fix the flaky…", first_prompt_cut: true, title: "Fix the flaky test" };
     mockApi({ "/api/session": () => s, "/api/prompt": () => ({ text: "Fix the flaky test in the ingest suite, then rerun it." }) });
-    at("#session=s1");
+    at("?session=s1");
     renderApp(<UsageSheets data={usage} />);
     await waitFor(() => expect(screen.getByRole("heading", { level: 2 }).textContent).toContain("Fix the flaky test")); // "Session#s1" until the answer lands
     expect(sheet().getByText(/first 13 characters/)).toBeTruthy();
@@ -83,7 +83,7 @@ describe("SessionSheet", () => {
     const s: SessionDetail = { ...session, first_prompt: "Fix the flaky…", first_prompt_cut: true, title: "Fix the flaky test" };
     const f = mockApi({ "/api/session": () => s, "/api/prompt": () => ({ text: "Fix the flaky test in the ingest suite, then rerun it." }) });
     const prompts = () => f.mock.calls.filter(c => String(c[0]).startsWith("/api/prompt")).length;
-    at("#session=s1");
+    at("?session=s1");
     const { client, unmount } = renderApp(<UsageSheets data={usage} />);
     await userEvent.click(await sheet().findByText("Source"));
     await userEvent.click(sheet().getByRole("button", { name: "Show the whole prompt" }));
@@ -100,7 +100,7 @@ describe("SessionSheet", () => {
     const s: SessionDetail = { ...session, first_prompt: "Fix the flaky…", first_prompt_cut: true, title: "Fix the flaky test" };
     let up = false;
     mockApi({ "/api/session": () => s, "/api/prompt": () => (up ? { text: "The whole prompt." } : undefined) });
-    at("#session=s1");
+    at("?session=s1");
     renderApp(<UsageSheets data={usage} />);
     await userEvent.click(await sheet().findByText("Source"));
     await userEvent.click(sheet().getByRole("button", { name: "Show the whole prompt" }));
@@ -116,7 +116,7 @@ describe("SessionSheet", () => {
       brief_summary: "Chased a flaky date test.", friction_detail: "Patched the wrong helper first.",
       goals: ["fix_bug", "write_tests"], friction: ["wrong_approach"], satisfaction: ["likely_satisfied", "dissatisfied"] };
     mockApi({ "/api/session": () => ({ ...session, insight }) });
-    at("#project=foo&range=30&source=claude&auto=1&session=s1");
+    at("?project=foo&range=30&source=claude&auto=1&session=s1");
     renderApp(<UsageSheets data={usage} />);
     const head = await sheet().findByRole("heading", { name: /^\/insights judgment/ });
     expect(within(head).getByText("model-judged")).toBeTruthy();
@@ -132,12 +132,12 @@ describe("SessionSheet", () => {
     expect(block.getByText("wrong approach").className).toContain("warn");
     expect(block.getByText("Chased a flaky date test.")).toBeTruthy();
     expect(block.getByText(/Patched the wrong helper first\./)).toBeTruthy();
-    expect(block.getByRole("link", { name: "Open in Insights" }).getAttribute("href")).toBe("/insights#project=foo&range=30&source=claude&auto=1");
+    expect(block.getByRole("link", { name: "Open in Insights" }).getAttribute("href")).toBe("/insights?project=foo&range=30&source=claude&auto=1");
   });
 
   it("shows no judgment block for a session without a facet", async () => {
     mockApi({ "/api/session": () => session });
-    at("#range=30&session=s1");
+    at("?range=30&session=s1");
     renderApp(<UsageSheets data={usage} />);
     expect(await sheet().findByText("$16")).toBeTruthy();
     expect(session.insight).toBeNull();
@@ -149,7 +149,7 @@ describe("SessionSheet", () => {
     const insight = { outcome: "unclear_from_transcript", helpfulness: null, session_type: null, brief_summary: null, friction_detail: null,
       goals: [], friction: [], satisfaction: ["satisfied"] };
     mockApi({ "/api/session": () => ({ ...session, insight }) });
-    at("#session=s1");
+    at("?session=s1");
     renderApp(<UsageSheets data={usage} />);
     await sheet().findByRole("heading", { name: /^\/insights judgment/ });
     expect(sheet().getByText("Unclear")).toBeTruthy();
@@ -159,7 +159,7 @@ describe("SessionSheet", () => {
 
   it("says so when the session does not exist", async () => {
     mockApi({});
-    at("#session=gone");
+    at("?session=gone");
     renderApp(<UsageSheets data={usage} />);
     expect(await sheet().findByText("This session was not found.")).toBeTruthy();
   });
@@ -168,31 +168,31 @@ describe("SessionSheet", () => {
 describe("ProjectSheet", () => {
   it("keeps the source on its errors link", async () => {
     mockApi({ "/api/usage": q => ({ ...usage, project: q.get("project"), source: q.get("source") }) });
-    at("#range=30&source=codex&inspect=foo");
+    at("?range=30&source=codex&inspect=foo");
     renderApp(<UsageSheets data={usage} />);
-    expect((await sheet().findByRole("link", { name: "Open its errors" })).getAttribute("href")).toBe("/errors#project=foo&range=30&source=codex");
+    expect((await sheet().findByRole("link", { name: "Open its errors" })).getAttribute("href")).toBe("/errors?project=foo&range=30&source=codex");
   });
 
   it("summarizes the project, opens a session over it and goes back", async () => {
     const f = mockApi({ "/api/usage": q => ({ ...usage, project: q.get("project") }), "/api/session": () => session });
-    at("#range=30&inspect=foo");
+    at("?range=30&inspect=foo");
     renderApp(<UsageSheets data={usage} />);
     expect(await sheet().findByText("errors per 100 calls")).toBeTruthy();
     expect(f.mock.calls[0]![0]).toBe("/api/usage?project=foo&range=30");
     expect(sheet().getByRole("button", { name: "Filter dashboard to foo" })).toBeTruthy();
-    expect(sheet().getByRole("link", { name: "Open its errors" }).getAttribute("href")).toBe("/errors#project=foo&range=30");
+    expect(sheet().getByRole("link", { name: "Open its errors" }).getAttribute("href")).toBe("/errors?project=foo&range=30");
     expect(sheet().queryByRole("button", { name: "← Back" })).toBeNull();
     await userEvent.click(sheet().getByRole("button", { name: "#s1" }));
-    expect(location.hash).toBe("#range=30&inspect=foo&session=s1");
+    expect(location.search).toBe("?range=30&inspect=foo&session=s1");
     expect(await sheet().findByText("$16")).toBeTruthy();
     await userEvent.click(sheet().getByRole("button", { name: "← Back" }));
-    expect(location.hash).toBe("#range=30&inspect=foo");
+    expect(location.search).toBe("?range=30&inspect=foo");
     await waitFor(() => expect(document.activeElement?.textContent).toBe("#s1"));
   });
 
   it("shows the project's change against the previous period with a daily sparkline, marking a new project", async () => {
     mockApi({ "/api/usage": q => ({ ...usage, project: q.get("project") }) });
-    at("#range=30&inspect=foo");
+    at("?range=30&inspect=foo");
     renderApp(<UsageSheets data={usage} />);
     await sheet().findByRole("heading", { name: "Change vs the previous 30 days" });
     const v = (l: string) => sheet().getByText(l).previousElementSibling!.textContent;
@@ -202,7 +202,7 @@ describe("ProjectSheet", () => {
 
   it("shows a known change with its sign, not marked new", async () => {
     mockApi({ "/api/usage": () => ({ ...usage, changes: [{ project: "foo", cost: 1.5, prev_cost: 4, delta: -2.5, new: false }] }) });
-    at("#range=30&inspect=foo");
+    at("?range=30&inspect=foo");
     renderApp(<UsageSheets data={usage} />);
     expect((await sheet().findByText("change")).previousElementSibling!.textContent).toBe("−$2.50");
     expect(sheet().queryByText("new")).toBeNull();
@@ -210,7 +210,7 @@ describe("ProjectSheet", () => {
 
   it("shows an unknown previous cost as unknown, with no change", async () => {
     mockApi({ "/api/usage": () => ({ ...usage, changes: [{ project: "foo", cost: 10, prev_cost: null, delta: null, new: false }] }) });
-    at("#range=30&inspect=foo");
+    at("?range=30&inspect=foo");
     renderApp(<UsageSheets data={usage} />);
     const prev = await sheet().findByText("previous 30 days");
     expect([prev.previousElementSibling!.textContent, sheet().getByText("change").previousElementSibling!.textContent]).toEqual(["–", "–"]);
@@ -218,7 +218,7 @@ describe("ProjectSheet", () => {
 
   it("leaves the change out of the all-time view", async () => {
     mockApi({ "/api/usage": () => usageAll });
-    at("#inspect=foo");
+    at("?inspect=foo");
     renderApp(<UsageSheets data={usageAll} />);
     await sheet().findByText("errors per 100 calls");
     expect(sheet().queryByText(/^Change vs the previous/)).toBeNull();
@@ -226,26 +226,26 @@ describe("ProjectSheet", () => {
 
   it("filters the page to the project and closes", async () => {
     mockApi({ "/api/usage": () => usage });
-    at("#inspect=foo");
+    at("?inspect=foo");
     renderApp(<UsageSheets data={usage} />);
     await userEvent.click(await sheet().findByRole("button", { name: "Filter dashboard to foo" }));
-    expect(location.hash).toBe("#project=foo");
+    expect(location.search).toBe("?project=foo");
     expect(document.querySelector("dialog")!.open).toBe(false);
   });
 
   it("clears the Activity day when it filters the page", async () => {
     mockApi({ "/api/usage": () => usage });
-    at("#range=30&day=2026-11-04&inspect=foo");
+    at("?range=30&day=2026-11-04&inspect=foo");
     renderApp(<UsageSheets data={usage} />);
     await userEvent.click(await sheet().findByRole("button", { name: "Filter dashboard to foo" }));
-    expect(location.hash).toBe("#project=foo&range=30");
+    expect(location.search).toBe("?project=foo&range=30");
   });
 });
 
 describe("sheet tables", () => {
   it("names a project sheet's table and its region, with row headers and a toggletip on Active", async () => {
     mockApi({ "/api/usage": q => ({ ...usage, project: q.get("project") }) });
-    at("#range=30&inspect=foo");
+    at("?range=30&inspect=foo");
     renderApp(<UsageSheets data={usage} />);
     const name = "Most expensive sessions", table = await sheet().findByRole("table", { name });
     expect(sheet().getByRole("region", { name }).tabIndex).toBe(0);
@@ -260,7 +260,7 @@ describe("sheet tables", () => {
 
   it("names a tool sheet's tables and their scroll regions", async () => {
     mockApi({ "/api/tool": q => ({ ...tool, kind: q.get("kind"), name: q.get("name") }) });
-    at("#range=30&tool=Bash");
+    at("?range=30&tool=Bash");
     renderApp(<UsageSheets data={usage} />);
     await sheet().findByText("12.1%");
     for (const name of ["Projects", "Inputs", "Recent calls"]) {
@@ -276,7 +276,7 @@ describe("ToolSheet", () => {
 
   it("leads with calls and failures against the previous period, and groups inputs", async () => {
     const f = serve();
-    at("#range=30&tool=Bash");
+    at("?range=30&tool=Bash");
     renderApp(<UsageSheets data={usage} />);
     expect(await sheet().findByText("12.1%")).toBeTruthy();
     expect(f.mock.calls[0]![0]).toBe("/api/tool?kind=tool&name=Bash&range=30");
@@ -291,13 +291,13 @@ describe("ToolSheet", () => {
 
   it("links failure types and failed calls into Errors in the same view", async () => {
     serve();
-    at("#range=30&source=claude&tool=Bash");
+    at("?range=30&source=claude&tool=Bash");
     renderApp(<UsageSheets data={usage} />);
     const types = await sheet().findByRole("region", { name: "Failures by type" });
     expect(within(types).getByText("Tests / build / lint failed")).toBeTruthy();
-    expect(within(types).getByRole("link").getAttribute("href")).toBe("/errors#range=30&source=claude&cat=tests");
+    expect(within(types).getByRole("link").getAttribute("href")).toBe("/errors?range=30&source=claude&cat=tests");
     const failed = sheet().getAllByRole("row").find(r => r.getAttribute("data-v") === "f1-29")!;
-    expect(within(failed).getByRole("link", { name: "In Errors" }).getAttribute("href")).toBe("/errors#range=30&source=claude&ex=f1-29");
+    expect(within(failed).getByRole("link", { name: "In Errors" }).getAttribute("href")).toBe("/errors?range=30&source=claude&ex=f1-29");
     const ok = sheet().getAllByRole("row").find(r => r.getAttribute("data-v") === "f1-30")!;
     expect(within(ok).queryByRole("link")).toBeNull();
     expect(sheet().getByText(/failed 4× in a row/)).toBeTruthy();
@@ -305,7 +305,7 @@ describe("ToolSheet", () => {
 
   it("names sessions by their title: a titled loop, and an untitled recent call by its short id", async () => {
     serve({ ...tool, error_loops: tool.error_loops.map(l => ({ ...l, title: "Fix flaky upload test" })) });
-    at("#range=30&tool=Bash");
+    at("?range=30&tool=Bash");
     renderApp(<UsageSheets data={usage} />);
     const loop = (await sheet().findByText(/failed 4× in a row/)).closest("div")!;
     const name = within(loop).getByRole("button", { name: "Fix flaky upload test" });
@@ -317,19 +317,19 @@ describe("ToolSheet", () => {
 
   it("lists an MCP server's tools, each opening its own sheet", async () => {
     serve(toolMcp);
-    at("#range=0&mcp=github");
+    at("?range=0&mcp=github");
     renderApp(<UsageSheets data={usage} />);
     expect(await sheet().findByRole("button", { name: "mcp__github__get_pr" })).toBeTruthy();
     expect(screen.getByRole("heading", { level: 2 }).textContent).toBe("MCP servergithub");
     expect(sheet().queryByText(/test runs/)).toBeNull();
     await userEvent.click(sheet().getByRole("button", { name: "mcp__github__search_issues" }));
-    expect(location.hash).toBe("#range=0&tool=mcp__github__search_issues");
+    expect(location.search).toBe("?range=0&tool=mcp__github__search_issues");
     expect((await screen.findByRole("heading", { level: 2 })).textContent).toBe("Toolmcp__github__search_issues");
   });
 
   it("shows a skill's invocations without input patterns", async () => {
     serve(toolSkill);
-    at("#range=0&skill=ship");
+    at("?range=0&skill=ship");
     renderApp(<UsageSheets data={usage} />);
     expect(await sheet().findByText("Recent calls")).toBeTruthy();
     expect(sheet().queryByText("Inputs")).toBeNull();
@@ -340,7 +340,7 @@ describe("ToolSheet", () => {
   it("says when the subject has no calls in the view", async () => {
     serve({ ...tool, totals: { ...tool.totals, calls: 0, errors: 0, failure_rate: null }, daily: [], projects: [], sources: [], threads: [],
       patterns: [], categories: [], error_loops: [], recent: [], recovery: { incidents: 0, recovered: 0, failed_again: 0, gave_up: 0 } });
-    at("#range=7&tool=Read");
+    at("?range=7&tool=Read");
     renderApp(<UsageSheets data={usage} />);
     expect(await sheet().findByText("No Read calls in this view.")).toBeTruthy();
     expect(document.querySelector("dialog svg")).toBeNull();
@@ -348,7 +348,7 @@ describe("ToolSheet", () => {
 
   it("reopens from the URL on reload", async () => {
     const f = serve();
-    at("#range=30&tool=Grep");
+    at("?range=30&tool=Grep");
     renderApp(<UsageSheets data={usage} />);
     expect((await screen.findByRole("heading", { level: 2 })).textContent).toBe("ToolGrep");
     expect(f.mock.calls[0]![0]).toBe("/api/tool?kind=tool&name=Grep&range=30");
@@ -356,29 +356,29 @@ describe("ToolSheet", () => {
 
   it("opens a session over it and goes back", async () => {
     serve();
-    at("#range=30&tool=Bash");
+    at("?range=30&tool=Bash");
     renderApp(<UsageSheets data={usage} />);
     const row = (await sheet().findAllByRole("row")).find(r => r.getAttribute("data-v") === "f1-27")!;
     await userEvent.click(within(row).getByRole("button"));
-    expect(location.hash).toBe("#range=30&tool=Bash&session=f1");
+    expect(location.search).toBe("?range=30&tool=Bash&session=f1");
     expect(await sheet().findByText("$16")).toBeTruthy();
     await userEvent.click(sheet().getByRole("button", { name: "← Back" }));
-    expect(location.hash).toBe("#range=30&tool=Bash");
+    expect(location.search).toBe("?range=30&tool=Bash");
     await waitFor(() => expect(document.activeElement?.closest("tr")?.getAttribute("data-v")).toBe("f1-27"));
   });
 
   it("opens from a session's tool row in place of the session, and history Back restores the session", async () => {
     serve();
-    at("#range=30&session=s1");
+    at("?range=30&session=s1");
     renderApp(<UsageSheets data={usage} />);
     await sheet().findByText("$16");
     const pushes = history.length;
     await userEvent.click(sheet().getByRole("button", { name: "Bash" }));
-    expect(location.hash).toBe("#range=30&tool=Bash");
+    expect(location.search).toBe("?range=30&tool=Bash");
     expect(history.length).toBe(pushes + 1);
     expect((await screen.findByRole("heading", { level: 2 })).textContent).toBe("ToolBash");
     act(() => history.back());
-    await waitFor(() => expect(location.hash).toBe("#range=30&session=s1"));
+    await waitFor(() => expect(location.search).toBe("?range=30&session=s1"));
     expect((await screen.findByRole("heading", { level: 2 })).textContent).toBe("Session#s1");
   });
 });

@@ -33,6 +33,7 @@ Run `ai-ledger rebuild` once after upgrading (with the app stopped): the Context
 - A session's whole first prompt, a failed call's full text and a day's sessions on Cost show at once when opened again. Saving a fix marker or a mute on Errors no longer makes every other page refetch.
 - On Live, a session opened again within five minutes shows its events at once and catches up, instead of loading from the start. Turning Full text off shows the events without text at once, with open rows and the scroll kept.
 - The page is revalidated with an ETag (`304` when unchanged) instead of being sent again on every visit.
+- The view (project, range, source, open sheet and each page's own state) moved from the URL hash to the query string: `/usage#project=foo&range=30` is now `/usage?project=foo&range=30`. Links in the old form still open the same view and are rewritten in place.
 
 ### Security
 

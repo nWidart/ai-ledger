@@ -3,11 +3,11 @@ import { isCancelledError, useQuery, useQueryClient, type QueryClient } from "@t
 import { ProjectName } from "../../components/ProjectDot";
 import { openToolSheet } from "../../components/sheets/session";
 import { num as fmt, plural, when as at } from "../../format";
-import { navigate } from "../../hash";
+import { navigate } from "../../url";
 import { queries } from "../../queries";
 import { useKeyed, useRow, type RowCtx } from "./context";
 import { dur, incSpan, msgOpenKey, OUTCOME, PAYLOAD_INPUT, sessionHref, type Err, type Group, type MsgGroup } from "./model";
-import { viewHash } from "./view";
+import { viewLink } from "./view";
 
 // Examples opened with "Show full", by id (or time and tool for an example without one).
 export const exKey = (e: Err) => e.id || e.ts + e.t;
@@ -65,7 +65,7 @@ export const Example = memo(function Example({ e }: { e: Err }) {
   const copy = () => {
     const done = (r: "ok" | "fail") => { setCopied(r); setTimeout(() => setCopied(""), r === "ok" ? 1500 : 4000); };
     // No clipboard API (or a refusal) throws inside the chain, so both end in the failed state.
-    Promise.resolve().then(() => navigator.clipboard.writeText(location.href.split("#")[0] + viewHash(x.v, e.id))).then(() => done("ok"), () => done("fail"));
+    Promise.resolve().then(() => navigator.clipboard.writeText(location.origin + location.pathname + viewLink(x.v, e.id))).then(() => done("ok"), () => done("fail"));
   };
   // Its Link, or a click anywhere on an example, selects it and puts its permalink in the address bar.
   const click = (ev: MouseEvent<HTMLDivElement>) => {
@@ -83,7 +83,7 @@ export const Example = memo(function Example({ e }: { e: Err }) {
         <span>{at(e.ts)}</span>
         <ProjectName project={e.p} /><button type="button" className="linkish" title={`Inspect ${e.t}`} onClick={() => openToolSheet("tool", e.t)}>{e.t}</button>{e.sub ? <span>subagent</span> : null}
         {e.s && <a href={sessionHref(x.v, e.s)} title={`Open session ${e.s} in Activity`} onClick={session}>#{e.s.slice(0, 8)}</a>}
-        {e.id && <span className="link"><a href={viewHash(x.v, e.id)} data-link={e.id} title="Permalink to this error">🔗 Link</a>
+        {e.id && <span className="link"><a href={viewLink(x.v, e.id)} data-link={e.id} title="Permalink to this error">🔗 Link</a>
           <button type="button" data-copy={e.id} onClick={copy}>{copied === "ok" ? "Copied ✓" : copied === "fail" ? "Copy failed" : "Copy URL"}</button>
             <span className="sr" role="status">{copied === "fail" ? "Could not copy the link." : copied === "ok" ? "Link copied." : ""}</span></span>}
       </div>

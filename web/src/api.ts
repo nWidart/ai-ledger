@@ -483,7 +483,7 @@ const qs = (o: Record<string, string | number | boolean | null | undefined>) => 
   return String(p);
 };
 export interface View { project: string; range: number; automated: boolean; source: Source | "" }
-/** The API view of the page hash (useHashState()). */
+/** The API view of the page hash (useView()). */
 export const viewOf = (h: { project: string; range: number; auto: boolean; source: Source | "" }): View =>
   ({ project: h.project, range: h.range, automated: h.auto, source: h.source });
 const viewQs = (v: View) => ({ project: v.project, range: v.range, automated: v.automated, source: v.source });

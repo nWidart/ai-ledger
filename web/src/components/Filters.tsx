@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Combobox } from "@base-ui/react/combobox";
 import type { Source } from "../api";
-import { RANGES, SOURCES, setHash, useHashState } from "../hash";
+import { RANGES, SOURCES, setSearch, useView } from "../url";
 import { ProjectDot } from "./ProjectDot";
 import { Toggletip } from "./Toggletip";
 import "./Filters.css";
@@ -31,10 +31,10 @@ export const agentName = (source: Source | "") => (source ? SOURCE_LABELS[source
 
 /** Project picker with its color dot, range and source segments and the automated toggle, all writing the URL hash. */
 export function Filters({ projects, automated = false, autoFile, range = true, children }: FiltersProps) {
-  const [h, set] = useHashState();
+  const [h, set] = useView();
   // An unknown source reads as All; the URL drops it so a copied link says what the page shows.
   const badSource = !!h.raw.source && !h.source;
-  useEffect(() => { if (badSource) setHash({ source: null }, { push: false }); }, [badSource]);
+  useEffect(() => { if (badSource) setSearch({ source: null }, { push: false }); }, [badSource]);
   const opts = projects.map(p => (typeof p === "string" ? { value: p } : p));
   if (h.project && !opts.some(o => o.value === h.project)) opts.unshift({ value: h.project });
   return (

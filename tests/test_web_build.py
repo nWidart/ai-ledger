@@ -39,9 +39,10 @@ class WebBuildTest(unittest.TestCase):
             self.assertEqual(fh.read().strip(), source_hash(),
                              "src/ai_ledger/web/ is stale: run `npm run build` in web/ and commit src/ai_ledger/web/")
 
-    def test_build_ships_no_query_devtools(self):
-        # The Query devtools are development only; the built app must ship none of them (its CSP allows nothing new).
-        markers = [b"react-query-devtools", b"ReactQueryDevtools", b"tsqd-"]
+    def test_build_ships_no_devtools(self):
+        # The Query and Router devtools are development only; the built app must ship none of them (its CSP allows
+        # nothing new).
+        markers = [b"react-query-devtools", b"ReactQueryDevtools", b"tsqd-", b"router-devtools", b"TanStackRouterDevtools"]
         leaks = []
         for root, _, files in os.walk(BUILD):
             for name in files:

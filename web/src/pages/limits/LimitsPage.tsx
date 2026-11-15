@@ -6,7 +6,7 @@ import { Filters, viewName } from "../../components/Filters";
 import { useLanding } from "../../components/useLanding";
 import { Ledger, LedgerRow } from "../../components/Ledger";
 import { big, dur, num, plural, usd } from "../../format";
-import { navigate, useHashState } from "../../hash";
+import { navigate, useView } from "../../url";
 import { queries } from "../../queries";
 import { useApi } from "../../useApi";
 import { LimitChart, planMarks } from "./LimitChart";
@@ -267,7 +267,7 @@ function Value({ d, project }: { d: LimitsPayload; project: string }) {
 /** Limits (/limits): how much of each provider's plan limits is used, when each runs out or resets, and where capacity
  *  goes unused. Open windows are account-wide and ignore the range; history, unused and value follow it. */
 export function LimitsPage() {
-  const [h] = useHashState();
+  const [h] = useView();
   const want = viewOf(h);
   const url = limitsUrl(want), { data: d, error, loading, retry } = useApi(queries.limits(want), { keepPrevious: true });
   // The payload does not echo its view, so remember the one the data on screen answers.

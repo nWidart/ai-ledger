@@ -77,7 +77,7 @@ One pair of pure functions in `web/src/url.ts`, `parseSearch(str)` and `formatSe
 - Parse: `Object.fromEntries(new URLSearchParams(str))`. Every value is a string; validation gives it its type.
 - Format: for each key, `true` is written `1`, a number as its digits, a string as it is; `undefined`, `null`, `""` and `false` are left out. No `JSON.stringify`: the default serializer would write `ex=%2212345%22`, which is not the same link.
 - A key that is absent stays absent. Validation never fills in a default; the pages apply defaults when they read (`range ?? 30`), as `parseHash` does today. So `range=30` is in the URL only when something wrote it, which the Errors page relies on ("30 days, or the range the URL names").
-- Key order is the order of the validated object, which each validator builds in a fixed order. The old canonical order (`HEAD`, `TAIL`) existed so that links from before the React app compared equal; with the redirect it has no reader and goes.
+- Key order is the old canonical order (`HEAD`, any other key, `TAIL`), kept in `formatSearch`. Changed during phase 1: the plan was to drop it, but keeping it makes every URL the app writes the old hash with `?` for `#`, character for character, so the old link and the new one are one string apart and every test expectation moved by one character. A URL spelled in another order is rewritten canonically by the next write, as `setHash` did.
 
 Alternative considered: Router's default JSON serializer with `stripSearchParams` for defaults. Rejected: it changes the values in every link, not only the separator.
 
@@ -89,6 +89,8 @@ Alternative considered: Router's default JSON serializer with `stripSearchParams
 - A key no validator names is dropped from the next URL the app writes. Today `raw` carries unknown keys along; nothing reads them, and the spec delta says an unknown key is ignored.
 
 No validation library: seven small validators are less code than a schema dependency and its adapter, and Router accepts a plain function.
+
+Phase 1 as built carries no route validator yet: the router's search is the record of strings `parseSearch` returns, which is what `hash.ts` called `raw`, and `parseView` (the old `parseHash`) reads it. Behaviour is the old behaviour with `?` for `#`, unknown keys carried along included. The typed validators arrive in phase 2, one page at a time.
 
 ### 5. The old hash form redirects in the root route's `beforeLoad`
 
@@ -116,17 +118,25 @@ sharedSearch(search)          // was sharedHash: the four shared keys, for a lin
 - The sheet count moves from `history.state.sheets` to the same field passed through `navigate`'s `state`, which Router stores beside its own keys. `closeSheets` reads it from `router.state.location.state` and calls `router.history.go(-n)`, or replaces when there is no count.
 - The module takes the router from a setter called by `makeRouter` (`bindRouter(router)`), so `setSearch` stays a plain function that event handlers and non-component code (`drill.ts`, `session.ts`) can call, and each test's router binds itself.
 
+Found while building phase 1, and now part of the module:
+
+- **Writes are flushed.** Router's browser history updates its own location at once but writes to `window.history` in a microtask. `setSearch` and `go` call `router.history.flush()`, so `location` is current when they return, as it was with `pushState`.
+- **The current URL is read from `router.history.location`**, not from Router's state, so two writes in one handler see each other.
+- **A write that changes nothing still rewrites a URL spelled in another key order**, through `router.history.replace`: Router reads both spellings as one location and would write nothing. The Errors page relies on it when it writes its view back after loading.
+- **`onNavigate(f)`** tells a page that the URL changed by a navigation (Back, Forward, `go`, an address typed in) and not by its own `setSearch`. The Errors page used `popstate` and `hashchange` for this, to restart its search and scroll to a linked example.
+
 Alternative considered: search middleware on each route for the dropped day and `retainSearchParams` for the shared keys. Middleware runs when a link is built and cannot choose push or replace, so the policy would be split between two places; `sharedSearch` is five lines. Revisit if the shared keys ever differ by page.
 
 ### 7. Components read typed search, each only what it uses
 
-- A page reads its route's search: `getRouteApi("/errors").useSearch()`, typed by that route's validator. `h.raw.sub` becomes `search.sub`.
-- Shared components (`Nav`, `Filters`, the sheets, the palette) read the root route's search with a selector: `useSearch({ from: "__root__", select: s => s.session })`. A component re-renders only when its selection changes, where `useHashState()` re-renders every reader on any change.
+- Every read comes from the router's location (`useRouterState({ select: s => s.location.search })`), not from a route match. Found while building phase 1: a match's search (`Route.useSearch()`) is committed after the route's load, a few microtasks after the write, and an input bound to the view (the Sessions search box) would then render its old value once and lose the caret's place. The location changes in the same task as the write. A real-browser check types in the middle of that box and passes.
+- So a page reads its typed search through one hook over the location: `useSearchOf(validate, select?)`, which applies the page's validator and an optional selector, with structural sharing from Router's store. `h.raw.sub` becomes `search.sub`. The route still carries the validator (`validateSearch`), so links and loaders are typed by it.
+- Shared components (`Nav`, `Filters`, the sheets, the palette) read the root keys the same way with a selector, so a component re-renders only when its selection changes, where `useHashState()` re-rendered every reader on any change.
 - `web/src/api.ts`'s `View` (project, range, automated, source) is built by `viewOf(rootState(search))`: `rootState` in `url.ts` applies the defaults, as `parseHash` does today.
 
 ### 8. Links
 
-The navigation's tabs become `<Link to={path} search={sharedSearch(search)}>`: a real `href`, modified clicks left to the browser, `aria-current="page"` from `activeProps`, preload on intent (decision 11). Links whose `href` comes from data (a session's link to Activity, the Limits link to Cost) keep their builders over `formatSearch` and navigate with `router.navigate({ href })` in the existing `plain(e)` click handlers.
+In phase 1 the navigation's tabs stay plain anchors that call `go(href)`, as before; they become `<Link>` in phase 4, where preloading needs it. Then the tabs are `<Link to={path} search={sharedOf(search)}>`: a real `href`, modified clicks left to the browser, `aria-current="page"` from `activeProps`, preload on intent (decision 11). Links whose `href` comes from data (a session's link to Activity, the Limits link to Cost) keep their builders over `formatSearch` and navigate with `router.navigate({ href })` in the existing `plain(e)` click handlers.
 
 ### 9. View transitions, on a page change only
 
@@ -159,11 +169,16 @@ Alternative considered: awaited loaders with `pendingComponent`. Rejected: it wo
 
 Issue #69 asks for page switches that do not block and for cached page models. This change gives it the view transition (decision 9), the page's code loaded before the switch commits (Router resolves the lazy component first, so there is no empty fallback), and data present at mount (decision 11). It does not make the new page's first render concurrent: React renders Router's state change synchronously (see the evidence table). Phase 3 measures the switch to the Errors page, the largest, against a copy of a real store; if the render is still a long task, caching the derived page model by payload identity (the issue's second proposal, independent of any router) becomes a follow-up issue. Issue #69 closes with this change either way, with the measurement recorded.
 
-### 13. Tests: one router per test, in memory
+### 13. Tests: one router per test, over jsdom's history
 
-`testing.tsx` (from `adopt-tanstack` phase 1) gains `renderAt(url, { client? })`: it creates a `QueryClient` and a router with `createMemoryHistory({ initialEntries: [url] })`, renders `RouterProvider`, awaits the lazy page, and returns `{ router, client }`. Tests assert `router.state.location.href` and `router.history.length` in place of `location.hash` and `history.length`, and `test-setup.ts` stops resetting the global URL. `hash.test.ts` becomes `url.test.ts`: `applyPatch`, `parseSearch` and `formatSearch` stay pure-function tests; push or replace, the sheet count and `closeSheets` run against a memory-history router; the redirect has its own cases, with the four legacy inputs from the prototype. The copy-link tests read the origin from `window.location.origin`, which a memory history does not change.
+Changed during phase 1. The plan was a memory history per test; the tests run on jsdom's browser history instead, as the app runs on the browser's. Reasons: it is the history type production uses, so the tests exercise the same code (the batched writes above were found this way); and the 400 lines that set the URL with `history.replaceState` and assert `location`, `history.length` and `history.back()` keep their meaning, moving only from `location.hash` and `#` to `location.search` and `?`. `test-setup.ts` destroys each test's routers and resets the URL, as it reset the URL before.
 
-One test file runs the real browser history in jsdom (`createBrowserHistory`), for what a memory history cannot show: that the first load of an old-form URL rewrites `location.href` in place.
+`testing.tsx` gives two ways to render:
+
+- `renderApp(ui, client?)`, for a component or a page on its own: the Query client and the router's context, without the route tree's rendering. The component shows at once, so the 221 existing `renderApp` calls stay synchronous. The router still loads on every history change, so the old-hash redirect runs.
+- `renderRouter(client?)`, for the whole app as `main.tsx` mounts it (`RouterProvider`): used by `App.test.tsx`, `visits.test.tsx`, `Nav.test.tsx` and the new `router.test.tsx`, which covers the seven paths, canonical URLs unchanged by loading, `/` and unknown paths, the old hash form, an unknown key, and scroll on a page switch.
+
+`hash.test.ts` became `url.test.ts`: every case ported, plus cases for the flush, the canonical rewrite, `onNavigate` and a `useView` that follows a write in the same `act`.
 
 ### 14. Devtools
 
@@ -176,6 +191,8 @@ No server code changes. Router in a client-only app adds no inline script and ma
 ### 16. Bundle
 
 Expected: +26.7 kB gzipped (+76 kB minified) in the entry chunk, from 77.9 to about 105 kB gzipped before `adopt-tanstack`'s own additions; `hash.ts` and `App.tsx`'s route picking give back under 1 kB. The app is served from the loopback interface, so the cost is parse time and wheel size, not transfer. The close-out task records the measured figures here.
+
+Measured after phase 1 (2026-11-15), all JS chunks, against `main` at 2572a72: 767,263 B minified and 249,677 B gzipped before; 841,842 B and 276,849 B after. That is +74,579 B minified and +27,172 B gzipped, in 22 chunks where there were 21.
 
 ### 17. A placeholder while a page first loads
 

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
-import { navigate, setHash, sharedHash, useHashState, usePathname } from "../hash";
+import { navigate, setSearch, sharedSearch, useView, usePathname } from "../url";
 import { getTheme, nextTheme, setTheme, useTheme, type Theme } from "../theme";
 import { alertKey, alertText } from "../pages/limits/limits";
 import { ProjectDot } from "./ProjectDot";
@@ -27,7 +27,7 @@ const THEME_ICON: Record<Theme, ReactNode> = {
 /** The shared top bar: brand, page tabs (keeping project, range and auto), the project filter chip, the palette button,
  *  ingest status and Refresh. */
 export function Nav() {
-  const path = usePathname(), [h] = useHashState(), shared = sharedHash(), theme = useTheme(), next = nextTheme(theme);
+  const path = usePathname(), [h] = useView(), shared = sharedSearch(), theme = useTheme(), next = nextTheme(theme);
   const nav = useRef<HTMLElement>(null);
   const { refresh, state: st } = useRefresh();
   const alert = st.alert ? alertText(st.alert) : null;
@@ -50,7 +50,7 @@ export function Nav() {
     if (to !== path) navigate(to + shared);
   };
   const clear = () => {
-    setHash({ project: null, session: null });
+    setSearch({ project: null, session: null });
     document.getElementById("fProject")?.focus();
   };
 

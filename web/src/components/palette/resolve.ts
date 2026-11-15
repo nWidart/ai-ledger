@@ -1,12 +1,12 @@
 // From the palette's chips and the current location to the URL one commit writes, the footer that says so, and how each
 // chip fared. Pure: no React, no DOM. Pages already read every key written here; nothing new goes in the hash.
 import { viewOf, type View } from "../../api";
-import { DEFAULT_RANGE, SHARED_KEYS, applyPatch, formatHash, parseHash, type HashState } from "../../hash";
+import { DEFAULT_RANGE, SHARED_KEYS, applyPatch, formatSearch, parseView, type ViewState } from "../../url";
 import { SOURCE_LABELS } from "../Filters";
 import { PAGES } from "../Nav";
 import { isFilter, rangeName, sourceLabel, type Chip, type Command, type FilterKind } from "./suggest";
 
-export interface Here { path: string; hash: HashState }
+export interface Here { path: string; hash: ViewState }
 export type ChipStatus = { state: "applied" } | { state: "replaced"; by: string } | { state: "dropped" };
 export interface Resolved {
   path: string;
@@ -32,7 +32,7 @@ const pageLabel = (path: string) => PAGES.find(p => p.path === path)?.label ?? p
 const isPage = (path: string) => PAGES.some(p => p.path === path);
 
 /** Chips for the filters the hash sets: project, source, range (only when the hash names one) and the automated toggle. */
-export function prefill(h: HashState): Chip[] {
+export function prefill(h: ViewState): Chip[] {
   const out: Chip[] = [];
   if (h.project) out.push({ kind: "project", value: h.project, label: h.project, prefilled: true });
   if (h.source) out.push({ kind: "source", value: h.source, label: SOURCE_LABELS[h.source], prefilled: true });
@@ -85,11 +85,11 @@ export function resolve(chips: readonly Chip[], here: Here): Resolved {
     raw = applyPatch(raw, open.kind === "category" ? { cat: open.value, ex: null, etool: null, at: null } : { [open.kind]: open.value });
   }
   if (path === "/errors" && !ERRORS_KEYS.some(k => k in raw)) raw.range = String(DEFAULT_RANGE);
-  const href = path + formatHash(raw), moved = href !== here.path + formatHash(here.hash.raw);
+  const href = path + formatSearch(raw), moved = href !== here.path + formatSearch(here.hash.raw);
   const ci = slot.get("command"), command = ci == null ? null : (chips[ci]!.value as Command);
 
   // The footer: the action, then the filters that apply, then anything that will not.
-  const st = parseHash(formatHash(raw));
+  const st = parseView(raw);
   let action = "";
   if (open) {
     action = open.kind === "category" ? `open Errors on ${open.label}` : open.kind === "session" ? `open session ${open.label}` : `open ${open.label} inspector`;

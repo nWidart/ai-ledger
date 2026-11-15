@@ -5,7 +5,7 @@ import { UsageSheets } from "../../components/sheets/UsageSheets";
 import type { SortBy } from "../../components/Sort";
 import { Toggletip } from "../../components/Toggletip";
 import { num as fmt } from "../../format";
-import { setHash, useHashState } from "../../hash";
+import { onNavigate, setSearch, useView } from "../../url";
 import { queries } from "../../queries";
 import { useApi } from "../../useApi";
 import { Ctx, Keyed, RowContext, tableFocus, type ErrorsCtx, type RowCtx } from "./context";
@@ -42,7 +42,7 @@ export function ErrorsPage() {
   const m = useMemo(() => base && withMuted(base, muted), [base, muted]); // the model with the types muted as of now
   // Project colors match Activity: the nav hands them out in the server's all-time order.
   useEffect(() => { if (data) setOrder(data.project_order); }, [data]);
-  const [h] = useHashState();
+  const [h] = useView();
   const saved = useRef<SavedView>(store.get<SavedView>(VIEW_KEY, {}));
   const read = useMemo(() => readView(h.raw, saved.current, base), [h.raw, base]);
   const view = useMemo(() => (m ? settle(m, read.view) : read.view), [m, read.view]);
@@ -60,7 +60,7 @@ export function ErrorsPage() {
   const [deadLink, setDeadLink] = useState(false);
   const sheet = useRef<HTMLDialogElement>(null), retryBtn = useRef<HTMLButtonElement>(null);
   const selecting = useRef(false), navd = useRef(false), retried = useRef(false), init = useRef(false);
-  const lastHash = useRef(""), sheetCat = useRef<string | null>(null), prevCat = useRef<string | null>(null), shownCat = useRef<string | null>(null);
+  const sheetCat = useRef<string | null>(null), prevCat = useRef<string | null>(null), shownCat = useRef<string | null>(null);
 
   const f = useMemo(() => m && filtered(m, view), [m, view.project, view.source, view.range, view.sub, view.noise]); // the type and the link don't filter; m changes with the muted types
   const vt = useMemo(() => m && f && viewTypes(m, view, f), [m, f, view]);
@@ -72,7 +72,7 @@ export function ErrorsPage() {
     if (patch.cat !== undefined && patch.cat !== cur.cat) { setQ(""); if (patch.tool === undefined) patch = { ...patch, tool: null }; }
     // A bucket key belongs to its granularity: the other one starts with none selected.
     if (patch.gran && patch.gran !== cur.gran && patch.at === undefined) patch = { ...patch, at: null };
-    setHash(viewPatch({ ...cur, ...patch }), { push });
+    setSearch(viewPatch({ ...cur, ...patch }), { push });
   }, []);
   const focusDetail = useCallback(() => {
     const t = $("#detailTitle");
@@ -115,18 +115,14 @@ export function ErrorsPage() {
   useEffect(() => { selecting.current = false; });
 
   // The view is the hash: write it back whole (a closed type drops out, an empty hash takes the saved view), and remember it.
-  useLayoutEffect(() => { if (m) setHash(viewPatch(view), { push: false }); }, [m, view]);
+  useLayoutEffect(() => { if (m) setSearch(viewPatch(view), { push: false }); }, [m, view]);
   useEffect(() => {
     if (!m) return;
     saved.current = savedOf(view);
     store.set(VIEW_KEY, saved.current);
   }, [m, view]);
-  // Back, Forward and hash links re-read the hash: the search starts over and a linked example scrolls into view.
-  useEffect(() => {
-    const on = () => { if (location.hash !== lastHash.current) { navd.current = true; setQ(""); } };
-    addEventListener("popstate", on); addEventListener("hashchange", on);
-    return () => { removeEventListener("popstate", on); removeEventListener("hashchange", on); };
-  }, []);
+  // Back, Forward and links re-read the URL: the search starts over and a linked example scrolls into view.
+  useEffect(() => onNavigate(() => { navd.current = true; setQ(""); }), []);
   useEffect(() => { if (error) retryBtn.current?.focus(); }, [error]);
   // A dead link shows the notice, and #pageLive announces it: cleared first, then set on the next frame, so each dead link is
   // read out again even when the text is the same as last time. Every way the announcement ends goes through endAnnounce:
@@ -212,7 +208,6 @@ export function ErrorsPage() {
         || (view.cat ? $("#detailTitle") : $(`#catBody button[data-c="${CSS.escape(prevCat.current ?? "")}"]`) || tableFocus()))?.focus();
     }
     prevCat.current = view.cat;
-    lastHash.current = location.hash;
   });
 
   const projects = useMemo(() => {

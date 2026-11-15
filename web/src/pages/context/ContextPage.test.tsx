@@ -5,15 +5,14 @@ import type { ContextPayload, Tip } from "../../api";
 import context from "../../__fixtures__/context";
 import session from "../../__fixtures__/session";
 import { mockApi } from "../../components/sheets/testing";
-import { App } from "../../App";
 import { openDrawer } from "../../components/Drawer";
 import { ContextPage } from "./ContextPage";
-import { renderApp } from "../../testing";
+import { renderApp, renderRouter } from "../../testing";
 
 const fixture: ContextPayload = context;
 const serve = (d: ContextPayload) => mockApi({ "/api/context": () => d, "/api/session": () => session });
 /** The page loaded, with these drawers open (a closed drawer renders no table). */
-const show = async (d: ContextPayload = fixture, hash = "#range=0", open = ["d-largest", "d-breaks"]) => {
+const show = async (d: ContextPayload = fixture, hash = "?range=0", open = ["d-largest", "d-breaks"]) => {
   const f = serve(d);
   history.replaceState(null, "", "/context" + hash);
   renderApp(<ContextPage />);
@@ -25,7 +24,7 @@ const drawer = (id: string) => document.getElementById(id)!;
 const isOpen = (id: string) => drawer(id).hasAttribute("data-open");
 /** A row's header and data cells, in order. */
 const cells = (row: HTMLElement) => [...row.querySelectorAll("th[scope=row], td")].map(c => c.textContent);
-const hash = () => new URLSearchParams(location.hash.slice(1));
+const hash = () => new URLSearchParams(location.search.slice(1));
 const section = (id: string) => within(document.getElementById(id)!);
 const tipCard = (title: string) => within(screen.getByText(title).closest("article") as HTMLElement);
 const back = async () => { act(() => history.back()); await new Promise(r => addEventListener("popstate", r, { once: true })); };
@@ -75,7 +74,7 @@ describe("ContextPage", () => {
 
   it("marks the content busy while loading, with no live region announcing it", async () => {
     mockApi({ "/api/context": () => new Promise(() => {}) as never });
-    history.replaceState(null, "", "/context#range=0");
+    history.replaceState(null, "", "/context?range=0");
     renderApp(<ContextPage />);
     const main = screen.getByRole("main");
     expect(main.id).toBe("content");
@@ -117,12 +116,12 @@ describe("ContextPage", () => {
 
   describe("a view with no data", () => {
     it("says no session has a measured start", async () => {
-      await show({ ...fixture, project: "nope", range: 7, coverage: { ...fixture.coverage, sessions: 0 }, starting: { ...fixture.starting, sessions: 0, median: null, p10: null, p90: null, window_share: null, by_project: [], trend: [] } }, "#project=nope&range=7");
+      await show({ ...fixture, project: "nope", range: 7, coverage: { ...fixture.coverage, sessions: 0 }, starting: { ...fixture.starting, sessions: 0, median: null, p10: null, p90: null, window_share: null, by_project: [], trend: [] } }, "?project=nope&range=7");
       expect(document.getElementById("lede")!.textContent).toBe("No agent session in nope with a measured start in the last 7 days.");
       expect(screen.getByText("No session in this view has a measured start.")).toBeTruthy();
     });
     it("names the agent picked", async () => {
-      await show({ ...fixture, source: "codex", starting: { ...fixture.starting, median: null } }, "#source=codex");
+      await show({ ...fixture, source: "codex", starting: { ...fixture.starting, median: null } }, "?source=codex");
       expect(document.getElementById("lede")!.textContent).toBe("No Codex session with a measured start yet.");
     });
   });
@@ -173,7 +172,7 @@ describe("tips", () => {
   });
 
   it("clears the hash when the list is closed from its title", async () => {
-    await show(fixture, "#range=0&tip=near_limit");
+    await show(fixture, "?range=0&tip=near_limit");
     await waitFor(() => expect(isOpen("d-tip")).toBe(true));
     await userEvent.click(within(drawer("d-tip")).getByRole("button", { name: /^Sessions matching/ }));
     await waitFor(() => expect(drawer("d-tip")).toBeNull());
@@ -182,7 +181,7 @@ describe("tips", () => {
   });
 
   it("opens a session sheet from the list", async () => {
-    await show(fixture, "#range=0&tip=near_limit");
+    await show(fixture, "?range=0&tip=near_limit");
     await userEvent.click(within(drawer("d-tip")).getByRole("button", { name: "Fix the importer" }));
     expect(hash().get("session")).toBe("f1");
     expect(hash().get("tip")).toBe("near_limit");
@@ -191,7 +190,7 @@ describe("tips", () => {
 
   it("says how many matching sessions are left out", async () => {
     const tip: Tip = { ...fixture.tips[0]!, matched: 25, sessions: Array.from({ length: 20 }, (_, i) => ({ ...fixture.tips[0]!.sessions[0]!, session_id: `s${i}`, title: `Session ${i}` })) };
-    await show({ ...fixture, tips: [tip] }, "#range=0&tip=near_limit");
+    await show({ ...fixture, tips: [tip] }, "?range=0&tip=near_limit");
     const d = drawer("d-tip");
     // Twenty session buttons, beside the drawer's own title button.
     expect(within(d).getAllByRole("button").filter(b => b.classList.contains("cellbtn"))).toHaveLength(20);
@@ -200,13 +199,13 @@ describe("tips", () => {
   });
 
   it("shows nothing for a tip the payload does not have", async () => {
-    await show(fixture, "#range=0&tip=nope");
+    await show(fixture, "?range=0&tip=nope");
     expect(drawer("d-tip")).toBeNull();
     expect(hash().get("tip")).toBe("nope");
   });
 
   it("shows nothing for a tip that does not fire in this view", async () => {
-    await show({ ...fixture, tips: fixture.tips.filter(t => t.id !== "near_limit") }, "#range=0&tip=near_limit");
+    await show({ ...fixture, tips: fixture.tips.filter(t => t.id !== "near_limit") }, "?range=0&tip=near_limit");
     expect(drawer("d-tip")).toBeNull();
   });
 });
@@ -388,7 +387,7 @@ describe("cost", () => {
 
 describe("filters", () => {
   it("offers the automated toggle and keeps the hash's view in the request", async () => {
-    const f = await show(fixture, "#project=foo&range=7&source=codex&auto=1");
+    const f = await show(fixture, "?project=foo&range=7&source=codex&auto=1");
     expect(f.mock.calls[0]![0]).toBe("/api/context?project=foo&range=7&automated=1&source=codex");
     expect(screen.getByRole("checkbox", { name: /Include automated/ })).toBeTruthy();
     expect((screen.getByRole("checkbox", { name: /Include automated/ }) as HTMLInputElement).checked).toBe(true);
@@ -396,8 +395,8 @@ describe("filters", () => {
 
   it("is a route of the app", async () => {
     serve(fixture);
-    history.replaceState(null, "", "/context#range=0");
-    renderApp(<App />);
+    history.replaceState(null, "", "/context?range=0");
+    renderRouter();
     expect(await screen.findByRole("heading", { level: 1, name: /A typical session starts with/ })).toBeTruthy();
     expect(document.title).toBe("Context · AI Ledger");
   });

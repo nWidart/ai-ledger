@@ -12,7 +12,7 @@ import { openProjectSheet, openSessionSheet, sessName } from "../../components/s
 import { UsageSheets } from "../../components/sheets/UsageSheets";
 import { useLanding } from "../../components/useLanding";
 import { big, num, pct, usd, when } from "../../format";
-import { useHashState } from "../../hash";
+import { useView } from "../../url";
 import { queries } from "../../queries";
 import { useApi } from "../../useApi";
 import { Changes } from "./Changes";
@@ -65,7 +65,7 @@ function SpendLedger({ d, all, onAll }: { d: UsagePayload; all: boolean; onAll: 
 
 /** Cost (/cost): what coding-agent usage (every source, or the one picked) cost at API list prices, where it went, and why it changed. */
 export function CostPage() {
-  const [h, set] = useHashState();
+  const [h, set] = useView();
   const want: View = viewOf(h), url = usageUrl(want), viewKey = url;
   const { data, error, loading, retry } = useApi(queries.usage(want), { keepPrevious: true });
   useEffect(() => { if (data) setOrder(data.project_order); }, [data]);

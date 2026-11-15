@@ -97,7 +97,7 @@ const btn = (page, name) => page.getByRole("button", { name, exact: true });
 const SCENES = {
   async activity(h, start) {
     const { page } = h;
-    await start("/usage#range=30");
+    await start("/usage?range=30");
     await h.wait(1500);
     await h.scrollTo(page.locator("#work"), 20);
     await h.click(btn(page, "Prompts"));
@@ -112,7 +112,7 @@ const SCENES = {
   },
   async cost(h, start) {
     const { page } = h;
-    await start("/cost#range=30");
+    await start("/cost?range=30");
     await h.wait(1800);
     await h.click(btn(page, "90d"), { pause: 1500 });
     await h.click(btn(page, "30d"), { pause: 1200 });
@@ -128,7 +128,7 @@ const SCENES = {
   },
   async errors(h, start) {
     const { page } = h;
-    await start("/errors#range=30");
+    await start("/errors?range=30");
     await h.wait(1800);
     await h.scrollTo(page.locator("#chartTitle"), 20);
     await h.click(page.locator("#legend button"), { pause: 1500 });
@@ -140,7 +140,7 @@ const SCENES = {
   },
   async limits(h, start) {
     const { page } = h;
-    await start("/limits#range=30");
+    await start("/limits?range=30");
     await h.wait(2200);
     const card = page.locator(".lim-grid svg").first();
     const box = await card.boundingBox();
@@ -156,7 +156,7 @@ const SCENES = {
   },
   async insights(h, start) {
     const { page } = h;
-    await start("/insights#range=30");
+    await start("/insights?range=30");
     await h.wait(2200);
     await h.scrollTo(page.locator("#friction"), 20);
     await h.wait(1800);
@@ -187,7 +187,7 @@ const SCENES = {
   },
   async tour(h, start) {
     const { page } = h;
-    await start("/usage#range=30");
+    await start("/usage?range=30");
     await h.wait(1800);
     await h.scrollTo(page.locator("#work"), 20);
     await h.click(btn(page, "Prompts"), { pause: 1200 });

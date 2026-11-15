@@ -2,6 +2,7 @@
 import { cleanup } from "@testing-library/react";
 import { afterEach } from "vitest";
 import { useFakeSource } from "./pages/live/testing";
+import { closeRouters } from "./testing";
 
 if (!HTMLDialogElement.prototype.showModal) {
   HTMLDialogElement.prototype.showModal = function (this: HTMLDialogElement) { this.setAttribute("open", ""); };
@@ -24,6 +25,7 @@ useFakeSource(); // jsdom has no EventSource; Live tests drive FakeSource.last
 
 afterEach(() => {
   cleanup();
+  closeRouters();
   history.replaceState(null, "", "/");
   try { localStorage.clear(); } catch { /* storage off */ }
 });

@@ -1,14 +1,13 @@
 import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { App } from "../App";
 import { hasHue, setOrder } from "../colors";
 import type { LimitsAlert } from "../api";
 import { alertText, whenDay } from "../pages/limits/limits";
 import { Nav } from "./Nav";
 import { queries } from "../queries";
 import { askedFor } from "./refresh";
-import { renderApp } from "../testing";
+import { renderApp, renderRouter } from "../testing";
 import { useApi } from "../useApi";
 import { useQuery, type QueryClient } from "@tanstack/react-query";
 import usage from "../__fixtures__/usage";
@@ -31,17 +30,18 @@ const json = (body: unknown, ok = true) => Promise.resolve({ ok, status: ok ? 20
 describe("Nav", () => {
   it("switches tabs keeping project, range, source and auto, and marks the current tab", async () => {
     vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/status") ? status : url.startsWith("/api/sessions") ? sessions : url.startsWith("/api/session") ? session : usage)));
-    history.replaceState(null, "", "/usage#project=foo&range=14&source=codex&auto=1&session=s1");
-    renderApp(<App />);
+    history.replaceState(null, "", "/usage?project=foo&range=14&source=codex&auto=1&session=s1");
+    renderRouter();
+    await screen.findByRole("link", { name: "Activity" });
     expect(screen.getByRole("link", { name: "Activity" }).getAttribute("aria-current")).toBe("page");
     expect(document.title).toBe("Activity · AI Ledger");
     await userEvent.click(screen.getByRole("link", { name: "Cost" }));
     expect(location.pathname).toBe("/cost");
-    expect(location.hash).toBe("#project=foo&range=14&source=codex&auto=1");
+    expect(location.search).toBe("?project=foo&range=14&source=codex&auto=1");
     expect(screen.getByRole("link", { name: "Cost" }).getAttribute("aria-current")).toBe("page");
     expect(screen.getByRole("link", { name: "Activity" }).getAttribute("aria-current")).toBeNull();
     expect(document.title).toBe("Cost · AI Ledger");
-    expect(screen.getByRole("link", { name: "Errors" }).getAttribute("href")).toBe("/errors#project=foo&range=14&source=codex&auto=1");
+    expect(screen.getByRole("link", { name: "Errors" }).getAttribute("href")).toBe("/errors?project=foo&range=14&source=codex&auto=1");
     // Back returns to Activity with its page-only keys.
     await act(async () => {
       history.back();
@@ -53,11 +53,12 @@ describe("Nav", () => {
 
   it("opens Limits with the project, range and source from Cost", async () => {
     vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/status") ? status : url.startsWith("/api/limits") ? limits : usage)));
-    history.replaceState(null, "", "/cost#project=foo&range=30&source=codex");
-    renderApp(<App />);
+    history.replaceState(null, "", "/cost?project=foo&range=30&source=codex");
+    renderRouter();
+    await screen.findByRole("link", { name: "Cost" });
     await userEvent.click(screen.getByRole("link", { name: "Limits" }));
     expect(location.pathname).toBe("/limits");
-    expect(location.hash).toBe("#project=foo&range=30&source=codex");
+    expect(location.search).toBe("?project=foo&range=30&source=codex");
     expect(document.title).toBe("Limits · AI Ledger");
     // The page's chunk loads on first show, so its fetch follows the click a tick later.
     await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(c => String(c[0]) === "/api/limits?project=foo&range=30&source=codex")).toBe(true));
@@ -65,11 +66,12 @@ describe("Nav", () => {
 
   it("opens Insights with the project, range and source from Cost", async () => {
     vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/status") ? status : url.startsWith("/api/insights") ? insights : usage)));
-    history.replaceState(null, "", "/cost#project=foo&range=30&source=codex");
-    renderApp(<App />);
+    history.replaceState(null, "", "/cost?project=foo&range=30&source=codex");
+    renderRouter();
+    await screen.findByRole("link", { name: "Cost" });
     await userEvent.click(screen.getByRole("link", { name: "Insights" }));
     expect(location.pathname).toBe("/insights");
-    expect(location.hash).toBe("#project=foo&range=30&source=codex");
+    expect(location.search).toBe("?project=foo&range=30&source=codex");
     expect(document.title).toBe("Insights · AI Ledger");
     // The page's chunk loads on first show, so its fetch follows the click a tick later.
     await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(c => String(c[0]) === "/api/insights?project=foo&range=30&source=codex")).toBe(true));
@@ -77,13 +79,14 @@ describe("Nav", () => {
 
   it("opens Context from Cost with the project and range kept, after Cost in the nav", async () => {
     vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/status") ? status : url.startsWith("/api/context") ? context : usage)));
-    history.replaceState(null, "", "/cost#project=foo&range=30");
-    renderApp(<App />);
+    history.replaceState(null, "", "/cost?project=foo&range=30");
+    renderRouter();
+    await screen.findByRole("link", { name: "Cost" });
     const tabs = screen.getAllByRole("link").map(a => a.textContent);
     expect(tabs.slice(tabs.indexOf("Cost"), tabs.indexOf("Cost") + 2)).toEqual(["Cost", "Context"]);
     await userEvent.click(screen.getByRole("link", { name: "Context" }));
     expect(location.pathname).toBe("/context");
-    expect(location.hash).toBe("#project=foo&range=30");
+    expect(location.search).toBe("?project=foo&range=30");
     expect(document.title).toBe("Context · AI Ledger");
     expect(screen.getByRole("link", { name: "Context" }).getAttribute("aria-current")).toBe("page");
     expect(screen.getByRole("link", { name: "Cost" }).getAttribute("aria-current")).toBeNull();
@@ -91,28 +94,30 @@ describe("Nav", () => {
 
   it("keeps the automated toggle from Context to Cost and back", async () => {
     vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/status") ? status : url.startsWith("/api/context") ? context : usage)));
-    history.replaceState(null, "", "/context#project=foo&range=30&auto=1");
-    renderApp(<App />);
+    history.replaceState(null, "", "/context?project=foo&range=30&auto=1");
+    renderRouter();
+    await screen.findByRole("link", { name: "Cost" });
     await userEvent.click(screen.getByRole("link", { name: "Cost" }));
     expect(location.pathname).toBe("/cost");
-    expect(location.hash).toBe("#project=foo&range=30&auto=1");
+    expect(location.search).toBe("?project=foo&range=30&auto=1");
     await userEvent.click(screen.getByRole("link", { name: "Context" }));
     expect(location.pathname).toBe("/context");
-    expect(location.hash).toBe("#project=foo&range=30&auto=1");
+    expect(location.search).toBe("?project=foo&range=30&auto=1");
   });
 
   it("opens Live with the project and source from Cost, and gives Cost its range back", async () => {
     vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/status") ? status : url.startsWith("/api/live/session") ? liveSession
       : url.startsWith("/api/live") ? live : usage)));
-    history.replaceState(null, "", "/cost#project=foo&range=14&source=claude");
-    renderApp(<App />);
+    history.replaceState(null, "", "/cost?project=foo&range=14&source=claude");
+    renderRouter();
+    await screen.findByRole("link", { name: "Cost" });
     await userEvent.click(screen.getByRole("link", { name: "Live" }));
     expect(location.pathname).toBe("/live");
     await waitFor(() => expect(document.title).toBe("(2) Live · AI Ledger")); // one approval wait and one your turn in the list
     expect(vi.mocked(fetch).mock.calls.some(c => String(c[0]) === "/api/live?project=foo&source=claude")).toBe(true);
     expect(screen.queryByRole("group", { name: "Time range" })).toBeNull();
     await userEvent.click(screen.getByRole("link", { name: "Cost" }));
-    expect(location.hash).toBe("#project=foo&range=14&source=claude");
+    expect(location.search).toBe("?project=foo&range=14&source=claude");
   });
 
   it("names the app AI Ledger", () => {
@@ -130,20 +135,20 @@ describe("Nav", () => {
 
   it("shows the project chip and clears the filter", async () => {
     vi.stubGlobal("fetch", vi.fn(() => json(status)));
-    history.replaceState(null, "", "/errors#project=foo&range=30&session=s1");
+    history.replaceState(null, "", "/errors?project=foo&range=30&session=s1");
     renderApp(<Nav />);
     await userEvent.click(screen.getByRole("button", { name: "Clear project filter" }));
-    expect(location.hash).toBe("#range=30");
+    expect(location.search).toBe("?range=30");
     expect(screen.queryByRole("button", { name: "Clear project filter" })).toBeNull();
     expect(screen.getByRole("link", { name: "Errors" }).getAttribute("aria-current")).toBe("page");
   });
 
   it("clears the Activity day with the project filter", async () => {
     vi.stubGlobal("fetch", vi.fn(() => json(status)));
-    history.replaceState(null, "", "/usage#project=foo&range=30&day=2026-11-04&q=api");
+    history.replaceState(null, "", "/usage?project=foo&range=30&day=2026-11-04&q=api");
     renderApp(<Nav />);
     await userEvent.click(screen.getByRole("button", { name: "Clear project filter" }));
-    expect(location.hash).toBe("#range=30&q=api");
+    expect(location.search).toBe("?range=30&q=api");
   });
 
   it("shows the ingest status, and a failed Refresh offers Retry until it is retried, whatever a status poll answers", async () => {
@@ -595,7 +600,7 @@ describe("Nav", () => {
     it("shows on the Limits page, whose tab is the current one", async () => {
       vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/status") ? { ...status, limits_alert: alert({}) } : limits)));
       history.replaceState(null, "", "/limits");
-      renderApp(<App />);
+      renderRouter();
       const link = await screen.findByRole("link", { name: /^Limits alert: / });
       expect(link.getAttribute("aria-current")).toBe("page");
       expect(badge()).not.toBeNull();

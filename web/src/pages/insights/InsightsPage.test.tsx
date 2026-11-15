@@ -7,17 +7,16 @@ import empty from "../../__fixtures__/insights-empty";
 import session from "../../__fixtures__/session";
 import sessions from "../../__fixtures__/sessions";
 import usage from "../../__fixtures__/usage";
-import { App } from "../../App";
 import { openDrawer } from "../../components/Drawer";
 import { mockApi } from "../../components/sheets/testing";
 import { when } from "../../format";
 import { InsightsPage } from "./InsightsPage";
-import { renderApp } from "../../testing";
+import { renderApp, renderRouter } from "../../testing";
 
 const fixture = insights as InsightsPayload, none = empty as InsightsPayload;
 /** A closed drawer renders no body: show() starts these open, as a reload that left them open would. */
 const DRAWERS = ["d-goals", "d-types", "d-figures", "d-coverage", "d-how"];
-const show = (d: InsightsPayload, hash = "#range=0", open = DRAWERS) => {
+const show = (d: InsightsPayload, hash = "?range=0", open = DRAWERS) => {
   localStorage.setItem("claude-usage-open", JSON.stringify(open));
   const f = mockApi({ "/api/insights": () => d });
   history.replaceState(null, "", "/insights" + hash);
@@ -48,7 +47,7 @@ describe("InsightsPage", () => {
   });
 
   it("claims no full coverage for a view without analysed sessions", async () => {
-    show({ ...none, coverage: { ...fixture.coverage, claude_sessions: 0, analysed: 0, not_analysed: 0, facets: 0, orphans: 0 } }, "#project=nope");
+    show({ ...none, coverage: { ...fixture.coverage, claude_sessions: 0, analysed: 0, not_analysed: 0, facets: 0, orphans: 0 } }, "?project=nope");
     expect((await lede()).textContent).toBe("No analysed sessions in this view.");
     expect(document.getElementById("coverage")).toBeNull();
   });
@@ -81,7 +80,7 @@ describe("InsightsPage", () => {
 
   it("says /insights covers only Claude Code with source Codex, and shows no figures", async () => {
     const codex: InsightsPayload = { ...none, coverage: { ...fixture.coverage, claude_sessions: 0, analysed: 0, not_analysed: 0, facets: 0, orphans: 0 } };
-    const f = show(codex, "#range=0&source=codex");
+    const f = show(codex, "?range=0&source=codex");
     expect((await lede()).textContent).toBe("/insights analyses only Claude Code sessions.");
     expect(f.mock.calls[0]![0]).toBe("/api/insights?range=0&source=codex");
     expect(screen.getByText(/Codex writes no facets/).textContent).toContain("1 Codex session in this view, none analysed");
@@ -114,7 +113,7 @@ describe("InsightsPage", () => {
   });
 
   it("orders the page: vitals, outcomes and friction, satisfaction, sessions, then Goals, Session types, Session figures and Coverage as closed drawers", async () => {
-    show(fixture, "#range=0", []);
+    show(fixture, "?range=0", []);
     await lede();
     const wrap = document.querySelector(".pg-insights")!, at = (sel: string) => [...wrap.querySelectorAll("*")].indexOf(wrap.querySelector(sel)!);
     const order = [".secidx", ".vitals", "#outcomes", "#friction", "#satisfaction", "#log", "#d-goals", "#d-types", "#d-figures", "#d-coverage", "#d-how"].map(at);
@@ -130,7 +129,7 @@ describe("InsightsPage", () => {
   });
 
   it("indexes the sections and opens a drawer on a jump", async () => {
-    show(fixture, "#range=0", []);
+    show(fixture, "?range=0", []);
     await lede();
     const nav = screen.getByRole("navigation", { name: "Page sections" });
     expect(within(nav).getAllByRole("link").map(a => a.textContent)).toEqual(["Overview", "Outcomes", "Friction", "Satisfaction", "Sessions", "Goals", "Session types", "Session figures", "Coverage", "How this works"]);
@@ -140,7 +139,7 @@ describe("InsightsPage", () => {
   });
 
   it("explains how /insights works in a closed drawer, with the run sizes from the store", async () => {
-    show(fixture, "#range=0", []);
+    show(fixture, "?range=0", []);
     await lede();
     const how = drawer("d-how");
     expect(isOpen("d-how")).toBe(false);
@@ -161,7 +160,7 @@ describe("InsightsPage", () => {
   });
 
   it("keeps the How this works drawer when the view has no analysed session, and drops it for Codex or an empty store", async () => {
-    show({ ...none, coverage: { ...fixture.coverage, facets: 0, analysed: 0, not_analysed: 0 } }, "#project=nope");
+    show({ ...none, coverage: { ...fixture.coverage, facets: 0, analysed: 0, not_analysed: 0 } }, "?project=nope");
     await lede();
     expect(drawer("d-how")).toBeTruthy();
     expect(within(screen.getByRole("navigation", { name: "Page sections" })).getAllByRole("link").map(a => a.textContent)).toEqual(["Overview", "How this works"]);
@@ -225,7 +224,7 @@ describe("InsightsPage", () => {
   });
 
   it("opens the coverage drawer from the coverage sentence", async () => {
-    show(fixture, "#range=0", []);
+    show(fixture, "?range=0", []);
     await lede();
     expect(isOpen("d-coverage")).toBe(false);
     await userEvent.click(within(document.getElementById("coverage")!).getByRole("button", { name: "by project and run" }));
@@ -285,7 +284,7 @@ describe("InsightsPage", () => {
     expect(top.textContent).toContain(when(fixture.sessions[2]!.start));
     expect(top.contains(last!.querySelector(".sum"))).toBe(false);
     expect(within(last!).getByText("#0000aaaa")).toBeTruthy();
-    expect(link.getAttribute("href")).toBe("/usage#range=0&session=0000aaaa-0000-4000-8000-000000000001");
+    expect(link.getAttribute("href")).toBe("/usage?range=0&session=0000aaaa-0000-4000-8000-000000000001");
     // Friction detail: an expander, closed, only on a card that has detail.
     const fd = mid!.querySelector("details")!;
     expect(fd.open).toBe(false);
@@ -296,31 +295,31 @@ describe("InsightsPage", () => {
     expect(last!.querySelector("details")).toBeNull();
     await userEvent.click(link);
     expect(location.pathname).toBe("/usage");
-    expect(location.hash).toBe("#range=0&session=0000aaaa-0000-4000-8000-000000000001");
+    expect(location.search).toBe("?range=0&session=0000aaaa-0000-4000-8000-000000000001");
   });
 
   it("narrows to friction and keeps that in the URL", async () => {
     show(fixture);
     await lede();
     await userEvent.click(within(logOf()).getByLabelText("Only sessions with friction"));
-    expect(location.hash).toBe("#range=0&friction=1");
+    expect(location.search).toBe("?range=0&friction=1");
     expect(cards().length).toBe(2);
     expect(within(logOf()).getByText("2 of 3 sessions")).toBeTruthy();
     await userEvent.click(within(logOf()).getByLabelText("Only sessions with friction"));
     expect(cards().length).toBe(3);
-    expect(location.hash).toBe("#range=0");
+    expect(location.search).toBe("?range=0");
   });
 
   it("keeps the friction filter from the hash, matches friction text alone, and links in the view", async () => {
     const sessions = fixture.sessions.map(s => (s.session_id.endsWith("3") ? { ...s, friction: [] } : s));
-    show({ ...fixture, sessions }, "#project=demo-app&range=7&source=claude&auto=1&friction=1");
+    show({ ...fixture, sessions }, "?project=demo-app&range=7&source=claude&auto=1&friction=1");
     await lede();
     const log = logOf();
     expect((within(log).getByLabelText("Only sessions with friction") as HTMLInputElement).checked).toBe(true);
     expect(cards().length).toBe(2);
     await userEvent.click(within(log).getByLabelText("Only sessions with friction"));
     expect(within(log).getByRole("link", { name: "Add a theme toggle" }).getAttribute("href"))
-      .toBe("/usage#project=demo-app&range=7&source=claude&auto=1&session=0000aaaa-0000-4000-8000-000000000001");
+      .toBe("/usage?project=demo-app&range=7&source=claude&auto=1&session=0000aaaa-0000-4000-8000-000000000001");
   });
 
   it("shows the first 25 sessions of the chosen order until asked for all, and names the collapse by position, not age", async () => {
@@ -350,7 +349,7 @@ describe("InsightsPage", () => {
     // not achieved (newest first), partially, unclear or unknown (newest first), mostly, fully.
     expect(order()).toEqual(["s1", "s5", "s4", "s3", "s6", "s2", "s0"]);
     expect(within(logOf()).getByText(/worst outcome first, newest first within an outcome/)).toBeTruthy();
-    expect(location.hash).toBe("#range=0");
+    expect(location.search).toBe("?range=0");
   });
 
   it("filters by outcome through the URL, with each outcome the view has and combined with friction", async () => {
@@ -363,25 +362,25 @@ describe("InsightsPage", () => {
     expect([...sel.options].map(o => o.textContent)).toEqual(["All outcomes", "Fully achieved", "Partially achieved", "Not achieved"]);
     expect(sel.value).toBe("");
     await pick("Outcome", "not_achieved");
-    expect(location.hash).toBe("#range=0&outcome=not_achieved");
+    expect(location.search).toBe("?range=0&outcome=not_achieved");
     expect(order()).toEqual(["s1", "s3"]);
     expect(within(logOf()).getByText("2 of 4 sessions")).toBeTruthy();
     await userEvent.click(within(logOf()).getByLabelText("Only sessions with friction"));
-    expect(location.hash).toBe("#range=0&outcome=not_achieved&friction=1");
+    expect(location.search).toBe("?range=0&outcome=not_achieved&friction=1");
     expect(order()).toEqual(["s1"]);
     expect(within(logOf()).getByText("1 of 4 sessions")).toBeTruthy();
     await pick("Outcome", "");
-    expect(location.hash).toBe("#range=0&friction=1");
+    expect(location.search).toBe("?range=0&friction=1");
     expect(within(logOf()).getByText("1 of 4 sessions")).toBeTruthy();
   });
 
   it("reads the outcome filter from the URL, and shows an empty state for an outcome nobody has", async () => {
     const d = ranked(["fully_achieved", "not_achieved"]);
-    show(d, "#range=0&outcome=not_achieved");
+    show(d, "?range=0&outcome=not_achieved");
     await lede();
     expect((within(logOf()).getByLabelText("Outcome") as HTMLSelectElement).value).toBe("not_achieved");
     expect(order()).toEqual(["s1"]);
-    act(() => { history.replaceState(null, "", "/insights#range=0&outcome=gone"); dispatchEvent(new HashChangeEvent("hashchange")); });
+    act(() => { history.replaceState(null, "", "/insights?range=0&outcome=gone"); dispatchEvent(new PopStateEvent("popstate")); });
     expect(cards().length).toBe(0);
     expect(within(logOf()).getByText("No session in this view matches the filters.")).toBeTruthy();
     expect(within(logOf()).getByText("0 of 2 sessions")).toBeTruthy();
@@ -392,7 +391,7 @@ describe("InsightsPage", () => {
   describe("drill-down", () => {
     const row = (sec: Element, name: RegExp) => within(sec as HTMLElement).getByRole("button", { name });
     const goals = () => drawer("d-goals");
-    const hashOf = () => location.hash;
+    const hashOf = () => location.search;
     const orphan = "Synthetic: tried a layout idea and dropped it.", mid = "Synthetic: chased a flaky date test. SENTINEL-facet-text";
 
     it("filters from a friction row, moves to the list and marks the row", async () => {
@@ -404,7 +403,7 @@ describe("InsightsPage", () => {
         const btn = row(section(/^Friction/), /^buggy code/);
         expect(btn.getAttribute("aria-pressed")).toBe("false");
         await userEvent.click(btn);
-        expect(hashOf()).toBe("#range=0&frf=buggy_code");
+        expect(hashOf()).toBe("?range=0&frf=buggy_code");
         expect(order()).toEqual([orphan, mid]);
         expect(within(logOf()).getByText("2 of 3 sessions")).toBeTruthy();
         expect(btn.getAttribute("aria-pressed")).toBe("true");
@@ -421,7 +420,7 @@ describe("InsightsPage", () => {
       await userEvent.click(btn);
       expect(history.length).toBe(before + 1);
       await userEvent.click(btn);
-      expect(hashOf()).toBe("#range=0");
+      expect(hashOf()).toBe("?range=0");
       expect(btn.getAttribute("aria-pressed")).toBe("false");
       expect(cards().length).toBe(3);
       await userEvent.click(btn);
@@ -433,18 +432,18 @@ describe("InsightsPage", () => {
       show(fixture);
       await lede();
       await userEvent.click(row(section(/^Outcomes model/), /^Partially achieved/));
-      expect(hashOf()).toBe("#range=0&outcome=partially_achieved");
+      expect(hashOf()).toBe("?range=0&outcome=partially_achieved");
       expect(order()).toEqual([mid]);
       expect((within(logOf()).getByLabelText("Outcome") as HTMLSelectElement).value).toBe("partially_achieved");
       await userEvent.click(row(section(/^Outcomes model/), /^abandoned/));
-      expect(hashOf()).toBe("#range=0&outcome=abandoned"); // one value per kind
+      expect(hashOf()).toBe("?range=0&outcome=abandoned"); // one value per kind
       await userEvent.click(row(section(/Satisfaction/), /^essential/));
-      expect(hashOf()).toBe("#range=0&outcome=abandoned&help=essential");
+      expect(hashOf()).toBe("?range=0&outcome=abandoned&help=essential");
       expect(cards().length).toBe(0);
       await userEvent.click(row(section(/Satisfaction/), /^essential/));
       await userEvent.click(row(section(/^Outcomes model/), /^abandoned/));
       await userEvent.click(row(goals(), /^fix bug/));
-      expect(hashOf()).toBe("#range=0&goal=fix_bug");
+      expect(hashOf()).toBe("?range=0&goal=fix_bug");
       expect(order()).toEqual([mid]);
     });
 
@@ -473,10 +472,10 @@ describe("InsightsPage", () => {
     });
 
     it("keeps focus where it is when a filter changes by other means", async () => {
-      show(fixture, "#range=0&fr=buggy_code");
+      show(fixture, "?range=0&fr=buggy_code");
       await lede();
       expect(document.activeElement).toBe(document.body);
-      act(() => { history.replaceState(null, "", "/insights#range=0&fr=wrong_approach"); dispatchEvent(new HashChangeEvent("hashchange")); });
+      act(() => { history.replaceState(null, "", "/insights?range=0&fr=wrong_approach"); dispatchEvent(new PopStateEvent("popstate")); });
       expect(document.activeElement).toBe(document.body);
       const sel = within(logOf()).getByLabelText("Outcome");
       await userEvent.selectOptions(sel, "partially_achieved");
@@ -491,7 +490,7 @@ describe("InsightsPage", () => {
     });
 
     it("sends focus to the list heading when a filter chip or Clear filters removes the focused button", async () => {
-      show(fixture, "#range=0&fr=buggy_code&goal=fix_bug");
+      show(fixture, "?range=0&fr=buggy_code&goal=fix_bug");
       await lede();
       const remove = within(logOf()).getByRole("button", { name: "Remove filter Goal: fix bug" });
       remove.focus();
@@ -508,7 +507,7 @@ describe("InsightsPage", () => {
     });
 
     it("never makes a button of a row with no sessions, even when it is the active filter, but still marks it", async () => {
-      show(fixture, "#range=0&outcome=mostly_achieved");
+      show(fixture, "?range=0&outcome=mostly_achieved");
       await lede();
       const out = section(/^Outcomes model/);
       expect(within(out).queryByRole("button", { name: /^Mostly achieved/ })).toBeNull();
@@ -522,21 +521,21 @@ describe("InsightsPage", () => {
       await lede();
       const [, second] = cards(), chip = (c: HTMLElement, name: string) => within(c).getByRole("button", { name });
       await userEvent.click(chip(second!, "fix bug"));
-      expect(hashOf()).toBe("#range=0&goal=fix_bug");
+      expect(hashOf()).toBe("?range=0&goal=fix_bug");
       expect(order()).toEqual([mid]);
       expect(chip(cards()[0]!, "fix bug").getAttribute("aria-pressed")).toBe("true");
       await userEvent.click(chip(cards()[0]!, "wrong approach"));
-      expect(hashOf()).toBe("#range=0&goal=fix_bug&fr=wrong_approach");
+      expect(hashOf()).toBe("?range=0&goal=fix_bug&fr=wrong_approach");
       await userEvent.click(chip(cards()[0]!, "Partially achieved"));
-      expect(hashOf()).toBe("#range=0&goal=fix_bug&fr=wrong_approach&outcome=partially_achieved");
+      expect(hashOf()).toBe("?range=0&goal=fix_bug&fr=wrong_approach&outcome=partially_achieved");
       await userEvent.click(chip(cards()[0]!, "fix bug"));
-      expect(hashOf()).toBe("#range=0&fr=wrong_approach&outcome=partially_achieved");
+      expect(hashOf()).toBe("?range=0&fr=wrong_approach&outcome=partially_achieved");
       expect(cards().length).toBe(1);
       expect(chip(cards()[0]!, "fix bug").getAttribute("aria-pressed")).toBe("false");
     });
 
     it("reads filters from the URL, ANDs them, and writes the same names back", async () => {
-      show(fixture, "#range=0&frf=buggy_code&goal=fix_bug&help=moderately_helpful&outcome=partially_achieved");
+      show(fixture, "?range=0&frf=buggy_code&goal=fix_bug&help=moderately_helpful&outcome=partially_achieved");
       await lede();
       expect(order()).toEqual([mid]);
       expect(within(logOf()).getByText("1 of 3 sessions")).toBeTruthy();
@@ -545,11 +544,11 @@ describe("InsightsPage", () => {
       expect(row(goals(), /^fix bug/).getAttribute("aria-pressed")).toBe("true");
       expect((within(logOf()).getByLabelText("Outcome") as HTMLSelectElement).value).toBe("partially_achieved");
       await userEvent.click(row(goals(), /^write tests/));
-      expect(hashOf()).toBe("#range=0&frf=buggy_code&goal=write_tests&help=moderately_helpful&outcome=partially_achieved");
+      expect(hashOf()).toBe("?range=0&frf=buggy_code&goal=write_tests&help=moderately_helpful&outcome=partially_achieved");
     });
 
     it("combines a drill-down filter with the friction box, and removes it from its chip", async () => {
-      show(fixture, "#range=0&friction=1&goal=write_tests");
+      show(fixture, "?range=0&friction=1&goal=write_tests");
       await lede();
       expect(order()).toEqual([mid]);
       await userEvent.click(within(logOf()).getByRole("button", { name: "Remove filter Goal: write tests" }));
@@ -557,7 +556,7 @@ describe("InsightsPage", () => {
     });
 
     it("lists the active filters as removable chips, and clears them all from two on", async () => {
-      show(fixture, "#range=0&fr=buggy_code");
+      show(fixture, "?range=0&fr=buggy_code");
       await lede();
       const bar = () => within(logOf()).getByRole("group", { name: "Active filters" });
       expect(within(bar()).getByRole("button", { name: "Remove filter Friction: buggy code" }).textContent).toContain("Friction: buggy code");
@@ -567,27 +566,27 @@ describe("InsightsPage", () => {
       expect(within(bar()).getAllByRole("button", { name: /^Remove filter/ }).map(b => b.getAttribute("aria-label"))).toEqual([
         "Remove filter Goal: fix bug", "Remove filter Friction: buggy code", "Remove filter Only sessions with friction"]);
       await userEvent.click(within(bar()).getByRole("button", { name: "Remove filter Goal: fix bug" }));
-      expect(hashOf()).toBe("#range=0&fr=buggy_code&friction=1");
+      expect(hashOf()).toBe("?range=0&fr=buggy_code&friction=1");
       await userEvent.click(within(logOf()).getByRole("button", { name: "Clear filters" }));
-      expect(hashOf()).toBe("#range=0");
+      expect(hashOf()).toBe("?range=0");
       expect(cards().length).toBe(3);
       expect(within(logOf()).queryByRole("group", { name: "Active filters" })).toBeNull();
       expect(within(logOf()).queryByRole("button", { name: "Clear filters" })).toBeNull();
     });
 
     it("shows the empty state, not an error, for a value no session has, and the chip to remove it", async () => {
-      show(fixture, "#range=0&fr=gone&help=nope");
+      show(fixture, "?range=0&fr=gone&help=nope");
       await lede();
       expect(cards().length).toBe(0);
       expect(within(logOf()).getByText("No session in this view matches the filters.")).toBeTruthy();
       expect(within(logOf()).getByText("0 of 3 sessions")).toBeTruthy();
       expect(screen.queryByRole("alert")).toBeNull();
       await userEvent.click(within(logOf()).getByRole("button", { name: "Remove filter Friction: gone" }));
-      expect(hashOf()).toBe("#range=0&help=nope");
+      expect(hashOf()).toBe("?range=0&help=nope");
     });
 
     it("says a filter covers only the newest listed sessions when the payload is cut", async () => {
-      show({ ...fixture, truncated: true }, "#range=0");
+      show({ ...fixture, truncated: true }, "?range=0");
       await lede();
       expect(within(logOf()).queryByText(/Filters cover only/)).toBeNull();
       await userEvent.click(row(section(/^Friction/), /^buggy code/));
@@ -595,20 +594,20 @@ describe("InsightsPage", () => {
     });
 
     it("says nothing about a cut when nothing is cut", async () => {
-      show(fixture, "#range=0&fr=buggy_code");
+      show(fixture, "?range=0&fr=buggy_code");
       await lede();
       expect(within(logOf()).queryByText(/Filters cover only/)).toBeNull();
     });
 
     it("leaves project, range, source and auto in the hash when a filter changes, and the filters when they change", async () => {
-      show(fixture, "#project=demo-app&range=7&source=claude&auto=1");
+      show(fixture, "?project=demo-app&range=7&source=claude&auto=1");
       await lede();
       await userEvent.click(row(section(/^Friction/), /^buggy code/));
-      expect(hashOf()).toBe("#project=demo-app&range=7&source=claude&auto=1&frf=buggy_code");
+      expect(hashOf()).toBe("?project=demo-app&range=7&source=claude&auto=1&frf=buggy_code");
       await userEvent.click(screen.getByRole("button", { name: "30d" }));
-      expect(hashOf()).toBe("#project=demo-app&range=30&source=claude&auto=1&frf=buggy_code");
+      expect(hashOf()).toBe("?project=demo-app&range=30&source=claude&auto=1&frf=buggy_code");
       await userEvent.click(row(section(/^Friction/), /^buggy code/));
-      expect(hashOf()).toBe("#project=demo-app&range=30&source=claude&auto=1");
+      expect(hashOf()).toBe("?project=demo-app&range=30&source=claude&auto=1");
     });
 
     it("keeps the sort for the page visit when the list unmounts and comes back", async () => {
@@ -630,7 +629,7 @@ describe("InsightsPage", () => {
     const stat = (d: HTMLElement, name: string) => within(d).getByText(name).parentElement!.textContent;
 
     it("shows the counted figures in a closed drawer that is not model-judged, and says what they are", async () => {
-      show(fixture, "#range=0", []);
+      show(fixture, "?range=0", []);
       await lede();
       const d = drawer("d-figures");
       expect(isOpen("d-figures")).toBe(false);
@@ -687,13 +686,13 @@ describe("InsightsPage", () => {
     });
 
     it("is not shown for Codex, whatever the payload holds", async () => {
-      show({ ...none, meta: fixture.meta, coverage: { ...fixture.coverage, claude_sessions: 0, analysed: 0, not_analysed: 0, facets: 0, orphans: 0 } }, "#range=0&source=codex");
+      show({ ...none, meta: fixture.meta, coverage: { ...fixture.coverage, claude_sessions: 0, analysed: 0, not_analysed: 0, facets: 0, orphans: 0 } }, "?range=0&source=codex");
       await lede();
       expect(document.getElementById("d-figures")).toBeNull();
     });
 
     it("stays in a view with no analysed session, with its place in the index", async () => {
-      show({ ...none, meta: fixture.meta, coverage: { ...fixture.coverage, facets: 0, analysed: 0, not_analysed: 3 } }, "#project=nope", []);
+      show({ ...none, meta: fixture.meta, coverage: { ...fixture.coverage, facets: 0, analysed: 0, not_analysed: 3 } }, "?project=nope", []);
       await lede();
       expect(isOpen("d-figures")).toBe(false);
       expect(within(screen.getByRole("navigation", { name: "Page sections" })).getAllByRole("link").map(a => a.textContent)).toEqual(["Overview", "Session figures", "How this works"]);
@@ -743,7 +742,7 @@ describe("InsightsPage", () => {
   });
 
   describe("label families", () => {
-    const goals = () => drawer("d-goals"), fr = () => section(/^Friction/), hashOf = () => location.hash;
+    const goals = () => drawer("d-goals"), fr = () => section(/^Friction/), hashOf = () => location.search;
     const logOf = () => section(/Analysed sessions/);
     const summaries = () => [...logOf().querySelectorAll("ul.scards > li .sum")].map(e => e.textContent);
     const rowBtn = (sec: HTMLElement, name: RegExp) => within(sec).getByRole("button", { name });
@@ -782,14 +781,14 @@ describe("InsightsPage", () => {
       const members = within(row).getByRole("list", { name: "Labels in buggy code" });
       expect(within(members).getAllByRole("listitem").map(li => li.textContent)).toEqual(["buggy code32 sessions", "broken build11 session"]);
       expect(within(members).getByTitle("broken_build")).toBeTruthy();
-      expect(hashOf()).toBe("#range=0"); // expanding filters nothing
+      expect(hashOf()).toBe("?range=0"); // expanding filters nothing
       await userEvent.click(exp);
       expect(exp.getAttribute("aria-expanded")).toBe("false");
       expect(within(fr()).queryByText("broken build")).toBeNull();
     });
 
     it("marks only the selected row as active, not the labels nested under a selected family, and the reverse", async () => {
-      show(fixture, "#range=0&frf=buggy_code");
+      show(fixture, "?range=0&frf=buggy_code");
       await lede();
       const family = rowBtn(fr(), /^buggy code/).closest("li")!;
       await userEvent.click(within(family).getByRole("button", { name: "2 labels in buggy code" }));
@@ -801,7 +800,7 @@ describe("InsightsPage", () => {
         expect(li.querySelector(":scope > .rowbtn")!.getAttribute("aria-pressed")).toBe("false");
       }
       await userEvent.click(rowBtn(fr(), /^broken build/));
-      expect(hashOf()).toBe("#range=0&frf=buggy_code&fr=broken_build");
+      expect(hashOf()).toBe("?range=0&frf=buggy_code&fr=broken_build");
       expect(members.map(li => li.classList.contains("on"))).toEqual([false, true]);
       expect(members[1]!.querySelector(":scope > .rowbtn")!.getAttribute("aria-pressed")).toBe("true");
       expect(family.classList.contains("on")).toBe(true);
@@ -815,7 +814,7 @@ describe("InsightsPage", () => {
       expect(document.activeElement).toBe(within(fr()).getByRole("button", { name: "2 labels in buggy code" }));
       await userEvent.keyboard("{Enter}");
       expect(within(fr()).getByText("broken build")).toBeTruthy();
-      expect(hashOf()).toBe("#range=0");
+      expect(hashOf()).toBe("?range=0");
     });
 
     it("filters by family from a family row: URL, chip, any member, and clears on a second click", async () => {
@@ -824,24 +823,24 @@ describe("InsightsPage", () => {
       await lede();
       const btn = rowBtn(fr(), /^buggy code/);
       await userEvent.click(btn);
-      expect(hashOf()).toBe("#range=0&frf=buggy_code");
+      expect(hashOf()).toBe("?range=0&frf=buggy_code");
       expect(summaries()).toEqual([orphan, mid]); // mid carries broken build only
       expect(btn.getAttribute("aria-pressed")).toBe("true");
       expect(within(logOf()).getByRole("button", { name: "Remove filter Friction family: buggy code" })).toBeTruthy();
       expect(within(logOf()).getByText("2 of 3 sessions")).toBeTruthy();
       await userEvent.click(btn);
-      expect(hashOf()).toBe("#range=0");
+      expect(hashOf()).toBe("?range=0");
       expect(summaries().length).toBe(3);
     });
 
     it("filters by goal family, and reads goalf from the URL", async () => {
-      show(fixture, "#range=0&goalf=implement_feature");
+      show(fixture, "?range=0&goalf=implement_feature");
       await lede();
       expect(summaries()).toEqual([theme]);
       expect(within(logOf()).getByRole("button", { name: "Remove filter Goal family: implement feature" })).toBeTruthy();
       expect(rowBtn(goals(), /^implement feature/).getAttribute("aria-pressed")).toBe("true");
       await userEvent.click(rowBtn(goals(), /^implement feature/));
-      expect(hashOf()).toBe("#range=0");
+      expect(hashOf()).toBe("?range=0");
     });
 
     it("keeps raw filters for a label row inside a family, a card chip and a family of one label", async () => {
@@ -849,36 +848,36 @@ describe("InsightsPage", () => {
       await lede();
       await userEvent.click(within(fr()).getByRole("button", { name: "2 labels in buggy code" }));
       await userEvent.click(rowBtn(fr(), /^broken build/));
-      expect(hashOf()).toBe("#range=0&fr=broken_build");
+      expect(hashOf()).toBe("?range=0&fr=broken_build");
       expect(summaries()).toEqual([orphan]);
       expect(within(logOf()).getByRole("button", { name: "Remove filter Friction: broken build" })).toBeTruthy();
       await userEvent.click(rowBtn(fr(), /^broken build/));
       await userEvent.click(rowBtn(fr(), /^wrong approach/)); // one label: the raw filter, not a family one
-      expect(hashOf()).toBe("#range=0&fr=wrong_approach");
+      expect(hashOf()).toBe("?range=0&fr=wrong_approach");
       await userEvent.click(rowBtn(fr(), /^wrong approach/));
       await userEvent.click(rowBtn(logOf(), /^build feature/));
-      expect(hashOf()).toBe("#range=0&goal=build_feature");
+      expect(hashOf()).toBe("?range=0&goal=build_feature");
       expect(summaries()).toEqual([theme]);
     });
 
     it("combines a family filter with the others, and keeps it through a range change", async () => {
-      show(fixture, "#range=0&frf=buggy_code&outcome=partially_achieved");
+      show(fixture, "?range=0&frf=buggy_code&outcome=partially_achieved");
       await lede();
       expect(summaries()).toEqual([mid]);
       await userEvent.click(rowBtn(goals(), /^fix bug/));
-      expect(hashOf()).toBe("#range=0&frf=buggy_code&outcome=partially_achieved&goal=fix_bug");
+      expect(hashOf()).toBe("?range=0&frf=buggy_code&outcome=partially_achieved&goal=fix_bug");
       await userEvent.click(screen.getByRole("button", { name: "30d" }));
-      expect(hashOf()).toBe("#range=30&frf=buggy_code&outcome=partially_achieved&goal=fix_bug");
+      expect(hashOf()).toBe("?range=30&frf=buggy_code&outcome=partially_achieved&goal=fix_bug");
     });
 
     it("shows the empty state, not an error, for a family the view does not have", async () => {
-      show(fixture, "#range=0&goalf=gone&frf=nope");
+      show(fixture, "?range=0&goalf=gone&frf=nope");
       await lede();
       expect(summaries()).toEqual([]);
       expect(within(logOf()).getByText("No session in this view matches the filters.")).toBeTruthy();
       expect(screen.queryByRole("alert")).toBeNull();
       await userEvent.click(within(logOf()).getByRole("button", { name: "Remove filter Goal family: gone" }));
-      expect(hashOf()).toBe("#range=0&frf=nope");
+      expect(hashOf()).toBe("?range=0&frf=nope");
     });
 
     it("names the top friction family in the lede when it groups several labels", async () => {
@@ -902,8 +901,8 @@ describe("InsightsPage", () => {
   it("opens the session sheet on Activity from a session link", async () => {
     mockApi({ "/api/insights": () => fixture, "/api/usage": () => usage, "/api/sessions": () => sessions, "/api/session": () => session,
       "/api/status": () => ({ ingesting: false, last_ingest: null, last_change: null, last_stats: null, error: null, counts: {}, interval: 60, project_order: [] }) });
-    history.replaceState(null, "", "/insights#range=0");
-    renderApp(<App />);
+    history.replaceState(null, "", "/insights?range=0");
+    renderRouter();
     await userEvent.click(await screen.findByRole("link", { name: "Add a theme toggle" }));
     expect(location.pathname).toBe("/usage");
     expect(document.title).toBe("Activity · AI Ledger");
