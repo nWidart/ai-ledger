@@ -9,7 +9,7 @@ import { rangeBox, StartRanges } from "./StartRanges";
 type Starting = ContextPayload["starting"];
 const foo = { project: "foo", sessions: 3, median: 24_000, p10: 20_800, p90: 60_800, window: 200_000, window_share: .12 };
 const bar = { project: "bar", sessions: 2, median: 8_500, p10: 8_100, p90: 8_900, window: null, window_share: null };
-const starting = (by: Starting["by_project"]): Starting => ({ sessions: 5, median: 20_000, p10: 8_100, p90: 60_800, window_share: .1, by_project: by, trend: [] });
+const starting = (by: Starting["by_project"]): Starting => ({ sessions: 5, median: 20_000, p10: 8_100, p90: 60_800, window: 200_000, window_share: .1, by_project: by, trend: [] });
 const left = (el: Element) => parseFloat((el as HTMLElement).style.left), width = (el: Element) => parseFloat((el as HTMLElement).style.width);
 
 beforeEach(() => setOrder(["foo", "bar"]));

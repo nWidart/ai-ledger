@@ -39,6 +39,7 @@ export default {
   "median": 15500.0,
   "p10": 8100.0,
   "p90": 23800.0,
+  "window": 200000,
   "window_share": 0.065,
   "by_project": [
    {
@@ -310,7 +311,12 @@ export default {
      0
     ]
    }
-  ]
+  ],
+  "peak": {
+   "sessions": 12,
+   "median": 52500.0,
+   "window_share": 0.1875
+  }
  },
  "sessions_map": {
   "total": 12,

@@ -9,7 +9,7 @@ Run `ai-ledger rebuild` once after upgrading (with the app stopped): the Context
 
 ### Added
 
-- A Project page gathers one project's figures, cost, top sessions, errors, context, session judgments and plan-limit share, each linking to its full page. Open it from the project's name in the navigation, "Open project page" in the project sheet or `>project` in the command palette.
+- A Project page gathers one project's figures, cost, top sessions, errors, context, session judgments and plan-limit share, each linking to its full page. Its Context block draws a typical session's window as a grid in the style of Claude Code's `/context`: the median starting context, what the peak adds and the free space, with tokens and shares. Open it from the project's name in the navigation, "Open project page" in the project sheet or `>project` in the command palette.
 - A Context page shows how context fills up in Claude Code and Codex sessions: where each project's sessions start and what share of the model's window that is, how fast context grows per turn and per prompt, how far sessions get before their first compaction, what fills context (tool and MCP results, with the largest linked to their sessions), what caching costs, and the sessions where caching broke and why. Token figures from result sizes are estimates (bytes ÷ 4).
 - The Context page's tips come from fixed rules. Each shows only when it fires on the filtered view, with its evidence, its advice and the sessions that match, which open in the session sheet.
 - The Context page has a Window pressure section: one bar per window size shows the share of sessions that peaked under 25%, 25 to 50%, 50 to 80%, 80 to 90% and at or over 90% of it, and selecting a part lists its sessions.

@@ -12,7 +12,8 @@ import type { ApiState } from "../../useApi";
 import { share } from "../context/context";
 import { makeModel } from "../errors/model";
 import { sharePct } from "../limits/limits";
-import { errorsBlock, limitsBlock } from "./project";
+import { ContextGrid } from "./ContextGrid";
+import { contextGrid, errorsBlock, limitsBlock } from "./project";
 
 /** The page's view in words and links: the project and the shared keys, as a query string for another page. */
 export interface Scope { project: string; range: number; source: "claude" | "codex" | ""; auto: boolean; search: string }
@@ -103,13 +104,16 @@ export function ContextBlock({ context, usage, scope }: { context: ApiState<Cont
   const na = (v: ReactNode) => v ?? "n/a";
   return (
     <Block id="context" title="Context" page="Context" href={"/context" + scope.search} state={context}>
-      {c => <Facts facts={[
+      {c => <>
+        <ContextGrid model={contextGrid(c)} />
+        <Facts facts={[
         [c.starting.median == null ? "n/a" : big(c.starting.median), "median starting context, tokens"],
         [c.starting.window_share == null ? "n/a" : share(c.starting.window_share), "of the window at the start"],
         [c.growth.added_per_prompt == null ? "n/a" : big(c.growth.added_per_prompt), "tokens added per prompt"],
         [c.growth.to_compaction.turns == null ? "n/a" : num(c.growth.to_compaction.turns), "turns to the first compaction"],
         [na(usage.data && num(usage.data.totals.near_limit)), "sessions near the context limit"],
-      ]} />}
+      ]} />
+      </>}
     </Block>
   );
 }

@@ -74,7 +74,7 @@ def starting(q):
         quantile_cont(start_prompt, 0.25) AS p25, quantile_cont(start_prompt, 0.75) AS p75, count(*) AS sessions
         FROM starts JOIN sess USING (session_id) WHERE first_ts IS NOT NULL GROUP BY 1 ORDER BY 1""")
     return dict(sessions=total["sessions"], median=total["median"], p10=total["p10"], p90=total["p90"],
-                window_share=total["window_share"], by_project=by_project, trend=trend)
+                window=total["win"], window_share=total["window_share"], by_project=by_project, trend=trend)
 
 
 # ---------- growth ----------
@@ -142,8 +142,10 @@ def growth(q):
     fill = {}
     for r in q(f"SELECT win, {over} AS bin, count(*) AS n FROM sess WHERE win IS NOT NULL AND peak_context IS NOT NULL GROUP BY 1, 2"):
         fill.setdefault(r["win"], [0] * (len(FILL_BINS) + 1))[r["bin"]] = r["n"]
+    # The median peak context of the sessions, and as a share of their window (over the sessions with a known window).
+    peak = q("SELECT count(*) AS sessions, quantile_cont(peak_context, 0.5) AS median, quantile_cont(peak_context / win, 0.5) AS window_share FROM sess WHERE peak_context IS NOT NULL")[0]
     return dict(curve=curve, share_curve=share_curve, by_project_curves=by_project_curves, added_per_prompt=added_total, by_project=by_project,
-                to_compaction=to_compaction, fill=[dict(window=w, sessions=sum(b), bins=b) for w, b in sorted(fill.items())])
+                to_compaction=to_compaction, fill=[dict(window=w, sessions=sum(b), bins=b) for w, b in sorted(fill.items())], peak=peak)
 
 
 # ---------- the session map ----------

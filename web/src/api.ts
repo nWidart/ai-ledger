@@ -480,7 +480,9 @@ export interface ContextPayload {
   /** How much of the view the new columns cover; rebuild_needed when a completed call lacks a size or a compacted session lacks a first compaction. */
   coverage: { sessions: number; with_window: number; calls: number; with_bytes: number; compacted: number; with_first_compaction: number; rebuild_needed: boolean };
   starting: {
-    sessions: number; median: number | null; p10: number | null; p90: number | null; window_share: number | null;
+    sessions: number; median: number | null; p10: number | null; p90: number | null;
+    /** The most common window of the sessions with a measured start; null when none is known. */
+    window: number | null; window_share: number | null;
     by_project: { project: string | null; sessions: number; median: number; p10: number; p90: number; window: number | null; window_share: number | null }[];
     /** week is the Monday that starts the week. p25 and p75 are the quartiles of the starting context of the week's sessions. */
     trend: { week: Day; median: number; p25: number; p75: number; sessions: number }[];
@@ -496,6 +498,8 @@ export interface ContextPayload {
     to_compaction: { sessions: number; turns: number | null; minutes: number | null };
     /** Five counts per window: <25%, 25-50%, 50-80%, 80-90%, >=90% of the window. */
     fill: { window: number; sessions: number; bins: [number, number, number, number, number] }[];
+    /** The median peak context of the view's sessions, in tokens and as a share of the window (over the sessions with a known window). */
+    peak: { sessions: number; median: number | null; window_share: number | null };
   };
   /** The sessions with a measured start, a known window and a peak. `points` holds the newest 1,000 (by first_ts, then session_id); `total` counts them all. */
   sessions_map: { total: number; points: SessionPoint[] };
