@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { LimitHistoryRow, LimitWindow, LimitWindowCurve, LimitsPayload } from "../../api";
@@ -9,10 +9,10 @@ import { openDrawer } from "../../components/Drawer";
 import { Palette } from "../../components/palette/Palette";
 import { openPalette } from "../../components/palette/store";
 import { mockApi } from "../../components/sheets/testing";
-import { clearApiCache } from "../../useApi";
 import { num, usd } from "../../format";
 import { barName, caption, capText, historyStrips, pace, recentText, shareText, span, surfacesText, whenDay, windowName } from "./limits";
 import { LimitsPage } from "./LimitsPage";
+import { ingested, renderApp } from "../../testing";
 
 const fixture = limits as LimitsPayload;
 const claude = fixture.windows[0]!, fable = fixture.windows[1]!, codex = fixture.windows[2]!;
@@ -22,7 +22,7 @@ const show = (d: LimitsPayload, hash = "#range=30") => {
   openDrawers();
   const f = mockApi({ "/api/limits": () => d });
   history.replaceState(null, "", "/limits" + hash);
-  render(<LimitsPage />);
+  renderApp(<LimitsPage />);
   return f;
 };
 /** A window's panel (not the table's scroll region, which is named for the table). */
@@ -295,7 +295,7 @@ describe("LimitsPage", () => {
     let fail = true;
     mockApi({ "/api/limits": () => (fail ? undefined : fixture) });
     history.replaceState(null, "", "/limits#range=30");
-    render(<LimitsPage />);
+    renderApp(<LimitsPage />);
     const retry = await screen.findByRole("button", { name: "Retry" });
     expect(document.activeElement).toBe(retry);
     fail = false;
@@ -306,7 +306,7 @@ describe("LimitsPage", () => {
   it("sends >bash from Limits to Activity, which hosts the inspector", async () => {
     mockApi({ "/api/limits": () => fixture, "/api/palette": () => palette });
     history.replaceState(null, "", "/limits");
-    render(<><LimitsPage /><Palette /></>);
+    renderApp(<><LimitsPage /><Palette /></>);
     await lede();
     act(() => openPalette());
     await userEvent.type(screen.getByRole("combobox", { name: "Filters, pages, inspectors and commands" }), ">bash");
@@ -464,7 +464,7 @@ describe("past windows strips", () => {
     if (open) openDrawers();
     const f = mockApi({ "/api/limits": () => d, "/api/limits/window": answer });
     history.replaceState(null, "", "/limits#range=30");
-    render(<LimitsPage />);
+    renderApp(<LimitsPage />);
     return f;
   };
 
@@ -555,7 +555,7 @@ describe("past windows strips", () => {
     }));
     openDrawers();
     history.replaceState(null, "", "/limits#range=30");
-    render(<LimitsPage />);
+    renderApp(<LimitsPage />);
     await lede();
     expect(hist().queryByRole("region", { name: /Codex weekly/ })).toBeNull();
     await userEvent.click(row(early));
@@ -567,8 +567,8 @@ describe("past windows strips", () => {
     expect(within(panel).getByText(/ended early by a plan change/)).toBeTruthy();
     expect(within(panel).queryByRole("img")).toBeNull();
     await act(async () => finish(curve));
+    expect(await within(panel).findByRole("img", { name: /^Codex weekly: 22% used when it ended .*Plan change from plus to prolite/ })).toBeTruthy();
     expect(within(panel).queryByText("Loading the curve…")).toBeNull();
-    expect(within(panel).getByRole("img", { name: /^Codex weekly: 22% used when it ended .*Plan change from plus to prolite/ })).toBeTruthy();
     expect(panel.querySelector(".lim-chart .now")).toBeNull();
     expect(hist().getAllByRole("row").filter(r => r.getAttribute("aria-current") === "true")).toHaveLength(1); // its row in the table
     await userEvent.click(row(early));
@@ -662,12 +662,12 @@ describe("past windows strips", () => {
     mockApi({ "/api/limits": () => ({ ...fixture, history: shown }), "/api/limits/window": () => curve });
     openDrawers();
     history.replaceState(null, "", "/limits#range=30");
-    render(<LimitsPage />);
+    const { client } = renderApp(<LimitsPage />);
     await lede();
     box.fire();
     expect(left).toHaveBeenCalledTimes(1);
     shown = [...fiveBars, { ...early, start: "2026-01-06T00:00:00.000Z", closed_at: "2026-01-07T00:00:00.000Z" }];
-    act(() => clearApiCache());
+    ingested(client);
     await hist().findByRole("button", { name: barName(shown[5]!) });
     box.fire();
     expect(left).toHaveBeenCalledTimes(1);
@@ -680,12 +680,12 @@ describe("past windows strips", () => {
     mockApi({ "/api/limits": () => ({ ...fixture, history: shown }), "/api/limits/window": () => curve });
     openDrawers();
     history.replaceState(null, "", "/limits#range=30");
-    render(<LimitsPage />);
+    const { client } = renderApp(<LimitsPage />);
     await lede();
     const group = () => hist().getByRole("group", { name: /past windows/ });
     act(() => within(group()).getByRole("button", { name: barName(win(30)) }).focus());
     shown = Array.from({ length: 60 }, (_, i) => win(i + 1)); // window 60 is new, window 0 is gone
-    act(() => clearApiCache());
+    ingested(client);
     await within(group()).findByRole("button", { name: barName(win(60)) });
     expect((document.activeElement as HTMLElement).getAttribute("aria-label")).toBe(barName(win(30)));
     await userEvent.keyboard("{ArrowLeft}");
@@ -701,12 +701,12 @@ describe("past windows strips", () => {
     mockApi({ "/api/limits": () => ({ ...fixture, history: shown }), "/api/limits/window": () => curve });
     openDrawers();
     history.replaceState(null, "", "/limits#range=30");
-    render(<LimitsPage />);
+    const { client } = renderApp(<LimitsPage />);
     await lede();
     act(() => hist().getByRole("button", { name: barName(win(0)) }).focus());
     act(() => (document.activeElement as HTMLElement).blur());
     shown = [1, 2, 3, 4].map(win);
-    act(() => clearApiCache());
+    ingested(client);
     await hist().findByRole("button", { name: barName(win(4)) });
     expect(hist().getAllByRole("button", { name: /, ended / }).filter(b => b.tabIndex === 0).map(b => b.getAttribute("aria-label"))).toEqual([barName(win(4))]);
   });
@@ -737,12 +737,15 @@ describe("past windows strips", () => {
 
   it("shows the error and Retry when a refetch of a loaded curve fails, not the old chart, then the chart again", async () => {
     let fail = false;
-    showCurve(fixture, () => (fail ? undefined : curve));
+    openDrawers();
+    mockApi({ "/api/limits": () => fixture, "/api/limits/window": () => (fail ? undefined : curve) });
+    history.replaceState(null, "", "/limits#range=30");
+    const { client } = renderApp(<LimitsPage />);
     await lede();
     await userEvent.click(row(early));
     await hist().findByRole("img", { name: /used when it ended/ });
     fail = true;
-    act(() => clearApiCache()); // an ingest or Refresh: the curve is asked for again
+    ingested(client); // an ingest or Refresh: the curve is asked for again
     const alert = await hist().findByRole("alert");
     expect(alert.textContent).toMatch(/Could not load this window's curve \(HTTP 404\)/);
     expect(hist().queryByRole("img", { name: /used when it ended/ })).toBeNull();
@@ -758,7 +761,7 @@ describe("past windows strips", () => {
       "/api/limits/window": () => ({ ...curve, window: claudeRow }) });
     openDrawers();
     history.replaceState(null, "", "/limits#range=30");
-    render(<LimitsPage />);
+    renderApp(<LimitsPage />);
     await lede();
     await userEvent.click(row(claudeRow));
     await hist().findByRole("img", { name: /used when it ended/ });
@@ -773,7 +776,7 @@ describe("past windows strips", () => {
       "/api/limits/window": () => curve });
     openDrawers();
     history.replaceState(null, "", "/limits#range=30");
-    render(<LimitsPage />);
+    renderApp(<LimitsPage />);
     await lede();
     await userEvent.click(row(early));
     await hist().findByRole("img", { name: /used when it ended/ });

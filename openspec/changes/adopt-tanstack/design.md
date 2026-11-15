@@ -99,15 +99,25 @@ The ingest watcher invalidates `{ predicate: q => q.queryKey[0] !== "status" && 
 
 Today a clear empties `values`, so a page the user returns to after an ingest shows nothing until its answer arrives (its `last` entry serves identity only). With Query, invalidation marks the query stale and refetches it if active; an inactive query keeps its data and refetches on its next mount, showing the old data meanwhile. That is better and is written into the spec delta ("Back to Activity after an ingest"). `useLanding`'s "quiet swap" rule (new data for the same URL, not asked for, no failure before: no animation) keeps working: `loading` is true while the refetch runs, `data` changes once, and `askedFor()` (below) says whether Refresh asked.
 
-`askedFor()` stays a module-level flag in `refresh.ts`: set when the Refresh mutation succeeds, cleared when the ingest watcher next invalidates. Its meaning is unchanged: "the data was last invalidated by Refresh rather than by an ingest in the background".
+`askedFor(client)` is kept per client in `refresh.ts` (a `WeakMap`, with the watcher's `last_change`), not as a module-level flag, so each test's client starts clean: set when the Refresh mutation succeeds, cleared when the ingest watcher next invalidates. `noteStatus(client, status, asked)` is the one function that takes in a status answer, for the watcher and for Refresh. Its meaning is unchanged: "the data was last invalidated by Refresh rather than by an ingest in the background".
 
 ### 3. Structural sharing replaces the stringify compare
 
-`last` exists so that an identical answer keeps its object identity, so a page does not redraw or replay its landing for nothing (spec: "Ingest with nothing new"). Query's structural sharing does the same at the subtree level: after a refetch, every unchanged subtree keeps its reference, and an identical answer is the identical object, so `data !== shown.current.data` in `useLanding` stays false and `useMemo` keyed on `data` stays warm. It walks both trees once on the main thread, as the stringify did, but keeps no text copy of every payload alive. The Errors payload is the largest (every failed call of the store); if a profile shows the walk over it to be noticeable, `structuralSharing: false` on `["errors"]` alone gives up identity for that one query, whose consumers memoize on their own model anyway. Decide from a measurement in phase 1, not before.
+`last` exists so that an identical answer keeps its object identity, so a page does not redraw or replay its landing for nothing (spec: "Ingest with nothing new"). Query's structural sharing does the same at the subtree level: after a refetch, every unchanged subtree keeps its reference, and an identical answer is the identical object, so `data !== shown.current.data` in `useLanding` stays false and `useMemo` keyed on `data` stays warm. It walks both trees once on the main thread, as the stringify did, but keeps no text copy of every payload alive. The Errors payload is the largest (every failed call of the store); if a profile shows the walk over it to be noticeable, `structuralSharing: false` on `["errors"]` alone gives up identity for that one query, whose consumers memoize on their own model anyway. Decide from a measurement, not before.
+
+**Measured in phase 2 (task 2.9): keep the default.** The `errors` fixture's rows repeated to the size given, `replaceEqualDeep` (Query's structural sharing) against a parsed copy, median of 15 runs under Vitest on Node 26, Apple M3 Max:
+
+| Failed calls | Payload | Structural sharing | `JSON.stringify` (the old compare) | `JSON.parse` (the fetch itself) |
+|---|---|---|---|---|
+| 1,000 | 0.16 MB | 0.6 ms | 0.2 ms | 0.4 ms |
+| 20,000 | 3.1 MB | 11 ms | 3.4 ms | 6.3 ms |
+| 100,000 | 15.4 MB | 54 ms | 20 ms | 32 ms |
+
+The walk costs the same whether the answer is identical or one row changed. It is about three times the old stringify, but it runs once per refetch, and `["errors"]` refetches only after an ingest that stored something or a Refresh: at 20,000 failed calls that is 11 ms, under one frame, at most once a minute. What it buys is worth more than that: an identical answer is the identical object, so the Errors page does not rebuild its model, and after a real change every unchanged row keeps its reference. Revisit `structuralSharing: false` on `["errors"]` if a store passes about 100,000 failed calls, where the walk reaches three frames.
 
 ### 4. Refresh is a mutation
 
-`useRefresh()` returns `{ refresh, state }` from a `useMutation`:
+`useRefresh()` returns `{ refresh, state }` from one `MutationObserver` per client, shared by the nav and the palette (a `useMutation` per caller would give each its own state, and a failed refresh must keep its text until Retry, which holds because the nav always observes it):
 
 - `mutationFn`: `POST /api/refresh`, answering a `Status`.
 - `onMutate`: `cancelQueries(["status"])`, so a poll in flight cannot land after the refresh's answer and show "Ingesting transcripts…" for an ingest that has ended (spec: "Status asked while a refresh runs").

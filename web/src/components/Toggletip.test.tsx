@@ -1,11 +1,12 @@
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { Toggletip } from "./Toggletip";
+import { renderApp } from "../testing";
 
 describe("Toggletip", () => {
   it("opens from the keyboard, reads its text in a status and closes on Escape with focus kept", async () => {
-    render(<><button type="button">before</button><span>Active <Toggletip term="Active time">Pauses over 20 minutes are left out.</Toggletip></span></>);
+    renderApp(<><button type="button">before</button><span>Active <Toggletip term="Active time">Pauses over 20 minutes are left out.</Toggletip></span></>);
     const tt = screen.getByRole("button", { name: "About Active time" });
     expect(tt.getAttribute("aria-expanded")).toBe("false");
     expect(screen.getByRole("status").textContent).toBe("");
@@ -21,7 +22,7 @@ describe("Toggletip", () => {
   });
 
   it("toggles on a second activation and closes on a click outside", async () => {
-    render(<><Toggletip term="Rate">Errors per 100 calls.</Toggletip><p>elsewhere</p></>);
+    renderApp(<><Toggletip term="Rate">Errors per 100 calls.</Toggletip><p>elsewhere</p></>);
     const tt = screen.getByRole("button", { name: "About Rate" });
     await userEvent.click(tt);
     expect(tt.getAttribute("aria-expanded")).toBe("true");
@@ -33,7 +34,7 @@ describe("Toggletip", () => {
   });
 
   it("takes its name from a visible label", () => {
-    render(<Toggletip label="model-judged">A model's opinion.</Toggletip>);
+    renderApp(<Toggletip label="model-judged">A model's opinion.</Toggletip>);
     expect(screen.getByRole("button", { name: "model-judged" })).toBeTruthy();
   });
 });

@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import fixture from "../../__fixtures__/errors";
@@ -8,13 +8,13 @@ import type { ErrorRow, ErrorsPayload, Incident } from "../../api";
 import palette from "../../__fixtures__/palette";
 import { Palette } from "../../components/palette/Palette";
 import { openPalette } from "../../components/palette/store";
-import { clearApiCache } from "../../useApi";
 import { tableFocus } from "./context";
 import { ErrorsPage } from "./ErrorsPage";
 import { sessionHref, typeRows } from "./model";
 import { when } from "../../format";
 import { lostPayload } from "./lostData";
 import { VIEW_KEY } from "./view";
+import { ingested, refreshed, renderApp } from "../../testing";
 
 // typeRows and sessionHref (one call per example render) run through their own implementation; the mock only counts the calls.
 vi.mock("./model", async orig => { const a = await orig<typeof import("./model")>(); return { ...a, typeRows: vi.fn(a.typeRows), sessionHref: vi.fn(a.sessionHref) }; });
@@ -106,8 +106,9 @@ function serve(fixes: Record<string, string> = {}, refuse: ((b: Fix) => boolean)
 }
 
 const page = async () => {
-  render(<ErrorsPage />);
+  const { client } = renderApp(<ErrorsPage />);
   await screen.findByRole("heading", { level: 1, name: /failed tool calls/ });
+  return client;
 };
 
 describe("ErrorsPage", () => {
@@ -381,7 +382,7 @@ describe("ErrorsPage", () => {
     it("shows the write's answer when the payload after it is another tab's older view", async () => {
       const api = serve();
       history.replaceState(null, "", hash);
-      await page();
+      const client = await page();
       api.payloadFixes = { worktree: "2026-10-01" }; // the payload after the write is another tab's view: no x, another type marked
       await mark();
       await waitFor(() => expect(api.store).toEqual({ x: "2026-11-05" }));
@@ -389,7 +390,7 @@ describe("ErrorsPage", () => {
       expect(screen.getByRole("button", { name: "Undo" })).toBeTruthy();
       expect(fixes()).toContain("1Fixes applied");
       api.payloadFixes = {}; // and one equal to the first payload, which the cache hands back as the same object
-      await act(async () => { clearApiCache(); });
+      ingested(client);
       await waitFor(() => expect(vi.mocked(fetch).mock.calls.filter(c => c[0] === "/api/errors").length).toBe(3));
       expect(screen.getByRole("button", { name: "Undo" })).toBeTruthy(); // the next load shows what the store holds now
     });
@@ -397,9 +398,9 @@ describe("ErrorsPage", () => {
     it("takes every payload before the first write as the seed", async () => {
       const api = serve();
       history.replaceState(null, "", hash);
-      await page();
+      const client = await page();
       api.store.x = "2026-11-03"; // another tab marks x
-      await act(async () => { clearApiCache(); });
+      ingested(client);
       await waitFor(() => expect(screen.getByRole("button", { name: "Undo" })).toBeTruthy());
       expect(fixes()).toContain("1Fixes applied");
     });
@@ -770,7 +771,7 @@ describe("ErrorsPage", () => {
       const text = "Couldn't confirm the change to git / gh error. Reload to see what the store holds.";
       await waitFor(() => expect(document.getElementById("muteErr")?.textContent).toBe(text));
       await waitFor(() => expect(document.getElementById("detailLive")?.textContent).toMatch(/^Couldn't confirm the change\. Reload/));
-      cleanup(); clearApiCache();
+      cleanup();
       const api2 = serve();
       api2.payload = mixed;
       api2.refuseMute = () => true;
@@ -894,7 +895,7 @@ describe("ErrorsPage", () => {
       hold.release();
       await waitFor(() => expect(document.getElementById("muteNote")).toBeNull());
       // With the detail open (toggle off) the detail says it, and the table card does not.
-      cleanup(); clearApiCache();
+      cleanup();
       history.replaceState(null, "", "/errors#range=7&cat=x");
       const api2 = serve(), hold2 = api2.hold();
       api2.payload = mixed;
@@ -969,7 +970,7 @@ describe("ErrorsPage", () => {
       expect(unmuteBtn()).toBeTruthy();
       // Under the toggle the muted type leaves the view, and the tool filter that belonged to it clears with it.
       history.replaceState(null, "", "/errors#range=30&noise=0&cat=x&etool=Edit");
-      cleanup(); clearApiCache();
+      cleanup();
       const api2 = serve({}, null, ["x"]);
       api2.payload = fixture;
       await page();
@@ -1009,7 +1010,7 @@ describe("ErrorsPage", () => {
       await page();
       expect(document.getElementById("detail")!.textContent).toContain('Muted types count as noise: "Hide noise and muted" leaves them out of the rate.');
       expect(document.getElementById("alwaysNoise")).toBeNull();
-      cleanup(); clearApiCache();
+      cleanup();
       for (const c of ["infra", "user_denied"]) {
         stubErrors(withErrors(fixture.errors.map((e, i) => (i < 2 ? { ...e, c } : e))));
         history.replaceState(null, "", `/errors#range=7&cat=${c}`);
@@ -1017,7 +1018,7 @@ describe("ErrorsPage", () => {
         expect(screen.queryByRole("button", { name: "Mute this type" })).toBeNull();
         expect(screen.queryByRole("button", { name: "Unmute" })).toBeNull();
         expect(document.getElementById("alwaysNoise")?.textContent).toMatch(/always noise/);
-        cleanup(); clearApiCache();
+        cleanup();
       }
     });
 
@@ -1158,7 +1159,7 @@ describe("ErrorsPage", () => {
   it("shows no notice while the payload loads", async () => {
     vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => {})));
     history.replaceState(null, "", "/errors#ex=nope");
-    render(<ErrorsPage />);
+    renderApp(<ErrorsPage />);
     expect(document.getElementById("load")!.textContent).toContain("Loading errors");
     expect(document.getElementById("deadLink")).toBeNull();
     expect(location.hash).toBe("#ex=nope");
@@ -1190,7 +1191,7 @@ describe("ErrorsPage", () => {
 
   it("hides the line when the view has no errors", async () => {
     stubErrors(withErrors([]));
-    render(<ErrorsPage />);
+    renderApp(<ErrorsPage />);
     await screen.findByRole("heading", { level: 1, name: /No failed tool calls/ });
     expect(document.getElementById("uncat")).toBeNull();
   });
@@ -1267,7 +1268,7 @@ describe("ErrorsPage", () => {
   it("commits a palette filter in place, keeping the open type and saving the view", async () => {
     vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/errors") ? fixture : url.startsWith("/api/palette") ? palette : {})));
     history.replaceState(null, "", "/errors#range=30&cat=x");
-    render(<><ErrorsPage /><Palette /></>);
+    renderApp(<><ErrorsPage /><Palette /></>);
     await screen.findByRole("heading", { level: 1, name: /failed tool calls/ });
     act(() => openPalette());
     const n = history.length;
@@ -1387,7 +1388,7 @@ describe("ErrorsPage dead-link frames", () => {
 
   it("unmounting cancels the pending frame", async () => {
     history.replaceState(null, "", "/errors#ex=nope");
-    const { unmount } = render(<ErrorsPage />);
+    const { unmount } = renderApp(<ErrorsPage />);
     await screen.findByRole("heading", { level: 1, name: /failed tool calls/ });
     await waitFor(() => expect(document.getElementById("deadLink")).not.toBeNull());
     expect(frames.size).toBe(1);
@@ -1404,7 +1405,7 @@ describe("ErrorsPage bucket selection", () => {
   const open = async (hash: string, payload = two) => {
     vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/errors") ? payload : {})));
     history.replaceState(null, "", "/errors" + hash);
-    await page();
+    return page();
   };
   // jsdom has no layout: the chart is 800 wide, three buckets of 250 from x=40.
   const clickBucket = (i: number) => {
@@ -1559,7 +1560,7 @@ describe("ErrorsPage bucket selection", () => {
     const pal = { ...palette, categories: [{ id: "tests", label: "tests", errors: 2 }, { id: "x", label: "x", errors: 4 }] };
     vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/errors") ? split : url.startsWith("/api/palette") ? pal : {})));
     history.replaceState(null, "", "/errors#range=30&at=2026-11-04");
-    render(<><ErrorsPage /><Palette /></>);
+    renderApp(<><ErrorsPage /><Palette /></>);
     await screen.findByRole("heading", { level: 1, name: /failed tool calls/ });
     act(() => openPalette());
     await userEvent.type(await screen.findByRole("combobox", { name: "Filters, pages, inspectors and commands" }), "tests{Enter}");
@@ -1570,7 +1571,7 @@ describe("ErrorsPage bucket selection", () => {
   it("clears the agent filter too with Clear filters, as the note says it may not match", async () => {
     vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/errors") ? two : {})));
     history.replaceState(null, "", "/errors#ex=t07&range=30&source=codex");
-    render(<ErrorsPage />);
+    renderApp(<ErrorsPage />);
     await screen.findByRole("heading", { level: 1 });
     const note = document.getElementById("outside")!;
     expect(note.textContent).toContain("project, agent, range");
@@ -1588,7 +1589,6 @@ describe("ErrorsPage bucket selection", () => {
     await open("#range=30&gran=week", { ...fixture, calls: calls(["2026-10-28"]) });
     expect([bands(), key()]).toEqual([0, false]);
     cleanup();
-    clearApiCache();
     // Days: the same errors, and a call on Nov 5: Oct 29 to Nov 3 have neither (one merged band), Nov 4 has errors only.
     await open("#range=30", { ...fixture, calls: calls(["2026-10-28", "2026-11-05"]) });
         expect([bands(), key()]).toEqual([1, true]);
@@ -1663,13 +1663,13 @@ describe("ErrorsPage bucket selection", () => {
   });
 
   it("keeps the current point when new data shifts the chart's points", async () => {
-    await open("#range=30");
+    const client = await open("#range=30");
     keys();
     await userEvent.keyboard("{Home}{ArrowRight}{Enter}"); // Nov 4
     expect(location.hash).toBe("#range=30&at=2026-11-04");
     // Ingestion adds an earlier first-call day: Nov 4 moves from the second point to the third.
     vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/errors") ? { ...two, calls: [["2026-11-02", "foo", 10, 0, "claude"], ...two.calls] } : {})));
-    await act(async () => { clearApiCache(true); });
+    refreshed(client);
     await waitFor(() => expect(document.getElementById("chart")!.textContent).toContain("Nov 2"));
     expect(document.getElementById("atMark")?.getAttribute("data-at")).toBe("2026-11-04");
     await userEvent.keyboard(" ");

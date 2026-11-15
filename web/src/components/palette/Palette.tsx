@@ -1,9 +1,9 @@
 import { createPortal } from "react-dom";
 import { Fragment, useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
-import { paletteUrl, sessionsUrl, type PalettePayload, type SessionsPage } from "../../api";
 import { go, parseHash, useHashState, usePathname } from "../../hash";
 import { useApi } from "../../useApi";
-import { refresh } from "../refresh";
+import { queries } from "../../queries";
+import { useRefresh } from "../refresh";
 import type { Ranges } from "./match";
 import { prefill, resolve, type ChipStatus } from "./resolve";
 import { closePalette, isMac, openPalette, usePaletteOpen } from "./store";
@@ -50,6 +50,7 @@ function Marked({ text, ranges }: { text: string; ranges: Ranges }) {
  */
 export function Palette() {
   const open = usePaletteOpen(), path = usePathname(), [h] = useHashState();
+  const { refresh } = useRefresh();
   const dlg = useRef<HTMLDialogElement>(null), input = useRef<HTMLInputElement>(null), opener = useRef<HTMLElement | null>(null);
   const [chips, setChips] = useState<Chip[]>([]);
   const [text, setText] = useState(""), [caret, setCaret] = useState(0), [hi, setHi] = useState(0);
@@ -105,7 +106,7 @@ export function Palette() {
   }, []);
 
   const now = resolve(chips, here);
-  const pal = useApi<PalettePayload>(open ? paletteUrl(now.view) : null, { keepPrevious: true });
+  const pal = useApi(open ? queries.palette(now.view) : null, { keepPrevious: true });
   const ts = terms(text), term = termAt(ts, caret);
   useEffect(() => {
     const want = open && searchesSessions(term) ? term.text : "";
@@ -113,7 +114,7 @@ export function Palette() {
     const t = setTimeout(() => setQ(want), SEARCH_MS);
     return () => clearTimeout(t);
   }, [open, term.sigil, term.text]);
-  const sess = useApi<SessionsPage>(q ? sessionsUrl(now.view, { q }) : null);
+  const sess = useApi(q ? queries.sessions(now.view, { q }) : null);
   const data = { palette: pal.data, sessions: q && q === term.text ? sess.data?.sessions : undefined };
   const rows = suggest(term, data, chips);
   // Counts from another facet combination, kept on screen while the chosen one loads.

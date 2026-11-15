@@ -22,7 +22,9 @@
 // next load.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { errorFixesImportUrl, errorFixUrl, errorMarksUrl, errorMuteUrl, type Day, type ErrorsPayload } from "../../api";
-import { clearApiCache, getJson } from "../../useApi";
+import { useQueryClient } from "@tanstack/react-query";
+import { isData } from "../../queries";
+import { getJson } from "../../useApi";
 import type { Fixes, Marks } from "./model";
 import { FIXES_KEY, loadFixes, store } from "./view";
 
@@ -76,6 +78,7 @@ export function useMarks(data: ErrorsPayload | undefined, say: (s: string) => vo
   /** Queue a write. It resolves to the store's answer once the page shows it; it rejects after the page shows what the store holds.
    *  took: whether marks show the write's intent; a failed step whose resync shows it resolves as saved, one whose resync fails
    *  rejects with Unconfirmed. Without took (the import) a failed step rejects as it failed. */
+  const client = useQueryClient();
   const write = useCallback((op: Op, url: string, body: unknown, took?: (m: Marks) => boolean) => {
     setSt(s => ({ ...s, ops: [...s.ops, op] }));
     const done = queue.current.then(() => send(url, body)).then(
@@ -85,10 +88,10 @@ export function useMarks(data: ErrorsPayload | undefined, say: (s: string) => vo
         setSt(s => ({ ...s, server: marks ?? s.server ?? seed.current ?? EMPTY, ops: s.ops.filter(o => o !== op) }));
         if (marks && took?.(marks)) return marks;
         throw took && !marks ? new Unconfirmed() : e;
-      }).finally(() => clearApiCache()); // a page opened later seeds from the marks as the store has them now
+      }).finally(() => { void client.invalidateQueries({ predicate: isData }); }); // a page opened later seeds from the marks as the store has them now
     queue.current = done.then(() => {}, () => {});
     return done;
-  }, []);
+  }, [client]);
 
   /** Mark cat fixed on day, or remove its marker (day null). */
   const setFix = useCallback((cat: string, day: Day | null) => {

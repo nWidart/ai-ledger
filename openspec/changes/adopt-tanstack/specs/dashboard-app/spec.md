@@ -56,14 +56,14 @@ The app SHALL keep each view's last answer in memory for at least five minutes a
 
 #### Scenario: Back to Activity after an ingest
 - **WHEN** the user views Activity, opens Cost, an ingest stores new lines, and the user clicks Activity
-- **THEN** Activity shows its previous figures at once and replaces them with the new ones when they arrive, with no loading state over the figures
+- **THEN** Activity shows its previous figures at once and replaces them with the new ones when they arrive, never showing an empty page meanwhile
 
 #### Scenario: Back to Activity with nothing new
 - **WHEN** the user views Activity, opens Cost and clicks Activity again, with no ingest between
 - **THEN** Activity shows its figures at once and sends no request
 
 #### Scenario: Long absence
-- **WHEN** the user leaves Cost open on Activity for ten minutes, with no ingest, and clicks Cost
+- **WHEN** the user leaves Cost for Insights for ten minutes, with no ingest, and clicks Cost
 - **THEN** Cost loads anew, as on a first visit
 
 ### Requirement: Abandon a request the user left

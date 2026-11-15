@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { dayUrl, usageUrl, viewOf, type DayView, type SessionSort, type UsagePayload, type View } from "../../api";
+import { usageUrl, viewOf, type SessionSort, type UsagePayload, type View } from "../../api";
 import { setOrder } from "../../colors";
 import { useCountUp } from "../../components/chart";
 import { openDrawer } from "../../components/Drawer";
@@ -13,6 +13,7 @@ import { UsageSheets } from "../../components/sheets/UsageSheets";
 import { useLanding } from "../../components/useLanding";
 import { dayLabel, dur, num, pct, plural } from "../../format";
 import { setHash, useHashState, type HashState } from "../../hash";
+import { queries } from "../../queries";
 import { useApi } from "../../useApi";
 import { SessionsDrawer, type SessFilter } from "./SessionsDrawer";
 import { ExtDrawer, LoopsDrawer, ProjectsDrawer, TestsDrawer, ToolsDrawer, type RowScope, type ToolKey } from "./tables";
@@ -93,7 +94,7 @@ function Vitals({ d }: { d: UsagePayload }) {
 export function ActivityPage() {
   const [h] = useHashState();
   const want: View = viewOf(h), url = usageUrl(want), viewKey = url;
-  const { data, error, loading, retry } = useApi<UsagePayload>(url, { keepPrevious: true });
+  const { data, error, loading, retry } = useApi(queries.usage(want), { keepPrevious: true });
   useEffect(() => { if (data) setOrder(data.project_order); }, [data]);
 
   // Page-only state: flaky tools first resets when the view changes; the tools and sessions sorts stay.
@@ -108,7 +109,7 @@ export function ActivityPage() {
     setFlaky(false);
   }, [viewKey]);
   // A selected day narrows tools, MCP & hooks and error loops to it; the rest stays range-wide.
-  const day = sess.day, dayApi = useApi<DayView>(day ? dayUrl(want, day) : null), dv = day ? dayApi.data : undefined;
+  const day = sess.day, dayApi = useApi(day ? queries.day(want, day) : null), dv = day ? dayApi.data : undefined;
 
   const { slow, grow, before, wrap, retryBtn } = useLanding(data, url, loading, error, ":scope > :is(.insights, .panel, .vitals, .drawers)");
 

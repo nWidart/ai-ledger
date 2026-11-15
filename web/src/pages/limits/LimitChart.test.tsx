@@ -1,9 +1,10 @@
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { LimitWindow, LimitsPayload } from "../../api";
 import limits from "../../__fixtures__/limits";
 import { LimitChart } from "./LimitChart";
 import { closedWindow, readPoints, readText } from "./limits";
+import { renderApp } from "../../testing";
 
 const fixture = limits as LimitsPayload;
 const claude = fixture.windows[0]!;
@@ -20,7 +21,7 @@ const w: LimitWindow = { ...claude, start: "2026-11-07T00:00:00.000Z", resets_at
   forecast: { ...claude.forecast!, curve } };
 const pts = readPoints(w), say = (i: number) => readText(pts[i]!);
 const draw = (win: LimitWindow = w) => {
-  render(<LimitChart w={win} now="2026-11-07T11:00:00.000Z" events={[]} />);
+  renderApp(<LimitChart w={win} now="2026-11-07T11:00:00.000Z" events={[]} />);
   return screen.queryByRole("group");
 };
 // jsdom has no layout: the chart is 420 wide with a 36px left margin and a 374px plot, so clientX is the plot's own x.
@@ -193,7 +194,7 @@ describe("LimitChart for a closed window", () => {
   const row = { ...(limits as LimitsPayload).history[0]!, start: "2026-11-07T00:00:00.000Z", closed_at: "2026-11-07T12:00:00.000Z", final: 42, hit: false, estimated: false };
   const closed = closedWindow(row, past);
   const events = [{ kind: "plan_change" as const, provider: row.provider, at: "2026-11-07T06:00:00.000Z", plan_from: "plus", plan_to: "prolite" }];
-  const drawClosed = () => { render(<LimitChart w={closed} now={null} events={events} />); return screen.getByRole("group"); };
+  const drawClosed = () => { renderApp(<LimitChart w={closed} now={null} events={events} />); return screen.getByRole("group"); };
 
   it("has no now line and no forecast, and ends at its close", () => {
     drawClosed();
