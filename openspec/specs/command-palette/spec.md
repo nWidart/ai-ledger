@@ -242,7 +242,7 @@ A sheet that only one page hosts SHALL take the commit to that page. Error categ
 - **THEN** the category chip shows as dropped, and Enter opens Cost with no category
 
 ### Requirement: A sheet without a page stays where it can
-A `>` sheet without a page SHALL open on the current page when that page hosts the sheet, and otherwise on Activity. Activity, Cost, Context and Errors host the tool, MCP server, skill and session sheets. Limits hosts none.
+A `>` sheet without a page SHALL open on the current page when that page hosts the sheet, and otherwise on Activity. Activity, Cost, Context, Errors and the Project page host the tool, MCP server, skill and session sheets. Limits hosts none.
 
 #### Scenario: On a hosting page
 - **WHEN** the user on Errors commits `>bash`
@@ -251,6 +251,10 @@ A `>` sheet without a page SHALL open on the current page when that page hosts t
 #### Scenario: On Context
 - **WHEN** the user on Context commits `>bash`
 - **THEN** the `Bash` inspector opens over Context
+
+#### Scenario: On the Project page
+- **WHEN** the user on the Project page of `foo` commits `>bash`
+- **THEN** the `Bash` inspector opens over the Project page
 
 #### Scenario: On Limits
 - **WHEN** the user on Limits commits `>bash`

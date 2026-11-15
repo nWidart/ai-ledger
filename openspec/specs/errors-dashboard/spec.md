@@ -201,7 +201,7 @@ The Errors summary SHALL show the share of the view's errors in the catch-all ty
 - **AND** a view filtered to one source shows the share alone
 
 ### Requirement: State each type's time lost
-The Errors page SHALL state each error type's time lost: the sum, over the view's incidents of that type, of each incident's span, from its first failure's start to its last failure's end. An incident SHALL count whole when at least one of its failures is in the view. A type whose incidents have no measurable span SHALL show no time. The page SHALL rank the open types that have a ready-made fix by time lost, most first, then by error count, and show each one's time lost.
+The Errors page SHALL state each error type's time lost: the sum, over the view's incidents of that type, of each incident's span, from its first failure's start to its last failure's end. An incident SHALL count whole when at least one of its failures is in the view. A type whose incidents have no measurable span SHALL show no time. The page SHALL rank the open types that have a ready-made fix by time lost, most first, then by error count, and show each one's time lost. Where to start SHALL list at most 4 of those types, and at most 4 under Rising fastest. It SHALL NOT leave out the always-noise types: with Hide noise and muted off, a type such as `user_denied` can be listed.
 
 #### Scenario: Fewer errors, more time lost
 - **WHEN** one open type has 3 errors in two incidents of 10 minutes each, and another has 4 errors in one incident of 1 minute
@@ -218,6 +218,14 @@ The Errors page SHALL state each error type's time lost: the sum, over the view'
 #### Scenario: No measurable span
 - **WHEN** a type's only incident is one failure with no recorded duration
 - **THEN** its time lost reads "–"
+
+#### Scenario: More open types than the list holds
+- **WHEN** 6 open types have a ready-made fix
+- **THEN** Where to start lists the 4 with the most time lost
+
+#### Scenario: Noise type with the toggle off
+- **WHEN** Hide noise and muted is off and `user_denied` is an open type with a ready-made fix and the most time lost
+- **THEN** Where to start lists `user_denied`, marked as noise
 
 ### Requirement: Break a type down by tool and agent
 The open type's detail SHALL list, next to By project, the type's top five tools (By tool) and top five agents (By agent), each with its error count and share of the type's errors in the detail, and fold the rest into "N more: M errors". A By agent row SHALL set the page's source filter. By agent SHALL be hidden under a source filter and when the type's errors come from one agent only.
