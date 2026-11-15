@@ -196,6 +196,27 @@ describe("ProjectPage", () => {
     });
   });
 
+  describe("limits while loading", () => {
+    it("draws nothing for the block until its request answers", async () => {
+      const f = serve();
+      const answer = f.getMockImplementation()!;
+      f.mockImplementation((input: string) => (String(input).startsWith("/api/limits") ? new Promise<Response>(() => {}) : answer(input)));
+      history.replaceState(null, "", "/project?project=foo&range=30");
+      renderApp(<ProjectPage />);
+      await loaded();
+      await within(block("Summary")).findByText(/est\. cost/);
+      expect(f.mock.calls.some(c => String(c[0]).startsWith("/api/limits"))).toBe(true);
+      expect(screen.queryByRole("region", { name: "Plan limits" })).toBeNull();
+    });
+
+    it("shows the error with Retry when the request fails", async () => {
+      open({ limits: null });
+      await loaded();
+      const b = await screen.findByRole("region", { name: "Plan limits" });
+      expect(await within(b).findByRole("button", { name: "Retry" })).toBeTruthy();
+    });
+  });
+
   describe("loading each block on its own", () => {
     it("leaves the other blocks drawn when one request fails, and retries just that one", async () => {
       const { f } = open({ insights: null });

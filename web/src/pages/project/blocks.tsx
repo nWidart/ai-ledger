@@ -138,7 +138,8 @@ export function InsightsBlock({ insights, scope }: { insights: ApiState<Insights
 /** The project's share of each open window that names it, and its commits per point. Left out when there is nothing to show. */
 export function LimitsBlock({ limits, scope }: { limits: ApiState<LimitsPayload>; scope: Scope }) {
   const b = useMemo(() => (limits.data ? limitsBlock(limits.data, scope.project) : undefined), [limits.data, scope.project]);
-  if (limits.data && !b) return null;
+  // Nothing until the data is in: the block shows with rows, or with its error and Retry.
+  if (!limits.error && !b) return null;
   const state: ApiState<NonNullable<typeof b>> = { ...limits, data: b ?? undefined };
   return (
     <Block id="limits" title="Plan limits" page="Limits" href={"/limits" + scope.search} state={state}>

@@ -23,12 +23,12 @@ Group 1 has no dependency. 2 needs 1. 3 needs 2 (it links to the page). 4 needs 
 
 ## 3. Entry points
 
-- [ ] 3.1 Project sheet: "Open project page" in `.actions`, before "Open its errors". Sheet test: it navigates to `/project` with the sheet's project and the page's range and source, with `inspect` cleared.
-- [ ] 3.2 `Nav.tsx`: the chip's project name is a link to `/project` + shared search, `aria-current="page"` on `/project`; no tab is current there. Nav test for both.
-- [ ] 3.3 Palette: `suggest.ts` offers a "Project" page (texts `project`) only when a project chip or the view's project is set; `resolve.ts` resolves it to `/project` and adds `/project` to `HOSTS_SHEETS`. Tests for the three scenarios of the command-palette delta.
+- [x] 3.1 Project sheet: "Open project page" in `.actions`, before "Open its errors". Sheet test: it navigates to `/project` with the sheet's project and the page's range and source, with `inspect` cleared.
+- [x] 3.2 `Nav.tsx`: the chip's project name is a link to `/project` + shared search, `aria-current="page"` on `/project`; no tab is current there. Nav test for both.
+- [x] 3.3 Palette: `suggest.ts` offers a "Project" page (texts `project`) only when a project chip or the view's project is set; `resolve.ts` resolves it to `/project` and adds `/project` to `HOSTS_SHEETS`. Tests for the three scenarios of the command-palette delta.
 
 ## 4. Ship
 
-- [ ] 4.1 `README.md` ("What you get") and `CHANGELOG.md` (`[Unreleased]`).
-- [ ] 4.2 `cd web && npm run check`, commit the rebuilt `src/ai_ledger/web/`; `uv run ruff check`; `uv run python -m unittest discover -s tests`; `openspec validate --specs --strict`.
+- [x] 4.1 `README.md` ("What you get") and `CHANGELOG.md` (`[Unreleased]`).
+- [x] 4.2 `cd web && npm run check`, commit the rebuilt `src/ai_ledger/web/`; `uv run ruff check`; `uv run python -m unittest discover -s tests`; `openspec validate --specs --strict`.
 - [ ] 4.3 Run against a copy of the real store (`uv run ai-ledger --db <copy> --port <free port>`): compare each block's figures with its page for two projects and two ranges.

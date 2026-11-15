@@ -4,7 +4,7 @@ import { viewOf, type View } from "../../api";
 import { DEFAULT_RANGE, SHARED_KEYS, applyPatch, formatSearch, parseView, rootState, validateRoot } from "../../url";
 import { SOURCE_LABELS } from "../Filters";
 import { PAGES } from "../Nav";
-import { isFilter, rangeName, sourceLabel, type Chip, type Command, type FilterKind } from "./suggest";
+import { PROJECT_PAGE, isFilter, rangeName, sourceLabel, type Chip, type Command, type FilterKind } from "./suggest";
 
 /** search: every key of the current URL, as written (page-only ones too). */
 export interface Here { path: string; search: Readonly<Record<string, string>> }
@@ -25,12 +25,12 @@ export interface Resolved {
   view: View;
 }
 
-const HOSTS_SHEETS = ["/usage", "/cost", "/context", "/errors"];
+const HOSTS_SHEETS = ["/usage", "/cost", "/context", "/errors", PROJECT_PAGE];
 // Errors' view keys (pages/errors/view.ts): with none of them in the URL, Errors shows its saved view instead.
 const ERRORS_KEYS = ["project", "range", "source", "sub", "noise", "gran", "cat", "ex"];
 const HASH_KEY: Record<FilterKind, string> = { project: "project", source: "source", range: "range", automated: "auto" };
-const pageLabel = (path: string) => PAGES.find(p => p.path === path)?.label ?? path;
-const isPage = (path: string) => PAGES.some(p => p.path === path);
+const pageLabel = (path: string) => (path === PROJECT_PAGE ? "Project" : PAGES.find(p => p.path === path)?.label ?? path);
+const isPage = (path: string) => path === PROJECT_PAGE || PAGES.some(p => p.path === path);
 
 /** Chips for the filters the URL sets: project, source, range (only when the URL names one) and the automated toggle. */
 export function prefill(search: Readonly<Record<string, string>>): Chip[] {

@@ -25,6 +25,7 @@ Needs [uv](https://docs.astral.sh/uv/). Runs on macOS and Linux. Your data stays
 | **Limits** | Each plan limit window, what used it, and a forecast to its reset. |
 | **Insights** | How Claude Code's `/insights` judged your sessions. |
 | **Live** | Every active session as it runs, sorted by who needs you first. |
+| **Project** | One project across all of the above, opened from its name in the navigation or its sheet. |
 
 Press **Cmd+K** to jump anywhere, for example `>errors #myproject #7d`. Every page works by keyboard and screen reader, and each chart has a data table.
 

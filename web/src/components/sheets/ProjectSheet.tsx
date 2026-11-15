@@ -7,7 +7,8 @@ import { Spark } from "../Spark";
 import { Toggletip } from "../Toggletip";
 import { Ledger, LedgerRow } from "../Ledger";
 import { FilterButton } from "./FilterButton";
-import { appLink, errorsHref, pickRow, sessName } from "./session";
+import { usePathname } from "../../url";
+import { appLink, errorsHref, projectHref, pickRow, sessName } from "./session";
 
 const TOP_MODELS = 8;
 /** A share as a whole percentage, "<1%" for a non-zero share that would round to 0%. */
@@ -52,6 +53,8 @@ export interface ProjectSheetProps {
   retry: () => void;
   range: number;
   pageProject: string;
+  /** The page shows automated sessions. */
+  automated?: boolean;
   onSession: (id: string, el: HTMLElement) => void;
   backTo?: RefObject<BackTo | null>;
 }
@@ -95,8 +98,8 @@ export function useBackTo(d: unknown, backTo: RefObject<BackTo | null> | undefin
   }, [d, backTo, body]);
 }
 
-export function ProjectSheet({ name, d, error, retry, range, pageProject, onSession, backTo }: ProjectSheetProps) {
-  const body = useRef<HTMLTableSectionElement>(null);
+export function ProjectSheet({ name, d, error, retry, range, pageProject, automated = false, onSession, backTo }: ProjectSheetProps) {
+  const path = usePathname(), body = useRef<HTMLTableSectionElement>(null);
   useBackTo(d, backTo, body);
   if (error) return <div className="empty" role="alert">Could not load this project ({error.message}). <button type="button" className="linkish" onClick={retry}>Retry</button></div>;
   if (!d) return <div className="empty" role="status">Loading…</div>;
@@ -104,6 +107,8 @@ export function ProjectSheet({ name, d, error, retry, range, pageProject, onSess
   return <>
     <div className="hint">{d.start ? `Last ${range} days` : "All time"}, from the range filter. Estimated at API list prices.</div>
     <div className="actions"><FilterButton project={name} pageProject={pageProject} />
+      {!(path === "/project" && name === pageProject) &&
+        <a className="btn" href={projectHref(name, range, d.source, automated)} onClick={appLink}>Open project page</a>}
       <a className="btn" href={errorsHref(name, range, undefined, { source: d.source })} onClick={appLink}>Open its errors</a></div>
     <Facts facts={summaryFacts(t)} />
     <ChangeDetail d={d} name={name} />
