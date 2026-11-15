@@ -4,7 +4,7 @@
 .contributors .ctr-main { background: var(--series-1); }
 .contributors .ctr-sub { background: var(--series-4); }
 .contributors .ctr-split-bar > span { display: block; min-width: 0; }
-.contributors .ctr-split-legend { display: flex; flex-wrap: wrap; gap: 4px 18px; list-style: none; margin: 6px 0 0; padding: 0; font-size: 13px; color: var(--text-secondary); }
+.contributors .ctr-split-legend { display: flex; flex-wrap: wrap; gap: 4px 18px; list-style: none; margin: 6px 0 0; padding: 0; font-size: .8125rem; color: var(--text-secondary); }
 .contributors .ctr-key { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
 .contributors .ctr-switch { width: fit-content; }
 .contributors .ctr-table th.ctr-total, .contributors .ctr-table th.ctr-range { vertical-align: bottom; }
@@ -15,7 +15,7 @@
 .contributors .ctr-rbar { position: absolute; top: 3px; bottom: 3px; border-radius: 3px; background: var(--series-1); opacity: .55; }
 .contributors .ctr-med { position: absolute; top: 1px; bottom: 1px; width: 2px; margin-left: -1px; background: var(--text-primary); border-radius: 1px; }
 .contributors .ctr-mark { position: absolute; top: -1px; bottom: -1px; width: 0; border-left: 1px dashed var(--text-secondary); }
-.contributors .ctr-fig { display: block; margin-top: 3px; font-size: 12px; font-variant-numeric: tabular-nums; }
+.contributors .ctr-fig { display: block; margin-top: 3px; font-size: .75rem; font-variant-numeric: tabular-nums; }
 @media (max-width: 640px) {
   .contributors .ctr-table .ctr-total, .contributors .ctr-table .ctr-range { min-width: 9rem; }
 }

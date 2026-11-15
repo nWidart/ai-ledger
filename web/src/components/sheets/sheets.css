@@ -8,8 +8,8 @@
     radial-gradient(farthest-side at 100% 50%, var(--scroll-shadow), transparent) right / 10px 100% no-repeat scroll; }
 :is(.panel, dialog.sheet) .scroll { --scroll-bg: var(--surface-1); }
 :is(.pg-activity, .pg-cost, .pg-limits, .pg-insights, .pg-context, .pg-project, dialog.sheet) .tall { max-height: 520px; overflow: auto; }
-:is(.pg-activity, .pg-cost, .pg-limits, .pg-insights, .pg-context, .pg-project, dialog.sheet) table { width: 100%; border-collapse: collapse; font-size: 13px; }
-:is(.pg-activity, .pg-cost, .pg-limits, .pg-insights, .pg-context, .pg-project, dialog.sheet) th { text-align: left; color: var(--text-muted); font-weight: 500; font-size: 12px; padding: 6px 8px;
+:is(.pg-activity, .pg-cost, .pg-limits, .pg-insights, .pg-context, .pg-project, dialog.sheet) table { width: 100%; border-collapse: collapse; font-size: .8125rem; }
+:is(.pg-activity, .pg-cost, .pg-limits, .pg-insights, .pg-context, .pg-project, dialog.sheet) th { text-align: left; color: var(--text-muted); font-weight: 500; font-size: .75rem; padding: 6px 8px;
   border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--bg); white-space: nowrap; }
 :is(.pg-activity, .pg-cost, .pg-limits, .pg-insights, .pg-context, .pg-project) .panel th { background: var(--surface-1); }
 :is(.pg-activity, .pg-cost, .pg-limits, .pg-insights, .pg-context, .pg-project, dialog.sheet) td { padding: 7px 8px; border-bottom: 1px solid var(--border); vertical-align: middle; }
@@ -32,55 +32,55 @@ dialog.sheet .pair > * { min-width: 0; }
 :is(.pg-activity, .pg-cost, .pg-limits, .pg-insights, .pg-context, .pg-project, dialog.sheet) tbody tr:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 :is(.pg-activity, .pg-cost, .pg-limits, .pg-insights, .pg-context, .pg-project, dialog.sheet) tbody.stale { opacity: .45; pointer-events: none; }
 :is(.pg-activity, .pg-cost, .pg-limits, .pg-insights, .pg-context, .pg-project, dialog.sheet) .bad { color: var(--critical-text); }
-:is(.pg-activity, .pg-cost, .pg-limits, .pg-insights, .pg-context, .pg-project, dialog.sheet) .small { font-size: 12px; }
+:is(.pg-activity, .pg-cost, .pg-limits, .pg-insights, .pg-context, .pg-project, dialog.sheet) .small { font-size: .75rem; }
 :is(.pg-activity, .pg-cost, .pg-limits, .pg-insights, .pg-context, .pg-project, dialog.sheet) .cellbtn { border: 0; background: none; padding: 0; font: inherit; color: var(--link); text-align: left; max-width: 100%;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 :is(.pg-activity, .pg-cost, .pg-limits, .pg-insights, .pg-context, .pg-project, dialog.sheet) .cellbtn:hover { background: none; text-decoration: underline; }
 
 /* Sheet bodies: project and session details */
-dialog.sheet .sheet-sub { color: var(--text-muted); font-size: 12px; font-weight: 400; }
-dialog.sheet h3 { font-size: 13px; margin: 14px 0 4px; color: var(--text-secondary); }
+dialog.sheet .sheet-sub { color: var(--text-muted); font-size: .75rem; font-weight: 400; }
+dialog.sheet h3 { font-size: .8125rem; margin: 14px 0 4px; color: var(--text-secondary); }
 dialog.sheet :is(td, th).name { white-space: normal; overflow-wrap: anywhere; max-width: none; }
 dialog.sheet .hint .chip { margin-bottom: 4px; }
 dialog.sheet .actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 4px; }
 /* The /insights judgment block in a session sheet (its own class: .insight is the dashboard card): the badge and chips come from facets.css and theme.css. */
-dialog.sheet .judgment { display: grid; gap: 8px; margin-bottom: 4px; font-size: 13px; }
+dialog.sheet .judgment { display: grid; gap: 8px; margin-bottom: 4px; font-size: .8125rem; }
 dialog.sheet .judgment p { margin: 0; color: var(--text-secondary); }
 dialog.sheet .judgment p b { color: var(--text-primary); font-weight: 500; }
 dialog.sheet .judgment-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; color: var(--text-secondary); }
 dialog.sheet .judgment-line b { color: var(--text-primary); font-weight: 500; }
 /* Free-form labels (an outcome /insights adds later) wrap instead of running past the sheet. */
 dialog.sheet .judgment :is(.badge, b) { white-space: normal; overflow-wrap: anywhere; min-width: 0; }
-dialog.sheet .judgment .dis { font-size: 11.5px; color: var(--critical-text); }
+dialog.sheet .judgment .dis { font-size: .71875rem; color: var(--critical-text); }
 dialog.sheet .judgment-chips { display: flex; flex-wrap: wrap; gap: 4px; }
 dialog.sheet .judgment-chips .chip { white-space: normal; }
 dialog.sheet .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; margin: 10px 0 14px; }
 dialog.sheet .facts > div { background: var(--surface-2); border-radius: 8px; padding: 8px 10px; min-width: 0; }
-dialog.sheet .facts .v { font-size: 18px; font-weight: 600; letter-spacing: -.025em; }
-dialog.sheet .facts .l { font-size: 12px; color: var(--text-muted); }
+dialog.sheet .facts .v { font-size: 1.125rem; font-weight: 600; letter-spacing: -.025em; }
+dialog.sheet .facts .l { font-size: .75rem; color: var(--text-muted); }
 dialog.sheet .sid { word-break: break-all; }
-dialog.sheet .commit { font-size: 12px; margin: 3px 0; }
+dialog.sheet .commit { font-size: .75rem; margin: 3px 0; }
 dialog.sheet .commit code { white-space: pre-wrap; overflow-wrap: anywhere; }
-dialog.sheet .statline { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 10px 0 12px; font-size: 13px; color: var(--text-secondary); }
-dialog.sheet .statline b { color: var(--text-primary); font-weight: 600; font-size: 14px; }
+dialog.sheet .statline { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 10px 0 12px; font-size: .8125rem; color: var(--text-secondary); }
+dialog.sheet .statline b { color: var(--text-primary); font-weight: 600; font-size: .875rem; }
 dialog.sheet details.sd { border-top: 1px solid var(--border); }
-dialog.sheet details.sd > summary { cursor: pointer; padding: 10px 0; font-size: 13px; font-weight: 600; color: var(--text-secondary); }
+dialog.sheet details.sd > summary { cursor: pointer; padding: 10px 0; font-size: .8125rem; font-weight: 600; color: var(--text-secondary); }
 dialog.sheet details.sd > summary .c { font-weight: 400; color: var(--text-muted); margin-left: 6px; }
 /* Tool sheet: calls per day and failure types */
 dialog.sheet .days svg { display: block; width: 100%; height: 56px; }
-dialog.sheet .tcat { margin: 6px 0 10px; font-size: 13px; }
+dialog.sheet .tcat { margin: 6px 0 10px; font-size: .8125rem; }
 dialog.sheet :is(td, th).name .cellbtn { white-space: normal; overflow-wrap: anywhere; }
-dialog.sheet :is(td, th).name code { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; }
+dialog.sheet :is(td, th).name code { white-space: pre-wrap; overflow-wrap: anywhere; font-size: .75rem; }
 /* Source: the first prompt exactly as recorded */
 dialog.sheet pre.fp-raw { margin: 0 0 8px; padding: 10px 12px; max-height: 320px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere;
-  border-left: 3px solid var(--accent); background: var(--surface-1); border-radius: 0 8px 8px 0; font: 12px/1.5 ui-monospace, "SF Mono", Menlo, monospace; }
+  border-left: 3px solid var(--accent); background: var(--surface-1); border-radius: 0 8px 8px 0; font: .75rem/1.5 ui-monospace, "SF Mono", Menlo, monospace; }
 
 /* Session timeline: context per request over time, with tool calls, compactions and commits on the same axis */
 dialog.sheet .tl { margin: 4px 0 6px; }
 dialog.sheet .tl svg { display: block; width: 100%; overflow: visible; }
 dialog.sheet .tl svg:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
-dialog.sheet .tl-read { min-height: 1.5em; font-size: 12.5px; color: var(--text-secondary); }
-dialog.sheet .tl-key { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 11.5px; color: var(--text-muted); margin: 4px 0 10px; }
+dialog.sheet .tl-read { min-height: 1.5em; font-size: .78125rem; color: var(--text-secondary); }
+dialog.sheet .tl-key { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: .71875rem; color: var(--text-muted); margin: 4px 0 10px; }
 dialog.sheet .tl-key i { display: inline-block; vertical-align: middle; margin-right: 5px; }
 /* The key's swatches, each drawn as the mark it names. */
 dialog.sheet .tl-key :is(.k-ctx, .k-near) { width: 14px; border-top: 2px solid var(--series-1); }
@@ -93,7 +93,7 @@ dialog.sheet .tl-key :is(.k-ok, .k-fail-box) { width: 10px; height: 10px; backgr
 dialog.sheet .tl-key .k-ok { background: var(--text-muted); opacity: .55; }
 /* Timeline events: the failures (adjacent ones grouped), compactions and commits as a list of real targets */
 dialog.sheet .tl-sel { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; min-height: 2.6em; margin: 4px 0 8px; padding: 8px 10px;
-  border-radius: 8px; background: var(--surface-2); font-size: 13px; color: var(--text-secondary); }
+  border-radius: 8px; background: var(--surface-2); font-size: .8125rem; color: var(--text-secondary); }
 dialog.sheet .tl-sel b { color: var(--text-primary); font-weight: 600; }
 dialog.sheet .evlist { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 2px; }
 /* A long event list skips the rows off screen. Paint containment clips at the row, so the focus ring is drawn inside it. */
@@ -101,22 +101,22 @@ dialog.sheet .evlist li { display: flex; align-items: stretch; gap: 4px; content
 dialog.sheet .evlist :is(.evbtn, .evlink):focus-visible { outline-offset: -2px; }
 dialog.sheet .evlist li[hidden] { display: none; }
 dialog.sheet .evbtn { flex: 1; min-width: 0; display: grid; grid-template-columns: 12px 4.2rem minmax(0, 1fr); gap: 8px; align-items: center; min-height: 32px;
-  padding: 4px 8px; border: 1px solid transparent; border-radius: 6px; background: none; text-align: left; font-size: 13px; }
+  padding: 4px 8px; border: 1px solid transparent; border-radius: 6px; background: none; text-align: left; font-size: .8125rem; }
 dialog.sheet .evbtn:hover { background: var(--surface-2); }
 dialog.sheet .evbtn[aria-pressed=true] { background: var(--accent-soft); border-color: var(--accent); }
 dialog.sheet .evbtn .mk { width: 10px; height: 10px; border-radius: 2px; background: var(--critical); }
 dialog.sheet .ev.compact .mk { background: none; border-left: 2px dashed var(--warning); width: 0; height: 12px; margin-left: 4px; border-radius: 0; }
 dialog.sheet .ev.commit .mk { background: var(--good); transform: rotate(45deg) scale(.8); }
-dialog.sheet .evbtn .tm { color: var(--text-muted); font-size: 12px; white-space: nowrap; }
+dialog.sheet .evbtn .tm { color: var(--text-muted); font-size: .75rem; white-space: nowrap; }
 dialog.sheet .evbtn .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-dialog.sheet .evbtn .nm small { color: var(--text-muted); font-size: 12px; margin-left: 6px; }
-dialog.sheet .evlink { display: inline-flex; align-items: center; min-height: 32px; padding: 0 8px; border-radius: 6px; font-size: 12.5px; white-space: nowrap; }
+dialog.sheet .evbtn .nm small { color: var(--text-muted); font-size: .75rem; margin-left: 6px; }
+dialog.sheet .evlink { display: inline-flex; align-items: center; min-height: 32px; padding: 0 8px; border-radius: 6px; font-size: .78125rem; white-space: nowrap; }
 dialog.sheet .evlink:hover { background: var(--surface-2); }
 dialog.sheet .evhead { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; margin: 10px 0 4px; }
-dialog.sheet .evhead h4 { flex: none; margin: 0; font-size: 13px; color: var(--text-secondary); }
-dialog.sheet .evhead .c { min-width: 0; color: var(--text-muted); font-size: 12.5px; }
+dialog.sheet .evhead h4 { flex: none; margin: 0; font-size: .8125rem; color: var(--text-secondary); }
+dialog.sheet .evhead .c { min-width: 0; color: var(--text-muted); font-size: .78125rem; }
 dialog.sheet .spark { margin: 0 0 14px; width: 100%; }
 dialog.sheet .spark svg { display: block; width: 100%; height: 48px; overflow: visible; }
-dialog.sheet .spark figcaption { display: flex; justify-content: space-between; gap: 8px; font-size: 11.5px; color: var(--text-muted); margin-top: 4px; }
+dialog.sheet .spark figcaption { display: flex; justify-content: space-between; gap: 8px; font-size: .71875rem; color: var(--text-muted); margin-top: 4px; }
 dialog.sheet .spark figcaption b { color: var(--text-secondary); font-weight: 500; }
 dialog.sheet .chip.new { border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }

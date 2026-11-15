@@ -1,15 +1,15 @@
 /* Insights (/insights): every rule sits under .pg-insights, since every page's CSS is loaded at once. Tables come from sheets.css. */
 .pg-insights .top { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: center; justify-content: space-between; margin-bottom: 20px; }
-.pg-insights .kicker { font-size: 15px; font-weight: 600; margin: 0; color: var(--text-secondary); display: flex; gap: 8px; align-items: center; }
-.pg-insights .cov { margin: -8px 0 16px; font-size: 13px; color: var(--text-secondary); }
+.pg-insights .kicker { font-size: .9375rem; font-weight: 600; margin: 0; color: var(--text-secondary); display: flex; gap: 8px; align-items: center; }
+.pg-insights .cov { margin: -8px 0 16px; font-size: .8125rem; color: var(--text-secondary); }
 .pg-insights .cov b { color: var(--text-primary); font-weight: 500; }
-.pg-insights .lede { margin: 0 0 8px; max-width: 34ch; font-size: clamp(24px, 4vw, 40px); line-height: 1.14; font-weight: 400;
+.pg-insights .lede { margin: 0 0 8px; max-width: 34ch; font-size: clamp(1.5rem, 4vw, 2.5rem); line-height: 1.14; font-weight: 400;
   letter-spacing: -.025em; text-wrap: balance; color: var(--text-secondary); }
 .pg-insights .lede:focus { outline: none; }
 .pg-insights .lede b { font-weight: 600; letter-spacing: -.04em; color: var(--text-primary); }
 .pg-insights .lede code { font-size: .8em; }
-.pg-insights .sub { color: var(--text-muted); font-size: 13px; margin: 0 0 20px; max-width: 90ch; }
-.pg-insights .pending { margin: -12px 0 8px; min-height: 1.5em; color: var(--text-secondary); font-size: 13px; }
+.pg-insights .sub { color: var(--text-muted); font-size: .8125rem; margin: 0 0 20px; max-width: 90ch; }
+.pg-insights .pending { margin: -12px 0 8px; min-height: 1.5em; color: var(--text-secondary); font-size: .8125rem; }
 .pg-insights .pending:empty { visibility: hidden; }
 .pg-insights.loading > :not(.top) { opacity: .55; }
 @media (prefers-reduced-motion: no-preference) { .pg-insights > :not(.top) { transition: opacity .2s; } }
@@ -19,10 +19,10 @@
   background: var(--border); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
 .pg-insights .vital { padding: 16px 16px 16px 0; background: var(--bg); min-width: 0; }
 .pg-insights .vital + .vital { padding-left: 16px; }
-.pg-insights .vital .v { font-size: 28px; font-weight: 600; letter-spacing: -.035em; line-height: 1.1; }
-.pg-insights .vital .v small { font-size: 15px; font-weight: 500; color: var(--text-muted); letter-spacing: -.01em; }
+.pg-insights .vital .v { font-size: 1.75rem; font-weight: 600; letter-spacing: -.035em; line-height: 1.1; }
+.pg-insights .vital .v small { font-size: .9375rem; font-weight: 500; color: var(--text-muted); letter-spacing: -.01em; }
 .pg-insights .vital .l { font-weight: 500; margin-top: 4px; }
-.pg-insights .vital .d { color: var(--text-muted); font-size: 12.5px; margin-top: 2px; }
+.pg-insights .vital .d { color: var(--text-muted); font-size: .78125rem; margin-top: 2px; }
 .pg-insights .vital.good .v { color: var(--good-text); }
 .pg-insights .vital.bad .v { color: var(--critical-text); }
 .pg-insights .vital.bad { color: inherit; } /* the shared .bad rule would redden the label too */
@@ -35,18 +35,18 @@
   .pg-insights .vital { padding: 10px 12px 10px 0; }
   .pg-insights .vital + .vital { padding-left: 12px; }
   .pg-insights .vital:nth-child(2), .pg-insights .vital:nth-child(4) { padding-left: 0; }
-  .pg-insights .vital .v { font-size: 22px; }
-  .pg-insights .lede { font-size: 21px; }
+  .pg-insights .vital .v { font-size: 1.375rem; }
+  .pg-insights .lede { font-size: 1.3125rem; }
 }
 
-.pg-insights h2 { font-size: 15px; font-weight: 600; margin: 0 0 2px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.pg-insights h3 { font-size: 13px; font-weight: 600; margin: 18px 0 2px; color: var(--text-secondary); }
+.pg-insights h2 { font-size: .9375rem; font-weight: 600; margin: 0 0 2px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.pg-insights h3 { font-size: .8125rem; font-weight: 600; margin: 18px 0 2px; color: var(--text-secondary); }
 .pg-insights .grid2 { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 16px; margin-bottom: 16px; align-items: start; }
 /* Wider value and side columns: "120 of 400" and "none analysed". */
 .pg-insights #d-coverage .ledger { --ledger-cols: minmax(0, 13rem) minmax(40px, 1fr) 6rem 6.5rem; }
 @media (max-width: 520px) { .pg-insights #d-coverage .ledger { --ledger-cols: minmax(0, 1fr) 6rem 6.5rem; } }
 .pg-insights .ledger .none { color: var(--warning-text); font-weight: 500; }
-.pg-insights .linkish.more { margin-top: 8px; font-size: 13px; }
+.pg-insights .linkish.more { margin-top: 8px; font-size: .8125rem; }
 @media (max-width: 900px) { .pg-insights .grid2 { grid-template-columns: minmax(0, 1fr); } }
 /* Ledgers here carry "N sessions" on the side, wider than the default column. */
 .pg-insights .ledger { --ledger-cols: minmax(0, 13rem) minmax(40px, 1fr) 3.5rem 5.5rem; }
@@ -55,14 +55,14 @@
 /* Session types: one stacked strip with a key */
 .pg-insights .strip { display: flex; height: 10px; border-radius: 5px; overflow: hidden; gap: 2px; margin: 10px 0 8px; }
 .pg-insights .strip i { display: block; height: 100%; }
-.pg-insights .key { display: flex; flex-wrap: wrap; gap: 4px 14px; list-style: none; margin: 0; padding: 0; font-size: 13px; color: var(--text-secondary); }
+.pg-insights .key { display: flex; flex-wrap: wrap; gap: 4px 14px; list-style: none; margin: 0; padding: 0; font-size: .8125rem; color: var(--text-secondary); }
 .pg-insights .key li { display: inline-flex; align-items: center; gap: 6px; }
 .pg-insights .key .sw { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
 .pg-insights .key b { color: var(--text-primary); font-weight: 600; }
 
 /* Session log */
 .pg-insights .log-head { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; justify-content: space-between; }
-.pg-insights .log-ctl { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; color: var(--text-secondary); font-size: 13px; }
+.pg-insights .log-ctl { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; color: var(--text-secondary); font-size: .8125rem; }
 .pg-insights .log-ctl select { margin-left: 4px; }
 /* A session card: title, outcome and chips on one wrapping line, the summary full width below. */
 .pg-insights .scards { list-style: none; margin: 0; padding: 0; }
@@ -75,12 +75,12 @@
 .pg-insights .scard .ttl .muted { font-weight: 400; }
 .pg-insights .scard .chip { white-space: normal; }
 /* Date and project: quiet, at the end of the line. */
-.pg-insights .scard .meta { min-width: 0; max-width: 100%; margin-left: auto; color: var(--text-muted); font-size: 12.5px; }
+.pg-insights .scard .meta { min-width: 0; max-width: 100%; margin-left: auto; color: var(--text-muted); font-size: .78125rem; }
 .pg-insights .scard .sum { margin: 4px 0 0; color: var(--text-secondary); max-width: 110ch; }
 .pg-insights .scard .fd { margin-top: 4px; color: var(--text-secondary); max-width: 110ch; }
-.pg-insights .scard .fd summary { cursor: pointer; font-size: 12.5px; color: var(--text-muted); }
+.pg-insights .scard .fd summary { cursor: pointer; font-size: .78125rem; color: var(--text-muted); }
 .pg-insights .scard .fd p { margin: 4px 0 0; }
-.pg-insights .dis { font-size: 11.5px; color: var(--critical-text); }
+.pg-insights .dis { font-size: .71875rem; color: var(--critical-text); }
 
 /* Drill-down: ledger rows, chips and the outcome badge are buttons that set a filter. Child selectors: a family row nests its
    labels' rows, and only the active row's own button and name take the highlight. */
@@ -93,7 +93,7 @@
 .pg-insights button.chip.on, .pg-insights button.badge.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 .pg-insights .fchips { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; margin: 8px 0 0; }
 .pg-insights .fchips .chip.fx { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-ink); }
-.pg-insights .fchips .linkish { font-size: 13px; }
+.pg-insights .fchips .linkish { font-size: .8125rem; }
 .pg-insights .ledger li.on:not(.pick) { background: var(--accent-soft); box-shadow: inset 2px 0 0 var(--accent); font-weight: 600; }
 /* A pickable row's button has its own columns in Ledger.css; give it the same ones as the rows above (wider side figure). */
 .pg-insights .ledger li.pick .rowbtn { grid-template-columns: var(--ledger-cols); }
@@ -112,8 +112,8 @@
   .pg-insights .vitals.figs .vital:nth-child(odd) { padding-left: 0; }
 }
 /* A session card's measured figures: the last line, quiet and apart from the model's summary. */
-.pg-insights .scard .measured { margin: 6px 0 0; color: var(--text-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.pg-insights .scard .measured { margin: 6px 0 0; color: var(--text-muted); font-size: .75rem; font-variant-numeric: tabular-nums; }
 /* A family row's expander and its labels, under the row. */
-.pg-insights .ledger li.pick .exp { margin: 0 0 4px 8px; font-size: 12.5px; }
+.pg-insights .ledger li.pick .exp { margin: 0 0 4px 8px; font-size: .78125rem; }
 .pg-insights .ledger li.pick .members { margin: 0 0 6px 18px; padding: 0; }
 .pg-insights .ledger li.pick .members[hidden] { display: none; }

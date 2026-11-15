@@ -4,9 +4,9 @@
 .linkish { border: 0; background: none; padding: 0; color: var(--link); font-size: inherit; }
 .linkish:hover { background: none; text-decoration: underline; }
 .panel { padding: 18px 20px; }
-.hint { color: var(--text-muted); font-size: 12.5px; margin: 2px 0 10px; }
-.more { margin-top: 10px; font-size: 13px; }
-.banner { border-left: 3px solid var(--warning-text); background: var(--surface-1); padding: 8px 12px; margin-bottom: 20px; font-size: 13px; color: var(--text-secondary); }
+.hint { color: var(--text-muted); font-size: .78125rem; margin: 2px 0 10px; }
+.more { margin-top: 10px; font-size: .8125rem; }
+.banner { border-left: 3px solid var(--warning-text); background: var(--surface-1); padding: 8px 12px; margin-bottom: 20px; font-size: .8125rem; color: var(--text-secondary); }
 .banner b { color: var(--warning-text); }
 /* Skip link: off-screen until focused by keyboard, then above the sticky nav. It lands on the page heading, which takes focus
    without a ring. */

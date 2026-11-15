@@ -4,7 +4,7 @@
 .pg-context .top { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px 32px; align-items: end; margin-bottom: 20px; }
 .pg-context .top-side { display: flex; flex-direction: column; align-items: flex-end; gap: 12px; min-width: 0; max-width: 600px; }
 .pg-context .top-side .filters { justify-content: flex-end; }
-.pg-context .lede { margin: 0; max-width: 26ch; font-size: clamp(26px, 4.2vw, 42px); line-height: 1.12;
+.pg-context .lede { margin: 0; max-width: 26ch; font-size: clamp(1.625rem, 4.2vw, 2.625rem); line-height: 1.12;
   font-weight: 400; letter-spacing: -.025em; text-wrap: balance; color: var(--text-secondary); }
 .pg-context .lede:focus { outline: none; }
 .pg-context .lede .amt { font-weight: 600; letter-spacing: -.04em; color: var(--text-primary); white-space: nowrap; }
@@ -12,15 +12,15 @@
 .pg-context .lede .pdot { width: .32em; height: .32em; vertical-align: .2em; margin: 0 .18em 0 .05em; }
 .pg-context .lede .unit { white-space: nowrap; }
 .pg-context .lede .delta { display: block; color: var(--text-primary); font-weight: 500; font-size: .62em; letter-spacing: -.015em; margin-top: 4px; }
-.pg-context .sub { color: var(--text-muted); font-size: 13px; margin: 8px 0 0; max-width: 90ch; }
+.pg-context .sub { color: var(--text-muted); font-size: .8125rem; margin: 8px 0 0; max-width: 90ch; }
 @media (max-width: 1040px) {
   .pg-context .top { grid-template-columns: minmax(0, 1fr); align-items: start; }
   .pg-context .top-side { max-width: none; align-items: stretch; }
   .pg-context .top-side .filters { justify-content: flex-start; }
 }
-.pg-context h2 { font-size: 16px; font-weight: 600; margin: 0; letter-spacing: -.005em; }
-.pg-context h3 { font-size: 13px; font-weight: 600; margin: 20px 0 2px; color: var(--text-secondary); }
-.pg-context .pending { margin: -12px 0 12px; min-height: 1.5em; color: var(--text-secondary); font-size: 13px; }
+.pg-context h2 { font-size: 1rem; font-weight: 600; margin: 0; letter-spacing: -.005em; }
+.pg-context h3 { font-size: .8125rem; font-weight: 600; margin: 20px 0 2px; color: var(--text-secondary); }
+.pg-context .pending { margin: -12px 0 12px; min-height: 1.5em; color: var(--text-secondary); font-size: .8125rem; }
 .pg-context .pending:empty { visibility: hidden; }
 .pg-context.loading > :not(.top):not(.secidx) { opacity: .55; }
 @media (prefers-reduced-motion: no-preference) { .pg-context > :not(.top):not(.secidx) { transition: opacity .2s; } }
@@ -35,7 +35,7 @@
 .pg-context .insight .v:empty { display: none; }
 .pg-context .evidence { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 6px 20px; margin: 0 0 8px; }
 .pg-context .evidence div { min-width: 0; }
-.pg-context .evidence dt { font-size: 12px; color: var(--text-muted); }
+.pg-context .evidence dt { font-size: .75rem; color: var(--text-muted); }
 .pg-context .evidence dd { margin: 0; font-weight: 500; color: var(--text-primary); overflow-wrap: anywhere; }
 .pg-context .advice { margin: 0; }
 .pg-context .advice code { background: var(--surface-2); padding: 0 4px; border-radius: 4px; }
@@ -45,39 +45,39 @@
 /* Tables: the whole view's row reads as a total */
 .pg-context .panel tr.all :is(td, th) { color: var(--text-secondary); font-weight: 500; background: var(--surface-2); }
 .pg-context td.input { max-width: 280px; }
-.pg-context td.input code { font-size: 12px; }
-.pg-context .chip.est { border-style: dashed; margin-left: 4px; font-size: 10.5px; }
+.pg-context td.input code { font-size: .75rem; }
+.pg-context .chip.est { border-style: dashed; margin-left: 4px; font-size: .65625rem; }
 .pg-context .lead-line { margin: 10px 0 0; color: var(--text-secondary); max-width: 90ch; }
 .pg-context .lead-line b { color: var(--text-primary); font-weight: 600; }
 .pg-context .panel .scroll { margin-top: 8px; }
 
 /* Charts: the legend, plot, readout and tooltip rows every chart on this page shares */
 .pg-context .legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 8px 0; }
-.pg-context .legend .key { font-size: 12px; display: inline-flex; gap: 6px; align-items: center; color: var(--text-secondary); max-width: 16rem; }
+.pg-context .legend .key { font-size: .75rem; display: inline-flex; gap: 6px; align-items: center; color: var(--text-secondary); max-width: 16rem; }
 .pg-context .legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; flex: none; }
 .pg-context .legend i.line { width: 14px; height: 0; border-radius: 0; border-top: 2px solid var(--text-primary); }
 .pg-context .legend i.band { background: var(--text-secondary); opacity: .25; }
 .pg-context .chart { position: relative; }
 .pg-context .chart svg { display: block; width: 100%; overflow: visible; }
 .pg-context .chart:focus-visible { outline-offset: 4px; border-radius: 4px; }
-.pg-context .readout { min-height: 1.5em; margin-top: 4px; font-size: 12.5px; color: var(--text-secondary); }
+.pg-context .readout { min-height: 1.5em; margin-top: 4px; font-size: .78125rem; color: var(--text-secondary); }
 .pg-context .axis-note, .pg-context .caption { margin-top: 2px; }
 .pg-context .tip .row { display: flex; gap: 16px; justify-content: space-between; }
 .pg-context .growth .chart svg { height: 260px; }
 .pg-context .start-trend .chart svg { height: 180px; }
 .pg-context .session-map .chart svg { height: 320px; }
 /* The scale under a range column's heading, shared by the start ranges and the contributors */
-.pg-context :is(.rng-head .scale, .ctr-scale) { display: flex; justify-content: space-between; gap: 6px; font-weight: 400; font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.pg-context :is(.rng-head .scale, .ctr-scale) { display: flex; justify-content: space-between; gap: 6px; font-weight: 400; font-size: .6875rem; color: var(--text-muted); margin-top: 2px; }
 
 /* Growth: the chart, then the vitals */
 .pg-context .vitals { display: grid; grid-template-columns: repeat(var(--n, 4), minmax(0, 1fr)); gap: 1px; margin: 16px 0 12px;
   background: var(--border); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
 .pg-context .vital { padding: 16px 16px 16px 0; background: var(--surface-1); min-width: 0; }
 .pg-context .vital + .vital { padding-left: 16px; }
-.pg-context .vital .v { font-size: 28px; font-weight: 600; letter-spacing: -.035em; line-height: 1.1; }
-.pg-context .vital .v small { font-size: 15px; font-weight: 500; color: var(--text-muted); letter-spacing: -.01em; }
+.pg-context .vital .v { font-size: 1.75rem; font-weight: 600; letter-spacing: -.035em; line-height: 1.1; }
+.pg-context .vital .v small { font-size: .9375rem; font-weight: 500; color: var(--text-muted); letter-spacing: -.01em; }
 .pg-context .vital .l { font-weight: 500; margin-top: 4px; }
-.pg-context .vital .d { color: var(--text-muted); font-size: 12.5px; margin-top: 2px; }
+.pg-context .vital .d { color: var(--text-muted); font-size: .78125rem; margin-top: 2px; }
 @media (max-width: 900px) {
   .pg-context .vitals { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .pg-context .vital:nth-child(odd) { padding-left: 0; }
@@ -86,8 +86,8 @@
 @media (max-width: 520px) {
   .pg-context .vital { padding-right: 12px; }
   .pg-context .vital + .vital:nth-child(even) { padding-left: 12px; }
-  .pg-context .vital .v { font-size: 22px; }
-  .pg-context .lede { font-size: 22px; }
+  .pg-context .vital .v { font-size: 1.375rem; }
+  .pg-context .lede { font-size: 1.375rem; }
 }
 
 /* Phones: the wide tables lose their least needed columns' room by scrolling sideways */
