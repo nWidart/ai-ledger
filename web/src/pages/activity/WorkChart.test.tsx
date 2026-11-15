@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DailyWorkRow, UsagePayload } from "../../api";
@@ -7,6 +7,7 @@ import { color, setOrder } from "../../colors";
 import { failRate, workBuckets, workKinds, workStack, type WorkMetric } from "./work";
 import { WorkPanel } from "./WorkChart";
 import { WorkHours } from "./WorkHours";
+import { renderApp } from "../../testing";
 
 const row = (day: string, o: Partial<DailyWorkRow> = {}): DailyWorkRow => ({ day, sessions: 1, prompts: 1, commits: 0, calls: 0, failed_calls: 0, ...o });
 type WP = UsagePayload["work_projects"][number];
@@ -27,7 +28,7 @@ const weekly: UsagePayload = {
 };
 
 const panel = (d: UsagePayload, metric: WorkMetric = "commits", onDay = vi.fn()) => {
-  render(<WorkPanel d={d} metric={metric} onMetric={() => {}} onDay={onDay} />);
+  renderApp(<WorkPanel d={d} metric={metric} onMetric={() => {}} onDay={onDay} />);
   return onDay;
 };
 const chart = () => screen.getByRole("group", { name: /per (day|week)/ });
@@ -310,7 +311,7 @@ describe("hours", () => {
   const cells = [{ dow: 2, hour: 23, prompts: 30 }, { dow: 2, hour: 9, prompts: 4 }, { dow: 6, hour: 10, prompts: 12 }];
 
   it("draws a 7x24 grid, Monday first, with the busiest cell named", () => {
-    render(<WorkHours cells={cells} />);
+    renderApp(<WorkHours cells={cells} />);
     const box = document.getElementById("hours")!;
     expect(within(box).getByRole("heading").textContent).toBe("Prompts by hour");
     const table = within(box).getByRole("table", { name: "Prompts by weekday and hour" });
@@ -326,7 +327,7 @@ describe("hours", () => {
   });
 
   it("outlines Monday 0:00 on focus, moves from there and keeps the cell", () => {
-    render(<WorkHours cells={cells} />);
+    renderApp(<WorkHours cells={cells} />);
     const table = screen.getByRole("table"), readout = () => document.querySelector("#hours .readout")!.textContent;
     const outlined = () => [...table.querySelectorAll("td.at")].map(td => td.getAttribute("title"));
     act(() => table.focus());
@@ -345,19 +346,19 @@ describe("hours", () => {
   });
 
   it("does not read cells out on hover", () => {
-    render(<WorkHours cells={cells} />);
+    renderApp(<WorkHours cells={cells} />);
     fireEvent.pointerEnter(screen.getByRole("table").querySelectorAll("tbody tr")[1]!.querySelectorAll("td")[23]!);
     expect(document.querySelector("#hours .readout")!.textContent).toBe("");
   });
 
   it("counts the ties for the busiest hour and day", () => {
-    render(<WorkHours cells={[{ dow: 2, hour: 9, prompts: 5 }, { dow: 4, hour: 9, prompts: 5 }, { dow: 5, hour: 14, prompts: 5 }]} />);
+    renderApp(<WorkHours cells={[{ dow: 2, hour: 9, prompts: 5 }, { dow: 4, hour: 9, prompts: 5 }, { dow: 5, hour: 14, prompts: 5 }]} />);
     expect(document.getElementById("hoursSum")!.textContent)
       .toMatch(/^Busiest hour: Tuesdays at 9:00 and 2 others, 5 prompts each\.\s+Busiest day: Tuesday and 2 others, 5 prompts each\. 15 prompts in all\./);
   });
 
   it("shows the empty state without data", () => {
-    render(<WorkHours cells={[]} />);
+    renderApp(<WorkHours cells={[]} />);
     expect(document.querySelector("#hours table")).toBeNull();
     expect(document.querySelector("#hours .empty")!.textContent).toBe("No prompts in this range.");
   });

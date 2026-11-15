@@ -1,8 +1,9 @@
-import { act, render, screen, within } from "@testing-library/react";
+import { act, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { setHash } from "../hash";
 import { Filters } from "./Filters";
+import { renderApp } from "../testing";
 
 const options = () => screen.queryAllByRole("option").map(o => o.textContent);
 
@@ -10,7 +11,7 @@ describe("Filters", () => {
   it("selects a range and a project from the keyboard, pushing each change", async () => {
     history.replaceState(null, "", "/usage#range=30&session=s1");
     const push = vi.spyOn(history, "pushState");
-    render(<Filters projects={["foo", "bar"]} automated />);
+    renderApp(<Filters projects={["foo", "bar"]} automated />);
     const user = userEvent.setup();
     expect(screen.getByRole("button", { name: "30d" }).getAttribute("aria-pressed")).toBe("true");
     screen.getByRole("button", { name: "7d" }).focus();
@@ -29,7 +30,7 @@ describe("Filters", () => {
 
   it("writes auto=1 when automated sessions are included", async () => {
     history.replaceState(null, "", "/cost#range=30");
-    render(<Filters projects={["foo"]} automated />);
+    renderApp(<Filters projects={["foo"]} automated />);
     const box = screen.getByRole("checkbox", { name: "Include automated sessions" }) as HTMLInputElement;
     expect(box.checked).toBe(false);
     await userEvent.click(box);
@@ -41,7 +42,7 @@ describe("Filters", () => {
 
   it("picks a source, closing the open sheet, and All removes it", async () => {
     history.replaceState(null, "", "/usage#range=30&session=s1");
-    render(<Filters projects={["foo"]} automated />);
+    renderApp(<Filters projects={["foo"]} automated />);
     const group = within(screen.getByRole("group", { name: "Source" }));
     expect(group.getAllByRole("button").map(b => b.textContent)).toEqual(["All", "Claude Code", "Codex"]);
     expect(group.getByRole("button", { name: "All" }).getAttribute("aria-pressed")).toBe("true");
@@ -54,14 +55,14 @@ describe("Filters", () => {
 
   it("shows an unknown source as All and drops it from the URL", () => {
     history.replaceState(null, "", "/cost#range=30&source=grok");
-    render(<Filters projects={["foo"]} automated />);
+    renderApp(<Filters projects={["foo"]} automated />);
     expect(within(screen.getByRole("group", { name: "Source" })).getByRole("button", { name: "All" }).getAttribute("aria-pressed")).toBe("true");
     expect(location.hash).toBe("#range=30");
   });
 
   it("lists the hash's project when the list leaves it out", async () => {
     history.replaceState(null, "", "/usage#project=observer-sessions&range=30");
-    render(<Filters projects={["foo", "bar"]} automated />);
+    renderApp(<Filters projects={["foo", "bar"]} automated />);
     const field = screen.getByRole("combobox", { name: "Project" }) as HTMLInputElement;
     expect(field.value).toBe("observer-sessions");
     await userEvent.click(field);
@@ -69,13 +70,13 @@ describe("Filters", () => {
   });
 
   it("hides the automated toggle where it does not apply", () => {
-    render(<Filters projects={[{ value: "foo", label: "foo — 3 errors (all time)" }]} />);
+    renderApp(<Filters projects={[{ value: "foo", label: "foo — 3 errors (all time)" }]} />);
     expect(screen.queryByRole("checkbox")).toBeNull();
   });
 
   it("shows a label in the field and in the list", async () => {
     history.replaceState(null, "", "/errors#project=foo");
-    render(<Filters projects={[{ value: "foo", label: "foo — 3 errors (all time)" }]} />);
+    renderApp(<Filters projects={[{ value: "foo", label: "foo — 3 errors (all time)" }]} />);
     const field = screen.getByRole("combobox", { name: "Project" }) as HTMLInputElement;
     expect(field.value).toBe("foo — 3 errors (all time)");
     await userEvent.click(field);
@@ -84,7 +85,7 @@ describe("Filters", () => {
 
   it("follows a hash change from elsewhere", async () => {
     history.replaceState(null, "", "/cost");
-    render(<Filters projects={["foo", "bar"]} />);
+    renderApp(<Filters projects={["foo", "bar"]} />);
     const field = screen.getByRole("combobox", { name: "Project" }) as HTMLInputElement;
     expect(field.value).toBe("All projects");
     await act(async () => { setHash({ project: "bar" }); });
@@ -97,7 +98,7 @@ describe("Filters project search", () => {
   const field = () => screen.getByRole("combobox", { name: "Project" }) as HTMLInputElement;
   it("narrows the list as the user types, ignoring case, and picks a project", async () => {
     history.replaceState(null, "", "/cost#project=proj-3");
-    render(<Filters projects={many} />);
+    renderApp(<Filters projects={many} />);
     const user = userEvent.setup();
     await user.click(field());
     expect(options()).toHaveLength(many.length + 1);
@@ -109,7 +110,7 @@ describe("Filters project search", () => {
   });
   it("picks the first match on Enter, then takes a new search in the same field", async () => {
     history.replaceState(null, "", "/cost");
-    render(<Filters projects={many} />);
+    renderApp(<Filters projects={many} />);
     const user = userEvent.setup();
     await user.click(field());
     await user.keyboard("atl{Enter}");
@@ -122,7 +123,7 @@ describe("Filters project search", () => {
   });
   it("lists every project when the field is cleared, and keeps the project until one is picked", async () => {
     history.replaceState(null, "", "/cost#project=atlas");
-    render(<Filters projects={many} />);
+    renderApp(<Filters projects={many} />);
     const user = userEvent.setup();
     await user.tab();
     await user.keyboard("{Backspace}"); // the name was selected
@@ -137,7 +138,7 @@ describe("Filters project search", () => {
   });
   it("selects the text on focus so typing replaces the project's name", async () => {
     history.replaceState(null, "", "/cost#project=atlas");
-    render(<Filters projects={many} />);
+    renderApp(<Filters projects={many} />);
     await userEvent.tab(); // the project field comes first
     expect(document.activeElement).toBe(field());
     await userEvent.keyboard("proj-1");
@@ -146,7 +147,7 @@ describe("Filters project search", () => {
   });
   it("picks with the arrows and Enter, and All projects clears the project", async () => {
     history.replaceState(null, "", "/cost#project=foo&range=7");
-    render(<Filters projects={["foo", "bar"]} />);
+    renderApp(<Filters projects={["foo", "bar"]} />);
     const user = userEvent.setup();
     await user.click(field());
     await user.keyboard("{ArrowUp}{Enter}");
@@ -155,7 +156,7 @@ describe("Filters project search", () => {
   });
   it("says when nothing matches and keeps All projects", async () => {
     history.replaceState(null, "", "/cost");
-    render(<Filters projects={many} />);
+    renderApp(<Filters projects={many} />);
     await userEvent.click(field());
     await userEvent.keyboard("zzz");
     expect(options()).toEqual(["All projects"]);
@@ -163,14 +164,14 @@ describe("Filters project search", () => {
   });
   it("filters a short list too", async () => {
     history.replaceState(null, "", "/cost");
-    render(<Filters projects={["foo", "bar"]} />);
+    renderApp(<Filters projects={["foo", "bar"]} />);
     await userEvent.click(field());
     await userEvent.keyboard("ba");
     expect(options()).toEqual(["bar", "All projects"]);
   });
   it("puts the selected project back on Escape and leaves the URL alone", async () => {
     history.replaceState(null, "", "/cost#project=foo");
-    render(<Filters projects={["foo", "bar"]} />);
+    renderApp(<Filters projects={["foo", "bar"]} />);
     const user = userEvent.setup();
     await user.click(field());
     await user.keyboard("ba");
@@ -182,7 +183,7 @@ describe("Filters project search", () => {
   });
   it("puts the selected project back on blur", async () => {
     history.replaceState(null, "", "/cost#project=foo");
-    render(<Filters projects={["foo", "bar"]} />);
+    renderApp(<Filters projects={["foo", "bar"]} />);
     const user = userEvent.setup();
     await user.click(field());
     await user.keyboard("ba");

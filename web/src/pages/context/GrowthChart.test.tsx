@@ -1,9 +1,10 @@
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import type { GrowthPoint } from "../../api";
 import { setOrder } from "../../colors";
 import { GrowthChart, readTurn } from "./GrowthChart";
+import { renderApp } from "../../testing";
 
 const pt = (turn: number, median: number, sessions = 9): GrowthPoint => ({ turn, median, p25: median * .7, p75: median * 1.4, sessions });
 const view = [1, 2, 3, 4, 5].map(t => pt(t, 20_000 + t * 10_000));
@@ -13,7 +14,7 @@ const bar = { project: "bar", sessions: 5, curve: view.slice(0, 3).map(p => ({ .
 describe("GrowthChart", () => {
   it("draws the view's median with its band and one line per project", () => {
     setOrder(["foo", "bar"]);
-    const { container } = render(<GrowthChart curve={view} projects={[foo, bar]} />);
+    const { container } = renderApp(<GrowthChart curve={view} projects={[foo, bar]} />);
     expect(container.querySelectorAll("path.curve.proj")).toHaveLength(2);
     // The median is drawn twice, a halo under the ink line.
     expect(container.querySelectorAll("path.curve.view")).toHaveLength(2);
@@ -25,7 +26,7 @@ describe("GrowthChart", () => {
   });
 
   it("describes itself, naming the median at the last turn shown", () => {
-    render(<GrowthChart curve={view} projects={[foo]} />);
+    renderApp(<GrowthChart curve={view} projects={[foo]} />);
     const chart = screen.getByRole("group");
     const label = chart.getAttribute("aria-label")!;
     expect(label).toContain("70k at turn 5");
@@ -35,7 +36,7 @@ describe("GrowthChart", () => {
   });
 
   it("reads a turn with the arrow keys", () => {
-    render(<GrowthChart curve={view} projects={[foo]} />);
+    renderApp(<GrowthChart curve={view} projects={[foo]} />);
     const chart = screen.getByRole("group");
     act(() => chart.focus());
     fireEvent.keyDown(chart, { key: "ArrowRight" });
@@ -47,7 +48,7 @@ describe("GrowthChart", () => {
   });
 
   it("dismisses the reading with Escape", () => {
-    render(<GrowthChart curve={view} projects={[]} />);
+    renderApp(<GrowthChart curve={view} projects={[]} />);
     const chart = screen.getByRole("group");
     fireEvent.keyDown(chart, { key: "ArrowRight" });
     expect(document.querySelector(".readout")!.textContent).not.toBe("");
@@ -56,7 +57,7 @@ describe("GrowthChart", () => {
   });
 
   it("offers every turn as a table, closed until asked for, with each project's median", async () => {
-    render(<GrowthChart curve={view} projects={[foo, bar]} />);
+    renderApp(<GrowthChart curve={view} projects={[foo, bar]} />);
     expect(screen.queryByRole("table")).toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "Show data table" }));
     const table = screen.getByRole("table", { name: "Median context at each turn" });
@@ -72,7 +73,7 @@ describe("GrowthChart", () => {
 
   it("reads the turn under the pointer, away from the endpoints", () => {
     const long = Array.from({ length: 101 }, (_, i) => pt(i + 1, 10_000 + i * 100));
-    const { container } = render(<GrowthChart curve={long} projects={[]} />);
+    const { container } = renderApp(<GrowthChart curve={long} projects={[]} />);
     // jsdom has no layout: the plot rect starts at the left margin and spans the inner width, as in the browser.
     const rect = container.querySelector("svg rect")!;
     rect.getBoundingClientRect = () => ({ left: 52, right: 786, width: 734, top: 12, bottom: 230, height: 218, x: 52, y: 12, toJSON: () => ({}) });
@@ -81,7 +82,7 @@ describe("GrowthChart", () => {
   });
 
   it("draws a curve of one point, and nothing without one", () => {
-    const { container, rerender } = render(<GrowthChart curve={[pt(1, 12_000)]} projects={[]} />);
+    const { container, rerender } = renderApp(<GrowthChart curve={[pt(1, 12_000)]} projects={[]} />);
     expect(container.querySelectorAll("path.curve.view")).toHaveLength(2);
     expect(screen.getByRole("group").getAttribute("aria-label")).toContain("12k tokens");
     rerender(<GrowthChart curve={[]} projects={[]} />);

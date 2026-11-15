@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { PalettePayload } from "../../api";
@@ -9,6 +9,7 @@ import { Nav } from "../Nav";
 import { mockApi } from "../sheets/testing";
 import { Palette } from "./Palette";
 import { closePalette, openPalette } from "./store";
+import { renderApp } from "../../testing";
 
 const status = { ingesting: false, last_ingest: "2026-11-05T12:00:00+00:00", last_change: "2026-11-05T12:00:00+00:00", last_stats: null, error: null, counts: {}, interval: 60, project_order: [] };
 // With a project chosen, only that project's tools come back: the palette must refetch to narrow its rows.
@@ -26,7 +27,7 @@ const clipboard = (writeText: (s: string) => Promise<void>) =>
   Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
 const show = async (href = "/usage#range=30") => {
   history.replaceState(null, "", href);
-  render(<Palette />);
+  renderApp(<Palette />);
   act(() => openPalette());
   await waitFor(() => expect(options().length).toBeGreaterThan(0));
 };
@@ -223,7 +224,7 @@ describe("Palette clicks and the copy result", () => {
     serve();
     clipboard(() => Promise.resolve());
     history.replaceState(null, "", "/usage#range=30");
-    render(<><dialog className="sheet" ref={d => { if (d && !d.open) d.showModal(); }} /><Palette /></>);
+    renderApp(<><dialog className="sheet" ref={d => { if (d && !d.open) d.showModal(); }} /><Palette /></>);
     act(() => openPalette());
     await userEvent.type(box(), "#fo");
     await userEvent.click(screen.getByRole("option", { name: "foo, project, 2 sessions" }));
@@ -240,7 +241,7 @@ describe("Palette shortcut and button", () => {
     serve();
     platform("MacIntel");
     history.replaceState(null, "", "/usage#range=30");
-    render(<><button>page control</button><Palette /></>);
+    renderApp(<><button>page control</button><Palette /></>);
     screen.getByRole("button", { name: "page control" }).focus();
     const ctrl = new KeyboardEvent("keydown", { key: "k", ctrlKey: true, bubbles: true, cancelable: true });
     act(() => { document.activeElement!.dispatchEvent(ctrl); });
@@ -254,7 +255,7 @@ describe("Palette shortcut and button", () => {
   it("opens on Ctrl+K elsewhere, and not on Cmd+K", () => {
     serve();
     platform("Linux x86_64");
-    render(<Palette />);
+    renderApp(<Palette />);
     const cmd = new KeyboardEvent("keydown", { key: "k", metaKey: true, bubbles: true, cancelable: true });
     act(() => { dispatchEvent(cmd); });
     expect(screen.queryByRole("combobox")).toBeNull();
@@ -268,14 +269,14 @@ describe("Palette shortcut and button", () => {
     serve();
     platform("MacIntel");
     history.replaceState(null, "", "/usage#range=30");
-    const { unmount } = render(<><Nav /><Palette /></>);
+    const { unmount } = renderApp(<><Nav /><Palette /></>);
     const btn = screen.getByRole("button", { name: "Search, open command palette (⌘K)" });
     expect(btn.querySelector("kbd")!.textContent).toBe("⌘K");
     await userEvent.click(btn);
     expect(document.activeElement).toBe(box());
     unmount();
     platform("Win32");
-    render(<Nav />);
+    renderApp(<Nav />);
     expect(screen.getByRole("button", { name: "Search, open command palette (Ctrl K)" })).toBeTruthy();
   });
 });
@@ -352,7 +353,7 @@ describe("Palette accessibility", () => {
   it("closes on Escape without changing the URL, and returns focus", async () => {
     serve();
     history.replaceState(null, "", "/usage#range=30");
-    render(<><button>opener</button><Palette /></>);
+    renderApp(<><button>opener</button><Palette /></>);
     screen.getByRole("button", { name: "opener" }).focus();
     act(() => openPalette());
     await userEvent.type(box(), "#foo{Tab}{Escape}");
@@ -366,7 +367,7 @@ describe("Palette accessibility", () => {
     history.replaceState(null, "", "/usage#range=30");
     const page = (opener: boolean, heading: string) =>
       <>{opener && <button>opener</button>}<h1 key={heading} id="lede" tabIndex={-1}>{heading}</h1><Palette /></>;
-    const { rerender } = render(page(true, "Loading…"));
+    const { rerender } = renderApp(page(true, "Loading…"));
     screen.getByRole("button", { name: "opener" }).focus();
     act(() => openPalette());
     rerender(page(false, "Loading…"));

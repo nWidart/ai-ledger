@@ -1,16 +1,17 @@
-import { act, render, screen, within } from "@testing-library/react";
+import { act, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Drawer, onUserScroll, openDrawer } from "./Drawer";
 import { InsightCard, rankInsights, type Insight } from "./InsightCard";
 import { Ledger, LedgerRow } from "./Ledger";
 import { SectionIndex } from "./SectionIndex";
+import { renderApp } from "../testing";
 
 describe("Drawer", () => {
   beforeEach(() => localStorage.clear());
   it("has a real heading holding the toggle, and opens from it and remembers it", async () => {
     const onToggle = vi.fn<(open: boolean) => void>();
-    const { unmount } = render(<Drawer id="d-tools" title="Tools" count="4" description="Calls and failures" onToggle={onToggle}><p>table</p></Drawer>);
+    const { unmount } = renderApp(<Drawer id="d-tools" title="Tools" count="4" description="Calls and failures" onToggle={onToggle}><p>table</p></Drawer>);
     const h = screen.getByRole("heading", { level: 2, name: "Tools 4" }), toggle = within(h).getByRole("button");
     expect(h.closest("summary")).toBeNull();
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
@@ -21,11 +22,11 @@ describe("Drawer", () => {
     expect(document.getElementById("d-tools")!.hasAttribute("data-open")).toBe(true);
     expect(JSON.parse(localStorage.getItem("claude-usage-open")!)).toEqual(["d-tools"]);
     unmount();
-    render(<Drawer id="d-tools" title="Tools"><input aria-label="Search" /></Drawer>);
+    renderApp(<Drawer id="d-tools" title="Tools"><input aria-label="Search" /></Drawer>);
     expect(screen.getByRole("button", { name: "Tools" }).getAttribute("aria-expanded")).toBe("true");
   });
   it("toggles from the keyboard", async () => {
-    render(<Drawer id="d-keys" title="Keys"><p>table</p></Drawer>);
+    renderApp(<Drawer id="d-keys" title="Keys"><p>table</p></Drawer>);
     await userEvent.tab();
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "Keys" }));
     await userEvent.keyboard("{Enter}");
@@ -34,7 +35,7 @@ describe("Drawer", () => {
     expect(screen.getByRole("button", { name: "Keys" }).getAttribute("aria-expanded")).toBe("false");
   });
   it("renders its body only once it has been open, then keeps it", async () => {
-    render(<Drawer id="d-lazy" title="Lazy"><table><tbody><tr><td>row</td></tr></tbody></table></Drawer>);
+    renderApp(<Drawer id="d-lazy" title="Lazy"><table><tbody><tr><td>row</td></tr></tbody></table></Drawer>);
     expect(screen.queryByText("row")).toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "Lazy" }));
     expect(screen.getByText("row")).toBeTruthy();
@@ -44,22 +45,22 @@ describe("Drawer", () => {
   });
   it("renders a drawer saved as open with its body", () => {
     localStorage.setItem("claude-usage-open", JSON.stringify(["d-saved"]));
-    render(<Drawer id="d-saved" title="Saved"><p>shown</p></Drawer>);
+    renderApp(<Drawer id="d-saved" title="Saved"><p>shown</p></Drawer>);
     expect(screen.getByText("shown")).toBeTruthy();
   });
   it("keeps a control beside the title out of the toggle", () => {
-    render(<Drawer id="d-after" title="Goals" after={<button type="button">About</button>}><p>x</p></Drawer>);
+    renderApp(<Drawer id="d-after" title="Goals" after={<button type="button">About</button>}><p>x</p></Drawer>);
     expect(screen.getByRole("button", { name: "Goals" }).contains(screen.getByRole("button", { name: "About" }))).toBe(false);
   });
   it("openDrawer opens it and focuses its first input", async () => {
-    render(<Drawer id="d-sessions" title="Sessions"><input aria-label="Search sessions" /></Drawer>);
+    renderApp(<Drawer id="d-sessions" title="Sessions"><input aria-label="Search sessions" /></Drawer>);
     act(() => openDrawer("d-sessions", true));
     expect(screen.getByRole("button", { name: "Sessions" }).getAttribute("aria-expanded")).toBe("true");
     expect(document.activeElement).toBe(screen.getByLabelText("Search sessions"));
   });
   it("openDrawer without a scroll only opens it, and ignores an id that is no drawer", () => {
     const onToggle = vi.fn<(open: boolean) => void>();
-    render(<Drawer id="d-quiet" title="Quiet" onToggle={onToggle}><input aria-label="Q" /></Drawer>);
+    renderApp(<Drawer id="d-quiet" title="Quiet" onToggle={onToggle}><input aria-label="Q" /></Drawer>);
     act(() => { openDrawer("d-quiet"); openDrawer("nope"); });
     expect(onToggle).toHaveBeenCalledWith(true);
     expect(document.activeElement).toBe(document.body);
@@ -79,7 +80,7 @@ describe("SectionIndex", () => {
   it("keeps a clicked section marked until the user scrolls", async () => {
     vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(40);
     vi.spyOn(Element.prototype, "scrollHeight", "get").mockReturnValue(5000); // at the top of a long page: A is in view
-    render(<><SectionIndex groups={[[{ id: "a", label: "A" }, { id: "b", label: "B" }]]} /><section id="a" /><section id="b" /></>);
+    renderApp(<><SectionIndex groups={[[{ id: "a", label: "A" }, { id: "b", label: "B" }]]} /><section id="a" /><section id="b" /></>);
     const current = () => document.querySelector("nav.secidx a[aria-current]")?.textContent;
     expect(current()).toBe("A");
     await userEvent.click(screen.getByRole("link", { name: "B" }));
@@ -107,7 +108,7 @@ describe("SectionIndex observers", () => {
     const was = Object.getOwnPropertyDescriptor(window, "scrollY")!;
     Object.defineProperty(window, "scrollY", { value: 300, configurable: true });
     try {
-      render(<><SectionIndex groups={[[{ id: "a", label: "A" }, { id: "b", label: "B" }]]} /><section id="a" /><section id="b" /></>);
+      renderApp(<><SectionIndex groups={[[{ id: "a", label: "A" }, { id: "b", label: "B" }]]} /><section id="a" /><section id="b" /></>);
       const [above, shown, stuck] = made as [typeof made[number], typeof made[number], typeof made[number]];
       expect(above.targets.map(t => t.id)).toEqual(["a", "b"]);
       expect(above.opts.rootMargin).toMatch(/^1000000px 0px -?\d+px 0px$/); // everything above, down to the line
@@ -137,7 +138,7 @@ describe("SectionIndex observers", () => {
 describe("Ledger", () => {
   it("renders selectable rows as buttons and an empty line", async () => {
     const pick = vi.fn();
-    const { rerender } = render(<Ledger empty="No usage in this range.">
+    const { rerender } = renderApp(<Ledger empty="No usage in this range.">
       {[<LedgerRow key="a" name="foo" project="foo" share={0.5} value="$16" side="99%" onPick={pick} pickKey="foo" />,
         <LedgerRow key="b" name="m-a · high" share={0} value="50%" side="$1" />]}
     </Ledger>);
@@ -159,7 +160,7 @@ describe("InsightCard", () => {
     const { lead, rest } = rankInsights([...cards, null]);
     expect(lead?.k).toBe("Needs attention");
     expect(rest.map(c => c.k)).toEqual(["Peak day"]);
-    render(<><InsightCard insight={lead!} primary />{rest.map(c => <InsightCard key={c.k} insight={c} />)}</>);
+    renderApp(<><InsightCard insight={lead!} primary />{rest.map(c => <InsightCard key={c.k} insight={c} />)}</>);
     expect(screen.getByText("● Act")).toBeTruthy();
     await userEvent.click(screen.getByRole("button", { name: "Show that day's sessions" }));
     expect(run).toHaveBeenCalledTimes(1);

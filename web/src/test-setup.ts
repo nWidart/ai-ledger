@@ -1,7 +1,6 @@
 // Vitest setup: jsdom lacks the dialog methods, matchMedia and ResizeObserver the components use.
 import { cleanup } from "@testing-library/react";
 import { afterEach } from "vitest";
-import { clearApiCache } from "./useApi";
 import { useFakeSource } from "./pages/live/testing";
 
 if (!HTMLDialogElement.prototype.showModal) {
@@ -25,7 +24,6 @@ useFakeSource(); // jsdom has no EventSource; Live tests drive FakeSource.last
 
 afterEach(() => {
   cleanup();
-  clearApiCache();
   history.replaceState(null, "", "/");
   try { localStorage.clear(); } catch { /* storage off */ }
 });

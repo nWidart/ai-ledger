@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
-import { limitsUrl, limitWindowUrl, viewOf, type LimitHistoryRow, type LimitsPayload, type LimitWindow, type LimitWindowCurve, type View, type WindowUsedRow } from "../../api";
+import { limitsUrl, viewOf, type LimitHistoryRow, type LimitsPayload, type LimitWindow, type View, type WindowUsedRow } from "../../api";
 import { DataTable } from "../../components/DataTable";
 import { Drawer } from "../../components/Drawer";
 import { Filters, viewName } from "../../components/Filters";
@@ -7,6 +7,7 @@ import { useLanding } from "../../components/useLanding";
 import { Ledger, LedgerRow } from "../../components/Ledger";
 import { big, dur, num, plural, usd } from "../../format";
 import { navigate, useHashState } from "../../hash";
+import { queries } from "../../queries";
 import { useApi } from "../../useApi";
 import { LimitChart, planMarks } from "./LimitChart";
 import { barKey, barName, bindingWindow, caption, capText, closedWindow, hasScenario, historyStrips, MIN_BAR, pace, planName, recentText, resetPct, sharePct, shareText, span, stripNote, surfacesText, usedHint, usedHref, usedRange, usedRangeName, whenDay, windowName, windowNotes, type Strip } from "./limits";
@@ -162,7 +163,7 @@ function HistoryStrip({ strip, selected, onPick, refs }: { strip: Strip; selecte
 
 /** The curve of the picked window, fetched when it is picked: heading, chart and a close button. */
 function WindowPanel({ h, onClose }: { h: LimitHistoryRow; onClose: () => void }) {
-  const { data, error, loading, retry } = useApi<LimitWindowCurve>(limitWindowUrl(h));
+  const { data, error, loading, retry } = useApi(queries.limitWindow(h));
   const w = useMemo(() => data && closedWindow(h, data.series), [h, data]);
   const notes = windowNotes(h);
   return (
@@ -268,7 +269,7 @@ function Value({ d, project }: { d: LimitsPayload; project: string }) {
 export function LimitsPage() {
   const [h] = useHashState();
   const want = viewOf(h);
-  const url = limitsUrl(want), { data: d, error, loading, retry } = useApi<LimitsPayload>(url, { keepPrevious: true });
+  const url = limitsUrl(want), { data: d, error, loading, retry } = useApi(queries.limits(want), { keepPrevious: true });
   // The payload does not echo its view, so remember the one the data on screen answers.
   const [shown, setShown] = useState(want);
   useEffect(() => { if (d && !loading && !error) setShown(want); }, [d, loading, error, url]); // want is read through url
