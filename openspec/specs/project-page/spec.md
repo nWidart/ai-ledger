@@ -33,11 +33,15 @@ The Project page SHALL NOT show without a project. Opening `/project` with no pr
 - **THEN** Activity opens with no project filter and the same range and source
 
 ### Requirement: Keep the Project page out of the tabs
-The navigation SHALL have no Project tab, and SHALL mark no tab as current on the Project page. The tabs SHALL keep the project, as on every page.
+The navigation SHALL have no Project tab, and SHALL mark no tab as current on the Project page. The tabs SHALL keep the project, as on every page. On narrow screens the page chooser SHALL read "Pages" on the Project page and mark no link in its list as current.
 
 #### Scenario: Tab from the Project page
 - **WHEN** the user views `foo` for the last 30 days on the Project page and clicks Cost
 - **THEN** Cost opens filtered to `foo` and the last 30 days
+
+#### Scenario: Page chooser on the Project page
+- **WHEN** the user views `foo` on the Project page on a phone
+- **THEN** the page chooser reads "Pages", and none of its links is marked current
 
 ### Requirement: Summarize the project
 The page SHALL open with the project's estimated cost, sessions, tokens, cache-hit ratio, share of tokens from subagents, cost per commit with the commit count, errors per 100 tool calls and error loops, each equal to the same figure on the project sheet for the same view. When the project has sessions active now, the summary SHALL say how many and link to Live filtered to the project; with none it SHALL say nothing about Live.
@@ -144,25 +148,6 @@ The Project page SHALL host the session sheet and the tool, MCP server and skill
 - **WHEN** the user reloads `/project?project=foo&session=abc`
 - **THEN** the Project page of `foo` shows with that session's sheet open
 
-### Requirement: Reach the Project page from the project sheet and the navigation
-The project sheet SHALL offer "Open project page", which opens the Project page for its project with the page's filters and closes the sheet. With a project filter set, the navigation's project chip SHALL show the name and a visible "Page" label as one link to the Project page with the same view, named "<project> project page", labelled on narrow screens too, and current on the Project page. Project names in tables SHALL keep opening the project sheet.
-
-#### Scenario: From the sheet
-- **WHEN** the user has the project sheet of `foo` open on Cost for the last 7 days and chooses "Open project page"
-- **THEN** the Project page opens on `foo` for the last 7 days with no sheet open
-
-#### Scenario: From the navigation
-- **WHEN** the user views `foo` on Errors and follows the chip's Page control
-- **THEN** the Project page opens on `foo` with the same range and source
-
-#### Scenario: Name for assistive technology
-- **WHEN** a screen-reader user lists the links of the navigation while `foo` is the project filter
-- **THEN** one link reads "foo project page"
-
-#### Scenario: Current page
-- **WHEN** the user views `foo` on the Project page
-- **THEN** the chip's link is marked as the current page and no tab is
-
 ### Requirement: Split the starting context by a context snapshot
 When the project has a context snapshot, the grid SHALL split the starting cells in proportion to the snapshot's categories loaded before the first prompt, with the rest of the median start as "First prompt and other". The legend SHALL give each category's tokens, the snapshot's date and model, and the deferred tools' total without cells. When the categories exceed the median start, the cells SHALL be split among the categories alone and the legend SHALL say so.
 
@@ -209,3 +194,37 @@ Before the run the block SHALL say that Measure now starts the project's MCP ser
 #### Scenario: Claude Code not installed
 - **WHEN** `claude` is not on the app's `PATH` and the user chooses Measure now
 - **THEN** the block says Claude Code was not found and its figures stay
+
+### Requirement: Reach the Project page from the project sheet and the filter row
+The project sheet SHALL offer "Open project page", which opens the Project page for its project with the page's filters and closes the sheet. With a project filter set, every page but the Project page SHALL show a "Project page" link next to the project picker that opens the Project page with the same view, named "<project> project page", on narrow screens too. Project names in tables SHALL keep opening the project sheet.
+
+#### Scenario: From the sheet
+- **WHEN** the user has the project sheet of `foo` open on Cost for the last 7 days and chooses "Open project page"
+- **THEN** the Project page opens on `foo` for the last 7 days with no sheet open
+
+#### Scenario: From the filter row
+- **WHEN** the user views `foo` on Errors for the last 7 days and follows "Project page" next to the picker
+- **THEN** the Project page opens on `foo` with the same range and source
+
+#### Scenario: Name for assistive technology
+- **WHEN** a screen-reader user lists the links of the Errors page while `foo` is the project filter
+- **THEN** one link reads "foo project page"
+
+#### Scenario: On the Project page
+- **WHEN** the user views `foo` on the Project page
+- **THEN** the filter row shows no "Project page" link
+
+#### Scenario: No project filter
+- **WHEN** the user views Errors with no project filter
+- **THEN** the filter row shows no "Project page" link
+
+### Requirement: Clear the project from the filter row
+With a project filter set, the filter row SHALL show a button next to the project picker, named "Clear project filter", that removes the project filter and keeps focus on the project picker. On the Project page it SHALL follow the rule for clearing the project there.
+
+#### Scenario: Clear on Errors
+- **WHEN** the user views `foo` on Errors for the last 7 days and activates "Clear project filter"
+- **THEN** Errors shows every project for the last 7 days, and focus is on the project picker
+
+#### Scenario: Clear on the Project page
+- **WHEN** the user views `foo` on the Project page and activates "Clear project filter"
+- **THEN** Activity opens with no project filter and the same range and source

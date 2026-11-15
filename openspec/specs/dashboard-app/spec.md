@@ -45,7 +45,7 @@ The app SHALL ingest new transcript data when it starts and then on a fixed inte
 - **THEN** the app goes back to ingesting on its fixed interval
 
 #### Scenario: Last ingest follows Live
-- **WHEN** the Live page is open, the navigation shows "Last ingest" with a time 50 seconds old, and the page receives a change notice
+- **WHEN** the Live page is open, the navigation shows a last ingest 50 seconds old, and the page receives a change notice
 - **THEN** the navigation shows the time of the ingest that stored those lines, within 2 seconds, without waiting for its own poll
 
 #### Scenario: Notices in quick succession
@@ -68,7 +68,7 @@ Only one process SHALL write to the store at a time. A second app or command-lin
 - **THEN** the command exits with a non-zero status and a message saying the app owns the store
 
 ### Requirement: Shared navigation
-Every dashboard page SHALL show the same navigation with Activity, Cost, Context, Errors, Limits, Insights and Live entries, mark the current page, and keep the selected project and time range when switching pages.
+Every dashboard page SHALL show the same navigation with Activity, Cost, Context, Errors, Limits, Insights and Live entries, mark the current page, and keep the selected project and time range when switching pages. The entries SHALL be tabs, or, on narrow screens, links in the page chooser; the same rules apply to both.
 
 #### Scenario: Switch from Usage to Errors
 - **WHEN** the user views project `foo` for the last 30 days on Activity (`/usage`) and clicks Errors
@@ -93,6 +93,10 @@ Every dashboard page SHALL show the same navigation with Activity, Cost, Context
 #### Scenario: Through Live and back
 - **WHEN** the user views project `foo` for the last 30 days on Cost, clicks Live, then clicks Cost
 - **THEN** Live shows only `foo` sessions, and Cost opens again on `foo` and the last 30 days
+
+#### Scenario: Switch from the page chooser
+- **WHEN** the user views project `foo` for the last 30 days on Cost on a phone, opens the page chooser and picks Errors
+- **THEN** the errors dashboard opens filtered to `foo` and the last 30 days
 
 ### Requirement: Errors dashboard served from the store
 The errors dashboard SHALL read its data from the store and SHALL keep its existing behavior: error categories with suggested fixes, per-example (`?ex=<tool_use_id>`) and per-category (`?cat=<type>`) permalinks, and applied-fix markers. A link in the earlier `#ex=` or `#cat=` form SHALL still open.
@@ -401,6 +405,13 @@ The shared navigation SHALL show a small dot on the Limits tab, on every page, t
 #### Scenario: An older app
 - **WHEN** the status has no `limits_alert`
 - **THEN** the navigation shows no dot
+
+### Requirement: Show the limits alert on the page chooser
+When the page chooser replaces the tabs, the chooser's button and its Limits link SHALL carry the same dot as the Limits tab, under the same rules.
+
+#### Scenario: On a phone
+- **WHEN** the status says Codex weekly is at its limit, and the user views Errors on a phone
+- **THEN** the closed page chooser shows a critical dot, and its Limits link shows one when it opens
 
 ### Requirement: Name the Limits tab after its alert
 The Limits tab's accessible name SHALL be "Limits alert: " and the alert's sentence, the sentence in text visually hidden, after the visible label. A status with no alert, or from an app that sends none, SHALL leave the tab's name "Limits" with no title.
@@ -911,3 +922,107 @@ At a browser default font size of up to 32px (200%), on a 1280px wide viewport, 
 #### Scenario: No sideways scroll
 - **WHEN** the browser's default font size is 32px and the viewport is 1280px wide
 - **THEN** no dashboard page scrolls sideways
+
+### Requirement: Keep the navigation on one row
+The navigation SHALL be one row at every window width and zoom level, with every entry and control reachable without scrolling the page sideways. As space shrinks it SHALL first hide the app's wordmark, then show the palette button as an icon, then replace the tabs with the page chooser. A tab SHALL NOT move into an overflow menu, and a status change SHALL NOT change the layout.
+
+#### Scenario: Laptop window with a project filter
+- **WHEN** the user views Errors with the project filter `ai-ledger` in a window 1000px wide
+- **THEN** the brand, all seven tabs, the palette button, the freshness control and the theme button sit on one row
+
+#### Scenario: Phone
+- **WHEN** the user views Errors on a phone 390px wide
+- **THEN** the navigation is one row with the logo, the page chooser, the palette button, the freshness control and the theme button
+
+#### Scenario: Zoomed in
+- **WHEN** the user views Activity in a 1280px window at 200% browser zoom
+- **THEN** the navigation is one row, and no page entry is out of reach
+
+#### Scenario: An alert arrives
+- **WHEN** a status poll brings a limits alert while the user views Cost in a narrow window
+- **THEN** no tab or control moves, appears or disappears; only the dot shows
+
+### Requirement: Choose a page from the page chooser
+On narrow screens the page chooser SHALL be a button that opens a list of links to the seven pages, with the current page marked. The links SHALL behave as the tabs do: they keep the filters, start loading on point or focus, open in a new tab on a modified click, and move focus to the page's heading when picked. Escape and a click outside SHALL close the list, Escape returning focus to the button. The open list SHALL overlay the page, not push it down.
+
+#### Scenario: Pick a page from the keyboard
+- **WHEN** the user opens the page chooser on Activity, moves to Cost and presses Enter
+- **THEN** the list closes, Cost opens, and focus is on its heading
+
+#### Scenario: Close without choosing
+- **WHEN** the user opens the page chooser and presses Escape
+- **THEN** the list closes and focus is on the chooser's button
+
+#### Scenario: Open in a new tab
+- **WHEN** the user Cmd-clicks Errors in the open page chooser
+- **THEN** Errors opens in a new browser tab with the same filters, and the current page stays
+
+### Requirement: Name the page chooser
+The page chooser's button SHALL show and name the current page, or "Pages" on a page that has no entry, and SHALL expose whether its list is open. While a limits alert is present, its accessible name SHALL add "Limits alert". The full alert sentence SHALL stay on the Limits link and in the alert's status region, said once.
+
+#### Scenario: On Errors
+- **WHEN** a screen reader user reaches the page chooser on Errors with no limits alert
+- **THEN** it reads as a collapsed button named for Errors
+
+#### Scenario: With an alert
+- **WHEN** a limits alert is present and the user reaches the page chooser on Errors
+- **THEN** its name says Errors and "Limits alert", and the Limits link in the open list is named "Limits alert: " and the sentence
+
+### Requirement: Show the last ingest as a clock time
+The navigation SHALL show the time of the last ingest as a clock time in hours and minutes, beside the Refresh button, and SHALL NOT show it as an age. A toggletip on that time SHALL show the exact time of the last ingest, the lines it stored, the time of the last ingest that changed data, the ingest interval, and the full text of any error. The toggletip SHALL follow the toggletip requirements.
+
+#### Scenario: After an ingest
+- **WHEN** the last ingest ran at 8:00:04 PM and stored 5 lines
+- **THEN** the navigation shows "8:00 PM", and its toggletip shows 8:00:04 PM and 5 new lines
+
+#### Scenario: Phone
+- **WHEN** the user views a page on a phone
+- **THEN** the time is hidden, its toggletip button stays, and the toggletip shows the same details on activation
+
+### Requirement: Say when the last ingest is stale
+When the last ingest is older than three ingest intervals, the freshness control SHALL say "Stale" with the time, in the warning color. The navigation SHALL judge this at each status answer and on return to the tab, and SHALL NOT need a timer to do it.
+
+#### Scenario: Ingest stopped
+- **WHEN** the interval is 60 seconds and the newest status, at 8:05 PM, says the last ingest ran at 8:00 PM
+- **THEN** the freshness control says "Stale" and 8:00 PM
+
+#### Scenario: Ingest running
+- **WHEN** the interval is 60 seconds and the newest status says the last ingest ran 70 seconds ago
+- **THEN** the freshness control shows the time and does not say "Stale"
+
+### Requirement: Show ingest failures in words
+The freshness control SHALL say "Failed" after an ingest error, "Offline" when the app does not answer its status request, and "Retry" on the Refresh button after a manual refresh fails, each in the critical color. "Ingesting…" SHALL show while a manual refresh runs. Color SHALL NOT be the only signal of any of these states.
+
+#### Scenario: Ingest error
+- **WHEN** the status reports an ingest error
+- **THEN** the freshness control says "Failed", and its toggletip shows the error's full text
+
+#### Scenario: App stopped
+- **WHEN** the app does not answer the status poll
+- **THEN** the freshness control says "Offline"
+
+### Requirement: Show new lines briefly
+When a status answer or a manual refresh tells of an ingest that stored new lines, the freshness control SHALL show "+N lines" just below it for about four seconds, at every width, without taking room in the navigation or moving any control. It SHALL be hidden from assistive technology and SHALL NOT animate when the user prefers reduced motion.
+
+#### Scenario: Background ingest
+- **WHEN** a status poll tells of an ingest that stored 5 lines
+- **THEN** "+5 lines" shows below the freshness control, then goes after about four seconds
+
+#### Scenario: Nothing new
+- **WHEN** a status poll tells of an ingest that stored no lines
+- **THEN** nothing shows below the freshness control
+
+### Requirement: Announce only the results of a manual refresh
+The navigation SHALL NOT announce timed ingests or a change of the last ingest time to assistive technology. It SHALL announce the result of a manual refresh, success or failure, once, in a polite status region. This region SHALL be separate from the limits alert's region.
+
+#### Scenario: Timed ingest
+- **WHEN** a status poll brings a new last ingest time while a screen reader user reads a page
+- **THEN** nothing is announced
+
+#### Scenario: Manual refresh
+- **WHEN** the user runs Refresh and it stores 5 lines
+- **THEN** the result, with 5 new lines, is announced once
+
+#### Scenario: Failed manual refresh
+- **WHEN** the user runs Refresh and it fails
+- **THEN** the failure is announced once, and the Refresh button reads Retry
