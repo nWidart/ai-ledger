@@ -93,7 +93,7 @@ The ingest watcher invalidates `{ predicate: q => q.queryKey[0] !== "status" && 
 
 **`placeholderData: keepPreviousData`** replaces `keepPrevious: true` on usage, insights, context, limits and palette, and `isPlaceholderData` is available to the pages that want to know. The sheets (session, tool, project) keep no previous data, as today.
 
-**Devtools.** `@tanstack/react-query-devtools` is mounted under `{import.meta.env.DEV && <ReactQueryDevtools />}` in `App.tsx`. The package's own `process.env.NODE_ENV` guard removes it from production bundles, and Vite's `import.meta.env.DEV` guard removes the import site too, so the build in `src/ai_ledger/web/` ships none of it; `tests/test_web_build.py` and a size assertion in the close-out task confirm it.
+**Devtools.** `@tanstack/react-query-devtools` is a `devDependency`, loaded in `main.tsx` beside the provider through a dynamic `import()` behind `import.meta.env.DEV`. `main.tsx`, not `App.tsx`: `import.meta.env.DEV` is true under Vitest, so a mount in `App.tsx` would load the devtools (and their Solid runtime) in every test that renders the app. Vite replaces `import.meta.env.DEV` with `false` in a production build and drops the dead `import()`, so the build in `src/ai_ledger/web/` ships none of it and the app's CSP (`connect-src 'self'`) sees nothing new; `tests/test_web_build.py` and an assertion in the close-out task confirm it.
 
 ### 2. Query defaults versus today's "clear everything"
 
@@ -143,7 +143,7 @@ statusOptions = queryOptions({
 - **List.** `useQuery(liveListOptions(view, text))` with `enabled: !paused && visible`, `refetchInterval: 10_000` (the recheck: time-based states need a fetch when no line arrives), `refetchIntervalInBackground: false`, `priority: "low"` on the recheck. A notice calls `invalidateQueries({ queryKey: ["live", "list"] })`.
 - **Selected session.** `useQuery(liveSessionOptions(id, text))` whose `queryFn` reads the cached value for its own key through the context's `client` (`client.getQueryData(queryKey)`), asks for `after = cached.cursor` when there is one and returns `mergeSession(cached, next, true)`; with nothing cached it asks from the start. This is the catch-up as today, in the one place the fetch happens, with no `moved()` guard: a key change (another session, text off) is another query. Turning text on keeps the events held until the text arrives (spec: "Toggle full text") through `placeholderData: (prev, prevQuery) => prevQuery?.queryKey[2] === id && !prevQuery.queryKey[3] ? prev : undefined`; any other change shows nothing of the old session, as today. A notice naming the selected session calls `invalidateQueries({ queryKey: ["live", "session", id] })`; a notice with `sessions: null` invalidates `["live"]`.
 - **Pause and `held`.** `enabled: false` while paused: Query does not refetch disabled queries on invalidation, so held notices change nothing; `held` is still counted for the label. On Resume the queries re-enable and, being stale, refetch once however many notices were held, and the status loop runs once (spec: "Pause and resume", "Paused Live page").
-- **Hidden tab.** The same as paused, through `enabled: !paused && visible` where `visible` is a tiny `useSyncExternalStore` on `document.visibilityState`, plus `refetchIntervalInBackground: false` for the recheck. The SSE stream stays open (the app's fast ingest depends on it, and the notices keep `held` current for the status loop). On show, the invalidated queries refetch (`refetchOnWindowFocus`, Query's own `visibilitychange` listener) and the status loop runs once. This replaces the manual pause `feat/web-audit-fixes` adds to `useLive.ts`. Spec delta: `live-dashboard`, "Hold updates while the tab is hidden".
+- **Hidden tab.** The same as paused, through `enabled: !paused && visible` where `visible` is `usePageVisible()` (`web/src/usePageVisible.ts`, on `main` since #74), plus `refetchIntervalInBackground: false` for the recheck. The SSE stream stays open (the app's fast ingest depends on it, and the notices keep `held` current for the status loop). On show, the invalidated queries refetch (`refetchOnWindowFocus`, Query's own `visibilitychange` listener) and the status loop runs once. This replaces the manual pause `feat/web-audit-fixes` adds to `useLive.ts`. Spec delta: `live-dashboard`, "Hold updates while the tab is hidden".
 - **Reconnect.** The SSE stream, its backoff and `conn` stay in `useLive` as they are: Query has no transport for server-sent events and the logic is specified to the second. On reopen after a drop, the hook invalidates `["live"]` and runs the status loop, as `refresh(null); status()` does today.
 - **`useNow`** (the 1 s tick) is not data and stays.
 - **Errors.** `listError` and `sessionError` are the two queries' `error`; a 404 on the session still reads as "Session not found" through `ApiError.status`.
@@ -161,7 +161,7 @@ What Router would give, against what the app has:
 - **Typed search params.** Router validates `?search` with a schema and gives typed `Route.useSearch()`. The app's state is in the hash, not the search string, and it is shareable state: `>copy link`, the Errors permalinks, every bookmark. Router's `hash` is a plain string for anchor scrolling (`hashScrollIntoView`), not a parsed state; `createHashHistory` puts the whole path in the hash (`/#/usage?…`), which would break the `/usage` paths the server serves and every existing link. Moving the state to `?search` would need a permanent client-side redirect from every old hash form, would change the URL every user has copied, and would still have to reproduce `setHash`'s semantics: push for some keys and replace for others, the sheet depth for `closeSheets`'s `history.go(-n)`, `VIEW_SCOPED` keys dropped with the view, the canonical key order. `hash.ts` is 150 tested lines that already type the hash (`HashState`).
 - **Code splitting.** `React.lazy` per page, which `feat/web-audit-fixes` adds in `App.tsx`, is the same split Router's `createLazyRoute` makes, with seven routes and no loaders.
 - **Transitions.** Router's `viewTransition` option wraps the commit in `document.startViewTransition`. `go()` in `hash.ts` can do the same: `startTransition(emit)` so a slow page's render does not block the click, inside `document.startViewTransition?.(…)` when `prefers-reduced-motion` is off, and `App` reads the pathname inside the transition so `useSyncExternalStore` no longer forces a synchronous render (the audit item). About twenty lines.
-- **Scroll restoration.** Router caches and restores scroll per location key. Today `go()` scrolls to the top on a page change and Back leaves scroll to the browser, which cannot restore it for content that is not drawn yet. This is a small real gap; if it is wanted, `hash.ts` can keep a `sessionStorage` map from `history.state.key` to `scrollY` in thirty lines. Not in this change.
+- **Scroll restoration.** Router caches and restores scroll per location key. Today `go()` scrolls to the top on a page change and Back leaves scroll to the browser, which cannot restore it for content that is not drawn yet. This is a small real gap; if it is wanted, `hash.ts` can keep a `sessionStorage` map from `history.state.key` to `scrollY` in thirty lines. Not in this change; the user wants it as a follow-up change (Resolved Questions).
 - **Preloading on hover.** Not applicable: seven pages whose code is one lazy chunk each, and data that depends on the hash.
 
 Cost: 30 kB gzipped, a second source of truth for the URL, a migration of every link and test, and a server `PAGES` list that would need to learn new paths or a catch-all. Verdict: **reject** for this app; revisit only if the app gains nested routes or per-route data loaders.
@@ -208,14 +208,14 @@ Today: one JS chunk of 651 kB minified, 204 kB gzipped. After this change: `@tan
 
 ## Migration phases
 
-Each phase is one PR off this change's branch, passes `cd web && npm run check` and the Python tests, commits the build, and can be reverted alone.
+Each phase is one PR on its own branch from `main`, started after the phase before it is squash-merged. It passes `cd web && npm run check` and the Python tests, commits the build, and can be reverted alone. `feat/web-audit-fixes` merged as #74 before phase 1, so `main` already has the lazy pages, `usePageVisible.ts` and the manual visibility pauses that phases 2 and 4 remove.
 
 1. **Foundation.** Add the two dependencies at exact versions, `queryClient.ts`, the provider in `main.tsx`, the devtools behind `import.meta.env.DEV`, and `testing.tsx`. No behaviour change; `useApi` still runs. Revert: remove the provider.
 2. **Pages on Query.** `queries.ts`, `getJson` with a signal, the `useApi` adapter over `useQuery`, the status query and the ingest watcher, Refresh as a mutation, `askedFor()`; delete the old cache; rewrite the affected tests; spec delta for the hidden tab. This is the phase that fixes the leak, the stringify compare, the missing cancellation and the poll in hidden tabs for every page. Revert: restore `useApi.ts` and `refresh.ts`.
 3. **Secondary fetches.** The sessions drawer (infinite query), `TopSessionsDrawer`, the session sheet's prompt, the Errors "Show full", the palette's two queries, the marks mutations with `setQueryData`. Revert per file.
 4. **Live.** The list and session queries, notices as invalidation, the cursor catch-up in the queryFn, pause and visibility through `enabled`, removal of the manual visibility pause; spec delta. Revert: restore `useLive.ts`.
-5. **Navigation polish.** `startTransition` and view transitions in `hash.ts` and `App.tsx`. Not TanStack; the audit item a router would have taken. Revert alone.
-6. **Close-out.** README, CHANGELOG, measured bundle sizes, dead code, `openspec validate`.
+5. **Navigation polish.** `startTransition` and view transitions in `hash.ts` and `App.tsx`. Not TanStack; the audit item a router would have taken. Its PR closes issue #69. Revert alone.
+6. **Close-out.** README, CHANGELOG, measured bundle sizes, dead code, `openspec validate`, and the archive of this change.
 
 ## Risks / Trade-offs
 
@@ -228,8 +228,11 @@ Each phase is one PR off this change's branch, passes `cd web && npm run check` 
 - **Query's own timers under fake timers.** `gcTime` and `refetchInterval` use `setTimeout`; a test that fakes `setTimeout` but not `Date` can see Query's interval fire. Mitigation: `gcTime: Infinity` in the test client, and the Live tests already fake `Date`.
 - **`fetch` `priority` typing.** `RequestInit.priority` is in TypeScript's DOM lib; if the installed `lib.dom` lacks it, a one-line type augmentation in `api.ts` carries it.
 
-## Open Questions
+## Resolved Questions
 
-- Should the status query's `refetchOnWindowFocus: "always"` also apply to the data queries (refetch everything on every tab return), or only to those invalidated while hidden (the plan)? The plan is quieter; the alternative catches an ingest whose status poll was missed.
-- Should the ingest watcher skip the Live queries (the plan) or invalidate them too, so the Live list refreshes on the nav's poll when the SSE stream is down? The reconnect path already catches up; the plan avoids a double fetch each second.
-- Scroll restoration on Back (decision 9): wanted as a follow-up change, or not at all?
+Answered by the user on 2026-11-15, before implementation started.
+
+- **Refetch on tab return: only the queries invalidated while hidden.** `refetchOnWindowFocus` stays at Query's default for the data queries; only the status query uses `"always"` (decision 5). The status answer on return invalidates the data if an ingest was missed, so the page is at most one request behind.
+- **An ingest does not invalidate the Live queries.** The watcher's predicate skips `["live"]` (decision 1). Live follows its own notices, and its reconnect path catches up after a drop (decision 7).
+- **Scroll restoration on Back: wanted, as a follow-up change.** Not in this change. Plan it as its own OpenSpec change (the `sessionStorage` map in `hash.ts` of decision 9).
+- **Rejecting TanStack Router: accepted.** Decision 9 stands.
