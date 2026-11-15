@@ -2,10 +2,9 @@ import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "re
 import { navigate, setHash, sharedHash, useHashState, usePathname } from "../hash";
 import { getTheme, nextTheme, setTheme, useTheme, type Theme } from "../theme";
 import { alertKey, alertText } from "../pages/limits/limits";
-import { usePageVisible } from "../usePageVisible";
 import { ProjectDot } from "./ProjectDot";
 import { openPalette, shortcutHint, shortcutKeys } from "./palette/store";
-import { pollStatus, refresh, useRefreshState } from "./refresh";
+import { useRefresh } from "./refresh";
 import "./Nav.css";
 
 export const PAGES = [
@@ -17,7 +16,6 @@ export const PAGES = [
   { path: "/insights", label: "Insights" },
   { path: "/live", label: "Live" },
 ] as const;
-const POLL_MS = 60_000, INGESTING_MS = 3_000;
 
 // Theme button icons, 16px line art in currentColor: a monitor for system, a sun for light, a moon for dark.
 const THEME_ICON: Record<Theme, ReactNode> = {
@@ -31,7 +29,7 @@ const THEME_ICON: Record<Theme, ReactNode> = {
 export function Nav() {
   const path = usePathname(), [h] = useHashState(), shared = sharedHash(), theme = useTheme(), next = nextTheme(theme);
   const nav = useRef<HTMLElement>(null);
-  const st = useRefreshState();
+  const { refresh, state: st } = useRefresh();
   const alert = st.alert ? alertText(st.alert) : null;
   // What a screen reader is told of the alert: its sentence, kept as it was while the alert stays the same alert (the forecast time
   // in the sentence drifts every cycle), changed when the alert's kind, window or measured flag change, and emptied, with no
@@ -45,22 +43,6 @@ export function Nav() {
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-
-  // Ingest status: every minute, and every few seconds while an ingest runs. A new last_change clears the data cache.
-  // Stopped while the tab is hidden; on return it asks at once when a poll came due meanwhile, else on the old schedule.
-  const visible = usePageVisible(), sched = useRef({ at: -Infinity, wait: POLL_MS });
-  useEffect(() => {
-    if (!visible) return;
-    let live = true, timer = 0;
-    const poll = () => {
-      clearTimeout(timer);
-      sched.current.at = Date.now();
-      void pollStatus().then(s => { if (live) { sched.current.wait = s?.ingesting ? INGESTING_MS : POLL_MS; timer = window.setTimeout(poll, sched.current.wait); } });
-    };
-    const left = sched.current.at + sched.current.wait - Date.now();
-    if (left <= 0) poll(); else timer = window.setTimeout(poll, left);
-    return () => { live = false; clearTimeout(timer); };
-  }, [visible]);
 
   const go = (e: MouseEvent<HTMLAnchorElement>, to: string) => {
     if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;

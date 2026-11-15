@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { ModelRow, ProjectRow, SessionsPage, UsagePayload } from "../../api";
@@ -9,6 +9,7 @@ import session from "../../__fixtures__/session";
 import { openDrawer } from "../../components/Drawer";
 import { mockApi } from "../../components/sheets/testing";
 import { dayStamp, download } from "../../components/export";
+import { renderApp } from "../../testing";
 import { compareText, costDays, moved, planText, thinHistory } from "./cost";
 import { CostPage } from "./CostPage";
 
@@ -21,7 +22,7 @@ const serve = (d: UsagePayload) => mockApi({ "/api/usage": () => d, "/api/sessio
 const loaded = () => screen.findByRole("heading", { level: 1, name: /estimated cost/ });
 const fetched = () => vi.mocked(fetch).mock.calls.map(c => c[0]);
 /** The page loaded, with these drawers open (a closed drawer renders no table). */
-const show = async (d: UsagePayload, open = ["d-projcost", "d-top", "d-tokens"]) => { serve(d); at(); render(<CostPage />); const lede = await loaded(); act(() => open.forEach(id => openDrawer(id))); return lede; };
+const show = async (d: UsagePayload, open = ["d-projcost", "d-top", "d-tokens"]) => { serve(d); at(); renderApp(<CostPage />); const lede = await loaded(); act(() => open.forEach(id => openDrawer(id))); return lede; };
 /** Whether a drawer is open. */
 const isOpen = (id: string) => document.getElementById(id)!.hasAttribute("data-open");
 const insights = () => within(document.getElementById("insights")!);
@@ -140,7 +141,7 @@ describe("CostPage", () => {
     const codex: UsagePayload = { ...usage, source: "codex", previous: null, totals: { ...usage.totals, cost: 2 } };
     mockApi({ "/api/usage": q => (q.get("source") === "codex" ? codex : usage), "/api/sessions": () => sessions, "/api/session": () => session });
     at();
-    render(<CostPage />);
+    renderApp(<CostPage />);
     await loaded();
     await userEvent.click(within(screen.getByRole("group", { name: "Source" })).getByRole("button", { name: "Codex" }));
     expect(location.hash).toBe("#range=30&source=codex");
@@ -153,12 +154,12 @@ describe("CostPage", () => {
     const none: UsagePayload = { ...usage, totals: { ...usage.totals, requests: 0 } };
     serve(none);
     at();
-    const { unmount } = render(<CostPage />);
+    const { unmount } = renderApp(<CostPage />);
     expect((await screen.findByRole("heading", { level: 1, name: /^No / })).textContent).toBe("No agent usage in the last 30 days.");
     unmount();
     serve({ ...none, source: "codex" });
     at("#range=30&source=codex");
-    render(<CostPage />);
+    renderApp(<CostPage />);
     expect((await screen.findByRole("heading", { level: 1, name: /^No / })).textContent).toBe("No Codex usage in the last 30 days.");
   });
 
@@ -322,7 +323,7 @@ describe("CostPage", () => {
       expect(names()[3]).toMatch(/^Small projects/);
     });
     it("opens for a small selected project", async () => {
-      serve({ ...seven(), project: "t2" }); at("#range=30&project=t2"); render(<CostPage />); await loaded(); act(() => openDrawer("d-projcost"));
+      serve({ ...seven(), project: "t2" }); at("#range=30&project=t2"); renderApp(<CostPage />); await loaded(); act(() => openDrawer("d-projcost"));
       expect(within(drawer("d-projcost")).getByRole("button", { name: "Hide small projects" }).getAttribute("aria-expanded")).toBe("true");
       expect(names()).toContain("t2");
     });
@@ -401,7 +402,7 @@ describe("CostPage", () => {
   it("leaves What changed out of a one-project view", async () => {
     serve({ ...usage, project: "foo" });
     at("#range=30&project=foo");
-    render(<CostPage />);
+    renderApp(<CostPage />);
     await loaded();
     expect(document.getElementById("changed")).toBeNull();
   });

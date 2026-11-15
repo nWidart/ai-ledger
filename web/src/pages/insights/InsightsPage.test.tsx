@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { InsightsPayload } from "../../api";
@@ -12,6 +12,7 @@ import { openDrawer } from "../../components/Drawer";
 import { mockApi } from "../../components/sheets/testing";
 import { when } from "../../format";
 import { InsightsPage } from "./InsightsPage";
+import { renderApp } from "../../testing";
 
 const fixture = insights as InsightsPayload, none = empty as InsightsPayload;
 /** A closed drawer renders no body: show() starts these open, as a reload that left them open would. */
@@ -20,7 +21,7 @@ const show = (d: InsightsPayload, hash = "#range=0", open = DRAWERS) => {
   localStorage.setItem("claude-usage-open", JSON.stringify(open));
   const f = mockApi({ "/api/insights": () => d });
   history.replaceState(null, "", "/insights" + hash);
-  render(<InsightsPage />);
+  renderApp(<InsightsPage />);
   return f;
 };
 const lede = () => screen.findByText((_, el) => el?.id === "lede" && !el.textContent!.startsWith("Loading"));
@@ -902,7 +903,7 @@ describe("InsightsPage", () => {
     mockApi({ "/api/insights": () => fixture, "/api/usage": () => usage, "/api/sessions": () => sessions, "/api/session": () => session,
       "/api/status": () => ({ ingesting: false, last_ingest: null, last_change: null, last_stats: null, error: null, counts: {}, interval: 60, project_order: [] }) });
     history.replaceState(null, "", "/insights#range=0");
-    render(<App />);
+    renderApp(<App />);
     await userEvent.click(await screen.findByRole("link", { name: "Add a theme toggle" }));
     expect(location.pathname).toBe("/usage");
     expect(document.title).toBe("Activity · AI Ledger");

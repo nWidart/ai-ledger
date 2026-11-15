@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import limits from "./__fixtures__/limits";
@@ -7,6 +7,7 @@ import { App } from "./App";
 import { closePalette } from "./components/palette/store";
 import { mockApi } from "./components/sheets/testing";
 import { navigate, setHash } from "./hash";
+import { renderApp } from "./testing";
 
 const status = { ingesting: false, last_ingest: null, last_change: null, last_stats: null, error: null, counts: {}, interval: 60, project_order: [] };
 const PAGES = [["/usage", "pg-activity"], ["/cost", "pg-cost"], ["/errors", "pg-errors"], ["/limits", "pg-limits"], ["/insights", "pg-insights"], ["/live", "pg-live"]] as const;
@@ -14,7 +15,7 @@ const PAGES = [["/usage", "pg-activity"], ["/cost", "pg-cost"], ["/errors", "pg-
 const pending = (path: string) => {
   vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => {})));
   history.replaceState(null, "", path + "#range=30");
-  return render(<App />);
+  return renderApp(<App />);
 };
 
 /** The page's main, once its chunk has loaded: until then main is the empty fallback. */
@@ -83,7 +84,7 @@ describe("App", () => {
     const show = (path: string) => {
       mockApi({ "/api/usage": () => usage, "/api/limits": () => limits, "/api/status": () => status });
       history.replaceState(null, "", path);
-      return render(<App />);
+      return renderApp(<App />);
     };
 
     it("moves to the new page's heading after a page switch, and waits for a page that is still loading", async () => {

@@ -10,6 +10,7 @@ import { sessName, shortId } from "../../components/sheets/session";
 import { useLanding } from "../../components/useLanding";
 import { dayLabel, dur, num, pct, plural, when } from "../../format";
 import { formatHash, navigate, setHash, useHashState } from "../../hash";
+import { queries } from "../../queries";
 import { useApi } from "../../useApi";
 import { armFocus, DRILL_KEYS, drillsOf, focusList, passes, pickProps, takeFocus, toggleDrill, type DrillKind } from "./drill";
 import { countOf, headline, measured } from "./insights";
@@ -349,7 +350,7 @@ function Sessions({ d, view, sort, onSort }: { d: InsightsPayload; view: View; s
 export function InsightsPage() {
   const [h] = useHashState();
   const want = viewOf(h);
-  const url = insightsUrl(want), { data: d, error, loading, retry } = useApi<InsightsPayload>(url, { keepPrevious: true });
+  const url = insightsUrl(want), { data: d, error, loading, retry } = useApi(queries.insights(want), { keepPrevious: true });
   const [shown, setShown] = useState(want);
   // Held here, not in Sessions: the list unmounts for a view with no analysed session, and the choice lasts the page visit.
   const [sort, setSort] = useState<SortId>("newest");

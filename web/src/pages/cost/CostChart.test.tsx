@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -8,6 +8,7 @@ import { setOrder } from "../../colors";
 import { dayRange, usd } from "../../format";
 import { CostChart } from "./CostChart";
 import type { Stack } from "./cost";
+import { renderApp } from "../../testing";
 
 const day = "2026-11-04";
 const base = usage.by_project[0]!;
@@ -20,7 +21,7 @@ const d: UsagePayload = { ...usage, start: day, end: day, range: 1, project: "",
 
 const chart = () => screen.getByRole("group", { name: /Estimated cost by project/ });
 const open = () => {
-  render(<CostChart d={d} metric="cost" onMetric={() => {}} hidden={[]} onHidden={() => {}} stack="project" onStack={() => {}} onProject={() => {}} onSource={() => {}} onDay={() => {}} />);
+  renderApp(<CostChart d={d} metric="cost" onMetric={() => {}} hidden={[]} onHidden={() => {}} stack="project" onStack={() => {}} onProject={() => {}} onSource={() => {}} onDay={() => {}} />);
   act(() => chart().focus());
   fireEvent.keyDown(chart(), { key: "Home" });
 };
@@ -47,7 +48,7 @@ describe("cost tooltip: Other's projects", () => {
 
 describe("cost chart: unpriced requests", () => {
   const read = (unpriced: number) => {
-    render(<CostChart d={{ ...d, daily: [{ ...d.daily[0]!, unpriced }] }} metric="cost" onMetric={() => {}} hidden={[]} onHidden={() => {}} stack="project" onStack={() => {}} onProject={() => {}} onSource={() => {}} onDay={() => {}} />);
+    renderApp(<CostChart d={{ ...d, daily: [{ ...d.daily[0]!, unpriced }] }} metric="cost" onMetric={() => {}} hidden={[]} onHidden={() => {}} stack="project" onStack={() => {}} onProject={() => {}} onSource={() => {}} onDay={() => {}} />);
     act(() => chart().focus());
     fireEvent.keyDown(chart(), { key: "Home" });
     return document.querySelector(".sr")!.textContent;
@@ -68,7 +69,7 @@ describe("cost chart: today so far", () => {
   const long: UsagePayload = { ...d, start: days[0]!, end: days.at(-1)!, range: 20,
     daily: days.map((x, i) => ({ ...usage.daily[0]!, day: x, cost: i === 19 ? 40 : 1, unpriced: 0 })),
     daily_projects: days.map((x, i) => ({ day: x, project: "A", cost: i === 19 ? 40 : 1, tokens: 1 })), by_project: [proj("A", 59)] };
-  const show = (data = long) => render(<CostChart d={data} metric="cost" onMetric={() => {}} hidden={[]} onHidden={() => {}} stack="project" onStack={() => {}} onProject={() => {}} onSource={() => {}} onDay={() => {}} />);
+  const show = (data = long) => renderApp(<CostChart d={data} metric="cost" onMetric={() => {}} hidden={[]} onHidden={() => {}} stack="project" onStack={() => {}} onProject={() => {}} onSource={() => {}} onDay={() => {}} />);
 
   it("hatches only today's bar and keys it in the legend", () => {
     show();
@@ -122,7 +123,7 @@ describe("cost chart: stack by", () => {
   afterEach(() => vi.clearAllMocks());
 
   it("is a labelled group, and Escape dismisses the tooltip the arrow keys opened", () => {
-    render(<Host data={split} />);
+    renderApp(<Host data={split} />);
     expect(screen.queryByRole("tooltip")).toBeNull();
     hover();
     expect(screen.getByRole("tooltip")).toBeTruthy();
@@ -132,7 +133,7 @@ describe("cost chart: stack by", () => {
   });
 
   it("offers a data table that follows the stacking and keeps the day's total", async () => {
-    render(<Host data={split} />);
+    renderApp(<Host data={split} />);
     expect(screen.queryByRole("table")).toBeNull(); // closed on load, and not rendered
     await userEvent.click(screen.getByRole("button", { name: "Show data table" }));
     const heads = () => within(screen.getByRole("table")).getAllByRole("columnheader").map(h => h.textContent);
@@ -150,7 +151,7 @@ describe("cost chart: stack by", () => {
   });
 
   it("restacks the bars and the legend, and names the stacking", async () => {
-    render(<Host data={split} />);
+    renderApp(<Host data={split} />);
     expect(keys().slice(0, 2)).toEqual(["A", "Other (4)"]);
     const fills = () => [...document.querySelectorAll(".bar-seg > *:not(.partial)")].map(e => e.getAttribute("fill"));
     expect(fills()).toHaveLength(2); // A and Other
@@ -166,7 +167,7 @@ describe("cost chart: stack by", () => {
   });
 
   it("keeps the day's total the same in every stacking", async () => {
-    render(<Host data={split} />);
+    renderApp(<Host data={split} />);
     for (const name of ["Project", "Model", "Agent"]) {
       await sel(name);
       hover();
@@ -179,7 +180,7 @@ describe("cost chart: stack by", () => {
   });
 
   it("lists the top three models inside Other, then + 1 more", async () => {
-    render(<Host data={many} first="model" />);
+    renderApp(<Host data={many} first="model" />);
     expect(keys().slice(0, 7)).toEqual(["m1", "m2", "m3", "m4", "m5", "m6", "Other (4)"]);
     hover();
     expect([...screen.getByRole("tooltip").querySelectorAll(".row.sub")].map(r => r.textContent)).toEqual([`m7${usd(4)}`, `m8${usd(3)}`, `m9${usd(2)}`, "+ 1 more"]);
@@ -187,7 +188,7 @@ describe("cost chart: stack by", () => {
   });
 
   it("filters to an agent from its key, and clears the filter from the same key", async () => {
-    const { rerender } = render(<Host data={split} first="source" />);
+    const { rerender } = renderApp(<Host data={split} first="source" />);
     await userEvent.click(screen.getByRole("button", { name: /Codex/ }));
     expect(calls.onSource).toHaveBeenCalledWith("codex");
     rerender(<Host data={{ ...split, source: "codex", daily_sources: [sd("codex", 0.5)] }} first="source" />);
@@ -198,19 +199,19 @@ describe("cost chart: stack by", () => {
   });
 
   it("keeps model keys plain: no filter", async () => {
-    render(<Host data={split} first="model" />);
+    renderApp(<Host data={split} first="model" />);
     expect(document.querySelectorAll(".legend button.proj")).toHaveLength(0);
   });
 
   it("shows the switch only with the cost metric", () => {
-    const { rerender } = render(<CostChart d={split} metric="cost" onMetric={() => {}} hidden={[]} onHidden={() => {}} stack="project" onStack={() => {}} onProject={() => {}} onSource={() => {}} onDay={() => {}} />);
+    const { rerender } = renderApp(<CostChart d={split} metric="cost" onMetric={() => {}} hidden={[]} onHidden={() => {}} stack="project" onStack={() => {}} onProject={() => {}} onSource={() => {}} onDay={() => {}} />);
     expect(screen.getByRole("group", { name: "Stack by" })).toBeTruthy();
     rerender(<CostChart d={split} metric="tokens" onMetric={() => {}} hidden={[]} onHidden={() => {}} stack="project" onStack={() => {}} onProject={() => {}} onSource={() => {}} onDay={() => {}} />);
     expect(screen.queryByRole("group", { name: "Stack by" })).toBeNull();
   });
 
   it("offers all three stackings in a one-project view", async () => {
-    render(<Host data={{ ...split, project: "A", by_project: [proj("A", 19.5)] }} />);
+    renderApp(<Host data={{ ...split, project: "A", by_project: [proj("A", 19.5)] }} />);
     expect(keys()[0]).toBe("A ✕");
     await sel("Model");
     expect(keys().slice(0, 3)).toEqual(["opus-4", "sonnet-4", "gpt-6"]);
@@ -223,7 +224,7 @@ describe("cost chart: stack by", () => {
       daily: days.map((x, i) => ({ ...usage.daily[0]!, day: x, cost: i === 19 ? 40 : 1, unpriced: 0 })),
       daily_projects: days.map((x, i) => ({ day: x, project: "A", cost: i === 19 ? 40 : 1, tokens: 1 })), by_project: [proj("A", 59)],
       daily_models: days.map((x, i) => ({ day: x, model: "claude-opus-4", cost: i === 19 ? 40 : 1 })) };
-    render(<Host data={long} first="model" />);
+    renderApp(<Host data={long} first="model" />);
     expect(document.querySelectorAll(".partial")).toHaveLength(1);
     expect(screen.getByText("Today so far")).toBeTruthy();
     act(() => screen.getByRole("group", { name: /Estimated cost by model/ }).focus());

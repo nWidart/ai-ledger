@@ -1,6 +1,7 @@
 import { useRef, type ReactNode } from "react";
-import { sessionUrl, toolUrl, usageUrl, viewOf, type SessionDetail, type ToolKind, type ToolPayload, type UsagePayload } from "../../api";
+import { viewOf, type ToolKind, type UsagePayload } from "../../api";
 import { closeSheets, useHashState } from "../../hash";
+import { queries } from "../../queries";
 import { useApi } from "../../useApi";
 import { ProjectDot } from "../ProjectDot";
 import { Sheet } from "../Sheet";
@@ -33,9 +34,9 @@ export function UsageSheets({ data, automated }: { data: UsagePayload | undefine
   const shown = useRef(""), backTo = useRef<BackTo | null>(null);
   if (open) shown.current = session || under;
   if (data) for (const s of [...data.top_sessions, ...data.sessions]) sessName(s);
-  const proj = useApi<UsagePayload>(inspect && !session ? usageUrl({ ...view, project: inspect }) : null);
-  const tool = useApi<ToolPayload>(tn && !inspect && !session ? toolUrl(tk, tn, view) : null);
-  const sess = useApi<SessionDetail>(session ? sessionUrl(session) : null);
+  const proj = useApi(inspect && !session ? queries.usage({ ...view, project: inspect }) : null);
+  const tool = useApi(tn && !inspect && !session ? queries.tool(tk, tn, view) : null);
+  const sess = useApi(session ? queries.session(session) : null);
   const pageProject = data?.project ?? h.project;
   const close = () => { backTo.current = null; closeSheets({ inspect: null, tool: null, mcp: null, skill: null, session: null }); };
   const toSession = (id: string, el: HTMLElement) => {

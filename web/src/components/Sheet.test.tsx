@@ -1,8 +1,9 @@
-import { act, render, screen } from "@testing-library/react";
+import { act, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { describe, expect, it } from "vitest";
 import { Sheet } from "./Sheet";
+import { renderApp } from "../testing";
 
 function Harness({ back }: { back?: boolean }) {
   const [open, setOpen] = useState(false), [n, setN] = useState(1);
@@ -16,7 +17,7 @@ function Harness({ back }: { back?: boolean }) {
 
 describe("Sheet", () => {
   it("opens with focus on its title and returns focus to its opener on Close", async () => {
-    render(<Harness />);
+    renderApp(<Harness />);
     const opener = screen.getByRole("button", { name: "Open s1" });
     await userEvent.click(opener);
     const title = screen.getByRole("heading", { level: 2 });
@@ -29,7 +30,7 @@ describe("Sheet", () => {
   });
 
   it("closes on Escape and refocuses the title when the content changes", async () => {
-    render(<Harness back />);
+    renderApp(<Harness back />);
     const opener = screen.getByRole("button", { name: "Open s1" });
     await userEvent.click(opener);
     await userEvent.click(screen.getByRole("button", { name: "Next" }));
