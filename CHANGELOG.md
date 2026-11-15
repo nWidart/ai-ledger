@@ -7,7 +7,7 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- Documentation site at https://nwidart.github.io/ai-ledger/: install, each page, configuration and the command line, replacing the user guide in `docs/guide.md`.
+- Documentation site at https://nwidart.github.io/ai-ledger/: install, playbooks that improve your agent workflow, each page, configuration and the command line. It replaces the user guide in `docs/guide.md`.
 
 ### Changed
 
