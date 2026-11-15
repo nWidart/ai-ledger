@@ -1,9 +1,9 @@
 // The Live page's data: the active list and the selected session, two queries (queries.ts) kept current by the app's
 // change notices (/api/live/events). A notice names the sessions that gained lines; the page then asks again for the list
-// and, when named, the selected session, whose query fetches only what is new. Query fetches a key the page comes to
-// show; every other fetch starts here, so Pause and a hidden tab hold them by not asking. While the tab is hidden the
-// page closes the stream, so the app stops its one-second ingest for it, and stops its timers; on return it fetches once
-// and opens the stream again.
+// and, when named, the selected session, whose query fetches only what is new: one request at a time for each, and one
+// more after it for the notices that came meanwhile. Query fetches a key the page comes to show; every other fetch
+// starts here, so Pause and a hidden tab hold them by not asking. While the tab is hidden the page closes the stream, so
+// the app stops its one-second ingest for it, and stops its timers; on return it fetches once and opens the stream again.
 import { useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { liveEventsUrl, type LivePayload, type LiveSession, type View } from "../../api";
@@ -35,7 +35,7 @@ export interface LiveData {
   list: LivePayload | undefined;
   session: LiveSession | undefined;
   conn: Conn;
-  /** Notices held while paused. */
+  /** Updates held while paused: the notices, and one for a request that was owed to a notice when the user paused. */
   held: number;
   /** The last failure of each fetch, cleared by its next success; the session's also by opening another session. */
   listError: Error | undefined;
@@ -55,11 +55,13 @@ export function useLive(view: View, selected: string, text: boolean, paused: boo
   const client = useQueryClient(), visible = usePageVisible();
   const listQ = useQuery(queries.liveList(view, text)), sessionQ = useQuery({ ...queries.liveSession(selected, text), enabled: !!selected });
   // What the page showed last, kept here rather than as placeholderData, which a failed fetch drops. The list stays
-  // while another filter's list loads or fails. Turning Full text on keeps the events, and with them the open rows and
+  // while another filter's list loads or fails, unless it was loaded with Full text and Full text is off now: its
+  // first-prompt titles must leave the screen. Turning Full text on keeps the events, and with them the open rows and
   // the scroll, until the text arrives; any other change shows nothing of them: another session's, or text that must
   // leave the screen now.
-  const [list, setList] = useState<LivePayload>();
-  if (listQ.data && listQ.data !== list) setList(listQ.data);
+  const [kept, setKept] = useState<{ list: LivePayload; text: boolean }>();
+  if (listQ.data && listQ.data !== kept?.list) setKept({ list: listQ.data, text });
+  const list = listQ.data ?? (kept && (text || !kept.text) ? kept.list : undefined);
   const [last, setLast] = useState<LiveSession>();
   if (sessionQ.data && sessionQ.data !== last) setLast(sessionQ.data);
   const session = sessionQ.data ?? (text && last?.session_id === selected ? last : undefined);
@@ -67,18 +69,37 @@ export function useLive(view: View, selected: string, text: boolean, paused: boo
   const listError = useLastError(listQ), sessionError = useLastError(sessionQ, selected);
   const [conn, setConn] = useState<Conn>("connecting");
   const [held, setHeld] = useState(0);
-  const cur = useRef({ view, selected, text, paused });
-  cur.current = { view, selected, text, paused };
+  const cur = useRef({ view, selected, text, paused, visible });
+  cur.current = { view, selected, text, paused, visible };
 
-  // A notice's fetch: the list, and the selected session when the notice names it (null: every session). It replaces a
-  // fetch of theirs under way, whose answer may be older than the notice's lines (a first load is joined instead).
-  // Asked through the observers, not invalidateQueries, which fetches with the options of the query's last fetch: at the
-  // recheck's low priority after a recheck.
+  // A notice's fetch of the list or of the selected session: one request at a time, and one more after it for the
+  // notices that came meanwhile, as the status below. No request is cancelled: with a notice a second and answers slower
+  // than that, none would ever land. A request found under way (a first load, the recheck, another session opening) was
+  // asked before the notice, so it is waited for and one more follows it. The one more is not sent while paused or
+  // hidden: Pause counts it as one update held, whatever both queries owed, so that Resume fetches; the return to the
+  // tab fetches anyway. Asked through the observers, not invalidateQueries, which cancels, and fetches with the options
+  // of the query's last fetch: at the recheck's low priority after a recheck. The observer asks for the session
+  // selected now.
   const { refetch: askList } = listQ, { refetch: askSession } = sessionQ;
+  const asked = useRef({ list: { busy: false, again: false }, session: { busy: false, again: false } });
+  const ask = useCallback((of: "list" | "session") => {
+    const all = asked.current, p = all[of];
+    if (p.busy) { p.again = true; return; }
+    p.busy = true;
+    void (async () => {
+      do {
+        p.again = client.isFetching({ queryKey: ["live", of] }) > 0;
+        await (of === "list" ? askList : askSession)({ cancelRefetch: false });
+      } while (p.again && !cur.current.paused && cur.current.visible && (of === "list" || cur.current.selected));
+      p.busy = false;
+      if (p.again && cur.current.paused) { all.list.again = all.session.again = false; setHeld(n => n + 1); }
+      p.again = false;
+    })();
+  }, [client, askList, askSession]);
   const refresh = useCallback((sessions: string[] | null) => {
-    void askList();
-    if (cur.current.selected && (sessions === null || sessions.includes(cur.current.selected))) void askSession();
-  }, [askList, askSession]);
+    ask("list");
+    if (cur.current.selected && (sessions === null || sessions.includes(cur.current.selected))) ask("session");
+  }, [ask]);
   // The nav's "Last ingest" follows the notices: one status request at a time, and one more after it for the notices
   // that came meanwhile, unless the user paused meanwhile.
   const poll = useRef({ busy: false, again: false });
@@ -152,7 +173,7 @@ export function useLive(view: View, selected: string, text: boolean, paused: boo
     return () => clearInterval(t);
   }, [paused, visible, client]);
 
-  return { list: listQ.data ?? list, session, conn, held, listError, sessionError };
+  return { list, session, conn, held, listError, sessionError };
 }
 
 /** A clock that ticks every second while not paused and the tab is showing, shared by every running timer on the page.
