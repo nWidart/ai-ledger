@@ -34,6 +34,10 @@ Run `ai-ledger rebuild` once after upgrading (with the app stopped): the Context
 - On Live, a session opened again within five minutes shows its events at once and catches up, instead of loading from the start. Turning Full text off shows the events without text at once, with open rows and the scroll kept.
 - The page is revalidated with an ETag (`304` when unchanged) instead of being sent again on every visit.
 
+### Fixed
+
+- The Context page no longer calls a Codex cache break an expiry after a pause of 5 to 30 minutes: Codex's cache lives 30 minutes. Claude Code keeps 5 minutes (1 hour after a 1-hour cache write), and the cache-breaks tip names both.
+
 ### Security
 
 - The app refuses requests another site makes to `/api` (403), so a page you have open cannot start ingests or read the store through your browser. `curl` and the command line are unaffected.
