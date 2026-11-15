@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
-import type { ModelRow, Totals, UsagePayload } from "../../api";
+import type { ModelRow, Source, Totals, UsagePayload } from "../../api";
 import { big, dur, num, pct, usd, when } from "../../format";
 import { money, sgn } from "../../pages/cost/cost";
 import { DataTable } from "../DataTable";
@@ -52,6 +52,8 @@ export interface ProjectSheetProps {
   error?: Error | undefined;
   retry: () => void;
   range: number;
+  /** The page's source filter, for the links, which need no payload. */
+  source: Source | "";
   pageProject: string;
   /** The page shows automated sessions. */
   automated?: boolean;
@@ -100,23 +102,25 @@ export function useBackTo(d: unknown, backTo: RefObject<BackTo | null> | undefin
   }, [d, backTo, body]);
 }
 
-export function ProjectSheet({ name, d, error, retry, range, pageProject, automated = false, onSession, backTo }: ProjectSheetProps) {
+export function ProjectSheet({ name, d, error, retry, range, source, pageProject, automated = false, onSession, backTo }: ProjectSheetProps) {
   const path = usePathname(), body = useRef<HTMLTableSectionElement>(null);
   useBackTo(d, backTo, body);
-  if (error) return <div className="empty" role="alert">Could not load this project ({error.message}). <button type="button" className="linkish" onClick={retry}>Retry</button></div>;
-  if (!d) return <div className="empty" role="status">Loading…</div>;
-  const t = d.totals, top = d.top_sessions.slice(0, 8);
+  // The way on needs only the view, so it shows while the figures load or fail, and stays the same node when they arrive.
   return <>
-    <div className="hint">{d.start ? `Last ${range} days` : "All time"}, from the range filter. Estimated at API list prices.</div>
+    {d && !error && <div className="hint">{d.start ? `Last ${range} days` : "All time"}, from the range filter. Estimated at API list prices.</div>}
     <div className="actions"><FilterButton project={name} pageProject={pageProject} />
       {!(path === "/project" && name === pageProject) &&
-        <a className="btn" href={projectHref(name, range, d.source, automated)} onClick={appLink}>Open project page</a>}
-      <a className="btn" href={errorsHref(name, range, undefined, { source: d.source })} onClick={appLink}>Open its errors</a></div>
-    <Facts facts={summaryFacts(t)} />
-    <ChangeDetail d={d} name={name} />
-    <h3>Models and effort</h3>
-    <ModelLedger models={d.models} />
-    <h3>Most expensive sessions</h3>
-    <TopSessions top={top} onSession={onSession} body={body} />
+        <a className="btn" href={projectHref(name, range, source, automated)} onClick={appLink}>Open project page</a>}
+      <a className="btn" href={errorsHref(name, range, undefined, { source })} onClick={appLink}>Open its errors</a></div>
+    {error ? <div className="empty" role="alert">Could not load this project ({error.message}). <button type="button" className="linkish" onClick={retry}>Retry</button></div>
+      : !d ? <div className="empty" role="status">Loading…</div>
+      : <>
+        <Facts facts={summaryFacts(d.totals)} />
+        <ChangeDetail d={d} name={name} />
+        <h3>Models and effort</h3>
+        <ModelLedger models={d.models} />
+        <h3>Most expensive sessions</h3>
+        <TopSessions top={d.top_sessions.slice(0, 8)} onSession={onSession} body={body} />
+      </>}
   </>;
 }

@@ -193,6 +193,21 @@ describe("ProjectSheet", () => {
     expect(location.pathname + location.search).toBe("/project?project=foo&range=7&source=codex&auto=1");
   });
 
+  it("offers its links while the project loads and when it fails", async () => {
+    mockApi({ "/api/usage": () => new Promise(() => {}) });
+    at("?range=7&source=codex&inspect=foo");
+    renderApp(<UsageSheets data={usage} />);
+    await sheet().findByRole("status");
+    expect(sheet().getByRole("link", { name: "Open project page" }).getAttribute("href")).toBe("/project?project=foo&range=7&source=codex");
+    expect(sheet().getByRole("link", { name: "Open its errors" }).getAttribute("href")).toBe("/errors?project=foo&range=7&source=codex");
+    cleanup();
+    mockApi({});
+    at("?range=7&inspect=foo");
+    renderApp(<UsageSheets data={usage} />);
+    await sheet().findByRole("alert");
+    expect(sheet().getByRole("link", { name: "Open project page" }).getAttribute("href")).toBe("/project?project=foo&range=7");
+  });
+
   it("leaves the project page link out on that page for the same project, and keeps it for another", async () => {
     mockApi({ "/api/usage": q => ({ ...usage, project: q.get("project") }) });
     history.replaceState(null, "", "/project?project=foo&range=30&inspect=foo");
