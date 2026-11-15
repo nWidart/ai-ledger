@@ -1200,7 +1200,7 @@ describe("ErrorsPage", () => {
     vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => {})));
     history.replaceState(null, "", "/errors?ex=nope");
     renderApp(<ErrorsPage />);
-    expect(document.getElementById("load")!.textContent).toContain("Loading errors");
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Loading errors…"); // visually hidden; the blocks are aria-hidden
     expect(document.getElementById("deadLink")).toBeNull();
     expect(location.search).toBe("?ex=nope");
   });
@@ -1612,7 +1612,7 @@ describe("ErrorsPage bucket selection", () => {
     vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/errors") ? two : {})));
     history.replaceState(null, "", "/errors?ex=t07&range=30&source=codex");
     renderApp(<ErrorsPage />);
-    await screen.findByRole("heading", { level: 1 });
+    await screen.findByText(/project, agent, range/); // the page has its payload (the loading heading is also an h1)
     const note = document.getElementById("outside")!;
     expect(note.textContent).toContain("project, agent, range");
     await userEvent.click(within(note).getByRole("button", { name: "Clear filters" }));

@@ -1,0 +1,18 @@
+/* The placeholder of a page's first load. Shows nothing for the first 150 ms (a delayed fade, not a timer), so a fast load never
+   flashes it; then calm gray blocks with a slow sheen. The gap and heights stand for a typical page, so the page that replaces
+   it moves little. */
+.skel { display: grid; gap: 20px; min-height: 70vh; padding-top: 8px; animation: skel-in .4s ease-out 150ms backwards; }
+.skel-b { background: linear-gradient(100deg, var(--track) 30%, var(--border) 50%, var(--track) 70%) 100% 0 / 300% 100%;
+  border-radius: 8px; animation: skel-sheen 1.4s ease-in-out infinite; }
+.skel-title { height: 34px; width: min(420px, 60%); }
+.skel-sums { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.skel-sum { height: 96px; }
+.skel-panel { height: 280px; border-radius: 12px; }
+.skel-rows { display: grid; gap: 12px; }
+.skel-row { height: 16px; }
+@keyframes skel-in { from { opacity: 0; } }
+@keyframes skel-sheen { to { background-position: 0 0; } }
+/* Reduced motion: flat gray blocks, no sweep (the delayed fade-in only changes opacity). */
+@media (prefers-reduced-motion: reduce) { .skel-b { animation: none; background: var(--track); } }
+/* Forced colors drop backgrounds: an outline keeps the blocks visible. */
+@media (forced-colors: active) { .skel-b { border: 1px solid CanvasText; } }

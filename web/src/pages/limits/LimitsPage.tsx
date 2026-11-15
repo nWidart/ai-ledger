@@ -3,6 +3,7 @@ import { limitsUrl, viewOf, type LimitHistoryRow, type LimitsPayload, type Limit
 import { DataTable } from "../../components/DataTable";
 import { Drawer } from "../../components/Drawer";
 import { Filters, viewName } from "../../components/Filters";
+import { PageSkeleton } from "../../components/PageSkeleton";
 import { useLanding } from "../../components/useLanding";
 import { Ledger, LedgerRow } from "../../components/Ledger";
 import { big, dur, num, plural, usd } from "../../format";
@@ -274,18 +275,20 @@ export function LimitsPage() {
   const [shown, setShown] = useState(want);
   useEffect(() => { if (d && !loading && !error) setShown(want); }, [d, loading, error, url]); // want is read through url
   const { slow, wrap, retryBtn } = useLanding(d, url, loading, error, ":scope > :is(.lim-grid, .panel, .drawers)");
+  // The first load shows the placeholder; the loading look (dimmed figures) belongs to a page that has figures.
+  const first = !d && !error;
   return (
-    <main id="content" className={"wrap pg-limits" + (slow ? " loading" : "")} ref={wrap} aria-busy={loading || undefined}>
-      <header className="top sect" id="overview">
+    <main id="content" className={"wrap pg-limits" + (slow && !first ? " loading" : "")} ref={wrap} aria-busy={loading || undefined}>
+      {first ? <PageSkeleton title="Loading limits…" /> : <header className="top sect" id="overview">
         <div>
-          {d ? <Lede d={d} /> : <h1 className="lede" id="lede" tabIndex={-1}>{error ? "Limits could not be loaded." : "Loading limits…"}</h1>}
+          {d ? <Lede d={d} /> : <h1 className="lede" id="lede" tabIndex={-1}>Limits could not be loaded.</h1>}
           {d && <StatusStrip d={d} />}
           {d?.suggestion && <p className="suggest">Send work to <b>{d.suggestion.provider_label}</b>: about {num(d.suggestion.unused_at_reset)}% of
             its {d.suggestion.label} limit would go unused (resets {whenDay(d.suggestion.resets_at)}).</p>}
           {d && <Freshness d={d} />}
         </div>
         <div className="top-side"><Filters projects={d?.projects ?? []} /></div>
-      </header>
+      </header>}
       {error && <div className="banner" role="alert"><b>Could not load limits for {viewName(want)} ({error.message}).{d ? ` Still showing ${viewName(shown)}.` : ""}</b>{" "}
         <button type="button" className="linkish" ref={retryBtn} onClick={retry}>Retry</button></div>}
       <p className="pending">{loading && d ? `Loading limits for ${viewName(want)}…` : ""}</p>

@@ -154,9 +154,13 @@ defaultViewTransition: { types: ({ pathChanged }) => pathChanged && !reducedMoti
 
 A filter or sheet change returns `false`, so only a page switch is animated; the reduced-motion check is the same `matchMedia` test `Drawer.tsx` uses. Browsers without `document.startViewTransition` ignore the option. This replaces `adopt-tanstack` task 5.1.
 
+As built: the function also requires `fromLocation`. On the first load there is none and Router reports `pathChanged` as true, so every first load started a transition. The reduced-motion test is `motion()` from `components/chart.ts`, the one already exported. The navigation bar has its own `view-transition-name`, with its old snapshot hidden, so the bar does not fade with the page and the current tab switches at once. The crossfade is 150 ms. Checked in Chrome: one transition per page switch, none for a filter, a sheet or under reduced motion.
+
 ### 10. Scroll restoration
 
 `scrollRestoration: true`. A page switch from the navigation is a new entry and starts at the top (Router's `resetScroll` default, today's `scrollTo(0, 0)` in `go()`); Back and Forward restore the entry's position; `setSearch` passes `resetScroll: false` (decision 6). On Back the page's data is normally still in the Query cache (`gcTime` 5 min, `staleTime: Infinity`), so the page has its full height when Router restores; after a longer absence the page loads again and the position can land short, which is accepted. Sheets are `<dialog>` elements that reset their own `scrollTop` on new content and are not registered.
+
+As built: Router keys positions by history entry, so Activity visited twice keeps two positions. Turning the option on sets `history.scrollRestoration` to `manual`. Router makes one `scrollTo` after the entry renders and does not retry, so a page that is still loading lands short; a reload therefore starts at the top, because its data is not cached yet. Checked in Chrome: Activity scrolled to 500 px, Cost opened (starts at 0) and scrolled to 240, Back returns Activity at 500 and Forward returns Cost at 240. A filter change and a sheet make no scroll call.
 
 ### 11. Preload on intent, without blocking the page
 
@@ -212,6 +216,8 @@ The user asked for a loading animation of gray blocks (2026-11-15), shown whenev
 - The sheen is a moving background gradient; under `prefers-reduced-motion: reduce` it does not move; under `forced-colors: active` the blocks get a border, since backgrounds are dropped there. Colours come from the theme's tokens, for light and dark.
 - The blocks are `aria-hidden`. The page heading stays in the document, visually hidden, with its "Loading activity…" text: it is where focus lands after a page switch, and it is what a screen reader reads.
 - A page that already shows data keeps today's behaviour while new data loads (the old figures stay, dimmed after 150 ms). A failed first load replaces the blocks with the failure message and Retry.
+
+As built: on a first load the blocks stand in for the page's header too (heading and filters), and the page does not take its dimmed "loading" look, which belongs to a page with figures on screen. Live keeps its heading and toolbar and shows the blocks below them. The blocks use the `--track` and `--border` tokens; no token was added. One limit: when a page's code takes longer than Router's pending delay (1 s), Router's pending component shows the blocks, and the page then mounts its own, whose fade-in starts again. On a normal load the code arrives well inside the delay and only the page's blocks show.
 
 Alternative considered: a placeholder on every load. Rejected by the user in favour of first load only; it would replace the specified "old numbers stay on screen" behaviour on four pages.
 

@@ -10,6 +10,7 @@ import type { SortBy } from "../../components/Sort";
 import { ModelLedger } from "../../components/sheets/ProjectSheet";
 import { openProjectSheet, openSessionSheet, sessName } from "../../components/sheets/session";
 import { UsageSheets } from "../../components/sheets/UsageSheets";
+import { PageSkeleton } from "../../components/PageSkeleton";
 import { useLanding } from "../../components/useLanding";
 import { big, num, pct, usd, when } from "../../format";
 import { useView } from "../../url";
@@ -102,14 +103,16 @@ export function CostPage() {
     : { lead: null, rest: [] };
   const changes = d && <Changes d={d} all={chgAll} onAll={setChgAll} />;
   const showChanges = !!d?.previous && !!d.start && !d.project && moved(d).length > 0;
-  const cls = "wrap pg-cost" + (slow ? " loading" : "") + (grow ? " grow" : "");
+  // The first load shows the placeholder; the loading look (dimmed figures) belongs to a page that has figures.
+  const first = !d && !error;
+  const cls = "wrap pg-cost" + (slow && !first ? " loading" : "") + (grow ? " grow" : "");
 
   return (
     <main id="content" className={cls} ref={wrap} aria-busy={loading || undefined}>
-      <header className="top sect" id="overview">
-        <div>{d ? <Lede d={d} before={before} /> : <h1 className="lede" id="lede" tabIndex={-1}>{error ? "Cost could not be loaded." : "Loading cost…"}</h1>}</div>
+      {first ? <PageSkeleton title="Loading cost…" /> : <header className="top sect" id="overview">
+        <div>{d ? <Lede d={d} before={before} /> : <h1 className="lede" id="lede" tabIndex={-1}>Cost could not be loaded.</h1>}</div>
         <div className="top-side"><Filters projects={d?.projects ?? []} automated />{d && <Spark d={d} />}</div>
-      </header>
+      </header>}
       {error && <div className="banner" role="alert"><b>Could not load {viewName(want)} ({error.message}).{d ? ` Still showing ${viewName(d)}.` : ""}</b>{" "}
         <button type="button" className="linkish" ref={retryBtn} onClick={retry}>Retry</button></div>}
       {d && d.unpriced.length > 0 && <div className="banner"><b>Unpriced models:</b> {d.unpriced.map((u, k) => <span key={k}>{k ? ", " : ""}<code>{u.model}</code> ({big(u.tokens)} tokens)</span>)}.
