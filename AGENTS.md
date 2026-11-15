@@ -10,9 +10,9 @@ Review the entire specification and break it down into small, independently exec
 
 Before starting any task, evaluate its complexity, reasoning requirements, risk, and implementation scope. Determine the most appropriate model for each change rather than defaulting everything to Fable 5.2.
 
-Use Haiku for simple, repetitive, and well-defined changes that require minimal reasoning.
+Use Sonnet for simple, repetitive, and well-defined changes that require minimal reasoning.
 
-Use Sonnet for standard implementation, feature development, refactoring, test creation, and moderately complex debugging.
+Use Opus for standard implementation, feature development, refactoring, test creation, and moderately complex debugging.
 
 Use Fable 5.2 for architectural decisions, difficult debugging, ambiguous requirements, complex reasoning, and changes with significant system-wide impact.
 
@@ -22,7 +22,7 @@ Maintain responsibility for coordination, integration, code review, and final ve
 
 Before execution, show me the complete task breakdown, the model selected for each task, and a brief explanation of why that model is the best choice.
 
-Your goal is to complete the entire specification with maximum quality while minimizing unnecessary token usage, execution time, and cost. Never use Fable 5.2 for work that Sonnet or Haiku can reliably handle.
+Your goal is to complete the entire specification with maximum quality while minimizing unnecessary token usage, execution time, and cost. Never use Fable 5.2 for work that Sonnet or Opus can reliably handle.
 
 
 ## Commands
