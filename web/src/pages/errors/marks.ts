@@ -20,15 +20,20 @@
 // an Undo made meanwhile runs after it. The store decides at write time which types it has never decided about. The key goes,
 // and the browser's markers with it, only when the import succeeded; a failed import leaves both, and it is tried again on the
 // next load.
+//
+// The transport is TanStack Query's: each step is a mutation (the queue still decides when it runs) and the resync a fetchQuery of
+// the marks that always asks the server. Marks the store answered are written into the cached Errors payload, so a page opened
+// later seeds from them without a request, and nothing else is invalidated: no other page shows marks.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { errorFixesImportUrl, errorFixUrl, errorMarksUrl, errorMuteUrl, type Day, type ErrorsPayload } from "../../api";
-import { useQueryClient } from "@tanstack/react-query";
-import { isData } from "../../queries";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { errorFixesImportUrl, errorFixUrl, errorMuteUrl, type Day, type ErrorsPayload } from "../../api";
+import { queries } from "../../queries";
 import { getJson } from "../../useApi";
 import type { Fixes, Marks } from "./model";
 import { FIXES_KEY, loadFixes, store } from "./view";
 
-const send = (url: string, body: unknown) => getJson<Marks>(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+// One mutation for the fix, the mute and the import: they differ only in URL and body, which are its variables. No signal: a write runs to its end.
+const send = ({ url, body }: { url: string; body: unknown }) => getJson<Marks>(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
 const without = (f: Fixes, c: string): Fixes => { const { [c]: _, ...rest } = f; return rest; };
 const FIX_FAILED = "Couldn't save the fix marker. Check that the app is running.";
 const MUTE_FAILED = "Couldn't save the muted setting. Check that the app is running.";
@@ -56,7 +61,7 @@ export function useMarks(data: ErrorsPayload | undefined, say: (s: string) => vo
   const [errors, setErrors] = useState<FixError[]>([]);
   const put = useCallback((e: FixError) => setErrors(es => [...es.filter(x => x.cat !== e.cat || x.kind !== e.kind), e]), []);
   const clear = useCallback((cat: string, kind: FixError["kind"]) => setErrors(es => es.filter(x => x.cat !== cat || x.kind !== kind)), []);
-  const queue = useRef<Promise<unknown>>(Promise.resolve()), moved = useRef(false), seed = useRef(seedOf(data));
+  const queue = useRef<Promise<unknown>>(Promise.resolve()), moved = useRef(false), latest = useRef(EMPTY), seed = useRef(seedOf(data));
   useEffect(() => { seed.current = seedOf(data); }, [data]);
   const shown = useMemo(() => {
     const base = st.server ?? seedOf(data) ?? EMPTY, fixes: Fixes = { ...st.local, ...base.fixes }, muted = new Set(base.muted); // the store wins on a type both have
@@ -78,20 +83,31 @@ export function useMarks(data: ErrorsPayload | undefined, say: (s: string) => vo
   /** Queue a write. It resolves to the store's answer once the page shows it; it rejects after the page shows what the store holds.
    *  took: whether marks show the write's intent; a failed step whose resync shows it resolves as saved, one whose resync fails
    *  rejects with Unconfirmed. Without took (the import) a failed step rejects as it failed. */
-  const client = useQueryClient();
+  const client = useQueryClient(), { mutateAsync } = useMutation({ mutationFn: send });
   const write = useCallback((op: Op, url: string, body: unknown, took?: (m: Marks) => boolean) => {
     setSt(s => ({ ...s, ops: [...s.ops, op] }));
-    const done = queue.current.then(() => send(url, body)).then(
-      marks => { setSt(s => ({ ...s, server: marks, ops: s.ops.filter(o => o !== op) })); return marks; },
+    // A page opened later seeds from the marks as the store has them now. The cached payload is not refetched: it only lacks the marks.
+    const cache = (m: Marks) => {
+      latest.current = m;
+      const put = () => client.setQueryData(queries.errors.queryKey, (d: ErrorsPayload | undefined) => d && { ...d, fixes: latest.current.fixes, muted: latest.current.muted });
+      put();
+      // A payload asked for before this answer and still on its way would land over it with older marks (the page ignores it, a page opened later would not).
+      if (client.isFetching({ queryKey: queries.errors.queryKey, exact: true })) void client.fetchQuery({ ...queries.errors, staleTime: 0 }).then(put, () => {});
+    };
+    const done = queue.current.then(() => mutateAsync({ url, body })).then(
+      marks => { setSt(s => ({ ...s, server: marks, ops: s.ops.filter(o => o !== op) })); cache(marks); return marks; },
       async e => {
-        const marks = await getJson<Marks>(errorMarksUrl).catch(() => null);
+        // staleTime 0: the client's default (Infinity) would answer from the cache, and the resync must ask the store.
+        const marks = await client.fetchQuery({ ...queries.errorMarks, staleTime: 0 }).catch(() => null);
         setSt(s => ({ ...s, server: marks ?? s.server ?? seed.current ?? EMPTY, ops: s.ops.filter(o => o !== op) }));
+        // No marks known: the cached payload may lack what the store took, so it is refetched (this payload alone; exact skips the marks and details).
+        if (marks) cache(marks); else void client.invalidateQueries({ queryKey: queries.errors.queryKey, exact: true });
         if (marks && took?.(marks)) return marks;
         throw took && !marks ? new Unconfirmed() : e;
-      }).finally(() => { void client.invalidateQueries({ predicate: isData }); }); // a page opened later seeds from the marks as the store has them now
+      });
     queue.current = done.then(() => {}, () => {});
     return done;
-  }, [client]);
+  }, [client, mutateAsync]);
 
   /** Mark cat fixed on day, or remove its marker (day null). */
   const setFix = useCallback((cat: string, day: Day | null) => {

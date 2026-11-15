@@ -30,7 +30,8 @@ Run `ai-ledger rebuild` once after upgrading (with the app stopped): the Context
 - Hovering the charts, opening Errors examples and scrolling pages with a section index do far less work.
 - A page you come back to shows its last figures at once. It refetches them, with the old figures still on screen, only when an ingest stored something or Refresh ran since. Figures no view has shown for five minutes are dropped from memory.
 - A request for a view you left (a filter changed, another page opened) is abandoned instead of running to its end.
-- Coming back to a background tab asks for the app's status at once.
+- A session's whole first prompt, a failed call's full text and a day's sessions on Cost show at once when opened again. Saving a fix marker or a mute on Errors no longer makes every other page refetch.
+- On Live, a session opened again within five minutes shows its events at once and catches up, instead of loading from the start. Turning Full text off shows the events without text at once, with open rows and the scroll kept.
 - The page is revalidated with an ETag (`304` when unchanged) instead of being sent again on every visit.
 
 ### Fixed

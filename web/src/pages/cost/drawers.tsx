@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { sessionsUrl, type ProjectRow, type SessionsPage, type Totals, type TitledSessionRow, type View } from "../../api";
+import { useEffect, useState, type ReactNode } from "react";
+import { type ProjectRow, type Totals, type TitledSessionRow, type View } from "../../api";
 import { useColors } from "../../colors";
 import { motion } from "../../components/chart";
 import { ExportButtons } from "../../components/ExportButtons";
@@ -12,7 +12,8 @@ import { openProjectSheet, openSessionSheet, pickRow, sessName, shortId } from "
 import { sortRows, SortTh, type SortBy } from "../../components/Sort";
 import { Toned, ToneKey } from "../../components/tone";
 import { big, dayLabel, dur, mult, num, pct, plural, usd, when } from "../../format";
-import { getJson } from "../../useApi";
+import { queries } from "../../queries";
+import { useApi } from "../../useApi";
 import { COMPARE_PROMPTS, OUTLIER_SHARE, perCommit, perPrompt, projectMedians } from "./insights";
 
 const Unpriced = ({ n }: { n: number }) => n ? <> <span className="chip warn" title={`${n} requests from unpriced models`}>+?<span className="sr">{n} requests from unpriced models</span></span></> : null;
@@ -134,26 +135,18 @@ export function ProjectCostDrawer({ rows, selected, sort, onSort, spot: pin, onS
 export function TopSessionsDrawer({ view, top, day, onDay, selected }: {
   view: View; top: TitledSessionRow[]; day: string; onDay: (day: string) => void; selected: string;
 }) {
-  const [st, setSt] = useState<{ day: string; rows?: TitledSessionRow[]; total?: number; error?: string }>({ day: "" });
-  const [tick, setTick] = useState(0), seq = useRef(0);
-  const viewKey = `${view.project}|${view.range}|${view.automated}|${view.source}`;
-  useEffect(() => {
-    const my = ++seq.current;
-    if (!day) { setSt({ day: "" }); return; }
-    setSt({ day });
-    getJson<SessionsPage>(sessionsUrl(view, { day })).then(d => {
-      if (my === seq.current) setSt({ day, rows: d.sessions, total: d.total });
-    }, (e: Error) => { if (my === seq.current) setSt({ day, error: e.message }); });
-    // view is read through viewKey.
-  }, [day, viewKey, tick]);
-  const rows = day ? st.rows ?? [] : top, busy = !!day && !st.rows && !st.error;
+  // No day: nothing to fetch, and the drawer shows the view's top sessions. A new day starts with no data, so the old day's rows never show.
+  const { data, error, loading, retry } = useApi(day ? queries.sessions(view, { day }) : null);
+  const rows = day ? (data?.sessions ?? []) : top;
+  // Loading hint and dimmed rows only while there is nothing to show yet; a background refetch keeps the rows as they are.
+  const busy = loading && data === undefined;
   let hint: ReactNode;
   if (!day) hint = `The ${plural(top.length, "most expensive session")} in this view, by estimated cost. Select a session for details.`;
-  else if (st.error) hint = "";
+  else if (error) hint = "";
   else if (busy) hint = `Loading sessions active on ${dayLabel(day, true)}…`;
-  else hint = `${plural(st.total ?? 0, "session")} active on ${dayLabel(day, true)}, by their estimated cost on that day. Select a session for details.`;
+  else hint = `${plural(data?.total ?? 0, "session")} active on ${dayLabel(day, true)}, by their estimated cost on that day. Select a session for details.`;
   return (
-    <Drawer id="d-top" title="Most expensive sessions" count={num(day ? st.total : top.length)} description="Estimated cost, duration and commits per session">
+    <Drawer id="d-top" title="Most expensive sessions" count={num(day ? data?.total : top.length)} description="Estimated cost, duration and commits per session">
       {(day || rows.length > 0) && <div className="tools-row">
         {day && <span className="daychip"><span>Active on {dayLabel(day, true)}</span>
           <button type="button" aria-label="Show the most expensive sessions on every day" title="Every day"
@@ -166,8 +159,8 @@ export function TopSessionsDrawer({ view, top, day, onDay, selected }: {
         <thead><tr><th scope="col">Session</th><th scope="col">Project</th><th scope="col" className="num opt">Active<Toggletip term="Active time">Active time: pauses over 20 minutes left out</Toggletip></th>
           <th scope="col" className="num opt">Prompts</th><th scope="col" className="num opt">Commits</th><th scope="col" className="num">Cost / commit</th><th scope="col" className="num">Est. cost</th></tr></thead>
         <tbody className={busy ? "stale" : undefined} aria-busy={busy || undefined}>
-          {st.error && day ? <tr><td colSpan={7} className="empty" role="alert">Could not load sessions ({st.error}). <button type="button" className="linkish"
-            onClick={() => setTick(t => t + 1)}>Retry</button></td></tr>
+          {error ? <tr><td colSpan={7} className="empty" role="alert">Could not load sessions ({error.message}). <button type="button" className="linkish"
+            onClick={retry}>Retry</button></td></tr>
             : rows.length ? rows.map(s => <tr key={s.session_id} {...pickRow(s.session_id, openSessionSheet, s.session_id === selected ? "sel" : "")}>
               <th scope="row" className="when sess"><button type="button" className="cellbtn" title={s.title || s.session_id}>{sessName(s)}</button>
                 <div className="muted small">{when(s.first_ts)}{s.git_branch ? ` · ${s.git_branch}` : ""}{s.title ? ` · ${shortId(s.session_id)}` : ""}</div></th>

@@ -91,6 +91,3 @@ export function useRefresh() {
     state: refreshState(q, m.status),
   };
 }
-
-/** For readers that do not start a Refresh. */
-export const useRefreshState = (): RefreshState => useRefresh().state;

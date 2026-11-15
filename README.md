@@ -98,6 +98,8 @@ cd web && npm install && npm run dev       # http://127.0.0.1:5173, /api proxied
 cd web && npm run check                    # typecheck, lint, test and build; run before committing
 ```
 
+The web app fetches through TanStack Query: each endpoint has one options factory in `web/src/queries.ts` (its key, URL and payload type), and pages read them through `useApi` in `web/src/useApi.ts`. Data refetches only when an ingest stores something or Refresh runs; the status poll and Live's recheck are the only requests on a timer. `npm run dev` shows the TanStack Query devtools as a button in the bottom-left corner, and the built app ships none. Tests render through `renderApp` from `web/src/testing.tsx`, which gives each test its own query client.
+
 Commit the build in `src/ai_ledger/web/` with every `web/src` change. [`tools/demo/`](https://github.com/nWidart/ai-ledger/tree/main/tools/demo) records the GIFs from synthetic data. Maintainer notes, including releases, are in [AGENTS.md](https://github.com/nWidart/ai-ledger/blob/main/AGENTS.md).
 
 ## License

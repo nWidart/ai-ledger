@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore } from "react";
-import { type ErrorDetail } from "../../api";
 import { setOrder } from "../../colors";
 import { agentName, Filters } from "../../components/Filters";
 import { UsageSheets } from "../../components/sheets/UsageSheets";
@@ -53,8 +52,8 @@ export function ErrorsPage() {
   const [mode, setModeS] = useState<Mode>(loadMode), [q, setQ] = useState("");
   // The type table's sort and filter text last the page visit, across view changes (not in the hash, not saved).
   const [typeSort, setTypeSort] = useState<SortBy<TypeKey>>(TYPE_SORT), [typeQ, setTypeQ] = useState("");
-  // Open incidents and message groups, opened examples and loaded text: each row reads its own entry, so a toggle re-renders one row, not the page.
-  const sets = useRef({ openInc: new Keyed<number, true>(), openMsg: new Keyed<string, true>(), opened: new Keyed<string, true>(), fullText: new Keyed<string, ErrorDetail>(), loading: new Keyed<string, true>(), failed: new Keyed<string, true>() }).current;
+  // Open incidents and message groups, and opened examples: each row reads its own entry, so a toggle re-renders one row, not the page.
+  const sets = useRef({ openInc: new Keyed<number, true>(), openMsg: new Keyed<string, true>(), opened: new Keyed<string, true>() }).current;
   const narrow = useMedia(NARROW), toSheet = !!m && narrow && !!view.cat;
   const [chartInView, setChartInView] = useState(true), [pageLive, setPageLive] = useState("");
   // A dead link's notice is page state: the write-back below drops its ex from the hash, so the hash can't say it any more.
