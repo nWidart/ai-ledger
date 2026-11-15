@@ -54,6 +54,7 @@ What the local Grok data shows (CLI 1.0.77; three sessions: a long TUI review, a
 - [A child file read before its parent's `subagent_spawned` line is stored would become its own session and count its usage twice] → Sorted discovery reads parents first. Grok writes `subagent_spawned` before it creates the child folder (28.710 s and 28.723 s in the probe). The race needs a parent line to be half-written at ingest time. A test checks that discovery puts the child after the parent.
 - [A cancelled turn may write no `turn_completed`, so its usage would be lost] → Task 2.1 checks this with a cancelled probe. If the line is missing, the gap goes in the README, and the change stays as specced.
 - [`stop_reason` for a cancelled turn may not be `cancelled`] → Task 2.1 records the real value and updates the spec scenario before archive.
+- [This plan was written when only Activity, Cost and Errors had the source filter. The spec deltas were rebased on 2026-11-15 onto specs that also put the filter on Context, Limits, Insights and Live, and that name the user prices file. The decisions and tasks were not updated] → Before apply, decide what Context, Limits, Insights and Live show for Grok, add scenarios for them, extend tasks 3.2 and 4.2 to those pages, and check the file paths in the tasks against `main`.
 
 ## Migration Plan
 
