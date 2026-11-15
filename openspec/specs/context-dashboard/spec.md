@@ -28,7 +28,7 @@ A session's starting context SHALL be the prompt tokens (input, cache read and b
 - **THEN** that request is not the session's first turn
 
 ### Requirement: Show starting context per project
-The page SHALL show, for the view and for each project in it, the median, the 10th percentile and the 90th percentile of starting context over the project's sessions, the median share of the model's window, and the number of sessions measured. It SHALL draw each project's 10th to 90th percentile range with its median marked, every project on one token scale, with the 30,000-token threshold of the large-start tip marked on that scale. It SHALL chart the view's median starting context per week of session start with its 25th to 75th percentile band, on a labelled token axis, with weeks placed by date, and SHALL mark a week with fewer than 3 sessions as resting on few sessions. A project with no measured session SHALL show no figure, not zero.
+The page SHALL show, for the view and for each project in it, the median, the 10th percentile and the 90th percentile of starting context over the project's sessions, the median share of the model's window, and the number of sessions measured; and SHALL show the view's median starting context per week of session start with its 25th to 75th percentile. A project with no measured session SHALL show no figure, not zero.
 
 #### Scenario: Two projects
 - **WHEN** `foo` sessions start at 20,000, 24,000 and 70,000 tokens and `bar` sessions at 8,000 and 9,000
@@ -37,6 +37,9 @@ The page SHALL show, for the view and for each project in it, the median, the 10
 #### Scenario: Window share
 - **WHEN** a session starts at 50,000 tokens and its window resolves to 200,000
 - **THEN** that session's share of the window is 25%
+
+### Requirement: Draw the spread of starting context
+The page SHALL draw each project's 10th to 90th percentile range with its median marked, every project on one token scale, with the 30,000-token threshold of the large-start tip marked on it. It SHALL chart the weekly medians with their band on a labelled token axis, with weeks placed by date, and SHALL mark a week with fewer than 3 sessions as resting on few sessions.
 
 #### Scenario: Spread is visible
 - **WHEN** `foo` has a 10th percentile of 20,800 and a 90th percentile of 60,800, and `bar` 8,100 and 8,900
@@ -66,7 +69,7 @@ A session's context window SHALL be the window its source stated (a Codex turn's
 - **THEN** its window is unknown, it takes no part in any share, and the view's count of sessions with a window leaves it out
 
 ### Requirement: Show how context grows
-The page SHALL chart the median context (prompt tokens) at each turn index over the view's sessions with at least that many turns, up to turn 100 and only for indexes with at least 5 sessions, and the same curve for each of the five projects with the most sessions. The chart SHALL show, at each turn index, how many sessions the point rests on. It SHALL offer the same curves as a share of each session's window, over the sessions with a known window, with the near-limit share of 80% marked; the token curves SHALL carry no limit mark. Selecting a project in the chart's legend SHALL draw that project alone against the view, with its 25th to 75th percentile band, and selecting it again SHALL restore every project. The page SHALL show the median tokens added per user prompt, for the view and per project, where a session's added tokens are the sum of the rises between consecutive turns (a fall, as after a compaction, adds nothing).
+The page SHALL chart the median context (prompt tokens) at each turn index over the view's sessions with at least that many turns, up to turn 100 and only for indexes with at least 5 sessions, and the same curve for each of the five projects with the most sessions. It SHALL show the median tokens added per user prompt, for the view and per project, where a session's added tokens are the sum of the rises between consecutive turns (a fall, as after a compaction, adds nothing).
 
 #### Scenario: Curve points need sessions
 - **WHEN** 12 sessions have 10 or more turns and 3 sessions have 11 or more
@@ -75,6 +78,13 @@ The page SHALL chart the median context (prompt tokens) at each turn index over 
 #### Scenario: Added per prompt
 - **WHEN** a session's turns are at 20,000, 30,000, 45,000, then 25,000 after a compaction, then 32,000, over 2 prompts
 - **THEN** its added tokens are 32,000 and its tokens added per prompt are 16,000
+
+#### Scenario: Per-project growth without a compaction
+- **WHEN** the view has two projects and no session compacted
+- **THEN** the page still shows each project's tokens added per prompt
+
+### Requirement: Read the growth chart by sessions, share and project
+The growth chart SHALL show, at each turn index, how many sessions the point rests on. It SHALL offer the same curves as a share of each session's window, over the sessions with a known window, with the near-limit share of 80% marked; the token curves SHALL carry no limit mark. Selecting a project in the legend SHALL draw that project alone against the view, with its 25th to 75th percentile band, and selecting it again SHALL restore every project.
 
 #### Scenario: Sessions left at a turn
 - **WHEN** 60 sessions reach turn 5 and 7 reach turn 40
@@ -88,10 +98,6 @@ The page SHALL chart the median context (prompt tokens) at each turn index over 
 - **WHEN** the user selects `foo` in the legend
 - **THEN** the chart draws the view's curve and `foo`'s curve with `foo`'s band, and no other project
 
-#### Scenario: Per-project growth without a compaction
-- **WHEN** the view has two projects and no session compacted
-- **THEN** the page still shows each project's tokens added per prompt
-
 ### Requirement: Show the way to the first compaction
 For the view's sessions with a compaction, the page SHALL show how many there are, the median number of turns before the first compaction, and the median active minutes before it, where active time leaves out every pause over 20 minutes, as a session's duration does. It SHALL show the same per project.
 
@@ -104,7 +110,7 @@ For the view's sessions with a compaction, the page SHALL show how many there ar
 - **THEN** the section says so and shows no medians
 
 ### Requirement: Show peak fill by window size
-The page SHALL group the view's sessions with a known window by that window and show, for each window, how many sessions peaked under 25%, 25 to 50%, 50 to 80%, 80 to 90% and at or over 90% of it. Each window SHALL be drawn as one bar whose segments are those five groups as shares of the window's sessions, so that windows with different numbers of sessions can be compared, with each segment's count and share readable. Selecting a segment SHALL list the sessions in it, newest first, and selecting a session SHALL open its session sheet.
+The page SHALL group the view's sessions with a known window by that window and show, for each window, how many sessions peaked under 25%, 25 to 50%, 50 to 80%, 80 to 90% and at or over 90% of it. Each window SHALL be drawn as one bar whose segments are those groups as shares of the window's sessions, with each segment's count and share readable.
 
 #### Scenario: Two window sizes
 - **WHEN** the view holds 1,000,000-token sessions and 258,400-token sessions
@@ -118,12 +124,15 @@ The page SHALL group the view's sessions with a known window by that window and 
 - **WHEN** 2 of 4 sessions with one window and 50 of 100 with another peaked under 25%
 - **THEN** both windows draw that segment at half the bar's width
 
+### Requirement: Drill from a peak-fill group to its sessions
+Selecting a segment of a window's bar SHALL list the sessions in it, newest first, and selecting a session SHALL open its session sheet.
+
 #### Scenario: Drill into a segment
 - **WHEN** the user selects the 80 to 90% segment of the 200,000-token window, which holds 3 sessions
 - **THEN** the page lists those 3 sessions, and selecting one opens its session sheet with the page's filters kept
 
 ### Requirement: Show what fills context
-The page SHALL show, over the view's main-thread tool calls with a known result size, the summed result size by tool and by MCP server, each with its calls, its median, 95th percentile and largest result and an estimated token count labelled as an estimate. It SHALL chart the ten tools, or MCP servers, with the largest summed size, each beside the range from its median to its 95th percentile result, and SHALL fold the rest into one "Other" total. The results of calls made inside subagent transcripts SHALL be summed apart, as bytes that never entered the main thread's context, and the main-thread and subagent totals SHALL be drawn as two parts of one bar.
+The page SHALL show, over the view's main-thread tool calls with a known result size, the summed result size by tool and by MCP server, each with its calls, its median, 95th percentile and largest result and an estimated token count labelled as an estimate. The results of calls made inside subagent transcripts SHALL be summed apart, as bytes that never entered the main thread's context.
 
 #### Scenario: By tool
 - **WHEN** 40 main-thread `Read` results total 2,000,000 bytes and 10 `Bash` results total 300,000
@@ -132,6 +141,9 @@ The page SHALL show, over the view's main-thread tool calls with a known result 
 #### Scenario: Subagent results apart
 - **WHEN** a session's subagent transcripts hold 5,000,000 bytes of tool results and its main thread 800,000
 - **THEN** the main-thread figures count 800,000 bytes and the subagent figure 5,000,000
+
+### Requirement: Chart the largest contributors
+The page SHALL chart the ten tools, or MCP servers, with the largest summed size, each beside the range from its median to its 95th percentile result, and SHALL fold the rest into one "Other" total. The main-thread and subagent totals SHALL be drawn as two parts of one bar.
 
 #### Scenario: Many small or a few huge
 - **WHEN** `Read` totals 2,000,000 bytes over 400 results with a 95th percentile of 12,000, and `Bash` totals 2,000,000 over 8 results with a 95th percentile of 900,000
