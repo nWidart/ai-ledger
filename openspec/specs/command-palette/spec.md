@@ -45,7 +45,7 @@ A `#` term SHALL select a filter: a project, a source (`#claude` for Claude Code
 - **THEN** the URL records the choice, Errors keeps showing automated sessions as it always does, and the choice applies on Activity and Cost
 
 ### Requirement: Go to a page with `>`
-A `>` term naming a page (Activity, Cost, Context, Errors, Limits, Insights, Live) SHALL open that page. Filters that are not changed in the palette SHALL be carried over as the navigation carries them. When the palette's chips or the current view name a project, `>project` SHALL open the Project page for that project; with no project, the palette SHALL NOT offer it.
+A `>` term naming a page (Activity, Cost, Context, Errors, Limits, Insights, Live) SHALL open that page. Filters that are not changed in the palette SHALL be carried over as the navigation carries them. When the palette's chips or the current view name a project, `>project` SHALL open the Project page for that project; with no project, the palette SHALL NOT offer the bare Project page.
 
 #### Scenario: Page only
 - **WHEN** the user views project `myproject` for the last 14 days on Activity and commits `>errors`
@@ -76,7 +76,7 @@ A `>` term naming a page (Activity, Cost, Context, Errors, Limits, Insights, Liv
 - **THEN** the Project page opens on `myproject`
 
 #### Scenario: No project named
-- **WHEN** the user has no project filter and types `>proj` with no project chip
+- **WHEN** the user has no project filter, no project chip, and no project whose name matches `proj`, and types `>proj`
 - **THEN** the list offers no Project page
 
 ### Requirement: Open an inspector with `>`
@@ -291,3 +291,30 @@ The message that `>copy link` shows, "Link copied" or that the link could not be
 #### Scenario: Link copied
 - **WHEN** the user commits `>copy link` and the browser allows the copy
 - **THEN** a status reading "Link copied" shows and a screen reader says it once, without moving focus
+
+### Requirement: Offer a project's page from its match
+Typed text with no sigil or with `>` SHALL also list a row that opens the page of each of the best three matching projects, in the Page group. Picking it SHALL add the project filter and the Project page together, announced in one message. The row SHALL NOT show for `#` terms, for empty text, or when picking it would change nothing. With no sigil it SHALL NOT count as an exact match.
+
+#### Scenario: Type a project's name
+- **WHEN** the user on Cost for the last 7 days types `jobdesk` and commits the row "jobdesk · open project page"
+- **THEN** the URL becomes `/project?project=jobdesk&range=7` and the Project page shows `jobdesk`
+
+#### Scenario: Name then another page
+- **WHEN** the user types `jobdesk >errors` and commits
+- **THEN** `jobdesk` becomes a project chip and Errors opens filtered to `jobdesk`
+
+#### Scenario: Name with `>`
+- **WHEN** the user types `>jobdesk #7d`
+- **THEN** `>jobdesk` becomes the project filter and Project page chips, and Enter opens the Project page of `jobdesk` for the last 7 days
+
+#### Scenario: Filters only
+- **WHEN** the user types `#job`
+- **THEN** the list shows the project `jobdesk` as a filter and no project-page row
+
+#### Scenario: Project already filtered
+- **WHEN** the user views `jobdesk` on Cost, opens the palette and types `jobdesk`
+- **THEN** the list offers the row "jobdesk · open project page"
+
+#### Scenario: Already on the page
+- **WHEN** the user views `jobdesk` on the Project page, opens the palette and types `jobdesk`
+- **THEN** the list offers no row for the page of `jobdesk`

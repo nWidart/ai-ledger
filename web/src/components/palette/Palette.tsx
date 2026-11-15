@@ -25,6 +25,14 @@ export function addChip(chips: readonly Chip[], c: Chip): Chip[] {
   const slot = slotOf(c);
   return [...chips.filter(x => !(x.kind === c.kind && x.value === c.value) && (slot == null || slotOf(x) !== slot)), { kind: c.kind, value: c.value, label: c.label }];
 }
+const hasProject = (chips: readonly Chip[], project: string) => chips.some(c => c.kind === "project" && c.value === project);
+/** The chips a row adds, through every path (footer, Tab, Enter, click, touch, auto-chip): a project-page row adds its
+ *  project filter, unless already there (the chip keeps its place), then the Project page. */
+const rowChips = (chips: readonly Chip[], r: Row) =>
+  addChip(r.project && !hasProject(chips, r.project) ? addChip(chips, { kind: "project", value: r.project, label: r.project }) : chips, r);
+/** What a pick adds, said once: a project-page row names its project unless that filter was already a chip. */
+const rowAdded = (r: Row, chips: readonly Chip[]) =>
+  (!r.project ? `${r.label} added` : hasProject(chips, r.project) ? `${r.label} page added` : `${r.project} and ${r.label} page added`);
 const sigil = (c: Chip) => (isFilter(c.kind) ? "#" : ">");
 const chipName = (c: Chip, s: ChipStatus) =>
   (isFilter(c.kind) ? `Remove ${c.kind === "automated" ? "automated sessions" : c.kind} filter${c.kind === "automated" ? "" : " " + c.label}`
@@ -112,14 +120,14 @@ export function Palette() {
   const want = open && searchesSessions(term) ? term.text : "", later = useDebouncedValue(want, SEARCH_MS), q = want && later;
   const sess = useApi(q ? queries.sessions(now.view, { q }) : null);
   const data = { palette: pal.data, sessions: q && q === term.text ? sess.data?.sessions : undefined };
-  const rows = suggest(term, data, chips);
+  const rows = suggest(term, data, chips, path);
   // Counts from another facet combination, kept on screen while the chosen one loads.
   const v = now.view, p = pal.data;
   const stale = !!p && (p.project !== v.project || p.range !== v.range || p.automated !== v.automated || p.source !== v.source);
   const at = Math.min(hi, rows.length - 1), row: Row | undefined = browsing || term.sigil || term.text ? rows[at] : undefined;
-  const preview = row ? resolve(addChip(chips, row), here) : now;
+  const preview = row ? resolve(rowChips(chips, row), here) : now;
   // Typed terms that are not chips yet: Enter waits until each is picked or deleted, so nothing typed is silently ignored.
-  const blockers = ts.filter(t => t.text && (t !== term || !row)).map(t => ({ t: t.sigil + t.text, none: !suggest(t, data, chips).length }));
+  const blockers = ts.filter(t => t.text && (t !== term || !row)).map(t => ({ t: t.sigil + t.text, none: !suggest(t, data, chips, path).length }));
   const footer = blockers.length
     ? [`Enter: pick or delete ${blockers.map(b => `“${b.t}”`).join(", ")} first`, ...blockers.filter(b => b.none).map(b => `no match for “${b.t}”`)].join(" · ")
     : preview.footer;
@@ -157,16 +165,17 @@ export function Palette() {
     say.current = { what, moved: false };
   };
   const edit = (next: string, pos: number, list = chips) => {
-    const got = autoChip(next, pos, t => suggest(t, data, list));
+    const got = autoChip(next, pos, t => suggest(t, data, list, path));
     let out = list;
-    for (const r of got.picked) out = addChip(out, r);
-    if (got.picked.length) setChipsSaying(out, got.picked.map(r => `${r.label} added`).join(", "));
+    const said: string[] = [];
+    for (const r of got.picked) { said.push(rowAdded(r, out)); out = rowChips(out, r); }
+    if (got.picked.length) setChipsSaying(out, said.join(", "));
     setText(got.input); setCaret(got.caret); setHi(0);
     if (got.picked.length) sel.current = got.caret;
   };
   const pick = (r: Row) => {
-    const next = addChip(chips, r), rest = (text.slice(0, term.start) + text.slice(term.end)).replace(/\s+$/, "");
-    setChipsSaying(next, `${r.label} added`);
+    const next = rowChips(chips, r), rest = (text.slice(0, term.start) + text.slice(term.end)).replace(/\s+$/, "");
+    setChipsSaying(next, rowAdded(r, chips));
     setText(rest); setCaret(term.start);
     sel.current = Math.min(term.start, rest.length);
     input.current?.focus();
@@ -203,7 +212,7 @@ export function Palette() {
     else if (e.key === "Home" && n && row) move(0);
     else if (e.key === "End" && n && row) move(n - 1);
     else if (e.key === "Tab" && !e.shiftKey && row) { e.preventDefault(); pick(row); }
-    else if (e.key === "Enter") { e.preventDefault(); commit(row ? addChip(chips, row) : chips); }
+    else if (e.key === "Enter") { e.preventDefault(); commit(row ? rowChips(chips, row) : chips); }
     else if (e.key === "Escape") { e.preventDefault(); close(); }
     else if (e.key === "Backspace" && !e.currentTarget.value && chips.length) { e.preventDefault(); remove(chips.length - 1); }
   };
@@ -245,7 +254,7 @@ export function Palette() {
                   {head && <li role="presentation" className="pal-group" aria-hidden="true">{BADGES[r.kind]}</li>}
                   <li id={optId(r)} role="option" aria-selected={r === row} aria-label={rowName(r)} className="pal-opt"
                     onMouseDown={e => e.preventDefault()} onMouseMove={() => { if (i !== at || !row) { setBrowsing(true); setHi(i); } }}
-                    onClick={() => (touch() || r.sigil === "#" ? pick(r) : commit(addChip(chips, r)))}>
+                    onClick={() => (touch() || r.sigil === "#" ? pick(r) : commit(rowChips(chips, r)))}>
                     <span className={`pal-badge k-${r.kind}`}>{BADGES[r.kind]}</span>
                     <span className="pal-text"><Marked text={r.text} ranges={r.ranges} /></span>
                     {r.detail.length > 0 && <span className="pal-detail">{r.detail.join(" · ")}</span>}
@@ -264,7 +273,7 @@ export function Palette() {
             <span id={footId}>{footer}</span>
             <span className="pal-foot-end">
               <span className="pal-keys" aria-hidden="true"><kbd>↑</kbd><kbd>↓</kbd> move <kbd>Tab</kbd> add <kbd>↵</kbd> go <kbd>Esc</kbd> close</span>
-              <button type="button" className="pal-apply" onClick={() => commit(row ? addChip(chips, row) : chips)}>Apply</button>
+              <button type="button" className="pal-apply" onClick={() => commit(row ? rowChips(chips, row) : chips)}>Apply</button>
             </span>
           </div>
           <div className="sr" role="status" aria-live="polite">{said}</div>

@@ -377,3 +377,96 @@ describe("Palette accessibility", () => {
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Loaded" })));
   });
 });
+
+describe("Palette project pages", () => {
+  const jd: PalettePayload = { ...palette, projects: [{ name: "jobdesk", sessions: 12 }, ...palette.projects] };
+  const page = "jobdesk · open project page, 12 sessions";
+  const foot = () => document.getElementById(box().getAttribute("aria-describedby")!)!.textContent;
+  const said = () => screen.getAllByRole("status")[0]!.textContent;
+
+  it("lists the project then its page, and opens the page with the view's range", async () => {
+    serve(() => jd);
+    await show("/cost?range=7");
+    await userEvent.type(box(), "jobdesk");
+    expect(options().slice(0, 2)).toEqual(["jobdesk, project, 12 sessions", page]);
+    await userEvent.keyboard("{ArrowDown}");
+    expect(foot()).toBe("Enter: open Project · jobdesk · 7d");
+    await userEvent.keyboard("{Enter}");
+    expect(location.pathname + location.search).toBe("/project?project=jobdesk&range=7");
+  });
+
+  it("opens the page on a click, and stages both chips on a touch screen", async () => {
+    serve(() => jd);
+    await show("/cost?range=7");
+    await userEvent.type(box(), "jobdesk");
+    vi.spyOn(window, "matchMedia").mockImplementation(q => ({ matches: q === "(pointer: coarse)" }) as MediaQueryList);
+    await userEvent.click(screen.getByRole("option", { name: page }));
+    expect([chips("Filters"), chips("Destination"), location.pathname]).toEqual([["#7d", "#jobdesk"], [">Project"], "/cost"]);
+    vi.mocked(window.matchMedia).mockRestore();
+    await userEvent.click(screen.getByRole("button", { name: "Remove page Project" }));
+    await userEvent.type(box(), "{Backspace}jobdesk");
+    await userEvent.click(screen.getByRole("option", { name: page }));
+    expect(location.pathname + location.search).toBe("/project?project=jobdesk&range=7");
+  });
+
+  it("adds both chips with Tab, announced once", async () => {
+    serve(() => jd);
+    await show("/usage?range=30");
+    await userEvent.type(box(), "jobdesk{ArrowDown}{Tab}");
+    expect([chips("Filters"), chips("Destination")]).toEqual([["#30d", "#jobdesk"], [">Project"]]);
+    expect(said()).toBe("jobdesk and Project page added. Enter: open Project · jobdesk · 30d");
+  });
+
+  it("announces only the page when the project is already a chip", async () => {
+    serve(() => jd);
+    await show("/cost?project=jobdesk&range=7");
+    await userEvent.type(box(), "jobdesk{Tab}");
+    expect([chips("Filters"), chips("Destination")]).toEqual([["#jobdesk", "#7d"], [">Project"]]);
+    expect(said()).toMatch(/^Project page added\. /);
+  });
+
+  it("auto-chips a bare name as the filter", async () => {
+    serve(() => jd);
+    await show("/cost?range=7");
+    await userEvent.type(box(), "jobdesk >errors");
+    expect([chips("Filters"), chips("Destination")]).toEqual([["#7d", "#jobdesk"], []]);
+    await userEvent.keyboard("{Enter}");
+    expect(location.pathname + location.search).toBe("/errors?project=jobdesk&range=7");
+  });
+
+  it("auto-chips the page row named after >", async () => {
+    serve(() => jd);
+    await show("/usage?range=30");
+    await userEvent.type(box(), ">jobdesk #7d");
+    expect([chips("Filters"), chips("Destination"), box()]).toEqual([["#30d", "#jobdesk"], [">Project"], expect.objectContaining({ value: "#7d" })]);
+    expect(said()).toMatch(/^jobdesk and Project page added\. /); // announced as "#" was typed, with what Enter did then
+    expect(foot()).toBe("Enter: open Project · jobdesk · 7d");
+    await userEvent.keyboard("{Enter}");
+    expect(location.pathname + location.search).toBe("/project?project=jobdesk&range=7");
+  });
+
+  it("lists no page row under #, and keeps the pages for an empty >", async () => {
+    serve(() => jd);
+    await show();
+    await userEvent.type(box(), "#job");
+    expect(options()).toEqual(["jobdesk, project, 12 sessions"]);
+    await userEvent.clear(box());
+    await userEvent.type(box(), ">");
+    expect(options().filter(n => n!.includes(", page"))).toHaveLength(7);
+    expect(options().some(n => n!.includes("open project page"))).toBe(false);
+  });
+
+  it("offers the page with the project pre-filled", async () => {
+    serve(() => jd);
+    await show("/cost?project=jobdesk&range=7");
+    await userEvent.type(box(), "jobdesk");
+    expect(options()).toContain(page);
+  });
+
+  it("offers no page row on that project's page", async () => {
+    serve(() => jd);
+    await show("/project?project=jobdesk&range=7");
+    await userEvent.type(box(), "jobdesk");
+    expect(options()).not.toContain(page);
+  });
+});

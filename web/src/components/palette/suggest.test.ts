@@ -1,13 +1,18 @@
 import { describe, expect, it } from "vitest";
 import palette from "../../__fixtures__/palette";
 import sessions from "../../__fixtures__/sessions";
-import { BADGES, MAX_ROWS, isFilter, noToolCalls, rowName, suggest } from "./suggest";
+import { EXACT, PREFIX } from "./match";
+import { BADGES, MAX_ROWS, PROJECT_PAGE, isFilter, noToolCalls, rowName, suggest, type Chip } from "./suggest";
 import { terms } from "./terms";
 
 const data = { palette, sessions: sessions.sessions };
 const term = (input: string) => terms(input)[0] ?? { sigil: "" as const, text: "", start: 0, end: 0 };
 const rows = (input: string, d: Parameters<typeof suggest>[1] = data) => suggest(term(input), d);
 const kinds = (input: string) => new Set(rows(input).map(r => r.kind));
+const jd = { palette: { ...palette, projects: [{ name: "jobdesk", sessions: 12 }, ...palette.projects] } };
+const own = (input: string, chips: Chip[] = [], path = "/cost", d = jd) => suggest(term(input), d, chips, path).filter(r => r.project);
+const proj = (name: string): Chip => ({ kind: "project", value: name, label: name });
+const page = (value: string, label: string): Chip => ({ kind: "page", value, label });
 
 describe("suggest", () => {
   it("lists only filters after #", () => {
@@ -69,5 +74,62 @@ describe("suggest", () => {
   it("marks the matched characters of the shown text", () => {
     expect(rows(">bas")[0]).toMatchObject({ text: "Bash", ranges: [[0, 3]] });
     expect(rows("#bash")[0]?.ranges).toEqual([[0, 4]]);
+  });
+});
+
+describe("suggest project pages", () => {
+  it("lists a project's page after its filter for bare text, never exact so the name auto-chips as the filter", () => {
+    const got = suggest(term("jobdesk"), jd);
+    expect(got.slice(0, 2).map(r => r.id)).toEqual(["project:jobdesk", "projectpage:jobdesk"]);
+    expect(got[1]).toMatchObject({ kind: "page", value: PROJECT_PAGE, label: "Project", project: "jobdesk", sigil: ">", rank: PREFIX,
+      text: "jobdesk · open project page", ranges: [[0, 7]], detail: ["12 sessions"] });
+    expect(rowName(got[1]!)).toBe("jobdesk · open project page, 12 sessions");
+    expect(own(">jobdesk")[0]!.rank).toBe(EXACT);
+  });
+  it("lists none under #, nor for empty text", () => {
+    expect(own("#job")).toEqual([]);
+    expect(own(">")).toEqual([]);
+    expect(own("")).toEqual([]);
+    expect(rows(">").filter(r => r.kind === "page").length).toBe(7);
+  });
+  it("lists the three best matching projects, the busiest first among equal matches", () => {
+    const many = { palette: { ...palette, projects: [1, 5, 3, 9].map((n, i) => ({ name: `job${i}`, sessions: n })) } };
+    expect(own("job", [], "/cost", many).map(r => r.project)).toEqual(["job3", "job1", "job2"]);
+  });
+  it("stays with the project filtered, and goes where picking it would change nothing", () => {
+    expect(own("jobdesk", [proj("jobdesk")]).map(r => r.id)).toEqual(["projectpage:jobdesk"]);
+    expect(own("jobdesk", [proj("jobdesk")], PROJECT_PAGE)).toEqual([]);
+    expect(own("jobdesk", [proj("jobdesk"), page(PROJECT_PAGE, "Project")])).toEqual([]);
+    expect(own("jobdesk", [proj("jobdesk"), page("/errors", "Errors")], PROJECT_PAGE).length).toBe(1);
+    expect(own("jobdesk", [proj("jobdesk"), page(PROJECT_PAGE, "Project"), page("/errors", "Errors")]).length).toBe(1);
+    expect(own("jobdesk", [proj("foo"), page(PROJECT_PAGE, "Project")]).length).toBe(1);
+    expect(own("jobdesk", [proj("foo")], PROJECT_PAGE).length).toBe(1);
+  });
+  it("leaves out the generic Project row when the chosen project's own row is listed", () => {
+    const px = { palette: { ...palette, projects: [{ name: "projx", sessions: 1 }] } };
+    const pages = (chips: Chip[]) => suggest(term(">proj"), px, chips, "/cost").filter(r => r.kind === "page").map(r => r.id);
+    expect(pages([proj("projx")])).toEqual(["projectpage:projx"]);
+    expect(pages([proj("foo")])).toEqual(["page:/project", "projectpage:projx"]);
+  });
+  it("keeps an exact name's page among the three, before busier projects that start with it", () => {
+    const busy = { palette: { ...palette, projects: [{ name: "jobdesk", sessions: 1 }, ...[9, 8, 7].map((n, i) => ({ name: `jobdesk-${i}`, sessions: n }))] } };
+    expect(own("jobdesk", [], "/cost", busy).map(r => r.project)).toEqual(["jobdesk", "jobdesk-0", "jobdesk-1"]);
+  });
+  it("puts the pages first at equal rank, and keeps every page that matches", () => {
+    const with_ = (...names: string[]) => ({ palette: { ...palette, projects: names.map(name => ({ name, sessions: 50 })) } });
+    expect(rows(">a", with_("ai-ledger"))[0]!.id).toBe("page:/usage");
+    const t = rows(">t", with_("t1", "t2", "t3"));
+    expect(t.filter(r => r.kind === "page" && !r.project).length).toBe(rows(">t").filter(r => r.kind === "page").length);
+    expect(t.filter(r => r.project).length).toBe(3);
+  });
+  it("never matches exactly after > when a page does, so >errors stays Errors with a project named errors", () => {
+    const got = rows(">errors", { palette: { ...palette, projects: [{ name: "errors", sessions: 50 }] } });
+    expect(got.filter(r => r.rank === EXACT).map(r => r.id)).toEqual(["page:/errors"]);
+    expect(got.find(r => r.project === "errors")!.rank).toBe(PREFIX);
+  });
+  it("never matches exactly after > when an inspector does, so >playwright stays the MCP server", () => {
+    const mcp = palette.mcp[0]!.name;
+    const got = rows(`>${mcp}`, { palette: { ...palette, projects: [{ name: mcp, sessions: 50 }] } });
+    expect(got.filter(r => r.rank === EXACT).map(r => r.id)).toEqual([`mcp:${mcp}`]);
   });
 });
