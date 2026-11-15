@@ -52,3 +52,4 @@ Every data table has an accessible name, and every header cell declares its scop
 - Input borders have a contrast of at least 3:1 against the page, and the palette input shows a focus ring of at least 3:1, in both themes. Text on the series-1 color has at least 4.5:1.
 - A page switch animates with a view transition when the browser supports it. With reduced motion requested, the page switches at once.
 - The theme follows the operating system (System), or stays Light or Dark. The choice is saved in your browser and applies before the page first paints.
+- Text follows the browser's default font size, and chart labels scale with it; nothing is cut off at 200%. In Chrome and Edge 146 or later, the dashboard also follows the operating system's text scale.
