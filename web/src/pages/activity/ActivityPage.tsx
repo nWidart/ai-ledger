@@ -12,10 +12,11 @@ import { Vs } from "../../components/sheets/ToolSheet";
 import { UsageSheets } from "../../components/sheets/UsageSheets";
 import { useLanding } from "../../components/useLanding";
 import { dayLabel, dur, num, pct, plural } from "../../format";
-import { setSearch, useView, type ViewState } from "../../url";
+import { setSearch, useSearchOf, useView } from "../../url";
 import { queries } from "../../queries";
 import { useApi } from "../../useApi";
 import { SessionsDrawer, type SessFilter } from "./SessionsDrawer";
+import { validateSearch, type ActivitySearch } from "./search";
 import { ExtDrawer, LoopsDrawer, ProjectsDrawer, TestsDrawer, ToolsDrawer, type RowScope, type ToolKey } from "./tables";
 import { firstWorkDay, flakyTools, shortTool, type WorkMetric } from "./work";
 import { WorkPanel } from "./WorkChart";
@@ -25,9 +26,7 @@ const METRIC_KEY = "claude-activity-metric";
 const loadMetric = (): WorkMetric => { try { const v = localStorage.getItem(METRIC_KEY); return v === "prompts" || v === "sessions" ? v : "commits"; } catch { return "commits"; } };
 
 /** The sessions table's limits, kept in the hash (day, q, near=1) so a reload or a shared link restores them. */
-const sessOf = (h: ViewState): SessFilter => ({ q: h.raw.q ?? "", near: h.raw.near === "1", day: isDay(h.raw.day) ? h.raw.day : "" });
-// A real calendar day as YYYY-MM-DD: 2026-02-30 is not one.
-const isDay = (s: string | undefined): s is string => !!s && /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(Date.parse(s)) && new Date(s).toISOString().startsWith(s);
+const sessOf = (s: ActivitySearch): SessFilter => ({ q: s.q ?? "", near: s.near ?? false, day: s.day ?? "" });
 // Replace, not push: typing a search adds no Back entries.
 const setSess = (f: SessFilter) => setSearch({ q: f.q, near: f.near, day: f.day }, { push: false });
 
@@ -93,12 +92,13 @@ function Vitals({ d }: { d: UsagePayload }) {
 /** Activity (/usage): what the coding agents did (all of them, or the one the source filter picks) and where they struggled. */
 export function ActivityPage() {
   const [h] = useView();
+  const search = useSearchOf(validateSearch);
   const want: View = viewOf(h), url = usageUrl(want), viewKey = url;
   const { data, error, loading, retry } = useApi(queries.usage(want), { keepPrevious: true });
   useEffect(() => { if (data) setOrder(data.project_order); }, [data]);
 
   // Page-only state: flaky tools first resets when the view changes; the tools and sessions sorts stay.
-  const sess = sessOf(h), [flaky, setFlaky] = useState(false), [toolSort, setToolSort] = useState<SortBy<ToolKey> | null>(null);
+  const sess = sessOf(search), [flaky, setFlaky] = useState(false), [toolSort, setToolSort] = useState<SortBy<ToolKey> | null>(null);
   const [sessSort, setSessSort] = useState<SortBy<SessionSort> | null>(null);
   const [metric, setMetricState] = useState<WorkMetric>(loadMetric);
   const setMetric = (m: WorkMetric) => { setMetricState(m); try { localStorage.setItem(METRIC_KEY, m); } catch { /* storage off */ } };

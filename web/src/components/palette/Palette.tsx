@@ -1,6 +1,6 @@
 import { createPortal } from "react-dom";
 import { Fragment, useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
-import { currentView, go, useView, usePathname } from "../../url";
+import { currentRaw, go, useSearchOf, usePathname } from "../../url";
 import { useApi } from "../../useApi";
 import { queries } from "../../queries";
 import { useRefresh } from "../refresh";
@@ -50,7 +50,7 @@ function Marked({ text, ranges }: { text: string; ranges: Ranges }) {
  * commit writes the whole view to the URL as one history entry. Mounted once by App, so it lives across page switches.
  */
 export function Palette() {
-  const open = usePaletteOpen(), path = usePathname(), [h] = useView();
+  const open = usePaletteOpen(), path = usePathname(), search = useSearchOf(raw => raw);
   const { refresh } = useRefresh();
   const dlg = useRef<HTMLDialogElement>(null), input = useRef<HTMLInputElement>(null), opener = useRef<HTMLElement | null>(null);
   const [chips, setChips] = useState<Chip[]>([]);
@@ -64,7 +64,7 @@ export function Palette() {
   const say = useRef<{ what: string; moved: boolean } | null>(null);
   const sel = useRef<number | null>(null); // where the caret goes once the input shows a changed text
   const id = useId(), listId = id + "list", footId = id + "foot";
-  const here = { path, hash: h };
+  const here = { path, search };
 
   // The shortcut works everywhere on the page, page controls and open sheets included.
   useEffect(() => {
@@ -84,7 +84,7 @@ export function Palette() {
     if (open && !d.open) {
       const a = document.activeElement;
       opener.current = a instanceof HTMLElement && a !== document.body ? a : null;
-      setChips(prefill(currentView()));
+      setChips(prefill(currentRaw()));
       setText(""); setCaret(0); setHi(0); setSaid(""); setBrowsing(false); setToast(null);
       d.showModal();
       input.current?.focus();

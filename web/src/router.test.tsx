@@ -42,6 +42,46 @@ describe("router", () => {
     });
   });
 
+  // The routes validate their keys, and the router writes the URL back when validation changes it. A typed value must
+  // be written as it was read, and a value that is not valid must stay as the user wrote it.
+  describe("a URL with every key a page reads", () => {
+    const urls = [
+      "/usage?project=foo&range=7&source=claude&auto=1&q=abc&near=1&day=2026-11-03&session=s1",
+      "/cost?project=foo&range=14&source=codex&auto=1&session=s1",
+      "/context?project=foo&range=90&tip=t1",
+      "/errors?project=foo&range=0&source=codex&sub=0&noise=0&gran=week&at=2026-11-03&etool=Bash&cat=x",
+      "/limits?project=foo&range=30",
+      "/insights?project=foo&range=90&outcome=achieved&friction=1&help=h&goal=g&fr=f&goalf=gf&frf=ff",
+      "/live?source=claude&view=wall",
+    ];
+    it.each(urls)("is unchanged by loading %s", async url => {
+      const { length } = open(url);
+      await loaded(url.split("?")[0] as keyof typeof ROUTES);
+      expect(here()).toBe(url);
+      expect(history.length).toBe(length);
+    });
+  });
+
+  it("types the search of a route's match, and writes a typed value as the URL had it", async () => {
+    const { router } = open("/usage?range=7&near=1&nosuchkey=1&day=never");
+    await loaded("/usage");
+    // The router lays the valid, typed values over the keys as written: what is unknown or not valid stays a string.
+    await waitFor(() => expect(router.state.matches.at(-1)?.search).toEqual({ range: 7, near: true, nosuchkey: "1", day: "never" }));
+    act(() => setSearch({ q: "x" }));
+    expect(here()).toBe("/usage?range=7&near=1&nosuchkey=1&day=never&q=x");
+  });
+
+  describe("a URL with values that are not valid", () => {
+    const urls = ["/usage?range=abc&near=0&day=2026-02-30", "/context?range=12&auto=yes", "/insights?range=-1&friction=0", "/live?view=grid", "/cost?range=7.5"];
+    it.each(urls)("opens the page with %s, and leaves the URL as written", async url => {
+      open(url);
+      await loaded(url.split("?")[0] as keyof typeof ROUTES);
+      expect(here()).toBe(url);
+      expect(document.getElementById("content")).not.toBeNull();
+      expect(screen.queryByText(/something went wrong/i)).toBeNull();
+    });
+  });
+
   it.each([["/", "/usage"], ["/nosuchpage?project=foo", "/usage?project=foo"]])("lands %s on %s without a new entry", async (from, to) => {
     const { length } = open(from);
     await waitFor(() => expect(location.pathname).toBe("/usage"));

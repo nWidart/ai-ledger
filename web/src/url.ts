@@ -3,7 +3,6 @@
 // sheet pushes an entry, everything else replaces it), the count of sheet entries that lets Close go back past them, and
 // the day that is dropped with its view. Keys and values are the ones the pages wrote in the hash before the query string,
 // written plainly (ex=12345, session=true, never JSON-quoted), so a link in the old form is the same link with # for ?.
-import { useMemo } from "react";
 import { useRouterState, type AnyRouter } from "@tanstack/react-router";
 import type { Source } from "./api";
 
@@ -12,27 +11,24 @@ export type Range = (typeof RANGES)[number];
 export const DEFAULT_RANGE: Range = 30;
 export const SOURCES = ["claude", "codex"] as const satisfies readonly Source[];
 
-export interface ViewState {
-  project: string;
-  /** 7, 14, 30, 90 or 0 (all time); 30 when missing or unknown. raw.range says whether the URL had one. */
-  range: Range;
-  /** Activity and Cost: the open session sheet; inspect: the open project sheet. */
-  session: string;
-  inspect: string;
-  /** The open tool, MCP server or skill sheet; at most one is set. */
-  tool: string;
-  mcp: string;
-  skill: string;
-  /** Errors: the linked example and the open type. */
-  ex: string;
-  cat: string;
+/** The keys every page shares and the sheets that open over it, typed; a key is present only when it holds a valid value,
+ *  so range says whether the URL names one. A type, not an interface, so a value of it can be given to formatSearch as it is.
+ *  A page's own keys are typed by the search.ts beside it. */
+export type RootSearch = {
+  project?: string;
+  /** 7, 14, 30, 90 or 0 (all time). */
+  range?: Range;
+  /** The coding agent; absent is all of them. */
+  source?: Source;
   /** Include automated sessions (auto=1). */
-  auto: boolean;
-  /** The coding agent: "claude", "codex", or "" (all) when missing or unknown. */
-  source: Source | "";
-  /** Every key as written, page-only ones too (Errors: sub, noise, gran). */
-  raw: Readonly<Record<string, string>>;
-}
+  auto?: true;
+  /** The open project sheet. */
+  inspect?: string;
+  /** The open tool, MCP server or skill sheet; at most one is set. */
+  tool?: string; mcp?: string; skill?: string;
+  /** Activity and Cost: the open session sheet. */
+  session?: string;
+};
 /** A change to the view. null, "" and false remove a key; true writes "1"; undefined leaves it as it is. */
 export type SearchPatch = { [k: string]: string | number | boolean | null | undefined };
 
@@ -70,15 +66,31 @@ export function formatSearch(search: Readonly<Record<string, unknown>>): string 
   return s ? "?" + s : "";
 }
 
-/** The view a query string's keys describe, with defaults for what is missing or unknown. */
-export function parseView(raw: Readonly<Record<string, string>>): ViewState {
-  const r = "range" in raw ? +raw.range! : NaN;
-  return {
-    project: raw.project || "", range: isRange(r) ? r : DEFAULT_RANGE, session: raw.session || "",
-    inspect: raw.inspect || "", tool: raw.tool || "", mcp: raw.mcp || "", skill: raw.skill || "", ex: raw.ex || "", cat: raw.cat || "", auto: raw.auto === "1",
-    source: sourceOf(raw.source), raw,
-  };
+const STRINGS = ["project", "inspect", "tool", "mcp", "skill", "session"] as const;
+
+/** Keeps the valid values of the shared keys, given as the URL writes them or already typed (the router calls it with
+ *  both). Never throws; an invalid value, and any other key, is dropped, and no default is filled in. */
+export function validateRoot(raw: Readonly<Record<string, unknown>>): RootSearch {
+  const out: RootSearch = {};
+  const str = (k: string) => (typeof raw[k] === "string" && raw[k] !== "" ? (raw[k] as string) : undefined);
+  const r = typeof raw.range === "string" && raw.range !== "" ? +raw.range : raw.range;
+  if (str("project")) out.project = str("project");
+  if (typeof r === "number" && isRange(r)) out.range = r;
+  const source = sourceOf(str("source"));
+  if (source) out.source = source;
+  if (raw.auto === "1" || raw.auto === true) out.auto = true;
+  for (const k of STRINGS.slice(1)) { const v = str(k); if (v) out[k] = v; }
+  return out;
 }
+
+/** The shared keys with their defaults, as the pages read them: 30 days, all sources, no sheet. */
+export const rootState = (s: RootSearch) => ({
+  project: s.project ?? "", range: s.range ?? DEFAULT_RANGE, source: (s.source ?? "") as Source | "", auto: s.auto ?? false,
+  inspect: s.inspect ?? "", tool: s.tool ?? "", mcp: s.mcp ?? "", skill: s.skill ?? "", session: s.session ?? "",
+});
+export type ViewState = ReturnType<typeof rootState>;
+/** The view a URL's keys describe, with defaults for what is missing or not valid. */
+export const parseView = (raw: Readonly<Record<string, unknown>>): ViewState => rootState(validateRoot(raw));
 
 // Page-only keys that belong to one view (Activity's selected day): a write that changes the parsed project, range or
 // source drops them in the same write, so Back returns to the view with its day. Writing the value a key already reads
@@ -120,8 +132,6 @@ export const onNavigate = (f: () => void) => { navs.add(f); return () => { navs.
 const here = () => router.history.location;
 /** The keys of the current URL, as written. */
 export const currentRaw = (): Record<string, string> => parseSearch(here().search);
-/** The view of the current URL, for code outside a component. */
-export const currentView = (): ViewState => parseView(currentRaw());
 
 // The sheets count in the entry's state: how many entries back the view had no sheet open, when every push since only opened sheets.
 const sheetDepth = (): number | undefined => (here().state as { sheets?: number } | undefined)?.sheets;
@@ -163,12 +173,21 @@ export function sharedOf(raw: Readonly<Record<string, unknown>>): Record<string,
 /** The shared keys of the current URL as a query string: "?project=foo&range=30" or "". */
 export const sharedSearch = (raw: Readonly<Record<string, unknown>> = currentRaw()): string => formatSearch(sharedOf(raw));
 
-/** The view in the URL, re-read on Back, Forward, links and every setSearch. */
-export function useView(): [ViewState, typeof setSearch] {
-  // The location, not a route match: it changes in the same task as the write, which an input bound to the view needs.
-  const raw = useRouterState({ select: s => s.location.search as Record<string, string> });
-  return [useMemo(() => parseView(raw), [raw]), setSearch];
+/** The keys of the current URL as validate types them, narrowed by select; re-read on every change of the URL. The
+ *  component re-renders only when its selection changes: the result is compared deeply, so validate and select may build
+ *  a new object on every call. Read from the location, not a route match: it changes in the same task as the write, which an input bound to the URL needs. */
+export function useSearchOf<T>(validate: (raw: Readonly<Record<string, string>>) => T): T;
+export function useSearchOf<T, U>(validate: (raw: Readonly<Record<string, string>>) => T, select: (search: T) => U): U;
+export function useSearchOf<T, U>(validate: (raw: Readonly<Record<string, string>>) => T, select?: (search: T) => U): T | U {
+  return useRouterState({
+    select: (s: { location: { search: unknown } }) => { const v = validate(s.location.search as Record<string, string>); return select ? select(v) : v; },
+    structuralSharing: true,
+  } as never) as T | U;
 }
+
+/** The shared keys of the URL with their defaults, and the function that changes the view. A change to a page's own key
+ *  does not re-render its readers. */
+export const useView = (): [ViewState, typeof setSearch] => [useSearchOf(parseView), setSearch];
 
 /** Goes to href (a path and query string) as one history entry, no reload; the new page starts at the top, the same page
  *  stays where it is. A no-op when href is where we are. */
@@ -182,32 +201,3 @@ export function go(href: string) {
 /** Client-side page switch: a new history entry, no reload. */
 export const navigate = (href: string) => go(href);
 export const usePathname = (): string => useRouterState({ select: s => s.location.pathname });
-
-/** The keys every page shares and the sheets that open over it, typed; a key is present only when it holds a value.
- *  A type, not an interface, so a value of it can be given to formatSearch as it is. */
-export type RootSearch = {
-  project?: string; range?: Range; source?: Source; auto?: true;
-  inspect?: string; tool?: string; mcp?: string; skill?: string; session?: string;
-};
-
-const STRINGS = ["project", "inspect", "tool", "mcp", "skill", "session"] as const;
-
-/** Keeps the valid values of a query string. Never throws; anything else, and any other key, is dropped. */
-export function validateRoot(raw: Record<string, unknown>): RootSearch {
-  const out: RootSearch = {};
-  const str = (k: string) => (typeof raw[k] === "string" && raw[k] !== "" ? (raw[k] as string) : undefined);
-  const r = typeof raw.range === "string" && raw.range !== "" ? +raw.range : raw.range;
-  if (str("project")) out.project = str("project");
-  if (typeof r === "number" && isRange(r)) out.range = r;
-  const source = sourceOf(str("source"));
-  if (source) out.source = source;
-  if (raw.auto === "1" || raw.auto === true) out.auto = true;
-  for (const k of STRINGS.slice(1)) { const v = str(k); if (v) out[k] = v; }
-  return out;
-}
-
-/** The typed fields with their defaults, as the pages read them. */
-export const rootState = (s: RootSearch) => ({
-  project: s.project ?? "", range: s.range ?? DEFAULT_RANGE, source: (s.source ?? "") as Source | "", auto: s.auto ?? false,
-  inspect: s.inspect ?? "", tool: s.tool ?? "", mcp: s.mcp ?? "", skill: s.skill ?? "", session: s.session ?? "",
-});

@@ -8,10 +8,11 @@ import { SectionIndex } from "../../components/SectionIndex";
 import { UsageSheets } from "../../components/sheets/UsageSheets";
 import { useLanding } from "../../components/useLanding";
 import { num, plural } from "../../format";
-import { setSearch, useView } from "../../url";
+import { setSearch, useSearchOf, useView } from "../../url";
 import { queries } from "../../queries";
 import { useApi } from "../../useApi";
 import { rebuildFacts, share } from "./context";
+import { validateSearch } from "./search";
 import { BreaksDrawer, LargestDrawer } from "./drawers";
 import { CostSection, Fills, Growth, Pressure, Starting } from "./sections";
 import { tipInsight, TipSessions } from "./tips";
@@ -47,12 +48,13 @@ function RebuildNotice({ d }: { d: ContextPayload }) {
  *  and the tips those figures give. Every source maps onto the same figures. */
 export function ContextPage() {
   const [h] = useView();
+  const search = useSearchOf(validateSearch);
   const want = viewOf(h), url = contextUrl(want);
   const { data: d, error, loading, retry } = useApi(queries.context(want), { keepPrevious: true });
   useEffect(() => { if (d) setOrder(d.project_order); }, [d]);
   const { slow, grow, wrap, retryBtn } = useLanding(d, url, loading, error, ":scope > :is(.panel, .tips, .drawers)");
   // A tip the payload does not have (an old link, another view) shows nothing.
-  const tip = d?.tips.find(t => t.id === h.raw.tip);
+  const tip = d?.tips.find(t => t.id === search.tip);
   const openTip = (id: TipId) => setSearch({ tip: id }, { push: true });
   const closeTip = () => setSearch({ tip: null }, { push: false });
   const cls = "wrap pg-context" + (slow ? " loading" : "") + (grow ? " grow" : "");

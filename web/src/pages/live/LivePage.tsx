@@ -4,7 +4,7 @@ import { Filters, SOURCE_LABELS } from "../../components/Filters";
 import { ProjectName } from "../../components/ProjectDot";
 import { appLink } from "../../components/sheets/session";
 import { plural, usd, when } from "../../format";
-import { useView } from "../../url";
+import { useSearchOf, useView } from "../../url";
 import { ApiError } from "../../useApi";
 import { sessionHref } from "../insights/InsightsPage";
 import { AgentPanel, StateTag } from "./AgentPanel";
@@ -12,6 +12,7 @@ import { groupSessions, needsYou, NO_FILTERS, stateNow, type LaneChoices } from 
 import { Stream } from "./Stream";
 import { useLive, useNow } from "./useLive";
 import { StateNote, Wall } from "./Wall";
+import { validateSearch } from "./search";
 import "./live.css";
 
 /** The states the rail's footer counts as working, as the rail's working group. approval? and your turn count as waiting
@@ -23,7 +24,8 @@ const COUNT = /^\(\d+\) /;
 /** Live (/live): the sessions active in the last 10 minutes, followed from the agent's side as their lines arrive. */
 export function LivePage() {
   const [h, set] = useView();
-  const view = viewOf(h), mode = h.raw.view === "wall" ? "wall" : "stream";
+  const search = useSearchOf(validateSearch);
+  const view = viewOf(h), mode = search.view === "wall" ? "wall" : "stream";
   const [text, setText] = useState(false); // off on every load: transcript text can hold secrets
   const [paused, setPaused] = useState(false);
   const [follow, setFollow] = useState(true);

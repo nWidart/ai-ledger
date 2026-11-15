@@ -5,7 +5,9 @@ import {
   applyRules, beforeAfter, breakdown, bucketLabel, bucketOf, buckets, byWeight, change, chartData, compare, emptyTypes, exList, filtered, inBucket, incidentsOf, inTool, incSummary, makeModel, messageOf, midDay, msgGroups, msgList, normalize, pointText,
   rangeStart, series, settle, summary, timeLost, typeColors, typeRows, uncategorized, viewTypes, whereToStart, withMuted, errorDays, type Err, type View,
 } from "./model";
+import { parseSearch, validateRoot } from "../../url";
 import { lostPayload } from "./lostData";
+import { validateSearch } from "./search";
 import { DEFAULT_VIEW, loadFixes, loadMode, readView, savedOf, viewLink, viewPatch } from "./view";
 
 const m = makeModel(fixture);
@@ -469,7 +471,7 @@ describe("tool breakdown", () => {
 });
 
 describe("hash and storage", () => {
-  const raw = (h: string) => Object.fromEntries(new URLSearchParams(h));
+  const raw = (h: string) => { const r = parseSearch(h); return { ...validateRoot(r), ...validateSearch(r) }; };
   it("reads the old page's keys; a bare ?ex= link is all time and opens its type", () => {
     expect(readView(raw("ex=t07"), {}, m)).toEqual({ linked: true, dead: false, view: { ...DEFAULT_VIEW, range: 0, cat: "x", focus: "t07" } });
     expect(readView(raw("project=foo&range=7&sub=0&noise=0&gran=week&cat=x"), {}, m).view)
@@ -482,7 +484,7 @@ describe("hash and storage", () => {
     expect(readView(raw("ex=nope"), {}, m)).toEqual({ linked: false, dead: true, view: { ...DEFAULT_VIEW, range: 30 } });
     expect(readView(raw("ex=nope&range=7"), {}, m)).toMatchObject({ dead: true, view: { range: 7, focus: null } });
     expect(readView(raw("range=30"), {}, m).dead).toBe(false);
-    expect(readView(raw("ex="), {}, m)).toMatchObject({ dead: false, view: { range: 0 } });
+    expect(readView(raw("ex="), {}, m)).toMatchObject({ dead: false, view: { range: 30 } }); // an empty ex is absent, so nothing names a view and the saved one (none) applies
     expect(readView({}, { range: 7 }, m).dead).toBe(false);
   });
   it("flags nothing before the payload loads, so a permalink does not flash the notice", () => {
