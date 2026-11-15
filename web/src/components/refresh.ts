@@ -15,11 +15,12 @@ export type RefreshKind = "idle" | "busy" | "stale" | "failed" | "offline" | "re
  *  text: the palette's sentence. The rest is from the newest status answer, whichever kind shows: at, the last ingest;
  *  inserted, the lines it stored; changedAt, the last ingest that changed data; interval, in seconds. error: the failed
  *  Refresh's message for retry, else the ingest error. said: the last Refresh's result, for a polite status region; empty
- *  while one runs and before the first, so it is announced once per Refresh and never for a timed ingest. */
+ *  while one runs and before the first, so it is announced once per Refresh and never for a timed ingest. ingesting: the
+ *  app says an ingest runs (the first one after start, before any time to show, can take minutes). */
 export interface RefreshState {
   text: string; failed: boolean; busy: boolean; retry: boolean; alert: LimitsAlert | null;
   kind: RefreshKind; at: Date | null; inserted: number | null; changedAt: Date | null; interval: number | null;
-  error: string | null; said: string;
+  error: string | null; said: string; ingesting: boolean;
 }
 
 const RETRY_TEXT = "Refresh failed. Select Retry to try again.";
@@ -106,7 +107,7 @@ const said = (refresh: string, r: RefreshResult) => {
 export function refreshState(q: StatusSlice, refresh: "idle" | "pending" | "success" | "error", r: RefreshResult = {}): RefreshState {
   const s = q.data, at = s?.last_ingest ? new Date(s.last_ingest) : null, interval = s?.interval ?? null;
   const base = {
-    alert: s?.limits_alert ?? null, at, inserted: s?.last_stats?.inserted ?? null,
+    alert: s?.limits_alert ?? null, at, inserted: s?.last_stats?.inserted ?? null, ingesting: !!s?.ingesting,
     changedAt: s?.last_change ? new Date(s.last_change) : null, interval, error: s?.error ?? null, said: said(refresh, r),
   };
   const off = { failed: false, busy: false, retry: false };
@@ -131,7 +132,8 @@ export function freshLabel(st: RefreshState): string {
     case "failed": case "retry": return "Failed";
     case "offline": return "Offline";
     case "stale": return st.at ? `Stale · ${clock(st.at)}` : "Stale";
-    case "idle": return st.at ? clock(st.at) : "";
+    // Before the first ingest ends there is no time to show: say the one under way, not nothing.
+    case "idle": return st.at ? clock(st.at) : st.ingesting ? "Ingesting…" : "";
   }
 }
 

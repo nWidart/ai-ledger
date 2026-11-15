@@ -14,7 +14,7 @@ This playbook applies before every screen share, recording, screenshot or demo o
 Act at once when one of these holds:
 
 - [Live](/ai-ledger/pages/live/) shows the banner "**Full text on.** Prompts, replies and tool output show as written, secrets included." This is the app's own warning.
-- The project picker, or the **Project** chip in the navigation, names a project you cannot show, such as a client's.
+- The project picker, or the **Search** button in the navigation, which shows the project's name while a project filter is set, names a project you cannot show, such as a client's.
 - A sheet is open beside the page: the URL holds `session=`, `inspect=`, `tool=`, `mcp=` or `skill=` (on any page but Live).
 - [Errors](/ai-ledger/pages/errors/) has a type open with its list or examples in view.
 
@@ -34,7 +34,7 @@ The table lists what each page can show with **Full text** off. Each row is abou
 
 | Page | What can show | Why it matters | Fix |
 | --- | --- | --- | --- |
-| Every page | Project names in the picker list, the [command palette](/ai-ledger/everywhere/command-palette/), tables, chart keys and the **Project** chip; the URL | A project name can name a client or private work. | [Narrow every page to one project](#narrow-every-page-to-one-project) |
+| Every page | Project names in the picker list, the [command palette](/ai-ledger/everywhere/command-palette/), tables, chart keys and the **Search** button; the URL | A project name can name a client or private work. | [Narrow every page to one project](#narrow-every-page-to-one-project) |
 | Cost, Activity, and the filters of Activity, Context, Project and Live | The path of the app's data folder: Cost's **Unpriced models** and **Prices file ignored** banners, Activity's **Automated projects file ignored** banner, and the "Add more projects in …" line of the **Include automated sessions** help | The path holds your user name, such as `/Users/<name>/Library/Application Support/ai-ledger/`. The **Unpriced models** banner shows, unfolded, whenever a model has no price, such as a new model. | [Hide paths to your data folder](#hide-paths-to-your-data-folder) |
 | Activity, Cost, Context, Insights, Project | Session titles. When the agent wrote no title, the title is made from the session's first prompt. | A first prompt can quote a secret, a person or a client. | [Narrow every page to one project](#narrow-every-page-to-one-project) |
 | Activity | **Failed test runs**: the **Command** column. The Tool, MCP server and skill sheets: the input patterns and the recent calls. | A command can hold a token or a path. | [Close sheets and keep drawers folded](#close-sheets-and-keep-drawers-folded) |
@@ -104,7 +104,7 @@ Before each share, check these on the tab you will share. Each must hold; there 
 | Check | Where | Expected |
 | --- | --- | --- |
 | The **Full text** banner | Live, under the filters | Absent. Prompts and replies read as word counts. |
-| The project filter | The URL and the **Project** chip | The one project you chose. |
+| The project filter | The URL and the **Search** button | The one project you chose. |
 | Open sheets | The URL, on every page but Live, where `session=` names the session in the stream | No `session=`, `inspect=`, `tool=`, `mcp=` or `skill=`. |
 | Errors | The URL of Errors | No `cat=` and no `ex=`: no type and no example open. |
 | **What used this window** | Limits | Folded, or Limits not shown. |

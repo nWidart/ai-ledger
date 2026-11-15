@@ -37,7 +37,7 @@ Leave the terminal open. The app runs until we stop it there.
 
 ## Wait for the first ingest
 
-The first start reads every transcript on the machine: Claude Code's in `~/.claude/projects` and Codex's in `~/.codex`. While it reads, the navigation bar at the top of the page says **Ingesting transcripts…**, next to the **Refresh** button.
+The first start reads every transcript on the machine: Claude Code's in `~/.claude/projects` and Codex's in `~/.codex`. While it reads, the navigation bar at the top of the page says **Ingesting…**, next to the **Refresh** button.
 
 This takes a few minutes: about 4 minutes for 3.4 GB of transcripts. The page fills in as it goes.
 
@@ -47,7 +47,7 @@ When the ingest is done, the terminal prints one line that counts what it read, 
 ingest: 2140 files, 812345 new lines, 96 usage-data files (0 skipped), 231.4s
 ```
 
-The navigation bar now says **Last ingest**, with the time and the number of new lines, and the page loads the new figures by itself.
+The navigation bar now shows the time of the ingest, such as **8:00 PM**. Hover it or select it to see the details, with the number of new lines. The page loads the new figures by itself.
 
 ## Read the first figure
 

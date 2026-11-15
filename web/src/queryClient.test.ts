@@ -117,6 +117,10 @@ describe("refreshState kinds", () => {
     expect(freshLabel(st)).toBe(time(at));
     expect(freshLabel(refreshState(q({ data: undefined, dataUpdatedAt: 0 }), "idle"))).toBe("");
   });
+  it("says Ingesting… for the first ingest, before any time, and the time once there is one", () => {
+    expect(freshLabel(refreshState(q({ data: { ...status, ingesting: true, last_ingest: null } }), "idle"))).toBe("Ingesting…");
+    expect(freshLabel(refreshState(q({ data: { ...status, ingesting: true } }), "idle"))).toBe(time(at));
+  });
   it("is stale when the last ingest is older than three intervals at the answer's time", () => {
     const st = refreshState(q({ dataUpdatedAt: at + 5 * 60_000 }), "idle");
     expect(st.kind).toBe("stale");
