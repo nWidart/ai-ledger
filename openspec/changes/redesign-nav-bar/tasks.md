@@ -4,18 +4,18 @@ Each group lists the model it suits. Groups 2 and 3 can run in parallel: they to
 
 ## 1. Prepare (lead)
 
-- [ ] 1.1 Wait for `respect-text-size` to merge into `main`, then rebase `feat/nav-bar-redesign` onto `origin/main`. Verify that `git merge-base --is-ancestor origin/main feat/nav-bar-redesign` succeeds and that `cd web && npm run check` passes.
+- [x] 1.1 Wait for `respect-text-size` to merge into `main`, then rebase `feat/nav-bar-redesign` onto `origin/main`. Verify that `git merge-base --is-ancestor origin/main feat/nav-bar-redesign` succeeds and that `cd web && npm run check` passes.
 
 ## 2. Freshness state in `refresh.ts` (Opus)
 
-- [ ] 2.1 Extend `RefreshState` with `kind`, `at`, `inserted`, `changedAt`, `interval` and `error`, keeping `text`. Add the Stale rule: older than 3 × interval, judged at `dataUpdatedAt`. Verify with new `queryClient.test.ts` cases for idle, busy, stale (at 5 min with a 60 s interval), not stale (at 70 s), failed, offline and retry, and the existing order: a running or failed manual refresh wins.
-- [ ] 2.2 Add the "+N lines" flash store beside `seen`: set it on a new `last_change`, or on a refresh answer with inserted > 0, and clear it after 4 s. Verify with fake-timer tests: shown at 5 lines and gone after 4 s, nothing for 0 lines, and nothing for the first status after load.
-- [ ] 2.3 Add the manual refresh result message: "Refreshed: N new lines", "Refreshed: nothing new", or the failure text. Set it on success or error and clear it when the next refresh starts. Verify with tests that a timed poll never sets it.
+- [x] 2.1 Extend `RefreshState` with `kind`, `at`, `inserted`, `changedAt`, `interval` and `error`, keeping `text`. Add the Stale rule: older than 3 × interval, judged at `dataUpdatedAt`. Verify with new `queryClient.test.ts` cases for idle, busy, stale (at 5 min with a 60 s interval), not stale (at 70 s), failed, offline and retry, and the existing order: a running or failed manual refresh wins.
+- [x] 2.2 Add the "+N lines" flash store beside `seen`: set it on a new `last_change`, or on a refresh answer with inserted > 0, and clear it after 4 s. Verify with fake-timer tests: shown at 5 lines and gone after 4 s, nothing for 0 lines, and nothing for the first status after load.
+- [x] 2.3 Add the manual refresh result message: "Refreshed: N new lines", "Refreshed: nothing new", or the failure text. Set it on success or error and clear it when the next refresh starts. Verify with tests that a timed poll never sets it.
 
 ## 3. Project link and clear button move to the filter row (Opus)
 
-- [ ] 3.1 In `Filters.tsx`, with a project set, render a "Project page" link named "<project> project page" next to the picker (not on `/project`), and a "Clear project filter" button that clears `project` and `session` and focuses `#fProject`. Style both in `Filters.css`, phones included. Verify with `Filters.test.tsx` cases for the link's name and target with range and source kept, no link on `/project` or without a project, clear keeping focus on the picker, and clear on `/project` opening Activity.
-- [ ] 3.2 Remove the project chip (`#navFilter`, `.appnav-go`, `clear()`) from `Nav.tsx` and its rules from `Nav.css`. Move the `router.test.tsx` and `Nav.test.tsx` chip assertions to the filter-row link. Verify with `npm run check`.
+- [x] 3.1 In `Filters.tsx`, with a project set, render a "Project page" link named "<project> project page" next to the picker (not on `/project`), and a "Clear project filter" button that clears `project` and `session` and focuses `#fProject`. Style both in `Filters.css`, phones included. Verify with `Filters.test.tsx` cases for the link's name and target with range and source kept, no link on `/project` or without a project, clear keeping focus on the picker, and clear on `/project` opening Activity.
+- [x] 3.2 Remove the project chip (`#navFilter`, `.appnav-go`, `clear()`) from `Nav.tsx` and its rules from `Nav.css`. Move the `router.test.tsx` and `Nav.test.tsx` chip assertions to the filter-row link. Verify with `npm run check`.
 - [ ] 3.3 Update `tools/demo/record.mjs` to click the filter-row link instead of `.appnav-go`. Verify that the script runs to the end against the demo store.
 
 ## 4. Search button shows the project (Sonnet)

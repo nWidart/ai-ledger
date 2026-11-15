@@ -86,14 +86,14 @@ To keep components out of `noteStatus`, the flash state lives in the same per-cl
 
 ### 6. Narrow layouts with CSS steps, page chooser with Base UI `Popover`
 
-Breakpoints are written in `rem`, so a larger default text size triggers them too. Values are set by measuring the real bar after implementation. The estimates are:
+Breakpoints are written in `em`, as `respect-text-size` left the existing ones (`32.5em`, `22.5em`). In a media query, `em` is the browser's default font size, so a larger default text size triggers them too. Values are set by measuring the real bar after implementation. The estimates are:
 
 | Width | Step |
 |---|---|
-| ≤ 60rem | Hide the wordmark. |
-| ≤ 52rem | The palette button shows its icon only, plus the dot. |
-| ≤ 46rem | Tab padding 10px → 7px. |
-| ≤ 38rem | Hide the tabs and show the page chooser. Hide the time text in the freshness control. |
+| ≤ 60em | Hide the wordmark. |
+| ≤ 52em | The palette button shows its icon only, plus the dot. |
+| ≤ 46em | Tab padding 10px → 7px. |
+| ≤ 38em | Hide the tabs and show the page chooser. Hide the time text in the freshness control. |
 
 The page chooser:
 

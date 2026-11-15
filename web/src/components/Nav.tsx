@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
-import { navigate, parseSearch, setSearch, sharedSearch, useSearchOf, usePathname } from "../url";
+import { navigate, parseSearch, sharedSearch, useSearchOf, usePathname } from "../url";
 import { getTheme, nextTheme, setTheme, useTheme, type Theme } from "../theme";
 import { alertKey, alertText } from "../pages/limits/limits";
-import { ProjectDot } from "./ProjectDot";
 import { openPalette, shortcutHint, shortcutKeys } from "./palette/store";
 import { useRefresh } from "./refresh";
 import "./Nav.css";
@@ -25,13 +24,12 @@ const THEME_ICON: Record<Theme, ReactNode> = {
   dark: <path d="M13.5 9.5A5.5 5.5 0 0 1 6.5 2.5a5.5 5.5 0 1 0 7 7Z" />,
 };
 
-// What the bar reads of the URL: the shared query string its links carry, and the project its chip shows.
-const navSearch = (raw: Readonly<Record<string, string>>) => ({ shared: sharedSearch(raw), project: raw.project || "" });
+// What the bar reads of the URL: the shared query string its links carry.
+const navSearch = (raw: Readonly<Record<string, string>>) => sharedSearch(raw);
 
-/** The shared top bar: brand, page tabs (keeping project, range and auto), the project filter chip, the palette button,
- *  ingest status and Refresh. */
+/** The shared top bar: brand, page tabs (keeping project, range and auto), the palette button, ingest status and Refresh. */
 export function Nav() {
-  const path = usePathname(), { shared, project } = useSearchOf(navSearch), theme = useTheme(), next = nextTheme(theme);
+  const path = usePathname(), shared = useSearchOf(navSearch), theme = useTheme(), next = nextTheme(theme);
   const nav = useRef<HTMLElement>(null);
   const { refresh, state: st } = useRefresh();
   const alert = st.alert ? alertText(st.alert) : null;
@@ -54,10 +52,6 @@ export function Nav() {
     if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     e.preventDefault();
     if (to !== path) navigate(to + shared);
-  };
-  const clear = () => {
-    setSearch({ project: null, session: null });
-    document.getElementById("fProject")?.focus();
   };
 
   return (
@@ -89,17 +83,6 @@ export function Nav() {
             );
           })}
         </span>
-        {project && (
-          <span className="appnav-filter" id="navFilter">
-            <span className="k">Project</span><ProjectDot project={project} />
-            <Link to="/project" search={parseSearch(shared) as never} activeOptions={{ includeSearch: false }} activeProps={{}} onClick={e => go(e, "/project")}>
-              <b>{project}</b>{" "}
-              {/* The pill says where the chip leads; the link's name reads "<project> project page". */}
-              <span className="appnav-go"><span className="sr">project</span>{" "}Page{path !== "/project" && <span aria-hidden="true">{" "}→</span>}</span>
-            </Link>
-            <button type="button" aria-label="Clear project filter" title="Show all projects" onClick={clear}>✕<span className="lbl"> Clear</span></button>
-          </span>
-        )}
         <button type="button" className="appnav-palette" aria-label={`Search, open command palette (${shortcutHint()})`} aria-haspopup="dialog"
           aria-keyshortcuts={shortcutKeys()} title={`Filter, go to a page or open an inspector (${shortcutHint()})`} onClick={openPalette}>
           <svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5" fill="none" stroke="currentColor" strokeWidth="1.8" /><path d="m13 13 4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>

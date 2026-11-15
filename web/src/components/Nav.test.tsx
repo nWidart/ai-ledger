@@ -10,7 +10,6 @@ import { askedFor } from "./refresh";
 import { renderApp, renderRouter } from "../testing";
 import { useApi } from "../useApi";
 import { useQuery, type QueryClient } from "@tanstack/react-query";
-import errors from "../__fixtures__/errors";
 import usage from "../__fixtures__/usage";
 import sessions from "../__fixtures__/sessions";
 import session from "../__fixtures__/session";
@@ -135,44 +134,13 @@ describe("Nav", () => {
     await waitFor(() => expect(hasHue("foo")).toBe(true));
   });
 
-  it("shows the project chip and clears the filter", async () => {
+  it("shows no project chip: the project's link and clear button are in the filter row", () => {
     vi.stubGlobal("fetch", vi.fn(() => json(status)));
-    history.replaceState(null, "", "/errors?project=foo&range=30&session=s1");
+    history.replaceState(null, "", "/errors?project=foo&range=30");
     renderApp(<Nav />);
-    await userEvent.click(screen.getByRole("button", { name: "Clear project filter" }));
-    expect(location.search).toBe("?range=30");
+    expect(screen.queryByRole("link", { name: /project page/i })).toBeNull();
     expect(screen.queryByRole("button", { name: "Clear project filter" })).toBeNull();
     expect(screen.getByRole("link", { name: "Errors" }).getAttribute("aria-current")).toBe("page");
-  });
-
-  it("links the chip's project to its page with the shared view, current there, and marks no tab", async () => {
-    const bodies: Record<string, unknown> = { "/api/status": status, "/api/errors": errors, "/api/context": context, "/api/insights": insights, "/api/limits": limits, "/api/live": live };
-    vi.stubGlobal("fetch", vi.fn((url: string) => json(bodies[new URL(url, "http://x").pathname] ?? usage)));
-    history.replaceState(null, "", "/cost?project=foo&range=30&source=claude");
-    renderRouter();
-    const link = await screen.findByRole("link", { name: /foo project page/i });
-    expect(link.getAttribute("href")).toBe("/project?project=foo&range=30&source=claude");
-    expect(document.querySelectorAll('#navFilter a[href^="/project"]').length).toBe(1);
-    expect(link.textContent).toContain("→");
-    expect(link.hasAttribute("title")).toBe(false);
-    expect(link.getAttribute("aria-current")).toBeNull();
-    await userEvent.click(link);
-    await waitFor(() => expect(location.pathname).toBe("/project"));
-    expect(location.search).toBe("?project=foo&range=30&source=claude");
-    await screen.findByRole("heading", { level: 1, name: "foo" });
-    const here = screen.getByRole("link", { name: /foo project page/i });
-    expect(here.getAttribute("aria-current")).toBe("page");
-    expect(here.textContent).not.toContain("→");
-    for (const name of ["Activity", "Cost", "Context", "Errors", "Limits", "Insights", "Live"]) expect(screen.getByRole("link", { name }).getAttribute("aria-current")).toBeNull();
-    expect(screen.getByRole("button", { name: "Clear project filter" })).toBeTruthy();
-  });
-
-  it("clears the Activity day with the project filter", async () => {
-    vi.stubGlobal("fetch", vi.fn(() => json(status)));
-    history.replaceState(null, "", "/usage?project=foo&range=30&day=2026-11-04&q=api");
-    renderApp(<Nav />);
-    await userEvent.click(screen.getByRole("button", { name: "Clear project filter" }));
-    expect(location.search).toBe("?range=30&q=api");
   });
 
   it("shows the ingest status, and a failed Refresh offers Retry until it is retried, whatever a status poll answers", async () => {
