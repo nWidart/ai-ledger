@@ -45,7 +45,7 @@ A `#` term SHALL select a filter: a project, a source (`#claude` for Claude Code
 - **THEN** the URL records the choice, Errors keeps showing automated sessions as it always does, and the choice applies on Activity and Cost
 
 ### Requirement: Go to a page with `>`
-A `>` term naming a page (Activity, Cost, Context, Errors, Limits, Insights, Live) SHALL open that page. Filters that are not changed in the palette SHALL be carried over as the navigation carries them.
+A `>` term naming a page (Activity, Cost, Context, Errors, Limits, Insights, Live) SHALL open that page. Filters that are not changed in the palette SHALL be carried over as the navigation carries them. When the palette's chips or the current view name a project, `>project` SHALL open the Project page for that project; with no project, the palette SHALL NOT offer it.
 
 #### Scenario: Page only
 - **WHEN** the user views project `myproject` for the last 14 days on Activity and commits `>errors`
@@ -66,6 +66,18 @@ A `>` term naming a page (Activity, Cost, Context, Errors, Limits, Insights, Liv
 #### Scenario: Go to Context
 - **WHEN** the user views project `myproject` for the last 7 days on Cost and commits `>context`
 - **THEN** Context opens filtered to `myproject` and the last 7 days
+
+#### Scenario: Go to a project's page
+- **WHEN** the user has no project filter on Cost for the last 7 days and commits `>project #myproject`
+- **THEN** the URL becomes `/project?project=myproject&range=7` and the Project page shows `myproject`
+
+#### Scenario: Project page from the current view
+- **WHEN** the user views project `myproject` on Activity and commits `>project`
+- **THEN** the Project page opens on `myproject`
+
+#### Scenario: No project named
+- **WHEN** the user has no project filter and types `>proj` with no project chip
+- **THEN** the list offers no Project page
 
 ### Requirement: Open an inspector with `>`
 A `>` term naming a tool, an MCP server, a skill, a session or an error category SHALL open that subject's sheet: the tool inspector for a tool, MCP server or skill, the session sheet for a session, and the category on Errors for an error category. The sheet SHALL reflect the committed filters.

@@ -115,7 +115,7 @@ The errors dashboard SHALL read its data from the store and SHALL keep its exist
 - **THEN** the marker still shows on its date with the before and after error rate
 
 ### Requirement: Open Activity by default
-The app SHALL serve Activity at `/usage`, Cost at `/cost`, Context at `/context`, Errors at `/errors`, Limits at `/limits`, Insights at `/insights` and Live at `/live`, and SHALL send `/` to Activity.
+The app SHALL serve Activity at `/usage`, Cost at `/cost`, Context at `/context`, Errors at `/errors`, Limits at `/limits`, Insights at `/insights`, Live at `/live` and the Project page at `/project`, and SHALL send `/` to Activity.
 
 #### Scenario: Open the app root
 - **WHEN** the user opens `http://127.0.0.1:8765/`
@@ -136,6 +136,10 @@ The app SHALL serve Activity at `/usage`, Cost at `/cost`, Context at `/context`
 #### Scenario: Open Live
 - **WHEN** the user opens `http://127.0.0.1:8765/live`
 - **THEN** the Live page opens
+
+#### Scenario: Open a project's page
+- **WHEN** the user opens `http://127.0.0.1:8765/project?project=foo`
+- **THEN** the Project page opens on `foo`
 
 ### Requirement: Run without a frontend toolchain
 The app SHALL serve every dashboard page from the built files that ship with it, in the repository and in the installed package, so running it needs only Python and its Python dependencies. A frontend toolchain SHALL be needed only to change the pages.
