@@ -5,12 +5,147 @@ description: Lower your estimated spend through the model mix, the cache hit rat
 
 ## Goal
 
+Each commit and each prompt costs less, through a cheaper model mix, a higher cache hit and fewer runaway sessions, and your plan matches what you use.
+
 ## Signs you need it
+
+Open [Cost](/ai-ledger/pages/cost/) with the range at **30d** and **All projects**. This playbook applies when one of these holds. The first four use the app's own thresholds.
+
+| Where | Sign | The app shows it when |
+| --- | --- | --- |
+| Cost, **What stands out** | **Cost-per-commit outlier**, marked **▲ Watch** or **● Act** | A project costs over twice the median project per commit and holds at least 2% of the spend. **● Act** from 4 times. |
+| Cost, **What stands out** | **Biggest spender** marked **▲ Watch**, or **Peak day** marked **▲ Watch** | The biggest project costs over twice the median project per commit; the costliest day is 3 times the median day or more, with 5 or more days of spend. |
+| Cost, **Cost by project** drawer | A **Cache hit** cell tinted as worse, with **▼** | The project's cache hit is 10 points or more below the median project's. |
+| [Context](/ai-ledger/pages/context/), **Tips** | **The prompt cache breaks within sessions**, or **Requests are priced on the long-prompt tier** | A session has 2 cache breaks or more; the long-prompt tier costs at least $1 and at least 10% of the view's estimated cost. |
+| Cost, the heading | The plan line, such as "at list prices this period is 0.6× your plan" (an example) | Rule of thumb: the multiple is below 1 at **30d** in two readings a week apart. |
+
+The plan line needs a known plan. On Linux, Claude Code has no plan-limit snapshot, so the line counts Codex only, or does not show.
+
+Two neighbouring signs belong to other playbooks:
+
+- A plan line well above 1×, together with a Limits window that runs out: open [Stop hitting plan limits](/ai-ledger/improve/plan-limits/).
+- One project that carries the rise in **What changed**: open [Retro on one project](/ai-ledger/improve/project-retro/) for it.
 
 ## Diagnose
 
+Find out which of five causes you have. Keep the filters of the signs: **30d**, **All projects**. The filters are the same on Cost and Context; see [Filters](/ai-ledger/everywhere/filters/).
+
+1. On Cost, select the action of the card that is marked: **Compare projects**, **Inspect project** or **Show that day's sessions**. If one project leads, pick it in the project picker for the next steps.
+2. Read **Models and effort**. Note the top row and its share, such as `fable-5-2 · high` at 70% (an example). Note every row that ends in `· fast`: those are fast-mode requests.
+3. Open the drawer **Tokens and cache**. Write down **Cache hit**, **Subagent cost**, **Per prompt** and **Per commit**. You need them in Verify.
+4. Open [Context](/ai-ledger/pages/context/) with the same filters. If the tip **The prompt cache breaks within sessions** shows, read its evidence line **Breaks by cause**: model switches, expired or other. If the tip **Requests are priced on the long-prompt tier** shows, read **Long-prompt thresholds**: the prompt size above which each model charges more.
+5. Back on Cost, open the drawer **Most expensive sessions**. Look for sessions with a long **Active** time, many **Prompts** and few **Commits**.
+6. For the plan line, open [Limits](/ai-ledger/pages/limits/) with the range at **90d** and read **Left unused** for each weekly limit.
+
+| What you see | Cause | Fix |
+| --- | --- | --- |
+| The top row of **Models and effort** is your most expensive model, for routine work; or **Subagent cost** is high and your subagents set no cheaper model. | The model is larger than the task. | [Use a cheaper model for routine work](#use-a-cheaper-model-for-routine-work) |
+| Rows that end in `· fast` hold a large share. | Fast mode on work you do not wait for. | [Use fast mode only when you wait](#use-fast-mode-only-when-you-wait) |
+| The cache-break tip shows, or the **Cache hit** cell is tinted as worse. | The prompt cache breaks. | [Keep the cache warm](#keep-the-cache-warm) |
+| The long-prompt tip shows. | Prompts pass the model's long-prompt threshold. | [Stay under the long-prompt threshold](#stay-under-the-long-prompt-threshold) |
+| The most expensive sessions run for hours across many prompts with few commits. | Sessions run across many tasks. | [Start a new session for each task](#start-a-new-session-for-each-task) |
+| The plan line stays below 1×, and **Left unused** reads 50% or more. | The plan is larger than your use. | [Fit the plan to your use](#fit-the-plan-to-your-use) |
+
+More than one cause can apply. Fix the one with the largest share of cost first.
+
 ## Act
+
+### Use a cheaper model for routine work
+
+Rule of thumb: lookups, renames, small edits, test runs and bulk reading do not need your largest model. Compare the prices in the [packaged price table](/ai-ledger/reference/configuration/#prices) before you choose.
+
+For Claude Code:
+
+- To set the default model of a project, set `model` in its `.claude/settings.json`:
+
+  ```json
+  {"model": "sonnet"}
+  ```
+
+- To switch for one session, run `/model` before the first prompt. A switch in the middle of a session breaks the cache (see [Keep the cache warm](#keep-the-cache-warm)).
+- To run a subagent on a cheaper model, set `model` in the front matter of its file in `.claude/agents/`:
+
+  ```md
+  ---
+  name: explorer
+  description: Reads code and reports where things are.
+  model: haiku
+  ---
+  ```
+
+For Codex, set the model and the reasoning effort in `~/.codex/config.toml`. The effort shows in **Models and effort** after the `·`. In the packaged price table, `gpt-6.1-sol` costs a fifth of `gpt-6-astra`:
+
+```toml
+model = "gpt-6.1-sol"
+model_reasoning_effort = "medium"
+```
+
+When a task needs the larger model, switch for that session only, at its start.
+
+### Use fast mode only when you wait
+
+A fast-mode request costs the model's fast rates, which are higher than its standard rates at any prompt size. In Claude Code, `/fast` turns fast mode on and off.
+
+Habit: when you hand the agent a task and leave it to run, turn fast mode off first.
+
+### Keep the cache warm
+
+Act on the cause that leads in **Breaks by cause**:
+
+- **model switch**: choose the model before the first prompt and keep it for the session. To change models, start a new session.
+- **expired**: the gap since the previous request was longer than the cache lifetime: 5 minutes in Claude Code, 30 minutes in Codex, 1 hour after a 1-hour cache write. Habit: when you come back to a long session after a longer break, and the next task is a new one, start a new session instead. It writes only the starting context to the cache, not the whole history. When the next task needs the history, keep the session: that break is the price of the history.
+- **other**: something before the cached part of the prompt changed. Do not edit `CLAUDE.md`, `AGENTS.md`, the MCP servers or the skills during a session; make the change, then start a new session.
+
+### Stay under the long-prompt threshold
+
+Once a prompt passes the threshold, every token of the request is priced higher. In the packaged price table, `claude-haiku-5-5` charges more above 100,000 tokens, and `gpt-6-astra` and `gpt-6.1-sol` above 272,000 tokens.
+
+Habit: when the token count under **Context window**, in a session's agent panel on [Live](/ai-ledger/pages/live/), nears the threshold of its model, run `/compact` or start a new session before the next prompt. To start sessions smaller, follow [Keep context lean](/ai-ledger/improve/lean-context/).
+
+### Start a new session for each task
+
+A long session sends its whole history with every request. Habit: when a task is done and committed, run `/clear` in Claude Code, or start a new session, before the next task. [Keep context lean](/ai-ledger/improve/lean-context/#start-a-new-session-for-each-task) has the other habits.
+
+### Fit the plan to your use
+
+A multiple below 1 means that the same use would have cost less at API list prices than the plan did. **Left unused** at 50% or more means you leave half of each week unused.
+
+1. If you pay another price than the packaged plan, such as an annual price, set it first, or the multiple is wrong. Add your plan to `plans` in your own `prices.json`, in the folder that holds the store, with your `monthly` price. [Configuration](/ai-ledger/reference/configuration/#plans) gives the folder and an example. The next page load uses it.
+2. If the multiple is still below 1, check two things on Limits, at **90d**: **Left unused** reads 50% or more for the weekly limit, and **Past windows** shows no red bar (**hit its limit**).
+3. If both hold, change to the next plan down, such as Claude Max 5x for Claude Max 20x, in your account at Anthropic or OpenAI before the next billing date.
 
 ## Verify
 
+Before you act, note the figures of step 3 of Diagnose, the share of the top row of **Models and effort**, and the cache-break count on Context, at **30d** and with the same project filter. The app has no custom date range, so you need these to compare with.
+
+The same day, open the session on [Live](/ai-ledger/pages/live/): the agent panel's **This session** shows the **Model** you set and its **Cache read** share.
+
+After 14 days, set the range to **14d** with the same project filter: the view then holds only days after the change. Read:
+
+| Figure | Where | Expected |
+| --- | --- | --- |
+| **Per commit**, **Per prompt** | Cost, **Tokens and cache** | Lower than your note. |
+| Share of the top row | Cost, **Models and effort** | Lower than your note, with the cheaper model higher. |
+| **Cache hit** | Cost, **Tokens and cache** | Higher than your note. |
+| Sessions with cache breaks, long-tier cost | Context, the two tips | Fewer sessions in the tip, or the tip is gone. |
+
+For a plan change, wait 30 days instead, then read the plan line on the Cost heading at **30d**: it names the new plan's price, with a multiple of 1 or more.
+
+The heading also compares the 14 days with the 14 days before ("−20% vs the previous 14 days", an example). Read it with care: it falls with less work too. **Per commit** and **Per prompt** are the figures that count.
+
+If a figure did not move:
+
+- A long session you started before the change, and resumed since, still runs on its old model. Wait for the view to hold new sessions.
+- A change to `.claude/settings.json`, an agent file or `config.toml` applies to new sessions only.
+- If **Per commit** rose while **Per prompt** fell, you committed less often. Read **Per prompt**.
+- If nothing moved, the cause you fixed was not the largest one. Go back to step 2 of Diagnose and take the next row of the table.
+
 ## Related
+
+- [Cost](/ai-ledger/pages/cost/): every card, panel and drawer used here.
+- [Context](/ai-ledger/pages/context/#cost): the cache chart, the cache breaks and the long-prompt tier.
+- [How cost is estimated](/ai-ledger/concepts/cost-estimates/): list prices, the cache and the plan comparison.
+- [Configuration](/ai-ledger/reference/configuration/): prices and plans.
+- [Metric glossary](/ai-ledger/reference/glossary/#cost): the definition of each figure.
+- [Keep context lean](/ai-ledger/improve/lean-context/): smaller sessions cost less per request.
+- [Stop hitting plan limits](/ai-ledger/improve/plan-limits/): when the plan is too small, not too large.
