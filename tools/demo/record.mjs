@@ -420,6 +420,9 @@ async function shots(wanted) {
       if (exited || i > 120) throw new Error("serve.py did not start");
       await sleep(500);
     }
+    // Another server may have taken 8799 while seed.py ran: then serve.py fails to bind and exits.
+    await sleep(1000);
+    if (exited) throw new Error("serve.py exited: something else holds port 8799, so the shots would not come from the demo store");
     for (const key of wanted.length ? all.filter(p => wanted.includes(p)) : all) {
       if (key === "live") await liveShots(b);
       else for (const scheme of ["dark", "light"]) await (key === "everywhere" ? everywhereShots(b, scheme) : pageShots(b, key, scheme));

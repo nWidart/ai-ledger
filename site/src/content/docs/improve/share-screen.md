@@ -34,7 +34,8 @@ The table lists what each page can show with **Full text** off. Each row is abou
 
 | Page | What can show | Why it matters | Fix |
 | --- | --- | --- | --- |
-| Every page | Project names in the picker list, the [command palette](/ai-ledger/everywhere/command-palette/), tables, chart keys and the **Project** chip; the URL; the tab title | A project name can name a client or private work. | [Narrow every page to one project](#narrow-every-page-to-one-project) |
+| Every page | Project names in the picker list, the [command palette](/ai-ledger/everywhere/command-palette/), tables, chart keys and the **Project** chip; the URL | A project name can name a client or private work. | [Narrow every page to one project](#narrow-every-page-to-one-project) |
+| Cost, Activity, and the filters of Activity, Context, Project and Live | The path of the app's data folder: Cost's **Unpriced models** and **Prices file ignored** banners, Activity's **Automated projects file ignored** banner, and the "Add more projects in …" line of the **Include automated sessions** help | The path holds your user name, such as `/Users/<name>/Library/Application Support/ai-ledger/`. The **Unpriced models** banner shows, unfolded, whenever a model has no price, such as a new model. | [Hide paths to your data folder](#hide-paths-to-your-data-folder) |
 | Activity, Cost, Context, Insights, Project | Session titles. When the agent wrote no title, the title is made from the session's first prompt. | A first prompt can quote a secret, a person or a client. | [Narrow every page to one project](#narrow-every-page-to-one-project) |
 | Activity | **Failed test runs**: the **Command** column. The Tool, MCP server and skill sheets: the input patterns and the recent calls. | A command can hold a token or a path. | [Close sheets and keep drawers folded](#close-sheets-and-keep-drawers-folded) |
 | Any page, session sheet | **Source** (the first prompt, folded), **Commits** (the commit commands, folded), the **Directory** and the **Resume** command (not folded), and the model's summary when the session has an `/insights` judgment | The directory and the resume command show your home folder path, which holds your user name. | [Close sheets and keep drawers folded](#close-sheets-and-keep-drawers-folded) |
@@ -80,6 +81,12 @@ Replace `<name>` with the project's name as the picker shows it. `/usage` is Act
 2. Keep these folded: Activity's **Failed test runs**, Context's **Largest tool results**, the Project page's **Largest overhead items**, and the **Friction detail** of an Insights card.
 3. If you must open a session sheet, keep **Source** and **Commits** folded, and scroll so that **Directory** and **Resume** stay off screen.
 
+### Hide paths to your data folder
+
+1. Open Cost and Activity before you share. If a banner names `prices.json` or `automated.json` with a path, fix the file or price the model as [Configuration](/ai-ledger/reference/configuration/) says, then reload: the banner goes away.
+2. If you cannot clear an **Unpriced models** banner, do not show Cost.
+3. Do not open the help of **Include automated sessions** on screen: it shows the path of `automated.json`.
+
 ### Keep Errors at the type table
 
 1. Open [Errors](/ai-ledger/pages/errors/) with no type in the URL: the page then shows the type table and **Where to start**, which hold type names, counts and fix text.
@@ -101,6 +108,7 @@ Before each share, check these on the tab you will share. Each must hold; there 
 | Open sheets | The URL, on every page but Live, where `session=` names the session in the stream | No `session=`, `inspect=`, `tool=`, `mcp=` or `skill=`. |
 | Errors | The URL of Errors | No `cat=` and no `ex=`: no type and no example open. |
 | **What used this window** | Limits | Folded, or Limits not shown. |
+| Data folder path | Cost and Activity banners | No banner names `prices.json` or `automated.json`, or the page is not shown. |
 | The shared area | Your sharing tool | One tab, not a screen. |
 
 If a secret was on screen, treat it as leaked: revoke it and make a new one with its provider. The store keeps every transcript line, so the secret stays in it; see [Privacy and security](/ai-ledger/concepts/privacy-security/).
