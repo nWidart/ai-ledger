@@ -25,6 +25,8 @@ Run `ai-ledger rebuild` once after upgrading (with the app stopped): the Context
 - Switching pages crossfades, in browsers with view transitions and unless reduced motion is on. Back and Forward return a page to where it was scrolled.
 - A page that loads for the first time shows gray placeholder blocks instead of an empty page.
 - Pointing at or focusing a page's tab starts loading that page and its data, so it opens sooner. Opening a URL starts the page's data with its code instead of after it.
+- Right-click a project, session, tool, MCP server, skill or error type for its actions. A project's menu opens its page or sheet, filters the dashboard to it, or shows it on another page. A session's menu opens it and copies its resume command (`claude --resume` or `codex resume`, after a `cd` to its directory), its id or its directory. A tool's menu opens its inspector, and an error type's menu opens it on Errors or mutes it there. Shift+F10 or the menu key opens the menu from the keyboard, and a long press opens it on touch. Shift+right-click shows the browser's menu.
+- The session sheet shows the session's resume command and directory, each with a Copy button.
 - The session sheet and the tool, MCP server and skill sheet have a Wide toggle that widens the sheet to up to 1100px. The wide sheet gives the session timeline more room and puts short sections side by side. The choice is saved in the browser.
 
 ### Changed

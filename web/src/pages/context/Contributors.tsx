@@ -87,7 +87,7 @@ export function Contributors({ fills }: { fills: Fills }) {
           </tr></thead>
           <tbody>{rows.map(({ name, row, other }) => {
             const range = row.p50_bytes != null && row.p95_bytes != null ? { p50: Math.max(1, row.p50_bytes), p95: Math.max(1, row.p95_bytes) } : null;
-            return <tr key={name} {...(other ? {} : pickRow(name, v => openToolSheet(kind, v)))}>
+            return <tr key={name} {...(other ? {} : pickRow(name, v => openToolSheet(kind, v), { kind, value: name }))}>
               <th scope="row" className="name">{other ? name : <button type="button" className="cellbtn" title={name}>{name}</button>}</th>
               <td className="ctr-total">
                 <span className="ctr-bar" aria-hidden="true"><i data-testid="ctr-total-bar" style={{ width: `${Math.max(1, row.bytes / max * 100)}%` }} /></span>

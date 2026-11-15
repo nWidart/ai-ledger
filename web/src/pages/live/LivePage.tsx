@@ -13,6 +13,7 @@ import { groupSessions, needsYou, NO_FILTERS, stateNow, type LaneChoices } from 
 import { Stream } from "./Stream";
 import { useLive, useNow } from "./useLive";
 import { StateNote, Wall } from "./Wall";
+import { subjectAttrs } from "../../components/menu/subject";
 import { validateSearch } from "./search";
 import "./live.css";
 
@@ -64,7 +65,7 @@ export function LivePage() {
   });
   const bare = !list && !listError;
   const entry = (s: LiveListSession) => <li key={s.session_id}>
-    <button type="button" data-session={s.session_id} aria-current={s.session_id === selected ? "true" : undefined} onClick={() => pick(s.session_id)}>
+    <button type="button" data-session={s.session_id} {...subjectAttrs("session", s.session_id)} aria-current={s.session_id === selected ? "true" : undefined} onClick={() => pick(s.session_id)}>
       {s.title ? <>
         <span className="ttl" title={s.title}>{s.title}</span><span className="cost">{usd(s.cost)}</span>
         <span className="sub"><ProjectName project={s.project} /> · <StateNote st={stateNow(s.state, now)} now={now} /> · {SOURCE_LABELS[s.source]}</span>

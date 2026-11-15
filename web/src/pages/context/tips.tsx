@@ -34,7 +34,7 @@ export function TipSessions({ tip, onClose }: { tip: Tip; onClose: () => void })
       <div className="hint">{tip.sessions.length < tip.matched ? `The ${num(tip.sessions.length)} newest of ${num(tip.matched)}` : plural(tip.matched, "session")}, newest first. Select one for details.</div>
       <DataTable name={`Sessions matching ${tip.title}`}>
         <thead><tr><th scope="col">Session</th><th scope="col">Project</th><th scope="col">Source</th><th scope="col">Started</th></tr></thead>
-        <tbody>{tip.sessions.map(s => <tr key={s.session_id} {...pickRow(s.session_id, openSessionSheet)}>
+        <tbody>{tip.sessions.map(s => <tr key={s.session_id} {...pickRow(s.session_id, openSessionSheet, { kind: "session", value: s.session_id })}>
           <th scope="row" className="when sess"><button type="button" className="cellbtn" data-session={s.session_id} title={s.title || s.session_id}>{sessName(s)}</button>
             {s.title && <div className="muted small">{shortId(s.session_id)}</div>}</th>
           <td className="name"><Proj project={s.project} /></td>

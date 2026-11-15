@@ -25,7 +25,7 @@ export interface Resolved {
   view: View;
 }
 
-const HOSTS_SHEETS = ["/usage", "/cost", "/context", "/errors", PROJECT_PAGE];
+export const HOSTS_SHEETS = ["/usage", "/cost", "/context", "/errors", PROJECT_PAGE];
 // Errors' view keys (pages/errors/view.ts): with none of them in the URL, Errors shows its saved view instead.
 const ERRORS_KEYS = ["project", "range", "source", "sub", "noise", "gran", "cat", "ex"];
 const HASH_KEY: Record<FilterKind, string> = { project: "project", source: "source", range: "range", automated: "auto" };

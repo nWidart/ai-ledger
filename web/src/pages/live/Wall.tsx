@@ -2,6 +2,7 @@ import type { LiveListSession, LiveState } from "../../api";
 import { SOURCE_LABELS } from "../../components/Filters";
 import { ProjectName } from "../../components/ProjectDot";
 import { num, pct, usd } from "../../format";
+import { subjectAttrs } from "../../components/menu/subject";
 import { NEAR_FULL, StateTag } from "./AgentPanel";
 import { groupSessions, INFERRED_WHY, stateNow, stateText } from "./live";
 
@@ -22,7 +23,7 @@ export function Wall({ sessions, now, pick }: { sessions: LiveListSession[]; now
       const st = stateNow(s.state, now), share = s.context != null && s.window ? s.context / s.window : null;
       const act = !s.latest ? "" : s.latest.kind === "prompt" ? "▸ prompt" : `${s.latest.lane ? "⤷ " : ""}${s.latest.tool} · ${s.latest.summary ?? ""}`;
       return <li key={s.session_id}>
-        <button type="button" data-session={s.session_id} className={"panel tile st-" + st.kind} onClick={() => pick(s.session_id)} aria-label={`Open ${s.title ?? s.project ?? "session"}`} aria-description={stateWhy(st, now)}>
+        <button type="button" data-session={s.session_id} {...subjectAttrs("session", s.session_id)} className={"panel tile st-" + st.kind} onClick={() => pick(s.session_id)} aria-label={`Open ${s.title ?? s.project ?? "session"}`} aria-description={stateWhy(st, now)}>
           <span className="top"><ProjectName project={s.project} /><StateTag st={st} now={now} plain /></span>
           {s.title && <span className="ttl" title={s.title}>{s.title}</span>}
           <code className="act">{act}</code>

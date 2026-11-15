@@ -79,7 +79,7 @@ export function TopSessions({ top, onSession, body }: { top: UsagePayload["top_s
   return (
     <DataTable name="Most expensive sessions"><thead><tr><th scope="col">Session</th><th scope="col">Branch</th>
     <th scope="col" className="num">Active<Toggletip term="Active time">Active time: pauses over 20 minutes left out</Toggletip></th><th scope="col" className="num">Est. cost</th></tr></thead>
-    <tbody ref={body}>{top.length ? top.map(s => <tr key={s.session_id} {...pickRow(s.session_id, onSession)}>
+    <tbody ref={body}>{top.length ? top.map(s => <tr key={s.session_id} {...pickRow(s.session_id, onSession, { kind: "session", value: s.session_id })}>
       <th scope="row" className="when sess"><button type="button" className="cellbtn" title={s.title || s.session_id}>{sessName(s)}</button><div className="muted small">{when(s.first_ts)}</div></th>
       <td className="name">{s.git_branch || "–"}</td><td className="num">{dur(s.duration_s)}</td><td className="num">{usd(s.cost)}</td></tr>)
       : <tr><td colSpan={4} className="empty">No sessions in this range.</td></tr>}</tbody>

@@ -45,7 +45,7 @@ export function StartRanges({ starting: s }: { starting: Starting }) {
           {s.median != null && s.p10 != null && s.p90 != null ? <RangeCell p10={s.p10} p90={s.p90} median={s.median} max={max} fill="var(--text-muted)" /> : <td />}
           <td className="num">{num(s.median)}</td><td className="num">{num(s.p10)}</td><td className="num">{num(s.p90)}</td>
           <td className="num">{share(s.window_share)}</td><td className="num">{num(s.sessions)}</td></tr>}
-        {s.by_project.map(p => <tr key={`project:${p.project ?? ""}`} {...(p.project ? pickRow(p.project, v => openProjectSheet(v)) : {})}>
+        {s.by_project.map(p => <tr key={`project:${p.project ?? ""}`} {...(p.project ? pickRow(p.project, v => openProjectSheet(v), { kind: "project", value: p.project }) : {})}>
           <th scope="row" className="name"><Proj project={p.project} button={!!p.project} /></th>
           <RangeCell p10={p.p10} p90={p.p90} median={p.median} max={max} fill={color(p.project)} />
           <td className="num">{num(p.median)}</td><td className="num">{num(p.p10)}</td><td className="num">{num(p.p90)}</td>

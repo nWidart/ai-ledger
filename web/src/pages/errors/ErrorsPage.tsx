@@ -12,8 +12,9 @@ import { useApi } from "../../useApi";
 import { PageSkeleton } from "../../components/PageSkeleton";
 import { Ctx, Keyed, RowContext, tableFocus, type ErrorsCtx, type RowCtx } from "./context";
 import { Detail } from "./Detail";
+import { useLendMute, type MuteFor } from "../../components/menu/mute";
 import { useMarks } from "./marks";
-import { bucketLabel, countBy, filtered, inBucket, makeModel, messageOf, msgOpenKey, settle, TYPE_SORT, viewTypes, withMuted, type TypeKey, type View } from "./model";
+import { bucketLabel, countBy, filtered, inBucket, makeModel, messageOf, msgOpenKey, NOISE, settle, TYPE_SORT, viewTypes, withMuted, type TypeKey, type View } from "./model";
 import { RateChart } from "./RateChart";
 import { Summary } from "./Summary";
 import { TypeTable } from "./TypeTable";
@@ -225,6 +226,14 @@ export function ErrorsPage() {
     m, v: view, f, vt, fixes, markErrors, dismissError, saving, muting, mode, q, pinned: pinnedId ? m.byId[pinnedId] : undefined, inSheet: toSheet, chartInView,
     update, pick, select, setFix, setMuted, setMode, setQ, typeSort, setTypeSort, typeQ, setTypeQ, after, say, ...sets,
   } : null, [m, view, f, vt, fixes, markErrors, dismissError, saving, muting, mode, q, pinnedId, toSheet, chartInView, update, pick, select, setFix, setMuted, setMode, typeSort, typeQ, after, say, sets]);
+  // The context menu's mute item: the type detail's own toggle, so it goes through the same queue with the same "Saving…" (in the
+  // detail when the type is open, else in the type table's note). None for a fixed noise type or one the page does not know.
+  const lendMute = useCallback<MuteFor>(cat => {
+    if (!m?.cats[cat] || NOISE.has(cat)) return null;
+    const muted = m.muted.has(cat);
+    return { muted, toggle: () => setMuted(cat, !muted, !muted && view.noise) };
+  }, [m, view.noise, setMuted]);
+  useLendMute(lendMute);
   // The rows (examples, incidents, messages) read this one: it moves with the model and the view, not with the search, the list mode or the marks.
   const rows = useMemo<RowCtx | null>(() => m ? { m, v: view, select, say, after, ...sets } : null, [m, view, select, say, after, sets]);
   const detailLive = <div className="sr" id="detailLive" aria-live="polite">{live}</div>;

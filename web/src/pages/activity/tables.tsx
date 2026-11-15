@@ -28,7 +28,7 @@ export function ProjectsDrawer({ rows: all, selected }: { rows: ProjectRow[]; se
       <DataTable name="Project metrics">
         <thead><tr>{th("project", "Project", true)}{th("sessions", "Sessions")}{th("tokens", "Tokens")}{th("subagent_share", "Subagents")}{th("tokens_per_prompt", "Tokens / prompt")}
           {th("commits", "Commits")}{th("errors_per_100_calls", "Errors / 100")}{th("error_loops", "Error loops")}</tr></thead>
-        <tbody>{rows.length ? rows.map(p => <tr key={p.project ?? ""} {...pickRow(p.project ?? "", v => openProjectSheet(v), p.project === selected && selected ? "sel" : "")}>
+        <tbody>{rows.length ? rows.map(p => <tr key={p.project ?? ""} {...pickRow(p.project ?? "", v => openProjectSheet(v), { kind: "project", value: p.project ?? "" }, p.project === selected && selected ? "sel" : "")}>
           <th scope="row" className="name"><ProjectName project={p.project}><button type="button" className="cellbtn" title={p.project ?? ""}>{p.project}</button></ProjectName></th>
           <td className="num"><span className="ibar" aria-hidden="true"><i style={{ width: `${Math.max(2, p.sessions / maxS * 100)}%`, background: color(p.project) }} /></span>{num(p.sessions)}</td>
           <td className="num">{big(p.tokens)}</td><td className="num">{pct(p.subagent_share)}</td><td className="num">{big(p.tokens_per_prompt)}</td><td className="num">{num(p.commits)}</td>
@@ -58,7 +58,7 @@ export function ToolsDrawer({ tools, flaky, sort, onSort, scope = RANGE }: {
       {scope.note}
       {flaky && !sort && <div className="hint">Tools failing over 10% of at least 20 calls first.</div>}
       <DataTable name="Tools" region="scroll tall"><thead><tr>{th("tool", "Tool", true)}{th("calls", "Calls")}{th("failure_rate", "Failed")}{th("p50_ms", "p50")}{th("p95_ms", "p95")}</tr></thead>
-        <tbody>{rs.length ? rs.map(r => <tr key={r.tool} {...pickRow(r.tool, v => openToolSheet("tool", v))}>
+        <tbody>{rs.length ? rs.map(r => <tr key={r.tool} {...pickRow(r.tool, v => openToolSheet("tool", v), { kind: "tool", value: r.tool })}>
           <th scope="row" className="name"><button type="button" className="cellbtn" title={r.tool}>{r.tool}</button></th><RateCells r={r} n={r.calls} />
           <td className="num">{ms(r.p50_ms)}</td><td className="num">{ms(r.p95_ms)}</td></tr>) : <None cols={5} on={scope.on} />}</tbody></DataTable>
     </Drawer>
@@ -68,7 +68,7 @@ export function ToolsDrawer({ tools, flaky, sort, onSort, scope = RANGE }: {
 export function ExtDrawer({ mcp, skills, hooks, scope = RANGE }: { mcp: NamedRateRow[]; skills: NamedRateRow[]; hooks: HookRow[]; scope?: RowScope }) {
   const rate = (title: string, head: string, kind: ToolKind, rs: NamedRateRow[]) => <div><h3>{title}</h3><DataTable name={title} region="scroll tall">
     <thead><tr><th scope="col">{head}</th><th scope="col" className="num">Calls</th><th scope="col" className="num">Failed</th></tr></thead>
-    <tbody>{rs.length ? rs.map(r => <tr key={r.name} {...pickRow(r.name, v => openToolSheet(kind, v))}>
+    <tbody>{rs.length ? rs.map(r => <tr key={r.name} {...pickRow(r.name, v => openToolSheet(kind, v), { kind, value: r.name })}>
       <th scope="row" className="name"><button type="button" className="cellbtn" title={r.name}>{r.name}</button></th><RateCells r={r} n={r.calls} /></tr>) : <None cols={3} on={scope.on} />}</tbody></DataTable></div>;
   return (
     <Drawer id="d-ext" title="MCP servers, skills and hooks" count={`${num(mcp.length)}, ${num(skills.length)} and ${num(hooks.length)}`} bodyClassName="ext">
