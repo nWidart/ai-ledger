@@ -122,6 +122,14 @@ Every active session as it runs: prompts, tool calls, subagents, context and cos
 
 **Connection.** In a background tab, Live stops listening and catches up when you come back. A paused page says Paused and shows no live dot. A lost connection says it is reconnecting, and retries on its own.
 
+### Project
+
+One project on one page. Open it from the project's name in the navigation, "Open project page" in the project sheet, or `>project` in the palette when a project is set. It is no tab.
+
+It gathers the project's figures for the range, source and automated filters you have set: the summary, cost against the period before with the models, the most expensive sessions, errors by type, context, session judgments and its share of the plan limits. Each block links to its page filtered to the project. The Errors block counts automated sessions, as the Errors page does. The limits block shows only when an open window lists the project among its top three, or a limit has commits per point for it.
+
+Without a project the page has nothing to show: clearing the project opens Activity.
+
 ## Everywhere
 
 - Press **Cmd+K** to jump anywhere: `>errors #myproject #7d`. The `>context` term opens the Context page, keeping the project and range filters.

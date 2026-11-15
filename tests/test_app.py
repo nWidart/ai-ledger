@@ -61,6 +61,12 @@ class AppTest(unittest.TestCase):
             status, headers, body = self.get(path)
             self.assertEqual((status, headers["Content-Type"], headers["Cache-Control"], body), (200, "text/html; charset=utf-8", "no-cache", index))
 
+    def test_project_page_serves_the_build(self):
+        with open(os.path.join(app.WEB, "index.html"), "rb") as fh:
+            index = fh.read()
+        status, headers, body = self.get("/project?project=foo")
+        self.assertEqual((status, headers["Content-Type"], body), (200, "text/html; charset=utf-8", index))
+
     def request(self, method, path, headers=None, body=None):
         h = http.client.HTTPConnection("127.0.0.1", self.httpd.server_address[1])
         h.request(method, path, body=body, headers={"Host": f"{app.HOST}:{app.PORT}", **(headers or {})})

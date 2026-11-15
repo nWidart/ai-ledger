@@ -29,7 +29,7 @@ INTERVAL = 60
 LIVE_INTERVAL = 1  # transcript ingest while a Live page is connected; usage data and limits stay on INTERVAL
 KEEPALIVE = 15  # seconds between SSE comments, so a closed Live page is noticed
 WEB = os.path.join(store.HERE, "web")  # the committed frontend build (npm run build in web/), shipped in the package
-PAGES = ("/usage", "/cost", "/context", "/errors", "/limits", "/insights", "/live")  # one app; it picks the page from the path
+PAGES = ("/usage", "/cost", "/context", "/errors", "/limits", "/insights", "/live", "/project")  # one app; it picks the page from the path
 ASSET_TYPES = {".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml",
                ".png": "image/png", ".woff2": "font/woff2", ".json": "application/json; charset=utf-8"}
 MAX_BODY = 4096  # a POST body is one small JSON object

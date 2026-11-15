@@ -55,7 +55,7 @@ export function UsageSheets({ data, automated }: { data: UsagePayload | undefine
     kind = "Project"; key = "project|" + inspect;
     title = <><ProjectDot project={inspect} />{inspect}</>;
     body = <ProjectSheet key={inspect} name={inspect} d={proj.data} error={proj.error} retry={proj.retry} range={h.range}
-      pageProject={pageProject} onSession={toSession} backTo={backTo} />;
+      pageProject={pageProject} automated={view.automated} onSession={toSession} backTo={backTo} />;
   } else if (tn) {
     kind = TOOL_KINDS[tk]; key = tk + "|" + tn; title = tn;
     body = <ToolSheet key={key} kind={tk} name={tn} d={tool.data} error={tool.error} retry={tool.retry} onSession={toSession} backTo={backTo} />;

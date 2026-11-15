@@ -37,6 +37,8 @@ export interface Row extends Chip {
 }
 export interface SuggestData { palette?: PalettePayload | undefined; sessions?: readonly TitledSessionRow[] | undefined }
 
+/** The Project page's path: a page the palette can open, though it is no tab. */
+export const PROJECT_PAGE = "/project";
 export const rangeName = (r: number) => (r ? `${r}d` : "all");
 export const rangeLabel = (r: number) => (r ? `Last ${r} days` : "All time");
 export const sourceLabel = (s: string) => SOURCE_LABELS[s as Source] ?? s;
@@ -45,7 +47,7 @@ const failed = (r: { calls: number; failure_rate: number | null }) => [plural(r.
 interface Candidate { kind: Kind; value: string; label: string; texts: string[]; detail?: string[]; count?: number; display?: number }
 
 /** Every candidate row before matching. */
-function candidates(data: SuggestData, sessions: boolean): Candidate[] {
+function candidates(data: SuggestData, sessions: boolean, project: boolean): Candidate[] {
   const p = data.palette, out: Candidate[] = [];
   for (const r of p?.projects ?? []) out.push({ kind: "project", value: r.name, label: r.name, texts: [r.name], detail: [plural(r.sessions, "session")], count: r.sessions });
   const bySource = new Map(p?.sources.map(r => [r.source, r.sessions]));
@@ -56,6 +58,8 @@ function candidates(data: SuggestData, sessions: boolean): Candidate[] {
   for (const r of RANGES) out.push({ kind: "range", value: String(r), label: rangeName(r), texts: [rangeName(r), rangeLabel(r)], detail: [rangeLabel(r)] });
   out.push({ kind: "automated", value: "1", label: "automated", texts: ["automated", "Include automated sessions"], detail: ["Include automated sessions"] });
   for (const pg of PAGES) out.push({ kind: "page", value: pg.path, label: pg.label, texts: [pg.label, pg.path.slice(1)] });
+  // The Project page is no tab: it is offered when a project is named, by a chip (the palette opens with one for the view's project).
+  if (project) out.push({ kind: "page", value: PROJECT_PAGE, label: "Project", texts: ["Project", "project"] });
   for (const [kind, rows] of [["tool", p?.tools], ["mcp", p?.mcp], ["skill", p?.skills]] as const) {
     for (const r of rows ?? []) out.push({ kind, value: r.name, label: r.name, texts: [r.name], detail: failed(r), count: r.calls });
   }
@@ -86,7 +90,7 @@ export const searchesSessions = (t: Term) => t.sigil !== "#" && t.text.trim().le
  */
 export function suggest(term: Term, data: SuggestData, chips: readonly Chip[] = []): Row[] {
   const picked = new Set(chips.map(c => c.kind + "\0" + c.value)), rows: Row[] = [];
-  for (const c of candidates(data, searchesSessions(term) && !!term.text.trim())) {
+  for (const c of candidates(data, searchesSessions(term) && !!term.text.trim(), chips.some(c => c.kind === "project"))) {
     const filter = isFilter(c.kind), subject = c.kind === "tool" || c.kind === "mcp" || c.kind === "skill";
     if (term.sigil === "#" && !filter && !subject) continue;
     if (term.sigil === ">" && filter) continue;

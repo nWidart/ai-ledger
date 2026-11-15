@@ -8,7 +8,7 @@ import { usePathname } from "./url";
 // Each page, and the palette, is its own chunk: a page's code loads when its route is first shown.
 const Palette = lazy(() => import("./components/palette/Palette").then(m => ({ default: m.Palette })));
 
-// One app, seven pages: the path picks the page; the nav switches without a reload, so payloads stay in memory between them.
+// One app, seven tabs and the Project page: the path picks the page; the nav switches without a reload, so payloads stay in memory between them.
 export const ROUTES = {
   "/usage": { title: "Activity · AI Ledger", Page: lazyRouteComponent(() => import("./pages/activity/ActivityPage"), "ActivityPage") },
   "/cost": { title: "Cost · AI Ledger", Page: lazyRouteComponent(() => import("./pages/cost/CostPage"), "CostPage") },
@@ -17,6 +17,8 @@ export const ROUTES = {
   "/limits": { title: "Limits · AI Ledger", Page: lazyRouteComponent(() => import("./pages/limits/LimitsPage"), "LimitsPage") },
   "/insights": { title: "Insights · AI Ledger", Page: lazyRouteComponent(() => import("./pages/insights/InsightsPage"), "InsightsPage") },
   "/live": { title: "Live · AI Ledger", Page: lazyRouteComponent(() => import("./pages/live/LivePage"), "LivePage") },
+  // Not a tab: reached from the project sheet, the navigation's project chip and the palette.
+  "/project": { title: "Project · AI Ledger", Page: lazyRouteComponent(() => import("./pages/project/ProjectPage"), "ProjectPage") },
 } as const;
 export type PagePath = keyof typeof ROUTES;
 const isPage = (p: string): p is PagePath => p in ROUTES;

@@ -8,6 +8,7 @@ const c = {
   errors: { kind: "page", value: "/errors", label: "Errors" },
   cost: { kind: "page", value: "/cost", label: "Cost" },
   context: { kind: "page", value: "/context", label: "Context" },
+  project: { kind: "page", value: "/project", label: "Project" },
   my: { kind: "project", value: "myproject", label: "myproject" },
   alpha: { kind: "project", value: "alpha", label: "alpha" },
   beta: { kind: "project", value: "beta", label: "beta" },
@@ -50,6 +51,23 @@ describe("resolve", () => {
   });
   it(">bash on Context stays on Context with the inspector", () => {
     expect(commit("/context?range=30", c.bash).href).toBe("/context?range=30&tool=Bash");
+  });
+  it(">project #myproject opens the project's page with the other filters", () => {
+    const r = commit("/cost?range=7", c.project, c.my);
+    expect(r.href).toBe("/project?project=myproject&range=7");
+    expect(r.footer).toBe("Enter: open Project · myproject · 7d");
+  });
+  it(">project opens the page of the view's project, and keeps a sheet it hosts", () => {
+    expect(commit("/usage?project=myproject&range=30&inspect=foo", c.project).href).toBe("/project?project=myproject&range=30");
+    expect(commit("/usage?project=myproject&range=30", c.project, c.bash).href).toBe("/project?project=myproject&range=30&tool=Bash");
+    expect(commit("/project?project=myproject&range=30", c.bash).href).toBe("/project?project=myproject&range=30&tool=Bash");
+  });
+  it("lets the later page win over >project, and a page-bound sheet imply its page", () => {
+    const r = commit("/usage?project=myproject&range=30", c.project, c.cost);
+    expect(r.href).toBe("/cost?project=myproject&range=30");
+    expect(r.status.at(-2)).toEqual({ state: "replaced", by: "Cost" });
+    expect(commit("/usage?project=myproject&range=30", c.project, c.timeout).href).toBe("/errors?project=myproject&range=30&cat=timeout");
+    expect(commit("/usage?project=myproject&range=30", c.timeout, c.project).status.at(-2)).toEqual({ state: "dropped" });
   });
   it(">errors keeps the filters", () => {
     expect(commit("/usage?project=myproject&range=14", c.errors).href).toBe("/errors?project=myproject&range=14");

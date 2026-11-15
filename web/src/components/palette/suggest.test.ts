@@ -26,6 +26,13 @@ describe("suggest", () => {
       ["project", "Project", "#"], ["source", "Source", "#"], ["range", "Range", "#"], ["automated", "Filter", "#"], ["page", "Page", ">"],
       ["tool", "Tool", ">"], ["mcp", "MCP server", ">"], ["skill", "Skill", ">"], ["session", "Session", ">"], ["command", "Command", ">"]]);
   });
+  it("offers the Project page only when a project chip names one", () => {
+    const my = [{ kind: "project", value: "foo", label: "foo" }] as const;
+    expect(suggest(term(">proj"), data, my).map(r => [r.kind, r.value, r.label])).toEqual([["page", "/project", "Project"]]);
+    expect(suggest(term(">project"), data, my)[0]).toMatchObject({ kind: "page", value: "/project", sigil: ">" });
+    expect(rows(">proj").filter(r => r.kind === "page")).toEqual([]);
+    expect(rows(">").some(r => r.value === "/project")).toBe(false);
+  });
   it("puts an exact match first", () => {
     expect(rows("bash")[0]).toMatchObject({ kind: "tool", value: "Bash", sigil: ">" });
     expect(rows(">errors")[0]).toMatchObject({ kind: "page", value: "/errors" });

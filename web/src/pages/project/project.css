@@ -1,0 +1,50 @@
+/* Project (/project): every rule sits under .pg-project, since every page's CSS is loaded at once. Tables come from sheets.css,
+   ledgers from Ledger.css. */
+.pg-project .top { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px 32px; align-items: end; margin-bottom: 20px; }
+.pg-project .top-side { display: flex; flex-direction: column; align-items: flex-end; gap: 12px; min-width: 0; max-width: 600px; }
+.pg-project .top-side .filters { justify-content: flex-end; }
+.pg-project .lede { margin: 0; min-width: 0; font-size: clamp(26px, 4.2vw, 42px); line-height: 1.12; font-weight: 600; letter-spacing: -.03em; color: var(--text-primary); }
+.pg-project .lede:focus { outline: none; }
+.pg-project .lede .pdot { width: .32em; height: .32em; vertical-align: .2em; margin: 0 .3em 0 .05em; }
+@media (max-width: 1040px) {
+  .pg-project .top { grid-template-columns: minmax(0, 1fr); align-items: start; }
+  .pg-project .top-side { max-width: none; align-items: stretch; }
+  .pg-project .top-side .filters { justify-content: flex-start; }
+}
+.pg-project.loading > :not(.top) { opacity: .55; }
+@media (prefers-reduced-motion: no-preference) { .pg-project > :not(.top) { transition: opacity .2s; } }
+
+/* One panel per block, in the page's single column */
+.pg-project .panel { margin-top: 16px; }
+.pg-project h2 { font-size: 16px; font-weight: 600; margin: 0; letter-spacing: -.005em; }
+.pg-project h3 { font-size: 13px; font-weight: 600; margin: 18px 0 2px; color: var(--text-secondary); }
+.pg-project .blk-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 16px; margin-bottom: 4px; }
+.pg-project .blk-open { font-size: 13px; color: var(--link); }
+.pg-project .blk-lede { margin: 6px 0 0; color: var(--text-secondary); }
+.pg-project .blk-lede b { color: var(--text-primary); font-weight: 600; }
+.pg-project .empty { padding: 12px 0; color: var(--text-muted); }
+.pg-project p.none { padding: 24px 0; font-size: 15px; }
+.pg-project .live-now { margin: 0; font-size: 13px; }
+.pg-project .panel .scroll { margin-top: 8px; }
+.pg-project .panel .hint { max-width: 90ch; }
+.pg-project .name a { color: var(--link); }
+.pg-project .delta-down { color: var(--good-text); } .pg-project .delta-up { color: var(--critical-text); }
+
+/* The figures of a block: the project sheet's tiles, on the page */
+.pg-project .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; margin: 10px 0 14px; }
+.pg-project .facts > div { background: var(--surface-2); border-radius: 8px; padding: 10px 12px; min-width: 0; }
+.pg-project .facts .v { font-size: 20px; font-weight: 600; letter-spacing: -.025em; }
+.pg-project .facts .l { font-size: 12px; color: var(--text-muted); }
+.pg-project .chip.new { border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+
+/* Cost per day over both periods */
+.pg-project .spark { margin: 0 0 14px; width: 100%; max-width: 480px; }
+.pg-project .spark svg { display: block; width: 100%; height: 48px; overflow: visible; }
+.pg-project .spark figcaption { display: flex; justify-content: space-between; gap: 8px; font-size: 11.5px; color: var(--text-muted); margin-top: 4px; }
+.pg-project .spark figcaption b { color: var(--text-secondary); font-weight: 500; }
+
+@media (max-width: 520px) {
+  .pg-project .lede { font-size: 24px; }
+  .pg-project .panel { padding: 14px 12px; }
+  .pg-project .facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

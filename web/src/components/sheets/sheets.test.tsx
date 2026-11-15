@@ -1,4 +1,4 @@
-import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import type { SessionDetail, ToolPayload } from "../../api";
@@ -171,6 +171,29 @@ describe("ProjectSheet", () => {
     at("?range=30&source=codex&inspect=foo");
     renderApp(<UsageSheets data={usage} />);
     expect((await sheet().findByRole("link", { name: "Open its errors" })).getAttribute("href")).toBe("/errors?project=foo&range=30&source=codex");
+  });
+
+  it("opens the project page with the page's view and no sheet key, before its errors link", async () => {
+    mockApi({ "/api/usage": q => ({ ...usage, project: q.get("project"), source: q.get("source") }) });
+    at("?range=7&source=codex&auto=1&inspect=foo&session=&tool=Bash");
+    renderApp(<UsageSheets data={usage} />);
+    const link = await sheet().findByRole("link", { name: "Open project page" });
+    expect(link.getAttribute("href")).toBe("/project?project=foo&range=7&source=codex&auto=1");
+    expect(link.compareDocumentPosition(sheet().getByRole("link", { name: "Open its errors" })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    await userEvent.click(link);
+    expect(location.pathname + location.search).toBe("/project?project=foo&range=7&source=codex&auto=1");
+  });
+
+  it("leaves the project page link out on that page for the same project, and keeps it for another", async () => {
+    mockApi({ "/api/usage": q => ({ ...usage, project: q.get("project") }) });
+    history.replaceState(null, "", "/project?project=foo&range=30&inspect=foo");
+    renderApp(<UsageSheets data={{ ...usage, project: "foo" }} />);
+    await sheet().findByRole("link", { name: "Open its errors" });
+    expect(sheet().queryByRole("link", { name: "Open project page" })).toBeNull();
+    cleanup();
+    history.replaceState(null, "", "/project?project=foo&range=30&inspect=bar");
+    renderApp(<UsageSheets data={{ ...usage, project: "foo" }} />);
+    expect((await sheet().findByRole("link", { name: "Open project page" })).getAttribute("href")).toBe("/project?project=bar&range=30");
   });
 
   it("summarizes the project, opens a session over it and goes back", async () => {
