@@ -15,7 +15,7 @@ import { useApi } from "../../useApi";
 import { rebuildFacts, share } from "./context";
 import { validateSearch } from "./search";
 import { BreaksDrawer, LargestDrawer } from "./drawers";
-import { CostSection, Fills, Growth, Starting } from "./sections";
+import { CostSection, Fills, Growth, Pressure, Starting } from "./sections";
 import { tipInsight, TipSessions } from "./tips";
 import "./context.css";
 
@@ -74,7 +74,7 @@ export function ContextPage() {
       {d && <>
         <RebuildNotice d={d} />
         <SectionIndex groups={[
-          [{ id: "overview", label: "Overview" }, { id: "tips", label: "Tips" }, { id: "starting", label: "Start", long: "Starting context" }, { id: "growth", label: "Growth" },
+          [{ id: "overview", label: "Overview" }, { id: "tips", label: "Tips" }, { id: "starting", label: "Start", long: "Starting context" }, { id: "growth", label: "Growth" }, { id: "pressure", label: "Pressure", long: "Window pressure" },
             { id: "fills", label: "Fills", long: "What fills context" }, { id: "cost", label: "Spend", long: "Cost" }],
           [{ id: "d-largest", label: "Results", long: "Largest tool results" }, { id: "d-breaks", label: "Cache breaks", long: "Sessions where caching broke" }],
         ]} />
@@ -88,6 +88,7 @@ export function ContextPage() {
         {tip && <div className="drawers tip-drawer"><TipSessions tip={tip} onClose={closeTip} /></div>}
         <Starting d={d} />
         <Growth d={d} />
+        <Pressure d={d} />
         <Fills d={d} />
         <CostSection d={d} />
         <div className="drawers"><LargestDrawer rows={d.fills.largest} /><BreaksDrawer cost={d.cost} /></div>
