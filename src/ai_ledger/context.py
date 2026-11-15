@@ -16,8 +16,9 @@ FILL_BINS = (0.25, 0.5, 0.75, 0.9)  # peak context as a share of the window: <25
 LARGEST_RESULTS = 25  # the largest main-thread tool results listed
 CACHE_MIN_PROMPT = 20_000  # a request with fewer prompt tokens is no cache break
 CACHE_BREAK_SHARE = 0.5  # a cache break reads less than this share of its prompt from the cache
-CACHE_TTL_S = 300  # the prompt cache lives 5 minutes; a longer pause before a break is an expiry
+CACHE_TTL_S = 300  # Claude Code's prompt cache lives 5 minutes; a longer pause before a break is an expiry
 CACHE_TTL_1H_S = 3600  # ... an hour when the previous request wrote 1-hour cache entries
+CACHE_TTL_CODEX_S = 1800  # a Codex session's cache lives 30 minutes (prices.json: cache_5m is OpenAI's 30-minute cache)
 BREAK_SESSIONS = 25  # the sessions with the most uncached tokens listed
 
 START_LARGE_TOKENS = 30_000  # large_start: a project's median starting context
@@ -185,8 +186,8 @@ def session_breaks(q):
           lag(model) OVER w AS prev_model, lag(ts) OVER w AS prev_ts, lag(cache_1h) OVER w AS prev_1h FROM turns WINDOW w AS (PARTITION BY session_id ORDER BY turn)),
         brk AS (SELECT l.session_id, l.prompt - l.cache_read AS uncached, rq.cost_input + rq.cost_cache_5m + rq.cost_cache_1h AS uncached_cost,
             CASE WHEN l.model <> l.prev_model THEN 'model_switch'
-                 WHEN date_diff('second', l.prev_ts, l.ts) > CASE WHEN l.prev_1h > 0 THEN {CACHE_TTL_1H_S} ELSE {CACHE_TTL_S} END THEN 'expired' ELSE 'other' END AS cause
-          FROM lagged l JOIN rq ON rq.message_id = l.message_id
+                 WHEN date_diff('second', l.prev_ts, l.ts) > CASE WHEN l.prev_1h > 0 THEN {CACHE_TTL_1H_S} WHEN sess.source = 'codex' THEN {CACHE_TTL_CODEX_S} ELSE {CACHE_TTL_S} END THEN 'expired' ELSE 'other' END AS cause
+          FROM lagged l JOIN rq ON rq.message_id = l.message_id JOIN sess ON sess.session_id = l.session_id
           WHERE l.turn > 1 AND l.prompt >= {CACHE_MIN_PROMPT} AND l.cache_read < {CACHE_BREAK_SHARE} * l.prompt)"""
     return q("""SELECT sess.session_id, sess.project, sess.source, sess.first_ts, count(*) AS breaks,
           count(*) FILTER (WHERE cause = 'model_switch') AS model_switch, count(*) FILTER (WHERE cause = 'expired') AS expired,
@@ -410,8 +411,8 @@ def cache_breaks_advice(ctx):
     if top == "model_switch":
         return "Keep one model through a session: a switch rereads the whole context uncached and writes a new cache."
     if top == "expired":
-        return ("Turns more than 5 minutes apart reread the context: that is the cache lifetime, not a mistake, and the figure above is "
-                "what it costs. Keep turns within it, or accept the cost.")
+        return ("Turns further apart than the cache lifetime (5 minutes in Claude Code, 30 in Codex) reread the context: that is the cache "
+                "lifetime, not a mistake, and the figure above is what it costs. Keep turns within it, or accept the cost.")
     return "Something before the cached part of the prompt changed (the system prompt, the tool set, an edited earlier message)."
 
 
