@@ -241,7 +241,7 @@ class AppTest(unittest.TestCase):
         got = json.loads(body)
         self.assertEqual(status, 200)
         self.assertEqual(sorted(got), sorted(["project", "range", "automated", "source", "start", "end", "projects", "project_order", "automated_file",
-                                              "coverage", "starting", "growth", "fills", "cost", "tips"]))
+                                              "coverage", "starting", "growth", "sessions_map", "fills", "cost", "tips"]))
         self.assertEqual((got["range"], got["tips"], got["starting"]["sessions"]), (7, [], 0))
         self.assertEqual(self.get("/api/context?project=foo&source=codex&automated=1")[0], 200)
         status, _, body = self.get("/api/context?source=grok")

@@ -167,6 +167,8 @@ dialog.sheet::backdrop { background: var(--scrim); }
     .pg-errors .legend button[aria-pressed=true],
     .pg-errors .byset li button[aria-pressed="true"],
     .pg-cost .legend button.proj[aria-current=true],
+    .pg-context .growth .legend button.key[aria-pressed=true],
+    .pg-context .pressure .band[aria-pressed=true],
     .pg-insights .ledger li.pick.on > .rowbtn, .pg-insights .ledger li.on:not(.pick),
     .pg-insights button.chip.on, .pg-insights button.badge.on,
     .pg-limits .hs-bar[aria-pressed="true"],
@@ -176,13 +178,15 @@ dialog.sheet::backdrop { background: var(--scrim); }
   :is(.pg-activity, .pg-cost) .chart svg > rect:not(.hit) { stroke: Highlight; stroke-width: 2px; }
 
   /* Bars: the fill keeps its color, the track and the fill sit in a frame. */
-  .ledger .bar, :is(.pg-activity, .pg-cost, .pg-context) .ibar, .pg-context .bins .bar, .pg-errors .bar, .pg-live .meter { forced-color-adjust: none; outline: 1px solid CanvasText; }
+  .ledger .bar, :is(.pg-activity, .pg-cost) .ibar, .pg-context :is(.pressure .band, .pressure .pkey i, .rng-bar, .rng-med, .ctr-bar i, .ctr-rbar, .ctr-med, .ctr-split-bar > span, .ctr-key), .pg-errors .bar, .pg-live .meter { forced-color-adjust: none; outline: 1px solid CanvasText; }
+  /* The frame above outranks the pressure segments' own focus ring; restore it in a system color. */
+  .pg-context .pressure .band:focus-visible { outline: 2px solid Highlight; outline-offset: 2px; }
   .pg-cost .daystrip .cells i { forced-color-adjust: none; background: GrayText; }
   .pg-cost .daystrip .cells i.on { background: CanvasText; }
   .pg-limits .hs-bar i { forced-color-adjust: none; }
   .pg-limits .hk { forced-color-adjust: none; outline: 1px solid CanvasText; }
   /* The charts' stacked bars: series colors kept, each segment edged in the text color. */
-  :is(.pg-activity, .pg-cost) .chart .bar-seg, .pg-errors #chart .layer { forced-color-adjust: none; stroke: CanvasText; stroke-width: .75px; }
+  :is(.pg-activity, .pg-cost) .chart .bar-seg, .pg-context .cache-chart svg rect[class^="seg-"], .pg-errors #chart .layer { forced-color-adjust: none; stroke: CanvasText; stroke-width: .75px; }
   /* Keys and dots that name a series or a project by color alone. */
-  .pdot, :is(.pg-activity, .pg-cost) .legend i:not(.line), .pg-context .growth .legend i:not(.line), .pg-errors .sw:not(.line), .pg-insights .key .sw { forced-color-adjust: none; outline: 1px solid CanvasText; }
+  .pdot, :is(.pg-activity, .pg-cost) .legend i:not(.line), .pg-context .legend i:not(.line), .pg-errors .sw:not(.line), .pg-insights .key .sw { forced-color-adjust: none; outline: 1px solid CanvasText; }
 }
