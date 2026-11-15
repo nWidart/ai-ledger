@@ -45,7 +45,7 @@ The rail's footer SHALL say how many sessions are working, those of the *working
 - **THEN** the rail's footer says 1 session working and 2 waiting for you, and the tab title starts with (2)
 
 ### Requirement: Show each session in its rail entry
-Each rail entry SHALL show the session's title as its main line, then the project with its color, the source and the state on its second line, and the cost so far. An entry in *your turn* or *thinking* SHALL show how long the session has been in that state. An entry with no title SHALL show the project as its main line.
+Each rail entry SHALL show the session's title as its main line, then the project with its color, the state and the source on its second line, and the cost so far. An entry with no title SHALL show the project as its main line, and its second line SHALL hold the state, the source and the branch. An entry in *your turn*, *thinking* or *idle* SHALL show how long the session has been in that state, and an entry running a tool SHALL show the tool's name and how long it has run, such as `Bash 12s`.
 
 #### Scenario: Two sessions in one project
 - **WHEN** two `ai-ledger` sessions are active with the AI titles "Add session titles" and "Fix Cost test"
@@ -55,9 +55,21 @@ Each rail entry SHALL show the session's title as its main line, then the projec
 - **WHEN** an active session has no agent title and Full text is off
 - **THEN** its entry shows the project as its main line, and when Full text is turned on it shows the title made from its first prompt
 
+#### Scenario: Untitled entry
+- **WHEN** an active session on branch `main` has no title
+- **THEN** its entry shows the project as its main line, and its second line shows the state, the source and `main`
+
 #### Scenario: How long on your turn
 - **WHEN** a session has been in your turn for 4 minutes
 - **THEN** its entry shows 4m 00s beside the state, and the figure counts up
+
+#### Scenario: How long idle
+- **WHEN** a session has been idle for 7 minutes
+- **THEN** its entry shows `idle 7m 00s`
+
+#### Scenario: A running tool
+- **WHEN** a session has run a `Bash` call for 12 seconds
+- **THEN** its entry shows `Bash 12s` as the state
 
 ### Requirement: Open a session from the rail
 Selecting a rail entry SHALL open that session in the stream. With no session selected, the page SHALL open the newest active session, the one that wrote last.
@@ -171,7 +183,7 @@ The lane header SHALL show the subagent's name, its description, its tool-call c
 Beside the stream, the page SHALL show the selected session's state with its detail, context window fill with a mark at each compaction, cost, requests, tool calls, errors, cache-read share, a tokens-per-minute chart of the last minute, and the plan-limit use for its source. An inferred state SHALL be shown as inferred.
 
 #### Scenario: Context near full
-- **WHEN** the session uses more than 80% of its model's context window
+- **WHEN** the session uses more than 80% of its context window: the window the session states (Codex), else its model's window in the price table
 - **THEN** the context meter shows the warning color
 
 #### Scenario: Likely waiting for approval
@@ -235,7 +247,7 @@ The page SHALL offer a Wall view with one tile per active session, grouped by st
 - **THEN** each group's heading is an `h2` followed by a list of its tiles, and the list says how many tiles it holds
 
 ### Requirement: Show each session on its wall tile
-A wall tile SHALL show the project, state, title, latest action, context fill, tool count, errors, cost, branch, source and model. A tile in *your turn* or *thinking* SHALL show how long the session has been in that state. A tile in *your turn* SHALL have a border. The title SHALL take one line under the project, cut with an ellipsis when it does not fit, with the full title on hover. A tile with no title SHALL leave that line out.
+A wall tile SHALL show the project, state, title, latest action, context fill, tool count, errors, cost, branch, source and model. A tile in *your turn*, *thinking* or *idle* SHALL show how long the session has been in that state, and one running a tool its name and run time. A tile in *your turn* SHALL have a border. The title SHALL take one line under the project, cut with an ellipsis when it does not fit, with the full title on hover. A tile with no title SHALL leave that line out.
 
 #### Scenario: Long title on a tile
 - **WHEN** a session's title is wider than its tile

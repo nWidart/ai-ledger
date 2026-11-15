@@ -149,11 +149,15 @@ The Insights page SHALL say that it counts a session by its start time, and that
 - **THEN** the subtitle says a session counts by its start time and that Activity counts a session with a request in the range
 
 ### Requirement: Order the page
-When the view has analysed sessions, the Insights page SHALL show, in this order: the coverage note, the lede and its sub line, the vitals, one row holding Outcomes and Friction categories, Satisfaction and helpfulness, the analysed sessions, then Goals and Session types. Goals and Session types SHALL each be a drawer, closed by default.
+When the view has analysed sessions, the Insights page SHALL show, in this order: the coverage note, the lede and its sub line, the vitals, one row holding Outcomes and Friction categories, the Trend panel when it is shown, Satisfaction and helpfulness, the analysed sessions, then the drawers: Goals, Session types, Session figures, Coverage and How this works. Each drawer SHALL be closed by default.
 
 #### Scenario: Order with figures
-- **WHEN** the view holds analysed sessions
-- **THEN** the sections read in the order Outcomes, Friction categories, Satisfaction and helpfulness, Analysed sessions, Goals, Session types, and Goals and Session types are closed
+- **WHEN** the view holds analysed sessions across 2 or more weeks
+- **THEN** the sections read in the order Outcomes, Friction categories, Outcome trend, Satisfaction and helpfulness, Analysed sessions, Goals, Session types, Session figures, Coverage, How this works, and the drawers are closed
+
+#### Scenario: Order without a trend
+- **WHEN** the view holds analysed sessions from one week only
+- **THEN** the Trend panel is left out and the other sections keep their order
 
 ### Requirement: Index the page's sections
 The Insights page SHALL show a section index after the sub line when the view has analysed sessions: Overview, Outcomes, Friction, Satisfaction and Sessions, then the drawers. Without analysed sessions, it SHALL show one only for How this works. Choosing a drawer SHALL open it and scroll to it. It SHALL NOT be shown for source Codex or an empty store.

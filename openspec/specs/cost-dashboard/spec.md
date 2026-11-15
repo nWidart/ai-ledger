@@ -47,11 +47,15 @@ The cost dashboard SHALL show each project's change in estimated cost against th
 - **THEN** `foo` shows its full cost as an increase and is marked new
 
 ### Requirement: Show token usage by kind
-The dashboard SHALL show input, output, thinking, cache read, 5-minute cache write and 1-hour cache write tokens per project and over time.
+The dashboard SHALL show input, output, thinking, cache read, 5-minute cache write and 1-hour cache write tokens per day. Per project, it SHALL show a single total of tokens, in Cost by project, not split by kind or over time.
 
 #### Scenario: Daily token chart
 - **WHEN** the user views a project
 - **THEN** a chart shows each token kind per day
+
+#### Scenario: Tokens per project
+- **WHEN** the user opens Cost by project
+- **THEN** each project's row shows one token total, and no split by kind
 
 ### Requirement: Show estimated cost
 The dashboard SHALL show an estimated cost per project, model and day, computed from per-model prices for each token kind, and SHALL label the value as an API-price estimate. When a model has no price, the dashboard SHALL name the user prices file by its full path as the place to add one.

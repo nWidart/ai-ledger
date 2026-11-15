@@ -219,6 +219,17 @@ The Errors page SHALL state each error type's time lost: the sum, over the view'
 - **WHEN** a type's only incident is one failure with no recorded duration
 - **THEN** its time lost reads "–"
 
+### Requirement: Cap the lists under Where to start
+Where to start SHALL list at most 4 open types with a ready-made fix, and at most 4 under Rising fastest. It SHALL NOT leave out the always-noise types: with Hide noise and muted off, a type such as `user_denied` can be listed.
+
+#### Scenario: More open types than the list holds
+- **WHEN** 6 open types have a ready-made fix
+- **THEN** Where to start lists the 4 with the most time lost
+
+#### Scenario: Noise type with the toggle off
+- **WHEN** Hide noise and muted is off and `user_denied` is an open type with a ready-made fix and the most time lost
+- **THEN** Where to start lists `user_denied`, marked as noise
+
 ### Requirement: Break a type down by tool and agent
 The open type's detail SHALL list, next to By project, the type's top five tools (By tool) and top five agents (By agent), each with its error count and share of the type's errors in the detail, and fold the rest into "N more: M errors". A By agent row SHALL set the page's source filter. By agent SHALL be hidden under a source filter and when the type's errors come from one agent only.
 

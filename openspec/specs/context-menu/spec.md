@@ -142,11 +142,15 @@ A menu item that changes the page, the filters or the open sheet SHALL write the
 - **THEN** Activity shows again with the view it had before
 
 ### Requirement: Announce what a copy did
-A copy item SHALL put its text on the clipboard and say "Copied" or that the text could not be copied, as a polite status present in the page before the message is set, so a screen reader says it once.
+A copy item SHALL put its text on the clipboard and say "Copied to clipboard." or "Could not copy to clipboard.", as a polite status present in the page before the message is set, so a screen reader says it once.
 
 #### Scenario: Clipboard refused
 - **WHEN** the browser refuses the clipboard write for Copy session ID
-- **THEN** the status says the text could not be copied
+- **THEN** the status says "Could not copy to clipboard."
+
+#### Scenario: Clipboard written
+- **WHEN** the user picks Copy session ID and the browser accepts the write
+- **THEN** the status says "Copied to clipboard."
 
 ### Requirement: Open and use the menu from the keyboard
 Shift+F10 and the context-menu key SHALL open the menu of the focused subject, anchored to it. The menu SHALL be a `menu` of `menuitem`s named after its subject, moved through with Up and Down and picked with Enter. Escape SHALL close it without closing a sheet or the palette, and focus SHALL return to the subject.

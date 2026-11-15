@@ -182,11 +182,15 @@ With a context snapshot, the Context block SHALL list the snapshot's five larges
 - **THEN** the list of largest items names `gmail` with 30k tokens
 
 ### Requirement: Measure a project's context overhead
-The Context block SHALL offer Measure now for a project with Claude Code sessions. Measure now SHALL run `claude -p "/context"` in the folder of the project's latest Claude Code session that still exists, with the project's most used model, then ingest, and the block SHALL show the new snapshot.
+The Context block SHALL offer Measure now when the view has Claude Code sessions or the project already has a context snapshot. Measure now SHALL run `claude -p "/context"` in the folder of the project's latest Claude Code session that still exists, with the project's most used model, then ingest, and the block SHALL show the new snapshot.
 
 #### Scenario: Measure a project
 - **WHEN** the user chooses Measure now on the Project page of `foo`
 - **THEN** `claude -p "/context"` runs in `foo`'s latest folder, and the grid splits the starting context by the new snapshot
+
+#### Scenario: Snapshot without sessions in the view
+- **WHEN** the Project page of `foo` has a context snapshot and the view holds no Claude Code session of `foo`
+- **THEN** the Context block still offers Measure now
 
 ### Requirement: Choose the measured folder and model in the app
 A request to measure SHALL name only the project, which SHALL be one the store knows. The app SHALL choose the folder and the model from the store and SHALL ignore any other value in the request. One run SHALL go at a time.
