@@ -1,7 +1,8 @@
 # documentation-site Specification
 
 ## Purpose
-TBD - created by archiving change add-docs-site. Update Purpose after archive.
+
+Publishes AI Ledger's documentation at https://nwidart.github.io/ai-ledger/: how to install it, what each page shows, and goal-first playbooks that turn what the pages show into concrete changes to a user's coding-agent workflow.
 
 ## Requirements
 
