@@ -17,6 +17,12 @@ The palette opens with its input focused. When a sheet is open, it opens above t
 
 ## Terms
 
+import ThemedImage from "../../../components/ThemedImage.astro";
+import palette from "../../../assets/shots/everywhere-palette.png";
+import paletteLight from "../../../assets/shots/everywhere-palette-light.png";
+
+<ThemedImage dark={palette} light={paletteLight} alt="The command palette searching atlas: a project, its page and its sessions, each with a kind badge." />
+
 A term starts with `#` or `>`, at the start of the text or after a space. Text with no sigil matches every kind below. Each suggestion shows its kind as a badge and the sigil it becomes when you pick it.
 
 ### `#` terms: filters

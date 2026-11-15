@@ -6,7 +6,13 @@ spec: [limits-dashboard, plan-limits]
 
 Limits answers: **how much of each plan limit window is used, when will it run out or reset, and how much goes unused?** A plan limit window is the 5-hour or weekly allowance of a provider's plan, for example Claude Code weekly or Codex 5-hour. For the difference between a plan limit window and a model's context window, see [Windows](/ai-ledger/concepts/windows/).
 
-<!-- shot slots: limits-lead (heading, status strip, suggestion, data line), limits-window-card (one open-window card), limits-past-windows (strips and table), limits-unused -->
+import ThemedImage from "../../../components/ThemedImage.astro";
+import windows from "../../../assets/shots/limits-windows.png";
+import windowsLight from "../../../assets/shots/limits-windows-light.png";
+import unused from "../../../assets/shots/limits-unused.png";
+import unusedLight from "../../../assets/shots/limits-unused-light.png";
+import history from "../../../assets/shots/limits-history.png";
+import historyLight from "../../../assets/shots/limits-history-light.png";
 
 ## Filters
 
@@ -40,6 +46,8 @@ With no window, the heading reads "No plan limits seen yet." Times read as "Sat,
 
 ### Open windows
 
+<ThemedImage dark={windows} light={windowsLight} alt="Limits' open windows: Claude Code and Codex, weekly and 5-hour, each a card with a usage chart, the pace and the forecast at the reset." />
+
 **Shows** one card per open window, whole account, regardless of the range. The hint above the cards says the range and project filters do not apply. The chart key lists measured, reading, estimated, forecast, last 24 h pace (only when a chart shows it), likely range, now, limit, and plan change (only when a chart shows one).
 
 **Figures** A card shows, top to bottom:
@@ -51,7 +59,7 @@ With no window, the heading reads "No plan limits seen yet." Times read as "Sat,
 | Caption | "At its limit until …", "Reaches 100% at … (between … and …)", or "Resets first at about 66% (60–85%)". With no calibration it says why there is no forecast. A **flat rate** chip marks a forecast made at a flat rate: a provider with fewer than 14 active days in the last 8 weeks. |
 | Last-24-hours line | "If the last 24 hours continue: reaches 100% at …" (warning tone) or "… about 41% at its reset". It carries your use over the last 24 hours on to the reset. It does not show for a window at its limit or without a forecast. |
 | Share line | For a scoped limit: "This limit is 50% of the weekly allowance; 21% of the weekly allowance is used through it". |
-| Surfaces line | For a weekly window with a breakdown: "All of this week's use so far came from Claude Code", or "This week's use by surface: Chats 60%, Claude Code 40%". No line when every surface is 0%. A surface under 0.5% reads "<1%". |
+| Surfaces line | For a weekly window with a breakdown: "All of this week's use so far came from Claude Code", or "This week's use by surface: Chats 60%, Claude Code 40%". No line when every surface is 0%. A surface under 0.5% reads "\<1%". |
 | Pace line | "80% left · 3d 12h to reset · usual pace 6.8% a day; this window 5.1% a day over its last day; 23% a day would use it all · behind pace: about 59% would go unused". The verdict is **ahead of pace: runs out before the reset** when the forecast reaches 100%, else **behind pace: about N% would go unused**, where N is 100 minus the forecast percent at the reset. Windows shorter than a day read per hour. A window at its limit has no pace. |
 | Cap in money | "100% ≈ $420 a week at list prices, from 37 points over 2 windows". Shows only for a calibrated window. |
 | What used this window | A drawer, closed by default. |
@@ -65,6 +73,8 @@ With no window, the heading reads "No plan limits seen yet." Times read as "Sat,
 
 ### Left unused
 
+<ThemedImage dark={unused} light={unusedLight} alt="Limits' Left unused panel: the average share of each plan limit still unused when its windows reset." />
+
 **Shows** for each provider and window kind, the average share still unused when the windows reset, over windows that ran their full length, in the selected range.
 
 **Figures** Each row reads "60% unused" with "4 windows" (and ", 1 estimated" where some are). The hint says how many windows that ended early, by an early reset or a plan change, are left out. A model-scoped window with nothing used and no counted use of its model is skipped. With none, it reads "No full-length windows in this range."
@@ -74,6 +84,8 @@ With no window, the heading reads "No plan limits seen yet." Times read as "Sat,
 The links in the drawers open [Cost](/ai-ledger/pages/cost/).
 
 ### Past windows
+
+<ThemedImage dark={history} light={historyLight} alt="Limits' Past windows drawer, open: the closed windows of the range, newest first." />
 
 **Shows** the closed windows of the selected range, newest first. The drawer is closed by default and headed **Past windows** with the number of closed windows.
 

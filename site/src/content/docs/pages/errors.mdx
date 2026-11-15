@@ -6,7 +6,15 @@ spec: [errors-dashboard, tool-inspector]
 
 Errors answers: which tool calls fail, which error types fail most and fastest, how much time the retry loops cost, and whether a fix worked. It reads the failed tool calls of every coding agent (Claude Code and Codex), sorts each into an error type, groups repeated failures into incidents, and gives each type a ready-made fix to paste into `CLAUDE.md` or `AGENTS.md`. The page is at `/errors`.
 
-<!-- shots: errors-summary (heading and vitals), errors-chart, errors-types (type table), errors-where-to-start, errors-type-detail -->
+import ThemedImage from "../../../components/ThemedImage.astro";
+import summary from "../../../assets/shots/errors-summary.png";
+import summaryLight from "../../../assets/shots/errors-summary-light.png";
+import chart from "../../../assets/shots/errors-chart.png";
+import chartLight from "../../../assets/shots/errors-chart-light.png";
+import types from "../../../assets/shots/errors-types.png";
+import typesLight from "../../../assets/shots/errors-types-light.png";
+import detail from "../../../assets/shots/errors-detail.png";
+import detailLight from "../../../assets/shots/errors-detail-light.png";
 
 Terms such as incident, recovered and error rate are in the [Metric glossary](/ai-ledger/reference/glossary/). A fix is a line to paste into your project's `CLAUDE.md` or `AGENTS.md`, where the agent reads its standing instructions.
 
@@ -28,6 +36,8 @@ There is no Include automated sessions control on this page. See [Filters](/ai-l
 ## Panels
 
 ### Summary
+
+<ThemedImage dark={summary} light={summaryLight} alt="Errors' summary figures: the error rate, its change against the previous 30 days, the incidents and the fixes applied." />
 
 **Shows** the view's answer in the heading: "N failed tool calls (X%), ↓/↑ Y% vs previous N days. *Type* is Z% of them." With no failure it reads "No failed tool calls … out of N". With no call it reads "No tool calls in this period". Under it, a line gives the date span and when the store was last ingested.
 
@@ -57,6 +67,8 @@ On a phone, only Error rate and Change show; **More summary** shows the rest.
 
 ### Errors by type
 
+<ThemedImage dark={chart} light={chartLight} alt="Errors by type: the error rate as a line over failed calls per day, on one time axis." />
+
 **Shows** two panels on one time axis. The upper panel is the error rate (errors per 100 tool calls) as a line; the lower panel is the failed calls per day or week as stacked bars. Without calls or without errors the chart is replaced by a message.
 
 **Figures**
@@ -72,6 +84,8 @@ On a phone, only Error rate and Change show; **More summary** shows the rest.
 - **Selecting a bucket**: a click, or Enter or Space on the current point, selects one day or week; the same action clears it. A chip by the Error types heading also clears it. A folded stretch cannot be selected. A selected bucket narrows the type table and the open type's detail to its errors. The summary, the chart, the rate trend and Change stay range-wide.
 
 ### Error types
+
+<ThemedImage dark={types} light={typesLight} alt="The Error types table: one row per type with its count and change." />
 
 **Shows** one row per error type in the view.
 
@@ -93,6 +107,8 @@ With a bucket selected, Errors, Time lost, Rate, Didn't recover and Share follow
 **Controls** A click anywhere on a row opens the type; a second click closes it. A search field, **Filter types…**, keeps the types whose label or id contains the text and announces "N of M types". Neither the sort nor the filter text is in the URL; they last the page visit. A second click on a sortable header flips the direction. A row with "–" in the sorted column comes last in both directions.
 
 ### Where to start
+
+<ThemedImage dark={detail} light={detailLight} alt="Errors' Where to start panel: the error types with a ready-made fix, and the fastest rising types." />
 
 **Shows** the panel beside the table while no type is open.
 

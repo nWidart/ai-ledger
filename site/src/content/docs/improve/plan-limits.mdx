@@ -34,6 +34,12 @@ Find out which of four causes you have. Limits shows open windows for the whole 
 4. On a weekly card, read the surfaces line, such as "This week's use by surface: Chats 60%, Claude Code 40%" (an example). The app counts only local agent use; the other surfaces show only in this line.
 5. Set the range to **90d** and open **Past windows**. Count the red bars of the limit, and read **At 100% for** in the table. Note whether the hits are recent or spread over the 90 days.
 
+import ThemedImage from "../../../components/ThemedImage.astro";
+import windows from "../../../assets/shots/limits-windows.png";
+import windowsLight from "../../../assets/shots/limits-windows-light.png";
+
+<ThemedImage dark={windows} light={windowsLight} alt="The open windows on Limits: each card gives the window's pace and the forecast to its reset." />
+
 | What you see | Cause | Fix |
 | --- | --- | --- |
 | The window's own rate is above the rate that would use it all, and (rule of thumb) twice the usual pace or more. **Past windows** shows few hits. | A burst of heavy work. | [Pace your work to the reset](#pace-your-work-to-the-reset) |

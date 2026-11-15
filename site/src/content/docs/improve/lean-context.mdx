@@ -50,6 +50,12 @@ Find out which of four causes you have. All steps but step 3 are on Context. The
 5. In **Growth**, read the tiles **Added per prompt**, **Sessions with a compaction** and **Before the first compaction**. Select **Share of window** above the chart and find the turn where the curve crosses the dashed line at 80%. With **All projects** selected, the table **Growth by project** gives the same figures for each project.
 6. In **What fills context**, read **Largest contributors**. A row whose range reaches the dashed line at 100,000 bytes has results that large. Then open the drawer **Largest tool results**: **Tool** and **Input** show which file, command or query produced each of the 25 largest results. The bar **Main thread / Subagents** shows how much of the reading the main thread did itself.
 
+import ThemedImage from "../../../components/ThemedImage.astro";
+import starting from "../../../assets/shots/context-starting.png";
+import startingLight from "../../../assets/shots/context-starting-light.png";
+
+<ThemedImage dark={starting} light={startingLight} alt="Starting context on Context: the starting context by project, with its 10th percentile and median." />
+
 | What you see | Cause | Fix |
 | --- | --- | --- |
 | The 10th percentile is close to the median, and **Memory files** is the largest category. | The instruction files are long. | [Trim CLAUDE.md or AGENTS.md](#trim-claudemd-or-agentsmd) |

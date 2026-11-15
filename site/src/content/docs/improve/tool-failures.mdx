@@ -32,6 +32,12 @@ Find out which of five causes you have. Errors counts automated sessions too; it
 5. If it has neither, switch the list to **By message**. The top message, with its share of the type's errors, names the repeated cause.
 6. If you came from the error loops of Activity, select **See loops** on its **Needs attention** card. Note the tool and the number of failures of each loop.
 
+import ThemedImage from "../../../components/ThemedImage.astro";
+import detail from "../../../assets/shots/errors-detail.png";
+import detailLight from "../../../assets/shots/errors-detail-light.png";
+
+<ThemedImage dark={detail} light={detailLight} alt="Where to start on Errors: the open fixes, ranked by the time each error type lost, and the fastest rising types." />
+
 | What you see | Cause | Fix |
 | --- | --- | --- |
 | **Potential fix** has a line and **Copy instruction line**. | The agent lacks a rule that the app knows. | [Paste the ready-made fix](#paste-the-ready-made-fix) |

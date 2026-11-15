@@ -8,11 +8,15 @@ hero:
 
 import { CardGrid, LinkCard } from "@astrojs/starlight/components";
 import ThemedImage from "../../components/ThemedImage.astro";
+import tourStill from "../../assets/shots/tour-overview.png";
+import tourStillLight from "../../assets/shots/tour-overview-light.png";
 
 AI Ledger reads your Claude Code and Codex transcripts into a local store and turns them into dashboards: Activity, Cost, Context, Errors, Limits, Insights, Live and Project. Your agents delete old transcripts; AI Ledger keeps every line. Everything runs on your machine.
 
 <ThemedImage
   gif="tour"
+  dark={tourStill}
+  light={tourStillLight}
   width={960}
   height={600}
   alt="A tour of AI Ledger with demo data: the Activity, Cost, Context, Errors and Limits pages, one after the other."

@@ -8,9 +8,15 @@ Activity answers one question: what did the agents get done in this view, and wh
 
 The page follows the filters at its top. Every figure below describes the selected project, time range and source.
 
-<!-- shot slot: activity-attention (the "Needs attention" card) -->
-<!-- shot slot: activity-work (the "Work per day" chart) -->
-<!-- shot slot: activity-hours (the "Prompts by hour" heatmap) -->
+import ThemedImage from "../../../components/ThemedImage.astro";
+import attention from "../../../assets/shots/activity-attention.png";
+import attentionLight from "../../../assets/shots/activity-attention-light.png";
+import vitals from "../../../assets/shots/activity-vitals.png";
+import vitalsLight from "../../../assets/shots/activity-vitals-light.png";
+import work from "../../../assets/shots/activity-work.png";
+import workLight from "../../../assets/shots/activity-work-light.png";
+import hours from "../../../assets/shots/activity-hours.png";
+import hoursLight from "../../../assets/shots/activity-hours-light.png";
 
 ## Filters
 
@@ -49,6 +55,8 @@ The page has a section index (Overview, Attention, Health, Work, Hours) and six 
 
 ### Needs attention
 
+<ThemedImage dark={attention} light={attentionLight} alt="Activity's Needs attention card: a short list of error loops, sessions near the context window, failing tools and failed test runs, each with an action." />
+
 **Shows** every problem found in the view, each with an action. The card opens just under the heading. It is hidden when the view has no requests.
 
 **Figures**
@@ -64,6 +72,8 @@ The card's title reads "N things to look at". With none of the four, it reads "N
 
 ### Work health
 
+<ThemedImage dark={vitals} light={vitalsLight} alt="Activity's Work health row: five tiles: errors per 100 calls, test runs passed, prompts interrupted, subagents and median session, each with its change against the previous period." />
+
 **Shows** five tiles. Each tile shows its change against the previous period of equal length, as ", up from X", ", down from X" or ", unchanged". The All range shows no change.
 
 | Tile | Figure | Note under it | Marked worse when |
@@ -77,6 +87,8 @@ The card's title reads "N things to look at". With none of the four, it reads "N
 A session's active time leaves out every pause over 20 minutes. Two figures that display the same value read "unchanged".
 
 ### Work per day, or per week
+
+<ThemedImage dark={work} light={workLight} alt="Activity's Work per day chart: commits per day, stacked by project, with errors per 100 calls on the right axis." />
 
 **Shows** one bar per day, or per week, from the first day with a session to the end of the range. Idle days show as zero.
 
@@ -98,6 +110,8 @@ A session's active time leaves out every pause over 20 minutes. Two figures that
 A selected day also narrows Tools, MCP servers, skills and hooks, and Error loops to that day, and the Sessions drawer shows each session's figures for that day. A note in each narrowed drawer says so and offers "Show the whole range". The heading, Needs attention, Work health and Project metrics keep the range's figures.
 
 ### Prompts by hour
+
+<ThemedImage dark={hours} light={hoursLight} alt="Activity's Prompts by hour heatmap: prompts by weekday and hour, darker cells holding more prompts." />
 
 **Shows** a heatmap of prompts by weekday (Monday first) and hour, on the machine's local clock. A darker cell holds more prompts.
 

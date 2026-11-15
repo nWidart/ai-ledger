@@ -4,7 +4,15 @@ description: Every active session as it runs, sorted by who needs you first.
 spec: [live-dashboard, live-sessions, session-titles]
 ---
 
-<!-- Shot slots wanted: live-stream (the Stream view, three panels), live-wall (the Wall view), live-agent-panel. -->
+import ThemedImage from "../../../components/ThemedImage.astro";
+import rail from "../../../assets/shots/live-rail.png";
+import railLight from "../../../assets/shots/live-rail-light.png";
+import stream from "../../../assets/shots/live-stream.png";
+import streamLight from "../../../assets/shots/live-stream-light.png";
+import status from "../../../assets/shots/live-status.png";
+import statusLight from "../../../assets/shots/live-status-light.png";
+import wall from "../../../assets/shots/live-wall.png";
+import wallLight from "../../../assets/shots/live-wall-light.png";
 
 Live answers one question: which of my sessions are running, and which wait for me? It follows each active Claude Code and Codex session within seconds of its transcript lines being written, from the agent's side: prompts, tool calls, subagents, context and cost.
 
@@ -42,6 +50,8 @@ The Stream view has three panels from left to right: the rail, the session's str
 
 ### Active sessions rail
 
+<ThemedImage dark={rail} light={railLight} alt="Live's Active · last 10 min rail: the active sessions, grouped by state." />
+
 **Shows** the active sessions. The panel heading reads "Active · last 10 min". Sessions sit under a heading per state group, `label · count`, in this order: **approval?**, **your turn**, **working**, **idle**, **ended**. A group with no session is not drawn. Inside a group, sessions are ordered by session start, oldest first, so an entry moves only when its state changes group. Keyboard focus follows a session that changes group.
 
 **Figures**
@@ -59,6 +69,8 @@ A session's title comes from the newest custom title (Claude Code `/rename`), el
 **Controls** Selecting an entry opens that session in the stream. With no session selected, the page opens the newest active session.
 
 ### Session stream
+
+<ThemedImage dark={stream} light={streamLight} alt="Live's session stream: a prompt, the reply, tool calls, a subagent lane and a failed npm test." />
 
 **Shows** the selected session as a log of its events in order, newest at the bottom. The head shows the session's title as a heading (the project when there is no title), then the project, git branch, source and model, a **Session sheet** link to the session's sheet on Activity, and the state. The time column shows the clock time, with the date for an event not from today.
 
@@ -95,6 +107,8 @@ The filters combine, stay on when you open another session, and change only what
 
 ### Agent panel
 
+<ThemedImage dark={status} light={statusLight} alt="Live's agent panel, Doing now: the session's context window, figures, tokens per minute and plan limits." />
+
 **Shows** the selected session's figures.
 
 **Figures** The sections, in order:
@@ -110,6 +124,8 @@ The filters combine, stay on when you open another session, and change only what
 **Controls** The Errors figure of **This session** toggles the Errors stream filter.
 
 ### Wall
+
+<ThemedImage dark={wall} light={wallLight} alt="Live's Wall view: one tile per active session." />
 
 **Shows** one tile per active session, grouped by state under the rail's headings (`label · count`), in the same order. Each group is a list under an `h2` heading. Inside a group, tiles are ordered by session start, oldest first.
 

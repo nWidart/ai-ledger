@@ -8,7 +8,15 @@ Insights answers: **did my sessions reach their goal, what got in the way, and h
 
 `/insights` is a Claude Code command. A model reads each session's transcript and writes one judgment file, a **facet**, per session. The app reads those files at every ingest and keeps a copy in the store, so the judgments stay after Claude Code overwrites or deletes the files. The app never calls a model and never runs `claude`. The directory it reads is `~/.claude/usage-data` (set with `--usage-data`; see the [CLI reference](/ai-ledger/reference/cli/)).
 
-<!-- shot slots: insights-vitals (the five figures), insights-outcomes-friction (Outcomes and Friction categories side by side), insights-sessions (the filter controls and two session cards), insights-coverage (the Coverage drawer, open) -->
+import ThemedImage from "../../../components/ThemedImage.astro";
+import vitals from "../../../assets/shots/insights-vitals.png";
+import vitalsLight from "../../../assets/shots/insights-vitals-light.png";
+import outcomes from "../../../assets/shots/insights-outcomes.png";
+import outcomesLight from "../../../assets/shots/insights-outcomes-light.png";
+import friction from "../../../assets/shots/insights-friction.png";
+import frictionLight from "../../../assets/shots/insights-friction-light.png";
+import log from "../../../assets/shots/insights-log.png";
+import logLight from "../../../assets/shots/insights-log-light.png";
 
 ## Filters
 
@@ -43,6 +51,8 @@ In page order, when the view has analysed sessions.
 
 ### Outcomes at a glance
 
+<ThemedImage dark={vitals} light={vitalsLight} alt="Insights' Outcomes at a glance row: five figures from the analysed sessions." />
+
 **Shows** five figures:
 
 | Figure | Detail line |
@@ -55,6 +65,8 @@ In page order, when the view has analysed sessions.
 
 ### Outcomes
 
+<ThemedImage dark={outcomes} light={outcomesLight} alt="Insights' Outcomes panel (model-judged): the share of analysed sessions in each outcome, from fully achieved to not achieved." />
+
 **Shows** (model-judged) whether each session met its goal, as a share of the analysed sessions: Fully achieved, Mostly achieved, Partially achieved, Not achieved and Unclear.
 
 **Figures** Each row shows its share and its count. An outcome the page does not know shows under its raw name.
@@ -62,6 +74,8 @@ In page order, when the view has analysed sessions.
 **Controls** Each row is a button that filters the session list.
 
 ### Friction categories
+
+<ThemedImage dark={friction} light={frictionLight} alt="Insights' Friction categories panel (model-judged): what got in the way, by times reported." />
 
 **Shows** (model-judged) what got in the way, by times reported, with the sessions that reported it ("14", "9 sessions"). A session can carry several labels. Similar labels are grouped into **families** by keyword, in a fixed order where the first matching rule wins; a label no rule matches is a family of its own.
 
@@ -83,6 +97,8 @@ In page order, when the view has analysed sessions.
 - **Claude's helpfulness**: sessions per rating, from essential to unhelpful, with the count and the share. Each row is a filter.
 
 ### Analysed sessions
+
+<ThemedImage dark={log} light={logLight} alt="Insights' Analysed sessions log (model-judged): session cards with their outcome, session type and friction labels, under the sort and outcome controls." />
 
 **Shows** (model-judged) the view's analysed sessions as cards. A line above the cards says how many it lists, in what order, and that the summary and friction detail are the model's words.
 

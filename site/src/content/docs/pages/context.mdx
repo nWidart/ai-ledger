@@ -8,7 +8,19 @@ Context answers: how much of the model's context window does a session start wit
 
 Terms such as cache read, cache write and long-prompt tier are in the [Metric glossary](/ai-ledger/reference/glossary/). Every figure comes from the transcripts. The page reads no `CLAUDE.md`, `AGENTS.md`, `.mcp.json` or other configuration file. A token figure taken from a tool result's size is an estimate and is labelled **estimate** wherever it appears.
 
-<!-- shots: context-overview (heading, filters and Tips), context-starting, context-growth, context-pressure, context-fills, context-cost -->
+import ThemedImage from "../../../components/ThemedImage.astro";
+import tips from "../../../assets/shots/context-tips.png";
+import tipsLight from "../../../assets/shots/context-tips-light.png";
+import starting from "../../../assets/shots/context-starting.png";
+import startingLight from "../../../assets/shots/context-starting-light.png";
+import growth from "../../../assets/shots/context-growth.png";
+import growthLight from "../../../assets/shots/context-growth-light.png";
+import pressure from "../../../assets/shots/context-pressure.png";
+import pressureLight from "../../../assets/shots/context-pressure-light.png";
+import fills from "../../../assets/shots/context-fills.png";
+import fillsLight from "../../../assets/shots/context-fills-light.png";
+import cost from "../../../assets/shots/context-cost.png";
+import costLight from "../../../assets/shots/context-cost-light.png";
 
 ## Filters
 
@@ -33,7 +45,7 @@ Links to Overview, Tips, Start (Starting context), Growth, Pressure (Window pres
 
 **Shows** the view's answer: "A typical session starts with N tokens of context, X% of its window." It adds how many sessions compacted. The line under it says that the figures are the prompt tokens of each session's first turn.
 
-With no measured session, the heading reads "No {agent} session{ in project} with a measured start in the last N days." (or "… yet." for All). The agent is "agent", "Claude Code" or "Codex", by the Source filter.
+With no measured session, the heading reads "No \{agent} session\{ in project} with a measured start in the last N days." (or "… yet." for All). The agent is "agent", "Claude Code" or "Codex", by the Source filter.
 
 ### Rebuild notice
 
@@ -45,6 +57,8 @@ With no measured session, the heading reads "No {agent} session{ in project} wit
 **Figures** It gives the counts ("N of M tool calls carry a result size") and says to stop the app and run `ai-ledger rebuild`. The figures on the page still cover the rows that have them. See [Troubleshooting](/ai-ledger/reference/troubleshooting/) and the [CLI reference](/ai-ledger/reference/cli/).
 
 ### Tips
+
+<ThemedImage dark={tips} light={tipsLight} alt="Context's Tips cards: each tip that fired says what to change, with its evidence." />
 
 **Shows** tips from six fixed rules. The app sets the thresholds; nothing is learned or generated. A tip shows only when its rule fires on the view. When none fires, the section reads "Nothing stands out in this view." Each tip card carries its severity mark: **● Act** (critical) or **▲ Watch** (warning). Tips run most severe first, and within a severity in the order below.
 
@@ -65,6 +79,8 @@ The evidence of the large-start tip names the five projects with the largest med
 
 ### Starting context
 
+<ThemedImage dark={starting} light={startingLight} alt="Context's Starting context panel: what a session begins with, per project." />
+
 **Shows** the prompt tokens of each session's first turn, which is what the model read before any work. The section's hint states how many sessions have a measured start and how many have a known window; a share of the window covers only sessions with a known window.
 
 **Figures**
@@ -79,6 +95,8 @@ The evidence of the large-start tip names the five projects with the largest med
 **Controls** Selecting a project row opens its project sheet. On the weekly chart, arrow keys read a week; **Show data table** lists week, median, 25th and 75th percentile, and sessions.
 
 ### Growth
+
+<ThemedImage dark={growth} light={growthLight} alt="Context's Growth panel: the median context size at each turn of a session." />
 
 **Shows** the median context (prompt tokens) at each turn of a session.
 
@@ -97,6 +115,8 @@ The evidence of the large-start tip names the five projects with the largest med
 
 ### Window pressure
 
+<ThemedImage dark={pressure} light={pressureLight} alt="Context's Window pressure panel: how close sessions get to their model's window at their peak." />
+
 **Shows** how full sessions get at their peak, by the size of their model's window. A session's window is the one its source stated (for Codex, the turn's `model_context_window`), else the `context` of its peak model in the price table, else unknown. See [Windows](/ai-ledger/concepts/windows/).
 
 **Figures**
@@ -111,6 +131,8 @@ The evidence of the large-start tip names the five projects with the largest med
 
 ### What fills context
 
+<ThemedImage dark={fills} light={fillsLight} alt="Context's What fills context panel: the size of tool results, summed by tool, by MCP server and by skill." />
+
 **Shows** the size of the main-thread tool results as the transcript stores them, summed by tool and by MCP server. The page marks each token count as an estimate: bytes divided by 4, rounded down. The section's hint states how many completed calls have a known size.
 
 **Figures**
@@ -122,6 +144,8 @@ The evidence of the large-start tip names the five projects with the largest med
 **Controls** A **By tool / By MCP server** switch shows when MCP servers exist. Selecting a tool or server row opens its tool inspector.
 
 ### Cost
+
+<ThemedImage dark={cost} light={costLight} alt="Context's Cost panel: what context costs, with the prompt cache's part in it." />
 
 **Shows** cost as the [Cost page](/ai-ledger/pages/cost/) counts it, with the prompt cache's part in it. Prices and tiers are the same as Cost's. A view with no priced request reads "–" (unknown), never zero.
 

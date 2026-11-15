@@ -37,6 +37,12 @@ Find out which of five causes you have. Keep the filters of the signs: **30d**, 
 5. Back on Cost, open the drawer **Most expensive sessions**. Look for sessions with a long **Active** time, many **Prompts** and few **Commits**.
 6. For the plan line, open [Limits](/ai-ledger/pages/limits/) with the range at **90d** and read **Left unused** for each weekly limit.
 
+import ThemedImage from "../../../components/ThemedImage.astro";
+import models from "../../../assets/shots/cost-models.png";
+import modelsLight from "../../../assets/shots/cost-models-light.png";
+
+<ThemedImage dark={models} light={modelsLight} alt="Models and effort on Cost: each model and effort level's share of the estimated cost, costliest first." />
+
 | What you see | Cause | Fix |
 | --- | --- | --- |
 | The top row of **Models and effort** is your most expensive model, for routine work; or **Subagent cost** is high and your subagents set no cheaper model. | The model is larger than the task. | [Use a cheaper model for routine work](#use-a-cheaper-model-for-routine-work) |

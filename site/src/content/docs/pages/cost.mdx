@@ -8,11 +8,17 @@ Cost answers three questions: what did this period cost, where did the spend go,
 
 The page follows the filters at its top. Every figure below describes the selected project, time range and source.
 
-<!-- shot slot: cost-overview (the heading, comparison and sparkline) -->
-<!-- shot slot: cost-changed (the "What changed" panel) -->
-<!-- shot slot: cost-insights (the "What stands out" cards) -->
-<!-- shot slot: cost-spend (the "Estimated cost per day" chart) -->
-<!-- shot slot: cost-where (the "Where the spend went" and "Models and effort" panels) -->
+import ThemedImage from "../../../components/ThemedImage.astro";
+import changed from "../../../assets/shots/cost-changed.png";
+import changedLight from "../../../assets/shots/cost-changed-light.png";
+import highlights from "../../../assets/shots/cost-highlights.png";
+import highlightsLight from "../../../assets/shots/cost-highlights-light.png";
+import spend from "../../../assets/shots/cost-spend.png";
+import spendLight from "../../../assets/shots/cost-spend-light.png";
+import where from "../../../assets/shots/cost-where.png";
+import whereLight from "../../../assets/shots/cost-where-light.png";
+import models from "../../../assets/shots/cost-models.png";
+import modelsLight from "../../../assets/shots/cost-models-light.png";
 
 ## Filters
 
@@ -63,6 +69,8 @@ A "+?" chip beside a cost means the figure leaves out some requests from unprice
 
 ### What changed
 
+<ThemedImage dark={changed} light={changedLight} alt="Cost's What changed panel: each project's change in estimated cost against the previous 30 days, as bars either side of zero." />
+
 **Shows** each project's change in estimated cost against the previous period, biggest move first, as bars either side of zero. The panel is titled "What changed vs the previous N days". It is left out for the All range, for a one-project view, and when no project moved.
 
 **Figures**
@@ -76,6 +84,8 @@ A "+?" chip beside a cost means the figure leaves out some requests from unprice
 **Controls** The top 8 projects show. **Show all N projects** shows the rest; the rows left out are summed into "N other projects". A row opens the project sheet.
 
 ### What stands out
+
+<ThemedImage dark={highlights} light={highlightsLight} alt="Cost's What stands out cards: findings, each with one action." />
 
 **Shows** up to four findings, each with one action. The most severe leads, in a wide card; among equal severity, the finding with more money at stake (the cost of the project, session or day it names) leads. The others follow as compact cards. A card is marked "✓ Good", "▲ Watch" or "● Act", or has no mark.
 
@@ -94,6 +104,8 @@ A "+?" chip beside a cost means the figure leaves out some requests from unprice
 - The Cache hit card is left out when the cache hit ratio is unknown (no input tokens). Compare projects sorts Cost by project by cost per commit and rings the outlier.
 
 ### Estimated cost per day
+
+<ThemedImage dark={spend} light={spendLight} alt="Cost's Estimated cost per day chart: one bar per day, stacked by project, with the 7-day average line." />
 
 **Shows** the chart of the view, one bar per day. The title reads "Estimated cost per day", with " by model" or " by agent" for those stackings, or "Tokens per day" for the Tokens measure.
 
@@ -121,6 +133,8 @@ A "+?" chip beside a cost means the figure leaves out some requests from unprice
 
 ### Where the spend went
 
+<ThemedImage dark={where} light={whereLight} alt="Cost's Where the spend went panel: each project's share of the estimated cost." />
+
 **Shows** the estimated cost per project, as a share of the total. With one project selected, the panel is titled "Most expensive sessions" and lists that project's sessions as a share of its cost.
 
 **Figures** A row has the name, a bar in the project's color, the cost (with a "+?" chip when unpriced requests are left out) and the share.
@@ -129,7 +143,9 @@ A "+?" chip beside a cost means the figure leaves out some requests from unprice
 
 ### Models and effort
 
-**Shows** the share of estimated cost of each model and effort level, costliest first. A row is named `model · effort`, with `· fast` for fast-mode requests, which form their own rows. A share above zero that rounds to 0% reads "<1%". A model with no price shows "–" and an "unpriced" chip.
+<ThemedImage dark={models} light={modelsLight} alt="Cost's Models and effort panel: each model and effort level's share of the estimated cost, costliest first." />
+
+**Shows** the share of estimated cost of each model and effort level, costliest first. A row is named `model · effort`, with `· fast` for fast-mode requests, which form their own rows. A share above zero that rounds to 0% reads "\<1%". A model with no price shows "–" and an "unpriced" chip.
 
 **Controls** The top 8 rows show. **Show all N** shows the rest.
 
