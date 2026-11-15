@@ -92,7 +92,11 @@ export function Nav() {
         {project && (
           <span className="appnav-filter" id="navFilter">
             <span className="k">Project</span><ProjectDot project={project} />
-            <Link to="/project" search={parseSearch(shared) as never} activeOptions={{ includeSearch: false }} activeProps={{}} title={`Open the ${project} project page`} onClick={e => go(e, "/project")}><b>{project}</b></Link>
+            <Link to="/project" search={parseSearch(shared) as never} activeOptions={{ includeSearch: false }} activeProps={{}} onClick={e => go(e, "/project")}>
+              <b>{project}</b>{" "}
+              {/* The pill says where the chip leads; the link's name reads "<project> project page". */}
+              <span className="appnav-go"><span className="sr">project</span>{" "}Page{path !== "/project" && <span aria-hidden="true">{" "}→</span>}</span>
+            </Link>
             <button type="button" aria-label="Clear project filter" title="Show all projects" onClick={clear}>✕<span className="lbl"> Clear</span></button>
           </span>
         )}

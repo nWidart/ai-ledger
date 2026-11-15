@@ -6,7 +6,7 @@ import { RANGES } from "../../url";
 import { SOURCE_LABELS } from "../Filters";
 import { PAGES } from "../Nav";
 import { shortId } from "../sheets/session";
-import { EXACT, bestMatch, byScore, type Ranges } from "./match";
+import { EXACT, PREFIX, bestMatch, byScore, match, type Ranges } from "./match";
 import type { Term } from "./terms";
 
 export type FilterKind = "project" | "source" | "range" | "automated";
@@ -19,8 +19,8 @@ export const BADGES: Record<Kind, string> = {
   project: "Project", source: "Source", range: "Range", automated: "Filter", page: "Page", tool: "Tool", mcp: "MCP server",
   skill: "Skill", session: "Session", category: "Error type", command: "Command",
 };
-/** Rows per kind and in all. */
-export const PER_KIND = 8, MAX_ROWS = 20, MAX_SESSIONS = 5;
+/** Rows per kind and in all; project-page rows. */
+export const PER_KIND = 8, MAX_ROWS = 20, MAX_SESSIONS = 5, MAX_PROJECT_PAGES = 3;
 
 /** A picked term. value: the project, source, range in days, page path, subject name, session id, category id or command. */
 export interface Chip { kind: Kind; value: string; label: string; prefilled?: boolean }
@@ -34,6 +34,8 @@ export interface Row extends Chip {
   detail: string[];
   rank: number;
   count: number;
+  /** A project-page row: picking it adds this project's filter with the Project page. */
+  project?: string;
 }
 export interface SuggestData { palette?: PalettePayload | undefined; sessions?: readonly TitledSessionRow[] | undefined }
 
@@ -86,11 +88,15 @@ export const searchesSessions = (t: Term) => t.sigil !== "#" && t.text.trim().le
 /**
  * The rows for the term under the caret, best first: at most PER_KIND per kind and MAX_ROWS in all. # lists filters, plus
  * "open inspector (>)" for a tool, MCP server or skill it names exactly (tools are not filters); > lists the rest; no sigil
- * lists every kind. Rows already picked as chips are left out.
+ * lists every kind. Rows already picked as chips are left out. path: the current page, to leave out a project page
+ * that is already open.
  */
-export function suggest(term: Term, data: SuggestData, chips: readonly Chip[] = []): Row[] {
-  const picked = new Set(chips.map(c => c.kind + "\0" + c.value)), rows: Row[] = [];
-  for (const c of candidates(data, searchesSessions(term) && !!term.text.trim(), chips.some(c => c.kind === "project"))) {
+export function suggest(term: Term, data: SuggestData, chips: readonly Chip[] = [], path = ""): Row[] {
+  const picked = new Set(chips.map(c => c.kind + "\0" + c.value)), rows = projectPages(term, data, chips, path);
+  const chosen = chips.findLast(c => c.kind === "project")?.value;
+  // The generic Project row would open the same page as the chosen project's own row.
+  const generic = !!chosen && !rows.some(r => r.project === chosen);
+  for (const c of candidates(data, searchesSessions(term) && !!term.text.trim(), generic)) {
     const filter = isFilter(c.kind), subject = c.kind === "tool" || c.kind === "mcp" || c.kind === "skill";
     if (term.sigil === "#" && !filter && !subject) continue;
     if (term.sigil === ">" && filter) continue;
@@ -119,7 +125,25 @@ export function suggest(term: Term, data: SuggestData, chips: readonly Chip[] = 
   return out;
 }
 
-/** The option's accessible name: "Bash, tool, 3 calls, 33% failed". */
-export const rowName = (r: Row) => [r.text, BADGES[r.kind].toLowerCase(), ...r.detail].join(", ");
+/**
+ * The best matching projects' pages, for typed text with no sigil or after >: none for empty text, which would push the
+ * pages out of their group. Bare text never matches exactly, so a typed name auto-chips as the filter. A project whose
+ * page the chips already lead to is left out: picking it would change nothing.
+ */
+function projectPages(term: Term, data: SuggestData, chips: readonly Chip[], path: string): Row[] {
+  if (term.sigil === "#" || !term.text) return [];
+  const chosen = chips.findLast(c => c.kind === "project")?.value, setter = chips.findLast(c => c.kind === "page" || c.kind === "category");
+  const open = setter ? setter.kind === "page" && setter.value === PROJECT_PAGE : path === PROJECT_PAGE;
+  return (data.palette?.projects ?? []).flatMap(p => {
+    const m = open && p.name === chosen ? null : match(term.text, p.name);
+    return m ? [{ name: p.name, rank: term.sigil ? m.rank : Math.max(m.rank, PREFIX), count: p.sessions, ranges: m.ranges }] : [];
+  }).sort(byScore).slice(0, MAX_PROJECT_PAGES).map((p): Row => ({
+    id: `projectpage:${p.name}`, kind: "page", value: PROJECT_PAGE, label: "Project", project: p.name, sigil: ">",
+    text: `${p.name} · open project page`, ranges: p.ranges, detail: [plural(p.count, "session")], rank: p.rank, count: p.count,
+  }));
+}
+
+/** The option's accessible name: "Bash, tool, 3 calls, 33% failed". A project-page row's text already says "page". */
+export const rowName = (r: Row) => [r.text, ...(r.project ? [] : [BADGES[r.kind].toLowerCase()]), ...r.detail].join(", ");
 /** The palette payload has no tool calls at all for the view. */
 export const noToolCalls = (p: PalettePayload | undefined) => !!p && !p.tools.length;
