@@ -79,14 +79,69 @@ The figure that should move, in which direction, and over how many days.
 Links to the Pages and Concepts pages it builds on.
 ```
 
-Use `###` inside a section when you need structure. Writing rules:
+Use `###` inside a section when you need structure. `npm run check` fails on a missing, extra or misplaced `##` heading.
 
-- Every claim names a page and a figure the app shows. If the app does not show it, leave it out.
-- Act gives something to paste, set or do, not advice.
-- Verify names the metric and the number of days to wait.
-- Check each figure against the page's specs before you commit.
+### The method
 
-The Metric glossary (`reference/glossary`) maps each metric to the page that shows it and the playbook that acts on it. Each page under `pages/` ends with links to the playbooks that start from it.
+A playbook is a how-to guide: the reader has a goal and knows the app. Write each section to this checklist.
+
+**Goal**
+
+- One sentence. Name the figure that moves and its direction: "Sessions start with less context", not "Understand context".
+
+**Signs you need it**
+
+- One to five signs. Each names a page, a panel and a figure, in the words the app shows, and the value that means "this playbook applies".
+- Use the threshold the app itself uses where one exists: a tip's rule, a Needs attention line, a Watch or Act mark, the Limits alert. Say that it is the app's.
+- When you set a value of your own, start the sentence with "Rule of thumb:".
+- Prefer a sign the app raises by itself (a tip, a mark, a dot) over one the reader must compute.
+- Say which neighbouring signs belong to another playbook, with a link.
+
+**Diagnose**
+
+- Numbered steps, six at most. Each step says where to go (page, panel, sheet, filter or range) and what to look for there.
+- End with a table: what you see, the cause, the Act subsection that fixes it. A playbook with one cause needs no table.
+- Send the reader to no step that does not change what they do next.
+
+**Act**
+
+- One `###` per cause. Each gives one of these, and nothing softer:
+  - a snippet to paste into `CLAUDE.md` or `AGENTS.md`, in a code block, with the file it goes in;
+  - a setting, with the file and the key;
+  - a command, in a code block;
+  - a habit with a trigger: "When the meter turns to the warning color, run `/compact`."
+- No "consider", "try to" or "be mindful of". When you cannot name what to paste, set, run or do, the playbook is not ready.
+- Give the Claude Code and the Codex variant where they differ. Name a real-world case that changes the step (a file shared in git, a tool the agent lacks).
+
+**Verify**
+
+- Name four things: the figure, the direction it moves, the days to wait, and where to read it.
+- The app has no custom date range. So either use a figure the app compares for you (the previous period of equal length, a weekly series, **Before and after the fix**), or tell the reader to note the figure before they act and to read it again with the range set to the days they waited.
+- Give a same-day check when one exists.
+- Say what to do when the figure did not move.
+
+**Related**
+
+- Three to seven links: the Pages pages the playbook reads, the Concepts page that explains why, the playbook to open next.
+
+**Tone**
+
+- Conditional imperatives: "If the tip fires, open …", "To find the server, select …".
+- Do not teach. One clause of reminder at most, then a link to Concepts or the [Metric glossary](src/content/docs/reference/glossary.md).
+- Use the app's own words, and put its labels in bold: **Needs attention**, **Added per prompt**.
+- Mark every example value as an example.
+
+**Check before you commit**
+
+- Check every label against `web/src/` and every threshold, cap and definition against `src/ai_ledger/`, then against `openspec/specs/`. The pages under `pages/` are a map, not the source.
+- Write what the app does. When the code and a spec disagree, the code is what the reader sees: follow it, and report the difference.
+- Give the page alone to a fresh reader with these questions: "Does this apply to me?", "What exactly do I change?", "How do I know it worked?". Fix the page until the reader answers each.
+
+Worked examples: `improve/lean-context.md` for a playbook with several causes, and `improve/weekly-review.md` for a routine, where Diagnose is the pass over the pages and Act sends the reader to one other playbook.
+
+### The metric-to-action mapping
+
+The Metric glossary (`reference/glossary`) maps each figure to the page that shows it and the playbook that acts on it. A new playbook adds its figures to the glossary's Playbook column. Each page under `pages/` ends with links to the playbooks that start from it.
 
 ## Images
 

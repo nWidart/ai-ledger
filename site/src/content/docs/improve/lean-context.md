@@ -5,12 +5,162 @@ description: Start sessions smaller and grow them slower, by trimming CLAUDE.md 
 
 ## Goal
 
+Sessions start with less context and add less per prompt, so they compact later and stay clear of the limit of the window.
+
 ## Signs you need it
+
+Open [Context](/ai-ledger/pages/context/) with the range at **30d** and read **Tips**. This playbook applies when one of these four tips shows. The thresholds are the app's own.
+
+| Tip | The app shows it when | Mark |
+| --- | --- | --- |
+| **Sessions start with a large context** | A project's median starting context is 30,000 tokens or more. | **▲ Watch** |
+| **Sessions compact repeatedly** | A session compacted 3 times or more. | **▲ Watch**; **● Act** from 6 compactions |
+| **Sessions reach the limit of the window** | A session peaked at 80% or more of its window. | **● Act** |
+| **Tool results fill the context** | A main-thread tool result is 100,000 bytes or more. | **▲ Watch**; **● Act** from 400,000 bytes |
+
+With several tips, start from one marked **● Act**.
+
+The same problem shows in three other places:
+
+- [Activity](/ai-ledger/pages/activity/), **Needs attention**: "N sessions reached 80%+ of the context window."
+- [Project](/ai-ledger/pages/project/), **Context**: **sessions near the context limit** is above 0.
+- [Live](/ai-ledger/pages/live/), **Context window**: the meter of a running session is in the warning color, which it takes above 80%.
+
+The two other tips, **The prompt cache breaks within sessions** and **Requests are priced on the long-prompt tier**, are about cost. For those, use [Spend less for the same output](/ai-ledger/improve/spend-less/).
 
 ## Diagnose
 
+Find out which of four causes you have. All steps but step 3 are on Context. The project picker and the range are the page's [filters](/ai-ledger/everywhere/filters/).
+
+1. In **Tips**, select the link "N sessions" at the foot of each tip that fired. The **Sessions matching** list opens. If most sessions belong to one project, pick that project in the project picker for the next steps.
+2. In **Starting context**, read the project's row in **Starting context by project**. Compare **10th percentile** with **Median**. The 10th percentile approximates the fixed overhead: what every session reads before your first prompt.
+   - If the 10th percentile is close to the median, the overhead is the problem. Go to step 3. Rule of thumb: "close" is three quarters of the median or more.
+   - If the 10th percentile is far under the median, the first prompts are large (pasted logs, long attached files). Go to [Start a new session for each task](#start-a-new-session-for-each-task).
+3. Split the overhead. Open the project's [Project page](/ai-ledger/pages/project/#open-the-page) and go to **Context**. Select **Measure now**. It runs `claude -p "/context"` in the project's folder: it calls no model, but it starts the project's MCP servers and hooks as a new session does. The grid's legend then lists the overhead by category, such as **Memory files** and **MCP tools**, and **Largest overhead items** names the five largest MCP servers, memory files and skills. Note the largest category and its tokens.
+   - A Codex project has no **Measure now**: Codex records no `/context`. Use step 4 for its MCP servers, and read its `AGENTS.md` yourself.
+4. Back on Context, read the evidence line **MCP servers called (fewest calls first)** on the tip **Sessions start with a large context**. Set the range to **90d** first. The line lists only the servers that the sessions called. Compare it with the servers you configured:
+
+   ```bash
+   claude mcp list
+   ```
+
+   For Codex, the configured servers are the `[mcp_servers.<name>]` tables in `~/.codex/config.toml`.
+
+   A configured server that the line does not list was never called in the range. A server at the front of the line was called least. If that tip did not fire, use the **By MCP server** table in **What fills context**: it lists the servers whose calls returned a result on the main thread.
+5. In **Growth**, read the tiles **Added per prompt**, **Sessions with a compaction** and **Before the first compaction**. Select **Share of window** above the chart and find the turn where the curve crosses the dashed line at 80%. With **All projects** selected, the table **Growth by project** gives the same figures for each project.
+6. In **What fills context**, read **Largest contributors**. A row whose range reaches the dashed line at 100,000 bytes has results that large. Then open the drawer **Largest tool results**: **Tool** and **Input** show which file, command or query produced each of the 25 largest results. The bar **Main thread / Subagents** shows how much of the reading the main thread did itself.
+
+| What you see | Cause | Fix |
+| --- | --- | --- |
+| The 10th percentile is close to the median, and **Memory files** is the largest category. | The instruction files are long. | [Trim CLAUDE.md or AGENTS.md](#trim-claudemd-or-agentsmd) |
+| **MCP tools** is the largest category, or a configured server is missing from the called list. | MCP servers you do not call. | [Remove the MCP servers you do not call](#remove-the-mcp-servers-you-do-not-call) |
+| **Added per prompt** is high, and **Largest tool results** lists whole files, full logs or unbounded searches. | Large tool results. | [Keep tool results small](#keep-tool-results-small) |
+| Sessions compact or peak at 80% with an ordinary start and no large result. | Sessions run across many tasks. | [Start a new session for each task](#start-a-new-session-for-each-task) |
+
+More than one cause can apply. Fix the largest category first.
+
 ## Act
+
+### Trim CLAUDE.md or AGENTS.md
+
+The file to edit is under **Largest overhead items**, **Memory files** (hover a name for its path). Every line of it is read at the start of every session.
+
+1. Delete what the agent can read in the repository when it needs it: file listings, copied API documentation, code samples that exist in the code.
+2. Delete the rules that a formatter, a linter or a test already enforces.
+3. In `CLAUDE.md`, replace each `@path` import of a long file with the plain path. An import loads the whole file at the start; a path costs one line, and the agent reads the file when the task needs it:
+
+   ```md
+   ## Reference (read only when the task needs it)
+   - Release steps: docs/release.md
+   - Database schema: docs/schema.md
+   ```
+
+4. In Claude Code, move the rules for one directory into a `CLAUDE.md` in that directory. Claude Code loads it only when it works on files there.
+
+If **Skills** or **Custom agents** is the largest category instead, remove the skills, plugins or agents you do not use. **Largest overhead items** names the largest skills.
+
+Then select **Measure now** again. **Memory files** shows the new size at once.
+
+### Remove the MCP servers you do not call
+
+A configured server puts its tool definitions in the prompt of every session, called or not, unless the agent defers them (see the note under the steps).
+
+1. Remove each server that step 4 found configured and never called in 90 days:
+
+   ```bash
+   claude mcp remove <name>
+   ```
+
+2. If the server is defined in the project's `.mcp.json`, delete its entry there. That file is in git, so the change reaches everyone who uses the repository.
+3. For Codex, delete the server's `[mcp_servers.<name>]` table in `~/.codex/config.toml`.
+4. For a server you call in a few projects only, remove it as in step 1, then run `claude mcp add` for it inside each of those projects. Without a scope option, `claude mcp add` adds the server to the current project only.
+
+Before you remove anything, read the line under the legend in the Project page's **Context**: "N deferred tokens of tools are not loaded". Deferred tools take no context. If most of the tokens of the MCP tools are deferred, removing servers frees little: fix another cause first.
+
+Then select **Measure now** again. **MCP tools** shows the new size at once.
+
+### Keep tool results small
+
+Paste this into the project's `CLAUDE.md`. It adds six lines to the starting context.
+
+```md
+## Context hygiene
+- Read a large file in parts: use `Read` with `offset` and `limit`.
+- Pipe long shell output through `head`, `tail` or `grep`. Never print a whole log or a whole test run.
+- Cap a search: use `head_limit`, or list file names only.
+- Ask an MCP tool for a small page: pass its limit or page-size argument.
+- For bulk reading (many files, a long log, a broad search), use a subagent and keep only its short report.
+```
+
+For Codex, paste it into `AGENTS.md` without the first and the third line, which name Claude Code tools.
+
+Keep only the lines that match the **Tool** column of **Largest tool results**:
+
+| Tool in the list | Line to keep |
+| --- | --- |
+| `Read` | Read a large file in parts. |
+| `Bash`, or Codex's `exec_command` | Pipe long shell output. |
+| `Grep`, `Glob` | Cap a search. |
+| A tool with an MCP server under its name | Ask an MCP tool for a small page. |
+| Any of them, when **Main thread** holds nearly all of the bar | Use a subagent for bulk reading. |
+
+### Start a new session for each task
+
+These are habits. Each has a trigger.
+
+- When a task is done and committed, start a new session, or run `/clear` in Claude Code, before the next task.
+- When [Live](/ai-ledger/pages/live/) shows the **Context window** meter of a session in the warning color, finish the step, then run `/compact` or start a new session. As the tip says, the last 20% of the window costs the most and compacts the worst.
+- When you are about to paste a log or a long file, give the agent the path instead.
+- When a session has compacted twice (two marks on that meter), start the next task in a new session. The tip **Sessions compact repeatedly** counts a session from its third compaction.
 
 ## Verify
 
+Before you act, note today's figures. On Context, set the project filter to the project and the range to **30d**, then write down **Median** in **Starting context by project**, and the tiles **Added per prompt** and **Before the first compaction** in **Growth**. The app has no custom date range, so you need these to compare with.
+
+The same day, for a trimmed file or a removed server: **Measure now** shows a smaller **Memory files** or **MCP tools** figure than the one you noted in step 3 of Diagnose.
+
+After 7 days of work in the project, set the range to **7d** on Context, with the same project filter, and read:
+
+| Figure | Where | Expected |
+| --- | --- | --- |
+| **Median** starting context | **Starting context by project** | Lower than your note. Under 30,000 tokens, the tick sits left of the dashed line and the tip **Sessions start with a large context** no longer names the project. |
+| Newest point | **Median start by week** | Lower than the point before it. A hollow dot rests on fewer than 3 sessions: wait one more week. |
+| **Added per prompt** | **Growth** | Lower than your note. |
+| **Before the first compaction** (median turns) | **Growth** | Higher than your note. Better still, the tile is gone and a line in its place starts "No session in this view compacted". |
+| "N sessions reached 80%+ of the context window." | Activity, **Needs attention**, at **7d** | A smaller N, or no such line. |
+
+If a figure did not move:
+
+- A session is in the view when it has a request in the range, with the figures of its whole life. A session you started before the change and resumed since still shows its old start. Wait until the view holds only new sessions.
+- A change to `CLAUDE.md`, `AGENTS.md` or the MCP servers applies to new sessions only.
+- If the median fell but sessions still compact, the cause is growth, not the start: go back to step 5 of Diagnose.
+
 ## Related
+
+- [Context](/ai-ledger/pages/context/): every panel and tip used here.
+- [Project](/ai-ledger/pages/project/): the context grid, the snapshot and **Measure now**.
+- [Live](/ai-ledger/pages/live/): the **Context window** meter of a running session.
+- [Context windows and plan limit windows](/ai-ledger/concepts/windows/): what a context window is and how the app measures it.
+- [Metric glossary](/ai-ledger/reference/glossary/#context): the definition of each figure.
+- [Spend less for the same output](/ai-ledger/improve/spend-less/): cache breaks and the long-prompt tier.
+- [Weekly 15-minute review](/ai-ledger/improve/weekly-review/): where this check sits in a routine.
