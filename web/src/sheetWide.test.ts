@@ -35,6 +35,8 @@ describe("sheetWide", () => {
     expect(getSheetWide()).toBe(false);
     setSheetWide(true);
     expect(getSheetWide()).toBe(true);
+    // A sheet mounting on the next page reads storage again; a failed read must not undo the choice.
+    expect(renderHook(() => useSheetWide()).result.current).toBe(true);
   });
   it("picks up a change made in another tab while no sheet was mounted", () => {
     const first = renderHook(() => useSheetWide());

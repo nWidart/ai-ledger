@@ -96,7 +96,7 @@ export function useBackTo(d: unknown, backTo: RefObject<BackTo | null> | undefin
     if (dlg) dlg.scrollTop = to.scroll;
     const row = body.current?.querySelector<HTMLElement>(`[data-v="${CSS.escape(to.v)}"] button`);
     row?.focus({ preventScroll: true });
-    row?.scrollIntoView?.({ block: "nearest" }); // the sheet's width may have changed meanwhile, which moves the row
+    row?.scrollIntoView?.({ block: "nearest" }); // a tool sheet widened or narrowed meanwhile has moved the row
   }, [d, backTo, body]);
 }
 

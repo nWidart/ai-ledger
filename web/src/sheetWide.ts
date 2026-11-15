@@ -7,9 +7,10 @@ export const SHEET_WIDE_KEY = "ai-ledger-sheet-wide";
 const subs = new Set<() => void>();
 let wide: boolean | undefined;
 
-const read = (): boolean => { try { return localStorage.getItem(SHEET_WIDE_KEY) === "1"; } catch { return false; } };
+// undefined: storage cannot be read, so whatever this page view chose stands.
+const read = (): boolean | undefined => { try { return localStorage.getItem(SHEET_WIDE_KEY) === "1"; } catch { return undefined; } };
 /** The current value; reads storage on first call. */
-export const getSheetWide = (): boolean => (wide ??= read());
+export const getSheetWide = (): boolean => (wide ??= read() ?? false);
 /** Tests only: forget the value read from storage. */
 export const resetSheetWide = () => { wide = undefined; };
 
@@ -22,7 +23,7 @@ export function setSheetWide(w: boolean) {
 const onStorage = (e: StorageEvent) => { if (e.storageArea === localStorage && (e.key === SHEET_WIDE_KEY || e.key === null)) apply(e.newValue === "1"); };
 
 const subscribe = (f: () => void) => {
-  if (!subs.size) { wide = read(); addEventListener("storage", onStorage); } // what other tabs did while nothing listened
+  if (!subs.size) { wide = read() ?? wide; addEventListener("storage", onStorage); } // what other tabs did while nothing listened
   subs.add(f);
   return () => { subs.delete(f); if (!subs.size) removeEventListener("storage", onStorage); };
 };

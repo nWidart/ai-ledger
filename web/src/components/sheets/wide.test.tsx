@@ -1,6 +1,6 @@
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import session from "../../__fixtures__/session";
 import tool from "../../__fixtures__/tool";
 import usage from "../../__fixtures__/usage";
@@ -21,6 +21,7 @@ const serve = () => mockApi({
 
 describe("Wide sheets", () => {
   beforeEach(() => { localStorage.clear(); resetSheetWide(); });
+  afterEach(() => { delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView; });
 
   it("offers Wide on session and tool sheets, not on a project sheet even with the choice on", async () => {
     serve();
@@ -79,13 +80,34 @@ describe("Wide sheets", () => {
     await userEvent.click(wideBtn()!);
     dlg().scrollTop = 240;
     await userEvent.click(within(row).getByRole("button"));
-    expect(location.search).toBe("?range=30&tool=Bash&session=f1");
     await sheet().findByText("$16");
     await userEvent.click(sheet().getByRole("button", { name: "← Back" }));
-    expect(location.search).toBe("?range=30&tool=Bash");
     expect(dlg().classList.contains("wide")).toBe(true);
     await waitFor(() => expect(document.activeElement?.closest("tr")?.getAttribute("data-v")).toBe("f1-27"));
     expect(dlg().scrollTop).toBe(240);
+  });
+
+  it("goes back from a session to a tool sheet narrowed meanwhile, restoring scroll and focus and revealing the row", async () => {
+    serve();
+    at("?range=30&tool=Bash");
+    renderApp(<UsageSheets data={usage} />);
+    const row = (await sheet().findAllByRole("row")).find(r => r.getAttribute("data-v") === "f1-27")!;
+    await userEvent.click(wideBtn()!);
+    dlg().scrollTop = 240;
+    await userEvent.click(within(row).getByRole("button"));
+    expect(location.search).toBe("?range=30&tool=Bash&session=f1");
+    await sheet().findByText("$16");
+    // Narrowed during the visit: the row has moved, so Back also brings it into view (jsdom has no scrollIntoView).
+    const reveal = vi.fn<(this: Element, o?: ScrollIntoViewOptions | boolean) => void>();
+    Element.prototype.scrollIntoView = reveal;
+    await userEvent.click(wideBtn()!);
+    await userEvent.click(sheet().getByRole("button", { name: "← Back" }));
+    expect(location.search).toBe("?range=30&tool=Bash");
+    expect(dlg().classList.contains("wide")).toBe(false);
+    await waitFor(() => expect(document.activeElement?.closest("tr")?.getAttribute("data-v")).toBe("f1-27"));
+    expect(dlg().scrollTop).toBe(240);
+    expect(reveal).toHaveBeenCalledWith({ block: "nearest" });
+    expect(reveal.mock.contexts[0]).toBe(document.activeElement);
   });
 
   it("opens a session from a project sheet wide and goes back to a narrow project sheet", async () => {
