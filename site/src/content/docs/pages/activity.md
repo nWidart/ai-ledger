@@ -25,9 +25,11 @@ The filters live in the page URL. The project filter changes only through these 
 
 A selected day is cleared in the same step as any change of project, range or source.
 
-## Page order
+## Section index
 
 The page has a section index (Overview, Attention, Health, Work, Hours) and six drawers (Sessions, Projects, Tools, MCP & hooks, Loops, Tests). A drawer is a table folded behind its title. Opening one from a card or chart scrolls to it.
+
+## Panels
 
 ### Overview
 
@@ -149,7 +151,7 @@ Each drawer title carries a count. The Sessions, Project metrics and Tools table
 
 With three or more projects, the Errors / 100 and Error loops cells are tinted when far from the median project, with a ▲ or ▼ mark and a key above the table. A project whose errors per 100 calls are 1.5 times the median or more is marked worse; an error-loop count that is 2 or more and above the median is marked worse. Hover a tinted cell for how far.
 
-A row opens the project sheet. Every row sorts in the browser.
+A row opens the project sheet. Every column header sorts, in the browser.
 
 ### Tools
 

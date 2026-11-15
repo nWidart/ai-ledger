@@ -14,33 +14,41 @@ Terms such as cache read, cache write and long-prompt tier are in the [Metric gl
 
 The header carries the shared filters. Every figure, chart, table and tip on the page follows them, and the URL keeps them.
 
-| Filter | Values |
+| Control | Values |
 | --- | --- |
 | Project | All projects, or one project. |
 | Time range | 7d, 14d, 30d, 90d, All. |
 | Source | All, Claude Code, Codex. |
-| Include automated | Off by default; on adds sessions that tools start in the background. |
+| Include automated sessions | Off by default; on adds sessions that tools start in the background. |
 
 A session is in the view when it has a request in the range. Its own figures (starting context, growth, compactions) cover the whole session. See [Filters](/ai-ledger/everywhere/filters/) for how the filters behave on every page.
 
-## Heading
+## Section index
 
-The heading states the view's answer: "A typical session starts with N tokens of context, X% of its window." It adds how many sessions compacted. With no measured session it reads "No session with a measured start". The line under it says that the figures are the prompt tokens of each session's first turn.
+Links to Overview, Tips, Start (Starting context), Growth, Pressure (Window pressure), Fills (What fills context) and Spend (Cost), then to the two drawers: Results (Largest tool results) and Cache breaks (Sessions where caching broke).
 
-## Rebuild notice
+## Panels
 
-A notice reads "The store holds sessions from before this version" when either of these holds in the view:
+### Heading
+
+**Shows** the view's answer: "A typical session starts with N tokens of context, X% of its window." It adds how many sessions compacted. The line under it says that the figures are the prompt tokens of each session's first turn.
+
+With no measured session, the heading reads "No {agent} session{ in project} with a measured start in the last N days." (or "… yet." for All). The agent is "agent", "Claude Code" or "Codex", by the Source filter.
+
+### Rebuild notice
+
+**Shows** a notice, "The store holds sessions from before this version", when either of these holds in the view:
 
 - some tool calls have no result size;
 - some sessions that compacted have no recorded first compaction.
 
-It gives the counts ("N of M tool calls carry a result size") and says to stop the app and run `ai-ledger rebuild`. The figures on the page still cover the rows that have them. See [Troubleshooting](/ai-ledger/reference/troubleshooting/) and the [CLI reference](/ai-ledger/reference/cli/).
+**Figures** It gives the counts ("N of M tool calls carry a result size") and says to stop the app and run `ai-ledger rebuild`. The figures on the page still cover the rows that have them. See [Troubleshooting](/ai-ledger/reference/troubleshooting/) and the [CLI reference](/ai-ledger/reference/cli/).
 
-## Tips
+### Tips
 
-Tips come from six fixed rules. The app sets the thresholds; nothing is learned or generated. A tip shows only when its rule fires on the view. When none fires, the section reads "Nothing stands out in this view." Tips run most severe first (critical, then warning), and within a severity in the order below.
+**Shows** tips from six fixed rules. The app sets the thresholds; nothing is learned or generated. A tip shows only when its rule fires on the view. When none fires, the section reads "Nothing stands out in this view." Tips run most severe first (critical, then warning), and within a severity in the order below.
 
-Each tip is a card with a severity, a title, its evidence, its advice and a count of the sessions that match. A small label names the kind of finding: Starting context, Compactions, Window limit, Tool results, Prompt cache or Long prompts. Selecting the count opens the **Sessions matching** list: the 20 newest matching sessions, with how many more are left out, each with its title, project, source and start time. Selecting a session opens its session sheet. The open tip is in the URL, and browser Back closes it.
+**Figures** Each tip is a card with a severity, a title, its evidence, its advice and a count of the sessions that match. A small label names the kind of finding: Starting context, Compactions, Window limit, Tool results, Prompt cache or Long prompts.
 
 | Tip (title) | Fires when | Severity |
 | --- | --- | --- |
@@ -53,67 +61,96 @@ Each tip is a card with a severity, a title, its evidence, its advice and a coun
 
 The evidence of the large-start tip names the five projects with the largest medians with their window shares, counts the rest, and lists the MCP servers that the transcripts record as called in those projects, fewest calls first. A server that is configured but never called leaves no trace in a transcript, so it is not listed.
 
-## Starting context
+**Controls** Selecting the count opens the **Sessions matching** list: the 20 newest matching sessions, with how many more are left out, each with its title, project, source and start time. Selecting a session opens its session sheet. The open tip is in the URL, and browser Back closes it.
 
-What it shows: the prompt tokens of each session's first turn, which is what the model read before any work.
+### Starting context
+
+**Shows** the prompt tokens of each session's first turn, which is what the model read before any work. The section's hint states how many sessions have a measured start and how many have a known window; a share of the window covers only sessions with a known window.
+
+**Figures**
 
 - **Starting context by project** table. One row for the whole view (when there is more than one project) and one per project:
   - **Median**, **10th percentile**, **90th percentile**: the spread of starting context over the project's sessions.
   - **10th to 90th percentile**: a bar on one token scale for every row, a tick at the median, and a dashed line at 30,000 tokens, the mark of the large-start tip.
   - **Share of window**: the median share of the model's window, with the window size.
   - **Sessions**: sessions measured. A project with none shows no figure, not zero.
-- **Median start by week**: the weekly median of starting context with its 25th to 75th percentile band, one point per week of session start. A week with fewer than 3 sessions has a hollow dot and is read as resting on few sessions. A week with no session is a gap, not a joined line. Arrow keys read a week; **Show data table** lists week, median, 25th and 75th percentile, and sessions.
+- **Median start by week**: the weekly median of starting context with its 25th to 75th percentile band, one point per week of session start. A week with fewer than 3 sessions has a hollow dot and is read as resting on few sessions. A week with no session is a gap, not a joined line.
 
-The section's hint states how many sessions have a measured start and how many have a known window; a share of the window covers only sessions with a known window. Selecting a project row opens its project sheet.
+**Controls** Selecting a project row opens its project sheet. On the weekly chart, arrow keys read a week; **Show data table** lists week, median, 25th and 75th percentile, and sessions.
 
-## Growth
+### Growth
 
-What it shows: the median context (prompt tokens) at each turn of a session.
+**Shows** the median context (prompt tokens) at each turn of a session.
 
-- **Growth chart**: the median at each turn index over the sessions that reach it, up to turn 100, with the 25th to 75th percentile band. A point needs at least 5 sessions that reach that turn (for a project's own curve, 5 sessions of that project), so a curve stops where they run out. Under the chart, a strip counts the sessions each turn rests on. The five projects with the most sessions get a curve of their own.
-  - **Tokens / Share of window** switch: the same curves as tokens, or as a share of each session's window over the sessions with a known window. The share view draws a dashed line at 80% of the window. The token view has no limit mark.
-  - A project button in the legend draws that project alone against the view, with its band; selecting it again restores every project.
-  - Arrow keys, Home and End read a turn; Escape clears the reading. **Show data table** lists each turn with the median, 25th and 75th percentile, sessions, and each project's median (a dash where that curve has ended).
+**Figures**
+
+- **Growth chart**: the median at each turn index over the sessions that reach it, up to turn 100, with the 25th to 75th percentile band. A point needs at least 5 sessions that reach that turn (for a project's own curve, 5 sessions of that project), so a curve stops where they run out. Under the chart, a strip counts the sessions each turn rests on. The five projects with the most sessions get a curve of their own. The share view draws a dashed line at 80% of the window. The token view has no limit mark.
 - **Added per prompt**: the median, over sessions, of the tokens a session adds per user prompt. A session's added tokens are the sum of the rises between consecutive turns; a fall, as after a compaction, adds nothing.
 - Three tiles appear when at least one session has a recorded first compaction: **Sessions with a compaction**, **Before the first compaction** (median turns) and **Active time before it** (median minutes; pauses over 20 minutes are left out). Without such a session, a line says either that no session compacted or that none has a recorded first compaction yet.
 - **Growth by project** table (more than one project): **Sessions**, **Added per prompt**, **Compacted**, **Turns to first compaction**, **Active time to it**.
 
-## Window pressure
+**Controls**
 
-What it shows: how full sessions get at their peak, by the size of their model's window.
+- **Tokens / Share of window** switch: the same curves as tokens, or as a share of each session's window over the sessions with a known window.
+- A project button in the legend draws that project alone against the view, with its band; selecting it again restores every project.
+- Arrow keys, Home and End read a turn; Escape clears the reading. **Show data table** lists each turn with the median, 25th and 75th percentile, sessions, and each project's median (a dash where that curve has ended).
+
+### Window pressure
+
+**Shows** how full sessions get at their peak, by the size of their model's window. A session's window is the one its source stated (for Codex, the turn's `model_context_window`), else the `context` of its peak model in the price table, else unknown. See [Windows](/ai-ledger/concepts/windows/).
+
+**Figures**
 
 - **One bar per window size** (for example 200k, 1M), over the sessions with a known window. Each bar splits into five segments: under 25%, 25–50%, 50–80%, 80–90% and 90% or more of the window at the session's peak. A segment is a share of that window's sessions; a segment of 7% or more of the bar shows its count, and one of 20% or more its label. A peak at an edge belongs to the band above it (80% is in 80–90%).
+- **Sessions by start and peak**: one dot per session, placed by starting context (log scale) and peak share of the window, with a line at 30,000 tokens and one at 80% of the window. A ring marks a session that compacted at least once. A dot shows the session's details on hover or focus. The chart holds at most the 1,000 newest sessions that have a measured start, a known window and a recorded peak, and states "Showing the newest N of M sessions" when there are more.
+
+**Controls**
+
 - Selecting a segment lists its sessions, newest first, up to 20, each showing its start, its peak share and its compactions. Selecting a session opens its session sheet. A table of the same counts is behind **Show data table**.
-- **Sessions by start and peak**: one dot per session, placed by starting context (log scale) and peak share of the window, with a line at 30,000 tokens and one at 80% of the window. A ring marks a session that compacted at least once. A dot shows the session's details on hover or focus and opens its session sheet. The chart holds at most the 1,000 newest sessions that have a measured start, a known window and a recorded peak, and states "Showing the newest N of M sessions" when there are more. Arrow keys step from the oldest to the newest session; Escape clears the reading.
+- A dot opens its session sheet. Arrow keys step from the oldest to the newest session; Escape clears the reading.
 
-A session's window is the one its source stated (for Codex, the turn's `model_context_window`), else the `context` of its peak model in the price table, else unknown. See [Windows](/ai-ledger/concepts/windows/).
+### What fills context
 
-## What fills context
+**Shows** the size of the main-thread tool results as the transcript stores them, summed by tool and by MCP server. The page marks each token count as an estimate: bytes divided by 4, rounded down. The section's hint states how many completed calls have a known size.
 
-What it shows: the size of the main-thread tool results as the transcript stores them, summed by tool and by MCP server. The page marks each token count as an estimate: bytes divided by 4, rounded down.
+**Figures**
 
 - **Main thread / Subagents**: one bar in two parts. Results of calls made inside subagent transcripts never entered the main thread's context, so they are summed apart and are not in any other figure of the section.
-- **Largest contributors**: the ten tools, or MCP servers, with the largest total result size, and one **Other** row for the rest. Each row has a total bar and the typical result range, median to 95th percentile, on a log scale with a dashed line at 100,000 bytes. A **By tool / By MCP server** switch shows when MCP servers exist.
+- **Largest contributors**: the ten tools, or MCP servers, with the largest total result size, and one **Other** row for the rest. Each row has a total bar and the typical result range, median to 95th percentile, on a log scale with a dashed line at 100,000 bytes.
 - **By tool** and **By MCP server** tables list every tool or server: **Calls**, **Median**, **95th percentile**, **Largest**, **Total**, **Estimated tokens**. A hint on **Calls** gives how many have a result size.
 
-Selecting a tool or server row opens its tool inspector. The section's hint states how many completed calls have a known size.
+**Controls** A **By tool / By MCP server** switch shows when MCP servers exist. Selecting a tool or server row opens its tool inspector.
 
-## Cost
+### Cost
 
-What it shows: cost as the [Cost page](/ai-ledger/pages/cost/) counts it, with the prompt cache's part in it. Prices and tiers are the same as Cost's. A view with no priced request reads "–" (unknown), never zero.
+**Shows** cost as the [Cost page](/ai-ledger/pages/cost/) counts it, with the prompt cache's part in it. Prices and tiers are the same as Cost's. A view with no priced request reads "–" (unknown), never zero.
 
-- **Cache use over time**: per day, or per week when the view's first request is more than 60 days old, the prompt tokens split into **Cache read**, **Cache write** and **Uncached input**, with each bucket's **Cache-hit ratio** (cache read tokens over all prompt tokens) as a line, and the cache breaks by cause as markers under the bars. A day or week with no request is empty. The caption says that a break's cause is inferred from the gap and the model of the previous request, not reported by the provider. Costs are not stacked in this chart. **Show data table** lists each bucket.
+**Figures**
+
+- **Cache use over time**: per day, or per week when the view's first request is more than 60 days old, the prompt tokens split into **Cache read**, **Cache write** and **Uncached input**, with each bucket's **Cache-hit ratio** (cache read tokens over all prompt tokens) as a line, and the cache breaks by cause as markers under the bars. A day or week with no request is empty. The caption says that a break's cause is inferred from the gap and the model of the previous request, not reported by the provider. Costs are not stacked in this chart.
 - **Cost by project** table: **Whole view** and each project (when there is more than one): **Estimated cost**, **Cache reads** (cost), **Long-prompt tier** (cost), **Long-tier requests**, **Cache-hit ratio**. The long-prompt tier prices a whole request higher once its prompt passes a model's threshold.
 
 A request that carries no time is in no bucket of the chart, but it counts in the table's cache-hit ratio. See [Cost estimates](/ai-ledger/concepts/cost-estimates/).
 
-## Largest tool results
+**Controls** **Show data table** lists each bucket of the chart.
 
-A drawer, **Largest tool results**, lists the 25 largest main-thread tool results in the view: **Tool** (with its MCP server), **Input** (a summary), **Size**, **Estimated tokens**, **When**, **Project** (with its source) and **Session**. Selecting a row opens its session sheet.
+## Drawers
 
-## Sessions where caching broke
+### Largest tool results
 
-A drawer, **Sessions where caching broke**, lists the sessions with a cache break, most uncached tokens first, up to 25: **Session**, **Project**, **Breaks**, **By cause**, **Uncached tokens**, **Their input cost**. Selecting a row opens its session sheet.
+**Shows** the 25 largest main-thread tool results in the view.
+
+**Columns** **Tool** (with its MCP server), **Input** (a summary), **Size**, **Estimated tokens**, **When**, **Project** (with its source) and **Session**.
+
+**Controls** Selecting a row opens its session sheet.
+
+### Sessions where caching broke
+
+**Shows** the sessions with a cache break, most uncached tokens first, up to 25.
+
+**Columns** **Session**, **Project**, **Breaks**, **By cause**, **Uncached tokens**, **Their input cost**.
+
+**Controls** Selecting a row opens its session sheet.
 
 A cache break is a main-thread request that is not the session's first turn, has at least 20,000 prompt tokens, and read less than half of them from the cache. Cache writes count as uncached. Its cause is the first of these that applies, in this order:
 
@@ -146,6 +183,6 @@ Selecting a row, dot or session opens a sheet over the page and keeps the filter
 
 ## Playbooks that start here
 
-- [Lean context](/ai-ledger/improve/lean-context/): a large starting context, fast growth and tool results that fill the window.
-- [Spend less](/ai-ledger/improve/spend-less/): cache breaks and long-prompt-tier spend.
-- [Weekly review](/ai-ledger/improve/weekly-review/): where Context fits in a 15-minute routine.
+- [Keep context lean](/ai-ledger/improve/lean-context/): a large starting context, fast growth and tool results that fill the window.
+- [Spend less for the same output](/ai-ledger/improve/spend-less/): cache breaks and long-prompt-tier spend.
+- [Weekly 15-minute review](/ai-ledger/improve/weekly-review/): where Context fits in a 15-minute routine.

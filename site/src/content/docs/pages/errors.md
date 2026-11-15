@@ -14,7 +14,7 @@ Terms such as incident, recovered and error rate are in the [Metric glossary](/a
 
 The header carries the shared filters and three page filters. The URL keeps them, and the page remembers its last view.
 
-| Filter | Values |
+| Control | Values |
 | --- | --- |
 | Project | All projects, or one project. The list shows each project's errors, all time. |
 | Time range | 7d, 14d, 30d, 90d, All. The default is 30d. |
@@ -23,11 +23,15 @@ The header carries the shared filters and three page filters. The URL keeps them
 | Include subagents | On by default. Off leaves out failures of subagents and the calls they made. |
 | Hide noise and muted | Off by default. On leaves out harness errors, user rejections and the types you muted. |
 
-There is no Include automated control on this page. See [Filters](/ai-ledger/everywhere/filters/) for the shared filters.
+There is no Include automated sessions control on this page. See [Filters](/ai-ledger/everywhere/filters/) for the shared filters.
 
-## Summary
+## Panels
 
-The heading states the view's answer: "N failed tool calls (X%), ↓/↑ Y% vs previous N days. *Type* is Z% of them." With no failure it reads "No failed tool calls … out of N". With no call it reads "No tool calls in this period". Under it, a line gives the date span and when the store was last ingested.
+### Summary
+
+**Shows** the view's answer in the heading: "N failed tool calls (X%), ↓/↑ Y% vs previous N days. *Type* is Z% of them." With no failure it reads "No failed tool calls … out of N". With no call it reads "No tool calls in this period". Under it, a line gives the date span and when the store was last ingested.
+
+**Figures**
 
 A line "Uncategorized: N% of errors" gives the share of errors in the catch-all types (Other, Other non-zero exit, MCP tool error): errors that no specific rule matched. When the view has errors from both agents and no source filter, it splits the share by agent. A growing catch-all shows at once.
 
@@ -42,29 +46,36 @@ Four vitals follow:
 
 On a phone, only Error rate and Change show; **More summary** shows the rest.
 
-### How the page compares periods
+**Controls** **More summary** (on a phone) shows the vitals that are hidden.
 
-The summary, the type table and Rising fastest compare the same way:
+**How the page compares periods.** The summary, the type table and Rising fastest compare the same way:
 
 - For a range (7d to 90d): the range against the same number of days just before it.
 - For All: the calls before and since the day that splits the view's calls in half.
 - When either side has fewer than 200 tool calls, Change shows "–" and the page says why ("Fewer than 200 tool calls in the 7 days before").
 - A type with fewer than 5 errors on either side shows its counts ("2 → 9": errors in the earlier period, then in the later one) instead of a percent.
 
-## Errors by type (chart)
+### Errors by type
 
-What it shows: two panels on one time axis. The upper panel is the error rate (errors per 100 tool calls) as a line; the lower panel is the failed calls per day or week as stacked bars.
+**Shows** two panels on one time axis. The upper panel is the error rate (errors per 100 tool calls) as a line; the lower panel is the failed calls per day or week as stacked bars. Without calls or without errors the chart is replaced by a message.
 
-- **Legend**: the five types with the most errors, each with its count, then **Other types**. Selecting a type opens it and draws its own rate line. The legend also names the rate line, **Under 50 calls** (a bucket with too few calls for a steady rate: a hollow dot, left out of the rate scale) and **No activity** (a band over buckets with no tool call; a stretch of them folds into a break marked `//`).
+**Figures**
+
+- **Legend**: the five types with the most errors, each with its count, then **Other types**. The legend also names the rate line, **Under 50 calls** (a bucket with too few calls for a steady rate: a hollow dot, left out of the rate scale) and **No activity** (a band over buckets with no tool call; a stretch of 8 or more buckets with no call folds into a break marked `//`).
 - **Fix markers**: a dashed green line at the day a fix was marked, labelled with the type.
-- **Reading**: hover, or the left and right arrow keys, Home and End, read a bucket: its rate, errors, calls and errors by type. Escape clears the reading. A failed call counts on the day it started and its error on the day it ended, so a bucket can have errors and no calls; the reading says that no tool call started in it.
+- **Reading**: a failed call counts on the day it started and its error on the day it ended, so a bucket can have errors and no calls; the reading says that no tool call started in it.
+
+**Controls**
+
+- Select a type in the legend to open it and draw its own rate line.
+- **Reading**: hover, or the left and right arrow keys, Home and End, read a bucket: its rate, errors, calls and errors by type. Escape clears the reading.
 - **Selecting a bucket**: a click, or Enter or Space on the current point, selects one day or week; the same action clears it. A chip by the Error types heading also clears it. A folded stretch cannot be selected. A selected bucket narrows the type table and the open type's detail to its errors. The summary, the chart, the rate trend and Change stay range-wide.
 
-Without calls or without errors the chart is replaced by a message.
+### Error types
 
-## Error types (table)
+**Shows** one row per error type in the view.
 
-One row per error type in the view. A click anywhere on a row opens the type; a second click closes it. A search field, **Filter types…**, keeps the types whose label or id contains the text and announces "N of M types". Neither the sort nor the filter text is in the URL; they last the page visit.
+**Figures**
 
 | Column | Meaning | Sort |
 | --- | --- | --- |
@@ -77,22 +88,28 @@ One row per error type in the view. A click anywhere on a row opens the type; a 
 | Rate trend | A sparkline of the type's rate over the range. | No |
 | Change | The type's rate against the comparison period, in percent, or counts when either side has fewer than 5 errors. | Yes, by the change in points |
 
-A second click on a sortable header flips the direction. A row with "–" in the sorted column comes last in both directions. With a bucket selected, Errors, Time lost, Rate, Didn't recover and Share follow the bucket; Rate trend and Change stay range-wide.
+With a bucket selected, Errors, Time lost, Rate, Didn't recover and Share follow the bucket; Rate trend and Change stay range-wide.
 
-## Where to start
+**Controls** A click anywhere on a row opens the type; a second click closes it. A search field, **Filter types…**, keeps the types whose label or id contains the text and announces "N of M types". Neither the sort nor the filter text is in the URL; they last the page visit. A second click on a sortable header flips the direction. A row with "–" in the sorted column comes last in both directions.
 
-The panel beside the table shows **Where to start** while no type is open.
+### Where to start
+
+**Shows** the panel beside the table while no type is open.
+
+**Figures**
 
 - **Open fixes**: up to four open types (no fix marked, not muted) that have a ready-made fix, with the most time lost in retry loops first, then the most errors. Each shows its errors and time lost and the fix text. Selecting one opens it.
 - **Rising fastest**: up to four types whose error rate rose by more than 10% of its earlier value in the comparison, with at least 5 errors now, ordered by the rise in percentage points. A type with few errors shows counts ("0 → 48"). A fixed-noise type carries "noise". The action reads "Check the fix" for a type with a fix marked and "See what changed" otherwise. A muted type is in neither list. Both lists follow the filters, so with **Hide noise and muted** off, an always-noise type that has a ready-made fix (User rejected the action) can be listed.
 
 The panel says "Nothing open with a known fix" and "Nothing is rising in this range" when a list is empty. A note under it says that the app ingests new transcript lines every minute and that **Refresh** ingests now.
 
-## Type detail
+**Controls** Selecting an item in either list opens its type.
 
-Selecting a type opens its detail in place of Where to start. On a narrow screen (900 px or less) it opens as a sheet. **Back to types** and **✕** close it. The open type is in the URL.
+### Type detail
 
-In order:
+**Shows** the open type, in place of Where to start. On a narrow screen (900 px or less) it opens as a sheet. **Back to types** and **✕** close it. The open type is in the URL.
+
+**Figures** In order:
 
 1. **Why**: one sentence on what the type is.
 2. **Incident line**: "N errors in M incidents, X% didn't recover", the time lost in retry loops and the largest incident ("Largest: N attempts over …").
@@ -109,7 +126,7 @@ In order:
 
    The mode is remembered. The search box, **Filter by command, error or project…**, narrows the list and the count line ("N of M match"). **Show more** adds the next page.
 
-### Incidents and outcomes
+#### Incidents and outcomes
 
 An incident is a retry loop of one agent: failures of one tool, by one agent (the main thread or one subagent), with one error type, each starting at most 10 minutes after the previous one ended, with at most 2 successful calls of that tool in between. Two subagents make two incidents.
 
@@ -121,11 +138,16 @@ An incident is a retry loop of one agent: failures of one tool, by one agent (th
 
 Recovered means only that the next call succeeded. A call that started before the last failure ended does not count.
 
-### Examples
+#### Examples
 
 An example shows its time, project, tool, **subagent** when it is one, session, the input, the error text and the tool's result. The tool name opens the tool inspector for the page's view. The session link (`#` and 8 characters) opens that session in Activity. **🔗 Link** and **Copy URL** give a permalink to the example; opening it shows its type and example first. The payload cuts long inputs; **Show full** loads the rest, and **Show less** folds it back. A permalink whose example the store no longer holds shows a notice ("The linked error is no longer in the store…") and the view without it. A linked example that the filters hide shows under **Outside current filters**, with **Clear filters**.
 
-## Error types
+## Sheets
+
+- The **tool inspector** opens from a tool name on an example, for the page's view.
+- A session link on an example leaves the page for the session in Activity.
+
+## Error type rules
 
 The app sorts each failed call into the first rule that matches. The page shows the label; the id appears in URLs and matches the type filter.
 
@@ -166,12 +188,7 @@ A type you expect, such as `grep/rg found nothing (exit 1)`, can be muted from i
 
 The fix markers and the muted types live in the store, so they follow you to another port, browser or profile. A change made in another tab shows on the next load.
 
-## Sheets
-
-- The **tool inspector** opens from a tool name on an example, for the page's view.
-- A session link on an example leaves the page for the session in Activity.
-
 ## Playbooks that start here
 
-- [Tool failures](/ai-ledger/improve/tool-failures/): find the error types that cost time, paste the fix, and check the rate afterwards.
-- [Weekly review](/ai-ledger/improve/weekly-review/): where Errors fits in a 15-minute routine.
+- [Kill repeated tool failures](/ai-ledger/improve/tool-failures/): find the error types that cost time, paste the fix, and check the rate afterwards.
+- [Weekly 15-minute review](/ai-ledger/improve/weekly-review/): where Errors fits in a 15-minute routine.

@@ -16,25 +16,115 @@ Terms such as compaction, subagent and automated session are in the [Metric glos
 
 A session is **active** when its newest stored line is less than 10 minutes old. Live lists active sessions only. With none, the page says "No session is active in this view." and, when a session exists, links to the newest one with the time it last wrote.
 
-## Controls
+## Filters
 
 The bar under the heading holds, in this order:
 
 | Control | What it does |
 | --- | --- |
 | **Stream** / **Wall** | Switches between one session in detail and every session as a tile. |
-| Project picker, **Source**, **Include automated** | The shared [filters](/ai-ledger/everywhere/filters/). Live has no range filter. The project picker lists the projects of the active sessions. |
-| **Follow** | Stream view only. Keeps the newest event in view. |
-| **Full text** | Shows transcript text as written. Off on every load. |
+| Project picker, **Source**, **Include automated sessions** | The shared [filters](/ai-ledger/everywhere/filters/). Live has no range filter. The project picker lists the projects of the active sessions. |
+| **Follow** | Stream view only. Keeps the newest event in view. On at load. Opening a session turns it on again. |
+| **Full text** | Shows transcript text as written. Off on every load. While it is on, a banner reads "Full text on. Prompts, replies and tool output show as written, secrets included." |
 | **Pause** / **Resume** | Holds new events and states until you resume. |
 
 Under the bar, a status line says one of: "Connecting…", "Updating live", "Paused" (with the number of updates held), or "Connection lost · reconnecting…". A paused page shows no live dot, and its state dots do not pulse. After a lost connection the page retries on its own, waiting longer after each failure up to 30 seconds, and fetches what it missed when it is back.
 
-The URL keeps the selected session, the view, and the project, source and automated filters. Follow, Full text, Pause and the stream filters are off on every load.
+The URL keeps the selected session, the view, and the project, source and automated filters. Full text, Pause and the stream filters are off on every load. Follow is on on every load.
 
 In a background tab, Live stops its requests and timers. When you return, it fetches what it missed and resumes. A page you paused stays paused.
 
 The tab title carries the number of sessions that need you, as in `(2) Live · AI Ledger`. Sessions that need you are those in **approval?** and **your turn**. With none, the title has no count.
+
+## Panels
+
+The Stream view has three panels from left to right: the rail, the session's stream, and the agent panel. At 721 pixels wide and up the page fits the window's height and each panel scrolls inside itself. Below that width the page scrolls as any other. The Wall view replaces the three panels with one tile per session.
+
+### Active sessions rail
+
+**Shows** the active sessions. The panel heading reads "Active · last 10 min". Sessions sit under a heading per state group, `label · count`, in this order: **approval?**, **your turn**, **working**, **idle**, **ended**. A group with no session is not drawn. Inside a group, sessions are ordered by session start, oldest first, so an entry moves only when its state changes group. Keyboard focus follows a session that changes group.
+
+**Figures**
+
+Each entry shows:
+
+- the session's title as its main line, or the project when the session has no title;
+- its cost so far;
+- on the second line, the project (with its color), the state with its time, and the source (Claude Code or Codex). An entry with no title shows the state, the source and the git branch instead.
+
+The footer reads `N sessions working · N waiting for you · $ so far`. Working counts the working group. Waiting counts approval? and your turn. Idle and ended count as neither.
+
+A session's title comes from the newest custom title (Claude Code `/rename`), else the agent's own title (a Claude Code AI title or a Codex thread name), else, only with Full text on, a title made from the first prompt. A title has at most 80 characters.
+
+**Controls** Selecting an entry opens that session in the stream. With no session selected, the page opens the newest active session.
+
+### Session stream
+
+**Shows** the selected session as a log of its events in order, newest at the bottom. The head shows the session's title as a heading (the project when there is no title), then the project, git branch, source and model, a **Session sheet** link to the session's sheet on Activity, and the state. The time column shows the clock time, with the date for an event not from today.
+
+When older events are not shown, the stream says so and links to the session sheet on Activity, which holds the whole session. A session with state your turn ends the stream with "waiting for your next prompt".
+
+**Figures**
+
+| Event | What the row shows |
+| --- | --- |
+| Prompt, Reply | With Full text off, a word count. With it on, the text as written. |
+| Tool call | The tool, its row text, its duration and its result: a timer while running, then ✓ passed or ✕ failed. A shell call with a description shows the description as its row text, otherwise the input summary. An MCP tool shows by its tool part, with the full name on hover. |
+| Compaction | A mark between events: "context compacted at N tokens". |
+| Interruption | "interrupted by you". |
+
+A tool row opens its detail in place: the description (shell calls), the input, the start time, the error when it failed, and the result. With Full text off, the result shows only its size in characters. A tool input is cut to 300 characters with Full text off. A failed command inside a Codex `exec` script gets its own failed row.
+
+**Subagent lanes.** Subagent work shows as a lane inside the stream. The header shows the subagent's name, its description, its tool count, its error count when above zero, its duration, its model and cost when known, and whether it is running (spinner) or done (✓). A finished lane is folded. A running lane with more than 5 rows shows its last 5, with a control under its header ("Show all N rows", then "Show last 5"). The Errors filter opens a finished lane that holds a failed row, unless you folded it. A fold or expansion you chose is kept while the page is open.
+
+**Controls**
+
+Under the head, a **Stream filters** bar holds:
+
+| Filter | Effect |
+| --- | --- |
+| Errors count (`N errors`, "show failed calls only") | Shows failed tool calls only. Select it again to clear it. The agent panel's Errors figure is the same control. |
+| **Main thread only** | Hides every subagent lane. |
+| **Hide read-only** | Hides calls that only read: `Read`, `Grep`, `Glob`, and shell calls whose every command only reads or searches. A failed call is never hidden. |
+
+The filters combine, stay on when you open another session, and change only what the stream draws, not the agent panel's figures or a lane header's counts. The stream says how many rows the filters hide.
+
+- Select a tool row to open its detail.
+- Select a lane header to fold or unfold the lane.
+- **Follow.** With Follow on, the stream keeps the newest event in view. Scrolling up or opening a tool row turns Follow off. While Follow is off and new events arrive, **Jump to latest ↓** appears and a status says "N new events". The status announces the count once it has held still for 1.5 seconds. Jump to latest turns Follow on again. With Follow on, the page announces nothing for new events.
+
+### Agent panel
+
+**Shows** the selected session's figures.
+
+**Figures** The sections, in order:
+
+| Section | Figures |
+| --- | --- |
+| **Doing now** | The state and its detail, such as "Bash pending 45s: likely waiting for your approval". An inferred state says why. |
+| **Context window** | The context of the newest main-thread request, out of the model's window, with a meter and a mark at each compaction. The meter turns to the warning color above 80%. "% used" and the compaction count sit under it. With no known window, it reads "window not known" and shows tokens only. |
+| **This session** | Cost, Requests, Tool calls, Errors, Cache read (share of tokens read from cache), Model. |
+| **Tokens · last minute, cache reads included** | Tokens per minute, with a chart of the last minute. |
+| **Plan limits** | The newest plan-limit use for the session's source, with its reset time. Shown when the source has one. The meter turns to the warning color above 80%. |
+
+**Controls** The Errors figure of **This session** toggles the Errors stream filter.
+
+### Wall
+
+**Shows** one tile per active session, grouped by state under the rail's headings (`label · count`), in the same order. Each group is a list under an `h2` heading. Inside a group, tiles are ordered by session start, oldest first.
+
+**Figures** A tile shows, top to bottom:
+
+- the project and the state;
+- the title on one line, cut with an ellipsis, with the full title on hover (left out when the session has no title);
+- the latest action: `▸ prompt`, or `Tool · summary`, with `⤷` before a subagent's call. A shell call with a description shows the description;
+- a context meter, and `context N%`;
+- the tool count, the error count when above zero, and the cost;
+- the git branch, the source and the model.
+
+A tile's border follows its state: your turn, approval? and running a tool each have a colored border, and ended has a dashed one. Thinking and idle tiles have the panel's usual border.
+
+**Controls** Selecting a tile opens that session in the Stream view.
 
 ## Session states
 
@@ -50,84 +140,6 @@ Each active session has one state. The rail, the wall and the agent panel use th
 | **ended** | ended | A Claude Code session you closed. Codex writes no close, so a Codex session goes from your turn to idle and never reads ended. |
 
 An inferred state shows "(inferred)" beside it, with the reason as hover text and in the agent panel.
-
-## Stream view
-
-The Stream view has three panels from left to right: the rail, the session's stream, and the agent panel. At 721 pixels wide and up the page fits the window's height and each panel scrolls inside itself. Below that width the page scrolls as any other.
-
-### Active sessions rail
-
-The panel heading reads "Active · last 10 min". Sessions sit under a heading per state group, `label · count`, in this order: **approval?**, **your turn**, **working**, **idle**, **ended**. A group with no session is not drawn. Inside a group, sessions are ordered by session start, oldest first, so an entry moves only when its state changes group. Keyboard focus follows a session that changes group.
-
-Each entry shows:
-
-- the session's title as its main line, or the project when the session has no title;
-- its cost so far;
-- on the second line, the project (with its color), the state with its time, and the source (Claude Code or Codex). An entry with no title shows the state, the source and the git branch instead.
-
-Selecting an entry opens that session in the stream. With no session selected, the page opens the newest active session.
-
-The footer reads `N sessions working · N waiting for you · $ so far`. Working counts the working group. Waiting counts approval? and your turn. Idle and ended count as neither.
-
-A session's title comes from the newest custom title (Claude Code `/rename`), else the agent's own title (a Claude Code AI title or a Codex thread name), else, only with Full text on, a title made from the first prompt. A title has at most 80 characters.
-
-### Session stream
-
-The head shows the session's title as a heading (the project when there is no title), then the project, git branch, source and model, a **Session sheet** link to the session's sheet on Activity, and the state.
-
-Under the head, a **Stream filters** bar holds:
-
-| Filter | Effect |
-| --- | --- |
-| Errors count (`N errors`, "show failed calls only") | Shows failed tool calls only. Select it again to clear it. The agent panel's Errors figure is the same control. |
-| **Main thread only** | Hides every subagent lane. |
-| **Hide read-only** | Hides calls that only read: `Read`, `Grep`, `Glob`, and shell calls whose every command only reads or searches. A failed call is never hidden. |
-
-The filters combine, stay on when you open another session, and change only what the stream draws, not the agent panel's figures or a lane header's counts. The stream says how many rows the filters hide.
-
-The stream is a log of the session's events in order, newest at the bottom. The time column shows the clock time, with the date for an event not from today.
-
-| Event | What the row shows |
-| --- | --- |
-| Prompt, Reply | With Full text off, a word count. With it on, the text as written. |
-| Tool call | The tool, its row text, its duration and its result: a timer while running, then ✓ passed or ✕ failed. A shell call with a description shows the description as its row text, otherwise the input summary. An MCP tool shows by its tool part, with the full name on hover. |
-| Compaction | A mark between events: "context compacted at N tokens". |
-| Interruption | "interrupted by you". |
-
-Selecting a tool row opens its detail in place: the description (shell calls), the input, the start time, the error when it failed, and the result. With Full text off, the result shows only its size in characters. A tool input is cut to 300 characters with Full text off. A failed command inside a Codex `exec` script gets its own failed row.
-
-**Subagent lanes.** Subagent work shows as a lane inside the stream. Select the lane header to fold or unfold it. The header shows the subagent's name, its description, its tool count, its error count when above zero, its duration, its model and cost when known, and whether it is running (spinner) or done (✓). A finished lane is folded. A running lane with more than 5 rows shows its last 5, with a control under its header ("Show all N rows", then "Show last 5"). The Errors filter opens a finished lane that holds a failed row, unless you folded it. A fold or expansion you chose is kept while the page is open.
-
-**Follow.** With Follow on, the stream keeps the newest event in view. Scrolling up or opening a tool row turns Follow off. While Follow is off and new events arrive, **Jump to latest ↓** appears and a status says "N new events", updated at most every 5 seconds. Jump to latest turns Follow on again. With Follow on, the page announces nothing for new events.
-
-When older events are not shown, the stream says so and links to the session sheet on Activity, which holds the whole session. A session with state your turn ends the stream with "waiting for your next prompt".
-
-### Agent panel
-
-The panel shows the selected session's figures. Its sections, in order:
-
-| Section | Figures |
-| --- | --- |
-| **Doing now** | The state and its detail, such as "Bash pending 45s: likely waiting for your approval". An inferred state says why. |
-| **Context window** | The context of the newest main-thread request, out of the model's window, with a meter and a mark at each compaction. The meter turns to the warning color above 80%. "% used" and the compaction count sit under it. With no known window, it reads "window not known" and shows tokens only. |
-| **This session** | Cost, Requests, Tool calls, Errors, Cache read (share of tokens read from cache), Model. |
-| **Tokens · last minute, cache reads included** | Tokens per minute, with a chart of the last minute. |
-| **Plan limits** | The newest plan-limit use for the session's source, with its reset time. Shown when the source has one. The meter turns to the warning color above 80%. |
-
-## Wall view
-
-The Wall shows one tile per active session, grouped by state under the rail's headings (`label · count`), in the same order. Each group is a list under an `h2` heading. Inside a group, tiles are ordered by session start, oldest first. Selecting a tile opens that session in the Stream view.
-
-A tile shows, top to bottom:
-
-- the project and the state;
-- the title on one line, cut with an ellipsis, with the full title on hover (left out when the session has no title);
-- the latest action: `▸ prompt`, or `Tool · summary`, with `⤷` before a subagent's call. A shell call with a description shows the description;
-- a context meter, and `context N%`;
-- the tool count, the error count when above zero, and the cost;
-- the git branch, the source and the model.
-
-A tile's border follows its state: your turn, approval? and running a tool each have a colored border, and ended has a dashed one. Thinking and idle tiles have the panel's usual border.
 
 ## Playbooks that start here
 

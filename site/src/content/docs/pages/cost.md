@@ -25,9 +25,11 @@ The page follows the filters at its top. Every figure below describes the select
 
 The filters live in the page URL, together with the inspected project and the open session. The project filter changes only through these controls, through a project key in the chart's legend, or through a "Filter dashboard to" button in a sheet; selecting a project or session elsewhere opens a sheet and leaves the filter alone. See [Filters](/ai-ledger/everywhere/filters/).
 
-## Page order
+## Section index
 
 The page has a section index (Overview, Changes, Insights, Per day, Spend) and three drawers (Tokens, Projects, Sessions). A drawer is a table folded behind its title.
+
+## Panels
 
 ### Overview
 
@@ -80,7 +82,7 @@ A "+?" chip beside a cost means the figure leaves out some requests from unprice
 | Finding | Figure | Mark | Action |
 | --- | --- | --- | --- |
 | Biggest spender (with one project selected, Biggest session) | The project's cost and its share of spend; its cost per commit. | Watch when its cost per commit is over twice the median project's. | Inspect project (or Open session). |
-| Cost per commit | The median cost per commit and the view's cost per commit. | Good when no project is an outlier. Watch for an outlier, Act when the outlier is four times the median or more. | Compare projects (or Open session). |
+| Cost per commit | The median cost per commit and the view's cost per commit. | Good when no project is an outlier. Watch for an outlier, Act when the outlier is four times the median or more. | Compare projects. With one project selected: Open the priciest session when there is no outlier, else Open session. |
 | Peak day | The costliest day, as a multiple of the median day with spend and as a share of the range. | Watch when 5 or more days have spend and the peak is 3 or more times the median. | Show that day's sessions. |
 | Cache hit | The cache hit ratio; the share of cache writes that use the 1-hour lifetime; the subagents' share of cost. | None. | See tokens and cache. |
 
