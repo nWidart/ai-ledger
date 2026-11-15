@@ -3,7 +3,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: Filter by source
-Activity, Cost and Errors SHALL offer a source filter with the choices All, Claude Code, Codex and Grok, defaulting to All. Every figure, chart and table on the page SHALL reflect the chosen source. The choice SHALL be kept in the page URL and carried across pages with the project and time range.
+Activity, Cost, Context, Errors, Limits, Insights and Live SHALL offer a source filter with the choices All, Claude Code, Codex and Grok, defaulting to All. Every figure, chart and table on the page SHALL reflect the chosen source. The choice SHALL be kept in the page URL and carried across pages with the project and time range.
 
 #### Scenario: Default shows every source
 - **WHEN** the user opens Cost with no source in the URL, and the last 30 days hold $120 of Claude usage, $15 of Codex usage and $5 of Grok usage
@@ -24,3 +24,15 @@ Activity, Cost and Errors SHALL offer a source filter with the choices All, Clau
 #### Scenario: Unknown source in the URL
 - **WHEN** the URL holds `source=gemini`
 - **THEN** the page shows All and replaces the value in the URL
+
+#### Scenario: Codex on Insights
+- **WHEN** the user views Codex on Activity and clicks Insights
+- **THEN** Insights opens with source Codex and says that `/insights` analyses only Claude Code sessions
+
+#### Scenario: Codex on Live
+- **WHEN** the user picks Codex on Live
+- **THEN** the rail and the wall show only Codex sessions
+
+#### Scenario: Codex on Context
+- **WHEN** the user picks Codex on Context
+- **THEN** every Context section and tip covers Codex sessions alone
