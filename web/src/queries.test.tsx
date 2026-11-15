@@ -1,7 +1,8 @@
 import { hashKey, queryOptions, type QueryKey } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getJson, type Status, type View } from "./api";
+import { getJson, type LiveEvent, type LiveSession, type Status, type View } from "./api";
+import { KEEP } from "./pages/live/live";
 import { isData, queries } from "./queries";
 import { makeTestClient, wrapper } from "./testing";
 import { useApi } from "./useApi";
@@ -83,6 +84,70 @@ describe("status", () => {
     vi.stubGlobal("fetch", f);
     await (queries.status.queryFn as (c: unknown) => Promise<unknown>)(ctx());
     expect(f).toHaveBeenCalledWith("/api/status", expect.objectContaining({ priority: "low", signal: expect.any(AbortSignal) }));
+  });
+});
+
+describe("live", () => {
+  const event = (key: string, summary = key) => ({ key, k: "tool", ts: null, lane: null, summary }) as unknown as LiveEvent;
+  const answer = (cursor: string | null, ...events: LiveEvent[]) => ({ session_id: "s1", cursor, truncated: false, events }) as LiveSession;
+  /** fetch answering the session requests in turn; the URLs and inits it got. */
+  const stub = (...answers: LiveSession[]) => {
+    const f = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>(async () => ok(answers.shift()));
+    vi.stubGlobal("fetch", f);
+    return f;
+  };
+  /** Fetches the session, and answers what the cache then holds (what the page draws). */
+  const asker = () => {
+    const client = makeTestClient(), o = queries.liveSession("s1");
+    return async () => { await client.fetchQuery(o); return client.getQueryData(o.queryKey)!; };
+  };
+
+  it("key the list by project, automated, source and text, and the session by id and text", () => {
+    expect(queries.liveList(v, true).queryKey).toEqual(["live", "list", { project: "p", automated: false, source: "" }, true]);
+    expect(hashKey(queries.liveList({ ...v, range: 7 }).queryKey)).toBe(hashKey(queries.liveList(v).queryKey)); // Live has no range
+    expect(hashKey(queries.liveList({ ...v, automated: true }).queryKey)).not.toBe(hashKey(queries.liveList(v).queryKey));
+    expect(queries.liveSession("s1").queryKey).toEqual(["live", "session", "s1", false]);
+    expect(hashKey(queries.liveSession("s1", true).queryKey)).not.toBe(hashKey(queries.liveSession("s1").queryKey));
+    expect([isData(queries.liveList(v)), isData(queries.liveSession("s1"))]).toEqual([false, false]);
+  });
+
+  it("are always stale and leave the return to the tab to the page", () => {
+    for (const o of [queries.liveList(v), queries.liveSession("s1")]) expect([o.staleTime, o.refetchOnWindowFocus]).toEqual([0, false]);
+  });
+
+  it("ask for the session from the start, then for what came after its cursor, and merge that in", async () => {
+    const f = stub(answer("c1", event("a"), event("b")), answer("c2", event("b", "done"), event("c")), answer(null));
+    const ask = asker(), first = await ask(), second = await ask();
+    expect(f.mock.calls.map(c => c[0])).toEqual(["/api/live/session?id=s1", "/api/live/session?id=s1&after=c1"]);
+    expect(second).toMatchObject({ cursor: "c2", events: [{ key: "a" }, { key: "b", summary: "done" }, { key: "c" }] }); // b replaced in place
+    expect(second.events[0]).toBe(first.events[0]); // an event the catch-up did not bring is the same object: its row is not drawn again
+    expect((await ask()).cursor).toBe("c2"); // an answer with no cursor keeps the one held
+    expect(f.mock.calls.at(-1)![0]).toBe("/api/live/session?id=s1&after=c2");
+  });
+
+  it("ask from the start for the same session with text: it is another query", async () => {
+    const f = stub(answer("c1", event("a")), answer("c1", event("a")));
+    const client = makeTestClient();
+    await client.fetchQuery(queries.liveSession("s1"));
+    await client.fetchQuery(queries.liveSession("s1", true));
+    expect(f.mock.calls.map(c => c[0])).toEqual(["/api/live/session?id=s1", "/api/live/session?id=s1&text=1"]);
+  });
+
+  it("keep each event's object when a catch-up pushes the oldest off the top", async () => {
+    const full = Array.from({ length: KEEP }, (_, i) => event("e" + i));
+    stub(answer("c1", ...full), answer("c2", event("new")));
+    const ask = asker(), first = await ask(), second = await ask();
+    expect([second.events.length, second.truncated, second.events.at(-1)!.key]).toEqual([KEEP, true, "new"]);
+    expect(second.events[0]).toBe(first.events[1]); // Query's structural sharing would copy every event here
+  });
+
+  it("send the recheck's priority with the signal, and the page's own requests with the signal alone", async () => {
+    const f = stub(answer("c1"), answer("c2"), answer(null));
+    const client = makeTestClient(), low: RequestInit = { priority: "low" };
+    await client.fetchQuery(queries.liveSession("s1"));
+    await client.fetchQuery(queries.liveSession("s1", false, low));
+    await client.fetchQuery(queries.liveList(v, false, low));
+    expect(f.mock.calls.map(c => c[1])).toEqual([{ signal: expect.any(AbortSignal) }, ...[1, 2].map(() => ({ priority: "low", signal: expect.any(AbortSignal) }))]);
   });
 });
 
