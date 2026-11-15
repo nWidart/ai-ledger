@@ -21,7 +21,7 @@ const twin = (v: string) => {
 /**
  * The project, tool and session sheets of Activity, Cost and Errors. What they show lives in the URL (inspect: a project;
  * tool, mcp or skill: a tool, MCP server or skill; session: a session), so Back, reload and shared links agree with them:
- * a session opened from a project or tool sheet gets ← Back to it.
+ * a session opened from a project or tool sheet gets ← Back to it. Session and tool sheets offer the Wide toggle; project sheets do not.
  * data: the page's payload, for its project filter and the session titles it already knows.
  * automated: the page shows automated sessions whatever the URL says (Errors), so its sheets do too.
  */
@@ -61,7 +61,7 @@ export function UsageSheets({ data, automated }: { data: UsagePayload | undefine
     body = <ToolSheet key={key} kind={tk} name={tn} d={tool.data} error={tool.error} retry={tool.retry} onSession={toSession} backTo={backTo} />;
   }
   return (
-    <Sheet open={open} kind={kind} title={title} contentKey={key} onClose={close} busy={!!session && sess.loading}
+    <Sheet open={open} kind={kind} title={title} contentKey={key} onClose={close} busy={!!session && sess.loading} widen={!!session || (!inspect && !!tn)}
       onBack={session && under ? () => set({ session: null }) : undefined} returnFocus={() => shown.current ? twin(shown.current) : null}>
       {body}
     </Sheet>

@@ -25,6 +25,7 @@ Run `ai-ledger rebuild` once after upgrading (with the app stopped): the Context
 - Switching pages crossfades, in browsers with view transitions and unless reduced motion is on. Back and Forward return a page to where it was scrolled.
 - A page that loads for the first time shows gray placeholder blocks instead of an empty page.
 - Pointing at or focusing a page's tab starts loading that page and its data, so it opens sooner. Opening a URL starts the page's data with its code instead of after it.
+- The session sheet and the tool, MCP server and skill sheet have a Wide toggle that widens the sheet to 1100px. The wide sheet gives the session timeline more room and puts short sections side by side. The choice is saved in the browser.
 
 ### Changed
 

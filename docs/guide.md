@@ -134,6 +134,7 @@ Without a project the page has nothing to show: clearing the project opens Activ
 
 - Press **Cmd+K** to jump anywhere: `>errors #myproject #7d`. The `>context` term opens the Context page, keeping the project and range filters.
 - The project picker on every page filters as you type.
+- Press **Wide** in a session sheet or a tool, MCP server or skill sheet to widen it to 1100px: the timeline gets more room and short sections sit side by side. The choice is saved in your browser. The project sheet stays narrow.
 - Every page works by keyboard and screen reader.
 - Each chart has a data table.
 - Forced-colors (high contrast) modes are supported.
