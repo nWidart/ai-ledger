@@ -1,6 +1,6 @@
 // Records scripted walkthroughs of the demo server as GIFs in docs/: PNG frames from Playwright, encoded by gifski.
 // Each scene records twice: <scene>.gif in dark mode, <scene>-light.gif in light mode.
-// node record.mjs [scene...]   (scenes: tour activity cost errors limits insights live; default all)
+// node record.mjs [scene...]   (scenes: tour activity cost context project errors limits insights live; default all)
 // live plays synthetic sessions with replay.py, so it needs uv.
 // CHROMIUM=<path> uses that Chromium instead of Playwright's own. SCHEMES=light records only that scheme.
 // live leaves its sessions in the store: seed it again before you record live a second time.
@@ -106,7 +106,7 @@ const SCENES = {
     await h.scrollTo(page.locator("#d-sessions"));
     await h.click(page.locator("#d-sessions tr.pick"), { dx: 0.2, pause: 2600 });
     await page.keyboard.press("Escape"); await h.wait(600);
-    await h.click(page.locator("#d-tools summary"), { dx: 0.05, pause: 600 });
+    await h.click(page.locator("#d-tools .drawer-toggle"), { dx: 0.05, pause: 600 });
     await h.click(sel(page, "#d-tools tr", "Edit"), { dx: 0.1, pause: 2600 });
     await page.keyboard.press("Escape"); await h.wait(800);
   },
@@ -122,8 +122,51 @@ const SCENES = {
     await h.wait(1500);
     await h.scrollTo(page.locator("#where"));
     await h.wait(1500);
-    await h.click(page.locator("#d-top summary"), { dx: 0.05, pause: 600 });
+    await h.click(page.locator("#d-top .drawer-toggle"), { dx: 0.05, pause: 600 });
     await h.scrollTo(page.locator("#d-top"));
+    await h.wait(1500);
+  },
+  async context(h, start) {
+    const { page } = h;
+    await start("/context?range=30");
+    await h.wait(2200);
+    await h.scrollTo(page.locator("#tips"), 20);
+    await h.wait(2000);
+    await h.scrollTo(page.locator("#starting"), 20);
+    await h.wait(1800);
+    await h.scrollTo(page.locator("#growth"), 20);
+    await h.click(btn(page, "Share of window"), { pause: 1500 });
+    await h.click(page.locator("#growth .key.proj"), { pause: 1500 });
+    await h.click(page.locator("#growth .key.proj"), { pause: 600 });
+    await h.scrollTo(page.locator("#pressure"), 20);
+    await h.click(page.locator("#pressure .band[aria-label*=\"272k\"]").nth(3), { pause: 1500 });
+    const map = page.locator("#pressure rect.hit");
+    await h.scrollTo(map, 120);
+    const box = await map.first().boundingBox();
+    for (const [x, y] of [[0.4, 0.6], [0.55, 0.35], [0.65, 0.15]]) { await h.move(box.x + box.width * x, box.y + box.height * y); await h.wait(500); }
+    await h.click(map, { dx: 0.65, dy: 0.15, pause: 2400 });
+    await page.keyboard.press("Escape"); await h.wait(600);
+    await h.scrollTo(page.locator("#fills"), 20);
+    await h.wait(1200);
+    await h.click(btn(page, "By MCP server"), { pause: 1500 });
+    await h.scrollTo(page.locator("#cost"), 20);
+    await h.wait(2200);
+  },
+  async project(h, start) {
+    const { page } = h;
+    await start("/usage?range=30&project=atlas-api");
+    await h.wait(1500);
+    await h.click(page.locator(".appnav-go"), { pause: 2000 });
+    await h.scrollTo(page.locator("#cost"), 20);
+    await h.wait(1500);
+    await h.scrollTo(page.locator("#sessions"), 20);
+    await h.click(page.locator("#sessions tbody tr"), { dx: 0.15, pause: 2400 });
+    await page.keyboard.press("Escape"); await h.wait(600);
+    await h.scrollTo(page.locator("#context"), 20);
+    await h.click(page.locator("#context summary"), { dx: 0.1, pause: 2500 });
+    await h.scrollTo(page.locator("#insights"), 20);
+    await h.wait(1500);
+    await h.scrollTo(page.locator("#limits"), 20);
     await h.wait(1500);
   },
   async errors(h, start) {
@@ -147,10 +190,10 @@ const SCENES = {
     for (const k of [0.2, 0.5, 0.75, 0.95]) { await h.move(box.x + box.width * k, box.y + box.height * 0.5); await h.wait(500); }
     await h.scrollTo(page.locator("#unused"));
     await h.wait(1500);
-    await h.click(page.locator("#history summary"), { dx: 0.05, pause: 600 });
+    await h.click(page.locator("#history .drawer-toggle"), { dx: 0.05, pause: 600 });
     await h.scrollTo(page.locator("#history"));
     await h.wait(1500);
-    await h.click(page.locator("#value summary"), { dx: 0.05, pause: 600 });
+    await h.click(page.locator("#value .drawer-toggle"), { dx: 0.05, pause: 600 });
     await h.scrollTo(page.locator("#value"));
     await h.wait(2000);
   },
@@ -164,7 +207,7 @@ const SCENES = {
     await h.wait(1500);
     await h.scrollTo(page.locator("#log"), 20);
     await h.click(page.getByLabel("Only sessions with friction"), { pause: 1500 });
-    await h.click(page.locator("#log a", { hasText: "Session" }).first(), { pause: 2600 });
+    await h.click(page.locator("#log a[title*=\"Open session\"]"), { pause: 2600 });
     await page.keyboard.press("Escape"); await h.wait(800);
   },
   async live(h, start) {
@@ -195,6 +238,9 @@ const SCENES = {
     await h.click(btn(page, "90d"), { pause: 1500 });
     await h.scrollTo(page.locator("#spend"));
     await h.wait(1200);
+    await h.click(page.getByRole("link", { name: "Context", exact: true }), { pause: 1800 });
+    await h.scrollTo(page.locator("#growth"), 20);
+    await h.wait(1500);
     await h.click(page.getByRole("link", { name: "Errors", exact: true }), { pause: 1800 });
     await h.scrollTo(page.locator("#chartTitle"), 20);
     await h.wait(1500);

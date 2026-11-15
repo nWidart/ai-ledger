@@ -36,7 +36,9 @@ CODEX_MODELS = [("gpt-6.1-sol", "high", 0.7), ("gpt-6-astra", "medium", 0.3)]
 # (tool, input, error text or None) templates; errors are categorized with the app's own rules
 OK = [("Read", "src/{f}.ts"), ("Read", "src/{f}.py"), ("Edit", "src/{f}.ts"), ("Edit", "src/{f}.py"), ("Grep", "TODO|FIXME"),
       ("Glob", "src/**/*.ts"), ("Bash", "npm test"), ("Bash", "git status"), ("Bash", "uv run pytest"), ("Bash", "git diff"),
-      ("Write", "src/{f}.test.ts"), ("WebFetch", "https://developer.mozilla.org/en-US/docs/Web/API"), ("Task", "Explore the codebase")]
+      ("Write", "src/{f}.test.ts"), ("WebFetch", "https://developer.mozilla.org/en-US/docs/Web/API"), ("Task", "Explore the codebase"),
+      ("mcp__github__get_pull_request", "{\"number\": 42}"), ("mcp__linear__list_issues", "{\"team\": \"API\"}"), ("mcp__playwright__browser_snapshot", "{}"),
+      ("mcp__context7__get-library-docs", "{\"library\": \"react\"}")]
 FAIL = [
     ("Edit", "src/{f}.ts", "String to replace not found in file.\nString: const total = items.reduce("),
     ("Edit", "src/{f}.py", "File has not been read yet. Read it first before writing to it."),
@@ -52,6 +54,10 @@ FAIL = [
     ("Bash", "npm run lint", "Exit code 1\n/src/canvas.ts\n  12:5  error  'ctx' is assigned a value but never used  no-unused-vars\n✖ 1 problem"),
 ]
 FILES = ["orders", "auth", "canvas", "layers", "billing", "cart", "router", "export", "toolbar", "webhook"]
+START = {"atlas-api": 48_000, "pixel-studio": 32_000, "ledger-web": 38_000, "docs-site": 22_000, "infra-scripts": 26_000}  # median starting context
+WINDOW = {"claude": 1_000_000, "codex": 272_000}  # the context window of each source's models
+RESULT = {"Read": 9_000, "Edit": 300, "Write": 250, "Grep": 2_500, "Glob": 900, "Bash": 4_000, "exec_command": 4_000, "WebFetch": 30_000,
+          "Task": 3_000, "Skill": 6_000, "github": 12_000, "linear": 6_000, "playwright": 45_000, "context7": 22_000}  # median result bytes
 
 for f in (DB, DB + ".wal"):
     if os.path.exists(f):
@@ -86,7 +92,10 @@ for d in range(DAYS, -1, -1):
                 continue
             model, effort = pick(CODEX_MODELS if source == "codex" else CLAUDE_MODELS)
             n_prompts = rnd.randint(1, 6)
-            t, ctx, peak, compactions = start, 20_000, 0, 0
+            win = WINDOW[source]
+            grow = rnd.choice([1, 1, 1, 2, 3]) if source == "claude" else rnd.choice([1, 1, 2])
+            one_hour = source == "claude" and rnd.random() < 0.2  # sessions that write 1-hour cache entries
+            t, ctx, peak, compactions, first_compaction = start, int(rnd.gauss(START[project], START[project] * 0.2)), 0, 0, None
             commits = 0
             for p in range(n_prompts):
                 pid = f"{sid}-p{p}"
@@ -96,17 +105,31 @@ for d in range(DAYS, -1, -1):
                     text = rnd.choice(PROMPTS[project])
                     raw.append((f"{sid}-raw", None, 0, 0, "user", sid, pid, t.isoformat(), False, True,
                                 json.dumps({"promptId": pid, "message": {"content": text}})))
+                switched = p > 0 and source == "claude" and rnd.random() < 0.04
+                if switched:
+                    model = rnd.choice([m for m, *_ in CLAUDE_MODELS if m != model])
                 for r in range(rnd.randint(2, 9)):
-                    t += timedelta(seconds=rnd.randint(8, 90))
+                    gap = rnd.randint(8, 90)
+                    t += timedelta(seconds=gap)
                     sub = source == "claude" and rnd.random() < 0.15
                     m = "claude-haiku-5-5" if sub else model
-                    ctx = min(ctx + rnd.randint(3_000, 18_000), 900_000)
-                    if ctx > 700_000 and rnd.random() < 0.3:
-                        ctx, compactions = 40_000, compactions + 1
-                    peak = max(peak, ctx)
+                    inp, c5, c1 = rnd.randint(50, 3_000), rnd.randint(500, 8_000), rnd.randint(500, 6_000) if one_hour else 0
+                    if sub:  # a subagent carries its own context, not the session's
+                        read = rnd.randint(8_000, 30_000)
+                    else:
+                        ctx = min(ctx + rnd.randint(3_000, 18_000) * grow, int(win * 0.95))
+                        if ctx > 0.8 * win and rnd.random() < 0.4:
+                            ctx, compactions = START[project] + 20_000, compactions + 1
+                            first_compaction = first_compaction or t
+                        peak = max(peak, ctx)
+                        read = ctx
+                        if r == 0 and (switched or (p > 0 and not one_hour and rnd.random() < 0.25)):  # a model switch, or the cache expired in the pause
+                            read, c5 = 0, ctx
+                        elif r > 0 and rnd.random() < 0.004:  # a break of no known cause
+                            read, inp = ctx // 5, ctx * 4 // 5
                     out = rnd.randint(300, 4_000)
-                    reqs.append((f"{sid}-r{p}-{r}", sid, t, m, effort, sub, rnd.randint(50, 3_000), out, out // 3,
-                                 ctx, rnd.randint(500, 8_000), rnd.randint(0, 6_000), rnd.randint(0, 9_000), "end_turn"))
+                    reqs.append((f"{sid}-r{p}-{r}", sid, t, m, effort, sub, inp, out, out // 3,
+                                 read, c5, c1, rnd.randint(0, 9_000), "end_turn"))
                     for k in range(rnd.randint(0, 3)):
                         tid = f"{sid}-t{p}-{r}-{k}"
                         end = t + timedelta(milliseconds=rnd.randint(40, 9_000))
@@ -122,30 +145,54 @@ for d in range(DAYS, -1, -1):
                         if commit:
                             inp, commits = "git commit -m \"wip\"", commits + 1
                         test = tool in categorize.SHELL_TOOLS and categorize.runs_tests(inp)
-                        mcp = "github" if tool.startswith("mcp__") else None
+                        mcp = tool.split("__")[1] if tool.startswith("mcp__") else None
                         skill = rnd.choice(["review-change", "ship", "frontend-design"]) if tool == "Read" and rnd.random() < 0.05 else None
                         if skill:
                             tool, inp = "Skill", skill
                         cat = categorize.categorize(err, tool, inp) if err else None
                         follow = "Fixed the old_string and retried." if err else None
+                        size = len(err) if err else min(int(RESULT[mcp or tool] * rnd.lognormvariate(0, 0.7) * (12 if rnd.random() < 0.004 else 1)), 600_000)
                         tools.append((tid, sid, tool, mcp, skill, inp, t, end, err is not None, err, cat, follow, sub,
-                                      commit, test, (test and err is None) or commit, None, None))
+                                      commit, test, (test and err is None) or commit, None, None, size))
                 if rnd.random() < 0.5:
                     hooks.append((sid, t, "stop_summary", "Stop", "notify.sh", rnd.randint(40, 400), rnd.random() < 0.04))
                 t += timedelta(minutes=rnd.randint(2, 25))
             sessions.append((sid, project, f"/home/demo/code/{project}", rnd.choice(["main", "feat/rate-limit", "fix/undo", "feat/export"]),
-                             start, t, "cli", "2.4.0", compactions, peak, model, source))
+                             start, t, "cli", "2.4.0", compactions, peak, model, source, win if source == "codex" else None, first_compaction))
 
 store.insert(c, "sessions", ["session_id", "project", "cwd", "git_branch", "first_ts", "last_ts", "entrypoint", "version",
-                             "compactions", "peak_context", "peak_model", "source"], sessions)
+                             "compactions", "peak_context", "peak_model", "source", "context_window", "first_compaction_ts"], sessions)
 store.insert(c, "requests", ["message_id", "session_id", "ts", "model", "effort", "subagent", "input", "output", "thinking",
                              "cache_read", "cache_5m", "cache_1h", "thinking_ms", "stop_reason"], reqs)
 store.insert(c, "tool_calls", ["tool_use_id", "session_id", "tool", "mcp_server", "skill", "input_summary", "start_ts", "end_ts",
                                "is_error", "error", "category", "followup", "subagent", "is_commit", "is_test", "test_passed",
-                               "result_file", "result_seq"], tools)
+                               "result_file", "result_seq", "result_bytes"], tools)
 store.insert(c, "prompts", ["prompt_id", "session_id", "ts", "interrupted"], prompts)
 store.insert(c, "hooks", ["session_id", "ts", "source", "hook", "command", "duration_ms", "is_error"], hooks, tail="")
 store.insert(c, "raw_lines", ["key", "file", "line_no", "byte_offset", "type", "session_id", "uuid", "ts", "subagent", "parsed", "json"], raw)
+
+# /context snapshots in three projects, so the Project page can split their starting context
+OVERHEAD = {"atlas-api": ["github", "linear", "playwright"], "pixel-studio": ["playwright", "context7"], "ledger-web": ["github", "context7"]}
+SKILLS = [("review-change", "userSettings"), ("ship", "userSettings"), ("frontend-design", "plugin")]
+snap_rows, part_rows = [], []
+for i, (project, servers) in enumerate(OVERHEAD.items()):
+    s = next(s for s in reversed(sessions) if s[1] == project and s[11] == "claude")
+    uuid = f"demo-context-{i}"
+    mcp = [("mcp_tool", f"mcp__{srv}__{name}", srv, rnd.randint(300, 1_800)) for srv in servers for name in ("list", "get", "create", "search")]
+    mem = [("memory_file", "/home/demo/.claude/CLAUDE.md", "User", 900),
+           ("memory_file", f"/home/demo/code/{project}/CLAUDE.md", "Project", rnd.randint(1_500, 4_000))]
+    agents = [("agent", "code-reviewer", "projectSettings", 480)]
+    skills = [("skill", name, src, rnd.randint(1_500, 4_500)) for name, src in SKILLS]
+    total = lambda parts: sum(p[3] for p in parts)
+    used = [("System prompt", 4_107), ("System tools", 12_790), ("MCP tools", total(mcp)), ("MCP server instructions", 300 * len(servers)),
+            ("Custom agents", total(agents)), ("Memory files", total(mem)), ("Skills", total(skills)), ("Messages", 2_500)]
+    in_use = sum(n for _, n in used)
+    cats = [("category", name, None, "used", n) for name, n in used] + [("category", "Autocompact buffer", None, "buffer", 33_000),
+                                                                       ("category", "Free space", None, "free", WINDOW["claude"] - in_use - 33_000)]
+    snap_rows.append((uuid, s[0], s[5], project, s[2], "2.4.0", s[10], WINDOW["claude"], in_use))
+    part_rows += [(uuid, seq, *row) for seq, row in enumerate(cats + [(k, n, d, None, tk) for k, n, d, tk in mcp + mem + agents + skills])]
+store.insert(c, "context_snapshots", ["uuid", "session_id", "ts", "project", "cwd", "version", "model", "context_window", "total"], snap_rows)
+store.insert(c, "context_parts", ["uuid", "seq", "kind", "name", "detail", "state", "tokens"], part_rows)
 
 # limits: weekly and 5-hour windows, one reading per hour that follows the requests in each window
 snaps = []
