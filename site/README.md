@@ -137,7 +137,7 @@ A playbook is a how-to guide: the reader has a goal and knows the app. Write eac
 - Write what the app does. When the code and a spec disagree, the code is what the reader sees: follow it, and report the difference.
 - Give the page alone to a fresh reader with these questions: "Does this apply to me?", "What exactly do I change?", "How do I know it worked?". Fix the page until the reader answers each.
 
-Worked examples: `improve/lean-context.md` for a playbook with several causes, and `improve/weekly-review.md` for a routine, where Diagnose is the pass over the pages and Act sends the reader to one other playbook.
+Worked examples: `improve/lean-context.mdx` for a playbook with several causes, and `improve/weekly-review.md` for a routine, where Diagnose is the pass over the pages and Act sends the reader to one other playbook.
 
 ### The metric-to-action mapping
 
@@ -151,14 +151,18 @@ Every image has an `alt` that says what it shows. Use `ThemedImage` for anything
 import ThemedImage from "../../../components/ThemedImage.astro";
 import costSpend from "../../../assets/shots/cost-spend.png";
 import costSpendLight from "../../../assets/shots/cost-spend-light.png";
+import tourStill from "../../../assets/shots/tour-overview.png";
+import tourStillLight from "../../../assets/shots/tour-overview-light.png";
 
-<ThemedImage dark={costSpend} light={costSpendLight} alt="Cost's spend chart: daily estimated spend by model over 30 days." />
+<ThemedImage dark={costSpend} light={costSpendLight} alt="Cost's spend chart: daily estimated spend by project over 30 days." />
 
-<ThemedImage gif="cost" width={960} height={600} dark={costSpend} light={costSpendLight} alt="…" />
+<ThemedImage gif="tour" width={960} height={600} dark={tourStill} light={tourStillLight} alt="…" />
 ```
 
-- Screenshots are PNGs in `src/assets/shots/`, named `<page>-<panel>.png` (dark) and `<page>-<panel>-light.png` (light).
-- GIFs are `docs/<name>.gif` and `docs/<name>-light.gif` in the repo, used by name (`gif="cost"`). With `dark` and `light` stills as well, the stills replace the GIF when the reader asks for reduced motion.
+- Screenshots are PNGs in `src/assets/shots/`, named `<page>-<panel>.png` (dark) and `<page>-<panel>-light.png` (light). Astro serves them optimized.
+- GIFs are `docs/<name>.gif` and `docs/<name>-light.gif` in the repo, used by name (`gif="cost"`). With `dark` and `light` stills as well, the stills replace the GIF when the reader asks for reduced motion. The home page's tour GIF has `tour-overview` as its still.
+- A page that shows an image is an `.mdx` file (the component needs it). In `.mdx`, a `<` or `{` in prose starts JSX: write `\<project>` or `\{name}`, or put the text in backticks. Put the imports where the first image is needed, not in front matter.
+- Add an image only where a picture shows the figure the reader must find. A shot no page uses is deleted (see `src/assets/shots/README.md`).
 
 ### Screenshots come only from the demo store
 
@@ -166,8 +170,10 @@ Never take a screenshot of your own store: it holds your transcripts, and any se
 
 ```bash
 uv sync                                   # once: the app, which seed.py and serve.py import
+(cd site && npm ci)                       # once: sharp, which quantizes each PNG
 cd tools/demo && npm ci                   # once: Playwright (`npx playwright install chromium` if it has no browser yet)
 node record.mjs shots [page...]           # write the PNGs into site/src/assets/shots/
+node record.mjs quantize                  # re-encode the PNGs already there, without recording
 ```
 
 The `shots` mode seeds the demo store (`seed.py`), starts the demo server itself, and stops it when it is done. It refuses to run when port 8799 already answers, before any shot. Pages: `activity cost context errors limits insights project live everywhere`; with none named it records all (about 4 minutes). `site/src/assets/shots/README.md` lists every shot. See the header of `tools/demo/record.mjs` for its options. When a change alters a panel, re-record its shots in the same change.
