@@ -183,7 +183,7 @@ The lane header SHALL show the subagent's name, its description, its tool-call c
 Beside the stream, the page SHALL show the selected session's state with its detail, context window fill with a mark at each compaction, cost, requests, tool calls, errors, cache-read share, a tokens-per-minute chart of the last minute, and the plan-limit use for its source. An inferred state SHALL be shown as inferred.
 
 #### Scenario: Context near full
-- **WHEN** the session uses more than 80% of its model's context window
+- **WHEN** the session uses more than 80% of its context window: the window the session states (Codex), else its model's window in the price table
 - **THEN** the context meter shows the warning color
 
 #### Scenario: Likely waiting for approval
