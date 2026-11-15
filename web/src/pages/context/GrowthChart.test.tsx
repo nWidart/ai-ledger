@@ -156,7 +156,7 @@ describe("GrowthChart", () => {
     fireEvent.keyDown(chart, { key: "Escape" });
     expect(container.querySelectorAll("path.curve.view")).toHaveLength(2);
     fireEvent.keyDown(screen.getByRole("group", { name: /^Median context/ }), { key: "ArrowRight" });
-    expect(document.querySelector(".readout")!.textContent).toBe(`${readTurn(view[0]!)}; foo 36k`);
+    expect(document.querySelector(".readout")!.textContent).toMatch(/; foo 36k \(25th to 75th percentile /);
     await userEvent.click(fooKey);
     expect(fooKey.getAttribute("aria-pressed")).toBe("false");
     expect(barKey.getAttribute("aria-pressed")).toBe("false");
