@@ -20,7 +20,7 @@ Each group lists the model it suits. Groups 2 and 3 can run in parallel: they to
 
 ## 4. Search button shows the project (Sonnet)
 
-- [ ] 4.1 With a project set, show the project dot and the name, truncated in `ch` with an ellipsis, in place of "Search". Set the `aria-label` to "Search in <project>, open command palette (<shortcut>)" and the title to the full name. Keep the dot in the icon-only state. Verify with `Nav.test.tsx` cases for the name with and without a project, the dot present, and "Search" visible with no project. Verify with `Palette.test.tsx` that "click Search" still finds the button by its name.
+- [x] 4.1 With a project set, show the project dot and the name, truncated in `ch` with an ellipsis, in place of "Search". Set the `aria-label` to "Search in <project>, open command palette (<shortcut>)" and the title to the full name. Keep the dot in the icon-only state. Verify with `Nav.test.tsx` cases for the name with and without a project, the dot present, and "Search" visible with no project. Verify with `Palette.test.tsx` that "click Search" still finds the button by its name.
 
 ## 5. Freshness control in the nav (Opus)
 

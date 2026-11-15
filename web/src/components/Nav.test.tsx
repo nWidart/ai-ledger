@@ -210,6 +210,24 @@ describe("Nav", () => {
     expect(screen.getByText(/Last ingest .* · 7 new lines/)).toBeTruthy();
   });
 
+  it("shows the project filter in the search button, and plain Search without one", async () => {
+    vi.stubGlobal("fetch", vi.fn(() => json(status)));
+    history.replaceState(null, "", "/usage");
+    const first = renderApp(<Nav />);
+    const plain = await screen.findByRole("button", { name: /^Search, open command palette/ });
+    expect(plain.textContent).toContain("Search");
+    expect(plain.querySelector(".pdot")).toBeNull();
+    first.unmount();
+    history.replaceState(null, "", "/usage?project=foo");
+    renderApp(<Nav />);
+    const btn = await screen.findByRole("button", { name: /Search/ });
+    expect(btn.textContent).toContain("foo");
+    expect(btn.textContent).not.toContain("Search");
+    expect(btn.querySelector(".pdot")).not.toBeNull();
+    expect(btn.getAttribute("aria-label")).toMatch(/^Search in foo, open command palette/);
+    expect(btn.getAttribute("title")).toContain("foo");
+  });
+
   it("keeps Refresh focused and focusable while it runs, ignores activation, and names the search button by its label", async () => {
     const answers: Record<string, () => void> = {}, later = (body: unknown) => new Promise<Response>(r => { answers.refresh = () => r(json(body)); });
     const f = vi.fn((_url: string, _init?: RequestInit) => json(status));

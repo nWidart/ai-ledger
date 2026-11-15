@@ -18,6 +18,10 @@
 .appnav-badge[data-tone=critical] { background: var(--critical); }
 .appnav-badge[data-tone=warning] { background: var(--warning-text); }
 .appnav-palette { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; color: var(--text-secondary); }
+/* The project filter in the button: its dot and name. On phones only the name goes; the dot stays beside the icon. */
+.appnav-scope { display: inline-flex; align-items: center; gap: 5px; color: var(--text-primary); }
+.appnav-scope .pdot { margin-right: 0; }
+.appnav-scope b { font-weight: 500; max-width: 14ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .appnav-palette svg { flex: none; width: .875rem; height: .875rem; }
 .appnav-palette kbd { font: .6875rem/1.4 ui-monospace, "SF Mono", Menlo, monospace; color: var(--text-muted); padding: 0 5px;
   border: 1px solid var(--border); border-radius: 5px; background: var(--surface-2); }
@@ -42,7 +46,7 @@
   /* Status stays readable to screen readers; failures stay visible on the button. */
   .appnav-status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .appnav .appnav-palette, #navRefresh, #navTheme { flex: none; min-width: 36px; min-height: 36px; padding: 0; justify-content: center; }
-  .appnav-palette .lbl, .appnav-palette kbd, #navRefresh .lbl { display: none; }
+  .appnav-palette .lbl, .appnav-scope b, .appnav-palette kbd, #navRefresh .lbl { display: none; }
   #navRefresh { display: inline-flex; align-items: center; }
   #navRefresh svg { display: block; }
 }

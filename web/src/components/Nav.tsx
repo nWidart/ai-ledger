@@ -5,6 +5,7 @@ import { getTheme, nextTheme, setTheme, useTheme, type Theme } from "../theme";
 import { alertKey, alertText } from "../pages/limits/limits";
 import { openPalette, shortcutHint, shortcutKeys } from "./palette/store";
 import { useRefresh } from "./refresh";
+import { ProjectDot } from "./ProjectDot";
 import "./Nav.css";
 
 export const PAGES = [
@@ -25,11 +26,11 @@ const THEME_ICON: Record<Theme, ReactNode> = {
 };
 
 // What the bar reads of the URL: the shared query string its links carry.
-const navSearch = (raw: Readonly<Record<string, string>>) => sharedSearch(raw);
+const navSearch = (raw: Readonly<Record<string, string>>) => ({ shared: sharedSearch(raw), project: raw.project || "" });
 
 /** The shared top bar: brand, page tabs (keeping project, range and auto), the palette button, ingest status and Refresh. */
 export function Nav() {
-  const path = usePathname(), shared = useSearchOf(navSearch), theme = useTheme(), next = nextTheme(theme);
+  const path = usePathname(), { shared, project } = useSearchOf(navSearch), theme = useTheme(), next = nextTheme(theme);
   const nav = useRef<HTMLElement>(null);
   const { refresh, state: st } = useRefresh();
   const alert = st.alert ? alertText(st.alert) : null;
@@ -83,10 +84,10 @@ export function Nav() {
             );
           })}
         </span>
-        <button type="button" className="appnav-palette" aria-label={`Search, open command palette (${shortcutHint()})`} aria-haspopup="dialog"
-          aria-keyshortcuts={shortcutKeys()} title={`Filter, go to a page or open an inspector (${shortcutHint()})`} onClick={openPalette}>
+        <button type="button" className="appnav-palette" aria-label={project ? `Search in ${project}, open command palette (${shortcutHint()})` : `Search, open command palette (${shortcutHint()})`} aria-haspopup="dialog"
+          aria-keyshortcuts={shortcutKeys()} title={project ? `${project}: filter, go to a page or open an inspector (${shortcutHint()})` : `Filter, go to a page or open an inspector (${shortcutHint()})`} onClick={openPalette}>
           <svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5" fill="none" stroke="currentColor" strokeWidth="1.8" /><path d="m13 13 4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>
-          <span className="lbl">Search</span><kbd>{shortcutHint()}</kbd>
+          {project ? <span className="appnav-scope"><ProjectDot project={project} /><b>{project}</b></span> : <span className="lbl">Search</span>}<kbd>{shortcutHint()}</kbd>
         </button>
         <span className="appnav-status" id="navStatus" aria-live="polite">{st.text}</span>
         <span className="sr" role="status">{said.text}</span>
