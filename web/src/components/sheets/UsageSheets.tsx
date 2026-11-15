@@ -19,11 +19,11 @@ const twin = (v: string) => {
 };
 
 /**
- * The project, tool and session sheets of Activity, Cost and Errors. What they show lives in the hash (inspect: a project;
+ * The project, tool and session sheets of Activity, Cost and Errors. What they show lives in the URL (inspect: a project;
  * tool, mcp or skill: a tool, MCP server or skill; session: a session), so Back, reload and shared links agree with them:
  * a session opened from a project or tool sheet gets ← Back to it.
  * data: the page's payload, for its project filter and the session titles it already knows.
- * automated: the page shows automated sessions whatever the hash says (Errors), so its sheets do too.
+ * automated: the page shows automated sessions whatever the URL says (Errors), so its sheets do too.
  */
 export function UsageSheets({ data, automated }: { data: UsagePayload | undefined; automated?: boolean }) {
   const h = useSearchOf(parseView), set = setSearch;

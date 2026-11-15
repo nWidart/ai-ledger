@@ -1,4 +1,4 @@
-// The drill-down filters of the Insights session list. Each is one value in the URL hash: a raw category name, or for goalf and
+// The drill-down filters of the Insights session list. Each is one value in the URL: a raw category name, or for goalf and
 // frf a family key, whose labels the payload names (the client never re-implements the grouping rules). The list and the chips
 // read them here.
 import { label, outcomeLabel } from "../../components/facets";
@@ -24,12 +24,12 @@ export const DRILL_KEYS = Object.keys(KINDS) as DrillKind[];
 const KEYS = DRILL_KEYS;
 
 export interface Drill { kind: DrillKind; value: string; chip: string }
-/** The filters the hash holds, in chip order. */
+/** The filters the URL holds, in chip order. */
 export const drillsOf = (search: InsightsSearch): Drill[] =>
   KEYS.filter(k => search[k]).map(k => ({ kind: k, value: search[k]!, chip: `${KINDS[k].name}: ${KINDS[k].text(search[k]!)}` }));
 /** Whether a session of view d passes every filter. */
 export const passes = (s: InsightSession, drills: Drill[], d: InsightsPayload) => drills.every(x => KINDS[x.kind].match(s, x.value, d));
-/** Sets a filter to name, or clears it when it already is name; one history entry. Read from the live hash, not a render. */
+/** Sets a filter to name, or clears it when it already is name; one history entry. Read from the live URL, not a render. */
 export function toggleDrill(kind: DrillKind, name: string): boolean {
   const on = validateSearch(currentRaw())[kind] === name;
   setSearch({ [kind]: on ? null : name }, { push: true });

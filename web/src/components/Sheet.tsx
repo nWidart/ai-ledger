@@ -8,7 +8,7 @@ export interface SheetProps {
   title: ReactNode;
   /** What the sheet shows; a new key starts it fresh (scrolled to the top, focus on the title). Defaults to the kind and title text. */
   contentKey?: string;
-  /** Close (✕), Escape and the backdrop. The owner clears its state (say the hash's session), which closes the sheet. */
+  /** Close (✕), Escape and the backdrop. The owner clears its state (say the URL's session), which closes the sheet. */
   onClose: () => void;
   /** Shows ← Back (a session opened from a project sheet goes back to the project). */
   onBack?: () => void;

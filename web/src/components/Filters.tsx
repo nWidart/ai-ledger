@@ -8,7 +8,7 @@ import "./Filters.css";
 
 export interface ProjectOption { value: string; label?: string }
 export interface FiltersProps {
-  /** The picker's projects, busiest first. The hash's project is listed even when missing here (say an automated
+  /** The picker's projects, busiest first. The URL's project is listed even when missing here (say an automated
    *  project while automated sessions are left out: naming it in the filter includes it). */
   projects: readonly (string | ProjectOption)[];
   /** Show "Include automated sessions" (Activity and Cost; Errors is never filtered). */
@@ -36,7 +36,7 @@ const filterSearch = (raw: Readonly<Record<string, string>>) => {
   return { project, range, source, auto, badSource: !!raw.source && !s.source };
 };
 
-/** Project picker with its color dot, range and source segments and the automated toggle, all writing the URL hash. */
+/** Project picker with its color dot, range and source segments and the automated toggle, all writing the URL. */
 export function Filters({ projects, automated = false, autoFile, range = true, children }: FiltersProps) {
   const h = useSearchOf(filterSearch), { badSource } = h, set = setSearch;
   // An unknown source reads as All; the URL drops it so a copied link says what the page shows.
@@ -76,7 +76,7 @@ function ProjectPicker({ project, options, onPick }: { project: string; options:
   const items = [ALL, ...options], selected = items.find(o => o.value === project) ?? ALL, name = labelOf(selected);
   // `typed` tells the user's text from the selected project's name, which lists everything.
   const [text, setText] = useState(name), [typed, setTyped] = useState(false), [seen, setSeen] = useState(name), [open, setOpen] = useState(false);
-  if (seen !== name) { setSeen(name); setText(name); setTyped(false); } // the hash changed: show its project
+  if (seen !== name) { setSeen(name); setText(name); setTyped(false); } // the URL changed: show its project
   const needle = text.trim().toLowerCase(), hits = typed && needle ? options.filter(o => labelOf(o).toLowerCase().includes(needle)) : null;
   // The name in the field stays selected until the user types, so typing replaces it.
   const field = useRef<HTMLInputElement>(null);

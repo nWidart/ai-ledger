@@ -190,6 +190,21 @@ Alternative considered: awaited loaders with `pendingComponent`. Rejected: it wo
 
 Issue #69 asks for page switches that do not block and for cached page models. This change gives it the view transition (decision 9), the page's code loaded before the switch commits (Router resolves the lazy component first, so there is no empty fallback), and data present at mount (decision 11). It does not make the new page's first render concurrent: React renders Router's state change synchronously (see the evidence table). Phase 3 measures the switch to the Errors page, the largest, against a copy of a real store; if the render is still a long task, caching the derived page model by payload identity (the issue's second proposal, independent of any router) becomes a follow-up issue. Issue #69 closes with this change either way, with the measurement recorded.
 
+Measured (2026-11-15) in headless Chrome on a copy of a real store, whose Errors payload is 5.8 MB: the switch from Activity to Errors, the pre-router build of `main` against this change after phase 4, seven runs per case, medians. "Click" is the click's Event Timing duration (input to next paint). "Longest task" is the longest main-thread task from the click until the page settled.
+
+| Case, CPU slowed 4 times | Click, before | Click, after | Longest task, before | Longest task, after |
+|---|---|---|---|---|
+| First visit to Errors | 40 ms | 40 ms | 163 ms | 176 ms |
+| Errors visited before, data cached | 104 ms | 24 ms | 91 ms | 90 ms |
+| Tab pointed at, then selected | 24 ms | 24 ms | 173 ms | 196 ms |
+
+- At real speed on this machine neither build has a long task in the switch: the longest was 56 ms, and Errors showed 50 to 57 ms after the click in both builds.
+- **The click no longer blocks when the data is cached**: 104 ms to 24 ms at 4 times slowdown. The view transition takes the render out of the click's own task, which is what the issue's first proposal asked for.
+- **The render itself costs what it did**: one task of 90 to 200 ms at 4 times slowdown, the same in both builds within noise. Router does not make it concurrent, as the evidence table said.
+- The view transition adds 20 to 40 ms before the new page shows at 4 times slowdown, and nothing measurable at real speed.
+
+Verdict: no follow-up issue. At real speed the render is at the 50 ms long-task threshold with a 5.8 MB payload, so caching the page model by payload identity (the issue's second proposal) would save a few milliseconds on a revisit. It becomes worth doing if the Errors payload grows well past this size or the switch is seen to stall on a slower machine. Issue #69 closes with this change.
+
 ### 13. Tests: one router per test, over jsdom's history
 
 Changed during phase 1. The plan was a memory history per test; the tests run on jsdom's browser history instead, as the app runs on the browser's. Reasons: it is the history type production uses, so the tests exercise the same code (the batched writes above were found this way); and the 400 lines that set the URL with `history.replaceState` and assert `location`, `history.length` and `history.back()` keep their meaning, moving only from `location.hash` and `#` to `location.search` and `?`. `test-setup.ts` destroys each test's routers and resets the URL, as it reset the URL before.
@@ -214,6 +229,8 @@ No server code changes. Router in a client-only app adds no inline script and ma
 Expected: +26.7 kB gzipped (+76 kB minified) in the entry chunk, from 77.9 to about 105 kB gzipped before `adopt-tanstack`'s own additions; `hash.ts` and `App.tsx`'s route picking give back under 1 kB. The app is served from the loopback interface, so the cost is parse time and wheel size, not transfer. The close-out task records the measured figures here.
 
 Measured after phase 1 (2026-11-15), all JS chunks, against `main` at 2572a72: 767,263 B minified and 249,677 B gzipped before; 841,842 B and 276,849 B after. That is +74,579 B minified and +27,172 B gzipped, in 22 chunks where there were 21.
+
+Measured at close-out (2026-11-15), all JS chunks, against `main` at 3c2f689 (which had gained six Context charts since phase 1): 799,521 B minified and 256,981 B gzipped before; 876,392 B and 283,264 B after. That is +76,871 B minified and +26,283 B gzipped, in 21 chunks both times. The growth is in the entry chunk, 89,293 B to 116,815 B gzipped (+27,522 B): Router, the five page validators and the placeholder. Two shared chunks gave back about 1 kB between them; every page chunk moved by less than 0.2 kB. No built file holds the Router devtools; `tests/test_web_build.py` asserts it.
 
 ### 17. A placeholder while a page first loads
 
