@@ -4,6 +4,8 @@ import type { SessionDetail, View } from "../../api";
 import { big, dur, ms, num, pct, plural, usd, when } from "../../format";
 import { queries } from "../../queries";
 import { ApiError } from "../../useApi";
+import { copyText } from "../export";
+import { resumeCommand } from "../menu/resume";
 import { DataTable } from "../DataTable";
 import { ProjectDot } from "../ProjectDot";
 import { Toggletip } from "../Toggletip";
@@ -18,6 +20,20 @@ export function sessCost(models: SessionDetail["models"]): [string, string] {
   const sum = priced.reduce((a, r) => a + r.cost!, 0);
   return !priced.length ? ["Unknown", "est. cost, no model priced"]
     : unpriced ? [usd(sum) + "+", `est. cost of priced models; ${plural(unpriced, "model")} unpriced`] : [usd(sum), "est. cost"];
+}
+
+/** A labelled line of text with a Copy button; the outcome is announced politely, the live region present before it speaks. */
+function CopyLine({ label, text }: { label: string; text: string }) {
+  const [state, setState] = useState<"" | "copied" | "failed">("");
+  useEffect(() => {
+    if (!state) return;
+    const t = setTimeout(() => setState(""), 2000);
+    return () => clearTimeout(t);
+  }, [state]);
+  return <p className="copyline"><span className="small muted">{label}</span> <code className="sid">{text}</code>{" "}
+    <button type="button" className="linkish small" onClick={async () => setState(await copyText(text) ? "copied" : "failed")}>
+      {state === "copied" ? "Copied" : state === "failed" ? "Copy failed" : "Copy"}<span className="sr"> {label.toLowerCase()}</span></button>
+    <span className="sr" aria-live="polite">{state === "copied" ? "Copied to clipboard." : state === "failed" ? "Could not copy to clipboard." : ""}</span></p>;
 }
 
 const Stat = ({ v, l }: { v: ReactNode; l: ReactNode }) => <span><b>{v}</b> {l}</span>;
@@ -89,11 +105,13 @@ export function SessionSheet({ id, s, error, retry, range, pageProject, view }: 
     </DataTable></details>
     <details className="sd"><summary>Tools<span className="c">{num(s.tools.length)}</span></summary><DataTable name="Tools">
       <thead><tr><th scope="col">Tool</th><th scope="col" className="num">Calls</th><th scope="col" className="num">Failed</th><th scope="col" className="num">p50</th></tr></thead>
-      <tbody>{s.tools.length ? s.tools.map(r => <tr key={r.tool} {...pickRow(r.tool, v => openToolSheet("tool", v))}>
+      <tbody>{s.tools.length ? s.tools.map(r => <tr key={r.tool} {...pickRow(r.tool, v => openToolSheet("tool", v), { kind: "tool", value: r.tool })}>
         <th scope="row" className="name"><button type="button" className="cellbtn">{r.tool}</button></th><td className="num">{num(r.calls)}</td>
         <td className={"num" + ((r.failure_rate ?? 0) > .1 ? " bad" : "")}>{pct(r.failure_rate, 1)}</td><td className="num">{ms(r.p50_ms)}</td></tr>)
         : <tr><td colSpan={4} className="empty">No tool calls.</td></tr>}</tbody>
     </DataTable></details></div>
     <p><code className="muted sid">{i.session_id}</code></p>
+    {i.cwd && <CopyLine label="Directory" text={i.cwd} />}
+    <CopyLine label="Resume" text={resumeCommand({ source: i.source, session_id: i.session_id, cwd: i.cwd })} />
   </>;
 }

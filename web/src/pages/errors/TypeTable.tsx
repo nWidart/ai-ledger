@@ -4,6 +4,7 @@ import { sortRows, SortTh, type SortBy } from "../../components/Sort";
 import { num as fmt } from "../../format";
 import { tableFocus, useErrors } from "./context";
 import { errorText } from "./marks";
+import { subjectAttrs } from "../../components/menu/subject";
 import { bucketLabel, compare, dur, emptyTypes, MIN_PCT_ERRORS, RECOVERED_NOTE, typeRows, yearLabel, type TypeKey, type TypeRow } from "./model";
 import { Spark } from "./Spark";
 
@@ -53,7 +54,7 @@ export const TypeTable = memo(function TypeTable() {
           {th("unrec", "Didn't recover", "num c-unrec", UNREC)}<th scope="col" className="c-share">Share</th><th scope="col" className="c-trend">Rate trend</th>{th("change", "Change", "num", CHANGE)}</tr></thead>
         <tbody id="catBody">
           {rows.length ? rows.map(({ cid, n, lost, rate, inc, bad, unrec, share, color, pts, delta }) => (
-            <tr key={cid + key} data-c={cid} className={(v.cat === cid ? "sel " : "") + (m.muted.has(cid) ? "is-muted" : "")} onClick={() => pick(v.cat === cid ? null : cid, v.cat !== cid)}>
+            <tr key={cid + key} data-c={cid} {...subjectAttrs("category", cid)} className={(v.cat === cid ? "sel " : "") + (m.muted.has(cid) ? "is-muted" : "")} onClick={() => pick(v.cat === cid ? null : cid, v.cat !== cid)}>
               <td><button type="button" className="tbtn" data-c={cid} aria-expanded={v.cat === cid} aria-controls="detail">
                 <i className="sw" style={{ background: color }} aria-hidden="true" />{m.cats[cid]!.label}</button>
                 {m.muted.has(cid) ? <span className="chip muted-type">Muted</span> : null}

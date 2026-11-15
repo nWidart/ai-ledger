@@ -4,14 +4,15 @@ Model per task in brackets. The lead integrates, reviews each diff and runs the 
 
 ## 1. Foundation
 
-- [ ] 1.1 [Opus] Spike the Base UI `ContextMenu` approach from design.md decision 2. Check four things in a throwaway test or story: a controlled root, the positioner `anchor` override for keyboard opening, `event.preventBaseUIHandler()` leaving `defaultPrevented` false outside subjects, and the popup showing above an open `<dialog>` sheet, where Escape closes only the menu. Verify: write the findings in a short note on this task. If any check fails, switch the design to the `Menu` fallback before 3.1 starts.
+- [x] 1.1 [Opus] Spike the Base UI `ContextMenu` approach from design.md decision 2. Check four things in a throwaway test or story: a controlled root, the positioner `anchor` override for keyboard opening, `event.preventBaseUIHandler()` leaving `defaultPrevented` false outside subjects, and the popup showing above an open `<dialog>` sheet, where Escape closes only the menu. Verify: write the findings in a short note on this task. If any check fails, switch the design to the `Menu` fallback before 3.1 starts.
+  - Findings: `ContextMenu` fits; no fallback. The bail-out needs `stopPropagation()` as well as `preventBaseUIHandler()`, because the trigger's `document` listener calls `preventDefault`. A passed `anchor` wins over the pointer. The popup portals into the open `<dialog>`. Base UI's Escape stops propagation. Long-press needs our own click guard. `aria-label` on `Popup` names the menu. design.md decision 2 records these. Still to check in a browser (6.1): top layer above a sheet, Escape not closing the sheet, and long-press on a device.
 - [x] 1.2 [Lead] Add `resumeCommand({source, session_id, cwd})` per design.md decision 4. Verify: unit tests cover Claude Code, Codex, no `cwd`, a space in `cwd` and a `'` in `cwd` (`'\''`), and `cd 'x' && ` shows only when `cwd` is set.
-- [ ] 1.3 [Opus] Add `menuItems(subject, ctx)` in `web/src/components/menu/items.ts` per design.md decision 3. Build navigation hrefs through the palette's `resolve()`. Verify: unit tests cover each subject's items and order; that Open project page is absent on that project's page; the filter toggle label and patch; that the sheet item is absent where the page hosts none; that Open session on Live goes to Activity; that Copy working directory is absent without `cwd`; the "Loading…" and "Not available" reasons; and that mute is absent off Errors and for `infra` and `user_denied`.
+- [x] 1.3 [Opus] Add `menuItems(subject, ctx)` in `web/src/components/menu/items.ts` per design.md decision 3. Build navigation hrefs through the palette's `resolve()`. Verify: unit tests cover each subject's items and order; that Open project page is absent on that project's page; the filter toggle label and patch; that the sheet item is absent where the page hosts none; that Open session on Live goes to Activity; that Copy working directory is absent without `cwd`; the "Loading…" and "Not available" reasons; and that mute is absent off Errors and for `infra` and `user_denied`.
 
 ## 2. Mark subjects
 
-- [ ] 2.1 [Sonnet] Give `pickRow` a subject-kind argument that sets `data-subject`, and pass the right kind at all 19 call sites. Leave the "Other" and long-tail rows unmarked. Verify: `npm run typecheck` passes, and a test renders one row of each kind and checks `data-subject` and `data-v`.
-- [ ] 2.2 [Sonnet] Mark the subjects outside `pickRow`: `ProjectName` (project), the Errors type rows (category), and the Live rail and wall buttons (session). Verify: tests on Errors and Live find `data-subject` on a type row and on a wall tile, and existing page tests still pass.
+- [x] 2.1 [Sonnet] Give `pickRow` a subject-kind argument that sets `data-subject`, and pass the right kind at all 19 call sites. Leave the "Other" and long-tail rows unmarked. Verify: `npm run typecheck` passes, and a test renders one row of each kind and checks `data-subject` and `data-v`.
+- [x] 2.2 [Sonnet] Mark the subjects outside `pickRow`: `ProjectName` (project), the Errors type rows (category), and the Live rail and wall buttons (session). Verify: tests on Errors and Live find `data-subject` on a type row and on a wall tile, and existing page tests still pass.
 
 ## 3. The menu
 
@@ -28,7 +29,7 @@ Model per task in brackets. The lead integrates, reviews each diff and runs the 
 
 ## 4. Session sheet
 
-- [ ] 4.1 [Sonnet] Show the working directory, when known, and `resumeCommand(...)` at the session sheet's foot next to the id, each with a Copy button and a polite status, per the usage-dashboard delta. Verify: sheet tests cover a Claude Code session with `cwd` and a Codex session without one.
+- [x] 4.1 [Sonnet] Show the working directory, when known, and `resumeCommand(...)` at the session sheet's foot next to the id, each with a Copy button and a polite status, per the usage-dashboard delta. Verify: sheet tests cover a Claude Code session with `cwd` and a Codex session without one.
 
 ## 5. Docs and build
 

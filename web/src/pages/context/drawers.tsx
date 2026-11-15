@@ -23,7 +23,7 @@ export function LargestDrawer({ rows }: { rows: D["fills"]["largest"] }) {
       <div className="hint">Sizes are as the transcript stores them; estimated tokens are the bytes divided by 4. Select a row to open its session.</div>
       <DataTable name="Largest tool results" region="scroll tall">
         <thead><tr><th scope="col">Tool</th><th scope="col">Input</th><th scope="col" className="num">Size</th><th scope="col" className="num">Estimated tokens</th><th scope="col">When</th><th scope="col">Project</th><th scope="col">Session</th></tr></thead>
-        <tbody>{rows.length ? rows.map(r => <tr key={r.id} {...pickRow(r.session_id, openSessionSheet)}>
+        <tbody>{rows.length ? rows.map(r => <tr key={r.id} {...pickRow(r.session_id, openSessionSheet, { kind: "session", value: r.session_id })}>
           <th scope="row" className="name" title={r.mcp_server ? `${r.tool} (MCP server ${r.mcp_server})` : r.tool}>{r.tool}{r.mcp_server && <div className="muted small">{r.mcp_server}</div>}</th>
           <td className="name input" title={r.input}>{r.input ? <code>{r.input}</code> : "–"}</td>
           <td className="num">{bytes(r.bytes)}</td><td className="num"><Est tokens={r.est_tokens} /></td><td className="when">{when(r.ts)}</td>
@@ -45,7 +45,7 @@ export function BreaksDrawer({ cost }: { cost: D["cost"] }) {
         other covers a changed prompt or tool set.{cost.break_sessions > rows.length ? ` Showing the ${num(rows.length)} with the most uncached tokens of ${num(cost.break_sessions)}.` : ""}</div>
       <DataTable name="Sessions where caching broke" region="scroll tall">
         <thead><tr><th scope="col">Session</th><th scope="col">Project</th><th scope="col" className="num">Breaks</th><th scope="col">By cause</th><th scope="col" className="num">Uncached tokens</th><th scope="col" className="num">Their input cost</th></tr></thead>
-        <tbody>{rows.length ? rows.map(r => <tr key={r.session_id} {...pickRow(r.session_id, openSessionSheet)}>
+        <tbody>{rows.length ? rows.map(r => <tr key={r.session_id} {...pickRow(r.session_id, openSessionSheet, { kind: "session", value: r.session_id })}>
           <SessionCell id={r.session_id} title={r.title} row />
           <td className="name"><Proj project={r.project} /><div className="muted small"><SourceName source={r.source} /></div></td>
           <td className="num">{num(r.breaks)}</td><td>{causesText(r)}</td><td className="num">{num(r.uncached_tokens)}</td><td className="num">{usd(r.cost)}</td></tr>)

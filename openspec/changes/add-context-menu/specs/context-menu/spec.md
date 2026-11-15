@@ -34,7 +34,11 @@ The browser's own menu SHALL show for a right-click outside a subject, for a rig
 - **THEN** the browser's menu shows and no app menu opens
 
 ### Requirement: Cover the places that show subjects
-The menu SHALL open on every row, card and name that stands for a subject: the rows of the dashboard tables and drawers, the rows of the project, session and tool sheets, the sessions of the Live rail and wall, the error type rows of Errors, and project names shown with their dot. An "Other" or long-tail row that stands for no single subject SHALL open no menu.
+The menu SHALL open on every row, card and name that stands for a subject: the rows of the dashboard tables and drawers, the rows of the project, session and tool sheets, the sessions of the Live rail and wall, the error type rows of Errors, and project names shown with their dot. A project name inside another subject's row or card SHALL open that subject's menu. An "Other" or long-tail row that stands for no single subject SHALL open no menu.
+
+#### Scenario: Project name inside a session row
+- **WHEN** the user right-clicks the project name shown in a session row or on a Live wall tile
+- **THEN** the session's menu opens, not the project's
 
 #### Scenario: Live wall tile
 - **WHEN** the user right-clicks a session tile on the Live wall

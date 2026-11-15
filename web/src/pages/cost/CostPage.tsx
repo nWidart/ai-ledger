@@ -54,7 +54,7 @@ function SpendLedger({ d, all, onAll }: { d: UsagePayload; all: boolean; onAll: 
       <div className="hint">{bySession ? `Estimated cost per session in ${d.project}${d.totals.cost ? `, as a share of its ${usd(d.totals.cost)}` : ""}. Select one for details.`
         : "Estimated cost per project, as a share of the total. Select a project for details."}</div>
       <Ledger empty="No usage in this range.">{shown.map(r => <LedgerRow key={r.key} name={r.name} title={r.title} share={(r.cost || 0) / total}
-        project={bySession ? undefined : r.key} color={color(bySession ? d.project : r.key)} pickKey={r.key}
+        project={bySession ? undefined : r.key} subject={{ kind: bySession ? "session" : "project", value: r.key }} color={color(bySession ? d.project : r.key)} pickKey={r.key}
         onPick={() => (bySession ? openSessionSheet(r.key) : openProjectSheet(r.key))}
         value={<>{usd(r.cost)}{r.unpriced > 0 && <> <span className="chip warn" title={`${r.unpriced} requests from unpriced models`}>+?<span className="sr">{r.unpriced} requests from unpriced models</span></span></>}</>}
         side={pct((r.cost || 0) / total)} />)}</Ledger>

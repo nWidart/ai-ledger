@@ -114,6 +114,14 @@ const page = async () => {
 };
 
 describe("ErrorsPage", () => {
+  it("marks each type row as a category subject", async () => {
+    history.replaceState(null, "", "/errors?range=0");
+    await page();
+    const rows = [...document.querySelectorAll("#catBody tr[data-c]")];
+    expect(rows.length).toBeGreaterThan(0);
+    for (const r of rows) expect(r.getAttribute("data-subject")).toBe(`category:${r.getAttribute("data-c")}`);
+  });
+
   it("states each type's time lost and ranks open fixes by it", async () => {
     vi.stubGlobal("fetch", vi.fn(() => json(lostPayload)));
     history.replaceState(null, "", "/errors?range=0");

@@ -2,6 +2,7 @@
 import type { MouseEvent } from "react";
 import type { SessionDetail, Source, ToolKind, View } from "../../api";
 import { big, num, pct, plural, usd } from "../../format";
+import { subjectAttrs, type Subject } from "../menu/subject";
 import { formatSearch, navigate, setSearch } from "../../url";
 
 // A session's readable name: the title the server took from its first prompt, else its short id. Remembered so a sheet
@@ -131,10 +132,10 @@ export function nearestIndex(xs: readonly number[], px: number): number {
 }
 
 /** A table row that opens something: a click anywhere on it (not on a link, not while selecting text) runs pick with the
- *  row's button, the keyboard target. */
-export function pickRow(v: string, pick: (v: string, el: HTMLElement) => void, className = "") {
+ *  row's button, the keyboard target. The subject, when given, marks the row for the context menu (none for an empty value). */
+export function pickRow(v: string, pick: (v: string, el: HTMLElement) => void, subject?: Subject, className = "") {
   return {
-    className: "pick" + (className ? " " + className : ""), "data-v": v,
+    className: "pick" + (className ? " " + className : ""), "data-v": v, ...(subject ? subjectAttrs(subject.kind, subject.value) : {}),
     onClick: (e: MouseEvent<HTMLTableRowElement>) => {
       if ((e.target as Element).closest("a") || String(window.getSelection() ?? "")) return;
       pick(v, e.currentTarget.querySelector("button") ?? e.currentTarget);

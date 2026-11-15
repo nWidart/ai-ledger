@@ -140,7 +140,7 @@ export function SessionMap({ map }: { map: SessionsMap }) {
       <ChartTable><DataTable name="Sessions on the map" region="scroll tall">
         <thead><tr><th scope="col">Session</th><th scope="col">Project</th><th scope="col">Agent</th><th scope="col">Started</th><th scope="col" className="num">Starting context</th>
           <th scope="col" className="num">Peak share</th><th scope="col" className="num">Window</th><th scope="col" className="num">Turns</th><th scope="col" className="num">Compactions</th></tr></thead>
-        <tbody>{pts.map(p => <tr key={p.session_id} {...pickRow(p.session_id, v => openSessionSheet(v))}>
+        <tbody>{pts.map(p => <tr key={p.session_id} {...pickRow(p.session_id, v => openSessionSheet(v), { kind: "session", value: p.session_id })}>
           <td><button type="button" className="cellbtn">{shortId(p.session_id)}</button></td><td><Proj project={p.project} /></td><td><SourceName source={p.source} /></td>
           <td>{when(p.first_ts)}</td><td className="num">{short(p.start)}</td><td className="num">{share(p.peak / p.window)}</td><td className="num">{windowLabel(p.window)}</td>
           <td className="num">{num(p.turns)}</td><td className="num">{num(p.compactions)}</td></tr>)}</tbody>

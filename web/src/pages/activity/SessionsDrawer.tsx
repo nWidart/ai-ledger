@@ -94,7 +94,7 @@ export function SessionsDrawer({ view, count, filter, onFilter, sort, onSort, se
         <tbody ref={body} className={stale ? "stale" : undefined} aria-busy={busy || undefined} inert={stale || undefined}>
           {failed ? <tr><td colSpan={COLS} className="empty" role="alert">Could not load sessions ({failed}). <button type="button" className="linkish"
             onClick={() => { void refetch(); search.current?.focus(); }}>Retry</button></td></tr>
-            : rows.length ? rows.map(s => <tr key={s.session_id} {...pickRow(s.session_id, openSessionSheet, s.session_id === selected ? "sel" : "")}>
+            : rows.length ? rows.map(s => <tr key={s.session_id} {...pickRow(s.session_id, openSessionSheet, { kind: "session", value: s.session_id }, s.session_id === selected ? "sel" : "")}>
               <th scope="row" className="when sess"><button type="button" className="cellbtn" title={s.title || s.session_id}>{sessName(s)}</button>
                 <div className="muted small">{when(s.first_ts)}{s.git_branch ? ` · ${s.git_branch}` : ""}{s.title ? ` · ${shortId(s.session_id)}` : ""}</div></th>
               <td className="name"><ProjectName project={s.project} /></td><td className="num opt">{dur(s.duration_s)}</td><td className="num opt">{num(s.prompts)}</td>

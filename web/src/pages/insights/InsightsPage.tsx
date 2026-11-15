@@ -189,7 +189,7 @@ function CoverageDrawer({ d }: { d: InsightsPayload }) {
       <p className="hint">Claude Code sessions of this view that /insights analysed, busiest project first. A project with none analysed has no judgments at all.</p>
       <TopLedger rows={by_project} empty="No Claude Code sessions in this view." noun="projects" row={r => {
         const share = r.sessions ? r.analysed / r.sessions : 0;
-        return <LedgerRow key={r.project} name={r.project} project={r.project} share={share} value={`${num(r.analysed)} of ${num(r.sessions)}`}
+        return <LedgerRow key={r.project} name={r.project} project={r.project} subject={{ kind: "project", value: r.project }} share={share} value={`${num(r.analysed)} of ${num(r.sessions)}`}
           side={r.analysed ? pct(share) : <span className="none">none analysed</span>} />;
       }} />
       <h3>By run</h3>

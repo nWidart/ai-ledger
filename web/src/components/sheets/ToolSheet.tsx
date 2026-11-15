@@ -88,7 +88,7 @@ export function ToolSheet({ kind, name, d, error, retry, onSession, backTo }: To
       <tbody>{d.projects.map(r => <tr key={r.project ?? ""}><th scope="row" className="name"><ProjectName project={r.project} /></th><RateCells r={r} n={r.calls} /></tr>)}</tbody></DataTable></div></div>
     {d.tools && <><h3>Tools</h3><DataTable name="Tools">
       <thead><tr><th scope="col">Tool</th><th scope="col" className="num">Calls</th><th scope="col" className="num">Failed</th><th scope="col" className="num">p50</th></tr></thead>
-      <tbody>{d.tools.length ? d.tools.map(r => <tr key={r.tool} {...pickRow(r.tool, v => openToolSheet("tool", v))}>
+      <tbody>{d.tools.length ? d.tools.map(r => <tr key={r.tool} {...pickRow(r.tool, v => openToolSheet("tool", v), { kind: "tool", value: r.tool })}>
         <th scope="row" className="name"><button type="button" className="cellbtn">{r.tool}</button></th><RateCells r={r} n={r.calls} /><td className="num">{ms(r.p50_ms)}</td></tr>)
         : <None cols={4} />}</tbody></DataTable></>}
     {d.patterns && <><h3>Inputs</h3><DataTable name="Inputs">
@@ -116,7 +116,7 @@ export function ToolSheet({ kind, name, d, error, retry, onSession, backTo }: To
         <a href={err(l.first_id)} onClick={appLink}>Open in Errors</a></div>))}</>}</div>}</div>}
     <h3>Recent calls</h3>
     <DataTable name="Recent calls" className="recent"><thead><tr><th scope="col">Session</th><th scope="col">Project</th><th scope="col">Input</th><th scope="col"><span className="sr">Result</span></th></tr></thead>
-      <tbody>{d.recent.map(c => <tr key={c.id} {...pickRow(c.id, (_, el) => onSession(c.session_id, el))}>
+      <tbody>{d.recent.map(c => <tr key={c.id} {...pickRow(c.id, (_, el) => onSession(c.session_id, el), { kind: "session", value: c.session_id })}>
         <th scope="row" className="when sess"><button type="button" className="cellbtn" title={c.title || c.session_id}>{sessName(c)}</button>
           <div className="muted small">{when(c.ts)}{c.title ? ` · ${shortId(c.session_id)}` : ""}</div></th>
         <td className="name"><ProjectName project={c.project} /></td>

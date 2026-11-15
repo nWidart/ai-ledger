@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { SessionDetail, ToolPayload } from "../../api";
 import session from "../../__fixtures__/session";
 import tool from "../../__fixtures__/tool";
@@ -462,5 +462,54 @@ describe("ToolSheet", () => {
     act(() => history.back());
     await waitFor(() => expect(location.search).toBe("?range=30&session=s1"));
     expect((await screen.findByRole("heading", { level: 2 })).textContent).toBe("Session#s1");
+  });
+});
+
+describe("subject marks and the session sheet's resume line", () => {
+  const copied = () => { const writeText = vi.fn(() => Promise.resolve()); vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } }); return writeText; };
+
+  it("marks a project sheet's session rows, and a tool sheet's recent calls by session, not by call", async () => {
+    mockApi({ "/api/usage": q => ({ ...usage, project: q.get("project") }) });
+    at("?range=30&inspect=foo");
+    renderApp(<UsageSheets data={usage} />);
+    const table = await sheet().findByRole("table", { name: "Most expensive sessions" });
+    for (const row of within(table).getAllByRole("row").slice(1).filter(r => r.getAttribute("data-v"))) expect(row.getAttribute("data-subject")).toBe(`session:${row.getAttribute("data-v")}`);
+    cleanup();
+    mockApi({ "/api/tool": q => ({ ...tool, kind: q.get("kind"), name: q.get("name") }) });
+    at("?range=30&tool=Bash");
+    renderApp(<UsageSheets data={usage} />);
+    const recent = await sheet().findByRole("table", { name: "Recent calls" });
+    const row = recent.querySelector("tr.pick")!;
+    expect(row.getAttribute("data-v")).not.toBe(tool.recent[0]!.session_id);
+    expect(row.getAttribute("data-subject")).toBe(`session:${tool.recent[0]!.session_id}`);
+    const projects = sheet().getByRole("table", { name: "Projects" });
+    expect([...projects.querySelectorAll(".pname[data-subject]")].map(e => e.getAttribute("data-subject"))).toEqual(tool.projects.filter(p => p.project).map(p => `project:${p.project}`));
+  });
+
+  it("shows a Claude Code session's directory and resume command, each with a Copy button", async () => {
+    mockApi({ "/api/session": () => ({ ...session, info: { ...session.info, cwd: "/Users/me/it's" } }) });
+    at("?range=30&session=s1");
+    renderApp(<UsageSheets data={usage} />);
+    await sheet().findByText("$16");
+    expect(sheet().getByText("/Users/me/it's")).toBeTruthy();
+    expect(sheet().getByText("cd '/Users/me/it'\\''s' && claude --resume s1")).toBeTruthy();
+    const writeText = copied();
+    await userEvent.click(sheet().getByRole("button", { name: /^Copy\s*resume$/ }));
+    expect(writeText).toHaveBeenCalledWith("cd '/Users/me/it'\\''s' && claude --resume s1");
+    await waitFor(() => expect(sheet().getByText("Copied to clipboard.").getAttribute("aria-live")).toBe("polite"));
+    await userEvent.click(sheet().getByRole("button", { name: /^Copy\s*directory$/ }));
+    expect(writeText).toHaveBeenLastCalledWith("/Users/me/it's");
+  });
+
+  it("shows a Codex session without a directory as codex resume only, and says when copying failed", async () => {
+    mockApi({ "/api/session": () => ({ ...session, info: { ...session.info, source: "codex", cwd: null } }) });
+    at("?range=30&session=s1");
+    renderApp(<UsageSheets data={usage} />);
+    await sheet().findByText("$16");
+    expect(sheet().getByText("codex resume s1")).toBeTruthy();
+    expect(sheet().queryByText("Directory")).toBeNull();
+    vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText: () => Promise.reject(new Error("denied")) } });
+    await userEvent.click(sheet().getByRole("button", { name: /^Copy/ }));
+    await waitFor(() => expect(sheet().getByText("Could not copy to clipboard.")).toBeTruthy());
   });
 });

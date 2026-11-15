@@ -95,7 +95,7 @@ export function ProjectCostDrawer({ rows, selected, sort, onSort, spot: pin, onS
     (row ?? d).scrollIntoView?.({ behavior: motion() ? "smooth" : "auto", block: row ? "center" : "start" });
     (row?.querySelector("button") ?? d.querySelector<HTMLElement>(".drawer-toggle"))?.focus({ preventScroll: true });
   }, [pin, body]);
-  const row = (p: ProjectRow) => { const cmp = m.big.has(p); return <tr key={p.project ?? ""} {...pickRow(p.project ?? "", v => openProjectSheet(v),
+  const row = (p: ProjectRow) => { const cmp = m.big.has(p); return <tr key={p.project ?? ""} {...pickRow(p.project ?? "", v => openProjectSheet(v), { kind: "project", value: p.project ?? "" },
           [p.project === selected && selected ? "sel" : "", spot === p ? "spot" : ""].filter(Boolean).join(" "))}>
           <th scope="row" className="name"><ProjectName project={p.project}><button type="button" className="cellbtn" title={p.project ?? ""}>{p.project ?? "(no project)"}</button></ProjectName></th>
           <td className="num"><span className="ibar" aria-hidden="true"><i style={{ width: `${Math.max(2, (p.cost || 0) / maxCost * 100)}%`, background: color(p.project) }} /></span>
@@ -161,7 +161,7 @@ export function TopSessionsDrawer({ view, top, day, onDay, selected }: {
         <tbody className={busy ? "stale" : undefined} aria-busy={busy || undefined}>
           {error ? <tr><td colSpan={7} className="empty" role="alert">Could not load sessions ({error.message}). <button type="button" className="linkish"
             onClick={retry}>Retry</button></td></tr>
-            : rows.length ? rows.map(s => <tr key={s.session_id} {...pickRow(s.session_id, openSessionSheet, s.session_id === selected ? "sel" : "")}>
+            : rows.length ? rows.map(s => <tr key={s.session_id} {...pickRow(s.session_id, openSessionSheet, { kind: "session", value: s.session_id }, s.session_id === selected ? "sel" : "")}>
               <th scope="row" className="when sess"><button type="button" className="cellbtn" title={s.title || s.session_id}>{sessName(s)}</button>
                 <div className="muted small">{when(s.first_ts)}{s.git_branch ? ` · ${s.git_branch}` : ""}{s.title ? ` · ${shortId(s.session_id)}` : ""}</div></th>
               <td className="name"><ProjectName project={s.project} /></td><td className="num opt">{dur(s.duration_s)}</td><td className="num opt">{num(s.prompts)}</td>

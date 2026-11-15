@@ -12,6 +12,7 @@ import type { ApiState } from "../../useApi";
 import { share } from "../context/context";
 import { makeModel } from "../errors/model";
 import { sharePct } from "../limits/limits";
+import { subjectAttrs } from "../../components/menu/subject";
 import { ContextGrid } from "./ContextGrid";
 import { MeasureNow } from "./MeasureNow";
 import { contextGrid, errorsBlock, limitsBlock } from "./project";
@@ -89,7 +90,7 @@ export function ErrorsBlock({ errors, scope }: { errors: ApiState<ErrorsPayload>
           <Facts facts={[[num(e.errors), "failed tool calls"], [e.rate == null ? "n/a" : `${num(e.rate, 1)}%`, `error rate, ${num(e.calls)} calls`]]} />
           <DataTable name="Top error types">
             <thead><tr><th scope="col">Type</th><th scope="col" className="num">Errors</th><th scope="col" className="num">Rate</th><th scope="col" className="num">Change {e.cmp}</th></tr></thead>
-            <tbody>{e.types.map(t => <tr key={t.cid}>
+            <tbody>{e.types.map(t => <tr key={t.cid} {...subjectAttrs("category", t.cid)}>
               <th scope="row" className="name"><a href={errorsHref(scope.project, scope.range, undefined, { source: scope.source, cat: t.cid })} onClick={appLink}>{t.label}</a></th>
               <td className="num">{num(t.n)}</td><td className="num">{t.rate == null ? "–" : `${num(t.rate, 2)}%`}</td>
               <td className={"num " + t.delta.cls} title={t.delta.title}>{t.delta.text}</td></tr>)}</tbody>

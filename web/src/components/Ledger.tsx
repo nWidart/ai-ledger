@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { subjectAttrs, type Subject } from "./menu/subject";
 import { ProjectDot } from "./ProjectDot";
 import "./Ledger.css";
 
@@ -20,20 +21,23 @@ export interface LedgerRowProps {
   active?: boolean;
   /** data-v on the row, so a re-rendered page can find the row again. */
   pickKey?: string;
+  /** The subject the row stands for, so the context menu can act on it (none for an empty value). */
+  subject?: Subject;
   /** A button row only: controls after the button in the row's item, never nested in the button. */
   children?: ReactNode;
 }
 
 /** One row of a ledger: name, share bar, value and a side figure. A selectable row is a real button. */
-export function LedgerRow({ name, title, share, value, side, project, color, onPick, active, pickKey, children }: LedgerRowProps) {
+export function LedgerRow({ name, title, share, value, side, project, color, onPick, active, pickKey, subject, children }: LedgerRowProps) {
+  const mark = subject ? subjectAttrs(subject.kind, subject.value) : {};
   const cells = <>
     <span className="n" title={title ?? (typeof name === "string" ? name : undefined)}>{project != null && <ProjectDot project={project} />}{name}</span>
     <span className="bar" aria-hidden="true"><span style={{ width: `${Math.max(share * 100, share > 0 ? 1 : 0)}%`, ...(color ? { background: color } : {}) }} /></span>
     <span className="v">{value}</span><span className="s">{side}</span>
   </>;
   return onPick
-    ? <li className={active ? "pick on" : "pick"} data-v={pickKey}><button type="button" className="rowbtn" aria-pressed={active} onClick={e => onPick(e.currentTarget)}>{cells}</button>{children}</li>
-    : <li className={active ? "on" : undefined} data-v={pickKey}>{cells}</li>;
+    ? <li className={active ? "pick on" : "pick"} data-v={pickKey} {...mark}><button type="button" className="rowbtn" aria-pressed={active} onClick={e => onPick(e.currentTarget)}>{cells}</button>{children}</li>
+    : <li className={active ? "on" : undefined} data-v={pickKey} {...mark}>{cells}</li>;
 }
 
 /** A ranked list of LedgerRows; empty: what to say when there are none. */

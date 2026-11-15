@@ -60,7 +60,7 @@ export function Growth({ d }: { d: D }) {
       {by.length > 1 && <DataTable name="Growth by project">
         <thead><tr><th scope="col">Project</th><th scope="col" className="num">Sessions</th><th scope="col" className="num">Added per prompt</th><th scope="col" className="num">Compacted</th>
           <th scope="col" className="num">Turns to first compaction</th><th scope="col" className="num">Active time to it</th></tr></thead>
-        <tbody>{by.map(p => <tr key={`project:${p.project ?? ""}`} {...(p.project ? pickRow(p.project, v => openProjectSheet(v)) : {})}>
+        <tbody>{by.map(p => <tr key={`project:${p.project ?? ""}`} {...(p.project ? pickRow(p.project, v => openProjectSheet(v), { kind: "project", value: p.project }) : {})}>
           <th scope="row" className="name"><Proj project={p.project} button={!!p.project} /></th><td className="num">{num(p.sessions)}</td><td className="num">{num(p.added_per_prompt)}</td>
           <td className="num">{num(p.compacted)}</td><td className="num">{num(p.turns_to_compaction)}</td>
           <td className="num">{p.minutes_to_compaction == null ? "–" : dur(p.minutes_to_compaction * 60)}</td></tr>)}</tbody>
@@ -89,7 +89,7 @@ function FillTable({ rows, head, kind }: { rows: FillRow[]; head: string; kind: 
   return <DataTable name={`Tool results ${kind === "mcp" ? "by MCP server" : "by tool"}`} region="scroll tall">
     <thead><tr><th scope="col">{head}</th><th scope="col" className="num">Calls</th><th scope="col" className="num">Median</th><th scope="col" className="num">95th percentile</th><th scope="col" className="num">Largest</th><th scope="col" className="num">Total</th>
       <th scope="col" className="num">Estimated tokens</th></tr></thead>
-    <tbody>{rows.map(r => <tr key={r.name} {...pickRow(r.name, v => openToolSheet(kind, v))}>
+    <tbody>{rows.map(r => <tr key={r.name} {...pickRow(r.name, v => openToolSheet(kind, v), { kind, value: r.name })}>
       <th scope="row" className="name"><button type="button" className="cellbtn" title={r.name}>{r.name}</button></th>
       <td className="num">{num(r.calls)}{r.with_bytes < r.calls && <Toggletip term="calls">{num(r.with_bytes)} with a result size</Toggletip>}</td>
       <td className="num">{bytes(r.p50_bytes)}</td><td className="num">{bytes(r.p95_bytes)}</td><td className="num">{bytes(r.max_bytes)}</td><td className="num">{bytes(r.bytes)}</td>
@@ -128,7 +128,7 @@ export function CostSection({ d }: { d: D }) {
         <thead><tr><th scope="col">Project</th><th scope="col" className="num">Estimated cost</th><th scope="col" className="num">Cache reads</th><th scope="col" className="num">Long-prompt tier</th>
           <th scope="col" className="num">Long-tier requests</th><th scope="col" className="num">Cache-hit ratio<Toggletip term="cache-hit ratio">Cache read tokens over all prompt tokens</Toggletip></th></tr></thead>
         <tbody>{rows.map(r => <tr key={r.whole ? "total" : `project:${r.project ?? ""}`} className={r.whole ? "all" : undefined}
-          {...(!r.whole && r.project ? pickRow(r.project, v => openProjectSheet(v)) : {})}>
+          {...(!r.whole && r.project ? pickRow(r.project, v => openProjectSheet(v), { kind: "project", value: r.project }) : {})}>
           <th scope="row" className="name">{r.whole ? "Whole view" : <Proj project={r.project} button={!!r.project} />}</th>
           <td className="num">{usd(r.cost)}</td><td className="num">{usd(r.cache_read_cost)}</td><td className="num">{longCost(r)}</td>
           <td className="num">{num(r.long_requests)}</td><td className="num">{pct(r.cache_hit_ratio)}</td></tr>)}</tbody>

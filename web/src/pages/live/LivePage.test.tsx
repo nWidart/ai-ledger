@@ -217,6 +217,14 @@ describe("LivePage", () => {
     await after([{ ...b, state: sess("b", "you", b.first_ts).state }, c, a], ["your turn · 1 b", "working · 2 a c"]); // only b moves
   });
 
+  it.each([["the rail", "?session=a"], ["the wall", "?view=wall"]])("marks each session button as a session subject, in %s", async (_where, hash) => {
+    show(hash);
+    const el = await (hash === "?view=wall" ? wall() : rail());
+    await waitFor(() => expect(el.querySelector("button[data-session]")).toBeTruthy());
+    const buttons = [...el.querySelectorAll("button[data-session]")];
+    for (const b of buttons) expect(b.getAttribute("data-subject")).toBe(`session:${b.getAttribute("data-session")}`);
+  });
+
   it.each([["the rail", "?session=a"], ["the wall", "?view=wall"]])("keeps the keyboard focus on a session that changes group, in %s", async (_where, hash) => {
     const a = sess("a", "tool", "2026-11-10T09:00:00.000Z"), b = sess("b", "tool", "2026-11-10T09:30:00.000Z"), turn = sess("b", "you", b.first_ts);
     const o = { list: { ...list, sessions: [a, b] } };
