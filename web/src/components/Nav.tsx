@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
-import { navigate, setSearch, sharedSearch, useSearchOf, usePathname } from "../url";
+import { Link } from "@tanstack/react-router";
+import { navigate, parseSearch, setSearch, sharedSearch, useSearchOf, usePathname } from "../url";
 import { getTheme, nextTheme, setTheme, useTheme, type Theme } from "../theme";
 import { alertKey, alertText } from "../pages/limits/limits";
 import { ProjectDot } from "./ProjectDot";
@@ -47,6 +48,8 @@ export function Nav() {
     return () => ro.disconnect();
   }, []);
 
+  // A plain click goes through navigate (url.ts holds the app's rules for a page switch); Link skips its own navigation
+  // when the event is default-prevented. A modified click is the browser's.
   const go = (e: MouseEvent<HTMLAnchorElement>, to: string) => {
     if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     e.preventDefault();
@@ -75,12 +78,14 @@ export function Nav() {
             // Color is never the only signal.
             const badge = p.path === "/limits" && alert;
             return (
-              <a key={p.path} href={p.path + shared} aria-current={p.path === path ? "page" : undefined} onClick={e => go(e, p.path)}>
+              // Link gives the tab its href and the preload on intent. The tab is current by path alone (includeSearch: false), as
+              // before, and activeProps={{}} drops the "active" class Link would add.
+              <Link key={p.path} to={p.path} search={parseSearch(shared) as never} activeOptions={{ includeSearch: false }} activeProps={{}} onClick={e => go(e, p.path)}>
                 {badge ? <>
                   <span title={badge}>{p.label}<span className="appnav-badge" data-tone={st.alert!.kind === "high" ? "warning" : "critical"} aria-hidden="true" /></span>
                   {" "}<span className="sr">alert: {badge}</span>
                 </> : p.label}
-              </a>
+              </Link>
             );
           })}
         </span>

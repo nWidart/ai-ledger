@@ -23,6 +23,7 @@ Run `ai-ledger rebuild` once after upgrading (with the app stopped): the Context
 - Windows high contrast and other forced-colors modes keep pressed, selected and current states and data bars visible.
 - Switching pages crossfades, in browsers with view transitions and unless reduced motion is on. Back and Forward return a page to where it was scrolled.
 - A page that loads for the first time shows gray placeholder blocks instead of an empty page.
+- Pointing at or focusing a page's tab starts loading that page and its data, so it opens sooner. Opening a URL starts the page's data with its code instead of after it.
 
 ### Changed
 

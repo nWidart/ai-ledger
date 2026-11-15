@@ -146,6 +146,8 @@ Alternative considered: search middleware on each route for the dropped day and 
 
 In phase 1 the navigation's tabs stay plain anchors that call `go(href)`, as before; they become `<Link>` in phase 4, where preloading needs it. Then the tabs are `<Link to={path} search={sharedOf(search)}>`: a real `href`, modified clicks left to the browser, `aria-current="page"` from `activeProps`, preload on intent (decision 11). Links whose `href` comes from data (a session's link to Activity, the Limits link to Cost) keep their builders over `formatSearch` and navigate with `router.navigate({ href })` in the existing `plain(e)` click handlers.
 
+As built: the tabs are `<Link>` for the `href` and the preload, but a plain click still goes through `go(href)`: the tab's `onClick` prevents the default and `Link` then skips its own navigation. `go` holds the rules a page switch needs (scroll to the top only on a path change, the flushed history write, and `onNavigate`, which the Errors page depends on). `aria-current` is set by path alone, as before (`activeOptions={{ includeSearch: false }}`, no active class). `Link` adds `data-status="active"` to the current tab; nothing reads it.
+
 ### 9. View transitions, on a page change only
 
 ```ts
@@ -174,6 +176,13 @@ loader: ({ context, deps }) => { void context.queryClient.prefetchQuery(queries.
 Pointing at a tab loads the page's chunk and puts its payload in the Query cache; the page then mounts on data already there or in flight, and Query deduplicates the page's own `useQuery` onto it. The loader returns nothing and is not awaited, so navigation never waits for data and the pages keep their own loading states. Live has no loader: its queries are driven by the event stream and its pause rules. This needs `queries.ts` from `adopt-tanstack` phase 2.
 
 Errors preloads its data too (the user left the choice to what serves the experience best, 2026-11-15). Its payload is the largest, but it has one query key for every filter (`["errors"]`) and is never stale until an ingest stores something, so pointing at the tab costs at most one request per ingest: the request the page would make on opening, made earlier. Preloading only its code would leave the app's slowest page as the one page that still opens on a wait.
+
+As built:
+
+- The loader's deps are the four view fields of the query key, read through the validators (`parseView`), so a sheet, a page-only key, or the automated toggle on Limits does not run it again. Cost starts Activity's query (`queries.usage`): the two pages share the payload.
+- A loader also runs when a URL is opened, so the page's data request starts with its code instead of after it. In Chrome on a cold open of Cost, the chunk and `/api/usage` were requested 1 ms apart.
+- A URL write that keeps the view does not run the loader again, so a page showing a failure and Retry is not asked again behind its back (a test pins this).
+- The test harness's router for components rendered outside their route (`renderApp`) is built without loaders (`makeRouter({ loaders: false })`): those tests set any path, and a loader would fetch the data of a page that is not shown. `renderRouter`, the whole app, keeps them.
 
 Alternative considered: awaited loaders with `pendingComponent`. Rejected: it would replace the specified landing and loading behaviour with Router's.
 

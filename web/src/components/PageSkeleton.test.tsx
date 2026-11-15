@@ -31,9 +31,16 @@ describe("PageSkeleton", () => {
   });
 
   it("marks the content area busy while loading, and no longer once the data shows", async () => {
+    // The route's loader starts the data with the page's code, so the page can mount with its data already there; hold the
+    // answer back to see it loading.
+    let answer!: () => void;
+    const held = new Promise<void>(r => { answer = r; });
     mockApi({ "/api/usage": () => usage, "/api/status": () => status });
+    const answered = vi.mocked(fetch).getMockImplementation()!;
+    vi.mocked(fetch).mockImplementation((input, init) => String(input).startsWith("/api/usage") ? held.then(() => answered(input, init)) : answered(input, init));
     await open("/usage?range=30", "pg-activity");
     expect(main("pg-activity")!.getAttribute("aria-busy")).toBe("true");
+    answer();
     await screen.findByRole("heading", { level: 1, name: /requests|prompts|tool calls|sessions/i });
     expect(main("pg-activity")!.hasAttribute("aria-busy")).toBe(false);
   });

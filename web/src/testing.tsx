@@ -27,11 +27,13 @@ const track = (router: Router, off?: () => void) => { stops.push(() => { off?.()
 
 /** The router a client's components read the URL from. A component under test is not a route, so it is given the router
  *  alone, without the route tree's rendering: it shows at once, with no wait for a route to load. The router still follows
- *  every history change, as RouterProvider makes it do, so the old-hash redirect runs. */
+ *  every history change, as RouterProvider makes it do, so the old-hash redirect runs. Its routes have no loaders: a test
+ *  sets whatever path it likes, often not the page's own, and a loader would fetch the data of a page that is not shown and
+ *  upset the tests' request counts. renderRouter, the whole app, keeps them. */
 export function routerOf(client: QueryClient): Router {
   const had = routers.get(client);
   if (had) { bindRouter(had); return had; }
-  const router = makeRouter({ queryClient: client });
+  const router = makeRouter({ queryClient: client, loaders: false });
   routers.set(client, router);
   void router.load();
   return track(router, router.history.subscribe(() => { void router.load(); }));
