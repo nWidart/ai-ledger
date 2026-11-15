@@ -22,6 +22,10 @@
 :is(.pg-activity, .pg-cost, .pg-limits, .pg-insights, .pg-context, .pg-project, dialog.sheet) :is(td, th).sess { max-width: 340px; }
 :is(.pg-activity, .pg-cost, .pg-limits, .pg-insights, .pg-context, .pg-project, dialog.sheet) :is(td, th).sess .cellbtn { display: block; width: 100%; font-weight: 500; }
 dialog.sheet table.recent :is(td, th).sess { max-width: 160px; } /* a long title must not squeeze the Input column */
+dialog.sheet.wide table.recent :is(td, th).sess { max-width: 340px; } /* room for the Input column at 1100px */
+/* two sections side by side when the sheet is wide, stacked when narrow; min-width 0 lets tables scroll inside */
+dialog.sheet .pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(380px, 100%), 1fr)); gap: 0 32px; align-items: start; }
+dialog.sheet .pair > * { min-width: 0; }
 :is(.pg-activity, .pg-cost, .pg-limits, .pg-insights, .pg-context, .pg-project, dialog.sheet) tbody tr.pick { cursor: pointer; }
 :is(.pg-activity, .pg-cost, .pg-limits, .pg-insights, .pg-context, .pg-project, dialog.sheet) tbody tr.pick:hover { background: var(--surface-2); }
 :is(.pg-activity, .pg-cost, .pg-limits, .pg-insights, .pg-context, .pg-project, dialog.sheet) tbody tr.sel { background: var(--accent-soft); }

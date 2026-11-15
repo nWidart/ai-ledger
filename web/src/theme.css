@@ -125,6 +125,7 @@ label.chk input, input[type=checkbox], input[type=radio] { accent-color: var(--a
 dialog.sheet { inset: 0 0 0 auto; margin: 0; width: min(640px, 100%); max-width: 100%; height: 100dvh; max-height: 100dvh;
   padding: 0; border: 0; border-left: 1px solid var(--border); color: var(--text-primary);
   overflow: auto; overscroll-behavior: contain; box-shadow: var(--shadow-sheet); }
+dialog.sheet.wide { width: min(1100px, 100%); }
 dialog.sheet::backdrop { background: var(--scrim); }
 
 /* errors page */
@@ -161,7 +162,7 @@ dialog.sheet::backdrop { background: var(--scrim); }
     .appnav a[aria-current=page],
     :is(.pg-activity, .pg-cost, .pg-insights, .pg-context) .secidx a[aria-current=true],
     .pal-opt[aria-selected=true],
-    dialog.sheet .evbtn[aria-pressed=true],
+    dialog.sheet .evbtn[aria-pressed=true], dialog.sheet .sheet-wide[aria-pressed=true],
     .pg-live .stream-filters button[aria-pressed=true], .pg-live .kv .fig[aria-pressed=true],
     .pg-live .rail li button[aria-current=true],
     .pg-errors .legend button[aria-pressed=true],

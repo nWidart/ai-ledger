@@ -86,7 +86,7 @@ export function timelineModel(s: SessionDetail, width: number): TimelineModel | 
   const ct = (t: number) => t - start - raw.reduce((n, g) => n + (g.b <= t ? g.b - g.a - keep : 0), 0);
   const total = ct(end) || 1;
   const W = Math.max(300, width);
-  const m = { l: 40, r: 8, t: 14 }, ph = 130, iw = W - m.l - m.r, pb = m.t + ph, sy = pb + 10, sh = 22, H = sy + sh + 20;
+  const m = { l: 40, r: 8, t: 14 }, ph = W >= 900 ? 180 : 130, iw = W - m.l - m.r, pb = m.t + ph, sy = pb + 10, sh = 22, H = sy + sh + 20;
   const x = (t: number) => m.l + ct(t) / total * iw;
   const maxC = Math.max(...reqs.map(r => r.context), 1);
   const yMax = limit && maxC >= .5 * limit ? limit * 1.02 : maxC * 1.15;

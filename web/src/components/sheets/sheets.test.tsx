@@ -8,7 +8,7 @@ import toolMcp from "../../__fixtures__/tool-mcp";
 import toolSkill from "../../__fixtures__/tool-skill";
 import usage from "../../__fixtures__/usage";
 import usageAll from "../../__fixtures__/usage-all";
-import { EV_TOP } from "./session";
+import { EV_TOP, timelineModel } from "./session";
 import { mockApi } from "./testing";
 import { UsageSheets } from "./UsageSheets";
 import { renderApp } from "../../testing";
@@ -17,6 +17,15 @@ const at = (hash: string) => history.replaceState(null, "", "/usage" + hash);
 const sheet = () => within(document.querySelector("dialog")!);
 
 describe("SessionSheet", () => {
+  it("pairs the Models and Tools details", async () => {
+    mockApi({ "/api/session": () => session });
+    at("?range=30&session=s1");
+    renderApp(<UsageSheets data={usage} />);
+    await sheet().findByText("$16");
+    const pair = document.querySelector("dialog .pair")!;
+    expect([...pair.querySelectorAll("summary")].map(x => x.firstChild!.textContent)).toEqual(["Models", "Tools"]);
+  });
+
   it("shows the session with its timeline, events and error-loop link to Errors", async () => {
     mockApi({ "/api/session": q => (q.get("id") === "s1" ? session : undefined) });
     at("?range=30&session=s1");
@@ -294,8 +303,43 @@ describe("sheet tables", () => {
   });
 });
 
+describe("timelineModel", () => {
+  it("plots 130 high below 900 wide and 180 from 900", () => {
+    const n = timelineModel(session, 600)!, w = timelineModel(session, 900)!;
+    expect([n.ph, w.ph]).toEqual([130, 180]);
+    expect([n.pb, w.pb]).toEqual([144, 194]);
+    expect(w.H - n.H).toBe(50);
+  });
+});
+
 describe("ToolSheet", () => {
   const serve = (d: ToolPayload = tool) => mockApi({ "/api/tool": q => ({ ...d, kind: q.get("kind"), name: q.get("name"), source: q.get("source") ?? "" }), "/api/session": () => session });
+  const heads = (el: Element) => [...el.querySelectorAll("h3")].map(h => h.textContent);
+  const pairs = () => [...document.querySelectorAll("dialog .pair")];
+
+  it("pairs Calls per day with Where, and Failures by type with After a failure", async () => {
+    serve({ ...tool, recovery: { ...tool.recovery, incidents: 3 } });
+    at("?range=30&tool=Bash");
+    renderApp(<UsageSheets data={usage} />);
+    await sheet().findByText("12.1%");
+    const [a, b] = pairs();
+    expect(heads(a!)).toEqual(["Calls per day", "Where"]);
+    expect(heads(b!).slice(0, 2)).toEqual(["Failures by type", "After a failure"]);
+    expect(pairs()).toHaveLength(2);
+  });
+
+  it("gives a lone failure section the whole width, and renders no pair for none", async () => {
+    serve({ ...tool, recovery: { ...tool.recovery, incidents: 0 }, error_loops: [] });
+    at("?range=30&tool=Bash");
+    renderApp(<UsageSheets data={usage} />);
+    await sheet().findByText("12.1%");
+    expect(pairs()[1]!.children).toHaveLength(1);
+    cleanup();
+    serve({ ...tool, categories: [], recovery: { ...tool.recovery, incidents: 0 }, error_loops: [] });
+    renderApp(<UsageSheets data={usage} />);
+    await sheet().findByText("12.1%");
+    expect(pairs()).toHaveLength(1);
+  });
 
   it("leads with calls and failures against the previous period, and groups inputs", async () => {
     const f = serve();
