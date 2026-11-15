@@ -30,21 +30,21 @@ Each group lists the model it suits. Groups 2 and 3 can run in parallel: they to
 
 ## 6. One row and the page chooser (Opus, Fable 5.2 if focus or layout bugs persist after one attempt)
 
-- [ ] 6.1 Extract the tab links into a shared `PageLinks` that renders the same `Link`s, with preload, `go()`, the Limits dot and its hidden alert text, for both the tabs and the chooser. Verify that the existing tab, preload and alert tests pass unchanged.
-- [ ] 6.2 Add the page chooser: a Base UI `Popover`, disclosure semantics, a trigger named for the current page or "Pages", with "Limits alert" and the dot while an alert is present. Close without returning focus on a link pick, return focus on Escape, and overlay without changing the nav's height. Verify with tests for:
+- [x] 6.1 Extract the tab links into a shared `PageLinks` that renders the same `Link`s, with preload, `go()`, the Limits dot and its hidden alert text, for both the tabs and the chooser. Verify that the existing tab, preload and alert tests pass unchanged.
+- [x] 6.2 Add the page chooser: a Base UI `Popover`, disclosure semantics, a trigger named for the current page or "Pages", with "Limits alert" and the dot while an alert is present. Close without returning focus on a link pick, return focus on Escape, and overlay without changing the nav's height. Verify with tests for:
   - a keyboard pick landing focus on `#lede`;
   - Escape returning focus to the trigger;
   - a Cmd-click leaving the page as it is;
   - "Pages" and no current link on `/project`;
   - the dot and the trigger name with an alert;
   - `--appnav-h` unchanged when the chooser opens.
-- [ ] 6.3 Replace the phone `@media` block with the `rem` steps: wordmark, Search to icon, tab padding, then the chooser with the time hidden. Set `.appnav-in` to `flex-wrap: nowrap`. Measure the real bar against a copy of the store at 1280, 1000, 800, 640, 390 and 320px, at 100% and 200% zoom, and set the breakpoints from those measurements. Verify that the bar is one row with no sideways scroll at every width measured, and that a test asserts `nowrap`.
+- [x] 6.3 Replace the phone `@media` block with the `rem` steps: wordmark, Search to icon, tab padding, then the chooser with the time hidden. Set `.appnav-in` to `flex-wrap: nowrap`. Measure the real bar against a copy of the store at 1280, 1000, 800, 640, 390 and 320px, at 100% and 200% zoom, and set the breakpoints from those measurements. Verify that the bar is one row with no sideways scroll at every width measured, and that a test asserts `nowrap`.
 
 ## 7. Docs, fixtures and build (Sonnet)
 
 - [ ] 7.1 Update `README.md`: navigation, freshness control and Project page link. Re-record the README GIFs with `tools/demo/`. Verify that the README describes the new bar and that the GIFs show it.
-- [ ] 7.2 Add the user-visible changes to `[Unreleased]` in `CHANGELOG.md`. Verify that the entry names the moved project link, the freshness control, the page chooser and the Search scope.
-- [ ] 7.3 Regenerate the page-test fixtures if any payload moved (none expected): `uv run python -m unittest tests.test_web_fixtures`. Rebuild and commit `src/ai_ledger/web/`. Verify that `uv run python -m unittest tests.test_web_build` passes.
+- [x] 7.2 Add the user-visible changes to `[Unreleased]` in `CHANGELOG.md`. Verify that the entry names the moved project link, the freshness control, the page chooser and the Search scope.
+- [x] 7.3 Regenerate the page-test fixtures if any payload moved (none expected): `uv run python -m unittest tests.test_web_fixtures`. Rebuild and commit `src/ai_ledger/web/`. Verify that `uv run python -m unittest tests.test_web_build` passes.
 
 ## 8. Integration (lead)
 

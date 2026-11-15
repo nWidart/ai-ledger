@@ -184,15 +184,15 @@ The freshness control SHALL say "Failed" after an ingest error, "Offline" when t
 - **THEN** the freshness control says "Offline"
 
 ### Requirement: Show new lines briefly
-When a status answer or a manual refresh tells of an ingest that stored new lines, the freshness control SHALL show "+N lines" beside the time for about four seconds. It SHALL be hidden from assistive technology and SHALL NOT animate when the user prefers reduced motion.
+When a status answer or a manual refresh tells of an ingest that stored new lines, the freshness control SHALL show "+N lines" just below it for about four seconds, at every width, without taking room in the navigation or moving any control. It SHALL be hidden from assistive technology and SHALL NOT animate when the user prefers reduced motion.
 
 #### Scenario: Background ingest
 - **WHEN** a status poll tells of an ingest that stored 5 lines
-- **THEN** "+5 lines" shows beside the time, then goes after about four seconds
+- **THEN** "+5 lines" shows below the freshness control, then goes after about four seconds
 
 #### Scenario: Nothing new
 - **WHEN** a status poll tells of an ingest that stored no lines
-- **THEN** nothing shows beside the time
+- **THEN** nothing shows below the freshness control
 
 ### Requirement: Announce only the results of a manual refresh
 The navigation SHALL NOT announce timed ingests or a change of the last ingest time to assistive technology. It SHALL announce the result of a manual refresh, success or failure, once, in a polite status region. This region SHALL be separate from the limits alert's region.

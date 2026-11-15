@@ -70,8 +70,14 @@
 .appnav-fresh .appnav-state { border-left: 1px solid var(--fresh-line); border-radius: 0 7px 7px 0; padding: 4px 8px; cursor: pointer;
   font-size: .75rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .appnav-caret { flex: none; width: .625rem; height: .625rem; opacity: .8; }
-/* "+N lines" for a moment after an ingest that stored lines: --good-text on --good-soft clears 4.5:1 in both themes. */
-.appnav-flash { color: var(--good-text); background: var(--good-soft); border-radius: 999px; padding: 0 7px; font-size: .75rem; font-weight: 500; }
+/* "+N lines" for a moment after an ingest that stored lines. It floats just below the freshness control, out of the flow, so it
+   takes no room in the row and moves nothing when it comes or goes; at every width. Above the page (inside the nav's stacking
+   context, z-index 5), below the popups (40). Its tint is laid on the bar's surface, so the page under it does not show through:
+   --good-text on --good-soft over --surface-1 clears 4.5:1 in both themes. */
+.appnav-fresh { position: relative; }
+.appnav-flash { position: absolute; top: calc(100% + 4px); right: 0; z-index: 1; pointer-events: none; white-space: nowrap;
+  color: var(--good-text); background: linear-gradient(var(--good-soft), var(--good-soft)) var(--surface-1); border: 1px solid var(--border);
+  border-radius: 999px; box-shadow: var(--shadow-pop); padding: 1px 8px; font-size: .75rem; font-weight: 500; line-height: 1.4; }
 @media (prefers-reduced-motion: no-preference) {
   .appnav-flash { animation: appnav-flash-in .2s ease-out; }
 }
@@ -91,29 +97,29 @@
 }
 /* The steps, widest first, each taking room away so the bar stays one row: the wordmark goes; the palette button keeps its icon
    (and the project's dot); the tabs tighten; then the page chooser takes the tabs' place. Each width is what the wider step needs,
-   measured with a long project name and the widest freshness state (the time with a "+12,345 lines" flash), plus 16px to spare and
-   17px for a desktop scrollbar. They are in em, the browser's text size, so a larger text size steps down sooner, as a narrower
-   window does. */
-@media (max-width: 67.5em) {
+   measured with a long project name and the widest freshness state ("Stale" with its time; the flash floats and takes no room),
+   plus 16px to spare and 17px for a desktop scrollbar. They are in em, the browser's text size, so a larger text size steps down
+   sooner, as a narrower window does. */
+@media (max-width: 64em) {
   .appnav-word { display: none; }
   .appnav-brand { margin-right: 4px; }
 }
-@media (max-width: 62.5em) {
+@media (max-width: 59.5em) {
   .appnav-palette .lbl, .appnav-scope b, .appnav-palette kbd { display: none; }
 }
-@media (max-width: 53.5em) {
+@media (max-width: 50.5em) {
   .appnav a { padding: 5px 7px; }
 }
-/* Phones: the page chooser and one row of 36px targets. The freshness control keeps both halves: the time and the flash go, the
+/* Phones: the page chooser and one row of 36px targets. The freshness control keeps both halves: the time goes, the
    toggletip button keeps its caret and shows the same details; Failed, Offline, Stale and Retry stay in words. */
-@media (max-width: 51em) {
+@media (max-width: 47.5em) {
   .appnav-tabs { display: none; }
   .appnav .appnav-chooser { display: inline-flex; }
   .appnav-in { padding: 6px 12px; gap: 4px; }
   .appnav-brand { margin-right: 2px; }
   .appnav .appnav-chooser { min-height: 36px; }
   .appnav .appnav-palette, #navRefresh, .appnav-fresh .appnav-state, #navTheme { min-width: 36px; min-height: 36px; padding: 0; justify-content: center; }
-  .appnav-flash, .appnav-fresh:not([data-kind=failed], [data-kind=offline], [data-kind=stale]) .appnav-time, .appnav-at { display: none; }
+  .appnav-fresh:not([data-kind=failed], [data-kind=offline], [data-kind=stale]) .appnav-time, .appnav-at { display: none; }
   #navRefresh:has(.lbl), .appnav-fresh:is([data-kind=failed], [data-kind=offline], [data-kind=stale]) .appnav-state { padding: 0 8px; }
 }
 /* The narrowest phones: the logo goes and the targets tighten. */

@@ -12,7 +12,7 @@ The shared navigation does three jobs at once: it moves between pages, it shows 
   - The left half is Refresh, with the same id, name, Retry state and busy behavior as today.
   - The right half is a toggletip that shows the time of the last ingest as a clock time ("8:00 PM"), not as an age. It opens the details: exact time, new lines, last data change, the interval, and the full error.
   - The control says "Stale" when the last ingest is older than three intervals, "Failed" after an ingest error, and "Offline" when the app does not answer.
-  - "+N lines" shows beside the time for a few seconds after an ingest stores new lines.
+  - "+N lines" shows just below the control for a few seconds after an ingest stores new lines.
 - **The ingest time leaves the live region.** Timed ingests are no longer announced. Only the result of a manual refresh is.
 - **One row at every width.** Narrower windows hide the wordmark, shrink Search to its icon and tighten the tabs. Below a breakpoint set in `rem`, a page chooser replaces the tabs. It is a button naming the current page ("Pages" on the Project page) that opens a list of the same page links, and it carries the Limits alert dot. No tab ever moves into a "More" menu.
 

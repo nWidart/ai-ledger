@@ -75,6 +75,8 @@ Alternatives considered:
 
 A small piece of state in the nav: `{ n, until }`, set when `noteStatus` sees a new `last_change`, or a manual refresh's answer stored lines. `n` is `last_stats.inserted`. A 4s timeout clears it. It is `aria-hidden`. Its fade-in is wrapped in `@media (prefers-reduced-motion: no-preference)`.
 
+The flash floats. It is absolutely positioned against the freshness control and hangs just below it, with `pointer-events: none`, a border and a shadow so it reads over the page. It sits above the page, inside the nav's stacking context, and below the popups. It takes no room in the row, so it moves nothing when it comes or goes, and it does not count toward the breakpoints. It shows at every width, phones included. Its tint is laid over `--surface-1`, so the page does not show through it.
+
 To keep components out of `noteStatus`, the flash state lives in the same per-client `WeakMap` as `seen`. It is exposed through a tiny subscribe and get pair, the same way the refresh observer is shared.
 
 ### 5. Live regions
@@ -86,14 +88,19 @@ To keep components out of `noteStatus`, the flash state lives in the same per-cl
 
 ### 6. Narrow layouts with CSS steps, page chooser with Base UI `Popover`
 
-Breakpoints are written in `em`, as `respect-text-size` left the existing ones (`32.5em`, `22.5em`). In a media query, `em` is the browser's default font size, so a larger default text size triggers them too. Values are set by measuring the real bar after implementation. The estimates are:
+Breakpoints are written in `em`, as `respect-text-size` left the existing ones (`32.5em`, `22.5em`). In a media query, `em` is the browser's default font size, so a larger default text size triggers them too.
 
-| Width | Step |
-|---|---|
-| ≤ 60em | Hide the wordmark. |
-| ≤ 52em | The palette button shows its icon only, plus the dot. |
-| ≤ 46em | Tab padding 10px → 7px. |
-| ≤ 38em | Hide the tabs and show the page chooser. Hide the time text in the freshness control. |
+The values come from measuring the real bar against the synthetic demo store. Each breakpoint is the width the wider step needs in its worst case, plus 16px to spare and 17px for a desktop scrollbar, rounded up to 0.5em. The worst case is a long project name in the palette button and the freshness control saying "Stale" with its time. The floating flash takes no room.
+
+| Width | Step | Worst case the wider step needs |
+|---|---|---|
+| ≤ 64em (1024px) | Hide the wordmark. | 990px |
+| ≤ 59.5em (952px) | The palette button shows its icon only, plus the dot. | 914px |
+| ≤ 50.5em (808px) | Tab padding 10px → 7px. | 769px |
+| ≤ 47.5em (760px) | Hide the tabs and show the page chooser. Hide the time text in the freshness control; Failed, Offline, Stale and Retry keep their words. Targets are 36px. | 727px |
+| ≤ 22.5em (360px) | Hide the logo (unchanged). | 336px (Retry, with "Insights" on the chooser) |
+
+A sweep of every width from 1400px down to 300px, in the normal, flash, Stale and Retry states, with and without a long project name, found the bar on one row with nothing overflowing it at every width. The flash stays inside the viewport and is not clipped.
 
 The page chooser:
 
