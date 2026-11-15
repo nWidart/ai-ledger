@@ -5,9 +5,12 @@ uv run tools/demo/replay.py    in another terminal: plays synthetic sessions int
 """
 import os
 
-from ai_ledger import app, store
+from ai_ledger import app, metrics, store
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+# The user files sit next to the store, as app.main sets them: here, beside demo.duckdb, so the real data folder's
+# prices.json and automated.json never reach the demo pages or the screenshots.
+metrics.USER_PRICES, metrics.USER_AUTOMATED = os.path.join(HERE, "prices.json"), os.path.join(HERE, "automated.json")
 
 LIVE = os.path.join(HERE, "live")  # replay.py's transcript root; never a real one
 os.makedirs(os.path.join(LIVE, "claude"), exist_ok=True)

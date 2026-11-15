@@ -71,7 +71,7 @@ Page behavior is specified in `openspec/specs/`. Plan each feature as an OpenSpe
 
 When user-visible behavior changes:
 
-- Update `README.md` or `docs/guide.md`.
+- Update `README.md` or the docs site in `site/`.
 - Add the change to the `[Unreleased]` section of `CHANGELOG.md`.
 
 ## Demo GIFs

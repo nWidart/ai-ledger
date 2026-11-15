@@ -1,0 +1,6 @@
+node_modules/
+dist/
+.astro/
+# Written by scripts/sync.mjs from ../CHANGELOG.md and ../docs/*.gif
+src/content/docs/changelog.md
+public/media/

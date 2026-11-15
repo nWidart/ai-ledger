@@ -32,6 +32,7 @@ Your goal is to complete the entire specification with maximum quality while min
 - `uv run ruff check` — lint Python.
 - `uv run python -m unittest discover -s tests` — Python tests.
 - `cd web && npm run check` — typecheck, lint (oxlint; warnings do not fail it), web tests and build. Run it before committing any `web/src` change.
+- `cd site && npm run check` — typecheck and build the docs site. Run it before committing any `site/` change.
 - `openspec validate --specs --strict` — validate the specs; CI runs it. Run it after any change under `openspec/specs/`.
 - `uv run ai-ledger rebuild` — regenerate derived tables after a parser or `categorize.py` change.
 
@@ -45,6 +46,7 @@ Your goal is to complete the entire specification with maximum quality while min
 - Plan features as OpenSpec changes in `openspec/changes/`; current specs live in `openspec/specs/`.
 - Give each OpenSpec change its own git worktree, on its own branch from `main`. Propose, apply and archive the change in that worktree, never in the main checkout or another change's branch. After archiving, remove the worktree.
 - Update `README.md` when user-visible behavior changes.
+- Update the docs site (`site/`) when user-visible behavior changes. Write its content with the `doc-coauthoring` skill.
 - Add user-visible changes to the `[Unreleased]` section of `CHANGELOG.md`.
 - Release: run the Release PR workflow on `main` (`gh workflow run release-pr.yml`; `-f bump=patch|minor|major` overrides the bump it picks). It opens a `release/v<version>` PR that sets the version and dates the `[Unreleased]` section; edit the notes on that branch if needed. Merging it runs `.github/workflows/release.yml`, which checks and smoke-tests the merge commit, then tags it, publishes to PyPI and creates the GitHub release. Never tag or publish by hand; to retry after a fix on `main`, run `gh workflow run release.yml -f tag=v<version>`. The workflow needs the `RELEASE_TOKEN` secret.
 

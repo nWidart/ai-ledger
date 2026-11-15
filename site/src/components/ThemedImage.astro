@@ -1,0 +1,66 @@
+---
+// One image in a dark and a light variant, shown by Starlight's theme (design D10).
+// Hidden variants are display: none, so a screen reader announces one alt.
+//
+// - Screenshot: <ThemedImage dark={shot} light={shotLight} alt="…" />, PNGs from src/assets/shots/.
+// - GIF: <ThemedImage gif="tour" alt="…" />, public/media/tour.gif and tour-light.gif (copied by
+//   scripts/sync.mjs). Add dark and light stills to show them in place of the GIF under reduced motion.
+import type { ImageMetadata } from "astro";
+import { Image } from "astro:assets";
+
+interface Props {
+  alt: string;
+  gif?: string;
+  dark?: ImageMetadata;
+  light?: ImageMetadata;
+  width?: number;
+  height?: number;
+}
+
+const { alt, gif, dark, light, width = dark?.width, height = dark?.height } = Astro.props;
+if (!gif && !(dark && light)) throw new Error("ThemedImage needs gif, or both dark and light");
+if (Boolean(dark) !== Boolean(light)) throw new Error("ThemedImage needs both dark and light, or neither");
+
+const media = `${import.meta.env.BASE_URL.replace(/\/$/, "")}/media/`;
+// With a GIF, the screenshots are its reduced-motion stills.
+const still = gif ? "still" : undefined;
+---
+
+<span class="themed-image">
+  {
+    gif && (
+      <>
+        <img class="dark motion" src={`${media}${gif}.gif`} alt={alt} width={width} height={height} loading="lazy" />
+        <img class="light motion" src={`${media}${gif}-light.gif`} alt={alt} width={width} height={height} loading="lazy" />
+      </>
+    )
+  }
+  {dark && <Image class:list={["dark", still]} src={dark} alt={alt} loading="lazy" />}
+  {light && <Image class:list={["light", still]} src={light} alt={alt} loading="lazy" />}
+</span>
+
+<style>
+  .themed-image {
+    display: block;
+  }
+  .themed-image img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+  }
+  :global(:root[data-theme="light"]) .dark,
+  :global(:root:not([data-theme="light"])) .light {
+    display: none;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .still {
+      display: none;
+    }
+  }
+  /* Keep the GIF when it has no still yet. */
+  @media (prefers-reduced-motion: reduce) {
+    .themed-image:has(.still) .motion {
+      display: none;
+    }
+  }
+</style>

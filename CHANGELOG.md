@@ -5,6 +5,10 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Documentation site at https://nwidart.github.io/ai-ledger/: install, playbooks that improve your agent workflow, each page, configuration and the command line. It replaces the user guide in `docs/guide.md`.
+
 ### Changed
 
 - Text follows the browser's default font size: font sizes are relative, chart labels scale with them, and nothing is cut off at 200%. In Chrome and Edge 146+ the dashboard also follows the operating system's text scale.

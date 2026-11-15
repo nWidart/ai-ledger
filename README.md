@@ -4,6 +4,8 @@
 
 AI Ledger reads your Claude Code and Codex transcripts and turns them into seven local dashboards. Your agents delete old transcripts; AI Ledger keeps every line.
 
+[Documentation](https://nwidart.github.io/ai-ledger/)
+
 <picture><source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/nWidart/ai-ledger/main/docs/tour-light.gif"><img src="https://raw.githubusercontent.com/nWidart/ai-ledger/main/docs/tour.gif" alt="Tour of the pages"></picture>
 
 ## Quick start
@@ -27,9 +29,9 @@ Needs [uv](https://docs.astral.sh/uv/). Runs on macOS and Linux. Your data stays
 | **Live** | Every active session as it runs, sorted by who needs you first. |
 | **Project** | One project across all of the above, opened from the Page link on the navigation's project filter, its sheet, or its name in the command palette. |
 
-Press **Cmd+K** to jump anywhere, for example `>errors #myproject #7d`. Right-click a project, session, tool or error type for its actions, such as copying a session's resume command. Every page works by keyboard and screen reader, and each chart has a data table.
+Press **Cmd+K** to jump anywhere, for example `>errors #myproject #7d`. Right-click a project, session, tool or error type for its actions, such as copying a session's resume command. Every page works by keyboard and screen reader. Charts open a data table or read point by point with the arrow keys.
 
-The [user guide](https://github.com/nWidart/ai-ledger/blob/main/docs/guide.md) describes each page in detail.
+The [documentation site](https://nwidart.github.io/ai-ledger/) describes each page in detail.
 
 <table>
 <tr><td><picture><source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/nWidart/ai-ledger/main/docs/activity-light.gif"><img src="https://raw.githubusercontent.com/nWidart/ai-ledger/main/docs/activity.gif" alt="Activity"></picture></td><td><picture><source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/nWidart/ai-ledger/main/docs/cost-light.gif"><img src="https://raw.githubusercontent.com/nWidart/ai-ledger/main/docs/cost.gif" alt="Cost"></picture></td></tr>
@@ -59,14 +61,14 @@ The first start reads every transcript, about 4 minutes for 3.4 GB. After that, 
 
 With the app stopped, `ai-ledger ingest` reads new lines once and `ai-ledger rebuild` recomputes the derived tables. After an upgrade that asks for it, run `ai-ledger rebuild` once.
 
-To set your own model prices or plan prices, or to hide more automated projects, see [Configuration](https://github.com/nWidart/ai-ledger/blob/main/docs/guide.md#configuration).
+To set your own model prices or plan prices, or to hide more automated projects, see [Configuration](https://nwidart.github.io/ai-ledger/reference/configuration/).
 
 ## Privacy
 
 - The server listens on `127.0.0.1` only, and refuses requests that another site makes from your browser.
 - The store keeps every transcript line, **including any secrets** that appeared in a session. Only your user can read it. Do not share it.
-- On macOS, the Limits page sends your Claude Code OAuth token from the Keychain to Anthropic's usage endpoint every 5 minutes. The token goes nowhere else and is never stored or logged. On Linux, Limits estimates from transcripts.
-- Live's **Full text** puts transcript content on screen, secrets included. Turn it off before you share your screen.
+- On macOS, the Limits page sends your Claude Code OAuth token from the Keychain to Anthropic's usage endpoint every 5 minutes. The token goes nowhere else and is never stored or logged. On Linux there is no Keychain to read, so Limits shows Codex windows only.
+- Live's **Full text** puts transcript content on screen, secrets included. Turn it off before you share your screen. Even off, Live shows the start of each tool input and the error text of failed calls, and other pages quote error examples. See [Share your screen safely](https://nwidart.github.io/ai-ledger/improve/share-screen/).
 - Your browser loads the font from Google Fonts. No transcript data goes with it.
 
 ## Contributing
