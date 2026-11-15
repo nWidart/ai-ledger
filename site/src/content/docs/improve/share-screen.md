@@ -85,7 +85,7 @@ Replace `<name>` with the project's name as the picker shows it. `/usage` is Act
 
 1. Open Cost and Activity before you share. If a banner names `prices.json` or `automated.json` with a path, fix the file or price the model as [Configuration](/ai-ledger/reference/configuration/) says, then reload: the banner goes away.
 2. If you cannot clear an **Unpriced models** banner, do not show Cost.
-3. Do not open the help of **Include automated sessions** on screen: it shows the path of `automated.json`.
+3. Do not open the help of **Include automated sessions** on screen, and keep the pointer off its **?** button: the help opens on hover, and it shows the path of `automated.json`.
 
 ### Keep Errors at the type table
 

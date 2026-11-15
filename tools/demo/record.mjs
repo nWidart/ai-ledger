@@ -409,20 +409,21 @@ async function shots(wanted) {
   // Start from the seed: an earlier live run left its sessions in the store and in live/.
   execFileSync("uv", ["run", "seed.py"], { cwd: HERE, stdio: "inherit" });
   rmSync(join(HERE, "live"), { recursive: true, force: true });
-  const server = spawn("uv", ["run", "serve.py"], { cwd: HERE, stdio: "ignore", detached: true });
+  const server = spawn("uv", ["run", "serve.py"], { cwd: HERE, stdio: ["ignore", "pipe", "ignore"], detached: true });
   const stop = () => { try { process.kill(-server.pid); } catch {} };
   let exited = false; server.once("exit", () => { exited = true; });
+  // serve.py prints "serving http://…" only after it has bound 8799, so another server that took the port while
+  // seed.py ran can never pass for the demo store: serve.py then exits without that line.
+  let ready = false; server.stdout.on("data", d => { if (String(d).includes("serving http://127.0.0.1:8799/")) ready = true; });
   process.once("SIGINT", () => { stop(); process.exit(130); });
   let b;
   try {
     b = await chromium.launch({ executablePath: process.env.CHROMIUM });
-    for (let i = 0; !(await listening()); i++) {
-      if (exited || i > 120) throw new Error("serve.py did not start");
+    for (let i = 0; !ready || !(await listening()); i++) {
+      if (exited) throw new Error("serve.py exited: if something else holds port 8799, stop it; the shots must come from the demo store");
+      if (i > 240) throw new Error("serve.py did not start");
       await sleep(500);
     }
-    // Another server may have taken 8799 while seed.py ran: then serve.py fails to bind and exits.
-    await sleep(1000);
-    if (exited) throw new Error("serve.py exited: something else holds port 8799, so the shots would not come from the demo store");
     for (const key of wanted.length ? all.filter(p => wanted.includes(p)) : all) {
       if (key === "live") await liveShots(b);
       else for (const scheme of ["dark", "light"]) await (key === "everywhere" ? everywhereShots(b, scheme) : pageShots(b, key, scheme));
