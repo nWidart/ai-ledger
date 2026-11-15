@@ -62,7 +62,10 @@ export function Palette() {
   const { refresh } = useRefresh();
   const dlg = useRef<HTMLDialogElement>(null), input = useRef<HTMLInputElement>(null), opener = useRef<HTMLElement | null>(null);
   const [chips, setChips] = useState<Chip[]>([]);
-  const [text, setText] = useState(""), [caret, setCaret] = useState(0), [hi, setHi] = useState(0);
+  const [text, setText] = useState(""), [caret, setCaret] = useState(0);
+  // The highlight: a position, and the row the user moved to. It stays on that row when rows load or reorder under it
+  // (session results arrive after a pause), and falls back to the position when the row is gone.
+  const [hi, setHi] = useState<{ at: number; id?: string }>({ at: 0 });
   // Nothing is highlighted until the user types or moves through the list, so Enter on the opened palette changes nothing.
   const [browsing, setBrowsing] = useState(false);
   const [said, setSaid] = useState("");
@@ -93,7 +96,7 @@ export function Palette() {
       const a = document.activeElement;
       opener.current = a instanceof HTMLElement && a !== document.body ? a : null;
       setChips(prefill(currentRaw()));
-      setText(""); setCaret(0); setHi(0); setSaid(""); setBrowsing(false); setToast(null);
+      setText(""); setCaret(0); setHi({ at: 0 }); setSaid(""); setBrowsing(false); setToast(null);
       d.showModal();
       input.current?.focus();
     } else if (!open && d.open) d.close();
@@ -124,7 +127,7 @@ export function Palette() {
   // Counts from another facet combination, kept on screen while the chosen one loads.
   const v = now.view, p = pal.data;
   const stale = !!p && (p.project !== v.project || p.range !== v.range || p.automated !== v.automated || p.source !== v.source);
-  const at = Math.min(hi, rows.length - 1), row: Row | undefined = browsing || term.sigil || term.text ? rows[at] : undefined;
+  const held = hi.id ? rows.findIndex(r => r.id === hi.id) : -1, at = held >= 0 ? held : Math.min(hi.at, rows.length - 1), row: Row | undefined = browsing || term.sigil || term.text ? rows[at] : undefined;
   const preview = row ? resolve(rowChips(chips, row), here) : now;
   // Typed terms that are not chips yet: Enter waits until each is picked or deleted, so nothing typed is silently ignored.
   const blockers = ts.filter(t => t.text && (t !== term || !row)).map(t => ({ t: t.sigil + t.text, none: !suggest(t, data, chips, path).length }));
@@ -161,7 +164,7 @@ export function Palette() {
   /** New chips: the highlight starts over (a hovered or arrowed row must be chosen again), and the change is announced
    *  with what Enter now does. */
   const setChipsSaying = (next: Chip[], what: string) => {
-    setChips(next); setHi(0); setBrowsing(false);
+    setChips(next); setHi({ at: 0 }); setBrowsing(false);
     say.current = { what, moved: false };
   };
   const edit = (next: string, pos: number, list = chips) => {
@@ -170,7 +173,7 @@ export function Palette() {
     const said: string[] = [];
     for (const r of got.picked) { said.push(rowAdded(r, out)); out = rowChips(out, r); }
     if (got.picked.length) setChipsSaying(out, said.join(", "));
-    setText(got.input); setCaret(got.caret); setHi(0);
+    setText(got.input); setCaret(got.caret); setHi({ at: 0 });
     if (got.picked.length) sel.current = got.caret;
   };
   const pick = (r: Row) => {
@@ -206,7 +209,7 @@ export function Palette() {
   const onKey = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.nativeEvent.isComposing || e.keyCode === 229) return; // an IME confirming a candidate with Enter, Tab or arrows is not ours
     const n = rows.length;
-    const move = (to: number) => { e.preventDefault(); setBrowsing(true); setHi(to); say.current ??= { what: "", moved: true }; };
+    const move = (to: number) => { e.preventDefault(); setBrowsing(true); setHi({ at: to, id: rows[to]!.id }); say.current ??= { what: "", moved: true }; };
     if (e.key === "ArrowDown" && n) move(row ? (at + 1) % n : 0);
     else if (e.key === "ArrowUp" && n) move(row ? (at - 1 + n) % n : n - 1);
     else if (e.key === "Home" && n && row) move(0);
@@ -253,7 +256,7 @@ export function Palette() {
                 <Fragment key={r.id}>
                   {head && <li role="presentation" className="pal-group" aria-hidden="true">{BADGES[r.kind]}</li>}
                   <li id={optId(r)} role="option" aria-selected={r === row} aria-label={rowName(r)} className="pal-opt"
-                    onMouseDown={e => e.preventDefault()} onMouseMove={() => { if (i !== at || !row) { setBrowsing(true); setHi(i); } }}
+                    onMouseDown={e => e.preventDefault()} onMouseMove={() => { if (i !== at || !row) { setBrowsing(true); setHi({ at: i, id: r.id }); } }}
                     onClick={() => (touch() || r.sigil === "#" ? pick(r) : commit(rowChips(chips, r)))}>
                     <span className={`pal-badge k-${r.kind}`}>{BADGES[r.kind]}</span>
                     <span className="pal-text"><Marked text={r.text} ranges={r.ranges} /></span>

@@ -395,6 +395,20 @@ describe("Palette project pages", () => {
     expect(location.pathname + location.search).toBe("/project?project=jobdesk&range=7");
   });
 
+  it("keeps the highlight on the page row when sessions load and rank above it", async () => {
+    const late = { ...sessions, sessions: sessions.sessions.map(s => ({ ...s, project: "jobdesk" })) };
+    mockApi({ "/api/palette": () => jd, "/api/sessions": () => late, "/api/status": () => status, "/api/usage": () => usage });
+    await show("/cost?range=7");
+    await userEvent.type(box(), "jobdesk{ArrowDown}");
+    expect(options().some(n => n!.includes(", session,"))).toBe(false);
+    expect(screen.getByRole("option", { selected: true }).getAttribute("aria-label")).toBe(page);
+    await waitFor(() => expect(options().some(n => n!.includes(", session,"))).toBe(true));
+    expect(options().indexOf(page)).toBeGreaterThan(1);
+    expect(screen.getByRole("option", { selected: true }).getAttribute("aria-label")).toBe(page);
+    await userEvent.keyboard("{Enter}");
+    expect(location.pathname + location.search).toBe("/project?project=jobdesk&range=7");
+  });
+
   it("opens the page on a click, and stages both chips on a touch screen", async () => {
     serve(() => jd);
     await show("/cost?range=7");
