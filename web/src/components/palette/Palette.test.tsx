@@ -417,6 +417,14 @@ describe("Palette project pages", () => {
     expect(said()).toBe("jobdesk and Project page added. Enter: open Project · jobdesk · 30d");
   });
 
+  it("announces only the page when the project is already a chip", async () => {
+    serve(() => jd);
+    await show("/cost?project=jobdesk&range=7");
+    await userEvent.type(box(), "jobdesk{Tab}");
+    expect([chips("Filters"), chips("Destination")]).toEqual([["#jobdesk", "#7d"], [">Project"]]);
+    expect(said()).toMatch(/^Project page added\. /);
+  });
+
   it("auto-chips a bare name as the filter", async () => {
     serve(() => jd);
     await show("/cost?range=7");

@@ -25,11 +25,14 @@ export function addChip(chips: readonly Chip[], c: Chip): Chip[] {
   const slot = slotOf(c);
   return [...chips.filter(x => !(x.kind === c.kind && x.value === c.value) && (slot == null || slotOf(x) !== slot)), { kind: c.kind, value: c.value, label: c.label }];
 }
+const hasProject = (chips: readonly Chip[], project: string) => chips.some(c => c.kind === "project" && c.value === project);
 /** The chips a row adds, through every path (footer, Tab, Enter, click, touch, auto-chip): a project-page row adds its
- *  project filter, then the Project page. */
+ *  project filter, unless already there (the chip keeps its place), then the Project page. */
 const rowChips = (chips: readonly Chip[], r: Row) =>
-  addChip(r.project ? addChip(chips, { kind: "project", value: r.project, label: r.project }) : chips, r);
-const rowAdded = (r: Row) => (r.project ? `${r.project} and ${r.label} page added` : `${r.label} added`);
+  addChip(r.project && !hasProject(chips, r.project) ? addChip(chips, { kind: "project", value: r.project, label: r.project }) : chips, r);
+/** What a pick adds, said once: a project-page row names its project unless that filter was already a chip. */
+const rowAdded = (r: Row, chips: readonly Chip[]) =>
+  (!r.project ? `${r.label} added` : hasProject(chips, r.project) ? `${r.label} page added` : `${r.project} and ${r.label} page added`);
 const sigil = (c: Chip) => (isFilter(c.kind) ? "#" : ">");
 const chipName = (c: Chip, s: ChipStatus) =>
   (isFilter(c.kind) ? `Remove ${c.kind === "automated" ? "automated sessions" : c.kind} filter${c.kind === "automated" ? "" : " " + c.label}`
@@ -165,13 +168,13 @@ export function Palette() {
     const got = autoChip(next, pos, t => suggest(t, data, list, path));
     let out = list;
     for (const r of got.picked) out = rowChips(out, r);
-    if (got.picked.length) setChipsSaying(out, got.picked.map(rowAdded).join(", "));
+    if (got.picked.length) setChipsSaying(out, got.picked.map(r => rowAdded(r, list)).join(", "));
     setText(got.input); setCaret(got.caret); setHi(0);
     if (got.picked.length) sel.current = got.caret;
   };
   const pick = (r: Row) => {
     const next = rowChips(chips, r), rest = (text.slice(0, term.start) + text.slice(term.end)).replace(/\s+$/, "");
-    setChipsSaying(next, rowAdded(r));
+    setChipsSaying(next, rowAdded(r, chips));
     setText(rest); setCaret(term.start);
     sel.current = Math.min(term.start, rest.length);
     input.current?.focus();

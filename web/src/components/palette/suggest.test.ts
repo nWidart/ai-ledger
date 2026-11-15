@@ -109,6 +109,22 @@ describe("suggest project pages", () => {
     const px = { palette: { ...palette, projects: [{ name: "projx", sessions: 1 }] } };
     const pages = (chips: Chip[]) => suggest(term(">proj"), px, chips, "/cost").filter(r => r.kind === "page").map(r => r.id);
     expect(pages([proj("projx")])).toEqual(["projectpage:projx"]);
-    expect(pages([proj("foo")])).toEqual(["projectpage:projx", "page:/project"]);
+    expect(pages([proj("foo")])).toEqual(["page:/project", "projectpage:projx"]);
+  });
+  it("keeps an exact name's page among the three, before busier projects that start with it", () => {
+    const busy = { palette: { ...palette, projects: [{ name: "jobdesk", sessions: 1 }, ...[9, 8, 7].map((n, i) => ({ name: `jobdesk-${i}`, sessions: n }))] } };
+    expect(own("jobdesk", [], "/cost", busy).map(r => r.project)).toEqual(["jobdesk", "jobdesk-0", "jobdesk-1"]);
+  });
+  it("puts the pages first at equal rank, and keeps every page that matches", () => {
+    const with_ = (...names: string[]) => ({ palette: { ...palette, projects: names.map(name => ({ name, sessions: 50 })) } });
+    expect(rows(">a", with_("ai-ledger"))[0]!.id).toBe("page:/usage");
+    const t = rows(">t", with_("t1", "t2", "t3"));
+    expect(t.filter(r => r.kind === "page" && !r.project).length).toBe(rows(">t").filter(r => r.kind === "page").length);
+    expect(t.filter(r => r.project).length).toBe(3);
+  });
+  it("never matches exactly after > when a page does, so >errors stays Errors with a project named errors", () => {
+    const got = rows(">errors", { palette: { ...palette, projects: [{ name: "errors", sessions: 50 }] } });
+    expect(got.filter(r => r.rank === EXACT).map(r => r.id)).toEqual(["page:/errors"]);
+    expect(got.find(r => r.project === "errors")!.rank).toBe(PREFIX);
   });
 });

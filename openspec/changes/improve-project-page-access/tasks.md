@@ -5,7 +5,7 @@
 ## 1. Navigation chip
 
 - [x] 1.1 `web/src/components/Nav.tsx`: one `Link` to `/project` over the name and a "Page →" label; visually hidden "project" between them; arrow `aria-hidden`; no `title`; no arrow on `/project`, where the link has `aria-current="page"`.
-- [x] 1.2 `web/src/components/Nav.css`: style "Page →" as an inner pill; a `.appnav-filter a[aria-current=page]` rule with the current-tab tint; at 520px and below, label kept and a 32px minimum height for the link and Clear.
+- [x] 1.2 `web/src/components/Nav.css`: style "Page →" as an inner pill (the tabs' current rule already tints the chip's link); at 520px and below, label kept and a 32px minimum height for the link and Clear.
 - [x] 1.3 Tests: the link's accessible name is "foo project page" and its href keeps the view; one link to `/project` in the chip; on `/project` it is current; update `router.test.tsx` selectors that read `#navFilter b`.
 
 ## 2. Palette project-page rows

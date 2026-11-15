@@ -113,12 +113,19 @@ export function suggest(term: Term, data: SuggestData, chips: readonly Chip[] = 
       rank: m.rank, count: c.count ?? 0,
     });
   }
-  rows.sort((a, b) => a.rank - b.rank || ORDER.indexOf(a.kind) - ORDER.indexOf(b.kind) || byScore({ ...a, name: a.text }, { ...b, name: b.text }));
-  const per = new Map<Kind, number>(), out: Row[] = [];
+  // A project's page never matches bare text exactly, so a typed name auto-chips as the filter; nor does it after > when a
+  // page matches exactly, so `>errors` stays the Errors page with a project named errors.
+  const pageExact = rows.some(r => r.kind === "page" && !r.project && r.rank === EXACT);
+  for (const r of rows) if (r.project && (!term.sigil || pageExact)) r.rank = Math.max(r.rank, PREFIX);
+  // Project pages follow the pages at equal rank (their session counts would win the tie), keep their own order (an exact
+  // name first) and are capped on their own.
+  rows.sort((a, b) => a.rank - b.rank || ORDER.indexOf(a.kind) - ORDER.indexOf(b.kind) || Number(!!a.project) - Number(!!b.project)
+    || (a.project ? 0 : byScore({ ...a, name: a.text }, { ...b, name: b.text })));
+  const per = new Map<string, number>(), out: Row[] = [];
   for (const r of rows) {
-    const n = per.get(r.kind) ?? 0;
+    const key = r.project ? "projectpage" : r.kind, n = per.get(key) ?? 0;
     if (n >= PER_KIND) continue;
-    per.set(r.kind, n + 1);
+    per.set(key, n + 1);
     out.push(r);
     if (out.length >= MAX_ROWS) break;
   }
@@ -127,8 +134,9 @@ export function suggest(term: Term, data: SuggestData, chips: readonly Chip[] = 
 
 /**
  * The best matching projects' pages, for typed text with no sigil or after >: none for empty text, which would push the
- * pages out of their group. Bare text never matches exactly, so a typed name auto-chips as the filter. A project whose
- * page the chips already lead to is left out: picking it would change nothing.
+ * pages out of their group. The best three by their own match, so an exact name is never crowded out by busier prefixes;
+ * suggest() then lowers their rank. A project whose page the chips already lead to is left out: picking it would change
+ * nothing.
  */
 function projectPages(term: Term, data: SuggestData, chips: readonly Chip[], path: string): Row[] {
   if (term.sigil === "#" || !term.text) return [];
@@ -136,7 +144,7 @@ function projectPages(term: Term, data: SuggestData, chips: readonly Chip[], pat
   const open = setter ? setter.kind === "page" && setter.value === PROJECT_PAGE : path === PROJECT_PAGE;
   return (data.palette?.projects ?? []).flatMap(p => {
     const m = open && p.name === chosen ? null : match(term.text, p.name);
-    return m ? [{ name: p.name, rank: term.sigil ? m.rank : Math.max(m.rank, PREFIX), count: p.sessions, ranges: m.ranges }] : [];
+    return m ? [{ name: p.name, rank: m.rank, count: p.sessions, ranges: m.ranges }] : [];
   }).sort(byScore).slice(0, MAX_PROJECT_PAGES).map((p): Row => ({
     id: `projectpage:${p.name}`, kind: "page", value: PROJECT_PAGE, label: "Project", project: p.name, sigil: ">",
     text: `${p.name} · open project page`, ranges: p.ranges, detail: [plural(p.count, "session")], rank: p.rank, count: p.count,
