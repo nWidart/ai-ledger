@@ -7,64 +7,43 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [0.4.0] - 2026-11-15
 
-Run `ai-ledger rebuild` once after upgrading (with the app stopped): the Context page needs the size of each tool result, the context window of each Codex session and the time of each session's first compaction, which earlier versions did not store. The rebuild fills them from the transcripts already read. It also picks up the `/context` results earlier sessions recorded.
+Run `ai-ledger rebuild` once after upgrading, with the app stopped. It fills the data the Context page needs (tool result sizes, Codex context windows, first compactions, past `/context` results) from transcripts already read. Until then, the Context page marks those figures as unavailable.
 
 ### Added
 
-- A Project page gathers one project's figures, cost, top sessions, errors, context, session judgments and plan-limit share, each linking to its full page. Its Context block draws a typical session's window as a grid in the style of Claude Code's `/context`: the median starting context, what the peak adds and the free space, with tokens and shares. When Claude Code's `/context` has measured the project, the grid splits the starting context into system prompt, tools, MCP, agents, memory files and skills, and Measure now runs `claude -p "/context"` in the project's folder to take a new snapshot. Open it from the Page link on the navigation's project filter, "Open project page" in the project sheet, or the command palette, where typing a project's name offers its page.
-- A Context page shows how context fills up in Claude Code and Codex sessions: where each project's sessions start and what share of the model's window that is, how fast context grows per turn and per prompt, how far sessions get before their first compaction, what fills context (tool and MCP results, with the largest linked to their sessions), what caching costs, and the sessions where caching broke and why. Token figures from result sizes are estimates (bytes ÷ 4).
-- The Context page's tips come from fixed rules. Each shows only when it fires on the filtered view, with its evidence, its advice and the sessions that match, which open in the session sheet.
-- The Context page has a Window pressure section: one bar per window size shows the share of sessions that peaked under 25%, 25 to 50%, 50 to 80%, 80 to 90% and at or over 90% of it, and selecting a part lists its sessions.
-- A session map on the Context page plots each session by its starting context and its peak share of the window, marks the sessions that compacted, and opens a session from its dot.
-- The Context page charts cache use over time: cache reads, cache writes and uncached input per day or week, the cache-hit ratio, and the cache breaks by cause.
-- The Context page charts the tools and MCP servers that fill context by total result size beside their median to 95th percentile result size, and draws the main-thread and subagent totals as one bar.
-- The store keeps the size of each tool result, the context window a Codex session states and the time of each session's first compaction. Until the rebuild, the Context page says those figures are not yet available.
-- The command palette's `>context` term opens the Context page, keeping the project and range filters.
-- Each page has a skip link and one main landmark, and a nav switch moves focus to the new page's heading.
-- Explanations that only showed on hover (column headers, filter options, the Live agent panel) open from a "?" button by keyboard or touch, or show as visible hints.
-- The Cost, Activity and Context charts have a "Show data table" under them, and Escape dismisses a chart's readout.
-- Windows high contrast and other forced-colors modes keep pressed, selected and current states and data bars visible.
-- Switching pages crossfades, in browsers with view transitions and unless reduced motion is on. Back and Forward return a page to where it was scrolled.
-- A page that loads for the first time shows gray placeholder blocks instead of an empty page.
-- Pointing at or focusing a page's tab starts loading that page and its data, so it opens sooner. Opening a URL starts the page's data with its code instead of after it.
-- Right-click a project, session, tool, MCP server, skill or error type for its actions. A project's menu opens its page or sheet, filters the dashboard to it, or shows it on another page. A session's menu opens it and copies its resume command (`claude --resume` or `codex resume`, after a `cd` to its directory), its id or its directory. A tool's menu opens its inspector, and an error type's menu opens it on Errors or mutes it there. Shift+F10 or the menu key opens the menu from the keyboard, and a long press opens it on touch. Shift+right-click shows the browser's menu.
-- The session sheet shows the session's resume command and directory, each with a Copy button.
-- The session sheet and the tool, MCP server and skill sheet have a Wide toggle that widens the sheet to up to 1100px. The wide sheet gives the session timeline more room and puts short sections side by side. The choice is saved in the browser.
+- Project page: one project's figures, cost, top sessions, errors, context, judgments and plan-limit share. Its context grid mirrors Claude Code's `/context`, and Measure runs `claude -p "/context"` for a fresh snapshot. Open it from the project filter, the project sheet or the command palette.
+- Context page: how context fills in Claude Code and Codex sessions. It shows starting size, growth per turn, time to first compaction, what fills context, caching cost and cache breaks. Tips from fixed rules show their evidence and matching sessions. Token figures from result sizes are estimates (bytes ÷ 4).
+- Context page sections: window pressure, a session map, cache use over time, and tools and MCP servers by result size.
+- `>context` in the command palette opens the Context page.
+- Right-click menus on projects, sessions, tools, MCP servers, skills and error types: open, filter, mute, or copy a resume command, id or directory. Shift+F10, the menu key and long press also open them.
+- The session sheet shows the resume command and directory, with Copy buttons.
+- A Wide toggle on the session and tool sheets (up to 1100px), saved in the browser.
+- Accessibility: a skip link, one main landmark, focus on the new page's heading, "?" buttons for hover-only hints, "Show data table" under charts, and forced-colors support.
+- Page switches crossfade (unless reduced motion is on), Back and Forward restore scroll, and first loads show placeholders.
+- Hovering or focusing a page's tab preloads the page and its data.
 
 ### Changed
 
-- `/context` runs no longer count as prompts on Activity: the command calls no model.
-- A shorter README with a one-line summary per page. Page details and configuration moved to a [user guide](docs/guide.md), and developer setup to [CONTRIBUTING.md](CONTRIBUTING.md).
-- The Context page's starting context shows each project's 10th to 90th percentile range on one scale, with the 90th percentile as a column, and the weekly trend is a line with its 25th to 75th percentile band, a token axis and weeks placed by date.
-- The Context page's growth chart shows how many sessions each turn rests on, can show context as a share of the window, and isolates a project from its legend. Growth per project shows even when no session compacted.
-- The Context page's peak-fill groups are cut at 80% instead of 75%, so the near-limit threshold is a group edge.
-- Drawer titles are headings with a toggle button, and a drawer draws its table only once opened.
-- Every data table has a name and row headers, and scrollable tables can be focused and scrolled by keyboard.
-- Inputs and selects have a 3:1 border, the command palette's input shows a focus ring, and Live's tool text reaches 4.5:1 in the light theme.
-- Refresh stays focusable while it runs, and loading states are no longer read out by screen readers.
-- Sheet and insight titles wrap instead of being cut off.
-- Pages and the command palette load on first use: the first download is about a third of what it was.
-- In a background tab, Live closes its event stream and stops its clock, and the status poll pauses; both catch up on return. Background polls go out at low priority.
-- Hovering the charts, opening Errors examples and scrolling pages with a section index do far less work.
-- A page you come back to shows its last figures at once. It refetches them, with the old figures still on screen, only when an ingest stored something or Refresh ran since. Figures no view has shown for five minutes are dropped from memory.
-- A request for a view you left (a filter changed, another page opened) is abandoned instead of running to its end.
-- A session's whole first prompt, a failed call's full text and a day's sessions on Cost show at once when opened again. Saving a fix marker or a mute on Errors no longer makes every other page refetch.
-- On Live, a session opened again within five minutes shows its events at once and catches up, instead of loading from the start. Turning Full text off shows the events without text at once, with open rows and the scroll kept.
-- The page is revalidated with an ETag (`304` when unchanged) instead of being sent again on every visit.
-- The view (project, range, source, open sheet and each page's own state) moved from the URL hash to the query string: `/usage#project=foo&range=30` is now `/usage?project=foo&range=30`. Links in the old form still open the same view and are rewritten in place.
+- `/context` runs no longer count as prompts on Activity.
+- Shorter README. Details moved to the [user guide](docs/guide.md) and [CONTRIBUTING.md](CONTRIBUTING.md).
+- Context charts: percentile ranges for starting context, a band on the weekly trend, growth as a share of the window, and peak-fill groups cut at 80% instead of 75%.
+- Accessibility: named tables with row headers, keyboard-scrollable tables, drawer titles as headings, 3:1 input borders, 4.5:1 Live tool text in the light theme, silent loading states and wrapping titles.
+- Faster: pages load on first use (the first download is about a third), revisited pages and sheets show at once and refetch only after new data, abandoned requests are cancelled, the page is revalidated by ETag, and chart hover and scrolling do less work.
+- In a background tab, Live stops streaming and polls pause until you return.
+- View state moved from the URL hash to the query string: `/usage#project=foo` is now `/usage?project=foo`. Old links still work.
 
 ### Fixed
 
-- In the command palette, a suggestion picked with the arrow keys or the mouse stays highlighted when session results load above it, so Enter opens what was highlighted.
-- The app no longer prints a `BrokenPipeError` traceback when a page cancels a request it no longer needs, such as on a tab switch.
-- The Context page no longer calls a Codex cache break an expiry after a pause of 5 to 30 minutes: Codex's cache lives 30 minutes. Claude Code keeps 5 minutes (1 hour after a 1-hour cache write), and the cache-breaks tip names both.
-- The "?" buttons that explain a column, filter or figure show their text again outside the session and project sheets, and now also open on hover.
+- In the command palette, a suggestion picked with the keys or mouse stays highlighted when session results load, so Enter opens it.
+- No more `BrokenPipeError` traceback when a page cancels a request.
+- A Codex cache break after a 5 to 30 minute pause is no longer called an expiry: Codex's cache lives 30 minutes.
+- "?" buttons show their text again outside the sheets, and also open on hover.
 
 ### Security
 
-- The app refuses requests another site makes to `/api` (403), so a page you have open cannot start ingests or read the store through your browser. `curl` and the command line are unaffected.
-- Every response carries security headers, and the page carries a Content Security Policy: it cannot be framed, and runs only its own scripts. The font still loads from Google Fonts.
-- Table export also guards a cell that starts with a tab or a carriage return against being read as a spreadsheet formula.
+- `/api` refuses requests from other sites (403). `curl` and the command line are unaffected.
+- Security headers and a Content Security Policy on every response: no framing, own scripts only.
+- Table export guards cells that start with a tab or carriage return against formula injection.
 
 ## [0.3.0] - 2026-11-12
 
