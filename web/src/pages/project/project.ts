@@ -1,6 +1,6 @@
 // Pure derivations of the Project page: what the Errors block and the Limits block show, taken from the payloads the Errors and
 // Limits pages read, through the same model functions, so a figure cannot differ from its page's.
-import type { LimitsPayload, Source } from "../../api";
+import type { ContextPayload, LimitsPayload, Source } from "../../api";
 import { windowName } from "../limits/limits";
 import { DEFAULT_VIEW } from "../errors/view";
 import { compare, filtered, rate, sumCalls, TOPN, typeRows, type Delta, type Model, type TypeRow } from "../errors/model";
@@ -39,4 +39,27 @@ export function limitsBlock(d: LimitsPayload, project: string): LimitsBlock | nu
   const commits = d.value.projects.flatMap(p => p.project === project && p.commits_per_point != null
     ? [{ key: `${p.provider}-${p.label}`, name: windowName(p), commits: p.commits, points: p.points, commitsPerPoint: p.commits_per_point }] : []);
   return windows.length || commits.length ? { windows, commits } : null;
+}
+
+export const GRID_CELLS = 200;
+export interface GridRow { key: "start" | "added" | "free"; label: string; tokens: number | null; share: number }
+export interface ContextGridModel { start: number; added: number; free: number; rows: GridRow[]; window: number | null; sessions: number }
+
+/** The grid of a typical session: 200 cells of half a percent of the window each, filled for the median start, then for the
+ *  median peak less the start, the rest free. null when the start's or the peak's share of the window is not known. */
+export function contextGrid(c: ContextPayload): ContextGridModel | null {
+  const s = c.starting, p = c.growth.peak;
+  if (s.window_share == null || p.window_share == null) return null;
+  const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x));
+  const start = clamp(Math.round(s.window_share * GRID_CELLS), 0, GRID_CELLS);
+  const peakCells = clamp(Math.round(p.window_share * GRID_CELLS), start, GRID_CELLS);
+  const freeTokens = s.window != null && s.window > 0 && p.median != null ? Math.max(0, s.window - p.median) : null;
+  return {
+    start, added: peakCells - start, free: GRID_CELLS - peakCells, window: s.window, sessions: Math.max(s.sessions, p.sessions),
+    rows: [
+      { key: "start", label: "Starting context", tokens: s.median, share: s.window_share },
+      { key: "added", label: "Added by the peak", tokens: s.median != null && p.median != null ? Math.max(0, p.median - s.median) : null, share: Math.max(0, Math.min(p.window_share, 1) - s.window_share) },
+      { key: "free", label: "Free space", tokens: freeTokens, share: Math.max(0, 1 - p.window_share) },
+    ],
+  };
 }

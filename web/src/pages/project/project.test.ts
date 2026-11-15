@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import type { ErrorsPayload, LimitsPayload } from "../../api";
+import type { ContextPayload, ErrorsPayload, LimitsPayload } from "../../api";
 import errors from "../../__fixtures__/errors";
 import limits from "../../__fixtures__/limits";
 import { DEFAULT_VIEW } from "../errors/view";
 import { compare, filtered, makeModel, rate, sumCalls, TOPN, typeRows } from "../errors/model";
-import { errorsBlock, errorsView, limitsBlock } from "./project";
+import { contextGrid, errorsBlock, errorsView, limitsBlock } from "./project";
 
 const model = makeModel(errors as ErrorsPayload);
 const lim = limits as LimitsPayload;
@@ -68,5 +68,33 @@ describe("limitsBlock", () => {
     const b = limitsBlock(d, "foo")!;
     expect(b.windows).toEqual([]);
     expect(b.commits).toHaveLength(2);
+  });
+});
+
+describe("contextGrid", () => {
+  const ctx = (start: number | null, peak: number | null, over: { window?: number | null; startMedian?: number | null; peakMedian?: number | null } = {}) => ({
+    starting: { sessions: 10, median: over.startMedian ?? 24000, window: over.window === undefined ? 200000 : over.window, window_share: start },
+    growth: { peak: { sessions: 12, median: over.peakMedian ?? 80000, window_share: peak } },
+  }) as unknown as ContextPayload;
+
+  it("fills 24, 56 and 120 cells for a start of 12% and a peak of 40%", () => {
+    const g = contextGrid(ctx(.12, .4))!;
+    expect([g.start, g.added, g.free]).toEqual([24, 56, 120]);
+    expect(g.rows.map(r => r.tokens)).toEqual([24000, 56000, 120000]);
+    expect(g.rows.map(r => Math.round(r.share * 100))).toEqual([12, 28, 60]);
+    expect(g.sessions).toBe(12);
+  });
+  it("fills the grid when the peak is over the window", () => {
+    const g = contextGrid(ctx(.12, 1.3, { peakMedian: 260000 }))!;
+    expect([g.start, g.added, g.free]).toEqual([24, 176, 0]);
+    expect(g.rows[2]!.share).toBe(0);
+    expect(g.rows[2]!.tokens).toBe(0);
+  });
+  it("leaves out the free tokens without a known window", () => {
+    expect(contextGrid(ctx(.12, .4, { window: null }))!.rows[2]!.tokens).toBeNull();
+  });
+  it("is null when the start's or peak's share is not known", () => {
+    expect(contextGrid(ctx(null, .4))).toBeNull();
+    expect(contextGrid(ctx(.1, null))).toBeNull();
   });
 });

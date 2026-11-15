@@ -17,8 +17,11 @@ import { big } from "../../format";
 import { renderApp } from "../../testing";
 import { ProjectPage } from "./ProjectPage";
 
+/** The fixture with the fields the grid reads (until the fixtures are regenerated): the peak's share of the window, null for none. */
+const withGrid = (c: unknown, peakShare: number | null) => { const d = c as ContextPayload;
+  return { ...d, starting: { ...d.starting, window: d.starting.window ?? 200000 }, growth: { ...d.growth, peak: { sessions: 11, median: 80000, window_share: peakShare } } } as ContextPayload; };
 const foo = (d: UsagePayload): UsagePayload => ({ ...d, project: "foo" });
-const base = { usage: foo(usage), errors: errors as ErrorsPayload, context: context as ContextPayload, insights: insights as InsightsPayload,
+const base = { usage: foo(usage), errors: errors as ErrorsPayload, context: withGrid(context, null) as ContextPayload, insights: insights as InsightsPayload,
   limits: limits as LimitsPayload, live: { ...live, sessions: live.sessions.slice(0, 2) } as LivePayload };
 type Payloads = { [K in keyof typeof base]?: (typeof base)[K] | null };
 /** The API with these payloads in place of the fixtures; null answers 404. */
@@ -153,11 +156,38 @@ describe("ProjectPage", () => {
       const c = await within(block("Context")).findByText("median starting context, tokens");
       expect(c.previousElementSibling!.textContent).toBe(big(context.starting.median));
       cleanup();
-      const none = { ...context, starting: { ...context.starting, median: null, window_share: null }, growth: { ...context.growth, added_per_prompt: null, to_compaction: { ...context.growth.to_compaction, turns: null } } } as ContextPayload;
+      const none = withGrid({ ...context, starting: { ...context.starting, median: null, window_share: null }, growth: { ...context.growth, added_per_prompt: null, to_compaction: { ...context.growth.to_compaction, turns: null } } }, null);
       open({ context: none });
       await loaded();
       await within(block("Context")).findByText("median starting context, tokens");
       expect(facts(block("Context")).slice(0, 4).map(t => t!.startsWith("n/a"))).toEqual([true, true, true, true]);
+    });
+
+    const typical = (peakShare: number | null) => withGrid({ ...context, starting: { ...context.starting, sessions: 9, median: 24000, window: 200000, window_share: .12 } }, peakShare);
+
+    it("draws the grid of a typical session above the facts, with a legend in text", async () => {
+      open({ context: typical(.4) });
+      await loaded();
+      const blk = block("Context");
+      await within(blk).findByRole("img", { name: /12% starting context, 28% added by the peak, 60% free/ });
+      expect(blk.querySelectorAll(".cg-cells .cg-cell").length).toBe(200);
+      expect(blk.querySelectorAll(".cg-cells .cg-start").length).toBe(24);
+      expect(blk.querySelectorAll(".cg-cells .cg-added").length).toBe(56);
+      expect(blk.querySelectorAll(".cg-cells .cg-free").length).toBe(120);
+      expect(within(blk).getByText("Typical session · 200k window")).toBeTruthy();
+      expect(within(blk).getByText("median of 11 sessions")).toBeTruthy();
+      const items = [...blk.querySelectorAll(".cg-legend li")].map(li => li.textContent);
+      expect(items[0]).toContain(`Starting context${big(24000)} tokens (12%)`);
+      expect(items[0]).toContain("System prompt, tools, memory and first prompt together");
+      expect(items[1]).toContain(`Added by the peak${big(56000)} tokens (28%)`);
+      expect(items[2]).toContain(`Free space${big(120000)} tokens (60%)`);
+    });
+
+    it("shows no grid when the peak's share of the window is not known", async () => {
+      open({ context: typical(null) });
+      await loaded();
+      await within(block("Context")).findByText("median starting context, tokens");
+      expect(block("Context").querySelector(".ctx-grid")).toBeNull();
     });
   });
 
