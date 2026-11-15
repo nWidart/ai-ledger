@@ -517,6 +517,18 @@ export interface ContextPayload {
     breaks: { session_id: string; title: string | null; project: string | null; source: Source; breaks: number; model_switch: number; expired: number; other: number; uncached_tokens: number; cost: number | null }[];
   };
   tips: Tip[];
+  /** The project's latest /context snapshot (configuration overhead), whatever the range; null without a project filter or a snapshot. */
+  overhead: ContextOverhead | null;
+}
+
+/** A part of a /context snapshot: an MCP server (its tools' tokens summed), a memory file (its path) or a skill. */
+export interface OverheadPart { name: string; tokens: number }
+/** What /context measured in a session of the project: categories in the order /context lists them (state is the category's
+ *  kind: used, deferred, buffer or free), and the five largest MCP servers, memory files and skills. */
+export interface ContextOverhead {
+  ts: Ts; session_id: string; model: string | null; version: string | null; window: number | null;
+  categories: { name: string; tokens: number; state: "used" | "deferred" | "buffer" | "free" }[];
+  top: { mcp_servers: OverheadPart[]; memory_files: OverheadPart[]; skills: OverheadPart[] };
 }
 
 // URLs. automated: Activity and Cost leave automated sessions out unless asked (auto=1 in the page URL). source: "" is all.

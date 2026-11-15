@@ -5,10 +5,10 @@ import shutil
 import subprocess
 import tempfile
 import unittest
-from datetime import datetime
+from datetime import date, datetime
 from unittest import mock
 
-from ai_ledger import store
+from ai_ledger import metrics, store
 from test_store import StoreCase, line
 
 S = dict(sessionId="s1", cwd="/nowhere/foo", gitBranch="main", entrypoint="cli", version="2.1")
@@ -394,3 +394,91 @@ class LiveItemsTest(unittest.TestCase):
 
     def test_unknown_line_type(self):
         self.assertEqual(self.items(line(type="file-history-snapshot", uuid="f1")), [])
+
+
+CONTEXT_FIXTURE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "claude", "context-command.jsonl")
+CONTEXT_SID = "ad33f29e-a6c5-4a98-b97b-80ece1213936"
+
+
+class ContextSnapshotTest(StoreCase):
+    """A trimmed `claude -p "/context"` transcript (Claude Code 2.1.325): one user line and one system/local_command line."""
+
+    def ingest_fixture(self):
+        with open(CONTEXT_FIXTURE) as fh:
+            self.write("measure.jsonl", fh.read())
+        store.ingest(self.con, self.roots)
+
+    def snapshots(self):
+        return self.q("SELECT uuid, session_id, ts, project, cwd, version, model, context_window, total FROM context_snapshots ORDER BY uuid")
+
+    def parts(self, kind=None):
+        where = "WHERE kind = ?" if kind else ""
+        return self.q(f"SELECT uuid, seq, kind, name, detail, state, tokens FROM context_parts {where} ORDER BY uuid, seq",
+                      *([kind] if kind else []))
+
+    def test_snapshot_of_a_print_mode_run(self):
+        self.ingest_fixture()
+        (uuid, sid, ts, project, cwd, version, model, window, total), = self.snapshots()
+        self.assertEqual((uuid, sid, project, cwd, version, model, window, total),
+                         ("cdf501fe-1ec1-4d8b-bfa4-75bc06e0ee46", CONTEXT_SID, "demo", "/home/dev/demo", "2.1.325", "claude-fable-5-2",
+                          1_000_000, 30912))
+        self.assertEqual(ts, datetime(2026, 11, 15, 10, 42, 41, 622000))
+        cats = [(name, state, tokens) for _, _, _, name, _, state, tokens in self.parts("category")]
+        self.assertEqual(len(cats), 12)
+        self.assertEqual(cats[0], ("System prompt", "used", 4107))
+        self.assertIn(("MCP tools (deferred)", "deferred", 81826), cats)
+        self.assertIn(("Autocompact buffer", "buffer", 33000), cats)
+        self.assertEqual(cats[-1], ("Free space", "free", 936088))
+        self.assertTrue(all(detail is None for *_, detail, _, _ in self.parts("category")))
+
+    def test_parts_of_each_kind(self):
+        self.ingest_fixture()
+        rows = lambda kind: [(name, detail, state, tokens) for _, _, _, name, detail, state, tokens in self.parts(kind)]
+        mcp = rows("mcp_tool")
+        self.assertIn(("mcp__caveman__caveman_compress", "caveman", None, 254), mcp)
+        self.assertEqual(rows("memory_file"), [("/home/dev/.claude/CLAUDE.md", "User", None, 81)])
+        self.assertIn(("caveman:cavecrew-builder", "plugin", None, 136), rows("agent"))
+        self.assertIn(("answer-review-feedback", "userSettings", None, 43), rows("skill"))
+        seqs = [seq for _, seq, *_ in self.parts()]
+        self.assertEqual(seqs, list(range(len(seqs))))  # one ordinal per part, in the order /context lists them
+
+    def test_measuring_session_counts_nowhere(self):
+        self.ingest_fixture()
+        self.assertEqual(self.q("SELECT count(*) FROM requests")[0][0], 0)
+        self.assertEqual(self.q("SELECT count(*) FROM prompts")[0][0], 0)  # /context calls no model: its command line is no prompt
+        u = metrics.usage(self.con.cursor(), today=date(2026, 11, 15))
+        self.assertEqual((u["totals"]["sessions"], u["totals"]["prompts"], u["totals"]["active_days"]), (0, 0, 0))
+        self.assertEqual(u["sessions"], [])
+        self.assertEqual(metrics.session_list(self.con.cursor(), today=date(2026, 11, 15))["total"], 0)
+
+    def test_rebuild_and_reingest_give_the_same_rows(self):
+        self.ingest_fixture()
+        snaps, parts = self.snapshots(), self.parts()
+        self.assertEqual(len(snaps), 1)
+        store.ingest(self.con, self.roots)  # nothing new
+        os.utime(os.path.join(self.root, "proj", "measure.jsonl"), (0, 0))
+        self.con.execute("UPDATE files SET read_offset = 0, lines = 0")  # read again from the start: dedup drops the lines
+        store.ingest(self.con, self.roots)
+        self.assertEqual((self.snapshots(), self.parts()), (snaps, parts))
+        store.rebuild(self.con)
+        self.assertEqual((self.snapshots(), self.parts()), (snaps, parts))
+
+    def test_lines_without_context_usage_give_none(self):
+        cmd = dict(type="system", subtype="local_command", timestamp="2026-11-10T10:00:00Z", **S)
+        self.write("a.jsonl", line(uuid="c1", content="<local-command-stdout>Context Usage</local-command-stdout>", **cmd)
+                   + line(uuid="c2", contextUsage=dict(model="m", total_tokens=1), **cmd)
+                   + line(uuid="c3", contextUsage=dict(categories="x"), **cmd)
+                   + line(uuid="c4", contextUsage=[1], **cmd))
+        store.ingest(self.con, self.roots)
+        self.assertEqual((self.snapshots(), self.parts()), ([], []))
+
+    def test_odd_values_are_kept_as_nulls(self):
+        cu = dict(categories=[dict(name="System prompt", tokens="9", kind="used"), "x", dict(name=3, tokens=True)],
+                  mcp_tools={"name": "not a list"}, raw_max_tokens=None)
+        self.write("a.jsonl", line(type="system", subtype="local_command", uuid="c1", timestamp="2026-11-10T10:00:00Z",
+                                   contextUsage=cu, **S))
+        store.ingest(self.con, self.roots)
+        (_, _, _, project, _, _, model, window, total), = self.snapshots()
+        self.assertEqual((project, model, window, total), ("foo", None, None, None))
+        self.assertEqual([(kind, name, state, tokens) for _, _, kind, name, _, state, tokens in self.parts()],
+                         [("category", "System prompt", "used", None), ("category", None, None, None)])

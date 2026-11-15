@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import type { ContextPayload, ErrorsPayload, LimitsPayload } from "../../api";
+import type { ContextOverhead, ContextPayload, ErrorsPayload, LimitsPayload } from "../../api";
 import errors from "../../__fixtures__/errors";
 import limits from "../../__fixtures__/limits";
 import { DEFAULT_VIEW } from "../errors/view";
 import { compare, filtered, makeModel, rate, sumCalls, TOPN, typeRows } from "../errors/model";
-import { contextGrid, errorsBlock, errorsView, limitsBlock } from "./project";
+import { apportion, contextGrid, errorsBlock, errorsView, GRID_CELLS, limitsBlock, REST_LABEL, type GridRow } from "./project";
 
 const model = makeModel(errors as ErrorsPayload);
 const lim = limits as LimitsPayload;
@@ -96,5 +96,73 @@ describe("contextGrid", () => {
   it("is null when the start's or peak's share is not known", () => {
     expect(contextGrid(ctx(null, .4))).toBeNull();
     expect(contextGrid(ctx(.1, null))).toBeNull();
+  });
+  it("keeps the start whole without a snapshot", () => {
+    for (const overhead of [undefined, null]) {
+      const g = contextGrid({ ...ctx(.12, .4), overhead } as ContextPayload)!;
+      expect(g.overhead).toBeNull();
+      expect(g.rows.map(r => [r.key, r.label, r.cells])).toEqual([["start", "Starting context", 24], ["added", "Added by the peak", 56], ["free", "Free space", 120]]);
+    }
+  });
+});
+
+describe("contextGrid with a snapshot", () => {
+  type Cat = ContextOverhead["categories"][number];
+  const snap = (cats: [string, number, Cat["state"]?][], over: Partial<ContextOverhead> = {}): ContextOverhead => ({
+    ts: "2026-11-10T09:30:00Z", session_id: "m1", model: "claude-opus-4-1", version: "2.1.0", window: 200000,
+    categories: cats.map(([name, tokens, state]) => ({ name, tokens, state: state ?? "used" })),
+    top: { mcp_servers: [], memory_files: [], skills: [] }, ...over,
+  });
+  // S 40,000 tokens at 20% of a 200k window: 40 starting cells.
+  const ctx = (overhead: ContextOverhead, median = 40000, startShare = .2) => ({
+    starting: { sessions: 10, median, window: 200000, window_share: startShare },
+    growth: { peak: { sessions: 12, median: 100000, window_share: .5 } }, overhead,
+  }) as unknown as ContextPayload;
+  const scenario = snap([["System prompt", 4000], ["System tools", 12000], ["Skills", 4000], ["Messages", 9000], ["MCP tools", 7000, "deferred"],
+    ["Autocompact buffer", 33000, "buffer"], ["Free space", 120000, "free"]]);
+  const starts = (rows: GridRow[]) => rows.filter(r => r.key !== "added" && r.key !== "free");
+
+  it("splits the start 10% system prompt, 30% system tools, 10% skills and 50% first prompt and other", () => {
+    const g = contextGrid(ctx(scenario))!;
+    expect(g.start).toBe(40);
+    expect(starts(g.rows).map(r => [r.label, r.tokens, r.cells])).toEqual([
+      ["System prompt", 4000, 4], ["System tools", 12000, 12], ["Skills", 4000, 4], [REST_LABEL, 20000, 20]]);
+    expect(starts(g.rows).map(r => Math.round(r.share * 1000) / 1000)).toEqual([.02, .06, .02, .1]);
+    expect(g.rows.slice(-2).map(r => [r.key, r.cells])).toEqual([["added", 60], ["free", 100]]);
+    expect(g.overhead).toEqual({ ts: scenario.ts, model: "claude-opus-4-1", deferred: 7000, overflow: false, top: scenario.top });
+  });
+
+  it("gives each category its own tone, and the rest its own", () => {
+    const g = contextGrid(ctx(scenario))!;
+    expect(starts(g.rows).map(r => r.tone)).toEqual(["p0", "p1", "p2", "rest"]);
+  });
+
+  it("splits among the categories alone when they exceed the median start", () => {
+    const g = contextGrid(ctx(snap([["System prompt", 10000], ["System tools", 30000], ["MCP tools", 10000]])))!;
+    expect(g.overhead!.overflow).toBe(true);
+    expect(starts(g.rows).map(r => [r.label, r.tokens, r.cells])).toEqual([["System prompt", 10000, 8], ["System tools", 30000, 24], ["MCP tools", 10000, 8]]);
+    expect(starts(g.rows).reduce((a, r) => a + r.share, 0)).toBeCloseTo(.2);
+  });
+
+  it("rounds so that the parts fill exactly the starting cells", () => {
+    for (const [median, share] of [[24000, .12], [31000, .155], [17777, .09]] as const) {
+      const g = contextGrid(ctx(snap([["System prompt", 3001], ["System tools", 5003], ["Memory files", 7000], ["Skills", 333]]), median, share))!;
+      expect(starts(g.rows).reduce((a, r) => a + r.cells, 0)).toBe(g.start);
+      expect(g.rows.reduce((a, r) => a + r.cells, 0)).toBe(GRID_CELLS);
+    }
+  });
+
+  it("drops the parts with no tokens", () => {
+    const g = contextGrid(ctx(snap([["System prompt", 10000], ["Custom agents", 0], ["System tools", 30000]])))!;
+    expect(starts(g.rows).map(r => r.label)).toEqual(["System prompt", "System tools"]);
+  });
+});
+
+describe("apportion", () => {
+  it("sums to n, giving the remainder to the largest fractions, a tie to the earlier", () => {
+    expect(apportion(10, [1, 1, 1])).toEqual([4, 3, 3]);
+    expect(apportion(7, [1, 2, 4])).toEqual([1, 2, 4]);
+    expect(apportion(5, [0.4, 0.6])).toEqual([2, 3]);
+    expect(apportion(3, [0, 0])).toEqual([0, 0]);
   });
 });

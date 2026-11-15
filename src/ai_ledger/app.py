@@ -22,7 +22,7 @@ from datetime import date, datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 
-from . import context, insights, limits, live, metrics, store
+from . import context, insights, limits, live, measure, metrics, store
 
 HOST, PORT = "127.0.0.1", 8765  # PORT is the default; --port changes it
 INTERVAL = 60
@@ -127,6 +127,9 @@ class App:
         self.con, self.roots = con, roots
         self.pollers = limits.pollers() if pollers is None else pollers
         self.lock = threading.Lock()
+        # Measure now: one claude -p "/context" run at a time. Not the store lock: the run takes up to measure.TIMEOUT seconds,
+        # and only the ingest after it writes.
+        self.measuring = threading.Lock()
         self.wake = threading.Event()
         self.stopping = threading.Event()
         # last_change: the time of the last ingest that stored anything, so pages refetch only when data changed.
@@ -231,6 +234,26 @@ class App:
             first = delta > 0 and self.watchers == 1
         if first:
             self.wake.set()
+
+    def measure(self, body):
+        """Run Measure now for the project the body names, then ingest so its snapshot lands. Returns the answer; raises
+        ValueError for a bad body and measure.MeasureError for a run that cannot go or failed."""
+        project = measure.parse(body)
+        if not self.measuring.acquire(blocking=False):
+            raise measure.MeasureError(409, "a measurement is already running")
+        try:
+            cur = self.con.cursor()  # reads, as the routes do: no store lock
+            if not measure.known(cur, project):
+                raise measure.MeasureError(404, "project not found")
+            folder = measure.folder(cur, project)
+            if folder is None:
+                raise measure.MeasureError(404, "no folder of the project exists any more")
+            model = measure.model(cur, project)
+            session_id = measure.run(folder, model)
+            self.ingest()
+        finally:
+            self.measuring.release()
+        return dict(session_id=session_id, project=project, cwd=folder, model=model)
 
     def status(self):
         cur = self.con.cursor()
@@ -438,6 +461,16 @@ def handler(app, port=PORT):
             if path == "/api/refresh":
                 app.ingest()
                 self.json(app.status())
+            elif path == "/api/context/measure":
+                try:
+                    self.json(app.measure(self.json_body()))
+                except ValueError as e:
+                    self.send(400, json.dumps(dict(error=str(e))))
+                except measure.MeasureError as e:  # the stderr tail goes to the page that asked, never to the log
+                    self.send(e.status, json.dumps(dict(error=e.message, **(dict(stderr=e.stderr) if e.stderr else {}))))
+                except Exception as e:  # a store error: answer, instead of dropping the connection
+                    print(f"measure request failed: {type(e).__name__}", file=sys.stderr, flush=True)
+                    self.send(500, json.dumps(dict(error="internal error")))
             elif path in ("/api/errors/fix", "/api/errors/mute", "/api/errors/fixes/import"):
                 kind = path.rsplit("/", 1)[1]  # fix, mute or import
                 try:

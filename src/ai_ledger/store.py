@@ -67,7 +67,7 @@ CREATE TABLE IF NOT EXISTS error_marks (category VARCHAR PRIMARY KEY, fixed_on D
 """
 
 DERIVED = ["sessions", "requests", "tool_calls", "prompts", "hooks", "limit_snapshots", "session_facets", "facet_counts", "session_meta",
-           "session_titles"]
+           "session_titles", "context_snapshots", "context_parts"]
 DERIVED_SCHEMA = """
 CREATE TABLE IF NOT EXISTS sessions (
   session_id VARCHAR PRIMARY KEY, project VARCHAR, cwd VARCHAR, git_branch VARCHAR,
@@ -102,6 +102,15 @@ CREATE TABLE IF NOT EXISTS session_meta (
   lines_added BIGINT, lines_removed BIGINT, files_modified INTEGER, git_pushes INTEGER, languages VARCHAR,
   permission_mode VARCHAR, response_p50_s DOUBLE, destructive_commands INTEGER, bash_would_prompt INTEGER);
 CREATE TABLE IF NOT EXISTS session_titles (session_id VARCHAR PRIMARY KEY, custom VARCHAR, agent VARCHAR);
+-- What /context measured (the contextUsage of a Claude Code system/local_command line): one snapshot per line, keyed by its uuid.
+-- context_window is the model's window (raw_max_tokens; `window` is reserved in DuckDB), total the tokens in use.
+CREATE TABLE IF NOT EXISTS context_snapshots (
+  uuid VARCHAR PRIMARY KEY, session_id VARCHAR, ts TIMESTAMP, project VARCHAR, cwd VARCHAR, version VARCHAR, model VARCHAR,
+  context_window BIGINT, total BIGINT);
+-- The snapshot's parts in the order /context lists them (seq): kind is category, mcp_tool, memory_file, agent or skill; detail
+-- the MCP server, the memory file's type or the source; state the category's kind (used, deferred, buffer, free), else null.
+CREATE TABLE IF NOT EXISTS context_parts (
+  uuid VARCHAR, seq INTEGER, kind VARCHAR, name VARCHAR, detail VARCHAR, state VARCHAR, tokens BIGINT, PRIMARY KEY (uuid, seq));
 """
 
 
@@ -439,6 +448,7 @@ def write_snapshots(cur, rows):
 
 
 INTERRUPT = "[Request interrupted by user"
+CONTEXT_COMMAND = "<command-name>/context</command-name>"  # a /context run's user line: it calls no model, so it is no prompt
 TITLE_LINES = {"custom-title": ("customTitle", "custom"), "ai-title": ("aiTitle", "agent")}  # type -> (field, kind)
 
 
@@ -453,6 +463,7 @@ class Deriver:
         self.prompts, self.interrupted, self.hooks, self.followups = {}, set(), [], {}
         self.limits = []  # limit_snapshots rows; only sources whose transcripts report plan limits fill it
         self.titles = {}  # session_id -> {"custom" | "agent": newest title of that kind}; no sessions row of its own
+        self.contexts = []  # (context_snapshots row, its context_parts rows); only Claude Code's /context lines fill it
         # Errors from earlier ingests of this file still waiting for Claude's next words.
         self.pending = dict(cur.execute(
             "SELECT tool_use_id, result_seq FROM tool_calls WHERE result_file = ? AND is_error AND followup IS NULL "
@@ -498,6 +509,8 @@ class Deriver:
             s["compactions"] += 1
             if ts:
                 s["first_compaction"] = min(s["first_compaction"] or ts, ts)
+        elif t == "system" and d.get("subtype") == "local_command":
+            self.context_usage(d, sid, ts)
         elif t == "system" and d.get("subtype") == "stop_hook_summary":
             errs = bool(d.get("hookErrors"))
             for h in d.get("hookInfos") or []:
@@ -513,6 +526,21 @@ class Deriver:
 
     def title(self, sid, kind, title):
         self.titles.setdefault(sid, {})[kind] = title
+
+    def context_usage(self, d, sid, ts):
+        """A /context result: the structured contextUsage object, never the Markdown in content. Skipped without its categories."""
+        cu = d.get("contextUsage")
+        if not d.get("uuid") or not isinstance(cu, dict) or not isinstance(cu.get("categories"), list):
+            return
+        parts = []
+        for kind, field, name, detail in CONTEXT_PARTS:
+            items = cu.get(field)
+            for x in items if isinstance(items, list) else []:
+                if isinstance(x, dict):
+                    parts.append((kind, text_or_none(x.get(name)), text_or_none(x.get(detail)) if detail else None,
+                                  text_or_none(x.get("kind")) if kind == "category" else None, int_or_none(x.get("tokens"))))
+        self.contexts.append(((d["uuid"], sid, ts, d.get("cwd"), text_or_none(d.get("version")), text_or_none(cu.get("model")),
+                               int_or_none(cu.get("raw_max_tokens")), int_or_none(cu.get("total_tokens"))), parts))
 
     def assistant(self, d, s, sid, ts, msg, content):
         mid = msg.get("id")
@@ -576,7 +604,7 @@ class Deriver:
                         self.pending[x["tool_use_id"]] = self.seq
         origin = (d.get("origin") or {}).get("kind") if isinstance(d.get("origin"), dict) else None
         human = (pid and not d.get("isMeta") and not d.get("isSidechain") and origin in (None, "human")
-                 and text.strip() and not text.lstrip().startswith(INTERRUPT)
+                 and text.strip() and not text.lstrip().startswith((INTERRUPT, CONTEXT_COMMAND))
                  and not any(isinstance(x, dict) and x.get("type") == "tool_result" for x in (content if isinstance(content, list) else [])))
         if human and pid not in self.prompts:
             self.prompts[pid] = (pid, sid, ts, False)
@@ -614,8 +642,21 @@ class Deriver:
                [(sid, t.get("custom"), t.get("agent")) for sid, t in self.titles.items()],
                tail="ON CONFLICT (session_id) DO UPDATE SET custom = coalesce(excluded.custom, session_titles.custom), "
                     "agent = coalesce(excluded.agent, session_titles.agent)")
+        self.flush_contexts()
         # Errors still open stay in self.pending; the next ingest reloads them from tool_calls.
         update_from(cur, "tool_calls", "tool_use_id", ["followup"], list(self.followups.items()), where="AND tool_calls.followup IS NULL")
+
+    def flush_contexts(self):
+        """Snapshots new to the store, and the parts of those only, so a line read twice adds no part twice."""
+        if not self.contexts:
+            return
+        cur = self.cur
+        snaps = [(uuid, sid, ts, self.projects.get(cur, cwd) if cwd else None, cwd, *rest)
+                 for (uuid, sid, ts, cwd, *rest), _ in self.contexts]
+        new = set(insert(cur, "context_snapshots", ["uuid", "session_id", "ts", "project", "cwd", "version", "model", "context_window",
+                                                    "total"], snaps, returning="uuid"))
+        insert(cur, "context_parts", ["uuid", "seq", "kind", "name", "detail", "state", "tokens"],
+               [(snap[0], i, *part) for snap, parts in self.contexts if snap[0] in new for i, part in enumerate(parts)])
 
     def flush_tools(self):
         cur = self.cur
@@ -658,6 +699,20 @@ class Deriver:
                 None, u.get("subagent"), u.get("is_commit"), u.get("is_test"),
                 None if not r else not r["is_error"], self.path if r else None,
                 r and r["seq"], r and r["bytes"])
+
+
+# The lists of a contextUsage object that become context_parts: (kind, list, the field of its name, the field of its detail).
+CONTEXT_PARTS = (("category", "categories", "name", None), ("mcp_tool", "mcp_tools", "name", "server_name"),
+                 ("memory_file", "memory_files", "path", "type"), ("agent", "agents", "agent_type", "source"),
+                 ("skill", "skills", "name", "source"))
+
+
+def text_or_none(v):
+    return v if isinstance(v, str) else None
+
+
+def int_or_none(v):
+    return int(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else None
 
 
 def text_bytes(content):

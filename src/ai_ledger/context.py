@@ -33,6 +33,7 @@ LONG_TIER_MIN_USD = 1.0  # long_tier: long-prompt-tier cost at least this
 LONG_TIER_SHARE = 0.10  # ... and at least this share of the view's cost
 TIP_SESSIONS = 20  # the newest matching sessions a tip lists
 TIP_PROJECTS = 5  # large_start names the projects with the largest medians, and counts the rest
+OVERHEAD_TOP = 5  # overhead lists the largest MCP servers, memory files and skills of the snapshot
 
 
 # ---------- the shared CTEs ----------
@@ -521,6 +522,30 @@ def tips(ctx):
 
 # ---------- the payload ----------
 
+# ---------- configuration overhead ----------
+
+def overhead(cur, project, source=""):
+    """The project's latest /context snapshot (context_snapshots, by ts then uuid), whatever the range: overhead is the
+    configuration's, not a session's. None without a project, for a Codex-only view (Codex records no /context) or without
+    a snapshot. categories keep the order /context lists them; top holds the OVERHEAD_TOP largest MCP servers (their tools
+    summed), memory files and skills."""
+    if not project or source == "codex":
+        return None
+    snap = metrics.rows(cur, """SELECT uuid, ts, session_id, model, version, context_window AS window FROM context_snapshots
+        WHERE project = ? ORDER BY ts DESC NULLS LAST, uuid DESC LIMIT 1""", [project])
+    if not snap:
+        return None
+    snap = snap[0]
+    uuid = snap.pop("uuid")
+    snap["ts"] = metrics.iso(snap["ts"])
+    snap["categories"] = metrics.rows(cur, """SELECT name, coalesce(tokens, 0) AS tokens, state FROM context_parts
+        WHERE uuid = ? AND kind = 'category' AND name IS NOT NULL ORDER BY seq""", [uuid])
+    top = lambda kind, name: metrics.rows(cur, f"""SELECT {name} AS name, sum(coalesce(tokens, 0)) AS tokens FROM context_parts
+        WHERE uuid = ? AND kind = ? AND {name} IS NOT NULL GROUP BY 1 ORDER BY tokens DESC, name LIMIT {OVERHEAD_TOP}""", [uuid, kind])
+    snap["top"] = dict(mcp_servers=top("mcp_tool", "detail"), memory_files=top("memory_file", "name"), skills=top("skill", "name"))
+    return snap
+
+
 def payload(cur, project="", range_days=0, source="", automated=False, today=None, prices=None):
     """The Context page payload (see design D9). Raises ValueError for a bad source or a negative range."""
     prices = metrics.load_prices() if prices is None else prices
@@ -541,6 +566,7 @@ def payload(cur, project="", range_days=0, source="", automated=False, today=Non
     brk = session_breaks(q)
     data["cost"] = dict(cost(q, today), break_sessions=len(brk), breaks=[{k: v for k, v in r.items() if k != "first_ts"} for r in brk[:BREAK_SESSIONS]])
     data["tips"] = tips(Ctx(cur, q, shared, rp, W, fp, prices, data, brk))
+    data["overhead"] = overhead(cur, project, source)
     # One title lookup for every session row on the payload: it reads the first prompt of each session that has no title.
     metrics.with_titles(cur, [*data["fills"]["largest"], *data["cost"]["breaks"], *(x for t in data["tips"] for x in t["sessions"])])
     return data

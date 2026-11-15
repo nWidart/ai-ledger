@@ -13,6 +13,7 @@ import { share } from "../context/context";
 import { makeModel } from "../errors/model";
 import { sharePct } from "../limits/limits";
 import { ContextGrid } from "./ContextGrid";
+import { MeasureNow } from "./MeasureNow";
 import { contextGrid, errorsBlock, limitsBlock } from "./project";
 
 /** The page's view in words and links: the project and the shared keys, as a query string for another page. */
@@ -99,9 +100,11 @@ export function ErrorsBlock({ errors, scope }: { errors: ApiState<ErrorsPayload>
   );
 }
 
-/** Starting context, its share of the window, growth per prompt, turns to the first compaction, and the sessions near the limit. */
+/** Starting context, its share of the window, growth per prompt, turns to the first compaction, and the sessions near the limit.
+ *  Measure now shows for a project with Claude Code sessions in the view, or with a snapshot already. */
 export function ContextBlock({ context, usage, scope }: { context: ApiState<ContextPayload>; usage: ApiState<UsagePayload>; scope: Scope }) {
   const na = (v: ReactNode) => v ?? "n/a";
+  const claude = !!usage.data?.daily_sources.some(r => r.source === "claude");
   return (
     <Block id="context" title="Context" page="Context" href={"/context" + scope.search} state={context}>
       {c => <>
@@ -113,6 +116,7 @@ export function ContextBlock({ context, usage, scope }: { context: ApiState<Cont
         [c.growth.to_compaction.turns == null ? "n/a" : num(c.growth.to_compaction.turns), "turns to the first compaction"],
         [na(usage.data && num(usage.data.totals.near_limit)), "sessions near the context limit"],
       ]} />
+        {(claude || c.overhead) && <MeasureNow key={scope.project} project={scope.project} />}
       </>}
     </Block>
   );

@@ -130,6 +130,10 @@ It gathers the project's figures for the range, source and automated filters you
 
 Without a project the page has nothing to show: clearing the project opens Activity.
 
+The Context block draws a typical session's window as a grid of 200 cells, in the style of Claude Code's `/context`: the median starting context, what the median peak adds, and the free space. Transcripts do not say what makes up the starting context, but `/context` does, and Claude Code writes its result to the transcript. When the project has such a snapshot, the grid splits the starting context into system prompt, system tools, MCP tools, custom agents, memory files and skills, with the rest as "First prompt and other", and lists the largest MCP servers, memory files and skills. The latest snapshot of the project is used, whatever the range.
+
+To take a snapshot, choose **Measure now** in the Context block. The app runs `claude -p "/context"` in the folder of the project's latest Claude Code session, with its most used model. That calls no model and costs nothing, but it starts the project's MCP servers and hooks as a new session would. You can also run `/context` in any session, or `claude -p "/context"` in the project's folder: the next ingest picks it up. Snapshots taken before you upgraded count after one `ai-ledger rebuild`.
+
 ## Everywhere
 
 - Press **Cmd+K** to jump anywhere: `>errors #myproject #7d`. The `>context` term opens the Context page, keeping the project and range filters.

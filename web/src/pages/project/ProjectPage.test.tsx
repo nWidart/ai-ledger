@@ -1,7 +1,7 @@
 import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
-import type { ContextPayload, ErrorsPayload, InsightsPayload, LimitsPayload, LivePayload, UsagePayload } from "../../api";
+import { describe, expect, it, vi } from "vitest";
+import type { ContextOverhead, ContextPayload, ErrorsPayload, InsightsPayload, LimitsPayload, LivePayload, UsagePayload } from "../../api";
 import context from "../../__fixtures__/context";
 import errors from "../../__fixtures__/errors";
 import insights from "../../__fixtures__/insights";
@@ -188,6 +188,101 @@ describe("ProjectPage", () => {
       await loaded();
       await within(block("Context")).findByText("median starting context, tokens");
       expect(block("Context").querySelector(".ctx-grid")).toBeNull();
+    });
+
+    // A start of 40,000 tokens at 20% of a 200k window: 40 starting cells, split 4 / 12 / 4 / 20.
+    const snapshot: ContextOverhead = {
+      ts: "2026-11-10T09:30:00Z", session_id: "m1", model: "claude-opus-4-1", version: "2.1.0", window: 200000,
+      categories: [{ name: "System prompt", tokens: 4000, state: "used" }, { name: "System tools", tokens: 12000, state: "used" },
+        { name: "Skills", tokens: 4000, state: "used" }, { name: "Messages", tokens: 900, state: "used" }, { name: "MCP tools", tokens: 7000, state: "deferred" },
+        { name: "Free space", tokens: 150000, state: "free" }],
+      top: { mcp_servers: [{ name: "github", tokens: 5200 }], memory_files: [{ name: "/Users/me/foo/CLAUDE.md", tokens: 1800 }], skills: [] },
+    };
+    const measured = (overhead: ContextOverhead | null, median = 40000) =>
+      ({ ...withGrid({ ...context, starting: { ...context.starting, sessions: 9, median, window: 200000, window_share: median / 200000 } }, .4), overhead }) as ContextPayload;
+
+    it("splits the starting cells by the snapshot, with its date, model, deferred tools and largest items", async () => {
+      open({ context: measured(snapshot) });
+      await loaded();
+      const blk = block("Context");
+      await within(blk).findByRole("img", { name: /20% starting context \(System prompt 2\.0%, System tools 6\.0%, Skills 2\.0%, First prompt and other 10%\), 20% added by the peak, 60% free/ });
+      expect([".cg-p0", ".cg-p1", ".cg-p2", ".cg-rest", ".cg-start"].map(c => blk.querySelectorAll(".cg-cells " + c).length)).toEqual([4, 12, 4, 20, 0]);
+      const items = [...blk.querySelectorAll(".cg-legend li")].map(li => li.textContent);
+      expect(items.slice(0, 4)).toEqual([`System prompt${big(4000)} tokens (2.0%)`, `System tools${big(12000)} tokens (6.0%)`, `Skills${big(4000)} tokens (2.0%)`,
+        `First prompt and other${big(20000)} tokens (10%)`]);
+      expect(items[4]).toContain("Added by the peak");
+      expect(blk.textContent).not.toContain("transcripts do not split them");
+      expect(within(blk).getByText(/^Overhead measured .* with claude-opus-4-1/).textContent).toContain(`${big(7000)} deferred tokens of tools are not loaded`);
+      const details = within(blk).getByText("Largest overhead items").closest("details")!;
+      expect(within(details).getByText("MCP servers")).toBeTruthy();
+      expect(within(details).getByText("github").nextElementSibling!.textContent).toBe(`${big(5200)} tokens`);
+      expect(within(details).getByText("CLAUDE.md").getAttribute("title")).toBe("/Users/me/foo/CLAUDE.md");
+      expect(within(details).queryByText("Skills")).toBeNull();
+    });
+
+    it("says so when the snapshot is larger than the median start", async () => {
+      open({ context: measured(snapshot, 16000) });
+      await loaded();
+      const blk = block("Context");
+      await within(blk).findByText(/The measured overhead is larger than the median start/);
+      expect(within(blk).queryByText("First prompt and other")).toBeNull();
+    });
+
+    /** The API with Measure now: the context payload answers `ctx` (changed by the run), the run answers `run()`. */
+    const withMeasure = (run: (init: RequestInit) => Promise<Response>, before: ContextPayload, after: ContextPayload) => {
+      let ctx = before;
+      const inner = serve({ context: before });
+      const f = vi.fn((input: string, init?: RequestInit) => {
+        if (input === "/api/context/measure") return run(init!).then(r => { if (r.ok) ctx = after; return r; });
+        if (input.startsWith("/api/context?")) return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(ctx) } as Response);
+        return inner(input);
+      });
+      vi.stubGlobal("fetch", f);
+      history.replaceState(null, "", "/project?project=foo&range=30");
+      renderApp(<ProjectPage />);
+      return f;
+    };
+    const answer = (status: number, body: unknown) => ({ ok: status < 400, status, json: () => Promise.resolve(body) }) as Response;
+
+    it("measures the project now, says it is busy, then shows the new snapshot", async () => {
+      let done!: (r: Response) => void;
+      const f = withMeasure(() => new Promise<Response>(r => { done = r; }), measured(null), measured(snapshot));
+      await loaded();
+      const blk = block("Context");
+      const button = await within(blk).findByRole("button", { name: "Measure now" });
+      expect(document.getElementById(button.getAttribute("aria-describedby")!)!.textContent)
+        .toBe(`Runs claude -p "/context" in the project's latest folder. Starts its MCP servers and hooks like a new session; calls no model.`);
+      expect(blk.textContent).toContain("transcripts do not split them");
+      await userEvent.click(button);
+      const busy = within(blk).getByRole("button", { name: "Measuring…" });
+      expect(busy.getAttribute("aria-disabled")).toBe("true");
+      expect(busy.getAttribute("aria-busy")).toBe("true");
+      await userEvent.click(busy);
+      const posts = f.mock.calls.filter(c => c[0] === "/api/context/measure");
+      expect(posts).toHaveLength(1);
+      expect(posts[0]![1]).toMatchObject({ method: "POST", body: JSON.stringify({ project: "foo" }) });
+      done(answer(200, { session_id: "m1", project: "foo", cwd: "/Users/me/foo", model: "claude-opus-4-1" }));
+      await within(blk).findByRole("button", { name: "Measure now" });
+      expect(within(blk).getByText(/^Overhead measured/)).toBeTruthy();
+      expect(blk.querySelectorAll(".cg-cells .cg-p1").length).toBe(12);
+    });
+
+    it("says why a run failed and keeps the figures", async () => {
+      withMeasure(() => Promise.resolve(answer(503, { error: "Claude Code was not found on the app's PATH." })), measured(null), measured(snapshot));
+      await loaded();
+      const blk = block("Context");
+      await userEvent.click(await within(blk).findByRole("button", { name: "Measure now" }));
+      expect((await within(blk).findByRole("alert")).textContent).toContain("Claude Code was not found on the app's PATH.");
+      expect(within(blk).getByText("median starting context, tokens")).toBeTruthy();
+      expect(blk.querySelectorAll(".cg-cells .cg-start").length).toBe(40);
+      expect(within(blk).getByRole("button", { name: "Measure now" }).getAttribute("aria-disabled")).toBeNull();
+    });
+
+    it("offers no Measure now without Claude Code sessions or a snapshot", async () => {
+      open({ usage: { ...foo(usage), daily_sources: [{ day: "2026-11-04", source: "codex", cost: 1 }] }, context: measured(null) });
+      await loaded();
+      await within(block("Context")).findByText("median starting context, tokens");
+      expect(within(block("Context")).queryByRole("button", { name: "Measure now" })).toBeNull();
     });
   });
 
