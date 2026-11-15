@@ -47,3 +47,8 @@ Your goal is to complete the entire specification with maximum quality while min
 - Update `README.md` when user-visible behavior changes.
 - Add user-visible changes to the `[Unreleased]` section of `CHANGELOG.md`.
 - Release: run the Release PR workflow on `main` (`gh workflow run release-pr.yml`; `-f bump=patch|minor|major` overrides the bump it picks). It opens a `release/v<version>` PR that sets the version and dates the `[Unreleased]` section; edit the notes on that branch if needed. Merging it runs `.github/workflows/release.yml`, which checks and smoke-tests the merge commit, then tags it, publishes to PyPI and creates the GitHub release. Never tag or publish by hand; to retry after a fix on `main`, run `gh workflow run release.yml -f tag=v<version>`. The workflow needs the `RELEASE_TOKEN` secret.
+
+## Shell
+
+- Change files with the Edit and Write tools. Never write a file through Bash: no heredocs, `python3 -` scripts, `cat >` or `cat >>`.
+- macOS `sed` is BSD: `sed -i` without a suffix argument fails. Use the Edit tool. If you must use `sed -i`, write `sed -i '' …`.
