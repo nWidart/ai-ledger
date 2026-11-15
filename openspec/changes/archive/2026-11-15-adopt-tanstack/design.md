@@ -33,14 +33,14 @@ Also listed on tanstack.com and not evaluated further: Start (full-stack framewo
 
 **Goals:**
 - One data layer for every GET, with cancellation, eviction, stale-while-revalidate and deduplication the app no longer writes itself.
-- Fix the audit items assigned to this change: no `AbortSignal`, unbounded cache and `JSON.stringify` compare, polls in hidden tabs, poll priority, synchronous page switches.
+- Fix the audit items assigned to this change: no `AbortSignal`, unbounded cache and `JSON.stringify` compare, polls in hidden tabs, poll priority. Synchronous page switches moved to `adopt-tanstack-router` (decision 9).
 - Every link, bookmark and copied URL keeps working. No server change.
 - Each phase ships on its own, passes `npm run check` and can be reverted by itself.
 - The bundle grows by Query alone.
 
 **Non-Goals:**
 - No change to payloads, URL keys or any figure.
-- No router. No virtualization. No change to how tables sort.
+- No router in this change (decision 9). No virtualization. No change to how tables sort.
 - No Suspense: the pages' loading states (`useLanding`, the drawers' hints, `aria-busy`) are specified behaviour and stay.
 
 ## Decisions
@@ -170,7 +170,9 @@ As built in phase 4. It differs from the first plan in four places, each for a r
 
 The Errors page's "Show more examples" (`Examples.tsx`, `MSG_PAGE = 30`) slices a list already in the payload; no request is involved, so it is not an infinite query and stays as it is. `TopSessionsDrawer` (one day's sessions, no paging) is a plain `useQuery`. The palette's session search is a plain `useQuery` on `["sessions", view, { q }]` with `enabled: !!q`.
 
-### 9. Router: reject; do the two navigation items in `hash.ts`
+### 9. Router: left to the change `adopt-tanstack-router`
+
+**Superseded on 2026-11-15.** The user asked for this verdict to be reconsidered and then approved a separate OpenSpec change, `adopt-tanstack-router`: TanStack Router owns the URL, the view moves from the hash to validated search params, and old hash links redirect in place. That change does the page transitions, the scroll restoration on Back and issue #69, so this change does none of them and its phase 5 is removed. The comparison below is kept as the reasoning of the first plan; its Transitions and Scroll restoration items describe work this change no longer does.
 
 What Router would give, against what the app has:
 
@@ -180,7 +182,7 @@ What Router would give, against what the app has:
 - **Scroll restoration.** Router caches and restores scroll per location key. Today `go()` scrolls to the top on a page change and Back leaves scroll to the browser, which cannot restore it for content that is not drawn yet. This is a small real gap; if it is wanted, `hash.ts` can keep a `sessionStorage` map from `history.state.key` to `scrollY` in thirty lines. Not in this change; the user wants it as a follow-up change (Resolved Questions).
 - **Preloading on hover.** Not applicable: seven pages whose code is one lazy chunk each, and data that depends on the hash.
 
-Cost: 30 kB gzipped, a second source of truth for the URL, a migration of every link and test, and a server `PAGES` list that would need to learn new paths or a catch-all. Verdict: **reject** for this app; revisit only if the app gains nested routes or per-route data loaders.
+Cost as first estimated: 30 kB gzipped (measured by `adopt-tanstack-router` at 26.7 kB gzipped), a second source of truth for the URL, and a migration of every link and test. No server change is needed: the server already serves `index.html` for the page paths whatever their query string. First verdict: reject. Current verdict: adopted by `adopt-tanstack-router`, which has its own design.
 
 ### 10. Testing
 
@@ -220,7 +222,22 @@ DB (1.0 RC, 108 kB) is a client-side relational store with live queries and opti
 
 ### 18. Bundle size, before and after
 
-Today: one JS chunk of 651 kB minified, 204 kB gzipped. After this change: `@tanstack/react-query` with `@tanstack/query-core` adds 13.0 kB gzipped (45 kB minified; Bundlephobia, 5.107.1); the removed `useApi` cache and guards take back about 1 kB; the devtools ship nothing. Estimate: about 216 kB gzipped total, in the per-page chunks `feat/web-audit-fixes` creates, with Query in the shared chunk. Rejecting Router (30 kB), Table (31 kB), Virtual (10 kB), Form (17 kB), Pacer (10 kB) and Hotkeys (16 kB) is what keeps it there; adopting them all would have added about 127 kB gzipped, more than half the app again. The close-out task records the measured sizes in the change.
+Estimated in the plan: Query adds about 13 kB gzipped, the devtools ship nothing.
+
+**Measured at close-out (task 6.2)**, from the committed build in `src/ai_ledger/web/assets/` at `1f73cca` (before phase 1) and after phase 4, `gzip -9`, 1 kB = 1000 bytes:
+
+| | Before | After | Change |
+|---|---|---|---|
+| All JS, minified | 729.0 kB (20 chunks) | 767.3 kB (21 chunks) | +38.3 kB (+5.3%) |
+| All JS, gzipped | 237.9 kB | 249.2 kB | +11.3 kB (+4.7%) |
+| Entry chunk `index`, minified | 246.9 kB | 286.8 kB | +39.8 kB |
+| Entry chunk `index`, gzipped | 77.9 kB | 89.3 kB | +11.4 kB |
+| `LivePage` chunk, gzipped | 9.2 kB | 8.1 kB | -1.1 kB |
+| CSS, gzipped | 19.6 kB | 19.6 kB | none |
+
+The growth is Query, and it sits in the entry chunk because every page uses it. It came in under the estimate: 11.3 kB gzipped against 13. The other page chunks moved by less than 0.4 kB each. No built file contains the devtools; `tests/test_web_build.py` asserts it (`test_build_ships_no_query_devtools`).
+
+The plan's "204 kB gzipped" for the build before was the single chunk measured before #74 split the pages; the figures above are the split build's. Rejecting Table (31 kB), Virtual (10 kB), Form (17 kB), Pacer (10 kB) and Hotkeys (16 kB) is what keeps the total there. Router's 26.7 kB is weighed in `adopt-tanstack-router`.
 
 ## Migration phases
 
@@ -230,8 +247,8 @@ Each phase is one PR on its own branch from `main`, started after the phase befo
 2. **Pages on Query.** `queries.ts`, `getJson` with a signal, the `useApi` adapter over `useQuery`, the status query and the ingest watcher, Refresh as a mutation, `askedFor()`; delete the old cache; rewrite the affected tests; spec delta for the hidden tab. This is the phase that fixes the leak, the stringify compare, the missing cancellation and the poll in hidden tabs for every page. Revert: restore `useApi.ts` and `refresh.ts`.
 3. **Secondary fetches.** The sessions drawer (infinite query), `TopSessionsDrawer`, the session sheet's prompt, the Errors "Show full", the palette's two queries, the marks mutations with `setQueryData`. Revert per file.
 4. **Live.** The list and session queries, notices as invalidation, the cursor catch-up in the queryFn, pause and visibility through `enabled`, removal of the manual visibility pause; spec delta. Revert: restore `useLive.ts`.
-5. **Navigation polish.** `startTransition` and view transitions in `hash.ts` and `App.tsx`. Not TanStack; the audit item a router would have taken. Its PR closes issue #69. Revert alone.
-6. **Close-out.** README, CHANGELOG, measured bundle sizes, dead code, `openspec validate`, and the archive of this change.
+5. **Navigation polish.** Removed. `adopt-tanstack-router` replaces `hash.ts`, so `startTransition` and view transitions there would be deleted by it; that change does them and closes issue #69.
+6. **Close-out.** README, CHANGELOG, measured bundle sizes, dead code, `openspec validate`, a walk of the app, and the archive of this change. It follows phase 4.
 
 ## Risks / Trade-offs
 
@@ -250,5 +267,5 @@ Answered by the user on 2026-11-15, before implementation started.
 
 - **Refetch on tab return: only the queries invalidated while hidden.** `refetchOnWindowFocus` stays at Query's default for the data queries; only the status query uses `"always"` (decision 5). The status answer on return invalidates the data if an ingest was missed, so the page is at most one request behind.
 - **An ingest does not invalidate the Live queries.** The watcher's predicate skips `["live"]` (decision 1). Live follows its own notices, and its reconnect path catches up after a drop (decision 7).
-- **Scroll restoration on Back: wanted, as a follow-up change.** Not in this change. Plan it as its own OpenSpec change (the `sessionStorage` map in `hash.ts` of decision 9).
-- **Rejecting TanStack Router: accepted.** Decision 9 stands.
+- **Scroll restoration on Back: wanted.** It is now part of `adopt-tanstack-router`, not a follow-up to this change.
+- **Rejecting TanStack Router: accepted at first, then reconsidered.** The user approved `adopt-tanstack-router` the same day; decision 9 says what that changes here.
