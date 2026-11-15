@@ -16,7 +16,7 @@ The docs site uses Starlight's default theme: system font, blue accent, cool gre
 
 ### Modified Capabilities
 
-- `documentation-site`: the light and dark themes follow the app's typeface and colors, pass WCAG AA contrast, and load no font from a third party.
+- `documentation-site`: a new requirement, Look like the app: the app's typeface and colors in both themes, WCAG AA contrast, and no font from a third party.
 
 ## Impact
 

@@ -53,7 +53,7 @@ The app loads IBM Plex Sans from Google Fonts, and the README's Privacy section 
 
 ### D5. A spec delta, not only a design note
 
-The look is visual, but two parts of it are commitments a later change must keep: WCAG AA contrast for text, links and control states in both themes, and no font request to a third party. They go into the `Work in light and dark, by keyboard and screen reader` requirement. Matching the app's typeface and colors goes in too, so a later restyle of either knows to follow the other.
+The look is visual, but two parts of it are commitments a later change must keep: WCAG AA contrast for text, links and control states in both themes, and no font request to a third party. They go into a new requirement, `Look like the app`, next to `Work in light and dark, by keyboard and screen reader`. Matching the app's typeface and colors goes in too, so a later restyle of either knows to follow the other. A new requirement, not a longer existing one: the existing one is already close to the strict validator's length limit.
 
 ## Contrast
 
