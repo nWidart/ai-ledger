@@ -73,7 +73,7 @@ When older events are not shown, the stream says so and links to the session she
 | Compaction | A mark between events: "context compacted at N tokens". |
 | Interruption | "interrupted by you". |
 
-A tool row opens its detail in place: the description (shell calls), the input, the start time, the error when it failed, and the result. With Full text off, the result shows only its size in characters. A tool input is cut to 300 characters with Full text off. A failed command inside a Codex `exec` script gets its own failed row.
+A tool row opens its detail in place: the description (shell calls), the input, the start time, the error when it failed, and the result. With Full text off, the result shows only its size in characters. A tool input is cut to 300 characters with Full text off. The error text of a failed call shows with Full text off too, up to 700 characters. A failed command inside a Codex `exec` script gets its own failed row.
 
 **Subagent lanes.** Subagent work shows as a lane inside the stream. The header shows the subagent's name, its description, its tool count, its error count when above zero, its duration, its model and cost when known, and whether it is running (spinner) or done (✓). A finished lane is folded. A running lane with more than 5 rows shows its last 5, with a control under its header ("Show all N rows", then "Show last 5"). The Errors filter opens a finished lane that holds a failed row, unless you folded it. A fold or expansion you chose is kept while the page is open.
 

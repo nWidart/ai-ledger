@@ -64,7 +64,7 @@ See [Activity](/ai-ledger/pages/activity/).
 | N failed test runs of M | Failed test runs out of all test runs. | **Needs attention** | [Kill repeated tool failures](/ai-ledger/improve/tool-failures/) |
 | Errors per 100 calls | Failed tool calls per 100 tool calls. Marked worse when it goes up. | **Work health**; **Project metrics** | [Kill repeated tool failures](/ai-ledger/improve/tool-failures/) |
 | Test runs passed | The share of test runs that passed. Marked worse when it goes down. | **Work health** | [Kill repeated tool failures](/ai-ledger/improve/tool-failures/) |
-| Prompts interrupted | The share of prompts that were interrupted. Marked worse when it goes up. | **Work health** | [Babysit agents less](/ai-ledger/improve/babysit-less/) |
+| Prompts interrupted | The share of prompts that were interrupted. In Claude Code, a tool call you reject counts as an interruption. Marked worse when it goes up. | **Work health** | [Babysit agents less](/ai-ledger/improve/babysit-less/) |
 | Subagents | The share of tokens that came from subagents. | **Work health**; **Project metrics** | – |
 | Median session | The median active time of a session. | **Work health** | – |
 | Work per day, or per week | Commits, prompts or sessions per day, with errors per 100 calls as a line. One bar per week when the view spans more than 60 days. | **Work per day** | [Weekly review](/ai-ledger/improve/weekly-review/) |

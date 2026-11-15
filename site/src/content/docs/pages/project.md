@@ -111,7 +111,7 @@ The legend beside the grid has a heading, "Typical session · 200k window" (the 
 
 ### Session judgments
 
-**Shows** how many of the project's Claude Code sessions `/insights` analysed, out of how many ("N of M Claude Code sessions analysed"), marked as a model's judgment as on [Insights](/ai-ledger/pages/insights/). Then **Outcomes** of the analysed sessions, as share and count, and **Top friction**, the three most reported kinds of friction with their session counts. With no analysed session the block says "No session is analysed by `/insights` in this view." and shows no outcome.
+**Shows** how many of the project's Claude Code sessions `/insights` analysed, out of how many ("N of M Claude Code sessions analysed"), marked as a model's judgment as on [Insights](/ai-ledger/pages/insights/). Then **Outcomes** of the analysed sessions, as share and count, and **Top friction**, the three most reported friction families with their session counts. With no analysed session the block says "No session is analysed by `/insights` in this view." and shows no outcome.
 
 **Controls** The heading link **Open in Insights** opens Insights for the project.
 

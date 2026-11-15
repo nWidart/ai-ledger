@@ -59,7 +59,9 @@ The app treats a session as automated when:
 - it has no user prompt;
 - it ran in a temporary folder (project `(temp)`) with at most one user prompt. A session in a temporary folder with more than one prompt is not automated: it counts under `(temp)`.
 
-A project filter that names an automated project includes that project's sessions, with the control off. Naming `(temp)` does not include its automated sessions.
+A project filter that names an automated project includes that project's sessions, with the control off, except its sessions with no user prompt, which stay out. Naming `(temp)` does not include its automated sessions.
+
+With the control off, the project picker leaves out automated projects. The Limits picker lists every project, automated ones included.
 
 If `automated.json` cannot be used, Activity shows a banner with the file's path and the reason, and only the built-in detection applies.
 

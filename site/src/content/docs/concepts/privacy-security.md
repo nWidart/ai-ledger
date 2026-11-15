@@ -49,7 +49,7 @@ There is no password. Requests that carry neither of those browser headers pass,
 
 Every page shows text taken from transcripts: project names, folders, git branches, session titles (made from a session's first prompt when the agent wrote none), commands, error messages and error examples. An error example can quote a secret that was in a command or its output.
 
-The [Live](/ai-ledger/pages/live/) page shows the most. Its **Full text** toggle is off each time the page loads. Off, prompts and replies show as word counts, tool results as sizes, tool inputs cut to 300 characters and subagent calls by their description; a short tool input, such as a command, still shows as written. On, everything shows as written, and a banner says so: "Full text on. Prompts, replies and tool output show as written, secrets included."
+The [Live](/ai-ledger/pages/live/) page shows the most. Its **Full text** toggle is off each time the page loads. Off, prompts and replies show as word counts, tool results as sizes, tool inputs cut to 300 characters, a failed call's error text up to 700 characters, and subagent calls by their description; a short tool input, such as a command, still shows as written. On, everything shows as written, and a banner says so: "Full text on. Prompts, replies and tool output show as written, secrets included."
 
 The Cost page's tables download as CSV and copy to the clipboard, with project and session names in them.
 
