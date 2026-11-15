@@ -23,7 +23,7 @@ export const yearLabel = (m: Model, k: Day) => dayLabel(k, k.slice(0, 4) !== m.l
 export const shortLabel = (s: string) => (s.length > 26 ? s.slice(0, 25) + "…" : s);
 
 export type Gran = "day" | "week";
-/** The view the hash holds. source: "" is all; sub: include subagents; noise: hide noise; cat: the open type; focus: the linked example;
+/** The view the URL holds. source: "" is all; sub: include subagents; noise: hide noise; cat: the open type; focus: the linked example;
  *  at: the chart bucket (as bucketOf returns it) the type table and the detail narrow to; tool: the tool the open type's detail narrows to. */
 export interface View { project: string; source: Source | ""; range: Range; gran: Gran; sub: boolean; noise: boolean; cat: string | null; focus: string | null; at: Day | null; tool: string | null }
 /** Applied fixes: type id -> YYYY-MM-DD, as the old page stored them. */
@@ -199,7 +199,7 @@ export const prevSpan = (m: Model, v: View): [Day, Day] | null => {
 /** A chart point can be selected unless it stands for a folded stretch without calls. The click, the keys and `settle` share this. */
 export const selectable = (p: ChartPt) => !p.to;
 /** A selected bucket that isn't a selectable point of the chart the view draws (another granularity, outside the range, before
- *  the first call, inside a fold) clears, so the marker and the filtered lists can't disagree. A hash cat with no errors in the
+ *  the first call, inside a fold) clears, so the marker and the filtered lists can't disagree. A cat in the URL with no errors in the
  *  view's bucket closes, unless an example is linked. A tool with no errors in the open type's bucket (or no open type) clears. */
 export function settle(m: Model, v: View): View {
   const f = filtered(m, v);

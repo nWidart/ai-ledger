@@ -33,7 +33,7 @@ export interface ErrorsCtx {
   dismissError: (cat: string, kind: FixError["kind"]) => void;
   setMode: (m: Mode) => void;
   setQ: (q: string) => void;
-  /** The type table's sort and filter text: page state, so they outlive a re-render and a change of view (not in the hash, not saved). */
+  /** The type table's sort and filter text: page state, so they outlive a re-render and a change of view (not in the URL, not saved). */
   typeSort: SortBy<TypeKey>; setTypeSort: (s: SortBy<TypeKey>) => void; typeQ: string; setTypeQ: (q: string) => void;
   /** Run once after the next render (focus a control that render brings). */
   after: (fn: () => void) => void;

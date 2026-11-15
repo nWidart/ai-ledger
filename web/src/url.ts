@@ -88,7 +88,7 @@ export const rootState = (s: RootSearch) => ({
   project: s.project ?? "", range: s.range ?? DEFAULT_RANGE, source: (s.source ?? "") as Source | "", auto: s.auto ?? false,
   inspect: s.inspect ?? "", tool: s.tool ?? "", mcp: s.mcp ?? "", skill: s.skill ?? "", session: s.session ?? "",
 });
-export type ViewState = ReturnType<typeof rootState>;
+type ViewState = ReturnType<typeof rootState>;
 /** The view a URL's keys describe, with defaults for what is missing or not valid. */
 export const parseView = (raw: Readonly<Record<string, unknown>>): ViewState => rootState(validateRoot(raw));
 

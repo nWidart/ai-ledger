@@ -1,5 +1,5 @@
 // From the palette's chips and the current location to the URL one commit writes, the footer that says so, and how each
-// chip fared. Pure: no React, no DOM. Pages already read every key written here; nothing new goes in the hash.
+// chip fared. Pure: no React, no DOM. Pages already read every key written here; nothing new goes in the URL.
 import { viewOf, type View } from "../../api";
 import { DEFAULT_RANGE, SHARED_KEYS, applyPatch, formatSearch, parseView, rootState, validateRoot } from "../../url";
 import { SOURCE_LABELS } from "../Filters";
@@ -26,13 +26,13 @@ export interface Resolved {
 }
 
 const HOSTS_SHEETS = ["/usage", "/cost", "/context", "/errors"];
-// Errors' view keys (pages/errors/view.ts): with none of them in the hash, Errors shows its saved view instead.
+// Errors' view keys (pages/errors/view.ts): with none of them in the URL, Errors shows its saved view instead.
 const ERRORS_KEYS = ["project", "range", "source", "sub", "noise", "gran", "cat", "ex"];
 const HASH_KEY: Record<FilterKind, string> = { project: "project", source: "source", range: "range", automated: "auto" };
 const pageLabel = (path: string) => PAGES.find(p => p.path === path)?.label ?? path;
 const isPage = (path: string) => PAGES.some(p => p.path === path);
 
-/** Chips for the filters the hash sets: project, source, range (only when the hash names one) and the automated toggle. */
+/** Chips for the filters the URL sets: project, source, range (only when the URL names one) and the automated toggle. */
 export function prefill(search: Readonly<Record<string, string>>): Chip[] {
   const s = validateRoot(search), h = rootState(s), out: Chip[] = [];
   if (h.project) out.push({ kind: "project", value: h.project, label: h.project, prefilled: true });
@@ -73,7 +73,7 @@ export function resolve(chips: readonly Chip[], here: Here): Resolved {
   const open = si == null ? null : chips[si]!;
   const path = chosen ?? (open && !HOSTS_SHEETS.includes(cur) ? "/usage" : cur);
 
-  // The hash: staying keeps every key, moving carries the shared ones (as the nav does); then the filters and the sheet.
+  // The URL: staying keeps every key, moving carries the shared ones (as the nav does); then the filters and the sheet.
   let raw: Record<string, string> = {};
   if (path === cur) raw = { ...here.search };
   else for (const k of SHARED_KEYS) if (here.search[k]) raw[k] = here.search[k]!;

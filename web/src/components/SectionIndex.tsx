@@ -15,7 +15,7 @@ const pin = (id: string) => {
   pins.forEach(f => f());
 };
 
-/** Scrolls to a section (opening a drawer) without touching the hash, which holds the view. */
+/** Scrolls to a section (opening a drawer) without touching the URL, which holds the view. */
 export function jumpTo(id: string) {
   const el = document.getElementById(id);
   if (!el || el.hidden) return;

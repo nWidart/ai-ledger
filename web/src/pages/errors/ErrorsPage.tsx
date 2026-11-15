@@ -52,13 +52,13 @@ export function ErrorsPage() {
   viewRef.current = view;
 
   const [mode, setModeS] = useState<Mode>(loadMode), [q, setQ] = useState("");
-  // The type table's sort and filter text last the page visit, across view changes (not in the hash, not saved).
+  // The type table's sort and filter text last the page visit, across view changes (not in the URL, not saved).
   const [typeSort, setTypeSort] = useState<SortBy<TypeKey>>(TYPE_SORT), [typeQ, setTypeQ] = useState("");
   // Open incidents and message groups, and opened examples: each row reads its own entry, so a toggle re-renders one row, not the page.
   const sets = useRef({ openInc: new Keyed<number, true>(), openMsg: new Keyed<string, true>(), opened: new Keyed<string, true>() }).current;
   const narrow = useMedia(NARROW), toSheet = !!m && narrow && !!view.cat;
   const [chartInView, setChartInView] = useState(true), [pageLive, setPageLive] = useState("");
-  // A dead link's notice is page state: the write-back below drops its ex from the hash, so the hash can't say it any more.
+  // A dead link's notice is page state: the write-back below drops its ex from the URL, so the URL can't say it any more.
   const [deadLink, setDeadLink] = useState(false);
   const sheet = useRef<HTMLDialogElement>(null), retryBtn = useRef<HTMLButtonElement>(null);
   const selecting = useRef(false), navd = useRef(false), retried = useRef(false), init = useRef(false);
@@ -116,7 +116,7 @@ export function ErrorsPage() {
   useLayoutEffect(() => { sets.openInc.flush(); sets.openMsg.flush(); }, [pinned, sets]);
   useEffect(() => { selecting.current = false; });
 
-  // The view is the hash: write it back whole (a closed type drops out, an empty hash takes the saved view), and remember it.
+  // The view is the URL: write it back whole (a closed type drops out, an empty URL takes the saved view), and remember it.
   useLayoutEffect(() => { if (m) setSearch(viewPatch(view), { push: false }); }, [m, view]);
   useEffect(() => {
     if (!m) return;

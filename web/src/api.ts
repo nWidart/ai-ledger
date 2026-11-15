@@ -476,14 +476,14 @@ export interface ContextPayload {
   tips: Tip[];
 }
 
-// URLs. automated: Activity and Cost leave automated sessions out unless asked (auto=1 in the page hash). source: "" is all.
+// URLs. automated: Activity and Cost leave automated sessions out unless asked (auto=1 in the page URL). source: "" is all.
 const qs = (o: Record<string, string | number | boolean | null | undefined>) => {
   const p = new URLSearchParams();
   for (const [k, v] of Object.entries(o)) if (v !== undefined && v !== null && v !== "" && v !== false) p.set(k, v === true ? "1" : String(v));
   return String(p);
 };
 export interface View { project: string; range: number; automated: boolean; source: Source | "" }
-/** The API view of the page hash (useView()). */
+/** The API view of the page URL (useView()). */
 export const viewOf = (h: { project: string; range: number; auto: boolean; source: Source | "" }): View =>
   ({ project: h.project, range: h.range, automated: h.auto, source: h.source });
 const viewQs = (v: View) => ({ project: v.project, range: v.range, automated: v.automated, source: v.source });

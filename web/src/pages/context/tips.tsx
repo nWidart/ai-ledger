@@ -24,7 +24,7 @@ export function tipInsight(t: Tip, open: (id: TipId) => void): Insight {
   };
 }
 
-/** The sessions a tip matches (the newest 20), each opening its sheet. Mounted while the hash names the tip; closing it clears the hash. */
+/** The sessions a tip matches (the newest 20), each opening its sheet. Mounted while the URL names the tip; closing it clears the tip from the URL. */
 export function TipSessions({ tip, onClose }: { tip: Tip; onClose: () => void }) {
   // An effect, not a layout effect: the drawer registers itself in its own effect, which runs first (a child's before its parent's).
   useEffect(() => { openDrawer("d-tip", true); }, [tip.id]);

@@ -26,7 +26,7 @@ import "./activity.css";
 const METRIC_KEY = "claude-activity-metric";
 const loadMetric = (): WorkMetric => { try { const v = localStorage.getItem(METRIC_KEY); return v === "prompts" || v === "sessions" ? v : "commits"; } catch { return "commits"; } };
 
-/** The sessions table's limits, kept in the hash (day, q, near=1) so a reload or a shared link restores them. */
+/** The sessions table's limits, kept in the query string (day, q, near=1) so a reload or a shared link restores them. */
 const sessOf = (s: ActivitySearch): SessFilter => ({ q: s.q ?? "", near: s.near ?? false, day: s.day ?? "" });
 // Replace, not push: typing a search adds no Back entries.
 const setSess = (f: SessFilter) => setSearch({ q: f.q, near: f.near, day: f.day }, { push: false });

@@ -15,7 +15,7 @@ import { viewOf, type View } from "./api";
 import { queries } from "./queries";
 import { bindRouter, formatSearch, parseSearch, parseView, validateRoot } from "./url";
 
-export interface RouterContext { queryClient: QueryClient }
+interface RouterContext { queryClient: QueryClient }
 
 // A link in the form used before the query string (/usage#project=foo&range=7) opens the same view: the hash is the query
 // string. It replaces the entry, so Back does not return to the old form. A hash with no "=" is an anchor and stays.
