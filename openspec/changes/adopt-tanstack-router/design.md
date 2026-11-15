@@ -230,6 +230,8 @@ Expected: +26.7 kB gzipped (+76 kB minified) in the entry chunk, from 77.9 to ab
 
 Measured after phase 1 (2026-11-15), all JS chunks, against `main` at 2572a72: 767,263 B minified and 249,677 B gzipped before; 841,842 B and 276,849 B after. That is +74,579 B minified and +27,172 B gzipped, in 22 chunks where there were 21.
 
+Measured at close-out (2026-11-15), all JS chunks, against `main` at 3c2f689 (which had gained six Context charts since phase 1): 799,521 B minified and 256,981 B gzipped before; 876,392 B and 283,264 B after. That is +76,871 B minified and +26,283 B gzipped, in 21 chunks both times. The growth is in the entry chunk, 89,293 B to 116,815 B gzipped (+27,522 B): Router, the five page validators and the placeholder. Two shared chunks gave back about 1 kB between them; every page chunk moved by less than 0.2 kB. No built file holds the Router devtools; `tests/test_web_build.py` asserts it.
+
 ### 17. A placeholder while a page first loads
 
 The user asked for a loading animation of gray blocks (2026-11-15), shown whenever a page has nothing to show yet: while its code loads or while its first data loads. Today that state is a heading, "Loading activity…", over an empty page.
