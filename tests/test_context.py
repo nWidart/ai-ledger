@@ -70,6 +70,15 @@ class Builder:
     def title(self, sid, title):
         store.insert(self.c, "session_titles", ["session_id", "custom", "agent"], [(sid, title, None)])
 
+    def snapshot(self, uuid, project="foo", ts="2026-11-04 08:00:00", sid="m1", model="m-a", version="2.1.325", window=200_000,
+                 categories=(("System prompt", 4000, "used"), ("Messages", 100, "used"), ("Free space", 190_000, "free")), parts=()):
+        """A /context snapshot: categories are (name, tokens, state); parts are (kind, name, detail, tokens)."""
+        store.insert(self.c, "context_snapshots", ["uuid", "session_id", "ts", "project", "cwd", "version", "model", "context_window", "total"],
+                     [(uuid, sid, ts, project, f"/w/{project}", version, model, window, 1000)])
+        rows = [("category", n, None, st, t) for n, t, st in categories] + [(k, n, d, None, t) for k, n, d, t in parts]
+        store.insert(self.c, "context_parts", ["uuid", "seq", "kind", "name", "detail", "state", "tokens"],
+                     [(uuid, i, *r) for i, r in enumerate(rows)])
+
     def payload(self, **kw):
         return context.payload(self.con.cursor(), prices=PRICES, today=TODAY, **kw)
 
@@ -135,7 +144,8 @@ class ContextPayloadTest(unittest.TestCase):
                    dict(project="bar", range_days=30, source="claude")):
             p = b.payload(**kw)
             self.assertEqual(sorted(p), sorted(["project", "range", "automated", "source", "start", "end", "projects", "project_order",
-                                                "automated_file", "coverage", "starting", "growth", "sessions_map", "fills", "cost", "tips"]), kw)
+                                                "automated_file", "coverage", "starting", "growth", "sessions_map", "fills", "cost", "tips",
+                                                "overhead"]), kw)
         with self.assertRaises(ValueError):
             b.payload(source="grok")
         with self.assertRaises(ValueError):
@@ -781,3 +791,42 @@ class TipsTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class OverheadTest(unittest.TestCase):
+    def test_none_without_a_project_a_snapshot_or_for_codex(self):
+        b = Builder(self)
+        b.session("s1")
+        b.snapshot("c1")
+        self.assertIsNone(b.payload()["overhead"])
+        self.assertIsNone(b.payload(project="bar")["overhead"])
+        self.assertIsNone(b.payload(project="foo", source="codex")["overhead"])
+        self.assertEqual(b.payload(project="foo", source="claude")["overhead"]["session_id"], "m1")
+
+    def test_latest_snapshot_of_the_project_whatever_the_range(self):
+        b = Builder(self)
+        b.session("s1")
+        b.snapshot("c1", ts="2026-01-01 10:00:00", model="old")
+        b.snapshot("c3", ts="2026-03-01 10:00:00", sid="m3", model="m-b", version="2.1.300", window=1_000_000)
+        b.snapshot("c2", ts="2026-03-01 10:00:00", model="tie")  # same time: the larger uuid wins
+        b.snapshot("c9", ts="2026-06-01 10:00:00", project="bar")
+        o = b.payload(project="foo", range_days=7)["overhead"]  # every snapshot is months before the range
+        self.assertEqual({k: o[k] for k in ("ts", "session_id", "model", "version", "window")},
+                         dict(ts="2026-03-01T10:00:00.000Z", session_id="m3", model="m-b", version="2.1.300", window=1_000_000))
+
+    def test_categories_in_order_and_the_largest_parts(self):
+        b = Builder(self)
+        b.session("s1")
+        cats = (("System prompt", 4107, "used"), ("MCP tools (deferred)", 81826, "deferred"), ("Autocompact buffer", 33000, "buffer"),
+                ("Free space", 936088, "free"))
+        parts = [("mcp_tool", f"mcp__s{i}__t{j}", f"s{i}", 10 * i + j) for i in range(7) for j in range(2)]
+        parts += [("memory_file", f"/m/{i}.md", "Project", i) for i in range(6)]
+        parts += [("skill", n, "userSettings", t) for n, t in (("b", 5), ("a", 5), ("c", 1), ("d", 9), ("e", 2), ("f", 3))]
+        parts += [("agent", "explorer", "plugin", 999)]
+        b.snapshot("c1", categories=cats, parts=parts)
+        o = b.payload(project="foo")["overhead"]
+        self.assertEqual(o["categories"], [dict(name=n, tokens=t, state=st) for n, t, st in cats])
+        self.assertEqual(o["top"]["mcp_servers"], [dict(name=f"s{i}", tokens=20 * i + 1) for i in (6, 5, 4, 3, 2)])  # tools summed by server
+        self.assertEqual([m["name"] for m in o["top"]["memory_files"]], [f"/m/{i}.md" for i in (5, 4, 3, 2, 1)])
+        self.assertEqual(o["top"]["skills"], [dict(name=n, tokens=t) for n, t in (("d", 9), ("a", 5), ("b", 5), ("f", 3), ("e", 2))])
+        self.assertEqual(sorted(o), ["categories", "model", "session_id", "top", "ts", "version", "window"])

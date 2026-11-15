@@ -5,11 +5,11 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-Run `ai-ledger rebuild` once after upgrading (with the app stopped): the Context page needs the size of each tool result, the context window of each Codex session and the time of each session's first compaction, which earlier versions did not store. The rebuild fills them from the transcripts already read.
+Run `ai-ledger rebuild` once after upgrading (with the app stopped): the Context page needs the size of each tool result, the context window of each Codex session and the time of each session's first compaction, which earlier versions did not store. The rebuild fills them from the transcripts already read. It also picks up the `/context` results earlier sessions recorded.
 
 ### Added
 
-- A Project page gathers one project's figures, cost, top sessions, errors, context, session judgments and plan-limit share, each linking to its full page. Its Context block draws a typical session's window as a grid in the style of Claude Code's `/context`: the median starting context, what the peak adds and the free space, with tokens and shares. Open it from the Page link on the navigation's project filter, "Open project page" in the project sheet, or the command palette, where typing a project's name offers its page.
+- A Project page gathers one project's figures, cost, top sessions, errors, context, session judgments and plan-limit share, each linking to its full page. Its Context block draws a typical session's window as a grid in the style of Claude Code's `/context`: the median starting context, what the peak adds and the free space, with tokens and shares. When Claude Code's `/context` has measured the project, the grid splits the starting context into system prompt, tools, MCP, agents, memory files and skills, and Measure now runs `claude -p "/context"` in the project's folder to take a new snapshot. Open it from the Page link on the navigation's project filter, "Open project page" in the project sheet, or the command palette, where typing a project's name offers its page.
 - A Context page shows how context fills up in Claude Code and Codex sessions: where each project's sessions start and what share of the model's window that is, how fast context grows per turn and per prompt, how far sessions get before their first compaction, what fills context (tool and MCP results, with the largest linked to their sessions), what caching costs, and the sessions where caching broke and why. Token figures from result sizes are estimates (bytes ÷ 4).
 - The Context page's tips come from fixed rules. Each shows only when it fires on the filtered view, with its evidence, its advice and the sessions that match, which open in the session sheet.
 - The Context page has a Window pressure section: one bar per window size shows the share of sessions that peaked under 25%, 25 to 50%, 50 to 80%, 80 to 90% and at or over 90% of it, and selecting a part lists its sessions.
@@ -29,6 +29,7 @@ Run `ai-ledger rebuild` once after upgrading (with the app stopped): the Context
 
 ### Changed
 
+- `/context` runs no longer count as prompts on Activity: the command calls no model.
 - A shorter README with a one-line summary per page. Page details and configuration moved to a [user guide](docs/guide.md), and developer setup to [CONTRIBUTING.md](CONTRIBUTING.md).
 - The Context page's starting context shows each project's 10th to 90th percentile range on one scale, with the 90th percentile as a column, and the weekly trend is a line with its 25th to 75th percentile band, a token axis and weeks placed by date.
 - The Context page's growth chart shows how many sessions each turn rests on, can show context as a share of the window, and isolates a project from its legend. Growth per project shows even when no session compacted.

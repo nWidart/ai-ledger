@@ -256,7 +256,7 @@ class AppTest(unittest.TestCase):
         got = json.loads(body)
         self.assertEqual(status, 200)
         self.assertEqual(sorted(got), sorted(["project", "range", "automated", "source", "start", "end", "projects", "project_order", "automated_file",
-                                              "coverage", "starting", "growth", "sessions_map", "fills", "cost", "tips"]))
+                                              "coverage", "starting", "growth", "sessions_map", "fills", "cost", "tips", "overhead"]))
         self.assertEqual((got["range"], got["tips"], got["starting"]["sessions"]), (7, [], 0))
         self.assertEqual(self.get("/api/context?project=foo&source=codex&automated=1")[0], 200)
         status, _, body = self.get("/api/context?source=grok")
@@ -813,6 +813,188 @@ class LiveEventsTest(unittest.TestCase):
         self.assertFalse(loop.is_alive())
         self.wait(lambda: self.app.watchers == 0)
         h.close()
+
+
+STUB_CLAUDE = """#!{python}
+import json, os, sys, time
+mode = os.environ.get("STUB_MODE", "ok")
+with open(os.environ["STUB_LOG"], "w") as fh:
+    json.dump(dict(argv=sys.argv[1:], cwd=os.getcwd(), stdin=sys.stdin.read()), fh)
+if mode == "sleep":
+    time.sleep(10)
+if mode == "fail":
+    sys.stderr.write("x" * 1000 + "boom: no auth")
+    sys.exit(3)
+if mode == "garbage":
+    print("not json")
+    sys.exit(0)
+print(json.dumps(dict(type="result", is_error=mode == "is_error", result="bad thing" if mode == "is_error" else "", session_id="new-session")))
+"""
+
+
+class MeasureTest(unittest.TestCase):
+    """POST /api/context/measure: the app picks the folder and the model from the store, runs claude -p /context there, ingests."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.con = store.open_store(os.path.join(self.tmp, "d", "x.duckdb"))
+        self.app = app.App(self.con, {}, pollers=[])
+        self.httpd = ThreadingHTTPServer(("127.0.0.1", 0), app.handler(self.app))
+        threading.Thread(target=self.httpd.serve_forever, daemon=True).start()
+        self.addCleanup(self.con.close)
+        self.addCleanup(self.httpd.server_close)
+        self.addCleanup(self.httpd.shutdown)
+        self.now = datetime.now().replace(microsecond=0)  # naive, as the store keeps UTC; a day either way makes no odds here
+        self.old_dir, self.new_dir = os.path.join(self.tmp, "old"), os.path.join(self.tmp, "new")
+        os.makedirs(self.old_dir)
+        os.makedirs(self.new_dir)
+        ts = lambda days: (self.now - timedelta(days=days)).isoformat(" ")
+        store.insert(self.con.cursor(), "sessions", ["session_id", "project", "cwd", "first_ts", "last_ts", "source"], [
+            ("gone", "foo", os.path.join(self.tmp, "deleted"), ts(1), ts(1), "claude"),  # the latest, but its folder went
+            ("s2", "foo", self.new_dir, ts(3), ts(3), "claude"),
+            ("s3", "foo", self.old_dir, ts(40), ts(40), "claude"),
+            ("cx", "foo", self.tmp, ts(0), ts(0), "codex"),  # Codex's folder is never measured
+            ("cxonly", "bar", self.tmp, ts(0), ts(0), "codex"),
+            ("nodir", "lost", os.path.join(self.tmp, "deleted"), ts(1), ts(1), "claude"),
+        ])
+        rows, n = [], iter(range(1000))
+        add = lambda session, model, days, k, subagent=False: rows.extend(
+            (f"m{next(n)}", session, ts(days), model, subagent) for _ in range(k))
+        add("s2", "claude-opus", 5, 3)  # the most used in 30 days
+        add("s2", "claude-sonnet", 2, 2)  # newer, but used less
+        add("s2", "claude-haiku", 4, 9, subagent=True)  # subagents do not count
+        add("gone", "<synthetic>", 1, 9)
+        add("s3", "claude-old", 40, 20)  # outside the window
+        add("cx", "gpt-5", 1, 20)
+        store.insert(self.con.cursor(), "requests", ["message_id", "session_id", "ts", "model", "subagent"], rows)
+        self.bin = os.path.join(self.tmp, "bin")
+        os.makedirs(self.bin)
+        self.log = os.path.join(self.tmp, "argv.json")
+        self.stub(os.path.join(self.bin, "claude"))
+        env = mock.patch.dict(os.environ, {"PATH": self.bin, "STUB_LOG": self.log, "STUB_MODE": "ok"})
+        env.start()
+        self.addCleanup(env.stop)
+
+    def stub(self, path):
+        with open(path, "w") as fh:
+            fh.write(STUB_CLAUDE.replace("{python}", sys.executable))
+        os.chmod(path, 0o755)
+
+    def post(self, body, headers=None):
+        raw = body if isinstance(body, bytes) else json.dumps(body).encode()
+        h = http.client.HTTPConnection("127.0.0.1", self.httpd.server_address[1], timeout=30)
+        h.request("POST", "/api/context/measure", body=raw, headers={"Host": f"{app.HOST}:{app.PORT}", "Content-Type": "application/json",
+                                                                       "Content-Length": str(len(raw)), **(headers or {})})
+        r = h.getresponse()
+        text = r.read()
+        return r.status, json.loads(text) if r.getheader("Content-Type", "").startswith("application/json") else text
+
+    def ran(self):
+        if not os.path.exists(self.log):
+            return None
+        with open(self.log) as fh:
+            return json.load(fh)
+
+    def test_folder_is_the_latest_that_still_exists(self):
+        cur = self.con.cursor()
+        self.assertEqual(app.measure.folder(cur, "foo"), self.new_dir)
+        self.assertEqual(app.measure.folder(cur, "foo", isdir=lambda d: d == self.old_dir), self.old_dir)
+        self.assertIsNone(app.measure.folder(cur, "lost"))
+        self.assertIsNone(app.measure.folder(cur, "bar"))  # Codex only
+
+    def test_model_is_the_most_used_in_30_days_else_the_latest(self):
+        cur = self.con.cursor()
+        self.assertEqual(app.measure.model(cur, "foo", self.now), "claude-opus")
+        # 60 days on, nothing is in the window: the latest main-thread model that is not <synthetic>
+        self.assertEqual(app.measure.model(cur, "foo", self.now + timedelta(days=60)), "claude-sonnet")
+        self.assertIsNone(app.measure.model(cur, "lost", self.now))
+        self.assertIsNone(app.measure.model(cur, "bar", self.now))  # Codex's models are not Claude Code's
+
+    def test_a_run_measures_in_the_chosen_folder_and_ingests(self):
+        status, got = self.post({"project": "foo"})
+        self.assertEqual((status, got), (200, dict(session_id="new-session", project="foo", cwd=self.new_dir, model="claude-opus")))
+        run = self.ran()
+        self.assertEqual(run["argv"], ["-p", "/context", "--model", "claude-opus", "--output-format", "json"])
+        self.assertEqual(os.path.realpath(run["cwd"]), os.path.realpath(self.new_dir))
+        self.assertEqual(run["stdin"], "")  # stdin is closed
+        self.assertIsNotNone(self.app.state["last_ingest"])
+        self.assertFalse(self.app.measuring.locked())
+
+    def test_a_project_without_a_model_measures_without_one(self):
+        self.con.execute("DELETE FROM requests")
+        self.assertEqual(self.post({"project": "foo"})[1]["model"], None)
+        self.assertEqual(self.ran()["argv"], ["-p", "/context", "--output-format", "json"])
+
+    def test_a_folder_or_model_in_the_request_is_ignored(self):
+        status, got = self.post({"project": "foo", "cwd": self.tmp, "folder": self.tmp, "model": "evil"})
+        self.assertEqual((status, got["cwd"], got["model"]), (200, self.new_dir, "claude-opus"))
+        self.assertEqual(self.ran()["argv"][3], "claude-opus")
+        self.assertEqual(os.path.realpath(self.ran()["cwd"]), os.path.realpath(self.new_dir))
+
+    def test_refuses_a_bad_body(self):
+        for body in ([], "foo", None, {}, {"project": ""}, {"project": 7}, {"project": "x" * 501}, b"{nope"):
+            status, got = self.post(body)
+            self.assertEqual(status, 400, body)
+            self.assertIsInstance(got["error"], str)
+        self.assertEqual(self.post(b'{"project": "foo"}', {"Content-Type": "text/plain"})[0], 400)
+        self.assertIsNone(self.ran())
+
+    def test_unknown_project_or_no_folder_is_not_found(self):
+        for project in ("nope", "bar"):  # bar has Codex sessions only
+            status, got = self.post({"project": project})
+            self.assertEqual((status, got), (404, dict(error="project not found")), project)
+        status, got = self.post({"project": "lost"})
+        self.assertEqual(status, 404)
+        self.assertIn("no folder", got["error"])
+        self.assertIsNone(self.ran())
+
+    def test_claude_not_on_path(self):
+        os.remove(os.path.join(self.bin, "claude"))
+        self.assertEqual(self.post({"project": "foo"}), (503, dict(error="Claude Code was not found on PATH")))
+
+    def test_one_run_at_a_time(self):
+        self.app.measuring.acquire()
+        try:
+            self.assertEqual(self.post({"project": "foo"})[0], 409)
+            self.assertIsNone(self.ran())
+        finally:
+            self.app.measuring.release()
+        self.assertEqual(self.post({"project": "foo"})[0], 200)
+
+    def test_the_store_lock_is_free_during_the_run(self):
+        seen = []
+        real = subprocess.run
+        with mock.patch.object(app.measure.subprocess, "run", side_effect=lambda *a, **k: (seen.append(self.app.lock.locked()), real(*a, **k))[1]):
+            self.assertEqual(self.post({"project": "foo"})[0], 200)
+        self.assertEqual(seen, [False])
+
+    def test_timeout(self):
+        os.environ["STUB_MODE"] = "sleep"
+        with mock.patch.object(app.measure, "TIMEOUT", 0.5):
+            status, got = self.post({"project": "foo"})
+        self.assertEqual(status, 504)
+        self.assertIn("did not finish", got["error"])
+        self.assertFalse(self.app.measuring.locked())
+
+    def test_failures_answer_502_with_the_stderr_tail(self):
+        os.environ["STUB_MODE"] = "fail"
+        status, got = self.post({"project": "foo"})
+        self.assertEqual(status, 502)
+        self.assertIn("status 3", got["error"])
+        self.assertTrue(got["stderr"].endswith("boom: no auth"))
+        self.assertLessEqual(len(got["stderr"]), app.measure.STDERR_TAIL)
+        for mode in ("garbage", "is_error"):
+            os.environ["STUB_MODE"] = mode
+            status, got = self.post({"project": "foo"})
+            self.assertEqual(status, 502, mode)
+            self.assertIsInstance(got["error"], str)
+        self.assertEqual(got["stderr"], "bad thing")  # is_error with no stderr: the result text
+        self.assertFalse(self.app.measuring.locked())
+
+    def test_cross_site_is_refused_before_it_runs(self):
+        self.assertEqual(self.post({"project": "foo"}, {"Sec-Fetch-Site": "cross-site"})[0], 403)
+        self.assertEqual(self.post({"project": "foo"}, {"Origin": "https://evil.example"})[0], 403)
+        self.assertIsNone(self.ran())
 
 
 if __name__ == "__main__":
