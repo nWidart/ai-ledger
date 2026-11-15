@@ -53,5 +53,5 @@ Group 1 comes first. Groups 2 to 7 need only group 1 and touch separate files, s
 ## 9. Docs and verification
 
 - [x] 9.1 `README.md`: the Context page's description names the new charts. `CHANGELOG.md`: entries under `[Unreleased]`.
-- [ ] 9.2 Time `context.payload` for the all-time view on a copy of a real store (never the live one), before and after; record both in the pull request. Open the page on that copy and check each chart in light and dark themes and at a narrow width.
-- [ ] 9.3 `openspec validate improve-context-charts --strict` and `openspec validate --specs --strict` pass.
+- [x] 9.2 Time `context.payload` for the all-time view on a copy of a real store (never the live one), before and after; record both in the pull request. Open the page on that copy and check each chart in light and dark themes and at a narrow width. Measured on a copy with 1,217 sessions in the all-time view: 0.68 s before, 0.83 s after (median of three runs); the payload grew from 124 kB to 401 kB, most of it the 1,000 session points.
+- [x] 9.3 `openspec validate improve-context-charts --strict` and `openspec validate --specs --strict` pass.
