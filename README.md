@@ -4,6 +4,8 @@
 
 AI Ledger reads your Claude Code and Codex transcripts and turns them into seven local dashboards. Your agents delete old transcripts; AI Ledger keeps every line.
 
+[Documentation](https://nwidart.github.io/ai-ledger/)
+
 <picture><source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/nWidart/ai-ledger/main/docs/tour-light.gif"><img src="https://raw.githubusercontent.com/nWidart/ai-ledger/main/docs/tour.gif" alt="Tour of the pages"></picture>
 
 ## Quick start
@@ -29,7 +31,7 @@ Needs [uv](https://docs.astral.sh/uv/). Runs on macOS and Linux. Your data stays
 
 Press **Cmd+K** to jump anywhere, for example `>errors #myproject #7d`. Right-click a project, session, tool or error type for its actions, such as copying a session's resume command. Every page works by keyboard and screen reader, and each chart has a data table.
 
-The [user guide](https://github.com/nWidart/ai-ledger/blob/main/docs/guide.md) describes each page in detail.
+The [documentation site](https://nwidart.github.io/ai-ledger/) describes each page in detail.
 
 <table>
 <tr><td><picture><source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/nWidart/ai-ledger/main/docs/activity-light.gif"><img src="https://raw.githubusercontent.com/nWidart/ai-ledger/main/docs/activity.gif" alt="Activity"></picture></td><td><picture><source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/nWidart/ai-ledger/main/docs/cost-light.gif"><img src="https://raw.githubusercontent.com/nWidart/ai-ledger/main/docs/cost.gif" alt="Cost"></picture></td></tr>
@@ -59,7 +61,7 @@ The first start reads every transcript, about 4 minutes for 3.4 GB. After that, 
 
 With the app stopped, `ai-ledger ingest` reads new lines once and `ai-ledger rebuild` recomputes the derived tables. After an upgrade that asks for it, run `ai-ledger rebuild` once.
 
-To set your own model prices or plan prices, or to hide more automated projects, see [Configuration](https://github.com/nWidart/ai-ledger/blob/main/docs/guide.md#configuration).
+To set your own model prices or plan prices, or to hide more automated projects, see [Configuration](https://nwidart.github.io/ai-ledger/reference/configuration/).
 
 ## Privacy
 

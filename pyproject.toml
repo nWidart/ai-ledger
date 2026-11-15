@@ -28,7 +28,8 @@ ai-ledger = "ai_ledger.app:main"
 
 [project.urls]
 Homepage = "https://github.com/nWidart/ai-ledger"
-Issues = "https://github.com/nWidart/ai-ledger/issues"
+Documentation = "https://nwidart.github.io/ai-ledger/"
+Issues ="https://github.com/nWidart/ai-ledger/issues"
 Changelog = "https://github.com/nWidart/ai-ledger/blob/main/CHANGELOG.md"
 
 [build-system]
