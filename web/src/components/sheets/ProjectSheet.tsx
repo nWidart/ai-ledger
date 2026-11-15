@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
-import type { ModelRow, UsagePayload } from "../../api";
+import type { ModelRow, Totals, UsagePayload } from "../../api";
 import { big, dur, num, pct, usd, when } from "../../format";
 import { money, sgn } from "../../pages/cost/cost";
 import { DataTable } from "../DataTable";
@@ -35,6 +35,13 @@ export function ModelLedger({ models, by = "requests" }: { models: readonly Mode
 export const Facts = ({ facts }: { facts: [ReactNode, ReactNode][] }) =>
   <div className="facts">{facts.map(([v, l], k) => <div key={k}><div className="v">{v}</div><div className="l">{l}</div></div>)}</div>;
 
+/** The project's eight summary figures, as the project sheet and the Project page show them. */
+export const summaryFacts = (t: Totals): [ReactNode, ReactNode][] => [
+  [usd(t.cost), "est. cost"], [num(t.sessions), "sessions"], [big(t.tokens), "tokens"], [pct(t.cache_hit_ratio, 1), "cache hit"],
+  [pct(t.subagent_token_share), "tokens from subagents"], [t.commits ? usd(t.cost_per_commit) : "n/a", `per commit, ${num(t.commits)} commits`],
+  [num(t.errors_per_100_calls, 1), "errors per 100 calls"], [num(t.error_loops), "error loops"],
+];
+
 /** Where to put the reader back when they return from a session to this project sheet. */
 export interface BackTo { scroll: number; v: string }
 
@@ -51,7 +58,7 @@ export interface ProjectSheetProps {
 
 /** The project's change against the previous period: both costs, the change (marked new without earlier usage) and the daily
  *  cost of both windows. d is the project's own payload, so its previous period and daily series are the project's. None for all time. */
-function ChangeDetail({ d, name }: { d: UsagePayload; name: string }) {
+export function ChangeDetail({ d, name }: { d: UsagePayload; name: string }) {
   const c = d.changes?.find(x => x.project === name);
   if (!d.previous || !d.start || !c) return null;
   return <>
@@ -60,6 +67,19 @@ function ChangeDetail({ d, name }: { d: UsagePayload; name: string }) {
       [<>{sgn(c.delta)}{c.new && <> <span className="chip new">new</span></>}</>, c.new ? "no usage before" : "change"]]} />
     <Spark d={d} />
   </>;
+}
+
+/** The most expensive sessions as a named table; a row opens its session through onSession. body: the tbody's ref, for useBackTo. */
+export function TopSessions({ top, onSession, body }: { top: UsagePayload["top_sessions"]; onSession: (id: string, el: HTMLElement) => void; body?: RefObject<HTMLTableSectionElement | null> }) {
+  return (
+    <DataTable name="Most expensive sessions"><thead><tr><th scope="col">Session</th><th scope="col">Branch</th>
+    <th scope="col" className="num">Active<Toggletip term="Active time">Active time: pauses over 20 minutes left out</Toggletip></th><th scope="col" className="num">Est. cost</th></tr></thead>
+    <tbody ref={body}>{top.length ? top.map(s => <tr key={s.session_id} {...pickRow(s.session_id, onSession)}>
+      <th scope="row" className="when sess"><button type="button" className="cellbtn" title={s.title || s.session_id}>{sessName(s)}</button><div className="muted small">{when(s.first_ts)}</div></th>
+      <td className="name">{s.git_branch || "–"}</td><td className="num">{dur(s.duration_s)}</td><td className="num">{usd(s.cost)}</td></tr>)
+      : <tr><td colSpan={4} className="empty">No sessions in this range.</td></tr>}</tbody>
+    </DataTable>
+  );
 }
 
 /** The project sheet's body: its summary over the page's range, models and its most expensive sessions. */
@@ -85,21 +105,11 @@ export function ProjectSheet({ name, d, error, retry, range, pageProject, onSess
     <div className="hint">{d.start ? `Last ${range} days` : "All time"}, from the range filter. Estimated at API list prices.</div>
     <div className="actions"><FilterButton project={name} pageProject={pageProject} />
       <a className="btn" href={errorsHref(name, range, undefined, { source: d.source })} onClick={appLink}>Open its errors</a></div>
-    <Facts facts={[
-      [usd(t.cost), "est. cost"], [num(t.sessions), "sessions"], [big(t.tokens), "tokens"], [pct(t.cache_hit_ratio, 1), "cache hit"],
-      [pct(t.subagent_token_share), "tokens from subagents"], [t.commits ? usd(t.cost_per_commit) : "n/a", `per commit, ${num(t.commits)} commits`],
-      [num(t.errors_per_100_calls, 1), "errors per 100 calls"], [num(t.error_loops), "error loops"],
-    ]} />
+    <Facts facts={summaryFacts(t)} />
     <ChangeDetail d={d} name={name} />
     <h3>Models and effort</h3>
     <ModelLedger models={d.models} />
     <h3>Most expensive sessions</h3>
-    <DataTable name="Most expensive sessions"><thead><tr><th scope="col">Session</th><th scope="col">Branch</th>
-      <th scope="col" className="num">Active<Toggletip term="Active time">Active time: pauses over 20 minutes left out</Toggletip></th><th scope="col" className="num">Est. cost</th></tr></thead>
-      <tbody ref={body}>{top.length ? top.map(s => <tr key={s.session_id} {...pickRow(s.session_id, onSession)}>
-        <th scope="row" className="when sess"><button type="button" className="cellbtn" title={s.title || s.session_id}>{sessName(s)}</button><div className="muted small">{when(s.first_ts)}</div></th>
-        <td className="name">{s.git_branch || "–"}</td><td className="num">{dur(s.duration_s)}</td><td className="num">{usd(s.cost)}</td></tr>)
-        : <tr><td colSpan={4} className="empty">No sessions in this range.</td></tr>}</tbody>
-    </DataTable>
+    <TopSessions top={top} onSession={onSession} body={body} />
   </>;
 }

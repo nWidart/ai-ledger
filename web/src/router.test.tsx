@@ -4,9 +4,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import usage from "./__fixtures__/usage";
 import { ROUTES } from "./App";
 import { renderRouter } from "./testing";
-import { setSearch } from "./url";
+import { navigate, setSearch } from "./url";
 
-const PATHS = Object.keys(ROUTES) as (keyof typeof ROUTES)[];
+// The tabs; the Project page has none and needs a project, so it has tests of its own below.
+const PATHS = (Object.keys(ROUTES) as (keyof typeof ROUTES)[]).filter(p => p !== "/project");
 const TABS: Record<string, string> = { "/usage": "Activity", "/cost": "Cost", "/context": "Context", "/errors": "Errors", "/limits": "Limits", "/insights": "Insights", "/live": "Live" };
 const status = { ingesting: false, last_ingest: null, last_change: null, last_stats: null, error: null, counts: {}, interval: 60, project_order: [] };
 const here = () => location.pathname + location.search + location.hash;
@@ -145,6 +146,52 @@ describe("router", () => {
       await new Promise(r => setTimeout(r, 20));
       expect(scroll).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe("the Project page", () => {
+  const tabs = () => within(screen.getByRole("navigation", { name: "Dashboards" }));
+  it("opens at /project?project=foo with no tab current, and keeps the URL", async () => {
+    const { length } = open("/project?project=foo&range=7");
+    await loaded("/project");
+    expect(here()).toBe("/project?project=foo&range=7");
+    expect(history.length).toBe(length);
+    expect(await screen.findByRole("heading", { level: 1, name: "foo" })).toBeTruthy();
+    for (const p of PATHS) expect(tabs().getByRole("link", { name: TABS[p]! }).getAttribute("aria-current")).toBeNull();
+  });
+
+  it("opens Activity, with the view kept, when the URL names no project", async () => {
+    const { length } = open("/project?range=7&source=codex");
+    await waitFor(() => expect(location.pathname).toBe("/usage"));
+    await loaded("/usage");
+    expect(here()).toBe("/usage?range=7&source=codex");
+    expect(history.length).toBe(length);
+  });
+
+  it("opens Activity when the project is cleared on the page, and Back does not return to a Project page without a project", async () => {
+    open("/usage?range=7&source=claude");
+    await loaded("/usage");
+    act(() => setSearch({ project: "foo" }));
+    await userEvent.click(tabs().getByRole("link", { name: "Cost" }));
+    await loaded("/cost");
+    // The chip's project name opens the page from here in a later step; the page is reached by its own URL meanwhile.
+    act(() => navigate("/project?project=foo&range=7&source=claude"));
+    await loaded("/project");
+    await screen.findByRole("heading", { level: 1, name: "foo" });
+    await userEvent.click(screen.getByRole("button", { name: "Clear project filter" }));
+    await waitFor(() => expect(location.pathname).toBe("/usage"));
+    expect(here()).toBe("/usage?range=7&source=claude");
+    act(() => history.back());
+    await waitFor(() => expect(location.pathname).toBe("/project"));
+    expect(location.search).toBe("?project=foo&range=7&source=claude");
+  });
+
+  it("keeps the project when a tab is chosen", async () => {
+    open("/project?project=foo&range=30");
+    await loaded("/project");
+    await userEvent.click(tabs().getByRole("link", { name: "Cost" }));
+    await loaded("/cost");
+    expect(here()).toBe("/cost?project=foo&range=30");
   });
 });
 

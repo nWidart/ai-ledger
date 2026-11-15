@@ -28,6 +28,9 @@ const fromOldHash = ({ location }: { location: ParsedLocation }) => {
 const toActivity = ({ location }: { location: ParsedLocation }) => {
   throw redirect({ to: "/usage", search: location.search, replace: true } as never);
 };
+// The Project page needs a project: without one (a link, or the project cleared on the page) Activity opens in its place, with
+// the rest of the view kept. Not tied to o.loaders: it is routing, not data.
+const needProject = ({ location }: { location: ParsedLocation }) => { if (!parseView(location.search).project) toActivity({ location }); };
 // While a page's code loads: the placeholder in the content area, marked busy.
 const Pending = () => <main id="content" className="wrap" aria-busy="true"><PageSkeleton title="Loading…" /></main>;
 
@@ -51,14 +54,16 @@ export function makeRouter(o: { queryClient: QueryClient; history?: RouterHistor
   // have none). The validators drop what is not valid and never throw, so a mistyped link opens the page, not an error.
   // The pages read the URL through the same validators (useSearchOf), from the location.
   const root = createRootRouteWithContext<RouterContext>()({ component: App, beforeLoad: fromOldHash, validateSearch: validateRoot });
-  const page = <const P extends PagePath, S = {}>(path: P, validateSearch?: (raw: Record<string, unknown>) => S, load?: object) =>
-    createRoute({ getParentRoute: () => root, path, component: ROUTES[path].Page, validateSearch, ...(o.loaders === false ? {} : load) });
+  const page = <const P extends PagePath, S = {}>(path: P, validateSearch?: (raw: Record<string, unknown>) => S, load?: object, beforeLoad?: (o: { location: ParsedLocation }) => void) =>
+    createRoute({ getParentRoute: () => root, path, component: ROUTES[path].Page, validateSearch, ...(beforeLoad ? { beforeLoad } : {}), ...(o.loaders === false ? {} : load) });
   // Live has no loader: pointing at its tab loads its code only; its data is a stream the page opens when it is shown.
   const routeTree = root.addChildren([
     page("/usage", activitySearch, viewLoader(v => queries.usage(v))), page("/cost", undefined, viewLoader(v => queries.usage(v))),
     page("/context", contextSearch, viewLoader(queries.context)), page("/errors", errorsSearch, errorsLoader),
     page("/limits", undefined, viewLoader(queries.limits, true)), page("/insights", insightsSearch, viewLoader(queries.insights)),
     page("/live", liveSearch),
+    // The usage payload is the one above the fold; the other blocks start when the page mounts.
+    page("/project", undefined, viewLoader(v => queries.usage(v)), needProject),
     createRoute({ getParentRoute: () => root, path: "/", beforeLoad: toActivity }),
     createRoute({ getParentRoute: () => root, path: "$", beforeLoad: toActivity }),
   ]);
