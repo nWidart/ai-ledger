@@ -39,6 +39,23 @@ describe("keys", () => {
     expect(isData({ queryKey: ["live", "x"] })).toBe(false);
     expect(isData(queries.errorDetail("x"))).toBe(false);
   });
+  it("keep the sessions pages apart from the plain sessions list, and by every filter and the sort", () => {
+    const o = { q: "a", near: true, day: "2026-11-04", sort: "cost" as const, desc: true };
+    const pages = queries.sessionPages(v, o).queryKey;
+    expect(pages).toEqual(["sessions", "pages", { project: "p", range: 30, automated: false, source: "" }, o]);
+    expect(hashKey(pages)).not.toBe(hashKey(queries.sessions(v, { q: "a" }).queryKey));
+    expect(isData({ queryKey: pages })).toBe(true);
+    for (const o2 of [{ ...o, q: "b" }, { ...o, near: false }, { ...o, day: "" }, { ...o, sort: "tokens" as const }, { ...o, desc: false }]) {
+      expect(hashKey(queries.sessionPages(v, o2).queryKey)).not.toBe(hashKey(pages));
+    }
+  });
+  it("ask for the next sessions page by the count loaded, and stop at the total", () => {
+    const next = queries.sessionPages(v).getNextPageParam!;
+    const page = (n: number, total: number) => ({ total, offset: 0, sessions: Array.from({ length: n }, () => ({}) as never) });
+    expect(next(page(100, 250), [page(100, 250)], 0, [0])).toBe(100);
+    expect(next(page(100, 250), [page(100, 250), page(100, 250)], 100, [0, 100])).toBe(200);
+    expect(next(page(50, 250), [page(100, 250), page(100, 250), page(50, 250)], 200, [0, 100, 200])).toBeUndefined();
+  });
   it("hold errorDetail forever", () => {
     expect(queries.errorDetail("x").staleTime).toBe(Infinity);
   });

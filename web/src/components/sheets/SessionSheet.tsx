@@ -1,7 +1,9 @@
-import { useRef, useState, type ReactNode } from "react";
-import { promptUrl, type SessionDetail, type View } from "../../api";
+import { useQuery } from "@tanstack/react-query";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import type { SessionDetail, View } from "../../api";
 import { big, dur, ms, num, pct, plural, usd, when } from "../../format";
-import { ApiError, getJson } from "../../useApi";
+import { queries } from "../../queries";
+import { ApiError } from "../../useApi";
 import { DataTable } from "../DataTable";
 import { ProjectDot } from "../ProjectDot";
 import { Toggletip } from "../Toggletip";
@@ -9,9 +11,6 @@ import { appLink, errorsHref, openProjectSheet, openToolSheet, pickRow } from ".
 import { FilterButton } from "./FilterButton";
 import { SessionInsight } from "./SessionInsight";
 import { Timeline } from "./Timeline";
-
-// The session payload caps the first prompt; the whole text comes from /api/prompt on demand, remembered by session.
-const fullPrompts = new Map<string, string>();
 
 /** A session's cost: unknown when no model is priced, a labelled subtotal when only some are. */
 export function sessCost(models: SessionDetail["models"]): [string, string] {
@@ -38,9 +37,15 @@ export interface SessionSheetProps {
 
 /** The session sheet's body: the whole session, whatever the range filter says. */
 export function SessionSheet({ id, s, error, retry, range, pageProject, view }: SessionSheetProps) {
-  const [full, setFull] = useState(() => fullPrompts.get(id));
-  const [fp, setFp] = useState<{ busy?: boolean; failed?: boolean; status: string }>({ status: "" });
+  // The session payload caps the first prompt; the whole text is a query, fetched once the user asks. Not enabled, it still
+  // answers from the cache, so a sheet reopened on the session shows the text it loaded before without a request.
+  const [askedId, setAskedId] = useState<string>(), asked = askedId === id;
+  const prompt = useQuery({ ...queries.prompt(id), enabled: asked });
+  const full = prompt.data?.text, busy = prompt.isFetching, failed = prompt.isError && !busy;
   const pre = useRef<HTMLPreElement>(null);
+  // The text lands only after the user asked (or it was cached already, which asks for nothing): focus it then.
+  const landed = asked && full != null;
+  useEffect(() => { if (landed) requestAnimationFrame(() => pre.current?.focus({ preventScroll: true })); }, [landed]);
   if (error) return error instanceof ApiError && error.status === 404
     ? <div className="empty">This session was not found.</div>
     : <div className="empty" role="alert">Could not load this session ({error.message}). <button type="button" className="linkish" onClick={retry}>Retry</button></div>;
@@ -48,15 +53,7 @@ export function SessionSheet({ id, s, error, retry, range, pageProject, view }: 
 
   const i = s.info, tokens = s.models.reduce((a, r) => a + r.tokens, 0), [cost, costNote] = sessCost(s.models);
   const cut = s.first_prompt_cut && full == null;
-  const loadPrompt = () => {
-    setFp({ busy: true, status: "Loading the whole prompt…" });
-    getJson<{ text: string }>(promptUrl(id)).then(({ text }) => {
-      fullPrompts.set(id, text);
-      setFull(text);
-      setFp({ status: `Showing all ${num(text.length)} characters.` });
-      requestAnimationFrame(() => pre.current?.focus({ preventScroll: true }));
-    }, (e: Error) => setFp({ failed: true, status: ` Could not load it (${e.message}).` }));
-  };
+  const status = busy ? "Loading the whole prompt…" : failed ? ` Could not load it (${prompt.error?.message}).` : landed ? `Showing all ${num(full.length)} characters.` : "";
 
   return <>
     <div className="hint"><span className="chip">Whole session, not limited by the range filter</span><br />
@@ -66,8 +63,8 @@ export function SessionSheet({ id, s, error, retry, range, pageProject, view }: 
     {s.first_prompt && <details className="sd">
       <summary>Source<span className="c">the first prompt as recorded{cut ? `, first ${num(s.first_prompt.length - 1)} characters` : full != null ? `, all ${num(full.length)} characters` : ""}</span></summary>
       <pre className="fp-raw" ref={pre} tabIndex={-1}>{full ?? s.first_prompt}</pre>
-      {cut && <button type="button" className="linkish small" disabled={fp.busy} onClick={loadPrompt}>{fp.failed ? "Retry loading the whole prompt" : "Show the whole prompt"}</button>}
-      <span className="small muted" role="status">{fp.status}</span>
+      {cut && <button type="button" className="linkish small" disabled={busy} onClick={() => { if (asked) void prompt.refetch(); else setAskedId(id); }}>{failed ? "Retry loading the whole prompt" : "Show the whole prompt"}</button>}
+      <span className="small muted" role="status">{status}</span>
     </details>}
     <div className="statline">
       <Stat v={cost} l={costNote} /><Stat v={big(tokens)} l="tokens" />
