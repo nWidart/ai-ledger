@@ -1,7 +1,7 @@
 // What the Errors components share: the model and view, and the page-level state that outlives a re-render or the detail
-// moving into the sheet (open incidents and message groups, opened examples, loaded full text).
+// moving into the sheet (open incidents and message groups, opened examples).
 import { createContext, useContext, useMemo, useSyncExternalStore } from "react";
-import type { Day, ErrorDetail } from "../../api";
+import type { Day } from "../../api";
 import type { SortBy } from "../../components/Sort";
 import type { Err, Filtered, Fixes, Model, TypeKey, View, ViewTypes } from "./model";
 import type { FixError } from "./marks";
@@ -38,12 +38,12 @@ export interface ErrorsCtx {
   /** Run once after the next render (focus a control that render brings). */
   after: (fn: () => void) => void;
   say: (s: string) => void;
-  openInc: Keyed<number, true>; openMsg: Keyed<string, true>; opened: Keyed<string, true>; fullText: Keyed<string, ErrorDetail>; loading: Keyed<string, true>; failed: Keyed<string, true>;
+  openInc: Keyed<number, true>; openMsg: Keyed<string, true>; opened: Keyed<string, true>;
 }
 
 /** What one example, incident or message row needs: the model, the view, and the keyed state. It changes with the view, not with the
  *  search text, the list mode or the marks, so a row (memoized) skips those re-renders. */
-export type RowCtx = Pick<ErrorsCtx, "m" | "v" | "select" | "say" | "after" | "openInc" | "openMsg" | "opened" | "fullText" | "loading" | "failed">;
+export type RowCtx = Pick<ErrorsCtx, "m" | "v" | "select" | "say" | "after" | "openInc" | "openMsg" | "opened">;
 
 /** A map by key whose changes tell only the subscribers of that key: a row reads its own entry, so changing one entry re-renders
  *  one row, not the page. With V = true it is a set (has, add, delete). The page's pin writes silently during its render (a

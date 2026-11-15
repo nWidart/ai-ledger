@@ -33,14 +33,14 @@ Also listed on tanstack.com and not evaluated further: Start (full-stack framewo
 
 **Goals:**
 - One data layer for every GET, with cancellation, eviction, stale-while-revalidate and deduplication the app no longer writes itself.
-- Fix the audit items assigned to this change: no `AbortSignal`, unbounded cache and `JSON.stringify` compare, polls in hidden tabs, poll priority, synchronous page switches.
+- Fix the audit items assigned to this change: no `AbortSignal`, unbounded cache and `JSON.stringify` compare, polls in hidden tabs, poll priority. Synchronous page switches moved to `adopt-tanstack-router` (decision 9).
 - Every link, bookmark and copied URL keeps working. No server change.
 - Each phase ships on its own, passes `npm run check` and can be reverted by itself.
 - The bundle grows by Query alone.
 
 **Non-Goals:**
 - No change to payloads, URL keys or any figure.
-- No router. No virtualization. No change to how tables sort.
+- No router in this change (decision 9). No virtualization. No change to how tables sort.
 - No Suspense: the pages' loading states (`useLanding`, the drawers' hints, `aria-busy`) are specified behaviour and stay.
 
 ## Decisions
@@ -146,17 +146,23 @@ statusOptions = queryOptions({
 
 ### 6. The Errors marks write with `setQueryData`
 
-`useMarks` keeps its serial queue, its `server`/`ops` model and its messages: they are specified behaviour (fix markers, muting, the import, the resync after a failed step) and Query's optimistic-update pattern would only rename them. What changes: each step's POST becomes a `useMutation` (one for fix, one for mute, one for the import, sharing a `mutationFn` by URL), the resync `GET /api/errors/marks` becomes `fetchQuery(["errors", "marks"])`, and the `finally(() => clearApiCache())` becomes `setQueryData(["errors"], d => d && { ...d, fixes: marks.fixes, muted: marks.muted })`: the page's payload carries the marks as the store has them now, with no refetch of the whole Errors payload and no invalidation of every other page, which is what `clearApiCache()` did.
+`useMarks` keeps its serial queue, its `server`/`ops` model and its messages: they are specified behaviour (fix markers, muting, the import, the resync after a failed step) and Query's optimistic-update pattern would only rename them. What changes: each step's POST becomes a mutation (one `useMutation` for fix, mute and import, with the URL and body as its variables: three hooks would differ in nothing else), the resync `GET /api/errors/marks` becomes `fetchQuery(["errors", "marks"])` with `staleTime: 0` so it always asks the store, and the `finally(() => clearApiCache())` becomes `setQueryData(["errors"], d => d && { ...d, fixes: marks.fixes, muted: marks.muted })`: the page's payload carries the marks as the store has them now, with no refetch of the whole Errors payload and no invalidation of every other page, which is what `clearApiCache()` did. Two edges: when a step ends with no marks known (the write and the resync both failed), `["errors"]` alone is invalidated, so a page opened later does not seed from a payload that may lack what the store took; and when an `/api/errors` fetch is under way as a write's answer is cached, the marks are written again once that fetch lands, since its payload carries older marks.
 
-### 7. Live: notices invalidate, the cursor catch-up lives in the queryFn
+### 7. Live: two always-stale queries, asked by `useLive`; the cursor catch-up lives in the queryFn
 
-- **List.** `useQuery(liveListOptions(view, text))` with `enabled: !paused && visible`, `refetchInterval: 10_000` (the recheck: time-based states need a fetch when no line arrives), `refetchIntervalInBackground: false`, `priority: "low"` on the recheck. A notice calls `invalidateQueries({ queryKey: ["live", "list"] })`.
-- **Selected session.** `useQuery(liveSessionOptions(id, text))` whose `queryFn` reads the cached value for its own key through the context's `client` (`client.getQueryData(queryKey)`), asks for `after = cached.cursor` when there is one and returns `mergeSession(cached, next, true)`; with nothing cached it asks from the start. This is the catch-up as today, in the one place the fetch happens, with no `moved()` guard: a key change (another session, text off) is another query. Turning text on keeps the events held until the text arrives (spec: "Toggle full text") through `placeholderData: (prev, prevQuery) => prevQuery?.queryKey[2] === id && !prevQuery.queryKey[3] ? prev : undefined`; any other change shows nothing of the old session, as today. A notice naming the selected session calls `invalidateQueries({ queryKey: ["live", "session", id] })`; a notice with `sessions: null` invalidates `["live"]`.
-- **Pause and `held`.** `enabled: false` while paused: Query does not refetch disabled queries on invalidation, so held notices change nothing; `held` is still counted for the label. On Resume the queries re-enable and, being stale, refetch once however many notices were held, and the status loop runs once (spec: "Pause and resume", "Paused Live page").
-- **Hidden tab.** The same as paused, through `enabled: !paused && visible` where `visible` is `usePageVisible()` (`web/src/usePageVisible.ts`, on `main` since #74), plus `refetchIntervalInBackground: false` for the recheck. The SSE stream stays open (the app's fast ingest depends on it, and the notices keep `held` current for the status loop). On show, the invalidated queries refetch (`refetchOnWindowFocus`, Query's own `visibilitychange` listener) and the status loop runs once. This replaces the manual pause `feat/web-audit-fixes` adds to `useLive.ts`. Spec delta: `live-dashboard`, "Hold updates while the tab is hidden".
-- **Reconnect.** The SSE stream, its backoff and `conn` stay in `useLive` as they are: Query has no transport for server-sent events and the logic is specified to the second. On reopen after a drop, the hook invalidates `["live"]` and runs the status loop, as `refresh(null); status()` does today.
+As built in phase 4. It differs from the first plan in four places, each for a reason found in the code or the spec: no `enabled` gate, no `refetchInterval`, notices refetch through the observers instead of `invalidateQueries`, and the stream closes in a hidden tab.
+
+- **Two queries.** `queries.liveList(view, text)` and `queries.liveSession(id, text)`, both with `staleTime: 0` and `refetchOnWindowFocus: false`. Query itself fetches only when the page comes to show a key: on mount, another session, another filter, Full text. Every other fetch starts in `useLive` (a notice, a reconnect, the return to the tab, Resume, the recheck).
+- **Pause and a hidden tab hold updates by not asking.** There is no `enabled: !paused && visible`. Pause holds updates, not navigation: a paused page still loads a session the user opens, the list for a filter the user changes and the text when Full text turns on, and a gate on `enabled` would have stopped those. `held` is still counted for the label, and Resume asks once however many notices were held. Resume with nothing held sends no Live request, as before.
+- **The selected session's catch-up is in its `queryFn`.** It reads the cached value for its own key through the context's `client`, asks for `after = cached.cursor` when there is one and returns `mergeSession(cached, next, true)`; with nothing cached it asks from the start. The `moved()` guards are gone: another session, or another text setting, is another key. `structuralSharing: false` on this query: `mergeSession` already keeps the object of every event it does not replace, and Query's sharing compares arrays by index, so once the oldest events drop off the top at 2,000 it would copy every event and redraw every row.
+- **Notices.** A notice asks the list again, and the selected session when it names it or carries `sessions: null`, through the two observers' `refetch({ cancelRefetch: false })`. Each query takes one request at a time and one more after it for the notices that came meanwhile, as the status loop does. No request is cancelled: the app sends a notice a second while Live is open, and with answers slower than that a cancelling refetch would never let one land (found in review of the phase 4 PR). A request found under way was asked before the notice, so one more follows it. The one more is not sent while paused or hidden: Pause counts it as one update held, so Resume fetches; the return to the tab fetches anyway. Not `invalidateQueries`: it cancels, and `refetchQueries` fetches with the options of the query's last fetch, which after a recheck are the low-priority ones. Then the status loop runs (`client.fetchQuery(queries.status)`, one request at a time and one more after it).
+- **The recheck** (every 10 s: time-based states need a fetch when no line arrives) is `useLive`'s interval, off while paused or hidden. It calls `client.fetchQuery` with the low-priority variant of the options, for the list and the selected session. Query's `refetchInterval` cannot mark its fetches, and the spec says background polls use low fetch priority while the page's own requests do not. It joins a fetch under way instead of replacing it.
+- **Hidden tab.** The stream closes while the tab is hidden and opens again on return, as #74 shipped and `openspec/specs/live-dashboard/spec.md` ("Pause the page's requests while the tab is hidden") specifies: an open stream keeps the app ingesting every second for a page nobody sees. The first plan said the stream stays open; it was written before #74. On return: one fetch of the list and one of the session, and the status loop once; a paused page stays paused and counts one update held. This change therefore adds no `live-dashboard` requirement.
+- **Reconnect.** The stream, its backoff and `conn` stay in `useLive`: Query has no transport for server-sent events and the timing is specified to the second. On reopen after a drop the hook asks both queries again and runs the status loop, or counts one update held when paused.
+- **What stays on screen.** Turning Full text on keeps the events, and with them the open rows and the scroll, until the text arrives; the list stays while another filter's list loads. Both are kept in state in `useLive`, not as `placeholderData`, which Query drops when the fetch fails: the events and the list also stay when that fetch fails. A list loaded with Full text does not stay once Full text is off: its first-prompt titles must leave the screen.
+- **Errors.** `listError` and `sessionError` are the queries' errors, held while the query is asked again (Query clears the error of a query with no data when a fetch starts, which would blink "Session not found" off on every recheck). A 404 on the session still reads as "Session not found" through `ApiError.status`.
+- **New for the user.** A session opened again within the cache's five minutes shows its events at once and catches up from its cursor, instead of loading from the start; so does Live opened again from another page. Turning Full text off shows the earlier events without text at once, with the open rows and the scroll kept.
 - **`useNow`** (the 1 s tick) is not data and stays.
-- **Errors.** `listError` and `sessionError` are the two queries' `error`; a 404 on the session still reads as "Session not found" through `ApiError.status`.
 
 ### 8. Infinite query for the sessions drawer; the Errors "Show more" is not a fetch
 
@@ -164,7 +170,9 @@ statusOptions = queryOptions({
 
 The Errors page's "Show more examples" (`Examples.tsx`, `MSG_PAGE = 30`) slices a list already in the payload; no request is involved, so it is not an infinite query and stays as it is. `TopSessionsDrawer` (one day's sessions, no paging) is a plain `useQuery`. The palette's session search is a plain `useQuery` on `["sessions", view, { q }]` with `enabled: !!q`.
 
-### 9. Router: reject; do the two navigation items in `hash.ts`
+### 9. Router: left to the change `adopt-tanstack-router`
+
+**Superseded on 2026-11-15.** The user asked for this verdict to be reconsidered and then approved a separate OpenSpec change, `adopt-tanstack-router`: TanStack Router owns the URL, the view moves from the hash to validated search params, and old hash links redirect in place. That change does the page transitions, the scroll restoration on Back and issue #69, so this change does none of them and its phase 5 is removed. The comparison below is kept as the reasoning of the first plan; its Transitions and Scroll restoration items describe work this change no longer does.
 
 What Router would give, against what the app has:
 
@@ -174,7 +182,7 @@ What Router would give, against what the app has:
 - **Scroll restoration.** Router caches and restores scroll per location key. Today `go()` scrolls to the top on a page change and Back leaves scroll to the browser, which cannot restore it for content that is not drawn yet. This is a small real gap; if it is wanted, `hash.ts` can keep a `sessionStorage` map from `history.state.key` to `scrollY` in thirty lines. Not in this change; the user wants it as a follow-up change (Resolved Questions).
 - **Preloading on hover.** Not applicable: seven pages whose code is one lazy chunk each, and data that depends on the hash.
 
-Cost: 30 kB gzipped, a second source of truth for the URL, a migration of every link and test, and a server `PAGES` list that would need to learn new paths or a catch-all. Verdict: **reject** for this app; revisit only if the app gains nested routes or per-route data loaders.
+Cost as first estimated: 30 kB gzipped (measured by `adopt-tanstack-router` at 26.7 kB gzipped), a second source of truth for the URL, and a migration of every link and test. No server change is needed: the server already serves `index.html` for the page paths whatever their query string. First verdict: reject. Current verdict: adopted by `adopt-tanstack-router`, which has its own design.
 
 ### 10. Testing
 
@@ -214,7 +222,22 @@ DB (1.0 RC, 108 kB) is a client-side relational store with live queries and opti
 
 ### 18. Bundle size, before and after
 
-Today: one JS chunk of 651 kB minified, 204 kB gzipped. After this change: `@tanstack/react-query` with `@tanstack/query-core` adds 13.0 kB gzipped (45 kB minified; Bundlephobia, 5.107.1); the removed `useApi` cache and guards take back about 1 kB; the devtools ship nothing. Estimate: about 216 kB gzipped total, in the per-page chunks `feat/web-audit-fixes` creates, with Query in the shared chunk. Rejecting Router (30 kB), Table (31 kB), Virtual (10 kB), Form (17 kB), Pacer (10 kB) and Hotkeys (16 kB) is what keeps it there; adopting them all would have added about 127 kB gzipped, more than half the app again. The close-out task records the measured sizes in the change.
+Estimated in the plan: Query adds about 13 kB gzipped, the devtools ship nothing.
+
+**Measured at close-out (task 6.2)**, from the committed build in `src/ai_ledger/web/assets/` at `1f73cca` (before phase 1) and after phase 4, `gzip -9`, 1 kB = 1000 bytes:
+
+| | Before | After | Change |
+|---|---|---|---|
+| All JS, minified | 729.0 kB (20 chunks) | 767.3 kB (21 chunks) | +38.3 kB (+5.3%) |
+| All JS, gzipped | 237.9 kB | 249.2 kB | +11.3 kB (+4.7%) |
+| Entry chunk `index`, minified | 246.9 kB | 286.8 kB | +39.8 kB |
+| Entry chunk `index`, gzipped | 77.9 kB | 89.3 kB | +11.4 kB |
+| `LivePage` chunk, gzipped | 9.2 kB | 8.1 kB | -1.1 kB |
+| CSS, gzipped | 19.6 kB | 19.6 kB | none |
+
+The growth is Query, and it sits in the entry chunk because every page uses it. It came in under the estimate: 11.3 kB gzipped against 13. The other page chunks moved by less than 0.4 kB each. No built file contains the devtools; `tests/test_web_build.py` asserts it (`test_build_ships_no_query_devtools`).
+
+The plan's "204 kB gzipped" for the build before was the single chunk measured before #74 split the pages; the figures above are the split build's. Rejecting Table (31 kB), Virtual (10 kB), Form (17 kB), Pacer (10 kB) and Hotkeys (16 kB) is what keeps the total there. Router's 26.7 kB is weighed in `adopt-tanstack-router`.
 
 ## Migration phases
 
@@ -224,8 +247,8 @@ Each phase is one PR on its own branch from `main`, started after the phase befo
 2. **Pages on Query.** `queries.ts`, `getJson` with a signal, the `useApi` adapter over `useQuery`, the status query and the ingest watcher, Refresh as a mutation, `askedFor()`; delete the old cache; rewrite the affected tests; spec delta for the hidden tab. This is the phase that fixes the leak, the stringify compare, the missing cancellation and the poll in hidden tabs for every page. Revert: restore `useApi.ts` and `refresh.ts`.
 3. **Secondary fetches.** The sessions drawer (infinite query), `TopSessionsDrawer`, the session sheet's prompt, the Errors "Show full", the palette's two queries, the marks mutations with `setQueryData`. Revert per file.
 4. **Live.** The list and session queries, notices as invalidation, the cursor catch-up in the queryFn, pause and visibility through `enabled`, removal of the manual visibility pause; spec delta. Revert: restore `useLive.ts`.
-5. **Navigation polish.** `startTransition` and view transitions in `hash.ts` and `App.tsx`. Not TanStack; the audit item a router would have taken. Its PR closes issue #69. Revert alone.
-6. **Close-out.** README, CHANGELOG, measured bundle sizes, dead code, `openspec validate`, and the archive of this change.
+5. **Navigation polish.** Removed. `adopt-tanstack-router` replaces `hash.ts`, so `startTransition` and view transitions there would be deleted by it; that change does them and closes issue #69.
+6. **Close-out.** README, CHANGELOG, measured bundle sizes, dead code, `openspec validate`, a walk of the app, and the archive of this change. It follows phase 4.
 
 ## Risks / Trade-offs
 
@@ -244,5 +267,5 @@ Answered by the user on 2026-11-15, before implementation started.
 
 - **Refetch on tab return: only the queries invalidated while hidden.** `refetchOnWindowFocus` stays at Query's default for the data queries; only the status query uses `"always"` (decision 5). The status answer on return invalidates the data if an ingest was missed, so the page is at most one request behind.
 - **An ingest does not invalidate the Live queries.** The watcher's predicate skips `["live"]` (decision 1). Live follows its own notices, and its reconnect path catches up after a drop (decision 7).
-- **Scroll restoration on Back: wanted, as a follow-up change.** Not in this change. Plan it as its own OpenSpec change (the `sessionStorage` map in `hash.ts` of decision 9).
-- **Rejecting TanStack Router: accepted.** Decision 9 stands.
+- **Scroll restoration on Back: wanted.** It is now part of `adopt-tanstack-router`, not a follow-up to this change.
+- **Rejecting TanStack Router: accepted at first, then reconsidered.** The user approved `adopt-tanstack-router` the same day; decision 9 says what that changes here.

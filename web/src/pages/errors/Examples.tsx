@@ -1,10 +1,10 @@
 import { memo, useId, useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from "react";
-import { errorUrl, type ErrorDetail } from "../../api";
+import { isCancelledError, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { ProjectName } from "../../components/ProjectDot";
 import { openToolSheet } from "../../components/sheets/session";
 import { num as fmt, plural, when as at } from "../../format";
 import { navigate } from "../../hash";
-import { getJson } from "../../useApi";
+import { queries } from "../../queries";
 import { useKeyed, useRow, type RowCtx } from "./context";
 import { dur, incSpan, msgOpenKey, OUTCOME, PAYLOAD_INPUT, sessionHref, type Err, type Group, type MsgGroup } from "./model";
 import { viewHash } from "./view";
@@ -13,18 +13,17 @@ import { viewHash } from "./view";
 export const exKey = (e: Err) => e.id || e.ts + e.t;
 const plain = (ev: MouseEvent) => !(ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey) && ev.button === 0;
 
-/** The payload cuts inputs at PAYLOAD_INPUT characters; "Show full" loads the rest once per id from /api/error. */
-async function loadFull(x: RowCtx, id: string) {
-  if (x.loading.has(id)) return;
-  x.loading.add(id); x.failed.delete(id);
+/** The payload cuts inputs at PAYLOAD_INPUT characters; "Show full" loads the rest once per id (the errorDetail query: kept for
+ *  the cache's life, never refetched by an ingest). The example reads the query's state; this runs the one request. */
+async function loadFull(x: RowCtx, client: QueryClient, id: string) {
   x.say("Loading full example…");
   try {
-    x.fullText.set(id, await getJson<ErrorDetail>(errorUrl(id)));
-  } catch {
-    x.loading.delete(id); x.failed.add(id);
+    await client.fetchQuery(queries.errorDetail(id));
+  } catch (e) {
+    // Nobody shows the example any more (it unmounted mid-request): Query cancelled the request, and there is nothing to report.
+    if (isCancelledError(e)) return;
     return x.say("Couldn't load the full example. Use Retry to try again.");
   }
-  x.loading.delete(id);
   x.opened.add(id);
   x.say("Full example shown");
 }
@@ -39,15 +38,16 @@ function watchSize(el: Element, fit: () => void) {
   return () => { fits.delete(el); sizes?.unobserve(el); };
 }
 
-/** One example. It reads its own entries of the keyed state (opened, loaded text, loading, failed), so opening one re-renders that one. */
+/** One example. It reads its own entries of the keyed state (opened) and its full text's query (loaded text, loading, failed), so opening one re-renders that one. */
 export const Example = memo(function Example({ e }: { e: Err }) {
   const x = useRow(), key = exKey(e), open = !!useKeyed(x.opened, key), ref = useRef<HTMLDivElement>(null);
-  const loaded = useKeyed(x.fullText, e.id);
+  // Not enabled: loadFull starts the request, this only follows its state (and answers from the cache, for an id loaded before).
+  const q = useQuery({ ...queries.errorDetail(e.id), enabled: false }), client = useQueryClient(), loaded = q.data;
   // Loaded full text replaces the payload's; a field cut when it was recorded says so.
   const t: { i: string; e: string; r: string; cut?: string[] } = loaded || e;
   const note = (k: string) => t.cut?.includes(k) ? <div className="cutnote">(summary as recorded)</div> : null;
   const cut = !!e.id && !loaded && e.i.length >= PAYLOAD_INPUT;
-  const busy = !!useKeyed(x.loading, e.id), failed = !!useKeyed(x.failed, e.id);
+  const busy = q.isFetching, failed = q.isError;
   const [clamped, setClamped] = useState(false), [copied, setCopied] = useState<"" | "ok" | "fail">("");
   // "Show full" only where a clamped body is cut off, the payload cut the input, or the example is already open.
   useLayoutEffect(() => {
@@ -57,7 +57,7 @@ export const Example = memo(function Example({ e }: { e: Err }) {
     return watchSize(el, fit);
   }, [t.i, t.e, t.r, open]);
   const full = () => {
-    if (!open && e.id && x.m.byId[e.id] && !x.fullText.has(e.id)) return void loadFull(x, e.id);
+    if (!open && e.id && x.m.byId[e.id] && !loaded) return void (busy || loadFull(x, client, e.id));
     if (open) x.opened.delete(key); else x.opened.add(key);
     const el = ref.current;
     if (open && el && el.getBoundingClientRect().top < 0) el.scrollIntoView({ block: "start" });

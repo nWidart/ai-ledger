@@ -12,6 +12,7 @@ import { App } from "../../App";
 import { LivePage } from "./LivePage";
 import { groupSessions, lanesOf, likelyWaiting, mergeSession, stateNow, stateText, streamRows } from "./live";
 import { FakeSource } from "./testing";
+import { queries } from "../../queries";
 import { renderApp } from "../../testing";
 
 const list = live as LivePayload, listText = liveListText as LivePayload, s1 = liveSession as LiveSession, s1text = liveText as LiveSession, codex = liveCodex as LiveSession;
@@ -47,6 +48,7 @@ const groups = (el: HTMLElement) => [...el.querySelectorAll(".group > h2, .group
 /** A list session of the given state that started at `first`. */
 const sess = (id: string, kind: LiveState["kind"], first: string, since = first) => ({ ...list.sessions[0]!, session_id: id, project: id, title: null,
   first_ts: first, last_ts: since, state: { kind, tool: kind === "tool" || kind === "wait" ? "Bash" : null, since, inferred: kind === "wait", long: kind === "tool" } });
+/** setTimeout too: Query tells React of a change on one. */
 const fakeClock = (at: string) => {
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval", "Date"] });
   vi.setSystemTime(Date.parse(at));
@@ -83,12 +85,33 @@ const conn = () => document.querySelector<HTMLElement>("p.conn")!;
 const drawn = () => [...screen.getByLabelText("Session events").querySelectorAll(".tool .nm")].map(n => n.textContent);
 const hidden = () => bar().querySelector(".hid")?.textContent ?? null;
 const check = (name: string) => screen.getByRole("checkbox", { name }) as HTMLInputElement;
+/** The rail's entry of a project, the project in the stream's head, a wait long enough for any request to go out, and
+ *  the request that catches s1 up from the fixture's cursor. */
+const entry = async (project: string) => within(await rail()).getAllByRole("button").find(b => b.querySelector(".pname")!.textContent === project)!;
+const headed = () => screen.getByRole("region", { name: "Session" }).querySelector(".stream-head .pname")?.textContent;
+const settle = () => act(async () => { await new Promise(r => setTimeout(r, 20)); });
+const catchUp = `/api/live/session?id=s1&after=${encodeURIComponent(s1.cursor!)}`;
+/** From this call on, the list and the session answer only when the test says so (answer(), or answer(n) for the n
+ *  asked first), each with what the app held when it was asked. sent: the requests since, as URL and abort signal;
+ *  waiting: how many are unanswered. */
+const lateAnswers = (f: ReturnType<typeof show>["f"]) => {
+  const normal = f.getMockImplementation()!, late: (() => void)[] = [], sent: { url: string; signal: AbortSignal }[] = [];
+  f.mockImplementation(((input: string, init: RequestInit) => {
+    const res = normal(input);
+    if (input === "/api/status") return res;
+    sent.push({ url: input, signal: init.signal! });
+    return new Promise<Response>(r => { late.push(() => r(res)); });
+  }) as typeof normal);
+  return { sent, urls: () => sent.map(x => x.url), waiting: () => late.length, answer: async (n = late.length) => { late.splice(0, n).forEach(a => a()); await settle(); } };
+};
 
-afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); Reflect.deleteProperty(document, "hidden"); });
-/** The tab goes to the background (or comes back): document.hidden as the browser says it, and its event. */
+afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); Reflect.deleteProperty(document, "hidden"); Reflect.deleteProperty(document, "visibilityState"); });
+/** The tab goes to the background (or comes back): document.hidden and visibilityState as the browser says them, and its
+ *  event, which bubbles to the window, where Query listens for its own refetch on focus. */
 const setHidden = (hidden: boolean) => {
   Object.defineProperty(document, "hidden", { configurable: true, get: () => hidden });
-  act(() => { document.dispatchEvent(new Event("visibilitychange")); });
+  Object.defineProperty(document, "visibilityState", { configurable: true, get: () => (hidden ? "hidden" : "visible") });
+  act(() => { document.dispatchEvent(new Event("visibilitychange", { bubbles: true })); });
 };
 
 describe("live.ts", () => {
@@ -189,7 +212,7 @@ describe("LivePage", () => {
       FakeSource.last!.notify(null);
       await waitFor(() => expect(groups(el)).toEqual(want));
     };
-    expect(groups(el)).toEqual(["working · 2 a b"]);
+    await waitFor(() => expect(groups(el)).toEqual(["working · 2 a b"]));
     await after([a, b], ["working · 2 a b"]); // a wrote: no entry moves
     await after([c, a, b], ["working · 3 a b c"]); // a new session joins the end of its group
     await after([{ ...b, state: sess("b", "you", b.first_ts).state }, c, a], ["your turn · 1 b", "working · 2 a c"]); // only b moves
@@ -303,7 +326,7 @@ describe("LivePage", () => {
       { ...list.sessions[0]!, session_id: "b", project: "ai-ledger", title: "Fix Cost test", title_from: "agent" as const }] };
     show("#session=a", { list: two });
     const rail = await screen.findByRole("region", { name: "Active sessions" });
-    const entries = within(rail).getAllByRole("button");
+    const entries = await within(rail).findAllByRole("button");
     expect(entries.map(b => b.querySelector(".ttl")!.textContent)).toEqual(["Add session titles", "Fix Cost test"]);
     expect(entries.map(b => b.querySelector(".sub .pname")!.textContent)).toEqual(["ai-ledger", "ai-ledger"]);
   });
@@ -507,8 +530,7 @@ describe("LivePage", () => {
   });
 
   it("ticks a running call's timer every second and flags a slow shell call", async () => {
-    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "Date"] });
-    vi.setSystemTime(Date.parse("2026-11-10T10:00:25.000Z"));
+    fakeClock("2026-11-10T10:00:25.000Z");
     show();
     await act(async () => { await vi.advanceTimersByTimeAsync(10); });
     const push = () => toolRow("Bash", 1);
@@ -521,8 +543,7 @@ describe("LivePage", () => {
   });
 
   it("keeps a long shell call running past 30 s, in its row and in the state", async () => {
-    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "Date"] });
-    vi.setSystemTime(Date.parse("2026-11-10T10:01:30.000Z"));
+    fakeClock("2026-11-10T10:01:30.000Z");
     const long = { ...s1, state: { ...s1.state, kind: "tool" as const, inferred: false, long: true },
       events: s1.events.map(e => (e.k === "tool" && e.end == null ? { ...e, long: true } : e)) };
     show("#session=s1", { session: () => long });
@@ -742,6 +763,123 @@ describe("LivePage", () => {
     await waitFor(() => expect(calls()).toContain(`/api/live/session?id=s1&after=${encodeURIComponent(s1.cursor!)}`));
   });
 
+  it("refetches the list and the followed session for a notice that names no session", async () => {
+    const { calls } = show();
+    await stream();
+    const n = calls().length;
+    FakeSource.last!.notify(null);
+    await settle();
+    expect(calls().slice(n)).toEqual(["/api/live", catchUp]);
+  });
+
+  it("leaves the list and the session alone when a status answer tells of an ingest", async () => {
+    const st = { ...status }, { calls, r } = show("#session=s1", { status: () => st });
+    await stream();
+    const n = calls().length;
+    await act(async () => { await r.client.fetchQuery(queries.status); }); // the first answer, which invalidates nothing
+    st.last_change = "2026-11-10T10:00:50+00:00";
+    await act(async () => { await r.client.fetchQuery(queries.status); });
+    await settle();
+    expect(calls().length).toBe(n); // Live follows its own notices
+  });
+
+  it("shows a session opened again at once, and asks only for what came after its cursor", async () => {
+    let back = false;
+    const { calls } = show("#session=s1", { session: q => (q.get("id") !== "s1" ? { ...s1, session_id: "s2", project: "jobdesk" }
+      : back ? new Promise(() => {}) as never : s1) }); // on return the answer never comes: what shows is what was held
+    await stream();
+    await userEvent.click(await entry("jobdesk"));
+    await waitFor(() => expect(headed()).toBe("jobdesk"));
+    back = true;
+    const n = calls().length;
+    await userEvent.click(await entry("foo"));
+    expect([headed(), drawn()]).toEqual(["foo", ["Read", "Agent", "Bash", "Bash"]]);
+    await settle();
+    expect(calls().slice(n)).toEqual([catchUp]);
+  });
+
+  it("lets every request run to its end under a notice a second, and ends with what the last notice told of", async () => {
+    fakeClock("2026-11-10T10:01:00.000Z");
+    const a = sess("a", "tool", "2026-11-10T09:00:00.000Z");
+    let s = s1;
+    const o = { list: { ...list, sessions: [a] }, session: () => s }, { f } = show("#session=s1", o);
+    await tick(10);
+    // Every answer takes a second and a half, and is what the app held when it was asked.
+    const normal = f.getMockImplementation()!, sent: { url: string; signal: AbortSignal }[] = [];
+    f.mockImplementation(((input: string, init: RequestInit) => {
+      const res = normal(input);
+      if (input === "/api/status") return res;
+      sent.push({ url: input, signal: init.signal! });
+      return new Promise<Response>(r => { setTimeout(() => r(res), 1500); });
+    }) as typeof normal);
+    for (let i = 1; i <= 5; i++) { // a notice at 0 s, 1 s, 2 s, 3 s and 4 s
+      o.list = { ...list, sessions: [{ ...a, project: "n" + i }] };
+      s = { ...s1, events: [{ ...(s1.events.at(-1) as LiveToolEvent), key: `n${i}#0`, id: "n" + i, summary: "ls" + i }], cursor: "c" + i };
+      FakeSource.last!.notify(["s1"]);
+      await tick(i < 5 ? 1000 : 5000);
+    }
+    expect(sent.map(x => x.signal.aborted)).not.toContain(true);
+    // Asked at 0 s, 1.5 s, 3 s and 4.5 s: one at a time for each, and the last one after the last notice.
+    expect(sent.map(x => x.url.split("?")[0])).toEqual(Array.from({ length: 4 }, () => ["/api/live", "/api/live/session"]).flat());
+    expect(groups(screen.getByRole("region", { name: "Active sessions" }))).toEqual(["working · 1 n5"]);
+    expect(screen.getAllByRole("button", { name: /^Bashls/ }).map(b => b.querySelector(".sum")!.textContent)).toEqual(["ls1", "ls2", "ls3", "ls5"]); // what the app held at each asking
+  });
+
+  it("follows a request under way with exactly one more, however many notices came meanwhile", async () => {
+    const { f } = show();
+    await stream();
+    const { sent, urls, waiting, answer } = lateAnswers(f);
+    for (let i = 0; i < 4; i++) FakeSource.last!.notify(["s1"]);
+    await settle();
+    expect(urls()).toEqual(["/api/live", catchUp]); // the first notice's, under way
+    await answer();
+    expect([urls().slice(2), waiting()]).toEqual([["/api/live", catchUp], 2]); // one more for the three notices since
+    await answer();
+    expect([urls().length, waiting(), sent.some(x => x.signal.aborted)]).toEqual([4, 0, false]);
+  });
+
+  it("follows a session's first load with one more request when a notice came during it", async () => {
+    const { f } = show();
+    await stream();
+    const { urls, waiting, answer } = lateAnswers(f), s2 = "/api/live/session?id=s2";
+    await userEvent.click(await entry("jobdesk"));
+    FakeSource.last!.notify(["s2"]); // the load under way was asked before it
+    await settle();
+    expect(urls()).toEqual([s2, "/api/live"]);
+    await answer();
+    expect([headed(), urls().slice(2), waiting()]).toEqual(["jobdesk", [`${s2}&after=${encodeURIComponent(s1.cursor!)}`], 1]);
+    await answer();
+    expect([urls().length, waiting()]).toEqual([3, 0]);
+  });
+
+  it("sends the request owed to a notice for the session selected now, when the user opened another meanwhile", async () => {
+    const { f } = show();
+    await stream();
+    const { urls, waiting, answer } = lateAnswers(f), s2 = "/api/live/session?id=s2";
+    FakeSource.last!.notify(["s1"]);
+    FakeSource.last!.notify(["s1"]); // one more owed, for the list and for s1
+    await userEvent.click(await entry("jobdesk"));
+    await settle();
+    expect(urls()).toEqual(["/api/live", catchUp, s2]);
+    await answer();
+    expect([headed(), urls().slice(3), waiting()]).toEqual(["jobdesk", ["/api/live", `${s2}&after=${encodeURIComponent(s1.cursor!)}`], 2]); // nothing more for s1
+    await answer();
+    expect([urls().length, waiting()]).toEqual([5, 0]);
+  });
+
+  it("drops the session request owed to a notice when no session is selected any more", async () => {
+    const o: Opts = {}, { f } = show("", o);
+    await stream(); // the newest session, as the URL names none
+    const { urls, waiting, answer } = lateAnswers(f);
+    o.list = { ...list, sessions: [] };
+    FakeSource.last!.notify(null);
+    FakeSource.last!.notify(null); // one more owed, for the list and for the session
+    await answer(1); // the list: no session is active
+    expect(await screen.findByText(/No session is active/)).toBeTruthy();
+    await answer();
+    expect([urls().filter(u => u.startsWith("/api/live/session")).length, waiting()]).toEqual([1, 0]);
+  });
+
   it("shows reconnecting when the stream drops, then catches up", async () => {
     const { calls } = show();
     await stream();
@@ -876,7 +1014,49 @@ describe("LivePage", () => {
     expect(calls().length).toBe(n);
     expect(conn().textContent).toBe("Paused · 3 updates held");
     await userEvent.click(screen.getByRole("button", { name: "Resume" }));
-    await waitFor(() => expect(calls().length).toBe(n + 2));
+    await settle();
+    expect(calls().slice(n)).toEqual(["/api/live", catchUp]); // once each, whatever was held
+  });
+
+  it("still loads what the user asks for while paused: another session, the full text", async () => {
+    const { calls } = show();
+    await stream();
+    await userEvent.click(screen.getByRole("button", { name: "Pause" }));
+    const n = calls().length;
+    await userEvent.click(await entry("jobdesk"));
+    await waitFor(() => expect(headed()).toBe("jobdesk"));
+    await userEvent.click(check("Full text"));
+    expect(await within(await rail()).findByText("Freeze the clock in the snapshot test")).toBeTruthy();
+    FakeSource.last!.notify(null);
+    await settle();
+    expect(calls().slice(n)).toEqual(["/api/live/session?id=s2", "/api/live?text=1", "/api/live/session?id=s2&text=1"]); // and nothing for the notice
+    expect(conn().textContent).toBe("Paused · 1 update held");
+  });
+
+  it("holds the request owed to a notice when the user pauses before it is sent, and sends it once on Resume", async () => {
+    const { f } = show();
+    await stream();
+    const { urls, waiting, answer } = lateAnswers(f);
+    FakeSource.last!.notify(["s1"]);
+    FakeSource.last!.notify(["s1"]); // one more owed, for the list and for the session
+    await userEvent.click(screen.getByRole("button", { name: "Pause" }));
+    await answer();
+    expect([urls().length, waiting(), conn().textContent]).toEqual([2, 0, "Paused · 1 update held"]); // one, whatever both owed
+    await userEvent.click(screen.getByRole("button", { name: "Resume" }));
+    await settle();
+    expect([urls().slice(2), waiting(), conn().textContent]).toEqual([["/api/live", catchUp], 2, "Connecting…"]);
+    await answer();
+    expect([urls().length, waiting()]).toEqual([4, 0]);
+  });
+
+  it("sends no request on Resume when no update was held", async () => {
+    const { calls } = show();
+    await stream();
+    const n = calls().length;
+    await userEvent.click(screen.getByRole("button", { name: "Pause" }));
+    await userEvent.click(screen.getByRole("button", { name: "Resume" }));
+    await settle();
+    expect(calls().length).toBe(n);
   });
 
   it("shows the agent panel: an inferred approval wait with its reason, the context and the figures", async () => {
@@ -1001,6 +1181,48 @@ describe("LivePage", () => {
     expect(toolRow("Bash", 0).getAttribute("aria-expanded")).toBe("true");
   });
 
+  it("keeps the events and their open rows, with the failure, when the full text cannot be loaded", async () => {
+    show("#session=s1", { session: q => (q.get("text") ? undefined : s1) });
+    await stream();
+    await userEvent.click(toolRow("Bash", 0));
+    await userEvent.click(check("Full text"));
+    expect((await screen.findByRole("alert")).textContent).toBe("Could not load. HTTP 404");
+    expect([toolRow("Bash", 0).getAttribute("aria-expanded"), screen.queryByText(/Session not found/)]).toEqual(["true", null]);
+  });
+
+  it("takes the text off the screen at once when Full text turns off, with the events held before it", async () => {
+    let off = false;
+    const { calls } = show("#session=s1", { session: q => (q.get("text") ? s1text : off ? new Promise(() => {}) as never : s1) }); // no answer after the text
+    await stream();
+    await userEvent.click(toolRow("Bash", 0));
+    await userEvent.click(check("Full text"));
+    expect(await screen.findByText("Add a fast ingest pass while the Live page is open")).toBeTruthy();
+    off = true;
+    const n = calls().length;
+    await userEvent.click(check("Full text"));
+    expect([screen.queryByText("Add a fast ingest pass while the Live page is open"), toolRow("Bash", 0).nextElementSibling!.querySelector("pre")]).toEqual([null, null]);
+    expect([drawn(), toolRow("Bash", 0).getAttribute("aria-expanded")]).toEqual([["Read", "Agent", "Bash", "Bash"], "true"]);
+    await settle();
+    expect(calls().slice(n)).toEqual(["/api/live", catchUp]);
+  });
+
+  it("takes a list loaded with Full text off the screen when Full text turns off, while the list without it loads", async () => {
+    const { f } = show("");
+    const title = () => within(screen.getByRole("main")).queryByText("Freeze the clock in the snapshot test");
+    await rail();
+    await userEvent.click(check("Full text"));
+    await waitFor(() => expect(title()).toBeTruthy());
+    await userEvent.click(screen.getByRole("checkbox", { name: /Include automated/ })); // a view whose list without text was never loaded
+    await settle();
+    expect(title()).toBeTruthy();
+    const { urls, answer } = lateAnswers(f);
+    await userEvent.click(check("Full text"));
+    await settle();
+    expect([urls()[0], title()]).toEqual(["/api/live?automated=1", null]); // asked, unanswered: no first-prompt title meanwhile
+    await answer();
+    expect([groups(await rail()).length, title()]).toEqual([5, null]);
+  });
+
   it("links the note on older events to the session sheet", async () => {
     show("#session=s1", { session: () => ({ ...s1, truncated: true }) });
     await stream();
@@ -1043,6 +1265,27 @@ describe("LivePage", () => {
     expect(location.hash).toBe("");
   });
 
+  it("keeps saying a session is not found, and that the list failed, while it asks again", async () => {
+    const { f } = show("#session=nope", { session: () => undefined });
+    expect(await screen.findByText(/Session not found/)).toBeTruthy();
+    // From here the list and the session answer with an HTTP error, and late.
+    const late: (() => void)[] = [], normal = f.getMockImplementation()!;
+    f.mockImplementation((input: string) => (input === "/api/status" ? normal(input)
+      : new Promise(r => { late.push(() => r({ ok: false, status: input.startsWith("/api/live/session") ? 404 : 500 } as Response)); })));
+    const said = () => [late.length, !!screen.queryByText(/Session not found/), screen.queryByText("Loading…"), screen.queryByRole("alert")?.textContent];
+    const answer = async () => { late.splice(0).forEach(a => a()); await settle(); return said(); };
+    await userEvent.click(check("Full text")); // a list and a session the page holds nothing of
+    await settle();
+    expect(said()).toEqual([2, true, null, undefined]);
+    expect(await answer()).toEqual([0, true, null, "Could not load. HTTP 500"]);
+    for (let i = 0; i < 2; i++) {
+      FakeSource.last!.notify(null);
+      await settle();
+      expect(said()).toEqual([2, true, null, "Could not load. HTTP 500"]); // both asked again, unanswered: nothing blinks off
+      expect(await answer()).toEqual([0, true, null, "Could not load. HTTP 500"]);
+    }
+  });
+
   it("moves off a session the list no longer holds, as after a filter change", async () => {
     const o: { list?: LivePayload } = {};
     const { calls } = show("", o);
@@ -1063,7 +1306,7 @@ describe("LivePage", () => {
   it("shows an ended session as ended in the rail, in the agent panel and on the wall", async () => {
     show("#session=s5", { session: () => ({ ...s1, session_id: "s5", project: "notes", state: ended.state }) });
     const rail = await screen.findByRole("region", { name: "Active sessions" });
-    const state = within(rail).getAllByRole("button").find(b => b.querySelector(".pname")!.textContent === "notes")!.querySelector(".state")!;
+    const state = (await within(rail).findAllByRole("button")).find(b => b.querySelector(".pname")!.textContent === "notes")!.querySelector(".state")!;
     expect([state.className, state.textContent]).toEqual(["state st-ended", "ended"]);
     await stream();
     const panel = screen.getByRole("complementary", { name: "Agent" });
@@ -1125,10 +1368,11 @@ describe("LivePage", () => {
 });
 
 describe("Live in a background tab", () => {
-  const clock = (at = "2026-11-10T10:00:25.000Z") => { vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "Date"] }); vi.setSystemTime(Date.parse(at)); };
+  const clock = () => fakeClock("2026-11-10T10:00:25.000Z");
   const flush = (ms = 10) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
-  /** The init each fetch got, by URL path. */
+  /** The init each fetch got, by URL path: Query's abort signal, and the low priority of a background request. */
   const inits = (f: ReturnType<typeof show>["f"], path: string) => f.mock.calls.filter(c => String(c[0]).startsWith(path)).map(c => (c as unknown[])[1]);
+  const own = { signal: expect.any(AbortSignal) }, low = { priority: "low", ...own };
 
   it("closes the notice stream, stops the timers and requests while hidden, and fetches once on return", async () => {
     clock();
@@ -1146,7 +1390,7 @@ describe("Live in a background tab", () => {
     await flush();
     expect(calls().length).toBe(n + 2); // the list and the session, once
     expect(polls()).toBe(1);
-    expect(inits(f, "/api/live")[2]).toBeUndefined(); // on return they are the page's own request, at normal priority
+    expect(inits(f, "/api/live").slice(2)).toEqual([own, own]); // on return they are the page's own requests, at normal priority
     expect(FakeSource.last).not.toBe(first); // and the stream is open again
     expect(FakeSource.last!.closed).toBe(false);
     FakeSource.last!.open();
@@ -1162,15 +1406,18 @@ describe("Live in a background tab", () => {
     const { f, calls } = show();
     await flush();
     FakeSource.last!.open();
-    expect(inits(f, "/api/live")).toEqual([undefined, undefined]); // the first load of the list and of the session
+    expect(inits(f, "/api/live")).toEqual([own, own]); // the first load of the list and of the session
     FakeSource.last!.notify(["s1"]);
     await flush();
-    expect(inits(f, "/api/live")).toEqual([undefined, undefined, undefined, undefined]); // a notice is news the user waits on
-    expect(inits(f, "/api/status")).toEqual([{ priority: "low", signal: expect.any(AbortSignal) }]); // Query passes its abort signal
+    expect(inits(f, "/api/live")).toEqual([own, own, own, own]); // a notice is news the user waits on
+    expect(inits(f, "/api/status")).toEqual([low]);
     const n = calls().length;
     await flush(10_000);
     expect(calls().length).toBe(n + 2);
-    expect(inits(f, "/api/live").slice(-2)).toEqual([{ priority: "low" }, { priority: "low" }]);
+    expect(inits(f, "/api/live").slice(-2)).toEqual([low, low]);
+    FakeSource.last!.notify(["s1"]);
+    await flush();
+    expect(inits(f, "/api/live").slice(-2)).toEqual([own, own]); // a notice after a recheck is the page's own request again
   });
 
   it("stops the clock while hidden and shows the real elapsed time on return", async () => {
@@ -1194,15 +1441,31 @@ describe("Live in a background tab", () => {
     const { calls, polls } = show();
     await flush();
     FakeSource.last!.open();
-    await userEvent.setup({ advanceTimers: vi.advanceTimersByTime }).click(screen.getByRole("button", { name: "Pause" }));
+    fireEvent.click(screen.getByRole("button", { name: "Pause" })); // not userEvent: it waits on a setTimeout, faked here
     const n = calls().length;
     setHidden(true);
     setHidden(false);
     await flush(30_000);
     expect([calls().length, polls(), conn().textContent]).toEqual([n, 0, "Paused · 1 update held"]);
-    await userEvent.setup({ advanceTimers: vi.advanceTimersByTime }).click(screen.getByRole("button", { name: "Resume" }));
+    fireEvent.click(screen.getByRole("button", { name: "Resume" }));
     await flush();
     expect(calls().length).toBe(n + 2);
+  });
+
+  it("drops the request owed to a notice when the tab is hidden before it is sent, and fetches once on return", async () => {
+    const { f } = show();
+    await stream();
+    const { urls, waiting, answer } = lateAnswers(f);
+    FakeSource.last!.notify(["s1"]);
+    FakeSource.last!.notify(["s1"]); // one more owed, for the list and for the session
+    setHidden(true);
+    await answer();
+    expect([urls().length, waiting()]).toEqual([2, 0]);
+    setHidden(false);
+    await settle();
+    expect([urls().slice(2), waiting()]).toEqual([["/api/live", catchUp], 2]);
+    await answer();
+    expect([urls().length, waiting()]).toEqual([4, 0]);
   });
 
   it("draws finished rows once: a tick formats no date for them", async () => {

@@ -79,6 +79,38 @@ describe("SessionSheet", () => {
     expect(sheet().queryByRole("button", { name: "Show the whole prompt" })).toBeNull();
   });
 
+  it("fetches the whole prompt once per session: a sheet reopened on it shows the text from the cache", async () => {
+    const s: SessionDetail = { ...session, first_prompt: "Fix the flaky…", first_prompt_cut: true, title: "Fix the flaky test" };
+    const f = mockApi({ "/api/session": () => s, "/api/prompt": () => ({ text: "Fix the flaky test in the ingest suite, then rerun it." }) });
+    const prompts = () => f.mock.calls.filter(c => String(c[0]).startsWith("/api/prompt")).length;
+    at("#session=s1");
+    const { client, unmount } = renderApp(<UsageSheets data={usage} />);
+    await userEvent.click(await sheet().findByText("Source"));
+    await userEvent.click(sheet().getByRole("button", { name: "Show the whole prompt" }));
+    await sheet().findByText("Fix the flaky test in the ingest suite, then rerun it.");
+    unmount();
+    renderApp(<UsageSheets data={usage} />, client);
+    await userEvent.click(await sheet().findByText("Source"));
+    expect(sheet().getByText("Fix the flaky test in the ingest suite, then rerun it.")).toBeTruthy();
+    expect(sheet().queryByRole("button", { name: "Show the whole prompt" })).toBeNull();
+    expect(prompts()).toBe(1);
+  });
+
+  it("says when the whole prompt could not load, and Retry asks again", async () => {
+    const s: SessionDetail = { ...session, first_prompt: "Fix the flaky…", first_prompt_cut: true, title: "Fix the flaky test" };
+    let up = false;
+    mockApi({ "/api/session": () => s, "/api/prompt": () => (up ? { text: "The whole prompt." } : undefined) });
+    at("#session=s1");
+    renderApp(<UsageSheets data={usage} />);
+    await userEvent.click(await sheet().findByText("Source"));
+    await userEvent.click(sheet().getByRole("button", { name: "Show the whole prompt" }));
+    expect(await sheet().findByText(/Could not load it \(/)).toBeTruthy();
+    up = true;
+    await userEvent.click(sheet().getByRole("button", { name: "Retry loading the whole prompt" }));
+    expect(await sheet().findByText("Showing all 17 characters.")).toBeTruthy();
+    expect(sheet().getByText("The whole prompt.")).toBeTruthy();
+  });
+
   it("shows the session's /insights judgment between its figures and the timeline, linking to Insights in the view", async () => {
     const insight = { outcome: "partially_achieved", helpfulness: "moderately_helpful", session_type: "iterative_refinement",
       brief_summary: "Chased a flaky date test.", friction_detail: "Patched the wrong helper first.",
