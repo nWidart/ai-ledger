@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
+import { Popover } from "@base-ui/react/popover";
 import { navigate, parseSearch, sharedSearch, useSearchOf, usePathname } from "../url";
 import { getTheme, nextTheme, setTheme, useTheme, type Theme } from "../theme";
 import { alertKey, alertText } from "../pages/limits/limits";
@@ -50,34 +51,87 @@ function IngestDetails({ st }: { st: RefreshState }) {
   </>;
 }
 
-/** The shared top bar: brand, page tabs (keeping project, range and auto), the palette button, and the freshness control:
- *  Refresh, and the last ingest's state with its details in a toggletip. */
-export function Nav() {
-  const path = usePathname(), { shared, project } = useSearchOf(navSearch), theme = useTheme(), next = nextTheme(theme);
-  const nav = useRef<HTMLElement>(null);
-  const { refresh, state: st } = useRefresh(), flash = useFlash();
-  const label = freshLabel(st) || "No ingest yet";
-  const alert = st.alert ? alertText(st.alert) : null;
-  // What a screen reader is told of the alert: its sentence, kept as it was while the alert stays the same alert (the forecast time
-  // in the sentence drifts every cycle), changed when the alert's kind, window or measured flag change, and emptied, with no
-  // announcement of its own, when it goes. Set while rendering, from the key: the usual way to derive state from a change.
-  const key = alertKey(st.alert), [said, setSaid] = useState({ key: "", text: "" });
-  if (key !== said.key) setSaid({ key, text: alert ?? "" });
+type Tone = "warning" | "critical";
 
-  // Pages offset scroll targets by the sticky nav's height, which grows when it wraps on phones.
-  useEffect(() => {
-    const el = nav.current!, ro = new ResizeObserver(() => document.documentElement.style.setProperty("--appnav-h", el.offsetHeight + "px"));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-
+/** The page links, for the tabs and for the page chooser's list alike: one implementation, so both preload, keep the filters,
+ *  leave a modified click to the browser and carry the Limits alert the same way. In a list, each link is in its own item.
+ *  onPick: told of a plain click it handled, with the page it opened (the current one included). */
+function PageLinks({ path, shared, alert, tone, list, onPick }: { path: string; shared: string; alert: string | null; tone: Tone; list?: boolean; onPick?: (to: string) => void }) {
   // A plain click goes through navigate (url.ts holds the app's rules for a page switch); Link skips its own navigation
   // when the event is default-prevented. A modified click is the browser's.
   const go = (e: MouseEvent<HTMLAnchorElement>, to: string) => {
     if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     e.preventDefault();
     if (to !== path) navigate(to + shared);
+    onPick?.(to);
   };
+  return PAGES.map(p => {
+    // The Limits link carries the alert. Its spoken form is a visually hidden span in the link ("Limits alert: <sentence>"). The
+    // hover text is the title of a plain span around the visible label and the dot, which is no part of the link's name or
+    // description, so the sentence is read once and the whole link explains itself. The space before the hidden span is a text node of
+    // the link: it ends the line, so it takes no room, and it keeps the name "Limits alert: …" whatever the engine does for a hidden span.
+    // Color is never the only signal.
+    const badge = p.path === "/limits" && alert;
+    // Link gives the link its href and the preload on intent. It is current by path alone (includeSearch: false), as before,
+    // and activeProps={{}} drops the "active" class Link would add.
+    const link = (
+      <Link key={p.path} to={p.path} search={parseSearch(shared) as never} activeOptions={{ includeSearch: false }} activeProps={{}} onClick={e => go(e, p.path)}>
+        {badge ? <>
+          <span title={badge}>{p.label}<span className="appnav-badge" data-tone={tone} aria-hidden="true" /></span>
+          {" "}<span className="sr">alert: {badge}</span>
+        </> : p.label}
+      </Link>
+    );
+    return list ? <li key={p.path}>{link}</li> : link;
+  });
+}
+
+/** The page chooser, which stands in for the tabs on narrow screens (Nav.css switches the two): a button named for the current
+ *  page, or "Pages" off the tabs, that opens the page links in a list. A disclosure, not a menu: the items are links, and keep
+ *  being links. With an alert, the button carries the dot and adds "Limits alert" to its name; the sentence stays on the Limits
+ *  link. The list is portaled and placed over the page, so the nav never grows. Escape and a click outside close it and give focus
+ *  back to the button; a picked page closes it without, so the page switch can move focus to the new page's heading. */
+function PageChooser({ path, shared, alert, tone }: { path: string; shared: string; alert: string | null; tone: Tone }) {
+  const [open, setOpen] = useState(false), picked = useRef(false);
+  const current = PAGES.find(p => p.path === path)?.label ?? "Pages";
+  return (
+    <Popover.Root open={open} onOpenChange={o => { if (o) picked.current = false; setOpen(o); }}>
+      <Popover.Trigger className="appnav-chooser" aria-label={alert ? `${current}, Limits alert` : undefined}>
+        <span className="appnav-chooser-lbl">{current}{alert && <span className="appnav-dot" data-tone={tone} aria-hidden="true" />}</span>
+        <svg className="appnav-caret" viewBox="0 0 10 10" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m2.5 4 2.5 2.5L7.5 4" /></svg>
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Positioner className="appnav-chooser-pos" side="bottom" align="start" sideOffset={6} collisionPadding={8}>
+          {/* A pick of another page leaves focus for the page switch to move; picking the current page moves nothing, so focus goes back. */}
+          <Popover.Popup className="appnav-chooser-pop" aria-label="Pages" finalFocus={() => !picked.current}>
+            <ul><PageLinks path={path} shared={shared} alert={alert} tone={tone} list onPick={to => { picked.current = to !== path; setOpen(false); }} /></ul>
+          </Popover.Popup>
+        </Popover.Positioner>
+      </Popover.Portal>
+    </Popover.Root>
+  );
+}
+
+/** The shared top bar: brand, page tabs (keeping project, range and auto) or the page chooser, the palette button, and the
+ *  freshness control: Refresh, and the last ingest's state with its details in a toggletip. */
+export function Nav() {
+  const path = usePathname(), { shared, project } = useSearchOf(navSearch), theme = useTheme(), next = nextTheme(theme);
+  const nav = useRef<HTMLElement>(null);
+  const { refresh, state: st } = useRefresh(), flash = useFlash();
+  const label = freshLabel(st) || "No ingest yet";
+  const alert = st.alert ? alertText(st.alert) : null, tone: Tone = st.alert?.kind === "high" ? "warning" : "critical";
+  // What a screen reader is told of the alert: its sentence, kept as it was while the alert stays the same alert (the forecast time
+  // in the sentence drifts every cycle), changed when the alert's kind, window or measured flag change, and emptied, with no
+  // announcement of its own, when it goes. Set while rendering, from the key: the usual way to derive state from a change.
+  const key = alertKey(st.alert), [said, setSaid] = useState({ key: "", text: "" });
+  if (key !== said.key) setSaid({ key, text: alert ?? "" });
+
+  // Pages offset scroll targets by the sticky nav's height, which follows the text size.
+  useEffect(() => {
+    const el = nav.current!, ro = new ResizeObserver(() => document.documentElement.style.setProperty("--appnav-h", el.offsetHeight + "px"));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   return (
     <nav className="appnav" aria-label="Dashboards" ref={nav}>
@@ -88,26 +142,9 @@ export function Nav() {
           <rect x="8.7" y="7" width="2.6" height="8.5" rx="1.1" fill="var(--surface-1)" />
           <rect x="12.9" y="4.5" width="2.6" height="11" rx="1.1" fill="var(--surface-1)" opacity=".7" />
         </svg><span className="appnav-word">AI <b>Ledger</b></span></span>
-        <span className="appnav-tabs">
-          {PAGES.map(p => {
-            // The Limits tab carries the alert. Its spoken form is a visually hidden span in the link ("Limits alert: <sentence>"). The
-            // hover text is the title of a plain span around the visible label and the dot, which is no part of the link's name or
-            // description, so the sentence is read once and the whole tab explains itself. The space before the hidden span is a text node of the
-            // link: it ends the line, so it takes no room, and it keeps the name "Limits alert: …" whatever the engine does for a hidden span.
-            // Color is never the only signal.
-            const badge = p.path === "/limits" && alert;
-            return (
-              // Link gives the tab its href and the preload on intent. The tab is current by path alone (includeSearch: false), as
-              // before, and activeProps={{}} drops the "active" class Link would add.
-              <Link key={p.path} to={p.path} search={parseSearch(shared) as never} activeOptions={{ includeSearch: false }} activeProps={{}} onClick={e => go(e, p.path)}>
-                {badge ? <>
-                  <span title={badge}>{p.label}<span className="appnav-badge" data-tone={st.alert!.kind === "high" ? "warning" : "critical"} aria-hidden="true" /></span>
-                  {" "}<span className="sr">alert: {badge}</span>
-                </> : p.label}
-              </Link>
-            );
-          })}
-        </span>
+        {/* Both are drawn; Nav.css shows one (display: none takes the other out of the tab order and the accessibility tree). */}
+        <span className="appnav-tabs"><PageLinks path={path} shared={shared} alert={alert} tone={tone} /></span>
+        <PageChooser path={path} shared={shared} alert={alert} tone={tone} />
         <button type="button" className="appnav-palette" aria-label={project ? `Search in ${project}, open command palette (${shortcutHint()})` : `Search, open command palette (${shortcutHint()})`} aria-haspopup="dialog"
           aria-keyshortcuts={shortcutKeys()} title={project ? `${project}: filter, go to a page or open an inspector (${shortcutHint()})` : `Filter, go to a page or open an inspector (${shortcutHint()})`} onClick={openPalette}>
           <svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5" fill="none" stroke="currentColor" strokeWidth="1.8" /><path d="m13 13 4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>

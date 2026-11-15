@@ -1,4 +1,5 @@
-import { act, screen, waitFor, within } from "@testing-library/react";
+import { readFileSync } from "node:fs";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { hasHue, setOrder } from "../colors";
@@ -820,6 +821,160 @@ describe("Nav", () => {
         expect(flashEl()?.textContent).toBe("+1 line");
       });
     });
+  });
+
+  // The page chooser stands in for the tabs on narrow screens. jsdom applies no media query, so both are in the document here:
+  // the chooser's links exist only while its list is open, so the tabs' names stay unique.
+  describe("page chooser", () => {
+    const chooser = () => document.querySelector<HTMLButtonElement>(".appnav-chooser")!;
+    const list = () => document.querySelector<HTMLElement>(".appnav-chooser-pop");
+    const item = (name: string | RegExp) => within(list()!).getByRole("link", { name });
+    const open = async () => {
+      act(() => chooser().focus());
+      await userEvent.keyboard("{Enter}");
+      await waitFor(() => expect(list()).not.toBeNull());
+    };
+    const alert: LimitsAlert = { kind: "at_limit", provider: "codex", provider_label: "Codex", label: "weekly", current: 100,
+      at: "2026-11-14T12:00:00.000Z", resets_at: "2026-11-14T12:00:00.000Z", measured: true, count: 1 };
+
+    it("is a collapsed button named for the current page, whose list holds the seven page links with the filters, the current one marked", async () => {
+      vi.stubGlobal("fetch", vi.fn(() => json(status)));
+      history.replaceState(null, "", "/errors?project=foo&range=14");
+      renderApp(<Nav />);
+      const btn = screen.getByRole("button", { name: "Errors" });
+      expect(btn).toBe(chooser());
+      expect(btn.getAttribute("aria-expanded")).toBe("false");
+      expect(btn.hasAttribute("aria-label")).toBe(false); // the visible label is the name
+      expect(list()).toBeNull();
+      const h = document.documentElement.style.getPropertyValue("--appnav-h");
+      await open();
+      expect(btn.getAttribute("aria-expanded")).toBe("true");
+      const links = within(list()!).getAllByRole("link");
+      expect(links.map(a => a.textContent)).toEqual(["Activity", "Cost", "Context", "Errors", "Limits", "Insights", "Live"]);
+      expect(links.every(a => a.parentElement!.tagName === "LI" && a.parentElement!.parentElement!.tagName === "UL")).toBe(true);
+      expect(list()!.querySelector("[role=menu], [role=menuitem]")).toBeNull(); // links, not a menu
+      expect(item("Errors").getAttribute("aria-current")).toBe("page");
+      expect(links.filter(a => a.hasAttribute("aria-current")).length).toBe(1);
+      expect(item("Cost").getAttribute("href")).toBe("/cost?project=foo&range=14");
+      // Portaled over the page: the nav's height, and --appnav-h with it, does not change.
+      expect(document.querySelector("nav.appnav")!.contains(list())).toBe(false);
+      expect(document.documentElement.style.getPropertyValue("--appnav-h")).toBe(h);
+    });
+
+    it("picks a page from the keyboard: the list closes, the page opens with the filters, and focus is on its heading", async () => {
+      vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/status") ? status : usage)));
+      history.replaceState(null, "", "/usage?project=foo&range=14");
+      renderRouter();
+      await screen.findByRole("heading", { level: 1, name: /requests|prompts|tool calls|sessions/i });
+      await open();
+      act(() => item("Cost").focus());
+      await userEvent.keyboard("{Enter}");
+      expect(location.pathname).toBe("/cost");
+      expect(location.search).toBe("?project=foo&range=14");
+      await waitFor(() => expect(list()).toBeNull());
+      await waitFor(() => expect(document.querySelector("main.pg-cost")).toBeTruthy());
+      await waitFor(() => expect(document.activeElement?.id).toBe("lede"));
+      expect(document.activeElement!.closest(".pg-cost")).toBeTruthy();
+      await new Promise(r => setTimeout(r, 20)); // nothing takes it back to the button afterwards
+      expect(document.activeElement?.id).toBe("lede");
+      expect(chooser().textContent).toBe("Cost");
+    });
+
+    // Here the page loads at once, so the heading has focus before the list goes. A page whose code is still loading has no heading
+    // yet: had the list given focus back to the button, it would land there and the page switch would stop following the heading.
+    it("gives focus back to no one when a page is picked, and to the button when the current page is", async () => {
+      vi.stubGlobal("fetch", vi.fn(() => json(status)));
+      history.replaceState(null, "", "/usage");
+      renderApp(<Nav />); // no page, and no page switch to move focus
+      await open();
+      act(() => item("Cost").focus());
+      await userEvent.keyboard("{Enter}");
+      await waitFor(() => expect(list()).toBeNull());
+      await flush();
+      expect(location.pathname).toBe("/cost");
+      expect(document.activeElement).toBe(document.body);
+      await open();
+      act(() => item("Cost").focus());
+      await userEvent.keyboard("{Enter}");
+      await waitFor(() => expect(list()).toBeNull());
+      await waitFor(() => expect(document.activeElement).toBe(chooser()));
+    });
+
+    it("closes on Escape, giving focus back to the button, and on a click outside", async () => {
+      vi.stubGlobal("fetch", vi.fn(() => json(status)));
+      history.replaceState(null, "", "/cost");
+      renderApp(<Nav />);
+      await open();
+      act(() => item("Errors").focus());
+      await userEvent.keyboard("{Escape}");
+      await waitFor(() => expect(list()).toBeNull());
+      expect(document.activeElement).toBe(chooser());
+      expect(chooser().getAttribute("aria-expanded")).toBe("false");
+      expect(location.pathname).toBe("/cost");
+      await open();
+      await userEvent.click(document.body);
+      await waitFor(() => expect(list()).toBeNull());
+      expect(location.pathname).toBe("/cost");
+    });
+
+    it("leaves a Cmd-click to the browser: the page stays", async () => {
+      vi.stubGlobal("fetch", vi.fn(() => json(status)));
+      history.replaceState(null, "", "/cost?range=14");
+      renderApp(<Nav />);
+      await open();
+      // What the app did with the click, read after React's handlers; then the default is dropped, as jsdom cannot open a tab.
+      let prevented: boolean | undefined;
+      const seen = (e: Event) => { prevented = e.defaultPrevented; e.preventDefault(); };
+      addEventListener("click", seen, { once: true });
+      fireEvent.click(item("Errors"), { metaKey: true });
+      expect(prevented).toBe(false);
+      expect(item("Errors").getAttribute("href")).toBe("/errors?range=14");
+      expect(location.pathname).toBe("/cost");
+      expect(location.search).toBe("?range=14");
+    });
+
+    it("reads Pages on the Project page and marks no link current", async () => {
+      vi.stubGlobal("fetch", vi.fn(() => json(status)));
+      history.replaceState(null, "", "/project?project=foo");
+      renderApp(<Nav />);
+      expect(screen.getByRole("button", { name: "Pages" })).toBe(chooser());
+      await open();
+      expect(within(list()!).getAllByRole("link").filter(a => a.hasAttribute("aria-current"))).toEqual([]);
+    });
+
+    it("carries the dot and says Limits alert while an alert is present; the Limits link is named for the alert", async () => {
+      const f = vi.fn(() => json({ ...status, limits_alert: alert }));
+      vi.stubGlobal("fetch", f);
+      history.replaceState(null, "", "/errors");
+      const { client } = renderApp(<Nav />);
+      const btn = await screen.findByRole("button", { name: "Errors, Limits alert" });
+      expect(btn).toBe(chooser());
+      expect(btn.textContent).toBe("Errors"); // the name holds the visible label
+      const dot = btn.querySelector<HTMLElement>(".appnav-dot")!;
+      expect([dot.dataset.tone, dot.getAttribute("aria-hidden"), dot.textContent]).toEqual(["critical", "true", ""]);
+      await open();
+      const link = item(/^Limits alert: /);
+      expect(link.textContent).toBe(`Limits alert: ${alertText(alert)}`);
+      expect(link.querySelector<HTMLElement>(".appnav-badge")!.dataset.tone).toBe("critical");
+      await userEvent.keyboard("{Escape}");
+      f.mockImplementation(() => json({ ...status, limits_alert: null }));
+      await poll(client);
+      expect(screen.getByRole("button", { name: "Errors" })).toBe(btn);
+      expect(btn.querySelector(".appnav-dot")).toBeNull();
+    });
+  });
+
+  // jsdom applies no layout, so the one-row rule is read from the stylesheet: the row never wraps (a step missing shows as
+  // overflow in review, not as a silent second row), and the narrow step swaps the tabs for the chooser.
+  it("keeps the bar on one row: nowrap, no wrapping rule, and the chooser in the tabs' place on narrow screens", () => {
+    const css = readFileSync("src/components/Nav.css", "utf8").replace(/\/\*[\s\S]*?\*\//g, ""); // vitest runs from web/
+    const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(([, sel, body]) => ({ sel: sel!.trim(), body: body! }));
+    const of = (sel: string) => rules.filter(r => r.sel.split(",").map(s => s.trim()).includes(sel));
+    expect(of(".appnav-in")[0]!.body).toMatch(/flex-wrap:\s*nowrap/);
+    expect(rules.filter(r => /flex-wrap:\s*wrap/.test(r.body))).toEqual([]);
+    const narrow = css.match(/@media \(max-width: ([\d.]+)em\) \{[^@]*\.appnav-tabs \{ display: none; \}[^@]*\.appnav \.appnav-chooser \{ display: inline-flex; \}/);
+    expect(narrow).not.toBeNull();
+    expect(of(".appnav .appnav-chooser")[0]!.body).toMatch(/display:\s*none/); // hidden at full width
   });
 
   it("steps the theme through light, dark and back to system", async () => {

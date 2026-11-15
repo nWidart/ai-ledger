@@ -1,27 +1,46 @@
 .appnav { background: var(--surface-1); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 5; }
-.appnav-in { max-width: 1240px; margin: 0 auto; padding: 8px 16px; display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center; }
+/* One row at every width: nothing wraps. The steps at the end of this file take room away as the window narrows, so that every item
+   keeps its own size; only the project name in the palette button may shrink further, to an ellipsis. */
+.appnav-in { max-width: 1240px; margin: 0 auto; padding: 8px 16px; display: flex; flex-wrap: nowrap; gap: 6px; align-items: center; }
+.appnav-in > * { flex: none; }
 .appnav-brand { display: inline-flex; align-items: center; gap: 8px; margin-right: 10px; flex: none; }
 .appnav-brand svg { display: block; width: 1.25rem; height: 1.25rem; }
 .appnav-word { font-size: .90625rem; font-weight: 500; letter-spacing: -.02em; color: var(--text-secondary); white-space: nowrap; }
 .appnav-word b { font-weight: 600; color: var(--text-primary); }
 .appnav-tabs { display: inline-flex; gap: 2px; padding-left: 10px; border-left: 1px solid var(--border); }
-.appnav a { color: var(--text-secondary); text-decoration: none; padding: 5px 10px; border-radius: 8px; font-weight: 500; }
-.appnav a:hover { background: var(--surface-2); color: var(--text-primary); }
-/* The current page's tab takes that page's tint: clay for Activity and Cost, coral red for Errors. */
-.appnav a[aria-current=page] { background: var(--accent-soft); color: var(--accent-ink); font-weight: 600; }
-.appnav a[href^="/errors"][aria-current=page] { background: var(--critical-soft); color: var(--critical-text); }
-/* The alert dot on the Limits tab sits in the tab's corner, out of the flow: it never moves a tab or the wrapping. The ring is the
-   bar's color, so the dot reads on any tab tint. Against --surface-1 the dot clears 3:1 in both themes: critical 4.68 (light) and
-   5.39 (dark), warning-text 5.77 and 8.69. (--warning itself is 2.99 in light, so the dot does not use it.) */
+/* The tabs and the page chooser's links: the same links, drawn as tabs in the bar and as rows in the chooser's list. */
+.appnav a, .appnav-chooser-pop a { color: var(--text-secondary); text-decoration: none; border-radius: 8px; font-weight: 500; white-space: nowrap; }
+.appnav a { padding: 5px 10px; }
+.appnav a:hover, .appnav-chooser-pop a:hover { background: var(--surface-2); color: var(--text-primary); }
+/* The current page's link takes that page's tint: clay for Activity and Cost, coral red for Errors. */
+:is(.appnav, .appnav-chooser-pop) a[aria-current=page] { background: var(--accent-soft); color: var(--accent-ink); font-weight: 600; }
+:is(.appnav, .appnav-chooser-pop) a[href^="/errors"][aria-current=page] { background: var(--critical-soft); color: var(--critical-text); }
+/* The alert dot on the Limits tab, and on the page chooser's button, sits in the corner, out of the flow: it never moves a tab or
+   resizes the button. The ring is the bar's color, so the dot reads on any tint. Against --surface-1 the dot clears 3:1 in both
+   themes: critical 4.68 (light) and 5.39 (dark), warning-text 5.77 and 8.69. (--warning itself is 2.99 in light, so the dot does not use it.) */
 .appnav a:has(.appnav-badge) { position: relative; }
-.appnav-badge { position: absolute; top: 3px; right: 3px; width: 7px; height: 7px; border-radius: 50%; box-shadow: 0 0 0 1.5px var(--surface-1); }
-.appnav-badge[data-tone=critical] { background: var(--critical); }
-.appnav-badge[data-tone=warning] { background: var(--warning-text); }
+.appnav-badge, .appnav-dot { position: absolute; top: 3px; right: 3px; width: 7px; height: 7px; border-radius: 50%; box-shadow: 0 0 0 1.5px var(--surface-1); }
+:is(.appnav-badge, .appnav-dot)[data-tone=critical] { background: var(--critical); }
+:is(.appnav-badge, .appnav-dot)[data-tone=warning] { background: var(--warning-text); }
+/* The page chooser: hidden until the narrow step below puts it in the tabs' place. Its label is the page's, as on the tab. */
+.appnav .appnav-chooser { display: none; position: relative; align-items: center; gap: 6px; padding: 4px 9px 4px 10px; font-size: inherit; font-weight: 600;
+  color: var(--text-primary); }
+.appnav-chooser .appnav-caret { opacity: .7; }
+.appnav-chooser[aria-expanded=true] .appnav-caret { transform: rotate(180deg); }
+/* The list: over the page, below the bar; the dot follows the Limits label in a row. */
+.appnav-chooser-pos { z-index: 40; }
+.appnav-chooser-pop { box-sizing: border-box; min-width: max(var(--anchor-width), 11rem); max-height: var(--available-height); overflow-y: auto; padding: 4px;
+  background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px; box-shadow: var(--shadow-pop); }
+.appnav-chooser-pop ul { list-style: none; margin: 0; padding: 0; }
+.appnav-chooser-pop a { display: block; padding: 8px 12px; border-radius: 6px; }
+.appnav-chooser-pop .appnav-badge { position: relative; top: -1px; right: auto; display: inline-block; margin-left: 6px; vertical-align: middle; }
 .appnav-palette { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; color: var(--text-secondary); }
-/* The project filter in the button: its dot and name. On phones only the name goes; the dot stays beside the icon. */
-.appnav-scope { display: inline-flex; align-items: center; gap: 5px; color: var(--text-primary); }
-.appnav-scope .pdot { margin-right: 0; }
-.appnav-scope b { font-weight: 500; max-width: 14ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.appnav-in > .appnav-palette { flex: 0 1 auto; min-width: 0; }
+/* The project filter in the button: its dot and name. When the button goes to its icon only the name goes; the dot stays beside the icon. */
+.appnav-scope { display: inline-flex; align-items: center; gap: 5px; min-width: 0; color: var(--text-primary); }
+.appnav-scope .pdot { flex: none; margin-right: 0; }
+.appnav-scope b { min-width: 0; font-weight: 500; max-width: 14ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.appnav-palette kbd { flex: none; }
 .appnav-palette svg { flex: none; width: .875rem; height: .875rem; }
 .appnav-palette kbd { font: .6875rem/1.4 ui-monospace, "SF Mono", Menlo, monospace; color: var(--text-muted); padding: 0 5px;
   border: 1px solid var(--border); border-radius: 5px; background: var(--surface-2); }
@@ -70,22 +89,35 @@
   .appnav-fresh .appnav-state { border-left-color: CanvasText; }
   .appnav-flash { border: 1px solid CanvasText; }
 }
-/* Phones: one row of 36px targets. The tabs share what the icon buttons leave. The freshness control keeps both halves: the
-   time and the flash go, the toggletip button keeps its caret and shows the same details; Failed, Offline and Retry stay in words. */
-@media (max-width: 32.5em) {
+/* The steps, widest first, each taking room away so the bar stays one row: the wordmark goes; the palette button keeps its icon
+   (and the project's dot); the tabs tighten; then the page chooser takes the tabs' place. Each width is what the wider step needs,
+   measured with a long project name and the widest freshness state (the time with a "+12,345 lines" flash), plus 16px to spare and
+   17px for a desktop scrollbar. They are in em, the browser's text size, so a larger text size steps down sooner, as a narrower
+   window does. */
+@media (max-width: 67.5em) {
+  .appnav-word { display: none; }
+  .appnav-brand { margin-right: 4px; }
+}
+@media (max-width: 62.5em) {
+  .appnav-palette .lbl, .appnav-scope b, .appnav-palette kbd { display: none; }
+}
+@media (max-width: 53.5em) {
+  .appnav a { padding: 5px 7px; }
+}
+/* Phones: the page chooser and one row of 36px targets. The freshness control keeps both halves: the time and the flash go, the
+   toggletip button keeps its caret and shows the same details; Failed, Offline, Stale and Retry stay in words. */
+@media (max-width: 51em) {
+  .appnav-tabs { display: none; }
+  .appnav .appnav-chooser { display: inline-flex; }
   .appnav-in { padding: 6px 12px; gap: 4px; }
   .appnav-brand { margin-right: 2px; }
-  .appnav-word { display: none; }
-  .appnav-tabs { flex: 1 1 auto; flex-wrap: wrap; min-width: 0; padding-left: 0; border-left: 0; }
-  .appnav a { flex: 1 1 auto; text-align: center; padding: 8px 4px; }
-  .appnav .appnav-palette, #navRefresh, .appnav-fresh .appnav-state, #navTheme { flex: none; min-width: 36px; min-height: 36px; padding: 0; justify-content: center; }
-  .appnav-palette .lbl, .appnav-scope b, .appnav-palette kbd, .appnav-flash,
-  .appnav-fresh:not([data-kind=failed], [data-kind=offline], [data-kind=stale]) .appnav-time, .appnav-at { display: none; }
+  .appnav .appnav-chooser { min-height: 36px; }
+  .appnav .appnav-palette, #navRefresh, .appnav-fresh .appnav-state, #navTheme { min-width: 36px; min-height: 36px; padding: 0; justify-content: center; }
+  .appnav-flash, .appnav-fresh:not([data-kind=failed], [data-kind=offline], [data-kind=stale]) .appnav-time, .appnav-at { display: none; }
   #navRefresh:has(.lbl), .appnav-fresh:is([data-kind=failed], [data-kind=offline], [data-kind=stale]) .appnav-state { padding: 0 8px; }
 }
-/* The narrowest phones: the logo goes and everything tightens so the actions stay on the tabs' row. */
+/* The narrowest phones: the logo goes and the targets tighten. */
 @media (max-width: 22.5em) {
   .appnav-brand { display: none; }
-  .appnav a { padding: 8px 2px; font-size: .84375rem; }
   .appnav .appnav-palette, #navRefresh, .appnav-fresh .appnav-state, #navTheme { min-width: 32px; }
 }
