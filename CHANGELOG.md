@@ -5,6 +5,8 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-15
+
 Run `ai-ledger rebuild` once after upgrading (with the app stopped): the Context page needs the size of each tool result, the context window of each Codex session and the time of each session's first compaction, which earlier versions did not store. The rebuild fills them from the transcripts already read. It also picks up the `/context` results earlier sessions recorded.
 
 ### Added
@@ -207,6 +209,7 @@ First release on PyPI.
   `$XDG_DATA_HOME/ai-ledger/` (or `~/.local/share/ai-ledger/`) elsewhere. A source checkout's `data/ai-ledger.duckdb`
   moves there on the first start.
 
+[0.4.0]: https://github.com/nWidart/ai-ledger/releases/tag/v0.4.0
 [0.3.0]: https://github.com/nWidart/ai-ledger/releases/tag/v0.3.0
 [0.2.0]: https://github.com/nWidart/ai-ledger/releases/tag/v0.2.0
 [0.1.3]: https://github.com/nWidart/ai-ledger/releases/tag/v0.1.3
