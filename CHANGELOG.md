@@ -21,6 +21,8 @@ Run `ai-ledger rebuild` once after upgrading (with the app stopped): the Context
 - Explanations that only showed on hover (column headers, filter options, the Live agent panel) open from a "?" button by keyboard or touch, or show as visible hints.
 - The Cost, Activity and Context charts have a "Show data table" under them, and Escape dismisses a chart's readout.
 - Windows high contrast and other forced-colors modes keep pressed, selected and current states and data bars visible.
+- Switching pages crossfades, in browsers with view transitions and unless reduced motion is on. Back and Forward return a page to where it was scrolled.
+- A page that loads for the first time shows gray placeholder blocks instead of an empty page.
 
 ### Changed
 

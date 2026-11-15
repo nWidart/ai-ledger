@@ -9,6 +9,7 @@ import { onNavigate, setSearch, useSearchOf, validateRoot } from "../../url";
 import { validateSearch } from "./search";
 import { queries } from "../../queries";
 import { useApi } from "../../useApi";
+import { PageSkeleton } from "../../components/PageSkeleton";
 import { Ctx, Keyed, RowContext, tableFocus, type ErrorsCtx, type RowCtx } from "./context";
 import { Detail } from "./Detail";
 import { useMarks } from "./marks";
@@ -229,7 +230,7 @@ export function ErrorsPage() {
   const detailLive = <div className="sr" id="detailLive" aria-live="polite">{live}</div>;
 
   return (
-    <main id="content" className="wrap pg-errors">
+    <main id="content" className="wrap pg-errors" aria-busy={!m && !error ? "true" : undefined}>
       <header className="top">
         <p className="kicker">{view.source ? agentName(view.source) : "Agent"} tool errors</p>
         <Filters projects={projects}>
@@ -244,7 +245,7 @@ export function ErrorsPage() {
       {!m && (error
         ? <div className="card" id="load" role="alert"><b>Couldn't load errors.</b> <span className="muted">{error.message}. Check that the app is running.</span>{" "}
           <button type="button" ref={retryBtn} onClick={() => { retried.current = true; retry(); }}>Retry</button></div>
-        : <div className="card" id="load" aria-busy="true">Loading errors…</div>)}
+        : <PageSkeleton title="Loading errors…" />)}
       <div className="sr" id="pageLive" aria-live="polite">{pageLive}</div>
       {deadLink && <div className="outnote" id="deadLink"><span>{DEAD_LINK}</span> <button type="button" onClick={dismissDead}>Dismiss</button></div>}
       {ctx && <Ctx.Provider value={ctx}><RowContext.Provider value={rows}>

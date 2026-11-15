@@ -5,6 +5,7 @@ import { ProjectName } from "../../components/ProjectDot";
 import { appLink } from "../../components/sheets/session";
 import { plural, usd, when } from "../../format";
 import { useSearchOf, useView } from "../../url";
+import { PageSkeleton } from "../../components/PageSkeleton";
 import { ApiError } from "../../useApi";
 import { sessionHref } from "../insights/InsightsPage";
 import { AgentPanel, StateTag } from "./AgentPanel";
@@ -61,6 +62,7 @@ export function LivePage() {
     if (!around?.isConnected || focused!.isConnected) return;
     [...around.querySelectorAll<HTMLElement>("[data-session]")].find(b => b.dataset.session === focused!.dataset.session)?.focus();
   });
+  const bare = !list && !listError;
   const entry = (s: LiveListSession) => <li key={s.session_id}>
     <button type="button" data-session={s.session_id} aria-current={s.session_id === selected ? "true" : undefined} onClick={() => pick(s.session_id)}>
       {s.title ? <>
@@ -72,7 +74,7 @@ export function LivePage() {
       </>}
     </button></li>;
   return (
-    <main id="content" className={"wrap pg-live" + (paused ? " paused" : "")}>
+    <main id="content" className={"wrap pg-live" + (paused ? " paused" : "")} aria-busy={bare || undefined}>
       <div className="top">
         <h1 id={list && !sessions.length && !h.session ? undefined : "lede"} tabIndex={-1}>Live</h1>
         <div className="seg" role="group" aria-label="View">
@@ -89,6 +91,8 @@ export function LivePage() {
       {text && <div className="banner" role="note"><b>Full text on.</b> Prompts, replies and tool output show as written, secrets included.
         The app only listens on 127.0.0.1; turn this off before sharing your screen.</div>}
       {error && <div className="banner" role="alert"><b>Could not load.</b> {error.message}</div>}
+      {/* With a session in the URL the stream's own panel says it is loading; the placeholder is for the bare page. */}
+      {bare && !h.session && <PageSkeleton />}
       {list && !sessions.length && !h.session && <Empty newest={list.newest} />}
       {mode === "wall" && sessions.length > 0 && <Wall sessions={sessions} now={now} pick={pick} />}
       {mode === "stream" && (sessions.length > 0 || h.session) && <div className="grid">

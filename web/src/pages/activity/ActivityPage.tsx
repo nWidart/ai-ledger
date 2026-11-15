@@ -10,6 +10,7 @@ import { SectionIndex } from "../../components/SectionIndex";
 import type { SortBy } from "../../components/Sort";
 import { Vs } from "../../components/sheets/ToolSheet";
 import { UsageSheets } from "../../components/sheets/UsageSheets";
+import { PageSkeleton } from "../../components/PageSkeleton";
 import { useLanding } from "../../components/useLanding";
 import { dayLabel, dur, num, pct, plural } from "../../format";
 import { setSearch, useSearchOf, useView } from "../../url";
@@ -128,14 +129,16 @@ export function ActivityPage() {
       : `Loading ${dayLabel(day, true)}…; showing the whole range. `}<button type="button" className="linkish" onClick={() => setSess({ ...sess, day: "" })}>Show the whole range</button></div>,
   } : undefined;
   const d = data, has = !!d && d.totals.requests > 0;
-  const cls = "wrap pg-activity" + (slow ? " loading" : "") + (grow ? " grow" : "");
+  // The first load shows the placeholder; the loading look (dimmed figures) belongs to a page that has figures.
+  const first = !d && !error;
+  const cls = "wrap pg-activity" + (slow && !first ? " loading" : "") + (grow ? " grow" : "");
 
   return (
     <main id="content" className={cls} ref={wrap} aria-busy={loading || undefined}>
-      <header className="top sect" id="overview">
-        <div>{d ? <Lede d={d} before={before} /> : <h1 className="lede" id="lede" tabIndex={-1}>{error ? "Activity could not be loaded." : "Loading activity…"}</h1>}</div>
+      {first ? <PageSkeleton title="Loading activity…" /> : <header className="top sect" id="overview">
+        <div>{d ? <Lede d={d} before={before} /> : <h1 className="lede" id="lede" tabIndex={-1}>Activity could not be loaded.</h1>}</div>
         <div className="top-side"><Filters projects={d?.projects ?? []} automated autoFile={d?.automated_file.path} /></div>
-      </header>
+      </header>}
       {error && <div className="banner" role="alert"><b>Could not load {viewName(want)} ({error.message}).{d ? ` Still showing ${viewName(d)}.` : ""}</b>{" "}
         <button type="button" className="linkish" ref={retryBtn} onClick={retry}>Retry</button></div>}
       {d?.automated_file.error && <div className="banner" role="alert"><b>Automated projects file ignored:</b> <code>{d.automated_file.path}</code> could not be used

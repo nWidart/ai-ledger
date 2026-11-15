@@ -6,6 +6,7 @@ import { InsightCard } from "../../components/InsightCard";
 import { ProjectDot } from "../../components/ProjectDot";
 import { SectionIndex } from "../../components/SectionIndex";
 import { UsageSheets } from "../../components/sheets/UsageSheets";
+import { PageSkeleton } from "../../components/PageSkeleton";
 import { useLanding } from "../../components/useLanding";
 import { num, plural } from "../../format";
 import { setSearch, useSearchOf, useView } from "../../url";
@@ -57,14 +58,16 @@ export function ContextPage() {
   const tip = d?.tips.find(t => t.id === search.tip);
   const openTip = (id: TipId) => setSearch({ tip: id }, { push: true });
   const closeTip = () => setSearch({ tip: null }, { push: false });
-  const cls = "wrap pg-context" + (slow ? " loading" : "") + (grow ? " grow" : "");
+  // The first load shows the placeholder; the loading look (dimmed figures) belongs to a page that has figures.
+  const first = !d && !error;
+  const cls = "wrap pg-context" + (slow && !first ? " loading" : "") + (grow ? " grow" : "");
 
   return (
     <main id="content" className={cls} ref={wrap} aria-busy={loading || undefined}>
-      <header className="top sect" id="overview">
-        <div>{d ? <Lede d={d} /> : <h1 className="lede" id="lede" tabIndex={-1}>{error ? "Context could not be loaded." : "Loading context…"}</h1>}</div>
+      {first ? <PageSkeleton title="Loading context…" /> : <header className="top sect" id="overview">
+        <div>{d ? <Lede d={d} /> : <h1 className="lede" id="lede" tabIndex={-1}>Context could not be loaded.</h1>}</div>
         <div className="top-side"><Filters projects={d?.projects ?? []} automated autoFile={d?.automated_file.path} /></div>
-      </header>
+      </header>}
       {error && <div className="banner" role="alert"><b>Could not load {viewName(want)} ({error.message}).{d ? ` Still showing ${viewName(d)}.` : ""}</b>{" "}
         <button type="button" className="linkish" ref={retryBtn} onClick={retry}>Retry</button></div>}
       <p className="pending">{loading && d ? `Loading ${viewName(want)}…` : ""}</p>

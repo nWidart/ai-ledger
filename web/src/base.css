@@ -20,3 +20,12 @@
 html { scroll-padding-top: calc(var(--appnav-h, 56px) + 12px); }
 html:has(.secidx) { scroll-padding-top: calc(var(--appnav-h, 56px) + var(--secidx-h, 0px) + 12px); }
 #lede:focus { outline: none; }
+
+/* A page switch crossfades the page (router.tsx names the type); the nav keeps its own layer so it does not fade with it. */
+.appnav { view-transition-name: appnav; }
+@media (prefers-reduced-motion: no-preference) {
+  :root:active-view-transition-type(page) {
+    &::view-transition-group(root), &::view-transition-group(appnav) { animation-duration: 150ms; }
+    &::view-transition-old(appnav) { display: none; }
+  }
+}

@@ -7,6 +7,7 @@ import { Ledger, LedgerRow } from "../../components/Ledger";
 import { ProjectName } from "../../components/ProjectDot";
 import { jumpTo, SectionIndex } from "../../components/SectionIndex";
 import { sessName, shortId } from "../../components/sheets/session";
+import { PageSkeleton } from "../../components/PageSkeleton";
 import { useLanding } from "../../components/useLanding";
 import { dayLabel, dur, num, pct, plural, when } from "../../format";
 import { formatSearch, navigate, setSearch, useSearchOf, useView } from "../../url";
@@ -359,17 +360,19 @@ export function InsightsPage() {
   const { slow, grow, wrap, retryBtn } = useLanding(d, url, loading, error, ":scope > :is(.grid2, .panel, .vitals, .drawers)");
   const howto = d && shown.source !== "codex" && d.coverage.stored_facets > 0;
   const figures = d && shown.source !== "codex" && d.coverage.facets > 0;
+  // The first load shows the placeholder; the loading look (dimmed figures) belongs to a page that has figures.
+  const first = !d && !error;
   const counted = d && shown.source !== "codex" && d.meta.sessions > 0;
   return (
-    <main id="content" className={"wrap pg-insights" + (slow ? " loading" : "") + (grow ? " grow" : "")} ref={wrap} aria-busy={loading || undefined}>
-      <header className="top sect" id="overview">
+    <main id="content" className={"wrap pg-insights" + (slow && !first ? " loading" : "") + (grow ? " grow" : "")} ref={wrap} aria-busy={loading || undefined}>
+      {first ? <PageSkeleton title="Loading insights…" /> : <header className="top sect" id="overview">
         <h1 className="kicker">Insights <Judged /></h1>
         <Filters projects={d?.projects ?? []} automated />
-      </header>
+      </header>}
       {error && <div className="banner" role="alert"><b>Could not load insights for {viewName(want)} ({error.message}).{d ? ` Still showing ${viewName(shown)}.` : ""}</b>{" "}
         <button type="button" className="linkish" ref={retryBtn} onClick={retry}>Retry</button></div>}
       <p className="pending">{loading && d ? `Loading insights for ${viewName(want)}…` : ""}</p>
-      {!d ? <p className="lede" id="lede" tabIndex={-1}>{error ? "Insights could not be loaded." : "Loading insights…"}</p> : <>
+      {!d ? (first ? null : <p className="lede" id="lede" tabIndex={-1}>Insights could not be loaded.</p>) : <>
         <Coverage d={d} view={shown} drawer={!!figures} />
         <Lede d={d} view={shown} />
         <Sub d={d} view={shown} />
