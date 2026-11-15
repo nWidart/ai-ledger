@@ -207,13 +207,9 @@ The user asked for a loading animation of gray blocks (2026-11-15), shown whenev
 
 Alternative considered: a placeholder on every load. Rejected by the user in favour of first load only; it would replace the specified "old numbers stay on screen" behaviour on four pages.
 
-## Edits needed in `adopt-tanstack` (not made by this change)
+## Edits made in `adopt-tanstack`
 
-That change is being implemented in another worktree. Its owner should:
-
-- Remove phase 5 (task 5.1) and the sentence in its proposal that says the two navigation items are done in `hash.ts`; point both at this change.
-- In design decision 9, replace the verdict with a pointer to this change, correct the size to 26.7 kB gzipped (measured), and drop the clause that says Router would need a server change.
-- Remove "Scroll restoration on Back" from its open questions, and the "closes issue #69" note from its close-out.
+That change is archived (`openspec/changes/archive/2026-11-15-adopt-tanstack/`, PR #81). Before it was archived, its owner removed its phase 5 (task 5.1) and pointed its proposal and design decision 9 at this change. Page transitions, scroll restoration on Back and issue #69 belong to this change.
 
 ## Risks / Trade-offs
 

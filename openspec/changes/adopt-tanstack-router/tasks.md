@@ -51,6 +51,5 @@ Tasks 2.1 to 2.7 touch separate folders and can run in parallel; each adds its r
 
 ## Workflow follow-up
 
-- Ask the owner of `adopt-tanstack` to make the edits listed in this change's `design.md` ("Edits needed in `adopt-tanstack`") before that change reaches its phase 5.
 - Archive this change after review, then remove its worktree.
 - Propose the modal window as its own change, on the router.
