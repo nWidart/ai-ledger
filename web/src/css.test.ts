@@ -22,6 +22,13 @@ describe("stylesheets respect the browser text size", () => {
     expect(bad).toEqual([]);
   });
 
+  it("declare no px width in a media query", () => {
+    const bad: string[] = [];
+    for (const { name, css } of files)
+      for (const m of css.matchAll(/@media[^{]*/g)) if (/(?:min|max)-width\s*:\s*[\d.]+px/.test(m[0])) bad.push(`${name}: ${m[0].trim()}`);
+    expect(bad).toEqual([]);
+  });
+
   it("set no font size on html or :root", () => {
     const bad: string[] = [];
     for (const { name, css } of files)

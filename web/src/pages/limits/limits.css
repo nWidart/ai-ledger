@@ -13,7 +13,7 @@
 .pg-limits .fresh b { color: var(--text-secondary); font-weight: 500; }
 .pg-limits .fresh .chip { margin-left: 6px; }
 /* Stack before the filters squeeze the heading into a narrow column. */
-@media (max-width: 1040px) {
+@media (max-width: 65em) {
   .pg-limits .top { grid-template-columns: minmax(0, 1fr); }
   .pg-limits .top-side { max-width: none; align-items: stretch; flex-direction: column-reverse; }
   .pg-limits .top-side .filters { justify-content: flex-start; }
@@ -38,10 +38,10 @@
 .pg-limits .lim-key .k-band { height: 10px; background: var(--accent-soft); border-radius: 2px; }
 .pg-limits .lim-key .k-now { width: 0; height: 12px; border-left: 1px dotted var(--text-muted); }
 .pg-limits .lim-key .k-cap { border-top: 1px dashed var(--critical); }
-@media (max-width: 720px) { .pg-limits .lim-key { margin-left: 0; } }
+@media (max-width: 45em) { .pg-limits .lim-key { margin-left: 0; } }
 /* Two cards a row, so four windows sit as a square rather than three and an orphan. */
 .pg-limits .lim-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
-@media (max-width: 900px) { .pg-limits .lim-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 56.25em) { .pg-limits .lim-grid { grid-template-columns: minmax(0, 1fr); } }
 .pg-limits .lim-card header { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
 .pg-limits .lim-card h3 { margin: 0; font-size: .875rem; font-weight: 600; }
 .pg-limits .now-pct b { font-size: 1.5rem; font-weight: 600; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
@@ -49,7 +49,7 @@
 /* What used this window: closed by default, under the cap-money line. */
 .pg-limits .lim-used { margin-top: 8px; font-size: .8125rem; color: var(--text-secondary); }
 .pg-limits .lim-used > summary { cursor: pointer; }
-.pg-limits .lim-used .used-lists { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px 20px; margin-top: 8px; }
+.pg-limits .lim-used .used-lists { display: grid; grid-template-columns: repeat(auto-fit, minmax(11.875rem, 1fr)); gap: 8px 20px; margin-top: 8px; }
 .pg-limits .lim-used h4 { margin: 0 0 2px; font-size: .75rem; font-weight: 600; color: var(--text-muted); }
 .pg-limits .lim-used ul { list-style: none; margin: 0; padding: 0; }
 .pg-limits .lim-used li { display: flex; flex-wrap: wrap; gap: 0 8px; align-items: baseline; }
@@ -99,7 +99,7 @@
 /* Left unused: "100% unused" and "12 windows, 3 estimated" need wider value and side columns than the shared ledger's. */
 .pg-limits #unused .ledger { --ledger-cols: minmax(0, 13rem) minmax(40px, 1fr) 6.5rem 10.5rem; }
 .pg-limits #unused .ledger .v, .pg-limits #unused .ledger .s { white-space: nowrap; }
-@media (max-width: 520px) {
+@media (max-width: 32.5em) {
   .pg-limits #unused .ledger { --ledger-cols: minmax(0, 1fr) auto; }
   .pg-limits #unused .ledger .s { grid-column: 1 / -1; grid-row: 3; text-align: left; }
 }
@@ -148,7 +148,7 @@
 .pg-limits .hs-panel header p { margin: 2px 0 0; font-size: .78125rem; }
 .pg-limits .hs-panel header p b { color: var(--text-primary); font-weight: 600; }
 .pg-limits tr.sel td { background: var(--accent-soft); }
-@media (max-width: 720px) {
+@media (max-width: 45em) {
   .pg-limits .hs-row { grid-template-columns: minmax(0, 1fr); }
   .pg-limits .hs-note { grid-column: 1; }
 }

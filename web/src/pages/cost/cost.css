@@ -24,12 +24,12 @@
 .pg-cost .spark figcaption { display: flex; justify-content: space-between; gap: 8px; font-size: .71875rem; color: var(--text-muted); margin-top: 4px; }
 .pg-cost .spark figcaption b { color: var(--text-secondary); font-weight: 500; }
 /* Stack before the filters squeeze the heading into a narrow column. */
-@media (max-width: 1040px) {
+@media (max-width: 65em) {
   .pg-cost .top { grid-template-columns: minmax(0, 1fr); align-items: start; }
   .pg-cost .top-side { max-width: none; align-items: stretch; flex-direction: column-reverse; }
   .pg-cost .top-side .filters { justify-content: flex-start; }
 }
-@media (max-width: 720px) { .pg-cost .spark { width: 100%; } }
+@media (max-width: 45em) { .pg-cost .spark { width: 100%; } }
 .pg-cost h2 { font-size: 1rem; font-weight: 600; margin: 0; letter-spacing: -.005em; }
 .pg-cost .pending { margin: -12px 0 12px; min-height: 1.5em; color: var(--text-secondary); font-size: .8125rem; }
 .pg-cost .pending:empty { visibility: hidden; }
@@ -53,7 +53,7 @@
 
 /* What changed: each project's cost change against the previous period, as bars either side of a zero line */
 .pg-cost .changed { margin: 0 0 20px; }
-.pg-cost .daystrips { display: grid; gap: 4px; font-size: .75rem; color: var(--text-secondary); flex: 0 1 420px; min-width: 0; }
+.pg-cost .daystrips { display: grid; gap: 4px; font-size: .75rem; color: var(--text-secondary); flex: 0 1 26.25rem; min-width: 0; }
 /* A fixed count column, so both strips get the same track and their days line up. */
 .pg-cost .daystrip { display: grid; grid-template-columns: 5.5rem minmax(0, 1fr) 6.5em; gap: 8px; align-items: center; }
 .pg-cost .daystrip > span:last-child { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -86,14 +86,14 @@
 .pg-cost .chip.new { border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
 .pg-cost .chg-note { margin: 10px 0 0; padding: 8px 12px; border-left: 3px solid var(--warning-text); background: var(--warning-soft); border-radius: 0 6px 6px 0;
   font-size: .8125rem; color: var(--text-secondary); }
-@media (max-width: 720px) {
+@media (max-width: 45em) {
   .pg-cost .diverge li > button, .pg-cost .diverge li.rest, .pg-cost .diverge .axis { grid-template-columns: minmax(0, 1fr) 5.5rem; row-gap: 4px; }
   .pg-cost .diverge .dv { grid-column: 1 / -1; grid-row: 2; }
   .pg-cost .diverge .s { grid-column: 1 / -1; grid-row: 3; }
   .pg-cost .diverge .axis span:nth-child(2) { grid-column: 1 / -1; }
   .pg-cost .diverge .axis span:not(:nth-child(2)) { display: none; }
 }
-@media (max-width: 520px) { .pg-cost .changed { margin: 16px 0 0; } }
+@media (max-width: 32.5em) { .pg-cost .changed { margin: 16px 0 0; } }
 
 /* Daily chart: the stacking and metric switches sit together; a project's legend key filters the page; a token kind's key toggles it */
 .pg-cost .legend button { font-size: .75rem; padding: 2px 8px; display: inline-flex; gap: 6px; align-items: center; border-radius: 999px; min-width: 0; }
@@ -105,7 +105,7 @@
 
 /* Ledgers: where the spend went beside models and effort */
 .pg-cost .split { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 16px; margin-top: 16px; }
-@media (max-width: 900px) { .pg-cost .split { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 56.25em) { .pg-cost .split { grid-template-columns: minmax(0, 1fr); } }
 
 /* Tokens and cache: four ratios in one ruled strip, then every token kind */
 .pg-cost .vitals { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; margin: 0 0 16px;
@@ -115,17 +115,17 @@
 .pg-cost .vital .v { font-size: 1.75rem; font-weight: 600; letter-spacing: -.035em; line-height: 1.1; }
 .pg-cost .vital .l { font-weight: 500; margin-top: 4px; }
 .pg-cost .vital .d { color: var(--text-muted); font-size: .78125rem; margin-top: 2px; }
-.pg-cost .totals { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0 24px; margin: 0; }
+.pg-cost .totals { display: grid; grid-template-columns: repeat(auto-fill, minmax(13.75rem, 1fr)); gap: 0 24px; margin: 0; }
 .pg-cost .totals div { padding: 10px 0; border-bottom: 1px solid var(--border); }
 .pg-cost .totals dt { color: var(--text-muted); font-size: .78125rem; }
 .pg-cost .totals dt i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; }
 .pg-cost .totals dd { margin: 2px 0 0; font-size: 1.0625rem; font-weight: 600; letter-spacing: -.02em; }
 .pg-cost .totals dd small { display: block; font-size: .78125rem; font-weight: 400; color: var(--text-secondary); }
-@media (max-width: 900px) {
+@media (max-width: 56.25em) {
   .pg-cost .vitals { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .pg-cost .vital:nth-child(odd) { padding-left: 0; }
 }
-@media (max-width: 520px) {
+@media (max-width: 32.5em) {
   .pg-cost .vital { padding-right: 12px; }
   .pg-cost .vital + .vital:nth-child(even) { padding-left: 12px; }
   .pg-cost .vital .v { font-size: 1.5rem; }
@@ -148,9 +148,9 @@
 .pg-cost .daychip { display: inline-flex; align-items: center; gap: 4px; font-size: .8125rem; padding: 2px 4px 2px 10px; border-radius: 999px;
   background: var(--accent-soft); color: var(--accent-ink); font-weight: 500; }
 .pg-cost .daychip button { border: 0; background: none; padding: 1px 6px; border-radius: 999px; font-size: .75rem; color: inherit; }
-@media (max-width: 520px) {
+@media (max-width: 32.5em) {
   .pg-cost #d-top .opt { display: none; }
-  .pg-cost #d-top :is(td, th).name { max-width: 90px; }
+  .pg-cost #d-top :is(td, th).name { max-width: 5.625rem; }
   .pg-cost #d-top :is(td, th).when { white-space: normal; }
   .pg-cost #d-top :is(td, th).when .small { overflow-wrap: anywhere; }
 }

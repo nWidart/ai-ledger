@@ -1,16 +1,19 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
+import { textScale } from "../../components/chart";
 import { num as fmt, niceStep } from "../../format";
 import { useErrors } from "./context";
 import { bucketLabel, bucketOf, chartData, idle, incSummary, label, linePath, LOW_CALLS, noCalls, pointRows, pointText, pointWhen, selectable, shortLabel, sumCalls, TOPN, typeColor } from "./model";
 
 // Two panels on one time axis, each with its own labeled scale: error rate (line) above, error counts by type (stacked bars) below.
-const H = 320, ML = 40, MR = 10, rT = 18, rH = 100, bT = rT + rH + 26, bH = H - bT - 24;
+const H = 320, MR = 10, rH = 100;
 const T = ({ x, y, a = "end", strong, children }: { x: number; y: number; a?: "start" | "middle" | "end"; strong?: boolean; children: ReactNode }) => (
-  <text x={x} y={y} textAnchor={a} fontSize="11" fill={strong ? "var(--text-secondary)" : "var(--text-muted)"} fontWeight={strong ? 500 : undefined}>{children}</text>
+  <text x={x} y={y} textAnchor={a} fontSize={11 * textScale()} fill={strong ? "var(--text-secondary)" : "var(--text-muted)"} fontWeight={strong ? 500 : undefined}>{children}</text>
 );
 
 export const RateChart = memo(function RateChart() {
   const { m, v, f, vt, fixes, pick, after, update, say } = useErrors();
+  // The labels and the room around them follow the browser's text size; the plots keep their height.
+  const ts = textScale(), ML = 40 * ts, rT = 18 * ts + 4 * (ts - 1), bT = rT + rH + 26 * ts, bH = H - bT - 24 * ts;
   const box = useRef<HTMLDivElement>(null), svg = useRef<SVGSVGElement>(null), tipEl = useRef<HTMLDivElement>(null);
   const [W, setW] = useState(0);
   const [hover, setHover] = useState<{ i: number; sx: number; sy: number } | null>(null), [live, setLive] = useState("");
@@ -41,7 +44,7 @@ export const RateChart = memo(function RateChart() {
   const rMax0 = Math.max(.1, ...rates.map((r, i) => (low[i] ? 0 : r || 0))) * 1.1, rStep = niceStep(rMax0 / 3), rMax = Math.ceil(rMax0 / rStep) * rStep;
   const yR = (x: number) => rT + rH - Math.min(x, rMax) / rMax * rH;
   // Counts are whole: whole steps.
-  const eMax0 = Math.max(1, ...pts.map(p => p.e)) * 1.05, eStep = Math.max(1, niceStep(eMax0 / 3)), eMax = Math.ceil(eMax0 / eStep) * eStep;
+  const eMax0 = Math.max(1, ...pts.map(p => p.e)) * 1.05, eStep = Math.max(1, niceStep(eMax0 / Math.max(1, Math.min(3, bH / (50 * ts))))), eMax = Math.ceil(eMax0 / eStep) * eStep;
   const yB = (x: number) => bT + bH - x / eMax * bH;
   const order = [...vt.layers, "__other"];
   const layer = cat && (vt.layers.includes(cat) ? cat : "__other");
@@ -57,16 +60,16 @@ export const RateChart = memo(function RateChart() {
       g.push(<rect key={"na" + i} className="noact" x={x0} y={rT} width={w} height={bT + bH - rT} fill="var(--surface-2)" opacity=".75" />);
       if (w > 64) g.push(<T key={"nt" + i} x={x0 + w / 2} y={bT + bH / 2} a="middle">no activity</T>);
       // A folded stretch: a break in the axis, two slashes on its baseline.
-      for (let k = i; k <= j; k++) if (pts[k]!.to) g.push(<T key={"fold" + k} x={cx(k)} y={bT + bH + 4} a="middle">//</T>);
+      for (let k = i; k <= j; k++) if (pts[k]!.to) g.push(<T key={"fold" + k} x={cx(k)} y={bT + bH + 4 * ts} a="middle">//</T>);
       i = j;
     }
     for (let x = 0; x <= rMax + 1e-9; x += rStep)
-      g.push(<line key={"rg" + x} x1={ML} x2={Wd - MR} y1={yR(x)} y2={yR(x)} stroke="var(--grid)" />, <T key={"rl" + x} x={ML - 6} y={yR(x) + 4}>{fmt(x, rStep < 1 ? 1 : 0) + "%"}</T>);
+      g.push(<line key={"rg" + x} x1={ML} x2={Wd - MR} y1={yR(x)} y2={yR(x)} stroke="var(--grid)" />, <T key={"rl" + x} x={ML - 6 * ts} y={yR(x) + 4 * ts}>{fmt(x, rStep < 1 ? 1 : 0) + "%"}</T>);
     for (let x = 0; x <= eMax + 1e-9; x += eStep)
-      g.push(<line key={"eg" + x} x1={ML} x2={Wd - MR} y1={yB(x)} y2={yB(x)} stroke="var(--grid)" />, <T key={"el" + x} x={ML - 6} y={yB(x) + 4}>{fmt(x)}</T>);
-    g.push(<T key="rt" x={ML} y={rT - 7} a="start" strong>{cat ? `${shortLabel(m.cats[cat]!.label)} rate, % of tool calls` : "Error rate, % of tool calls"}</T>, <T key="bt" x={ML} y={bT - 8} a="start" strong>{`Failed calls per ${per}, by type`}</T>);
-    const every = Math.max(1, Math.ceil(n / Math.max(2, Math.floor(iw / 70))));
-    keys.forEach((k, i) => { if (i % every === 0) g.push(<T key={"x" + k} x={cx(i)} y={H - 6} a="middle">{label(k)}</T>); });
+      g.push(<line key={"eg" + x} x1={ML} x2={Wd - MR} y1={yB(x)} y2={yB(x)} stroke="var(--grid)" />, <T key={"el" + x} x={ML - 6 * ts} y={yB(x) + 4 * ts}>{fmt(x)}</T>);
+    g.push(<T key="rt" x={ML} y={rT - 7 * ts} a="start" strong>{cat ? `${shortLabel(m.cats[cat]!.label)} rate, % of tool calls` : "Error rate, % of tool calls"}</T>, <T key="bt" x={ML} y={bT - 8 * ts} a="start" strong>{`Failed calls per ${per}, by type`}</T>);
+    const every = Math.max(1, Math.ceil(n / Math.max(2, Math.floor(iw / (70 * ts)))));
+    keys.forEach((k, i) => { if (i % every === 0) g.push(<T key={"x" + k} x={cx(i)} y={H - 6 * ts} a="middle">{label(k)}</T>); });
     // Stacked bars: biggest type on the baseline, Other on top; a 2px surface gap between segments.
     const bwid = Math.max(1, Math.min(26, bw * .72)), rects: Record<string, ReactNode[]> = Object.fromEntries(order.map(c => [c, []]));
     pts.forEach((p, i) => {
@@ -87,7 +90,7 @@ export const RateChart = memo(function RateChart() {
       return i < 0 || !m.cats[cid] ? [] : [[cid, i] as const];
     });
     return { g, rects, all, fx };
-  }, [pts, W, fixes, vt, cat]); // the scales and labels follow from these
+  }, [pts, W, fixes, vt, cat, ts]); // the scales and labels follow from these
 
   const lineColor = cat ? typeColor(cat, vt) : "var(--text-primary)";
   const sel = v.at ? pts.findIndex(p => p.k === v.at && selectable(p)) : -1;
@@ -152,7 +155,7 @@ export const RateChart = memo(function RateChart() {
             <path className="rline" id={cat ? "rSel" : "rAll"} pathLength={1} d={drawn.all.solid} fill="none" stroke={lineColor} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
             {drawn.fx.map(([cid, i]) => <g key={cid} className={"fix" + (cid === cat ? " on" : "")} data-c={cid}>
               <line x1={cx(i)} x2={cx(i)} y1={rT} y2={bT + bH} stroke="var(--good)" strokeWidth="1.5" strokeDasharray="4 3" />
-              <text x={cx(i) + 4} y={rT + 10} fontSize="11" fill="var(--good-text)">✓ {shortLabel(m.cats[cid]!.label)}</text></g>)}
+              <text x={cx(i) + 4} y={rT + 10 * ts} fontSize={11 * ts} fill="var(--good-text)">✓ {shortLabel(m.cats[cid]!.label)}</text></g>)}
             <rect id="xh" x={hover ? ML + hover.i * bw : 0} y={rT} height={bT + bH - rT} width={bw} fill="var(--text-primary)" opacity=".06" visibility={hover ? "visible" : "hidden"} />
             <circle id="xd" r="4.5" cx={hp && hr != null ? cx(hover.i) : 0} cy={hp && hr != null ? yR(hr) : 0} fill={lineColor} stroke="var(--surface-1)" strokeWidth="2"
               visibility={hp && hr != null ? "visible" : "hidden"} />

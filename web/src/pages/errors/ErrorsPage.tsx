@@ -21,7 +21,7 @@ import { TypeTable } from "./TypeTable";
 import { loadMode, MODE_KEY, readView, savedOf, store, VIEW_KEY, viewPatch, type Mode, type SavedView } from "./view";
 import "./errors.css";
 
-const NARROW = "(max-width: 900px)";
+const NARROW = "(max-width: 56.25em)";
 const DEAD_LINK = "The linked error is no longer in the store. It may have been dropped by a rebuild, or the link is from another store. Showing the view without it.";
 const reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 const useMedia = (q: string) => useSyncExternalStore(

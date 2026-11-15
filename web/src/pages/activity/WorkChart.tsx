@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import type { DailyWorkRow, UsagePayload } from "../../api";
 import { useColors } from "../../colors";
 import { dayLabel, niceStep, num, plural } from "../../format";
-import { dayAxis, peakLabelAt, tipAt, useWidth } from "../../components/chart";
+import { dayAxis, peakLabelAt, roomForLabels, textScale, tipAt, useWidth } from "../../components/chart";
 import { ChartTable, DataTable } from "../../components/DataTable";
 import type { Kind } from "../cost/cost";
 import { busy, failRate, METRICS, monday, workBuckets, workKinds, workStack, type WorkMetric } from "./work";
@@ -73,9 +73,10 @@ function WorkBars({ rows, week, view, kinds, stack, metric, onMetric, onDay }: W
   useLayoutEffect(() => { if (at != null) place(); }, [at]);
 
   const M = METRICS.find(x => x.k === metric)!, unit = week ? "week" : "day";
-  const a = useMemo(() => dayAxis(W, H, rows.length, Math.max(...rows.map(p => p[metric]), 0), niceStep, MARGIN), [W, rows, metric]);
+  const ts = textScale();
+  const a = useMemo(() => dayAxis(W, H, rows.length, Math.max(...rows.map(p => p[metric]), 0), niceStep, MARGIN, ts), [W, rows, metric, ts]);
   // Week labels are longer, so fewer of them fit.
-  const every = week ? Math.max(1, Math.ceil(rows.length / Math.max(2, Math.floor(a.iw / 100)))) : a.every;
+  const every = week ? Math.max(1, Math.ceil(rows.length / Math.max(2, Math.floor(a.iw / (100 * ts))))) : a.every;
   // The rate axis has as many steps as the count axis, so its ticks sit on the same grid lines.
   // No bar with a tool call: no rate to draw, so no line, axis or legend key.
   const rates = rows.map(failRate), hasRate = rates.some(r => r != null), n = Math.round(a.yMax / a.step);
@@ -116,7 +117,7 @@ function WorkBars({ rows, week, view, kinds, stack, metric, onMetric, onDay }: W
     const x = a.x(i), segs = parts(i);
     let base = 0;
     return <g key={p.day}>
-      {i % every === 0 && <text x={x + a.w / 2} y={H - 6} textAnchor="middle" fontSize="11" fill="var(--text-muted)">{bucketLabel(p.day, week)}</text>}
+      {i % every === 0 && <text x={x + a.w / 2} y={H - 6 * ts} textAnchor="middle" fontSize={11 * ts} fill="var(--text-muted)">{bucketLabel(p.day, week)}</text>}
       {/* One group per bar, so the whole stack grows from the baseline when data lands. */}
       {segs.length > 0 && <g className="bar-seg" style={{ ["--i" as string]: Math.min(i, 60) }}>{segs.map(([k, v], j) => {
         const top = a.y(base + v), h = v / a.yMax * a.ih;
@@ -128,7 +129,7 @@ function WorkBars({ rows, week, view, kinds, stack, metric, onMetric, onDay }: W
           : <rect key={k.k} x={x} y={top} width={a.w} height={hh} fill={k.c} />;
       })}</g>}
     </g>;
-  }), [rows, a, every, week, parts]);
+  }), [rows, a, every, week, parts, ts]);
   const ticks: number[] = [];
   for (let v = 0; v <= n; v++) ticks.push(v);
   const cur = at != null ? rows[at] : undefined, curParts = at != null && kinds.length ? parts(at).reverse() : [];
@@ -158,9 +159,9 @@ function WorkBars({ rows, week, view, kinds, stack, metric, onMetric, onDay }: W
       <div className="chart" ref={box} tabIndex={0} role="group" aria-label={label} onKeyDown={onKey} onBlur={() => setAt(null)}>
         <svg ref={svg} viewBox={`0 0 ${W} ${H}`} aria-hidden="true">
           {ticks.map(t => <g key={t}><line x1={a.m.l} x2={W - a.m.r} y1={a.y(t * a.step)} y2={a.y(t * a.step)} stroke="var(--grid)" />
-            <text x={a.m.l - 6} y={a.y(t * a.step) + 4} textAnchor="end" fontSize="11" fill="var(--text-muted)">{num(t * a.step)}</text>
-            {hasRate && <text className="rtick" x={W - a.m.r + 6} y={ry(t * rStep) + 4} fontSize="11" fill="var(--text-muted)">{num(t * rStep, rDigits)}</text>}</g>)}
-          {hasRate && <text transform={`translate(${W - 6},${a.m.t + a.ih / 2}) rotate(90)`} textAnchor="middle" fontSize="11" fill="var(--text-muted)">Errors per 100 calls</text>}
+            <text x={a.m.l - 6 * ts} y={a.y(t * a.step) + 4 * ts} textAnchor="end" fontSize={11 * ts} fill="var(--text-muted)">{num(t * a.step)}</text>
+            {hasRate && <text className="rtick" x={W - a.m.r + 6 * ts} y={ry(t * rStep) + 4 * ts} fontSize={11 * ts} fill="var(--text-muted)">{num(t * rStep, rDigits)}</text>}</g>)}
+          {hasRate && roomForLabels(a) && <text transform={`translate(${W - 6 * ts},${a.m.t + a.ih / 2}) rotate(90)`} textAnchor="middle" fontSize={11 * ts} fill="var(--text-muted)">Errors per 100 calls</text>}
           {bars}
           {/* The rate line, haloed in the surface color so it stays readable across the bars. */}
           {hasRate && <>
@@ -168,10 +169,10 @@ function WorkBars({ rows, week, view, kinds, stack, metric, onMetric, onDay }: W
             <path className="rate" d={line} fill="none" stroke={FAIL} strokeWidth="1.75" strokeLinejoin="round" strokeLinecap="round" />
           </>}
           {lone.map(i => <circle key={i} className="rate" cx={a.cx(i)} cy={ry(rates[i]!)} r="2.5" fill={FAIL} stroke="var(--surface-1)" strokeWidth="1.5" />)}
-          {pk && pk[metric] > 0 && (() => {
+          {pk && pk[metric] > 0 && roomForLabels(a) && (() => {
             const { x: lx, anchor } = peakLabelAt(a, peak);
             // A wide halo, so the rate line never strikes through the label.
-            return <text x={lx} y={a.y(pk[metric]) - 7} textAnchor={anchor} fontSize="11" fontWeight="600" fill="var(--text-primary)"
+            return <text x={lx} y={a.y(pk[metric]) - 7 * ts} textAnchor={anchor} fontSize={11 * ts} fontWeight="600" fill="var(--text-primary)"
               stroke="var(--surface-1)" strokeWidth="7" strokeLinejoin="round" paintOrder="stroke">Peak {plural(pk[metric], M.one)} · {bucketLabel(pk.day, week)}</text>;
           })()}
           {at != null && <rect x={a.m.l + at * a.bw} width={a.bw} y={a.m.t} height={a.ih} fill="var(--text-primary)" opacity=".06" />}

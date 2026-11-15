@@ -1,6 +1,7 @@
 import { memo, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import type { SessionDetail } from "../../api";
 import { big, dur, num, plural } from "../../format";
+import { textScale } from "../chart";
 import { appLink, errorsHref, EV_TOP, nearestIndex, readRequest, timelineModel, type TimelineModel, type TlEvent } from "./session";
 
 const evTime = (tl: TimelineModel, e: TlEvent) =>
@@ -16,17 +17,18 @@ function EvName({ tl, e }: { tl: TimelineModel; e: TlEvent }) {
 /** The timeline's static layers (grid, compactions, context line, commits, tool-call strip, axis labels), drawn once per model:
  *  a hover moves only the marker, so these are not re-emitted (a long session has thousands of tick rectangles). */
 const Layers = memo(function Layers({ tl }: { tl: TimelineModel }) {
-  const { W, H, m, iw, pb, sy, sh, x, y, yMax, limit, near, nearShown, reqs, calls, comps, fails, commits, gaps } = tl;
+  const { W, H, ts, m, iw, pb, sy, sh, x, y, yMax, limit, near, nearShown, reqs, calls, comps, fails, commits, gaps } = tl;
+  const fs = 10.5 * ts;
   const rules = commits.length <= 12; // many commits: diamonds only, no rules
   const line = reqs.map((r, k) => `${k ? "L" : "M"}${x(r.t).toFixed(1)},${y(r.context).toFixed(1)}`).join("");
   return <>
     <line x1={m.l} x2={W - m.r} y1={pb} y2={pb} stroke="var(--border)" />
     <line x1={m.l} x2={W - m.r} y1={y(yMax / 2)} y2={y(yMax / 2)} stroke="var(--grid)" />
-    <text x={m.l - 6} y={pb + 4} textAnchor="end" fontSize="10.5" fill="var(--text-muted)">0</text>
-    <text x={m.l - 6} y={y(yMax / 2) + 4} textAnchor="end" fontSize="10.5" fill="var(--text-muted)">{big(yMax / 2)}</text>
+    <text x={m.l - 6 * ts} y={pb + 4 * ts} textAnchor="end" fontSize={fs} fill="var(--text-muted)">0</text>
+    <text x={m.l - 6 * ts} y={y(yMax / 2) + 4 * ts} textAnchor="end" fontSize={fs} fill="var(--text-muted)">{big(yMax / 2)}</text>
     {nearShown && near != null && <>
       <line x1={m.l} x2={W - m.r} y1={y(near)} y2={y(near)} stroke="var(--critical)" strokeDasharray="5 4" strokeWidth="1.25" />
-      <text x={W - m.r} y={y(near) - 4} textAnchor="end" fontSize="10.5" fill="var(--critical-text)">80% of {big(limit)}</text>
+      <text x={W - m.r} y={y(near) - 4 * ts} textAnchor="end" fontSize={fs} fill="var(--critical-text)">80% of {big(limit)}</text>
     </>}
     {/* Breaks where idle time was squeezed out. */}
     {gaps.map(g => <g key={g.a}><title>{dur((g.b - g.a) / 1000)} idle</title>
@@ -34,7 +36,7 @@ const Layers = memo(function Layers({ tl }: { tl: TimelineModel }) {
       <path d={`M${g.bx - 4},${pb + 3} l3,-6 l2,6 l3,-6`} fill="none" stroke="var(--text-muted)" /></g>)}
     {comps.map((t, k) => <g key={k}>
       <line x1={x(t)} x2={x(t)} y1={m.t} y2={pb} stroke="var(--warning)" strokeDasharray="3 3" strokeWidth="1.5" />
-      <text x={x(t) + 3} y={m.t + 8} fontSize="10.5" fill="var(--warning-text)">compacted</text></g>)}
+      <text x={x(t) + 3} y={m.t + 8 * ts} fontSize={fs} fill="var(--warning-text)">compacted</text></g>)}
     {reqs.length > 0 && <>
       <path d={`${line}L${x(reqs.at(-1)!.t).toFixed(1)},${pb}L${x(reqs[0]!.t).toFixed(1)},${pb}Z`} fill="var(--series-1-soft)" />
       <path d={line} fill="none" stroke="var(--series-1)" strokeWidth="1.75" strokeLinejoin="round" />
@@ -47,9 +49,9 @@ const Layers = memo(function Layers({ tl }: { tl: TimelineModel }) {
     <rect x={m.l} y={sy} width={iw} height={sh} rx="4" fill="var(--surface-2)" />
     {calls.filter(c => !c.is_error).map(c => <rect key={c.id} x={x(c.t) - .5} y={sy + 6} width="1" height={sh - 12} fill="var(--text-muted)" opacity=".5" />)}
     {fails.map(c => <rect key={c.id} x={x(c.t) - 1} y={sy + 2} width="2" height={sh - 4} rx="1" fill="var(--critical)" />)}
-    <text x={m.l} y={H - 4} fontSize="10.5" fill="var(--text-muted)">{tl.fmtT(tl.start)}</text>
-    <text x={W - m.r} y={H - 4} textAnchor="end" fontSize="10.5" fill="var(--text-muted)">{tl.fmtT(tl.end)}</text>
-    <text x={m.l - 6} y={sy + sh / 2 + 4} textAnchor="end" fontSize="10.5" fill="var(--text-muted)">tools</text>
+    <text x={m.l} y={H - 4 * ts} fontSize={fs} fill="var(--text-muted)">{tl.fmtT(tl.start)}</text>
+    <text x={W - m.r} y={H - 4 * ts} textAnchor="end" fontSize={fs} fill="var(--text-muted)">{tl.fmtT(tl.end)}</text>
+    <text x={m.l - 6 * ts} y={sy + sh / 2 + 4 * ts} textAnchor="end" fontSize={fs} fill="var(--text-muted)">tools</text>
   </>;
 });
 
@@ -65,7 +67,8 @@ export function Timeline({ s, project }: { s: SessionDetail; project: string | n
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  const tl = useMemo(() => timelineModel(s, width), [s, width]);
+  const ts = textScale();
+  const tl = useMemo(() => timelineModel(s, width, ts), [s, width, ts]);
   const xs = useMemo(() => tl?.reqs.map(r => tl.x(r.t)) ?? [], [tl]); // each request's x, for the hover and the keyboard
   const [at, setAt] = useState<number | null>(null), [sel, setSel] = useState<number | null>(null), [all, setAll] = useState(false);
   const focusMore = useRef(false), evH = useId();

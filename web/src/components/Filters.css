@@ -1,5 +1,5 @@
 .filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; min-width: 0; max-width: 100%; }
-@media (max-width: 520px) {
+@media (max-width: 32.5em) {
   .filters { gap: 6px; }
   .filters .seg button { padding: 5px 9px; font-size: .8125rem; }
   .filters select, .filters .pick-field { padding-top: 5px; padding-bottom: 5px; font-size: .8125rem; }

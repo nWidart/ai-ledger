@@ -1,6 +1,6 @@
 /* Insight cards: the most severe finding leads, wide, with the supporting findings compact in a row beneath it */
 .insights { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; margin: 0 0 20px; }
-.insights .support { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.insights .support { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 12px; }
 .insight { position: relative; display: flex; flex-direction: column; gap: 4px; padding: 14px 16px 14px 18px; overflow: hidden; }
 .insight::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 4px; background: var(--sev, var(--border)); }
 .insight.good { --sev: var(--good); --sev-text: var(--good-text); }
@@ -15,8 +15,8 @@
 .insight .v .muted { font-size: .875rem; font-weight: 500; }
 .insight .b { color: var(--text-secondary); font-size: .8125rem; flex: 1; overflow-wrap: anywhere; }
 .insight ul { list-style: none; margin: 2px 0 0; padding: 0; display: grid; gap: 6px; flex: 1; }
-.insight li { font-size: .8125rem; color: var(--text-secondary); padding-left: 12px; position: relative; overflow-wrap: anywhere; }
-.insight li::before { content: ""; position: absolute; left: 0; top: .55em; width: 5px; height: 5px; border-radius: 50%; background: var(--sev); }
+.insight li { font-size: .8125rem; color: var(--text-secondary); padding-left: .75rem; position: relative; overflow-wrap: anywhere; }
+.insight li::before { content: ""; position: absolute; left: 0; top: .55em; width: .3125rem; height: .3125rem; border-radius: 50%; background: var(--sev); }
 .insight li.crit::before { background: var(--critical); }
 .insight li b { color: var(--text-primary); font-weight: 600; }
 .insight .act { align-self: flex-start; margin-top: 6px; font-size: .8125rem; font-weight: 500; }
@@ -30,8 +30,8 @@
 .insight.compact .v { font-size: 1.25rem; }
 .insight.compact .act { margin-top: auto; padding-top: 6px; }
 .insight.compact .b { flex: 0 1 auto; }
-@media (max-width: 760px) { .insight.primary { grid-template-columns: minmax(0, 1fr); } .insight.primary .rest { padding-top: 0; } }
-@media (max-width: 520px) {
+@media (max-width: 47.5em) { .insight.primary { grid-template-columns: minmax(0, 1fr); } .insight.primary .rest { padding-top: 0; } }
+@media (max-width: 32.5em) {
   .insight.primary { padding: 14px 16px 14px 18px; }
   .insight.primary .v { font-size: 1.75rem; }
 }

@@ -26,12 +26,12 @@
 .pg-insights .vital.good .v { color: var(--good-text); }
 .pg-insights .vital.bad .v { color: var(--critical-text); }
 .pg-insights .vital.bad { color: inherit; } /* the shared .bad rule would redden the label too */
-@media (max-width: 900px) {
+@media (max-width: 56.25em) {
   .pg-insights .vitals { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .pg-insights .vital:first-child { grid-column: 1 / -1; }
   .pg-insights .vital:nth-child(2), .pg-insights .vital:nth-child(4) { padding-left: 0; }
 }
-@media (max-width: 520px) {
+@media (max-width: 32.5em) {
   .pg-insights .vital { padding: 10px 12px 10px 0; }
   .pg-insights .vital + .vital { padding-left: 12px; }
   .pg-insights .vital:nth-child(2), .pg-insights .vital:nth-child(4) { padding-left: 0; }
@@ -44,13 +44,13 @@
 .pg-insights .grid2 { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 16px; margin-bottom: 16px; align-items: start; }
 /* Wider value and side columns: "120 of 400" and "none analysed". */
 .pg-insights #d-coverage .ledger { --ledger-cols: minmax(0, 13rem) minmax(40px, 1fr) 6rem 6.5rem; }
-@media (max-width: 520px) { .pg-insights #d-coverage .ledger { --ledger-cols: minmax(0, 1fr) 6rem 6.5rem; } }
+@media (max-width: 32.5em) { .pg-insights #d-coverage .ledger { --ledger-cols: minmax(0, 1fr) 6rem 6.5rem; } }
 .pg-insights .ledger .none { color: var(--warning-text); font-weight: 500; }
 .pg-insights .linkish.more { margin-top: 8px; font-size: .8125rem; }
-@media (max-width: 900px) { .pg-insights .grid2 { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 56.25em) { .pg-insights .grid2 { grid-template-columns: minmax(0, 1fr); } }
 /* Ledgers here carry "N sessions" on the side, wider than the default column. */
 .pg-insights .ledger { --ledger-cols: minmax(0, 13rem) minmax(40px, 1fr) 3.5rem 5.5rem; }
-@media (max-width: 520px) { .pg-insights .ledger { --ledger-cols: minmax(0, 1fr) 3.5rem 5.5rem; } }
+@media (max-width: 32.5em) { .pg-insights .ledger { --ledger-cols: minmax(0, 1fr) 3.5rem 5.5rem; } }
 
 /* Session types: one stacked strip with a key */
 .pg-insights .strip { display: flex; height: 10px; border-radius: 5px; overflow: hidden; gap: 2px; margin: 10px 0 8px; }
@@ -97,16 +97,16 @@
 .pg-insights .ledger li.on:not(.pick) { background: var(--accent-soft); box-shadow: inset 2px 0 0 var(--accent); font-weight: 600; }
 /* A pickable row's button has its own columns in Ledger.css; give it the same ones as the rows above (wider side figure). */
 .pg-insights .ledger li.pick .rowbtn { grid-template-columns: var(--ledger-cols); }
-@media (max-width: 520px) { .pg-insights .ledger li.pick .rowbtn { grid-template-columns: var(--ledger-cols); } }
+@media (max-width: 32.5em) { .pg-insights .ledger li.pick .rowbtn { grid-template-columns: var(--ledger-cols); } }
 /* Session figures drawer: six counted figures in the vitals strip. */
 .pg-insights .vitals.figs { grid-template-columns: repeat(6, minmax(0, 1fr)); margin: 10px 0 4px; }
-@media (max-width: 900px) {
+@media (max-width: 56.25em) {
   .pg-insights .vitals.figs { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .pg-insights .vitals.figs .vital:first-child { grid-column: auto; }
   .pg-insights .vitals.figs .vital:nth-child(n) { padding-left: 16px; }
   .pg-insights .vitals.figs .vital:nth-child(3n + 1) { padding-left: 0; }
 }
-@media (max-width: 520px) {
+@media (max-width: 32.5em) {
   .pg-insights .vitals.figs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .pg-insights .vitals.figs .vital:nth-child(n) { padding-left: 12px; }
   .pg-insights .vitals.figs .vital:nth-child(odd) { padding-left: 0; }

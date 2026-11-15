@@ -7,7 +7,7 @@
 .drawer .drawer-toggle:hover { background: none; }
 /* The whole title line is the click target. */
 .drawer .drawer-toggle::after { content: ""; position: absolute; inset: 0; }
-.drawer .drawer-toggle::before { content: ""; width: 7px; height: 7px; flex: none; align-self: center;
+.drawer .drawer-toggle::before { content: ""; width: .4375rem; height: .4375rem; flex: none; align-self: center;
   border-right: 1.5px solid var(--text-muted); border-bottom: 1.5px solid var(--text-muted); transform: rotate(-45deg); transition: transform .15s; }
 .drawer .drawer-toggle[aria-expanded=true]::before { transform: rotate(45deg); }
 .drawer .drawer-toggle:hover { color: var(--link); }
@@ -18,5 +18,5 @@
 .drawer > .drawer-head h2 > :not(.drawer-toggle) { position: relative; z-index: 1; margin-left: 4px; }
 .drawer-body { padding: 0 0 24px; }
 .drawer > .drawer-body[hidden] { display: none !important; }
-@media (max-width: 900px) { .drawer > .drawer-head .w { display: none; } }
+@media (max-width: 56.25em) { .drawer > .drawer-head .w { display: none; } }
 @media (prefers-reduced-motion: reduce) { .drawer .drawer-toggle::before { transition: none; } }

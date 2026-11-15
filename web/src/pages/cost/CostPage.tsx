@@ -35,7 +35,7 @@ const isStack = (v: unknown): v is Stack => STACKS.includes(v as Stack);
 const isList = (v: unknown): v is string[] => Array.isArray(v) && v.every(x => typeof x === "string");
 
 // Phones show What changed after the chart and its insights, and fold the supporting cards under the chart.
-const NARROW = "(max-width: 520px)";
+const NARROW = "(max-width: 32.5em)";
 const subscribeNarrow = (f: () => void) => { const m = matchMedia(NARROW); m.addEventListener?.("change", f); return () => m.removeEventListener?.("change", f); };
 const useNarrow = () => useSyncExternalStore(subscribeNarrow, () => matchMedia(NARROW).matches, () => false);
 

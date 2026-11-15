@@ -63,14 +63,15 @@ export type TlEvent =
   | { kind: "commit"; t: number; t1: number; call: TlCall };
 
 export interface TimelineModel {
-  W: number; H: number; m: { l: number; r: number; t: number }; ph: number; iw: number; pb: number; sy: number; sh: number;
+  W: number; H: number; ts: number; m: { l: number; r: number; t: number }; ph: number; iw: number; pb: number; sy: number; sh: number;
   x: (t: number) => number; y: (v: number) => number; yMax: number; limit: number | null; near: number | null; nearShown: boolean;
   reqs: TlReq[]; calls: TlCall[]; comps: number[]; fails: TlCall[]; commits: TlCall[];
   gaps: { a: number; b: number; bx: number }[]; events: TlEvent[]; cmd: Record<string, string>;
   start: number; end: number; maxC: number; summary: string; fmtT: (t: number) => string;
 }
 
-export function timelineModel(s: SessionDetail, width: number): TimelineModel | null {
+/** ts: the browser's text scale (textScale()); the room around the labels grows with it, the plot keeps its size. */
+export function timelineModel(s: SessionDetail, width: number, ts = 1): TimelineModel | null {
   const i = s.info, limit = i.context_limit || null;
   const reqs: TlReq[] = s.requests.filter(r => !r.subagent && r.ts)
     .map(r => ({ t: Date.parse(r.ts!), context: r.context, model: r.model ?? "", cost: r.cost }));
@@ -87,7 +88,7 @@ export function timelineModel(s: SessionDetail, width: number): TimelineModel | 
   const ct = (t: number) => t - start - raw.reduce((n, g) => n + (g.b <= t ? g.b - g.a - keep : 0), 0);
   const total = ct(end) || 1;
   const W = Math.max(300, width);
-  const m = { l: 40, r: 8, t: 14 }, ph = W >= 900 ? 180 : 130, iw = W - m.l - m.r, pb = m.t + ph, sy = pb + 10, sh = 22, H = sy + sh + 20;
+  const m = { l: 40 * ts, r: 8, t: 14 * ts }, ph = W >= 900 ? 180 : 130, iw = W - m.l - m.r, pb = m.t + ph, sy = pb + 10 * ts, sh = 22, H = sy + sh + 20 * ts;
   const x = (t: number) => m.l + ct(t) / total * iw;
   const maxC = Math.max(...reqs.map(r => r.context), 1);
   const yMax = limit && maxC >= .5 * limit ? limit * 1.02 : maxC * 1.15;
@@ -112,7 +113,7 @@ export function timelineModel(s: SessionDetail, width: number): TimelineModel | 
     ? `Context grew from ${big(reqs[0]!.context)} to a peak of ${big(maxC)} over ${plural(reqs.length, "main-thread request")}; ${plural(calls.length, "tool call")}, ${num(fails.length)} failed.`
     : `${plural(calls.length, "tool call")}, ${num(fails.length)} failed.`;
   return {
-    W, H, m, ph, iw, pb, sy, sh, x, y, yMax, limit, near, nearShown: !!near && near <= yMax,
+    W, H, ts, m, ph, iw, pb, sy, sh, x, y, yMax, limit, near, nearShown: !!near && near <= yMax,
     reqs, calls, comps, fails, commits, events, cmd, start, end, maxC, summary, fmtT,
     gaps: raw.map(g => ({ ...g, bx: x(g.a) + keep / total * iw / 2 })),
   };

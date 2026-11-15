@@ -16,6 +16,6 @@
 .contributors .ctr-med { position: absolute; top: 1px; bottom: 1px; width: 2px; margin-left: -1px; background: var(--text-primary); border-radius: 1px; }
 .contributors .ctr-mark { position: absolute; top: -1px; bottom: -1px; width: 0; border-left: 1px dashed var(--text-secondary); }
 .contributors .ctr-fig { display: block; margin-top: 3px; font-size: .75rem; font-variant-numeric: tabular-nums; }
-@media (max-width: 640px) {
+@media (max-width: 40em) {
   .contributors .ctr-table .ctr-total, .contributors .ctr-table .ctr-range { min-width: 9rem; }
 }

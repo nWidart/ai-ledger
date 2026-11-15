@@ -4,8 +4,8 @@
 .pressure .prow { display: grid; gap: 6px; }
 .pressure .pw { font-size: .8125rem; color: var(--text-secondary); }
 .pressure .pw b { color: var(--text-primary); font-weight: 600; }
-.pressure .pbar { display: flex; gap: 2px; width: 100%; height: 40px; }
-.pressure .band { flex-shrink: 1; flex-basis: 0; min-width: 6px; height: 100%; padding: 0; border: 0; border-radius: 4px; cursor: pointer; overflow: hidden;
+.pressure .pbar { display: flex; gap: 2px; width: 100%; min-height: 2.5rem; }
+.pressure .band { flex-shrink: 1; flex-basis: 0; min-width: 6px; align-self: stretch; padding: 0; border: 0; border-radius: 4px; cursor: pointer; overflow: hidden;
   display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.15; color: var(--text-primary); font: inherit; font-size: .75rem; white-space: nowrap; }
 /* A segment's width is its share; the 6px minimum keeps a tiny share visible and selectable, at the cost of drawing it a little wide.
    Text on a segment: the first two bands are light greys, the third a mid grey, the last two the warning and critical fills; each pair reads in both themes. */
