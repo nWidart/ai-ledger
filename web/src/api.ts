@@ -433,7 +433,38 @@ export interface Status {
 // (no data, no price, no window), never zero. A project of null is a session with no project.
 export interface GrowthPoint { turn: number; median: number; p25: number; p75: number; sessions: number }
 /** name: the tool, or the MCP server. est_tokens is bytes / 4, an estimate. */
-export interface FillRow { name: string; calls: number; with_bytes: number; bytes: number; est_tokens: number; p50_bytes: number | null; max_bytes: number | null }
+export interface FillRow {
+  name: string; calls: number; with_bytes: number; bytes: number; est_tokens: number; p50_bytes: number | null;
+  /** The 95th percentile result size in bytes, rounded like p50_bytes; null when no call has a size. */
+  p95_bytes: number | null;
+  max_bytes: number | null;
+}
+/** One session on the session map. The title is not carried: the session sheet shows it. */
+export interface SessionPoint {
+  session_id: string; project: string | null; source: Source;
+  /** When the session began; null when unknown. */
+  first_ts: Ts | null;
+  /** The session's starting context: the prompt tokens of its first turn. */
+  start: number;
+  /** Its peak context in tokens. It can exceed `window` by a little. */
+  peak: number;
+  /** Its resolved context window in tokens. */
+  window: number;
+  /** The number of turns (main-thread requests of at least 2,000 prompt tokens). */
+  turns: number;
+  compactions: number;
+}
+/** One bucket (a day, or the Monday of a week) of cache use. input, cache_read and cache_write are prompt tokens summed over the view's requests. */
+export interface CacheBucket {
+  /** The bucket's first day. */
+  day: Day;
+  /** Uncached input tokens. */
+  input: number; cache_read: number;
+  /** Cache writes, 5-minute and 1-hour together. */
+  cache_write: number;
+  /** Cache breaks in the bucket by inferred cause (not reported by the provider). */
+  model_switch: number; expired: number; other: number;
+}
 export type TipId = "large_start" | "frequent_compactions" | "near_limit" | "large_results" | "cache_breaks" | "long_tier";
 export interface Tip {
   id: TipId; severity: "warn" | "critical"; title: string;
@@ -451,23 +482,31 @@ export interface ContextPayload {
   starting: {
     sessions: number; median: number | null; p10: number | null; p90: number | null; window_share: number | null;
     by_project: { project: string | null; sessions: number; median: number; p10: number; p90: number; window: number | null; window_share: number | null }[];
-    trend: { week: Day; median: number; sessions: number }[];
+    /** week is the Monday that starts the week. p25 and p75 are the quartiles of the starting context of the week's sessions. */
+    trend: { week: Day; median: number; p25: number; p75: number; sessions: number }[];
   };
   growth: {
     curve: GrowthPoint[];
-    by_project_curves: { project: string | null; sessions: number; curve: GrowthPoint[] }[];
+    /** The curve as fractions of each session's window, over the sessions with a known window (so each point's `sessions` can be fewer than the token curve's); same turn cap and 5-session minimum. Can be empty. */
+    share_curve: GrowthPoint[];
+    /** share_curve of a project is that project's share curve; can be empty. */
+    by_project_curves: { project: string | null; sessions: number; curve: GrowthPoint[]; share_curve: GrowthPoint[] }[];
     added_per_prompt: number | null;
     by_project: { project: string | null; sessions: number; added_per_prompt: number | null; compacted: number; turns_to_compaction: number | null; minutes_to_compaction: number | null }[];
     to_compaction: { sessions: number; turns: number | null; minutes: number | null };
-    /** Five counts per window: <25%, 25-50%, 50-75%, 75-90%, >=90% of the window. */
+    /** Five counts per window: <25%, 25-50%, 50-80%, 80-90%, >=90% of the window. */
     fill: { window: number; sessions: number; bins: [number, number, number, number, number] }[];
   };
+  /** The sessions with a measured start, a known window and a peak. `points` holds the newest 1,000 (by first_ts, then session_id); `total` counts them all. */
+  sessions_map: { total: number; points: SessionPoint[] };
   fills: {
     main_bytes: number; subagent_bytes: number;
     tools: FillRow[]; mcp: FillRow[];
     largest: { id: string; session_id: string; title: string | null; project: string | null; source: Source; tool: string; mcp_server: string | null; input: string; bytes: number; est_tokens: number; ts: Ts | null }[];
   };
   cost: {
+    /** Cache use over time: per day, or per week when the view's first request is more than 60 days old. Buckets with no request are left out. */
+    series: { bucket: "day" | "week"; rows: CacheBucket[] };
     cost: number | null; cache_read_cost: number | null; long_cost: number | null; long_requests: number; cache_hit_ratio: number | null;
     by_project: { project: string | null; cost: number | null; cache_read_cost: number | null; long_cost: number | null; long_requests: number; cache_hit_ratio: number | null; prompt_tokens: number; cache_read: number }[];
     break_sessions: number;
