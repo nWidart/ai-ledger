@@ -1,6 +1,6 @@
 import { createPortal } from "react-dom";
 import { Fragment, useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
-import { go, parseHash, useHashState, usePathname } from "../../hash";
+import { currentView, go, useView, usePathname } from "../../url";
 import { useApi } from "../../useApi";
 import { queries } from "../../queries";
 import { useRefresh } from "../refresh";
@@ -50,7 +50,7 @@ function Marked({ text, ranges }: { text: string; ranges: Ranges }) {
  * commit writes the whole view to the URL as one history entry. Mounted once by App, so it lives across page switches.
  */
 export function Palette() {
-  const open = usePaletteOpen(), path = usePathname(), [h] = useHashState();
+  const open = usePaletteOpen(), path = usePathname(), [h] = useView();
   const { refresh } = useRefresh();
   const dlg = useRef<HTMLDialogElement>(null), input = useRef<HTMLInputElement>(null), opener = useRef<HTMLElement | null>(null);
   const [chips, setChips] = useState<Chip[]>([]);
@@ -84,7 +84,7 @@ export function Palette() {
     if (open && !d.open) {
       const a = document.activeElement;
       opener.current = a instanceof HTMLElement && a !== document.body ? a : null;
-      setChips(prefill(parseHash(location.hash)));
+      setChips(prefill(currentView()));
       setText(""); setCaret(0); setHi(0); setSaid(""); setBrowsing(false); setToast(null);
       d.showModal();
       input.current?.focus();

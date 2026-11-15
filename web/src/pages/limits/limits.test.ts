@@ -197,9 +197,9 @@ describe("what used this window", () => {
 
   it("links to Cost with the project, the range, the window's source and automated sessions, which the drawer counts", () => {
     const w = win({ provider: "codex", start: began(10).start });
-    expect(usedHref(w, now, "ai-ledger")).toBe("/cost#project=ai-ledger&range=14&source=codex&auto=1");
-    expect(usedHref(w, now)).toBe("/cost#range=14&source=codex&auto=1");
-    expect(usedHref(win({ provider: "claude", start: began(200).start }), now, "a b&c")).toBe("/cost#project=a+b%26c&range=0&source=claude&auto=1");
+    expect(usedHref(w, now, "ai-ledger")).toBe("/cost?project=ai-ledger&range=14&source=codex&auto=1");
+    expect(usedHref(w, now)).toBe("/cost?range=14&source=codex&auto=1");
+    expect(usedHref(win({ provider: "claude", start: began(200).start }), now, "a b&c")).toBe("/cost?project=a+b%26c&range=0&source=claude&auto=1");
   });
 
   it("hints with the top project and its share", () => {

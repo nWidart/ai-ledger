@@ -1,4 +1,5 @@
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, screen, within } from "@testing-library/react";
+import { renderApp } from "../../testing";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { SessionPoint } from "../../api";
@@ -11,11 +12,11 @@ const heavy = pt("heavy000001", { first_ts: "2026-11-05T10:00:00.000Z", start: 6
 const over = pt("over0000002", { first_ts: "2026-11-03T10:00:00.000Z", start: 20_000, peak: 230_000, compactions: 2 });
 const calm = pt("calm0000003", { first_ts: "2026-11-04T10:00:00.000Z", project: "bar", source: "codex" });
 const points = [heavy, over, calm];
-const hash = () => new URLSearchParams(location.hash.slice(1));
+const hash = () => new URLSearchParams(location.search.slice(1));
 const num = (el: Element | null, a: string) => Number(el!.getAttribute(a));
 const dotOf = (c: HTMLElement, id: string) => c.querySelector(`g[data-id="${id}"] circle.dot`)!;
 
-beforeEach(() => { location.hash = ""; setOrder(["foo", "bar"]); });
+beforeEach(() => { history.replaceState(null, "", location.pathname); setOrder(["foo", "bar"]); });
 
 describe("log scale", () => {
   it("gives equal distances to equal ratios", () => {
@@ -31,7 +32,7 @@ describe("log scale", () => {
 
 describe("SessionMap", () => {
   it("puts a 60k start peaking at 90% right of the 30k line and above the 80% line", () => {
-    const { container } = render(<SessionMap map={{ total: 3, points }} />);
+    const { container } = renderApp(<SessionMap map={{ total: 3, points }} />);
     const d = dotOf(container, "heavy000001"), lx = num(container.querySelector(".ref-x"), "x1"), ly = num(container.querySelector(".ref-y"), "y1");
     expect(num(d, "cx")).toBeGreaterThan(lx);
     expect(num(d, "cy")).toBeLessThan(ly);
@@ -40,17 +41,17 @@ describe("SessionMap", () => {
   });
 
   it("draws a peak over its window at 100% and shows the real share", () => {
-    const { container } = render(<SessionMap map={{ total: 3, points }} />);
+    const { container } = renderApp(<SessionMap map={{ total: 3, points }} />);
     expect(drawnShare(over)).toBe(1);
     // A peak of 100% of the window and one of 115% sit at the same height: the plot's top edge.
-    const { container: c2 } = render(<SessionMap map={{ total: 1, points: [pt("full00000004", { start: 20_000, peak: 200_000 })] }} />);
+    const { container: c2 } = renderApp(<SessionMap map={{ total: 1, points: [pt("full00000004", { start: 20_000, peak: 200_000 })] }} />);
     expect(num(dotOf(container, "over0000002"), "cy")).toBe(num(dotOf(c2, "full00000004"), "cy"));
     fireEvent.keyDown(container.querySelector("[role=group]")!, { key: "Home" });
     expect(container.querySelector("[role=tooltip]")!.textContent).toContain("230k (115%)");
   });
 
   it("rings compacted sessions only", () => {
-    const { container } = render(<SessionMap map={{ total: 3, points }} />);
+    const { container } = renderApp(<SessionMap map={{ total: 3, points }} />);
     expect(container.querySelectorAll("circle.ring")).toHaveLength(1);
     expect(container.querySelector('g[data-id="over0000002"] circle.ring')).not.toBeNull();
     expect(container.querySelector('g[data-id="calm0000003"] circle.ring')).toBeNull();
@@ -59,7 +60,7 @@ describe("SessionMap", () => {
   });
 
   it("states the count, and the newest N of M when the view has more", () => {
-    const { rerender } = render(<SessionMap map={{ total: 3, points }} />);
+    const { rerender } = renderApp(<SessionMap map={{ total: 3, points }} />);
     expect(screen.getByText(/^3 sessions\./)).toBeTruthy();
     rerender(<SessionMap map={{ total: 3412, points }} />);
     expect(screen.getByText(/Showing the newest 3 of 3,412 sessions/)).toBeTruthy();
@@ -68,7 +69,7 @@ describe("SessionMap", () => {
   });
 
   it("steps through points oldest to newest with the arrow keys and clears with Escape", () => {
-    render(<SessionMap map={{ total: 3, points }} />);
+    renderApp(<SessionMap map={{ total: 3, points }} />);
     const chart = screen.getByRole("group"), readout = () => document.querySelector(".readout")!.textContent!;
     act(() => chart.focus());
     fireEvent.keyDown(chart, { key: "ArrowRight" });
@@ -84,8 +85,8 @@ describe("SessionMap", () => {
   });
 
   it("keeps the page's filters when a session opens", () => {
-    location.hash = "#project=foo&range=30";
-    render(<SessionMap map={{ total: 3, points }} />);
+    history.replaceState(null, "", "?project=foo&range=30");
+    renderApp(<SessionMap map={{ total: 3, points }} />);
     const chart = screen.getByRole("group");
     fireEvent.keyDown(chart, { key: "End" });
     fireEvent.keyDown(chart, { key: "Enter" });
@@ -93,7 +94,7 @@ describe("SessionMap", () => {
   });
 
   it("opens the session on Enter and on a click near its dot", () => {
-    const { container } = render(<SessionMap map={{ total: 3, points }} />);
+    const { container } = renderApp(<SessionMap map={{ total: 3, points }} />);
     const chart = screen.getByRole("group");
     fireEvent.keyDown(chart, { key: "Enter" });
     expect(hash().get("session")).toBeNull();
@@ -111,7 +112,7 @@ describe("SessionMap", () => {
   });
 
   it("opens a session from its row in the data table", async () => {
-    render(<SessionMap map={{ total: 3, points }} />);
+    renderApp(<SessionMap map={{ total: 3, points }} />);
     await userEvent.click(screen.getByRole("button", { name: "Show data table" }));
     const table = screen.getByRole("table", { name: "Sessions on the map" });
     const rows = within(table).getAllByRole("row").slice(1);
@@ -121,7 +122,7 @@ describe("SessionMap", () => {
   });
 
   it("renders only an empty state without points", () => {
-    const { container } = render(<SessionMap map={{ total: 0, points: [] }} />);
+    const { container } = renderApp(<SessionMap map={{ total: 0, points: [] }} />);
     expect(screen.getByText("No session in this view has a measured start, a known window and a peak.")).toBeTruthy();
     expect(container.querySelector("svg")).toBeNull();
   });

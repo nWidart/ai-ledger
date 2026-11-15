@@ -1,7 +1,7 @@
 // Text for the Limits page: names, captions and pace, from the /api/limits payload.
 import type { LimitHistoryRow, LimitPoint, LimitWindow, LimitsAlert, LimitsPayload } from "../../api";
 import { num, plural, usd } from "../../format";
-import { formatHash, RANGES, sourceOf, type Range } from "../../hash";
+import { formatSearch, RANGES, sourceOf, type Range } from "../../url";
 
 /** A timestamp as "Sat, Nov 7, 2:00 PM" in the reader's zone: every time on the page reads this way. */
 export const whenDay = (ts: string | null | undefined): string =>
@@ -171,7 +171,7 @@ export const usedRangeName = (range: Range): string => (range ? `last ${range} d
 /** The Cost page filtered to the window's source and its nearest range preset, and to one project when given. The drawer counts
  *  automated and helper sessions, and Cost leaves them out unless auto=1, so the link asks for them. */
 export const usedHref = (w: LimitWindow, now: string, project = ""): string =>
-  "/cost" + formatHash({ project, range: String(usedRange(w, now)), source: sourceOf(w.provider), auto: "1" });
+  "/cost" + formatSearch({ project, range: String(usedRange(w, now)), source: sourceOf(w.provider), auto: "1" });
 
 /** A share as a whole percent: "54%", and "<1%" for a share that rounds to nothing. */
 export const sharePct = (share: number): string => (share > 0 && share < 0.005 ? "<1%" : `${Math.round(share * 100)}%`);

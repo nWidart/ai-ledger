@@ -6,10 +6,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import errors from "./__fixtures__/errors";
 import insights from "./__fixtures__/insights";
 import usage from "./__fixtures__/usage";
-import { App } from "./App";
-import { navigate, setHash } from "./hash";
+import { navigate, setSearch } from "./url";
 import { makeQueryClient } from "./queryClient";
-import { ingested, renderApp } from "./testing";
+import { ingested, renderRouter } from "./testing";
 
 const status = { ingesting: false, last_ingest: null, last_change: null, last_stats: null, error: null, counts: {}, interval: 60, project_order: [] };
 const withPrompts = (prompts: number, project = "") => ({ ...usage, project, totals: { ...usage.totals, prompts } });
@@ -44,7 +43,7 @@ const lede = () => document.getElementById("lede")?.textContent ?? "";
 const main = (cls: string) => document.querySelector<HTMLElement>("main." + cls);
 /** The page is up and has its answer: the lede no longer says Loading. */
 const shown = async (cls: string) => { await waitFor(() => expect(main(cls)).toBeTruthy()); await waitFor(() => expect(lede()).not.toMatch(/^Loading/)); };
-const open = (path: string) => { history.replaceState(null, "", path); return renderApp(<App />); };
+const open = (path: string) => { history.replaceState(null, "", path); return renderRouter(); };
 const link = (name: string) => screen.getByRole("link", { name });
 
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
@@ -57,7 +56,7 @@ describe("Keep page data between visits", () => {
     it("shows Activity's previous figures at once after an ingest, and the new ones when they arrive", async () => {
       let now: unknown = withPrompts(3), hold = false;
       const s = server(u => answers(u, now), u => hold && u.pathname === "/api/usage");
-      const { client } = open("/usage#range=30");
+      const { client } = open("/usage?range=30");
       await shown("pg-activity");
       expect(lede()).toMatch(/from 3 prompts/);
 
@@ -84,7 +83,7 @@ describe("Keep page data between visits", () => {
 
     it("shows Activity's figures at once and sends no request when nothing was ingested", async () => {
       const s = server(u => answers(u, withPrompts(3)));
-      open("/usage#range=30");
+      open("/usage?range=30");
       await shown("pg-activity");
       await userEvent.click(link(other));
       await shown(cls);
@@ -107,22 +106,22 @@ describe("Keep page data between visits", () => {
     const go = async (href: string) => { act(() => navigate(href)); await tick(); };
     let hold = false;
     const s = server(u => answers(u, withPrompts(3)), u => hold && u.pathname === "/api/usage");
-    history.replaceState(null, "", "/cost#range=30");
-    renderApp(<App />, makeQueryClient()); // the app's own gcTime, five minutes
+    history.replaceState(null, "", "/cost?range=30");
+    renderRouter(makeQueryClient()); // the app's own gcTime, five minutes
     await tick();
     expect(lede()).not.toMatch(/^Loading/);
     expect(s.to("/api/usage").length).toBe(1);
 
-    await go("/insights#range=30");
+    await go("/insights?range=30");
     await tick(4 * 60_000);
-    await go("/cost#range=30");
+    await go("/cost?range=30");
     expect(lede()).not.toMatch(/^Loading/); // four minutes: kept, shown at once
     expect(s.to("/api/usage").length).toBe(1);
 
-    await go("/insights#range=30");
+    await go("/insights?range=30");
     await tick(10 * 60_000);
     hold = true;
-    await go("/cost#range=30");
+    await go("/cost?range=30");
     expect(lede()).toBe("Loading cost…"); // ten minutes: a first visit
     expect(s.to("/api/usage").length).toBe(2);
   });
@@ -131,14 +130,14 @@ describe("Keep page data between visits", () => {
 describe("Abandon a request the user left", () => {
   it("abandons the request for the project picked before, and never shows its answer", async () => {
     const s = server(u => answers(u, withPrompts(5, "bar")), u => u.pathname === "/api/usage" && u.searchParams.get("project") === "foo");
-    open("/usage#project=foo&range=30");
+    open("/usage?project=foo&range=30");
     await waitFor(() => expect(s.to("/api/usage").length).toBe(1));
     const foo = s.last("/api/usage");
     expect(foo.url.searchParams.get("project")).toBe("foo");
     expect(foo.signal!.aborted).toBe(false);
     expect(lede()).toMatch(/^Loading/);
 
-    act(() => setHash({ project: "bar" }));
+    act(() => setSearch({ project: "bar" }));
     await waitFor(() => expect(foo.signal!.aborted).toBe(true));
     await shown("pg-activity");
     expect(lede()).toMatch(/from 5 prompts.*bar/);
@@ -151,7 +150,7 @@ describe("Abandon a request the user left", () => {
   it("abandons Cost's request when the user goes to Errors, and Errors loads", async () => {
     vi.stubGlobal("IntersectionObserver", class { observe() {} unobserve() {} disconnect() {} });
     const s = server(u => answers(u, withPrompts(3)), u => u.pathname === "/api/usage");
-    open("/cost#range=30");
+    open("/cost?range=30");
     await waitFor(() => expect(s.to("/api/usage").length).toBe(1));
     const cost = s.last("/api/usage");
     expect(lede()).toBe("Loading cost…");

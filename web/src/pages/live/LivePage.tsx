@@ -4,7 +4,7 @@ import { Filters, SOURCE_LABELS } from "../../components/Filters";
 import { ProjectName } from "../../components/ProjectDot";
 import { appLink } from "../../components/sheets/session";
 import { plural, usd, when } from "../../format";
-import { useHashState } from "../../hash";
+import { useView } from "../../url";
 import { ApiError } from "../../useApi";
 import { sessionHref } from "../insights/InsightsPage";
 import { AgentPanel, StateTag } from "./AgentPanel";
@@ -22,7 +22,7 @@ const COUNT = /^\(\d+\) /;
 
 /** Live (/live): the sessions active in the last 10 minutes, followed from the agent's side as their lines arrive. */
 export function LivePage() {
-  const [h, set] = useHashState();
+  const [h, set] = useView();
   const view = viewOf(h), mode = h.raw.view === "wall" ? "wall" : "stream";
   const [text, setText] = useState(false); // off on every load: transcript text can hold secrets
   const [paused, setPaused] = useState(false);

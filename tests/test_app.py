@@ -120,6 +120,13 @@ class AppTest(unittest.TestCase):
         status, _, body = self.request("GET", "/usage", {"If-None-Match": '"stale"'})
         self.assertEqual((status, bool(body)), (200, True))
 
+    def test_page_ignores_its_query_string(self):
+        # The web app keeps its view in the query string, so the server must serve the page whatever the query.
+        plain, with_query = self.get("/usage"), self.get("/usage?project=foo&range=7")
+        self.assertEqual((with_query[0], with_query[2]), (plain[0], plain[2]))
+        for name in ("Content-Type", "Content-Security-Policy", "Cache-Control", "ETag"):
+            self.assertEqual(with_query[1][name], plain[1][name], name)
+
     def test_api_and_assets_keep_their_cache_headers(self):
         self.assertEqual(self.get("/api/status")[1]["Cache-Control"], "no-store")
         self.assertNotIn("ETag", self.get("/api/status")[1])

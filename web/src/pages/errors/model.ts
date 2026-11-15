@@ -3,7 +3,7 @@
 import type { Category, Day, ErrorRow, ErrorsPayload, Incident, Source, Ts } from "../../api";
 import { dayLabel, num as fmt } from "../../format";
 import type { SortBy } from "../../components/Sort";
-import type { Range } from "../../hash";
+import type { Range } from "../../url";
 
 export const NOISE = new Set(["infra", "user_denied"]); // always noise; the types the user muted join them (Model.muted)
 export const CATCH_ALL = new Set(["other", "exit_other", "mcp"]); // the types no specific rule matched

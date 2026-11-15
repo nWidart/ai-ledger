@@ -15,7 +15,7 @@ import { CostPage } from "./CostPage";
 
 vi.mock("../../components/export", async orig => ({ ...(await orig<typeof import("../../components/export")>()), download: vi.fn() }));
 
-const at = (hash = "#range=30") => history.replaceState(null, "", "/cost" + hash);
+const at = (hash = "?range=30") => history.replaceState(null, "", "/cost" + hash);
 // The day's sessions as the server sends them: costliest on that day first.
 const byDay: SessionsPage = { ...sessions, sessions: ["s1", "s3", "s2"].map(id => sessions.sessions.find(s => s.session_id === id)!) };
 const serve = (d: UsagePayload) => mockApi({ "/api/usage": () => d, "/api/sessions": q => (q.get("day") ? byDay : sessions), "/api/session": () => session });
@@ -144,7 +144,7 @@ describe("CostPage", () => {
     renderApp(<CostPage />);
     await loaded();
     await userEvent.click(within(screen.getByRole("group", { name: "Source" })).getByRole("button", { name: "Codex" }));
-    expect(location.hash).toBe("#range=30&source=codex");
+    expect(location.search).toBe("?range=30&source=codex");
     // The whole page re-renders for the new source; that takes about a second in jsdom, longer while other files run.
     await waitFor(() => expect(document.getElementById("lede")!.textContent).toBe("$2.00 estimated cost"), { timeout: 5000 });
     expect(fetched()).toContain("/api/usage?range=30&source=codex");
@@ -158,7 +158,7 @@ describe("CostPage", () => {
     expect((await screen.findByRole("heading", { level: 1, name: /^No / })).textContent).toBe("No agent usage in the last 30 days.");
     unmount();
     serve({ ...none, source: "codex" });
-    at("#range=30&source=codex");
+    at("?range=30&source=codex");
     renderApp(<CostPage />);
     expect((await screen.findByRole("heading", { level: 1, name: /^No / })).textContent).toBe("No Codex usage in the last 30 days.");
   });
@@ -183,7 +183,7 @@ describe("CostPage", () => {
     expect(within(foo).getByText("new")).toBeTruthy();
     expect(changed.getByText(/1 project marked new had no usage at all before, worth \$16/)).toBeTruthy();
     await userEvent.click(foo);
-    expect(location.hash).toBe("#range=30&inspect=foo");
+    expect(location.search).toBe("?range=30&inspect=foo");
   });
 
   it("opens a project from What changed with its change against the previous period", async () => {
@@ -323,7 +323,7 @@ describe("CostPage", () => {
       expect(names()[3]).toMatch(/^Small projects/);
     });
     it("opens for a small selected project", async () => {
-      serve({ ...seven(), project: "t2" }); at("#range=30&project=t2"); renderApp(<CostPage />); await loaded(); act(() => openDrawer("d-projcost"));
+      serve({ ...seven(), project: "t2" }); at("?range=30&project=t2"); renderApp(<CostPage />); await loaded(); act(() => openDrawer("d-projcost"));
       expect(within(drawer("d-projcost")).getByRole("button", { name: "Hide small projects" }).getAttribute("aria-expanded")).toBe("true");
       expect(names()).toContain("t2");
     });
@@ -401,7 +401,7 @@ describe("CostPage", () => {
 
   it("leaves What changed out of a one-project view", async () => {
     serve({ ...usage, project: "foo" });
-    at("#range=30&project=foo");
+    at("?range=30&project=foo");
     renderApp(<CostPage />);
     await loaded();
     expect(document.getElementById("changed")).toBeNull();
@@ -426,7 +426,7 @@ describe("CostPage", () => {
       await userEvent.click(screen.getByRole("button", { name: "Agent" }));
       expect(screen.getByRole("group", { name: /^Estimated cost by agent per day/ })).toBeTruthy();
       await userEvent.click(within(document.querySelector(".legend") as HTMLElement).getByRole("button", { name: "Claude Code" }));
-      expect(location.hash).toBe("#range=30&source=claude");
+      expect(location.search).toBe("?range=30&source=claude");
       cleanup();
       await show(usage);
       expect(screen.getByRole("button", { name: "Agent" }).getAttribute("aria-pressed")).toBe("true");
@@ -478,7 +478,7 @@ describe("CostPage", () => {
   it("opens the sheets from the spend ledger and Back closes them", async () => {
     await show(usage);
     await userEvent.click(within(document.getElementById("where")!).getByRole("button", { name: /foo/ }));
-    expect(location.hash).toBe("#range=30&inspect=foo");
+    expect(location.search).toBe("?range=30&inspect=foo");
     await screen.findByRole("button", { name: "Filter dashboard to foo" });
   });
 

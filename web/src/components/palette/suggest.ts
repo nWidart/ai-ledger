@@ -2,7 +2,7 @@
 // pages, the payload's tools, MCP servers, skills and error categories, the session search, and the commands.
 import type { PalettePayload, Source, TitledSessionRow } from "../../api";
 import { pct, plural, when } from "../../format";
-import { RANGES } from "../../hash";
+import { RANGES } from "../../url";
 import { SOURCE_LABELS } from "../Filters";
 import { PAGES } from "../Nav";
 import { shortId } from "../sheets/session";

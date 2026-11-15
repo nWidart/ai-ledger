@@ -3,19 +3,18 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import limits from "./__fixtures__/limits";
 import usage from "./__fixtures__/usage";
-import { App } from "./App";
 import { closePalette } from "./components/palette/store";
 import { mockApi } from "./components/sheets/testing";
-import { navigate, setHash } from "./hash";
-import { renderApp } from "./testing";
+import { navigate, setSearch } from "./url";
+import { renderRouter } from "./testing";
 
 const status = { ingesting: false, last_ingest: null, last_change: null, last_stats: null, error: null, counts: {}, interval: 60, project_order: [] };
 const PAGES = [["/usage", "pg-activity"], ["/cost", "pg-cost"], ["/errors", "pg-errors"], ["/limits", "pg-limits"], ["/insights", "pg-insights"], ["/live", "pg-live"]] as const;
 /** The app with every request left pending: each page shows its loading state. */
 const pending = (path: string) => {
   vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => {})));
-  history.replaceState(null, "", path + "#range=30");
-  return renderApp(<App />);
+  history.replaceState(null, "", path + "?range=30");
+  return renderRouter();
 };
 
 /** The page's main, once its chunk has loaded: until then main is the empty fallback. */
@@ -25,7 +24,7 @@ describe("App", () => {
   // First in the file on purpose: a page module is imported once, so only its first render shows the Suspense fallback.
   it("loads each page as its own chunk behind an empty main, so the landmark never leaves", async () => {
     pending("/limits");
-    const fallback = screen.getByRole("main");
+    const fallback = await screen.findByRole("main");
     expect(fallback.id).toBe("content");
     expect(fallback.getAttribute("aria-busy")).toBe("true");
     expect(fallback.querySelector(".pg-limits")).toBeNull();
@@ -64,7 +63,7 @@ describe("App", () => {
     expect(document.activeElement).toBe(skip);
     await userEvent.keyboard("{Enter}");
     expect(document.activeElement).toBe(document.getElementById("lede"));
-    expect(location.hash).toBe("#range=30");
+    expect(location.search).toBe("?range=30");
   });
 
   it("does not announce loading: no status region, no live heading, and aria-busy on the page", async () => {
@@ -84,28 +83,28 @@ describe("App", () => {
     const show = (path: string) => {
       mockApi({ "/api/usage": () => usage, "/api/limits": () => limits, "/api/status": () => status });
       history.replaceState(null, "", path);
-      return renderApp(<App />);
+      return renderRouter();
     };
 
     it("moves to the new page's heading after a page switch, and waits for a page that is still loading", async () => {
-      show("/usage#range=30");
+      show("/usage?range=30");
       await screen.findByRole("heading", { level: 1, name: /requests|prompts|tool calls|sessions/i });
       expect(document.activeElement).toBe(document.body); // the first load leaves focus alone
       await userEvent.click(screen.getByRole("link", { name: "Cost" }));
       await waitFor(() => expect(document.querySelector("main.pg-cost")).toBeTruthy());
       await waitFor(() => expect(document.activeElement?.id).toBe("lede"));
       expect(document.activeElement!.closest(".pg-cost")).toBeTruthy();
-      act(() => navigate("/limits#range=30"));
+      act(() => navigate("/limits?range=30"));
       await waitFor(() => expect(document.activeElement!.closest(".pg-limits")).toBeTruthy());
       expect(document.activeElement!.id).toBe("lede");
     });
 
     it("leaves focus where it is on a hash-only change", async () => {
-      show("/usage#range=30");
+      show("/usage?range=30");
       await screen.findByRole("heading", { level: 1, name: /requests|prompts|tool calls|sessions/i });
       const tab = screen.getByRole("link", { name: "Cost" });
       act(() => tab.focus());
-      act(() => setHash({ range: "7" }));
+      act(() => setSearch({ range: "7" }));
       await new Promise(r => setTimeout(r, 20));
       expect(document.activeElement).toBe(tab);
     });

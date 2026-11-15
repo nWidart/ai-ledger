@@ -1,4 +1,5 @@
-import { render, screen, within } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
+import { renderApp } from "../../testing";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { ContextPayload, FillRow } from "../../api";
@@ -10,14 +11,14 @@ const row = (name: string, bytes: number, o: Partial<FillRow> = {}): FillRow =>
 const many = (n: number, prefix = "T") => Array.from({ length: n }, (_, i) => row(`${prefix}${i + 1}`, (n - i) * 10_000));
 const fills = (tools: FillRow[], mcp: FillRow[] = [], main = 750_000, sub = 250_000): ContextPayload["fills"] =>
   ({ main_bytes: main, subagent_bytes: sub, tools, mcp, largest: [] });
-const hash = () => new URLSearchParams(location.hash.slice(1));
+const hash = () => new URLSearchParams(location.search.slice(1));
 const body = () => within(screen.getByRole("table")).getAllByRole("row").slice(1);
 
 beforeEach(() => history.replaceState(null, "", "/context"));
 
 describe("Contributors", () => {
   it("shows equal totals with ranges far apart for many small and a few huge results", () => {
-    render(<Contributors fills={fills([row("Read", 2_000_000, { calls: 400, p50_bytes: 4_000, p95_bytes: 12_000 }), row("Bash", 2_000_000, { calls: 8, p50_bytes: 200_000, p95_bytes: 900_000 })])} />);
+    renderApp(<Contributors fills={fills([row("Read", 2_000_000, { calls: 400, p50_bytes: 4_000, p95_bytes: 12_000 }), row("Bash", 2_000_000, { calls: 8, p50_bytes: 200_000, p95_bytes: 900_000 })])} />);
     const [read, bash] = body(), bar = (r: HTMLElement) => r.querySelector<HTMLElement>(".ctr-bar i")!.style.width;
     const left = (r: HTMLElement) => parseFloat(r.querySelector<HTMLElement>("[data-testid=ctr-range-bar]")!.style.left);
     expect(bar(read!)).toBe(bar(bash!));
@@ -26,7 +27,7 @@ describe("Contributors", () => {
 
   it("shows ten rows and an Other row summing the remaining four of 14 tools", () => {
     const tools = many(14);
-    render(<Contributors fills={fills(tools)} />);
+    renderApp(<Contributors fills={fills(tools)} />);
     const rows = body();
     expect(rows).toHaveLength(11);
     const other = rows[10]!;
@@ -37,13 +38,13 @@ describe("Contributors", () => {
   });
 
   it("has no Other row for exactly ten", () => {
-    render(<Contributors fills={fills(many(10))} />);
+    renderApp(<Contributors fills={fills(many(10))} />);
     expect(body()).toHaveLength(10);
     expect(screen.queryByText(/^Other/)).toBeNull();
   });
 
   it("draws the split bar's two shares in bar and text", () => {
-    render(<Contributors fills={fills(many(2))} />);
+    renderApp(<Contributors fills={fills(many(2))} />);
     expect(screen.getByTestId("ctr-main").style.width).toBe("75%");
     expect(screen.getByTestId("ctr-sub").style.width).toBe("25%");
     expect(screen.getByText(/Main thread:/).textContent).toMatch(/750 KB.*75%.*estimate/);
@@ -52,12 +53,12 @@ describe("Contributors", () => {
   });
 
   it("omits the split bar when both totals are zero", () => {
-    render(<Contributors fills={fills(many(2), [], 0, 0)} />);
+    renderApp(<Contributors fills={fills(many(2), [], 0, 0)} />);
     expect(screen.queryByTestId("ctr-main")).toBeNull();
   });
 
   it("draws no range for a null median or 95th percentile, but keeps the 100 KB line", () => {
-    render(<Contributors fills={fills([row("A", 50_000), row("B", 40_000, { p50_bytes: null, p95_bytes: null })])} />);
+    renderApp(<Contributors fills={fills([row("A", 50_000), row("B", 40_000, { p50_bytes: null, p95_bytes: null })])} />);
     const [a, b] = body();
     expect(a!.querySelector("[data-testid=ctr-range-bar]")).toBeTruthy();
     expect(b!.querySelector("[data-testid=ctr-range-bar]")).toBeNull();
@@ -75,18 +76,18 @@ describe("Contributors", () => {
   });
 
   it("labels estimated tokens as estimates", () => {
-    render(<Contributors fills={fills(many(2))} />);
+    renderApp(<Contributors fills={fills(many(2))} />);
     expect(screen.getAllByText("estimate").length).toBeGreaterThan(2);
   });
 
   it("names both scales in the headings", () => {
-    render(<Contributors fills={fills(many(2))} />);
+    renderApp(<Contributors fills={fills(many(2))} />);
     expect(screen.getByRole("columnheader", { name: /Total result size/ })).toBeTruthy();
     expect(screen.getByRole("columnheader", { name: /Typical result: median to 95th percentile \(log scale\)/ })).toBeTruthy();
   });
 
   it("opens the tool sheet for a tool, and for an MCP server after the switch", async () => {
-    render(<Contributors fills={fills(many(2), many(2, "srv"))} />);
+    renderApp(<Contributors fills={fills(many(2), many(2, "srv"))} />);
     await userEvent.click(screen.getByRole("button", { name: "T1" }));
     expect(hash().get("tool")).toBe("T1");
     await userEvent.click(screen.getByRole("button", { name: "By MCP server" }));
@@ -96,12 +97,12 @@ describe("Contributors", () => {
   });
 
   it("has no switch without an MCP row", () => {
-    render(<Contributors fills={fills(many(2))} />);
+    renderApp(<Contributors fills={fills(many(2))} />);
     expect(screen.queryByRole("button", { name: "By MCP server" })).toBeNull();
   });
 
   it("says so when the selected list is empty", async () => {
-    render(<Contributors fills={fills([], many(1, "srv"))} />);
+    renderApp(<Contributors fills={fills([], many(1, "srv"))} />);
     expect(screen.getByText("No tool result with a known size in this view.")).toBeTruthy();
     expect(screen.queryByRole("table")).toBeNull();
   });

@@ -9,7 +9,7 @@ import { jumpTo, SectionIndex } from "../../components/SectionIndex";
 import { sessName, shortId } from "../../components/sheets/session";
 import { useLanding } from "../../components/useLanding";
 import { dayLabel, dur, num, pct, plural, when } from "../../format";
-import { formatHash, navigate, setHash, useHashState } from "../../hash";
+import { formatSearch, navigate, setSearch, useView } from "../../url";
 import { queries } from "../../queries";
 import { useApi } from "../../useApi";
 import { armFocus, DRILL_KEYS, drillsOf, focusList, passes, pickProps, takeFocus, toggleDrill, type DrillKind } from "./drill";
@@ -24,7 +24,7 @@ const Cat = ({ name }: { name: string }) => <span title={name}>{label(name)}</sp
 
 /** Session href on Activity, in view v's project, range, source and automated toggle; without a view, all time, so an old
  *  session is inside the range. */
-export const sessionHref = (id: string, v?: View) => "/usage" + formatHash({ project: v?.project ?? "", range: String(v?.range ?? 0),
+export const sessionHref = (id: string, v?: View) => "/usage" + formatSearch({ project: v?.project ?? "", range: String(v?.range ?? 0),
   source: v?.source ?? "", auto: v?.automated ? "1" : "", session: id });
 // Ledgers with free-form names (goals, friction, satisfaction) show this many rows until asked for all.
 const TOP = 12;
@@ -122,7 +122,7 @@ function FamilyRow({ f, max, raw, kind }: { f: FacetFamily; max: number; raw: Re
 }
 
 function Friction({ d }: { d: InsightsPayload }) {
-  const [h] = useHashState(), max = d.friction_families[0]?.n ?? 0;
+  const [h] = useView(), max = d.friction_families[0]?.n ?? 0;
   return (
     <section className="panel sect" id="friction" aria-labelledby="frictionTitle">
       <h2 id="frictionTitle">Friction categories <Judged /></h2>
@@ -134,7 +134,7 @@ function Friction({ d }: { d: InsightsPayload }) {
 }
 
 function Goals({ d }: { d: InsightsPayload }) {
-  const [h] = useHashState(), max = d.goal_families[0]?.n ?? 0;
+  const [h] = useView(), max = d.goal_families[0]?.n ?? 0;
   return (
     <Drawer id="d-goals" title="Goals" after={<Judged />}>
       <p className="hint">What each session set out to do. {FAMILY_HINT}</p>
@@ -227,7 +227,7 @@ function Trend({ d }: { d: InsightsPayload }) {
 }
 
 function Outcomes({ d }: { d: InsightsPayload }) {
-  const [h] = useHashState(), n = d.coverage.facets;
+  const [h] = useView(), n = d.coverage.facets;
   return (
     <section className="panel sect" id="outcomes" aria-labelledby="outcomesTitle">
       <h2 id="outcomesTitle">Outcomes <Judged /></h2>
@@ -239,7 +239,7 @@ function Outcomes({ d }: { d: InsightsPayload }) {
 }
 
 function Feelings({ d }: { d: InsightsPayload }) {
-  const [h] = useHashState(), n = d.coverage.facets, smax = Math.max(0, ...d.satisfaction.map(s => s.n));
+  const [h] = useView(), n = d.coverage.facets, smax = Math.max(0, ...d.satisfaction.map(s => s.n));
   return (
     <section className="panel sect" id="satisfaction" aria-labelledby="feelTitle">
       <h2 id="feelTitle">Satisfaction and helpfulness <Judged /></h2>
@@ -305,7 +305,7 @@ type SortId = keyof typeof SORTS;
 const filtersOf = (raw: Readonly<Record<string, string>>) => ({ friction: raw.friction === "1", outcome: raw.outcome ?? "" });
 
 function Sessions({ d, view, sort, onSort }: { d: InsightsPayload; view: View; sort: SortId; onSort: (s: SortId) => void }) {
-  const [h] = useHashState(), { friction, outcome } = filtersOf(h.raw), drills = drillsOf(h.raw), [all, setAll] = useState(false);
+  const [h] = useView(), { friction, outcome } = filtersOf(h.raw), drills = drillsOf(h.raw), [all, setAll] = useState(false);
   const filtered = friction || drills.length > 0;
   const rows = d.sessions.filter(s => (!friction || hasFriction(s)) && passes(s, drills, d)).sort(SORTS[sort].cmp);
   const listed = all ? rows : rows.slice(0, SESSIONS_TOP);
@@ -315,7 +315,7 @@ function Sessions({ d, view, sort, onSort }: { d: InsightsPayload; view: View; s
   // After a click changed the filters (not a URL change, Back or the select), focus the heading: the clicked chip may be gone.
   const key = [...DRILL_KEYS.map(k => h.raw[k] ?? ""), friction].join("\0");
   useEffect(() => { const to = takeFocus(); if (to) focusList(to); }, [key]);
-  const drop = (keys: string[]) => { armFocus("heading"); setHash(Object.fromEntries(keys.map(k => [k, null])), { push: true }); };
+  const drop = (keys: string[]) => { armFocus("heading"); setSearch(Object.fromEntries(keys.map(k => [k, null])), { push: true }); };
   const chips = [...drills.map(x => ({ key: x.kind, text: x.chip })), ...(friction ? [{ key: "friction", text: "Only sessions with friction" }] : [])];
   return (
     <section className="panel log sect" id="log" aria-labelledby="logTitle">
@@ -324,9 +324,9 @@ function Sessions({ d, view, sort, onSort }: { d: InsightsPayload; view: View; s
         <div className="log-ctl">
           <label>Sort <select value={sort} onChange={e => onSort(e.target.value as SortId)}>
             {(Object.keys(SORTS) as SortId[]).map(k => <option key={k} value={k}>{SORTS[k].label}</option>)}</select></label>
-          <label>Outcome <select value={outcome} onChange={e => setHash({ outcome: e.target.value }, { push: true })}>
+          <label>Outcome <select value={outcome} onChange={e => setSearch({ outcome: e.target.value }, { push: true })}>
             <option value="">All outcomes</option>{outcomes.map(o => <option key={o} value={o}>{outcomeLabel(o)}</option>)}</select></label>
-          <label className="chk"><input type="checkbox" checked={friction} onChange={e => setHash({ friction: e.target.checked }, { push: true })} /> Only sessions with friction</label>
+          <label className="chk"><input type="checkbox" checked={friction} onChange={e => setSearch({ friction: e.target.checked }, { push: true })} /> Only sessions with friction</label>
         </div>
       </div>
       {chips.length > 0 && <div className="fchips" role="group" aria-label="Active filters">
@@ -348,7 +348,7 @@ function Sessions({ d, view, sort, onSort }: { d: InsightsPayload; view: View; s
 /** Insights (/insights): how Claude Code's /insights judged the view's sessions (outcome, satisfaction, helpfulness,
  *  friction, goals and session types), the analysed sessions, and how much of the view is not analysed yet, by project and by run. */
 export function InsightsPage() {
-  const [h] = useHashState();
+  const [h] = useView();
   const want = viewOf(h);
   const url = insightsUrl(want), { data: d, error, loading, retry } = useApi(queries.insights(want), { keepPrevious: true });
   const [shown, setShown] = useState(want);

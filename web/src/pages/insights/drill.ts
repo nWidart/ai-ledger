@@ -4,7 +4,7 @@
 import { label, outcomeLabel } from "../../components/facets";
 import { jumpTo } from "../../components/SectionIndex";
 import type { InsightSession, InsightsPayload } from "../../api";
-import { parseHash, setHash } from "../../hash";
+import { currentRaw, setSearch } from "../../url";
 
 export type DrillKind = "outcome" | "help" | "goal" | "goalf" | "fr" | "frf";
 /** The names of the labels in a family of the view; none for a family the view does not have. */
@@ -30,8 +30,8 @@ export const drillsOf = (raw: Readonly<Record<string, string>>): Drill[] =>
 export const passes = (s: InsightSession, drills: Drill[], d: InsightsPayload) => drills.every(x => KINDS[x.kind].match(s, x.value, d));
 /** Sets a filter to name, or clears it when it already is name; one history entry. Read from the live hash, not a render. */
 export function toggleDrill(kind: DrillKind, name: string): boolean {
-  const on = parseHash(location.hash).raw[kind] === name;
-  setHash({ [kind]: on ? null : name }, { push: true });
+  const on = currentRaw()[kind] === name;
+  setSearch({ [kind]: on ? null : name }, { push: true });
   return !on;
 }
 
