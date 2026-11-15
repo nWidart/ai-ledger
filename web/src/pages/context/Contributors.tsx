@@ -4,7 +4,7 @@ import { DataTable } from "../../components/DataTable";
 import { openToolSheet, pickRow } from "../../components/sheets/session";
 import { num } from "../../format";
 import { Est } from "./cells";
-import { RESULT_LARGE_BYTES, bytes, share } from "./context";
+import { BYTES_PER_TOKEN, RESULT_LARGE_BYTES, bytes, share } from "./context";
 import "./Contributors.css";
 
 type Fills = ContextPayload["fills"];
@@ -50,7 +50,7 @@ function Split({ main, sub }: { main: number; sub: number }) {
         <span className="ctr-sub" data-testid="ctr-sub" style={{ width: `${sub / all * 100}%` }} />
       </div>
       <ul className="ctr-split-legend">
-        <li><i className="ctr-key ctr-main" aria-hidden="true" /> Main thread: <b>{bytes(main)}</b> ({share(main / all)}), <Est tokens={Math.floor(main / 4)} /></li>
+        <li><i className="ctr-key ctr-main" aria-hidden="true" /> Main thread: <b>{bytes(main)}</b> ({share(main / all)}), <Est tokens={Math.floor(main / BYTES_PER_TOKEN)} /></li>
         <li><i className="ctr-key ctr-sub" aria-hidden="true" /> Subagents: <b>{bytes(sub)}</b> ({share(sub / all)})</li>
       </ul>
     </div>
@@ -95,7 +95,7 @@ export function Contributors({ fills }: { fills: Fills }) {
               </td>
               <td className="ctr-range">
                 <span className="ctr-track" aria-hidden="true">
-                  {range && <span className="ctr-rbar" data-testid="ctr-range-bar" style={{ left: at(range.p50), width: `${Math.max(.6, (logPos(range.p95, lo, hi) - logPos(range.p50, lo, hi)) * 100)}%` }} />}
+                  {range && <span className="ctr-rbar" data-testid="ctr-range-bar" style={{ left: `${Math.min(99.4, logPos(range.p50, lo, hi) * 100)}%`, width: `${Math.max(.6, (logPos(range.p95, lo, hi) - logPos(range.p50, lo, hi)) * 100)}%` }} />}
                   {range && <span className="ctr-med" style={{ left: at(range.p50) }} />}
                   <span className="ctr-mark" data-testid="ctr-mark" style={{ left: at(RESULT_LARGE_BYTES) }} />
                 </span>

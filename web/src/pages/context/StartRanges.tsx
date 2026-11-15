@@ -31,7 +31,7 @@ export function StartRanges({ starting: s }: { starting: Starting }) {
   const color = useColors();
   if (!s.by_project.length) return <p className="empty">No session in this view has a measured start.</p>;
   // One scale for every row: 0 to the largest 90th percentile (or the threshold, if larger) with a little headroom.
-  const max = Math.max(...s.by_project.map(p => p.p90), START_LARGE_TOKENS) * 1.08;
+  const max = Math.max(s.p90 ?? 0, ...s.by_project.map(p => p.p90), START_LARGE_TOKENS) * 1.08;
   const all = s.by_project.length > 1;
   return (
     <DataTable name="Starting context by project" className="start-ranges">

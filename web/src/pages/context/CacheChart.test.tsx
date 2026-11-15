@@ -58,6 +58,23 @@ describe("cache chart", () => {
     expect(x("2026-11-03") - x("2026-11-01")).toBeCloseTo(2 * 704 / 3);
   });
 
+  it("breaks the ratio line at a day with no request", () => {
+    render(<CacheChart series={daily(b("2026-11-01", { cache_read: 9, input: 1 }), b("2026-11-02", { cache_read: 9, input: 1 }), b("2026-11-04", { cache_read: 9, input: 1 }))} />);
+    expect(document.querySelector("path.ratio")!.getAttribute("d")!.match(/M/g)).toHaveLength(2);
+  });
+
+  it("reads the bucket under the pointer", () => {
+    const days = Array.from({ length: 10 }, (_, i) => b(`2026-11-${String(i + 1).padStart(2, "0")}`, { input: 10 }));
+    const { container } = render(<CacheChart series={daily(...days)} />);
+    // The hit rect is the plot: 704px wide here, ten slots of 70.4px. The centre of the second slot is 105.6px in.
+    const rect = container.querySelector('svg rect[fill="transparent"]')!;
+    rect.getBoundingClientRect = () => ({ left: 52, right: 756, width: 704, top: 0, bottom: 300, height: 300, x: 52, y: 0, toJSON: () => ({}) });
+    fireEvent.pointerMove(rect, { clientX: 52 + 105.6, clientY: 50 });
+    expect(readout()).toContain("Nov 2");
+    fireEvent.pointerMove(rect, { clientX: 52 + 704 - 5, clientY: 50 });
+    expect(readout()).toContain("Nov 10");
+  });
+
   it("labels weekly buckets as weeks", () => {
     render(<CacheChart series={{ bucket: "week", rows: [b("2026-11-02", { input: 10 })] }} />);
     act(() => chart().focus());

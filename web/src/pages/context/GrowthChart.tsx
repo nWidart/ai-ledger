@@ -65,8 +65,8 @@ export function GrowthChart({ curve, projects, share }: { curve: GrowthPoint[]; 
     : (cv.length > 1
       ? `Median context at each turn: ${fmt(first.median)} tokens at turn ${first.turn}, ${fmt(last.median)} at turn ${last.turn}, the last turn with 5 or more sessions (${plural(last.sessions, "session")}). `
       : `Median context at turn ${last.turn}, the only turn with 5 or more sessions: ${fmt(last.median)} tokens (${plural(last.sessions, "session")}). `))
-    + `The band shows the 25th to 75th percentile, ${fmt(last.p25)} to ${fmt(last.p75)} at turn ${last.turn}.`
-    + (only ? ` Showing only ${only.project ?? "(no project)"}, with its own band.` : drawn.length ? ` ${plural(drawn.length, "project")} drawn separately.` : "")
+    + (only ? `Showing only ${only.project ?? "(no project)"}, with its 25th to 75th percentile band, ${fmt(only.c.at(-1)!.p25)} to ${fmt(only.c.at(-1)!.p75)} at turn ${only.c.at(-1)!.turn}.`
+      : `The band shows the 25th to 75th percentile, ${fmt(last.p25)} to ${fmt(last.p75)} at turn ${last.turn}.` + (drawn.length ? ` ${plural(drawn.length, "project")} drawn separately.` : ""))
     + ` Sessions still running: ${num(first.sessions)} at turn ${first.turn}, ${num(last.sessions)} at turn ${last.turn}.`
     + " Use the left and right arrow keys to read each turn, Escape to dismiss it.";
   const near = (ev: PointerEvent) => {

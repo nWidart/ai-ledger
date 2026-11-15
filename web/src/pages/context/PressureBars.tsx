@@ -16,7 +16,7 @@ const LIST_MAX = 20;
 /** A segment at least this wide shows its count; at least `LABEL_AT` also its band label. */
 const COUNT_AT = .07, LABEL_AT = .2;
 const TONE = [
-  "color-mix(in srgb, var(--text-muted) 45%, var(--track))", "color-mix(in srgb, var(--text-muted) 70%, var(--track))", "var(--text-muted)", "var(--warning)", "var(--critical)",
+  "color-mix(in srgb, var(--text-muted) 45%, var(--track))", "color-mix(in srgb, var(--text-muted) 80%, var(--track))", "var(--text-muted)", "var(--warning)", "var(--critical)",
 ];
 
 /** The band (0-4) of a peak share. */
@@ -41,7 +41,7 @@ export function PressureBars({ fill, points }: { fill: Fill; points: SessionPoin
               if (!n) return null;
               const s = n / (t || 1);
               return <button key={i} type="button" className="band" aria-pressed={on === i} data-band={i} data-share={s}
-                style={{ flexGrow: s, background: TONE[i] }} title={`${FILL_LABELS[i]}: ${plural(n, "session")}`}
+                style={{ flexGrow: s, background: TONE[i] }} title={`${FILL_LABELS[i]}: ${plural(n, "session")} (${pct(s)})`}
                 aria-label={`${plural(n, "session")} (${pct(s)}) peaked at ${FILL_LABELS[i]} of the ${windowLabel(f.window)} window`}
                 onClick={() => setSel(on === i ? null : { window: f.window, band: i })}>
                 {s >= COUNT_AT && <span className="n" aria-hidden="true">{num(n)}</span>}
@@ -50,7 +50,7 @@ export function PressureBars({ fill, points }: { fill: Fill; points: SessionPoin
             })}
           </div>
           {on != null && <div className="plist" role="group" aria-label={`Sessions that peaked at ${FILL_LABELS[on]} of the ${windowLabel(f.window)} window`}>
-            {list.length < f.bins[on]! && <p className="muted small">Showing {num(list.length)} of {num(f.bins[on]!)}: the list covers the newest sessions on the map.</p>}
+            {list.length < f.bins[on]! && <p className="muted small">Showing {num(list.length)} of {num(f.bins[on]!)}: the list covers the sessions on the map below, which holds the newest sessions with a measured start.</p>}
             <ul>{list.slice(0, LIST_MAX).map(p => <li key={p.session_id}>
               <button type="button" className="cellbtn psess" data-session={p.session_id} onClick={() => openSessionSheet(p.session_id)}>
                 <span className="pname">{shortId(p.session_id)}</span>

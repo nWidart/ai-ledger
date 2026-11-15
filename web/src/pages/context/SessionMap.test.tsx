@@ -83,6 +83,15 @@ describe("SessionMap", () => {
     expect(readout()).toBe("");
   });
 
+  it("keeps the page's filters when a session opens", () => {
+    location.hash = "#project=foo&range=30";
+    render(<SessionMap map={{ total: 3, points }} />);
+    const chart = screen.getByRole("group");
+    fireEvent.keyDown(chart, { key: "End" });
+    fireEvent.keyDown(chart, { key: "Enter" });
+    expect([hash().get("project"), hash().get("range"), hash().get("session")]).toEqual(["foo", "30", "heavy000001"]);
+  });
+
   it("opens the session on Enter and on a click near its dot", () => {
     const { container } = render(<SessionMap map={{ total: 3, points }} />);
     const chart = screen.getByRole("group");

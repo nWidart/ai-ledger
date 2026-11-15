@@ -142,6 +142,10 @@ class ContextPayloadTest(unittest.TestCase):
             b.payload(range_days=-1)
         self.assertEqual(b.payload(range_days=7)["start"], "2026-10-30")
         self.assertEqual(b.payload(source="codex")["starting"]["sessions"], 1)
+        codex = b.payload(source="codex")  # the map and the cache series cover a Codex session as they do a Claude Code one
+        self.assertEqual([(p["session_id"], p["source"], p["window"]) for p in codex["sessions_map"]["points"]], [("x1", "codex", 258_400)])
+        self.assertTrue(codex["cost"]["series"]["rows"])
+        self.assertTrue(all(r["input"] + r["cache_read"] + r["cache_write"] > 0 for r in codex["cost"]["series"]["rows"]))
         self.assertEqual(b.payload(automated=True)["coverage"]["sessions"], b.payload()["coverage"]["sessions"] + 1)
         self.assertEqual(b.payload(range_days=7)["coverage"]["sessions"], b.payload()["coverage"]["sessions"] - 4)  # b3 and three baz sessions are before the range
 

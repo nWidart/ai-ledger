@@ -51,6 +51,14 @@ describe("StartTrend", () => {
     expect(label).toContain("26k");
   });
 
+  it("breaks the line and the band at a week with no session", () => {
+    const w = (week: string) => ({ week, median: 24_000, p25: 20_000, p75: 30_000, sessions: 9 });
+    const { container } = render(<StartTrend trend={[w("2026-10-19"), w("2026-10-26"), w("2026-11-09"), w("2026-11-16")]} />);
+    const ms = (sel: string) => container.querySelector(sel)!.getAttribute("d")!.match(/M/g)!.length;
+    expect(ms("path.trend-line")).toBe(2);
+    expect(ms("path.band")).toBe(2);
+  });
+
   it("reads the week under the pointer", () => {
     const { container } = render(<StartTrend trend={trend} />);
     const rect = container.querySelector("svg rect")!;

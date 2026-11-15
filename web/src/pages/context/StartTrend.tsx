@@ -29,8 +29,12 @@ export function StartTrend({ trend }: { trend: Trend }) {
   const yTicks: number[] = [];
   for (let v = 0; v <= yMax + 1e-9; v += step) yTicks.push(v);
   const f = (v: number) => v.toFixed(1);
-  const line = trend.map((w, i) => `${i ? "L" : "M"}${f(xs[i]!)},${f(y(w.median))}`).join("");
-  const band = `${trend.map((w, i) => `${i ? "L" : "M"}${f(xs[i]!)},${f(y(w.p75))}`).join("")}${trend.map((_, i) => `L${f(xs[trend.length - 1 - i]!)},${f(y(trend[trend.length - 1 - i]!.p25))}`).join("")}Z`;
+  // Runs of neighbouring weeks: the line and the band stop at a week with no session, so they never read as a figure for it.
+  const at7 = trend.map(w => Date.parse(w.week + "T00:00:00Z")), runs: number[][] = [];
+  trend.forEach((_, i) => { if (i && at7[i]! - at7[i - 1]! <= 7 * 864e5) runs.at(-1)!.push(i); else runs.push([i]); });
+  const line = runs.map(r => r.map((i, k) => `${k ? "L" : "M"}${f(xs[i]!)},${f(y(trend[i]!.median))}`).join("")).join("");
+  const band = runs.filter(r => r.length > 1).map(r => `${r.map((i, k) => `${k ? "L" : "M"}${f(xs[i]!)},${f(y(trend[i]!.p75))}`).join("")}${r.slice().reverse()
+    .map(i => `L${f(xs[i]!)},${f(y(trend[i]!.p25))}`).join("")}Z`).join("");
   // Label weeks left to right, skipping any whose label would sit within 64px of the last one drawn.
   const ticks: number[] = [];
   xs.forEach((x, i) => { if (!ticks.length || x - xs[ticks[ticks.length - 1]!]! >= 64) ticks.push(i); });

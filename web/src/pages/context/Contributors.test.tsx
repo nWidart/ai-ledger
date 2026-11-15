@@ -16,6 +16,14 @@ const body = () => within(screen.getByRole("table")).getAllByRole("row").slice(1
 beforeEach(() => history.replaceState(null, "", "/context"));
 
 describe("Contributors", () => {
+  it("shows equal totals with ranges far apart for many small and a few huge results", () => {
+    render(<Contributors fills={fills([row("Read", 2_000_000, { calls: 400, p50_bytes: 4_000, p95_bytes: 12_000 }), row("Bash", 2_000_000, { calls: 8, p50_bytes: 200_000, p95_bytes: 900_000 })])} />);
+    const [read, bash] = body(), bar = (r: HTMLElement) => r.querySelector<HTMLElement>(".ctr-bar i")!.style.width;
+    const left = (r: HTMLElement) => parseFloat(r.querySelector<HTMLElement>("[data-testid=ctr-range-bar]")!.style.left);
+    expect(bar(read!)).toBe(bar(bash!));
+    expect(left(bash!)).toBeGreaterThan(left(read!) + 30);
+  });
+
   it("shows ten rows and an Other row summing the remaining four of 14 tools", () => {
     const tools = many(14);
     render(<Contributors fills={fills(tools)} />);

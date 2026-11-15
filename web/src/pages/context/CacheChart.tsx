@@ -75,8 +75,9 @@ export function CacheChart({ series }: { series: Series }) {
   };
   const show = (i: number, x: number, y: number) => { pos.current = { x, y }; setAt(i); };
   const nearest = (ev: PointerEvent) => {
-    const r = ev.currentTarget.getBoundingClientRect(), px = (ev.clientX - r.left) * W / (r.width || W);
-    const i = Math.max(0, Math.min(n - 1, Math.floor((px - M.l) / a.bw)));
+    // The hit rect is the plot itself, so the pointer's offset in it scales to the plot's width, not the svg's.
+    const r = ev.currentTarget.getBoundingClientRect(), px = (ev.clientX - r.left) * a.iw / (r.width || a.iw);
+    const i = Math.max(0, Math.min(n - 1, Math.floor(px / a.bw)));
     return slots[i]!.row ? i : null;
   };
   const onKey = (ev: KeyboardEvent) => {

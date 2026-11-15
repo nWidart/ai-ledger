@@ -12,6 +12,8 @@ export const START_LARGE_TOKENS = 30_000;
 export const TREND_MIN_SESSIONS = 3;
 /** A peak at or over this share of the window is near the limit (the server's metrics.NEAR_LIMIT). */
 export const NEAR_LIMIT = .8;
+/** Estimated tokens of a tool result are its bytes over this (the server's BYTES_PER_TOKEN). */
+export const BYTES_PER_TOKEN = 4;
 /** A main-thread tool result at or over this many bytes fires the large-results tip (the server's RESULT_LARGE_BYTES). */
 export const RESULT_LARGE_BYTES = 100_000;
 

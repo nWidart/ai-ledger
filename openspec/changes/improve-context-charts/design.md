@@ -52,7 +52,7 @@ cost.series: {
 }
 ```
 
-- `day` is the bucket's first day. `input`, `cache_read` and `cache_write` (`cache_5m + cache_1h`) are summed over `rq`, the same requests the section's cache-hit ratio covers, so a bucket's ratio is `cache_read / (input + cache_read + cache_write)` and the buckets add up to the section's figure.
+- `day` is the bucket's first day. `input`, `cache_read` and `cache_write` (`cache_5m + cache_1h`) are summed over `rq`, the same requests the section's cache-hit ratio covers, so a bucket's ratio is `cache_read / (input + cache_read + cache_write)` and the buckets add up to the section's figure. A request with no timestamp is in the section's figure and in no bucket; both parsers allow one, and it is rare.
 - `model_switch`, `expired` and `other` count the cache breaks in the bucket by cause, from the `brk` CTE `session_breaks` already builds (it gains the break's `ts`). The CTE text moves to a helper both queries share, so the rule has one definition.
 - `bucket` is `"week"` when the view's first request is more than `metrics.WEEKLY_AFTER_DAYS` before today, as Activity's work chart decides; buckets with no request are left out and the chart spaces the rest by date.
 

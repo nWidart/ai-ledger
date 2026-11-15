@@ -69,10 +69,19 @@ describe("PressureBars", () => {
     expect(hash().get("session")).toBe("ddd000000000");
   });
 
+  it("keeps the page's filters when a listed session opens", async () => {
+    location.hash = "#project=foo&range=30";
+    render(<PressureBars fill={fill} points={points} />);
+    await userEvent.click(seg(/peaked at 80–90%/));
+    await userEvent.click(within(screen.getByRole("group", { name: /Sessions that peaked at 80–90%/ })).getByRole("button"));
+    expect([hash().get("project"), hash().get("range"), hash().get("session")]).toEqual(["foo", "30", "ddd000000000"]);
+    location.hash = "";
+  });
+
   it("says when the map holds fewer sessions than the segment counts", async () => {
     render(<PressureBars fill={fill} points={points} />);
     await userEvent.click(seg(/peaked at <25% of the 200k/));
-    expect(screen.getByText(/Showing 1 of 5: the list covers the newest sessions on the map\./)).toBeTruthy();
+    expect(screen.getByText(/Showing 1 of 5: the list covers the sessions on the map below/)).toBeTruthy();
   });
 
   it("caps the list at 20 and counts the rest", async () => {
