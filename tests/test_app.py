@@ -82,6 +82,15 @@ class AppTest(unittest.TestCase):
         self.assertEqual(self.request("POST", "/api/nothing")[1]["X-Content-Type-Options"], "nosniff")
         self.assertEqual(self.get("/api/status", host=f"localhost:{app.PORT}")[1]["X-Content-Type-Options"], "nosniff")
 
+    def test_a_dropped_request_logs_nothing(self):
+        # A page that cancels a fetch closes the socket before the answer: the write fails, and the server stays quiet.
+        err = io.StringIO()
+        with mock.patch.object(self.httpd.RequestHandlerClass, "json", side_effect=BrokenPipeError), contextlib.redirect_stderr(err):
+            with self.assertRaises(http.client.RemoteDisconnected):
+                self.get("/api/status")
+        self.assertEqual(err.getvalue(), "")
+        self.assertEqual(self.get("/api/status")[0], 200)
+
     def test_only_html_carries_a_policy(self):
         self.assertIn("script-src", self.get("/usage")[1]["Content-Security-Policy"])
         self.assertNotIn("Content-Security-Policy", self.get("/api/status")[1])

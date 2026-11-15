@@ -249,6 +249,14 @@ def asset(path):
 
 def handler(app, port=PORT):
     class Handler(BaseHTTPRequestHandler):
+        def handle(self):
+            """Serve the connection. A browser that drops a request (a page cancels a fetch it no longer needs) leaves nothing to
+            answer: swallow the write that fails, instead of the server printing its traceback."""
+            try:
+                super().handle()
+            except ConnectionError:
+                pass
+
         def send(self, code, body, ctype="application/json; charset=utf-8", headers=(), cache="no-store"):
             data = body if isinstance(body, bytes) else body.encode()
             self.send_response(code)
@@ -295,9 +303,7 @@ def handler(app, port=PORT):
                         msg = ": keep-alive\n\n"
                     self.wfile.write(msg.encode())
                     self.wfile.flush()
-            except (BrokenPipeError, ConnectionResetError):
-                pass
-            finally:
+            finally:  # the page went: handle swallows the failed write
                 app.watch(-1)
 
         def json_body(self, limit=MAX_BODY):
