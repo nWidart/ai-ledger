@@ -49,6 +49,7 @@ Run `ai-ledger rebuild` once after upgrading (with the app stopped): the Context
 
 - The app no longer prints a `BrokenPipeError` traceback when a page cancels a request it no longer needs, such as on a tab switch.
 - The Context page no longer calls a Codex cache break an expiry after a pause of 5 to 30 minutes: Codex's cache lives 30 minutes. Claude Code keeps 5 minutes (1 hour after a 1-hour cache write), and the cache-breaks tip names both.
+- The "?" buttons that explain a column, filter or figure show their text again outside the session and project sheets, and now also open on hover.
 
 ### Security
 
