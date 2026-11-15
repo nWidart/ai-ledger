@@ -27,6 +27,7 @@ Run `ai-ledger rebuild` once after upgrading (with the app stopped): the Context
 
 ### Changed
 
+- A shorter README with a one-line summary per page. Page details and configuration moved to a [user guide](docs/guide.md), and developer setup to [CONTRIBUTING.md](CONTRIBUTING.md).
 - The Context page's starting context shows each project's 10th to 90th percentile range on one scale, with the 90th percentile as a column, and the weekly trend is a line with its 25th to 75th percentile band, a token axis and weeks placed by date.
 - The Context page's growth chart shows how many sessions each turn rests on, can show context as a share of the window, and isolates a project from its legend. Growth per project shows even when no session compacted.
 - The Context page's peak-fill groups are cut at 80% instead of 75%, so the near-limit threshold is a group edge.
