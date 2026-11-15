@@ -2,3 +2,81 @@
 title: 15-minute first tour
 description: Read each page once with your own data, one stop per page.
 ---
+
+In this tour we open each page of AI Ledger once, with our own data, and read the one figure that page leads with. There are eight stops of under two minutes each.
+
+Before we start, AI Ledger must be running and its first ingest done: the navigation bar says **Last ingest**. If it is not running, follow [Install and first run](/ai-ledger/start/install/) first.
+
+Every page we visit is a tab in the navigation bar at the top, except the last one. The filters beside each page's heading start on the last 30 days, all projects and both agents; we leave them so.
+
+## Activity: what got done
+
+Select the **Activity** tab. Its heading counts commits, prompts, sessions and active days, for example "214 commits from 1,032 prompts in 96 sessions across 12 projects, 18 active days".
+
+Look at the **Needs attention** card below it. It lists error loops, sessions that reached 80% or more of their context window, tools that fail often and failed test runs. When there is nothing to list, it says "Nothing needs attention".
+
+More: [Activity](/ai-ledger/pages/activity/).
+
+## Cost: what it cost
+
+Select the **Cost** tab. Its heading gives the period's estimated cost, for example "$1,284.50 estimated cost", and its change against the 30 days before.
+
+Read the line under the heading. It says the cost is estimated at API list prices, and gives the month's run rate: "On pace for about $1,400 this month." When AI Ledger knows our plan, the same line compares the two: "You pay about $200 a month (Claude Max 20x); at list prices this period is 4.2× your plan."
+
+More: [Cost](/ai-ledger/pages/cost/), and [How cost is estimated](/ai-ledger/concepts/cost-estimates/).
+
+## Context: how full the context gets
+
+Select the **Context** tab. Its heading says how much context a typical session starts with, for example "A typical session starts with 24,310 tokens of context, 12% of its window. 31 of 96 sessions compacted."
+
+Scroll to **Tips**. Each tip shows only when a fixed rule fires, with the evidence and the sessions that match.
+
+More: [Context](/ai-ledger/pages/context/).
+
+## Errors: where the agents failed
+
+Select the **Errors** tab. Its heading counts the failed tool calls and their share of all tool calls, and names the error type with the most of them.
+
+Look at **Where to start**. It ranks the open fixes by the time each error type lost.
+
+More: [Errors](/ai-ledger/pages/errors/).
+
+## Limits: how much of the plan is used
+
+Select the **Limits** tab. Its heading names the fullest plan limit window, for example "No limit runs out at the current pace. Fullest: Claude Code weekly, at 57% now, about 80% when it resets Sun, Nov 22, 9:00 AM."
+
+If the heading says "No plan limits seen yet.", AI Ledger has no limit data yet. On a Mac it asks Anthropic for Claude Code's limits every 5 minutes; Codex records its limits in its own transcripts.
+
+More: [Limits](/ai-ledger/pages/limits/), and [Context windows and plan limit windows](/ai-ledger/concepts/windows/).
+
+## Insights: how /insights judged the sessions
+
+Select the **Insights** tab. This page shows what Claude Code's `/insights` command wrote about our sessions: outcomes, friction and goals.
+
+If we have never run `/insights`, the page says "No /insights data found." and tells us to run `/insights` in Claude Code, then Refresh. We can leave that for later.
+
+More: [Insights](/ai-ledger/pages/insights/).
+
+## Live: what runs now
+
+Select the **Live** tab. It lists the sessions that wrote in the last 10 minutes, grouped by who needs us first: **approval?**, **your turn**, **working**, **idle** and **ended**.
+
+If it says "No session is active in this view.", open another terminal, start Claude Code or Codex in any project and send a prompt. The session appears on Live within a second, under **working**, and moves to **your turn** when the agent finishes.
+
+More: [Live](/ai-ledger/pages/live/).
+
+## Project: one project on one page
+
+The last page is no tab. Select a project in the **Project** picker of the filters. The navigation bar now shows that project, with a **Page** link next to its name.
+
+Select **Page**. The Project page gathers that project's summary, cost, top sessions, errors, context and share of the plan limits, each linking to its page.
+
+To go back to every project, select **Clear** next to the project's name in the navigation bar.
+
+More: [Project](/ai-ledger/pages/project/).
+
+## What we have seen
+
+We have read each page's lead figure once. To come back to them each week with a purpose, follow the [Weekly 15-minute review](/ai-ledger/improve/weekly-review/).
+
+To move around faster, press **⌘K** on a Mac or **Ctrl+K** on Linux and type a page name: see the [command palette](/ai-ledger/everywhere/command-palette/).
