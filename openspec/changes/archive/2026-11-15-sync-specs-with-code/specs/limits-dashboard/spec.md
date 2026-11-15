@@ -20,7 +20,7 @@ Limits SHALL open with the window that will stop the user first: one already at 
 - **THEN** the lead says Codex 5-hour is at its limit until 04:08, and its card says so in the critical style
 
 ### Requirement: Show value per 1%
-For each calibrated limit, Limits SHALL show the tokens and estimated cost one percentage point buys, broken down by model, and the points each model used inside that limit's windows on its plan. A model without a price SHALL be marked unpriced, and a limit from an earlier plan SHALL say so. Per project, it SHALL show commits per percentage point, listing projects that used at least one point. Without a project filter, it SHALL fold the rest into one "smaller projects" row for each provider; with a project filter, it SHALL list only that project. A figure without enough data SHALL show as not available.
+For each calibrated limit, Limits SHALL show the tokens and estimated cost one percentage point buys, broken down by model, and the points each model used inside that limit's windows on its plan. A model without a price SHALL be marked unpriced, and a limit from an earlier plan SHALL say so. Per project, it SHALL show commits per percentage point, folding projects under one point into a "smaller projects" row unless filtered by project. A figure without enough data SHALL show as not available.
 
 #### Scenario: Model breakdown
 - **WHEN** Claude weekly is calibrated at $8 per 1% and two models used it
@@ -39,7 +39,7 @@ For each calibrated limit, Limits SHALL show the tokens and estimated cost one p
 - **THEN** the table lists that project alone, with no "smaller projects" row
 
 ### Requirement: Show a status strip of open windows
-Limits SHALL show a status strip under its heading: a list labelled "Open windows at a glance" with one chip per open window, in payload order. Each chip SHALL show the window name, the percent used now ("–" with no reading) and "resets in". A chip at its limit or forecast to hit 100% before reset SHALL have the warning tone and say "at limit" or "runs out". The navigation's dot on the Limits tab is a separate signal: it uses the critical tone for a window at its limit or forecast to run out, and the warning tone only for a high one. An estimated chip SHALL carry an "est." marker. With no open window the strip SHALL NOT render.
+Limits SHALL show a status strip under its heading: a list labelled "Open windows at a glance" with one chip per open window, in payload order. Each chip SHALL show the window name, the percent used now ("–" with no reading) and "resets in". A chip at its limit or forecast to hit 100% before reset SHALL have the warning tone and say "at limit" or "runs out". An estimated chip SHALL carry an "est." marker. With no open window the strip SHALL NOT render.
 
 #### Scenario: One chip per window
 - **WHEN** three windows are open

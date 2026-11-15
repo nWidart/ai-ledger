@@ -34,7 +34,7 @@ None.
 - `limits-dashboard`: the lead, value per 1% and status strip requirements.
 - `insights-dashboard`: the page order requirement.
 - `context-dashboard`: peak-fill drill, cache breaks and the near-limit and cache-break tips.
-- `errors-dashboard`: the time lost ranking that feeds Where to start.
+- `errors-dashboard`: a new requirement for the Where to start lists, since the time lost requirement has no room for it.
 - `dashboard-app`: the automated sessions requirement.
 - `command-palette`: the sheet-hosting requirement.
 - `context-menu`: the copy status requirement.

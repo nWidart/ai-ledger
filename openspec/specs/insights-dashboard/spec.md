@@ -149,7 +149,7 @@ The Insights page SHALL say that it counts a session by its start time, and that
 - **THEN** the subtitle says a session counts by its start time and that Activity counts a session with a request in the range
 
 ### Requirement: Order the page
-When the view has analysed sessions, the Insights page SHALL show, in this order: the coverage note, the lede and its sub line, the section index, the vitals, one row holding Outcomes and Friction categories, the Trend panel when it is shown, Satisfaction and helpfulness, the analysed sessions, then the drawers: Goals, Session types, Session figures, Coverage and How this works. Each drawer SHALL be closed by default. Session figures SHALL be shown when the view has sessions, and How this works when the store has facets.
+When the view has analysed sessions, the Insights page SHALL show, in this order: the coverage note, the lede and its sub line, the vitals, one row holding Outcomes and Friction categories, the Trend panel when it is shown, Satisfaction and helpfulness, the analysed sessions, then the drawers: Goals, Session types, Session figures, Coverage and How this works. Each drawer SHALL be closed by default.
 
 #### Scenario: Order with figures
 - **WHEN** the view holds analysed sessions across 2 or more weeks

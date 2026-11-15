@@ -247,7 +247,7 @@ The page SHALL offer a Wall view with one tile per active session, grouped by st
 - **THEN** each group's heading is an `h2` followed by a list of its tiles, and the list says how many tiles it holds
 
 ### Requirement: Show each session on its wall tile
-A wall tile SHALL show the project, state, title, latest action, context fill, tool count, errors, cost, branch, source and model. A tile in *your turn*, *thinking* or *idle* SHALL show how long the session has been in that state, and a tile running a tool SHALL show the tool's name and how long it has run. A tile in *your turn* SHALL have a border. The title SHALL take one line under the project, cut with an ellipsis when it does not fit, with the full title on hover. A tile with no title SHALL leave that line out.
+A wall tile SHALL show the project, state, title, latest action, context fill, tool count, errors, cost, branch, source and model. A tile in *your turn*, *thinking* or *idle* SHALL show how long the session has been in that state, and one running a tool its name and run time. A tile in *your turn* SHALL have a border. The title SHALL take one line under the project, cut with an ellipsis when it does not fit, with the full title on hover. A tile with no title SHALL leave that line out.
 
 #### Scenario: Long title on a tile
 - **WHEN** a session's title is wider than its tile

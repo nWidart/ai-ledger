@@ -16,7 +16,7 @@ Selecting a segment of a window's bar SHALL list the sessions in it, newest firs
 - **THEN** the page lists those 3 and says it shows 3 of 5, because the list covers the sessions on the map
 
 ### Requirement: Find the sessions where caching broke
-A cache break SHALL be a main-thread request, not the session's first turn, with at least 20,000 prompt tokens of which less than half were cache reads. Its cause SHALL be `model_switch` when its model differs from the previous main-thread request's, else `expired` when more than the cache lifetime passed since that request, else `other`. The page SHALL list the sessions with a break, most uncached tokens first, at most 25, each with its breaks by cause and the uncached tokens those breaks cost, and SHALL say how many it shows of how many when there are more.
+A cache break SHALL be a main-thread request, not the session's first turn, with at least 20,000 prompt tokens of which less than half were cache reads. Its cause SHALL be `model_switch` when its model differs from the previous main-thread request's, else `expired` when more than the cache lifetime passed since that request, else `other`. The page SHALL list the sessions with a break, most uncached tokens first, at most 25, each with its breaks by cause and the uncached tokens those breaks cost.
 
 #### Scenario: Model switch
 - **WHEN** a session's turn on model A reads 80,000 tokens from cache, and the next turn, 20 seconds later on model B, has 85,000 prompt tokens with 0 cache reads
@@ -43,7 +43,7 @@ A cache break SHALL be a main-thread request, not the session's first turn, with
 - **THEN** the drawer lists the 25 with the most uncached tokens and says it shows 25 of 40
 
 ### Requirement: Tip about sessions near the limit
-The near-limit rule SHALL fire, as critical, when a session in the view peaked at 80% or more of its window. The window SHALL be the one the session states (Codex), else the price table's window for the session's model. Activity counts a session as near the limit by the price table's window for the session's peak model only, so the two pages can differ for a session whose stated window is not the price table's. Its evidence SHALL give the count of such sessions and the highest share, and its advice SHALL say to start the next task in a new session.
+The near-limit rule SHALL fire, as critical, when a session in the view peaked at 80% or more of its window. The window is the session's stated one (Codex), else the price table's for its model; Activity uses only the price table's window for the peak model. Its evidence SHALL give the count of such sessions and the highest share, and its advice SHALL say to start the next task in a new session.
 
 #### Scenario: Session at 85%
 - **WHEN** a session peaked at 85% of a 200,000 window
@@ -54,7 +54,7 @@ The near-limit rule SHALL fire, as critical, when a session in the view peaked a
 - **THEN** the tip counts it against the stated window, not the price table's
 
 ### Requirement: Tip about cache breaks
-The cache-breaks rule SHALL fire when a session in the view has 2 or more cache breaks. Its evidence SHALL give the sessions, the breaks by cause and the uncached tokens, and the view's cache-hit ratio. Its advice SHALL say to keep one model through a session when most breaks are model switches, to keep turns within the cache lifetime or accept the cost when most are expiries, naming the lifetime of each source (5 minutes in Claude Code, 30 minutes in Codex), and, when most are `other`, that something before the cached part of the prompt changed: the system prompt, the tool set or an edited earlier message.
+The cache-breaks rule SHALL fire when a session in the view has 2 or more cache breaks. Its evidence SHALL give the sessions, the breaks by cause and the uncached tokens, and the view's cache-hit ratio. Its advice SHALL say to keep one model through a session when most breaks are model switches, to keep turns within the cache lifetime or accept the cost when most are expiries (5 minutes in Claude Code, 30 in Codex), and that the prompt changed before its cached part when most are `other`.
 
 #### Scenario: Model switches
 - **WHEN** a session has 3 cache breaks, 2 of them model switches
