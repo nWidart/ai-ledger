@@ -1,7 +1,7 @@
 // The app's router: one root route (the shell: navigation, the page, the palette) and one lazy route per page. The view
 // lives in the query string, read and written by url.ts's plain serializer and typed by each route's validator. Routes are built per router, so each test
 // has its own.
-import type { QueryClient } from "@tanstack/react-query";
+import type { FetchQueryOptions, QueryClient, QueryKey } from "@tanstack/react-query";
 import { createRootRouteWithContext, createRoute, createRouter, redirect, type ParsedLocation, type RouterHistory } from "@tanstack/react-router";
 import { App, ROUTES, type PagePath } from "./App";
 import { motion } from "./components/chart";
@@ -11,7 +11,9 @@ import { validateSearch as contextSearch } from "./pages/context/search";
 import { validateSearch as errorsSearch } from "./pages/errors/search";
 import { validateSearch as insightsSearch } from "./pages/insights/search";
 import { validateSearch as liveSearch } from "./pages/live/search";
-import { bindRouter, formatSearch, parseSearch, validateRoot } from "./url";
+import { viewOf, type View } from "./api";
+import { queries } from "./queries";
+import { bindRouter, formatSearch, parseSearch, parseView, validateRoot } from "./url";
 
 export interface RouterContext { queryClient: QueryClient }
 
@@ -29,22 +31,40 @@ const toActivity = ({ location }: { location: ParsedLocation }) => {
 // While a page's code loads: the placeholder in the content area, marked busy.
 const Pending = () => <main id="content" className="wrap" aria-busy="true"><PageSkeleton title="Loading…" /></main>;
 
-export function makeRouter(o: { queryClient: QueryClient; history?: RouterHistory }) {
+// A page's loader starts its main query and does not wait for it: the page's own useApi call lands on the same key, so Query
+// hands it the one request, and the router caches nothing (defaultPreloadStaleTime 0; Query owns the cache). The deps are the
+// view fields of the key, taken through the validators (a match's search holds typed values and the rest as written), so a
+// sheet opening or a page-only key does not change them and does not run the loader again.
+const viewDeps = (search: Record<string, unknown>) => { const { project, range, auto, source } = parseView(search); return { project, range, auto, source }; };
+const viewLoader = <K extends QueryKey>(query: (v: View) => FetchQueryOptions<any, Error, any, K>, limits = false) => ({
+  // Limits ignores `automated` (its key has no such field), so a toggle of it must not run the loader.
+  loaderDeps: ({ search }: { search: Record<string, unknown> }) => { const d = viewDeps(search); return limits ? { ...d, auto: false } : d; },
+  loader: ({ context, deps }: { context: RouterContext; deps: ReturnType<typeof viewDeps> }) => { void context.queryClient.prefetchQuery(query(viewOf(deps))); },
+});
+// Errors has one key for every filter.
+const errorsLoader = { loader: ({ context }: { context: RouterContext }) => { void context.queryClient.prefetchQuery(queries.errors); } };
+
+export function makeRouter(o: { queryClient: QueryClient; history?: RouterHistory; loaders?: boolean }) {
   // Each route types its own keys: the root the ones every page shares, a page the ones only it reads (Cost and Limits
   // have none). The validators drop what is not valid and never throw, so a mistyped link opens the page, not an error.
   // The pages read the URL through the same validators (useSearchOf), from the location.
   const root = createRootRouteWithContext<RouterContext>()({ component: App, beforeLoad: fromOldHash, validateSearch: validateRoot });
-  const page = <const P extends PagePath, S = {}>(path: P, validateSearch?: (raw: Record<string, unknown>) => S) =>
-    createRoute({ getParentRoute: () => root, path, component: ROUTES[path].Page, validateSearch });
+  const page = <const P extends PagePath, S = {}>(path: P, validateSearch?: (raw: Record<string, unknown>) => S, load?: object) =>
+    createRoute({ getParentRoute: () => root, path, component: ROUTES[path].Page, validateSearch, ...(o.loaders === false ? {} : load) });
+  // Live has no loader: pointing at its tab loads its code only; its data is a stream the page opens when it is shown.
   const routeTree = root.addChildren([
-    page("/usage", activitySearch), page("/cost"), page("/context", contextSearch), page("/errors", errorsSearch), page("/limits"),
-    page("/insights", insightsSearch), page("/live", liveSearch),
+    page("/usage", activitySearch, viewLoader(v => queries.usage(v))), page("/cost", undefined, viewLoader(v => queries.usage(v))),
+    page("/context", contextSearch, viewLoader(queries.context)), page("/errors", errorsSearch, errorsLoader),
+    page("/limits", undefined, viewLoader(queries.limits, true)), page("/insights", insightsSearch, viewLoader(queries.insights)),
+    page("/live", liveSearch),
     createRoute({ getParentRoute: () => root, path: "/", beforeLoad: toActivity }),
     createRoute({ getParentRoute: () => root, path: "$", beforeLoad: toActivity }),
   ]);
   const router = createRouter({
     routeTree, history: o.history, context: { queryClient: o.queryClient },
     parseSearch, stringifySearch: formatSearch, defaultPendingComponent: Pending,
+    // A tab pointed at or focused starts its page's loading (Link's intent preload). The router keeps no result of it.
+    defaultPreload: "intent", defaultPreloadStaleTime: 0,
     // Back and Forward return a page to where it was: the router saves the window's position per history entry (its
     // __TSR_key, so Activity visited twice keeps two) and restores it after the entry renders. A navigation with resetScroll
     // (a page switch) goes to the top, and setSearch's resetScroll: false leaves it. The default key and instant behavior

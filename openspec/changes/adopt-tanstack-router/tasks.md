@@ -41,7 +41,7 @@ Tasks 2.1 to 2.5 touch separate folders and ran in parallel. Reads go through `u
 
 ## 4. Preload on intent (phase 4)
 
-- [ ] 4.1 The navigation's tabs become `<Link>` with the shared keys as `search` (design decision 8); `defaultPreload: "intent"`, `defaultPreloadStaleTime: 0`, and a loader with `loaderDeps` on each page route except Live that starts the page's main query without awaiting it (design decision 11), using `queries.ts`. — **Sonnet**. Depends on: group 1, `adopt-tanstack` phase 2. Done when: tests cover the three scenarios of "Start loading a page from its tab": pointing at Cost then selecting it sends one request for Cost's data; pointing without selecting leaves the page, the URL and the history as they were; pointing at Live sends no Live request; pointing at Errors twice, and then selecting it, sends one request for `/api/errors` (Errors preloads its data, design decision 11).
+- [x] 4.1 The navigation's tabs become `<Link>` with the shared keys as `search` (design decision 8); `defaultPreload: "intent"`, `defaultPreloadStaleTime: 0`, and a loader with `loaderDeps` on each page route except Live that starts the page's main query without awaiting it (design decision 11), using `queries.ts`. — **Sonnet**. Depends on: group 1, `adopt-tanstack` phase 2. Done when: tests cover the three scenarios of "Start loading a page from its tab": pointing at Cost then selecting it sends one request for Cost's data; pointing without selecting leaves the page, the URL and the history as they were; pointing at Live sends no Live request; pointing at Errors twice, and then selecting it, sends one request for `/api/errors` (Errors preloads its data, design decision 11).
 
 ## 5. Close-out (phase 5)
 

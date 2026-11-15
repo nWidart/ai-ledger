@@ -1,4 +1,4 @@
-import { act, screen, waitFor } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import usage from "./__fixtures__/usage";
@@ -21,15 +21,22 @@ const open = (url: string) => {
 const loaded = (path: keyof typeof ROUTES) => waitFor(() => expect(document.title).toBe(title(path)));
 
 beforeEach(() => {
-  vi.stubGlobal("fetch", vi.fn((url: string) => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(url.startsWith("/api/status") ? status : url.startsWith("/api/usage") ? usage : {}) } as Response)));
+  // A page's data now arrives before the page renders (its route's loader starts it), so an endpoint with no fixture here
+  // answers 404 (the page shows its error state) rather than `{}`, a payload the page cannot draw.
+  vi.stubGlobal("fetch", vi.fn((url: string) => {
+    const body = url.startsWith("/api/status") ? status : url.startsWith("/api/usage") ? usage : undefined;
+    return Promise.resolve({ ok: body !== undefined, status: body !== undefined ? 200 : 404, json: () => Promise.resolve(body) } as Response);
+  }));
 });
 
 describe("router", () => {
   it.each(PATHS)("opens %s with its title and its tab marked current", async path => {
     open(path);
     await loaded(path);
-    expect(screen.getByRole("link", { name: TABS[path]! }).getAttribute("aria-current")).toBe("page");
-    for (const p of PATHS.filter(p => p !== path)) expect(screen.getByRole("link", { name: TABS[p]! }).getAttribute("aria-current")).toBeNull();
+    // Within the nav: a page that has its data at once has links to other pages of its own.
+    const tab = (p: string) => within(screen.getByRole("navigation", { name: "Dashboards" })).getByRole("link", { name: TABS[p]! });
+    expect(tab(path).getAttribute("aria-current")).toBe("page");
+    for (const p of PATHS.filter(p => p !== path)) expect(tab(p).getAttribute("aria-current")).toBeNull();
   });
 
   describe("a canonical URL", () => {

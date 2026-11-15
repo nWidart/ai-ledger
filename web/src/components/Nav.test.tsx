@@ -1,4 +1,4 @@
-import { act, screen, waitFor } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { hasHue, setOrder } from "../colors";
@@ -69,7 +69,8 @@ describe("Nav", () => {
     history.replaceState(null, "", "/cost?project=foo&range=30&source=codex");
     renderRouter();
     await screen.findByRole("link", { name: "Cost" });
-    await userEvent.click(screen.getByRole("link", { name: "Insights" }));
+    // Within the nav: Cost's data now arrives with its page, which has a link to Insights of its own.
+    await userEvent.click(within(screen.getByRole("navigation", { name: "Dashboards" })).getByRole("link", { name: "Insights" }));
     expect(location.pathname).toBe("/insights");
     expect(location.search).toBe("?project=foo&range=30&source=codex");
     expect(document.title).toBe("Insights · AI Ledger");
