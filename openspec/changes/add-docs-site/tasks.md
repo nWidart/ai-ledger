@@ -1,6 +1,6 @@
 # Tasks
 
-Group 1 has no dependency. 2, 3, 4 and 7 need 1. 5 needs 3 and 4 (playbooks link to Pages and Concepts). 6 needs 5 (it follows the method 5 sets). 8 needs 1. 9 needs all others. Each group touches its own files: 2 to 6 write only their own pages under `site/src/content/docs/`, 7 only `tools/demo/` and `site/src/assets/shots/`, 8 only repo docs.
+Group 1 has no dependency. 2, 3, 4, 7 and 8 need 1. 5 needs 3 and 4 (playbooks link to Pages and Concepts). 6 needs 5 (it follows the method 5 sets). 9 needs all others. Each group touches its own files: 2 to 6 write only their own pages under `site/src/content/docs/`, 7 writes only `tools/demo/` and `site/src/assets/shots/` and never edits pages, 8 only repo docs. Section 9 puts section 7's shots into the pages.
 
 ## 1. Scaffold
 
@@ -21,13 +21,12 @@ Group 1 has no dependency. 2, 3, 4 and 7 need 1. 5 needs 3 and 4 (playbooks link
 - [ ] 2.1 Everywhere pages from `docs/guide.md` "Everywhere" and the specs (`command-palette`, `context-menu`, `dashboard-app`): `command-palette` (syntax: `>page`, `#project`, ranges, examples), `context-menu` (per target, Shift+F10, menu key, long press), `filters` (project picker, range, source, Include automated, with the "Automated sessions" section of the guide), `keyboard-screen-reader`, `data-tables`. Each with `spec:` front matter.
 - [ ] 2.2 `reference/configuration` from the guide's Configuration, Prices, Plans and Automated projects sections, with the file locations and the reload rule.
 - [ ] 2.3 The other Reference pages, from `README.md`, `src/ai_ledger/` (`--help`) and the `distribution` and `transcript-store` specs: `reference/cli` (commands and options), `reference/storage` (store and configuration locations on macOS and Linux, `--db`), `reference/troubleshooting` (port in use, `localhost` against `127.0.0.1`, ingest and rebuild need the app stopped, the Context figures unavailable before `rebuild`).
-- [ ] 2.4 Move the guide's per-page sections (Activity to Project) into the eight `pages/` stubs as starting text, so nothing is lost when the guide becomes a stub.
-- [ ] 2.5 `docs/guide.md` becomes the stub of design D13: title, one line to the site, the old headings each with one link to its new page.
-- [ ] 2.6 `npm run check` passes.
+- [ ] 2.4 `docs/guide.md` becomes the stub of design D13: title, one line to the site, the old headings each with one link to its new page.
+- [ ] 2.5 `npm run check` passes.
 
 ## 3. Dashboard reference pages
 
-- [ ] 3.1 Write `pages/activity`, `cost`, `context`, `errors`, `limits`, `insights`, `live`, `project` from their specs (`usage-dashboard`, `cost-dashboard`, `context-dashboard`, `errors-dashboard`, `limits-dashboard` and `plan-limits`, `insights-dashboard` and `session-insights`, `live-dashboard` and `live-sessions`, `project-page`), starting from the text moved in 2.4. Each page: what it answers, its panels in page order, its filters, its sheets, what each figure means, and `spec:` front matter.
+- [ ] 3.1 Write `pages/activity`, `cost`, `context`, `errors`, `limits`, `insights`, `live`, `project` from their specs (`usage-dashboard`, `cost-dashboard`, `context-dashboard`, `errors-dashboard`, `limits-dashboard` and `plan-limits`, `insights-dashboard` and `session-insights`, `live-dashboard` and `live-sessions`, `project-page`), starting from that page's section in `docs/guide.md` as it stands at the change's base commit (`git show 37eeee8:docs/guide.md`). Each page: what it answers, its panels in page order, its filters, its sheets, what each figure means, and `spec:` front matter.
 - [ ] 3.2 Each page ends with "Playbooks that start here", linking the playbooks of section 5 and 6 that start from it (stub links are fine until they are written).
 - [ ] 3.3 Screenshot slots use `ThemedImage` with the file names section 7 will write; until then, no image, no broken path.
 - [ ] 3.4 `npm run check` passes.
@@ -69,8 +68,7 @@ The Get started tutorials sit here: like the concepts, they are written from the
 
 - [ ] 7.1 `tools/demo/record.mjs`: a `shots` mode (design D11) that starts `serve.py`, refuses when 8799 already answers, writes `site/src/assets/shots/<page>-<panel>.png` and `-light.png` cropped to each panel, and stops the server. Live shots use `replay.py`. The GIF scenes are unchanged. Update the header comment.
 - [ ] 7.2 Seed (`uv run tools/demo/seed.py`) and record every shot the pages, concepts and playbooks reference, plus the reduced-motion stills for each GIF used on the site.
-- [ ] 7.3 Fill the image slots left in 3.3, 4, 5 and 6; every image has an `alt`.
-- [ ] 7.4 Check that no shot shows anything but demo data (project names from `seed.py`); `npm run check` passes.
+- [ ] 7.3 Check that no shot shows anything but demo data (project names from `seed.py`); `npm run check` passes.
 
 ## 8. Repo docs
 
@@ -83,9 +81,10 @@ The Get started tutorials sit here: like the concepts, they are written from the
 
 ## 9. Verify
 
-- [ ] 9.1 `cd site && npm run check` passes from a clean clone (`npm ci` first); the built `dist/` has `llms.txt`, `llms-full.txt` and `pagefind/`.
-- [ ] 9.2 Link check: a broken link and a broken anchor fail the build; removing a Verify heading fails the playbook check.
-- [ ] 9.3 Accuracy spot-check: for each `pages/` page and three playbooks, compare every figure named with its `spec:` specs; fix the page where they differ.
-- [ ] 9.4 `npm run preview`: search offline, theme toggle with images, keyboard-only pass, reduced motion, a 390px viewport.
-- [ ] 9.5 `openspec validate --specs --strict` and `openspec validate add-docs-site --strict` pass.
-- [ ] 9.6 After the first deploy from `main`: `https://nwidart.github.io/ai-ledger/` and `/ai-ledger/llms.txt` load.
+- [ ] 9.1 Fill the image slots left by sections 3–6 with the shots from section 7; every image has an `alt`.
+- [ ] 9.2 `cd site && npm run check` passes from a clean clone (`npm ci` first); the built `dist/` has `llms.txt`, `llms-full.txt` and `pagefind/`.
+- [ ] 9.3 Link check: a broken link and a broken anchor fail the build; removing a Verify heading fails the playbook check.
+- [ ] 9.4 Accuracy spot-check: for each `pages/` page and three playbooks, compare every figure named with its `spec:` specs; fix the page where they differ.
+- [ ] 9.5 `npm run preview`: search offline, theme toggle with images, keyboard-only pass, reduced motion, a 390px viewport.
+- [ ] 9.6 `openspec validate --specs --strict` and `openspec validate add-docs-site --strict` pass.
+- [ ] 9.7 After the first deploy from `main`: `https://nwidart.github.io/ai-ledger/` and `/ai-ledger/llms.txt` load.

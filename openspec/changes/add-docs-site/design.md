@@ -40,7 +40,7 @@ New `.github/workflows/docs.yml`, separate from `ci.yml` so a docs-only change d
 - Triggers: `pull_request` and `push` to `main`, both with `paths: site/**, docs/*.gif, CHANGELOG.md, .github/workflows/docs.yml`; and `workflow_dispatch`.
 - `build` job: checkout, `actions/setup-node` with Node 26 and npm cache on `site/package-lock.json`, `npm ci`, `npm run check` in `site/`, then `actions/upload-pages-artifact` with `site/dist`.
 - `deploy` job: only on `push` to `main` or `workflow_dispatch` on `main`; `needs: build`; `environment: github-pages`; `actions/deploy-pages`. Permissions are set per job: `contents: read` for build, `pages: write` and `id-token: write` for deploy only.
-- `concurrency: { group: pages, cancel-in-progress: false }`, so a running deploy finishes.
+- The `deploy` job has `concurrency: { group: pages, cancel-in-progress: false }`, so a running deploy finishes. The workflow's own concurrency group is per ref, as in `ci.yml`, so one pull request's build never waits on or cancels another's.
 
 The repository's Pages source must be set to GitHub Actions once, by hand (task 1.9). The workflow uses the official `actions/configure-pages`, `actions/upload-pages-artifact` and `actions/deploy-pages`, pinned to major versions as `ci.yml` pins its actions.
 
@@ -97,7 +97,7 @@ Every image has an `alt` that says what it shows. Starlight's default theme colo
 `tools/demo/record.mjs` gains a `shots` mode (`node record.mjs shots [page...]`) that reuses its browser and scheme setup and writes the PNGs of D10 into `site/src/assets/shots/`, each cropped to one panel's locator. In this mode the script starts `serve.py` itself and stops it at the end, and exits with an error before taking any shot when port 8799 already answers. `serve.py` opens only `tools/demo/demo.duckdb` and ingests only `tools/demo/live/`, so a screenshot cannot come from a real store. The Live shots use `replay.py` as the Live GIF does. The existing GIF scenes keep their behavior. The steps (seed, then shots) are in `tools/demo/`'s header comment and `site/README.md`.
 
 ### D12. Reference pages from the specs
-Each page under `pages/` and each Everywhere page carries `spec:` front matter naming the specs it was written from (`spec: [cost-dashboard]`), through a `docsSchema` extension in `src/content.config.ts`. The field is not rendered; it tells an author which spec to re-read when it changes, and drives the accuracy spot-check (task 9.3). Where a page and a spec disagree, the spec wins and the page is fixed.
+Each page under `pages/` and each Everywhere page carries `spec:` front matter naming the specs it was written from (`spec: [cost-dashboard]`), through a `docsSchema` extension in `src/content.config.ts`. The field is not rendered; it tells an author which spec to re-read when it changes, and drives the accuracy spot-check (task 9.4). Where a page and a spec disagree, the spec wins and the page is fixed.
 
 ### D13. `docs/guide.md` becomes a stub
 Its content moves into the site (Pages, Everywhere, Configuration, Automated sessions). The stub keeps the title, one line pointing to the site, and the old `##`/`###` headings, each followed by one link to the site page that replaced it, so old links such as `docs/guide.md#configuration` (in READMEs on PyPI) land on a heading that sends the reader on.
@@ -111,7 +111,7 @@ Its content moves into the site (Pages, Everywhere, Configuration, Automated ses
 
 ## Risks / Trade-offs
 
-- **Pages may drift from the app** → reference pages name their specs (D12); the AGENTS.md rule makes docs part of a user-visible change; task 9.3 spot-checks.
+- **Pages may drift from the app** → reference pages name their specs (D12); the AGENTS.md rule makes docs part of a user-visible change; task 9.4 spot-checks.
 - **Node 26 and Astro** → if the pinned Astro does not support Node 26, the scaffold step stops and reports instead of picking another Node version silently.
 - **The sync step's outputs are not in git** → a fresh clone must run `sync` before `astro dev`; the npm scripts run it, so only a bare `npx astro dev` misses it.
 - **Screenshots age as the app changes** → the shots mode re-records them all in one command; a page change that alters a panel re-records its shots in the same change.
