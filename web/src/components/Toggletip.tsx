@@ -10,14 +10,15 @@ const HOVER_DELAY_MS = 150;
  *  Base UI places the popup beside the button and keeps it inside the viewport; inside a modal sheet it is portaled into the
  *  dialog (anything outside a modal dialog is inert). The text also goes to a polite live region next to the button, which is
  *  what a screen reader reads: the popup itself is hidden from it, as a popup far from the button in the DOM is easy to miss.
- *  term: what it explains, for the name "About {term}"; label: visible text on the button instead of the "?" (it names itself). */
-export function Toggletip({ term, label, className, children }: { term?: string; label?: ReactNode; className?: string; children: ReactNode }) {
+ *  term: what it explains, for the name "About {term}"; label: visible text on the button instead of the "?" (it names itself,
+ *  unless name is given: a label that does not say enough on its own, as a bare time, takes a name that does). */
+export function Toggletip({ term, label, name, className, children }: { term?: string; label?: ReactNode; name?: string; className?: string; children: ReactNode }) {
   const [open, setOpen] = useState(false), [host, setHost] = useState<HTMLElement | null>(null), btn = useRef<HTMLButtonElement>(null);
   // Escape dismisses the popup only: a sheet's own Escape (the dialog's cancel) must not close it too.
   const key = (e: KeyboardEvent) => { if (e.key === "Escape" && open) { e.preventDefault(); e.stopPropagation(); setOpen(false); } };
   return <>
     <Popover.Root open={open} onOpenChange={o => { if (o) setHost(btn.current?.closest("dialog") ?? null); setOpen(o); }}>
-      <Popover.Trigger ref={btn} openOnHover delay={HOVER_DELAY_MS} className={"tt" + (label == null ? " tt-q" : "") + (className ? " " + className : "")} aria-label={label == null ? `About ${term}` : undefined} onKeyDown={key}>
+      <Popover.Trigger ref={btn} openOnHover delay={HOVER_DELAY_MS} className={"tt" + (label == null ? " tt-q" : "") + (className ? " " + className : "")} aria-label={name ?? (label == null ? `About ${term}` : undefined)} onKeyDown={key}>
         {label ?? "?"}</Popover.Trigger>
       {/* Base UI waits for a null container: outside a dialog, pass undefined so the popup goes to the body. */}
       <Popover.Portal container={host ?? undefined}>

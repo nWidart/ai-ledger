@@ -11,6 +11,12 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- The navigation no longer shows the project chip. With a project filter set, each page's filter row shows a "Project page →" link (not on the Project page itself) and a ✕ "Clear project filter" button beside the project picker.
+- The Search button shows the project's color dot and name while a project filter is set.
+- The last ingest and Refresh are one control: a Refresh button (it reads "Retry" after a failed refresh) and the last ingest as a clock time. Clicking or hovering the time shows the exact time, new lines, last data change, interval and the full error. It reads "Stale" when the last ingest is older than three intervals, "Failed" after an ingest error and "Offline" when the app does not answer. "+N lines" appears for a few seconds after an ingest stores new lines.
+- The navigation stays on one row at every width. Narrower windows hide the wordmark, shrink Search to an icon and tighten the tabs. On narrow screens a page chooser (the current page's name, or "Pages" on the Project page) replaces the tabs and carries the Limits alert dot.
+- Screen readers no longer hear every timed ingest; only the result of a manual refresh is announced.
+
 - Text follows the browser's default font size: font sizes are relative, chart labels scale with them, and nothing is cut off at 200%. In Chrome and Edge 146+ the dashboard also follows the operating system's text scale.
 
 ## [0.4.0] - 2026-11-15

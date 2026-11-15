@@ -951,12 +951,14 @@ describe("LivePage", () => {
   });
 
   it("updates the nav's Last ingest on a change notice, without waiting for the nav's poll", async () => {
+    // The nav's sentence for the last ingest, with seconds: Refresh's title (the visible label shows hours and minutes only).
     const st = { ...status }, text = (ts: string) => `Last ingest ${new Date(ts).toLocaleTimeString()}`;
+    const said = () => document.getElementById("navRefresh")?.title;
     show("?session=s1", { app: true, status: () => st });
-    expect(await screen.findByText(text(st.last_ingest))).toBeTruthy();
+    await waitFor(() => expect(said()).toBe(text(st.last_ingest)));
     st.last_ingest = st.last_change = "2026-11-10T10:00:50+00:00";
     FakeSource.last!.notify(["s2"]);
-    expect(await screen.findByText(text(st.last_ingest))).toBeTruthy();
+    await waitFor(() => expect(said()).toBe(text(st.last_ingest)));
   });
 
   it("asks for the status once at a time however many notices arrive, and not while paused", async () => {

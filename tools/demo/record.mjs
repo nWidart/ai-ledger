@@ -172,7 +172,7 @@ const SCENES = {
     const { page } = h;
     await start("/usage?range=30&project=atlas-api");
     await h.wait(1500);
-    await h.click(page.locator(".appnav-go"), { pause: 2000 });
+    await h.click(page.locator(".filters-projectpage"), { pause: 2000 });
     await h.scrollTo(page.locator("#cost"), 20);
     await h.wait(1500);
     await h.scrollTo(page.locator("#sessions"), 20);

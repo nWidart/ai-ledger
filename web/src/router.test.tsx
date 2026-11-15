@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import usage from "./__fixtures__/usage";
 import { ROUTES } from "./App";
 import { renderRouter } from "./testing";
-import { navigate, setSearch } from "./url";
+import { setSearch } from "./url";
 
 // The tabs; the Project page has none and needs a project, so it has tests of its own below.
 const PATHS = (Object.keys(ROUTES) as (keyof typeof ROUTES)[]).filter(p => p !== "/project");
@@ -128,7 +128,7 @@ describe("router", () => {
       act(() => { location.hash = "#project=foo"; });
       await waitFor(() => expect(location.search).toBe("?project=foo"));
       expect(location.hash).toBe("");
-      await waitFor(() => expect(document.querySelector("#navFilter")?.textContent).toContain("foo"));
+      expect(await screen.findByRole("link", { name: "foo project page" })).toBeTruthy();
     });
   });
 
@@ -174,9 +174,9 @@ describe("the Project page", () => {
     act(() => setSearch({ project: "foo" }));
     await userEvent.click(tabs().getByRole("link", { name: "Cost" }));
     await loaded("/cost");
-    // The chip's project name opens the page from here in a later step; the page is reached by its own URL meanwhile.
-    act(() => navigate("/project?project=foo&range=7&source=claude"));
+    await userEvent.click(await screen.findByRole("link", { name: "foo project page" }));
     await loaded("/project");
+    expect(here()).toBe("/project?project=foo&range=7&source=claude");
     await screen.findByRole("heading", { level: 1, name: "foo" });
     await userEvent.click(screen.getByRole("button", { name: "Clear project filter" }));
     await waitFor(() => expect(location.pathname).toBe("/usage"));
@@ -199,7 +199,7 @@ describe("a key no page knows", () => {
   it("is ignored: the page shows as it would without it", async () => {
     open("/cost?project=foo&nosuchkey=1");
     await loaded("/cost");
-    expect(document.querySelector("#navFilter b")?.textContent).toBe("foo");
+    expect((await screen.findByRole("link", { name: "foo project page" })).getAttribute("href")).toBe("/project?project=foo");
     expect(screen.getByRole("link", { name: "Cost" }).getAttribute("aria-current")).toBe("page");
   });
 });

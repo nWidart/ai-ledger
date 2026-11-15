@@ -24,6 +24,7 @@ Charts with this keyboard reading: the Activity work chart and hours grid, the C
 
 - The first Tab stop on every page is a **Skip to content** link, visible only while it has focus. Enter moves focus into the page's main content, past the navigation.
 - Each page holds its content in one `main` landmark, after the navigation. Its heading and tables are inside it.
+- On a narrow window (about 760px and below, or zoomed in), a page chooser button replaces the tabs. It is named for the current page, or "Pages" on the Project page, and opens a list of the pages. Esc closes the list and returns focus to the button.
 - After you pick a page in the navigation, focus moves to that page's heading. Loading a page directly, changing a filter, and browser Back and Forward do not move focus.
 - A section or field you jump to, or that takes focus, stays clear of the sticky navigation and the section index.
 - A drawer's title is a heading in the page outline, and its toggle is a button.
@@ -36,6 +37,7 @@ Charts with this keyboard reading: the Activity work chart and hours grid, the C
 | Palette | The highlighted option with its kind, counts and position. Chip and footer changes are announced. |
 | `>copy link`, a context-menu copy item | "Link copied", "Copied to clipboard." or the failure, as a polite status. |
 | **Refresh** | The button stays focusable while a refresh runs and exposes `aria-disabled`. A second press does nothing. |
+| Ingest result | Only the result of a manual refresh is announced: "Refreshed: 5 new lines" (an example), "Refreshed: nothing new", or the failure. A timed ingest is not announced. |
 | A page that is loading | Its content area is `aria-busy`. Nothing about loading is announced. Only the result of an action, such as a failed refresh, is announced. |
 | Limits tab | The tab's name reads "Limits alert: *sentence*" while a window is at its limit, forecast to run out, or at 90% or more. |
 | Theme button | Its name is "Theme: system", "Theme: light" or "Theme: dark". Each press steps System, Light, Dark, then System again. |

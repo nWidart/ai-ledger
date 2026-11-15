@@ -1,12 +1,18 @@
 import { Profiler } from "react";
-import { act, screen, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { setSearch } from "../url";
 import { Filters } from "./Filters";
-import { renderApp } from "../testing";
+import { renderApp, renderRouter } from "../testing";
+import context from "../__fixtures__/context";
+import errors from "../__fixtures__/errors";
+import insights from "../__fixtures__/insights";
+import limits from "../__fixtures__/limits";
+import usage from "../__fixtures__/usage";
 
 const options = () => screen.queryAllByRole("option").map(o => o.textContent);
+const status = { ingesting: false, last_ingest: null, last_change: null, last_stats: null, error: null, counts: {}, interval: 60, project_order: [] };
 
 describe("Filters", () => {
   it("selects a range and a project from the keyboard, pushing each change", async () => {
@@ -91,6 +97,85 @@ describe("Filters", () => {
     expect(field.value).toBe("All projects");
     await act(async () => { setSearch({ project: "bar" }); });
     expect(field.value).toBe("bar");
+  });
+});
+
+describe("Filters project link and clear button", () => {
+  const link = () => screen.queryByRole("link", { name: "foo project page" });
+  const clear = () => screen.queryByRole("button", { name: "Clear project filter" });
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  it("links the project to its page with the range and source kept", async () => {
+    history.replaceState(null, "", "/errors?project=foo&range=7&source=codex&session=s1");
+    renderApp(<Filters projects={["foo"]} />);
+    const a = link()!;
+    expect(a.getAttribute("href")).toBe("/project?project=foo&range=7&source=codex");
+    expect(a.textContent).toBe("Project page →");
+    expect(a.className).toContain("filters-projectpage");
+    expect(clear()!.getAttribute("title")).toBe("Show all projects");
+    await userEvent.click(a);
+    await waitFor(() => expect(location.pathname).toBe("/project"));
+    expect(location.search).toBe("?project=foo&range=7&source=codex");
+  });
+
+  it("shows no link on the Project page, and keeps the clear button there", () => {
+    history.replaceState(null, "", "/project?project=foo&range=7");
+    renderApp(<Filters projects={["foo"]} />);
+    expect(link()).toBeNull();
+    expect(screen.queryByRole("link")).toBeNull();
+    expect(clear()).toBeTruthy();
+  });
+
+  it("shows neither without a project", () => {
+    history.replaceState(null, "", "/errors?range=7");
+    renderApp(<Filters projects={["foo"]} />);
+    expect(screen.queryByRole("link")).toBeNull();
+    expect(clear()).toBeNull();
+  });
+
+  it("clears the project and the open session, keeping focus on the picker", async () => {
+    history.replaceState(null, "", "/errors?project=foo&range=7&session=s1");
+    renderApp(<Filters projects={["foo"]} />);
+    await userEvent.click(clear()!);
+    expect(location.pathname).toBe("/errors");
+    expect(location.search).toBe("?range=7");
+    expect(document.activeElement).toBe(screen.getByRole("combobox", { name: "Project" }));
+    expect(clear()).toBeNull();
+    expect(screen.queryByRole("link")).toBeNull();
+  });
+
+  it("clears the Activity day with the project filter", async () => {
+    history.replaceState(null, "", "/usage?project=foo&range=30&day=2026-11-04&q=api");
+    renderApp(<Filters projects={["foo"]} />);
+    await userEvent.click(clear()!);
+    expect(location.search).toBe("?range=30&q=api");
+  });
+
+  it("opens Activity with the view kept when the project is cleared on the Project page", async () => {
+    history.replaceState(null, "", "/project?project=foo&range=7&source=claude");
+    renderApp(<Filters projects={["foo"]} />);
+    await userEvent.click(clear()!);
+    await waitFor(() => expect(location.pathname).toBe("/usage"));
+    expect(location.search).toBe("?range=7&source=claude");
+  });
+
+  it("opens the Project page from the filter row of a page, with no tab marked current", async () => {
+    const bodies: Record<string, unknown> = { "/api/status": status, "/api/errors": errors, "/api/context": context, "/api/insights": insights, "/api/limits": limits };
+    vi.stubGlobal("fetch", vi.fn((url: string) => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(bodies[new URL(url, "http://x").pathname] ?? usage) } as Response)));
+    history.replaceState(null, "", "/cost?project=foo&range=30&source=claude");
+    renderRouter();
+    const a = await screen.findByRole("link", { name: "foo project page" });
+    expect(document.querySelectorAll('a[href^="/project"]').length).toBe(1);
+    expect(a.hasAttribute("title")).toBe(false);
+    expect(a.getAttribute("aria-current")).toBeNull();
+    await userEvent.click(a);
+    await waitFor(() => expect(location.pathname).toBe("/project"));
+    expect(location.search).toBe("?project=foo&range=30&source=claude");
+    await screen.findByRole("heading", { level: 1, name: "foo" });
+    expect(link()).toBeNull();
+    const tabs = within(screen.getByRole("navigation", { name: "Dashboards" }));
+    for (const name of ["Activity", "Cost", "Context", "Errors", "Limits", "Insights", "Live"]) expect(tabs.getByRole("link", { name }).getAttribute("aria-current")).toBeNull();
+    expect(clear()).toBeTruthy();
   });
 });
 

@@ -27,9 +27,9 @@ Needs [uv](https://docs.astral.sh/uv/). Runs on macOS and Linux. Your data stays
 | **Limits** | Each plan limit window, what used it, and a forecast to its reset. |
 | **Insights** | How Claude Code's `/insights` judged your sessions. |
 | **Live** | Every active session as it runs, sorted by who needs you first. |
-| **Project** | One project across all of the above, opened from the Page link on the navigation's project filter, its sheet, or its name in the command palette. |
+| **Project** | One project across all of the above, opened from the "Project page" link beside the project filter, its sheet, or its name in the command palette. |
 
-Press **Cmd+K** to jump anywhere, for example `>errors #myproject #7d`. Right-click a project, session, tool or error type for its actions, such as copying a session's resume command. Every page works by keyboard and screen reader. Charts open a data table or read point by point with the arrow keys.
+Press **Cmd+K** to jump anywhere, for example `>errors #myproject #7d`. Right-click a project, session, tool or error type for its actions, such as copying a session's resume command. Every page works by keyboard and screen reader. Charts open a data table or read point by point with the arrow keys. The navigation stays on one row at every width, and next to Refresh it shows when the data was last ingested.
 
 The [documentation site](https://nwidart.github.io/ai-ledger/) describes each page in detail.
 

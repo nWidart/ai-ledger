@@ -18,7 +18,7 @@ export const ROUTES = {
   "/limits": { title: "Limits · AI Ledger", Page: lazyRouteComponent(() => import("./pages/limits/LimitsPage"), "LimitsPage") },
   "/insights": { title: "Insights · AI Ledger", Page: lazyRouteComponent(() => import("./pages/insights/InsightsPage"), "InsightsPage") },
   "/live": { title: "Live · AI Ledger", Page: lazyRouteComponent(() => import("./pages/live/LivePage"), "LivePage") },
-  // Not a tab: reached from the project sheet, the navigation's project chip and the palette.
+  // Not a tab: reached from the project sheet, the filter row's "Project page" link and the palette.
   "/project": { title: "Project · AI Ledger", Page: lazyRouteComponent(() => import("./pages/project/ProjectPage"), "ProjectPage") },
 } as const;
 export type PagePath = keyof typeof ROUTES;

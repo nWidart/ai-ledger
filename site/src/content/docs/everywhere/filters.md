@@ -41,7 +41,7 @@ The picker is one filterable dropdown. Its field shows the selected project, or 
 - Escape closes the popup without a selection and puts the selected project back in the field.
 - Emptying the field lists every project.
 
-When a project is set, the navigation shows a Project chip with the project's name. The chip links to the project's Project page, and its Clear button removes the filter.
+When a project is set, the filter row shows a **Project page →** link next to the picker, and a ✕ button named "Clear project filter" that removes the filter. The link goes to the project's Project page and is not on the Project page itself. Clearing the filter on the Project page opens Activity.
 
 ## Source
 

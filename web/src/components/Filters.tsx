@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { Combobox } from "@base-ui/react/combobox";
+import { Link } from "@tanstack/react-router";
 import type { Source } from "../api";
-import { RANGES, SOURCES, rootState, setSearch, useSearchOf, validateRoot } from "../url";
+import { RANGES, SOURCES, navigate, parseSearch, rootState, setSearch, sharedSearch, usePathname, useSearchOf, validateRoot } from "../url";
 import { ProjectDot } from "./ProjectDot";
 import { Toggletip } from "./Toggletip";
 import "./Filters.css";
@@ -30,22 +31,44 @@ export const viewName = (v: { project: string; range: number; source: Source | "
 export const agentName = (source: Source | "") => (source ? SOURCE_LABELS[source] : "agent");
 
 // What the filters show of the URL; a session or sheet key is not in it, so opening a sheet does not render them.
-// badSource: the URL names a source that is not valid.
+// badSource: the URL names a source that is not valid. shared: the shared query string the Project page link carries.
 const filterSearch = (raw: Readonly<Record<string, string>>) => {
   const s = validateRoot(raw), { project, range, source, auto } = rootState(s);
-  return { project, range, source, auto, badSource: !!raw.source && !s.source };
+  return { project, range, source, auto, badSource: !!raw.source && !s.source, shared: sharedSearch(raw) };
 };
 
-/** Project picker with its color dot, range and source segments and the automated toggle, all writing the URL. */
+/** Project picker with its color dot, its Project page link and clear button, range and source segments and the automated
+ *  toggle, all writing the URL. */
 export function Filters({ projects, automated = false, autoFile, range = true, children }: FiltersProps) {
-  const h = useSearchOf(filterSearch), { badSource } = h, set = setSearch;
+  const h = useSearchOf(filterSearch), { badSource } = h, set = setSearch, path = usePathname();
   // An unknown source reads as All; the URL drops it so a copied link says what the page shows.
   useEffect(() => { if (badSource) setSearch({ source: null }, { push: false }); }, [badSource]);
   const opts = projects.map(p => (typeof p === "string" ? { value: p } : p));
   if (h.project && !opts.some(o => o.value === h.project)) opts.unshift({ value: h.project });
+  // A plain click goes through navigate (url.ts holds the app's rules for a page switch); Link skips its own navigation
+  // when the event is default-prevented. A modified click is the browser's.
+  const go = (e: MouseEvent<HTMLAnchorElement>) => {
+    if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    navigate("/project" + h.shared);
+  };
+  // On the Project page, a view with no project opens Activity in its place (router.tsx, needProject).
+  const clear = () => {
+    setSearch({ project: null, session: null });
+    document.getElementById("fProject")?.focus();
+  };
   return (
     <div className="filters" role="group" aria-label="Filters">
-      <ProjectPicker project={h.project} options={opts} onPick={project => set({ project, session: null, inspect: null })} />
+      <span className="filters-project">
+        <ProjectPicker project={h.project} options={opts} onPick={project => set({ project, session: null, inspect: null })} />
+        {h.project && path !== "/project" && (
+          // The visible text is "Project page"; the name says whose, and contains it.
+          <Link to="/project" search={parseSearch(h.shared) as never} className="filters-projectpage" aria-label={`${h.project} project page`} onClick={go}>
+            Project page<span aria-hidden="true">{" "}→</span>
+          </Link>
+        )}
+        {h.project && <button type="button" className="filters-clear" aria-label="Clear project filter" title="Show all projects" onClick={clear}>✕</button>}
+      </span>
       {range && <div className="seg" id="fRange" role="group" aria-label="Time range">
         {RANGES.map(r => (
           <button key={r} type="button" aria-pressed={h.range === r} onClick={() => set({ range: r })}>{rangeLabel(r)}</button>
