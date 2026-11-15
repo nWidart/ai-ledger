@@ -25,6 +25,6 @@ Text "jobdesk · open project page": the name first, so the matched span marks i
 - Bare text or `>`, at least one character typed; never under `#` (filters only) or for empty text (it would push the pages out of the Page group). At most three rows, the busiest first among equal matches.
 - The best three are chosen by their own match, so an exact name is never crowded out by busier projects that start with it.
 - Bare text: rank at least PREFIX, so it is never exact and auto-chipping picks the project row. The Page group then follows the Project group.
-- `>`: the match's own rank, so `>jobdesk` matches exactly and auto-chips, unless a page matches exactly: `>errors` stays Errors when a project is named `errors`.
+- `>`: the match's own rank, so `>jobdesk` matches exactly and auto-chips, unless another destination (a page, tool, MCP server, skill or error type) matches exactly: `>errors` stays Errors when a project is named `errors`.
 - At equal rank the pages come before project pages, whose session counts would otherwise win the tie, and project pages do not count toward the Page group's cap.
 - Already picked: the row stays when only `#jobdesk` is set (the palette opens with it on a filtered page). It is left out when `>Project` is already a chip with that project, or when the palette is open on that project's page with no other page chip, where it would change nothing. The generic "Project" row is left out when a project-page row for the same project is listed.

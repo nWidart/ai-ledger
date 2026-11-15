@@ -113,10 +113,11 @@ export function suggest(term: Term, data: SuggestData, chips: readonly Chip[] = 
       rank: m.rank, count: c.count ?? 0,
     });
   }
-  // A project's page never matches bare text exactly, so a typed name auto-chips as the filter; nor does it after > when a
-  // page matches exactly, so `>errors` stays the Errors page with a project named errors.
-  const pageExact = rows.some(r => r.kind === "page" && !r.project && r.rank === EXACT);
-  for (const r of rows) if (r.project && (!term.sigil || pageExact)) r.rank = Math.max(r.rank, PREFIX);
+  // A project's page never matches bare text exactly, so a typed name auto-chips as the filter; nor does it after > when
+  // another destination matches exactly, so `>errors` stays Errors and `>playwright` the MCP server with projects of those
+  // names. Sessions match through their project's name, so they would always lower it.
+  const otherExact = rows.some(r => !r.project && r.kind !== "session" && r.rank === EXACT);
+  for (const r of rows) if (r.project && (!term.sigil || otherExact)) r.rank = Math.max(r.rank, PREFIX);
   // Project pages follow the pages at equal rank (their session counts would win the tie), keep their own order (an exact
   // name first) and are capped on their own.
   rows.sort((a, b) => a.rank - b.rank || ORDER.indexOf(a.kind) - ORDER.indexOf(b.kind) || Number(!!a.project) - Number(!!b.project)

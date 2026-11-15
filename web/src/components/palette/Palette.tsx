@@ -167,8 +167,9 @@ export function Palette() {
   const edit = (next: string, pos: number, list = chips) => {
     const got = autoChip(next, pos, t => suggest(t, data, list, path));
     let out = list;
-    for (const r of got.picked) out = rowChips(out, r);
-    if (got.picked.length) setChipsSaying(out, got.picked.map(r => rowAdded(r, list)).join(", "));
+    const said: string[] = [];
+    for (const r of got.picked) { said.push(rowAdded(r, out)); out = rowChips(out, r); }
+    if (got.picked.length) setChipsSaying(out, said.join(", "));
     setText(got.input); setCaret(got.caret); setHi(0);
     if (got.picked.length) sel.current = got.caret;
   };

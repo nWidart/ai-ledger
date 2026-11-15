@@ -127,4 +127,9 @@ describe("suggest project pages", () => {
     expect(got.filter(r => r.rank === EXACT).map(r => r.id)).toEqual(["page:/errors"]);
     expect(got.find(r => r.project === "errors")!.rank).toBe(PREFIX);
   });
+  it("never matches exactly after > when an inspector does, so >playwright stays the MCP server", () => {
+    const mcp = palette.mcp[0]!.name;
+    const got = rows(`>${mcp}`, { palette: { ...palette, projects: [{ name: mcp, sessions: 50 }] } });
+    expect(got.filter(r => r.rank === EXACT).map(r => r.id)).toEqual([`mcp:${mcp}`]);
+  });
 });
