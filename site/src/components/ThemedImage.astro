@@ -52,8 +52,9 @@ const still = gif ? "still" : undefined;
   :global(:root:not([data-theme="light"])) .light {
     display: none;
   }
+  /* As specific as `.themed-image img` above, which would otherwise keep the still on screen next to the GIF. */
   @media (prefers-reduced-motion: no-preference) {
-    .still {
+    .themed-image .still {
       display: none;
     }
   }
