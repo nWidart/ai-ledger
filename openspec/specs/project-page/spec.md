@@ -90,6 +90,24 @@ The page SHALL show the project's median starting context and its share of the w
 - **WHEN** Context shows a median starting context of 24,000 tokens for `foo` over the last 30 days
 - **THEN** the Project page of `foo` over the last 30 days shows 24,000 tokens
 
+### Requirement: Draw a typical session's window as a grid
+The Context block SHALL open with a grid of 200 cells, ten rows of twenty, in the style of Claude Code's `/context`, each cell half a percent of the context window. It SHALL fill cells for the median starting context's share, then for the median peak's share less the starting share, and leave the rest free; a peak over the window SHALL fill the grid. When the start's or the peak's window share is not known, the block SHALL show no grid.
+
+#### Scenario: Grid of a typical session
+- **WHEN** the sessions of `foo` start with a median 12% of a 200k window and peak at a median 40%
+- **THEN** the grid fills 24 cells as starting context, 56 cells as added by the peak, and leaves 120 cells free
+
+#### Scenario: Unknown window
+- **WHEN** no session of `foo` in the view has a known context window
+- **THEN** the Context block shows its figures and no grid
+
+### Requirement: Explain the context grid in a legend
+Beside the grid a legend SHALL give each part's tokens and share of the window, and a heading SHALL name the most common window and the number of sessions measured. The legend SHALL say that the starting context holds the system prompt, tools, memory and first prompt together, since the transcripts do not split it.
+
+#### Scenario: Legend of the parts
+- **WHEN** the sessions of `foo` start with a median 24,000 tokens, 12% of a 200k window
+- **THEN** the legend reads "Starting context 24k tokens (12%)" under the heading "Typical session · 200k window"
+
 ### Requirement: Show the project's session judgments
 The page SHALL show how many of the project's Claude Code sessions `/insights` analysed, out of how many, the outcomes of the analysed sessions and the three most reported kinds of friction, marked as a model's judgment as on Insights. With no analysed session the block SHALL say so in one line. The block SHALL link to Insights filtered to the project.
 

@@ -217,6 +217,13 @@ class StartingTest(unittest.TestCase):
         self.assertEqual((got["unknown"]["window"], got["unknown"]["window_share"]), (None, None))
         self.assertEqual((p["coverage"]["sessions"], p["coverage"]["with_window"]), (4, 3))
 
+    def test_window_is_the_most_common_known_window(self):
+        b = Builder(self)
+        for sid, peak_model, window in (("a", "m-a", None), ("b", "m-a", None), ("c", "m-nowin", 258_400), ("d", "m-nowin", None)):
+            b.session(sid, "foo", peak=50_000, peak_model=peak_model, window=window)
+            b.turn(sid, 0, 50_000, model=peak_model)
+        self.assertEqual(b.payload()["starting"]["window"], 200_000)  # two sessions at the table's 200,000; the others are unknown or 258,400
+
     def test_trend_quartiles(self):
         b = Builder(self)
         for i, start in enumerate((10_000, 20_000, 30_000, 40_000)):
@@ -325,6 +332,27 @@ class GrowthTest(unittest.TestCase):
         self.assertEqual([(p["turn"], p["sessions"]) for p in g["curve"]], [(1, 6), (2, 6)])
         self.assertEqual([(c["project"], len(c["share_curve"])) for c in g["by_project_curves"]], [("foo", 2)])
         self.assertEqual(g["by_project_curves"][0]["share_curve"][1]["p75"], 0.75)
+
+    def test_peak_median_and_share_of_the_window(self):
+        b = Builder(self)
+        for sid, peak in (("a", 50_000), ("b", 100_000)):  # 25% and 50% of 200,000
+            b.session(sid, "foo", peak=peak)
+            b.turn(sid, 0, 5_000)
+        b.session("c", "foo", peak=150_000, peak_model="m-nowin")  # no window: counts for the median only
+        b.turn("c", 0, 5_000, model="m-nowin")
+        b.session("n", "foo", peak=None)  # no peak: not counted
+        b.turn("n", 0, 5_000)
+        peak = b.payload()["growth"]["peak"]
+        self.assertEqual(peak["sessions"], 3)
+        self.assertEqual(peak["median"], 100_000)
+        self.assertAlmostEqual(peak["window_share"], 0.375)
+
+    def test_peak_window_share_is_none_without_a_known_window(self):
+        b = Builder(self)
+        for sid in ("a", "b"):
+            b.session(sid, "foo", peak=80_000, peak_model="m-nowin")
+            b.turn(sid, 0, 5_000, model="m-nowin")
+        self.assertEqual(b.payload()["growth"]["peak"], dict(sessions=2, median=80_000, window_share=None))
 
     def test_fill_bins_by_window(self):
         b = Builder(self)

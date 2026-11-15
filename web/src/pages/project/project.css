@@ -48,3 +48,21 @@
   .pg-project .panel { padding: 14px 12px; }
   .pg-project .facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* Context block: the grid of a typical session, as in Claude Code's /context */
+.pg-project .ctx-grid { display: flex; flex-wrap: wrap; gap: 16px 28px; align-items: flex-start; margin-bottom: 16px; --cg-start: var(--series-1); --cg-added: var(--series-4); --cg-free: var(--text-muted); }
+.pg-project .ctx-grid .cg-defs { position: absolute; }
+.pg-project .ctx-grid .cg-cells { display: grid; gap: 1px; width: 100%; max-width: 360px; flex: 0 1 360px; min-width: 0; }
+.pg-project .ctx-grid .cg-cells .cg-cell { display: block; width: 100%; height: auto; aspect-ratio: 1; }
+.pg-project .ctx-grid .cg-start { color: var(--cg-start); }
+.pg-project .ctx-grid .cg-added { color: var(--cg-added); }
+.pg-project .ctx-grid .cg-free { color: var(--cg-free); opacity: .6; }
+.pg-project .ctx-grid .cg-side { flex: 1 1 260px; min-width: 0; }
+.pg-project .ctx-grid .cg-title { margin: 0; font-size: 14px; color: var(--text-primary); }
+.pg-project .ctx-grid .cg-sub { margin: 2px 0 10px; font-size: 12.5px; }
+.pg-project .ctx-grid .cg-legend { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; font-size: 13px; color: var(--text-secondary); }
+.pg-project .ctx-grid .cg-legend li { display: grid; grid-template-columns: 16px auto 1fr; column-gap: 8px; align-items: center; }
+.pg-project .ctx-grid .cg-name { color: var(--text-primary); }
+.pg-project .ctx-grid .cg-fig { font-variant-numeric: tabular-nums; }
+.pg-project .ctx-grid .cg-note { grid-column: 2 / -1; font-size: 12px; }
+@media (max-width: 640px) { .pg-project .ctx-grid { flex-direction: column; } .pg-project .ctx-grid .cg-cells, .pg-project .ctx-grid .cg-side { flex-basis: auto; } }

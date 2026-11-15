@@ -1,4 +1,5 @@
 import { useEffect, useId, useLayoutEffect, useRef, type ReactNode } from "react";
+import { setSheetWide, useSheetWide } from "../sheetWide";
 import "./Sheet.css";
 
 export interface SheetProps {
@@ -15,16 +16,18 @@ export interface SheetProps {
   busy?: boolean;
   /** Where focus goes on close when the element that opened the sheet is gone (say a re-rendered row). */
   returnFocus?: () => HTMLElement | null | undefined;
+  /** Offers the Wide toggle. The choice is the browser's, one for every sheet that offers it. */
+  widen?: boolean;
   children: ReactNode;
 }
 
 /** Details over the page from the right, as a modal <dialog>. Focus returns to whatever opened it. */
-export function Sheet({ open, kind, title, contentKey, onClose, onBack, busy, returnFocus, children }: SheetProps) {
+export function Sheet({ open, kind, title, contentKey, onClose, onBack, busy, returnFocus, widen, children }: SheetProps) {
   const dlg = useRef<HTMLDialogElement>(null), head = useRef<HTMLHeadingElement>(null);
   const opener = useRef<HTMLElement | null>(null), shown = useRef<string | undefined>(undefined);
   const close = useRef(onClose), back = useRef(returnFocus), isOpen = useRef(open);
   close.current = onClose; back.current = returnFocus; isOpen.current = open;
-  const titleId = useId();
+  const titleId = useId(), wide = useSheetWide();
   const key = contentKey ?? (typeof kind === "string" ? kind : "") + "|" + (typeof title === "string" ? title : "");
 
   useLayoutEffect(() => {
@@ -60,12 +63,13 @@ export function Sheet({ open, kind, title, contentKey, onClose, onBack, busy, re
   }, []);
 
   return (
-    <dialog className="sheet" ref={dlg} aria-labelledby={titleId} aria-busy={busy || undefined}
+    <dialog className={widen && wide ? "sheet wide" : "sheet"} ref={dlg} aria-labelledby={titleId} aria-busy={busy || undefined}
       onClick={e => { if (e.target === e.currentTarget) close.current(); }}>
       {open && <div className="sheet-in">
         <div className="sheet-head">
           {onBack && <button type="button" className="sheet-back" onClick={onBack}>← Back</button>}
           <h2 id={titleId} ref={head} tabIndex={-1}>{kind != null && <><span className="sheet-kind">{kind}</span><br /></>}{title}</h2>
+          {widen && <button type="button" className="sheet-wide" aria-pressed={wide} onClick={() => setSheetWide(!wide)}>Wide</button>}
           <button type="button" className="sheet-close" aria-label="Close" onClick={() => close.current()}>✕</button>
         </div>
         <div className="sheet-body">{children}</div>

@@ -81,7 +81,7 @@ export function SessionSheet({ id, s, error, retry, range, pageProject, view }: 
       <div key={l.first_id}>{l.tool} failed {l.failures}× in a row. <a href={errorsHref(i.project, range, l.first_id)} onClick={appLink}>Open in Errors</a></div>))}</>}
     {s.commits.length > 0 && <details className="sd"><summary>Commits<span className="c">{num(s.commits.length)}</span></summary>
       {s.commits.map(c => <div key={c.tool_use_id} className="muted commit"><code>{c.command}</code></div>)}</details>}
-    <details className="sd"><summary>Models<span className="c">{num(s.models.length)}</span></summary><DataTable name="Models">
+    <div className="pair"><details className="sd"><summary>Models<span className="c">{num(s.models.length)}</span></summary><DataTable name="Models">
       <thead><tr><th scope="col">Model</th><th scope="col" className="num">Requests</th><th scope="col" className="num">Tokens</th><th scope="col" className="num">Est. cost</th></tr></thead>
       <tbody>{s.models.map((r, k) => <tr key={k}>
         <th scope="row" className="name">{(r.model ?? "").replace(/^claude-/, "")}<div className="muted small">{[r.effort !== "(none)" && r.effort, r.subagent ? "subagent" : "main thread"].filter(Boolean).join(" · ")}</div></th>
@@ -93,7 +93,7 @@ export function SessionSheet({ id, s, error, retry, range, pageProject, view }: 
         <th scope="row" className="name"><button type="button" className="cellbtn">{r.tool}</button></th><td className="num">{num(r.calls)}</td>
         <td className={"num" + ((r.failure_rate ?? 0) > .1 ? " bad" : "")}>{pct(r.failure_rate, 1)}</td><td className="num">{ms(r.p50_ms)}</td></tr>)
         : <tr><td colSpan={4} className="empty">No tool calls.</td></tr>}</tbody>
-    </DataTable></details>
+    </DataTable></details></div>
     <p><code className="muted sid">{i.session_id}</code></p>
   </>;
 }

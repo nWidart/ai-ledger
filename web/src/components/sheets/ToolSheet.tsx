@@ -69,7 +69,7 @@ export function ToolSheet({ kind, name, d, error, retry, onSession, backTo }: To
     {d.source ? `, ${agentName(d.source)} only` : ""}.{p ? ` Compared with the ${d.range} days before.` : ""}
     {kind === "skill" ? " Counts the calls that invoked the skill, not the calls made while it ran." : ""}</div>;
   if (!t.calls) return <>{hint}<div className="empty">No {name} calls in this view.</div></>;
-  const r = d.recovery;
+  const r = d.recovery, hasTypes = d.categories.length > 0, hasAfter = r.incidents > 0, hasLoops = d.error_loops.length > 0;
   return <div ref={body}>
     {hint}
     <Facts facts={[
@@ -77,15 +77,15 @@ export function ToolSheet({ kind, name, d, error, retry, onSession, backTo }: To
       [pct(t.failure_rate, 1), <>failed<Vs cur={t.failure_rate} prev={p?.failure_rate} fmt={n => pct(n, 1)} worse="up" /></>],
       [ms(t.p50_ms), "p50 latency"], [ms(t.p95_ms), "p95 latency"], [pct(t.subagent_share), "from subagents"],
     ]} />
-    <h3>Calls per day</h3>
-    <Days d={d} />
-    <h3>Where</h3>
+    <div className="pair"><div><h3>Calls per day</h3>
+      <Days d={d} /></div>
+    <div><h3>Where</h3>
     <div className="statline">
       {d.sources.map(s => <span key={s.source}>{agentName(s.source)}: {rate(s)}</span>)}
       {d.threads.map(s => <span key={String(s.subagent)}>{s.subagent ? "Subagents" : "Main thread"}: {rate(s)}</span>)}
     </div>
     <DataTable name="Projects"><thead><tr><th scope="col">Project</th><th scope="col" className="num">Calls</th><th scope="col" className="num">Failed</th></tr></thead>
-      <tbody>{d.projects.map(r => <tr key={r.project ?? ""}><th scope="row" className="name"><ProjectName project={r.project} /></th><RateCells r={r} n={r.calls} /></tr>)}</tbody></DataTable>
+      <tbody>{d.projects.map(r => <tr key={r.project ?? ""}><th scope="row" className="name"><ProjectName project={r.project} /></th><RateCells r={r} n={r.calls} /></tr>)}</tbody></DataTable></div></div>
     {d.tools && <><h3>Tools</h3><DataTable name="Tools">
       <thead><tr><th scope="col">Tool</th><th scope="col" className="num">Calls</th><th scope="col" className="num">Failed</th><th scope="col" className="num">p50</th></tr></thead>
       <tbody>{d.tools.length ? d.tools.map(r => <tr key={r.tool} {...pickRow(r.tool, v => openToolSheet("tool", v))}>
@@ -99,19 +99,21 @@ export function ToolSheet({ kind, name, d, error, retry, onSession, backTo }: To
       <Stat v={num(d.shell.test_runs)} l={d.shell.test_runs === 1 ? "test run" : "test runs"} />
       <Stat v={pct(d.shell.pass_rate)} l="passed" />
       <Stat v={num(d.shell.commits)} l={d.shell.commits === 1 ? "commit" : "commits"} /></div></>}
-    {d.categories.length > 0 && <section aria-labelledby="tool-types"><h3 id="tool-types">Failures by type</h3>
+    {(hasTypes || hasAfter || hasLoops) && <div className="pair">
+    {hasTypes && <section aria-labelledby="tool-types"><h3 id="tool-types">Failures by type</h3>
       {d.categories.map(c => <div key={c.id ?? ""} className="tcat">
         <b>{c.label ?? "Uncategorized"}</b> <span className="muted">{plural(c.errors, "failure")}</span>
         {c.id && <> · <a href={err(undefined, c.id)} onClick={appLink}>Open in Errors</a></>}
         {c.why && <div className="muted small">{c.why}</div>}{c.fix && <div className="small">Fix: {c.fix}</div>}
       </div>)}</section>}
-    {r.incidents > 0 && <><h3>After a failure</h3><div className="statline">
+    {(hasAfter || hasLoops) && <div>
+    {hasAfter && <><h3>After a failure</h3><div className="statline">
       <Stat v={num(r.incidents)} l={r.incidents === 1 ? "incident" : "incidents"} /><Stat v={num(r.recovered)} l="recovered" />
       <Stat v={num(r.failed_again)} l="failed again" /><Stat v={num(r.gave_up)} l="gave up" /></div></>}
-    {d.error_loops.length > 0 && <><h3>Error loops</h3>{d.error_loops.map(l => (
+    {hasLoops && <><h3>Error loops</h3>{d.error_loops.map(l => (
       <div key={l.first_id} data-v={l.first_id}>{l.tool} failed {l.failures}× in a row in{" "}
         <button type="button" className="linkish" title={l.title || l.session_id} onClick={e => onSession(l.session_id, e.currentTarget)}>{sessName(l)}</button>, {when(utc(l.start_ts))}.{" "}
-        <a href={err(l.first_id)} onClick={appLink}>Open in Errors</a></div>))}</>}
+        <a href={err(l.first_id)} onClick={appLink}>Open in Errors</a></div>))}</>}</div>}</div>}
     <h3>Recent calls</h3>
     <DataTable name="Recent calls" className="recent"><thead><tr><th scope="col">Session</th><th scope="col">Project</th><th scope="col">Input</th><th scope="col"><span className="sr">Result</span></th></tr></thead>
       <tbody>{d.recent.map(c => <tr key={c.id} {...pickRow(c.id, (_, el) => onSession(c.session_id, el))}>
