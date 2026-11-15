@@ -116,7 +116,7 @@ The page SHALL chart each of the view's sessions with a measured start, a known 
 - **THEN** its mark differs in shape from a session that never compacted, and its details say 2 compactions
 
 ### Requirement: Show cache use over time
-The page SHALL chart, per day of the view, or per week when the view's first request is more than 60 days old, the prompt tokens of the view's requests split into cache reads, cache writes and uncached input, with the cache-hit ratio of each bucket, and the number of cache breaks in each bucket by cause. The buckets SHALL add up to the cache-hit ratio of the view's requests that carry a time; a request with no time is in no bucket. The chart SHALL say that a break's cause is inferred, not reported by the provider. Costs SHALL NOT be stacked in this chart.
+The page SHALL chart, per day of the view, or per week when the view's first request is more than 60 days old, the prompt tokens of the view's requests split into cache reads, cache writes and uncached input, with each bucket's cache-hit ratio and its cache breaks by cause. The buckets SHALL add up to the cache-hit ratio of the view's requests that carry a time. The chart SHALL say that a break's cause is inferred. Costs SHALL NOT be stacked in this chart.
 
 #### Scenario: A day's ratio
 - **WHEN** a day's requests read 900,000 tokens from the cache, wrote 60,000 and sent 40,000 uncached
@@ -133,3 +133,7 @@ The page SHALL chart, per day of the view, or per week when the view's first req
 #### Scenario: Day with no request
 - **WHEN** the view has requests on 3 and 5 November and none on 4 November
 - **THEN** the chart leaves 4 November empty and does not draw 3 and 5 November as neighbours
+
+#### Scenario: Request with no time
+- **WHEN** a request in the view carries no time
+- **THEN** it is in no bucket, and it still counts in the Cost section's cache-hit ratio
