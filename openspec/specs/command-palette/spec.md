@@ -53,7 +53,7 @@ A `>` term naming a page (Activity, Cost, Context, Errors, Limits, Insights, Liv
 
 #### Scenario: Page and filter
 - **WHEN** the user commits `>errors #myproject` on any page
-- **THEN** the URL becomes `/errors#project=myproject` with the other current filters, and Errors shows `myproject`
+- **THEN** the URL becomes `/errors?project=myproject` with the other current filters, and Errors shows `myproject`
 
 #### Scenario: No filters set
 - **WHEN** the user has no filters on Activity, the last Errors view saved in the browser was project `other`, and the user commits `>errors`
@@ -134,7 +134,7 @@ A picked suggestion SHALL become a chip: filter chips on the left of the input, 
 Opening the palette SHALL show a chip for each filter the current URL sets: project, source, range and the automated toggle. Removing a pre-filled chip and committing SHALL remove that filter, so the palette also edits the current filters in place.
 
 #### Scenario: Filtered page
-- **WHEN** the user opens the palette on Activity with `#project=myproject&source=codex`
+- **WHEN** the user opens the palette on Activity with `?project=myproject&source=codex`
 - **THEN** the palette shows the chips `#myproject` and `#codex`
 
 #### Scenario: Remove a filter
