@@ -35,6 +35,10 @@ Run `ai-ledger rebuild` once after upgrading (with the app stopped): the Context
 - The page is revalidated with an ETag (`304` when unchanged) instead of being sent again on every visit.
 - The view (project, range, source, open sheet and each page's own state) moved from the URL hash to the query string: `/usage#project=foo&range=30` is now `/usage?project=foo&range=30`. Links in the old form still open the same view and are rewritten in place.
 
+### Fixed
+
+- The Context page no longer calls a Codex cache break an expiry after a pause of 5 to 30 minutes: Codex's cache lives 30 minutes. Claude Code keeps 5 minutes (1 hour after a 1-hour cache write), and the cache-breaks tip names both.
+
 ### Security
 
 - The app refuses requests another site makes to `/api` (403), so a page you have open cannot start ingests or read the store through your browser. `curl` and the command line are unaffected.
