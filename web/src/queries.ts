@@ -1,7 +1,7 @@
 // One queryOptions() per endpoint: its key, URL and payload type in one place. Keys are [resource, ...parts] and the View
 // is one part (Query hashes object keys whatever their order), built from its four fields only so an object with extra
-// fields keys the same. The Live queries and the infinite sessions list are added by the phases that use them.
-import { queryOptions } from "@tanstack/react-query";
+// fields keys the same. The Live queries are added by the phase that uses them.
+import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import {
   contextUrl, dayUrl, errorMarksUrl, errorUrl, errorsUrl, getJson, insightsUrl, limitsUrl, limitWindowUrl, paletteUrl, promptUrl,
   sessionUrl, sessionsUrl, statusUrl, toolUrl, usageUrl,
@@ -27,6 +27,18 @@ export const queries = {
   day: (v: View, day: Day) => queryOptions({ queryKey: ["day", view(v), day], queryFn: get<DayView>(dayUrl(v, day)) }),
   sessions: (v: View, opts: Parameters<typeof sessionsUrl>[1] = {}) =>
     queryOptions({ queryKey: ["sessions", view(v), opts], queryFn: get<SessionsPage>(sessionsUrl(v, opts)) }),
+  // The drawer's pages, loaded by offset. Its key differs from `sessions`' at index 1, so the two caches never collide.
+  // No maxPages: a user who paged far wants those rows.
+  sessionPages: (v: View, { q, near, day, sort, desc }: Omit<NonNullable<Parameters<typeof sessionsUrl>[1]>, "offset" | "limit"> = {}) =>
+    infiniteQueryOptions({
+      queryKey: ["sessions", "pages", view(v), { q, near, day, sort, desc }],
+      queryFn: ({ pageParam, signal }) => getJson<SessionsPage>(sessionsUrl(v, { q, near, day, sort, desc, offset: pageParam }), { signal }),
+      initialPageParam: 0,
+      getNextPageParam: (last, pages) => {
+        const loaded = pages.reduce((n, p) => n + p.sessions.length, 0);
+        return loaded < last.total ? loaded : undefined;
+      },
+    }),
   session: (id: string) => queryOptions({ queryKey: ["session", id], queryFn: get<SessionDetail>(sessionUrl(id)) }),
   prompt: (id: string) => queryOptions({ queryKey: ["prompt", id], queryFn: get<{ text: string }>(promptUrl(id)) }),
   tool: (kind: ToolKind, name: string, v: View) =>

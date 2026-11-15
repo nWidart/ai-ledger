@@ -153,7 +153,7 @@ export function ActivityPage() {
         <WorkPanel d={d} metric={metric} onMetric={setMetric} onDay={showDay} />
         <div className="drawers">
           <SessionsDrawer view={{ project: d.project, range: d.range, automated: d.automated, source: d.source }} count={d.totals.sessions} filter={sess} onFilter={setSess} sort={sessSort} onSort={setSessSort}
-            selected={h.session} usage={d} />
+            selected={h.session} />
           <ProjectsDrawer rows={d.by_project} selected={d.project} />
           <ToolsDrawer tools={(dv ?? d).tools} flaky={flaky} sort={toolSort} onSort={setToolSort} scope={scope} />
           <ExtDrawer mcp={(dv ?? d).mcp} skills={(dv ?? d).skills} hooks={(dv ?? d).hooks} scope={scope} />

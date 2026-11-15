@@ -261,7 +261,88 @@ describe("ActivityPage", () => {
     act(() => { openDrawer("d-sessions"); });
     await waitFor(() => expect(fetched().filter(u => u === "/api/sessions?range=30")).toHaveLength(1));
     ingested(client);
-    await waitFor(() => expect(fetched()).toContain("/api/sessions?range=30&limit=100"));
+    // The first page again: the loaded pages are refetched, not one request sized to the rows.
+    await waitFor(() => expect(fetched().filter(u => u === "/api/sessions?range=30")).toHaveLength(2));
+  });
+
+  it("pages the sessions table: Show more appends the next page and focuses its first new row", async () => {
+    mockApi({ "/api/usage": () => usage, "/api/sessions": paged(many(250)) });
+    at();
+    renderApp(<ActivityPage />);
+    await loaded();
+    openSessions();
+    const drawer = within(document.getElementById("d-sessions")!);
+    await drawer.findByRole("button", { name: "Session 99" });
+    expect(document.querySelectorAll("#d-sessions tbody tr")).toHaveLength(100);
+    expect(document.querySelector("#d-sessions .hint")!.textContent).toContain("Showing 100.");
+    await userEvent.click(drawer.getByRole("button", { name: "Show more sessions" }));
+    await waitFor(() => expect(document.activeElement).toBe(drawer.getByRole("button", { name: "Session 100" })));
+    expect(document.querySelectorAll("#d-sessions tbody tr")).toHaveLength(200);
+    expect(fetched().filter(u => String(u).startsWith("/api/sessions"))).toEqual(["/api/sessions?range=30", "/api/sessions?range=30&offset=100"]);
+  });
+
+  it("waits 200 ms after typing to search, keeps the rows inert meanwhile, then replaces them", async () => {
+    const found = held<unknown>();
+    mockApi({ "/api/usage": () => usage, "/api/sessions": q => (q.get("q") ? found.p : { total: 100, offset: 0, sessions: many(100) }) });
+    at();
+    renderApp(<ActivityPage />);
+    await loaded();
+    openSessions();
+    const drawer = within(document.getElementById("d-sessions")!), tbody = () => document.querySelector("#d-sessions tbody")!;
+    await drawer.findByRole("button", { name: "Session 0" });
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      fireEvent.change(drawer.getByRole("searchbox", { name: "Search sessions" }), { target: { value: "needle" } });
+      await act(async () => { await vi.advanceTimersByTimeAsync(150); });
+      expect(fetched().some(u => String(u).startsWith("/api/sessions") && String(u).includes("q=needle"))).toBe(false);
+      await act(async () => { await vi.advanceTimersByTimeAsync(100); });
+      await waitFor(() => expect(fetched()).toContain("/api/sessions?range=30&q=needle"));
+      await waitFor(() => expect(document.querySelector("#d-sessions .hint")!.textContent).toBe("Searching for “needle”…"));
+      expect(tbody().hasAttribute("inert")).toBe(true);
+      expect(drawer.getByRole("button", { name: "Session 0" })).toBeTruthy();
+      await act(async () => { found.resolve({ total: 1, offset: 0, sessions: many(1, "Hit") }); await found.p; });
+      await waitFor(() => expect(drawer.getByRole("button", { name: "Hit 0" })).toBeTruthy());
+    } finally { vi.useRealTimers(); }
+    expect(drawer.queryByRole("button", { name: "Session 0" })).toBeNull();
+    expect(tbody().hasAttribute("inert")).toBe(false);
+    expect(document.querySelector("#d-sessions .hint")!.textContent).toMatch(/^1 session match/);
+  });
+
+  it("says a search failed, with Retry, and shows no rows of the earlier query", async () => {
+    let down = true;
+    mockApi({ "/api/usage": () => usage, "/api/sessions": q => (q.get("q") && down ? undefined : { total: 100, offset: 0, sessions: many(100) }) });
+    at("#range=30&q=needle");
+    renderApp(<ActivityPage />);
+    await loaded();
+    openSessions();
+    const drawer = within(document.getElementById("d-sessions")!);
+    expect(await drawer.findByRole("alert")).toBeTruthy();
+    expect(drawer.getByRole("alert").textContent).toMatch(/^Could not load sessions \(.+\)\. Retry$/);
+    expect(document.querySelector("#d-sessions .hint")!.textContent).toBe("Search for “needle” failed.");
+    expect(drawer.queryByRole("button", { name: "Session 0" })).toBeNull();
+    down = false;
+    await userEvent.click(drawer.getByRole("button", { name: "Retry" }));
+    expect(await drawer.findByRole("button", { name: "Session 0" })).toBeTruthy();
+    expect(drawer.queryByRole("alert")).toBeNull();
+  });
+
+  it("keeps the rows and says so when Show more fails, and appends on the next try", async () => {
+    let down = true;
+    const page = paged(many(250));
+    mockApi({ "/api/usage": () => usage, "/api/sessions": q => (q.get("offset") && down ? undefined : page(q)) });
+    at();
+    renderApp(<ActivityPage />);
+    await loaded();
+    openSessions();
+    const drawer = within(document.getElementById("d-sessions")!);
+    await drawer.findByRole("button", { name: "Session 99" });
+    await userEvent.click(drawer.getByRole("button", { name: "Show more sessions" }));
+    await waitFor(() => expect(document.querySelector("#d-sessions .hint")!.textContent).toMatch(/^Could not load more sessions \(.+\)\. Select Show more to try again\.$/));
+    expect(document.querySelectorAll("#d-sessions tbody tr")).toHaveLength(100);
+    down = false;
+    await userEvent.click(drawer.getByRole("button", { name: "Show more sessions" }));
+    await waitFor(() => expect(document.querySelectorAll("#d-sessions tbody tr")).toHaveLength(200));
+    expect(document.querySelector("#d-sessions .hint")!.textContent).toContain("Showing 200.");
   });
 
   it("swaps in new data from a background ingest quietly, and replays the landing only after Refresh", async () => {
@@ -298,8 +379,10 @@ describe("ActivityPage", () => {
     await userEvent.click(screen.getByRole("button", { name: "Show more sessions" }));
     const row = await screen.findByRole("button", { name: "Session 150" });
     act(() => row.focus());
+    const before = fetched().length;
     ingested(client);
-    await waitFor(() => expect(fetched()).toContain("/api/sessions?range=30&limit=200"));
+    // One request per loaded page, first page first.
+    await waitFor(() => expect(fetched().slice(before).filter(u => String(u).startsWith("/api/sessions"))).toEqual(["/api/sessions?range=30", "/api/sessions?range=30&offset=100"]));
     await waitFor(() => expect(document.querySelector("#d-sessions tbody")!.getAttribute("aria-busy")).toBeNull());
     expect(document.querySelectorAll("#d-sessions tbody tr")).toHaveLength(200);
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "Session 150" }));
@@ -420,7 +503,7 @@ describe("ActivityPage", () => {
     await waitFor(() => expect(fetched()).toContain("/api/sessions?range=30&sort=cost&desc=1"));
     await waitFor(() => expect(document.querySelector("#d-sessions tbody")!.getAttribute("aria-busy")).toBeNull());
     ingested(client);
-    await waitFor(() => expect(fetched()).toContain("/api/sessions?range=30&limit=100&sort=cost&desc=1"));
+    await waitFor(() => expect(fetched().filter(u => u === "/api/sessions?range=30&sort=cost&desc=1")).toHaveLength(2));
   });
 
   it("drops a Show more page that answers after the sort changed", async () => {

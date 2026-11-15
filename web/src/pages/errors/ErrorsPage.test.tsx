@@ -9,6 +9,7 @@ import palette from "../../__fixtures__/palette";
 import { Palette } from "../../components/palette/Palette";
 import { openPalette } from "../../components/palette/store";
 import { tableFocus } from "./context";
+import { queries } from "../../queries";
 import { ErrorsPage } from "./ErrorsPage";
 import { sessionHref, typeRows } from "./model";
 import { when } from "../../format";
@@ -105,6 +106,7 @@ function serve(fixes: Record<string, string> = {}, refuse: ((b: Fix) => boolean)
   return api;
 }
 
+const payloadGets = () => vi.mocked(fetch).mock.calls.filter(c => c[0] === "/api/errors").length;
 const page = async () => {
   const { client } = renderApp(<ErrorsPage />);
   await screen.findByRole("heading", { level: 1, name: /failed tool calls/ });
@@ -342,20 +344,53 @@ describe("ErrorsPage", () => {
       expect(api.store).toEqual({});
     });
 
-    // Finding 4: a payload that was asked for before the last write finished never overrides that write's answer.
-    it("keeps the answer of the last write over the payload an earlier write asked for", async () => {
-      const api = serve(), hold = api.hold(1); // the Undo waits; the Mark's answer is quick
-      api.failGets(2); // the payload fetched after the Mark answers; no later one does
+    const cached = (client: Awaited<ReturnType<typeof page>>) => client.getQueryData<ErrorsPayload>(queries.errors.queryKey)?.fixes;
+
+    // A write's answer goes into the cached payload; nothing asks /api/errors again, and no other page's data is invalidated.
+    it("writes a saved fix into the cached payload without asking /api/errors again", async () => {
+      const api = serve();
+      history.replaceState(null, "", hash);
+      const client = await page();
+      expect(payloadGets()).toBe(1);
+      await mark();
+      await waitFor(() => expect(cached(client)).toEqual({ x: "2026-11-05" }));
+      expect(api.store).toEqual({ x: "2026-11-05" });
+      expect(screen.getByRole("button", { name: "Undo" })).toBeTruthy();
+      await undo();
+      await waitFor(() => expect(cached(client)).toEqual({}));
+      expect(client.getQueryData<ErrorsPayload>(queries.errors.queryKey)?.muted).toEqual([]);
+      expect(payloadGets()).toBe(1); // the count is the point: the cache took the answers, the page asked nothing
+      expect(client.getQueryState(queries.errors.queryKey)?.isInvalidated).toBe(false);
+    });
+
+    // A failed step whose resync fails too leaves no marks known: the cached payload may lack what the store took, so it is refetched.
+    it("refetches the payload alone when a step and its resync both fail", async () => {
+      const api = serve({}, () => true);
+      api.failResync = true;
       history.replaceState(null, "", hash);
       await page();
+      await mark();
+      await waitFor(() => expect(document.getElementById("fixErr")).toBeTruthy());
+      await waitFor(() => expect(payloadGets()).toBe(2));
+      expect(vi.mocked(fetch).mock.calls.filter(c => String(c[0]).startsWith("/api/error?"))).toHaveLength(0);
+    });
+
+    // Finding 4: a payload that was asked for before the last write finished never overrides that write's answer. After a write nothing
+    // asks for one, so the hazard is a payload another trigger (an ingest) asked for while the writes ran: held here until the Undo's answer.
+    it("keeps the answer of the last write over the payload an earlier write asked for", async () => {
+      const api = serve(), hold = api.hold(1); // the Undo waits; the Mark's answer is quick
+      history.replaceState(null, "", hash);
+      const client = await page();
       // Both clicks come before any answer: the Undo is queued behind the Mark, and held at the server.
       fireEvent.click(screen.getByRole("button", { name: "Mark fix applied" }));
       fireEvent.click(screen.getByRole("button", { name: "Undo" }));
-      await waitFor(() => expect(vi.mocked(fetch).mock.calls.filter(c => c[0] === "/api/errors").length).toBe(2)); // the Mark's refresh is back, with the marker
+      await waitFor(() => expect(cached(client)).toEqual({ x: "2026-11-05" })); // the Mark's answer is in the cache, with the marker
       await waitFor(() => expect(api.posts.length).toBe(2));
+      expect(payloadGets()).toBe(1); // the Mark asked for no refresh
       hold.release();
       await waitFor(() => expect(api.store).toEqual({}));
-      await waitFor(() => expect(vi.mocked(fetch).mock.calls.filter(c => c[0] === "/api/errors").length).toBe(3)); // the refresh after the Undo failed
+      await waitFor(() => expect(cached(client)).toEqual({}));
+      expect(payloadGets()).toBe(1);
       expect(screen.getByRole("button", { name: "Mark fix applied" })).toBeTruthy();
       expect(fixes()).toContain("0Fixes applied");
       expect(document.querySelector("#catBody .chip.fixed")).toBeNull();
@@ -363,19 +398,21 @@ describe("ErrorsPage", () => {
 
     // Finding 4, the ordering the first test misses: an older payload and the last write's answer settle together.
     it("keeps the last write's answer when an older payload resolves in the same tick", async () => {
-      const api = serve(), hold = api.hold(1), held = api.holdGet(1); // the Undo and the Mark's refresh both wait
-      api.failGets(2); // no payload after them answers
+      const api = serve(), hold = api.hold(1), held = api.holdGet(1); // the Undo and an ingest's payload (asked while x was marked) both wait
       history.replaceState(null, "", hash);
-      await page();
+      const client = await page();
       fireEvent.click(screen.getByRole("button", { name: "Mark fix applied" }));
       fireEvent.click(screen.getByRole("button", { name: "Undo" }));
       await waitFor(() => expect(api.posts.length).toBe(2));
-      await waitFor(() => expect(vi.mocked(fetch).mock.calls.filter(c => c[0] === "/api/errors").length).toBe(2)); // the refresh asked while x was marked
+      await waitFor(() => expect(cached(client)).toEqual({ x: "2026-11-05" }));
+      ingested(client);
+      await waitFor(() => expect(payloadGets()).toBe(2)); // the payload asked while x was marked
       await act(async () => { held.release(); hold.release(); });
       await waitFor(() => expect(api.store).toEqual({}));
-      await waitFor(() => expect(vi.mocked(fetch).mock.calls.filter(c => c[0] === "/api/errors").length).toBe(3)); // the one after the Undo failed
       expect(screen.getByRole("button", { name: "Mark fix applied" })).toBeTruthy();
       expect(fixes()).toContain("0Fixes applied");
+      // The older payload landed over the Undo's answer in the cache: the answer is put back, so a page opened later seeds from it.
+      await waitFor(() => expect(cached(client)).toEqual({}));
     });
 
     // N2: a payload no longer applies once the first write is done, so one equal to the first cannot be mistaken for a repeat.
@@ -386,12 +423,15 @@ describe("ErrorsPage", () => {
       api.payloadFixes = { worktree: "2026-10-01" }; // the payload after the write is another tab's view: no x, another type marked
       await mark();
       await waitFor(() => expect(api.store).toEqual({ x: "2026-11-05" }));
-      await waitFor(() => expect(vi.mocked(fetch).mock.calls.filter(c => c[0] === "/api/errors").length).toBe(2));
+      await waitFor(() => expect(cached(client)).toEqual({ x: "2026-11-05" }));
+      expect(payloadGets()).toBe(1); // the write asked for no payload: the one after it is the ingest's
+      ingested(client);
+      await waitFor(() => expect(payloadGets()).toBe(2));
       expect(screen.getByRole("button", { name: "Undo" })).toBeTruthy();
       expect(fixes()).toContain("1Fixes applied");
       api.payloadFixes = {}; // and one equal to the first payload, which the cache hands back as the same object
       ingested(client);
-      await waitFor(() => expect(vi.mocked(fetch).mock.calls.filter(c => c[0] === "/api/errors").length).toBe(3));
+      await waitFor(() => expect(payloadGets()).toBe(3));
       expect(screen.getByRole("button", { name: "Undo" })).toBeTruthy(); // the next load shows what the store holds now
     });
 
@@ -2455,6 +2495,74 @@ describe("ErrorsPage render cost", () => {
     await waitFor(() => expect(ex.classList.contains("open")).toBe(true));
     // Its own renders (loading, loaded, open) and none of the other five's: a page-wide render per step would be six times as many.
     expect(exRenders()).toBeLessThanOrEqual(4);
+  });
+
+  describe("Show full", () => {
+    const detailGets = () => vi.mocked(fetch).mock.calls.filter(c => String(c[0]).startsWith("/api/error?")).length;
+    const open = async () => {
+      localStorage.setItem("claude-errors-mode", '"flat"');
+      history.replaceState(null, "", "/errors#cat=x");
+      const client = await page();
+      const ex = document.getElementById("ex-t07")!, btn = ex.querySelector<HTMLButtonElement>("button.full")!;
+      btn.hidden = false; // nothing clamps in jsdom: show the button, as the clamp check does where a body is cut
+      return { client, ex, btn };
+    };
+
+    it("loads the full text once per id: a second Show full, after closing and reopening, sends no request", async () => {
+      const { ex, btn } = await open();
+      await userEvent.click(btn);
+      await waitFor(() => expect(ex.classList.contains("open")).toBe(true));
+      expect(ex.textContent).toContain("full error");
+      expect(detailGets()).toBe(1);
+      await userEvent.click(btn); // Show less
+      expect(ex.classList.contains("open")).toBe(false);
+      expect(btn.textContent).toBe("Show full");
+      await userEvent.click(btn); // the text is loaded: it only opens
+      expect(ex.classList.contains("open")).toBe(true);
+      expect(detailGets()).toBe(1);
+    });
+
+    it("loads it once more per id across the page being left and opened again within the cache's life", async () => {
+      const { client, ex, btn } = await open();
+      await userEvent.click(btn);
+      await waitFor(() => expect(ex.classList.contains("open")).toBe(true));
+      cleanup();
+      renderApp(<ErrorsPage />, client);
+      await screen.findByRole("heading", { level: 1, name: /failed tool calls/ });
+      expect(document.getElementById("ex-t07")!.textContent).toContain("full error"); // the loaded text replaces the payload's at once
+      const again = document.getElementById("ex-t07")!.querySelector<HTMLButtonElement>("button.full")!;
+      again.hidden = false;
+      await userEvent.click(again);
+      expect(document.getElementById("ex-t07")!.classList.contains("open")).toBe(true);
+      expect(detailGets()).toBe(1);
+    });
+
+    it("keeps a shown full text through an ingest: the call's text never changes, so nothing refetches it", async () => {
+      const { client, ex, btn } = await open();
+      await userEvent.click(btn);
+      await waitFor(() => expect(ex.classList.contains("open")).toBe(true));
+      ingested(client);
+      await waitFor(() => expect(payloadGets()).toBe(2)); // the payload is refetched, the full text is not
+      expect(detailGets()).toBe(1);
+      expect(document.getElementById("ex-t07")!.textContent).toContain("full error");
+    });
+
+    it("says when the full text could not load, and Retry asks again", async () => {
+      let up = false;
+      const base = vi.mocked(fetch);
+      vi.stubGlobal("fetch", vi.fn((url: string, init?: RequestInit) => url.startsWith("/api/error?") && !up
+        ? Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({ error: "no" }) } as Response) : base(url, init)));
+      const { ex, btn } = await open();
+      await userEvent.click(btn);
+      await waitFor(() => expect(btn.textContent).toBe("Couldn't load full text · Retry"));
+      expect(ex.classList.contains("open")).toBe(false);
+      await waitFor(() => expect(document.getElementById("detailLive")?.textContent).toBe("Couldn't load the full example. Use Retry to try again."));
+      up = true;
+      await userEvent.click(btn);
+      await waitFor(() => expect(ex.classList.contains("open")).toBe(true));
+      expect(btn.textContent).toBe("Show less");
+      await waitFor(() => expect(document.getElementById("detailLive")?.textContent).toBe("Full example shown"));
+    });
   });
 
   it("watches every example's size with one ResizeObserver", async () => {

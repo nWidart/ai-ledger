@@ -11,6 +11,7 @@ import { BADGES, isFilter, noToolCalls, rowName, searchesSessions, suggest, type
 import { autoChip, termAt, terms } from "./terms";
 import "./palette.css";
 import { focusLede } from "../focusLede";
+import { useDebouncedValue } from "../useDebounced";
 
 const SEARCH_MS = 150, SETTLE_MS = 700;
 // A clicked filter row becomes a chip, a clicked destination applies. On touch screens every tapped row becomes a chip
@@ -59,7 +60,6 @@ export function Palette() {
   const [said, setSaid] = useState("");
   // The outcome of >copy link: shown and announced in whatever modal is on top once the commit has landed (a sheet it opened).
   const [toast, setToast] = useState<{ text: string; host: Element } | null>(null);
-  const [q, setQ] = useState("");
   // What the next settled footer is announced with: a chip change, or a move through the list (announced after a pause).
   const say = useRef<{ what: string; moved: boolean } | null>(null);
   const sel = useRef<number | null>(null); // where the caret goes once the input shows a changed text
@@ -85,7 +85,7 @@ export function Palette() {
       const a = document.activeElement;
       opener.current = a instanceof HTMLElement && a !== document.body ? a : null;
       setChips(prefill(parseHash(location.hash)));
-      setText(""); setCaret(0); setHi(0); setSaid(""); setQ(""); setBrowsing(false); setToast(null);
+      setText(""); setCaret(0); setHi(0); setSaid(""); setBrowsing(false); setToast(null);
       d.showModal();
       input.current?.focus();
     } else if (!open && d.open) d.close();
@@ -108,12 +108,8 @@ export function Palette() {
   const now = resolve(chips, here);
   const pal = useApi(open ? queries.palette(now.view) : null, { keepPrevious: true });
   const ts = terms(text), term = termAt(ts, caret);
-  useEffect(() => {
-    const want = open && searchesSessions(term) ? term.text : "";
-    if (!want) { setQ(""); return; }
-    const t = setTimeout(() => setQ(want), SEARCH_MS);
-    return () => clearTimeout(t);
-  }, [open, term.sigil, term.text]);
+  // The session search follows typing after a pause; a term that no longer searches sessions stops it at once.
+  const want = open && searchesSessions(term) ? term.text : "", later = useDebouncedValue(want, SEARCH_MS), q = want && later;
   const sess = useApi(q ? queries.sessions(now.view, { q }) : null);
   const data = { palette: pal.data, sessions: q && q === term.text ? sess.data?.sessions : undefined };
   const rows = suggest(term, data, chips);
