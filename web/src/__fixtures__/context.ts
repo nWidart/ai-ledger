@@ -9,11 +9,13 @@ export default {
  "start": null,
  "end": "2026-11-05",
  "projects": [
+  "baz",
   "bar",
   "foo",
   "codex-app"
  ],
  "project_order": [
+  "baz",
   "foo",
   "codex-app",
   "bar"
@@ -24,21 +26,30 @@ export default {
   "projects": []
  },
  "coverage": {
-  "sessions": 7,
-  "with_window": 7,
-  "compacted": 1,
-  "with_first_compaction": 1,
-  "calls": 6,
-  "with_bytes": 6,
+  "sessions": 12,
+  "with_window": 12,
+  "compacted": 2,
+  "with_first_compaction": 2,
+  "calls": 15,
+  "with_bytes": 15,
   "rebuild_needed": false
  },
  "starting": {
-  "sessions": 7,
-  "median": 15000.0,
-  "p10": 7600.0,
-  "p90": 42400.0,
-  "window_share": 0.045,
+  "sessions": 12,
+  "median": 15500.0,
+  "p10": 8100.0,
+  "p90": 23800.0,
+  "window_share": 0.065,
   "by_project": [
+   {
+    "project": "baz",
+    "sessions": 5,
+    "median": 16000.0,
+    "p10": 12800.0,
+    "p90": 20400.0,
+    "window_share": 0.08,
+    "window": 200000
+   },
    {
     "project": "bar",
     "sessions": 3,
@@ -71,12 +82,30 @@ export default {
    {
     "week": "2026-09-28",
     "median": 7000.0,
+    "p25": 7000.0,
+    "p75": 7000.0,
     "sessions": 1
    },
    {
+    "week": "2026-10-19",
+    "median": 19000.0,
+    "p25": 17500.0,
+    "p75": 20500.0,
+    "sessions": 2
+   },
+   {
+    "week": "2026-10-26",
+    "median": 16000.0,
+    "p25": 15000.0,
+    "p75": 17000.0,
+    "sessions": 2
+   },
+   {
     "week": "2026-11-02",
-    "median": 17500.0,
-    "sessions": 6
+    "median": 15000.0,
+    "p25": 10500.0,
+    "p75": 22000.0,
+    "sessions": 7
    }
   ]
  },
@@ -84,22 +113,139 @@ export default {
   "curve": [
    {
     "turn": 1,
-    "median": 15000.0,
-    "p25": 8500.0,
-    "p75": 22000.0,
-    "sessions": 7
+    "median": 15500.0,
+    "p25": 11250.0,
+    "p75": 20500.0,
+    "sessions": 12
    },
    {
     "turn": 2,
+    "median": 25000.0,
+    "p25": 20500.0,
+    "p75": 29500.0,
+    "sessions": 10
+   },
+   {
+    "turn": 3,
     "median": 30000.0,
-    "p25": 26000.0,
-    "p75": 80000.0,
-    "sessions": 5
+    "p25": 27000.0,
+    "p75": 39500.0,
+    "sessions": 7
+   },
+   {
+    "turn": 4,
+    "median": 60000.0,
+    "p25": 37500.0,
+    "p75": 105000.0,
+    "sessions": 7
    }
   ],
-  "by_project_curves": [],
-  "added_per_prompt": 16000.0,
+  "share_curve": [
+   {
+    "turn": 1,
+    "median": 0.065,
+    "p25": 0.04375,
+    "p75": 0.0925,
+    "sessions": 12
+   },
+   {
+    "turn": 2,
+    "median": 0.105309598,
+    "p25": 0.0925,
+    "p75": 0.135,
+    "sessions": 10
+   },
+   {
+    "turn": 3,
+    "median": 0.15,
+    "p25": 0.135,
+    "p75": 0.1975,
+    "sessions": 7
+   },
+   {
+    "turn": 4,
+    "median": 0.3,
+    "p25": 0.1875,
+    "p75": 0.525,
+    "sessions": 7
+   }
+  ],
+  "by_project_curves": [
+   {
+    "project": "baz",
+    "sessions": 5,
+    "curve": [
+     {
+      "turn": 1,
+      "median": 16000.0,
+      "p25": 14000.0,
+      "p75": 18000.0,
+      "sessions": 5
+     },
+     {
+      "turn": 2,
+      "median": 22000.0,
+      "p25": 20000.0,
+      "p75": 24000.0,
+      "sessions": 5
+     },
+     {
+      "turn": 3,
+      "median": 28000.0,
+      "p25": 26000.0,
+      "p75": 30000.0,
+      "sessions": 5
+     },
+     {
+      "turn": 4,
+      "median": 60000.0,
+      "p25": 45000.0,
+      "p75": 120000.0,
+      "sessions": 5
+     }
+    ],
+    "share_curve": [
+     {
+      "turn": 1,
+      "median": 0.08,
+      "p25": 0.07,
+      "p75": 0.09,
+      "sessions": 5
+     },
+     {
+      "turn": 2,
+      "median": 0.11,
+      "p25": 0.1,
+      "p75": 0.12,
+      "sessions": 5
+     },
+     {
+      "turn": 3,
+      "median": 0.14,
+      "p25": 0.13,
+      "p75": 0.15,
+      "sessions": 5
+     },
+     {
+      "turn": 4,
+      "median": 0.3,
+      "p25": 0.225,
+      "p75": 0.6,
+      "sessions": 5
+     }
+    ]
+   }
+  ],
+  "added_per_prompt": 20000.0,
   "by_project": [
+   {
+    "project": "baz",
+    "sessions": 5,
+    "added_per_prompt": 24000.0,
+    "compacted": 1,
+    "turns_to_compaction": 4.0,
+    "minutes_to_compaction": 3.0
+   },
    {
     "project": "bar",
     "sessions": 3,
@@ -126,18 +272,18 @@ export default {
    }
   ],
   "to_compaction": {
-   "sessions": 1,
-   "turns": 5.0,
-   "minutes": 5.0
+   "sessions": 2,
+   "turns": 4.5,
+   "minutes": 4.0
   },
   "fill": [
    {
     "window": 200000,
-    "sessions": 5,
+    "sessions": 10,
     "bins": [
-     3,
-     1,
-     0,
+     5,
+     2,
+     2,
      1,
      0
     ]
@@ -166,8 +312,145 @@ export default {
    }
   ]
  },
+ "sessions_map": {
+  "total": 12,
+  "points": [
+   {
+    "session_id": "x1",
+    "project": "codex-app",
+    "source": "codex",
+    "first_ts": "2026-11-04T13:00:00.000Z",
+    "start": 15000,
+    "peak": 26000,
+    "window": 258400,
+    "turns": 2,
+    "compactions": 0
+   },
+   {
+    "session_id": "b2",
+    "project": "bar",
+    "source": "claude",
+    "first_ts": "2026-11-04T12:20:00.000Z",
+    "start": 9000,
+    "peak": 9000,
+    "window": 200000,
+    "turns": 2,
+    "compactions": 0
+   },
+   {
+    "session_id": "b1",
+    "project": "bar",
+    "source": "claude",
+    "first_ts": "2026-11-04T12:00:00.000Z",
+    "start": 8000,
+    "peak": 8000,
+    "window": 200000,
+    "turns": 1,
+    "compactions": 0
+   },
+   {
+    "session_id": "f3",
+    "project": "foo",
+    "source": "claude",
+    "first_ts": "2026-11-04T11:00:00.000Z",
+    "start": 70000,
+    "peak": 150000,
+    "window": 2000000,
+    "turns": 2,
+    "compactions": 0
+   },
+   {
+    "session_id": "f2",
+    "project": "foo",
+    "source": "claude",
+    "first_ts": "2026-11-04T10:00:00.000Z",
+    "start": 24000,
+    "peak": 90000,
+    "window": 200000,
+    "turns": 4,
+    "compactions": 0
+   },
+   {
+    "session_id": "f1",
+    "project": "foo",
+    "source": "claude",
+    "first_ts": "2026-11-04T09:00:00.000Z",
+    "start": 20000,
+    "peak": 170000,
+    "window": 200000,
+    "turns": 5,
+    "compactions": 3
+   },
+   {
+    "session_id": "z0",
+    "project": "baz",
+    "source": "claude",
+    "first_ts": "2026-11-02T09:00:00.000Z",
+    "start": 12000,
+    "peak": 60000,
+    "window": 200000,
+    "turns": 5,
+    "compactions": 0
+   },
+   {
+    "session_id": "z1",
+    "project": "baz",
+    "source": "claude",
+    "first_ts": "2026-11-01T09:00:00.000Z",
+    "start": 18000,
+    "peak": 120000,
+    "window": 200000,
+    "turns": 4,
+    "compactions": 1
+   },
+   {
+    "session_id": "z2",
+    "project": "baz",
+    "source": "claude",
+    "first_ts": "2026-10-26T09:00:00.000Z",
+    "start": 14000,
+    "peak": 30000,
+    "window": 200000,
+    "turns": 4,
+    "compactions": 0
+   },
+   {
+    "session_id": "z3",
+    "project": "baz",
+    "source": "claude",
+    "first_ts": "2026-10-25T09:00:00.000Z",
+    "start": 22000,
+    "peak": 45000,
+    "window": 200000,
+    "turns": 4,
+    "compactions": 0
+   },
+   {
+    "session_id": "z4",
+    "project": "baz",
+    "source": "claude",
+    "first_ts": "2026-10-19T09:00:00.000Z",
+    "start": 16000,
+    "peak": 150000,
+    "window": 200000,
+    "turns": 4,
+    "compactions": 0
+   },
+   {
+    "session_id": "b3",
+    "project": "bar",
+    "source": "claude",
+    "first_ts": "2026-10-01T09:00:00.000Z",
+    "start": 7000,
+    "peak": 7000,
+    "window": 200000,
+    "turns": 1,
+    "compactions": 0
+   }
+  ]
+ },
  "fills": {
-  "main_bytes": 373300,
+  "main_bytes": 508552,
   "subagent_bytes": 500000,
   "tools": [
    {
@@ -176,6 +459,7 @@ export default {
     "with_bytes": 1,
     "bytes": 250000,
     "p50_bytes": 250000,
+    "p95_bytes": 250000,
     "max_bytes": 250000,
     "est_tokens": 62500
    },
@@ -185,8 +469,99 @@ export default {
     "with_bytes": 1,
     "bytes": 120000,
     "p50_bytes": 120000,
+    "p95_bytes": 120000,
     "max_bytes": 120000,
     "est_tokens": 30000
+   },
+   {
+    "name": "mcp__figma__node",
+    "calls": 1,
+    "with_bytes": 1,
+    "bytes": 27056,
+    "p50_bytes": 27056,
+    "p95_bytes": 27056,
+    "max_bytes": 27056,
+    "est_tokens": 6764
+   },
+   {
+    "name": "mcp__linear__issue",
+    "calls": 1,
+    "with_bytes": 1,
+    "bytes": 24049,
+    "p50_bytes": 24049,
+    "p95_bytes": 24049,
+    "max_bytes": 24049,
+    "est_tokens": 6012
+   },
+   {
+    "name": "NotebookEdit",
+    "calls": 1,
+    "with_bytes": 1,
+    "bytes": 21042,
+    "p50_bytes": 21042,
+    "p95_bytes": 21042,
+    "max_bytes": 21042,
+    "est_tokens": 5260
+   },
+   {
+    "name": "LS",
+    "calls": 1,
+    "with_bytes": 1,
+    "bytes": 18035,
+    "p50_bytes": 18035,
+    "p95_bytes": 18035,
+    "max_bytes": 18035,
+    "est_tokens": 4508
+   },
+   {
+    "name": "Task",
+    "calls": 1,
+    "with_bytes": 1,
+    "bytes": 15028,
+    "p50_bytes": 15028,
+    "p95_bytes": 15028,
+    "max_bytes": 15028,
+    "est_tokens": 3757
+   },
+   {
+    "name": "WebFetch",
+    "calls": 1,
+    "with_bytes": 1,
+    "bytes": 12021,
+    "p50_bytes": 12021,
+    "p95_bytes": 12021,
+    "max_bytes": 12021,
+    "est_tokens": 3005
+   },
+   {
+    "name": "Write",
+    "calls": 1,
+    "with_bytes": 1,
+    "bytes": 9014,
+    "p50_bytes": 9014,
+    "p95_bytes": 9014,
+    "max_bytes": 9014,
+    "est_tokens": 2253
+   },
+   {
+    "name": "Edit",
+    "calls": 1,
+    "with_bytes": 1,
+    "bytes": 6007,
+    "p50_bytes": 6007,
+    "p95_bytes": 6007,
+    "max_bytes": 6007,
+    "est_tokens": 1501
+   },
+   {
+    "name": "Glob",
+    "calls": 1,
+    "with_bytes": 1,
+    "bytes": 3000,
+    "p50_bytes": 3000,
+    "p95_bytes": 3000,
+    "max_bytes": 3000,
+    "est_tokens": 750
    },
    {
     "name": "Grep",
@@ -194,6 +569,7 @@ export default {
     "with_bytes": 1,
     "bytes": 2000,
     "p50_bytes": 2000,
+    "p95_bytes": 2000,
     "max_bytes": 2000,
     "est_tokens": 500
    },
@@ -203,6 +579,7 @@ export default {
     "with_bytes": 1,
     "bytes": 1000,
     "p50_bytes": 1000,
+    "p95_bytes": 1000,
     "max_bytes": 1000,
     "est_tokens": 250
    },
@@ -212,17 +589,39 @@ export default {
     "with_bytes": 1,
     "bytes": 300,
     "p50_bytes": 300,
+    "p95_bytes": 300,
     "max_bytes": 300,
     "est_tokens": 75
    }
   ],
   "mcp": [
    {
+    "name": "figma",
+    "calls": 1,
+    "with_bytes": 1,
+    "bytes": 27056,
+    "p50_bytes": 27056,
+    "p95_bytes": 27056,
+    "max_bytes": 27056,
+    "est_tokens": 6764
+   },
+   {
+    "name": "linear",
+    "calls": 1,
+    "with_bytes": 1,
+    "bytes": 24049,
+    "p50_bytes": 24049,
+    "p95_bytes": 24049,
+    "max_bytes": 24049,
+    "est_tokens": 6012
+   },
+   {
     "name": "github",
     "calls": 1,
     "with_bytes": 1,
     "bytes": 1000,
     "p50_bytes": 1000,
+    "p95_bytes": 1000,
     "max_bytes": 1000,
     "est_tokens": 250
    }
@@ -253,6 +652,123 @@ export default {
     "ts": "2026-11-04T09:02:00.000Z",
     "est_tokens": 30000,
     "title": "Fix the importer"
+   },
+   {
+    "id": "t00058",
+    "session_id": "z1",
+    "project": "baz",
+    "source": "claude",
+    "tool": "mcp__figma__node",
+    "mcp_server": "figma",
+    "input": "x",
+    "bytes": 27056,
+    "ts": "2026-11-04T09:09:00.000Z",
+    "est_tokens": 6764,
+    "title": null
+   },
+   {
+    "id": "t00057",
+    "session_id": "z0",
+    "project": "baz",
+    "source": "claude",
+    "tool": "mcp__linear__issue",
+    "mcp_server": "linear",
+    "input": "x",
+    "bytes": 24049,
+    "ts": "2026-11-04T09:08:00.000Z",
+    "est_tokens": 6012,
+    "title": null
+   },
+   {
+    "id": "t00056",
+    "session_id": "z1",
+    "project": "baz",
+    "source": "claude",
+    "tool": "NotebookEdit",
+    "mcp_server": null,
+    "input": "x",
+    "bytes": 21042,
+    "ts": "2026-11-04T09:07:00.000Z",
+    "est_tokens": 5260,
+    "title": null
+   },
+   {
+    "id": "t00055",
+    "session_id": "z0",
+    "project": "baz",
+    "source": "claude",
+    "tool": "LS",
+    "mcp_server": null,
+    "input": "x",
+    "bytes": 18035,
+    "ts": "2026-11-04T09:06:00.000Z",
+    "est_tokens": 4508,
+    "title": null
+   },
+   {
+    "id": "t00054",
+    "session_id": "z1",
+    "project": "baz",
+    "source": "claude",
+    "tool": "Task",
+    "mcp_server": null,
+    "input": "x",
+    "bytes": 15028,
+    "ts": "2026-11-04T09:05:00.000Z",
+    "est_tokens": 3757,
+    "title": null
+   },
+   {
+    "id": "t00053",
+    "session_id": "z0",
+    "project": "baz",
+    "source": "claude",
+    "tool": "WebFetch",
+    "mcp_server": null,
+    "input": "x",
+    "bytes": 12021,
+    "ts": "2026-11-04T09:04:00.000Z",
+    "est_tokens": 3005,
+    "title": null
+   },
+   {
+    "id": "t00052",
+    "session_id": "z1",
+    "project": "baz",
+    "source": "claude",
+    "tool": "Write",
+    "mcp_server": null,
+    "input": "x",
+    "bytes": 9014,
+    "ts": "2026-11-04T09:03:00.000Z",
+    "est_tokens": 2253,
+    "title": null
+   },
+   {
+    "id": "t00051",
+    "session_id": "z0",
+    "project": "baz",
+    "source": "claude",
+    "tool": "Edit",
+    "mcp_server": null,
+    "input": "x",
+    "bytes": 6007,
+    "ts": "2026-11-04T09:02:00.000Z",
+    "est_tokens": 1501,
+    "title": null
+   },
+   {
+    "id": "t00050",
+    "session_id": "z1",
+    "project": "baz",
+    "source": "claude",
+    "tool": "Glob",
+    "mcp_server": null,
+    "input": "x",
+    "bytes": 3000,
+    "ts": "2026-11-04T09:01:00.000Z",
+    "est_tokens": 750,
+    "title": null
    },
    {
     "id": "t00017",
@@ -296,11 +812,79 @@ export default {
   ]
  },
  "cost": {
-  "cost": 2.24732,
-  "cache_read_cost": 0.0907,
+  "cost": 2.58895,
+  "series": {
+   "bucket": "day",
+   "rows": [
+    {
+     "day": "2026-10-01",
+     "input": 7000,
+     "cache_read": 0,
+     "cache_write": 0,
+     "model_switch": 0,
+     "expired": 0,
+     "other": 0
+    },
+    {
+     "day": "2026-10-19",
+     "input": 3000,
+     "cache_read": 197000,
+     "cache_write": 16000,
+     "model_switch": 0,
+     "expired": 0,
+     "other": 0
+    },
+    {
+     "day": "2026-10-25",
+     "input": 3000,
+     "cache_read": 104000,
+     "cache_write": 22000,
+     "model_switch": 0,
+     "expired": 0,
+     "other": 0
+    },
+    {
+     "day": "2026-10-26",
+     "input": 3000,
+     "cache_read": 73000,
+     "cache_write": 14000,
+     "model_switch": 0,
+     "expired": 0,
+     "other": 0
+    },
+    {
+     "day": "2026-11-01",
+     "input": 3000,
+     "cache_read": 171000,
+     "cache_write": 18000,
+     "model_switch": 0,
+     "expired": 0,
+     "other": 0
+    },
+    {
+     "day": "2026-11-02",
+     "input": 63000,
+     "cache_read": 99000,
+     "cache_write": 12000,
+     "model_switch": 1,
+     "expired": 0,
+     "other": 0
+    },
+    {
+     "day": "2026-11-04",
+     "input": 451300,
+     "cache_read": 275000,
+     "cache_write": 0,
+     "model_switch": 1,
+     "expired": 1,
+     "other": 2
+    }
+   ]
+  },
+  "cache_read_cost": 0.1551,
   "long_cost": 1.5001,
   "long_requests": 1,
-  "cache_hit_ratio": 0.375017046,
+  "cache_hit_ratio": 0.598970214,
   "by_project": [
    {
     "project": "foo",
@@ -311,6 +895,16 @@ export default {
     "cache_read": 275000,
     "prompt_tokens": 656300,
     "cache_hit_ratio": 0.419015694
+   },
+   {
+    "project": "baz",
+    "cost": 0.34163,
+    "cache_read_cost": 0.0644,
+    "long_cost": null,
+    "long_requests": 0,
+    "cache_read": 644000,
+    "prompt_tokens": 801000,
+    "cache_hit_ratio": 0.803995006
    },
    {
     "project": "codex-app",
@@ -333,7 +927,7 @@ export default {
     "cache_hit_ratio": 0.0
    }
   ],
-  "break_sessions": 3,
+  "break_sessions": 4,
   "breaks": [
    {
     "session_id": "f2",
@@ -357,6 +951,18 @@ export default {
     "other": 1,
     "uncached_tokens": 150000,
     "cost": 1.5,
+    "title": null
+   },
+   {
+    "session_id": "z0",
+    "project": "baz",
+    "source": "claude",
+    "breaks": 1,
+    "model_switch": 1,
+    "expired": 0,
+    "other": 0,
+    "uncached_tokens": 60000,
+    "cost": 0.18,
     "title": null
    },
    {
@@ -419,11 +1025,11 @@ export default {
     },
     {
      "label": "Median turns before the first compaction (compacted sessions with a known first compaction)",
-     "value": "5"
+     "value": "4"
     },
     {
      "label": "Median active minutes before the first compaction (compacted sessions with a known first compaction)",
-     "value": "5"
+     "value": "4"
     }
    ],
    "advice": "Start a new session or `/clear` between tasks; `/compact` before the context fills, while the summary is still cheap; hand bulk reading to a subagent, so it compacts there and not in the main thread.",
@@ -491,7 +1097,7 @@ export default {
     },
     {
      "label": "Cache-hit ratio of the view",
-     "value": "38%"
+     "value": "60%"
     }
    ],
    "advice": "Keep one model through a session: a switch rereads the whole context uncached and writes a new cache.",
@@ -517,7 +1123,7 @@ export default {
     },
     {
      "label": "Share of the estimated cost",
-     "value": "67%"
+     "value": "58%"
     },
     {
      "label": "Long-tier requests",

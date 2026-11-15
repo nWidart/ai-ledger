@@ -1,0 +1,24 @@
+.pressure { display: grid; gap: 14px; margin-top: 8px; }
+.pressure .pkey { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 11.5px; color: var(--text-muted); }
+.pressure .pkey i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+.pressure .prow { display: grid; gap: 6px; }
+.pressure .pw { font-size: 13px; color: var(--text-secondary); }
+.pressure .pw b { color: var(--text-primary); font-weight: 600; }
+.pressure .pbar { display: flex; gap: 2px; width: 100%; height: 40px; }
+.pressure .band { flex-shrink: 1; flex-basis: 0; min-width: 6px; height: 100%; padding: 0; border: 0; border-radius: 4px; cursor: pointer; overflow: hidden;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.15; color: var(--text-primary); font: inherit; font-size: 12px; white-space: nowrap; }
+/* A segment's width is its share; the 6px minimum keeps a tiny share visible and selectable, at the cost of drawing it a little wide.
+   Text on a segment: the first two bands are light greys, the third a mid grey, the last two the warning and critical fills; each pair reads in both themes. */
+.pressure .band[data-band="1"] { color: light-dark(var(--text-primary), var(--bg)); }
+.pressure .band[data-band="2"] { color: var(--bg); }
+.pressure .band[data-band="3"] { color: light-dark(var(--text-primary), var(--bg)); }
+.pressure .band[data-band="4"] { color: var(--on-accent); }
+.pressure .band .n { font-weight: 600; }
+.pressure .band .l { font-size: 10.5px; }
+.pressure .band[aria-pressed="true"] { outline: 2px solid var(--text-primary); outline-offset: 1px; }
+.pressure .band:focus-visible { outline: 2px solid var(--text-primary); outline-offset: 2px; }
+.pressure .plist { border: 1px solid var(--border); border-radius: 6px; padding: 8px; display: grid; gap: 4px; }
+.pressure .plist p { margin: 0; }
+.pressure .plist ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.pressure .psess { display: flex; flex-wrap: wrap; gap: 2px 12px; width: 100%; text-align: left; font-size: 12.5px; padding: 4px 6px; }
+.pressure .pname { font-weight: 600; }

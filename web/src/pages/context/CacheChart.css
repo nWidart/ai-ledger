@@ -1,0 +1,16 @@
+/* Cache chart: tokens by bucket with the cache-hit line, and the breaks strip under it */
+.pg-context .cache-chart { --cc-read: color-mix(in srgb, var(--series-1) 38%, var(--surface-1)); --cc-write: var(--series-1); --cc-input: var(--accent);
+  --cc-model_switch: var(--series-3); --cc-expired: var(--warning); --cc-other: var(--text-muted); }
+.pg-context .cache-chart .seg-read { fill: var(--cc-read); }
+.pg-context .cache-chart .seg-write { fill: var(--cc-write); }
+.pg-context .cache-chart .seg-input { fill: var(--cc-input); }
+.pg-context .cache-chart .seg-model_switch { fill: var(--cc-model_switch); }
+.pg-context .cache-chart .seg-expired { fill: var(--cc-expired); }
+.pg-context .cache-chart .seg-other { fill: var(--cc-other); }
+.pg-context .cache-chart i.seg-read { background: var(--cc-read); border: 1px solid var(--text-muted); }
+.pg-context .cache-chart i.seg-write { background: var(--cc-write); }
+.pg-context .cache-chart i.seg-input { background: var(--cc-input); }
+.pg-context .cache-chart i.seg-model_switch { background: var(--cc-model_switch); }
+.pg-context .cache-chart i.seg-expired { background: var(--cc-expired); }
+.pg-context .cache-chart i.seg-other { background: var(--cc-other); }
+.pg-context .cache-chart .tip .head { font-weight: 600; margin-bottom: 4px; }
