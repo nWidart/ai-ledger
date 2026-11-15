@@ -5,6 +5,18 @@ import "./chart.css";
 /** Motion is opt-out: every animation checks this (and the CSS sits behind the same media query). */
 export const motion = () => !matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+/** How much larger than the default the browser's text is: the root's computed font size over 16, 1 when it cannot be
+ *  read. Read when a chart renders; SVG labels and the margins that hold them multiply by it. */
+export function textScale(): number {
+  if (typeof document === "undefined") return 1;
+  const px = parseFloat(getComputedStyle(document.documentElement).fontSize);
+  return px > 0 && Number.isFinite(px) ? px / 16 : 1;
+}
+
+/** A chart's margins with the room for labels grown by the text scale (the same numbers at a scale of 1). */
+export const scaleMargins = <T extends Record<string, number>>(m: T, s: number): T =>
+  s === 1 ? m : (Object.fromEntries(Object.entries(m).map(([k, v]) => [k, v * s])) as T);
+
 /** A figure counting up from the one shown before, so a range change reads as a change. round: integers by default. */
 export function useCountUp(to: number, from: number | undefined, round: (v: number) => number = Math.round): number {
   const [v, setV] = useState(to);
@@ -40,13 +52,14 @@ export function useWidth(ref: RefObject<HTMLElement | null>, fallback = 800): nu
 }
 
 /** Plot geometry for one bar per day: x of day i, bar width, y of a value, round axis ticks. */
-export interface DayAxis { W: number; H: number; m: { t: number; r: number; b: number; l: number }; iw: number; ih: number; bw: number; gap: number; w: number;
+export interface DayAxis { W: number; H: number; m: { t: number; r: number; b: number; l: number }; iw: number; ih: number; bw: number; gap: number; w: number; s: number;
   yMax: number; step: number; x: (i: number) => number; cx: (i: number) => number; y: (v: number) => number; every: number }
-export function dayAxis(W: number, H: number, n: number, max: number, niceStep: (raw: number) => number, m = { t: 22, r: 8, b: 26, l: 52 }): DayAxis {
+export function dayAxis(W: number, H: number, n: number, max: number, niceStep: (raw: number) => number, m = { t: 22, r: 8, b: 26, l: 52 }, s = 1): DayAxis {
+  m = scaleMargins(m, s);
   const iw = W - m.l - m.r, ih = H - m.t - m.b;
   const top = max * 1.08 || 1, step = niceStep(top / 4), yMax = Math.ceil(top / step) * step;
   const bw = iw / Math.max(1, n), gap = Math.min(4, bw * .25), w = Math.max(1, bw - gap);
-  return { W, H, m, iw, ih, bw, gap, w, yMax, step, every: Math.max(1, Math.ceil(n / Math.max(2, Math.floor(iw / 64)))),
+  return { W, H, m, iw, ih, bw, gap, w, s, yMax, step, every: Math.max(1, Math.ceil(n / Math.max(s === 1 ? 2 : 1, Math.floor(iw / (64 * s))))),
     x: i => m.l + i * bw + gap / 2, cx: i => m.l + (i + .5) * bw, y: v => m.t + ih - v / yMax * ih };
 }
 
@@ -57,8 +70,12 @@ export function tipAt(box: HTMLElement, tip: HTMLElement, clientX: number, clien
   return { left: Math.max(4 - r.left, (right ? clientX - tip.offsetWidth - 14 : clientX + 14) - r.left), top: clientY - r.top - 10 };
 }
 
+/** False when the text is scaled up and the plot is too narrow for the peak label and the right axis title: they are left out.
+ *  Always true at the default text size. */
+export const roomForLabels = (a: DayAxis) => a.s === 1 || a.iw >= 300 * a.s;
+
 /** Where the peak day's label goes over its bar: centred, or kept inside the plot at either edge. */
 export function peakLabelAt(a: DayAxis, i: number): { x: number; anchor: "start" | "middle" | "end" } {
-  const px = a.cx(i), near = 56, anchor = px < a.m.l + near ? "start" : px > a.W - a.m.r - near ? "end" : "middle";
+  const px = a.cx(i), near = 56 * a.s, anchor = px < a.m.l + near ? "start" : px > a.W - a.m.r - near ? "end" : "middle";
   return { anchor, x: anchor === "start" ? Math.max(a.m.l, px - a.w / 2) : anchor === "end" ? Math.min(a.W - a.m.r, px + a.w / 2) : px };
 }

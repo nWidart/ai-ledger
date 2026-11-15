@@ -1,4 +1,4 @@
 /* The "Show data table" disclosure under a chart, and a scroll region's focus ring (drawn inside, so a clipping parent keeps it). */
-.chart-table { margin-top: 8px; font-size: 13px; }
+.chart-table { margin-top: 8px; font-size: .8125rem; }
 .chart-table > div { margin-top: 8px; }
 [role=region][tabindex="0"]:focus-visible { outline-offset: -2px; }

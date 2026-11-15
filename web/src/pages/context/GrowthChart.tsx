@@ -1,14 +1,14 @@
 import { useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import type { ContextPayload, GrowthPoint } from "../../api";
 import { useColors } from "../../colors";
-import { useWidth } from "../../components/chart";
+import { scaleMargins, textScale, useWidth } from "../../components/chart";
 import { ChartTable, DataTable } from "../../components/DataTable";
 import { niceStep, num, pct, plural } from "../../format";
 import { NEAR_LIMIT, share as shareText, short } from "./context";
 import "./GrowthChart.css";
 
 type Curves = ContextPayload["growth"]["by_project_curves"];
-const H = 260, M = { t: 12, r: 14, b: 30, l: 52 };
+const H0 = 260, M0 = { t: 12, r: 14, b: 30, l: 52 }; // at the default text size
 /** The survival strip under the x-axis: its gap, bar height and the text row. */
 const STRIP = { gap: 6, bar: 22, text: 18 };
 type Mode = "tokens" | "share";
@@ -31,6 +31,8 @@ export function GrowthChart({ curve, projects, share }: { curve: GrowthPoint[]; 
   const [at, setAt] = useState<number | null>(null); // an index into the curve in view
   const [mode, setMode] = useState<Mode>("tokens"), [sel, setSel] = useState<string | null>(null);
   if (!curve.length) return null;
+  // Labels and the room around them follow the browser's text size; the plot keeps its height.
+  const ts = textScale(), M = scaleMargins(M0, ts), H = H0 + (M.t + M.b) - (M0.t + M0.b);
   const canShare = !!share?.length, m: Mode = mode === "share" && canShare ? "share" : "tokens", isShare = m === "share";
   const cv = isShare ? share! : curve, fmt = isShare ? shareText : short;
   const drawn = projects.map(p => ({ project: p.project, sessions: p.sessions, c: isShare ? p.share_curve : p.curve })).filter(p => p.c.length);
@@ -53,7 +55,7 @@ export function GrowthChart({ curve, projects, share }: { curve: GrowthPoint[]; 
   for (let t = xStep; t <= xMax; t += xStep) if (t > 1) xTicks.push(t);
   // The survival strip: one bar per point of the curve in view, by its sessions.
   const maxSessions = Math.max(...cv.map(p => p.sessions), 1), stripTop = H + STRIP.gap, barW = Math.max(1, Math.min(10, iw / cv.length * .7));
-  const svgH = H + STRIP.gap + STRIP.bar + STRIP.text;
+  const svgH = H + STRIP.gap + STRIP.bar + STRIP.text * ts;
 
   const cur = at == null ? null : cv[at] ?? null;
   const readout = cur && [(isShare ? readShare : readTurn)(cur), ...shown.flatMap(p => { const c = p.c.find(q => q.turn === cur.turn); return c ? [`${p.project ?? "(no project)"} ${fmt(c.median)}` + (only ? ` (25th to 75th percentile ${fmt(c.p25)} to ${fmt(c.p75)})` : "")] : []; })].join("; ");
@@ -99,12 +101,12 @@ export function GrowthChart({ curve, projects, share }: { curve: GrowthPoint[]; 
       <div className="chart" ref={box} tabIndex={0} role="group" aria-label={label} onKeyDown={onKey} onBlur={() => setAt(null)}>
         <svg className="growth-svg" viewBox={`0 0 ${W} ${svgH}`} aria-hidden="true">
           {yTicks.map(v => <g key={v}><line x1={M.l} x2={W - M.r} y1={y(v)} y2={y(v)} stroke="var(--grid)" />
-            <text x={M.l - 6} y={y(v) + 4} textAnchor="end" fontSize="11" fill="var(--text-muted)">{isShare ? pct(v) : short(v)}</text></g>)}
-          {xTicks.map(t => <text key={t} x={x(t)} y={H - 8} textAnchor="middle" fontSize="11" fill="var(--text-muted)">{t}</text>)}
+            <text x={M.l - 6 * ts} y={y(v) + 4 * ts} textAnchor="end" fontSize={11 * ts} fill="var(--text-muted)">{isShare ? pct(v) : short(v)}</text></g>)}
+          {xTicks.map(t => <text key={t} x={x(t)} y={H - 8 * ts} textAnchor="middle" fontSize={11 * ts} fill="var(--text-muted)">{t}</text>)}
           {!only && <path className="band" d={bandOf(cv)} fill="var(--text-secondary)" opacity=".16" stroke="none" />}
           {only && <path className="band proj-band" d={bandOf(only.c)} fill={color(only.project)} opacity=".18" stroke="none" />}
           {isShare && <g className="limit"><line x1={M.l} x2={W - M.r} y1={y(NEAR_LIMIT)} y2={y(NEAR_LIMIT)} stroke="var(--text-muted)" strokeDasharray="5 4" />
-            <text x={W - M.r} y={y(NEAR_LIMIT) - 4} textAnchor="end" fontSize="11" fill="var(--text-muted)">{pct(NEAR_LIMIT)} of the window</text></g>}
+            <text x={W - M.r} y={y(NEAR_LIMIT) - 4 * ts} textAnchor="end" fontSize={11 * ts} fill="var(--text-muted)">{pct(NEAR_LIMIT)} of the window</text></g>}
           {shown.map(p => <path key={key(p)} className="curve proj" d={line(p.c)} fill="none" stroke={color(p.project)} strokeWidth={only ? 3 : 1.5} strokeLinejoin="round" />)}
           <path className="curve view" d={line(cv)} fill="none" stroke="var(--surface-1)" strokeWidth="4.5" strokeLinejoin="round" strokeLinecap="round" />
           <path className="curve view" d={line(cv)} fill="none" stroke="var(--text-primary)" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
@@ -115,8 +117,8 @@ export function GrowthChart({ curve, projects, share }: { curve: GrowthPoint[]; 
           <g className="strip">
             {cv.map(p => { const h = Math.max(1, p.sessions / maxSessions * STRIP.bar);
               return <rect key={p.turn} className="strip-bar" x={x(p.turn) - barW / 2} y={stripTop + STRIP.bar - h} width={barW} height={h} fill="var(--text-muted)" opacity=".55" />; })}
-            <text x={M.l} y={stripTop + STRIP.bar + 13} fontSize="11" fill="var(--text-muted)">Sessions still running at each turn</text>
-            <text x={W - M.r} y={stripTop + STRIP.bar + 13} textAnchor="end" fontSize="11" fill="var(--text-muted)">{num(first.sessions)} at turn {first.turn} to {num(last.sessions)} at turn {last.turn}</text>
+            <text x={M.l} y={stripTop + STRIP.bar + 13 * ts} fontSize={11 * ts} fill="var(--text-muted)">Sessions still running at each turn</text>
+            <text x={W - M.r} y={stripTop + STRIP.bar + 13 * ts} textAnchor="end" fontSize={11 * ts} fill="var(--text-muted)">{num(first.sessions)} at turn {first.turn} to {num(last.sessions)} at turn {last.turn}</text>
           </g>
         </svg>
       </div>

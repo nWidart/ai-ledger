@@ -2,21 +2,21 @@
 .drawers { margin-top: 32px; border-top: 1px solid var(--border); }
 .drawer { border-bottom: 1px solid var(--border); }
 .drawer > .drawer-head { position: relative; display: flex; gap: 12px; align-items: baseline; padding: 14px 4px; }
-.drawer > .drawer-head h2 { font-size: 16px; font-weight: 600; margin: 0; letter-spacing: -.005em; }
+.drawer > .drawer-head h2 { font-size: 1rem; font-weight: 600; margin: 0; letter-spacing: -.005em; }
 .drawer .drawer-toggle { border: 0; background: none; padding: 0; font: inherit; color: inherit; letter-spacing: inherit; cursor: pointer; display: flex; gap: 12px; align-items: baseline; text-align: left; }
 .drawer .drawer-toggle:hover { background: none; }
 /* The whole title line is the click target. */
 .drawer .drawer-toggle::after { content: ""; position: absolute; inset: 0; }
-.drawer .drawer-toggle::before { content: ""; width: 7px; height: 7px; flex: none; align-self: center;
+.drawer .drawer-toggle::before { content: ""; width: .4375rem; height: .4375rem; flex: none; align-self: center;
   border-right: 1.5px solid var(--text-muted); border-bottom: 1.5px solid var(--text-muted); transform: rotate(-45deg); transition: transform .15s; }
 .drawer .drawer-toggle[aria-expanded=true]::before { transform: rotate(45deg); }
 .drawer .drawer-toggle:hover { color: var(--link); }
 .drawer .drawer-toggle:focus-visible { outline-offset: 4px; }
-.drawer .drawer-toggle .c { color: var(--text-muted); font-size: 13px; font-weight: 400; }
-.drawer > .drawer-head .w { color: var(--text-muted); font-size: 12.5px; margin-left: auto; text-align: right; }
+.drawer .drawer-toggle .c { color: var(--text-muted); font-size: .8125rem; font-weight: 400; }
+.drawer > .drawer-head .w { color: var(--text-muted); font-size: .78125rem; margin-left: auto; text-align: right; }
 /* A control beside the title (a toggletip) sits above the click target. */
 .drawer > .drawer-head h2 > :not(.drawer-toggle) { position: relative; z-index: 1; margin-left: 4px; }
 .drawer-body { padding: 0 0 24px; }
 .drawer > .drawer-body[hidden] { display: none !important; }
-@media (max-width: 900px) { .drawer > .drawer-head .w { display: none; } }
+@media (max-width: 56.25em) { .drawer > .drawer-head .w { display: none; } }
 @media (prefers-reduced-motion: reduce) { .drawer .drawer-toggle::before { transition: none; } }

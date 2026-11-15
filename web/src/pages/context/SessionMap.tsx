@@ -2,7 +2,7 @@
 import { useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent } from "react";
 import type { ContextPayload, SessionPoint } from "../../api";
 import { useColors } from "../../colors";
-import { tipAt, useWidth } from "../../components/chart";
+import { scaleMargins, textScale, tipAt, useWidth } from "../../components/chart";
 import { ChartTable, DataTable } from "../../components/DataTable";
 import { openSessionSheet, pickRow, shortId } from "../../components/sheets/session";
 import { num, plural, when } from "../../format";
@@ -12,7 +12,7 @@ import { SOURCE_LABELS } from "../../components/Filters";
 import "./SessionMap.css";
 
 type SessionsMap = ContextPayload["sessions_map"];
-const H = 320, M = { t: 14, r: 16, b: 46, l: 52 };
+const H = 320, M0 = { t: 14, r: 16, b: 46, l: 52 }; // the margins at the default text size
 /** A pointer picks the nearest dot within this many pixels. */
 const PICK_PX = 12;
 const R = 4, RING = 7.5;
@@ -66,6 +66,7 @@ export function SessionMap({ map }: { map: SessionsMap }) {
   }, [at]);
   if (!pts.length) return <p className="muted session-map-empty">No session in this view has a measured start, a known window and a peak.</p>;
 
+  const ts = textScale(), M = scaleMargins(M0, ts); // labels and the room around them follow the browser's text size
   const iw = W - M.l - M.r, ih = H - M.t - M.b;
   const x = (v: number) => M.l + logFraction(v, dom) * iw, y = (r: number) => M.t + ih - Math.min(1, r) * ih;
   const xTicks = startTicks(dom), yTicks = [0, .2, .4, .6, .8, 1];
@@ -109,15 +110,16 @@ export function SessionMap({ map }: { map: SessionsMap }) {
       <div className="chart" ref={box} tabIndex={0} role="group" aria-label={label} onKeyDown={onKey} onBlur={() => setAt(null)}>
         <svg viewBox={`0 0 ${W} ${H}`} aria-hidden="true">
           {yTicks.map(v => <g key={v}><line x1={M.l} x2={W - M.r} y1={y(v)} y2={y(v)} stroke="var(--grid)" />
-            <text x={M.l - 6} y={y(v) + 4} textAnchor="end" fontSize="11" fill="var(--text-muted)">{Math.round(v * 100)}%</text></g>)}
+            <text x={M.l - 6 * ts} y={y(v) + 4 * ts} textAnchor="end" fontSize={11 * ts} fill="var(--text-muted)">{Math.round(v * 100)}%</text></g>)}
           {xTicks.map(t => <g key={t}><line x1={x(t)} x2={x(t)} y1={M.t} y2={M.t + ih} stroke="var(--grid)" />
-            <text x={x(t)} y={M.t + ih + 16} textAnchor="middle" fontSize="11" fill="var(--text-muted)">{short(t)}</text></g>)}
-          <text x={M.l + iw / 2} y={H - 6} textAnchor="middle" fontSize="11.5" fill="var(--text-secondary)">Starting context (tokens, log scale)</text>
-          <text transform={`translate(12 ${M.t + ih / 2}) rotate(-90)`} textAnchor="middle" fontSize="11.5" fill="var(--text-secondary)">Peak share of the window</text>
+            <text x={x(t)} y={M.t + ih + 16 * ts} textAnchor="middle" fontSize={11 * ts} fill="var(--text-muted)">{short(t)}</text></g>)}
+          <text x={M.l + iw / 2} y={H - 6 * ts} textAnchor="middle" fontSize={11.5 * ts} fill="var(--text-secondary)">Starting context (tokens, log scale)</text>
+          <text transform={`translate(${12 * ts} ${M.t + ih / 2}) rotate(-90)`} textAnchor="middle" fontSize={11.5 * ts} fill="var(--text-secondary)">{/* The full title is about 6.5 text-sized units per character along the axis; a shorter one when the plot is too short for it. */}
+            {ih >= 24 * 6.5 * ts ? "Peak share of the window" : "Peak share"}</text>
           <line className="ref-x" x1={x(START_LARGE_TOKENS)} x2={x(START_LARGE_TOKENS)} y1={M.t} y2={M.t + ih} stroke="var(--text-muted)" strokeDasharray="5 4" />
-          <text x={x(START_LARGE_TOKENS) + 4} y={M.t + ih - 6} fontSize="11" fill="var(--text-secondary)" stroke="var(--surface-1)" strokeWidth="3" paintOrder="stroke">30k start</text>
+          <text x={x(START_LARGE_TOKENS) + 4} y={M.t + ih - 6 * ts} fontSize={11 * ts} fill="var(--text-secondary)" stroke="var(--surface-1)" strokeWidth="3" paintOrder="stroke">30k start</text>
           <line className="ref-y" x1={M.l} x2={W - M.r} y1={y(NEAR_LIMIT)} y2={y(NEAR_LIMIT)} stroke="var(--text-muted)" strokeDasharray="5 4" />
-          <text x={W - M.r - 4} y={y(NEAR_LIMIT) + 13} textAnchor="end" fontSize="11" fill="var(--text-secondary)" stroke="var(--surface-1)" strokeWidth="3" paintOrder="stroke">80% of window</text>
+          <text x={W - M.r - 4} y={y(NEAR_LIMIT) + 13 * ts} textAnchor="end" fontSize={11 * ts} fill="var(--text-secondary)" stroke="var(--surface-1)" strokeWidth="3" paintOrder="stroke">80% of window</text>
           {pts.map((p, i) => <g key={p.session_id} className={"pt" + (i === at ? " on" : "")} data-id={p.session_id}>
             {p.compactions > 0 && <circle className="ring" cx={x(p.start)} cy={y(drawnShare(p))} r={RING} fill="none" stroke={color(p.project)} strokeWidth="1.5" />}
             <circle className="dot" cx={x(p.start)} cy={y(drawnShare(p))} r={R} fill={color(p.project)} fillOpacity=".75" stroke="var(--surface-1)" strokeWidth="1" />

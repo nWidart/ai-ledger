@@ -2,23 +2,23 @@
 .pg-limits .top { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px 32px; align-items: start; margin-bottom: 20px; }
 .pg-limits .top-side { display: flex; flex-direction: column; align-items: flex-end; gap: 12px; min-width: 0; max-width: 600px; }
 .pg-limits .top-side .filters { justify-content: flex-end; }
-.pg-limits .lede { margin: 0; max-width: 28ch; font-size: clamp(24px, 3.6vw, 38px); line-height: 1.15;
+.pg-limits .lede { margin: 0; max-width: 28ch; font-size: clamp(1.5rem, 3.6vw, 2.375rem); line-height: 1.15;
   font-weight: 400; letter-spacing: -.025em; text-wrap: balance; color: var(--text-secondary); }
 .pg-limits .lede:focus { outline: none; }
 .pg-limits .lede b, .pg-limits .lede .when { color: var(--text-primary); font-weight: 600; }
 .pg-limits .lede .then { display: block; font-size: .62em; margin-top: 6px; }
-.pg-limits .suggest { margin: 12px 0 0; font-size: 15px; color: var(--text-secondary); }
+.pg-limits .suggest { margin: 12px 0 0; font-size: .9375rem; color: var(--text-secondary); }
 .pg-limits .suggest b { color: var(--text-primary); }
-.pg-limits .fresh { list-style: none; padding: 0; margin: 12px 0 0; display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: 12.5px; color: var(--text-muted); }
+.pg-limits .fresh { list-style: none; padding: 0; margin: 12px 0 0; display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: .78125rem; color: var(--text-muted); }
 .pg-limits .fresh b { color: var(--text-secondary); font-weight: 500; }
 .pg-limits .fresh .chip { margin-left: 6px; }
 /* Stack before the filters squeeze the heading into a narrow column. */
-@media (max-width: 1040px) {
+@media (max-width: 65em) {
   .pg-limits .top { grid-template-columns: minmax(0, 1fr); }
   .pg-limits .top-side { max-width: none; align-items: stretch; flex-direction: column-reverse; }
   .pg-limits .top-side .filters { justify-content: flex-start; }
 }
-.pg-limits .pending { margin: -12px 0 12px; min-height: 1.5em; color: var(--text-secondary); font-size: 13px; }
+.pg-limits .pending { margin: -12px 0 12px; min-height: 1.5em; color: var(--text-secondary); font-size: .8125rem; }
 .pg-limits .pending:empty { visibility: hidden; }
 .pg-limits.loading > :not(.top) { opacity: .55; }
 @media (prefers-reduced-motion: no-preference) { .pg-limits > :not(.top) { transition: opacity .2s; } }
@@ -26,7 +26,7 @@
 /* Open windows: what the filters do not touch, and a key shared by every card's chart. */
 .pg-limits .sect-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; margin: 8px 0 12px; }
 .pg-limits .sect-head .hint { margin: 0; }
-.pg-limits .lim-key { list-style: none; padding: 0; margin: 0 0 0 auto; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--text-secondary); }
+.pg-limits .lim-key { list-style: none; padding: 0; margin: 0 0 0 auto; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: .75rem; color: var(--text-secondary); }
 .pg-limits .lim-key li { display: inline-flex; align-items: center; gap: 6px; }
 .pg-limits .lim-key i { display: inline-block; width: 16px; height: 0; }
 .pg-limits .lim-key .k-used { border-top: 2px solid var(--series-1); }
@@ -38,32 +38,32 @@
 .pg-limits .lim-key .k-band { height: 10px; background: var(--accent-soft); border-radius: 2px; }
 .pg-limits .lim-key .k-now { width: 0; height: 12px; border-left: 1px dotted var(--text-muted); }
 .pg-limits .lim-key .k-cap { border-top: 1px dashed var(--critical); }
-@media (max-width: 720px) { .pg-limits .lim-key { margin-left: 0; } }
+@media (max-width: 45em) { .pg-limits .lim-key { margin-left: 0; } }
 /* Two cards a row, so four windows sit as a square rather than three and an orphan. */
 .pg-limits .lim-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
-@media (max-width: 900px) { .pg-limits .lim-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 56.25em) { .pg-limits .lim-grid { grid-template-columns: minmax(0, 1fr); } }
 .pg-limits .lim-card header { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
-.pg-limits .lim-card h3 { margin: 0; font-size: 14px; font-weight: 600; }
-.pg-limits .now-pct b { font-size: 24px; font-weight: 600; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+.pg-limits .lim-card h3 { margin: 0; font-size: .875rem; font-weight: 600; }
+.pg-limits .now-pct b { font-size: 1.5rem; font-weight: 600; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
 .pg-limits .chip.est { border-style: dashed; }
 /* What used this window: closed by default, under the cap-money line. */
-.pg-limits .lim-used { margin-top: 8px; font-size: 13px; color: var(--text-secondary); }
+.pg-limits .lim-used { margin-top: 8px; font-size: .8125rem; color: var(--text-secondary); }
 .pg-limits .lim-used > summary { cursor: pointer; }
-.pg-limits .lim-used .used-lists { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px 20px; margin-top: 8px; }
-.pg-limits .lim-used h4 { margin: 0 0 2px; font-size: 12px; font-weight: 600; color: var(--text-muted); }
+.pg-limits .lim-used .used-lists { display: grid; grid-template-columns: repeat(auto-fit, minmax(11.875rem, 1fr)); gap: 8px 20px; margin-top: 8px; }
+.pg-limits .lim-used h4 { margin: 0 0 2px; font-size: .75rem; font-weight: 600; color: var(--text-muted); }
 .pg-limits .lim-used ul { list-style: none; margin: 0; padding: 0; }
 .pg-limits .lim-used li { display: flex; flex-wrap: wrap; gap: 0 8px; align-items: baseline; }
 .pg-limits .lim-used li > :first-child { min-width: 0; overflow-wrap: anywhere; color: var(--text-primary); }
 .pg-limits .lim-used .used-share { font-variant-numeric: tabular-nums; }
-.pg-limits .lim-used .used-note { margin: 6px 0 4px; font-size: 12px; }
-.pg-limits .cap-text { margin: 6px 0 2px; font-size: 13.5px; color: var(--text-primary); }
+.pg-limits .lim-used .used-note { margin: 6px 0 4px; font-size: .75rem; }
+.pg-limits .cap-text { margin: 6px 0 2px; font-size: .84375rem; color: var(--text-primary); }
 .pg-limits .cap-text.out { color: var(--critical-text); font-weight: 500; }
-.pg-limits .cap-text.recent { margin-top: 0; font-size: 12.5px; color: var(--text-secondary); }
+.pg-limits .cap-text.recent { margin-top: 0; font-size: .78125rem; color: var(--text-secondary); }
 .pg-limits .cap-text.recent.out { color: var(--critical-text); }
-.pg-limits .pace { margin: 0; font-size: 12.5px; color: var(--text-muted); }
+.pg-limits .pace { margin: 0; font-size: .78125rem; color: var(--text-muted); }
 .pg-limits .pace b { color: var(--text-secondary); font-weight: 500; }
-.pg-limits .cap-money { margin: 2px 0 0; font-size: 12.5px; color: var(--text-muted); }
-.pg-limits .cap-note { margin: 2px 0 0; font-size: 12.5px; color: var(--text-muted); } /* the weekly share and the surfaces, under the forecast lines */
+.pg-limits .cap-money { margin: 2px 0 0; font-size: .78125rem; color: var(--text-muted); }
+.pg-limits .cap-note { margin: 2px 0 0; font-size: .78125rem; color: var(--text-muted); } /* the weekly share and the surfaces, under the forecast lines */
 
 .pg-limits .lim-chart { position: relative; margin-top: 8px; width: 100%; overflow: hidden; }
 .pg-limits .lim-chart svg { display: block; touch-action: pan-y; } /* a sideways drag reads the chart; a vertical one still scrolls */
@@ -71,7 +71,7 @@
 .pg-limits .lim-chart:focus-visible { outline-offset: -2px; border-radius: 4px; }
 .pg-limits .lim-chart .grid { stroke: var(--grid); }
 .pg-limits .lim-chart .cap { stroke: var(--critical); stroke-dasharray: 4 3; }
-.pg-limits .lim-chart .ax { fill: var(--text-muted); font-size: 11.5px; }
+.pg-limits .lim-chart .ax { fill: var(--text-muted); font-size: .71875rem; }
 .pg-limits .lim-chart .band { fill: var(--accent-soft); }
 .pg-limits .lim-chart .fc { fill: none; stroke: var(--accent); stroke-width: 1.6; stroke-dasharray: 5 4; }
 .pg-limits .lim-chart .recent { fill: none; stroke: var(--series-6); stroke-width: 1.6; stroke-dasharray: 9 3 2 3; }
@@ -88,18 +88,18 @@
 .pg-limits .lim-chart .plan line { stroke: var(--warning); stroke-width: 1.5; }
 /* A wide, invisible stroke so the 1.5px plan line can be pointed at; its label says what changed without hovering. */
 .pg-limits .lim-chart .plan .hit { stroke: transparent; stroke-width: 14; }
-.pg-limits .lim-chart .plan text { fill: var(--warning-text); font-size: 11px; }
+.pg-limits .lim-chart .plan text { fill: var(--warning-text); font-size: .6875rem; }
 
 .pg-limits > .hint { margin: 10px 0 0; }
 .pg-limits > .panel { margin-top: 16px; }
-.pg-limits .panel h2, .pg-limits .sect-head h2 { margin: 0; font-size: 15px; font-weight: 600; }
+.pg-limits .panel h2, .pg-limits .sect-head h2 { margin: 0; font-size: .9375rem; font-weight: 600; }
 .pg-limits .val + .val { margin-top: 18px; }
-.pg-limits .val h3 { margin: 6px 0 4px; font-size: 13px; font-weight: 600; }
+.pg-limits .val h3 { margin: 6px 0 4px; font-size: .8125rem; font-weight: 600; }
 .pg-limits td .bad { color: var(--critical-text); }
 /* Left unused: "100% unused" and "12 windows, 3 estimated" need wider value and side columns than the shared ledger's. */
 .pg-limits #unused .ledger { --ledger-cols: minmax(0, 13rem) minmax(40px, 1fr) 6.5rem 10.5rem; }
 .pg-limits #unused .ledger .v, .pg-limits #unused .ledger .s { white-space: nowrap; }
-@media (max-width: 520px) {
+@media (max-width: 32.5em) {
   .pg-limits #unused .ledger { --ledger-cols: minmax(0, 1fr) auto; }
   .pg-limits #unused .ledger .s { grid-column: 1 / -1; grid-row: 3; text-align: left; }
 }
@@ -108,7 +108,7 @@
 /* Status strip: one chip per open window under the heading, so the whole answer reads without scrolling. Wraps on narrow screens. */
 .pg-limits .strip { list-style: none; padding: 0; margin: 12px 0 0; display: flex; flex-wrap: wrap; gap: 6px; }
 .pg-limits .strip-chip { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; max-width: 100%; padding: 3px 10px;
-  border: 1px solid var(--border); border-radius: 8px; font-size: 13px; color: var(--text-secondary); }
+  border: 1px solid var(--border); border-radius: 8px; font-size: .8125rem; color: var(--text-secondary); }
 .pg-limits .strip-chip b { color: var(--text-primary); font-weight: 600; }
 .pg-limits .strip-chip .strip-pct { color: var(--text-primary); font-variant-numeric: tabular-nums; }
 .pg-limits .strip-chip .chip { margin: 0; }
@@ -120,10 +120,10 @@
 .pg-limits .hs { margin: 4px 0 18px; }
 .pg-limits .hs > .hint { margin: 0 0 8px; }
 .pg-limits .hs-row { display: grid; grid-template-columns: minmax(0, 11rem) minmax(0, 1fr); gap: 0 14px; align-items: end; margin-top: 8px; }
-.pg-limits .hs-name { font-size: 13px; color: var(--text-primary); padding-bottom: 2px; }
+.pg-limits .hs-name { font-size: .8125rem; color: var(--text-primary); padding-bottom: 2px; }
 /* 60 bars do not fit a phone: the strip scrolls inside its own box (the page never does). */
 .pg-limits .hs-bars { display: flex; align-items: stretch; height: 40px; min-width: 0; overflow-x: auto; overscroll-behavior-x: contain; }
-.pg-limits .hs-note { grid-column: 2; margin: 2px 0 0; font-size: 12px; }
+.pg-limits .hs-note { grid-column: 2; margin: 2px 0 0; font-size: .75rem; }
 /* The button is the whole column, so a short bar is as easy to hit as a tall one; its <i> is the bar. 8px apart, with a 6px bar
  * inside: neighbours touch, so a thumb picks the one it lands on. */
 .pg-limits .hs-bar { flex: 0 0 8px; box-sizing: border-box; padding: 0 1px; border: 0; border-radius: 2px; background: transparent; cursor: pointer;
@@ -144,11 +144,11 @@
 .pg-limits .hs-key { margin: 10px 0 0; }
 .pg-limits .hs-panel { margin-top: 14px; }
 .pg-limits .hs-panel header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
-.pg-limits .hs-panel h3 { margin: 0; font-size: 14px; font-weight: 600; }
-.pg-limits .hs-panel header p { margin: 2px 0 0; font-size: 12.5px; }
+.pg-limits .hs-panel h3 { margin: 0; font-size: .875rem; font-weight: 600; }
+.pg-limits .hs-panel header p { margin: 2px 0 0; font-size: .78125rem; }
 .pg-limits .hs-panel header p b { color: var(--text-primary); font-weight: 600; }
 .pg-limits tr.sel td { background: var(--accent-soft); }
-@media (max-width: 720px) {
+@media (max-width: 45em) {
   .pg-limits .hs-row { grid-template-columns: minmax(0, 1fr); }
   .pg-limits .hs-note { grid-column: 1; }
 }

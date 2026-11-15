@@ -1,3 +1,3 @@
 .session-map { margin-top: 8px; }
-.session-map .smcount { margin: 0 0 6px; font-size: 13px; color: var(--text-primary); }
+.session-map .smcount { margin: 0 0 6px; font-size: .8125rem; color: var(--text-primary); }
 .session-map .hit { cursor: pointer; }

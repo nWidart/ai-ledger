@@ -4,7 +4,7 @@
 .pg-activity .top { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px 32px; align-items: end; margin-bottom: 20px; }
 .pg-activity .top-side { display: flex; flex-direction: column; align-items: flex-end; gap: 12px; min-width: 0; max-width: 600px; }
 .pg-activity .top-side .filters { justify-content: flex-end; }
-.pg-activity .lede { margin: 0; max-width: 26ch; font-size: clamp(26px, 4.2vw, 42px); line-height: 1.12;
+.pg-activity .lede { margin: 0; max-width: 26ch; font-size: clamp(1.625rem, 4.2vw, 2.625rem); line-height: 1.12;
   font-weight: 400; letter-spacing: -.025em; text-wrap: balance; color: var(--text-secondary); }
 .pg-activity .lede:focus { outline: none; }
 /* The figure and the project carry the sentence; the rest recedes. */
@@ -16,15 +16,15 @@
 .pg-activity .lede .chg { font-size: .45em; font-weight: 500; letter-spacing: 0; color: var(--text-muted); }
 /* Sessions and active days take their own line, so the commit count never breaks mid-phrase. */
 .pg-activity .lede .delta { display: block; color: var(--text-primary); font-weight: 500; font-size: .62em; letter-spacing: -.015em; margin-top: 4px; }
-.pg-activity .sub { color: var(--text-muted); font-size: 13px; margin: 8px 0 0; }
+.pg-activity .sub { color: var(--text-muted); font-size: .8125rem; margin: 8px 0 0; }
 /* Stack before the filters squeeze the heading into a narrow column. */
-@media (max-width: 1040px) {
+@media (max-width: 65em) {
   .pg-activity .top { grid-template-columns: minmax(0, 1fr); align-items: start; }
   .pg-activity .top-side { max-width: none; align-items: stretch; }
   .pg-activity .top-side .filters { justify-content: flex-start; }
 }
-.pg-activity h2 { font-size: 16px; font-weight: 600; margin: 0; letter-spacing: -.005em; }
-.pg-activity .pending { margin: -12px 0 12px; min-height: 1.5em; color: var(--text-secondary); font-size: 13px; }
+.pg-activity h2 { font-size: 1rem; font-weight: 600; margin: 0; letter-spacing: -.005em; }
+.pg-activity .pending { margin: -12px 0 12px; min-height: 1.5em; color: var(--text-secondary); font-size: .8125rem; }
 .pg-activity .pending:empty { visibility: hidden; }
 .pg-activity.loading > :not(.top):not(.secidx) { opacity: .55; }
 @media (prefers-reduced-motion: no-preference) { .pg-activity > :not(.top):not(.secidx) { transition: opacity .2s; } }
@@ -37,18 +37,18 @@
 .pg-activity .vital + .vital { padding-left: 16px; }
 .pg-activity .vital:focus { outline: none; }
 .pg-activity .vital:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-.pg-activity .vital .v { font-size: 28px; font-weight: 600; letter-spacing: -.035em; line-height: 1.1; }
+.pg-activity .vital .v { font-size: 1.75rem; font-weight: 600; letter-spacing: -.035em; line-height: 1.1; }
 .pg-activity .vital .l { font-weight: 500; margin-top: 4px; }
-.pg-activity .vital .d { color: var(--text-muted); font-size: 12.5px; margin-top: 2px; }
-@media (max-width: 900px) {
+.pg-activity .vital .d { color: var(--text-muted); font-size: .78125rem; margin-top: 2px; }
+@media (max-width: 56.25em) {
   .pg-activity .vitals { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .pg-activity .vital:nth-child(odd) { padding-left: 0; }
   .pg-activity .vital:last-child:nth-child(odd) { grid-column: 1 / -1; }
 }
-@media (max-width: 520px) {
+@media (max-width: 32.5em) {
   .pg-activity .vital { padding-right: 12px; }
   .pg-activity .vital + .vital:nth-child(even) { padding-left: 12px; }
-  .pg-activity .vital .v { font-size: 24px; }
+  .pg-activity .vital .v { font-size: 1.5rem; }
 }
 
 
@@ -60,41 +60,41 @@
 .pg-activity .hours .hint { margin: 4px 0 8px; }
 .pg-activity .heat { width: 100%; table-layout: fixed; border-collapse: separate; border-spacing: 2px; }
 .pg-activity .heat:focus-visible { outline-offset: 4px; border-radius: 4px; }
-.pg-activity .heat th { font-size: 11px; font-weight: 400; color: var(--text-muted); padding: 0; }
+.pg-activity .heat th { font-size: .6875rem; font-weight: 400; color: var(--text-muted); padding: 0; }
 .pg-activity .heat thead th { text-align: left; }
 .pg-activity .heat tbody th { width: 3em; text-align: left; padding-right: 4px; }
 .pg-activity .heat td { height: 18px; padding: 0; border-radius: 3px; background: var(--surface-2); }
 .pg-activity .heat td.at { outline: 2px solid var(--text-primary); outline-offset: -1px; }
-.pg-activity .hours .readout { min-height: 1.5em; margin-top: 6px; font-size: 12.5px; color: var(--text-secondary); }
-@media (max-width: 520px) { .pg-activity .heat { border-spacing: 1px; } .pg-activity .heat td { height: 14px; } }
+.pg-activity .hours .readout { min-height: 1.5em; margin-top: 6px; font-size: .78125rem; color: var(--text-secondary); }
+@media (max-width: 32.5em) { .pg-activity .heat { border-spacing: 1px; } .pg-activity .heat td { height: 14px; } }
 
 /* Drawers: the full tables */
 .pg-activity .tools-row { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin-bottom: 6px; }
 .pg-activity .tools-row input[type=search] { font: inherit; color: var(--text-primary); background: var(--surface-1); border: 1px solid var(--border);
-  border-radius: 8px; padding: 6px 10px; flex: 1 1 260px; min-width: 0; }
-.pg-activity .daychip { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; padding: 2px 4px 2px 10px; border-radius: 999px;
+  border-radius: 8px; padding: 6px 10px; flex: 1 1 16.25rem; min-width: 0; }
+.pg-activity .daychip { display: inline-flex; align-items: center; gap: 4px; font-size: .8125rem; padding: 2px 4px 2px 10px; border-radius: 999px;
   background: var(--accent-soft); color: var(--accent-ink); font-weight: 500; }
-.pg-activity .daychip button { border: 0; background: none; padding: 1px 6px; border-radius: 999px; font-size: 12px; color: inherit; }
+.pg-activity .daychip button { border: 0; background: none; padding: 1px 6px; border-radius: 999px; font-size: .75rem; color: inherit; }
 /* MCP servers and skills side by side, hooks on a full-width row below. */
 .pg-activity .ext { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
 .pg-activity .ext :is(.hooks, .note) { grid-column: 1 / -1; }
-.pg-activity .ext h3 { font-size: 14px; margin: 0 0 6px; }
-.pg-activity .ext :is(td, th).hook { max-width: 640px; }
-@media (max-width: 900px) { .pg-activity .ext { grid-template-columns: minmax(0, 1fr); } .pg-activity .ext :is(td, th).hook { max-width: 300px; } }
+.pg-activity .ext h3 { font-size: .875rem; margin: 0 0 6px; }
+.pg-activity .ext :is(td, th).hook { max-width: 40rem; }
+@media (max-width: 56.25em) { .pg-activity .ext { grid-template-columns: minmax(0, 1fr); } .pg-activity .ext :is(td, th).hook { max-width: 18.75rem; } }
 /* The sessions table fits its box without scrolling sideways: the least needed columns go first. */
-@media (max-width: 1260px) {
+@media (max-width: 78.75em) {
   .pg-activity #d-sessions .opt2 { display: none; }
-  .pg-activity #d-sessions :is(td, th).sess { max-width: 230px; }
+  .pg-activity #d-sessions :is(td, th).sess { max-width: 14.375rem; }
   .pg-activity #d-sessions :is(td, th).sess .small { overflow: hidden; text-overflow: ellipsis; }
 }
-@media (max-width: 900px) {
-  .pg-activity #d-sessions :is(td, th).sess { max-width: 170px; }
-  .pg-activity #d-sessions :is(td, th).name { max-width: 120px; }
+@media (max-width: 56.25em) {
+  .pg-activity #d-sessions :is(td, th).sess { max-width: 10.625rem; }
+  .pg-activity #d-sessions :is(td, th).name { max-width: 7.5rem; }
 }
-@media (max-width: 700px) {
+@media (max-width: 43.75em) {
   .pg-activity #d-sessions :is(.opt, .opt2) { display: none; }
-  .pg-activity .ext :is(td, th).hook { max-width: 150px; }
-  .pg-activity #d-sessions :is(td, th).name { max-width: 90px; }
+  .pg-activity .ext :is(td, th).hook { max-width: 9.375rem; }
+  .pg-activity #d-sessions :is(td, th).name { max-width: 5.625rem; }
   .pg-activity #d-sessions :is(td, th).when { white-space: normal; }
   .pg-activity #d-sessions :is(td, th).when .small { overflow-wrap: anywhere; }
 }

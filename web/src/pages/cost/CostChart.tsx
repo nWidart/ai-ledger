@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import type { Source, UsagePayload } from "../../api";
 import { useColors } from "../../colors";
-import { dayAxis, peakLabelAt, tipAt, useWidth } from "../../components/chart";
+import { dayAxis, peakLabelAt, roomForLabels, textScale, tipAt, useWidth } from "../../components/chart";
 import { ChartTable, DataTable } from "../../components/DataTable";
 import { big, dayLabel, niceStep, plural, usd, usd0 } from "../../format";
 import { costDays, costKinds, isOther, KINDS, STACKS, STACK_WORD, type CostDay, type Kind, type Stack } from "./cost";
@@ -65,7 +65,8 @@ export function CostChart({ d, metric, onMetric, hidden, onHidden, stack, onStac
   const live = pts.length - 1;
   const avg = pts.map((_, i) => (i < 6 || i === live ? null : pts.slice(i - 6, i + 1).reduce((s, q) => s + total(q), 0) / 7));
   const showAvg = pts.length >= 14;
-  const a = useMemo(() => dayAxis(W, H, pts.length, Math.max(...pts.map(total), 0), niceStep), [W, pts, total]);
+  const ts = textScale();
+  const a = useMemo(() => dayAxis(W, H, pts.length, Math.max(...pts.map(total), 0), niceStep, undefined, ts), [W, pts, total, ts]);
   const fy = cost ? usd : big, ty = cost ? usd0 : big;
   const peak = pts.reduce((b, p, i) => (total(p) > total(pts[b]!) ? i : b), 0), pk = pts[peak];
   const indexAt = (clientX: number) => {
@@ -95,7 +96,7 @@ export function CostChart({ d, metric, onMetric, hidden, onHidden, stack, onStac
     const x = a.x(i), segs = kinds.filter(k => (p.v[k.k] ?? 0) > 0);
     let base = 0;
     return <g key={p.day}>
-      {i % a.every === 0 && <text x={x + a.w / 2} y={H - 6} textAnchor="middle" fontSize="11" fill="var(--text-muted)">{dayLabel(p.day)}</text>}
+      {i % a.every === 0 && <text x={x + a.w / 2} y={H - 6 * ts} textAnchor="middle" fontSize={11 * ts} fill="var(--text-muted)">{dayLabel(p.day)}</text>}
       {/* One group per bar, so the whole stack grows from the baseline when data lands. */}
       {segs.length > 0 && <g className="bar-seg" style={{ ["--i" as string]: Math.min(i, 60) }}>{segs.map((k, j) => {
         const v = p.v[k.k]!, top = a.y(base + v), h = v / a.yMax * a.ih;
@@ -108,7 +109,7 @@ export function CostChart({ d, metric, onMetric, hidden, onHidden, stack, onStac
         return <Fragment key={k.k}>{shape(k.c)}{i === live && shape("url(#partial-day)", "partial")}</Fragment>;
       })}</g>}
     </g>;
-  }), [pts, kinds, a, live]);
+  }), [pts, kinds, a, live, ts]);
   const ticks: number[] = [];
   for (let v = 0; v <= a.yMax + 1e-9; v += a.step) ticks.push(v);
 
@@ -177,16 +178,16 @@ export function CostChart({ d, metric, onMetric, hidden, onHidden, stack, onStac
           <defs><pattern id="partial-day" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
             <rect width="2.5" height="6" fill="var(--surface-1)" opacity=".6" /></pattern></defs>
           {ticks.map(v => <g key={v}><line x1={a.m.l} x2={W - a.m.r} y1={a.y(v)} y2={a.y(v)} stroke="var(--grid)" />
-            <text x={a.m.l - 6} y={a.y(v) + 4} textAnchor="end" fontSize="11" fill="var(--text-muted)">{ty(v)}</text></g>)}
+            <text x={a.m.l - 6 * ts} y={a.y(v) + 4 * ts} textAnchor="end" fontSize={11 * ts} fill="var(--text-muted)">{ty(v)}</text></g>)}
           {bars}
           {/* The average line, haloed in the surface color so it stays readable across bars of any hue. */}
           {showAvg && <>
             <path d={avgLine} fill="none" stroke="var(--surface-1)" strokeWidth="4.5" strokeLinejoin="round" strokeLinecap="round" />
             <path d={avgLine} fill="none" stroke="var(--text-primary)" strokeWidth="1.75" strokeLinejoin="round" strokeLinecap="round" />
           </>}
-          {pk && total(pk) > 0 && (() => {
+          {pk && total(pk) > 0 && roomForLabels(a) && (() => {
             const { x, anchor } = peakLabelAt(a, peak);
-            return <text x={x} y={a.y(total(pk)) - 7} textAnchor={anchor} fontSize="11" fontWeight="600" fill="var(--text-primary)"
+            return <text x={x} y={a.y(total(pk)) - 7 * ts} textAnchor={anchor} fontSize={11 * ts} fontWeight="600" fill="var(--text-primary)"
               stroke="var(--surface-1)" strokeWidth="3" paintOrder="stroke">Peak {fy(total(pk))} · {dayLabel(pk.day)}{soFar(peak)}</text>;
           })()}
           {at != null && <rect x={a.m.l + at * a.bw} width={a.bw} y={a.m.t} height={a.ih} fill="var(--text-primary)" opacity=".06" />}

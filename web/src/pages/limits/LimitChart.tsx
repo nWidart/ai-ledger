@@ -1,9 +1,9 @@
 import { useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import type { LimitWindow, PlanChange } from "../../api";
-import { useWidth } from "../../components/chart";
+import { scaleMargins, textScale, useWidth } from "../../components/chart";
 import { caption, hasScenario, nearestPoint, planName, readPoints, readText, tipPlace, whenDay, windowName } from "./limits";
 
-const H = 168, M = { t: 12, r: 10, b: 24, l: 36 }, DOT_GAP = 7;
+const H0 = 168, M0 = { t: 12, r: 10, b: 24, l: 36 }, DOT_GAP = 7; // at the default text size
 
 /** The plan changes that fall inside a window. */
 export const planMarks = (w: LimitWindow, events: PlanChange[]) =>
@@ -16,6 +16,8 @@ const KEYS: Record<string, number> = { ArrowLeft: -1, ArrowRight: 1, Home: -Infi
  *  window (closedWindow): it runs to its close, which is its resets_at here, and has no forecast and no now. */
 export function LimitChart({ w, now, events }: { w: LimitWindow; now: string | null; events: PlanChange[] }) {
   const box = useRef<HTMLDivElement>(null), tip = useRef<HTMLDivElement>(null), svg = useRef<SVGSVGElement>(null), W = useWidth(box, 420);
+  // The labels' size comes from the stylesheet (rem); the room around them follows it, the plot keeps its height.
+  const ts = textScale(), M = scaleMargins(M0, ts), H = H0 + (M.t + M.b) - (M0.t + M0.b);
   // The point being read, and where its tooltip goes (client pixels). key: set by the keyboard, so only that is announced.
   const [read, setRead] = useState<{ i: number; x: number; y: number; key: boolean } | null>(null);
   const pts = useMemo(() => readPoints(w), [w]), nowAt = Math.max(0, w.series.length - 1);
@@ -33,7 +35,7 @@ export function LimitChart({ w, now, events }: { w: LimitWindow; now: string | n
   const recent = f && hasScenario(w) ? path(f.curve.flatMap(p => p.recent == null ? [] : [{ t: p.t, v: p.recent }])) : null;
   const band = f && `${path(f.curve.map(p => ({ t: p.t, v: p.hi })))}L${f.curve.slice().reverse().map(p => `${x(p.t).toFixed(1)},${y(p.lo).toFixed(1)}`).join("L")}Z`;
   // The page's one time format; a narrow chart keeps the date of a long window, or the time of a short one.
-  const at = W >= 360 ? whenDay : (w.window_minutes ?? 0) >= 1440
+  const at = W >= 360 * ts ? whenDay : (w.window_minutes ?? 0) >= 1440
     ? (t: string) => new Date(t).toLocaleDateString(undefined, { month: "short", day: "numeric" })
     : (t: string) => new Date(t).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
   const marks = planMarks(w, events), said = (e: PlanChange) => `Plan change from ${e.plan_from} to ${e.plan_to}, ${whenDay(e.at)}`;
@@ -80,7 +82,7 @@ export function LimitChart({ w, now, events }: { w: LimitWindow; now: string | n
           : `${w.provider_label} ${w.label}: ${w.current ?? "–"}% used. ${caption(w)}.`, ...marks.map(e => `${said(e)}.`)].join(" ")}>
         {[0, 50, 100].map(p => <g key={p}>
           <line x1={M.l} x2={W - M.r} y1={y(p)} y2={y(p)} className={p === 100 ? "cap" : "grid"} />
-          <text x={M.l - 6} y={y(p) + 4} textAnchor="end" className="ax">{p}%</text>
+          <text x={M.l - 6 * ts} y={y(p) + 4 * ts} textAnchor="end" className="ax">{p}%</text>
         </g>)}
         {band && <path d={band} className="band" />}
         {f && <path d={path(f.curve.map(p => ({ t: p.t, v: p.mid })))} className="fc" />}
@@ -91,14 +93,14 @@ export function LimitChart({ w, now, events }: { w: LimitWindow; now: string | n
         {marks.map(e => <g key={e.at} className="plan"><title>{said(e)}</title>
           <line x1={x(e.at)} x2={x(e.at)} y1={M.t} y2={M.t + ih} />
           <line x1={x(e.at)} x2={x(e.at)} y1={M.t} y2={M.t + ih} className="hit" />
-          <text x={x(e.at) + (x(e.at) > W / 2 ? -4 : 4)} y={M.t + 10} textAnchor={x(e.at) > W / 2 ? "end" : "start"}>{`plan: ${planName(e.plan_to)}`}</text></g>)}
+          <text x={x(e.at) + (x(e.at) > W / 2 ? -4 : 4) * ts} y={M.t + 10 * ts} textAnchor={x(e.at) > W / 2 ? "end" : "start"}>{`plan: ${planName(e.plan_to)}`}</text></g>)}
         {now != null && <line x1={x(now)} x2={x(now)} y1={M.t} y2={M.t + ih} className="now" />}
         {cur && read && <>
           <line x1={x(cur.t)} x2={x(cur.t)} y1={M.t} y2={M.t + ih} className="guide" />
           <circle cx={x(cur.t)} cy={y(pctOf(read.i))} r={4} className={"pick" + (cur.kind === "forecast" ? " ahead" : "")} />
         </>}
-        <text x={M.l} y={H - 6} className="ax">{at(w.start)}</text>
-        <text x={W - M.r} y={H - 6} textAnchor="end" className="ax">{now == null ? "ended" : "resets"} {at(w.resets_at)}</text>
+        <text x={M.l} y={H - 6 * ts} className="ax">{at(w.start)}</text>
+        <text x={W - M.r} y={H - 6 * ts} textAnchor="end" className="ax">{now == null ? "ended" : "resets"} {at(w.resets_at)}</text>
       </svg>
       {pts.length > 0 && <>
         <div className="tip" ref={tip} aria-hidden="true" style={{ display: cur ? "block" : "none" }}>{cur && readText(cur)}</div>

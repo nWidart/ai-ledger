@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import type { CacheBucket, ContextPayload } from "../../api";
-import { dayAxis, tipAt, useWidth } from "../../components/chart";
+import { dayAxis, scaleMargins, textScale, tipAt, useWidth } from "../../components/chart";
 import { ChartTable, DataTable } from "../../components/DataTable";
 import { dayLabel, dayRange, niceStep, num, pct, plural } from "../../format";
 import { BREAK_CAUSES, causesText, short } from "./context";
@@ -10,8 +10,8 @@ type Series = ContextPayload["cost"]["series"];
 /** One place on the calendar axis: the bucket's first day, and its row (null when nothing happened that day or week). */
 export interface Slot { day: string; row: CacheBucket | null }
 
-const TOP = 200, STRIP = 48, GAP = 52, H = TOP + 12 + GAP + STRIP + 24 + 4;
-const M = { t: 12, r: 44, b: 0, l: 52 };
+const TOP = 200, STRIP = 48, GAP = 52;
+const M0 = { t: 12, r: 44, b: 0, l: 52 }; // the margins at the default text size
 
 /** A bucket's prompt tokens: uncached input, cache read and cache write. */
 const prompt = (r: CacheBucket) => r.input + r.cache_read + r.cache_write;
@@ -51,11 +51,14 @@ export function CacheChart({ series }: { series: Series }) {
   if (!rows.length) return <p className="empty">No request in this view.</p>;
 
   const n = slots.length, maxT = Math.max(...rows.map(prompt), 1), maxB = Math.max(...rows.map(breaks), 1);
-  const a = dayAxis(W, TOP + M.t, n, maxT, niceStep, M);
+  // The labels and the room that holds them grow with the browser's text size; the plots keep their height.
+  const ts = textScale(), M = scaleMargins(M0, ts), GAPs = GAP * ts;
+  const H = TOP + M.t + GAPs + STRIP + 28 * ts;
+  const a = dayAxis(W, TOP + M.t, n, maxT, niceStep, M0, ts);
   const yTicks: number[] = [];
   for (let v = 0; v <= a.yMax + 1e-9; v += a.step) yTicks.push(v);
   const ry = (r: number) => M.t + a.ih - r * a.ih;
-  const sy = TOP + M.t + GAP / 2 + 6, sy1 = sy + STRIP, sh = (v: number) => v / maxB * STRIP;
+  const sy = TOP + M.t + GAPs / 2 + 6 * ts, sy1 = sy + STRIP, sh = (v: number) => v / maxB * STRIP;
   const when = (s: Slot, long = false) => (weekly ? "Week of " : "") + dayLabel(s.day, long);
 
   const line = slots.flatMap((s, i) => { const r = s.row && hitRatio(s.row); return r == null ? [] : [{ i, r }]; });
@@ -104,8 +107,8 @@ export function CacheChart({ series }: { series: Series }) {
       <div className="chart" ref={box} tabIndex={0} role="group" aria-label={label} onKeyDown={onKey} onBlur={() => setAt(null)}>
         <svg viewBox={`0 0 ${W} ${H}`} height={H} aria-hidden="true">
           {yTicks.map(v => <g key={v}><line x1={M.l} x2={W - M.r} y1={a.y(v)} y2={a.y(v)} stroke="var(--grid)" />
-            <text x={M.l - 6} y={a.y(v) + 4} textAnchor="end" fontSize="11" fill="var(--text-muted)">{short(v)}</text></g>)}
-          {[0, .25, .5, .75, 1].map(r => <text key={r} x={W - M.r + 6} y={ry(r) + 4} fontSize="11" fill="var(--text-muted)">{pct(r)}</text>)}
+            <text x={M.l - 6 * ts} y={a.y(v) + 4 * ts} textAnchor="end" fontSize={11 * ts} fill="var(--text-muted)">{short(v)}</text></g>)}
+          {[0, .25, .5, .75, 1].map(r => <text key={r} x={W - M.r + 6 * ts} y={ry(r) + 4 * ts} fontSize={11 * ts} fill="var(--text-muted)">{pct(r)}</text>)}
           {slots.map((s, i) => {
             if (!s.row) return null;
             const r = s.row;
@@ -120,8 +123,8 @@ export function CacheChart({ series }: { series: Series }) {
             <path d={path} fill="none" stroke="var(--surface-1)" strokeWidth="5" strokeLinejoin="round" strokeLinecap="round" />
             <path className="ratio" d={path} fill="none" stroke="var(--text-primary)" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
             {line.map(p => <circle key={p.i} cx={a.cx(p.i)} cy={ry(p.r)} r="3" fill="var(--text-primary)" stroke="var(--surface-1)" strokeWidth="1.5" />)}</>}
-          <text x={M.l} y={sy - 8} fontSize="11" fontWeight="600" fill="var(--text-secondary)">Cache breaks</text>
-          <text x={W - M.r} y={sy - 8} textAnchor="end" fontSize="11" fill="var(--text-muted)">{all.b ? `most in a ${weekly ? "week" : "day"}: ${num(maxB)}` : "none in this view"}</text>
+          <text x={M.l} y={sy - 8 * ts} fontSize={11 * ts} fontWeight="600" fill="var(--text-secondary)">Cache breaks</text>
+          <text x={W - M.r} y={sy - 8 * ts} textAnchor="end" fontSize={11 * ts} fill="var(--text-muted)">{all.b ? `most in a ${weekly ? "week" : "day"}: ${num(maxB)}` : "none in this view"}</text>
           <line x1={M.l} x2={W - M.r} y1={sy1} y2={sy1} stroke="var(--grid)" />
           {slots.map((s, i) => {
             if (!s.row) return null;
@@ -131,7 +134,7 @@ export function CacheChart({ series }: { series: Series }) {
               return h > 0 ? <rect key={k} className={`seg-${k}`} data-cause={k} data-day={s.day} x={a.x(i)} y={top} width={a.w} height={h} /> : null;
             })}</g>;
           })}
-          {slots.map((s, i) => i % a.every === 0 && <text key={s.day} x={a.cx(i)} y={sy1 + 16} textAnchor="middle" fontSize="11" fill="var(--text-muted)">{dayLabel(s.day)}</text>)}
+          {slots.map((s, i) => i % a.every === 0 && <text key={s.day} x={a.cx(i)} y={sy1 + 16 * ts} textAnchor="middle" fontSize={11 * ts} fill="var(--text-muted)">{dayLabel(s.day)}</text>)}
           {cur && row && <line x1={a.cx(at!)} x2={a.cx(at!)} y1={M.t} y2={sy1} stroke="var(--text-muted)" strokeDasharray="3 3" />}
           <rect x={M.l} y={0} width={a.iw} height={H} fill="transparent"
             onPointerMove={ev => { const i = nearest(ev); if (i == null) setAt(null); else show(i, ev.clientX, ev.clientY); }} onPointerLeave={() => setAt(null)} />

@@ -5,6 +5,10 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Text follows the browser's default font size: font sizes are relative, chart labels scale with them, and nothing is cut off at 200%. In Chrome and Edge 146+ the dashboard also follows the operating system's text scale.
+
 ## [0.4.0] - 2026-11-15
 
 Run `ai-ledger rebuild` once after upgrading, with the app stopped. It fills the data the Context page needs (tool result sizes, Codex context windows, first compactions, past `/context` results) from transcripts already read. Until then, the Context page marks those figures as unavailable.

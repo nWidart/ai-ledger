@@ -1,6 +1,6 @@
 import { useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import type { ContextPayload } from "../../api";
-import { useWidth } from "../../components/chart";
+import { scaleMargins, textScale, useWidth } from "../../components/chart";
 import { ChartTable, DataTable } from "../../components/DataTable";
 import { dayLabel, niceStep, num, plural } from "../../format";
 import { short, START_LARGE_TOKENS, TREND_MIN_SESSIONS } from "./context";
@@ -8,7 +8,7 @@ import "./StartTrend.css";
 
 type Trend = ContextPayload["starting"]["trend"];
 type Week = Trend[number];
-const H = 180, M = { t: 10, r: 14, b: 26, l: 52 };
+const H = 180, M0 = { t: 10, r: 14, b: 26, l: 52 }; // the margins at the default text size
 
 /** What the chart reads at a week, in words: "Week of Nov 2: median 24k tokens (25th to 75th percentile 20k to 31k), 9 sessions". */
 export const readWeek = (w: Week) =>
@@ -21,6 +21,7 @@ export function StartTrend({ trend }: { trend: Trend }) {
   const box = useRef<HTMLDivElement>(null), W = useWidth(box);
   const [at, setAt] = useState<number | null>(null);
   if (!trend.length) return null;
+  const ts = textScale(), M = scaleMargins(M0, ts); // labels and the room around them follow the browser's text size
   const first = trend[0]!, last = trend[trend.length - 1]!, t0 = Date.parse(first.week + "T00:00:00Z"), span = Date.parse(last.week + "T00:00:00Z") - t0;
   const iw = W - M.l - M.r, ih = H - M.t - M.b;
   const xs = trend.map(w => span ? M.l + (Date.parse(w.week + "T00:00:00Z") - t0) / span * iw : M.l + iw / 2);
@@ -35,9 +36,9 @@ export function StartTrend({ trend }: { trend: Trend }) {
   const line = runs.map(r => r.map((i, k) => `${k ? "L" : "M"}${f(xs[i]!)},${f(y(trend[i]!.median))}`).join("")).join("");
   const band = runs.filter(r => r.length > 1).map(r => `${r.map((i, k) => `${k ? "L" : "M"}${f(xs[i]!)},${f(y(trend[i]!.p75))}`).join("")}${r.slice().reverse()
     .map(i => `L${f(xs[i]!)},${f(y(trend[i]!.p25))}`).join("")}Z`).join("");
-  // Label weeks left to right, skipping any whose label would sit within 64px of the last one drawn.
+  // Label weeks left to right, skipping any whose label would sit within 64px (at the default text size) of the last one drawn.
   const ticks: number[] = [];
-  xs.forEach((x, i) => { if (!ticks.length || x - xs[ticks[ticks.length - 1]!]! >= 64) ticks.push(i); });
+  xs.forEach((x, i) => { if (!ticks.length || x - xs[ticks[ticks.length - 1]!]! >= 64 * ts) ticks.push(i); });
 
   const cur = at == null ? null : trend[at]!;
   const label = (trend.length > 1
@@ -68,10 +69,10 @@ export function StartTrend({ trend }: { trend: Trend }) {
       <div className="chart" ref={box} tabIndex={0} role="group" aria-label={label} onKeyDown={onKey} onBlur={() => setAt(null)}>
         <svg viewBox={`0 0 ${W} ${H}`} aria-hidden="true">
           {yTicks.map(v => <g key={v}><line x1={M.l} x2={W - M.r} y1={y(v)} y2={y(v)} stroke="var(--grid)" />
-            <text x={M.l - 6} y={y(v) + 4} textAnchor="end" fontSize="11" fill="var(--text-muted)">{short(v)}</text></g>)}
-          {ticks.map(i => <text key={trend[i]!.week} x={xs[i]} y={H - 8} textAnchor="middle" fontSize="11" fill="var(--text-muted)">{dayLabel(trend[i]!.week)}</text>)}
+            <text x={M.l - 6 * ts} y={y(v) + 4 * ts} textAnchor="end" fontSize={11 * ts} fill="var(--text-muted)">{short(v)}</text></g>)}
+          {ticks.map(i => <text key={trend[i]!.week} x={xs[i]} y={H - 8 * ts} textAnchor="middle" fontSize={11 * ts} fill="var(--text-muted)">{dayLabel(trend[i]!.week)}</text>)}
           {START_LARGE_TOKENS <= yMax && <g className="threshold"><line x1={M.l} x2={W - M.r} y1={y(START_LARGE_TOKENS)} y2={y(START_LARGE_TOKENS)} stroke="var(--text-muted)" strokeDasharray="4 3" />
-            <text x={W - M.r} y={y(START_LARGE_TOKENS) - 4} textAnchor="end" fontSize="10.5" fill="var(--text-muted)">{short(START_LARGE_TOKENS)}</text></g>}
+            <text x={W - M.r} y={y(START_LARGE_TOKENS) + (ts > 1 ? 12 * ts : -4)} textAnchor="end" fontSize={10.5 * ts} fill="var(--text-muted)">{short(START_LARGE_TOKENS)}</text></g>}
           {/* A week with no neighbour has no band to sit in: its spread is a vertical span. */}
           {runs.filter(r => r.length === 1).map(([i]) => <line key={trend[i!]!.week} className="span" x1={xs[i!]} x2={xs[i!]} y1={y(trend[i!]!.p75)} y2={y(trend[i!]!.p25)}
             stroke="var(--text-secondary)" opacity=".28" strokeWidth="7" strokeLinecap="round" />)}
