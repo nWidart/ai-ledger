@@ -75,7 +75,7 @@ describe("ProjectPage", () => {
       const onPage = facts(await screen.findByRole("region", { name: "Summary" }));
       expect(onPage).toHaveLength(8);
       cleanup();
-      renderApp(<ProjectSheet name="foo" d={d} retry={() => {}} range={30} pageProject="foo" onSession={() => {}} />);
+      renderApp(<ProjectSheet name="foo" d={d} retry={() => {}} range={30} source="" pageProject="foo" onSession={() => {}} />);
       expect(facts(document.body as HTMLElement).slice(0, 8)).toEqual(onPage);
     });
 
