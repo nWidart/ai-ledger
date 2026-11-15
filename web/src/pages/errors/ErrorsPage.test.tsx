@@ -8,6 +8,7 @@ import type { ErrorRow, ErrorsPayload, Incident } from "../../api";
 import palette from "../../__fixtures__/palette";
 import { Palette } from "../../components/palette/Palette";
 import { openPalette } from "../../components/palette/store";
+import { muteFor } from "../../components/menu/mute";
 import { tableFocus } from "./context";
 import { queries } from "../../queries";
 import { ErrorsPage } from "./ErrorsPage";
@@ -1104,6 +1105,52 @@ describe("ErrorsPage", () => {
       await userEvent.click(unmuteBtn());
       await waitFor(() => expect(api.mutes).toEqual([{ category: "git", muted: false }]));
       expect(muteBtn()).toBeTruthy();
+    });
+
+    // The context menu sits at the app root, above the page: the page lends it the detail's own toggle (components/menu/mute.ts).
+    describe("lent to the context menu", () => {
+      it("mutes the open type as the detail's button does: same request, Saving… and aria-busy", async () => {
+        const api = serve(), hold = api.hold();
+        api.payload = mixed;
+        history.replaceState(null, "", "/errors?range=7&cat=git");
+        await page();
+        const lent = muteFor("git")!;
+        expect(lent.muted).toBe(false);
+        act(() => lent.toggle());
+        expect(unmuteBtn().getAttribute("aria-busy")).toBe("true");
+        expect(document.getElementById("muteSaving")?.textContent).toBe("Saving…");
+        expect(muteFor("git")?.muted).toBe(true); // the page's copy as of now, the write still on its way
+        hold.release();
+        await waitFor(() => expect([...api.muted]).toEqual(["git"]));
+        expect(api.requests).toEqual(["mute git true"]);
+        await waitFor(() => expect(document.getElementById("muteSaving")).toBeNull());
+        await waitFor(() => expect(document.getElementById("detailLive")?.textContent).toBe("Type muted."));
+        act(() => muteFor("git")!.toggle());
+        await waitFor(() => expect(api.mutes).toEqual([{ category: "git", muted: true }, { category: "git", muted: false }]));
+        expect(muteBtn()).toBeTruthy();
+      });
+
+      it("shows the pending mute of a type that is not open in the table's note", async () => {
+        const api = serve(), hold = api.hold();
+        api.payload = mixed;
+        history.replaceState(null, "", "/errors?range=7&noise=0");
+        await page();
+        act(() => muteFor("x")!.toggle());
+        expect(document.getElementById("muteNote")?.textContent).toBe("Muting x… Saving…");
+        expect(rowOf("x")).toBeNull(); // Hide noise and muted is on: the row left the view, the note says what is happening
+        hold.release();
+        await waitFor(() => expect([...api.muted]).toEqual(["x"]));
+        await waitFor(() => expect(document.getElementById("muteNote")).toBeNull());
+      });
+
+      it("lends nothing for the fixed noise types or an unknown type, and nothing once the page is gone", async () => {
+        serve();
+        await page();
+        expect(muteFor("x")).not.toBeNull();
+        for (const c of ["infra", "user_denied", "nope"]) expect(muteFor(c)).toBeNull();
+        cleanup();
+        expect(muteFor("x")).toBeNull();
+      });
     });
   });
 

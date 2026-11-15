@@ -137,6 +137,13 @@ To take a snapshot, choose **Measure now** in the Context block. The app runs `c
 ## Everywhere
 
 - Press **Cmd+K** to jump anywhere: `>errors #myproject #7d`. The `>context` term opens the Context page, keeping the project and range filters.
+- Right-click a project, a session, a tool, MCP server or skill, or an error type for its actions:
+  - A project: open its page or sheet, filter the dashboard to it, or show it on Cost, Errors, Context or Live.
+  - A session: open it or its project's page, or copy its resume command (`claude --resume <id>` or `codex resume <id>`, after a `cd` to its directory), its id or its directory.
+  - A tool, MCP server or skill: open its inspector.
+  - An error type: open it on Errors, or mute it there.
+
+  Shift+F10 or the menu key opens the menu on a focused row, and a long press opens it on touch. Shift+right-click, or a right-click on selected text, shows the browser's menu instead. The session sheet also shows the resume command and the directory, each with a Copy button.
 - The project picker on every page filters as you type.
 - Press **Wide** in a session sheet or a tool, MCP server or skill sheet to widen it to up to 1100px: the timeline gets more room and short sections sit side by side. The choice is saved in your browser. The project sheet stays narrow.
 - Every page works by keyboard and screen reader.

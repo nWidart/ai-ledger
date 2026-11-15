@@ -16,7 +16,7 @@ Model per task in brackets. The lead integrates, reviews each diff and runs the 
 
 ## 3. The menu
 
-- [ ] 3.1 [Opus] Build `<SubjectMenu>` per design.md decisions 1, 2 and 7, and mount it once in the app root. It covers delegation, the browser-menu passthrough (no subject, selected text, Shift), pointer and long-press opening, Shift+F10 and the ContextMenu key, the "<subject> actions" name, focus return, `go(href)` for navigation, and the polite copy status. Verify with tests for the context-menu spec scenarios:
+- [x] 3.1 [Opus] Build `<SubjectMenu>` per design.md decisions 1, 2 and 7, and mount it once in the app root. It covers delegation, the browser-menu passthrough (no subject, selected text, Shift), pointer and long-press opening, Shift+F10 and the ContextMenu key, the "<subject> actions" name, focus return, `go(href)` for navigation, and the polite copy status. Verify with tests for the context-menu spec scenarios:
   - right-click on a row opens the menu and not the sheet;
   - a nested session row wins over its project;
   - a heading, selected text and Shift leave `defaultPrevented` false;
@@ -24,8 +24,8 @@ Model per task in brackets. The lead integrates, reviews each diff and runs the 
   - Shift+F10 then Escape returns focus and keeps the sheet open;
   - an item adds one history entry and Back restores the view;
   - a refused clipboard announces the failure.
-- [ ] 3.2 [Opus] Load session details when a session menu opens, per design.md decision 5. Verify: tests show "Loading…" first, then the item becoming available with the menu still open, and "Not available" on a failed `/api/session`, with Copy session ID still working.
-- [ ] 3.3 [Opus] Expose the Errors mute toggle to the menu through a context that only the Errors page provides, per design.md decision 6. Verify: an Errors test mutes a type from the menu and sees the same "Saving…" feedback and request as the detail button. A test on another page sees no mute item.
+- [x] 3.2 [Opus] Load session details when a session menu opens, per design.md decision 5. Verify: tests show "Loading…" first, then the item becoming available with the menu still open, and "Not available" on a failed `/api/session`, with Copy session ID still working.
+- [x] 3.3 [Opus] Expose the Errors mute toggle to the menu through a context that only the Errors page provides, per design.md decision 6. Verify: an Errors test mutes a type from the menu and sees the same "Saving…" feedback and request as the detail button. A test on another page sees no mute item.
 
 ## 4. Session sheet
 
@@ -33,8 +33,8 @@ Model per task in brackets. The lead integrates, reviews each diff and runs the 
 
 ## 5. Docs and build
 
-- [ ] 5.1 [Sonnet] Describe the right-click menu in `README.md` and add it to `[Unreleased]` in `CHANGELOG.md`. Verify: both files mention the four subjects and the Shift+right-click escape.
-- [ ] 5.2 [Lead] Rebuild and check:
+- [x] 5.1 [Lead] Describe the right-click menu in `README.md` and `docs/guide.md` and add it to `[Unreleased]` in `CHANGELOG.md`. Verify: both files mention the four subjects and the Shift+right-click escape.
+- [x] 5.2 [Lead] Rebuild and check:
   - run `cd web && npm run check`;
   - commit the rebuilt `src/ai_ledger/web/`;
   - run `uv run python -m unittest discover -s tests`, `uv run ruff check` and `openspec validate --strict`.

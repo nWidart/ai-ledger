@@ -27,7 +27,7 @@ Needs [uv](https://docs.astral.sh/uv/). Runs on macOS and Linux. Your data stays
 | **Live** | Every active session as it runs, sorted by who needs you first. |
 | **Project** | One project across all of the above, opened from the Page link on the navigation's project filter, its sheet, or its name in the command palette. |
 
-Press **Cmd+K** to jump anywhere, for example `>errors #myproject #7d`. Every page works by keyboard and screen reader, and each chart has a data table.
+Press **Cmd+K** to jump anywhere, for example `>errors #myproject #7d`. Right-click a project, session, tool or error type for its actions, such as copying a session's resume command. Every page works by keyboard and screen reader, and each chart has a data table.
 
 The [user guide](https://github.com/nWidart/ai-ledger/blob/main/docs/guide.md) describes each page in detail.
 

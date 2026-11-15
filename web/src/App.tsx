@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { lazyRouteComponent, Outlet } from "@tanstack/react-router";
 import { focusLede } from "./components/focusLede";
+import { SubjectMenu } from "./components/menu/SubjectMenu";
 import { Nav } from "./components/Nav";
 import { isMac, openPalette, usePaletteOpen } from "./components/palette/store";
 import { usePathname } from "./url";
@@ -51,7 +52,8 @@ export function App() {
     {/* A click goes to the page heading itself, and leaves the URL as it is; a focusable main would take focus from every click inside it. */}
     <a className="skip" href="#content" onClick={e => { e.preventDefault(); land(true); }}>Skip to content</a>
     <Nav />
-    <Outlet />
+    {/* One context menu for every subject the pages mark (components/menu). */}
+    <SubjectMenu><Outlet /></SubjectMenu>
     {seen && <Suspense fallback={null}><Palette /></Suspense>}
   </>;
 }
