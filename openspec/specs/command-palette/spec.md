@@ -7,7 +7,7 @@ The keyboard command palette: one input that narrows the view with `#` filters, 
 ## Requirements
 
 ### Requirement: Open the palette
-Every dashboard page SHALL open the palette on Cmd+K on macOS and Ctrl+K on other systems, also while focus is in a page control. The navigation SHALL show a button that opens the palette and shows the shortcut for the user's system. The button's accessible name SHALL include its visible label, "Search". The palette SHALL open with its input focused.
+Every dashboard page SHALL open the palette on Cmd+K on macOS and Ctrl+K on other systems, also while focus is in a page control. The navigation SHALL show a button that opens the palette and shows the shortcut for the user's system. The button's accessible name SHALL include "Search" and any text the button shows. The palette SHALL open with its input focused.
 
 #### Scenario: Shortcut on macOS
 - **WHEN** the user presses Cmd+K on any dashboard page on macOS
@@ -326,3 +326,18 @@ Typed text with no sigil or with `>` SHALL also list a row that opens the page o
 #### Scenario: Already on the page
 - **WHEN** the user views `jobdesk` on the Project page, opens the palette and types `jobdesk`
 - **THEN** the list offers no row for the page of `jobdesk`
+
+### Requirement: Show the project filter on the palette button
+While a project filter is set, the palette button SHALL show the project's color dot and its name, cut short with an ellipsis when long, in place of the "Search" label, and SHALL name the project in its accessible name. When the button shows only its icon, it SHALL keep the dot. With no project filter, the button SHALL show "Search".
+
+#### Scenario: Project filter set
+- **WHEN** the user views Errors with the project filter `ai-ledger`
+- **THEN** the palette button shows the `ai-ledger` dot and name, and its accessible name includes "Search" and "ai-ledger"
+
+#### Scenario: Narrow window
+- **WHEN** the window is too narrow for the button's text and the project filter is `ai-ledger`
+- **THEN** the button shows the search icon and the `ai-ledger` dot
+
+#### Scenario: No project filter
+- **WHEN** the user views Errors with no project filter
+- **THEN** the palette button shows "Search"
