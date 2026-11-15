@@ -154,7 +154,7 @@ defaultViewTransition: { types: ({ pathChanged }) => pathChanged && !reducedMoti
 
 A filter or sheet change returns `false`, so only a page switch is animated; the reduced-motion check is the same `matchMedia` test `Drawer.tsx` uses. Browsers without `document.startViewTransition` ignore the option. This replaces `adopt-tanstack` task 5.1.
 
-As built: the function also requires `fromLocation`. On the first load there is none and Router reports `pathChanged` as true, so every first load started a transition. The reduced-motion test is `motion()` from `components/chart.ts`, the one already exported. The navigation bar has its own `view-transition-name`, with its old snapshot hidden, so the bar does not fade with the page and the current tab switches at once. The crossfade is 150 ms. Checked in Chrome: one transition per page switch, none for a filter, a sheet or under reduced motion.
+As built: the function also requires `fromLocation`. On the first load there is none and Router reports `pathChanged` as true, so every first load started a transition. The reduced-motion test is `motion()` from `components/chart.ts`, the one already exported. The navigation bar has its own `view-transition-name`, with its old snapshot hidden, so the bar does not fade with the page and the current tab switches at once. The crossfade is 150 ms. The option is off in a browser that has view transitions but no transition types (Chrome before 125, Safari 18.0): there Router does not call the `types` function and would crossfade every navigation, filters and reduced motion included. Checked in Chrome: one transition per page switch, none for a filter, a sheet or under reduced motion.
 
 ### 10. Scroll restoration
 
