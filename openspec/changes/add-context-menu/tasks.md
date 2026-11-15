@@ -42,7 +42,8 @@ Model per task in brackets. The lead integrates, reviews each diff and runs the 
 
 ## 6. Integration
 
-- [ ] 6.1 [Lead] Run the app against a copy of the store on a free port, with `uv run ai-ledger --db <copy> --port <port>`. In a browser, check the menu on each covered place: Activity, Cost and Context tables, the Errors type rows, the Live rail and wall, the three sheets, and the Project page. Check keyboard opening and that the browser's menu still shows outside subjects. Verify: each spec scenario behaves as written. The live store stays untouched.
+- [x] 6.1 [Lead] Run the app against a copy of the store on a free port, with `uv run ai-ledger --db <copy> --port <port>`. In a browser, check the menu on each covered place: Activity, Cost and Context tables, the Errors type rows, the Live rail and wall, the three sheets, and the Project page. Check keyboard opening and that the browser's menu still shows outside subjects. Verify: each spec scenario behaves as written. The live store stays untouched.
+  - Result (Chrome): menus open on Activity, Errors, sheets and the Project page. Show on Errors carries the filters with one history entry. The menu renders inside the open sheet and is the top hit. Escape closes only the menu. Shift+F10 opens it anchored under the row, with focus on the first item, and focus returns to the row. Headings and Shift+right-click keep the browser's menu. The Live wall had no sessions in the copy, so unit tests cover it. Long-press still needs a check on a touch device. Fix: a session's menu no longer offers Open project page on that project's page.
 
 ## Workflow follow-up
 

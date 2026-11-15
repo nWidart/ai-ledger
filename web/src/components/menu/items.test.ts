@@ -54,6 +54,10 @@ describe("project menu", () => {
 });
 
 describe("session menu", () => {
+  it("leaves out Open project page on that project's page", () => {
+    expect(labels(items(sess, "/project?project=jobdesk", ready()))[0]).toEqual(["Open session"]);
+    expect(labels(items(sess, "/project?project=other", ready()))[0]).toEqual(["Open session", "Open project page"]);
+  });
   it("offers its items in order once the details are in", () => {
     expect(labels(items(sess, "/usage", ready()))).toEqual([
       ["Open session", "Open project page"],

@@ -43,9 +43,12 @@ const projectPage = (here: Here, name: string) => via(here, projectChip(name), p
 /** This path with the patch applied, as a write to the current page. */
 const patched = (here: Here, patch: Parameters<typeof applyPatch>[1]) => here.path + formatSearch(applyPatch(here.search, patch));
 
+/** The page shows this project's Project page already. */
+const onProjectPage = (here: Here, name: string) => here.path === PROJECT_PAGE && parseView(here.search).project === name;
+
 function projectItems(name: string, here: Here): MenuItem[][] {
   const filtered = parseView(here.search).project === name, open: MenuItem[] = [];
-  if (!(here.path === PROJECT_PAGE && filtered)) open.push({ id: "project-page", label: "Open project page", type: "nav", href: projectPage(here, name) });
+  if (!onProjectPage(here, name)) open.push({ id: "project-page", label: "Open project page", type: "nav", href: projectPage(here, name) });
   if (HOSTS_SHEETS.includes(here.path)) {
     open.push({ id: "project-sheet", label: "Open project sheet", type: "nav",
       href: patched(here, { inspect: name, tool: null, mcp: null, skill: null, session: null }) });
@@ -64,7 +67,7 @@ function sessionItems(id: string, here: Here, s: SessionState = { state: "loadin
   const wait = s.state === "loading" ? LOADING : s.state === "error" ? UNAVAILABLE : null;
   const open: MenuItem[] = [{ id: "open-session", label: "Open session", type: "nav", href: via(here, { kind: "session", value: id, label: shortId(id) }) }];
   if (wait) open.push({ id: "project-page", label: "Open project page", type: "nav", href: "", disabled: wait });
-  else if (s.state === "ready" && s.project) open.push({ id: "project-page", label: "Open project page", type: "nav", href: projectPage(here, s.project) });
+  else if (s.state === "ready" && s.project && !onProjectPage(here, s.project)) open.push({ id: "project-page", label: "Open project page", type: "nav", href: projectPage(here, s.project) });
   const copy: MenuItem[] = [
     s.state === "ready"
       ? { id: "copy-resume", label: "Copy resume command", type: "copy", text: resumeCommand({ source: s.source, session_id: id, cwd: s.cwd }) }

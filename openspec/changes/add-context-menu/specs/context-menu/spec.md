@@ -75,7 +75,7 @@ When the page is not filtered to the project, the filter item SHALL read "Filter
 - **THEN** Cost shows every project
 
 ### Requirement: Offer a session's actions
-A session's menu SHALL offer: Open session, Open project page, Copy resume command, Copy session ID, and Copy working directory. Open session SHALL open the session sheet as the palette opens it. Open project page SHALL be left out when the session has no project. Copy working directory SHALL be left out when the store has no working directory for the session.
+A session's menu SHALL offer: Open session, Open project page, Copy resume command, Copy session ID, and Copy working directory. Open session SHALL open the session sheet as the palette opens it. Open project page SHALL be left out when the session has no project or the page is that project's page. Copy working directory SHALL be left out when the store has no working directory for the session.
 
 #### Scenario: Open a session from Live
 - **WHEN** the user picks Open session in the menu of a session on Live
