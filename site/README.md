@@ -53,7 +53,7 @@ spec: [cost-dashboard]
 ---
 ```
 
-When a spec changes, re-read the pages that name it. When a page and its spec disagree, the spec wins: fix the page. A change to user-visible behavior updates the pages in the same change.
+When a spec changes, re-read the pages that name it. When a page and its spec disagree, read the code: the page follows the code, and the mismatch is reported so the spec gets fixed in its own change. A change to user-visible behavior updates the pages in the same change.
 
 ## Playbooks
 

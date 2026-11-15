@@ -46,7 +46,7 @@ With no measured session, the heading reads "No {agent} session{ in project} wit
 
 ### Tips
 
-**Shows** tips from six fixed rules. The app sets the thresholds; nothing is learned or generated. A tip shows only when its rule fires on the view. When none fires, the section reads "Nothing stands out in this view." Tips run most severe first (critical, then warning), and within a severity in the order below.
+**Shows** tips from six fixed rules. The app sets the thresholds; nothing is learned or generated. A tip shows only when its rule fires on the view. When none fires, the section reads "Nothing stands out in this view." Each tip card carries its severity mark: **● Act** (critical) or **▲ Watch** (warning). Tips run most severe first, and within a severity in the order below.
 
 **Figures** Each tip is a card with a severity, a title, its evidence, its advice and a count of the sessions that match. A small label names the kind of finding: Starting context, Compactions, Window limit, Tool results, Prompt cache or Long prompts.
 

@@ -52,7 +52,7 @@ Each entry shows:
 - its cost so far;
 - on the second line, the project (with its color), the state with its time, and the source (Claude Code or Codex). An entry with no title shows the state, the source and the git branch instead.
 
-The footer reads `N sessions working · N waiting for you · $ so far`. Working counts the working group. Waiting counts approval? and your turn. Idle and ended count as neither.
+The footer reads `N sessions working · N waiting for you · $ so far`; the "waiting for you" part shows only when at least one session waits. Working counts the working group. Waiting counts approval? and your turn. Idle and ended count as neither.
 
 A session's title comes from the newest custom title (Claude Code `/rename`), else the agent's own title (a Claude Code AI title or a Codex thread name), else, only with Full text on, a title made from the first prompt. A title has at most 80 characters.
 

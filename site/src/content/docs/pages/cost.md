@@ -82,7 +82,7 @@ A "+?" chip beside a cost means the figure leaves out some requests from unprice
 | Finding | Figure | Mark | Action |
 | --- | --- | --- | --- |
 | Biggest spender (with one project selected, Biggest session) | The project's cost and its share of spend; its cost per commit. | Watch when its cost per commit is over twice the median project's. | Inspect project (or Open session). |
-| Cost per commit | The median cost per commit and the view's cost per commit. | Good when no project is an outlier. Watch for an outlier, Act when the outlier is four times the median or more. | Compare projects. With one project selected: Open the priciest session when there is no outlier, else Open session. |
+| Cost per commit (titled "Cost-per-commit outlier" when a project or session is an outlier) | The median cost per commit and the view's cost per commit. | Good when no project is an outlier. Watch for an outlier, Act when the outlier is four times the median or more. | Compare projects. With one project selected: Open the priciest session when there is no outlier, else Open session. |
 | Peak day | The costliest day, as a multiple of the median day with spend and as a share of the range. | Watch when 5 or more days have spend and the peak is 3 or more times the median. | Show that day's sessions. |
 | Cache hit | The cache hit ratio; the share of cache writes that use the 1-hour lifetime; the subagents' share of cost. | None. | See tokens and cache. |
 
