@@ -91,7 +91,8 @@ export function LivePage() {
       {text && <div className="banner" role="note"><b>Full text on.</b> Prompts, replies and tool output show as written, secrets included.
         The app only listens on 127.0.0.1; turn this off before sharing your screen.</div>}
       {error && <div className="banner" role="alert"><b>Could not load.</b> {error.message}</div>}
-      {bare && <PageSkeleton />}
+      {/* With a session in the URL the stream's own panel says it is loading; the placeholder is for the bare page. */}
+      {bare && !h.session && <PageSkeleton />}
       {list && !sessions.length && !h.session && <Empty newest={list.newest} />}
       {mode === "wall" && sessions.length > 0 && <Wall sessions={sessions} now={now} pick={pick} />}
       {mode === "stream" && (sessions.length > 0 || h.session) && <div className="grid">

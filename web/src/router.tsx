@@ -44,6 +44,8 @@ const viewLoader = <K extends QueryKey>(query: (v: View) => FetchQueryOptions<an
 // Errors has one key for every filter.
 const errorsLoader = { loader: ({ context }: { context: RouterContext }) => { void context.queryClient.prefetchQuery(queries.errors); } };
 
+const typedTransitions = () => typeof CSS !== "undefined" && !!CSS.supports?.("selector(:active-view-transition-type(a))");
+
 export function makeRouter(o: { queryClient: QueryClient; history?: RouterHistory; loaders?: boolean }) {
   // Each route types its own keys: the root the ones every page shares, a page the ones only it reads (Cost and Limits
   // have none). The validators drop what is not valid and never throw, so a mistyped link opens the page, not an error.
@@ -72,8 +74,9 @@ export function makeRouter(o: { queryClient: QueryClient; history?: RouterHistor
     scrollRestoration: true,
     // A page switch crossfades (base.css, type "page"); the first load (no fromLocation), a view change that keeps the path,
     // and reduced motion start no transition: false is what the router takes as "none" (it runs the update without
-    // document.startViewTransition).
-    defaultViewTransition: { types: ({ fromLocation, pathChanged }) => fromLocation && pathChanged && motion() ? ["page"] : false },
+    // document.startViewTransition). Off altogether in a browser with view transitions but no transition types: there the
+    // router never asks this function and would crossfade every navigation, filters and reduced motion included.
+    defaultViewTransition: typedTransitions() && { types: ({ fromLocation, pathChanged }) => fromLocation && pathChanged && motion() ? ["page"] : false },
   });
   bindRouter(router);
   return router;

@@ -79,4 +79,15 @@ describe("view transitions", () => {
     await settled();
     expect(start).not.toHaveBeenCalled();
   });
+
+  // Chrome before 125 and Safari 18.0 have view transitions without types: the router would crossfade every navigation.
+  it("starts none in a browser without transition types", async () => {
+    vi.stubGlobal("CSS", { supports: () => false });
+    await open("/usage");
+    await userEvent.click(screen.getByRole("link", { name: "Cost" }));
+    await loaded("/cost");
+    act(() => setSearch({ range: 7 }));
+    await new Promise(r => setTimeout(r, 50));
+    expect(start).not.toHaveBeenCalled();
+  });
 });

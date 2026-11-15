@@ -78,4 +78,16 @@ describe("scroll restoration", () => {
     await waitFor(() => expect(scrollTo).toHaveBeenCalled());
     expect(scrollTo.mock.calls.at(-1)).toEqual([{ top: 500, left: 0 }]);
   });
+
+  // A write that changes nothing rewrites a URL spelled in another key order (url.ts). It is the same view: it must not
+  // move the page either.
+  it("a write that only respells the URL makes no scroll call", async () => {
+    await open("/usage?range=7&project=foo");
+    scrollBy(400);
+    scrollTo.mockClear();
+    act(() => setSearch({ range: 7 }));
+    expect(location.search).toBe("?project=foo&range=7");
+    await settle();
+    expect(scrollTo).not.toHaveBeenCalled();
+  });
 });
