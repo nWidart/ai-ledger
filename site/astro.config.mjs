@@ -85,7 +85,18 @@ export default defineConfig({
       description,
       social: [{ icon: "github", label: "GitHub", href: "https://github.com/nWidart/ai-ledger" }],
       editLink: { baseUrl: "https://github.com/nWidart/ai-ledger/edit/main/site/" },
-      customCss: ["./src/styles/custom.css"],
+      // The app's mark (web/index.html) and its typeface, self-hosted so a reader's browser asks no third party.
+      logo: { src: "./src/assets/mark.svg" },
+      favicon: "/favicon.svg",
+      customCss: [
+        "@fontsource/ibm-plex-sans/latin-400.css",
+        "@fontsource/ibm-plex-sans/latin-400-italic.css",
+        "@fontsource/ibm-plex-sans/latin-500.css",
+        "@fontsource/ibm-plex-sans/latin-600.css",
+        "./src/styles/custom.css",
+      ],
+      // Code frames take the app's 8px control radius and no drop shadow.
+      expressiveCode: { styleOverrides: { borderRadius: "0.5rem", frames: { frameBoxShadowCssValue: "none" } } },
       sidebar,
       plugins: [
         starlightLinksValidator(),

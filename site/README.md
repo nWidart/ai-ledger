@@ -31,7 +31,7 @@ Every script runs `npm run sync` first. It writes two things from the repo, both
 | `src/content.config.ts` | The front matter schema: Starlight's, plus `spec`. |
 | `src/components/ThemedImage.astro` | An image in dark and light variants. |
 | `src/assets/shots/` | Screenshots, recorded from the demo store. |
-| `src/styles/custom.css` | Site styles on top of Starlight's theme. |
+| `src/styles/custom.css` | The theme: the app's tokens mapped onto Starlight's, and a few element styles. See "Theme" below. |
 | `scripts/sync.mjs` | Copies the changelog and the GIFs in (see above). |
 | `scripts/check-playbooks.mjs` | The playbook template check. |
 
@@ -177,6 +177,15 @@ node record.mjs quantize                  # re-encode the PNGs already there, wi
 ```
 
 The `shots` mode seeds the demo store (`seed.py`), starts the demo server itself, and stops it when it is done. It refuses to run when port 8799 already answers, before any shot. Pages: `activity cost context errors limits insights project live everywhere`; with none named it records all (about 4 minutes). `site/src/assets/shots/README.md` lists every shot. See the header of `tools/demo/record.mjs` for its options. When a change alters a panel, re-record its shots in the same change.
+
+## Theme
+
+The site looks like the app. `src/styles/custom.css` copies the app's color tokens from `web/src/theme.css` under an `--ai-` prefix, each a `light-dark()` pair, and maps them onto Starlight's `--sl-color-*` properties. A few element styles follow: the title bar, sidebar, search, asides, cards and the focus ring. The font is IBM Plex Sans from `@fontsource/ibm-plex-sans`, served by the site itself. The logo and favicon are the app's mark.
+
+- When the app's palette changes, change the tokens here in the same change. The two share no build.
+- Style with tokens and CSS. Override a Starlight component only when CSS cannot do the job.
+- Every text, link and control state passes WCAG AA in both themes. Check a new color against its background before you add it. `openspec/changes/archive/*-add-docs-theme/design.md` lists the current ratios.
+- Load no font or stylesheet from a third party.
 
 ## Deploy
 

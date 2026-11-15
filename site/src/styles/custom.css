@@ -1,7 +1,232 @@
 /*
- * Site styles on top of Starlight's theme. Starlight's colors are kept (design D10):
- * any accent color added here must pass WCAG AA contrast in both the light and the dark theme.
+ * The AI Ledger theme: the app's tokens (web/src/theme.css) mapped onto Starlight's (design D1 of add-docs-theme).
+ *
+ * Each token is light-dark(light, dark). Starlight sets color-scheme from its data-theme attribute, so one set of
+ * tokens follows the theme picker. Keep the values equal to the app's: when the app changes a token, change it here.
+ * Every text and UI pair passes WCAG AA in both themes; the ratios are in the design. A new color must pass too.
+ *
+ * This file is unlayered, so it wins over Starlight's layered styles without !important.
  */
+
+:root {
+  /* The app's tokens, under an --ai- prefix so they never clash with Starlight's. */
+  --ai-bg: light-dark(#f6f5f2, #121211);
+  --ai-surface-1: light-dark(#fcfcfb, #1a1a19);
+  --ai-surface-2: light-dark(#f0efec, #242422);
+  --ai-border: light-dark(#e2e0da, #33332f);
+  --ai-control-border: light-dark(#8e8c85, #75746d);
+  --ai-text-primary: light-dark(#0b0b0b, #f0efec);
+  --ai-text-body: light-dark(#2e2d2a, #d6d5cc);
+  --ai-text-secondary: light-dark(#52514e, #c3c2b7);
+  --ai-text-muted: light-dark(#66655f, #9d9c94);
+  --ai-accent: light-dark(#b4502a, #e8895f);
+  --ai-accent-ink: light-dark(#8f3d1e, #f0a582);
+  --ai-on-accent: light-dark(#ffffff, #1a1a19);
+  /* The app's --accent-soft, made opaque on the page background so text on it has a fixed contrast. */
+  --ai-accent-soft: light-dark(color-mix(in srgb, #b4502a 11%, #f6f5f2), color-mix(in srgb, #e8895f 16%, #121211));
+  --ai-shadow-card: 0 1px 2px light-dark(rgba(20, 18, 12, 0.04), transparent);
+
+  /* Starlight's grey ramp runs from the strongest text (white) to the page (black) in both themes. */
+  --sl-color-white: var(--ai-text-primary);
+  --sl-color-gray-1: light-dark(#1f1f1d, #e6e5df);
+  --sl-color-gray-2: var(--ai-text-body);
+  --sl-color-gray-3: var(--ai-text-muted);
+  --sl-color-gray-4: var(--ai-control-border);
+  --sl-color-gray-5: var(--ai-border);
+  --sl-color-gray-6: light-dark(#f0efec, #1a1a19);
+  --sl-color-gray-7: var(--ai-surface-1);
+  --sl-color-black: var(--ai-bg);
+
+  /* One clay accent for everything interactive, as in the app. Text uses the ink step. */
+  --sl-color-accent-low: var(--ai-accent-soft);
+  --sl-color-accent: var(--ai-accent);
+  --sl-color-accent-high: var(--ai-accent-ink);
+  --sl-color-text-accent: var(--ai-accent-ink);
+  --sl-color-text-invert: var(--ai-on-accent);
+  --sl-color-bg-accent: var(--ai-accent);
+
+  /* Status hues for asides and badges: the app's series blue, good, warning and critical, plus a project violet. */
+  --sl-color-blue: light-dark(#2a78d6, #3987e5);
+  --sl-color-blue-high: light-dark(#1c5dab, #74aff5);
+  --sl-color-blue-low: color-mix(in srgb, var(--sl-color-blue) 12%, var(--ai-surface-1));
+  --sl-color-green: #0ca30c;
+  --sl-color-green-high: light-dark(#006300, #4cc94c);
+  --sl-color-green-low: color-mix(in srgb, var(--sl-color-green) 12%, var(--ai-surface-1));
+  --sl-color-orange: light-dark(#c98500, #d99a1e);
+  --sl-color-orange-high: light-dark(#8a5a00, #e0b04a);
+  --sl-color-orange-low: color-mix(in srgb, var(--sl-color-orange) 12%, var(--ai-surface-1));
+  --sl-color-red: light-dark(#d03b3b, #e66767);
+  --sl-color-red-high: light-dark(#b42318, #f08080);
+  --sl-color-red-low: color-mix(in srgb, var(--sl-color-red) 12%, var(--ai-surface-1));
+  --sl-color-purple: light-dark(#7a52d9, #a48cf5);
+  --sl-color-purple-high: light-dark(#5b37b8, #c2b3f8);
+  --sl-color-purple-low: color-mix(in srgb, var(--sl-color-purple) 12%, var(--ai-surface-1));
+
+  /* Surfaces: the bar like the app's nav, the sidebar flat on the page, code on the panel surface. */
+  --sl-color-text: var(--ai-text-body);
+  --sl-color-bg: var(--ai-bg);
+  --sl-color-bg-nav: var(--ai-surface-1);
+  --sl-color-bg-sidebar: var(--ai-bg);
+  --sl-color-bg-inline-code: var(--ai-surface-2);
+  --sl-color-hairline: var(--ai-border);
+  --sl-color-hairline-light: var(--ai-border);
+  --sl-color-hairline-shade: var(--ai-border);
+
+  /* Type: the app's IBM Plex Sans (self-hosted, imported in astro.config.mjs); code keeps the system monospace. */
+  --sl-font: "IBM Plex Sans";
+  --sl-line-height: 1.7;
+}
+
+/* Keyboard focus: the app's ring, a 2px clay outline. It sits in Starlight's base layer so that the components that
+   draw their ring inside (sidebar, tabs, table of contents) keep their own offset. */
+@layer starlight.base {
+  :focus-visible {
+    outline: 2px solid var(--sl-color-accent);
+    outline-offset: 2px;
+  }
+}
+
+/* The title bar: the app's mark and a quiet wordmark. */
+.site-title {
+  color: var(--ai-text-primary);
+  font-size: var(--sl-text-lg);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  gap: 0.5rem;
+}
+.site-title img {
+  height: 1.5rem;
+  width: auto;
+}
+
+/* Icon links and the phone menu button read as the app's icon buttons: quiet until hovered. */
+.social-icons a {
+  color: var(--ai-text-secondary);
+}
+.social-icons a:hover {
+  color: var(--ai-text-primary);
+}
+.sl-menu-button {
+  border: 1px solid var(--ai-border);
+  border-radius: 0.5rem;
+  background-color: var(--ai-surface-1);
+  color: var(--ai-text-primary);
+  box-shadow: none;
+}
+.sl-menu-button:has(~ :popover-open) {
+  background-color: var(--ai-surface-2);
+}
+
+/* Search reads as one of the app's controls. */
+site-search button[data-open-modal] {
+  background-color: var(--ai-surface-1);
+  border-color: var(--ai-border);
+  border-radius: 0.5rem;
+}
+site-search button[data-open-modal]:hover {
+  background-color: var(--ai-surface-2);
+  border-color: var(--ai-control-border);
+}
+
+/* Flat panes, as in the app: no rule under the page title or beside the table of contents. */
+.content-panel + .content-panel {
+  border-top: 0;
+}
+.right-sidebar {
+  border-inline-start: 0;
+}
+
+/* Sidebar: the current page takes the app's active-tab tint; other links get the tab hover. */
+.sidebar-content a {
+  border-radius: 0.375rem;
+}
+.sidebar-content a:hover {
+  background-color: var(--ai-surface-2);
+}
+.sidebar-content a[aria-current="page"],
+.sidebar-content a[aria-current="page"]:hover {
+  background-color: var(--ai-accent-soft);
+  color: var(--ai-accent-ink);
+}
+.sidebar-content .large {
+  font-size: var(--sl-text-base);
+  font-weight: 600;
+}
+
+/* Headings are tight and heavy, like the app's figures. */
+h1#_top,
+.sl-markdown-content :is(h1, h2, h3, h4) {
+  letter-spacing: -0.02em;
+}
+
+/* Links stay underlined in prose (color is never the only cue), with a softer line until hover. */
+.sl-markdown-content a:not(:where(.not-content *)) {
+  text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
+  text-underline-offset: 0.18em;
+}
+.sl-markdown-content a:not(:where(.not-content *)):hover {
+  text-decoration-color: currentColor;
+}
+
+.sl-markdown-content code:not(:where(.not-content *)) {
+  border-radius: 0.25rem;
+}
+
+/* Asides are the app's insight cards: a panel with a severity bar on the left and a colored title.
+   Tip is the app's Good, caution its Watch, danger its Act; a note is information in the series blue. */
+.starlight-aside {
+  position: relative;
+  overflow: hidden;
+  padding: 0.875rem 1rem 0.875rem 1.25rem;
+  border: 1px solid var(--ai-border);
+  border-radius: 0.75rem;
+  background-color: var(--ai-surface-1);
+  box-shadow: var(--ai-shadow-card);
+  color: var(--ai-text-primary);
+}
+.starlight-aside::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: var(--sl-color-asides-border);
+}
+.starlight-aside--note {
+  --sl-color-asides-border: var(--sl-color-blue);
+  --sl-color-asides-text-accent: var(--sl-color-blue-high);
+}
+.starlight-aside--tip {
+  --sl-color-asides-border: var(--sl-color-green);
+  --sl-color-asides-text-accent: var(--sl-color-green-high);
+}
+.starlight-aside--caution {
+  --sl-color-asides-border: var(--sl-color-orange);
+  --sl-color-asides-text-accent: var(--sl-color-orange-high);
+}
+.starlight-aside--danger {
+  --sl-color-asides-border: var(--sl-color-red);
+  --sl-color-asides-text-accent: var(--sl-color-red-high);
+}
+.starlight-aside__title {
+  font-size: var(--sl-text-sm);
+}
+.starlight-aside__icon {
+  font-size: 1.15em;
+}
+
+/* Cards and the previous/next links are the app's panels. */
+.sl-link-card,
+.pagination-links a {
+  background-color: var(--ai-surface-1);
+  border: 1px solid var(--ai-border);
+  border-radius: 0.75rem;
+  box-shadow: var(--ai-shadow-card);
+}
+.sl-link-card:hover,
+.pagination-links a:hover {
+  background-color: var(--ai-surface-1);
+  border-color: var(--ai-accent);
+}
 
 /* Screenshots and GIFs sit on the page background; a hairline frames them in both themes. */
 .sl-markdown-content .themed-image img {
