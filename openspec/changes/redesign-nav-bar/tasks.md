@@ -16,7 +16,7 @@ Each group lists the model it suits. Groups 2 and 3 can run in parallel: they to
 
 - [x] 3.1 In `Filters.tsx`, with a project set, render a "Project page" link named "<project> project page" next to the picker (not on `/project`), and a "Clear project filter" button that clears `project` and `session` and focuses `#fProject`. Style both in `Filters.css`, phones included. Verify with `Filters.test.tsx` cases for the link's name and target with range and source kept, no link on `/project` or without a project, clear keeping focus on the picker, and clear on `/project` opening Activity.
 - [x] 3.2 Remove the project chip (`#navFilter`, `.appnav-go`, `clear()`) from `Nav.tsx` and its rules from `Nav.css`. Move the `router.test.tsx` and `Nav.test.tsx` chip assertions to the filter-row link. Verify with `npm run check`.
-- [ ] 3.3 Update `tools/demo/record.mjs` to click the filter-row link instead of `.appnav-go`. Verify that the script runs to the end against the demo store.
+- [x] 3.3 Update `tools/demo/record.mjs` to click the filter-row link instead of `.appnav-go`. Verify that the script runs to the end against the demo store.
 
 ## 4. Search button shows the project (Sonnet)
 
@@ -42,13 +42,13 @@ Each group lists the model it suits. Groups 2 and 3 can run in parallel: they to
 
 ## 7. Docs, fixtures and build (Sonnet)
 
-- [ ] 7.1 Update `README.md`: navigation, freshness control and Project page link. Re-record the README GIFs with `tools/demo/`. Verify that the README describes the new bar and that the GIFs show it.
+- [x] 7.1 Update `README.md`: navigation, freshness control and Project page link. Re-record the README GIFs with `tools/demo/`. Verify that the README describes the new bar and that the GIFs show it.
 - [x] 7.2 Add the user-visible changes to `[Unreleased]` in `CHANGELOG.md`. Verify that the entry names the moved project link, the freshness control, the page chooser and the Search scope.
 - [x] 7.3 Regenerate the page-test fixtures if any payload moved (none expected): `uv run python -m unittest tests.test_web_fixtures`. Rebuild and commit `src/ai_ledger/web/`. Verify that `uv run python -m unittest tests.test_web_build` passes.
 
 ## 8. Integration (lead)
 
-- [ ] 8.1 Review the whole diff against the specs. Run `cd web && npm run check`, `uv run ruff check`, `uv run python -m unittest discover -s tests` and `openspec validate --specs --strict`. Verify that all four pass.
+- [x] 8.1 Review the whole diff against the specs. Run `cd web && npm run check`, `uv run ruff check`, `uv run python -m unittest discover -s tests` and `openspec validate --specs --strict`. Verify that all four pass.
 - [ ] 8.2 Walk the flows on a copy of the store (`uv run ai-ledger --db <copy> --port <free port>`) in both themes:
   - page switches from tabs and from the chooser;
   - Refresh, Retry, Stale (by stopping ingest), Offline (by stopping the app);
