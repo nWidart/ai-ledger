@@ -4,8 +4,9 @@ import { navigate, parseSearch, sharedSearch, useSearchOf, usePathname } from ".
 import { getTheme, nextTheme, setTheme, useTheme, type Theme } from "../theme";
 import { alertKey, alertText } from "../pages/limits/limits";
 import { openPalette, shortcutHint, shortcutKeys } from "./palette/store";
-import { useRefresh } from "./refresh";
+import { freshLabel, useFlash, useRefresh, type RefreshState } from "./refresh";
 import { ProjectDot } from "./ProjectDot";
+import { Toggletip } from "./Toggletip";
 import "./Nav.css";
 
 export const PAGES = [
@@ -28,11 +29,34 @@ const THEME_ICON: Record<Theme, ReactNode> = {
 // What the bar reads of the URL: the shared query string its links carry.
 const navSearch = (raw: Readonly<Record<string, string>>) => ({ shared: sharedSearch(raw), project: raw.project || "" });
 
-/** The shared top bar: brand, page tabs (keeping project, range and auto), the palette button, ingest status and Refresh. */
+// An exact time: the time alone for today, with the date for an older day.
+const exact = (d: Date) => d.toDateString() === new Date().toDateString() ? d.toLocaleTimeString() : d.toLocaleString();
+const every = (s: number) => s >= 60 && s % 60 === 0 ? `every ${s / 60} min` : `every ${s} s`;
+
+/** The freshness toggletip's details: what the short label stands for, in full. */
+function IngestDetails({ st }: { st: RefreshState }) {
+  return <>
+    {st.kind === "offline" && <p className="appnav-fresh-note">The app did not answer its status request.</p>}
+    {st.kind === "retry" && <p className="appnav-fresh-note">Refresh failed.</p>}
+    {!st.at && st.kind === "idle" && <p className="appnav-fresh-note">No ingest yet.</p>}
+    {!!(st.at || st.error || st.interval) && <dl className="appnav-fresh-dl">
+      {st.at && <><dt>Last ingest</dt><dd>{exact(st.at)}</dd></>}
+      {st.inserted != null && <><dt>New lines</dt><dd>{st.inserted.toLocaleString()}</dd></>}
+      {st.changedAt && <><dt>Last data change</dt><dd>{exact(st.changedAt)}</dd></>}
+      {st.interval ? <><dt>Interval</dt><dd>{every(st.interval)}</dd></> : null}
+      {st.error && <><dt>Error</dt><dd className="appnav-fresh-err">{st.error}</dd></>}
+    </dl>}
+    <p className="appnav-fresh-foot">Ingest runs on its own. Refresh runs it now.</p>
+  </>;
+}
+
+/** The shared top bar: brand, page tabs (keeping project, range and auto), the palette button, and the freshness control:
+ *  Refresh, and the last ingest's state with its details in a toggletip. */
 export function Nav() {
   const path = usePathname(), { shared, project } = useSearchOf(navSearch), theme = useTheme(), next = nextTheme(theme);
   const nav = useRef<HTMLElement>(null);
-  const { refresh, state: st } = useRefresh();
+  const { refresh, state: st } = useRefresh(), flash = useFlash();
+  const label = freshLabel(st) || "No ingest yet";
   const alert = st.alert ? alertText(st.alert) : null;
   // What a screen reader is told of the alert: its sentence, kept as it was while the alert stays the same alert (the forecast time
   // in the sentence drifts every cycle), changed when the alert's kind, window or measured flag change, and emptied, with no
@@ -89,13 +113,24 @@ export function Nav() {
           <svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5" fill="none" stroke="currentColor" strokeWidth="1.8" /><path d="m13 13 4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>
           {project ? <span className="appnav-scope"><ProjectDot project={project} /><b>{project}</b></span> : <span className="lbl">Search</span>}<kbd>{shortcutHint()}</kbd>
         </button>
-        <span className="appnav-status" id="navStatus" aria-live="polite">{st.text}</span>
         <span className="sr" role="status">{said.text}</span>
-        <button type="button" id="navRefresh" className={st.failed ? "failed" : undefined} title={st.text} aria-disabled={st.busy || undefined} onClick={refresh}
-          aria-label={st.retry ? "Retry" : "Refresh"}>
-          <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9" /><path d="M13.5 2.5v3h-3" /></svg>
-          <span className="lbl">{st.retry ? "Retry" : "Refresh"}</span>
-        </button>
+        {/* The freshness control: Refresh and the state, drawn as one split control. The state's time is no live region; only
+            a manual Refresh's result is said, in its own region. */}
+        <span className="appnav-fresh" role="group" aria-label="Ingest" data-kind={st.kind}>
+          <button type="button" id="navRefresh" className={st.failed ? "failed" : undefined} title={st.text} aria-disabled={st.busy || undefined} onClick={refresh}
+            aria-label={st.retry ? "Retry" : "Refresh"}>
+            <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9" /><path d="M13.5 2.5v3h-3" /></svg>
+            {st.retry && <span className="lbl">Retry</span>}
+          </button>
+          <Toggletip className="appnav-state" name={`Ingest status: ${label}`} label={<>
+            {flash && <span className="appnav-flash" aria-hidden="true">+{flash.n.toLocaleString()} line{flash.n === 1 ? "" : "s"}</span>}
+            {/* Stale keeps its word on phones, where the time goes: color is never the only signal. */}
+            {st.kind === "stale" ? <span className="appnav-time appnav-stale">{label.replace(/ · .*/, "")}<span className="appnav-at">{label.slice(label.indexOf(" · "))}</span></span>
+              : <span className="appnav-time">{label}</span>}
+            <svg className="appnav-caret" viewBox="0 0 10 10" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m2.5 4 2.5 2.5L7.5 4" /></svg>
+          </>}><IngestDetails st={st} /></Toggletip>
+        </span>
+        <span className="sr" role="status" id="navResult">{st.said}</span>
         <button type="button" id="navTheme" aria-label={`Theme: ${theme}`} title={`Theme: ${theme}. Click for ${next}.`} onClick={() => setTheme(nextTheme(getTheme()))}>
           <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{THEME_ICON[theme]}</svg>
         </button>

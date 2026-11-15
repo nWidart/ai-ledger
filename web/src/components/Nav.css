@@ -25,34 +25,67 @@
 .appnav-palette svg { flex: none; width: .875rem; height: .875rem; }
 .appnav-palette kbd { font: .6875rem/1.4 ui-monospace, "SF Mono", Menlo, monospace; color: var(--text-muted); padding: 0 5px;
   border: 1px solid var(--border); border-radius: 5px; background: var(--surface-2); }
-.appnav-status { margin-left: 8px; color: var(--text-muted); font-size: .75rem; }
 .appnav button { font-size: .8125rem; padding: 4px 10px; }
 /* Icon-only, as tall as Refresh. */
 #navTheme { display: inline-flex; align-items: center; padding: 4px 7px; color: var(--text-secondary); }
 #navTheme svg { display: block; margin: 1.5px 0; width: 1rem; height: 1rem; }
 #navTheme:hover { color: var(--text-primary); }
-#navRefresh svg { display: none; width: 1rem; height: 1rem; }
-#navRefresh.failed { border-color: var(--critical-text); color: var(--critical-text); }
+/* The freshness control: Refresh and the state toggletip drawn as one split control, one border around both and a line
+   between. The state colors the border, the line and the text: critical for Failed, Offline and Retry, warning for Stale.
+   Against --surface-1 (borders need 3:1, text 4.5:1): --critical-text 6.40 (light) and 6.72 (dark), --warning-text 5.77 and
+   8.69, --text-secondary 7.73 and 9.72; on the --surface-2 hover all stay above 5:1. --warning itself is 2.99 in light, so Stale
+   does not use it. The idle border is the bar's usual --border, as on every other button: the icon and the text mark the control.
+   Each state also says itself in words, so color is never the only signal. */
+.appnav-fresh { --fresh-line: var(--border); display: inline-flex; align-items: stretch; margin-left: 4px; border: 1px solid var(--fresh-line);
+  border-radius: 8px; background: var(--surface-1); color: var(--text-secondary); }
+.appnav-fresh:is([data-kind=failed], [data-kind=offline], [data-kind=retry]) { --fresh-line: var(--critical-text); color: var(--critical-text); }
+.appnav-fresh[data-kind=stale] { --fresh-line: var(--warning-text); color: var(--warning-text); }
+.appnav-fresh button { display: inline-flex; align-items: center; gap: 5px; border: 0; background: none; color: inherit; }
+.appnav-fresh button:hover { background: var(--surface-2); }
+#navRefresh { border-radius: 7px 0 0 7px; padding: 4px 8px; }
+#navRefresh svg { display: block; flex: none; margin: 1.5px 0; width: 1rem; height: 1rem; }
+#navRefresh .lbl { font-weight: 500; }
 /* Busy: aria-disabled keeps the button focusable while it shows as unavailable. */
 #navRefresh[aria-disabled="true"] { opacity: .55; cursor: default; }
-/* Phones: one row of 36px targets. The tabs share what the icon buttons leave; Refresh drops its label for an icon.
-   The project chip wraps to its own row below; ingest status moves into the Refresh button's tooltip. */
+#navRefresh[aria-disabled="true"]:hover { background: none; }
+.appnav-fresh .appnav-state { border-left: 1px solid var(--fresh-line); border-radius: 0 7px 7px 0; padding: 4px 8px; cursor: pointer;
+  font-size: .75rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.appnav-caret { flex: none; width: .625rem; height: .625rem; opacity: .8; }
+/* "+N lines" for a moment after an ingest that stored lines: --good-text on --good-soft clears 4.5:1 in both themes. */
+.appnav-flash { color: var(--good-text); background: var(--good-soft); border-radius: 999px; padding: 0 7px; font-size: .75rem; font-weight: 500; }
+@media (prefers-reduced-motion: no-preference) {
+  .appnav-flash { animation: appnav-flash-in .2s ease-out; }
+}
+@keyframes appnav-flash-in { from { opacity: 0; transform: translateY(2px); } }
+/* The details popup. */
+.appnav-fresh-dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin: 0; }
+.appnav-fresh-dl dt { color: var(--text-muted); }
+.appnav-fresh-dl dd { margin: 0; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.appnav-fresh-dl .appnav-fresh-err { color: var(--critical-text); overflow-wrap: anywhere; }
+.appnav-fresh-note { margin: 0 0 6px; color: var(--text-primary); font-weight: 500; }
+.appnav-fresh-foot { margin: 6px 0 0; padding-top: 6px; border-top: 1px solid var(--border); color: var(--text-muted); }
+/* High contrast: the theme's border colors are dropped, so the group and its line take the system text color; the flash keeps a frame. */
+@media (forced-colors: active) {
+  .appnav-fresh { border-color: CanvasText; }
+  .appnav-fresh .appnav-state { border-left-color: CanvasText; }
+  .appnav-flash { border: 1px solid CanvasText; }
+}
+/* Phones: one row of 36px targets. The tabs share what the icon buttons leave. The freshness control keeps both halves: the
+   time and the flash go, the toggletip button keeps its caret and shows the same details; Failed, Offline and Retry stay in words. */
 @media (max-width: 32.5em) {
   .appnav-in { padding: 6px 12px; gap: 4px; }
   .appnav-brand { margin-right: 2px; }
   .appnav-word { display: none; }
   .appnav-tabs { flex: 1 1 auto; flex-wrap: wrap; min-width: 0; padding-left: 0; border-left: 0; }
   .appnav a { flex: 1 1 auto; text-align: center; padding: 8px 4px; }
-  /* Status stays readable to screen readers; failures stay visible on the button. */
-  .appnav-status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-  .appnav .appnav-palette, #navRefresh, #navTheme { flex: none; min-width: 36px; min-height: 36px; padding: 0; justify-content: center; }
-  .appnav-palette .lbl, .appnav-scope b, .appnav-palette kbd, #navRefresh .lbl { display: none; }
-  #navRefresh { display: inline-flex; align-items: center; }
-  #navRefresh svg { display: block; }
+  .appnav .appnav-palette, #navRefresh, .appnav-fresh .appnav-state, #navTheme { flex: none; min-width: 36px; min-height: 36px; padding: 0; justify-content: center; }
+  .appnav-palette .lbl, .appnav-scope b, .appnav-palette kbd, .appnav-flash,
+  .appnav-fresh:not([data-kind=failed], [data-kind=offline], [data-kind=stale]) .appnav-time, .appnav-at { display: none; }
+  #navRefresh:has(.lbl), .appnav-fresh:is([data-kind=failed], [data-kind=offline], [data-kind=stale]) .appnav-state { padding: 0 8px; }
 }
 /* The narrowest phones: the logo goes and everything tightens so the actions stay on the tabs' row. */
 @media (max-width: 22.5em) {
   .appnav-brand { display: none; }
   .appnav a { padding: 8px 2px; font-size: .84375rem; }
-  .appnav .appnav-palette, #navRefresh, #navTheme { min-width: 32px; }
+  .appnav .appnav-palette, #navRefresh, .appnav-fresh .appnav-state, #navTheme { min-width: 32px; }
 }

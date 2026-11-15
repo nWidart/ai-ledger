@@ -41,6 +41,12 @@ describe("Toggletip", () => {
     expect(screen.getByRole("button", { name: "model-judged" })).toBeTruthy();
   });
 
+  it("takes a given name over its visible label", () => {
+    renderApp(<Toggletip label="8:00 PM" name="Ingest status: 8:00 PM">Details.</Toggletip>);
+    const tt = screen.getByRole("button", { name: "Ingest status: 8:00 PM" });
+    expect(tt.textContent).toBe("8:00 PM");
+  });
+
   it("opens on hover and closes when the pointer leaves, unless a click pinned it", async () => {
     renderApp(<><Toggletip term="Time lost">Time from the error to the next success.</Toggletip><p>elsewhere</p></>);
     const tt = screen.getByRole("button", { name: "About Time lost" });

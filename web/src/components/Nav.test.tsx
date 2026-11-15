@@ -26,6 +26,15 @@ const flush = () => new Promise(r => setTimeout(r, 0));
 const poll = (client: QueryClient) => act(async () => { await client.fetchQuery(queries.status).catch(() => null); await flush(); });
 const view = { project: "", range: 30, automated: false, source: "" } as const;
 const json = (body: unknown, ok = true) => Promise.resolve({ ok, status: ok ? 200 : 500, json: () => Promise.resolve(body) } as Response);
+// The freshness control: its group, its short visible label, its toggletip button, and the sentence the palette and Refresh's
+// title carry ("Last ingest 12:00:00 PM · 2 new lines"), which the flows below follow.
+const fresh = () => screen.getByRole("group", { name: "Ingest" });
+const label = () => fresh().querySelector(".appnav-time")?.textContent;
+const stateBtn = () => screen.getByRole("button", { name: /^Ingest status: / });
+const ingestText = () => document.getElementById("navRefresh")!.title;
+const ingested = (re: RegExp) => waitFor(() => expect(ingestText()).toMatch(re));
+const clock = (iso: string) => new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+const result = () => document.getElementById("navResult")!;
 
 describe("Nav", () => {
   it("switches tabs keeping project, range, source and auto, and marks the current tab", async () => {
@@ -150,11 +159,12 @@ describe("Nav", () => {
     vi.stubGlobal("fetch", f);
     history.replaceState(null, "", "/usage");
     const { client } = renderApp(<Nav />);
-    expect(await screen.findByText(/Last ingest .* · 2 new lines/)).toBeTruthy();
+    await ingested(/Last ingest .* · 2 new lines/);
     await userEvent.click(screen.getByRole("button", { name: "Refresh" }));
     const btn = await screen.findByRole("button", { name: "Retry" });
     expect(btn.className).toBe("failed");
-    expect(screen.getByText("Refresh failed. Select Retry to try again.")).toBeTruthy();
+    expect([btn.textContent, label(), fresh().dataset.kind]).toEqual(["Retry", "Failed", "retry"]);
+    expect(screen.getByText("Refresh failed. Select Retry to try again.")).toBe(result());
     expect(f).toHaveBeenCalledWith("/api/refresh", { method: "POST" });
     order = ["foo"]; // the app is up: the nav's poll, or Live's on a change notice, still does its other work
     await poll(client);
@@ -163,7 +173,8 @@ describe("Nav", () => {
     down = false;
     await userEvent.click(screen.getByRole("button", { name: "Retry" }));
     expect((await screen.findByRole("button", { name: "Refresh" })).className).toBe("");
-    expect(screen.getByText(/Last ingest .* · 2 new lines/)).toBeTruthy();
+    expect(ingestText()).toMatch(/Last ingest .* · 2 new lines/);
+    expect(screen.getByRole("button", { name: "Refresh" }).textContent).toBe(""); // icon-only again
   });
 
   it("keeps a failed Refresh's text through any number of polls, and shows Ingesting… while it runs", async () => {
@@ -193,21 +204,21 @@ describe("Nav", () => {
     const f = vi.fn((_url: string, _init?: RequestInit) => json(status));
     vi.stubGlobal("fetch", f);
     const { client } = renderApp(<Nav />);
-    expect(await screen.findByText(/Last ingest .* · 2 new lines/)).toBeTruthy();
+    await ingested(/Last ingest .* · 2 new lines/);
     f.mockImplementation((_url, init) => init?.method === "POST" ? later("refresh", { ...status, last_stats: { ...status.last_stats, inserted: 5 } }) : json({ ...status, ingesting: true }));
     await userEvent.click(screen.getByRole("button", { name: "Refresh" }));
     await poll(client); // answered while the ingest runs
-    expect(screen.getByText("Ingesting…")).toBeTruthy();
+    expect(label()).toBe("Ingesting…");
     f.mockImplementation(() => later("status", { ...status, ingesting: true }));
     let asked!: Promise<unknown>;
     act(() => { asked = client.fetchQuery(queries.status).catch(() => null); }); // asked while it runs, answered after
     await act(async () => { answers.refresh!(); });
-    expect(await screen.findByText(/Last ingest .* · 5 new lines/)).toBeTruthy();
+    await ingested(/Last ingest .* · 5 new lines/);
     await act(async () => { answers.status!(); await asked; });
-    expect(screen.getByText(/Last ingest .* · 5 new lines/)).toBeTruthy();
+    expect(ingestText()).toMatch(/Last ingest .* · 5 new lines/);
     f.mockImplementation(() => json({ ...status, last_stats: { ...status.last_stats, inserted: 7 } }));
     await poll(client); // asked after: shown
-    expect(screen.getByText(/Last ingest .* · 7 new lines/)).toBeTruthy();
+    expect(ingestText()).toMatch(/Last ingest .* · 7 new lines/);
   });
 
   it("shows the project filter in the search button, and plain Search without one", async () => {
@@ -233,7 +244,7 @@ describe("Nav", () => {
     const f = vi.fn((_url: string, _init?: RequestInit) => json(status));
     vi.stubGlobal("fetch", f);
     renderApp(<Nav />);
-    expect(await screen.findByText(/Last ingest .* · 2 new lines/)).toBeTruthy();
+    await ingested(/Last ingest .* · 2 new lines/);
     expect(screen.getByRole("button", { name: /^Search/ }).getAttribute("aria-label")).toMatch(/^Search, open command palette \(/);
     f.mockImplementation((_url, init) => init?.method === "POST" ? later(status) : json(status));
     const btn = screen.getByRole("button", { name: "Refresh" });
@@ -256,23 +267,23 @@ describe("Nav", () => {
     const f = vi.fn((_url: string, _init?: RequestInit) => json(status));
     vi.stubGlobal("fetch", f);
     const { client } = renderApp(<Nav />);
-    expect(await screen.findByText(/Last ingest .* · 2 new lines/)).toBeTruthy();
+    await ingested(/Last ingest .* · 2 new lines/);
     const refresh = async (inserted: number) => {
       f.mockImplementation((_url, init) => init?.method === "POST" ? json({ ...status, last_stats: { ...status.last_stats, inserted } }) : json(status));
       await userEvent.click(screen.getByRole("button", { name: "Refresh" }));
-      expect(await screen.findByText(new RegExp(`· ${inserted} new lines`))).toBeTruthy();
+      await ingested(new RegExp(`· ${inserted} new lines`));
     };
     f.mockImplementation(() => later("nav", { ...status, ingesting: true }));
     let asked!: Promise<unknown>;
     act(() => { asked = client.fetchQuery(queries.status).catch(() => null); }); // sent while an ingest runs
     await refresh(7);
     await act(async () => { answers.nav!(); await asked; });
-    expect(screen.getByText(/Last ingest .* · 7 new lines/)).toBeTruthy();
+    expect(ingestText()).toMatch(/Last ingest .* · 7 new lines/);
     f.mockImplementation(() => new Promise<Response>((_, no) => { answers.down = () => no(new Error("down")); }));
     act(() => { asked = client.fetchQuery(queries.status).catch(() => null); }); // sent before the next Refresh, and it fails after it
     await refresh(9);
     await act(async () => { answers.down!(); await asked; });
-    expect(screen.getByText(/Last ingest .* · 9 new lines/)).toBeTruthy();
+    expect(ingestText()).toMatch(/Last ingest .* · 9 new lines/);
   });
 
   describe("a new last_change", () => {
@@ -327,7 +338,7 @@ describe("Nav", () => {
     const { unmount } = renderApp(<Nav />);
     const tick = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
     await tick(0);
-    expect([f.mock.calls.length, screen.getByText("Ingesting transcripts…") != null]).toEqual([1, true]);
+    expect([f.mock.calls.length, ingestText()]).toEqual([1, "Ingesting transcripts…"]);
     ingesting = false;
     await tick(3000);
     expect(f.mock.calls.length).toBe(2);
@@ -377,7 +388,7 @@ describe("Nav", () => {
       setHidden(false);
       await tick(0);
       expect(f.mock.calls.length).toBe(2);
-      expect(screen.getByText(/^Last ingest /).textContent).toContain(new Date(status.last_ingest).toLocaleTimeString());
+      expect(ingestText()).toContain(new Date(status.last_ingest).toLocaleTimeString());
     });
 
     // The old nav kept its schedule when the tab came back before a poll was due; the query asks on every return
@@ -398,31 +409,31 @@ describe("Nav", () => {
     const f = vi.fn(() => json(status));
     vi.stubGlobal("fetch", f);
     const { client } = renderApp(<Nav />);
-    expect(await screen.findByText(/Last ingest .* · 2 new lines/)).toBeTruthy();
+    await ingested(/Last ingest .* · 2 new lines/);
     f.mockImplementation(() => json({ ...status, last_stats: { ...status.last_stats, inserted: 7 }, project_order: ["foo"] }));
     await poll(client);
     expect(client.getQueryData<typeof status>(queries.status.queryKey)?.project_order).toEqual(["foo"]);
-    expect(screen.getByText(/Last ingest .* · 7 new lines/)).toBeTruthy();
+    expect(ingestText()).toMatch(/Last ingest .* · 7 new lines/);
     expect(hasHue("foo")).toBe(true);
     f.mockImplementation(() => Promise.reject(new Error("down")));
     await poll(client);
-    expect(screen.getByText("App not reachable")).toBeTruthy();
+    expect([label(), ingestText()]).toEqual(["Offline", "App not reachable"]);
   });
 
-  it("says App not reachable when the first status request fails, and does not blink while the next poll runs", async () => {
+  it("says Offline when the first status request fails, and does not blink while the next poll runs", async () => {
     let answer = () => {};
     const f = vi.fn((_url: string, _init?: RequestInit): Promise<Response> => Promise.reject(new Error("down")));
     vi.stubGlobal("fetch", f);
     const { client } = renderApp(<Nav />);
-    expect(await screen.findByText("App not reachable")).toBeTruthy();
+    await waitFor(() => expect(label()).toBe("Offline"));
     f.mockImplementation(() => new Promise<Response>(r => { answer = () => r(json(status)); }));
     let next!: Promise<unknown>;
     act(() => { next = client.refetchQueries({ queryKey: ["status"] }); });
     await act(flush); // Query's notice that the fetch began reaches the nav
-    expect(screen.getByText("App not reachable")).toBeTruthy(); // the poll under way
+    expect(label()).toBe("Offline"); // the poll under way
     await act(async () => { answer(); await next; await flush(); });
-    expect(screen.queryByText("App not reachable")).toBeNull();
-    expect(screen.getByText(/Last ingest/)).toBeTruthy();
+    expect(label()).toBe(`Stale · ${clock(status.last_ingest)}`);
+    expect(ingestText()).toMatch(/^Last ingest/);
   });
 
   describe("Limits badge", () => {
@@ -498,7 +509,7 @@ describe("Nav", () => {
       const f = vi.fn(() => json({ ...status, limits_alert: null }));
       vi.stubGlobal("fetch", f);
       const { client } = renderApp(<Nav />);
-      expect(await screen.findByText(/Last ingest/)).toBeTruthy();
+      await ingested(/^Last ingest/);
       expect(badge()).toBeNull();
       f.mockImplementation(() => json({ ...status, limits_alert: alert({ kind: "high", current: 91 }) }));
       await poll(client);
@@ -525,7 +536,12 @@ describe("Nav", () => {
     });
 
     describe("announcement", () => {
-      const region = () => screen.getByRole("status");
+      // The alert's own region: not the Refresh result's, nor the toggletip's in the freshness control.
+      const region = () => {
+        const r = screen.getAllByRole("status").filter(el => el !== result() && !el.closest(".appnav-fresh"));
+        expect(r.length).toBe(1);
+        return r[0]!;
+      };
       const pollWith = async ({ f, client }: { f: ReturnType<typeof vi.fn>; client: QueryClient }, limits_alert: LimitsAlert | null | undefined) => {
         f.mockImplementation(() => json(limits_alert === undefined ? status : { ...status, limits_alert }));
         await poll(client);
@@ -535,7 +551,7 @@ describe("Nav", () => {
         vi.stubGlobal("fetch", f);
         history.replaceState(null, "", "/usage");
         const { client } = renderApp(<Nav />);
-        await screen.findByText(/Last ingest/);
+        await ingested(/^Last ingest/);
         return { f, client };
       };
 
@@ -543,8 +559,8 @@ describe("Nav", () => {
         await setup(null);
         expect(region().className).toBe("sr");
         expect(region().textContent).toBe("");
-        expect(region().id).not.toBe("navStatus");
-        expect(document.getElementById("navStatus")!.getAttribute("role")).toBeNull();
+        expect(region().id).toBe("");
+        expect(fresh().querySelector(".appnav-time")!.closest("[aria-live], [role=status]")).toBeNull();
       });
 
       it("says the sentence when an alert appears", async () => {
@@ -614,6 +630,195 @@ describe("Nav", () => {
       const link = await screen.findByRole("link", { name: /^Limits alert: / });
       expect(link.getAttribute("aria-current")).toBe("page");
       expect(badge()).not.toBeNull();
+    });
+  });
+
+  describe("freshness control", () => {
+    const flashEl = () => fresh().querySelector<HTMLElement>(".appnav-flash");
+    const popup = () => document.querySelector<HTMLElement>(".tt-pop");
+    // The details as [term, value] pairs.
+    const rows = () => [...popup()!.querySelectorAll("dt")].map(dt => [dt.textContent, dt.nextElementSibling?.textContent]);
+    const open = async () => {
+      stateBtn().focus();
+      await userEvent.keyboard("{Enter}");
+      await waitFor(() => expect(popup()).not.toBeNull());
+    };
+
+    it("shows the last ingest as a clock time, beside an icon-only Refresh, named for what it is", async () => {
+      const now = new Date().toISOString();
+      vi.stubGlobal("fetch", vi.fn(() => json({ ...status, last_ingest: now, last_change: now })));
+      renderApp(<Nav />);
+      await waitFor(() => expect(label()).toBe(clock(now)));
+      expect(label()).toMatch(/^\d{1,2}[:.]\d{2}/);
+      expect(label()).not.toMatch(/Stale/);
+      expect(fresh().dataset.kind).toBe("idle");
+      expect(stateBtn().getAttribute("aria-label")).toBe(`Ingest status: ${clock(now)}`);
+      const btn = screen.getByRole("button", { name: "Refresh" });
+      expect([btn.textContent, btn.querySelector("svg")?.getAttribute("aria-hidden"), fresh().contains(btn)]).toEqual(["", "true", true]);
+    });
+
+    it("says Stale with the time when the last ingest is older than three intervals", async () => {
+      vi.stubGlobal("fetch", vi.fn(() => json(status))); // 2026-11-05, long before the answer
+      renderApp(<Nav />);
+      await waitFor(() => expect(label()).toBe(`Stale · ${clock(status.last_ingest)}`));
+      expect(fresh().dataset.kind).toBe("stale");
+    });
+
+    it("says Failed after an ingest error, and the toggletip holds the error's full text", async () => {
+      const error = "IO Error: Could not set lock on file: Conflicting lock is held by PID 4242";
+      vi.stubGlobal("fetch", vi.fn(() => json({ ...status, error })));
+      renderApp(<Nav />);
+      await waitFor(() => expect(label()).toBe("Failed"));
+      expect(fresh().dataset.kind).toBe("failed");
+      expect(screen.getByRole("button", { name: "Refresh" }).className).toBe("failed");
+      await open();
+      expect(rows()).toContainEqual(["Error", error]);
+    });
+
+    it("says Offline when the app does not answer, and why in the details", async () => {
+      vi.stubGlobal("fetch", vi.fn(() => Promise.reject(new Error("down"))));
+      renderApp(<Nav />);
+      await waitFor(() => expect(label()).toBe("Offline"));
+      expect(fresh().dataset.kind).toBe("offline");
+      await open();
+      expect(popup()!.textContent).toContain("The app did not answer its status request.");
+    });
+
+    it("says No ingest yet before the first ingest", async () => {
+      vi.stubGlobal("fetch", vi.fn(() => json({ ...status, last_ingest: null, last_change: null, last_stats: null })));
+      renderApp(<Nav />);
+      await waitFor(() => expect(stateBtn().getAttribute("aria-label")).toBe("Ingest status: No ingest yet"));
+      expect(label()).toBe("No ingest yet");
+      await open();
+      expect(popup()!.textContent).toContain("No ingest yet.");
+      expect(rows()).toEqual([["Interval", "every 1 min"]]);
+    });
+
+    it("says Ingesting… while a Refresh runs", async () => {
+      const f = vi.fn((_url: string, init?: RequestInit) => init?.method === "POST" ? new Promise<Response>(() => {}) : json(status));
+      vi.stubGlobal("fetch", f);
+      renderApp(<Nav />);
+      await ingested(/^Last ingest/);
+      await userEvent.click(screen.getByRole("button", { name: "Refresh" }));
+      expect([label(), fresh().dataset.kind, stateBtn().getAttribute("aria-label")]).toEqual(["Ingesting…", "busy", "Ingest status: Ingesting…"]);
+    });
+
+    it("shows the details on activation: the exact time, lines, last change and interval, and Escape keeps focus", async () => {
+      const at = "2026-11-05T20:00:04+00:00", change = "2026-11-05T19:58:00+00:00";
+      vi.stubGlobal("fetch", vi.fn(() => json({ ...status, last_ingest: at, last_change: change, interval: 90, last_stats: { ...status.last_stats, inserted: 1234 } })));
+      renderApp(<Nav />);
+      await ingested(/1,234 new lines/);
+      expect(stateBtn().getAttribute("aria-expanded")).toBe("false");
+      await open();
+      expect(stateBtn().getAttribute("aria-expanded")).toBe("true");
+      expect(rows()).toEqual([
+        ["Last ingest", expect.stringContaining(new Date(at).toLocaleTimeString())],
+        ["New lines", "1,234"],
+        ["Last data change", expect.stringContaining(new Date(change).toLocaleTimeString())],
+        ["Interval", "every 90 s"],
+      ]);
+      expect(popup()!.textContent).toContain("Ingest runs on its own. Refresh runs it now.");
+      // Read once it shows, through the toggletip's own region, which is empty while closed.
+      const tipRegion = fresh().querySelector("[role=status]")!;
+      expect(tipRegion.textContent).toContain("1,234");
+      await userEvent.keyboard("{Escape}");
+      expect(stateBtn().getAttribute("aria-expanded")).toBe("false");
+      expect(document.activeElement).toBe(stateBtn());
+      expect(tipRegion.textContent).toBe("");
+    });
+
+    it("says a failed Refresh's error in the details, beside Retry", async () => {
+      const f = vi.fn((_url: string, init?: RequestInit) => init?.method === "POST" ? Promise.reject(new Error("connection refused")) : json(status));
+      vi.stubGlobal("fetch", f);
+      renderApp(<Nav />);
+      await ingested(/^Last ingest/);
+      await userEvent.click(screen.getByRole("button", { name: "Refresh" }));
+      await screen.findByRole("button", { name: "Retry" });
+      await open();
+      expect(popup()!.textContent).toContain("Refresh failed.");
+      expect(rows()).toContainEqual(["Error", "connection refused"]);
+    });
+
+    describe("live regions", () => {
+      // Every live region in the nav, and its text.
+      const regions = () => [...document.querySelectorAll(".appnav [role=status], .appnav [aria-live]")].map(r => r.textContent);
+
+      it("announces nothing for a timed poll that brings a new time and new lines", async () => {
+        const f = vi.fn(() => json(status));
+        vi.stubGlobal("fetch", f);
+        const { client } = renderApp(<Nav />);
+        await ingested(/^Last ingest/);
+        expect(document.querySelectorAll(".appnav [aria-live]").length).toBe(0);
+        const seen: MutationRecord[] = [];
+        const mo = new MutationObserver(r => seen.push(...r));
+        document.querySelectorAll(".appnav [role=status]").forEach(r => mo.observe(r, { childList: true, characterData: true, subtree: true }));
+        f.mockImplementation(() => json({ ...status, last_ingest: "2026-11-05T12:05:00+00:00", last_change: "2026-11-05T12:05:00+00:00",
+          last_stats: { ...status.last_stats, inserted: 5 } }));
+        await poll(client);
+        expect(ingestText()).toMatch(/· 5 new lines/);
+        expect(seen.concat(mo.takeRecords())).toEqual([]);
+        expect(regions().every(t => t === "")).toBe(true);
+        mo.disconnect();
+      });
+
+      it("says a manual Refresh's result once, in its own region, and leaves the limits alert's alone", async () => {
+        const limits_alert: LimitsAlert = { kind: "high", provider: "codex", provider_label: "Codex", label: "weekly", current: 92,
+          at: "2026-11-14T12:00:00.000Z", resets_at: "2026-11-14T12:00:00.000Z", measured: true, count: 1 };
+        const answers: Record<string, () => void> = {};
+        const f = vi.fn((_url: string, _init?: RequestInit) => json({ ...status, limits_alert }));
+        vi.stubGlobal("fetch", f);
+        const { client } = renderApp(<Nav />);
+        const alertRegion = () => screen.getAllByRole("status").find(r => r.textContent === "Codex weekly is at 92%");
+        await waitFor(() => expect(alertRegion()).toBeTruthy());
+        const was = alertRegion()!;
+        expect(result().textContent).toBe("");
+        f.mockImplementation((_url, init) => init?.method === "POST"
+          ? new Promise<Response>(r => { answers.refresh = () => r(json({ ...status, limits_alert, last_stats: { ...status.last_stats, inserted: 5 } })); })
+          : json({ ...status, limits_alert }));
+        await userEvent.click(screen.getByRole("button", { name: "Refresh" }));
+        expect(result().textContent).toBe(""); // nothing while it runs
+        const seen: string[] = [];
+        const mo = new MutationObserver(() => seen.push(result().textContent!));
+        mo.observe(result(), { childList: true, characterData: true, subtree: true });
+        await act(async () => { answers.refresh!(); });
+        await waitFor(() => expect(result().textContent).toBe("Refreshed: 5 new lines"));
+        await poll(client); // a timed poll after it says nothing again
+        await act(flush);
+        expect(seen).toEqual(["Refreshed: 5 new lines"]);
+        mo.disconnect();
+        expect([alertRegion(), was.textContent]).toEqual([was, "Codex weekly is at 92%"]);
+        expect(was).not.toBe(result());
+      });
+    });
+
+    describe("+N lines", () => {
+      const tick = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
+      afterEach(() => { vi.useRealTimers(); });
+
+      it("shows +5 lines, hidden from assistive technology, after a poll with new data, for four seconds; nothing for nothing new", async () => {
+        vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval", "Date"] });
+        let change = status.last_change, inserted = 2;
+        vi.stubGlobal("fetch", vi.fn(() => json({ ...status, last_change: change, last_stats: { ...status.last_stats, inserted } })));
+        const { client } = renderApp(<Nav />);
+        const pollNow = () => act(async () => { void client.fetchQuery(queries.status).catch(() => null); await vi.advanceTimersByTimeAsync(0); });
+        await tick(0);
+        expect(flashEl()).toBeNull(); // the first answer's lines are already on the page
+        change = "2026-11-05T12:05:00+00:00"; inserted = 5;
+        await pollNow();
+        expect([flashEl()?.textContent, flashEl()?.getAttribute("aria-hidden")]).toEqual(["+5 lines", "true"]);
+        expect(stateBtn().getAttribute("aria-label")).not.toContain("+5");
+        expect(fresh().firstElementChild).toBe(screen.getByRole("button", { name: "Refresh" }));
+        await tick(3999);
+        expect(flashEl()).not.toBeNull();
+        await tick(1);
+        expect(flashEl()).toBeNull();
+        inserted = 0; change = "2026-11-05T12:06:00+00:00"; // an ingest that stored nothing
+        await pollNow();
+        expect(flashEl()).toBeNull();
+        inserted = 1; change = "2026-11-05T12:07:00+00:00";
+        await pollNow();
+        expect(flashEl()?.textContent).toBe("+1 line");
+      });
     });
   });
 
