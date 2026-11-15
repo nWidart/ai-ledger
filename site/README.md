@@ -165,12 +165,12 @@ import costSpendLight from "../../../assets/shots/cost-spend-light.png";
 Never take a screenshot of your own store: it holds your transcripts, and any secret in them. Every screenshot comes from the synthetic store in `tools/demo/`:
 
 ```bash
-uv run tools/demo/seed.py                 # build the synthetic store
-cd tools/demo && npm ci
+uv sync                                   # once: the app, which seed.py and serve.py import
+cd tools/demo && npm ci                   # once: Playwright (`npx playwright install chromium` if it has no browser yet)
 node record.mjs shots [page...]           # write the PNGs into site/src/assets/shots/
 ```
 
-The `shots` mode starts the demo server itself, refuses to run when port 8799 already answers, and stops the server when it is done. See the header of `tools/demo/record.mjs` for its options. When a change alters a panel, re-record its shots in the same change.
+The `shots` mode seeds the demo store (`seed.py`), starts the demo server itself, and stops it when it is done. It refuses to run when port 8799 already answers, before any shot. Pages: `activity cost context errors limits insights project live everywhere`; with none named it records all (about 4 minutes). `site/src/assets/shots/README.md` lists every shot. See the header of `tools/demo/record.mjs` for its options. When a change alters a panel, re-record its shots in the same change.
 
 ## Deploy
 
