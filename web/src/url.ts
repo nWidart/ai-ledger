@@ -142,8 +142,13 @@ export function setSearch(patch: SearchPatch, opts: { push?: boolean } = {}) {
   const loc = here(), was = parseSearch(loc.search), next = applyPatch(was, patch), s = formatSearch(next);
   if (s === formatSearch(was)) {
     // The same view spelled another way (keys in another order): rewrite it in the canonical spelling, as a replace. The
-    // router reads both spellings as one location and would write nothing.
-    if (s !== loc.search) { router.history.replace(loc.pathname + s + loc.hash, loc.state); router.history.flush(); }
+    // router reads both spellings as one location and writes nothing for it, so the entry's state is marked: a changed
+    // state makes it write, through navigate, which keeps the scroll position as every other view write does.
+    if (s !== loc.search) {
+      const sheets = sheetDepth();
+      void router.navigate({ to: loc.pathname, search: next, hash: true, replace: true, resetScroll: false, state: { ...(sheets ? { sheets } : {}), respelled: true } } as never);
+      router.history.flush();
+    }
     return;
   }
   const changed = PUSH_KEYS.filter(k => (was[k] ?? "") !== (next[k] ?? ""));

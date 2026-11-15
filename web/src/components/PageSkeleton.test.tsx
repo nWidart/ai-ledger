@@ -92,6 +92,14 @@ describe("PageSkeleton", () => {
       expect(main(cls)!.getAttribute("aria-busy")).toBe("true");
     });
 
+  it("leaves Live with a session in the URL to the stream's own loading line: one loading state, not two", async () => {
+    vi.stubGlobal("fetch", vi.fn(never));
+    await open("/live?session=s1", "pg-live");
+    expect(blocks()).toBeNull();
+    expect(screen.getByText("Loading…")).toBeTruthy();
+    expect(main("pg-live")!.getAttribute("aria-busy")).toBe("true");
+  });
+
   it("keeps the focus move after a page switch: it lands on the page's heading, hidden while loading", async () => {
     mockApi({ "/api/usage": () => usage, "/api/limits": () => new Promise(() => {}) as never, "/api/status": () => status });
     await open("/usage?range=30", "pg-activity");
