@@ -11,6 +11,10 @@ Run `ai-ledger rebuild` once after upgrading (with the app stopped): the Context
 
 - A Context page shows how context fills up in Claude Code and Codex sessions: where each project's sessions start and what share of the model's window that is, how fast context grows per turn and per prompt, how far sessions get before their first compaction, what fills context (tool and MCP results, with the largest linked to their sessions), what caching costs, and the sessions where caching broke and why. Token figures from result sizes are estimates (bytes ÷ 4).
 - The Context page's tips come from fixed rules. Each shows only when it fires on the filtered view, with its evidence, its advice and the sessions that match, which open in the session sheet.
+- The Context page has a Window pressure section: one bar per window size shows the share of sessions that peaked under 25%, 25 to 50%, 50 to 80%, 80 to 90% and at or over 90% of it, and selecting a part lists its sessions.
+- A session map on the Context page plots each session by its starting context and its peak share of the window, marks the sessions that compacted, and opens a session from its dot.
+- The Context page charts cache use over time: cache reads, cache writes and uncached input per day or week, the cache-hit ratio, and the cache breaks by cause.
+- The Context page charts the tools and MCP servers that fill context by total result size beside their median to 95th percentile result size, and draws the main-thread and subagent totals as one bar.
 - The store keeps the size of each tool result, the context window a Codex session states and the time of each session's first compaction. Until the rebuild, the Context page says those figures are not yet available.
 - The command palette's `>context` term opens the Context page, keeping the project and range filters.
 - Each page has a skip link and one main landmark, and a nav switch moves focus to the new page's heading.
@@ -23,6 +27,9 @@ Run `ai-ledger rebuild` once after upgrading (with the app stopped): the Context
 
 ### Changed
 
+- The Context page's starting context shows each project's 10th to 90th percentile range on one scale, with the 90th percentile as a column, and the weekly trend is a line with its 25th to 75th percentile band, a token axis and weeks placed by date.
+- The Context page's growth chart shows how many sessions each turn rests on, can show context as a share of the window, and isolates a project from its legend. Growth per project shows even when no session compacted.
+- The Context page's peak-fill groups are cut at 80% instead of 75%, so the near-limit threshold is a group edge.
 - Drawer titles are headings with a toggle button, and a drawer draws its table only once opened.
 - Every data table has a name and row headers, and scrollable tables can be focused and scrolled by keyboard.
 - Inputs and selects have a 3:1 border, the command palette's input shows a focus ring, and Live's tool text reaches 4.5:1 in the light theme.

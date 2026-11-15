@@ -20,6 +20,11 @@ PRICES = {
 }
 
 
+def metrics_monday(day):
+    d = date.fromisoformat(day)
+    return (d - timedelta(days=d.weekday())).isoformat()
+
+
 def at(minutes=0, base=T0):
     """The stored timestamp text `minutes` after base."""
     return (base + timedelta(minutes=minutes)).strftime("%Y-%m-%d %H:%M:%S")
@@ -108,6 +113,18 @@ def rich(b):
     b.title("f1", "Fix the importer")
     b.session("o1", "observer-sessions", 300, peak=3_000)
     b.turn("o1", 300, 3_000)
+    # baz: five more sessions on other days, so the charts have material: more weeks and days, a compaction, a break and many tools
+    for i, (days, peak, start) in enumerate(((-2, 60_000, 12_000), (-3, 120_000, 18_000), (-9, 30_000, 14_000), (-10, 45_000, 22_000), (-16, 150_000, 16_000))):
+        base = T0 + timedelta(days=days)
+        sid = f"z{i}"
+        b.session(sid, "baz", 0, prompts=2, peak=peak, compactions=1 if i == 1 else 0, compaction_at=8 if i == 1 else None, base=base)
+        for k, prompt in enumerate([start, start + 6_000, start + 12_000, peak]):
+            b.turn(sid, k, prompt, base=base, cache_read=0 if k == 0 else prompt - 1_000, cache_5m=prompt if k == 0 else 0)
+        if i == 0:
+            b.turn(sid, 5, peak, base=base, model="m-b")  # a model switch
+    for i, (tool, mcp) in enumerate((("Glob", None), ("Edit", None), ("Write", None), ("WebFetch", None), ("Task", None), ("LS", None), ("NotebookEdit", None),
+                                    ("mcp__linear__issue", "linear"), ("mcp__figma__node", "figma"))):
+        b.call("z0" if i % 2 else "z1", tool, 1 + i, 3_000 * (i + 1) + 7 * i, mcp=mcp, summary="x")
 
 
 class ContextPayloadTest(unittest.TestCase):
@@ -118,15 +135,19 @@ class ContextPayloadTest(unittest.TestCase):
                    dict(project="bar", range_days=30, source="claude")):
             p = b.payload(**kw)
             self.assertEqual(sorted(p), sorted(["project", "range", "automated", "source", "start", "end", "projects", "project_order",
-                                                "automated_file", "coverage", "starting", "growth", "fills", "cost", "tips"]), kw)
+                                                "automated_file", "coverage", "starting", "growth", "sessions_map", "fills", "cost", "tips"]), kw)
         with self.assertRaises(ValueError):
             b.payload(source="grok")
         with self.assertRaises(ValueError):
             b.payload(range_days=-1)
         self.assertEqual(b.payload(range_days=7)["start"], "2026-10-30")
         self.assertEqual(b.payload(source="codex")["starting"]["sessions"], 1)
+        codex = b.payload(source="codex")  # the map and the cache series cover a Codex session as they do a Claude Code one
+        self.assertEqual([(p["session_id"], p["source"], p["window"]) for p in codex["sessions_map"]["points"]], [("x1", "codex", 258_400)])
+        self.assertTrue(codex["cost"]["series"]["rows"])
+        self.assertTrue(all(r["input"] + r["cache_read"] + r["cache_write"] > 0 for r in codex["cost"]["series"]["rows"]))
         self.assertEqual(b.payload(automated=True)["coverage"]["sessions"], b.payload()["coverage"]["sessions"] + 1)
-        self.assertEqual(b.payload(range_days=7)["coverage"]["sessions"], b.payload()["coverage"]["sessions"] - 1)  # b3 is before the range
+        self.assertEqual(b.payload(range_days=7)["coverage"]["sessions"], b.payload()["coverage"]["sessions"] - 4)  # b3 and three baz sessions are before the range
 
     def test_rich_fixture_populates_every_section(self):
         b = Builder(self)
@@ -136,10 +157,20 @@ class ContextPayloadTest(unittest.TestCase):
         self.assertEqual(p["tips"][0]["severity"], "critical")
         self.assertEqual([t["id"] for t in p["tips"]], ["near_limit", "frequent_compactions", "large_results", "cache_breaks", "long_tier"])
         self.assertTrue(p["starting"]["by_project"] and p["starting"]["trend"])
-        self.assertTrue(p["growth"]["fill"] and p["growth"]["to_compaction"]["sessions"] == 1)
+        self.assertTrue(p["growth"]["fill"] and p["growth"]["to_compaction"]["sessions"] == 2)
         self.assertTrue(p["fills"]["tools"] and p["fills"]["mcp"] and p["fills"]["largest"])
         self.assertTrue(p["cost"]["breaks"] and p["cost"]["long_cost"])
         self.assertFalse(p["coverage"]["rebuild_needed"])
+        # what the chart builders rely on
+        self.assertEqual([f["window"] for f in p["growth"]["fill"]], [200_000, 258_400, 2_000_000])
+        self.assertGreaterEqual(len(p["starting"]["trend"]), 2)
+        self.assertTrue(p["growth"]["share_curve"] and all(r["p25"] <= r["median"] <= r["p75"] for r in p["growth"]["share_curve"]))
+        self.assertGreaterEqual(len(p["sessions_map"]["points"]), 10)
+        self.assertTrue(any(pt["compactions"] for pt in p["sessions_map"]["points"]))
+        self.assertGreaterEqual(len(p["cost"]["series"]["rows"]), 3)
+        self.assertTrue(any(r["model_switch"] + r["expired"] + r["other"] for r in p["cost"]["series"]["rows"]))
+        self.assertGreater(len(p["fills"]["tools"]), 10)
+        self.assertGreaterEqual(len(p["fills"]["mcp"]), 2)
 
 
 class StartingTest(unittest.TestCase):
@@ -185,6 +216,14 @@ class StartingTest(unittest.TestCase):
         self.assertEqual(got["stated"]["window"], 1_000_000)
         self.assertEqual((got["unknown"]["window"], got["unknown"]["window_share"]), (None, None))
         self.assertEqual((p["coverage"]["sessions"], p["coverage"]["with_window"]), (4, 3))
+
+    def test_trend_quartiles(self):
+        b = Builder(self)
+        for i, start in enumerate((10_000, 20_000, 30_000, 40_000)):
+            b.session(f"s{i}", "foo", peak=start)
+            b.turn(f"s{i}", 0, start)
+        t = b.payload()["starting"]["trend"][0]
+        self.assertEqual((t["p25"], t["median"], t["p75"]), (17_500, 25_000, 32_500))
 
     def test_trend_by_week(self):
         b = Builder(self)
@@ -262,6 +301,31 @@ class GrowthTest(unittest.TestCase):
         tc = b.payload()["growth"]["to_compaction"]
         self.assertEqual((tc["sessions"], tc["turns"], tc["minutes"]), (0, None, None))
 
+    def test_a_share_of_79_and_81_percent_fall_either_side_of_the_warning(self):
+        b = Builder(self)
+        for sid, peak in (("a", 158_000), ("b", 162_000)):  # 79% and 81% of 200,000
+            b.session(sid, "foo", peak=peak)
+            b.turn(sid, 0, 5_000)
+        fill = b.payload()["growth"]["fill"]
+        self.assertEqual(fill[0]["bins"], [0, 0, 1, 1, 0])
+        self.assertEqual(sum(fill[0]["bins"]), fill[0]["sessions"])
+
+    def test_share_curve_is_the_fraction_of_the_window_over_sessions_with_a_window(self):
+        b = Builder(self)
+        for i in range(5):  # five sessions with a 200,000 window; the 5th has none
+            b.session(f"s{i}", "foo", peak=150_000, peak_model="m-a" if i < 4 else "m-nowin")
+            b.turns(f"s{i}", [10_000, 150_000], model="m-a" if i < 4 else "m-nowin")
+        g = b.payload()["growth"]
+        self.assertEqual([(p["turn"], p["sessions"]) for p in g["curve"]], [(1, 5), (2, 5)])  # the token curve has all five
+        self.assertEqual(g["share_curve"], [])  # four sessions with a window: under the minimum
+        b.session("s5", "foo", peak=150_000)
+        b.turns("s5", [10_000, 150_000])
+        g = b.payload()["growth"]
+        self.assertEqual([(p["turn"], p["median"], p["sessions"]) for p in g["share_curve"]], [(1, 0.05, 5), (2, 0.75, 5)])
+        self.assertEqual([(p["turn"], p["sessions"]) for p in g["curve"]], [(1, 6), (2, 6)])
+        self.assertEqual([(c["project"], len(c["share_curve"])) for c in g["by_project_curves"]], [("foo", 2)])
+        self.assertEqual(g["by_project_curves"][0]["share_curve"][1]["p75"], 0.75)
+
     def test_fill_bins_by_window(self):
         b = Builder(self)
         for i, peak in enumerate((40_000, 50_000, 100_000, 160_000, 180_000, 240_000)):  # 20%, 25%, 50%, 80%, 90%, 120%
@@ -275,6 +339,35 @@ class GrowthTest(unittest.TestCase):
         self.assertEqual([(f["window"], f["sessions"], f["bins"]) for f in fill], [(200_000, 6, [1, 1, 1, 1, 2]), (258_400, 1, [0, 1, 0, 0, 0])])
         for f in fill:
             self.assertEqual(sum(f["bins"]), f["sessions"])
+
+
+class SessionsMapTest(unittest.TestCase):
+    def test_eligible_sessions_only_and_no_title(self):
+        b = Builder(self)
+        b.session("ok", "foo", peak=100_000, compactions=2)
+        b.turns("ok", [10_000, 20_000, 30_000])
+        b.title("ok", "A title")
+        b.session("nostart", "foo", peak=100_000)
+        b.turn("nostart", 0, 300)  # no turn: no measured start
+        b.session("nowin", "foo", peak=100_000, peak_model="m-nowin")
+        b.turn("nowin", 0, 10_000, model="m-nowin")
+        b.session("nopeak", "foo", peak=None)
+        b.turn("nopeak", 0, 10_000)
+        m = b.payload()["sessions_map"]
+        self.assertEqual(m["total"], 1)
+        self.assertEqual(m["points"], [dict(session_id="ok", project="foo", source="claude", first_ts="2026-11-04T09:00:00.000Z", start=10_000, peak=100_000,
+                                            window=200_000, turns=3, compactions=2)])
+        self.assertEqual(Builder(self).payload()["sessions_map"], dict(total=0, points=[]))
+
+    def test_the_newest_points_are_kept_and_total_counts_all(self):
+        b = Builder(self)
+        for i in range(3):
+            b.session(f"s{i}", "foo", i, peak=100_000)
+            b.turn(f"s{i}", i, 10_000)
+        old, context.SESSION_POINTS = context.SESSION_POINTS, 2
+        self.addCleanup(setattr, context, "SESSION_POINTS", old)
+        m = b.payload()["sessions_map"]
+        self.assertEqual(([p["session_id"] for p in m["points"]], m["total"]), (["s2", "s1"], 3))
 
 
 class FillsTest(unittest.TestCase):
@@ -296,6 +389,16 @@ class FillsTest(unittest.TestCase):
         self.assertEqual((f["tools"][0]["p50_bytes"], f["tools"][0]["max_bytes"]), (502, 1_000))  # (3 + 1,000) / 2, rounded
         self.assertEqual([(r["name"], r["bytes"]) for r in f["mcp"]], [("srv", 100)])
         self.assertEqual((f["main_bytes"], f["subagent_bytes"]), (1_130, 5_000))  # the subagent's 5,000 is in no tool row
+
+    def test_p95_bytes(self):
+        b = Builder(self)
+        b.session("a", "foo")
+        b.turn("a", 0, 5_000)
+        for i in range(20):
+            b.call("a", "Read", i, 1_000 * (i + 1))  # 1,000 to 20,000
+        r = b.payload()["fills"]["tools"][0]
+        self.assertEqual(r["p95_bytes"], 19_050)  # quantile_cont at 0.95 over 20 values: 19,000 + 0.05 * 1,000
+        self.assertEqual(r["p50_bytes"], 10_500)
 
     def test_largest_results(self):
         b = Builder(self)
@@ -420,6 +523,39 @@ class CostTest(unittest.TestCase):
         got = {r["session_id"]: r for r in b.payload()["cost"]["breaks"]}
         self.assertEqual((got["h1"]["expired"], got["h1"]["other"]), (0, 1))
         self.assertEqual((got["h2"]["expired"], got["h2"]["other"]), (1, 0))
+
+    def test_series_by_day_adds_up_to_the_cache_hit_ratio(self):
+        b = Builder(self)
+        b.session("a", "foo", peak=90_000)
+        b.turn("a", 0, 80_000, cache_read=80_000)
+        b.turn("a", 0.3, 85_000, model="m-b")  # a model switch
+        b.turn("a", 0.6, 85_000, model="m-a")  # another
+        b.turn("a", 14, 90_000, model="m-a", cache_read=1_000)  # an expiry
+        b.session("b", "foo", 0, peak=60_000, base=T0 + timedelta(days=1))
+        b.turn("b", 0, 60_000, base=T0 + timedelta(days=1), cache_5m=60_000)
+        b.turn("b", 1, 60_000, base=T0 + timedelta(days=1), cache_read=50_000, cache_5m=10_000)
+        c = b.payload()["cost"]
+        self.assertEqual(c["series"]["bucket"], "day")
+        rows = c["series"]["rows"]
+        self.assertEqual([r["day"] for r in rows], ["2026-11-04", "2026-11-05"])
+        self.assertEqual((rows[0]["model_switch"], rows[0]["expired"], rows[0]["other"]), (2, 1, 0))
+        self.assertEqual((rows[1]["model_switch"], rows[1]["expired"], rows[1]["other"]), (0, 0, 0))
+        self.assertEqual((rows[1]["input"], rows[1]["cache_read"], rows[1]["cache_write"]), (0, 50_000, 70_000))
+        reads, prompt = sum(r["cache_read"] for r in rows), sum(r["input"] + r["cache_read"] + r["cache_write"] for r in rows)
+        self.assertAlmostEqual(reads / prompt, c["cache_hit_ratio"])
+        self.assertEqual(sum(r["model_switch"] + r["expired"] + r["other"] for r in rows), sum(x["breaks"] for x in c["breaks"]))
+
+    def test_series_is_weekly_for_an_old_view(self):
+        b = Builder(self)
+        for i, days in enumerate((-200, -199, -190)):
+            base = T0 + timedelta(days=days)
+            b.session(f"s{i}", "foo", base=base, peak=10_000)
+            b.turn(f"s{i}", 0, 10_000, base=base)
+        s = b.payload()["cost"]["series"]
+        self.assertEqual(s["bucket"], "week")
+        self.assertTrue(all(r["day"] == metrics_monday(r["day"]) for r in s["rows"]))
+        self.assertEqual(sum(r["input"] for r in s["rows"]), 30_000)
+        self.assertEqual(Builder(self).payload()["cost"]["series"], dict(bucket="day", rows=[]))
 
     def test_cache_lifetime_follows_the_source(self):
         # Codex's cache lives 30 minutes, Claude Code's 5: the same pause is an expiry for one and not the other

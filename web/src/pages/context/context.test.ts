@@ -23,7 +23,7 @@ describe("context figures", () => {
   });
 
   it("names the five fill bins", () => {
-    expect(FILL_LABELS).toEqual(["<25%", "25–50%", "50–75%", "75–90%", "≥90%"]);
+    expect(FILL_LABELS).toEqual(["<25%", "25–50%", "50–80%", "80–90%", "≥90%"]);
   });
 
   it("splits advice at its backticks", () => {
@@ -40,7 +40,7 @@ describe("context figures", () => {
 
   it("asks for a rebuild only when the payload does", () => {
     expect(rebuildFacts(context.coverage)).toBeNull();
-    expect(rebuildFacts({ ...context.coverage, rebuild_needed: true, calls: 4000, with_bytes: 1000 })).toEqual({ calls: 4000, withBytes: 1000, compacted: 1, withFirst: 1 });
+    expect(rebuildFacts({ ...context.coverage, rebuild_needed: true, calls: 4000, with_bytes: 1000 })).toEqual({ calls: 4000, withBytes: 1000, compacted: 2, withFirst: 2 });
   });
 
   it("has a kicker for every tip the fixture holds", () => {
