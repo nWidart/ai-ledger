@@ -1,0 +1,25 @@
+---
+title: AI Ledger
+description: See what your coding agents did, what it cost, and where they got stuck.
+template: splash
+hero:
+  tagline: See what your coding agents did, what it cost, and where they got stuck.
+---
+
+import { CardGrid, LinkCard } from "@astrojs/starlight/components";
+import ThemedImage from "../../components/ThemedImage.astro";
+
+AI Ledger reads your Claude Code and Codex transcripts into a local store and turns them into dashboards: Activity, Cost, Context, Errors, Limits, Insights, Live and Project. Your agents delete old transcripts; AI Ledger keeps every line. Everything runs on your machine.
+
+<ThemedImage
+  gif="tour"
+  width={960}
+  height={600}
+  alt="A tour of AI Ledger with demo data: the Activity, Cost, Context, Errors and Limits pages, one after the other."
+/>
+
+<CardGrid>
+  <LinkCard title="Start" description="Install AI Ledger and read your first week of sessions." href="/ai-ledger/start/install/" />
+  <LinkCard title="Improve" description="Turn a figure into a change in how you work, starting with a weekly 15-minute review." href="/ai-ledger/improve/weekly-review/" />
+  <LinkCard title="Look up" description="What each page, panel and figure shows." href="/ai-ledger/pages/activity/" />
+</CardGrid>

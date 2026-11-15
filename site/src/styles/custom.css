@@ -1,0 +1,10 @@
+/*
+ * Site styles on top of Starlight's theme. Starlight's colors are kept (design D10):
+ * any accent color added here must pass WCAG AA contrast in both the light and the dark theme.
+ */
+
+/* Screenshots and GIFs sit on the page background; a hairline frames them in both themes. */
+.sl-markdown-content .themed-image img {
+  border: 1px solid var(--sl-color-hairline);
+  border-radius: 0.5rem;
+}

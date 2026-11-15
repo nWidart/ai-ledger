@@ -4,17 +4,17 @@ Group 1 has no dependency. 2, 3, 4, 7 and 8 need 1. 5 needs 3 and 4 (playbooks l
 
 ## 1. Scaffold
 
-- [ ] 1.1 `site/package.json`: Astro, `@astrojs/starlight`, `starlight-links-validator`, `starlight-llms-txt`, `@astrojs/check`, `typescript`, all exact versions; `engines.node` the Node major CI uses for `web/` (26); scripts `sync`, `dev`, `build`, `preview`, `check` as design D1. Commit `package-lock.json`. If the pinned Astro does not support that Node version, stop and report.
-- [ ] 1.2 `astro.config.mjs`: `site: "https://nwidart.github.io"`, `base: "/ai-ledger"`, `trailingSlash: "always"`; Starlight with the title, the GitHub social link, an edit link to `site/` on `main`, `customCss`, and the plugins of 1.5 and 1.6.
-- [ ] 1.3 Sidebar written out item by item in the order and with the slugs of design D7. Every page exists as a stub with its title and a one-line description, so the build and link check pass from the start.
-- [ ] 1.4 `src/content.config.ts`: Starlight's `docsSchema` extended with an optional `spec: string[]` (design D12).
-- [ ] 1.5 `starlight-llms-txt` with project name and description; check `dist/llms.txt` and `dist/llms-full.txt` after a build.
-- [ ] 1.6 `starlight-links-validator`; verify a deliberately broken link and a broken anchor fail `astro build`, then remove them.
-- [ ] 1.7 `scripts/sync.mjs` (design D9): changelog page from `../CHANGELOG.md` with its links rewritten, GIFs copied to `public/media/`; both outputs in `site/.gitignore`. `scripts/check-playbooks.mjs` (design D8), failing on a missing, extra or out-of-order `##` heading in `improve/*`, naming file and heading. While playbooks are stubs, each stub carries the six headings.
-- [ ] 1.8 `src/components/ThemedImage.astro` and `src/styles/custom.css` (design D10): theme switching by `data-theme`, one `alt` announced, the reduced-motion still, `BASE_URL` paths. Home page (`index.mdx`): splash, the tour GIF, three `LinkCard`s.
-- [ ] 1.9 `.github/workflows/docs.yml` (design D3). Note in the step report that the repository's Pages source must be set to GitHub Actions by an admin.
-- [ ] 1.10 `site/README.md`: how to run, the check, the playbook template and writing rules, the screenshot steps, and that reference pages follow `openspec/specs/`.
-- [ ] 1.11 `cd site && npm run check` passes; Pagefind search works on `npm run preview`; light and dark both render.
+- [x] 1.1 `site/package.json`: Astro, `@astrojs/starlight`, `starlight-links-validator`, `starlight-llms-txt`, `@astrojs/check`, `typescript`, all exact versions; `engines.node` the Node major CI uses for `web/` (26); scripts `sync`, `dev`, `build`, `preview`, `check` as design D1. Commit `package-lock.json`. If the pinned Astro does not support that Node version, stop and report.
+- [x] 1.2 `astro.config.mjs`: `site: "https://nwidart.github.io"`, `base: "/ai-ledger"`, `trailingSlash: "always"`; Starlight with the title, the GitHub social link, an edit link to `site/` on `main`, `customCss`, and the plugins of 1.5 and 1.6.
+- [x] 1.3 Sidebar written out item by item in the order and with the slugs of design D7. Every page exists as a stub with its title and a one-line description, so the build and link check pass from the start.
+- [x] 1.4 `src/content.config.ts`: Starlight's `docsSchema` extended with an optional `spec: string[]` (design D12).
+- [x] 1.5 `starlight-llms-txt` with project name and description; check `dist/llms.txt` and `dist/llms-full.txt` after a build.
+- [x] 1.6 `starlight-links-validator`; verify a deliberately broken link and a broken anchor fail `astro build`, then remove them.
+- [x] 1.7 `scripts/sync.mjs` (design D9): changelog page from `../CHANGELOG.md` with its links rewritten, GIFs copied to `public/media/`; both outputs in `site/.gitignore`. `scripts/check-playbooks.mjs` (design D8), failing on a missing, extra or out-of-order `##` heading in `improve/*`, naming file and heading. While playbooks are stubs, each stub carries the six headings.
+- [x] 1.8 `src/components/ThemedImage.astro` and `src/styles/custom.css` (design D10): theme switching by `data-theme`, one `alt` announced, the reduced-motion still, `BASE_URL` paths. Home page (`index.mdx`): splash, the tour GIF, three `LinkCard`s.
+- [x] 1.9 `.github/workflows/docs.yml` (design D3). Note in the step report that the repository's Pages source must be set to GitHub Actions by an admin.
+- [x] 1.10 `site/README.md`: how to run, the check, the playbook template and writing rules, the screenshot steps, and that reference pages follow `openspec/specs/`.
+- [x] 1.11 `cd site && npm run check` passes; Pagefind search works on `npm run preview`; light and dark both render.
 
 ## 2. Port the user guide
 
