@@ -45,7 +45,7 @@ export function StartTrend({ trend }: { trend: Trend }) {
     : `Median starting context, the only week: ${short(first.median)} tokens the week of ${dayLabel(first.week)}. `)
     + `The band shows the 25th to 75th percentile. Use the left and right arrow keys to read each week, Escape to dismiss it.`;
   const near = (ev: PointerEvent) => {
-    const r = ev.currentTarget.getBoundingClientRect(), px = M.l + (ev.clientX - r.left) * iw / r.width;
+    const r = ev.currentTarget.getBoundingClientRect(), px = M.l + (ev.clientX - r.left) * iw / (r.width || iw);
     let best = 0;
     xs.forEach((x, i) => { if (Math.abs(x - px) < Math.abs(xs[best]! - px)) best = i; });
     return best;
@@ -72,6 +72,9 @@ export function StartTrend({ trend }: { trend: Trend }) {
           {ticks.map(i => <text key={trend[i]!.week} x={xs[i]} y={H - 8} textAnchor="middle" fontSize="11" fill="var(--text-muted)">{dayLabel(trend[i]!.week)}</text>)}
           {START_LARGE_TOKENS <= yMax && <g className="threshold"><line x1={M.l} x2={W - M.r} y1={y(START_LARGE_TOKENS)} y2={y(START_LARGE_TOKENS)} stroke="var(--text-muted)" strokeDasharray="4 3" />
             <text x={W - M.r} y={y(START_LARGE_TOKENS) - 4} textAnchor="end" fontSize="10.5" fill="var(--text-muted)">{short(START_LARGE_TOKENS)}</text></g>}
+          {/* A week with no neighbour has no band to sit in: its spread is a vertical span. */}
+          {runs.filter(r => r.length === 1).map(([i]) => <line key={trend[i!]!.week} className="span" x1={xs[i!]} x2={xs[i!]} y1={y(trend[i!]!.p75)} y2={y(trend[i!]!.p25)}
+            stroke="var(--text-secondary)" opacity=".28" strokeWidth="7" strokeLinecap="round" />)}
           {trend.length > 1 && <>
             <path className="band" d={band} fill="var(--text-secondary)" opacity=".16" stroke="none" />
             <path className="trend-line" d={line} fill="none" stroke="var(--surface-1)" strokeWidth="4.5" strokeLinejoin="round" strokeLinecap="round" />

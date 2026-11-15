@@ -57,6 +57,15 @@ describe("StartTrend", () => {
     const ms = (sel: string) => container.querySelector(sel)!.getAttribute("d")!.match(/M/g)!.length;
     expect(ms("path.trend-line")).toBe(2);
     expect(ms("path.band")).toBe(2);
+    expect(container.querySelectorAll("line.span")).toHaveLength(0);
+  });
+
+  it("draws the spread of a week with no neighbour as a span", () => {
+    const w = (week: string) => ({ week, median: 24_000, p25: 20_000, p75: 30_000, sessions: 9 });
+    const { container } = render(<StartTrend trend={[w("2026-11-02"), w("2026-11-16")]} />);
+    const spans = [...container.querySelectorAll("line.span")];
+    expect(spans).toHaveLength(2);
+    expect(Number(spans[0]!.getAttribute("y1"))).toBeLessThan(Number(spans[0]!.getAttribute("y2")));
   });
 
   it("reads the week under the pointer", () => {

@@ -88,7 +88,7 @@ export function SessionMap({ map }: { map: SessionsMap }) {
   const step = (i: number) => {
     setAt(i);
     const b = box.current?.getBoundingClientRect(), p = pts[i]!;
-    if (b) pos.current = { x: b.left + (x(p.start) / W) * b.width, y: b.top + y(drawnShare(p)) };
+    if (b) pos.current = { x: b.left + (x(p.start) / W) * b.width, y: b.top + (y(drawnShare(p)) / W) * b.width };
   };
   const onKey = (ev: KeyboardEvent) => {
     if (ev.key === "Escape") return setAt(null);

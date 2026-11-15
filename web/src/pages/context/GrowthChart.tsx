@@ -56,7 +56,7 @@ export function GrowthChart({ curve, projects, share }: { curve: GrowthPoint[]; 
   const svgH = H + STRIP.gap + STRIP.bar + STRIP.text;
 
   const cur = at == null ? null : cv[at] ?? null;
-  const readout = cur && [(isShare ? readShare : readTurn)(cur), ...shown.flatMap(p => { const c = p.c.find(q => q.turn === cur.turn); return c ? [`${p.project ?? "(no project)"} ${fmt(c.median)}`] : []; })].join("; ");
+  const readout = cur && [(isShare ? readShare : readTurn)(cur), ...shown.flatMap(p => { const c = p.c.find(q => q.turn === cur.turn); return c ? [`${p.project ?? "(no project)"} ${fmt(c.median)}` + (only ? ` (25th to 75th percentile ${fmt(c.p25)} to ${fmt(c.p75)})` : "")] : []; })].join("; ");
   const label = (isShare
     ? (cv.length > 1
       ? `Median share of the window at each turn: ${fmt(first.median)} at turn ${first.turn}, ${fmt(last.median)} at turn ${last.turn}, the last turn with 5 or more sessions with a known window (${plural(last.sessions, "session")}). `
@@ -71,7 +71,7 @@ export function GrowthChart({ curve, projects, share }: { curve: GrowthPoint[]; 
     + " Use the left and right arrow keys to read each turn, Escape to dismiss it.";
   const near = (ev: PointerEvent) => {
     // The pointer's x in the svg's own units: the plot rect starts at M.l and is iw wide, so offset and scale within it.
-    const r = ev.currentTarget.getBoundingClientRect(), px = M.l + (ev.clientX - r.left) * iw / r.width;
+    const r = ev.currentTarget.getBoundingClientRect(), px = M.l + (ev.clientX - r.left) * iw / (r.width || iw);
     let best = 0;
     cv.forEach((p, i) => { if (Math.abs(x(p.turn) - px) < Math.abs(x(cv[best]!.turn) - px)) best = i; });
     return best;
@@ -128,7 +128,7 @@ export function GrowthChart({ curve, projects, share }: { curve: GrowthPoint[]; 
         <thead><tr><th scope="col">Turn</th><th scope="col" className="num">Median</th><th scope="col" className="num">25th percentile</th><th scope="col" className="num">75th percentile</th>
           <th scope="col" className="num">Sessions</th>{shown.map(p => <th key={key(p)} scope="col" className="num">{p.project ?? "(no project)"}</th>)}</tr></thead>
         <tbody>{cv.map(p => <tr key={p.turn}><th scope="row" className="num">{num(p.turn)}</th><td className="num">{fmt(p.median)}</td><td className="num">{fmt(p.p25)}</td><td className="num">{fmt(p.p75)}</td>
-          <td className="num">{num(p.sessions)}</td>{shown.map(q => { const c = q.c.find(r => r.turn === p.turn); return <td key={key(q)} className="num">{c ? fmt(c.median) : "–"}</td>; })}</tr>)}</tbody>
+          <td className="num">{num(p.sessions)}</td>{shown.map(q => { const c = q.c.find(r => r.turn === p.turn); return <td key={key(q)} className="num">{c ? fmt(c.median) + (only ? ` (${fmt(c.p25)} to ${fmt(c.p75)})` : "") : "–"}</td>; })}</tr>)}</tbody>
       </DataTable></ChartTable>
     </div>
   );

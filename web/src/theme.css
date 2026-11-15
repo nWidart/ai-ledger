@@ -168,6 +168,7 @@ dialog.sheet::backdrop { background: var(--scrim); }
     .pg-errors .byset li button[aria-pressed="true"],
     .pg-cost .legend button.proj[aria-current=true],
     .pg-context .growth .legend button.key[aria-pressed=true],
+    .pg-context .pressure .band[aria-pressed=true],
     .pg-insights .ledger li.pick.on > .rowbtn, .pg-insights .ledger li.on:not(.pick),
     .pg-insights button.chip.on, .pg-insights button.badge.on,
     .pg-limits .hs-bar[aria-pressed="true"],
@@ -178,6 +179,8 @@ dialog.sheet::backdrop { background: var(--scrim); }
 
   /* Bars: the fill keeps its color, the track and the fill sit in a frame. */
   .ledger .bar, :is(.pg-activity, .pg-cost) .ibar, .pg-context :is(.pressure .band, .pressure .pkey i, .rng-bar, .rng-med, .ctr-bar i, .ctr-rbar, .ctr-med, .ctr-split-bar > span, .ctr-key), .pg-errors .bar, .pg-live .meter { forced-color-adjust: none; outline: 1px solid CanvasText; }
+  /* The frame above outranks the pressure segments' own focus ring; restore it in a system color. */
+  .pg-context .pressure .band:focus-visible { outline: 2px solid Highlight; outline-offset: 2px; }
   .pg-cost .daystrip .cells i { forced-color-adjust: none; background: GrayText; }
   .pg-cost .daystrip .cells i.on { background: CanvasText; }
   .pg-limits .hs-bar i { forced-color-adjust: none; }

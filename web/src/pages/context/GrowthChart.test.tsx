@@ -148,6 +148,12 @@ describe("GrowthChart", () => {
     // The view's band is hidden, the project's is drawn, and the view's median stays.
     expect(container.querySelectorAll("path.band")).toHaveLength(1);
     expect(container.querySelectorAll("path.proj-band")).toHaveLength(1);
+    // Its spread is readable, not only drawn: the label, the readout and the table give the project's quartiles.
+    const chart = screen.getByRole("group", { name: /^Median context/ });
+    expect(chart.getAttribute("aria-label")).toContain("Showing only foo, with its 25th to 75th percentile band");
+    fireEvent.keyDown(chart, { key: "Home" });
+    expect(document.querySelector(".readout")!.textContent).toMatch(/foo \S+ \(25th to 75th percentile \S+ to \S+\)/);
+    fireEvent.keyDown(chart, { key: "Escape" });
     expect(container.querySelectorAll("path.curve.view")).toHaveLength(2);
     fireEvent.keyDown(screen.getByRole("group", { name: /^Median context/ }), { key: "ArrowRight" });
     expect(document.querySelector(".readout")!.textContent).toBe(`${readTurn(view[0]!)}; foo 36k`);
