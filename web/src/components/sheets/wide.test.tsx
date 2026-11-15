@@ -34,6 +34,11 @@ describe("Wide sheets", () => {
     await screen.findByRole("heading", { level: 2 });
     expect(wideBtn()).toBeTruthy();
     b.unmount();
+    at("?range=30&mcp=srv");
+    const c = renderApp(<UsageSheets data={usage} />);
+    await screen.findByRole("heading", { level: 2 });
+    expect(wideBtn()).toBeTruthy();
+    c.unmount();
     localStorage.setItem(SHEET_WIDE_KEY, "1"); resetSheetWide();
     at("?range=30&inspect=foo");
     renderApp(<UsageSheets data={usage} />);
@@ -58,8 +63,10 @@ describe("Wide sheets", () => {
     renderApp(<UsageSheets data={usage} />);
     await sheet().findByText("$16");
     const search = location.search, n = history.length;
+    dlg().scrollTop = 180;
     await userEvent.click(wideBtn()!);
     expect(dlg().classList.contains("wide")).toBe(true);
+    expect(dlg().scrollTop).toBe(180);
     expect(location.search).toBe(search);
     expect(history.length).toBe(n);
   });
@@ -87,6 +94,7 @@ describe("Wide sheets", () => {
     at("?range=30&inspect=foo");
     renderApp(<UsageSheets data={usage} />);
     await sheet().findByText("errors per 100 calls");
+    dlg().scrollTop = 120;
     await userEvent.click(sheet().getByRole("button", { name: "#s1" }));
     await sheet().findByText("$16");
     expect(dlg().classList.contains("wide")).toBe(true);
@@ -95,6 +103,8 @@ describe("Wide sheets", () => {
     expect(location.search).toBe("?range=30&inspect=foo");
     expect(dlg().classList.contains("wide")).toBe(false);
     expect(wideBtn()).toBeNull();
+    await waitFor(() => expect(document.activeElement?.textContent).toBe("#s1"));
+    expect(dlg().scrollTop).toBe(120);
   });
 
   it("closes a wide session sheet on Escape and clears session from the URL", async () => {

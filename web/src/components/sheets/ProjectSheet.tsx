@@ -94,7 +94,9 @@ export function useBackTo(d: unknown, backTo: RefObject<BackTo | null> | undefin
     backTo.current = null;
     const dlg = body.current?.closest("dialog");
     if (dlg) dlg.scrollTop = to.scroll;
-    body.current?.querySelector<HTMLElement>(`[data-v="${CSS.escape(to.v)}"] button`)?.focus({ preventScroll: true });
+    const row = body.current?.querySelector<HTMLElement>(`[data-v="${CSS.escape(to.v)}"] button`);
+    row?.focus({ preventScroll: true });
+    row?.scrollIntoView?.({ block: "nearest" }); // the sheet's width may have changed meanwhile, which moves the row
   }, [d, backTo, body]);
 }
 

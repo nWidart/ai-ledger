@@ -30,14 +30,33 @@ describe("sheetWide", () => {
     expect(() => setSheetWide(true)).not.toThrow();
     expect(getSheetWide()).toBe(true);
   });
+  it("reads narrow when reading storage throws, and still switches", () => {
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => { throw new Error("blocked"); });
+    expect(getSheetWide()).toBe(false);
+    setSheetWide(true);
+    expect(getSheetWide()).toBe(true);
+  });
+  it("picks up a change made in another tab while no sheet was mounted", () => {
+    const first = renderHook(() => useSheetWide());
+    expect(first.result.current).toBe(false);
+    first.unmount();
+    localStorage.setItem(SHEET_WIDE_KEY, "1"); // another tab; its storage event found no listener here
+    expect(renderHook(() => useSheetWide()).result.current).toBe(true);
+  });
+  it("ignores session storage events", () => {
+    const { result } = renderHook(() => useSheetWide());
+    act(() => { setSheetWide(true); });
+    act(() => { dispatchEvent(new StorageEvent("storage", { storageArea: sessionStorage, key: null, newValue: null })); });
+    expect(result.current).toBe(true);
+  });
   it("follows a change made in another tab", () => {
     const { result } = renderHook(() => useSheetWide());
     expect(result.current).toBe(false);
-    act(() => { dispatchEvent(new StorageEvent("storage", { key: SHEET_WIDE_KEY, newValue: "1" })); });
+    act(() => { dispatchEvent(new StorageEvent("storage", { storageArea: localStorage, key: SHEET_WIDE_KEY, newValue: "1" })); });
     expect(result.current).toBe(true);
-    act(() => { dispatchEvent(new StorageEvent("storage", { key: null, newValue: null })); });
+    act(() => { dispatchEvent(new StorageEvent("storage", { storageArea: localStorage, key: null, newValue: null })); });
     expect(result.current).toBe(false);
-    act(() => { dispatchEvent(new StorageEvent("storage", { key: "other", newValue: "1" })); });
+    act(() => { dispatchEvent(new StorageEvent("storage", { storageArea: localStorage, key: "other", newValue: "1" })); });
     expect(result.current).toBe(false);
   });
 });
