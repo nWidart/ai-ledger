@@ -28,8 +28,8 @@ describe("PressureBars", () => {
   it("sizes segments by their share of their own window", () => {
     render(<PressureBars fill={fill} points={points} />);
     const [a, b] = screen.getAllByRole("group").filter(g => g.classList.contains("pbar"));
-    expect([...a!.querySelectorAll<HTMLElement>(".seg")].map(s => Number(s.style.flexGrow))).toEqual([.5, .3, .2]);
-    expect([...b!.querySelectorAll<HTMLElement>(".seg")].map(s => Number(s.style.flexGrow))).toEqual([1]);
+    expect([...a!.querySelectorAll<HTMLElement>(".band")].map(s => Number(s.style.flexGrow))).toEqual([.5, .3, .2]);
+    expect([...b!.querySelectorAll<HTMLElement>(".band")].map(s => Number(s.style.flexGrow))).toEqual([1]);
   });
 
   it("renders no segment for an empty band but keeps it in the table", async () => {

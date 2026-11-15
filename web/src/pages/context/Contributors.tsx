@@ -91,7 +91,7 @@ export function Contributors({ fills }: { fills: Fills }) {
               <th scope="row" className="name">{other ? name : <button type="button" className="cellbtn" title={name}>{name}</button>}</th>
               <td className="ctr-total">
                 <span className="ctr-bar" aria-hidden="true"><i data-testid="ctr-total-bar" style={{ width: `${Math.max(1, row.bytes / max * 100)}%` }} /></span>
-                <span className="ctr-fig">{bytes(row.bytes)} <span className="muted">(<Est tokens={row.est_tokens} />)</span></span>
+                <span className="ctr-fig">{bytes(row.bytes)} <span className="muted">· <Est tokens={row.est_tokens} /></span></span>
               </td>
               <td className="ctr-range">
                 <span className="ctr-track" aria-hidden="true">

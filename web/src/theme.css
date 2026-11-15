@@ -176,7 +176,7 @@ dialog.sheet::backdrop { background: var(--scrim); }
   :is(.pg-activity, .pg-cost) .chart svg > rect:not(.hit) { stroke: Highlight; stroke-width: 2px; }
 
   /* Bars: the fill keeps its color, the track and the fill sit in a frame. */
-  .ledger .bar, :is(.pg-activity, .pg-cost) .ibar, .pg-context :is(.pressure .seg, .rng-bar, .ctr-bar i, .ctr-rbar), .pg-errors .bar, .pg-live .meter { forced-color-adjust: none; outline: 1px solid CanvasText; }
+  .ledger .bar, :is(.pg-activity, .pg-cost) .ibar, .pg-context :is(.pressure .band, .rng-bar, .ctr-bar i, .ctr-rbar), .pg-errors .bar, .pg-live .meter { forced-color-adjust: none; outline: 1px solid CanvasText; }
   .pg-cost .daystrip .cells i { forced-color-adjust: none; background: GrayText; }
   .pg-cost .daystrip .cells i.on { background: CanvasText; }
   .pg-limits .hs-bar i { forced-color-adjust: none; }

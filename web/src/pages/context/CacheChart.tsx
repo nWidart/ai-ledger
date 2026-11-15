@@ -59,7 +59,8 @@ export function CacheChart({ series }: { series: Series }) {
   const when = (s: Slot, long = false) => (weekly ? "Week of " : "") + dayLabel(s.day, long);
 
   const line = slots.flatMap((s, i) => { const r = s.row && hitRatio(s.row); return r == null ? [] : [{ i, r }]; });
-  const path = line.map((p, k) => `${k ? "L" : "M"}${a.cx(p.i).toFixed(1)},${ry(p.r).toFixed(1)}`).join("");
+  // The line joins neighbouring buckets only: across an empty slot it breaks, so it never reads as a ratio for days with no request.
+  const path = line.map((p, k) => `${k && line[k - 1]!.i === p.i - 1 ? "L" : "M"}${a.cx(p.i).toFixed(1)},${ry(p.r).toFixed(1)}`).join("");
   const hit = slots.flatMap(s => s.row ? [s.row] : []);
   const all = hit.reduce((t, r) => ({ input: t.input + r.input, cache_read: t.cache_read + r.cache_read, cache_write: t.cache_write + r.cache_write, b: t.b + breaks(r) }),
     { input: 0, cache_read: 0, cache_write: 0, b: 0 });
@@ -119,7 +120,7 @@ export function CacheChart({ series }: { series: Series }) {
             <path className="ratio" d={path} fill="none" stroke="var(--text-primary)" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
             {line.map(p => <circle key={p.i} cx={a.cx(p.i)} cy={ry(p.r)} r="3" fill="var(--text-primary)" stroke="var(--surface-1)" strokeWidth="1.5" />)}</>}
           <text x={M.l} y={sy - 8} fontSize="11" fontWeight="600" fill="var(--text-secondary)">Cache breaks</text>
-          <text x={W - M.r} y={sy - 8} textAnchor="end" fontSize="11" fill="var(--text-muted)">most in a {weekly ? "week" : "day"}: {num(maxB)}</text>
+          <text x={W - M.r} y={sy - 8} textAnchor="end" fontSize="11" fill="var(--text-muted)">{all.b ? `most in a ${weekly ? "week" : "day"}: ${num(maxB)}` : "none in this view"}</text>
           <line x1={M.l} x2={W - M.r} y1={sy1} y2={sy1} stroke="var(--grid)" />
           {slots.map((s, i) => {
             if (!s.row) return null;

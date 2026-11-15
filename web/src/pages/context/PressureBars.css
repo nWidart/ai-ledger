@@ -5,17 +5,17 @@
 .pressure .pw { font-size: 13px; color: var(--text-secondary); }
 .pressure .pw b { color: var(--text-primary); font-weight: 600; }
 .pressure .pbar { display: flex; gap: 2px; width: 100%; height: 40px; }
-.pressure .seg { flex-shrink: 1; flex-basis: 0; min-width: 6px; height: 100%; padding: 0 4px; border: 0; border-radius: 4px; cursor: pointer; overflow: hidden;
+.pressure .band { flex-shrink: 1; flex-basis: 0; min-width: 6px; height: 100%; padding: 0 4px; border: 0; border-radius: 4px; cursor: pointer; overflow: hidden;
   display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.15; color: var(--text-primary); font: inherit; font-size: 12px; white-space: nowrap; }
 /* Text on a segment: the first two bands are light greys, the third a mid grey, the last two the warning and critical fills; each pair reads in both themes. */
-.pressure .seg[data-band="1"] { color: light-dark(var(--text-primary), var(--bg)); }
-.pressure .seg[data-band="2"] { color: var(--bg); }
-.pressure .seg[data-band="3"] { color: light-dark(var(--text-primary), var(--bg)); }
-.pressure .seg[data-band="4"] { color: var(--on-accent); }
-.pressure .seg .n { font-weight: 600; }
-.pressure .seg .l { font-size: 10.5px; opacity: .85; }
-.pressure .seg[aria-pressed="true"] { outline: 2px solid var(--text-primary); outline-offset: 1px; }
-.pressure .seg:focus-visible { outline: 2px solid var(--text-primary); outline-offset: 2px; }
+.pressure .band[data-band="1"] { color: light-dark(var(--text-primary), var(--bg)); }
+.pressure .band[data-band="2"] { color: var(--bg); }
+.pressure .band[data-band="3"] { color: light-dark(var(--text-primary), var(--bg)); }
+.pressure .band[data-band="4"] { color: var(--on-accent); }
+.pressure .band .n { font-weight: 600; }
+.pressure .band .l { font-size: 10.5px; opacity: .85; }
+.pressure .band[aria-pressed="true"] { outline: 2px solid var(--text-primary); outline-offset: 1px; }
+.pressure .band:focus-visible { outline: 2px solid var(--text-primary); outline-offset: 2px; }
 .pressure .plist { border: 1px solid var(--border); border-radius: 6px; padding: 8px; display: grid; gap: 4px; }
 .pressure .plist p { margin: 0; }
 .pressure .plist ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }

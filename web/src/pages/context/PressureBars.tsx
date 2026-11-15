@@ -40,7 +40,7 @@ export function PressureBars({ fill, points }: { fill: Fill; points: SessionPoin
             {f.bins.map((n, i) => {
               if (!n) return null;
               const s = n / (t || 1);
-              return <button key={i} type="button" className="seg" aria-pressed={on === i} data-band={i} data-share={s}
+              return <button key={i} type="button" className="band" aria-pressed={on === i} data-band={i} data-share={s}
                 style={{ flexGrow: s, background: TONE[i] }} title={`${FILL_LABELS[i]}: ${plural(n, "session")}`}
                 aria-label={`${plural(n, "session")} (${pct(s)}) peaked at ${FILL_LABELS[i]} of the ${windowLabel(f.window)} window`}
                 onClick={() => setSel(on === i ? null : { window: f.window, band: i })}>
