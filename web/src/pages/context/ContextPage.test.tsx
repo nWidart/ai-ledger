@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import type { ContextPayload, Tip } from "../../api";
@@ -8,6 +8,7 @@ import { mockApi } from "../../components/sheets/testing";
 import { App } from "../../App";
 import { openDrawer } from "../../components/Drawer";
 import { ContextPage } from "./ContextPage";
+import { renderApp } from "../../testing";
 
 const fixture: ContextPayload = context;
 const serve = (d: ContextPayload) => mockApi({ "/api/context": () => d, "/api/session": () => session });
@@ -15,7 +16,7 @@ const serve = (d: ContextPayload) => mockApi({ "/api/context": () => d, "/api/se
 const show = async (d: ContextPayload = fixture, hash = "#range=0", open = ["d-largest", "d-breaks"]) => {
   const f = serve(d);
   history.replaceState(null, "", "/context" + hash);
-  render(<ContextPage />);
+  renderApp(<ContextPage />);
   await screen.findByText((_, el) => el?.id === "lede" && !el.textContent!.startsWith("Loading"));
   act(() => open.forEach(id => openDrawer(id)));
   return f;
@@ -90,7 +91,7 @@ describe("ContextPage", () => {
   it("marks the content busy while loading, with no live region announcing it", async () => {
     mockApi({ "/api/context": () => new Promise(() => {}) as never });
     history.replaceState(null, "", "/context#range=0");
-    render(<ContextPage />);
+    renderApp(<ContextPage />);
     const main = screen.getByRole("main");
     expect(main.id).toBe("content");
     expect(main.getAttribute("aria-busy")).toBe("true");
@@ -475,7 +476,7 @@ describe("filters", () => {
   it("is a route of the app", async () => {
     serve(fixture);
     history.replaceState(null, "", "/context#range=0");
-    render(<App />);
+    renderApp(<App />);
     expect(await screen.findByRole("heading", { level: 1, name: /A typical session starts with/ })).toBeTruthy();
     expect(document.title).toBe("Context · AI Ledger");
   });

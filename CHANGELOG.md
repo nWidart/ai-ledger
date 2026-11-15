@@ -35,7 +35,14 @@ Run `ai-ledger rebuild` once after upgrading (with the app stopped): the Context
 - Pages and the command palette load on first use: the first download is about a third of what it was.
 - In a background tab, Live closes its event stream and stops its clock, and the status poll pauses; both catch up on return. Background polls go out at low priority.
 - Hovering the charts, opening Errors examples and scrolling pages with a section index do far less work.
+- A page you come back to shows its last figures at once. It refetches them, with the old figures still on screen, only when an ingest stored something or Refresh ran since. Figures no view has shown for five minutes are dropped from memory.
+- A request for a view you left (a filter changed, another page opened) is abandoned instead of running to its end.
+- Coming back to a background tab asks for the app's status at once.
 - The page is revalidated with an ETag (`304` when unchanged) instead of being sent again on every visit.
+
+### Fixed
+
+- The Context page no longer calls a Codex cache break an expiry after a pause of 5 to 30 minutes: Codex's cache lives 30 minutes. Claude Code keeps 5 minutes (1 hour after a 1-hour cache write), and the cache-breaks tip names both.
 
 ### Security
 

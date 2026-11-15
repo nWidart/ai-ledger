@@ -1,11 +1,12 @@
-import { render, screen, within } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { ChartTable, DataTable, ScrollRegion } from "./DataTable";
+import { renderApp } from "../testing";
 
 describe("ScrollRegion and DataTable", () => {
   it("makes a scrolling wrapper a focusable, named region", async () => {
-    render(<ScrollRegion label="Tools"><p>wide</p></ScrollRegion>);
+    renderApp(<ScrollRegion label="Tools"><p>wide</p></ScrollRegion>);
     const region = screen.getByRole("region", { name: "Tools" });
     expect(region.tabIndex).toBe(0);
     await userEvent.tab();
@@ -13,7 +14,7 @@ describe("ScrollRegion and DataTable", () => {
   });
 
   it("names the table and its region, with header scopes", () => {
-    render(<DataTable name="Cost by project" region="scroll tall"><thead><tr><th scope="col">Project</th><th scope="col">Cost</th></tr></thead>
+    renderApp(<DataTable name="Cost by project" region="scroll tall"><thead><tr><th scope="col">Project</th><th scope="col">Cost</th></tr></thead>
       <tbody><tr><th scope="row">foo</th><td>$1</td></tr></tbody></DataTable>);
     const region = screen.getByRole("region", { name: "Cost by project" });
     expect(region.className).toBe("scroll tall");
@@ -25,7 +26,7 @@ describe("ScrollRegion and DataTable", () => {
 
 describe("ChartTable", () => {
   it("is closed, renders nothing while closed, and opens and closes from its button", async () => {
-    render(<ChartTable><DataTable name="Chart data"><tbody><tr><td>1</td></tr></tbody></DataTable></ChartTable>);
+    renderApp(<ChartTable><DataTable name="Chart data"><tbody><tr><td>1</td></tr></tbody></DataTable></ChartTable>);
     const btn = screen.getByRole("button", { name: "Show data table" });
     expect(btn.getAttribute("aria-expanded")).toBe("false");
     expect(screen.queryByRole("table")).toBeNull();

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore } from "react";
-import { errorsUrl, type ErrorDetail, type ErrorsPayload } from "../../api";
+import { type ErrorDetail } from "../../api";
 import { setOrder } from "../../colors";
 import { agentName, Filters } from "../../components/Filters";
 import { UsageSheets } from "../../components/sheets/UsageSheets";
@@ -7,6 +7,7 @@ import type { SortBy } from "../../components/Sort";
 import { Toggletip } from "../../components/Toggletip";
 import { num as fmt } from "../../format";
 import { setHash, useHashState } from "../../hash";
+import { queries } from "../../queries";
 import { useApi } from "../../useApi";
 import { Ctx, Keyed, RowContext, tableFocus, type ErrorsCtx, type RowCtx } from "./context";
 import { Detail } from "./Detail";
@@ -31,7 +32,7 @@ const focusKey = (el: HTMLElement) => el.id ? "#" + CSS.escape(el.id)
 
 /** Errors (/errors): failed tool calls of every coding agent (or the one the source filter picks), by type, with fixes. */
 export function ErrorsPage() {
-  const { data, error, retry } = useApi<ErrorsPayload>(errorsUrl);
+  const { data, error, retry } = useApi(queries.errors);
   // Status for screen readers (say) and the run-after-render queue (after): the marks' writes use them, so they come first.
   const pending = useRef<(() => void)[]>([]), [, bump] = useReducer((x: number) => x + 1, 0), [live, setLive] = useState("");
   const after = useCallback((fn: () => void) => { pending.current.push(fn); bump(); }, []);

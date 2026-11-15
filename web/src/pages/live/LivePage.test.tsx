@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { LiveEvent, LivePayload, LiveSession, LiveState, LiveToolEvent } from "../../api";
@@ -12,6 +12,7 @@ import { App } from "../../App";
 import { LivePage } from "./LivePage";
 import { groupSessions, lanesOf, likelyWaiting, mergeSession, stateNow, stateText, streamRows } from "./live";
 import { FakeSource } from "./testing";
+import { renderApp } from "../../testing";
 
 const list = live as LivePayload, listText = liveListText as LivePayload, s1 = liveSession as LiveSession, s1text = liveText as LiveSession, codex = liveCodex as LiveSession;
 
@@ -27,7 +28,7 @@ function show(hash = "#session=s1", o: Opts = {}) {
     "/api/status": () => (o.status ? o.status() : status),
   });
   history.replaceState(null, "", "/live" + hash);
-  const r = render(o.app ? <App /> : <LivePage />);
+  const r = renderApp(o.app ? <App /> : <LivePage />);
   const urls = () => f.mock.calls.map(c => String(c[0]));
   return { f, r, calls: () => urls().filter(u => u !== "/api/status"), polls: () => urls().filter(u => u === "/api/status").length };
 }
@@ -1165,7 +1166,7 @@ describe("Live in a background tab", () => {
     FakeSource.last!.notify(["s1"]);
     await flush();
     expect(inits(f, "/api/live")).toEqual([undefined, undefined, undefined, undefined]); // a notice is news the user waits on
-    expect(inits(f, "/api/status")).toEqual([{ priority: "low" }]);
+    expect(inits(f, "/api/status")).toEqual([{ priority: "low", signal: expect.any(AbortSignal) }]); // Query passes its abort signal
     const n = calls().length;
     await flush(10_000);
     expect(calls().length).toBe(n + 2);

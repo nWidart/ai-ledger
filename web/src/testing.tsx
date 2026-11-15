@@ -2,9 +2,12 @@
 // Fetch stays mocked with vi.stubGlobal("fetch", …) or mockApi() (components/sheets/testing.ts), since query functions call it.
 // gcTime is Infinity: Query collects on setTimeout, and under fake timers a collection must not fire between awaits.
 import { QueryClientProvider, type QueryClient } from "@tanstack/react-query";
-import { render } from "@testing-library/react";
+import { act, render } from "@testing-library/react";
 import type { ReactElement, ReactNode } from "react";
+import type { Status } from "./api";
+import { noteStatus } from "./components/refresh";
 import { makeQueryClient } from "./queryClient";
+import { isData } from "./queries";
 
 /** The app's client with garbage collection off; every other default is the app's. */
 export const makeTestClient = (): QueryClient => {
@@ -24,3 +27,11 @@ export const wrap = (ui: ReactNode, client: QueryClient = makeTestClient()): Rea
 /** RTL's `render` with the provider as wrapper, so `rerender(ui)` keeps it; the client comes back with the result. */
 export const renderApp = (ui: ReactNode, client: QueryClient = makeTestClient()) =>
   ({ ...render(ui, { wrapper: wrapper(client) }), client });
+
+/** An ingest in the background stored something: invalidates what every page shows, as the status watcher does. */
+export const ingested = (client: QueryClient) => act(() => { void client.invalidateQueries({ predicate: isData }); });
+
+const REFRESHED: Status = { ingesting: false, last_ingest: null, last_stats: null, error: null, last_change: null, counts: {}, interval: 60, project_order: [] };
+
+/** Refresh ran: the data is invalidated and marked as asked for, so pages replay their landing. */
+export const refreshed = (client: QueryClient) => act(() => { noteStatus(client, REFRESHED, true); });

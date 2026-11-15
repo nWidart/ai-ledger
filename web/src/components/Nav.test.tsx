@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "../App";
@@ -6,8 +6,11 @@ import { hasHue, setOrder } from "../colors";
 import type { LimitsAlert } from "../api";
 import { alertText, whenDay } from "../pages/limits/limits";
 import { Nav } from "./Nav";
-import { pollStatus } from "./refresh";
-import { fetchCached, peekCache } from "../useApi";
+import { queries } from "../queries";
+import { askedFor } from "./refresh";
+import { renderApp } from "../testing";
+import { useApi } from "../useApi";
+import { useQuery, type QueryClient } from "@tanstack/react-query";
 import usage from "../__fixtures__/usage";
 import sessions from "../__fixtures__/sessions";
 import session from "../__fixtures__/session";
@@ -18,13 +21,18 @@ import live from "../__fixtures__/live";
 import liveSession from "../__fixtures__/live-session";
 
 const status = { ingesting: false, last_ingest: "2026-11-05T12:00:00+00:00", last_change: "2026-11-05T12:00:00+00:00", last_stats: { files: 1, lines: 2, inserted: 2, seconds: 0.1 }, error: null, counts: {}, interval: 60, project_order: [] };
+// What a status request asked from outside the nav is (Live's on a change notice): a fetch of the status query, which
+// always goes out (staleTime 0). A failure is the answer null. Query tells its observers on a timer, so the helper waits one.
+const flush = () => new Promise(r => setTimeout(r, 0));
+const poll = (client: QueryClient) => act(async () => { await client.fetchQuery(queries.status).catch(() => null); await flush(); });
+const view = { project: "", range: 30, automated: false, source: "" } as const;
 const json = (body: unknown, ok = true) => Promise.resolve({ ok, status: ok ? 200 : 500, json: () => Promise.resolve(body) } as Response);
 
 describe("Nav", () => {
   it("switches tabs keeping project, range, source and auto, and marks the current tab", async () => {
     vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/status") ? status : url.startsWith("/api/sessions") ? sessions : url.startsWith("/api/session") ? session : usage)));
     history.replaceState(null, "", "/usage#project=foo&range=14&source=codex&auto=1&session=s1");
-    render(<App />);
+    renderApp(<App />);
     expect(screen.getByRole("link", { name: "Activity" }).getAttribute("aria-current")).toBe("page");
     expect(document.title).toBe("Activity · AI Ledger");
     await userEvent.click(screen.getByRole("link", { name: "Cost" }));
@@ -46,7 +54,7 @@ describe("Nav", () => {
   it("opens Limits with the project, range and source from Cost", async () => {
     vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/status") ? status : url.startsWith("/api/limits") ? limits : usage)));
     history.replaceState(null, "", "/cost#project=foo&range=30&source=codex");
-    render(<App />);
+    renderApp(<App />);
     await userEvent.click(screen.getByRole("link", { name: "Limits" }));
     expect(location.pathname).toBe("/limits");
     expect(location.hash).toBe("#project=foo&range=30&source=codex");
@@ -58,7 +66,7 @@ describe("Nav", () => {
   it("opens Insights with the project, range and source from Cost", async () => {
     vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/status") ? status : url.startsWith("/api/insights") ? insights : usage)));
     history.replaceState(null, "", "/cost#project=foo&range=30&source=codex");
-    render(<App />);
+    renderApp(<App />);
     await userEvent.click(screen.getByRole("link", { name: "Insights" }));
     expect(location.pathname).toBe("/insights");
     expect(location.hash).toBe("#project=foo&range=30&source=codex");
@@ -70,7 +78,7 @@ describe("Nav", () => {
   it("opens Context from Cost with the project and range kept, after Cost in the nav", async () => {
     vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/status") ? status : url.startsWith("/api/context") ? context : usage)));
     history.replaceState(null, "", "/cost#project=foo&range=30");
-    render(<App />);
+    renderApp(<App />);
     const tabs = screen.getAllByRole("link").map(a => a.textContent);
     expect(tabs.slice(tabs.indexOf("Cost"), tabs.indexOf("Cost") + 2)).toEqual(["Cost", "Context"]);
     await userEvent.click(screen.getByRole("link", { name: "Context" }));
@@ -84,7 +92,7 @@ describe("Nav", () => {
   it("keeps the automated toggle from Context to Cost and back", async () => {
     vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/status") ? status : url.startsWith("/api/context") ? context : usage)));
     history.replaceState(null, "", "/context#project=foo&range=30&auto=1");
-    render(<App />);
+    renderApp(<App />);
     await userEvent.click(screen.getByRole("link", { name: "Cost" }));
     expect(location.pathname).toBe("/cost");
     expect(location.hash).toBe("#project=foo&range=30&auto=1");
@@ -97,7 +105,7 @@ describe("Nav", () => {
     vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/status") ? status : url.startsWith("/api/live/session") ? liveSession
       : url.startsWith("/api/live") ? live : usage)));
     history.replaceState(null, "", "/cost#project=foo&range=14&source=claude");
-    render(<App />);
+    renderApp(<App />);
     await userEvent.click(screen.getByRole("link", { name: "Live" }));
     expect(location.pathname).toBe("/live");
     await waitFor(() => expect(document.title).toBe("(2) Live · AI Ledger")); // one approval wait and one your turn in the list
@@ -109,21 +117,21 @@ describe("Nav", () => {
 
   it("names the app AI Ledger", () => {
     vi.stubGlobal("fetch", vi.fn(() => json(status)));
-    const { container } = render(<Nav />);
+    const { container } = renderApp(<Nav />);
     expect(container.querySelector(".appnav-word")?.textContent).toBe("AI Ledger");
   });
 
   it("colors projects from the status, on any page", async () => {
     setOrder([]);
     vi.stubGlobal("fetch", vi.fn(() => json({ ...status, project_order: ["foo"] })));
-    render(<Nav />);
+    renderApp(<Nav />);
     await waitFor(() => expect(hasHue("foo")).toBe(true));
   });
 
   it("shows the project chip and clears the filter", async () => {
     vi.stubGlobal("fetch", vi.fn(() => json(status)));
     history.replaceState(null, "", "/errors#project=foo&range=30&session=s1");
-    render(<Nav />);
+    renderApp(<Nav />);
     await userEvent.click(screen.getByRole("button", { name: "Clear project filter" }));
     expect(location.hash).toBe("#range=30");
     expect(screen.queryByRole("button", { name: "Clear project filter" })).toBeNull();
@@ -133,7 +141,7 @@ describe("Nav", () => {
   it("clears the Activity day with the project filter", async () => {
     vi.stubGlobal("fetch", vi.fn(() => json(status)));
     history.replaceState(null, "", "/usage#project=foo&range=30&day=2026-11-04&q=api");
-    render(<Nav />);
+    renderApp(<Nav />);
     await userEvent.click(screen.getByRole("button", { name: "Clear project filter" }));
     expect(location.hash).toBe("#range=30&q=api");
   });
@@ -144,7 +152,7 @@ describe("Nav", () => {
     const f = vi.fn((_url: string, init?: RequestInit) => init?.method === "POST" && down ? Promise.reject(new Error("down")) : json({ ...status, project_order: order }));
     vi.stubGlobal("fetch", f);
     history.replaceState(null, "", "/usage");
-    render(<Nav />);
+    const { client } = renderApp(<Nav />);
     expect(await screen.findByText(/Last ingest .* · 2 new lines/)).toBeTruthy();
     await userEvent.click(screen.getByRole("button", { name: "Refresh" }));
     const btn = await screen.findByRole("button", { name: "Retry" });
@@ -152,7 +160,7 @@ describe("Nav", () => {
     expect(screen.getByText("Refresh failed. Select Retry to try again.")).toBeTruthy();
     expect(f).toHaveBeenCalledWith("/api/refresh", { method: "POST" });
     order = ["foo"]; // the app is up: the nav's poll, or Live's on a change notice, still does its other work
-    await act(async () => { expect(await pollStatus()).not.toBeNull(); });
+    await poll(client);
     expect([screen.getByRole("button", { name: "Retry" }).className, hasHue("foo")]).toEqual(["failed", true]);
     expect(screen.getByText("Refresh failed. Select Retry to try again.")).toBeTruthy();
     down = false;
@@ -161,25 +169,47 @@ describe("Nav", () => {
     expect(screen.getByText(/Last ingest .* · 2 new lines/)).toBeTruthy();
   });
 
+  it("keeps a failed Refresh's text through any number of polls, and shows Ingesting… while it runs", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval", "Date"] });
+    let down = true;
+    const f = vi.fn((_url: string, init?: RequestInit) => init?.method === "POST" && down ? Promise.reject(new Error("down")) : json(status));
+    vi.stubGlobal("fetch", f);
+    renderApp(<Nav />);
+    const tick = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
+    await tick(0);
+    act(() => { screen.getByRole("button", { name: "Refresh" }).click(); });
+    await tick(0);
+    expect(screen.getByText("Refresh failed. Select Retry to try again.")).toBeTruthy();
+    await tick(30 * 60_000); // thirty polls, longer than Query keeps a mutation nobody observes
+    expect(f.mock.calls.filter(c => String(c[0]) === "/api/status").length).toBeGreaterThan(20);
+    expect(screen.getByText("Refresh failed. Select Retry to try again.")).toBeTruthy();
+    down = false;
+    f.mockImplementation((_url, init) => init?.method === "POST" ? new Promise<Response>(() => {}) : json(status));
+    act(() => { screen.getByRole("button", { name: "Retry" }).click(); });
+    await tick(0);
+    expect(screen.getByText("Ingesting…")).toBeTruthy();
+    vi.useRealTimers();
+  });
+
   it("leaves the text to a running Refresh: no status poll replaces it, nor the answer to one asked before it ended", async () => {
     const answers: Record<string, () => void> = {}, later = (key: string, body: unknown) => new Promise<Response>(r => { answers[key] = () => r(json(body)); });
     const f = vi.fn((_url: string, _init?: RequestInit) => json(status));
     vi.stubGlobal("fetch", f);
-    render(<Nav />);
+    const { client } = renderApp(<Nav />);
     expect(await screen.findByText(/Last ingest .* · 2 new lines/)).toBeTruthy();
     f.mockImplementation((_url, init) => init?.method === "POST" ? later("refresh", { ...status, last_stats: { ...status.last_stats, inserted: 5 } }) : json({ ...status, ingesting: true }));
     await userEvent.click(screen.getByRole("button", { name: "Refresh" }));
-    await act(async () => { await pollStatus(); }); // answered while the ingest runs
+    await poll(client); // answered while the ingest runs
     expect(screen.getByText("Ingesting…")).toBeTruthy();
     f.mockImplementation(() => later("status", { ...status, ingesting: true }));
     let asked!: Promise<unknown>;
-    act(() => { asked = pollStatus(); }); // asked while it runs, answered after
+    act(() => { asked = client.fetchQuery(queries.status).catch(() => null); }); // asked while it runs, answered after
     await act(async () => { answers.refresh!(); });
     expect(await screen.findByText(/Last ingest .* · 5 new lines/)).toBeTruthy();
     await act(async () => { answers.status!(); await asked; });
     expect(screen.getByText(/Last ingest .* · 5 new lines/)).toBeTruthy();
     f.mockImplementation(() => json({ ...status, last_stats: { ...status.last_stats, inserted: 7 } }));
-    await act(async () => { await pollStatus(); }); // asked after: shown
+    await poll(client); // asked after: shown
     expect(screen.getByText(/Last ingest .* · 7 new lines/)).toBeTruthy();
   });
 
@@ -187,7 +217,7 @@ describe("Nav", () => {
     const answers: Record<string, () => void> = {}, later = (body: unknown) => new Promise<Response>(r => { answers.refresh = () => r(json(body)); });
     const f = vi.fn((_url: string, _init?: RequestInit) => json(status));
     vi.stubGlobal("fetch", f);
-    render(<Nav />);
+    renderApp(<Nav />);
     expect(await screen.findByText(/Last ingest .* · 2 new lines/)).toBeTruthy();
     expect(screen.getByRole("button", { name: /^Search/ }).getAttribute("aria-label")).toMatch(/^Search, open command palette \(/);
     f.mockImplementation((_url, init) => init?.method === "POST" ? later(status) : json(status));
@@ -204,54 +234,82 @@ describe("Nav", () => {
     expect(document.activeElement).toBe(btn);
   });
 
-  it("keeps a status when the answer to a request sent before it arrives after it", async () => {
+  // Two status requests in flight at once, answered out of order, cannot exist: Query keeps one fetch per key. What can: a
+  // poll in flight when Refresh starts or ends, and answered after it.
+  it("keeps a Refresh's status when a poll sent before it is answered after it, whether the poll answers or fails", async () => {
     const answers: Record<string, () => void> = {}, later = (key: string, body: unknown) => new Promise<Response>(r => { answers[key] = () => r(json(body)); });
     const f = vi.fn((_url: string, _init?: RequestInit) => json(status));
     vi.stubGlobal("fetch", f);
-    render(<Nav />);
+    const { client } = renderApp(<Nav />);
     expect(await screen.findByText(/Last ingest .* · 2 new lines/)).toBeTruthy();
+    const refresh = async (inserted: number) => {
+      f.mockImplementation((_url, init) => init?.method === "POST" ? json({ ...status, last_stats: { ...status.last_stats, inserted } }) : json(status));
+      await userEvent.click(screen.getByRole("button", { name: "Refresh" }));
+      expect(await screen.findByText(new RegExp(`· ${inserted} new lines`))).toBeTruthy();
+    };
     f.mockImplementation(() => later("nav", { ...status, ingesting: true }));
     let asked!: Promise<unknown>;
-    act(() => { asked = pollStatus(); }); // the nav's, sent while an ingest runs
-    f.mockImplementation(() => json({ ...status, last_stats: { ...status.last_stats, inserted: 7 } }));
-    await act(async () => { await pollStatus(); }); // Live's on the change notice: sent after, answered before
-    expect(screen.getByText(/Last ingest .* · 7 new lines/)).toBeTruthy();
+    act(() => { asked = client.fetchQuery(queries.status).catch(() => null); }); // sent while an ingest runs
+    await refresh(7);
     await act(async () => { answers.nav!(); await asked; });
     expect(screen.getByText(/Last ingest .* · 7 new lines/)).toBeTruthy();
     f.mockImplementation(() => new Promise<Response>((_, no) => { answers.down = () => no(new Error("down")); }));
-    act(() => { asked = pollStatus(); }); // sent before the next one, and it fails after it
-    f.mockImplementation(() => json({ ...status, last_stats: { ...status.last_stats, inserted: 9 } }));
-    await act(async () => { await pollStatus(); });
+    act(() => { asked = client.fetchQuery(queries.status).catch(() => null); }); // sent before the next Refresh, and it fails after it
+    await refresh(9);
     await act(async () => { answers.down!(); await asked; });
     expect(screen.getByText(/Last ingest .* · 9 new lines/)).toBeTruthy();
   });
 
-  it("does nothing with the answer to a status request sent before one already answered: no cache clear, no project order", async () => {
-    setOrder([]);
-    let answer = () => {};
-    const f = vi.fn((_url: string, _init?: RequestInit) => json(status));
-    vi.stubGlobal("fetch", f);
-    render(<Nav />);
-    expect(await screen.findByText(/Last ingest .* · 2 new lines/)).toBeTruthy();
-    f.mockImplementation(() => new Promise<Response>(r => { answer = () => r(json({ ...status, project_order: ["old"] })); }));
-    let asked!: Promise<unknown>;
-    act(() => { asked = pollStatus(); }); // the nav's, sent before an ingest stores something
-    const stored = { ...status, last_change: "2026-11-05T12:05:00+00:00", project_order: ["new"] };
-    f.mockImplementation(url => json(url === "/api/x" ? { a: 1 } : stored));
-    await act(async () => { await pollStatus(); }); // Live's, sent after the ingest: clears the cache
-    await fetchCached("/api/x");
-    await act(async () => { answer(); await asked; });
-    expect([peekCache("/api/x"), hasHue("old"), hasHue("new")]).toEqual([{ a: 1 }, false, true]);
-    await act(async () => { await pollStatus(); }); // the same last_change as the newest answer: nothing new
-    expect(peekCache("/api/x")).toEqual({ a: 1 });
+  describe("a new last_change", () => {
+    // A mounted data query (Activity's), and a Live one that follows its own notices.
+    const Probe = () => {
+      useApi(queries.usage(view));
+      useQuery({ queryKey: ["live", "list"], queryFn: () => fetch("/api/live").then(r => r.json()), staleTime: Infinity });
+      return null;
+    };
+    const setup = async (answer: () => unknown) => {
+      const f = vi.fn((url: string, _init?: RequestInit) => url.startsWith("/api/status") ? json(answer()) : url === "/api/refresh" ? json(answer()) : json({ n: 1 }));
+      vi.stubGlobal("fetch", f);
+      const { client } = renderApp(<><Nav /><Probe /></>);
+      const calls = (prefix: string) => f.mock.calls.filter(c => String(c[0]).startsWith(prefix)).length;
+      await waitFor(() => expect([calls("/api/usage"), calls("/api/live")]).toEqual([1, 1]));
+      return { client, calls };
+    };
+
+    it("refetches the mounted data query, not for the first status or an identical last_change, and leaves a Live one alone", async () => {
+      let change = status.last_change;
+      const { client, calls } = await setup(() => ({ ...status, last_change: change }));
+      await poll(client); // the same last_change
+      expect(calls("/api/usage")).toBe(1);
+      change = "2026-11-05T12:05:00+00:00";
+      await poll(client);
+      await waitFor(() => expect(calls("/api/usage")).toBe(2));
+      expect(calls("/api/live")).toBe(1);
+    });
+
+    it("is asked for by Refresh, not by an ingest in the background, and the poll after a Refresh refetches nothing more", async () => {
+      let change = status.last_change;
+      const { client, calls } = await setup(() => ({ ...status, last_change: change }));
+      expect(askedFor(client)).toBe(false);
+      await userEvent.click(screen.getByRole("button", { name: "Refresh" })); // the same last_change: Refresh invalidates anyway
+      await waitFor(() => expect(calls("/api/usage")).toBe(2));
+      expect(askedFor(client)).toBe(true);
+      await poll(client);
+      await act(async () => { await new Promise(r => setTimeout(r, 30)); });
+      expect([calls("/api/usage"), askedFor(client)]).toEqual([2, true]);
+      change = "2026-11-05T12:05:00+00:00"; // an ingest in the background
+      await poll(client);
+      await waitFor(() => expect(calls("/api/usage")).toBe(3));
+      expect(askedFor(client)).toBe(false);
+    });
   });
 
   it("polls the status every minute, every 3 s while an ingest runs, and stops on unmount", async () => {
-    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval", "Date"] });
     let ingesting = true;
     const f = vi.fn(() => json({ ...status, ingesting }));
     vi.stubGlobal("fetch", f);
-    const { unmount } = render(<Nav />);
+    const { unmount } = renderApp(<Nav />);
     const tick = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
     await tick(0);
     expect([f.mock.calls.length, screen.getByText("Ingesting transcripts…") != null]).toEqual([1, true]);
@@ -271,29 +329,32 @@ describe("Nav", () => {
   it("sends the status poll at low priority", async () => {
     const f = vi.fn((_url: string, _init?: RequestInit) => json(status));
     vi.stubGlobal("fetch", f);
-    render(<Nav />);
+    renderApp(<Nav />);
     await waitFor(() => expect(f).toHaveBeenCalled());
-    expect(f.mock.calls[0]).toEqual(["/api/status", { priority: "low" }]);
+    expect(f.mock.calls[0]![0]).toBe("/api/status");
+    expect(f.mock.calls[0]![1]).toMatchObject({ priority: "low" });
   });
 
   describe("in a background tab", () => {
+    // Query's focusManager listens to visibilitychange on window and reads document.visibilityState.
     const setHidden = (hidden: boolean) => {
       Object.defineProperty(document, "hidden", { configurable: true, get: () => hidden });
-      act(() => { document.dispatchEvent(new Event("visibilitychange")); });
+      Object.defineProperty(document, "visibilityState", { configurable: true, get: () => (hidden ? "hidden" : "visible") });
+      act(() => { window.dispatchEvent(new Event("visibilitychange")); });
     };
     const tick = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
     const setup = async () => {
-      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval", "Date"] });
       const f = vi.fn(() => json(status));
       vi.stubGlobal("fetch", f);
-      const view = render(<Nav />);
+      const view = renderApp(<Nav />);
       await tick(0);
       expect(f.mock.calls.length).toBe(1);
       return { f, ...view };
     };
-    afterEach(() => { vi.useRealTimers(); Reflect.deleteProperty(document, "hidden"); });
+    afterEach(() => { vi.useRealTimers(); Reflect.deleteProperty(document, "hidden"); Reflect.deleteProperty(document, "visibilityState"); });
 
-    it("sends no status request while hidden, and asks at once on return when a poll came due", async () => {
+    it("sends no status request while hidden, and asks once on return", async () => {
       const { f } = await setup();
       setHidden(true);
       await tick(600_000);
@@ -301,23 +362,18 @@ describe("Nav", () => {
       setHidden(false);
       await tick(0);
       expect(f.mock.calls.length).toBe(2);
-      await tick(59_999);
-      expect(f.mock.calls.length).toBe(2);
-      await tick(1); // and the interval goes on
-      expect(f.mock.calls.length).toBe(3);
+      expect(screen.getByText(/^Last ingest /).textContent).toContain(new Date(status.last_ingest).toLocaleTimeString());
     });
 
-    it("keeps its schedule when the tab returns before a poll came due", async () => {
+    // The old nav kept its schedule when the tab came back before a poll was due; the query asks on every return
+    // (refetchOnWindowFocus "always"), so this is the nearest scenario: a short absence still asks once.
+    it("asks once on return even when no poll came due meanwhile", async () => {
       const { f } = await setup();
       await tick(20_000);
       setHidden(true);
       await tick(10_000);
       setHidden(false);
       await tick(0);
-      expect(f.mock.calls.length).toBe(1);
-      await tick(29_999);
-      expect(f.mock.calls.length).toBe(1);
-      await tick(1); // a minute after the first
       expect(f.mock.calls.length).toBe(2);
     });
   });
@@ -326,15 +382,32 @@ describe("Nav", () => {
     setOrder([]);
     const f = vi.fn(() => json(status));
     vi.stubGlobal("fetch", f);
-    render(<Nav />);
+    const { client } = renderApp(<Nav />);
     expect(await screen.findByText(/Last ingest .* · 2 new lines/)).toBeTruthy();
     f.mockImplementation(() => json({ ...status, last_stats: { ...status.last_stats, inserted: 7 }, project_order: ["foo"] }));
-    await act(async () => { expect((await pollStatus())?.project_order).toEqual(["foo"]); });
+    await poll(client);
+    expect(client.getQueryData<typeof status>(queries.status.queryKey)?.project_order).toEqual(["foo"]);
     expect(screen.getByText(/Last ingest .* · 7 new lines/)).toBeTruthy();
     expect(hasHue("foo")).toBe(true);
     f.mockImplementation(() => Promise.reject(new Error("down")));
-    await act(async () => { expect(await pollStatus()).toBeNull(); });
+    await poll(client);
     expect(screen.getByText("App not reachable")).toBeTruthy();
+  });
+
+  it("says App not reachable when the first status request fails, and does not blink while the next poll runs", async () => {
+    let answer = () => {};
+    const f = vi.fn((_url: string, _init?: RequestInit): Promise<Response> => Promise.reject(new Error("down")));
+    vi.stubGlobal("fetch", f);
+    const { client } = renderApp(<Nav />);
+    expect(await screen.findByText("App not reachable")).toBeTruthy();
+    f.mockImplementation(() => new Promise<Response>(r => { answer = () => r(json(status)); }));
+    let next!: Promise<unknown>;
+    act(() => { next = client.refetchQueries({ queryKey: ["status"] }); });
+    await act(flush); // Query's notice that the fetch began reaches the nav
+    expect(screen.getByText("App not reachable")).toBeTruthy(); // the poll under way
+    await act(async () => { answer(); await next; await flush(); });
+    expect(screen.queryByText("App not reachable")).toBeNull();
+    expect(screen.getByText(/Last ingest/)).toBeTruthy();
   });
 
   describe("Limits badge", () => {
@@ -350,7 +423,7 @@ describe("Nav", () => {
     ] as const)("marks the Limits tab for %s: a dot in the right tone, the sentence in its name and title", async (_kind, over, tone, sentence) => {
       vi.stubGlobal("fetch", vi.fn(() => json({ ...status, limits_alert: alert(over) })));
       history.replaceState(null, "", "/usage");
-      render(<Nav />);
+      renderApp(<Nav />);
       const link = await screen.findByRole("link", { name: `Limits alert: ${sentence}` });
       expect(sentence).toBe(alertText(alert(over)));
       // Exposed once: the sentence is in the link's name (a hidden span after the label), the link has no title to read again as a
@@ -377,31 +450,31 @@ describe("Nav", () => {
 
     it("marks an estimate in the name and the hover text", async () => {
       vi.stubGlobal("fetch", vi.fn(() => json({ ...status, limits_alert: alert({ kind: "high", current: 95, measured: false }) })));
-      render(<Nav />);
+      renderApp(<Nav />);
       const link = await screen.findByRole("link", { name: "Limits alert: Codex weekly is at an estimated 95%" });
       expect(link.querySelector("span[title]")?.getAttribute("title")).toBe("Codex weekly is at an estimated 95%");
     });
 
     it("says how many more windows are in alert", async () => {
       vi.stubGlobal("fetch", vi.fn(() => json({ ...status, limits_alert: alert({ kind: "high", current: 95, count: 3 }) })));
-      render(<Nav />);
+      renderApp(<Nav />);
       expect(await screen.findByRole("link", { name: "Limits alert: Codex weekly is at 95% (and 2 more)" })).toBeTruthy();
     });
 
     it("shows none when limits_alert is null, or missing as an older server sends it", async () => {
       const f = vi.fn(() => json({ ...status, limits_alert: alert({}) }));
       vi.stubGlobal("fetch", f);
-      render(<Nav />);
+      const { client } = renderApp(<Nav />);
       await screen.findByRole("link", { name: /^Limits alert: / });
       f.mockImplementation(() => json({ ...status, limits_alert: null }));
-      await act(async () => { await pollStatus(); });
+      await poll(client);
       expect(badge()).toBeNull();
       expect(tab("Limits").textContent).toBe("Limits");
       f.mockImplementation(() => json({ ...status, limits_alert: alert({}) }));
-      await act(async () => { await pollStatus(); });
+      await poll(client);
       expect(badge()).not.toBeNull();
       f.mockImplementation(() => json(status)); // no field at all
-      await act(async () => { await pollStatus(); });
+      await poll(client);
       expect(badge()).toBeNull();
       expect(tab("Limits")).toBeTruthy();
     });
@@ -409,27 +482,27 @@ describe("Nav", () => {
     it("follows the status poll: it appears, changes and goes, with no reload", async () => {
       const f = vi.fn(() => json({ ...status, limits_alert: null }));
       vi.stubGlobal("fetch", f);
-      render(<Nav />);
+      const { client } = renderApp(<Nav />);
       expect(await screen.findByText(/Last ingest/)).toBeTruthy();
       expect(badge()).toBeNull();
       f.mockImplementation(() => json({ ...status, limits_alert: alert({ kind: "high", current: 91 }) }));
-      await act(async () => { await pollStatus(); });
+      await poll(client);
       expect([badge()?.dataset.tone, document.querySelector("a span[title]")?.getAttribute("title")]).toEqual(["warning", "Codex weekly is at 91%"]);
       f.mockImplementation(() => json({ ...status, limits_alert: alert({ kind: "at_limit" }) }));
-      await act(async () => { await pollStatus(); });
+      await poll(client);
       expect(badge()?.dataset.tone).toBe("critical");
       f.mockImplementation(() => json({ ...status, limits_alert: null }));
-      await act(async () => { await pollStatus(); });
+      await poll(client);
       expect(badge()).toBeNull();
     });
 
     it("keeps the badge when the app does not answer, and takes a Refresh's answer", async () => {
       const f = vi.fn((_url: string, _init?: RequestInit) => json({ ...status, limits_alert: alert({ kind: "high", current: 91 }) }));
       vi.stubGlobal("fetch", f);
-      render(<Nav />);
+      const { client } = renderApp(<Nav />);
       await screen.findByRole("link", { name: /^Limits alert: / });
       f.mockImplementation(() => Promise.reject(new Error("down")));
-      await act(async () => { await pollStatus(); });
+      await poll(client);
       expect(badge()).not.toBeNull();
       f.mockImplementation(() => json({ ...status, limits_alert: null }));
       await userEvent.click(screen.getByRole("button", { name: "Refresh" }));
@@ -438,17 +511,17 @@ describe("Nav", () => {
 
     describe("announcement", () => {
       const region = () => screen.getByRole("status");
-      const poll = async (f: ReturnType<typeof vi.fn>, limits_alert: LimitsAlert | null | undefined) => {
+      const pollWith = async ({ f, client }: { f: ReturnType<typeof vi.fn>; client: QueryClient }, limits_alert: LimitsAlert | null | undefined) => {
         f.mockImplementation(() => json(limits_alert === undefined ? status : { ...status, limits_alert }));
-        await act(async () => { await pollStatus(); });
+        await poll(client);
       };
       const setup = async (first: LimitsAlert | null) => {
         const f = vi.fn((_url: string, _init?: RequestInit) => json({ ...status, limits_alert: first }));
         vi.stubGlobal("fetch", f);
         history.replaceState(null, "", "/usage");
-        render(<Nav />);
+        const { client } = renderApp(<Nav />);
         await screen.findByText(/Last ingest/);
-        return f;
+        return { f, client };
       };
 
       it("is a persistent polite status region of its own, hidden from sight, that holds no alert until there is one", async () => {
@@ -460,8 +533,8 @@ describe("Nav", () => {
       });
 
       it("says the sentence when an alert appears", async () => {
-        const f = await setup(null);
-        await poll(f, alert({ kind: "at_limit" }));
+        const ctx = await setup(null);
+        await pollWith(ctx, alert({ kind: "at_limit" }));
         expect(region().textContent).toBe(alertText(alert({ kind: "at_limit" })));
       });
 
@@ -472,12 +545,12 @@ describe("Nav", () => {
       });
 
       it("leaves the text alone when only the time, the percent or the count drift, and does not touch the node", async () => {
-        const f = await setup(alert({ kind: "runs_out", current: 60, at: "2026-11-13T08:00:00.000Z" }));
+        const ctx = await setup(alert({ kind: "runs_out", current: 60, at: "2026-11-13T08:00:00.000Z" }));
         const was = (await waitFor(() => { expect(region().textContent).not.toBe(""); return region().textContent; }));
         const seen: MutationRecord[] = [];
         const mo = new MutationObserver(r => seen.push(...r));
         mo.observe(region(), { childList: true, characterData: true, subtree: true });
-        await poll(f, alert({ kind: "runs_out", current: 71, at: "2026-11-13T09:30:00.000Z", count: 2 }));
+        await pollWith(ctx, alert({ kind: "runs_out", current: 71, at: "2026-11-13T09:30:00.000Z", count: 2 }));
         expect(region().textContent).toBe(was);
         expect(seen.concat(mo.takeRecords())).toEqual([]);
         mo.disconnect();
@@ -486,26 +559,26 @@ describe("Nav", () => {
       });
 
       it("says it again when the kind, the window or the measured flag changes", async () => {
-        const f = await setup(alert({ kind: "high", current: 92 }));
+        const ctx = await setup(alert({ kind: "high", current: 92 }));
         await waitFor(() => expect(region().textContent).toBe("Codex weekly is at 92%"));
-        await poll(f, alert({ kind: "at_limit" }));
+        await pollWith(ctx, alert({ kind: "at_limit" }));
         expect(region().textContent).toBe(alertText(alert({ kind: "at_limit" })));
-        await poll(f, alert({ kind: "at_limit", label: "5-hour" }));
+        await pollWith(ctx, alert({ kind: "at_limit", label: "5-hour" }));
         expect(region().textContent).toBe(alertText(alert({ kind: "at_limit", label: "5-hour" })));
-        await poll(f, alert({ kind: "at_limit", label: "5-hour", measured: false }));
+        await pollWith(ctx, alert({ kind: "at_limit", label: "5-hour", measured: false }));
         expect(region().textContent).toBe(alertText(alert({ kind: "at_limit", label: "5-hour", measured: false })));
-        await poll(f, alert({ kind: "at_limit", provider: "claude", provider_label: "Claude Code", label: "5-hour", measured: false }));
+        await pollWith(ctx, alert({ kind: "at_limit", provider: "claude", provider_label: "Claude Code", label: "5-hour", measured: false }));
         expect(region().textContent).toBe("Claude Code 5-hour is estimated to be at its limit until " + whenDay("2026-11-14T12:00:00.000Z"));
       });
 
       it("empties when the alert goes, and says the next one when it comes back", async () => {
-        const f = await setup(alert({ kind: "high", current: 92 }));
+        const ctx = await setup(alert({ kind: "high", current: 92 }));
         await waitFor(() => expect(region().textContent).not.toBe(""));
-        await poll(f, null);
+        await pollWith(ctx, null);
         expect(region().textContent).toBe("");
-        await poll(f, alert({ kind: "high", current: 92 }));
+        await pollWith(ctx, alert({ kind: "high", current: 92 }));
         expect(region().textContent).toBe("Codex weekly is at 92%");
-        await poll(f, undefined); // an older app's status: no field
+        await pollWith(ctx, undefined); // an older app's status: no field
         expect(region().textContent).toBe("");
       });
 
@@ -522,7 +595,7 @@ describe("Nav", () => {
     it("shows on the Limits page, whose tab is the current one", async () => {
       vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/status") ? { ...status, limits_alert: alert({}) } : limits)));
       history.replaceState(null, "", "/limits");
-      render(<App />);
+      renderApp(<App />);
       const link = await screen.findByRole("link", { name: /^Limits alert: / });
       expect(link.getAttribute("aria-current")).toBe("page");
       expect(badge()).not.toBeNull();
@@ -531,7 +604,7 @@ describe("Nav", () => {
 
   it("steps the theme through light, dark and back to system", async () => {
     vi.stubGlobal("fetch", vi.fn(() => json(status)));
-    render(<Nav />);
+    renderApp(<Nav />);
     const root = document.documentElement;
     const step = async (name: string) => userEvent.click(screen.getByRole("button", { name }));
     expect(screen.getByRole("button", { name: "Theme: system" }).getAttribute("title")).toBe("Theme: system. Click for light.");

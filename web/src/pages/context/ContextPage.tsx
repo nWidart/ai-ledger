@@ -9,6 +9,7 @@ import { UsageSheets } from "../../components/sheets/UsageSheets";
 import { useLanding } from "../../components/useLanding";
 import { num, plural } from "../../format";
 import { setHash, useHashState } from "../../hash";
+import { queries } from "../../queries";
 import { useApi } from "../../useApi";
 import { rebuildFacts, share } from "./context";
 import { BreaksDrawer, LargestDrawer } from "./drawers";
@@ -47,7 +48,7 @@ function RebuildNotice({ d }: { d: ContextPayload }) {
 export function ContextPage() {
   const [h] = useHashState();
   const want = viewOf(h), url = contextUrl(want);
-  const { data: d, error, loading, retry } = useApi<ContextPayload>(url, { keepPrevious: true });
+  const { data: d, error, loading, retry } = useApi(queries.context(want), { keepPrevious: true });
   useEffect(() => { if (d) setOrder(d.project_order); }, [d]);
   const { slow, grow, wrap, retryBtn } = useLanding(d, url, loading, error, ":scope > :is(.panel, .tips, .drawers)");
   // A tip the payload does not have (an old link, another view) shows nothing.

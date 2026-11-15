@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { askedFor } from "../useApi";
+import { useQueryClient } from "@tanstack/react-query";
+import { askedFor } from "./refresh";
 import { motion } from "./chart";
 
 /**
@@ -10,6 +11,7 @@ import { motion } from "./chart";
  * before: the payload shown until this one, so figures can count from it (undefined on a quiet swap: no count).
  */
 export function useLanding<T>(data: T | undefined, url: string, loading: boolean, error: Error | undefined, fade: string) {
+  const client = useQueryClient();
   const [slow, setSlow] = useState(false);
   useEffect(() => { if (!loading) { setSlow(false); return; } const t = setTimeout(() => setSlow(true), 150); return () => clearTimeout(t); }, [loading]);
   const retryBtn = useRef<HTMLButtonElement>(null), failed = useRef(false);
@@ -17,7 +19,7 @@ export function useLanding<T>(data: T | undefined, url: string, loading: boolean
 
   const wrap = useRef<HTMLDivElement>(null), shown = useRef<{ data?: T; url?: string; before?: T; quiet?: boolean }>({});
   if (data !== shown.current.data) {
-    const was = shown.current, quiet = was.data !== undefined && was.url === url && !askedFor() && !failed.current;
+    const was = shown.current, quiet = was.data !== undefined && was.url === url && !askedFor(client) && !failed.current;
     shown.current = { data, url, before: quiet ? undefined : was.data, quiet };
   }
   const [grow, setGrow] = useState(false);

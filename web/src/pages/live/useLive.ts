@@ -4,7 +4,8 @@
 // fetches once and opens the stream again.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { liveEventsUrl, liveSessionUrl, liveUrl, type LivePayload, type LiveSession, type View } from "../../api";
-import { pollStatus } from "../../components/refresh";
+import { useQueryClient } from "@tanstack/react-query";
+import { queries } from "../../queries";
 import { getJson } from "../../useApi";
 import { usePageVisible } from "../../usePageVisible";
 import { mergeSession } from "./live";
@@ -74,13 +75,13 @@ export function useLive(view: View, selected: string, text: boolean, paused: boo
   }, [loadList, loadSession]);
   // The nav's "Last ingest" follows the notices: one status request at a time, and one more after it for the notices
   // that came meanwhile, unless the user paused meanwhile.
-  const poll = useRef({ busy: false, again: false });
+  const client = useQueryClient(), poll = useRef({ busy: false, again: false });
   const status = useCallback(() => {
     const p = poll.current;
     if (p.busy) { p.again = true; return; }
     p.busy = true;
-    void (async () => { do { p.again = false; await pollStatus(); } while (p.again && !cur.current.paused); p.busy = false; })();
-  }, []);
+    void (async () => { do { p.again = false; await client.fetchQuery(queries.status).catch(() => null); } while (p.again && !cur.current.paused); p.busy = false; })();
+  }, [client]);
 
   const listUrl = liveUrl(view, text);
   useEffect(() => { loadList(); }, [listUrl, loadList]);

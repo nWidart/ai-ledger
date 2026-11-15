@@ -557,6 +557,16 @@ class CostTest(unittest.TestCase):
         self.assertEqual(sum(r["input"] for r in s["rows"]), 30_000)
         self.assertEqual(Builder(self).payload()["cost"]["series"], dict(bucket="day", rows=[]))
 
+    def test_cache_lifetime_follows_the_source(self):
+        # Codex's cache lives 30 minutes, Claude Code's 5: the same pause is an expiry for one and not the other
+        b = Builder(self)
+        for sid, source, pause in (("cx10", "codex", 10), ("cx40", "codex", 40), ("cc10", "claude", 10), ("cc40", "claude", 40)):
+            b.session(sid, "foo", peak=60_000, source=source)
+            b.turn(sid, 0, 60_000, cache_read=60_000)
+            b.turn(sid, pause, 60_000, cache_read=1_000)
+        got = {r["session_id"]: (r["expired"], r["other"]) for r in b.payload()["cost"]["breaks"]}
+        self.assertEqual(got, {"cx10": (0, 1), "cx40": (1, 0), "cc10": (1, 0), "cc40": (1, 0)})
+
     def test_break_cost_is_unknown_for_unpriced_models(self):
         b = Builder(self)
         b.session("a", "foo", peak=50_000, peak_model="m-unknown")

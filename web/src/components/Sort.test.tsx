@@ -1,8 +1,9 @@
-import { render, screen, within } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { describe, expect, it } from "vitest";
 import { sortRows, SortTh, type SortBy } from "./Sort";
+import { renderApp } from "../testing";
 
 describe("sortRows", () => {
   it("orders a copy both ways, rows with no value last either way", () => {
@@ -21,7 +22,7 @@ function Table({ init = null }: { init?: SortBy<"a" | "b"> | null }) {
 
 describe("SortTh", () => {
   it("marks only the sorted header, flips on a second click, and is reachable by Tab", async () => {
-    render(<Table />);
+    renderApp(<Table />);
     const th = (n: string) => screen.getByRole("button", { name: n }).closest("th")!;
     expect([th("A").getAttribute("aria-sort"), th("B").getAttribute("aria-sort")]).toEqual([null, null]);
     await userEvent.tab();
@@ -38,7 +39,7 @@ describe("SortTh", () => {
 
 describe("SortTh title", () => {
   it("scopes the header to its column and puts the explanation behind a toggletip beside the sort button", async () => {
-    render(<table><thead><tr><SortTh k="a" sort={null} onSort={() => {}} title="Active time: pauses over 20 minutes left out">Active</SortTh></tr></thead></table>);
+    renderApp(<table><thead><tr><SortTh k="a" sort={null} onSort={() => {}} title="Active time: pauses over 20 minutes left out">Active</SortTh></tr></thead></table>);
     const th = screen.getByRole("columnheader");
     expect(th.getAttribute("scope")).toBe("col");
     expect(th.hasAttribute("title")).toBe(false);

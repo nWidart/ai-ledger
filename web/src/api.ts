@@ -557,3 +557,14 @@ export const errorMarksUrl = "/api/errors/marks";
 export const errorFixesImportUrl = "/api/errors/fixes/import";
 export const errorUrl = (id: string) => `/api/error?${qs({ id })}`;
 export const statusUrl = "/api/status";
+
+export class ApiError extends Error {
+  constructor(message: string, readonly status: number) { super(message); }
+}
+
+/** GET (or, with init, any request) answering JSON. init carries the caller's signal and priority to fetch. */
+export async function getJson<T>(url: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(url, init);
+  if (!res.ok) throw new ApiError(`HTTP ${res.status}`, res.status);
+  return (await res.json()) as T;
+}
