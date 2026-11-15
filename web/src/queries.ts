@@ -1,15 +1,16 @@
 // One queryOptions() per endpoint: its key, URL and payload type in one place. Keys are [resource, ...parts] and the View
 // is one part (Query hashes object keys whatever their order), built from its four fields only so an object with extra
-// fields keys the same. The Live queries are added by the phase that uses them.
+// fields keys the same.
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import {
-  contextUrl, dayUrl, errorMarksUrl, errorUrl, errorsUrl, getJson, insightsUrl, limitsUrl, limitWindowUrl, paletteUrl, promptUrl,
-  sessionUrl, sessionsUrl, statusUrl, toolUrl, usageUrl,
+  contextUrl, dayUrl, errorMarksUrl, errorUrl, errorsUrl, getJson, insightsUrl, limitsUrl, limitWindowUrl, liveSessionUrl, liveUrl, paletteUrl,
+  promptUrl, sessionUrl, sessionsUrl, statusUrl, toolUrl, usageUrl,
   type ContextPayload, type Day, type DayView, type ErrorDetail, type ErrorsPayload, type InsightsPayload, type LimitHistoryRow,
-  type LimitsPayload, type LimitWindowCurve, type PalettePayload, type SessionDetail, type SessionsPage, type Status, type ToolKind,
-  type ToolPayload, type UsagePayload, type View,
+  type LimitsPayload, type LimitWindowCurve, type LivePayload, type LiveSession, type PalettePayload, type SessionDetail, type SessionsPage,
+  type Status, type ToolKind, type ToolPayload, type UsagePayload, type View,
 } from "./api";
 import type { Marks } from "./pages/errors/model";
+import { mergeSession } from "./pages/live/live";
 
 const view = (v: View): View => ({ project: v.project, range: v.range, automated: v.automated, source: v.source });
 const get = <T,>(url: string, init?: RequestInit) => ({ signal }: { signal: AbortSignal }) => getJson<T>(url, { ...init, signal });
@@ -58,6 +59,30 @@ export const queries = {
   errorMarks: queryOptions({ queryKey: ["errors", "marks"], queryFn: get<Marks>(errorMarksUrl) }),
   // A failed call's text does not change, so a sheet reopened later needs no refetch even after an ingest.
   errorDetail: (id: string) => queryOptions({ queryKey: ["errors", "detail", id], queryFn: get<ErrorDetail>(errorUrl(id)), staleTime: Infinity }),
+  // Live. Always stale: no notice reaches a key the page does not show, so a key shown again (a session opened again, Live
+  // opened again) draws what is cached and asks again. No focus refetch: the page's return to the tab is useLive's, which
+  // knows about Pause. init: the fetch priority of useLive's recheck.
+  liveList: (v: View, text = false, init?: RequestInit) =>
+    queryOptions({
+      queryKey: ["live", "list", { project: v.project, automated: v.automated, source: v.source }, text],
+      queryFn: get<LivePayload>(liveUrl(v, text), init),
+      staleTime: 0,
+      refetchOnWindowFocus: false,
+    }),
+  liveSession: (id: string, text = false, init?: RequestInit) =>
+    queryOptions({
+      queryKey: ["live", "session", id, text],
+      // The catch-up: with this session cached, ask for what came after its cursor and merge it in; else ask from the start.
+      queryFn: async ({ client, queryKey, signal }) => {
+        const held = client.getQueryData<LiveSession>(queryKey), after = held?.cursor;
+        return mergeSession(held, await getJson<LiveSession>(liveSessionUrl(id, { after, text }), { ...init, signal }), after != null);
+      },
+      staleTime: 0,
+      refetchOnWindowFocus: false,
+      // mergeSession keeps the object of every event it does not replace. Query's sharing compares by index, so once the
+      // oldest events drop off the top every event would get a new object, and every row a redraw.
+      structuralSharing: false,
+    }),
 };
 
 /** What an ingest or Refresh invalidates: status is the watcher's own input, Live follows its own notices, and a failed
