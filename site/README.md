@@ -14,7 +14,7 @@ npm run check     # what CI runs: sync, playbook check, astro check, build with 
 npm run preview   # serves the last build from dist/, search included
 ```
 
-Every script runs `npm run sync` first. It writes two things from the repo, both git-ignored: `src/content/docs/changelog.md` from `../CHANGELOG.md`, and `public/media/*.gif` from `../docs/*.gif`. A bare `npx astro dev` skips it, so use the npm scripts. Never edit or commit those outputs: change `CHANGELOG.md` or `docs/*.gif` instead.
+Every script runs `npm run sync` first. It writes two things from the repo, both git-ignored: `src/content/docs/changelog.md` from `../CHANGELOG.md`, and `public/media/`, holding the `../docs/*.gif` files a page names with `gif="…"` (and their `-light` variants). A bare `npx astro dev` skips it, so use the npm scripts. Never edit or commit those outputs: change `CHANGELOG.md` or `docs/*.gif` instead.
 
 `npm run check` fails on:
 

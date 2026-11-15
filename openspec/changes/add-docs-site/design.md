@@ -80,7 +80,7 @@ The metric-to-action mapping lives in the Metric glossary (`reference/glossary`)
 One script, run before `dev`, `build`, `preview` and `check`, prepares the files the site takes from the repo. Its outputs are git-ignored, so there is one copy of each in git.
 
 - **Changelog.** Reads `../CHANGELOG.md`, drops its `# Changelog` heading, adds front matter (`title: Changelog`), rewrites repo-relative links (`docs/guide.md`, `CONTRIBUTING.md`) to `https://github.com/nWidart/ai-ledger/blob/main/<path>`, and writes `src/content/docs/changelog.md`. The page is then an ordinary doc: in the sidebar, the search index, `llms-full.txt`, and the link check. Any later edit to `CHANGELOG.md` shows on the next build; the workflow's `paths` include it.
-- **GIFs.** Copies `../docs/*.gif` into `public/media/`. `docs/*.gif` stays the only copy in git and stays at its path, so the raw GitHub URLs in published READMEs keep working.
+- **GIFs.** Copies into `public/media/` the GIFs the pages name (`gif="tour"` on a `ThemedImage`) and their light variants, from `../docs/`; the others stay out of the build, which would otherwise carry about 60 MB of unused GIFs. `docs/*.gif` stays the only copy in git and stays at its path, so the raw GitHub URLs in published READMEs keep working.
 
 Rejected for the changelog: importing `CHANGELOG.md` into an Astro page (the page leaves the docs collection, so the link check, `llms.txt` and the sidebar's current-page marking need special cases); a hand-kept copy (drifts). Rejected for the GIFs: hot-linking raw GitHub URLs (the site breaks when `main` moves the file, and the browser loads from a second origin); moving them into `site/` (breaks published READMEs).
 

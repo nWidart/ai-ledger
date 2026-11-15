@@ -95,7 +95,7 @@ The site SHALL offer light and dark themes that follow the system setting until 
 - **THEN** a still screenshot shows in place of the tour GIF
 
 ### Requirement: Keep the docs in step with the app
-Reference pages SHALL describe the app as `openspec/specs/` does, and each SHALL name the specs it was written from. The Changelog page SHALL be built from `CHANGELOG.md` at build time, with no copy of it kept in git. The GIFs in `docs/*.gif` SHALL stay at their paths, and the site SHALL use them from there, with no second copy in git.
+Reference pages SHALL describe what the app does, and each SHALL name the specs it was written from. The Changelog page SHALL be built from `CHANGELOG.md` at build time, with no copy of it kept in git. The GIFs in `docs/*.gif` SHALL stay at their paths, and the site SHALL use them from there, with no second copy in git.
 
 #### Scenario: Changelog edit
 - **WHEN** a commit adds an entry to `CHANGELOG.md` on `main`
