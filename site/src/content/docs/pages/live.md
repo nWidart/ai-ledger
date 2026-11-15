@@ -25,7 +25,7 @@ The bar under the heading holds, in this order:
 | **Stream** / **Wall** | Switches between one session in detail and every session as a tile. |
 | Project picker, **Source**, **Include automated sessions** | The shared [filters](/ai-ledger/everywhere/filters/). Live has no range filter. The project picker lists the projects of the active sessions. |
 | **Follow** | Stream view only. Keeps the newest event in view. On at load. Opening a session turns it on again. |
-| **Full text** | Shows transcript text as written. Off on every load. While it is on, a banner reads "Full text on. Prompts, replies and tool output show as written, secrets included." |
+| **Full text** | Shows transcript text as written. Off on every load. While it is on, a banner reads "Full text on. Prompts, replies and tool output show as written, secrets included. The app only listens on 127.0.0.1; turn this off before sharing your screen." |
 | **Pause** / **Resume** | Holds new events and states until you resume. |
 
 Under the bar, a status line says one of: "Connecting…", "Updating live", "Paused" (with the number of updates held), or "Connection lost · reconnecting…". A paused page shows no live dot, and its state dots do not pulse. After a lost connection the page retries on its own, waiting longer after each failure up to 30 seconds, and fetches what it missed when it is back.

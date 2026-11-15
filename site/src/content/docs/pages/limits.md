@@ -71,7 +71,7 @@ With no window, the heading reads "No plan limits seen yet." Times read as "Sat,
 
 ## Drawers
 
-Limits has no sheets. The links in its drawers open [Cost](/ai-ledger/pages/cost/).
+The links in the drawers open [Cost](/ai-ledger/pages/cost/).
 
 ### Past windows
 
@@ -99,6 +99,10 @@ Limits has no sheets. The links in its drawers open [Cost](/ai-ledger/pages/cost
 - **Commits a point, by project**: Project, Limit, Points, Commits, Commits a point. Projects that used at least one point get a row; the rest fold into one "smaller projects" row. With a project filter, the table shows only that project. A figure without enough data reads as not available.
 - With no calibrated limit, it reads "No calibrated limit yet."
 
+## Sheets
+
+Limits has no sheets.
+
 ## Navigation alert
 
 A dot on the Limits tab, on every page, marks an alert. With no dot, no open window is in alert. The alert names the one worst open window, in this order. The dot's own tone is in brackets; it is separate from the chip tones in the status strip above.
@@ -115,7 +119,7 @@ Limits reads two kinds of reading, and marks each figure as **measured** or **es
 
 | | macOS | Linux |
 | --- | --- | --- |
-| Claude Code windows | The app sends your Claude Code OAuth token from the Keychain to Anthropic's usage endpoint at most every 5 minutes. The token goes nowhere else and is never stored or logged. | The app tries the same poll, and it fails every time: there is no macOS Keychain to read. The data line for Claude Code reads "no limit readings yet" with the **polling failing** chip and the reason "cannot read the Claude credential: no macOS Keychain". This is expected on Linux. Claude Code writes no limits into transcripts, so Limits has no Claude Code window of its own on Linux. Polls already in the store, from a copy made on macOS, still show their windows, marked estimated. |
+| Claude Code windows | The app sends your Claude Code OAuth token from the Keychain to Anthropic's usage endpoint at most every 5 minutes. The token goes nowhere else and is never stored or logged. | The app tries the same poll, and it fails every time: there is no macOS Keychain to read. The data line for Claude Code shows the **polling failing** chip and the reason "cannot read the Claude credential: no macOS Keychain". This is expected on Linux. Claude Code writes no limits into transcripts, so with no Claude Code polls in the store the data line reads "no limit readings yet" and Limits has no Claude Code window. Polls already in the store, from a copy made on macOS, still show their windows; the data line then reads "estimated · last poll …". |
 | Codex windows | Read from the `rate_limits` blocks in Codex transcripts. | Read from the same blocks. |
 
 A window with no measured reading is estimated: the last reading, plus the counted use since, divided by the calibration. The calibration is the estimated cost one percentage point buys, worked out from past readings and the cost of the use counted in the same windows. A window with no calibration shows its measured points, no forecast, and the reason. An estimate counts local agent work only. Use elsewhere (claude.ai, Codex cloud) shows up at the next measured reading. See [Privacy and security](/ai-ledger/concepts/privacy-security/) and [Cost estimates](/ai-ledger/concepts/cost-estimates/).

@@ -140,7 +140,7 @@ A request that carries no time is in no bucket of the chart, but it counts in th
 
 **Shows** the 25 largest main-thread tool results in the view.
 
-**Columns** **Tool** (with its MCP server), **Input** (a summary), **Size**, **Estimated tokens**, **When**, **Project** (with its source) and **Session**.
+**Figures** Columns: **Tool** (with its MCP server), **Input** (a summary), **Size**, **Estimated tokens**, **When**, **Project** (with its source) and **Session**.
 
 **Controls** Selecting a row opens its session sheet.
 
@@ -148,7 +148,7 @@ A request that carries no time is in no bucket of the chart, but it counts in th
 
 **Shows** the sessions with a cache break, most uncached tokens first, up to 25.
 
-**Columns** **Session**, **Project**, **Breaks**, **By cause**, **Uncached tokens**, **Their input cost**.
+**Figures** Columns: **Session**, **Project**, **Breaks**, **By cause**, **Uncached tokens**, **Their input cost**.
 
 **Controls** Selecting a row opens its session sheet.
 
