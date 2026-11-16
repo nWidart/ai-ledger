@@ -7,7 +7,7 @@ Publishes AI Ledger's documentation at https://nwidart.github.io/ai-ledger/: how
 ## Requirements
 
 ### Requirement: Build and deploy the site
-The repository SHALL hold a documentation site in `site/`, an npm project separate from `web/` with exact dependency versions and a committed lock file. One command, `npm run check` in `site/`, SHALL check and build it. A workflow SHALL build the site on every pull request that changes `site/`, `docs/*.gif`, `CHANGELOG.md` or the workflow itself, and SHALL deploy it from `main` to GitHub Pages at `https://nwidart.github.io/ai-ledger/`. A pull request SHALL NOT deploy.
+The repository SHALL hold a documentation site in `site/`, an npm project separate from `web/` with exact dependency versions and a committed lock file. One command, `npm run check` in `site/`, SHALL check and build it. A workflow SHALL build the site on every pull request that changes `site/`, `docs/*.gif`, `docs/*.mp4`, `CHANGELOG.md` or the workflow itself, and SHALL deploy it from `main` to GitHub Pages at `https://nwidart.github.io/ai-ledger/`. A pull request SHALL NOT deploy.
 
 #### Scenario: Pull request touching the site
 - **WHEN** a pull request changes a file under `site/`
@@ -86,7 +86,7 @@ The site's build SHALL fail when a page links to a page or heading anchor of the
 - **THEN** the build fails
 
 ### Requirement: Work in light and dark, by keyboard and screen reader
-The site SHALL offer light and dark themes that follow the system setting until the reader picks one, and every page, image included, SHALL be readable in both. Every control SHALL work by keyboard with a visible focus. Every image SHALL have alternative text, and an image shown in two theme variants SHALL be announced once. With reduced motion requested, the site SHALL show a still image in place of each animated GIF.
+The site SHALL offer light and dark themes that follow the system setting until the reader picks one, and every page, image included, SHALL be readable in both. Every control SHALL work by keyboard with a visible focus. Every image and video SHALL have alternative text, and one shown in two theme variants SHALL be announced once. With reduced motion requested, the site SHALL show a still image in place of each animated GIF and SHALL not play any video.
 
 #### Scenario: Switch theme
 - **WHEN** the reader switches the site to light on a page with a screenshot
@@ -98,7 +98,7 @@ The site SHALL offer light and dark themes that follow the system setting until 
 
 #### Scenario: Reduced motion
 - **WHEN** the reader's system asks for reduced motion and they open the Home page
-- **THEN** a still screenshot shows in place of the tour GIF
+- **THEN** a still screenshot shows in place of the tour, and no video plays
 
 ### Requirement: Look like the app
 Both themes SHALL use the app's typeface and colors, and SHALL meet WCAG 2.2 AA contrast for text, links and control states. The site SHALL serve its font itself and SHALL ask no third party for it.
@@ -116,7 +116,7 @@ Both themes SHALL use the app's typeface and colors, and SHALL meet WCAG 2.2 AA 
 - **THEN** it fetches the font from the site itself and makes no request to a font service
 
 ### Requirement: Keep the docs in step with the app
-Reference pages SHALL describe what the app does, and each SHALL name the specs it was written from. The Changelog page SHALL be built from `CHANGELOG.md` at build time, with no copy of it kept in git. The GIFs in `docs/*.gif` SHALL stay at their paths, and the site SHALL use them from there, with no second copy in git.
+Reference pages SHALL describe what the app does, and each SHALL name the specs it was written from. The Changelog page SHALL be built from `CHANGELOG.md` at build time, with no copy of it kept in git. The GIFs in `docs/*.gif` and the videos in `docs/*.mp4` SHALL stay at their paths, and the site SHALL use them from there, with no second copy in git.
 
 #### Scenario: Changelog edit
 - **WHEN** a commit adds an entry to `CHANGELOG.md` on `main`
@@ -168,3 +168,18 @@ The Home page SHALL say in plain terms where transcripts are stored, what the ap
 #### Scenario: Privacy answered
 - **WHEN** a visitor reads the Home page
 - **THEN** it says the store stays on their machine, the server listens on 127.0.0.1 only, and the one outbound call the app makes with their credentials
+
+### Requirement: Play the Home page tour as a video
+The Home page SHALL play the tour as a muted, looping MP4 video made from the same frames as the tour GIF, in the variant the current theme shows. Only the visible variant SHALL load and play, and only while it is on screen. A button on the video SHALL pause and resume it.
+
+#### Scenario: Tour plays in the current theme
+- **WHEN** a visitor opens the Home page in the light theme
+- **THEN** `tour-light.mp4` plays and `tour.mp4` is not downloaded
+
+#### Scenario: Theme switch
+- **WHEN** the visitor switches the site to dark while the tour plays
+- **THEN** the light video pauses and the dark video plays
+
+#### Scenario: Pause
+- **WHEN** the visitor activates the tour's pause button by mouse or keyboard
+- **THEN** the video stops, and the button now offers to play it
