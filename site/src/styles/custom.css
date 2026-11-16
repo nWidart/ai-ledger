@@ -233,3 +233,46 @@ h1#_top,
   border: 1px solid var(--sl-color-hairline);
   border-radius: 0.5rem;
 }
+
+/* Home page: the hero has no image, so it stays one centered column at every width, short enough that the install
+   command below it shows without scrolling on a laptop screen. */
+@media (min-width: 50rem) {
+  .hero {
+    grid-template-columns: 100%;
+    padding-block: clamp(2rem, calc(0.5rem + 6vmin), 4rem) 1rem;
+  }
+  .hero .stack {
+    text-align: center;
+  }
+  .hero .copy {
+    align-items: center;
+  }
+  .hero .actions {
+    justify-content: center;
+  }
+}
+.hero h1 {
+  font-size: clamp(var(--sl-text-3xl), calc(0.25rem + 4vw), var(--sl-text-5xl));
+  letter-spacing: -0.02em;
+}
+.hero .copy > * {
+  max-width: 34ch;
+}
+.hero .tagline {
+  max-width: 60ch;
+}
+
+/* Home page: the install command sits right under the hero, centered, as narrow as the tagline. */
+.sl-markdown-content .install {
+  max-width: 36rem;
+  margin-inline: auto;
+  text-align: center;
+  scroll-margin-top: calc(var(--sl-nav-height) + 1.5rem);
+}
+.sl-markdown-content .install p {
+  color: var(--ai-text-secondary);
+  font-size: var(--sl-text-sm);
+}
+.sl-markdown-content .install .expressive-code {
+  text-align: start;
+}

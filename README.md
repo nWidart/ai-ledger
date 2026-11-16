@@ -1,6 +1,6 @@
 # AI Ledger
 
-**See what your coding agents did, what it cost, and where they got stuck.**
+**See what Claude Code and Codex did, what it cost, and where they got stuck.**
 
 AI Ledger reads your Claude Code and Codex transcripts and turns them into seven local dashboards. Your agents delete old transcripts; AI Ledger keeps every line.
 

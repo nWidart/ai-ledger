@@ -1,9 +1,17 @@
 ---
-title: AI Ledger
-description: See what your coding agents did, what it cost, and where they got stuck.
+title: Dashboards for Claude Code and Codex
+description: Local dashboards for Claude Code and Codex. See what your agents did, what it cost, how full their context got, where they failed and how much of your plan limits they used. Free, open source, runs on your machine.
 template: splash
 hero:
-  tagline: See what your coding agents did, what it cost, and where they got stuck.
+  title: See what Claude Code and Codex did, what it cost, and where they got stuck.
+  tagline: AI Ledger reads every Claude Code and Codex transcript on your machine and turns it into dashboards for spend, context, failed tool calls, plan limits and live sessions. Free and open source. Your transcripts never leave your machine.
+  actions:
+    - text: Install with one command
+      link: "#install"
+    - text: View on GitHub
+      link: https://github.com/nWidart/ai-ledger
+      variant: minimal
+      icon: github
 ---
 
 import { CardGrid, LinkCard } from "@astrojs/starlight/components";
@@ -11,7 +19,15 @@ import ThemedImage from "../../components/ThemedImage.astro";
 import tourStill from "../../assets/shots/tour-overview.png";
 import tourStillLight from "../../assets/shots/tour-overview-light.png";
 
-AI Ledger reads your Claude Code and Codex transcripts into a local store and turns them into dashboards: Activity, Cost, Context, Errors, Limits, Insights, Live and Project. Your agents delete old transcripts; AI Ledger keeps every line. Everything runs on your machine.
+<div id="install" class="install">
+
+```bash
+uvx ai-ledger
+```
+
+Needs [uv](https://docs.astral.sh/uv/getting-started/installation/) on macOS or Linux. The command opens `http://127.0.0.1:8765/` in your browser. The first start reads every transcript, about 4 minutes for 3.4 GB, and the page fills in as it goes.
+
+</div>
 
 <ThemedImage
   gif="tour"
@@ -21,6 +37,93 @@ AI Ledger reads your Claude Code and Codex transcripts into a local store and tu
   height={600}
   alt="A tour of AI Ledger with demo data: the Activity, Cost, Context, Errors and Limits pages, one after the other."
 />
+
+## Questions it answers
+
+<CardGrid>
+  <LinkCard
+    title="Where did the money go?"
+    description="Spend at API list prices per project, model and session, next to what your plan costs."
+    href="/ai-ledger/pages/cost/"
+  />
+  <LinkCard
+    title="Why do I keep hitting my limits?"
+    description="Each plan limit window, what used it, and a forecast to its reset."
+    href="/ai-ledger/pages/limits/"
+  />
+  <LinkCard
+    title="Why does context fill up so fast?"
+    description="How full the context window gets, how fast it grows, and what fills it."
+    href="/ai-ledger/pages/context/"
+  />
+  <LinkCard
+    title="What does my agent keep getting wrong?"
+    description="Failed tool calls by type, the time they cost, and a fix to paste into CLAUDE.md or AGENTS.md."
+    href="/ai-ledger/pages/errors/"
+  />
+  <LinkCard
+    title="Which session needs me right now?"
+    description="Every active session as it runs, sorted by who needs you first."
+    href="/ai-ledger/pages/live/"
+  />
+  <LinkCard
+    title="What got done this week?"
+    description="Commits, prompts and sessions per day or week, by project, and what needs your attention."
+    href="/ai-ledger/pages/activity/"
+  />
+</CardGrid>
+
+Two more pages: [Insights](/ai-ledger/pages/insights/) shows how Claude Code's `/insights` judged your sessions, and [Project](/ai-ledger/pages/project/) shows one project across all of the above.
+
+## Keep the history your agents throw away
+
+Claude Code deletes local transcripts after 30 days by default. AI Ledger copies every line into one DuckDB file on your disk and never deletes a line. Months later, you can still see what a refactor cost and which sessions it took. While the app runs, it reads new lines every 60 seconds.
+
+## Built for a file full of secrets
+
+Transcripts hold your prompts, file contents, command output and sometimes an API key. AI Ledger is built for that.
+
+- **The store stays on your disk.** It is one file that only your user can read. There is no account, no analytics and no update check.
+- **Only your machine can connect.** The server listens on `127.0.0.1` and refuses requests that other sites send from your browser.
+- **Your Claude Code token goes only to Anthropic.** On macOS, the Limits page reads Claude Code's OAuth token from the Keychain to ask Anthropic's usage endpoint for your plan limits, at most once every 5 minutes. The request carries no transcript data, and the token goes nowhere else.
+- **Your agents' files stay as they are.** AI Ledger opens transcripts read-only.
+- **The code is open.** AI Ledger is MIT licensed; [read it on GitHub](https://github.com/nWidart/ai-ledger).
+
+The full model, including the font request and what the pages show when you share your screen: [Privacy and security model](/ai-ledger/concepts/privacy-security/).
+
+## Before you install
+
+### Is it free?
+
+Yes. AI Ledger is MIT licensed, with no paid tier and no account.
+
+### Which agents does it read?
+
+Claude Code, from `~/.claude/projects`, and Codex, from `~/.codex`. It does not read other agents, such as Cursor. To read other folders, see [CLI and options](/ai-ledger/reference/cli/).
+
+### Does it run on Windows?
+
+No. It runs on macOS and Linux. On Linux, the Limits page shows Codex windows only, because there is no Keychain to read Claude Code's token from.
+
+### How accurate are the costs?
+
+They are estimates at API list prices, from a price table that ships with each release. On a subscription, the Cost page compares them with what your plan costs. To set your own prices, see [Configuration](/ai-ledger/reference/configuration/) and [How cost is estimated](/ai-ledger/concepts/cost-estimates/).
+
+### How do I remove it?
+
+If you installed the command, run `uv tool uninstall ai-ledger`. If you only ran `uvx`, run `uv cache clean ai-ledger`. Then delete the data folder: `~/Library/Application Support/ai-ledger/` on macOS, `~/.local/share/ai-ledger/` (or `$XDG_DATA_HOME/ai-ledger/`) on Linux.
+
+## Start now
+
+```bash
+uvx ai-ledger
+```
+
+To keep it, install the `ai-ledger` command, so later starts skip the download:
+
+```bash
+uv tool install ai-ledger
+```
 
 <CardGrid>
   <LinkCard title="Start" description="Install AI Ledger and read your first week of sessions." href="/ai-ledger/start/install/" />
