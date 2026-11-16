@@ -5,25 +5,34 @@
 // - Screenshot: <ThemedImage dark={shot} light={shotLight} alt="…" />, PNGs from src/assets/shots/.
 // - GIF: <ThemedImage gif="tour" alt="…" />, public/media/tour.gif and tour-light.gif (copied by
 //   scripts/sync.mjs). Add dark and light stills to show them in place of the GIF under reduced motion.
+// - Video: <ThemedImage video="tour" dark={still} light={stillLight} alt="…" />, public/media/tour.mp4 and
+//   tour-light.mp4 (copied by scripts/sync.mjs). The stills are the posters and are required. The script below
+//   plays only the theme's variant, only while it is on screen, never under reduced motion; a button pauses it
+//   (hero-video design D4, D5).
 import type { ImageMetadata } from "astro";
-import { Image } from "astro:assets";
+import { Image, getImage } from "astro:assets";
 
 interface Props {
   alt: string;
   gif?: string;
+  video?: string;
   dark?: ImageMetadata;
   light?: ImageMetadata;
   width?: number;
   height?: number;
 }
 
-const { alt, gif, dark, light, width = dark?.width, height = dark?.height } = Astro.props;
+const { alt, gif, video, dark, light, width = dark?.width, height = dark?.height } = Astro.props;
+if (gif && video) throw new Error("ThemedImage takes gif or video, not both");
+if (video && !(dark && light)) throw new Error("ThemedImage needs dark and light stills with video, for its posters");
 if (!gif && !(dark && light)) throw new Error("ThemedImage needs gif, or both dark and light");
 if (Boolean(dark) !== Boolean(light)) throw new Error("ThemedImage needs both dark and light, or neither");
 
 const media = `${import.meta.env.BASE_URL.replace(/\/$/, "")}/media/`;
 // With a GIF, the screenshots are its reduced-motion stills.
 const still = gif ? "still" : undefined;
+const posters =
+  video && dark && light ? await Promise.all([getImage({ src: dark, width }), getImage({ src: light, width })]) : [];
 ---
 
 <span class="themed-image">
@@ -35,15 +44,106 @@ const still = gif ? "still" : undefined;
       </>
     )
   }
-  {dark && <Image class:list={["dark", still]} src={dark} alt={alt} loading="lazy" />}
-  {light && <Image class:list={["light", still]} src={light} alt={alt} loading="lazy" />}
+  {
+    video && (
+      <span class="themed-video" data-themed-video>
+        <video
+          class="dark"
+          src={`${media}${video}.mp4`}
+          poster={posters[0]?.src}
+          aria-label={alt}
+          width={width}
+          height={height}
+          muted
+          loop
+          playsinline
+          preload="none"
+        />
+        <video
+          class="light"
+          src={`${media}${video}-light.mp4`}
+          poster={posters[1]?.src}
+          aria-label={alt}
+          width={width}
+          height={height}
+          muted
+          loop
+          playsinline
+          preload="none"
+        />
+        <button type="button" class="video-toggle" aria-label="Pause animation" hidden>
+          <svg class="icon-pause" viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M4 3h3v10H4zM9 3h3v10H9z" />
+          </svg>
+          <svg class="icon-play" viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M5 3l8 5-8 5z" />
+          </svg>
+        </button>
+      </span>
+    )
+  }
+  {!video && dark && <Image class:list={["dark", still]} src={dark} alt={alt} loading="lazy" />}
+  {!video && light && <Image class:list={["light", still]} src={light} alt={alt} loading="lazy" />}
 </span>
+
+<script>
+  // Plays the variant the theme shows while it is on screen, pauses the other, and leaves the poster under reduced
+  // motion. A reader's pause holds across theme switches. Runs once per page for every video ThemedImage.
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)");
+  const updates: Array<() => void> = [];
+
+  for (const root of document.querySelectorAll<HTMLElement>("[data-themed-video]")) {
+    const dark = root.querySelector<HTMLVideoElement>("video.dark");
+    const light = root.querySelector<HTMLVideoElement>("video.light");
+    const button = root.querySelector<HTMLButtonElement>(".video-toggle");
+    if (!dark || !light || !button) continue;
+    let onScreen = false;
+    let paused = false;
+
+    const update = () => {
+      const active = document.documentElement.dataset.theme === "light" ? light : dark;
+      const other = active === light ? dark : light;
+      if (!other.paused) other.pause();
+      button.hidden = reduce.matches;
+      button.setAttribute("aria-label", paused ? "Play animation" : "Pause animation");
+      button.dataset.paused = String(paused);
+      if (onScreen && !paused && !reduce.matches) {
+        active.play().catch((error: unknown) => {
+          // A pause() before play() settles rejects with AbortError; anything else means the browser blocked
+          // playback, so offer the play button.
+          if (error instanceof DOMException && error.name === "AbortError") return;
+          paused = true;
+          update();
+        });
+      } else if (!active.paused) {
+        active.pause();
+      }
+    };
+
+    button.addEventListener("click", () => {
+      paused = !paused;
+      update();
+    });
+    new IntersectionObserver(([entry]) => {
+      onScreen = entry?.isIntersecting ?? false;
+      update();
+    }).observe(root);
+    updates.push(update);
+  }
+
+  if (updates.length) {
+    const updateAll = () => updates.forEach((update) => update());
+    new MutationObserver(updateAll).observe(document.documentElement, { attributeFilter: ["data-theme"] });
+    reduce.addEventListener("change", updateAll);
+  }
+</script>
 
 <style>
   .themed-image {
     display: block;
   }
-  .themed-image img {
+  .themed-image img,
+  .themed-image video {
     display: block;
     max-width: 100%;
     height: auto;
@@ -63,5 +163,43 @@ const still = gif ? "still" : undefined;
     .themed-image:has(.still) .motion {
       display: none;
     }
+  }
+
+  /* The video's box, so the button sits on its corner however wide the column is. */
+  .themed-video {
+    position: relative;
+    display: block;
+    width: fit-content;
+    max-width: 100%;
+  }
+  .video-toggle {
+    position: absolute;
+    inset-block-end: 0.75rem;
+    inset-inline-end: 0.75rem;
+    display: grid;
+    place-items: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    padding: 0;
+    border: 1px solid var(--ai-control-border);
+    border-radius: 0.5rem;
+    background-color: var(--ai-surface-1);
+    color: var(--ai-text-primary);
+    cursor: pointer;
+  }
+  .video-toggle:hover {
+    background-color: var(--ai-surface-2);
+  }
+  .video-toggle[hidden] {
+    display: none;
+  }
+  .video-toggle svg {
+    width: 1rem;
+    height: 1rem;
+    fill: currentColor;
+  }
+  .video-toggle[data-paused="true"] .icon-pause,
+  .video-toggle:not([data-paused="true"]) .icon-play {
+    display: none;
   }
 </style>

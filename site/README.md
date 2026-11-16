@@ -14,7 +14,7 @@ npm run check     # what CI runs: sync, playbook check, astro check, build with 
 npm run preview   # serves the last build from dist/, search included
 ```
 
-Every script runs `npm run sync` first. It writes two things from the repo, both git-ignored: `src/content/docs/changelog.md` from `../CHANGELOG.md`, and `public/media/`, holding the `../docs/*.gif` files a page names with `gif="…"` (and their `-light` variants). A bare `npx astro dev` skips it, so use the npm scripts. Never edit or commit those outputs: change `CHANGELOG.md` or `docs/*.gif` instead.
+Every script runs `npm run sync` first. It writes two things from the repo, both git-ignored: `src/content/docs/changelog.md` from `../CHANGELOG.md`, and `public/media/`, holding the `../docs/*.gif` and `../docs/*.mp4` files a page names with `gif="…"` or `video="…"` (and their `-light` variants). A bare `npx astro dev` skips it, so use the npm scripts. Never edit or commit those outputs: change `CHANGELOG.md`, `docs/*.gif` or `docs/*.mp4` instead.
 
 `npm run check` fails on:
 
@@ -32,7 +32,7 @@ Every script runs `npm run sync` first. It writes two things from the repo, both
 | `src/components/ThemedImage.astro` | An image in dark and light variants. |
 | `src/assets/shots/` | Screenshots, recorded from the demo store. |
 | `src/styles/custom.css` | The theme: the app's tokens mapped onto Starlight's, and a few element styles. See "Theme" below. |
-| `scripts/sync.mjs` | Copies the changelog and the GIFs in (see above). |
+| `scripts/sync.mjs` | Copies the changelog, the GIFs and the videos in (see above). |
 | `scripts/check-playbooks.mjs` | The playbook template check. |
 
 A new page is not in the sidebar until you add it to `sidebar` in `astro.config.mjs`.
@@ -157,10 +157,13 @@ import tourStillLight from "../../../assets/shots/tour-overview-light.png";
 <ThemedImage dark={costSpend} light={costSpendLight} alt="Cost's spend chart: daily estimated spend by project over 30 days." />
 
 <ThemedImage gif="tour" width={960} height={600} dark={tourStill} light={tourStillLight} alt="…" />
+
+<ThemedImage video="tour" width={960} height={600} dark={tourStill} light={tourStillLight} alt="…" />
 ```
 
 - Screenshots are PNGs in `src/assets/shots/`, named `<page>-<panel>.png` (dark) and `<page>-<panel>-light.png` (light). Astro serves them optimized.
-- GIFs are `docs/<name>.gif` and `docs/<name>-light.gif` in the repo, used by name (`gif="cost"`). With `dark` and `light` stills as well, the stills replace the GIF when the reader asks for reduced motion. The home page's tour GIF has `tour-overview` as its still.
+- GIFs are `docs/<name>.gif` and `docs/<name>-light.gif` in the repo, used by name (`gif="cost"`). With `dark` and `light` stills as well, the stills replace the GIF when the reader asks for reduced motion.
+- Videos are `docs/<name>.mp4` and `docs/<name>-light.mp4`, used by name (`video="tour"`). They need `dark` and `light` stills, shown as posters. Only the theme's variant loads, and it plays muted and looped while on screen, with a button to pause it. Under reduced motion it never plays and the still stays. The home page's tour is a video with `tour-overview` as its still. `tools/demo/record.mjs` writes videos only for the scenes in its `VIDEOS` set, and needs ffmpeg with libx264 to do it.
 - A page that shows an image is an `.mdx` file (the component needs it). In `.mdx`, a `<` or `{` in prose starts JSX: write `\<project>` or `\{name}`, or put the text in backticks. Put the imports where the first image is needed, not in front matter.
 - Add an image only where a picture shows the figure the reader must find. A shot no page uses is deleted (see `src/assets/shots/README.md`).
 

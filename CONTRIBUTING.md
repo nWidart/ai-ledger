@@ -76,7 +76,7 @@ When user-visible behavior changes:
 
 ## Demo GIFs
 
-[`tools/demo/`](tools/demo/) records the GIFs in `docs/` from a synthetic store.
+[`tools/demo/`](tools/demo/) records the GIFs in `docs/` from a synthetic store, and the `docs/*.mp4` videos the docs site plays. Recording needs ffmpeg with libx264 for the videos.
 
 ## Maintainers
 
