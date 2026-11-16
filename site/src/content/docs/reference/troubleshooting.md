@@ -81,7 +81,7 @@ No. The server listens on `127.0.0.1` only. On macOS, the Limits page sends your
 
 ### Why does the first start take minutes?
 
-The first ingest reads every transcript: about 4 minutes for 3.4 GB. After that, the app reads only the lines added since the last ingest.
+The first ingest reads every transcript: about 5 minutes for a month of heavy use. After that, the app reads only the lines added since the last ingest.
 
 ### My agent deleted old transcripts. Are they gone from AI Ledger?
 

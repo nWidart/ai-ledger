@@ -39,7 +39,7 @@ Leave the terminal open. The app runs until we stop it there.
 
 The first start reads every transcript on the machine: Claude Code's in `~/.claude/projects` and Codex's in `~/.codex`. While it reads, the navigation bar at the top of the page says **Ingesting…**, next to the **Refresh** button.
 
-This takes a few minutes: about 4 minutes for 3.4 GB of transcripts. The page fills in as it goes.
+This takes a few minutes: about 5 minutes for a month of heavy use. The page fills in as it goes.
 
 When the ingest is done, the terminal prints one line that counts what it read, for example:
 
