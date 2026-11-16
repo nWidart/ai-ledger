@@ -228,8 +228,8 @@ h1#_top,
   border-color: var(--ai-accent);
 }
 
-/* Screenshots and GIFs sit on the page background; a hairline frames them in both themes. */
-.sl-markdown-content .themed-image img {
+/* Screenshots, GIFs and videos sit on the page background; a hairline frames them in both themes. */
+.sl-markdown-content .themed-image :is(img, video) {
   border: 1px solid var(--sl-color-hairline);
   border-radius: 0.5rem;
 }

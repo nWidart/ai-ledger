@@ -1,5 +1,7 @@
 // Records scripted walkthroughs of the demo server as GIFs in docs/: PNG frames from Playwright, encoded by gifski.
 // Each scene records twice: <scene>.gif in dark mode, <scene>-light.gif in light mode.
+// Scenes in VIDEOS (tour) also get <scene>.mp4 / <scene>-light.mp4 from the same frames: H.264, 960px wide, no audio.
+// That needs ffmpeg with libx264 on the PATH.
 // node record.mjs [scene...]   (scenes: tour activity cost context project errors limits insights live; default all)
 // live plays synthetic sessions with replay.py, so it needs uv.
 // CHROMIUM=<path> uses that Chromium instead of Playwright's own. SCHEMES=light records only that scheme.
@@ -28,6 +30,7 @@ import { join } from "node:path";
 const BASE = "http://127.0.0.1:8799";
 const SHOTS = new URL("../../site/src/assets/shots/", import.meta.url).pathname;
 const FPS = 12;
+const VIDEOS = new Set(["tour"]); // scenes that also get an MP4
 const DOCS = new URL("../../docs/", import.meta.url).pathname;
 const HERE = new URL(".", import.meta.url).pathname;
 
@@ -103,6 +106,11 @@ async function record(name, scene, scheme) {
     out.push(f);
   }
   execFileSync("gifski", ["--fps", String(FPS), "--width", "960", "--quality", "80", "-o", `${DOCS}${name}${scheme === "light" ? "-light" : ""}.gif`, ...out], { stdio: "inherit" });
+  if (VIDEOS.has(name)) {
+    execFileSync("ffmpeg", ["-y", "-loglevel", "error", "-framerate", String(FPS), "-i", `${dir}/f-%05d.png`,
+      "-vf", "scale=960:-2:flags=lanczos", "-c:v", "libx264", "-crf", "23", "-preset", "slow", "-pix_fmt", "yuv420p",
+      "-movflags", "+faststart", "-r", String(FPS), "-an", `${DOCS}${name}${scheme === "light" ? "-light" : ""}.mp4`], { stdio: "inherit" });
+  }
   rmSync(dir, { recursive: true });
   console.log(`${name} (${scheme}): ${out.length} frames`);
 }

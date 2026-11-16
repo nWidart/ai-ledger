@@ -1,6 +1,7 @@
 // Prepares the files the site takes from the repo (design D9). Its outputs are git-ignored:
 // - src/content/docs/changelog.md, from ../CHANGELOG.md with repo-relative links made absolute;
-// - public/media/*.gif, the GIFs the pages use, copied from ../docs/*.gif, which stay the only copy in git.
+// - public/media/*.gif and *.mp4, the GIFs (`gif="tour"`) and videos (`video="tour"`) the pages use, copied from
+//   ../docs/, which stay the only copy in git.
 import { copyFile, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
@@ -29,23 +30,27 @@ async function syncChangelog() {
   await writeFile(`${site}src/content/docs/changelog.md`, frontMatter + body);
 }
 
-// Only the GIFs a page names (`gif="tour"` on a ThemedImage), with their light variants: the rest stay out of the build.
-async function usedGifs() {
+// Only the GIFs and videos a page names (`gif="tour"`, `video="tour"` on a ThemedImage), with their light variants: the rest stay out of the build.
+async function usedMedia() {
   const docs = `${site}src/content/docs/`;
   const files = (await readdir(docs, { recursive: true })).filter((name) => /\.mdx?$/.test(name));
   const names = new Set();
   for (const name of files) {
-    for (const [, gif] of (await readFile(docs + name, "utf8")).matchAll(/\bgif="([\w-]+)"/g)) names.add(gif);
+    const text = await readFile(docs + name, "utf8");
+    for (const [, kind, media] of text.matchAll(/\b(gif|video)="([\w-]+)"/g)) {
+      const ext = kind === "gif" ? "gif" : "mp4";
+      names.add(`${media}.${ext}`).add(`${media}-light.${ext}`);
+    }
   }
-  return [...names].flatMap((gif) => [`${gif}.gif`, `${gif}-light.gif`]);
+  return [...names];
 }
 
-async function syncGifs() {
+async function syncMedia() {
   const media = `${site}public/media/`;
   await rm(media, { recursive: true, force: true });
   await mkdir(media, { recursive: true });
-  const gifs = await usedGifs();
-  await Promise.all(gifs.map((name) => copyFile(`${repo}docs/${name}`, media + name)));
+  const files = await usedMedia();
+  await Promise.all(files.map((name) => copyFile(`${repo}docs/${name}`, media + name)));
 }
 
-await Promise.all([syncChangelog(), syncGifs()]);
+await Promise.all([syncChangelog(), syncMedia()]);
