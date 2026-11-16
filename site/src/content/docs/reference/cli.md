@@ -26,7 +26,7 @@ While the app runs, **Refresh** in the navigation (or `>refresh` in the command 
 
 `rebuild` reads no transcript root, so of the options below only `--db` applies to it.
 
-A first ingest reads every transcript and takes about 4 minutes for 3.4 GB. After that, ingest reads only the lines added since the last one.
+A first ingest reads every transcript and takes about 5 minutes for a month of heavy use. After that, ingest reads only the lines added since the last one.
 
 ## Options
 

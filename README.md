@@ -48,7 +48,7 @@ ai-ledger                   # serve on http://127.0.0.1:8765/ and open it
 uv tool upgrade ai-ledger   # new version and new prices
 ```
 
-The first start reads every transcript, about 4 minutes for 3.4 GB. After that, the app picks up new lines every 60 seconds.
+The first start reads every transcript, about 5 minutes for a month of heavy use. After that, the app picks up new lines every 60 seconds.
 
 | Option | Default |
 | --- | --- |

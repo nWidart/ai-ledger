@@ -48,7 +48,7 @@ An ingest reads every transcript file under the folders above and stores what is
 
 The app ingests when it starts and then every 60 seconds. While a [Live](/ai-ledger/pages/live/) page is open, it reads transcripts every second, so Live follows a session as it runs; `/insights` data and plan limits stay on the 60-second cycle, and Claude Code's limits are polled at most once every 5 minutes. **Refresh** in the navigation bar runs an ingest at once. An open page loads its data again only when an ingest stored something new.
 
-The first ingest reads every transcript on the machine. It takes about 4 minutes for 3.4 GB of transcripts. The app serves its pages from the start, and the navigation bar says **Ingesting…** until that first ingest is done. Later ingests read only new lines.
+The first ingest reads every transcript on the machine. It takes about 5 minutes for a month of heavy use. The app serves its pages from the start, and the navigation bar says **Ingesting…** until that first ingest is done. Later ingests read only new lines.
 
 ### One owner
 
