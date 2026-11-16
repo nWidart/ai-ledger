@@ -44,7 +44,7 @@ Pages SHALL hold one page per dashboard: Activity, Cost, Context, Errors, Limits
 
 #### Scenario: Home page
 - **WHEN** the reader opens `https://nwidart.github.io/ai-ledger/`
-- **THEN** the page says what AI Ledger does, shows the tour GIF, and offers three cards: Start, Improve and Look up, each linking into its section
+- **THEN** the page says what AI Ledger does, shows the tour GIF, the install command, the questions each dashboard answers, the privacy model and a short FAQ, and offers three cards: Start, Improve and Look up, each linking into its section
 
 ### Requirement: Write every playbook to one template
 Every playbook SHALL have these sections, in this order and no others at the same level: Goal (one sentence), Signs you need it (which page and figure to check), Diagnose (how to find the cause in the data), Act (a concrete change: a CLAUDE.md or AGENTS.md snippet, a setting or a habit), Verify (which figure should move, and over how many days), and Related (links to Pages and Concepts pages). Every figure a playbook names SHALL be one the app shows.
@@ -154,3 +154,17 @@ Every screenshot on the site SHALL come from the synthetic demo store in `tools/
 #### Scenario: README
 - **WHEN** a reader opens `README.md`
 - **THEN** it links to the site for the full documentation
+
+### Requirement: Lead the Home page to an install
+The Home page SHALL name Claude Code and Codex in its heading, SHALL offer a hero install action that leads to the `uvx ai-ledger` command with its prerequisites, and SHALL repeat that command at the end of the page.
+
+#### Scenario: Install from the hero
+- **WHEN** a visitor opens `https://nwidart.github.io/ai-ledger/` and selects the hero's install action
+- **THEN** the page shows the `uvx ai-ledger` command with a copy button, the need for uv, and macOS and Linux as supported systems
+
+### Requirement: Answer the privacy objection on the Home page
+The Home page SHALL say in plain terms where transcripts are stored, what the app sends over the network, and that it is free and open source. It SHALL make only claims the app's code and docs support, and SHALL show no invented testimonial or count.
+
+#### Scenario: Privacy answered
+- **WHEN** a visitor reads the Home page
+- **THEN** it says the store stays on their machine, the server listens on 127.0.0.1 only, and the one outbound call the app makes with their credentials
