@@ -28,8 +28,8 @@
 
 ## 5. Integration
 
-- [ ] 5.1 Copy the live store, run `uv run ai-ledger rebuild --db <copy>`, then serve it with `uv run ai-ledger --db <copy> --port <free port>`. Verify on Activity and in a session sheet that model time, tool time and output speed show, and that speed is near the 98 tok/s measured in planning. Delete the copy afterwards.
-- [ ] 5.2 Run `uv run ruff check`, `uv run python -m unittest discover -s tests` and `openspec validate --specs --strict`, and verify that all pass.
+- [x] 5.1 Copy the live store, run `uv run ai-ledger rebuild --db <copy>`, then serve it with `uv run ai-ledger --db <copy> --port <free port>`. Verify on Activity and in a session sheet that model time, tool time and output speed show, and that speed is near the 98 tok/s measured in planning. Delete the copy afterwards.
+- [x] 5.2 Run `uv run ruff check`, `uv run python -m unittest discover -s tests` and `openspec validate --specs --strict`, and verify that all pass.
 
 ## Workflow follow-up
 
