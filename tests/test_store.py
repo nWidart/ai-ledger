@@ -412,6 +412,47 @@ class SourceMigrationTest(StoreCase):
         self.con = store.open_store(self.db)
 
 
+class SessionRunsStoreTest(StoreCase):
+    def write_session(self):
+        S = dict(sessionId="s1", cwd="/nowhere/foo")
+        run = lambda start, api: line(type="cost-state", sessionId="s1", startTime=start, totalAPIDuration=api, totalToolDuration=4000,
+                                      totalLinesAdded=12, totalLinesRemoved=3, totalCostUSD=0.1)
+        self.write("a.jsonl", line(type="user", uuid="u1", timestamp="2026-11-01T10:00:00Z", promptId="p1",
+                                   message=dict(role="user", content="go"), **S)
+                   + line(type="assistant", uuid="a1", timestamp="2026-11-01T10:00:01Z",
+                          message=dict(id="m1", model="m", usage=dict(input_tokens=1, output_tokens=2),
+                                       content=[dict(type="tool_use", id="t1", name="Bash", input=dict(command="x"))]), **S)
+                   + run(1000, 9000) + run(1000, 9500) + run(2000, 300))
+        store.ingest(self.con, self.roots)
+
+    def counts(self):
+        return [self.q(f"SELECT count(*) FROM {t}")[0][0] for t in ("raw_lines", "sessions", "requests", "tool_calls")]
+
+    def test_store_from_before_the_table_gains_it_empty(self):
+        self.write_session()
+        self.con.execute("DROP TABLE session_runs")  # the schema before session timing
+        before = self.counts()
+        self.assertEqual(before, [5, 1, 1, 1])
+        self.con.close()
+        for _ in range(2):  # opening again adds nothing and breaks nothing
+            self.con = store.open_store(self.db)
+            self.assertEqual(self.q("SELECT count(*) FROM session_runs"), [(0,)])
+            self.assertEqual(self.counts(), before)
+            self.con.close()
+        self.con = store.open_store(self.db)
+
+    def test_rebuild_fills_the_table(self):
+        self.write_session()
+        runs = "SELECT * FROM session_runs ORDER BY ALL"
+        before = self.q(runs)
+        self.assertEqual(before, [("s1", 1000, 9500, 4000, 12, 3), ("s1", 2000, 300, 4000, 12, 3)])
+        self.con.execute("DROP TABLE session_runs")
+        self.con.close()
+        self.con = store.open_store(self.db)
+        store.rebuild(self.con)
+        self.assertEqual(self.q(runs), before)
+
+
 class DataDirTest(unittest.TestCase):
     """The default store lives in a per-user data folder, outside the installed code."""
 

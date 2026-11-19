@@ -315,6 +315,99 @@ class RebuildTest(StoreCase):
         self.assertEqual(before["context"], [("s1", None, datetime(2026, 11, 1, 10, 5))])
 
 
+def cost_state(start, api, tool, added, removed, sid="s1", **kw):
+    """A trimmed Claude Code cost-state line: running totals of one run (startTime), no uuid and no timestamp."""
+    return line(type="cost-state", sessionId=sid, startTime=start, totalCostUSD=0.42, totalAPIDuration=api,
+                totalAPIDurationWithoutRetries=api - 5 if isinstance(api, int) else api, totalToolDuration=tool,
+                totalDuration=api + tool + 1000 if isinstance(api, int) and isinstance(tool, int) else None,
+                totalLinesAdded=added, totalLinesRemoved=removed,
+                modelUsage={"claude-opus-5-5": dict(inputTokens=10, outputTokens=20, costUSD=0.42)}, **kw)
+
+
+class CostStateTest(StoreCase):
+    """session_runs: one row per run (startTime) of a session, each figure the largest any of its cost-state lines stated."""
+    START, LATER = 1_793_000_000_000, 1_793_090_000_000
+
+    def runs(self):
+        return self.q("SELECT session_id, start_ms, api_ms, tool_ms, lines_added, lines_removed FROM session_runs ORDER BY ALL")
+
+    def session_sums(self):
+        return self.q("SELECT session_id, sum(api_ms), sum(tool_ms), sum(lines_added), sum(lines_removed) FROM session_runs GROUP BY 1")
+
+    def test_one_run(self):
+        self.write("a.jsonl", prompt("u1", "2026-11-01T10:00:00Z", "p1", "go") + cost_state(self.START, 90_000, 40_000, 120, 30))
+        store.ingest(self.con, self.roots)
+        self.assertEqual(self.runs(), [("s1", self.START, 90_000, 40_000, 120, 30)])
+
+    def test_snapshots_of_one_run_keep_the_largest(self):
+        self.write("a.jsonl", cost_state(self.START, 60_000, 50_000, 10, 3) + cost_state(self.START, 90_000, 40_000, 120, 30))
+        store.ingest(self.con, self.roots)
+        self.write("a.jsonl", cost_state(self.START, 70_000, 45_000, 100, 40))  # a later ingest: each figure grows only
+        store.ingest(self.con, self.roots)
+        self.assertEqual(self.runs(), [("s1", self.START, 90_000, 50_000, 120, 40)])
+
+    def test_two_runs_sum(self):
+        self.write("a.jsonl", cost_state(self.START, 60_000, 10_000, 5, 1))
+        store.ingest(self.con, self.roots)
+        self.write("a.jsonl", cost_state(self.LATER, 20_000, 2_000, 7, 2))
+        store.ingest(self.con, self.roots)
+        self.assertEqual(len(self.runs()), 2)
+        self.assertEqual(self.session_sums(), [("s1", 80_000, 12_000, 12, 3)])
+
+    def test_line_read_twice_or_copied_changes_nothing(self):
+        self.write("a.jsonl", cost_state(self.START, 90_000, 40_000, 120, 30))
+        store.ingest(self.con, self.roots)
+        before = self.runs()
+        os.utime(os.path.join(self.root, "proj", "a.jsonl"), (0, 0))
+        self.con.execute("UPDATE files SET read_offset = 0, lines = 0")  # read again from the start
+        store.ingest(self.con, self.roots)
+        self.assertEqual(self.runs(), before)
+        self.write("b.jsonl", cost_state(self.START, 90_000, 40_000, 120, 30))  # a copy in another file: its own raw line
+        store.ingest(self.con, self.roots)
+        self.assertEqual(self.count("type = 'cost-state'"), 2)
+        self.assertEqual(self.runs(), before)
+
+    def test_malformed_lines_are_skipped(self):
+        self.write("a.jsonl", line(type="cost-state", startTime=self.START, totalAPIDuration=1, totalToolDuration=1,
+                                   totalLinesAdded=1, totalLinesRemoved=1)  # no session
+                   + line(type="cost-state", sessionId="s1", totalAPIDuration=1, totalToolDuration=1, totalLinesAdded=1,
+                          totalLinesRemoved=1)  # no run
+                   + cost_state(self.START, "90000", 1, 1, 1)  # a figure as text
+                   + cost_state(self.START, 1.5, 1, 1, 1)
+                   + cost_state(self.START, 1, True, 1, 1)  # a bool is no figure
+                   + cost_state(self.START, 1, 1, None, 1)
+                   + cost_state(str(self.START), 1, 1, 1, 1)
+                   + cost_state(self.LATER, 5, 6, 7, 8, sid="s2"))
+        store.ingest(self.con, self.roots)
+        self.assertEqual(self.runs(), [("s2", self.LATER, 5, 6, 7, 8)])
+
+    def test_cost_state_makes_no_session_and_changes_none(self):
+        self.write("a.jsonl", prompt("u1", "2026-11-01T10:00:00Z", "p1", "go"))
+        store.ingest(self.con, self.roots)
+        before = self.q("SELECT * FROM sessions")
+        self.write("a.jsonl", cost_state(self.START, 1, 1, 1, 1) + cost_state(self.START, 1, 1, 1, 1, sid="s9"))
+        store.ingest(self.con, self.roots)
+        self.assertEqual(self.q("SELECT * FROM sessions"), before)
+        self.assertEqual(len(self.runs()), 2)
+
+    def test_subagent_file_records_nothing(self):
+        self.write("s1/subagents/agent-1.jsonl", cost_state(self.START, 1, 1, 1, 1))
+        store.ingest(self.con, self.roots)
+        self.assertEqual(self.runs(), [])
+
+    def test_codex_session_records_nothing(self):
+        from test_codex import FIXTURES
+        for p in sorted(glob.glob(os.path.join(FIXTURES, "*.jsonl"))):
+            d = os.path.join(self.roots["codex"], "sessions", "2026", "11", "01")
+            os.makedirs(d, exist_ok=True)
+            shutil.copy(p, os.path.join(d, os.path.basename(p).split("--", 1)[1]))
+            with open(os.path.join(d, os.path.basename(p).split("--", 1)[1]), "a") as fh:  # even a line shaped like Claude Code's
+                fh.write(cost_state(self.START, 1, 1, 1, 1))
+        store.ingest(self.con, self.roots)
+        self.assertGreater(self.q("SELECT count(*) FROM sessions WHERE source = 'codex'")[0][0], 0)
+        self.assertEqual(self.runs(), [])
+
+
 class OtherDeriver(store.Deriver):
     """A second source's parser: Claude's line shapes under its own session ids."""
 

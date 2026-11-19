@@ -442,7 +442,7 @@ def usage(cur, project="", range_days=0, session="", prices=None, today=None, au
         errors_per_100_calls=per(100 * calls["errors"], calls["calls"]),
         session_seconds=sum(x["duration_s"] or 0 for x in sess),
         median_session_seconds=median([x["duration_s"] for x in sess if x["duration_s"] is not None]),
-        near_limit=sum(1 for x in sess if x["near_limit"]))
+        near_limit=sum(1 for x in sess if x["near_limit"]), **timing(sess))
     out = dict(project=project, range=range_days, automated=bool(automated), source=source, start=start.isoformat() if start else None, end=today.isoformat(),
                projects=project_list(cur, automated, af["projects"]), project_order=project_order(cur, af["projects"]), totals=totals, daily=daily, daily_projects=daily_projects,
                daily_models=daily_models, daily_sources=daily_sources,
@@ -546,7 +546,7 @@ def previous_period(cur, project, range_days, prices, today, automated=False, so
     daily = rows(cur, f"{rq} SELECT {day('ts')} AS day, sum(cost) AS cost, sum(tokens) AS tokens FROM rq GROUP BY 1 ORDER BY 1", p)
     by_project = rows(cur, f"{rq} SELECT project, sum(cost) AS cost, sum(tokens) AS tokens, count(*) AS requests FROM rq GROUP BY 1", p)
     return dict(tot, **prompt_totals(cur, W, fp), **{k: calls[k] for k in ("calls", "errors", "commits", "test_runs", "tests_passed")},
-                median_session_seconds=median([x["duration_s"] for x in sess if x["duration_s"] is not None]),
+                median_session_seconds=median([x["duration_s"] for x in sess if x["duration_s"] is not None]), **timing(sess),
                 start=start.isoformat(), end=end.isoformat(), daily=daily, by_project=by_project)
 
 
@@ -711,6 +711,15 @@ def session_list(cur, project="", range_days=0, q="", near=False, offset=0, limi
     return dict(total=len(hits), offset=offset, sessions=with_titles(cur, hits[offset:offset + limit]))
 
 
+def timing(sess):
+    """Model time, tool time and output speed over the sessions (sessions() rows) that record runs; the others count in none."""
+    timed = [x for x in sess if x["model_ms"] is not None]
+    model_ms = sum(x["model_ms"] for x in timed)
+    out = sum(x["timed_output"] for x in timed)
+    return dict(model_ms=model_ms, tool_ms=sum(x["tool_ms"] for x in timed), timed_sessions=len(timed), timed_output=out,
+                output_per_s=out / (model_ms / 1000) if model_ms else None)
+
+
 def median(xs):
     xs = sorted(xs)
     if not xs:
@@ -797,7 +806,9 @@ def active_cte(ids, on_day=False):
 
 def sessions(cur, rq, rp, W, fp, prices, on=None):
     """Sessions with requests in the view; every count is limited to the view's range. duration_s is the whole session's
-    active time (active_cte), or that of the local date on alone."""
+    active time (active_cte), or that of the local date on alone. model_ms and tool_ms are the whole session's, summed over
+    its runs (session_runs), and timed_output its whole output, subagents included, to match: all three NULL without a run.
+    Output tokens include thinking tokens, as Claude Code reports them."""
     rs = rows(cur, f"""{rq}, agg AS (
           SELECT session_id, count(*) AS requests, sum(tokens) AS tokens, sum(cost) AS cost,
                  count(*) FILTER (WHERE cost IS NULL) AS unpriced, coalesce(sum(thinking_ms), 0) AS thinking_ms
@@ -809,14 +820,19 @@ def sessions(cur, rq, rp, W, fp, prices, on=None):
                FROM tool_calls t JOIN sessions s USING (session_id) WHERE {W('coalesce(t.start_ts, t.end_ts)')} GROUP BY 1),
         pr AS (SELECT session_id, count(*) AS prompts, count(*) FILTER (WHERE interrupted) AS interrupted
                FROM prompts p JOIN sessions s USING (session_id) WHERE {W('p.ts')} GROUP BY 1),
-        {active_cte("SELECT session_id FROM agg", on is not None)}
+        {active_cte("SELECT session_id FROM agg", on is not None)},
+        runs AS (SELECT session_id, sum(api_ms) AS model_ms, sum(tool_ms) AS tool_ms FROM session_runs
+                 WHERE session_id IN (SELECT session_id FROM agg) GROUP BY 1),
+        whole AS (SELECT session_id, coalesce(sum(output), 0) AS output FROM requests WHERE session_id IN (SELECT session_id FROM runs) GROUP BY 1)
         SELECT s.session_id, s.project, s.git_branch, s.first_ts, s.last_ts, act.active_s AS duration_s,
                s.compactions, s.peak_context, s.peak_model, agg.requests, agg.tokens, agg.cost, agg.unpriced, agg.thinking_ms,
                coalesce(tc.tool_calls, 0) AS tool_calls, coalesce(tc.errors, 0) AS errors, coalesce(tc.commits, 0) AS commits,
                coalesce(tc.tests_passed, 0) AS tests_passed, coalesce(tc.tests_failed, 0) AS tests_failed,
-               coalesce(pr.prompts, 0) AS prompts, coalesce(pr.interrupted, 0) AS interrupted
+               coalesce(pr.prompts, 0) AS prompts, coalesce(pr.interrupted, 0) AS interrupted,
+               runs.model_ms, runs.tool_ms, CASE WHEN runs.session_id IS NOT NULL THEN coalesce(whole.output, 0) END AS timed_output
         FROM agg JOIN sessions s USING (session_id) LEFT JOIN tc USING (session_id) LEFT JOIN pr USING (session_id)
-        LEFT JOIN act USING (session_id)""", rp + fp + fp + ([on, on] if on else []))
+        LEFT JOIN act USING (session_id) LEFT JOIN runs USING (session_id) LEFT JOIN whole USING (session_id)""",
+              rp + fp + fp + ([on, on] if on else []))
     for r in rs:
         limit = (prices.get(r["peak_model"]) or {}).get("context")
         r["context_limit"] = limit
@@ -874,6 +890,12 @@ def session_detail(cur, sid, allq, p, prices):
     info["first_ts"], info["last_ts"] = iso(info["first_ts"]), iso(info["last_ts"])
     info["context_limit"] = (prices.get(info["peak_model"]) or {}).get("context")
     info["active_s"] = (cur.execute(f"WITH {active_cte('?')} SELECT active_s FROM act", [sid, sid]).fetchone() or (None,))[0]
+    # Its runs' figures, all None without a run; the speed over its whole output (thinking included), subagents too, as the time.
+    info.update(rows(cur, """SELECT sum(api_ms) AS model_ms, sum(tool_ms) AS tool_ms, sum(lines_added) AS lines_added,
+        sum(lines_removed) AS lines_removed, (SELECT sum(output) FROM requests WHERE session_id = ?) AS output
+        FROM session_runs WHERE session_id = ?""", [sid, sid])[0])
+    out = info.pop("output")
+    info["output_per_s"] = (out or 0) / (info["model_ms"] / 1000) if info["model_ms"] else None
     sums = ", ".join(f"sum({k}) AS {k}" for k in TOKEN_KINDS)
     from . import insights  # insights imports this module
     return dict(
