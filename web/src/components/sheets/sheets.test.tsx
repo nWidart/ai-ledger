@@ -166,6 +166,30 @@ describe("SessionSheet", () => {
     expect(sheet().queryByText(/Friction:/)).toBeNull();
   });
 
+  it("shows the model time, tool time, output speed and lines the session records, with where they come from", async () => {
+    mockApi({ "/api/session": () => session });
+    at("?session=s1");
+    renderApp(<UsageSheets data={usage} />);
+    await sheet().findByText("$16");
+    expect(sheet().getByText("model time").textContent).toMatch(/^2\.8h model time/);
+    expect(sheet().getByText("tool time").textContent).toBe("50m tool time");
+    expect(sheet().getByText("output tok/s").textContent).toBe("100 output tok/s");
+    expect(sheet().getByText("lines").textContent).toBe("+130 / −32 lines");
+    await userEvent.click(sheet().getByRole("button", { name: "About model and tool time" }));
+    expect(sheet().getAllByText(/From Claude Code's own record of the session, subagent work included/).length).toBeGreaterThan(0);
+  });
+
+  it("shows none of them for a session that records no model time", async () => {
+    const info = { ...session.info, source: "codex" as const, model_ms: null, tool_ms: null, lines_added: null, lines_removed: null, output_per_s: null };
+    mockApi({ "/api/session": () => ({ ...session, info }) });
+    at("?session=s1");
+    renderApp(<UsageSheets data={usage} />);
+    await sheet().findByText("$16");
+    expect(sheet().getByText("active")).toBeTruthy();
+    for (const l of ["model time", "tool time", "output tok/s", "lines"]) expect(sheet().queryByText(l)).toBeNull();
+    expect(sheet().queryByRole("button", { name: "About model and tool time" })).toBeNull();
+  });
+
   it("says so when the session does not exist", async () => {
     mockApi({});
     at("?session=gone");

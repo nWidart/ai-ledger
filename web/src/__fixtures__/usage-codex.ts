@@ -59,7 +59,12 @@ export default {
   "errors_per_100_calls": 100.0,
   "session_seconds": 60,
   "median_session_seconds": 60,
-  "near_limit": 0
+  "near_limit": 0,
+  "model_ms": 0,
+  "tool_ms": 0,
+  "timed_sessions": 0,
+  "timed_output": 0,
+  "output_per_s": null
  },
  "daily": [
   {
@@ -212,6 +217,9 @@ export default {
    "tests_failed": 0,
    "prompts": 1,
    "interrupted": 0,
+   "model_ms": null,
+   "tool_ms": null,
+   "timed_output": null,
    "context_limit": null,
    "context_share": null,
    "near_limit": false,
@@ -243,6 +251,9 @@ export default {
    "tests_failed": 0,
    "prompts": 1,
    "interrupted": 0,
+   "model_ms": null,
+   "tool_ms": null,
+   "timed_output": null,
    "context_limit": null,
    "context_share": null,
    "near_limit": false,

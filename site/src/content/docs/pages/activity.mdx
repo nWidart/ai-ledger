@@ -74,7 +74,7 @@ The card's title reads "N things to look at". With none of the four, it reads "N
 
 <ThemedImage dark={vitals} light={vitalsLight} alt="Activity's Work health row: five tiles: errors per 100 calls, test runs passed, prompts interrupted, subagents and median session, each with its change against the previous period." />
 
-**Shows** five tiles. Each tile shows its change against the previous period of equal length, as ", up from X", ", down from X" or ", unchanged". The All range shows no change.
+**Shows** six tiles. Each tile shows its change against the previous period of equal length, as ", up from X", ", down from X" or ", unchanged". The All range shows no change.
 
 | Tile | Figure | Note under it | Marked worse when |
 | --- | --- | --- | --- |
@@ -82,9 +82,12 @@ The card's title reads "N things to look at". With none of the four, it reads "N
 | Test runs passed | Share of test and build runs that passed, or "n/a" | "N passed, M failed of K test or build runs." | It goes down. |
 | Prompts interrupted | Share of prompts interrupted | "N of M prompts." | It goes up. |
 | Subagents | Share of tokens that came from subagents | "of tokens came from subagents." | Never judged. |
-| Median session | Median active time of a session | "N sessions, X active and Y thinking in all." | Never judged. |
+| Median session | Median active time of a session | "N sessions, X active and Y thinking in all." When a session records model time: "…; X waiting on the model and Y running tools." | Never judged. |
+| Output speed | Output tokens per second of model time, as "98 tok/s", or "n/a" | "Output tokens per second of model time, in N sessions.", or "No session in this view records model time." | It goes down. |
 
 A session's active time leaves out every pause over 20 minutes. Two figures that display the same value read "unchanged".
+
+Model time and tool time come from the `cost-state` line that Claude Code writes when a session ends, in versions from about late October 2026. Codex sessions and older Claude Code sessions record none, and count in neither figure. Output speed divides the output tokens of the sessions that record model time by that model time. These are whole-session figures: they include subagent work and the session's time outside the range. Model time can exceed active time, because subagents run at the same time. On a store from an earlier version, run `ai-ledger rebuild` once, with the app stopped, to fill them for sessions already ingested; see [Upgrade and rebuild](/ai-ledger/start/upgrade/).
 
 ### Work per day, or per week
 
@@ -202,7 +205,7 @@ Shows the whole session, whatever the range filter says.
 - A line names the project (it opens the project sheet), the git branch, and the first and last time.
 - **Filter dashboard to *project*** or **Show all projects**.
 - **Source**: the first prompt as recorded. A long prompt is cut; **Show the whole prompt** loads all of it.
-- A line of figures: estimated cost (a "+" marks a subtotal when some model has no price; "Unknown" when none has), tokens, prompts and interrupted prompts, peak context with its share of the window, compactions, commits, active time.
+- A line of figures: estimated cost (a "+" marks a subtotal when some model has no price; "Unknown" when none has), tokens, prompts and interrupted prompts, peak context with its share of the window, compactions, commits, active time. When the session records them, the line adds model time, tool time, output speed, and lines added and removed, as `+120 / −30`; a tooltip says they come from Claude Code and include subagents. See [Work health](#work-health).
 - **/insights judgment**, tagged model-judged, when the session has an `/insights` analysis: outcome, a "dissatisfied" marker when satisfaction includes it, helpfulness and session type, goal and friction categories, a brief summary and the friction detail, and **Open in Insights**, which keeps the view's filters. Only Claude Code sessions are analysed; a Codex session never shows it. See [Insights](/ai-ledger/pages/insights/).
 - **Timeline** of the session.
 - **Error loops** in the session, each with "Open in Errors".

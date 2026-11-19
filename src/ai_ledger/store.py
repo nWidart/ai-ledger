@@ -67,7 +67,7 @@ CREATE TABLE IF NOT EXISTS error_marks (category VARCHAR PRIMARY KEY, fixed_on D
 """
 
 DERIVED = ["sessions", "requests", "tool_calls", "prompts", "hooks", "limit_snapshots", "session_facets", "facet_counts", "session_meta",
-           "session_titles", "context_snapshots", "context_parts"]
+           "session_titles", "context_snapshots", "context_parts", "session_runs"]
 DERIVED_SCHEMA = """
 CREATE TABLE IF NOT EXISTS sessions (
   session_id VARCHAR PRIMARY KEY, project VARCHAR, cwd VARCHAR, git_branch VARCHAR,
@@ -111,6 +111,11 @@ CREATE TABLE IF NOT EXISTS context_snapshots (
 -- the MCP server, the memory file's type or the source; state the category's kind (used, deferred, buffer, free), else null.
 CREATE TABLE IF NOT EXISTS context_parts (
   uuid VARCHAR, seq INTEGER, kind VARCHAR, name VARCHAR, detail VARCHAR, state VARCHAR, tokens BIGINT, PRIMARY KEY (uuid, seq));
+-- The running totals of a Claude Code cost-state line, one row per run (a process start, startTime in epoch ms) of a session,
+-- each figure the largest any line of the run stated. A session's figures are the sum over its runs. api_ms is totalAPIDuration.
+CREATE TABLE IF NOT EXISTS session_runs (
+  session_id VARCHAR, start_ms BIGINT, api_ms BIGINT, tool_ms BIGINT, lines_added BIGINT, lines_removed BIGINT,
+  PRIMARY KEY (session_id, start_ms));
 """
 
 
@@ -464,6 +469,7 @@ class Deriver:
         self.limits = []  # limit_snapshots rows; only sources whose transcripts report plan limits fill it
         self.titles = {}  # session_id -> {"custom" | "agent": newest title of that kind}; no sessions row of its own
         self.contexts = []  # (context_snapshots row, its context_parts rows); only Claude Code's /context lines fill it
+        self.runs = {}  # (session_id, start_ms) -> [api_ms, tool_ms, lines_added, lines_removed]; only cost-state lines fill it
         # Errors from earlier ingests of this file still waiting for Claude's next words.
         self.pending = dict(cur.execute(
             "SELECT tool_use_id, result_seq FROM tool_calls WHERE result_file = ? AND is_error AND followup IS NULL "
@@ -493,6 +499,9 @@ class Deriver:
             title = d.get(TITLE_LINES[t][0])
             if not self.sub and d.get("sessionId") and isinstance(title, str) and title.strip():
                 self.title(d["sessionId"], TITLE_LINES[t][1], title)
+            return
+        if t == "cost-state":  # no timestamp, cwd or version: it makes no sessions row, only its run's
+            self.cost_state(d)
             return
         s = self.session(d)
         sid, ts = d.get("sessionId"), ts_of(d.get("timestamp"))
@@ -526,6 +535,15 @@ class Deriver:
 
     def title(self, sid, kind, title):
         self.titles.setdefault(sid, {})[kind] = title
+
+    def cost_state(self, d):
+        """A run's running totals, which Claude Code writes as it exits, subagent work included. Only a main file holds them.
+        The format is undocumented: a line without its session, its run or an integer figure is skipped."""
+        sid, start, figures = d.get("sessionId"), d.get("startTime"), [d.get(f) for f in COST_FIGURES]
+        if self.sub or not isinstance(sid, str) or not sid or not all(is_int(v) for v in (start, *figures)):
+            return
+        old = self.runs.get((sid, start))
+        self.runs[(sid, start)] = figures if old is None else [max(a, b) for a, b in zip(old, figures)]
 
     def context_usage(self, d, sid, ts):
         """A /context result: the structured contextUsage object, never the Markdown in content. Skipped without its categories."""
@@ -643,6 +661,11 @@ class Deriver:
                tail="ON CONFLICT (session_id) DO UPDATE SET custom = coalesce(excluded.custom, session_titles.custom), "
                     "agent = coalesce(excluded.agent, session_titles.agent)")
         self.flush_contexts()
+        # A line read again, or copied into another file, states figures the run already has: greatest() keeps them as they are.
+        insert(cur, "session_runs", ["session_id", "start_ms", "api_ms", "tool_ms", "lines_added", "lines_removed"],
+               [(sid, start, *f) for (sid, start), f in self.runs.items()],
+               tail="ON CONFLICT (session_id, start_ms) DO UPDATE SET " + ", ".join(
+                   f"{c} = greatest(session_runs.{c}, excluded.{c})" for c in ("api_ms", "tool_ms", "lines_added", "lines_removed")))
         # Errors still open stay in self.pending; the next ingest reloads them from tool_calls.
         update_from(cur, "tool_calls", "tool_use_id", ["followup"], list(self.followups.items()), where="AND tool_calls.followup IS NULL")
 
@@ -707,8 +730,15 @@ CONTEXT_PARTS = (("category", "categories", "name", None), ("mcp_tool", "mcp_too
                  ("skill", "skills", "name", "source"))
 
 
+COST_FIGURES = ("totalAPIDuration", "totalToolDuration", "totalLinesAdded", "totalLinesRemoved")  # a cost-state line's, as session_runs keeps them
+
+
 def text_or_none(v):
     return v if isinstance(v, str) else None
+
+
+def is_int(v):
+    return isinstance(v, int) and not isinstance(v, bool)
 
 
 def int_or_none(v):

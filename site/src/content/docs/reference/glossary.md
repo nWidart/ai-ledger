@@ -34,6 +34,7 @@ Four words mark where a figure comes from:
 | Commit | A `git commit` shell call that succeeded. |
 | Test run | A shell call that runs tests, a build, a linter or a type check. |
 | Active time | The time between a session's main-thread requests and tool calls, less every pause over 20 minutes. |
+| Model time, tool time | The time a Claude Code session spent waiting on the model and running tools, subagents included, from the line Claude Code writes when the session ends. Codex and older Claude Code sessions record none. Model time can exceed active time, because subagents run at the same time. |
 | Active day | A day with at least one prompt. |
 | Previous period | The same number of days just before the range. The **All** range has none. |
 | Estimated cost | Each request's tokens times its model's API list price. See [How cost is estimated](/ai-ledger/concepts/cost-estimates/). |
@@ -66,7 +67,8 @@ See [Activity](/ai-ledger/pages/activity/).
 | Test runs passed | The share of test runs that passed. Marked worse when it goes down. | **Work health** | [Kill repeated tool failures](/ai-ledger/improve/tool-failures/) |
 | Prompts interrupted | The share of prompts that were interrupted. In Claude Code, a tool call you reject counts as an interruption. Marked worse when it goes up. | **Work health** | [Babysit agents less](/ai-ledger/improve/babysit-less/) |
 | Subagents | The share of tokens that came from subagents. | **Work health**; **Project metrics** | – |
-| Median session | The median active time of a session. | **Work health** | – |
+| Median session | The median active time of a session. Its note adds the time waiting on the model and running tools, over the sessions that record it. | **Work health** | – |
+| Output speed | Output tokens per second of model time, over the sessions that record model time. Claude Code only, whole-session, subagents included. Marked worse when it goes down. | **Work health**; session sheet | – |
 | Work per day, or per week | Commits, prompts or sessions per day, with errors per 100 calls as a line. One bar per week when the view spans more than 60 days. | **Work per day** | [Weekly review](/ai-ledger/improve/weekly-review/) |
 | Prompts by hour | Prompts by weekday and hour, on the machine's clock. | **Prompts by hour** | [Stop hitting plan limits](/ai-ledger/improve/plan-limits/) |
 | Peak context | The largest request of a session, with its share of the window when that is 80% or more. | **Sessions** drawer | [Keep context lean](/ai-ledger/improve/lean-context/) |

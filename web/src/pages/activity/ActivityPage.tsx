@@ -65,6 +65,7 @@ function Lede({ d, before }: { d: UsagePayload; before: UsagePayload | undefined
 
 /** a / b, or null when there is nothing to divide by (a previous period with no calls, say). */
 const ratio = (a: number, b: number) => (b ? a / b : null);
+const tokS = (n: number) => `${num(n)} tok/s`;
 
 /** Work vitals: how smoothly the work went, each against the period before (none for All, or with nothing to divide by there). */
 function Vitals({ d }: { d: UsagePayload }) {
@@ -81,8 +82,13 @@ function Vitals({ d }: { d: UsagePayload }) {
     { v: pct(t.subagent_token_share), l: "Subagents", n: "of tokens came from subagents.",
       cur: t.subagent_token_share, prev: p && ratio(p.sub_tokens, p.tokens), fmt: pct },
     { v: dur(t.median_session_seconds), l: "Median session",
-      n: `${plural(t.sessions, "session")}, ${dur(t.session_seconds)} active${t.thinking_ms ? ` and ${dur(t.thinking_ms / 1000)} thinking` : ""} in all.`,
+      n: `${plural(t.sessions, "session")}, ${dur(t.session_seconds)} active${t.thinking_ms ? ` and ${dur(t.thinking_ms / 1000)} thinking` : ""} in all${t.timed_sessions
+        ? `; ${dur(t.model_ms / 1000)} waiting on the model and ${dur(t.tool_ms / 1000)} running tools` : ""}.`,
       cur: t.median_session_seconds, prev: p?.median_session_seconds, fmt: dur },
+    // Whole-session output over model time, timed sessions only (Claude Code records it; Codex does not).
+    { v: t.output_per_s == null ? "n/a" : tokS(t.output_per_s), l: "Output speed",
+      n: t.output_per_s == null ? "No session in this view records model time." : `Output tokens per second of model time, in ${plural(t.timed_sessions, "session")}.`,
+      cur: t.output_per_s, prev: p?.output_per_s, worse: "down", fmt: tokS },
   ];
   return <section className="vitals sect" id="vitals" aria-label="Work health">
     {vs.map(x => <div className="vital" key={x.l} id={x.id} tabIndex={x.id ? -1 : undefined}><div className="v">{x.v}</div>
