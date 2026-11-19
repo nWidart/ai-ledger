@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { DayView, Previous, ProjectRow, UsagePayload } from "../../api";
 import usage from "../../__fixtures__/usage";
 import usageAll from "../../__fixtures__/usage-all";
+import usageCodex from "../../__fixtures__/usage-codex";
 import sessions from "../../__fixtures__/sessions";
 import session from "../../__fixtures__/session";
 import tool from "../../__fixtures__/tool";
@@ -121,6 +122,51 @@ describe("change against the previous period", () => {
     renderApp(<ActivityPage />);
     await loaded();
     expect(document.getElementById("vitals")!.textContent).not.toMatch(change);
+  });
+});
+
+describe("model time and output speed", () => {
+  /** A vital's figure and note. */
+  const tile = (label: string) => { const el = vital(label).closest(".vital")!; return [el.querySelector(".v")!.textContent, el.querySelector(".d")!.textContent]; };
+
+  it("adds the model and tool time to the session note and shows output speed against the period before, a fall as worse", async () => {
+    // One timed session: 10,000 s of model time, 3,000 s of tool time, 1M output tokens (100 tok/s).
+    serve(prior({ output_per_s: 150 }));
+    at();
+    renderApp(<ActivityPage />);
+    await loaded();
+    expect(tile("Median session")[1]).toMatch(/ in all; 2\.8h waiting on the model and 50m running tools\.$/);
+    expect(tile("Output speed")).toEqual(["100 tok/s", "Output tokens per second of model time, in 1 session."]);
+    expect(vital("Output speed").textContent).toBe("Output speed, down from 150 tok/s");
+    expect(worse(vital("Output speed"))).toBe(true);
+  });
+
+  it("does not mark a rise as worse", async () => {
+    serve(prior({ output_per_s: 50 }));
+    at();
+    renderApp(<ActivityPage />);
+    await loaded();
+    expect(vital("Output speed").textContent).toBe("Output speed, up from 50 tok/s");
+    expect(worse(vital("Output speed"))).toBe(false);
+  });
+
+  it("does not compare with a period that recorded no model time", async () => {
+    expect(usage.previous!.output_per_s).toBeNull();
+    serve(usage);
+    at();
+    renderApp(<ActivityPage />);
+    await loaded();
+    expect(vital("Output speed").textContent).toBe("Output speed");
+  });
+
+  it("reads not available, with the reason, and names no model or tool time when no session records model time", async () => {
+    serve(usageCodex);
+    at("?range=30&source=codex");
+    renderApp(<ActivityPage />);
+    await loaded();
+    expect(tile("Output speed")).toEqual(["n/a", "No session in this view records model time."]);
+    expect(tile("Median session")[1]).toMatch(/ in all\.$/);
+    expect(document.getElementById("vitals")!.textContent).not.toMatch(/waiting on the model|running tools/);
   });
 });
 

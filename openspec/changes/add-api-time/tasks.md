@@ -15,16 +15,16 @@
 
 ## 3. Web: Activity and the session sheet
 
-- [ ] 3.1 Add the new fields to the `UsagePayload` totals and previous types and to the session detail types in `web/src/api.ts`. Verify that `cd web && npm run check` typechecks.
-- [ ] 3.2 In `ActivityPage.tsx` `Vitals`, add the model and tool time to the "Median session" note when `timed_sessions > 0`. Add an "Output speed" vital (`tok/s`, `worse: "down"`, compared with the previous period) whose note reads not available, with the reason, when no session is timed. Verify with `ActivityPage.test.tsx` cases for a timed view and an untimed (Codex) view.
-- [ ] 3.3 In `SessionSheet.tsx`, show model time, tool time, output speed and `+added / −removed` lines next to `active`. Add a Toggletip saying the figures come from Claude Code and include subagents. Leave out each missing figure. Verify with a sheet test for a timed session and a Codex session.
-- [ ] 3.4 Run `cd web && npm run check`, then commit the rebuilt `src/ai_ledger/web/`. Verify that `tests/test_web_build.py` passes.
+- [x] 3.1 Add the new fields to the `UsagePayload` totals and previous types and to the session detail types in `web/src/api.ts`. Verify that `cd web && npm run check` typechecks.
+- [x] 3.2 In `ActivityPage.tsx` `Vitals`, add the model and tool time to the "Median session" note when `timed_sessions > 0`. Add an "Output speed" vital (`tok/s`, `worse: "down"`, compared with the previous period) whose note reads not available, with the reason, when no session is timed. Verify with `ActivityPage.test.tsx` cases for a timed view and an untimed (Codex) view.
+- [x] 3.3 In `SessionSheet.tsx`, show model time, tool time, output speed and `+added / −removed` lines next to `active`. Add a Toggletip saying the figures come from Claude Code and include subagents. Leave out each missing figure. Verify with a sheet test for a timed session and a Codex session.
+- [x] 3.4 Run `cd web && npm run check`, then commit the rebuilt `src/ai_ledger/web/`. Verify that `tests/test_web_build.py` passes.
 
 ## 4. Docs
 
-- [ ] 4.1 Update `README.md` where it describes Activity and the session sheet. Verify that it names model time, tool time, output speed and lines changed, and says they need Claude Code's `cost-state` line.
-- [ ] 4.2 Update `site/src/content/docs/pages/activity.mdx` with the `doc-coauthoring` skill. Verify with `cd site && npm run check`.
-- [ ] 4.3 Add an `[Unreleased]` entry to `CHANGELOG.md` that names the new figures and tells existing users to run `ai-ledger rebuild`. Verify that the entry is under `[Unreleased]`.
+- [x] 4.1 Update `README.md` where it describes Activity and the session sheet. Verify that it names model time, tool time, output speed and lines changed, and says they need Claude Code's `cost-state` line.
+- [x] 4.2 Update `site/src/content/docs/pages/activity.mdx` with the `doc-coauthoring` skill. Verify with `cd site && npm run check`.
+- [x] 4.3 Add an `[Unreleased]` entry to `CHANGELOG.md` that names the new figures and tells existing users to run `ai-ledger rebuild`. Verify that the entry is under `[Unreleased]`.
 
 ## 5. Integration
 

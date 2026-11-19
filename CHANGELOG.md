@@ -8,6 +8,7 @@ and versions follow [Semantic Versioning](https://semver.org/).
 ### Added
 
 - Documentation site at https://nwidart.github.io/ai-ledger/: install, playbooks that improve your agent workflow, each page, configuration and the command line, in the app's typeface and colors, light and dark. It replaces the user guide in `docs/guide.md`.
+- Time on the model and on tools, from the `cost-state` line Claude Code writes when a session ends (about late October 2026 on). Activity has a new "Output speed" tile (output tokens per second of model time, compared with the previous period; "n/a" when no session in view records model time), and the "Median session" note adds the time spent waiting on the model and running tools. The session sheet shows model time, tool time, output speed and lines added and removed. Figures include subagent work. Codex and older Claude Code sessions have none. Run `ai-ledger rebuild` once with the app stopped to fill the figures for sessions already ingested.
 
 ### Changed
 

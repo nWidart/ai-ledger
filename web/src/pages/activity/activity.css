@@ -30,8 +30,8 @@
 @media (prefers-reduced-motion: no-preference) { .pg-activity > :not(.top):not(.secidx) { transition: opacity .2s; } }
 
 
-/* Work vitals: five ratios in one ruled strip */
-.pg-activity .vitals { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1px; margin: 0 0 20px;
+/* Work vitals: six figures in one ruled strip, then two rows of three, then three of two */
+.pg-activity .vitals { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 1px; margin: 0 0 20px;
   background: var(--border); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
 .pg-activity .vital { padding: 16px 16px 16px 0; background: var(--bg); min-width: 0; }
 .pg-activity .vital + .vital { padding-left: 16px; }
@@ -40,8 +40,13 @@
 .pg-activity .vital .v { font-size: 1.75rem; font-weight: 600; letter-spacing: -.035em; line-height: 1.1; }
 .pg-activity .vital .l { font-weight: 500; margin-top: 4px; }
 .pg-activity .vital .d { color: var(--text-muted); font-size: .78125rem; margin-top: 2px; }
+@media (max-width: 75em) {
+  .pg-activity .vitals { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .pg-activity .vital:nth-child(3n+1) { padding-left: 0; }
+}
 @media (max-width: 56.25em) {
   .pg-activity .vitals { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pg-activity .vital:nth-child(even) { padding-left: 16px; }
   .pg-activity .vital:nth-child(odd) { padding-left: 0; }
   .pg-activity .vital:last-child:nth-child(odd) { grid-column: 1 / -1; }
 }
