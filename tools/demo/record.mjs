@@ -300,7 +300,7 @@ const shoot = async (target, path, options = {}) => { await target.screenshot({ 
 // [panel name, selector, { drawer: id of the drawer to open first, max: crop height }]
 const SHOT_PAGES = {
   activity: { url: "/usage?range=30", panels: [
-    ["attention", "#attention"], ["vitals", "#vitals"], ["work", "#work"], ["hours", "#hours"]] },
+    ["attention", "#attention"], ["vitals", "#vitals"], ["work", "#work"], ["hours", "#hours", { drawer: "d-hours" }]] },
   cost: { url: "/cost?range=30", panels: [
     ["overview", "#overview"], ["spend", "#spend"], ["projects", "#projects"], ["highlights", "#insights"],
     ["models", ".split > section.panel"]] },
