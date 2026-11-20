@@ -163,8 +163,19 @@ Activity SHALL chart commits, prompts or sessions across the view, from its firs
 - **THEN** the sessions table opens limited to the sessions that ran on that day
 
 #### Scenario: Failure rate, not failed count
-- **WHEN** a quiet day has 2 failed calls of 4 and a busy day has 6 of 200
-- **THEN** the line shows 50 errors per 100 calls for the quiet day and 3 for the busy day, and each tooltip also gives the failed count
+- **WHEN** two busy days have 6 failed calls of 200 and 5 of 100
+- **THEN** the line shows 3 and 5 errors per 100 calls, and each tooltip also gives the failed count
+
+### Requirement: Mark work chart bars with few tool calls
+On the work chart, a bar with fewer than 50 tool calls SHALL draw its rate as a hollow dot and SHALL NOT set the rate axis, when at least one bar has 50 or more. The line SHALL still run through the dot, and a rate above the axis SHALL stop at its top. The legend SHALL give a key for the hollow dot, and the bar's tooltip, screen-reader text and data table SHALL say it has too few calls for a steady rate while still giving its rate.
+
+#### Scenario: Quiet day does not set the scale
+- **WHEN** a quiet day has 2 failed calls of 4 and the busy days have 6 of 200 and 5 of 100
+- **THEN** the quiet day's rate is a hollow dot with the line through it, the rate axis ends near 10 and not 100, the legend gives a key for the hollow dot, and the day's tooltip gives 50 errors per 100 calls and says it has too few calls for a steady rate
+
+#### Scenario: Every bar is quiet
+- **WHEN** no bar has 50 tool calls
+- **THEN** the chart marks no hollow dot and its rate axis fits the highest rate
 
 ### Requirement: Chart a long range by week
 When the span from the first day with a session to today is over 60 days, the chart SHALL show one bar per week (Monday start, local time) instead of per day, and its totals for commits and prompts SHALL equal the sum of its bars; a session counts once in each bucket it touches, so the bars for sessions can add up to more than the total. The week that holds the end of the range SHALL read "so far", and a first week cut by the start of the range SHALL read "from" that date.

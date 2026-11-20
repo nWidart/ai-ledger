@@ -194,19 +194,49 @@ describe("failure rate line", () => {
     expect(svg.textContent).toContain("Errors per 100 calls");
     const line = svg.querySelector("path.rate")!.getAttribute("d")!;
     expect(line.match(/[ML]/g)).toEqual(["M", "M"]);
-    // Each lone point gets a dot, since no line reaches it.
-    expect(svg.querySelectorAll("circle.rate")).toHaveLength(2);
+    // Each lone point gets a dot, since no line reaches it: filled for the busy day, hollow for the 4-call day.
+    expect(svg.querySelectorAll("circle.rate")).toHaveLength(1);
+    expect(svg.querySelectorAll("circle.lowc")).toHaveLength(1);
   });
 
   it("ticks the right-hand axis on the count axis's grid lines, with decimals for small steps", () => {
     const ticks = () => [...document.querySelectorAll("#work svg .rtick")].map(t => t.textContent);
     panel(d);
-    // Two count steps (no commits: 0 to 1 by 0.5), so a top rate of 50 makes 0, 50, 100.
-    expect(ticks()).toEqual(["0", "50", "100"]);
+    // Two count steps (no commits: 0 to 1 by 0.5). The 4-call day's 50 is left out, so the top rate is the busy day's 3.
+    expect(ticks()).toEqual(["0", "2", "4"]);
     cleanup();
     const low = [row("2026-11-04", { calls: 1000, failed_calls: 1 }), row("2026-11-05", { calls: 1000, failed_calls: 1 })];
     panel({ ...usage, work: low, work_projects: [] });
     expect(ticks()).toEqual(["0.0", "0.1", "0.2"]);
+  });
+
+  it("marks a bar with few calls as a hollow dot that sets no axis, and says so in the tooltip, table and key", async () => {
+    const rows = [row("2026-11-04", { calls: 4, failed_calls: 2 }), row("2026-11-05", { calls: 200, failed_calls: 6 }), row("2026-11-06", { calls: 100, failed_calls: 5 })];
+    panel({ ...usage, end: "2026-11-06", work: rows, work_projects: [] });
+    const svg = document.querySelector("#work svg")!;
+    // The scale follows the busy days (3 and 5), not the quiet day's 50; the line still runs through the hollow dot.
+    expect([...svg.querySelectorAll(".rtick")].map(t => t.textContent)).toEqual(["0", "5", "10"]); // not 0, 50, 100
+    expect(svg.querySelector("path.rate")!.getAttribute("d")!.match(/[ML]/g)).toEqual(["M", "L", "L"]);
+    expect(svg.querySelectorAll("circle.lowc")).toHaveLength(1);
+    expect(document.querySelector("#work .legend")!.textContent).toBe("CommitsErrors per 100 calls (right axis)Under 50 calls");
+    act(() => chart().focus());
+    fireEvent.keyDown(chart(), { key: "Home" });
+    expect(within(screen.getByRole("tooltip")).getByText("too few calls for a steady rate")).toBeTruthy();
+    expect(document.querySelector("#work .sr")!.textContent).toContain("2 failed calls of 4, 50.0 per 100, too few calls for a steady rate");
+    fireEvent.keyDown(chart(), { key: "ArrowRight" });
+    expect(within(screen.getByRole("tooltip")).queryByText("too few calls for a steady rate")).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Show data table" }));
+    const cells = within(screen.getByRole("table", { name: "Commits and errors per 100 tool calls per day" })).getAllByRole("cell").filter((_, i) => i % 2 === 1); // each row: commits, rate
+    expect(cells.map(c => c.textContent)).toEqual(["50.0 (too few calls for a steady rate)", "3.0", "5.0"]);
+  });
+
+  it("marks nothing when every bar has few calls: the view scales to its own rates", () => {
+    const rows = [row("2026-11-04", { calls: 4, failed_calls: 2 }), row("2026-11-05", { calls: 10, failed_calls: 1 })];
+    panel({ ...usage, work: rows, work_projects: [] });
+    const svg = document.querySelector("#work svg")!;
+    expect(svg.querySelectorAll("circle.lowc")).toHaveLength(0);
+    expect([...svg.querySelectorAll(".rtick")].map(t => t.textContent)).toEqual(["0", "50", "100"]);
+    expect(document.querySelector("#work .legend")!.textContent).not.toContain("Under");
   });
 
   it("draws no rate, axis or key when no bar has a tool call", () => {

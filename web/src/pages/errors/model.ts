@@ -12,7 +12,6 @@ export const MIN_AFTER_CALLS = 200; // calls since a fix before its rate counts 
 export const MIN_CMP_CALLS = 200; // tool calls each side of a change needs before the change shows
 export const MIN_PCT_ERRORS = 5; // fewer errors than this on either side: a type's change shows as counts, not a percent
 export const GAP_FOLD = 8; // a stretch of this many chart buckets or more without a call folds into one
-export const LOW_CALLS = 50; // a chart bucket with fewer calls has a noisy rate: marked, and left out of the rate scale
 export const PAYLOAD_INPUT = 400; // the payload cuts inputs here; "Show full" loads the rest from /api/error
 const DAY = 864e5;
 export const toDate = (s: string) => new Date(s + "T00:00:00Z");

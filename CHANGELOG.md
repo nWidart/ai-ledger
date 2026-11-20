@@ -20,6 +20,10 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 - Text follows the browser's default font size: font sizes are relative, chart labels scale with them, and nothing is cut off at 200%. In Chrome and Edge 146+ the dashboard also follows the operating system's text scale.
 
+### Fixed
+
+- The Activity work chart no longer lets one quiet day set the scale of its errors-per-100-calls line. A day or week with fewer than 50 tool calls draws its rate as a hollow dot, is left out of the right-hand axis, and says "too few calls for a steady rate" in its tooltip and data table, as the Errors chart does. A legend key explains the hollow dot.
+
 ## [0.4.0] - 2026-11-15
 
 Run `ai-ledger rebuild` once after upgrading, with the app stopped. It fills the data the Context page needs (tool result sizes, Codex context windows, first compactions, past `/context` results) from transcripts already read. Until then, the Context page marks those figures as unavailable.
