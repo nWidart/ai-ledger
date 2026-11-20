@@ -9,6 +9,8 @@ Cost answers three questions: what did this period cost, where did the spend go,
 The page follows the filters at its top. Every figure below describes the selected project, time range and source.
 
 import ThemedImage from "../../../components/ThemedImage.astro";
+import tokens from "../../../assets/shots/cost-tokens.png";
+import tokensLight from "../../../assets/shots/cost-tokens-light.png";
 import overview from "../../../assets/shots/cost-overview.png";
 import overviewLight from "../../../assets/shots/cost-overview-light.png";
 import highlights from "../../../assets/shots/cost-highlights.png";
@@ -104,7 +106,7 @@ A "+?" chip beside a cost means the figure leaves out some requests from unprice
   - **Model**: the models that cost the most in the view, up to six series colors, then Other, labeled without the `claude-` prefix.
   - **Agent**: one series per agent (Claude Code, Codex), no Other.
   - A day's total is the same in every stacking.
-- **Tokens measure.** Each bar is stacked by token kind: Input, Output, Thinking, Cache read, Cache write 5m, Cache write 1h. Cache reads usually dwarf the rest.
+- **Tokens measure.** Each bar is stacked by token kind: Input, Output, Thinking, Cache read, Cache write 5m, Cache write 1h. In **Volume**, a bar is the day's tokens, and cache reads usually dwarf the rest. In **Share**, every bar fills the plot from 0% to 100%, and each kind's segment is its share of that day's tokens, so you can see whether output grew or shrank. The title reads "Token share per day". Share draws no 7-day average and no peak label, since both describe the day's total; the tooltip, the screen-reader text and the data table give each kind's share and the day's total tokens. A day with no tokens has no bar.
 - A 7-day average line, drawn when the view has 14 or more days. At a day, it is the mean of the 7 complete days ending there; today has none.
 - Today's bar is hatched over each segment's color, and the legend adds "Today so far". The tooltip and the label say "so far".
 - A label names the peak.
@@ -113,6 +115,7 @@ A "+?" chip beside a cost means the figure leaves out some requests from unprice
 **Controls**
 
 - **Stack by** (Project, Model, Agent) switches the stacking. It shows only on the Cost measure. The choice is kept in the browser.
+- **Scale** (Volume, Share) switches the Tokens measure between the day's tokens and each kind's share of them. Volume is the default. It shows only on the Tokens measure, and the choice is kept in the browser.
 - **Cost, Tokens** switch the measure. Cost is the default. The choice is kept in the browser.
 - On the Cost measure, a project key in the legend filters the page to that project, an agent key filters to that agent, and the same key again (shown with ✕) clears the filter. Model keys, Other and the average line only name a series; they do not filter or toggle.
 - On the Tokens measure, a legend key hides or shows a kind. The hidden kinds are kept in the browser. When every kind is hidden, a note offers "Show every kind".
@@ -191,7 +194,9 @@ The count is the view's tokens.
 - **Per prompt**: estimated cost per prompt, and tokens per prompt.
 - **Per commit**: estimated cost per commit, and tokens per commit, or "n/a" with no commits.
 
-Under them, each billed kind, biggest cost first: Input, Output + thinking (thinking is billed as output), Cache read, Cache write 5m, Cache write 1h. A kind shows its estimated cost, its share of the total, its tokens and its share of tokens. When no request is priced, the cost reads "cost unknown", not zero. A last row gives the requests and how many came from the main thread.
+<ThemedImage dark={tokens} light={tokensLight} alt="The Tokens and cache drawer: the four figures, then each billed kind's share of tokens as a bar to the left of its name and its share of estimated cost as a bar to the right." />
+
+Under them, a two-sided chart compares each billed kind's share of tokens with its share of estimated cost: Input, Output + thinking (thinking is billed as output), Cache write (the 5-minute and 1-hour lifetimes together) and Cache read, biggest cost first. The share of tokens is a bar to the left of the kind's name, the share of estimated cost a bar to the right. Each side has its own 0 to 100% scale, and both shares are also written next to their bars. A sentence above the chart names the kind where the two shares differ most, for example that cache reads are most of the tokens and a small part of the cost. When no request is priced, the cost shares read "–" and have no bar, not zero. **Show data table** opens the exact figures: each kind's tokens, share of tokens, estimated cost and share of cost, with the thinking tokens and each cache write lifetime under their kind. A last line gives the requests and how many came from the main thread.
 
 ### Most expensive sessions
 

@@ -1,15 +1,16 @@
 // The blocks of the Project page. Each reads one payload another page reads, with the project as the filter, and draws, fails and
 // retries on its own (Block). Figures come from the other pages' own components and model functions.
 import { useMemo, type ReactNode } from "react";
-import type { ContextPayload, ErrorsPayload, InsightsPayload, LimitsPayload, LivePayload, UsagePayload } from "../../api";
+import type { ContextPayload, ErrorsPayload, InsightsPayload, LimitsPayload, LivePayload, Totals, UsagePayload } from "../../api";
 import { DataTable } from "../../components/DataTable";
 import { Judged, label as facetLabel, outcomeLabel } from "../../components/facets";
 import { Ledger, LedgerRow } from "../../components/Ledger";
-import { ChangeDetail, Facts, ModelLedger, summaryFacts, TopSessions } from "../../components/sheets/ProjectSheet";
+import { ChangeDetail, Facts, ModelLedger, TopSessions } from "../../components/sheets/ProjectSheet";
 import { appLink, errorsHref, openSessionSheet } from "../../components/sheets/session";
-import { big, num, pct, plural } from "../../format";
+import { big, dur, num, pct, plural, usd } from "../../format";
 import type { ApiState } from "../../useApi";
 import { share } from "../context/context";
+import { TokenPairs } from "../cost/TokenPairs";
 import { makeModel } from "../errors/model";
 import { sharePct } from "../limits/limits";
 import { subjectAttrs } from "../../components/menu/subject";
@@ -38,28 +39,43 @@ function Block<T>({ id, title, page, href, state, children }: { id: string; titl
   );
 }
 
-/** The project's eight figures, as the project sheet shows them, and a link to Live while sessions of it are running. */
-export function SummaryBlock({ usage, live, scope }: { usage: ApiState<UsagePayload>; live: ApiState<LivePayload>; scope: Scope }) {
+/** What the project did: eight figures the project sheet does not show (the sheet has cost, sessions, tokens and error counts), as
+ *  Activity counts them, and a link to Live while sessions of it are running. A figure the store cannot give reads n/a. */
+export const activityFacts = (t: Totals): [ReactNode, ReactNode][] => {
+  const na = (v: number | null, f: (n: number) => string) => (v == null ? "n/a" : f(v));
+  return [
+    [num(t.prompts), "prompts"], [num(t.commits), "commits"], [num(t.active_days), "active days"],
+    [num(t.requests), `requests, ${num(t.main_requests)} from the main thread`], [na(t.median_session_seconds, dur), "median session"],
+    [na(t.cost_per_prompt, usd), "estimated cost per prompt"], [na(t.turns_per_prompt, n => num(n, 1)), "turns per prompt"],
+    [na(t.interruption_rate, n => pct(n, 1)), "of prompts interrupted"],
+  ];
+};
+export function ActivityBlock({ usage, live, scope }: { usage: ApiState<UsagePayload>; live: ApiState<LivePayload>; scope: Scope }) {
   const n = live.data?.sessions.length ?? 0;
   return (
-    <Block id="summary" title="Summary" page="Activity" href={"/usage" + scope.search} state={usage}>
+    <Block id="activity" title="Activity" page="Activity" href={"/usage" + scope.search} state={usage}>
       {d => <>
-        <div className="hint">{d.start ? `Last ${d.range} days` : "All time"}, from the range filter. Estimated at API list prices.</div>
-        <Facts facts={summaryFacts(d.totals)} />
+        <div className="hint">{d.start ? `Last ${d.range} days` : "All time"}, from the range filter.</div>
+        <Facts facts={activityFacts(d.totals)} />
         {n > 0 && <p className="live-now"><a href={"/live" + scope.search} onClick={appLink}>{plural(n, "session")} active now</a></p>}
       </>}
     </Block>
   );
 }
 
-/** The change against the previous period with the daily cost of both, and the models by estimated cost. */
+/** The change against the previous period with the daily cost of both (the estimated cost alone for all time), the models by
+ *  estimated cost, and each token kind's share of tokens beside its share of cost. */
 export function CostBlock({ usage, scope }: { usage: ApiState<UsagePayload>; scope: Scope }) {
   return (
     <Block id="cost" title="Cost" page="Cost" href={"/cost" + scope.search} state={usage}>
       {d => <>
-        <ChangeDetail d={d} name={scope.project} />
+        <div className="hint">Estimated at API list prices.</div>
+        {d.previous && d.start && d.changes?.some(c => c.project === scope.project) ? <ChangeDetail d={d} name={scope.project} />
+          : <Facts facts={[[usd(d.totals.cost), d.start ? `est. cost, last ${d.range} days` : "est. cost, all time"]]} />}
         <h3>Models by estimated cost</h3>
         <ModelLedger key={scope.search} models={d.models} by="cost" />
+        <h3>Tokens beside cost</h3>
+        <TokenPairs t={d.totals} />
       </>}
     </Block>
   );

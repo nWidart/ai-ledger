@@ -13,7 +13,7 @@ import usage from "../../__fixtures__/usage";
 import usageAll from "../../__fixtures__/usage-all";
 import { ProjectSheet } from "../../components/sheets/ProjectSheet";
 import { mockApi } from "../../components/sheets/testing";
-import { big } from "../../format";
+import { big, num, usd } from "../../format";
 import { renderApp } from "../../testing";
 import { ProjectPage } from "./ProjectPage";
 
@@ -47,19 +47,20 @@ describe("ProjectPage", () => {
     const { f } = open();
     await loaded();
     expect(document.getElementById("content")).not.toBeNull();
-    await screen.findByRole("region", { name: "Summary" });
+    await screen.findByRole("region", { name: "Plan limits" });
     const urls = f.mock.calls.map(c => c[0] as string);
     for (const u of ["/api/usage?project=foo&range=30", "/api/context?project=foo&range=30", "/api/insights?project=foo&range=30", "/api/limits?project=foo&range=30"]) expect(urls).toContain(u);
     expect(urls).toContain("/api/errors");
     expect(urls.some(u => u.startsWith("/api/live?project=foo"))).toBe(true);
-    for (const name of ["Summary", "Cost", "Sessions", "Errors", "Context", "Session judgments", "Plan limits"]) expect(block(name)).toBeTruthy();
+    for (const name of ["Activity", "Cost", "Sessions", "Errors", "Context", "Session judgments", "Plan limits"]) expect(block(name)).toBeTruthy();
   });
 
   it("links every block to its page with the shared view", async () => {
     open({}, "?project=foo&range=7&source=claude&auto=1");
     await loaded();
+    await screen.findByRole("region", { name: "Plan limits" });
     const link = (name: string) => within(block(name)).getByRole("link", { name: /^Open in/ }).getAttribute("href");
-    expect(link("Summary")).toBe("/usage?project=foo&range=7&source=claude&auto=1");
+    expect(link("Activity")).toBe("/usage?project=foo&range=7&source=claude&auto=1");
     expect(link("Cost")).toBe("/cost?project=foo&range=7&source=claude&auto=1");
     expect(link("Context")).toBe("/context?project=foo&range=7&source=claude&auto=1");
     expect(link("Session judgments")).toBe("/insights?project=foo&range=7&source=claude&auto=1");
@@ -67,27 +68,66 @@ describe("ProjectPage", () => {
     expect(link("Errors")).toBe("/errors?project=foo&range=7&source=claude");
   });
 
-  describe("summary", () => {
-    it("shows the project sheet's eight figures for the same payload", async () => {
-      const d = foo(usage);
+  describe("layout", () => {
+    const ids = (col: Element) => [...col.querySelectorAll(":scope > section")].map(s => s.id);
+
+    it("puts Activity, Cost and Context in the left column, and Errors, Plan limits, Sessions and Session judgments in the right", async () => {
       open();
       await loaded();
-      const onPage = facts(await screen.findByRole("region", { name: "Summary" }));
-      expect(onPage).toHaveLength(8);
+      await screen.findByRole("region", { name: "Plan limits" });
+      const cols = document.querySelectorAll(".pg-project .cols > .col");
+      expect(cols).toHaveLength(2);
+      expect(ids(cols[0]!)).toEqual(["activity", "cost", "context"]);
+      expect(ids(cols[1]!)).toEqual(["errors", "limits", "sessions", "insights"]);
+      // The heading and the filters sit above the columns.
+      expect(document.querySelector(".pg-project > header")!.contains(screen.getByRole("heading", { level: 1 }))).toBe(true);
+    });
+
+    it("has no Project tab to repeat: the page is not in the navigation", async () => {
+      open();
+      await loaded();
+      expect(screen.queryByRole("link", { name: "Project" })).toBeNull();
+    });
+  });
+
+  describe("activity", () => {
+    const labels = (el: Element) => [...el.querySelectorAll(".facts .l")].map(x => x.textContent);
+
+    it("shows eight figures of the project's activity, none of them the project sheet's", async () => {
+      const t = usage.totals;
+      open();
+      await loaded();
+      const blk = await screen.findByRole("region", { name: "Activity" });
+      await within(blk).findByText("median session");
+      expect(labels(blk)).toEqual(["prompts", "commits", "active days", `requests, ${num(t.main_requests)} from the main thread`, "median session",
+        "estimated cost per prompt", "turns per prompt", "of prompts interrupted"]);
+      const v = [...blk.querySelectorAll(".facts .v")].map(x => x.textContent);
+      expect(v.slice(0, 4)).toEqual([num(t.prompts), num(t.commits), num(t.active_days), num(t.requests)]);
+      expect(v[5]).toBe(usd(t.cost_per_prompt));
       cleanup();
-      renderApp(<ProjectSheet name="foo" d={d} retry={() => {}} range={30} source="" pageProject="foo" onSession={() => {}} />);
-      expect(facts(document.body as HTMLElement).slice(0, 8)).toEqual(onPage);
+      renderApp(<ProjectSheet name="foo" d={foo(usage)} retry={() => {}} range={30} source="" pageProject="foo" onSession={() => {}} />);
+      const sheet = labels(document.body);
+      expect(labels(blk).filter(l => sheet.includes(l))).toEqual([]);
+    });
+
+    it("reads a figure the store cannot give as n/a", async () => {
+      const none = { ...usage.totals, median_session_seconds: null, cost_per_prompt: null, turns_per_prompt: null, interruption_rate: null };
+      open({ usage: foo({ ...usage, totals: none } as UsagePayload) });
+      await loaded();
+      const blk = await screen.findByRole("region", { name: "Activity" });
+      await within(blk).findByText("median session");
+      expect([...blk.querySelectorAll(".facts .v")].slice(4).map(x => x.textContent)).toEqual(["n/a", "n/a", "n/a", "n/a"]);
     });
 
     it("says how many sessions are active and links to Live, and says nothing at none", async () => {
       open();
       await loaded();
-      const link = await within(block("Summary")).findByRole("link", { name: "2 sessions active now" });
+      const link = await within(block("Activity")).findByRole("link", { name: "2 sessions active now" });
       expect(link.getAttribute("href")).toBe("/live?project=foo&range=30");
       cleanup();
       open({ live: { ...live, sessions: [] } as LivePayload });
       await loaded();
-      await within(block("Summary")).findByText(/est\. cost/);
+      await within(block("Activity")).findByText("median session");
       expect(screen.queryByText(/active now/)).toBeNull();
     });
   });
@@ -101,11 +141,21 @@ describe("ProjectPage", () => {
       expect(within(block("Cost")).getByText("Models by estimated cost")).toBeTruthy();
     });
 
-    it("shows no change for all time", async () => {
+    it("shows no change for all time, and the estimated cost in its place", async () => {
       open({ usage: foo(usageAll) }, "?project=foo&range=0");
       await loaded();
       await within(block("Cost")).findByText("Models by estimated cost");
       expect(within(block("Cost")).queryByText(/Change vs/)).toBeNull();
+      expect(within(block("Cost")).getByText("est. cost, all time")).toBeTruthy();
+    });
+
+    it("sets each token kind's share of tokens beside its share of cost", async () => {
+      open();
+      await loaded();
+      const list = await within(block("Cost")).findByRole("list", { name: "Share of tokens beside share of estimated cost, by kind" });
+      const rows = [...list.querySelectorAll(".sr")].map(r => r.textContent);
+      expect(rows).toHaveLength(4);
+      expect(rows).toContain("Cache read: 66.7% of tokens, 5.1% of estimated cost");
     });
 
     it("opens a session's sheet from the list", async () => {
@@ -316,7 +366,7 @@ describe("ProjectPage", () => {
     it("is left out when no window names the project and no limit has a figure", async () => {
       open({}, "?project=nosuch&range=30");
       await screen.findByRole("heading", { level: 1, name: "nosuch" });
-      await within(block("Summary")).findByText(/est\. cost/);
+      await within(block("Activity")).findByText("median session");
       await waitFor(() => expect(screen.queryByRole("region", { name: "Plan limits" })).toBeNull());
     });
   });
@@ -329,7 +379,7 @@ describe("ProjectPage", () => {
       history.replaceState(null, "", "/project?project=foo&range=30");
       renderApp(<ProjectPage />);
       await loaded();
-      await within(block("Summary")).findByText(/est\. cost/);
+      await within(block("Activity")).findByText("median session");
       expect(f.mock.calls.some(c => String(c[0]).startsWith("/api/limits"))).toBe(true);
       expect(screen.queryByRole("region", { name: "Plan limits" })).toBeNull();
     });
@@ -349,7 +399,7 @@ describe("ProjectPage", () => {
       const b = await screen.findByRole("region", { name: "Session judgments" });
       const alert = await within(b).findByRole("alert");
       expect(alert.textContent).toMatch(/Could not load session judgments/);
-      expect(await within(block("Summary")).findByText(/est\. cost/)).toBeTruthy();
+      expect(await within(block("Activity")).findByText("median session")).toBeTruthy();
       expect(within(block("Context")).queryByRole("alert")).toBeNull();
       await within(block("Context")).findByText("median starting context, tokens");
       const asked = () => f.mock.calls.filter(c => String(c[0]).startsWith("/api/insights")).length;
@@ -361,9 +411,52 @@ describe("ProjectPage", () => {
     it("shows a failing usage request in the blocks that read it, and the others still draw", async () => {
       open({ usage: null });
       await loaded();
-      await waitFor(() => expect(within(block("Summary")).getByRole("alert")).toBeTruthy());
+      await waitFor(() => expect(within(block("Activity")).getByRole("alert")).toBeTruthy());
       expect(within(block("Cost")).getByRole("alert")).toBeTruthy();
+      expect(within(block("Sessions")).getByRole("alert")).toBeTruthy();
       expect(await within(block("Session judgments")).findByText(/1 of 3/)).toBeTruthy();
+      await within(block("Context")).findByText("median starting context, tokens");
+      expect(within(block("Context")).queryByRole("alert")).toBeNull();
+      expect(await within(block("Errors")).findByRole("table", { name: "Top error types" })).toBeTruthy();
+      expect(await within(block("Plan limits")).findByText("Claude Code weekly")).toBeTruthy();
+      expect(screen.queryByText(/No use of foo/)).toBeNull();
+    });
+
+    it("fails the Errors block alone when its request fails", async () => {
+      open({ errors: null });
+      await loaded();
+      expect(await within(block("Errors")).findByRole("alert")).toBeTruthy();
+      expect(await within(block("Activity")).findByText("median session")).toBeTruthy();
+      expect(within(block("Activity")).queryByRole("alert")).toBeNull();
+      expect(within(block("Session judgments")).queryByRole("alert")).toBeNull();
+    });
+
+    /** The API with one path that never answers. */
+    const hang = (path: string) => {
+      const f = serve(), answer = f.getMockImplementation()!;
+      f.mockImplementation((input: string) => (String(input).startsWith(path) ? new Promise<Response>(() => {}) : answer(input)));
+      history.replaceState(null, "", "/project?project=foo&range=30");
+      renderApp(<ProjectPage />);
+    };
+
+    it("shows the heading, the filters and every block at once, with a slow usage request loading in its own blocks only", async () => {
+      hang("/api/usage");
+      // No placeholder: the heading and the filters are there before any request answers.
+      expect(screen.getByRole("heading", { level: 1, name: "foo" })).toBeTruthy();
+      expect(screen.getByRole("group", { name: "Filters" })).toBeTruthy();
+      expect(within(block("Activity")).getByText("Loading…")).toBeTruthy();
+      expect(within(block("Cost")).getByText("Loading…")).toBeTruthy();
+      expect(await within(block("Errors")).findByRole("table", { name: "Top error types" })).toBeTruthy();
+      expect(await within(block("Session judgments")).findByText(/1 of 3/)).toBeTruthy();
+      await within(block("Context")).findByText("median starting context, tokens");
+      expect(screen.queryByText(/No use of foo/)).toBeNull();
+    });
+
+    it("says a slow errors request is loading, and draws the other blocks", async () => {
+      hang("/api/errors");
+      expect(within(block("Errors")).getByText("Loading…")).toBeTruthy();
+      expect(await within(block("Activity")).findByText("median session")).toBeTruthy();
+      expect(within(block("Errors")).getByText("Loading…")).toBeTruthy();
     });
   });
 
@@ -373,7 +466,7 @@ describe("ProjectPage", () => {
     await loaded();
     expect(await screen.findByText(/No use of foo in this view/)).toBeTruthy();
     expect(screen.getByRole("group", { name: "Filters" })).toBeTruthy();
-    expect(screen.queryByRole("region", { name: "Summary" })).toBeNull();
+    expect(screen.queryByRole("region", { name: "Activity" })).toBeNull();
   });
 
   it("hosts the sheets: a session in the URL opens its sheet over the page", async () => {

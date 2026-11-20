@@ -3,8 +3,8 @@ import type { Source, UsagePayload } from "../../api";
 import { useColors } from "../../colors";
 import { dayAxis, peakLabelAt, roomForLabels, textScale, tipAt, useWidth } from "../../components/chart";
 import { ChartTable, DataTable } from "../../components/DataTable";
-import { big, dayLabel, niceStep, plural, usd, usd0 } from "../../format";
-import { costDays, costKinds, isOther, KINDS, STACKS, STACK_WORD, type CostDay, type Kind, type Stack } from "./cost";
+import { big, dayLabel, niceStep, pct, plural, usd, usd0 } from "../../format";
+import { costDays, costKinds, isOther, KINDS, SCALES, shares, STACKS, STACK_WORD, type CostDay, type Kind, type Stack, type TokenScale } from "./cost";
 
 const H = 240;
 export type CostMetric = "cost" | "tokens";
@@ -16,6 +16,9 @@ export interface CostChartProps {
   /** Token kinds left out of the tokens chart. */
   hidden: readonly string[];
   onHidden: (ks: string[]) => void;
+  /** The tokens chart's scale (each day's volume, or its kinds' shares of the day) and a change of it. */
+  scale: TokenScale;
+  onScale: (s: TokenScale) => void;
   /** What the cost bars stack by, and a change of it. */
   stack: Stack;
   onStack: (s: Stack) => void;
@@ -38,7 +41,7 @@ const STACK_HINT: Record<Stack, (one: boolean) => string> = {
 const Row = ({ k, v }: { k: Kind; v: string }) => <div className="row"><span><i style={{ background: k.c }} />{k.label}</span><b>{v}</b></div>;
 
 /** Estimated cost per day stacked by project, model or agent (Other in grey), or tokens per day by kind, with a 7-day average line. */
-export function CostChart({ d, metric, onMetric, hidden, onHidden, stack, onStack, onProject, onSource, onDay }: CostChartProps) {
+export function CostChart({ d, metric, onMetric, hidden, onHidden, scale, onScale, stack, onStack, onProject, onSource, onDay }: CostChartProps) {
   useColors();
   const box = useRef<HTMLDivElement>(null), tip = useRef<HTMLDivElement>(null), svg = useRef<SVGSVGElement>(null), legend = useRef<HTMLDivElement>(null);
   const W = useWidth(box);
@@ -50,7 +53,7 @@ export function CostChart({ d, metric, onMetric, hidden, onHidden, stack, onStac
     const p = tipAt(box.current, tip.current, pos.current.x, pos.current.y);
     tip.current.style.left = p.left + "px"; tip.current.style.top = p.top + "px";
   };
-  useEffect(() => setAt(null), [d, metric, hidden, stack]);
+  useEffect(() => setAt(null), [d, metric, hidden, stack, scale]);
   useLayoutEffect(() => { if (at != null) place(); }, [at]);
   // A project or agent key re-renders the legend for the new view: its first key is the way back.
   const refocus = useRef(false);
@@ -61,14 +64,23 @@ export function CostChart({ d, metric, onMetric, hidden, onHidden, stack, onStac
   const none = !cost && !kinds.length; // every token kind hidden
   const pts = useMemo<CostDay[]>(() => costDays(d, cost ? kinds : [], stack), [d, cost, kinds, stack]);
   const total = useCallback((p: CostDay) => kinds.reduce((s, k) => s + (p.v[k.k] || 0), 0), [kinds]);
+  // Share: every bar is the day's tokens split by kind, so it fills the plot. The bars draw the fractions (plot); the readouts
+  // and the table read the tokens (pts) and each kind's share of them (frac).
+  const share = !cost && scale === "share";
+  const frac = useCallback((p: CostDay, k: Kind) => shares(p.v, kinds)[k.k] ?? 0, [kinds]);
+  const plot = useMemo<CostDay[]>(() => (share ? pts.map(p => ({ ...p, v: shares(p.v, kinds) })) : pts), [share, pts, kinds]);
   // The view ends today, a day still in progress: its bar is hatched and the average (the trailing 7-day mean of the plotted
-  // total, from the seventh day on) leaves it out, so the line ends yesterday.
+  // total, from the seventh day on) leaves it out, so the line ends yesterday. A share bar has no total to average.
   const live = pts.length - 1;
-  const avg = pts.map((_, i) => (i < 6 || i === live ? null : pts.slice(i - 6, i + 1).reduce((s, q) => s + total(q), 0) / 7));
-  const showAvg = pts.length >= 14;
+  const showAvg = pts.length >= 14 && !share;
+  const avg = pts.map((_, i) => (!showAvg || i < 6 || i === live ? null : pts.slice(i - 6, i + 1).reduce((s, q) => s + total(q), 0) / 7));
   const ts = textScale();
-  const a = useMemo(() => dayAxis(W, H, pts.length, Math.max(...pts.map(total), 0), niceStep, undefined, ts), [W, pts, total, ts]);
-  const fy = cost ? usd : big, ty = cost ? usd0 : big;
+  const a = useMemo(() => {
+    const base = dayAxis(W, H, pts.length, Math.max(...pts.map(total), 0), niceStep, undefined, ts);
+    // The share axis is 0 to 100% in quarters, whatever the nice step of the volume would be.
+    return share ? { ...base, yMax: 1, step: .25, y: (v: number) => base.m.t + base.ih - v * base.ih } : base;
+  }, [W, pts, total, ts, share]);
+  const fy = cost ? usd : big, ty = share ? (v: number) => pct(v) : cost ? usd0 : big;
   const peak = pts.reduce((b, p, i) => (total(p) > total(pts[b]!) ? i : b), 0), pk = pts[peak];
   const indexAt = (clientX: number) => {
     const r = svg.current!.getBoundingClientRect(), px = (clientX - r.left) * W / r.width;
@@ -93,7 +105,7 @@ export function CostChart({ d, metric, onMetric, hidden, onHidden, stack, onStac
     if (i === at) place(); else setAt(i);
   };
   // The bars and their axis labels: drawn again only with the data, the size or the stacking, not on every pointer move.
-  const bars = useMemo(() => pts.map((p, i) => {
+  const bars = useMemo(() => plot.map((p, i) => {
     const x = a.x(i), segs = kinds.filter(k => (p.v[k.k] ?? 0) > 0);
     let base = 0;
     return <g key={p.day}>
@@ -110,7 +122,7 @@ export function CostChart({ d, metric, onMetric, hidden, onHidden, stack, onStac
         return <Fragment key={k.k}>{shape(k.c)}{i === live && shape("url(#partial-day)", "partial")}</Fragment>;
       })}</g>}
     </g>;
-  }), [pts, kinds, a, live, ts]);
+  }), [plot, kinds, a, live, ts]);
   const ticks: number[] = [];
   for (let v = 0; v <= a.yMax + 1e-9; v += a.step) ticks.push(v);
 
@@ -132,24 +144,33 @@ export function CostChart({ d, metric, onMetric, hidden, onHidden, stack, onStac
   const avgText = (i: number) => (showAvg && avg[i] != null ? `7-day average ${fy(avg[i])}` : "");
   const text = (p: CostDay, i: number) => (cost
     ? `${usd(p.cost)} estimated${parts(p).length > 1 || p.other?.length ? ` by ${STACK_WORD[stack].noun}: ` + parts(p).map(k => partText(p, k)).join(", ") : ""}${p.unpriced ? `, ${plural(p.unpriced, "unpriced request")}` : ""}`
+    : share ? (total(p) ? kinds.map(k => `${k.label} ${pct(frac(p, k), 1)}`).join(", ") + `, total ${big(total(p))}` : "no tokens")
     : kinds.map(k => `${k.label} ${big(p.v[k.k])}`).join(", ") + `, total ${big(total(p))}`) + (avgText(i) ? `. ${avgText(i)}` : "");
   const cur = at != null ? pts[at] : undefined;
-  const what = cost ? (d.project && stack === "project" ? "Estimated cost" : `Estimated cost by ${STACK_WORD[stack].noun}`) : "Tokens by kind";
-  const label = pk ? `${what} per day, ${pts.length} days, peaking at ${fy(total(pk))} on ${dayLabel(pk.day, true)}${soFar(peak)}. Use the left and right arrow keys to read each day and Enter to list its sessions.`
-    : `${what} per day, no days yet.`;
+  const what = cost ? (d.project && stack === "project" ? "Estimated cost" : `Estimated cost by ${STACK_WORD[stack].noun}`) : share ? "Token share by kind" : "Tokens by kind";
+  const keys = "Use the left and right arrow keys to read each day and Enter to list its sessions.";
+  const label = !pk ? `${what} per day, no days yet.` : share ? `${what} per day, ${pts.length} days. ${keys}`
+    : `${what} per day, ${pts.length} days, peaking at ${fy(total(pk))} on ${dayLabel(pk.day, true)}${soFar(peak)}. ${keys}`;
   const avgLine = avg.map((v, i) => (v == null ? "" : `${i === 6 ? "M" : "L"}${a.cx(i).toFixed(1)},${a.y(v).toFixed(1)}`)).join("");
 
   return (
     <section className="panel sect" id="spend" aria-labelledby="chartTitle">
       <div className="chart-head">
-        <div><h2 id="chartTitle">{cost ? `Estimated cost per day${stack === "project" ? "" : ` by ${STACK_WORD[stack].noun}`}` : "Tokens per day"}</h2>
+        <div><h2 id="chartTitle">{cost ? `Estimated cost per day${stack === "project" ? "" : ` by ${STACK_WORD[stack].noun}`}` : share ? "Token share per day" : "Tokens per day"}</h2>
           <div className="hint">{cost ? `${STACK_HINT[stack](!!d.project)} list prices.`
-            : "Select a kind to hide it. Cache reads usually dwarf the rest."}{showAvg ? " The 7-day average covers complete days." : ""} Select a day, or use the arrow keys and Enter, for its sessions.</div></div>
+            : share ? "Each bar is the day's tokens split by kind. Select a kind to hide it."
+              : "Select a kind to hide it. Cache reads usually dwarf the rest; Share compares the kinds."}{showAvg ? " The 7-day average covers complete days." : ""} Select a day, or use the arrow keys and Enter, for its sessions.</div></div>
         <div className="chart-ctl">
           {cost && <>
             <span className="muted" id="stackBy">Stack by</span>
             <div className="seg" role="group" aria-labelledby="stackBy">
               {STACKS.map(x => <button key={x} type="button" aria-pressed={x === stack} onClick={() => onStack(x)}>{STACK_WORD[x].label}</button>)}
+            </div>
+          </>}
+          {!cost && <>
+            <span className="muted" id="scaleBy">Scale</span>
+            <div className="seg" role="group" aria-labelledby="scaleBy">
+              {SCALES.map(x => <button key={x} type="button" aria-pressed={x === scale} onClick={() => onScale(x)}>{x === "share" ? "Share" : "Volume"}</button>)}
             </div>
           </>}
           <div className="seg" role="group" aria-label="Chart metric">
@@ -186,7 +207,7 @@ export function CostChart({ d, metric, onMetric, hidden, onHidden, stack, onStac
             <path d={avgLine} fill="none" stroke="var(--surface-1)" strokeWidth="4.5" strokeLinejoin="round" strokeLinecap="round" />
             <path d={avgLine} fill="none" stroke="var(--text-primary)" strokeWidth="1.75" strokeLinejoin="round" strokeLinecap="round" />
           </>}
-          {pk && total(pk) > 0 && roomForLabels(a) && (() => {
+          {pk && !share && total(pk) > 0 && roomForLabels(a) && (() => {
             const { x, anchor } = peakLabelAt(a, peak);
             return <text x={x} y={a.y(total(pk)) - 7 * ts} textAnchor={anchor} fontSize={11 * ts} fontWeight="600" fill="var(--text-primary)"
               stroke="var(--surface-1)" strokeWidth="3" paintOrder="stroke">Peak {fy(total(pk))} · {dayLabel(pk.day)}{soFar(peak)}</text>;
@@ -205,7 +226,7 @@ export function CostChart({ d, metric, onMetric, hidden, onHidden, stack, onStac
             <div className={"row" + (parts(cur).length ? " tot" : "")}><span>Total</span><b>{usd(cur.cost)}</b></div>
             {cur.unpriced > 0 && <div className="muted">{plural(cur.unpriced, "unpriced request")}</div>}
           </> : <>
-            {kinds.slice().reverse().map(k => <Row key={k.k} k={k} v={big(cur.v[k.k])} />)}
+            {kinds.slice().reverse().map(k => <Row key={k.k} k={k} v={share ? (total(cur) ? pct(frac(cur, k), 1) : "–") : big(cur.v[k.k])} />)}
             <div className="row tot"><span>Total</span><b>{big(total(cur))}</b></div>
           </>}
           {avgText(at) && <div className="muted">{avgText(at)}</div>}
@@ -216,7 +237,7 @@ export function CostChart({ d, metric, onMetric, hidden, onHidden, stack, onStac
       {!none && <ChartTable><DataTable name={`${what} per day`} region="scroll tall">
         <thead><tr><th scope="col">Day</th>{kinds.map(k => <th key={k.k} scope="col" className="num">{k.label}</th>)}<th scope="col" className="num">Total</th></tr></thead>
         <tbody>{pts.map((p, i) => <tr key={p.day}><th scope="row">{dayLabel(p.day, true)}{soFar(i)}</th>
-          {kinds.map(k => <td key={k.k} className="num">{fy(p.v[k.k] ?? 0)}</td>)}<td className="num">{cost ? usd(p.cost) : big(total(p))}</td></tr>)}</tbody>
+          {kinds.map(k => <td key={k.k} className="num">{share ? (total(p) ? pct(frac(p, k), 1) : "–") : fy(p.v[k.k] ?? 0)}</td>)}<td className="num">{cost ? usd(p.cost) : big(total(p))}</td></tr>)}</tbody>
       </DataTable></ChartTable>}
     </section>
   );

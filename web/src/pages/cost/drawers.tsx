@@ -10,22 +10,14 @@ import { openSessionSheet, pickRow, sessName, shortId } from "../../components/s
 import { big, dayLabel, dur, num, pct, plural, usd, when } from "../../format";
 import { queries } from "../../queries";
 import { useApi } from "../../useApi";
+import { TokenPairs } from "./TokenPairs";
 
 /** "+?" after a cost that leaves out n requests from unpriced models. */
 export const Unpriced = ({ n }: { n: number }) => n ? <> <span className="chip warn" title={`${n} requests from unpriced models`}>+?<span className="sr">{n} requests from unpriced models</span></span></> : null;
 export const NA = () => <span className="muted">n/a</span>;
 
-/** Tokens and cache: cache efficiency, subagent and per-outcome cost, then each billed kind by estimated cost and token share. */
+/** Tokens and cache: cache efficiency, subagent and per-outcome cost, then each billed kind's share of tokens beside its share of cost. */
 export function TokensDrawer({ t }: { t: Totals }) {
-  const all = t.tokens || 1, known = t.cost != null;
-  // Thinking is billed as output, so Output and Thinking share one cost; each row is a billed kind, biggest cost first.
-  const bill = [
-    { label: "Input", c: "var(--series-1)", cost: t.cost_input, tokens: t.input },
-    { label: "Output + thinking", c: "var(--series-2)", cost: t.cost_output, tokens: t.output, note: `${big(t.thinking)} of the tokens are thinking, billed as output` },
-    { label: "Cache read", c: "var(--series-4)", cost: t.cost_cache_read, tokens: t.cache_read },
-    { label: "Cache write 5m", c: "var(--series-5)", cost: t.cost_cache_5m, tokens: t.cache_5m },
-    { label: "Cache write 1h", c: "var(--series-6)", cost: t.cost_cache_1h, tokens: t.cache_1h },
-  ].sort((a, b) => (b.cost ?? 0) - (a.cost ?? 0));
   const vitals: [string, string, string][] = [
     [pct(t.cache_hit_ratio, 1), "Cache hit", `of input tokens came from cache. ${pct(t.write_1h_share)} of cache writes use the 1-hour lifetime.`],
     [pct(t.subagent_cost_share), "Subagent cost", `of estimated cost came from subagents${t.sub_cost ? `, ${usd(t.sub_cost)}` : ""}; ${pct(t.subagent_token_share)} of tokens.`],
@@ -37,12 +29,8 @@ export function TokensDrawer({ t }: { t: Totals }) {
       <section className="vitals" aria-label="Efficiency">
         {vitals.map(([v, l, n]) => <div className="vital" key={l}><div className="v">{v}</div><div className="l">{l}</div><div className="d">{n}</div></div>)}
       </section>
-      <dl className="totals by-kind">
-        {bill.map(k => <div key={k.label}><dt><i style={{ background: k.c }} aria-hidden="true" />{k.label}</dt>
-          <dd>{usd(k.cost)}<small className="cost-share">{known && t.cost ? `${pct((k.cost ?? 0) / t.cost, 1)} of ${usd(t.cost)} estimated cost` : "cost unknown"}</small>
-            <small>{big(k.tokens)} tokens, {pct(k.tokens / all, 1)} of {big(t.tokens)}</small>{k.note && <small>{k.note}</small>}</dd></div>)}
-        <div><dt>Requests</dt><dd>{num(t.requests)}<small>{num(t.main_requests)} from the main thread</small></dd></div>
-      </dl>
+      <TokenPairs t={t} />
+      <p className="hint requests">{plural(t.requests, "request")}, {num(t.main_requests)} from the main thread.</p>
     </Drawer>
   );
 }

@@ -10,6 +10,7 @@ import { openDrawer } from "../../components/Drawer";
 import { mockApi } from "../../components/sheets/testing";
 import { dayStamp, download } from "../../components/export";
 import { renderApp } from "../../testing";
+import { big } from "../../format";
 import { compareText, costDays, thinHistory } from "./cost";
 import { CostPage } from "./CostPage";
 
@@ -406,6 +407,21 @@ describe("CostPage", () => {
     }
   });
 
+  it("remembers the tokens scale across a remount", async () => {
+    localStorage.setItem("claude-usage-metric", JSON.stringify("tokens"));
+    try {
+      await show(usage);
+      expect(screen.getByRole("group", { name: /^Tokens by kind per day/ })).toBeTruthy();
+      await userEvent.click(within(screen.getByRole("group", { name: "Scale" })).getByRole("button", { name: "Share" }));
+      expect(screen.getByRole("group", { name: /^Token share by kind per day/ })).toBeTruthy();
+      cleanup();
+      await show(usage);
+      expect(screen.getByRole("group", { name: /^Token share by kind per day/ })).toBeTruthy();
+    } finally {
+      localStorage.clear();
+    }
+  });
+
   it("remembers the stacking across a remount and filters to an agent from its key", async () => {
     try {
       await show(usage);
@@ -491,21 +507,41 @@ describe("CostPage", () => {
     expect(screen.getByRole("button", { name: "Cache read" }).getAttribute("aria-pressed")).toBe("true");
   });
 
-  it("splits the Tokens and cache drawer by estimated cost, biggest first, with thinking billed as output", async () => {
+  it("pairs each billed kind's share of tokens with its share of cost in the Tokens and cache drawer, costliest first", async () => {
     await show(usage);
-    const rows = [...drawer("d-tokens").querySelectorAll(".by-kind > div")].map(d => d.textContent!);
-    expect(rows[0]).toMatch(/^Output \+ thinking\$1063\.3% of \$16 estimated cost/);
-    expect(rows[0]).toMatch(/of the tokens are thinking, billed as output/);
-    const cr = rows.find(r => r.startsWith("Cache read"))!;
-    expect(cr).toMatch(/\$0\.80.*5\.1% of \$16 estimated cost8\.0M tokens, 66\.7% of 12\.0M/);
-    expect(rows.some(r => r.startsWith("Thinking"))).toBe(false);
+    const rows = [...drawer("d-tokens").querySelectorAll(".tp-row .sr")].map(d => d.textContent!);
+    expect(rows).toHaveLength(4);
+    expect(rows[0]).toBe("Output + thinking: 8.3% of tokens, 63.3% of estimated cost");
+    expect(rows.find(r => r.startsWith("Cache read"))).toBe("Cache read: 66.7% of tokens, 5.1% of estimated cost");
+    expect(rows.some(r => r.startsWith("Cache write 5m") || r.startsWith("Thinking"))).toBe(false);
+    // The bars: tokens left, cost right, each as long as its share.
+    const read = [...drawer("d-tokens").querySelectorAll(".tp-row")].find(r => r.textContent!.startsWith("Cache read"))!;
+    expect(read.querySelector<HTMLElement>(".tp-l i")!.style.width).toMatch(/^66\.6/);
+    expect(read.querySelector<HTMLElement>(".tp-r i")!.style.width).toMatch(/^5\.0|^5\.1/);
+    expect(within(drawer("d-tokens")).getByText("Cache read is 66.7% of tokens and 5.1% of estimated cost.")).toBeTruthy();
   });
 
-  it("shows an unknown cost by kind as a dash, not $0", async () => {
+  it("gives the exact tokens and cost of each kind in a data table, with thinking and both cache write lifetimes", async () => {
+    await show(usage, ["d-tokens"]);
+    await userEvent.click(within(drawer("d-tokens")).getByRole("button", { name: "Show data table" }));
+    const table = within(drawer("d-tokens")).getByRole("table", { name: "Tokens and estimated cost by kind" });
+    const cells = (name: string) => [...within(table).getByRole("rowheader", { name }).closest("tr")!.querySelectorAll("td")].map(c => c.textContent);
+    expect(cells("Cache read")).toEqual([big(8000000), "66.7%", "$0.80", "5.1%"]);
+    expect(cells("Output + thinking").slice(2)).toEqual(["$10", "63.3%"]);
+    expect(cells("Thinking (in output)")[0]).toBe(big(500000));
+    expect(cells("5-minute cache write")[0]).toBe(big(500000));
+    expect(cells("1-hour cache write")[0]).toBe(big(500000));
+    expect(within(table).queryByRole("rowheader", { name: "Cache write 5m" })).toBeNull();
+  });
+
+  it("shows an unknown cost by kind as a dash, not $0, with no cost bar", async () => {
     const none = { cost: null, cost_input: null, cost_output: null, cost_cache_read: null, cost_cache_5m: null, cost_cache_1h: null };
-    await show({ ...usage, totals: { ...usage.totals, ...none } });
-    const first = drawer("d-tokens").querySelector(".by-kind > div")!.textContent!;
-    expect(first).toMatch(/–cost unknown/);
-    expect(drawer("d-tokens").querySelector(".by-kind")!.textContent).not.toMatch(/\$0/);
+    await show({ ...usage, totals: { ...usage.totals, ...none } }, ["d-tokens"]);
+    const d = drawer("d-tokens");
+    expect(d.querySelector(".tp-row .sr")!.textContent).toMatch(/cost unknown$/);
+    expect(d.querySelectorAll(".tp-r i")).toHaveLength(0);
+    expect(within(d).getByText(/share of cost is unknown/)).toBeTruthy();
+    await userEvent.click(within(d).getByRole("button", { name: "Show data table" }));
+    expect(within(d).getByRole("table", { name: "Tokens and estimated cost by kind" }).textContent).not.toMatch(/\$0/);
   });
 });

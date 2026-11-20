@@ -1,5 +1,5 @@
 // Cost's figures from the usage payload: the headline comparison, the daily series and the chart's stack.
-import type { Source, UsagePayload } from "../../api";
+import type { Source, Totals, UsagePayload } from "../../api";
 import { color, hasHue } from "../../colors";
 import { SOURCE_LABELS } from "../../components/Filters";
 import { dayRange, mult, num, pct, usd0 } from "../../format";
@@ -156,4 +156,35 @@ export function sparkPoints(d: Pick<UsagePayload, "previous" | "daily" | "start"
   const pts = dayRange(first, d.end).map(k => ({ k, v: byDay.get(k) ?? 0 }));
   if (pts.length < 2) return null;
   return { pts, split: prev && d.start ? Math.max(0, pts.findIndex(p => p.k >= d.start!)) : 0 };
+}
+
+/** The tokens chart's scale: each day's volume, or its kinds' shares of that day's tokens (every bar the full height). */
+export type TokenScale = "volume" | "share";
+export const SCALES: readonly TokenScale[] = ["volume", "share"];
+
+/** A day's value per kind as a fraction of the shown kinds' total; every kind 0 on a day with no tokens. */
+export function shares(v: Record<string, number>, kinds: readonly Kind[]): Record<string, number> {
+  const sum = kinds.reduce((s, k) => s + (v[k.k] || 0), 0);
+  return Object.fromEntries(kinds.map(k => [k.k, sum ? (v[k.k] || 0) / sum : 0]));
+}
+
+/** One billed token kind: its tokens and the share of all tokens, its estimated cost (null when unknown) and the share of all cost. */
+export interface TokenPair { key: "input" | "output" | "write" | "read"; label: string; c: string; tokens: number; tokenShare: number; cost: number | null; costShare: number | null;
+  /** What the row holds beyond its name: thinking inside Output, the two lifetimes inside Cache write. */
+  parts: { label: string; tokens: number; cost: number | null }[] }
+
+/** The view's token kinds as billed (thinking inside Output, the two cache write lifetimes joined), each with its share of tokens beside
+ *  its share of the estimated cost. Costliest first, by tokens when no request is priced. */
+export function tokenPairs(t: Pick<Totals, "tokens" | "cost" | "input" | "output" | "thinking" | "cache_read" | "cache_5m" | "cache_1h" | "cost_input" | "cost_output" | "cost_cache_read" | "cost_cache_5m" | "cost_cache_1h">): TokenPair[] {
+  const all = t.tokens || 1, known = t.cost != null && t.cost > 0;
+  const sum = (a: number | null, b: number | null) => (a == null || b == null ? null : a + b);
+  const row = (key: TokenPair["key"], label: string, c: string, tokens: number, cost: number | null, parts: TokenPair["parts"] = []): TokenPair =>
+    ({ key, label, c, tokens, tokenShare: tokens / all, cost, costShare: known && cost != null ? cost / t.cost! : null, parts });
+  return [
+    row("input", "Input", "var(--series-1)", t.input, t.cost_input),
+    row("output", "Output + thinking", "var(--series-2)", t.output, t.cost_output, [{ label: "Thinking", tokens: t.thinking, cost: null }]),
+    row("write", "Cache write", "var(--series-5)", t.cache_5m + t.cache_1h, sum(t.cost_cache_5m, t.cost_cache_1h),
+      [{ label: "5-minute", tokens: t.cache_5m, cost: t.cost_cache_5m }, { label: "1-hour", tokens: t.cache_1h, cost: t.cost_cache_1h }]),
+    row("read", "Cache read", "var(--series-4)", t.cache_read, t.cost_cache_read),
+  ].sort((a, b) => (known ? (b.cost ?? 0) - (a.cost ?? 0) : b.tokens - a.tokens));
 }

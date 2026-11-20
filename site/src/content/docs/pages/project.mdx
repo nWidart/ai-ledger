@@ -5,8 +5,10 @@ spec: [project-page]
 ---
 
 import ThemedImage from "../../../components/ThemedImage.astro";
-import summary from "../../../assets/shots/project-summary.png";
-import summaryLight from "../../../assets/shots/project-summary-light.png";
+import layout from "../../../assets/shots/project-layout.png";
+import layoutLight from "../../../assets/shots/project-layout-light.png";
+import activity from "../../../assets/shots/project-activity.png";
+import activityLight from "../../../assets/shots/project-activity-light.png";
 import cost from "../../../assets/shots/project-cost.png";
 import costLight from "../../../assets/shots/project-cost-light.png";
 import sessions from "../../../assets/shots/project-sessions.png";
@@ -21,6 +23,10 @@ import limits from "../../../assets/shots/project-limits.png";
 import limitsLight from "../../../assets/shots/project-limits-light.png";
 
 Project answers one question: how is this project doing, without visiting every page? It gathers the project's figures from Activity, Cost, Errors, Context, Insights and Limits on one page. Each block links to its page, filtered to the project.
+
+<ThemedImage dark={layout} light={layoutLight} alt="The Project page for atlas-api in two columns: Activity, Cost and Context on the left, Errors, Plan limits and Sessions on the right." />
+
+On a wide screen (wider than 60em) the blocks sit in two columns: Activity, Cost and Context on the left; Errors, Plan limits, Sessions and Session judgments on the right. On a narrow screen they stack in one column in the same order, left column first. The page adds depth to the [project sheet](/ai-ledger/pages/cost/) rather than repeating it: the sheet keeps the eight quick figures, and the page shows other figures and charts.
 
 Terms such as automated session, calibrated window, points and counted use are in the [Metric glossary](/ai-ledger/reference/glossary/).
 
@@ -37,41 +43,44 @@ The heading is the project's name. Beside it are the shared [filters](/ai-ledger
 
 The tabs of the navigation keep the project, as on every page, and none is marked current on the Project page.
 
-When the project has no request in the view, the page keeps its heading and filters and says "No use of \<project> in this view." with a hint to pick a longer range, another source or include automated sessions. It shows no block.
+When the project has no request in the view, the page keeps its heading and filters and says "No use of \<project> in this view." with a hint to pick a longer range, another source or include automated sessions. It shows no block. The page says this only after the usage request has answered with no request.
 
 ## Panels
 
-The page loads each block on its own. A block whose data fails to load says "Could not load \<block>" with the error and a **Retry** control; the other blocks still show. Each block's heading has an **Open in \<page>** link to that page, filtered to the project and to the page's range, source and automated filters. Blocks appear in this order.
+The heading, the filters and every block show at once, without waiting for any request. Each block loads, fails and shows its empty state on its own. While its data is on the way, a block says "Loading…". A block whose data fails to load says "Could not load \<block>" with the error and a **Retry** control; the other blocks still show their figures. When the usage request fails, only Activity, Cost and Sessions show that error. Each block's heading has an **Open in \<page>** link to that page, filtered to the project and to the page's range, source and automated filters. Blocks appear in the order below, the left column first.
 
-### Summary
+### Activity
 
-<ThemedImage dark={summary} light={summaryLight} alt="The Project page's Summary block for atlas-api: eight figures, each equal to the same figure on its page." />
+<ThemedImage dark={activity} light={activityLight} alt="The Project page's Activity block for atlas-api: eight figures of the project's activity." />
 
-**Shows** a line, "Last N days, from the range filter" (or "All time"), "Estimated at API list prices." Then eight figures, each equal to the same figure on the project sheet for the same view.
+**Shows** a line, "Last N days, from the range filter" (or "All time"). Then eight figures, each equal to the same figure on [Activity](/ai-ledger/pages/activity/) for the project and view. They are not the project sheet's eight figures.
 
 **Figures**
 
 | Figure | Meaning |
 | --- | --- |
-| est. cost | Estimated spend at API list prices. See [Cost estimates](/ai-ledger/concepts/cost-estimates/). |
-| sessions | Sessions of the project in the view. |
-| tokens | Tokens used. |
-| cache hit | Cache-read tokens over all prompt tokens. |
-| tokens from subagents | Share of tokens spent by subagents. |
-| per commit | Estimated cost per commit, with the commit count: "per commit, N commits". `n/a` with no commit. |
-| errors per 100 calls | Failed tool calls per 100 tool calls. |
-| error loops | Runs where the same tool failed three or more times in a row within a session. |
+| prompts | Prompts you sent in the view. |
+| commits | Commits made. |
+| active days | Days with at least one request. |
+| requests | Requests, with how many "from the main thread" (the rest came from subagents). |
+| median session | The median active time of a session. |
+| estimated cost per prompt | Estimated cost over prompts. |
+| turns per prompt | Model turns for each prompt. |
+| of prompts interrupted | Share of prompts you interrupted. |
+
+A figure the store cannot give reads `n/a`.
 
 **Controls** The heading link **Open in Activity** opens Activity for the project. When sessions of the project are active now, a link reads "N sessions active now" and opens [Live](/ai-ledger/pages/live/) showing only the project. With none, the block says nothing about Live.
 
 ### Cost
 
-<ThemedImage dark={cost} light={costLight} alt="The Project page's Cost block for atlas-api: the change in estimated cost against the previous 30 days, and the models by estimated cost." />
+<ThemedImage dark={cost} light={costLight} alt="The Project page's Cost block for atlas-api: the change in estimated cost against the previous 30 days, the models by estimated cost, and each token kind's share of tokens beside its share of cost." />
 
-**Shows**
+**Shows** the line "Estimated at API list prices." Then:
 
-- **Change vs the previous N days**: the cost of the previous period, the cost of the last N days, and the change, with a **new** tag when the project had no usage before. A chart gives the cost per day over both periods. The all-time view shows no change.
-- **Models by estimated cost**: the project's models ranked by estimated cost, as the project sheet and the [Cost](/ai-ledger/pages/cost/) page show them.
+- **Change vs the previous N days**: the cost of the previous period, the cost of the last N days, and the change, with a **new** tag when the project had no usage before. A chart gives the cost per day over both periods. The all-time view shows the estimated cost in its place and no change. See [Cost estimates](/ai-ledger/concepts/cost-estimates/).
+- **Models by estimated cost**: the project's models ranked by estimated cost, as the [Cost](/ai-ledger/pages/cost/) page shows them.
+- **Tokens beside cost**: each billed token kind's share of the project's tokens beside its share of its estimated cost, as in the Tokens and cache drawer of [Cost](/ai-ledger/pages/cost/), with the same data table.
 
 **Controls** The heading link **Open in Cost** opens Cost for the project.
 
@@ -87,7 +96,7 @@ The page loads each block on its own. A block whose data fails to load says "Cou
 
 <ThemedImage dark={errors} light={errorsLight} alt="The Project page's Errors block for atlas-api." />
 
-**Shows** figures that each equal what [Errors](/ai-ledger/pages/errors/) shows by default for the project, range and source. The block counts automated sessions too, as Errors does; when the **Include automated sessions** filter is off it says so: "Errors counts automated sessions too, whatever the filter says." With that filter off, this block's error rate can therefore differ from the Summary's errors per 100 calls, which follow the filter.
+**Shows** figures that each equal what [Errors](/ai-ledger/pages/errors/) shows by default for the project, range and source. The block counts automated sessions too, as Errors does; when the **Include automated sessions** filter is off it says so: "Errors counts automated sessions too, whatever the filter says." With that filter off, this block's error rate can therefore differ from the project sheet's errors per 100 calls, which follow the filter.
 
 **Figures**
 
