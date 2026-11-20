@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore } from "react";
 import { setOrder } from "../../colors";
 import { agentName, Filters } from "../../components/Filters";
+import { showModalUnder } from "../../components/Sheet";
 import { UsageSheets } from "../../components/sheets/UsageSheets";
 import type { SortBy } from "../../components/Sort";
 import { Toggletip } from "../../components/Toggletip";
@@ -180,8 +181,9 @@ export function ErrorsPage() {
     // Narrow screens show an open type in the sheet: the detail renders there, the same either way.
     const d = sheet.current!;
     if (toSheet) {
-      if (!d.open) d.showModal();
-      if (sheetCat.current !== view.cat) { d.scrollTop = 0; $("#detailTitle")?.focus({ preventScroll: true }); }
+      // Under a session or tool sheet already open (a deep link, or a wide window made narrow): that one stays on top, with focus.
+      const top = d.open || showModalUnder(d);
+      if (sheetCat.current !== view.cat) { d.scrollTop = 0; if (top) $("#detailTitle")?.focus({ preventScroll: true }); }
       sheetCat.current = view.cat;
     } else if (d.open) d.close();
     // A new type fades in over the old one's place.

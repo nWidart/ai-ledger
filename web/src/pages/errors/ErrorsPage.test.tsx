@@ -1423,6 +1423,28 @@ describe("ErrorsPage", () => {
       expect(document.querySelector("main")).toBe(main);
       expect(document.activeElement).toBe(link);
     });
+
+    it("stays on top of the narrow-screen type sheet on a deep link, which opens it before Errors loads", async () => {
+      vi.stubGlobal("matchMedia", (q: string) => ({ matches: q.includes("max-width"), media: q, addEventListener() {}, removeEventListener() {} }));
+      // The browser stacks modal dialogs in the order showModal opens them: the last one is on top and gets Escape.
+      const shown: HTMLDialogElement[] = [], showModal = HTMLDialogElement.prototype.showModal;
+      const spy = vi.spyOn(HTMLDialogElement.prototype, "showModal").mockImplementation(function (this: HTMLDialogElement) { shown.push(this); showModal.call(this); });
+      try {
+        history.replaceState(null, "", "/errors?range=30&session=s1&cat=x");
+        await page();
+        const detail = document.getElementById("sheet") as HTMLDialogElement;
+        const dlg = document.querySelector<HTMLDialogElement>("dialog.sheet:not(#sheet)")!;
+        expect(await within(dlg).findByText("Timeline")).toBeTruthy();
+        expect(shown.indexOf(detail)).toBeGreaterThan(shown.indexOf(dlg)); // the session sheet opened first
+        expect(shown.at(-1)).toBe(dlg); // and is on top
+        expect(detail.open).toBe(true);
+        expect(document.activeElement && dlg.contains(document.activeElement)).toBe(true);
+        await userEvent.click(within(dlg).getByRole("button", { name: "← Back" }));
+        expect(dlg.open).toBe(false);
+        expect(detail.open).toBe(true);
+        expect(location.search).toBe("?range=30&cat=x");
+      } finally { spy.mockRestore(); }
+    });
   });
 
   describe("tool sheet", () => {
