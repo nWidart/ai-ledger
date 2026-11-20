@@ -40,7 +40,13 @@ The page SHALL show the project's change in estimated cost against the previous 
 - **THEN** the block's chart shows 66% of tokens beside 5% of estimated cost for Cache read
 
 ### Requirement: Load each block on its own
-The page SHALL show its heading and filters, and every block, without waiting for any request. Each block SHALL show its own state: a loading line while its data is on the way, its figures once they arrive, an empty state when it has nothing to show, and an error with a Retry control when its request fails. A failed or slow request SHALL change only the blocks that read it, and the other blocks SHALL still show. The Plan limits block SHALL stay out until it has something to show, as its own requirement says, and show its error when its request fails. The page SHALL say there is no use in the view only when the usage request has answered with no request for the project.
+The page SHALL show its heading and filters, and every block, without waiting for any request. Each block SHALL show its own state: a loading line while its data is on the way, its figures once they arrive, an empty state when it has nothing to show, and an error with a Retry control when its request fails. A failed or slow request SHALL change only the blocks that read it, and the other blocks SHALL still show. The Plan limits block SHALL stay out until it has something to show, as its own requirement says, and show its error when its request fails.
+
+The page SHALL say there is no use in the view only when the usage request has answered with no request for the project. That message SHALL sit above the blocks and SHALL NOT hide them: Activity, Cost and Sessions SHALL say they have no request in the view, and every other block SHALL show its own figures, empty state or error. The Context block SHALL still offer Measure now with a snapshot, as its own requirement says.
+
+The per-block states SHALL take the place of the app's page placeholder for data: once the page's code has loaded, the page SHALL NOT show the gray placeholder blocks while its data loads, and its content area SHALL NOT be `aria-busy`. Instead each block SHALL be `aria-busy` while a request it reads is under way. A block's loading line SHALL NOT be a live region. A block that already shows figures SHALL keep them while its request refreshes, as the app's rule for data on screen says, and a refresh that takes over 150 ms SHALL dim that block's figures only.
+
+When the Live request fails, the Activity block SHALL say the sessions active now could not load, with a Retry control, and keep its figures, so that a failure does not read as no active session.
 
 #### Scenario: One block fails
 - **WHEN** the insights request fails and the others succeed
@@ -53,6 +59,26 @@ The page SHALL show its heading and filters, and every block, without waiting fo
 #### Scenario: Slow block
 - **WHEN** the errors request has not answered
 - **THEN** the Errors block says it is loading and the other blocks show their figures
+
+#### Scenario: Slow usage request
+- **WHEN** the usage request has not answered and the others have
+- **THEN** Activity, Cost, Sessions and Context are `aria-busy`, Errors and Session judgments are not, the page's content area is not, and no loading line is announced
+
+#### Scenario: Slow refresh
+- **WHEN** the usage request refreshes and takes over 150 ms
+- **THEN** the blocks that read usage keep their figures dimmed until it answers, and the other blocks are not dimmed
+
+#### Scenario: No use with a snapshot
+- **WHEN** the usage request answers with no request for `foo` and `foo` has a context snapshot
+- **THEN** the page says there is no use of `foo` in the view, Activity, Cost and Sessions say they have no request, and the Context block shows the snapshot and offers Measure now
+
+#### Scenario: No use with a failed request
+- **WHEN** the usage request answers with no request for `foo` and the errors request fails
+- **THEN** the page says there is no use of `foo` in the view, and the Errors block shows its error with Retry
+
+#### Scenario: Live fails
+- **WHEN** the live request fails and the usage request succeeds
+- **THEN** the Activity block shows its figures and says the sessions active now could not load, with Retry
 
 #### Scenario: Empty block
 - **WHEN** `foo` has no failed call in the view

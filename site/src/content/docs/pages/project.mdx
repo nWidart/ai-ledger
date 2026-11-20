@@ -43,11 +43,11 @@ The heading is the project's name. Beside it are the shared [filters](/ai-ledger
 
 The tabs of the navigation keep the project, as on every page, and none is marked current on the Project page.
 
-When the project has no request in the view, the page keeps its heading and filters and says "No use of \<project> in this view." with a hint to pick a longer range, another source or include automated sessions. It shows no block. The page says this only after the usage request has answered with no request.
+When the project has no request in the view, the page keeps its heading and filters and says "No use of \<project> in this view." with a hint to pick a longer range, another source or include automated sessions. The page says this only after the usage request has answered with no request. The blocks still show below it: Activity, Cost and Sessions say "No requests in this view.", and the other blocks show their own figures, empty state or error. Context still offers **Measure now** when the project has a context snapshot.
 
 ## Panels
 
-The heading, the filters and every block show at once, without waiting for any request. Each block loads, fails and shows its empty state on its own. While its data is on the way, a block says "Loading…". A block whose data fails to load says "Could not load \<block>" with the error and a **Retry** control; the other blocks still show their figures. When the usage request fails, only Activity, Cost and Sessions show that error. Each block's heading has an **Open in \<page>** link to that page, filtered to the project and to the page's range, source and automated filters. Blocks appear in the order below, the left column first.
+The heading, the filters and every block show at once, without waiting for any request. Each block loads, fails and shows its empty state on its own. While its data is on the way, a block says "Loading…". When a block's data refreshes and the answer takes a while, that block keeps its figures and dims them; the other blocks stay as they are. A block whose data fails to load says "Could not load \<block>" with the error and a **Retry** control; the other blocks still show their figures. When the usage request fails, only Activity, Cost and Sessions show that error. Each block's heading has an **Open in \<page>** link to that page, filtered to the project and to the page's range, source and automated filters. Blocks appear in the order below, the left column first.
 
 ### Activity
 
@@ -61,7 +61,7 @@ The heading, the filters and every block show at once, without waiting for any r
 | --- | --- |
 | prompts | Prompts you sent in the view. |
 | commits | Commits made. |
-| active days | Days with at least one request. |
+| active days | Days with at least one prompt. A session that works on its own (a resumed one, a background task) adds none. |
 | requests | Requests, with how many "from the main thread" (the rest came from subagents). |
 | median session | The median active time of a session. |
 | estimated cost per prompt | Estimated cost over prompts. |
@@ -70,7 +70,7 @@ The heading, the filters and every block show at once, without waiting for any r
 
 A figure the store cannot give reads `n/a`.
 
-**Controls** The heading link **Open in Activity** opens Activity for the project. When sessions of the project are active now, a link reads "N sessions active now" and opens [Live](/ai-ledger/pages/live/) showing only the project. With none, the block says nothing about Live.
+**Controls** The heading link **Open in Activity** opens Activity for the project. When sessions of the project are active now, a link reads "N sessions active now" and opens [Live](/ai-ledger/pages/live/) showing only the project. With none, the block says nothing about Live. When the Live request fails, the block says "Could not load the sessions active now." with a **Retry** control, and keeps its figures.
 
 ### Cost
 
