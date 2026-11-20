@@ -1,6 +1,9 @@
 // The blocks of the Project page. Each reads one payload another page reads, with the project as the filter, and draws, fails and
 // retries on its own (Block). Figures come from the other pages' own components and model functions.
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { motion } from "../../components/chart";
+import { askedFor } from "../../components/refresh";
 import type { ContextPayload, ErrorsPayload, InsightsPayload, LimitsPayload, LivePayload, Totals, UsagePayload } from "../../api";
 import { DataTable } from "../../components/DataTable";
 import { Judged, label as facetLabel, outcomeLabel } from "../../components/facets";
@@ -34,16 +37,45 @@ function useSlow(loading: boolean) {
   return loading && slow;
 }
 
+/** How a block takes in new data, as useLanding does for a whole page, but for this block alone, so a payload that changed moves only
+ *  the blocks that read it. When the block's data changes for a new view (view), after Refresh or after a failure, its bars grow in
+ *  and, over earlier figures, it fades in; new data an ingest brought in the background swaps in quietly. An answer equal to the last
+ *  keeps its reference (the query cache shares it), so a refresh that changed nothing moves nothing. */
+function useLand(data: unknown, view: string, error: Error | undefined) {
+  const client = useQueryClient(), ref = useRef<HTMLElement>(null);
+  const shown = useRef({ data, view }), failed = useRef(false);
+  useEffect(() => { if (error) failed.current = true; }, [error]);
+  useLayoutEffect(() => {
+    const was = shown.current;
+    shown.current = { data, view };
+    if (data === undefined || data === was.data) return;
+    const quiet = was.data !== undefined && was.view === view && !askedFor(client) && !failed.current;
+    failed.current = false;
+    const el = ref.current;
+    if (quiet || !motion() || !el) return;
+    // Classes set here, not through className, so restarting the animation re-renders nothing.
+    el.classList.remove("grow", "fade-in");
+    void el.offsetWidth;
+    el.classList.add("grow");
+    if (was.data !== undefined) el.classList.add("fade-in");
+    const t = setTimeout(() => el.classList.remove("grow"), 1100);
+    return () => { clearTimeout(t); el.classList.remove("grow"); };
+    // view is read with data, not watched: it changes before its answer comes, and the landing waits for that answer.
+  }, [data]); // eslint-disable-line react-hooks/exhaustive-deps
+  return ref;
+}
+
 /** One block: its heading with the link to its page, then its body once its data is in. A failed request says so with Retry
  *  and, when the block already has figures (a refresh failed), keeps them. The block is aria-busy while its request, or another it
- *  reads a line from (also), is under way; a refresh of its own request that takes a while dims its figures, and no other block's.
- *  The loading line is plain text, not a live region: aria-busy says it. */
+ *  reads a line from (also), is under way; one of them taking a while dims its figures, and no other block's. The loading line is
+ *  plain text, not a live region: aria-busy says it. href names the view, so the block lands anew when it changes. */
 function Block<T>({ id, title, page, href, state, also = [], children }: { id: string; title: string; page: string; href: string; state: ApiState<T>;
   also?: readonly ApiState<unknown>[]; children: (d: T) => ReactNode }) {
   const { data, error, retry } = state;
-  const loading = state.loading || also.some(s => s.loading), slow = useSlow(state.loading);
+  const loading = state.loading || also.some(s => s.loading), slow = useSlow(loading);
+  const ref = useLand(data, href, error);
   return (
-    <section className={"panel sect" + (slow && data ? " loading" : "")} id={id} aria-labelledby={id + "Title"} aria-busy={loading || undefined}>
+    <section ref={ref} className={"panel sect" + (slow && data ? " loading" : "")} id={id} aria-labelledby={id + "Title"} aria-busy={loading || undefined}>
       <header className="blk-head">
         <h2 id={id + "Title"}>{title}</h2>
         <a className="blk-open" href={href} onClick={appLink}>Open in {page}</a>
@@ -59,7 +91,7 @@ const noRequests = <p className="empty">No requests in this view.</p>;
 
 /** What the project did: eight figures the project sheet does not show (the sheet has cost, sessions, tokens and error counts), as
  *  Activity counts them, and a link to Live while sessions of it are running (a note with Retry when Live did not answer, so a failure
- *  does not read as no session). A figure the store cannot give reads n/a. */
+ *  does not read as no session, and a plain "Checking…" line while Live has not answered). A figure the store cannot give reads n/a. */
 export const activityFacts = (t: Totals): [ReactNode, ReactNode][] => {
   const na = (v: number | null, f: (n: number) => string) => (v == null ? "n/a" : f(v));
   return [
@@ -71,13 +103,19 @@ export const activityFacts = (t: Totals): [ReactNode, ReactNode][] => {
 };
 export function ActivityBlock({ usage, live, scope }: { usage: ApiState<UsagePayload>; live: ApiState<LivePayload>; scope: Scope }) {
   const n = live.data?.sessions.length ?? 0;
+  // The line stays in the page whatever it says, so Retry can put focus on it: the request clears its error, and the button goes.
+  const line = useRef<HTMLParagraphElement>(null);
+  const retry = () => { line.current?.focus(); live.retry(); };
   return (
     <Block id="activity" title="Activity" page="Activity" href={"/usage" + scope.search} state={usage} also={[live]}>
       {d => <>
         <div className="hint">{d.start ? `Last ${d.range} days` : "All time"}, from the range filter.</div>
         {d.totals.requests ? <Facts facts={activityFacts(d.totals)} /> : noRequests}
-        {live.error ? <p className="live-now muted">Could not load the sessions active now. <button type="button" className="linkish" onClick={live.retry}>Retry</button></p>
-          : n > 0 && <p className="live-now"><a href={"/live" + scope.search} onClick={appLink}>{plural(n, "session")} active now</a></p>}
+        <p className={"live-now" + (n > 0 ? "" : " muted")} ref={line} tabIndex={-1}>
+          {live.error ? <>Could not load the sessions active now. <button type="button" className="linkish" onClick={retry}>Retry</button></>
+            : !live.data && live.loading ? "Checking for active sessions…"
+            : n > 0 && <a href={"/live" + scope.search} onClick={appLink}>{plural(n, "session")} active now</a>}
+        </p>
       </>}
     </Block>
   );
@@ -147,7 +185,7 @@ export function ContextBlock({ context, usage, scope }: { context: ApiState<Cont
   return (
     <Block id="context" title="Context" page="Context" href={"/context" + scope.search} state={context} also={[usage]}>
       {c => <>
-        <ContextGrid model={contextGrid(c)} />
+        <ContextGrid model={contextGrid(c)} snapshot={c.overhead} />
         <Facts facts={[
         [c.starting.median == null ? "n/a" : big(c.starting.median), "median starting context, tokens"],
         [c.starting.window_share == null ? "n/a" : share(c.starting.window_share), "of the window at the start"],

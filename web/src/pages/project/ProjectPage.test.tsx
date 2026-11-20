@@ -1,4 +1,4 @@
-import { cleanup, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { ContextOverhead, ContextPayload, ErrorsPayload, InsightsPayload, LimitsPayload, LivePayload, UsagePayload } from "../../api";
@@ -14,7 +14,7 @@ import usageAll from "../../__fixtures__/usage-all";
 import { ProjectSheet } from "../../components/sheets/ProjectSheet";
 import { mockApi } from "../../components/sheets/testing";
 import { big, num, usd } from "../../format";
-import { renderApp } from "../../testing";
+import { refreshed, renderApp } from "../../testing";
 import { ProjectPage } from "./ProjectPage";
 
 /** The fixture with the fields the grid reads (until the fixtures are regenerated): the peak's share of the window, null for none. */
@@ -137,9 +137,32 @@ describe("ProjectPage", () => {
       const note = await within(block("Activity")).findByText(/Could not load the sessions active now/);
       expect(within(block("Activity")).getByText("median session")).toBeTruthy();
       expect(within(block("Activity")).queryByRole("alert")).toBeNull();
+      const answer = f.getMockImplementation()!;
+      let done!: () => void;
+      // The retried request waits, then answers with two sessions.
+      f.mockImplementation((input: string) => (String(input).startsWith("/api/live")
+        ? new Promise<Response>(r => { done = () => r({ ok: true, status: 200, json: () => Promise.resolve(base.live) } as Response); })
+        : answer(input)));
       const asked = () => f.mock.calls.filter(c => String(c[0]).startsWith("/api/live")).length, before = asked();
       await userEvent.click(within(note).getByRole("button", { name: "Retry" }));
       await waitFor(() => expect(asked()).toBeGreaterThan(before));
+      // While it is under way: a plain line, no live region, and focus on the line, not lost with the button.
+      const line = within(block("Activity")).getByText("Checking for active sessions…");
+      expect(line.closest("[aria-live], [role=status]")).toBeNull();
+      expect(document.activeElement).toBe(line);
+      act(() => done());
+      const link = await within(block("Activity")).findByRole("link", { name: "2 sessions active now" });
+      expect(document.activeElement).toBe(link.parentElement);
+    });
+
+    it("says it is checking for active sessions while Live has not answered, not that there are none", async () => {
+      const f = serve(), answer = f.getMockImplementation()!;
+      f.mockImplementation((input: string) => (String(input).startsWith("/api/live") ? new Promise<Response>(() => {}) : answer(input)));
+      history.replaceState(null, "", "/project?project=foo&range=30");
+      renderApp(<ProjectPage />);
+      await within(block("Activity")).findByText("median session");
+      expect(within(block("Activity")).getByText("Checking for active sessions…")).toBeTruthy();
+      expect(block("Activity").getAttribute("aria-busy")).toBe("true");
     });
   });
 
@@ -349,6 +372,22 @@ describe("ProjectPage", () => {
       expect(within(blk).getByText(/^Overhead measured/)).toBeTruthy();
     });
 
+    it("shows what the snapshot measured when no session in the view gives a share of the window", async () => {
+      // No request in the range: the starting and peak shares are null, so there is no grid, but the snapshot is the project's latest.
+      const none = { ...foo(usage), totals: { ...usage.totals, requests: 0, sessions: 0 }, daily_sources: [] } as UsagePayload;
+      const empty = { ...withGrid({ ...context, starting: { ...context.starting, sessions: 0, median: null, window_share: null } }, null), overhead: snapshot } as ContextPayload;
+      open({ usage: none, context: empty });
+      await loaded();
+      const blk = block("Context");
+      await within(blk).findByRole("button", { name: "Measure now" });
+      expect(blk.querySelector(".cg-cells")).toBeNull();
+      expect(within(blk).getByText("Measured overhead · 200k window")).toBeTruthy();
+      expect(within(blk).getByText(/^Overhead measured .* with claude-opus-4-1/).textContent).toContain(`${big(7000)} deferred tokens of tools are not loaded`);
+      const items = [...blk.querySelectorAll(".cg-legend li")].map(li => li.textContent);
+      expect(items).toEqual([`System prompt${big(4000)} tokens (2.0%)`, `System tools${big(12000)} tokens (6.0%)`, `Skills${big(4000)} tokens (2.0%)`]);
+      expect(within(blk).getByText("Largest overhead items")).toBeTruthy();
+    });
+
     it("offers no Measure now without Claude Code sessions or a snapshot", async () => {
       open({ usage: { ...foo(usage), daily_sources: [{ day: "2026-11-04", source: "codex", cost: 1 }] }, context: measured(null) });
       await loaded();
@@ -477,6 +516,55 @@ describe("ProjectPage", () => {
       for (const name of ["Errors", "Session judgments"]) expect(busy(name)).toBeNull();
       expect(document.getElementById("content")!.getAttribute("aria-busy")).toBeNull();
       expect(within(block("Activity")).queryByRole("status")).toBeNull();
+    });
+
+    it("keeps the figures through a slow range change, dimming the blocks that read usage only", async () => {
+      const f = serve(), answer = f.getMockImplementation()!;
+      f.mockImplementation((input: string) => (String(input).startsWith("/api/usage?project=foo&range=7") ? new Promise<Response>(() => {}) : answer(input)));
+      history.replaceState(null, "", "/project?project=foo&range=30");
+      renderApp(<ProjectPage />);
+      await within(block("Activity")).findByText("median session");
+      await within(block("Context")).findByText("median starting context, tokens");
+      await within(block("Session judgments")).findByText(/1 of 3/);
+      act(() => { history.pushState(null, "", "/project?project=foo&range=7"); });
+      // The earlier figures stay, then dim once the request takes over 150 ms; Context reads usage for a line, so it dims too.
+      const dimmed = (name: string) => block(name).classList.contains("loading");
+      await waitFor(() => expect(dimmed("Activity")).toBe(true));
+      for (const name of ["Activity", "Cost", "Sessions", "Context"]) expect(dimmed(name)).toBe(true);
+      expect(within(block("Activity")).getByText("median session")).toBeTruthy();
+      expect(within(block("Activity")).queryByText("Loading…")).toBeNull();
+      for (const name of ["Errors", "Session judgments"]) expect(dimmed(name)).toBe(false);
+    });
+
+    it("drops the figures of the project just left, even while the new one loads", async () => {
+      const f = serve(), answer = f.getMockImplementation()!;
+      f.mockImplementation((input: string) => (String(input).startsWith("/api/usage?project=bar") ? new Promise<Response>(() => {}) : answer(input)));
+      history.replaceState(null, "", "/project?project=foo&range=30");
+      renderApp(<ProjectPage />);
+      await within(block("Activity")).findByText("median session");
+      act(() => { history.pushState(null, "", "/project?project=bar&range=30"); });
+      await screen.findByRole("heading", { level: 1, name: "bar" });
+      expect(within(block("Activity")).getByText("Loading…")).toBeTruthy();
+      expect(within(block("Activity")).queryByText("median session")).toBeNull();
+    });
+
+    it("after Refresh, moves only the blocks whose data changed", async () => {
+      let n = 0;
+      const f = serve(), answer = f.getMockImplementation()!;
+      // Each usage answer is new; every other answer is the same object, so its blocks keep their data.
+      f.mockImplementation((input: string) => (String(input).startsWith("/api/usage")
+        ? Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(foo({ ...usage, totals: { ...usage.totals, prompts: 100 + n++ } })) } as Response)
+        : answer(input)));
+      history.replaceState(null, "", "/project?project=foo&range=30");
+      const { client } = renderApp(<ProjectPage />);
+      await within(block("Activity")).findByText(num(100));
+      await within(block("Errors")).findByRole("table", { name: "Top error types" });
+      await within(block("Session judgments")).findByText(/1 of 3/);
+      refreshed(client);
+      await within(block("Activity")).findByText(num(101));
+      for (const name of ["Activity", "Cost", "Sessions"]) expect(block(name).classList.contains("fade-in")).toBe(true);
+      for (const name of ["Errors", "Session judgments"]) expect(block(name).classList.contains("fade-in")).toBe(false);
+      expect(document.getElementById("content")!.classList.contains("grow")).toBe(false);
     });
 
     it("says a slow errors request is loading, and draws the other blocks", async () => {
