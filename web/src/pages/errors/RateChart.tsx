@@ -1,8 +1,8 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
-import { textScale } from "../../components/chart";
+import { LOW_CALLS, lowVolume, textScale } from "../../components/chart";
 import { num as fmt, niceStep } from "../../format";
 import { useErrors } from "./context";
-import { bucketLabel, bucketOf, chartData, idle, incSummary, label, linePath, LOW_CALLS, noCalls, pointRows, pointText, pointWhen, selectable, shortLabel, sumCalls, TOPN, typeColor } from "./model";
+import { bucketLabel, bucketOf, chartData, idle, incSummary, label, linePath, noCalls, pointRows, pointText, pointWhen, selectable, shortLabel, sumCalls, TOPN, typeColor } from "./model";
 
 // Two panels on one time axis, each with its own labeled scale: error rate (line) above, error counts by type (stacked bars) below.
 const H = 320, MR = 10, rH = 100;
@@ -40,7 +40,7 @@ export const RateChart = memo(function RateChart() {
   // The rate panel shows the selected type's rate on its own scale, or the overall rate. Buckets with under LOW_CALLS calls
   // (when others have more) are marked and left out of the scale: one quiet day's 3 of 12 can't flatten the rest.
   const rates = pts.map(p => (cat ? (p.c ? (p.byAll[cat] || 0) / p.c * 100 : null) : p.r));
-  const low = pts.map(p => p.c > 0 && p.c < LOW_CALLS && pts.some(q => q.c >= LOW_CALLS));
+  const low = lowVolume(pts.map(p => p.c));
   const rMax0 = Math.max(.1, ...rates.map((r, i) => (low[i] ? 0 : r || 0))) * 1.1, rStep = niceStep(rMax0 / 3), rMax = Math.ceil(rMax0 / rStep) * rStep;
   const yR = (x: number) => rT + rH - Math.min(x, rMax) / rMax * rH;
   // Counts are whole: whole steps.
