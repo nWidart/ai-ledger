@@ -222,7 +222,7 @@ describe("failure rate line", () => {
     act(() => chart().focus());
     fireEvent.keyDown(chart(), { key: "Home" });
     expect(within(screen.getByRole("tooltip")).getByText("too few calls for a steady rate")).toBeTruthy();
-    expect(document.querySelector("#work .sr")!.textContent).toContain("2 failed calls of 4, 50.0 per 100, too few calls for a steady rate");
+    expect(document.querySelector("#work div.sr[aria-live]")!.textContent).toContain("2 failed calls of 4, 50.0 per 100, too few calls for a steady rate");
     fireEvent.keyDown(chart(), { key: "ArrowRight" });
     expect(within(screen.getByRole("tooltip")).queryByText("too few calls for a steady rate")).toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "Show data table" }));
