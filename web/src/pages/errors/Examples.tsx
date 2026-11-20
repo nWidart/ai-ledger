@@ -1,9 +1,8 @@
 import { memo, useId, useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { isCancelledError, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { ProjectName } from "../../components/ProjectDot";
-import { openToolSheet } from "../../components/sheets/session";
+import { openToolSheet, sessionLink } from "../../components/sheets/session";
 import { num as fmt, plural, when as at } from "../../format";
-import { navigate } from "../../url";
 import { queries } from "../../queries";
 import { useKeyed, useRow, type RowCtx } from "./context";
 import { dur, incSpan, msgOpenKey, OUTCOME, PAYLOAD_INPUT, sessionHref, type Err, type Group, type MsgGroup } from "./model";
@@ -75,14 +74,13 @@ export const Example = memo(function Example({ e }: { e: Err }) {
     if (a?.dataset.link && plain(ev)) { ev.preventDefault(); return x.select(e.id); }
     if (!a && !String(window.getSelection())) x.select(e.id);
   };
-  const session = (ev: MouseEvent<HTMLAnchorElement>) => { if (plain(ev)) { ev.preventDefault(); navigate(ev.currentTarget.getAttribute("href")!); } };
   return (
     <div ref={ref} className={"ex" + (e.id && e.id === x.v.focus ? " focus" : "") + (open ? " open" : "")} tabIndex={-1}
       id={e.id ? "ex-" + e.id : undefined} data-cut={cut ? "" : undefined} onClick={click}>
       <div className="meta">
         <span>{at(e.ts)}</span>
         <ProjectName project={e.p} /><button type="button" className="linkish" title={`Inspect ${e.t}`} onClick={() => openToolSheet("tool", e.t)}>{e.t}</button>{e.sub ? <span>subagent</span> : null}
-        {e.s && <a href={sessionHref(x.v, e.s)} title={`Open session ${e.s} in Activity`} onClick={session}>#{e.s.slice(0, 8)}</a>}
+        {e.s && <a href={sessionHref(x.v, e.s)} title={`Open session ${e.s}`} onClick={sessionLink(e.s)}>#{e.s.slice(0, 8)}</a>}
         {e.id && <span className="link"><a href={viewLink(x.v, e.id)} data-link={e.id} title="Permalink to this error">🔗 Link</a>
           <button type="button" data-copy={e.id} onClick={copy}>{copied === "ok" ? "Copied ✓" : copied === "fail" ? "Copy failed" : "Copy URL"}</button>
             <span className="sr" role="status">{copied === "fail" ? "Could not copy the link." : copied === "ok" ? "Link copied." : ""}</span></span>}

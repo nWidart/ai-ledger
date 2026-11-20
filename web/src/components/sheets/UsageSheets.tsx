@@ -1,6 +1,6 @@
 import { useRef, type ReactNode } from "react";
 import { viewOf, type ToolKind, type UsagePayload } from "../../api";
-import { closeSheets, parseView, setSearch, useSearchOf } from "../../url";
+import { closeSheets, parseView, setSearch, sheetKey, usePathname, useSearchOf } from "../../url";
 import { queries } from "../../queries";
 import { useApi } from "../../useApi";
 import { ProjectDot } from "../ProjectDot";
@@ -19,8 +19,9 @@ const twin = (v: string) => {
 };
 
 /**
- * The project, tool and session sheets of Activity, Cost and Errors. What they show lives in the URL (inspect: a project;
- * tool, mcp or skill: a tool, MCP server or skill; session: a session), so Back, reload and shared links agree with them:
+ * The project, tool and session sheets of Activity, Cost, Context, Errors, Insights, Live and the Project page. What they
+ * show lives in the URL (inspect: a project; tool, mcp or skill: a tool, MCP server or skill; session, or sheet on Live:
+ * a session), so Back, reload and shared links agree with them:
  * a session opened from a project or tool sheet gets ← Back to it. Session and tool sheets offer the Wide toggle; project sheets do not.
  * data: the page's payload, for its project filter and the session titles it already knows.
  * automated: the page shows automated sessions whatever the URL says (Errors), so its sheets do too.
@@ -28,7 +29,7 @@ const twin = (v: string) => {
 export function UsageSheets({ data, automated }: { data: UsagePayload | undefined; automated?: boolean }) {
   const h = useSearchOf(parseView), set = setSearch;
   const view = { ...viewOf(h), automated: automated || h.auto };
-  const { session, inspect } = h;
+  const sk = sheetKey(usePathname()), session = h[sk], { inspect } = h;
   const [tk, tn]: [ToolKind, string] = h.tool ? ["tool", h.tool] : h.mcp ? ["mcp", h.mcp] : ["skill", h.skill];
   const under = inspect || tn, open = !!(session || under);
   const shown = useRef(""), backTo = useRef<BackTo | null>(null);
@@ -38,7 +39,7 @@ export function UsageSheets({ data, automated }: { data: UsagePayload | undefine
   const tool = useApi(tn && !inspect && !session ? queries.tool(tk, tn, view) : null);
   const sess = useApi(session ? queries.session(session) : null);
   const pageProject = data?.project ?? h.project;
-  const close = () => { backTo.current = null; closeSheets({ inspect: null, tool: null, mcp: null, skill: null, session: null }); };
+  const close = () => { backTo.current = null; closeSheets({ inspect: null, tool: null, mcp: null, skill: null, [sk]: null }); };
   const toSession = (id: string, el: HTMLElement) => {
     const dlg = el.closest("dialog");
     backTo.current = { scroll: dlg?.scrollTop ?? 0, v: el.closest<HTMLElement>("[data-v]")?.dataset.v ?? id };
@@ -62,7 +63,7 @@ export function UsageSheets({ data, automated }: { data: UsagePayload | undefine
   }
   return (
     <Sheet open={open} kind={kind} title={title} contentKey={key} onClose={close} busy={!!session && sess.loading} widen={!!session || (!inspect && !!tn)}
-      onBack={session && under ? () => set({ session: null }) : undefined} returnFocus={() => shown.current ? twin(shown.current) : null}>
+      onBack={session && under ? () => set({ [sk]: null }) : undefined} returnFocus={() => shown.current ? twin(shown.current) : null}>
       {body}
     </Sheet>
   );

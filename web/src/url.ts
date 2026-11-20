@@ -26,18 +26,22 @@ export type RootSearch = {
   inspect?: string;
   /** The open tool, MCP server or skill sheet; at most one is set. */
   tool?: string; mcp?: string; skill?: string;
-  /** Activity and Cost: the open session sheet. */
+  /** The open session sheet; on Live, the session the stream follows (see sheetKey). */
   session?: string;
+  /** Live: the open session sheet. */
+  sheet?: string;
 };
 /** A change to the view. null, "" and false remove a key; true writes "1"; undefined leaves it as it is. */
 export type SearchPatch = { [k: string]: string | number | boolean | null | undefined };
 
 // Back retraces changes to these; other keys replace unless the caller asks to push.
-const PUSH_KEYS = ["project", "range", "source", "auto", "inspect", "tool", "mcp", "skill", "session", "ex", "cat"];
+const PUSH_KEYS = ["project", "range", "source", "auto", "inspect", "tool", "mcp", "skill", "session", "sheet", "ex", "cat"];
 // Written in this order (as the pages wrote them), with any other keys between gran and inspect.
-const HEAD = ["project", "range", "source", "auto", "sub", "noise", "gran"], TAIL = ["inspect", "tool", "mcp", "skill", "session", "ex", "cat"];
-// The keys that open a sheet.
-const SHEET_KEYS = ["inspect", "tool", "mcp", "skill", "session"];
+const HEAD = ["project", "range", "source", "auto", "sub", "noise", "gran"], TAIL = ["inspect", "tool", "mcp", "skill", "session", "sheet", "ex", "cat"];
+/** The key of the session sheet on a page: session, except on Live, where session names the session the stream follows. */
+export const sheetKey = (path: string): "session" | "sheet" => (path === "/live" ? "sheet" : "session");
+// The keys that open a sheet on a page.
+const sheetKeys = (path: string): string[] => ["inspect", "tool", "mcp", "skill", sheetKey(path)];
 /** Project, range, source and the automated toggle travel between pages; page-only keys stay behind. */
 export const SHARED_KEYS = ["project", "range", "source", "auto"] as const;
 
@@ -66,7 +70,7 @@ export function formatSearch(search: Readonly<Record<string, unknown>>): string 
   return s ? "?" + s : "";
 }
 
-const STRINGS = ["project", "inspect", "tool", "mcp", "skill", "session"] as const;
+const STRINGS = ["project", "inspect", "tool", "mcp", "skill", "session", "sheet"] as const;
 
 /** Keeps the valid values of the shared keys, given as the URL writes them or already typed (the router calls it with
  *  both). Never throws; an invalid value, and any other key, is dropped, and no default is filled in. */
@@ -86,7 +90,7 @@ export function validateRoot(raw: Readonly<Record<string, unknown>>): RootSearch
 /** The shared keys with their defaults, as the pages read them: 30 days, all sources, no sheet. */
 export const rootState = (s: RootSearch) => ({
   project: s.project ?? "", range: s.range ?? DEFAULT_RANGE, source: (s.source ?? "") as Source | "", auto: s.auto ?? false,
-  inspect: s.inspect ?? "", tool: s.tool ?? "", mcp: s.mcp ?? "", skill: s.skill ?? "", session: s.session ?? "",
+  inspect: s.inspect ?? "", tool: s.tool ?? "", mcp: s.mcp ?? "", skill: s.skill ?? "", session: s.session ?? "", sheet: s.sheet ?? "",
 });
 type ViewState = ReturnType<typeof rootState>;
 /** The view a URL's keys describe, with defaults for what is missing or not valid. */
@@ -132,6 +136,8 @@ export const onNavigate = (f: () => void) => { navs.add(f); return () => { navs.
 const here = () => router.history.location;
 /** The keys of the current URL, as written. */
 export const currentRaw = (): Record<string, string> => parseSearch(here().search);
+/** The key of the current page's session sheet (sheetKey). */
+export const currentSheetKey = () => sheetKey(here().pathname);
 
 // The sheets count in the entry's state: how many entries back the view had no sheet open, when every push since only opened sheets.
 const sheetDepth = (): number | undefined => (here().state as { sheets?: number } | undefined)?.sheets;
@@ -155,8 +161,8 @@ export function setSearch(patch: SearchPatch, opts: { push?: boolean } = {}) {
   const push = opts.push ?? changed.length > 0;
   let sheets = sheetDepth();
   if (push) {
-    const before = SHEET_KEYS.some(k => was[k]) ? sheets : 0;
-    sheets = SHEET_KEYS.some(k => next[k]) && changed.every(k => SHEET_KEYS.includes(k)) && before != null ? before + 1 : undefined;
+    const keys = sheetKeys(loc.pathname), before = keys.some(k => was[k]) ? sheets : 0;
+    sheets = keys.some(k => next[k]) && changed.every(k => keys.includes(k)) && before != null ? before + 1 : undefined;
   }
   void router.navigate({ to: loc.pathname, search: next, replace: !push, resetScroll: false, state: sheets ? { sheets } : {} } as never);
   router.history.flush();

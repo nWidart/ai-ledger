@@ -22,7 +22,7 @@ Live shows word counts, shortened tool inputs and subagent descriptions by defau
 
 Terms such as compaction, subagent and automated session are in the [Metric glossary](/ai-ledger/reference/glossary/).
 
-A session is **active** when its newest stored line is less than 10 minutes old. Live lists active sessions only. With none, the page says "No session is active in this view." and, when a session exists, links to the newest one with the time it last wrote.
+A session is **active** when its newest stored line is less than 10 minutes old. Live lists active sessions only. With none, the page says "No session is active in this view." and, when a session exists, links to the newest one with the time it last wrote. The link opens that session's sheet over the page.
 
 ## Filters
 
@@ -72,9 +72,9 @@ A session's title comes from the newest custom title (Claude Code `/rename`), el
 
 <ThemedImage dark={stream} light={streamLight} alt="Live's session stream: a prompt, the reply, tool calls, a subagent lane and a failed npm test." />
 
-**Shows** the selected session as a log of its events in order, newest at the bottom. The head shows the session's title as a heading (the project when there is no title), then the project, git branch, source and model, a **Session sheet** link to the session's sheet on Activity, and the state. The time column shows the clock time, with the date for an event not from today.
+**Shows** the selected session as a log of its events in order, newest at the bottom. The head shows the session's title as a heading (the project when there is no title), then the project, git branch, source and model, a **Session sheet** link, and the state. The link opens the session's sheet over Live: the stream keeps updating under it, and Close or Back returns to it. On Live the URL names the sheet as `sheet`, because `session` names the session the stream follows: `/live?session=abc&sheet=abc`. The time column shows the clock time, with the date for an event not from today.
 
-When older events are not shown, the stream says so and links to the session sheet on Activity, which holds the whole session. A session with state your turn ends the stream with "waiting for your next prompt".
+When older events are not shown, the stream says so and links to the session sheet, which holds the whole session. A session with state your turn ends the stream with "waiting for your next prompt".
 
 **Figures**
 

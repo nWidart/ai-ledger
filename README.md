@@ -31,7 +31,7 @@ Needs [uv](https://docs.astral.sh/uv/). Runs on macOS and Linux. Your data stays
 
 Press **Cmd+K** to jump anywhere, for example `>errors #myproject #7d`. Right-click a project, session, tool or error type for its actions, such as copying a session's resume command. Every page works by keyboard and screen reader. Charts open a data table or read point by point with the arrow keys. The navigation stays on one row at every width, and next to Refresh it shows when the data was last ingested.
 
-A session's sheet shows its model time, tool time, output speed and lines added and removed. These come from the `cost-state` line Claude Code writes when a session ends (from about late October 2026), so Codex and older Claude Code sessions show none.
+A session link on any page opens the session's sheet over that page, so the page keeps its state and Back closes the sheet. A session's sheet shows its model time, tool time, output speed and lines added and removed. These come from the `cost-state` line Claude Code writes when a session ends (from about late October 2026), so Codex and older Claude Code sessions show none.
 
 The [documentation site](https://nwidart.github.io/ai-ledger/) describes each page in detail.
 

@@ -34,7 +34,7 @@ Find the friction that stops the most sessions, and read what the model wrote ab
 3. Select the family's row. The session list under **Analysed sessions** keeps the sessions with that friction, and a chip reads "Friction family: …". Set **Sort** to **Outcome**: the sessions that did not reach their goal come first.
 4. On the first five cards, open **Friction detail** and read the model's words. Note what went wrong in each: what the agent did, and what you wanted.
 5. Read the goal chips on those cards. If one goal family recurs, such as **fix bug** (an example), the fix belongs to that kind of task. Select the goal chip to keep only its sessions.
-6. Select the title of one card. Its session sheet opens on Activity. If its **Error loops** list is not empty, or its peak context is at 80% or more of the window (the app's own limit for **Needs attention**), fix that measured cause before the friction family: use the table's last two rows.
+6. Select the title of one card. Its session sheet opens over Insights. If its **Error loops** list is not empty, or its peak context is at 80% or more of the window (the app's own limit for **Needs attention**), fix that measured cause before the friction family: use the table's last two rows.
 
 | What you see | Cause | Fix |
 | --- | --- | --- |

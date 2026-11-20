@@ -12,6 +12,7 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Session links on Errors, Insights and Live open the session sheet over the page instead of going to Activity. The page keeps its state, Live keeps its stream and live connection, and Close or Back returns to it. The URL names the open sheet (`sheet=` on Live, where `session=` is the followed session), and middle-click opens it in a new tab.
 - The navigation no longer shows the project chip. With a project filter set, each page's filter row shows a "Project page →" link (not on the Project page itself) and a ✕ "Clear project filter" button beside the project picker.
 - The Search button shows the project's color dot and name while a project filter is set.
 - The last ingest and Refresh are one control: a Refresh button (it reads "Retry" after a failed refresh) and the last ingest as a clock time. Clicking or hovering the time shows the exact time, new lines, last data change, interval and the full error. It reads "Stale" when the last ingest is older than three intervals, "Failed" after an ingest error and "Offline" when the app does not answer. "+N lines" appears for a few seconds after an ingest stores new lines.

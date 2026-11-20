@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useId, useState, type MouseEvent, type ReactNode } from "react";
+import { Fragment, useEffect, useId, useState, type ReactNode } from "react";
 import { insightsUrl, viewOf, type FacetFamily, type InsightSession, type InsightsPayload, type View } from "../../api";
 import { Drawer } from "../../components/Drawer";
 import { Judged, label, outcomeLabel, outcomeTone } from "../../components/facets";
@@ -6,11 +6,12 @@ import { Filters, viewName } from "../../components/Filters";
 import { Ledger, LedgerRow } from "../../components/Ledger";
 import { ProjectName } from "../../components/ProjectDot";
 import { jumpTo, SectionIndex } from "../../components/SectionIndex";
-import { sessName, shortId } from "../../components/sheets/session";
+import { sessionLink, sessionSheetHref, sessName, shortId } from "../../components/sheets/session";
+import { UsageSheets } from "../../components/sheets/UsageSheets";
 import { PageSkeleton } from "../../components/PageSkeleton";
 import { useLanding } from "../../components/useLanding";
 import { dayLabel, dur, num, pct, plural, when } from "../../format";
-import { formatSearch, navigate, setSearch, useSearchOf, useView } from "../../url";
+import { setSearch, useSearchOf, useView } from "../../url";
 import { validateSearch, type InsightsSearch } from "./search";
 import { queries } from "../../queries";
 import { useApi } from "../../useApi";
@@ -24,10 +25,9 @@ const TYPE_COLORS = ["var(--proj-2)", "var(--proj-4)", "var(--proj-5)", "var(--p
 /** A category name with spaces, its raw name in the title. */
 const Cat = ({ name }: { name: string }) => <span title={name}>{label(name)}</span>;
 
-/** Session href on Activity, in view v's project, range, source and automated toggle; without a view, all time, so an old
- *  session is inside the range. */
-export const sessionHref = (id: string, v?: View) => "/usage" + formatSearch({ project: v?.project ?? "", range: String(v?.range ?? 0),
-  source: v?.source ?? "", auto: v?.automated ? "1" : "", session: id });
+/** Insights in view v and its filters with session id's sheet open over it: the href of a session card's link. */
+const sessionHref = (id: string, v: View, raw: InsightsSearch) =>
+  sessionSheetHref("/insights", { project: v.project, range: String(v.range), source: v.source, auto: v.automated, ...raw }, id);
 // Ledgers with free-form names (goals, friction, satisfaction) show this many rows until asked for all.
 const TOP = 12;
 // Sessions listed until asked for all.
@@ -256,20 +256,17 @@ function Feelings({ d }: { d: InsightsPayload }) {
   );
 }
 
-const plain = (e: MouseEvent) => !(e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey);
-
 /** One session as a card: title, outcome and chips on the first line, the model's summary below, friction detail on expand. */
 function SessionCard({ s, view, raw }: { s: InsightSession; view: View; raw: InsightsSearch }) {
   const line = s.meta ? measured(s.meta) : "";
   /** A chip or badge that sets, or clears, the filter of its kind. */
   const pick = (kind: DrillKind, name: string, text: ReactNode, cls: string) =>
     <button type="button" className={cls + (raw[kind] === name ? " on" : "")} title={name} aria-pressed={raw[kind] === name} onClick={() => toggleDrill(kind, name)}>{text}</button>;
-  const open = (e: MouseEvent<HTMLAnchorElement>) => { if (plain(e)) { e.preventDefault(); navigate(e.currentTarget.getAttribute("href")!); } };
   return (
     <li className="scard">
       <div className="top">
         <span className="ttl">{s.in_store
-          ? <a href={sessionHref(s.session_id, view)} title={`${s.title ? s.title + " · " : ""}Open session ${s.session_id} in Activity`} onClick={open}>{sessName(s)}</a>
+          ? <a href={sessionHref(s.session_id, view, raw)} title={`${s.title ? s.title + " · " : ""}Open session ${s.session_id}`} onClick={sessionLink(s.session_id)}>{sessName(s)}</a>
           : <span title={s.title ?? s.session_id}>{sessName(s)}</span>}
           {(s.title || !s.in_store) && <span className="muted small"> {s.title && shortId(s.session_id)}{s.title && !s.in_store && " · "}
             {!s.in_store && <span title="This session's transcript is not in the store">no transcript</span>}</span>}</span>
@@ -398,6 +395,7 @@ export function InsightsPage() {
         </>}
         {!figures && (counted || howto) && <div className="drawers">{counted && <SessionFigures d={d} />}{howto && <HowItWorks d={d} />}</div>}
       </>}
+      <UsageSheets data={undefined} />
     </main>
   );
 }
