@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import type { DailyWorkRow, UsagePayload } from "../../api";
 import { useColors } from "../../colors";
 import { dayLabel, niceStep, num, plural } from "../../format";
-import { dayAxis, peakLabelAt, roomForLabels, textScale, tipAt, useWidth } from "../../components/chart";
+import { dayAxis, LOW_CALLS, lowVolume, peakLabelAt, roomForLabels, textScale, tipAt, useWidth } from "../../components/chart";
 import { ChartTable, DataTable } from "../../components/DataTable";
 import type { Kind } from "../cost/cost";
 import { busy, failRate, METRICS, monday, workBuckets, workKinds, workStack, type WorkMetric } from "./work";
@@ -10,6 +10,7 @@ import { WorkHours } from "./WorkHours";
 
 const H = 240;
 const BAR = "var(--series-1)", FAIL = "var(--critical)";
+const FEW = "too few calls for a steady rate"; // as the Errors chart words it
 
 /** The days of a view: a week bar it cuts short is partial. */
 export interface WorkView { start: string | null; end: string }
@@ -79,11 +80,14 @@ function WorkBars({ rows, week, view, kinds, stack, metric, onMetric, onDay }: W
   const every = week ? Math.max(1, Math.ceil(rows.length / Math.max(2, Math.floor(a.iw / (100 * ts))))) : a.every;
   // The rate axis has as many steps as the count axis, so its ticks sit on the same grid lines.
   // No bar with a tool call: no rate to draw, so no line, axis or legend key.
+  // A bar with few calls (when others have enough) has a noisy rate: it gets a hollow dot and is left out of the scale, so one
+  // quiet day's 2 of 4 can't flatten the busy days. The line still runs through it; a rate above the axis stops at its top.
   const rates = rows.map(failRate), hasRate = rates.some(r => r != null), n = Math.round(a.yMax / a.step);
-  const rStep = niceStep((Math.max(...rates.map(r => r ?? 0), 0) * 1.08 || 1) / n), ry = (v: number) => a.m.t + a.ih - v / (rStep * n) * a.ih;
+  const low = useMemo(() => lowVolume(rows.map(p => p.calls)), [rows]), hasLow = low.some(Boolean);
+  const rStep = niceStep((Math.max(...rates.map((r, i) => (low[i] ? 0 : r ?? 0)), 0) * 1.08 || 1) / n), ry = (v: number) => a.m.t + a.ih - Math.min(v, rStep * n) / (rStep * n) * a.ih;
   const rDigits = Math.max(0, -Math.floor(Math.log10(rStep))); // a step of 0.5 reads "0.5", not "1"
   const line = rates.map((v, i) => (v == null ? "" : `${rates[i - 1] != null ? "L" : "M"}${a.cx(i).toFixed(1)},${ry(v).toFixed(1)}`)).join("");
-  const lone = rates.flatMap((v, i) => (v != null && rates[i - 1] == null && rates[i + 1] == null ? [i] : [])); // no line reaches these
+  const lone = rates.flatMap((v, i) => (v != null && !low[i] && rates[i - 1] == null && rates[i + 1] == null ? [i] : [])); // no line reaches these
   const plain = useMemo<Kind>(() => ({ k: metric, label: M.label, c: BAR }), [metric, M.label]);
   // A bar's parts, bottom first; zero parts left out.
   const parts = useCallback((i: number): [Kind, number][] =>
@@ -155,6 +159,7 @@ function WorkBars({ rows, week, view, kinds, stack, metric, onMetric, onDay }: W
       <div className="legend" aria-hidden="true">
         {(kinds.length ? kinds : [plain]).map(k => <span key={k.k} className="key"><i style={{ background: k.c }} />{k.label}</span>)}
         {hasRate && <span className="key"><i className="line fail" />Errors per 100 calls (right axis)</span>}
+        {hasLow && <span className="key"><i className="low" />{`Under ${LOW_CALLS} calls`}</span>}
       </div>
       <div className="chart" ref={box} tabIndex={0} role="group" aria-label={label} onKeyDown={onKey} onBlur={() => setAt(null)}>
         <svg ref={svg} viewBox={`0 0 ${W} ${H}`} aria-hidden="true">
@@ -169,6 +174,7 @@ function WorkBars({ rows, week, view, kinds, stack, metric, onMetric, onDay }: W
             <path className="rate" d={line} fill="none" stroke={FAIL} strokeWidth="1.75" strokeLinejoin="round" strokeLinecap="round" />
           </>}
           {lone.map(i => <circle key={i} className="rate" cx={a.cx(i)} cy={ry(rates[i]!)} r="2.5" fill={FAIL} stroke="var(--surface-1)" strokeWidth="1.5" />)}
+          {rates.map((r, i) => low[i] && r != null && <circle key={"lo" + i} className="lowc" cx={a.cx(i)} cy={ry(r)} r="3" fill="var(--surface-1)" stroke={FAIL} strokeWidth="1.5" />)}
           {pk && pk[metric] > 0 && roomForLabels(a) && (() => {
             const { x: lx, anchor } = peakLabelAt(a, peak);
             // A wide halo, so the rate line never strikes through the label.
@@ -186,16 +192,17 @@ function WorkBars({ rows, week, view, kinds, stack, metric, onMetric, onDay }: W
             <div key={k.k} className="row"><span><i style={{ background: k.c }} />{k.label}</span><b>{num(v)}</b></div>)}</div>}
           <div className="row tot"><span><i style={{ background: FAIL }} />Errors per 100 calls</span><b>{num(failRate(cur), 1)}</b></div>
           <div className="row"><span>Failed tool calls</span><b>{num(cur.failed_calls)}{cur.calls ? ` of ${num(cur.calls)}` : ""}</b></div>
+          {low[at!] && <div className="muted">{FEW}</div>}
         </>}</div>
       </div>
-      <div className="sr" aria-live="polite">{cur ? `${name(cur.day)}: ${bucketText(cur)}`
+      <div className="sr" aria-live="polite">{cur ? `${name(cur.day)}: ${bucketText(cur)}${low[at!] ? `, ${FEW}` : ""}`
         + (curParts.length ? `. ${M.label} by project: ${curParts.map(([k, v]) => `${k.label} ${num(v)}`).join(", ")}` : "") : ""}</div>
       {/* The chart's text alternative: the measure per bucket (by project when stacked), its total and errors per 100 tool calls. */}
       <ChartTable><DataTable name={`${M.label}${kinds.length ? " by project" : ""} and errors per 100 tool calls per ${unit}`} region="scroll tall">
         <thead><tr><th scope="col">{week ? "Week" : "Day"}</th>{kinds.map(k => <th key={k.k} scope="col" className="num">{k.label}</th>)}
           <th scope="col" className="num">{kinds.length ? "Total" : M.label}</th><th scope="col" className="num">Errors per 100 calls</th></tr></thead>
         <tbody>{rows.map((p, i) => <tr key={p.day}><th scope="row">{name(p.day)}</th>
-          {kinds.map(k => <td key={k.k} className="num">{num(stack[i]?.[k.k] ?? 0)}</td>)}<td className="num">{num(p[metric])}</td><td className="num">{num(failRate(p), 1)}</td></tr>)}</tbody>
+          {kinds.map(k => <td key={k.k} className="num">{num(stack[i]?.[k.k] ?? 0)}</td>)}<td className="num">{num(p[metric])}</td><td className="num">{num(failRate(p), 1)}{low[i] ? ` (${FEW})` : ""}</td></tr>)}</tbody>
       </DataTable></ChartTable>
     </section>
   );

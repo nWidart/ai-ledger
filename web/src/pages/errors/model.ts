@@ -3,7 +3,9 @@
 import type { Category, Day, ErrorRow, ErrorsPayload, Incident, Source, Ts } from "../../api";
 import { dayLabel, num as fmt } from "../../format";
 import type { SortBy } from "../../components/Sort";
-import type { Range } from "../../url";
+import { sessionSheetHref } from "../../components/sheets/session";
+import { parseSearch, type Range } from "../../url";
+import { viewLink } from "./view";
 
 export const NOISE = new Set(["infra", "user_denied"]); // always noise; the types the user muted join them (Model.muted)
 export const CATCH_ALL = new Set(["other", "exit_other", "mcp"]); // the types no specific rule matched
@@ -12,7 +14,6 @@ export const MIN_AFTER_CALLS = 200; // calls since a fix before its rate counts 
 export const MIN_CMP_CALLS = 200; // tool calls each side of a change needs before the change shows
 export const MIN_PCT_ERRORS = 5; // fewer errors than this on either side: a type's change shows as counts, not a percent
 export const GAP_FOLD = 8; // a stretch of this many chart buckets or more without a call folds into one
-export const LOW_CALLS = 50; // a chart bucket with fewer calls has a noisy rate: marked, and left out of the rate scale
 export const PAYLOAD_INPUT = 400; // the payload cuts inputs here; "Show full" loads the rest from /api/error
 const DAY = 864e5;
 export const toDate = (s: string) => new Date(s + "T00:00:00Z");
@@ -497,6 +498,5 @@ export function msgList(groups: readonly MsgGroup[], q: string, focused: Err | u
   if (fk != null) { const i = ex.findIndex(g => g.key === fk); if (i > 0) ex.unshift(...ex.splice(i, 1)); }
   return { flat: false, items: ex, count: q ? `${fmt(ex.length)} of ${fmt(groups.length)} match` : `${fmt(groups.length)} message${groups.length === 1 ? "" : "s"} in ${scope}, most errors first` };
 }
-/** Usage shows the session's own project; only an Errors project or source filter carries over. */
-export const sessionHref = (v: View, s: string) =>
-  "/usage#" + new URLSearchParams({ range: String(v.range), session: s, ...(v.project && { project: v.project }), ...(v.source && { source: v.source }) });
+/** Errors in view v with session s's sheet open over it: the href of an example's session link. */
+export const sessionHref = (v: View, s: string) => sessionSheetHref("/errors", parseSearch(viewLink(v)), s);

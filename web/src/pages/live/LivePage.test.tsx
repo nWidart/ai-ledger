@@ -364,10 +364,14 @@ describe("LivePage", () => {
     expect(await within(main).findByText(/^idle/)).toBeTruthy();
   });
 
-  it("says no session is active and links the newest one to Activity", async () => {
+  it("says no session is active and links the newest one to its session sheet", async () => {
     show("", { list: { now: list.now, automated_file: list.automated_file, sessions: [], newest: { session_id: "s4", project: "dotfiles", last_ts: "2026-11-10T09:53:00.000Z" } } });
     const lede = await screen.findByText(/No session is active/);
-    expect(within(lede).getByRole("link", { name: "dotfiles" }).getAttribute("href")).toBe("/usage?range=0&session=s4");
+    const link = within(lede).getByRole("link", { name: "dotfiles" });
+    expect(link.getAttribute("href")).toBe("/live?sheet=s4");
+    await userEvent.click(link);
+    expect(location.pathname + location.search).toBe("/live?sheet=s4");
+    expect(await screen.findByRole("dialog")).toBeTruthy();
   });
 
   it("shows tool rows with duration and result, a failed call, a compaction and the subagent lane", async () => {
@@ -1235,16 +1239,36 @@ describe("LivePage", () => {
   it("links the note on older events to the session sheet", async () => {
     show("?session=s1", { session: () => ({ ...s1, truncated: true }) });
     await stream();
-    expect(screen.getByRole("link", { name: "session sheet on Activity" }).getAttribute("href")).toBe("/usage?range=0&session=s1");
+    expect(screen.getByRole("link", { name: "session sheet" }).getAttribute("href")).toBe("/live?session=s1&sheet=s1");
   });
 
-  it("links the stream head to the session's sheet on Activity", async () => {
+  it("opens the session sheet over Live from the stream head, keeping the stream and its live connection", async () => {
     show("?session=s1", { app: true });
     const head = (await screen.findByRole("group", { name: "Stream filters" })).previousElementSibling as HTMLElement;
     const link = within(head).getByRole("link", { name: "Session sheet" });
-    expect([head.className, link.getAttribute("href")]).toEqual(["stream-head", "/usage?range=0&session=s1"]);
+    expect([head.className, link.getAttribute("href")]).toEqual(["stream-head", "/live?session=s1&sheet=s1"]); // a new tab opens the same
+    const source = FakeSource.last!, events = screen.getByLabelText("Session events");
     await userEvent.click(link);
-    expect(location.pathname + location.search).toBe("/usage?range=0&session=s1"); // in the app, without a reload
+    expect(location.pathname + location.search).toBe("/live?session=s1&sheet=s1"); // in the app, without a reload
+    expect(document.title).toMatch(/Live · AI Ledger$/);
+    const dlg = await screen.findByRole("dialog");
+    expect(within(dlg).getByText("Session")).toBeTruthy();
+    expect([FakeSource.last, source.closed, events.isConnected]).toEqual([source, false, true]); // same stream, same connection
+    await userEvent.click(within(dlg).getByRole("button", { name: "Close" }));
+    await waitFor(() => expect(location.search).toBe("?session=s1")); // Back to the stream as it was
+    expect([FakeSource.last, source.closed, events.isConnected]).toEqual([source, false, true]);
+    await waitFor(() => expect(document.activeElement).toBe(link));
+  });
+
+  it("keeps the followed session when a sheet closes after picking sessions in the rail", async () => {
+    show("?session=s1");
+    await stream();
+    await userEvent.click(within(await rail()).getAllByRole("button").find(b => b.dataset.session === "s2")!);
+    expect(location.search).toBe("?session=s2");
+    await userEvent.click(await within(screen.getByRole("region", { name: "Session" })).findByRole("link", { name: "Session sheet" }));
+    expect(location.search).toBe("?session=s2&sheet=s2");
+    await userEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Close" }));
+    await waitFor(() => expect(location.search).toBe("?session=s2")); // closing goes back over the sheet alone
   });
 
   it("dates the time of an event that is not from today", async () => {

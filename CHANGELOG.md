@@ -12,6 +12,7 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Session links on Errors, Insights and Live open the session sheet over the page instead of going to Activity. The page keeps its state, Live keeps its stream and live connection, and Close or Back returns to it. The URL names the open sheet (`sheet=` on Live, where `session=` is the followed session), and middle-click opens it in a new tab.
 - The navigation no longer shows the project chip. With a project filter set, each page's filter row shows a "Project page →" link (not on the Project page itself) and a ✕ "Clear project filter" button beside the project picker.
 - The Search button shows the project's color dot and name while a project filter is set.
 - The last ingest and Refresh are one control: a Refresh button (it reads "Retry" after a failed refresh) and the last ingest as a clock time. Clicking or hovering the time shows the exact time, new lines, last data change, interval and the full error. It reads "Stale" when the last ingest is older than three intervals, "Failed" after an ingest error and "Offline" when the app does not answer. "+N lines" appears for a few seconds after an ingest stores new lines.
@@ -22,6 +23,10 @@ and versions follow [Semantic Versioning](https://semver.org/).
 - Cost's heading keeps the cost and its change. The windows' days with prompts, the sessions, tokens and requests, and how the estimate and the pace are computed move to a "How measured" disclosure. The Biggest spender and Cache hit cards are gone; the project table and Tokens and cache show the same figures.
 
 - Text follows the browser's default font size: font sizes are relative, chart labels scale with them, and nothing is cut off at 200%. In Chrome and Edge 146+ the dashboard also follows the operating system's text scale.
+
+### Fixed
+
+- The Activity work chart no longer lets one quiet day set the scale of its errors-per-100-calls line. A day or week with fewer than 50 tool calls draws its rate as a hollow dot, is left out of the right-hand axis, and says "too few calls for a steady rate" in its tooltip and data table, as the Errors chart does. A legend key explains the hollow dot.
 
 ## [0.4.0] - 2026-11-15
 

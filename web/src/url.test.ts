@@ -1,10 +1,10 @@
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { viewOf } from "./api";
-import { errorsHref, openToolSheet } from "./components/sheets/session";
+import { errorsHref, openSessionSheet, openToolSheet, sessionSheetHref } from "./components/sheets/session";
 import { makeTestClient, routerOf, wrapper } from "./testing";
 import {
-  applyPatch, closeSheets, currentRaw, formatSearch, go, navigate, onNavigate, parseSearch, parseView, rootState, setSearch, sharedOf, sharedSearch,
+  applyPatch, closeSheets, currentRaw, formatSearch, go, navigate, onNavigate, parseSearch, parseView, rootState, setSearch, sharedOf, sharedSearch, sheetKey,
   useView, useSearchOf, usePathname, validateRoot, type RootSearch,
 } from "./url";
 
@@ -55,12 +55,12 @@ describe("formatSearch", () => {
 describe("parseView", () => {
   it("reads a Usage URL from before the change", () => {
     const s = view("?project=foo&range=14&inspect=bar&session=abc");
-    expect(s).toEqual({ project: "foo", range: 14, source: "", auto: false, inspect: "bar", tool: "", mcp: "", skill: "", session: "abc" });
+    expect(s).toEqual({ project: "foo", range: 14, source: "", auto: false, inspect: "bar", tool: "", mcp: "", skill: "", session: "abc", sheet: "" });
   });
   it("reads the shared keys of an Errors URL and leaves its page-only keys out", () => {
     const s = view("?project=foo&range=0&sub=0&noise=0&gran=week&ex=toolu_1");
     expect(s).toMatchObject({ project: "foo", range: 0 });
-    expect(Object.keys(s)).toEqual(["project", "range", "source", "auto", "inspect", "tool", "mcp", "skill", "session"]);
+    expect(Object.keys(s)).toEqual(["project", "range", "source", "auto", "inspect", "tool", "mcp", "skill", "session", "sheet"]);
   });
   it("defaults the range to 30", () => {
     expect(view("?ex=toolu_1").range).toBe(30);
@@ -149,7 +149,7 @@ describe("validateRoot", () => {
 describe("rootState", () => {
   it("applies defaults and fits viewOf", () => {
     const s = rootState({});
-    expect(s).toEqual({ project: "", range: 30, source: "", auto: false, inspect: "", tool: "", mcp: "", skill: "", session: "" });
+    expect(s).toEqual({ project: "", range: 30, source: "", auto: false, inspect: "", tool: "", mcp: "", skill: "", session: "", sheet: "" });
     expect(viewOf(rootState({ project: "p", range: 0, auto: true }))).toMatchObject({ project: "p", range: 0, automated: true });
   });
 });
@@ -266,6 +266,20 @@ describe("setSearch", () => {
     openToolSheet("skill", "ship");
     expect(location.search).toBe("?range=30&skill=ship");
     expect(history.length).toBe(len + 3);
+  });
+  it("keys the session sheet as sheet on Live, where session is the followed session", () => {
+    expect([sheetKey("/usage"), sheetKey("/errors"), sheetKey("/insights"), sheetKey("/live")]).toEqual(["session", "session", "session", "sheet"]);
+    start("/live?session=s1");
+    openSessionSheet("s2");
+    expect(location.search).toBe("?session=s1&sheet=s2");
+    expect(sheets()).toBe(1);
+    openToolSheet("tool", "Bash");
+    expect(location.search).toBe("?tool=Bash&session=s1"); // the followed session stays
+    start("/live");
+    setSearch({ session: "s1" }); // picking a session in the rail opens no sheet
+    expect(sheets()).toBeUndefined();
+    expect(sessionSheetHref("/live", { session: "s1" }, "s2")).toBe("/live?session=s1&sheet=s2");
+    expect(sessionSheetHref("/insights", { range: "7" }, "s2")).toBe("/insights?range=7&session=s2");
   });
   it("closes sheets by going back over the entries they pushed", async () => {
     const router = start("/usage?range=30");

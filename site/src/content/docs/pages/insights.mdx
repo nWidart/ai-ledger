@@ -102,7 +102,7 @@ In page order, when the view has analysed sessions.
 
 **Shows** (model-judged) the view's analysed sessions as cards. A line above the cards says how many it lists, in what order, and that the summary and friction detail are the model's words.
 
-**Figures** Each card shows: the session title (a link to the session's sheet on Activity, in the view's filters; a session with no transcript in the store shows "no transcript" and no link), the outcome badge, **dissatisfied** when the user pushed back, the goal chips and friction chips, the start time and the project, then the model's brief summary. A closed **Friction detail** control holds the model's friction text. A last line counted from the transcript reads "+120 −30 lines · 4 files · 35m · 1 push", leaving out any part that is missing or 0.
+**Figures** Each card shows: the session title (a link that opens the session's sheet over the page; a session with no transcript in the store shows "no transcript" and no link), the outcome badge, **dissatisfied** when the user pushed back, the goal chips and friction chips, the start time and the project, then the model's brief summary. A closed **Friction detail** control holds the model's friction text. A last line counted from the transcript reads "+120 −30 lines · 4 files · 35m · 1 push", leaving out any part that is missing or 0.
 
 The list shows the first 25 sessions and "Show all N sessions". The payload holds the newest 200 analysed sessions of the view; when it is cut and a filter is active, the line says the filter covers only those 200, so a ledger count can exceed the sessions listed.
 
@@ -163,7 +163,7 @@ Closed by default; the page remembers the ones you leave open.
 
 ## Sheets
 
-Insights opens no sheet of its own. A session card links to that session's sheet on [Activity](/ai-ledger/pages/activity/), where a **/insights judgment** section (model-judged) repeats the outcome, the dissatisfied mark, the helpfulness and session type ratings, the goal and friction chips, the summary and the friction text, with an **Open in Insights** link. Project rows in Coverage by project work with the [context menu](/ai-ledger/everywhere/context-menu/).
+A session card's title opens that session's sheet over Insights. The filters stay as they are, and Close or Back returns to the list. The URL names the session (`session=…`), and middle-click opens it in a new tab. The sheet is the one on [Activity](/ai-ledger/pages/activity/#session-sheet). Its **/insights judgment** section (model-judged) repeats the outcome, the dissatisfied mark, the helpfulness and session type ratings, the goal and friction chips, the summary and the friction text, with an **Open in Insights** link. Project rows in Coverage by project work with the [context menu](/ai-ledger/everywhere/context-menu/).
 
 ## Model-judged and measured
 

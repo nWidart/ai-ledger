@@ -1,8 +1,7 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import type { LiveEvent, LiveSession, LiveToolEvent, Ts } from "../../api";
 import { big, plural, usd } from "../../format";
-import { appLink } from "../../components/sheets/session";
-import { sessionHref } from "../insights/InsightsPage";
+import { sessionLink } from "../../components/sheets/session";
 import { elapsed, isRow, isTool, labelOf, likelyWaiting, passes, since, streamRows, type LaneChoices, type LiveLane, type StreamFilters } from "./live";
 
 const CLOCK = { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false } as const;
@@ -118,9 +117,11 @@ const Lane = memo(function Lane({ lane, fig, v, now, today, text, open, toggle, 
  *  wherever it stands; scrolling or opening a row turns it off, and Jump to latest turns it back on. A finished lane is
  *  folded and a running one shows its last LAST rows, until the user chooses otherwise. The filters leave rows out of
  *  what is drawn: a lane with no row left is hidden, and the Errors filter opens the lanes it finds rows in. */
-export function Stream({ s, now, text, follow, setFollow, filters: f, setFilters, choices: c, setChoices }: {
+export function Stream({ s, now, text, follow, setFollow, filters: f, setFilters, choices: c, setChoices, sheet }: {
   s: LiveSession; now: number; text: boolean; follow: boolean; setFollow: (on: boolean) => void;
   filters: StreamFilters; setFilters: (f: StreamFilters) => void; choices: LaneChoices; setChoices: (c: LaneChoices) => void;
+  /** The href of a link that opens this session's sheet over Live. */
+  sheet: string;
 }) {
   const box = useRef<HTMLDivElement>(null), drawn = useRef<HTMLDivElement>(null), newest = useRef<HTMLDivElement>(null);
   const put = useRef({ top: 0, reach: 0 });
@@ -223,7 +224,7 @@ export function Stream({ s, now, text, follow, setFollow, filters: f, setFilters
     </div>
     <span className="sr" role="status">{said}</span>
     <div className={"stream" + (wide ? " dated" : "")} ref={box} onScroll={onScroll} tabIndex={0} role="log" aria-live="off" aria-label="Session events"><div ref={drawn}>
-      {s.truncated && <p className="older muted">Older events are not shown. The <a href={sessionHref(s.session_id)} onClick={appLink}>session sheet on Activity</a> has
+      {s.truncated && <p className="older muted">Older events are not shown. The <a href={sheet} onClick={sessionLink(s.session_id)}>session sheet</a> has
         the whole session.</p>}
       {rows.map(r => {
         if (r.kind === "lane") {

@@ -5,6 +5,15 @@ import "./chart.css";
 /** Motion is opt-out: every animation checks this (and the CSS sits behind the same media query). */
 export const motion = () => !matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+/** A bucket with fewer tool calls has a noisy error rate: its mark is hollow and the rate scale leaves it out. */
+export const LOW_CALLS = 50;
+/** Which buckets (by their tool call counts) have too few calls for a steady rate. None when no bucket has enough, so a
+ *  view that is quiet throughout still scales to its own rates; a bucket without calls has no rate and is never low. */
+export const lowVolume = (calls: readonly number[]): boolean[] => {
+  const steady = calls.some(c => c >= LOW_CALLS);
+  return calls.map(c => steady && c > 0 && c < LOW_CALLS);
+};
+
 /** How much larger than the default the browser's text is: the root's computed font size over 16, 1 when it cannot be
  *  read. Read when a chart renders; SVG labels and the margins that hold them multiply by it. */
 export function textScale(): number {

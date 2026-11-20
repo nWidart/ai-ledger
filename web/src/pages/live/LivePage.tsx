@@ -2,12 +2,12 @@ import { useEffect, useLayoutEffect, useState } from "react";
 import { viewOf, type LiveListSession, type LiveState } from "../../api";
 import { Filters, SOURCE_LABELS } from "../../components/Filters";
 import { ProjectName } from "../../components/ProjectDot";
-import { appLink } from "../../components/sheets/session";
+import { sessionLink, sessionSheetHref } from "../../components/sheets/session";
+import { UsageSheets } from "../../components/sheets/UsageSheets";
 import { plural, usd, when } from "../../format";
 import { useSearchOf, useView } from "../../url";
 import { PageSkeleton } from "../../components/PageSkeleton";
 import { ApiError } from "../../useApi";
-import { sessionHref } from "../insights/InsightsPage";
 import { AgentPanel, StateTag } from "./AgentPanel";
 import { groupSessions, needsYou, NO_FILTERS, stateNow, type LaneChoices } from "./live";
 import { Stream } from "./Stream";
@@ -42,6 +42,9 @@ export function LivePage() {
   const newest = sessions[0]?.session_id ?? "", listed = sessions.some(s => s.session_id === first);
   useEffect(() => { if (!h.session && list && !listed) setFirst(newest); }, [h.session, list, listed, newest]);
   const pick = (id: string) => { set({ session: id, view: null }); setFollow(true); };
+  /** Live as it is, with session id's sheet open over it: the href of a session link. */
+  const sheetHref = (id: string) =>
+    sessionSheetHref("/live", { project: view.project, source: view.source, auto: view.automated, view: search.view, session: h.session }, id);
   const projects = [...new Set(sessions.map(s => s.project).filter((p): p is string => !!p))];
   const status = paused ? `Paused${held ? ` · ${plural(held, "update")} held` : ""}` : conn === "reconnecting" ? "Connection lost · reconnecting…"
     : conn === "live" ? "Updating live" : "Connecting…";
@@ -94,7 +97,7 @@ export function LivePage() {
       {error && <div className="banner" role="alert"><b>Could not load.</b> {error.message}</div>}
       {/* With a session in the URL the stream's own panel says it is loading; the placeholder is for the bare page. */}
       {bare && !h.session && <PageSkeleton />}
-      {list && !sessions.length && !h.session && <Empty newest={list.newest} />}
+      {list && !sessions.length && !h.session && <Empty newest={list.newest} href={sheetHref} />}
       {mode === "wall" && sessions.length > 0 && <Wall sessions={sessions} now={now} pick={pick} />}
       {mode === "stream" && (sessions.length > 0 || h.session) && <div className="grid">
         <section className="panel rail" aria-label="Active sessions">
@@ -113,11 +116,11 @@ export function LivePage() {
               <ProjectName project={shown.project}><b>{shown.project ?? "(unknown)"}</b></ProjectName>
               {shown.branch && <code className="chip">{shown.branch}</code>}<span className="chip">{SOURCE_LABELS[shown.source]}</span>
               {shown.model && <span className="chip">{shown.model}</span>}
-              <a href={sessionHref(shown.session_id)} onClick={appLink}>Session sheet</a>
+              <a href={sheetHref(shown.session_id)} onClick={sessionLink(shown.session_id)}>Session sheet</a>
               <span className="spacer" /><StateTag st={stateNow(shown.state, now)} now={now} plain />
             </div>
             <Stream key={shown.session_id} s={shown} now={now} text={text} follow={follow} setFollow={setFollow} filters={filters} setFilters={setFilters}
-              choices={choices} setChoices={setChoices} />
+              choices={choices} setChoices={setChoices} sheet={sheetHref(shown.session_id)} />
           </> : missing ? <p className="muted loading">Session not found. It may be from another store, or its id is mistyped.{" "}
             <a href="/live" onClick={e => { e.preventDefault(); set({ session: null }); }}>Show the active sessions</a></p>
             : <p className="muted loading">Loading…</p>}
@@ -125,11 +128,12 @@ export function LivePage() {
         {shown && <AgentPanel s={shown} st={stateNow(shown.state, now)} now={now} failedOnly={filters.errors}
           setFailedOnly={errors => setFilters({ ...filters, errors })} />}
       </div>}
+      <UsageSheets data={undefined} />
     </main>
   );
 }
 
-function Empty({ newest }: { newest: { session_id: string; project: string | null; last_ts: string | null } | null }) {
+function Empty({ newest, href }: { newest: { session_id: string; project: string | null; last_ts: string | null } | null; href: (id: string) => string }) {
   return <p className="empty-live" id="lede" tabIndex={-1}>No session is active in this view.
-    {newest && <> The newest, <a href={sessionHref(newest.session_id)}>{newest.project ?? "a session"}</a>, last wrote {when(newest.last_ts)}.</>}</p>;
+    {newest && <> The newest, <a href={href(newest.session_id)} onClick={sessionLink(newest.session_id)}>{newest.project ?? "a session"}</a>, last wrote {when(newest.last_ts)}.</>}</p>;
 }
