@@ -63,7 +63,7 @@ A project filter that names an automated project includes that project's session
 
 With the control off, the project picker leaves out automated projects. The Limits picker lists every project, automated ones included.
 
-If `automated.json` cannot be used, Activity shows a banner with the file's path and the reason, and only the built-in detection applies.
+If `automated.json` cannot be used, a banner under the navigation names the file's path and the reason, on every page, and only the built-in detection applies.
 
 ## Days
 

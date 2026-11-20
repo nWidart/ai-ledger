@@ -43,7 +43,7 @@ There is no Include automated sessions control on this page. See [Filters](/ai-l
 
 **Figures**
 
-A line "Uncategorized: N% of errors" gives the share of errors in the catch-all types (Other, Other non-zero exit, MCP tool error): errors that no specific rule matched. When the view has errors from both agents and no source filter, it splits the share by agent. A growing catch-all shows at once.
+A line "Uncategorized: N% of errors" gives the share of errors in the catch-all types (Other, Other non-zero exit, MCP tool error): errors that no specific rule matched. Its **How measured** toggletip says so. When the view has errors from both agents and no source filter, it splits the share by agent. A growing catch-all shows at once.
 
 Four vitals follow. None repeats the error rate, which the heading states:
 
@@ -80,7 +80,7 @@ On a phone, only Change and Incidents show; **More summary** shows the rest.
 **Controls**
 
 - Select a type in the legend to open it and draw its own rate line.
-- **Reading**: hover, or the left and right arrow keys, Home and End, read a bucket: its rate, errors, calls and errors by type. Escape clears the reading.
+- **Reading**: hover, or the left and right arrow keys, Home and End, read a bucket: its rate, errors, calls and errors by type, and "too few calls for a steady rate" for a hollow point. Escape clears the reading.
 - **Selecting a bucket**: a click, or Enter or Space on the current point, selects one day or week; the same action clears it. A chip by the Error types heading also clears it. A folded stretch cannot be selected. A selected bucket narrows the type table and the open type's detail to its errors. The summary, the chart, the rate trend and Change stay range-wide.
 
 ### Error types
@@ -123,12 +123,12 @@ The panel says "Nothing open with a known fix" and "Nothing is rising in this ra
 
 ### Type detail
 
-**Shows** the open type, in place of Where to start. On a narrow screen (900 px or less) it opens as a sheet. **Back to types** and **✕** close it. The open type is in the URL.
+**Shows** the open type, in place of Where to start. On a narrow screen (900 px or less) it opens as a sheet. **Back to types** and **✕** close it. The open type is in the URL. A session or tool sheet opened from it stacks over it with **← Back**: Back, Close, Esc or a click beside it returns to the type and to the link.
 
 **Figures** In order:
 
 1. **Why**: one sentence on what the type is.
-2. **Incident line**: "N errors in M incidents, X% didn't recover", the time lost in retry loops and the largest incident ("Largest: N attempts over …").
+2. **Incident line**: "N errors in M incidents, X% didn't recover", the time lost in retry loops and the largest incident ("Largest: N attempts over 3m"). Its **How measured** toggletip says what an incident is and what recovered means. Durations read in one unit, as on every page: "42s", "7m", "1.5h".
 3. **Potential fix**: the fix text, and where one exists a snippet to paste and **Copy instruction line**.
 4. **Fix marker**: a date field **Applied on** (today by default, no earlier than the first day of the store) and **Mark fix applied**; once marked, **✓ Fix applied** with the date and **Undo**. A marker applies to all projects. While a write waits the page shows "Saving…"; a failed write shows a message beside the marker.
 5. **Mute**: **Mute this type** or **Unmute**. A muted type counts as noise. **Harness / connection failure** and **User rejected the action** are always noise and cannot be muted; the detail says so instead.

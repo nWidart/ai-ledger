@@ -52,7 +52,7 @@ The page reads top to bottom: the heading, Needs attention, the work chart, then
 - Commits show their change against the previous period of equal length: "up from", "down from", or "unchanged".
 - With no requests in the view, the heading reads "No agent activity in the last 30 days." (or "yet" for All). With a source selected, it names the source in place of "agent".
 
-**Banner** "Automated projects file ignored" appears when the automated projects file cannot be used. It names the file and the reason. See [Configuration](/ai-ledger/reference/configuration/).
+**Banner** "Automated projects file ignored" appears under the navigation, on every page, when the automated projects file cannot be used. It names the file and the reason. See [Filters](/ai-ledger/everywhere/filters/#include-automated).
 
 ### Needs attention
 
@@ -108,7 +108,7 @@ A selected day also narrows Tools, MCP servers, skills and hooks, and Error loop
 | Prompts interrupted | Share of prompts interrupted | "N of M prompts; X turns and Y tool calls per prompt." | It goes up. |
 | Subagents | Share of tokens that came from subagents | "of tokens came from subagents." | Never judged. |
 | Median session | Median active time of a session | "N sessions, X active and Y thinking in all." When a session records model time: "…; X waiting on the model and Y running tools." | Never judged. |
-| Output speed | Output tokens per second of model time, as "98 tok/s", or "n/a" | "Output tokens per second of model time, in N sessions.", or "No session in this view records model time." | It goes down. |
+| Output speed | Output tokens per second of model time, as "98 tok/s", or "n/a" | "Output tokens per second of model time, in N sessions.", "Codex transcripts record no model time." when the view holds Codex work only, or "No session in this view records model time." | It goes down. |
 
 A session's active time leaves out every pause over 20 minutes. Two figures that display the same value read "unchanged".
 
