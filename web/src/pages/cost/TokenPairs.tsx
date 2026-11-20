@@ -19,7 +19,7 @@ export function TokenPairs({ t }: { t: Totals }) {
   const pairs = tokenPairs(t), known = pairs.some(p => p.costShare != null), sentence = lede(pairs);
   return (
     <div className="tpairs">
-      <div className="hint" aria-live="polite">{known ? sentence : "No request in this view is priced, so each kind's share of cost is unknown."}</div>
+      <div className="hint">{known ? sentence : "No request in this view is priced, so each kind's share of cost is unknown."}</div>
       <div className="tp-head" aria-hidden="true"><span>Share of tokens</span><span /><span>Share of estimated cost</span></div>
       <ul className="tp-chart" aria-label="Share of tokens beside share of estimated cost, by kind">
         {pairs.map(p => <li key={p.key} className="tp-row">
