@@ -186,6 +186,24 @@ describe("model time and output speed", () => {
     await loaded();
     expect(tile("Output speed")).toEqual(["n/a", "No session in this view records model time."]);
   });
+
+  // The reason follows the view's sessions, not its priced requests: an unpriced Claude Code model adds no cost row by source.
+  it("does not blame Codex on All sources when the Claude Code sessions are unpriced", async () => {
+    serve({ ...usage, totals: { ...usage.totals, output_per_s: null, timed_sessions: 0, session_sources: ["claude", "codex"] },
+      daily_sources: [{ day: "2026-11-04", source: "codex", cost: 1 }] });
+    at();
+    renderApp(<ActivityPage />);
+    await loaded();
+    expect(tile("Output speed")).toEqual(["n/a", "No session in this view records model time."]);
+  });
+
+  it("names Codex on All sources when every session in the view is a Codex one", async () => {
+    serve({ ...usage, totals: { ...usage.totals, output_per_s: null, timed_sessions: 0, session_sources: ["codex"] }, daily_sources: [] });
+    at();
+    renderApp(<ActivityPage />);
+    await loaded();
+    expect(tile("Output speed")).toEqual(["n/a", "Codex transcripts record no model time."]);
+  });
 });
 
 describe("drawer tables", () => {

@@ -66,7 +66,10 @@ export default {
   "model_ms": 10000000,
   "tool_ms": 3000000,
   "timed_sessions": 1,
-  "output_per_s": 100.0
+  "output_per_s": 100.0,
+  "session_sources": [
+   "claude"
+  ]
  },
  "daily": [
   {

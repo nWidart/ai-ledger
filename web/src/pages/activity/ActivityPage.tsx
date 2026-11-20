@@ -75,8 +75,8 @@ function sessionNote(t: Totals): string {
 /** Work vitals: how smoothly the work went, each against the period before (none for All, or with nothing to divide by there). */
 function Vitals({ d }: { d: UsagePayload }) {
   const t = d.totals, p = d.previous;
-  // A view with Codex work only has no model time to divide by: Codex transcripts do not record it.
-  const codexOnly = d.source === "codex" || (d.daily_sources.length > 0 && d.daily_sources.every(r => r.source === "codex"));
+  // A view whose sessions are all Codex ones has no model time to divide by: Codex transcripts do not record it.
+  const codexOnly = d.source === "codex" || (t.session_sources.length > 0 && t.session_sources.every(s => s === "codex"));
   // cur and prev are the same figure of this and the previous period; worse: the way a move reads as bad.
   const vs: { v: string; l: string; n: ReactNode; id?: string; cur: number | null; prev?: number | null; worse?: "up" | "down"; fmt: (n: number) => string }[] = [
     { v: num(t.sessions), l: "Sessions", cur: t.sessions, prev: p?.sessions, fmt: n => plural(n, "session"),
