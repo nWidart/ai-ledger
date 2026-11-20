@@ -97,6 +97,12 @@ describe("resolve", () => {
     expect(live.footer).toBe("Enter: open session #abc · 30d");
     expect(commit("/live?session=s1&sheet=x", c.bash).href).toBe("/live?tool=Bash&session=s1");
   });
+  it("keeps Live's followed session when one commit changes the project and opens a session sheet", () => {
+    const s1: Chip = { kind: "session", value: "abc", label: "#abc" };
+    expect(commit("/live?project=foo&session=s1", c.my, s1).href).toBe("/live?project=myproject&session=s1&sheet=abc");
+    // A new project alone still starts the stream over: the followed session was the old project's.
+    expect(commit("/live?project=foo&session=s1&sheet=x", c.my).href).toBe("/live?project=myproject");
+  });
   it(">errors >bash opens Errors with the inspector", () => {
     expect(commit("/usage", c.errors, c.bash).href).toBe("/errors?range=30&tool=Bash");
   });

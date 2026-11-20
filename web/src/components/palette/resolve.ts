@@ -83,7 +83,11 @@ export function resolve(chips: readonly Chip[], here: Here): Resolved {
   else for (const k of SHARED_KEYS) if (here.search[k]) raw[k] = here.search[k]!;
   const value = (k: FilterKind) => { const i = slot.get(k); return i == null ? null : chips[i]!.value; };
   raw = applyPatch(raw, Object.fromEntries((Object.keys(HASH_KEY) as FilterKind[]).map(k => [HASH_KEY[k], value(k)])));
-  if ((raw.project ?? "") !== (here.search.project ?? "") || (raw.source ?? "") !== (here.search.source ?? "")) raw = applyPatch(raw, { session: null, [sk]: null, inspect: null });
+  // A new project or source closes the sheets of the old one. On Live it also drops the followed session, unless the same commit
+  // opens a sheet: that asks for a sheet over the stream, which keeps following.
+  if ((raw.project ?? "") !== (here.search.project ?? "") || (raw.source ?? "") !== (here.search.source ?? "")) {
+    raw = applyPatch(raw, { ...(open && sk !== "session" ? {} : { session: null }), [sk]: null, inspect: null });
+  }
   if (open) {
     raw = applyPatch(raw, { inspect: null, tool: null, mcp: null, skill: null, [sk]: null });
     // Opening a type is an explicit request: it wins over a selected chart bucket, which the palette cannot see the errors of.
