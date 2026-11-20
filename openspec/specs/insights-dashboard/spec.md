@@ -87,11 +87,11 @@ The page SHALL list the view's analysed sessions as cards: title, outcome, goals
 - **THEN** its card shows no expander
 
 ### Requirement: Link analysed sessions to their sheets
-Each session in the store SHALL link to its session sheet on Activity, in the view's project, range, source and automated filter.
+Each session in the store SHALL link to its session sheet, which opens over Insights. The page's project, range, source, automated filter and its own filters SHALL stay as they were under the sheet and after it closes.
 
 #### Scenario: Open a session
 - **WHEN** the user views project `foo` for the last 7 days and clicks a session in the list
-- **THEN** Activity opens on project `foo` for the last 7 days with that session's sheet
+- **THEN** that session's sheet opens over Insights, and the page still shows project `foo` for the last 7 days
 
 #### Scenario: Session missing from the store
 - **WHEN** a facet's session has no transcript in the store
