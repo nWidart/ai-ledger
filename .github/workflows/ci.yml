@@ -23,8 +23,39 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Decides whether the Python and web jobs run: they are skipped when a push or PR changes only Markdown files.
+  # The specs and package jobs always run: specs are Markdown, and the package embeds README.md.
+  # A call from release.yml (inputs.ref set) always runs every job.
+  changes:
+    name: Changes
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.diff.outputs.code }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+      - name: Detect non-Markdown changes
+        id: diff
+        env:
+          REF: ${{ inputs.ref }}
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          code=true
+          # Diffing two trees needs no history, so a shallow fetch of the base commit is enough.
+          # A missing base (a new branch, a force push) leaves code=true.
+          if [ -z "$REF" ] && [ -n "$BASE" ] && git fetch --quiet --depth=1 origin "$BASE" \
+            && files=$(git diff --name-only "$BASE" HEAD) && [ -n "$files" ] \
+            && ! grep -qv '\.md$' <<< "$files"; then
+            code=false
+            echo "Only Markdown files changed: skipping the Python and web jobs."
+          fi
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+
   python-lint:
     name: Python · lint
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -38,6 +69,8 @@ jobs:
 
   python-tests:
     name: Python · tests
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -51,6 +84,8 @@ jobs:
 
   web-typecheck:
     name: Web · typecheck
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -69,6 +104,8 @@ jobs:
 
   web-lint:
     name: Web · lint
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -87,6 +124,8 @@ jobs:
 
   web-tests:
     name: Web · tests
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -105,6 +144,8 @@ jobs:
 
   web-build:
     name: Web · build
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -142,6 +183,8 @@ jobs:
   package:
     name: Package
     needs: [python-lint, python-tests, web-typecheck, web-lint, web-tests, web-build, specs]
+    # Runs when the Python and web jobs were skipped, but not when one failed or was cancelled.
+    if: ${{ !cancelled() && !failure() }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
