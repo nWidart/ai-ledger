@@ -136,11 +136,9 @@ export function Nav() {
   return (
     <nav className="appnav" aria-label="Dashboards" ref={nav}>
       <div className="appnav-in">
-        <span className="appnav-brand"><svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true">
-          <rect width="20" height="20" rx="5.5" fill="var(--accent)" />
-          <rect x="4.5" y="10.5" width="2.6" height="5" rx="1.1" fill="var(--surface-1)" />
-          <rect x="8.7" y="7" width="2.6" height="8.5" rx="1.1" fill="var(--surface-1)" />
-          <rect x="12.9" y="4.5" width="2.6" height="11" rx="1.1" fill="var(--surface-1)" opacity=".7" />
+        {/* The mark: a bound ledger, its page closed by an accountant's double rule. */}
+        <span className="appnav-brand"><svg viewBox="0 0 32 32" width="20" height="20" aria-hidden="true">
+          <path fill="var(--accent)" d="M6.5 2H9V30H6.5A3 3 0 0 1 3.5 27V5A3 3 0 0 1 6.5 2ZM11.5 2H25.5A3 3 0 0 1 28.5 5V18.5H11.5ZM11.5 21H28.5V24.25H11.5ZM11.5 26.75H28.5V27A3 3 0 0 1 25.5 30H11.5Z" />
         </svg><span className="appnav-word">AI <b>Ledger</b></span></span>
         {/* Both are drawn; Nav.css shows one (display: none takes the other out of the tab order and the accessibility tree). */}
         <span className="appnav-tabs"><PageLinks path={path} shared={shared} alert={alert} tone={tone} /></span>
