@@ -8,7 +8,7 @@ from unittest import mock
 
 from compression import zstd
 
-from ai_ledger import metrics, store
+from ai_ledger import metrics, store, titles
 from ai_ledger.codex import live_items as codex_live, placement, thread_class
 from test_store import StoreCase
 
@@ -501,8 +501,8 @@ class PromptTest(CodexCase):
         self.ingest()
         self.assertEqual(self.q("SELECT prompt_id, ts FROM prompts"), [("t1", datetime.fromisoformat("2026-11-06 10:00:00"))])
         # The session's title comes from the typed message, not the injected ones before it.
-        self.assertEqual(metrics.first_prompt(self.con.cursor(), THREAD), "run it now")
-        self.assertEqual(metrics.with_titles(self.con.cursor(), [dict(session_id=THREAD)])[0]["title"], "run it now")
+        self.assertEqual(titles.first_prompt(self.con.cursor(), THREAD), "run it now")
+        self.assertEqual(titles.with_titles(self.con.cursor(), [dict(session_id=THREAD)])[0]["title"], "run it now")
 
     def test_automation_heartbeat(self):
         self.put("v0155_heartbeat")
@@ -582,13 +582,13 @@ class IndexTest(CodexCase):
         self.index((self.OTHER, "Gone"))
         self.ingest()
         self.assertEqual(self.q("SELECT session_id FROM sessions"), [(THREAD,)])  # every dashboard lists sessions rows
-        self.assertNotIn(self.OTHER, metrics.titles(self.con.cursor(), [THREAD]))
+        self.assertNotIn(self.OTHER, titles.titles(self.con.cursor(), [THREAD]))
 
     def test_index_missing(self):
         self.place(NAME, meta(THREAD) + item(1, "t1", dict(type="UserMessage", id="item-1", content=[dict(type="text", text="run it now")])))
         self.assertEqual(self.ingest()["files"], 1)
         self.assertEqual(self.titles(), [])
-        self.assertEqual(metrics.titles(self.con.cursor(), [THREAD]), {THREAD: ("run it now", "prompt")})
+        self.assertEqual(titles.titles(self.con.cursor(), [THREAD]), {THREAD: ("run it now", "prompt")})
 
     def test_index_rewritten_whole(self):
         a, b = line(id=THREAD, thread_name="a", updated_at="2026-11-06T10:00:00Z"), line(id=self.OTHER, thread_name="b", updated_at="2026-11-06T10:00:01Z")

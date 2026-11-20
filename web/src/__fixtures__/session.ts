@@ -19,11 +19,13 @@ export default {
   "first_compaction_ts": null,
   "context_limit": 1000,
   "active_s": 540,
-  "model_ms": 10000000,
-  "tool_ms": 3000000,
-  "lines_added": 130,
-  "lines_removed": 32,
-  "output_per_s": 100.0
+  "runs": {
+   "model_ms": 10000000,
+   "tool_ms": 3000000,
+   "lines_added": 130,
+   "lines_removed": 32,
+   "output_per_s": 100.0
+  }
  },
  "insight": null,
  "models": [

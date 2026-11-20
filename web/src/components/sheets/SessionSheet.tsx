@@ -90,11 +90,11 @@ export function SessionSheet({ id, s, error, retry, range, pageProject, view }: 
       <Stat v={num(s.commits.length)} l={s.commits.length === 1 ? "commit" : "commits"} />
       <Stat v={dur(i.active_s)} l={<>active<Toggletip term="active time">Pauses over 20 minutes left out</Toggletip></>} />
       {/* Claude Code's cost-state line: none of these for a session without one (every Codex session). */}
-      {i.model_ms != null && <>
-        <Stat v={dur(i.model_ms / 1000)} l={<>model time<Toggletip term="model and tool time">From Claude Code's own record of the session, subagent work included</Toggletip></>} />
-        {i.tool_ms != null && <Stat v={dur(i.tool_ms / 1000)} l="tool time" />}
-        {i.output_per_s != null && <Stat v={num(i.output_per_s)} l="output tok/s" />}
-        {i.lines_added != null && i.lines_removed != null && <Stat v={`+${num(i.lines_added)} / −${num(i.lines_removed)}`} l="lines" />}
+      {i.runs && <>
+        <Stat v={dur(i.runs.model_ms / 1000)} l={<>model time<Toggletip term="model and tool time">From Claude Code's own record of the session, subagent work included</Toggletip></>} />
+        <Stat v={dur(i.runs.tool_ms / 1000)} l="tool time" />
+        {i.runs.output_per_s != null && <Stat v={num(i.runs.output_per_s)} l="output tok/s" />}
+        <Stat v={`+${num(i.runs.lines_added)} / −${num(i.runs.lines_removed)}`} l="lines" />
       </>}
     </div>
     {s.insight && <SessionInsight i={s.insight} view={view} />}

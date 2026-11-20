@@ -9,7 +9,7 @@ import re
 import shlex
 from datetime import datetime, timedelta, timezone
 
-from . import limits, metrics, store
+from . import limits, metrics, store, titles
 from .categorize import SHELL_TOOLS
 
 ACTIVE = timedelta(minutes=10)  # a session with a line this recent is listed
@@ -372,7 +372,7 @@ def sessions(cur, project="", source="", automated=False, now=None, prices=None,
     sids = [s["session_id"] for s in info]
     lines = recent(cur, sids)
     figs = figures(cur, sids, prices)
-    found = metrics.titles(cur, sids, prompts=text)
+    found = titles.titles(cur, sids, prompts=text)
     ended = closed(cur, sids)
     copied = forked(cur, sids)
     out = []
@@ -388,7 +388,7 @@ def sessions(cur, project="", source="", automated=False, now=None, prices=None,
 
 
 def title_of(found, sid):
-    """The title and title_from fields of session sid, from metrics.titles."""
+    """The title and title_from fields of session sid, from titles.titles."""
     title, origin = found.get(sid, (None, None))
     return dict(title=title, title_from=origin)
 
@@ -476,7 +476,7 @@ def session(cur, sid, after="", text=False, now=None, prices=None):
     last = aware(s["last_ts"])
     cursor = max((r[2] for r in rows if r[2]), default=after or None)
     f = figures(cur, [sid], prices)[sid]
-    return dict(session_id=sid, **title_of(metrics.titles(cur, [sid], prompts=text), sid), project=s["project"], source=s["source"], branch=s["git_branch"], last_ts=iso(last),
+    return dict(session_id=sid, **title_of(titles.titles(cur, [sid], prompts=text), sid), project=s["project"], source=s["source"], branch=s["git_branch"], last_ts=iso(last),
                 now=iso(now), cursor=cursor, truncated=more,
                 state=state(assemble(recent(cur, [sid]).get(sid, []), copied)[0], now, s["source"], last, sid in closed(cur, [sid])),
                 events=[public(e, text) for e in events], lanes=lanes(cur, sid, prices),
