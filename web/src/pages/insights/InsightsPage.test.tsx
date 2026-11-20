@@ -1,4 +1,4 @@
-import { act, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { InsightsPayload } from "../../api";
@@ -933,5 +933,22 @@ describe("InsightsPage", () => {
     await waitFor(() => expect(location.search).toBe("?range=0"));
     expect(document.querySelector("main")).toBe(page);
     await waitFor(() => expect(document.activeElement).toBe(link)); // focus returns to the link
+  });
+
+  it("opens the session sheet over Insights from a session link's context menu, and returns focus to the link", async () => {
+    mockApi({ "/api/insights": () => fixture, "/api/usage": () => usage, "/api/sessions": () => sessions, "/api/session": () => session,
+      "/api/status": () => ({ ingesting: false, last_ingest: null, last_change: null, last_stats: null, error: null, counts: {}, interval: 60, project_order: [] }) });
+    history.replaceState(null, "", "/insights?range=0");
+    renderRouter();
+    const link = await screen.findByRole("link", { name: "Add a theme toggle" });
+    const page = document.querySelector("main")!;
+    fireEvent.contextMenu(link, { clientX: 20, clientY: 30 });
+    await userEvent.click(within(screen.getByRole("menu")).getByRole("menuitem", { name: "Open session" }));
+    await waitFor(() => expect(location.pathname + location.search).toBe("/insights?range=0&session=0000aaaa-0000-4000-8000-000000000001"));
+    const dlg = await waitFor(() => { const d = document.querySelector<HTMLDialogElement>("dialog[open]"); expect(d).toBeTruthy(); return d!; });
+    expect(document.querySelector("main")).toBe(page); // over Insights, not Activity
+    await userEvent.click(within(dlg).getByRole("button", { name: "Close" }));
+    await waitFor(() => expect(location.search).toBe("?range=0"));
+    await waitFor(() => expect(document.activeElement).toBe(link));
   });
 });

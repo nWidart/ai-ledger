@@ -133,6 +133,9 @@ describe("App", () => {
         act(() => navigate(to + "?range=30"));
         await page(cls);
         expect(screen.getAllByRole("alert").filter(a => a.textContent?.includes(path))).toHaveLength(1);
+        // The same node, never remounted: a new alert would be read out again on every page.
+        expect(screen.getByRole("alert")).toBe(alert);
+        expect(alert.isConnected).toBe(true);
         expect(document.querySelector("main")!.contains(alert)).toBe(false); // the app's, not the page's
       }
     });

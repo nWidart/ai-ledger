@@ -1811,6 +1811,17 @@ describe("ErrorsPage bucket selection", () => {
     expect(document.getElementById("chartLive")!.textContent).toMatch(/^Nov 5, 2026: 0\.00% rate, 0 errors of 10 calls/);
   });
 
+  it("reads a quiet day, reached by an arrow key, as too few calls for a steady rate", async () => {
+    // Nov 3 has 4 calls in a view whose other days have hundreds: its point is hollow, and the reading says why.
+    await open("?range=30", withDays([["2026-11-03", "foo", 4, 0, "claude"], ["2026-11-04", "foo", 300, 0, "claude"]]));
+    keys();
+    await userEvent.keyboard("{Home}{ArrowRight}{ArrowLeft}");
+    const live = document.getElementById("chartLive")!.textContent!;
+    expect(live).toMatch(/^Nov 3, 2026: 50\.00% rate, 2 errors of 4 calls, too few calls for a steady rate\. /);
+    await userEvent.keyboard("{ArrowRight}");
+    expect(document.getElementById("chartLive")!.textContent).not.toMatch(/too few calls/);
+  });
+
   it("dismisses the tooltip and the reading with Escape, and the keys start over", async () => {
     await open("?range=30", withDays([["2026-11-03", "foo", 10, 0, "claude"], ["2026-11-05", "foo", 10, 0, "claude"]]));
     keys();
