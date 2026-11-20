@@ -33,7 +33,7 @@ http://127.0.0.1:8765/usage?range=7
 | [2. Cost](#2-cost-2-minutes) | 2 | The heading, **What stands out** | [Spend less for the same output](/ai-ledger/improve/spend-less/) |
 | [3. Context](#3-context-2-minutes) | 2 | **Tips** | [Keep context lean](/ai-ledger/improve/lean-context/), [Spend less for the same output](/ai-ledger/improve/spend-less/) |
 | [4. Errors](#4-errors-3-minutes) | 3 | **Change**, **Where to start** | [Kill repeated tool failures](/ai-ledger/improve/tool-failures/) |
-| [5. Limits](#5-limits-2-minutes) | 2 | The heading, the status strip, **Left unused** | [Stop hitting plan limits](/ai-ledger/improve/plan-limits/) |
+| [5. Limits](#5-limits-2-minutes) | 2 | The heading, the card headers, **Past windows** | [Stop hitting plan limits](/ai-ledger/improve/plan-limits/) |
 | [6. Insights](#6-insights-2-minutes) | 2 | **Outcomes at a glance**, **Friction categories** | [Get sessions to finish](/ai-ledger/improve/finish-sessions/) |
 | [7. Live](#7-live-1-minute) | 1 | The rail's **approval?** and **your turn** groups | [Babysit agents less](/ai-ledger/improve/babysit-less/) |
 
@@ -95,12 +95,12 @@ If you marked a fix in an earlier week, open that type and read **Before and aft
 
 The open windows cover your whole account and ignore the range.
 
-Read the heading. The stop is off when it does not start with "No limit runs out at the current pace.", or when a chip in the status strip reads **at limit** or **runs out**. Open [Stop hitting plan limits](/ai-ledger/improve/plan-limits/).
+Read the heading. The stop is off when it does not start with "No limit runs out at the current pace.", or when a card's header reads **at its limit** or **runs out**. Open [Stop hitting plan limits](/ai-ledger/improve/plan-limits/).
 
 Then read two more lines:
 
 - A suggestion such as "Send work to Codex: about 70% of its weekly limit would go unused" (an example) names the provider with the most headroom. To act on it, open [Compare Claude Code and Codex](/ai-ledger/improve/compare-sources/).
-- **Left unused** gives the average share of each limit that was still unused when its windows reset. Rule of thumb: when a weekly limit reads 50% unused or more in every review of a month, your plan is larger than your use. Open [Spend less for the same output](/ai-ledger/improve/spend-less/) for the plan fit.
+- **Past windows** gives, under each limit's name, the average share still unused when its windows reset ("avg 60% unused"). Rule of thumb: when a weekly limit reads 50% unused or more in every review of a month, your plan is larger than your use. Open [Spend less for the same output](/ai-ledger/improve/spend-less/) for the plan fit.
 
 ### 6. Insights (2 minutes)
 

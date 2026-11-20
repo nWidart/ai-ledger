@@ -16,7 +16,10 @@ export interface FiltersProps {
   automated?: boolean;
   /** The file that lists more automated projects, named in the toggle's hint. */
   autoFile?: string;
-  /** Show the time range (Live has none: it keeps the range in the URL for the other pages). */
+  /** Show the project picker (Limits has none: limits are per account; the URL keeps the project for the other pages). */
+  project?: boolean;
+  /** Show the time range (Live has none: it keeps the range in the URL for the other pages; Limits shows RangeFilter where
+   *  the range applies). */
   range?: boolean;
   /** Page-only controls after the range (Errors: granularity, subagents, noise). */
   children?: ReactNode;
@@ -37,9 +40,19 @@ const filterSearch = (raw: Readonly<Record<string, string>>) => {
   return { project, range, source, auto, badSource: !!raw.source && !s.source, shared: sharedSearch(raw) };
 };
 
+/** The time range segment, writing the URL: in Filters, or alone where a page's range applies to one section. */
+export function RangeFilter() {
+  const { range } = useSearchOf(filterSearch);
+  return <div className="seg" id="fRange" role="group" aria-label="Time range">
+    {RANGES.map(r => (
+      <button key={r} type="button" aria-pressed={range === r} onClick={() => setSearch({ range: r })}>{rangeLabel(r)}</button>
+    ))}
+  </div>;
+}
+
 /** Project picker with its color dot, its Project page link and clear button, range and source segments and the automated
  *  toggle, all writing the URL. */
-export function Filters({ projects, automated = false, autoFile, range = true, children }: FiltersProps) {
+export function Filters({ projects, automated = false, autoFile, project = true, range = true, children }: FiltersProps) {
   const h = useSearchOf(filterSearch), { badSource } = h, set = setSearch, path = usePathname();
   // An unknown source reads as All; the URL drops it so a copied link says what the page shows.
   useEffect(() => { if (badSource) setSearch({ source: null }, { push: false }); }, [badSource]);
@@ -59,7 +72,7 @@ export function Filters({ projects, automated = false, autoFile, range = true, c
   };
   return (
     <div className="filters" role="group" aria-label="Filters">
-      <span className="filters-project">
+      {project && <span className="filters-project">
         <ProjectPicker project={h.project} options={opts} onPick={project => set({ project, session: null, inspect: null })} />
         {h.project && path !== "/project" && (
           // The visible text is "Project page"; the name says whose, and contains it.
@@ -68,12 +81,8 @@ export function Filters({ projects, automated = false, autoFile, range = true, c
           </Link>
         )}
         {h.project && <button type="button" className="filters-clear" aria-label="Clear project filter" title="Show all projects" onClick={clear}>✕</button>}
-      </span>
-      {range && <div className="seg" id="fRange" role="group" aria-label="Time range">
-        {RANGES.map(r => (
-          <button key={r} type="button" aria-pressed={h.range === r} onClick={() => set({ range: r })}>{rangeLabel(r)}</button>
-        ))}
-      </div>}
+      </span>}
+      {range && <RangeFilter />}
       <div className="seg" id="fSource" role="group" aria-label="Source">
         {(["", ...SOURCES] as const).map(s => (
           <button key={s} type="button" aria-pressed={h.source === s} onClick={() => set({ source: s, session: null, inspect: null })}>{s ? SOURCE_LABELS[s] : "All"}</button>

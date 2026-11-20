@@ -170,22 +170,22 @@ See [Limits](/ai-ledger/pages/limits/). Open windows cover the whole account and
 
 | Figure | Meaning | Where | Playbook |
 | --- | --- | --- | --- |
-| Percent used | The share of a window's allowance used now, **measured** or **estimated**. | Heading; status strip; window cards | [Stop hitting plan limits](/ai-ledger/improve/plan-limits/) |
-| Resets in | The time to the window's reset. | Status strip; window cards | [Stop hitting plan limits](/ai-ledger/improve/plan-limits/) |
-| at limit, runs out | The window is at 100%, or is forecast to reach 100% before its reset. | Status strip | [Stop hitting plan limits](/ai-ledger/improve/plan-limits/) |
+| Percent used | The share of a window's allowance used now, **measured** or **estimated**. | Heading; card headers | [Stop hitting plan limits](/ai-ledger/improve/plan-limits/) |
+| Headroom | The percent left and the time to the window's reset. | Card footers | [Stop hitting plan limits](/ai-ledger/improve/plan-limits/) |
+| at its limit, runs out | The window is at 100%, or is forecast to reach 100% before its reset. | Heading; card headers | [Stop hitting plan limits](/ai-ledger/improve/plan-limits/) |
 | Limits alert (dot) | An open window is at its limit, is forecast to run out, or is at 90% or more. | The **Limits** tab, on every page | [Stop hitting plan limits](/ai-ledger/improve/plan-limits/) |
-| Forecast, likely range | Where the percent used goes by the reset, from your activity by hour of day. The range covers your usual pace and the window's own recent pace. | Window cards | [Stop hitting plan limits](/ai-ledger/improve/plan-limits/) |
+| Forecast cone | Where the percent used goes by the reset, from your activity by hour of day. The cone covers your usual pace and the window's own recent pace, and turns amber when its high edge reaches 100% before the reset. | Window cards | [Stop hitting plan limits](/ai-ledger/improve/plan-limits/) |
 | Reaches 100% at | The forecast time the window reaches 100%, before its reset. | Heading; window cards | [Stop hitting plan limits](/ai-ledger/improve/plan-limits/) |
 | Last 24 h pace | The forecast if your use of the last 24 hours continued to the reset. | Window cards | [Stop hitting plan limits](/ai-ledger/improve/plan-limits/) |
-| Usual pace; pace that would use it all | Your average rate for the provider, and the rate that ends at exactly 100% at the reset. | Window cards | [Stop hitting plan limits](/ai-ledger/improve/plan-limits/) |
+| Usual pace; safe pace | Your average rate for the provider, and the rate that ends at exactly 100% at the reset (the safe-pace line on the chart, "would use it all" in Details). | Card footers; Details | [Stop hitting plan limits](/ai-ledger/improve/plan-limits/) |
 | ahead of pace, behind pace | The forecast reaches 100% before the reset, or about N% would go unused. | Window cards | [Stop hitting plan limits](/ai-ledger/improve/plan-limits/) |
 | Send work to | The provider with the most headroom at the current pace, when two providers or more have a forecast. | Under the heading | [Compare Claude Code and Codex](/ai-ledger/improve/compare-sources/) |
 | Counted use | The local agent use that the app prices from transcripts. Use elsewhere, such as claude.ai, shows only at the next measured reading. | **What used this window** | [Stop hitting plan limits](/ai-ledger/improve/plan-limits/) |
 | What used this window | The top three projects and models of a window by estimated cost, with their share and points. | Window cards | [Stop hitting plan limits](/ai-ledger/improve/plan-limits/) |
 | Calibrated window | A window with a known estimated cost per point, worked out from past readings. A window calibrates once it has moved 5 points while its use was counted. | Window cards; **What a point buys** | – |
 | Cap in money | The calibrated cost of one point, times 100, at API list prices. | Window cards | [Spend less for the same output](/ai-ledger/improve/spend-less/) |
-| Left unused | The average share of a limit still unused when its full-length windows reset, in the range. | **Left unused** | [Spend less for the same output](/ai-ledger/improve/spend-less/) |
-| Final, At 100% for | A closed window's final percent, and how long it stayed at its limit. | **Past windows** drawer | [Stop hitting plan limits](/ai-ledger/improve/plan-limits/) |
+| avg N% unused | The average share of a limit still unused when its full-length windows reset, in the range. | **Past windows** | [Spend less for the same output](/ai-ledger/improve/spend-less/) |
+| Final, At 100% for | A closed window's final percent, and how long it stayed at its limit. | **Past windows** table | [Stop hitting plan limits](/ai-ledger/improve/plan-limits/) |
 | $ a point, Tokens a point | The estimated cost of one point of a limit, and the tokens of each model that one point buys. | **What a point buys** drawer | [Spend less for the same output](/ai-ledger/improve/spend-less/) |
 | Commits a point | A project's commits per point of a limit. | **What a point buys** drawer | [Retro on one project](/ai-ledger/improve/project-retro/) |
 

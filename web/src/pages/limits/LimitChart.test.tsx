@@ -104,16 +104,23 @@ describe("LimitChart readout", () => {
     expect(tip().textContent).toMatch(/ · 42% · estimated$/);
   });
 
-  it("draws the last-24-hours line only when the curve carries it, and reads it in the tooltip", () => {
-    draw();
-    expect(document.querySelector(".lim-chart .recent")).toBeNull();
-    cleanup();
+  it("draws the last-24-hours line only when asked and the curve carries it, and reads it in the tooltip only then", () => {
     const withRecent = { ...w, forecast: { ...w.forecast!, curve: curve.map((p, i) => ({ ...p, recent: 42 + i * 29 })) } };
-    const g = draw(withRecent)!;
+    renderApp(<LimitChart w={w} now="2026-11-07T11:00:00.000Z" events={[]} recent />);
+    expect(document.querySelector(".lim-chart .recent")).toBeNull(); // asked, but no scenario
+    cleanup();
+    let g = draw(withRecent)!; // a scenario, not asked
+    expect(document.querySelector(".lim-chart .recent")).toBeNull();
+    act(() => g.focus());
+    fireEvent.keyDown(g, { key: "End" });
+    expect(tip().textContent).toMatch(/forecast 58%$/);
+    cleanup();
+    renderApp(<LimitChart w={withRecent} now="2026-11-07T11:00:00.000Z" events={[]} recent />);
+    g = screen.getByRole("group");
     expect(document.querySelectorAll(".lim-chart .recent")).toHaveLength(1);
     act(() => g.focus());
     fireEvent.keyDown(g, { key: "End" });
-    expect(tip().textContent).toBe(readText(readPoints(withRecent).at(-1)!));
+    expect(tip().textContent).toBe(readText(readPoints(withRecent).at(-1)!, true));
     expect(tip().textContent).toMatch(/forecast 58% · last 24 h pace 100%$/);
     expect(plot().getAttribute("aria-label")).not.toMatch(/last 24/);
   });
@@ -175,6 +182,43 @@ describe("LimitChart readout", () => {
   });
 });
 
+describe("LimitChart encodings", () => {
+  const now = "2026-11-07T11:00:00.000Z";
+  const path = (cls: string) => document.querySelector(`.lim-chart .${cls}`);
+
+  it("draws the line, the cone, now and the safe pace, with no reading dots", () => {
+    draw({ ...w, current: 42, at_limit: false });
+    for (const cls of ["meas-one", "est", "band", "fc", "now", "safe"]) expect(path(cls)).toBeTruthy(); // one measured reading: a mark, not a line
+    expect(document.querySelector(".lim-chart circle.dot")).toBeNull();
+    // The safe pace runs from now at 42% (x 191.8 of 36 + 11/24 of 374; y 12 + 132 * .58) to 100% at the reset (the plot's top right).
+    expect(path("safe")!.getAttribute("d")).toBe(`M${(36 + 374 * 11 / 24).toFixed(1)},${(12 + 132 * 0.58).toFixed(1)}L410.0,12.0`);
+  });
+
+  it("tints the cone when its high bound reaches 100% before the reset, and not otherwise", () => {
+    draw({ ...w, at_limit: false, forecast: { ...w.forecast!, hits_at_early: "2026-11-07T20:00:00.000Z" } });
+    expect(path("band")!.classList.contains("warn")).toBe(true);
+    expect(path("fc")!.classList.contains("warn")).toBe(true);
+    cleanup();
+    draw({ ...w, at_limit: false, forecast: { ...w.forecast!, hits_at: null, hits_at_early: null } });
+    expect(path("band")!.classList.contains("warn")).toBe(false);
+  });
+
+  it("has no safe pace at the limit, and says the paces in its name", () => {
+    draw({ ...w, at_limit: true });
+    expect(path("safe")).toBeNull();
+    cleanup();
+    draw({ ...w, at_limit: false, window_minutes: 10080, forecast: { ...w.forecast!, pace_now: 18, pace_target: 7, pace: "ahead" } });
+    expect(screen.getByRole("img").getAttribute("aria-label")).toMatch(/Forecast pace 18%\/d, safe pace 7%\/d, running hot\.$/);
+  });
+
+  it("marks a plan change with a short labelled tick at the top, not a line across the plot", () => {
+    renderApp(<LimitChart w={w} now={now} events={[{ kind: "plan_change", provider: w.provider, at: "2026-11-07T06:00:00.000Z", plan_from: "plus", plan_to: "max/x" }]} />);
+    const tick = document.querySelector(".lim-chart .plan line")!;
+    expect(Number(tick.getAttribute("y2")) - Number(tick.getAttribute("y1"))).toBe(8);
+    expect(document.querySelector(".lim-chart .plan text")!.textContent).toBe("plan: max");
+  });
+});
+
 describe("LimitChart tooltip placement", () => {
   afterEach(() => vi.restoreAllMocks());
 
@@ -196,9 +240,10 @@ describe("LimitChart for a closed window", () => {
   const events = [{ kind: "plan_change" as const, provider: row.provider, at: "2026-11-07T06:00:00.000Z", plan_from: "plus", plan_to: "prolite" }];
   const drawClosed = () => { renderApp(<LimitChart w={closed} now={null} events={events} />); return screen.getByRole("group"); };
 
-  it("has no now line and no forecast, and ends at its close", () => {
+  it("has no now line, no safe pace and no forecast, and ends at its close", () => {
     drawClosed();
     expect(document.querySelector(".lim-chart .now")).toBeNull();
+    expect(document.querySelector(".lim-chart .safe")).toBeNull();
     expect(document.querySelector(".lim-chart .fc")).toBeNull();
     expect(document.querySelector(".lim-chart .band")).toBeNull();
     expect(plot().textContent).toMatch(/ended /);

@@ -1,9 +1,9 @@
 import { useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import type { LimitWindow, PlanChange } from "../../api";
 import { scaleMargins, textScale, useWidth } from "../../components/chart";
-import { caption, hasScenario, nearestPoint, planName, readPoints, readText, tipPlace, whenDay, windowName } from "./limits";
+import { caption, coneCrosses, hasScenario, nearestPoint, paceRates, planName, readPoints, readText, safePace, tipPlace, whenDay, windowName } from "./limits";
 
-const H0 = 168, M0 = { t: 12, r: 10, b: 24, l: 36 }, DOT_GAP = 7; // at the default text size
+const H0 = 168, M0 = { t: 12, r: 10, b: 24, l: 36 }, TICK = 8; // at the default text size
 
 /** The plan changes that fall inside a window. */
 export const planMarks = (w: LimitWindow, events: PlanChange[]) =>
@@ -11,10 +11,13 @@ export const planMarks = (w: LimitWindow, events: PlanChange[]) =>
 
 const KEYS: Record<string, number> = { ArrowLeft: -1, ArrowRight: 1, Home: -Infinity, End: Infinity };
 
-/** One window from its start to its reset: the percent used so far (estimates dotted, measured snapshots as dots and a
- *  solid line), the forecast with its band, the 100% line, now, and plan changes inside the window. now: null for a closed
- *  window (closedWindow): it runs to its close, which is its resets_at here, and has no forecast and no now. */
-export function LimitChart({ w, now, events }: { w: LimitWindow; now: string | null; events: PlanChange[] }) {
+/** One window from its start to its reset, in at most four encodings: the percent used so far (one line, solid where measured,
+ *  faded where estimated), the forecast as a cone from its low to its high bound around its middle (the warning tint when the
+ *  high bound reaches 100% before the reset), now, and the safe-pace line from now to 100% at the reset. The 100% grid line and
+ *  the reset time frame it; a plan change inside the window is a labelled tick at the top. recent: also draw the last-24-hours
+ *  line, and read its value. now: null for a closed window (closedWindow): it runs to its close, which is its resets_at here,
+ *  and has no forecast, no now and no safe pace. */
+export function LimitChart({ w, now, events, recent: showRecent = false }: { w: LimitWindow; now: string | null; events: PlanChange[]; recent?: boolean }) {
   const box = useRef<HTMLDivElement>(null), tip = useRef<HTMLDivElement>(null), svg = useRef<SVGSVGElement>(null), W = useWidth(box, 420);
   // The labels' size comes from the stylesheet (rem); the room around them follows it, the plot keeps its height.
   const ts = textScale(), M = scaleMargins(M0, ts), H = H0 + (M.t + M.b) - (M0.t + M0.b);
@@ -27,17 +30,16 @@ export function LimitChart({ w, now, events }: { w: LimitWindow; now: string | n
   const path = (pts: { t: string; v: number }[]) => pts.map((p, i) => `${i ? "L" : "M"}${x(p.t).toFixed(1)},${y(p.v).toFixed(1)}`).join("");
   const est = path(w.series.map(p => ({ t: p.t, v: p.pct })));
   const measured = w.series.filter(p => p.measured);
-  // Readings every few minutes would merge into a thick dotted line over the measured one: keep a dot every DOT_GAP px.
-  let lastX = -Infinity;
-  const dots = measured.filter(p => x(p.t) - lastX >= DOT_GAP && (lastX = x(p.t), true));
-  const f = w.forecast;
+  const f = w.forecast, warn = coneCrosses(w) ? " warn" : "", safe = safePace(w, now), rates = paceRates(w);
   const pctOf = (i: number) => { const p = pts[i]!; return p.kind === "past" ? p.pct : p.mid; };
-  const recent = f && hasScenario(w) ? path(f.curve.flatMap(p => p.recent == null ? [] : [{ t: p.t, v: p.recent }])) : null;
+  const recent = showRecent && f && hasScenario(w) ? path(f.curve.flatMap(p => p.recent == null ? [] : [{ t: p.t, v: p.recent }])) : null;
   const band = f && `${path(f.curve.map(p => ({ t: p.t, v: p.hi })))}L${f.curve.slice().reverse().map(p => `${x(p.t).toFixed(1)},${y(p.lo).toFixed(1)}`).join("L")}Z`;
   // The page's one time format; a narrow chart keeps the date of a long window, or the time of a short one.
   const at = W >= 360 * ts ? whenDay : (w.window_minutes ?? 0) >= 1440
     ? (t: string) => new Date(t).toLocaleDateString(undefined, { month: "short", day: "numeric" })
     : (t: string) => new Date(t).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  // "now" under its tick, when it clears the start and reset labels (about 110px each at the default size).
+  const nowLabel = now != null && x(now) - M.l > 120 * ts && W - M.r - x(now) > 150 * ts;
   const marks = planMarks(w, events), said = (e: PlanChange) => `Plan change from ${e.plan_from} to ${e.plan_to}, ${whenDay(e.at)}`;
   // A click or tap focuses the chart too: it keeps what the pointer shows. Only focus from the keyboard reads now.
   const pointed = useRef(false);
@@ -79,21 +81,23 @@ export function LimitChart({ w, now, events }: { w: LimitWindow; now: string | n
     <div className="lim-chart" ref={box} {...reader}>
       <svg ref={svg} width={W} height={H} role="img" onPointerMove={onMove} onPointerLeave={() => setRead(null)}
         aria-label={[now == null ? `${w.provider_label} ${w.label}: ${w.current ?? "–"}% used when it ended ${whenDay(w.resets_at)}.`
-          : `${w.provider_label} ${w.label}: ${w.current ?? "–"}% used. ${caption(w)}.`, ...marks.map(e => `${said(e)}.`)].join(" ")}>
+          : `${w.provider_label} ${w.label}: ${w.current ?? "–"}% used. ${caption(w)}.`,
+          rates && `Forecast pace ${rates.now}, safe pace ${rates.safe}${rates.hot ? ", running hot" : ""}.`, ...marks.map(e => `${said(e)}.`)].filter(Boolean).join(" ")}>
         {[0, 50, 100].map(p => <g key={p}>
           <line x1={M.l} x2={W - M.r} y1={y(p)} y2={y(p)} className={p === 100 ? "cap" : "grid"} />
           <text x={M.l - 6 * ts} y={y(p) + 4 * ts} textAnchor="end" className="ax">{p}%</text>
         </g>)}
-        {band && <path d={band} className="band" />}
-        {f && <path d={path(f.curve.map(p => ({ t: p.t, v: p.mid })))} className="fc" />}
+        {band && <path d={band} className={"band" + warn} />}
+        {f && <path d={path(f.curve.map(p => ({ t: p.t, v: p.mid })))} className={"fc" + warn} />}
+        {safe && <path d={path([safe.from, safe.to])} className="safe" />}
         {recent && <path d={recent} className="recent" />}
         {est && <path d={est} className="est" />}
         {measured.length > 1 && <path d={path(measured.map(p => ({ t: p.t, v: p.pct })))} className="meas" />}
-        {dots.map(p => <circle key={p.t} cx={x(p.t)} cy={y(p.pct)} r={2.6} className="dot" />)}
+        {measured.length === 1 && <circle cx={x(measured[0]!.t)} cy={y(measured[0]!.pct)} r={2} className="meas-one" />}
         {marks.map(e => <g key={e.at} className="plan"><title>{said(e)}</title>
-          <line x1={x(e.at)} x2={x(e.at)} y1={M.t} y2={M.t + ih} />
-          <line x1={x(e.at)} x2={x(e.at)} y1={M.t} y2={M.t + ih} className="hit" />
-          <text x={x(e.at) + (x(e.at) > W / 2 ? -4 : 4) * ts} y={M.t + 10 * ts} textAnchor={x(e.at) > W / 2 ? "end" : "start"}>{`plan: ${planName(e.plan_to)}`}</text></g>)}
+          <line x1={x(e.at)} x2={x(e.at)} y1={M.t} y2={M.t + TICK * ts} />
+          <line x1={x(e.at)} x2={x(e.at)} y1={M.t} y2={M.t + TICK * ts} className="hit" />
+          <text x={x(e.at) + (x(e.at) > W / 2 ? -4 : 4) * ts} y={M.t + 8 * ts} textAnchor={x(e.at) > W / 2 ? "end" : "start"}>{`plan: ${planName(e.plan_to)}`}</text></g>)}
         {now != null && <line x1={x(now)} x2={x(now)} y1={M.t} y2={M.t + ih} className="now" />}
         {cur && read && <>
           <line x1={x(cur.t)} x2={x(cur.t)} y1={M.t} y2={M.t + ih} className="guide" />
@@ -101,10 +105,11 @@ export function LimitChart({ w, now, events }: { w: LimitWindow; now: string | n
         </>}
         <text x={M.l} y={H - 6 * ts} className="ax">{at(w.start)}</text>
         <text x={W - M.r} y={H - 6 * ts} textAnchor="end" className="ax">{now == null ? "ended" : "resets"} {at(w.resets_at)}</text>
+        {nowLabel && <text x={x(now!)} y={H - 6 * ts} textAnchor="middle" className="ax now-ax">now</text>}
       </svg>
       {pts.length > 0 && <>
-        <div className="tip" ref={tip} aria-hidden="true" style={{ display: cur ? "block" : "none" }}>{cur && readText(cur)}</div>
-        <span className="sr" aria-live="polite">{cur && read?.key ? readText(cur) : ""}</span>
+        <div className="tip" ref={tip} aria-hidden="true" style={{ display: cur ? "block" : "none" }}>{cur && readText(cur, !!recent)}</div>
+        <span className="sr" aria-live="polite">{cur && read?.key ? readText(cur, !!recent) : ""}</span>
       </>}
     </div>
   );

@@ -9,7 +9,7 @@ Each kind of task goes to the agent that does it for less estimated cost per com
 
 ## Signs you need it
 
-- [Limits](/ai-ledger/pages/limits/) shows a suggestion such as "Send work to Codex: about 70% of its weekly limit would go unused (resets …)" (an example). The app shows it when two providers or more have a forecast, and names the one with the most headroom.
+- [Limits](/ai-ledger/pages/limits/) shows a suggestion such as "Send work to Codex: about 70% of its weekly limit would go unused" (an example). The app shows it when two providers or more have a forecast, and names the one with the most headroom.
 - On [Cost](/ai-ledger/pages/cost/), with **Stack by** set to **Agent**, the chart shows both Claude Code and Codex in the range.
 - Rule of thumb: you used both agents in one project in the last 30 days, and you cannot say which one costs less per commit there.
 
@@ -24,7 +24,7 @@ Compare like with like: the same project, the same range, and figures that both 
 3. On [Activity](/ai-ledger/pages/activity/), write down the heading's commits and prompts, and the **Work health** tiles **Test runs passed** and **Prompts interrupted**.
 4. On [Context](/ai-ledger/pages/context/), write down **Added per prompt** and **Sessions with a compaction** in **Growth**.
 5. Set the source to **Codex** and read the same figures again on the same pages.
-6. Open [Limits](/ai-ledger/pages/limits/) with the source at **All**. Read the heading, the status strip, and the suggestion if one shows.
+6. Open [Limits](/ai-ledger/pages/limits/) with the source at **All**. Read the heading, the status in each card's header, and the suggestion if one shows.
 
 Compare only these figures. The others differ by what each agent records:
 
@@ -81,7 +81,7 @@ Then open [Errors](/ai-ledger/pages/errors/) with the project filter and the sou
 
 ### Move work before a limit runs out
 
-When the Limits heading names a window that runs out before its reset, start your next task in the agent that the suggestion "Send work to …" names. Without a suggestion, read the status strip and pick the provider whose windows show no **at limit** and no **runs out**.
+When the Limits heading names a window that runs out before its reset, start your next task in the agent that the suggestion "Send work to …" names. Without a suggestion, read the card headers and pick the provider whose windows read neither **at its limit** nor **runs out**.
 
 Do not move work to a provider whose limit already shows **at limit**. Limits never suggests it.
 
@@ -95,8 +95,8 @@ After 14 days of work in the project, set the range to **14d** and pick the proj
 | --- | --- | --- |
 | **Per commit** | Cost, **Tokens and cache**, with the source at **All** | Lower than your note: more of the work went to the agent that costs less per commit. |
 | **Test runs passed** | Activity, **Work health**, with the source set to the agent that had the lower figure | Higher than your note, closer to the other agent's. |
-| Windows at limit | Limits, status strip, source at **All** | No chip reads **at limit** or **runs out**. |
-| **Left unused** | Limits, source at **All** | A smaller share for the provider you moved work to. |
+| Windows at limit | Limits, card headers, source at **All** | No card reads **at its limit** or **runs out**. |
+| **avg N% unused** | Limits, **Past windows**, source at **All** | A smaller share for the provider you moved work to. |
 
 If **Cost / commit** did not fall, check that the kind of task you moved is what the project's commits are about: read the session titles in Activity's **Sessions** drawer for each source. If one agent has fewer than 5 commits in the range, wait one more week.
 
