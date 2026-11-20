@@ -2,8 +2,8 @@
 import type { ProjectRow, UsagePayload } from "../../api";
 import type { Insight } from "../../components/InsightCard";
 import { ProjectName } from "../../components/ProjectDot";
-import { knownTitle, sessName, shortId } from "../../components/sheets/session";
-import { dayLabel, dur, median, mult, num, pct, plural, usd } from "../../format";
+import { knownTitle, shortId } from "../../components/sheets/session";
+import { dayLabel, median, mult, pct, plural, usd } from "../../format";
 import type { CostDay } from "./cost";
 
 export const OUTLIER_SHARE = 0.02;
@@ -26,36 +26,11 @@ export function projectMedians(rows: readonly ProjectRow[]) {
 
 /** Ways to act on a finding: each opens the sheet or the table that explains it. */
 export interface CostActs {
-  project: (name: string) => void;
   session: (id: string) => void;
   day: (day: string) => void;
   /** Cost by project, sorted by cost per commit, the outlier ringed. */
   compare: (name: string, med: number) => void;
   tokens: () => void;
-}
-
-/** The biggest project by spend (inside one project: the biggest session), warned about when its cost per commit is over
- *  twice the median project's. */
-export function spenderInsight(d: UsagePayload, go: CostActs): Insight | null {
-  const total = d.totals.cost || 1;
-  if (d.project) {
-    const s = d.top_sessions.find(x => (x.cost ?? 0) > 0);
-    if (!s) return null;
-    return { sev: "info", k: "Biggest session", stake: s.cost!, t: <><span title={s.title || s.session_id}>{sessName(s)}</span>{!s.title && s.git_branch ? ` · ${s.git_branch}` : ""}</>,
-      v: <>{usd(s.cost)} <span className="muted">{pct(s.cost! / total)}</span></>,
-      b: s.commits ? `${usd(s.cost! / s.commits)} per commit over ${plural(s.commits, "commit")}, ${dur(s.duration_s)} long.` : `No commits in ${dur(s.duration_s)}.`,
-      act: { label: "Open session", run: () => go.session(s.session_id) } };
-  }
-  const p = d.by_project.filter(x => (x.cost ?? 0) > 0).sort((a, b) => b.cost! - a.cost!)[0];
-  if (!p) return null;
-  const med = projectMedians(d.by_project).cpc;
-  const high = p.cost_per_commit != null && !!med && p.cost_per_commit > 2 * med;
-  return { sev: high ? "warn" : "info", k: "Biggest spender", stake: p.cost!, t: <ProjectName project={p.project} />,
-    v: <>{usd(p.cost)} <span className="muted">{pct(p.cost! / total)} of spend</span></>,
-    b: p.cost_per_commit != null && p.commits
-      ? `${usd(p.cost_per_commit)} per commit over ${plural(p.commits, "commit")}${high ? `, ${mult(p.cost_per_commit / med!)} the median project` : ""}.`
-      : "No commits in this range, so no cost per commit.",
-    act: { label: "Inspect project", run: () => go.project(p.project ?? "") } };
 }
 
 /** Cost per commit against the median: projects with 3+ commits that are big enough to compare (inside one project, sessions with 2+), so one lucky or
@@ -90,18 +65,3 @@ export function peakInsight(d: UsagePayload, days: readonly CostDay[], go: CostA
     b: pts.length > 1 ? `${mult(r)} the median day with spend (${usd(med)}), ${pct(peak.cost / (d.totals.cost || 1))} of this range.` : "The only day with spend in this range.",
     act: { label: "Show that day's sessions", run: () => go.day(peak.day) } };
 }
-
-/** Cache efficiency and what subagents cost. */
-export function cacheInsight(d: UsagePayload, go: CostActs): Insight | null {
-  const t = d.totals;
-  if (t.cache_hit_ratio == null) return null;
-  return { sev: "info", k: "Cache hit", t: t.write_1h_share == null ? "No cache writes" : `${pct(t.write_1h_share)} of writes are 1-hour`, v: pct(t.cache_hit_ratio, 1),
-    b: t.subagent_cost_share == null ? "No priced cost to split by subagents." : `Subagents: ${pct(t.subagent_cost_share)} of cost${t.sub_cost ? `, ${usd(t.sub_cost)}` : ""}.`,
-    act: { label: "See tokens and cache", run: go.tokens } };
-}
-
-/** The phone's metric pair beside the lead finding: days with prompts and cost per commit. */
-export const pairFacts = (d: UsagePayload): { v: string; of?: string; l: string }[] => [
-  { v: num(d.totals.active_days), of: d.range ? ` / ${d.range}` : undefined, l: `days with prompts${d.previous ? `, ${num(d.previous.active_days)} before` : ""}` },
-  { v: d.totals.commits ? usd(d.totals.cost_per_commit) : "n/a", l: `per commit, ${plural(d.totals.commits, "commit")}` },
-];

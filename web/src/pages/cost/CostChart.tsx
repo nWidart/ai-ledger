@@ -28,10 +28,11 @@ export interface CostChartProps {
 }
 
 // What the hint says about each stacking (one project selected: the project stack has nothing to explain).
+// One line with the rest of the hint, so the chart starts high on the page.
 const STACK_HINT: Record<Stack, (one: boolean) => string> = {
-  project: one => (one ? "At" : "Projects with a color of their own (the busiest of all time), the rest in Other; select one to filter. At"),
-  model: () => "The models that cost the most in this view, the rest in Other. At",
-  source: () => "One color per agent; select one to filter. At",
+  project: one => (one ? "At" : "The busiest projects by color, the rest in Other; a key filters. At"),
+  model: () => "The costliest models by color, the rest in Other. At",
+  source: () => "One color per agent; a key filters. At",
 };
 
 const Row = ({ k, v }: { k: Kind; v: string }) => <div className="row"><span><i style={{ background: k.c }} />{k.label}</span><b>{v}</b></div>;
@@ -142,8 +143,8 @@ export function CostChart({ d, metric, onMetric, hidden, onHidden, stack, onStac
     <section className="panel sect" id="spend" aria-labelledby="chartTitle">
       <div className="chart-head">
         <div><h2 id="chartTitle">{cost ? `Estimated cost per day${stack === "project" ? "" : ` by ${STACK_WORD[stack].noun}`}` : "Tokens per day"}</h2>
-          <div className="hint">{cost ? `${STACK_HINT[stack](!!d.project)} API list prices; unpriced models are left out.`
-            : "Select a kind to hide it. Cache reads usually dwarf the rest."}{showAvg ? " The 7-day average covers complete days." : ""} Select a day to list its sessions by cost; with the keyboard, focus the chart, use the arrow keys and press Enter.</div></div>
+          <div className="hint">{cost ? `${STACK_HINT[stack](!!d.project)} list prices.`
+            : "Select a kind to hide it. Cache reads usually dwarf the rest."}{showAvg ? " The 7-day average covers complete days." : ""} Select a day, or use the arrow keys and Enter, for its sessions.</div></div>
         <div className="chart-ctl">
           {cost && <>
             <span className="muted" id="stackBy">Stack by</span>

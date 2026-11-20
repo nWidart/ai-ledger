@@ -14,22 +14,15 @@
 .pg-cost .lede .unit { white-space: nowrap; }
 /* The comparison takes its own line under the amount. */
 .pg-cost .lede .delta { display: block; color: var(--text-primary); font-weight: 500; }
-/* The two windows the headline compares, with how many days in each have any recorded usage. */
-.pg-cost .windows { display: flex; flex-wrap: wrap; gap: 4px 18px; margin: 12px 0 0; font-size: .8125rem; color: var(--text-secondary); }
+/* The two windows the headline compares. */
+.pg-cost .windows { margin: 10px 0 0; font-size: .8125rem; color: var(--text-secondary); }
 .pg-cost .windows b { color: var(--text-primary); font-weight: 600; }
-.pg-cost .sub { color: var(--text-muted); font-size: .8125rem; margin: 6px 0 0; }
-/* Sparkline: the previous period (muted) and this one (ink), split by a tick. */
-.pg-cost .spark { margin: 0; width: 240px; }
-.pg-cost .spark svg { display: block; width: 100%; height: 48px; overflow: visible; }
-.pg-cost .spark figcaption { display: flex; justify-content: space-between; gap: 8px; font-size: .71875rem; color: var(--text-muted); margin-top: 4px; }
-.pg-cost .spark figcaption b { color: var(--text-secondary); font-weight: 500; }
 /* Stack before the filters squeeze the heading into a narrow column. */
 @media (max-width: 65em) {
   .pg-cost .top { grid-template-columns: minmax(0, 1fr); align-items: start; }
   .pg-cost .top-side { max-width: none; align-items: stretch; flex-direction: column-reverse; }
   .pg-cost .top-side .filters { justify-content: flex-start; }
 }
-@media (max-width: 45em) { .pg-cost .spark { width: 100%; } }
 .pg-cost h2 { font-size: 1rem; font-weight: 600; margin: 0; letter-spacing: -.005em; }
 .pg-cost .pending { margin: -12px 0 12px; min-height: 1.5em; color: var(--text-secondary); font-size: .8125rem; }
 .pg-cost .pending:empty { visibility: hidden; }
@@ -37,63 +30,73 @@
 @media (prefers-reduced-motion: no-preference) { .pg-cost > :not(.top):not(.secidx) { transition: opacity .2s; } }
 .pg-cost .banner code { overflow-wrap: anywhere; }
 
-/* Phones: a metric pair beside the lead finding; the rest of the findings fold into "More insights" under the chart. */
-.pg-cost .mpair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
-.pg-cost .mpair > div { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; min-width: 0; }
-.pg-cost .mpair .v { font-size: 1.25rem; font-weight: 600; letter-spacing: -.03em; line-height: 1.2; }
-.pg-cost .mpair .v .muted { font-size: .8125rem; font-weight: 500; }
-.pg-cost .mpair .l { font-size: .75rem; color: var(--text-muted); }
-.pg-cost details.more-ins { margin: 16px 0 0; }
-.pg-cost details.more-ins > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 14px;
-  border: 1px solid var(--border); border-radius: 10px; background: var(--surface-1); font-weight: 500; }
-.pg-cost details.more-ins > summary::-webkit-details-marker { display: none; }
-.pg-cost details.more-ins > summary::after { content: "+"; margin-left: auto; color: var(--text-muted); font-size: 1.125rem; }
-.pg-cost details.more-ins[open] > summary::after { content: "−"; }
-.pg-cost details.more-ins .support { display: grid; gap: 10px; margin-top: 10px; }
+/* How measured: the windows' days with prompts, the view's reach and the method, folded under the heading. */
+.pg-cost details.how { margin: 6px 0 0; font-size: .8125rem; color: var(--text-secondary); max-width: 64ch; }
+.pg-cost details.how > summary { cursor: pointer; width: fit-content; min-height: 24px; color: var(--text-muted); }
+.pg-cost details.how > summary:hover { color: var(--text-primary); }
+.pg-cost details.how ul { margin: 4px 0 0; padding-left: 1.1em; display: grid; gap: 4px; }
 
-/* What changed: each project's cost change against the previous period, as bars either side of a zero line */
-.pg-cost .changed { margin: 0 0 20px; }
-.pg-cost .daystrips { display: grid; gap: 4px; font-size: .75rem; color: var(--text-secondary); flex: 0 1 26.25rem; min-width: 0; }
-/* A fixed count column, so both strips get the same track and their days line up. */
-.pg-cost .daystrip { display: grid; grid-template-columns: 5.5rem minmax(0, 1fr) 6.5em; gap: 8px; align-items: center; }
-.pg-cost .daystrip > span:last-child { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.pg-cost .daystrip .cells { display: flex; gap: 2px; min-width: 0; overflow: hidden; }
-.pg-cost .daystrip .cells i { flex: 1 1 0; min-width: 2px; max-width: 6px; height: 12px; border-radius: 2px; background: var(--track); }
-/* Over 60 days, 1px cells and gaps, so 90 days fit a narrow track. */
-.pg-cost .daystrip .cells.dense { gap: 1px; }
-.pg-cost .daystrip .cells.dense i { min-width: 1px; border-radius: 1px; }
-.pg-cost .daystrip .cells i.on { background: var(--text-secondary); }
-.pg-cost .daystrip b { color: var(--text-primary); font-weight: 600; }
-.pg-cost .diverge { list-style: none; margin: 12px 0 0; padding: 0; }
-.pg-cost .diverge li > button, .pg-cost .diverge li.rest { display: grid; grid-template-columns: minmax(0, 13rem) minmax(80px, 1fr) 5.5rem minmax(0, 9rem); gap: 12px; align-items: center;
-  width: 100%; min-height: 32px; padding: 4px 8px; margin: 0; border: 0; border-radius: 6px; background: none; color: inherit; font: inherit; text-align: left; }
-.pg-cost .diverge li > button:hover { background: var(--surface-2); }
-.pg-cost .diverge li.rest { color: var(--text-muted); }
-.pg-cost .diverge .n { display: flex; align-items: center; gap: 6px; min-width: 0; }
-.pg-cost .diverge .n > span:first-of-type { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.pg-cost .diverge .dv { display: grid; grid-template-columns: 1fr 1fr; height: 12px; position: relative; }
-.pg-cost .diverge .dv::after { content: ""; position: absolute; left: 50%; top: -4px; bottom: -4px; width: 1px; background: var(--text-muted); }
-.pg-cost .diverge .dv span { display: flex; }
-.pg-cost .diverge .dv .neg { justify-content: flex-end; }
-.pg-cost .diverge .dv i { display: block; height: 100%; border-radius: 3px; min-width: 2px; }
-.pg-cost .diverge .dv .neg i { border-radius: 3px 0 0 3px; }
-.pg-cost .diverge .dv .pos i { border-radius: 0 3px 3px 0; }
-.pg-cost .diverge .d { text-align: right; font-weight: 600; white-space: nowrap; }
-.pg-cost .diverge .s { color: var(--text-muted); font-size: .78125rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.pg-cost .diverge .axis { display: grid; grid-template-columns: minmax(0, 13rem) minmax(80px, 1fr) 5.5rem minmax(0, 9rem); gap: 12px; padding: 0 8px 2px;
-  font-size: .71875rem; color: var(--text-muted); }
-.pg-cost .diverge .axis span:nth-child(2) { display: flex; justify-content: space-between; }
-.pg-cost .chip.new { border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
-.pg-cost .chg-note { margin: 10px 0 0; padding: 8px 12px; border-left: 3px solid var(--warning-text); background: var(--warning-soft); border-radius: 0 6px 6px 0;
-  font-size: .8125rem; color: var(--text-secondary); }
-@media (max-width: 45em) {
-  .pg-cost .diverge li > button, .pg-cost .diverge li.rest, .pg-cost .diverge .axis { grid-template-columns: minmax(0, 1fr) 5.5rem; row-gap: 4px; }
-  .pg-cost .diverge .dv { grid-column: 1 / -1; grid-row: 2; }
-  .pg-cost .diverge .s { grid-column: 1 / -1; grid-row: 3; }
-  .pg-cost .diverge .axis span:nth-child(2) { grid-column: 1 / -1; }
-  .pg-cost .diverge .axis span:not(:nth-child(2)) { display: none; }
+/* Plan gauge: the month so far (solid) and its pace (light) on one track, a tick at the plan's monthly price, the multiple as a badge. */
+.pg-cost .gauge { margin: 0; width: min(100%, 27rem); padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-1); }
+.pg-cost .g-head { display: flex; align-items: baseline; justify-content: space-between; gap: 4px 12px; font-size: .71875rem; }
+.pg-cost .g-title { font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--text-secondary); }
+.pg-cost .g-plan { font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--text-muted); }
+.pg-cost .g-badge { font-size: 1.25rem; font-weight: 700; letter-spacing: -.02em; line-height: 1; color: var(--text-primary); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.pg-cost .g-bar { position: relative; height: 14px; margin: 10px 0 8px; border-radius: 3px; background: var(--track); }
+.pg-cost .g-bar i { position: absolute; top: 0; bottom: 0; left: 0; border-radius: 3px; }
+.pg-cost .g-bar .g-pace, .pg-cost .g-key.pace { background: color-mix(in srgb, var(--accent) 30%, var(--track)); }
+.pg-cost .g-bar .g-now, .pg-cost .g-key.now { background: var(--accent); }
+.pg-cost .g-bar .g-tick { width: 2px; top: -4px; bottom: -4px; margin-left: -1px; border-radius: 1px; background: var(--text-primary); }
+.pg-cost .g-legend { display: flex; flex-wrap: wrap; gap: 2px 14px; font-size: .75rem; color: var(--text-muted); }
+.pg-cost .g-legend b { color: var(--text-primary); font-weight: 600; font-variant-numeric: tabular-nums; }
+.pg-cost .g-key { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; }
+.pg-cost .g-key.tick { width: 2px; height: 10px; border-radius: 1px; background: var(--text-primary); vertical-align: -1px; }
+.pg-cost .g-note { flex-basis: 100%; }
+@media (prefers-reduced-motion: no-preference) {
+  .pg-cost.grow .g-bar :is(.g-now, .g-pace) { transform-origin: left; animation: grow-x .6s cubic-bezier(.2,.7,.2,1) both; }
 }
-@media (max-width: 32.5em) { .pg-cost .changed { margin: 16px 0 0; } }
+@media (forced-colors: active) {
+  .pg-cost .g-bar { forced-color-adjust: none; background: Canvas; outline: 1px solid CanvasText; }
+  .pg-cost :is(.g-bar .g-now, .g-key.now) { forced-color-adjust: none; background: CanvasText; }
+  .pg-cost :is(.g-bar .g-pace, .g-key.pace) { forced-color-adjust: none; background: GrayText; }
+  .pg-cost :is(.g-bar .g-tick, .g-key.tick) { forced-color-adjust: none; background: Highlight; }
+}
+
+/* Project spend and change: trend, spend with share, change either side of a center line, cost per commit, cache hit. */
+.pg-cost .projects { margin-top: 16px; }
+.pg-cost .projects .chart-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 8px 16px; margin-bottom: 8px; }
+.pg-cost .projects .tools-row { margin: 0; }
+.pg-cost .projects h2 .count { margin-left: 4px; color: var(--text-muted); font-weight: 400; font-size: .875rem; }
+.pg-cost .matrix { width: 100%; }
+.pg-cost .matrix .trend-cell { width: 84px; }
+.pg-cost .matrix svg.trend { display: block; width: 72px; height: 20px; overflow: visible; }
+.pg-cost .matrix td.spend, .pg-cost .matrix td.chg { white-space: nowrap; }
+.pg-cost .matrix td.spend .ibar { width: 88px; }
+.pg-cost .matrix td.spend .pc { display: inline-block; min-width: 3.25em; margin-left: 6px; color: var(--text-muted); }
+.pg-cost .matrix .dv { display: inline-grid; grid-template-columns: 1fr 1fr; width: 128px; height: 10px; position: relative; margin-right: 8px; vertical-align: -1px; }
+.pg-cost .matrix .dv::after { content: ""; position: absolute; left: 50%; top: -4px; bottom: -4px; width: 1px; background: var(--text-muted); }
+.pg-cost .matrix .dv > span { display: flex; }
+.pg-cost .matrix .dv .neg { justify-content: flex-end; }
+.pg-cost .matrix .dv i { display: block; height: 100%; min-width: 2px; }
+.pg-cost .matrix .dv .neg i { border-radius: 3px 0 0 3px; }
+.pg-cost .matrix .dv .pos i { border-radius: 0 3px 3px 0; }
+.pg-cost .matrix .chg .d { display: inline-block; min-width: 4.25em; font-weight: 600; }
+.pg-cost .matrix .chg .chip { margin-left: 6px; }
+.pg-cost .matrix tr.small-bucket :is(th, td) { color: var(--text-secondary); }
+.pg-cost .chip.new { border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.pg-cost .chg-note { margin: 0 0 10px; padding: 8px 12px; border-left: 3px solid var(--warning-text); background: var(--warning-soft); border-radius: 0 6px 6px 0;
+  font-size: .8125rem; color: var(--text-secondary); }
+@media (max-width: 32.5em) {
+  .pg-cost .matrix .opt { display: none; }
+  .pg-cost .matrix td.spend .ibar { width: 36px; }
+  .pg-cost .matrix .dv { width: 48px; margin-right: 4px; }
+  .pg-cost .matrix .chg .d { min-width: 0; }
+  .pg-cost .matrix :is(td, th).name { max-width: 7.5rem; }
+}
+@media (forced-colors: active) {
+  .pg-cost .matrix .dv i { forced-color-adjust: none; outline: 1px solid CanvasText; }
+  .pg-cost .matrix .dv::after { forced-color-adjust: none; background: CanvasText; }
+}
 
 /* Daily chart: the stacking and metric switches sit together; a project's legend key filters the page; a token kind's key toggles it */
 .pg-cost .legend button { font-size: .75rem; padding: 2px 8px; display: inline-flex; gap: 6px; align-items: center; border-radius: 999px; min-width: 0; }
@@ -103,9 +106,6 @@
 .pg-cost .legend button.proj span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pg-cost .legend button.proj[aria-current=true] { border-color: var(--text-secondary); font-weight: 500; }
 
-/* Ledgers: where the spend went beside models and effort */
-.pg-cost .split { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 16px; margin-top: 16px; }
-@media (max-width: 56.25em) { .pg-cost .split { grid-template-columns: minmax(0, 1fr); } }
 
 /* Tokens and cache: four ratios in one ruled strip, then every token kind */
 .pg-cost .vitals { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; margin: 0 0 16px;
@@ -131,14 +131,16 @@
   .pg-cost .vital .v { font-size: 1.5rem; }
 }
 
-/* Cost by project: the first column stays put while the table scrolls sideways */
-.pg-cost #d-projcost th:first-child, .pg-cost #d-projcost td:first-child { position: sticky; left: 0; background: var(--bg); z-index: 1; box-shadow: 1px 0 0 var(--border); }
-.pg-cost #d-projcost th:first-child { z-index: 2; }
-.pg-cost #d-projcost tr.sel :is(td, th):first-child { background: color-mix(in srgb, var(--accent) 11%, var(--bg)); }
+/* The findings beside Models and effort; Models alone takes the width. */
+.pg-cost .split { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 16px; margin-top: 16px; align-items: start; }
+.pg-cost .split.solo { grid-template-columns: minmax(0, 1fr); }
+.pg-cost .split .insights { margin: 0; }
+@media (max-width: 56.25em) { .pg-cost .split { grid-template-columns: minmax(0, 1fr); } }
+
 /* From "Compare projects": the outlier row, ringed and tinted, with a note above the table saying why. */
-.pg-cost #d-projcost tr.spot :is(td, th) { background: var(--accent-soft); }
-.pg-cost #d-projcost tr.spot td.tone.worse { background: var(--critical-soft); }
-.pg-cost #d-projcost tr.spot :is(td, th):first-child { background: color-mix(in srgb, var(--accent) 12%, var(--bg)); box-shadow: inset 3px 0 0 var(--accent), 1px 0 0 var(--border); }
+.pg-cost .projects tr.spot :is(td, th) { background: var(--accent-soft); }
+.pg-cost .projects tr.spot td.tone.worse { background: var(--critical-soft); }
+.pg-cost .projects tr.spot :is(td, th):first-child { box-shadow: inset 3px 0 0 var(--accent); }
 .pg-cost .proj-note { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; margin: 0 0 10px; padding: 8px 12px; border-radius: 8px;
   background: var(--surface-1); border: 1px solid var(--border); font-size: .8125rem; color: var(--text-secondary); }
 .pg-cost .proj-note b { color: var(--text-primary); }
