@@ -32,3 +32,4 @@
 - [x] 6.2 `cd web && npm run check`, `uv run ruff check`, `uv run python -m unittest discover -s tests`, `openspec validate --specs --strict`; commit the rebuilt `src/ai_ledger/web/`.
 - [x] 6.3 Measure screens and words per page on the demo store, before and after.
 - [x] 6.4 Update `README.md`, the docs site and `CHANGELOG.md` `[Unreleased]`.
+- [x] 6.5 Regenerate the docs site screenshots of Activity, Context, Errors and Insights with `node record.mjs shots activity context errors insights`; the Prompts by hour shot opens its drawer first.
