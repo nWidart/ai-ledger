@@ -14,15 +14,15 @@ The cost dashboard SHALL let the user pick a time range and a project, and every
 - **THEN** every chart, card and table shows only `foo` sessions from those 7 days
 
 #### Scenario: Inspect a project without filtering
-- **WHEN** the user selects project `foo` in the spend ledger
+- **WHEN** the user selects project `foo` in the project table
 - **THEN** a side sheet shows `foo`'s summary, the page keeps its current filter, and the sheet offers a button to filter the dashboard to `foo`
 
 ### Requirement: Lead with the period's cost and its change
-The cost dashboard SHALL open with the estimated cost of the selected view, its change against the previous period of equal length, and a daily cost sparkline across both periods. For the all-time range it SHALL show the cost since the first recorded day, without a comparison.
+The cost dashboard SHALL open with a heading of at most two figures: the estimated cost of the selected view and its change against the previous period of equal length. A line under it SHALL name the dates of both windows. For the all-time range it SHALL show the cost since the first recorded day, without a comparison.
 
 #### Scenario: Thirty-day view
 - **WHEN** the user views the last 30 days
-- **THEN** the page heading shows the period's estimated cost and its change against the 30 days before, and names both windows with their count of days with a prompt
+- **THEN** the page heading shows the period's estimated cost and its change against the 30 days before, the line under it names both windows, and "How measured" gives their count of days with a prompt
 
 #### Scenario: Thin previous period
 - **WHEN** the previous period has prompts on fewer than half as many days as the current one
@@ -40,22 +40,22 @@ Selecting a day on the cost chart, or the peak day's action, SHALL list every se
 - **THEN** the session is listed at $10, and the list's costs sum to Nov 4's total
 
 ### Requirement: Show what changed by project
-The cost dashboard SHALL show each project's change in estimated cost against the previous period, largest change first, and SHALL mark projects with no usage in the previous period as new. A project whose cost in either period is unknown (only unpriced models) SHALL show that cost as unknown and no change. A one-project view SHALL leave this panel out.
+The project table SHALL show each project's change in estimated cost against the previous period, and SHALL mark projects with no usage in the previous period as new. A project whose cost in either period is unknown (only unpriced models) SHALL show that cost as unknown and no change. The bars SHALL share one scale, the largest change filling its half.
 
 #### Scenario: New project
 - **WHEN** project `foo` has cost in the current period and no usage in the previous one
 - **THEN** `foo` shows its full cost as an increase and is marked new
 
 ### Requirement: Show token usage by kind
-The dashboard SHALL show input, output, thinking, cache read, 5-minute cache write and 1-hour cache write tokens per day. Per project, it SHALL show a single total of tokens, in Cost by project, not split by kind or over time.
+The dashboard SHALL show input, output, thinking, cache read, 5-minute cache write and 1-hour cache write tokens per day. Per project, it SHALL give a single total of tokens, not split by kind or over time, in the project table's export and in the project sheet.
 
 #### Scenario: Daily token chart
 - **WHEN** the user views a project
 - **THEN** a chart shows each token kind per day
 
 #### Scenario: Tokens per project
-- **WHEN** the user opens Cost by project
-- **THEN** each project's row shows one token total, and no split by kind
+- **WHEN** the user exports the project table
+- **THEN** each project's row holds one token total, and no split by kind
 
 ### Requirement: Show estimated cost
 The dashboard SHALL show an estimated cost per project, model and day, computed from per-model prices for each token kind, and SHALL label the value as an API-price estimate. When a model has no price, the dashboard SHALL name the user prices file by its full path as the place to add one.
@@ -84,21 +84,21 @@ A price entry MAY carry fast-mode rates: a request in fast mode on such a model 
 - **THEN** it costs the model's standard price and is not listed as unpriced
 
 ### Requirement: Show cache efficiency
-The dashboard SHALL show the cache hit ratio (cache read tokens divided by all input tokens) and the share of cache writes that used the 1-hour lifetime.
+The dashboard SHALL show the cache hit ratio (cache read tokens divided by all input tokens) and the share of cache writes that used the 1-hour lifetime, for the view in Tokens and cache. Per project, the project table SHALL show the cache hit ratio, and its export SHALL hold the cache hit ratio and the 1-hour write share.
 
 #### Scenario: Cache ratio per project
 - **WHEN** the user compares projects
-- **THEN** each project shows its cache hit ratio and 1-hour write share
+- **THEN** each project shows its cache hit ratio, and the export holds its 1-hour write share
 
 ### Requirement: Show subagent cost share
-The cost dashboard SHALL show what share of estimated cost came from subagents.
+The cost dashboard SHALL show what share of estimated cost came from subagents, for the view in Tokens and cache, and per project in the project table's export.
 
 #### Scenario: Subagent heavy project
 - **WHEN** 40% of a project's cost came from subagent requests
-- **THEN** the cost dashboard shows a 40% subagent cost share for that project
+- **THEN** the project table's export holds a 0.4 subagent cost share for that project
 
 ### Requirement: Show cost per outcome
-The cost dashboard SHALL show cost per commit and cost per prompt per project, and SHALL point out a project (or, inside one project, a session) whose cost per commit is more than twice the median and that holds at least 2% of the view's spend. Among findings of equal severity, the one with more money at stake SHALL lead.
+The cost dashboard SHALL show cost per commit per project in the project table, and cost per commit and cost per prompt per project in its export. It SHALL point out a project (or, inside one project, a session) whose cost per commit is more than twice the median and that holds at least 2% of the view's spend. Among findings of equal severity, the one with more money at stake SHALL lead.
 
 #### Scenario: Cost-per-commit outlier
 - **WHEN** one project with three or more commits costs four times the median project per commit
@@ -152,7 +152,7 @@ When the user prices file cannot be read, is not valid JSON, has neither a `mode
 When the view has a previous period, a project's sheet SHALL show its change against that period: the previous cost, this period's cost, the change with its sign, a mark when the project had no usage in the previous period, and a daily cost sparkline over both periods with the split between them marked. A cost that is unknown (only unpriced models) SHALL read as unknown, with no change. The all-time view SHALL show none of this.
 
 #### Scenario: Project that grew
-- **WHEN** the user opens project `foo` from What changed, and `foo` cost $4 in the previous 30 days and $10 in the last 30
+- **WHEN** the user opens project `foo` from the project table, and `foo` cost $4 in the previous 30 days and $10 in the last 30
 - **THEN** the sheet shows $4, $10 and +$6, and a daily sparkline over both periods
 
 #### Scenario: New project
@@ -173,28 +173,6 @@ The usage payload SHALL list the subscription plans that apply to the view: for 
 #### Scenario: Unknown plan
 - **WHEN** the newest snapshot names a plan the plan prices lack, or there is no snapshot
 - **THEN** no plan is listed
-
-### Requirement: Put the estimate next to the plan price
-The Cost heading SHALL add one line giving the monthly price of the listed plans (summed over them, naming each) and the estimated cost as a multiple of that price prorated to the view's days (monthly price × days / 30; for all time, the days from the first recorded day to today). A multiple below 1 SHALL be shown as such.
-
-#### Scenario: One plan, 30 days
-- **WHEN** the newest Claude snapshot names Max 20x and a 30-day view estimates $840
-- **THEN** the heading says "You pay about $200 a month (Claude Max 20x); at list prices this period is 4.2× your plan."
-
-#### Scenario: Multiple below 1
-- **WHEN** the estimated cost is below the plan price prorated to the view's days
-- **THEN** the line shows the multiple below 1 as such
-
-### Requirement: Keep the plan line factual
-The plan line SHALL NOT state savings or what the user actually pays beyond the plan price. With no known plan, no usage or an unknown cost, the line SHALL NOT be shown.
-
-#### Scenario: No known plan
-- **WHEN** the newest snapshot names a plan the plan prices lack, or there is no snapshot
-- **THEN** no line is shown
-
-#### Scenario: No usage or unknown cost
-- **WHEN** the view has no usage, or its cost is unknown
-- **THEN** no line is shown
 
 ### Requirement: Show estimated cost by token kind
 The dashboard SHALL show, for the view, the estimated cost of each billed kind (input, output, cache read, 5-minute cache write, 1-hour cache write) with its share of the estimated cost, next to the kind's token count and token share, ordered by cost, biggest first. When no request is priced, the cost of each kind SHALL show as unknown, not as zero.
@@ -245,11 +223,15 @@ The cost chart SHALL stack the projects, or the models, that own a color of thei
 - **THEN** the tooltip lists the token kinds only, as before
 
 ### Requirement: Sort cost by project
-The cost dashboard SHALL sort the cost-by-project table by any column, by click or keyboard, marking the sorted column with `aria-sort`. The default SHALL be cost, highest first. A project with no value in the column SHALL come last in either direction. The sort SHALL reset when the view changes.
+The cost dashboard SHALL sort the project table by any column, by click or keyboard, marking the sorted column with `aria-sort`. The trend column SHALL sort by the cost of the view's last 7 days. The default SHALL be cost, highest first. A project with no value in the column SHALL come last in either direction. The sort SHALL reset when the view changes.
 
 #### Scenario: Sort by a column
 - **WHEN** the user selects the Cost / commit header twice
 - **THEN** the table lists projects by cost per commit, highest then lowest first, projects without commits last both times
+
+#### Scenario: Sort by change
+- **WHEN** the user selects the change header
+- **THEN** the table lists projects by change, the largest increase first
 
 ### Requirement: Compare projects from the cost-per-commit finding
 Comparing projects from the cost-per-commit finding SHALL sort by cost per commit, highest first, ring the outlier and say how far it sits from the median, and a control in that note SHALL return to the default sort.
@@ -274,7 +256,7 @@ The cost and tokens charts SHALL draw the bar for today (the last day of the vie
 - **THEN** the average at yesterday does not include today, and the line ends at yesterday
 
 ### Requirement: Project the month's cost
-The usage payload SHALL carry `run_rate`: the cost of the calendar month up to yesterday, the mean daily cost of the last 7 complete days, the days left in the month counting today, and the projection (cost so far plus mean times days left). It SHALL follow the view's project, source and automated filters and SHALL NOT depend on its range.
+The usage payload SHALL carry `run_rate`: the cost of the calendar month up to yesterday, the mean daily cost of the last 7 complete days, the days left in the month counting today, and the projection (cost so far plus mean times days left). It SHALL also carry `by_source`: for each agent with a cost in either window, its own cost so far and projection over the same windows and days left. It SHALL follow the view's project, source and automated filters and SHALL NOT depend on its range.
 
 #### Scenario: First of the month
 - **WHEN** today is the 1st of a month
@@ -284,29 +266,26 @@ The usage payload SHALL carry `run_rate`: the cost of the calendar month up to y
 - **WHEN** the user changes the time range and keeps the same filters
 - **THEN** `run_rate` is unchanged
 
+#### Scenario: Two agents
+- **WHEN** Claude Code and Codex both have cost in the last 7 complete days
+- **THEN** `by_source` lists both, and their costs so far and projections add up to the totals
+
 ### Requirement: Withhold the projection without enough history
 `run_rate` SHALL be null without 7 complete days of history or without a priced request among them.
 
 #### Scenario: Unpriced history
 - **WHEN** every request in the last 7 complete days is on an unpriced model
-- **THEN** `run_rate` is null and the heading shows no projection
+- **THEN** `run_rate` is null and the page shows no gauge
 
 #### Scenario: Short history
 - **WHEN** fewer than 7 complete days of history exist
 - **THEN** `run_rate` is null
 
-### Requirement: Show the projection in the heading
-The heading's second line SHALL read "On pace for about $X this month" after the list-price sentence when `run_rate` is present, and SHALL not show it otherwise.
-
-#### Scenario: Projection present
-- **WHEN** `run_rate` is present
-- **THEN** the heading's second line reads "On pace for about $X this month" after the list-price sentence
-
 ### Requirement: Export cost tables
-The cost dashboard SHALL let the user download the cost-by-project and most-expensive-sessions tables as CSV, or copy either to the clipboard as tab-separated text. Each export SHALL hold every row of the table, in the order shown (for cost by project, the order the projects have with the small projects shown, even when they are folded), with cost and share figures rounded to 4 decimals and n/a values as empty cells. The buttons SHALL NOT be shown when the table has no rows.
+The cost dashboard SHALL let the user download the project table and the most-expensive-sessions table as CSV, or copy either to the clipboard as tab-separated text. Each export SHALL hold every row of the table, in the order shown (for the project table, the order the projects have with the small projects shown, even when they are folded), with cost and share figures rounded to 4 decimals and n/a values as empty cells. The buttons SHALL NOT be shown when the table has no rows.
 
 #### Scenario: Download the project table in its sorted order
-- **WHEN** the user sorts the cost-by-project table by cost per commit and selects "Download CSV"
+- **WHEN** the user sorts the project table by cost per commit and selects "Download CSV"
 - **THEN** the file lists the projects in that order, with a header row and CRLF line ends
 
 #### Scenario: Download with small projects folded
@@ -324,6 +303,13 @@ The cost dashboard SHALL let the user download the cost-by-project and most-expe
 #### Scenario: No rows
 - **WHEN** the sessions table has no rows
 - **THEN** no export button is shown
+
+### Requirement: Export every project figure
+The project export SHALL hold the cost, tokens, cache hit, 1-hour write share, subagent cost share, commits, cost per commit, cost per prompt and change of each project, including the figures the table does not show.
+
+#### Scenario: Figures off the table
+- **WHEN** the user downloads the project table
+- **THEN** each row holds the project's tokens, 1-hour write share, subagent cost share and cost per prompt beside the figures the table shows
 
 ### Requirement: Name and guard exported files
 The CSV file name SHALL be `ai-ledger-cost-projects-<date>.csv` or `ai-ledger-cost-sessions-<date>.csv`, dated today, or with the selected day's date when a day is selected in the sessions table. Text cells that start with `=`, `+`, `-`, `@`, a tab or a carriage return SHALL be prefixed with an apostrophe; numbers SHALL NOT.
@@ -387,15 +373,19 @@ Under Model the chart SHALL give a series color to each of the models with the m
 - **THEN** today's bar is hatched and the 7-day average leaves today out
 
 ### Requirement: Fold small projects
-The cost-by-project table SHALL fold the projects too small to compare, those outside the set the medians use (under 2% of the view's cost and under 10 prompts), into one "Small projects (N)" row after the big projects, whatever the sort. The row SHALL show their summed cost, tokens and commits and a button, with `aria-expanded`, that shows or hides them. Shown, they SHALL follow the big projects in the current sort order.
+The project table SHALL fold the projects too small to compare, those outside the set the medians use (under 2% of the view's cost and under 10 prompts) and whose change is under 2% of the view's cost, into one "Small projects (N)" row after the big projects, whatever the sort. The row SHALL show their summed cost, share and change and a button, with `aria-expanded`, that shows or hides them. Shown, they SHALL follow the big projects in the current sort order.
 
 #### Scenario: Scratch projects fold
 - **WHEN** a view has three big projects and four small ones
-- **THEN** the table shows the three big projects and a "Small projects (4)" row with their summed cost, tokens and commits
+- **THEN** the table shows the three big projects and a "Small projects (4)" row with their summed cost and change
 
 #### Scenario: Show the small projects
 - **WHEN** the user selects "Show 4 small projects"
 - **THEN** the four projects appear below the big ones and the button reads "Hide small projects" with `aria-expanded` true
+
+#### Scenario: A large drop stays visible
+- **WHEN** a project with no usage in this period cost 10% of the view's cost in the previous one
+- **THEN** it is listed among the big projects, not folded
 
 ### Requirement: Fold only when it hides enough
 The cost-by-project table SHALL fold only with at least 3 small projects and at least 1 big project.
@@ -420,7 +410,7 @@ The selected project and the project ringed by "Compare projects" SHALL NOT be h
 - **THEN** the small projects show, with the outlier among them
 
 ### Requirement: Reset the fold with the view
-The shown or hidden state of the small projects SHALL reset when the view changes. The drawer's count SHALL stay the number of all projects.
+The shown or hidden state of the small projects SHALL reset when the view changes. The project count beside the table's title SHALL stay the number of all projects.
 
 #### Scenario: View changes
 - **WHEN** the user shows the small projects and then changes the time range
@@ -428,7 +418,7 @@ The shown or hidden state of the small projects SHALL reset when the view change
 
 #### Scenario: Drawer count
 - **WHEN** the table folds four small projects
-- **THEN** the drawer's count is the number of all projects, folded ones included
+- **THEN** the count beside the table's title is the number of all projects, folded ones included
 
 ### Requirement: Offer the cost chart as a table
 Under the cost and tokens chart, a "Show data table" button SHALL expose `aria-expanded` and, when expanded, show a table of the chart's figures: one row per day, and one column for the day, one for each series in the current stacking (Project, Model or Agent, with Other) and one for the day's total, in the chart's units, with the table named for the chart. The table SHALL follow the stacking and the metric, SHALL be closed on every page load, and SHALL NOT be rendered while closed.
@@ -451,3 +441,72 @@ The "+?" chip that marks a cost figure as leaving out unpriced requests SHALL ca
 #### Scenario: Screen reader
 - **WHEN** a screen reader reads a project's cost that has 12 requests from unpriced models
 - **THEN** it reads the cost, then that the cost leaves out 12 requests from unpriced models
+
+### Requirement: Show the monthly pace against the plan
+Beside the heading, when `run_rate` is present, the cost dashboard SHALL show a horizontal gauge of the calendar month: the cost so far this month as a solid bar and the pace projection as a lighter extension of it. With a listed plan, it SHALL add a tick at the monthly price of the listed plans, naming each, and a badge with the projection as a multiple of that price. Its figures SHALL also be text. It SHALL NOT state savings. Without `run_rate` it SHALL NOT be shown.
+
+#### Scenario: One plan
+- **WHEN** the newest Claude snapshot names Max 20x, the month so far cost $150 and the projection is $840
+- **THEN** the gauge shows $150 so far, about $840 pace, a tick at $200 named Claude Max 20x, and a "4.2× plan" badge
+
+#### Scenario: No projection
+- **WHEN** `run_rate` is null
+- **THEN** no gauge is shown
+
+### Requirement: Count only the agents a plan covers
+The gauge's multiple SHALL count only the agents with a listed plan, from `run_rate.by_source`. When another agent also spent this month, the gauge SHALL name the agents it counts. A multiple below 1 SHALL be shown as such. Without a listed plan, or when no agent with a plan spent this month, the gauge SHALL show the cost so far and the pace of the whole view, with no tick and no multiple.
+
+#### Scenario: No known plan
+- **WHEN** `run_rate` is present and no plan is listed
+- **THEN** the gauge shows the cost so far and the pace, with no tick and no multiple
+
+#### Scenario: Agent without a plan
+- **WHEN** only Codex has a listed plan and Claude Code also spent this month
+- **THEN** the gauge counts Codex's cost only and says it counts Codex use
+
+#### Scenario: Below the plan
+- **WHEN** the projection is below the plan's monthly price
+- **THEN** the badge shows the multiple below 1, such as "0.6× plan"
+
+### Requirement: Show project spend and change in one table
+The cost dashboard SHALL show one project table, "Project spend and change", with one row per project used in the view or in its previous period. Its columns SHALL be: the project; a daily cost sparkline over the view's days; the estimated cost with a bar and its share of the view's cost; the change against the previous period as a bar either side of a center line; the cost per commit; and the cache hit ratio. Selecting a row SHALL open the project sheet.
+
+#### Scenario: Thirty-day view
+- **WHEN** the user views the last 30 days across three projects
+- **THEN** the table lists each project with its trend, cost and share, change, cost per commit and cache hit
+
+### Requirement: Fit the project table to the view
+The project table SHALL leave out the change column for the all-time range. A one-project view SHALL leave the table out. On phone widths the table SHALL keep the project, the cost and the change, and MAY hide the other columns.
+
+#### Scenario: Project used only before
+- **WHEN** project `old` had usage in the previous period and none in this one
+- **THEN** the table lists `old` at $0 with its whole previous cost as a decrease
+
+#### Scenario: All time
+- **WHEN** the range is all time
+- **THEN** the table has no change column
+
+#### Scenario: One project
+- **WHEN** the view is filtered to one project
+- **THEN** no project table is shown
+
+### Requirement: Explain the method behind a disclosure
+The heading SHALL carry a "How measured" disclosure, closed by default. It SHALL name the windows with their count of days with a prompt, the previous period's cost, the view's sessions, projects, tokens and requests, that cost is estimated at API list prices (and leaves out unpriced models when some are unpriced), and how the gauge's pace and multiple are computed.
+
+#### Scenario: Open the disclosure
+- **WHEN** the user opens "How measured" on a 30-day view
+- **THEN** it names both windows with their days with prompts, the previous cost, and the method of the estimate and the pace
+
+### Requirement: Keep the insights to what the page does not already show
+The cost dashboard SHALL show the cost-per-commit finding and the peak-day finding only. It SHALL NOT show a card that repeats the heading, the gauge or the project table, such as the biggest project by spend or the overall cache hit.
+
+#### Scenario: Insights on a 30-day view
+- **WHEN** the user views the last 30 days with usage
+- **THEN** the insights are the cost-per-commit finding and the peak day, and no Biggest spender or Cache hit card is shown
+
+### Requirement: Put the daily chart near the top
+At 1440×900, the daily cost chart SHALL start within the first 900px of the page when no banner shows, and every chart hint SHALL be one line at that width.
+
+#### Scenario: Desktop
+- **WHEN** the user opens a 30-day view at 1440×900 with no banner
+- **THEN** the top of the daily cost chart is within the first screen
