@@ -40,8 +40,9 @@ const Pending = () => <main id="content" className="wrap" aria-busy="true"><Page
 // sheet opening or a page-only key does not change them and does not run the loader again.
 const viewDeps = (search: Record<string, unknown>) => { const { project, range, auto, source } = parseView(search); return { project, range, auto, source }; };
 const viewLoader = <K extends QueryKey>(query: (v: View) => FetchQueryOptions<any, Error, any, K>, limits = false) => ({
-  // Limits ignores `automated` (its key has no such field), so a toggle of it must not run the loader.
-  loaderDeps: ({ search }: { search: Record<string, unknown> }) => { const d = viewDeps(search); return limits ? { ...d, auto: false } : d; },
+  // Limits ignores `automated` (its key has no such field) and the project (limits are per account), so a change of either
+  // must not run the loader.
+  loaderDeps: ({ search }: { search: Record<string, unknown> }) => { const d = viewDeps(search); return limits ? { ...d, auto: false, project: "" } : d; },
   loader: ({ context, deps }: { context: RouterContext; deps: ReturnType<typeof viewDeps> }) => { void context.queryClient.prefetchQuery(query(viewOf(deps))); },
 });
 // Errors has one key for every filter.

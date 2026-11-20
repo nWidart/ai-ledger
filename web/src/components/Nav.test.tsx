@@ -61,7 +61,7 @@ describe("Nav", () => {
     expect(document.title).toBe("Activity · AI Ledger");
   });
 
-  it("opens Limits with the project, range and source from Cost", async () => {
+  it("opens Limits with the range and source from Cost, keeping the project in the URL for the other pages", async () => {
     vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/status") ? status : url.startsWith("/api/limits") ? limits : usage)));
     history.replaceState(null, "", "/cost?project=foo&range=30&source=codex");
     renderRouter();
@@ -71,7 +71,7 @@ describe("Nav", () => {
     expect(location.search).toBe("?project=foo&range=30&source=codex");
     expect(document.title).toBe("Limits · AI Ledger");
     // The page's chunk loads on first show, so its fetch follows the click a tick later.
-    await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(c => String(c[0]) === "/api/limits?project=foo&range=30&source=codex")).toBe(true));
+    await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(c => String(c[0]) === "/api/limits?range=30&source=codex")).toBe(true));
   });
 
   it("opens Insights with the project, range and source from Cost", async () => {

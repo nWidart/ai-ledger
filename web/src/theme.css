@@ -187,6 +187,20 @@ dialog.sheet::backdrop { background: var(--scrim); }
   .pg-cost .daystrip .cells i.on { background: CanvasText; }
   .pg-limits .hs-bar i { forced-color-adjust: none; }
   .pg-limits .hk { forced-color-adjust: none; outline: 1px solid CanvasText; }
+  /* The Limits chart in system colors: the line in the text color (estimated stretches dimmed), the cone as an outline (dashed
+     when it reaches 100%, so the warning is not a tint alone), now and the 100% line in the text color, the safe pace in GrayText. */
+  .pg-limits .lim-chart svg { forced-color-adjust: none; }
+  .pg-limits .lim-chart :is(.meas, .est) { stroke: CanvasText; }
+  .pg-limits .lim-chart .meas-one { fill: CanvasText; }
+  .pg-limits .lim-chart .band { fill: none; stroke: Highlight; stroke-width: 1px; }
+  .pg-limits .lim-chart .band.warn { stroke-width: 2px; stroke-dasharray: 4 2; }
+  .pg-limits .lim-chart .fc { stroke: Highlight; opacity: 1; }
+  .pg-limits .lim-chart :is(.now, .cap, .guide) { stroke: CanvasText; }
+  .pg-limits .lim-chart :is(.safe, .grid) { stroke: GrayText; opacity: 1; }
+  .pg-limits .lim-chart .recent { stroke: LinkText; }
+  .pg-limits .lim-chart .plan line:not(.hit) { stroke: LinkText; }
+  .pg-limits .lim-chart :is(.ax, .plan text) { fill: CanvasText; }
+  .pg-limits .lim-chart .pick { fill: Highlight; stroke: Canvas; }
   /* The charts' stacked bars: series colors kept, each segment edged in the text color. */
   :is(.pg-activity, .pg-cost) .chart .bar-seg, .pg-context .cache-chart svg rect[class^="seg-"], .pg-errors #chart .layer { forced-color-adjust: none; stroke: CanvasText; stroke-width: .75px; }
   /* Keys and dots that name a series or a project by color alone. */

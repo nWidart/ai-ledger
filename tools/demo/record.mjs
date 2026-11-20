@@ -214,11 +214,9 @@ const SCENES = {
     const card = page.locator(".lim-grid svg").first();
     const box = await card.boundingBox();
     for (const k of [0.2, 0.5, 0.75, 0.95]) { await h.move(box.x + box.width * k, box.y + box.height * 0.5); await h.wait(500); }
-    await h.scrollTo(page.locator("#unused"));
-    await h.wait(1500);
-    await h.click(page.locator("#history .drawer-toggle"), { dx: 0.05, pause: 600 });
+    await h.click(page.locator(".lim-more").first(), { pause: 1500 });
     await h.scrollTo(page.locator("#history"));
-    await h.wait(1500);
+    await h.click(page.locator("#history .hs-bar").first(), { pause: 1800 });
     await h.click(page.locator("#value .drawer-toggle"), { dx: 0.05, pause: 600 });
     await h.scrollTo(page.locator("#value"));
     await h.wait(2000);
@@ -300,7 +298,6 @@ async function quantize(path) {
 const shoot = async (target, path, options = {}) => { await target.screenshot({ path, ...options }); await quantize(path); };
 
 // [panel name, selector, { drawer: id of the drawer to open first, max: crop height }]
-const D = (name, id) => [name, "#" + id, { drawer: id }];
 const SHOT_PAGES = {
   activity: { url: "/usage?range=30", panels: [
     ["attention", "#attention"], ["vitals", "#vitals"], ["work", "#work"], ["hours", "#hours"]] },
@@ -312,7 +309,7 @@ const SHOT_PAGES = {
   errors: { url: "/errors?range=30", panels: [
     ["summary", "#kpis"], ["chart", ".chart-card"], ["types", ".card.types"], ["detail", "#detail"]] },
   limits: { url: "/limits?range=30", panels: [
-    ["windows", ".lim-grid"], ["unused", "#unused"], D("history", "history")] },
+    ["windows", ".lim-grid"], ["history", "#history"]] },
   insights: { url: "/insights?range=30", panels: [
     ["vitals", "#vitals"], ["outcomes", "#outcomes"], ["friction", "#friction"], ["log", "#log"]] },
   project: { url: "/project?range=30&project=atlas-api", panels: [

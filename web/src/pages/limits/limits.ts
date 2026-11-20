@@ -111,6 +111,68 @@ export function pace(w: LimitWindow, now: string): { left: string; reset: string
   };
 }
 
+/** The card header's one status: "runs out <time>" when the forecast's middle reaches 100% before the reset, "at its limit until
+ *  <time>", "about N% at reset", or "no forecast". out: the critical style, for a window that stops the user. */
+export function status(w: LimitWindow): { text: string; out: boolean } {
+  if (w.at_limit) return { text: `at its limit until ${whenDay(w.resets_at)}`, out: true };
+  const f = w.forecast;
+  if (!f) return { text: "no forecast", out: false };
+  if (f.hits_at) return { text: `runs out ${whenDay(f.hits_at)}`, out: true };
+  return { text: `about ${resetPct(f.at_reset)}% at reset`, out: false };
+}
+
+/** The footer's headroom: "12% left · 1d 17h", the percent left and the time to reset. */
+export function headroom(w: LimitWindow, now: string): string {
+  const p = pace(w, now);
+  return `${p.left} · ${span(Date.parse(w.resets_at) - Date.parse(now))}`;
+}
+
+/** The footer's pace: the forecast's pace against the safe pace, the one that ends at exactly 100% at reset ("18%/d" and
+ *  "7%/d"; per hour for a window shorter than a day). hot: the forecast's pace is above the safe one. null for a window at its
+ *  limit or without a forecast. */
+export function paceRates(w: LimitWindow): { now: string; safe: string; hot: boolean } | null {
+  const f = w.forecast;
+  if (w.at_limit || !f || f.pace_target == null) return null;
+  const hourly = (w.window_minutes ?? 1440) < 1440, k = hourly ? 1 / 24 : 1, unit = hourly ? "%/h" : "%/d";
+  return { now: pct1(f.pace_now * k) + unit, safe: pct1(f.pace_target * k) + unit, hot: f.pace === "ahead" };
+}
+
+/** The safe-pace line: from now at the percent used now, straight to 100% at the reset, so its slope is the pace that ends at
+ *  exactly 100%. A curve steeper than it runs hot. null for a closed window (now null), a window at its limit, one with no
+ *  reading, and one whose reset has passed. */
+export function safePace(w: LimitWindow, now: string | null): { from: { t: string; v: number }; to: { t: string; v: number } } | null {
+  if (now == null || w.at_limit || w.current == null || w.current >= 100 || Date.parse(w.resets_at) <= Date.parse(now)) return null;
+  return { from: { t: now, v: w.current }, to: { t: w.resets_at, v: 100 } };
+}
+
+/** The safe-pace line's percent at t, or null outside it (before now, after the reset, or no line). */
+export function safeAt(line: ReturnType<typeof safePace>, t: string): number | null {
+  if (!line) return null;
+  const t0 = Date.parse(line.from.t), t1 = Date.parse(line.to.t), at = Date.parse(t);
+  if (at < t0 || at > t1) return null;
+  return line.from.v + (line.to.v - line.from.v) * (at - t0) / (t1 - t0);
+}
+
+/** Whether the forecast cone reaches 100% before the reset: its high bound does (hits_at_early). The cone then takes the
+ *  warning tint, even when the middle resets first: the tint says "might", the header says "runs out". A window at its limit
+ *  has no cone. */
+export const coneCrosses = (w: LimitWindow): boolean => !w.at_limit && !!w.forecast?.hits_at_early;
+
+/** The rows of a chart's data table: the readable points nearest to CHART_ROWS times spread from the window's start to its
+ *  reset, and the point at now, in time order, each once; safe: the safe-pace percent at a time after now. */
+export const CHART_ROWS = 12;
+export function chartRows(w: LimitWindow, now: string | null): { p: ReadPoint; now: boolean; safe: number | null }[] {
+  const pts = readPoints(w);
+  if (!pts.length) return [];
+  const t0 = Date.parse(w.start), t1 = Date.parse(w.resets_at), line = safePace(w, now), nowAt = now == null ? -1 : w.series.length - 1;
+  const picks = new Set(Array.from({ length: CHART_ROWS }, (_, i) => nearestPoint(pts, t0 + (t1 - t0) * i / (CHART_ROWS - 1))));
+  if (nowAt >= 0) picks.add(nowAt);
+  return [...picks].sort((a, b) => a - b).map(i => {
+    const p = pts[i]!;
+    return { p, now: i === nowAt, safe: p.kind === "forecast" ? safeAt(line, p.t) : null };
+  });
+}
+
 /** One point a reader can land on: a past reading or estimate, or a forecast point after now. */
 export type ReadPoint =
   | { kind: "past"; t: string; pct: number; measured: boolean }
@@ -135,11 +197,19 @@ export function nearestPoint(pts: ReadPoint[], ms: number): number {
 /** A percent with at most one decimal: "42", "42.3". */
 const pct1 = (v: number): string => { const r = Math.round(v * 10) / 10; return Number.isInteger(r) ? num(r) : num(r, 1); };
 
-/** "Sat, Nov 7, 2:00 PM · 42% · measured", or "… · forecast 71% (60–85%)" with the likely range when it reads wider than a point. */
-export function readText(p: ReadPoint): string {
-  if (p.kind === "past") return `${whenDay(p.t)} · ${pct1(p.pct)}% · ${p.measured ? "measured" : "estimated"}`;
+/** A point's percent and kind, as the readout and the data table give it: "42% · measured", or "forecast 71% (60–85%)" with
+ *  the likely range when it reads wider than a point. */
+export function pointText(p: ReadPoint): string {
+  if (p.kind === "past") return `${pct1(p.pct)}% · ${p.measured ? "measured" : "estimated"}`;
   const lo = pct1(p.lo), hi = pct1(p.hi);
-  return `${whenDay(p.t)} · forecast ${pct1(p.mid)}%${lo === hi ? "" : ` (${lo}–${hi}%)`}${p.recent == null ? "" : ` · last 24 h pace ${pct1(p.recent)}%`}`;
+  return `forecast ${pct1(p.mid)}%${lo === hi ? "" : ` (${lo}–${hi}%)`}`;
+}
+
+/** "Sat, Nov 7, 2:00 PM · 42% · measured", or "… · forecast 71% (60–85%)"; with recent (the last 24 h pace line is drawn),
+ *  a forecast point ends with " · last 24 h pace 72.3%" when it has a scenario value. */
+export function readText(p: ReadPoint, recent = false): string {
+  const scenario = recent && p.kind === "forecast" && p.recent != null ? ` · last 24 h pace ${pct1(p.recent)}%` : "";
+  return `${whenDay(p.t)} · ${pointText(p)}${scenario}`;
 }
 
 /** Where a tooltip goes inside its box, in box pixels: right of the point (left of it near the right edge), kept inside
@@ -206,7 +276,22 @@ export function barName(h: LimitHistoryRow): string {
 /** The note after a strip that does not show all its limit's windows, or null when it does. */
 export const stripNote = (shown: number, total: number): string | null => (shown < total ? `${shown} most recent of ${total}; the table lists all` : null);
 
-export interface Strip { key: string; name: string; bars: LimitHistoryRow[]; total: number }
+/** provider and label: those of its newest window, to find its unused row. hits: its windows in the range that hit their limit,
+ *  all of them, not only the bars shown. */
+export interface Strip { key: string; name: string; provider: string; label: string; bars: LimitHistoryRow[]; total: number; hits: number }
+
+type Unused = LimitsPayload["unused"][number];
+
+/** A strip's summary, "avg 47% unused · 2 hits" ("no full-length windows · …" when every window ended early or there is no
+ *  unused row), and its title: how many windows the average covers, how many are estimated and how many ended early and are
+ *  left out. The unused rows are per provider and label, so the strip takes the row of its newest window's label. */
+export function stripSummary(s: Strip, unused: Unused[]): { text: string; title: string } {
+  const u = unused.find(r => r.provider === s.provider && r.label === s.label), hits = plural(s.hits, "hit");
+  if (!u || u.avg_unused == null) return { text: `no full-length windows · ${hits}`, title: "Every window in the range ended early, so there is no average." };
+  return { text: `avg ${num(u.avg_unused)}% unused · ${hits}`,
+    title: `Average share left unused at reset over ${plural(u.windows, "full-length window")}${u.estimated ? `, ${num(u.estimated)} estimated` : ""}`
+      + `${u.early ? `; left out: ${plural(u.early, "window")} that ended early, by an early reset or a plan change` : ""}.` };
+}
 
 /** One strip per limit with closed windows (provider, limit id and scope: two limits can share a label), in the order the open
  *  windows use: provider (in the given order, the payload's providers; any other last), then longest window first, then scope.
@@ -221,7 +306,8 @@ export function historyStrips(history: LimitHistoryRow[], providers: string[]): 
     const old = rows.slice().sort((a, b) => Date.parse(a.closed_at) - Date.parse(b.closed_at) || Date.parse(a.start) - Date.parse(b.start));
     const newest = old.at(-1)!;
     return { sort: { rank: rank(newest.provider), minutes: Math.max(...rows.map(h => h.window_minutes ?? 0)), scope: newest.scope },
-      strip: { key, name: windowName(newest), bars: old.slice(-STRIP_BARS), total: rows.length } };
+      strip: { key, name: windowName(newest), provider: newest.provider, label: newest.label, bars: old.slice(-STRIP_BARS),
+        total: rows.length, hits: rows.filter(h => h.hit).length } };
   }).sort((a, b) => a.sort.rank - b.sort.rank || b.sort.minutes - a.sort.minutes || order(a.sort.scope, b.sort.scope) || order(a.strip.key, b.strip.key))
     .map(x => x.strip);
 }

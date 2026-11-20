@@ -113,7 +113,7 @@ describe("starting a page from its tab", () => {
     await open("/usage?project=foo&range=7");
     await user.hover(tab("Limits"));
     await waitFor(() => expect(calls("/api/limits")).toHaveLength(1));
-    expect(calls("/api/limits")[0]).toBe("/api/limits?project=foo&range=7");
+    expect(calls("/api/limits")[0]).toBe("/api/limits?range=7"); // Limits has no project: limits are per account
     await user.hover(tab("Insights"));
     await waitFor(() => expect(calls("/api/insights")).toHaveLength(1));
     expect(calls("/api/insights")[0]).toContain("project=foo&range=7");
