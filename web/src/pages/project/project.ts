@@ -74,6 +74,13 @@ export function apportion(n: number, weights: readonly number[]): number[] {
 export const overheadParts = (o: ContextOverhead): OverheadPart[] =>
   o.categories.filter(c => c.state === "used" && c.name !== "Messages" && c.tokens > 0).map(c => ({ name: c.name, tokens: c.tokens }));
 
+/** What the legend says of the snapshot, against the median start (null: none to compare, so no overflow). */
+export function gridOverhead(o: ContextOverhead, start: number | null): GridOverhead {
+  const sum = overheadParts(o).reduce((a, x) => a + x.tokens, 0);
+  return { ts: o.ts, model: o.model, deferred: o.categories.filter(x => x.state === "deferred").reduce((a, x) => a + x.tokens, 0),
+    overflow: start != null && sum > start, top: o.top };
+}
+
 /** The grid of a typical session: 200 cells of half a percent of the window each, filled for the median start, then for the
  *  median peak less the start, the rest free. null when the start's or the peak's share of the window is not known. With a
  *  snapshot, the start's cells are split among its overhead categories and the rest of the median start ("First prompt and
@@ -91,8 +98,8 @@ export function contextGrid(c: ContextPayload): ContextGridModel | null {
   let overhead: GridOverhead | null = null;
   if (o) {
     const parts = overheadParts(o), sum = parts.reduce((a, x) => a + x.tokens, 0), S = s.median;
-    const overflow = S != null && sum > S;
-    overhead = { ts: o.ts, model: o.model, deferred: o.categories.filter(x => x.state === "deferred").reduce((a, x) => a + x.tokens, 0), overflow, top: o.top };
+    overhead = gridOverhead(o, S);
+    const overflow = overhead.overflow;
     // Without a median start there is nothing to split.
     if (S != null && S > 0) {
       const whole = overflow ? sum : S;

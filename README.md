@@ -21,13 +21,13 @@ Needs [uv](https://docs.astral.sh/uv/). Runs on macOS and Linux. Your data stays
 | Page | Shows |
 | --- | --- |
 | **Activity** | What got done per day or week, by project, and what needs your attention. It also shows the output speed per model second and how long a median session waits on the model and tools. |
-| **Cost** | Estimated spend at API list prices per day, and the month's pace against your plan. One table shows each project's trend, spend, change, cost per commit and cache hit. |
+| **Cost** | Estimated spend at API list prices per day, and the month's pace against your plan. One table shows each project's trend, spend, change, cost per commit and cache hit. The tokens chart can show each day's share by token kind, and the Tokens and cache drawer sets each kind's share of tokens beside its share of cost. |
 | **Context** | How full the context window gets, how fast it grows, and what fills it. |
 | **Errors** | Failed tool calls by type, the time they cost, and a fix to paste into `CLAUDE.md` or `AGENTS.md`. |
 | **Limits** | Each plan limit window with its forecast cone and the safe pace to its reset, what used it, and how past windows ended. |
 | **Insights** | How Claude Code's `/insights` judged your sessions. |
 | **Live** | Every active session as it runs, sorted by who needs you first. |
-| **Project** | One project across all of the above, opened from the "Project page" link beside the project filter, its sheet, or its name in the command palette. |
+| **Project** | One project across all of the above in two columns, each block loading on its own, opened from the "Project page" link beside the project filter, its sheet, or its name in the command palette. |
 
 Each page leads with its answer and its main chart. Full tables wait in drawers at the foot of the page, closed on every load, one open at a time; method notes wait behind a **How measured** link.
 

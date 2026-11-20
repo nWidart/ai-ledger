@@ -15,7 +15,7 @@ import { big } from "../../format";
 import { useView } from "../../url";
 import { queries } from "../../queries";
 import { useApi } from "../../useApi";
-import { costDays, STACKS, type Stack } from "./cost";
+import { costDays, SCALES, STACKS, type Stack, type TokenScale } from "./cost";
 import { CostChart, type CostMetric } from "./CostChart";
 import { TokensDrawer, TopSessionsDrawer } from "./drawers";
 import { peakInsight, perCommitInsight, type CostActs } from "./insights";
@@ -26,11 +26,12 @@ import { ProjectTable, type CostSpot } from "./ProjectTable";
 import "./cost.css";
 
 // The chart's metric, hidden token kinds and cost stacking, under the keys the Usage page kept them in (the stacking is newer).
-const METRIC_KEY = "claude-usage-metric", HIDDEN_KEY = "claude-usage-hidden", STACK_KEY = "claude-usage-stack";
+const METRIC_KEY = "claude-usage-metric", HIDDEN_KEY = "claude-usage-hidden", STACK_KEY = "claude-usage-stack", SCALE_KEY = "claude-usage-token-scale";
 const stored = <T,>(k: string, ok: (v: unknown) => v is T, d: T): T => { try { const v: unknown = JSON.parse(localStorage.getItem(k) || "null"); return ok(v) ? v : d; } catch { return d; } };
 const store = (k: string, v: unknown) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* storage off */ } };
 const isMetric = (v: unknown): v is CostMetric => v === "cost" || v === "tokens";
 const isStack = (v: unknown): v is Stack => STACKS.includes(v as Stack);
+const isScale = (v: unknown): v is TokenScale => SCALES.includes(v as TokenScale);
 const isList = (v: unknown): v is string[] => Array.isArray(v) && v.every(x => typeof x === "string");
 
 /** Cost (/cost): what coding-agent usage (every source, or the one picked) cost at API list prices, where it went, and why it
@@ -53,6 +54,8 @@ export function CostPage() {
   const [metric, setMetricState] = useState<CostMetric>(() => stored(METRIC_KEY, isMetric, "cost"));
   const [hidden, setHiddenState] = useState<string[]>(() => stored(HIDDEN_KEY, isList, []));
   const [stack, setStackState] = useState<Stack>(() => stored(STACK_KEY, isStack, "project"));
+  const [scale, setScaleState] = useState<TokenScale>(() => stored(SCALE_KEY, isScale, "volume"));
+  const setScale = (s: TokenScale) => { setScaleState(s); store(SCALE_KEY, s); };
   const setStack = (s: Stack) => { setStackState(s); store(STACK_KEY, s); };
   const setMetric = (m: CostMetric) => { setMetricState(m); store(METRIC_KEY, m); };
   const setHidden = (ks: string[]) => { setHiddenState(ks); store(HIDDEN_KEY, ks); };
@@ -95,7 +98,7 @@ export function CostPage() {
             { id: "projects", label: "Projects", long: "Project spend and change", hidden: !table }, { id: "insights", label: "Insights", hidden: !lead }],
           [{ id: "d-tokens", label: "Tokens", long: "Tokens and cache" }, { id: "d-top", label: "Sessions", long: "Most expensive sessions" }],
         ]} />
-        <CostChart d={d} metric={metric} onMetric={setMetric} hidden={hidden} onHidden={setHidden} onDay={showDay} stack={stack} onStack={setStack}
+        <CostChart d={d} metric={metric} onMetric={setMetric} hidden={hidden} onHidden={setHidden} scale={scale} onScale={setScale} onDay={showDay} stack={stack} onStack={setStack}
           onProject={p => set({ project: p, session: null, inspect: null })} onSource={s => set({ source: s, session: null, inspect: null })} />
         {table && <ProjectTable d={d} sort={sort} onSort={setSort} spot={spot} onSpot={setSpot} smallOpen={smallOpen} onSmallOpen={setSmallOpen} />}
         <div className={lead ? "split" : "split solo"}>

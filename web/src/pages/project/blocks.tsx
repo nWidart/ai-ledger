@@ -1,15 +1,19 @@
 // The blocks of the Project page. Each reads one payload another page reads, with the project as the filter, and draws, fails and
 // retries on its own (Block). Figures come from the other pages' own components and model functions.
-import { useMemo, type ReactNode } from "react";
-import type { ContextPayload, ErrorsPayload, InsightsPayload, LimitsPayload, LivePayload, UsagePayload } from "../../api";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { motion } from "../../components/chart";
+import { askedFor } from "../../components/refresh";
+import type { ContextPayload, ErrorsPayload, InsightsPayload, LimitsPayload, LivePayload, Totals, UsagePayload } from "../../api";
 import { DataTable } from "../../components/DataTable";
 import { Judged, label as facetLabel, outcomeLabel } from "../../components/facets";
 import { Ledger, LedgerRow } from "../../components/Ledger";
-import { ChangeDetail, Facts, ModelLedger, summaryFacts, TopSessions } from "../../components/sheets/ProjectSheet";
+import { ChangeDetail, Facts, ModelLedger, TopSessions } from "../../components/sheets/ProjectSheet";
 import { appLink, errorsHref, openSessionSheet } from "../../components/sheets/session";
-import { big, num, pct, plural } from "../../format";
+import { big, dur, num, pct, plural, usd } from "../../format";
 import type { ApiState } from "../../useApi";
 import { share } from "../context/context";
+import { TokenPairs } from "../cost/TokenPairs";
 import { makeModel } from "../errors/model";
 import { sharePct } from "../limits/limits";
 import { subjectAttrs } from "../../components/menu/subject";
@@ -22,44 +26,116 @@ export interface Scope { project: string; range: number; source: "claude" | "cod
 
 const FRICTION_TOP = 3;
 
+/** True once loading has gone on for 150 ms, as the app's other pages time their loading look. */
+function useSlow(loading: boolean) {
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    if (!loading) return;
+    const t = setTimeout(() => setSlow(true), 150);
+    return () => { clearTimeout(t); setSlow(false); };
+  }, [loading]);
+  return loading && slow;
+}
+
+/** How a block takes in new data, as useLanding does for a whole page, but for this block alone, so a payload that changed moves only
+ *  the blocks that read it. When the block's data changes for a new view (view), after Refresh or after a failure, its bars grow in
+ *  and, over earlier figures, it fades in; new data an ingest brought in the background swaps in quietly. An answer equal to the last
+ *  keeps its reference (the query cache shares it), so a refresh that changed nothing moves nothing. */
+function useLand(data: unknown, view: string, error: Error | undefined) {
+  const client = useQueryClient(), ref = useRef<HTMLElement>(null);
+  const shown = useRef({ data, view }), failed = useRef(false);
+  useEffect(() => { if (error) failed.current = true; }, [error]);
+  useLayoutEffect(() => {
+    const was = shown.current;
+    shown.current = { data, view };
+    if (data === undefined || data === was.data) return;
+    const quiet = was.data !== undefined && was.view === view && !askedFor(client) && !failed.current;
+    failed.current = false;
+    const el = ref.current;
+    if (quiet || !motion() || !el) return;
+    // Classes set here, not through className, so restarting the animation re-renders nothing.
+    el.classList.remove("grow", "fade-in");
+    void el.offsetWidth;
+    el.classList.add("grow");
+    if (was.data !== undefined) el.classList.add("fade-in");
+    const t = setTimeout(() => el.classList.remove("grow"), 1100);
+    return () => { clearTimeout(t); el.classList.remove("grow"); };
+    // view is read with data, not watched: it changes before its answer comes, and the landing waits for that answer.
+  }, [data]); // eslint-disable-line react-hooks/exhaustive-deps
+  return ref;
+}
+
 /** One block: its heading with the link to its page, then its body once its data is in. A failed request says so with Retry
- *  and, when the block already has figures (a refresh failed), keeps them. */
-function Block<T>({ id, title, page, href, state, children }: { id: string; title: string; page: string; href: string; state: ApiState<T>; children: (d: T) => ReactNode }) {
+ *  and, when the block already has figures (a refresh failed), keeps them. The block is aria-busy while its request, or another it
+ *  reads a line from (also), is under way; one of them taking a while dims its figures, and no other block's. The loading line is
+ *  plain text, not a live region: aria-busy says it. href names the view, so the block lands anew when it changes. */
+function Block<T>({ id, title, page, href, state, also = [], children }: { id: string; title: string; page: string; href: string; state: ApiState<T>;
+  also?: readonly ApiState<unknown>[]; children: (d: T) => ReactNode }) {
   const { data, error, retry } = state;
+  const loading = state.loading || also.some(s => s.loading), slow = useSlow(loading);
+  const ref = useLand(data, href, error);
   return (
-    <section className="panel sect" id={id} aria-labelledby={id + "Title"} aria-busy={(!data && !error) || undefined}>
+    <section ref={ref} className={"panel sect" + (slow && data ? " loading" : "")} id={id} aria-labelledby={id + "Title"} aria-busy={loading || undefined}>
       <header className="blk-head">
         <h2 id={id + "Title"}>{title}</h2>
         <a className="blk-open" href={href} onClick={appLink}>Open in {page}</a>
       </header>
       {error && <div className="empty" role="alert">Could not load {title.toLowerCase()} ({error.message}). <button type="button" className="linkish" onClick={retry}>Retry</button></div>}
-      {data ? children(data) : !error && <p className="empty" role="status">Loading…</p>}
+      {data ? children(data) : !error && <p className="empty">Loading…</p>}
     </section>
   );
 }
 
-/** The project's eight figures, as the project sheet shows them, and a link to Live while sessions of it are running. */
-export function SummaryBlock({ usage, live, scope }: { usage: ApiState<UsagePayload>; live: ApiState<LivePayload>; scope: Scope }) {
+/** A usage block's body when the project has no request in the view (the page says so above the blocks). */
+const noRequests = <p className="empty">No requests in this view.</p>;
+
+/** What the project did: eight figures the project sheet does not show (the sheet has cost, sessions, tokens and error counts), as
+ *  Activity counts them, and a link to Live while sessions of it are running (a note with Retry when Live did not answer, so a failure
+ *  does not read as no session, and a plain "Checking…" line while Live has not answered). A figure the store cannot give reads n/a. */
+export const activityFacts = (t: Totals): [ReactNode, ReactNode][] => {
+  const na = (v: number | null, f: (n: number) => string) => (v == null ? "n/a" : f(v));
+  return [
+    [num(t.prompts), "prompts"], [num(t.commits), "commits"], [num(t.active_days), "active days"],
+    [num(t.requests), `requests, ${num(t.main_requests)} from the main thread`], [na(t.median_session_seconds, dur), "median session"],
+    [na(t.cost_per_prompt, usd), "estimated cost per prompt"], [na(t.turns_per_prompt, n => num(n, 1)), "turns per prompt"],
+    [na(t.interruption_rate, n => pct(n, 1)), "of prompts interrupted"],
+  ];
+};
+export function ActivityBlock({ usage, live, scope }: { usage: ApiState<UsagePayload>; live: ApiState<LivePayload>; scope: Scope }) {
   const n = live.data?.sessions.length ?? 0;
+  // The line stays in the page whatever it says, so Retry can put focus on it: the request clears its error, and the button goes.
+  const line = useRef<HTMLParagraphElement>(null);
+  const retry = () => { line.current?.focus(); live.retry(); };
   return (
-    <Block id="summary" title="Summary" page="Activity" href={"/usage" + scope.search} state={usage}>
+    <Block id="activity" title="Activity" page="Activity" href={"/usage" + scope.search} state={usage} also={[live]}>
       {d => <>
-        <div className="hint">{d.start ? `Last ${d.range} days` : "All time"}, from the range filter. Estimated at API list prices.</div>
-        <Facts facts={summaryFacts(d.totals)} />
-        {n > 0 && <p className="live-now"><a href={"/live" + scope.search} onClick={appLink}>{plural(n, "session")} active now</a></p>}
+        <div className="hint">{d.start ? `Last ${d.range} days` : "All time"}, from the range filter.</div>
+        {d.totals.requests ? <Facts facts={activityFacts(d.totals)} /> : noRequests}
+        <p className={"live-now" + (n > 0 ? "" : " muted")} ref={line} tabIndex={-1}>
+          {live.error ? <>Could not load the sessions active now. <button type="button" className="linkish" onClick={retry}>Retry</button></>
+            : !live.data && live.loading ? "Checking for active sessions…"
+            : n > 0 && <a href={"/live" + scope.search} onClick={appLink}>{plural(n, "session")} active now</a>}
+        </p>
       </>}
     </Block>
   );
 }
 
-/** The change against the previous period with the daily cost of both, and the models by estimated cost. */
+/** The change against the previous period with the daily cost of both (the estimated cost alone for all time), the models by
+ *  estimated cost, and each token kind's share of tokens beside its share of cost. */
 export function CostBlock({ usage, scope }: { usage: ApiState<UsagePayload>; scope: Scope }) {
   return (
     <Block id="cost" title="Cost" page="Cost" href={"/cost" + scope.search} state={usage}>
       {d => <>
-        <ChangeDetail d={d} name={scope.project} />
-        <h3>Models by estimated cost</h3>
-        <ModelLedger key={scope.search} models={d.models} by="cost" />
+        <div className="hint">Estimated at API list prices.</div>
+        {!d.totals.requests ? noRequests : <>
+          {d.previous && d.start && d.changes?.some(c => c.project === scope.project) ? <ChangeDetail d={d} name={scope.project} />
+            : <Facts facts={[[usd(d.totals.cost), d.start ? `est. cost, last ${d.range} days` : "est. cost, all time"]]} />}
+          <h3>Models by estimated cost</h3>
+          <ModelLedger key={scope.search} models={d.models} by="cost" />
+          <h3>Tokens beside cost</h3>
+          <TokenPairs t={d.totals} />
+        </>}
       </>}
     </Block>
   );
@@ -69,7 +145,7 @@ export function CostBlock({ usage, scope }: { usage: ApiState<UsagePayload>; sco
 export function SessionsBlock({ usage, scope }: { usage: ApiState<UsagePayload>; scope: Scope }) {
   return (
     <Block id="sessions" title="Sessions" page="Activity" href={"/usage" + scope.search} state={usage}>
-      {d => <>
+      {d => !d.totals.requests ? noRequests : <>
         <div className="hint">The eight most expensive sessions of the project in this view. Select one for details.</div>
         <TopSessions top={d.top_sessions.slice(0, 8)} onSession={openSessionSheet} />
       </>}
@@ -107,9 +183,9 @@ export function ContextBlock({ context, usage, scope }: { context: ApiState<Cont
   const na = (v: ReactNode) => v ?? "n/a";
   const claude = !!usage.data?.daily_sources.some(r => r.source === "claude");
   return (
-    <Block id="context" title="Context" page="Context" href={"/context" + scope.search} state={context}>
+    <Block id="context" title="Context" page="Context" href={"/context" + scope.search} state={context} also={[usage]}>
       {c => <>
-        <ContextGrid model={contextGrid(c)} />
+        <ContextGrid model={contextGrid(c)} snapshot={c.overhead} />
         <Facts facts={[
         [c.starting.median == null ? "n/a" : big(c.starting.median), "median starting context, tokens"],
         [c.starting.window_share == null ? "n/a" : share(c.starting.window_share), "of the window at the start"],

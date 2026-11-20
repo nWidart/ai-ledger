@@ -1,4 +1,4 @@
-import { cleanup, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { ContextOverhead, ContextPayload, ErrorsPayload, InsightsPayload, LimitsPayload, LivePayload, UsagePayload } from "../../api";
@@ -13,8 +13,8 @@ import usage from "../../__fixtures__/usage";
 import usageAll from "../../__fixtures__/usage-all";
 import { ProjectSheet } from "../../components/sheets/ProjectSheet";
 import { mockApi } from "../../components/sheets/testing";
-import { big } from "../../format";
-import { renderApp } from "../../testing";
+import { big, num, usd } from "../../format";
+import { refreshed, renderApp } from "../../testing";
 import { ProjectPage } from "./ProjectPage";
 
 /** The fixture with the fields the grid reads (until the fixtures are regenerated): the peak's share of the window, null for none. */
@@ -47,19 +47,20 @@ describe("ProjectPage", () => {
     const { f } = open();
     await loaded();
     expect(document.getElementById("content")).not.toBeNull();
-    await screen.findByRole("region", { name: "Summary" });
+    await screen.findByRole("region", { name: "Plan limits" });
     const urls = f.mock.calls.map(c => c[0] as string);
     for (const u of ["/api/usage?project=foo&range=30", "/api/context?project=foo&range=30", "/api/insights?project=foo&range=30", "/api/limits?project=foo&range=30"]) expect(urls).toContain(u);
     expect(urls).toContain("/api/errors");
     expect(urls.some(u => u.startsWith("/api/live?project=foo"))).toBe(true);
-    for (const name of ["Summary", "Cost", "Sessions", "Errors", "Context", "Session judgments", "Plan limits"]) expect(block(name)).toBeTruthy();
+    for (const name of ["Activity", "Cost", "Sessions", "Errors", "Context", "Session judgments", "Plan limits"]) expect(block(name)).toBeTruthy();
   });
 
   it("links every block to its page with the shared view", async () => {
     open({}, "?project=foo&range=7&source=claude&auto=1");
     await loaded();
+    await screen.findByRole("region", { name: "Plan limits" });
     const link = (name: string) => within(block(name)).getByRole("link", { name: /^Open in/ }).getAttribute("href");
-    expect(link("Summary")).toBe("/usage?project=foo&range=7&source=claude&auto=1");
+    expect(link("Activity")).toBe("/usage?project=foo&range=7&source=claude&auto=1");
     expect(link("Cost")).toBe("/cost?project=foo&range=7&source=claude&auto=1");
     expect(link("Context")).toBe("/context?project=foo&range=7&source=claude&auto=1");
     expect(link("Session judgments")).toBe("/insights?project=foo&range=7&source=claude&auto=1");
@@ -67,28 +68,101 @@ describe("ProjectPage", () => {
     expect(link("Errors")).toBe("/errors?project=foo&range=7&source=claude");
   });
 
-  describe("summary", () => {
-    it("shows the project sheet's eight figures for the same payload", async () => {
-      const d = foo(usage);
+  describe("layout", () => {
+    const ids = (col: Element) => [...col.querySelectorAll(":scope > section")].map(s => s.id);
+
+    it("puts Activity, Cost and Context in the left column, and Errors, Plan limits, Sessions and Session judgments in the right", async () => {
       open();
       await loaded();
-      const onPage = facts(await screen.findByRole("region", { name: "Summary" }));
-      expect(onPage).toHaveLength(8);
+      await screen.findByRole("region", { name: "Plan limits" });
+      const cols = document.querySelectorAll(".pg-project .cols > .col");
+      expect(cols).toHaveLength(2);
+      expect(ids(cols[0]!)).toEqual(["activity", "cost", "context"]);
+      expect(ids(cols[1]!)).toEqual(["errors", "limits", "sessions", "insights"]);
+      // The heading and the filters sit above the columns.
+      expect(document.querySelector(".pg-project > header")!.contains(screen.getByRole("heading", { level: 1 }))).toBe(true);
+    });
+
+    it("has no Project tab to repeat: the page is not in the navigation", async () => {
+      open();
+      await loaded();
+      expect(screen.queryByRole("link", { name: "Project" })).toBeNull();
+    });
+  });
+
+  describe("activity", () => {
+    const labels = (el: Element) => [...el.querySelectorAll(".facts .l")].map(x => x.textContent);
+
+    it("shows eight figures of the project's activity, none of them the project sheet's", async () => {
+      const t = usage.totals;
+      open();
+      await loaded();
+      const blk = await screen.findByRole("region", { name: "Activity" });
+      await within(blk).findByText("median session");
+      expect(labels(blk)).toEqual(["prompts", "commits", "active days", `requests, ${num(t.main_requests)} from the main thread`, "median session",
+        "estimated cost per prompt", "turns per prompt", "of prompts interrupted"]);
+      const v = [...blk.querySelectorAll(".facts .v")].map(x => x.textContent);
+      expect(v.slice(0, 4)).toEqual([num(t.prompts), num(t.commits), num(t.active_days), num(t.requests)]);
+      expect(v[5]).toBe(usd(t.cost_per_prompt));
       cleanup();
-      renderApp(<ProjectSheet name="foo" d={d} retry={() => {}} range={30} source="" pageProject="foo" onSession={() => {}} />);
-      expect(facts(document.body as HTMLElement).slice(0, 8)).toEqual(onPage);
+      renderApp(<ProjectSheet name="foo" d={foo(usage)} retry={() => {}} range={30} source="" pageProject="foo" onSession={() => {}} />);
+      const sheet = labels(document.body);
+      expect(labels(blk).filter(l => sheet.includes(l))).toEqual([]);
+    });
+
+    it("reads a figure the store cannot give as n/a", async () => {
+      const none = { ...usage.totals, median_session_seconds: null, cost_per_prompt: null, turns_per_prompt: null, interruption_rate: null };
+      open({ usage: foo({ ...usage, totals: none } as UsagePayload) });
+      await loaded();
+      const blk = await screen.findByRole("region", { name: "Activity" });
+      await within(blk).findByText("median session");
+      expect([...blk.querySelectorAll(".facts .v")].slice(4).map(x => x.textContent)).toEqual(["n/a", "n/a", "n/a", "n/a"]);
     });
 
     it("says how many sessions are active and links to Live, and says nothing at none", async () => {
       open();
       await loaded();
-      const link = await within(block("Summary")).findByRole("link", { name: "2 sessions active now" });
+      const link = await within(block("Activity")).findByRole("link", { name: "2 sessions active now" });
       expect(link.getAttribute("href")).toBe("/live?project=foo&range=30");
       cleanup();
       open({ live: { ...live, sessions: [] } as LivePayload });
       await loaded();
-      await within(block("Summary")).findByText(/est\. cost/);
+      await within(block("Activity")).findByText("median session");
       expect(screen.queryByText(/active now/)).toBeNull();
+    });
+
+    it("says the sessions active now could not load, with Retry, when Live fails alone", async () => {
+      const { f } = open({ live: null });
+      await loaded();
+      const note = await within(block("Activity")).findByText(/Could not load the sessions active now/);
+      expect(within(block("Activity")).getByText("median session")).toBeTruthy();
+      expect(within(block("Activity")).queryByRole("alert")).toBeNull();
+      const answer = f.getMockImplementation()!;
+      let done!: () => void;
+      // The retried request waits, then answers with two sessions.
+      f.mockImplementation((input: string) => (String(input).startsWith("/api/live")
+        ? new Promise<Response>(r => { done = () => r({ ok: true, status: 200, json: () => Promise.resolve(base.live) } as Response); })
+        : answer(input)));
+      const asked = () => f.mock.calls.filter(c => String(c[0]).startsWith("/api/live")).length, before = asked();
+      await userEvent.click(within(note).getByRole("button", { name: "Retry" }));
+      await waitFor(() => expect(asked()).toBeGreaterThan(before));
+      // While it is under way: a plain line, no live region, and focus on the line, not lost with the button.
+      const line = within(block("Activity")).getByText("Checking for active sessions…");
+      expect(line.closest("[aria-live], [role=status]")).toBeNull();
+      expect(document.activeElement).toBe(line);
+      act(() => done());
+      const link = await within(block("Activity")).findByRole("link", { name: "2 sessions active now" });
+      expect(document.activeElement).toBe(link.parentElement);
+    });
+
+    it("says it is checking for active sessions while Live has not answered, not that there are none", async () => {
+      const f = serve(), answer = f.getMockImplementation()!;
+      f.mockImplementation((input: string) => (String(input).startsWith("/api/live") ? new Promise<Response>(() => {}) : answer(input)));
+      history.replaceState(null, "", "/project?project=foo&range=30");
+      renderApp(<ProjectPage />);
+      await within(block("Activity")).findByText("median session");
+      expect(within(block("Activity")).getByText("Checking for active sessions…")).toBeTruthy();
+      expect(block("Activity").getAttribute("aria-busy")).toBe("true");
     });
   });
 
@@ -101,11 +175,21 @@ describe("ProjectPage", () => {
       expect(within(block("Cost")).getByText("Models by estimated cost")).toBeTruthy();
     });
 
-    it("shows no change for all time", async () => {
+    it("shows no change for all time, and the estimated cost in its place", async () => {
       open({ usage: foo(usageAll) }, "?project=foo&range=0");
       await loaded();
       await within(block("Cost")).findByText("Models by estimated cost");
       expect(within(block("Cost")).queryByText(/Change vs/)).toBeNull();
+      expect(within(block("Cost")).getByText("est. cost, all time")).toBeTruthy();
+    });
+
+    it("sets each token kind's share of tokens beside its share of cost", async () => {
+      open();
+      await loaded();
+      const list = await within(block("Cost")).findByRole("list", { name: "Share of tokens beside share of estimated cost, by kind" });
+      const rows = [...list.querySelectorAll(".sr")].map(r => r.textContent);
+      expect(rows).toHaveLength(4);
+      expect(rows).toContain("Cache read: 66.7% of tokens, 5.1% of estimated cost");
     });
 
     it("opens a session's sheet from the list", async () => {
@@ -278,6 +362,32 @@ describe("ProjectPage", () => {
       expect(within(blk).getByRole("button", { name: "Measure now" }).getAttribute("aria-disabled")).toBeNull();
     });
 
+    it("offers Measure now from a snapshot when the project has no request in the view", async () => {
+      const none = { ...foo(usage), totals: { ...usage.totals, requests: 0, sessions: 0 }, daily_sources: [] } as UsagePayload;
+      open({ usage: none, context: measured(snapshot) });
+      await loaded();
+      await screen.findByText(/No use of foo in this view/);
+      const blk = block("Context");
+      expect(await within(blk).findByRole("button", { name: "Measure now" })).toBeTruthy();
+      expect(within(blk).getByText(/^Overhead measured/)).toBeTruthy();
+    });
+
+    it("shows what the snapshot measured when no session in the view gives a share of the window", async () => {
+      // No request in the range: the starting and peak shares are null, so there is no grid, but the snapshot is the project's latest.
+      const none = { ...foo(usage), totals: { ...usage.totals, requests: 0, sessions: 0 }, daily_sources: [] } as UsagePayload;
+      const empty = { ...withGrid({ ...context, starting: { ...context.starting, sessions: 0, median: null, window_share: null } }, null), overhead: snapshot } as ContextPayload;
+      open({ usage: none, context: empty });
+      await loaded();
+      const blk = block("Context");
+      await within(blk).findByRole("button", { name: "Measure now" });
+      expect(blk.querySelector(".cg-cells")).toBeNull();
+      expect(within(blk).getByText("Measured overhead · 200k window")).toBeTruthy();
+      expect(within(blk).getByText(/^Overhead measured .* with claude-opus-4-1/).textContent).toContain(`${big(7000)} deferred tokens of tools are not loaded`);
+      const items = [...blk.querySelectorAll(".cg-legend li")].map(li => li.textContent);
+      expect(items).toEqual([`System prompt${big(4000)} tokens (2.0%)`, `System tools${big(12000)} tokens (6.0%)`, `Skills${big(4000)} tokens (2.0%)`]);
+      expect(within(blk).getByText("Largest overhead items")).toBeTruthy();
+    });
+
     it("offers no Measure now without Claude Code sessions or a snapshot", async () => {
       open({ usage: { ...foo(usage), daily_sources: [{ day: "2026-11-04", source: "codex", cost: 1 }] }, context: measured(null) });
       await loaded();
@@ -316,7 +426,7 @@ describe("ProjectPage", () => {
     it("is left out when no window names the project and no limit has a figure", async () => {
       open({}, "?project=nosuch&range=30");
       await screen.findByRole("heading", { level: 1, name: "nosuch" });
-      await within(block("Summary")).findByText(/est\. cost/);
+      await within(block("Activity")).findByText("median session");
       await waitFor(() => expect(screen.queryByRole("region", { name: "Plan limits" })).toBeNull());
     });
   });
@@ -329,7 +439,7 @@ describe("ProjectPage", () => {
       history.replaceState(null, "", "/project?project=foo&range=30");
       renderApp(<ProjectPage />);
       await loaded();
-      await within(block("Summary")).findByText(/est\. cost/);
+      await within(block("Activity")).findByText("median session");
       expect(f.mock.calls.some(c => String(c[0]).startsWith("/api/limits"))).toBe(true);
       expect(screen.queryByRole("region", { name: "Plan limits" })).toBeNull();
     });
@@ -349,7 +459,7 @@ describe("ProjectPage", () => {
       const b = await screen.findByRole("region", { name: "Session judgments" });
       const alert = await within(b).findByRole("alert");
       expect(alert.textContent).toMatch(/Could not load session judgments/);
-      expect(await within(block("Summary")).findByText(/est\. cost/)).toBeTruthy();
+      expect(await within(block("Activity")).findByText("median session")).toBeTruthy();
       expect(within(block("Context")).queryByRole("alert")).toBeNull();
       await within(block("Context")).findByText("median starting context, tokens");
       const asked = () => f.mock.calls.filter(c => String(c[0]).startsWith("/api/insights")).length;
@@ -361,19 +471,132 @@ describe("ProjectPage", () => {
     it("shows a failing usage request in the blocks that read it, and the others still draw", async () => {
       open({ usage: null });
       await loaded();
-      await waitFor(() => expect(within(block("Summary")).getByRole("alert")).toBeTruthy());
+      await waitFor(() => expect(within(block("Activity")).getByRole("alert")).toBeTruthy());
       expect(within(block("Cost")).getByRole("alert")).toBeTruthy();
+      expect(within(block("Sessions")).getByRole("alert")).toBeTruthy();
       expect(await within(block("Session judgments")).findByText(/1 of 3/)).toBeTruthy();
+      await within(block("Context")).findByText("median starting context, tokens");
+      expect(within(block("Context")).queryByRole("alert")).toBeNull();
+      expect(await within(block("Errors")).findByRole("table", { name: "Top error types" })).toBeTruthy();
+      expect(await within(block("Plan limits")).findByText("Claude Code weekly")).toBeTruthy();
+      expect(screen.queryByText(/No use of foo/)).toBeNull();
+    });
+
+    it("fails the Errors block alone when its request fails", async () => {
+      open({ errors: null });
+      await loaded();
+      expect(await within(block("Errors")).findByRole("alert")).toBeTruthy();
+      expect(await within(block("Activity")).findByText("median session")).toBeTruthy();
+      expect(within(block("Activity")).queryByRole("alert")).toBeNull();
+      expect(within(block("Session judgments")).queryByRole("alert")).toBeNull();
+    });
+
+    /** The API with one path that never answers. */
+    const hang = (path: string) => {
+      const f = serve(), answer = f.getMockImplementation()!;
+      f.mockImplementation((input: string) => (String(input).startsWith(path) ? new Promise<Response>(() => {}) : answer(input)));
+      history.replaceState(null, "", "/project?project=foo&range=30");
+      renderApp(<ProjectPage />);
+    };
+
+    it("shows the heading, the filters and every block at once, with a slow usage request loading in its own blocks only", async () => {
+      hang("/api/usage");
+      // No placeholder: the heading and the filters are there before any request answers.
+      expect(screen.getByRole("heading", { level: 1, name: "foo" })).toBeTruthy();
+      expect(screen.getByRole("group", { name: "Filters" })).toBeTruthy();
+      expect(within(block("Activity")).getByText("Loading…")).toBeTruthy();
+      expect(within(block("Cost")).getByText("Loading…")).toBeTruthy();
+      expect(await within(block("Errors")).findByRole("table", { name: "Top error types" })).toBeTruthy();
+      expect(await within(block("Session judgments")).findByText(/1 of 3/)).toBeTruthy();
+      await within(block("Context")).findByText("median starting context, tokens");
+      expect(screen.queryByText(/No use of foo/)).toBeNull();
+      // Busy is each block's: the ones that read usage (Context for a line), not the page, and the loading line is no live region.
+      const busy = (name: string) => block(name).getAttribute("aria-busy");
+      for (const name of ["Activity", "Cost", "Sessions", "Context"]) expect(busy(name)).toBe("true");
+      for (const name of ["Errors", "Session judgments"]) expect(busy(name)).toBeNull();
+      expect(document.getElementById("content")!.getAttribute("aria-busy")).toBeNull();
+      expect(within(block("Activity")).queryByRole("status")).toBeNull();
+    });
+
+    it("keeps the figures through a slow range change, dimming the blocks that read usage only", async () => {
+      const f = serve(), answer = f.getMockImplementation()!;
+      f.mockImplementation((input: string) => (String(input).startsWith("/api/usage?project=foo&range=7") ? new Promise<Response>(() => {}) : answer(input)));
+      history.replaceState(null, "", "/project?project=foo&range=30");
+      renderApp(<ProjectPage />);
+      await within(block("Activity")).findByText("median session");
+      await within(block("Context")).findByText("median starting context, tokens");
+      await within(block("Session judgments")).findByText(/1 of 3/);
+      act(() => { history.pushState(null, "", "/project?project=foo&range=7"); });
+      // The earlier figures stay, then dim once the request takes over 150 ms; Context reads usage for a line, so it dims too.
+      const dimmed = (name: string) => block(name).classList.contains("loading");
+      await waitFor(() => expect(dimmed("Activity")).toBe(true));
+      for (const name of ["Activity", "Cost", "Sessions", "Context"]) expect(dimmed(name)).toBe(true);
+      expect(within(block("Activity")).getByText("median session")).toBeTruthy();
+      expect(within(block("Activity")).queryByText("Loading…")).toBeNull();
+      for (const name of ["Errors", "Session judgments"]) expect(dimmed(name)).toBe(false);
+    });
+
+    it("drops the figures of the project just left, even while the new one loads", async () => {
+      const f = serve(), answer = f.getMockImplementation()!;
+      f.mockImplementation((input: string) => (String(input).startsWith("/api/usage?project=bar") ? new Promise<Response>(() => {}) : answer(input)));
+      history.replaceState(null, "", "/project?project=foo&range=30");
+      renderApp(<ProjectPage />);
+      await within(block("Activity")).findByText("median session");
+      act(() => { history.pushState(null, "", "/project?project=bar&range=30"); });
+      await screen.findByRole("heading", { level: 1, name: "bar" });
+      expect(within(block("Activity")).getByText("Loading…")).toBeTruthy();
+      expect(within(block("Activity")).queryByText("median session")).toBeNull();
+    });
+
+    it("after Refresh, moves only the blocks whose data changed", async () => {
+      let n = 0;
+      const f = serve(), answer = f.getMockImplementation()!;
+      // Each usage answer is new; every other answer is the same object, so its blocks keep their data.
+      f.mockImplementation((input: string) => (String(input).startsWith("/api/usage")
+        ? Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(foo({ ...usage, totals: { ...usage.totals, prompts: 100 + n++ } })) } as Response)
+        : answer(input)));
+      history.replaceState(null, "", "/project?project=foo&range=30");
+      const { client } = renderApp(<ProjectPage />);
+      await within(block("Activity")).findByText(num(100));
+      await within(block("Errors")).findByRole("table", { name: "Top error types" });
+      await within(block("Session judgments")).findByText(/1 of 3/);
+      refreshed(client);
+      await within(block("Activity")).findByText(num(101));
+      for (const name of ["Activity", "Cost", "Sessions"]) expect(block(name).classList.contains("fade-in")).toBe(true);
+      for (const name of ["Errors", "Session judgments"]) expect(block(name).classList.contains("fade-in")).toBe(false);
+      expect(document.getElementById("content")!.classList.contains("grow")).toBe(false);
+    });
+
+    it("says a slow errors request is loading, and draws the other blocks", async () => {
+      hang("/api/errors");
+      expect(within(block("Errors")).getByText("Loading…")).toBeTruthy();
+      expect(await within(block("Activity")).findByText("median session")).toBeTruthy();
+      expect(within(block("Errors")).getByText("Loading…")).toBeTruthy();
     });
   });
 
-  it("says there is no use in the view, and keeps the heading and the filters", async () => {
+  describe("no use in the view", () => {
     const none = { ...foo(usage), totals: { ...usage.totals, requests: 0, sessions: 0 } } as UsagePayload;
-    open({ usage: none });
-    await loaded();
-    expect(await screen.findByText(/No use of foo in this view/)).toBeTruthy();
-    expect(screen.getByRole("group", { name: "Filters" })).toBeTruthy();
-    expect(screen.queryByRole("region", { name: "Summary" })).toBeNull();
+
+    it("says so above the blocks, keeps the heading and the filters, and the usage blocks say they have no request", async () => {
+      open({ usage: none });
+      await loaded();
+      expect(await screen.findByText(/No use of foo in this view/)).toBeTruthy();
+      expect(screen.getByRole("group", { name: "Filters" })).toBeTruthy();
+      for (const name of ["Activity", "Cost", "Sessions"]) expect(within(block(name)).getByText("No requests in this view.")).toBeTruthy();
+      expect(block("Activity").querySelector(".facts")).toBeNull();
+    });
+
+    it("still shows a failed Errors request with Retry", async () => {
+      const { f } = open({ usage: none, errors: null });
+      await loaded();
+      await screen.findByText(/No use of foo in this view/);
+      const alert = await within(block("Errors")).findByRole("alert");
+      expect(alert.textContent).toMatch(/Could not load errors/);
+      const asked = () => f.mock.calls.filter(c => c[0] === "/api/errors").length, before = asked();
+      await userEvent.click(within(alert).getByRole("button", { name: "Retry" }));
+      await waitFor(() => expect(asked()).toBeGreaterThan(before));
+    });
   });
 
   it("hosts the sheets: a session in the URL opens its sheet over the page", async () => {

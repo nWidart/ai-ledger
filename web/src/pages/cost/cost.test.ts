@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ProjectRow, RunRateSource, UsagePayload } from "../../api";
 import usage from "../../__fixtures__/usage";
-import { costDays, gaugeFigures, type Kind } from "./cost";
+import { costDays, gaugeFigures, shares, stackHeights, tokenPairs, type Kind } from "./cost";
 import { projectMedians } from "./insights";
 import { foldMatrix, projectMatrix, sortMatrix, type MatrixRow } from "./matrix";
 
@@ -124,5 +124,89 @@ describe("costDays", () => {
   it("leaves Other's list out when Other is not stacked", () => {
     const [de] = costDays(view([pd("A", 10), pd("B", 5)], 15), [named("A")]);
     expect(de!.other).toBeUndefined();
+  });
+});
+
+describe("shares", () => {
+  const kind = (k: string): Kind => ({ k, label: k, c: "red" });
+  const [a, b, c] = [kind("a"), kind("b"), kind("c")];
+
+  it("gives each shown kind its fraction of the shown total, adding to 1", () => {
+    const s = shares({ a: 60, b: 20, c: 120 }, [a, b, c]);
+    expect(s).toEqual({ a: .3, b: .1, c: .6 });
+    expect(Object.values(s).reduce((x, y) => x + y, 0)).toBeCloseTo(1);
+  });
+
+  it("leaves a hidden kind out of the total", () => {
+    expect(shares({ a: 60, b: 20, c: 120 }, [a, b])).toEqual({ a: .75, b: .25 });
+  });
+
+  it("is zero for every kind on a day without tokens", () => {
+    expect(shares({}, [a, b])).toEqual({ a: 0, b: 0 });
+  });
+});
+
+describe("stackHeights", () => {
+  const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
+
+  it("splits the bar in proportion when every slot is above its minimum", () => {
+    expect(stackHeights([1, 3], 100, [1, 3])).toEqual([25, 75]);
+  });
+
+  it("gives thin segments their minimum and shrinks the others, so the slots still fill the bar", () => {
+    const s = stackHeights([998, 1, 1], 200, [1, 3, 3]);
+    expect(s.slice(1)).toEqual([3, 3]);
+    expect(s[0]).toBeCloseTo(194);
+    expect(sum(s)).toBeCloseTo(200);
+  });
+
+  it("is each minimum when the bar is shorter than the minimums", () => {
+    expect(stackHeights([5, 5], 2, [1, 3])).toEqual([1, 3]);
+  });
+});
+
+describe("tokenPairs", () => {
+  const t = usage.totals;
+  const pairs = (over: Record<string, number | null> = {}) => tokenPairs({ ...t, ...over } as typeof t);
+
+  it("lists the four billed kinds, costliest first", () => {
+    const p = pairs(), costs = p.map(x => x.cost!);
+    expect(p.map(x => x.key).sort()).toEqual(["input", "output", "read", "write"]);
+    expect(p[0]!.key).toBe("output");
+    expect(costs).toEqual([...costs].sort((x, y) => y - x));
+  });
+
+  it("sets each kind's share of tokens beside its share of cost, each adding to 1", () => {
+    const p = pairs();
+    const read = p.find(x => x.key === "read")!;
+    expect(read.tokens).toBe(t.cache_read);
+    expect(read.tokenShare).toBeCloseTo(t.cache_read / t.tokens);
+    expect(read.costShare).toBeCloseTo(t.cost_cache_read! / t.cost!);
+    expect(p.reduce((s, x) => s + x.tokenShare, 0)).toBeCloseTo(1);
+    expect(p.reduce((s, x) => s + (x.costShare ?? 0), 0)).toBeCloseTo(1);
+  });
+
+  it("counts thinking inside Output, and joins the two cache write lifetimes", () => {
+    const p = pairs();
+    expect(p.find(x => x.key === "output")!.tokens).toBe(t.output);
+    expect(p.find(x => x.key === "output")!.parts).toEqual([{ label: "Thinking", tokens: t.thinking, cost: null }]);
+    const write = p.find(x => x.key === "write")!;
+    expect(write.tokens).toBe(t.cache_5m + t.cache_1h);
+    expect(write.cost).toBeCloseTo(t.cost_cache_5m! + t.cost_cache_1h!);
+    expect(write.parts.map(x => x.label)).toEqual(["5-minute", "1-hour"]);
+  });
+
+  it("has no cost and no cost share when nothing is priced, and goes by tokens", () => {
+    const none = { cost: null, cost_input: null, cost_output: null, cost_cache_read: null, cost_cache_5m: null, cost_cache_1h: null };
+    const p = pairs(none);
+    expect(p.every(x => x.cost == null && x.costShare == null)).toBe(true);
+    expect(p[0]!.key).toBe("read");
+  });
+
+  it("keeps a known zero cost apart from an unknown one: a cost of 0 and a share of 0, by tokens", () => {
+    const free = { cost: 0, cost_input: 0, cost_output: 0, cost_cache_read: 0, cost_cache_5m: 0, cost_cache_1h: 0 };
+    const p = pairs(free);
+    expect(p.every(x => x.cost === 0 && x.costShare === 0)).toBe(true);
+    expect(p[0]!.key).toBe("read");
   });
 });
