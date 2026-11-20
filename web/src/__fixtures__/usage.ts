@@ -527,8 +527,16 @@ export default {
  "run_rate": {
   "month_cost": 15.8,
   "daily_avg": 2.257142857,
+  "projected": 74.485714286,
   "days_left": 26,
-  "projected": 74.485714286
+  "by_source": [
+   {
+    "source": "claude",
+    "month_cost": 15.8,
+    "daily_avg": 2.257142857,
+    "projected": 74.485714286
+   }
+  ]
  },
  "prices_file": {
   "path": "/Users/example/Library/Application Support/ai-ledger/prices.json",

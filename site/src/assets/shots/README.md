@@ -15,10 +15,10 @@ Only the shots a page shows are kept: a shot no page references is deleted, and 
 | `activity-vitals` | The work-health row of figures. | Activity |
 | `activity-work` | "Work per day": commits per day by project with errors per 100 calls on the right axis. | Activity |
 | `activity-hours` | "Prompts by hour": when the work happens. | Activity |
-| `cost-changed` | "What changed vs the previous 30 days": spend deltas. | Cost |
-| `cost-highlights` | "What stands out": the insight cards. | Cost |
+| `cost-overview` | The heading, the filters and the plan gauge. | Cost |
 | `cost-spend` | "Estimated cost per day", stacked by project. | Cost |
-| `cost-where` | "Where the spend went": by project. | Cost |
+| `cost-projects` | "Project spend and change": trend, spend, change, cost per commit and cache hit per project. | Cost |
+| `cost-highlights` | "What stands out": the insight cards. | Cost |
 | `cost-models` | "Models and effort": spend by model and effort level. | Cost, Spend less |
 | `context-tips` | "Tips": the cards that say what to change. | Context, First tour |
 | `context-starting` | "Starting context": what a session begins with, per project. | Context, Keep context lean |

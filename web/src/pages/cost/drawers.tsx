@@ -1,23 +1,19 @@
-import { useEffect, useState, type ReactNode } from "react";
-import { type ProjectRow, type Totals, type TitledSessionRow, type View } from "../../api";
-import { useColors } from "../../colors";
-import { motion } from "../../components/chart";
+import type { ReactNode } from "react";
+import { type Totals, type TitledSessionRow, type View } from "../../api";
 import { ExportButtons } from "../../components/ExportButtons";
 import { dayStamp } from "../../components/export";
 import { DataTable } from "../../components/DataTable";
-import { Drawer, openDrawer } from "../../components/Drawer";
+import { Drawer } from "../../components/Drawer";
 import { Toggletip } from "../../components/Toggletip";
 import { ProjectName } from "../../components/ProjectDot";
-import { openProjectSheet, openSessionSheet, pickRow, sessName, shortId } from "../../components/sheets/session";
-import { sortRows, SortTh, type SortBy } from "../../components/Sort";
-import { Toned, ToneKey } from "../../components/tone";
-import { big, dayLabel, dur, mult, num, pct, plural, usd, when } from "../../format";
+import { openSessionSheet, pickRow, sessName, shortId } from "../../components/sheets/session";
+import { big, dayLabel, dur, num, pct, plural, usd, when } from "../../format";
 import { queries } from "../../queries";
 import { useApi } from "../../useApi";
-import { COMPARE_PROMPTS, OUTLIER_SHARE, perCommit, perPrompt, projectMedians } from "./insights";
 
-const Unpriced = ({ n }: { n: number }) => n ? <> <span className="chip warn" title={`${n} requests from unpriced models`}>+?<span className="sr">{n} requests from unpriced models</span></span></> : null;
-const NA = () => <span className="muted">n/a</span>;
+/** "+?" after a cost that leaves out n requests from unpriced models. */
+export const Unpriced = ({ n }: { n: number }) => n ? <> <span className="chip warn" title={`${n} requests from unpriced models`}>+?<span className="sr">{n} requests from unpriced models</span></span></> : null;
+export const NA = () => <span className="muted">n/a</span>;
 
 /** Tokens and cache: cache efficiency, subagent and per-outcome cost, then each billed kind by estimated cost and token share. */
 export function TokensDrawer({ t }: { t: Totals }) {
@@ -51,84 +47,9 @@ export function TokensDrawer({ t }: { t: Totals }) {
   );
 }
 
-/** From "Compare projects": ring this project, and say how far it sits from the median. The table is sorted by cost per commit. */
-export interface CostSpot { spot: string; med: number }
-export type ProjectKey = "project" | "cost" | "tokens" | "hit" | "w1h" | "sub" | "commits" | "cpc" | "cpp";
-export const COST_SORT: SortBy<ProjectKey> = { key: "cost", desc: true };
-
 /** A value rounded to 4 decimals for export; null stays an empty cell. */
-const r4 = (n: number | null): number | null => (n == null ? null : Math.round(n * 1e4) / 1e4);
-const PROJECT_HEAD = ["Project", "Est. cost (USD)", "Tokens", "Cache hit", "1h writes", "Subagent cost share", "Commits", "Cost per commit (USD)", "Cost per prompt (USD)"];
+export const r4 = (n: number | null): number | null => (n == null ? null : Math.round(n * 1e4) / 1e4);
 const SESSION_HEAD = ["Session id", "Title", "Project", "Started", "Branch", "Active seconds", "Prompts", "Commits", "Cost per commit (USD)", "Est. cost (USD)"];
-
-const GET: Record<ProjectKey, (p: ProjectRow) => number | string | null> = {
-  project: p => p.project, cost: p => p.cost, tokens: p => p.tokens, hit: p => p.cache_hit_ratio, w1h: p => p.write_1h_share,
-  sub: p => p.subagent_cost_share, commits: p => p.commits, cpc: perCommit, cpp: perPrompt,
-};
-
-/** Cost by project: cost, cost per commit and per prompt, cache hit, 1-hour writes and subagent cost share, sortable by any column. The
- *  per-prompt, per-commit and cache-hit cells are compared with the median of the projects big enough to compare. */
-export function ProjectCostDrawer({ rows, selected, sort, onSort, spot: pin, onSpot, smallOpen, onSmallOpen }: {
-  rows: ProjectRow[]; selected: string; sort: SortBy<ProjectKey>; onSort: (s: SortBy<ProjectKey>) => void; spot: CostSpot | null; onSpot: (s: CostSpot | null) => void;
-  smallOpen: boolean; onSmallOpen: (open: boolean) => void;
-}) {
-  const color = useColors(), [body, setBody] = useState<HTMLTableSectionElement | null>(null);
-  const sorted = sortRows(rows, GET[sort.key], sort.desc), m = projectMedians(rows), many = m.n >= 3;
-  // Projects too small to compare fold into one row (3+ of them, beside at least one big one); sorting never lifts them above the big ones.
-  const small = sorted.filter(p => !m.big.has(p)), fold = small.length >= 3 && m.big.size > 0;
-  const head = fold ? sorted.filter(p => m.big.has(p)) : sorted, ps = fold ? [...head, ...small] : sorted;
-  const forced = fold && small.some(p => (selected && p.project === selected) || p.project === pin?.spot), open = fold && (smallOpen || forced);
-  const sum = (f: (p: ProjectRow) => number | null) => small.reduce((a, p) => a + (f(p) ?? 0), 0);
-  const smallCost = small.every(p => p.cost == null) ? null : sum(p => p.cost); // unknown when every folded project's is
-  const exported = ps.map(p => [p.project, r4(p.cost), p.tokens, r4(p.cache_hit_ratio), r4(p.write_1h_share), r4(p.subagent_cost_share), p.commits,
-    r4(perCommit(p)), r4(perPrompt(p))]);
-  const maxCost = Math.max(...ps.map(p => p.cost || 0), 0) || 1, spot = pin ? ps.find(p => p.project === pin.spot) : undefined;
-  const th = (k: ProjectKey, label: string, asc?: boolean) =>
-    <SortTh k={k} sort={sort} onSort={s => { onSort(s); onSpot(null); }} asc={asc} className={k === "project" ? undefined : "num"}>{label}</SortTh>;
-  // The outlier row in view and focused, once the drawer shows it: it opens, and its body (so `body`) follows.
-  useEffect(() => {
-    if (!pin) return;
-    openDrawer("d-projcost");
-    const d = document.getElementById("d-projcost");
-    if (!d || !body) return;
-    const row = body.querySelector<HTMLElement>(`tr[data-v="${CSS.escape(pin.spot)}"]`);
-    (row ?? d).scrollIntoView?.({ behavior: motion() ? "smooth" : "auto", block: row ? "center" : "start" });
-    (row?.querySelector("button") ?? d.querySelector<HTMLElement>(".drawer-toggle"))?.focus({ preventScroll: true });
-  }, [pin, body]);
-  const row = (p: ProjectRow) => { const cmp = m.big.has(p); return <tr key={p.project ?? ""} {...pickRow(p.project ?? "", v => openProjectSheet(v), { kind: "project", value: p.project ?? "" },
-          [p.project === selected && selected ? "sel" : "", spot === p ? "spot" : ""].filter(Boolean).join(" "))}>
-          <th scope="row" className="name"><ProjectName project={p.project}><button type="button" className="cellbtn" title={p.project ?? ""}>{p.project ?? "(no project)"}</button></ProjectName></th>
-          <td className="num"><span className="ibar" aria-hidden="true"><i style={{ width: `${Math.max(2, (p.cost || 0) / maxCost * 100)}%`, background: color(p.project) }} /></span>
-            {usd(p.cost)}<Unpriced n={p.unpriced} /></td>
-          <td className="num">{big(p.tokens)}</td>
-          <Toned v={p.cache_hit_ratio} text={pct(p.cache_hit_ratio)} med={cmp ? m.hit : null} better="up" kind="points" medText={pct(m.hit)} />
-          <td className="num">{pct(p.write_1h_share)}</td><td className="num">{pct(p.subagent_cost_share)}</td><td className="num">{num(p.commits)}</td>
-          {!p.commits ? <td className="num"><NA /></td> : perCommit(p) == null ? <td className="num">{usd(null)}</td>
-            : <Toned v={perCommit(p)} text={usd(perCommit(p))} med={cmp && p.commits >= 3 ? m.cpc : null} better="down" kind="ratio" medText={usd(m.cpc)} zeroText={`no cost; median ${usd(m.cpc)} per commit`} />}
-          <Toned v={perPrompt(p)} text={usd(perPrompt(p))} med={cmp ? m.cpp : null} better="down" kind="ratio" medText={usd(m.cpp)} zeroText={`no cost; median ${usd(m.cpp)} per prompt`} />
-        </tr>; };
-  const bucket = <tr key="small-projects" className="small-bucket"><th scope="row" className="name"><b>Small projects ({small.length})</b>{" "}
-    <button type="button" className="linkish" aria-expanded={open} disabled={forced} title={forced ? "A selected or ringed project is small" : undefined}
-      onClick={() => onSmallOpen(!open)}>{open ? "Hide small projects" : `Show ${small.length} small projects`}</button></th>
-    <td className="num">{usd(smallCost)}<Unpriced n={sum(p => p.unpriced)} /></td><td className="num">{big(sum(p => p.tokens))}</td>
-    <td /><td /><td /><td className="num">{num(sum(p => p.commits))}</td><td /><td /></tr>;
-  const r = spot && perCommit(spot) != null && pin ? perCommit(spot)! / pin.med : null;
-  return (
-    <Drawer id="d-projcost" title="Cost by project" count={num(rows.length)} description="Cost, cost per commit and per prompt, cache hit, 1-hour writes and subagent cost">
-      {pin && <div className="proj-note" role="status"><span>Sorted by cost per commit, highest first.</span>
-        {spot && <span><ProjectName project={spot.project}><b>{spot.project}</b></ProjectName>: <b>{usd(perCommit(spot))}</b> per commit over {plural(spot.commits, "commit")}
-          {r ? `, ${mult(r)} the median project with 3+ commits (${usd(pin.med)})` : ""}.</span>}
-        <button type="button" className="linkish" onClick={() => { onSort(COST_SORT); onSpot(null); document.querySelector<HTMLElement>("#d-projcost .drawer-toggle")?.focus(); }}>Sort by cost again</button></div>}
-      {many && <ToneKey note={`median of the ${m.n} projects with ${pct(OUTLIER_SHARE)}+ of cost or ${COMPARE_PROMPTS}+ prompts`} />}
-      {ps.length > 0 && <div className="tools-row"><ExportButtons name={`ai-ledger-cost-projects-${dayStamp()}.csv`} headers={PROJECT_HEAD} rows={exported} /></div>}
-      <DataTable name="Cost by project">
-        <thead><tr>{th("project", "Project", true)}{th("cost", "Est. cost")}{th("tokens", "Tokens")}{th("hit", "Cache hit")}{th("w1h", "1h writes")}{th("sub", "Subagent cost")}
-          {th("commits", "Commits")}{th("cpc", "Cost / commit")}{th("cpp", "Cost / prompt")}</tr></thead>
-        <tbody ref={setBody}>{ps.length ? <>{head.map(row)}{fold && bucket}{open && small.map(row)}</> : <tr><td colSpan={9} className="empty">No usage in this range.</td></tr>}</tbody>
-      </DataTable>
-    </Drawer>
-  );
-}
 
 /** The view's most expensive sessions; day: every session active that day (from the chart or the peak-day card), loaded
  *  from the server with its figures for that day, costliest first, so their costs add up to the day's bar. */

@@ -1,8 +1,8 @@
 // Cost's figures from the usage payload: the headline comparison, the daily series and the chart's stack.
-import type { Change, Source, UsagePayload } from "../../api";
+import type { Source, UsagePayload } from "../../api";
 import { color, hasHue } from "../../colors";
 import { SOURCE_LABELS } from "../../components/Filters";
-import { dayRange, mult, num, pct, usd, usd0 } from "../../format";
+import { dayRange, mult, num, pct, usd0 } from "../../format";
 
 /** A series in the chart: a token kind, or one of a cost stacking's ("p:<project>", "m:<model>", "s:<source>"; the bare
  *  prefix is Other). project and source: the filter the legend key sets. */
@@ -108,17 +108,23 @@ export const money = (n: number | null | undefined): string => (n == null ? "–
 /** A change in cost with its sign ("+$12", "−$3"), "–" when unknown. */
 export const sgn = (v: number | null): string => (v == null ? "–" : (v > 0 ? "+" : v < 0 ? "−" : "") + usd0(Math.abs(v)));
 
-/** The plan line: what the plan(s) in the view cost a month, and the list-price cost as a multiple of that price prorated to
- *  the view's days (30 to the month). null without a known plan, a priced cost or days to compare. */
-export function planText(d: Pick<UsagePayload, "plans" | "totals" | "range" | "daily" | "end" | "daily_sources">): string | null {
-  // Only the agents with a known plan count: the server leaves the others' plans out, so the whole cost would overstate the multiple.
-  const covered = new Set<string>(d.plans.map(p => p.provider)), cost = d.daily_sources.reduce((a, r) => a + (covered.has(r.source) ? r.cost || 0 : 0), 0), days = d.range || dayRange(d.daily[0]?.day || d.end, d.end).length, monthly = d.plans.reduce((a, p) => a + p.monthly, 0);
-  if (!d.plans.length || !d.totals.requests || !cost || !monthly) return null;
-  // When an agent without a plan also spent, name the agents counted, so the multiple does not read as the whole headline cost.
-  const partial = d.daily_sources.some(r => !covered.has(r.source) && (r.cost || 0) > 0);
-  const what = partial ? `this period's ${d.plans.map(p => SOURCE_LABELS[p.provider]).join(" + ")} use` : "this period";
-  return `You pay about ${usd(monthly)} a month (${d.plans.map(p => p.label).join(" + ")}); at list prices ${what} is ${mult(cost / (monthly * days / 30))} your plan${d.plans.length > 1 ? "s" : ""}.`;
+/** The plan gauge's figures for the calendar month: the cost so far (to yesterday) and the pace projection. plan: the listed
+ *  plans' monthly price, their names and the pace as a multiple of that price. Only the agents with a listed plan count, so the
+ *  multiple does not set another agent's spend against the plan; counted names them when another agent also spent. Without a
+ *  plan, or with no spend from an agent that has one, the whole view's figures and no plan. null without a run rate. */
+export interface Gauge { now: number; pace: number; plan: { monthly: number; labels: string[]; multiple: number } | null; counted: Source[] | null }
+export function gaugeFigures(d: Pick<UsagePayload, "run_rate" | "plans">): Gauge | null {
+  const r = d.run_rate;
+  if (!r) return null;
+  const covered = new Set<Source>(d.plans.map(p => p.provider)), monthly = d.plans.reduce((a, p) => a + p.monthly, 0);
+  const mine = r.by_source.filter(s => covered.has(s.source)), pace = mine.reduce((a, s) => a + s.projected, 0);
+  if (!monthly || !(pace > 0)) return { now: r.month_cost, pace: r.projected, plan: null, counted: null };
+  const partial = r.by_source.some(s => !covered.has(s.source) && s.projected > 0);
+  return { now: mine.reduce((a, s) => a + s.month_cost, 0), pace, plan: { monthly, labels: d.plans.map(p => p.label), multiple: pace / monthly },
+    counted: partial ? mine.map(s => s.source) : null };
 }
+/** Agents by name, joined: "Claude Code + Codex". */
+export const agentNames = (ss: readonly Source[]): string => ss.map(s => SOURCE_LABELS[s]).join(" + ");
 
 /** The headline's comparison: "17.8× the previous 30 days" from 2× up, a percentage below; sr: the same, read aloud. */
 export function compareText(d: Pick<UsagePayload, "totals" | "previous" | "range">): { text: string; sr: string } | null {
@@ -140,9 +146,6 @@ export function compareText(d: Pick<UsagePayload, "totals" | "previous" | "range
 /** The previous window has usage on fewer than half as many days as this one, so its multiple says little. */
 export const thinHistory = (d: Pick<UsagePayload, "totals" | "previous" | "range">): boolean =>
   !!d.previous && d.previous.active_days < Math.min(d.totals.active_days, d.range) / 2;
-
-/** Projects whose cost moved, biggest move first (the server's order). */
-export const moved = (d: Pick<UsagePayload, "changes">): Change[] => (d.changes ?? []).filter(c => c.cost !== 0 || c.prev_cost !== 0);
 
 /** Daily cost across twice the range: the previous period, then this one (all time: the whole history). split: where this one starts. */
 export function sparkPoints(d: Pick<UsagePayload, "previous" | "daily" | "start" | "end">): { pts: { k: string; v: number }[]; split: number } | null {

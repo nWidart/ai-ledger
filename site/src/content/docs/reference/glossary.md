@@ -86,21 +86,20 @@ See [Cost](/ai-ledger/pages/cost/). Every cost is an estimate at API list prices
 | --- | --- | --- | --- |
 | Estimated cost | The view's estimated cost, and its comparison with the previous period: a multiple from 2× up, a percentage below. | Heading | [Spend less for the same output](/ai-ledger/improve/spend-less/) |
 | thin history | The previous period has prompts on fewer than half as many days as this one, so the comparison says little. | Heading | – |
-| On pace for about $X this month | This month's cost up to yesterday, plus the mean daily cost of the last 7 complete days times the days left. | Heading | [Spend less for the same output](/ai-ledger/improve/spend-less/) |
-| N× your plan | The estimated cost over the plan's monthly price, prorated to the days of the view. | Heading | [Spend less for the same output](/ai-ledger/improve/spend-less/) |
+| On pace for | This month's cost up to yesterday, plus the mean daily cost of the last 7 complete days times the days left. | Plan gauge | [Spend less for the same output](/ai-ledger/improve/spend-less/) |
+| N× plan | The month's pace over the plan's monthly price, counting only the agents with a known plan. | Plan gauge | [Spend less for the same output](/ai-ledger/improve/spend-less/) |
 | +? | The cost leaves out requests of unpriced models. | Beside a cost | – |
-| Change by project | Each project's cost against the previous period, biggest move first. | **What changed** | [Retro on one project](/ai-ledger/improve/project-retro/) |
-| Biggest spender | The project with the highest cost, its share of spend and its cost per commit. **▲ Watch** when that is over twice the median project's. | **What stands out** | [Spend less for the same output](/ai-ledger/improve/spend-less/) |
-| Cost per commit | Estimated cost over commits, for the view and against the median project. An outlier costs over twice the median and holds at least 2% of the spend: **▲ Watch**, and **● Act** from 4 times. | **What stands out**; **Tokens and cache**; **Cost by project** | [Spend less for the same output](/ai-ledger/improve/spend-less/) |
+| Change by project | Each project's cost against the previous period; "new" when it had no usage before. | **Project spend and change** | [Retro on one project](/ai-ledger/improve/project-retro/) |
+| Cost per commit | Estimated cost over commits, for the view and against the median project. An outlier costs over twice the median and holds at least 2% of the spend: **▲ Watch**, and **● Act** from 4 times. | **What stands out**; **Tokens and cache**; **Project spend and change** | [Spend less for the same output](/ai-ledger/improve/spend-less/) |
 | Peak day | The costliest day, as a multiple of the median day with spend. **▲ Watch** at 3 times or more, with 5 or more days of spend. | **What stands out** | [Spend less for the same output](/ai-ledger/improve/spend-less/) |
-| Cache hit | Cache read tokens over all prompt tokens. | **What stands out**; **Tokens and cache**; **Cost by project** | [Spend less for the same output](/ai-ledger/improve/spend-less/) |
-| 1h writes | The share of cache write tokens that use the 1-hour lifetime. | **What stands out**; **Tokens and cache**; **Cost by project** | [Spend less for the same output](/ai-ledger/improve/spend-less/) |
-| Subagent cost | The share of estimated cost that came from subagents. | **Tokens and cache**; **Cost by project** | [Spend less for the same output](/ai-ledger/improve/spend-less/) |
+| Cache hit | Cache read tokens over all prompt tokens. | **Tokens and cache**; **Project spend and change** | [Spend less for the same output](/ai-ledger/improve/spend-less/) |
+| 1h writes | The share of cache write tokens that use the 1-hour lifetime. | **Tokens and cache**; the project table's export | [Spend less for the same output](/ai-ledger/improve/spend-less/) |
+| Subagent cost | The share of estimated cost that came from subagents. | **Tokens and cache**; the project table's export | [Spend less for the same output](/ai-ledger/improve/spend-less/) |
 | Cost per day | Estimated cost per day, stacked by project, model or agent, with a 7-day average when the view has 14 days or more. | **Estimated cost per day** | [Compare Claude Code and Codex](/ai-ledger/improve/compare-sources/) |
 | Tokens per day | Tokens per day by kind: Input, Output, Thinking, Cache read, Cache write 5m, Cache write 1h. | **Tokens per day** | – |
-| Share of spend | A project's share of the view's cost. | **Where the spend went** | [Retro on one project](/ai-ledger/improve/project-retro/) |
+| Share of spend | A project's share of the view's cost. | **Project spend and change** | [Retro on one project](/ai-ledger/improve/project-retro/) |
 | Model and effort share | The share of cost of each model and effort level; fast-mode requests form their own rows. | **Models and effort** | [Spend less for the same output](/ai-ledger/improve/spend-less/) |
-| Per prompt | Estimated cost and tokens per prompt. | **Tokens and cache**; **Cost by project** | [Spend less for the same output](/ai-ledger/improve/spend-less/) |
+| Per prompt | Estimated cost and tokens per prompt. | **Tokens and cache**; the project table's export | [Spend less for the same output](/ai-ledger/improve/spend-less/) |
 | Cost by token kind | Cost and tokens of Input, Output + thinking, Cache read, Cache write 5m and Cache write 1h. | **Tokens and cache** | [Spend less for the same output](/ai-ledger/improve/spend-less/) |
 | Est. cost (session) | A session's estimated cost; with a day selected, its cost on that day. | **Most expensive sessions** | [Spend less for the same output](/ai-ledger/improve/spend-less/) |
 

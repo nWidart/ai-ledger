@@ -48,13 +48,11 @@ The Cost page shows the **cache hit ratio**: cache read tokens divided by all pr
 
 A subscription plan, such as Claude Pro or Max, or ChatGPT Plus or Pro, charges a flat monthly price, whatever the tokens. The estimate says what the same usage would cost at API list prices. Comparing the two shows how much API usage the plan covered.
 
-AI Ledger learns your plan from the newest plan-limit snapshot of each agent: on macOS, Claude Code's from Anthropic's usage endpoint, and Codex's from its own transcripts. The plan's monthly price comes from the `plans` table in `prices.json`. The Cost page then prorates that price to the days of the view (monthly price × days ÷ 30) and gives the estimate as a multiple of it:
+AI Ledger learns your plan from the newest plan-limit snapshot of each agent: on macOS, Claude Code's from Anthropic's usage endpoint, and Codex's from its own transcripts. The plan's monthly price comes from the `plans` table in `prices.json`. The Cost page's plan gauge sets the month's pace against that price and shows the multiple as a badge, such as "4.2× plan". The pace is the cost so far this month plus the mean daily cost of the last 7 complete days times the days left.
 
-> You pay about $200 a month (Claude Max 20x); at list prices this period is 4.2× your plan.
+A multiple of 4.2 means this month's usage is on pace to cost 4.2 times the plan's price on the API. A multiple below 1 means the plan costs more than the same usage on the API. The gauge states no savings and nothing about what you pay beyond the plan's price.
 
-A multiple of 4.2 means the period's usage would cost 4.2 times the plan's price for the same days on the API. A multiple below 1 means the plan cost more than the same usage on the API. The line states no savings and nothing about what you pay beyond the plan's price.
-
-When only some agents have a known plan, the multiple counts only their usage, and the line names them: "at list prices this period's Codex use is 0.7× your plan." When no plan is known, there is no line.
+When only some agents have a known plan, the multiple counts only their usage, and the gauge names them: "Codex use only". When no plan is known, the gauge shows the cost so far and the pace, with no multiple.
 
 The [Limits](/ai-ledger/pages/limits/) page uses the same estimate in another way: it measures each limit window in estimated dollars per 1% used. See [Context windows and plan limit windows](/ai-ledger/concepts/windows/).
 

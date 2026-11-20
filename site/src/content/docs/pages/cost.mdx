@@ -9,14 +9,14 @@ Cost answers three questions: what did this period cost, where did the spend go,
 The page follows the filters at its top. Every figure below describes the selected project, time range and source.
 
 import ThemedImage from "../../../components/ThemedImage.astro";
-import changed from "../../../assets/shots/cost-changed.png";
-import changedLight from "../../../assets/shots/cost-changed-light.png";
+import overview from "../../../assets/shots/cost-overview.png";
+import overviewLight from "../../../assets/shots/cost-overview-light.png";
 import highlights from "../../../assets/shots/cost-highlights.png";
 import highlightsLight from "../../../assets/shots/cost-highlights-light.png";
 import spend from "../../../assets/shots/cost-spend.png";
 import spendLight from "../../../assets/shots/cost-spend-light.png";
-import where from "../../../assets/shots/cost-where.png";
-import whereLight from "../../../assets/shots/cost-where-light.png";
+import projects from "../../../assets/shots/cost-projects.png";
+import projectsLight from "../../../assets/shots/cost-projects-light.png";
 import models from "../../../assets/shots/cost-models.png";
 import modelsLight from "../../../assets/shots/cost-models-light.png";
 
@@ -33,13 +33,15 @@ The filters live in the page URL, together with the inspected project and the op
 
 ## Section index
 
-The page has a section index (Overview, Changes, Insights, Per day, Spend) and three drawers (Tokens, Projects, Sessions). A drawer is a table folded behind its title.
+The page has a section index (Overview, Per day, Projects, Insights) and two drawers (Tokens, Sessions). A drawer is a table folded behind its title. At 1440×900 the daily chart starts on the first screen.
 
 ## Panels
 
 ### Overview
 
-**Shows** the heading, which answers "what did this period cost, and how does that compare?":
+<ThemedImage dark={overview} light={overviewLight} alt="Cost's heading with the estimated cost and its change, the filters, and the plan gauge with the month so far, the pace and the plan tick." />
+
+**Shows** the heading, which answers "what did this period cost, and how does that compare?" in two figures:
 
 > $3,429 estimated cost 17.8× the previous 30 days
 
@@ -53,55 +55,41 @@ The page has a section index (Overview, Changes, Insights, Per day, Spend) and t
   - "nothing in the previous 30 days" or "no priced usage in the previous 30 days" when the previous period has no cost to divide by;
   - "no priced usage in this period" when no request of the view has a price.
   - The All range shows no comparison.
-- A line gives the windows. For a range: "This period" with its dates and how many of its days had prompts, and "Previous" with its dates, its cost and its days with prompts. A "thin history" chip marks a previous window with prompts on fewer than half as many days as this one, since its multiple then says little. The All range has no previous window and no chip. For All: the dates and the number of days with prompts.
-- A second line gives the sessions (and projects), the tokens and requests, and "Cost is estimated at API list prices" (and "leaves out unpriced models" when some are unpriced).
-- "On pace for about $X this month." This is the projection for the calendar month: the cost so far this month up to yesterday, plus the mean daily cost of the last 7 complete days times the days left, today included. It follows the project, source and automated filters, not the range, so it shows for every range, All included. It is not shown without 7 complete days of history or without a priced request among them.
-- The plan line: "You pay about $200 a month (Claude Max 20x); at list prices this period is 4.2× your plan." The multiple divides the estimated cost by the plan's monthly price prorated to the view's days (monthly price × days / 30; for All, the days from the first recorded day to today). It names every plan in the view, and only the agents with a known plan count; when another agent without a plan also spent, the line says whose use it counts. A multiple below 1 shows as such. It states no savings. It is not shown without a known plan, without usage, or when the cost is unknown. Set plan prices in [Configuration](/ai-ledger/reference/configuration/).
-- A daily cost sparkline across both periods: the previous period dashed, this one solid, with the split marked, and the two period costs under it. For All, it covers the whole history.
+- A line gives the dates of both windows: "Oct 22 – Nov 20, 2026 vs Sep 22 – Oct 21, 2026". A "thin history" chip marks a previous window with prompts on fewer than half as many days as this one, since its change then says little. For All: "All time" and the dates.
 - With no requests in the view, the heading reads "No agent usage in the last 30 days." (or "yet" for All).
 
-**Banners**
+**How measured** is a disclosure under the heading, closed by default. It holds:
+
+- each window's dates and how many of its days had prompts, and the previous window's cost;
+- the sessions (and projects), the tokens and the requests;
+- "Cost is estimated at API list prices" (and "leaves out unpriced models" when some are unpriced);
+- how the gauge's pace and plan multiple are computed, when the gauge shows.
+
+### Plan gauge
+
+The gauge sits beside the heading, under the filters. It measures the calendar month, not the range, so it reads the same for every range, All included.
+
+**Figures**
+
+- **So far**: the cost this month up to yesterday, as a solid bar.
+- **On pace for**: the projection for the month, as a lighter bar that extends it. The projection is the cost so far plus the mean daily cost of the last 7 complete days times the days left, today included.
+- **Plan**: a tick at the monthly price of the plans in the view, named in the gauge's title ("This month vs plan ($200/mo, Claude Max 20x)").
+- **N× plan**: the pace divided by the plan's monthly price, as a badge. A multiple below 1 shows as such ("0.6× plan").
+
+**Rules**
+
+- The gauge follows the project, source and automated filters.
+- Only the agents with a known plan count. When another agent without a plan also spent this month, the gauge says whose use it counts ("Codex use only").
+- Without a known plan, or when no agent with a plan spent this month, the gauge shows the cost so far and the pace of the whole view, with no tick and no multiple.
+- The gauge is not shown without 7 complete days of history or without a priced request among them.
+- It states no savings. Set plan prices in [Configuration](/ai-ledger/reference/configuration/).
+
+### Banners
 
 - **Unpriced models** appears when some model has no price. It lists each model with its tokens. Their tokens are counted; their cost is unknown and left out of totals. To price one, add it to the user prices file, whose full path the banner names, in the shape of the packaged `prices.json`. The next page load uses it, with no rebuild.
 - **Prices file ignored** appears when the user prices file cannot be used. It names the file and the reason. Packaged prices apply until it is fixed. See [Configuration](/ai-ledger/reference/configuration/).
 
 A "+?" chip beside a cost means the figure leaves out some requests from unpriced models. Its text says how many, and its hover text shows the count.
-
-### What changed
-
-<ThemedImage dark={changed} light={changedLight} alt="Cost's What changed panel: each project's change in estimated cost against the previous 30 days, as bars either side of zero." />
-
-**Shows** each project's change in estimated cost against the previous period, biggest move first, as bars either side of zero. The panel is titled "What changed vs the previous N days". It is left out for the All range, for a one-project view, and when no project moved.
-
-**Figures**
-
-- A line gives the two period costs and the change: "$120 → $3,429 (+$3,309)".
-- Each row: the project, a "new" chip when it had no usage at all before, the bar, the change, and the two costs. A cost that is unknown (only unpriced models) shows "–" and no change.
-- When projects marked new exist, the line adds how many and what they are worth.
-- Two day strips show which days of each window have spend, with the count ("N/M days with spend").
-- When the previous window is thin, a note says older transcripts may not be in the store, so read the multiple as "more than before".
-
-**Controls** The top 8 projects show. **Show all N projects** shows the rest; the rows left out are summed into "N other projects". A row opens the project sheet.
-
-### What stands out
-
-<ThemedImage dark={highlights} light={highlightsLight} alt="Cost's What stands out cards: findings, each with one action." />
-
-**Shows** up to four findings, each with one action. The most severe leads, in a wide card; among equal severity, the finding with more money at stake (the cost of the project, session or day it names) leads. The others follow as compact cards. A card is marked "✓ Good", "▲ Watch" or "● Act", or has no mark.
-
-| Finding | Figure | Mark | Action |
-| --- | --- | --- | --- |
-| Biggest spender (with one project selected, Biggest session) | The project's cost and its share of spend; its cost per commit. | Watch when its cost per commit is over twice the median project's. | Inspect project (or Open session). |
-| Cost per commit (titled "Cost-per-commit outlier" when a project or session is an outlier) | The median cost per commit and the view's cost per commit. | Good when no project is an outlier. Watch for an outlier, Act when the outlier is four times the median or more. | Compare projects. With one project selected: Open the priciest session when there is no outlier, else Open session. |
-| Peak day | The costliest day, as a multiple of the median day with spend and as a share of the range. | Watch when 5 or more days have spend and the peak is 3 or more times the median. | Show that day's sessions. |
-| Cache hit | The cache hit ratio; the share of cache writes that use the 1-hour lifetime; the subagents' share of cost. | None. | See tokens and cache. |
-
-**Rules**
-
-- An outlier costs more than twice the median per commit and holds at least 2% of the view's spend. With one project selected, the same test runs over its sessions that have 2 or more commits.
-- The median covers the projects big enough to compare: those with at least 2% of the view's cost or at least 10 prompts. A median per commit also needs projects with at least 3 commits. With fewer than 3 such projects, there is no median and the card says "Too few projects with commits to compare against a median."
-- With no commits, the Cost per commit card reads "No commits" and its action is "See cost per prompt".
-- The Cache hit card is left out when the cache hit ratio is unknown (no input tokens). Compare projects sorts Cost by project by cost per commit and rings the outlier.
 
 ### Estimated cost per day
 
@@ -131,15 +119,54 @@ A "+?" chip beside a cost means the figure leaves out some requests from unprice
 - Select a day, or focus the chart, use the arrow keys (Home and End jump to the ends) and press Enter, to select that day. The Most expensive sessions drawer opens with every session active that day and its cost on that day, costliest first, so the costs add up to the bar.
 - **Show data table** opens a named table: one row per day, one column per series of the current stacking, and a total. It is closed on every page load.
 
-### Where the spend went
+### Project spend and change
 
-<ThemedImage dark={where} light={whereLight} alt="Cost's Where the spend went panel: each project's share of the estimated cost." />
+<ThemedImage dark={projects} light={projectsLight} alt="Cost's Project spend and change table: each project's daily trend, spend with its share, change against the previous 30 days, cost per commit and cache hit." />
 
-**Shows** the estimated cost per project, as a share of the total. With one project selected, the panel is titled "Most expensive sessions" and lists that project's sessions as a share of its cost.
+**Shows** one row per project used in the view or in the previous period. The count beside the title is the number of all projects. The table is left out of a one-project view.
 
-**Figures** A row has the name, a bar in the project's color, the cost (with a "+?" chip when unpriced requests are left out) and the share.
+**Columns**
 
-**Controls** The top 8 rows show. **Show all N projects** (or **sessions**) shows the rest. A row opens the project sheet (or the session sheet).
+| Column | Shows |
+| --- | --- |
+| Project | The project. A row opens the project sheet. |
+| Trend | The project's daily cost over the view, as a line in its color. |
+| Spend | The estimated cost, with a bar and its share of the view's cost. A "+?" chip marks a cost that leaves out unpriced requests. |
+| Δ vs prev N d | The change against the previous period, as a bar on either side of a center line, all on one scale, then the change with its sign. A "new" chip marks a project with no usage before. A project used only in the previous period shows $0 spend and its whole previous cost as a decrease. Left out for the All range. |
+| Cost / commit | Estimated cost over commits, or "n/a" with no commits. |
+| Cache hit | Cache read tokens over all prompt tokens. |
+
+On a phone, the table keeps Project, Spend and the change.
+
+**Rules**
+
+- Every column sorts, by click or keyboard; the sorted header carries `aria-sort`. The default is Spend, highest first. Trend sorts by the cost of the view's last 7 days. A project with no value in a column comes last in either direction. The sort resets when the view changes.
+- With 3 or more big projects, the Cost / commit and Cache hit cells are tinted against the median project, with a ▲ or ▼ mark and a key above the table. Cost / commit is tinted from 1.5 times the median; cache hit from 10 points away. The median covers the projects with at least 2% of the view's cost or at least 10 prompts; Cost / commit also needs 3 or more commits. Hover a tinted cell for how far.
+- Projects too small to compare (outside that set) fold into one row, "Small projects (N)", after the big projects, whatever the sort. A project whose change is at least 2% of the view's cost never folds, so a large drop stays in view. The row sums their spend, share and change; the change is unknown when one of theirs is. Folding needs at least 3 small projects and at least 1 big one. **Show N small projects** (and **Hide small projects**) toggles them. A project ringed by Compare projects is never hidden. The fold resets with the view.
+- When the previous window is thin, a note above the table says to read a change as "more than before".
+
+**Controls**
+
+- **Download CSV** and **Copy** export the table. The export holds, per project: estimated cost, tokens, cache hit, 1h writes, subagent cost share, commits, cost per commit, cost per prompt and the change. It holds every row in the order shown, small projects included even when folded, with costs and shares rounded to 4 decimals. Copy puts tab-separated text on the clipboard. The file is named `ai-ledger-cost-projects-<date>.csv`, dated today. A text cell that starts with `=`, `+`, `-`, `@`, a tab or a carriage return is prefixed with an apostrophe; numbers are not.
+- From Compare projects, a note says "Sorted by cost per commit, highest first.", gives the outlier's cost per commit and its multiple of the median, and offers "Sort by cost again".
+
+### What stands out
+
+<ThemedImage dark={highlights} light={highlightsLight} alt="Cost's What stands out cards: findings, each with one action." />
+
+**Shows** up to two findings, each with one action, beside Models and effort. They are the findings the heading, the gauge and the project table do not already show. The most severe leads, in a wide card; among equal severity, the finding with more money at stake leads. A card is marked "✓ Good", "▲ Watch" or "● Act", or has no mark.
+
+| Finding | Figure | Mark | Action |
+| --- | --- | --- | --- |
+| Cost per commit (titled "Cost-per-commit outlier" when a project or session is an outlier) | The median cost per commit and the view's cost per commit. | Good when no project is an outlier. Watch for an outlier, Act when the outlier is four times the median or more. | Compare projects. With one project selected: Open the priciest session when there is no outlier, else Open session. |
+| Peak day | The costliest day, as a multiple of the median day with spend and as a share of the range. | Watch when 5 or more days have spend and the peak is 3 or more times the median. | Show that day's sessions. |
+
+**Rules**
+
+- An outlier costs more than twice the median per commit and holds at least 2% of the view's spend. With one project selected, the same test runs over its sessions that have 2 or more commits.
+- The median covers the projects big enough to compare, as in the project table. With fewer than 3 such projects with commits, the card says "Too few projects with commits to compare against a median."
+- With no commits, the Cost per commit card reads "No commits" and its action is "See cost per prompt".
+- Compare projects sorts the project table by cost per commit, scrolls to the outlier, rings it and focuses it.
 
 ### Models and effort
 
@@ -166,25 +193,6 @@ The count is the view's tokens.
 
 Under them, each billed kind, biggest cost first: Input, Output + thinking (thinking is billed as output), Cache read, Cache write 5m, Cache write 1h. A kind shows its estimated cost, its share of the total, its tokens and its share of tokens. When no request is priced, the cost reads "cost unknown", not zero. A last row gives the requests and how many came from the main thread.
 
-### Cost by project
-
-The count is the number of projects.
-
-**Columns** Project, Est. cost (with a bar), Tokens, Cache hit, 1h writes, Subagent cost, Commits, Cost / commit, Cost / prompt.
-
-**Rules**
-
-- Every column sorts, by click or keyboard; the sorted header carries `aria-sort`. The default is Est. cost, highest first. A project with no value in a column comes last in either direction. The sort resets when the view changes.
-- With 3 or more big projects, the Cache hit, Cost / commit and Cost / prompt cells are tinted against the median project, with a ▲ or ▼ mark and a key above the table. A ratio 1.5 times the median or more away is tinted; cache hit is tinted from 10 points away. The median covers the projects with at least 2% of the view's cost or at least 10 prompts; Cost / commit also needs 3 or more commits. Hover a tinted cell for how far.
-- Projects too small to compare (outside that set) fold into one row, "Small projects (N)", after the big projects, whatever the sort. The row sums their cost, tokens and commits. Folding needs at least 3 small projects and at least 1 big one. **Show N small projects** (and **Hide small projects**) toggles them. The selected project, and a project ringed by Compare projects, are never hidden. The fold resets with the view; the drawer count stays the number of all projects.
-- A project with no commits shows "n/a" in Cost / commit.
-
-**Controls**
-
-- **Download CSV** and **Copy** export the table. Copy puts tab-separated text on the clipboard. The export holds every row in the order shown, small projects included even when folded, with costs and shares rounded to 4 decimals. The file is named `ai-ledger-cost-projects-<date>.csv`, dated today. A text cell that starts with `=`, `+`, `-`, `@`, a tab or a carriage return is prefixed with an apostrophe; numbers are not.
-- From Compare projects, a note says "Sorted by cost per commit, highest first.", gives the outlier's cost per commit and its multiple of the median, and offers "Sort by cost again".
-- A row opens the project sheet.
-
 ### Most expensive sessions
 
 The count is the number of sessions listed: the most expensive sessions of the view (up to 50), or with a day selected, every session active that day.
@@ -194,7 +202,7 @@ The count is the number of sessions listed: the most expensive sessions of the v
 **Controls**
 
 - A day chip, "Active on *day*", shows when a day is selected. Its ✕ shows the most expensive sessions of the view again.
-- **Download CSV** and **Copy** export the table, as above. The file is named `ai-ledger-cost-sessions-<date>.csv`, dated today, or with the selected day's date when a day is selected.
+- **Download CSV** and **Copy** export the table, as for the project table. The file is named `ai-ledger-cost-sessions-<date>.csv`, dated today, or with the selected day's date when a day is selected.
 - A row opens the session sheet.
 
 ## Sheets
