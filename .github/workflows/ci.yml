@@ -24,7 +24,8 @@ concurrency:
 
 jobs:
   # Decides whether the Python and web jobs run: they are skipped when a push or PR changes only Markdown files.
-  # The specs and package jobs always run: specs are Markdown, and the package embeds README.md.
+  # The specs, web build and package jobs always run: specs are Markdown, the package embeds README.md,
+  # and the package ships the web build.
   # A call from release.yml (inputs.ref set) always runs every job.
   changes:
     name: Changes
@@ -69,13 +70,17 @@ jobs:
 
   python-tests:
     name: Python · tests
-    needs: changes
+    needs: [changes, web-build]
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.ref }}
+      - uses: actions/download-artifact@v8 # the app tests serve the build
+        with:
+          name: web-build
+          path: src/ai_ledger/web
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           version: "0.13.x"
@@ -142,10 +147,9 @@ jobs:
       - run: npm ci
       - run: npm test
 
+  # git ignores src/ai_ledger/web: this job builds it once for the Python tests and the package.
   web-build:
     name: Web · build
-    needs: changes
-    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -160,13 +164,11 @@ jobs:
         working-directory: web
       - run: npm run build
         working-directory: web
-      - name: Committed build matches the sources
-        run: |
-          if [ -n "$(git status --porcelain --untracked-files=all src/ai_ledger/web)" ]; then
-            git status --short --untracked-files=all src/ai_ledger/web
-            echo "::error::src/ai_ledger/web is stale: run npm run build in web/ and commit src/ai_ledger/web/"
-            exit 1
-          fi
+      - uses: actions/upload-artifact@v7
+        with:
+          name: web-build
+          path: src/ai_ledger/web/
+          if-no-files-found: error
 
   specs:
     name: Specs · validate
@@ -203,7 +205,18 @@ jobs:
             echo "::error::tag $TAG does not match the package version $version"
             exit 1
           fi
+      - uses: actions/download-artifact@v8
+        with:
+          name: web-build
+          path: src/ai_ledger/web
       - run: uv build
+      - name: Wheel ships the web build
+        run: |
+          files=$(unzip -Z1 dist/*.whl)
+          if ! grep -qx 'ai_ledger/web/index.html' <<< "$files" || ! grep -q '^ai_ledger/web/assets/.*\.js$' <<< "$files"; then
+            echo "::error::the wheel has no web build in ai_ledger/web/"
+            exit 1
+          fi
       - uses: actions/upload-artifact@v7
         with:
           name: dist

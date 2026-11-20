@@ -1,0 +1,3 @@
+# Branches each add lines under [Unreleased]. A union merge keeps the lines from both sides instead of stopping
+# with a conflict. Check their order after the merge.
+CHANGELOG.md merge=union

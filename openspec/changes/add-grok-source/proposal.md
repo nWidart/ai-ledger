@@ -31,7 +31,7 @@ The user now also runs xAI's Grok CLI (`grok`, 1.0.77), and that work and spend 
 - A new `grok.py` holds the Grok file discovery, keys and `GrokDeriver`.
 - `metrics.py`: `SOURCES` gains `grok`. The requests view takes `coalesce(r.cost, estimate)`.
 - `app.py`: `--grok`, passed into `roots`.
-- `web/`: `Source` and `SOURCES` gain `grok`, and the `Filters` control gets a Grok choice. Fixtures are regenerated, and `web/dist/` is rebuilt.
+- `web/`: `Source` and `SOURCES` gain `grok`, and the `Filters` control gets a Grok choice. Fixtures are regenerated.
 - `README.md`: what is ingested, and the `--grok` option.
 - Tests: Grok fixtures trimmed from the real probe session, through all three `test_*` layers.
 - Interaction: the in-flight `add-command-palette` change lists sources for `#` filters. Whichever change merges second adds `grok` there.
