@@ -37,24 +37,24 @@ There is no Include automated sessions control on this page. See [Filters](/ai-l
 
 ### Summary
 
-<ThemedImage dark={summary} light={summaryLight} alt="Errors' summary figures: the error rate, its change against the previous 30 days, the incidents and the fixes applied." />
+<ThemedImage dark={summary} light={summaryLight} alt="Errors' summary figures: the change in the error rate against the previous 30 days, the incidents, the top type and the fixes applied." />
 
-**Shows** the view's answer in the heading: "N failed tool calls (X%), ↓/↑ Y% vs previous N days. *Type* is Z% of them." With no failure it reads "No failed tool calls … out of N". With no call it reads "No tool calls in this period". Under it, a line gives the date span and when the store was last ingested.
+**Shows** the view's answer in the heading, two figures: "N failed tool calls (X%)." X is the error rate. With no failure it reads "No failed tool calls … out of N". With no call it reads "No tool calls in this period". Under it, a line gives the date span and when the store was last ingested.
 
 **Figures**
 
 A line "Uncategorized: N% of errors" gives the share of errors in the catch-all types (Other, Other non-zero exit, MCP tool error): errors that no specific rule matched. When the view has errors from both agents and no source filter, it splits the share by agent. A growing catch-all shows at once.
 
-Four vitals follow:
+Four vitals follow. None repeats the error rate, which the heading states:
 
 | Vital | Meaning |
 | --- | --- |
-| Error rate | Failed tool calls as a share of all tool calls in the view. |
-| Change | The error rate against the comparison period (see below). |
+| Change | The error rate against the comparison period (see below), with both rates in its note. |
 | Incidents | Errors grouped into incidents, the share of incidents that did not recover, and the number of error types. |
+| Top type | The error type with the most errors, and its share of the errors. "–" with no errors. |
 | Fixes applied | Types marked as fixed, and how many open types still have a ready-made fix. |
 
-On a phone, only Error rate and Change show; **More summary** shows the rest.
+On a phone, only Change and Incidents show; **More summary** shows the rest.
 
 **Controls** **More summary** (on a phone) shows the vitals that are hidden.
 

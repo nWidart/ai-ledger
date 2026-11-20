@@ -43,7 +43,9 @@ Links to Overview, Tips, Start (Starting context), Growth, Pressure (Window pres
 
 ### Heading
 
-**Shows** the view's answer: "A typical session starts with N tokens of context, X% of its window." It adds how many sessions compacted. The line under it says that the figures are the prompt tokens of each session's first turn.
+**Shows** the view's answer: "A typical session starts with N tokens of context, X% of its window." The sessions that compacted are in the [Growth](#growth) tiles. The line under it says every figure comes from the transcripts; its How measured toggletip says the figures are the prompt tokens of each session's first turn, and that no configuration file is read.
+
+Every section's hint is one line. Method text sits behind a How measured toggletip at the end of the hint; see [Data tables](/ai-ledger/everywhere/data-tables/#how-measured).
 
 With no measured session, the heading reads "No \{agent} session\{ in project} with a measured start in the last N days." (or "… yet." for All). The agent is "agent", "Claude Code" or "Codex", by the Source filter.
 
@@ -62,7 +64,7 @@ With no measured session, the heading reads "No \{agent} session\{ in project} w
 
 **Shows** tips from six fixed rules. The app sets the thresholds; nothing is learned or generated. A tip shows only when its rule fires on the view. When none fires, the section reads "Nothing stands out in this view." Each tip card carries its severity mark: **● Act** (critical) or **▲ Watch** (warning). Tips run most severe first, and within a severity in the order below.
 
-**Figures** Each tip is a card with a severity, a title, its evidence, its advice and a count of the sessions that match. A small label names the kind of finding: Starting context, Compactions, Window limit, Tool results, Prompt cache or Long prompts.
+**Figures** Each tip is a small card, side by side with the others in one row, with a severity, a title and a count of the sessions that match. Its evidence and advice open under **Evidence and advice**. A small label names the kind of finding: Starting context, Compactions, Window limit, Tool results, Prompt cache or Long prompts.
 
 | Tip (title) | Fires when | Severity |
 | --- | --- | --- |
@@ -81,7 +83,7 @@ The evidence of the large-start tip names the five projects with the largest med
 
 <ThemedImage dark={starting} light={startingLight} alt="Context's Starting context panel: what a session begins with, per project." />
 
-**Shows** the prompt tokens of each session's first turn, which is what the model read before any work. The section's hint states how many sessions have a measured start and how many have a known window; a share of the window covers only sessions with a known window.
+**Shows** the prompt tokens of each session's first turn, which is what the model read before any work. The section's How measured toggletip states how many sessions have a measured start and how many have a known window; a share of the window covers only sessions with a known window.
 
 **Figures**
 
@@ -104,7 +106,8 @@ The evidence of the large-start tip names the five projects with the largest med
 
 - **Growth chart**: the median at each turn index over the sessions that reach it, up to turn 100, with the 25th to 75th percentile band. A point needs at least 5 sessions that reach that turn (for a project's own curve, 5 sessions of that project), so a curve stops where they run out. Under the chart, a strip counts the sessions each turn rests on. The five projects with the most sessions get a curve of their own. The share view draws a dashed line at 80% of the window. The token view has no limit mark.
 - **Added per prompt**: the median, over sessions, of the tokens a session adds per user prompt. A session's added tokens are the sum of the rises between consecutive turns; a fall, as after a compaction, adds nothing.
-- Three tiles appear when at least one session has a recorded first compaction: **Sessions with a compaction**, **Before the first compaction** (median turns) and **Active time before it** (median minutes; pauses over 20 minutes are left out). Without such a session, a line says either that no session compacted or that none has a recorded first compaction yet.
+- **Sessions compacted**: how many of the view's sessions compacted at least once, of how many.
+- Two more tiles appear when at least one session has a recorded first compaction: **Before the first compaction** (median turns) and **Active time before it** (median minutes; pauses over 20 minutes are left out). The Sessions compacted note then counts the sessions with a recorded first compaction. Without such a session, a line says either that no session compacted or that none has a recorded first compaction yet.
 - **Growth by project** table (more than one project): **Sessions**, **Added per prompt**, **Compacted**, **Turns to first compaction**, **Active time to it**.
 
 **Controls**
@@ -133,15 +136,19 @@ The evidence of the large-start tip names the five projects with the largest med
 
 <ThemedImage dark={fills} light={fillsLight} alt="Context's What fills context panel: the size of tool results, summed by tool, by MCP server and by skill." />
 
-**Shows** the size of the main-thread tool results as the transcript stores them, summed by tool and by MCP server. The page marks each token count as an estimate: bytes divided by 4, rounded down. The section's hint states how many completed calls have a known size.
+**Shows** the size of the main-thread tool results as the transcript stores them, summed by tool and by MCP server. The page marks each token count as an estimate: bytes divided by 4, rounded down. The section's How measured toggletip states how many completed calls have a known size.
 
 **Figures**
 
 - **Main thread / Subagents**: one bar in two parts. Results of calls made inside subagent transcripts never entered the main thread's context, so they are summed apart and are not in any other figure of the section.
-- **Largest contributors**: the ten tools, or MCP servers, with the largest total result size, and one **Other** row for the rest. Each row has a total bar and the typical result range, median to 95th percentile, on a log scale with a dashed line at 100,000 bytes.
-- **By tool** and **By MCP server** tables list every tool or server: **Calls**, **Median**, **95th percentile**, **Largest**, **Total**, **Estimated tokens**. A hint on **Calls** gives how many have a result size.
+- **Largest contributors**: the one table of tools, or MCP servers. It shows the ten with the largest total result size, and one **Other** row for the rest. Columns: **Calls** (a toggletip gives how many have a result size), **Total result size** (a bar, the size and its estimated tokens), **Typical result** (median to 95th percentile, on a log scale with a dashed line at 100,000 bytes) and **Largest**.
 
-**Controls** A **By tool / By MCP server** switch shows when MCP servers exist. Selecting a tool or server row opens its tool inspector.
+**Controls**
+
+- A **By tool / By MCP server** switch shows when MCP servers exist.
+- **Show all N tools** (or MCP servers) lists every row, with no Other row; **Show the top 10** folds them again.
+- Every column sorts; see [Sorting](/ai-ledger/everywhere/data-tables/#sorting). The table starts by total size, largest first. **Typical result** sorts by the median. The ten shown, and the Other row, follow the sort.
+- Selecting a tool or server row opens its tool inspector.
 
 ### Cost
 
@@ -190,7 +197,7 @@ Selecting a row, dot or session opens a sheet over the page and keeps the filter
 
 - the **session sheet**, from sessions in tips, the pressure lists, the session map and both drawers;
 - the **project sheet**, from a project row in the Starting context, Growth and Cost tables;
-- the **tool inspector**, from a tool or MCP server row in Largest contributors and the By tool and By MCP server tables. It shows that tool's calls, failures and latency for the same view.
+- the **tool inspector**, from a tool or MCP server row in Largest contributors. It shows that tool's calls, failures and latency for the same view.
 
 ## How the figures are measured
 

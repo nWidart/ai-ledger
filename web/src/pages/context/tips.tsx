@@ -12,14 +12,16 @@ import { codeParts, TIP_KICKERS } from "./context";
 /** Text with its `code` spans set in code. */
 export const Code = ({ text }: { text: string }) => <>{codeParts(text).map((p, i) => (p.code ? <code key={i}>{p.text}</code> : p.text))}</>;
 
-/** A tip as a card: its evidence as a list, its advice, and its sessions count as the action. */
+/** A tip as a small card: its title and its sessions count as the action, its evidence and advice folded behind a disclosure so
+ *  the cards stay one short row above the charts. */
 export function tipInsight(t: Tip, open: (id: TipId) => void): Insight {
   return {
     sev: t.severity, k: TIP_KICKERS[t.id] ?? "Tip", t: t.title,
-    b: <>
+    b: <details className="tip-more">
+      <summary>Evidence and advice</summary>
       <dl className="evidence">{t.evidence.map(e => <div key={e.label}><dt>{e.label}</dt><dd>{e.value}</dd></div>)}</dl>
       <p className="advice"><Code text={t.advice} /></p>
-    </>,
+    </details>,
     act: t.matched > 0 ? { label: plural(t.matched, "session"), run: () => open(t.id) } : undefined,
   };
 }

@@ -28,7 +28,7 @@ Find out why the sessions need you. Steps 1 and 2 are on Live, while you work. S
 
 1. Keep Live open in a tab for one working day. When a session moves under **approval?**, select it. The agent panel's **Doing now** names the call, such as "Bash pending 45s: likely waiting for your approval" (an example). The last tool row of the stream shows its command. Write the command down. The state is inferred: transcripts record no permission prompt. A shell call that the agent started with a timeout above 120 seconds never reads **approval?**, however long it runs.
 2. When a session moves under **your turn**, read the agent's last reply in your terminal. Note what it did: asked a question, asked to go on, reported the task done, or stopped part way. After 5 minutes with no new line, the session reads **idle** instead, so a session you leave waiting long drops out of **your turn**.
-3. On Activity, set the range to **30d**. Write down the **Prompts interrupted** tile and its note "N of M prompts", and the line under the heading: "N turns and N tool calls per prompt".
+3. On Activity, set the range to **30d**. Write down the **Prompts interrupted** tile and its note: "N of M prompts; N turns and N tool calls per prompt".
 4. On Errors, set the range to **30d** and leave **Hide noise and muted** off: on, it hides user rejections. Open the types **User rejected the action** and **Permission / safety check denied** in turn. In each type's detail, select **By message** and read the examples: they name the calls you rejected, or the calls a permission check blocked.
 5. In the Sessions drawer on Activity, open the session sheet of a session you remember stopping. Its line of figures counts its interrupted prompts. In Claude Code, a tool call you reject counts as an interrupted prompt too.
 
@@ -131,7 +131,7 @@ After 7 days of work, read:
 | **Prompts interrupted** | Activity, **Work health**, at **7d** | The tile reads "down from": the app compares the 7 days since your change with the 7 days before. |
 | **User rejected the action** | Errors, the type's detail, **Before and after the fix** | **Rate lower**. Before enough calls, it reads **Not enough calls yet**: wait. |
 | **Change** of **Permission / safety check denied** | Errors, **Error types**, at **7d** | A fall. |
-| "N tool calls per prompt" | Activity, the line under the heading, at **7d** | Higher than your note: the agent does more per prompt. Read it with **Errors per 100 calls**: if errors rose too, the agent works more but not better. |
+| "N tool calls per prompt" | Activity, the **Prompts interrupted** note, at **7d** | Higher than your note: the agent does more per prompt. Read it with **Errors per 100 calls**: if errors rose too, the agent works more but not better. |
 | "N waiting for you" | Live, the rail's footer | Shows less often while you work. |
 
 If a figure did not move:

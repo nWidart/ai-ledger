@@ -33,7 +33,9 @@ A selected day is cleared in the same step as any change of project, range or so
 
 ## Section index
 
-The page has a section index (Overview, Attention, Health, Work, Hours) and six drawers (Sessions, Projects, Tools, MCP & hooks, Loops, Tests). A drawer is a table folded behind its title. Opening one from a card or chart scrolls to it.
+The page has a section index (Overview, Attention, Work, Health) and seven drawers (Sessions, Projects, Tools, MCP & hooks, Loops, Tests, Hours). A drawer is a table folded behind its title. Every drawer is closed when the page loads, and one opens at a time: opening a drawer closes the open one. Opening one from a card or chart scrolls to it.
+
+The page reads top to bottom: the heading, Needs attention, the work chart, then Work health and the drawers.
 
 ## Panels
 
@@ -41,14 +43,13 @@ The page has a section index (Overview, Attention, Health, Work, Hours) and six 
 
 **Shows** the heading, which answers "what got done?":
 
-> 30 commits from 212 prompts, up from 20 commits, in 41 sessions across 6 projects, 18 active days
+> 30 commits from 212 prompts, up from 20 commits
 
 **Figures**
 
-- Commits, prompts, sessions and active days of the view. An active day is a day with at least one user prompt; a session that works alone on a day with no prompt does not make it active.
+- Commits and prompts of the view. Sessions and active days are in the [Sessions tile](#work-health).
 - With one project selected, the heading adds "on" and the project. With the All range, it adds "since" and the first day with a session, and shows no change.
-- Commits, sessions and active days each show their change against the previous period of equal length: "up from", "down from", or "unchanged".
-- Under the heading: turns per prompt, tool calls per prompt, and the number of prompts interrupted.
+- Commits show their change against the previous period of equal length: "up from", "down from", or "unchanged".
 - With no requests in the view, the heading reads "No agent activity in the last 30 days." (or "yet" for All). With a source selected, it names the source in place of "agent".
 
 **Banner** "Automated projects file ignored" appears when the automated projects file cannot be used. It names the file and the reason. See [Configuration](/ai-ledger/reference/configuration/).
@@ -69,25 +70,6 @@ The page has a section index (Overview, Attention, Health, Work, Hours) and six 
 | N failed test runs of M. | At least one failed test or build run. | See tests opens the Failed test runs drawer. |
 
 The card's title reads "N things to look at". With none of the four, it reads "Nothing needs attention".
-
-### Work health
-
-<ThemedImage dark={vitals} light={vitalsLight} alt="Activity's Work health row: five tiles: errors per 100 calls, test runs passed, prompts interrupted, subagents and median session, each with its change against the previous period." />
-
-**Shows** six tiles. Each tile shows its change against the previous period of equal length, as ", up from X", ", down from X" or ", unchanged". The All range shows no change.
-
-| Tile | Figure | Note under it | Marked worse when |
-| --- | --- | --- | --- |
-| Errors per 100 calls | Failed calls per 100 tool calls | "N failed of M tool calls." | It goes up. |
-| Test runs passed | Share of test and build runs that passed, or "n/a" | "N passed, M failed of K test or build runs." | It goes down. |
-| Prompts interrupted | Share of prompts interrupted | "N of M prompts." | It goes up. |
-| Subagents | Share of tokens that came from subagents | "of tokens came from subagents." | Never judged. |
-| Median session | Median active time of a session | "N sessions, X active and Y thinking in all." When a session records model time: "…; X waiting on the model and Y running tools." | Never judged. |
-| Output speed | Output tokens per second of model time, as "98 tok/s", or "n/a" | "Output tokens per second of model time, in N sessions.", or "No session in this view records model time." | It goes down. |
-
-A session's active time leaves out every pause over 20 minutes. Two figures that display the same value read "unchanged".
-
-Model time and tool time come from the `cost-state` line that Claude Code writes when a session ends, in versions from about late October 2026. Codex sessions and older Claude Code sessions record none, and count in neither figure. Output speed divides the output tokens of the sessions that record model time by that model time. These are whole-session figures: they include subagent work and the session's time outside the range. Model time can exceed active time, because subagents run at the same time. On a store from an earlier version, run `ai-ledger rebuild` once, with the app stopped, to fill them for sessions already ingested; see [Upgrade and rebuild](/ai-ledger/start/upgrade/).
 
 ### Work per day, or per week
 
@@ -112,18 +94,25 @@ Model time and tool time come from the `cost-state` line that Claude Code writes
 
 A selected day also narrows Tools, MCP servers, skills and hooks, and Error loops to that day, and the Sessions drawer shows each session's figures for that day. A note in each narrowed drawer says so and offers "Show the whole range". The heading, Needs attention, Work health and Project metrics keep the range's figures.
 
-### Prompts by hour
+### Work health
 
-<ThemedImage dark={hours} light={hoursLight} alt="Activity's Prompts by hour heatmap: prompts by weekday and hour, darker cells holding more prompts." />
+<ThemedImage dark={vitals} light={vitalsLight} alt="Activity's Work health row: tiles for sessions, errors per 100 calls, test runs passed, prompts interrupted, subagents, median session and output speed, each with its change against the previous period." />
 
-**Shows** a heatmap of prompts by weekday (Monday first) and hour, on the machine's local clock. A darker cell holds more prompts.
+**Shows** seven tiles, under the work chart. Each tile shows its change against the previous period of equal length, as ", up from X", ", down from X" or ", unchanged". The All range shows no change.
 
-**Figures**
+| Tile | Figure | Note under it | Marked worse when |
+| --- | --- | --- | --- |
+| Sessions | Sessions in the view | "N active days, across M projects." Active days show their change too. An active day is a day with at least one user prompt; a session that works alone on a day with no prompt does not make it active. | Never judged. |
+| Errors per 100 calls | Failed calls per 100 tool calls | "N failed of M tool calls." | It goes up. |
+| Test runs passed | Share of test and build runs that passed, or "n/a" | "N passed, M failed of K test or build runs." | It goes down. |
+| Prompts interrupted | Share of prompts interrupted | "N of M prompts; X turns and Y tool calls per prompt." | It goes up. |
+| Subagents | Share of tokens that came from subagents | "of tokens came from subagents." | Never judged. |
+| Median session | Median active time of a session | "N sessions, X active and Y thinking in all." When a session records model time: "…; X waiting on the model and Y running tools." | Never judged. |
+| Output speed | Output tokens per second of model time, as "98 tok/s", or "n/a" | "Output tokens per second of model time, in N sessions.", or "No session in this view records model time." | It goes down. |
 
-- A summary line names the busiest hour and the busiest day, and counts ties ("and 2 others"), then gives the total number of prompts.
-- With no prompts in the range, the panel reads "No prompts in this range."
+A session's active time leaves out every pause over 20 minutes. Two figures that display the same value read "unchanged".
 
-**Controls** The heatmap is one tab stop. The arrow keys move between cells, and Home and End jump to the first and last hour of the row. The cell under the cursor is read under the grid.
+Model time and tool time come from the `cost-state` line that Claude Code writes when a session ends, in versions from about late October 2026. Codex sessions and older Claude Code sessions record none, and count in neither figure. Output speed divides the output tokens of the sessions that record model time by that model time. These are whole-session figures: they include subagent work and the session's time outside the range. Model time can exceed active time, because subagents run at the same time. On a store from an earlier version, run `ai-ledger rebuild` once, with the app stopped, to fill them for sessions already ingested; see [Upgrade and rebuild](/ai-ledger/start/upgrade/).
 
 ## Drawers
 
@@ -131,7 +120,7 @@ Each drawer title carries a count. The Sessions, Project metrics and Tools table
 
 ### Sessions
 
-**Shows** every session in the view, one row each. The drawer title counts the sessions in the view. A line says a session counts here when it has a request in the range, and that Insights counts sessions by their start time, so the two totals can differ slightly.
+**Shows** every session in the view, one row each. The drawer title counts the sessions in the view. Its How measured toggletip says a session counts here when it has a request in the range, and that Insights counts sessions by their start time, so the two totals can differ slightly.
 
 **Columns**
 
@@ -193,6 +182,19 @@ See tools in Needs attention puts the tools failing over 10% of at least 20 call
 **Shows** the newest failed test and build runs. The drawer count is every failed run in the view. A list cut at the newest 50 says "Showing the 50 newest of N".
 
 **Columns** When, Project, Session (opens the session sheet), Command, and an "Open in Errors" link to the failure on Errors.
+
+### Prompts by hour
+
+<ThemedImage dark={hours} light={hoursLight} alt="Activity's Prompts by hour heatmap: prompts by weekday and hour, darker cells holding more prompts." />
+
+**Shows** a heatmap of prompts by weekday (Monday first) and hour, on the machine's local clock. A darker cell holds more prompts. The heatmap filters nothing, so it waits in this drawer, out of the page's flow.
+
+**Figures**
+
+- A summary line names the busiest hour and the busiest day, and counts ties ("and 2 others"), then gives the total number of prompts.
+- With no prompts in the range, the drawer reads "No prompts in this range."
+
+**Controls** The heatmap is one tab stop. The arrow keys move between cells, and Home and End jump to the first and last hour of the row. The cell under the cursor is read under the grid.
 
 ## Sheets
 

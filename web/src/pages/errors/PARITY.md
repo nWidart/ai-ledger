@@ -33,10 +33,10 @@ notice) are tested in jsdom only, not yet checked in a browser at 1280px or 390p
 
 ## Briefing and vitals
 
-- [x] L438–459: the lede: "N failed tool calls (r%), ↓/↑d% vs previous N days. <Top type> is x% of them." with the project (dot and name) when filtered; "flat" under 1%; "No failed tool calls … out of N." and "No tool calls … in this period." variants. Port: `Summary`, `model.ts` `summary`.
+- [x] L438–459: the lede: "N failed tool calls (r%), ↓/↑d% vs previous N days. <Top type> is x% of them." with the project (dot and name) when filtered; "flat" under 1%; "No failed tool calls … out of N." and "No tool calls … in this period." variants. Port: `Summary`, `model.ts` `summary`. Changed since: the lede states only the failed calls and the rate; the change and the top type moved to vitals (trim-page-density).
 - [x] L442–453: the comparison is the previous equal period (from `error_days`), or for All time the second half against the first. Port: `model.ts` `summary`. Changed since: `compare` splits All time at the day that halves its calls and needs 200 calls a side (define-error-incidents).
 - [x] L1003–1004: the date line: "Oct 8, 2026 to Nov 6, 2026 · Ingested <time>" or "All time to …". Port: `Summary` `#gen`.
-- [x] L463–469: four vitals: Error rate, Change (green/red past ±1%), Incidents (with the "didn't recover" share, the recovered note and the type count), Fixes applied (with how many open types have a ready-made fix). Port: `Summary`.
+- [x] L463–469: four vitals: Error rate, Change (green/red past ±1%), Incidents (with the "didn't recover" share, the recovered note and the type count), Fixes applied (with how many open types have a ready-made fix). Port: `Summary`. Changed since: Error rate is gone (the lede states it) and Top type (its share of the errors) sits after Incidents (trim-page-density).
 - [x] L42–45, L264, L1048–1052: on phones only the first two vitals show; "More summary" / "Less summary" (aria-expanded, aria-controls `kpis gen`) shows the rest and the date line. Port: `Summary`, `errors.css`.
 
 ## Rate chart

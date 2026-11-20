@@ -21,8 +21,9 @@ const byDay: SessionsPage = { ...sessions, sessions: ["s1", "s3", "s2"].map(id =
 const serve = (d: UsagePayload) => mockApi({ "/api/usage": () => d, "/api/sessions": q => (q.get("day") ? byDay : sessions), "/api/session": () => session });
 const loaded = () => screen.findByRole("heading", { level: 1, name: /estimated cost/ });
 const fetched = () => vi.mocked(fetch).mock.calls.map(c => c[0]);
-/** The page loaded, with these drawers open (a closed drawer renders no table). */
-const show = async (d: UsagePayload, open = ["d-top", "d-tokens"]) => { serve(d); at(); renderApp(<CostPage />); const lede = await loaded(); act(() => open.forEach(id => openDrawer(id))); return lede; };
+/** The page loaded, with these drawers opened in turn: a closed drawer renders no table, and a page opens one drawer at a time,
+ *  so each has rendered its body (kept, hidden, once closed) and the last stays open. */
+const show = async (d: UsagePayload, open = ["d-tokens", "d-top"]) => { serve(d); at(); renderApp(<CostPage />); const lede = await loaded(); act(() => open.forEach(id => openDrawer(id))); return lede; };
 /** Whether a drawer is open. */
 const isOpen = (id: string) => document.getElementById(id)!.hasAttribute("data-open");
 const insights = () => within(document.getElementById("insights")!);

@@ -29,9 +29,13 @@
 .pg-context .panel > .hint { max-width: 90ch; }
 .pg-context .empty { padding: 16px 0; }
 
-/* Tips: one card each, the evidence as a list and the advice under it */
+/* Tips: small cards in one row, the evidence and advice folded under each title */
 .pg-context .tips { margin: 0 0 4px; }
 .pg-context .tips .insights { margin-top: 10px; }
+.pg-context .tip-cards { grid-template-columns: repeat(auto-fit, minmax(13.5rem, 1fr)); align-items: start; }
+.pg-context .tip-cards .insight { padding: 10px 12px 10px 16px; }
+.pg-context .tip-more summary { cursor: pointer; color: var(--link); font-size: .75rem; }
+.pg-context .tip-more[open] summary { margin-bottom: 6px; }
 .pg-context .insight .v:empty { display: none; }
 .pg-context .evidence { display: grid; grid-template-columns: repeat(auto-fill, minmax(13.125rem, 1fr)); gap: 6px 20px; margin: 0 0 8px; }
 .pg-context .evidence div { min-width: 0; }

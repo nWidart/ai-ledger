@@ -4,6 +4,9 @@
 .tt.tt-q { display: inline-grid; place-items: center; width: 1rem; height: 1rem; margin-left: 4px; vertical-align: middle; border-radius: 50%;
   border: 1px solid var(--text-muted); color: var(--text-muted); font-size: .65625rem; font-weight: 600; line-height: 1; }
 .tt.tt-q:hover, .tt.tt-q[aria-expanded=true] { color: var(--text-primary); border-color: var(--text-primary); }
+/* How measured: a link-like label at the end of a hint (see HowMeasured.tsx). */
+.tt.how { color: var(--link); text-decoration: underline dotted; text-underline-offset: 2px; white-space: nowrap; }
+.tt.how:hover, .tt.how[aria-expanded=true] { text-decoration-style: solid; }
 .tt-pos { z-index: 40; }
 .tt-pop { max-width: min(20rem, calc(100vw - 16px)); padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-1);
   box-shadow: var(--shadow-pop); color: var(--text-secondary); font-size: .78125rem; font-weight: 400; line-height: 1.45; letter-spacing: 0; text-align: left; text-transform: none; white-space: normal; }

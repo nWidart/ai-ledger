@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { usageUrl, viewOf, type SessionSort, type Totals, type UsagePayload, type View } from "../../api";
 import { setOrder } from "../../colors";
 import { useCountUp } from "../../components/chart";
@@ -21,6 +21,7 @@ import { validateSearch, type ActivitySearch } from "./search";
 import { ExtDrawer, LoopsDrawer, ProjectsDrawer, TestsDrawer, ToolsDrawer, type RowScope, type ToolKey } from "./tables";
 import { firstWorkDay, flakyTools, shortTool, type WorkMetric } from "./work";
 import { WorkPanel } from "./WorkChart";
+import { HoursDrawer } from "./WorkHours";
 import "./activity.css";
 
 const METRIC_KEY = "claude-activity-metric";
@@ -48,19 +49,16 @@ export function attentionInsight(d: UsagePayload, go: AttentionActs): Insight {
     b: items.length ? "" : "No error loops, sessions near the context limit, flaky tools or failed tests in this range." };
 }
 
-/** The heading answers "what got done?": commits from prompts, then sessions and active days. No cost here; that is Cost's. */
+/** The heading answers "what got done?": commits from prompts, two figures; sessions and active days are the Sessions vital's.
+ *  No cost here; that is Cost's. */
 function Lede({ d, before }: { d: UsagePayload; before: UsagePayload | undefined }) {
   const t = d.totals, p = d.previous, commits = useCountUp(t.commits, before?.totals.commits);
   const where = d.project ? <> <span className="unit">on <span className="proj"><ProjectDot project={d.project} />{d.project}</span></span></> : null;
   const since = d.range ? "" : ` since ${dayLabel(firstWorkDay(d) ?? d.end, true)}`;
-  return <>
-    <h1 className="lede" id="lede" aria-live="polite" tabIndex={-1}>{t.requests
-      ? <><span className="amt">{plural(commits, "commit")}</span> <span className="unit">from {plural(t.prompts, "prompt")}</span>{where}{since}
-        <span className="chg"><Vs cur={t.commits} prev={p?.commits} fmt={n => plural(n, "commit")} /></span>
-        <span className="sr">, </span><span className="delta">in {plural(t.sessions, "session")}{!d.project && d.by_project.length > 1 ? ` across ${plural(d.by_project.length, "project")}` : ""}<Vs cur={t.sessions} prev={p?.sessions} fmt={n => plural(n, "session")} />, {plural(t.active_days, "active day")}<Vs cur={t.active_days} prev={p?.active_days} fmt={n => plural(n, "active day")} /></span></>
-      : <>No {agentName(d.source)} activity{where} {d.range ? `in the last ${d.range} days` : "yet"}.</>}</h1>
-    {t.requests > 0 && <p className="sub">{num(t.turns_per_prompt, 1)} turns and {num(t.tool_calls_per_prompt, 1)} tool calls per prompt. {plural(t.interrupted, "prompt")} interrupted.</p>}
-  </>;
+  return <h1 className="lede" id="lede" aria-live="polite" tabIndex={-1}>{t.requests
+    ? <><span className="amt">{plural(commits, "commit")}</span> <span className="unit">from {plural(t.prompts, "prompt")}</span>{where}{since}
+      <span className="chg"><Vs cur={t.commits} prev={p?.commits} fmt={n => plural(n, "commit")} /></span></>
+    : <>No {agentName(d.source)} activity{where} {d.range ? `in the last ${d.range} days` : "yet"}.</>}</h1>;
 }
 
 /** a / b, or null when there is nothing to divide by (a previous period with no calls, say). */
@@ -78,13 +76,17 @@ function sessionNote(t: Totals): string {
 function Vitals({ d }: { d: UsagePayload }) {
   const t = d.totals, p = d.previous;
   // cur and prev are the same figure of this and the previous period; worse: the way a move reads as bad.
-  const vs: { v: string; l: string; n: string; id?: string; cur: number | null; prev?: number | null; worse?: "up" | "down"; fmt: (n: number) => string }[] = [
+  const vs: { v: string; l: string; n: ReactNode; id?: string; cur: number | null; prev?: number | null; worse?: "up" | "down"; fmt: (n: number) => string }[] = [
+    { v: num(t.sessions), l: "Sessions", cur: t.sessions, prev: p?.sessions, fmt: n => plural(n, "session"),
+      n: <>{plural(t.active_days, "active day")}<Vs cur={t.active_days} prev={p?.active_days} fmt={n => plural(n, "active day")} />
+        {!d.project && d.by_project.length > 1 ? `, across ${plural(d.by_project.length, "project")}` : ""}.</> },
     { v: num(t.errors_per_100_calls, 1), l: "Errors per 100 calls", n: `${num(t.errors)} failed of ${plural(t.calls, "tool call")}.`,
       cur: t.errors_per_100_calls, prev: p && ratio(100 * p.errors, p.calls), worse: "up", fmt: n => num(n, 1) },
     { v: t.test_runs ? pct(t.tests_passed / t.test_runs) : "n/a", l: "Test runs passed", id: "v-tests",
       n: t.test_runs ? `${num(t.tests_passed)} passed, ${num(t.tests_failed)} failed of ${plural(t.test_runs, "test or build run")}.` : "No test or build runs in this range.",
       cur: ratio(t.tests_passed, t.test_runs), prev: p && ratio(p.tests_passed, p.test_runs), worse: "down", fmt: pct },
-    { v: pct(t.interruption_rate, 1), l: "Prompts interrupted", n: `${num(t.interrupted)} of ${plural(t.prompts, "prompt")}.`,
+    { v: pct(t.interruption_rate, 1), l: "Prompts interrupted",
+      n: `${num(t.interrupted)} of ${plural(t.prompts, "prompt")}; ${num(t.turns_per_prompt, 1)} turns and ${num(t.tool_calls_per_prompt, 1)} tool calls per prompt.`,
       cur: t.interruption_rate, prev: p && ratio(p.interrupted, p.prompts), worse: "up", fmt: n => pct(n, 1) },
     { v: pct(t.subagent_token_share), l: "Subagents", n: "of tokens came from subagents.",
       cur: t.subagent_token_share, prev: p && ratio(p.sub_tokens, p.tokens), fmt: pct },
@@ -125,7 +127,6 @@ export function ActivityPage() {
   const day = sess.day, dayApi = useApi(day ? queries.day(want, day) : null), dv = day ? dayApi.data : undefined;
 
   const { slow, grow, before, wrap, retryBtn } = useLanding(data, url, loading, error, ":scope > :is(.insights, .panel, .vitals, .drawers)");
-
   // The attention and chart actions show the table in the order they promise.
   const sessionsFor = (f: SessFilter) => { setSess(f); setSessSort(null); openDrawer("d-sessions", true); };
   const showDay = (day: string) => sessionsFor({ q: "", near: false, day });
@@ -158,14 +159,15 @@ export function ActivityPage() {
       <p className="pending">{loading && d ? `Loading ${viewName(want)}…` : ""}</p>
       {d && <>
         <SectionIndex groups={[
-          [{ id: "overview", label: "Overview" }, { id: "attention", label: "Attention", hidden: !has }, { id: "vitals", label: "Health", long: "Work health", hidden: !has },
-            { id: "work", label: "Work", long: "Work per day" }, { id: "hours", label: "Hours", long: "Prompts by hour" }],
+          [{ id: "overview", label: "Overview" }, { id: "attention", label: "Attention", hidden: !has }, { id: "work", label: "Work", long: "Work per day" },
+            { id: "vitals", label: "Health", long: "Work health", hidden: !has }],
           [{ id: "d-sessions", label: "Sessions" }, { id: "d-projects", label: "Projects", long: "Project metrics" }, { id: "d-tools", label: "Tools" },
-            { id: "d-ext", label: "MCP & hooks", long: "MCP & hooks" }, { id: "d-loops", label: "Loops", long: "Error loops" }, { id: "d-tests", label: "Tests", long: "Failed test runs" }],
+            { id: "d-ext", label: "MCP & hooks", long: "MCP & hooks" }, { id: "d-loops", label: "Loops", long: "Error loops" }, { id: "d-tests", label: "Tests", long: "Failed test runs" },
+            { id: "d-hours", label: "Hours", long: "Prompts by hour" }],
         ]} />
         {has && <section className="insights sect" id="attention" aria-label="What needs attention"><InsightCard insight={attentionInsight(d, acts)} primary /></section>}
-        {has && <Vitals d={d} />}
         <WorkPanel d={d} metric={metric} onMetric={setMetric} onDay={showDay} />
+        {has && <Vitals d={d} />}
         <div className="drawers">
           <SessionsDrawer view={{ project: d.project, range: d.range, automated: d.automated, source: d.source }} count={d.totals.sessions} filter={sess} onFilter={setSess} sort={sessSort} onSort={setSessSort}
             selected={h.session} />
@@ -174,6 +176,7 @@ export function ActivityPage() {
           <ExtDrawer mcp={(dv ?? d).mcp} skills={(dv ?? d).skills} hooks={(dv ?? d).hooks} scope={scope} />
           <LoopsDrawer loops={(dv ?? d).error_loops} total={dv ? dv.error_loops_total : d.totals.error_loops} range={d.range} scope={scope} />
           <TestsDrawer tests={d.failed_tests} total={d.totals.tests_failed} range={d.range} />
+          <HoursDrawer cells={d.work_hours} />
         </div>
       </>}
       <UsageSheets data={d} />

@@ -2,6 +2,7 @@
 import type { ContextPayload } from "../../api";
 import { DataTable } from "../../components/DataTable";
 import { Drawer } from "../../components/Drawer";
+import { HowMeasured } from "../../components/HowMeasured";
 import { openSessionSheet, pickRow, sessName, shortId } from "../../components/sheets/session";
 import { num, usd, when } from "../../format";
 import { Est, Proj, SourceName } from "./cells";
@@ -40,9 +41,10 @@ export function BreaksDrawer({ cost }: { cost: D["cost"] }) {
   const rows = cost.breaks;
   return (
     <Drawer id="d-breaks" title="Sessions where caching broke" count={num(cost.break_sessions)} description="Breaks by cause, with the uncached tokens they cost">
-      <div className="hint">A break is a main-thread request after the first turn with at least 20,000 prompt tokens, less than half of them read from the cache.
-        A model switch is a different model from the previous request's; expired means a longer pause since it than the cache lifetime (5 minutes, or 30 for OpenAI's cache), a rule rather than a measurement;
-        other covers a changed prompt or tool set.{cost.break_sessions > rows.length ? ` Showing the ${num(rows.length)} with the most uncached tokens of ${num(cost.break_sessions)}.` : ""}</div>
+      <div className="hint">{cost.break_sessions > rows.length ? `Showing the ${num(rows.length)} with the most uncached tokens of ${num(cost.break_sessions)}.` : "Most uncached tokens first."}
+        <HowMeasured what="cache breaks">A break is a main-thread request after the first turn with at least 20,000 prompt tokens, less than half of them read from the cache.
+          A model switch is a different model from the previous request's; expired means a longer pause since it than the cache lifetime (5 minutes, or 30 for OpenAI's cache), a rule rather than a measurement;
+          other covers a changed prompt or tool set.</HowMeasured></div>
       <DataTable name="Sessions where caching broke" region="scroll tall">
         <thead><tr><th scope="col">Session</th><th scope="col">Project</th><th scope="col" className="num">Breaks</th><th scope="col">By cause</th><th scope="col" className="num">Uncached tokens</th><th scope="col" className="num">Their input cost</th></tr></thead>
         <tbody>{rows.length ? rows.map(r => <tr key={r.session_id} {...pickRow(r.session_id, openSessionSheet, { kind: "session", value: r.session_id })}>

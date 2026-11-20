@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { ContextPayload, FillRow } from "../../api";
 import { DataTable } from "../../components/DataTable";
 import { openToolSheet, pickRow } from "../../components/sheets/session";
+import { sortRows, SortTh, type SortBy } from "../../components/Sort";
+import { Toggletip } from "../../components/Toggletip";
 import { num } from "../../format";
 import { Est } from "./cells";
 import { BYTES_PER_TOKEN, RESULT_LARGE_BYTES, bytes, share } from "./context";
@@ -57,16 +59,22 @@ function Split({ main, sub }: { main: number; sub: number }) {
   );
 }
 
-/** What fills context: the main-thread and subagent split, then the ten largest tools or MCP servers by total size, each beside the range of its typical result. */
+type SortKey = "name" | "calls" | "bytes" | "p50_bytes" | "max_bytes";
+const BY_TOTAL: SortBy<SortKey> = { key: "bytes", desc: true };
+
+/** What fills context: the main-thread and subagent split, then the tools or MCP servers, the ten first by the sort (largest
+ *  total by default) and the rest folded into Other until "Show all", each beside the range of its typical result. */
 export function Contributors({ fills }: { fills: Fills }) {
-  const [pick, setPick] = useState<Kind>("tool");
+  const [pick, setPick] = useState<Kind>("tool"), [sort, setSort] = useState(BY_TOTAL), [all, setAll] = useState(false);
   const hasMcp = fills.mcp.length > 0, kind: Kind = hasMcp ? pick : "tool";
-  const list = kind === "mcp" ? fills.mcp : fills.tools;
-  const rows = ranked(list, kind);
+  const list = sortRows(kind === "mcp" ? fills.mcp : fills.tools, r => r[sort.key], sort.desc);
+  const rows = all ? list.map(row => ({ name: row.name, row, other: false })) : ranked(list, kind);
   const max = Math.max(...rows.map(r => r.row.bytes), 1);
   const { lo, hi } = rangeScale(rows.map(r => r.row));
   const at = (v: number) => `${logPos(v, lo, hi) * 100}%`;
-  const noun = kind === "mcp" ? "MCP server" : "Tool";
+  const noun = kind === "mcp" ? "MCP server" : "Tool", nouns = kind === "mcp" ? "MCP servers" : "tools";
+  const th = (k: SortKey, label: ReactNode, cls?: string) =>
+    <SortTh k={k} sort={sort} onSort={setSort} asc={k === "name"} className={cls}>{label}</SortTh>;
   return (
     <div className="contributors">
       {fills.main_bytes + fills.subagent_bytes > 0 && <>
@@ -79,16 +87,18 @@ export function Contributors({ fills }: { fills: Fills }) {
       {rows.length === 0 ? <p className="empty">No tool result with a known size in this view.</p> :
         <DataTable name={`Largest contributors ${kind === "mcp" ? "by MCP server" : "by tool"}`} className="ctr-table">
           <thead><tr>
-            <th scope="col">{noun}</th>
-            <th scope="col" className="ctr-total">Total result size
-              <span className="ctr-scale" aria-hidden="true"><span>0</span><span>{bytes(max)}</span></span></th>
-            <th scope="col" className="ctr-range">Typical result: median to 95th percentile (log scale)
-              <span className="ctr-scale" aria-hidden="true"><span>{bytes(lo)}</span><span>dashed: {bytes(RESULT_LARGE_BYTES)}</span><span>{bytes(hi)}</span></span></th>
+            {th("name", noun)}
+            {th("calls", "Calls", "num")}
+            {th("bytes", <>Total result size<span className="ctr-scale" aria-hidden="true"><span>0</span><span>{bytes(max)}</span></span></>, "ctr-total")}
+            {th("p50_bytes", <>Typical result: median to 95th percentile (log scale)
+              <span className="ctr-scale" aria-hidden="true"><span>{bytes(lo)}</span><span>dashed: {bytes(RESULT_LARGE_BYTES)}</span><span>{bytes(hi)}</span></span></>, "ctr-range")}
+            {th("max_bytes", "Largest", "num")}
           </tr></thead>
           <tbody>{rows.map(({ name, row, other }) => {
             const range = row.p50_bytes != null && row.p95_bytes != null ? { p50: Math.max(1, row.p50_bytes), p95: Math.max(1, row.p95_bytes) } : null;
             return <tr key={name} {...(other ? {} : pickRow(name, v => openToolSheet(kind, v), { kind, value: name }))}>
               <th scope="row" className="name">{other ? name : <button type="button" className="cellbtn" title={name}>{name}</button>}</th>
+              <td className="num">{num(row.calls)}{row.with_bytes < row.calls && <Toggletip term="calls">{num(row.with_bytes)} with a result size</Toggletip>}</td>
               <td className="ctr-total">
                 <span className="ctr-bar" aria-hidden="true"><i data-testid="ctr-total-bar" style={{ width: `${Math.max(1, row.bytes / max * 100)}%` }} /></span>
                 <span className="ctr-fig">{bytes(row.bytes)} <span className="muted">· <Est tokens={row.est_tokens} /></span></span>
@@ -99,11 +109,14 @@ export function Contributors({ fills }: { fills: Fills }) {
                   {range && <span className="ctr-med" style={{ left: at(range.p50) }} />}
                   <span className="ctr-mark" data-testid="ctr-mark" style={{ left: at(RESULT_LARGE_BYTES) }} />
                 </span>
-                <span className="ctr-fig muted">{range ? `median ${bytes(row.p50_bytes)} · 95th ${bytes(row.p95_bytes)}` : other ? `${num(row.calls)} calls` : "no result size"}</span>
+                <span className="ctr-fig muted">{range ? `median ${bytes(row.p50_bytes)} · 95th ${bytes(row.p95_bytes)}` : other ? "" : "no result size"}</span>
               </td>
+              <td className="num">{other ? "" : bytes(row.max_bytes)}</td>
             </tr>;
           })}</tbody>
         </DataTable>}
+      {list.length > TOP_ROWS && <button type="button" className="linkish more ctr-more" onClick={() => setAll(!all)}>
+        {all ? `Show the top ${TOP_ROWS}` : `Show all ${num(list.length)} ${nouns}`}</button>}
     </div>
   );
 }

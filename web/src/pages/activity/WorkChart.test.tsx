@@ -6,7 +6,7 @@ import usage from "../../__fixtures__/usage";
 import { color, setOrder } from "../../colors";
 import { failRate, workBuckets, workKinds, workStack, type WorkMetric } from "./work";
 import { WorkPanel } from "./WorkChart";
-import { WorkHours } from "./WorkHours";
+import { HoursDrawer, WorkHours } from "./WorkHours";
 import { renderApp } from "../../testing";
 
 const row = (day: string, o: Partial<DailyWorkRow> = {}): DailyWorkRow => ({ day, sessions: 1, prompts: 1, commits: 0, calls: 0, failed_calls: 0, ...o });
@@ -312,7 +312,7 @@ describe("weekly buckets", () => {
     expect(within(screen.getByRole("tooltip")).getByText("Week of Sep 7, 2026, from Sep 9")).toBeTruthy();
     fireEvent.keyDown(chart(), { key: "End" });
     expect(within(screen.getByRole("tooltip")).getByText("Week of Nov 9, 2026, so far")).toBeTruthy();
-    expect(document.querySelector("#work .sr")!.textContent).toMatch(/^Week of Nov 9, 2026, so far: 0 commits/);
+    expect(document.querySelector("#work div.sr[aria-live]")!.textContent).toMatch(/^Week of Nov 9, 2026, so far: 0 commits/);
     fireEvent.keyDown(chart(), { key: "ArrowLeft" });
     expect(within(screen.getByRole("tooltip")).getByText("Week of Nov 2, 2026")).toBeTruthy();
   });
@@ -343,7 +343,6 @@ describe("hours", () => {
   it("draws a 7x24 grid, Monday first, with the busiest cell named", () => {
     renderApp(<WorkHours cells={cells} />);
     const box = document.getElementById("hours")!;
-    expect(within(box).getByRole("heading").textContent).toBe("Prompts by hour");
     const table = within(box).getByRole("table", { name: "Prompts by weekday and hour" });
     const rows = table.querySelectorAll("tbody tr");
     expect(rows).toHaveLength(7);
@@ -393,8 +392,15 @@ describe("hours", () => {
     expect(document.querySelector("#hours .empty")!.textContent).toBe("No prompts in this range.");
   });
 
-  it("sits under the chart in the work panel", () => {
+  it("leaves the work panel, and waits in a closed Prompts by hour drawer", async () => {
     panel(usage);
-    expect(document.getElementById("work")!.compareDocumentPosition(document.getElementById("hours")!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(document.getElementById("hours")).toBeNull();
+    cleanup();
+    renderApp(<HoursDrawer cells={cells} />);
+    const toggle = screen.getByRole("heading", { level: 2, name: "Prompts by hour" }).querySelector("button")!;
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(document.getElementById("hours")).toBeNull();
+    await userEvent.click(toggle);
+    expect(screen.getByRole("table", { name: "Prompts by weekday and hour" })).toBeTruthy();
   });
 });

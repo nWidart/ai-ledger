@@ -4,9 +4,9 @@ import { useColors } from "../../colors";
 import { dayLabel, niceStep, num, plural } from "../../format";
 import { dayAxis, LOW_CALLS, lowVolume, peakLabelAt, roomForLabels, textScale, tipAt, useWidth } from "../../components/chart";
 import { ChartTable, DataTable } from "../../components/DataTable";
+import { HowMeasured } from "../../components/HowMeasured";
 import type { Kind } from "../cost/cost";
 import { busy, failRate, METRICS, monday, workBuckets, workKinds, workStack, type WorkMetric } from "./work";
-import { WorkHours } from "./WorkHours";
 
 const H = 240;
 const BAR = "var(--series-1)", FAIL = "var(--critical)";
@@ -34,16 +34,13 @@ export interface WorkPanelProps {
   onDay: (day: string) => void;
 }
 
-/** The work chart in the payload's buckets, stacked by project, then prompts by weekday and hour. */
+/** The work chart in the payload's buckets, stacked by project. */
 export function WorkPanel({ d, metric, onMetric, onDay }: WorkPanelProps) {
   useColors();
   const rows = useMemo(() => workBuckets(d), [d]);
   const kinds = workKinds(d, rows, metric);
-  return <>
-    <WorkBars rows={rows} week={d.work_bucket === "week"} view={d} kinds={kinds} stack={workStack(rows, d.work_projects, kinds, metric)}
-      metric={metric} onMetric={onMetric} onDay={onDay} />
-    <WorkHours cells={d.work_hours} />
-  </>;
+  return <WorkBars rows={rows} week={d.work_bucket === "week"} view={d} kinds={kinds} stack={workStack(rows, d.work_projects, kinds, metric)}
+    metric={metric} onMetric={onMetric} onDay={onDay} />;
 }
 
 const MARGIN = { t: 22, r: 44, b: 26, l: 52 }; // room on the right for the rate axis
@@ -148,10 +145,11 @@ function WorkBars({ rows, week, view, kinds, stack, metric, onMetric, onDay }: W
     <section className="panel sect work" id="work" aria-labelledby="workTitle">
       <div className="chart-head">
         <div><h2 id="workTitle">Work per {unit}</h2>
-          <div className="hint">{M.label}{kinds.length ? " by project (projects with a color of their own, the rest in Other)" : ""} per {week ? "week, from Monday" : "day"}{hasRate
-            ? ", with errors per 100 tool calls against the right-hand axis" : ""}. {week
-              ? "Choose a shorter range to pick a day."
-              : "Select a day to list its sessions; with the keyboard, focus the chart, use the arrow keys and press Enter."}</div></div>
+          <div className="hint">{M.label}{kinds.length ? " by project" : ""} per {week ? "week" : "day"}{hasRate
+            ? ", errors per 100 tool calls on the right axis" : ""}. {week ? "Choose a shorter range to pick a day." : "Select a day to list its sessions."}
+            <HowMeasured what="work per day">{kinds.length ? "Projects with a color of their own are drawn apart, the rest in Other. " : ""}{week
+              ? "Weeks start on Monday. " : "With the keyboard, focus the chart, use the arrow keys and press Enter to list a day's sessions. "}
+              {hasRate ? "The line is the failed tool calls per 100 calls, against its own axis." : ""}</HowMeasured></div></div>
         <div className="seg" role="group" aria-label="Chart metric">
           {METRICS.map(x => <button key={x.k} type="button" aria-pressed={x.k === metric} onClick={() => onMetric(x.k)}>{x.label}</button>)}
         </div>

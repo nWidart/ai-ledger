@@ -104,7 +104,12 @@ describe("change against the previous period", () => {
     serve(prior({ commits: 4, sessions: 1, active_days: 3 }));
     at();
     renderApp(<ActivityPage />);
-    expect((await loaded()).textContent).toBe("1 commit from 3 prompts, down from 4 commits, in 2 sessions, up from 1 session, 2 active days, down from 3 active days");
+    expect((await loaded()).textContent).toBe("1 commit from 3 prompts, down from 4 commits");
+    const [v, note] = [vital("Sessions").closest(".vital")!.querySelector(".v")!, vital("Sessions").closest(".vital")!.querySelector(".d")!];
+    expect(v.textContent).toBe("2");
+    expect(vital("Sessions").textContent).toBe("Sessions, up from 1 session");
+    expect(worse(vital("Sessions"))).toBe(false);
+    expect(note.textContent).toBe("2 active days, down from 3 active days.");
   });
 
   it("shows no change in the All range", async () => {
@@ -121,7 +126,9 @@ describe("change against the previous period", () => {
     at();
     renderApp(<ActivityPage />);
     await loaded();
-    expect(document.getElementById("vitals")!.textContent).not.toMatch(change);
+    // Sessions, the first tile, is a count, not a ratio: it compares with the period before whatever that held.
+    const ratios = [...document.querySelectorAll("#vitals .vital")].slice(1);
+    expect(ratios.map(t => t.textContent).join(" ")).not.toMatch(change);
   });
 });
 
@@ -178,13 +185,18 @@ describe("drawer tables", () => {
     await loaded();
     expect(screen.getByRole("heading", { level: 2, name: /^Tools/ })).toBeTruthy();
     expect(screen.queryByRole("table", { name: "Tools" })).toBeNull();
-    act(() => { for (const id of ["d-projects", "d-tools", "d-ext", "d-loops", "d-tests", "d-sessions"]) openDrawer(id); });
-    for (const name of ["Project metrics", "Tools", "Error loops", "Failed test runs", "Sessions", "MCP servers", "Skills", "Hooks"]) {
-      const table = screen.getByRole("table", { name });
+    // One drawer opens at a time: each table is read while its drawer is the open one.
+    const tables: [string, string][] = [["Project metrics", "d-projects"], ["Tools", "d-tools"], ["Error loops", "d-loops"], ["Failed test runs", "d-tests"],
+      ["Sessions", "d-sessions"], ["MCP servers", "d-ext"], ["Skills", "d-ext"], ["Hooks", "d-ext"]];
+    for (const [name, id] of tables) {
+      act(() => openDrawer(id));
+      const table = await screen.findByRole("table", { name });
       expect(screen.getByRole("region", { name }).tabIndex).toBe(0);
       expect(within(table).getAllByRole("columnheader").every(h => h.getAttribute("scope") === "col")).toBe(true);
     }
+    act(() => openDrawer("d-tools"));
     expect(within(screen.getByRole("table", { name: "Tools" })).getAllByRole("rowheader")[0]!.getAttribute("scope")).toBe("row");
+    act(() => openDrawer("d-projects"));
     expect(within(screen.getByRole("table", { name: "Project metrics" })).getAllByRole("rowheader").map(h => h.textContent)).toContain("foo");
   });
 
@@ -236,13 +248,25 @@ describe("automated projects file", () => {
 });
 
 describe("work panel", () => {
-  it("puts the hours heatmap on the page and in the section index", async () => {
+  it("keeps the hours heatmap in a closed drawer, listed in the section index", async () => {
     serve(usage);
     at();
     renderApp(<ActivityPage />);
     await loaded();
+    expect(document.getElementById("hours")).toBeNull();
+    await userEvent.click(within(screen.getByRole("navigation", { name: /sections/i })).getByRole("link", { name: "Hours" }));
+    expect(screen.getByRole("button", { name: "Prompts by hour" }).getAttribute("aria-expanded")).toBe("true");
     expect(document.getElementById("hours")).toBeTruthy();
-    expect(within(screen.getByRole("navigation", { name: /sections/i })).getByRole("link", { name: "Hours" })).toBeTruthy();
+  });
+
+  it("puts the work chart before the vitals", async () => {
+    serve(usage);
+    at();
+    renderApp(<ActivityPage />);
+    await loaded();
+    const order = ["attention", "work", "vitals"].map(id => document.getElementById(id)!);
+    expect(order[0]!.compareDocumentPosition(order[1]!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(order[1]!.compareDocumentPosition(order[2]!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });
 
@@ -261,7 +285,7 @@ describe("ActivityPage", () => {
     at();
     renderApp(<ActivityPage />);
     const lede = await loaded();
-    expect(lede.textContent).toBe("1 commit from 3 prompts, up from 0 commits, in 2 sessions, up from 1 session, 2 active days, up from 1 active day");
+    expect(lede.textContent).toBe("1 commit from 3 prompts, up from 0 commits");
     const before = document.querySelector(".top")!.textContent! + document.getElementById("attention")!.textContent!;
     expect(before).not.toMatch(/\$|cost/i);
   });
@@ -274,7 +298,7 @@ describe("ActivityPage", () => {
     await loaded();
     await userEvent.click(within(screen.getByRole("group", { name: "Source" })).getByRole("button", { name: "Codex" }));
     expect(location.search).toBe("?range=30&source=codex");
-    expect((await screen.findByRole("heading", { level: 1, name: /^0 commits/ })).textContent).toBe("0 commits from 1 prompt, unchanged, in 1 session, unchanged, 1 active day, unchanged");
+    expect((await screen.findByRole("heading", { level: 1, name: /^0 commits/ })).textContent).toBe("0 commits from 1 prompt, unchanged");
     expect(fetched()).toContain("/api/usage?range=30&source=codex");
   });
 
@@ -284,7 +308,10 @@ describe("ActivityPage", () => {
     renderApp(<ActivityPage />);
     await loaded();
     openSessions();
-    expect(screen.getByText(/A session counts here when it has a request in the range/).textContent).toContain("Insights counts sessions by their start time");
+    const drawer = document.getElementById("d-sessions")!;
+    const how = within(drawer).getByRole("button", { name: "How measured: the session count" });
+    await userEvent.click(how);
+    expect(within(how.parentElement!).getByRole("status").textContent).toMatch(/A session counts here when it has a request in the range.*Insights counts sessions by their start time/);
   });
 
   it("reloads an open sessions table when the source changes", async () => {
@@ -320,7 +347,7 @@ describe("ActivityPage", () => {
     const drawer = within(document.getElementById("d-sessions")!);
     await drawer.findByRole("button", { name: "Session 99" });
     expect(document.querySelectorAll("#d-sessions tbody tr")).toHaveLength(100);
-    expect(document.querySelector("#d-sessions .hint")!.textContent).toContain("Showing 100.");
+    expect(document.querySelector("#d-sessions .hint [aria-live]")!.textContent).toContain("Showing 100.");
     await userEvent.click(drawer.getByRole("button", { name: "Show more sessions" }));
     await waitFor(() => expect(document.activeElement).toBe(drawer.getByRole("button", { name: "Session 100" })));
     expect(document.querySelectorAll("#d-sessions tbody tr")).toHaveLength(200);
@@ -343,7 +370,7 @@ describe("ActivityPage", () => {
       expect(fetched().some(u => String(u).startsWith("/api/sessions") && String(u).includes("q=needle"))).toBe(false);
       await act(async () => { await vi.advanceTimersByTimeAsync(100); });
       await waitFor(() => expect(fetched()).toContain("/api/sessions?range=30&q=needle"));
-      await waitFor(() => expect(document.querySelector("#d-sessions .hint")!.textContent).toBe("Searching for “needle”…"));
+      await waitFor(() => expect(document.querySelector("#d-sessions .hint [aria-live]")!.textContent).toBe("Searching for “needle”…"));
       expect(tbody().hasAttribute("inert")).toBe(true);
       expect(drawer.getByRole("button", { name: "Session 0" })).toBeTruthy();
       await act(async () => { found.resolve({ total: 1, offset: 0, sessions: many(1, "Hit") }); await found.p; });
@@ -351,7 +378,7 @@ describe("ActivityPage", () => {
     } finally { vi.useRealTimers(); }
     expect(drawer.queryByRole("button", { name: "Session 0" })).toBeNull();
     expect(tbody().hasAttribute("inert")).toBe(false);
-    expect(document.querySelector("#d-sessions .hint")!.textContent).toMatch(/^1 session match/);
+    expect(document.querySelector("#d-sessions .hint [aria-live]")!.textContent).toMatch(/^1 session match/);
   });
 
   it("says a search failed, with Retry, and shows no rows of the earlier query", async () => {
@@ -364,7 +391,7 @@ describe("ActivityPage", () => {
     const drawer = within(document.getElementById("d-sessions")!);
     expect(await drawer.findByRole("alert")).toBeTruthy();
     expect(drawer.getByRole("alert").textContent).toMatch(/^Could not load sessions \(.+\)\. Retry$/);
-    expect(document.querySelector("#d-sessions .hint")!.textContent).toBe("Search for “needle” failed.");
+    expect(document.querySelector("#d-sessions .hint [aria-live]")!.textContent).toBe("Search for “needle” failed.");
     expect(drawer.queryByRole("button", { name: "Session 0" })).toBeNull();
     down = false;
     await userEvent.click(drawer.getByRole("button", { name: "Retry" }));
@@ -383,12 +410,12 @@ describe("ActivityPage", () => {
     const drawer = within(document.getElementById("d-sessions")!);
     await drawer.findByRole("button", { name: "Session 99" });
     await userEvent.click(drawer.getByRole("button", { name: "Show more sessions" }));
-    await waitFor(() => expect(document.querySelector("#d-sessions .hint")!.textContent).toMatch(/^Could not load more sessions \(.+\)\. Select Show more to try again\.$/));
+    await waitFor(() => expect(document.querySelector("#d-sessions .hint [aria-live]")!.textContent).toMatch(/^Could not load more sessions \(.+\)\. Select Show more to try again\.$/));
     expect(document.querySelectorAll("#d-sessions tbody tr")).toHaveLength(100);
     down = false;
     await userEvent.click(drawer.getByRole("button", { name: "Show more sessions" }));
     await waitFor(() => expect(document.querySelectorAll("#d-sessions tbody tr")).toHaveLength(200));
-    expect(document.querySelector("#d-sessions .hint")!.textContent).toContain("Showing 200.");
+    expect(document.querySelector("#d-sessions .hint [aria-live]")!.textContent).toContain("Showing 200.");
   });
 
   it("swaps in new data from a background ingest quietly, and replays the landing only after Refresh", async () => {
@@ -396,15 +423,15 @@ describe("ActivityPage", () => {
     mockApi({ "/api/usage": () => ({ ...usage, totals: { ...usage.totals, sessions: 2 + n++ } }), "/api/sessions": () => sessions });
     at();
     const { container, client } = renderApp(<ActivityPage />);
-    await screen.findByRole("heading", { level: 1, name: /in 2 sessions/ });
+    await waitFor(() => expect(document.querySelector("#vitals .vital .v")?.textContent).toBe("2")); // the Sessions vital
     const page = container.querySelector(".pg-activity")!, fades = () => page.querySelectorAll(".fade-in").length;
     await waitFor(() => expect(page.classList.contains("grow")).toBe(false), { timeout: 2000 });
     ingested(client);
-    await screen.findByRole("heading", { level: 1, name: /in 3 sessions/ });
+    await waitFor(() => expect(document.querySelector("#vitals .vital .v")?.textContent).toBe("3")); // the Sessions vital
     expect(page.classList.contains("grow")).toBe(false);
     expect(fades()).toBe(0);
     refreshed(client);
-    await screen.findByRole("heading", { level: 1, name: /in 4 sessions/ });
+    await waitFor(() => expect(document.querySelector("#vitals .vital .v")?.textContent).toBe("4")); // the Sessions vital
     expect(page.classList.contains("grow")).toBe(true);
     expect(fades()).toBeGreaterThan(0);
   });
@@ -500,7 +527,7 @@ describe("ActivityPage", () => {
     renderApp(<ActivityPage />);
     await loaded();
     openSessions();
-    const drawer = within(document.getElementById("d-sessions")!), hint = () => document.querySelector("#d-sessions .hint")!.textContent;
+    const drawer = within(document.getElementById("d-sessions")!), hint = () => document.querySelector("#d-sessions .hint [aria-live]")!.textContent;
     const keys: [string, string, string][] = [["Session", "first_ts", "newest first"], ["Active", "duration_s", "longest active time first"],
       ["Prompts", "prompts", "most prompts first"], ["Tokens", "tokens", "most tokens first"], ["Est. cost", "cost", "costliest first"],
       ["Peak context", "peak_context", "largest peak context first"], ["Failed", "errors", "most failed calls first"],
@@ -525,7 +552,7 @@ describe("ActivityPage", () => {
     await userEvent.click(attention().getByRole("button", { name: "See it" }));
     await waitFor(() => expect(fetched()).toContain("/api/sessions?range=30&near=1"));
     expect(document.querySelector("#d-sessions th[aria-sort]")).toBeNull();
-    await waitFor(() => expect(document.querySelector("#d-sessions .hint")!.textContent).toContain("nearest the limit first"));
+    await waitFor(() => expect(document.querySelector("#d-sessions .hint [aria-live]")!.textContent).toContain("nearest the limit first"));
     await userEvent.click(within(document.getElementById("d-sessions")!).getByRole("button", { name: "Tokens" }));
     await waitFor(() => expect(fetched()).toContain("/api/sessions?range=30&near=1&sort=tokens&desc=1"));
     const chart = screen.getByRole("group", { name: /^Commits/ });
@@ -535,7 +562,7 @@ describe("ActivityPage", () => {
     fireEvent.keyDown(chart, { key: "Enter" });
     await waitFor(() => expect(fetched()).toContain("/api/sessions?range=30&day=2026-11-04"));
     expect(document.querySelector("#d-sessions th[aria-sort]")).toBeNull();
-    await waitFor(() => expect(document.querySelector("#d-sessions .hint")!.textContent).toContain("by their cost on that day"));
+    await waitFor(() => expect(document.querySelector("#d-sessions .hint [aria-live]")!.textContent).toContain("by their cost on that day"));
   });
 
   it("keeps the Sessions sort when new data refreshes the table", async () => {
@@ -576,7 +603,7 @@ describe("ActivityPage", () => {
     at();
     renderApp(<ActivityPage />);
     await loaded();
-    act(() => { openDrawer("d-projects"); openDrawer("d-tools"); });
+    act(() => { openDrawer("d-projects"); });
     const order = (id: string) => [...document.querySelectorAll(`#${id} tbody tr`)].map(r => r.getAttribute("data-v"));
     const projects = within(document.getElementById("d-projects")!);
     expect(order("d-projects")).toEqual(["b", "c", "a"]);
@@ -586,6 +613,7 @@ describe("ActivityPage", () => {
     expect(order("d-projects")).toEqual(["c", "b", "a"]);
     await userEvent.click(projects.getByRole("button", { name: "Tokens / prompt" }));
     expect(order("d-projects")).toEqual(["b", "c", "a"]);
+    act(() => { openDrawer("d-tools"); });
     expect(order("d-tools")).toEqual(usage.tools.map(t => t.tool));
     const failed = within(document.getElementById("d-tools")!).getByRole("button", { name: "Failed" });
     await userEvent.click(failed);
@@ -655,25 +683,31 @@ describe("ActivityPage", () => {
     at("?range=30&day=2026-11-04");
     renderApp(<ActivityPage />);
     await loaded();
-    act(() => { openDrawer("d-tools"); openDrawer("d-ext"); openDrawer("d-loops"); openDrawer("d-sessions"); });
+    act(() => { openDrawer("d-tools"); });
     const tools = within(document.getElementById("d-tools")!);
     expect(await tools.findByRole("button", { name: "Grep" })).toBeTruthy();
     expect(tools.queryByRole("button", { name: "Edit" })).toBeNull();
     expect(fetched()).toContain("/api/day?range=30&day=2026-11-04");
     expect(tools.getByText(/^Nov 4, 2026 only\./)).toBeTruthy();
+    act(() => { openDrawer("d-ext"); });
     expect(within(document.getElementById("d-ext")!).getByRole("button", { name: "daysrv" })).toBeTruthy();
+    act(() => { openDrawer("d-loops"); });
     const loops = document.getElementById("d-loops")!;
     expect(loops.querySelector("h2")!.textContent).toMatch(/Error loops\s*7/);
     expect(loops.querySelector("a")!.getAttribute("href")).toContain("ex=dl1");
     // Projects and attention stay range-wide; the sessions table says which figures are whole-session.
     expect(attention().getByText("1 failed test run")).toBeTruthy();
+    act(() => { openDrawer("d-sessions"); });
     await userEvent.click(screen.getByRole("button", { name: "About Peak context" }));
     expect(screen.getByRole("button", { name: "Peak context" }).closest("th")!.querySelector("[role=status]")!.textContent).toMatch(/whole-session/i);
+    act(() => { openDrawer("d-tools"); });
     await userEvent.click(tools.getByRole("button", { name: "Show the whole range" }));
     expect(location.search).toBe("?range=30");
     expect(await tools.findByRole("button", { name: "Edit" })).toBeTruthy();
     expect(tools.queryByRole("button", { name: "Grep" })).toBeNull();
+    act(() => { openDrawer("d-ext"); });
     expect(within(document.getElementById("d-ext")!).getByRole("button", { name: "srv" })).toBeTruthy();
+    act(() => { openDrawer("d-sessions"); });
     expect(screen.getByRole("button", { name: "Peak context" }).closest("th")!.getAttribute("title")).toBeNull();
   });
 
@@ -684,7 +718,7 @@ describe("ActivityPage", () => {
     at("?range=30&day=2026-11-04");
     renderApp(<ActivityPage />);
     await loaded();
-    act(() => { openDrawer("d-tools"); openDrawer("d-ext"); });
+    act(() => { openDrawer("d-ext"); openDrawer("d-tools"); }); // both bodies render; the tools stay open
     const tools = within(document.getElementById("d-tools")!), ext = document.getElementById("d-ext")!;
     expect(tools.getByText(/^Loading Nov 4, 2026…; showing the whole range\./)).toBeTruthy();
     expect(tools.getByRole("button", { name: "Edit" })).toBeTruthy();
@@ -719,11 +753,11 @@ describe("ActivityPage", () => {
     at("?range=30&day=2026-02-30");
     renderApp(<ActivityPage />);
     await loaded();
-    act(() => { openDrawer("d-tools"); });
     openSessions();
     await waitFor(() => expect(fetched()).toContain("/api/sessions?range=30"));
     expect(fetched().some(u => String(u).startsWith("/api/day") || String(u).includes("day="))).toBe(false);
     expect(screen.queryByText(/^Active on/)).toBeNull();
+    act(() => { openDrawer("d-tools"); });
     expect(within(document.getElementById("d-tools")!).getByRole("button", { name: "Edit" })).toBeTruthy();
   });
 

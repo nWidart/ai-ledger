@@ -6,6 +6,14 @@ spec: [dashboard-app, usage-dashboard, cost-dashboard, context-dashboard]
 
 Pages show their figures as charts and as tables. This page describes the controls the tables share.
 
+## Drawers
+
+A drawer is a table folded behind its title, at the foot of a page. Every drawer is closed when a page loads, after a reload too. A page shows one open drawer at a time: opening a drawer closes the open one. A section index link, a card action or a chart click that opens a drawer also scrolls to it.
+
+## How measured
+
+A section's hint is one line. When there is more to say about how a figure is measured, a **How measured** link ends the hint. It is a toggletip: it shows the method on hover and on activation, and closes on Esc or a click outside it.
+
 ## Show data table
 
 Under some charts, a **Show data table** button opens the chart's figures as a table. The button reads **Hide data table** while the table is open. The table is closed on every page load and is not rendered while closed. It follows the chart's current measure and stacking.

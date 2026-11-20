@@ -5,6 +5,7 @@ import type { LimitHistoryRow, LimitWindow, LimitWindowCurve, LimitsPayload } fr
 import limits from "../../__fixtures__/limits";
 import windowCurve from "../../__fixtures__/limit-window";
 import palette from "../../__fixtures__/palette";
+import { openDrawer } from "../../components/Drawer";
 import { Palette } from "../../components/palette/Palette";
 import { openPalette } from "../../components/palette/store";
 import { mockApi } from "../../components/sheets/testing";
@@ -15,8 +16,9 @@ import { ingested, renderApp } from "../../testing";
 
 const fixture = limits as LimitsPayload;
 const claude = fixture.windows[0]!, fable = fixture.windows[1]!, codex = fixture.windows[2]!;
-/** A closed drawer renders no table: this starts open, as a reload that left it open would. */
-const openDrawers = () => localStorage.setItem("claude-usage-open", JSON.stringify(["value"]));
+/** Drawers start closed and a closed drawer renders no table: once the page is up, lede() opens What a point buys. */
+let toOpen = false;
+const openDrawers = () => { toOpen = true; };
 /** An open window's card, and the same with its Details open. */
 const card = (name: string) => screen.getByRole("region", { name });
 const details = (name: string) => {
@@ -34,7 +36,11 @@ const show = (d: LimitsPayload, hash = "?range=30") => {
 };
 /** A window's panel (not the table's scroll region, which is named for the table). */
 const WINDOW = /^(Claude Code|Codex)/;
-const lede = () => screen.findByRole("heading", { level: 1, name: /reaches|runs out|at its limit|seen yet/ });
+const lede = async () => {
+  const h = await screen.findByRole("heading", { level: 1, name: /reaches|runs out|at its limit|seen yet/ });
+  if (toOpen) { toOpen = false; act(() => openDrawer("value")); }
+  return h;
+};
 // Every window resets first: the fixture's Claude forecast, moved below 100%.
 const calm: LimitsPayload = {
   ...fixture, binding: { provider: "claude", limit_id: "weekly_all", scope: "", runs_out: false },
@@ -517,7 +523,7 @@ describe("past windows strips", () => {
   const row = (h: LimitHistoryRow) => screen.getByRole("button", { name: barName(h) });
   const hist = () => within(document.getElementById("history")!);
   const showCurve = (d: LimitsPayload = fixture, answer: () => unknown = () => curve, open = true) => {
-    if (open) openDrawers();
+    toOpen = open;
     const f = mockApi({ "/api/limits": () => d, "/api/limits/window": answer });
     history.replaceState(null, "", "/limits?range=30");
     renderApp(<LimitsPage />);

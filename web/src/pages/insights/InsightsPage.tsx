@@ -3,6 +3,7 @@ import { insightsUrl, viewOf, type FacetFamily, type InsightSession, type Insigh
 import { Drawer } from "../../components/Drawer";
 import { Judged, label, outcomeLabel, outcomeTone } from "../../components/facets";
 import { Filters, viewName } from "../../components/Filters";
+import { HowMeasured } from "../../components/HowMeasured";
 import { Ledger, LedgerRow } from "../../components/Ledger";
 import { ProjectName } from "../../components/ProjectDot";
 import { jumpTo, SectionIndex } from "../../components/SectionIndex";
@@ -40,7 +41,7 @@ function Coverage({ d, view, drawer }: { d: InsightsPayload; view: View; drawer:
     {drawer && <> Coverage <button type="button" className="linkish" onClick={() => jumpTo("d-coverage")}>by project and run</button>.</>}</>;
   return <>
     {c.not_analysed > 0 && <p className="cov" role="status" id="coverage">
-      <b>{num(c.analysed)} of {plural(c.claude_sessions, "Claude Code session")}</b> in this view analysed ({pct(c.analysed / c.claude_sessions)}).
+      <b>{num(c.analysed)} of {plural(c.claude_sessions, "Claude Code session")}</b> in this view analysed ({pct(c.analysed / c.claude_sessions)}){c.orphans > 0 && `; ${num(c.orphans)} more ${c.orphans === 1 ? "has a facet" : "have facets"} but no transcript`}.
       Each <code>/insights</code> run in Claude Code analyses more.{newest}</p>}
     {c.not_analysed === 0 && c.analysed > 0 && <p className="cov" id="coverage">Every Claude Code session in this view with a transcript is analysed.{newest}</p>}
     {view.source === "" && c.codex_sessions > 0 && <p className="cov">{plural(c.codex_sessions, "Codex session")} in this view {c.codex_sessions === 1 ? "is" : "are"} not
@@ -65,22 +66,20 @@ function Sub({ d, view }: { d: InsightsPayload; view: View }) {
     none analysed. Pick Claude Code or All to see the judgments.</p>;
   if (!c.stored_facets) return <p className="sub">The app reads <code>{c.dir ?? "~/.claude/usage-data"}</code>. Run <code>/insights</code> in Claude Code,
     then Refresh.{d.meta.sessions > 0 && " The session figures below are counted from transcripts."}</p>;
-  return <p className="sub">{viewName(view)}. Figures tagged model-judged come from <code>/insights</code> facets: a model's reading of each session,
-    not a measurement. Codex sessions have no facets. A session counts here by its start time; Activity counts a session with a request in the range, so the two totals can differ slightly.</p>;
+  return <p className="sub">{viewName(view)}. Model-judged: a model's reading of each session, not a measurement.
+    <HowMeasured what="the judgments">The figures come from <code>/insights</code> facets, except Session figures and Coverage, which are counted. Codex sessions have no facets.
+      A session counts here by its start time; Activity counts a session with a request in the range, so the two totals can differ slightly.</HowMeasured></p>;
 }
 
 function Vitals({ d }: { d: InsightsPayload }) {
-  const c = d.coverage, n = c.facets, full = countOf(d.outcomes, "fully_achieved"), mostly = countOf(d.outcomes, "mostly_achieved");
+  const n = d.coverage.facets, full = countOf(d.outcomes, "fully_achieved"), mostly = countOf(d.outcomes, "mostly_achieved");
   const partly = countOf(d.outcomes, "partially_achieved"), not = countOf(d.outcomes, "not_achieved");
   const dis = d.satisfaction.find(s => s.name === "dissatisfied")?.sessions ?? 0;
   const unclear = n - full - mostly - partly - not; // unclear_from_transcript, or an outcome this page does not know
   return (
     <section className="vitals sect" id="vitals" aria-label="Outcomes at a glance">
-      <div className="vital"><div className="v">{num(n)}</div><div className="l">Sessions analysed</div>
-        <div className="d">{num(c.analysed)} of {num(c.claude_sessions)} stored Claude Code sessions{c.orphans > 0 && `, ${num(c.orphans)} without transcript`}
-          {unclear > 0 && `; ${num(unclear)} with no clear outcome`}</div></div>
       <div className="vital good"><div className="v">{num(full + mostly)} <small>{pct((full + mostly) / n)}</small></div><div className="l">Fully or mostly achieved</div>
-        <div className="d">{num(full)} fully, {num(mostly)} mostly</div></div>
+        <div className="d">{num(mostly)} mostly{unclear > 0 && `; ${num(unclear)} with no clear outcome`}</div></div>
       <div className="vital"><div className="v">{num(partly)}</div><div className="l">Partially</div><div className="d">some of the goal met</div></div>
       <div className="vital bad"><div className="v">{num(not)}</div><div className="l">Not achieved</div><div className="d">goal abandoned or failed</div></div>
       <div className="vital bad"><div className="v">{num(dis)}</div><div className="l">Dissatisfied</div><div className="d">sessions where the user pushed back</div></div>
@@ -127,8 +126,8 @@ function Friction({ d }: { d: InsightsPayload }) {
   const raw = useSearchOf(validateSearch), max = d.friction_families[0]?.n ?? 0;
   return (
     <section className="panel sect" id="friction" aria-labelledby="frictionTitle">
-      <h2 id="frictionTitle">Friction categories <Judged /></h2>
-      <p className="hint">What got in the way, by times reported, with the sessions that reported it. A session can carry several. {FAMILY_HINT}</p>
+      <h2 id="frictionTitle">Friction categories</h2>
+      <p className="hint">What got in the way, by times reported.<HowMeasured what="friction">Each row has the sessions that reported it; a session can carry several. {FAMILY_HINT}</HowMeasured></p>
       <TopLedger rows={d.friction_families} empty="No friction reported in this view." noun="friction families" row={f =>
         <FamilyRow key={f.family} f={f} max={max} raw={raw} kind={{ raw: "fr", family: "frf" }} />} />
     </section>
@@ -138,8 +137,8 @@ function Friction({ d }: { d: InsightsPayload }) {
 function Goals({ d }: { d: InsightsPayload }) {
   const raw = useSearchOf(validateSearch), max = d.goal_families[0]?.n ?? 0;
   return (
-    <Drawer id="d-goals" title="Goals" after={<Judged />}>
-      <p className="hint">What each session set out to do. {FAMILY_HINT}</p>
+    <Drawer id="d-goals" title="Goals">
+      <p className="hint">What each session set out to do.<HowMeasured what="goals">{FAMILY_HINT}</HowMeasured></p>
       <TopLedger rows={d.goal_families} empty="No goals recorded in this view." noun="goal families" row={f =>
         <FamilyRow key={f.family} f={f} max={max} raw={raw} kind={{ raw: "goal", family: "goalf" }} />} />
     </Drawer>
@@ -149,7 +148,7 @@ function Goals({ d }: { d: InsightsPayload }) {
 function SessionTypes({ d }: { d: InsightsPayload }) {
   const types = d.session_types.filter(t => t.n > 0), color = (i: number) => TYPE_COLORS[Math.min(i, TYPE_COLORS.length - 1)];
   return (
-    <Drawer id="d-types" title="Session types" after={<Judged />}>
+    <Drawer id="d-types" title="Session types">
       {types.length ? <>
         <div className="strip" aria-hidden="true">{types.map((t, i) => <i key={t.name} style={{ flex: t.n, background: color(i) }} />)}</div>
         <ul className="key">{types.map((t, i) => <li key={t.name}><i className="sw" style={{ background: color(i) }} /><Cat name={t.name} /> <b>{num(t.n)}</b></li>)}</ul>
@@ -220,7 +219,7 @@ function Trend({ d }: { d: InsightsPayload }) {
   if (d.trend.length < 2) return null;
   return (
     <section className="panel sect" id="trend" aria-labelledby="trendTitle">
-      <h2 id="trendTitle">Outcome trend <Judged /></h2>
+      <h2 id="trendTitle">Outcome trend</h2>
       <p className="hint">Share of analysed sessions fully or mostly achieved, per week. Weeks are by session start, and a week with few sessions swings.</p>
       <Ledger empty="No weeks in this view.">{d.trend.map(w => <LedgerRow key={w.week} name={`Week of ${dayLabel(w.week)}`} title={w.week}
         share={w.n ? w.achieved / w.n : 0} value={pct(w.n ? w.achieved / w.n : 0)} side={`${num(w.achieved)} of ${num(w.n)}`} />)}</Ledger>
@@ -232,8 +231,9 @@ function Outcomes({ d }: { d: InsightsPayload }) {
   const raw = useSearchOf(validateSearch), n = d.coverage.facets;
   return (
     <section className="panel sect" id="outcomes" aria-labelledby="outcomesTitle">
-      <h2 id="outcomesTitle">Outcomes <Judged /></h2>
-      <p className="hint">Whether each session met its goal, as judged by a model from the transcript. Share of the {plural(n, "analysed session")}.</p>
+      <h2 id="outcomesTitle">Outcomes</h2>
+      <p className="hint">Whether each session met its goal, judged by a model from the transcript.<HowMeasured what="outcomes">Shares are of
+        the {plural(n, "analysed session")}.</HowMeasured></p>
       <Ledger empty="No outcomes in this view.">{d.outcomes.map(o => <LedgerRow key={o.name} name={outcomeLabel(o.name)} title={o.name}
         share={n ? o.n / n : 0} value={pct(n ? o.n / n : 0)} side={num(o.n)} {...pickProps(raw, "outcome", o.name, o.n)} />)}</Ledger>
     </section>
@@ -244,7 +244,7 @@ function Feelings({ d }: { d: InsightsPayload }) {
   const raw = useSearchOf(validateSearch), n = d.coverage.facets, smax = Math.max(0, ...d.satisfaction.map(s => s.n));
   return (
     <section className="panel sect" id="satisfaction" aria-labelledby="feelTitle">
-      <h2 id="feelTitle">Satisfaction and helpfulness <Judged /></h2>
+      <h2 id="feelTitle">Satisfaction and helpfulness</h2>
       <p className="hint">User satisfaction signals the model saw, summed over the sessions.</p>
       <TopLedger rows={d.satisfaction} empty="No satisfaction signals in this view." noun="signals" row={s => <LedgerRow key={s.name} name={label(s.name)}
         title={s.name} share={smax ? s.n / smax : 0} value={num(s.n)} side={sessionsSide(s)} />} />
@@ -319,7 +319,7 @@ function Sessions({ d, view, sort, onSort }: { d: InsightsPayload; view: View; s
   return (
     <section className="panel log sect" id="log" aria-labelledby="logTitle">
       <div className="log-head">
-        <h2 id="logTitle" tabIndex={-1}>Analysed sessions <Judged /></h2>
+        <h2 id="logTitle" tabIndex={-1}>Analysed sessions</h2>
         <div className="log-ctl">
           <label>Sort <select value={sort} onChange={e => onSort(e.target.value as SortId)}>
             {(Object.keys(SORTS) as SortId[]).map(k => <option key={k} value={k}>{SORTS[k].label}</option>)}</select></label>

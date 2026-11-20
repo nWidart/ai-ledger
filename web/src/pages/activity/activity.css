@@ -30,10 +30,10 @@
 @media (prefers-reduced-motion: no-preference) { .pg-activity > :not(.top):not(.secidx) { transition: opacity .2s; } }
 
 
-/* Work vitals: six figures in one ruled strip, then two rows of three, then three of two */
+/* Work vitals: seven figures in one ruled strip, then rows of four, then of two (the odd last one spans) */
 /* Every cell pads --vpad on both sides, so the padding is the same at any column count. The strip is pulled left by one
    pad and clipped there, which puts the first column's text flush with the page edge and hides the strip's own edge. */
-.pg-activity .vitals { --vpad: 16px; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 1px; margin: 0 0 20px;
+.pg-activity .vitals { --vpad: 16px; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 1px; margin: 0 0 20px;
   margin-inline-start: calc(var(--vpad) * -1); clip-path: inset(0 0 0 var(--vpad));
   background: var(--border); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
 .pg-activity .vital { padding: 16px var(--vpad); background: var(--bg); min-width: 0; }
@@ -43,7 +43,7 @@
 .pg-activity .vital .l { font-weight: 500; margin-top: 4px; }
 .pg-activity .vital .d { color: var(--text-muted); font-size: .78125rem; margin-top: 2px; }
 @media (max-width: 75em) {
-  .pg-activity .vitals { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .pg-activity .vitals { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 @media (max-width: 56.25em) {
   .pg-activity .vitals { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -59,7 +59,6 @@
 .pg-activity .work .tip .parts { padding-left: 14px; color: var(--text-secondary); }
 
 /* Prompts by hour: a weekday by hour grid, darker for more */
-.pg-activity .hours { margin-top: 16px; }
 .pg-activity .hours .hint { margin: 4px 0 8px; }
 .pg-activity .heat { width: 100%; table-layout: fixed; border-collapse: separate; border-spacing: 2px; }
 .pg-activity .heat:focus-visible { outline-offset: 4px; border-radius: 4px; }

@@ -40,7 +40,7 @@ None.
 - `web/src/components/Drawer.tsx`: no `localStorage`; a page-wide rule that one drawer is open. `savedOpen` goes; `SessionsDrawer` starts closed.
 - `web/src/components/HowMeasured.tsx`: new, a `Toggletip` with a visible "How measured" label.
 - `web/src/pages/activity/`, `context/`, `errors/`, `insights/`: the page changes above, and their tests.
-- `web/src/pages/limits/LimitsPage.test.tsx`: opens its drawers by clicking, not through `localStorage`. Limits and Cost page content do not change.
+- `LimitsPage.test.tsx`, `CostPage.test.tsx` and `InsightsPage.test.tsx` open their drawers with `openDrawer` once the page loads, not through `localStorage`. Limits and Cost page content do not change.
 - No payload change, so the page-test fixtures stay as they are.
 - `src/ai_ledger/web/` is rebuilt.
 - Docs: `README.md`, the docs site pages for Activity, Context, Errors and Insights, and `CHANGELOG.md` `[Unreleased]`.

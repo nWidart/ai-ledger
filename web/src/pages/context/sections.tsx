@@ -1,12 +1,13 @@
 // Context's sections: starting context, growth, what fills context and cost.
-import type { ContextPayload, FillRow } from "../../api";
+import type { ContextPayload } from "../../api";
 import { DataTable } from "../../components/DataTable";
-import { openProjectSheet, openToolSheet, pickRow } from "../../components/sheets/session";
+import { HowMeasured } from "../../components/HowMeasured";
+import { openProjectSheet, pickRow } from "../../components/sheets/session";
 import { Toggletip } from "../../components/Toggletip";
 import { dur, num, pct, plural, usd, usd0 } from "../../format";
-import { Proj, Est } from "./cells";
+import { Proj } from "./cells";
 import { CacheChart } from "./CacheChart";
-import { CURVE_MIN_SESSIONS, bytes, START_LARGE_TOKENS, short } from "./context";
+import { CURVE_MIN_SESSIONS, START_LARGE_TOKENS, short } from "./context";
 import { Contributors } from "./Contributors";
 import { GrowthChart } from "./GrowthChart";
 import { PressureBars } from "./PressureBars";
@@ -22,10 +23,11 @@ export function Starting({ d }: { d: D }) {
   return (
     <section className="panel sect" id="starting" aria-labelledby="startTitle">
       <h2 id="startTitle">Starting context</h2>
-      <div className="hint">The prompt tokens of each session's first turn: what the model read before any work, from the system prompt and tool definitions to the project's instructions.
-        The median is the typical start; the 10th percentile approximates the fixed overhead, since the sessions with the smallest first prompt start with little else.
-        The bar spans the 10th to the 90th percentile, with a tick at the median; the dashed line is the {short(START_LARGE_TOKENS)}-token mark the large-start tip uses.
-        {" "}{num(s.sessions)} of {plural(c.sessions, "session")} in this view have a measured start; {num(c.with_window)} have a known window, which is all a share of the window can cover.</div>
+      <div className="hint">What the model read before any work, per project: 10th to 90th percentile, median ticked.
+        <HowMeasured what="starting context">The prompt tokens of each session's first turn, from the system prompt and tool definitions to the project's instructions.
+          The median is the typical start; the 10th percentile approximates the fixed overhead, since the sessions with the smallest first prompt start with little else.
+          The dashed line is the {short(START_LARGE_TOKENS)}-token mark the large-start tip uses.
+          {" "}{num(s.sessions)} of {plural(c.sessions, "session")} in this view have a measured start; {num(c.with_window)} have a known window, which is all a share of the window can cover.</HowMeasured></div>
       <StartRanges starting={s} />
       {s.trend.length > 0 && <><h3>Median start by week</h3><StartTrend trend={s.trend} /></>}
     </section>
@@ -42,14 +44,16 @@ export function Growth({ d }: { d: D }) {
   return (
     <section className="panel sect" id="growth" aria-labelledby="growthTitle">
       <h2 id="growthTitle">Growth</h2>
-      <div className="hint">The median context at each turn of a session, over the sessions that reach it. A point needs at least {CURVE_MIN_SESSIONS} sessions, so a curve stops where they run out.
-        The strip under the chart counts how many sessions each turn rests on; the switch above it shows the curve as a share of the model's window instead of tokens.</div>
+      <div className="hint">The median context at each turn, over the sessions that reach it.
+        <HowMeasured what="growth">A point needs at least {CURVE_MIN_SESSIONS} sessions, so a curve stops where they run out.
+          The strip under the chart counts how many sessions each turn rests on; the switch above it shows the curve as a share of the model's window instead of tokens.</HowMeasured></div>
       {g.curve.length ? <GrowthChart curve={g.curve} projects={g.by_project_curves} share={g.share_curve} />
         : <p className="empty">No turn is shared by {CURVE_MIN_SESSIONS} or more sessions in this view, so there is no curve yet.</p>}
-      <div className="vitals" style={{ ["--n" as string]: tiles ? 4 : 1 }}>
+      <div className="vitals" style={{ ["--n" as string]: tiles ? 4 : 2 }}>
         <Tile v={num(g.added_per_prompt)} unit="tokens" l="Added per prompt" dsc="Median per session: the rises between turns over its prompts. A fall, as after a compaction, adds nothing." />
+        <Tile v={num(c.compacted)} l={`${c.compacted === 1 ? "Session" : "Sessions"} compacted`}
+          dsc={`Of ${plural(c.sessions, "session")}${tiles ? `; ${num(tc.sessions)} with a recorded first compaction` : ""}`} />
         {tiles && <>
-          <Tile v={num(tc.sessions)} l={`${tc.sessions === 1 ? "Session" : "Sessions"} with a compaction`} dsc="With a recorded first compaction" />
           <Tile v={num(tc.turns)} unit="turns" l="Before the first compaction" dsc="Median number of turns" />
           <Tile v={dur((tc.minutes ?? 0) * 60)} l="Active time before it" dsc="Median; pauses over 20 minutes left out" />
         </>}
@@ -75,7 +79,8 @@ export function Pressure({ d }: { d: D }) {
   return (
     <section className="panel sect" id="pressure" aria-labelledby="pressureTitle">
       <h2 id="pressureTitle">Window pressure</h2>
-      <div className="hint">How full sessions peak, by the size of their model's window: how many peaked in each band of it. {num(c.with_window)} of {plural(c.sessions, "session")} have a known window.</div>
+      <div className="hint">How many sessions peaked in each band of their model's window.
+        <HowMeasured what="window pressure">Sessions are grouped by the size of their model's window. {num(c.with_window)} of {plural(c.sessions, "session")} have a known window.</HowMeasured></div>
       {g.fill.length ? <PressureBars fill={g.fill} points={m.points} /> : <p className="empty">No session in this view has a known window.</p>}
       <h3>Sessions by start and peak</h3>
       <div className="hint">Each dot is a session: how much context it started with, and how much of its window it filled at its peak.</div>
@@ -84,30 +89,17 @@ export function Pressure({ d }: { d: D }) {
   );
 }
 
-/** Tool results by tool or MCP server: the main thread's summed size, with an estimated token count. */
-function FillTable({ rows, head, kind }: { rows: FillRow[]; head: string; kind: "tool" | "mcp" }) {
-  return <DataTable name={`Tool results ${kind === "mcp" ? "by MCP server" : "by tool"}`} region="scroll tall">
-    <thead><tr><th scope="col">{head}</th><th scope="col" className="num">Calls</th><th scope="col" className="num">Median</th><th scope="col" className="num">95th percentile</th><th scope="col" className="num">Largest</th><th scope="col" className="num">Total</th>
-      <th scope="col" className="num">Estimated tokens</th></tr></thead>
-    <tbody>{rows.map(r => <tr key={r.name} {...pickRow(r.name, v => openToolSheet(kind, v), { kind, value: r.name })}>
-      <th scope="row" className="name"><button type="button" className="cellbtn" title={r.name}>{r.name}</button></th>
-      <td className="num">{num(r.calls)}{r.with_bytes < r.calls && <Toggletip term="calls">{num(r.with_bytes)} with a result size</Toggletip>}</td>
-      <td className="num">{bytes(r.p50_bytes)}</td><td className="num">{bytes(r.p95_bytes)}</td><td className="num">{bytes(r.max_bytes)}</td><td className="num">{bytes(r.bytes)}</td>
-      <td className="num"><Est tokens={r.est_tokens} /></td></tr>)}</tbody>
-  </DataTable>;
-}
-
-/** What the tool results put in context: the largest contributors with the spread of their results, then every tool and MCP server, the subagents' results kept apart. */
+/** What the tool results put in context: the largest contributors with the spread of their results, every tool and MCP server
+ *  one "Show all" away, the subagents' results kept apart. */
 export function Fills({ d }: { d: D }) {
   const f = d.fills, c = d.coverage;
   return (
     <section className="panel sect" id="fills" aria-labelledby="fillsTitle">
       <h2 id="fillsTitle">What fills context</h2>
-      <div className="hint">The size of each main-thread tool result as the transcript stores it, summed by tool and by MCP server. Token counts are the bytes divided by 4, an estimate.
-        {" "}Sizes are known for {num(c.with_bytes)} of {plural(c.calls, "completed call")}.</div>
+      <div className="hint">Main-thread tool result sizes, summed by tool or MCP server.
+        <HowMeasured what="what fills context">Each result's size is as the transcript stores it. Token counts are the bytes divided by 4, an estimate.
+          {" "}Sizes are known for {num(c.with_bytes)} of {plural(c.calls, "completed call")}.</HowMeasured></div>
       <Contributors fills={f} />
-      {f.tools.length > 0 && <><h3>By tool</h3><FillTable rows={f.tools} head="Tool" kind="tool" /></>}
-      {f.mcp.length > 0 && <><h3>By MCP server</h3><FillTable rows={f.mcp} head="MCP server" kind="mcp" /></>}
     </section>
   );
 }
@@ -120,7 +112,8 @@ export function CostSection({ d }: { d: D }) {
   return (
     <section className="panel sect" id="cost" aria-labelledby="costTitle">
       <h2 id="costTitle">Cost</h2>
-      <div className="hint">Estimated at API list prices, as on the Cost page; an unpriced model reads as unknown (–), never as zero. The long-prompt tier prices the whole request higher once the prompt passes a model's threshold.</div>
+      <div className="hint">Estimated at API list prices, as on the Cost page.
+        <HowMeasured what="cost">An unpriced model reads as unknown (–), never as zero. The long-prompt tier prices the whole request higher once the prompt passes a model's threshold.</HowMeasured></div>
       <h3>Cache use over time</h3>
       <CacheChart series={c.series} />
       <h3>By project</h3>

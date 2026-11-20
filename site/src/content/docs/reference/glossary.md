@@ -56,8 +56,8 @@ See [Activity](/ai-ledger/pages/activity/).
 
 | Figure | Meaning | Where | Playbook |
 | --- | --- | --- | --- |
-| Commits, prompts, sessions, active days | Counts over the view, with the change against the previous period. | Heading | [Weekly review](/ai-ledger/improve/weekly-review/) |
-| Turns per prompt, tool calls per prompt | Main-thread requests, and main-thread tool calls, per prompt. | Under the heading | [Babysit agents less](/ai-ledger/improve/babysit-less/) |
+| Commits, prompts, sessions, active days | Counts over the view, with the change against the previous period. | Heading (commits, prompts); **Sessions** tile (sessions, active days) | [Weekly review](/ai-ledger/improve/weekly-review/) |
+| Turns per prompt, tool calls per prompt | Main-thread requests, and main-thread tool calls, per prompt. | **Prompts interrupted** tile | [Babysit agents less](/ai-ledger/improve/babysit-less/) |
 | N things to look at | How many of the four lines below show. | **Needs attention** | [Weekly review](/ai-ledger/improve/weekly-review/) |
 | N error loops | Error loops in the view. Marks the card **● Act**. | **Needs attention** | [Kill repeated tool failures](/ai-ledger/improve/tool-failures/) |
 | N sessions reached 80%+ of the context window | Sessions whose peak context was near the limit. | **Needs attention** | [Keep context lean](/ai-ledger/improve/lean-context/) |

@@ -14,7 +14,7 @@ The app already leaves out the sessions it detects as automated: a session of `o
 - Activity shows the banner "**Automated projects file ignored:**", with the file's path and the reason. This is the app's own sign: your `automated.json` does not apply, and only the built-in detection does.
 - On [Activity](/ai-ledger/pages/activity/), the **Project metrics** drawer lists a project that a script, a scheduled job or a tool works in, not you.
 - Rule of thumb: in Activity's **Sessions** drawer, sorted by **Prompts**, many sessions have 1 prompt and the same title. A script that runs `claude -p "…"` or `codex exec "…"` in a project folder makes such sessions, and the app counts them as yours.
-- Rule of thumb: **Prompts by hour** shows prompts at hours when you do not work, such as every night at 3:00.
+- Rule of thumb: Activity's **Prompts by hour** drawer shows prompts at hours when you do not work, such as every night at 3:00.
 - A session you ran yourself is missing from your figures, and it ran in a temporary folder with one prompt.
 
 Errors and Limits have no **Include automated sessions** control: Errors counts automated sessions in every figure, and the plan limit windows on Limits count all use of the account. This playbook does not change them.
@@ -23,7 +23,7 @@ Errors and Limits have no **Include automated sessions** control: Errors counts 
 
 Use [Activity](/ai-ledger/pages/activity/) with the range at **30d**, the project at **All projects** and the source at **All**.
 
-1. Read the heading's session count, such as "in 41 sessions" (an example). Turn on **Include automated sessions** and read it again. The difference is the sessions the app already detects. Turn the control off again.
+1. Read the session count in the **Sessions** tile, such as "41" (an example). Turn on **Include automated sessions** and read it again. The difference is the sessions the app already detects. Turn the control off again.
 2. Open **Project metrics**. For each project you do not work in by hand, write down its name and its **Sessions** count.
 3. Open **Sessions** and select the **Prompts** header to sort by it. Find the sessions with 1 prompt. Read their **Session** column (the title) and **Project** column. A title that repeats across many sessions is a script's prompt.
 4. Select one such session to open its sheet. Read the **Directory** line: the folder the script ran in.
@@ -91,14 +91,14 @@ When you start a session in a temporary folder, such as `/tmp/`, and send at mos
 
 ## Verify
 
-Before you act, note the heading's session count on Activity at **30d** with **Include automated sessions** off, and the **Sessions** count of each project you found in step 2 of Diagnose.
+Before you act, note the **Sessions** tile's count on Activity at **30d** with **Include automated sessions** off, and the **Sessions** count of each project you found in step 2 of Diagnose.
 
 Right after you edit `automated.json`, reload the page and read these with **Include automated sessions** off. There is nothing to wait for:
 
 | Figure | Where | Expected |
 | --- | --- | --- |
 | The listed project | The project picker and **Project metrics** | Gone from both. |
-| Session count | Activity's heading | Lower than your note, by the listed projects' sessions. |
+| Session count | Activity's **Sessions** tile | Lower than your note, by the listed projects' sessions. |
 | The listed project, with **Include automated sessions** on | **Project metrics** | Back in the list. |
 
 For a script you moved to its own folder, wait until it has run again, then set the range to **7d** and read **Sessions**, sorted by **Prompts**. Expected: no new one-prompt session with the script's title in your project. Older sessions keep their project until they leave the range.
@@ -113,7 +113,7 @@ If a figure did not move:
 
 - [Filters](/ai-ledger/everywhere/filters/#include-automated): the rules that make a session automated.
 - [Configuration](/ai-ledger/reference/configuration/#automated-projects): the `automated.json` file.
-- [Activity](/ai-ledger/pages/activity/): the heading, **Project metrics** and **Sessions**.
+- [Activity](/ai-ledger/pages/activity/): the **Sessions** tile, **Project metrics** and the **Sessions** drawer.
 - [Metric glossary](/ai-ledger/reference/glossary/): the automated session and the other terms.
 - [How AI Ledger works](/ai-ledger/concepts/how-it-works/): how the app reads sessions and projects.
 - [Weekly 15-minute review](/ai-ledger/improve/weekly-review/): a routine on figures without automated sessions.
