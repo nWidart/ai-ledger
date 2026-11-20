@@ -21,7 +21,7 @@ const d: UsagePayload = { ...usage, start: day, end: day, range: 1, project: "",
 
 const chart = () => screen.getByRole("group", { name: /Estimated cost by project/ });
 const open = () => {
-  renderApp(<CostChart d={d} metric="cost" onMetric={() => {}} hidden={[]} onHidden={() => {}} stack="project" onStack={() => {}} onProject={() => {}} onSource={() => {}} onDay={() => {}} />);
+  renderApp(<CostChart d={d} metric="cost" onMetric={() => {}} hidden={[]} onHidden={() => {}} scale="volume" onScale={() => {}} stack="project" onStack={() => {}} onProject={() => {}} onSource={() => {}} onDay={() => {}} />);
   act(() => chart().focus());
   fireEvent.keyDown(chart(), { key: "Home" });
 };
@@ -48,7 +48,7 @@ describe("cost tooltip: Other's projects", () => {
 
 describe("cost chart: unpriced requests", () => {
   const read = (unpriced: number) => {
-    renderApp(<CostChart d={{ ...d, daily: [{ ...d.daily[0]!, unpriced }] }} metric="cost" onMetric={() => {}} hidden={[]} onHidden={() => {}} stack="project" onStack={() => {}} onProject={() => {}} onSource={() => {}} onDay={() => {}} />);
+    renderApp(<CostChart d={{ ...d, daily: [{ ...d.daily[0]!, unpriced }] }} metric="cost" onMetric={() => {}} hidden={[]} onHidden={() => {}} scale="volume" onScale={() => {}} stack="project" onStack={() => {}} onProject={() => {}} onSource={() => {}} onDay={() => {}} />);
     act(() => chart().focus());
     fireEvent.keyDown(chart(), { key: "Home" });
     return document.querySelector(".sr")!.textContent;
@@ -69,7 +69,7 @@ describe("cost chart: today so far", () => {
   const long: UsagePayload = { ...d, start: days[0]!, end: days.at(-1)!, range: 20,
     daily: days.map((x, i) => ({ ...usage.daily[0]!, day: x, cost: i === 19 ? 40 : 1, unpriced: 0 })),
     daily_projects: days.map((x, i) => ({ day: x, project: "A", cost: i === 19 ? 40 : 1, tokens: 1 })), by_project: [proj("A", 59)] };
-  const show = (data = long) => renderApp(<CostChart d={data} metric="cost" onMetric={() => {}} hidden={[]} onHidden={() => {}} stack="project" onStack={() => {}} onProject={() => {}} onSource={() => {}} onDay={() => {}} />);
+  const show = (data = long) => renderApp(<CostChart d={data} metric="cost" onMetric={() => {}} hidden={[]} onHidden={() => {}} scale="volume" onScale={() => {}} stack="project" onStack={() => {}} onProject={() => {}} onSource={() => {}} onDay={() => {}} />);
 
   it("hatches only today's bar and keys it in the legend", () => {
     show();
@@ -114,7 +114,7 @@ describe("cost chart: stack by", () => {
   /** The chart with a stack state of its own, as the page keeps it. */
   function Host({ data, first }: { data: UsagePayload; first?: Stack }) {
     const [stack, setStack] = useState<Stack>(first ?? "project");
-    return <CostChart d={data} metric="cost" onMetric={() => {}} hidden={[]} onHidden={() => {}} stack={stack} onStack={setStack} onDay={() => {}} {...calls} />;
+    return <CostChart d={data} metric="cost" onMetric={() => {}} hidden={[]} onHidden={() => {}} scale="volume" onScale={() => {}} stack={stack} onStack={setStack} onDay={() => {}} {...calls} />;
   }
   const keys = () => [...document.querySelectorAll(".legend .proj, .legend .key")].map(k => k.textContent);
   const tipRows = () => [...screen.getByRole("tooltip").querySelectorAll(".row:not(.sub)")].map(r => r.textContent);
@@ -204,9 +204,9 @@ describe("cost chart: stack by", () => {
   });
 
   it("shows the switch only with the cost metric", () => {
-    const { rerender } = renderApp(<CostChart d={split} metric="cost" onMetric={() => {}} hidden={[]} onHidden={() => {}} stack="project" onStack={() => {}} onProject={() => {}} onSource={() => {}} onDay={() => {}} />);
+    const { rerender } = renderApp(<CostChart d={split} metric="cost" onMetric={() => {}} hidden={[]} onHidden={() => {}} scale="volume" onScale={() => {}} stack="project" onStack={() => {}} onProject={() => {}} onSource={() => {}} onDay={() => {}} />);
     expect(screen.getByRole("group", { name: "Stack by" })).toBeTruthy();
-    rerender(<CostChart d={split} metric="tokens" onMetric={() => {}} hidden={[]} onHidden={() => {}} stack="project" onStack={() => {}} onProject={() => {}} onSource={() => {}} onDay={() => {}} />);
+    rerender(<CostChart d={split} metric="tokens" onMetric={() => {}} hidden={[]} onHidden={() => {}} scale="volume" onScale={() => {}} stack="project" onStack={() => {}} onProject={() => {}} onSource={() => {}} onDay={() => {}} />);
     expect(screen.queryByRole("group", { name: "Stack by" })).toBeNull();
   });
 
@@ -233,5 +233,112 @@ describe("cost chart: stack by", () => {
     expect(document.querySelector(".sr")!.textContent).not.toContain("7-day average");
     fireEvent.keyDown(screen.getByRole("group", { name: /Estimated cost by model/ }), { key: "ArrowLeft" });
     expect(document.querySelector(".sr")!.textContent).toContain(`7-day average ${usd(1)}`);
+  });
+});
+
+describe("tokens chart: Share", () => {
+  // Two days: 60 input, 20 output and 120 cache read (30%, 10%, 60% of 200), then a day with no tokens.
+  const empty = { input: 0, output: 0, thinking: 0, cache_read: 0, cache_5m: 0, cache_1h: 0 };
+  const tokens: UsagePayload = { ...d, start: day, end: "2026-11-05", range: 2,
+    daily: [{ ...usage.daily[0]!, ...empty, day, input: 60, output: 20, cache_read: 120, cost: 1, unpriced: 0 }, { ...usage.daily[0]!, ...empty, day: "2026-11-05", cost: 0, unpriced: 0 }] };
+
+  /** The tokens chart with a scale state of its own, as the page keeps it. */
+  function Host({ data = tokens, first = "share", hidden = [] }: { data?: UsagePayload; first?: "volume" | "share"; hidden?: string[] }) {
+    const [scale, setScale] = useState(first);
+    return <CostChart d={data} metric="tokens" onMetric={() => {}} hidden={hidden} onHidden={() => {}} scale={scale} onScale={setScale} stack="project" onStack={() => {}}
+      onProject={() => {}} onSource={() => {}} onDay={() => {}} />;
+  }
+  const chart = (name: RegExp | string) => screen.getByRole("group", { name });
+  const read = (name: RegExp | string, key = "Home") => { act(() => chart(name).focus()); fireEvent.keyDown(chart(name), { key }); };
+  const axis = () => [...document.querySelectorAll("svg text")].map(t => t.textContent).filter(t => t?.endsWith("%"));
+
+  it("offers the scale only with tokens, Volume first, and switches to Share", async () => {
+    renderApp(<Host first="volume" />);
+    const scale = screen.getByRole("group", { name: "Scale" });
+    expect(within(scale).getByRole("button", { name: "Volume" }).getAttribute("aria-pressed")).toBe("true");
+    expect(chart(/^Tokens by kind per day/)).toBeTruthy();
+    await userEvent.click(within(scale).getByRole("button", { name: "Share" }));
+    expect(chart(/^Token share by kind per day/)).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Token share per day" })).toBeTruthy();
+  });
+
+  it("is not offered in the cost metric", () => {
+    renderApp(<CostChart d={tokens} metric="cost" onMetric={() => {}} hidden={[]} onHidden={() => {}} scale="share" onScale={() => {}} stack="project" onStack={() => {}} onProject={() => {}} onSource={() => {}} onDay={() => {}} />);
+    expect(screen.queryByRole("group", { name: "Scale" })).toBeNull();
+  });
+
+  it("fills the plot with each day's shares on a 0 to 100% axis, and draws no average or peak", () => {
+    renderApp(<Host />);
+    expect(axis()).toEqual(["0%", "25%", "50%", "75%", "100%"]);
+    // The day with tokens is three segments; the day without is none.
+    const heights = [...document.querySelectorAll(".bar-seg > :is(rect, path):not(.partial)")].map(s => s.getAttribute("height"));
+    expect(document.querySelectorAll(".bar-seg")).toHaveLength(1);
+    expect(heights.filter(Boolean).length + document.querySelectorAll(".bar-seg path").length).toBe(3);
+    expect(screen.queryByText("7-day average")).toBeNull();
+    expect(document.querySelector("svg text[font-weight='600']")).toBeNull();
+  });
+
+  it("draws a 1% share above zero height, under the 2px gap between segments", () => {
+    const thin: UsagePayload = { ...tokens, daily: [{ ...tokens.daily[0]!, ...empty, input: 98, output: 1, cache_read: 1 }] };
+    renderApp(<Host data={thin} />);
+    const segs = [...document.querySelectorAll(".bar-seg > rect:not(.partial)")];
+    expect(segs).toHaveLength(3);
+    for (const s of segs) expect(Number(s.getAttribute("height"))).toBeGreaterThan(0);
+  });
+
+  it("gives two 0.1% shares room of their own, so no segment paints over another and the bar still fills the plot", () => {
+    const thin: UsagePayload = { ...tokens, daily: [{ ...tokens.daily[0]!, ...empty, input: 998, output: 1, cache_read: 1 }] };
+    renderApp(<Host data={thin} />);
+    const segs = [...document.querySelectorAll(".bar-seg > rect:not(.partial)")]
+      .map(s => ({ y: Number(s.getAttribute("y")), h: Number(s.getAttribute("height")) })).sort((p, q) => p.y - q.y);
+    expect(segs).toHaveLength(3);
+    for (let i = 1; i < segs.length; i++) expect(segs[i]!.y).toBeGreaterThanOrEqual(segs[i - 1]!.y + segs[i - 1]!.h + 2 - 1e-9);
+    for (const s of segs) expect(s.h).toBeGreaterThanOrEqual(1 - 1e-9);
+    // Top of the 100% line to the baseline: the 0% and 100% axis labels' rows bound the bar.
+    const top = segs[0]!.y, bottom = segs.at(-1)!.y + segs.at(-1)!.h;
+    const zero = [...document.querySelectorAll("svg line")].map(l => Number(l.getAttribute("y1")));
+    expect(zero).toContain(bottom);
+    expect(zero).toContain(top);
+  });
+
+  it("reads a day's shares and total in the tooltip and the screen-reader text", () => {
+    renderApp(<Host />);
+    read(/^Token share/);
+    const rows = [...screen.getByRole("tooltip").querySelectorAll(".row")].map(r => r.textContent);
+    expect(rows).toContain("Input30.0%");
+    expect(rows).toContain("Output10.0%");
+    expect(rows).toContain("Cache read60.0%");
+    expect(rows.at(-1)).toBe("Total200");
+    expect(document.querySelector(".sr")!.textContent).toContain("Input 30.0%, Output 10.0%, Thinking 0.0%, Cache read 60.0%, Cache write 5m 0.0%, Cache write 1h 0.0%, total 200");
+    read(/^Token share/, "ArrowRight");
+    expect(document.querySelector(".sr")!.textContent).toContain("no tokens");
+    expect(screen.getByRole("tooltip").textContent).toContain("–");
+  });
+
+  it("takes a hidden kind out of the day's total, so the others still make 100%", () => {
+    renderApp(<Host hidden={["cache_read"]} />);
+    read(/^Token share/);
+    expect(document.querySelector(".sr")!.textContent).toContain("Input 75.0%, Output 25.0%");
+    expect(document.querySelector(".sr")!.textContent).toContain("total 80");
+  });
+
+  it("lists each day's shares and total tokens in the data table", async () => {
+    renderApp(<Host />);
+    await userEvent.click(screen.getByRole("button", { name: "Show data table" }));
+    const table = screen.getByRole("table", { name: "Token share by kind per day" });
+    const head = within(table).getAllByRole("columnheader").map(c => c.textContent);
+    expect(head).toEqual(["Day", "Input", "Output", "Thinking", "Cache read", "Cache write 5m", "Cache write 1h", "Total"]);
+    const [first, second] = within(table).getAllByRole("row").slice(1).map(r => [...r.querySelectorAll("td")].map(c => c.textContent));
+    expect(first).toEqual(["30.0%", "10.0%", "0.0%", "60.0%", "0.0%", "0.0%", "200"]);
+    expect(second!.slice(0, 6)).toEqual(Array(6).fill("–"));
+  });
+
+  it("keeps Volume's average line and peak label", () => {
+    const days = dayRange("2026-10-16", "2026-11-04");
+    const long: UsagePayload = { ...tokens, start: days[0]!, end: days.at(-1)!, range: 20,
+      daily: days.map(x => ({ ...usage.daily[0]!, ...empty, day: x, input: 1, cost: 1, unpriced: 0 })) };
+    renderApp(<Host data={long} first="volume" />);
+    expect(screen.getByText("7-day average")).toBeTruthy();
+    expect(document.querySelector("svg text[font-weight='600']")).not.toBeNull();
   });
 });

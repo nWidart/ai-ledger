@@ -20,6 +20,7 @@ Only the shots a page shows are kept: a shot no page references is deleted, and 
 | `cost-projects` | "Project spend and change": trend, spend, change, cost per commit and cache hit per project. | Cost |
 | `cost-highlights` | "What stands out": the insight cards. | Cost |
 | `cost-models` | "Models and effort": spend by model and effort level. | Cost, Spend less |
+| `cost-tokens` | "Tokens and cache" drawer, open: each kind's share of tokens beside its share of cost. | Cost |
 | `context-tips` | "Tips": the cards that say what to change. | Context, First tour |
 | `context-starting` | "Starting context": what a session begins with, per project. | Context, Keep context lean |
 | `context-growth` | "Growth": context size as a session goes on. | Context |
@@ -36,8 +37,9 @@ Only the shots a page shows are kept: a shot no page references is deleted, and 
 | `insights-outcomes` | "Outcomes", model-judged. | Insights, First tour |
 | `insights-friction` | "Friction categories", model-judged. | Insights |
 | `insights-log` | "Analysed sessions": the log, first 1200px. | Insights |
-| `project-summary` | "Summary". | Project, First tour |
-| `project-cost` | "Cost". | Project |
+| `project-layout` | The whole page in two columns, cropped to its first 1500px. | Project, First tour |
+| `project-activity` | "Activity": eight figures of the project's activity. | Project |
+| `project-cost` | "Cost": change, models, and token share beside cost share. | Project |
 | `project-sessions` | "Sessions". | Project |
 | `project-errors` | "Errors". | Project |
 | `project-context` | "Context". | Project |

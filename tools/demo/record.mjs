@@ -303,7 +303,7 @@ const SHOT_PAGES = {
     ["attention", "#attention"], ["vitals", "#vitals"], ["work", "#work"], ["hours", "#hours", { drawer: "d-hours" }]] },
   cost: { url: "/cost?range=30", panels: [
     ["overview", "#overview"], ["spend", "#spend"], ["projects", "#projects"], ["highlights", "#insights"],
-    ["models", ".split > section.panel"]] },
+    ["models", ".split > section.panel"], ["tokens", "#d-tokens", { drawer: "d-tokens" }]] },
   context: { url: "/context?range=30", panels: [
     ["tips", "#tips"], ["starting", "#starting"], ["growth", "#growth"], ["pressure", "#pressure"], ["fills", "#fills"], ["cost", "#cost"]] },
   errors: { url: "/errors?range=30", panels: [
@@ -313,8 +313,8 @@ const SHOT_PAGES = {
   insights: { url: "/insights?range=30", panels: [
     ["vitals", "#vitals"], ["outcomes", "#outcomes"], ["friction", "#friction"], ["log", "#log"]] },
   project: { url: "/project?range=30&project=atlas-api", panels: [
-    ["summary", "#summary"], ["cost", "#cost"], ["sessions", "#sessions"], ["errors", "#errors"], ["context", "#context"],
-    ["insights", "#insights"], ["limits", "#limits"]] },
+    ["layout", "#content", { max: 1500 }], ["activity", "#activity"], ["cost", "#cost"], ["sessions", "#sessions"], ["errors", "#errors"],
+    ["context", "#context"], ["insights", "#insights"], ["limits", "#limits"]] },
 };
 
 const suffix = scheme => scheme === "light" ? "-light" : "";

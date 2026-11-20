@@ -11,10 +11,15 @@
   .pg-project .top-side { max-width: none; align-items: stretch; }
   .pg-project .top-side .filters { justify-content: flex-start; }
 }
-.pg-project.loading > :not(.top) { opacity: .55; }
-@media (prefers-reduced-motion: no-preference) { .pg-project > :not(.top) { transition: opacity .2s; } }
+/* A block whose own request is slow to refresh dims its figures, not its heading; the other blocks stay as they are. */
+.pg-project .panel.loading > :not(.blk-head) { opacity: .55; }
+@media (prefers-reduced-motion: no-preference) { .pg-project .panel > :not(.blk-head) { transition: opacity .2s; } }
 
-/* One panel per block, in the page's single column */
+/* Two columns of blocks on a wide screen (Activity, Cost and Context | Errors, Plan limits, Sessions and Session judgments), one
+   column on a narrow one, in the same order. A panel's margin-top is the gap between blocks. */
+.pg-project .cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 16px; align-items: start; }
+.pg-project .col { min-width: 0; }
+@media (max-width: 60em) { .pg-project .cols { grid-template-columns: minmax(0, 1fr); } }
 .pg-project .panel { margin-top: 16px; }
 .pg-project h2 { font-size: 1rem; font-weight: 600; margin: 0; letter-spacing: -.005em; }
 .pg-project h3 { font-size: .8125rem; font-weight: 600; margin: 18px 0 2px; color: var(--text-secondary); }
