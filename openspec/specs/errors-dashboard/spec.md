@@ -189,11 +189,11 @@ The selected bucket SHALL be part of the URL view and push a history entry, and 
 - **THEN** the example shows under "Outside current filters", and Clear filters also clears the bucket
 
 ### Requirement: Show the uncategorized share
-The Errors summary SHALL show the share of the view's errors in the catch-all types (Other, Other non-zero exit and MCP tool error), which are the errors no specific rule matched, with a title that says so. When the view is not filtered to one source and more than one source has errors, the line SHALL split the share by source. It SHALL show nothing when the view has no errors.
+The Errors summary SHALL show the share of the view's errors in the catch-all types (Other, Other non-zero exit and MCP tool error), which are the errors no specific rule matched, followed by a How measured toggletip that says so. When the view is not filtered to one source and more than one source has errors, the line SHALL split the share by source. It SHALL show nothing when the view has no errors.
 
 #### Scenario: Share shows
 - **WHEN** the view has errors, and 12 of 100 of them are of catch-all types
-- **THEN** the summary shows "Uncategorized: 12% of errors", titled with the catch-all types and what they mean
+- **THEN** the summary shows "Uncategorized: 12% of errors", and its How measured toggletip names the catch-all types and what they mean
 
 #### Scenario: Split by source
 - **WHEN** the view has no source filter and both Claude Code and Codex have errors in it
@@ -201,11 +201,11 @@ The Errors summary SHALL show the share of the view's errors in the catch-all ty
 - **AND** a view filtered to one source shows the share alone
 
 ### Requirement: State each type's time lost
-The Errors page SHALL state each error type's time lost: the sum, over the view's incidents of that type, of each incident's span, from its first failure's start to its last failure's end. An incident SHALL count whole when at least one of its failures is in the view. A type whose incidents have no measurable span SHALL show no time. The page SHALL rank the open types that have a ready-made fix by time lost, most first, then by error count, and show each one's time lost.
+The Errors page SHALL state each error type's time lost: the sum of the spans of the view's incidents of that type, each from its first failure's start to its last failure's end, in the app's one duration format. An incident SHALL count whole when at least one of its failures is in the view. A type whose incidents have no measurable span SHALL show no time. The page SHALL rank the open types with a ready-made fix by time lost, most first, then by error count, and show each one's time lost.
 
 #### Scenario: Fewer errors, more time lost
 - **WHEN** one open type has 3 errors in two incidents of 10 minutes each, and another has 4 errors in one incident of 1 minute
-- **THEN** Where to start lists the first type above the second, and the type table shows 20 min and 1 min
+- **THEN** Where to start lists the first type above the second, and the type table shows 20m and 1m
 
 #### Scenario: Equal time lost
 - **WHEN** two open types lost the same time
@@ -456,7 +456,7 @@ The type table SHALL sort by Type (A to Z first), Errors, Time lost, Rate, Didn'
 
 #### Scenario: No time lost
 - **WHEN** the user sorts by Time lost, least first, and a type with no measurable time lost shows "–"
-- **THEN** that type comes after the type that shows "1 min"
+- **THEN** that type comes after the type that shows "1m"
 
 ### Requirement: Show each type's rate and share that did not recover
 The type table SHALL show Rate: the type's errors per 100 tool calls in the view, with two decimals and "%", or "–" with no calls. It SHALL show Didn't recover: the percent of the type's incidents whose outcome is not recovered, with "N of M incidents" as its title, or "–" with no incident. With a chart bucket selected, both SHALL count only that bucket's errors, and Rate SHALL use that bucket's calls.
@@ -583,3 +583,17 @@ The Errors lede SHALL state the view's failed tool calls and their error rate, a
 #### Scenario: No errors
 - **WHEN** the view has tool calls and none failed
 - **THEN** the lede says no tool call failed out of how many, and the Top type vital shows "–"
+
+### Requirement: Explain incidents behind How measured
+The open type's incident line SHALL end with a How measured toggletip that says what an incident is (one agent retrying one tool with this error, within the gap, at most the given successful calls apart) and what recovered means. The line SHALL carry no hover title and no inline method note.
+
+#### Scenario: Read the incident method
+- **WHEN** the user opens a type and activates How measured on its incident line
+- **THEN** it says what an incident is and that recovered means only that the agent's next call of that tool succeeded
+
+### Requirement: Read a low-call chart point
+The chart's keyboard and pointer reading of a bucket with too few calls for a steady rate (the hollow point) SHALL add "too few calls for a steady rate" after the rate, as its tooltip and Activity's chart do. In forced colors, the hollow point and its key SHALL keep a page-colored center in a text-colored ring.
+
+#### Scenario: A quiet day
+- **WHEN** the user reads, by keyboard, a day with 4 tool calls in a view whose other days have hundreds
+- **THEN** the reading says its rate, errors and calls, then "too few calls for a steady rate"

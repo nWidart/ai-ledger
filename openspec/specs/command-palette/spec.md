@@ -242,7 +242,7 @@ A sheet that only one page hosts SHALL take the commit to that page. Error categ
 - **THEN** the category chip shows as dropped, and Enter opens Cost with no category
 
 ### Requirement: A sheet without a page stays where it can
-A `>` sheet without a page SHALL open on the current page when that page hosts the sheet, and otherwise on Activity. Activity, Cost, Context, Errors and the Project page host the tool, MCP server, skill and session sheets. Limits hosts none.
+A `>` sheet without a page SHALL open on the current page when that page hosts the sheet, and otherwise on Activity. Activity, Cost, Context, Errors, Insights, Live and the Project page host the tool, MCP server, skill and session sheets. Limits hosts none.
 
 #### Scenario: On a hosting page
 - **WHEN** the user on Errors commits `>bash`
@@ -259,6 +259,17 @@ A `>` sheet without a page SHALL open on the current page when that page hosts t
 #### Scenario: On Limits
 - **WHEN** the user on Limits commits `>bash`
 - **THEN** Activity opens with the `Bash` inspector, and the footer said so before Enter
+
+### Requirement: Keep the followed session on Live
+On Live, the session sheet SHALL be named under `sheet`, and opening any sheet SHALL keep `session`, the session the stream follows, even when the same commit changes the project or source. A commit that changes the project or source and opens no sheet SHALL drop `session`.
+
+#### Scenario: On Live
+- **WHEN** the user on `/live?session=s1` commits a session chip for `abc`
+- **THEN** the URL is `/live?session=s1&sheet=abc`, the session sheet opens over Live and the stream keeps following `s1`
+
+#### Scenario: On Live, with a new project
+- **WHEN** the user on `/live?project=foo&session=s1` changes the project chip to `bar` and commits a session chip for `abc`
+- **THEN** the URL is `/live?project=bar&session=s1&sheet=abc`, and the stream keeps following `s1`; changing the project alone starts the stream over
 
 ### Requirement: Tools are not filters
 A `#` term that matches a tool, MCP server or skill SHALL NOT become a filter. The palette SHALL offer that subject's inspector instead, as a row like "Bash · open inspector (>)", and picking it SHALL add a `>` chip.
