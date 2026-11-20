@@ -20,7 +20,7 @@ None.
 
 ### Modified Capabilities
 
-- `usage-dashboard`: "Show work per day" states the low-call rule for the rate line.
+- `usage-dashboard`: "Show work per day" drops the quiet-day scenario; a new requirement, "Mark work chart bars with few tool calls", states the low-call rule for the rate line.
 
 ## Impact
 

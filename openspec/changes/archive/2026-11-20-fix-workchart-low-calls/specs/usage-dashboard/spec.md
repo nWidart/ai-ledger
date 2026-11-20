@@ -3,7 +3,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: Show work per day
-Activity SHALL chart commits, prompts or sessions across the view, from its first day with a session, with errors per 100 tool calls on the same chart against its own axis (the failed count stays in the tooltip); a view with no tool calls SHALL show no rate line, axis or legend entry. A bar with fewer than 50 tool calls SHALL draw its rate as a hollow dot and SHALL NOT set the rate axis, when at least one bar has 50 or more; the line SHALL still run through it, the legend SHALL give a key for the hollow dot, and the bar's tooltip, screen-reader text and data table SHALL say it has too few calls for a steady rate. Selecting a day SHALL list that day's sessions. The all-time lead SHALL date the history from that same day.
+Activity SHALL chart commits, prompts or sessions across the view, from its first day with a session, with errors per 100 tool calls on the same chart against its own axis (the failed count stays in the tooltip); a view with no tool calls SHALL show no rate line, axis or legend entry. Selecting a day SHALL list that day's sessions. The all-time lead SHALL date the history from that same day.
 
 #### Scenario: History starts inside the range
 - **WHEN** the user opens the 90-day view and the first session in it ran 40 days ago
@@ -16,6 +16,11 @@ Activity SHALL chart commits, prompts or sessions across the view, from its firs
 #### Scenario: Failure rate, not failed count
 - **WHEN** two busy days have 6 failed calls of 200 and 5 of 100
 - **THEN** the line shows 3 and 5 errors per 100 calls, and each tooltip also gives the failed count
+
+## ADDED Requirements
+
+### Requirement: Mark work chart bars with few tool calls
+On the work chart, a bar with fewer than 50 tool calls SHALL draw its rate as a hollow dot and SHALL NOT set the rate axis, when at least one bar has 50 or more. The line SHALL still run through the dot, and a rate above the axis SHALL stop at its top. The legend SHALL give a key for the hollow dot, and the bar's tooltip, screen-reader text and data table SHALL say it has too few calls for a steady rate while still giving its rate.
 
 #### Scenario: Quiet day does not set the scale
 - **WHEN** a quiet day has 2 failed calls of 4 and the busy days have 6 of 200 and 5 of 100
