@@ -286,6 +286,21 @@ describe("tokens chart: Share", () => {
     for (const s of segs) expect(Number(s.getAttribute("height"))).toBeGreaterThan(0);
   });
 
+  it("gives two 0.1% shares room of their own, so no segment paints over another and the bar still fills the plot", () => {
+    const thin: UsagePayload = { ...tokens, daily: [{ ...tokens.daily[0]!, ...empty, input: 998, output: 1, cache_read: 1 }] };
+    renderApp(<Host data={thin} />);
+    const segs = [...document.querySelectorAll(".bar-seg > rect:not(.partial)")]
+      .map(s => ({ y: Number(s.getAttribute("y")), h: Number(s.getAttribute("height")) })).sort((p, q) => p.y - q.y);
+    expect(segs).toHaveLength(3);
+    for (let i = 1; i < segs.length; i++) expect(segs[i]!.y).toBeGreaterThanOrEqual(segs[i - 1]!.y + segs[i - 1]!.h + 2 - 1e-9);
+    for (const s of segs) expect(s.h).toBeGreaterThanOrEqual(1 - 1e-9);
+    // Top of the 100% line to the baseline: the 0% and 100% axis labels' rows bound the bar.
+    const top = segs[0]!.y, bottom = segs.at(-1)!.y + segs.at(-1)!.h;
+    const zero = [...document.querySelectorAll("svg line")].map(l => Number(l.getAttribute("y1")));
+    expect(zero).toContain(bottom);
+    expect(zero).toContain(top);
+  });
+
   it("reads a day's shares and total in the tooltip and the screen-reader text", () => {
     renderApp(<Host />);
     read(/^Token share/);

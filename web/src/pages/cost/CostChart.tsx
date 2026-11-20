@@ -4,7 +4,7 @@ import { useColors } from "../../colors";
 import { dayAxis, peakLabelAt, roomForLabels, textScale, tipAt, useWidth } from "../../components/chart";
 import { ChartTable, DataTable } from "../../components/DataTable";
 import { big, dayLabel, niceStep, pct, plural, usd, usd0 } from "../../format";
-import { costDays, costKinds, isOther, KINDS, SCALES, shares, STACKS, STACK_WORD, type CostDay, type Kind, type Stack, type TokenScale } from "./cost";
+import { costDays, costKinds, isOther, KINDS, SCALES, shares, stackHeights, STACKS, STACK_WORD, type CostDay, type Kind, type Stack, type TokenScale } from "./cost";
 
 const H = 240;
 export type CostMetric = "cost" | "tokens";
@@ -106,17 +106,18 @@ export function CostChart({ d, metric, onMetric, hidden, onHidden, scale, onScal
   };
   // The bars and their axis labels: drawn again only with the data, the size or the stacking, not on every pointer move.
   const bars = useMemo(() => plot.map((p, i) => {
-    const x = a.x(i), segs = kinds.filter(k => (p.v[k.k] ?? 0) > 0);
-    let base = 0;
+    const x = a.x(i), segs = kinds.filter(k => (p.v[k.k] ?? 0) > 0), vals = segs.map(k => p.v[k.k]!);
+    // 2px surface gap between stacked segments; the top segment gets rounded corners. A positive segment keeps at least 1px, so a
+    // thin share (1% of the plot is about 2px) is never drawn zero tall while its tooltip gives it. The slots make room for that
+    // pixel and the gap below it, and the others shrink to keep the bar its height, so no segment paints over another.
+    const slots = stackHeights(vals, vals.reduce((s, v) => s + v, 0) / a.yMax * a.ih, segs.map((_, j) => (j ? 3 : 1)));
+    let base = a.y(0);
     return <g key={p.day}>
       {i % a.every === 0 && <text x={x + a.w / 2} y={H - 6 * ts} textAnchor="middle" fontSize={11 * ts} fill="var(--text-muted)">{dayLabel(p.day)}</text>}
       {/* One group per bar, so the whole stack grows from the baseline when data lands. */}
       {segs.length > 0 && <g className="bar-seg" style={{ ["--i" as string]: Math.min(i, 60) }}>{segs.map((k, j) => {
-        const v = p.v[k.k]!, top = a.y(base + v), h = v / a.yMax * a.ih;
-        base += v;
-        // 2px surface gap between stacked segments; the top segment gets rounded corners. A positive segment keeps at least 1px, so a
-        // thin share (1% of the plot is about 2px) is never drawn zero tall while its tooltip gives it.
-        const hh = Math.max(1, h - (j ? 2 : 0));
+        const top = base - slots[j]!, hh = slots[j]! - (j ? 2 : 0);
+        base = top;
         const shape = (fill: string, cls?: string) => j === segs.length - 1 && hh > 4
           ? <path className={cls} d={`M${x},${top + hh} V${top + 3} q0,-3 3,-3 H${x + a.w - 3} q3,0 3,3 V${top + hh} Z`} fill={fill} />
           : <rect className={cls} x={x} y={top} width={a.w} height={hh} fill={fill} />;

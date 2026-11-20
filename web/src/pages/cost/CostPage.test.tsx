@@ -569,4 +569,12 @@ describe("CostPage", () => {
     await show({ ...usage, totals: { ...usage.totals, ...close } }, ["d-tokens"]);
     expect(within(drawer("d-tokens")).getByText("Cache write is 8.3% of tokens and 5.0% of estimated cost.")).toBeTruthy();
   });
+
+  it("names the costlier kind on a tie, whatever the float rounding of the gaps", async () => {
+    // Input 70% of tokens and 60% of cost, Output 30% and 40%: both gaps are 10 points.
+    const tie = { tokens: 100, input: 70, output: 30, thinking: 0, cache_read: 0, cache_5m: 0, cache_1h: 0,
+      cost: 10, cost_input: 6, cost_output: 4, cost_cache_read: 0, cost_cache_5m: 0, cost_cache_1h: 0 };
+    await show({ ...usage, totals: { ...usage.totals, ...tie } }, ["d-tokens"]);
+    expect(within(drawer("d-tokens")).getByText("Input is 70.0% of tokens and 60.0% of estimated cost.")).toBeTruthy();
+  });
 });

@@ -168,6 +168,24 @@ export function shares(v: Record<string, number>, kinds: readonly Kind[]): Recor
   return Object.fromEntries(kinds.map(k => [k.k, sum ? (v[k.k] || 0) / sum : 0]));
 }
 
+/** The pixel slot of each stacked segment, bottom first, summing to the bar's height (total). A slot is at least its minimum (mins[j]:
+ *  the segment's painted 1px plus the gap below it), and the other slots share what is left in proportion to their values, so a thin
+ *  segment takes room of its own instead of painting over its neighbour. With less room than the minimums, each slot is its minimum. */
+export function stackHeights(values: readonly number[], total: number, mins: readonly number[]): number[] {
+  const out = values.map(() => 0), fixed = new Set<number>();
+  for (;;) {
+    const room = total - [...fixed].reduce((s, j) => s + mins[j]!, 0);
+    const free = values.reduce((s, v, j) => (fixed.has(j) ? s : s + v), 0);
+    let grew = false;
+    values.forEach((v, j) => {
+      if (fixed.has(j)) { out[j] = mins[j]!; return; }
+      out[j] = free > 0 ? (v / free) * Math.max(0, room) : 0;
+      if (out[j]! < mins[j]!) { fixed.add(j); grew = true; }
+    });
+    if (!grew) return out;
+  }
+}
+
 /** One billed token kind: its tokens and the share of all tokens, its estimated cost (null when unknown) and the share of all cost
  *  (null when no request is priced, 0 when the priced requests cost nothing). */
 export interface TokenPair { key: "input" | "output" | "write" | "read"; label: string; c: string; tokens: number; tokenShare: number; cost: number | null; costShare: number | null;

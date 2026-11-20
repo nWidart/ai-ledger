@@ -11,10 +11,12 @@ const cents = (n: number | null) => (n == null ? "–" : "$" + num(n, 2));
 function lede(pairs: readonly TokenPair[], cost: number | null): string {
   if (cost == null) return "No request in this view is priced, so each kind's share of cost is unknown.";
   if (cost === 0) return "The priced requests in this view cost $0.00, so no kind has a share of estimated cost.";
-  const far = pairs.reduce((b, p) => (gap(p) > gap(b) ? p : b));
+  const far = pairs.reduce((b, p) => (gap(p) > gap(b) + TIE ? p : b));
   return `${far.label} is ${pct(far.tokenShare, 1)} of tokens and ${pct(far.costShare, 1)} of estimated cost.`;
 }
 const gap = (p: TokenPair) => Math.abs(p.tokenShare - (p.costShare ?? 0));
+/** Gaps closer than this are a tie, so a float's rounding (0.7 − 0.6 against 0.4 − 0.3) does not pass over the costlier kind. */
+const TIE = 1e-9;
 
 /** A share as a bar: no fill at 0, so an empty track reads as 0.0%. */
 const fill = (share: number | null, c: string) => (share ? <i style={{ width: `${share * 100}%`, background: c }} /> : null);
