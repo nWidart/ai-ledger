@@ -2,7 +2,7 @@
 
 ## 1. Helpers
 
-- [x] 1.1 In `limits.ts`, add `safePace(w, now)` (the two ends of the safe-pace line, or null), `coneCrosses(w)`, `status(w)` (the card header's status and whether it is critical), `paceText(w)` (the footer's pace and whether it runs hot), `headroom(w, now)`, `chartRows(w, now)` (the data table: at most 12 sampled times and now), and the strip summary (`stripSummary`). Add `hits` to `Strip`. Give `readText` a flag for the scenario. Verify with `limits.test.ts` cases for the diagonal ends, for no diagonal (at limit, no reading, closed window), for the cone tint (high bound only, none, at limit), the hourly pace, and the strip summary.
+- [x] 1.1 In `limits.ts`, add `safePace(w, now)` (the two ends of the safe-pace line, or null), `coneCrosses(w)`, `status(w)` (the card header's status and whether it is critical), `paceRates(w)` (the footer's pace and whether it runs hot), `headroom(w, now)`, `chartRows(w, now)` (the data table: at most 12 sampled times and now), and the strip summary (`stripSummary`). Add `hits` to `Strip`. Give `readText` a flag for the scenario. Verify with `limits.test.ts` cases for the diagonal ends, for no diagonal (at limit, no reading, closed window), for the cone tint (high bound only, none, at limit), the hourly pace, and the strip summary.
 
 ## 2. Chart
 
