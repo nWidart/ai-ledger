@@ -24,6 +24,8 @@ export interface Totals extends Tokens {
   /** Model and tool time summed over the sessions that record them (timed_sessions; Claude Code's cost-state line), whole-session;
    *  output_per_s is those sessions' output tokens over their model time, null when there is none. */
   model_ms: number; tool_ms: number; timed_sessions: number; output_per_s: number | null;
+  /** The sources of the view's sessions (a session is in the view when it has requests in it), A to Z. */
+  session_sources: Source[];
 }
 
 export interface DailyRow extends Tokens { day: Day; cost: number | null; unpriced: number }
@@ -437,6 +439,8 @@ export interface Status {
   limits_alert?: LimitsAlert | null;
   /** Plan-limit pollers by provider; never the credential. */
   limits?: Record<string, { last_ok: string | null; last_attempt: string | null; failures: number; error: string | null; stale: boolean }>;
+  /** The user automated projects file and why it was ignored, for the toggle's hint and the app's warning. Absent from an older app. */
+  automated_file?: AutomatedFile;
 }
 
 // Context page: /api/context. Numbers are tokens unless the name says bytes, dollars (cost), minutes or a ratio; null is unknown

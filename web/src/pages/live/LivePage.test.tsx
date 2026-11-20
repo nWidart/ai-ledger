@@ -188,11 +188,12 @@ describe("live.ts", () => {
 
 describe("LivePage", () => {
   it("names the automated projects file on the automated toggle", async () => {
-    show("");
+    const { r } = show("");
     await rail();
+    act(() => { r.client.setQueryData(queries.status.queryKey, { ...status, automated_file: list.automated_file }); });
     expect(list.automated_file.path).toMatch(/automated\.json$/);
     await userEvent.click(screen.getByRole("button", { name: "About automated sessions" }));
-    expect(within(screen.getByRole("group", { name: "Filters" })).getByRole("status").textContent).toContain(list.automated_file.path);
+    expect(within(screen.getByRole("group", { name: "Filters" })).getByRole("tooltip").textContent).toContain(list.automated_file.path);
   });
 
   it("lists the active sessions and opens the newest when the URL names none", async () => {
@@ -347,7 +348,7 @@ describe("LivePage", () => {
     expect(await within(rail).findByText("Freeze the clock in the snapshot test")).toBeTruthy();
   });
 
-  it("titles the stream with the session's title, and only the project without one", async () => {
+  it("titles the stream with the session's title, and with the project without one", async () => {
     show();
     const main = await stream();
     expect(within(main).getByRole("heading", { level: 2 }).textContent).toBe("Fast ingest pass while Live is open");
@@ -355,7 +356,8 @@ describe("LivePage", () => {
     show("?session=" + codex.session_id, { session: () => codex });
     const other = await stream();
     expect(await within(other).findByRole("button", { name: /^exec_command/ })).toBeTruthy();
-    expect(within(other).queryByRole("heading", { level: 2 })).toBeNull();
+    expect(codex.title).toBeFalsy();
+    expect(within(other).getAllByRole("heading", { level: 2 }).map(h => h.textContent)).toEqual([codex.project]);
   });
 
   it("follows the URL's session, and still shows one that is no longer active", async () => {
@@ -367,6 +369,8 @@ describe("LivePage", () => {
   it("says no session is active and links the newest one to its session sheet", async () => {
     show("", { list: { now: list.now, automated_file: list.automated_file, sessions: [], newest: { session_id: "s4", project: "dotfiles", last_ts: "2026-11-10T09:53:00.000Z" } } });
     const lede = await screen.findByText(/No session is active/);
+    expect(screen.getByRole("heading", { level: 1 }).id).toBe("lede"); // the page heading stays the page's landing, not the note
+    expect(lede.id).toBe("");
     const link = within(lede).getByRole("link", { name: "dotfiles" });
     expect(link.getAttribute("href")).toBe("/live?sheet=s4");
     await userEvent.click(link);
@@ -1260,6 +1264,22 @@ describe("LivePage", () => {
     await waitFor(() => expect(document.activeElement).toBe(link));
   });
 
+  it("opens a rail session's sheet over Live from its context menu, keeping the stream, and returns focus to it", async () => {
+    show("?session=s1", { app: true });
+    await stream();
+    const source = FakeSource.last!;
+    const s2 = within(await rail()).getAllByRole("button").find(b => b.dataset.session === "s2")!;
+    s2.focus();
+    await userEvent.keyboard("{Shift>}{F10}{/Shift}");
+    await userEvent.click(within(screen.getByRole("menu")).getByRole("menuitem", { name: "Open session" }));
+    await waitFor(() => expect(location.pathname + location.search).toBe("/live?session=s1&sheet=s2"));
+    const dlg = await screen.findByRole("dialog");
+    expect([FakeSource.last, source.closed]).toEqual([source, false]); // the stream still follows s1
+    await userEvent.click(within(dlg).getByRole("button", { name: "Close" }));
+    await waitFor(() => expect(location.search).toBe("?session=s1"));
+    await waitFor(() => expect(document.activeElement).toBe(s2));
+  });
+
   it("keeps the followed session when a sheet closes after picking sessions in the rail", async () => {
     show("?session=s1");
     await stream();
@@ -1393,7 +1413,8 @@ describe("LivePage", () => {
     expect(foo.querySelector(".ttl")!.getAttribute("title")).toBe("Fast ingest pass while Live is open");
     expect(within(el).getByRole("button", { name: "Open dotfiles" }).querySelector(".ttl")).toBeNull();
     expect(foo.textContent).toContain("git push origin feat/live-page");
-    expect(foo.textContent).toContain("1 errors");
+    expect(foo.textContent).toContain("1 error"); // one, singular
+    expect(foo.textContent).not.toContain("1 errors");
     await userEvent.click(within(el).getByRole("button", { name: "Open graft" }));
     expect(location.search).toBe("?session=0a0f7777-0000-7000-8000-000000000007");
     expect(await stream()).toBeTruthy();

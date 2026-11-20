@@ -37,6 +37,18 @@ describe("format", () => {
     expect(dur(42.4)).toBe("42s");
     expect(dur(1800)).toBe("30m");
     expect(dur(5400)).toBe("1.5h");
+    expect(dur(45_000)).toBe("13h"); // no decimal from 10 hours
+  });
+  it("dur picks its unit after rounding, so it never crosses into the next one", () => {
+    expect(dur(59.4)).toBe("59s");
+    expect(dur(59.6)).toBe("1m");
+    expect(dur(89)).toBe("1m");
+    expect(dur(3569)).toBe("59m");
+    expect(dur(3590)).toBe("1h");
+    expect(dur(3600)).toBe("1h");
+    expect(dur(35_990)).toBe("10h");
+  });
+  it("ms", () => {
     expect(ms(850)).toBe("850ms");
     expect(ms(1234)).toBe("1.2s");
   });

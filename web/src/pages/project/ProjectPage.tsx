@@ -54,7 +54,7 @@ export function ProjectPage() {
     <main id="content" className="wrap pg-project">
       <header className="top sect" id="overview">
         <h1 className="lede" id="lede" tabIndex={-1}><ProjectName project={project} /></h1>
-        <div className="top-side"><Filters projects={projects} automated autoFile={d?.automated_file.path} /></div>
+        <div className="top-side"><Filters projects={projects} automated /></div>
       </header>
       {idle && <p className="empty none" role="status">No use of {project} in this view. Pick a longer range, another source or include automated sessions.</p>}
       <div className="cols">

@@ -65,7 +65,7 @@ export function ContextPage() {
     <main id="content" className={cls} ref={wrap} aria-busy={loading || undefined}>
       {first ? <PageSkeleton title="Loading context…" /> : <header className="top sect" id="overview">
         <div>{d ? <Lede d={d} /> : <h1 className="lede" id="lede" tabIndex={-1}>Context could not be loaded.</h1>}</div>
-        <div className="top-side"><Filters projects={d?.projects ?? []} automated autoFile={d?.automated_file.path} /></div>
+        <div className="top-side"><Filters projects={d?.projects ?? []} automated /></div>
       </header>}
       {error && <div className="banner" role="alert"><b>Could not load {viewName(want)} ({error.message}).{d ? ` Still showing ${viewName(d)}.` : ""}</b>{" "}
         <button type="button" className="linkish" ref={retryBtn} onClick={retry}>Retry</button></div>}

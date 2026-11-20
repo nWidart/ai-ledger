@@ -9,9 +9,16 @@ export const usd = (n: N): string => (n == null ? "–" : "$" + num(n, n < 10 ? 
 /** A cost that is really nothing, not $0.00. */
 export const usd0 = (n: N): string => (n ? usd(n) : "$0");
 export const pct = (n: N, d = 0): string => (n == null ? "–" : num(n * 100, d) + "%");
-/** Seconds as 42s, 7m or 1.5h. */
-export const dur = (s: N): string =>
-  s == null ? "–" : s < 60 ? `${Math.round(s)}s` : s < 3600 ? `${Math.round(s / 60)}m` : `${num(s / 3600, 1)}h`;
+/** Seconds as 42s, 7m, 1.5h or 12h: one unit, one decimal under 10 hours. Each unit is picked after rounding, so a value that
+ *  rounds up to the next unit reads in it (59.6 s is 1m, not 60s; 3,590 s is 1h, not 60m). The pages' one duration format;
+ *  Limits' countdown (span) and Live's ticking timer (elapsed) keep two units for their own reasons. */
+export function dur(s: N): string {
+  if (s == null) return "–";
+  if (Math.round(s) < 60) return `${Math.round(s)}s`;
+  if (Math.round(s / 60) < 60) return `${Math.round(s / 60)}m`;
+  const h = Math.round(s / 360) / 10;
+  return h < 10 ? `${num(h, h % 1 ? 1 : 0)}h` : `${num(Math.round(s / 3600))}h`;
+}
 /** Milliseconds as 850ms or 1.2s. */
 export const ms = (v: N): string => (v == null ? "–" : v < 1000 ? `${Math.round(v)}ms` : `${num(v / 1000, 1)}s`);
 /** A timestamp as "Nov 4, 10:01 AM" in the reader's zone. */

@@ -11,7 +11,7 @@ Your figures count only the sessions you ran yourself: scripted, scheduled and h
 
 The app already leaves out the sessions it detects as automated: a session of `observer-sessions` (claude-mem's project) or of a project in `automated.json`, a session with no prompt, and a session in a temporary folder with at most one prompt (see [Filters](/ai-ledger/everywhere/filters/#include-automated)). This playbook applies when it misses some, or when it hides one of yours:
 
-- Activity shows the banner "**Automated projects file ignored:**", with the file's path and the reason. This is the app's own sign: your `automated.json` does not apply, and only the built-in detection does.
+- Every page shows the banner "**Automated projects file ignored:**" under the navigation, with the file's path and the reason. This is the app's own sign: your `automated.json` does not apply, and only the built-in detection does.
 - On [Activity](/ai-ledger/pages/activity/), the **Project metrics** drawer lists a project that a script, a scheduled job or a tool works in, not you.
 - Rule of thumb: in Activity's **Sessions** drawer, sorted by **Prompts**, many sessions have 1 prompt and the same title. A script that runs `claude -p "…"` or `codex exec "…"` in a project folder makes such sessions, and the app counts them as yours.
 - Rule of thumb: Activity's **Prompts by hour** drawer shows prompts at hours when you do not work, such as every night at 3:00.

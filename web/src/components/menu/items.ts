@@ -2,7 +2,7 @@
 // only) a callback. Pure: no React, no DOM. Links come from the palette's resolver with chips for the current filters
 // and the subject, so they carry filters, pick a sheet's host page and drop a sheet exactly as a palette commit does.
 import type { Source } from "../../api";
-import { applyPatch, formatSearch, parseView } from "../../url";
+import { applyPatch, formatSearch, parseView, sheetKey } from "../../url";
 import { HOSTS_SHEETS, prefill, resolve, type Here } from "../palette/resolve";
 import { PROJECT_PAGE, type Chip } from "../palette/suggest";
 import { shortId } from "../sheets/session";
@@ -51,12 +51,12 @@ function projectItems(name: string, here: Here): MenuItem[][] {
   if (!onProjectPage(here, name)) open.push({ id: "project-page", label: "Open project page", type: "nav", href: projectPage(here, name) });
   if (HOSTS_SHEETS.includes(here.path)) {
     open.push({ id: "project-sheet", label: "Open project sheet", type: "nav",
-      href: patched(here, { inspect: name, tool: null, mcp: null, skill: null, session: null }) });
+      href: patched(here, { inspect: name, tool: null, mcp: null, skill: null, [sheetKey(here.path)]: null }) });
   }
   // The sheet's filter button's patch: filter to the project, or clear the filter when the page already shows only it.
   open.push(filtered
-    ? { id: "filter", label: "Show all projects", type: "nav", href: patched(here, { project: null, inspect: null, session: null }) }
-    : { id: "filter", label: `Filter dashboard to ${name}`, type: "nav", href: patched(here, { project: name, inspect: null, session: null }) });
+    ? { id: "filter", label: "Show all projects", type: "nav", href: patched(here, { project: null, inspect: null, session: null, sheet: null }) }
+    : { id: "filter", label: `Filter dashboard to ${name}`, type: "nav", href: patched(here, { project: name, inspect: null, session: null, sheet: null }) });
   const show = SHOW_ON.map(([path, label]): MenuItem => ({
     id: `show-${path.slice(1)}`, label: `Show on ${label}`, type: "nav", href: via(here, projectChip(name), pageChip(path, label)),
   }));

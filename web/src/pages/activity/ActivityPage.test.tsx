@@ -17,6 +17,9 @@ import { ActivityPage } from "./ActivityPage";
 import { setSearch } from "../../url";
 import { hookCommand, workDays } from "./work";
 import { ingested, refreshed, renderApp } from "../../testing";
+import { queries } from "../../queries";
+
+const REFRESHED_STATUS = { ingesting: false, last_ingest: null, last_stats: null, error: null, last_change: null, counts: {}, interval: 60, project_order: [] };
 
 const at = (hash = "?range=30") => history.replaceState(null, "", "/usage" + hash);
 const serve = (d: UsagePayload) => mockApi({ "/api/usage": () => d, "/api/sessions": () => sessions, "/api/session": () => session });
@@ -171,9 +174,35 @@ describe("model time and output speed", () => {
     at("?range=30&source=codex");
     renderApp(<ActivityPage />);
     await loaded();
-    expect(tile("Output speed")).toEqual(["n/a", "No session in this view records model time."]);
+    expect(tile("Output speed")).toEqual(["n/a", "Codex transcripts record no model time."]);
     expect(tile("Median session")[1]).toMatch(/ in all\.$/);
     expect(document.getElementById("vitals")!.textContent).not.toMatch(/waiting on the model|running tools/);
+  });
+
+  it("says no session records model time when Claude Code sessions in the view have none", async () => {
+    serve({ ...usage, totals: { ...usage.totals, output_per_s: null, timed_sessions: 0 } });
+    at();
+    renderApp(<ActivityPage />);
+    await loaded();
+    expect(tile("Output speed")).toEqual(["n/a", "No session in this view records model time."]);
+  });
+
+  // The reason follows the view's sessions, not its priced requests: an unpriced Claude Code model adds no cost row by source.
+  it("does not blame Codex on All sources when the Claude Code sessions are unpriced", async () => {
+    serve({ ...usage, totals: { ...usage.totals, output_per_s: null, timed_sessions: 0, session_sources: ["claude", "codex"] },
+      daily_sources: [{ day: "2026-11-04", source: "codex", cost: 1 }] });
+    at();
+    renderApp(<ActivityPage />);
+    await loaded();
+    expect(tile("Output speed")).toEqual(["n/a", "No session in this view records model time."]);
+  });
+
+  it("names Codex on All sources when every session in the view is a Codex one", async () => {
+    serve({ ...usage, totals: { ...usage.totals, output_per_s: null, timed_sessions: 0, session_sources: ["codex"] }, daily_sources: [] });
+    at();
+    renderApp(<ActivityPage />);
+    await loaded();
+    expect(tile("Output speed")).toEqual(["n/a", "Codex transcripts record no model time."]);
   });
 });
 
@@ -209,41 +238,22 @@ describe("drawer tables", () => {
     const head = within(await screen.findByRole("table", { name: "Sessions" })).getByRole("columnheader", { name: /^Tests/ });
     expect(head.hasAttribute("title")).toBe(false);
     await userEvent.click(within(head).getByRole("button", { name: "About Tests" }));
-    expect(within(head).getByRole("status").textContent).toBe("Test and build runs: passed of run");
+    expect(within(head).getByRole("tooltip").textContent).toBe("Test and build runs: passed of run");
   });
 });
 
 describe("automated projects file", () => {
-  const bad: UsagePayload = { ...usage, automated_file: { ...usage.automated_file, error: "Expecting value: line 1 column 1 (char 0)" } };
-
-  it("shows a banner with the path and the error, saying the file is ignored", async () => {
-    serve(bad);
-    at();
-    renderApp(<ActivityPage />);
-    await loaded();
-    const banner = screen.getByRole("alert");
-    expect(banner.textContent).toContain(usage.automated_file.path);
-    expect(banner.textContent).toContain("Expecting value: line 1 column 1 (char 0)");
-    expect(banner.textContent).toMatch(/ignored until it is fixed/);
-  });
-
-  it("shows none without an error", async () => {
+  // The warning and the path come from the status poll, not from the page (App.test.tsx covers the warning on every page).
+  it("names the file on the automated toggle, from the status the nav polls", async () => {
     serve(usage);
     at();
-    renderApp(<ActivityPage />);
+    const { client } = renderApp(<ActivityPage />);
     await loaded();
-    expect(screen.queryByRole("alert")).toBeNull();
-  });
-
-  it("names the file on the automated toggle", async () => {
-    serve(usage);
-    at();
-    renderApp(<ActivityPage />);
-    await loaded();
+    act(() => { client.setQueryData(queries.status.queryKey, { ...REFRESHED_STATUS, automated_file: usage.automated_file }); });
     const tip = screen.getByRole("button", { name: "About automated sessions" });
     await userEvent.click(tip);
     expect(tip.getAttribute("aria-expanded")).toBe("true");
-    expect(within(screen.getByRole("group", { name: "Filters" })).getByRole("status").textContent).toContain(usage.automated_file.path);
+    expect(within(screen.getByRole("group", { name: "Filters" })).getByRole("tooltip").textContent).toContain(usage.automated_file.path);
   });
 });
 
@@ -311,7 +321,7 @@ describe("ActivityPage", () => {
     const drawer = document.getElementById("d-sessions")!;
     const how = within(drawer).getByRole("button", { name: "How measured: the session count" });
     await userEvent.click(how);
-    expect(within(how.parentElement!).getByRole("status").textContent).toMatch(/A session counts here when it has a request in the range.*Insights counts sessions by their start time/);
+    expect(within(how.parentElement!).getByRole("tooltip").textContent).toMatch(/A session counts here when it has a request in the range.*Insights counts sessions by their start time/);
   });
 
   it("reloads an open sessions table when the source changes", async () => {
@@ -699,7 +709,7 @@ describe("ActivityPage", () => {
     expect(attention().getByText("1 failed test run")).toBeTruthy();
     act(() => { openDrawer("d-sessions"); });
     await userEvent.click(screen.getByRole("button", { name: "About Peak context" }));
-    expect(screen.getByRole("button", { name: "Peak context" }).closest("th")!.querySelector("[role=status]")!.textContent).toMatch(/whole-session/i);
+    expect(screen.getByRole("button", { name: "Peak context" }).closest("th")!.querySelector("[role=tooltip]")!.textContent).toMatch(/whole-session/i);
     act(() => { openDrawer("d-tools"); });
     await userEvent.click(tools.getByRole("button", { name: "Show the whole range" }));
     expect(location.search).toBe("?range=30");

@@ -20,8 +20,14 @@
 }
 .pg-limits .pending { margin: -12px 0 12px; min-height: 1.5em; color: var(--text-secondary); font-size: .8125rem; }
 .pg-limits .pending:empty { visibility: hidden; }
-.pg-limits.loading > :not(.top) { opacity: .55; }
-@media (prefers-reduced-motion: no-preference) { .pg-limits > :not(.top) { transition: opacity .2s; } }
+/* A slow load dims the figures it will replace, but not the charts' lines, which would fall under 3:1 against the card: around a
+   chart only what holds none dims, and in it only the labels and the cone's fill. */
+.pg-limits.loading > :not(.top, :has(.lim-chart)), .pg-limits.loading :has(.lim-chart) > :not(.lim-chart, :has(.lim-chart)),
+.pg-limits.loading .lim-chart :is(text, .band, .tip) { opacity: .55; }
+@media (prefers-reduced-motion: no-preference) {
+  .pg-limits > :not(.top, :has(.lim-chart)), .pg-limits :has(.lim-chart) > :not(.lim-chart, :has(.lim-chart)),
+  .pg-limits .lim-chart :is(text, .band, .tip) { transition: opacity .2s; }
+}
 
 /* Open windows: a one-line hint, the last 24 h pace toggle, and How measured. The charts need no key. */
 .pg-limits .sect-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; margin: 8px 0 12px; }
@@ -29,9 +35,6 @@
 .pg-limits .lim-toggle { margin-left: auto; padding: 3px 10px; border: 1px solid var(--border); border-radius: 8px; background: transparent;
   color: var(--text-secondary); font: inherit; font-size: .78125rem; cursor: pointer; }
 .pg-limits .lim-toggle[aria-pressed="true"] { border-color: var(--series-6); color: var(--text-primary); box-shadow: inset 0 -2px 0 var(--series-6); }
-.pg-limits .how { flex-basis: 100%; font-size: .78125rem; color: var(--text-secondary); }
-.pg-limits .how > summary { cursor: pointer; width: fit-content; }
-.pg-limits .how p { margin: 6px 0 0; max-width: 80ch; }
 @media (max-width: 45em) { .pg-limits .lim-toggle { margin-left: 0; } }
 .pg-limits .lim-key { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: .75rem; color: var(--text-secondary); }
 .pg-limits .lim-key li { display: inline-flex; align-items: center; gap: 6px; }
@@ -77,6 +80,7 @@
 .pg-limits .cap-text.out { color: var(--critical-text); font-weight: 500; }
 .pg-limits .cap-note { margin: 2px 0 0; font-size: .78125rem; color: var(--text-muted); }
 .pg-limits .cap-note.out { color: var(--critical-text); }
+.pg-limits .cap-note.warn { color: var(--warning-text); }
 .pg-limits .cap-note b { color: var(--text-secondary); font-weight: 500; }
 
 .pg-limits .lim-chart { position: relative; margin-top: 8px; width: 100%; overflow: hidden; }
@@ -86,15 +90,16 @@
 .pg-limits .lim-chart .grid { stroke: var(--grid); }
 .pg-limits .lim-chart .cap { stroke: var(--critical); stroke-dasharray: 4 3; }
 .pg-limits .lim-chart .ax { fill: var(--text-muted); font-size: .71875rem; }
-/* Four encodings: the line (solid where measured, faded where estimated), the cone (neutral, or the warning tint when its high
- * bound reaches 100% before the reset), now, and the safe pace (a faint straight line from now to 100% at the reset). */
+/* Four encodings: the line (solid where measured, dashed where estimated), the cone (neutral, or the warning tint when its high
+ * bound reaches 100% before the reset) with its dotted middle, now, and the safe pace (a thin long-dashed straight line from now to
+ * 100% at the reset). Lines differ by dash and width, never by opacity: each keeps at least 3:1 against the card in both themes. */
 .pg-limits .lim-chart .band { fill: var(--series-1-soft); }
-.pg-limits .lim-chart .fc { fill: none; stroke: var(--series-1); stroke-width: 1.2; opacity: .55; }
+.pg-limits .lim-chart .fc { fill: none; stroke: var(--series-1); stroke-width: 1.5; stroke-dasharray: 2 3; }
 .pg-limits .lim-chart .band.warn { fill: var(--warning-soft); }
-.pg-limits .lim-chart .fc.warn { stroke: var(--warning); opacity: .9; }
-.pg-limits .lim-chart .safe { fill: none; stroke: var(--text-muted); stroke-width: 1; opacity: .5; }
+.pg-limits .lim-chart .fc.warn { stroke: var(--warning-text); }
+.pg-limits .lim-chart .safe { fill: none; stroke: var(--text-muted); stroke-width: 1; stroke-dasharray: 6 4; }
 .pg-limits .lim-chart .recent { fill: none; stroke: var(--series-6); stroke-width: 1.6; stroke-dasharray: 9 3 2 3; }
-.pg-limits .lim-chart .est { fill: none; stroke: var(--series-1); stroke-width: 2; opacity: .4; }
+.pg-limits .lim-chart .est { fill: none; stroke: var(--series-1); stroke-width: 2; stroke-dasharray: 5 3; }
 .pg-limits .lim-chart .meas { fill: none; stroke: var(--series-1); stroke-width: 2; }
 .pg-limits .lim-chart .meas-one { fill: var(--series-1); }
 .pg-limits .lim-chart .now { stroke: var(--text-secondary); stroke-width: 1; }

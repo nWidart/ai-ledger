@@ -28,13 +28,18 @@ export const openToolSheet = (kind: ToolKind, name: string) =>
 /** The href of a link to page path in view keys search with session id's sheet open: a new tab opens it there. */
 export const sessionSheetHref = (path: string, search: Readonly<Record<string, unknown>>, id: string) =>
   path + formatSearch({ ...search, [sheetKey(path)]: id });
-/** A session link's click: opens the sheet of id over this page, page and URL kept, so Back closes it; modified clicks
- *  open the link's href as the browser does. */
-export const sessionLink = (id: string) => (e: MouseEvent<HTMLAnchorElement>) => {
-  if (!plain(e)) return;
-  e.preventDefault();
-  openSessionSheet(id);
-};
+/** A session link's props, spread on its <a> next to an href from sessionSheetHref. The click opens the sheet of id over
+ *  this page, page and URL kept, so Back closes it; modified clicks open the link's href as the browser does. The link
+ *  is the session's subject for the context menu, and data-session lets the sheet return focus to it when re-rendered. */
+export const sessionLink = (id: string) => ({
+  ...subjectAttrs("session", id),
+  "data-session": id,
+  onClick: (e: MouseEvent<HTMLAnchorElement>) => {
+    if (!plain(e)) return;
+    e.preventDefault();
+    openSessionSheet(id);
+  },
+});
 
 /** The Errors page for a project, its range when given, focused on one failure when ex is set, else on type cat. */
 export function errorsHref(project: string | null | undefined, range?: number | null, ex?: string, o: { source?: Source | ""; cat?: string | null } = {}): string {

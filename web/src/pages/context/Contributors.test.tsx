@@ -47,20 +47,39 @@ describe("Contributors", () => {
     expect(body()).toHaveLength(11);
   });
 
-  it("sorts by any column, the ten shown and the Other row following the sort", async () => {
+  it("sorts the ten largest by any column, and keeps the cut by total, the Other row last", async () => {
     const tools = many(12).map((r, i) => ({ ...r, calls: i + 1, max_bytes: (i + 1) * 1_000 })); // T12 has the most calls, T1 the largest total
     renderApp(<Contributors fills={fills(tools)} />);
     const names = () => body().map(r => r.querySelector("th")!.textContent);
-    expect(screen.getByRole("button", { name: /^Total result size/ }).closest("th")!.getAttribute("aria-sort")).toBe("descending");
+    expect(screen.getByRole("button", { name: "Total result size" }).closest("th")!.getAttribute("aria-sort")).toBe("descending");
     expect(names()[0]).toBe("T1");
     await userEvent.click(screen.getByRole("button", { name: "Calls" }));
-    expect(names().slice(0, 3)).toEqual(["T12", "T11", "T10"]);
-    expect(names().at(-1)).toBe("Other (2 tools)"); // T2 and T1, the fewest calls
+    expect(names().slice(0, 3)).toEqual(["T10", "T9", "T8"]); // the most calls among the ten largest
+    expect(names().at(-1)).toBe("Other (2 tools)"); // T11 and T12, the smallest totals, whatever the sort
+    expect(names()).toContain("T1");
     await userEvent.click(screen.getByRole("button", { name: "Tool" }));
-    expect(names().slice(0, 3)).toEqual(["T1", "T10", "T11"]);
+    expect(names().slice(0, 3)).toEqual(["T1", "T10", "T2"]);
     await userEvent.click(screen.getByRole("button", { name: "Largest" }));
-    expect(names()[0]).toBe("T12");
-    expect(cells(body()[0]!).at(-1)).toBe("12 KB");
+    expect(names()[0]).toBe("T10");
+    expect(cells(body()[0]!).at(-1)).toBe("10 KB");
+  });
+
+  it("scales the total bars to the largest named row, with no bar for Other", () => {
+    // Other sums 30 small tools to more than the largest named one: it must not shrink the named bars.
+    const tools = [row("Big", 100_000), ...many(9, "M").map(r => ({ ...r, bytes: 50_000 })), ...many(30, "S").map(r => ({ ...r, bytes: 20_000 }))];
+    renderApp(<Contributors fills={fills(tools)} />);
+    const rows = body(), bar = (r: HTMLElement) => r.querySelector<HTMLElement>("[data-testid=ctr-total-bar]")?.style.width;
+    expect(bar(rows[0]!)).toBe("100%");
+    expect(bar(rows[1]!)).toBe("50%");
+    expect(rows.at(-1)!.textContent).toContain("Other (30 tools)");
+    expect(bar(rows.at(-1)!)).toBeUndefined();
+  });
+
+  it("keeps the scale out of the sort button's name", () => {
+    renderApp(<Contributors fills={fills(many(2))} />);
+    const btn = screen.getByRole("button", { name: "Typical result: median to 95th percentile (log scale)" });
+    expect(btn.querySelector(".ctr-scale")).toBeNull();
+    expect(btn.closest("th")!.querySelector(".ctr-scale")).not.toBeNull();
   });
 
   it("has no Other row for exactly ten", () => {

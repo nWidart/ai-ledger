@@ -9,6 +9,8 @@ export const motion = () => !matchMedia("(prefers-reduced-motion: reduce)").matc
 export const LOW_CALLS = 50;
 /** Which buckets (by their tool call counts) have too few calls for a steady rate. None when no bucket has enough, so a
  *  view that is quiet throughout still scales to its own rates; a bucket without calls has no rate and is never low. */
+/** What a reading says of a low-volume bucket (lowVolume), on every chart that marks one. */
+export const FEW_CALLS = "too few calls for a steady rate";
 export const lowVolume = (calls: readonly number[]): boolean[] => {
   const steady = calls.some(c => c >= LOW_CALLS);
   return calls.map(c => steady && c > 0 && c < LOW_CALLS);

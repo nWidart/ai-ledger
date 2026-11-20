@@ -224,7 +224,7 @@ export function Stream({ s, now, text, follow, setFollow, filters: f, setFilters
     </div>
     <span className="sr" role="status">{said}</span>
     <div className={"stream" + (wide ? " dated" : "")} ref={box} onScroll={onScroll} tabIndex={0} role="log" aria-live="off" aria-label="Session events"><div ref={drawn}>
-      {s.truncated && <p className="older muted">Older events are not shown. The <a href={sheet} onClick={sessionLink(s.session_id)}>session sheet</a> has
+      {s.truncated && <p className="older muted">Older events are not shown. The <a href={sheet} {...sessionLink(s.session_id)}>session sheet</a> has
         the whole session.</p>}
       {rows.map(r => {
         if (r.kind === "lane") {

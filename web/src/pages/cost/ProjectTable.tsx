@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { UsagePayload } from "../../api";
 import { useColors } from "../../colors";
 import { motion } from "../../components/chart";
@@ -30,6 +30,11 @@ function Trend({ values, color }: { values: readonly number[]; color: string }) 
     <path d={d} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" vectorEffect="non-scaling-stroke" /></svg>;
 }
 
+const SORT_NAMES: Record<MatrixKey, string> = { project: "project", trend: "trend", cost: "spend", delta: "change", cpc: "cost per commit", hit: "cache hit" };
+/** What a sort did, for the status line: "Sorted by spend, highest first". */
+export const sortedText = (s: SortBy<MatrixKey>) =>
+  `Sorted by ${SORT_NAMES[s.key]}, ${s.key === "project" ? (s.desc ? "Z to A" : "A to Z") : s.desc ? "highest first" : "lowest first"}`;
+
 /** A change as a bar on one side of a center line, scaled to the largest change of the table. */
 const Diverge = ({ v, max, color }: { v: number | null; max: number; color: string }) => {
   const bar = <i style={{ width: `${Math.max(2, Math.abs(v ?? 0) / max * 100)}%`, background: color }} />;
@@ -51,8 +56,19 @@ export function ProjectTable({ d, sort, onSort, spot: pin, onSpot, smallOpen, on
   const ps = [...head, ...small], spot = pin ? ps.find(r => r.project === pin.spot) : undefined;
   const maxCost = Math.max(...ps.map(r => r.cost || 0), 0) || 1, maxDelta = Math.max(...ps.map(r => Math.abs(r.delta ?? 0)), 0) || 1;
   const cols = prev ? 6 : 5;
+  // A sort says what it did, politely: aria-sort alone is read only when focus lands on the header. The one region follows the
+  // table's sort whoever set it (a header, Compare projects, Sort by cost again, a new view's reset), each set is a new object, and
+  // the text is cleared first, so a sort that reads as the last one did is said again.
+  const [said, setSaid] = useState(""), mounted = useRef(false);
+  useEffect(() => {
+    if (!mounted.current) { mounted.current = true; return; }
+    setSaid("");
+    const f = requestAnimationFrame(() => setSaid(sortedText(sort)));
+    return () => cancelAnimationFrame(f);
+  }, [sort]);
+  const sortBy = (s: SortBy<MatrixKey>) => { onSort({ ...s }); onSpot(null); };
   const th = (k: MatrixKey, label: ReactNode, cls?: string, asc?: boolean, title?: string) =>
-    <SortTh k={k} sort={sort} onSort={s => { onSort(s); onSpot(null); }} asc={asc} className={cls} title={title}>{label}</SortTh>;
+    <SortTh k={k} sort={sort} onSort={sortBy} asc={asc} className={cls} title={title}>{label}</SortTh>;
   // The outlier row in view and focused once the table shows it.
   useEffect(() => {
     if (!pin || !body) return;
@@ -100,10 +116,15 @@ export function ProjectTable({ d, sort, onSort, spot: pin, onSpot, smallOpen, on
       </div>
       {prev && thinHistory(d) && <div className="chg-note">The previous {d.range} days have prompts on only {plural(d.previous!.active_days, "day")} against {num(d.totals.active_days)} now,
         so read a change as "more than before", not an exact growth.</div>}
-      {pin && <div className="proj-note" role="status"><span>Sorted by cost per commit, highest first.</span>
+      {pin && <div className="proj-note"><span>Sorted by cost per commit, highest first.</span>
         {spot && <span><ProjectName project={spot.project}><b>{spot.project}</b></ProjectName>: <b>{usd(spot.cpc)}</b> per commit over {plural(spot.p?.commits ?? 0, "commit")}
           {r ? `, ${mult(r)} the median project with 3+ commits (${usd(pin.med)})` : ""}.</span>}
-        <button type="button" className="linkish" onClick={() => { onSort(MATRIX_SORT); onSpot(null); document.querySelector<HTMLElement>("#projects .sortbtn")?.focus(); }}>Sort by cost again</button></div>}
+        <button type="button" className="linkish" onClick={() => {
+          // The button goes with the note: focus moves to the header the table is now sorted by.
+          document.querySelector<HTMLElement>(`#projects th[data-sort="${MATRIX_SORT.key}"] .sortbtn`)?.focus();
+          sortBy(MATRIX_SORT);
+        }}>Sort by cost again</button></div>}
+      <p className="sr" role="status">{said}</p>
       {many && <ToneKey note={`median of the ${m.n} projects with ${pct(OUTLIER_SHARE)}+ of cost or ${COMPARE_PROMPTS}+ prompts`} />}
       <DataTable name="Project spend and change" className="matrix">
         <thead><tr>{th("project", "Project", undefined, true)}

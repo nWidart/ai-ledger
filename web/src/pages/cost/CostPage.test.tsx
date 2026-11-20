@@ -31,7 +31,12 @@ const insights = () => within(document.getElementById("insights")!);
 const drawer = (id: string) => document.getElementById(id)!;
 /** The project table's section. */
 const table = () => document.getElementById("projects")!;
-const how = () => document.querySelector("details.how")!.textContent;
+/** The How measured text under the heading, opened first. */
+const how = () => {
+  const b = screen.getByRole("button", { name: "How measured: cost" });
+  if (b.getAttribute("aria-expanded") !== "true") act(() => b.click());
+  return b.parentElement!.querySelector("[role=tooltip]")!.textContent;
+};
 // A project row's cells: trend, spend, change, cost per commit, cache hit (with a previous period).
 const CPC = 3, HIT = 4;
 
@@ -108,9 +113,8 @@ describe("CostPage", () => {
   it("leads a thirty-day view with its cost and the change, and both windows with their days with prompts under How measured", async () => {
     const lede = await show(doubled);
     expect(lede.textContent).toBe("$16 estimated cost, 2.0× the previous 30 days2.0 times the previous 30 days");
-    expect(document.querySelector(".windows")!.textContent).toBe("Oct 7 – Nov 5, 2026 vs Sep 7 – Oct 6, 2026");
-    const details = document.querySelector("details.how") as HTMLDetailsElement;
-    expect(details.open).toBe(false);
+    expect(document.querySelector(".windows")!.textContent).toBe("Oct 7 – Nov 5, 2026 vs Sep 7 – Oct 6, 2026 How measured");
+    expect(screen.getByRole("button", { name: "How measured: cost" }).getAttribute("aria-expanded")).toBe("false");
     expect(how()).toMatch(/This period, Oct 7 – Nov 5, 2026: 2 of 30 days with prompts\./);
     expect(how()).toMatch(/Previous period, Sep 7 – Oct 6, 2026: \$7\.90, 1 of 30 days with prompts\./);
     expect(how()).toMatch(/Cost is estimated at API list prices and leaves out unpriced models\./);
@@ -200,7 +204,7 @@ describe("CostPage", () => {
     const head = within(screen.getByRole("table", { name: "Most expensive sessions" })).getByRole("columnheader", { name: /^Active/ });
     expect(head.hasAttribute("title")).toBe(false);
     await userEvent.click(within(head).getByRole("button", { name: "About Active time" }));
-    expect(within(head).getByRole("status").textContent).toBe("Active time: pauses over 20 minutes left out");
+    expect(within(head).getByRole("tooltip").textContent).toBe("Active time: pauses over 20 minutes left out");
   });
 
   it("names a cost-per-commit outlier and compares projects on request", async () => {
@@ -218,7 +222,37 @@ describe("CostPage", () => {
     expect(within(table()).getByRole("button", { name: /Cost \/ commit/ }).closest("th")!.getAttribute("aria-sort")).toBe("descending");
     await userEvent.click(screen.getByRole("button", { name: "Sort by cost again" }));
     expect(table().querySelector(".proj-note")).toBeNull();
+    expect(document.activeElement).toBe(within(table()).getByRole("button", { name: "Spend" }));
+    expect((await within(table()).findByText("Sorted by spend, highest first")).getAttribute("role")).toBe("status");
     expect([...table().querySelectorAll("tbody tr")].map(r => r.getAttribute("data-v"))).toEqual(["d", "c", "b", "a"]);
+  });
+
+  it("says each sort in one polite region, a repeat and a new view's reset too", async () => {
+    serve(withProjects([proj("a", 6, 3), proj("b", 8, 4), proj("c", 10, 5), proj("d", 40, 5)]));
+    at();
+    renderApp(<CostPage />);
+    await loaded();
+    const status = () => table().querySelectorAll("[role=status]");
+    // What the region said: each text it took after being cleared (a screen reader reads a change of text, not a render).
+    const said: string[] = [], region = status()[0]!;
+    const watch = new MutationObserver(() => { if (region.textContent) said.push(region.textContent); });
+    watch.observe(region, { childList: true, characterData: true, subtree: true });
+    const step = async (run: () => Promise<void>) => { const n = said.length; await run(); await waitFor(() => expect(said.length).toBe(n + 1)); };
+    const compare = async () => userEvent.click(within(insights().getByText("Cost-per-commit outlier").closest("article")!).getByRole("button", { name: "Compare projects" }));
+    await insights().findByText("Cost-per-commit outlier");
+    try {
+      await step(compare);
+      await step(compare); // the same sort again is said again
+      await step(() => userEvent.click(screen.getByRole("button", { name: "Sort by cost again" })));
+      await step(compare);
+      await step(() => userEvent.click(screen.getByRole("button", { name: "Sort by cost again" })));
+      expect(status()).toHaveLength(1); // the note under Compare projects is not a second region
+      await step(() => userEvent.click(within(table()).getByRole("button", { name: "Project" })));
+      // A new view resets the sort, and the region says the sort it is now.
+      await step(async () => act(() => { history.pushState(null, "", "/cost?range=7"); dispatchEvent(new PopStateEvent("popstate")); }));
+      const cpc = "Sorted by cost per commit, highest first", spend = "Sorted by spend, highest first";
+      expect(said).toEqual([cpc, cpc, spend, cpc, spend, "Sorted by project, A to Z", spend]);
+    } finally { watch.disconnect(); }
   });
 
   it("sorts the project table by any column, no value last either way", async () => {
@@ -233,9 +267,11 @@ describe("CostPage", () => {
     expect(th("Spend").getAttribute("aria-sort")).toBeNull();
     await userEvent.click(within(th("Cost / commit")).getByRole("button"));
     expect(th("Cost / commit").getAttribute("aria-sort")).toBe("ascending");
+    await waitFor(() => expect(table().querySelector(".sr[role=status]")!.textContent).toBe("Sorted by cost per commit, lowest first"));
     expect(names().at(-1)).toBe("idle");
     await userEvent.click(within(th("Project")).getByRole("button"));
     expect(names()).toEqual(["a", "b", "idle"]);
+    await waitFor(() => expect(table().querySelector(".sr[role=status]")!.textContent).toBe("Sorted by project, A to Z"));
     // Every column sorts by keyboard too: Enter on the change header.
     within(th("Change vs prev 30d")).getByRole("button").focus();
     await userEvent.keyboard("{Enter}");
@@ -466,7 +502,9 @@ describe("CostPage", () => {
     expect(banner).toMatch(/m-unknown \(200 tokens\)/);
     expect(banner).toMatch(/add them to \/Users\/example\/Library\/Application Support\/ai-ledger\/prices\.json/);
     const row = document.querySelector('#projects tr[data-v="foo"]')!;
-    expect(within(row as HTMLElement).getByTitle("1 requests from unpriced models").textContent).toBe("+?1 requests from unpriced models");
+    const chip = within(row as HTMLElement).getByTitle("1 request from unpriced models");
+    expect(chip.querySelector(".sr")!.textContent).toBe("plus an unknown cost for 1 request from unpriced models");
+    expect(chip.querySelector("[aria-hidden=true]")!.textContent).toBe("+?");
     expect(screen.getByText("unpriced").className).toMatch(/chip warn/);
     expect(row.querySelector(".spend")!.textContent).toMatch(/\$16 \+\?/);
   });

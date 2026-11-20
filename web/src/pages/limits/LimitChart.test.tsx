@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { LimitWindow, LimitsPayload } from "../../api";
 import limits from "../../__fixtures__/limits";
-import { LimitChart } from "./LimitChart";
+import { LimitChart, percentRuns } from "./LimitChart";
 import { closedWindow, readPoints, readText } from "./limits";
 import { renderApp } from "../../testing";
 
@@ -194,6 +194,20 @@ describe("LimitChart encodings", () => {
     expect(path("safe")!.getAttribute("d")).toBe(`M${(36 + 374 * 11 / 24).toFixed(1)},${(12 + 132 * 0.58).toFixed(1)}L410.0,12.0`);
   });
 
+  it("draws an estimate between two readings dashed, with no solid line over it", () => {
+    const t = (h: number) => `2026-11-07T${String(h).padStart(2, "0")}:00:00.000Z`;
+    const series = [{ t: t(8), pct: 10, measured: true }, { t: t(9), pct: 20, measured: true }, { t: t(10), pct: 25, measured: false },
+      { t: t(11), pct: 40, measured: true }];
+    const { runs, lone } = percentRuns(series);
+    expect(runs.map(r => [r.meas, r.map(p => p.pct)])).toEqual([[true, [10, 20]], [false, [20, 25, 40]]]);
+    expect(lone.map(p => p.pct)).toEqual([40]); // its only neighbour is an estimate: a mark
+    draw({ ...w, series });
+    const d = (cls: string) => [...document.querySelectorAll(`.lim-chart .${cls}`)].map(e => e.getAttribute("d")!.split(/[ML]/).length - 1);
+    expect(d("meas")).toEqual([2]); // 10 to 20, not 20 to 40
+    expect(d("est")).toEqual([3]);
+    expect(document.querySelectorAll(".lim-chart .meas-one")).toHaveLength(1);
+  });
+
   it("tints the cone when its high bound reaches 100% before the reset, and not otherwise", () => {
     draw({ ...w, at_limit: false, forecast: { ...w.forecast!, hits_at_early: "2026-11-07T20:00:00.000Z" } });
     expect(path("band")!.classList.contains("warn")).toBe(true);
@@ -212,10 +226,10 @@ describe("LimitChart encodings", () => {
   });
 
   it("marks a plan change with a short labelled tick at the top, not a line across the plot", () => {
-    renderApp(<LimitChart w={w} now={now} events={[{ kind: "plan_change", provider: w.provider, at: "2026-11-07T06:00:00.000Z", plan_from: "plus", plan_to: "max/x" }]} />);
+    renderApp(<LimitChart w={w} now={now} events={[{ kind: "plan_change", provider: w.provider, at: "2026-11-07T06:00:00.000Z", plan_from: "plus", plan_to: "max/default_claude_max_20x" }]} />);
     const tick = document.querySelector(".lim-chart .plan line")!;
     expect(Number(tick.getAttribute("y2")) - Number(tick.getAttribute("y1"))).toBe(8);
-    expect(document.querySelector(".lim-chart .plan text")!.textContent).toBe("plan: max");
+    expect(document.querySelector(".lim-chart .plan text")!.textContent).toBe("plan: max 20x");
   });
 });
 

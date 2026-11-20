@@ -13,7 +13,8 @@ import { useApi } from "../../useApi";
 import { TokenPairs } from "./TokenPairs";
 
 /** "+?" after a cost that leaves out n requests from unpriced models. */
-export const Unpriced = ({ n }: { n: number }) => n ? <> <span className="chip warn" title={`${n} requests from unpriced models`}>+?<span className="sr">{n} requests from unpriced models</span></span></> : null;
+export const Unpriced = ({ n }: { n: number }) => n ? <> <span className="chip warn" title={`${plural(n, "request")} from unpriced models`}><span aria-hidden="true">+?</span>
+  <span className="sr">plus an unknown cost for {plural(n, "request")} from unpriced models</span></span></> : null;
 export const NA = () => <span className="muted">n/a</span>;
 
 /** Tokens and cache: cache efficiency, subagent and per-outcome cost, then each billed kind's share of tokens beside its share of cost. */

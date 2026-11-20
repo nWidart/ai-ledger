@@ -89,6 +89,20 @@ describe("resolve", () => {
   it("#myproject #codex #7d >cost", () => {
     expect(commit("/usage?range=30", c.my, c.codex, c.d7, c.cost).href).toBe("/cost?project=myproject&range=7&source=codex");
   });
+  it("opens a sheet over Insights and Live, on Live under sheet with the followed session kept", () => {
+    const s1: Chip = { kind: "session", value: "abc", label: "#abc" };
+    expect(commit("/insights?range=7", s1).href).toBe("/insights?range=7&session=abc");
+    const live = commit("/live?session=s1", s1);
+    expect(live.href).toBe("/live?session=s1&sheet=abc");
+    expect(live.footer).toBe("Enter: open session #abc · 30d");
+    expect(commit("/live?session=s1&sheet=x", c.bash).href).toBe("/live?tool=Bash&session=s1");
+  });
+  it("keeps Live's followed session when one commit changes the project and opens a session sheet", () => {
+    const s1: Chip = { kind: "session", value: "abc", label: "#abc" };
+    expect(commit("/live?project=foo&session=s1", c.my, s1).href).toBe("/live?project=myproject&session=s1&sheet=abc");
+    // A new project alone still starts the stream over: the followed session was the old project's.
+    expect(commit("/live?project=foo&session=s1&sheet=x", c.my).href).toBe("/live?project=myproject");
+  });
   it(">errors >bash opens Errors with the inspector", () => {
     expect(commit("/usage", c.errors, c.bash).href).toBe("/errors?range=30&tool=Bash");
   });

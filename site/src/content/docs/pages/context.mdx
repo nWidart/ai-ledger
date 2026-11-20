@@ -141,13 +141,13 @@ The evidence of the large-start tip names the five projects with the largest med
 **Figures**
 
 - **Main thread / Subagents**: one bar in two parts. Results of calls made inside subagent transcripts never entered the main thread's context, so they are summed apart and are not in any other figure of the section.
-- **Largest contributors**: the one table of tools, or MCP servers. It shows the ten with the largest total result size, and one **Other** row for the rest. Columns: **Calls** (a toggletip gives how many have a result size), **Total result size** (a bar, the size and its estimated tokens), **Typical result** (median to 95th percentile, on a log scale with a dashed line at 100,000 bytes) and **Largest**.
+- **Largest contributors**: the one table of tools, or MCP servers. It shows the ten with the largest total result size, and one **Other** row for the rest. The total bars scale to the largest named row; the Other row has its figure and no bar. Columns: **Calls** (a toggletip gives how many have a result size), **Total result size** (a bar, the size and its estimated tokens), **Typical result** (median to 95th percentile, on a log scale with a dashed line at 100,000 bytes) and **Largest**.
 
 **Controls**
 
 - A **By tool / By MCP server** switch shows when MCP servers exist.
 - **Show all N tools** (or MCP servers) lists every row, with no Other row; **Show the top 10** folds them again.
-- Every column sorts; see [Sorting](/ai-ledger/everywhere/data-tables/#sorting). The table starts by total size, largest first. **Typical result** sorts by the median. The ten shown, and the Other row, follow the sort.
+- Every column sorts; see [Sorting](/ai-ledger/everywhere/data-tables/#sorting). The table starts by total size, largest first. **Typical result** sorts by the median. The sort orders the ten shown; the ten stay the ten largest by total whatever the sort, and the Other row stays last.
 - Selecting a tool or server row opens its tool inspector.
 
 ### Cost

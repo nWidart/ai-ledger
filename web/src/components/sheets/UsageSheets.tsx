@@ -11,10 +11,10 @@ import { SessionSheet } from "./SessionSheet";
 import { TOOL_KINDS, ToolSheet } from "./ToolSheet";
 import "./sheets.css";
 
-// The page's control for item v, so focus can return to a re-rendered row: a row or ledger item (data-v), or a session button.
+// The page's control for item v, so focus can return to a re-rendered row: a row or ledger item (data-v), or a session button or link.
 const twin = (v: string) => {
   const e = CSS.escape(v);
-  return document.querySelector<HTMLElement>(`.wrap :is([data-v="${e}"] button, button[data-session="${e}"])`)
+  return document.querySelector<HTMLElement>(`.wrap :is([data-v="${e}"] button, [data-session="${e}"])`)
     ?? document.querySelector<HTMLElement>(".wrap .lede");
 };
 

@@ -719,13 +719,13 @@ describe("Nav", () => {
         ["Interval", "every 90 s"],
       ]);
       expect(popup()!.textContent).toContain("Ingest runs on its own. Refresh runs it now.");
-      // Read once it shows, through the toggletip's own region, which is empty while closed.
-      const tipRegion = fresh().querySelector("[role=status]")!;
+      // Read as content right after the button, once it shows.
+      const tipRegion = fresh().querySelector("[role=tooltip]")!;
       expect(tipRegion.textContent).toContain("1,234");
       await userEvent.keyboard("{Escape}");
       expect(stateBtn().getAttribute("aria-expanded")).toBe("false");
       expect(document.activeElement).toBe(stateBtn());
-      expect(tipRegion.textContent).toBe("");
+      await waitFor(() => expect(fresh().querySelector("[role=tooltip]")).toBeNull());
     });
 
     it("says a failed Refresh's error in the details, beside Retry", async () => {

@@ -131,29 +131,29 @@ describe("ErrorsPage", () => {
     const table = document.getElementById("catBody")!, lost = (c: string) => table.querySelector(`tr[data-c="${c}"] td.c-lost`)!;
     const lostHead = screen.getByRole("columnheader", { name: /^Time lost/ });
     await userEvent.click(within(lostHead).getByRole("button", { name: "About Time lost" }));
-    expect(within(lostHead).getByRole("status").textContent).toMatch(/^Time in retry loops: from each incident's first failure to its last/);
+    expect(within(lostHead).getByRole("tooltip").textContent).toMatch(/^Time in retry loops: from each incident's first failure to its last/);
     expect([...table.querySelectorAll("tr")].map(r => r.getAttribute("data-c")).slice(0, 2)).toEqual(["worktree", "git"]);
-    expect(lost("worktree").textContent).toBe("1 min");
-    expect(lost("git").textContent).toBe("20 min");
+    expect(lost("worktree").textContent).toBe("1m");
+    expect(lost("git").textContent).toBe("20m");
     expect(lost("sleep_poll").textContent).toBe("–");
     const picks = [...document.querySelectorAll("#detail .pick")];
     expect(picks.slice(0, 3).map(p => [p.getAttribute("data-c"), p.querySelector(".phead .muted")!.textContent])).toEqual([
-      ["git", "3 errors · 20 min lost"], ["worktree", "4 errors · 1 min lost"], ["tests", "1 errors · 1 min lost"]]);
-    expect(picks[3]!.querySelector(".phead .muted")!.textContent).toBe("1 errors");
+      ["git", "3 errors · 20m lost"], ["worktree", "4 errors · 1m lost"], ["tests", "1 error · 1m lost"]]);
+    expect(picks[3]!.querySelector(".phead .muted")!.textContent).toBe("1 error");
     await userEvent.click(picks[0] as HTMLElement);
-    expect(document.querySelector("#detail .istat")!.textContent).toContain("20 min lost in retry loops");
+    expect(document.querySelector("#detail .istat")!.textContent).toContain("20m lost in retry loops");
   });
 
   it("narrows the time lost to the selected bucket's incidents, in the table and the detail, not in Where to start", async () => {
     vi.stubGlobal("fetch", vi.fn(() => json(lostPayload)));
-    // Oct 30 holds g3, the end of git's midnight incident: that incident's 10 min count whole, not the range's 20.
+    // Oct 30 holds g3, the end of git's midnight incident: that incident's 10m count whole, not the range's 20.
     history.replaceState(null, "", "/errors?range=0&at=2026-10-30");
     await page();
     const table = document.getElementById("catBody")!;
-    expect([...table.querySelectorAll("tr")].map(r => [r.getAttribute("data-c"), r.querySelector("td.c-lost")?.textContent])).toEqual([["git", "10 min"]]);
-    expect(document.querySelector("#detail .pick .phead .muted")!.textContent).toBe("3 errors · 20 min lost");
+    expect([...table.querySelectorAll("tr")].map(r => [r.getAttribute("data-c"), r.querySelector("td.c-lost")?.textContent])).toEqual([["git", "10m"]]);
+    expect(document.querySelector("#detail .pick .phead .muted")!.textContent).toBe("3 errors · 20m lost");
     await userEvent.click(table.querySelector('tr[data-c="git"] .tbtn')!);
-    expect(document.querySelector("#detail .istat")!.textContent).toContain("10 min lost in retry loops");
+    expect(document.querySelector("#detail .istat")!.textContent).toContain("10m lost in retry loops");
   });
 
   it("says in the footnote of Where to start that fix markers are kept in the store", async () => {
@@ -681,7 +681,7 @@ describe("ErrorsPage", () => {
       await page();
       expect(toggle().id).toBe("fNoise");
       await userEvent.click(screen.getByRole("button", { name: "About hiding noise and muted types" }));
-      expect(screen.getByText("Leaves out harness errors, user rejections and the types you muted", { selector: "[role=status]" })).toBeTruthy();
+      expect(screen.getByText("Leaves out harness errors, user rejections and the types you muted", { selector: "[role=tooltip]" })).toBeTruthy();
       await userEvent.click(toggle());
       expect(location.search).toContain("noise=0");
     });
@@ -911,7 +911,7 @@ describe("ErrorsPage", () => {
       expect(rowOf("git")).toBeNull();
       expect(rowOf("x")).toBeTruthy();
       expect(lede()).toContain("40.0%");
-      expect(document.getElementById("uncat")?.textContent).toBe("Uncategorized: 0% of errors");
+      expect(document.querySelector("#uncat .uncat-v")?.textContent).toBe("Uncategorized: 0% of errors");
       await userEvent.click(toggle());
       expect(rowOf("git")).toBeTruthy();
     });
@@ -1268,8 +1268,20 @@ describe("ErrorsPage", () => {
     history.replaceState(null, "", "/errors?ex=nope");
     renderApp(<ErrorsPage />);
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Loading errors…"); // visually hidden; the blocks are aria-hidden
+    expect(document.querySelector("header.top")).toBeNull(); // the placeholder alone, as on the other pages
     expect(document.getElementById("deadLink")).toBeNull();
     expect(location.search).toBe("?ex=nope");
+  });
+
+  it("names the page in a heading when the first load fails, beside Retry", async () => {
+    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({ error: "boom" }) } as Response)));
+    history.replaceState(null, "", "/errors");
+    renderApp(<ErrorsPage />);
+    const h1 = await screen.findByRole("heading", { level: 1, name: "Errors could not be loaded." });
+    expect(h1.id).toBe("lede");
+    expect(h1.closest("header.top")).not.toBeNull();
+    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+    expect(within(document.getElementById("load")!).getByRole("button", { name: "Retry" })).toBeTruthy();
   });
 
   it("clears the notice when a later hash names a live example", async () => {
@@ -1284,8 +1296,12 @@ describe("ErrorsPage", () => {
   it("shows the uncategorized share in the summary", async () => {
     await page();
     // The fixture's errors all have one rule-matched type, so the share is zero and there is no split for one source.
-    expect(document.getElementById("uncat")?.textContent).toBe("Uncategorized: 0% of errors");
-    expect(document.getElementById("uncat")?.title).toMatch(/^Share of errors in catch-all types/);
+    expect(document.querySelector("#uncat .uncat-v")?.textContent).toBe("Uncategorized: 0% of errors");
+    const how = screen.getByRole("button", { name: "How measured: uncategorized" });
+    expect(how.closest("#uncat")).not.toBeNull();
+    expect(document.getElementById("uncat")?.title).toBe("");
+    await userEvent.click(how);
+    expect(screen.getByRole("tooltip").textContent).toMatch(/^The share of errors in the catch-all types/);
   });
 
   it("shows a share under 1% with one decimal, not 0%", async () => {
@@ -1293,7 +1309,7 @@ describe("ErrorsPage", () => {
     const base = fixture.errors[0]!;
     stubErrors(withErrors([...fixture.errors, ...Array.from({ length: 199 }, (_, i) => ({ ...base, id: `x${i}`, c: "x" })), { ...base, id: "o1", c: "other" }]));
     await page();
-    expect(document.getElementById("uncat")?.textContent).toBe("Uncategorized: 0.5% of errors");
+    expect(document.querySelector("#uncat .uncat-v")?.textContent).toBe("Uncategorized: 0.5% of errors");
   });
 
   it("hides the line when the view has no errors", async () => {
@@ -1329,9 +1345,9 @@ describe("ErrorsPage", () => {
       calls: [["2026-11-04", "foo", 7, 0, "claude"], ["2026-11-04", "foo", 3, 0, "codex"]] };
     vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/errors") ? mixed : {})));
     await page();
-    expect(document.getElementById("uncat")?.textContent).toBe("Uncategorized: 33% of errors (Claude Code 25%, Codex 50%)");
+    expect(document.querySelector("#uncat .uncat-v")?.textContent).toBe("Uncategorized: 33% of errors (Claude Code 25%, Codex 50%)");
     await userEvent.click(within(screen.getByRole("group", { name: "Source" })).getByRole("button", { name: "Codex" }));
-    expect(document.getElementById("uncat")?.textContent).toBe("Uncategorized: 50% of errors");
+    expect(document.querySelector("#uncat .uncat-v")?.textContent).toBe("Uncategorized: 50% of errors");
   });
 
   it("says Agent tool errors for every source, and narrows to Codex in the browser", async () => {
@@ -1359,7 +1375,7 @@ describe("ErrorsPage", () => {
     const base = fixture.errors[0]!;
     stubErrors(withErrors([...fixture.errors, { ...base, id: "s1", c: "other", sub: 1 }, { ...base, id: "s2", c: "mcp", sub: 1 }, { ...base, id: "n1", c: "user_denied" }]));
     await page();
-    const uncat = () => document.getElementById("uncat")?.textContent;
+    const uncat = () => document.querySelector("#uncat .uncat-v")?.textContent;
     expect(uncat()).toBe("Uncategorized: 22% of errors"); // 2 of 9
 
     const n = history.length;
@@ -1407,6 +1423,28 @@ describe("ErrorsPage", () => {
       expect(document.querySelector("main")).toBe(main);
       expect(document.activeElement).toBe(link);
     });
+
+    it("stays on top of the narrow-screen type sheet on a deep link, which opens it before Errors loads", async () => {
+      vi.stubGlobal("matchMedia", (q: string) => ({ matches: q.includes("max-width"), media: q, addEventListener() {}, removeEventListener() {} }));
+      // The browser stacks modal dialogs in the order showModal opens them: the last one is on top and gets Escape.
+      const shown: HTMLDialogElement[] = [], showModal = HTMLDialogElement.prototype.showModal;
+      const spy = vi.spyOn(HTMLDialogElement.prototype, "showModal").mockImplementation(function (this: HTMLDialogElement) { shown.push(this); showModal.call(this); });
+      try {
+        history.replaceState(null, "", "/errors?range=30&session=s1&cat=x");
+        await page();
+        const detail = document.getElementById("sheet") as HTMLDialogElement;
+        const dlg = document.querySelector<HTMLDialogElement>("dialog.sheet:not(#sheet)")!;
+        expect(await within(dlg).findByText("Timeline")).toBeTruthy();
+        expect(shown.indexOf(detail)).toBeGreaterThan(shown.indexOf(dlg)); // the session sheet opened first
+        expect(shown.at(-1)).toBe(dlg); // and is on top
+        expect(detail.open).toBe(true);
+        expect(document.activeElement && dlg.contains(document.activeElement)).toBe(true);
+        await userEvent.click(within(dlg).getByRole("button", { name: "← Back" }));
+        expect(dlg.open).toBe(false);
+        expect(detail.open).toBe(true);
+        expect(location.search).toBe("?range=30&cat=x");
+      } finally { spy.mockRestore(); }
+    });
   });
 
   describe("tool sheet", () => {
@@ -1426,6 +1464,7 @@ describe("ErrorsPage", () => {
       history.replaceState(null, "", "/errors?range=7&cat=x");
       await page();
       const dlg = await openBash();
+      expect(within(dlg).queryByRole("button", { name: "← Back" })).toBeNull(); // nothing under it on a wide screen
       expect(location.search).toBe("?range=7&tool=Bash&cat=x");
       expect(vi.mocked(fetch).mock.calls.map(c => c[0])).toContain("/api/tool?kind=tool&name=Bash&range=7&automated=1");
       await userEvent.click(within(dlg).getByRole("button", { name: "Close" }));
@@ -1454,6 +1493,23 @@ describe("ErrorsPage", () => {
       expect(dlg.open).toBe(false);
       expect(detail.open).toBe(true);
       expect(location.search).toBe("?range=30&cat=x");
+    });
+
+    it("stacks over the narrow-screen detail sheet with ← Back, which returns to it and to the link", async () => {
+      vi.stubGlobal("matchMedia", (q: string) => ({ matches: q.includes("max-width"), media: q, addEventListener() {}, removeEventListener() {} }));
+      history.replaceState(null, "", "/errors?range=30&cat=x");
+      await page();
+      const detail = document.getElementById("sheet") as HTMLDialogElement;
+      const bash = within(document.getElementById("ex-t07")!).getByRole("button", { name: "Bash" });
+      const dlg = await openBash();
+      // The top sheet comes after the detail sheet in the document, so the browser stacks it above; only it offers Back.
+      expect(detail.compareDocumentPosition(dlg) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(within(detail).queryByRole("button", { name: "← Back" })).toBeNull();
+      await userEvent.click(within(dlg).getByRole("button", { name: "← Back" }));
+      expect(dlg.open).toBe(false);
+      expect(detail.open).toBe(true);
+      expect(location.search).toBe("?range=30&cat=x");
+      expect(document.activeElement).toBe(bash);
     });
   });
 });
@@ -1753,6 +1809,17 @@ describe("ErrorsPage bucket selection", () => {
     expect(tip.textContent).toContain("x"); // its type rows still show
     await userEvent.keyboard("{ArrowRight}"); // Nov 5: calls, no errors
     expect(document.getElementById("chartLive")!.textContent).toMatch(/^Nov 5, 2026: 0\.00% rate, 0 errors of 10 calls/);
+  });
+
+  it("reads a quiet day, reached by an arrow key, as too few calls for a steady rate", async () => {
+    // Nov 3 has 4 calls in a view whose other days have hundreds: its point is hollow, and the reading says why.
+    await open("?range=30", withDays([["2026-11-03", "foo", 4, 0, "claude"], ["2026-11-04", "foo", 300, 0, "claude"]]));
+    keys();
+    await userEvent.keyboard("{Home}{ArrowRight}{ArrowLeft}");
+    const live = document.getElementById("chartLive")!.textContent!;
+    expect(live).toMatch(/^Nov 3, 2026: 50\.00% rate, 2 errors of 4 calls, too few calls for a steady rate\. /);
+    await userEvent.keyboard("{ArrowRight}");
+    expect(document.getElementById("chartLive")!.textContent).not.toMatch(/too few calls/);
   });
 
   it("dismisses the tooltip and the reading with Escape, and the keys start over", async () => {
@@ -2144,7 +2211,7 @@ describe("type table: sort and filter", () => {
     await open();
     const th = head("Change").closest("th")!;
     await userEvent.click(within(th).getByRole("button", { name: "About Change" }));
-    expect(within(th).getByRole("status").textContent).toMatch(/^Sorts by the change in error rate, in points/);
+    expect(within(th).getByRole("tooltip").textContent).toMatch(/^Sorts by the change in error rate, in points/);
   });
 
   // jsdom has no layout or media queries, so read the stylesheet: the only columns a breakpoint hides are Share and the trend, and neither sorts.

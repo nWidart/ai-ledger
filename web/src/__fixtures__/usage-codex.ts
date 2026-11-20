@@ -63,7 +63,10 @@ export default {
   "model_ms": 0,
   "tool_ms": 0,
   "timed_sessions": 0,
-  "output_per_s": null
+  "output_per_s": null,
+  "session_sources": [
+   "codex"
+  ]
  },
  "daily": [
   {

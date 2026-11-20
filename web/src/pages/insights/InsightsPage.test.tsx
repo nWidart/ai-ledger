@@ -1,4 +1,4 @@
-import { act, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { InsightsPayload } from "../../api";
@@ -46,7 +46,7 @@ describe("InsightsPage", () => {
     const sub = screen.getByText(/Model-judged: a model's reading/);
     expect(sub.textContent).toContain("Model-judged: a model's reading of each session, not a measurement.");
     await userEvent.click(within(sub).getByRole("button", { name: "How measured: the judgments" }));
-    const how = within(sub).getByRole("status").textContent!;
+    const how = within(sub).getByRole("tooltip").textContent!;
     expect(how).toContain("The figures come from /insights facets, except Session figures and Coverage, which are counted. Codex sessions have no facets.");
     expect(how).toContain("A session counts here by its start time; Activity counts a session with a request in the range, so the two totals can differ slightly.");
     const cov = document.getElementById("coverage")!;
@@ -100,10 +100,12 @@ describe("InsightsPage", () => {
     expect(document.getElementById("coverage")).toBeNull();
   });
 
-  it("tags the page heading as model-judged once, and no section heading", async () => {
+  it("tags the page header as model-judged once, beside the page name, and no section heading", async () => {
     show(fixture);
     await lede();
-    expect(within(screen.getByRole("heading", { level: 1 })).getByText("model-judged")).toBeTruthy();
+    // The tag sits outside the h1: the lede is a live region, and the tag's toggletip would read into it.
+    expect(within(document.querySelector<HTMLElement>("header.top .kicker")!).getByText("model-judged")).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 1 }).id).toBe("lede");
     expect(screen.getAllByText("model-judged")).toHaveLength(1);
     const headings = screen.getAllByRole("heading", { level: 2 });
     expect(headings.map(h => h.textContent)).toEqual(["Outcomes", "Friction categories", "Satisfaction and helpfulness",
@@ -770,7 +772,7 @@ describe("InsightsPage", () => {
       expect(within(fr()).getAllByRole("listitem").map(li => li.textContent)).toEqual(["buggy code42 sessions2 labels ▾", "wrong approach31 session"]);
       for (const [sec, what] of [[goals(), "goals"], [fr(), "friction"]] as const) {
         await userEvent.click(within(sec).getByRole("button", { name: `How measured: ${what}` }));
-        expect(within(sec).getByRole("status").textContent).toMatch(/grouped into families by keyword.*as \/insights wrote them/);
+        expect(within(sec).getByRole("tooltip").textContent).toMatch(/grouped into families by keyword.*as \/insights wrote them/);
       }
     });
 
@@ -931,5 +933,22 @@ describe("InsightsPage", () => {
     await waitFor(() => expect(location.search).toBe("?range=0"));
     expect(document.querySelector("main")).toBe(page);
     await waitFor(() => expect(document.activeElement).toBe(link)); // focus returns to the link
+  });
+
+  it("opens the session sheet over Insights from a session link's context menu, and returns focus to the link", async () => {
+    mockApi({ "/api/insights": () => fixture, "/api/usage": () => usage, "/api/sessions": () => sessions, "/api/session": () => session,
+      "/api/status": () => ({ ingesting: false, last_ingest: null, last_change: null, last_stats: null, error: null, counts: {}, interval: 60, project_order: [] }) });
+    history.replaceState(null, "", "/insights?range=0");
+    renderRouter();
+    const link = await screen.findByRole("link", { name: "Add a theme toggle" });
+    const page = document.querySelector("main")!;
+    fireEvent.contextMenu(link, { clientX: 20, clientY: 30 });
+    await userEvent.click(within(screen.getByRole("menu")).getByRole("menuitem", { name: "Open session" }));
+    await waitFor(() => expect(location.pathname + location.search).toBe("/insights?range=0&session=0000aaaa-0000-4000-8000-000000000001"));
+    const dlg = await waitFor(() => { const d = document.querySelector<HTMLDialogElement>("dialog[open]"); expect(d).toBeTruthy(); return d!; });
+    expect(document.querySelector("main")).toBe(page); // over Insights, not Activity
+    await userEvent.click(within(dlg).getByRole("button", { name: "Close" }));
+    await waitFor(() => expect(location.search).toBe("?range=0"));
+    await waitFor(() => expect(document.activeElement).toBe(link));
   });
 });

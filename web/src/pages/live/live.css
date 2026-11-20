@@ -65,6 +65,8 @@
 .pg-live .stream-head a { font-size: .78125rem; }
 .pg-live .stream-head .stream-title { flex-basis: 100%; margin: 0; font-size: 1rem; font-weight: 600; color: var(--text-primary);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-transform: none; letter-spacing: -.005em; }
+/* No title: the project is the heading, and looks as it does under a title. */
+.pg-live .stream-head .stream-proj { margin: 0; font: inherit; color: inherit; text-transform: none; letter-spacing: normal; }
 /* The stream's filters. A pressed Errors count, here and in the agent panel, is the filter on. */
 .pg-live .stream-filters { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: center; padding: 6px 14px; border-bottom: 1px solid var(--border); font-size: .78125rem; }
 .pg-live .stream-filters button { font-size: .75rem; padding: 2px 9px; border-radius: 999px; }

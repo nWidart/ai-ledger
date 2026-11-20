@@ -297,6 +297,7 @@ describe("weekly buckets", () => {
     expect(chart().getAttribute("aria-label")).toMatch(/^Commits and errors per 100 tool calls per week, 10 weeks, commits peaking at 5 in the week of Oct 19, 2026/);
     expect(document.querySelector("#work svg")!.textContent).toContain("Week of Sep 7");
     expect(document.querySelector("#work .hint")!.textContent).toMatch(/Choose a shorter range to pick a day/);
+    expect(screen.getByRole("button", { name: "How measured: work per week" })).toBeTruthy();
     act(() => chart().focus());
     fireEvent.keyDown(chart(), { key: "Home" });
     expect(within(screen.getByRole("tooltip")).getByText("Week of Sep 7, 2026")).toBeTruthy();

@@ -51,13 +51,13 @@ function Coverage({ d, view, drawer }: { d: InsightsPayload; view: View; drawer:
 
 function Lede({ d, view }: { d: InsightsPayload; view: View }) {
   const c = d.coverage;
-  if (view.source === "codex") return <p className="lede" id="lede" tabIndex={-1}><code>/insights</code> analyses only Claude Code sessions.</p>;
-  if (!c.stored_facets) return <p className="lede" id="lede" tabIndex={-1}>{d.meta.sessions > 0 ? <>No <code>/insights</code> judgments found.</>
-    : <>No <code>/insights</code> data found.</>}</p>;
-  if (!c.facets) return <p className="lede" id="lede" tabIndex={-1}>No analysed sessions in this view.</p>;
+  if (view.source === "codex") return <h1 className="lede" id="lede" tabIndex={-1}><code>/insights</code> analyses only Claude Code sessions.</h1>;
+  if (!c.stored_facets) return <h1 className="lede" id="lede" tabIndex={-1}>{d.meta.sessions > 0 ? <>No <code>/insights</code> judgments found.</>
+    : <>No <code>/insights</code> data found.</>}</h1>;
+  if (!c.facets) return <h1 className="lede" id="lede" tabIndex={-1}>No analysed sessions in this view.</h1>;
   const h = headline(d);
-  return <p className="lede" id="lede" tabIndex={-1} aria-live="polite"><b>{num(h.full)} of {num(h.n)}</b> analysed sessions fully achieved their
-    goal; {h.top ? <><b><Cat name={h.top} /></b> caused the most friction.</> : <>no friction reported.</>}</p>;
+  return <h1 className="lede" id="lede" tabIndex={-1} aria-live="polite"><b>{num(h.full)} of {num(h.n)}</b> analysed sessions fully achieved their
+    goal; {h.top ? <><b><Cat name={h.top} /></b> caused the most friction.</> : <>no friction reported.</>}</h1>;
 }
 
 function Sub({ d, view }: { d: InsightsPayload; view: View }) {
@@ -266,7 +266,7 @@ function SessionCard({ s, view, raw }: { s: InsightSession; view: View; raw: Ins
     <li className="scard">
       <div className="top">
         <span className="ttl">{s.in_store
-          ? <a href={sessionHref(s.session_id, view, raw)} title={`${s.title ? s.title + " · " : ""}Open session ${s.session_id}`} onClick={sessionLink(s.session_id)}>{sessName(s)}</a>
+          ? <a href={sessionHref(s.session_id, view, raw)} title={`${s.title ? s.title + " · " : ""}Open session ${s.session_id}`} {...sessionLink(s.session_id)}>{sessName(s)}</a>
           : <span title={s.title ?? s.session_id}>{sessName(s)}</span>}
           {(s.title || !s.in_store) && <span className="muted small"> {s.title && shortId(s.session_id)}{s.title && !s.in_store && " · "}
             {!s.in_store && <span title="This session's transcript is not in the store">no transcript</span>}</span>}</span>
@@ -363,13 +363,13 @@ export function InsightsPage() {
   return (
     <main id="content" className={"wrap pg-insights" + (slow && !first ? " loading" : "") + (grow ? " grow" : "")} ref={wrap} aria-busy={loading || undefined}>
       {first ? <PageSkeleton title="Loading insights…" /> : <header className="top sect" id="overview">
-        <h1 className="kicker">Insights <Judged /></h1>
+        <p className="kicker">Insights <Judged /></p>
         <Filters projects={d?.projects ?? []} automated />
       </header>}
       {error && <div className="banner" role="alert"><b>Could not load insights for {viewName(want)} ({error.message}).{d ? ` Still showing ${viewName(shown)}.` : ""}</b>{" "}
         <button type="button" className="linkish" ref={retryBtn} onClick={retry}>Retry</button></div>}
       <p className="pending">{loading && d ? `Loading insights for ${viewName(want)}…` : ""}</p>
-      {!d ? (first ? null : <p className="lede" id="lede" tabIndex={-1}>Insights could not be loaded.</p>) : <>
+      {!d ? (first ? null : <h1 className="lede" id="lede" tabIndex={-1}>Insights could not be loaded.</h1>) : <>
         <Coverage d={d} view={shown} drawer={!!figures} />
         <Lede d={d} view={shown} />
         <Sub d={d} view={shown} />

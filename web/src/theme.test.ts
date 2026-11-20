@@ -160,6 +160,9 @@ describe("forced colors", () => {
     expect(at).toBeGreaterThan(-1);
     return css.slice(at);
   };
+  it("draws low-call rate points hollow in system colors", () => {
+    expect(block()).toMatch(/circle\.lowc \{ forced-color-adjust: none; fill: Canvas; stroke: CanvasText; \}/);
+  });
   it("has one forced-colors block, last in theme.css", () => {
     expect(themeCss().match(/@media \(forced-colors: active\)/g)).toHaveLength(1);
     expect(block().trimEnd().endsWith("}")).toBe(true);

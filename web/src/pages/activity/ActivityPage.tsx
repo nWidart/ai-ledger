@@ -75,6 +75,8 @@ function sessionNote(t: Totals): string {
 /** Work vitals: how smoothly the work went, each against the period before (none for All, or with nothing to divide by there). */
 function Vitals({ d }: { d: UsagePayload }) {
   const t = d.totals, p = d.previous;
+  // A view whose sessions are all Codex ones has no model time to divide by: Codex transcripts do not record it.
+  const codexOnly = d.source === "codex" || (t.session_sources.length > 0 && t.session_sources.every(s => s === "codex"));
   // cur and prev are the same figure of this and the previous period; worse: the way a move reads as bad.
   const vs: { v: string; l: string; n: ReactNode; id?: string; cur: number | null; prev?: number | null; worse?: "up" | "down"; fmt: (n: number) => string }[] = [
     { v: num(t.sessions), l: "Sessions", cur: t.sessions, prev: p?.sessions, fmt: n => plural(n, "session"),
@@ -95,7 +97,7 @@ function Vitals({ d }: { d: UsagePayload }) {
       cur: t.median_session_seconds, prev: p?.median_session_seconds, fmt: dur },
     // Whole-session output over model time, timed sessions only (Claude Code records it; Codex does not).
     { v: t.output_per_s == null ? "n/a" : tokS(t.output_per_s), l: "Output speed",
-      n: t.output_per_s == null ? "No session in this view records model time." : `Output tokens per second of model time, in ${plural(t.timed_sessions, "session")}.`,
+      n: t.output_per_s == null ? (codexOnly ? "Codex transcripts record no model time." : "No session in this view records model time.") : `Output tokens per second of model time, in ${plural(t.timed_sessions, "session")}.`,
       cur: t.output_per_s, prev: p?.output_per_s, worse: "down", fmt: tokS },
   ];
   return <section className="vitals sect" id="vitals" aria-label="Work health">
@@ -150,12 +152,10 @@ export function ActivityPage() {
     <main id="content" className={cls} ref={wrap} aria-busy={loading || undefined}>
       {first ? <PageSkeleton title="Loading activity…" /> : <header className="top sect" id="overview">
         <div>{d ? <Lede d={d} before={before} /> : <h1 className="lede" id="lede" tabIndex={-1}>Activity could not be loaded.</h1>}</div>
-        <div className="top-side"><Filters projects={d?.projects ?? []} automated autoFile={d?.automated_file.path} /></div>
+        <div className="top-side"><Filters projects={d?.projects ?? []} automated /></div>
       </header>}
       {error && <div className="banner" role="alert"><b>Could not load {viewName(want)} ({error.message}).{d ? ` Still showing ${viewName(d)}.` : ""}</b>{" "}
         <button type="button" className="linkish" ref={retryBtn} onClick={retry}>Retry</button></div>}
-      {d?.automated_file.error && <div className="banner" role="alert"><b>Automated projects file ignored:</b> <code>{d.automated_file.path}</code> could not be used
-        ({d.automated_file.error}). The file is ignored until it is fixed; only the built-in detection applies.</div>}
       <p className="pending">{loading && d ? `Loading ${viewName(want)}…` : ""}</p>
       {d && <>
         <SectionIndex groups={[

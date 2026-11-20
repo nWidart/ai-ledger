@@ -1,7 +1,7 @@
 // From the palette's chips and the current location to the URL one commit writes, the footer that says so, and how each
 // chip fared. Pure: no React, no DOM. Pages already read every key written here; nothing new goes in the URL.
 import { viewOf, type View } from "../../api";
-import { DEFAULT_RANGE, SHARED_KEYS, applyPatch, formatSearch, parseView, rootState, validateRoot } from "../../url";
+import { DEFAULT_RANGE, SHARED_KEYS, applyPatch, formatSearch, parseView, rootState, sheetKey, validateRoot } from "../../url";
 import { SOURCE_LABELS } from "../Filters";
 import { PAGES } from "../Nav";
 import { PROJECT_PAGE, isFilter, rangeName, sourceLabel, type Chip, type Command, type FilterKind } from "./suggest";
@@ -25,7 +25,9 @@ export interface Resolved {
   view: View;
 }
 
-export const HOSTS_SHEETS = ["/usage", "/cost", "/context", "/errors", PROJECT_PAGE];
+/** Pages that mount UsageSheets, so they host the project, tool, MCP server, skill and session sheets. */
+export const HOSTS_SHEETS = ["/usage", "/cost", "/context", "/errors", "/insights", "/live", PROJECT_PAGE];
+const hosts = (path: string) => HOSTS_SHEETS.includes(path);
 // Errors' view keys (pages/errors/view.ts): with none of them in the URL, Errors shows its saved view instead.
 const ERRORS_KEYS = ["project", "range", "source", "sub", "noise", "gran", "cat", "ex"];
 const HASH_KEY: Record<FilterKind, string> = { project: "project", source: "source", range: "range", automated: "auto" };
@@ -66,12 +68,14 @@ export function resolve(chips: readonly Chip[], here: Here): Resolved {
   }
   let si = slot.get("sheet");
   const sheet = si == null ? null : chips[si]!;
-  if (sheet && (sheet.kind === "category" ? chosen !== "/errors" : chosen != null && !HOSTS_SHEETS.includes(chosen))) {
+  if (sheet && (sheet.kind === "category" ? chosen !== "/errors" : chosen != null && !hosts(chosen))) {
     status[si!] = { state: "dropped" };
     si = undefined;
   }
   const open = si == null ? null : chips[si]!;
-  const path = chosen ?? (open && !HOSTS_SHEETS.includes(cur) ? "/usage" : cur);
+  const path = chosen ?? (open && !hosts(cur) ? "/usage" : cur);
+  // The session sheet's key on the page: on Live, session names the session the stream follows (url.ts sheetKey).
+  const sk = sheetKey(path);
 
   // The URL: staying keeps every key, moving carries the shared ones (as the nav does); then the filters and the sheet.
   let raw: Record<string, string> = {};
@@ -79,11 +83,16 @@ export function resolve(chips: readonly Chip[], here: Here): Resolved {
   else for (const k of SHARED_KEYS) if (here.search[k]) raw[k] = here.search[k]!;
   const value = (k: FilterKind) => { const i = slot.get(k); return i == null ? null : chips[i]!.value; };
   raw = applyPatch(raw, Object.fromEntries((Object.keys(HASH_KEY) as FilterKind[]).map(k => [HASH_KEY[k], value(k)])));
-  if ((raw.project ?? "") !== (here.search.project ?? "") || (raw.source ?? "") !== (here.search.source ?? "")) raw = applyPatch(raw, { session: null, inspect: null });
+  // A new project or source closes the sheets of the old one. On Live it also drops the followed session, unless the same commit
+  // opens a sheet: that asks for a sheet over the stream, which keeps following.
+  if ((raw.project ?? "") !== (here.search.project ?? "") || (raw.source ?? "") !== (here.search.source ?? "")) {
+    raw = applyPatch(raw, { ...(open && sk !== "session" ? {} : { session: null }), [sk]: null, inspect: null });
+  }
   if (open) {
-    raw = applyPatch(raw, { inspect: null, tool: null, mcp: null, skill: null, session: null });
+    raw = applyPatch(raw, { inspect: null, tool: null, mcp: null, skill: null, [sk]: null });
     // Opening a type is an explicit request: it wins over a selected chart bucket, which the palette cannot see the errors of.
-    raw = applyPatch(raw, open.kind === "category" ? { cat: open.value, ex: null, etool: null, at: null } : { [open.kind]: open.value });
+    raw = applyPatch(raw, open.kind === "category" ? { cat: open.value, ex: null, etool: null, at: null }
+      : { [open.kind === "session" ? sk : open.kind]: open.value });
   }
   if (path === "/errors" && !ERRORS_KEYS.some(k => k in raw)) raw.range = String(DEFAULT_RANGE);
   const href = path + formatSearch(raw), moved = href !== here.path + formatSearch(here.search);

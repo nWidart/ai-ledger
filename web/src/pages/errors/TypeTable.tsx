@@ -1,11 +1,11 @@
 import { memo, useMemo, useRef } from "react";
 import { DataTable } from "../../components/DataTable";
 import { sortRows, SortTh, type SortBy } from "../../components/Sort";
-import { num as fmt } from "../../format";
+import { dur, num as fmt } from "../../format";
 import { tableFocus, useErrors } from "./context";
 import { errorText } from "./marks";
 import { subjectAttrs } from "../../components/menu/subject";
-import { bucketLabel, compare, dur, emptyTypes, MIN_PCT_ERRORS, RECOVERED_NOTE, typeRows, yearLabel, type TypeKey, type TypeRow } from "./model";
+import { bucketLabel, compare, emptyTypes, MIN_PCT_ERRORS, RECOVERED_NOTE, typeRows, yearLabel, type TypeKey, type TypeRow } from "./model";
 import { Spark } from "./Spark";
 
 const LOST = "Time in retry loops: from each incident's first failure to its last. An incident counts whole when any of its failures is in the view.";
@@ -60,7 +60,7 @@ export const TypeTable = memo(function TypeTable() {
                 {m.muted.has(cid) ? <span className="chip muted-type">Muted</span> : null}
                 {fixes[cid] ? <span className="chip fixed">✓ Fix applied {yearLabel(m, fixes[cid])}</span> : null}</td>
               <td className="num">{fmt(n)}</td>
-              <td className="num c-lost">{lost ? dur(lost) : "–"}</td>
+              <td className="num c-lost">{lost ? dur(lost / 1000) : "–"}</td>
               <td className="num c-rate">{rate == null ? "–" : `${fmt(rate, 2)}%`}</td>
               <td className="num c-unrec" title={inc ? `${fmt(bad)} of ${fmt(inc)} incident${inc === 1 ? "" : "s"}` : undefined}>{unrec == null ? "–" : `${fmt(unrec, 0)}%`}
                 {inc > 0 && <span className="sr">, {fmt(bad)} of {fmt(inc)} incident{inc === 1 ? "" : "s"}</span>}</td>

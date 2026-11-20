@@ -80,12 +80,12 @@ export function LivePage() {
   return (
     <main id="content" className={"wrap pg-live" + (paused ? " paused" : "")} aria-busy={bare || undefined}>
       <div className="top">
-        <h1 id={list && !sessions.length && !h.session ? undefined : "lede"} tabIndex={-1}>Live</h1>
+        <h1 id="lede" tabIndex={-1}>Live</h1>
         <div className="seg" role="group" aria-label="View">
           <button type="button" aria-pressed={mode === "stream"} onClick={() => set({ view: null })}>Stream</button>
           <button type="button" aria-pressed={mode === "wall"} onClick={() => set({ view: "wall" })}>Wall</button>
         </div>
-        <Filters projects={projects} automated autoFile={list?.automated_file.path} range={false} />
+        <Filters projects={projects} automated range={false} />
         <span className="spacer" />
         {mode === "stream" && <label className="chk"><input type="checkbox" checked={follow} onChange={e => setFollow(e.target.checked)} /> Follow</label>}
         <label className="chk"><input type="checkbox" checked={text} onChange={e => setText(e.target.checked)} /> Full text</label>
@@ -112,11 +112,13 @@ export function LivePage() {
         <section className="panel main" aria-label="Session">
           {shown ? <>
             <div className="stream-head">
-              {shown.title && <h2 className="stream-title" title={shown.title}>{shown.title}</h2>}
-              <ProjectName project={shown.project}><b>{shown.project ?? "(unknown)"}</b></ProjectName>
+              {/* The session's heading: its title, else its project. */}
+              {shown.title ? <><h2 className="stream-title" title={shown.title}>{shown.title}</h2>
+                <ProjectName project={shown.project}><b>{shown.project ?? "(unknown)"}</b></ProjectName></>
+                : <h2 className="stream-proj"><ProjectName project={shown.project}><b>{shown.project ?? "(unknown)"}</b></ProjectName></h2>}
               {shown.branch && <code className="chip">{shown.branch}</code>}<span className="chip">{SOURCE_LABELS[shown.source]}</span>
               {shown.model && <span className="chip">{shown.model}</span>}
-              <a href={sheetHref(shown.session_id)} onClick={sessionLink(shown.session_id)}>Session sheet</a>
+              <a href={sheetHref(shown.session_id)} {...sessionLink(shown.session_id)}>Session sheet</a>
               <span className="spacer" /><StateTag st={stateNow(shown.state, now)} now={now} plain />
             </div>
             <Stream key={shown.session_id} s={shown} now={now} text={text} follow={follow} setFollow={setFollow} filters={filters} setFilters={setFilters}
@@ -134,6 +136,6 @@ export function LivePage() {
 }
 
 function Empty({ newest, href }: { newest: { session_id: string; project: string | null; last_ts: string | null } | null; href: (id: string) => string }) {
-  return <p className="empty-live" id="lede" tabIndex={-1}>No session is active in this view.
-    {newest && <> The newest, <a href={href(newest.session_id)} onClick={sessionLink(newest.session_id)}>{newest.project ?? "a session"}</a>, last wrote {when(newest.last_ts)}.</>}</p>;
+  return <p className="empty-live">No session is active in this view.
+    {newest && <> The newest, <a href={href(newest.session_id)} {...sessionLink(newest.session_id)}>{newest.project ?? "a session"}</a>, last wrote {when(newest.last_ts)}.</>}</p>;
 }

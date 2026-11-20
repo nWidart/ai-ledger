@@ -33,7 +33,7 @@ Each page leads with its answer and its main chart. Full tables wait in drawers 
 
 Press **Cmd+K** to jump anywhere, for example `>errors #myproject #7d`. Right-click a project, session, tool or error type for its actions, such as copying a session's resume command. Every page works by keyboard and screen reader. Charts open a data table or read point by point with the arrow keys. The navigation stays on one row at every width, and next to Refresh it shows when the data was last ingested.
 
-A session link on any page opens the session's sheet over that page, so the page keeps its state and Back closes the sheet. A session's sheet shows its model time, tool time, output speed and lines added and removed. These come from the `cost-state` line Claude Code writes when a session ends (from about late October 2026), so Codex and older Claude Code sessions show none.
+A session link on any page opens the session's sheet over that page, so the page keeps its state and Back closes the sheet. **Open session** in Cmd+K and in the right-click menu does the same on every page that shows sessions; on Live the stream keeps following its session. A session's sheet shows its model time, tool time, output speed and lines added and removed. These come from the `cost-state` line Claude Code writes when a session ends (from about late October 2026), so Codex and older Claude Code sessions show none.
 
 The [documentation site](https://nwidart.github.io/ai-ledger/) describes each page in detail.
 
@@ -65,7 +65,7 @@ The first start reads every transcript, about 5 minutes for a month of heavy use
 
 With the app stopped, `ai-ledger ingest` reads new lines once and `ai-ledger rebuild` recomputes the derived tables. After an upgrade that asks for it, run `ai-ledger rebuild` once.
 
-To set your own model prices or plan prices, or to hide more automated projects, see [Configuration](https://nwidart.github.io/ai-ledger/reference/configuration/).
+To set your own model prices or plan prices, or to hide more automated projects, see [Configuration](https://nwidart.github.io/ai-ledger/reference/configuration/). If the automated projects file (`automated.json`) cannot be used, one warning under the navigation says so on every page.
 
 ## Privacy
 

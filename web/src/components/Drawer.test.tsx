@@ -106,6 +106,31 @@ describe("SectionIndex", () => {
     await vi.waitFor(() => expect(current()).toBe("A"));
     vi.restoreAllMocks();
   });
+
+  it("brings the marked link into view when a resize makes the bar overflow, with the same section marked", async () => {
+    const ros: ResizeObserverCallback[] = [];
+    vi.stubGlobal("ResizeObserver", class { constructor(cb: ResizeObserverCallback) { ros.push(cb); } observe() {} disconnect() {} });
+    vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(40);
+    vi.spyOn(Element.prototype, "scrollHeight", "get").mockReturnValue(5000);
+    const wide = vi.spyOn(Element.prototype, "scrollWidth", "get").mockReturnValue(100);
+    vi.spyOn(Element.prototype, "clientWidth", "get").mockReturnValue(100);
+    vi.spyOn(HTMLElement.prototype, "offsetLeft", "get").mockImplementation(function (this: HTMLElement) { return this.textContent === "B" ? 300 : 0; });
+    vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockReturnValue(40);
+    const left = vi.spyOn(Element.prototype, "scrollLeft", "set");
+    try {
+      renderApp(<><SectionIndex groups={[[{ id: "a", label: "A" }, { id: "b", label: "B" }]]} /><section id="a" /><section id="b" /></>);
+      await userEvent.click(screen.getByRole("link", { name: "B" }));
+      await vi.waitFor(() => expect(document.querySelector("nav.secidx a[aria-current]")?.textContent).toBe("B"));
+      expect(left).not.toHaveBeenCalled(); // the links fit
+      wide.mockReturnValue(500); // the window narrows: the bar overflows, and B is past its right edge
+      act(() => ros.forEach(cb => cb([], {} as ResizeObserver)));
+      expect(left).toHaveBeenLastCalledWith(300 + 40 - 100 + 16);
+    } finally {
+      act(() => { dispatchEvent(new Event("wheel")); }); // unpins B for the tests after
+      vi.unstubAllGlobals();
+      vi.restoreAllMocks();
+    }
+  });
 });
 
 describe("SectionIndex observers", () => {
@@ -148,6 +173,32 @@ describe("SectionIndex observers", () => {
     } finally {
       Object.defineProperty(window, "scrollY", was);
       vi.unstubAllGlobals();
+    }
+  });
+
+  it("reads the sections again when a drawer opens or closes", async () => {
+    made.length = 0;
+    vi.stubGlobal("IntersectionObserver", FakeIO);
+    vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(40);
+    const height = vi.spyOn(Element.prototype, "scrollHeight", "get").mockReturnValue(5000);
+    const was = Object.getOwnPropertyDescriptor(window, "scrollY")!;
+    Object.defineProperty(window, "scrollY", { value: 300, configurable: true });
+    try {
+      renderApp(<><SectionIndex groups={[[{ id: "a", label: "A" }], [{ id: "d", label: "D" }]]} /><section id="a" />
+        <Drawer id="d" title="D">rows</Drawer></>);
+      const [above, shown] = made as [typeof made[number], typeof made[number]];
+      const sec = (id: string) => ({ target: document.getElementById(id)!, isIntersecting: true });
+      const current = () => document.querySelector("nav.secidx a[aria-current]")?.textContent;
+      act(() => { shown.cb([sec("a"), sec("d")]); above.cb([sec("a")]); });
+      expect(current()).toBe("A");
+      // The drawer's body brings the page's end into view; no section crosses a line, so only the drawer's toggle says so.
+      height.mockReturnValue(1000);
+      await userEvent.click(screen.getByRole("button", { name: "D" }));
+      expect(current()).toBe("D");
+    } finally {
+      Object.defineProperty(window, "scrollY", was);
+      vi.unstubAllGlobals();
+      vi.restoreAllMocks();
     }
   });
 });

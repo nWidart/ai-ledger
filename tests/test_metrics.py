@@ -1131,6 +1131,9 @@ class SessionRunsTest(unittest.TestCase):
 
     def test_nothing_recorded(self):
         self.assertEqual(self.totals(source="codex"), dict(model_ms=0, tool_ms=0, timed_sessions=0, output_per_s=None))
+        # The view's sessions' sources say why: priced or not, each session counts.
+        u = lambda source: metrics.usage(self.con.cursor(), "foo", 7, prices=PRICES, today=TODAY, source=source)["totals"]["session_sources"]
+        self.assertEqual((u(""), u("codex")), (["claude", "codex"], ["codex"]))
         self.assertEqual(self.totals(source="codex", today=date(2026, 11, 11), prev=True)["output_per_s"], None)
 
     def test_session_sheet(self):

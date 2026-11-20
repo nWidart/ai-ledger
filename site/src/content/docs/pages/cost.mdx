@@ -60,7 +60,7 @@ The page has a section index (Overview, Per day, Projects, Insights) and two dra
 - A line gives the dates of both windows: "Oct 22 – Nov 20, 2026 vs Sep 22 – Oct 21, 2026". A "thin history" chip marks a previous window with prompts on fewer than half as many days as this one, since its change then says little. For All: "All time" and the dates.
 - With no requests in the view, the heading reads "No agent usage in the last 30 days." (or "yet" for All).
 
-**How measured** is a disclosure under the heading, closed by default. It holds:
+**How measured** ends the line of dates. It is a toggletip, as on every page (see [Data tables](/ai-ledger/everywhere/data-tables/#how-measured)). It holds:
 
 - each window's dates and how many of its days had prompts, and the previous window's cost;
 - the sessions (and projects), the tokens and the requests;
@@ -91,7 +91,7 @@ The gauge sits beside the heading, under the filters. It measures the calendar m
 - **Unpriced models** appears when some model has no price. It lists each model with its tokens. Their tokens are counted; their cost is unknown and left out of totals. To price one, add it to the user prices file, whose full path the banner names, in the shape of the packaged `prices.json`. The next page load uses it, with no rebuild.
 - **Prices file ignored** appears when the user prices file cannot be used. It names the file and the reason. Packaged prices apply until it is fixed. See [Configuration](/ai-ledger/reference/configuration/).
 
-A "+?" chip beside a cost means the figure leaves out some requests from unpriced models. Its text says how many, and its hover text shows the count.
+A "+?" chip beside a cost means the figure leaves out some requests from unpriced models. A screen reader reads "plus an unknown cost for N requests from unpriced models", and its hover text shows the count.
 
 ### Estimated cost per day
 
@@ -151,7 +151,8 @@ On a phone, the table keeps Project, Spend and the change.
 **Controls**
 
 - **Download CSV** and **Copy** export the table. The export holds, per project: estimated cost, tokens, cache hit, 1h writes, subagent cost share, commits, cost per commit, cost per prompt and the change. It holds every row in the order shown, small projects included even when folded, with costs and shares rounded to 4 decimals. Copy puts tab-separated text on the clipboard. The file is named `ai-ledger-cost-projects-<date>.csv`, dated today. A text cell that starts with `=`, `+`, `-`, `@`, a tab or a carriage return is prefixed with an apostrophe; numbers are not.
-- From Compare projects, a note says "Sorted by cost per commit, highest first.", gives the outlier's cost per commit and its multiple of the median, and offers "Sort by cost again".
+- From Compare projects, a note says "Sorted by cost per commit, highest first.", gives the outlier's cost per commit and its multiple of the median, and offers "Sort by cost again", which sorts by Spend and moves focus to its header.
+- Every sort says what it did to a screen reader: "Sorted by spend, highest first". That includes Compare projects, Sort by cost again, the same sort twice and the reset a new range makes.
 
 ### What stands out
 

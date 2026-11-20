@@ -259,7 +259,7 @@ class App:
         cur = self.con.cursor()
         counts = {t: cur.execute(f"SELECT count(*) FROM {t}").fetchone()[0] for t in ("raw_lines", "files", "sessions", "requests", "tool_calls")}
         return dict(self.state, counts=counts, interval=INTERVAL, limits={p.name: dict(p.state) for p in self.pollers},
-                    limits_alert=self.limits_alert, project_order=metrics.project_order(cur))
+                    limits_alert=self.limits_alert, project_order=metrics.project_order(cur), automated_file=metrics.automated_file())
 
 
 def asset(path):

@@ -231,6 +231,18 @@ class AppTest(unittest.TestCase):
         self.assertEqual(got["project_order"], metrics.project_order(self.con.cursor()))
         self.assertIn("last_change", got)
 
+    def test_status_carries_the_automated_file(self):
+        # Every page reads the file's state from the status poll: the toggle's hint and the app's warning.
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "automated.json")
+            with mock.patch.object(metrics, "USER_AUTOMATED", path):
+                self.assertEqual(json.loads(self.get("/api/status")[2])["automated_file"], dict(path=path, error=None, projects=[]))
+                with open(path, "w") as f:
+                    f.write("{not json")
+                got = json.loads(self.get("/api/status")[2])["automated_file"]
+        self.assertEqual((got["path"], got["projects"]), (path, []))
+        self.assertTrue(got["error"])
+
     def test_status_carries_the_limits_alert(self):
         alert = dict(kind="runs_out", provider="claude", provider_label="Claude Code", label="weekly", current=64.0,
                      at="2026-11-13T08:00:00", resets_at="2026-11-14T12:00:00", count=1)

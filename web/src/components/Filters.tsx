@@ -4,6 +4,7 @@ import { Link } from "@tanstack/react-router";
 import type { Source } from "../api";
 import { RANGES, SOURCES, navigate, parseSearch, rootState, setSearch, sharedSearch, usePathname, useSearchOf, validateRoot } from "../url";
 import { ProjectDot } from "./ProjectDot";
+import { useLastStatus } from "./refresh";
 import { Toggletip } from "./Toggletip";
 import "./Filters.css";
 
@@ -12,10 +13,9 @@ export interface FiltersProps {
   /** The picker's projects, busiest first. The URL's project is listed even when missing here (say an automated
    *  project while automated sessions are left out: naming it in the filter includes it). */
   projects: readonly (string | ProjectOption)[];
-  /** Show "Include automated sessions" (Activity and Cost; Errors is never filtered). */
+  /** Show "Include automated sessions" (Activity and Cost; Errors is never filtered). Its hint names the automated projects
+   *  file, from the app's status: no page passes it. */
   automated?: boolean;
-  /** The file that lists more automated projects, named in the toggle's hint. */
-  autoFile?: string;
   /** Show the project picker (Limits has none: limits are per account; the URL keeps the project for the other pages). */
   project?: boolean;
   /** Show the time range (Live has none: it keeps the range in the URL for the other pages; Limits shows RangeFilter where
@@ -52,8 +52,9 @@ export function RangeFilter() {
 
 /** Project picker with its color dot, its Project page link and clear button, range and source segments and the automated
  *  toggle, all writing the URL. */
-export function Filters({ projects, automated = false, autoFile, project = true, range = true, children }: FiltersProps) {
+export function Filters({ projects, automated = false, project = true, range = true, children }: FiltersProps) {
   const h = useSearchOf(filterSearch), { badSource } = h, set = setSearch, path = usePathname();
+  const autoFile = useLastStatus()?.automated_file?.path;
   // An unknown source reads as All; the URL drops it so a copied link says what the page shows.
   useEffect(() => { if (badSource) setSearch({ source: null }, { push: false }); }, [badSource]);
   const opts = projects.map(p => (typeof p === "string" ? { value: p } : p));

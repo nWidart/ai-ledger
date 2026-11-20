@@ -1,5 +1,6 @@
 import { memo, useState, type ReactNode } from "react";
 import { agentName } from "../../components/Filters";
+import { HowMeasured } from "../../components/HowMeasured";
 import { ProjectDot } from "../../components/ProjectDot";
 import { num as fmt } from "../../format";
 import { useErrors } from "./context";
@@ -10,7 +11,7 @@ const Vital = ({ v, l, note, cls = "" }: { v: ReactNode; l: string; note: string
 );
 /** A share as a percent: 0 decimals, 1 under 1% (so 0.4% is not 0%). */
 const pct = (x: number) => { const p = x * 100; return fmt(p, p > 0 && p < 1 ? 1 : 0) + "%"; };
-const UNCAT_TITLE = "Share of errors in catch-all types (Other, Other non-zero exit, MCP tool error): errors no specific rule matched";
+const UNCAT_HOW = "The share of errors in the catch-all types, Other, Other non-zero exit and MCP tool error: the errors no specific rule matched.";
 
 /** The briefing (the period's answer as one sentence) and the vitals; on a phone the rest of the summary waits behind More. */
 export const Summary = memo(function Summary() {
@@ -30,7 +31,8 @@ export const Summary = memo(function Summary() {
         : <><b>{fmt(n)}</b> failed tool call{n === 1 ? "" : "s"}{where} (<b>{fmt(r, 1)}%</b>).</>}
     </h1>
     <p className={"sub folded" + (more ? " open" : "")} id="gen">{gen}</p>
-    {n ? <p className={"sub folded" + (more ? " open" : "")} id="uncat" title={UNCAT_TITLE}>{`Uncategorized: ${pct(uncat.share)} of errors${split}`}</p> : null}
+    {n ? <p className={"sub folded" + (more ? " open" : "")} id="uncat"><span className="uncat-v">{`Uncategorized: ${pct(uncat.share)} of errors${split}`}</span>
+      <HowMeasured what="uncategorized">{UNCAT_HOW}</HowMeasured></p> : null}
     <section className={"vitals" + (more ? " open" : "")} id="kpis" aria-label="Summary">
       <Vital v={d == null ? "–" : `${d > 0 ? "+" : ""}${fmt(d, 0)}%`} l="Change" cls={d == null ? "" : d < -1 ? "delta-down" : d > 1 ? "delta-up" : ""}
         note={idle ? "No tool calls in this period." : why ? `${why}, nothing to compare.` : r0 == null || r1 == null ? "Not enough calls to compare." : `Error rate ${cmp}: ${fmt(r0, 1)}% → ${fmt(r1, 1)}%.`} />

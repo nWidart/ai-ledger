@@ -22,6 +22,7 @@ The menu opens on every row, card and name that stands for a subject:
 - the rows of the project, session and tool sheets;
 - the sessions of the Live rail and wall;
 - the error type rows of Errors;
+- the session links of Errors' examples and of Insights' session cards;
 - project names shown with their dot.
 
 A project name inside another subject's row or card opens that subject's menu. A session row's project name opens the session's menu, not the project's. An "Other" or long-tail row that stands for no single subject opens no menu.
@@ -45,7 +46,7 @@ The menu is a `menu` of `menuitem`s, named after its subject (for example "jobde
 | Item | Action |
 | --- | --- |
 | Open project page | Opens the Project page, with the current range, source and automated filters. Left out on that project's own page. |
-| Open project sheet | Opens the project's sheet. Left out where the page cannot host the sheet. |
+| Open project sheet | Opens the project's sheet over the current page. Left out on Limits, which hosts no sheet. |
 | Filter dashboard to *project* | Sets the project filter. When the page already shows only that project, the item reads "Show all projects" and clears the filter. |
 | Show on Cost, Show on Errors, Show on Context, Show on Live | Opens that page filtered to the project, with the range, source and automated filters kept. |
 | Copy project name | Copies the name. |
@@ -54,7 +55,7 @@ The menu is a `menu` of `menuitem`s, named after its subject (for example "jobde
 
 | Item | Action |
 | --- | --- |
-| Open session | Opens the session sheet, as the palette does. |
+| Open session | Opens the session sheet over the current page, as the palette does. On Live, the stream keeps its session and its live connection. From Limits, which hosts no sheet, it opens on Activity. |
 | Open project page | Opens the session's Project page. Left out when the session has no project or the page is that project's page. |
 | Copy resume command | Copies the command that resumes the session. |
 | Copy session ID | Copies the id. |

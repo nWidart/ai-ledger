@@ -8,5 +8,12 @@
 .tt.how { color: var(--link); text-decoration: underline dotted; text-underline-offset: 2px; white-space: nowrap; }
 .tt.how:hover, .tt.how[aria-expanded=true] { text-decoration-style: solid; }
 .tt-pos { z-index: 40; }
-.tt-pop { max-width: min(20rem, calc(100vw - 16px)); padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-1);
+/* No taller than the room Base UI finds beside the button (Cost's method on a short window): the rest scrolls, by keyboard too
+   (Toggletip.tsx makes a popup that scrolls a tab stop). */
+.tt-pop { max-width: min(20rem, calc(100vw - 16px)); max-height: var(--available-height, none); box-sizing: border-box; overflow-y: auto; overscroll-behavior: contain; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-1);
   box-shadow: var(--shadow-pop); color: var(--text-secondary); font-size: .78125rem; font-weight: 400; line-height: 1.45; letter-spacing: 0; text-align: left; text-transform: none; white-space: normal; }
+/* A paragraph inside a popup: a span, as the popup sits in a hint line and holds phrasing content only. */
+.tt-pop .tt-p { display: block; }
+.tt-pop .tt-p + .tt-p { margin-top: 6px; }
+/* The popup's place in the DOM, right after its button; Base UI positions the popup itself. */
+.tt-host { display: contents; }
