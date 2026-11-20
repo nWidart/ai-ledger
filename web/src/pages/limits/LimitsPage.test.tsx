@@ -303,7 +303,8 @@ describe("LimitsPage", () => {
     openTable();
     expect(hist.getByText("ended early by a plan change from plus to prolite")).toBeTruthy();
     const hit = hist.getAllByRole("row").find(r => r.textContent!.startsWith("Codex 5-hour"))!;
-    expect(within(hit).getByText("4.3h")).toBeTruthy();
+    // 255 minutes at 100%: the same two units as the bar's name and the panel's notes.
+    expect(within(hit).getByText("4h 15m")).toBeTruthy();
   });
 
   it("sets the range in the Past windows header, which keeps the open windows", async () => {

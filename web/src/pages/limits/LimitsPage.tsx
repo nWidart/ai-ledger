@@ -7,7 +7,7 @@ import { HowMeasured } from "../../components/HowMeasured";
 import { PageSkeleton } from "../../components/PageSkeleton";
 import { Toggletip } from "../../components/Toggletip";
 import { useLanding } from "../../components/useLanding";
-import { big, dur, num, plural, usd } from "../../format";
+import { big, num, plural, usd } from "../../format";
 import { navigate, useView } from "../../url";
 import { queries } from "../../queries";
 import { useApi } from "../../useApi";
@@ -236,7 +236,7 @@ function PastWindows({ d }: { d: LimitsPayload }) {
         <tbody>{d.history.map(h => <tr key={`${h.provider}-${h.label}-${h.closed_at}`} className={barKey(h) === selected ? "sel" : undefined}
           aria-current={barKey(h) === selected || undefined}>
           <td>{windowName(h)}</td><td>{planName(h.plan) ?? "–"}</td><td>{whenDay(h.closed_at)}</td><td className="num">{num(h.final)}%</td>
-          <td>{h.hit ? <b className="bad">{h.hit_minutes != null ? dur(h.hit_minutes * 60) : "yes"}</b> : "–"}</td>
+          <td>{h.hit ? <b className="bad">{h.hit_minutes != null ? span(h.hit_minutes * 60000) : "yes"}</b> : "–"}</td>
           <td>{h.early && <span>{h.reason?.startsWith("plan change") ? `ended early by a ${h.reason}` : "reset early"}</span>}{h.estimated && <span className="chip est">estimated</span>}</td>
         </tr>)}</tbody>
       </DataTable></ChartTable>}
