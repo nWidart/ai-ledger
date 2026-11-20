@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build && node scripts/stamp.mjs",
+    "build": "vite build",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint --react-plugin --vitest-plugin src",
     "test": "vitest run",

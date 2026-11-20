@@ -15,7 +15,8 @@
 //   is palette-quantized (sharp, from site/node_modules) to keep it small.
 //
 // node record.mjs quantize   re-encodes the PNGs already in site/src/assets/shots/ the same way, without recording.
-//   Steps: `uv sync` once, `npm ci` here and in site/ (sharp), then this. shots seeds the demo store itself (seed.py), starts serve.py and stops it
+//   Steps: `uv sync` once, `npm ci && npm run build` in web/ (serve.py serves that build), `npm ci` here and in
+//   site/ (sharp), then this. shots seeds the demo store itself (seed.py), starts serve.py and stops it
 //   at the end, and exits before any shot when port 8799 (or DEMO_PORT) already answers, so no shot comes from a store you run yourself.
 //   serve.py opens only demo.duckdb, so a shot cannot show your transcripts. live plays replay.py sessions, last of all.
 //   Shots are 1280px wide at device scale 1 (SCALE=2 doubles it), with reduced motion on so charts do not animate.

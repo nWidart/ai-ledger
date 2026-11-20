@@ -1,5 +1,6 @@
 """Serve the demo store on 127.0.0.1:8799 (or $DEMO_PORT) with no limit polling, ingesting only tools/demo/live/, so nothing real enters it.
 
+cd web && npm ci && npm run build    once: the pages come from that build, which git does not track
 uv run tools/demo/serve.py
 uv run tools/demo/replay.py    in another terminal: plays synthetic sessions into tools/demo/live/ for the Live page
 """
