@@ -366,19 +366,26 @@ RUN_RATE_DAYS = 7  # the complete days whose mean cost projects the rest of the 
 def run_rate(cur, project, prices, today, automated=False, source="", user_projects=None):
     """The month's run rate under the view's scope (project, source, automated; not its range): the cost so far this month up
     to yesterday, the mean daily cost of the last 7 complete days, the days left counting today, and their projection. None
-    without 7 complete days of history or without a priced request among them."""
+    without 7 complete days of history or without a priced request among them. by_source: the cost so far and projection of
+    each agent with a cost in either window, over the same days, so a plan can be set against the agents it covers."""
     _, _, _, _, _, rq, rp = view(project, 0, prices, today, automated, source, user_projects)
     first_of = today.replace(day=1)
     since = today - timedelta(days=RUN_RATE_DAYS)
-    row = rows(cur, f"""{rq} SELECT min(day) AS first, sum(cost) FILTER (WHERE day >= ? AND day < ?) AS avg_sum,
-        sum(cost) FILTER (WHERE day >= ? AND day < ?) AS month_sum FROM (SELECT {day('ts')} AS day, cost FROM rq)""",
-        rp + [since.isoformat(), today.isoformat(), first_of.isoformat(), today.isoformat()])[0]
-    if row["first"] is None or row["first"] > since.isoformat() or row["avg_sum"] is None:
+    by = rows(cur, f"""{rq} SELECT source, min(day) AS first, sum(cost) FILTER (WHERE day >= ? AND day < ?) AS avg_sum,
+        sum(cost) FILTER (WHERE day >= ? AND day < ?) AS month_sum FROM (SELECT {day('ts')} AS day, source, cost FROM rq)
+        GROUP BY 1 ORDER BY 1""", rp + [since.isoformat(), today.isoformat(), first_of.isoformat(), today.isoformat()])
+    first = min((r["first"] for r in by), default=None)
+    priced = [r for r in by if r["avg_sum"] is not None or r["month_sum"] is not None]
+    if first is None or first > since.isoformat() or all(r["avg_sum"] is None for r in by):
         return None
     left = (first_of.replace(year=first_of.year + first_of.month // 12, month=first_of.month % 12 + 1) - today).days
-    daily_avg = row["avg_sum"] / RUN_RATE_DAYS
-    month_cost = row["month_sum"] or 0
-    return dict(month_cost=month_cost, daily_avg=daily_avg, days_left=left, projected=month_cost + daily_avg * left)
+
+    def rate(avg_sum, month_sum):
+        daily_avg, month_cost = (avg_sum or 0) / RUN_RATE_DAYS, month_sum or 0
+        return dict(month_cost=month_cost, daily_avg=daily_avg, projected=month_cost + daily_avg * left)
+
+    total = rate(sum(r["avg_sum"] or 0 for r in by), sum(r["month_sum"] or 0 for r in by))
+    return dict(total, days_left=left, by_source=[dict(source=r["source"], **rate(r["avg_sum"], r["month_sum"])) for r in priced])
 
 
 def usage(cur, project="", range_days=0, session="", prices=None, today=None, automated=False, source=""):

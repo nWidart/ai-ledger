@@ -80,6 +80,8 @@ export interface Change { project: string | null; cost: number | null; prev_cost
 
 /** The coding agent a session came from; "" in a filter is every source. */
 export type Source = "claude" | "codex";
+/** One agent's share of the month's run rate. */
+export interface RunRateSource { source: Source; month_cost: number; daily_avg: number; projected: number }
 
 export interface UsagePayload {
   project: string; range: number; automated: boolean; source: Source | ""; start: Day | null; end: Day;
@@ -99,8 +101,9 @@ export interface UsagePayload {
   /** null for the all-time view. */
   previous: Previous | null; changes: Change[] | null;
   /** The calendar month's projection under the view's scope (any range): month_cost up to yesterday, plus daily_avg (the last
-   *  7 complete days) over days_left, today counted. null without 7 complete days of priced history. */
-  run_rate: { month_cost: number; daily_avg: number; days_left: number; projected: number } | null;
+   *  7 complete days) over days_left, today counted. null without 7 complete days of priced history. by_source: the same per
+   *  agent with a cost in either window; they add up to the totals. */
+  run_rate: { month_cost: number; daily_avg: number; days_left: number; projected: number; by_source: RunRateSource[] } | null;
   /** The user prices file next to the store (path), and why it was ignored (error; null when read or absent). */
   prices_file: { path: string; error: string | null };
   /** The plan each provider in the view is on (from its newest limit snapshot), priced monthly in USD; none when unknown. */

@@ -813,6 +813,14 @@ class RunRateTest(unittest.TestCase):
         r = self.rate()  # today's $100 is left out; Nov 13-19 average $3; Nov 1-19 cost 19 + 20; Nov 20-30 is 11 days
         self.assertEqual((r["month_cost"], r["daily_avg"], r["days_left"], r["projected"]), (39, 3, 11, 72))
 
+    def test_splits_by_agent_over_the_same_days(self):
+        r = self.rate()  # foo (Claude): Nov 1-19 $19, Nov 13-19 $1 a day; bar (Codex): Nov 10-19 $20, $2 a day
+        by = {s["source"]: s for s in r["by_source"]}
+        self.assertEqual((by["claude"]["month_cost"], by["claude"]["projected"]), (19, 19 + 11))
+        self.assertEqual((by["codex"]["month_cost"], by["codex"]["projected"]), (20, 20 + 2 * 11))
+        self.assertAlmostEqual(sum(s["projected"] for s in r["by_source"]), r["projected"])
+        self.assertEqual([s["source"] for s in self.rate(source="codex")["by_source"]], ["codex"])
+
     def test_project_and_source_filters_apply(self):
         self.assertEqual(self.rate(project="foo")["projected"], 19 + 11)
         self.assertEqual(self.rate(source="codex")["projected"], 20 + 2 * 11)
