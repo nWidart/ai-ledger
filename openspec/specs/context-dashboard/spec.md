@@ -140,7 +140,7 @@ Selecting a segment of a window's bar SHALL list the sessions in it, newest firs
 - **THEN** the page lists those 3 and says it shows 3 of 5, because the list covers the sessions on the map
 
 ### Requirement: Show what fills context
-The page SHALL show, over the view's main-thread tool calls with a known result size, the summed result size by tool and by MCP server, each with its calls, its median, 95th percentile and largest result and an estimated token count labelled as an estimate. The results of calls made inside subagent transcripts SHALL be summed apart, as bytes that never entered the main thread's context.
+The page SHALL show, over the view's main-thread tool calls with a known result size, the summed result size by tool and by MCP server, each with its calls, its median, 95th percentile and largest result and an estimated token count labelled as an estimate. The figures SHALL be shown once, in the largest contributors table, with no second table of the same rows. The results of calls made inside subagent transcripts SHALL be summed apart, as bytes that never entered the main thread's context.
 
 #### Scenario: By tool
 - **WHEN** 40 main-thread `Read` results total 2,000,000 bytes and 10 `Bash` results total 300,000
@@ -150,8 +150,12 @@ The page SHALL show, over the view's main-thread tool calls with a known result 
 - **WHEN** a session's subagent transcripts hold 5,000,000 bytes of tool results and its main thread 800,000
 - **THEN** the main-thread figures count 800,000 bytes and the subagent figure 5,000,000
 
+#### Scenario: One table
+- **WHEN** the user opens the What fills context section
+- **THEN** it shows the largest contributors table and no separate By tool or By MCP server table
+
 ### Requirement: Chart the largest contributors
-The page SHALL chart the ten tools, or MCP servers, with the largest summed size, each beside the range from its median to its 95th percentile result, and SHALL fold the rest into one "Other" total. The main-thread and subagent totals SHALL be drawn as two parts of one bar.
+The page SHALL chart the ten tools, or MCP servers, with the largest summed size, each beside the range from its median to its 95th percentile result, with its calls and its largest result, and SHALL fold the rest into one "Other" total. The main-thread and subagent totals SHALL be drawn as two parts of one bar.
 
 #### Scenario: Many small or a few huge
 - **WHEN** `Read` totals 2,000,000 bytes over 400 results with a 95th percentile of 12,000, and `Bash` totals 2,000,000 over 8 results with a 95th percentile of 900,000
@@ -159,7 +163,18 @@ The page SHALL chart the ten tools, or MCP servers, with the largest summed size
 
 #### Scenario: More than ten tools
 - **WHEN** 14 tools have results with a known size
-- **THEN** the chart shows the 10 with the largest totals and one "Other" bar summing the remaining 4, and the table lists all 14
+- **THEN** the chart shows the 10 with the largest totals and one "Other" bar summing the remaining 4
+
+### Requirement: Show and sort every contributor
+A "Show all N" control SHALL list every tool, or MCP server, in the largest contributors table, with no Other row, and a second activation SHALL fold them again. The Name, Calls, Total, Typical result and Largest columns SHALL sort the rows, the Typical result column by the median. The rows SHALL start ordered by total, largest first, and the ten shown with the Other row SHALL follow the sort.
+
+#### Scenario: Show all
+- **WHEN** 14 tools have results with a known size and the user selects "Show all 14 tools"
+- **THEN** the table lists all 14 and no Other row
+
+#### Scenario: Sort by calls
+- **WHEN** the user sorts the table by Calls
+- **THEN** the tool with the most calls comes first, and the ten shown are the ten with the most calls
 
 ### Requirement: Estimate tokens from bytes
 An estimated token count SHALL be the result size in bytes divided by 4, rounded down, and SHALL be labelled as an estimate wherever it is shown.
@@ -225,7 +240,7 @@ A cache break's `expired` cause SHALL use the cache lifetime of its session's so
 - **THEN** the second turn is a cache break with cause `expired`
 
 ### Requirement: Give data-driven tips
-The page SHALL show tips from a fixed set of rules, each with a severity, a title, its evidence figures, its advice and the sessions that match it. The rules and their thresholds SHALL be fixed in the app, not learned or generated. A tip SHALL be shown only when its rule fires on the view's data, and the page SHALL say when none fires.
+The page SHALL show tips from a fixed set of rules, each with a severity, a title, its evidence figures, its advice and the sessions that match it. The rules and their thresholds SHALL be fixed in the app, not learned or generated. A tip SHALL be shown only when its rule fires on the view's data, and the page SHALL say when none fires. Tips SHALL show as compact cards side by side, never as full-width cards stacked one under another.
 
 #### Scenario: Nothing fires
 - **WHEN** no rule fires on the view
@@ -234,6 +249,10 @@ The page SHALL show tips from a fixed set of rules, each with a severity, a titl
 #### Scenario: Rule fires
 - **WHEN** a main-thread tool result in the view is 150,000 bytes
 - **THEN** the large-results tip is shown with its evidence, advice and the session that holds the result
+
+#### Scenario: Several tips
+- **WHEN** three rules fire on a 1440-pixel-wide window
+- **THEN** the three tips show as compact cards on one row
 
 ### Requirement: Order the tips
 Tips SHALL be ordered by severity, critical before warning, and within a severity in the rules' fixed order.
@@ -407,3 +426,10 @@ The page SHALL chart, per day of the view, or per week when the view's first req
 #### Scenario: Request with no time
 - **WHEN** a request in the view carries no time
 - **THEN** it is in no bucket, and it still counts in the Cost section's cache-hit ratio
+
+### Requirement: Lead with the typical start
+The Context lede SHALL state the view's median starting context and, when known, its median share of the window. The number of sessions that compacted SHALL show in the Growth vitals, as that many of the view's sessions, not in the lede.
+
+#### Scenario: Lede and compactions
+- **WHEN** the view's median start is 24,000 tokens, 12% of the window, and 9 of 40 sessions compacted
+- **THEN** the lede states 24,000 tokens and 12% of its window, and the Growth vitals show 9 sessions compacted of 40
