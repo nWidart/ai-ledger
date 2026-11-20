@@ -29,22 +29,24 @@ export function ProjectPage() {
   const live = useApi(project ? queries.liveList(want) : null);
   const d = usage.data;
   useEffect(() => { if (d) setOrder(d.project_order); }, [d]);
-  const { slow, grow, wrap } = useLanding(d, project + "|" + h.range + "|" + h.source + "|" + h.auto, usage.loading, usage.error, ":scope .panel");
+  // Busy and the dimmed look of a slow refresh are each block's own (Block), so a slow usage request leaves fresh blocks alone.
+  const { grow, wrap } = useLanding(d, project + "|" + h.range + "|" + h.source + "|" + h.auto, usage.loading, usage.error, ":scope .panel");
   const scope: Scope = { project, range: h.range, source: h.source, auto: h.auto,
     search: formatSearch({ project, range: String(h.range), source: h.source, auto: h.auto ? "1" : "" }) };
-  // Only an answered usage request can say the project has no request in the view; until then, or when it failed, the blocks show.
+  // Only an answered usage request can say the project has no request in the view. The blocks still show below it: Context can have
+  // a snapshot to measure from, and the other requests their own figures or failures.
   const idle = !!d && d.totals.requests === 0;
   // The picker lists the projects of any payload that came, so one failed request does not empty it.
   const projects = d?.projects ?? limits.data?.projects ?? insights.data?.projects ?? [];
-  const cls = "wrap pg-project" + (slow && d ? " loading" : "") + (grow ? " grow" : "");
 
   return (
-    <main id="content" className={cls} ref={wrap} aria-busy={usage.loading || undefined}>
+    <main id="content" className={"wrap pg-project" + (grow ? " grow" : "")} ref={wrap}>
       <header className="top sect" id="overview">
         <h1 className="lede" id="lede" tabIndex={-1}><ProjectName project={project} /></h1>
         <div className="top-side"><Filters projects={projects} automated autoFile={d?.automated_file.path} /></div>
       </header>
-      {idle ? <p className="empty none" role="status">No use of {project} in this view. Pick a longer range, another source or include automated sessions.</p> : <div className="cols">
+      {idle && <p className="empty none" role="status">No use of {project} in this view. Pick a longer range, another source or include automated sessions.</p>}
+      <div className="cols">
         <div className="col">
           <ActivityBlock usage={usage} live={live} scope={scope} />
           <CostBlock usage={usage} scope={scope} />
@@ -56,7 +58,7 @@ export function ProjectPage() {
           <SessionsBlock usage={usage} scope={scope} />
           <InsightsBlock insights={insights} scope={scope} />
         </div>
-      </div>}
+      </div>
       <UsageSheets data={d} />
     </main>
   );

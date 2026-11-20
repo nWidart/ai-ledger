@@ -130,6 +130,17 @@ describe("ProjectPage", () => {
       await within(block("Activity")).findByText("median session");
       expect(screen.queryByText(/active now/)).toBeNull();
     });
+
+    it("says the sessions active now could not load, with Retry, when Live fails alone", async () => {
+      const { f } = open({ live: null });
+      await loaded();
+      const note = await within(block("Activity")).findByText(/Could not load the sessions active now/);
+      expect(within(block("Activity")).getByText("median session")).toBeTruthy();
+      expect(within(block("Activity")).queryByRole("alert")).toBeNull();
+      const asked = () => f.mock.calls.filter(c => String(c[0]).startsWith("/api/live")).length, before = asked();
+      await userEvent.click(within(note).getByRole("button", { name: "Retry" }));
+      await waitFor(() => expect(asked()).toBeGreaterThan(before));
+    });
   });
 
   describe("cost and sessions", () => {
@@ -328,6 +339,16 @@ describe("ProjectPage", () => {
       expect(within(blk).getByRole("button", { name: "Measure now" }).getAttribute("aria-disabled")).toBeNull();
     });
 
+    it("offers Measure now from a snapshot when the project has no request in the view", async () => {
+      const none = { ...foo(usage), totals: { ...usage.totals, requests: 0, sessions: 0 }, daily_sources: [] } as UsagePayload;
+      open({ usage: none, context: measured(snapshot) });
+      await loaded();
+      await screen.findByText(/No use of foo in this view/);
+      const blk = block("Context");
+      expect(await within(blk).findByRole("button", { name: "Measure now" })).toBeTruthy();
+      expect(within(blk).getByText(/^Overhead measured/)).toBeTruthy();
+    });
+
     it("offers no Measure now without Claude Code sessions or a snapshot", async () => {
       open({ usage: { ...foo(usage), daily_sources: [{ day: "2026-11-04", source: "codex", cost: 1 }] }, context: measured(null) });
       await loaded();
@@ -450,6 +471,12 @@ describe("ProjectPage", () => {
       expect(await within(block("Session judgments")).findByText(/1 of 3/)).toBeTruthy();
       await within(block("Context")).findByText("median starting context, tokens");
       expect(screen.queryByText(/No use of foo/)).toBeNull();
+      // Busy is each block's: the ones that read usage (Context for a line), not the page, and the loading line is no live region.
+      const busy = (name: string) => block(name).getAttribute("aria-busy");
+      for (const name of ["Activity", "Cost", "Sessions", "Context"]) expect(busy(name)).toBe("true");
+      for (const name of ["Errors", "Session judgments"]) expect(busy(name)).toBeNull();
+      expect(document.getElementById("content")!.getAttribute("aria-busy")).toBeNull();
+      expect(within(block("Activity")).queryByRole("status")).toBeNull();
     });
 
     it("says a slow errors request is loading, and draws the other blocks", async () => {
@@ -460,13 +487,28 @@ describe("ProjectPage", () => {
     });
   });
 
-  it("says there is no use in the view, and keeps the heading and the filters", async () => {
+  describe("no use in the view", () => {
     const none = { ...foo(usage), totals: { ...usage.totals, requests: 0, sessions: 0 } } as UsagePayload;
-    open({ usage: none });
-    await loaded();
-    expect(await screen.findByText(/No use of foo in this view/)).toBeTruthy();
-    expect(screen.getByRole("group", { name: "Filters" })).toBeTruthy();
-    expect(screen.queryByRole("region", { name: "Activity" })).toBeNull();
+
+    it("says so above the blocks, keeps the heading and the filters, and the usage blocks say they have no request", async () => {
+      open({ usage: none });
+      await loaded();
+      expect(await screen.findByText(/No use of foo in this view/)).toBeTruthy();
+      expect(screen.getByRole("group", { name: "Filters" })).toBeTruthy();
+      for (const name of ["Activity", "Cost", "Sessions"]) expect(within(block(name)).getByText("No requests in this view.")).toBeTruthy();
+      expect(block("Activity").querySelector(".facts")).toBeNull();
+    });
+
+    it("still shows a failed Errors request with Retry", async () => {
+      const { f } = open({ usage: none, errors: null });
+      await loaded();
+      await screen.findByText(/No use of foo in this view/);
+      const alert = await within(block("Errors")).findByRole("alert");
+      expect(alert.textContent).toMatch(/Could not load errors/);
+      const asked = () => f.mock.calls.filter(c => c[0] === "/api/errors").length, before = asked();
+      await userEvent.click(within(alert).getByRole("button", { name: "Retry" }));
+      await waitFor(() => expect(asked()).toBeGreaterThan(before));
+    });
   });
 
   it("hosts the sheets: a session in the URL opens its sheet over the page", async () => {
