@@ -8,7 +8,7 @@
 ## 2. Figures: gauge and table math
 
 - [x] 2.1 In `cost.ts`, add `gaugeFigures()`: cost so far, pace, plan price and labels, the agents counted, and the multiple, or null without `run_rate`. Delete `planText`. Verify with `cost.test.ts` cases for one plan, no plan, an agent without a plan, a multiple below 1 and no `run_rate`.
-- [x] 2.2 In `cost.ts`, add `projectMatrix()` (rows from `by_project`, `changes` and `daily_projects`), `sortMatrix()` and `foldMatrix()`. Verify with `cost.test.ts` cases for each sort key with no value last, a project used only before, the fold rule, a large drop staying unfolded, and a selected small project forcing the fold open.
+- [x] 2.2 In a new `matrix.ts`, add `projectMatrix()` (rows from `by_project`, `changes` and `daily_projects`), `sortMatrix()` and `foldMatrix()`. Verify with `cost.test.ts` cases for each sort key with no value last, a project used only before, the fold rule and a large drop staying unfolded.
 
 ## 3. Page
 

@@ -28,7 +28,7 @@ export function projectMedians(rows: readonly ProjectRow[]) {
 export interface CostActs {
   session: (id: string) => void;
   day: (day: string) => void;
-  /** Cost by project, sorted by cost per commit, the outlier ringed. */
+  /** The project table, sorted by cost per commit, the outlier ringed. */
   compare: (name: string, med: number) => void;
   tokens: () => void;
 }

@@ -38,7 +38,7 @@ const Diverge = ({ v, max, color }: { v: number | null; max: number; color: stri
 
 /** Project spend and change: each project's daily trend, cost and share, change against the previous period, cost per commit
  *  and cache hit, sortable by any column. Projects too small to compare fold into one row. A row opens the project sheet.
- *  Every figure of the old Cost by project table stays in the export. */
+ *  The export also holds tokens, 1h writes, subagent cost share and cost per prompt. */
 export function ProjectTable({ d, sort, onSort, spot: pin, onSpot, smallOpen, onSmallOpen }: {
   d: UsagePayload; sort: SortBy<MatrixKey>; onSort: (s: SortBy<MatrixKey>) => void; spot: CostSpot | null; onSpot: (s: CostSpot | null) => void;
   smallOpen: boolean; onSmallOpen: (open: boolean) => void;
