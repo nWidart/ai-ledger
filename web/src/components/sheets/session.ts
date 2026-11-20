@@ -3,7 +3,10 @@ import type { MouseEvent } from "react";
 import type { SessionDetail, Source, ToolKind, View } from "../../api";
 import { big, num, pct, plural, usd } from "../../format";
 import { subjectAttrs, type Subject } from "../menu/subject";
-import { formatSearch, navigate, setSearch } from "../../url";
+import { currentSheetKey, formatSearch, navigate, setSearch, sheetKey } from "../../url";
+
+/** A plain left click, one the app may handle itself: no modifier, not handled already. */
+const plain = (e: MouseEvent) => !(e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey);
 
 // A session's readable name: the title the server took from its first prompt, else its short id. Remembered so a sheet
 // can name a session before its details arrive.
@@ -16,12 +19,22 @@ export function sessName(s: { session_id: string; title?: string | null }): stri
 export const knownTitle = (id: string): string | undefined => titles.get(id);
 
 /** Opens the project sheet (Back retraces it); from a session sheet it replaces the session. */
-export const openProjectSheet = (name: string | null | undefined) => setSearch({ inspect: name || null, session: null });
-/** Opens the session sheet; over a project or tool sheet, Back returns to it. */
-export const openSessionSheet = (id: string) => setSearch({ session: id });
+export const openProjectSheet = (name: string | null | undefined) => setSearch({ inspect: name || null, [currentSheetKey()]: null });
+/** Opens the session sheet over the current page; over a project or tool sheet, Back returns to it. */
+export const openSessionSheet = (id: string) => setSearch({ [currentSheetKey()]: id });
 /** Opens the sheet of a tool, MCP server or skill in place of any other sheet (Back retraces it). */
 export const openToolSheet = (kind: ToolKind, name: string) =>
-  setSearch({ tool: kind === "tool" ? name : null, mcp: kind === "mcp" ? name : null, skill: kind === "skill" ? name : null, inspect: null, session: null });
+  setSearch({ tool: kind === "tool" ? name : null, mcp: kind === "mcp" ? name : null, skill: kind === "skill" ? name : null, inspect: null, [currentSheetKey()]: null });
+/** The href of a link to page path in view keys search with session id's sheet open: a new tab opens it there. */
+export const sessionSheetHref = (path: string, search: Readonly<Record<string, unknown>>, id: string) =>
+  path + formatSearch({ ...search, [sheetKey(path)]: id });
+/** A session link's click: opens the sheet of id over this page, page and URL kept, so Back closes it; modified clicks
+ *  open the link's href as the browser does. */
+export const sessionLink = (id: string) => (e: MouseEvent<HTMLAnchorElement>) => {
+  if (!plain(e)) return;
+  e.preventDefault();
+  openSessionSheet(id);
+};
 
 /** The Errors page for a project, its range when given, focused on one failure when ex is set, else on type cat. */
 export function errorsHref(project: string | null | undefined, range?: number | null, ex?: string, o: { source?: Source | ""; cat?: string | null } = {}): string {
@@ -41,7 +54,7 @@ export const projectHref = (project: string, range: number, source: Source | "",
 export const insightsHref = (v: View) => "/insights" + formatSearch({ project: v.project, range: String(v.range), source: v.source, auto: v.automated ? "1" : "" });
 /** Follows an in-app link without a reload; modified clicks open as the browser does. */
 export function appLink(e: MouseEvent<HTMLAnchorElement>) {
-  if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  if (!plain(e)) return;
   e.preventDefault();
   navigate(e.currentTarget.getAttribute("href")!);
 }

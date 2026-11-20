@@ -3,7 +3,9 @@
 import type { Category, Day, ErrorRow, ErrorsPayload, Incident, Source, Ts } from "../../api";
 import { dayLabel, num as fmt } from "../../format";
 import type { SortBy } from "../../components/Sort";
-import type { Range } from "../../url";
+import { sessionSheetHref } from "../../components/sheets/session";
+import { parseSearch, type Range } from "../../url";
+import { viewLink } from "./view";
 
 export const NOISE = new Set(["infra", "user_denied"]); // always noise; the types the user muted join them (Model.muted)
 export const CATCH_ALL = new Set(["other", "exit_other", "mcp"]); // the types no specific rule matched
@@ -496,6 +498,5 @@ export function msgList(groups: readonly MsgGroup[], q: string, focused: Err | u
   if (fk != null) { const i = ex.findIndex(g => g.key === fk); if (i > 0) ex.unshift(...ex.splice(i, 1)); }
   return { flat: false, items: ex, count: q ? `${fmt(ex.length)} of ${fmt(groups.length)} match` : `${fmt(groups.length)} message${groups.length === 1 ? "" : "s"} in ${scope}, most errors first` };
 }
-/** Usage shows the session's own project; only an Errors project or source filter carries over. */
-export const sessionHref = (v: View, s: string) =>
-  "/usage#" + new URLSearchParams({ range: String(v.range), session: s, ...(v.project && { project: v.project }), ...(v.source && { source: v.source }) });
+/** Errors in view v with session s's sheet open over it: the href of an example's session link. */
+export const sessionHref = (v: View, s: string) => sessionSheetHref("/errors", parseSearch(viewLink(v)), s);

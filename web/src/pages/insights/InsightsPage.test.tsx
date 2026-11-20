@@ -284,7 +284,7 @@ describe("InsightsPage", () => {
     expect(top.textContent).toContain(when(fixture.sessions[2]!.start));
     expect(top.contains(last!.querySelector(".sum"))).toBe(false);
     expect(within(last!).getByText("#0000aaaa")).toBeTruthy();
-    expect(link.getAttribute("href")).toBe("/usage?range=0&session=0000aaaa-0000-4000-8000-000000000001");
+    expect(link.getAttribute("href")).toBe("/insights?range=0&session=0000aaaa-0000-4000-8000-000000000001");
     // Friction detail: an expander, closed, only on a card that has detail.
     const fd = mid!.querySelector("details")!;
     expect(fd.open).toBe(false);
@@ -294,7 +294,7 @@ describe("InsightsPage", () => {
     expect(fd.open).toBe(true);
     expect(last!.querySelector("details")).toBeNull();
     await userEvent.click(link);
-    expect(location.pathname).toBe("/usage");
+    expect(location.pathname).toBe("/insights");
     expect(location.search).toBe("?range=0&session=0000aaaa-0000-4000-8000-000000000001");
   });
 
@@ -319,7 +319,7 @@ describe("InsightsPage", () => {
     expect(cards().length).toBe(2);
     await userEvent.click(within(log).getByLabelText("Only sessions with friction"));
     expect(within(log).getByRole("link", { name: "Add a theme toggle" }).getAttribute("href"))
-      .toBe("/usage?project=demo-app&range=7&source=claude&auto=1&session=0000aaaa-0000-4000-8000-000000000001");
+      .toBe("/insights?project=demo-app&range=7&source=claude&auto=1&session=0000aaaa-0000-4000-8000-000000000001");
   });
 
   it("shows the first 25 sessions of the chosen order until asked for all, and names the collapse by position, not age", async () => {
@@ -898,15 +898,23 @@ describe("InsightsPage", () => {
     });
   });
 
-  it("opens the session sheet on Activity from a session link", async () => {
+  it("opens the session sheet over Insights from a session link, and Back closes it with the page as it was", async () => {
     mockApi({ "/api/insights": () => fixture, "/api/usage": () => usage, "/api/sessions": () => sessions, "/api/session": () => session,
       "/api/status": () => ({ ingesting: false, last_ingest: null, last_change: null, last_stats: null, error: null, counts: {}, interval: 60, project_order: [] }) });
     history.replaceState(null, "", "/insights?range=0");
     renderRouter();
-    await userEvent.click(await screen.findByRole("link", { name: "Add a theme toggle" }));
-    expect(location.pathname).toBe("/usage");
-    expect(document.title).toBe("Activity · AI Ledger");
-    await waitFor(() => expect(document.querySelector("dialog")).toBeTruthy()); // Activity loads as its own chunk
-    expect(await within(document.querySelector("dialog")!).findByText("Timeline")).toBeTruthy();
+    const link = await screen.findByRole("link", { name: "Add a theme toggle" });
+    expect(link.getAttribute("href")).toBe("/insights?range=0&session=0000aaaa-0000-4000-8000-000000000001"); // a new tab opens the same
+    const page = document.querySelector("main")!;
+    await userEvent.click(link);
+    expect(location.pathname + location.search).toBe("/insights?range=0&session=0000aaaa-0000-4000-8000-000000000001");
+    expect(document.title).toBe("Insights · AI Ledger");
+    const dlg = await waitFor(() => { const d = document.querySelector<HTMLDialogElement>("dialog[open]"); expect(d).toBeTruthy(); return d!; });
+    expect(await within(dlg).findByText("Timeline")).toBeTruthy();
+    expect(document.querySelector("main")).toBe(page); // the page stays mounted under the sheet
+    await userEvent.click(within(dlg).getByRole("button", { name: "Close" }));
+    await waitFor(() => expect(location.search).toBe("?range=0"));
+    expect(document.querySelector("main")).toBe(page);
+    await waitFor(() => expect(document.activeElement).toBe(link)); // focus returns to the link
   });
 });

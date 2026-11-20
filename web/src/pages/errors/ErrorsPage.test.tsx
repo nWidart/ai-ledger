@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import fixture from "../../__fixtures__/errors";
 import tool from "../../__fixtures__/tool";
+import session from "../../__fixtures__/session";
 import type { ErrorRow, ErrorsPayload, Incident } from "../../api";
 import palette from "../../__fixtures__/palette";
 import { Palette } from "../../components/palette/Palette";
@@ -1371,6 +1372,30 @@ describe("ErrorsPage", () => {
     expect(location.search).toBe("?project=foo&range=30&cat=x");
     expect(history.length).toBe(n + 1);
     await waitFor(() => expect(JSON.parse(localStorage.getItem(VIEW_KEY)!)).toMatchObject({ project: "foo", range: 30, cat: "x" }));
+  });
+
+  describe("session sheet", () => {
+    beforeEach(() => {
+      vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/errors") ? fixture : url.startsWith("/api/session") ? session : {})));
+      localStorage.setItem("claude-errors-mode", '"flat"'); // every example listed, none inside a closed incident
+    });
+    afterEach(() => { vi.unstubAllGlobals(); });
+
+    it("opens over Errors from an example's session link, and closing keeps the page and returns focus to the link", async () => {
+      history.replaceState(null, "", "/errors?range=7&cat=x");
+      await page();
+      const main = document.querySelector("main")!, link = within(document.getElementById("ex-t07")!).getByRole("link", { name: "#s1" });
+      expect(link.getAttribute("href")).toBe("/errors?range=7&session=s1&cat=x"); // a new tab opens the same
+      await userEvent.click(link);
+      expect(location.pathname + location.search).toBe("/errors?range=7&session=s1&cat=x");
+      const dlg = document.querySelector<HTMLDialogElement>("dialog.sheet:not(#sheet)")!;
+      expect(await within(dlg).findByText("Timeline")).toBeTruthy();
+      expect(dlg.open).toBe(true);
+      await userEvent.click(within(dlg).getByRole("button", { name: "Close" }));
+      expect(location.search).toBe("?range=7&cat=x");
+      expect(document.querySelector("main")).toBe(main);
+      expect(document.activeElement).toBe(link);
+    });
   });
 
   describe("tool sheet", () => {

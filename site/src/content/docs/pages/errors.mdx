@@ -156,12 +156,12 @@ Recovered means only that the next call succeeded. A call that started before th
 
 #### Examples
 
-An example shows its time, project, tool, **subagent** when it is one, session, the input, the error text and the tool's result. The tool name opens the tool inspector for the page's view. The session link (`#` and 8 characters) opens that session in Activity. **🔗 Link** and **Copy URL** give a permalink to the example; opening it shows its type and example first. The payload cuts long inputs; **Show full** loads the rest, and **Show less** folds it back. A permalink whose example the store no longer holds shows a notice ("The linked error is no longer in the store…") and the view without it. A linked example that the filters hide shows under **Outside current filters**, with **Clear filters**.
+An example shows its time, project, tool, **subagent** when it is one, session, the input, the error text and the tool's result. The tool name opens the tool inspector for the page's view. The session link (`#` and 8 characters) opens that session's sheet over the page. **🔗 Link** and **Copy URL** give a permalink to the example; opening it shows its type and example first. The payload cuts long inputs; **Show full** loads the rest, and **Show less** folds it back. A permalink whose example the store no longer holds shows a notice ("The linked error is no longer in the store…") and the view without it. A linked example that the filters hide shows under **Outside current filters**, with **Clear filters**.
 
 ## Sheets
 
 - The **tool inspector** opens from a tool name on an example, for the page's view.
-- A session link on an example leaves the page for the session in Activity.
+- The **session sheet** opens from a session link on an example, over the page: the open type and the examples stay as they are, and Close or Back returns to them. The URL names the session, so `/errors?range=7&session=abc&cat=x` opens type `x` with that session's sheet. Middle-click opens it in a new tab. See [Activity](/ai-ledger/pages/activity/#session-sheet).
 
 ## Error type rules
 
