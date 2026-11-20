@@ -92,14 +92,24 @@ export function SectionIndex({ groups }: { groups: Section[][] }) {
       offDrawer(); pins.delete(update);
     };
   }, [key]);
-  // A bar that scrolls sideways keeps the marked pill in view; the page itself does not move.
+  // A bar that scrolls sideways keeps the marked pill in view; the page itself does not move. A resize can make the bar overflow
+  // and new links can push the pill out, with the same section marked: read it again then too.
+  const links = live.map(s => s.id + "\u0000" + s.label).join("\u0001");
   useEffect(() => {
-    const el = idx.current, a = el?.querySelector<HTMLElement>("a[aria-current]");
-    if (!el || !a || el.scrollWidth <= el.clientWidth) return;
-    const l = a.offsetLeft - el.offsetLeft, r = l + a.offsetWidth;
-    if (l < el.scrollLeft) el.scrollLeft = l - 16;
-    else if (r > el.scrollLeft + el.clientWidth) el.scrollLeft = r - el.clientWidth + 16;
-  }, [cur]);
+    const el = idx.current;
+    if (!el) return;
+    const reveal = () => {
+      const a = el.querySelector<HTMLElement>("a[aria-current]");
+      if (!a || el.scrollWidth <= el.clientWidth) return;
+      const l = a.offsetLeft - el.offsetLeft, r = l + a.offsetWidth;
+      if (l < el.scrollLeft) el.scrollLeft = l - 16;
+      else if (r > el.scrollLeft + el.clientWidth) el.scrollLeft = r - el.clientWidth + 16;
+    };
+    reveal();
+    const ro = new ResizeObserver(reveal);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [cur, links]);
   return <>
     <label className="jump"><span>Jump to</span><select aria-label="Jump to a section" value="" onChange={e => { if (e.target.value) jumpTo(e.target.value); }}>
       <option value="">Choose a section…</option>
