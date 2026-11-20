@@ -29,8 +29,15 @@ export function span(msLeft: number): string {
   return d ? `${d}d ${h}h` : h ? `${h}h ${mm}m` : `${mm}m`;
 }
 
-/** A plan as the page shows it: Claude's "max/default_claude_max_20x" (subscription/tier) reads "max". */
-export const planName = (plan: string | null) => plan?.split("/")[0] ?? null;
+/** A plan as the page shows it, its tier included: Claude's "max/default_claude_max_20x" (subscription/rate limit tier) reads
+ *  "max 20x", and a tier with no multiplier follows in brackets ("pro (default_claude_ai)"). */
+export function planName(plan: string | null): string | null {
+  if (plan == null) return null;
+  const at = plan.indexOf("/"), sub = at < 0 ? plan : plan.slice(0, at), tier = at < 0 ? "" : plan.slice(at + 1);
+  if (!tier) return sub;
+  const x = /_(\d+x)$/.exec(tier)?.[1];
+  return x ? `${sub} ${x}` : `${sub} (${tier})`;
+}
 
 export const windowName = (w: { provider_label: string; label: string }) => `${w.provider_label} ${w.label}`;
 

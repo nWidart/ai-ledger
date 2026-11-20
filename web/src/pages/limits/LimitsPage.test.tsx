@@ -1,4 +1,4 @@
-import { act, fireEvent, screen, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { LimitHistoryRow, LimitWindow, LimitWindowCurve, LimitsPayload } from "../../api";
@@ -242,6 +242,25 @@ describe("LimitsPage", () => {
     expect(details("Codex weekly").queryByText(/last 24 hours continue/)).toBeNull(); // no line at the limit
   });
 
+  it("takes the line away with the toggle when a refresh brings the last window with a scenario to its limit", async () => {
+    let d: LimitsPayload = fixture;
+    openDrawers();
+    mockApi({ "/api/limits": () => d });
+    history.replaceState(null, "", "/limits?range=30");
+    const { client } = renderApp(<LimitsPage />);
+    await lede();
+    await userEvent.click(screen.getByRole("button", { name: "Last 24 h pace" }));
+    expect(document.querySelectorAll(".lim-chart .recent")).toHaveLength(2);
+    d = { ...out, windows: [{ ...claude, current: 100, at_limit: true }, fable, capped] };
+    ingested(client);
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Last 24 h pace" })).toBeNull());
+    expect(document.querySelector(".lim-chart .recent")).toBeNull();
+    d = fixture; // a window short of its limit has a scenario again: the toggle is back, off
+    ingested(client);
+    expect((await screen.findByRole("button", { name: "Last 24 h pace" })).getAttribute("aria-pressed")).toBe("false");
+    expect(document.querySelector(".lim-chart .recent")).toBeNull();
+  });
+
   it("shows no toggle, line or path without a scenario", async () => {
     const none = (w: LimitWindow): LimitWindow => w.forecast ? { ...w, forecast: { ...w.forecast, recent_pace: null, recent_hits_at: null,
       recent_at_reset: null, curve: w.forecast.curve.map(p => ({ ...p, recent: null })) } } : w;
@@ -322,6 +341,9 @@ describe("LimitsPage", () => {
     show(fixture);
     await lede();
     expect(document.querySelector("#value .hint")!.textContent).toMatch(/^One point is 1% of a limit, over the last 30 days: the range set in Past windows\./);
+    // The pricing is method: behind How measured, not in the hint's line.
+    await userEvent.click(screen.getByRole("button", { name: "How measured: what a point buys" }));
+    expect(screen.getByRole("tooltip").textContent).toMatch(/^Cost is at API list prices/);
   });
 
   it("folds projects under a point into one row, and marks unpriced models and earlier plans", async () => {
@@ -413,6 +435,22 @@ describe("card header and footer", () => {
     await userEvent.click(within(none).getByRole("button", { name: "Why no pace" }));
     expect(screen.getByRole("tooltip").textContent).toBeTruthy();
     expect(dd("Claude Code weekly", "Top").textContent).toMatch(claude.used ? new RegExp(`^${usedHint(claude.used)}`) : /^–/);
+  });
+
+  it("says why there is no pace for a window at its limit that is not calibrated", async () => {
+    show({ ...fixture, windows: [{ ...fable, current: 100, at_limit: true }] });
+    await lede();
+    const none = dd("Claude Code weekly · Fable", "Pace");
+    await userEvent.click(within(none).getByRole("button", { name: "Why no pace" }));
+    expect(screen.getByRole("tooltip").textContent).toBe(fable.no_forecast);
+  });
+
+  it("shows the plan's tier, not only on hover", async () => {
+    show({ ...fixture, windows: [{ ...claude, plan: "max/default_claude_max_20x" }] });
+    await lede();
+    const plan = card("Claude Code weekly").querySelector("h3 .muted") as HTMLElement;
+    expect(plan.textContent).toBe(" · max 20x");
+    expect(plan.title).toBe("");
   });
 
   it("shows a dash for a window with no reading yet", async () => {

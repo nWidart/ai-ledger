@@ -1,5 +1,5 @@
 import { useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
-import type { LimitWindow, PlanChange } from "../../api";
+import type { LimitPoint, LimitWindow, PlanChange } from "../../api";
 import { scaleMargins, textScale, useWidth } from "../../components/chart";
 import { caption, coneCrosses, hasScenario, nearestPoint, paceRates, planName, readPoints, readText, safePace, tipPlace, whenDay, windowName } from "./limits";
 
@@ -9,7 +9,22 @@ const H0 = 168, M0 = { t: 12, r: 10, b: 24, l: 36 }, TICK = 8; // at the default
 export const planMarks = (w: LimitWindow, events: PlanChange[]) =>
   events.filter(e => e.provider === w.provider && Date.parse(e.at) >= Date.parse(w.start) && Date.parse(e.at) <= Date.parse(w.resets_at));
 
-const KEYS: Record<string, number> = { ArrowLeft: -1, ArrowRight: 1, Home: -Infinity, End: Infinity };
+/** The percent line in contiguous runs, each one solid (both ends measured) or dashed (an end estimated), sharing their joins, so
+ *  measured points either side of an estimate never draw a solid line over it; lone: the measured points in no solid run. */
+export function percentRuns(series: LimitPoint[]) {
+  const runs: (LimitPoint[] & { meas?: boolean })[] = [];
+  series.forEach((p, i) => {
+    const q = series[i - 1], last = runs.at(-1);
+    if (!q) return;
+    const meas = p.measured && q.measured;
+    if (last && last.meas === meas) last.push(p);
+    else runs.push(Object.assign([q, p], { meas }));
+  });
+  const lone = series.filter((p, i) => p.measured && !series[i - 1]?.measured && !series[i + 1]?.measured);
+  return { runs, lone };
+}
+
+const KEYS: Record<string, number> ={ ArrowLeft: -1, ArrowRight: 1, Home: -Infinity, End: Infinity };
 
 /** One window from its start to its reset, in at most four encodings: the percent used so far (one line, solid where measured,
  *  dashed where estimated), the forecast as a cone from its low to its high bound around its middle (the warning tint when the
@@ -28,8 +43,7 @@ export function LimitChart({ w, now, events, recent: showRecent = false }: { w: 
   const x = (t: string) => M.l + Math.min(1, Math.max(0, (Date.parse(t) - t0) / (t1 - t0 || 1))) * iw;
   const y = (p: number) => M.t + ih * (1 - Math.min(100, Math.max(0, p)) / 100);
   const path = (pts: { t: string; v: number }[]) => pts.map((p, i) => `${i ? "L" : "M"}${x(p.t).toFixed(1)},${y(p.v).toFixed(1)}`).join("");
-  const est = path(w.series.map(p => ({ t: p.t, v: p.pct })));
-  const measured = w.series.filter(p => p.measured);
+  const { runs, lone } = useMemo(() => percentRuns(w.series), [w.series]);
   const f = w.forecast, warn = coneCrosses(w) ? " warn" : "", safe = safePace(w, now), rates = paceRates(w);
   const pctOf = (i: number) => { const p = pts[i]!; return p.kind === "past" ? p.pct : p.mid; };
   const recent = showRecent && f && hasScenario(w) ? path(f.curve.flatMap(p => p.recent == null ? [] : [{ t: p.t, v: p.recent }])) : null;
@@ -91,9 +105,8 @@ export function LimitChart({ w, now, events, recent: showRecent = false }: { w: 
         {f && <path d={path(f.curve.map(p => ({ t: p.t, v: p.mid })))} className={"fc" + warn} />}
         {safe && <path d={path([safe.from, safe.to])} className="safe" />}
         {recent && <path d={recent} className="recent" />}
-        {est && <path d={est} className="est" />}
-        {measured.length > 1 && <path d={path(measured.map(p => ({ t: p.t, v: p.pct })))} className="meas" />}
-        {measured.length === 1 && <circle cx={x(measured[0]!.t)} cy={y(measured[0]!.pct)} r={2} className="meas-one" />}
+        {runs.map(r => <path key={r[0]!.t} d={path(r.map(p => ({ t: p.t, v: p.pct })))} className={r.meas ? "meas" : "est"} />)}
+        {lone.map(p => <circle key={p.t} cx={x(p.t)} cy={y(p.pct)} r={2} className="meas-one" />)}
         {marks.map(e => <g key={e.at} className="plan"><title>{said(e)}</title>
           <line x1={x(e.at)} x2={x(e.at)} y1={M.t} y2={M.t + TICK * ts} />
           <line x1={x(e.at)} x2={x(e.at)} y1={M.t} y2={M.t + TICK * ts} className="hit" />

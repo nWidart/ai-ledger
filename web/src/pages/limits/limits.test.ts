@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { LimitHistoryRow, LimitWindow, LimitsAlert, LimitsPayload } from "../../api";
 import limits from "../../__fixtures__/limits";
-import { alertKey, alertText, barKey, barName, caption, CHART_ROWS, chartRows, closedWindow, coneCrosses, hasScenario, headroom, historyStrips, paceRates, safeAt, safePace, status, STRIP_BARS, stripNote, stripSummary, windowNotes, nearestPoint, pace, readPoints, readText, recentText, shareText, surfacesText, tipPlace, usedHint, usedHref, usedRange, usedRangeName, whenDay } from "./limits";
+import { alertKey, alertText, barKey, barName, caption, CHART_ROWS, chartRows, closedWindow, coneCrosses, hasScenario, headroom, historyStrips, paceRates, planName, safeAt, safePace, status, STRIP_BARS, stripNote, stripSummary, windowNotes, nearestPoint, pace, readPoints, readText, recentText, shareText, surfacesText, tipPlace, usedHint, usedHref, usedRange, usedRangeName, whenDay } from "./limits";
 
 const claude = (limits as LimitsPayload).windows[0]!;
 const win = (over: Partial<LimitWindow>): LimitWindow => ({ ...claude, ...over });
@@ -15,6 +15,15 @@ const curve = [
   { t: "2026-11-07T13:00:00.000Z", mid: 58, lo: 58, hi: 58, recent: 72.34 },
 ];
 const fc = (c: typeof curve) => ({ ...claude.forecast!, curve: c });
+
+describe("planName", () => {
+  it("keeps the tier: its multiplier, or the tier itself in brackets", () => {
+    expect(planName("max/default_claude_max_20x")).toBe("max 20x");
+    expect(planName("pro/default_claude_ai")).toBe("pro (default_claude_ai)");
+    expect(planName("plus")).toBe("plus");
+    expect(planName(null)).toBeNull();
+  });
+});
 
 describe("readPoints", () => {
   it("lists the past points, then the forecast points after now, with no duplicate at now", () => {

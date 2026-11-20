@@ -20,8 +20,14 @@
 }
 .pg-limits .pending { margin: -12px 0 12px; min-height: 1.5em; color: var(--text-secondary); font-size: .8125rem; }
 .pg-limits .pending:empty { visibility: hidden; }
-.pg-limits.loading > :not(.top) { opacity: .55; }
-@media (prefers-reduced-motion: no-preference) { .pg-limits > :not(.top) { transition: opacity .2s; } }
+/* A slow load dims the figures it will replace, but not the charts' lines, which would fall under 3:1 against the card: around a
+   chart only what holds none dims, and in it only the labels and the cone's fill. */
+.pg-limits.loading > :not(.top, :has(.lim-chart)), .pg-limits.loading :has(.lim-chart) > :not(.lim-chart, :has(.lim-chart)),
+.pg-limits.loading .lim-chart :is(text, .band, .tip) { opacity: .55; }
+@media (prefers-reduced-motion: no-preference) {
+  .pg-limits > :not(.top, :has(.lim-chart)), .pg-limits :has(.lim-chart) > :not(.lim-chart, :has(.lim-chart)),
+  .pg-limits .lim-chart :is(text, .band, .tip) { transition: opacity .2s; }
+}
 
 /* Open windows: a one-line hint, the last 24 h pace toggle, and How measured. The charts need no key. */
 .pg-limits .sect-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; margin: 8px 0 12px; }
