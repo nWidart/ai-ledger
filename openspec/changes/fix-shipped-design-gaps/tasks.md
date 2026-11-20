@@ -23,9 +23,22 @@
 - [x] 3.5 Headings: Errors' skeleton replaces its header and a failed load names the page; Insights' lede is the `h1` and the kicker a `p`; Live's `h1` keeps `#lede`. Verify with Errors, Insights and Live tests.
 - [x] 3.6 Live's wall pluralizes errors; Errors' Where to start too. Activity's Output speed names Codex on a Codex-only view.
 
-## 4. Specs, docs and build
+## 4. Review fixes
 
-- [x] 4.1 Delta specs for every modified capability; `openspec validate --specs --strict`.
-- [x] 4.2 Docs site pages for Activity, Context, Cost, Errors, Insights, Limits, filters, data tables, context menu, palette and two playbooks; `CHANGELOG.md` `[Unreleased]`. README unchanged: its line on How measured still holds.
-- [x] 4.3 Rebuild `src/ai_ledger/web/`; run `npm run check` in `web/` and `site/`, `uv run ruff check` and the Python tests.
-- [x] 4.4 Regenerate the docs-site screenshots and the README GIFs of the pages that look different: Cost, Context, Errors, Limits.
+- [x] 4.1 Errors: `showModalUnder()` keeps a session or tool sheet above the narrow type sheet on a deep link, a reload and a wide-to-narrow resize. Verify with an `ErrorsPage.test.tsx` test of the showModal order and Back.
+- [x] 4.2 Activity: `totals.session_sources` decides Output speed's reason. Verify with `test_metrics.py` and `ActivityPage.test.tsx` (mixed sources with unpriced Claude Code, Codex only); regenerate the fixtures.
+- [x] 4.3 Limits: the scenario follows its toggle's eligibility; Why no pace at the limit; percent line in contiguous runs; lines undimmed on a slow load; plan tier visible; pricing behind How measured; time at a limit in two units. Verify with `LimitsPage.test.tsx`, `LimitChart.test.tsx` and `limits.test.ts`.
+- [x] 4.4 Section bar: reveal the marked pill on resize and on new links. Verify with `Drawer.test.tsx`.
+- [x] 4.5 Cost: one status follows the table's sort, repeats included. Verify with `CostPage.test.tsx`.
+- [x] 4.6 Palette: a commit that changes the project and opens a sheet keeps Live's `session`. Verify with `resolve.test.ts`.
+- [x] 4.7 Toggletip: height capped to the available height, scrolling, a tab stop when it scrolls. Verify with `Toggletip.test.tsx`.
+- [x] 4.8 Live: the project heads a stream with no title. Verify with `LivePage.test.tsx`.
+- [x] 4.9 Tests: the context menu opens a session in place on Live and Insights and returns focus; the automated file warning is one node across pages; the Errors chart reads a quiet day by arrow key.
+- [x] 4.10 Deltas: Limits (`estimated`, encodings with the scenario line, plan tier, pricing), Cost (reachable ringed-project scenario, sort announcements), forced-colors hollow points and the weekly How measured, the duration rule with Limits' spans, stacked sheets on a deep link, toggletip height, Live's heading, the palette on Live. README, `CHANGELOG.md` and the site.
+
+## 5. Specs, docs and build
+
+- [x] 5.1 Delta specs for every modified capability; `openspec validate --specs --strict`.
+- [x] 5.2 Docs site pages for Activity, Context, Cost, Errors, Insights, Limits, filters, data tables, context menu, palette and two playbooks; `CHANGELOG.md` `[Unreleased]`. README: a line on Open session from Cmd+K and the context menu, and one on the shared automated file warning.
+- [x] 5.3 Rebuild `src/ai_ledger/web/`; run `npm run check` in `web/` and `site/`, `uv run ruff check` and the Python tests.
+- [x] 5.4 Regenerate the docs-site screenshots and the README GIFs of the pages that look different: Cost, Context, Errors, Limits.

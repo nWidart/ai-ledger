@@ -14,3 +14,14 @@ A wall tile SHALL show the project, state, title, latest action, context fill, t
 #### Scenario: One error
 - **WHEN** a session has one failed tool call
 - **THEN** its tile reads "1 error"
+
+### Requirement: Title the stream
+The stream SHALL show the selected session's title as a heading above its project, branch, source and model. With no title, the heading SHALL be the project.
+
+#### Scenario: Session with a custom title
+- **WHEN** the followed session was renamed "release notes" with `/rename`
+- **THEN** the stream's heading is "release notes", with the project and branch below it
+
+#### Scenario: Session with no title
+- **WHEN** the followed session is a Codex session with no title, in project `foo`
+- **THEN** the stream's heading is "foo", followed by its branch, source and model

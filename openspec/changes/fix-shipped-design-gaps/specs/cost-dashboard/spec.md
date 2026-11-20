@@ -16,15 +16,23 @@ The line under the heading SHALL end with a "How measured" toggletip, the shared
 ## ADDED Requirements
 
 ### Requirement: Keep the ringed project visible when folding
-The project ringed by "Compare projects" SHALL NOT be hidden: when it is small, the small projects SHALL show. A project filter needs no such rule, since a one-project view has no project table.
+The project ringed by "Compare projects" SHALL NOT be hidden: when it is small, the small projects SHALL show. Compare projects rings only a project big enough to compare, which never folds, so this happens only when new data makes the ringed project small while the ring stays. A project filter needs no such rule, since a one-project view has no project table.
 
-#### Scenario: A small project is ringed
-- **WHEN** the user compares projects and the outlier is a small project
-- **THEN** the small projects show, with the outlier among them
+#### Scenario: The ringed project becomes small
+- **WHEN** the user compares projects, and a refresh of the same view leaves the ringed project under the share and prompts that keep a project above the fold
+- **THEN** the small projects show, with the ringed project among them, and their toggle cannot hide it
 
 ### Requirement: Say what a project table sort did
-Sorting the project table SHALL be announced politely, as "Sorted by <column>, highest first" (or "lowest first"; "A to Z" or "Z to A" for the project). "Sort by cost again" SHALL sort by Spend, most first, and move focus to the Spend header, since the note that holds it goes away.
+Every change of the project table's sort SHALL be announced politely, as "Sorted by <column>, highest first" (or "lowest first"; "A to Z" or "Z to A" for the project), through one status region, whatever set the sort: a header, "Compare projects", "Sort by cost again" or a new view's reset. A repeat SHALL be announced again. "Sort by cost again" SHALL sort by Spend, most first, and focus the Spend header.
 
 #### Scenario: Sort by cost again
 - **WHEN** the user compares projects, then selects "Sort by cost again"
 - **THEN** the table is sorted by Spend, focus is on the Spend header, and a screen reader hears "Sorted by spend, highest first"
+
+#### Scenario: Compare twice
+- **WHEN** the user selects "Compare projects", then "Compare projects" again
+- **THEN** a screen reader hears "Sorted by cost per commit, highest first" both times
+
+#### Scenario: A new view
+- **WHEN** the table is sorted by project and the user picks another range
+- **THEN** the table is sorted by Spend again, and a screen reader hears "Sorted by spend, highest first"

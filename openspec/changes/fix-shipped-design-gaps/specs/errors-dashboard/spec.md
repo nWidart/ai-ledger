@@ -56,7 +56,7 @@ The open type's incident line SHALL end with a How measured toggletip that says 
 - **THEN** it says what an incident is and that recovered means only that the agent's next call of that tool succeeded
 
 ### Requirement: Read a low-call chart point
-The chart's keyboard and pointer reading of a bucket with too few calls for a steady rate (the hollow point) SHALL add "too few calls for a steady rate" after the rate, as its tooltip and Activity's chart do.
+The chart's keyboard and pointer reading of a bucket with too few calls for a steady rate (the hollow point) SHALL add "too few calls for a steady rate" after the rate, as its tooltip and Activity's chart do. In forced colors, the hollow point and its key SHALL keep a page-colored center in a text-colored ring.
 
 #### Scenario: A quiet day
 - **WHEN** the user reads, by keyboard, a day with 4 tool calls in a view whose other days have hundreds

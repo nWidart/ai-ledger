@@ -43,20 +43,20 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 - The Activity work chart no longer lets one quiet day set the scale of its errors-per-100-calls line. A day or week with fewer than 50 tool calls draws its rate as a hollow dot, is left out of the right-hand axis, and says "too few calls for a steady rate" in its tooltip and data table, as the Errors chart does. A legend key explains the hollow dot.
 - Gaps found in a design review of the recent changes:
-  - **Open session** in the command palette and the context menu opens the sheet over Insights and Live too, instead of going to Activity. On Live it keeps the followed session and the live connection. Session links on Errors' examples and Insights' cards open the context menu, and focus returns to them when the sheet closes.
-  - On a narrow screen, a session or tool sheet opened from an Errors type sheet stacks over it with **← Back**. Back, Close, Esc or a click beside it returns to the type and to the link.
+  - **Open session** in the command palette and the context menu opens the sheet over Insights and Live too, instead of going to Activity. On Live it keeps the followed session and the live connection, also when the same command changes the project. Session links on Errors' examples and Insights' cards open the context menu, and focus returns to them when the sheet closes.
+  - On a narrow screen, a session or tool sheet opened from an Errors type sheet stacks over it with **← Back**. Back, Close, Esc or a click beside it returns to the type and to the link. A link or reload that names both keeps the session sheet on top.
   - Cost, Errors and Limits use the same **How measured** toggletip as the other pages. Errors' uncategorized share and incident line explain themselves there instead of in hover text.
-  - Toggletips no longer read their text aloud on hover. Their text follows the button in the page, so a screen reader reaches it once the button is expanded.
-  - The section bar marks the right section after a drawer opens or closes, and its pills stay on one line, scrolling sideways when the window is narrow.
-  - Limits: the forecast, estimated and safe-pace lines are dotted or dashed at full contrast instead of faint. The percent chip reads "estimated", a missing pace says why behind a **?**, each project in What used this window shows its cost, and a limit's unused summary explains itself behind How measured instead of hover text. A scenario that reaches 100% reads in the warning style. The **Last 24 h pace** toggle hides when every window with a scenario is at its limit. A past window's curve has its data table, and What a point buys names its range.
+  - Toggletips no longer read their text aloud on hover. Their text follows the button in the page, so a screen reader reaches it once the button is expanded. A long one fits the window and scrolls, by keyboard too.
+  - The section bar marks the right section after a drawer opens or closes, and its pills stay on one line, scrolling sideways when the window is narrow and keeping the marked one in view after a resize.
+  - Limits: the forecast, estimated and safe-pace lines are dotted or dashed at full contrast instead of faint, and keep it while a slow range change dims the page. An estimate between two readings is dashed, with no solid line drawn over it. The percent chip reads "estimated", a missing pace says why behind a **?** (at the limit too), each project in What used this window shows its cost, and a limit's unused summary explains itself behind How measured instead of hover text. Plans show their tier ("max 20x") instead of only in hover text. A scenario that reaches 100% reads in the warning style. The **Last 24 h pace** toggle hides when every window with a scenario is at its limit, and its line goes with it when a refresh brings the last one there. A past window's curve has its data table, What a point buys names its range and keeps its pricing note behind How measured, and the closed windows table gives time at the limit as "4h 15m", as the bars do.
   - Context's Largest contributors keeps the ten largest tools whatever the sort, scales its bars to them, and draws no bar for Other.
-  - Cost: **Sort by cost again** moves focus to the Spend header, a sort is announced to screen readers, and the unpriced chip reads "plus an unknown cost for N requests from unpriced models".
+  - Cost: **Sort by cost again** moves focus to the Spend header, every sort is announced to screen readers (Compare projects, a repeat and a new view's reset too), and the unpriced chip reads "plus an unknown cost for N requests from unpriced models".
   - Durations read in one unit everywhere and never round across it: 59.6 s reads "1m", not "60s". Errors writes "20m" where it wrote "20 min".
   - The warning that `automated.json` was ignored shows under the navigation on every page, not only Activity, and every automated toggle names the file.
   - The Errors chart's keyboard reading says "too few calls for a steady rate" for a hollow point, as Activity does. Hollow points stay visible in Windows high contrast. The weekly work chart's How measured says "per week".
   - Errors, Insights and Live give each page one heading that names it, while loading, after a failed load and with nothing to show.
-  - Live's wall reads "1 error", not "1 errors".
-  - Activity's Output speed tile says "Codex transcripts record no model time." on a Codex-only view.
+  - Live's wall reads "1 error", not "1 errors". A followed session with no title has its project as the stream's heading.
+  - Activity's Output speed tile says "Codex transcripts record no model time." when every session in the view is a Codex one, priced or not.
 
 ## [0.4.0] - 2026-11-15
 
