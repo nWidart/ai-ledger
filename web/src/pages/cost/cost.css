@@ -88,8 +88,9 @@
   font-size: .8125rem; color: var(--text-secondary); }
 @media (max-width: 32.5em) {
   .pg-cost .matrix .opt { display: none; }
-  .pg-cost .matrix td.spend .ibar { width: 36px; }
-  .pg-cost .matrix .dv { width: 48px; margin-right: 4px; }
+  .pg-cost .matrix td.spend :is(.ibar, .pc) { display: none; }
+  .pg-cost .matrix .dv { width: 40px; margin-right: 4px; }
+  .pg-cost .matrix .chg .chip { display: none; }
   .pg-cost .matrix .chg .d { min-width: 0; }
   .pg-cost .matrix :is(td, th).name { max-width: 7.5rem; }
 }
