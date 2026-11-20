@@ -251,7 +251,14 @@ The page SHALL offer a Wall view with one tile per active session, grouped by st
 - **THEN** each group's heading is an `h2` followed by a list of its tiles, and the list says how many tiles it holds
 
 ### Requirement: Show each session on its wall tile
-A wall tile SHALL show the project, state, title, latest action, context fill, tool count, errors, cost, branch, source and model. A tile in *your turn*, *thinking* or *idle* SHALL show how long the session has been in that state, and one running a tool its name and run time. A tile in *your turn* SHALL have a border. The title SHALL take one line under the project, cut with an ellipsis when it does not fit, with the full title on hover. A tile with no title SHALL leave that line out.
+A wall tile SHALL show the project, state, title, latest action, context fill, tool count, errors, cost, branch, source and model. The error count SHALL agree in number with its noun: "1 error", "2 errors".
+
+#### Scenario: One error
+- **WHEN** a session has one failed tool call
+- **THEN** its tile reads "1 error"
+
+### Requirement: Show state time and title on a wall tile
+A tile in *your turn*, *thinking* or *idle* SHALL show how long the session has been in that state, and one running a tool its name and run time. A tile in *your turn* SHALL have a border. The title SHALL take one line under the project, cut with an ellipsis when it does not fit, with the full title on hover. A tile with no title SHALL leave that line out.
 
 #### Scenario: Long title on a tile
 - **WHEN** a session's title is wider than its tile
@@ -304,6 +311,10 @@ The stream SHALL show the selected session's title as a heading above its projec
 #### Scenario: Session with a custom title
 - **WHEN** the followed session was renamed "release notes" with `/rename`
 - **THEN** the stream's heading is "release notes", with the project and branch below it
+
+#### Scenario: Session with no title
+- **WHEN** the followed session is a Codex session with no title, in project `foo`
+- **THEN** the stream's heading is "foo", followed by its branch, source and model
 
 ### Requirement: Filter the stream
 The stream SHALL offer filters, in a bar under its head, that change what it draws and nothing it holds. Selecting the Errors count, there or in the agent panel, SHALL filter the stream to failed tool rows, and selecting it again SHALL clear the filter. A Main thread only toggle SHALL hide every lane. A Hide read-only toggle SHALL hide the tool rows the app marks as read-only: `Read`, `Grep`, `Glob`, and shell calls whose every command only reads or searches. It SHALL NOT hide a failed row.

@@ -57,15 +57,26 @@ The dashboard SHALL show the model time and tool time that sessions record, summ
 - **THEN** the dashboard states 40 minutes waiting on the model and 25 minutes running tools, and does not count the third session in either figure
 
 ### Requirement: Show output speed
-The dashboard SHALL show output speed: the output tokens of the sessions that record model time divided by their model time, in tokens per second. It SHALL be compared with the previous period, and a fall SHALL read as worse. When no session in the view records model time, the dashboard SHALL show output speed as not available with the reason.
+The dashboard SHALL show output speed: the output tokens of the sessions that record model time divided by their model time, in tokens per second. It SHALL be compared with the previous period, and a fall SHALL read as worse.
 
 #### Scenario: Output speed
 - **WHEN** the sessions that record model time spent 1,000 seconds of it and wrote 98,000 output tokens
 - **THEN** output speed reads 98 tokens per second
 
+### Requirement: Explain missing output speed
+When no session in the view records model time, the dashboard SHALL show output speed as not available with the reason: when every session in the view is a Codex session, that Codex transcripts record no model time; otherwise, that no session in the view records it. Which sessions are in the view SHALL decide it, priced or not.
+
 #### Scenario: Nothing recorded
-- **WHEN** every session in the view is a Codex session, or predates the `cost-state` line
+- **WHEN** every session in the view predates the `cost-state` line
 - **THEN** output speed reads not available, its note says no session in the view records model time, and the duration note names no model or tool time
+
+#### Scenario: Codex only
+- **WHEN** every session in the view is a Codex session
+- **THEN** output speed reads not available, and its note says Codex transcripts record no model time
+
+#### Scenario: Priced Codex and unpriced Claude Code
+- **WHEN** the view has all sources, its Codex requests are priced, its Claude Code requests are from an unpriced model, and no session records model time
+- **THEN** output speed reads not available, and its note says no session in the view records model time, not that Codex records none
 
 ### Requirement: Show outcomes and efficiency ratios
 The dashboard SHALL count successful `git commit` calls and test or build runs (with pass and fail counts) per session, and SHALL show tokens per commit and errors per 100 tool calls per project.
@@ -174,7 +185,7 @@ Activity SHALL chart commits, prompts or sessions across the view, from its firs
 - **THEN** the line shows 3 and 5 errors per 100 calls, and each tooltip also gives the failed count
 
 ### Requirement: Mark work chart bars with few tool calls
-On the work chart, a bar with fewer than 50 tool calls SHALL draw its rate as a hollow dot and SHALL NOT set the rate axis, when at least one bar has 50 or more. The line SHALL still run through the dot, and a rate above the axis SHALL stop at its top. The legend SHALL give a key for the hollow dot, and the bar's tooltip, screen-reader text and data table SHALL say it has too few calls for a steady rate while still giving its rate.
+On the work chart, a bar with fewer than 50 tool calls SHALL draw its rate as a hollow dot and SHALL NOT set the rate axis, when at least one bar has 50 or more. The line SHALL still run through the dot, and a rate above the axis SHALL stop at its top.
 
 #### Scenario: Quiet day does not set the scale
 - **WHEN** a quiet day has 2 failed calls of 4 and the busy days have 6 of 200 and 5 of 100
@@ -183,6 +194,24 @@ On the work chart, a bar with fewer than 50 tool calls SHALL draw its rate as a 
 #### Scenario: Every bar is quiet
 - **WHEN** no bar has 50 tool calls
 - **THEN** the chart marks no hollow dot and its rate axis fits the highest rate
+
+### Requirement: Key and describe the hollow dot
+The legend SHALL give a key for the hollow dot, and the bar's tooltip, screen-reader text and data table SHALL say it has too few calls for a steady rate while still giving its rate. In forced colors, the dot and its key SHALL stay hollow: a page-colored center in a text-colored ring.
+
+#### Scenario: Forced colors
+- **WHEN** the user's system forces its colors
+- **THEN** the hollow dot and its key keep a page-colored center and a text-colored ring, apart from the solid line
+
+### Requirement: Name the work chart's bucket
+The work chart's How measured toggletip SHALL name its bucket: "How measured: work per day", or "per week" on a chart by week.
+
+#### Scenario: Chart by week
+- **WHEN** the work chart is by week
+- **THEN** its How measured toggletip reads "How measured: work per week"
+
+#### Scenario: A chart by week
+- **WHEN** the chart shows one bar per week
+- **THEN** its How measured toggletip is named "How measured: work per week"
 
 ### Requirement: Chart a long range by week
 When the span from the first day with a session to today is over 60 days, the chart SHALL show one bar per week (Monday start, local time) instead of per day, and its totals for commits and prompts SHALL equal the sum of its bars; a session counts once in each bucket it touches, so the bars for sessions can add up to more than the total. The week that holds the end of the range SHALL read "so far", and a first week cut by the start of the range SHALL read "from" that date.
