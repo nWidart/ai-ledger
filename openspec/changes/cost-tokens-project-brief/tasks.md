@@ -27,6 +27,12 @@
 - [x] 6.2 Project: the no-use message sits above the blocks and hides none (usage blocks say "No requests in this view."); `aria-busy` and the slow-refresh dimming move from `main` to each block, with the blocks that read usage or Live for a line; the loading line is no live region; Activity says when Live failed, with Retry. Verify with `ProjectPage.test.tsx`: empty usage with a Context snapshot, empty usage with a failed Errors request, per-block `aria-busy`, a failed Live request.
 - [x] 6.3 Docs and specs: active days are days with a prompt; the Project and Cost docs pages, `CHANGELOG.md` and both delta specs (cache-read scenario with every kind, exact-number values and precision, partial-day wording by mode, summary and zero-cost rules, no-use and per-block loading against the app-wide rules) follow.
 
-## 7. Verify
+## 7. Final review fixes
 
-- [x] 7.1 `openspec validate --specs --strict`, `openspec validate cost-tokens-project-brief --strict`, `uv run ruff check`, `uv run python -m unittest discover -s tests`, `cd web && npm run check`, `cd site && npm run check`.
+- [x] 7.1 Cost: `stackHeights()` gives each stacked segment a slot of at least its 1px and gap, so thin segments do not overlap and the bar keeps its height; the summary sentence treats gaps within 1e-9 as a tie. Verify with `cost.test.ts` (slots), `CostChart.test.tsx` (99.8 / 0.1 / 0.1 extents do not overlap) and `CostPage.test.tsx` (70/30 tokens, 60/40 cost names Input).
+- [x] 7.2 Project: Context shows the snapshot without a grid; each block dims while any request it reads is slow and lands (grow, fade) on its own; a filter change keeps the same project's figures (`useKept`); Activity says "Checking for active sessions…" while Live is pending and Retry keeps focus on the line. Verify with `ProjectPage.test.tsx`: snapshot with null shares, slow range change, another project, Refresh with one payload changed, Live pending and Retry.
+- [x] 7.3 Specs and docs: the delta states the Cost block's estimated cost as the exception to the sheet rule, the filter-change rule and the new scenarios; the Cost docs say the average and peak are Volume only; the Project docs follow. No Share screenshot: `tools/demo/record.mjs` has no Share step, and adding one means a new recording and regenerated images, beyond this round.
+
+## 8. Verify
+
+- [x] 8.1 `openspec validate --specs --strict`, `openspec validate cost-tokens-project-brief --strict`, `uv run ruff check`, `uv run python -m unittest discover -s tests`, `cd web && npm run check`, `cd site && npm run check`.

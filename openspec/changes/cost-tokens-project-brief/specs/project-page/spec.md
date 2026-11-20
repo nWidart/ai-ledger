@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: Lay out the blocks in two columns
-On wide screens the Project page SHALL show its blocks in two columns: Activity, Cost and Context on the left, and Errors, Plan limits, Sessions and Session judgments on the right, each in that order. On narrow screens it SHALL show them in one column in the same order, left column first. The heading and filters SHALL span the page above the columns. A block SHALL NOT repeat the project sheet's summary figures.
+On wide screens the Project page SHALL show its blocks in two columns: Activity, Cost and Context on the left, and Errors, Plan limits, Sessions and Session judgments on the right, each in that order. On narrow screens it SHALL show them in one column in the same order, left column first. The heading and filters SHALL span the page above the columns. A block SHALL NOT repeat the project sheet's summary figures, except the Cost block's estimated cost.
 
 #### Scenario: Wide screen
 - **WHEN** the user opens the Project page on a screen wider than 60em
@@ -42,11 +42,11 @@ The page SHALL show the project's change in estimated cost against the previous 
 ### Requirement: Load each block on its own
 The page SHALL show its heading and filters, and every block, without waiting for any request. Each block SHALL show its own state: a loading line while its data is on the way, its figures once they arrive, an empty state when it has nothing to show, and an error with a Retry control when its request fails. A failed or slow request SHALL change only the blocks that read it, and the other blocks SHALL still show. The Plan limits block SHALL stay out until it has something to show, as its own requirement says, and show its error when its request fails.
 
-The page SHALL say there is no use in the view only when the usage request has answered with no request for the project. That message SHALL sit above the blocks and SHALL NOT hide them: Activity, Cost and Sessions SHALL say they have no request in the view, and every other block SHALL show its own figures, empty state or error. The Context block SHALL still offer Measure now with a snapshot, as its own requirement says.
+The page SHALL say there is no use in the view only when the usage request has answered with no request for the project. That message SHALL sit above the blocks and SHALL NOT hide them: Activity, Cost and Sessions SHALL say they have no request in the view, and every other block SHALL show its own figures, empty state or error. With a snapshot, the Context block SHALL still show what the snapshot measured (when, with which model, each category's tokens and the largest items) and offer Measure now, as its own requirement says, even when it has no grid to draw.
 
-The per-block states SHALL take the place of the app's page placeholder for data: once the page's code has loaded, the page SHALL NOT show the gray placeholder blocks while its data loads, and its content area SHALL NOT be `aria-busy`. Instead each block SHALL be `aria-busy` while a request it reads is under way. A block's loading line SHALL NOT be a live region. A block that already shows figures SHALL keep them while its request refreshes, as the app's rule for data on screen says, and a refresh that takes over 150 ms SHALL dim that block's figures only.
+The per-block states SHALL take the place of the app's page placeholder for data: once the page's code has loaded, the page SHALL NOT show the gray placeholder blocks while its data loads, and its content area SHALL NOT be `aria-busy`. Instead each block SHALL be `aria-busy` while a request it reads is under way. A block's loading line SHALL NOT be a live region. A block that already shows figures SHALL keep them while its request refreshes and while a change of the range, source or automated filter loads, as the app's rules for data on screen say. A request a block reads, its own or one it reads a line from, that takes over 150 ms SHALL dim that block's figures only. Picking another project SHALL drop the figures, so that no block shows one project's figures under another's name. When new data arrives after Refresh, a filter change or a failed request, only the blocks whose data changed SHALL fade in.
 
-When the Live request fails, the Activity block SHALL say the sessions active now could not load, with a Retry control, and keep its figures, so that a failure does not read as no active session.
+While the Live request is on the way, the Activity block SHALL say it is checking for active sessions, in a line that is not a live region. When the Live request fails, the block SHALL say the sessions active now could not load, with a Retry control, and keep its figures. Neither state SHALL read as no active session. Retry SHALL leave focus on the line while the request runs.
 
 #### Scenario: One block fails
 - **WHEN** the insights request fails and the others succeed
@@ -66,7 +66,27 @@ When the Live request fails, the Activity block SHALL say the sessions active no
 
 #### Scenario: Slow refresh
 - **WHEN** the usage request refreshes and takes over 150 ms
-- **THEN** the blocks that read usage keep their figures dimmed until it answers, and the other blocks are not dimmed
+- **THEN** Activity, Cost, Sessions and Context keep their figures dimmed until it answers, and the other blocks are not dimmed
+
+#### Scenario: Range change
+- **WHEN** the user changes the range from 30 to 7 days and the usage request for 7 days takes over 150 ms
+- **THEN** the blocks that read usage keep their 30-day figures, dimmed, and no loading line replaces them
+
+#### Scenario: Another project
+- **WHEN** the user picks `bar` on the Project page of `foo` and `bar`'s usage request has not answered
+- **THEN** the blocks that read usage say they are loading and show none of `foo`'s figures
+
+#### Scenario: Refresh changes one payload
+- **WHEN** a Refresh brings new usage figures and the same errors and insights
+- **THEN** Activity, Cost and Sessions fade in, and Errors and Session judgments do not
+
+#### Scenario: Live pending
+- **WHEN** the usage request has answered and the Live request has not
+- **THEN** the Activity block shows its figures and says it is checking for active sessions
+
+#### Scenario: Snapshot without a grid
+- **WHEN** `foo` has a context snapshot and no session in the view, so the start's share of the window is unknown
+- **THEN** the Context block shows no grid, and shows when the snapshot was measured, its categories' tokens and its largest items, with Measure now
 
 #### Scenario: No use with a snapshot
 - **WHEN** the usage request answers with no request for `foo` and `foo` has a context snapshot
