@@ -1,4 +1,4 @@
-import { useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useCallback, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Popover } from "@base-ui/react/popover";
 import "./Toggletip.css";
 
@@ -17,6 +17,14 @@ export function Toggletip({ term, label, name, className, children }: { term?: s
   const [open, setOpen] = useState(false), [host, setHost] = useState<HTMLElement | null>(null), btn = useRef<HTMLButtonElement>(null);
   // Escape dismisses the popup only: a sheet's own Escape (the dialog's cancel) must not close it too.
   const key = (e: KeyboardEvent) => { if (e.key === "Escape" && open) { e.preventDefault(); e.stopPropagation(); setOpen(false); } };
+  // A popup taller than the room beside the button scrolls (Toggletip.css), and is then the next tab stop, so the keyboard can scroll it.
+  const [scrolls, setScrolls] = useState(false);
+  const fit = useCallback((el: HTMLDivElement | null) => {
+    if (!el) return;
+    const ro = new ResizeObserver(() => setScrolls(el.scrollHeight > el.clientHeight + 1));
+    ro.observe(el);
+    return () => { ro.disconnect(); setScrolls(false); };
+  }, []);
   return <>
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger ref={btn} aria-haspopup={false} openOnHover delay={HOVER_DELAY_MS} className={"tt" + (label == null ? " tt-q" : "") + (className ? " " + className : "")} aria-label={name ?? (label == null ? `About ${term}` : undefined)} onKeyDown={key}>
@@ -24,7 +32,7 @@ export function Toggletip({ term, label, name, className, children }: { term?: s
       {/* The host span holds the popup next to the button. Base UI waits while the container is null, so it mounts once the span does. */}
       {host && <Popover.Portal container={host}>
         <Popover.Positioner className="tt-pos" side="bottom" align="start" sideOffset={6} collisionPadding={8} positionMethod="fixed">
-          <Popover.Popup className="tt-pop" role="tooltip" initialFocus={false} onKeyDown={key}>{children}</Popover.Popup>
+          <Popover.Popup ref={fit} className="tt-pop" role="tooltip" initialFocus={false} tabIndex={scrolls ? 0 : undefined} onKeyDown={key}>{children}</Popover.Popup>
         </Popover.Positioner>
       </Popover.Portal>}
     </Popover.Root>
