@@ -7,45 +7,56 @@ The Limits page shows how much of each provider's plan limits is used, when each
 ## Requirements
 
 ### Requirement: Lead with the binding window
-Limits SHALL open with the window that will stop the user first: one already at its limit, else the one forecast to reach 100% soonest. If none is at or forecast to reach 100% before it resets, it SHALL show the fullest window: the one with the highest forecast percent at its reset, or its current percent when it has no forecast. That lead SHALL read "Fullest: …". The lead SHALL name the provider and window, the percent used now and when it resets.
+Limits SHALL open with the window that will stop the user first: one already at its limit, else the one forecast to reach 100% soonest. If none is at or forecast to reach 100% before it resets, it SHALL show the fullest window after "Fullest: …": the one with the highest forecast percent at its reset, or its current percent when it has no forecast. The lead SHALL name the provider and window and give at most two figures, as the scenarios show.
 
 #### Scenario: One window runs out
 - **WHEN** Claude's weekly window is at 90% and forecast to reach 100% on Sat 14:00, and every other window resets first
-- **THEN** the lead says Claude weekly, at 90% now, reaches 100% on Sat 14:00, before its reset on Sun 06:00
+- **THEN** the lead says Claude weekly, at 90% now, runs out on Sat 14:00, and gives no third figure
 
 #### Scenario: Nothing runs out
 - **WHEN** every window is forecast to reset below 100%
-- **THEN** the lead says no limit runs out at the current pace, and reads "Fullest:" followed by the window with the highest forecast at reset
+- **THEN** the lead says no limit runs out at the current pace, and reads "Fullest:" followed by the window with the highest forecast at reset and that forecast percent
 
 #### Scenario: Window without a forecast
 - **WHEN** no window runs out and the fullest one has no forecast
-- **THEN** the lead names the window with the highest current percent after "Fullest:"
+- **THEN** the lead names the window with the highest current percent after "Fullest:", with its percent now
 
 #### Scenario: A window at its limit
 - **WHEN** Codex 5-hour is at 100% and resets at 04:08
 - **THEN** the lead says Codex 5-hour is at its limit until 04:08, and its card says so in the critical style
 
 ### Requirement: Show every open window with its forecast
-Limits SHALL show one chart per open window. Each chart SHALL show the percent used so far, the forecast to reset with its low and high bounds, a 100% line, and the reset time. Measured points SHALL look different from estimated ones. Each chart SHALL say either "reaches 100% at …" or "resets first at about …%", and a text SHALL give 100% at the reset only for a line that reaches it: a percent from 99.5% up to 100% reads 99%.
-
-#### Scenario: Measured and estimated
-- **WHEN** a Claude window has polls every 5 minutes after Nov 6 and calibrated estimates before
-- **THEN** the chart marks the polled points as measured and the rest as estimated
+Limits SHALL show one card per open window. Its header SHALL give the window's name and plan, its percent used now, an "est." marker when that percent is estimated, and one status: "runs out <time>" when the forecast's middle reaches 100% before the reset, "at its limit until <time>", "about <n>% at reset", or "no forecast". "runs out" and "at its limit" SHALL be in the critical style with a marker, so the colour is not the only signal. A percent at reset from 99.5% up to 100% SHALL read 99%.
 
 #### Scenario: Forecast unavailable
 - **WHEN** a window has no calibration
-- **THEN** its chart shows the measured points, no forecast, and the reason
+- **THEN** its chart shows the past line and no cone, its header reads "no forecast", and its Details give the reason
+
+#### Scenario: A window that runs out
+- **WHEN** Claude weekly is at 88% and its forecast reaches 100% at Sat 2:00 PM, before its reset
+- **THEN** its header reads 88% and "runs out Sat, … 2:00 PM" in the critical style with a marker
+
+### Requirement: Draw at most four encodings per chart
+Each open-window chart SHALL draw at most four encodings: the percent used so far as one line (solid where measured, faded where estimated), the forecast as a shaded cone from its low to its high bound with its middle, a `now` tick, and the safe-pace line. A 100% grid line with its axis label and the reset time on the right edge SHALL frame the plot. The page SHALL show no chart key.
+
+#### Scenario: Measured and estimated
+- **WHEN** a Claude window has polls every 5 minutes after Nov 6 and calibrated estimates before
+- **THEN** the chart draws the polled stretch as a solid line and the rest as a faded line, with no dots
 
 ### Requirement: Show headroom and pace
-For each open window, Limits SHALL show the percent left, the time left to reset, the usual pace, the window's own recent pace once it has one, and the pace that ends at exactly 100% at reset. It SHALL say whether the user is ahead of or behind that pace. A window at its limit SHALL show no pace.
+Each open-window card SHALL show a three-column footer. Headroom SHALL give the percent left and the time to reset. Pace SHALL give the forecast's pace against the safe pace, per hour under a day, critical when above the safe pace; a window at its limit or without a forecast SHALL show none. Top SHALL give the top project and its share, or "–". Details SHALL give the usual and recent paces and whether the user is ahead of or behind the safe pace.
 
 #### Scenario: Behind pace
-- **WHEN** Codex weekly is at 20% with 3.5 of 7 days left
-- **THEN** Limits shows 80% left over 3.5 days, a target pace of about 23% a day, and says the user is behind that pace
+- **WHEN** Codex weekly is at 20% with 3.5 of 7 days left and a forecast pace of 10% a day
+- **THEN** its footer reads "80% left · 3d 12h" and "10%/d vs 22.9%/d safe", not in the critical style, and its Details say the user is behind pace
 
 #### Scenario: Both paces
 - **WHEN** a weekly window's usual pace is 6.8% a day and it used 34% over its last day
-- **THEN** its card shows a usual pace of 6.8% a day and this window at 34% a day over its last day
+- **THEN** its Details give a usual pace of 6.8% a day and this window at 34% a day over its last day
+
+#### Scenario: A short window
+- **WHEN** a 5-hour window's forecast pace is 48% a day and its safe pace 480% a day
+- **THEN** its footer reads "2%/h vs 20%/h safe"
 
 ### Requirement: Suggest where to send work
 Limits SHALL suggest the provider with the most headroom left at the current pace. It SHALL not suggest a provider with a window at its limit, or whose binding window is forecast to reach 100% before it resets. It SHALL suggest nothing unless at least two providers have a forecast.
@@ -63,7 +74,7 @@ Limits SHALL suggest the provider with the most headroom left at the current pac
 - **THEN** Limits does not suggest Codex
 
 ### Requirement: Show limit history
-Limits SHALL list the closed windows of the selected range, newest first. Each row SHALL give the window's provider, kind, plan and final percent, and say whether it hit 100% and for how long it stayed there. Plan changes and early resets SHALL be marked on the charts and in the list.
+Limits SHALL list the closed windows of the selected range, newest first, in a table behind a "Show data table" toggle in the "Past windows" section, closed on every load. Each row SHALL give the window's provider, kind, plan and final percent, and say whether it hit 100% and for how long it stayed there. Plan changes SHALL be marked on the charts and early resets in the list.
 
 #### Scenario: Window left unused
 - **WHEN** a Codex weekly window closed at 22% because of a plan change
@@ -74,18 +85,18 @@ Limits SHALL list the closed windows of the selected range, newest first. Each r
 - **THEN** the history shows a hit of about 4 hours 15 minutes
 
 ### Requirement: Show unused capacity
-Limits SHALL show, for the selected range, the average percent left at reset for each provider and window kind, over windows that ran their full length. It SHALL say how many windows ended early and were left out. A model-scoped window with nothing used and no counted use of its model SHALL be skipped.
+Each strip row in "Past windows" SHALL end with "avg <n>% unused · <k> hits": the average percent left at reset over the limit's full-length windows in the range, and how many of its closed windows in the range hit their limit. A limit with no full-length window SHALL read "no full-length windows". The row's title SHALL say what the average covers and leaves out. A model-scoped window with nothing used and no counted use of its model SHALL be skipped. Limits SHALL show no "Left unused" panel.
 
 #### Scenario: Four weekly windows
-- **WHEN** four Codex weekly windows closed at 30%, 40%, 50% and 40%
-- **THEN** Limits shows an average of 60% left unused
+- **WHEN** four Codex weekly windows closed at 30%, 40%, 50% and 40%, and none hit its limit
+- **THEN** the Codex weekly strip reads "avg 60% unused · 0 hits"
 
 #### Scenario: A window cut short
 - **WHEN** one more Codex weekly window ended after a day at 10% because of a plan change
-- **THEN** the average stays 60%, and Limits says 1 window that ended early is left out
+- **THEN** the average stays 60%, and the row's title says 1 window that ended early is left out
 
 ### Requirement: Show value per 1%
-For each calibrated limit, Limits SHALL show the tokens and estimated cost one percentage point buys, broken down by model, and the points each model used inside that limit's windows on its plan. A model without a price SHALL be marked unpriced, and a limit from an earlier plan SHALL say so. Per project, it SHALL show commits per percentage point, folding projects under one point into a "smaller projects" row unless filtered by project. A figure without enough data SHALL show as not available.
+For each calibrated limit, Limits SHALL show the tokens and estimated cost one percentage point buys by model, and the points each model used inside that limit's windows on its plan, over the range set in "Past windows". An unpriced model and a limit from an earlier plan SHALL be marked. Per project, it SHALL show commits per point for every project, folding each provider's projects under one point into a "smaller projects" row. A figure without enough data SHALL show as not available.
 
 #### Scenario: Model breakdown
 - **WHEN** Claude weekly is calibrated at $8 per 1% and two models used it
@@ -96,12 +107,12 @@ For each calibrated limit, Limits SHALL show the tokens and estimated cost one p
 - **THEN** the 5-hour points used leave out the `prolite` spend, and the limit is marked as an earlier plan
 
 #### Scenario: Small projects folded
-- **WHEN** no project filter is set and three projects of one provider used under one point each
+- **WHEN** three projects of one provider used under one point each
 - **THEN** the table lists the larger projects and one "3 smaller projects" row for that provider
 
 #### Scenario: Project filter
-- **WHEN** the user filters to a project that used under one point
-- **THEN** the table lists that project alone, with no "smaller projects" row
+- **WHEN** the page's address carries `project=foo` from another page
+- **THEN** the table still lists every project, and the page asks `/api/limits` for no project
 
 ### Requirement: Show freshness of limit data
 Limits SHALL show, per provider, when the last snapshot was taken, how long ago, and whether the current figure is measured or estimated. It SHALL flag a provider whose polling is failing, or whose last snapshot is older than twice its poll interval. A reading from a provider that is not polled SHALL count as estimated once it is over an hour old.
@@ -115,41 +126,26 @@ Limits SHALL show, per provider, when the last snapshot was taken, how long ago,
 - **THEN** Limits shows it was taken 5 hours ago, and Codex figures as estimated
 
 ### Requirement: Filter Limits by time range and source
-Limits SHALL apply the shared time range to the history, unused-capacity and value sections, and the source filter to every section. Open windows SHALL always show, whatever the range. The project filter SHALL apply only to commits per percentage point, because limits are per account.
+The page header SHALL show the Source filter only. Source SHALL apply to every section. The time range SHALL be set in the "Past windows" section header and SHALL apply to the past windows and to "What a point buys". Open windows SHALL always show, whatever the range. Limits SHALL have no project filter.
 
 #### Scenario: Codex only
 - **WHEN** the user picks source Codex on Limits
 - **THEN** only Codex windows, history and value appear, and the URL records `source=codex`
 
 #### Scenario: Project filter set
-- **WHEN** the shared project filter is `foo`
-- **THEN** the windows show account-wide usage, and commits per percentage point shows only `foo`
+- **WHEN** the shared project filter is `foo` on another page and the user opens Limits
+- **THEN** Limits shows no project filter, every section reads as with no project, and the URL keeps `project=foo` for the other pages
 
-### Requirement: Show a status strip of open windows
-Limits SHALL show a status strip under its heading: a list labelled "Open windows at a glance" with one chip per open window, in payload order. Each chip SHALL show the window name, the percent used now ("–" with no reading) and "resets in". A chip at its limit or forecast to hit 100% before reset SHALL have the warning tone and say "at limit" or "runs out". An estimated chip SHALL carry an "est." marker. With no open window the strip SHALL NOT render.
-
-#### Scenario: One chip per window
-- **WHEN** three windows are open
-- **THEN** the strip lists three chips in payload order, each with its percent used and "resets in"
-
-#### Scenario: A window at its limit
-- **WHEN** Codex weekly is at 100% until its reset
-- **THEN** its chip has the warning tone and says "at limit", while the navigation's dot is critical
-
-#### Scenario: A window that runs out
-- **WHEN** Claude weekly is forecast to reach 100% before its reset
-- **THEN** its chip has the warning tone and says "runs out", while the navigation's dot is critical
-
-#### Scenario: No open windows
-- **WHEN** no window is open
-- **THEN** the page shows no strip
+#### Scenario: Range in Past windows
+- **WHEN** the user picks 7d in the "Past windows" header
+- **THEN** the strips, the table and "What a point buys" cover the last 7 days, the open windows do not change, and the URL records `range=7`
 
 ### Requirement: Show the cap in money and its calibration
-Each calibrated open-window card SHALL show, under its pace line, one muted line: "100% ≈ <money> <period> at list prices, from <N> over <M>". The money SHALL be the calibrated value per percent times 100. The period SHALL follow the window length. A card with no calibration SHALL NOT show the line.
+Each calibrated open-window card SHALL show, in its Details, one muted line: "100% ≈ <money> <period> at list prices, from <N> over <M>". The money SHALL be the calibrated value per percent times 100. The period SHALL follow the window length. A card with no calibration SHALL NOT show the line.
 
 #### Scenario: A weekly window
 - **WHEN** a weekly window is calibrated at 4.2 dollars per percent from 37 points over 2 windows
-- **THEN** its card shows "100% ≈ $420 a week at list prices, from 37 points over 2 windows"
+- **THEN** its Details show "100% ≈ $420 a week at list prices, from 37 points over 2 windows"
 
 #### Scenario: The period follows the window length
 - **WHEN** a window is 10080 minutes, 1440, 43200, 300, another whole number of hours, or of unknown length
@@ -161,11 +157,11 @@ Each calibrated open-window card SHALL show, under its pace line, one muted line
 
 #### Scenario: A window that is not calibrated
 - **WHEN** a window has no calibration
-- **THEN** its card shows no cap-money line
+- **THEN** its Details show no cap-money line
 
 #### Scenario: A window at its limit that is not calibrated
 - **WHEN** a window reports 100% before any priced usage is counted, so it has no calibration
-- **THEN** its card shows no cap-money line, and its caption says "At its limit until …"
+- **THEN** its Details show no cap-money line, and its header says "at its limit until …"
 
 ### Requirement: Read an open-window chart at a point in time
 Each open-window chart SHALL show a readout of one point (guide, marker, tooltip) among its past points, then its forecast points after now. The tooltip SHALL give the time, then the percent with measured or estimated, or the forecast with its likely range. A pointer SHALL read the nearest point. The tooltip SHALL stay inside the chart's width and wrap when wider than it.
@@ -214,62 +210,62 @@ A chart with points SHALL be one tab stop that reads now on keyboard focus (focu
 - **THEN** its chart shows the image only, with no tab stop and no readout
 
 ### Requirement: Show the last-24-hours scenario
-Each open-window chart whose forecast has the last-24-hours scenario SHALL draw it as a second line over the forecast span, with a dash pattern and a colour of its own. The chart key SHALL list it as "last 24 h pace" when any card shows the scenario line. A forecast point's readout SHALL end with " · last 24 h pace <n>%" when the point has a scenario value.
+A "Last 24 h pace" toggle above the cards SHALL show when any open window's forecast has the scenario, off on every load and pressed when on. When on, each chart with the scenario SHALL draw it as a second line with its own dash and colour, and a forecast point's readout SHALL end with " · last 24 h pace <n>%" when the point has a value. When off, no chart SHALL draw the line and no readout SHALL name it.
 
 #### Scenario: No scenario
 - **WHEN** no open window has a scenario
-- **THEN** no card has the line, no chart has the second line and the chart key does not list "last 24 h pace"
+- **THEN** the page has no "Last 24 h pace" toggle and no chart has the second line
 
 #### Scenario: Reading a forecast point
-- **WHEN** the readout is on a forecast point of 58% whose scenario value is 72.3%
-- **THEN** it reads "<time> · forecast 58% · last 24 h pace 72.3%", and without the last part when the point has no scenario value
+- **WHEN** the toggle is on and the readout is on a forecast point of 58% whose scenario value is 72.3%
+- **THEN** it reads "<time> · forecast 58% · last 24 h pace 72.3%", and without the last part when the toggle is off or the point has no scenario value
 
 ### Requirement: Say what the last-24-hours scenario reaches
-Under the caption, the card SHALL say "If the last 24 hours continue: reaches 100% at <time>" when the scenario reaches 100% before the reset, in the warning style, or "If the last 24 hours continue: about <n>% at its reset" when it does not. A window at its limit, a window with no forecast and a window with no scenario SHALL show no such line. A percent at its reset from 99.5% up to 100% SHALL read 99%, so the line claims 100% only when it reaches it.
+A card's Details SHALL say "If the last 24 hours continue: reaches 100% at <time>" when the scenario reaches 100% before the reset, in the warning style, or "If the last 24 hours continue: about <n>% at its reset" when it does not, whatever the toggle. A window at its limit, a window with no forecast and a window with no scenario SHALL show no such line. A percent at its reset from 99.5% up to 100% SHALL read 99%, so the line claims 100% only when it reaches it.
 
 #### Scenario: The scenario reaches 100%
 - **WHEN** a window's scenario reaches 100% at Sat, Nov 7, 3:00 PM before the reset
-- **THEN** its card reads "If the last 24 hours continue: reaches 100% at Sat, Nov 7, 3:00 PM" in the warning style, and its chart has the second line
+- **THEN** its Details read "If the last 24 hours continue: reaches 100% at Sat, Nov 7, 3:00 PM" in the warning style
 
 #### Scenario: The reset comes first
 - **WHEN** a window's scenario stays at 41.26% at the reset
-- **THEN** its card reads "If the last 24 hours continue: about 41% at its reset", not in the warning style
+- **THEN** its Details read "If the last 24 hours continue: about 41% at its reset", not in the warning style
 
 #### Scenario: A window at its limit
 - **WHEN** a window is at its limit
-- **THEN** its card has no scenario line
+- **THEN** its Details have no scenario line
 
 ### Requirement: Keep the last-24-hours scenario apart from the card's other text
-The hint under "Open windows" SHALL say that the line carries the use of the last 24 hours on to the reset. The scenario SHALL NOT change the heading, the status strip, the caption or the suggestion.
+"How measured" SHALL say that the last-24-hours line carries the use of the last 24 hours on to the reset. The scenario SHALL NOT change the heading, the card header, the footer or the suggestion.
 
 #### Scenario: The hint
-- **WHEN** Limits shows open windows with the scenario line
-- **THEN** the hint under "Open windows" says that the line carries the use of the last 24 hours on to the reset, and the heading, status strip, caption and suggestion read as without the scenario
+- **WHEN** Limits shows open windows with the scenario
+- **THEN** "How measured" says that the line carries the use of the last 24 hours on to the reset, and the heading, card headers, footers and suggestion read as without the scenario
 
 ### Requirement: Show what used each open window
-Each open-window card with counted use since its start SHALL show a drawer, closed by default, headed "What used this window", after the cap-money line. Closed, its heading SHALL end with the window's top project and its share of the window's counted use ("ai-ledger 54%"), when the use has a project. A card with no counted use since its start SHALL have no drawer.
+The footer's Top column SHALL give the window's top project and its share of the window's counted use ("ai-ledger 54%"), when the use has a project, else "–". The card's Details SHALL list what used the window when it has counted use since its start. A card with no counted use since its start SHALL have no such list.
 
 #### Scenario: A window that runs hot
 - **WHEN** a weekly window that started 5 days ago has counted use, 54% of it in the project ai-ledger
-- **THEN** its card has a closed drawer reading "What used this window · ai-ledger 54%", and opened it lists the top projects and models with their shares and points
+- **THEN** its footer's Top reads "ai-ledger 54%", and its Details list the top projects and models with their shares and points
 
 #### Scenario: Nothing counted
 - **WHEN** no use was counted since the window started
-- **THEN** its card has no drawer
+- **THEN** its footer's Top reads "–" and its Details have no list of what used it
 
 ### Requirement: List what used an open window
-Opened, the drawer SHALL list the top three projects and the top three models by estimated cost, each with its share as a percent and, when the window is calibrated, its points ("≈ 12.3 points"), and give its cost at API list prices as the row's title. It SHALL say that only counted local agent use at list prices is in it and that use elsewhere is not.
+In the card's Details, Limits SHALL list the top three projects and the top three models by estimated cost, each with its share as a percent and, when the window is calibrated, its points ("≈ 12.3 points"), and give its cost at API list prices as the row's title. It SHALL say that only counted local agent use at list prices is in it and that use elsewhere is not.
 
 #### Scenario: Not calibrated
 - **WHEN** a window is not calibrated yet
-- **THEN** its drawer lists shares and costs and no points
+- **THEN** its Details list shares and costs and no points
 
 ### Requirement: Scope what used an open window to the window
-The use in the drawer is that from the window's start to now, for the provider's agent and the models the limit covers. It SHALL NOT follow the page's project and range filters.
+The use in the Details is that from the window's start to now, for the provider's agent and the models the limit covers. It SHALL NOT follow the page's range.
 
 #### Scenario: A filtered page
-- **WHEN** the page has a project or range filter set
-- **THEN** the drawer's use is still that from the window's start to now, for the provider's agent and the models the limit covers
+- **WHEN** the page has a range set
+- **THEN** the Details' use is still that from the window's start to now, for the provider's agent and the models the limit covers
 
 ### Requirement: Link what used an open window to Cost
 Each project SHALL link to Cost filtered to that project, with the window's provider as the source and automated sessions included (the drawer counts them, and Cost leaves them out otherwise). A link "Open in Cost" SHALL do the same with no project.
@@ -297,15 +293,15 @@ Every such link, the project links included, SHALL name its range as the nearest
 - **THEN** the link's accessible name reads "ai-ledger in Cost, last 7 days" and its title names 7 days as the nearest preset
 
 ### Requirement: Show a scoped limit's share and the week's use by surface
-An open-window card whose window has a share of the weekly allowance SHALL say, in a small muted line under the forecast lines, "This limit is <allowance>% of the weekly allowance; <used>% of the weekly allowance is used through it". A card without a share SHALL show no such line.
+An open-window card whose window has a share of the weekly allowance SHALL say, in a small muted line in its Details, "This limit is <allowance>% of the weekly allowance; <used>% of the weekly allowance is used through it". A card without a share SHALL show no such line.
 
 #### Scenario: A scoped card
 - **WHEN** the Fable window has a share of 21% used of a 50% allowance
-- **THEN** its card reads "This limit is 50% of the weekly allowance; 21% of the weekly allowance is used through it"
+- **THEN** its Details read "This limit is 50% of the weekly allowance; 21% of the weekly allowance is used through it"
 
 #### Scenario: No field
 - **WHEN** a window has no share and no surfaces
-- **THEN** its card shows neither line
+- **THEN** its Details show neither line
 
 ### Requirement: Show the week's use by surface
 A card whose window has surfaces SHALL say, in the same style, "All of this week's use so far came from <label>" when exactly one surface has any use (a percent above 0, before rounding), else "This week's use by surface: <label> <percent>%, …" listing every surface with use, most first. A card whose surfaces are all 0% SHALL show no surfaces line. A card without surfaces SHALL show no such line.
@@ -330,14 +326,14 @@ Percents SHALL read as whole numbers. A surface whose percent rounds to 0 SHALL 
 - **THEN** the card reads "This week's use by surface: Claude Code 99%, Chats 1%", never "All of this week's use so far came from Claude Code"
 
 ### Requirement: Keep the share and surface lines apart from the card's other text
-The lines SHALL NOT change the heading, the status strip, the captions, the pace line or the freshness line, and the hint that estimates count local agent work only SHALL stay.
+The lines SHALL NOT change the heading, the card header, the footer or the freshness line, and "How measured" SHALL still say that estimates count local agent work only.
 
 #### Scenario: A card with both lines
 - **WHEN** a card shows the share line and the surfaces line
-- **THEN** its heading, status strip, captions, pace line and freshness line read as without them, and the hint that estimates count local agent work only is still shown
+- **THEN** its heading, card header, footer and freshness line read as without them, and "How measured" still says that estimates count local agent work only
 
 ### Requirement: Show past windows as bars with a curve on demand
-Above the table of closed windows, Limits SHALL show one row per limit (its provider, limit id and scope) that has closed windows in the selected range, in the order the open windows use (provider, then longest window first, then scope), each with the limit's name (that of its newest closed window) and a strip of small bars, oldest left and newest right.
+A "Past windows" section, always shown on the page and not in a drawer, SHALL show one row per limit (its provider, limit id and scope) that has closed windows in the selected range, in the order the open windows use (provider, then longest window first, then scope), each with the limit's name (that of its newest closed window), a strip of small bars, oldest left and newest right, and its unused and hits summary. With no closed window in the range, it SHALL say so.
 
 #### Scenario: A strip per limit
 - **WHEN** the range holds closed Claude Code weekly windows and Codex weekly and 5-hour windows
@@ -373,10 +369,10 @@ A key under the strips SHALL name the three marks and draw each as its bars do (
 - **THEN** the key under them names the limit hit, ended early and estimated marks, drawn red, hatched and outlined
 
 ### Requirement: Scroll a wide strip inside its box
-A strip too wide for its box SHALL scroll inside that box, not the page, showing its newest bars when the box first has a width (so also when Past windows is opened after the page loaded). It SHALL never move back there after the user has scrolled it, focused a bar or pressed a key in it, and moving between its bars by keyboard SHALL bring the focused bar into view.
+A strip too wide for its box SHALL scroll inside that box, not the page, showing its newest bars when the box first has a width. It SHALL never move back there after the user has scrolled it, focused a bar or pressed a key in it, and moving between its bars by keyboard SHALL bring the focused bar into view.
 
 #### Scenario: Opened after load
-- **WHEN** Past windows is opened after the page loaded and a strip is wider than its box
+- **WHEN** the page loads, or the section first gets a width, and a strip is wider than its box
 - **THEN** the strip shows its newest bars, and scrolls inside its box, not the page
 
 #### Scenario: The user has scrolled
@@ -412,7 +408,7 @@ The curve SHALL be fetched when the bar is picked, and the panel SHALL show that
 - **THEN** the panel says so, without the old chart, and Retry fetches it again
 
 ### Requirement: Close a picked window's curve panel
-Picking the same bar again, or the panel's Close button, SHALL close the panel, and Close SHALL return focus to the bar. The picked window SHALL NOT be part of the page's address. A range, source or project that leaves the picked window out of the strips SHALL close the panel.
+Picking the same bar again, or the panel's Close button, SHALL close the panel, and Close SHALL return focus to the bar. The picked window SHALL NOT be part of the page's address. A range or source that leaves the picked window out of the strips SHALL close the panel.
 
 #### Scenario: Close
 - **WHEN** the panel's Close button is pressed
@@ -423,8 +419,58 @@ Picking the same bar again, or the panel's Close button, SHALL close the panel, 
 - **THEN** the panel closes
 
 ### Requirement: Mark the picked window without changing the rest of Limits
-The table row of the picked window SHALL be marked. The table, the Unused section and the other drawers SHALL NOT change.
+The table row of the picked window SHALL be marked. The table, the strips' summaries and the drawers SHALL NOT change.
 
 #### Scenario: A picked window
 - **WHEN** a bar is picked
-- **THEN** the window's table row is marked, and the table, the Unused section and the other drawers read as before
+- **THEN** the window's table row is marked, and the table, the strips' summaries and the drawers read as before
+
+### Requirement: Draw the safe pace
+Each open-window chart with a percent now SHALL draw a faint straight line from the point now at that percent to 100% at the reset: the pace that ends at exactly 100%. A curve steeper than the line runs hot. A window at its limit, a window with no percent now and a closed window's chart SHALL have no such line. The chart's data table SHALL give the line's value at each time after now.
+
+#### Scenario: A window running hot
+- **WHEN** a weekly window is at 40% at Wed noon and resets Sun noon
+- **THEN** its chart draws a straight line from 40% at Wed noon to 100% at Sun noon, and its forecast cone rises above it
+
+#### Scenario: A window at its limit
+- **WHEN** a window is at its limit
+- **THEN** its chart has no safe-pace line
+
+### Requirement: Tint a cone that reaches 100% before the reset
+The forecast cone SHALL take the warning tint when its high bound reaches 100% before the reset, and the neutral tint otherwise. The tint SHALL NOT be the only signal: the card header still says "runs out" when the middle reaches 100%, and the Details caption gives when the high and low bounds do.
+
+#### Scenario: Only the high bound reaches 100%
+- **WHEN** a window's forecast middle resets at 92% and its high bound reaches 100% on Sat
+- **THEN** its cone has the warning tint, its header reads "about 92% at reset", and its Details caption gives the range up to 100%
+
+#### Scenario: Nothing reaches 100%
+- **WHEN** a window's high bound stays under 100% at reset
+- **THEN** its cone has the neutral tint
+
+### Requirement: Mark plan changes without a key
+A plan change inside a window SHALL be drawn as a short tick at the top of the plot labelled "plan: <plan>", with a tooltip and the chart's accessible name giving the change in words.
+
+#### Scenario: A plan change
+- **WHEN** the plan changed from `plus` to `prolite` inside a window
+- **THEN** its chart shows a tick at that time labelled "plan: prolite", and its accessible name says "Plan change from plus to prolite, <time>"
+
+### Requirement: Keep the rest of a card behind Details
+Each open-window card SHALL have one "Details" button in its footer that shows and hides a region under the footer, closed on every load, with `aria-expanded` and `aria-controls` while open. The region SHALL hold the forecast caption with its range, the last-24-hours line, the paces, the weekly share and surfaces lines, the cap-money line, what used the window with its links to Cost, and the chart's data as a table.
+
+#### Scenario: Opening Details
+- **WHEN** the user presses a card's "Details"
+- **THEN** the region under the footer shows the caption, the paces, the cap money and the chart's data table, and the button reads as expanded
+
+### Requirement: Offer each chart's data as a table
+Each open-window card's Details SHALL hold a table of its chart: at most 12 times spread from the window's start to its reset, and now, each with the time, the percent and its kind (measured, estimated, or forecast with its likely range), and the safe-pace percent for times after now.
+
+#### Scenario: A weekly window
+- **WHEN** a weekly window's Details are open
+- **THEN** its table lists the window's start, about one time a day and now, each with a percent, and forecast rows to the reset with their likely range and the safe-pace percent
+
+### Requirement: Explain the method behind How measured
+The forecast method, the last-24-hours line and the note that estimates count local agent work only SHALL sit in a "How measured" disclosure under "Open windows", closed on every load. The hint under "Open windows" SHALL be one line.
+
+#### Scenario: The method
+- **WHEN** the user opens "How measured"
+- **THEN** it says how forecasts are made, what the cone and the safe-pace line mean, what the last-24-hours line carries, and that estimates count local agent work only
