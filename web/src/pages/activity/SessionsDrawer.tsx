@@ -2,7 +2,8 @@ import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { SessionSort, View } from "../../api";
 import { DataTable } from "../../components/DataTable";
-import { Drawer, savedOpen } from "../../components/Drawer";
+import { Drawer } from "../../components/Drawer";
+import { HowMeasured } from "../../components/HowMeasured";
 import { Toggletip } from "../../components/Toggletip";
 import { SortTh, type SortBy } from "../../components/Sort";
 import { ProjectName } from "../../components/ProjectDot";
@@ -40,7 +41,7 @@ export function SessionsDrawer({ view, count, filter, onFilter, sort, onSort, se
   view: View; count: number; filter: SessFilter; onFilter: (f: SessFilter) => void; sort: SortBy<SessionSort> | null; onSort: (s: SortBy<SessionSort>) => void;
   selected: string;
 }) {
-  const [open, setOpen] = useState(() => savedOpen("d-sessions"));
+  const [open, setOpen] = useState(false);
   const body = useRef<HTMLTableSectionElement>(null), search = useRef<HTMLInputElement>(null), focusRow = useRef(-1);
   // Searching waits for a pause in typing; clearing the box searches at once.
   const debounced = useDebouncedValue(filter.q, 200), qt = (filter.q ? debounced : "").trim();
@@ -83,8 +84,8 @@ export function SessionsDrawer({ view, count, filter, onFilter, sort, onSort, se
         {filter.day && <span className="daychip"><span>Active on {dayLabel(filter.day, true)}</span>
           <button type="button" aria-label="Show sessions on every day" title="Every day" onClick={() => { onFilter({ ...filter, day: "" }); search.current?.focus(); }}>✕</button></span>}
       </div>
-      <div className="hint" aria-live="polite">{hint}</div>
-      <p className="hint">A session counts here when it has a request in the range; Insights counts sessions by their start time, so the two totals can differ slightly.</p>
+      <div className="hint"><span aria-live="polite">{hint}</span>
+        <HowMeasured what="the session count">A session counts here when it has a request in the range; Insights counts sessions by their start time, so the two totals can differ slightly.</HowMeasured></div>
       <DataTable name="Sessions" region="scroll tall">
         <thead><tr>{HEAD.map(([label, k, cls, title, whole]) => {
           const t = whole && filter.day ? WHOLE : title;

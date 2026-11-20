@@ -887,6 +887,17 @@ describe("ErrorsPage", () => {
       expect([...api.muted]).toEqual(["git"]);
     });
 
+    it("leads with the failed calls and their rate only; the vitals add the change and the top type, not the rate", async () => {
+      stubErrors(mixed);
+      history.replaceState(null, "", "/errors?range=30");
+      await page();
+      expect(lede()).toMatch(/^6 failed tool calls \(60\.0%\)\.$/);
+      const vitals = document.querySelector(".vitals")!;
+      expect([...vitals.querySelectorAll(".vital .l")].map(l => l.textContent)).toEqual(["Change", "Incidents", "Top type", "Fixes applied"]);
+      expect(vitals.textContent).not.toContain("60.0%");
+      expect(vitals.querySelector(".vital:nth-child(3) .d")!.textContent).toMatch(/^\d+% of errors\.$/);
+    });
+
     it("lets the toggle hide a muted type, and the rate follows", async () => {
       stubErrors({ ...mixed, muted: ["git"] });
       history.replaceState(null, "", "/errors?range=30");
@@ -894,12 +905,12 @@ describe("ErrorsPage", () => {
       expect(lede()).toContain("6 failed tool calls");
       expect(rowOf("git")!.querySelector(".chip.muted-type")?.textContent).toBe("Muted");
       expect(rowOf("x")).toBeTruthy();
-      expect(document.querySelector(".vitals")!.textContent).toContain("60.0%");
+      expect(lede()).toContain("60.0%");
       await userEvent.click(toggle());
       expect(lede()).toContain("4 failed tool calls");
       expect(rowOf("git")).toBeNull();
       expect(rowOf("x")).toBeTruthy();
-      expect(document.querySelector(".vitals")!.textContent).toContain("40.0%");
+      expect(lede()).toContain("40.0%");
       expect(document.getElementById("uncat")?.textContent).toBe("Uncategorized: 0% of errors");
       await userEvent.click(toggle());
       expect(rowOf("git")).toBeTruthy();

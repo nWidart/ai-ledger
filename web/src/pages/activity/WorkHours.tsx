@@ -1,5 +1,6 @@
 import { useState, type KeyboardEvent } from "react";
 import type { UsagePayload } from "../../api";
+import { Drawer } from "../../components/Drawer";
 import { plural } from "../../format";
 
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
@@ -26,8 +27,7 @@ export function WorkHours({ cells }: { cells: UsagePayload["work_hours"] }) {
   };
 
   return (
-    <section className="panel sect hours" id="hours" aria-labelledby="hoursTitle">
-      <h2 id="hoursTitle">Prompts by hour</h2>
+    <div className="hours" id="hours">
       {!total ? <div className="empty">No prompts in this range.</div> : <>
         <p className="hint" id="hoursSum">Busiest hour: {DAYS[Math.floor(top / 24)]}s at {top % 24}:00{others(cellTies)}, {plural(max, "prompt")}{each(cellTies)}.
           Busiest day: {DAYS[day]}{others(dayTies)}, {plural(dayMax, "prompt")}{each(dayTies)}. {plural(total, "prompt")} in all. Weekdays and hours on this machine's clock.</p>
@@ -43,6 +43,10 @@ export function WorkHours({ cells }: { cells: UsagePayload["work_hours"] }) {
         </table>
         <div className="readout" aria-live="polite">{focused ? cellText(at.r, at.c) : ""}</div>
       </>}
-    </section>
+    </div>
   );
 }
+
+/** The heatmap folded behind a drawer: it filters nothing, so it stays out of the page's default flow. */
+export const HoursDrawer = ({ cells }: { cells: UsagePayload["work_hours"] }) =>
+  <Drawer id="d-hours" title="Prompts by hour" description="Prompts by weekday and hour, on this machine's clock"><WorkHours cells={cells} /></Drawer>;

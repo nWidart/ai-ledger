@@ -13,6 +13,7 @@ const fills = (tools: FillRow[], mcp: FillRow[] = [], main = 750_000, sub = 250_
   ({ main_bytes: main, subagent_bytes: sub, tools, mcp, largest: [] });
 const hash = () => new URLSearchParams(location.search.slice(1));
 const body = () => within(screen.getByRole("table")).getAllByRole("row").slice(1);
+const cells = (row: HTMLElement) => [...row.querySelectorAll("th[scope=row], td")].map(c => c.textContent);
 
 beforeEach(() => history.replaceState(null, "", "/context"));
 
@@ -35,6 +36,31 @@ describe("Contributors", () => {
     expect(other.textContent).toContain("100 KB"); // 40k + 30k + 20k + 10k
     expect(within(other).queryByRole("button")).toBeNull();
     expect(other.querySelector("[data-testid=ctr-range-bar]")).toBeNull();
+  });
+
+  it("shows all 14 rows on request, with no Other row, and folds them again", async () => {
+    renderApp(<Contributors fills={fills(many(14))} />);
+    await userEvent.click(screen.getByRole("button", { name: "Show all 14 tools" }));
+    expect(body()).toHaveLength(14);
+    expect(screen.queryByText(/^Other/)).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Show the top 10" }));
+    expect(body()).toHaveLength(11);
+  });
+
+  it("sorts by any column, the ten shown and the Other row following the sort", async () => {
+    const tools = many(12).map((r, i) => ({ ...r, calls: i + 1, max_bytes: (i + 1) * 1_000 })); // T12 has the most calls, T1 the largest total
+    renderApp(<Contributors fills={fills(tools)} />);
+    const names = () => body().map(r => r.querySelector("th")!.textContent);
+    expect(screen.getByRole("button", { name: /^Total result size/ }).closest("th")!.getAttribute("aria-sort")).toBe("descending");
+    expect(names()[0]).toBe("T1");
+    await userEvent.click(screen.getByRole("button", { name: "Calls" }));
+    expect(names().slice(0, 3)).toEqual(["T12", "T11", "T10"]);
+    expect(names().at(-1)).toBe("Other (2 tools)"); // T2 and T1, the fewest calls
+    await userEvent.click(screen.getByRole("button", { name: "Tool" }));
+    expect(names().slice(0, 3)).toEqual(["T1", "T10", "T11"]);
+    await userEvent.click(screen.getByRole("button", { name: "Largest" }));
+    expect(names()[0]).toBe("T12");
+    expect(cells(body()[0]!).at(-1)).toBe("12 KB");
   });
 
   it("has no Other row for exactly ten", () => {

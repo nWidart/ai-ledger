@@ -9,7 +9,7 @@ import { renderApp } from "../testing";
 
 describe("Drawer", () => {
   beforeEach(() => localStorage.clear());
-  it("has a real heading holding the toggle, and opens from it and remembers it", async () => {
+  it("has a real heading holding the toggle, opens from it, and starts closed again after a remount", async () => {
     const onToggle = vi.fn<(open: boolean) => void>();
     const { unmount } = renderApp(<Drawer id="d-tools" title="Tools" count="4" description="Calls and failures" onToggle={onToggle}><p>table</p></Drawer>);
     const h = screen.getByRole("heading", { level: 2, name: "Tools 4" }), toggle = within(h).getByRole("button");
@@ -20,10 +20,26 @@ describe("Drawer", () => {
     expect(onToggle).toHaveBeenCalledWith(true);
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
     expect(document.getElementById("d-tools")!.hasAttribute("data-open")).toBe(true);
-    expect(JSON.parse(localStorage.getItem("claude-usage-open")!)).toEqual(["d-tools"]);
+    expect(localStorage.getItem("claude-usage-open")).toBeNull();
     unmount();
     renderApp(<Drawer id="d-tools" title="Tools"><input aria-label="Search" /></Drawer>);
-    expect(screen.getByRole("button", { name: "Tools" }).getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByRole("button", { name: "Tools" }).getAttribute("aria-expanded")).toBe("false");
+  });
+  it("opens one at a time: opening one, by its toggle or openDrawer, closes the other", async () => {
+    const onA = vi.fn<(open: boolean) => void>();
+    renderApp(<><Drawer id="d-a" title="A" onToggle={onA}><p>a</p></Drawer><Drawer id="d-b" title="B"><p>b</p></Drawer></>);
+    const a = screen.getByRole("button", { name: "A" }), b = screen.getByRole("button", { name: "B" });
+    await userEvent.click(a);
+    await userEvent.click(b);
+    expect(a.getAttribute("aria-expanded")).toBe("false");
+    expect(b.getAttribute("aria-expanded")).toBe("true");
+    expect(onA).toHaveBeenLastCalledWith(false);
+    act(() => openDrawer("d-a"));
+    expect(a.getAttribute("aria-expanded")).toBe("true");
+    expect(b.getAttribute("aria-expanded")).toBe("false");
+    await userEvent.click(a);
+    expect(a.getAttribute("aria-expanded")).toBe("false");
+    expect(b.getAttribute("aria-expanded")).toBe("false");
   });
   it("toggles from the keyboard", async () => {
     renderApp(<Drawer id="d-keys" title="Keys"><p>table</p></Drawer>);
@@ -43,10 +59,11 @@ describe("Drawer", () => {
     expect((document.getElementById("d-lazy-body") as HTMLElement).hidden).toBe(true);
     expect(document.getElementById("d-lazy-body")!.textContent).toBe("row");
   });
-  it("renders a drawer saved as open with its body", () => {
+  it("starts closed even when an earlier version saved it as open", () => {
     localStorage.setItem("claude-usage-open", JSON.stringify(["d-saved"]));
     renderApp(<Drawer id="d-saved" title="Saved"><p>shown</p></Drawer>);
-    expect(screen.getByText("shown")).toBeTruthy();
+    expect(screen.queryByText("shown")).toBeNull();
+    expect(screen.getByRole("button", { name: "Saved" }).getAttribute("aria-expanded")).toBe("false");
   });
   it("keeps a control beside the title out of the toggle", () => {
     renderApp(<Drawer id="d-after" title="Goals" after={<button type="button">About</button>}><p>x</p></Drawer>);

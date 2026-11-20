@@ -14,8 +14,8 @@
 .pg-insights.loading > :not(.top) { opacity: .55; }
 @media (prefers-reduced-motion: no-preference) { .pg-insights > :not(.top) { transition: opacity .2s; } }
 
-/* Five outcomes in one ruled strip */
-.pg-insights .vitals { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1px; margin: 0 0 20px;
+/* Four outcomes in one ruled strip */
+.pg-insights .vitals { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; margin: 0 0 20px;
   background: var(--border); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
 .pg-insights .vital { padding: 16px 16px 16px 0; background: var(--bg); min-width: 0; }
 .pg-insights .vital + .vital { padding-left: 16px; }
@@ -28,13 +28,12 @@
 .pg-insights .vital.bad { color: inherit; } /* the shared .bad rule would redden the label too */
 @media (max-width: 56.25em) {
   .pg-insights .vitals { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .pg-insights .vital:first-child { grid-column: 1 / -1; }
-  .pg-insights .vital:nth-child(2), .pg-insights .vital:nth-child(4) { padding-left: 0; }
+  .pg-insights .vital:nth-child(odd) { padding-left: 0; }
 }
 @media (max-width: 32.5em) {
   .pg-insights .vital { padding: 10px 12px 10px 0; }
   .pg-insights .vital + .vital { padding-left: 12px; }
-  .pg-insights .vital:nth-child(2), .pg-insights .vital:nth-child(4) { padding-left: 0; }
+  .pg-insights .vital:nth-child(odd) { padding-left: 0; }
   .pg-insights .vital .v { font-size: 1.375rem; }
   .pg-insights .lede { font-size: 1.3125rem; }
 }

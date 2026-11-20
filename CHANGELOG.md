@@ -29,6 +29,13 @@ and versions follow [Semantic Versioning](https://semver.org/).
   - Past windows are always on the page, each limit with "avg N% unused · K hits", and replace the Left unused panel. Their table is behind **Show data table**.
   - The time range moved into the Past windows header. Limits has no project filter: "What a point buys" lists every project, and the Project page still shows one project's plan-limit figures.
   - The heading gives at most two figures, and the forecast method is behind **How measured**.
+- Shorter pages on Activity, Context, Errors and Insights. On the demo store at 1440×900, Activity drops from 2.2 to 1.6 screens and Context from 8 to 5.5, and every main chart starts on the first screen.
+  - Drawers start closed on every page load, and a page opens one at a time: opening a drawer closes the open one. Drawers you left open before this version start closed.
+  - Each section's hint is one line. Method text sits behind a **How measured** link at its end.
+  - Each heading states at most two figures, and no tile repeats them. Activity reads "N commits from M prompts"; a new **Sessions** tile holds sessions and active days, the **Prompts interrupted** note holds turns and tool calls per prompt, and the work chart sits above the tiles. Errors reads "N failed tool calls (X%)"; the Error rate tile is gone and a **Top type** tile is new. Context leaves the compacted sessions to its Growth tiles. Insights drops the Sessions analysed tile.
+  - Activity's Prompts by hour heatmap moves into a closed drawer.
+  - Context's tips are small cards in one row, their evidence and advice under **Evidence and advice**. The By tool and By MCP server tables are gone: the Largest contributors table gains Calls and Largest columns, sortable columns and **Show all N tools**.
+  - Insights shows the model-judged tag once, in the page heading.
 
 - Text follows the browser's default font size: font sizes are relative, chart labels scale with them, and nothing is cut off at 200%. In Chrome and Edge 146+ the dashboard also follows the operating system's text scale.
 

@@ -24,7 +24,7 @@ Insights has the shared project, time range, source and Include automated sessio
 
 | Control | What it does |
 | --- | --- |
-| Project, Time range | The shared filters. A session belongs to a range by its **start time**. [Activity](/ai-ledger/pages/activity/) counts a session with a request in the range, so the two totals can differ slightly. The sub line says so. |
+| Project, Time range | The shared filters. A session belongs to a range by its **start time**. [Activity](/ai-ledger/pages/activity/) counts a session with a request in the range, so the two totals can differ slightly. The sub line's How measured toggletip says so. |
 | Source | Source **Codex** shows no figures: "/insights analyses only Claude Code sessions." Codex writes no facets. With source All, Codex sessions never count in a facet figure. |
 | Include automated sessions | With it off, the facets of automated sessions count nowhere on the page. With it on, they count in every figure except the coverage figures, which never count automated sessions unless the project filter names their project. |
 | **Refresh** | The button in the navigation bar. It runs an ingest at once: the app reads new transcript lines and new `/insights` files into the store, and the page then shows them. |
@@ -41,24 +41,23 @@ In page order, when the view has analysed sessions.
 
 ### Coverage note
 
-**Shows** how much of the view `/insights` has analysed: "**150 of 400 Claude Code sessions** in this view analysed (38%). Each /insights run in Claude Code analyses more. The newest analysis was written Sat, Nov 7, 2:00 PM. Coverage by project and run." When none is missing, it reads "Every Claude Code session in this view with a transcript is analysed." With source All and Codex sessions in the view, a second line says they are not analysed.
+**Shows** how much of the view `/insights` has analysed: "**150 of 400 Claude Code sessions** in this view analysed (38%). Each /insights run in Claude Code analyses more. The newest analysis was written Sat, Nov 7, 2:00 PM. Coverage by project and run." When analysed sessions have no transcript in the store, the first sentence adds "; N more have facets but no transcript". When none is missing, it reads "Every Claude Code session in this view with a transcript is analysed." With source All and Codex sessions in the view, a second line says they are not analysed.
 
 **Controls** The last words link to the Coverage drawer.
 
 ### Heading and sub line
 
-**Shows** the view's answer. The heading counts only the fully achieved sessions, not the mostly achieved ones. It reads "**117 of 150** analysed sessions fully achieved their goal; **tooling** caused the most friction." It names the friction family with the highest count when the family holds two or more labels, else the most counted label as written, or "no friction reported". The sub line names the view and the counting rule above.
+**Shows** the view's answer. The heading counts only the fully achieved sessions, not the mostly achieved ones. It reads "**117 of 150** analysed sessions fully achieved their goal; **tooling** caused the most friction." It names the friction family with the highest count when the family holds two or more labels, else the most counted label as written, or "no friction reported". The sub line names the view and says the figures are model-judged: a model's reading of each session, not a measurement. Its How measured toggletip says which figures come from facets and gives the counting rule above.
 
 ### Outcomes at a glance
 
-<ThemedImage dark={vitals} light={vitalsLight} alt="Insights' Outcomes at a glance row: five figures from the analysed sessions." />
+<ThemedImage dark={vitals} light={vitalsLight} alt="Insights' Outcomes at a glance row: four figures from the analysed sessions." />
 
-**Shows** five figures:
+**Shows** four figures. The number of analysed sessions is in the heading, so no figure repeats it:
 
 | Figure | Detail line |
 | --- | --- |
-| Sessions analysed | "150 of 400 stored Claude Code sessions", plus ", N without transcript" and "; N with no clear outcome" when they apply. |
-| Fully or mostly achieved | The fully plus mostly achieved count and its share, with the split: "141 (94%)", "117 fully, 24 mostly". |
+| Fully or mostly achieved | The fully plus mostly achieved count and its share, with the mostly achieved count: "141 (94%)", "24 mostly", plus "; N with no clear outcome" when it applies. |
 | Partially | "some of the goal met". |
 | Not achieved | "goal abandoned or failed". |
 | Dissatisfied | "sessions where the user pushed back": sessions with a dissatisfied signal. |
@@ -77,7 +76,7 @@ In page order, when the view has analysed sessions.
 
 <ThemedImage dark={friction} light={frictionLight} alt="Insights' Friction categories panel (model-judged): what got in the way, by times reported." />
 
-**Shows** (model-judged) what got in the way, by times reported, with the sessions that reported it ("14", "9 sessions"). A session can carry several labels. Similar labels are grouped into **families** by keyword, in a fixed order where the first matching rule wins; a label no rule matches is a family of its own.
+**Shows** (model-judged) what got in the way, by times reported, with the sessions that reported it ("14", "9 sessions"). A session can carry several labels. Similar labels are grouped into **families** by keyword (the How measured toggletip says so), in a fixed order where the first matching rule wins; a label no rule matches is a family of its own.
 
 **Figures** A family of two or more labels shows an expander, "N labels", that lists the labels as `/insights` wrote them. A family's count is the sum of its labels' counts, and its sessions are the distinct sessions that carry any of them. Names read with spaces, not underscores. The list shows the first 12 rows and "Show all N friction families". With none, it reads "No friction reported in this view."
 
@@ -132,7 +131,7 @@ The chips and the badge on a card are buttons that set or clear their filter wit
 
 ## Drawers
 
-Closed by default; the page remembers the ones you leave open.
+Closed on every page load. One opens at a time: opening a drawer closes the open one.
 
 ### Goals
 
@@ -167,7 +166,7 @@ A session card's title opens that session's sheet over Insights. The filters sta
 
 ## Model-judged and measured
 
-Every figure that comes from a facet carries a **model-judged** tag next to it and in the page heading. The tag says the figure is a model's opinion of a transcript, not a measurement. Figures counted from transcripts (Session figures, Coverage, the measured line on a session card) carry no tag.
+The page heading carries the **model-judged** tag once; the panels and drawers do not repeat it. The tag says the figures are a model's opinion of a transcript, not a measurement. The sections marked (model-judged) on this page come from facets. Figures counted from transcripts (Session figures, Coverage, the measured line on a session card) are measured, and the sub line's How measured toggletip names them.
 
 ## Page states
 

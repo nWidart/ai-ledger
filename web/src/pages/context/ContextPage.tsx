@@ -2,14 +2,14 @@ import { useEffect } from "react";
 import { contextUrl, viewOf, type ContextPayload, type TipId } from "../../api";
 import { setOrder } from "../../colors";
 import { agentName, Filters, viewName } from "../../components/Filters";
+import { HowMeasured } from "../../components/HowMeasured";
 import { InsightCard } from "../../components/InsightCard";
 import { ProjectDot } from "../../components/ProjectDot";
 import { SectionIndex } from "../../components/SectionIndex";
 import { UsageSheets } from "../../components/sheets/UsageSheets";
 import { PageSkeleton } from "../../components/PageSkeleton";
 import { useLanding } from "../../components/useLanding";
-import { num, plural } from "../../format";
-import { setSearch, useSearchOf, useView } from "../../url";
+import { num, plural } from "../../format";import { setSearch, useSearchOf, useView } from "../../url";
 import { queries } from "../../queries";
 import { useApi } from "../../useApi";
 import { rebuildFacts, share } from "./context";
@@ -19,18 +19,17 @@ import { CostSection, Fills, Growth, Pressure, Starting } from "./sections";
 import { tipInsight, TipSessions } from "./tips";
 import "./context.css";
 
-/** The heading answers "how much context do sessions start with?": the view's median start, its share of the window and the
- *  sessions that compacted. Every source reads "session", never one agent's name. */
+/** The heading answers "how much context do sessions start with?": the view's median start and its share of the window, two
+ *  figures (the sessions that compacted are Growth's). Every source reads "session", never one agent's name. */
 function Lede({ d }: { d: ContextPayload }) {
-  const s = d.starting, c = d.coverage;
+  const s = d.starting;
   const where = d.project ? <> in <span className="proj"><ProjectDot project={d.project} />{d.project}</span></> : null;
   if (s.median == null) return <h1 className="lede" id="lede" tabIndex={-1} aria-live="polite">No {agentName(d.source)} session{where} with a measured start {d.range ? `in the last ${d.range} days` : "yet"}.</h1>;
   return <>
     <h1 className="lede" id="lede" tabIndex={-1} aria-live="polite">A typical session{where} starts with <span className="amt">{num(s.median)} tokens</span> of context
-      {s.window_share != null && <>, <span className="unit">{share(s.window_share)} of its window</span></>}.
-      <span className="delta">{c.compacted ? `${num(c.compacted)} of ${plural(c.sessions, "session")} compacted.` : "No session compacted."}</span></h1>
-    <p className="sub">The prompt tokens of each session's first turn, over {plural(s.sessions, "session")} with a measured start. Nothing is read from <code>CLAUDE.md</code>, <code>AGENTS.md</code> or any
-      configuration file; every figure comes from the transcripts. Token figures taken from tool result sizes are estimates.</p>
+      {s.window_share != null && <>, <span className="unit">{share(s.window_share)} of its window</span></>}.</h1>
+    <p className="sub">Every figure comes from the transcripts.<HowMeasured what="context">The prompt tokens of each session's first turn, over {plural(s.sessions, "session")} with a measured
+      start. Nothing is read from <code>CLAUDE.md</code>, <code>AGENTS.md</code> or any configuration file. Token figures taken from tool result sizes are estimates.</HowMeasured></p>
   </>;
 }
 
@@ -80,9 +79,9 @@ export function ContextPage() {
         ]} />
         <section className="tips sect" id="tips" aria-labelledby="tipsTitle">
           <h2 id="tipsTitle">Tips</h2>
-          <div className="hint">From fixed rules over this view's figures: thresholds are set in the app, and nothing is learned or generated. Most severe first.</div>
+          <div className="hint">Most severe first.<HowMeasured what="tips">From fixed rules over this view's figures: thresholds are set in the app, and nothing is learned or generated.</HowMeasured></div>
           {d.tips.length
-            ? <div className="insights">{d.tips.map(t => <InsightCard key={t.id} primary insight={tipInsight(t, openTip)} />)}</div>
+            ? <div className="insights tip-cards">{d.tips.map(t => <InsightCard key={t.id} insight={tipInsight(t, openTip)} />)}</div>
             : <p className="empty">Nothing stands out in this view.</p>}
         </section>
         {tip && <div className="drawers tip-drawer"><TipSessions tip={tip} onClose={closeTip} /></div>}

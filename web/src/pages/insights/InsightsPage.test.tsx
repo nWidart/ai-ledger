@@ -14,36 +14,48 @@ import { InsightsPage } from "./InsightsPage";
 import { renderApp, renderRouter } from "../../testing";
 
 const fixture = insights as InsightsPayload, none = empty as InsightsPayload;
-/** A closed drawer renders no body: show() starts these open, as a reload that left them open would. */
+/** A closed drawer renders no body, and a page opens one drawer at a time: once the page is up, lede() opens these in turn, so
+ *  each has rendered its body (kept, hidden, once closed) and the last stays open. A test reads a drawer by role after open(). */
 const DRAWERS = ["d-goals", "d-types", "d-figures", "d-coverage", "d-how"];
+let toOpen: string[] = [];
 const show = (d: InsightsPayload, hash = "?range=0", open = DRAWERS) => {
-  localStorage.setItem("claude-usage-open", JSON.stringify(open));
+  toOpen = open;
   const f = mockApi({ "/api/insights": () => d });
   history.replaceState(null, "", "/insights" + hash);
   renderApp(<InsightsPage />);
   return f;
 };
-const lede = () => screen.findByText((_, el) => el?.id === "lede" && !el.textContent!.startsWith("Loading"));
+const open = (id: string) => act(() => openDrawer(id));
+const lede = async () => {
+  const el = await screen.findByText((_, el) => el?.id === "lede" && !el.textContent!.startsWith("Loading"));
+  const ids = toOpen;
+  toOpen = [];
+  ids.forEach(open);
+  return el;
+};
 const section = (name: RegExp) => screen.getByRole("region", { name });
-const drawer = (id: string) => document.getElementById(id)!;
-const isOpen = (id: string) => drawer(id).hasAttribute("data-open");
+/** A drawer, opened first (which closes the open one) so its body can be read by role. */
+const drawer = (id: string) => { open(id); return document.getElementById(id)!; };
+const isOpen = (id: string) => document.getElementById(id)!.hasAttribute("data-open");
 
 describe("InsightsPage", () => {
   it("leads with the analysed counts, the unanalysed count and the newest facet", async () => {
     const f = show(fixture);
     expect((await lede()).textContent).toBe("1 of 3 analysed sessions fully achieved their goal; buggy code caused the most friction.");
     expect(f.mock.calls[0]![0]).toBe("/api/insights?range=0");
-    expect(screen.getByText(/A session counts here by its start time/).textContent).toContain("so the two totals can differ slightly.");
-    const sub = screen.getByText(/Figures tagged model-judged/).textContent!;
-    expect(sub).toContain("Figures tagged model-judged come from /insights facets: a model's reading of each session, not a measurement. Codex sessions have no facets.");
-    expect(sub).not.toContain("Every figure on this page");
+    const sub = screen.getByText(/Model-judged: a model's reading/);
+    expect(sub.textContent).toContain("Model-judged: a model's reading of each session, not a measurement.");
+    await userEvent.click(within(sub).getByRole("button", { name: "How measured: the judgments" }));
+    const how = within(sub).getByRole("status").textContent!;
+    expect(how).toContain("The figures come from /insights facets, except Session figures and Coverage, which are counted. Codex sessions have no facets.");
+    expect(how).toContain("A session counts here by its start time; Activity counts a session with a request in the range, so the two totals can differ slightly.");
     const cov = document.getElementById("coverage")!;
     expect(cov.getAttribute("role")).toBe("status");
-    expect(cov.textContent).toBe(`1 of 3 Claude Code sessions in this view analysed (33%). Each /insights run in Claude Code analyses more. The newest analysis was written ${when(fixture.coverage.newest_facet)}. Coverage by project and run.`);
+    expect(cov.textContent).toBe(`1 of 3 Claude Code sessions in this view analysed (33%); 2 more have facets but no transcript. Each /insights run in Claude Code analyses more. The newest analysis was written ${when(fixture.coverage.newest_facet)}. Coverage by project and run.`);
     expect(screen.getByText(/Codex session in this view is not/).textContent).toBe("1 Codex session in this view is not analysed: /insights covers Claude Code only.");
     const vitals = screen.getByRole("region", { name: "Outcomes at a glance" });
-    expect(within(vitals).getByText("Sessions analysed").parentElement!.textContent).toBe("3Sessions analysed1 of 3 stored Claude Code sessions, 2 without transcript; 1 with no clear outcome"); // abandoned: not a tile of its own
-    expect(within(vitals).getByText("Fully or mostly achieved").parentElement!.textContent).toBe("1 33%Fully or mostly achieved1 fully, 0 mostly");
+    expect(within(vitals).queryByText("Sessions analysed")).toBeNull(); // the lede states it
+    expect(within(vitals).getByText("Fully or mostly achieved").parentElement!.textContent).toBe("1 33%Fully or mostly achieved0 mostly; 1 with no clear outcome"); // abandoned: not a tile of its own
   });
 
   it("claims no full coverage for a view without analysed sessions", async () => {
@@ -88,20 +100,21 @@ describe("InsightsPage", () => {
     expect(document.getElementById("coverage")).toBeNull();
   });
 
-  it("tags every facet section heading as model-judged, and the page heading", async () => {
+  it("tags the page heading as model-judged once, and no section heading", async () => {
     show(fixture);
     await lede();
     expect(within(screen.getByRole("heading", { level: 1 })).getByText("model-judged")).toBeTruthy();
+    expect(screen.getAllByText("model-judged")).toHaveLength(1);
     const headings = screen.getAllByRole("heading", { level: 2 });
-    expect(headings.map(h => h.textContent)).toEqual(["Outcomes model-judged", "Friction categories model-judged", "Satisfaction and helpfulness model-judged",
-      "Analysed sessions model-judged", "Goals model-judged", "Session types model-judged", "Session figures", "Coverage", "How this works"]);
-    expect(within(section(/^Outcomes model/)).getByText(/judged by a model from the transcript/)).toBeTruthy();
+    expect(headings.map(h => h.textContent)).toEqual(["Outcomes", "Friction categories", "Satisfaction and helpfulness",
+      "Analysed sessions", "Goals", "Session types", "Session figures", "Coverage", "How this works"]);
+    expect(within(section(/^Outcomes$/)).getByText(/judged by a model from the transcript/)).toBeTruthy();
   });
 
   it("shows outcomes with share and count, an unknown outcome under its raw name, and names with spaces", async () => {
     show(fixture);
     await lede();
-    const rows = within(section(/^Outcomes model/)).getAllByRole("listitem").map(li => li.textContent);
+    const rows = within(section(/^Outcomes$/)).getAllByRole("listitem").map(li => li.textContent);
     expect(rows).toEqual(["Fully achieved33%1", "Mostly achieved0%0", "Partially achieved33%1", "Not achieved0%0", "Unclear0%0", "abandoned33%1"]);
     const fr = within(section(/^Friction/)).getAllByRole("listitem");
     expect(fr.map(li => li.textContent)).toEqual(["buggy code42 sessions2 labels ▾", "wrong approach31 session"]);
@@ -141,7 +154,7 @@ describe("InsightsPage", () => {
   it("explains how /insights works in a closed drawer, with the run sizes from the store", async () => {
     show(fixture, "?range=0", []);
     await lede();
-    const how = drawer("d-how");
+    const how = document.getElementById("d-how")!;
     expect(isOpen("d-how")).toBe(false);
     act(() => openDrawer("d-how"));
     expect(within(how).getByRole("heading", { level: 2 }).textContent).toBe("How this works");
@@ -176,7 +189,7 @@ describe("InsightsPage", () => {
     const trend = [{ week: "2026-10-26", n: 5, achieved: 4 }, { week: "2026-11-02", n: 2, achieved: 1 }];
     show({ ...fixture, trend });
     await lede();
-    const panel = section(/^Outcome trend model-judged/);
+    const panel = section(/^Outcome trend$/);
     expect(within(panel).getAllByRole("listitem").map(li => li.textContent)).toEqual(["Week of Oct 2680%4 of 5", "Week of Nov 250%1 of 2"]);
     expect(within(panel).getByText(/Weeks are by session start, and a week with few sessions swings/)).toBeTruthy();
     expect(panel.previousElementSibling).toBe(document.querySelector(".grid2"));
@@ -431,17 +444,17 @@ describe("InsightsPage", () => {
     it("filters from an outcome, a helpfulness and a goal row, by raw name", async () => {
       show(fixture);
       await lede();
-      await userEvent.click(row(section(/^Outcomes model/), /^Partially achieved/));
+      await userEvent.click(row(section(/^Outcomes$/), /^Partially achieved/));
       expect(hashOf()).toBe("?range=0&outcome=partially_achieved");
       expect(order()).toEqual([mid]);
       expect((within(logOf()).getByLabelText("Outcome") as HTMLSelectElement).value).toBe("partially_achieved");
-      await userEvent.click(row(section(/^Outcomes model/), /^abandoned/));
+      await userEvent.click(row(section(/^Outcomes$/), /^abandoned/));
       expect(hashOf()).toBe("?range=0&outcome=abandoned"); // one value per kind
       await userEvent.click(row(section(/Satisfaction/), /^essential/));
       expect(hashOf()).toBe("?range=0&outcome=abandoned&help=essential");
       expect(cards().length).toBe(0);
       await userEvent.click(row(section(/Satisfaction/), /^essential/));
-      await userEvent.click(row(section(/^Outcomes model/), /^abandoned/));
+      await userEvent.click(row(section(/^Outcomes$/), /^abandoned/));
       await userEvent.click(row(goals(), /^fix bug/));
       expect(hashOf()).toBe("?range=0&goal=fix_bug");
       expect(order()).toEqual([mid]);
@@ -450,7 +463,7 @@ describe("InsightsPage", () => {
     it("makes no button of a row with no sessions or of the satisfaction signals", async () => {
       show(fixture);
       await lede();
-      const out = section(/^Outcomes model/);
+      const out = section(/^Outcomes$/);
       expect(within(out).queryByRole("button", { name: /^Mostly achieved/ })).toBeNull();
       expect(within(out).getByText("Mostly achieved")).toBeTruthy();
       expect(within(section(/Satisfaction/)).queryByRole("button", { name: /^very helpful/ })).toBeNull();
@@ -509,7 +522,7 @@ describe("InsightsPage", () => {
     it("never makes a button of a row with no sessions, even when it is the active filter, but still marks it", async () => {
       show(fixture, "?range=0&outcome=mostly_achieved");
       await lede();
-      const out = section(/^Outcomes model/);
+      const out = section(/^Outcomes$/);
       expect(within(out).queryByRole("button", { name: /^Mostly achieved/ })).toBeNull();
       expect(within(out).getByText("Mostly achieved").closest("li")!.classList.contains("on")).toBe(true);
       expect(within(out).getByText("Fully achieved").closest("li")!.classList.contains("on")).toBe(false);
@@ -631,7 +644,7 @@ describe("InsightsPage", () => {
     it("shows the counted figures in a closed drawer that is not model-judged, and says what they are", async () => {
       show(fixture, "?range=0", []);
       await lede();
-      const d = drawer("d-figures");
+      const d = document.getElementById("d-figures")!;
       expect(isOpen("d-figures")).toBe(false);
       act(() => openDrawer("d-figures"));
       expect(within(d).getByRole("heading", { level: 2 }).textContent).toBe("Session figures");
@@ -755,8 +768,10 @@ describe("InsightsPage", () => {
       expect(within(goals()).getAllByRole("listitem").map(li => li.textContent)).toEqual([
         "fix bug21 session", "implement feature21 session2 labels ▾", "explore idea11 session", "write tests11 session"]); // a family of one label shows the label as written
       expect(within(fr()).getAllByRole("listitem").map(li => li.textContent)).toEqual(["buggy code42 sessions2 labels ▾", "wrong approach31 session"]);
-      for (const sec of [goals(), fr()]) expect(within(sec).getByText(/grouped into families by keyword.*as \/insights wrote them/)).toBeTruthy();
-      expect(within(fr()).getByRole("heading", { level: 2 }).textContent).toContain("model-judged");
+      for (const [sec, what] of [[goals(), "goals"], [fr(), "friction"]] as const) {
+        await userEvent.click(within(sec).getByRole("button", { name: `How measured: ${what}` }));
+        expect(within(sec).getByRole("status").textContent).toMatch(/grouped into families by keyword.*as \/insights wrote them/);
+      }
     });
 
     it("counts the 12-row cap in families", async () => {

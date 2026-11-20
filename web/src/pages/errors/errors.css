@@ -7,7 +7,6 @@
 .pg-errors .lede { margin: 0 0 8px; max-width: 34ch; font-size: clamp(1.5rem, 4vw, 2.5rem); line-height: 1.14;
   font-weight: 400; letter-spacing: -.025em; text-wrap: balance; color: var(--text-secondary); }
 .pg-errors .lede b { font-weight: 600; letter-spacing: -.04em; color: var(--text-primary); }
-.pg-errors .lede .dn { color: var(--good-text); font-weight: 500; } .pg-errors .lede .up { color: var(--critical-text); font-weight: 500; }
 .pg-errors .lede:focus { outline: none; }
 /* Desktop: the sentence runs wider, so the chart starts above the fold. */
 @media (min-width: 68.75em) { .pg-errors .lede { max-width: 56ch; font-size: clamp(1.5rem, 2.6vw, 2.25rem); } }

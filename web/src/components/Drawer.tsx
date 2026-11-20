@@ -1,17 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import "./Drawer.css";
 
-// Which drawers are open survives a reload, as before (one list for every page; ids are unique across pages).
-const KEY = "claude-usage-open";
-const load = (): string[] => { try { const v = JSON.parse(localStorage.getItem(KEY) || "[]"); return Array.isArray(v) ? v : []; } catch { return []; } };
-/** Whether the drawer was left open: how it starts. */
-export const savedOpen = (id: string) => load().includes(id);
-const save = (id: string, open: boolean) => {
-  const s = new Set(load());
-  if (open) s.add(id); else s.delete(id);
-  try { localStorage.setItem(KEY, JSON.stringify([...s])); } catch { /* storage off */ }
-};
-
 export interface DrawerProps {
   /** The element id: section links and openDrawer() find it by this. */
   id: string;
@@ -28,24 +17,27 @@ export interface DrawerProps {
   children: ReactNode;
 }
 
-// Mounted drawers by id, so openDrawer() can open one (and ask it to scroll and focus once its body shows).
-const drawers = new Map<string, (scroll: boolean) => void>();
+// Mounted drawers by id, so openDrawer() can open one (and ask it to scroll and focus once its body shows), and an opening
+// drawer can close the rest: one page is mounted at a time, so these are the page's drawers.
+const drawers = new Map<string, { open: (scroll: boolean) => void; close: () => void }>();
 
 /** A full table folded behind a title line: the title is a heading and its button the disclosure (aria-expanded), as the heading
  *  must not sit inside a <summary>. The body renders once the drawer has been open, and stays after, so a closed drawer
- *  costs no table. Pages that fetch on open use onToggle. */
+ *  costs no table. Pages that fetch on open use onToggle. Every drawer starts closed, and a page shows one open at a time:
+ *  opening one closes the others. */
 export function Drawer({ id, title, after, count, description, bodyClassName, onToggle, children }: DrawerProps) {
-  const [open, setOpen] = useState(() => savedOpen(id)), [seen, setSeen] = useState(open), [go, setGo] = useState<{ scroll: boolean } | null>(null);
-  const now = useRef(open), keep = useRef({ onToggle });
+  const [open, setOpen] = useState(false), [seen, setSeen] = useState(false), [go, setGo] = useState<{ scroll: boolean } | null>(null);
+  const now = useRef(false), keep = useRef({ onToggle });
   keep.current = { onToggle };
   const set = useCallback((o: boolean) => {
     if (o === now.current) return;
     now.current = o;
     setOpen(o); if (o) setSeen(true);
-    save(id, o); keep.current.onToggle?.(o);
+    if (o) drawers.forEach((d, k) => { if (k !== id) d.close(); });
+    keep.current.onToggle?.(o);
   }, [id]);
   useEffect(() => {
-    drawers.set(id, scroll => { set(true); setGo({ scroll }); });
+    drawers.set(id, { open: scroll => { set(true); setGo({ scroll }); }, close: () => set(false) });
     return () => { drawers.delete(id); };
   }, [id, set]);
   // openDrawer(): the body has rendered by now, so its first input exists.
@@ -75,7 +67,7 @@ export function onUserScroll(f: () => void): () => void {
 }
 /** Opens a drawer; scroll: also bring it into view and focus its first input (or its toggle). */
 export function openDrawer(id: string, scroll = false) {
-  drawers.get(id)?.(scroll);
+  drawers.get(id)?.open(scroll);
 }
 /** Whether the element is a drawer (a Drawer's root). */
 export const isDrawer = (el: Element | null): boolean => !!el?.classList.contains("drawer");
