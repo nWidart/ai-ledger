@@ -16,7 +16,7 @@
 //
 // node record.mjs quantize   re-encodes the PNGs already in site/src/assets/shots/ the same way, without recording.
 //   Steps: `uv sync` once, `npm ci` here and in site/ (sharp), then this. shots seeds the demo store itself (seed.py), starts serve.py and stops it
-//   at the end, and exits before any shot when port 8799 already answers, so no shot comes from a store you run yourself.
+//   at the end, and exits before any shot when port 8799 (or DEMO_PORT) already answers, so no shot comes from a store you run yourself.
 //   serve.py opens only demo.duckdb, so a shot cannot show your transcripts. live plays replay.py sessions, last of all.
 //   Shots are 1280px wide at device scale 1 (SCALE=2 doubles it), with reduced motion on so charts do not animate.
 import { chromium } from "playwright";
@@ -27,7 +27,9 @@ import { connect } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-const BASE = "http://127.0.0.1:8799";
+// DEMO_PORT moves the demo server off 8799, when another checkout already serves its demo store there.
+const PORT = Number(process.env.DEMO_PORT || 8799);
+const BASE = `http://127.0.0.1:${PORT}`;
 const SHOTS = new URL("../../site/src/assets/shots/", import.meta.url).pathname;
 const FPS = 12;
 const VIDEOS = new Set(["tour"]); // scenes that also get an MP4
@@ -140,12 +142,12 @@ const SCENES = {
     await h.wait(1800);
     await h.click(btn(page, "90d"), { pause: 1500 });
     await h.click(btn(page, "30d"), { pause: 1200 });
-    await h.click(sel(page, ".rowbtn", "infra-scripts"), { pause: 2400 });
-    await page.keyboard.press("Escape"); await h.wait(600);
     await h.scrollTo(page.locator("#spend"));
     await h.wait(1500);
-    await h.scrollTo(page.locator("#where"));
-    await h.wait(1500);
+    await h.scrollTo(page.locator("#projects"));
+    await h.wait(1200);
+    await h.click(sel(page, "#projects .cellbtn", "infra-scripts"), { pause: 2400 });
+    await page.keyboard.press("Escape"); await h.wait(600);
     await h.click(page.locator("#d-top .drawer-toggle"), { dx: 0.05, pause: 600 });
     await h.scrollTo(page.locator("#d-top"));
     await h.wait(1500);
@@ -280,7 +282,7 @@ const SCENES = {
 const SCALE = Number(process.env.SCALE ?? 1);
 const MAX = 1200; // a panel taller than this (a long table) is cropped to its first 1200px
 const listening = () => new Promise(done => {
-  const s = connect(8799, "127.0.0.1");
+  const s = connect(PORT, "127.0.0.1");
   s.once("connect", () => { s.destroy(); done(true); });
   s.once("error", () => done(false));
 });
@@ -303,8 +305,8 @@ const SHOT_PAGES = {
   activity: { url: "/usage?range=30", panels: [
     ["attention", "#attention"], ["vitals", "#vitals"], ["work", "#work"], ["hours", "#hours"]] },
   cost: { url: "/cost?range=30", panels: [
-    ["changed", "#changed"], ["highlights", "#insights"], ["spend", "#spend"], ["where", "#where"],
-    ["models", ".split > section.panel >> nth=1"]] },
+    ["overview", "#overview"], ["spend", "#spend"], ["projects", "#projects"], ["highlights", "#insights"],
+    ["models", ".split > section.panel"]] },
   context: { url: "/context?range=30", panels: [
     ["tips", "#tips"], ["starting", "#starting"], ["growth", "#growth"], ["pressure", "#pressure"], ["fills", "#fills"], ["cost", "#cost"]] },
   errors: { url: "/errors?range=30", panels: [
@@ -412,7 +414,7 @@ async function shots(wanted) {
   const all = [...Object.keys(SHOT_PAGES), "everywhere", "live"]; // live last: its sessions stay in the store
   const bad = wanted.filter(p => !all.includes(p));
   if (bad.length) { console.error(`Unknown page: ${bad.join(", ")}. Pages: ${all.join(" ")}`); process.exit(1); }
-  if (await listening()) { console.error("Port 8799 already answers. Stop that server first: the shots must come from the demo store, which this script serves itself."); process.exit(1); }
+  if (await listening()) { console.error(`Port ${PORT} already answers. Stop that server first: the shots must come from the demo store, which this script serves itself (or set DEMO_PORT).`); process.exit(1); }
   mkdirSync(SHOTS, { recursive: true });
   // Start from the seed: an earlier live run left its sessions in the store and in live/.
   execFileSync("uv", ["run", "seed.py"], { cwd: HERE, stdio: "inherit" });
@@ -420,15 +422,15 @@ async function shots(wanted) {
   const server = spawn("uv", ["run", "serve.py"], { cwd: HERE, stdio: ["ignore", "pipe", "ignore"], detached: true });
   const stop = () => { try { process.kill(-server.pid); } catch {} };
   let exited = false; server.once("exit", () => { exited = true; });
-  // serve.py prints "serving http://…" only after it has bound 8799, so another server that took the port while
+  // serve.py prints "serving http://…" only after it has bound its port, so another server that took the port while
   // seed.py ran can never pass for the demo store: serve.py then exits without that line.
-  let ready = false; server.stdout.on("data", d => { if (String(d).includes("serving http://127.0.0.1:8799/")) ready = true; });
+  let ready = false; server.stdout.on("data", d => { if (String(d).includes(`serving ${BASE}/`)) ready = true; });
   process.once("SIGINT", () => { stop(); process.exit(130); });
   let b;
   try {
     b = await chromium.launch({ executablePath: process.env.CHROMIUM });
     for (let i = 0; !ready || !(await listening()); i++) {
-      if (exited) throw new Error("serve.py exited: if something else holds port 8799, stop it; the shots must come from the demo store");
+      if (exited) throw new Error(`serve.py exited: if something else holds port ${PORT}, stop it; the shots must come from the demo store`);
       if (i > 240) throw new Error("serve.py did not start");
       await sleep(500);
     }
