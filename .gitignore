@@ -6,3 +6,5 @@ data/
 .venv/
 node_modules/
 dist/
+# The frontend build (npm run build in web/). CI builds it for the tests and the package.
+/src/ai_ledger/web/

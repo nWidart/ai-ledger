@@ -26,7 +26,7 @@ USAGE_DATA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures"
 
 
 class AppTest(unittest.TestCase):
-    """The pages and assets come from the committed build in src/ai_ledger/web; the host check guards all of them."""
+    """The pages and assets come from the frontend build in src/ai_ledger/web (npm run build in web/); the host check guards all of them."""
 
     @classmethod
     def setUpClass(cls):

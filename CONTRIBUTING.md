@@ -6,8 +6,10 @@ You need [uv](https://docs.astral.sh/uv/) and Node.
 
 ```bash
 uv sync                                    # Python 3.14 and dependencies
-cd web && npm install
+cd web && npm ci && npm run build         # build the frontend once; the app serves it from src/ai_ledger/web/
 ```
+
+Without the build, the app answers 503 and the Python tests fail.
 
 Never run the app against your live store while you develop. Copy the store and point the app at the copy:
 
@@ -29,7 +31,7 @@ cd web && npm run check                    # typecheck, lint, test and build
 openspec validate --specs --strict         # after a change under openspec/specs/
 ```
 
-Commit the build in `src/ai_ledger/web/` with every `web/src` change. CI fails when the build is stale.
+Do not commit the build in `src/ai_ledger/web/`. Git ignores it, and CI builds it for the tests and the package. Rebuild with `npm run build` in `web/` after a `web/src` change if you run the app or the Python tests.
 
 After a payload change, regenerate the page-test fixtures in `web/src/__fixtures__/`:
 

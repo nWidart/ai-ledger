@@ -19,7 +19,7 @@
 
 - [ ] 3.1 Add `grok` to `metrics.SOURCES`, so `source=grok` is accepted and `source=gemini` gets a 400. Extend the `test_metrics` fixture with a Grok session, and regenerate `web/src/__fixtures__/`. Verify that `tests/test_web_fixtures.py` passes and that a second run leaves the fixtures unchanged.
 - [ ] 3.2 Add `grok` to `Source` in `api.ts` and `SOURCES` in `hash.ts`, and label it "Grok" in `Filters`. Change the unknown-source test value from `grok` to `gemini`. Verify with `hash.test.ts` and a page test that picking Grok writes `source=grok` and narrows the figures.
-- [ ] 3.3 Run `npm run check` in `web/`, commit the rebuilt `web/dist/`, and verify that `tests/test_web_build.py` passes.
+- [ ] 3.3 Run `npm run check` in `web/`, then verify that `tests/test_web_build.py` passes. Do not commit the build: git ignores `src/ai_ledger/web/`.
 
 ## 4. Integration
 

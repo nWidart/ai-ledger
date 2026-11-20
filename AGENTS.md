@@ -40,7 +40,7 @@ Your goal is to complete the entire specification with maximum quality while min
 
 - `ingest` and `rebuild` need the app stopped: the app owns the store. The live store is `~/Library/Application Support/ai-ledger/ai-ledger.duckdb` on macOS (`$XDG_DATA_HOME/ai-ledger/` or `~/.local/share/ai-ledger/` on Linux). To test against real data, copy it and run `uv run ai-ledger --db <copy> --port <free port>`; never touch the live store.
 - The store holds full transcript content, including secrets. Never commit, print or paste it.
-- Commit `src/ai_ledger/web/` (the build) with every `web/src` change. `tests/test_web_build.py` and CI fail when the build is stale.
+- `src/ai_ledger/web/` is the Vite build. Git ignores it; CI builds it for the tests and the package. In a fresh clone or worktree, run `cd web && npm ci && npm run build` before `uv run ai-ledger` or the Python tests. Without it, pages answer 503.
 - After a payload change, regenerate the page-test fixtures in `web/src/__fixtures__/`: `uv run python -m unittest tests.test_web_fixtures`.
 - Both sources (Claude Code, Codex) map onto the same derived tables. A parser change in `store.py` or `codex.py` must keep that shape.
 - Plan features as OpenSpec changes in `openspec/changes/`; current specs live in `openspec/specs/`.
