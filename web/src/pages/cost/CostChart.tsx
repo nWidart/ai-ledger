@@ -114,8 +114,9 @@ export function CostChart({ d, metric, onMetric, hidden, onHidden, scale, onScal
       {segs.length > 0 && <g className="bar-seg" style={{ ["--i" as string]: Math.min(i, 60) }}>{segs.map((k, j) => {
         const v = p.v[k.k]!, top = a.y(base + v), h = v / a.yMax * a.ih;
         base += v;
-        // 2px surface gap between stacked segments; the top segment gets rounded corners.
-        const hh = Math.max(0, h - (j ? 2 : 0));
+        // 2px surface gap between stacked segments; the top segment gets rounded corners. A positive segment keeps at least 1px, so a
+        // thin share (1% of the plot is about 2px) is never drawn zero tall while its tooltip gives it.
+        const hh = Math.max(1, h - (j ? 2 : 0));
         const shape = (fill: string, cls?: string) => j === segs.length - 1 && hh > 4
           ? <path className={cls} d={`M${x},${top + hh} V${top + 3} q0,-3 3,-3 H${x + a.w - 3} q3,0 3,3 V${top + hh} Z`} fill={fill} />
           : <rect className={cls} x={x} y={top} width={a.w} height={hh} fill={fill} />;

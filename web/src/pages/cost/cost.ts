@@ -168,23 +168,25 @@ export function shares(v: Record<string, number>, kinds: readonly Kind[]): Recor
   return Object.fromEntries(kinds.map(k => [k.k, sum ? (v[k.k] || 0) / sum : 0]));
 }
 
-/** One billed token kind: its tokens and the share of all tokens, its estimated cost (null when unknown) and the share of all cost. */
+/** One billed token kind: its tokens and the share of all tokens, its estimated cost (null when unknown) and the share of all cost
+ *  (null when no request is priced, 0 when the priced requests cost nothing). */
 export interface TokenPair { key: "input" | "output" | "write" | "read"; label: string; c: string; tokens: number; tokenShare: number; cost: number | null; costShare: number | null;
   /** What the row holds beyond its name: thinking inside Output, the two lifetimes inside Cache write. */
   parts: { label: string; tokens: number; cost: number | null }[] }
 
 /** The view's token kinds as billed (thinking inside Output, the two cache write lifetimes joined), each with its share of tokens beside
- *  its share of the estimated cost. Costliest first, by tokens when no request is priced. */
+ *  its share of the estimated cost. Costliest first, by tokens when no request is priced or the priced ones cost nothing. A cost of
+ *  null is unknown (no request priced, as the API sends it); a cost of 0 is known (models priced at zero rates). */
 export function tokenPairs(t: Pick<Totals, "tokens" | "cost" | "input" | "output" | "thinking" | "cache_read" | "cache_5m" | "cache_1h" | "cost_input" | "cost_output" | "cost_cache_read" | "cost_cache_5m" | "cost_cache_1h">): TokenPair[] {
-  const all = t.tokens || 1, known = t.cost != null && t.cost > 0;
+  const all = t.tokens || 1, total = t.cost;
   const sum = (a: number | null, b: number | null) => (a == null || b == null ? null : a + b);
   const row = (key: TokenPair["key"], label: string, c: string, tokens: number, cost: number | null, parts: TokenPair["parts"] = []): TokenPair =>
-    ({ key, label, c, tokens, tokenShare: tokens / all, cost, costShare: known && cost != null ? cost / t.cost! : null, parts });
+    ({ key, label, c, tokens, tokenShare: tokens / all, cost, costShare: total == null || cost == null ? null : total > 0 ? cost / total : 0, parts });
   return [
     row("input", "Input", "var(--series-1)", t.input, t.cost_input),
     row("output", "Output + thinking", "var(--series-2)", t.output, t.cost_output, [{ label: "Thinking", tokens: t.thinking, cost: null }]),
     row("write", "Cache write", "var(--series-5)", t.cache_5m + t.cache_1h, sum(t.cost_cache_5m, t.cost_cache_1h),
       [{ label: "5-minute", tokens: t.cache_5m, cost: t.cost_cache_5m }, { label: "1-hour", tokens: t.cache_1h, cost: t.cost_cache_1h }]),
     row("read", "Cache read", "var(--series-4)", t.cache_read, t.cost_cache_read),
-  ].sort((a, b) => (known ? (b.cost ?? 0) - (a.cost ?? 0) : b.tokens - a.tokens));
+  ].sort((a, b) => (total ? (b.cost ?? 0) - (a.cost ?? 0) : b.tokens - a.tokens));
 }

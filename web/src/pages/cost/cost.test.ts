@@ -183,4 +183,11 @@ describe("tokenPairs", () => {
     expect(p.every(x => x.cost == null && x.costShare == null)).toBe(true);
     expect(p[0]!.key).toBe("read");
   });
+
+  it("keeps a known zero cost apart from an unknown one: a cost of 0 and a share of 0, by tokens", () => {
+    const free = { cost: 0, cost_input: 0, cost_output: 0, cost_cache_read: 0, cost_cache_5m: 0, cost_cache_1h: 0 };
+    const p = pairs(free);
+    expect(p.every(x => x.cost === 0 && x.costShare === 0)).toBe(true);
+    expect(p[0]!.key).toBe("read");
+  });
 });

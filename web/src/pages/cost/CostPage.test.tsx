@@ -10,7 +10,7 @@ import { openDrawer } from "../../components/Drawer";
 import { mockApi } from "../../components/sheets/testing";
 import { dayStamp, download } from "../../components/export";
 import { renderApp } from "../../testing";
-import { big } from "../../format";
+import { num } from "../../format";
 import { compareText, costDays, thinHistory } from "./cost";
 import { CostPage } from "./CostPage";
 
@@ -526,11 +526,14 @@ describe("CostPage", () => {
     await userEvent.click(within(drawer("d-tokens")).getByRole("button", { name: "Show data table" }));
     const table = within(drawer("d-tokens")).getByRole("table", { name: "Tokens and estimated cost by kind" });
     const cells = (name: string) => [...within(table).getByRole("rowheader", { name }).closest("tr")!.querySelectorAll("td")].map(c => c.textContent);
-    expect(cells("Cache read")).toEqual([big(8000000), "66.7%", "$0.80", "5.1%"]);
-    expect(cells("Output + thinking").slice(2)).toEqual(["$10", "63.3%"]);
-    expect(cells("Thinking (in output)")[0]).toBe(big(500000));
-    expect(cells("5-minute cache write")[0]).toBe(big(500000));
-    expect(cells("1-hour cache write")[0]).toBe(big(500000));
+    // Full token counts and dollars to the cent (not 8.0M or $10); shares to one decimal.
+    expect(cells("Cache read")).toEqual([num(8000000), "66.7%", "$0.80", "5.1%"]);
+    expect(cells("Output + thinking")).toEqual([num(1000100), "8.3%", "$10.00", "63.3%"]);
+    expect(cells("Input")).toEqual([num(2000100), "16.7%", "$2.00", "12.7%"]);
+    expect(cells("Cache write")).toEqual([num(1000000), "8.3%", "$3.00", "19.0%"]);
+    expect(cells("Thinking (in output)")).toEqual([num(500000), "", "", ""]);
+    expect(cells("5-minute cache write")).toEqual([num(500000), "", "$1.00", ""]);
+    expect(cells("1-hour cache write")).toEqual([num(500000), "", "$2.00", ""]);
     expect(within(table).queryByRole("rowheader", { name: "Cache write 5m" })).toBeNull();
   });
 
@@ -543,5 +546,27 @@ describe("CostPage", () => {
     expect(within(d).getByText(/share of cost is unknown/)).toBeTruthy();
     await userEvent.click(within(d).getByRole("button", { name: "Show data table" }));
     expect(within(d).getByRole("table", { name: "Tokens and estimated cost by kind" }).textContent).not.toMatch(/\$0/);
+  });
+
+  it("tells a known zero cost from an unknown one: models priced at zero rates", async () => {
+    const free = { cost: 0, cost_input: 0, cost_output: 0, cost_cache_read: 0, cost_cache_5m: 0, cost_cache_1h: 0 };
+    await show({ ...usage, totals: { ...usage.totals, ...free } }, ["d-tokens"]);
+    const d = drawer("d-tokens");
+    expect(within(d).getByText("The priced requests in this view cost $0.00, so no kind has a share of estimated cost.")).toBeTruthy();
+    expect(within(d).queryByText(/is priced|unknown/)).toBeNull();
+    expect(d.querySelector(".tp-row .sr")!.textContent).toMatch(/0\.0% of estimated cost$/);
+    // No fill for a zero share, on either side.
+    expect(d.querySelectorAll(".tp-r i")).toHaveLength(0);
+    await userEvent.click(within(d).getByRole("button", { name: "Show data table" }));
+    const table = within(d).getByRole("table", { name: "Tokens and estimated cost by kind" });
+    expect([...within(table).getByRole("rowheader", { name: "Cache read" }).closest("tr")!.querySelectorAll("td")].map(c => c.textContent).slice(2)).toEqual(["$0.00", "0.0%"]);
+  });
+
+  it("names the kind with the widest gap even when every gap is small", async () => {
+    // Shares of cost close to the shares of tokens (Input 16.7/19, Output 8.3/10, Cache read 66.7/66, Cache write 8.3/5): Cache write's
+    // 3.3 points are the widest gap.
+    const close = { cost: 10, cost_input: 1.9, cost_output: 1, cost_cache_read: 6.6, cost_cache_5m: .25, cost_cache_1h: .25 };
+    await show({ ...usage, totals: { ...usage.totals, ...close } }, ["d-tokens"]);
+    expect(within(drawer("d-tokens")).getByText("Cache write is 8.3% of tokens and 5.0% of estimated cost.")).toBeTruthy();
   });
 });

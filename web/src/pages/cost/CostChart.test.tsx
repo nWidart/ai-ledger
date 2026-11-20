@@ -278,6 +278,14 @@ describe("tokens chart: Share", () => {
     expect(document.querySelector("svg text[font-weight='600']")).toBeNull();
   });
 
+  it("draws a 1% share above zero height, under the 2px gap between segments", () => {
+    const thin: UsagePayload = { ...tokens, daily: [{ ...tokens.daily[0]!, ...empty, input: 98, output: 1, cache_read: 1 }] };
+    renderApp(<Host data={thin} />);
+    const segs = [...document.querySelectorAll(".bar-seg > rect:not(.partial)")];
+    expect(segs).toHaveLength(3);
+    for (const s of segs) expect(Number(s.getAttribute("height"))).toBeGreaterThan(0);
+  });
+
   it("reads a day's shares and total in the tooltip and the screen-reader text", () => {
     renderApp(<Host />);
     read(/^Token share/);
