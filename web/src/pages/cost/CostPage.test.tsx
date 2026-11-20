@@ -222,8 +222,36 @@ describe("CostPage", () => {
     await userEvent.click(screen.getByRole("button", { name: "Sort by cost again" }));
     expect(table().querySelector(".proj-note")).toBeNull();
     expect(document.activeElement).toBe(within(table()).getByRole("button", { name: "Spend" }));
-    expect(within(table()).getByText("Sorted by spend, highest first").getAttribute("role")).toBe("status");
+    expect((await within(table()).findByText("Sorted by spend, highest first")).getAttribute("role")).toBe("status");
     expect([...table().querySelectorAll("tbody tr")].map(r => r.getAttribute("data-v"))).toEqual(["d", "c", "b", "a"]);
+  });
+
+  it("says each sort in one polite region, a repeat and a new view's reset too", async () => {
+    serve(withProjects([proj("a", 6, 3), proj("b", 8, 4), proj("c", 10, 5), proj("d", 40, 5)]));
+    at();
+    renderApp(<CostPage />);
+    await loaded();
+    const status = () => table().querySelectorAll("[role=status]");
+    // What the region said: each text it took after being cleared (a screen reader reads a change of text, not a render).
+    const said: string[] = [], region = status()[0]!;
+    const watch = new MutationObserver(() => { if (region.textContent) said.push(region.textContent); });
+    watch.observe(region, { childList: true, characterData: true, subtree: true });
+    const step = async (run: () => Promise<void>) => { const n = said.length; await run(); await waitFor(() => expect(said.length).toBe(n + 1)); };
+    const compare = async () => userEvent.click(within(insights().getByText("Cost-per-commit outlier").closest("article")!).getByRole("button", { name: "Compare projects" }));
+    await insights().findByText("Cost-per-commit outlier");
+    try {
+      await step(compare);
+      await step(compare); // the same sort again is said again
+      await step(() => userEvent.click(screen.getByRole("button", { name: "Sort by cost again" })));
+      await step(compare);
+      await step(() => userEvent.click(screen.getByRole("button", { name: "Sort by cost again" })));
+      expect(status()).toHaveLength(1); // the note under Compare projects is not a second region
+      await step(() => userEvent.click(within(table()).getByRole("button", { name: "Project" })));
+      // A new view resets the sort, and the region says the sort it is now.
+      await step(async () => act(() => { history.pushState(null, "", "/cost?range=7"); dispatchEvent(new PopStateEvent("popstate")); }));
+      const cpc = "Sorted by cost per commit, highest first", spend = "Sorted by spend, highest first";
+      expect(said).toEqual([cpc, cpc, spend, cpc, spend, "Sorted by project, A to Z", spend]);
+    } finally { watch.disconnect(); }
   });
 
   it("sorts the project table by any column, no value last either way", async () => {
@@ -238,11 +266,11 @@ describe("CostPage", () => {
     expect(th("Spend").getAttribute("aria-sort")).toBeNull();
     await userEvent.click(within(th("Cost / commit")).getByRole("button"));
     expect(th("Cost / commit").getAttribute("aria-sort")).toBe("ascending");
-    expect(table().querySelector(".sr[role=status]")!.textContent).toBe("Sorted by cost per commit, lowest first");
+    await waitFor(() => expect(table().querySelector(".sr[role=status]")!.textContent).toBe("Sorted by cost per commit, lowest first"));
     expect(names().at(-1)).toBe("idle");
     await userEvent.click(within(th("Project")).getByRole("button"));
     expect(names()).toEqual(["a", "b", "idle"]);
-    expect(table().querySelector(".sr[role=status]")!.textContent).toBe("Sorted by project, A to Z");
+    await waitFor(() => expect(table().querySelector(".sr[role=status]")!.textContent).toBe("Sorted by project, A to Z"));
     // Every column sorts by keyboard too: Enter on the change header.
     within(th("Change vs prev 30d")).getByRole("button").focus();
     await userEvent.keyboard("{Enter}");

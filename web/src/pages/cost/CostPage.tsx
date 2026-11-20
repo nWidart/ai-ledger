@@ -47,7 +47,8 @@ export function CostPage() {
   useEffect(() => {
     if (lastView.current === viewKey) return;
     lastView.current = viewKey;
-    setSort(MATRIX_SORT); setSpot(null); setDay(""); setSmallOpen(false);
+    // A sort already the default stays the same object: the table's status says a sort only when it changes.
+    setSort(s => (s.key === MATRIX_SORT.key && s.desc === MATRIX_SORT.desc ? s : MATRIX_SORT)); setSpot(null); setDay(""); setSmallOpen(false);
   }, [viewKey]);
   const [metric, setMetricState] = useState<CostMetric>(() => stored(METRIC_KEY, isMetric, "cost"));
   const [hidden, setHiddenState] = useState<string[]>(() => stored(HIDDEN_KEY, isList, []));

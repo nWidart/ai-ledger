@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { UsagePayload } from "../../api";
 import { useColors } from "../../colors";
 import { motion } from "../../components/chart";
@@ -56,9 +56,17 @@ export function ProjectTable({ d, sort, onSort, spot: pin, onSpot, smallOpen, on
   const ps = [...head, ...small], spot = pin ? ps.find(r => r.project === pin.spot) : undefined;
   const maxCost = Math.max(...ps.map(r => r.cost || 0), 0) || 1, maxDelta = Math.max(...ps.map(r => Math.abs(r.delta ?? 0)), 0) || 1;
   const cols = prev ? 6 : 5;
-  // A sort says what it did, politely: aria-sort alone is read only when focus lands on the header.
-  const [said, setSaid] = useState("");
-  const sortBy = (s: SortBy<MatrixKey>) => { onSort(s); onSpot(null); setSaid(sortedText(s)); };
+  // A sort says what it did, politely: aria-sort alone is read only when focus lands on the header. The one region follows the
+  // table's sort whoever set it (a header, Compare projects, Sort by cost again, a new view's reset), each set is a new object, and
+  // the text is cleared first, so a sort that reads as the last one did is said again.
+  const [said, setSaid] = useState(""), mounted = useRef(false);
+  useEffect(() => {
+    if (!mounted.current) { mounted.current = true; return; }
+    setSaid("");
+    const f = requestAnimationFrame(() => setSaid(sortedText(sort)));
+    return () => cancelAnimationFrame(f);
+  }, [sort]);
+  const sortBy = (s: SortBy<MatrixKey>) => { onSort({ ...s }); onSpot(null); };
   const th = (k: MatrixKey, label: ReactNode, cls?: string, asc?: boolean, title?: string) =>
     <SortTh k={k} sort={sort} onSort={sortBy} asc={asc} className={cls} title={title}>{label}</SortTh>;
   // The outlier row in view and focused once the table shows it.
@@ -108,7 +116,7 @@ export function ProjectTable({ d, sort, onSort, spot: pin, onSpot, smallOpen, on
       </div>
       {prev && thinHistory(d) && <div className="chg-note">The previous {d.range} days have prompts on only {plural(d.previous!.active_days, "day")} against {num(d.totals.active_days)} now,
         so read a change as "more than before", not an exact growth.</div>}
-      {pin && <div className="proj-note" role="status"><span>Sorted by cost per commit, highest first.</span>
+      {pin && <div className="proj-note"><span>Sorted by cost per commit, highest first.</span>
         {spot && <span><ProjectName project={spot.project}><b>{spot.project}</b></ProjectName>: <b>{usd(spot.cpc)}</b> per commit over {plural(spot.p?.commits ?? 0, "commit")}
           {r ? `, ${mult(r)} the median project with 3+ commits (${usd(pin.med)})` : ""}.</span>}
         <button type="button" className="linkish" onClick={() => {
