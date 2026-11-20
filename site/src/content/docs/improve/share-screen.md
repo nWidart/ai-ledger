@@ -39,7 +39,7 @@ The table lists what each page can show with **Full text** off. Each row is abou
 | Activity, Cost, Context, Insights, Project | Session titles. When the agent wrote no title, the title is made from the session's first prompt. | A first prompt can quote a secret, a person or a client. | [Narrow every page to one project](#narrow-every-page-to-one-project) |
 | Activity | **Failed test runs**: the **Command** column. The Tool, MCP server and skill sheets: the input patterns and the recent calls. | A command can hold a token or a path. | [Close sheets and keep drawers folded](#close-sheets-and-keep-drawers-folded) |
 | Any page, session sheet | **Source** (the first prompt, folded), **Commits** (the commit commands, folded), the **Directory** and the **Resume** command (not folded), and the model's summary when the session has an `/insights` judgment | The directory and the resume command show your home folder path, which holds your user name. | [Close sheets and keep drawers folded](#close-sheets-and-keep-drawers-folded) |
-| Cost | **Most expensive sessions** and **Cost by project**; the plan line, which names your plan and its price | Session titles and project names. The CSV and copy buttons put the same names on the clipboard. | [Narrow every page to one project](#narrow-every-page-to-one-project) |
+| Cost | **Most expensive sessions** and **Project spend and change**; the plan gauge, which names your plan and its price | Session titles and project names. The CSV and copy buttons put the same names on the clipboard. | [Narrow every page to one project](#narrow-every-page-to-one-project) |
 | Context | **Largest tool results**: the **Input** column, a summary of the file, command or query of each result | A file path or a command can be private. | [Close sheets and keep drawers folded](#close-sheets-and-keep-drawers-folded) |
 | Project | **Largest overhead items**: MCP servers, memory files and skills by name, with each memory file's path on hover | Paths and server names. | [Close sheets and keep drawers folded](#close-sheets-and-keep-drawers-folded) |
 | Errors | Each example: the tool input, the error text and the tool's result. Incidents and **By message** rows. | An error example can quote a secret from a command or its output. No toggle hides it. | [Keep Errors at the type table](#keep-errors-at-the-type-table) |
@@ -70,7 +70,7 @@ Replace `<name>` with the project's name as the picker shows it. `/usage` is Act
 
 - Before you share, read that project's session titles in Activity's **Sessions** drawer, and its session cards on Insights. If one is not safe to show, do not show the pages that list session titles: Activity, Cost, Context, Insights and Project.
 - Leave **Include automated sessions** off.
-- Do not show Cost if your plan's name and price are private: the plan line names them.
+- Do not show Cost if your plan's name and price are private: the plan gauge names them.
 - Do not open the project picker or the command palette while you share: both list your other projects.
 - Do not show Limits with the **What used this window** drawer open: it names the top projects of each window, whatever the filter.
 - If no project is safe to show, do not share the app. Use the screenshots on this site instead.

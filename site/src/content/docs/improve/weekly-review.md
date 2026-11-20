@@ -60,9 +60,9 @@ Read the heading: the estimated cost and its comparison with the previous 7 days
 - a card carries the mark **▲ Watch** or **● Act**. The app sets **▲ Watch** for a project that costs over twice the median project per commit (the project holds at least 2% of the spend and has 3 or more commits), and for a peak day at 3 times the median day or more (with 5 or more days with spend). It sets **● Act** for a project at 4 times the median per commit or more.
 - Rule of thumb: the heading shows a multiple, which the app does from 2× up, and no **thin history** chip sits beside the previous period.
 
-For either, open [Spend less for the same output](/ai-ledger/improve/spend-less/). If one project carries the rise in **What changed**, open [Retro on one project](/ai-ledger/improve/project-retro/) for that project instead.
+For either, open [Spend less for the same output](/ai-ledger/improve/spend-less/). If one project carries the rise in the change column of **Project spend and change**, open [Retro on one project](/ai-ledger/improve/project-retro/) for that project instead.
 
-Read the line "On pace for about $X this month." as information. It is an estimate at API list prices, not a bill.
+Read the plan gauge's pace ("on pace for ~$X") as information. It is an estimate at API list prices, not a bill.
 
 ### 3. Context (2 minutes)
 

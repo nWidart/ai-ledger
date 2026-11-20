@@ -19,8 +19,8 @@ If you use only one of the two agents, this playbook does not apply. If one plan
 
 Compare like with like: the same project, the same range, and figures that both agents record the same way. Every page has the **Source** filter (All, Claude Code, Codex), and the navigation carries it to the next page.
 
-1. On [Cost](/ai-ledger/pages/cost/), set the range to **30d** and **Stack by** to **Agent**. Select the **Claude Code** key in the chart's legend: it sets the source filter. Open **Cost by project** and note the **Commits** of each project. Select the key again to clear it, then do the same with **Codex**. Pick a project where each agent has 5 commits or more (a rule of thumb). With fewer, one long session decides the figure.
-2. Pick that project in the project picker, and set the source to **Claude Code**. On Cost, write down **Cost / commit** and **Cost / prompt** from **Cost by project**.
+1. On [Cost](/ai-ledger/pages/cost/), set the range to **30d** and **Stack by** to **Agent**. Select the **Claude Code** key in the chart's legend: it sets the source filter. In **Project spend and change**, select each project: its sheet gives its commits. Select the key again to clear it, then do the same with **Codex**. Pick a project where each agent has 5 commits or more (a rule of thumb). With fewer, one long session decides the figure.
+2. Pick that project in the project picker, and set the source to **Claude Code**. On Cost, open **Tokens and cache** and write down **Per commit** and **Per prompt**.
 3. On [Activity](/ai-ledger/pages/activity/), write down the heading's commits and prompts, and the **Work health** tiles **Test runs passed** and **Prompts interrupted**.
 4. On [Context](/ai-ledger/pages/context/), write down **Added per prompt** and **Sessions with a compaction** in **Growth**.
 5. Set the source to **Codex** and read the same figures again on the same pages.
@@ -93,7 +93,7 @@ After 14 days of work in the project, set the range to **14d** and pick the proj
 
 | Figure | Where | Expected |
 | --- | --- | --- |
-| **Cost / commit** | Cost, **Cost by project**, with the source at **All** | Lower than your note: more of the work went to the agent that costs less per commit. |
+| **Per commit** | Cost, **Tokens and cache**, with the source at **All** | Lower than your note: more of the work went to the agent that costs less per commit. |
 | **Test runs passed** | Activity, **Work health**, with the source set to the agent that had the lower figure | Higher than your note, closer to the other agent's. |
 | Windows at limit | Limits, status strip, source at **All** | No chip reads **at limit** or **runs out**. |
 | **Left unused** | Limits, source at **All** | A smaller share for the provider you moved work to. |
@@ -103,7 +103,7 @@ If **Cost / commit** did not fall, check that the kind of task you moved is what
 ## Related
 
 - [Filters](/ai-ledger/everywhere/filters/): the **Source** filter and how it carries from page to page.
-- [Cost](/ai-ledger/pages/cost/): **Stack by** **Agent** and **Cost by project**.
+- [Cost](/ai-ledger/pages/cost/): **Stack by** **Agent**, **Project spend and change** and **Tokens and cache**.
 - [Limits](/ai-ledger/pages/limits/): the suggestion and the windows of each provider.
 - [How cost is estimated](/ai-ledger/concepts/cost-estimates/): why a cost is at API list prices.
 - [Context windows and plan limit windows](/ai-ledger/concepts/windows/): why a point of one provider is not a point of the other.

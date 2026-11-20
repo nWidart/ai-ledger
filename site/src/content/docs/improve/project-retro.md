@@ -12,7 +12,7 @@ At the end of a stretch of work on one project, find in 20 minutes the one figur
 Run a retro when one of these holds:
 
 - [Cost](/ai-ledger/pages/cost/), **What stands out**: the card **Cost-per-commit outlier** names the project. The app marks it **▲ Watch** when the project costs more than twice the median project per commit, and **● Act** from 4 times.
-- Cost, **What changed**: one project carries most of the rise against the previous period.
+- Cost, **Project spend and change**: one project carries most of the rise in the change column.
 - [Activity](/ai-ledger/pages/activity/), **Project metrics**: the project's **Errors / 100** or **Error loops** cell is tinted as worse. The app tints errors per 100 calls at 1.5 times the median project or more, and an error-loop count of 2 or more above the median. The table needs three or more projects to compare.
 - Rule of thumb: you closed a milestone on the project, such as a release or a finished feature, or a month has passed since its last retro.
 
@@ -113,7 +113,7 @@ If the figure did not move:
 
 - [Project](/ai-ledger/pages/project/): every block read here and how to open the page.
 - [Activity](/ai-ledger/pages/activity/#project-metrics): **Project metrics** and the project sheet.
-- [Cost](/ai-ledger/pages/cost/): **What stands out** and **What changed**.
+- [Cost](/ai-ledger/pages/cost/): **What stands out** and **Project spend and change**.
 - [Metric glossary](/ai-ledger/reference/glossary/#project): the figures that show only on Project.
 - [Cost estimates](/ai-ledger/concepts/cost-estimates/): why the cost figures are estimates.
 - [Weekly 15-minute review](/ai-ledger/improve/weekly-review/): the same pass for all projects.

@@ -21,7 +21,7 @@ Needs [uv](https://docs.astral.sh/uv/). Runs on macOS and Linux. Your data stays
 | Page | Shows |
 | --- | --- |
 | **Activity** | What got done per day or week, by project, and what needs your attention. It also shows the output speed per model second and how long a median session waits on the model and tools. |
-| **Cost** | Estimated spend at API list prices, per project, model and session, compared with your plan. |
+| **Cost** | Estimated spend at API list prices per day, and the month's pace against your plan. One table shows each project's trend, spend, change, cost per commit and cache hit. |
 | **Context** | How full the context window gets, how fast it grows, and what fills it. |
 | **Errors** | Failed tool calls by type, the time they cost, and a fix to paste into `CLAUDE.md` or `AGENTS.md`. |
 | **Limits** | Each plan limit window, what used it, and a forecast to its reset. |
