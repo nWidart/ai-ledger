@@ -30,9 +30,8 @@ Only the shots a page shows are kept: a shot no page references is deleted, and 
 | `errors-chart` | "Errors by type": failed tool calls over time. | Errors |
 | `errors-types` | "Error types": the table of types, counts and change. | Errors |
 | `errors-detail` | "Where to start": error types with a ready-made fix, and the fastest rising. | Errors, First tour, Kill repeated tool failures |
-| `limits-windows` | The four open plan windows: Claude Code and Codex, weekly and 5-hour, with pace and forecast. | Limits, First tour, Stop hitting plan limits |
-| `limits-unused` | "Left unused": plan left over at reset. | Limits |
-| `limits-history` | Past windows drawer, open. | Limits |
+| `limits-windows` | The four open plan windows: Claude Code and Codex, weekly and 5-hour, each with its pace cone chart and its headroom, pace and top project footer. | Limits, First tour, Stop hitting plan limits |
+| `limits-history` | "Past windows": a strip of bars per limit, with its average left unused and its hits. | Limits |
 | `insights-vitals` | The outcomes-at-a-glance row. | Insights |
 | `insights-outcomes` | "Outcomes", model-judged. | Insights, First tour |
 | `insights-friction` | "Friction categories", model-judged. | Insights |

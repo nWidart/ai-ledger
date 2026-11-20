@@ -9,97 +9,93 @@ Limits answers: **how much of each plan limit window is used, when will it run o
 import ThemedImage from "../../../components/ThemedImage.astro";
 import windows from "../../../assets/shots/limits-windows.png";
 import windowsLight from "../../../assets/shots/limits-windows-light.png";
-import unused from "../../../assets/shots/limits-unused.png";
-import unusedLight from "../../../assets/shots/limits-unused-light.png";
 import history from "../../../assets/shots/limits-history.png";
 import historyLight from "../../../assets/shots/limits-history-light.png";
 
 ## Filters
 
-Limits has the shared project, time range and source filters. See [Filters](/ai-ledger/everywhere/filters/).
+The page header has the shared source filter. The time range sits in the **Past windows** header, the part of the page it changes. See [Filters](/ai-ledger/everywhere/filters/).
 
-| Control | What it changes |
-| --- | --- |
-| Range | Past windows, Left unused and What a point buys. |
-| Source | Every section. Source Codex shows only Codex windows, history and value. |
-| Project | Only the commits-a-point table in What a point buys. Limits are per account, so open windows always show account-wide use. |
+| Control | Where | What it changes |
+| --- | --- | --- |
+| Source | Page header | Every section. Source Codex shows only Codex windows, past windows and value. |
+| Range | Past windows header | Past windows and What a point buys. Open windows ignore it. |
 
-There is no Include automated sessions control on Limits. Open windows ignore the range.
+Limits has no project filter and no Include automated sessions control. Limits are per account. A project picked on another page stays in the address for the other pages, and Limits ignores it. For one project's share of each window and its commits per point, see the **Plan limits** block on the [Project page](/ai-ledger/pages/project/).
 
 ## Panels
 
 ### Heading and summary
 
-**Shows** the window that will stop you first. The heading has three forms:
+**Shows** the window that will stop you first, in at most two figures. The heading has three forms:
 
-- "**Claude Code weekly** is at its limit (100% used) until Sat, Nov 7, 2:00 PM." A window is at its limit. If several are, it names the one that resets last.
-- "**Claude Code weekly**, at 90% now, reaches 100% Sat, Nov 7, 2:00 PM, before its reset Sun, Nov 8, 6:00 AM." No window is at its limit and at least one is forecast to reach 100%. It names the one that does so first.
-- "No limit runs out at the current pace. Fullest: **Claude Code weekly**, at 41% now, about 66% when it resets Sun, Nov 8, 6:00 AM." Every forecast ends below 100%. It names the window with the highest forecast at reset.
+- "**Claude Code weekly** is at its limit until Sat, Nov 7, 2:00 PM." A window is at its limit. If several are, it names the one that resets last.
+- "**Claude Code weekly**, at 90% now, runs out Sat, Nov 7, 2:00 PM." No window is at its limit and at least one is forecast to reach 100% before its reset. It names the one that does so first.
+- "No limit runs out at the current pace. Fullest: **Claude Code weekly**, about 66% at reset." Every forecast ends below 100%. It names the window with the highest forecast at reset. A window without a forecast reads "at 41% now" instead.
 
 With no window, the heading reads "No plan limits seen yet." Times read as "Sat, Nov 7, 2:00 PM", in your time zone.
 
 **Figures** Under the heading:
 
-- **Status strip** ("Open windows at a glance"): one chip per open window, in payload order. A chip shows the window name, the percent used now ("–" with no reading) and "resets in". A window at its limit or forecast to reach 100% before its reset has the warning tone and the text **at limit** or **runs out**. An estimated chip carries **est.**. With no open window, the strip does not show.
-- **Suggestion**: "Send work to Codex: about 70% of its weekly limit would go unused (resets …)". It names the provider with the most headroom at the current pace. It never names a provider that has a window at its limit or forecast to reach 100%, and it shows only when at least two providers have a forecast.
+- **Suggestion**: "Send work to Codex: about 70% of its weekly limit would go unused." It names the provider with the most headroom at the current pace. It never names a provider that has a window at its limit or forecast to reach 100%, and it shows only when at least two providers have a forecast.
 - **Data line** (one per provider): "measured" or "estimated", the time of the last poll (or last reading, for a provider that is not polled) and how long ago. A provider with no reading says "no limit readings yet". A chip flags a problem: **polling failing**, **token expired** or **old** (the last reading is older than twice the poll interval). A reading from a provider that is not polled counts as estimated once it is over an hour old. On Linux, the **polling failing** chip on Claude Code is expected: see [Where the data comes from](#where-the-data-comes-from).
 
 ### Open windows
 
-<ThemedImage dark={windows} light={windowsLight} alt="Limits' open windows: Claude Code and Codex, weekly and 5-hour, each a card with a usage chart, the pace and the forecast at the reset." />
+<ThemedImage dark={windows} light={windowsLight} alt="Limits' open windows: Claude Code and Codex, weekly and 5-hour, each a card with a pace cone chart and a footer of headroom, pace and top project." />
 
-**Shows** one card per open window, whole account, regardless of the range. The hint above the cards says the range and project filters do not apply. The chart key lists measured, reading, estimated, forecast, last 24 h pace (only when a chart shows it), likely range, now, limit, and plan change (only when a chart shows one).
+**Shows** one card per open window, whole account, regardless of the range. The hint above the cards is one line. The forecast method sits behind **How measured**. The charts need no key.
 
 **Figures** A card shows, top to bottom:
 
 | Part | What it says |
 | --- | --- |
-| Heading | The window name and the plan (for example "Claude Code weekly · max"), the percent used now, and a **measured** or **estimated** chip. |
-| Chart | The percent used so far, the forecast to the reset with its likely range, a 100% line, and the reset time. A solid line with dots is measured, a dotted line is estimated, and a dashed line is the forecast. Plan changes are marked. |
-| Caption | "At its limit until …", "Reaches 100% at … (between … and …)", or "Resets first at about 66% (60–85%)". With no calibration it says why there is no forecast. A **flat rate** chip marks a forecast made at a flat rate: a provider with fewer than 14 active days in the last 8 weeks. |
-| Last-24-hours line | "If the last 24 hours continue: reaches 100% at …" (warning tone) or "… about 41% at its reset". It carries your use over the last 24 hours on to the reset. It does not show for a window at its limit or without a forecast. |
-| Share line | For a scoped limit: "This limit is 50% of the weekly allowance; 21% of the weekly allowance is used through it". |
-| Surfaces line | For a weekly window with a breakdown: "All of this week's use so far came from Claude Code", or "This week's use by surface: Chats 60%, Claude Code 40%". No line when every surface is 0%. A surface under 0.5% reads "\<1%". |
-| Pace line | "80% left · 3d 12h to reset · usual pace 6.8% a day; this window 5.1% a day over its last day; 23% a day would use it all · behind pace: about 59% would go unused". The verdict is **ahead of pace: runs out before the reset** when the forecast reaches 100%, else **behind pace: about N% would go unused**, where N is 100 minus the forecast percent at the reset. Windows shorter than a day read per hour. A window at its limit has no pace. |
-| Cap in money | "100% ≈ $420 a week at list prices, from 37 points over 2 windows". Shows only for a calibrated window. |
-| What used this window | A drawer, closed by default. |
+| Header | The window name and the plan (for example "Claude Code weekly · max"), the percent used now ("–" with no reading), an **est.** chip when that percent is estimated, and one status: **runs out Sat, Nov 7, 2:00 PM** or **at its limit until …** (critical tone with a ▲), "about 66% at reset", or "no forecast". |
+| Chart | Four things. The **line** is the percent used so far: solid where measured, faded where estimated. The shaded **cone** is the forecast to the reset, from its low to its high bound, around its middle. It turns amber when its high bound reaches 100% before the reset. The **now** tick marks the present. The faint straight **safe-pace line** runs from now at the percent used now to 100% at the reset: the pace that would use the window exactly. A cone steeper than that line runs hot. A 100% grid line and the reset time frame the plot. A plan change is a short tick at the top labelled "plan: max". |
+| Footer | Three columns. **Headroom**: "12% left · 1d 17h", the percent left and the time to reset. **Pace**: "18%/d vs 7%/d safe", the forecast's pace against the safe pace, in the critical tone with a ▲ when it is above it. Windows shorter than a day read per hour ("%/h"). A window at its limit or without a forecast shows "–". **Top**: the project that used most of the window and its share ("ai-ledger 54%"), or "–". |
+| Details | A button in the footer that opens the rest of the card. See below. |
 
-**How the forecast is made.** The forecast follows your activity profile by hour of day, pooled across providers. Once a window has been open for a seventh of its length (at most a day), the forecast pace is halfway between your usual pace and the window's own pace over that last seventh, and the likely range covers both. A percent at reset from 99.5% up to 100% reads 99%, so "100%" appears only for a line that reaches it.
+**Details** holds, top to bottom:
+
+- **Caption**: "At its limit until …", "Reaches 100% at … (between … and …)", or "Resets first at about 66% (60–85%)". With no calibration it says why there is no forecast. A **flat rate** chip marks a forecast made at a flat rate: a provider with fewer than 14 active days in the last 8 weeks.
+- **Last-24-hours line**: "If the last 24 hours continue: reaches 100% at …" (warning tone) or "… about 41% at its reset". It does not show for a window at its limit or without a forecast.
+- **Paces**: "Usual pace 6.8% a day; this window 5.1% a day over its last day; 23% a day would use it all · behind pace: about 59% would go unused". The verdict is **ahead of pace: runs out before the reset** when the forecast's pace is above the safe pace, else **behind pace: about N% would go unused**, where N is 100 minus the forecast percent at the reset.
+- **Share line**, for a scoped limit: "This limit is 50% of the weekly allowance; 21% of the weekly allowance is used through it".
+- **Surfaces line**, for a weekly window with a breakdown: "All of this week's use so far came from Claude Code", or "This week's use by surface: Chats 60%, Claude Code 40%". No line when every surface is 0%. A surface under 0.5% reads "\<1%".
+- **Cap in money**: "100% ≈ $420 a week at list prices, from 37 points over 2 windows". Shows only for a calibrated window.
+- **What used this window**. See below.
+- **Chart data**: a table of up to 12 times from the window's start to its reset, plus now. Each row gives the time, the percent (measured, estimated, or the forecast with its likely range) and, after now, the safe-pace percent. See [Data tables](/ai-ledger/everywhere/data-tables/).
+
+**How measured** says how the figures are made. The forecast follows your activity profile by hour of day, pooled across providers. Once a window has been open for a seventh of its length (at most a day), the forecast pace is halfway between your usual pace and the window's own pace over that last seventh, and the cone covers both. A percent at reset from 99.5% up to 100% reads 99%, so "100%" appears only for a line that reaches it. Estimates count local agent work only.
 
 **Controls**
 
-- **Reading a chart.** Point at the chart to read the nearest point: "Sat, Nov 7, 2:00 PM · 42% · measured", or for the forecast "… · forecast 71% (60–85%)", ending in " · last 24 h pace 72.3%" where that line exists. By keyboard, the chart is one tab stop: focus reads now, Left and Right move between points, Home and End go to the first and last, and Escape clears. Keys with Alt, Ctrl, Meta or Shift held are left to the browser.
-- **What used this window.** The summary ends with the top project and its share ("What used this window · ai-ledger 54%"). Opened, it lists the top three projects and the top three models by estimated cost, each with its share and, for a calibrated window, its points ("≈ 12.3 points"). Hover a row for its cost at API list prices. The note says only counted local agent use at list prices is in it. The drawer counts use from the window's start to now, for the provider's agent and the models the limit covers, whatever the page filters say. Each project links to [Cost](/ai-ledger/pages/cost/) for that project, the window's provider and automated sessions included, at the smallest range preset (7, 14, 30 or 90 days, else all time) that covers the window's start. The link names that range. **Open in Cost** does the same with no project. A window with no counted use since its start has no drawer.
-
-### Left unused
-
-<ThemedImage dark={unused} light={unusedLight} alt="Limits' Left unused panel: the average share of each plan limit still unused when its windows reset." />
-
-**Shows** for each provider and window kind, the average share still unused when the windows reset, over windows that ran their full length, in the selected range.
-
-**Figures** Each row reads "60% unused" with "4 windows" (and ", 1 estimated" where some are). The hint says how many windows that ended early, by an early reset or a plan change, are left out. A model-scoped window with nothing used and no counted use of its model is skipped. With none, it reads "No full-length windows in this range."
-
-## Drawers
-
-The links in the drawers open [Cost](/ai-ledger/pages/cost/).
+- **Last 24 h pace.** A toggle above the cards, shown when any window has the scenario. It is off on every load. On, each chart that has the scenario draws a second, dash-dot line: your use over the last 24 hours carried on to the reset. It does not change the heading, the card header, the footer or the suggestion.
+- **Details.** Opens and closes the card's Details. It is closed on every load.
+- **Reading a chart.** Point at the chart to read the nearest point: "Sat, Nov 7, 2:00 PM · 42% · measured", or for the forecast "… · forecast 71% (60–85%)". With **Last 24 h pace** on, a forecast point ends in " · last 24 h pace 72.3%". By keyboard, the chart is one tab stop: focus reads now, Left and Right move between points, Home and End go to the first and last, and Escape clears. Keys with Alt, Ctrl, Meta or Shift held are left to the browser.
+- **What used this window**, in Details, lists the top three projects and the top three models by estimated cost, each with its share and, for a calibrated window, its points ("≈ 12.3 points"). Hover a row for its cost at API list prices. The note says only counted local agent use at list prices is in it. The drawer counts use from the window's start to now, for the provider's agent and the models the limit covers, whatever the page filters say. Each project links to [Cost](/ai-ledger/pages/cost/) for that project, the window's provider and automated sessions included, at the smallest range preset (7, 14, 30 or 90 days, else all time) that covers the window's start. The link names that range. **Open in Cost** does the same with no project. A window with no counted use since its start has no list, and its footer's Top reads "–".
 
 ### Past windows
 
-<ThemedImage dark={history} light={historyLight} alt="Limits' Past windows drawer, open: the closed windows of the range, newest first." />
+<ThemedImage dark={history} light={historyLight} alt="Limits' Past windows panel: a strip of bars per limit with its average left unused and its hits, and the range in the header." />
 
-**Shows** the closed windows of the selected range, newest first. The drawer is closed by default and headed **Past windows** with the number of closed windows.
+**Shows** the closed windows of the selected range, one strip per limit, with the time range in the panel's header. The panel is always on the page.
 
 **Figures**
 
 - **Strips.** One row per limit with closed windows, in the order of the open windows (provider, then the longest window first, then scope). Each bar is one closed window, oldest left, as tall as its final percent; a window at 0% still shows. A strip shows at most the 60 most recent windows and says "60 most recent of 143; the table lists all" when it holds more. A strip too wide for its box scrolls inside the box.
+- **Summary**, under each limit's name: "avg 60% unused · 2 hits". The average is the share still unused at reset, over the limit's windows in the range that ran their full length. The hits count every closed window in the range that hit its limit, not only the bars shown. Hover the summary to see how many windows the average covers, how many are estimated, and how many ended early (by an early reset or a plan change) and are left out. A limit whose windows all ended early reads "no full-length windows". A model-scoped window with nothing used and no counted use of its model is skipped.
 - **Key** ("Bar key"): red is **hit its limit**, hatched is **ended early**, outlined is **estimated**. A bar can carry all three. Each bar is a button whose name says the same in words, for example "Codex 5-hour, ended Sat, Nov 7, 2:00 PM: 100%, hit its limit for 4h 15m".
 - **Curve panel.** Pick a bar to open that window's curve under the strips: the window name and plan, its start and end, its final percent and its notes, then the chart, without a forecast or a "now" line. It reads "Loading the curve…" while it loads. If the fetch fails it says so and offers **Retry**. The picked window is not in the page address. A filter that leaves the window out closes the panel.
-- **Closed windows table.** Columns: Window, Plan, Ended, Final, At 100% for, Note. The picked window's row is marked. Note reads "ended early by a plan change …" or "reset early", and an **estimated** chip for a window rebuilt from counted usage. With none, it reads "No closed windows in this range." See [Data tables](/ai-ledger/everywhere/data-tables/).
+- **Closed windows table**, behind **Show data table** (closed on every load). Columns: Window, Plan, Ended, Final, At 100% for, Note. Newest first. The picked window's row is marked. Note reads "ended early by a plan change …" or "reset early", and an **estimated** chip for a window rebuilt from counted usage. With no closed window, the panel reads "No closed windows in this range." See [Data tables](/ai-ledger/everywhere/data-tables/).
 
 **Controls**
 
+- **Range** (7d, 14d, 30d, 90d, All) in the header: sets the range for Past windows and What a point buys.
 - **Keyboard.** A strip is one tab stop. Left and Right move between bars, Home and End go to the first and last, and Enter or Space picks the focused bar.
 - **Close** (or picking the bar again) closes the curve panel and returns focus to the bar.
+
+## Drawers
 
 ### What a point buys
 
@@ -107,8 +103,8 @@ The links in the drawers open [Cost](/ai-ledger/pages/cost/).
 
 **Figures**
 
-- For each calibrated limit, a heading "Claude Code weekly: $8.00 a point" (with the plan, and "an earlier plan" when the limit belongs to one) and a table **Points by model**: Model, Points used, Tokens a point. A model without a price is marked **unpriced** and has no points. Points used count only use inside the limit's own windows on its plan, over the range.
-- **Commits a point, by project**: Project, Limit, Points, Commits, Commits a point. Projects that used at least one point get a row; the rest fold into one "smaller projects" row. With a project filter, the table shows only that project. A figure without enough data reads as not available.
+- For each calibrated limit, a heading "Claude Code weekly: $8.00 a point" (with the plan, and "an earlier plan" when the limit belongs to one) and a table **Points by model**: Model, Points used, Tokens a point. A model without a price is marked **unpriced** and has no points. Points used count only use inside the limit's own windows on its plan, over the range set in Past windows.
+- **Commits a point, by project**: Project, Limit, Points, Commits, Commits a point. Projects that used at least one point get a row; the rest of each provider's fold into one "smaller projects" row. A figure without enough data reads as not available.
 - With no calibrated limit, it reads "No calibrated limit yet."
 
 ## Sheets
@@ -117,7 +113,7 @@ Limits has no sheets.
 
 ## Navigation alert
 
-A dot on the Limits tab, on every page, marks an alert. With no dot, no open window is in alert. The alert names the one worst open window, in this order. The dot's own tone is in brackets; it is separate from the chip tones in the status strip above.
+A dot on the Limits tab, on every page, marks an alert. With no dot, no open window is in alert. The alert names the one worst open window, in this order. The dot's own tone is in brackets.
 
 1. **At its limit** (critical dot): the window that resets last of those at their limit.
 2. **Runs out** (critical dot): the window forecast to reach 100% soonest, before its reset.
@@ -140,13 +136,14 @@ A window with no measured reading is estimated: the last reading, plus the count
 
 | Figure | Meaning |
 | --- | --- |
-| Percent used | The share of the window's allowance used now. **measured** comes from a poll or a reading; **estimated** is rebuilt from counted usage. |
-| Resets in / resets | The time to the window's reset, and the reset time. |
-| Forecast, likely range | Where the percent used goes by the reset, from your hourly activity profile. The range covers your usual pace and the window's own recent pace. |
-| Reaches 100% at | The forecast time the line crosses 100%, strictly before the reset. Reaching exactly 100% at the reset is no hit. |
-| Last 24 h pace | The forecast if your use over the last 24 hours continued to the reset. It does not change the heading, the status strip, the caption or the suggestion. |
+| Percent used | The share of the window's allowance used now. **measured** comes from a poll or a reading; **estimated** (**est.**) is rebuilt from counted usage. |
+| Headroom | The percent left and the time to the window's reset. |
+| Forecast cone | Where the percent used goes by the reset, from your hourly activity profile. Its middle is the forecast; its edges cover your usual pace and the window's own recent pace. Amber when its high edge reaches 100% before the reset. |
+| Runs out / Reaches 100% at | The forecast time the middle line crosses 100%, strictly before the reset. Reaching exactly 100% at the reset is no hit. |
+| Last 24 h pace | The forecast if your use over the last 24 hours continued to the reset. It does not change the heading, the card header, the footer or the suggestion. |
 | Usual pace | Your average rate for this provider, weighted toward recent weeks. |
-| Pace that would use it all | The pace that ends at exactly 100% at the reset. |
+| Safe pace | The pace that ends at exactly 100% at the reset: the slope of the safe-pace line, and the "safe" figure in the footer. Called "would use it all" in Details. |
+| Avg unused | The average share still unused at reset, over a limit's full-length windows in the range. |
 | Cap in money | The calibrated cost of one percent, times 100, at API list prices. It rests on the points and windows named in the line. |
 | Points | Percentage points of a limit. |
 | Early end | A window closed before its scheduled reset, by an early reset or a plan change. |

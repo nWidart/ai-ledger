@@ -35,7 +35,7 @@ Find out which of five causes you have. Keep the filters of the signs: **30d**, 
 3. Open the drawer **Tokens and cache**. Write down **Cache hit**, **Subagent cost**, **Per prompt** and **Per commit**. You need them in Verify.
 4. Open [Context](/ai-ledger/pages/context/) with the same filters. If the tip **The prompt cache breaks within sessions** shows, read its evidence line **Breaks by cause**: model switches, expired or other. If the tip **Requests are priced on the long-prompt tier** shows, read **Long-prompt thresholds**: the prompt size above which each model charges more.
 5. Back on Cost, open the drawer **Most expensive sessions**. Look for sessions with a long **Active** time, many **Prompts** and few **Commits**.
-6. For the plan gauge, open [Limits](/ai-ledger/pages/limits/) with the range at **90d** and read **Left unused** for each weekly limit.
+6. For the plan gauge, open [Limits](/ai-ledger/pages/limits/) with the range at **90d** and read the **avg N% unused** summary in **Past windows** for each weekly limit.
 
 import ThemedImage from "../../../components/ThemedImage.astro";
 import models from "../../../assets/shots/cost-models.png";
@@ -50,7 +50,7 @@ import modelsLight from "../../../assets/shots/cost-models-light.png";
 | The cache-break tip shows, or the **Cache hit** cell is tinted as worse. | The prompt cache breaks. | [Keep the cache warm](#keep-the-cache-warm) |
 | The long-prompt tip shows. | Prompts pass the model's long-prompt threshold. | [Stay under the long-prompt threshold](#stay-under-the-long-prompt-threshold) |
 | The most expensive sessions run for hours across many prompts with few commits. | Sessions run across many tasks. | [Start a new session for each task](#start-a-new-session-for-each-task) |
-| The plan gauge stays below 1×, and **Left unused** reads 50% or more. | The plan is larger than your use. | [Fit the plan to your use](#fit-the-plan-to-your-use) |
+| The plan gauge stays below 1×, and **Past windows** reads avg 50% unused or more. | The plan is larger than your use. | [Fit the plan to your use](#fit-the-plan-to-your-use) |
 
 More than one cause can apply. Fix the one with the largest share of cost first.
 
@@ -114,10 +114,10 @@ A long session sends its whole history with every request. Habit: when a task is
 
 ### Fit the plan to your use
 
-A multiple below 1 means that the same use would have cost less at API list prices than the plan did. **Left unused** at 50% or more means you leave half of each week unused.
+A multiple below 1 means that the same use would have cost less at API list prices than the plan did. An **avg 50% unused** or more in **Past windows** means you leave half of each week unused.
 
 1. If you pay another price than the packaged plan, such as an annual price, set it first, or the multiple is wrong. Add your plan to `plans` in your own `prices.json`, in the folder that holds the store, with your `monthly` price. [Configuration](/ai-ledger/reference/configuration/#plans) gives the folder and an example. The next page load uses it.
-2. If the multiple is still below 1, check two things on Limits, at **90d**: **Left unused** reads 50% or more for the weekly limit, and **Past windows** shows no red bar (**hit its limit**).
+2. If the multiple is still below 1, check two things in Limits' **Past windows**, at **90d**: the weekly limit reads avg 50% unused or more, and its strip shows no red bar (**hit its limit**).
 3. If both hold, change to the next plan down, such as Claude Max 5x for Claude Max 20x, in your account at Anthropic or OpenAI before the next billing date.
 
 ## Verify

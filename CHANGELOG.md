@@ -21,6 +21,14 @@ and versions follow [Semantic Versioning](https://semver.org/).
 - Cost puts the daily chart on the first screen. A plan gauge beside the heading shows the month's cost so far and its pace against a tick at your plan's monthly price, with an "N× plan" badge (the pace over the plan price). Without a known plan it shows the cost so far and the pace only. It replaces the sparkline and the "On pace for…" and "You pay about…" sentences. The old prorated "N× your plan" multiple of the range is gone.
 - Cost shows each project once, in "Project spend and change": a daily trend, spend with its share, the change against the previous period (new projects marked; projects used only before listed at $0), cost per commit and cache hit. Every column sorts, small projects fold into one row, and a row opens the project sheet. It replaces What changed, Where the spend went and the Cost by project drawer. Tokens, 1h writes, subagent cost share and cost per prompt per project are in its CSV and Copy export, which also gains the change.
 - Cost's heading keeps the cost and its change. The windows' days with prompts, the sessions, tokens and requests, and how the estimate and the pace are computed move to a "How measured" disclosure. The Biggest spender and Cache hit cards are gone; the project table and Tokens and cache show the same figures.
+- Limits is easier to read:
+  - Each open-window chart draws four things: the line used so far (solid where measured, faded where estimated), the forecast as a shaded cone (amber when its high edge reaches 100% before the reset), now, and a faint safe-pace line from now to 100% at the reset. The chart key is gone.
+  - Each card's header gives the percent and one status ("runs out …", "at its limit until …", "about N% at reset"). A footer gives headroom, pace against the safe pace ("18%/d vs 7%/d safe") and the top project. Everything else, including a table of the chart, is behind **Details**.
+  - The last 24 h pace line is behind one toggle.
+  - The status strip is gone; the Limits tab's alert dot stays.
+  - Past windows are always on the page, each limit with "avg N% unused · K hits", and replace the Left unused panel. Their table is behind **Show data table**.
+  - The time range moved into the Past windows header. Limits has no project filter: "What a point buys" lists every project, and the Project page still shows one project's plan-limit figures.
+  - The heading gives at most two figures, and the forecast method is behind **How measured**.
 
 - Text follows the browser's default font size: font sizes are relative, chart labels scale with them, and nothing is cut off at 200%. In Chrome and Edge 146+ the dashboard also follows the operating system's text scale.
 
