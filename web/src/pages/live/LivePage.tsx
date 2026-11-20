@@ -112,8 +112,10 @@ export function LivePage() {
         <section className="panel main" aria-label="Session">
           {shown ? <>
             <div className="stream-head">
-              {shown.title && <h2 className="stream-title" title={shown.title}>{shown.title}</h2>}
-              <ProjectName project={shown.project}><b>{shown.project ?? "(unknown)"}</b></ProjectName>
+              {/* The session's heading: its title, else its project. */}
+              {shown.title ? <><h2 className="stream-title" title={shown.title}>{shown.title}</h2>
+                <ProjectName project={shown.project}><b>{shown.project ?? "(unknown)"}</b></ProjectName></>
+                : <h2 className="stream-proj"><ProjectName project={shown.project}><b>{shown.project ?? "(unknown)"}</b></ProjectName></h2>}
               {shown.branch && <code className="chip">{shown.branch}</code>}<span className="chip">{SOURCE_LABELS[shown.source]}</span>
               {shown.model && <span className="chip">{shown.model}</span>}
               <a href={sheetHref(shown.session_id)} {...sessionLink(shown.session_id)}>Session sheet</a>

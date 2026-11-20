@@ -348,7 +348,7 @@ describe("LivePage", () => {
     expect(await within(rail).findByText("Freeze the clock in the snapshot test")).toBeTruthy();
   });
 
-  it("titles the stream with the session's title, and only the project without one", async () => {
+  it("titles the stream with the session's title, and with the project without one", async () => {
     show();
     const main = await stream();
     expect(within(main).getByRole("heading", { level: 2 }).textContent).toBe("Fast ingest pass while Live is open");
@@ -356,7 +356,8 @@ describe("LivePage", () => {
     show("?session=" + codex.session_id, { session: () => codex });
     const other = await stream();
     expect(await within(other).findByRole("button", { name: /^exec_command/ })).toBeTruthy();
-    expect(within(other).queryByRole("heading", { level: 2 })).toBeNull();
+    expect(codex.title).toBeFalsy();
+    expect(within(other).getAllByRole("heading", { level: 2 }).map(h => h.textContent)).toEqual([codex.project]);
   });
 
   it("follows the URL's session, and still shows one that is no longer active", async () => {
@@ -1261,6 +1262,22 @@ describe("LivePage", () => {
     await waitFor(() => expect(location.search).toBe("?session=s1")); // Back to the stream as it was
     expect([FakeSource.last, source.closed, events.isConnected]).toEqual([source, false, true]);
     await waitFor(() => expect(document.activeElement).toBe(link));
+  });
+
+  it("opens a rail session's sheet over Live from its context menu, keeping the stream, and returns focus to it", async () => {
+    show("?session=s1", { app: true });
+    await stream();
+    const source = FakeSource.last!;
+    const s2 = within(await rail()).getAllByRole("button").find(b => b.dataset.session === "s2")!;
+    s2.focus();
+    await userEvent.keyboard("{Shift>}{F10}{/Shift}");
+    await userEvent.click(within(screen.getByRole("menu")).getByRole("menuitem", { name: "Open session" }));
+    await waitFor(() => expect(location.pathname + location.search).toBe("/live?session=s1&sheet=s2"));
+    const dlg = await screen.findByRole("dialog");
+    expect([FakeSource.last, source.closed]).toEqual([source, false]); // the stream still follows s1
+    await userEvent.click(within(dlg).getByRole("button", { name: "Close" }));
+    await waitFor(() => expect(location.search).toBe("?session=s1"));
+    await waitFor(() => expect(document.activeElement).toBe(s2));
   });
 
   it("keeps the followed session when a sheet closes after picking sessions in the rail", async () => {

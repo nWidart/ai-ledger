@@ -1,0 +1,1 @@
+import{pr as e,yt as t}from"./index-rpv0yWOa.js";var n=e();function r({what:e,children:r}){return(0,n.jsxs)(n.Fragment,{children:[` `,(0,n.jsx)(t,{label:`How measured`,name:`How measured: ${e}`,className:`how`,children:r})]})}export{r as t};
