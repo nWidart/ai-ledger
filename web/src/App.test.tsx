@@ -71,7 +71,7 @@ describe("App", () => {
       const { unmount } = pending(path);
       const main = await page(cls);
       expect(main.querySelector("#lede, #load")?.textContent, path).toMatch(/^Loading/);
-      expect(within(main).queryAllByRole("status").filter(e => e.textContent), path).toEqual([]); // an empty one (a toggletip's) says nothing
+      expect(within(main).queryAllByRole("status").filter(e => e.textContent), path).toEqual([]); // an empty one says nothing
       expect([...main.querySelectorAll("[aria-live]")].filter(e => e.textContent), path).toEqual([]); // an empty announcer is fine
       expect(main.getAttribute("aria-busy") === "true" || main.querySelector("#load")?.getAttribute("aria-busy") === "true", path).toBe(true);
       unmount();
@@ -107,6 +107,46 @@ describe("App", () => {
       act(() => setSearch({ range: "7" }));
       await new Promise(r => setTimeout(r, 20));
       expect(document.activeElement).toBe(tab);
+    });
+  });
+
+  describe("automated projects file", () => {
+    const path = "/Users/me/Library/Application Support/ai-ledger/automated.json";
+    const withFile = (error: string | null) => {
+      // Every page's data stays pending: the warning and the hint come from the status poll alone.
+      vi.stubGlobal("fetch", vi.fn((u: string) => new URL(u, "http://x").pathname === "/api/status"
+        ? Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ ...status, automated_file: { path, error, projects: [] } }) } as Response)
+        : new Promise<Response>(() => {})));
+    };
+
+    it("warns once above every page when the file was ignored, and keeps the warning across a page switch", async () => {
+      withFile("Expecting value: line 1 column 1 (char 0)");
+      history.replaceState(null, "", "/cost?range=30");
+      renderRouter();
+      await page("pg-cost");
+      const alert = await screen.findByRole("alert");
+      expect(alert.textContent).toContain(path);
+      expect(alert.textContent).toContain("Expecting value: line 1 column 1 (char 0)");
+      expect(alert.textContent).toMatch(/ignored until it is fixed; only the built-in detection applies/);
+      expect(alert.closest("section")!.getAttribute("aria-label")).toBe("Automated projects file");
+      for (const [to, cls] of [["/insights", "pg-insights"], ["/errors", "pg-errors"], ["/usage", "pg-activity"]] as const) {
+        act(() => navigate(to + "?range=30"));
+        await page(cls);
+        expect(screen.getAllByRole("alert").filter(a => a.textContent?.includes(path))).toHaveLength(1);
+        expect(document.querySelector("main")!.contains(alert)).toBe(false); // the app's, not the page's
+      }
+    });
+
+    it("shows no warning for a file that is fine, and names its path on the automated toggle", async () => {
+      withFile(null);
+      history.replaceState(null, "", "/live");
+      renderRouter();
+      await page("pg-live"); // its header shows before its data
+      const tip = await screen.findByRole("button", { name: "About automated sessions" });
+      await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(c => String(c[0]).includes("/api/status"))).toBe(true));
+      await userEvent.click(tip);
+      await waitFor(() => expect(screen.getByRole("tooltip").textContent).toContain(path));
+      expect(screen.queryByRole("alert")).toBeNull();
     });
   });
 });

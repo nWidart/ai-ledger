@@ -324,7 +324,7 @@ describe("sheet tables", () => {
     const head = within(table).getByRole("columnheader", { name: /^Active/ });
     expect(head.getAttribute("scope")).toBe("col");
     await userEvent.click(within(head).getByRole("button", { name: "About Active time" }));
-    expect(within(head).getByRole("status").textContent).toBe("Active time: pauses over 20 minutes left out");
+    expect(within(head).getByRole("tooltip").textContent).toBe("Active time: pauses over 20 minutes left out");
     await userEvent.keyboard("{Escape}");
     expect(within(head).getByRole("button", { name: "About Active time" }).getAttribute("aria-expanded")).toBe("false");
   });

@@ -1,5 +1,5 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
-import { LOW_CALLS, lowVolume, textScale } from "../../components/chart";
+import { FEW_CALLS, LOW_CALLS, lowVolume, textScale } from "../../components/chart";
 import { num as fmt, niceStep } from "../../format";
 import { useErrors } from "./context";
 import { bucketLabel, bucketOf, chartData, idle, incSummary, label, linePath, noCalls, pointRows, pointText, pointWhen, selectable, shortLabel, sumCalls, TOPN, typeColor } from "./model";
@@ -98,7 +98,7 @@ export const RateChart = memo(function RateChart() {
   // Without the SVG (no calls, or no errors to draw) there is nothing to read or select: the render and the keys share this.
   const bare = empty || noErrors;
 
-  const show = (i: number, sx: number, sy: number) => { setHover({ i, sx, sy }); return pointText(m, v, pts[i]!, vt); };
+  const show = (i: number, sx: number, sy: number) => { setHover({ i, sx, sy }); return pointText(m, v, pts[i]!, vt, low[i]); };
   const hide = () => setHover(null), blur = () => { hide(); cur.current = null; };
   const at = (ev: MouseEvent<SVGRectElement>) => {
     const r = svg.current!.getBoundingClientRect(), px = (ev.clientX - r.left) * (W || 800) / r.width;
@@ -178,7 +178,7 @@ export const RateChart = memo(function RateChart() {
     return <>
       <div className="muted">{pointWhen(v, p)}</div>
       {idle(p) ? <div><b>No activity</b> · no tool calls</div> : <>
-        {p.c ? <div className="tot"><b>{fmt(p.r, 2)}%</b> rate · <b>{fmt(p.e)}</b> errors · {fmt(p.c)} calls{low[i] ? " · too few calls for a steady rate" : ""}</div>
+        {p.c ? <div className="tot"><b>{fmt(p.r, 2)}%</b> rate · <b>{fmt(p.e)}</b> errors · {fmt(p.c)} calls{low[i] ? ` · ${FEW_CALLS}` : ""}</div>
           : <div className="tot">{noCalls(v, p)}</div>}
         {rows.map(([l, k, c, on]) => <div key={l} className={"trow" + (on ? " on" : "")}><span><i className="sw" style={{ background: c }} />{shortLabel(l)}</span><b>{fmt(k)}</b></div>)}
         {inOther && selN ? <div className="trow on"><span>{shortLabel(m.cats[cat]!.label)}</span><b>{fmt(selN)}</b></div> : null}

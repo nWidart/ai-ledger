@@ -1,16 +1,17 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Source } from "../../api";
 import { agentName } from "../../components/Filters";
+import { HowMeasured } from "../../components/HowMeasured";
 import { ProjectName } from "../../components/ProjectDot";
 import { useColors } from "../../colors";
-import { num as fmt } from "../../format";
+import { dur, num as fmt, plural } from "../../format";
 import { tableFocus, useErrors } from "./context";
 import { errorText } from "./marks";
 import { Example, Examples, Incident, MsgRow } from "./Examples";
 import { Spark } from "./Spark";
 import type { Mode } from "./view";
 import {
-  beforeAfter, bucketOf, buckets, breakdown, byWeight, dur, exList, incSpan, incSummary, inBucket, inTool, NOISE, RECOVERED_NOTE, series,
+  beforeAfter, bucketOf, buckets, breakdown, byWeight, exList, incSpan, incSummary, inBucket, inTool, NOISE, RECOVERED_NOTE, series,
   label, MIN_PCT_ERRORS, msgGroups, msgList, typeColor, whereToStart, yearLabel, type Err, type Group, type MsgGroup,
 } from "./model";
 
@@ -38,7 +39,7 @@ function WhereToStart() {
     <h2>Where to start</h2>
     {!f.errs.length ? <div className="empty">No errors in this range, nothing to start on.</div> : <>
       <p className="why">Open error types with a ready-made fix, the most time lost in retry loops first. Pick one, apply the fix, then mark it applied to watch its rate drop.</p>
-      {open.length ? open.map(({ c, n, lost }) => <Pick key={c} c={c} top={<span className="muted">{fmt(n)} errors{lost ? ` · ${dur(lost)} lost` : ""}</span>} sub={m.cats[c]!.fix} act="Open fix and examples" />)
+      {open.length ? open.map(({ c, n, lost }) => <Pick key={c} c={c} top={<span className="muted">{plural(n, "error")}{lost ? ` · ${dur(lost / 1000)} lost` : ""}</span>} sub={m.cats[c]!.fix} act="Open fix and examples" />)
         : <div className="empty">Nothing open with a known fix.</div>}
       <h3 className="subh">Rising fastest</h3>
       <p className="why tight">{`Error rate ${cmp}, as in the table's Change.`}</p>
@@ -144,9 +145,11 @@ function TypeDetail({ cat }: { cat: string }) {
       </span>
     </div>
     <p className="why">{c.why}</p>
-    {base.length ? <p className="istat" title={`An incident: one agent retrying one tool with this error, each failure within ${m.gap} minutes of the last and at most ${m.maxOk} successful calls of that tool apart. Recovered: the agent's next call of that tool, after the last failure, succeeded.`}>
-      <b>{fmt(base.length)}</b> error{base.length === 1 ? "" : "s"} in <b>{fmt(is.n)}</b> incident{is.n === 1 ? "" : "s"}, <b>{fmt(is.pct, 0)}%</b> didn't recover <span className="muted">({RECOVERED_NOTE.replace(/\.$/, "")})</span>.{lost ? <> <b>{dur(lost)}</b> lost in retry loops.</> : null}
-      {worst && worst.errs.length > 1 ? ` Largest: ${fmt(worst.errs.length)} attempts over ${dur(incSpan(worst))}.` : ""}</p> : null}
+    {base.length ? <p className="istat">
+      <b>{fmt(base.length)}</b> error{base.length === 1 ? "" : "s"} in <b>{fmt(is.n)}</b> incident{is.n === 1 ? "" : "s"}, <b>{fmt(is.pct, 0)}%</b> didn't recover.{lost ? <> <b>{dur(lost / 1000)}</b> lost in retry loops.</> : null}
+      {worst && worst.errs.length > 1 ? ` Largest: ${fmt(worst.errs.length)} attempts over ${dur(incSpan(worst) / 1000)}.` : ""}
+      <HowMeasured what="incidents">An incident is one agent retrying one tool with this error, each failure within {m.gap} minutes of the last and
+        at most {m.maxOk} successful calls of that tool apart. {RECOVERED_NOTE}</HowMeasured></p> : null}
     <div className="fixbox"><div className="t">Potential fix</div><div>{c.fix}</div>
       {c.snippet ? <><pre className="snip" id="snip">{c.snippet}</pre><div className="row"><button type="button" id="copy" onClick={copy}>{copied === "ok" ? "Copied ✓" : "Copy instruction line"}</button>
         <span role="status" className={copied === "fail" ? "muted" : "sr"}>{copied === "fail" ? "Could not copy: select the line above and copy it." : copied === "ok" ? "Copied." : ""}</span></div></> : null}

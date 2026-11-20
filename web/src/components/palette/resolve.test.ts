@@ -89,6 +89,14 @@ describe("resolve", () => {
   it("#myproject #codex #7d >cost", () => {
     expect(commit("/usage?range=30", c.my, c.codex, c.d7, c.cost).href).toBe("/cost?project=myproject&range=7&source=codex");
   });
+  it("opens a sheet over Insights and Live, on Live under sheet with the followed session kept", () => {
+    const s1: Chip = { kind: "session", value: "abc", label: "#abc" };
+    expect(commit("/insights?range=7", s1).href).toBe("/insights?range=7&session=abc");
+    const live = commit("/live?session=s1", s1);
+    expect(live.href).toBe("/live?session=s1&sheet=abc");
+    expect(live.footer).toBe("Enter: open session #abc · 30d");
+    expect(commit("/live?session=s1&sheet=x", c.bash).href).toBe("/live?tool=Bash&session=s1");
+  });
   it(">errors >bash opens Errors with the inspector", () => {
     expect(commit("/usage", c.errors, c.bash).href).toBe("/errors?range=30&tool=Bash");
   });

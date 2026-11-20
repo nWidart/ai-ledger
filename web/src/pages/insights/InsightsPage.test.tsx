@@ -46,7 +46,7 @@ describe("InsightsPage", () => {
     const sub = screen.getByText(/Model-judged: a model's reading/);
     expect(sub.textContent).toContain("Model-judged: a model's reading of each session, not a measurement.");
     await userEvent.click(within(sub).getByRole("button", { name: "How measured: the judgments" }));
-    const how = within(sub).getByRole("status").textContent!;
+    const how = within(sub).getByRole("tooltip").textContent!;
     expect(how).toContain("The figures come from /insights facets, except Session figures and Coverage, which are counted. Codex sessions have no facets.");
     expect(how).toContain("A session counts here by its start time; Activity counts a session with a request in the range, so the two totals can differ slightly.");
     const cov = document.getElementById("coverage")!;
@@ -100,10 +100,12 @@ describe("InsightsPage", () => {
     expect(document.getElementById("coverage")).toBeNull();
   });
 
-  it("tags the page heading as model-judged once, and no section heading", async () => {
+  it("tags the page header as model-judged once, beside the page name, and no section heading", async () => {
     show(fixture);
     await lede();
-    expect(within(screen.getByRole("heading", { level: 1 })).getByText("model-judged")).toBeTruthy();
+    // The tag sits outside the h1: the lede is a live region, and the tag's toggletip would read into it.
+    expect(within(document.querySelector<HTMLElement>("header.top .kicker")!).getByText("model-judged")).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 1 }).id).toBe("lede");
     expect(screen.getAllByText("model-judged")).toHaveLength(1);
     const headings = screen.getAllByRole("heading", { level: 2 });
     expect(headings.map(h => h.textContent)).toEqual(["Outcomes", "Friction categories", "Satisfaction and helpfulness",
@@ -770,7 +772,7 @@ describe("InsightsPage", () => {
       expect(within(fr()).getAllByRole("listitem").map(li => li.textContent)).toEqual(["buggy code42 sessions2 labels ▾", "wrong approach31 session"]);
       for (const [sec, what] of [[goals(), "goals"], [fr(), "friction"]] as const) {
         await userEvent.click(within(sec).getByRole("button", { name: `How measured: ${what}` }));
-        expect(within(sec).getByRole("status").textContent).toMatch(/grouped into families by keyword.*as \/insights wrote them/);
+        expect(within(sec).getByRole("tooltip").textContent).toMatch(/grouped into families by keyword.*as \/insights wrote them/);
       }
     });
 

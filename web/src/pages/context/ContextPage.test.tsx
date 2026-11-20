@@ -33,7 +33,7 @@ const tipCard = (title: string) => within(screen.getByText(title).closest("artic
 const how = async (what: string) => {
   const b = screen.getByRole("button", { name: `How measured: ${what}` });
   await userEvent.click(b);
-  return within(b.parentElement!).getByRole("status").textContent!;
+  return within(b.parentElement!).getByRole("tooltip").textContent!;
 };
 const back = async () => { act(() => history.back()); await new Promise(r => addEventListener("popstate", r, { once: true })); };
 
@@ -93,11 +93,11 @@ describe("ContextPage", () => {
     const head = within(screen.getByRole("table", { name: "Cost by project" })).getByRole("columnheader", { name: /^Cache-hit ratio/ });
     expect(head.querySelector("[title]")).toBeNull();
     await userEvent.click(within(head).getByRole("button", { name: "About cache-hit ratio" }));
-    expect(within(head).getByRole("status").textContent).toBe("Cache read tokens over all prompt tokens");
+    expect(within(head).getByRole("tooltip").textContent).toBe("Cache read tokens over all prompt tokens");
     // Only a row with calls that carry no result size has one on its call count.
     const bash = within(screen.getByRole("table", { name: "Largest contributors by tool" })).getByText("Bash").closest("tr")!;
     await userEvent.click(within(bash).getByRole("button", { name: "About calls" }));
-    expect(within(bash).getByRole("status").textContent).toBe("1 with a result size");
+    expect(within(bash).getByRole("tooltip").textContent).toBe("1 with a result size");
   });
 
   it("marks the content busy while loading, with no live region announcing it", async () => {

@@ -20,6 +20,13 @@ export interface DrawerProps {
 // Mounted drawers by id, so openDrawer() can open one (and ask it to scroll and focus once its body shows), and an opening
 // drawer can close the rest: one page is mounted at a time, so these are the page's drawers.
 const drawers = new Map<string, { open: (scroll: boolean) => void; close: () => void }>();
+// Called after any drawer opens or closes, once its body is laid out: what is in view moves with it (SectionIndex).
+const toggles = new Set<() => void>();
+/** Calls f after any drawer opens or closes; returns a function that stops it. */
+export function onDrawerToggle(f: () => void): () => void {
+  toggles.add(f);
+  return () => { toggles.delete(f); };
+}
 
 /** A full table folded behind a title line: the title is a heading and its button the disclosure (aria-expanded), as the heading
  *  must not sit inside a <summary>. The body renders once the drawer has been open, and stays after, so a closed drawer
@@ -40,6 +47,9 @@ export function Drawer({ id, title, after, count, description, bodyClassName, on
     drawers.set(id, { open: scroll => { set(true); setGo({ scroll }); }, close: () => set(false) });
     return () => { drawers.delete(id); };
   }, [id, set]);
+  // After the change is laid out, not on mount: every drawer starts closed.
+  const was = useRef(open);
+  useLayoutEffect(() => { if (was.current === open) return; was.current = open; toggles.forEach(f => f()); }, [open]);
   // openDrawer(): the body has rendered by now, so its first input exists.
   useLayoutEffect(() => { if (go) { reveal(id, go.scroll); setGo(null); } }, [go, id]);
   const body = id + "-body";

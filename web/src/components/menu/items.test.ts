@@ -34,8 +34,12 @@ describe("project menu", () => {
   it("opens the sheet on the current page", () => {
     expect(href(items(jobdesk, "/usage?range=7&tool=Bash"), "project-sheet")).toBe("/usage?range=7&inspect=jobdesk");
   });
-  it("leaves out the sheet where the page hosts none", () => {
-    for (const p of ["/limits", "/insights", "/live"]) expect(find(items(jobdesk, p + "?range=7"), "project-sheet")).toBeUndefined();
+  it("leaves out the sheet on Limits, which hosts none", () => {
+    expect(find(items(jobdesk, "/limits?range=7"), "project-sheet")).toBeUndefined();
+  });
+  it("opens the sheet over Insights, and over Live with the followed session kept", () => {
+    expect(href(items(jobdesk, "/insights?range=7&session=s1"), "project-sheet")).toBe("/insights?range=7&inspect=jobdesk");
+    expect(href(items(jobdesk, "/live?session=s1&sheet=s2"), "project-sheet")).toBe("/live?inspect=jobdesk&session=s1");
   });
   it("filters to the project, or shows all when already filtered to it", () => {
     const off = find(items(jobdesk, "/usage?range=7&session=s1"), "filter");
@@ -68,9 +72,11 @@ describe("session menu", () => {
     expect(text(g, "copy-id")).toBe("abc");
     expect(text(g, "copy-cwd")).toBe("/Users/me/my app");
   });
-  it("opens the session over the page, and on Activity from Live", () => {
+  it("opens the session over the page, under the sheet key on Live, and on Activity from Limits", () => {
     expect(href(items(sess, "/cost?range=7"), "open-session")).toBe("/cost?range=7&session=abc");
-    expect(href(items(sess, "/live?range=7"), "open-session")).toBe("/usage?range=7&session=abc");
+    expect(href(items(sess, "/insights?range=7"), "open-session")).toBe("/insights?range=7&session=abc");
+    expect(href(items(sess, "/live?range=7&session=s1"), "open-session")).toBe("/live?range=7&session=s1&sheet=abc");
+    expect(href(items(sess, "/limits?range=7"), "open-session")).toBe("/usage?range=7&session=abc");
   });
   it("copies the resume command for its agent", () => {
     expect(text(items(sess, "/usage", ready()), "copy-resume")).toBe("cd '/Users/me/my app' && claude --resume abc");

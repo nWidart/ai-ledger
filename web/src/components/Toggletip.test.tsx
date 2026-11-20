@@ -7,21 +7,30 @@ import { renderApp } from "../testing";
 const popup = () => document.querySelector(".tt-pop");
 
 describe("Toggletip", () => {
-  it("opens from the keyboard, reads its text in a status and closes on Escape with focus kept", async () => {
+  it("opens from the keyboard right after its button, and closes on Escape with focus kept", async () => {
     renderApp(<><button type="button">before</button><span>Active <Toggletip term="Active time">Pauses over 20 minutes are left out.</Toggletip></span></>);
     const tt = screen.getByRole("button", { name: "About Active time" });
     expect(tt.getAttribute("aria-expanded")).toBe("false");
-    expect(screen.getByRole("status").textContent).toBe("");
     await userEvent.tab(); await userEvent.tab();
     expect(document.activeElement).toBe(tt);
     await userEvent.keyboard("{Enter}");
     expect(tt.getAttribute("aria-expanded")).toBe("true");
-    expect(screen.getByRole("status").textContent).toBe("Pauses over 20 minutes are left out.");
-    expect(popup()?.textContent).toBe("Pauses over 20 minutes are left out.");
+    // Content a screen reader reads next, not a live region nor a node hidden from it.
+    const tip = screen.getByRole("tooltip");
+    expect(tip.textContent).toBe("Pauses over 20 minutes are left out.");
+    expect(tip.closest("[aria-hidden]")).toBeNull();
+    expect(tt.compareDocumentPosition(tip) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(tip.closest(".tt-host")?.parentElement).toBe(tt.parentElement);
+    expect(screen.queryByRole("status")).toBeNull();
     await userEvent.keyboard("{Escape}");
     expect(tt.getAttribute("aria-expanded")).toBe("false");
-    expect(screen.getByRole("status").textContent).toBe("");
     expect(document.activeElement).toBe(tt);
+  });
+
+  it("stays inside a modal sheet", async () => {
+    renderApp(<dialog open><Toggletip term="Rate">Errors per 100 calls.</Toggletip></dialog>);
+    await userEvent.click(screen.getByRole("button", { name: "About Rate" }));
+    expect(popup()?.closest("dialog")).not.toBeNull();
   });
 
   it("toggles on a second activation and closes on a click outside", async () => {
@@ -53,7 +62,7 @@ describe("Toggletip", () => {
     await userEvent.hover(tt);
     await waitFor(() => expect(tt.getAttribute("aria-expanded")).toBe("true"));
     expect(popup()?.textContent).toBe("Time from the error to the next success.");
-    expect(screen.getByRole("status").textContent).toBe("Time from the error to the next success.");
+    expect(screen.queryByRole("status")).toBeNull(); // hover announces nothing
     await userEvent.unhover(tt);
     await waitFor(() => expect(tt.getAttribute("aria-expanded")).toBe("false"));
     await userEvent.hover(tt);

@@ -1,6 +1,7 @@
 import type { UsagePayload } from "../../api";
 import { useCountUp } from "../../components/chart";
 import { agentName } from "../../components/Filters";
+import { HowMeasured } from "../../components/HowMeasured";
 import { ProjectDot } from "../../components/ProjectDot";
 import { big, dayLabel, num, plural, usd } from "../../format";
 import { agentNames, compareText, gaugeFigures, money, periodCost, thinHistory } from "./cost";
@@ -26,21 +27,18 @@ export function Lede({ d, before }: { d: UsagePayload; before: UsagePayload | un
       : <>No {agentName(d.source)} usage{where} {d.range ? `in the last ${d.range} days` : "yet"}.</>}</h1>
     {t.requests > 0 && <p className="windows">{d.start
       ? <>{span(d.start, d.end)}{prev && <> <span className="muted">vs</span> {span(prev.start, prev.end)}</>}{thin && <> <span className="chip warn">thin history</span></>}</>
-      : <>All time {span(first, d.end)}</>}</p>}
-    {t.requests > 0 && <details className="how">
-      <summary>How measured</summary>
-      <ul>
+      : <>All time {span(first, d.end)}</>}
+      <HowMeasured what="cost">
         {d.start ? <>
-          <li>This period, {span(d.start, d.end)}: {num(t.active_days)} of {d.range} days with prompts.</li>
-          {prev && <li>Previous period, {span(prev.start, prev.end)}: {money(periodCost(prev))}, {num(prev.active_days)} of {d.range} days with prompts.
-            {thin && " It has prompts on fewer than half as many days, so older transcripts may be missing: read the change as \"more than before\"."}</li>}
-        </> : <li>All time, {span(first, d.end)}: {plural(t.active_days, "day")} with prompts.</li>}
-        <li>{reach}, {big(t.tokens)} tokens in {num(t.requests)} requests.</li>
-        <li>Cost is estimated at API list prices{d.unpriced.length ? " and leaves out unpriced models" : ""}. It is not a bill.</li>
-        {g && <li>The month's pace is its cost so far, to yesterday, plus the mean daily cost of the last 7 complete days times the {plural(d.run_rate!.days_left, "day")} left.
-          It follows the project, agent and automated filters, not the range.</li>}
-        {g?.plan && <li>The plan multiple divides the pace by the plans' monthly price{g.counted ? `, counting ${agentNames(g.counted)} use only, since no plan is known for the other agents` : ""}.</li>}
-      </ul>
-    </details>}
+          <span className="tt-p">This period, {span(d.start, d.end)}: {num(t.active_days)} of {d.range} days with prompts.</span>
+          {prev && <span className="tt-p">Previous period, {span(prev.start, prev.end)}: {money(periodCost(prev))}, {num(prev.active_days)} of {d.range} days with prompts.
+            {thin && " It has prompts on fewer than half as many days, so older transcripts may be missing: read the change as \"more than before\"."}</span>}
+        </> : <span className="tt-p">All time, {span(first, d.end)}: {plural(t.active_days, "day")} with prompts.</span>}
+        <span className="tt-p">{reach}, {big(t.tokens)} tokens in {num(t.requests)} requests.</span>
+        <span className="tt-p">Cost is estimated at API list prices{d.unpriced.length ? " and leaves out unpriced models" : ""}. It is not a bill.</span>
+        {g && <span className="tt-p">The month's pace is its cost so far, to yesterday, plus the mean daily cost of the last 7 complete days times the {plural(d.run_rate!.days_left, "day")} left.
+          It follows the project, agent and automated filters, not the range.</span>}
+        {g?.plan && <span className="tt-p">The plan multiple divides the pace by the plans' monthly price{g.counted ? `, counting ${agentNames(g.counted)} use only, since no plan is known for the other agents` : ""}.</span>}
+      </HowMeasured></p>}
   </>;
 }

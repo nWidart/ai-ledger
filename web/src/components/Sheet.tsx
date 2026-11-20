@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useRef, type ReactNode } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { setSheetWide, useSheetWide } from "../sheetWide";
 import "./Sheet.css";
 
@@ -25,6 +25,9 @@ export interface SheetProps {
 export function Sheet({ open, kind, title, contentKey, onClose, onBack, busy, returnFocus, widen, children }: SheetProps) {
   const dlg = useRef<HTMLDialogElement>(null), head = useRef<HTMLHeadingElement>(null);
   const opener = useRef<HTMLElement | null>(null), shown = useRef<string | undefined>(undefined);
+  // Opened over another modal dialog (Errors' type sheet on a narrow screen): the browser stacks them, Escape and the backdrop
+  // close this one first, and ← Back says that a sheet waits under it.
+  const [over, setOver] = useState(false);
   const close = useRef(onClose), back = useRef(returnFocus), isOpen = useRef(open);
   close.current = onClose; back.current = returnFocus; isOpen.current = open;
   const titleId = useId(), wide = useSheetWide();
@@ -35,6 +38,7 @@ export function Sheet({ open, kind, title, contentKey, onClose, onBack, busy, re
     if (open && !d.open) {
       const a = document.activeElement;
       opener.current = a instanceof HTMLElement && a !== document.body ? a : null;
+      setOver([...document.querySelectorAll("dialog[open]")].some(x => x !== d));
       d.showModal();
     } else if (!open && d.open) {
       d.close();
@@ -67,7 +71,7 @@ export function Sheet({ open, kind, title, contentKey, onClose, onBack, busy, re
       onClick={e => { if (e.target === e.currentTarget) close.current(); }}>
       {open && <div className="sheet-in">
         <div className="sheet-head">
-          {onBack && <button type="button" className="sheet-back" onClick={onBack}>← Back</button>}
+          {(onBack || over) && <button type="button" className="sheet-back" onClick={onBack ?? (() => close.current())}>← Back</button>}
           <h2 id={titleId} ref={head} tabIndex={-1}>{kind != null && <><span className="sheet-kind">{kind}</span><br /></>}{title}</h2>
           {widen && <button type="button" className="sheet-wide" aria-pressed={wide} onClick={() => setSheetWide(!wide)}>Wide</button>}
           <button type="button" className="sheet-close" aria-label="Close" onClick={() => close.current()}>✕</button>

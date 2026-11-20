@@ -49,7 +49,7 @@ describe("SortTh title", () => {
     expect(document.activeElement).toBe(tt);
     await userEvent.keyboard("{Enter}");
     expect(tt.getAttribute("aria-expanded")).toBe("true");
-    expect(within(th).getByRole("status").textContent).toBe("Active time: pauses over 20 minutes left out");
+    expect(within(th).getByRole("tooltip").textContent).toBe("Active time: pauses over 20 minutes left out");
     await userEvent.keyboard("{Escape}");
     expect(tt.getAttribute("aria-expanded")).toBe("false");
     expect(document.activeElement).toBe(tt);

@@ -198,8 +198,8 @@ describe("LimitsPage", () => {
     const fresh = within(screen.getByRole("list", { name: "Limit data" }));
     expect(fresh.getByText("polling failing")).toBeTruthy();
     expect(fresh.getByText("(usage endpoint unreachable)")).toBeTruthy();
-    expect(within(card("Claude Code weekly")).getByTitle("estimated").textContent).toBe("est.");
-    expect(within(card("Codex weekly")).queryByTitle("estimated")).toBeNull();
+    expect(card("Claude Code weekly").querySelector(".now-pct .chip.est")!.textContent).toBe("estimated"); // visible, not a title
+    expect(card("Codex weekly").querySelector(".now-pct .chip.est")).toBeNull();
   });
 
   it("draws one chart per open window with no key, and says why one has no forecast", async () => {
@@ -227,18 +227,18 @@ describe("LimitsPage", () => {
     expect(document.querySelectorAll(".lim-chart .recent")).toHaveLength(2);
     const line = details("Claude Code weekly").getByText(recentText(claude)!);
     expect(line.textContent).toBe(`If the last 24 hours continue: reaches 100% at ${whenDay(claude.forecast!.recent_hits_at)}`);
-    expect(line.className).toBe("cap-note out");
+    expect(line.className).toBe("cap-note warn"); // a scenario warns; only the forecast itself is critical
     expect(details("Codex weekly").getByText(recentText(codex)!).className).toBe("cap-note");
     expect(details("Claude Code weekly · Fable").queryByText(/last 24 hours continue/)).toBeNull();
     await userEvent.click(toggle);
     expect(document.querySelector(".lim-chart .recent")).toBeNull();
   });
 
-  it("offers the toggle even when only a window at its limit has a scenario, with no Details line for it", async () => {
+  it("hides the toggle when every window with a scenario is at its limit, with no Details line for it", async () => {
     show({ ...out, windows: [capped] });
     await lede();
-    await userEvent.click(screen.getByRole("button", { name: "Last 24 h pace" }));
-    expect(document.querySelectorAll(".lim-chart .recent")).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: "Last 24 h pace" })).toBeNull();
+    expect(document.querySelector(".lim-chart .recent")).toBeNull();
     expect(details("Codex weekly").queryByText(/last 24 hours continue/)).toBeNull(); // no line at the limit
   });
 
@@ -256,12 +256,15 @@ describe("LimitsPage", () => {
   it("puts the method behind How measured, with a one-line hint", async () => {
     show(fixture);
     await lede();
-    const how = screen.getByText("How measured").closest("details")!;
-    expect(how.open).toBe(false);
+    const btn = screen.getByRole("button", { name: "How measured: forecasts" });
+    expect(btn.closest("#windows .hint")).not.toBeNull();
+    expect(btn.getAttribute("aria-expanded")).toBe("false");
+    await userEvent.click(btn);
+    const how = screen.getByRole("tooltip");
     expect(how.textContent).toMatch(/last 24 h pace line carries your use over the last 24 hours on to the reset/);
     expect(how.textContent).toMatch(/Estimates count local agent work only/);
-    expect(how.textContent).toMatch(/faint straight line runs from now to 100% at the reset/);
-    expect(document.querySelector("#windows .hint")!.textContent).toBe("Now, for the whole account. Hover or focus a chart for the value at a time.");
+    expect(how.textContent).toMatch(/dashed straight line runs from now to 100% at the reset/);
+    expect(document.querySelector("#windows .hint")!.firstChild!.textContent).toBe("Now, for the whole account. Hover or focus a chart for the value at a time.");
   });
 
   it("lists past windows with hits, early resets and their unused summary", async () => {
@@ -275,7 +278,9 @@ describe("LimitsPage", () => {
     const codexWeekly = strips.find(s => s.name === "Codex weekly")!;
     const sum = hist.getByText(stripSummary(codexWeekly, fixture.unused).text);
     expect(sum.textContent).toMatch(/^avg 60% unused · \d+ hits?$/);
-    expect(sum.title).toMatch(/left out: 1 window that ended early/);
+    expect(sum.title).toBe("");
+    await userEvent.click(hist.getByRole("button", { name: "How measured: Codex weekly unused" }));
+    expect(screen.getByRole("tooltip").textContent).toMatch(/left out: 1 window that ended early/);
     openTable();
     expect(hist.getByText("ended early by a plan change from plus to prolite")).toBeTruthy();
     const hit = hist.getAllByRole("row").find(r => r.textContent!.startsWith("Codex 5-hour"))!;
@@ -311,6 +316,12 @@ describe("LimitsPage", () => {
     expect(value.getByText(/^Claude Code weekly: \$/)).toBeTruthy();
     expect(value.getByText("claude-opus-5-5")).toBeTruthy();
     expect(value.getByText("Commits a point, by project")).toBeTruthy();
+  });
+
+  it("names the range what a point buys covers", async () => {
+    show(fixture);
+    await lede();
+    expect(document.querySelector("#value .hint")!.textContent).toMatch(/^One point is 1% of a limit, over the last 30 days: the range set in Past windows\./);
   });
 
   it("folds projects under a point into one row, and marks unpriced models and earlier plans", async () => {
@@ -396,7 +407,11 @@ describe("card header and footer", () => {
     expect(pace.textContent).toBe(`▲ ${r.now} vs ${r.safe} safe, running hot`);
     expect(pace.className).toBe("hot");
     expect(dd("Codex weekly", "Pace").className).toBe("");
-    expect(dd("Claude Code weekly · Fable", "Pace").textContent).toBe("–"); // no forecast
+    const none = dd("Claude Code weekly · Fable", "Pace");
+    expect(none.firstChild!.textContent).toBe("–"); // no forecast, and why behind a toggletip, not a title
+    expect(none.title).toBe("");
+    await userEvent.click(within(none).getByRole("button", { name: "Why no pace" }));
+    expect(screen.getByRole("tooltip").textContent).toBeTruthy();
     expect(dd("Claude Code weekly", "Top").textContent).toMatch(claude.used ? new RegExp(`^${usedHint(claude.used)}`) : /^–/);
   });
 
@@ -451,17 +466,17 @@ describe("what used this window", () => {
     expect(document.querySelector(".lim-used h4")!.textContent).toBe("What used this window");
   });
 
-  it("lists projects and models with shares, points and the cost as a title", async () => {
+  it("lists projects and models with shares, cost and points", async () => {
     show(only({ ...claude, used }));
     await lede();
     const lists = open(claude);
     expect(lists.getByRole("heading", { name: "Projects" })).toBeTruthy();
     expect(lists.getByRole("heading", { name: "Models" })).toBeTruthy();
     const row = lists.getByText("ai-ledger", { selector: "a" }).closest("li")!;
-    expect(row.textContent).toBe("ai-ledger54%≈ 12.3 points");
-    expect(row.title).toBe(`${usd(6.7)}, estimated at API list prices`);
-    expect(lists.getByText("claude-opus-5-5").closest("li")!.textContent).toBe("claude-opus-5-597%≈ 22.0 points");
-    expect(lists.getByText("claude-fable-5-1").closest("li")!.textContent).toBe("claude-fable-5-13%"); // no points, none shown
+    expect(row.textContent).toBe(`ai-ledger54%${usd(6.7)}≈ 12.3 points`);
+    expect(row.title).toBe("");
+    expect(lists.getByText("claude-opus-5-5").closest("li")!.textContent).toBe(`claude-opus-5-597%${usd(12)}≈ 22.0 points`);
+    expect(lists.getByText("claude-fable-5-1").closest("li")!.textContent).toBe(`claude-fable-5-13%${usd(0.34)}`); // no points, none shown
     expect(lists.getByText(/use elsewhere is not in it/).textContent).toBe(`Counted local agent use only, at API list prices (${usd(12.34)} here); use elsewhere is not in it.`);
   });
 
@@ -635,6 +650,10 @@ describe("past windows strips", () => {
     expect(await within(panel).findByRole("img", { name: /^Codex weekly: 22% used when it ended .*Plan change from plus to prolite/ })).toBeTruthy();
     expect(within(panel).queryByText("Loading the curve…")).toBeNull();
     expect(panel.querySelector(".lim-chart .now")).toBeNull();
+    // The curve as a table too, behind its toggle, with no safe-pace column for a closed window.
+    await userEvent.click(within(panel).getByRole("button", { name: "Show data table" }));
+    const data = within(panel).getByRole("table", { name: /chart data$/ });
+    expect(within(data).getAllByRole("columnheader").map(h => h.textContent)).toEqual(["Time", "Used"]);
     expect(hist().getAllByRole("row").filter(r => r.getAttribute("aria-current") === "true")).toHaveLength(1); // its row in the table
     await userEvent.click(row(early));
     expect(row(early).getAttribute("aria-pressed")).toBe("false");

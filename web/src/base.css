@@ -8,6 +8,10 @@
 .more { margin-top: 10px; font-size: .8125rem; }
 .banner { border-left: 3px solid var(--warning-text); background: var(--surface-1); padding: 8px 12px; margin-bottom: 20px; font-size: .8125rem; color: var(--text-secondary); }
 .banner b { color: var(--warning-text); }
+/* An app-wide warning above the page (AutomatedFileWarning): the page's own top padding keeps the gap under it. */
+.app-warning { padding-bottom: 0; }
+.app-warning .banner { margin-bottom: 0; }
+.app-warning code { overflow-wrap: anywhere; }
 /* Skip link: off-screen until focused by keyboard, then above the sticky nav. It lands on the page heading, which takes focus
    without a ring. */
 .skip { position: fixed; top: 8px; left: 8px; z-index: 50; padding: 8px 14px; border-radius: 8px; background: var(--surface-1); color: var(--accent);

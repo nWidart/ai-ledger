@@ -3,6 +3,8 @@
 /* Header as on Usage: page name left, filters right on the same row. */
 .pg-errors .top { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: center; justify-content: space-between; margin-bottom: 24px; }
 .pg-errors .kicker { font-size: .9375rem; font-weight: 600; margin: 0; color: var(--text-secondary); }
+/* A failed first load names the page in its header, on a line of its own. */
+.pg-errors .top > .lede { flex-basis: 100%; }
 /* The briefing: the period's answer as one sentence, as on Usage. */
 .pg-errors .lede { margin: 0 0 8px; max-width: 34ch; font-size: clamp(1.5rem, 4vw, 2.5rem); line-height: 1.14;
   font-weight: 400; letter-spacing: -.025em; text-wrap: balance; color: var(--text-secondary); }

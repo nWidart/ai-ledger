@@ -2,6 +2,7 @@
 // /api/errors returns every error; the page filters on the client, by project and source among others.
 import type { Category, Day, ErrorRow, ErrorsPayload, Incident, Source, Ts } from "../../api";
 import { dayLabel, num as fmt } from "../../format";
+import { FEW_CALLS } from "../../components/chart";
 import type { SortBy } from "../../components/Sort";
 import { sessionSheetHref } from "../../components/sheets/session";
 import { parseSearch, type Range } from "../../url";
@@ -258,11 +259,6 @@ export const byWeight = (a: Group, b: Group) => b.errs.length - a.errs.length ||
 // "recovered" means only that the agent's next call of that tool succeeded, so the badge says that.
 export const OUTCOME: Record<string, [string, string]> = { recovered: ["Next call OK", "ok"], failed_again: ["Failed again", "warn"], gave_up: ["Gave up", "bad"] };
 export const RECOVERED_NOTE = "Recovered means only that the agent's next call of that tool succeeded.";
-/** Milliseconds as 42s, 7 min or 1.5 h (this page's own wording). */
-export function dur(ms: number) {
-  const s = Math.round(ms / 1000);
-  return s < 60 ? `${s}s` : s < 3600 ? `${Math.round(s / 60)} min` : `${fmt(s / 3600, s < 36000 ? 1 : 0)} h`;
-}
 /** Time lost per error type: the sum of its incidents' spans, first failure start to last failure end. An incident counts whole
  *  when at least one of its failures is in errs; the span is not clipped to the filtered failures. */
 export function timeLost(m: Model, errs: readonly Err[], groups: readonly Group[] = incidentsOf(m, errs)): Record<string, number> {
@@ -312,11 +308,12 @@ export const pointWhen = (v: View, p: ChartPt) =>
 export const idle = (p: ChartPt) => !p.c && !p.e;
 /** What a point with errors and no calls says: a failed call counts its call on the day it started and its error on the day it ended. */
 export const noCalls = (v: View, p: ChartPt) => `${fmt(p.e)} error${p.e === 1 ? "" : "s"}, no tool call started in this ${v.gran}`;
-/** What the keyboard reading of the chart announces for a point. */
-export function pointText(m: Model, v: View, p: ChartPt, vt: ViewTypes): string {
+/** What the keyboard reading of the chart announces for a point. low: the point has too few calls for a steady rate (lowVolume),
+ *  said after the rate as the tooltip and Activity's chart say it. */
+export function pointText(m: Model, v: View, p: ChartPt, vt: ViewTypes, low = false): string {
   const when = pointWhen(v, p) + (p.k === v.at && !p.to ? " (selected)" : ""), selN = (v.cat && p.byAll[v.cat]) || 0;
   if (idle(p)) return `${when}: no activity`;
-  return `${when}: ${p.c ? `${fmt(p.r, 2)}% rate, ${fmt(p.e)} errors of ${fmt(p.c)} calls` : noCalls(v, p)}. ` + pointRows(m, v, p, vt).map(([l, n]) => `${l} ${fmt(n)}`).join(", ")
+  return `${when}: ${p.c ? `${fmt(p.r, 2)}% rate, ${fmt(p.e)} errors of ${fmt(p.c)} calls${low ? `, ${FEW_CALLS}` : ""}` : noCalls(v, p)}. ` + pointRows(m, v, p, vt).map(([l, n]) => `${l} ${fmt(n)}`).join(", ")
     + (v.cat && selN ? `. Selected ${m.cats[v.cat]!.label}: ${fmt(selN)}` : "");
 }
 /** Rate line: solid across buckets with a value; a bridge over a gap, never a lone dot. */

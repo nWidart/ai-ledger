@@ -179,6 +179,10 @@ dialog.sheet::backdrop { background: var(--scrim); }
   /* The bucket under the keyboard or pointer on the Activity and Cost charts is a 6% wash; frame it instead. */
   :is(.pg-activity, .pg-cost) .chart svg > rect:not(.hit) { stroke: Highlight; stroke-width: 2px; }
 
+  /* A low-call rate point is hollow: a page-colored center and a text-colored ring, on the charts and in their keys, so it
+     reads apart from the solid line whatever the user's Canvas is. */
+  :is(.pg-activity, .pg-errors) circle.lowc { forced-color-adjust: none; fill: Canvas; stroke: CanvasText; }
+  .pg-activity .legend i.low, .pg-errors .sw.low { forced-color-adjust: none; background: Canvas; border-color: CanvasText; }
   /* Bars: the fill keeps its color, the track and the fill sit in a frame. */
   .ledger .bar, :is(.pg-activity, .pg-cost) .ibar, .pg-context :is(.pressure .band, .pressure .pkey i, .rng-bar, .rng-med, .ctr-bar i, .ctr-rbar, .ctr-med, .ctr-split-bar > span, .ctr-key), .pg-errors .bar, .pg-live .meter { forced-color-adjust: none; outline: 1px solid CanvasText; }
   /* The frame above outranks the pressure segments' own focus ring; restore it in a system color. */

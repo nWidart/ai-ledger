@@ -437,6 +437,8 @@ export interface Status {
   limits_alert?: LimitsAlert | null;
   /** Plan-limit pollers by provider; never the credential. */
   limits?: Record<string, { last_ok: string | null; last_attempt: string | null; failures: number; error: string | null; stale: boolean }>;
+  /** The user automated projects file and why it was ignored, for the toggle's hint and the app's warning. Absent from an older app. */
+  automated_file?: AutomatedFile;
 }
 
 // Context page: /api/context. Numbers are tokens unless the name says bytes, dollars (cost), minutes or a ratio; null is unknown

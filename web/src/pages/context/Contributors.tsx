@@ -31,10 +31,12 @@ export function rangeScale(rows: { p50_bytes: number | null; p95_bytes: number |
   return { lo, hi };
 }
 
-/** The ten largest rows and one folded "Other" row (a total, no range) when there are more. */
-function ranked(rows: FillRow[], kind: Kind): { name: string; row: FillRow; other: boolean }[] {
-  const top = rows.slice(0, TOP_ROWS).map(row => ({ name: row.name, row, other: false }));
-  const rest = rows.slice(TOP_ROWS);
+/** The ten rows with the largest totals, in the order order gives them, and one folded "Other" row (a total, no range) when
+ *  there are more. The cut is by total whatever the sort, so sorting by name or calls never folds a heavy tool away. */
+function ranked(rows: FillRow[], kind: Kind, order: (rows: FillRow[]) => FillRow[]): { name: string; row: FillRow; other: boolean }[] {
+  const byTotal = sortRows(rows, r => r.bytes, true);
+  const top = order(byTotal.slice(0, TOP_ROWS)).map(row => ({ name: row.name, row, other: false }));
+  const rest = byTotal.slice(TOP_ROWS);
   if (!rest.length) return top;
   const sum = (f: (r: FillRow) => number) => rest.reduce((s, r) => s + f(r), 0);
   const noun = kind === "mcp" ? (rest.length === 1 ? "MCP server" : "MCP servers") : rest.length === 1 ? "tool" : "tools";
@@ -62,19 +64,21 @@ function Split({ main, sub }: { main: number; sub: number }) {
 type SortKey = "name" | "calls" | "bytes" | "p50_bytes" | "max_bytes";
 const BY_TOTAL: SortBy<SortKey> = { key: "bytes", desc: true };
 
-/** What fills context: the main-thread and subagent split, then the tools or MCP servers, the ten first by the sort (largest
- *  total by default) and the rest folded into Other until "Show all", each beside the range of its typical result. */
+/** What fills context: the main-thread and subagent split, then the tools or MCP servers, the ten with the largest totals in the
+ *  sort's order and the rest folded into Other until "Show all", each beside the range of its typical result. The total bars
+ *  scale to the largest named row: the Other row has a figure and no bar, so a large tail does not shrink the rest. */
 export function Contributors({ fills }: { fills: Fills }) {
   const [pick, setPick] = useState<Kind>("tool"), [sort, setSort] = useState(BY_TOTAL), [all, setAll] = useState(false);
   const hasMcp = fills.mcp.length > 0, kind: Kind = hasMcp ? pick : "tool";
-  const list = sortRows(kind === "mcp" ? fills.mcp : fills.tools, r => r[sort.key], sort.desc);
-  const rows = all ? list.map(row => ({ name: row.name, row, other: false })) : ranked(list, kind);
-  const max = Math.max(...rows.map(r => r.row.bytes), 1);
+  const order = (rs: FillRow[]) => sortRows(rs, r => r[sort.key], sort.desc);
+  const list = kind === "mcp" ? fills.mcp : fills.tools;
+  const rows = all ? order(list).map(row => ({ name: row.name, row, other: false })) : ranked(list, kind, order);
+  const max = Math.max(...rows.filter(r => !r.other).map(r => r.row.bytes), 1);
   const { lo, hi } = rangeScale(rows.map(r => r.row));
   const at = (v: number) => `${logPos(v, lo, hi) * 100}%`;
   const noun = kind === "mcp" ? "MCP server" : "Tool", nouns = kind === "mcp" ? "MCP servers" : "tools";
-  const th = (k: SortKey, label: ReactNode, cls?: string) =>
-    <SortTh k={k} sort={sort} onSort={setSort} asc={k === "name"} className={cls}>{label}</SortTh>;
+  const th = (k: SortKey, label: ReactNode, cls?: string, after?: ReactNode) =>
+    <SortTh k={k} sort={sort} onSort={setSort} asc={k === "name"} className={cls} after={after}>{label}</SortTh>;
   return (
     <div className="contributors">
       {fills.main_bytes + fills.subagent_bytes > 0 && <>
@@ -89,9 +93,9 @@ export function Contributors({ fills }: { fills: Fills }) {
           <thead><tr>
             {th("name", noun)}
             {th("calls", "Calls", "num")}
-            {th("bytes", <>Total result size<span className="ctr-scale" aria-hidden="true"><span>0</span><span>{bytes(max)}</span></span></>, "ctr-total")}
-            {th("p50_bytes", <>Typical result: median to 95th percentile (log scale)
-              <span className="ctr-scale" aria-hidden="true"><span>{bytes(lo)}</span><span>dashed: {bytes(RESULT_LARGE_BYTES)}</span><span>{bytes(hi)}</span></span></>, "ctr-range")}
+            {th("bytes", "Total result size", "ctr-total", <span className="ctr-scale" aria-hidden="true"><span>0</span><span>{bytes(max)}</span></span>)}
+            {th("p50_bytes", "Typical result: median to 95th percentile (log scale)", "ctr-range",
+              <span className="ctr-scale" aria-hidden="true"><span>{bytes(lo)}</span><span>dashed: {bytes(RESULT_LARGE_BYTES)}</span><span>{bytes(hi)}</span></span>)}
             {th("max_bytes", "Largest", "num")}
           </tr></thead>
           <tbody>{rows.map(({ name, row, other }) => {
@@ -100,7 +104,7 @@ export function Contributors({ fills }: { fills: Fills }) {
               <th scope="row" className="name">{other ? name : <button type="button" className="cellbtn" title={name}>{name}</button>}</th>
               <td className="num">{num(row.calls)}{row.with_bytes < row.calls && <Toggletip term="calls">{num(row.with_bytes)} with a result size</Toggletip>}</td>
               <td className="ctr-total">
-                <span className="ctr-bar" aria-hidden="true"><i data-testid="ctr-total-bar" style={{ width: `${Math.max(1, row.bytes / max * 100)}%` }} /></span>
+                {!other && <span className="ctr-bar" aria-hidden="true"><i data-testid="ctr-total-bar" style={{ width: `${Math.max(1, row.bytes / max * 100)}%` }} /></span>}
                 <span className="ctr-fig">{bytes(row.bytes)} <span className="muted">· <Est tokens={row.est_tokens} /></span></span>
               </td>
               <td className="ctr-range">

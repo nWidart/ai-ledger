@@ -39,7 +39,7 @@ export function ProjectPage() {
     <main id="content" className={cls} ref={wrap} aria-busy={usage.loading || undefined}>
       {first ? <PageSkeleton title={`Loading ${project}…`} /> : <header className="top sect" id="overview">
         <h1 className="lede" id="lede" tabIndex={-1}><ProjectName project={project} /></h1>
-        <div className="top-side"><Filters projects={d?.projects ?? []} automated autoFile={d?.automated_file.path} /></div>
+        <div className="top-side"><Filters projects={d?.projects ?? []} automated /></div>
       </header>}
       {first ? null : idle ? <p className="empty none" role="status">No use of {project} in this view. Pick a longer range, another source or include automated sessions.</p> : <>
         <SummaryBlock usage={usage} live={live} scope={scope} />

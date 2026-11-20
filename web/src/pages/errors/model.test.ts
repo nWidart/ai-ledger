@@ -114,6 +114,11 @@ describe("filtering and series", () => {
     expect(pointText(mm, v({ gran: "week" }), { ...p, e: 1, by: { x: 1 } }, vt)).toContain("1 error, no tool call started in this week");
     expect(pointText(mm, vv, { ...p, e: 0, by: {}, byAll: {}, other: 0 }, vt)).toBe("Nov 4, 2026: no activity"); // neither: no activity
   });
+  it("says a low-call point has too few calls for a steady rate, as the tooltip and Activity say it", () => {
+    const mm = makeModel(fixture), vv = v(), f = filtered(mm, vv), vt = viewTypes(mm, vv, f), p = chartData(mm, vv, f, vt).pts.find(x => x.c > 0)!;
+    expect(pointText(mm, vv, p, vt, true)).toContain(`calls, too few calls for a steady rate. `);
+    expect(pointText(mm, vv, p, vt)).not.toMatch(/too few calls/);
+  });
 });
 
 describe("types", () => {

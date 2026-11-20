@@ -150,6 +150,32 @@ describe("SectionIndex observers", () => {
       vi.unstubAllGlobals();
     }
   });
+
+  it("reads the sections again when a drawer opens or closes", async () => {
+    made.length = 0;
+    vi.stubGlobal("IntersectionObserver", FakeIO);
+    vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(40);
+    const height = vi.spyOn(Element.prototype, "scrollHeight", "get").mockReturnValue(5000);
+    const was = Object.getOwnPropertyDescriptor(window, "scrollY")!;
+    Object.defineProperty(window, "scrollY", { value: 300, configurable: true });
+    try {
+      renderApp(<><SectionIndex groups={[[{ id: "a", label: "A" }], [{ id: "d", label: "D" }]]} /><section id="a" />
+        <Drawer id="d" title="D">rows</Drawer></>);
+      const [above, shown] = made as [typeof made[number], typeof made[number]];
+      const sec = (id: string) => ({ target: document.getElementById(id)!, isIntersecting: true });
+      const current = () => document.querySelector("nav.secidx a[aria-current]")?.textContent;
+      act(() => { shown.cb([sec("a"), sec("d")]); above.cb([sec("a")]); });
+      expect(current()).toBe("A");
+      // The drawer's body brings the page's end into view; no section crosses a line, so only the drawer's toggle says so.
+      height.mockReturnValue(1000);
+      await userEvent.click(screen.getByRole("button", { name: "D" }));
+      expect(current()).toBe("D");
+    } finally {
+      Object.defineProperty(window, "scrollY", was);
+      vi.unstubAllGlobals();
+      vi.restoreAllMocks();
+    }
+  });
 });
 
 describe("Ledger", () => {

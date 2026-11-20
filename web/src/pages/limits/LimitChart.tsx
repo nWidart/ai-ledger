@@ -12,8 +12,8 @@ export const planMarks = (w: LimitWindow, events: PlanChange[]) =>
 const KEYS: Record<string, number> = { ArrowLeft: -1, ArrowRight: 1, Home: -Infinity, End: Infinity };
 
 /** One window from its start to its reset, in at most four encodings: the percent used so far (one line, solid where measured,
- *  faded where estimated), the forecast as a cone from its low to its high bound around its middle (the warning tint when the
- *  high bound reaches 100% before the reset), now, and the safe-pace line from now to 100% at the reset. The 100% grid line and
+ *  dashed where estimated), the forecast as a cone from its low to its high bound around its middle (the warning tint when the
+ *  high bound reaches 100% before the reset), now, and the dashed safe-pace line from now to 100% at the reset. The 100% grid line and
  *  the reset time frame it; a plan change inside the window is a labelled tick at the top. recent: also draw the last-24-hours
  *  line, and read its value. now: null for a closed window (closedWindow): it runs to its close, which is its resets_at here,
  *  and has no forecast, no now and no safe pace. */

@@ -1,7 +1,7 @@
 import type { LiveListSession, LiveState } from "../../api";
 import { SOURCE_LABELS } from "../../components/Filters";
 import { ProjectName } from "../../components/ProjectDot";
-import { num, pct, usd } from "../../format";
+import { num, pct, plural, usd } from "../../format";
 import { subjectAttrs } from "../../components/menu/subject";
 import { NEAR_FULL, StateTag } from "./AgentPanel";
 import { groupSessions, INFERRED_WHY, stateNow, stateText } from "./live";
@@ -28,7 +28,7 @@ export function Wall({ sessions, now, pick }: { sessions: LiveListSession[]; now
           {s.title && <span className="ttl" title={s.title}>{s.title}</span>}
           <code className="act">{act}</code>
           {share != null && <span className={"meter" + (share > NEAR_FULL ? " warn" : "")}><i style={{ width: `${Math.min(100, share * 100)}%` }} /></span>}
-          <span className="row"><span>{share != null ? `context ${pct(share)} · ` : ""}{num(s.tools)} tools{s.errors ? <> · <span className="bad">{num(s.errors)} errors</span></> : null}</span>
+          <span className="row"><span>{share != null ? `context ${pct(share)} · ` : ""}{num(s.tools)} tools{s.errors ? <> · <span className="bad">{plural(s.errors, "error")}</span></> : null}</span>
             <span>{usd(s.cost)}</span></span>
           <span className="row muted"><code>{s.branch ?? "–"}</code><span>{SOURCE_LABELS[s.source]} · {s.model ?? "–"}</span></span>
         </button>

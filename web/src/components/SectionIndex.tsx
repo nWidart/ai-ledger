@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import { motion } from "./chart";
-import { isDrawer, onUserScroll, openDrawer } from "./Drawer";
+import { isDrawer, onDrawerToggle, onUserScroll, openDrawer } from "./Drawer";
 import "./SectionIndex.css";
 
 export interface Section { id: string; label: string; long?: string; hidden?: boolean }
@@ -83,15 +83,23 @@ export function SectionIndex({ groups }: { groups: Section[][] }) {
     const onScroll = () => { clearTimeout(rest); rest = window.setTimeout(update, 100); };
     const native = "onscrollend" in window;
     addEventListener(native ? "scrollend" : "scroll", native ? update : onScroll, { passive: true });
-    document.addEventListener("toggle", update, true); // drawers opening move what is in view
+    const offDrawer = onDrawerToggle(update); // a drawer opening or closing moves what is in view
     pins.add(update);
     connect();
     return () => {
       io.forEach(o => o.disconnect()); ro.disconnect(); cancelAnimationFrame(raf); clearTimeout(rest);
       removeEventListener("resize", onResize); removeEventListener(native ? "scrollend" : "scroll", native ? update : onScroll);
-      document.removeEventListener("toggle", update, true); pins.delete(update);
+      offDrawer(); pins.delete(update);
     };
   }, [key]);
+  // A bar that scrolls sideways keeps the marked pill in view; the page itself does not move.
+  useEffect(() => {
+    const el = idx.current, a = el?.querySelector<HTMLElement>("a[aria-current]");
+    if (!el || !a || el.scrollWidth <= el.clientWidth) return;
+    const l = a.offsetLeft - el.offsetLeft, r = l + a.offsetWidth;
+    if (l < el.scrollLeft) el.scrollLeft = l - 16;
+    else if (r > el.scrollLeft + el.clientWidth) el.scrollLeft = r - el.clientWidth + 16;
+  }, [cur]);
   return <>
     <label className="jump"><span>Jump to</span><select aria-label="Jump to a section" value="" onChange={e => { if (e.target.value) jumpTo(e.target.value); }}>
       <option value="">Choose a section…</option>

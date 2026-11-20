@@ -30,12 +30,6 @@
 @media (prefers-reduced-motion: no-preference) { .pg-cost > :not(.top):not(.secidx) { transition: opacity .2s; } }
 .pg-cost .banner code { overflow-wrap: anywhere; }
 
-/* How measured: the windows' days with prompts, the view's reach and the method, folded under the heading. */
-.pg-cost details.how { margin: 6px 0 0; font-size: .8125rem; color: var(--text-secondary); max-width: 64ch; }
-.pg-cost details.how > summary { cursor: pointer; width: fit-content; min-height: 24px; color: var(--text-muted); }
-.pg-cost details.how > summary:hover { color: var(--text-primary); }
-.pg-cost details.how ul { margin: 4px 0 0; padding-left: 1.1em; display: grid; gap: 4px; }
-
 /* Plan gauge: the month so far (solid) and its pace (light) on one track, a tick at the plan's monthly price, the multiple as a badge. */
 .pg-cost .gauge { margin: 0; width: min(100%, 27rem); padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-1); }
 .pg-cost .g-head { display: flex; align-items: baseline; justify-content: space-between; gap: 4px 12px; font-size: .71875rem; }

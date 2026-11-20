@@ -188,11 +188,12 @@ describe("live.ts", () => {
 
 describe("LivePage", () => {
   it("names the automated projects file on the automated toggle", async () => {
-    show("");
+    const { r } = show("");
     await rail();
+    act(() => { r.client.setQueryData(queries.status.queryKey, { ...status, automated_file: list.automated_file }); });
     expect(list.automated_file.path).toMatch(/automated\.json$/);
     await userEvent.click(screen.getByRole("button", { name: "About automated sessions" }));
-    expect(within(screen.getByRole("group", { name: "Filters" })).getByRole("status").textContent).toContain(list.automated_file.path);
+    expect(within(screen.getByRole("group", { name: "Filters" })).getByRole("tooltip").textContent).toContain(list.automated_file.path);
   });
 
   it("lists the active sessions and opens the newest when the URL names none", async () => {
@@ -367,6 +368,8 @@ describe("LivePage", () => {
   it("says no session is active and links the newest one to its session sheet", async () => {
     show("", { list: { now: list.now, automated_file: list.automated_file, sessions: [], newest: { session_id: "s4", project: "dotfiles", last_ts: "2026-11-10T09:53:00.000Z" } } });
     const lede = await screen.findByText(/No session is active/);
+    expect(screen.getByRole("heading", { level: 1 }).id).toBe("lede"); // the page heading stays the page's landing, not the note
+    expect(lede.id).toBe("");
     const link = within(lede).getByRole("link", { name: "dotfiles" });
     expect(link.getAttribute("href")).toBe("/live?sheet=s4");
     await userEvent.click(link);
@@ -1393,7 +1396,8 @@ describe("LivePage", () => {
     expect(foo.querySelector(".ttl")!.getAttribute("title")).toBe("Fast ingest pass while Live is open");
     expect(within(el).getByRole("button", { name: "Open dotfiles" }).querySelector(".ttl")).toBeNull();
     expect(foo.textContent).toContain("git push origin feat/live-page");
-    expect(foo.textContent).toContain("1 errors");
+    expect(foo.textContent).toContain("1 error"); // one, singular
+    expect(foo.textContent).not.toContain("1 errors");
     await userEvent.click(within(el).getByRole("button", { name: "Open graft" }));
     expect(location.search).toBe("?session=0a0f7777-0000-7000-8000-000000000007");
     expect(await stream()).toBeTruthy();

@@ -86,6 +86,8 @@ export function useFlash(): Flash | null {
 }
 
 export const useStatus = () => useQuery(queries.status);
+/** The last status the nav's poll got, without polling or fetching from here: for parts of a page that only read it. */
+export const useLastStatus = (): Status | undefined => useQuery({ ...queries.status, enabled: false }).data;
 
 interface StatusSlice { data: Status | undefined; dataUpdatedAt: number; errorUpdatedAt: number }
 

@@ -3,7 +3,9 @@ import { limitsUrl, viewOf, type LimitHistoryRow, type LimitsPayload, type Limit
 import { ChartTable, DataTable } from "../../components/DataTable";
 import { Drawer } from "../../components/Drawer";
 import { Filters, RangeFilter, SOURCE_LABELS } from "../../components/Filters";
+import { HowMeasured } from "../../components/HowMeasured";
 import { PageSkeleton } from "../../components/PageSkeleton";
+import { Toggletip } from "../../components/Toggletip";
 import { useLanding } from "../../components/useLanding";
 import { big, dur, num, plural, usd } from "../../format";
 import { navigate, useView } from "../../url";
@@ -55,9 +57,9 @@ function Used({ w, now }: { w: LimitWindow; now: string }) {
   };
   const list = (title: string, rows: { key: string; r: WindowUsedRow; link?: string }[]) => rows.length > 0 && <div>
     <h5>{title}</h5>
-    <ul>{rows.map(({ key, r, link }) => <li key={key} title={`${usd(r.cost)}, estimated at API list prices`}>
+    <ul>{rows.map(({ key, r, link }) => <li key={key}>
       {link ? <a href={link} onClick={open} aria-label={`${key} in Cost, ${range}`} title={`Open ${key} in Cost: ${near}`}>{key}</a> : <span>{key}</span>}
-      <span className="used-share">{sharePct(r.share)}</span>
+      <span className="used-share">{sharePct(r.share)}</span><span className="muted">{usd(r.cost)}</span>
       {r.points != null && <span className="muted">≈ {num(r.points, 1)} points</span>}</li>)}</ul>
   </div>;
   return (
@@ -73,14 +75,15 @@ function Used({ w, now }: { w: LimitWindow; now: string }) {
   );
 }
 
-/** The chart as a table: sampled times from start to reset and now, each with its percent and the safe pace after now. */
-function ChartData({ w, now }: { w: LimitWindow; now: string }) {
+/** The chart as a table: sampled times from start to reset and now, each with its percent and the safe pace after now. A closed
+ *  window (now null) has no now and no safe pace, so its table has no such column. */
+function ChartData({ w, now }: { w: LimitWindow; now: string | null }) {
   const rows = chartRows(w, now);
   if (!rows.length) return null;
   return <DataTable name={`${windowName(w)}, chart data`}>
-    <thead><tr><th scope="col">Time</th><th scope="col">Used</th><th scope="col" className="num">Safe pace</th></tr></thead>
+    <thead><tr><th scope="col">Time</th><th scope="col">Used</th>{now != null && <th scope="col" className="num">Safe pace</th>}</tr></thead>
     <tbody>{rows.map(({ p, now: isNow, safe }) => <tr key={p.t}>
-      <th scope="row">{whenDay(p.t)}{isNow && " (now)"}</th><td>{pointText(p)}</td><td className="num">{safe == null ? "–" : `${num(safe, 1)}%`}</td>
+      <th scope="row">{whenDay(p.t)}{isNow && " (now)"}</th><td>{pointText(p)}</td>{now != null && <td className="num">{safe == null ? "–" : `${num(safe, 1)}%`}</td>}
     </tr>)}</tbody>
   </DataTable>;
 }
@@ -91,7 +94,7 @@ function Details({ w, now, id }: { w: LimitWindow; now: string; id: string }) {
   return (
     <div className="lim-details" id={id}>
       <p className={"cap-text" + (w.at_limit || f?.hits_at ? " out" : "")}>{caption(w)}{!w.at_limit && f?.kind === "flat" && <> <span className="chip">flat rate</span></>}</p>
-      {recent && <p className={"cap-note" + (f?.recent_hits_at ? " out" : "")}>{recent}</p>}
+      {recent && <p className={"cap-note" + (f?.recent_hits_at ? " warn" : "")}>{recent}</p>}
       {p.rate && <p className="cap-note">{p.rate[0]!.toUpperCase() + p.rate.slice(1)}{p.verdict && <> · <b>{p.verdict}</b></>}</p>}
       {share && <p className="cap-note">{share}</p>}
       {surfaces && <p className="cap-note">{surfaces}</p>}
@@ -109,7 +112,7 @@ function WindowCard({ w, d, recent }: { w: LimitWindow; d: LimitsPayload; recent
     <section className="panel lim-card" aria-label={windowName(w)}>
       <header>
         <h3>{windowName(w)}{w.plan && <span className="muted" title={w.plan}> · {planName(w.plan)}</span>}</h3>
-        <div className="now-pct"><b>{w.current == null ? "–" : `${num(w.current)}%`}</b>{!w.measured && <> <span className="chip est" title="estimated">est.</span></>}
+        <div className="now-pct"><b>{w.current == null ? "–" : `${num(w.current)}%`}</b>{!w.measured && <> <span className="chip est">estimated</span></>}
           {" "}<span className={"lim-status" + (st.out ? " out" : "")}>{st.out && <span aria-hidden="true">▲ </span>}{st.text}</span></div>
       </header>
       <LimitChart w={w} now={d.now} events={d.events} recent={recent} />
@@ -117,7 +120,7 @@ function WindowCard({ w, d, recent }: { w: LimitWindow; d: LimitsPayload; recent
         <div><dt>Headroom</dt><dd>{headroom(w, d.now)}</dd></div>
         <div><dt>Pace</dt>{rates
           ? <dd className={rates.hot ? "hot" : undefined}>{rates.hot && <span aria-hidden="true">▲ </span>}{rates.now} vs {rates.safe} safe{rates.hot && <span className="sr">, running hot</span>}</dd>
-          : <dd className="muted" title={w.at_limit ? undefined : w.no_forecast ?? undefined}>–</dd>}</div>
+          : <dd className="muted">–{!w.at_limit && w.no_forecast && <Toggletip name="Why no pace">{w.no_forecast}</Toggletip>}</dd>}</div>
         <div><dt>Top</dt><dd><span>{top ?? "–"}</span>
           <button type="button" className="linkish lim-more" aria-label={`Details of ${windowName(w)}`} aria-expanded={open}
             aria-controls={open ? id : undefined} onClick={() => setOpen(!open)}>Details</button></dd></div>
@@ -166,7 +169,7 @@ function HistoryStrip({ strip, unused, selected, onPick, refs }: { strip: Strip;
   };
   return (
     <div className="hs-row">
-      <div className="hs-name">{strip.name}<span className="hs-sum" title={sum.title}>{sum.text}</span></div>
+      <div className="hs-name">{strip.name}<span className="hs-sum"><span>{sum.text}</span><Toggletip name={`How measured: ${strip.name} unused`}>{sum.title}</Toggletip></span></div>
       <div className="hs-bars" ref={scroller} onPointerDown={settle} onWheel={settle} onTouchStart={settle} onFocus={settle} role="group" aria-label={`${strip.name}, past windows, oldest first. Left and Right arrow keys move between them.`} onKeyDown={onKey}>
         {bars.map((h, i) => {
           const key = barKey(h), name = barName(h);
@@ -198,7 +201,7 @@ function WindowPanel({ h, onClose }: { h: LimitHistoryRow; onClose: () => void }
         <button type="button" className="linkish" onClick={onClose}>Close</button>
       </header>
       {error ? <p role="alert">Could not load this window's curve ({error.message}). <button type="button" className="linkish" onClick={retry}>Retry</button></p>
-        : w && data ? <LimitChart w={w} now={null} events={data.events} />
+        : w && data ? <><LimitChart w={w} now={null} events={data.events} /><ChartTable><ChartData w={w} now={null} /></ChartTable></>
         : <p className="muted">{loading ? "Loading the curve…" : ""}</p>}
     </section>
   );
@@ -250,11 +253,11 @@ function projectRows(projects: LimitsPayload["value"]["projects"]) {
       points: ps.reduce((n, p) => n + p.points, 0), commits: ps.reduce((n, p) => n + p.commits, 0), commits_per_point: null }))];
 }
 
-function Value({ d }: { d: LimitsPayload }) {
-  const v = d.value;
+function Value({ d, range }: { d: LimitsPayload; range: number }) {
+  const v = d.value, over = range ? `the last ${range} days` : "all time";
   return (
-    <Drawer id="value" title="What a point buys" description="Cost, tokens and commits per 1% of a limit">
-      <div className="hint">One point is 1% of a limit, over the range set in Past windows. Cost is at API list prices; a model without a price has no points.</div>
+    <Drawer id="value" title="What a point buys" description={`Cost, tokens and commits per 1% of a limit, ${over}`}>
+      <div className="hint">One point is 1% of a limit, over {over}: the range set in Past windows. Cost is at API list prices; a model without a price has no points.</div>
       {v.limits.length ? v.limits.map(l => <div key={`${l.provider}-${l.label}`} className="val">
         <h3>{windowName(l)}: {usd(l.cost_per_point)} a point{l.plan && <span className="muted" title={l.plan}> · {planName(l.plan)}{l.past_plan && ", an earlier plan"}</span>}</h3>
         <DataTable name={`Points by model, ${windowName(l)}`}>
@@ -277,17 +280,16 @@ function Value({ d }: { d: LimitsPayload }) {
 }
 
 /** How the figures are made: the forecast, the cone, the safe pace, the last 24 h line, and what estimates count. */
-function HowMeasured() {
+function HowForecast() {
   return (
-    <details className="how">
-      <summary>How measured</summary>
-      <p>Forecasts run halfway between your usual pace and the window's own over its last seventh (a weekly window's last day); the
-        shaded cone is the likely range and covers both. The faint straight line runs from now to 100% at the reset: the pace that
+    <HowMeasured what="forecasts">
+      <span className="tt-p">Forecasts run halfway between your usual pace and the window's own over its last seventh (a weekly window's last day);
+        the shaded cone is the likely range and covers both. The dashed straight line runs from now to 100% at the reset: the pace that
         would use the window exactly. A curve steeper than it runs hot. The cone turns amber when its high edge reaches 100% before
-        the reset.</p>
-      <p>The last 24 h pace line carries your use over the last 24 hours on to the reset.</p>
-      <p>Estimates count local agent work only: use elsewhere (claude.ai, Codex cloud) shows up at the next measured reading.</p>
-    </details>
+        the reset.</span>
+      <span className="tt-p">The last 24 h pace line carries your use over the last 24 hours on to the reset.</span>
+      <span className="tt-p">Estimates count local agent work only: use elsewhere (claude.ai, Codex cloud) shows up at the next measured reading.</span>
+    </HowMeasured>
   );
 }
 
@@ -321,9 +323,8 @@ export function LimitsPage() {
       {d && <>
         <div className="sect-head sect" id="windows">
           <h2>Open windows</h2>
-          <p className="hint">Now, for the whole account. Hover or focus a chart for the value at a time.</p>
-          {d.windows.some(hasScenario) && <button type="button" className="lim-toggle" aria-pressed={recent} onClick={() => setRecent(!recent)}>Last 24 h pace</button>}
-          <HowMeasured />
+          <p className="hint">Now, for the whole account. Hover or focus a chart for the value at a time.<HowForecast /></p>
+          {d.windows.some(w => hasScenario(w) && !w.at_limit) && <button type="button" className="lim-toggle" aria-pressed={recent} onClick={() => setRecent(!recent)}>Last 24 h pace</button>}
         </div>
         <section className="lim-grid" aria-label="Open windows">
           {d.windows.length ? d.windows.map(w => <WindowCard key={`${w.provider}-${w.limit_id}-${w.scope}`} w={w} d={d} recent={recent} />)
@@ -331,7 +332,7 @@ export function LimitsPage() {
         </section>
         <PastWindows d={d} />
         <div className="drawers">
-          <Value d={d} />
+          <Value d={d} range={shown.range} />
         </div>
       </>}
     </main>

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import type { DailyWorkRow, UsagePayload } from "../../api";
 import { useColors } from "../../colors";
 import { dayLabel, niceStep, num, plural } from "../../format";
-import { dayAxis, LOW_CALLS, lowVolume, peakLabelAt, roomForLabels, textScale, tipAt, useWidth } from "../../components/chart";
+import { dayAxis, FEW_CALLS, LOW_CALLS, lowVolume, peakLabelAt, roomForLabels, textScale, tipAt, useWidth } from "../../components/chart";
 import { ChartTable, DataTable } from "../../components/DataTable";
 import { HowMeasured } from "../../components/HowMeasured";
 import type { Kind } from "../cost/cost";
@@ -10,7 +10,6 @@ import { busy, failRate, METRICS, monday, workBuckets, workKinds, workStack, typ
 
 const H = 240;
 const BAR = "var(--series-1)", FAIL = "var(--critical)";
-const FEW = "too few calls for a steady rate"; // as the Errors chart words it
 
 /** The days of a view: a week bar it cuts short is partial. */
 export interface WorkView { start: string | null; end: string }
@@ -147,7 +146,7 @@ function WorkBars({ rows, week, view, kinds, stack, metric, onMetric, onDay }: W
         <div><h2 id="workTitle">Work per {unit}</h2>
           <div className="hint">{M.label}{kinds.length ? " by project" : ""} per {week ? "week" : "day"}{hasRate
             ? ", errors per 100 tool calls on the right axis" : ""}. {week ? "Choose a shorter range to pick a day." : "Select a day to list its sessions."}
-            <HowMeasured what="work per day">{kinds.length ? "Projects with a color of their own are drawn apart, the rest in Other. " : ""}{week
+            <HowMeasured what={`work per ${unit}`}>{kinds.length ? "Projects with a color of their own are drawn apart, the rest in Other. " : ""}{week
               ? "Weeks start on Monday. " : "With the keyboard, focus the chart, use the arrow keys and press Enter to list a day's sessions. "}
               {hasRate ? "The line is the failed tool calls per 100 calls, against its own axis." : ""}</HowMeasured></div></div>
         <div className="seg" role="group" aria-label="Chart metric">
@@ -190,17 +189,17 @@ function WorkBars({ rows, week, view, kinds, stack, metric, onMetric, onDay }: W
             <div key={k.k} className="row"><span><i style={{ background: k.c }} />{k.label}</span><b>{num(v)}</b></div>)}</div>}
           <div className="row tot"><span><i style={{ background: FAIL }} />Errors per 100 calls</span><b>{num(failRate(cur), 1)}</b></div>
           <div className="row"><span>Failed tool calls</span><b>{num(cur.failed_calls)}{cur.calls ? ` of ${num(cur.calls)}` : ""}</b></div>
-          {low[at!] && <div className="muted">{FEW}</div>}
+          {low[at!] && <div className="muted">{FEW_CALLS}</div>}
         </>}</div>
       </div>
-      <div className="sr" aria-live="polite">{cur ? `${name(cur.day)}: ${bucketText(cur)}${low[at!] ? `, ${FEW}` : ""}`
+      <div className="sr" aria-live="polite">{cur ? `${name(cur.day)}: ${bucketText(cur)}${low[at!] ? `, ${FEW_CALLS}` : ""}`
         + (curParts.length ? `. ${M.label} by project: ${curParts.map(([k, v]) => `${k.label} ${num(v)}`).join(", ")}` : "") : ""}</div>
       {/* The chart's text alternative: the measure per bucket (by project when stacked), its total and errors per 100 tool calls. */}
       <ChartTable><DataTable name={`${M.label}${kinds.length ? " by project" : ""} and errors per 100 tool calls per ${unit}`} region="scroll tall">
         <thead><tr><th scope="col">{week ? "Week" : "Day"}</th>{kinds.map(k => <th key={k.k} scope="col" className="num">{k.label}</th>)}
           <th scope="col" className="num">{kinds.length ? "Total" : M.label}</th><th scope="col" className="num">Errors per 100 calls</th></tr></thead>
         <tbody>{rows.map((p, i) => <tr key={p.day}><th scope="row">{name(p.day)}</th>
-          {kinds.map(k => <td key={k.k} className="num">{num(stack[i]?.[k.k] ?? 0)}</td>)}<td className="num">{num(p[metric])}</td><td className="num">{num(failRate(p), 1)}{low[i] ? ` (${FEW})` : ""}</td></tr>)}</tbody>
+          {kinds.map(k => <td key={k.k} className="num">{num(stack[i]?.[k.k] ?? 0)}</td>)}<td className="num">{num(p[metric])}</td><td className="num">{num(failRate(p), 1)}{low[i] ? ` (${FEW_CALLS})` : ""}</td></tr>)}</tbody>
       </DataTable></ChartTable>
     </section>
   );

@@ -240,7 +240,8 @@ export function ErrorsPage() {
 
   return (
     <main id="content" className="wrap pg-errors" aria-busy={!m && !error ? "true" : undefined}>
-      <header className="top">
+      {/* The first load shows the placeholder alone, with the page's heading, as the other pages do; a failed one keeps the header. */}
+      {!m && !error ? <PageSkeleton title="Loading errors…" /> : <header className="top">
         <p className="kicker">{view.source ? agentName(view.source) : "Agent"} tool errors</p>
         <Filters projects={projects}>
           <div className="seg" id="fGran" role="group" aria-label="Granularity">
@@ -250,11 +251,10 @@ export function ErrorsPage() {
           <label className="chk"><input type="checkbox" id="fNoise" checked={view.noise} onChange={e => update({ noise: e.target.checked }, true)} /> <span>Hide noise and muted</span></label>
           <Toggletip term="hiding noise and muted types">Leaves out harness errors, user rejections and the types you muted</Toggletip>
         </Filters>
-      </header>
-      {!m && (error
-        ? <div className="card" id="load" role="alert"><b>Couldn't load errors.</b> <span className="muted">{error.message}. Check that the app is running.</span>{" "}
-          <button type="button" ref={retryBtn} onClick={() => { retried.current = true; retry(); }}>Retry</button></div>
-        : <PageSkeleton title="Loading errors…" />)}
+        {!m && <h1 className="lede" id="lede" tabIndex={-1}>Errors could not be loaded.</h1>}
+      </header>}
+      {!m && error && <div className="card" id="load" role="alert"><b>Couldn't load errors.</b> <span className="muted">{error.message}. Check that the app is running.</span>{" "}
+        <button type="button" ref={retryBtn} onClick={() => { retried.current = true; retry(); }}>Retry</button></div>}
       <div className="sr" id="pageLive" aria-live="polite">{pageLive}</div>
       {deadLink && <div className="outnote" id="deadLink"><span>{DEAD_LINK}</span> <button type="button" onClick={dismissDead}>Dismiss</button></div>}
       {ctx && <Ctx.Provider value={ctx}><RowContext.Provider value={rows}>
