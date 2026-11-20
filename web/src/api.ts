@@ -21,9 +21,9 @@ export interface Totals extends Tokens {
   tokens_per_prompt: number | null; cost_per_prompt: number | null; turns_per_prompt: number | null; tool_calls_per_prompt: number | null;
   interruption_rate: number | null; tokens_per_commit: number | null; cost_per_commit: number | null; errors_per_100_calls: number | null;
   session_seconds: number; median_session_seconds: number | null; near_limit: number;
-  /** Model and tool time summed over the sessions that record them (timed_sessions; Claude Code's cost-state line), whole-session,
-   *  and timed_output their whole output tokens; output_per_s is timed_output over model time, null when there is none. */
-  model_ms: number; tool_ms: number; timed_sessions: number; timed_output: number; output_per_s: number | null;
+  /** Model and tool time summed over the sessions that record them (timed_sessions; Claude Code's cost-state line), whole-session;
+   *  output_per_s is those sessions' output tokens over their model time, null when there is none. */
+  model_ms: number; tool_ms: number; timed_sessions: number; output_per_s: number | null;
 }
 
 export interface DailyRow extends Tokens { day: Day; cost: number | null; unpriced: number }
@@ -61,8 +61,6 @@ export interface SessionRow {
   unpriced: number; thinking_ms: number; tool_calls: number; errors: number; commits: number; tests_passed: number; tests_failed: number;
   prompts: number; interrupted: number; context_limit: number | null; context_share: number | null; near_limit: boolean;
   tokens_per_prompt: number | null; error_loops: number;
-  /** Whole-session model time, tool time and output tokens; null when the session records no model time. */
-  model_ms: number | null; tool_ms: number | null; timed_output: number | null;
   /** From the first prompt; set on top_sessions and /api/sessions rows only. */
   title?: string | null;
 }
@@ -73,7 +71,7 @@ export interface Previous {
   /** As the same totals of the view. */
   prompts: number; commits: number; calls: number; errors: number; test_runs: number; tests_passed: number; interrupted: number;
   sub_tokens: number; median_session_seconds: number | null;
-  model_ms: number; tool_ms: number; timed_sessions: number; timed_output: number; output_per_s: number | null;
+  output_per_s: number | null;
   daily: { day: Day; cost: number | null; tokens: number }[];
   by_project: { project: string | null; cost: number | null; tokens: number; requests: number }[];
 }
@@ -128,9 +126,10 @@ export interface SessionInfo {
   context_window: number | null; first_compaction_ts: Ts | null;
   /** Active time, as the sessions table's duration_s: pauses over 20 minutes left out. */
   active_s: number | null;
-  /** From Claude Code's cost-state line, subagents included; all null when the session records none (every Codex session). */
-  model_ms: number | null; tool_ms: number | null; lines_added: number | null; lines_removed: number | null; output_per_s: number | null;
+  /** From Claude Code's cost-state line, subagents included; null when the session records none (every Codex session). */
+  runs: SessionRuns | null;
 }
+export interface SessionRuns { model_ms: number; tool_ms: number; lines_added: number; lines_removed: number; output_per_s: number | null }
 export interface SessionModelRow extends Tokens { model: string | null; effort: string; subagent: boolean; requests: number; tokens: number; cost: number | null }
 /** The session's /insights judgment (a facet): a model's opinion, not a measurement. Name lists run most counted first. */
 export type SessionInsight = Pick<InsightSession, "outcome" | "helpfulness" | "session_type" | "brief_summary" | "friction_detail" | "friction" | "goals" | "satisfaction">;

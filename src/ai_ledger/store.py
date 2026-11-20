@@ -469,7 +469,7 @@ class Deriver:
         self.limits = []  # limit_snapshots rows; only sources whose transcripts report plan limits fill it
         self.titles = {}  # session_id -> {"custom" | "agent": newest title of that kind}; no sessions row of its own
         self.contexts = []  # (context_snapshots row, its context_parts rows); only Claude Code's /context lines fill it
-        self.runs = {}  # (session_id, start_ms) -> [api_ms, tool_ms, lines_added, lines_removed]; only cost-state lines fill it
+        self.runs = {}  # (session_id, start_ms) -> its figures in RUN_FIGURES order; only cost-state lines fill it
         # Errors from earlier ingests of this file still waiting for Claude's next words.
         self.pending = dict(cur.execute(
             "SELECT tool_use_id, result_seq FROM tool_calls WHERE result_file = ? AND is_error AND followup IS NULL "
@@ -539,9 +539,11 @@ class Deriver:
     def cost_state(self, d):
         """A run's running totals, which Claude Code writes as it exits, subagent work included. Only a main file holds them.
         The format is undocumented: a line without its session, its run or an integer figure is skipped."""
-        sid, start, figures = d.get("sessionId"), d.get("startTime"), [d.get(f) for f in COST_FIGURES]
+        sid, start, figures = d.get("sessionId"), d.get("startTime"), [d.get(k) for k in RUN_FIGURES.values()]
         if self.sub or not isinstance(sid, str) or not sid or not all(is_int(v) for v in (start, *figures)):
             return
+        # Merged here as well as by flush's greatest(): one INSERT ... ON CONFLICT cannot update the same row twice in DuckDB,
+        # so a run with two lines in this pass must reach it as one row.
         old = self.runs.get((sid, start))
         self.runs[(sid, start)] = figures if old is None else [max(a, b) for a, b in zip(old, figures)]
 
@@ -662,10 +664,10 @@ class Deriver:
                     "agent = coalesce(excluded.agent, session_titles.agent)")
         self.flush_contexts()
         # A line read again, or copied into another file, states figures the run already has: greatest() keeps them as they are.
-        insert(cur, "session_runs", ["session_id", "start_ms", "api_ms", "tool_ms", "lines_added", "lines_removed"],
+        insert(cur, "session_runs", ["session_id", "start_ms", *RUN_FIGURES],
                [(sid, start, *f) for (sid, start), f in self.runs.items()],
                tail="ON CONFLICT (session_id, start_ms) DO UPDATE SET " + ", ".join(
-                   f"{c} = greatest(session_runs.{c}, excluded.{c})" for c in ("api_ms", "tool_ms", "lines_added", "lines_removed")))
+                   f"{c} = greatest(session_runs.{c}, excluded.{c})" for c in RUN_FIGURES))
         # Errors still open stay in self.pending; the next ingest reloads them from tool_calls.
         update_from(cur, "tool_calls", "tool_use_id", ["followup"], list(self.followups.items()), where="AND tool_calls.followup IS NULL")
 
@@ -730,7 +732,9 @@ CONTEXT_PARTS = (("category", "categories", "name", None), ("mcp_tool", "mcp_too
                  ("skill", "skills", "name", "source"))
 
 
-COST_FIGURES = ("totalAPIDuration", "totalToolDuration", "totalLinesAdded", "totalLinesRemoved")  # a cost-state line's, as session_runs keeps them
+# The session_runs figure columns, each with the cost-state line's key it comes from.
+RUN_FIGURES = {"api_ms": "totalAPIDuration", "tool_ms": "totalToolDuration", "lines_added": "totalLinesAdded",
+               "lines_removed": "totalLinesRemoved"}
 
 
 def text_or_none(v):

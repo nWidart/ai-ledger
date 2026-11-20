@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from typing import Callable
 
-from . import metrics
+from . import metrics, titles
 from .categorize import SHELL_TOOLS
 
 START_MIN_TOKENS = 2000  # a main-thread request with fewer prompt tokens is a side request, not a turn: it did not carry the context
@@ -568,5 +568,5 @@ def payload(cur, project="", range_days=0, source="", automated=False, today=Non
     data["tips"] = tips(Ctx(cur, q, shared, rp, W, fp, prices, data, brk))
     data["overhead"] = overhead(cur, project, source)
     # One title lookup for every session row on the payload: it reads the first prompt of each session that has no title.
-    metrics.with_titles(cur, [*data["fills"]["largest"], *data["cost"]["breaks"], *(x for t in data["tips"] for x in t["sessions"])])
+    titles.with_titles(cur, [*data["fills"]["largest"], *data["cost"]["breaks"], *(x for t in data["tips"] for x in t["sessions"])])
     return data

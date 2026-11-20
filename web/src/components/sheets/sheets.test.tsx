@@ -180,7 +180,7 @@ describe("SessionSheet", () => {
   });
 
   it("shows none of them for a session that records no model time", async () => {
-    const info = { ...session.info, source: "codex" as const, model_ms: null, tool_ms: null, lines_added: null, lines_removed: null, output_per_s: null };
+    const info = { ...session.info, source: "codex" as const, runs: null };
     mockApi({ "/api/session": () => ({ ...session, info }) });
     at("?session=s1");
     renderApp(<UsageSheets data={usage} />);

@@ -9,7 +9,7 @@ import re
 import sys
 from datetime import datetime, timedelta, timezone
 
-from . import families, metrics, store
+from . import families, metrics, store, titles
 
 KINDS = {"facets": "facet", "session-meta": "meta"}  # directory -> usage_files.kind; report*.html is never read
 SESSION_ID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
@@ -336,5 +336,5 @@ def payload(cur, project="", range_days=0, source="", automated=False, today=Non
     for r in sess[:SESSION_ROWS]:
         r["start"] = metrics.iso(r["start"])
         r.update(session_names(names, r["session_id"]), meta=own.get(r["session_id"]))
-    out.update(sessions=metrics.with_titles(cur, sess[:SESSION_ROWS]), truncated=len(sess) > SESSION_ROWS)
+    out.update(sessions=titles.with_titles(cur, sess[:SESSION_ROWS]), truncated=len(sess) > SESSION_ROWS)
     return out

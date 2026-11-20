@@ -10,7 +10,7 @@ from http.server import ThreadingHTTPServer
 from unittest import mock
 from zoneinfo import ZoneInfo
 
-from ai_ledger import app, metrics, store
+from ai_ledger import app, metrics, store, titles
 
 PRICES = {
     "m-a": {"input": 1, "output": 10, "cache_read": 0.1, "cache_5m": 2, "cache_1h": 4, "context": 1000},
@@ -248,7 +248,7 @@ class MetricsTest(unittest.TestCase):
         self.assertIsNone(self.all["changes"])
 
     def test_prompt_title(self):
-        t = metrics.prompt_title
+        t = titles.prompt_title
         self.assertEqual(t("<command-message>ship</command-message>\n<command-name>/ship</command-name>\n<command-args>add  the tests</command-args>"),
                          "/ship add the tests")
         self.assertEqual(t("<command-message>ship is running…</command-message>"), "/ship")
@@ -265,12 +265,12 @@ class MetricsTest(unittest.TestCase):
         store.insert(c, "session_titles", ["session_id", "custom", "agent"], [
             ("s1", "auth  bug\n fix", "Fix login redirect"), ("s3", None, "y" * 140), ("gone", "never stored", None)])
         try:
-            with mock.patch.object(metrics, "first_prompts", wraps=metrics.first_prompts) as fp:
-                got = metrics.titles(c, ["s1", "s2", "s3", "o1", "s1"])
+            with mock.patch.object(titles, "first_prompts", wraps=titles.first_prompts) as fp:
+                got = titles.titles(c, ["s1", "s2", "s3", "o1", "s1"])
             self.assertEqual(got, {"s1": ("auth bug fix", "agent"), "s2": ("Add a dark mode toggle to the settings page.", "prompt"),
                                    "s3": ("y" * 79 + "…", "agent")})
             self.assertEqual(fp.call_args.args[1], ["s2", "o1"])  # only the sessions without an agent title
-            self.assertEqual(metrics.titles(c, []), {})
+            self.assertEqual(titles.titles(c, []), {})
             self.assertEqual(metrics.session(c, "s1", prices=PRICES)["title"], "auth bug fix")
             usage = metrics.usage(c, "foo", 7, prices=PRICES, today=TODAY)
             self.assertEqual(usage["error_loops"][0]["title"], "auth bug fix")
@@ -282,10 +282,10 @@ class MetricsTest(unittest.TestCase):
             c.execute("DELETE FROM session_titles")
 
     def test_short_title(self):
-        self.assertEqual(metrics.short_title("  a \t b\n"), "a b")
-        self.assertEqual(metrics.short_title("z" * 80), "z" * 80)
-        self.assertIsNone(metrics.short_title(" "))
-        self.assertIsNone(metrics.short_title(None))
+        self.assertEqual(titles.short_title("  a \t b\n"), "a b")
+        self.assertEqual(titles.short_title("z" * 80), "z" * 80)
+        self.assertIsNone(titles.short_title(" "))
+        self.assertIsNone(titles.short_title(None))
 
     def test_session_list_by_day(self):
         day = metrics.session_list(self.con.cursor(), day="2026-11-04", prices=PRICES, today=TODAY)
@@ -333,8 +333,8 @@ class MetricsTest(unittest.TestCase):
         try:
             s = metrics.session(c, "s2", prices=PRICES)
             self.assertTrue(s["first_prompt_cut"])
-            self.assertEqual(len(s["first_prompt"]), metrics.FIRST_PROMPT_CAP + 1)
-            self.assertEqual(metrics.first_prompt(c, "s2", cap=None), long.strip())
+            self.assertEqual(len(s["first_prompt"]), titles.FIRST_PROMPT_CAP + 1)
+            self.assertEqual(titles.first_prompt(c, "s2", cap=None), long.strip())
         finally:
             c.execute("DELETE FROM raw_lines WHERE key = 'x3'")
 
@@ -374,13 +374,15 @@ class MetricsTest(unittest.TestCase):
         self.assertAlmostEqual(bash["p50_ms"], 4000)
         self.assertAlmostEqual(bash["p95_ms"], 9400)
         # s1's two runs; s2 records none and counts in neither figure.
-        self.assertEqual({k: t[k] for k in ("model_ms", "tool_ms", "timed_sessions", "timed_output", "output_per_s")},
-                         dict(model_ms=10_000_000, tool_ms=3_000_000, timed_sessions=1, timed_output=1_000_000, output_per_s=100.0))
-        s2 = next(x for x in self.foo7["sessions"] if x["session_id"] == "s2")
-        self.assertEqual((s2["model_ms"], s2["tool_ms"], s2["timed_output"]), (None, None, None))
-        info = self.foo7["session"]["info"]
-        self.assertEqual({k: info[k] for k in ("model_ms", "tool_ms", "lines_added", "lines_removed", "output_per_s")},
+        self.assertEqual({k: t[k] for k in ("model_ms", "tool_ms", "timed_sessions", "output_per_s")},
+                         dict(model_ms=10_000_000, tool_ms=3_000_000, timed_sessions=1, output_per_s=100.0))
+        self.assertNotIn("timed_output", t)
+        self.assertEqual(self.foo7["session"]["info"]["runs"],
                          dict(model_ms=10_000_000, tool_ms=3_000_000, lines_added=130, lines_removed=32, output_per_s=100.0))
+        # The run figures stay off the session rows: only the totals and the session sheet carry them.
+        for key in ("sessions", "top_sessions", "near_limit"):
+            for x in self.foo7[key]:
+                self.assertFalse({"model_ms", "tool_ms", "timed_output"} & x.keys(), (key, x["session_id"]))
 
     def test_outcomes(self):
         t = self.foo7["totals"]
@@ -612,8 +614,7 @@ class MetricsTest(unittest.TestCase):
 
     def test_previous_matches_usage_over_previous_window(self):
         keys = ("prompts", "commits", "calls", "errors", "test_runs", "tests_passed", "interrupted", "sub_tokens",
-                "median_session_seconds", "sessions", "requests", "tokens", "active_days", "model_ms", "tool_ms", "timed_sessions",
-                "timed_output", "output_per_s")
+                "median_session_seconds", "sessions", "requests", "tokens", "active_days", "output_per_s")
         c = self.con.cursor()
         # Nothing lies after these previous windows, so a usage() call ending on their last day covers exactly them.
         for today, days, auto in ((date(2026, 11, 7), 2, False), (date(2026, 11, 7), 2, True), (date(2026, 11, 6), 1, False),
@@ -625,8 +626,8 @@ class MetricsTest(unittest.TestCase):
         prev = metrics.usage(c, "foo", 1, prices=PRICES, today=TODAY)["previous"]
         self.assertEqual({k: prev[k] for k in keys}, dict(
             prompts=2, commits=1, calls=10, errors=6, test_runs=2, tests_passed=1, interrupted=1, sub_tokens=1_000_000,
-            median_session_seconds=540, sessions=1, requests=2, tokens=12_000_000, active_days=1, model_ms=10_000_000,
-            tool_ms=3_000_000, timed_sessions=1, timed_output=1_000_000, output_per_s=100.0))
+            median_session_seconds=540, sessions=1, requests=2, tokens=12_000_000, active_days=1, output_per_s=100.0))
+        self.assertFalse({"model_ms", "tool_ms", "timed_sessions", "timed_output"} & prev.keys())
 
     def test_session_sort(self):
         ids = lambda **k: [x["session_id"] for x in metrics.session_list(self.con.cursor(), prices=PRICES, today=TODAY, **k)["sessions"]]
@@ -1104,35 +1105,31 @@ class SessionRunsTest(unittest.TestCase):
     def totals(self, source="", today=TODAY, prev=False):
         u = metrics.usage(self.con.cursor(), "foo", 7, prices=PRICES, today=today, source=source)
         t = u["previous"] if prev else u["totals"]
-        return {k: t[k] for k in ("model_ms", "tool_ms", "timed_sessions", "timed_output", "output_per_s")}
+        return {k: t[k] for k in (("output_per_s",) if prev else ("model_ms", "tool_ms", "timed_sessions", "output_per_s"))}
 
     def test_model_and_tool_time_and_output_speed(self):
         # 40 minutes waiting on the model and 25 running tools; c counts in neither. 235,200 tokens over 2,400 s is 98 per second.
-        want = dict(model_ms=40 * 60_000, tool_ms=25 * 60_000, timed_sessions=2, timed_output=235_200, output_per_s=98.0)
-        self.assertEqual(self.totals(), want)
-        self.assertEqual(self.totals(today=date(2026, 11, 11), prev=True), want)  # the previous period counts the same way
+        self.assertEqual(self.totals(), dict(model_ms=40 * 60_000, tool_ms=25 * 60_000, timed_sessions=2, output_per_s=98.0))
+        self.assertEqual(self.totals(today=date(2026, 11, 11), prev=True), dict(output_per_s=98.0))  # the previous period counts the same way
 
     def test_a_session_cut_by_the_range_counts_its_whole_output(self):
-        u = metrics.usage(self.con.cursor(), "foo", 7, prices=PRICES, today=TODAY)
-        a = next(x for x in u["sessions"] if x["session_id"] == "a")
-        self.assertEqual((a["model_ms"], a["tool_ms"], a["timed_output"]), (30 * 60_000, 20 * 60_000, 150_000))
-        c = next(x for x in u["sessions"] if x["session_id"] == "c")
-        self.assertEqual((c["model_ms"], c["tool_ms"], c["timed_output"]), (None, None, None))
+        runs = {r["session_id"]: r for r in metrics.rows(self.con.cursor(), f"WITH {metrics.runs_cte('SELECT session_id FROM sessions')} SELECT * FROM runs")}
+        self.assertEqual((runs["a"]["model_ms"], runs["a"]["tool_ms"], runs["a"]["output"]), (30 * 60_000, 20 * 60_000, 150_000))
+        self.assertEqual({sid: r["output"] for sid, r in runs.items()}, dict(a=150_000, b=85_200, d=81_000))  # c and x record no run
         listed = metrics.session_list(self.con.cursor(), "foo", 7, prices=PRICES, today=TODAY)["sessions"]
-        self.assertEqual({x["session_id"]: x["timed_output"] for x in listed}, dict(a=150_000, b=85_200, c=None, x=None))
+        self.assertEqual({x["session_id"] for x in listed}, set("abcx"))
+        for x in listed:
+            self.assertFalse({"model_ms", "tool_ms", "timed_output"} & x.keys(), x["session_id"])
 
     def test_nothing_recorded(self):
-        self.assertEqual(self.totals(source="codex"), dict(model_ms=0, tool_ms=0, timed_sessions=0, timed_output=0, output_per_s=None))
+        self.assertEqual(self.totals(source="codex"), dict(model_ms=0, tool_ms=0, timed_sessions=0, output_per_s=None))
         self.assertEqual(self.totals(source="codex", today=date(2026, 11, 11), prev=True)["output_per_s"], None)
 
     def test_session_sheet(self):
         info = metrics.session(self.con.cursor(), "d", prices=PRICES)["info"]
-        self.assertEqual({k: info[k] for k in ("model_ms", "tool_ms", "lines_added", "lines_removed", "output_per_s")},
-                         dict(model_ms=15 * 60_000, tool_ms=6 * 60_000, lines_added=120, lines_removed=30, output_per_s=90.0))
-        self.assertNotIn("output", info)
-        info = metrics.session(self.con.cursor(), "x", prices=PRICES)["info"]
-        self.assertEqual({k: info[k] for k in ("model_ms", "tool_ms", "lines_added", "lines_removed", "output_per_s")},
-                         dict.fromkeys(("model_ms", "tool_ms", "lines_added", "lines_removed", "output_per_s")))
+        self.assertEqual(info["runs"], dict(model_ms=15 * 60_000, tool_ms=6 * 60_000, lines_added=120, lines_removed=30, output_per_s=90.0))
+        self.assertFalse({"output", "model_ms", "tool_ms", "output_per_s"} & info.keys())
+        self.assertIsNone(metrics.session(self.con.cursor(), "x", prices=PRICES)["info"]["runs"])  # a Codex session records no run
 
 
 class SessionTimeTest(unittest.TestCase):

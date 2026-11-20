@@ -31,10 +31,12 @@
 
 
 /* Work vitals: six figures in one ruled strip, then two rows of three, then three of two */
-.pg-activity .vitals { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 1px; margin: 0 0 20px;
+/* Every cell pads --vpad on both sides, so the padding is the same at any column count. The strip is pulled left by one
+   pad and clipped there, which puts the first column's text flush with the page edge and hides the strip's own edge. */
+.pg-activity .vitals { --vpad: 16px; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 1px; margin: 0 0 20px;
+  margin-inline-start: calc(var(--vpad) * -1); clip-path: inset(0 0 0 var(--vpad));
   background: var(--border); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
-.pg-activity .vital { padding: 16px 16px 16px 0; background: var(--bg); min-width: 0; }
-.pg-activity .vital + .vital { padding-left: 16px; }
+.pg-activity .vital { padding: 16px var(--vpad); background: var(--bg); min-width: 0; }
 .pg-activity .vital:focus { outline: none; }
 .pg-activity .vital:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .pg-activity .vital .v { font-size: 1.75rem; font-weight: 600; letter-spacing: -.035em; line-height: 1.1; }
@@ -42,17 +44,13 @@
 .pg-activity .vital .d { color: var(--text-muted); font-size: .78125rem; margin-top: 2px; }
 @media (max-width: 75em) {
   .pg-activity .vitals { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .pg-activity .vital:nth-child(3n+1) { padding-left: 0; }
 }
 @media (max-width: 56.25em) {
   .pg-activity .vitals { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .pg-activity .vital:nth-child(even) { padding-left: 16px; }
-  .pg-activity .vital:nth-child(odd) { padding-left: 0; }
   .pg-activity .vital:last-child:nth-child(odd) { grid-column: 1 / -1; }
 }
 @media (max-width: 32.5em) {
-  .pg-activity .vital { padding-right: 12px; }
-  .pg-activity .vital + .vital:nth-child(even) { padding-left: 12px; }
+  .pg-activity .vitals { --vpad: 12px; }
   .pg-activity .vital .v { font-size: 1.5rem; }
 }
 

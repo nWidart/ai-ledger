@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { usageUrl, viewOf, type SessionSort, type UsagePayload, type View } from "../../api";
+import { usageUrl, viewOf, type SessionSort, type Totals, type UsagePayload, type View } from "../../api";
 import { setOrder } from "../../colors";
 import { useCountUp } from "../../components/chart";
 import { openDrawer } from "../../components/Drawer";
@@ -67,6 +67,13 @@ function Lede({ d, before }: { d: UsagePayload; before: UsagePayload | undefined
 const ratio = (a: number, b: number) => (b ? a / b : null);
 const tokS = (n: number) => `${num(n)} tok/s`;
 
+/** The "Median session" note: the active time, then the thinking and the model and tool time when recorded. */
+function sessionNote(t: Totals): string {
+  const thinking = t.thinking_ms ? ` and ${dur(t.thinking_ms / 1000)} thinking` : "";
+  const timed = t.timed_sessions ? `; ${dur(t.model_ms / 1000)} waiting on the model and ${dur(t.tool_ms / 1000)} running tools` : "";
+  return `${plural(t.sessions, "session")}, ${dur(t.session_seconds)} active${thinking} in all${timed}.`;
+}
+
 /** Work vitals: how smoothly the work went, each against the period before (none for All, or with nothing to divide by there). */
 function Vitals({ d }: { d: UsagePayload }) {
   const t = d.totals, p = d.previous;
@@ -82,8 +89,7 @@ function Vitals({ d }: { d: UsagePayload }) {
     { v: pct(t.subagent_token_share), l: "Subagents", n: "of tokens came from subagents.",
       cur: t.subagent_token_share, prev: p && ratio(p.sub_tokens, p.tokens), fmt: pct },
     { v: dur(t.median_session_seconds), l: "Median session",
-      n: `${plural(t.sessions, "session")}, ${dur(t.session_seconds)} active${t.thinking_ms ? ` and ${dur(t.thinking_ms / 1000)} thinking` : ""} in all${t.timed_sessions
-        ? `; ${dur(t.model_ms / 1000)} waiting on the model and ${dur(t.tool_ms / 1000)} running tools` : ""}.`,
+      n: sessionNote(t),
       cur: t.median_session_seconds, prev: p?.median_session_seconds, fmt: dur },
     // Whole-session output over model time, timed sessions only (Claude Code records it; Codex does not).
     { v: t.output_per_s == null ? "n/a" : tokS(t.output_per_s), l: "Output speed",

@@ -2,10 +2,9 @@
 import json
 import math
 import os
-import re
 from datetime import date, timedelta
 
-from . import store
+from . import store, titles
 from .categorize import RULES, SHELL_TOOLS, input_pattern
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -442,16 +441,16 @@ def usage(cur, project="", range_days=0, session="", prices=None, today=None, au
         errors_per_100_calls=per(100 * calls["errors"], calls["calls"]),
         session_seconds=sum(x["duration_s"] or 0 for x in sess),
         median_session_seconds=median([x["duration_s"] for x in sess if x["duration_s"] is not None]),
-        near_limit=sum(1 for x in sess if x["near_limit"]), **timing(sess))
+        near_limit=sum(1 for x in sess if x["near_limit"]), **timing(cur, rq, rp))
     out = dict(project=project, range=range_days, automated=bool(automated), source=source, start=start.isoformat() if start else None, end=today.isoformat(),
                projects=project_list(cur, automated, af["projects"]), project_order=project_order(cur, af["projects"]), totals=totals, daily=daily, daily_projects=daily_projects,
                daily_models=daily_models, daily_sources=daily_sources,
                daily_work=work, work_bucket=bucket, work=work if by is day else daily_work(cur, rq, rp, W, fp, by),
                work_projects=daily_work(cur, rq, rp, W, fp, by, by_project=True), work_hours=work_hours(cur, W, fp),
                unpriced=unpriced, models=models, by_project=by_project, **tool_rates(cur, W, fp),
-               error_loops=with_titles(cur, loops[:50]), failed_tests=with_titles(cur, failed_tests),
+               error_loops=titles.with_titles(cur, loops[:50]), failed_tests=titles.with_titles(cur, failed_tests),
                sessions=sorted(sess, key=lambda x: x["first_ts"] or "", reverse=True)[:300],
-               top_sessions=with_titles(cur, sorted(sess, key=lambda x: -(x["cost"] or 0))[:50]),
+               top_sessions=titles.with_titles(cur, sorted(sess, key=lambda x: -(x["cost"] or 0))[:50]),
                near_limit=sorted((x for x in sess if x["near_limit"]), key=lambda x: -x["context_share"]),
                previous=previous_period(cur, project, range_days, prices, today, automated, source, af["projects"]))
     out["changes"] = project_changes(by_project, out["previous"])
@@ -516,7 +515,7 @@ def day_view(cur, project="", range_days=0, day="", today=None, automated=False,
     _, pcte, pparams, fp, W, _, _ = view(project, range_days, {}, today or local_today(cur), automated, source)
     d, W, fp, _, _ = on_day(day, pcte, pparams, W, fp)
     loops = error_loops(cur, W, fp)
-    return dict(day=d.isoformat(), **tool_rates(cur, W, fp), error_loops=with_titles(cur, loops[:50]), error_loops_total=len(loops))
+    return dict(day=d.isoformat(), **tool_rates(cur, W, fp), error_loops=titles.with_titles(cur, loops[:50]), error_loops_total=len(loops))
 
 
 def previous_dates(range_days, today):
@@ -546,7 +545,8 @@ def previous_period(cur, project, range_days, prices, today, automated=False, so
     daily = rows(cur, f"{rq} SELECT {day('ts')} AS day, sum(cost) AS cost, sum(tokens) AS tokens FROM rq GROUP BY 1 ORDER BY 1", p)
     by_project = rows(cur, f"{rq} SELECT project, sum(cost) AS cost, sum(tokens) AS tokens, count(*) AS requests FROM rq GROUP BY 1", p)
     return dict(tot, **prompt_totals(cur, W, fp), **{k: calls[k] for k in ("calls", "errors", "commits", "test_runs", "tests_passed")},
-                median_session_seconds=median([x["duration_s"] for x in sess if x["duration_s"] is not None]), **timing(sess),
+                median_session_seconds=median([x["duration_s"] for x in sess if x["duration_s"] is not None]),
+                output_per_s=timing(cur, rq, p)["output_per_s"],
                 start=start.isoformat(), end=end.isoformat(), daily=daily, by_project=by_project)
 
 
@@ -622,7 +622,7 @@ def tool_detail(cur, kind, name, project="", range_days=0, today=None, automated
         t.tool, left(t.input_summary, 400) AS input, t.is_error, t.category, t.subagent,
         {latency('t.')} AS duration_ms FROM {tc} ORDER BY {ts} DESC NULLS LAST, t.tool_use_id DESC
         LIMIT {RECENT_CALLS}""", p)
-    for r in with_titles(cur, recent):
+    for r in titles.with_titles(cur, recent):
         r["ts"], r["input"] = iso(r["ts"]), r["input"] or ""
     tools = None
     if kind == "mcp":
@@ -632,7 +632,7 @@ def tool_detail(cur, kind, name, project="", range_days=0, today=None, automated
                 start=start.isoformat() if start else None, end=today.isoformat(), totals=tot, previous=previous, daily=daily,
                 projects=by("s.project", "project"), sources=by("coalesce(s.source, 'claude')", "source"),
                 threads=by("t.subagent", "subagent"), patterns=patterns, categories=categories, recovery=recovery,
-                error_loops=with_titles(cur, loops), shell=shell, recent=recent, tools=tools)
+                error_loops=titles.with_titles(cur, loops), shell=shell, recent=recent, tools=tools)
 
 
 def palette(cur, project="", range_days=0, today=None, automated=False, source=""):
@@ -697,7 +697,7 @@ def session_list(cur, project="", range_days=0, q="", near=False, offset=0, limi
     sess = sessions(cur, rq, rp, W, fp, prices, on)
     q = q.strip().lower()
     hits = [x for x in sess if not near or x["near_limit"]]
-    named = titles(cur, [x["session_id"] for x in hits]) if q else {}
+    named = titles.titles(cur, [x["session_id"] for x in hits]) if q else {}
     hits = [x for x in hits if not q or q in f"{(named.get(x['session_id']) or ('',))[0]} {x['session_id']} {x['project']} {x['git_branch'] or ''}".lower()]
     if near:
         hits.sort(key=lambda x: -x["context_share"])
@@ -708,16 +708,7 @@ def session_list(cur, project="", range_days=0, q="", near=False, offset=0, limi
         hits.sort(key=lambda x: x["first_ts"] or "", reverse=True)
     if sort:
         hits = sorted((x for x in hits if x[sort] is not None), key=lambda x: x[sort], reverse=desc) + [x for x in hits if x[sort] is None]
-    return dict(total=len(hits), offset=offset, sessions=with_titles(cur, hits[offset:offset + limit]))
-
-
-def timing(sess):
-    """Model time, tool time and output speed over the sessions (sessions() rows) that record runs; the others count in none."""
-    timed = [x for x in sess if x["model_ms"] is not None]
-    model_ms = sum(x["model_ms"] for x in timed)
-    out = sum(x["timed_output"] for x in timed)
-    return dict(model_ms=model_ms, tool_ms=sum(x["tool_ms"] for x in timed), timed_sessions=len(timed), timed_output=out,
-                output_per_s=out / (model_ms / 1000) if model_ms else None)
+    return dict(total=len(hits), offset=offset, sessions=titles.with_titles(cur, hits[offset:offset + limit]))
 
 
 def median(xs):
@@ -804,11 +795,34 @@ def active_cte(ids, on_day=False):
                 FROM gap GROUP BY 1)"""
 
 
+def runs_cte(ids):
+    """CTEs ending in runs(session_id, model_ms, tool_ms, lines_added, lines_removed, output) for each session that ids (SQL)
+    selects and that has a run (session_runs): its figures summed over its runs, and output its whole output, subagents
+    included, to match. Output tokens include thinking tokens, as Claude Code reports them. ids is used once."""
+    return f"""run_sums AS (SELECT session_id, sum(api_ms) AS model_ms, sum(tool_ms) AS tool_ms, sum(lines_added) AS lines_added,
+                   sum(lines_removed) AS lines_removed FROM session_runs WHERE session_id IN ({ids}) GROUP BY 1),
+        run_output AS (SELECT session_id, sum(output) AS output FROM requests
+                       WHERE session_id IN (SELECT session_id FROM run_sums) GROUP BY 1),
+        runs AS (SELECT run_sums.*, coalesce(run_output.output, 0) AS output FROM run_sums LEFT JOIN run_output USING (session_id))"""
+
+
+def speed(output, model_ms):
+    """Output tokens per second of model time; None without model time."""
+    return output / (model_ms / 1000) if model_ms else None
+
+
+def timing(cur, rq, rp):
+    """Model time, tool time and output speed over the view's sessions (those with requests in rq, params rp) that record
+    runs, each whole-session (runs_cte); the others count in none."""
+    t = rows(cur, f"""{rq}, {runs_cte("SELECT session_id FROM rq")} SELECT coalesce(sum(model_ms), 0) AS model_ms,
+        coalesce(sum(tool_ms), 0) AS tool_ms, count(*) AS timed_sessions, coalesce(sum(output), 0) AS output FROM runs""", rp)[0]
+    return dict(model_ms=t["model_ms"], tool_ms=t["tool_ms"], timed_sessions=t["timed_sessions"],
+                output_per_s=speed(t["output"], t["model_ms"]))
+
+
 def sessions(cur, rq, rp, W, fp, prices, on=None):
     """Sessions with requests in the view; every count is limited to the view's range. duration_s is the whole session's
-    active time (active_cte), or that of the local date on alone. model_ms and tool_ms are the whole session's, summed over
-    its runs (session_runs), and timed_output its whole output, subagents included, to match: all three NULL without a run.
-    Output tokens include thinking tokens, as Claude Code reports them."""
+    active time (active_cte), or that of the local date on alone."""
     rs = rows(cur, f"""{rq}, agg AS (
           SELECT session_id, count(*) AS requests, sum(tokens) AS tokens, sum(cost) AS cost,
                  count(*) FILTER (WHERE cost IS NULL) AS unpriced, coalesce(sum(thinking_ms), 0) AS thinking_ms
@@ -820,19 +834,14 @@ def sessions(cur, rq, rp, W, fp, prices, on=None):
                FROM tool_calls t JOIN sessions s USING (session_id) WHERE {W('coalesce(t.start_ts, t.end_ts)')} GROUP BY 1),
         pr AS (SELECT session_id, count(*) AS prompts, count(*) FILTER (WHERE interrupted) AS interrupted
                FROM prompts p JOIN sessions s USING (session_id) WHERE {W('p.ts')} GROUP BY 1),
-        {active_cte("SELECT session_id FROM agg", on is not None)},
-        runs AS (SELECT session_id, sum(api_ms) AS model_ms, sum(tool_ms) AS tool_ms FROM session_runs
-                 WHERE session_id IN (SELECT session_id FROM agg) GROUP BY 1),
-        whole AS (SELECT session_id, coalesce(sum(output), 0) AS output FROM requests WHERE session_id IN (SELECT session_id FROM runs) GROUP BY 1)
+        {active_cte("SELECT session_id FROM agg", on is not None)}
         SELECT s.session_id, s.project, s.git_branch, s.first_ts, s.last_ts, act.active_s AS duration_s,
                s.compactions, s.peak_context, s.peak_model, agg.requests, agg.tokens, agg.cost, agg.unpriced, agg.thinking_ms,
                coalesce(tc.tool_calls, 0) AS tool_calls, coalesce(tc.errors, 0) AS errors, coalesce(tc.commits, 0) AS commits,
                coalesce(tc.tests_passed, 0) AS tests_passed, coalesce(tc.tests_failed, 0) AS tests_failed,
-               coalesce(pr.prompts, 0) AS prompts, coalesce(pr.interrupted, 0) AS interrupted,
-               runs.model_ms, runs.tool_ms, CASE WHEN runs.session_id IS NOT NULL THEN coalesce(whole.output, 0) END AS timed_output
+               coalesce(pr.prompts, 0) AS prompts, coalesce(pr.interrupted, 0) AS interrupted
         FROM agg JOIN sessions s USING (session_id) LEFT JOIN tc USING (session_id) LEFT JOIN pr USING (session_id)
-        LEFT JOIN act USING (session_id) LEFT JOIN runs USING (session_id) LEFT JOIN whole USING (session_id)""",
-              rp + fp + fp + ([on, on] if on else []))
+        LEFT JOIN act USING (session_id)""", rp + fp + fp + ([on, on] if on else []))
     for r in rs:
         limit = (prices.get(r["peak_model"]) or {}).get("context")
         r["context_limit"] = limit
@@ -890,12 +899,10 @@ def session_detail(cur, sid, allq, p, prices):
     info["first_ts"], info["last_ts"] = iso(info["first_ts"]), iso(info["last_ts"])
     info["context_limit"] = (prices.get(info["peak_model"]) or {}).get("context")
     info["active_s"] = (cur.execute(f"WITH {active_cte('?')} SELECT active_s FROM act", [sid, sid]).fetchone() or (None,))[0]
-    # Its runs' figures, all None without a run; the speed over its whole output (thinking included), subagents too, as the time.
-    info.update(rows(cur, """SELECT sum(api_ms) AS model_ms, sum(tool_ms) AS tool_ms, sum(lines_added) AS lines_added,
-        sum(lines_removed) AS lines_removed, (SELECT sum(output) FROM requests WHERE session_id = ?) AS output
-        FROM session_runs WHERE session_id = ?""", [sid, sid])[0])
-    out = info.pop("output")
-    info["output_per_s"] = (out or 0) / (info["model_ms"] / 1000) if info["model_ms"] else None
+    # Its runs' figures (runs_cte), None without a run: every Codex session.
+    run = rows(cur, f"WITH {runs_cte('?')} SELECT * FROM runs", [sid])
+    info["runs"] = dict({k: run[0][k] for k in ("model_ms", "tool_ms", "lines_added", "lines_removed")},
+                        output_per_s=speed(run[0]["output"], run[0]["model_ms"])) if run else None
     sums = ", ".join(f"sum({k}) AS {k}" for k in TOKEN_KINDS)
     from . import insights  # insights imports this module
     return dict(
@@ -917,7 +924,6 @@ def session_detail(cur, sid, allq, p, prices):
 
 
 TIMELINE_CAP = 5000  # rows per series in the session timeline; longer sessions keep their first rows
-FIRST_PROMPT_CAP = 600
 
 
 def session_timeline(cur, sid, allq, p):
@@ -936,99 +942,7 @@ def session_timeline(cur, sid, allq, p):
     # Claude Code marks a compaction with a compact_boundary system line, Codex with a compacted line.
     compactions = [r[0] for r in cur.execute("""SELECT ts FROM raw_lines WHERE session_id = ? AND (type = 'compacted'
         OR type = 'system' AND json LIKE '%"compact_boundary"%') ORDER BY ts""", [sid]).fetchall()]
-    full = first_prompts(cur, [sid]).get(sid)
-    return dict(requests=reqs, calls=calls, compaction_ts=compactions, first_prompt=cap_prompt(full),
-                first_prompt_cut=bool(full and len(full) > FIRST_PROMPT_CAP), title=titles(cur, [sid]).get(sid, (None,))[0],
+    full = titles.first_prompts(cur, [sid]).get(sid)
+    return dict(requests=reqs, calls=calls, compaction_ts=compactions, first_prompt=titles.cap_prompt(full),
+                first_prompt_cut=bool(full and len(full) > titles.FIRST_PROMPT_CAP), title=titles.titles(cur, [sid]).get(sid, (None,))[0],
                 truncated=len(reqs) >= TIMELINE_CAP or len(calls) >= TIMELINE_CAP)
-
-
-def first_prompts(cur, sids):
-    """{session_id: full text of its first human prompt} (the earliest row in prompts), for the sessions that have one stored.
-    Each line is read by its file's source (store.SOURCES)."""
-    if not sids:
-        return {}
-    found = {}
-    types = sorted({src.prompt_type for src in store.SOURCES.values()})
-    for sid, pid, source, line in cur.execute("""
-            WITH fp AS (SELECT session_id, arg_min(prompt_id, ts) AS pid FROM prompts WHERE list_contains(?, session_id) GROUP BY 1)
-            SELECT r.session_id, fp.pid, coalesce(f.source, 'claude'), r.json FROM raw_lines r JOIN fp USING (session_id)
-            LEFT JOIN files f ON f.path = r.file
-            WHERE list_contains(?, r.type) AND contains(r.json, fp.pid)
-            QUALIFY row_number() OVER (PARTITION BY r.session_id ORDER BY r.ts) <= 20
-            ORDER BY r.session_id, r.ts""", [list(sids), types]).fetchall():
-        src = store.SOURCES.get(source)
-        if sid in found or src is None:
-            continue
-        try:
-            d = json.loads(line)
-        except ValueError:
-            continue
-        text = src.prompt_text(d, pid) if isinstance(d, dict) else None
-        if text:
-            found[sid] = text
-    return found
-
-
-def cap_prompt(text, cap=FIRST_PROMPT_CAP):
-    return None if text is None else text[:cap] + ("…" if len(text) > cap else "")
-
-
-def first_prompt(cur, sid, cap=FIRST_PROMPT_CAP):
-    """The text of the session's first human prompt, cut to cap characters (None: the whole text), or None."""
-    text = first_prompts(cur, [sid]).get(sid)
-    return text if cap is None else cap_prompt(text, cap)
-
-
-TITLE_LEN = 80
-# Claude Code wraps slash commands and injected context in hyphenated tags: <command-name>, <command-args>, <system-reminder>, ...
-CMD_TAG = lambda tag: re.compile(rf"<{tag}>\s*(.*?)\s*</{tag}>", re.S)
-WRAPPER_BLOCK = re.compile(r"<([a-z]+(?:-[a-z]+)+)>.*?</\1>", re.S)
-WRAPPER_TAG = re.compile(r"</?[a-z]+(?:-[a-z]+)+>")
-
-
-def prompt_title(text, n=TITLE_LEN):
-    """A short readable name for a session from its first prompt: "/ship add tests" for a slash command (its tags stripped),
-    else the first sentence of the first line, cut to n characters. None when nothing readable is left."""
-    if not text:
-        return None
-    name, msg, args = (CMD_TAG(t).search(text) for t in ("command-name", "command-message", "command-args"))
-    if name or msg:
-        cmd = name.group(1).strip() if name else (msg.group(1).split() or [""])[0]
-        title = ("" if cmd.startswith("/") else "/") + cmd + (" " + args.group(1) if args and args.group(1).strip() else "")
-    else:
-        body = WRAPPER_TAG.sub(" ", WRAPPER_BLOCK.sub(" ", text))
-        line = next((ln.strip() for ln in body.splitlines() if ln.strip()), "")
-        line = re.sub(r"^[#>*\-\s]+", "", line)
-        m = re.search(r"[.!?](?=\s|$)", line)
-        title = line[:m.end()] if m and m.end() > 12 else line
-    return short_title(title, n)
-
-
-def short_title(title, n=TITLE_LEN):
-    """title with its whitespace collapsed, cut to n characters with an ellipsis; None when nothing is left."""
-    title = " ".join(title.split()) if isinstance(title, str) else ""
-    if not title:
-        return None
-    return title if len(title) <= n else title[:n - 1].rstrip() + "…"
-
-
-def titles(cur, sids, prompts=True):
-    """{session_id: (title, "agent" | "prompt")} for the sessions that have one: the newest custom title, else the newest
-    title the agent wrote (Claude Code's ai-title, Codex's thread name), else prompt_title of the first prompt, unless
-    prompts is False."""
-    sids = list(dict.fromkeys(sids))
-    if not sids:
-        return {}
-    out = {sid: (short_title(t), "agent") for sid, t in cur.execute(
-        "SELECT session_id, coalesce(custom, agent) FROM session_titles WHERE list_contains(?, session_id)", [sids]).fetchall()}
-    texts = first_prompts(cur, [sid for sid in sids if sid not in out]) if prompts else {}
-    out |= {sid: (prompt_title(text), "prompt") for sid, text in texts.items()}
-    return {sid: t for sid, t in out.items() if t[0]}
-
-
-def with_titles(cur, sess):
-    """Adds title (see titles) to each session row; returns the rows."""
-    found = titles(cur, [x["session_id"] for x in sess])
-    for x in sess:
-        x["title"] = found.get(x["session_id"], (None,))[0]
-    return sess

@@ -22,7 +22,7 @@ from datetime import date, datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 
-from . import context, insights, limits, live, measure, metrics, store
+from . import context, insights, limits, live, measure, metrics, store, titles
 
 HOST, PORT = "127.0.0.1", 8765  # PORT is the default; --port changes it
 INTERVAL = 60
@@ -416,7 +416,7 @@ def handler(app, port=PORT):
                     detail = metrics.session(app.con.cursor(), q.get("id", ""))
                     self.send(404, json.dumps(dict(error="session not found"))) if detail is None else self.json(detail)
                 elif url.path == "/api/prompt":  # the session's whole first prompt; /api/session caps it
-                    text = metrics.first_prompt(app.con.cursor(), q.get("session", ""), cap=None)
+                    text = titles.first_prompt(app.con.cursor(), q.get("session", ""), cap=None)
                     self.send(404, json.dumps(dict(error="prompt not found"))) if text is None else self.json(dict(text=text))
                 elif url.path == "/api/sessions":
                     self.json(metrics.session_list(app.con.cursor(), q.get("project", ""), int(q.get("range") or 0), q.get("q", ""),
