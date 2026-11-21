@@ -103,7 +103,8 @@ All in `web/src/components/echart/option.ts` unless said, pure, and typed from `
 - `tracksOption(env, { layout, labels, format, y })`: the `grid`, `xAxis` and `yAxis` lists of decision 1, from a layout, the labels and one value axis per track.
 - `trackAxes(t)` and `FRAME_AXES`.
 - `selectionMark(env, { index })`: decision 4.
-- `lineSeries(env, { id, data, color, dots, ...axes })`: a line with no symbols, broken at nulls, not clipped, silent. `dots(i)` gives `"solid"`, `"hollow"` or nothing for point `i`. Colors by decision 5.
+- `lineSeries(env, { id, data, color, ...axes })`: a line with no symbols, broken at nulls, not clipped, silent. Colors by decision 5.
+- `lineDots(env, { id, data, color, hollow, ...axes })`: the line's dots, a custom series on its axes over it (`z: 3`), one item per point with a value. A point `hollow(i)` names gets a hollow dot. Any other point gets a solid dot when no line reaches it in the points shown: neither neighbour has a value or is shown. The dot is decided as it is drawn, for the zoom window of that moment. ECharts filters the points outside the window out of the line, so a point whose only neighbour is outside draws a move with no length and no symbol (measured: two days of calls, zoomed past the first). A neighbour is shown when the middle of its band is inside the plot. A symbol callback cannot decide this: it gets the point's value and index, not the window. Colors by decision 5.
 - `sliderTrend(data, axes)`: a hidden line (`id: "trend"`, no symbol, line opacity 0, transparent). The slider draws its faint trend from the first line, bar, candlestick or scatter series on the lowest-index x axis it drives that carries one; the series' order counts only among the series on that axis (`SliderZoomView._prepareDataShadowInfo`, ECharts 6.1.0). So the trend line goes on the first track that has a line, listed before that track's lines, with no line on an axis before it: on the work chart, on the bars' track, over the rate line's track. The fake runtime throws when the slider would draw another series, by the same rule (`sliderShadowOf` in `testing.ts`).
 - `zoomSlider(env)`: gains `xAxisIndex: "all"` (decision 1).
 - `pointLabel` (the peak label) measures its text as zrender does, with `measureText` on a canvas of its own, so `option.ts` imports nothing from ECharts at runtime; jsdom has no canvas, and there it estimates 0.6em a character. `labelAnchor` keeps the old anchor rule (centred over the bar, or anchored at the bar's edge within 56px times the text scale of the plot's edge), then slides the label along, its anchor kept, until its whole text is inside the plot. A plot narrower than the text draws no label. This replaces the rule "no peak label in a plot under 300px times the text scale at a larger text size", on the work chart and on Cost: at a larger text size a mid-width plot now shows the label. Known limits: the width is not measured again when the font loads after the first drawing, and the label's 3px halo may pass the plot's edge by 1.5px.
@@ -134,7 +135,7 @@ Alternative: a `selected` prop on the wrapper. Rejected: the wrapper would add a
 
 - A line that is the only line on its track is drawn in `ink.text` (`CanvasText`). Its color is not what tells it apart: its track and its legend key do. A theme color such as `--critical` has no sure contrast on the user's `Canvas`.
 - A solid dot on it is `ink.text` with an `ink.surface` border. A hollow dot is `ink.surface` inside an `ink.text` ring, as the spec already asks of the work chart's hollow dot.
-- `lineSeries()` does this from `env.forced`, so no chart writes it.
+- `lineSeries()` and `lineDots()` do this from `env.forced`, so no chart writes it.
 - The legend keys are HTML. The line key's border and the hollow key (`.legend i.low`, which keeps its rule in `theme.css`) already follow.
 - Lines that only their colors tell apart (Growth's project medians) are not built here. They keep their colors, over a halo in `ink.surface`: see "What later changes inherit".
 
@@ -183,8 +184,8 @@ Layout at the default text size: margins top 20, right 16, bottom 24, left 52; b
 | Rate track: its own scale, ticks at 0 and its top | `valueAxis` on `trackAxes(1)` with `max` and `step` both `rateScale().top`; the top label hangs under its line (`verticalAlignMaxLabel: "top"`) |
 | Rate line, broken at a bucket without calls | `lineSeries` in `var(--critical)`, `null` for no calls |
 | A rate above the scale stops at the top | The model draws `min(rate, top)`; the reading gives the rate itself |
-| Hollow dot for a bucket with few calls, left out of the scale | `dots: "hollow"`; `lowVolume()` and `rateScale()` unchanged |
-| Dot on a point no line reaches | `dots: "solid"` |
+| Hollow dot for a bucket with few calls, left out of the scale | `lineDots` with `hollow` from `low`; `lowVolume()` and `rateScale()` unchanged |
+| Dot on a point no line reaches | `lineDots`, in the days shown: also a point whose neighbour the zoom leaves out |
 | No tool calls: no rate track, no key | One track; the bars take the rate track's room |
 | Legend: project keys, rate key, "Under 50 calls" | Unchanged HTML, static |
 | Peak label | `pointLabel` on `trackAxes(0)`, `id: "peak"`; left out at a zero peak, kept inside the plot and left out when the plot is narrower than its text, as on Cost (decision 3) |
@@ -269,7 +270,7 @@ No new name matches an existing file's name in another case: `workChart.ts` and 
 
 | Layer | What it proves |
 |---|---|
-| `option.test.ts`, `stack.test.ts` | `trackLayout` heights at scale 1 and 2, with and without the slider; `tracksOption` indexes, the one axis pointer, hidden track axes; `selectionMark` in theme and forced colors; `lineSeries` colors, nulls and dots in both modes; `sliderTrend`; `zoomSlider` drives all axes; `width(band, i)` |
+| `option.test.ts`, `stack.test.ts` | `trackLayout` heights at scale 1 and 2, with and without the slider; `tracksOption` indexes, the one axis pointer, hidden track axes; `selectionMark` in theme and forced colors; `lineSeries` colors and nulls, `lineDots` in both modes and for a window that leaves a neighbour out; `sliderTrend`; `zoomSlider` drives all axes; `width(band, i)` |
 | `EChart.test.tsx` | `status` said once, replaced by a reading, not said again, not said on mount or for a new view, dropped when empty; `onEscape` only with no reading, prevented only on true, never from the document |
 | `testing.test.ts` | The fake's new rules, below |
 | `zoomReset.test.tsx` | The button shows by the wrapper's report, resets and focuses the box, and hands the focus over when it leaves |

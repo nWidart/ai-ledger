@@ -223,38 +223,68 @@ export const selectionMark = (env: OptionEnv, { index }: { index: number }): Cus
   },
 });
 
-/** A dot on a line's point: solid, or hollow (a surface center inside a ring of the line's color). */
-export type Dot = "solid" | "hollow";
+/** A line's ink: its resolved color, or under forced colors the text ink (CanvasText). A line drawn so is the only line on
+ *  its track, told apart by its track and its legend key, and a theme color has no sure contrast on the user's Canvas. */
+const lineInk = (env: OptionEnv, color: string) => (env.forced ? env.ink.text : env.color(color));
 
-/** A line with no symbols, broken at a null, not clipped and deaf to the pointer, in its resolved color; `dots(i)` puts a
- *  solid or a hollow dot on point i. Under forced colors the line is the text ink (CanvasText): it is the only line on its
- *  track, told apart by its track and its legend key, and a theme color has no sure contrast on the user's Canvas. */
-export function lineSeries(env: OptionEnv, { id, data, color, dots, xAxisIndex, yAxisIndex }: {
-  id: string; data: readonly (number | null)[]; color: string; dots?: (i: number) => Dot | undefined;
+/** A line with no symbols, broken at a null, not clipped and deaf to the pointer, in its ink (`lineInk`). Its dots are
+ *  `lineDots`'s. */
+export function lineSeries(env: OptionEnv, { id, data, color, xAxisIndex, yAxisIndex }: {
+  id: string; data: readonly (number | null)[]; color: string;
 } & SeriesAxes): LineSeriesOption {
-  const ink = env.forced ? env.ink.text : env.color(color), surface = env.ink.surface;
-  const dot: Record<Dot, { symbolSize: number; itemStyle: { color: string; borderColor: string; borderWidth: number } }> = {
-    solid: { symbolSize: 5, itemStyle: { color: ink, borderColor: surface, borderWidth: 1.5 } },
-    hollow: { symbolSize: 6, itemStyle: { color: surface, borderColor: ink, borderWidth: 1.5 } },
-  };
+  const ink = lineInk(env, color);
   return {
     type: "line",
     id,
     xAxisIndex,
     yAxisIndex,
-    data: data.map((v, i) => {
-      const d = v == null ? undefined : dots?.(i);
-      return d ? { value: v, symbol: "circle", ...dot[d] } : v;
-    }),
-    // No symbol but on the points `dots` names, and every one of those: "auto" would thin them on a long axis.
+    data: [...data],
     symbol: "none",
-    showAllSymbol: true,
     connectNulls: false,
     clip: false,
     silent: true,
     lineStyle: { color: ink, width: 1.75, join: "round", cap: "round" },
     itemStyle: { color: ink },
     emphasis: { disabled: true },
+  };
+}
+
+/** The dots of the line `lineSeries` draws from the same data, on its axes and over it, in its ink: a hollow dot (a surface
+ *  centre in a ring of the ink) on each point `hollow` names, and a solid one (the ink in a surface ring) on a point no line
+ *  reaches in the points shown, where neither neighbour has a value or is shown. That is decided as the dot is drawn, for
+ *  the zoom window of the moment: ECharts filters the points outside the window out of the line, so a point whose only
+ *  neighbour the window leaves out is a move with no length, which draws nothing. A neighbour is shown when the middle of
+ *  its band is inside the plot: ECharts places a point outside the window by extrapolation, a band or more past the edge.
+ *  A point outside the window is filtered out of the dots too. */
+export function lineDots(env: OptionEnv, { id, data, color, hollow, xAxisIndex, yAxisIndex }: {
+  id: string; data: readonly (number | null)[]; color: string; hollow?: (i: number) => boolean;
+} & SeriesAxes): CustomSeriesOption {
+  const ink = lineInk(env, color), surface = env.ink.surface;
+  return {
+    type: "custom",
+    id,
+    xAxisIndex,
+    yAxisIndex,
+    data: data.flatMap((v, i) => (v == null ? [] : [[i, v, hollow?.(i) ? 1 : 0]])),
+    encode: { x: 0, y: 1 },
+    silent: true,
+    z: 3,
+    renderItem: (params, api) => {
+      const plot = params.coordSys as unknown as { x: number; width: number };
+      const i = api.value(0) as number, [cx, cy] = api.coord([i, api.value(1)]) as [number, number];
+      const shown = (j: number) => {
+        const [x] = api.coord([j, 0]) as [number, number];
+        return data[j] != null && x >= plot.x && x <= plot.x + plot.width;
+      };
+      const ring = !!api.value(2);
+      if (!ring && (shown(i - 1) || shown(i + 1))) return null;
+      return {
+        type: "circle",
+        emphasisDisabled: true, // no highlight state, as the stack has none
+        shape: { cx, cy, r: ring ? 3 : 2.5 },
+        style: { fill: ring ? surface : ink, stroke: ring ? ink : surface, lineWidth: 1.5 },
+      };
+    },
   };
 }
 

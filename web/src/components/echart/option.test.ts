@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { CustomSeriesRenderItemAPI, CustomSeriesRenderItemParams } from "./echarts";
 import { dayAxis, peakLabelAt } from "../chart";
 import {
-  baseOption, categoryAxis, FRAME_AXES, labelAnchor, lineSeries, pointLabel, selectionMark, SLIDER_ROOM, sliderTrend, trackAxes, trackLayout,
+  baseOption, categoryAxis, FRAME_AXES, labelAnchor, lineDots, lineSeries, pointLabel, selectionMark, SLIDER_ROOM, sliderTrend, trackAxes, trackLayout,
   tracksOption, valueAxis, zoomSlider, type OptionEnv,
 } from "./option";
 import { sliderShadowOf } from "./testing";
@@ -354,42 +354,49 @@ describe("selectionMark", () => {
   });
 });
 
-describe("lineSeries", () => {
-  type Item = { value: number; symbol: string; symbolSize: number; itemStyle: Record<string, unknown> };
-  const dots = (i: number) => (i === 2 ? "solid" as const : i === 4 ? "hollow" as const : undefined);
-  const line = (e = env()) => lineSeries(e, { id: "rate", data: [.1, null, .3, .2, .05], color: "var(--critical)", dots, ...trackAxes(1) });
+describe("lineSeries and lineDots", () => {
+  const data = [.1, null, .3, .2, null, .05];
+  const line = (e = env()) => lineSeries(e, { id: "rate", data, color: "var(--critical)", ...trackAxes(1) });
+  const dots = (e = env()) => lineDots(e, { id: "rate-dots", data, color: "var(--critical)", hollow: i => i === 5, ...trackAxes(1) });
+  type Dot = { type: string; shape: { cx: number; cy: number; r: number }; style: Record<string, unknown> } | null;
+  // Each dot drawn through renderItem over a stubbed track: 40px bands from x 52, showing points `from` to `to`.
+  const drawn = (e: OptionEnv, from: number, to: number) => {
+    const s = dots(e), plot = { type: "cartesian2d", x: 52, y: 20, width: (to - from + 1) * 40, height: 36 };
+    return new Map((s.data as number[][]).filter(([i]) => i! >= from && i! <= to).map(row => {
+      const api = { value: (dim: number) => row[dim], coord: ([x, v]: number[]) => [52 + (x! - from + .5) * 40, 56 - v! * 36] };
+      return [row[0]!, s.renderItem!({ coordSys: plot } as unknown as CustomSeriesRenderItemParams, api as unknown as CustomSeriesRenderItemAPI) as Dot];
+    }));
+  };
+  const kinds = (m: Map<number, Dot>) => [...m].map(([i, d]) => [i, d && (d.shape.r === 3 ? "hollow" : "solid")]);
 
-  it("is a silent line on its axes, broken at a null, not clipped, with no symbol but on the points named", () => {
-    expect(line()).toMatchObject({
-      type: "line", id: "rate", xAxisIndex: 2, yAxisIndex: 2, symbol: "none", showAllSymbol: true, connectNulls: false, clip: false, silent: true,
-    });
-  });
-
-  it("draws in the color env.color resolves", () => {
+  it("is a silent line on its axes with no symbol, broken at a null, not clipped, in the color env.color resolves", () => {
+    expect(line()).toMatchObject({ type: "line", id: "rate", xAxisIndex: 2, yAxisIndex: 2, symbol: "none", connectNulls: false, clip: false, silent: true });
+    expect(line().data).toEqual(data);
     expect(line().lineStyle).toMatchObject({ color: "resolved(var(--critical))", width: 1.75 });
   });
 
-  it("keeps each null, and sets a symbol only on the points dots names", () => {
-    const d = line().data as (number | null | Item)[];
-    expect([d[0], d[1], d[3]]).toEqual([.1, null, .2]);
-    expect(d[2]).toMatchObject({ value: .3, symbol: "circle" });
-    expect(d[4]).toMatchObject({ value: .05, symbol: "circle" });
-    // No dot on a point with no value.
-    expect(lineSeries(env(), { id: "r", data: [null], color: "x", dots: () => "hollow", ...trackAxes(0) }).data).toEqual([null]);
+  it("puts its dots on the line's axes, over it, one item per point with a value", () => {
+    expect(dots()).toMatchObject({ type: "custom", id: "rate-dots", xAxisIndex: 2, yAxisIndex: 2, z: 3, silent: true });
+    expect(dots().data).toEqual([[0, .1, 0], [2, .3, 0], [3, .2, 0], [5, .05, 1]]);
   });
 
-  it("swaps a solid dot's fill and ring for a hollow one", () => {
-    const d = line().data as Item[];
-    expect(d[2]).toMatchObject({ symbolSize: 5, itemStyle: { color: "resolved(var(--critical))", borderColor: "ink-surface", borderWidth: 1.5 } });
-    expect(d[4]).toMatchObject({ symbolSize: 6, itemStyle: { color: "ink-surface", borderColor: "resolved(var(--critical))", borderWidth: 1.5 } });
+  it("dots each point hollow names, and a point no line reaches in the points shown, over its band", () => {
+    // Every point shown: 2 and 3 are joined, 5 is hollow, 0 has no neighbour with a value.
+    const all = drawn(env(), 0, 5);
+    expect(kinds(all)).toEqual([[0, "solid"], [2, null], [3, null], [5, "hollow"]]);
+    expect(all.get(0)!.shape).toEqual({ cx: 72, cy: 52.4, r: 2.5 });
+    // A window that leaves 2 out leaves 3 alone at its left edge, and one that leaves 3 out leaves 2 alone at its right.
+    expect(kinds(drawn(env(), 3, 5))).toEqual([[3, "solid"], [5, "hollow"]]);
+    expect(kinds(drawn(env(), 0, 2))).toEqual([[0, "solid"], [2, "solid"]]);
   });
 
-  it("is the text ink under forced colors, its hollow dot a surface centre in a text ring", () => {
-    const l = line(env({ forced: true })), d = l.data as Item[];
-    expect(l.lineStyle!.color).toBe("ink-text");
-    expect(d[2]!.itemStyle).toMatchObject({ color: "ink-text", borderColor: "ink-surface" });
-    expect(d[4]!.itemStyle).toMatchObject({ color: "ink-surface", borderColor: "ink-text" });
-    expect(JSON.stringify(l)).not.toContain("critical");
+  it("draws a solid dot as the ink in a surface ring, a hollow one as a surface centre in an ink ring: the text ink under forced colors", () => {
+    const style = (e: OptionEnv) => { const m = drawn(e, 0, 5); return [m.get(0)!.style, m.get(5)!.style]; };
+    expect(style(env())).toEqual([
+      { fill: "resolved(var(--critical))", stroke: "ink-surface", lineWidth: 1.5 }, { fill: "ink-surface", stroke: "resolved(var(--critical))", lineWidth: 1.5 }]);
+    expect(style(env({ forced: true }))).toEqual([{ fill: "ink-text", stroke: "ink-surface", lineWidth: 1.5 }, { fill: "ink-surface", stroke: "ink-text", lineWidth: 1.5 }]);
+    expect(line(env({ forced: true })).lineStyle!.color).toBe("ink-text");
+    expect(drawn(env(), 0, 5).get(5)).toMatchObject({ type: "circle", emphasisDisabled: true });
   });
 });
 

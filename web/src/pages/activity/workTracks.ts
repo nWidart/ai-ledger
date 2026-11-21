@@ -4,7 +4,7 @@
 import type { DailyWorkRow, UsagePayload } from "../../api";
 import { lowVolume, niceMax } from "../../components/chart";
 import {
-  baseOption, type Dot, lineSeries, pointLabel, selectionMark, sliderTrend, trackAxes, trackLayout, type TrackLayout, tracksOption,
+  baseOption, lineDots, lineSeries, pointLabel, selectionMark, sliderTrend, trackAxes, trackLayout, type TrackLayout, tracksOption,
   valueAxis, ZOOM_FROM, zoomSlider,
 } from "../../components/echart/option";
 import { stackSeries } from "../../components/echart/stack";
@@ -62,10 +62,8 @@ export interface WorkModel {
   rates: (number | null)[];
   /** Per bucket, the rate as drawn: stopped at the scale's top. */
   drawn: (number | null)[];
-  /** Per bucket, whether it has too few calls for a steady rate (`lowVolume`). */
+  /** Per bucket, whether it has too few calls for a steady rate (`lowVolume`): a hollow dot on the rate line. */
   low: boolean[];
-  /** Per bucket, its dot on the rate line: hollow for a low bucket, solid for a point no line reaches. */
-  dots: (Dot | undefined)[];
   /** Some bucket has a tool call: the rate track is drawn. */
   hasRate: boolean;
   /** Some bucket is low: the legend keys the hollow dot. */
@@ -97,13 +95,11 @@ export function workModel(d: UsagePayload, metric: WorkMetric, selected: WorkPic
   const rates = buckets.map(failRate), hasRate = rates.some(r => r != null);
   const low = lowVolume(buckets.map(p => p.calls));
   const rate = rateScale(rates, low);
-  const dots = rates.map((v, i): Dot | undefined => (v == null ? undefined : low[i] ? "hollow"
-    : rates[i - 1] == null && rates[i + 1] == null ? "solid" : undefined));
   const peak = buckets.length ? totals.reduce((b, t, i) => (t > totals[b]! ? i : b), 0) : null;
   const at = selected && selected.week === week ? buckets.findIndex(p => p.day === selected.day) : -1;
   return {
     metric, week, span: { start: d.start, end: d.end }, buckets, stacked, kinds, values, totals, rates,
-    drawn: rates.map(v => (v == null ? null : Math.min(v, rate.top))), low, dots, hasRate, hasLow: low.some(Boolean), rate, peak,
+    drawn: rates.map(v => (v == null ? null : Math.min(v, rate.top))), low, hasRate, hasLow: low.some(Boolean), rate, peak,
     axis: niceMax(Math.max(...totals, 0), niceStep), zoom: buckets.length >= ZOOM_FROM, selected: at < 0 ? null : at,
     view: [d.range, d.work_bucket, buckets[0]?.day, d.project, d.source, d.automated, metric].join("|"),
   };
@@ -135,7 +131,11 @@ export function workOption(m: WorkModel, env: ChartEnv): EChartsOption {
   const series: Series[] = m.zoom ? [sliderTrend(m.totals, bars)] : [];
   if (m.selected != null) series.push(selectionMark(env, { index: m.selected }));
   series.push(stackSeries({ kinds: m.kinds, values: m.values, hatched: () => false, env, ...bars }));
-  if (m.hasRate) series.push(lineSeries(env, { id: "rate", data: m.drawn, color: FAIL, dots: i => m.dots[i], ...trackAxes(1) }));
+  // The dots over the line: hollow on a low bucket, solid on a point no line reaches in the days shown.
+  if (m.hasRate) {
+    const rate = { data: m.drawn, color: FAIL, ...trackAxes(1) };
+    series.push(lineSeries(env, { id: "rate", ...rate }), lineDots(env, { id: "rate-dots", ...rate, hollow: i => m.low[i]! }));
+  }
   // The label keeps inside the plot, and a plot narrower than its text draws none (pointLabel), as on Cost.
   const pk = m.peak;
   if (pk != null && m.totals[pk]! > 0) {

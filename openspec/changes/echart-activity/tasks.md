@@ -51,6 +51,7 @@ How to read a step:
 - [x] 5.6 **Browser check: dropped loads.** `open()` in `chartfit/harness.mjs` loads a page again, up to 3 times, when the demo server dropped a request (design decision 12).
 - [x] 5.7 **Browser check: narrow widths.** `chartfit` runs each chart in a 343px box, and the work chart by week at 32px text; one line failed on the peak label, fixed in 5.8.
 - [x] 5.8 **Peak label inside the plot.** `pointLabel` measures its text and slides it inside the plot, or draws none; the 300px room rule is gone from the work chart and Cost (design decision 3).
+- [x] 5.9 **Rate dots in the days shown.** `lineDots` draws the rate line's dots as a custom series and decides a solid dot as it is drawn, so a point whose neighbour the zoom leaves out is a dot over its bar (design decision 3); a real-ECharts test at both edges of the window and a `chartfit` line.
 
 ## Workflow follow-up
 

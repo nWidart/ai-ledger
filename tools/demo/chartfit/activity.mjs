@@ -17,7 +17,8 @@
 //   with no frame; a hollow dot is Canvas in a CanvasText ring, a solid one CanvasText;
 // - at a 32px root the box grows, the bars track keeps its 120px, and the rate track's top label hangs under its line;
 // - a hollow dot for a day of few calls and a solid one for a point no line reaches, in the theme's colors, and zoomed the
-//   hollow dot is still over the middle of its day's bar;
+//   hollow dot is still over the middle of its day's bar; with tool calls on two days next to each other only, a zoom that
+//   leaves the first out draws the second's rate as a dot over its bar;
 // - a view with no tool calls draws no rate track, no dot, no rate key, and the bars take the room;
 // - by week (all time, with older weeks added to reach the slider): labels, the reading, the zoom words and "Show all
 //   weeks"; the store's own 11 weeks draw no slider;
@@ -414,6 +415,23 @@ export async function activity(h) {
       }
       await page.done();
     }
+  }
+
+  // Tool calls on two days next to each other only, and plus with nothing read: the window starts on the second, so the
+  // zoom leaves the first out and the second's rate is alone in the days shown.
+  {
+    const B = N - Math.ceil(N / 2), A = B - 1;
+    const page = await c.openOn({ answer: d => each(d, DAYS, (r, i) => Object.assign(r, i === A || i === B ? { calls: Math.max(r.calls, 100) } : { calls: 0, failed_calls: 0 })) }, "two days of calls");
+    await box(page).focus();
+    await page.keyboard.press("+");
+    await until(() => drawn(page), n => n < N);
+    await sleep(200);
+    const w = c.shownBy(await ev(page, () => window.chartfit.readout()));
+    const mid = await ev(page, () => { const b = window.chartfit.bars().reduce((a, x) => (x.l < a.l ? x : a)); return (b.l + b.r) / 2; });
+    const ds = await ev(page, () => window.chartfit.dots());
+    line(`zoomed past the first of two days with tool calls, day ${B + 1}'s rate is a dot over its bar`, w?.from === B && ds.some(x => Math.abs(x.x - mid) <= 1.5),
+      `window ${w ? `${w.from + 1}..${w.to + 1}` : "unknown"}, first bar middle ${Math.round(mid)}px, ${ds.length ? `dots at ${ds.map(x => Math.round(x.x)).join(", ")}px` : "no dot"}`);
+    await page.done();
   }
 
   // No tool calls: no rate track, the bars take its room.

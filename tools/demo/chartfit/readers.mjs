@@ -3,7 +3,7 @@
 // segments are the svg group's direct paths with a solid fill and no fill-opacity, down to the bottom grid line: the grid
 // lines are unfilled, the hatch fills with a url() pattern, the band and the slider's filler are translucent, the average
 // lines sit in groups and the slider's handles below the grid. The selection is a framed rectangle as tall as the grid; the
-// band never has a stroke. A line's dots are ECharts' circle symbol, a unit circle scaled by its transform, never a bar; a
+// band never has a stroke. A line's dots are circles drawn as one arc, never a bar; a
 // line is a stroked, unfilled path in a clipped group of its own. In a chart of several tracks the grid is the frame: from
 // the top grid line of the first track to the bottom one of the last. This function runs in the page: it uses nothing from
 // this module.
@@ -17,8 +17,9 @@ export function readers(root) {
   const fill = e => e.getAttribute("fill") ?? "none";
   const stroked = e => (e.getAttribute("stroke") ?? "none") !== "none";
   const solid = e => e.tagName === "path" && fill(e) !== "none" && !fill(e).startsWith("url(");
-  /** A dot on a line: ECharts' circle symbol, drawn as a unit circle and scaled into place. */
-  const dot = e => e.tagName === "path" && /^M1 0A1 1 /.test(e.getAttribute("d") ?? "");
+  /** A dot on a line: a circle drawn as one arc from its rightmost point, "M x y A r r 0 1 1 …": a custom series' own
+   *  circle (`lineDots()`), or ECharts' circle symbol, a unit circle scaled into place by its transform. */
+  const dot = e => e.tagName === "path" && /^M-?[\d.]+ -?[\d.]+A([\d.]+) \1 0 1 1 /.test(e.getAttribute("d") ?? "");
   /** The vertical scale of an element's transform, 1 when it has none: under 1 while a bar grows. */
   const scaleY = e => {
     const m = /^matrix\(([^)]+)\)/.exec(e.getAttribute("transform") ?? "");

@@ -70,6 +70,11 @@ const segments = () => paths().flatMap(p => {
   const t = tokenOf(p.getAttribute("fill"));
   return t && COLORS.includes(t) ? [{ token: t, ...box(p.getAttribute("d")!) }] : [];
 });
+/** A dot's centre: the renderer writes a circle as an arc from its rightmost point, "M x y A r r …". */
+const centreX = (e: Element) => {
+  const [, x, r] = /^M(-?[\d.]+) -?[\d.]+A([\d.]+)/.exec(e.getAttribute("d") ?? "")!;
+  return Number(x) - Number(r);
+};
 const by = (fill: string, stroke: string) => paths().filter(p => tokenOf(p.getAttribute("fill")) === fill && tokenOf(p.getAttribute("stroke")) === stroke);
 const rateLine = () => paths().filter(p => p.getAttribute("fill") === "none" && tokenOf(p.getAttribute("stroke")) === "var(--critical)");
 const solid = () => by("var(--critical)", "var(--surface-1)");
@@ -132,8 +137,7 @@ it("draws both tracks, one band over them, the selection apart from it, a zoom o
   // its bar; the selected day 2 is left out, and so is its frame.
   fireEvent.keyDown(group(), { key: "+" });
   await waitFor(() => expect(segments()).toHaveLength(30));
-  // A symbol is a unit circle, placed by its transform: matrix(sx, 0, 0, sy, x, y).
-  const dotX = Number(/matrix\(([^)]*)\)/.exec(hollow()[0]!.getAttribute("transform")!)![1]!.split(",")[4]);
+  const dotX = centreX(hollow()[0]!);
   const under = segments().filter(s => s.left <= dotX && s.left + s.width >= dotX);
   expect(under).toHaveLength(3);
   expect(Math.abs(under[0]!.cx - dotX)).toBeLessThanOrEqual(.5);
@@ -156,6 +160,26 @@ it("draws both tracks, one band over them, the selection apart from it, a zoom o
   unmount();
   expect(drawing.querySelector("svg")).toBeNull();
   expect(errors).not.toHaveBeenCalled(); // jsdom's "Not implemented" and React's warnings both come through here
+});
+
+// Tool calls on two days next to each other: one line between them, no dot. A zoom that leaves one of them out leaves the
+// other alone in the days shown, at either edge of the window: ECharts filters the neighbour out and draws the line as a
+// move with no length, so the point is a dot, over its bar.
+it("draws a dot on a rate point whose neighbour the zoom leaves out, over its bar, at either edge of the window", async () => {
+  const pair = rows.map((r, i) => ({ ...r, ...(i === 11 || i === 12 ? { calls: 100, failed_calls: 3 } : { calls: 0, failed_calls: 0 }) }));
+  const { unmount } = renderApp(panel({ ...d, work: pair }));
+  await waitFor(() => expect(segments()).toHaveLength(60));
+  expect(rateLine()).toHaveLength(1);
+  expect(solid()).toHaveLength(0);
+  for (const [from, alone] of [[12, 12], [5, 11]] as const) {
+    act(() => { getInstanceByDom(plot())!.dispatchAction({ type: "dataZoom", startValue: from, endValue: from + 6 }); });
+    // Seven days in the plot's 732px from x 52: the dot over the middle of the day alone.
+    const mid = 52 + (alone - from + .5) * 732 / 7;
+    await waitFor(() => expect(solid().map(centreX)).toEqual([expect.closeTo(mid, 0)]));
+    expect(segments().filter(s => Math.abs(s.cx - mid) <= .5)).toHaveLength(3);
+  }
+  unmount();
+  expect(errors).not.toHaveBeenCalled();
 });
 
 // The pointer reads a day through the frame, which spans both tracks and the gap between them: over the bars, the gap and

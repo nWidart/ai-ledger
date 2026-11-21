@@ -134,13 +134,10 @@ describe("workModel", () => {
     expect(rateOf(m)).toMatchObject({ xAxisIndex: 2, yAxisIndex: 2, connectNulls: false, lineStyle: { color: "var(--critical)" } });
   });
 
-  it("puts a hollow dot on a bucket with few calls and a solid one on a point no line reaches", () => {
-    const symbols = (m: WorkModel) => (rateOf(m)!.data as unknown[]).map(v => (v && typeof v === "object" ? (v as { itemStyle: { color: string } }).itemStyle.color : null));
-    // Both points are alone: the low one is hollow (a surface center), the busy one solid.
-    expect(model(gap).dots).toEqual(["hollow", undefined, "solid"]);
-    expect(symbols(model(gap))).toEqual(["ink-surface", null, "var(--critical)"]);
-    // The line runs through the hollow dot; no point is alone.
-    expect(model(fewCalls).dots).toEqual(["hollow", undefined, undefined]);
+  it("puts the rate line's dots on its track, hollow on a bucket with few calls", () => {
+    // Each point with a rate as drawn, and 1 where its dot is hollow (lineDots draws a solid one where no line reaches).
+    expect(byId(model(gap), "rate-dots")).toMatchObject({ xAxisIndex: 2, yAxisIndex: 2, data: [[0, 5, 1], [2, 3, 0]] });
+    expect((byId(model(fewCalls), "rate-dots") as CustomSeriesOption).data).toEqual([[0, 10, 1], [1, 3, 0], [2, 5, 0]]);
     expect(model(fewCalls).hasLow).toBe(true);
   });
 
@@ -158,7 +155,6 @@ describe("workModel", () => {
   it("marks nothing when every bar has few calls: the view scales to its own rates", () => {
     const m = model(allFew);
     expect(m.hasLow).toBe(false);
-    expect(m.dots.includes("hollow")).toBe(false);
     expect(m.rate.top).toBe(100);
   });
 
@@ -291,7 +287,6 @@ describe("workModel on the page fixtures", () => {
       const top = niceStep(Math.max(0, ...rates.map((r, i) => (low[i] ? 0 : r ?? 0))) * 1.08 || 1);
       expect(m.rate.top).toBe(top);
       expect(m.drawn).toEqual(rates.map(r => (r == null ? null : Math.min(r, top))));
-      expect(m.dots).toEqual(rates.map((r, i) => (r == null ? undefined : low[i] ? "hollow" : rates[i - 1] == null && rates[i + 1] == null ? "solid" : undefined)));
       expect(m.hasRate).toBe(rates.some(r => r != null));
       const peak = totals.indexOf(Math.max(...totals));
       expect(m.peak).toBe(peak);
@@ -306,7 +301,7 @@ describe("workModel on the page fixtures", () => {
       expect(model(d, metric, { day: keys[0]!, week: !week }).selected).toBeNull();
       const o = workOption(model(d, metric, { day: keys[peak]!, week }), env());
       expect((o.series as SeriesOption[]).map(s => s.id)).toEqual([
-        ...(m.zoom ? ["trend"] : []), "selected", "stack", ...(m.hasRate ? ["rate"] : []), ...(totals[peak]! > 0 ? ["peak"] : []),
+        ...(m.zoom ? ["trend"] : []), "selected", "stack", ...(m.hasRate ? ["rate", "rate-dots"] : []), ...(totals[peak]! > 0 ? ["peak"] : []),
       ]);
       expect(o.grid).toHaveLength(m.hasRate ? 3 : 2);
     }
