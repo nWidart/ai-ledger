@@ -40,10 +40,10 @@ export const viewName = (v: { project: string; range: number; source: Source | "
 export const agentName = (source: Source | "") => (source ? SOURCE_LABELS[source] : "agent");
 
 // What the filters show of the URL; a session or sheet key is not in it, so opening a sheet does not render them.
-// badSource: the URL names a source that is not valid. shared: the shared query string the Project page link carries.
+// shared: the shared query string the Project page link carries. An unknown source reads as All (ScopeBar drops it from the URL).
 const filterSearch = (raw: Readonly<Record<string, string>>) => {
-  const s = validateRoot(raw), { project, range, source, auto } = rootState(s);
-  return { project, range, source, auto, badSource: !!raw.source && !s.source, shared: sharedSearch(raw) };
+  const { project, range, source, auto } = rootState(validateRoot(raw));
+  return { project, range, source, auto, shared: sharedSearch(raw) };
 };
 
 /** The time range segment, writing the URL: in Filters, or alone where a page's range applies to one section. */
@@ -65,10 +65,8 @@ export const useChangedFilters = (set: FilterSet): number => useSearchOf(raw => 
 /** Project picker with its color dot and clear button, range and source segments, the automated toggle, all writing the URL,
  *  then the Brief link to the project's page. */
 export function Filters({ projects, automated = false, project = true, range = true, source = true, brief = true }: FiltersProps) {
-  const h = useSearchOf(filterSearch), { badSource } = h, set = setSearch;
+  const h = useSearchOf(filterSearch), set = setSearch;
   const autoFile = useLastStatus()?.automated_file?.path;
-  // An unknown source reads as All; the URL drops it so a copied link says what the page shows.
-  useEffect(() => { if (badSource) setSearch({ source: null }, { push: false }); }, [badSource]);
   const opts = projects.map(p => (typeof p === "string" ? { value: p } : p));
   if (h.project && !opts.some(o => o.value === h.project)) opts.unshift({ value: h.project });
   // On the Project page, a view with no project opens Activity in its place (router.tsx, needProject).
@@ -126,8 +124,13 @@ const labelOf = (o: ProjectOption) => o.label ?? o.value;
 function ProjectPicker({ project, options, onPick }: { project: string; options: ProjectOption[]; onPick: (project: string) => void }) {
   const items = [ALL, ...options], selected = items.find(o => o.value === project) ?? ALL, name = labelOf(selected);
   // `typed` tells the user's text from the selected project's name, which lists everything.
-  const [text, setText] = useState(name), [typed, setTyped] = useState(false), [seen, setSeen] = useState(name), [open, setOpen] = useState(false);
-  if (seen !== name) { setSeen(name); setText(name); setTyped(false); } // the URL changed: show its project
+  const [text, setText] = useState(name), [typed, setTyped] = useState(false), [open, setOpen] = useState(false);
+  const [seen, setSeen] = useState({ value: selected.value, name });
+  if (seen.value !== selected.value || seen.name !== name) {
+    // The URL changed: show its project. A new label for the same project (its counts arrived) leaves the user's text alone.
+    setSeen({ value: selected.value, name });
+    if (seen.value !== selected.value || !typed) { setText(name); setTyped(false); }
+  }
   const needle = text.trim().toLowerCase(), hits = typed && needle ? options.filter(o => labelOf(o).toLowerCase().includes(needle)) : null;
   // The name in the field stays selected until the user types, so typing replaces it.
   const field = useRef<HTMLInputElement>(null);

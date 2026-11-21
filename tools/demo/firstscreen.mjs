@@ -1,7 +1,7 @@
 // Checks in a real browser that Context's tabs and first plotted mark are on the first screen at 1440 x 900, with every tip rule
 // firing, before and after "Show N more" expands the strip; that Activity's work chart and workbench tab list are, over 30 days
 // (bars by day) and all time (bars by week); and that the first chart of Cost, Errors, Limits, the Judgments view and Live starts
-// there. The jsdom tests cannot lay a page out; this can. It runs locally, not in
+// there, with its first plotted mark wholly on it. The jsdom tests cannot lay a page out; this can. It runs locally, not in
 // CI. It needs the demo server and the pinned Playwright:
 //   cd web && npm ci && npm run build;  cd tools/demo && npm ci && uv run seed.py && uv run serve.py   (DEMO_PORT moves it)
 //   node firstscreen.mjs        exits 1, naming what falls outside the window
@@ -19,14 +19,15 @@ const TITLES = {
   large_results: "Tool results fill the context", cache_breaks: "The prompt cache breaks within sessions", long_tier: "Requests are priced on the long-prompt tier",
 };
 
-/** The other pages: the first chart of each, which must start on the first screen. Live's is its stream's first event, from the
- *  web tests' fixtures, so it does not depend on a replay. */
+/** The other pages: the first chart of each, which must start on the first screen, and its first plotted mark (the first bar, the
+ *  measured line), which must be wholly on it. Live's is its stream's first event, from the web tests' fixtures, so it does not
+ *  depend on a replay; it has no plot. */
 const FIRST = [
-  ["Cost's daily cost chart", "/cost?range=30", "#spend .chart"],
-  ["Errors' rate chart", "/errors?range=30", ".chart-card"],
-  ["Limits' first open window chart", "/limits?range=30", ".lim-grid .lim-chart"],
-  ["the Judgments view's Outcomes ledger", "/usage?view=judgments&range=30", "#outcomes"],
-  ["Live's first stream event", "/live?session=s1", ".pg-live .stream .ev"],
+  ["Cost's daily cost chart", "/cost?range=30", "#spend .chart", "#spend .bar-seg"],
+  ["Errors' rate chart", "/errors?range=30", ".chart-card", ".chart-card .bars rect"],
+  ["Limits' first open window chart", "/limits?range=30", ".lim-grid .lim-chart", ".lim-grid .lim-chart :is(.meas, .meas-one)"],
+  ["the Judgments view's Outcomes ledger", "/usage?view=judgments&range=30", "#outcomes", "#outcomes .ledger .bar"],
+  ["Live's first stream event", "/live?session=s1", ".pg-live .stream .ev", null],
 ];
 const FIX = new URL("../../web/src/__fixtures__/", import.meta.url).pathname;
 /** A generated fixture's object: the JSON between `export default` and `satisfies`. */
@@ -86,12 +87,17 @@ try {
       failed ||= !v.ok;
     }
     // Every other page's first chart starts on the first screen, under the nav and the scope bar.
-    for (const [what, path, sel] of FIRST) {
+    for (const [what, path, sel, markSel] of FIRST) {
       await page.goto(BASE + path);
       await page.waitForSelector(sel);
-      const top = await page.evaluate(sel => document.querySelector(sel).getBoundingClientRect().top, sel);
-      const ok = top >= 0 && top < H;
-      console.log(`${scheme}, ${what}: starts at ${Math.round(top)}px of ${H}: ${ok ? "ok" : "OUTSIDE THE WINDOW"}`);
+      if (markSel) await page.waitForSelector(markSel, { state: "attached" });
+      const { top, mark } = await page.evaluate(([sel, markSel]) => {
+        const r = markSel && document.querySelector(markSel)?.getBoundingClientRect();
+        return { top: document.querySelector(sel).getBoundingClientRect().top, mark: r ? { top: r.top, bottom: r.bottom } : null };
+      }, [sel, markSel]);
+      const ok = top >= 0 && top < H && (!markSel || (mark != null && mark.top >= 0 && mark.bottom <= H));
+      const marked = markSel ? `, first plotted mark at ${mark ? `${Math.round(mark.top)}-${Math.round(mark.bottom)}px` : "missing"}` : "";
+      console.log(`${scheme}, ${what}: starts at ${Math.round(top)}px${marked} of ${H}: ${ok ? "ok" : "OUTSIDE THE WINDOW"}`);
       failed ||= !ok;
     }
     await page.context().close();

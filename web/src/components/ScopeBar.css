@@ -34,7 +34,6 @@
 .scopebar-pop .filters-project .pick-project { flex: 1 1 auto; }
 .scopebar-pop .seg { display: flex; }
 .scopebar-pop .seg button { flex: 1 1 auto; white-space: nowrap; }
-.scopebar-pop .filters-brief { align-self: flex-start; }
 
 @media (forced-colors: active) {
   .scopebar-count { border: 1px solid CanvasText; }

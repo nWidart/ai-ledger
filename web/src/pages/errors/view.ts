@@ -27,13 +27,25 @@ export const loadMode = (): Mode => { const m = store.get<string>(MODE_KEY, "inc
 const isRange = (n: number): n is Range => (RANGES as readonly number[]).includes(n);
 export const DEFAULT_VIEW: View = { project: "", source: "", range: 30, gran: "day", sub: true, noise: false, cat: null, focus: null, at: null, tool: null };
 
+// The URL names no view key: the saved view fills it.
+const bare = (s: RootSearch & ErrorsSearch) => s.project === undefined && s.range === undefined && s.source === undefined && s.sub === undefined
+  && s.noise === undefined && s.gran === undefined && s.cat === undefined && s.ex === undefined && s.at === undefined && s.etool === undefined;
+
+/** For a URL with no view key, the URL keys of the saved view (else null). The router writes them before the page or the scope
+ *  bar shows (router.tsx), so the bar shows the saved view from its first frame, and a filter changed while the payload loads
+ *  changes that view, not the defaults. The saved type goes in as it is: the page drops it once the payload says it is gone. */
+export function savedPatch(s: RootSearch & ErrorsSearch): SearchPatch | null {
+  if (!bare(s)) return null;
+  const v = store.get<unknown>(VIEW_KEY, {}), saved = v && typeof v === "object" ? (v as SavedView) : {};
+  return { ...viewPatch(readView(s, saved, undefined).view), cat: typeof saved.cat === "string" ? saved.cat : null };
+}
+
 /** The view from the URL's valid keys. Any view key makes the URL the whole view: omitted keys take their defaults, and the saved view
  *  only fills an empty URL. A key with an invalid value is absent. A bare ex link means all time. linked: the URL names a known example. dead: it names one the
  *  model lacks, which is not all time: it keeps its range, or 30 days. Nothing is dead until the model loads (m undefined),
  *  so the notice never flashes while the payload is on its way. */
 export function readView(s: RootSearch & ErrorsSearch, saved: SavedView, m: Pick<Model, "cats" | "byId"> | undefined): { view: View; linked: boolean; dead: boolean } {
-  if (s.project === undefined && s.range === undefined && s.source === undefined && s.sub === undefined && s.noise === undefined && s.gran === undefined
-    && s.cat === undefined && s.ex === undefined && s.at === undefined && s.etool === undefined) {
+  if (bare(s)) {
     const r = Number(saved.range);
     return { linked: false, dead: false, view: { ...DEFAULT_VIEW, project: typeof saved.project === "string" ? saved.project : "", range: isRange(r) ? r : 30,
       source: sourceOf(saved.source),

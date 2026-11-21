@@ -9,10 +9,11 @@ import { PageSkeleton } from "./components/PageSkeleton";
 import { validateRoute as activitySearch } from "./pages/activity/search";
 import { validateSearch as contextSearch } from "./pages/context/search";
 import { validateSearch as errorsSearch } from "./pages/errors/search";
+import { savedPatch } from "./pages/errors/view";
 import { validateSearch as liveSearch } from "./pages/live/search";
 import { viewOf, type View } from "./api";
 import { queries } from "./queries";
-import { bindRouter, formatSearch, parseSearch, parseView, validateRoot } from "./url";
+import { applyPatch, bindRouter, formatSearch, parseSearch, parseView, validateRoot } from "./url";
 
 interface RouterContext { queryClient: QueryClient }
 
@@ -37,6 +38,13 @@ const toJudgments = ({ location }: { location: ParsedLocation }) => {
 // The Project page needs a project: without one (a link, or the project cleared on the page) Activity opens in its place, with
 // the rest of the view kept. Not tied to o.loaders: it is routing, not data.
 const needProject = ({ location }: { location: ParsedLocation }) => { if (!parseView(location.search).project) toActivity({ location }); };
+// Errors with no view key in the URL opens the view it last showed (pages/errors/view.ts), written into the URL before the page's
+// code or data comes: the scope bar shows that view from the start, and a filter changed meanwhile keeps the rest of it. It
+// replaces the entry, as the page's own write-back does. Every other key (auto, an open sheet) stays.
+const savedErrorsView = ({ location }: { location: ParsedLocation }) => {
+  const raw = location.search as Record<string, string>, patch = savedPatch({ ...validateRoot(raw), ...errorsSearch(raw) });
+  if (patch) throw redirect({ to: "/errors", search: applyPatch(raw, patch), hash: location.hash, replace: true } as never);
+};
 // While a page's code loads: the placeholder in the content area, marked busy.
 const Pending = () => <main id="content" className="wrap" aria-busy="true"><PageSkeleton title="Loading…" /></main>;
 
@@ -76,7 +84,7 @@ export function makeRouter(o: { queryClient: QueryClient; history?: RouterHistor
   // /insights is no page: it redirects to Activity's Judgments view.
   const routeTree = root.addChildren([
     page("/usage", activitySearch, activityLoader), page("/cost", undefined, viewLoader(v => queries.usage(v))),
-    page("/context", contextSearch, viewLoader(queries.context)), page("/errors", errorsSearch, errorsLoader),
+    page("/context", contextSearch, viewLoader(queries.context)), page("/errors", errorsSearch, errorsLoader, savedErrorsView),
     page("/limits", undefined, viewLoader(queries.limits, true)), page("/live", liveSearch),
     // The usage payload is the one above the fold; the other blocks start when the page mounts.
     page("/project", undefined, viewLoader(v => queries.usage(v)), needProject),

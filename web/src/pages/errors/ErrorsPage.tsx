@@ -216,7 +216,8 @@ export function ErrorsPage() {
 
   const projects = useMemo(() => {
     const ps = (m?.projects ?? []).map(([p, n]) => ({ value: p, label: `${p} — ${fmt(n)} error${n === 1 ? "" : "s"} (all time)` }));
-    if (view.project && !ps.some(p => p.value === view.project)) ps.push({ value: view.project, label: `${view.project} — 0 errors (all time)` });
+    // A project the loaded payload lacks has no error; until the payload comes, the picker names the project alone.
+    if (m && view.project && !ps.some(p => p.value === view.project)) ps.push({ value: view.project, label: `${view.project} — 0 errors (all time)` });
     return ps;
   }, [m, view.project]);
   useScopeProjects(projects);

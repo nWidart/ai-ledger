@@ -52,7 +52,8 @@
 /* Rail */
 .pg-live .rail h2 { padding: 12px 14px 4px; margin: 0; }
 .pg-live .rail .group h3 { padding: 5px 14px 1px; }
-.pg-live .rail ul { list-style: none; margin: 0; padding: 0 6px 8px; }
+/* 4px under each group, with its heading's 5px above the next: 8 sessions in all five groups keep about 20px to spare at 1440 x 900 (livefit.mjs). */
+.pg-live .rail ul { list-style: none; margin: 0; padding: 0 6px 4px; }
 .pg-live .rail li button { width: 100%; text-align: left; border: 0; background: none; border-radius: 9px; padding: 4px 9px;
   display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0 8px; align-items: center; }
 /* The entry's third line: the context meter and its percent, the latest action, the errors with a ✕. */

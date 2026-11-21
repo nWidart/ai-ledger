@@ -61,9 +61,9 @@ describe("Filters", () => {
     expect(location.search).toBe("?range=30");
   });
 
-  it("shows an unknown source as All and drops it from the URL", () => {
+  it("shows an unknown source as All, and the scope bar drops it from the URL", () => {
     history.replaceState(null, "", "/cost?range=30&source=grok");
-    renderApp(<Filters projects={["foo"]} automated />);
+    renderApp(<ScopeBar />);
     expect(within(screen.getByRole("group", { name: "Source" })).getByRole("button", { name: "All" }).getAttribute("aria-pressed")).toBe("true");
     expect(location.search).toBe("?range=30");
   });
@@ -124,6 +124,22 @@ describe("Filters", () => {
     expect(field.value).toBe("foo — 3 errors (all time)");
     await userEvent.click(field);
     expect(screen.getByRole("option", { name: "foo — 3 errors (all time)" })).toBeTruthy();
+  });
+
+  it("takes a new label for the selected project, but leaves the text the user is typing", async () => {
+    history.replaceState(null, "", "/errors?project=foo");
+    const { rerender } = renderApp(<Filters projects={[]} />);
+    const field = screen.getByRole("combobox", { name: "Project" }) as HTMLInputElement;
+    expect(field.value).toBe("foo");
+    rerender(<Filters projects={[{ value: "foo", label: "foo — 3 errors (all time)" }]} />);
+    expect(field.value).toBe("foo — 3 errors (all time)");
+    await userEvent.click(field);
+    await userEvent.keyboard("ba");
+    rerender(<Filters projects={[{ value: "foo", label: "foo — 4 errors (all time)" }, { value: "bar", label: "bar — 1 error (all time)" }]} />);
+    expect(field.value).toBe("ba");
+    expect(options()).toEqual(["bar — 1 error (all time)", "All projects"]);
+    await userEvent.keyboard("{Escape}");
+    expect(field.value).toBe("foo — 4 errors (all time)");
   });
 
   it("follows a hash change from elsewhere", async () => {
