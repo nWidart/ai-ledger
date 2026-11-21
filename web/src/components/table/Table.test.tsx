@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { DataTable } from "../DataTable";
 import { SortTh, type SortBy } from "../Sort";
 import { renderApp } from "../../testing";
-import { Table, type Column, type TableProps } from "./Table";
+import { Table, type Column, type RowAttrs, type TableProps } from "./Table";
 
 interface R { n: string; v: number | null }
 type K = "n" | "v";
@@ -206,6 +206,20 @@ describe("Table sorting", () => {
     expect(screen.getAllByRole("columnheader")).toHaveLength(2); // an extra key draws no column
   });
 
+  it("sorts by an extra key that is also a display-only column's id, in either column order", () => {
+    interface P { n: string; a: number; score: number }
+    const rows: P[] = [{ n: "p", a: 1, score: 2 }, { n: "q", a: 2, score: 3 }, { n: "r", a: 3, score: 1 }];
+    const a: Column<P, "n" | "a" | "score"> = { id: "a", header: "A", sort: "desc", value: r => r.a, sorts: { score: r => r.score },
+      th: h => <th scope="col" className={h.className}>A and score</th> };
+    const shown: Column<P, "n" | "a" | "score"> = { id: "score", header: "Score", align: "num", cell: r => r.score };
+    const name: Column<P, "n" | "a" | "score"> = { id: "n", header: "Name", value: r => r.n };
+    for (const cols of [[name, a, shown], [name, shown, a]]) {
+      const { unmount } = renderApp(<Table name="T" rows={rows} columns={cols} rowId={r => r.n} sort={{ key: "score", desc: true }} onSort={() => {}} />);
+      expect(names()).toEqual(["q", "p", "r"]);
+      unmount();
+    }
+  });
+
   it("draws plain headers for columns that do not sort, and sorts nothing by them", () => {
     const cols: Column<R, K>[] = [{ id: "n", header: "Name", value: r => r.n }, COLS[1]!];
     renderApp(<Table name="T" rows={ROWS} columns={cols} rowId={r => r.n} sort={{ key: "n", desc: false }} onSort={() => {}} />);
@@ -250,6 +264,15 @@ describe("Table rows", () => {
     expect(own).toHaveBeenCalledTimes(1);
     await userEvent.click(tr("b").querySelector("td")!);
     expect([own.mock.calls.length, open.mock.calls.length]).toEqual([1, 1]);
+  });
+
+  it("keeps its own row keys: a key from rowProps never replaces the row's id", () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      renderApp(<Table name="T" rows={ROWS} columns={COLS} rowId={r => r.n} rowProps={() => ({ key: "same" }) as RowAttrs} />);
+      expect(names()).toEqual(["b", "x", "a", "c"]);
+      expect(error.mock.calls.filter(c => /same key/.test(String(c[0])))).toEqual([]);
+    } finally { error.mockRestore(); }
   });
 
   it("re-sorts when a column's value changes on the same rows and sort", () => {

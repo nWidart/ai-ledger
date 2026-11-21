@@ -70,8 +70,8 @@ type TableSort<K extends string> =
 
 export type TableProps<T extends RowData, K extends string = string> = TableBase<T, K> & TableSort<K>;
 
-/** What rowProps may set on a row's tr. */
-export type RowAttrs = Omit<ComponentPropsWithoutRef<"tr">, "children"> & { [data: `data-${string}`]: string | undefined };
+/** What rowProps may set on a row's tr. Not its key: the table keys rows by rowId. */
+export type RowAttrs = Omit<ComponentPropsWithoutRef<"tr">, "children" | "key"> & { [data: `data-${string}`]: string | undefined };
 
 interface TableBase<T extends RowData, K extends string> {
   /** The table's name, on the table and on the scroll region around it. */
@@ -120,8 +120,9 @@ export function Table<T extends RowData, K extends string = string>({ name, rows
       id, enableSorting: sortable, sortUndefined: "last", sortFn: compare as SortFn<typeof features, T>,
       accessorFn: r => { const v = value?.(r); return hasValue(v) ? v : undefined; },
     });
-    return columns.flatMap(c => [def(c.id, c.value, !!c.sort),
-      ...Object.entries<((r: T) => CellValue) | undefined>(c.sorts ?? {}).map(([k, value]) => def(k, value, true))]);
+    const extra = columns.flatMap(c => Object.entries<((r: T) => CellValue) | undefined>(c.sorts ?? {}).map(([k, value]) => def(k, value, true)));
+    // One TanStack column per id, the sortable one: a display-only column whose id is also an extra sort key registers none.
+    return [...columns.filter(c => c.sort || !extra.some(d => d.id === c.id)).map(c => def(c.id, c.value, !!c.sort)), ...extra];
   }, [columns]);
   const sorting = useMemo<SortingState>(() => sort ? [{ id: sort.key, desc: sort.desc }] : [], [sort?.key, sort?.desc]); // eslint-disable-line react-hooks/exhaustive-deps
   // TanStack rebuilds its rows, and the values they cache per column id, only for new data: new columns get a fresh copy of the rows.
@@ -139,7 +140,8 @@ export function Table<T extends RowData, K extends string = string>({ name, rows
   const row = (r: T, id: string, key = id) => {
     const v = pick?.value(r), sel = current != null && id === current ? "sel" : "";
     const attrs = pick && v != null ? pickRow(v, (v, el) => pick.open(v, el, r), pick.subject?.(r), sel) : { className: sel || undefined };
-    const own = rowProps?.(r), cls = [attrs.className, own?.className].filter(Boolean).join(" ") || undefined;
+    // An untyped caller's key is dropped too: the table owns row identity.
+    const { key: _key, ...own } = (rowProps?.(r) ?? {}) as RowAttrs & { key?: unknown }, cls = [attrs.className, own.className].filter(Boolean).join(" ") || undefined;
     return <tr key={key} {...own} {...attrs} className={cls}>{columns.map((c, i) => {
       const value = c.cell ? undefined : c.value?.(r), content = c.cell ? c.cell(r) : hasValue(value) ? value : null;
       const own = c.cellProps?.(r), props = { ...own, className: [classes(c), own?.className].filter(Boolean).join(" ") || undefined };
