@@ -438,22 +438,117 @@ describe("cost chart: zoom", () => {
     fireEvent.keyDown(group(), { key: "End" });
     for (let i = 0; i < 15; i++) fireEvent.keyDown(group(), { key: "ArrowLeft" }); // Oct 20
     expect(sr()).toContain("Oct 20, 2026:");
+    const label = group().getAttribute("aria-label");
     fireEvent.keyDown(group(), { key: "+", shiftKey: true });
     const { from, to } = chart.shown;
     expect(to - from + 1).toBe(15);
     expect(from <= 14 && to >= 14).toBe(true);
     expect(sr()).toMatch(/^Showing \w+ \d+ to \w+ \d+, 15 of 30 days\.$/);
     expect(showAll()).toBeTruthy();
+    expect(group().getAttribute("aria-label")).toBe(label); // the name is the view's, zoomed or not
   });
 
-  it("reads past the zoom: End reads the last day and the days shown move to include it", async () => {
+  it("reads past the zoom: End reads the last day, the days shown move to include it, and the status says both", async () => {
     renderApp(<Host />);
     const chart = await drawn();
     await drag(5, 14);
     act(() => group().focus());
     fireEvent.keyDown(group(), { key: "End" });
-    expect(sr()).toContain("Nov 4, 2026 so far:");
-    expect(chart.shown.to).toBe(29);
+    expect(sr()).toMatch(/^Nov 4, 2026 so far: .* Showing Oct 26 to Nov 4, 10 of 30 days\.$/);
+    expect(chart.shown).toEqual({ from: 20, to: 29 });
+    fireEvent.keyDown(group(), { key: "ArrowLeft" }); // inside the days shown: the day alone
+    expect(sr()).toMatch(/^Nov 3, 2026: /);
+    expect(sr()).not.toContain("Showing");
+  });
+
+  /** The month with today's cost $5 higher, as a background ingest of a running session leaves it: the same view, newer data. */
+  const newer = (data = month, more = 5): UsagePayload => {
+    const today = data.end, up = <T extends { day: string; cost: number | null }>(r: T): T => (r.day === today ? { ...r, cost: (r.cost ?? 0) + more } : r);
+    return { ...data, daily: data.daily.map(up), daily_projects: data.daily_projects.map(up), daily_models: data.daily_models.map(up) };
+  };
+  /** Counts the changes to the live region's text since the last call: what a screen reader would say. */
+  const spoken = () => {
+    const seen = new MutationObserver(() => {});
+    seen.observe(document.querySelector(".sr")!, { childList: true, characterData: true, subtree: true });
+    return () => seen.takeRecords().length;
+  };
+
+  it("keeps the zoom, 'Show all days' and its focus when newer data arrives for the same view, and says nothing", async () => {
+    const { rerender } = renderApp(<Host />);
+    const chart = await drawn();
+    await drag(5, 14);
+    act(() => showAll()!.focus());
+    const said = spoken(), draws = chart.options.length;
+    rerender(<Host data={newer()} />);
+    expect(chart.options.length).toBeGreaterThan(draws); // the newer figures are drawn
+    expect(chart.shown).toEqual({ from: 5, to: 14 });
+    expect(document.activeElement).toBe(showAll());
+    expect(sr()).toBe("Showing Oct 11 to Oct 20, 10 of 30 days.");
+    expect(said()).toBe(0);
+  });
+
+  it("keeps the day being read across newer data: silent when its words are the same, said again when its figure changed", async () => {
+    const { rerender } = renderApp(<Host />);
+    const chart = await drawn();
+    await drag(20, 29);
+    chart.fire("mousemove", chart.pointAt(25));
+    const reading = sr();
+    expect(reading).toContain("Oct 31, 2026:");
+    const said = spoken();
+    rerender(<Host data={newer()} />);
+    expect(sr()).toBe(reading);
+    expect(screen.getByRole("tooltip").textContent).toContain("Oct 31, 2026");
+    expect(chart.band).toBe(25);
+    expect(said()).toBe(0);
+
+    chart.fire("mousemove", chart.pointAt(29)); // today, whose cost the next refresh raises from $35 to $40
+    expect(sr()).toContain(usd(35));
+    said();
+    rerender(<Host data={newer(month, 10)} />);
+    expect(sr()).toContain(usd(40));
+    expect(said()).toBe(1);
+    expect(chart.shown).toEqual({ from: 20, to: 29 });
+  });
+
+  it("keeps the zoom on its days when an all-time view gains a day at its end", async () => {
+    const all = (to: string): UsagePayload => ({ ...view("2026-10-06", to), range: 0, start: null });
+    const { rerender } = renderApp(<Host data={all("2026-11-04")} />);
+    const chart = await drawn();
+    await drag(5, 14);
+    rerender(<Host data={all("2026-11-05")} />);
+    expect(chart.points).toBe(31);
+    expect(chart.shown).toEqual({ from: 5, to: 14 }); // Oct 11 to Oct 20 still
+    expect(showAll()).toBeTruthy();
+  });
+
+  it("shows every day again when a rolling range moves on a day: its first day is another view's", async () => {
+    const { rerender } = renderApp(<Host />);
+    const chart = await drawn();
+    await drag(5, 14);
+    rerender(<Host data={{ ...view("2026-10-07", "2026-11-05"), range: 30 }} />);
+    expect(chart.shown).toEqual({ from: 0, to: 29 });
+    expect(showAll()).toBeNull();
+  });
+
+  it("keeps the zoom when a token kind is hidden or shown, on the whole view's new value axis", async () => {
+    function Tokens() {
+      const [hidden, setHidden] = useState<string[]>([]);
+      const data: UsagePayload = { ...month, daily: month.daily.map(r => ({ ...r, input: 100, output: 50, thinking: 10, cache_read: 1000, cache_5m: 0, cache_1h: 0 })) };
+      return <CostChart d={data} metric="tokens" onMetric={() => {}} hidden={hidden} onHidden={setHidden} scale="volume" onScale={() => {}} stack="project" onStack={() => {}}
+        onProject={() => {}} onSource={() => {}} onDay={() => {}} />;
+    }
+    renderApp(<Tokens />);
+    const chart = await drawn();
+    const max = () => (chart.last!.yAxis as { max: number }).max;
+    await drag(5, 14);
+    const before = max();
+    await userEvent.click(screen.getByRole("button", { name: "Cache read" }));
+    expect(max()).toBeLessThan(before); // the axis is the whole view's, without the hidden kind
+    expect(chart.shown).toEqual({ from: 5, to: 14 });
+    expect(showAll()).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Cache read" }));
+    expect(max()).toBe(before);
+    expect(chart.shown).toEqual({ from: 5, to: 14 });
   });
 
   it("leaves Ctrl and plus to the browser", async () => {

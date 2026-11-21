@@ -54,11 +54,16 @@ export function CostChart({ d, metric, onMetric, hidden, onHidden, scale, onScal
   useEffect(() => { if (refocus.current) { refocus.current = false; legend.current?.querySelector("button")?.focus(); } }, [d]);
 
   const m = useMemo(() => costModel(d, metric, hidden, stack, scale), [d, metric, hidden, stack, scale]);
-  // One function per view: a new one is a new drawing, and ends the reading and the zoom, as a new view did before.
+  // One function per set of figures: a new one is drawn. Newer data and a hidden kind give one too, in the same view.
   const option = useCallback((env: ChartEnv) => costOption(m, env), [m]);
   const { cost, share, none, kinds, days: pts, totals, showAvg, zoom, avg, live, peak } = m;
+  // The view: what the user chose, and the first day it draws. While it is the same, the reading and the zoom stay on
+  // their days through newer data (a background ingest every minute while a session runs) and through a hidden kind.
+  // The first day is in it because a day keeps its index only while the view starts on the same one: a rolling range
+  // that moves on at midnight is another view, and an all-time view only gains days at its end.
+  const view = [d.range, pts[0]?.day, d.project, d.source, d.automated, metric, stack, scale].join("|");
   // Whether the chart shows fewer than every day, as the wrapper reports it: it only shows "Show all days", and is no input
-  // of the option, so keeping it leaves the zoom alone. A new view's drawing reports every day shown, which clears it.
+  // of the option, so keeping it leaves the zoom alone. A new view reports every day shown, which clears it.
   const box = useRef<EChartHandle>(null);
   const [zoomed, setZoomed] = useState(false);
   const onZoom = useCallback((s: Shown | null) => setZoomed(s != null), []);
@@ -167,7 +172,7 @@ export function CostChart({ d, metric, onMetric, hidden, onHidden, scale, onScal
       </div>
       {none && <div className="empty all-hidden" role="status">All token kinds are hidden.{" "}
         <button type="button" className="linkish" onClick={() => onHidden([])}>Show every kind</button></div>}
-      <EChart ref={box} label={label} hidden={none} height={H + (zoom ? SLIDER_ROOM : 0)} option={option} points={pts.length} tip={tip} read={read}
+      <EChart ref={box} label={label} hidden={none} height={H + (zoom ? SLIDER_ROOM : 0)} option={option} view={view} points={pts.length} tip={tip} read={read}
         onActivate={pick} zoom={zoom} onZoom={onZoom} readZoom={readZoom} />
       {/* The chart's text alternative: a figure per day and series in the current stacking, in the chart's units. */}
       {!none && <ChartTable><DataTable name={`${what} per day`} region="scroll tall">

@@ -11,7 +11,7 @@ import { openDrawer } from "../../components/Drawer";
 import { drawn } from "../../components/echart/testing";
 import { mockApi } from "../../components/sheets/testing";
 import { dayStamp, download } from "../../components/export";
-import { renderApp, renderPage } from "../../testing";
+import { ingested, renderApp, renderPage } from "../../testing";
 import { num } from "../../format";
 import { compareText, costDays, thinHistory } from "./cost";
 import { CostPage } from "./CostPage";
@@ -450,6 +450,25 @@ describe("CostPage", () => {
     renderApp(<CostPage />);
     await loaded();
     expect(document.getElementById("projects")).toBeNull();
+  });
+
+  it("keeps the daily chart's zoom, and the focus on Show all days, when an ingest brings newer figures", async () => {
+    // What the status watcher does about every minute while a session runs: the usage is fetched again, with today's cost up.
+    let served = usage;
+    mockApi({ "/api/usage": () => served, "/api/sessions": () => sessions, "/api/session": () => session });
+    at();
+    const { client } = renderPage(<CostPage />);
+    await loaded();
+    const chart = await drawn();
+    chart.zoomTo(5, 14);
+    act(() => screen.getByRole("button", { name: "Show all days" }).focus());
+    const draws = chart.options.length, status = document.querySelector("#spend .sr")!.textContent;
+    served = { ...usage, daily: usage.daily.map(r => (r.day === usage.end ? { ...r, cost: (r.cost ?? 0) + 5 } : r)) };
+    await ingested(client);
+    await waitFor(() => expect(chart.options.length).toBeGreaterThan(draws)); // the newer figures are drawn
+    expect(chart.shown).toEqual({ from: 5, to: 14 });
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Show all days" }));
+    expect(document.querySelector("#spend .sr")!.textContent).toBe(status);
   });
 
   it("says when every token kind is hidden and shows them again", async () => {

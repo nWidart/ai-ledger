@@ -166,8 +166,12 @@ export interface EChartProps {
   hidden?: boolean;
   /** The box's height in px. The box has it from the first render. */
   height: number;
-  /** Builds the ECharts option. Pure. Memoize it on the chart's data: a new function is a new drawing, and drops the reading and the zoom. */
+  /** Builds the ECharts option. Pure. Memoize it on the chart's data: a new function is drawn. */
   option: (env: ChartEnv) => EChartsOption;
+  /** What makes this the same view: a key built from what the user chose, never from the figures. While it stays the same, a new
+   *  option function is the same chart with newer data, and the reading and the zoom stay. When it changes, both reset.
+   *  Without it, the option function is the view. */
+  view?: string;
   /** How many points the keys read: days, weeks, sessions, requests. */
   points: number;
   /** The tooltip for point i. Without it, the chart has no tooltip. */
@@ -180,7 +184,7 @@ export interface EChartProps {
   zoom?: boolean;
   /** The days shown changed: the first and last point, or null for every point. */
   onZoom?: (shown: { from: number; to: number } | null) => void;
-  /** The sentence the live region says after a zoom change. */
+  /** The sentence the live region says after a zoom change: alone, or after the reading when a reading key moved the days shown. */
   readZoom?: (shown: { from: number; to: number } | null) => string;
   /** `reset()` shows every point again; `focus()` focuses the box. */
   ref?: Ref<{ reset(): void; focus(): void }>;
@@ -200,7 +204,12 @@ The DOM, which keeps today's roles and classes:
 Behavior:
 
 - **Loading.** The box has its height from the first render. Until the runtime resolves, `.echart-plot` is empty. If the import fails, the box shows "The chart could not be drawn. The data table below has its figures." in muted text. Keys, tooltip and readout work in all three states.
-- **Drawing.** On ready, and whenever `option`, the environment or the box size changes: `chart.setOption(option(env), { replaceMerge: ["series", "xAxis", "yAxis", "grid"] })`. Series that are gone are dropped, and the zoom window is kept, because the option never names `startValue` or `endValue`. When the `option` function itself changes, the wrapper clears the cursor and resets the zoom.
+- **Drawing.** On ready, and whenever `option`, the environment or the box size changes: `chart.setOption(option(env), { replaceMerge: ["series", "xAxis", "yAxis", "grid"] })`. Series that are gone are dropped, and the zoom window is kept, because the option never names `startValue` or `endValue`.
+- **View.** A new `option` function means one of two things, and the wrapper must tell them apart: newer data for the same chart (a background ingest refetches every page's data about every minute while a session runs), or another chart (the user changed the range, a filter, the stacking). The `view` key is the chart's answer. While it is the same, a new function is drawn and the cursor and the zoom stay on their points. When it changes, the wrapper clears the cursor and resets the zoom. Without a key the option function is the view, so a chart that names none resets on every new function, as before.
+  - Within a view a point keeps its index, and new points come at the end. The key therefore holds what fixes the first point: Cost's holds the first day drawn, so a rolling range that moves on at midnight is another view, and an all-time view only gains days. The wrapper maps nothing by key: a day axis needs no more, and a chart whose points can move inside a view must make that a view change.
+  - After a same-view redraw the wrapper puts the window back on the indexes it showed: ECharts holds a dragged window as a share of the points, which is other points once their number changes (measured: 10 to 19 of 30 became 10 to 20 of 31).
+  - A view that loses points ends a reading on a point that is gone, and shows every point when the window no longer fits. An option that stops drawing the slider leaves no zoom, and the reading stays.
+  - The live region changes only when its words do. A reading that survives a redraw is not said again, unless the newer data changed its sentence: the tooltip shows the new figures, so a screen reader user hears them too. The zoom sentence is kept as it was worded.
 - **Resize.** One `ResizeObserver` on the box. It calls `chart.resize()` and updates `env.width` and `env.height` in an animation frame.
 - **Disposal.** `chart.dispose()` in the effect's cleanup. A mount, unmount and mount again (StrictMode) leaves one chart.
 - **Reduced motion.** `env.motion` false: the option sets `animation: false`. The base option sets `animationDurationUpdate: 0` always, so only the first draw animates.
@@ -259,7 +268,8 @@ Alternative: feed standard bars with values adjusted to the minimum height. Reje
 - Keys on the focused box: `+` or `=` halves the span, `-` doubles it, around the cursor, or the last point when nothing is read. Shift is allowed with these keys, since `+` needs it on most layouts; Alt, Ctrl and Meta are not.
 - When the cursor moves outside the window, the window shifts to include it.
 - The wrapper tells the chart the days shown through `onZoom`, and takes `reset()` and `focus()` on its ref, so the chart can render "Show all days" beside its legend and return focus to the box.
-- The readout says the days shown after each change: "Showing Oct 11 to Oct 20, 10 of 30 days." The chart supplies the wording through `readZoom`.
+- The readout says the days shown after each change: "Showing Oct 11 to Oct 20, 10 of 30 days." The chart supplies the wording through `readZoom`. A zoom key, the slider and `reset()` say it alone. When an arrow key, Home or End moves the window to include the point it reads, the one live region says both in one message, the reading first: "Oct 30, 2026 so far: … Showing Oct 21 to Oct 30, 10 of 30 days." The user asked for the day; the move is what else changed.
+- The zoom belongs to the view (decision 5): newer data and a hidden kind keep it, a new view resets it. Cost's view is the range, the first day drawn, the project, the source, the automated filter, the measure, the stacking and the scale.
 - The zoom is not stored and is not in the URL.
 
 ### 9. Cost chart: every behavior and its ECharts form

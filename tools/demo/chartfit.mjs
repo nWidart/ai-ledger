@@ -17,6 +17,8 @@
 //   and returns focus to the chart;
 // - the hint under the heading is one line at 1440px in every stacking and scale; a 7-day view has no slider, and back at
 //   30 days the slider returns with every day shown;
+// - zooming leaves the chart's accessible name alone; newer figures for the same view (the usage answered again with today's
+//   cost up, after a window focus) are drawn and keep the days shown, "Show all days" and the focus on it, with nothing said;
 // - the page logs no CSP violation, no console error and no page error.
 // It runs locally, not in CI. It needs the build and the pinned Playwright:
 //   uv sync;  cd web && npm ci && npm run build;  cd tools/demo && npm ci
@@ -466,6 +468,47 @@ try {
     await sleep(300);
     const enter = { open: await drawer(), readout: await ev(page, () => window.chartfit.readout()) };
     line(`Enter on an empty day ${I + 1} opens nothing, and the reading stays`, !enter.open && named(enter.readout) === I, `drawer ${enter.open ? "open" : "closed"}, readout "${enter.readout}"`);
+    await page.done();
+  }
+
+  // Newer figures for the same view, as an ingest in the background brings about every minute while a session runs. The
+  // status answer names a new change when the window is focused again, so the page fetches its usage again, and today's
+  // cost is up in it. The zoom, "Show all days" and the focus on it stay, and the live region says nothing.
+  {
+    const page = await open("refresh");
+    let more = 0;
+    await page.route(/\/api\/usage\?/, async route => {
+      const res = await route.fetch(), d = await res.json();
+      if (more) for (const k of ["daily", "daily_projects", "daily_models", "daily_sources"])
+        if (Array.isArray(d[k])) d[k] = d[k].map(r => (r.day === d.end && r.cost != null ? { ...r, cost: r.cost + more } : r));
+      await route.fulfill({ response: res, json: d });
+    });
+    await page.route(/\/api\/status/, async route => {
+      const res = await route.fetch(), s = await res.json();
+      await route.fulfill({ response: res, json: more ? { ...s, last_change: `chartfit ${more}` } : s });
+    });
+    const box = page.locator("#spend .echart"), name = await box.getAttribute("aria-label");
+    const drawnDays = () => ev(page, () => window.chartfit.days().length);
+    const bars = () => ev(page, () => JSON.stringify(window.chartfit.bars().map(r => [Math.round(r.l), Math.round(r.t), Math.round(r.h)])));
+    await box.focus();
+    await page.keyboard.press("+");
+    const zoomed = await until(drawnDays, n => n < N);
+    const named = await box.getAttribute("aria-label");
+    line("zooming leaves the chart's accessible name as it was", zoomed < N && named === name, named === name ? `${zoomed} days drawn` : `"${name}" became "${named}"`);
+    const showAll = page.locator("#spend .show-all");
+    // The button follows the chart's report of the zoom, a render after the days are drawn.
+    if (!line('"Show all days" shows while zoomed', await showAll.waitFor({ timeout: 4000 }).then(() => true, () => false))) throw new Error("no zoom to keep");
+    await showAll.focus();
+    const before = await bars();
+    await ev(page, () => window.chartfit.listen());
+    more = 1000;
+    await ev(page, () => window.dispatchEvent(new Event("visibilitychange")));
+    const after = await until(bars, s => s !== before);
+    await sleep(400);
+    const kept = await ev(page, () => ({ days: window.chartfit.days().length, focus: document.activeElement === document.querySelector("#spend .show-all"), said: window.__said }));
+    line("newer figures for the same view are drawn", after !== before);
+    line('the refresh keeps the days shown, "Show all days" and the focus on it, and says nothing', kept.days === zoomed && kept.focus && !kept.said.length,
+      `${kept.days} of ${N} days drawn, ${zoomed} before; focus ${kept.focus ? "on the button" : "lost"}; said ${JSON.stringify(kept.said)}`);
     await page.done();
   }
 

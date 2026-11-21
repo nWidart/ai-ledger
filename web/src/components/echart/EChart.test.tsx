@@ -632,20 +632,37 @@ describe("EChart zoom", () => {
     expect(zooms(chart)).toEqual([]);
   });
 
-  it("moves the days shown to include the point a key reads", async () => {
-    render(zoomed());
+  it("moves the days shown to include the point a key reads, and says the reading and the days shown", async () => {
+    const { rerender } = render(zoomed());
     const chart = await drawn();
+    const onZoom = zoomSpy();
+    rerender(zoomed({ onZoom }));
     chart.zoomTo(5, 14);
     key("End");
-    expect(readout()).toBe("Oct 30: $29.00"); // the reading is said, not the zoom
+    // One message for the one live region: the day the key asked for, then the days now shown.
+    expect(readout()).toBe("Oct 30: $29.00 Showing Oct 21 to Oct 30, 10 of 30 days.");
     expect(zooms(chart).at(-1)).toEqual([20, 29]);
     expect(chart.shown).toEqual({ from: 20, to: 29 });
+    expect(onZoom.mock.calls.at(-1)).toEqual([{ from: 20, to: 29 }]);
     expect(chart.band).toBe(29);
     key("ArrowLeft");
     expect(zooms(chart)).toHaveLength(1); // inside: nothing moves
+    expect(readout()).toBe("Oct 29: $28.00"); // and nothing more to say
     key("Home");
     expect(chart.shown).toEqual({ from: 0, to: 9 });
+    expect(readout()).toBe("Oct 1: $0.00 Showing Oct 1 to Oct 10, 10 of 30 days.");
     expect(chart.band).toBe(0);
+    key("Escape");
+    expect(readout()).toBe("");
+  });
+
+  it("moves the days shown without a word when the caller words no zoom", async () => {
+    render(zoomed({ readZoom: undefined }));
+    const chart = await drawn();
+    chart.zoomTo(5, 14);
+    key("End");
+    expect(chart.shown).toEqual({ from: 20, to: 29 });
+    expect(readout()).toBe("Oct 30: $29.00");
   });
 
   it("reports a drag of the slider, says the days shown, and reads the points it shows", async () => {
@@ -829,5 +846,135 @@ describe("EChart zoom", () => {
     expect(onZoom.mock.calls.at(-1)).toEqual([null]);
     expect(readout()).toBe("Showing all 30 days.");
     expect(document.activeElement).toBe(box());
+  });
+
+  // The view: what the user chose. While it is the same, a new option function is the same chart with newer data.
+  const days = (n: number) => Array.from({ length: n }, (_, i) => `Oct ${i + 1}`);
+  /** The chart's option for n days, a new function each call, as a refetch gives one. */
+  const fresh = (n = 30, slider = true) => (env: ChartEnv): EChartsOption => ({
+    ...month(env), xAxis: { type: "category", data: days(n) },
+    series: [{ type: "line", data: days(n).map((_, i) => i % 10), lineStyle: { color: env.color("var(--proj-1)") } }],
+    dataZoom: slider ? [zoomSlider(env)] : [],
+  });
+  const viewed = (props: Partial<EChartProps> = {}) => zoomed({ view: "30 days by project", option: fresh(), ...props });
+  /** Counts the changes to the live region's text since the last call: what a screen reader would say. */
+  const spoken = () => {
+    const seen = new MutationObserver(() => {});
+    seen.observe(document.querySelector(".sr[aria-live=polite]")!, { childList: true, characterData: true, subtree: true });
+    return () => seen.takeRecords().length;
+  };
+
+  it("keeps the zoom and the reading when the same view draws newer data, and says nothing", async () => {
+    const onZoom = zoomSpy();
+    const { rerender } = render(viewed({ onZoom }));
+    const chart = await drawn();
+    key("+");
+    expect(readout()).toBe("Showing Oct 16 to Oct 30, 15 of 30 days.");
+    const said = spoken(), draws = chart.options.length;
+    rerender(viewed({ onZoom }));
+    expect(chart.options).toHaveLength(draws + 1); // drawn again
+    expect(chart.shown).toEqual({ from: 15, to: 29 });
+    expect(zooms(chart)).toEqual([[15, 29]]); // nothing sent: the chart kept its window
+    expect(onZoom).toHaveBeenCalledTimes(1);
+    expect(readout()).toBe("Showing Oct 16 to Oct 30, 15 of 30 days.");
+    expect(said()).toBe(0);
+
+    chart.fire("mousemove", chart.pointAt(20));
+    expect(readout()).toBe("Oct 21: $20.00");
+    const actions = bands(chart).length;
+    expect(said()).toBe(1);
+    rerender(viewed({ onZoom }));
+    expect(readout()).toBe("Oct 21: $20.00");
+    expect(said()).toBe(0); // the same words: a refresh every minute must not repeat them
+    expect(chart.band).toBe(20);
+    expect(bands(chart).slice(actions)).toEqual(["at 20"]); // the redraw dropped the band: back on its point
+    expect(chart.shown).toEqual({ from: 15, to: 29 });
+    key("+"); // and the zoom goes on from where it was, around the day being read
+    expect(chart.shown).toEqual({ from: 17, to: 24 });
+  });
+
+  it("says the reading again when the newer data changed its words", async () => {
+    const { rerender } = render(viewed());
+    await drawn();
+    key("End");
+    const said = spoken();
+    rerender(viewed({ read: i => `${MONTH[i]}: $${i + 1}.00` })); // today's figure grew
+    expect(readout()).toBe("Oct 30: $30.00");
+    expect(said()).toBe(1);
+  });
+
+  it("ends the reading and shows every point when the view changes, whatever the option function", async () => {
+    const onZoom = zoomSpy(), option = fresh();
+    const { rerender } = render(viewed({ onZoom, option }));
+    const chart = await drawn();
+    chart.zoomTo(10, 19);
+    chart.fire("mousemove", chart.pointAt(12));
+    rerender(viewed({ onZoom, option, view: "30 days by model" })); // the same function: the key alone makes the view
+    expect(chart.shown).toEqual({ from: 0, to: 29 });
+    expect(zooms(chart)).toEqual(["all"]);
+    expect(onZoom.mock.calls.at(-1)).toEqual([null]);
+    expect(readout()).toBe("");
+    expect(chart.band).toBeNull();
+  });
+
+  it("keeps the window and the cursor on their points when the view gains a point at its end", async () => {
+    const onZoom = zoomSpy();
+    const { rerender } = render(viewed({ onZoom }));
+    const chart = await drawn();
+    chart.zoomTo(10, 19);
+    chart.fire("mousemove", chart.pointAt(12));
+    // ECharts keeps a slider's window as a share of the points: with one more point the same share is other points.
+    const set = chart.setOption.bind(chart);
+    vi.spyOn(chart, "setOption").mockImplementation((o, opts) => {
+      set(o as never, opts as never);
+      chart.dispatchAction({ type: "dataZoom", startValue: 11, endValue: 20 }, { silent: true });
+    });
+    const said = spoken();
+    rerender(viewed({ onZoom, option: fresh(31), points: 31 }));
+    expect(chart.points).toBe(31);
+    expect(zooms(chart).at(-1)).toEqual([10, 19]); // put back on the points it showed
+    expect(chart.shown).toEqual({ from: 10, to: 19 });
+    expect(onZoom).toHaveBeenCalledTimes(1);
+    expect(readout()).toBe("Oct 13: $12.00");
+    expect(chart.band).toBe(12);
+    expect(said()).toBe(0);
+  });
+
+  it("ends a reading whose point is gone, shows every point when the window no longer fits, and brings neither back", async () => {
+    const onZoom = zoomSpy();
+    const { rerender } = render(viewed({ onZoom }));
+    const chart = await drawn();
+    chart.zoomTo(20, 29);
+    chart.fire("mousemove", chart.pointAt(25));
+    expect(readout()).toBe("Oct 26: $25.00");
+    const reads: number[] = [];
+    const counted = (i: number) => { reads.push(i); return readDay(i); };
+    rerender(viewed({ onZoom, option: fresh(22), points: 22, read: counted }));
+    expect(readout()).toBe("");
+    expect(reads).toEqual([]); // never asked for a point the view no longer has
+    expect(chart.band).toBeNull();
+    expect(chart.shown).toEqual({ from: 0, to: 21 });
+    expect(onZoom.mock.calls.at(-1)).toEqual([null]);
+
+    rerender(viewed({ onZoom, read: counted }));
+    expect(readout()).toBe("");
+    expect(chart.shown).toEqual({ from: 0, to: 29 });
+    expect(onZoom.mock.calls.at(-1)).toEqual([null]);
+  });
+
+  it("drops the zoom when the same view stops drawing the slider, and keeps the reading", async () => {
+    const onZoom = zoomSpy();
+    const { rerender } = render(viewed({ onZoom }));
+    const chart = await drawn();
+    chart.zoomTo(10, 19);
+    chart.fire("mousemove", chart.pointAt(12));
+    rerender(viewed({ onZoom, option: fresh(30, false) }));
+    expect(chart.option.dataZoom).toEqual([]);
+    expect(onZoom.mock.calls.at(-1)).toEqual([null]);
+    expect(readout()).toBe("Oct 13: $12.00");
+    expect(key("+")).toBe(true); // no slider: the key is the browser's
+    rerender(viewed({ onZoom })); // the slider is back, on every point
+    expect(chart.shown).toEqual({ from: 0, to: 29 });
+    expect(onZoom).toHaveBeenCalledTimes(2);
   });
 });

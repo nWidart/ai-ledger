@@ -36,10 +36,18 @@ export interface EChartProps {
   hidden?: boolean;
   /** The box's height in px. The box has it from the first render. */
   height: number;
-  /** Builds the ECharts option. Pure. Memoize it on the chart's data: a new function is a new drawing, which ends the
-   *  reading and shows every point again. */
+  /** Builds the ECharts option. Pure. Memoize it on the chart's data: a new function is drawn. */
   option: (env: ChartEnv) => EChartsOption;
-  /** How many points the keys read: days, weeks, sessions, requests. One per band of the option's first x axis. */
+  /** What makes this the same view: a key built from what the user chose (the range, the filters, the stacking, the
+   *  measure), never from the figures. While it stays the same, a new option function is the same chart with newer data:
+   *  it is drawn, and the reading and the zoom stay on the points they were on. When it changes, the reading ends and
+   *  every point shows again.
+   *  Within a view a point keeps its index, and new points come at the end. So the key must also hold what fixes the
+   *  first point (a rolling range's first day): when that moves, it is another view.
+   *  Without a key the option function is the view, and each new function ends the reading and the zoom. */
+  view?: string;
+  /** How many points the keys read: days, weeks, sessions, requests. One per band of the option's first x axis. When a
+   *  view loses points, a reading on a point that is gone ends, and a zoom that no longer fits shows every point. */
   points: number;
   /** The tooltip for point i. Without it, the chart has no tooltip. */
   tip?: (i: number) => ReactNode;
@@ -54,9 +62,12 @@ export interface EChartProps {
    *  read or set, and turning it off shows every point. The window is read as point indexes, so the slider must zoom a
    *  category x axis (one band per point): a value or time axis gives values, not indexes, and is not supported. */
   zoom?: boolean;
-  /** The points shown changed, by a key, the slider, `reset()` or a new drawing: null when every point shows. */
+  /** The points shown changed, by a key, the slider, `reset()`, a new view, or a redraw that left the zoom no slider or
+   *  no room: null when every point shows. A redraw of the same view that keeps the points shown is not a change. */
   onZoom?: (shown: Shown | null) => void;
-  /** The sentence the live region says after the user changes the points shown: null when every point shows. */
+  /** The sentence the live region says after the user changes the points shown: null when every point shows. It is
+   *  said alone after a zoom key, the slider or `reset()`, and after the reading (`read(i)`, then this) when an arrow
+   *  key, Home or End moved the points shown to include the point it reads. */
   readZoom?: (shown: Shown | null) => string;
   /** `reset()` shows every point again; `focus()` focuses the box. */
   ref?: Ref<EChartHandle>;
@@ -126,7 +137,7 @@ function placeTip(box: HTMLElement, plot: HTMLElement, tip: HTMLElement | null, 
 }
 
 export function EChart({
-  label, describedBy, id, className, hidden, height, option, points, tip, read, onActivate, zoom, onZoom, readZoom, ref,
+  label, describedBy, id, className, hidden, height, option, view, points, tip, read, onActivate, zoom, onZoom, readZoom, ref,
 }: EChartProps) {
   const box = useRef<HTMLDivElement>(null), plot = useRef<HTMLDivElement>(null), tipEl = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(UNMEASURED);
@@ -140,19 +151,22 @@ export function EChart({
   // The points shown, as the chart last reported them: null while every point shows.
   const [zoomed, setZoomed] = useState<Shown | null>(null);
   const shown = zoom && zoomed && zoomed.to < points ? zoomed : null;
-  // What the live region says after a zoom change, until the next reading.
-  const [status, setStatus] = useState<string | null>(null);
-  // A new option function is a new drawing: nothing is read on it yet, the old point may not exist, and it shows every
-  // point (the draw effect resets the chart's window). Turning the zoom off shows every point too (the zoom effect).
-  // Cleared here, in the render that sees the change, so no effect runs on the old state and a function that comes back
-  // brings nothing back.
-  const [drawing, setDrawing] = useState({ option, zoom });
-  if (drawing.option !== option || drawing.zoom !== zoom) {
-    if (drawing.option !== option) setReading(null);
-    setDrawing({ option, zoom });
+  // The zoom sentence the live region says, until the next reading: alone, or after the reading when the key that read
+  // the point also moved the points shown. Kept as it was worded, so a redraw of the same view says nothing again.
+  const [status, setStatus] = useState<{ text: string; after: boolean } | null>(null);
+  // The view: the caller's key, or the option function when it gives none. A new view is another chart: nothing is read
+  // on it yet, the old point may not exist, and it shows every point (the draw effect resets the chart's window).
+  // Turning the zoom off shows every point too (the zoom effect). A point the same view no longer has cannot be read.
+  // All cleared here, in the render that sees the change, so no effect runs on the old state, and a view, a zoom or a
+  // point that comes back brings nothing back.
+  const shows = view ?? option;
+  const [drawing, setDrawing] = useState({ view: shows, zoom });
+  if (drawing.view !== shows || drawing.zoom !== zoom) {
+    if (drawing.view !== shows) setReading(null);
+    setDrawing({ view: shows, zoom });
     setZoomed(null);
     setStatus(null);
-  }
+  } else if (reading != null && reading >= points) setReading(null);
   /** A new reading, or none: the live region says it in place of the zoom status. Ending no reading changes nothing, so
    *  a pointer that moves over the slider leaves the status the slider's drag set. */
   const readAt = (i: number | null) => {
@@ -160,17 +174,17 @@ export function EChart({
     setReading(i);
     setStatus(null);
   };
-  /** The live region says the points shown, when the caller words them. */
-  const say = (now: Shown | null) => { if (readZoom) setStatus(readZoom(now)); };
+  /** The live region says the points shown, when the caller words them: alone, or after the reading. */
+  const say = (now: Shown | null, after = false) => { if (readZoom) setStatus({ text: readZoom(now), after }); };
   /** Moves the chart's window to `to` (null: every point) and keeps what the chart then shows. Silent: the datazoom
-   *  listener is for the slider. With `speak`, the live region says the points shown, if they changed: ECharts may clamp
-   *  the window to the one it had. */
-  const zoomTo = (made: ECharts, to: Shown | null, speak: boolean) => {
+   *  listener is for the slider. The live region says the points shown, if they changed (ECharts may clamp the window
+   *  to the one it had): alone, or with `after` behind the reading the same key just made. */
+  const zoomTo = (made: ECharts, to: Shown | null, after = false) => {
     made.dispatchAction(to ? { type: "dataZoom", startValue: to.from, endValue: to.to } : ALL, { silent: true });
     const now = shownOn(made, points);
     if (same(now, shown)) return;
     setZoomed(now);
-    if (speak) say(now);
+    say(now, after);
   };
   // Where the pointer's reading points, in px from the plot's top left; null for a key's reading, which points at the
   // point itself. Not state: a pointer move inside one point re-renders nothing, the tooltip is only moved.
@@ -202,7 +216,7 @@ export function EChart({
       const next = zoomAround(shown, points, factor, at ?? points - 1);
       if (!same(next, shown)) {
         pointer.current = null; // the tooltip goes over the point, which the zoom moves
-        zoomTo(chart, next, true);
+        zoomTo(chart, next);
       }
       return;
     }
@@ -218,15 +232,16 @@ export function EChart({
     const i = Math.max(0, Math.min(points - 1, from + step));
     pointer.current = null;
     readAt(i);
-    // The days shown move, by as little as they can, to include the point read; the reading is said, not the zoom.
+    // The days shown move, by as little as they can, to include the point read. The one live region says both, the
+    // reading first: the user asked for the point, and the move is what else changed.
     if (chart && shown && !inside(i, shown)) {
       const span = shown.to - shown.from, start = i < shown.from ? i : i - span;
-      zoomTo(chart, { from: start, to: start + span }, false);
+      zoomTo(chart, { from: start, to: start + span }, true);
     }
   };
 
   // One handle for the box's life, so a callback ref runs once; reset() reads the chart as it is when it is called.
-  const reset = useEffectEvent(() => { if (chart && shown) zoomTo(chart, null, true); });
+  const reset = useEffectEvent(() => { if (chart && shown) zoomTo(chart, null); });
   useImperativeHandle(ref, () => ({ reset: () => reset(), focus: () => box.current?.focus() }), []);
 
   // Escape ends a reading wherever the focus is: the pointer can open one while the focus is elsewhere. A key from
@@ -328,21 +343,34 @@ export function EChart({
   // while its box is hidden still has one. The first run repeats the size init() took, which changes nothing.
   useEffect(() => { chart?.resize({ width, height }); }, [chart, width, height]);
 
-  // Reduced motion is the wrapper's to keep, so no option builder can forget it. A new option function is a new drawing:
-  // its slider merges into the old one by id and would keep the old window, so the window is reset to every point.
-  const drew = useRef(option);
+  /** After a redraw of the same view, the window goes back on the points it showed. The slider merges into the old one
+   *  by id and keeps its window, but as ECharts holds it: a drag's window is a share of the points, which is other
+   *  points once their number changes. A redraw that leaves no slider, or no room for the window, leaves no zoom. */
+  const keep = useEffectEvent((made: ECharts) => {
+    if (!zoom) return;
+    let now = shownOn(made, points);
+    if (windowOf(made) && !same(now, shown)) {
+      made.dispatchAction(shown ? { type: "dataZoom", startValue: shown.from, endValue: shown.to } : ALL, { silent: true });
+      now = shownOn(made, points);
+    }
+    if (!same(now, zoomed)) setZoomed(now);
+  });
+  // Reduced motion is the wrapper's to keep, so no option builder can forget it. A new view shows every point: its
+  // slider merges into the old one by id and would keep the old window, so the window is reset.
+  const drew = useRef(shows);
   useEffect(() => {
     if (!chart) return;
     const made = option(env);
     chart.setOption(env.motion ? made : { ...made, animation: false }, { replaceMerge: REPLACE });
-    if (drew.current === option) return;
-    drew.current = option;
+    if (drew.current === shows) return keep(chart);
+    drew.current = shows;
     unzoom(chart);
-  }, [chart, option, env]);
+  }, [chart, option, env, shows]);
   // Without zoom, nothing reads or sets the window: a chart left zoomed would have no way back.
   useEffect(() => { if (chart && !zoom) unzoom(chart); }, [chart, zoom]);
 
-  // The caller hears of every change to the points shown, whatever made it: a key, the slider, reset() or a new drawing.
+  // The caller hears of every change to the points shown, whatever made it: a key, the slider, reset(), a new view, or
+  // a redraw that left the zoom no slider or no room.
   const told = useRef<Shown | null>(null);
   const tell = useEffectEvent(() => onZoom?.(shown));
   useEffect(() => {
@@ -382,6 +410,9 @@ export function EChart({
     };
   }, []);
 
+  // What the live region says: the zoom sentence alone, the reading, or the reading and then the zoom sentence.
+  const live = at != null && (!status || status.after) ? read(at) + (status ? ` ${status.text}` : "") : status?.text ?? "";
+
   return (
     <>
       <div ref={box} id={id} className={className ? `echart ${className}` : "echart"} hidden={hidden} role="group" tabIndex={0}
@@ -390,7 +421,9 @@ export function EChart({
         {tip && <div ref={tipEl} className="tip" role="tooltip" style={{ display: at == null ? "none" : "block" }}>{at != null && tip(at)}</div>}
         {failed && <p className="echart-failed">The chart could not be drawn. The data table below has its figures.</p>}
       </div>
-      <div className="sr" aria-live="polite">{status ?? (at != null ? read(at) : "")}</div>
+      {/* One polite region for the reading and the zoom. Its text changes only when the words do, so a redraw of the
+          same view repeats nothing; a reading whose figures the newer data changed is said again, as the tooltip shows it. */}
+      <div className="sr" aria-live="polite">{live}</div>
     </>
   );
 }
