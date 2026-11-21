@@ -37,7 +37,7 @@ The package SHALL contain the built frontend and the price table, so an installe
 
 #### Scenario: Installed app serves every page
 - **WHEN** the app runs from an installed package on a machine with no checkout and no Node
-- **THEN** Activity, Cost, Context, Errors, Limits, Insights and Live all load and work
+- **THEN** Live, Limits, Activity with its Judgments view, Cost, Context and Errors all load and work
 
 #### Scenario: Installed app prices requests
 - **WHEN** the app runs from an installed package

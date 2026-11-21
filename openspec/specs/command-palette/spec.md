@@ -45,7 +45,7 @@ A `#` term SHALL select a filter: a project, a source (`#claude` for Claude Code
 - **THEN** the URL records the choice, Errors keeps showing automated sessions as it always does, and the choice applies on Activity and Cost
 
 ### Requirement: Go to a page with `>`
-A `>` term naming a page (Activity, Cost, Context, Errors, Limits, Insights, Live) SHALL open that page. Filters that are not changed in the palette SHALL be carried over as the navigation carries them. When the palette's chips or the current view name a project, `>project` SHALL open the Project page for that project; with no project, the palette SHALL NOT offer the bare Project page.
+A `>` term naming a page (Live, Limits, Activity, Cost, Context, Errors) SHALL open that page. Filters that are not changed in the palette SHALL be carried over as the navigation carries them. When the palette's chips or the current view name a project, `>project` SHALL open the Project page for that project; with no project, the palette SHALL NOT offer the bare Project page.
 
 #### Scenario: Page only
 - **WHEN** the user views project `myproject` for the last 14 days on Activity and commits `>errors`
@@ -231,7 +231,7 @@ A commit SHALL open at most one sheet. When a commit names a second inspector, t
 - **THEN** only `>Read` remains and Enter opens the `Read` inspector
 
 ### Requirement: A page-bound sheet implies its page
-A sheet that only one page hosts SHALL take the commit to that page. Error categories live on Errors. When a page chosen after such a sheet cannot host it, the later page SHALL win and the sheet's chip SHALL show that it was dropped.
+A sheet that only one page hosts SHALL take the commit to that page. Error categories live on Errors; every other sheet is hosted by every page. When a page chosen after a category is not Errors, the later page SHALL win and the category's chip SHALL show that it was dropped.
 
 #### Scenario: Error category from Activity
 - **WHEN** the user on Activity commits `>timeout` picked as the `Command timed out` category
@@ -242,7 +242,7 @@ A sheet that only one page hosts SHALL take the commit to that page. Error categ
 - **THEN** the category chip shows as dropped, and Enter opens Cost with no category
 
 ### Requirement: A sheet without a page stays where it can
-A `>` sheet without a page SHALL open on the current page when that page hosts the sheet, and otherwise on Activity. Activity, Cost, Context, Errors, Insights, Live and the Project page host the tool, MCP server, skill and session sheets. Limits hosts none.
+A `>` tool, MCP server, skill or session sheet without a page SHALL open on the current page, whatever the page: the app's shell hosts those sheets on every page, Limits included. With a page chip, it SHALL open on that page.
 
 #### Scenario: On a hosting page
 - **WHEN** the user on Errors commits `>bash`
@@ -258,7 +258,11 @@ A `>` sheet without a page SHALL open on the current page when that page hosts t
 
 #### Scenario: On Limits
 - **WHEN** the user on Limits commits `>bash`
-- **THEN** Activity opens with the `Bash` inspector, and the footer said so before Enter
+- **THEN** the `Bash` inspector opens over Limits, at `/limits?tool=Bash`
+
+#### Scenario: On the Judgments view
+- **WHEN** the user on `/usage?range=7&view=judgments` commits a session
+- **THEN** the session sheet opens over the Judgments view, with the view kept in the URL
 
 ### Requirement: Keep the followed session on Live
 On Live, the session sheet SHALL be named under `sheet`, and opening any sheet SHALL keep `session`, the session the stream follows, even when the same commit changes the project or source. A commit that changes the project or source and opens no sheet SHALL drop `session`.
@@ -352,3 +356,22 @@ While a project filter is set, the palette button SHALL show the project's color
 #### Scenario: No project filter
 - **WHEN** the user views Errors with no project filter
 - **THEN** the palette button shows "Search"
+
+### Requirement: Go to the Judgments view with `>`
+`>judgments` SHALL open Activity's Judgments view, and `>insights`, its name when it was a page, SHALL find the same row. The row SHALL follow Activity in the list and say it is an Activity view. A move between Overview and Judgments SHALL carry the shared filters and leave the other view's own keys behind, as the view switch does. `>activity` from the Judgments view SHALL open Overview. When the filters name Codex only, the footer SHALL say that Overview opens.
+
+#### Scenario: Open Judgments
+- **WHEN** the user views project `myproject` for the last 7 days on Cost and commits `>judgments`
+- **THEN** the URL becomes `/usage?project=myproject&range=7&view=judgments`, and the footer said "open Judgments" before Enter
+
+#### Scenario: The old name
+- **WHEN** the user types `>insights`
+- **THEN** the first row is Judgments
+
+#### Scenario: Back to Overview
+- **WHEN** the user on `/usage?range=7&view=judgments&outcome=not_achieved` commits `>activity`
+- **THEN** the URL becomes `/usage?range=7`
+
+#### Scenario: Codex only
+- **WHEN** the chips are `#codex` and `>judgments`
+- **THEN** the footer says Codex has no judgments and that Overview opens
