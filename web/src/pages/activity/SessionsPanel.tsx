@@ -84,7 +84,7 @@ export function sessionColumns(sorted: ReadonlySet<Key>, kept: ColumnChoice, day
     // The row header, though the selection column comes before it: that column holds a control, not data.
     { id: "first_ts", header: "Session", sort: "desc", value: s => s.first_ts, rowHeader: true, className: className("first_ts"), cellProps: () => SESS_CELL,
       cell: s => <SessionCell s={s} sub={<>{when(s.first_ts)}{s.git_branch ? ` · ${s.git_branch}` : ""}{s.title ? ` · ${shortId(s.session_id)}` : ""}</>} /> },
-    { id: "project", header: "Project", className: className("project"), cellProps: () => NAME_CELL, cell: s => <ProjectName project={s.project} /> },
+    { id: "project", header: "Project", className: className("project"), cellProps: () => NAME_CELL, cell: s => <ProjectName project={s.project}>{s.project == null ? <span className="muted">(no project)</span> : undefined}</ProjectName> },
     stat("duration_s", "Active", 0, s => dur(s.duration_s), s => s.duration_s, { tip: "Active time: pauses over 20 minutes left out" }),
     stat("model_ms", "Model", 1, s => s.model_ms == null ? "–" : dur(s.model_ms / 1000), s => s.model_ms,
       { tip: "Model time: waiting on the model, over the whole session; Codex records none", whole: true }),

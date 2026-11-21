@@ -2135,6 +2135,26 @@ describe("Sessions selection", () => {
       expect(compared()).toEqual(["#s1", "#s3"]);
     });
 
+    it("returns focus to a compared name after a click that does not focus it, as in Safari", async () => {
+      serve(usage);
+      at();
+      renderPage(<ActivityPage />);
+      await loaded();
+      await listed(sessions.sessions.length);
+      await userEvent.click(box("#s1"));
+      await userEvent.click(box("#s3"));
+      await userEvent.click(compareButton()!);
+      // A bare click event moves no focus: the page's body holds it when the name opens the sheet.
+      act(() => (document.activeElement as HTMLElement).blur());
+      expect(document.activeElement).toBe(document.body);
+      fireEvent.click(nameButton("#s3"));
+      expect(location.search).toBe("?range=30&session=s3");
+      const dlg = within(document.querySelector("dialog")!);
+      expect(await dlg.findByText("Timeline")).toBeTruthy();
+      await userEvent.click(dlg.getByRole("button", { name: "Close" }));
+      await waitFor(() => expect(document.activeElement).toBe(nameButton("#s3")));
+    });
+
     it("reads a missing figure as the table does, explains a missing model time, and keeps the list's scope for each figure", async () => {
       const base = many(4);
       const rows = [

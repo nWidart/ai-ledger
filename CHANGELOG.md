@@ -97,6 +97,7 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Activity's Sessions table names a session with no project "(no project)", as the Context page does, instead of showing a dot with no name.
 - Accessibility: each row of the Error loops, Failed test runs, Closed windows and Errors' Error types tables now has a row header (the session, the window or the type), so a screen reader names the row as you move down a column. Session is now the first column of Error loops and Failed test runs, before When, because a row header names only the cells after it.
 - Limits draws two past windows from the same poll as separate bars: each can be focused and picked on its own, picking one marks only its row in the Closed windows table, and its panel draws that window's own readings. Past windows no longer list an estimated window over the span of a measured one.
 - Judgments' Session types bar shows in a forced-colors (high contrast) mode, where its parts used to vanish.

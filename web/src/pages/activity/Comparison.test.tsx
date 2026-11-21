@@ -1,11 +1,10 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { ListedSessionRow } from "../../api";
 import sessions from "../../__fixtures__/sessions";
 import { Table } from "../../components/table/Table";
 import { when } from "../../format";
-import { renderApp } from "../../testing";
 import { Comparison } from "./Comparison";
 import { comparedFigures, sessionColumns } from "./SessionsPanel";
 
@@ -68,12 +67,23 @@ describe("Comparison", () => {
     expect(screen.queryByText(/records no model time/)).toBeNull();
   });
 
-  it("opens a session's sheet from its name and removes it with its Remove button", async () => {
-    const onRemove = vi.fn<(s: ListedSessionRow) => void>();
-    renderApp(<Comparison id="cmp" sessions={rows} figures={comparedFigures(all())} onRemove={onRemove} />);
-    await userEvent.click(within(table()).getByRole("button", { name: "Fix login" }));
-    await waitFor(() => expect(location.search).toBe("?session=s1"));
-    await userEvent.click(within(table()).getByRole("button", { name: "Remove #s2 from the comparison" }));
-    expect(onRemove).toHaveBeenCalledWith(rows[1]);
+  it("gives each header a short name for its cells: the session's on its column, the figure's on its row", () => {
+    draw({ day: true });
+    expect([...table().querySelectorAll("thead th")].slice(1).map(th => th.getAttribute("abbr"))).toEqual(["Fix login", "#s2"]);
+    expect([...table().querySelectorAll("tbody th")].map(th => th.getAttribute("abbr"))).toEqual(FIGURES);
+    // The controls in the headers keep their own names.
+    expect(within(table()).getByRole("button", { name: "Remove Fix login from the comparison" })).toBeTruthy();
+    expect(within(table()).getByRole("button", { name: "About Model" })).toBeTruthy();
+  });
+
+  it("names a session with no project \"(no project)\", in the Sessions table and the comparison alike", () => {
+    const orphan = [{ ...rows[0]!, project: null }, rows[1]!];
+    render(<Comparison id="cmp" sessions={orphan} figures={comparedFigures(all())} onRemove={() => {}} />);
+    render(<Table name="Sessions" rows={orphan} columns={all()} rowId={s => s.session_id} />);
+    const listed = screen.getByRole("table", { name: "Sessions" }).querySelector("tbody tr")!.children[1]!;
+    const compared = table().querySelector("tbody tr")!.children[1]!;
+    expect([listed.textContent, compared.textContent]).toEqual(["(no project)", "(no project)"]);
+    expect(compared.innerHTML).toBe(listed.innerHTML);
+    expect(compared.querySelector(".muted")?.textContent).toBe("(no project)");
   });
 });
