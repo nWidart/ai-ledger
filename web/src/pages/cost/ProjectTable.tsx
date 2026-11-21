@@ -1,14 +1,14 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { UsagePayload } from "../../api";
 import { useColors } from "../../colors";
 import { motion } from "../../components/chart";
-import { DataTable } from "../../components/DataTable";
 import { ExportButtons } from "../../components/ExportButtons";
 import { dayStamp } from "../../components/export";
 import { ProjectName } from "../../components/ProjectDot";
-import { openProjectSheet, pickRow } from "../../components/sheets/session";
-import { SortTh, type SortBy } from "../../components/Sort";
-import { Toned, ToneKey } from "../../components/tone";
+import { openProjectSheet } from "../../components/sheets/session";
+import type { SortBy } from "../../components/Sort";
+import { Table, type Column, type RowAttrs, type RowPick } from "../../components/table/Table";
+import { tint, ToneKey } from "../../components/tone";
 import { mult, num, pct, plural, usd } from "../../format";
 import { sgn, thinHistory } from "./cost";
 import { NA, r4, Unpriced } from "./drawers";
@@ -35,6 +35,11 @@ const SORT_NAMES: Record<MatrixKey, string> = { project: "project", trend: "tren
 export const sortedText = (s: SortBy<MatrixKey>) =>
   `Sorted by ${SORT_NAMES[s.key]}, ${s.key === "project" ? (s.desc ? "Z to A" : "A to Z") : s.desc ? "highest first" : "lowest first"}`;
 
+const NAME_CELL = { className: "name" }, TREND_CELL = { className: "trend-cell" }, SPEND_CELL = { className: "spend" }, CHG_CELL = { className: "chg" };
+const projectId = (r: MatrixRow) => r.project ?? "";
+/** A row opens its project's sheet; a project-less row too, by its empty name. */
+const PICK: RowPick<MatrixRow> = { value: projectId, open: v => openProjectSheet(v), subject: r => ({ kind: "project", value: projectId(r) }) };
+
 /** A change as a bar on one side of a center line, scaled to the largest change of the table. */
 const Diverge = ({ v, max, color }: { v: number | null; max: number; color: string }) => {
   const bar = <i style={{ width: `${Math.max(2, Math.abs(v ?? 0) / max * 100)}%`, background: color }} />;
@@ -50,12 +55,12 @@ export function ProjectTable({ d, sort, onSort, spot: pin, onSpot, smallOpen, on
 }) {
   const color = useColors(), [body, setBody] = useState<HTMLTableSectionElement | null>(null);
   const rows = useMemo(() => projectMatrix(d), [d]), m = useMemo(() => projectMedians(d.by_project), [d]), many = m.n >= 3;
-  const total = d.totals.cost || 0, prev = !!d.previous && !!d.start;
-  const { head, small } = foldMatrix(sortMatrix(rows, sort), m.big, total), fold = small.length > 0;
+  const total = d.totals.cost || 0, prev = !!d.previous && !!d.start, range = d.range;
+  // The table sorts here, not in Table: the folded projects follow the big ones in the same order, and the export keeps it.
+  const { head, small } = useMemo(() => foldMatrix(sortMatrix(rows, sort), m.big, total), [rows, sort, m, total]), fold = small.length > 0;
   const forced = small.some(r => r.project === pin?.spot), open = fold && (smallOpen || forced);
   const ps = [...head, ...small], spot = pin ? ps.find(r => r.project === pin.spot) : undefined;
   const maxCost = Math.max(...ps.map(r => r.cost || 0), 0) || 1, maxDelta = Math.max(...ps.map(r => Math.abs(r.delta ?? 0)), 0) || 1;
-  const cols = prev ? 6 : 5;
   // A sort says what it did, politely: aria-sort alone is read only when focus lands on the header. The one region follows the
   // table's sort whoever set it (a header, Compare projects, Sort by cost again, a new view's reset), each set is a new object, and
   // the text is cleared first, so a sort that reads as the last one did is said again.
@@ -67,8 +72,6 @@ export function ProjectTable({ d, sort, onSort, spot: pin, onSpot, smallOpen, on
     return () => cancelAnimationFrame(f);
   }, [sort]);
   const sortBy = (s: SortBy<MatrixKey>) => { onSort({ ...s }); onSpot(null); };
-  const th = (k: MatrixKey, label: ReactNode, cls?: string, asc?: boolean, title?: string) =>
-    <SortTh k={k} sort={sort} onSort={sortBy} asc={asc} className={cls} title={title}>{label}</SortTh>;
   // The outlier row in view and focused once the table shows it.
   useEffect(() => {
     if (!pin || !body) return;
@@ -79,22 +82,33 @@ export function ProjectTable({ d, sort, onSort, spot: pin, onSpot, smallOpen, on
 
   const exported = ps.map(r => [r.project, r4(r.cost), r.p?.tokens ?? 0, r4(r.hit), r4(r.p?.write_1h_share ?? null), r4(r.p?.subagent_cost_share ?? null),
     r.p?.commits ?? 0, r4(r.cpc), r4(r.p ? perPrompt(r.p) : null), r4(r.delta)]);
-  const row = (r: MatrixRow) => {
-    const cmp = !!r.p && m.big.has(r.p), c = color(r.project);
-    return <tr key={r.project ?? ""} {...pickRow(r.project ?? "", v => openProjectSheet(v), { kind: "project", value: r.project ?? "" },
-      spot === r ? "spot" : "")}>
-      <th scope="row" className="name"><ProjectName project={r.project}><button type="button" className="cellbtn" title={r.project ?? ""}>{r.project ?? "(no project)"}</button></ProjectName></th>
-      <td className="opt trend-cell"><Trend values={r.trend} color={c} /><span className="sr">last {RECENT_DAYS} days {usd(r.recent)}</span></td>
-      <td className="num spend"><span className="ibar" aria-hidden="true"><i style={{ width: `${Math.max(2, (r.cost || 0) / maxCost * 100)}%`, background: c }} /></span>
-        <b>{usd(r.cost)}</b><Unpriced n={r.unpriced} /><span className="pc">{pct(r.share)}</span></td>
-      {prev && <td className="num chg"><Diverge v={r.delta} max={maxDelta} color={c} /><span className="d">{sgn(r.delta)}</span>
-        {r.isNew && <span className="chip new" title="No usage in the previous period">new</span>}</td>}
-      {!r.p || !r.p.commits ? <td className="num opt"><NA /></td> : r.cpc == null ? <td className="num opt">{usd(null)}</td>
-        : <Toned v={r.cpc} text={usd(r.cpc)} med={cmp && r.p.commits >= 3 ? m.cpc : null} better="down" kind="ratio" medText={usd(m.cpc)} zeroText={`no cost; median ${usd(m.cpc)} per commit`} opt />}
-      {r.hit == null ? <td className="num opt">{pct(null)}</td>
-        : <Toned v={r.hit} text={pct(r.hit)} med={cmp ? m.hit : null} better="up" kind="points" medText={pct(m.hit)} opt />}
-    </tr>;
-  };
+  const columns = useMemo((): Column<MatrixRow, MatrixKey>[] => {
+    const cmp = (r: MatrixRow) => !!r.p && m.big.has(r.p);
+    const cpcTint = (r: MatrixRow) => !r.p?.commits || r.cpc == null ? null : tint({ v: r.cpc, med: cmp(r) && r.p.commits >= 3 ? m.cpc : null,
+      better: "down", kind: "ratio", medText: usd(m.cpc), zeroText: `no cost; median ${usd(m.cpc)} per commit` });
+    const hitTint = (r: MatrixRow) => r.hit == null ? null : tint({ v: r.hit, med: cmp(r) ? m.hit : null, better: "up", kind: "points", medText: pct(m.hit) });
+    const tinted = (t: ReturnType<typeof tint>) => t ? { className: t.className, title: t.title } : {};
+    const cols: (Column<MatrixRow, MatrixKey> | false)[] = [
+      { id: "project", header: "Project", sort: "asc", value: r => r.project, cellProps: () => NAME_CELL,
+        cell: r => <ProjectName project={r.project}><button type="button" className="cellbtn" title={r.project ?? ""}>{r.project ?? "(no project)"}</button></ProjectName> },
+      { id: "trend", header: "Trend", sort: "desc", value: r => r.recent, hide: 0, cellProps: () => TREND_CELL,
+        tip: `Daily cost over the view. Sorts by the cost of the last ${RECENT_DAYS} days.`,
+        cell: r => <><Trend values={r.trend} color={color(r.project)} /><span className="sr">last {RECENT_DAYS} days {usd(r.recent)}</span></> },
+      { id: "cost", header: "Spend", sort: "desc", value: r => r.cost, align: "num", cellProps: () => SPEND_CELL,
+        cell: r => <><span className="ibar" aria-hidden="true"><i style={{ width: `${Math.max(2, (r.cost || 0) / maxCost * 100)}%`, background: color(r.project) }} /></span>
+          <b>{usd(r.cost)}</b><Unpriced n={r.unpriced} /><span className="pc">{pct(r.share)}</span></> },
+      prev && { id: "delta", header: <><span aria-hidden="true">Δ</span><span className="sr">Change</span> vs prev {range}d</>, sort: "desc", value: r => r.delta,
+        align: "num", cellProps: () => CHG_CELL,
+        cell: r => <><Diverge v={r.delta} max={maxDelta} color={color(r.project)} /><span className="d">{sgn(r.delta)}</span>
+          {r.isNew && <span className="chip new" title="No usage in the previous period">new</span>}</> },
+      { id: "cpc", header: "Cost / commit", sort: "desc", value: r => r.cpc, align: "num", hide: 0, cellProps: r => tinted(cpcTint(r)),
+        cell: r => !r.p?.commits ? <NA /> : <>{usd(r.cpc)}{cpcTint(r)?.mark}</> },
+      { id: "hit", header: "Cache hit", sort: "desc", value: r => r.hit, align: "num", hide: 0, cellProps: r => tinted(hitTint(r)),
+        cell: r => <>{pct(r.hit)}{hitTint(r)?.mark}</> },
+    ];
+    return cols.filter(c => c !== false);
+  }, [m, prev, range, maxCost, maxDelta, color]);
+  const rowProps = (r: MatrixRow): RowAttrs => ({ className: spot === r ? "spot" : undefined });
   const smallCost = sumKnown(small, r => r.cost), smallDelta = small.some(r => r.delta == null) ? null : small.reduce((a, r) => a + r.delta!, 0);
   const bucket = <tr key="small-projects" className="small-bucket"><th scope="row" className="name"><b>Small projects ({small.length})</b>{" "}
     <button type="button" className="linkish" aria-expanded={open} disabled={forced} title={forced ? "A ringed project is small" : undefined}
@@ -126,15 +140,9 @@ export function ProjectTable({ d, sort, onSort, spot: pin, onSpot, smallOpen, on
         }}>Sort by cost again</button></div>}
       <p className="sr" role="status">{said}</p>
       {many && <ToneKey note={`median of the ${m.n} projects with ${pct(OUTLIER_SHARE)}+ of cost or ${COMPARE_PROMPTS}+ prompts`} />}
-      <DataTable name="Project spend and change" className="matrix">
-        <thead><tr>{th("project", "Project", undefined, true)}
-          {th("trend", "Trend", "opt", false, `Daily cost over the view. Sorts by the cost of the last ${RECENT_DAYS} days.`)}
-          {th("cost", "Spend", "num")}
-          {prev && th("delta", <><span aria-hidden="true">Δ</span><span className="sr">Change</span> vs prev {d.range}d</>, "num")}
-          {th("cpc", "Cost / commit", "num opt")}{th("hit", "Cache hit", "num opt")}</tr></thead>
-        <tbody ref={setBody}>{ps.length ? <>{head.map(row)}{fold && bucket}{open && small.map(row)}</>
-          : <tr><td colSpan={cols} className="empty">No usage in this range.</td></tr>}</tbody>
-      </DataTable>
+      <Table name="Project spend and change" className="matrix" rows={head} columns={columns} rowId={projectId} sort={sort} onSort={sortBy} manualSort
+        pick={PICK} rowProps={rowProps} body={{ ref: setBody }} empty="No usage in this range."
+        after={row => <>{fold && bucket}{open && small.map(row)}</>} />
     </section>
   );
 }

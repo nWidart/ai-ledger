@@ -1,5 +1,7 @@
+import type { ReactNode } from "react";
 import type { Totals } from "../../api";
-import { ChartTable, DataTable } from "../../components/DataTable";
+import { ChartTable } from "../../components/DataTable";
+import { Table, type Column } from "../../components/table/Table";
 import { num, pct } from "../../format";
 import { kindCost, tokenPairs, type TokenPair } from "./cost";
 
@@ -22,6 +24,22 @@ const TIE = 1e-9;
 /** A share as a bar: no fill at 0, so an empty track reads as 0.0%. */
 const fill = (share: number | null, c: string) => (share ? <i style={{ width: `${share * 100}%`, background: c }} /> : null);
 
+/** A row of the exact table: a kind's, or one of its parts (output's reasoning, a cache write's duration) under it, which has no share. */
+interface KindRow { id: string; label: ReactNode; tokens: number; tokenShare: number | null; cost: number | null; costShare: number | null; part: boolean }
+const kindRows = (p: TokenPair): KindRow[] => [
+  { id: p.key, label: p.label, tokens: p.tokens, tokenShare: p.tokenShare, cost: p.cost, costShare: p.costShare, part: false },
+  ...p.parts.map((x): KindRow => ({ id: p.key + x.label, label: <>{x.label}{p.key === "output" ? " (in output)" : " cache write"}</>, tokens: x.tokens,
+    tokenShare: null, cost: x.cost, costShare: null, part: true })),
+];
+const PART_ROW = { className: "part" };
+const KIND_COLUMNS: Column<KindRow>[] = [
+  { id: "kind", header: "Kind", cell: r => r.label },
+  { id: "tokens", header: "Tokens", align: "num", cell: r => num(r.tokens) },
+  { id: "tokenShare", header: "Share of tokens", align: "num", cell: r => r.part ? null : pct(r.tokenShare, 1) },
+  { id: "cost", header: "Est. cost", align: "num", cell: r => r.part && r.cost == null ? "" : cents(r.cost) },
+  { id: "costShare", header: "Share of cost", align: "num", cell: r => r.part ? null : pct(r.costShare, 1) },
+];
+
 /** Each billed token kind's share of tokens beside its share of estimated cost: a bar to the left of the kind's name for tokens and a
  *  bar to the right for cost, each on its own 0 to 100% scale, with the shares as text. The bars are a picture of the figures: each row
  *  reads as one sentence, and the data table holds the exact tokens and cost. t: the view's or a project's totals. */
@@ -42,16 +60,8 @@ export function TokenPairs({ t }: { t: Totals }) {
           <span className="tp-r" aria-hidden="true"><span className="tp-bar">{fill(p.costShare, p.c)}</span><b>{pct(p.costShare, 1)}</b></span>
         </li>)}
       </ul>
-      <ChartTable><DataTable name="Tokens and estimated cost by kind" region="scroll">
-        <thead><tr><th scope="col">Kind</th><th scope="col" className="num">Tokens</th><th scope="col" className="num">Share of tokens</th>
-          <th scope="col" className="num">Est. cost</th><th scope="col" className="num">Share of cost</th></tr></thead>
-        <tbody>{pairs.flatMap(p => [
-          <tr key={p.key}><th scope="row">{p.label}</th><td className="num">{num(p.tokens)}</td><td className="num">{pct(p.tokenShare, 1)}</td>
-            <td className="num">{cents(p.cost)}</td><td className="num">{pct(p.costShare, 1)}</td></tr>,
-          ...p.parts.map(x => <tr key={p.key + x.label} className="part"><th scope="row">{x.label}{p.key === "output" ? " (in output)" : " cache write"}</th><td className="num">{num(x.tokens)}</td>
-            <td className="num" /><td className="num">{x.cost == null ? "" : cents(x.cost)}</td><td className="num" /></tr>),
-        ])}</tbody>
-      </DataTable></ChartTable>
+      <ChartTable><Table name="Tokens and estimated cost by kind" region="scroll" rows={pairs.flatMap(kindRows)} columns={KIND_COLUMNS} rowId={r => r.id}
+        rowProps={r => r.part ? PART_ROW : {}} /></ChartTable>
     </div>
   );
 }
