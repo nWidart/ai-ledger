@@ -16,8 +16,9 @@ Every page works from the keyboard and with a screen reader. This page lists the
 | Esc | An open menu, the palette, a sheet, a toggletip, a chart tooltip | Close it. Esc in a menu or on a chart tooltip does not close the sheet or the palette under it. |
 | Left, Right | A focused chart | Read the previous or next point. |
 | Home, End | A focused chart | Read the first or last point. |
-| Plus (or `=`) | The focused Cost daily chart, in a view of 14 days or more | Zoom in: halve the days shown, around the day you are reading, down to 7 days. |
-| Minus | The focused Cost daily chart, in a view of 14 days or more | Zoom out: double the days shown, up to every day. |
+| Esc | The focused Activity work chart, with no bar being read | Clear the selected day or week. |
+| Plus (or `=`) | The focused Cost daily chart or Activity work chart, in a view of 14 or more days or weeks | Zoom in: halve the days or weeks shown, around the one you are reading, down to 7. |
+| Minus | The focused Cost daily chart or Activity work chart, in a view of 14 or more days or weeks | Zoom out: double the days or weeks shown, up to every one. |
 | Enter (Space on Errors) | A focused chart that selects a bucket | Select or clear the point you are reading. |
 | Left, Right, Home, End | A focused tab on Activity's workbench or on Context | Move to the previous, next, first or last tab, wrapping. Context selects it at once; on Activity, Enter or Space selects it. |
 | Tab | A focused tab | Move to the selected tab's panel. |
