@@ -1,6 +1,7 @@
 // Checks in a real browser that Context's tabs and first plotted mark are on the first screen at 1440 x 900, with every tip rule
-// firing, before and after "Show N more" expands the strip; that Activity's work chart and workbench tab list are, over 30 days
-// (bars by day) and all time (bars by week); and that the first chart of Cost, Errors, Limits, the Judgments view and Live starts
+// firing, before and after "Show N more" expands the strip; that Activity's work chart (its whole box, waited for until its
+// first bar is drawn) and workbench tab list are, over 30 days (bars by day, with the zoom slider under them) and all time
+// (bars by week); and that the first chart of Cost, Errors, Limits, the Judgments view and Live starts
 // there, with its first plotted mark wholly on it. The jsdom tests cannot lay a page out; this can. It runs locally, not in
 // CI. It needs the demo server and the pinned Playwright:
 //   cd web && npm ci && npm run build;  cd tools/demo && npm ci && uv run seed.py && uv run serve.py   (DEMO_PORT moves it)
@@ -27,6 +28,11 @@ const TITLES = {
  *  own and the pattern's paths in <defs>. The bars come first in document order, before any nested group: the zoom slider,
  *  drawn after the average lines' groups, has filled paths of its own there, which `:not(g ~ path)` leaves out. */
 const COST_BAR = '#spend .echart-plot svg > g > path:not([fill="none"]):not([fill^="url("]):not(g ~ path)';
+/** Activity's work chart is ECharts' SVG too, with the same rule for its bars, two tracks and two marks more. The selected
+ *  bucket's frame is a translucent path drawn before the bars, and the reading band one after them: `:not([fill-opacity])`
+ *  leaves both out. The rate line sits in a clipped group of its own; its dots, drawn after it, are scaled symbols, which
+ *  `:not([transform])` leaves out as well as `:not(g ~ path)` does. The slider comes after the rate line's group. */
+const WORK_BAR = '#work .echart-plot svg > g > path:not([fill="none"]):not([fill^="url("]):not([fill-opacity]):not([transform]):not(g ~ path)';
 const FIRST = [
   ["Cost's daily cost chart", "/cost?range=30", "#spend .echart", COST_BAR],
   ["Errors' rate chart", "/errors?range=30", ".chart-card", ".chart-card .bars rect"],
@@ -84,10 +90,10 @@ try {
     // Activity's Overview: the work chart and the tab list.
     for (const range of ["30", "0"]) {
       await page.goto(`${BASE}/usage?range=${range}`);
-      await page.waitForSelector("#work .bar-seg");
+      await page.waitForSelector(WORK_BAR);
       const got = await page.evaluate(() => {
         const box = sel => { const r = document.querySelector(sel)?.getBoundingClientRect(); return r ? { top: r.top, bottom: r.bottom } : null; };
-        return { tabs: box("#workbench [role=tablist]"), mark: box("#work .chart") };
+        return { tabs: box("#workbench [role=tablist]"), mark: box("#work .echart") };
       });
       const v = verdict(got, `${scheme}, Activity over ${range === "0" ? "all time" : `${range} days`}`);
       console.log(v.line.replace("first plotted mark", "work chart"));
