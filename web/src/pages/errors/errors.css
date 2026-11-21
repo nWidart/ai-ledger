@@ -115,7 +115,7 @@
 .pg-errors .types td { vertical-align: top; }
 /* The type is the row's header: it reads as the data cell beside it, not as a column header. */
 .pg-errors .types tbody th[scope=row] { color: inherit; font-weight: inherit; font-size: inherit; padding-top: var(--space-4); padding-bottom: var(--space-4);
-  vertical-align: top; }
+  text-align: start; vertical-align: top; }
 .pg-errors .types :is(td, th).c-type { overflow-wrap: anywhere; }
 /* A wide count and rate (1,000,000 and 100.00%) wrap onto two lines rather than spill into the next cell (td.num is nowrap): the rate
    stays whole, and the count breaks only after a thousands separator (TypeTable puts a <wbr> there), as on a phone. tools/demo/typefit.mjs checks it. */
