@@ -403,13 +403,14 @@ class GrokDeriver(store.Deriver):
 
     def turn(self, d, u, s, ts):
         """The requests of a finished turn. Its calls cannot be told when no line states one or the turn names several
-        models: it is then one request per model at the turn's end."""
+        models: it is then one request per model at the turn's end, keyed by the turn_completed line's key (prompt ids
+        repeat, so two turns of one prompt id stay two)."""
         usage, pid = u["usage"], u.get("prompt_id")
         models = {k: v for k, v in (usage.get("modelUsage") or {}).items() if isinstance(v, dict)} or {None: usage}
         calls = self.calls(d, pid) if pid and len(models) == 1 else []
         if not calls:
             for model, mu in models.items():
-                mid = f"grok:{self.sid}:{pid}:{model or ''}"
+                mid = f"{key(d, self.path, 0)}:{model or ''}"
                 self.request(mid, ts, model, counts(mu), cost_of(mu), u.get("stop_reason"))
             return
         (model, mu), = models.items()

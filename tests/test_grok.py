@@ -218,10 +218,32 @@ class UsageTest(GrokCase):
         self.ingest()
         turn, = turns(path)
         rows = self.q("SELECT message_id, model, stop_reason FROM requests")
-        self.assertEqual(rows, [(f"grok:{SESSION['long-turn']}:{turn['prompt_id']}:grok-4.7-build", "grok-4.7-build", "end_turn")])
+        (key,), = self.q("SELECT key FROM raw_lines WHERE type = 'turn_completed'")
+        self.assertEqual(rows, [(f"{key}:grok-4.7-build", "grok-4.7-build", "end_turn")])  # the turn_completed line's key
         self.assertSums(SESSION["long-turn"], reported([turn]))
         end, = self.q("SELECT ts FROM raw_lines WHERE type = 'turn_completed'")
         self.assertEqual(self.q("SELECT ts FROM requests"), [(datetime.fromisoformat(store.ts_of(end[0])),)])
+
+    def test_turns_whose_calls_cannot_be_told_and_share_a_prompt_id(self):
+        # Prompt ids repeat: two such turns of one file, with the same prompt id (or none), are two requests each.
+        path, = self.put("long-turn")
+        with open(path) as fh:
+            lines = [json.loads(x) for x in fh if not any(f'"{t}"' in x for t in grok.CALL_TYPES)]
+        end = next(d for d in lines if grok.update(d).get("sessionUpdate") == "turn_completed")
+        again, bare, bare2 = (json.loads(json.dumps(end)) for _ in range(3))
+        for i, d in enumerate((again, bare, bare2), 1):
+            grok.meta(d)["eventId"] += f"{i}0"
+            grok.meta(d)["agentTimestampMs"] += 1000 * i
+        for d in (bare, bare2):
+            del grok.update(d)["prompt_id"]
+        with open(path, "w") as fh:
+            fh.writelines(json.dumps(d) + "\n" for d in lines + [again, bare, bare2])
+        self.ingest()
+        self.assertEqual(self.q("SELECT count(*) FROM requests"), [(4,)])
+        self.assertSums(SESSION["long-turn"], reported(turns(path)))
+        before = self.q("SELECT * FROM requests ORDER BY 1")
+        store.rebuild(self.con)
+        self.assertEqual(self.q("SELECT * FROM requests ORDER BY 1"), before)
 
     def test_same_rows_however_the_file_is_cut(self):
         for label in ("long-turn", "compaction", "probe"):

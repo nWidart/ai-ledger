@@ -73,7 +73,7 @@ A call is a distinct `streamStartMs` among the lines of one `promptId`. Its cont
 - each of uncached input, cache read, cache write, output and thinking is the turn's figure times the call's share of the summed context sizes, rounded so that the rows add up to the turn's figure (largest remainder);
 - `reported_cost` is split the same way, the last row taking the remainder.
 
-When the calls cannot be told (no line of the turn has a `streamStartMs`) or the turn names more than one model, the turn makes one request per model at the turn's end, key `grok:<session>:<prompt_id>:<model>`.
+When the calls cannot be told (no line of the turn has a `streamStartMs`) or the turn names more than one model, the turn makes one request per model at the turn's end, keyed by its `turn_completed` line's key and the model (`grok:<eventId>:<agentTimestampMs>:<model>`), since prompt ids repeat and two such turns of one prompt id must stay two.
 
 An incremental chunk can hold a `turn_completed` whose call lines came in an earlier chunk. So the deriver always reads a turn's calls from `raw_lines`, which already holds the chunk being derived. It counts only the lines between the file's previous `turn_completed` and this one. That makes the rows the same however the file was cut into ingests (a line written late lands after the turn's end and counts nowhere), and a prompt id used by two turns counts no call twice.
 
