@@ -3,17 +3,14 @@ import type { ErrorLoop, HookRow, NamedRateRow, ProjectRow, ToolKind, ToolRow, U
 import { useColors } from "../../colors";
 import type { SortBy } from "../../components/Sort";
 import { ProjectName } from "../../components/ProjectDot";
-import { toneOf, ToneKey } from "../../components/tone";
+import { tint, ToneKey, type ToneInput } from "../../components/tone";
 import { appLink, errorsHref, openProjectSheet, openSessionSheet, openToolSheet, shortId, utc } from "../../components/sheets/session";
-import { RATE_COLUMNS, SessionCell } from "../../components/table/cells";
+import { FAILED, RATE_COLUMNS, SessionCell } from "../../components/table/cells";
 import { Table, type Column, type RowPick } from "../../components/table/Table";
 import { big, median, ms, num, pct, when } from "../../format";
 import { flakyFirst, hookCommand } from "./work";
 
 const NAME = () => ({ className: "name" });
-/** The share of calls or runs that failed (as RATE_COLUMNS' Failed); over 10% reads as bad. */
-const failed = { header: "Failed", align: "num", cell: (r: { failure_rate: number | null }) => pct(r.failure_rate, 1),
-  cellProps: (r: { failure_rate: number | null }) => (r.failure_rate ?? 0) > .1 ? { className: "bad" } : {} } as const;
 
 export type ProjectKey = "project" | "sessions" | "tokens" | "subagent_share" | "tokens_per_prompt" | "commits" | "errors_per_100_calls" | "error_loops";
 /** Project metrics open by sessions, most first. */
@@ -21,19 +18,12 @@ export const PROJECT_SORT: SortBy<ProjectKey> = { key: "sessions", desc: true };
 
 type ProjectColumn = Column<ProjectRow, ProjectKey>;
 /** A number column tinted, weighted and marked when far from the median project, so color is never the only cue (as Toned). */
-function tonedColumn(id: "errors_per_100_calls" | "error_loops", header: string, text: (p: ProjectRow) => string, med: number | null, kind: "ratio" | "count",
-  medText: string, zeroText?: string): ProjectColumn {
-  const say = (p: ProjectRow) => {
-    const t = toneOf(p[id], med, "down", kind);
-    if (!t) return null;
-    const what = t.zero ? `${zeroText || `zero; median ${medText}`}, ${t.worse ? "worse" : "better"}`
-      : `${t.above ? "above" : "below"} the median (${medText}) by ${t.by}, ${t.worse ? "worse" : "better"}`;
-    return { t, what };
-  };
+function tonedColumn(id: "errors_per_100_calls" | "error_loops", header: string, text: (p: ProjectRow) => string, tone: Omit<ToneInput, "v" | "better">): ProjectColumn {
+  const at = (p: ProjectRow) => tint({ ...tone, v: p[id], better: "down" });
   return {
     id, header, align: "num", sort: "desc", value: p => p[id],
-    cellProps: p => { const s = say(p); return s ? { className: `tone ${s.t.worse ? "worse" : "better"}`, title: s.what } : {}; },
-    cell: p => { const s = say(p); return s ? <>{text(p)}<span className="mk" aria-hidden="true">{s.t.above ? "▲" : "▼"}</span><span className="sr">, {s.what}</span></> : text(p); },
+    cellProps: p => { const t = at(p); return t ? { className: t.className, title: t.title } : {}; },
+    cell: p => <>{text(p)}{at(p)?.mark}</>,
   };
 }
 const PROJECT_PICK: RowPick<ProjectRow> = { value: p => p.project ?? "", open: v => openProjectSheet(v), subject: p => ({ kind: "project", value: p.project ?? "" }) };
@@ -56,8 +46,9 @@ export function ProjectsTable({ rows, selected, sort, onSort, on }: {
       { id: "subagent_share", header: "Subagents", align: "num", sort: "desc", value: p => p.subagent_share, cell: p => pct(p.subagent_share) },
       { id: "tokens_per_prompt", header: "Tokens / prompt", align: "num", sort: "desc", value: p => p.tokens_per_prompt, cell: p => big(p.tokens_per_prompt) },
       { id: "commits", header: "Commits", align: "num", sort: "desc", value: p => p.commits, cell: p => num(p.commits) },
-      tonedColumn("errors_per_100_calls", "Errors / 100", p => num(p.errors_per_100_calls, 1), err, "ratio", num(err, 1), `zero errors; median ${num(err, 1)} per 100 calls`),
-      tonedColumn("error_loops", "Error loops", p => num(p.error_loops), loops, "count", num(loops)),
+      tonedColumn("errors_per_100_calls", "Errors / 100", p => num(p.errors_per_100_calls, 1),
+        { med: err, kind: "ratio", medText: num(err, 1), zeroText: `zero errors; median ${num(err, 1)} per 100 calls` }),
+      tonedColumn("error_loops", "Error loops", p => num(p.error_loops), { med: loops, kind: "count", medText: num(loops) }),
     ];
   }, [rows, many, color]);
   return (
@@ -73,7 +64,7 @@ export type ToolKey = "tool" | "calls" | "failure_rate" | "p50_ms" | "p95_ms";
 const TOOL_COLUMNS: readonly Column<ToolRow, ToolKey>[] = [
   { id: "tool", header: "Tool", sort: "asc", value: r => r.tool, cellProps: NAME, cell: r => <button type="button" className="cellbtn" title={r.tool}>{r.tool}</button> },
   { id: "calls", header: "Calls", align: "num", sort: "desc", value: r => r.calls, cell: r => num(r.calls) },
-  { ...failed, id: "failure_rate", sort: "desc", value: r => r.failure_rate },
+  { ...FAILED, id: "failure_rate", sort: "desc", value: r => r.failure_rate },
   { id: "p50_ms", header: "p50", align: "num", sort: "desc", value: r => r.p50_ms, cell: r => ms(r.p50_ms) },
   { id: "p95_ms", header: "p95", align: "num", sort: "desc", value: r => r.p95_ms, cell: r => ms(r.p95_ms) },
 ];
@@ -107,7 +98,7 @@ const HOOK_COLUMNS: readonly Column<HookRow>[] = [
   { id: "hook", header: "Hook", cellProps: r => ({ className: "name hook", title: hookTitle(r) }),
     cell: r => r.name && r.name !== r.event ? <>{hookCommand(r.name)}<div className="muted small">{r.event}</div></> : r.event },
   { id: "runs", header: "Runs", align: "num", cell: r => num(r.runs) },
-  { ...failed, id: "failed" },
+  { ...FAILED, id: "failed" },
   { id: "avg", header: "Avg", align: "num", cell: r => ms(r.avg_ms) },
 ];
 

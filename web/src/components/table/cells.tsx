@@ -25,11 +25,18 @@ export function SessionCell({ s, data, subject, onOpen, sub }: SessionCellProps)
     {sub ? <div className="muted small">{sub}</div> : null}</>;
 }
 
-type Rate = { calls: number; failure_rate: number | null };
+type Failing = { failure_rate: number | null };
+type Rate = Failing & { calls: number };
 
-/** Calls and the share that failed, as two columns; a failure rate over 10% reads as bad. */
+/** The share of calls or runs that failed, as a column without its id: any row with a failure rate spreads it with its own id
+ *  (and sort and value). Over 10% reads as bad. */
+export const FAILED = {
+  header: "Failed", align: "num", cell: (r: Failing) => pct(r.failure_rate, 1),
+  cellProps: (r: Failing) => (r.failure_rate ?? 0) > .1 ? { className: "bad" } : {},
+} satisfies Pick<Column<Failing>, "header" | "align" | "cell" | "cellProps">;
+
+/** Calls and the share that failed, as two columns. */
 export const RATE_COLUMNS: readonly Column<Rate>[] = [
   { id: "calls", header: "Calls", align: "num", cell: r => num(r.calls) },
-  { id: "failed", header: "Failed", align: "num", cell: r => pct(r.failure_rate, 1),
-    cellProps: r => (r.failure_rate ?? 0) > .1 ? { className: "bad" } : {} },
+  { ...FAILED, id: "failed" },
 ];
