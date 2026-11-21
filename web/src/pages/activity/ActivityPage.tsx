@@ -18,7 +18,7 @@ import { noFacets } from "../../components/facets";
 import { queries } from "../../queries";
 import { useApi } from "../../useApi";
 import { Judgments } from "./judgments/Judgments";
-import { SessionsPanel, type SessFilter } from "./SessionsPanel";
+import { SessionsPanel, useSessSelection, type SessFilter } from "./SessionsPanel";
 import { NO_JUDGMENTS_KEYS, validateSearch, type ActivitySearch, type WorkTab } from "./search";
 import { ViewSwitch } from "./ViewSwitch";
 import { ExtTables, LoopsList, PROJECT_SORT, ProjectsTable, TestsList, ToolsTable, type ProjectKey, type ToolKey } from "./tables";
@@ -176,6 +176,9 @@ function Overview({ views }: { views: ReactNode }) {
   const [flaky, setFlaky] = useState(false), [toolSort, setToolSort] = useState<SortBy<ToolKey> | null>(null);
   // The Sessions sort: its keys, first key first; empty is the list's own order.
   const [sessSort, setSessSort] = useState<readonly SortBy<SessionSort>[]>([]), [projSort, setProjSort] = useState<SortBy<ProjectKey>>(PROJECT_SORT);
+  // The Sessions selection, kept through a tab change, Show more, a sort, a search and a refresh; its scope is the view and the
+  // selected days asked for, so a change of any of them clears it.
+  const selection = useSessSelection(JSON.stringify([want.project, want.range, want.automated, want.source, sess.day, sess.days]));
   const [metric, setMetricState] = useState<WorkMetric>(loadMetric);
   const setMetric = (m: WorkMetric) => { setMetricState(m); try { localStorage.setItem(METRIC_KEY, m); } catch { /* storage off */ } };
   const lastView = useRef(viewKey);
@@ -263,8 +266,8 @@ function Overview({ views }: { views: ReactNode }) {
         <WorkPanel d={d} metric={metric} onMetric={setMetric} selected={sel && { day: sel.day, week: sel.days === 7 }} onPick={current ? pick : undefined} onClear={clear} />
         {has && <Vitals d={d} go={toVital} />}
         <Workbench tab={tab} onTab={setTab} note={note}>
-          {tab === "sessions" && <SessionsPanel view={{ project: d.project, range: d.range, automated: d.automated, source: d.source }} filter={sess} onFilter={setSess}
-            sort={sessSort} onSort={setSessSort} selected={h.session} />}
+          {tab === "sessions" && <SessionsPanel view={{ project: d.project, range: d.range, automated: d.automated, source: d.source }} asked={want} filter={sess}
+            onFilter={setSess} sort={sessSort} onSort={setSessSort} selected={h.session} selection={selection} />}
           {tab === "projects" && <ProjectsTable rows={(dv ?? d).by_project} selected={d.project} sort={projSort} onSort={setProjSort} on={on} />}
           {tab === "tools" && <>
             <ToolsTable tools={(dv ?? d).tools} flaky={flaky} sort={toolSort} onSort={setToolSort} on={on} />

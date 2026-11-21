@@ -72,6 +72,36 @@ The browser keeps the choice for every view and after a reload. The URL does not
 
 From the keyboard, press Enter on **Columns** to open the list and move the focus into it. Tab moves through the checkboxes and Space ticks or unticks one; the list stays open. Esc closes the list and returns the focus to the button. A click outside the list closes it too: a click on a control, such as the search field, leaves the focus there, and a click on plain text or the page background returns the focus to the button. A screen reader hears the button as collapsed or expanded, and the list as a dialog named "Columns".
 
+## Selection
+
+Activity's Sessions table lets you select up to four sessions. No other table has a selection.
+
+Each row starts with a checkbox. Tick it, or click anywhere in its cell, to select the session; the session sheet does not open. The rest of the row opens the sheet as before. There is no select-all.
+
+While a session is selected, a bar above the table says how many are selected:
+
+- With one: "1 selected. Select 1 more to compare."
+- With four: "4 selected. 4 is the most that compare." The other rows' checkboxes are disabled until you unselect one.
+
+**Clear selection** in the bar unselects every session and moves the focus to the search field.
+
+The selection lasts through Show more, a sort, a search, **Near context limit only**, a refresh and a tab change. A selected session that a search leaves out of the list stays selected and counted. The selection clears when the project, range, source, Include automated, or the selected day or week changes: its sessions' figures would then count other days or other sessions.
+
+While another view loads, the rows of the view before stay on screen. Their checkboxes are disabled until the new rows arrive, so no session joins the selection with figures from the view before. The rows still open their sheet. If the new view fails to load, the checkboxes stay disabled until the view asked for and the rows shown agree again.
+
+The URL and the browser keep no selection and no comparison: a reload or a shared link shows no session selected.
+
+## Comparison
+
+With two or more sessions selected, **Compare** in the selection bar shows the selected sessions side by side, in a table named "Session comparison" between the bar and the Sessions table. It is the Sessions table turned on its side: one row per figure, one column per session, in the order you selected them.
+
+- Each figure reads as its Sessions cell does and keeps the scope it has there. [Compare sessions](/ai-ledger/pages/activity/#sessions) on the Activity page lists each figure's scope.
+- Every figure has its row, even a column you hid or the width hides.
+- Ticking another row while the comparison shows adds its column.
+- The comparison reads the rows the list has loaded and makes no request. A refresh updates the figures of each session the list holds; a session a search leaves out keeps its last figures.
+
+**Compare** is a disclosure button: a screen reader hears it as collapsed or expanded, and the focus stays on it when the comparison shows or hides. Each figure's row starts with its name as a row header, and each session's column header holds the session's name, so a screen reader hears both with every cell. The name opens the session sheet, and closing the sheet returns the focus to it. **Remove** unselects its session and moves the focus to the next session's Remove button, or to the previous one's after the last. When fewer than two sessions stay selected, the comparison closes and the focus moves to **Clear selection**. While a new sort or search loads, Remove still works. On a narrow window the comparison scrolls sideways in its own region.
+
 ## Export
 
 The Cost page's project table and session table have **Download CSV** and **Copy** buttons. Download CSV saves the rows as shown as a `.csv` file. Copy puts the same rows, tab-separated, on the clipboard and reads "Copied" or "Copy failed".

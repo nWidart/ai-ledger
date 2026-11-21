@@ -407,6 +407,31 @@ describe("Table rows", () => {
     expect(open).toHaveBeenCalledWith("p-c", screen.getByRole("button", { name: "c" }), ROWS[3]);
   });
 
+  it("does not open a row from a click on a checkbox or a label in it, and still opens it from a plain cell and its button", async () => {
+    const open = vi.fn<(v: string, el: HTMLElement, r: R) => void>();
+    const columns: Column<R>[] = [
+      { id: "pick", header: "Pick", rowHeader: false, cell: r => <label><input type="checkbox" aria-label={`Pick ${r.n}`} /> <span>tick {r.n}</span></label> },
+      { id: "n", header: "Name", rowHeader: true, cell: r => <button type="button" className="cellbtn">{r.n}</button> },
+      { id: "note", header: "Note", cell: r => <label>note {r.n}</label> },
+      { id: "v", header: "Value", value: r => r.v, align: "num" },
+    ];
+    renderApp(<Table name="T" rows={ROWS} columns={columns} rowId={r => r.n} pick={{ value: r => `p-${r.n}`, open }} />);
+    const box = screen.getByRole<HTMLInputElement>("checkbox", { name: "Pick b" });
+    await userEvent.click(box);
+    expect(box.checked).toBe(true);
+    await userEvent.click(screen.getByText("tick b"));
+    expect(box.checked).toBe(false);
+    await userEvent.click(screen.getByText("note b"));
+    expect(open).not.toHaveBeenCalled();
+    // The checkbox cell comes first and is no row header; the button's cell is.
+    expect(screen.getByRole("rowheader", { name: "b" }).previousElementSibling!.tagName).toBe("TD");
+    await userEvent.click(box.closest("tr")!.querySelector("td.num")!);
+    expect(open).toHaveBeenCalledWith("p-b", screen.getByRole("button", { name: "b" }), ROWS[0]);
+    await userEvent.click(screen.getByRole("button", { name: "a" }));
+    expect(open).toHaveBeenLastCalledWith("p-a", screen.getByRole("button", { name: "a" }), ROWS[2]);
+    expect(open).toHaveBeenCalledTimes(2);
+  });
+
   it("sets a row's own attributes, its class after pick and sel, and lets a pick's own win", async () => {
     const own = vi.fn<() => void>(), open = vi.fn<(v: string, el: HTMLElement, r: R) => void>();
     renderApp(<Table name="T" rows={ROWS} columns={COLS} rowId={r => r.n} current="a" rowProps={r => ({ "data-c": r.n, className: r.v ? undefined : "none", onClick: own })}

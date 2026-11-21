@@ -1,22 +1,61 @@
 import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { ListedSessionRow, SessionSort, Span, View } from "../../api";
 import { HowMeasured } from "../../components/HowMeasured";
 import type { SortBy } from "../../components/Sort";
 import { ProjectName } from "../../components/ProjectDot";
-import { openSessionSheet, shortId } from "../../components/sheets/session";
+import { openSessionSheet, sessName, shortId } from "../../components/sheets/session";
 import { SessionCell } from "../../components/table/cells";
-import { Table, type CellValue, type Column, type RowPick } from "../../components/table/Table";
+import { Table, type CellValue, type Column, type RowAttrs, type RowPick } from "../../components/table/Table";
 import { big, dur, num, pct, plural, usd, when } from "../../format";
 import { useDebouncedValue } from "../../components/useDebounced";
 import { queries } from "../../queries";
 import { ColumnChooser } from "./ColumnChooser";
+import { Comparison } from "./Comparison";
 import { choosable, setColumnChoice, useColumnChoice, useWidthHides, type ChoosableId, type ColumnChoice } from "./sessionColumns";
 
 /** What the sessions table is limited to: a search, sessions near the context limit, and the chart's selection (day, its
  *  first day, none for the range; days, 1 or a week's 7). */
 export interface SessFilter { q: string; near: boolean; day: string; days: Span }
 export const NO_FILTER: SessFilter = { q: "", near: false, day: "", days: 1 };
+
+/** The most sessions selected at once: the most that compare side by side. */
+export const MAX_SELECTED = 4;
+const NONE: ReadonlyMap<string, ListedSessionRow> = new Map();
+/** The Sessions selection: each selected session's row, in the order selected. toggle and refresh take rows of the view asked
+ *  for only (the panel's job); refresh replaces the held row of each selected session among rows, so it keeps its newest figures. */
+export interface SessSelection {
+  rows: ReadonlyMap<string, ListedSessionRow>;
+  toggle: (row: ListedSessionRow, on: boolean) => void;
+  refresh: (rows: readonly ListedSessionRow[]) => void;
+  clear: () => void;
+}
+/** The selection, held as page state with the scope its rows were counted in: the view and the selected day or week asked for,
+ *  as one key. A change of project, range, source, automated toggle, day or week clears it at once: a selection held for
+ *  another scope reads as empty, and is dropped in the same render, so going back to the earlier scope selects nothing.
+ *  A write stamps it with the scope asked for now. */
+export function useSessSelection(scope: string): SessSelection {
+  const [held, setHeld] = useState<{ scope: string; rows: ReadonlyMap<string, ListedSessionRow> }>({ scope, rows: NONE });
+  // State reset on a changed input, set while rendering: React renders again at once, before anything shows.
+  if (held.scope !== scope) setHeld({ scope, rows: NONE });
+  // Each write starts from the selection as it reads now; one that changes nothing keeps the state, so no render follows.
+  const edit = useCallback((f: (m: Map<string, ListedSessionRow>) => boolean) =>
+    setHeld(h => { const m = new Map(h.scope === scope ? h.rows : NONE); return f(m) ? { scope, rows: m } : h; }), [scope]);
+  const toggle = useCallback((row: ListedSessionRow, on: boolean) => edit(m => {
+    const id = row.session_id;
+    if (!on) return m.delete(id);
+    if (m.has(id) || m.size >= MAX_SELECTED) return false;
+    m.set(id, row);
+    return true;
+  }), [edit]);
+  const refresh = useCallback((rows: readonly ListedSessionRow[]) => edit(m => {
+    let changed = false;
+    for (const r of rows) if (m.has(r.session_id) && m.get(r.session_id) !== r) { m.set(r.session_id, r); changed = true; }
+    return changed;
+  }), [edit]);
+  const clear = useCallback(() => setHeld({ scope, rows: NONE }), [scope]);
+  return { rows: held.scope === scope ? held.rows : NONE, toggle, refresh, clear };
+}
 
 const WHOLE = "Whole-session figure, not only the selected days";
 // The order each sort gives, most first then least first.
@@ -29,22 +68,23 @@ const ORDER: Record<SessionSort, [string, string]> = {
   tests_failed: ["most failed test runs first", "fewest failed test runs first"],
 };
 
-type Key = SessionSort | "project";
-const SESS_CELL = { className: "when sess" }, NAME_CELL = { className: "name" };
+type Key = SessionSort | "project" | "select";
+const SESS_CELL = { className: "when sess" }, WHEN_CELL = { className: "when" }, NAME_CELL = { className: "name" }, CHOSEN: RowAttrs = { className: "chosen" }, PLAIN: RowAttrs = {};
 const PICK: RowPick<ListedSessionRow> = { value: s => s.session_id, open: openSessionSheet, subject: s => ({ kind: "session", value: s.session_id }) };
 
 /** The table's columns, all of them. sorted: the sort's keys, whose cells add "sorted"; kept: the columns the user keeps, whose cells
  *  add "keep"; either class shows a column at any width. day: a day is selected, so the whole-session figures say so. */
-function sessionColumns(sorted: ReadonlySet<Key>, kept: ColumnChoice, day: boolean): Column<ListedSessionRow, Key>[] {
+export function sessionColumns(sorted: ReadonlySet<Key>, kept: ColumnChoice, day: boolean): Column<ListedSessionRow, Key>[] {
   const className = (id: Key) => [sorted.has(id) && "sorted", choosable(id) && kept[id] && "keep"].filter(Boolean).join(" ") || undefined;
   // A sortable figure: hide, its narrow-width priority; whole, a whole-session figure on a day.
   const stat = (id: Exclude<SessionSort, "first_ts">, header: string, hide: 0 | 1 | 2 | undefined, cell: (s: ListedSessionRow) => ReactNode, value: (s: ListedSessionRow) => CellValue,
     { tip, whole, cellProps }: { tip?: string; whole?: boolean; cellProps?: Column<ListedSessionRow>["cellProps"] } = {}): Column<ListedSessionRow, Key> =>
     ({ id, header, sort: "desc", value, cell, align: "num", hide, className: className(id), tip: whole && day ? WHOLE : tip, cellProps });
   return [
-    { id: "first_ts", header: "Session", sort: "desc", value: s => s.first_ts, className: className("first_ts"), cellProps: () => SESS_CELL,
+    // The row header, though the selection column comes before it: that column holds a control, not data.
+    { id: "first_ts", header: "Session", sort: "desc", value: s => s.first_ts, rowHeader: true, className: className("first_ts"), cellProps: () => SESS_CELL,
       cell: s => <SessionCell s={s} sub={<>{when(s.first_ts)}{s.git_branch ? ` · ${s.git_branch}` : ""}{s.title ? ` · ${shortId(s.session_id)}` : ""}</>} /> },
-    { id: "project", header: "Project", className: className("project"), cellProps: () => NAME_CELL, cell: s => <ProjectName project={s.project} /> },
+    { id: "project", header: "Project", className: className("project"), cellProps: () => NAME_CELL, cell: s => <ProjectName project={s.project}>{s.project == null ? <span className="muted">(no project)</span> : undefined}</ProjectName> },
     stat("duration_s", "Active", 0, s => dur(s.duration_s), s => s.duration_s, { tip: "Active time: pauses over 20 minutes left out" }),
     stat("model_ms", "Model", 1, s => s.model_ms == null ? "–" : dur(s.model_ms / 1000), s => s.model_ms,
       { tip: "Model time: waiting on the model, over the whole session; Codex records none", whole: true }),
@@ -66,6 +106,12 @@ function sessionColumns(sorted: ReadonlySet<Key>, kept: ColumnChoice, day: boole
   ];
 }
 
+// The session's actual start, as the Session cell's muted line reads it.
+const START: Column<ListedSessionRow, Key> = { id: "first_ts", header: "Start", cell: s => when(s.first_ts), cellProps: () => WHEN_CELL };
+/** The comparison's figures, from the table's columns: Project, Start, then every figure in the table's order, hidden or not. */
+export const comparedFigures = (all: readonly Column<ListedSessionRow, Key>[]): Column<ListedSessionRow, Key>[] =>
+  all.flatMap(c => c.id === "first_ts" ? [] : c.id === "project" ? [c, START] : [c]);
+
 /** Every session in the view, paged on the server so search finds old ones too, and sorted there so a sort orders them all.
  *  The Sessions tab's panel: an infinite query on the view, the filters and the sort, loaded while the tab shows, from the
  *  first page when any of them changes (the rows shown stay, inert, until the new first page lands). When an ingest or
@@ -73,12 +119,18 @@ function sessionColumns(sorted: ReadonlySet<Key>, kept: ColumnChoice, day: boole
  *  sort: the page's keys, first key first (up to three), empty for today's order; hiding a sorted column takes its key out.
  *  "Sort by several columns" (or Shift with a press) makes a header press add its column to the sort.
  *  The columns: the user's choice (sessionColumns.ts) over the width rule. A hidden column leaves the array given to Table, a kept
- *  one carries "keep"; every sorted column always shows. */
-export function SessionsPanel({ view, filter, onFilter, sort, onSort, selected }: {
-  view: View; filter: SessFilter; onFilter: (f: SessFilter) => void; sort: readonly SortBy<SessionSort>[]; onSort: (s: readonly SortBy<SessionSort>[]) => void;
-  selected: string;
+ *  one carries "keep"; every sorted column always shows.
+ *  view: the view of the /api/usage response on screen, which the rows are counted in; asked: the view the URL asks for. They
+ *  differ while a new view loads (or after it failed), and the earlier view's rows stay on screen meanwhile.
+ *  selection: the page's (a checkbox column first in each row, a bar over the table, and from two sessions Compare, which shows the
+ *  held rows side by side between the bar and the table). A tick is taken only from rows of the view
+ *  asked for: the two views equal and the rows not left over from an earlier query; otherwise the row checkboxes are disabled. */
+export function SessionsPanel({ view, asked, filter, onFilter, sort, onSort, selected, selection }: {
+  view: View; asked: View; filter: SessFilter; onFilter: (f: SessFilter) => void; sort: readonly SortBy<SessionSort>[]; onSort: (s: readonly SortBy<SessionSort>[]) => void;
+  selected: string; selection: SessSelection;
 }) {
-  const [several, setSeveral] = useState(false);
+  const [several, setSeveral] = useState(false), [comparing, setComparing] = useState(false), cmpId = useId();
+  const clearButton = useRef<HTMLButtonElement>(null), cmpFocus = useRef<string | null>(null);
   const root = useRef<HTMLDivElement>(null), body = useRef<HTMLTableSectionElement>(null), search = useRef<HTMLInputElement>(null), focusRow = useRef(-1);
   // Searching waits for a pause in typing; clearing the box searches at once.
   const debounced = useDebouncedValue(filter.q, 200), qt = (filter.q ? debounced : "").trim();
@@ -109,11 +161,27 @@ export function SessionsPanel({ view, filter, onFilter, sort, onSort, selected }
     : `Could not refresh the sessions (${error.message}).` : undefined;
   const loadingHint = stale && busy ? (qt ? `Searching for “${qt}”…` : "Loading sessions…") : failed ? (qt ? `Search for “${qt}” failed.` : "Sessions failed to load.") : "";
 
+  // The rows are in the scope asked for: counted in the view the URL asks for, and the answer to this query (the day and days
+  // come from the URL, so they differ from the rows' only while those are placeholder data).
+  const inScope = !!data && !isPlaceholderData && view.project === asked.project && view.range === asked.range
+    && view.automated === asked.automated && view.source === asked.source;
+  const { rows: picked, toggle, refresh, clear } = selection, full = picked.size >= MAX_SELECTED;
+  // Rows in scope bring each selected session's newest figures.
+  useEffect(() => { if (inScope) refresh(rows); }, [inScope, rows, refresh]);
+  // A label fills the cell, so a near miss still toggles the box; pickRow leaves clicks on it to the box. A change that reaches
+  // a box out of scope is refused as well as its disabled state refuses it.
+  const selectColumn = useMemo((): Column<ListedSessionRow, Key> => ({
+    id: "select", header: <span className="sr">Select</span>, rowHeader: false, className: "pickcol",
+    cell: s => { const on = picked.has(s.session_id); return <label><input type="checkbox" aria-label={`Select ${sessName(s)}`} checked={on}
+      disabled={!inScope || (!on && full)} onChange={e => { if (inScope) toggle(s, e.target.checked); }} /></label>; },
+  }), [picked, inScope, full, toggle]);
+
   const day = !!filter.day, choice = useColumnChoice(), hides = useWidthHides();
   // The sorted keys, as a set that changes only with the keys, so the columns are not rebuilt for a new list of the same keys.
   const keys = sort.map(s => s.key).join(), sorted = useMemo(() => new Set<Key>(keys ? keys.split(",") as SessionSort[] : []), [keys]);
   const all = useMemo(() => sessionColumns(sorted, choice, day), [sorted, choice, day]);
-  const columns = useMemo(() => all.filter(c => sorted.has(c.id) || !choosable(c.id) || choice[c.id] !== false), [all, sorted, choice]);
+  const figures = useMemo(() => comparedFigures(all), [all]);
+  const columns = useMemo(() => [selectColumn, ...all.filter(c => sorted.has(c.id) || !choosable(c.id) || choice[c.id] !== false)], [selectColumn, all, sorted, choice]);
   // A box is ticked when its column shows now: sorted, kept, or left to a width that does not hide it.
   const widthHides = (c: Column<ListedSessionRow, Key>) => c.hide != null && hides(c.hide);
   const items = all.flatMap(c => choosable(c.id) ? [{ id: c.id, label: String(c.header), shown: sorted.has(c.id) || (choice[c.id] ?? !widthHides(c)) }] : []);
@@ -137,6 +205,24 @@ export function SessionsPanel({ view, filter, onFilter, sort, onSort, selected }
   const order = sort.length ? sort.map(s => ORDER[s.key][s.desc ? 0 : 1]).join(", then ") : filter.near ? "nearest the limit first" : filter.day ? `by their cost on ${filter.days === 1 ? "that day" : "those days"}` : "newest first";
   const hint = moreError ?? (loadingHint || (failed ? "" : `${plural(total, "session")}${narrowed ? " match" : ""}` + (total || sort.length ? `, ${order}.` : ".")
     + (total ? ` ${rows.length < total ? `Showing ${num(rows.length)}. ` : ""}Select a session for details.` : "")));
+  // The bar's status is always in the page, empty with nothing selected, so its first count is announced.
+  const n = picked.size;
+  const count = !n ? "" : `${num(n)} selected.` + (n === 1 ? " Select 1 more to compare." : full ? ` ${MAX_SELECTED} is the most that compare.` : "");
+  // The comparison shows from two sessions on, from the held rows alone; under two it closes, so a later pair does not reopen it unasked.
+  if (comparing && n < 2) setComparing(false);
+  const shown = comparing && n >= 2;
+  // Removing a session moves focus to the next session's Remove button, else the previous one's; under two, to Clear selection.
+  const remove = (s: ListedSessionRow) => {
+    const ids = [...picked.keys()], rest = ids.filter(id => id !== s.session_id);
+    cmpFocus.current = rest.length < 2 ? "" : rest[Math.min(ids.indexOf(s.session_id), rest.length - 1)]!;
+    toggle(s, false);
+  };
+  useEffect(() => {
+    const to = cmpFocus.current;
+    if (to == null) return;
+    cmpFocus.current = null;
+    (to ? [...document.getElementById(cmpId)?.querySelectorAll<HTMLElement>("[data-remove]") ?? []].find(b => b.dataset.remove === to) : clearButton.current)?.focus();
+  }, [picked, cmpId]);
   return (
     <div id="sessions" ref={root}>
       <div className="tools-row">
@@ -148,8 +234,15 @@ export function SessionsPanel({ view, filter, onFilter, sort, onSort, selected }
       </div>
       <div className="hint"><span aria-live="polite">{hint}</span>
         <HowMeasured what="the session count">A session counts here when it has a request in the range; the Judgments view counts sessions by their start time, so the two totals can differ slightly.</HowMeasured></div>
+      <div className={"selbar" + (n ? " on" : "")}>
+        <span role="status">{count}</span>
+        {n > 1 && <button type="button" className="linkish" aria-expanded={shown} aria-controls={shown ? cmpId : undefined} onClick={() => setComparing(!shown)}>Compare</button>}
+        {n > 0 && <button type="button" className="linkish" ref={clearButton} onClick={() => { clear(); search.current?.focus(); }}>Clear selection</button>}
+      </div>
+      {shown && <Comparison id={cmpId} sessions={[...picked.values()]} figures={figures} onRemove={remove} />}
       <Table name="Sessions" region="scroll tall" rows={rows} columns={columns} rowId={s => s.session_id} manualSort sort={sort}
         onSort={s => sortBy(s as SortBy<SessionSort>[])} sortAdd={several} current={selected} pick={PICK}
+        rowProps={s => (picked.has(s.session_id) ? CHOSEN : PLAIN)}
         body={{ ref: body, className: stale ? "stale" : undefined, "aria-busy": busy || undefined, inert: stale || undefined }}
         empty={failed || busy ? undefined : narrowed ? "No sessions match." : "No sessions in this range."}
         after={failed ? <tr><td colSpan={columns.length} className="empty" role="alert">Could not load sessions ({failed}). <button type="button" className="linkish"

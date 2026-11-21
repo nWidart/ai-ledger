@@ -17,6 +17,7 @@ import { mockApi } from "../../components/sheets/testing";
 import { ActivityPage } from "./ActivityPage";
 import { setSearch } from "../../url";
 import { hookCommand, workDays } from "./work";
+import { dur, when } from "../../format";
 import { ingested, prevented, refreshed, renderApp, renderPage } from "../../testing";
 
 const at = (hash = "?range=30") => history.replaceState(null, "", "/usage" + hash);
@@ -1236,8 +1237,9 @@ describe("Sessions columns", () => {
     await userEvent.click(columnsButton());
     await userEvent.click(box("Compactions"));
     expect(heads()).not.toContain("compactions");
-    expect(heads()).toHaveLength(12);
-    expect(document.querySelector("#sessions tbody tr")!.children).toHaveLength(12);
+    // 12 of the 13 columns, after the selection column.
+    expect(heads()).toHaveLength(13);
+    expect(document.querySelector("#sessions tbody tr")!.children).toHaveLength(13);
     await userEvent.click(box("Commits"));
     expect(stored()).toEqual({ compactions: false, commits: false });
     expect(columnsButton().textContent).toBe("Columns, 2 hidden");
@@ -1252,7 +1254,7 @@ describe("Sessions columns", () => {
     const reset = within(list()).getByRole("button", { name: "Reset columns" });
     await userEvent.click(reset);
     expect(stored()).toBeNull();
-    expect(heads()).toHaveLength(13);
+    expect(heads()).toHaveLength(14);
     expect(columnsButton().textContent).toBe("Columns");
     expect(document.activeElement).toBe(reset);
     expect(box("Compactions").checked).toBe(true);
@@ -1501,5 +1503,481 @@ describe("Sessions sort by several columns", () => {
     await user.click(several());
     await user.click(sortButton("prompts"));
     await waitFor(() => expect(hint()).toBe("0 sessions match, costliest first, then most prompts first."));
+  });
+});
+
+describe("Sessions selection", () => {
+  beforeEach(() => { resetColumnChoice(); });
+  afterEach(() => { resetColumnChoice(); });
+
+  const panel = () => within(document.getElementById("sessions")!);
+  const box = (name: string) => panel().getByRole<HTMLInputElement>("checkbox", { name: `Select ${name}` });
+  const boxes = () => [...document.querySelectorAll<HTMLInputElement>("#sessions tbody input[type=checkbox]")];
+  /** What the selection bar's status says; empty with nothing selected. */
+  const status = () => panel().getByRole("status").textContent;
+  const clearButton = () => panel().queryByRole("button", { name: "Clear selection" });
+  const searchBox = () => panel().getByRole("searchbox", { name: "Search sessions" });
+  // The Sessions table itself: the comparison, in the same panel, is a table too.
+  const LIST = '#sessions table[aria-label="Sessions"]';
+  const rowOf = (name: string) => within(document.querySelector<HTMLElement>(LIST)!).getByRole("button", { name }).closest("tr")!;
+  /** A row's cell under the header of a sort key. */
+  const cellOf = (name: string, key: string) => {
+    const at = [...document.querySelectorAll(`${LIST} thead th`)].indexOf(document.querySelector(`${LIST} thead th[data-sort="${key}"]`)!);
+    return rowOf(name).children[at] as HTMLElement;
+  };
+  const listed = (n: number) => waitFor(() => expect(document.querySelectorAll(`${LIST} tbody tr`)).toHaveLength(n));
+  /** The page with all its sessions on server pages; a search keeps the sessions whose title holds it. */
+  const serveMany = (all: ReturnType<typeof many>, o: { usage?: (q: URLSearchParams) => unknown } = {}) => mockApi({
+    "/api/usage": o.usage ?? (() => usage),
+    "/api/sessions": q => paged(q.get("q") ? all.filter(s => s.title.includes(q.get("q")!)) : all)(q),
+  });
+
+  it("selects a session from its checkbox or by Space without opening its sheet, while the rest of the row still opens it", async () => {
+    serve(usage);
+    at();
+    renderApp(<ActivityPage />);
+    await loaded();
+    await listed(sessions.sessions.length);
+    // The checkbox column comes first, under a header only assistive technology reads; Session stays the row header.
+    const first = document.querySelector("#sessions thead th")!;
+    expect([first.textContent, first.querySelector(".sr")?.textContent, first.getAttribute("scope")]).toEqual(["Select", "Select", "col"]);
+    expect(within(screen.getByRole("table", { name: "Sessions" })).getAllByRole("rowheader").map(h => h.querySelector("button")!.textContent)).toEqual(["#s2", "#s1", "#s3"]);
+    expect([...document.querySelectorAll("#sessions tbody tr")].every(r => r.firstElementChild!.matches("td") && r.children[1]!.matches('th[scope="row"]'))).toBe(true);
+    expect(box("#s1").closest("label")!.parentElement!.tagName).toBe("TD");
+    await userEvent.click(box("#s1"));
+    expect(box("#s1").checked).toBe(true);
+    expect(rowOf("#s1").classList.contains("chosen")).toBe(true);
+    expect(rowOf("#s2").classList.contains("chosen")).toBe(false);
+    expect(location.search).toBe("?range=30");
+    // Space on the checkbox, then Tab to the row's session button.
+    act(() => box("#s2").focus());
+    await userEvent.keyboard(" ");
+    expect(box("#s2").checked).toBe(true);
+    await userEvent.tab();
+    expect(document.activeElement).toBe(panel().getByRole("button", { name: "#s2" }));
+    expect(location.search).toBe("?range=30");
+    // A click on the label around the box, beside it, toggles it too.
+    await userEvent.click(box("#s2").closest("label")!);
+    expect(box("#s2").checked).toBe(false);
+    expect(location.search).toBe("?range=30");
+    // The cost cell opens the sheet, and the row stays selected.
+    await userEvent.click(cellOf("#s1", "cost"));
+    expect(location.search).toBe("?range=30&session=s1");
+    expect(box("#s1").checked).toBe(true);
+  });
+
+  it("says how many are selected, that one more is needed, and that four is the most; then disables the other rows", async () => {
+    serveMany(many(6));
+    at();
+    renderApp(<ActivityPage />);
+    await loaded();
+    await listed(6);
+    expect(status()).toBe("");
+    expect(clearButton()).toBeNull();
+    await userEvent.click(box("Session 3"));
+    expect(status()).toBe("1 selected. Select 1 more to compare.");
+    expect(clearButton()).toBeTruthy();
+    await userEvent.click(box("Session 1"));
+    expect(status()).toBe("2 selected.");
+    await userEvent.click(box("Session 0"));
+    await userEvent.click(box("Session 5"));
+    expect(status()).toBe("4 selected. 4 is the most that compare.");
+    expect(boxes().filter(b => b.disabled).map(b => b.getAttribute("aria-label"))).toEqual(["Select Session 2", "Select Session 4"]);
+    expect(boxes().filter(b => b.checked)).toHaveLength(4);
+    await userEvent.click(box("Session 1"));
+    expect(status()).toBe("3 selected.");
+    expect(boxes().some(b => b.disabled)).toBe(false);
+  });
+
+  it("clears the selection with Clear selection, which moves focus to the search field", async () => {
+    serveMany(many(6));
+    at();
+    renderApp(<ActivityPage />);
+    await loaded();
+    await listed(6);
+    for (const n of [0, 1, 2]) await userEvent.click(box(`Session ${n}`));
+    expect(status()).toBe("3 selected.");
+    await userEvent.click(clearButton()!);
+    expect(boxes().some(b => b.checked)).toBe(false);
+    expect(status()).toBe("");
+    expect(clearButton()).toBeNull();
+    expect(document.activeElement).toBe(searchBox());
+  });
+
+  it("keeps the bar and Clear selection usable while the rows are stale, and the row checkboxes inert with their rows", async () => {
+    const found = held<unknown>();
+    mockApi({ "/api/usage": () => usage, "/api/sessions": q => (q.get("q") ? found.p : paged(many(6))(q)) });
+    at();
+    renderApp(<ActivityPage />);
+    await loaded();
+    await listed(6);
+    await userEvent.click(box("Session 0"));
+    await userEvent.type(searchBox(), "needle");
+    await waitFor(() => expect(document.querySelector("#sessions tbody")!.hasAttribute("inert")).toBe(true));
+    expect(box("Session 0").checked).toBe(true);
+    expect(box("Session 1").disabled).toBe(true);
+    expect(status()).toBe("1 selected. Select 1 more to compare.");
+    await userEvent.click(clearButton()!);
+    expect(status()).toBe("");
+    expect(document.activeElement).toBe(searchBox());
+    await act(async () => { found.resolve({ total: 0, offset: 0, sessions: [] }); await found.p; });
+  });
+
+  it("keeps the selection through Show more, a sort, a search that leaves a session out, a refresh and a tab change", async () => {
+    const all = many(250);
+    serveMany(all);
+    at();
+    const { client } = renderApp(<ActivityPage />);
+    await loaded();
+    await listed(100);
+    await userEvent.click(box("Session 0"));
+    await userEvent.click(box("Session 1"));
+    await userEvent.click(panel().getByRole("button", { name: "Show more sessions" }));
+    await listed(200);
+    expect([box("Session 0").checked, box("Session 1").checked, box("Session 150").checked]).toEqual([true, true, false]);
+    await userEvent.click(panel().getByRole("button", { name: "Est. cost" }));
+    await waitFor(() => expect(fetched().map(String)).toContain("/api/sessions?range=30&sort=cost&desc=1"));
+    await waitFor(() => expect(box("Session 0").disabled).toBe(false));
+    expect([box("Session 0").checked, box("Session 1").checked]).toEqual([true, true]);
+    // A search that leaves Session 1 out still counts it.
+    await userEvent.type(searchBox(), "Session 0");
+    await listed(1);
+    expect(box("Session 0").checked).toBe(true);
+    expect(status()).toBe("2 selected.");
+    const before = fetched().filter(u => String(u).includes("q=Session+0")).length;
+    ingested(client);
+    await waitFor(() => expect(fetched().filter(u => String(u).includes("q=Session+0")).length).toBeGreaterThan(before));
+    await waitFor(() => expect(document.querySelector("#sessions tbody")!.getAttribute("aria-busy")).toBeNull());
+    expect(status()).toBe("2 selected.");
+    await userEvent.clear(searchBox());
+    await waitFor(() => expect(box("Session 1").checked).toBe(true));
+    await openTab("Projects");
+    await openTab("Sessions");
+    await waitFor(() => expect(box("Session 1").disabled).toBe(false));
+    expect([box("Session 0").checked, box("Session 1").checked]).toEqual([true, true]);
+    expect(status()).toBe("2 selected.");
+    expect(location.search).toBe("?range=30");
+  });
+
+  it("clears the selection at once when the range changes or a day is picked on the chart", async () => {
+    mockApi({ "/api/usage": q => ({ ...usage, range: Number(q.get("range")) }), "/api/sessions": () => sessions });
+    at();
+    renderApp(<ActivityPage />);
+    await loaded();
+    await listed(sessions.sessions.length);
+    await userEvent.click(box("#s1"));
+    await userEvent.click(box("#s2"));
+    act(() => setSearch({ range: 7 }));
+    expect(status()).toBe("");
+    await waitFor(() => expect(box("#s1").disabled).toBe(false));
+    expect(boxes().some(b => b.checked)).toBe(false);
+    act(() => setSearch({ range: 30 }));
+    await waitFor(() => expect(box("#s1").disabled).toBe(false));
+    await userEvent.click(box("#s1"));
+    await userEvent.click(box("#s3"));
+    expect(status()).toBe("2 selected.");
+    const chart = screen.getByRole("group", { name: /^Commits/ });
+    act(() => chart.focus());
+    fireEvent.keyDown(chart, { key: "End" });
+    fireEvent.keyDown(chart, { key: "Enter" });
+    expect(location.search).toBe("?range=30&day=2026-11-05");
+    expect(status()).toBe("");
+  });
+
+  it.each([
+    ["range", { range: 7 }, { range: 30 }],
+    ["project", { project: "foo" }, { project: null }],
+    ["source", { source: "codex" }, { source: null }],
+    ["automated toggle", { auto: true }, { auto: null }],
+    ["day", { day: "2026-11-04" }, { day: null }],
+    ["week", { week: "2026-11-02" }, { week: null }],
+  ] as const)("drops the selection for good when the %s changes: going back selects nothing", async (_, away, back) => {
+    mockApi({
+      "/api/usage": q => ({ ...usage, range: Number(q.get("range")), project: q.get("project") ?? "", source: q.get("source") ?? "", automated: q.get("automated") === "1" }),
+      "/api/sessions": () => sessions, "/api/day": q => noDay(q.get("day")!, q.get("days") === "7" ? 7 : 1),
+    });
+    at();
+    renderApp(<ActivityPage />);
+    await loaded();
+    await listed(sessions.sessions.length);
+    await userEvent.click(box("#s1"));
+    expect(status()).toBe("1 selected. Select 1 more to compare.");
+    act(() => setSearch(away));
+    await waitFor(() => expect(boxes().length > 0 && boxes().every(b => !b.disabled)).toBe(true));
+    expect(status()).toBe("");
+    act(() => setSearch(back));
+    expect(location.search).toBe("?range=30");
+    await waitFor(() => expect(boxes().length > 0 && boxes().every(b => !b.disabled)).toBe(true));
+    expect(boxes().some(b => b.checked)).toBe(false);
+    expect(status()).toBe("");
+    expect(clearButton()).toBeNull();
+    expect(document.querySelector("#sessions tbody tr.chosen")).toBeNull();
+  });
+
+  it("disables the row checkboxes while the rows on screen belong to the view before, and takes nothing from them", async () => {
+    const wait = held<unknown>();
+    mockApi({ "/api/usage": q => (q.get("range") === "7" ? wait.p : usage), "/api/sessions": () => sessions });
+    at();
+    renderApp(<ActivityPage />);
+    await loaded();
+    await listed(sessions.sessions.length);
+    await userEvent.click(box("#s1"));
+    act(() => setSearch({ range: 7 }));
+    await waitFor(() => expect(fetched().map(String)).toContain("/api/usage?range=7"));
+    // The 30-day rows stay on screen, not inert, with every checkbox disabled and nothing selected.
+    expect(status()).toBe("");
+    expect(document.querySelector("#sessions tbody")!.hasAttribute("inert")).toBe(false);
+    expect(boxes().map(b => [b.disabled, b.checked])).toEqual([[true, false], [true, false], [true, false]]);
+    await userEvent.click(box("#s2"));
+    fireEvent.click(box("#s3"));
+    expect(status()).toBe("");
+    // Once the 7-day figures and rows arrive, the checkboxes are enabled.
+    await act(async () => { wait.resolve({ ...usage, range: 7 }); await wait.p; });
+    await waitFor(() => expect(fetched().map(String)).toContain("/api/sessions?range=7"));
+    await waitFor(() => expect(boxes().every(b => !b.disabled)).toBe(true));
+    await userEvent.click(box("#s2"));
+    expect(status()).toBe("1 selected. Select 1 more to compare.");
+  });
+
+  it("keeps the row checkboxes disabled when the view asked for fails to load, and the rows still open their sheet", async () => {
+    mockApi({ "/api/usage": q => (q.get("range") === "7" ? undefined : usage), "/api/sessions": () => sessions });
+    at();
+    renderApp(<ActivityPage />);
+    await loaded();
+    await listed(sessions.sessions.length);
+    act(() => setSearch({ range: 7 }));
+    await waitFor(() => expect(document.querySelector(".banner[role=alert]")?.textContent).toMatch(/^Could not load/));
+    expect(boxes().every(b => b.disabled)).toBe(true);
+    await userEvent.click(cellOf("#s2", "cost"));
+    expect(location.search).toBe("?range=7&session=s2");
+    expect(status()).toBe("");
+  });
+
+  describe("comparison", () => {
+    const comparison = () => screen.queryByRole("table", { name: "Session comparison" });
+    const compareButton = () => panel().queryByRole("button", { name: "Compare" });
+    /** The compared sessions, by the name in each column's header, in order. */
+    const compared = () => [...comparison()!.querySelectorAll("thead th")].slice(1).map(th => th.querySelector("button")!.textContent);
+    /** A figure's cells, one per compared session, as text. */
+    const figure = (name: string) => [...[...comparison()!.querySelectorAll("tbody tr")].find(r => r.firstElementChild!.firstChild!.textContent === name)!
+      .querySelectorAll("td")].map(td => td.textContent);
+    const removeButton = (name: string) => within(comparison()!).getByRole("button", { name: `Remove ${name} from the comparison` });
+    const nameButton = (name: string) => within(comparison()!).getByRole("button", { name });
+
+    it("shows from two sessions as a disclosure that keeps focus, between the bar and the table, and gains a column per tick, with no request", async () => {
+      serveMany(many(6));
+      at();
+      renderApp(<ActivityPage />);
+      await loaded();
+      await listed(6);
+      await userEvent.click(box("Session 3"));
+      expect(compareButton()).toBeNull();
+      await userEvent.click(box("Session 1"));
+      await userEvent.click(box("Session 0"));
+      expect([compareButton()!.getAttribute("aria-expanded"), compareButton()!.hasAttribute("aria-controls")]).toEqual(["false", false]);
+      const before = fetched().length;
+      await userEvent.click(compareButton()!);
+      expect(document.activeElement).toBe(compareButton());
+      expect(compareButton()!.getAttribute("aria-expanded")).toBe("true");
+      const region = document.getElementById(compareButton()!.getAttribute("aria-controls")!)!;
+      expect(region.contains(comparison())).toBe(true);
+      // Between the bar and the Sessions table, in the order selected.
+      const list = screen.getByRole("region", { name: "Sessions" });
+      expect(document.querySelector("#sessions .selbar")!.compareDocumentPosition(region) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(region.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(compared()).toEqual(["Session 3", "Session 1", "Session 0"]);
+      await userEvent.click(box("Session 5"));
+      expect(compared()).toEqual(["Session 3", "Session 1", "Session 0", "Session 5"]);
+      expect(fetched()).toHaveLength(before);
+      act(() => compareButton()!.focus());
+      await userEvent.keyboard("{Enter}");
+      expect(comparison()).toBeNull();
+      expect([compareButton()!.getAttribute("aria-expanded"), compareButton()!.hasAttribute("aria-controls")]).toEqual(["false", false]);
+      expect(document.activeElement).toBe(compareButton());
+      expect(location.search).toBe("?range=30");
+    });
+
+    it("has a row for a column the user hid", async () => {
+      localStorage.setItem(COLUMNS_KEY, JSON.stringify({ compactions: false }));
+      serve(usage);
+      at();
+      renderApp(<ActivityPage />);
+      await loaded();
+      await listed(sessions.sessions.length);
+      expect(document.querySelector('#sessions thead th[data-sort="compactions"]')).toBeNull();
+      await userEvent.click(box("#s1"));
+      await userEvent.click(box("#s2"));
+      await userEvent.click(compareButton()!);
+      expect(figure("Compactions")).toEqual(["2", "0"]);
+    });
+
+    it("keeps the held rows current: a refresh updates them, and a session a search leaves out keeps its newest figures", async () => {
+      const all = many(6).map(s => ({ ...s, commits: 0 }));
+      serveMany(all);
+      at();
+      const { client } = renderApp(<ActivityPage />);
+      await loaded();
+      await listed(6);
+      await userEvent.click(box("Session 0"));
+      await userEvent.click(box("Session 1"));
+      await userEvent.click(compareButton()!);
+      expect(figure("Commits")).toEqual(["0", "0"]);
+      // An ingest gives Session 0 two commits: its column follows its row.
+      all[0] = { ...all[0]!, commits: 2 };
+      ingested(client);
+      await waitFor(() => expect(figure("Commits")).toEqual(["2", "0"]));
+      // A search that leaves it out keeps the refreshed figures, through a later refresh too; the listed session still refreshes.
+      await userEvent.type(searchBox(), "Session 1");
+      await listed(1);
+      expect(figure("Commits")).toEqual(["2", "0"]);
+      all[0] = { ...all[0]!, commits: 5 };
+      all[1] = { ...all[1]!, commits: 3 };
+      ingested(client);
+      await waitFor(() => expect(figure("Commits")).toEqual(["2", "3"]));
+      expect(compared()).toEqual(["Session 0", "Session 1"]);
+      expect(status()).toBe("2 selected.");
+    });
+
+    it("takes no figure from the earlier view's rows while a new range loads", async () => {
+      const wait = held<unknown>(), all = many(3).map(s => ({ ...s, commits: 0 }));
+      const { client } = (() => {
+        mockApi({ "/api/usage": q => (q.get("range") === "7" ? wait.p : usage),
+          "/api/sessions": q => paged(q.get("range") === "7" ? all.map(s => ({ ...s, commits: 1 })) : all)(q) });
+        at();
+        return renderApp(<ActivityPage />);
+      })();
+      await loaded();
+      await listed(3);
+      await userEvent.click(box("Session 0"));
+      await userEvent.click(box("Session 1"));
+      await userEvent.click(compareButton()!);
+      act(() => setSearch({ range: 7 }));
+      expect([status(), comparison()]).toEqual(["", null]);
+      // The 30-day rows refresh while the 7-day figures are pending: nothing takes them, and a return to 30 days brings back no selection.
+      all[0] = { ...all[0]!, commits: 9 };
+      ingested(client);
+      await waitFor(() => expect(cellOf("Session 0", "commits").textContent).toBe("9"));
+      expect([status(), comparison()]).toEqual(["", null]);
+      act(() => setSearch({ range: 30 }));
+      await waitFor(() => expect(box("Session 0").disabled).toBe(false));
+      expect([status(), compareButton()]).toEqual(["", null]);
+      // Ticked in the 7-day view, a session shows its 7-day row.
+      act(() => setSearch({ range: 7 }));
+      await act(async () => { wait.resolve({ ...usage, range: 7 }); await wait.p; });
+      await waitFor(() => expect(cellOf("Session 0", "commits").textContent).toBe("1"));
+      await waitFor(() => expect(box("Session 0").disabled).toBe(false));
+      await userEvent.click(box("Session 0"));
+      await userEvent.click(box("Session 2"));
+      await userEvent.click(compareButton()!);
+      expect(figure("Commits")).toEqual(["1", "1"]);
+    });
+
+    it("moves focus to the next Remove button, else the previous one, and to Clear selection when one session stays", async () => {
+      const sorted = held<unknown>();
+      mockApi({ "/api/usage": () => usage, "/api/sessions": q => (q.get("sort") ? sorted.p : paged(many(6))(q)) });
+      at();
+      renderApp(<ActivityPage />);
+      await loaded();
+      await listed(6);
+      for (const n of [0, 1, 2, 3]) await userEvent.click(box(`Session ${n}`));
+      await userEvent.click(compareButton()!);
+      await userEvent.click(removeButton("Session 1"));
+      expect(compared()).toEqual(["Session 0", "Session 2", "Session 3"]);
+      expect(box("Session 1").checked).toBe(false);
+      expect(document.activeElement).toBe(removeButton("Session 2"));
+      await userEvent.click(removeButton("Session 3"));
+      expect(document.activeElement).toBe(removeButton("Session 2"));
+      // While a new sort loads and the rows are inert, Remove still works.
+      await userEvent.click(panel().getByRole("button", { name: "Est. cost" }));
+      await waitFor(() => expect(document.querySelector(`${LIST} tbody`)!.hasAttribute("inert")).toBe(true));
+      await userEvent.click(removeButton("Session 0"));
+      expect(comparison()).toBeNull();
+      expect(status()).toBe("1 selected. Select 1 more to compare.");
+      expect(document.activeElement).toBe(clearButton());
+      await act(async () => { sorted.resolve(paged(many(6))(new URLSearchParams())); await sorted.p; });
+      await waitFor(() => expect(box("Session 4").disabled).toBe(false));
+      // The next pair does not reopen it unasked.
+      await userEvent.click(box("Session 4"));
+      expect([comparison(), compareButton()!.getAttribute("aria-expanded")]).toEqual([null, "false"]);
+    });
+
+    it("opens a session's sheet from its name, and closing the sheet returns focus to the name with the comparison shown", async () => {
+      serve(usage);
+      at();
+      renderPage(<ActivityPage />);
+      await loaded();
+      await listed(sessions.sessions.length);
+      await userEvent.click(box("#s1"));
+      await userEvent.click(box("#s3"));
+      await userEvent.click(compareButton()!);
+      await userEvent.click(nameButton("#s3"));
+      expect(location.search).toBe("?range=30&session=s3");
+      const dlg = within(document.querySelector("dialog")!);
+      expect(await dlg.findByText("Timeline")).toBeTruthy();
+      await userEvent.click(dlg.getByRole("button", { name: "Close" }));
+      expect(location.search).toBe("?range=30");
+      await waitFor(() => expect(document.activeElement).toBe(nameButton("#s3")));
+      expect(compared()).toEqual(["#s1", "#s3"]);
+    });
+
+    it("returns focus to a compared name after a click that does not focus it, as in Safari", async () => {
+      serve(usage);
+      at();
+      renderPage(<ActivityPage />);
+      await loaded();
+      await listed(sessions.sessions.length);
+      await userEvent.click(box("#s1"));
+      await userEvent.click(box("#s3"));
+      await userEvent.click(compareButton()!);
+      // A bare click event moves no focus: the page's body holds it when the name opens the sheet.
+      act(() => (document.activeElement as HTMLElement).blur());
+      expect(document.activeElement).toBe(document.body);
+      fireEvent.click(nameButton("#s3"));
+      expect(location.search).toBe("?range=30&session=s3");
+      const dlg = within(document.querySelector("dialog")!);
+      expect(await dlg.findByText("Timeline")).toBeTruthy();
+      await userEvent.click(dlg.getByRole("button", { name: "Close" }));
+      await waitFor(() => expect(document.activeElement).toBe(nameButton("#s3")));
+    });
+
+    it("reads a missing figure as the table does, explains a missing model time, and keeps the list's scope for each figure", async () => {
+      const base = many(4);
+      const rows = [
+        { ...base[0]!, title: "Codex run", model_ms: null, output_per_s: null, cost: 1.5 },
+        { ...base[1]!, title: "Grok run", model_ms: 120_000, output_per_s: 31.4, cost: 0.75 },
+        { ...base[2]!, title: "Unpriced run", model_ms: 60_000, output_per_s: 12, cost: null },
+        { ...base[3]!, title: "Early run", first_ts: "2026-09-20T08:00:00.000Z", duration_s: 10_800, model_ms: 3_000, output_per_s: 8, cost: 2 },
+      ];
+      mockApi({ "/api/usage": () => usage, "/api/sessions": paged(rows), "/api/day": () => noDay("2026-11-05") });
+      at();
+      renderApp(<ActivityPage />);
+      await loaded();
+      await listed(4);
+      for (const r of rows) await userEvent.click(box(r.title));
+      await userEvent.click(compareButton()!);
+      expect(figure("Model")).toEqual(rows.map(r => cellOf(r.title, "model_ms").textContent));
+      expect(figure("Model")[0]).toBe("–");
+      expect(figure("Model")[1]).not.toBe("–");
+      expect(figure("Tok/s")[0]).toBe("–");
+      expect(figure("Tok/s")[1]).toBe(cellOf("Grok run", "output_per_s").textContent);
+      expect(figure("Est. cost")[2]).toBe("–");
+      // Each figure reads as the session's Sessions row reads it: Start, its actual start (the row's muted line), and Active.
+      const listedAs = [["Active", "duration_s"], ["Prompts", "prompts"], ["Tokens", "tokens"], ["Est. cost", "cost"], ["Peak context", "peak_context"]] as const;
+      expect(figure("Start")).toEqual(rows.map(r => rowOf(r.title).querySelector("th .small")!.textContent!.split(" · ")[0]));
+      expect(listedAs.map(([name]) => [name, figure(name)])).toEqual(listedAs.map(([name, key]) => [name, rows.map(r => cellOf(r.title, key).textContent)]));
+      expect(figure("Start")[3]).toBe(when("2026-09-20T08:00:00.000Z"));
+      expect(figure("Active")[3]).toBe(dur(10_800));
+      expect(comparison()!.closest(".cmp")!.querySelector(".hint")!.textContent).toBe("– : the session records no model time (Codex and older Claude Code sessions).");
+      // On a selected day the whole-session figures say so on their row header, as the Sessions headers do.
+      act(() => setSearch({ day: "2026-11-05" }));
+      await waitFor(() => expect(box("Codex run").disabled).toBe(false));
+      await userEvent.click(box("Codex run"));
+      await userEvent.click(box("Grok run"));
+      await userEvent.click(compareButton()!);
+      const tips = [...comparison()!.querySelectorAll("tbody th button")].map(b => b.getAttribute("aria-label"));
+      expect(tips).toEqual(["About Active", "About Model", "About Tok/s", "About Peak context", "About Compactions", "About Tests"]);
+      await userEvent.click(within(comparison()!).getByRole("button", { name: "About Peak context" }));
+      expect(within(comparison()!).getByRole("tooltip").textContent).toBe("Whole-session figure, not only the selected days");
+    });
   });
 });

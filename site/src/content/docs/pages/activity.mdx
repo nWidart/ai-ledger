@@ -166,10 +166,28 @@ The Sessions, Project metrics and Tools tables sort by a column: select a header
 - **Columns** opens a list with one checkbox per column except Session. Untick a column to hide it at every width. Tick a column the window's width hides to keep it at every width. **Reset columns** drops every choice. The button reads "Columns, N hidden" while you hide N columns. The browser keeps the choice for every view; the URL does not. See [Columns](/ai-ledger/everywhere/data-tables/#columns).
 - Every column except Project sorts, over the whole matching list on the server. Without a chosen sort, the order is newest first; with the near-limit filter, nearest the limit first; with a day or week selected on the chart, by cost on those days, all of them on one page. Sessions with no model time sort last under Model and Tok/s, in either direction. On a narrow window some columns hide; every sorted column always shows, even a column you hid. Hiding a sorted column takes it out of the sort and leaves the other keys. The hint under the controls says the whole order, such as "250 sessions, costliest first, then most prompts first."
 - **Sort by several columns** sorts by up to three columns. While it is ticked, a header press adds its column as the last key, most first; a second press reverses it; a third removes it. Shift with a press does the same with the box unticked. At three columns, a new column replaces the third. Without the box or Shift, a press sorts by that column alone. Each sorted header shows its arrow and its rank. See [Sorting](/ai-ledger/everywhere/data-tables/#sorting).
-- A row opens the session sheet.
+- Each row starts with a checkbox named "Select" and the session's name. Tick it, or click anywhere in its cell, to select the session; the sheet does not open. Up to four sessions can be selected; at four, the other rows' boxes are disabled. A bar above the table says how many are selected, and **Clear selection** unselects them all and moves the focus to the search field. The selection lasts through Show more, a sort, a search, the near-limit filter, a refresh and a tab change. It clears when the project, range, source, Include automated, or the selected day or week changes. See [Selection](/ai-ledger/everywhere/data-tables/#selection).
+- The rest of a row opens the session sheet.
 - **Show more sessions** loads the next page.
-- The search text and near-limit filter are kept in the URL and restored on reload. The sort is not kept.
+- The search text and near-limit filter are kept in the URL and restored on reload. The sort and the selection are not kept.
 - With a day or week selected, every figure is those days', except Model, Tok/s, Peak context and Compactions, which stay whole-session figures; a tooltip says so.
+
+**Compare sessions**
+
+With two or more sessions selected, **Compare** in the selection bar shows a "Session comparison" table between the bar and the Sessions table. Select it again to hide it. The table has one column per selected session, in the order you selected them, and one row per figure: Project, Start, then every Sessions column from Active to Tests. A column you hid, or one the window's width hides, still has its row. Each figure reads as its Sessions cell does, in the same format. A figure a session does not record reads "–", and when a compared session records no model time, a note under the table says what that "–" means.
+
+Each figure keeps the scope it has in the Sessions list:
+
+- Start is the session's actual start, even when the session started before the range.
+- Active covers the whole session, unless a day or week is selected; then it covers those days.
+- Model, Tok/s, Peak context and Compactions are whole-session figures. With a day or week selected, a toggletip on their row says so.
+- Prompts, Tokens, Est. cost, Failed, Commits and Tests count the range, or the selected day or week.
+
+The comparison makes no request: it reads the rows the list has loaded. A refresh updates each compared session the list holds. A session that a search leaves out of the list keeps the figures the list last showed for it.
+
+Each session's column header holds its name, which opens the session sheet, and a **Remove** button, which unselects it. Under two sessions, the comparison closes.
+
+The comparison leaves out the figures only the session sheet has: tool time, lines changed, the model mix and the judgment. It has no link of its own and marks no best or worst value. See [Comparison](/ai-ledger/everywhere/data-tables/#comparison).
 
 ### Projects
 
