@@ -315,35 +315,47 @@ export default {
   "peak": {
    "sessions": 12,
    "median": 52500.0,
-   "window_share": 0.1875,
-   "by_project": [
-    {
-     "project": "baz",
-     "sessions": 5,
-     "median": 60000.0,
-     "window_share": 0.3
-    },
-    {
-     "project": "bar",
-     "sessions": 3,
-     "median": 8000.0,
-     "window_share": 0.04
-    },
-    {
-     "project": "foo",
-     "sessions": 3,
-     "median": 150000.0,
-     "window_share": 0.45
-    },
-    {
-     "project": "codex-app",
-     "sessions": 1,
-     "median": 26000.0,
-     "window_share": 0.100619195
-    }
-   ]
+   "window_share": 0.1875
   }
  },
+ "grids": [
+  {
+   "project": "baz",
+   "sessions": 5,
+   "start": 16000.0,
+   "start_share": 0.08,
+   "peak": 60000.0,
+   "peak_share": 0.3,
+   "window": 200000
+  },
+  {
+   "project": "bar",
+   "sessions": 3,
+   "start": 8000.0,
+   "start_share": 0.04,
+   "peak": 8000.0,
+   "peak_share": 0.04,
+   "window": 200000
+  },
+  {
+   "project": "foo",
+   "sessions": 3,
+   "start": 24000.0,
+   "start_share": 0.1,
+   "peak": 150000.0,
+   "peak_share": 0.45,
+   "window": 200000
+  },
+  {
+   "project": "codex-app",
+   "sessions": 1,
+   "start": 15000.0,
+   "start_share": 0.058049536,
+   "peak": 26000.0,
+   "peak_share": 0.100619195,
+   "window": 258400
+  }
+ ],
  "sessions_map": {
   "total": 12,
   "points": [

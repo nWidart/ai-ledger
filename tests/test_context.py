@@ -144,7 +144,7 @@ class ContextPayloadTest(unittest.TestCase):
                    dict(project="bar", range_days=30, source="claude")):
             p = b.payload(**kw)
             self.assertEqual(sorted(p), sorted(["project", "range", "automated", "source", "start", "end", "projects", "project_order",
-                                                "automated_file", "coverage", "starting", "growth", "sessions_map", "fills", "cost", "tips",
+                                                "automated_file", "coverage", "starting", "growth", "grids", "sessions_map", "fills", "cost", "tips",
                                                 "overhead"]), kw)
         with self.assertRaises(ValueError):
             b.payload(source="grok")
@@ -357,22 +357,34 @@ class GrowthTest(unittest.TestCase):
         self.assertEqual(peak["median"], 100_000)
         self.assertAlmostEqual(peak["window_share"], 0.375)
 
-    def test_peak_per_project_most_sessions_first(self):
-        b = Builder(self)
-        for sid, project, peak in (("a", "foo", 40_000), ("b", "foo", 120_000), ("c", "foo", 80_000), ("d", "bar", 100_000)):
-            b.session(sid, project, peak=peak)
-            b.turn(sid, 0, 5_000)
-        rows = b.payload()["growth"]["peak"]["by_project"]
-        self.assertEqual([(r["project"], r["sessions"], r["median"]) for r in rows], [("foo", 3, 80_000), ("bar", 1, 100_000)])
-        self.assertAlmostEqual(rows[0]["window_share"], 0.4)  # 80,000 of 200,000
-
     def test_peak_window_share_is_none_without_a_known_window(self):
         b = Builder(self)
         for sid in ("a", "b"):
             b.session(sid, "foo", peak=80_000, peak_model="m-nowin")
             b.turn(sid, 0, 5_000, model="m-nowin")
-        self.assertEqual(b.payload()["growth"]["peak"], dict(sessions=2, median=80_000, window_share=None,
-                                                             by_project=[dict(project="foo", sessions=2, median=80_000, window_share=None)]))
+        self.assertEqual(b.payload()["growth"]["peak"], dict(sessions=2, median=80_000, window_share=None))
+
+    def test_grids_rank_and_measure_the_sessions_with_a_start_a_window_and_a_peak(self):
+        b = Builder(self)
+        # foo: three sessions with a start, a window and a peak (10%/40%, 20%/50%, 30%/60% of 200,000).
+        for sid, start, peak in (("a", 20_000, 80_000), ("b", 40_000, 100_000), ("c", 60_000, 120_000)):
+            b.session(sid, "foo", peak=peak)
+            b.turn(sid, 0, start)
+        # bar: five measured starts, but only one with a known window and a peak; the others take no part.
+        b.session("w", "bar", peak=150_000)
+        b.turn("w", 0, 100_000)
+        for i in range(2):
+            b.session(f"nw{i}", "bar", peak=10_000, peak_model="m-nowin")
+            b.turn(f"nw{i}", 0, 9_000, model="m-nowin")
+            b.session(f"np{i}", "bar", peak=None)
+            b.turn(f"np{i}", 0, 9_000)
+        rows = b.payload()["grids"]
+        self.assertEqual([(r["project"], r["sessions"], r["window"]) for r in rows], [("foo", 3, 200_000), ("bar", 1, 200_000)])
+        foo, bar = rows
+        self.assertEqual((foo["start"], foo["peak"]), (40_000, 100_000))
+        self.assertAlmostEqual(foo["start_share"], 0.2)
+        self.assertAlmostEqual(foo["peak_share"], 0.5)
+        self.assertEqual((bar["start"], bar["peak"]), (100_000, 150_000))  # the one eligible session's, not the median of all five starts
 
     def test_fill_bins_by_window(self):
         b = Builder(self)

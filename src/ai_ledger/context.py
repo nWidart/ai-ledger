@@ -144,12 +144,25 @@ def growth(q):
     for r in q(f"SELECT win, {over} AS bin, count(*) AS n FROM sess WHERE win IS NOT NULL AND peak_context IS NOT NULL GROUP BY 1, 2"):
         fill.setdefault(r["win"], [0] * (len(FILL_BINS) + 1))[r["bin"]] = r["n"]
     # The median peak context of the sessions, and as a share of their window (over the sessions with a known window).
-    # The same per project, most sessions first, for the window grids of each project.
-    stat = "count(*) AS sessions, quantile_cont(peak_context, 0.5) AS median, quantile_cont(peak_context / win, 0.5) AS window_share FROM sess WHERE peak_context IS NOT NULL"
-    peak = q(f"SELECT {stat}")[0]
-    peak["by_project"] = q(f"SELECT project, {stat} GROUP BY project ORDER BY sessions DESC, project NULLS LAST")
+    peak = q("SELECT count(*) AS sessions, quantile_cont(peak_context, 0.5) AS median, quantile_cont(peak_context / win, 0.5) AS window_share FROM sess WHERE peak_context IS NOT NULL")[0]
     return dict(curve=curve, share_curve=share_curve, by_project_curves=by_project_curves, added_per_prompt=added_total, by_project=by_project,
                 to_compaction=to_compaction, fill=[dict(window=w, sessions=sum(b), bins=b) for w, b in sorted(fill.items())], peak=peak)
+
+
+# ---------- the window grids ----------
+
+def grids(q):
+    """Per project, most sessions first: the sessions with a measured start, a known window and a peak (the session map's), their
+    most common window, and the medians of their start and peak in tokens and as shares of each session's window. Start and peak
+    come from the same sessions, so a project's grid and its figures describe one population."""
+    rs = q("""SELECT project, count(*) AS sessions, mode(win) AS win, quantile_cont(start_prompt, 0.5) AS start,
+        quantile_cont(start_prompt / win, 0.5) AS start_share, quantile_cont(peak_context, 0.5) AS peak,
+        quantile_cont(peak_context / win, 0.5) AS peak_share
+        FROM sess JOIN starts USING (session_id) WHERE win IS NOT NULL AND peak_context IS NOT NULL
+        GROUP BY project ORDER BY sessions DESC, project NULLS LAST""")
+    for r in rs:
+        r["window"] = r.pop("win")
+    return rs
 
 
 # ---------- the session map ----------
@@ -594,7 +607,7 @@ def payload(cur, project="", range_days=0, source="", automated=False, today=Non
     data = dict(project=project, range=range_days, automated=bool(automated), source=source,
                 start=start.isoformat() if start else None, end=today.isoformat(),
                 projects=metrics.project_list(cur, automated, af["projects"]), project_order=metrics.project_order(cur, af["projects"]),
-                automated_file=af, coverage=coverage(cur, q, W, fp), starting=starting(q), growth=growth(q), sessions_map=sessions_map(q), fills=fills(cur, W, fp))
+                automated_file=af, coverage=coverage(cur, q, W, fp), starting=starting(q), growth=growth(q), grids=grids(q), sessions_map=sessions_map(q), fills=fills(cur, W, fp))
     brk = session_breaks(q)
     data["cost"] = dict(cost(q, today), break_sessions=len(brk), breaks=[{k: v for k, v in r.items() if k != "first_ts"} for r in brk[:BREAK_SESSIONS]])
     data["tips"] = tips(Ctx(cur, q, shared, rp, W, fp, prices, data, brk))

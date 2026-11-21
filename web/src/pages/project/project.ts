@@ -99,12 +99,15 @@ export interface TypicalSession {
 /** The grid of a typical session from its figures (a view's, or one project's on Context), split by a snapshot when there is one;
  *  null when the start's or the peak's share of the window is not known. */
 export function typicalGrid(t: TypicalSession, snapshot?: ContextOverhead | null): ContextGridModel | null {
-  const ws = t.startShare, pws = t.peakShare;
-  if (ws == null || pws == null) return null;
+  const ws = t.startShare;
+  if (ws == null || t.peakShare == null) return null;
+  // The peak is drawn from the start up: a median peak under the median start (from different sessions) fills no added cells, and
+  // the free share is what the cells leave free, so the figures match the cells.
+  const pws = Math.max(t.peakShare, ws);
   const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x));
   const start = clamp(Math.round(ws * GRID_CELLS), 0, GRID_CELLS);
   const peakCells = clamp(Math.round(pws * GRID_CELLS), start, GRID_CELLS);
-  const freeTokens = t.window != null && t.window > 0 && t.peak != null ? Math.max(0, t.window - t.peak) : null;
+  const freeTokens = t.window != null && t.window > 0 && t.peak != null ? Math.max(0, t.window - Math.max(t.peak, t.start ?? 0)) : null;
   const o = snapshot ?? null;
   let starts: GridRow[] = [{ key: "start", tone: "start", label: "Starting context", tokens: t.start, share: ws, cells: start }];
   let overhead: GridOverhead | null = null;
