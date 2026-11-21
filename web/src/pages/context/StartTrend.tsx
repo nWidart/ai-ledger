@@ -1,7 +1,8 @@
 import { useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import type { ContextPayload } from "../../api";
 import { scaleMargins, textScale, useWidth } from "../../components/chart";
-import { ChartTable, DataTable } from "../../components/DataTable";
+import { ChartTable } from "../../components/DataTable";
+import { Table, type Column } from "../../components/table/Table";
 import { dayLabel, niceStep, num, plural } from "../../format";
 import { short, START_LARGE_TOKENS, TREND_MIN_SESSIONS } from "./context";
 import { modified } from "../../components/keys";
@@ -10,6 +11,14 @@ import "./StartTrend.css";
 type Trend = ContextPayload["starting"]["trend"];
 type Week = Trend[number];
 const H = 180, M0 = { t: 10, r: 14, b: 26, l: 52 }; // the margins at the default text size
+// The chart's data table: one row per week.
+const COLUMNS: Column<Week>[] = [
+  { id: "week", header: "Week of", value: w => w.week, cell: w => dayLabel(w.week, true) },
+  { id: "median", header: "Median", align: "num", value: w => w.median, cell: w => short(w.median) },
+  { id: "p25", header: "25th percentile", align: "num", value: w => w.p25, cell: w => short(w.p25) },
+  { id: "p75", header: "75th percentile", align: "num", value: w => w.p75, cell: w => short(w.p75) },
+  { id: "sessions", header: "Sessions", align: "num", value: w => w.sessions, cell: w => num(w.sessions) },
+];
 
 /** What the chart reads at a week, in words: "Week of Nov 2: median 24k tokens (25th to 75th percentile 20k to 31k), 9 sessions". */
 export const readWeek = (w: Week) =>
@@ -92,10 +101,7 @@ export function StartTrend({ trend }: { trend: Trend }) {
         </svg>
       </div>
       <div className="readout" aria-live="polite">{cur ? readWeek(cur) : ""}</div>
-      <ChartTable><DataTable name="Median starting context per week of session start">
-        <thead><tr><th scope="col">Week of</th><th scope="col" className="num">Median</th><th scope="col" className="num">25th percentile</th><th scope="col" className="num">75th percentile</th><th scope="col" className="num">Sessions</th></tr></thead>
-        <tbody>{trend.map(w => <tr key={w.week}><th scope="row">{dayLabel(w.week, true)}</th><td className="num">{short(w.median)}</td><td className="num">{short(w.p25)}</td><td className="num">{short(w.p75)}</td><td className="num">{num(w.sessions)}</td></tr>)}</tbody>
-      </DataTable></ChartTable>
+      <ChartTable><Table name="Median starting context per week of session start" rows={trend} columns={COLUMNS} rowId={w => w.week} /></ChartTable>
     </div>
   );
 }

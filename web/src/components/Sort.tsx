@@ -16,15 +16,19 @@ export function sortRows<T>(rows: readonly T[], get: (r: T) => number | string |
   });
 }
 
+/** What a header's toggletip explains, for its name: the header text, or "this column" when the header is not plain text. */
+export const headerTerm = (header: ReactNode) => typeof header === "string" ? header : "this column";
+
 /** A header cell that sorts by k: most first (asc: A to Z first), flipping on a second click. Only the sorted one carries aria-sort.
  *  title: what the column means, behind a toggletip beside the sort button (a title on the header would be hover-only).
+ *  term: what the toggletip explains, for its name "About {term}" (default: the header text).
  *  after: more of the header outside the sort button, as a column's scale, so the button's name stays the column's. */
-export function SortTh<K extends string>({ k, sort, onSort, asc, className, title, after, children }: {
-  k: K; sort: SortBy<K> | null; onSort: (s: SortBy<K>) => void; asc?: boolean; className?: string; title?: string; after?: ReactNode; children: ReactNode;
+export function SortTh<K extends string>({ k, sort, onSort, asc, className, title, term, after, children }: {
+  k: K; sort: SortBy<K> | null; onSort: (s: SortBy<K>) => void; asc?: boolean; className?: string; title?: string; term?: string; after?: ReactNode; children: ReactNode;
 }) {
   const on = sort?.key === k;
   return <th scope="col" className={className} data-sort={k} aria-sort={on ? (sort.desc ? "descending" : "ascending") : undefined}>
     <button type="button" className="sortbtn" onClick={() => onSort({ key: k, desc: on ? !sort.desc : !asc })}>{children}
       <span className="sortmark" aria-hidden="true">{on ? (sort.desc ? "↓" : "↑") : ""}</span></button>
-    {title && <Toggletip term={typeof children === "string" ? children : "this column"}>{title}</Toggletip>}{after}</th>;
+    {title && <Toggletip term={term ?? headerTerm(children)}>{title}</Toggletip>}{after}</th>;
 }
