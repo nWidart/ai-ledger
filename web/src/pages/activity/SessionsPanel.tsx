@@ -1,12 +1,11 @@
 import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
-import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
-import type { SessionSort, Span, View } from "../../api";
-import { DataTable } from "../../components/DataTable";
+import { useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from "react";
+import type { ListedSessionRow, SessionSort, Span, View } from "../../api";
 import { HowMeasured } from "../../components/HowMeasured";
-import { Toggletip } from "../../components/Toggletip";
 import { SortTh, type SortBy } from "../../components/Sort";
 import { ProjectName } from "../../components/ProjectDot";
-import { openSessionSheet, pickRow, sessName, shortId } from "../../components/sheets/session";
+import { openSessionSheet, sessName, shortId } from "../../components/sheets/session";
+import { Table, type CellValue, type Column, type RowPick } from "../../components/table/Table";
 import { big, dur, num, pct, plural, usd, when } from "../../format";
 import { useDebouncedValue } from "../../components/useDebounced";
 import { queries } from "../../queries";
@@ -16,18 +15,7 @@ import { queries } from "../../queries";
 export interface SessFilter { q: string; near: boolean; day: string; days: Span }
 export const NO_FILTER: SessFilter = { q: "", near: false, day: "", days: 1 };
 
-const COLS = 13;
 const WHOLE = "Whole-session figure, not only the selected days";
-// The columns: label, the server's sort key (none: not sortable), class, title; whole: a whole-session figure on a day.
-const HEAD: [string, SessionSort | null, string, string?, boolean?][] = [
-  ["Session", "first_ts", ""], ["Project", null, ""], ["Active", "duration_s", "num opt", "Active time: pauses over 20 minutes left out"],
-  ["Model", "model_ms", "num opt1", "Model time: waiting on the model, over the whole session; Codex records none", true],
-  ["Tok/s", "output_per_s", "num opt1", "Output speed: output tokens per second of model time, over the whole session", true], ["Prompts", "prompts", "num opt"],
-  ["Tokens", "tokens", "num opt2"], ["Est. cost", "cost", "num"], ["Peak context", "peak_context", "num", undefined, true], ["Failed", "errors", "num opt"],
-  ["Compactions", "compactions", "num opt2", undefined, true], ["Commits", "commits", "num opt"], ["Tests", "tests_failed", "num opt", "Test and build runs: passed of run"],
-];
-// Each sortable column's class; the sorted column's cells add "sorted", which keeps them shown at any width.
-const CLS = Object.fromEntries(HEAD.flatMap(([, k, cls]) => (k ? [[k, cls]] : []))) as Record<SessionSort, string>;
 // The order each sort gives, most first then least first.
 const ORDER: Record<SessionSort, [string, string]> = {
   first_ts: ["newest first", "oldest first"], duration_s: ["longest active time first", "shortest active time first"],
@@ -37,6 +25,44 @@ const ORDER: Record<SessionSort, [string, string]> = {
   compactions: ["most compactions first", "fewest compactions first"], commits: ["most commits first", "fewest commits first"],
   tests_failed: ["most failed test runs first", "fewest failed test runs first"],
 };
+
+type Key = SessionSort | "project";
+const SESS_CELL = { className: "when sess" }, NAME_CELL = { className: "name" };
+const PICK: RowPick<ListedSessionRow> = { value: s => s.session_id, open: openSessionSheet, subject: s => ({ kind: "session", value: s.session_id }) };
+
+/** The table's columns. sorted: the sort's key, whose cells add "sorted", which keeps them shown at any width. day: a day is selected,
+ *  so the whole-session figures say so. */
+function sessionColumns(sorted: SessionSort | undefined, day: boolean): Column<ListedSessionRow, Key>[] {
+  // A sortable figure: hide, its narrow-width priority; whole, a whole-session figure on a day.
+  const stat = (id: SessionSort, header: string, hide: 0 | 1 | 2 | undefined, cell: (s: ListedSessionRow) => ReactNode, value: (s: ListedSessionRow) => CellValue,
+    { tip, whole, cellProps }: { tip?: string; whole?: boolean; cellProps?: Column<ListedSessionRow>["cellProps"] } = {}): Column<ListedSessionRow, Key> =>
+    ({ id, header, sort: "desc", value, cell, align: "num", hide, className: sorted === id ? "sorted" : undefined, tip: whole && day ? WHOLE : tip, cellProps });
+  return [
+    { id: "first_ts", header: "Session", sort: "desc", value: s => s.first_ts, cellProps: () => SESS_CELL,
+      th: h => <SortTh k="first_ts" sort={h.sort} onSort={s => h.onSort?.(s)} className={sorted === "first_ts" ? " sorted" : undefined}>Session</SortTh>,
+      cell: s => <><button type="button" className="cellbtn" title={s.title || s.session_id}>{sessName(s)}</button>
+        <div className="muted small">{when(s.first_ts)}{s.git_branch ? ` · ${s.git_branch}` : ""}{s.title ? ` · ${shortId(s.session_id)}` : ""}</div></> },
+    { id: "project", header: "Project", cellProps: () => NAME_CELL, cell: s => <ProjectName project={s.project} /> },
+    stat("duration_s", "Active", 0, s => dur(s.duration_s), s => s.duration_s, { tip: "Active time: pauses over 20 minutes left out" }),
+    stat("model_ms", "Model", 1, s => s.model_ms == null ? "–" : dur(s.model_ms / 1000), s => s.model_ms,
+      { tip: "Model time: waiting on the model, over the whole session; Codex records none", whole: true }),
+    stat("output_per_s", "Tok/s", 1, s => num(s.output_per_s), s => s.output_per_s,
+      { tip: "Output speed: output tokens per second of model time, over the whole session", whole: true }),
+    stat("prompts", "Prompts", 0, s => num(s.prompts), s => s.prompts),
+    stat("tokens", "Tokens", 2, s => big(s.tokens), s => s.tokens),
+    stat("cost", "Est. cost", undefined, s => usd(s.cost), s => s.cost),
+    stat("peak_context", "Peak context", undefined, s => <>{big(s.peak_context)}{s.near_limit && <> <span className="chip warn"
+      title={`${pct(s.context_share)} of the context window`}>{pct(s.context_share)}</span></>}</>, s => s.peak_context, { whole: true }),
+    stat("errors", "Failed", 0, s => num(s.errors), s => s.errors, { cellProps: s => ({ className: s.errors ? "bad" : undefined }) }),
+    stat("compactions", "Compactions", 2, s => num(s.compactions), s => s.compactions, { whole: true }),
+    stat("commits", "Commits", 0, s => num(s.commits), s => s.commits),
+    // A session's test and build runs as "passed/run", marked bad when any failed; "–" when it ran none.
+    stat("tests_failed", "Tests", 0, s => s.tests_passed + s.tests_failed ? `${num(s.tests_passed)}/${num(s.tests_passed + s.tests_failed)}` : "–", s => s.tests_failed, {
+      tip: "Test and build runs: passed of run",
+      cellProps: s => ({ className: s.tests_failed ? "bad" : undefined,
+        title: s.tests_passed + s.tests_failed ? `${num(s.tests_passed)} passed, ${num(s.tests_failed)} failed` : "No test or build runs" }) }),
+  ];
+}
 
 /** Every session in the view, paged on the server so search finds old ones too, and sorted there so a sort orders them all.
  *  The Sessions tab's panel: an infinite query on the view, the filters and the sort, loaded while the tab shows, from the
@@ -77,7 +103,8 @@ export function SessionsPanel({ view, filter, onFilter, sort, onSort, selected }
     : `Could not refresh the sessions (${error.message}).` : undefined;
   const loadingHint = stale && busy ? (qt ? `Searching for “${qt}”…` : "Loading sessions…") : failed ? (qt ? `Search for “${qt}” failed.` : "Sessions failed to load.") : "";
 
-  const col = (k: SessionSort) => CLS[k] + (sort?.key === k ? " sorted" : "");
+  const sorted = sort?.key, day = !!filter.day;
+  const columns = useMemo(() => sessionColumns(sorted, day), [sorted, day]);
   const order = sort ? ORDER[sort.key][sort.desc ? 0 : 1] : filter.near ? "nearest the limit first" : filter.day ? `by their cost on ${filter.days === 1 ? "that day" : "those days"}` : "newest first";
   const hint = moreError ?? (loadingHint || (failed ? "" : `${plural(total, "session")}${narrowed ? " match" : ""}` + (total ? `, ${order}. `
     + `${rows.length < total ? `Showing ${num(rows.length)}. ` : ""}Select a session for details.` : ".")));
@@ -90,36 +117,13 @@ export function SessionsPanel({ view, filter, onFilter, sort, onSort, selected }
       </div>
       <div className="hint"><span aria-live="polite">{hint}</span>
         <HowMeasured what="the session count">A session counts here when it has a request in the range; the Judgments view counts sessions by their start time, so the two totals can differ slightly.</HowMeasured></div>
-      <DataTable name="Sessions" region="scroll tall">
-        <thead><tr>{HEAD.map(([label, k, cls, title, whole]) => {
-          const t = whole && filter.day ? WHOLE : title;
-          return k ? <SortTh key={label} k={k} sort={sort} onSort={onSort} className={col(k) || undefined} title={t}>{label}</SortTh>
-            : <th key={label} scope="col" className={cls || undefined}>{label}{t && <Toggletip term={label}>{t}</Toggletip>}</th>;
-        })}</tr></thead>
-        <tbody ref={body} className={stale ? "stale" : undefined} aria-busy={busy || undefined} inert={stale || undefined}>
-          {failed ? <tr><td colSpan={COLS} className="empty" role="alert">Could not load sessions ({failed}). <button type="button" className="linkish"
-            onClick={() => { void refetch(); search.current?.focus(); }}>Retry</button></td></tr>
-            : rows.length ? rows.map(s => <tr key={s.session_id} {...pickRow(s.session_id, openSessionSheet, { kind: "session", value: s.session_id }, s.session_id === selected ? "sel" : "")}>
-              <th scope="row" className="when sess"><button type="button" className="cellbtn" title={s.title || s.session_id}>{sessName(s)}</button>
-                <div className="muted small">{when(s.first_ts)}{s.git_branch ? ` · ${s.git_branch}` : ""}{s.title ? ` · ${shortId(s.session_id)}` : ""}</div></th>
-              <td className="name"><ProjectName project={s.project} /></td><td className={col("duration_s")}>{dur(s.duration_s)}</td>
-              <td className={col("model_ms")}>{s.model_ms == null ? "–" : dur(s.model_ms / 1000)}</td><td className={col("output_per_s")}>{num(s.output_per_s)}</td>
-              <td className={col("prompts")}>{num(s.prompts)}</td>
-              <td className={col("tokens")}>{big(s.tokens)}</td><td className={col("cost")}>{usd(s.cost)}</td>
-              <td className={col("peak_context")}>{big(s.peak_context)}{s.near_limit && <> <span className="chip warn" title={`${pct(s.context_share)} of the context window`}>{pct(s.context_share)}</span></>}</td>
-              <td className={col("errors") + (s.errors ? " bad" : "")}>{num(s.errors)}</td><td className={col("compactions")}>{num(s.compactions)}</td><td className={col("commits")}>{num(s.commits)}</td>
-              <TestsCell className={col("tests_failed")} passed={s.tests_passed} failed={s.tests_failed} /></tr>)
-            : !busy ? <tr><td colSpan={COLS} className="empty">{narrowed ? "No sessions match." : "No sessions in this range."}</td></tr> : null}
-        </tbody>
-      </DataTable>
+      <Table name="Sessions" region="scroll tall" rows={rows} columns={columns} rowId={s => s.session_id} manualSort sort={sort}
+        onSort={s => onSort(s as SortBy<SessionSort>)} current={selected} pick={PICK}
+        body={{ ref: body, className: stale ? "stale" : undefined, "aria-busy": busy || undefined, inert: stale || undefined }}
+        empty={failed || busy ? undefined : narrowed ? "No sessions match." : "No sessions in this range."}
+        after={failed ? <tr><td colSpan={columns.length} className="empty" role="alert">Could not load sessions ({failed}). <button type="button" className="linkish"
+          onClick={() => { void refetch(); search.current?.focus(); }}>Retry</button></td></tr> : null} />
       {rows.length < total && !failed && <button type="button" className="linkish more" disabled={busy} onClick={more}>Show more sessions</button>}
     </div>
   );
-}
-
-/** A session's test and build runs as "passed/run", marked bad when any failed; "–" when it ran none. */
-function TestsCell({ className, passed, failed }: { className: string; passed: number; failed: number }) {
-  const runs = passed + failed;
-  return <td className={className + (failed ? " bad" : "")} title={runs ? `${num(passed)} passed, ${num(failed)} failed` : "No test or build runs"}>
-    {runs ? `${num(passed)}/${num(runs)}` : "–"}</td>;
 }
