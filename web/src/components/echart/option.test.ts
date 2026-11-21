@@ -205,10 +205,20 @@ describe("tracksOption", () => {
     const o = option();
     expect([o.grid.length, o.xAxis.length, o.yAxis.length]).toEqual([3, 3, 3]);
     expect(o.grid).toEqual([
-      { left: 52, right: 16, top: 20, height: 172 },
-      { left: 52, right: 16, top: 20, height: 120 },
-      { left: 52, right: 16, top: 156, height: 36 },
+      { left: 52, right: 16, top: 20, height: 172, outerBoundsMode: "none" },
+      { left: 52, right: 16, top: 20, height: 120, outerBoundsMode: "none" },
+      { left: 52, right: 16, top: 156, height: 36, outerBoundsMode: "none" },
     ]);
+  });
+
+  it("opts every grid out of ECharts' own fit, which would shrink the frame alone, the one grid with visible labels", () => {
+    expect(option().grid.map(g => g.outerBoundsMode)).toEqual(["none", "none", "none"]);
+  });
+
+  it("keeps the newest label, right-aligned on its point, so it ends inside the plot: with no fit, the box would clip it", () => {
+    const [frame] = option().xAxis as (Axis & { axisLabel: Record<string, unknown> })[];
+    expect(frame!.axisLabel).toMatchObject({ hideOverlap: true, alignMaxLabel: "right", showMaxLabel: true });
+    expect(frame!.axisLabel.alignMinLabel).toBeUndefined(); // the left margin holds half the first label
   });
 
   it("puts the labels and the only axis pointer on x axis 0, the frame's", () => {

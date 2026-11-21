@@ -153,7 +153,7 @@ describe("the fake ECharts runtime", () => {
 
   // A chart of several tracks: a frame grid (0) over one grid per track, each grid with its own x and y axis.
   const tracks = (n = 3, points = 10, x: (i: number) => Record<string, unknown> = () => ({})) => ({
-    grid: Array.from({ length: n }, (_, i) => ({ id: `g${i}`, top: 10 + i * 60, height: 50 })),
+    grid: Array.from({ length: n }, (_, i) => ({ id: `g${i}`, top: 10 + i * 60, height: 50, outerBoundsMode: "none" })),
     xAxis: Array.from({ length: n }, (_, i) => ({ type: "category", data: Array.from({ length: points }, (_, p) => `d${p}`), gridIndex: i, ...x(i) })),
     yAxis: Array.from({ length: n }, (_, i) => ({ type: "value", gridIndex: i, max: 100 })),
   });
@@ -188,6 +188,17 @@ describe("the fake ECharts runtime", () => {
     const chart = await chartOf(10, tracks(3, 10, i => ({ axisPointer: { show: i === 0 } })));
     expect(() => chart.setOption({ xAxis: [{}, {}, { axisPointer: { show: true } }] })).toThrow("x axis 2 shows an axis pointer");
     expect(list(chart.option.xAxis).map(a => a.axisPointer)).toEqual([{ show: true }, { show: false }, { show: false }]);
+  });
+
+  it("throws for grids that ECharts may fit on their own, where it shrinks the frame alone and its axis leaves the tracks'", async () => {
+    const fitted = (i: number) => ({ grid: tracks().grid.map((g, j) => (j === i ? { ...g, outerBoundsMode: "auto" } : g)) });
+    await expect(chartOf(10, { ...tracks(), ...fitted(0) })).rejects.toThrow('grid 0 has no outerBoundsMode "none"');
+    await expect(chartOf(10, { ...tracks(), grid: tracks().grid.map(g => ({ ...g, outerBoundsMode: undefined })) })).rejects.toThrow("grid 0, 1, 2 has no");
+    // The merged option counts: a track's grid set back to the default in a later option.
+    const chart = await chartOf(10, tracks());
+    expect(() => chart.setOption(fitted(2))).toThrow('grid 2 has no outerBoundsMode "none"');
+    // One grid cannot drift from itself: it may take ECharts' fit.
+    await expect(chartOf(10, { grid: { top: 10 } })).resolves.toBeDefined();
   });
 
   it("records a refused option nowhere: not in options, not as last", async () => {

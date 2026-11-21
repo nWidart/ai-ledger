@@ -148,16 +148,25 @@ export const FRAME_AXES: Readonly<SeriesAxes> = { xAxisIndex: 0, yAxisIndex: 0 }
 
 /** The grids and axes of a chart of several tracks, from one layout and one label list, so the tracks cannot drift apart:
  *  grid 0 is the frame, with the labels (under the last track) and the only axis pointer, over a hidden 0-to-1 value axis;
- *  grid t + 1 is track t, with a hidden category axis over the same labels and `y[t]`, its own value axis. */
+ *  grid t + 1 is track t, with a hidden category axis over the same labels and `y[t]`, its own value axis.
+ *  Every grid sits exactly where the layout puts it (`outerBoundsMode: "none"`). By default ECharts 6 fits each grid on its
+ *  own: it shrinks a grid whose axis labels would leave the box (Grid.js, layOutGridByOuterBounds). Only the frame has
+ *  visible x labels, so only the frame would shrink, and its axis, which holds the band, the selection and the pointer's
+ *  reading, would leave the tracks' axes: by half a band at the newest point of 11 weekly bars in 343px. Instead the
+ *  layout keeps the labels in: the left margin holds the value labels and half the first bucket label; the newest label
+ *  is always shown, right-aligned on its point, so it ends inside the plot (a centred one would pass the right margin),
+ *  and the labels it overlaps are hidden. The fake runtime refuses a chart of several grids that leaves one to ECharts'
+ *  fit (`refuse` in testing.ts). */
 export function tracksOption(env: OptionEnv, { layout, labels, format, y }: {
   layout: TrackLayout; labels: readonly string[]; format: (label: string) => string; y: readonly ValueAxis[];
 }): { grid: GridOption[]; xAxis: XAXisComponentOption[]; yAxis: YAXisComponentOption[] } {
   if (y.length !== layout.tracks.length) throw new Error(`tracksOption: ${layout.tracks.length} tracks, ${y.length} value axes`);
-  const side = { left: layout.left, right: layout.right };
+  const side = { left: layout.left, right: layout.right, outerBoundsMode: "none" as const };
+  const frame = categoryAxis(env, labels, format);
   return {
     grid: [{ ...side, ...layout.frame }, ...layout.tracks.map(t => ({ ...side, ...t }))],
     xAxis: [
-      { ...categoryAxis(env, labels, format), gridIndex: 0 },
+      { ...frame, gridIndex: 0, axisLabel: { ...frame.axisLabel, alignMaxLabel: "right", showMaxLabel: true } },
       ...layout.tracks.map((_, t): CategoryAxis => ({ type: "category", gridIndex: t + 1, data: [...labels], show: false, axisPointer: { show: false } })),
     ],
     yAxis: [{ type: "value", gridIndex: 0, min: 0, max: 1, show: false }, ...y.map((a, t) => ({ ...a, gridIndex: t + 1 }))],

@@ -31,7 +31,7 @@
 // A chart of several tracks (design decision 1 of echart-activity) draws a frame grid over one grid per track, each with
 // its own x axis. The fake keeps one grid, which is the frame: the first x axis's points and the first y axis's `max` are
 // all it reads, and a finder index other than 0 still throws. The tracks' grids and axes merge like any other item.
-// It is stricter than ECharts in four ways, since each is a bug here, in the wrapper or in a chart:
+// It is stricter than ECharts in five ways, since each is a bug here, in the wrapper or in a chart:
 // - a call on a disposed chart, or a second live chart on one element, throws where ECharts would log a warning;
 // - setOption throws when the merged option holds a slider and an x axis that slider does not drive, where ECharts
 //   zooms the axes it drives and leaves the others, so one track would zoom and the next would not;
@@ -39,7 +39,9 @@
 //   over that axis's grid alone, while the pointer is in it;
 // - setOption throws when the merged option holds a slider and a series with the id "trend" (`sliderTrend()`) that is
 //   not the series the slider draws its faint trend from (`sliderShadowOf`, by ECharts' rule), where ECharts draws
-//   another series' trend with no error.
+//   another series' trend with no error;
+// - setOption throws when the merged option holds two grids or more and one of them lacks `outerBoundsMode: "none"`,
+//   where ECharts fits each grid on its own and shrinks the frame alone, the one with visible labels (`tracksOption`).
 // A setOption that throws is not recorded: `options` and `last` hold only the options the chart took.
 // It is simpler than ECharts in what it does not model, so no test may rely on it: a slider's `xAxisId`, a vertical
 // slider (it drives y axes), and which x axes an inside dataZoom drives; and where a series or a mark is drawn, since it
@@ -121,6 +123,10 @@ function refuse(option: Option) {
   }
   const pointer = axes.findIndex((a, i) => i > 0 && isPlain(a.axisPointer) && a.axisPointer.show === true);
   if (pointer > 0) throw new Error(`FakeChart.setOption(): x axis ${pointer} shows an axis pointer; only the first x axis may, or ECharts draws a second band`);
+  const grids = list(option.grid), fitted = grids.flatMap((g, i) => (isPlain(g) && g.outerBoundsMode === "none" ? [] : [i]));
+  if (grids.length > 1 && fitted.length) {
+    throw new Error(`FakeChart.setOption(): grid ${fitted.join(", ")} has no outerBoundsMode "none"; ECharts would fit it on its own, and its x axis would leave the others'`);
+  }
 }
 
 /** One component key's items after a setOption: `fresh` holds the items that merged into no old one. */

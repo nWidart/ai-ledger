@@ -1,5 +1,6 @@
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { getInstanceByDom } from "echarts/core";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DailyWorkRow, UsagePayload } from "../../api";
 import usage from "../../__fixtures__/usage";
 import { color, setOrder } from "../../colors";
@@ -179,14 +180,62 @@ it("reads the day under the pointer over the bars, the gap between the tracks an
   expect(errors).not.toHaveBeenCalled();
 });
 
-// The bar being read keeps its kinds' colors: the shared stack turns ECharts' own highlight off.
-it("keeps the day read in its projects' colors", async () => {
+// The selected day, read: its mark keeps the selection's tint and frame. ECharts' pointer highlights the items on the
+// axis it reads (axisTrigger.js, dispatchHighDownActually), the frame's: the selection mark is the one series there, and
+// a highlight would lift its colors. Two guards stop it, each enough alone: the frame's pointer triggers no highlight
+// (`triggerEmphasis: false` in categoryAxis) and the mark has no highlight state (`emphasisDisabled` in selectionMark).
+// The bars are on a track's axis, which the pointer never reads, so no highlight reaches them.
+it("keeps the selection's colors on the selected day while it is read", async () => {
   const { unmount } = renderApp(panel(d));
   await waitFor(() => expect(segments()).toHaveLength(60));
+  expect(selection()).toHaveLength(1);
   act(() => group().focus());
-  fireEvent.keyDown(group(), { key: "ArrowRight" });
+  for (let i = 0; i <= 2; i++) fireEvent.keyDown(group(), { key: "ArrowRight" }); // day 0, 1, then the selected day 2
+  await waitFor(() => expect(screen.getByRole("tooltip").textContent).toContain("Oct 19, 2026"));
   await waitFor(() => expect(band()).toHaveLength(1));
   await new Promise(settled => setTimeout(settled, 100)); // the highlight is drawn on a later frame than the band
-  expect(segments()).toHaveLength(60);
+  expect(selection()).toHaveLength(1);
   unmount();
+});
+
+// A chart of several tracks lays out its frame and its tracks by their own places (tracksOption): ECharts' own fit would
+// shrink the frame alone, the one grid with visible labels, once its newest label reaches the box's right edge, and the
+// band, the selection and the pointer's reading would sit apart from the bars. "Week of …" labels in a phone's width
+// reach it, as they do at twice the text size.
+describe("by week in a narrow box", () => {
+  /** n weeks of work to Monday Nov 16, every week with work; the newest is selected. */
+  const weeks = (n: number): UsagePayload => {
+    const mondays = dayRange("2025-01-06", "2026-11-16").filter((_, i) => i % 7 === 0).slice(-n);
+    const work = mondays.map(day => ({ day, sessions: 3, prompts: 3, commits: 3, calls: 100, failed_calls: 2 }));
+    return { ...usage, range: 0, start: null, end: "2026-11-16", project: "", source: "", work_bucket: "week", work, daily_work: work, work_projects: [] };
+  };
+  const NEWEST: WorkPick = { day: "2026-11-16", week: true };
+  const sized = (width: number, fontSize: string) => {
+    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(width);
+    document.documentElement.style.fontSize = fontSize;
+  };
+  afterEach(() => { document.documentElement.style.fontSize = ""; });
+
+  it.each([
+    { n: 11, width: 343, fontSize: "16px" },
+    { n: 13, width: 600, fontSize: "32px" },
+  ])("keeps the frame's axis on the tracks' axes: $n weeks, $width px, at $fontSize", async ({ n, width, fontSize }) => {
+    sized(width, fontSize);
+    const { unmount } = renderApp(<WorkPanel d={weeks(n)} metric="commits" onMetric={() => {}} selected={NEWEST} onPick={() => {}} onClear={() => {}} />);
+    await waitFor(() => expect(filled("var(--series-1)")).toHaveLength(n));
+    const chart = getInstanceByDom(plot())!;
+    expect(chart.getWidth()).toBe(width);
+    for (const i of [0, n - 1]) {
+      const xs = [0, 1, 2].map(a => chart.convertToPixel({ xAxisIndex: a }, i) as number);
+      expect(Math.max(...xs) - Math.min(...xs), `point ${i} on x axes 0, 1, 2: ${xs.join(", ")}`).toBeLessThanOrEqual(.5);
+    }
+    // What the user sees: the newest week's frame around its bar, and its label, which ends inside the box.
+    const newest = filled("var(--series-1)").map(p => box(p.getAttribute("d")!)).reduce((a, b) => (b.cx > a.cx ? b : a));
+    expect(Math.abs(box(selection()[0]!.getAttribute("d")!).cx - newest.cx)).toBeLessThanOrEqual(.5);
+    const label = [...plot().querySelectorAll("svg text")].find(t => t.textContent === "Week of Nov 16")!;
+    expect(label.getAttribute("text-anchor")).toBe("end");
+    expect(Number(/translate\(([\d.]+)/.exec(label.getAttribute("transform") ?? "")?.[1] ?? label.getAttribute("x"))).toBeLessThanOrEqual(width);
+    unmount();
+    expect(errors).not.toHaveBeenCalled();
+  });
 });
