@@ -8,8 +8,6 @@ Judgments is the second view of [Activity](/ai-ledger/pages/activity/). It answe
 
 To open it, select **Judgments** in the view switch at the top of Activity, or type `>judgments` in the [command palette](/ai-ledger/everywhere/command-palette/). Its address is `/usage?view=judgments`. It was the Insights page before: an old `/insights` link opens it, with its filters and its open session kept.
 
-The screenshots on this page are older than the view: they show no friction weights and no measured line on a session card, and the outcome trend has none yet.
-
 `/insights` is a Claude Code command. A model reads each session's transcript and writes one judgment file, a **facet**, per session. The app reads those files at every ingest and keeps a copy in the store, so the judgments stay after Claude Code overwrites or deletes the files. The app never calls a model and never runs `claude`. The directory it reads is `~/.claude/usage-data` (set with `--usage-data`; see the [CLI reference](/ai-ledger/reference/cli/)).
 
 import ThemedImage from "../../../components/ThemedImage.astro";
