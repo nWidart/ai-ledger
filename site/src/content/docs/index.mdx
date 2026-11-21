@@ -85,7 +85,7 @@ Transcripts hold your prompts, file contents, command output and sometimes an AP
 
 - **The store stays on your disk.** It is one file that only your user can read. There is no account, no analytics and no update check.
 - **Only your machine can connect.** The server listens on `127.0.0.1` and refuses requests that other sites send from your browser.
-- **Your Claude Code token goes only to Anthropic.** On macOS, the Limits page reads Claude Code's OAuth token from the Keychain to ask Anthropic's usage endpoint for your plan limits, at most once every 5 minutes. The request carries no transcript data, and the token goes nowhere else.
+- **Your tokens go only to their own provider.** On macOS, the Limits page reads Claude Code's OAuth token from the Keychain to ask Anthropic's usage endpoint for your plan limits, at most once every 5 minutes. If the Grok CLI is signed in with grok.com, it does the same with that login's token and xAI's billing endpoint. The requests carry no transcript data, and each token goes nowhere else.
 - **Your agents' files stay as they are.** AI Ledger opens transcripts read-only.
 - **The code is open.** AI Ledger is MIT licensed; [read it on GitHub](https://github.com/nWidart/ai-ledger).
 
@@ -103,7 +103,7 @@ Claude Code, from `~/.claude/projects`, Codex, from `~/.codex`, and the Grok CLI
 
 ### Does it run on Windows?
 
-No. It runs on macOS and Linux. On Linux, the Limits page shows Codex windows only, because there is no Keychain to read Claude Code's token from.
+No. It runs on macOS and Linux. On Linux, the Limits page shows Codex and Grok windows only, because there is no Keychain to read Claude Code's token from.
 
 ### How accurate are the costs?
 

@@ -46,7 +46,7 @@ Grok differs from the other two agents in a few ways:
 
 - Grok writes token usage and cost once per turn, when the turn ends. The app splits a turn over its model calls by each call's context size: totals per turn, session, day, project and model are exact, one call's share is an estimate. A running turn shows no tokens or cost until it ends, and a turn that never ends (a crash, or a headless run killed by a signal) reports no usage.
 - A Grok request costs what Grok reported, not an estimate at list prices.
-- Grok records no reasoning effort, git branch, session title or plan limits, and `/insights` writes no judgments for it. Limits shows no Grok window, and a Grok cache break is never marked expired.
+- Grok records no reasoning effort, git branch, or session title, and `/insights` writes no judgments for it. A Grok cache break is never marked expired. Limits shows a Grok card when the Grok CLI is signed in with grok.com: the app asks xAI for the plan's credits every 5 minutes with that login's token, read from `~/.grok/auth.json` (or `$GROK_HOME/auth.json`). With an API key or no login, it sends nothing and Limits shows no Grok card. Grok names no plan, so Cost has no Grok plan from snapshots.
 
 The [documentation site](https://nwidart.github.io/ai-ledger/) describes each page in detail. The top bar's **Docs** link and the command palette's `>docs` commands open the page you are on, and "Learn more" links in the explanations go to the section behind a figure; the app sends nothing to the site until you follow a link.
 
@@ -85,7 +85,8 @@ To set your own model prices or plan prices, or to hide more automated projects,
 
 - The server listens on `127.0.0.1` only, and refuses requests that another site makes from your browser.
 - The store keeps every transcript line, **including any secrets** that appeared in a session. Only your user can read it. Do not share it.
-- On macOS, the Limits page sends your Claude Code OAuth token from the Keychain to Anthropic's usage endpoint every 5 minutes. The token goes nowhere else and is never stored or logged. On Linux there is no Keychain to read, so Limits shows Codex windows only.
+- On macOS, the Limits page sends your Claude Code OAuth token from the Keychain to Anthropic's usage endpoint every 5 minutes. The token goes nowhere else and is never stored or logged. On Linux there is no Keychain to read, so Limits shows no Claude Code window.
+- If the Grok CLI is signed in with grok.com, the Limits page sends that login's access token, read from `~/.grok/auth.json` (or `$GROK_HOME/auth.json`), to `https://cli-chat-proxy.grok.com/v1/billing?format=credits` every 5 minutes. The token goes nowhere else, is never stored, logged or shown, and is never refreshed. With an API key or no login, nothing is sent.
 - Live's **Full text** puts transcript content on screen, secrets included. Turn it off before you share your screen. Even off, Live shows the start of each tool input and the error text of failed calls, and other pages quote error examples. See [Share your screen safely](https://nwidart.github.io/ai-ledger/improve/share-screen/).
 - Your browser loads the font from Google Fonts. No transcript data goes with it.
 
