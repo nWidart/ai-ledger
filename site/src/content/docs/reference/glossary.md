@@ -153,16 +153,16 @@ See [Errors](/ai-ledger/pages/errors/). Errors counts automated sessions too.
 | Change | The error rate against the comparison period: the same number of days before, or for **All** the earlier half of the calls. "–" when either side has fewer than 200 tool calls. | Summary; type table | [Kill repeated tool failures](/ai-ledger/improve/tool-failures/) |
 | Incident | A retry loop: failures of one tool, by one agent, with one error type, each at most 10 minutes after the previous one, with at most 2 successful calls of that tool in between. | Summary; type detail | [Kill repeated tool failures](/ai-ledger/improve/tool-failures/) |
 | Recovered (Next call OK) | The agent's next call of that tool after the incident succeeded. Otherwise the incident reads **Failed again** or **Gave up**. | Type detail | [Kill repeated tool failures](/ai-ledger/improve/tool-failures/) |
-| Didn't recover | The share of incidents whose outcome is not recovered. | Summary; type table | [Kill repeated tool failures](/ai-ledger/improve/tool-failures/) |
+| Not recovered | The share of incidents whose outcome is not recovered. The summary says it as "did not recover". | Summary; type table | [Kill repeated tool failures](/ai-ledger/improve/tool-failures/) |
 | Fixes applied | The error types that you marked as fixed, and the open types that still have a ready-made fix. | Summary | [Kill repeated tool failures](/ai-ledger/improve/tool-failures/) |
 | Uncategorized | The share of errors in the catch-all types: Other, Other non-zero exit and MCP tool error. | Under the heading | – |
-| Errors, Share | A type's failed calls, and its share of the view's errors. | Type table | [Kill repeated tool failures](/ai-ledger/improve/tool-failures/) |
+| Errors, share | A type's failed calls, and its share of the view's errors, drawn as a bar under the count. | Type table | [Kill repeated tool failures](/ai-ledger/improve/tool-failures/) |
 | Time lost | The time in retry loops: each incident's first failure to its last, summed. | Type table; type detail | [Kill repeated tool failures](/ai-ledger/improve/tool-failures/) |
-| Rate, Rate trend | A type's errors per 100 tool calls, and that rate over the range. | Type table | [Kill repeated tool failures](/ai-ledger/improve/tool-failures/) |
+| Rate, Trend | A type's errors per 100 tool calls, and that rate over the range, with a tick on the day its fix was applied. | Type table | [Kill repeated tool failures](/ai-ledger/improve/tool-failures/) |
 | Open fixes | Up to four open types with a ready-made fix, most time lost first. | **Where to start** | [Kill repeated tool failures](/ai-ledger/improve/tool-failures/) |
 | Rising fastest | Up to four types whose rate rose by more than 10% of its earlier value, with at least 5 errors now. | **Where to start** | [Kill repeated tool failures](/ai-ledger/improve/tool-failures/) |
-| Before and after the fix | A type's error rate before and since the day you marked a fix, over all time. The verdict is **Rate lower**, **Rate higher** or **Rate unchanged**. It reads **Not enough calls yet** until the calls since the fix number at least 200 and enough for the old rate to have produced 5 errors. | Type detail | [Kill repeated tool failures](/ai-ledger/improve/tool-failures/) |
-| Noise | Harness errors, user rejections and the types you muted. **Hide noise and muted** leaves them out. | Filters; type detail | [Kill repeated tool failures](/ai-ledger/improve/tool-failures/) |
+| Before and after the fix | A type's error rate before and since the day you marked a fix, over all time. The verdict is **Rate lower**, **Rate higher** or **Rate unchanged**. It reads **Not enough calls yet** until the calls since the fix number at least 200 and enough for the old rate to have produced 5 errors. | Type detail; **Applied fixes** in **Where to start** | [Kill repeated tool failures](/ai-ledger/improve/tool-failures/) |
+| Noise | Harness errors, user rejections and the types you muted. **Hide noise and muted** leaves them out. | Type table toolbar; type detail | [Kill repeated tool failures](/ai-ledger/improve/tool-failures/) |
 
 ## Limits
 
