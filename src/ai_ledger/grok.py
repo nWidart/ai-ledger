@@ -429,9 +429,11 @@ class GrokDeriver(store.Deriver):
             return []
         (start,) = self.cur.execute("SELECT coalesce(max(byte_offset), -1) FROM raw_lines WHERE file = ? AND type = 'turn_completed' "
                                     "AND byte_offset < ?", [self.path, end]).fetchone()
+        # Only a JSON integer is a call figure, as store.is_int reads it in live_items: TRY_CAST would take "12".
+        whole = lambda f: (f"CASE WHEN json_type(json, '$.params._meta.{f}') IN ('BIGINT', 'UBIGINT') "
+                           f"THEN TRY_CAST(json_extract(json, '$.params._meta.{f}') AS BIGINT) END")
         rows = self.cur.execute(
-            "SELECT stream, max(total) FROM (SELECT TRY_CAST(json_extract(json, '$.params._meta.streamStartMs') AS BIGINT) AS stream, "
-            "TRY_CAST(json_extract(json, '$.params._meta.totalTokens') AS BIGINT) AS total FROM raw_lines "
+            f"SELECT stream, max(total) FROM (SELECT {whole('streamStartMs')} AS stream, {whole('totalTokens')} AS total FROM raw_lines "
             f"WHERE file = ? AND parsed AND type IN ({','.join('?' * len(CALL_TYPES))}) "
             "AND json_extract_string(json, '$.params._meta.promptId') = ? AND byte_offset > ? AND byte_offset < ?) "
             "WHERE stream IS NOT NULL GROUP BY 1 ORDER BY 1",

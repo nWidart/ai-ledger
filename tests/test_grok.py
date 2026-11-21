@@ -292,6 +292,22 @@ class UsageTest(GrokCase):
         self.assertNotEqual(got, [r[0] for r in self.q("SELECT input + cache_read + cache_5m + cache_1h FROM requests "
                                                        f"WHERE input + cache_read >= {context.START_MIN_TOKENS} ORDER BY ts")])
 
+    def test_call_figures_that_are_text_state_no_call(self):
+        # "12" is no streamStartMs: a numeric string would make a call at the Unix epoch. The turn is then one request.
+        path, = self.put("long-turn")
+
+        def change(d):
+            m = grok.meta(d)
+            for k in ("streamStartMs", "totalTokens"):
+                if k in m:
+                    m[k] = str(m[k])
+        rewrite(path, change)
+        self.ingest()
+        self.assertEqual(self.q("SELECT count(*), min(ts) > TIMESTAMP '2000-01-01' FROM requests"), [(1, True)])
+        with open(path) as fh:
+            chunk = next(d for d in map(json.loads, fh) if grok.update(d).get("sessionUpdate") == "agent_message_chunk")
+        self.assertEqual([it["group"] for it in grok.live_items(chunk)], [None])
+
     def test_turn_whose_calls_cannot_be_told_states_no_context(self):
         path, = self.put("long-turn")
         with open(path) as fh:
