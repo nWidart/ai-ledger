@@ -107,6 +107,12 @@ and versions follow [Semantic Versioning](https://semver.org/).
 - Picking or clearing a project, or picking a source, closes Live's open session sheet, as it does on the other pages.
 - Errors' rate chart keeps its hint on a phone, as the other pages' charts do, and the Incidents vital no longer repeats what "recovered" means.
 - Context's "Tool results fill the context" tip no longer tells Codex sessions to hand bulk reading to a subagent; when both agents match, it names Claude Code for that line.
+- Alt+Left (Back), Ctrl+Home and other modified keys work again while a chart or a tab list has focus, on Activity, Cost, Context, Errors and in the session sheet's timeline. The charts and tabs handle their keys only without Alt, Ctrl, Meta or Shift; the timeline keeps Shift for its ten-request step.
+- A screen reader hears all a Live wall tile shows, its state, latest action, context, tools, errors, cost, branch and model, after the tile's name "Pin …" and its pressed state.
+- Live shows "N new events" beside **Jump to latest** while Follow is off, at once and then at most every 5 seconds, in a polite status. It was for screen readers only.
+- Closing a sheet on Live moves focus to the page heading when the control that opened it is gone, as on the other pages.
+- Tab from Activity's workbench tabs reaches the selected panel, as on Context.
+- In forced colors, Live's pressed Errors figure, Activity's selected workbench tab and Limits' pressed **Last 24 h pace** toggle are outlined in the highlight color.
 
 ## [0.4.0] - 2026-11-15
 

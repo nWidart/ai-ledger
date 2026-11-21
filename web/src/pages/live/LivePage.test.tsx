@@ -381,6 +381,13 @@ describe("LivePage", () => {
     expect(await screen.findByRole("dialog")).toBeTruthy();
   });
 
+  it("returns focus to the page heading when a sheet closes and nothing on the page opened it", async () => {
+    show("?sheet=zz");
+    expect(await screen.findByRole("dialog")).toBeTruthy();
+    await userEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Close" }));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("heading", { level: 1, name: "Live" })));
+  });
+
   it("shows tool rows with duration and result, a failed call, a compaction and the subagent lane", async () => {
     show();
     await stream();
@@ -612,23 +619,33 @@ describe("LivePage", () => {
     expect((screen.getByRole("checkbox", { name: "Follow" }) as HTMLInputElement).checked).toBe(true);
   });
 
-  it("is a silent log, and a polite status counts the events that came while Follow is off, once", async () => {
-    const more = { ...s1, events: [...s1.events, { ...(s1.events.at(-1) as LiveToolEvent), key: "n#0", id: "t10", summary: "ls" }], cursor: "c3" };
-    let fresh = false;
-    show("?session=s1", { session: () => (fresh ? more : s1) });
-    const box = await screen.findByRole("log", { name: "Session events" });
+  it("is a silent log, and shows the events that came while Follow is off beside Jump to latest, at most every 5 s", async () => {
+    fakeClock("2026-11-10T10:01:00.000Z");
+    let n = 0;
+    const add = (i: number) => ({ ...(s1.events.at(-1) as LiveToolEvent), key: `n#${i}`, id: `t1${i}`, summary: "ls" });
+    show("?session=s1", { session: () => ({ ...s1, events: [...s1.events, ...Array.from({ length: n }, (_, i) => add(i))], cursor: `c${n}` }) });
+    const arrive = async (count: number) => { n = count; FakeSource.last!.notify(["s1"]); await tick(10); };
+    await tick(10);
+    const box = screen.getByRole("log", { name: "Session events" });
     expect([box.getAttribute("aria-live"), box.tabIndex]).toEqual(["off", 0]);
-    const said = () => screen.getAllByRole("status").map(e => e.textContent);
-    expect(said()).not.toContain("1 new event");
+    const news = () => box.querySelector<HTMLElement>(".news-n")!;
+    expect([news().getAttribute("role"), news().getAttribute("aria-live")]).toEqual(["status", "polite"]);
+    await arrive(1);
+    expect(news().textContent).toBe(""); // Follow on: nothing said
     box.scrollTop = 100; // no size changed: the scroll is the user's
     fireEvent.scroll(box);
-    fresh = true;
-    FakeSource.last!.notify(["s1"]);
-    await screen.findByRole("button", { name: "Jump to latest ↓" });
-    expect(said()).not.toContain("1 new event"); // not on the tick: only once the count holds still
-    await waitFor(() => expect(said()).toContain("1 new event"), { timeout: 3000 });
-    await userEvent.click(screen.getByRole("button", { name: "Jump to latest ↓" }));
-    expect(said()).not.toContain("1 new event");
+    await arrive(2);
+    const jump = screen.getByRole("button", { name: "Jump to latest ↓" });
+    expect(news().textContent).toBe("1 new event"); // the first count at once, on screen beside the button
+    expect(news().parentElement).toBe(jump.parentElement);
+    await arrive(4);
+    await tick(1000);
+    expect(news().textContent).toBe("1 new event"); // not on each arrival
+    await tick(4000);
+    expect(news().textContent).toBe("3 new events");
+    fireEvent.click(jump);
+    await tick(10);
+    expect([news().textContent, screen.queryByRole("button", { name: "Jump to latest ↓" })]).toEqual(["", null]);
   });
 
   it("keeps following when the box or its rows change size, and puts the newest event back in view", async () => {
@@ -1522,6 +1539,23 @@ describe("LivePage", () => {
     show("?session=" + codex.session_id, { session: () => codex });
     await stream();
     expect(await screen.findByRole("button", { name: /^exec_command/ })).toBeTruthy();
+  });
+
+  it("names a tile by its pin action and gives a screen reader all it shows, pinned or not", async () => {
+    show("?view=wall");
+    const el = await wall(), s = list.sessions.find(x => x.title === "Fast ingest pass while Live is open")!;
+    const tile = within(el).getByRole("button", { name: "Pin Fast ingest pass while Live is open" });
+    const said = () => tile.getAttribute("aria-description")!;
+    expect(tile.getAttribute("aria-pressed")).toBe("false");
+    expect(said()).toMatch(new RegExp(`^Project ${s.project}\\. `));
+    for (const part of ["Latest: Bash: git push origin feat/live-page", `${s.tools} tools`, "1 error", usd(s.cost), `Branch ${s.branch}`, "Claude Code", s.model!])
+      expect(said()).toContain(part);
+    expect(said()).toContain(`Context ${pct(s.context! / s.window!)}`);
+    expect(said()).toContain(stateText(stateNow(s.state, Date.parse(list.now)), Date.parse(list.now)).label.split(" ")[0]!);
+    // Without a title the project names the tile, so the description does not say it again.
+    expect(within(el).getByRole("button", { name: "Pin dotfiles" }).getAttribute("aria-description")).not.toMatch(/^Project/);
+    await userEvent.click(tile);
+    expect([tile.getAttribute("aria-pressed"), within(el).getByRole("button", { name: "Pin Fast ingest pass while Live is open" })]).toEqual(["true", tile]);
   });
 
   it("shows every active session on the wall, pins one beside the tiles, and opens it in the stream", async () => {

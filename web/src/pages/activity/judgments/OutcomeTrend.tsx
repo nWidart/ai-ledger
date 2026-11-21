@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type 
 import type { TrendWeek } from "../../../api";
 import { stackHeights, textScale, tipAt, useWidth } from "../../../components/chart";
 import { ChartTable, DataTable } from "../../../components/DataTable";
+import { modified } from "../../../components/keys";
 import { HowMeasured } from "../../../components/HowMeasured";
 import { dayLabel, num, pct, plural } from "../../../format";
 import { FEW_SESSIONS, FEW_TEXT, isFew, TREND_PARTS, trendCounts, trendText } from "./figures";
@@ -41,7 +42,7 @@ export function OutcomeTrend({ weeks }: { weeks: TrendWeek[] }) {
     if (i === at) place(); else setAt(i);
   };
   const onKey = (ev: KeyboardEvent) => {
-    if (ev.altKey || ev.ctrlKey || ev.metaKey || ev.shiftKey) return; // Alt+Left is history, Ctrl+Home the page: not ours
+    if (modified(ev)) return; // Alt+Left is history, Ctrl+Home the page: not ours
     if (ev.key === "Escape") return setAt(null);
     const step = ({ ArrowLeft: -1, ArrowRight: 1, Home: -Infinity, End: Infinity } as Record<string, number>)[ev.key];
     if (step == null) return;

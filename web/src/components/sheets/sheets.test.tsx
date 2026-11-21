@@ -11,7 +11,7 @@ import usageAll from "../../__fixtures__/usage-all";
 import { EV_TOP, timelineModel } from "./session";
 import { mockApi } from "./testing";
 import { UsageSheets } from "./UsageSheets";
-import { renderApp } from "../../testing";
+import { MODIFIED_KEYS, prevented, renderApp } from "../../testing";
 
 const at = (hash: string) => history.replaceState(null, "", "/usage" + hash);
 const sheet = () => within(document.querySelector("dialog")!);
@@ -40,6 +40,16 @@ describe("SessionSheet", () => {
     expect(evs.map(b => b.textContent)).toEqual([expect.stringMatching(/Edit failed 4× in a row/), expect.stringMatching(/^.*Commit/),
       expect.stringMatching(/Bash, mcp__srv__q failed 2× in a row/)]);
     expect(sheet().getAllByRole("link", { name: "Open the first of these failures in Errors" })[0]!.getAttribute("href")).toBe("/errors?project=foo&ex=t01");
+  });
+
+  it("leaves keys with Alt, Ctrl or Meta to the browser on the timeline, Shift being its longer step", async () => {
+    mockApi({ "/api/session": () => session });
+    at("?session=s1");
+    renderApp(<UsageSheets />);
+    const svg = await sheet().findByRole("group", { name: /^Session timeline/ });
+    expect(prevented(svg, MODIFIED_KEYS.filter(k => !("shiftKey" in k)))).toEqual([]);
+    expect(sheet().queryByText(/^Request 1 of 1/)).toBeNull();
+    expect(prevented(svg, [{ key: "ArrowRight", shiftKey: true }])).toEqual(["Shift+ArrowRight"]);
   });
 
   it("reads requests with the arrow keys and marks a selected event on the timeline", async () => {

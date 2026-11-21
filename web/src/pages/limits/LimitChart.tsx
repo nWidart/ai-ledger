@@ -1,6 +1,7 @@
 import { useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import type { LimitPoint, LimitWindow, PlanChange } from "../../api";
 import { scaleMargins, textScale, useWidth } from "../../components/chart";
+import { modified } from "../../components/keys";
 import { caption, coneCrosses, hasScenario, nearestPoint, paceRates, planName, readPoints, readText, safePace, tipPlace, whenDay, windowName } from "./limits";
 
 const H0 = 168, M0 = { t: 12, r: 10, b: 24, l: 36 }, TICK = 8; // at the default text size
@@ -76,7 +77,7 @@ export function LimitChart({ w, now, events, recent: showRecent = false }: { w: 
     setRead({ i, x: r.left + x(pts[i]!.t) * k, y: r.top + y(pctOf(i)) * k, key: true });
   };
   const onKey = (ev: KeyboardEvent) => {
-    if (ev.altKey || ev.ctrlKey || ev.metaKey || ev.shiftKey) return; // Alt+Left is history, Ctrl+Home the page: not ours
+    if (modified(ev)) return; // Alt+Left is history, Ctrl+Home the page: not ours
     if (ev.key === "Escape") return setRead(null);
     const step = KEYS[ev.key];
     if (step == null) return;

@@ -1,5 +1,6 @@
 import { useMemo, useState, type KeyboardEvent, type PointerEvent } from "react";
 import type { LivePulse } from "../../api";
+import { modified } from "../../components/keys";
 import { plural } from "../../format";
 import { pulseMinutes, pulseSummary, tokensShort, type PulseMinute } from "./live";
 
@@ -26,7 +27,7 @@ export function Pulse({ p }: { p: LivePulse }) {
   if (line) line += `H${W}`;
   const label = `${pulseSummary(p)} Use the left and right arrow keys to read each minute, Escape to dismiss it.`;
   const onKey = (ev: KeyboardEvent) => {
-    if (ev.altKey || ev.ctrlKey || ev.metaKey || ev.shiftKey) return;
+    if (modified(ev)) return; // Alt+Left is history, Ctrl+Home the page: not ours
     if (ev.key === "Escape") return setAt(null);
     const d = ({ ArrowLeft: -1, ArrowRight: 1, Home: -Infinity, End: Infinity } as Record<string, number>)[ev.key];
     if (d == null) return;

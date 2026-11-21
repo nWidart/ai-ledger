@@ -82,8 +82,8 @@ const Ev = memo(function Ev({ e, today, now, text, open, toggle, mark }: {
 
 /** Tool rows a running lane shows, unless the user asks for all of them. */
 const LAST = 5;
-/** How long the count of new events must hold still before it is announced. */
-const NEWS_MS = 1500;
+/** The count of new events changes at most this often, so a busy stream is not read out arrival by arrival. */
+const NEWS_MS = 5000;
 /** Follow: the room left around a row scrolled into view. */
 const PAD = 8;
 /** How far a box can scroll: another reach means the box or what it draws changed size. */
@@ -207,14 +207,17 @@ export function Stream({ s, now, text, follow, setFollow, filters: f, setFilters
     const el = box.current!, { top, reach } = put.current;
     if (follow && reachOf(el) === reach && Math.abs(el.scrollTop - top) > 1) { setFollow(false); setSeenAt(s.events.length); }
   };
-  // One polite status for the rows that came while Follow is off, said once the count has held still, so a busy stream is not
-  // read out tick by tick (the stream itself is a log that stays silent). told is the count the timer last saw settle.
-  const fresh = newer ? s.events.slice(seenAt).filter(isRow).length : 0, [told, setTold] = useState(0);
+  // One polite status, shown beside Jump to latest, for the rows that came while Follow is off (the stream itself is a log that
+  // stays silent). It takes the count at once, then at most once every NEWS_MS: a count that changes sooner waits for the rest
+  // of the interval. told is the count it shows, toldAt when it took it; Follow on empties it.
+  const fresh = newer ? s.events.slice(seenAt).filter(isRow).length : 0, [told, setTold] = useState(0), toldAt = useRef(-Infinity);
+  if (!fresh && told) setTold(0); // set while rendering, so the next count starts from none
   useEffect(() => {
-    const t = setTimeout(() => setTold(fresh), NEWS_MS);
+    if (!fresh) { toldAt.current = -Infinity; return; }
+    const t = setTimeout(() => { toldAt.current = Date.now(); setTold(fresh); }, Math.max(0, toldAt.current + NEWS_MS - Date.now()));
     return () => clearTimeout(t);
   }, [fresh]);
-  const said = fresh && told === fresh ? plural(fresh, "new event") : "";
+  const said = fresh && told ? plural(told, "new event") : "";
   return <>
     <div className="stream-filters" role="group" aria-label="Stream filters">
       <button type="button" aria-pressed={f.errors} aria-describedby={hint} onClick={() => setFilters({ ...f, errors: !f.errors })}>{plural(s.errors, "error")}</button>
@@ -223,7 +226,6 @@ export function Stream({ s, now, text, follow, setFollow, filters: f, setFilters
       <label className="chk"><input type="checkbox" checked={f.quiet} onChange={e => setFilters({ ...f, quiet: e.target.checked })} /> Hide read-only</label>
       {hidden > 0 && <span className="hid muted">{plural(hidden, "row")} hidden</span>}
     </div>
-    <span className="sr" role="status">{said}</span>
     <div className={"stream" + (wide ? " dated" : "")} ref={box} onScroll={onScroll} tabIndex={0} role="log" aria-live="off" aria-label="Session events"><div ref={drawn}>
       {s.truncated && <p className="older muted">Older events are not shown. The <a href={sheet} {...sessionLink(s.session_id)}>session sheet</a> has
         the whole session.</p>}
@@ -242,7 +244,11 @@ export function Stream({ s, now, text, follow, setFollow, filters: f, setFilters
       {hidden > 0 && hidden === held.length && <p className="older muted">{f.errors && !held.some(e => isTool(e) && e.failed)
         ? "No failed calls in the events held." : "The filters hide every row."}</p>}
       {s.state.kind === "you" && <div className="ev"><span className="t" /><span className="note">waiting for your next prompt</span></div>}
-      {newer && <button type="button" className="jump" onClick={() => setFollow(true)}>Jump to latest ↓</button>}
+      {/* Always drawn, so the status is in place before it first speaks; its own politeness inside the silent log. */}
+      <div className="news">
+        {newer && <button type="button" className="jump" onClick={() => setFollow(true)}>Jump to latest ↓</button>}
+        <span className="news-n" role="status" aria-live="polite">{said}</span>
+      </div>
     </div></div>
   </>;
 }

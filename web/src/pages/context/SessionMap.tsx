@@ -11,6 +11,7 @@ import { num, plural, when } from "../../format";
 import { Proj, SourceName } from "./cells";
 import { NEAR_LIMIT, QUADS, quadAt, quadOf, START_LARGE_TOKENS, share, short, windowLabel, type Quad } from "./context";
 import { SOURCE_LABELS } from "../../components/Filters";
+import { modified } from "../../components/keys";
 import "./SessionMap.css";
 
 type SessionsMap = ContextPayload["sessions_map"];
@@ -141,6 +142,7 @@ export function SessionMap({ map, quad, onQuad }: { map: SessionsMap; quad: Quad
     if (b) pos.current = { x: b.left + (x(p.start) / W) * b.width, y: b.top + (y(drawnShare(p)) / W) * b.width };
   };
   const onKey = (ev: KeyboardEvent) => {
+    if (modified(ev)) return; // Alt+Left is history, Ctrl+Home the page: not ours
     // One Escape dismisses the reading and clears the quadrant, so the bars never stay narrowed behind a dismissed reading.
     if (ev.key === "Escape") { setAt(null); if (quad) onQuad(null); return; }
     if (ev.key === "Enter") { if (cur) { ev.preventDefault(); openSessionSheet(cur.session_id); } return; }

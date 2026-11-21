@@ -5,6 +5,7 @@ import { scaleMargins, textScale, useWidth } from "../../components/chart";
 import { ChartTable, DataTable } from "../../components/DataTable";
 import { niceStep, num, pct, plural } from "../../format";
 import { NEAR_LIMIT, share as shareText, short } from "./context";
+import { modified } from "../../components/keys";
 import "./GrowthChart.css";
 
 type Curves = ContextPayload["growth"]["by_project_curves"];
@@ -79,6 +80,7 @@ export function GrowthChart({ curve, projects, share }: { curve: GrowthPoint[]; 
     return best;
   };
   const onKey = (ev: KeyboardEvent) => {
+    if (modified(ev)) return; // Alt+Left is history, Ctrl+Home the page: not ours
     if (ev.key === "Escape") return setAt(null);
     const d = ({ ArrowLeft: -1, ArrowRight: 1, Home: -Infinity, End: Infinity } as Record<string, number>)[ev.key];
     if (d == null) return;

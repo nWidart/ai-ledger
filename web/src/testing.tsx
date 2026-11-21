@@ -5,7 +5,7 @@
 // gcTime is Infinity: Query collects on setTimeout, and under fake timers a collection must not fire between awaits.
 import { QueryClientProvider, type QueryClient } from "@tanstack/react-query";
 import { RouterContextProvider, RouterProvider } from "@tanstack/react-router";
-import { act, render } from "@testing-library/react";
+import { act, fireEvent, render } from "@testing-library/react";
 import type { ReactElement, ReactNode } from "react";
 import type { Status } from "./api";
 import { noteStatus } from "./components/refresh";
@@ -76,3 +76,11 @@ const REFRESHED: Status = { ingesting: false, last_ingest: null, last_stats: nul
 
 /** Refresh ran: the data is invalidated and marked as asked for, so pages replay their landing. */
 export const refreshed = (client: QueryClient) => act(() => { noteStatus(client, REFRESHED, true); });
+
+/** Keys the browser keeps for itself: Alt+Left goes back, Ctrl+Home to the page top, Shift+Space scrolls up. */
+export const MODIFIED_KEYS = [{ key: "ArrowLeft", altKey: true }, { key: "Home", ctrlKey: true }, { key: "End", metaKey: true },
+  { key: "ArrowRight", shiftKey: true }, { key: "Enter", ctrlKey: true }, { key: "Escape", altKey: true }] as const;
+/** Which of the modified keys a key handler on el prevents, as "Alt+ArrowLeft": none, for one that leaves them to the browser. */
+export const prevented = (el: Element, keys: readonly (typeof MODIFIED_KEYS)[number][] = MODIFIED_KEYS): string[] =>
+  keys.filter(k => !fireEvent.keyDown(el, k)).map(k => [..."altKey" in k ? ["Alt"] : [], ..."ctrlKey" in k ? ["Ctrl"] : [],
+    ..."metaKey" in k ? ["Meta"] : [], ..."shiftKey" in k ? ["Shift"] : [], k.key].join("+"));

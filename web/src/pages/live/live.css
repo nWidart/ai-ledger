@@ -131,7 +131,11 @@
 .pg-live .lane .ev { grid-template-columns: var(--twl) minmax(0, 1fr); padding: 2px 6px; }
 .pg-live .compact { text-align: center; font-size: .75rem; color: var(--warning-text); margin: 12px 14px; border-top: 1px dashed var(--warning-text); line-height: 0; }
 .pg-live .compact span { background: var(--surface-1); padding: 0 8px; }
-.pg-live .jump { position: sticky; bottom: 8px; display: block; margin: 8px auto 0; background: var(--accent); color: var(--on-accent); border-color: var(--accent); font-size: .78125rem; box-shadow: var(--shadow-pop); }
+/* Jump to latest and the count of new events, side by side at the foot of the box. Empty (Follow on), the row takes no room. */
+.pg-live .news { position: sticky; bottom: 8px; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 4px 8px; }
+.pg-live .jump { margin-top: 8px; background: var(--accent); color: var(--on-accent); border-color: var(--accent); font-size: .78125rem; box-shadow: var(--shadow-pop); }
+.pg-live .news-n:not(:empty) { margin-top: 8px; padding: 2px 9px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface-1);
+  color: var(--text-primary); font-size: .75rem; box-shadow: var(--shadow-pop); }
 
 /* Status strip: one wrapping row of small items under the stream's head. */
 .pg-live .strip { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; padding: 6px 14px; border-bottom: 1px solid var(--border);

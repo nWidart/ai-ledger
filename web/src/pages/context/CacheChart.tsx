@@ -4,6 +4,7 @@ import { dayAxis, scaleMargins, stackHeights, textScale, tipAt, useWidth } from 
 import { ChartTable, DataTable } from "../../components/DataTable";
 import { dayLabel, dayRange, niceStep, num, pct, plural } from "../../format";
 import { BREAK_CAUSES, causesText, short } from "./context";
+import { modified } from "../../components/keys";
 import "./CacheChart.css";
 
 type Series = ContextPayload["cost"]["series"];
@@ -113,6 +114,7 @@ export function CacheChart({ series }: { series: Series }) {
     return slots[i]!.row ? i : null;
   };
   const onKey = (ev: KeyboardEvent) => {
+    if (modified(ev)) return; // Alt+Left is history, Ctrl+Home the page: not ours
     if (ev.key === "Escape") return setAt(null);
     const d = ({ ArrowLeft: -1, ArrowRight: 1, Home: -Infinity, End: Infinity } as Record<string, number>)[ev.key];
     if (d == null) return;

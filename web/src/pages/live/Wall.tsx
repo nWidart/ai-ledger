@@ -21,6 +21,18 @@ export function StateNote({ st, now }: { st: LiveState; now: number }) {
 /** A session as the page names it: its title, else its project. */
 export const nameOf = (s: Pick<LiveListSession, "title" | "project"> | undefined) => s?.title ?? s?.project ?? "session";
 
+/** What a tile shows, as one description a screen reader reads after the tile's name: the project (with a title, which
+ *  names the tile), the state and its detail, the latest action, the figures, the branch, source and model. The tile's
+ *  name is the action, "Pin" and the session, and aria-pressed says whether it is pinned. */
+export function tileText(s: LiveListSession, st: LiveState, now: number): string {
+  const share = s.context != null && s.window ? s.context / s.window : null, l = s.latest;
+  const latest = !l ? "nothing yet" : l.kind === "prompt" ? "your prompt" : `${l.lane ? "in a subagent, " : ""}${l.tool}${l.summary ? `: ${l.summary}` : ""}`;
+  const figures = [share != null ? `Context ${pct(share)}` : "", `${num(s.tools)} tools`, s.errors > 0 ? plural(s.errors, "error") : "", usd(s.cost)];
+  return [s.title && s.project ? `Project ${s.project}` : "", `${stateText(st, now).label}${st.inferred ? " (inferred)" : ""}: ${stateWhy(st, now)}`,
+    `Latest: ${latest}`, figures.filter(Boolean).join(", "),
+    [s.branch ? `Branch ${s.branch}` : "", SOURCE_LABELS[s.source], s.model ?? ""].filter(Boolean).join(", ")].filter(Boolean).join(". ") + ".";
+}
+
 /** One tile per active session, grouped as the rail is; selecting one pins its stream beside the tiles, or unpins it, so
  *  the tile is a toggle. A tile names its session (data-session), as a rail entry does: LivePage keeps the keyboard focus
  *  on one that changes group. */
@@ -31,7 +43,7 @@ export function Wall({ sessions, now, pins, toggle }: { sessions: LiveListSessio
       const st = stateNow(s.state, now), share = s.context != null && s.window ? s.context / s.window : null, pinned = pins.includes(s.session_id);
       return <li key={s.session_id}>
         <button type="button" data-session={s.session_id} {...subjectAttrs("session", s.session_id)} className={"panel tile st-" + st.kind + (pinned ? " pinned" : "")}
-          onClick={() => toggle(s.session_id)} aria-pressed={pinned} aria-label={`Pin ${nameOf(s)}`} aria-description={stateWhy(st, now)}>
+          onClick={() => toggle(s.session_id)} aria-pressed={pinned} aria-label={`Pin ${nameOf(s)}`} aria-description={tileText(s, st, now)}>
           <span className="top"><ProjectName project={s.project} /><StateTag st={st} now={now} plain /></span>
           {s.title && <span className="ttl" title={s.title}>{s.title}</span>}
           <code className="act">{latestText(s.latest)}</code>

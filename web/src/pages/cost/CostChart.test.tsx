@@ -8,7 +8,7 @@ import { setOrder } from "../../colors";
 import { dayRange, usd } from "../../format";
 import { CostChart } from "./CostChart";
 import type { Stack } from "./cost";
-import { renderApp } from "../../testing";
+import { prevented, renderApp } from "../../testing";
 
 const day = "2026-11-04";
 const base = usage.by_project[0]!;
@@ -76,6 +76,13 @@ describe("cost chart: today so far", () => {
     expect(document.querySelectorAll(".partial")).toHaveLength(1);
     expect(document.querySelector(".partial")!.getAttribute("fill")).toBe("url(#partial-day)");
     expect(screen.getByText("Today so far")).toBeTruthy();
+  });
+
+  it("leaves keys with Alt, Ctrl, Meta or Shift to the browser", () => {
+    show();
+    act(() => chart().focus());
+    expect(prevented(chart())).toEqual([]);
+    expect(screen.queryByRole("tooltip")).toBeNull();
   });
 
   it("labels today 'so far' in the tooltip and the screen-reader text, and yesterday not", () => {
