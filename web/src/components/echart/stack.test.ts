@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { CustomSeriesRenderItemAPI, CustomSeriesRenderItemParams } from "echarts";
 import { stackRects, stackSeries, type StackEnv, type StackRect } from "./stack";
+import type { ChartEnv } from "./tokens";
+
+// Type-level: a chart passes its own `ChartEnv` as the stack's environment; tsc fails here if that stops holding.
+export const chartEnvIsStackEnv = (e: ChartEnv): StackEnv => e;
 
 const env = (over: Partial<StackEnv> = {}): StackEnv => ({
   color: s => `resolved(${s})`, ink: { text: "ink-text", surface: "ink-surface" }, forced: false, motion: false, ...over,
