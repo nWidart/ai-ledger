@@ -190,8 +190,9 @@ dialog.sheet::backdrop { background: var(--scrim); }
   /* The frame above outranks the pressure segments' own focus ring; restore it in a system color. */
   .pg-context .pressure .band:focus-visible { outline: 2px solid Highlight; outline-offset: 2px; }
   /* Last 24 h pace, pressed: the system selection pair, as a pressed segment, so it reads as pressed with the focus ring too
-     (the theme's inset shadow is dropped in this mode). The ring sits outside, on the page color. */
-  .pg-limits .lim-toggle[aria-pressed="true"] { forced-color-adjust: none; background: Highlight; color: HighlightText; border-color: Highlight; box-shadow: none; }
+     (the theme's inset shadow is dropped in this mode). The ring sits outside, on the page color. `:root` outranks
+     limits.css's pressed rule, which the build places after this file. */
+  :root .pg-limits .lim-toggle[aria-pressed="true"] { forced-color-adjust: none; background: Highlight; color: HighlightText; border-color: Highlight; box-shadow: none; }
   .pg-limits .lim-toggle[aria-pressed="true"]:focus-visible { outline-color: CanvasText; }
   .pg-limits .hs-bar i { forced-color-adjust: none; }
   .pg-limits .hk { forced-color-adjust: none; outline: 1px solid CanvasText; }
