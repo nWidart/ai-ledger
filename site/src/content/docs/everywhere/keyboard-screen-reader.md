@@ -18,13 +18,15 @@ Every page works from the keyboard and with a screen reader. This page lists the
 | Home, End | A focused chart | Read the first or last point. |
 | Enter (Space on Errors) | A focused chart that selects a bucket | Select or clear the point you are reading. |
 
-Charts with this keyboard reading: the Activity work chart and hours grid, the Cost chart, the Errors chart, the Context charts and the Limits chart. A tooltip that a chart opens closes with Esc without changing the selected point.
+Charts with this keyboard reading: the Activity work chart and hours grid, the outcome trend of Activity's Judgments view, the Cost chart, the Errors chart, the Context charts and the Limits chart. A tooltip that a chart opens closes with Esc without changing the selected point.
 
 ## Page structure
 
 - The first Tab stop on every page is a **Skip to content** link, visible only while it has focus. Enter moves focus into the page's main content, past the navigation.
 - Each page holds its content in one `main` landmark, after the navigation. Its heading and tables are inside it.
-- On a narrow window (about 760px and below, or zoomed in), a page chooser button replaces the tabs. It is named for the current page, or "Pages" on the Project page, and opens a list of the pages. Esc closes the list and returns focus to the button.
+- The navigation's tabs are in two groups, each named for a screen reader: **Now** (Live, Limits) and **Review** (Activity, Cost, Context, Errors).
+- On a narrow window (about 780px and below, or zoomed in), a page chooser button replaces the tabs. It is named for the current page, or "Pages" on the Project page, and opens a list of the pages in the same two groups. Esc closes the list and returns focus to the button.
+- Activity's view switch is a group named "Activity view" with two buttons, Overview and Judgments; the pressed one is the view shown. After a switch, focus stays on the switch.
 - After you pick a page in the navigation, focus moves to that page's heading. Loading a page directly, changing a filter, and browser Back and Forward do not move focus.
 - A section or field you jump to, or that takes focus, stays clear of the sticky navigation and the section index.
 - A drawer's title is a heading in the page outline, and its toggle is a button.
@@ -39,7 +41,10 @@ Charts with this keyboard reading: the Activity work chart and hours grid, the C
 | **Refresh** | The button stays focusable while a refresh runs and exposes `aria-disabled`. A second press does nothing. |
 | Ingest result | Only the result of a manual refresh is announced: "Refreshed: 5 new lines" (an example), "Refreshed: nothing new", or the failure. A timed ingest is not announced. |
 | A page that is loading | Its content area is `aria-busy`. Nothing about loading is announced. Only the result of an action, such as a failed refresh, is announced. |
-| Limits tab | The tab's name reads "Limits alert: *sentence*" while a window is at its limit, forecast to run out, or at 90% or more. |
+| Live tab | The tab's name adds the sessions that wait for you: "Live 2 sessions waiting for you". With none, it reads "Live". The badge's number itself is hidden from a screen reader. |
+| Limits tab | The tab's name adds what its pill shows: "Limits Highest open window: Codex weekly at 42%" ("at an estimated 42%" for an estimate). While a window is at its limit, forecast to run out, or at 90% or more, it reads "Limits alert: *sentence*". The alert's sentence is also announced once, when the alert appears. |
+| Page chooser | Its name adds "Limits alert" while a window is in alert, and the sessions that wait for you: "Cost, Limits alert, 2 sessions waiting for you". |
+| Judgments button | With Codex as the only source it is unavailable (`aria-disabled`), stays focusable, and is described by the reason shown beside it. |
 | Theme button | Its name is "Theme: system", "Theme: light" or "Theme: dark". Each press steps System, Light, Dark, then System again. |
 | Chart | A `group` with a label that says what the chart shows and how to read it, with a live region that reads the point you move to. |
 | Toggletip | A button named for the term it explains. It exposes `aria-expanded`, opens on activation (and on hover), and closes on Esc, on a second activation and on a click outside it. |

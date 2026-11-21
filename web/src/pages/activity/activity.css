@@ -1,9 +1,16 @@
 /* Activity (/usage): every rule sits under .pg-activity, since every page's CSS is loaded at once. */
 
-/* Briefing: the period's work as the page heading, then filters */
-.pg-activity .top { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px 32px; align-items: end; margin-bottom: 20px; }
-.pg-activity .top-side { display: flex; flex-direction: column; align-items: flex-end; gap: 12px; min-width: 0; max-width: 600px; }
-.pg-activity .top-side .filters { justify-content: flex-end; }
+/* The view switch, Overview and Judgments, over the heading of both views (the Judgments view's main is .pg-judgments). Beside
+   it: why Judgments cannot be picked, or the model-judged tag. */
+:is(.pg-activity, .pg-judgments) .views { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; margin: 0 0 14px; }
+:is(.pg-activity, .pg-judgments) .views-why { color: var(--text-secondary); font-size: .8125rem; }
+/* Not available: still focusable, so its reason can be reached; it reads as off and does nothing. */
+:is(.pg-activity, .pg-judgments) .views .seg button[aria-disabled=true] { color: var(--text-muted); cursor: not-allowed; text-decoration: line-through; }
+
+/* Briefing: the period's work as the page heading, then filters. Both views lay their header out the same way. */
+:is(.pg-activity, .pg-judgments) .top { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px 32px; align-items: end; margin-bottom: 20px; }
+:is(.pg-activity, .pg-judgments) .top-side { display: flex; flex-direction: column; align-items: flex-end; gap: 12px; min-width: 0; max-width: 600px; }
+:is(.pg-activity, .pg-judgments) .top-side .filters { justify-content: flex-end; }
 .pg-activity .lede { margin: 0; max-width: 26ch; font-size: clamp(1.625rem, 4.2vw, 2.625rem); line-height: 1.12;
   font-weight: 400; letter-spacing: -.025em; text-wrap: balance; color: var(--text-secondary); }
 .pg-activity .lede:focus { outline: none; }
@@ -19,15 +26,15 @@
 .pg-activity .sub { color: var(--text-muted); font-size: .8125rem; margin: 8px 0 0; }
 /* Stack before the filters squeeze the heading into a narrow column. */
 @media (max-width: 65em) {
-  .pg-activity .top { grid-template-columns: minmax(0, 1fr); align-items: start; }
-  .pg-activity .top-side { max-width: none; align-items: stretch; }
-  .pg-activity .top-side .filters { justify-content: flex-start; }
+  :is(.pg-activity, .pg-judgments) .top { grid-template-columns: minmax(0, 1fr); align-items: start; }
+  :is(.pg-activity, .pg-judgments) .top-side { max-width: none; align-items: stretch; }
+  :is(.pg-activity, .pg-judgments) .top-side .filters { justify-content: flex-start; }
 }
 .pg-activity h2 { font-size: 1rem; font-weight: 600; margin: 0; letter-spacing: -.005em; }
 .pg-activity .pending { margin: -12px 0 12px; min-height: 1.5em; color: var(--text-secondary); font-size: .8125rem; }
 .pg-activity .pending:empty { visibility: hidden; }
-.pg-activity.loading > :not(.top):not(.secidx) { opacity: .55; }
-@media (prefers-reduced-motion: no-preference) { .pg-activity > :not(.top):not(.secidx) { transition: opacity .2s; } }
+.pg-activity.loading > :not(.top):not(.views):not(.secidx) { opacity: .55; }
+@media (prefers-reduced-motion: no-preference) { .pg-activity > :not(.top):not(.views):not(.secidx) { transition: opacity .2s; } }
 
 
 /* Work vitals: seven figures in one ruled strip, then rows of four, then of two (the odd last one spans) */

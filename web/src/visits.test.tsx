@@ -5,6 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import errors from "./__fixtures__/errors";
 import insights from "./__fixtures__/insights";
+import limits from "./__fixtures__/limits";
 import usage from "./__fixtures__/usage";
 import { navigate, setSearch } from "./url";
 import { makeQueryClient } from "./queryClient";
@@ -16,6 +17,7 @@ const answers = (u: URL, now: unknown) => {
   switch (u.pathname) {
     case "/api/usage": return now;
     case "/api/insights": return insights;
+    case "/api/limits": return limits;
     case "/api/errors": return errors;
     case "/api/errors/marks": return { fixes: {}, muted: [] };
     case "/api/status": return status;
@@ -49,8 +51,8 @@ const link = (name: string) => screen.getByRole("link", { name });
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 
 describe("Keep page data between visits", () => {
-  // Cost shares Activity's answer (the same key), so the other page is Insights, which does not: there the refetch starts on return.
-  describe.each(["Cost", "Insights"])("with %s between", other => {
+  // Cost shares Activity's answer (the same key), so the other page is Limits, which does not: there the refetch starts on return.
+  describe.each(["Cost", "Limits"])("with %s between", other => {
     const cls = "pg-" + other.toLowerCase();
 
     it("shows Activity's previous figures at once after an ingest, and the new ones when they arrive", async () => {
@@ -100,7 +102,7 @@ describe("Keep page data between visits", () => {
 
   // Last in the file: its pages' chunks are loaded first (import), so fake timers need not wait for a dynamic import.
   it("drops an answer no view showed for five minutes, so Cost loads anew after ten minutes away and not after four", async () => {
-    await Promise.all([import("./pages/cost/CostPage"), import("./pages/insights/InsightsPage")]);
+    await Promise.all([import("./pages/cost/CostPage"), import("./pages/activity/ActivityPage")]);
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval", "Date"] });
     const tick = (ms = 20) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
     const go = async (href: string) => { act(() => navigate(href)); await tick(); };
@@ -112,18 +114,21 @@ describe("Keep page data between visits", () => {
     expect(lede()).not.toMatch(/^Loading/);
     expect(s.to("/api/usage").length).toBe(1);
 
-    await go("/insights?range=30");
+    // Activity's Judgments view reads another answer, and the shell's sheet host keeps none alive.
+    await go("/usage?range=30&view=judgments");
     await tick(4 * 60_000);
     await go("/cost?range=30");
     expect(lede()).not.toMatch(/^Loading/); // four minutes: kept, shown at once
     expect(s.to("/api/usage").length).toBe(1);
 
-    await go("/insights?range=30");
+    await go("/usage?range=30&view=judgments");
     await tick(10 * 60_000);
     hold = true;
     await go("/cost?range=30");
     expect(lede()).toBe("Loading cost…"); // ten minutes: a first visit
     expect(s.to("/api/usage").length).toBe(2);
+    // Leaving the Judgments view never draws Overview: no request of its own was started and abandoned on the way.
+    expect(s.to("/api/usage").some(r => r.signal?.aborted)).toBe(false);
   });
 });
 

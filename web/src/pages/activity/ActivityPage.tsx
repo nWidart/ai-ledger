@@ -9,15 +9,16 @@ import { ProjectDot } from "../../components/ProjectDot";
 import { SectionIndex } from "../../components/SectionIndex";
 import type { SortBy } from "../../components/Sort";
 import { Vs } from "../../components/sheets/ToolSheet";
-import { UsageSheets } from "../../components/sheets/UsageSheets";
 import { PageSkeleton } from "../../components/PageSkeleton";
 import { useLanding } from "../../components/useLanding";
 import { dayLabel, dur, num, pct, plural } from "../../format";
-import { setSearch, useSearchOf, useView } from "../../url";
+import { setSearch, usePathname, useSearchOf, useView } from "../../url";
 import { queries } from "../../queries";
 import { useApi } from "../../useApi";
+import { Judgments } from "./judgments/Judgments";
 import { SessionsDrawer, type SessFilter } from "./SessionsDrawer";
-import { validateSearch, type ActivitySearch } from "./search";
+import { NO_JUDGMENTS_KEYS, validateSearch, type ActivitySearch } from "./search";
+import { ViewSwitch } from "./ViewSwitch";
 import { ExtDrawer, LoopsDrawer, ProjectsDrawer, TestsDrawer, ToolsDrawer, type RowScope, type ToolKey } from "./tables";
 import { firstWorkDay, flakyTools, shortTool, type WorkMetric } from "./work";
 import { WorkPanel } from "./WorkChart";
@@ -106,8 +107,26 @@ function Vitals({ d }: { d: UsagePayload }) {
   </section>;
 }
 
-/** Activity (/usage): what the coding agents did (all of them, or the one the source filter picks) and where they struggled. */
+/** Activity (/usage): two views of the same sessions, picked by the view switch and kept in the URL. Overview is what the
+ *  coding agents did and where they struggled, measured; Judgments (view=judgments) is how /insights judged them. A Codex-only
+ *  view has no judgments, so it always shows Overview, with the switch saying why. */
 export function ActivityPage() {
+  const [h] = useView(), inUrl = useSearchOf(validateSearch, s => s.view === "judgments");
+  // The URL changes before the route does. While the app leaves Activity for another page, whose URL names no view, the view
+  // stays the one shown: leaving Judgments must not draw Overview for a moment, and start its request only to abandon it.
+  // Kept as state set while rendering: the usual way to hold the last value of something derived.
+  const here = usePathname() === "/usage", [last, setLast] = useState(inUrl);
+  if (here && last !== inUrl) setLast(inUrl);
+  const asked = here ? inUrl : last, codex = h.source === "codex", judgments = asked && !codex;
+  // A link to the judgments of Codex sessions opens Overview: the URL drops the view, so a copied link says what the page shows.
+  useEffect(() => { if (here && asked && codex) setSearch({ view: null, ...NO_JUDGMENTS_KEYS }, { push: false }); }, [here, asked, codex]);
+  const views = <ViewSwitch view={judgments ? "judgments" : "overview"} codex={codex} />;
+  return judgments ? <Judgments views={views} /> : <Overview views={views} />;
+}
+
+/** Activity's Overview: what the coding agents did (all of them, or the one the source filter picks) and where they struggled.
+ *  views: the page's view switch, drawn over the heading. */
+function Overview({ views }: { views: ReactNode }) {
   const [h] = useView();
   const search = useSearchOf(validateSearch);
   const want: View = viewOf(h), url = usageUrl(want), viewKey = url;
@@ -150,10 +169,13 @@ export function ActivityPage() {
 
   return (
     <main id="content" className={cls} ref={wrap} aria-busy={loading || undefined}>
-      {first ? <PageSkeleton title="Loading activity…" /> : <header className="top sect" id="overview">
-        <div>{d ? <Lede d={d} before={before} /> : <h1 className="lede" id="lede" tabIndex={-1}>Activity could not be loaded.</h1>}</div>
-        <div className="top-side"><Filters projects={d?.projects ?? []} automated /></div>
-      </header>}
+      {first ? <PageSkeleton title="Loading activity…" /> : <>
+        {views}
+        <header className="top sect" id="overview">
+          <div>{d ? <Lede d={d} before={before} /> : <h1 className="lede" id="lede" tabIndex={-1}>Activity could not be loaded.</h1>}</div>
+          <div className="top-side"><Filters projects={d?.projects ?? []} automated /></div>
+        </header>
+      </>}
       {error && <div className="banner" role="alert"><b>Could not load {viewName(want)} ({error.message}).{d ? ` Still showing ${viewName(d)}.` : ""}</b>{" "}
         <button type="button" className="linkish" ref={retryBtn} onClick={retry}>Retry</button></div>}
       <p className="pending">{loading && d ? `Loading ${viewName(want)}…` : ""}</p>
@@ -179,7 +201,6 @@ export function ActivityPage() {
           <HoursDrawer cells={d.work_hours} />
         </div>
       </>}
-      <UsageSheets data={d} />
     </main>
   );
 }

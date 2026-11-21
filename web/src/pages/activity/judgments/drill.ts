@@ -1,10 +1,10 @@
-// The drill-down filters of the Insights session list. Each is one value in the URL: a raw category name, or for goalf and
+// The drill-down filters of the Judgments session list. Each is one value in the URL: a raw category name, or for goalf and
 // frf a family key, whose labels the payload names (the client never re-implements the grouping rules). The list and the chips
 // read them here.
-import { label, outcomeLabel } from "../../components/facets";
-import { jumpTo } from "../../components/SectionIndex";
-import type { InsightSession, InsightsPayload } from "../../api";
-import { currentRaw, setSearch } from "../../url";
+import { label, outcomeLabel } from "../../../components/facets";
+import { jumpTo } from "../../../components/SectionIndex";
+import type { InsightSession, InsightsPayload } from "../../../api";
+import { currentRaw, setSearch } from "../../../url";
 import { validateSearch, type InsightsSearch } from "./search";
 
 export type DrillKind = "outcome" | "help" | "goal" | "goalf" | "fr" | "frf";

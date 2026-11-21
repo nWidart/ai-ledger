@@ -4,7 +4,7 @@ import { viewOf, type View } from "../../api";
 import { DEFAULT_RANGE, SHARED_KEYS, applyPatch, formatSearch, parseView, rootState, sheetKey, validateRoot } from "../../url";
 import { SOURCE_LABELS } from "../Filters";
 import { PAGES } from "../Nav";
-import { PROJECT_PAGE, isFilter, rangeName, sourceLabel, type Chip, type Command, type FilterKind } from "./suggest";
+import { JUDGMENTS_PAGE, PROJECT_PAGE, isFilter, rangeName, sourceLabel, type Chip, type Command, type FilterKind } from "./suggest";
 
 /** search: every key of the current URL, as written (page-only ones too). */
 export interface Here { path: string; search: Readonly<Record<string, string>> }
@@ -25,14 +25,14 @@ export interface Resolved {
   view: View;
 }
 
-/** Pages that mount UsageSheets, so they host the project, tool, MCP server, skill and session sheets. */
-export const HOSTS_SHEETS = ["/usage", "/cost", "/context", "/errors", "/insights", "/live", PROJECT_PAGE];
-const hosts = (path: string) => HOSTS_SHEETS.includes(path);
 // Errors' view keys (pages/errors/view.ts): with none of them in the URL, Errors shows its saved view instead.
 const ERRORS_KEYS = ["project", "range", "source", "sub", "noise", "gran", "cat", "ex"];
 const HASH_KEY: Record<FilterKind, string> = { project: "project", source: "source", range: "range", automated: "auto" };
-const pageLabel = (path: string) => (path === PROJECT_PAGE ? "Project" : PAGES.find(p => p.path === path)?.label ?? path);
+// A page as a page chip names it: a path, or JUDGMENTS_PAGE for Activity's Judgments view, which is a destination of its own.
+const pageLabel = (page: string) => (page === PROJECT_PAGE ? "Project" : page === JUDGMENTS_PAGE ? "Judgments" : PAGES.find(p => p.path === page)?.label ?? page);
 const isPage = (path: string) => path === PROJECT_PAGE || PAGES.some(p => p.path === path);
+/** The page a location shows; a path that is no page reads as Activity. */
+const pageOf = (here: Here) => (here.path === "/usage" && here.search.view === "judgments" ? JUDGMENTS_PAGE : isPage(here.path) ? here.path : "/usage");
 
 /** Chips for the filters the URL sets: project, source, range (only when the URL names one) and the automated toggle. */
 export function prefill(search: Readonly<Record<string, string>>): Chip[] {
@@ -46,12 +46,13 @@ export function prefill(search: Readonly<Record<string, string>>): Chip[] {
 
 /**
  * Where the chips lead from here. Filters hold one value per key and sheets and commands one slot each: a later chip
- * replaces an earlier one. A page chip sets the page and a category chip sets Errors, the last one winning; a sheet the
- * winning page cannot host is dropped. With no page, a sheet stays on a page that hosts it, else goes to Activity.
+ * replaces an earlier one. A page chip sets the page and a category chip sets Errors, the last one winning. Every page hosts
+ * the project, tool and session sheets (the app's shell mounts them), so such a sheet opens on the winning page, or stays on
+ * the current one with no page chip; an error type's sheet is Errors' own, and a page chip for another page drops it.
  */
 export function resolve(chips: readonly Chip[], here: Here): Resolved {
   const status: ChipStatus[] = chips.map(() => ({ state: "applied" }));
-  const cur = isPage(here.path) ? here.path : "/usage";
+  const cur = pageOf(here);
   const slot = new Map<string, number>(), setters: number[] = [];
   chips.forEach((c, i) => {
     const key = isFilter(c.kind) ? c.kind : c.kind === "command" ? "command" : c.kind === "page" ? null : "sheet";
@@ -68,19 +69,21 @@ export function resolve(chips: readonly Chip[], here: Here): Resolved {
   }
   let si = slot.get("sheet");
   const sheet = si == null ? null : chips[si]!;
-  if (sheet && (sheet.kind === "category" ? chosen !== "/errors" : chosen != null && !hosts(chosen))) {
+  if (sheet?.kind === "category" && chosen !== "/errors") {
     status[si!] = { state: "dropped" };
     si = undefined;
   }
   const open = si == null ? null : chips[si]!;
-  const path = chosen ?? (open && !hosts(cur) ? "/usage" : cur);
+  const page = chosen ?? cur, path = page === JUDGMENTS_PAGE ? "/usage" : page;
   // The session sheet's key on the page: on Live, session names the session the stream follows (url.ts sheetKey).
   const sk = sheetKey(path);
 
   // The URL: staying keeps every key, moving carries the shared ones (as the nav does); then the filters and the sheet.
+  // Activity's two views are two pages here: a move between them leaves the other view's own keys behind.
   let raw: Record<string, string> = {};
-  if (path === cur) raw = { ...here.search };
+  if (page === cur) raw = { ...here.search };
   else for (const k of SHARED_KEYS) if (here.search[k]) raw[k] = here.search[k]!;
+  if (page === JUDGMENTS_PAGE) raw.view = "judgments";
   const value = (k: FilterKind) => { const i = slot.get(k); return i == null ? null : chips[i]!.value; };
   raw = applyPatch(raw, Object.fromEntries((Object.keys(HASH_KEY) as FilterKind[]).map(k => [HASH_KEY[k], value(k)])));
   // A new project or source closes the sheets of the old one. On Live it also drops the followed session, unless the same commit
@@ -103,9 +106,9 @@ export function resolve(chips: readonly Chip[], here: Here): Resolved {
   let action = "";
   if (open) {
     action = open.kind === "category" ? `open Errors on ${open.label}` : open.kind === "session" ? `open session ${open.label}` : `open ${open.label} inspector`;
-    if (open.kind !== "category" && path !== cur) action += ` on ${pageLabel(path)}`;
-  } else if (path !== cur) action = `open ${pageLabel(path)}`;
-  else if (moved) action = `update ${pageLabel(path)}`;
+    if (open.kind !== "category" && page !== cur) action += ` on ${pageLabel(page)}`;
+  } else if (page !== cur) action = `open ${pageLabel(page)}`;
+  else if (moved) action = `update ${pageLabel(page)}`;
   if (command === "copy") action = action ? `${action}, then copy its link` : "copy the link to this view";
   if (command === "refresh") action = action ? `${action}, then refresh data` : "refresh data";
   const parts = [action ? `Enter: ${action}` : "Enter: close, nothing changed"];
@@ -115,6 +118,8 @@ export function resolve(chips: readonly Chip[], here: Here): Resolved {
     parts.push(st.range ? rangeName(st.range) : "all time");
     if (st.auto) parts.push(path === "/errors" ? "Errors always includes automated sessions" : "automated sessions");
   }
-  chips.forEach((c, i) => { if (status[i]!.state === "dropped") parts.push(`${c.label} not applied on ${pageLabel(path)}`); });
+  // Judgments has none for Codex alone: Activity then shows Overview, and says why on its view switch.
+  if (page === JUDGMENTS_PAGE && st.source === "codex" && action) parts.push("Codex has no judgments: Overview opens");
+  chips.forEach((c, i) => { if (status[i]!.state === "dropped") parts.push(`${c.label} not applied on ${pageLabel(page)}`); });
   return { path, raw, href, moved, changed: moved || command != null, command, footer: parts.join(" · "), status, view: viewOf(st) };
 }

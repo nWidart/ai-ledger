@@ -8,7 +8,7 @@ import { setSearch } from "./url";
 
 // The tabs; the Project page has none and needs a project, so it has tests of its own below.
 const PATHS = (Object.keys(ROUTES) as (keyof typeof ROUTES)[]).filter(p => p !== "/project");
-const TABS: Record<string, string> = { "/usage": "Activity", "/cost": "Cost", "/context": "Context", "/errors": "Errors", "/limits": "Limits", "/insights": "Insights", "/live": "Live" };
+const TABS: Record<string, string> = { "/usage": "Activity", "/cost": "Cost", "/context": "Context", "/errors": "Errors", "/limits": "Limits", "/live": "Live" };
 const status = { ingesting: false, last_ingest: null, last_change: null, last_stats: null, error: null, counts: {}, interval: 60, project_order: [] };
 const here = () => location.pathname + location.search + location.hash;
 const title = (path: keyof typeof ROUTES) => ROUTES[path].title;
@@ -59,7 +59,7 @@ describe("router", () => {
       "/context?project=foo&range=90&tip=t1",
       "/errors?project=foo&range=0&source=codex&sub=0&noise=0&gran=week&at=2026-11-03&etool=Bash&cat=x",
       "/limits?project=foo&range=30",
-      "/insights?project=foo&range=90&outcome=achieved&friction=1&help=h&goal=g&fr=f&goalf=gf&frf=ff",
+      "/usage?project=foo&range=90&view=judgments&outcome=achieved&friction=1&help=h&goal=g&fr=f&goalf=gf&frf=ff&session=s1",
       "/live?source=claude&view=wall",
     ];
     it.each(urls)("is unchanged by loading %s", async url => {
@@ -80,7 +80,7 @@ describe("router", () => {
   });
 
   describe("a URL with values that are not valid", () => {
-    const urls = ["/usage?range=abc&near=0&day=2026-02-30", "/context?range=12&auto=yes", "/insights?range=-1&friction=0", "/live?view=grid", "/cost?range=7.5"];
+    const urls = ["/usage?range=abc&near=0&day=2026-02-30", "/context?range=12&auto=yes", "/usage?range=-1&view=judgments&friction=0", "/usage?view=nosuchview", "/live?view=grid", "/cost?range=7.5"];
     it.each(urls)("opens the page with %s, and leaves the URL as written", async url => {
       open(url);
       await loaded(url.split("?")[0] as keyof typeof ROUTES);
@@ -96,6 +96,45 @@ describe("router", () => {
     await loaded("/usage");
     expect(here()).toBe(to);
     expect(history.length).toBe(length);
+  });
+
+  // /insights was a page before it became Activity's Judgments view: its links must keep opening what they named.
+  describe("the old /insights address", () => {
+    const cases: [string, string][] = [
+      ["/insights", "/usage?view=judgments"],
+      ["/insights?project=foo&range=7&source=claude&auto=1", "/usage?project=foo&range=7&source=claude&auto=1&view=judgments"],
+      ["/insights?range=7&outcome=not_achieved&friction=1&frf=tooling", "/usage?range=7&view=judgments&outcome=not_achieved&friction=1&frf=tooling"],
+      ["/insights?project=foo&session=abc", "/usage?project=foo&view=judgments&session=abc"],
+      ["/insights#project=foo&range=30", "/usage?project=foo&range=30&view=judgments"], // the earlier hash form, too
+    ];
+    it.each(cases)("opens %s as the Judgments view, with every key kept and no new entry", async (old, now) => {
+      const { length } = open(old);
+      await waitFor(() => expect(here()).toBe(now));
+      await loaded("/usage");
+      await waitFor(() => expect(document.querySelector("main.pg-judgments")).toBeTruthy());
+      expect(within(screen.getByRole("navigation", { name: "Dashboards" })).getByRole("link", { name: "Activity" }).getAttribute("aria-current")).toBe("page");
+      expect(here()).toBe(now);
+      expect(history.length).toBe(length);
+    });
+
+    it("opens Overview for a Codex-only link, with the view dropped from the URL and Judgments not available", async () => {
+      const { length } = open("/insights?range=7&source=codex&outcome=not_achieved");
+      await waitFor(() => expect(here()).toBe("/usage?range=7&source=codex"));
+      await waitFor(() => expect(document.querySelector("main.pg-activity")).toBeTruthy());
+      expect(document.querySelector("main.pg-judgments")).toBeNull();
+      const judgments = await screen.findByRole("button", { name: "Judgments" });
+      expect(judgments.getAttribute("aria-disabled")).toBe("true");
+      expect(history.length).toBe(length);
+    });
+
+    it("opens an old link followed while the app is open, as one entry", async () => {
+      const { router } = open("/cost?range=14");
+      await loaded("/cost");
+      const length = history.length;
+      await act(() => router.navigate({ to: "/insights", search: { range: "14", outcome: "not_achieved" } } as never));
+      await waitFor(() => expect(here()).toBe("/usage?range=14&view=judgments&outcome=not_achieved"));
+      expect(history.length).toBe(length + 1);
+    });
   });
 
   describe("the old hash form", () => {

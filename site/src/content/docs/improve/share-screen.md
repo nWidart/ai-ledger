@@ -36,7 +36,7 @@ The table lists what each page can show with **Full text** off. Each row is abou
 | --- | --- | --- | --- |
 | Every page | Project names in the picker list, the [command palette](/ai-ledger/everywhere/command-palette/), tables, chart keys and the **Search** button; the URL | A project name can name a client or private work. | [Narrow every page to one project](#narrow-every-page-to-one-project) |
 | Cost, Activity, and the filters of Activity, Context, Project and Live | The path of the app's data folder: Cost's **Unpriced models** and **Prices file ignored** banners, Activity's **Automated projects file ignored** banner, and the "Add more projects in …" line of the **Include automated sessions** help | The path holds your user name, such as `/Users/<name>/Library/Application Support/ai-ledger/`. The **Unpriced models** banner shows, unfolded, whenever a model has no price, such as a new model. | [Hide paths to your data folder](#hide-paths-to-your-data-folder) |
-| Activity, Cost, Context, Insights, Project | Session titles. When the agent wrote no title, the title is made from the session's first prompt. | A first prompt can quote a secret, a person or a client. | [Narrow every page to one project](#narrow-every-page-to-one-project) |
+| Activity (both views), Cost, Context, Project | Session titles. When the agent wrote no title, the title is made from the session's first prompt. | A first prompt can quote a secret, a person or a client. | [Narrow every page to one project](#narrow-every-page-to-one-project) |
 | Activity | **Failed test runs**: the **Command** column. The Tool, MCP server and skill sheets: the input patterns and the recent calls. | A command can hold a token or a path. | [Close sheets and keep drawers folded](#close-sheets-and-keep-drawers-folded) |
 | Any page, session sheet | **Source** (the first prompt, folded), **Commits** (the commit commands, folded), the **Directory** and the **Resume** command (not folded), and the model's summary when the session has an `/insights` judgment | The directory and the resume command show your home folder path, which holds your user name. | [Close sheets and keep drawers folded](#close-sheets-and-keep-drawers-folded) |
 | Cost | **Most expensive sessions** and **Project spend and change**; the plan gauge, which names your plan and its price | Session titles and project names. The CSV and copy buttons put the same names on the clipboard. | [Narrow every page to one project](#narrow-every-page-to-one-project) |
@@ -44,7 +44,7 @@ The table lists what each page can show with **Full text** off. Each row is abou
 | Project | **Largest overhead items**: MCP servers, memory files and skills by name, with each memory file's path on hover | Paths and server names. | [Close sheets and keep drawers folded](#close-sheets-and-keep-drawers-folded) |
 | Errors | Each example: the tool input, the error text and the tool's result. Incidents and **By message** rows. | An error example can quote a secret from a command or its output. No toggle hides it. | [Keep Errors at the type table](#keep-errors-at-the-type-table) |
 | Limits | **What used this window**: the top three projects of each window | It ignores the project filter, so it can name other projects. | [Narrow every page to one project](#narrow-every-page-to-one-project) |
-| Insights | Session cards: the model's brief summary, and the **Friction detail** (folded) | The model's words can repeat what you asked. | [Close sheets and keep drawers folded](#close-sheets-and-keep-drawers-folded) |
+| Activity, Judgments view | Session cards: the model's brief summary, and the **Friction detail** (folded) | The model's words can repeat what you asked. | [Close sheets and keep drawers folded](#close-sheets-and-keep-drawers-folded) |
 | Live, **Full text** off | Tool inputs up to 300 characters, so a short command shows whole; the error text of a failed call; subagent descriptions; git branches; titles that the agent or `/rename` wrote | A short command can hold a token. | [Turn off Full text on Live](#turn-off-full-text-on-live) |
 | Live, **Full text** on | Prompts, replies and tool results as written, and titles made from first prompts | Everything, secrets included. | [Turn off Full text on Live](#turn-off-full-text-on-live) |
 
@@ -68,7 +68,7 @@ http://127.0.0.1:8765/usage?project=<name>&range=7
 
 Replace `<name>` with the project's name as the picker shows it. `/usage` is Activity, and `range=7` is the last 7 days. The navigation carries the filter to each page you open next.
 
-- Before you share, read that project's session titles in Activity's **Sessions** drawer, and its session cards on Insights. If one is not safe to show, do not show the pages that list session titles: Activity, Cost, Context, Insights and Project.
+- Before you share, read that project's session titles in Activity's **Sessions** drawer, and its session cards in Activity's Judgments view. If one is not safe to show, do not show the pages that list session titles: Activity, Cost, Context and Project.
 - Leave **Include automated sessions** off.
 - Do not show Cost if your plan's name and price are private: the plan gauge names them.
 - Do not open the project picker or the command palette while you share: both list your other projects.
@@ -78,7 +78,7 @@ Replace `<name>` with the project's name as the picker shows it. `/usage` is Act
 ### Close sheets and keep drawers folded
 
 1. Close every sheet with its **✕**, or press Escape. Check that the URL has no `session=`, `inspect=`, `tool=`, `mcp=` or `skill=`. On Live, `session=` names the session in the stream, not a sheet.
-2. Keep these folded: Activity's **Failed test runs**, Context's **Largest tool results**, the Project page's **Largest overhead items**, and the **Friction detail** of an Insights card.
+2. Keep these folded: Activity's **Failed test runs**, Context's **Largest tool results**, the Project page's **Largest overhead items**, and the **Friction detail** of a card in the Judgments view.
 3. If you must open a session sheet, keep **Source** and **Commits** folded, and scroll so that **Directory** and **Resume** stay off screen.
 
 ### Hide paths to your data folder

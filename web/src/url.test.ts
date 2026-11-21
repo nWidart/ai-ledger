@@ -268,7 +268,7 @@ describe("setSearch", () => {
     expect(history.length).toBe(len + 3);
   });
   it("keys the session sheet as sheet on Live, where session is the followed session", () => {
-    expect([sheetKey("/usage"), sheetKey("/errors"), sheetKey("/insights"), sheetKey("/live")]).toEqual(["session", "session", "session", "sheet"]);
+    expect([sheetKey("/usage"), sheetKey("/errors"), sheetKey("/limits"), sheetKey("/live")]).toEqual(["session", "session", "session", "sheet"]);
     start("/live?session=s1");
     openSessionSheet("s2");
     expect(location.search).toBe("?session=s1&sheet=s2");
@@ -279,7 +279,20 @@ describe("setSearch", () => {
     setSearch({ session: "s1" }); // picking a session in the rail opens no sheet
     expect(sheets()).toBeUndefined();
     expect(sessionSheetHref("/live", { session: "s1" }, "s2")).toBe("/live?session=s1&sheet=s2");
-    expect(sessionSheetHref("/insights", { range: "7" }, "s2")).toBe("/insights?range=7&session=s2");
+    expect(sessionSheetHref("/usage", { range: "7", view: "judgments", outcome: "not_achieved" }, "s2")).toBe("/usage?range=7&view=judgments&outcome=not_achieved&session=s2");
+    expect(sessionSheetHref("/limits", { range: "7" }, "s2")).toBe("/limits?range=7&session=s2");
+  });
+  it("pushes an entry for a switch of Activity's view, and writes the view before the keys of the view it picks", () => {
+    start("/usage?range=30&q=fix");
+    const len = history.length;
+    setSearch({ view: "judgments", q: null });
+    expect(location.search).toBe("?range=30&view=judgments");
+    expect(history.length).toBe(len + 1); // Back returns to Overview
+    setSearch({ outcome: "not_achieved" }, { push: true });
+    expect(location.search).toBe("?range=30&view=judgments&outcome=not_achieved");
+    setSearch({ view: null, outcome: null });
+    expect(location.search).toBe("?range=30");
+    expect(history.length).toBe(len + 3);
   });
   it("closes sheets by going back over the entries they pushed", async () => {
     const router = start("/usage?range=30");

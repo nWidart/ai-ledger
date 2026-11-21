@@ -67,6 +67,16 @@ def insights_fixtures():
         empty = case.payload(range_days=0)
         case.session(ti.A + "1", "demo-app", "2026-11-03 09:00:00")
         store.insert(case.con.cursor(), "session_titles", ["session_id", "custom", "agent"], [(ti.A + "1", None, "Add a theme toggle")])
+        # the in-store session's measured figures: two requests 12 minutes apart ($4.20), one failed call of two, a peak at 62% of the window
+        cur = case.con.cursor()
+        cur.execute("UPDATE sessions SET peak_context = 620, peak_model = 'm-a' WHERE session_id = ?", [ti.A + "1"])
+        store.insert(cur, "requests", ["message_id", "session_id", "ts", "model", "subagent", "input", "output", "thinking", "cache_read",
+                                       "cache_5m", "cache_1h"],
+                     [("ia1", ti.A + "1", "2026-11-03 09:00:00", "m-a", False, 1_200_000, 100_000, 0, 0, 0, 0),
+                      ("ia2", ti.A + "1", "2026-11-03 09:12:00", "m-a", False, 1_000_000, 100_000, 0, 0, 0, 0)])
+        store.insert(cur, "tool_calls", ["tool_use_id", "session_id", "tool", "start_ts", "end_ts", "is_error"],
+                     [("it1", ti.A + "1", "Bash", "2026-11-03 09:01:00", "2026-11-03 09:01:02", True),
+                      ("it2", ti.A + "1", "Read", "2026-11-03 09:02:00", "2026-11-03 09:02:01", False)])
         case.session("c1", "demo-app", "2026-11-03 10:00:00")
         case.session("c2", "docs-site", "2026-11-04 10:00:00")
         case.session("x1", "demo-app", "2026-11-04 11:00:00", source="codex")
@@ -80,7 +90,7 @@ def insights_fixtures():
         # two runs: the first two facets 20 minutes apart, the third the next morning
         for sid, ts in ((ti.A + "1", "2026-11-05 18:00:00"), (ti.A + "2", "2026-11-05 18:20:00"), (ti.A + "3", "2026-11-06 09:00:00")):
             case.con.execute("UPDATE session_facets SET file_mtime = ? WHERE session_id = ?", [ts, sid])
-        full = case.payload(range_days=0)
+        full = case.payload(range_days=0, prices=tm.PRICES)
         for d in (empty, full):
             d["coverage"]["dir"] = "/Users/example/.claude/usage-data"
         return full, empty

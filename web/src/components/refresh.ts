@@ -3,7 +3,7 @@
 // Refresh is one mutation per client.
 import { MutationObserver, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useSyncExternalStore } from "react";
-import { getJson, type LimitsAlert, type Status } from "../api";
+import { getJson, type LimitsAlert, type LimitsPeak, type Status } from "../api";
 import { setOrder } from "../colors";
 import { isData, queries } from "../queries";
 
@@ -12,13 +12,15 @@ import { isData, queries } from "../queries";
 export type RefreshKind = "idle" | "busy" | "stale" | "failed" | "offline" | "retry";
 
 /** alert: the Limits tab's alert from the newest status answered (null for none, and for an older app that sends none).
+ *  peak: the fullest open limit window, for the Limits tab's pill (null for none). waiting: the sessions waiting on the
+ *  user, for the Live tab's badge (0 for none, for a count that failed and for an older app).
  *  text: the palette's sentence. The rest is from the newest status answer, whichever kind shows: at, the last ingest;
  *  inserted, the lines it stored; changedAt, the last ingest that changed data; interval, in seconds. error: the failed
  *  Refresh's message for retry, else the ingest error. said: the last Refresh's result, for a polite status region; empty
  *  while one runs and before the first, so it is announced once per Refresh and never for a timed ingest. ingesting: the
  *  app says an ingest runs (the first one after start, before any time to show, can take minutes). */
 export interface RefreshState {
-  text: string; failed: boolean; busy: boolean; retry: boolean; alert: LimitsAlert | null;
+  text: string; failed: boolean; busy: boolean; retry: boolean; alert: LimitsAlert | null; peak: LimitsPeak | null; waiting: number;
   kind: RefreshKind; at: Date | null; inserted: number | null; changedAt: Date | null; interval: number | null;
   error: string | null; said: string; ingesting: boolean;
 }
@@ -109,7 +111,7 @@ const said = (refresh: string, r: RefreshResult) => {
 export function refreshState(q: StatusSlice, refresh: "idle" | "pending" | "success" | "error", r: RefreshResult = {}): RefreshState {
   const s = q.data, at = s?.last_ingest ? new Date(s.last_ingest) : null, interval = s?.interval ?? null;
   const base = {
-    alert: s?.limits_alert ?? null, at, inserted: s?.last_stats?.inserted ?? null, ingesting: !!s?.ingesting,
+    alert: s?.limits_alert ?? null, peak: s?.limits_peak ?? null, waiting: s?.live_waiting ?? 0, at, inserted: s?.last_stats?.inserted ?? null, ingesting: !!s?.ingesting,
     changedAt: s?.last_change ? new Date(s.last_change) : null, interval, error: s?.error ?? null, said: said(refresh, r),
   };
   const off = { failed: false, busy: false, retry: false };

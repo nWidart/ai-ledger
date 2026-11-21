@@ -2,7 +2,6 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, u
 import { setOrder } from "../../colors";
 import { agentName, Filters } from "../../components/Filters";
 import { showModalUnder } from "../../components/Sheet";
-import { UsageSheets } from "../../components/sheets/UsageSheets";
 import type { SortBy } from "../../components/Sort";
 import { Toggletip } from "../../components/Toggletip";
 import { num as fmt } from "../../format";
@@ -271,7 +270,6 @@ export function ErrorsPage() {
           {toSheet && <><section className="card detail" id="detail"><Detail /></section>{detailLive}</>}
         </dialog>
       </RowContext.Provider></Ctx.Provider>}
-      <UsageSheets data={undefined} automated />
     </main>
   );
 }

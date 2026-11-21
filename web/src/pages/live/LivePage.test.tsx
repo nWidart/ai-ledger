@@ -12,7 +12,7 @@ import { LivePage } from "./LivePage";
 import { groupSessions, lanesOf, likelyWaiting, mergeSession, stateNow, stateText, streamRows } from "./live";
 import { FakeSource } from "./testing";
 import { queries } from "../../queries";
-import { renderApp, renderRouter } from "../../testing";
+import { renderPage, renderRouter } from "../../testing";
 
 const list = live as LivePayload, listText = liveListText as LivePayload, s1 = liveSession as LiveSession, s1text = liveText as LiveSession, codex = liveCodex as LiveSession;
 
@@ -28,7 +28,7 @@ function show(hash = "?session=s1", o: Opts = {}) {
     "/api/status": () => (o.status ? o.status() : status),
   });
   history.replaceState(null, "", "/live" + hash);
-  const r = (o.app ? renderRouter() : renderApp(<LivePage />));
+  const r = (o.app ? renderRouter() : renderPage(<LivePage />));
   const urls = () => f.mock.calls.map(c => String(c[0]));
   return { f, r, calls: () => urls().filter(u => u !== "/api/status"), polls: () => urls().filter(u => u === "/api/status").length };
 }

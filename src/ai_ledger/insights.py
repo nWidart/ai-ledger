@@ -163,7 +163,7 @@ def derive(cur, rows, projects=None):
                                        "destructive_commands", "bash_would_prompt"], list(metas.values()))
 
 
-# ---------- the Insights page ----------
+# ---------- the Judgments view of Activity (/api/insights) ----------
 
 # Every facet with the project and start time it filters by: its stored session's, else its session meta's.
 FACETS = """f AS (SELECT sf.*, coalesce(se.project, m.project, '(unknown)') AS project, 'claude' AS source,
@@ -268,13 +268,39 @@ def run_sizes(groups):
     return dict(runs=len(sizes), min=min(sizes), median=metrics.median(sizes), max=max(sizes)) if sizes else None
 
 
-def payload(cur, project="", range_days=0, source="", automated=False, today=None, usage_dir=None):
-    """The JSON the Insights page reads. Only Claude Code sessions have facets: source codex returns coverage alone, and empty
+def measured(cur, ids, prices):
+    """{session_id: {cost, active_s, errors, context_share}} of the stored sessions among ids, each over the whole session,
+    whatever the view's range: the cost of its requests (None when none is priced), its active time (metrics.active_cte), its
+    failed tool calls, and its peak context as a share of its model's window (None without a known window). The same measures
+    as the Sessions table's, so a card and its sheet agree."""
+    if not ids:
+        return {}
+    pcte, pp = metrics.price_cte(prices)
+    got = metrics.rows(cur, f"""{metrics.requests_cte(pcte, "list_contains(?, r.session_id)")},
+        agg AS (SELECT session_id, sum(cost) AS cost FROM rq GROUP BY 1),
+        tc AS (SELECT session_id, count(*) FILTER (WHERE is_error) AS errors FROM tool_calls WHERE list_contains(?, session_id) GROUP BY 1),
+        {metrics.active_cte("SELECT unnest(?)")}
+        SELECT s.session_id, agg.cost, act.active_s, coalesce(tc.errors, 0) AS errors, s.peak_context, s.peak_model
+        FROM sessions s LEFT JOIN agg USING (session_id) LEFT JOIN tc USING (session_id) LEFT JOIN act USING (session_id)
+        WHERE list_contains(?, s.session_id)""", pp + [ids] * 5)
+    out = {}
+    for r in got:
+        limit = (prices.get(r["peak_model"]) or {}).get("context")
+        out[r["session_id"]] = dict(cost=r["cost"], active_s=r["active_s"], errors=r["errors"],
+                                    context_share=r["peak_context"] / limit if limit and r["peak_context"] else None)
+    return out
+
+
+def payload(cur, project="", range_days=0, source="", automated=False, today=None, usage_dir=None, prices=None):
+    """The JSON the Judgments view reads. Only Claude Code sessions have facets: source codex returns coverage alone, and empty
     session figures. meta holds the view's session figures (see session_figures; median response time is the median of session
-    medians), and each listed session's meta its own figures, or None without a session-meta row.
+    medians), and each listed session's meta its own figures, or None without a session-meta row. Each listed session also
+    carries its cost, errors and context_share (see measured), None without a transcript in the store, and each friction
+    family and its labels the cost and active_s of the sessions that reported them.
     Coverage counts leave automated sessions out, whatever automated says. underlying_goal and primary_success stay in the
     store. Raises ValueError for an unknown source or a negative range."""
     today = today or metrics.local_today(cur)
+    prices = metrics.load_prices() if prices is None else prices
     start, *_ = metrics.view(project, range_days, {}, today, automated, source)
     sql, sp = metrics.scope(project, automated, source)
     since = metrics.day_start("CAST(? AS DATE)")
@@ -316,15 +342,19 @@ def payload(cur, project="", range_days=0, source="", automated=False, today=Non
     by = lambda col: dict(cur.execute(f"{in_view} SELECT {col}, count(*) FROM v WHERE {col} IS NOT NULL GROUP BY 1", wp).fetchall())
     out.update(outcomes=ordered(by("outcome"), OUTCOMES), helpfulness=ordered(by("helpfulness"), HELPFULNESS),
                session_types=ordered(by("session_type"), SESSION_TYPES))
+    # Every stored session of the view, not only the listed ones: a friction family weighs all the sessions that reported it.
+    figures = measured(cur, [r[0] for r in cur.execute(f"{in_view} SELECT session_id FROM v WHERE in_store", wp).fetchall()], prices)
     for kind, key, fam in (("satisfaction", "satisfaction", None), ("friction", "friction", "friction_families"), ("goal", "goals", "goal_families")):
         out[key] = metrics.rows(cur, f"""{in_view} SELECT c.name, sum(c.n)::BIGINT AS n, count(DISTINCT c.session_id) AS sessions
             FROM facet_counts c JOIN v USING (session_id) WHERE c.kind = ? GROUP BY 1 ORDER BY 2 DESC, 3 DESC, 1""", wp + [kind])
         if fam:
             pairs = cur.execute(f"""{in_view} SELECT DISTINCT c.name, c.session_id FROM facet_counts c JOIN v USING (session_id)
                 WHERE c.kind = ?""", wp + [kind]).fetchall()
-            out[fam] = families.group(kind, out[key], pairs)
-    out["trend"] = [dict(zip(("week", "n", "achieved"), r)) for r in reversed(cur.execute(f"""{in_view}
-        SELECT {metrics.week('start')} AS week, count(*), count(*) FILTER (WHERE outcome IN ('fully_achieved', 'mostly_achieved'))
+            out[fam] = families.group(kind, out[key], pairs, figures if kind == "friction" else None)
+    outcome = lambda *names: f"count(*) FILTER (WHERE outcome IN ({', '.join(repr(n) for n in names)}))"
+    out["trend"] = [dict(zip(("week", "n", "achieved", "fully", "mostly", "partially", "not_achieved"), r)) for r in reversed(cur.execute(f"""{in_view}
+        SELECT {metrics.week('start')} AS week, count(*), {outcome('fully_achieved', 'mostly_achieved')}, {outcome('fully_achieved')},
+            {outcome('mostly_achieved')}, {outcome('partially_achieved')}, {outcome('not_achieved')}
         FROM v WHERE start IS NOT NULL GROUP BY 1 ORDER BY 1 DESC LIMIT ?""", wp + [TREND_WEEKS]).fetchall())]
     names = name_lists(cur.execute(f"""{in_view} SELECT c.session_id, c.kind, c.name FROM facet_counts c JOIN v USING (session_id)
             ORDER BY c.session_id, c.kind, c.n DESC, c.name""", wp).fetchall())
@@ -335,6 +365,8 @@ def payload(cur, project="", range_days=0, source="", automated=False, today=Non
                                                                      f"WHERE session_id IN ({','.join('?' * len(ids))})", ids).fetchall()}
     for r in sess[:SESSION_ROWS]:
         r["start"] = metrics.iso(r["start"])
-        r.update(session_names(names, r["session_id"]), meta=own.get(r["session_id"]))
+        mine = figures.get(r["session_id"]) or {}
+        r.update(session_names(names, r["session_id"]), meta=own.get(r["session_id"]),
+                 **{k: mine.get(k) for k in ("cost", "errors", "context_share")})
     out.update(sessions=titles.with_titles(cur, sess[:SESSION_ROWS]), truncated=len(sess) > SESSION_ROWS)
     return out

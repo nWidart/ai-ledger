@@ -26,23 +26,23 @@ describe("Wide sheets", () => {
   it("offers Wide on session and tool sheets, not on a project sheet even with the choice on", async () => {
     serve();
     at("?range=30&session=s1");
-    const a = renderApp(<UsageSheets data={usage} />);
+    const a = renderApp(<UsageSheets />);
     await sheet().findByText("$16");
     expect(wideBtn()).toBeTruthy();
     a.unmount();
     at("?range=30&tool=Bash");
-    const b = renderApp(<UsageSheets data={usage} />);
+    const b = renderApp(<UsageSheets />);
     await screen.findByRole("heading", { level: 2 });
     expect(wideBtn()).toBeTruthy();
     b.unmount();
     at("?range=30&mcp=srv");
-    const c = renderApp(<UsageSheets data={usage} />);
+    const c = renderApp(<UsageSheets />);
     await screen.findByRole("heading", { level: 2 });
     expect(wideBtn()).toBeTruthy();
     c.unmount();
     localStorage.setItem(SHEET_WIDE_KEY, "1"); resetSheetWide();
     at("?range=30&inspect=foo");
-    renderApp(<UsageSheets data={usage} />);
+    renderApp(<UsageSheets />);
     await sheet().findByText("errors per 100 calls");
     expect(wideBtn()).toBeNull();
     expect(dlg().classList.contains("wide")).toBe(false);
@@ -52,7 +52,7 @@ describe("Wide sheets", () => {
     serve();
     localStorage.setItem(SHEET_WIDE_KEY, "1");
     at("?range=30&session=s1");
-    renderApp(<UsageSheets data={usage} />);
+    renderApp(<UsageSheets />);
     await sheet().findByText("$16");
     expect(dlg().classList.contains("wide")).toBe(true);
     expect(wideBtn()!.getAttribute("aria-pressed")).toBe("true");
@@ -61,7 +61,7 @@ describe("Wide sheets", () => {
   it("does not touch the URL or history", async () => {
     serve();
     at("?range=30&session=s1");
-    renderApp(<UsageSheets data={usage} />);
+    renderApp(<UsageSheets />);
     await sheet().findByText("$16");
     const search = location.search, n = history.length;
     dlg().scrollTop = 180;
@@ -75,7 +75,7 @@ describe("Wide sheets", () => {
   it("goes back from a session to a wide tool sheet keeping width, scroll and focus", async () => {
     serve();
     at("?range=30&tool=Bash");
-    renderApp(<UsageSheets data={usage} />);
+    renderApp(<UsageSheets />);
     const row = (await sheet().findAllByRole("row")).find(r => r.getAttribute("data-v") === "f1-27")!;
     await userEvent.click(wideBtn()!);
     dlg().scrollTop = 240;
@@ -90,7 +90,7 @@ describe("Wide sheets", () => {
   it("goes back from a session to a tool sheet narrowed meanwhile, restoring scroll and focus and revealing the row", async () => {
     serve();
     at("?range=30&tool=Bash");
-    renderApp(<UsageSheets data={usage} />);
+    renderApp(<UsageSheets />);
     const row = (await sheet().findAllByRole("row")).find(r => r.getAttribute("data-v") === "f1-27")!;
     await userEvent.click(wideBtn()!);
     dlg().scrollTop = 240;
@@ -114,7 +114,7 @@ describe("Wide sheets", () => {
     serve();
     localStorage.setItem(SHEET_WIDE_KEY, "1");
     at("?range=30&inspect=foo");
-    renderApp(<UsageSheets data={usage} />);
+    renderApp(<UsageSheets />);
     await sheet().findByText("errors per 100 calls");
     dlg().scrollTop = 120;
     await userEvent.click(sheet().getByRole("button", { name: "#s1" }));
@@ -133,7 +133,7 @@ describe("Wide sheets", () => {
     serve();
     localStorage.setItem(SHEET_WIDE_KEY, "1");
     at("?range=30&session=s1");
-    renderApp(<UsageSheets data={usage} />);
+    renderApp(<UsageSheets />);
     await sheet().findByText("$16");
     act(() => { dlg().dispatchEvent(new Event("cancel", { cancelable: true })); });
     await waitFor(() => expect(location.search).not.toContain("session"));

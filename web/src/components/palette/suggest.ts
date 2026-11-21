@@ -41,6 +41,9 @@ export interface SuggestData { palette?: PalettePayload | undefined; sessions?: 
 
 /** The Project page's path: a page the palette can open, though it is no tab. */
 export const PROJECT_PAGE = "/project";
+/** Activity's Judgments view, as a page chip's value: a destination the palette can open, though it is no tab. Not a path:
+ *  resolve.ts turns it into /usage with view=judgments. */
+export const JUDGMENTS_PAGE = "/usage?view=judgments";
 export const rangeName = (r: number) => (r ? `${r}d` : "all");
 export const rangeLabel = (r: number) => (r ? `Last ${r} days` : "All time");
 export const sourceLabel = (s: string) => SOURCE_LABELS[s as Source] ?? s;
@@ -59,7 +62,11 @@ function candidates(data: SuggestData, sessions: boolean, project: boolean): Can
   }
   for (const r of RANGES) out.push({ kind: "range", value: String(r), label: rangeName(r), texts: [rangeName(r), rangeLabel(r)], detail: [rangeLabel(r)] });
   out.push({ kind: "automated", value: "1", label: "automated", texts: ["automated", "Include automated sessions"], detail: ["Include automated sessions"] });
-  for (const pg of PAGES) out.push({ kind: "page", value: pg.path, label: pg.label, texts: [pg.label, pg.path.slice(1)] });
+  for (const pg of PAGES) {
+    out.push({ kind: "page", value: pg.path, label: pg.label, texts: [pg.label, pg.path.slice(1)] });
+    // Activity's Judgments view follows Activity; "insights", its name when it was a page, still finds it.
+    if (pg.path === "/usage") out.push({ kind: "page", value: JUDGMENTS_PAGE, label: "Judgments", texts: ["Judgments", "judgments", "insights"], detail: ["Activity view"] });
+  }
   // The Project page is no tab: it is offered when a project is named, by a chip (the palette opens with one for the view's project).
   if (project) out.push({ kind: "page", value: PROJECT_PAGE, label: "Project", texts: ["Project", "project"] });
   for (const [kind, rows] of [["tool", p?.tools], ["mcp", p?.mcp], ["skill", p?.skills]] as const) {

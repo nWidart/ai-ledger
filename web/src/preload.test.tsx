@@ -114,9 +114,23 @@ describe("starting a page from its tab", () => {
     await user.hover(tab("Limits"));
     await waitFor(() => expect(calls("/api/limits")).toHaveLength(1));
     expect(calls("/api/limits")[0]).toBe("/api/limits?range=7"); // Limits has no project: limits are per account
-    await user.hover(tab("Insights"));
-    await waitFor(() => expect(calls("/api/insights")).toHaveLength(1));
-    expect(calls("/api/insights")[0]).toContain("project=foo&range=7");
+    await user.hover(tab("Context"));
+    await waitFor(() => expect(calls("/api/context")).toHaveLength(1));
+    expect(calls("/api/context")[0]).toContain("project=foo&range=7");
+  });
+
+  it("starts the data of the Activity view the URL names: Judgments' once, with no source, and not Overview's", async () => {
+    await open("/usage?project=foo&range=7&source=claude&view=judgments");
+    await screen.findByRole("heading", { level: 1 });
+    expect(calls("/api/insights")).toEqual(["/api/insights?project=foo&range=7"]); // loader and view together
+    expect(calls("/api/usage")).toEqual([]);
+  });
+
+  it("starts Overview's data for a Codex-only view that asks for Judgments, which it does not have", async () => {
+    await open("/usage?range=7&source=codex&view=judgments");
+    await screen.findByRole("heading", { level: 1 });
+    expect(calls("/api/usage")).toEqual(["/api/usage?range=7&source=codex"]);
+    expect(calls("/api/insights")).toEqual([]);
   });
 
   it("does not request the page's data again when a session sheet opens", async () => {

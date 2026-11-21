@@ -9,7 +9,7 @@ import session from "../../__fixtures__/session";
 import { openDrawer } from "../../components/Drawer";
 import { mockApi } from "../../components/sheets/testing";
 import { dayStamp, download } from "../../components/export";
-import { renderApp } from "../../testing";
+import { renderApp, renderPage } from "../../testing";
 import { num } from "../../format";
 import { compareText, costDays, thinHistory } from "./cost";
 import { CostPage } from "./CostPage";
@@ -24,7 +24,7 @@ const loaded = () => screen.findByRole("heading", { level: 1, name: /estimated c
 const fetched = () => vi.mocked(fetch).mock.calls.map(c => c[0]);
 /** The page loaded, with these drawers opened in turn: a closed drawer renders no table, and a page opens one drawer at a time,
  *  so each has rendered its body (kept, hidden, once closed) and the last stays open. */
-const show = async (d: UsagePayload, open = ["d-tokens", "d-top"]) => { serve(d); at(); renderApp(<CostPage />); const lede = await loaded(); act(() => open.forEach(id => openDrawer(id))); return lede; };
+const show = async (d: UsagePayload, open = ["d-tokens", "d-top"]) => { serve(d); at(); renderPage(<CostPage />); const lede = await loaded(); act(() => open.forEach(id => openDrawer(id))); return lede; };
 /** Whether a drawer is open. */
 const isOpen = (id: string) => document.getElementById(id)!.hasAttribute("data-open");
 const insights = () => within(document.getElementById("insights")!);

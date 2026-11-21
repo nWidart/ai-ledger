@@ -52,19 +52,25 @@ def family(kind, name):
     return name
 
 
-def group(kind, rows, pairs):
+def group(kind, rows, pairs, weights=None):
     """The families of rows, [{family, n, sessions, members}]: rows are [{name, n, sessions}] of one kind, pairs the
     (name, session_id) pairs behind them. n sums the members' n; sessions counts the distinct sessions with any member. Members
-    come most counted first, then by name; families by n, then sessions (both descending), then key."""
+    come most counted first, then by name; families by n, then sessions (both descending), then key.
+    weights ({session_id: {cost, active_s}}): each family and member also gets the cost and active_s summed over its distinct
+    sessions, each session once. A session without a weight, or with a figure of None, adds nothing."""
     keys = {r["name"]: family(kind, r["name"]) for r in rows}
-    carried = {}
+    carried, named = {}, {}
     for name, sid in pairs:
         carried.setdefault(keys[name], set()).add(sid)
+        named.setdefault(name, set()).add(sid)
+    weigh = lambda sids: {k: sum((weights.get(s) or {}).get(k) or 0 for s in sids) for k in ("cost", "active_s")}
     out = {}
     for r in rows:
         f = out.setdefault(keys[r["name"]], dict(family=keys[r["name"]], n=0, sessions=len(carried.get(keys[r["name"]], ())), members=[]))
         f["n"] += r["n"]
-        f["members"].append(dict(r))
+        f["members"].append(dict(r, **weigh(named.get(r["name"], ()))) if weights is not None else dict(r))
     for f in out.values():
         f["members"].sort(key=lambda m: (-m["n"], m["name"]))
+        if weights is not None:
+            f.update(weigh(carried.get(f["family"], ())))
     return sorted(out.values(), key=lambda f: (-f["n"], -f["sessions"], f["family"]))

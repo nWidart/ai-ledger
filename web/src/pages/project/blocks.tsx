@@ -9,7 +9,7 @@ import { DataTable } from "../../components/DataTable";
 import { Judged, label as facetLabel, outcomeLabel } from "../../components/facets";
 import { Ledger, LedgerRow } from "../../components/Ledger";
 import { ChangeDetail, Facts, ModelLedger, TopSessions } from "../../components/sheets/ProjectSheet";
-import { appLink, errorsHref, openSessionSheet } from "../../components/sheets/session";
+import { appLink, errorsHref, judgmentsHref, openSessionSheet } from "../../components/sheets/session";
 import { big, dur, num, pct, plural, usd } from "../../format";
 import type { ApiState } from "../../useApi";
 import { share } from "../context/context";
@@ -199,10 +199,12 @@ export function ContextBlock({ context, usage, scope }: { context: ApiState<Cont
   );
 }
 
-/** How many sessions /insights analysed, their outcomes and the top friction; a model's judgment, so tagged as on Insights. */
+/** How many sessions /insights analysed, their outcomes and the top friction; a model's judgment, so tagged as on Activity's
+ *  Judgments view, which it opens. */
 export function InsightsBlock({ insights, scope }: { insights: ApiState<InsightsPayload>; scope: Scope }) {
+  const href = judgmentsHref({ project: scope.project, range: scope.range, source: scope.source, automated: scope.auto });
   return (
-    <Block id="insights" title="Session judgments" page="Insights" href={"/insights" + scope.search} state={insights}>
+    <Block id="insights" title="Session judgments" page="Judgments" href={href} state={insights}>
       {d => {
         const c = d.coverage, n = c.facets, top = d.friction_families.slice(0, FRICTION_TOP), max = top[0]?.n ?? 0;
         if (!c.analysed) return <p className="empty">No session is analysed by <code>/insights</code> in this view.</p>;

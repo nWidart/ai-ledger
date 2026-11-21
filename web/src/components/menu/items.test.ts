@@ -34,11 +34,11 @@ describe("project menu", () => {
   it("opens the sheet on the current page", () => {
     expect(href(items(jobdesk, "/usage?range=7&tool=Bash"), "project-sheet")).toBe("/usage?range=7&inspect=jobdesk");
   });
-  it("leaves out the sheet on Limits, which hosts none", () => {
-    expect(find(items(jobdesk, "/limits?range=7"), "project-sheet")).toBeUndefined();
+  it("opens the sheet over Limits too: every page hosts the sheets", () => {
+    expect(href(items(jobdesk, "/limits?range=7"), "project-sheet")).toBe("/limits?range=7&inspect=jobdesk");
   });
-  it("opens the sheet over Insights, and over Live with the followed session kept", () => {
-    expect(href(items(jobdesk, "/insights?range=7&session=s1"), "project-sheet")).toBe("/insights?range=7&inspect=jobdesk");
+  it("opens the sheet over Activity's Judgments view, and over Live with the followed session kept", () => {
+    expect(href(items(jobdesk, "/usage?range=7&view=judgments&session=s1"), "project-sheet")).toBe("/usage?range=7&view=judgments&inspect=jobdesk");
     expect(href(items(jobdesk, "/live?session=s1&sheet=s2"), "project-sheet")).toBe("/live?inspect=jobdesk&session=s1");
   });
   it("filters to the project, or shows all when already filtered to it", () => {
@@ -72,11 +72,11 @@ describe("session menu", () => {
     expect(text(g, "copy-id")).toBe("abc");
     expect(text(g, "copy-cwd")).toBe("/Users/me/my app");
   });
-  it("opens the session over the page, under the sheet key on Live, and on Activity from Limits", () => {
+  it("opens the session over the page, Limits and the Judgments view included, under the sheet key on Live", () => {
     expect(href(items(sess, "/cost?range=7"), "open-session")).toBe("/cost?range=7&session=abc");
-    expect(href(items(sess, "/insights?range=7"), "open-session")).toBe("/insights?range=7&session=abc");
+    expect(href(items(sess, "/usage?range=7&view=judgments&outcome=not_achieved"), "open-session")).toBe("/usage?range=7&view=judgments&outcome=not_achieved&session=abc");
     expect(href(items(sess, "/live?range=7&session=s1"), "open-session")).toBe("/live?range=7&session=s1&sheet=abc");
-    expect(href(items(sess, "/limits?range=7"), "open-session")).toBe("/usage?range=7&session=abc");
+    expect(href(items(sess, "/limits?range=7"), "open-session")).toBe("/limits?range=7&session=abc");
   });
   it("copies the resume command for its agent", () => {
     expect(text(items(sess, "/usage", ready()), "copy-resume")).toBe("cd '/Users/me/my app' && claude --resume abc");
@@ -105,7 +105,7 @@ describe("tool menus", () => {
     expect(labels(g)).toEqual([["Open inspector"], ["Copy name"]]);
     expect(href(g, "open-inspector")).toBe("/context?range=30&mcp=playwright");
     expect(text(g, "copy-name")).toBe("playwright");
-    expect(href(items({ kind: "tool", value: "Bash" }, "/limits?range=7"), "open-inspector")).toBe("/usage?range=7&tool=Bash");
+    expect(href(items({ kind: "tool", value: "Bash" }, "/limits?range=7"), "open-inspector")).toBe("/limits?range=7&tool=Bash");
     expect(href(items({ kind: "skill", value: "ship" }, "/cost"), "open-inspector")).toBe("/cost?skill=ship");
   });
 });

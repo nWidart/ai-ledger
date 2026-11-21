@@ -326,6 +326,23 @@ class SessionsTest(LiveCase):
         got = live.sessions(self.cur(), now=NOW + timedelta(hours=1), prices=PRICES)
         self.assertEqual((got["sessions"], got["newest"]["session_id"]), ([], "s1"))
 
+    def test_waiting_counts_your_turn_and_likely_approval_waits(self):
+        self.assertEqual(live.waiting(self.cur(), now=NOW), 1)  # s2 is in your turn; s1 runs Read
+        self.write("s4.jsonl", (prompt("x1", at(0), "y1", "go") + assistant("c1", "o1", at(5), [tool_use("t9", "Bash", command="make")])).replace('"s1"', '"s4"'))
+        self.ingest()
+        self.assertEqual(live.waiting(self.cur(), now=NOW), 2)  # a shell call pending past 30 s
+        kinds = [s["state"]["kind"] for s in live.sessions(self.cur(), now=NOW, prices=PRICES)["sessions"]]
+        self.assertEqual(sum(k in live.WAITING for k in kinds), 2)  # as the list says
+
+    def test_waiting_covers_every_project_and_source_and_leaves_automated_sessions_out(self):
+        self.con.execute("UPDATE sessions SET source = 'codex' WHERE session_id = 's2'")
+        self.assertEqual(live.waiting(self.cur(), now=NOW), 1)
+        self.con.execute("UPDATE sessions SET project = 'observer-sessions' WHERE session_id = 's2'")
+        self.assertEqual(live.waiting(self.cur(), now=NOW), 0)
+
+    def test_waiting_is_zero_with_no_active_session(self):
+        self.assertEqual(live.waiting(self.cur(), now=NOW + timedelta(hours=1)), 0)
+
 
 class TitleTest(LiveCase):
     def setUp(self):

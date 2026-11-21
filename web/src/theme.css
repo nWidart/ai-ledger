@@ -161,7 +161,7 @@ dialog.sheet::backdrop { background: var(--scrim); }
   /* Current page, current section, selected row, pressed toggle, selected bucket. */
   :is(
     .appnav a[aria-current=page],
-    :is(.pg-activity, .pg-cost, .pg-insights, .pg-context) .secidx a[aria-current=true],
+    :is(.pg-activity, .pg-cost, .pg-judgments, .pg-context) .secidx a[aria-current=true],
     .pal-opt[aria-selected=true],
     dialog.sheet .evbtn[aria-pressed=true], dialog.sheet .sheet-wide[aria-pressed=true],
     .pg-live .stream-filters button[aria-pressed=true], .pg-live .kv .fig[aria-pressed=true],
@@ -171,13 +171,13 @@ dialog.sheet::backdrop { background: var(--scrim); }
     .pg-cost .legend button.proj[aria-current=true],
     .pg-context .growth .legend button.key[aria-pressed=true],
     .pg-context .pressure .band[aria-pressed=true],
-    .pg-insights .ledger li.pick.on > .rowbtn, .pg-insights .ledger li.on:not(.pick),
-    .pg-insights button.chip.on, .pg-insights button.badge.on,
+    .pg-judgments .ledger li.pick.on > .rowbtn, .pg-judgments .ledger li.on:not(.pick),
+    .pg-judgments button.chip.on, .pg-judgments button.badge.on,
     .pg-limits .hs-bar[aria-pressed="true"],
-    :is(.pg-activity, .pg-cost, .pg-limits, .pg-insights, dialog.sheet) tbody tr.sel, .pg-errors tbody tr.sel
+    :is(.pg-activity, .pg-cost, .pg-limits, .pg-judgments, dialog.sheet) tbody tr.sel, .pg-errors tbody tr.sel
   ):not(:focus-visible) { outline: 2px solid Highlight; outline-offset: -2px; }
   /* The bucket under the keyboard or pointer on the Activity and Cost charts is a 6% wash; frame it instead. */
-  :is(.pg-activity, .pg-cost) .chart svg > rect:not(.hit) { stroke: Highlight; stroke-width: 2px; }
+  :is(.pg-activity, .pg-cost, .pg-judgments) .chart svg > rect:not(.hit) { stroke: Highlight; stroke-width: 2px; }
 
   /* A low-call rate point is hollow: a page-colored center and a text-colored ring, on the charts and in their keys, so it
      reads apart from the solid line whatever the user's Canvas is. */
@@ -206,7 +206,7 @@ dialog.sheet::backdrop { background: var(--scrim); }
   .pg-limits .lim-chart :is(.ax, .plan text) { fill: CanvasText; }
   .pg-limits .lim-chart .pick { fill: Highlight; stroke: Canvas; }
   /* The charts' stacked bars: series colors kept, each segment edged in the text color. */
-  :is(.pg-activity, .pg-cost) .chart .bar-seg, .pg-context .cache-chart svg rect[class^="seg-"], .pg-errors #chart .layer { forced-color-adjust: none; stroke: CanvasText; stroke-width: .75px; }
+  :is(.pg-activity, .pg-cost, .pg-judgments) .chart .bar-seg, .pg-context .cache-chart svg rect[class^="seg-"], .pg-errors #chart .layer { forced-color-adjust: none; stroke: CanvasText; stroke-width: .75px; }
   /* Keys and dots that name a series or a project by color alone. */
-  .pdot, :is(.pg-activity, .pg-cost) .legend i:not(.line), .pg-context .legend i:not(.line), .pg-errors .sw:not(.line), .pg-insights .key .sw { forced-color-adjust: none; outline: 1px solid CanvasText; }
+  .pdot, :is(.pg-activity, .pg-cost, .pg-judgments) .legend i:not(.line), .pg-context .legend i:not(.line), .pg-errors .sw:not(.line), .pg-judgments .key .sw { forced-color-adjust: none; outline: 1px solid CanvasText; }
 }

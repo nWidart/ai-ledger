@@ -1,0 +1,137 @@
+/* Activity's Judgments view (/usage?view=judgments): every rule sits under .pg-judgments, since every page's CSS is loaded at
+   once. The view switch and the header's grid (the heading, then the filters, as on Overview) are in activity.css; tables come
+   from sheets.css, the trend chart from chart.css. */
+.pg-judgments .cov { margin: 0 0 16px; font-size: .8125rem; color: var(--text-secondary); }
+.pg-judgments .cov b { color: var(--text-primary); font-weight: 500; }
+.pg-judgments .lede { margin: 0; max-width: 34ch; font-size: clamp(1.5rem, 4vw, 2.5rem); line-height: 1.14; font-weight: 400;
+  letter-spacing: -.025em; text-wrap: balance; color: var(--text-secondary); }
+.pg-judgments .lede:focus { outline: none; }
+.pg-judgments .lede b { font-weight: 600; letter-spacing: -.04em; color: var(--text-primary); }
+.pg-judgments .lede code { font-size: .8em; }
+.pg-judgments .sub { color: var(--text-muted); font-size: .8125rem; margin: 0 0 8px; max-width: 90ch; }
+.pg-judgments .pending { margin: -12px 0 8px; min-height: 1.5em; color: var(--text-secondary); font-size: .8125rem; }
+.pg-judgments .pending:empty { visibility: hidden; }
+.pg-judgments.loading > :not(.top):not(.views):not(.secidx) { opacity: .55; }
+@media (prefers-reduced-motion: no-preference) { .pg-judgments > :not(.top):not(.views):not(.secidx) { transition: opacity .2s; } }
+
+/* The outcome trend: every bar fills the plot, so a faint bar is the cue that few sessions stand behind it. */
+.pg-judgments .trend h2 { margin-bottom: 2px; }
+.pg-judgments .trend .bar-seg.few rect { opacity: .45; }
+.pg-judgments .trend .legend i.few { background: var(--text-muted); opacity: .45; }
+/* Friction: the weight switch beside the heading, and room for a cost or a duration with two more figures beside it. */
+.pg-judgments .friction .chart-head { margin-bottom: 4px; }
+.pg-judgments .friction .ledger { --ledger-cols: minmax(0, 10rem) minmax(40px, 1fr) 3.5rem 9.75rem; }
+/* Phones: the name keeps the row with the value; the other figures go under it, then the bar. */
+@media (max-width: 32.5em) {
+  .pg-judgments .friction .ledger { --ledger-cols: minmax(0, 1fr) 4rem; }
+  .pg-judgments .friction .ledger .s { grid-column: 1 / -1; grid-row: 2; text-align: left; }
+  .pg-judgments .friction .ledger .bar { grid-row: 3; }
+}
+
+/* Four outcomes in one ruled strip */
+.pg-judgments .vitals { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; margin: 0 0 20px;
+  background: var(--border); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.pg-judgments .vital { padding: 16px 16px 16px 0; background: var(--bg); min-width: 0; }
+.pg-judgments .vital + .vital { padding-left: 16px; }
+.pg-judgments .vital .v { font-size: 1.75rem; font-weight: 600; letter-spacing: -.035em; line-height: 1.1; }
+.pg-judgments .vital .v small { font-size: .9375rem; font-weight: 500; color: var(--text-muted); letter-spacing: -.01em; }
+.pg-judgments .vital .l { font-weight: 500; margin-top: 4px; }
+.pg-judgments .vital .d { color: var(--text-muted); font-size: .78125rem; margin-top: 2px; }
+.pg-judgments .vital.good .v { color: var(--good-text); }
+.pg-judgments .vital.bad .v { color: var(--critical-text); }
+.pg-judgments .vital.bad { color: inherit; } /* the shared .bad rule would redden the label too */
+@media (max-width: 56.25em) {
+  .pg-judgments .vitals { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pg-judgments .vital:nth-child(odd) { padding-left: 0; }
+}
+@media (max-width: 32.5em) {
+  .pg-judgments .vital { padding: 10px 12px 10px 0; }
+  .pg-judgments .vital + .vital { padding-left: 12px; }
+  .pg-judgments .vital:nth-child(odd) { padding-left: 0; }
+  .pg-judgments .vital .v { font-size: 1.375rem; }
+  .pg-judgments .lede { font-size: 1.3125rem; }
+}
+
+.pg-judgments h2 { font-size: .9375rem; font-weight: 600; margin: 0 0 2px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.pg-judgments h3 { font-size: .8125rem; font-weight: 600; margin: 18px 0 2px; color: var(--text-secondary); }
+.pg-judgments .grid2 { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 16px; margin-bottom: 16px; align-items: start; }
+/* Wider value and side columns: "120 of 400" and "none analysed". */
+.pg-judgments #d-coverage .ledger { --ledger-cols: minmax(0, 13rem) minmax(40px, 1fr) 6rem 6.5rem; }
+@media (max-width: 32.5em) { .pg-judgments #d-coverage .ledger { --ledger-cols: minmax(0, 1fr) 6rem 6.5rem; } }
+.pg-judgments .ledger .none { color: var(--warning-text); font-weight: 500; }
+.pg-judgments .linkish.more { margin-top: 8px; font-size: .8125rem; }
+@media (max-width: 56.25em) { .pg-judgments .grid2 { grid-template-columns: minmax(0, 1fr); } }
+/* Ledgers here carry "N sessions" on the side, wider than the default column. */
+.pg-judgments .ledger { --ledger-cols: minmax(0, 13rem) minmax(40px, 1fr) 3.5rem 5.5rem; }
+@media (max-width: 32.5em) { .pg-judgments .ledger { --ledger-cols: minmax(0, 1fr) 3.5rem 5.5rem; } }
+
+/* Session types: one stacked strip with a key */
+.pg-judgments .strip { display: flex; height: 10px; border-radius: 5px; overflow: hidden; gap: 2px; margin: 10px 0 8px; }
+.pg-judgments .strip i { display: block; height: 100%; }
+.pg-judgments .key { display: flex; flex-wrap: wrap; gap: 4px 14px; list-style: none; margin: 0; padding: 0; font-size: .8125rem; color: var(--text-secondary); }
+.pg-judgments .key li { display: inline-flex; align-items: center; gap: 6px; }
+.pg-judgments .key .sw { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.pg-judgments .key b { color: var(--text-primary); font-weight: 600; }
+
+/* Session log */
+.pg-judgments .log-head { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; justify-content: space-between; }
+.pg-judgments .log-ctl { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; color: var(--text-secondary); font-size: .8125rem; }
+.pg-judgments .log-ctl select { margin-left: 4px; }
+/* A session card: title, outcome and chips on one wrapping line, the summary full width below. */
+.pg-judgments .scards { list-style: none; margin: 0; padding: 0; }
+.pg-judgments .scard { padding: 11px 0; border-top: 1px solid var(--border); }
+.pg-judgments .scard:first-child { border-top: 0; }
+.pg-judgments .scard .top { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; }
+.pg-judgments .scard .ttl { font-weight: 500; min-width: 0; overflow-wrap: anywhere; }
+.pg-judgments .scard .ttl a { text-decoration: none; }
+.pg-judgments .scard .ttl a:hover { text-decoration: underline; }
+.pg-judgments .scard .ttl .muted { font-weight: 400; }
+.pg-judgments .scard .chip { white-space: normal; }
+/* Date and project: quiet, at the end of the line. */
+.pg-judgments .scard .meta { min-width: 0; max-width: 100%; margin-left: auto; color: var(--text-muted); font-size: .78125rem; }
+.pg-judgments .scard .sum { margin: 4px 0 0; color: var(--text-secondary); max-width: 110ch; }
+.pg-judgments .scard .fd { margin-top: 4px; color: var(--text-secondary); max-width: 110ch; }
+.pg-judgments .scard .fd summary { cursor: pointer; font-size: .78125rem; color: var(--text-muted); }
+.pg-judgments .scard .fd p { margin: 4px 0 0; }
+.pg-judgments .dis { font-size: .71875rem; color: var(--critical-text); }
+
+/* Drill-down: ledger rows, chips and the outcome badge are buttons that set a filter. Child selectors: a family row nests its
+   labels' rows, and only the active row's own button and name take the highlight. */
+.pg-judgments .ledger li.pick.on > .rowbtn { background: var(--accent-soft); box-shadow: inset 2px 0 0 var(--accent); }
+.pg-judgments .ledger li.pick.on > .rowbtn > .n { font-weight: 600; }
+.pg-judgments button.chip, .pg-judgments button.badge { font-family: inherit; line-height: inherit; border: 1px solid var(--border); cursor: pointer; }
+.pg-judgments button.chip { background: none; }
+.pg-judgments button.badge { border-color: transparent; }
+.pg-judgments button.chip:hover, .pg-judgments button.badge:hover { border-color: var(--text-muted); }
+.pg-judgments button.chip.on, .pg-judgments button.badge.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.pg-judgments .fchips { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; margin: 8px 0 0; }
+.pg-judgments .fchips .chip.fx { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-ink); }
+.pg-judgments .fchips .linkish { font-size: .8125rem; }
+.pg-judgments .ledger li.on:not(.pick) { background: var(--accent-soft); box-shadow: inset 2px 0 0 var(--accent); font-weight: 600; }
+/* A pickable row's button has its own columns in Ledger.css; give it the same ones as the rows above (wider side figure). */
+.pg-judgments .ledger li.pick .rowbtn { grid-template-columns: var(--ledger-cols); }
+@media (max-width: 32.5em) { .pg-judgments .ledger li.pick .rowbtn { grid-template-columns: var(--ledger-cols); } }
+/* Session figures drawer: six counted figures in the vitals strip. */
+.pg-judgments .vitals.figs { grid-template-columns: repeat(6, minmax(0, 1fr)); margin: 10px 0 4px; }
+@media (max-width: 56.25em) {
+  .pg-judgments .vitals.figs { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .pg-judgments .vitals.figs .vital:first-child { grid-column: auto; }
+  .pg-judgments .vitals.figs .vital:nth-child(n) { padding-left: 16px; }
+  .pg-judgments .vitals.figs .vital:nth-child(3n + 1) { padding-left: 0; }
+}
+@media (max-width: 32.5em) {
+  .pg-judgments .vitals.figs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pg-judgments .vitals.figs .vital:nth-child(n) { padding-left: 12px; }
+  .pg-judgments .vitals.figs .vital:nth-child(odd) { padding-left: 0; }
+}
+/* A session card's measured figures: the last lines, quiet and apart from the model's summary. First what the store measured
+   (cost, peak context, tool errors), then what /insights counted. A figure worth a look is in the warning ink, and still says
+   itself in words. */
+.pg-judgments .scard :is(.stored, .measured) { margin: 6px 0 0; color: var(--text-muted); font-size: .75rem; font-variant-numeric: tabular-nums; }
+.pg-judgments .scard .stored { color: var(--text-secondary); }
+.pg-judgments .scard .stored + .measured { margin-top: 2px; }
+.pg-judgments .scard .stored .warn { color: var(--warning-text); font-weight: 500; }
+/* A family row's expander and its labels, under the row. */
+.pg-judgments .ledger li.pick .exp { margin: 0 0 4px 8px; font-size: .78125rem; }
+.pg-judgments .ledger li.pick .members { margin: 0 0 6px 18px; padding: 0; }
+.pg-judgments .ledger li.pick .members[hidden] { display: none; }

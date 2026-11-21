@@ -21,6 +21,9 @@ export interface FiltersProps {
   /** Show the time range (Live has none: it keeps the range in the URL for the other pages; Limits shows RangeFilter where
    *  the range applies). */
   range?: boolean;
+  /** Show the source (Activity's Judgments view has none: only Claude Code sessions are judged; the URL keeps the source for
+   *  the other pages). A page shows a filter only when it changes what the page shows. */
+  source?: boolean;
   /** Page-only controls after the range (Errors: granularity, subagents, noise). */
   children?: ReactNode;
 }
@@ -52,7 +55,7 @@ export function RangeFilter() {
 
 /** Project picker with its color dot, its Project page link and clear button, range and source segments and the automated
  *  toggle, all writing the URL. */
-export function Filters({ projects, automated = false, project = true, range = true, children }: FiltersProps) {
+export function Filters({ projects, automated = false, project = true, range = true, source = true, children }: FiltersProps) {
   const h = useSearchOf(filterSearch), { badSource } = h, set = setSearch, path = usePathname();
   const autoFile = useLastStatus()?.automated_file?.path;
   // An unknown source reads as All; the URL drops it so a copied link says what the page shows.
@@ -84,11 +87,11 @@ export function Filters({ projects, automated = false, project = true, range = t
         {h.project && <button type="button" className="filters-clear" aria-label="Clear project filter" title="Show all projects" onClick={clear}>✕</button>}
       </span>}
       {range && <RangeFilter />}
-      <div className="seg" id="fSource" role="group" aria-label="Source">
+      {source && <div className="seg" id="fSource" role="group" aria-label="Source">
         {(["", ...SOURCES] as const).map(s => (
           <button key={s} type="button" aria-pressed={h.source === s} onClick={() => set({ source: s, session: null, inspect: null })}>{s ? SOURCE_LABELS[s] : "All"}</button>
         ))}
-      </div>
+      </div>}
       {children}
       {automated && <>
         <label className="chk">

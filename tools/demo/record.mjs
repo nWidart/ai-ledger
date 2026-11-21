@@ -3,6 +3,8 @@
 // Scenes in VIDEOS (tour) also get <scene>.mp4 / <scene>-light.mp4 from the same frames: H.264, 960px wide, no audio.
 // That needs ffmpeg with libx264 on the PATH.
 // node record.mjs [scene...]   (scenes: tour activity cost context project errors limits insights live; default all)
+// insights is Activity's Judgments view (/usage?view=judgments). It keeps the name it had as a page, for the scene and for the
+// shots: published READMEs link to docs/insights.gif.
 // live plays synthetic sessions with replay.py, so it needs uv.
 // CHROMIUM=<path> uses that Chromium instead of Playwright's own. SCHEMES=light records only that scheme.
 // live leaves its sessions in the store: seed it again before you record live a second time.
@@ -222,14 +224,18 @@ const SCENES = {
     await h.scrollTo(page.locator("#value"));
     await h.wait(2000);
   },
+  // Activity's Judgments view: from Overview through the view switch, then friction by cost and by active time, the outcome
+  // trend, and a session's sheet over the view.
   async insights(h, start) {
     const { page } = h;
-    await start("/insights?range=30");
-    await h.wait(2200);
+    await start("/usage?range=30");
+    await h.wait(1200);
+    await h.click(btn(page, "Judgments"), { pause: 2200 });
     await h.scrollTo(page.locator("#friction"), 20);
-    await h.wait(1800);
-    await h.scrollTo(page.locator("#outcomes"), 20);
-    await h.wait(1500);
+    await h.wait(1400);
+    await h.click(btn(page, "Active time"), { pause: 1500 });
+    await h.scrollTo(page.locator("#trend"), 20);
+    await h.click(page.locator("#trend svg").first(), { dx: 0.6, dy: 0.5, pause: 1800 });
     await h.scrollTo(page.locator("#log"), 20);
     await h.click(page.getByLabel("Only sessions with friction"), { pause: 1500 });
     await h.click(page.locator("#log a[title*=\"Open session\"]"), { pause: 2600 });
@@ -311,7 +317,7 @@ const SHOT_PAGES = {
     ["summary", "#kpis"], ["chart", ".chart-card"], ["types", ".card.types"], ["detail", "#detail"]] },
   limits: { url: "/limits?range=30", panels: [
     ["windows", ".lim-grid"], ["history", "#history"]] },
-  insights: { url: "/insights?range=30", panels: [
+  insights: { url: "/usage?range=30&view=judgments", panels: [
     ["vitals", "#vitals"], ["outcomes", "#outcomes"], ["friction", "#friction"], ["log", "#log"]] },
   project: { url: "/project?range=30&project=atlas-api", panels: [
     ["layout", "#content", { max: 1500 }], ["activity", "#activity"], ["cost", "#cost"], ["sessions", "#sessions"], ["errors", "#errors"],

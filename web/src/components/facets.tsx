@@ -1,4 +1,4 @@
-// What the Insights page and the session sheet share to show Claude Code's /insights judgments: the model-judged tag, the
+// What Activity's Judgments view, the Project page and the session sheet share to show Claude Code's /insights judgments: the model-judged tag, the
 // outcome badge's words and tone, and category names. /insights writes free-form snake_case labels; they show with spaces.
 import { Toggletip } from "./Toggletip";
 import "./facets.css";

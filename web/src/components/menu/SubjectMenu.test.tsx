@@ -8,13 +8,14 @@ import session from "../../__fixtures__/session";
 import { ActivityPage } from "../../pages/activity/ActivityPage";
 import { openDrawer } from "../Drawer";
 import { mockApi } from "../sheets/testing";
+import { UsageSheets } from "../sheets/UsageSheets";
 import { renderApp, renderRouter } from "../../testing";
 import { SubjectMenu } from "./SubjectMenu";
 
 const at = (search = "?range=30") => history.replaceState(null, "", "/usage" + search);
 const serve = (detail: () => unknown = () => session) => mockApi({ "/api/usage": () => usage, "/api/sessions": () => sessions, "/api/session": detail });
 const loaded = () => screen.findByRole("heading", { level: 1, name: /commit/ });
-const page = async (search?: string) => { at(search); renderApp(<SubjectMenu><ActivityPage /></SubjectMenu>); await loaded(); act(() => { openDrawer("d-projects"); }); };
+const page = async (search?: string) => { at(search); renderApp(<SubjectMenu><ActivityPage /><UsageSheets /></SubjectMenu>); await loaded(); act(() => { openDrawer("d-projects"); }); };
 const projectRow = (name = "foo") =>
   within(screen.getByRole("table", { name: "Project metrics" })).getAllByRole("row").find(r => r.getAttribute("data-subject") === `project:${name}`)!;
 const sessionInSheet = () => waitFor(() => { const r = sheet().querySelector<HTMLElement>('[data-subject="session:s1"]'); expect(r).toBeTruthy(); return r!; });

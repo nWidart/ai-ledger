@@ -8,7 +8,6 @@ import { SectionIndex } from "../../components/SectionIndex";
 import type { SortBy } from "../../components/Sort";
 import { ModelLedger } from "../../components/sheets/ProjectSheet";
 import { openSessionSheet } from "../../components/sheets/session";
-import { UsageSheets } from "../../components/sheets/UsageSheets";
 import { PageSkeleton } from "../../components/PageSkeleton";
 import { useLanding } from "../../components/useLanding";
 import { big } from "../../format";
@@ -113,7 +112,6 @@ export function CostPage() {
           <TopSessionsDrawer view={{ project: d.project, range: d.range, automated: d.automated, source: d.source }} top={d.top_sessions} day={day} onDay={setDay} selected={h.session} />
         </div>
       </>}
-      <UsageSheets data={d} />
     </main>
   );
 }

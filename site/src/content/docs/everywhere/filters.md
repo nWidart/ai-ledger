@@ -6,6 +6,8 @@ spec: [dashboard-app, command-palette]
 
 Four filters narrow what a page shows: the project, the time range, the source and whether automated sessions count. Every figure, chart and table on a page follows them. The filters live in the page's URL, so a reload or a copied link shows the same view, and the navigation carries them to the next page you open.
 
+A page shows a filter only when it changes what the page shows. A filter a page does not show keeps its value in the URL, for the pages you open next. The filters sit in the page header beside the heading, always in the order project, range, source, Include automated.
+
 ## Controls
 
 | Control | Choices | Default | URL key |
@@ -21,16 +23,19 @@ The same filters are available in the [command palette](/ai-ledger/everywhere/co
 
 | Page | Project | Range | Source | Include automated |
 | --- | --- | --- | --- | --- |
-| Activity | yes | yes | yes | yes |
+| Live | yes | no | yes | yes |
+| Limits | no | in Past windows | yes | no |
+| Activity, Overview | yes | yes | yes | yes |
+| Activity, Judgments | yes | yes | no | yes |
 | Cost | yes | yes | yes | yes |
 | Context | yes | yes | yes | yes |
 | Errors | yes | yes | yes | no |
-| Limits | yes | yes | yes | no |
-| Insights | yes | yes | yes | yes |
-| Live | yes | no | yes | yes |
 | Project | yes | yes | yes | yes |
 
-Live has no range, but it keeps the range in the URL for the pages you open next. Errors always counts automated sessions and has no control for them.
+- Live shows what runs now, so it has no range.
+- Limits are per account, so Limits has no project filter. Its range sits in the **Past windows** header, the part of the page it changes.
+- Activity's Judgments view shows how `/insights` judged your sessions, and `/insights` judges Claude Code sessions only. A source filter would change nothing there, so the view has none.
+- Errors always counts automated sessions and has no control for them.
 
 ## Project picker
 
@@ -47,7 +52,7 @@ When a project is set, the filter row shows a **Project page →** link next to 
 
 The source filter has the choices All, Claude Code and Codex. A value in the URL that is not one of these reads as All, and the URL drops it.
 
-Insights covers Claude Code sessions only, because Claude Code's `/insights` analyses only those. With Codex selected, Insights says so.
+Activity's [Judgments view](/ai-ledger/pages/insights/) covers Claude Code sessions only, because Claude Code's `/insights` analyses only those. With Codex selected, Activity shows Overview: the **Judgments** button of its view switch cannot be picked, and the text beside it says why, "Codex writes no facets: /insights judges Claude Code sessions only."
 
 ## Include automated
 
@@ -61,7 +66,7 @@ The app treats a session as automated when:
 
 A project filter that names an automated project includes that project's sessions, with the control off, except its sessions with no user prompt, which stay out. Naming `(temp)` does not include its automated sessions.
 
-With the control off, the project picker leaves out automated projects. The Limits picker lists every project, automated ones included.
+With the control off, the project picker leaves out automated projects.
 
 If `automated.json` cannot be used, a banner under the navigation names the file's path and the reason, on every page, and only the built-in detection applies.
 

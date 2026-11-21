@@ -3,7 +3,6 @@ import { viewOf } from "../../api";
 import { setOrder } from "../../colors";
 import { Filters } from "../../components/Filters";
 import { ProjectName } from "../../components/ProjectDot";
-import { UsageSheets } from "../../components/sheets/UsageSheets";
 import { useLanding } from "../../components/useLanding";
 import { queries } from "../../queries";
 import { formatSearch, useView } from "../../url";
@@ -70,7 +69,6 @@ export function ProjectPage() {
           <InsightsBlock insights={insights} scope={scope} />
         </div>
       </div>
-      <UsageSheets data={d} />
     </main>
   );
 }

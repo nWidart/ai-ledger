@@ -37,7 +37,7 @@ Compare only these figures. The others differ by what each agent records:
 | Starting context | No | Each agent has its own system prompt and tools, and reads its own instruction file. |
 | **Cache hit**, **1h writes**, cache breaks | No | Codex reports one kind of cache write, and the app counts its cache as lasting 30 minutes. Claude Code has 5-minute and 1-hour writes. |
 | **Largest tool results** | No | Codex records no result size for `apply_patch` and `web_search`. |
-| Outcomes, friction | No | [Insights](/ai-ledger/pages/insights/) covers Claude Code sessions only. |
+| Outcomes, friction | No | Activity's [Judgments view](/ai-ledger/pages/insights/) covers Claude Code sessions only, and cannot be picked with Codex as the source. |
 | Points, percent of a limit | No | Each provider's plan sets its own limits. |
 | **ended** on Live | No | Codex writes no close, so a Codex session never reads **ended**. |
 

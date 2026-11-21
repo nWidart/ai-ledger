@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import palette from "../../__fixtures__/palette";
 import sessions from "../../__fixtures__/sessions";
 import { EXACT, PREFIX } from "./match";
-import { BADGES, MAX_ROWS, PROJECT_PAGE, isFilter, noToolCalls, rowName, suggest, type Chip } from "./suggest";
+import { BADGES, JUDGMENTS_PAGE, MAX_ROWS, PROJECT_PAGE, isFilter, noToolCalls, rowName, suggest, type Chip } from "./suggest";
 import { terms } from "./terms";
 
 const data = { palette, sessions: sessions.sessions };
@@ -41,7 +41,10 @@ describe("suggest", () => {
   it("puts an exact match first", () => {
     expect(rows("bash")[0]).toMatchObject({ kind: "tool", value: "Bash", sigil: ">" });
     expect(rows(">errors")[0]).toMatchObject({ kind: "page", value: "/errors" });
-    expect(rows(">insights")[0]).toMatchObject({ kind: "page", value: "/insights", label: "Insights" });
+    expect(rows(">judgments")[0]).toMatchObject({ kind: "page", value: JUDGMENTS_PAGE, label: "Judgments", detail: ["Activity view"] });
+    expect(rows(">insights")[0]).toMatchObject({ kind: "page", value: JUDGMENTS_PAGE, label: "Judgments" }); // its name when it was a page
+    expect(rows(">").some(r => r.value === "/insights")).toBe(false);
+    expect(rows(">limits")[0]).toMatchObject({ kind: "page", value: "/limits", label: "Limits" });
     expect(rows(">live")[0]).toMatchObject({ kind: "page", value: "/live", label: "Live" });
     expect(rows(">context")[0]).toMatchObject({ kind: "page", value: "/context", label: "Context" });
     expect(rows("#7d")[0]).toMatchObject({ kind: "range", value: "7", text: "7d" });

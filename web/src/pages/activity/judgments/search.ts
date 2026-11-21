@@ -1,4 +1,5 @@
-// The Insights page's own keys in the URL, typed. The shared ones (project, range, source, auto) are validateRoot's.
+// The Judgments view's own keys in the URL, typed. The shared ones (project, range, source, auto) are validateRoot's, and
+// view, which picks the view, is Activity's (../search.ts).
 /** Present only when valid. A type, not an interface, so a value of it can be given to formatSearch as it is. */
 export type InsightsSearch = {
   /** Outcome filter: a raw category name. */

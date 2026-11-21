@@ -9,6 +9,7 @@ import { act, render } from "@testing-library/react";
 import type { ReactElement, ReactNode } from "react";
 import type { Status } from "./api";
 import { noteStatus } from "./components/refresh";
+import { UsageSheets } from "./components/sheets/UsageSheets";
 import { makeQueryClient } from "./queryClient";
 import { isData } from "./queries";
 import { makeRouter } from "./router";
@@ -56,6 +57,10 @@ export const wrap = (ui: ReactNode, client: QueryClient = makeTestClient()): Rea
 /** RTL's `render` with the providers as wrapper, so `rerender(ui)` keeps them; the client comes back with the result. */
 export const renderApp = (ui: ReactNode, client: QueryClient = makeTestClient()) =>
   ({ ...render(ui, { wrapper: wrapper(client) }), client });
+
+/** A page with the app shell's sheet host beside it, as App mounts them: for a test that opens a project, tool or session
+ *  sheet from a page. No page mounts the sheets itself. */
+export const renderPage = (page: ReactNode, client: QueryClient = makeTestClient()) => renderApp(<>{page}<UsageSheets /></>, client);
 
 /** The whole app at the current URL, routes and all, as main.tsx mounts it; the page shows once its route has loaded. */
 export const renderRouter = (client: QueryClient = makeTestClient()) => {

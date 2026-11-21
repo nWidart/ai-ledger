@@ -1,6 +1,6 @@
 ---
 title: Get sessions to finish
-description: Raise the share of sessions that reach their goal, from the outcomes and friction on Insights.
+description: Raise the share of sessions that reach their goal, from the outcomes and friction in Activity's Judgments view.
 ---
 
 ## Goal
@@ -9,16 +9,16 @@ More sessions reach their goal: the share **Fully or mostly achieved** goes up, 
 
 ## Signs you need it
 
-Open [Insights](/ai-ledger/pages/insights/) with the range at **30d**. Every figure there is **model-judged**: Claude Code's `/insights` wrote it from the transcript. The app sets no threshold on this page, so these signs are rules of thumb:
+Open Activity, select [Judgments](/ai-ledger/pages/insights/) in the view switch above the heading, and set the range to **30d**. Every figure named here is **model-judged**: Claude Code's `/insights` wrote it from the transcript. The app sets no threshold in this view, so these signs are rules of thumb:
 
 - Rule of thumb: in **Outcomes at a glance**, **Fully or mostly achieved** is under 80%.
 - Rule of thumb: **Not achieved** or **Dissatisfied** is higher than in your last note of the [Weekly 15-minute review](/ai-ledger/improve/weekly-review/#keep-a-note-of-each-review).
-- Rule of thumb: the newest week of **Outcome trend** has a lower share than the week before, on at least 5 sessions. A week with few sessions swings: read the "4 of 5" count beside the share.
-- Rule of thumb: one family leads **Friction categories** two reviews in a row. The heading names it: "…; **tooling** caused the most friction" (an example).
+- Rule of thumb: the newest week's bar in **Outcome trend** has a smaller fully and mostly achieved part than the week before, on at least 5 sessions. The figure over a bar is the week's sessions; a faint bar has fewer than 5, and swings.
+- Rule of thumb: one family leads **Friction categories**, by **Reports**, two reviews in a row. The heading names it: "…; **tooling** caused the most friction" (an example).
 
 The same judgments show for one project in the **Session judgments** block of the [Project](/ai-ledger/pages/project/) page.
 
-Insights covers Claude Code sessions only: `/insights` analyses no Codex session.
+The view covers Claude Code sessions only: `/insights` analyses no Codex session.
 
 Two families point to other playbooks first:
 
@@ -30,11 +30,11 @@ Two families point to other playbooks first:
 Find the friction that stops the most sessions, and read what the model wrote about it.
 
 1. Read the coverage note at the top, such as "150 of 400 Claude Code sessions in this view analysed (38%)" (an example). The figures cover only the analysed sessions. If the last week has no analysis, run `/insights` in Claude Code, select **Refresh** in the app's navigation bar, and read the page again.
-2. In **Friction categories**, read the first family and its sessions. Families come most reported first. Select **N labels** under it to read the labels as `/insights` wrote them. The app groups labels into families by keyword: **misunderstood request**, **wrong approach**, **tooling**, **buggy code**, **excessive changes**, **rejected action** and **slow**. A label that matches no family is a row of its own.
+2. In **Friction categories**, select **Reports**: families then come most reported first. Read the first family and its sessions. Then select **Cost**: the family on top is the one the costliest sessions reported, which is the one to fix first when the two differ. The cost is that of the whole sessions, not of the friction alone. Select **N labels** under a family to read the labels as `/insights` wrote them. The app groups labels into families by keyword: **misunderstood request**, **wrong approach**, **tooling**, **buggy code**, **excessive changes**, **rejected action** and **slow**. A label that matches no family is a row of its own.
 3. Select the family's row. The session list under **Analysed sessions** keeps the sessions with that friction, and a chip reads "Friction family: …". Set **Sort** to **Outcome**: the sessions that did not reach their goal come first.
 4. On the first five cards, open **Friction detail** and read the model's words. Note what went wrong in each: what the agent did, and what you wanted.
 5. Read the goal chips on those cards. If one goal family recurs, such as **fix bug** (an example), the fix belongs to that kind of task. Select the goal chip to keep only its sessions.
-6. Select the title of one card. Its session sheet opens over Insights. If its **Error loops** list is not empty, or its peak context is at 80% or more of the window (the app's own limit for **Needs attention**), fix that measured cause before the friction family: use the table's last two rows.
+6. Read each card's measured line, such as "$4.20 · peak context 62% · 1 tool error" (an example). Then select the title of one card: its session sheet opens over the view. If its **Error loops** list is not empty, or its peak context is at 80% or more of the window (the app's own limit for **Needs attention**; the card marks it), fix that measured cause before the friction family: use the table's last two rows.
 
 | What you see | Cause | Fix |
 | --- | --- | --- |
@@ -47,7 +47,7 @@ Find the friction that stops the most sessions, and read what the model wrote ab
 
 ## Act
 
-Each snippet goes in the project's `CLAUDE.md`. The same lines work in `AGENTS.md` for Codex, though Insights cannot show their effect there. If the friction shows in every project, put the lines in your own `~/.claude/CLAUDE.md` instead.
+Each snippet goes in the project's `CLAUDE.md`. The same lines work in `AGENTS.md` for Codex, though the Judgments view cannot show their effect there. If the friction shows in every project, put the lines in your own `~/.claude/CLAUDE.md` instead.
 
 ### State the goal and when it is done
 
@@ -106,16 +106,16 @@ Paste this into `CLAUDE.md`:
 
 ## Verify
 
-Before you act, note four figures at **30d**: **Fully or mostly achieved**, **Not achieved**, **Dissatisfied**, and the count of the family you worked on in **Friction categories**. The app has no custom date range, so you need them to compare with.
+Before you act, note four figures at **30d**: **Fully or mostly achieved**, **Not achieved**, **Dissatisfied**, and the reports of the family you worked on in **Friction categories** (select **Reports**). The app has no custom date range, so you need them to compare with.
 
 There is no same-day check: the judgments come from `/insights`, after the sessions end.
 
-After 14 days of work, run `/insights` in Claude Code, select **Refresh**, and read Insights:
+After 14 days of work, run `/insights` in Claude Code, select **Refresh**, and read the Judgments view:
 
 | Figure | Where | Expected |
 | --- | --- | --- |
-| The weeks that start after your change | **Outcome trend** | A higher share than the weeks before it. Insights counts a session by its start time, so these weeks hold only sessions you started after the change. |
-| The family you worked on | **Friction categories**, at **14d** | No longer first, or reported fewer times than half of your note at **30d**. The half is a rule of thumb: 14 days are about half of 30. |
+| The weeks that start after your change | **Outcome trend** | A larger fully and mostly achieved part than in the weeks before it. The view counts a session by its start time, so these weeks hold only sessions you started after the change. |
+| The family you worked on | **Friction categories**, by **Reports**, at **14d** | No longer first, or reported fewer times than half of your note at **30d**. The half is a rule of thumb: 14 days are about half of 30. |
 | **Fully or mostly achieved** | **Outcomes at a glance**, at **14d** | A higher share than your note. |
 | **Not achieved** and **Dissatisfied** | **Outcomes at a glance**, at **14d** | A lower share of **Sessions analysed** than in your note. |
 
@@ -128,10 +128,10 @@ If a figure did not move:
 
 ## Related
 
-- [Insights](/ai-ledger/pages/insights/): every panel used here, the families and the filters.
+- [Judgments](/ai-ledger/pages/insights/): every panel used here, the families, the weights and the filters.
 - [Activity](/ai-ledger/pages/activity/#session-sheet): the session sheet and its **/insights judgment**.
 - [Project](/ai-ledger/pages/project/): the **Session judgments** block for one project.
-- [Metric glossary](/ai-ledger/reference/glossary/#insights): what each judgment means.
+- [Metric glossary](/ai-ledger/reference/glossary/#judgments): what each judgment means.
 - [Kill repeated tool failures](/ai-ledger/improve/tool-failures/): for **tooling** and **slow**.
 - [Babysit agents less](/ai-ledger/improve/babysit-less/): for **rejected action**.
 - [Weekly 15-minute review](/ai-ledger/improve/weekly-review/): where this check sits in a routine.

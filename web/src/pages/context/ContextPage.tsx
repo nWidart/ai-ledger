@@ -6,7 +6,6 @@ import { HowMeasured } from "../../components/HowMeasured";
 import { InsightCard } from "../../components/InsightCard";
 import { ProjectDot } from "../../components/ProjectDot";
 import { SectionIndex } from "../../components/SectionIndex";
-import { UsageSheets } from "../../components/sheets/UsageSheets";
 import { PageSkeleton } from "../../components/PageSkeleton";
 import { useLanding } from "../../components/useLanding";
 import { num, plural } from "../../format";import { setSearch, useSearchOf, useView } from "../../url";
@@ -92,7 +91,6 @@ export function ContextPage() {
         <CostSection d={d} />
         <div className="drawers"><LargestDrawer rows={d.fills.largest} /><BreaksDrawer cost={d.cost} /></div>
       </>}
-      <UsageSheets data={undefined} />
     </main>
   );
 }

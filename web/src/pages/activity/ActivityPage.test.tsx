@@ -16,7 +16,7 @@ import { mockApi } from "../../components/sheets/testing";
 import { ActivityPage } from "./ActivityPage";
 import { setSearch } from "../../url";
 import { hookCommand, workDays } from "./work";
-import { ingested, refreshed, renderApp } from "../../testing";
+import { ingested, refreshed, renderApp, renderPage } from "../../testing";
 import { queries } from "../../queries";
 
 const REFRESHED_STATUS = { ingesting: false, last_ingest: null, last_stats: null, error: null, last_change: null, counts: {}, interval: 60, project_order: [] };
@@ -321,7 +321,7 @@ describe("ActivityPage", () => {
     const drawer = document.getElementById("d-sessions")!;
     const how = within(drawer).getByRole("button", { name: "How measured: the session count" });
     await userEvent.click(how);
-    expect(within(how.parentElement!).getByRole("tooltip").textContent).toMatch(/A session counts here when it has a request in the range.*Insights counts sessions by their start time/);
+    expect(within(how.parentElement!).getByRole("tooltip").textContent).toMatch(/A session counts here when it has a request in the range; the Judgments view counts sessions by their start time/);
   });
 
   it("reloads an open sessions table when the source changes", async () => {
@@ -878,7 +878,7 @@ describe("ActivityPage", () => {
   it("opens a session sheet from the sessions table and closes it again", async () => {
     serve(usage);
     at();
-    renderApp(<ActivityPage />);
+    renderPage(<ActivityPage />);
     await loaded();
     act(() => { openDrawer("d-sessions"); });
     const row = await within(document.getElementById("d-sessions")!).findByRole("button", { name: "#s1" });
@@ -893,7 +893,7 @@ describe("ActivityPage", () => {
   it("opens a tool sheet from the tools drawer, and Escape returns focus to the row", async () => {
     mockApi({ "/api/usage": () => usage, "/api/tool": q => ({ ...tool, kind: q.get("kind"), name: q.get("name") }) });
     at();
-    renderApp(<ActivityPage />);
+    renderPage(<ActivityPage />);
     await loaded();
     act(() => { openDrawer("d-tools"); });
     const row = document.querySelector<HTMLElement>('#d-tools tr[data-v="Bash"]')!;
@@ -910,7 +910,7 @@ describe("ActivityPage", () => {
   it("opens MCP server and skill sheets from the extensions drawer", async () => {
     mockApi({ "/api/usage": () => usage, "/api/tool": q => ({ ...tool, kind: q.get("kind"), name: q.get("name") }) });
     at();
-    renderApp(<ActivityPage />);
+    renderPage(<ActivityPage />);
     await loaded();
     act(() => { openDrawer("d-ext"); });
     const ext = within(document.getElementById("d-ext")!);
@@ -925,7 +925,7 @@ describe("ActivityPage", () => {
   it("opens the palette over an open tool sheet, and Escape leaves the sheet open", async () => {
     mockApi({ "/api/usage": () => usage, "/api/tool": () => tool, "/api/palette": () => palette });
     at("?range=30&tool=Bash");
-    renderApp(<><ActivityPage /><Palette /></>);
+    renderPage(<><ActivityPage /><Palette /></>);
     const sheet = document.querySelector<HTMLDialogElement>("dialog.sheet")!;
     expect(await within(sheet).findByText("Recent calls")).toBeTruthy();
     act(() => { dispatchEvent(new KeyboardEvent("keydown", { key: "k", ctrlKey: true, metaKey: true, bubbles: true })); openPalette(); });

@@ -47,7 +47,7 @@ export interface SessionSheetProps {
   range: number;
   /** The project the page is filtered to, so the filter button can offer to clear it. */
   pageProject: string;
-  /** The page's filters, for the link to Insights. */
+  /** The page's filters, for the link to Activity's Judgments view. */
   view: View;
 }
 

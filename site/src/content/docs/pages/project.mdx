@@ -22,7 +22,7 @@ import insightsLight from "../../../assets/shots/project-insights-light.png";
 import limits from "../../../assets/shots/project-limits.png";
 import limitsLight from "../../../assets/shots/project-limits-light.png";
 
-Project answers one question: how is this project doing, without visiting every page? It gathers the project's figures from Activity, Cost, Errors, Context, Insights and Limits on one page. Each block links to its page, filtered to the project.
+Project answers one question: how is this project doing, without visiting every page? It gathers the project's figures from Activity (both views), Cost, Errors, Context and Limits on one page. Each block links to its page, filtered to the project.
 
 <ThemedImage dark={layout} light={layoutLight} alt="The Project page for atlas-api in two columns: Activity, Cost and Context on the left, Errors, Plan limits and Sessions on the right." />
 
@@ -146,9 +146,9 @@ The legend beside the grid has a heading, "Typical session · 200k window" (the 
 
 <ThemedImage dark={insights} light={insightsLight} alt="The Project page's Session judgments block: how many of the project's sessions /insights analysed." />
 
-**Shows** how many of the project's Claude Code sessions `/insights` analysed, out of how many ("N of M Claude Code sessions analysed"), marked as a model's judgment as on [Insights](/ai-ledger/pages/insights/). Then **Outcomes** of the analysed sessions, as share and count, and **Top friction**, the three most reported friction families with their session counts. With no analysed session the block says "No session is analysed by `/insights` in this view." and shows no outcome.
+**Shows** how many of the project's Claude Code sessions `/insights` analysed, out of how many ("N of M Claude Code sessions analysed"), marked as a model's judgment as on Activity's [Judgments view](/ai-ledger/pages/insights/). Then **Outcomes** of the analysed sessions, as share and count, and **Top friction**, the three most reported friction families with their session counts. With no analysed session the block says "No session is analysed by `/insights` in this view." and shows no outcome.
 
-**Controls** The heading link **Open in Insights** opens Insights for the project.
+**Controls** The heading link **Open in Judgments** opens Activity's Judgments view for the project.
 
 ### Plan limits
 
@@ -167,7 +167,7 @@ See [Windows](/ai-ledger/concepts/windows/) for how limit windows work.
 
 ## Sheets
 
-The Project page hosts the session sheet and the tool, MCP server and skill sheets. Their state is kept in the URL, as on Activity: reloading `/project?project=foo&session=abc` shows the Project page of `foo` with that session's sheet open.
+The Project page shows the session sheet and the tool, MCP server and skill sheets, as every page does. Their state is kept in the URL, as on Activity: reloading `/project?project=foo&session=abc` shows the Project page of `foo` with that session's sheet open.
 
 ## Open the page
 

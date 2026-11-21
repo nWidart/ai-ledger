@@ -5,19 +5,20 @@ import { SubjectMenu } from "./components/menu/SubjectMenu";
 import { AutomatedFileWarning } from "./components/AutomatedFileWarning";
 import { Nav } from "./components/Nav";
 import { isMac, openPalette, usePaletteOpen } from "./components/palette/store";
+import { UsageSheets } from "./components/sheets/UsageSheets";
 import { usePathname } from "./url";
 
 // Each page, and the palette, is its own chunk: a page's code loads when its route is first shown.
 const Palette = lazy(() => import("./components/palette/Palette").then(m => ({ default: m.Palette })));
 
-// One app, seven tabs and the Project page: the path picks the page; the nav switches without a reload, so payloads stay in memory between them.
+// One app, six tabs and the Project page: the path picks the page; the nav switches without a reload, so payloads stay in memory between them.
+// Activity holds two views, Overview and Judgments (pages/activity); /insights, once a page, redirects to the second (router.tsx).
 export const ROUTES = {
   "/usage": { title: "Activity · AI Ledger", Page: lazyRouteComponent(() => import("./pages/activity/ActivityPage"), "ActivityPage") },
   "/cost": { title: "Cost · AI Ledger", Page: lazyRouteComponent(() => import("./pages/cost/CostPage"), "CostPage") },
   "/context": { title: "Context · AI Ledger", Page: lazyRouteComponent(() => import("./pages/context/ContextPage"), "ContextPage") },
   "/errors": { title: "Errors · AI Ledger", Page: lazyRouteComponent(() => import("./pages/errors/ErrorsPage"), "ErrorsPage") },
   "/limits": { title: "Limits · AI Ledger", Page: lazyRouteComponent(() => import("./pages/limits/LimitsPage"), "LimitsPage") },
-  "/insights": { title: "Insights · AI Ledger", Page: lazyRouteComponent(() => import("./pages/insights/InsightsPage"), "InsightsPage") },
   "/live": { title: "Live · AI Ledger", Page: lazyRouteComponent(() => import("./pages/live/LivePage"), "LivePage") },
   // Not a tab: reached from the project sheet, the filter row's "Project page" link and the palette.
   "/project": { title: "Project · AI Ledger", Page: lazyRouteComponent(() => import("./pages/project/ProjectPage"), "ProjectPage") },
@@ -25,7 +26,7 @@ export const ROUTES = {
 export type PagePath = keyof typeof ROUTES;
 const isPage = (p: string): p is PagePath => p in ROUTES;
 
-/** The root route's component: the navigation, the page the path names, and the palette. */
+/** The root route's component: the navigation, the page the path names, the sheets and the palette. */
 export function App() {
   // Any other path is on its way to Activity (the router redirects it).
   const path = usePathname(), route: PagePath = isPage(path) ? path : "/usage";
@@ -54,8 +55,9 @@ export function App() {
     <a className="skip" href="#content" onClick={e => { e.preventDefault(); land(true); }}>Skip to content</a>
     <Nav />
     <AutomatedFileWarning />
-    {/* One context menu for every subject the pages mark (components/menu). */}
-    <SubjectMenu><Outlet /></SubjectMenu>
+    {/* One context menu for every subject the pages and the sheets mark (components/menu), and one host for the project, tool
+        and session sheets: every page opens them in place, and no page mounts its own. */}
+    <SubjectMenu><Outlet /><UsageSheets /></SubjectMenu>
     {seen && <Suspense fallback={null}><Palette /></Suspense>}
   </>;
 }
