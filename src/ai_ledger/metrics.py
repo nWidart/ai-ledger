@@ -316,12 +316,13 @@ def requests_cte(pcte, where):
     """Requests with their session's project and source, total tokens, the estimated cost of each priced kind (cost_input, cost_output,
     cost_cache_read, cost_cache_5m, cost_cache_1h) and their sum as cost. All are NULL when the model is unpriced; the tier
     is chosen once per request, so the kinds add up to cost. A request whose source reported its cost (reported_cost) costs
-    that instead: cost is unknown only with neither, and the kinds of such a request are NULL when its model is unpriced.
+    that instead: cost is unknown only with neither, and the kinds of such a request are NULL even when its model has
+    rates (a user can price a Grok model), as the web reads the kinds as the estimated part of cost.
     Thinking tokens are billed as output.
     A fast-mode request (speed 'fast') on a model with fast rates costs those rates at any prompt size: fast pricing applies
     across the full context window, so it replaces the long-prompt tier. Without fast rates it costs as any other request."""
     rate = lambda k: f"CASE WHEN fst THEN p.{_RATE[k][2]} WHEN lg THEN p.{_RATE[k][1]} ELSE p.{_RATE[k][0]} END"
-    parts = ", ".join(f"r.{k} * {rate(k)} / 1e6 AS cost_{k}" for k in PRICE_KINDS)
+    parts = ", ".join(f"CASE WHEN r.reported_cost IS NULL THEN r.{k} * {rate(k)} / 1e6 END AS cost_{k}" for k in PRICE_KINDS)
     return f"""WITH {pcte}, rq AS (
         SELECT *, coalesce(reported_cost, {" + ".join(f"cost_{k}" for k in PRICE_KINDS)}) AS cost FROM (
           SELECT r.*, s.project, coalesce(s.source, 'claude') AS source, r.input + r.output + r.cache_read + r.cache_5m + r.cache_1h AS tokens,

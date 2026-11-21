@@ -122,7 +122,19 @@ class ReportedCostTest(unittest.TestCase):
         self.assertEqual([r["model"] for r in u["unpriced"]], ["m-other"])
 
     def test_reported_cost_wins_over_the_estimate(self):
-        self.assertAlmostEqual(self.usage([("m-a", 0.5)])["totals"]["cost"], 0.5)
+        t = self.usage([("m-a", 0.5)])["totals"]
+        self.assertAlmostEqual(t["cost"], 0.5)
+        # Rates for its model (a user can add some for a Grok model) give the request no kind costs: the web reads the
+        # kinds as the estimated part of cost and the rest as the reported part.
+        self.assertEqual([t[f"cost_{k}"] for k in metrics.PRICE_KINDS], [None] * 5)
+
+    def test_kind_costs_leave_out_a_reported_cost(self):
+        t = self.usage([("m-a", 0.5), ("m-a", None)])["totals"]
+        est = (60 * 1 + 10 * 10) / 1e6
+        self.assertAlmostEqual(t["cost"], 0.5 + est)
+        self.assertAlmostEqual(t["cost_input"], 60 / 1e6)
+        self.assertAlmostEqual(t["cost_output"], 100 / 1e6)
+        self.assertAlmostEqual(sum(t[f"cost_{k}"] or 0 for k in metrics.PRICE_KINDS), est)
 
     def test_a_price_entry_without_rates_gives_a_window_and_prices_nothing(self):
         tmp = tempfile.mkdtemp()
