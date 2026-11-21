@@ -720,15 +720,45 @@ SESSION_SORTS = ("first_ts", "duration_s", "prompts", "tokens", "cost", "peak_co
                  "model_ms", "output_per_s")
 
 
+MAX_SESSION_SORTS = 3
+
+
+def parse_session_sort(sort, desc=False):
+    """The (key, descending) pairs of a sessions sort: one to MAX_SESSION_SORTS keys of SESSION_SORTS, comma-separated, each
+    with a leading "-" for descending. A single key without "-" is descending when desc. No sort ("") gives no pairs.
+    Raises ValueError for an unknown, repeated or empty key, more keys than MAX_SESSION_SORTS, and desc beside a list or a "-" key."""
+    if not sort:
+        return []
+    items = sort.split(",")
+    if len(items) > MAX_SESSION_SORTS:
+        raise ValueError(f"too many sort keys: at most {MAX_SESSION_SORTS}")
+    keys = []
+    for item in items:
+        down = item.startswith("-")
+        key = item[1:] if down else item
+        if not key:
+            raise ValueError("empty sort key")
+        if key not in SESSION_SORTS:
+            raise ValueError(f"unknown sort: {key}")
+        if any(key == k for k, _ in keys):
+            raise ValueError(f"repeated sort key: {key}")
+        keys.append((key, down))
+    if desc and (len(keys) > 1 or keys[0][1]):
+        raise ValueError("desc cannot go with a sort list or a - key")
+    return [(keys[0][0], True)] if desc else keys
+
+
 def session_list(cur, project="", range_days=0, q="", near=False, offset=0, limit=100, prices=None, today=None, day="", automated=False,
                  source="", sort="", desc=False, days=None):
     """One page of the view's sessions, newest first (or nearest the context limit first), matching q on title, id, project
     or branch. day (YYYY-MM-DD): the sessions with requests on that day, or in the week from it (days=7), every figure (active
     time included) limited to those days in the range, costliest first and all of them, so their costs add up to the days'.
-    sort (one of SESSION_SORTS, ascending unless desc) orders them instead, before the page; rows without a value come last.
-    Each row also carries its whole-session model time and output speed (add_runs). Raises ValueError for another sort or span, or a span without a day."""
-    if sort and sort not in SESSION_SORTS:
-        raise ValueError(f"unknown sort: {sort}")
+    sort (parse_session_sort: one to three keys of SESSION_SORTS, "-" for descending, ascending otherwise, or one key with
+    desc) orders them instead, before the page, by the first key, then by each next one among the rows that are tied; rows
+    without a value come last for each key. The list's own order, then the session id, breaks the last ties, so pages never
+    repeat or skip a session. Each row also carries its whole-session model time and output speed (add_runs). Raises
+    ValueError for a sort it cannot read, another span, or a span without a day."""
+    order = parse_session_sort(sort, desc)
     prices = load_prices() if prices is None else prices
     if days is not None and not day:
         raise ValueError("days needs a day")
@@ -742,6 +772,7 @@ def session_list(cur, project="", range_days=0, q="", near=False, offset=0, limi
     hits = [x for x in sess if not near or x["near_limit"]]
     named = titles.titles(cur, [x["session_id"] for x in hits]) if q else {}
     hits = [x for x in hits if not q or q in f"{(named.get(x['session_id']) or ('',))[0]} {x['session_id']} {x['project']} {x['git_branch'] or ''}".lower()]
+    hits.sort(key=lambda x: x["session_id"])  # the last tie-break: the sorts below are stable
     if near:
         hits.sort(key=lambda x: -x["context_share"])
     elif day:
@@ -750,8 +781,8 @@ def session_list(cur, project="", range_days=0, q="", near=False, offset=0, limi
     else:
         hits.sort(key=lambda x: x["first_ts"] or "", reverse=True)
     add_runs(cur, hits)
-    if sort:
-        hits = sorted((x for x in hits if x[sort] is not None), key=lambda x: x[sort], reverse=desc) + [x for x in hits if x[sort] is None]
+    for key, down in reversed(order):  # the last key first, so the first one ends up deciding
+        hits = sorted((x for x in hits if x[key] is not None), key=lambda x: x[key], reverse=down) + [x for x in hits if x[key] is None]
     return dict(total=len(hits), offset=offset, sessions=titles.with_titles(cur, hits[offset:offset + limit]))
 
 

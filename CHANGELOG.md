@@ -23,6 +23,7 @@ and versions follow [Semantic Versioning](https://semver.org/).
 - Judgments' Friction categories can be weighed by the cost or the active time of the sessions that reported each friction, or by reports. Cost is the default, and each row shows the other two beside it. A session with no price adds its active time but no cost.
 - The command palette opens Activity's Judgments view with `>judgments`; `>insights` finds the same row.
 - Activity's Sessions tab has **Model** (model time) and **Tok/s** (output tokens per second of model time) columns, whole-session figures that sort like the others. Sessions that record no model time, Codex and older Claude Code ones, read "–" and sort last either way, and add nothing to the Output speed tile. On a narrow window the sorted column stays shown. `/api/sessions` rows add `model_ms` and `output_per_s` and accept them as `sort`.
+- `/api/sessions` sorts by up to three keys: `sort=-cost,prompts` orders by cost, then prompts among sessions with the same cost, a leading `-` meaning descending, and rows with no value come last for each key. More than three keys, an unknown, repeated or empty key, and `desc=1` beside a list or a `-` key answer 400. The earlier form, `sort=cost&desc=1`, still works and equals `sort=-cost`. Sessions that every key leaves tied now come in the list's own order, then by session id, so pages of a sorted list never repeat or skip a session.
 
 ### Changed
 
