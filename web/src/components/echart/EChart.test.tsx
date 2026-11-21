@@ -331,6 +331,30 @@ describe("EChart reading", () => {
     expect(chart.band).toBeNull();
   });
 
+  it("keeps the band on the day a key read when the wheel turns over another day the pointer rests on", async () => {
+    render(show());
+    const chart = await drawn();
+    chart.fire("mousemove", chart.pointAt(0)); // the pointer rests on Mon
+    key("End");
+    expect(readout()).toBe("Wed: $3.00");
+    expect(chart.band).toBe(2);
+    chart.fire("mousewheel", chart.pointAt(0)); // ECharts' own trigger would put the band back under the pointer
+    expect(chart.band).toBe(2);
+    expect(readout()).toBe("Wed: $3.00");
+  });
+
+  it("puts a key's tooltip over the point when the pointer was reading that same point", async () => {
+    render(show());
+    const chart = await drawn();
+    chart.fire("mousemove", [chart.pointAt(2)[0] + 20, 190]); // low in Wed's band: the tooltip is beside the pointer
+    expect(readout()).toBe("Wed: $3.00");
+    expect(tooltip()!.style.top).toBe("180px");
+    key("End"); // the same point, now the keyboard's: over the point, under the top of the grid
+    expect(readout()).toBe("Wed: $3.00");
+    expect(parseFloat(tooltip()!.style.left)).toBeCloseTo(chart.pointAt(2)[0] - 14, 2);
+    expect(tooltip()!.style.top).toBe("22px");
+  });
+
   it("keeps a chart's own axis-pointer settings beside its own", async () => {
     render(show({ option: env => ({ ...option(env), axisPointer: { link: [{ xAxisIndex: "all" }] } }) }));
     expect((await drawn()).last).toMatchObject({ axisPointer: { link: [{ xAxisIndex: "all" }], triggerOn: "none" } });

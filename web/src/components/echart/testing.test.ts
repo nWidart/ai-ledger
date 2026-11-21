@@ -62,6 +62,8 @@ describe("the fake ECharts runtime", () => {
     expect(chart.band).toBeNull();
     chart.fire("click", chart.pointAt(7));
     expect(chart.band).toBe(7);
+    chart.fire("mousewheel", chart.pointAt(2));
+    expect(chart.band).toBe(2);
     chart.fire("globalout");
     expect(chart.band).toBeNull();
     expect(chart.actions).toEqual([]); // ECharts' own moves are not the wrapper's actions
@@ -69,6 +71,7 @@ describe("the fake ECharts runtime", () => {
     chart.setOption({ axisPointer: { triggerOn: "none" } });
     chart.fire("mousemove", chart.pointAt(4));
     chart.fire("click", chart.pointAt(7));
+    chart.fire("mousewheel", chart.pointAt(2));
     expect(chart.band).toBeNull();
     chart.dispatchAction({ type: "updateAxisPointer", currTrigger: "mousemove", x: chart.pointAt(6)[0], y: 100 });
     chart.fire("globalout");

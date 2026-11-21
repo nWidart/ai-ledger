@@ -23,7 +23,7 @@
 // - getOption: components as arrays, each dataZoom with the window as `startValue`, `endValue`, `start` and `end`.
 // - the pointer's cursor: getZr().setCursorStyle() sets `zr.cursor`, and a fired "mousemove" sets it back to "default"
 //   before the handlers run, as zrender does on each move over no drawn element.
-// - ECharts' own axis-pointer triggers: a fired "mousemove" or "click" moves `band` to the point under it and a fired
+// - ECharts' own axis-pointer triggers: a fired "mousemove", "click" or "mousewheel" moves `band` to the point under it and a fired
 //   "globalout" hides it, with no action recorded, unless the option's root `axisPointer.triggerOn` is "none".
 // It is stricter than ECharts in one way: a call on a disposed chart, or a second live chart on one element, throws where
 // ECharts would log a warning, since either is a wrapper bug.
@@ -245,9 +245,9 @@ export class FakeChart {
     };
     act(() => {
       if (name === "mousemove") this.zr.cursor = "default"; // no drawn element is under the fake's pointer
-      // ECharts' own axis-pointer triggers: the band goes to the point under a move or a click, and hides when the
-      // pointer leaves, unless the option's axisPointer.triggerOn is "none".
-      const auto = String(list(this.current.axisPointer)[0]?.triggerOn ?? "mousemove|click");
+      // ECharts' own axis-pointer triggers: the band goes to the point under a move, a click or the wheel, and hides
+      // when the pointer leaves, unless the option's axisPointer.triggerOn is "none".
+      const auto = String(list(this.current.axisPointer)[0]?.triggerOn ?? "mousemove|click|mousewheel");
       if (auto !== "none" && name === "globalout") this.band = null;
       else if (auto !== "none" && auto.includes(name)) this.band = this.pointAtPixel(x ?? NaN, y ?? NaN);
       this.zr.trigger(name, event);
