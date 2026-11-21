@@ -886,6 +886,26 @@ describe("EChart zoom", () => {
     expect(readout()).toBe("Oct 13: $12.00");
   });
 
+  it("draws no slider while zoom is off, whatever the option holds, and draws it again when zoom turns on", async () => {
+    // A slider the wrapper neither reads nor resets would still zoom the chart when dragged.
+    const { rerender } = render(zoomed({ zoom: false }));
+    const chart = await drawn();
+    expect(chart.last!.dataZoom).toEqual([]);
+    expect(chart.option.dataZoom ?? []).toEqual([]);
+    const draws = chart.options.length;
+    rerender(zoomed({ zoom: true })); // the flag alone redraws
+    expect(chart.options).toHaveLength(draws + 1);
+    expect(chart.last!.dataZoom).toHaveLength(1);
+    key("+");
+    expect(chart.shown).toEqual({ from: 15, to: 29 });
+    rerender(zoomed({ zoom: false }));
+    expect(chart.options).toHaveLength(draws + 2);
+    expect(chart.option.dataZoom).toEqual([]);
+    expect(chart.shown).toEqual({ from: 0, to: 29 });
+    rerender(zoomed({ zoom: undefined }));
+    expect(chart.option.dataZoom).toEqual([]);
+  });
+
   it("says nothing on release when the view changed under a drag", async () => {
     const onZoom = zoomSpy();
     const { rerender } = render(zoomed({ onZoom, view: "30 days" }));

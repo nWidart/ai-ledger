@@ -59,8 +59,9 @@ export interface EChartProps {
    *  over every point of a chart that has a handler: the wrapper cannot tell which points the handler would decline. */
   onActivate?: (i: number) => boolean | void;
   /** The option draws the zoom slider (`zoomSlider()`): the box takes the zoom keys, plus and `=` to halve the points
-   *  shown and minus to double them, and follows the slider. Without it, or while the option draws no slider, no zoom is
-   *  read or set, and turning it off shows every point. The window is read as point indexes, so the slider must zoom a
+   *  shown and minus to double them, and follows the slider. Without it the wrapper draws no slider, whatever the option
+   *  holds, so none is left that it neither reads nor resets, and every point shows. While the option draws no slider,
+   *  no zoom is read or set. The window is read as point indexes, so the slider must zoom a
    *  category x axis (one band per point): a value or time axis gives values, not indexes, and is not supported. */
   zoom?: boolean;
   /** The points shown changed, by a key, the slider, `reset()`, a new view, or a redraw that left the zoom no slider or
@@ -165,7 +166,8 @@ export function EChart({
   const [said, setSaid] = useState<Said | null>(null);
   // The view: the caller's key, or the option function when it gives none. A new view is another chart: nothing is read
   // on it yet, the old point may not exist, and it shows every point (the draw effect resets the chart's window).
-  // Turning the zoom off shows every point too (the zoom effect). A point the same view no longer has cannot be read.
+  // Turning the zoom off shows every point too (the draw leaves the slider out). A point the same view no longer has
+  // cannot be read.
   // All cleared here, in the render that sees the change, so no effect runs on the old state, and a view, a zoom or a
   // point that comes back brings nothing back.
   const shows = view ?? option;
@@ -401,6 +403,8 @@ export function EChart({
   // one on a click, over a point nothing reads (a click on a point the chart declines, with the pointer at rest).
   // Motion is for the chart's first drawing alone: its marks grow once. Every later one is drawn at once, so a bar that
   // newer data adds, or a new view brings, does not grow while the others stand.
+  // The slider is the wrapper's too: without `zoom` it draws none, whatever the option holds. A slider it neither reads
+  // nor resets would still zoom the chart when dragged, with no status and no way back.
   // A new view shows every point: its slider merges into the old one by id and would keep the old window, so the window
   // is reset.
   const drew = useRef(shows), drawn = useRef<ECharts | null>(null);
@@ -408,15 +412,15 @@ export function EChart({
     if (!chart) return;
     const made = option(env), first = drawn.current !== chart;
     drawn.current = chart;
-    chart.setOption({ ...made, ...(env.motion && first ? {} : { animation: false }), axisPointer: { ...made.axisPointer, triggerOn: "none" } }, { replaceMerge: REPLACE });
+    chart.setOption({
+      ...made, ...(env.motion && first ? {} : { animation: false }), ...(zoom ? {} : { dataZoom: [] }),
+      axisPointer: { ...made.axisPointer, triggerOn: "none" },
+    }, { replaceMerge: REPLACE });
     if (drew.current === shows) return keep(chart);
     drew.current = shows;
     unsaid.current = false; // a drag still going changed the old view: its release has nothing to say of this one
     unzoom(chart);
-  }, [chart, option, env, shows]);
-  // Without zoom, nothing reads or sets the window: a chart left zoomed would have no way back.
-  useEffect(() => { if (chart && !zoom) unzoom(chart); }, [chart, zoom]);
-
+  }, [chart, option, env, shows, zoom]);
   // The caller hears of every change to the points shown, whatever made it: a key, the slider, reset(), a new view, or
   // a redraw that left the zoom no slider or no room.
   const told = useRef<Shown | null>(null);
