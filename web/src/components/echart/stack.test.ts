@@ -158,6 +158,14 @@ describe("stackSeries", () => {
     }
   });
 
+  it("gives each bar no highlight state, hatched or not, with motion or not", () => {
+    // ECharts would redraw a highlighted bar's segments in lifted colors that no token gives.
+    for (const motion of [false, true]) {
+      const s = stackSeries({ kinds, values: shares, hatched: i => i === 3, env: env({ motion }) });
+      for (const i of [0, 3]) expect(draw(s, i)).toMatchObject({ emphasisDisabled: true });
+    }
+  });
+
   it("edges each segment in the text ink under forced colors only", () => {
     const plain = draw(stackSeries({ kinds, values: shares, hatched: () => false, env: env() }), 0)!;
     for (const c of plain.children) expect(c.style.stroke).toBeUndefined();

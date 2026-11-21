@@ -52,6 +52,12 @@ describe("categoryAxis", () => {
     expect(categoryAxis(env({ motion: true }), [], String).axisPointer).toMatchObject({ animation: false });
   });
 
+  it("highlights nothing on the point read: the band alone shows the reading", () => {
+    // By default the pointer highlights every item on its point: ECharts lifts a custom series' colors and draws a dot in its
+    // own palette on a line with no symbols.
+    expect(categoryAxis(env(), [], String).axisPointer).toMatchObject({ triggerEmphasis: false });
+  });
+
   it("grows the label size and margin with the text scale", () => {
     const one = categoryAxis(env(), [], String).axisLabel!, two = categoryAxis(env({ textScale: 2 }), [], String).axisLabel!;
     expect(two.fontSize).toBe(2 * (one.fontSize as number));
@@ -105,6 +111,10 @@ describe("pointLabel", () => {
     expect(el.type).toBe("text");
     expect(el.style).toMatchObject({ text: "Peak", fill: "ink-text", stroke: "ink-surface", fontSize: 22 });
     expect(el.style.y).toBeLessThan(a.y(v));
+  });
+
+  it("has no highlight state, so no highlight changes its colors", () => {
+    expect(draw(1, 15).el).toMatchObject({ emphasisDisabled: true });
   });
 
   it("is one item, drawn above the lines and deaf to the pointer", () => {
@@ -203,7 +213,7 @@ describe("tracksOption", () => {
 
   it("puts the labels and the only axis pointer on x axis 0, the frame's", () => {
     const [frame, ...tracks] = option().xAxis as Axis[];
-    expect(frame).toMatchObject({ type: "category", gridIndex: 0, data: labels, axisPointer: { show: true } });
+    expect(frame).toMatchObject({ type: "category", gridIndex: 0, data: labels, axisPointer: { show: true, triggerEmphasis: false } });
     expect((frame!.axisLabel!.formatter as (v: string) => string)("2026-10-02")).toBe("10-02");
     expect((option().xAxis as Axis[]).filter(a => a.axisPointer?.show)).toHaveLength(1);
     // Each track's x axis: hidden, on its own grid, over the same labels, with no pointer.
@@ -243,6 +253,8 @@ describe("selectionMark", () => {
     expect(r.type).toBe("rect");
     expect(r.shape).toEqual({ x: 172.75, y: 20.75, width: 38.5, height: 170.5 });
     expect(r.style).toEqual({ fill: "ink-tint", stroke: "ink-accent", lineWidth: 1.5 });
+    // No highlight state: reading the selected point leaves its tint and frame as they are.
+    expect(r).toMatchObject({ emphasisDisabled: true });
   });
 
   it("is an unfilled 2px frame in the accent, Highlight there, under forced colors", () => {

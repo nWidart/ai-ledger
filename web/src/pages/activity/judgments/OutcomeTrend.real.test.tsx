@@ -113,10 +113,9 @@ it("draws a bar per week in the parts' colors, the counts, one band, newer figur
   expect(errors).not.toHaveBeenCalled(); // jsdom's "Not implemented" and React's warnings both come through here
 });
 
-// A known defect, kept failing on purpose: the axis pointer highlights the bars under it, and the stack's custom series
-// leaves ECharts' emphasis on, so the week read is redrawn in lifted colors that no token gives (rgb(8, 100, 200) becomes
-// rgb(8,105,210)). When the stack disables its emphasis this test fails: make it a plain `it`.
-it.fails("keeps the week read in its parts' colors", async () => {
+// By default ECharts' axis pointer highlights the items on the point read, and a highlighted custom series is redrawn in
+// lifted colors that no token gives (rgb(8, 100, 200) became rgb(8,105,210)). The band alone shows the reading.
+it("keeps the week read in its parts' colors", async () => {
   const { unmount } = renderApp(<OutcomeTrend weeks={trend} view="v" />);
   await waitFor(() => expect(new Set(parts().map(p => p.token))).toEqual(new Set(PARTS)));
   const before = parts().length;

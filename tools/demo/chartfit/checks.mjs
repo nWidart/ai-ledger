@@ -98,6 +98,23 @@ export function chart(h, d) {
       await page.done();
     },
 
+    /** The reading keeps the drawing's colors: in light, with the keys on point I, each legend key's color is still drawn,
+     *  and no bar is drawn in a color that is not a key's. By default ECharts highlights the items under its axis pointer:
+     *  it redrew the bars read in lifted colors, and gave a line with no symbols a dot in its own palette. */
+    async readColors() {
+      const page = await open("reading colors");
+      await theme(page, "light");
+      await until(() => drawnKeys(page), k => k.ok);
+      await read(page);
+      await until(() => state(page), s => s.band);
+      await sleep(200); // a highlight is drawn on a frame after the band's
+      const k = await drawnKeys(page);
+      const off = k.fills.filter(f => !k.keys.some(x => x.color === f));
+      line(`light, with ${one} ${I + 1} read: each legend key's color is drawn, and no bar in another color`, k.ok && !off.length,
+        off.length ? `not a key's: ${off.map(f => `rgb(${f})`).join(", ")}; ${keyLine(k)}` : keyLine(k));
+      await page.done();
+    },
+
     /** Forced colors: system colors for the text, the band and the bars' edges. */
     async forcedColors() {
       const page = await open("forced colors", { forcedColors: "active" });

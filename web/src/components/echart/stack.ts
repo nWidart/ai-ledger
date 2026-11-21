@@ -76,7 +76,9 @@ export function stackSeries({ kinds, values, hatched, env, width = barWidth, id 
     // wrapper animates the chart's first drawing only, so a bar that newer data adds does not grow either.
     const grow = env.motion && params.actionType == null
       ? { originX: cx, originY: y0, enterFrom: { scaleY: 0 }, enterAnimation: { delay: 6 * Math.min(i, 60) } } : {};
-    return { type: "group", children, ...grow };
+    // No highlight state: a highlight would redraw the segments in lifted colors that no token gives. The axis pointer
+    // asks for none (categoryAxis), and the series is silent; this holds for any other highlight too.
+    return { type: "group", children, emphasisDisabled: true, ...grow };
   };
   return {
     type: "custom",

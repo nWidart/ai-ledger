@@ -104,6 +104,7 @@ All in `web/src/components/echart/option.ts` unless said, pure, and typed from `
 - `zoomSlider(env)`: gains `xAxisIndex: "all"`.
 - `SLIDER_ROOM` (28) and `ZOOM_FROM` (14, `ZOOM_DAYS` in `costDaily.ts` today) move here from `costDaily.ts`, which imports them and still exports `SLIDER_ROOM`, so `CostChart.tsx` is not touched by this.
 - `stack.ts`: `width` becomes `(band, i) => number`. The outcome trend halves the width of a week with few sessions.
+- No highlight: the band alone shows the reading. By default ECharts' axis pointer highlights every item on the point read (`dispatchHighDownActually` in `axisTrigger.js`), and `silent` does not stop it, since it only mutes the pointer's own events. A highlighted custom series is redrawn in lifted colors that no token gives (`createEmphasisDefaultState`), and a line with no symbols gets a dot in ECharts' own palette (`LineView.highlight`). Measured on Cost and the outcome trend before this fix. So `categoryAxis()` sets `axisPointer.triggerEmphasis: false`. The shapes of `stackSeries()`, `selectionMark()` and `pointLabel()` also set `emphasisDisabled: true`, so a highlight from any other source leaves them as drawn. A series-level `emphasis.disabled` would not do this for a custom series: there it only stops the blur of other series.
 
 Cost's `avgLine` stays as it is: a haloed text-colored line is another thing than a series-colored line with dots.
 
@@ -111,7 +112,7 @@ Cost's `avgLine` stays as it is: a haloed text-colored line is another thing tha
 
 - **How a chart tells it.** The chart's model holds `selected: number | null`, the index of the selected point, and its option builder adds `selectionMark(env, { index })`. The wrapper has no prop for it. The selection is not part of `view`, so selecting redraws the same view: the reading and the zoom stay.
 - **How it is drawn.** A custom series with `id: "selected"` on the frame, `z: 1` (over the grid lines, under the marks), one item, silent. Its rectangle is the point's whole band over the frame's height, inset by half the frame line. Theme: fill `ink.tint` (the accent at 16%), a 1.5px frame in `ink.accent`. Forced colors: no fill, a 2px frame in `ink.accent`, which is `Highlight` there.
-- **Apart from the reading.** The reading band has no frame and sits over the marks: a neutral wash in the theme, a `Highlight` wash in forced colors. The frame is the selection in both modes, so the two differ by shape and not by hue alone. Both show on a point that is selected and read.
+- **Apart from the reading.** The reading band has no frame and sits over the marks: a neutral wash in the theme, a `Highlight` wash in forced colors. The frame is the selection in both modes, so the two differ by shape and not by hue alone. Both show on a point that is selected and read. Reading a point changes no color of what is drawn: the helpers turn ECharts' own highlight off (decision 3).
 - **Zoom.** A selected point outside the points shown draws nothing (spike). The chip still names it. An index outside the axis draws nothing either: ECharts would place it by extrapolation, in a margin or off the box.
 - **Words.** The chip names the selection, and `status` says a selection or a clear once. A bar's reading does not say "selected": it does not today.
 

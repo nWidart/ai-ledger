@@ -31,6 +31,7 @@ export async function cost(h) {
   const { N, I, named, centre, ev, drawn, away, box } = c;
 
   await c.colors();
+  await c.readColors();
   await c.forcedColors();
   await c.textSize();
 

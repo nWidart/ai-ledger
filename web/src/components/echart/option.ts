@@ -35,14 +35,17 @@ type ValueAxis = Extract<YAXisComponentOption, { type?: "value" }>;
 
 /** One band per label (a day, a week), with no tick and no line, muted labels that ECharts thins when they overlap, and the
  *  cursor band: the shadow pointer in the cursor ink, with no label. The wrapper moves and hides it. It jumps to the point
- *  read: by default ECharts slides it for 200ms over bands wider than 15px, across days the reading no longer names. */
+ *  read: by default ECharts slides it for 200ms over bands wider than 15px, across days the reading no longer names.
+ *  The band alone shows the reading: by default the pointer also highlights every item on the point read
+ *  (axisTrigger.js, dispatchHighDownActually), which lifts the colors of a custom series' shapes (states.js,
+ *  createEmphasisDefaultState) and gives a line with no symbols a dot in ECharts' own palette (LineView.highlight). */
 export const categoryAxis = (env: OptionEnv, labels: readonly string[], format: (label: string) => string): CategoryAxis => ({
   type: "category",
   data: [...labels],
   axisTick: { show: false },
   axisLine: { show: false },
   axisLabel: { color: env.ink.muted, fontSize: size(env), margin: 8 * env.textScale, hideOverlap: true, formatter: (v: string) => format(v) },
-  axisPointer: { show: true, type: "shadow", animation: false, shadowStyle: { color: env.ink.cursor }, label: { show: false } },
+  axisPointer: { show: true, type: "shadow", animation: false, triggerEmphasis: false, shadowStyle: { color: env.ink.cursor }, label: { show: false } },
 });
 
 /** A value axis from 0 to max in ticks of step (see `niceMax` in chart.ts), on grid lines, with muted labels. */
@@ -80,6 +83,7 @@ export const pointLabel = (env: OptionEnv, { index, value, text }: { index: numb
     const { x, align } = labelAnchor(cx, bar, params.coordSys as unknown as { x: number; width: number }, env.textScale);
     return {
       type: "text",
+      emphasisDisabled: true, // no highlight state, as the stack has none
       style: {
         text, x, y: cy - 4 * env.textScale, align, verticalAlign: "bottom",
         fontFamily: FONT, fontSize: size(env), fontWeight: 600,
@@ -180,6 +184,7 @@ export const selectionMark = (env: OptionEnv, { index }: { index: number }): Cus
     const band = (api.size!([1, 0]) as number[])[0]!, line = env.forced ? 2 : 1.5;
     return {
       type: "rect",
+      emphasisDisabled: true, // no highlight state, as the stack has none
       shape: { x: cx - band / 2 + line / 2, y: frame.y + line / 2, width: band - line, height: frame.height - line },
       style: { fill: env.forced ? "none" : env.ink.tint, stroke: env.ink.accent, lineWidth: line },
     };
