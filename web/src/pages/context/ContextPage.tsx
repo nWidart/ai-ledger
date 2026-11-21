@@ -6,6 +6,7 @@ import { useScopeProjects } from "../../components/ScopeBar";
 import { HowMeasured } from "../../components/HowMeasured";
 import { ProjectDot } from "../../components/ProjectDot";
 import { jumpTo } from "../../components/Drawer";
+import { DocsLink } from "../../components/DocsLink";
 import { PageSkeleton } from "../../components/PageSkeleton";
 import { useLanding } from "../../components/useLanding";
 import { num, plural } from "../../format";
@@ -30,7 +31,7 @@ function Lede({ d }: { d: ContextPayload }) {
   return <>
     <h1 className="lede" id="lede" tabIndex={-1} aria-live="polite">A typical session{where} starts with <span className="amt">{num(s.median)} tokens</span> of context
       {s.window_share != null && <>, <span className="unit">{share(s.window_share)} of its window</span></>}.</h1>
-    <p className="sub">Every figure comes from the transcripts.<HowMeasured what="context">The prompt tokens of each session's first turn, over {plural(s.sessions, "session")} with a measured
+    <p className="sub">Every figure comes from the transcripts.<HowMeasured what="context" docs="concepts/windows#the-context-window">The prompt tokens of each session's first turn, over {plural(s.sessions, "session")} with a measured
       start. Nothing is read from <code>CLAUDE.md</code>, <code>AGENTS.md</code> or any configuration file. Token figures taken from tool result sizes are estimates.</HowMeasured></p>
   </>;
 }
@@ -95,7 +96,7 @@ export function ContextPage() {
         <div>{d ? <Lede d={d} /> : <h1 className="lede" id="lede" tabIndex={-1}>Context could not be loaded.</h1>}</div>
       </header>}
       {error && <div className="banner" role="alert"><b>Could not load {viewName(want)} ({error.message}).{d ? ` Still showing ${viewName(d)}.` : ""}</b>{" "}
-        <button type="button" className="linkish" ref={retryBtn} onClick={retry}>Retry</button></div>}
+        <button type="button" className="linkish" ref={retryBtn} onClick={retry}>Retry</button>{" "}<DocsLink docs="reference/troubleshooting">Troubleshooting</DocsLink></div>}
       <p className="pending">{loading && d ? `Loading ${viewName(want)}…` : ""}</p>
       {d && <>
         <RebuildNotice d={d} />

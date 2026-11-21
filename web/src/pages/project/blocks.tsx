@@ -7,6 +7,7 @@ import { askedFor } from "../../components/refresh";
 import type { ContextPayload, ErrorsPayload, InsightsPayload, LimitsPayload, LivePayload, Totals, UsagePayload } from "../../api";
 import { DataTable } from "../../components/DataTable";
 import { Judged, label as facetLabel, NO_FACETS, outcomeLabel } from "../../components/facets";
+import { DocsLink } from "../../components/DocsLink";
 import { Ledger, LedgerRow } from "../../components/Ledger";
 import { ChangeDetail, Facts, ModelLedger, TopSessions } from "../../components/sheets/ProjectSheet";
 import { appLink, errorsHref, judgmentsHref, openSessionSheet } from "../../components/sheets/session";
@@ -82,7 +83,7 @@ function Block<T>({ id, title, page, href, off, state, also = [], children }: { 
         <h2 id={id + "Title"}>{title}</h2>
         {off ? <span className="blk-off">{off}</span> : <a className="blk-open" href={href} onClick={appLink}>Open in {page}</a>}
       </header>
-      {error && <div className="empty" role="alert">Could not load {title.toLowerCase()} ({error.message}). <button type="button" className="linkish" onClick={retry}>Retry</button></div>}
+      {error && <div className="empty" role="alert">Could not load {title.toLowerCase()} ({error.message}). <button type="button" className="linkish" onClick={retry}>Retry</button>{" "}<DocsLink docs="reference/troubleshooting">Troubleshooting</DocsLink></div>}
       {data ? children(data) : !error && !off && <p className="empty">Loading…</p>}
     </section>
   );

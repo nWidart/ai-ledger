@@ -508,6 +508,8 @@ describe("ProjectPage", () => {
       const b = await screen.findByRole("region", { name: "Session judgments" });
       const alert = await within(b).findByRole("alert");
       expect(alert.textContent).toMatch(/Could not load session judgments/);
+      expect(within(alert).getByRole("link", { name: "Troubleshooting, Troubleshooting and FAQ documentation, opens in a new tab" }).getAttribute("href"))
+        .toBe("https://nwidart.github.io/ai-ledger/reference/troubleshooting/");
       expect(await within(block("Activity")).findByText("median session")).toBeTruthy();
       expect(within(block("Context")).queryByRole("alert")).toBeNull();
       await within(block("Context")).findByText("median starting context, tokens");

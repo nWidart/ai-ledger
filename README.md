@@ -40,7 +40,7 @@ Each page shows only the filters that change it. Limits shows the source only, a
 
 A session link on any page opens the session's sheet over that page, so the page keeps its state and Back closes the sheet; changing the project or source filter closes it too. **Open session** in Cmd+K and in the right-click menu does the same on every page, Limits included; on Live the stream keeps following its session. A session's sheet shows its model time, tool time, output speed and lines added and removed. These come from the `cost-state` line Claude Code writes when a session ends (from about late October 2026), so Codex and older Claude Code sessions show none.
 
-The [documentation site](https://nwidart.github.io/ai-ledger/) describes each page in detail.
+The [documentation site](https://nwidart.github.io/ai-ledger/) describes each page in detail. The top bar's **Docs** link and the command palette's `>docs` commands open the page you are on, and "Learn more" links in the explanations go to the section behind a figure; the app sends nothing to the site until you follow a link.
 
 <table>
 <tr><td><picture><source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/nWidart/ai-ledger/main/docs/activity-light.gif"><img src="https://raw.githubusercontent.com/nWidart/ai-ledger/main/docs/activity.gif" alt="Activity"></picture></td><td><picture><source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/nWidart/ai-ledger/main/docs/cost-light.gif"><img src="https://raw.githubusercontent.com/nWidart/ai-ledger/main/docs/cost.gif" alt="Cost"></picture></td></tr>

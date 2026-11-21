@@ -1,4 +1,4 @@
-import { act, screen, waitFor } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import limits from "../__fixtures__/limits";
@@ -85,6 +85,20 @@ describe("PageSkeleton", () => {
     await userEvent.click(retry);
     await waitFor(() => expect(document.getElementById("lede")!.textContent).not.toMatch(/could not be loaded/));
   });
+
+  // Live's banner has no Retry (the stream asks again on its own) and the Project page's blocks fail one by one: their own tests.
+  it.each([["/usage", "pg-activity"], ["/usage?view=judgments", "pg-judgments"], ["/cost", "pg-cost"], ["/context", "pg-context"], ["/errors", "pg-errors"], ["/limits", "pg-limits"]])(
+    "on %s, a failed first load links to Troubleshooting beside Retry", async (path, cls) => {
+      mockApi({ "/api/status": () => status });
+      await open(path + (path.includes("?") ? "&" : "?") + "range=30", cls);
+      const retry = await screen.findByRole("button", { name: "Retry" });
+      const alert = retry.closest<HTMLElement>("[role=alert]")!;
+      expect(alert.textContent).toMatch(/Could not load/);
+      const link = within(alert).getByRole("link", { name: "Troubleshooting, Troubleshooting and FAQ documentation, opens in a new tab" });
+      expect(link.getAttribute("href")).toBe("https://nwidart.github.io/ai-ledger/reference/troubleshooting/");
+      expect([link.getAttribute("target"), link.getAttribute("rel")]).toEqual(["_blank", "noreferrer"]);
+      expect(retry.compareDocumentPosition(link) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy(); // after Retry
+    });
 
   it.each([["/cost", "pg-cost"], ["/context", "pg-context"], ["/errors", "pg-errors"], ["/limits", "pg-limits"], ["/usage?view=judgments", "pg-judgments"], ["/live", "pg-live"]])(
     "shows on %s while its first load is pending", async (path, cls) => {

@@ -1,6 +1,7 @@
 // From the palette's chips and the current location to the URL one commit writes, the footer that says so, and how each
 // chip fared. Pure: no React, no DOM. Pages already read every key written here; nothing new goes in the URL.
 import { viewOf, type View } from "../../api";
+import { DOCS, docsForRoute, docsUrl, type DocsKey } from "../../docs";
 import { DEFAULT_RANGE, SHARED_KEYS, applyPatch, formatSearch, parseView, rootState, sheetKey, validateRoot } from "../../url";
 import { SOURCE_LABELS } from "../Filters";
 import { PAGES } from "../Nav";
@@ -18,6 +19,8 @@ export interface Resolved {
   /** Enter does something: the view moves or a command runs. */
   changed: boolean;
   command: Command | null;
+  /** The docs page a docs command opens in a new tab, or null. */
+  docs: string | null;
   footer: string;
   /** One per chip, in chip order. */
   status: ChipStatus[];
@@ -100,6 +103,9 @@ export function resolve(chips: readonly Chip[], here: Here): Resolved {
   if (path === "/errors" && !ERRORS_KEYS.some(k => k in raw)) raw.range = String(DEFAULT_RANGE);
   const href = path + formatSearch(raw), moved = href !== here.path + formatSearch(here.search);
   const ci = slot.get("command"), command = ci == null ? null : (chips[ci]!.value as Command);
+  // "This page" is the page the commit shows, as the navigation's Docs link will point there once it lands.
+  const docsKey: DocsKey | null = command === "docs" ? docsForRoute(path, raw) : command?.startsWith("docs:") ? (command.slice(5) as DocsKey) : null;
+  const docs = docsKey && Object.hasOwn(DOCS, docsKey) ? docsUrl(docsKey) : null;
 
   // The footer: the action, then the filters that apply, then anything that will not.
   const st = parseView(raw);
@@ -111,6 +117,10 @@ export function resolve(chips: readonly Chip[], here: Here): Resolved {
   else if (moved) action = `update ${pageLabel(page)}`;
   if (command === "copy") action = action ? `${action}, then copy its link` : "copy the link to this view";
   if (command === "refresh") action = action ? `${action}, then refresh data` : "refresh data";
+  if (docs) {
+    const opens = `open the ${docsKey === "home" ? "docs home" : DOCS[docsKey!].title + " docs"} in a new tab`;
+    action = action ? `${action}, then ${opens}` : opens;
+  }
   const parts = [action ? `Enter: ${action}` : "Enter: close, nothing changed"];
   if (action && (moved || command === "copy")) {
     if (st.project) parts.push(st.project);
@@ -121,5 +131,5 @@ export function resolve(chips: readonly Chip[], here: Here): Resolved {
   // Judgments has none for Codex alone: Activity then shows Overview, and says why on its view switch.
   if (page === JUDGMENTS_PAGE && st.source === "codex" && action) parts.push("Codex has no judgments: Overview opens");
   chips.forEach((c, i) => { if (status[i]!.state === "dropped") parts.push(`${c.label} not applied on ${pageLabel(page)}`); });
-  return { path, raw, href, moved, changed: moved || command != null, command, footer: parts.join(" · "), status, view: viewOf(st) };
+  return { path, raw, href, moved, changed: moved || command != null, command, docs, footer: parts.join(" · "), status, view: viewOf(st) };
 }

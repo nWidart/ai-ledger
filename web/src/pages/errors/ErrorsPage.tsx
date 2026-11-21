@@ -9,6 +9,7 @@ import { onNavigate, setSearch, useSearchOf, validateRoot } from "../../url";
 import { validateSearch } from "./search";
 import { queries } from "../../queries";
 import { useApi } from "../../useApi";
+import { DocsLink } from "../../components/DocsLink";
 import { PageSkeleton } from "../../components/PageSkeleton";
 import { Ctx, Keyed, RowContext, tableFocus, type ErrorsCtx, type RowCtx } from "./context";
 import { Detail } from "./Detail";
@@ -250,7 +251,7 @@ export function ErrorsPage() {
         {!m && <h1 className="lede" id="lede" tabIndex={-1}>Errors could not be loaded.</h1>}
       </header>}
       {!m && error && <div className="panel" id="load" role="alert"><b>Could not load errors.</b> <span className="muted">{error.message}. Check that the app is running.</span>{" "}
-        <button type="button" ref={retryBtn} onClick={() => { retried.current = true; retry(); }}>Retry</button></div>}
+        <button type="button" ref={retryBtn} onClick={() => { retried.current = true; retry(); }}>Retry</button>{" "}<DocsLink docs="reference/troubleshooting">Troubleshooting</DocsLink></div>}
       <div className="sr" id="pageLive" aria-live="polite">{pageLive}</div>
       {deadLink && <div className="outnote" id="deadLink"><span>{DEAD_LINK}</span> <button type="button" onClick={dismissDead}>Dismiss</button></div>}
       {ctx && <Ctx.Provider value={ctx}><RowContext.Provider value={rows}>

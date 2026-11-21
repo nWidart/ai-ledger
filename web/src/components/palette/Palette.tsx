@@ -192,6 +192,8 @@ export function Palette() {
   const commit = (list: Chip[]) => {
     if (blockers.length) { setSaid(footer); return; }
     const r = resolve(list, here);
+    // A row is a listbox option, not a link: the docs open from this Enter or click, a user activation no popup blocker stops.
+    if (r.docs) window.open(r.docs, "_blank", "noreferrer");
     close();
     if (r.moved) go(r.href);
     if (r.command === "refresh") refresh();

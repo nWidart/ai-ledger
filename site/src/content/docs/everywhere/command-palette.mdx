@@ -51,6 +51,10 @@ A `#` term that matches a tool, an MCP server or a skill is not a filter. The pa
 | An error category | The category on Errors. |
 | `>refresh` | The same ingest and data refresh as the navigation's **Refresh** button. |
 | `>copy link` | Applies the view the other chips describe, then copies that view's URL. A status says "Link copied", or that the link could not be copied. |
+| `>docs`, `>help`, `>documentation` | **Docs: this page**: the documentation of the page the commit shows, in a new tab. Activity's Judgments view opens [Judgments](/ai-ledger/pages/insights/); a page with no docs page of its own opens the docs home. `>` alone lists this command. |
+| `>docs cost`, or a docs page's title | **Docs: \<title>**, one command per page of this site, such as **Docs: How cost is estimated**. It opens that page in a new tab. |
+
+The docs commands are commands, like `>refresh` and `>copy link`: they take the command slot, and the other chips still apply to the view. A title alone, such as `>cost`, matches only at the start of the title or of one of its words, and ranks the page above its docs command: `>cost` opens Cost, and **Docs: Cost** comes after it. The footer names the docs page, for example "Enter: open the Cost docs in a new tab". The palette sends nothing to this site until you commit a docs command.
 
 ### Examples
 
@@ -62,6 +66,7 @@ A `#` term that matches a tool, an MCP server or a skill is not a filter. The pa
 | `>errors >bash` | Errors with the `Bash` inspector open over it. |
 | `#myproject >errors >copy link` | Errors filtered to `myproject`, with its URL on the clipboard. |
 | `>project #myproject` | `/project?project=myproject`, with the current range. |
+| `>errors >docs` | Errors, with the Errors docs in a new tab. |
 
 ## Chips
 

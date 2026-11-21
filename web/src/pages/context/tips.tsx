@@ -31,7 +31,7 @@ export function TipStrip({ tips, onSessions }: { tips: Tip[]; onSessions: (id: T
   return (
     <section className="tips" id="tips" aria-labelledby="tipsTitle">
       <h2 id="tipsTitle">Tips</h2>
-      <HowMeasured what="tips">From fixed rules over this view's figures: thresholds are set in the app, and nothing is learned or generated. Most severe first.</HowMeasured>
+      <HowMeasured what="tips" docs="reference/glossary#context">From fixed rules over this view's figures: thresholds are set in the app, and nothing is learned or generated. Most severe first.</HowMeasured>
       {tips.length ? <ul className="tip-strip">
         {shown.map(t => <li key={t.id} className={`tip-item ${t.severity}`}>
           <button type="button" className="tip-btn" aria-expanded={open === t.id} aria-controls={open === t.id ? "tip-detail" : undefined} data-tip={t.id}

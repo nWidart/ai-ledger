@@ -56,7 +56,7 @@ describe("Judgments view", () => {
     const sub = screen.getByText(/Model-judged: a model's reading/);
     expect(sub.textContent).toMatch(/^all projects, all time, Claude Code sessions\. Model-judged: a model's reading of each session, not a measurement\./);
     await userEvent.click(within(sub).getByRole("button", { name: "How measured: the judgments" }));
-    const how = within(sub).getByRole("tooltip").textContent!;
+    const how = sub.querySelector(".tt-pop")!.textContent!;
     expect(how).toContain("The figures come from /insights facets, except Session figures and Coverage, which are counted, and each session's cost, peak context and tool errors, which are measured from its transcript.");
     expect(how).toContain("/insights judges Claude Code sessions only: Codex writes no facets, so this view has no source filter.");
     expect(how).toContain("A session counts here by its start time; Overview counts a session with a request in the range, so the two totals can differ slightly.");
@@ -321,7 +321,7 @@ describe("Judgments view", () => {
       await up();
       expect(within(panel()).getByText(/as shares of that week/).textContent).toContain("The figure over a bar is its sessions.");
       await userEvent.click(within(panel()).getByRole("button", { name: "How measured: the outcome trend" }));
-      const how = within(panel()).getAllByRole("tooltip").find(t => t.textContent!.includes("Weeks are by session start"))!.textContent!;
+      const how = [...panel().querySelectorAll(".tt-pop")].find(t => t.textContent!.includes("Weeks are by session start"))!.textContent!;
       expect(how).toContain("Every bar is 100% of its week");
       expect(how).toContain("A week with fewer than 5 sessions is drawn at half width.");
     });
@@ -966,7 +966,7 @@ describe("Judgments view", () => {
       expect(within(fr()).getAllByRole("listitem").map(li => li.textContent)).toEqual(["buggy code4$0 · 0s · 2 sessions2 labels ▾", "wrong approach3$0 · 0s · 1 session"]);
       for (const [sec, what] of [[goals(), "goals"], [fr(), "friction"]] as const) {
         await userEvent.click(within(sec).getByRole("button", { name: `How measured: ${what}` }));
-        expect(within(sec).getByRole("tooltip").textContent).toMatch(/grouped into families by keyword.*as \/insights wrote them/);
+        expect(sec.querySelector(".tt-pop")!.textContent).toMatch(/grouped into families by keyword.*as \/insights wrote them/);
       }
     });
 
@@ -1032,7 +1032,7 @@ describe("Judgments view", () => {
         await lede();
         expect(within(fr()).getByText(/What got in the way/).textContent).toContain("What got in the way, weighed by the sessions that reported it.");
         await userEvent.click(within(fr()).getByRole("button", { name: "How measured: friction" }));
-        const how = within(fr()).getByRole("tooltip").textContent!;
+        const how = fr().querySelector(".tt-pop")!.textContent!;
         expect(how).toContain("Cost and active time are those of the whole sessions that reported a friction, not of the friction alone, and each session counts once in a row.");
         expect(how).toContain("A session with no transcript in the store adds no cost or time; one with no price adds no cost, but its active time counts.");
       });

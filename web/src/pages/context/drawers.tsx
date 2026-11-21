@@ -42,7 +42,7 @@ export function BreaksDrawer({ cost }: { cost: D["cost"] }) {
   return (
     <Drawer id="d-breaks" title="Sessions where caching broke" count={num(cost.break_sessions)} description="Breaks by cause, with the uncached tokens they cost">
       <div className="hint">{cost.break_sessions > rows.length ? `Showing the ${num(rows.length)} with the most uncached tokens of ${num(cost.break_sessions)}.` : "Most uncached tokens first."}
-        <HowMeasured what="cache breaks">A break is a main-thread request after the first turn with at least 20,000 prompt tokens, less than half of them read from the cache.
+        <HowMeasured what="cache breaks" docs="reference/glossary#context">A break is a main-thread request after the first turn with at least 20,000 prompt tokens, less than half of them read from the cache.
           A model switch is a different model from the previous request's; expired means a longer pause since it than the cache lifetime (5 minutes, or 30 for OpenAI's cache), a rule rather than a measurement;
           other covers a changed prompt or tool set.</HowMeasured></div>
       <DataTable name="Sessions where caching broke" region="scroll tall">

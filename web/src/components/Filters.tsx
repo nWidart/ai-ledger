@@ -91,7 +91,7 @@ export function Filters({ projects, automated = false, project = true, range = t
           <input type="checkbox" id="fAuto" checked={h.auto} onChange={e => set({ auto: e.target.checked })} />
           <span>Include automated <span className="long">sessions</span></span>
         </label>
-        <Toggletip term="automated sessions">{"Sessions that tools start in the background, such as claude-mem's observer-sessions." + (autoFile ? ` Add more projects in ${autoFile}.` : "")}</Toggletip>
+        <Toggletip term="automated sessions" docs="everywhere/filters#include-automated">{"Sessions that tools start in the background, such as claude-mem's observer-sessions." + (autoFile ? ` Add more projects in ${autoFile}.` : "")}</Toggletip>
       </span>}
       {project && brief && <BriefLink />}
     </div>

@@ -429,7 +429,7 @@ describe("automated projects file", () => {
     const tip = screen.getByRole("button", { name: "About automated sessions" });
     await userEvent.click(tip);
     expect(tip.getAttribute("aria-expanded")).toBe("true");
-    expect(within(screen.getByRole("group", { name: "Filters" })).getByRole("tooltip").textContent).toContain(usage.automated_file.path);
+    expect(screen.getByRole("group", { name: "Filters" }).querySelector(".tt-pop")!.textContent).toContain(usage.automated_file.path);
   });
 });
 

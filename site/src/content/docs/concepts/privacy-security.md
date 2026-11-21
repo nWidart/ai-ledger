@@ -31,6 +31,8 @@ The page loads its font, IBM Plex Sans, from Google Fonts. Your browser fetches 
 
 The app has no account, no analytics and no update check.
 
+The app's links to this documentation site, such as **Docs** in the navigation, **Learn more** in an explanation and the palette's docs commands, open `https://nwidart.github.io/ai-ledger/` in a new browser tab. The app sends nothing to the site before you follow one: it does not preload or prefetch it, and the new tab gets no referrer.
+
 One action runs a program for you: **Measure now** on the [Project](/ai-ledger/pages/project/) page runs `claude -p "/context"` in the project's folder. That calls no model, but it starts the project's MCP servers and hooks as a new Claude Code session would, and they do whatever they are set up to do.
 
 ## How the server is guarded

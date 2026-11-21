@@ -192,6 +192,66 @@ describe("Palette", () => {
   });
 });
 
+describe("Palette docs commands", () => {
+  const foot = () => document.getElementById(box().getAttribute("aria-describedby")!)!.textContent;
+  const opened = () => vi.spyOn(window, "open").mockReturnValue(null);
+
+  it("opens this page's docs in a new tab with no referrer, closes, and leaves the view", async () => {
+    serve();
+    const open = opened(), push = vi.spyOn(history, "pushState");
+    await show("/cost?range=30");
+    await userEvent.type(box(), ">docs: this page{Enter}");
+    expect(open).toHaveBeenCalledExactlyOnceWith("https://nwidart.github.io/ai-ledger/pages/cost/", "_blank", "noreferrer");
+    expect(screen.queryByRole("combobox")).toBeNull();
+    expect(push).not.toHaveBeenCalled();
+    expect(location.pathname + location.search).toBe("/cost?range=30");
+  });
+
+  it("offers a docs page by name, and opens it with Enter", async () => {
+    serve();
+    const open = opened();
+    await show("/usage?range=30");
+    await userEvent.type(box(), ">docs windows");
+    expect(options()[0]).toBe("Docs: Context windows and plan limit windows, command, Documentation, opens in a new tab");
+    await userEvent.keyboard("{Enter}");
+    expect(open).toHaveBeenCalledExactlyOnceWith("https://nwidart.github.io/ai-ledger/concepts/windows/", "_blank", "noreferrer");
+  });
+
+  it("names the page whose docs Enter opens in the footer", async () => {
+    serve();
+    await show("/errors?range=30");
+    await userEvent.type(box(), ">docs");
+    expect(options()[0]).toMatch(/^Docs: this page, command/);
+    expect(foot()).toBe("Enter: open the Errors docs in a new tab");
+  });
+
+  it("applies a filter chip with the docs command", async () => {
+    serve();
+    const open = opened();
+    await show("/errors?range=30");
+    await userEvent.type(box(), "#foo{Tab}>docs: this page{Enter}");
+    expect(location.pathname + location.search).toBe("/errors?project=foo&range=30");
+    expect(open).toHaveBeenCalledExactlyOnceWith("https://nwidart.github.io/ai-ledger/pages/errors/", "_blank", "noreferrer");
+  });
+
+  it("opens the docs from a clicked row", async () => {
+    serve();
+    const open = opened();
+    await show("/limits?range=30");
+    await userEvent.type(box(), ">help");
+    await userEvent.click(screen.getByRole("option", { name: /^Docs: this page,/ }));
+    expect(open).toHaveBeenCalledExactlyOnceWith("https://nwidart.github.io/ai-ledger/pages/limits/", "_blank", "noreferrer");
+  });
+
+  it("opens nothing for the other commands", async () => {
+    serve();
+    const open = opened();
+    await show();
+    await userEvent.type(box(), ">refresh{Enter}");
+    expect(open).not.toHaveBeenCalled();
+  });
+});
+
 describe("Palette by pointer", () => {
   it("closes with its Close button and applies with Apply", async () => {
     serve();

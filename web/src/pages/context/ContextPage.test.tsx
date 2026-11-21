@@ -43,7 +43,7 @@ const section = (id: string) => within(document.getElementById(id)!);
 const how = async (what: string) => {
   const b = screen.getByRole("button", { name: `How measured: ${what}` });
   await userEvent.click(b);
-  return within(b.parentElement!).getByRole("tooltip").textContent!;
+  return b.parentElement!.querySelector(".tt-pop")!.textContent!;
 };
 const back = async () => { act(() => history.back()); await new Promise(r => addEventListener("popstate", r, { once: true })); };
 
@@ -54,6 +54,7 @@ describe("ContextPage", () => {
     expect(document.getElementById("lede")!.textContent).toBe("A typical session starts with 15,500 tokens of context, 6.5% of its window.");
     expect(screen.getByText(/Every figure comes from the transcripts/)).toBeTruthy();
     expect(await how("context")).toMatch(/first turn, over 12 sessions with a measured start\. Nothing is read from CLAUDE\.md, AGENTS\.md or any configuration file/);
+    expect(screen.getByRole("button", { name: "How measured: context" }).parentElement!.querySelector(".tt-pop a")!.getAttribute("href")).toMatch(/concepts\/windows\/#the-context-window$/);
     await openTab("Growth and bloat");
     const tile = section("growth").getByText("Sessions compacted").closest(".vital")!;
     expect(tile.textContent).toMatch(/^2Sessions compactedOf 12 sessions/);

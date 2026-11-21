@@ -9,6 +9,8 @@ import { openPalette, shortcutHint, shortcutKeys } from "./palette/store";
 import { freshLabel, useFlash, useRefresh, type RefreshState } from "./refresh";
 import { ProjectDot } from "./ProjectDot";
 import { Toggletip } from "./Toggletip";
+import { DocsLink } from "./DocsLink";
+import { docsForRoute, type DocsKey } from "../docs";
 import "./Nav.css";
 
 /** The pages in two groups: Now, what is happening and what is left (Live, Limits), and Review, what happened (Activity, Cost,
@@ -28,8 +30,12 @@ const THEME_ICON: Record<Theme, ReactNode> = {
   dark: <path d="M13.5 9.5A5.5 5.5 0 0 1 6.5 2.5a5.5 5.5 0 1 0 7 7Z" />,
 };
 
-// What the bar reads of the URL: the shared query string its links carry.
-const navSearch = (raw: Readonly<Record<string, string>>) => ({ shared: sharedSearch(raw), project: raw.project || "" });
+// The Docs links' icon, 16px line art in currentColor like the theme's: an open book.
+const BookIcon = () => <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+  <path d="M8 4.5C6.6 3.4 4.6 3 2 3v9c2.6 0 4.6.4 6 1.5 1.4-1.1 3.4-1.5 6-1.5V3c-2.6 0-4.6.4-6 1.5ZM8 4.5v9" /></svg>;
+
+// What the bar reads of the URL: the shared query string its links carry, and the view, which picks Activity's docs page.
+const navSearch = (raw: Readonly<Record<string, string>>) => ({ shared: sharedSearch(raw), project: raw.project || "", view: raw.view || "" });
 
 // An exact time: the time alone for today, with the date for an older day.
 const exact = (d: Date) => d.toDateString() === new Date().toDateString() ? d.toLocaleTimeString() : d.toLocaleString();
@@ -132,8 +138,9 @@ function PageLinks({ pages, path, shared, sig, list, onPick }: { pages: readonly
  *  items are links, and keep being links. The button carries the count of waiting sessions, and the Limits pill while a window
  *  is in alert, and adds both to its name; the alert's sentence stays on the Limits link. The list is portaled and placed over
  *  the page, so the nav never grows. Escape and a click outside close it and give focus back to the button; a picked page
- *  closes it without, so the page switch can move focus to the new page's heading. */
-function PageChooser({ path, shared, sig }: { path: string; shared: string; sig: Signals }) {
+ *  closes it without, so the page switch can move focus to the new page's heading. The list ends with the current page's
+ *  Docs link, which leaves the bar on phones (Nav.css): it opens a new tab and closes the list, giving focus back. */
+function PageChooser({ path, shared, sig, docs }: { path: string; shared: string; sig: Signals; docs: DocsKey }) {
   const [open, setOpen] = useState(false), picked = useRef(false);
   const current = PAGES.find(p => p.path === path)?.label ?? "Pages";
   // The name says what the pill shows: the alert, and the percent in words.
@@ -156,6 +163,7 @@ function PageChooser({ path, shared, sig }: { path: string; shared: string; sig:
               <div className="appnav-glabel" aria-hidden="true">{g.label}</div>
               <ul><PageLinks pages={g.pages} path={path} shared={shared} sig={sig} list onPick={to => { picked.current = to !== path; setOpen(false); }} /></ul>
             </div>)}
+            <ul className="appnav-chooser-docs"><li><DocsLink docs={docs} onClick={() => setOpen(false)}><BookIcon />Docs</DocsLink></li></ul>
           </Popover.Popup>
         </Popover.Positioner>
       </Popover.Portal>
@@ -164,13 +172,13 @@ function PageChooser({ path, shared, sig }: { path: string; shared: string; sig:
 }
 
 /** The shared top bar: brand, page tabs in two groups (keeping project, range, source and auto) or the page chooser, the
- *  palette button, and the freshness control: Refresh, and the last ingest's state with its details in a toggletip. */
+ *  palette button, the current page's Docs link, and the freshness control: Refresh, and the last ingest's state with its details in a toggletip. */
 export function Nav() {
-  const path = usePathname(), { shared, project } = useSearchOf(navSearch), theme = useTheme(), next = nextTheme(theme);
+  const path = usePathname(), { shared, project, view } = useSearchOf(navSearch), theme = useTheme(), next = nextTheme(theme);
   const nav = useRef<HTMLElement>(null);
   const { refresh, state: st } = useRefresh(), flash = useFlash();
   const label = freshLabel(st) || "No ingest yet";
-  const sig = signalsOf(st), { alert } = sig;
+  const sig = signalsOf(st), { alert } = sig, docs = docsForRoute(path, { view });
   // What a screen reader is told of the alert: its sentence, kept as it was while the alert stays the same alert (the forecast time
   // in the sentence drifts every cycle), changed when the alert's kind, window or measured flag change, and emptied, with no
   // announcement of its own, when it goes. Set while rendering, from the key: the usual way to derive state from a change.
@@ -197,12 +205,16 @@ export function Nav() {
           <span className="appnav-glabel" aria-hidden="true">{g.label}</span>
           <PageLinks pages={g.pages} path={path} shared={shared} sig={sig} />
         </span>)}</span>
-        <PageChooser path={path} shared={shared} sig={sig} />
+        <PageChooser path={path} shared={shared} sig={sig} docs={docs} />
         <button type="button" className="appnav-palette" aria-label={project ? `Search in ${project}, open command palette (${shortcutHint()})` : `Search, open command palette (${shortcutHint()})`} aria-haspopup="dialog"
           aria-keyshortcuts={shortcutKeys()} title={project ? `${project}: filter, go to a page or open an inspector (${shortcutHint()})` : `Filter, go to a page or open an inspector (${shortcutHint()})`} onClick={openPalette}>
           <svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5" fill="none" stroke="currentColor" strokeWidth="1.8" /><path d="m13 13 4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>
           {project ? <span className="appnav-scope"><ProjectDot project={project} /><b>{project}</b></span> : <span className="lbl">Search</span>}<kbd>{shortcutHint()}</kbd>
         </button>
+        {/* The current page's docs, in a new tab. Nav.css hides the word visually at the palette button's icon step, so the
+            link's name stays "Docs, <page> documentation, opens in a new tab"; on phones it takes the link out of the bar
+            (display: none), and the page chooser's list holds it instead. */}
+        <DocsLink docs={docs} className="appnav-docs"><BookIcon /><span className="lbl">Docs</span></DocsLink>
         <span className="sr" role="status">{said.text}</span>
         {/* The freshness control: Refresh and the state, drawn as one split control. The state's time is no live region; only
             a manual Refresh's result is said, in its own region. */}
@@ -212,7 +224,8 @@ export function Nav() {
             <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9" /><path d="M13.5 2.5v3h-3" /></svg>
             {st.retry && <span className="lbl">Retry</span>}
           </button>
-          <Toggletip className="appnav-state" name={`Ingest status: ${label}`} label={<>
+          {/* A failed ingest or an app that does not answer ends the details with a link to the troubleshooting page. */}
+          <Toggletip className="appnav-state" name={`Ingest status: ${label}`} docs={st.kind === "failed" || st.kind === "offline" ? "reference/troubleshooting" : undefined} label={<>
             {flash && <span className="appnav-flash" aria-hidden="true">+{flash.n.toLocaleString()} line{flash.n === 1 ? "" : "s"}</span>}
             {/* Stale keeps its word on phones, where the time goes: color is never the only signal. */}
             {st.kind === "stale" ? <span className="appnav-time appnav-stale">{label.replace(/ · .*/, "")}<span className="appnav-at">{label.slice(label.indexOf(" · "))}</span></span>

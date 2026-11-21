@@ -6,12 +6,16 @@ import { RANGES } from "../../url";
 import { SOURCE_LABELS } from "../Filters";
 import { PAGES } from "../Nav";
 import { shortId } from "../sheets/session";
-import { EXACT, PREFIX, bestMatch, byScore, match, type Ranges } from "./match";
+import { DOCS, type DocsKey } from "../../docs";
+import { EXACT, PREFIX, SUBSEQUENCE, WORD, bestMatch, byScore, match, type Match, type Ranges } from "./match";
 import type { Term } from "./terms";
 
 export type FilterKind = "project" | "source" | "range" | "automated";
 export type Kind = FilterKind | "page" | "tool" | "mcp" | "skill" | "session" | "category" | "command";
-export type Command = "refresh" | "copy";
+/** "docs" opens the current page's documentation, "docs:<key>" one docs page. */
+export type Command = "refresh" | "copy" | "docs" | `docs:${DocsKey}`;
+/** The docs commands' label for "this page". */
+export const DOCS_THIS_PAGE = "Docs: this page";
 
 const ORDER: Kind[] = ["project", "source", "range", "automated", "page", "tool", "mcp", "skill", "category", "session", "command"];
 export const isFilter = (k: Kind): k is FilterKind => k === "project" || k === "source" || k === "range" || k === "automated";
@@ -49,7 +53,52 @@ export const rangeLabel = (r: number) => (r ? `Last ${r} days` : "All time");
 export const sourceLabel = (s: string) => SOURCE_LABELS[s as Source] ?? s;
 const failed = (r: { calls: number; failure_rate: number | null }) => [plural(r.calls, "call"), `${pct(r.failure_rate)} failed`];
 
-interface Candidate { kind: Kind; value: string; label: string; texts: string[]; detail?: string[]; count?: number; display?: number }
+interface Candidate {
+  kind: Kind; value: string; label: string; texts: string[]; detail?: string[]; count?: number; display?: number;
+  /** Matches in place of bestMatch over texts (the docs commands). */
+  matcher?: (q: string) => (Match & { on: number }) | null;
+}
+
+const DOCS_WORDS = ["docs", "documentation", "help"], DOCS_PREFIX = "Docs: ";
+/**
+ * How a typed term matches a docs command ("Docs: " + title), or null. Never exact unless the whole label is typed, so a
+ * page's name typed alone stays the page's unique exact match (and auto-chips). A leading "docs", "documentation" or "help"
+ * (two letters or more) asks for docs: alone it matches "this page" before the titled pages, and with more words those
+ * words match the title. Without one, only the title's start or a word's start matches, a step below the same match on a
+ * page or inspector, so the docs commands follow the rows they document and add no noise to substring searches.
+ */
+function docsMatcher(title: string, thisPage: boolean) {
+  const label = DOCS_PREFIX + title, at = DOCS_PREFIX.length;
+  const shift = (r: Ranges): Ranges => r.map(([a, b]) => [a + at, b + at]);
+  return (query: string): (Match & { on: number }) | null => {
+    const q = query.trim().toLowerCase();
+    // An empty term lists every row (match.ts): of the docs commands, only "this page", so `>` alone stays short.
+    if (!q) return thisPage ? { rank: SUBSEQUENCE, ranges: [], on: 0 } : null;
+    if (q === label.toLowerCase()) return { rank: EXACT, ranges: [[0, label.length]], on: 0 };
+    const [, word = "", rest = ""] = /^([^\s:]+)[\s:]*(.*)$/.exec(q) ?? [];
+    if (word.length >= 2 && DOCS_WORDS.some(w => w.startsWith(word))) {
+      const mark: Ranges = "docs".startsWith(word) ? [[0, word.length]] : [];
+      if (!rest) return { rank: thisPage ? PREFIX : WORD, ranges: mark, on: 0 };
+      const m = match(rest, title);
+      if (m && m.rank <= WORD) return { rank: Math.max(m.rank, PREFIX), ranges: [...mark, ...shift(m.ranges)], on: 0 };
+    }
+    const m = match(q, title);
+    return m && m.rank <= WORD ? { rank: m.rank + 1, ranges: shift(m.ranges), on: 0 } : null;
+  };
+}
+
+/** The docs commands: "Docs: this page", then one per docs page (not the anchored entries, which name a heading). */
+function docsCommands(): Candidate[] {
+  const out: Candidate[] = [{ kind: "command", value: "docs", label: DOCS_THIS_PAGE, texts: [DOCS_THIS_PAGE],
+    detail: ["Open this page's documentation in a new tab"], matcher: docsMatcher("this page", true) }];
+  for (const [key, e] of Object.entries(DOCS) as [DocsKey, (typeof DOCS)[DocsKey]][]) {
+    if ("anchor" in e) continue;
+    const label = DOCS_PREFIX + e.title;
+    out.push({ kind: "command", value: `docs:${key}`, label, texts: [label], detail: ["Documentation, opens in a new tab"], matcher: docsMatcher(e.title, false) });
+  }
+  return out;
+}
+const DOCS_COMMANDS = docsCommands();
 
 /** Every candidate row before matching. */
 function candidates(data: SuggestData, sessions: boolean, project: boolean): Candidate[] {
@@ -86,6 +135,7 @@ function candidates(data: SuggestData, sessions: boolean, project: boolean): Can
   }
   out.push({ kind: "command", value: "refresh", label: "Refresh", texts: ["refresh", "Refresh data"], detail: ["Ingest new transcripts now"] });
   out.push({ kind: "command", value: "copy", label: "Copy link", texts: ["copy link"], detail: ["Apply, then copy the view's URL"] });
+  out.push(...DOCS_COMMANDS);
   return out;
 }
 
@@ -108,7 +158,7 @@ export function suggest(term: Term, data: SuggestData, chips: readonly Chip[] = 
     if (term.sigil === "#" && !filter && !subject) continue;
     if (term.sigil === ">" && filter) continue;
     if (picked.has(c.kind + "\0" + c.value)) continue;
-    const m = bestMatch(term.text, c.texts);
+    const m = c.matcher ? c.matcher(term.text) : bestMatch(term.text, c.texts);
     if (!m) continue;
     const offer = term.sigil === "#" && subject;
     if (offer && m.rank !== EXACT) continue;

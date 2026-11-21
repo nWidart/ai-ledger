@@ -35,7 +35,7 @@ const table = () => document.getElementById("projects")!;
 const how = () => {
   const b = screen.getByRole("button", { name: "How measured: cost" });
   if (b.getAttribute("aria-expanded") !== "true") act(() => b.click());
-  return b.parentElement!.querySelector("[role=tooltip]")!.textContent;
+  return b.parentElement!.querySelector(".tt-pop")!.textContent;
 };
 // A project row's cells: trend, spend, change, cost per commit, cache hit (with a previous period).
 const CPC = 3, HIT = 4;
@@ -137,6 +137,7 @@ describe("CostPage", () => {
     expect(how()).toMatch(/This period, Oct 7 – Nov 5, 2026: 2 of 30 days with prompts\./);
     expect(how()).toMatch(/Previous period, Sep 7 – Oct 6, 2026: \$7\.90, 1 of 30 days with prompts\./);
     expect(how()).toMatch(/Cost is estimated at API list prices and leaves out unpriced models\./);
+    expect(screen.getByRole("button", { name: "How measured: cost" }).parentElement!.querySelector(".tt-pop a")!.getAttribute("href")).toMatch(/concepts\/cost-estimates\/$/);
     expect(screen.queryByRole("img", { name: /Daily cost sparkline/ })).toBeNull();
   });
 

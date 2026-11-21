@@ -108,7 +108,7 @@ function SortCol({ cls, sort, onSort, keys, head, tip }: {
   cls: string; sort: SortBy<TypeKey>; onSort: (s: SortBy<TypeKey>) => void; keys: [TypeKey, string][]; head?: string; tip: string;
 }) {
   const on = keys.find(([k]) => k === sort.key);
-  const tt = <Toggletip term={head ?? keys[0]![1]}>{tip}</Toggletip>;
+  const tt = <Toggletip term={head ?? keys[0]![1]} docs="reference/glossary#errors">{tip}</Toggletip>;
   return <th scope="col" className={cls} aria-sort={on ? (sort.desc ? "descending" : "ascending") : undefined}>
     {head && <div className="sk"><span className="hd">{head}</span>{tt}</div>}
     {keys.map(([k, label], i) => {

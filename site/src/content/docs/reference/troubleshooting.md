@@ -38,6 +38,11 @@ ai-ledger rebuild
 - **Cause:** the store was filled before the Context page's figures existed, so some rows lack them. The notice counts the tool calls that carry a result size and the compacted sessions that record when they first compacted. The page shows the figures for the rows that have them.
 - **Fix:** stop the app and run `ai-ledger rebuild` once. It regenerates the derived tables from the stored lines and fills the figures.
 
+### The navigation says Failed or Offline, or a page could not load
+
+- **Cause:** **Offline** means the app did not answer its status request: it has stopped, or its terminal was closed. **Failed** means the last ingest stopped on an error, or a **Refresh** failed. Select the state to read the details: an ingest error shows under **Error**. A page that could not load says so, with a **Retry** control.
+- **Fix:** for Offline, look at the terminal that ran `ai-ledger`, start the app again if it stopped, and reload the page. For Failed, read the error, then press **Refresh** (it reads **Retry** after a failed Refresh). For a page, select **Retry**.
+
 ### The browser does not open
 
 - **Cause:** the app does not open a browser when `--no-open` is given, when standard output is not a terminal, or on Linux when neither `DISPLAY` nor `WAYLAND_DISPLAY` is set.
@@ -77,7 +82,7 @@ ai-ledger rebuild
 
 ### Does AI Ledger send my transcripts anywhere?
 
-No. The server listens on `127.0.0.1` only. On macOS, the Limits page sends your Claude Code OAuth token from the Keychain to Anthropic's usage endpoint every 5 minutes; the token goes nowhere else and is never stored or logged. On Linux, Limits estimates from transcripts. Your browser loads a font from Google Fonts; no transcript data goes with the request. See [Privacy and security model](/ai-ledger/concepts/privacy-security/).
+No. The server listens on `127.0.0.1` only. On macOS, the Limits page sends your Claude Code OAuth token from the Keychain to Anthropic's usage endpoint every 5 minutes; the token goes nowhere else and is never stored or logged. On Linux, Limits estimates from transcripts. Your browser loads a font from Google Fonts; no transcript data goes with the request. A link to these docs opens them in a new tab only when you follow it. See [Privacy and security model](/ai-ledger/concepts/privacy-security/).
 
 ### Why does the first start take minutes?
 

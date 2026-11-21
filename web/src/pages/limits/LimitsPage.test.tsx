@@ -283,7 +283,7 @@ describe("LimitsPage", () => {
     expect(btn.closest("#windows .hint")).not.toBeNull();
     expect(btn.getAttribute("aria-expanded")).toBe("false");
     await userEvent.click(btn);
-    const how = screen.getByRole("tooltip");
+    const how = document.querySelector(".tt-pop")!;
     expect(how.textContent).toMatch(/last 24 h pace line carries your use over the last 24 hours on to the reset/);
     expect(how.textContent).toMatch(/Estimates count local agent work only/);
     expect(how.textContent).toMatch(/dashed straight line runs from now to 100% at the reset/);
@@ -303,7 +303,7 @@ describe("LimitsPage", () => {
     expect(sum.textContent).toMatch(/^avg 60% unused · \d+ hits?$/);
     expect(sum.title).toBe("");
     await userEvent.click(hist.getByRole("button", { name: "How measured: Codex weekly unused" }));
-    expect(screen.getByRole("tooltip").textContent).toMatch(/left out: 1 window that ended early/);
+    expect(document.querySelector(".tt-pop")!.textContent).toMatch(/left out: 1 window that ended early/);
     openTable();
     expect(hist.getByText("ended early by a plan change from plus to prolite")).toBeTruthy();
     const hit = hist.getAllByRole("row").find(r => r.textContent!.startsWith("Codex 5-hour"))!;
@@ -348,7 +348,8 @@ describe("LimitsPage", () => {
     expect(document.querySelector("#value .hint")!.textContent).toMatch(/^One point is 1% of a limit, over the last 30 days: the range set in Past windows\./);
     // The pricing is method: behind How measured, not in the hint's line.
     await userEvent.click(screen.getByRole("button", { name: "How measured: what a point buys" }));
-    expect(screen.getByRole("tooltip").textContent).toMatch(/^Cost is at API list prices/);
+    expect(document.querySelector(".tt-pop")!.textContent).toMatch(/^Cost is at API list prices/);
+    expect(within(document.querySelector<HTMLElement>(".tt-pop")!).getByRole("link", { name: /Learn more/ }).getAttribute("href")).toMatch(/concepts\/windows\/#the-plan-limit-window$/);
   });
 
   it("folds projects under a point into one row, and marks unpriced models and earlier plans", async () => {
