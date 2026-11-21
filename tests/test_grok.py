@@ -399,7 +399,7 @@ class PromptTest(GrokCase):
         self.put("long-turn")
         self.ingest()
         sid = SESSION["long-turn"]
-        self.assertEqual(self.prompts(), [("prompt-02000001", sid, False)])
+        self.assertEqual(self.prompts(), [(f"{sid}:prompt-02000001", sid, False)])
         first, = self.q("SELECT min(ts) FROM raw_lines WHERE type = 'user_message_chunk'")[0]
         self.assertEqual(self.q("SELECT ts FROM prompts"), [(datetime.fromisoformat(store.ts_of(first)),)])
         self.assertEqual(titles.first_prompts(self.con.cursor(), [sid]), {sid: "text 3\ntext 5"})
@@ -407,14 +407,38 @@ class PromptTest(GrokCase):
     def test_cancelled_turn(self):
         self.put("cancelled")
         self.ingest()
-        self.assertEqual(self.prompts(), [("prompt-04000001", SESSION["cancelled"], True)])
+        sid = SESSION["cancelled"]
+        self.assertEqual(self.prompts(), [(f"{sid}:prompt-04000001", sid, True)])
 
     def test_turns_of_the_probe(self):
         self.put("probe")
         self.ingest()
         sid = SESSION["probe"]
-        self.assertEqual(self.prompts(), [("0a1f0001-0000-7000-8000-000000000003", sid, False),
-                                          ("0a1f0001-0000-7000-8000-000000000010", sid, False)])
+        self.assertEqual(self.prompts(), [(f"{sid}:0a1f0001-0000-7000-8000-000000000003", sid, False),
+                                          (f"{sid}:0a1f0001-0000-7000-8000-000000000010", sid, False)])
+    def test_sessions_that_share_a_prompt_id(self):
+        # A wrapper app can give two sessions the same prompt id: each keeps its own prompt, text and interrupted flag.
+        path, = self.put("cancelled")
+        sid, other = SESSION["cancelled"], "0a1f0004-0000-7000-8000-000000000009"
+        copy = os.path.join(os.path.dirname(os.path.dirname(path)), other, grok.LOG)
+        os.makedirs(os.path.dirname(copy))
+        shutil.copy(path, copy)
+
+        def change(d):
+            p, u = grok.params(d), grok.update(d)
+            p["sessionId"] = other
+            p["_meta"]["eventId"] = other + p["_meta"]["eventId"][len(sid):]
+            if u.get("sessionUpdate") == "turn_completed":
+                u["stop_reason"] = "end_turn"
+            if u.get("sessionUpdate") == "user_message_chunk":
+                u["content"]["text"] = "other " + u["content"]["text"]
+        rewrite(copy, change)
+        self.ingest()
+        want = [(f"{sid}:prompt-04000001", sid, True), (f"{other}:prompt-04000001", other, False)]
+        self.assertEqual(self.q("SELECT prompt_id, session_id, interrupted FROM prompts ORDER BY session_id"), want)
+        self.assertEqual(titles.first_prompts(self.con.cursor(), [sid, other]), {sid: "text 3\ntext 5", other: "other text 3\nother text 5"})
+        store.rebuild(self.con)
+        self.assertEqual(self.q("SELECT prompt_id, session_id, interrupted FROM prompts ORDER BY session_id"), want)
 
     def test_chunk_in_a_later_ingest_than_its_hook(self):
         path, = self.put("long-turn")
@@ -428,7 +452,8 @@ class PromptTest(GrokCase):
         with open(path, "a") as fh:
             fh.writelines(lines[cut:])
         self.ingest()
-        self.assertEqual(self.prompts(), [("prompt-02000001", SESSION["long-turn"], False)])
+        sid = SESSION["long-turn"]
+        self.assertEqual(self.prompts(), [(f"{sid}:prompt-02000001", sid, False)])
 
     def test_title_is_the_first_prompt(self):
         self.put("tools")

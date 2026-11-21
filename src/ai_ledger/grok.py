@@ -136,12 +136,19 @@ def prompt_text(d, pid):
     return (chunk_text(u).strip() or None) if u.get("sessionUpdate") == "user_message_chunk" else None
 
 
+def stored_prompt(sid, pid):
+    """The prompt id stored for Grok prompt pid of session sid (prompts, interrupted, tool results): <session>:<prompt id>,
+    since prompt ids repeat across sessions (a wrapper app can supply them). None without a prompt id."""
+    return f"{sid}:{pid}" if pid else None
+
+
 def prompt_texts(cur, pids):
-    """{session: text} of each prompt in pids ({session: prompt id}): the user_message_chunk lines between the session's
-    first user_prompt_submit hook line with that prompt id and the next such line, in file order, one chunk a line.
-    A subagent's lines (the task its parent gave it) are not read."""
+    """{session: text} of each prompt in pids ({session: stored prompt id}): the user_message_chunk lines between the
+    session's first user_prompt_submit hook line with that prompt id and the next such line, in file order, one chunk a
+    line. A subagent's lines (the task its parent gave it) are not read."""
     if not pids:
         return {}
+    pids = {sid: pid.removeprefix(f"{sid}:") for sid, pid in pids.items()}  # the prompt id as the lines state it
     got = cur.execute("""
         WITH want AS (SELECT unnest(?::VARCHAR[]) AS session_id, unnest(?::VARCHAR[]) AS pid),
         hooks AS (SELECT r.session_id, r.file, r.byte_offset, json_extract_string(r.json, '$.params.update.prompt_id') AS pid
@@ -259,7 +266,7 @@ class GrokDeriver(store.Deriver):
         elif t == "hook_execution":
             self.hook(u, when)
         elif t == "user_message_chunk" and not self.sub:
-            pid = self.prompt_of(d)
+            pid = stored_prompt(self.sid, self.prompt_of(d))
             if pid and pid not in self.prompts:
                 self.prompts[pid] = (pid, self.sid, when, False)
         if self.sub:
@@ -269,7 +276,7 @@ class GrokDeriver(store.Deriver):
             self.turn(d, u, s, when)
             self.run(u, m)
             if u.get("stop_reason") == "cancelled" and u.get("prompt_id"):
-                self.interrupted.add(u["prompt_id"])
+                self.interrupted.add(stored_prompt(self.sid, u["prompt_id"]))
         elif t == "auto_compact_started" and isinstance(u.get("context_window"), int):
             s["window"] = u["context_window"]
         elif t == "auto_compact_completed":
@@ -296,7 +303,7 @@ class GrokDeriver(store.Deriver):
         err = error_of(tool, u)
         text = content_text(u) or mcp_text(u.get("rawOutput"))
         self.seq += 1
-        self.results[tid] = dict(end_ts=ts, is_error=err is not None, error=err, prompt_id=m.get("promptId"),
+        self.results[tid] = dict(end_ts=ts, is_error=err is not None, error=err, prompt_id=stored_prompt(self.sid, m.get("promptId")),
                                  session_id=self.sid, seq=self.seq, sub=self.sub, bytes=len(text.encode("utf-8")))
         if err is not None:
             self.pending[tid] = self.seq

@@ -111,6 +111,8 @@ The cost: Cost's subagent share leaves out Grok.
 ### Prompts are keyed by the turn's prompt id
 A `user_message_chunk` belongs to the newest `user_prompt_submit` hook's `prompt_id` before it. The chunks of one prompt make one row. A turn that ends `cancelled` marks its prompt interrupted. Text is not classified as injected: a wrapper around the typed text (T3 Code's) is still the person's prompt.
 
+Prompt ids repeat across sessions: a wrapper app can supply them, and nine real sessions share one. So the stored prompt id is `<session id>:<prompt id>`, in `prompts`, in the interrupted marks and in the tool results.
+
 ### Model time is one run per turn
 `session_runs` gets a row per `turn_completed`: `start_ms` is the turn's end minus `elapsed_ms`, `api_ms` is `apiDurationMs`, and tool time and lines are NULL. Task 3.6 checks that every reader shows "–" for the NULLs.
 
