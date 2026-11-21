@@ -1,10 +1,9 @@
 import { act, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { Drawer, onUserScroll, openDrawer } from "./Drawer";
+import { Drawer, jumpTo, onUserScroll, openDrawer } from "./Drawer";
 import { InsightCard, rankInsights, type Insight } from "./InsightCard";
 import { Ledger, LedgerRow } from "./Ledger";
-import { SectionIndex } from "./SectionIndex";
 import { renderApp } from "../testing";
 
 describe("Drawer", () => {
@@ -93,113 +92,25 @@ describe("Drawer", () => {
   });
 });
 
-describe("SectionIndex", () => {
-  it("keeps a clicked section marked until the user scrolls", async () => {
-    vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(40);
-    vi.spyOn(Element.prototype, "scrollHeight", "get").mockReturnValue(5000); // at the top of a long page: A is in view
-    renderApp(<><SectionIndex groups={[[{ id: "a", label: "A" }, { id: "b", label: "B" }]]} /><section id="a" /><section id="b" /></>);
-    const current = () => document.querySelector("nav.secidx a[aria-current]")?.textContent;
-    expect(current()).toBe("A");
-    await userEvent.click(screen.getByRole("link", { name: "B" }));
-    await vi.waitFor(() => expect(current()).toBe("B"));
-    act(() => { dispatchEvent(new Event("wheel")); });
-    await vi.waitFor(() => expect(current()).toBe("A"));
-    vi.restoreAllMocks();
+describe("jumpTo", () => {
+  it("scrolls to a section and focuses its first control, or only scrolls", () => {
+    const into = vi.fn();
+    Element.prototype.scrollIntoView = into;
+    renderApp(<section id="a"><h2><button type="button">A</button></h2></section>);
+    act(() => jumpTo("a", false));
+    expect(into).toHaveBeenCalledTimes(1);
+    expect(document.activeElement).toBe(document.body);
+    act(() => jumpTo("a"));
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "A" }));
   });
 
-  it("brings the marked link into view when a resize makes the bar overflow, with the same section marked", async () => {
-    const ros: ResizeObserverCallback[] = [];
-    vi.stubGlobal("ResizeObserver", class { constructor(cb: ResizeObserverCallback) { ros.push(cb); } observe() {} disconnect() {} });
-    vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(40);
-    vi.spyOn(Element.prototype, "scrollHeight", "get").mockReturnValue(5000);
-    const wide = vi.spyOn(Element.prototype, "scrollWidth", "get").mockReturnValue(100);
-    vi.spyOn(Element.prototype, "clientWidth", "get").mockReturnValue(100);
-    vi.spyOn(HTMLElement.prototype, "offsetLeft", "get").mockImplementation(function (this: HTMLElement) { return this.textContent === "B" ? 300 : 0; });
-    vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockReturnValue(40);
-    const left = vi.spyOn(Element.prototype, "scrollLeft", "set");
-    try {
-      renderApp(<><SectionIndex groups={[[{ id: "a", label: "A" }, { id: "b", label: "B" }]]} /><section id="a" /><section id="b" /></>);
-      await userEvent.click(screen.getByRole("link", { name: "B" }));
-      await vi.waitFor(() => expect(document.querySelector("nav.secidx a[aria-current]")?.textContent).toBe("B"));
-      expect(left).not.toHaveBeenCalled(); // the links fit
-      wide.mockReturnValue(500); // the window narrows: the bar overflows, and B is past its right edge
-      act(() => ros.forEach(cb => cb([], {} as ResizeObserver)));
-      expect(left).toHaveBeenLastCalledWith(300 + 40 - 100 + 16);
-    } finally {
-      act(() => { dispatchEvent(new Event("wheel")); }); // unpins B for the tests after
-      vi.unstubAllGlobals();
-      vi.restoreAllMocks();
-    }
-  });
-});
-
-describe("SectionIndex observers", () => {
-  type Cb = (es: Partial<IntersectionObserverEntry>[]) => void;
-  const made: { cb: Cb; opts: IntersectionObserverInit; targets: Element[] }[] = [];
-  class FakeIO {
-    constructor(cb: Cb, opts: IntersectionObserverInit) { made.push({ cb, opts, targets: [] }); this.i = made.length - 1; }
-    i: number;
-    observe(el: Element) { made[this.i]!.targets.push(el); }
-    disconnect() {}
-  }
-  it("marks the section whose top passed the index's line, and the index once it is stuck, without reading layout on scroll", () => {
-    made.length = 0;
-    vi.stubGlobal("IntersectionObserver", FakeIO);
-    vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(40);
-    vi.spyOn(Element.prototype, "scrollHeight", "get").mockReturnValue(5000);
-    const was = Object.getOwnPropertyDescriptor(window, "scrollY")!;
-    Object.defineProperty(window, "scrollY", { value: 300, configurable: true });
-    try {
-      renderApp(<><SectionIndex groups={[[{ id: "a", label: "A" }, { id: "b", label: "B" }]]} /><section id="a" /><section id="b" /></>);
-      const [above, shown, stuck] = made as [typeof made[number], typeof made[number], typeof made[number]];
-      expect(above.targets.map(t => t.id)).toEqual(["a", "b"]);
-      expect(above.opts.rootMargin).toMatch(/^1000000px 0px -?\d+px 0px$/); // everything above, down to the line
-      expect(shown.opts.rootMargin).toBe("1000000px 0px 0px 0px");
-      expect(stuck.targets[0]!.tagName).toBe("NAV");
-      const sec = (id: string, isIntersecting: boolean) => ({ target: document.getElementById(id)!, isIntersecting });
-      const current = () => document.querySelector("nav.secidx a[aria-current]")?.textContent;
-      act(() => above.cb([sec("a", true), sec("b", false)]));
-      expect(current()).toBe("A");
-      act(() => above.cb([sec("b", true)]));
-      expect(current()).toBe("B");
-      act(() => above.cb([sec("b", false)]));
-      expect(current()).toBe("A");
-      const nav = document.querySelector("nav.secidx")!;
-      expect(nav.classList.contains("stuck")).toBe(false);
-      act(() => stuck.cb([{ intersectionRatio: .97, boundingClientRect: { top: 0 } as DOMRect }]));
-      expect(nav.classList.contains("stuck")).toBe(true);
-      act(() => stuck.cb([{ intersectionRatio: 1, boundingClientRect: { top: 90 } as DOMRect }]));
-      expect(nav.classList.contains("stuck")).toBe(false);
-    } finally {
-      Object.defineProperty(window, "scrollY", was);
-      vi.unstubAllGlobals();
-    }
-  });
-
-  it("reads the sections again when a drawer opens or closes", async () => {
-    made.length = 0;
-    vi.stubGlobal("IntersectionObserver", FakeIO);
-    vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(40);
-    const height = vi.spyOn(Element.prototype, "scrollHeight", "get").mockReturnValue(5000);
-    const was = Object.getOwnPropertyDescriptor(window, "scrollY")!;
-    Object.defineProperty(window, "scrollY", { value: 300, configurable: true });
-    try {
-      renderApp(<><SectionIndex groups={[[{ id: "a", label: "A" }], [{ id: "d", label: "D" }]]} /><section id="a" />
-        <Drawer id="d" title="D">rows</Drawer></>);
-      const [above, shown] = made as [typeof made[number], typeof made[number]];
-      const sec = (id: string) => ({ target: document.getElementById(id)!, isIntersecting: true });
-      const current = () => document.querySelector("nav.secidx a[aria-current]")?.textContent;
-      act(() => { shown.cb([sec("a"), sec("d")]); above.cb([sec("a")]); });
-      expect(current()).toBe("A");
-      // The drawer's body brings the page's end into view; no section crosses a line, so only the drawer's toggle says so.
-      height.mockReturnValue(1000);
-      await userEvent.click(screen.getByRole("button", { name: "D" }));
-      expect(current()).toBe("D");
-    } finally {
-      Object.defineProperty(window, "scrollY", was);
-      vi.unstubAllGlobals();
-      vi.restoreAllMocks();
-    }
+  it("opens a drawer it is given and focuses its toggle", () => {
+    Element.prototype.scrollIntoView = vi.fn();
+    renderApp(<Drawer id="d" title="D">rows</Drawer>);
+    act(() => jumpTo("d"));
+    const toggle = screen.getByRole("button", { name: "D" });
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(document.activeElement).toBe(toggle);
   });
 });
 

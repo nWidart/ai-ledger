@@ -1,31 +1,34 @@
-import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { Combobox } from "@base-ui/react/combobox";
 import { Link } from "@tanstack/react-router";
 import type { Source } from "../api";
-import { RANGES, SOURCES, navigate, parseSearch, rootState, setSearch, sharedSearch, usePathname, useSearchOf, validateRoot } from "../url";
+import { DEFAULT_RANGE, RANGES, SOURCES, navigate, parseSearch, rootState, setSearch, sharedSearch, usePathname, useSearchOf, validateRoot } from "../url";
 import { ProjectDot } from "./ProjectDot";
 import { useLastStatus } from "./refresh";
 import { Toggletip } from "./Toggletip";
 import "./Filters.css";
 
 export interface ProjectOption { value: string; label?: string }
-export interface FiltersProps {
-  /** The picker's projects, busiest first. The URL's project is listed even when missing here (say an automated
-   *  project while automated sessions are left out: naming it in the filter includes it). */
-  projects: readonly (string | ProjectOption)[];
-  /** Show "Include automated sessions" (Activity and Cost; Errors is never filtered). Its hint names the automated projects
-   *  file, from the app's status: no page passes it. */
-  automated?: boolean;
-  /** Show the project picker (Limits has none: limits are per account; the URL keeps the project for the other pages). */
-  project?: boolean;
-  /** Show the time range (Live has none: it keeps the range in the URL for the other pages; Limits shows RangeFilter where
-   *  the range applies). */
-  range?: boolean;
-  /** Show the source (Activity's Judgments view has none: only Claude Code sessions are judged; the URL keeps the source for
-   *  the other pages). A page shows a filter only when it changes what the page shows. */
-  source?: boolean;
-  /** Page-only controls after the range (Errors: granularity, subagents, noise). */
-  children?: ReactNode;
+/** The project list a picker offers, busiest first. */
+export type ProjectList = readonly (string | ProjectOption)[];
+/** Which of the shared filters a page shows: each only where it changes what the page shows (ScopeBar's scopeOf). A filter
+ *  left out keeps its URL value for the other pages, and is never written. */
+export interface FilterSet {
+  /** The project picker (Limits has none: limits are per account). */
+  project: boolean;
+  /** The time range (Live has none; Limits shows RangeFilter in the section the range applies to). */
+  range: boolean;
+  /** The source (Activity's Judgments view has none: only Claude Code sessions are judged). */
+  source: boolean;
+  /** "Include automated sessions" (Errors is never filtered). Its hint names the automated projects file, from the app's status. */
+  automated: boolean;
+}
+export interface FiltersProps extends Partial<FilterSet> {
+  /** The picker's projects. The URL's project is listed even when missing here (say an automated project while automated
+   *  sessions are left out: naming it in the filter includes it). */
+  projects: ProjectList;
+  /** End with the Brief link (BriefLink) when a project is picked; the narrow scope bar draws it beside its button instead. */
+  brief?: boolean;
 }
 
 const rangeLabel = (r: number) => (r ? `${r}d` : "All");
@@ -37,10 +40,10 @@ export const viewName = (v: { project: string; range: number; source: Source | "
 export const agentName = (source: Source | "") => (source ? SOURCE_LABELS[source] : "agent");
 
 // What the filters show of the URL; a session or sheet key is not in it, so opening a sheet does not render them.
-// badSource: the URL names a source that is not valid. shared: the shared query string the Project page link carries.
+// shared: the shared query string the Project page link carries. An unknown source reads as All (ScopeBar drops it from the URL).
 const filterSearch = (raw: Readonly<Record<string, string>>) => {
-  const s = validateRoot(raw), { project, range, source, auto } = rootState(s);
-  return { project, range, source, auto, badSource: !!raw.source && !s.source, shared: sharedSearch(raw) };
+  const { project, range, source, auto } = rootState(validateRoot(raw));
+  return { project, range, source, auto, shared: sharedSearch(raw) };
 };
 
 /** The time range segment, writing the URL: in Filters, or alone where a page's range applies to one section. */
@@ -53,22 +56,19 @@ export function RangeFilter() {
   </div>;
 }
 
-/** Project picker with its color dot, its Project page link and clear button, range and source segments and the automated
- *  toggle, all writing the URL. */
-export function Filters({ projects, automated = false, project = true, range = true, source = true, children }: FiltersProps) {
-  const h = useSearchOf(filterSearch), { badSource } = h, set = setSearch, path = usePathname();
+/** How many of the filters a page shows are off their default: the narrow scope bar's count. */
+export const useChangedFilters = (set: FilterSet): number => useSearchOf(raw => {
+  const { project, range, source, auto } = rootState(validateRoot(raw));
+  return [set.project && !!project, set.range && range !== DEFAULT_RANGE, set.source && !!source, set.automated && auto].filter(Boolean).length;
+});
+
+/** Project picker with its color dot and clear button, range and source segments, the automated toggle, all writing the URL,
+ *  then the Brief link to the project's page. */
+export function Filters({ projects, automated = false, project = true, range = true, source = true, brief = true }: FiltersProps) {
+  const h = useSearchOf(filterSearch), set = setSearch;
   const autoFile = useLastStatus()?.automated_file?.path;
-  // An unknown source reads as All; the URL drops it so a copied link says what the page shows.
-  useEffect(() => { if (badSource) setSearch({ source: null }, { push: false }); }, [badSource]);
   const opts = projects.map(p => (typeof p === "string" ? { value: p } : p));
   if (h.project && !opts.some(o => o.value === h.project)) opts.unshift({ value: h.project });
-  // A plain click goes through navigate (url.ts holds the app's rules for a page switch); Link skips its own navigation
-  // when the event is default-prevented. A modified click is the browser's.
-  const go = (e: MouseEvent<HTMLAnchorElement>) => {
-    if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
-    e.preventDefault();
-    navigate("/project" + h.shared);
-  };
   // On the Project page, a view with no project opens Activity in its place (router.tsx, needProject).
   const clear = () => {
     setSearch({ project: null, session: null });
@@ -78,12 +78,6 @@ export function Filters({ projects, automated = false, project = true, range = t
     <div className="filters" role="group" aria-label="Filters">
       {project && <span className="filters-project">
         <ProjectPicker project={h.project} options={opts} onPick={project => set({ project, session: null, inspect: null })} />
-        {h.project && path !== "/project" && (
-          // The visible text is "Project page"; the name says whose, and contains it.
-          <Link to="/project" search={parseSearch(h.shared) as never} className="filters-projectpage" aria-label={`${h.project} project page`} onClick={go}>
-            Project page<span aria-hidden="true">{" "}→</span>
-          </Link>
-        )}
         {h.project && <button type="button" className="filters-clear" aria-label="Clear project filter" title="Show all projects" onClick={clear}>✕</button>}
       </span>}
       {range && <RangeFilter />}
@@ -92,15 +86,34 @@ export function Filters({ projects, automated = false, project = true, range = t
           <button key={s} type="button" aria-pressed={h.source === s} onClick={() => set({ source: s, session: null, inspect: null })}>{s ? SOURCE_LABELS[s] : "All"}</button>
         ))}
       </div>}
-      {children}
-      {automated && <>
+      {automated && <span className="filters-auto">
         <label className="chk">
           <input type="checkbox" id="fAuto" checked={h.auto} onChange={e => set({ auto: e.target.checked })} />
           <span>Include automated <span className="long">sessions</span></span>
         </label>
         <Toggletip term="automated sessions">{"Sessions that tools start in the background, such as claude-mem's observer-sessions." + (autoFile ? ` Add more projects in ${autoFile}.` : "")}</Toggletip>
-      </>}
+      </span>}
+      {project && brief && <BriefLink />}
     </div>
+  );
+}
+
+/** Brief: with a project picked, the link to its Project page with the same view; none on the Project page itself. */
+export function BriefLink() {
+  const { project, shared } = useSearchOf(filterSearch), path = usePathname();
+  if (!project || path === "/project") return null;
+  // A plain click goes through navigate (url.ts holds the app's rules for a page switch); Link skips its own navigation
+  // when the event is default-prevented. A modified click is the browser's.
+  const go = (e: MouseEvent<HTMLAnchorElement>) => {
+    if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    navigate("/project" + shared);
+  };
+  // The visible text is "Brief"; the name starts with it and says whose page it opens.
+  return (
+    <Link to="/project" search={parseSearch(shared) as never} className="filters-brief" aria-label={`Brief, ${project} project page`} onClick={go}>
+      Brief<span aria-hidden="true">→</span>
+    </Link>
   );
 }
 
@@ -111,8 +124,13 @@ const labelOf = (o: ProjectOption) => o.label ?? o.value;
 function ProjectPicker({ project, options, onPick }: { project: string; options: ProjectOption[]; onPick: (project: string) => void }) {
   const items = [ALL, ...options], selected = items.find(o => o.value === project) ?? ALL, name = labelOf(selected);
   // `typed` tells the user's text from the selected project's name, which lists everything.
-  const [text, setText] = useState(name), [typed, setTyped] = useState(false), [seen, setSeen] = useState(name), [open, setOpen] = useState(false);
-  if (seen !== name) { setSeen(name); setText(name); setTyped(false); } // the URL changed: show its project
+  const [text, setText] = useState(name), [typed, setTyped] = useState(false), [open, setOpen] = useState(false);
+  const [seen, setSeen] = useState({ value: selected.value, name });
+  if (seen.value !== selected.value || seen.name !== name) {
+    // The URL changed: show its project. A new label for the same project (its counts arrived) leaves the user's text alone.
+    setSeen({ value: selected.value, name });
+    if (seen.value !== selected.value || !typed) { setText(name); setTyped(false); }
+  }
   const needle = text.trim().toLowerCase(), hits = typed && needle ? options.filter(o => labelOf(o).toLowerCase().includes(needle)) : null;
   // The name in the field stays selected until the user types, so typing replaces it.
   const field = useRef<HTMLInputElement>(null);

@@ -93,8 +93,8 @@
 /* Wide screens: the type table stays in view, scrolling on its own, while a type's examples run down the page beside it. */
 @media (min-width: 56.3125em) {
   .pg-errors .grid2 { align-items: start; }
-  .pg-errors .types { position: sticky; top: calc(var(--appnav-h, 56px) + 12px); display: flex; flex-direction: column;
-    max-height: calc(100vh - var(--appnav-h, 56px) - 24px); }
+  .pg-errors .types { position: sticky; top: calc(var(--bars-h) + 12px); display: flex; flex-direction: column;
+    max-height: calc(100vh - var(--bars-h) - 24px); }
   .pg-errors .types .tscroll { overflow-y: auto; min-height: 0; }
   .pg-errors .types thead th { position: sticky; top: 0; z-index: 1; background: var(--surface-1); }
 }
@@ -315,12 +315,13 @@
 .pg-errors #load { margin-bottom: 16px; }
 .pg-errors .linkbtn { background: none; border: 0; padding: 0; color: var(--link); font-size: .8125rem; }
 .pg-errors .linkbtn:hover { background: none; text-decoration: underline; }
-/* Wide screens: the type header and the example search stay in view while the examples scroll. */
+/* Wide screens: the type header and the example search stay in view while the examples scroll, inside the detail pane and
+   under the nav and the scope bar (--bars-h). */
 @media (min-width: 56.3125em) {
   .pg-errors #detail .dhead, .pg-errors #detail .exbar { position: sticky; z-index: 1; background: var(--surface-1); margin: 0 -20px; padding: 10px 20px; }
-  .pg-errors #detail .dhead { top: var(--appnav-h, 56px); flex-wrap: nowrap; border-bottom: 1px solid var(--border); margin-bottom: 12px; }
+  .pg-errors #detail .dhead { top: var(--bars-h); flex-wrap: nowrap; border-bottom: 1px solid var(--border); margin-bottom: 12px; }
   .pg-errors #detail .dhead h2 { margin: 0; min-width: 0; }
-  .pg-errors #detail .exbar { top: calc(var(--appnav-h, 56px) + var(--dhead-h, 0px)); border-bottom: 1px solid var(--border); padding-bottom: 0; }
+  .pg-errors #detail .exbar { top: calc(var(--bars-h) + var(--dhead-h, 0px)); border-bottom: 1px solid var(--border); padding-bottom: 0; }
   .pg-errors #detail .ex, .pg-errors #detail .inc { scroll-margin-top: calc(var(--dhead-h, 0px) + var(--exbar-h, 0px)); }
 }
 .pg-errors .sheet #back { display: none; }

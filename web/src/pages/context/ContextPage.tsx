@@ -1,10 +1,11 @@
 import { useEffect } from "react";
 import { contextUrl, viewOf, type ContextPayload, type TipId } from "../../api";
 import { setOrder } from "../../colors";
-import { agentName, Filters, viewName } from "../../components/Filters";
+import { agentName, viewName } from "../../components/Filters";
+import { useScopeProjects } from "../../components/ScopeBar";
 import { HowMeasured } from "../../components/HowMeasured";
 import { ProjectDot } from "../../components/ProjectDot";
-import { jumpTo } from "../../components/SectionIndex";
+import { jumpTo } from "../../components/Drawer";
 import { PageSkeleton } from "../../components/PageSkeleton";
 import { useLanding } from "../../components/useLanding";
 import { num, plural } from "../../format";
@@ -58,6 +59,7 @@ export function ContextPage() {
   const search = useSearchOf(validateSearch);
   const want = viewOf(h), url = contextUrl(want);
   const { data: d, error, loading, retry } = useApi(queries.context(want), { keepPrevious: true });
+  useScopeProjects(d?.projects ?? []);
   useEffect(() => { if (d) setOrder(d.project_order); }, [d]);
   const { slow, grow, wrap, retryBtn } = useLanding(d, url, loading, error, ":scope > :is(.tips, .drawers), :scope .tabpanel > :is(.panel, .drawers)");
   // A tip the payload does not have (an old link, another view) shows nothing.
@@ -91,7 +93,6 @@ export function ContextPage() {
     <main id="content" className={cls} ref={wrap} aria-busy={loading || undefined}>
       {first ? <PageSkeleton title="Loading context…" /> : <header className="top sect" id="overview">
         <div>{d ? <Lede d={d} /> : <h1 className="lede" id="lede" tabIndex={-1}>Context could not be loaded.</h1>}</div>
-        <div className="top-side"><Filters projects={d?.projects ?? []} automated /></div>
       </header>}
       {error && <div className="banner" role="alert"><b>Could not load {viewName(want)} ({error.message}).{d ? ` Still showing ${viewName(d)}.` : ""}</b>{" "}
         <button type="button" className="linkish" ref={retryBtn} onClick={retry}>Retry</button></div>}

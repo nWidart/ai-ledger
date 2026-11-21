@@ -1,16 +1,9 @@
 /* Project (/project): every rule sits under .pg-project, since every page's CSS is loaded at once. Tables come from sheets.css,
    ledgers from Ledger.css. */
-.pg-project .top { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px 32px; align-items: end; margin-bottom: 20px; }
-.pg-project .top-side { display: flex; flex-direction: column; align-items: flex-end; gap: 12px; min-width: 0; max-width: 600px; }
-.pg-project .top-side .filters { justify-content: flex-end; }
+.pg-project .top { margin-bottom: 20px; }
 .pg-project .lede { margin: 0; min-width: 0; font-size: clamp(1.625rem, 4.2vw, 2.625rem); line-height: 1.12; font-weight: 600; letter-spacing: -.03em; color: var(--text-primary); }
 .pg-project .lede:focus { outline: none; }
 .pg-project .lede .pdot { width: .32em; height: .32em; vertical-align: .2em; margin: 0 .3em 0 .05em; }
-@media (max-width: 65em) {
-  .pg-project .top { grid-template-columns: minmax(0, 1fr); align-items: start; }
-  .pg-project .top-side { max-width: none; align-items: stretch; }
-  .pg-project .top-side .filters { justify-content: flex-start; }
-}
 /* A block whose own request is slow to refresh dims its figures, not its heading; the other blocks stay as they are. */
 .pg-project .panel.loading > :not(.blk-head) { opacity: .55; }
 @media (prefers-reduced-motion: no-preference) { .pg-project .panel > :not(.blk-head) { transition: opacity .2s; } }

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore } from "react";
 import { setOrder } from "../../colors";
-import { agentName, Filters } from "../../components/Filters";
+import { agentName } from "../../components/Filters";
+import { useScopeProjects } from "../../components/ScopeBar";
 import { showModalUnder } from "../../components/Sheet";
 import type { SortBy } from "../../components/Sort";
 import { num as fmt } from "../../format";
@@ -215,9 +216,11 @@ export function ErrorsPage() {
 
   const projects = useMemo(() => {
     const ps = (m?.projects ?? []).map(([p, n]) => ({ value: p, label: `${p} — ${fmt(n)} error${n === 1 ? "" : "s"} (all time)` }));
-    if (view.project && !ps.some(p => p.value === view.project)) ps.push({ value: view.project, label: `${view.project} — 0 errors (all time)` });
+    // A project the loaded payload lacks has no error; until the payload comes, the picker names the project alone.
+    if (m && view.project && !ps.some(p => p.value === view.project)) ps.push({ value: view.project, label: `${view.project} — 0 errors (all time)` });
     return ps;
   }, [m, view.project]);
+  useScopeProjects(projects);
 
   // The context changes only with what it holds: the page re-renders for its own state (the status regions, a toggle's focus) without
   // re-rendering the components that read it.
@@ -243,8 +246,7 @@ export function ErrorsPage() {
       {/* The first load shows the placeholder alone, with the page's heading, as the other pages do; a failed one keeps the header. */}
       {!m && !error ? <PageSkeleton title="Loading errors…" /> : <header className="top">
         <p className="kicker">{view.source ? agentName(view.source) : "Agent"} tool errors</p>
-        {/* Only the page-level filters: Day/Week sits in the chart's header, the subagent and noise toggles in the type table's toolbar. */}
-        <Filters projects={projects} />
+        {/* The page-level filters are in the scope bar: Day/Week sits in the chart's header, the subagent and noise toggles in the type table's toolbar. */}
         {!m && <h1 className="lede" id="lede" tabIndex={-1}>Errors could not be loaded.</h1>}
       </header>}
       {!m && error && <div className="panel" id="load" role="alert"><b>Could not load errors.</b> <span className="muted">{error.message}. Check that the app is running.</span>{" "}

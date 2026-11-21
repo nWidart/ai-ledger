@@ -6,7 +6,7 @@ spec: [cost-dashboard]
 
 Cost answers three questions: what did this period cost, where did the spend go, and why did it change? Every figure is an estimate. It applies API list prices to the tokens in your transcripts; it is not a bill. See [Cost estimates](/ai-ledger/concepts/cost-estimates/) for what the estimate includes and leaves out.
 
-The page follows the filters at its top. Every figure below describes the selected project, time range and source.
+The page follows the filters in the [scope bar](/ai-ledger/everywhere/filters/#scope-bar) under the navigation. Every figure below describes the selected project, time range and source.
 
 import ThemedImage from "../../../components/ThemedImage.astro";
 import tokens from "../../../assets/shots/cost-tokens.png";
@@ -33,9 +33,9 @@ import modelsLight from "../../../assets/shots/cost-models-light.png";
 
 The filters live in the page URL, together with the inspected project and the open session. The project filter changes only through these controls, through a project key in the chart's legend, or through a "Filter dashboard to" button in a sheet; selecting a project or session elsewhere opens a sheet and leaves the filter alone. See [Filters](/ai-ledger/everywhere/filters/).
 
-## Section index
+## Layout
 
-The page has a section index (Overview, Per day, Projects, Insights) and two drawers (Tokens, Sessions). A drawer is a table folded behind its title. At 1440×900 the daily chart starts on the first screen.
+The page reads top to bottom: the heading with the plan gauge beside it, the daily chart, the project table, the insights beside Models and effort, then two drawers (Tokens, Sessions). A drawer is a table folded behind its title. Each section has its own heading; the page has no section index. At 1440×900 the daily chart starts on the first screen.
 
 ## Panels
 
@@ -69,7 +69,7 @@ The page has a section index (Overview, Per day, Projects, Insights) and two dra
 
 ### Plan gauge
 
-The gauge sits beside the heading, under the filters. It measures the calendar month, not the range, so it reads the same for every range, All included.
+The gauge sits beside the heading; the filters are in the scope bar above. It measures the calendar month, not the range, so it reads the same for every range, All included.
 
 **Figures**
 

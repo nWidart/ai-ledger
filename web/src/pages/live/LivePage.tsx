@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { viewOf, type LiveListSession, type LiveState } from "../../api";
-import { Filters, SOURCE_LABELS } from "../../components/Filters";
+import { SOURCE_LABELS } from "../../components/Filters";
+import { useScopeProjects } from "../../components/ScopeBar";
 import { ProjectName } from "../../components/ProjectDot";
 import { sessionLink, sessionSheetHref } from "../../components/sheets/session";
 import { pct, plural, usd, when } from "../../format";
@@ -80,7 +81,7 @@ export function LivePage() {
     refocus.current = null;
     el.focus();
   });
-  const projects = [...new Set(sessions.map(s => s.project).filter((p): p is string => !!p))];
+  useScopeProjects([...new Set(sessions.map(s => s.project).filter((p): p is string => !!p))]);
   const status = paused ? `Paused${held ? ` · ${plural(held, "update")} held` : ""}` : conn === "reconnecting" ? "Connection lost · reconnecting…"
     : conn === "live" ? "Updating live" : "Connecting…";
   const shown = session && session.session_id === selected ? session : undefined;
@@ -130,7 +131,6 @@ export function LivePage() {
           <button type="button" aria-pressed={mode === "stream"} onClick={() => set({ view: null })}>Stream</button>
           <button type="button" aria-pressed={mode === "wall"} onClick={() => set({ view: "wall" })}>Wall</button>
         </div>
-        <Filters projects={projects} automated range={false} />
         <span className="spacer" />
         <p className={"conn" + (conn === "reconnecting" ? " lost" : "")} role="status" aria-live="polite">{status}</p>
         {mode === "stream" && <label className="chk"><input type="checkbox" checked={follow} onChange={e => setFollow(e.target.checked)} /> Follow</label>}

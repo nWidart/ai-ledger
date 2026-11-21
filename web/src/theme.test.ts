@@ -194,13 +194,23 @@ describe("forced colors", () => {
 });
 
 describe("scroll padding", () => {
-  it("reserves the sticky nav and the stuck section index once, on the page", () => {
+  it("reserves the sticky nav and the scope bar once, on the page", () => {
     const base = strip(readFileSync("src/base.css", "utf8"));
-    expect(base).toMatch(/html \{ scroll-padding-top: calc\(var\(--appnav-h, 56px\) \+ 12px\); \}/);
-    expect(base).toMatch(/html:has\(\.secidx\) \{ scroll-padding-top: calc\(var\(--appnav-h, 56px\) \+ var\(--secidx-h, 0px\) \+ 12px\); \}/);
+    expect(base).toMatch(/:root \{ --bars-h: calc\(var\(--appnav-h, 56px\) \+ var\(--scope-h, 0px\)\); \}/);
+    expect(base).toMatch(/html \{ scroll-padding-top: calc\(var\(--bars-h\) \+ 12px\); \}/);
     expect(base).not.toContain("scroll-margin-top");
+    expect(base).not.toContain("secidx");
   });
   it("leaves no per-element copy of that offset", () => {
-    for (const f of ["src/components/Drawer.css", "src/components/SectionIndex.css"]) expect(readFileSync(f, "utf8")).not.toContain("scroll-margin-top");
+    for (const f of ["src/components/Drawer.css", "src/components/ScopeBar.css"]) expect(readFileSync(f, "utf8")).not.toContain("scroll-margin-top");
+  });
+  it("sticks the scope bar under the nav, and every lower sticky element under both bars", () => {
+    expect(strip(readFileSync("src/components/ScopeBar.css", "utf8"))).toMatch(/\.scopebar \{ position: sticky; top: var\(--appnav-h, 56px\);/);
+    const errors = strip(readFileSync("src/pages/errors/errors.css", "utf8"));
+    expect(errors).toContain(".pg-errors #detail .dhead { top: var(--bars-h);");
+    expect(errors).toContain(".pg-errors #detail .exbar { top: calc(var(--bars-h) + var(--dhead-h, 0px));");
+    expect(errors).toContain(".pg-errors .types { position: sticky; top: calc(var(--bars-h) + 12px);");
+    // Only the bars themselves read the nav's height alone: a page that did would slide under the scope bar.
+    for (const f of ["src/pages/errors/errors.css", "src/pages/live/live.css"]) expect(readFileSync(f, "utf8")).not.toMatch(/var\(--appnav-h/);
   });
 });

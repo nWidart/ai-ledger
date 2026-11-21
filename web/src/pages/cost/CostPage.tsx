@@ -2,9 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { usageUrl, viewOf, type View } from "../../api";
 import { setOrder } from "../../colors";
 import { openDrawer } from "../../components/Drawer";
-import { Filters, viewName } from "../../components/Filters";
+import { viewName } from "../../components/Filters";
+import { useScopeProjects } from "../../components/ScopeBar";
 import { InsightCard, rankInsights } from "../../components/InsightCard";
-import { SectionIndex } from "../../components/SectionIndex";
 import type { SortBy } from "../../components/Sort";
 import { ModelLedger } from "../../components/sheets/ProjectSheet";
 import { openSessionSheet } from "../../components/sheets/session";
@@ -62,6 +62,7 @@ export function CostPage() {
   const { slow, grow, before, wrap, retryBtn } = useLanding(data, url, loading, error, ":scope > :is(.panel, .split, .drawers)");
 
   const d = data, has = !!d && d.totals.requests > 0;
+  useScopeProjects(d?.projects ?? []);
   const days = useMemo(() => (d ? costDays(d) : []), [d]);
   const showDay = (v: string) => { setDay(v); openDrawer("d-top", true); };
   const acts: CostActs = {
@@ -81,7 +82,7 @@ export function CostPage() {
     <main id="content" className={cls} ref={wrap} aria-busy={loading || undefined}>
       {first ? <PageSkeleton title="Loading cost…" /> : <header className="top sect" id="overview">
         <div>{d ? <Lede d={d} before={before} /> : <h1 className="lede" id="lede" tabIndex={-1}>Cost could not be loaded.</h1>}</div>
-        <div className="top-side"><Filters projects={d?.projects ?? []} automated />{d && <PlanGauge d={d} />}</div>
+        {d && <div className="top-side"><PlanGauge d={d} /></div>}
       </header>}
       {error && <div className="banner" role="alert"><b>Could not load {viewName(want)} ({error.message}).{d ? ` Still showing ${viewName(d)}.` : ""}</b>{" "}
         <button type="button" className="linkish" ref={retryBtn} onClick={retry}>Retry</button></div>}
@@ -92,11 +93,6 @@ export function CostPage() {
         ({d.prices_file.error}). Packaged prices apply until it is fixed.</div>}
       <p className="pending">{loading && d ? `Loading ${viewName(want)}…` : ""}</p>
       {d && <>
-        <SectionIndex groups={[
-          [{ id: "overview", label: "Overview" }, { id: "spend", label: "Per day", long: "Cost per day" },
-            { id: "projects", label: "Projects", long: "Project spend and change", hidden: !table }, { id: "insights", label: "Insights", hidden: !lead }],
-          [{ id: "d-tokens", label: "Tokens", long: "Tokens and cache" }, { id: "d-top", label: "Sessions", long: "Most expensive sessions" }],
-        ]} />
         <CostChart d={d} metric={metric} onMetric={setMetric} hidden={hidden} onHidden={setHidden} scale={scale} onScale={setScale} onDay={showDay} stack={stack} onStack={setStack}
           onProject={p => set({ project: p, session: null, inspect: null })} onSource={s => set({ source: s, session: null, inspect: null })} />
         {table && <ProjectTable d={d} sort={sort} onSort={setSort} spot={spot} onSpot={setSpot} smallOpen={smallOpen} onSmallOpen={setSmallOpen} />}

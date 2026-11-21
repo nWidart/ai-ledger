@@ -43,8 +43,11 @@ const measure = page => page.evaluate(() => {
   const d = document.documentElement;
   return {
     stream: Math.round(r(stream).width), streamTop: Math.round(r(stream).top),
+    // What the sessions need: the rail's children (heading, groups, footer) stacked, not scrollHeight, which is never less than
+    // the room the rail has, so it would hide how much is to spare.
     railFits: rail ? rail.scrollHeight <= rail.clientHeight + 1 : null, railHeight: rail ? Math.round(r(rail).height) : null,
-    railContent: rail ? rail.scrollHeight : null,
+    railRoom: rail ? rail.clientHeight : null,
+    railContent: rail ? Math.round([...rail.children].reduce((a, c) => a + c.getBoundingClientRect().height, 0)) : null,
     firstEvent: { top: Math.round(r(ev).top), bottom: Math.round(r(ev).bottom) },
     hscroll: d.scrollWidth > d.clientWidth, scrollWidth: d.scrollWidth, clientWidth: d.clientWidth,
   };
@@ -55,8 +58,11 @@ const fails = [];
 try {
   const wide = await open(b, 1440, 900, "/live?session=s1");
   const w = await measure(wide);
-  console.log(`1440x900: stream ${w.stream}px wide, top at ${w.streamTop}px; rail ${w.railHeight}px high, 8 sessions in 5 groups take ${w.railContent}px: ${w.railFits ? "fit" : "SCROLL"}; first event at ${w.firstEvent.top}px`);
+  const spare = w.railRoom - w.railContent;
+  console.log(`1440x900: stream ${w.stream}px wide, top at ${w.streamTop}px; rail ${w.railHeight}px high, 8 sessions in 5 groups take ${w.railContent}px of ${w.railRoom}px (${spare}px to spare): ${w.railFits ? "fit" : "SCROLL"}; first event at ${w.firstEvent.top}px`);
   if (!w.railFits) fails.push("the rail scrolls with 8 sessions at 1440 x 900");
+  // A margin for a font that sets a little taller, a longer title or one more line in a footer.
+  if (spare < 16) fails.push(`the rail has ${spare}px to spare with 8 sessions at 1440 x 900, under 16px`);
   // The width the stream had beside the agent panel, which this layout must beat (live-dashboard spec: Stream width).
   if (!(w.stream > 798)) fails.push(`the stream is ${w.stream}px wide at 1440 x 900, not wider than 798px`);
   await wide.getByRole("checkbox", { name: "Full text" }).check();

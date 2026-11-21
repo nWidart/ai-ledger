@@ -158,10 +158,9 @@ dialog.sheet::backdrop { background: var(--scrim); }
   .pick-opt[data-highlighted] { forced-color-adjust: none; background: Highlight; color: HighlightText; }
   .pick-opt[data-selected] { outline: 1px solid CanvasText; outline-offset: -1px; }
 
-  /* Current page, current section, selected row, pressed toggle, selected bucket. */
+  /* Current page, selected row, pressed toggle, selected bucket. */
   :is(
     .appnav a[aria-current=page],
-    :is(.pg-activity, .pg-cost, .pg-judgments, .pg-context) .secidx a[aria-current=true],
     .pal-opt[aria-selected=true],
     dialog.sheet .evbtn[aria-pressed=true], dialog.sheet .sheet-wide[aria-pressed=true],
     .pg-live .stream-filters button[aria-pressed=true], .pg-live .kv .fig[aria-pressed=true],

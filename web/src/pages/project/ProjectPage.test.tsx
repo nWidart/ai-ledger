@@ -510,11 +510,11 @@ describe("ProjectPage", () => {
       renderApp(<ProjectPage />);
     };
 
-    it("shows the heading, the filters and every block at once, with a slow usage request loading in its own blocks only", async () => {
+    it("shows the heading and every block at once, with a slow usage request loading in its own blocks only", async () => {
       hang("/api/usage");
-      // No placeholder: the heading and the filters are there before any request answers.
+      // No placeholder: the heading is there before any request answers. The filters are the shell's scope bar.
       expect(screen.getByRole("heading", { level: 1, name: "foo" })).toBeTruthy();
-      expect(screen.getByRole("group", { name: "Filters" })).toBeTruthy();
+      expect(document.querySelector("main .filters")).toBeNull();
       expect(within(block("Activity")).getByText("Loading…")).toBeTruthy();
       expect(within(block("Cost")).getByText("Loading…")).toBeTruthy();
       expect(await within(block("Errors")).findByRole("table", { name: "Top error types" })).toBeTruthy();

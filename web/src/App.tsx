@@ -5,6 +5,7 @@ import { SubjectMenu } from "./components/menu/SubjectMenu";
 import { AutomatedFileWarning } from "./components/AutomatedFileWarning";
 import { Nav } from "./components/Nav";
 import { isMac, openPalette, usePaletteOpen } from "./components/palette/store";
+import { ScopeBar } from "./components/ScopeBar";
 import { UsageSheets } from "./components/sheets/UsageSheets";
 import { usePathname } from "./url";
 
@@ -20,7 +21,7 @@ export const ROUTES = {
   "/errors": { title: "Errors · AI Ledger", Page: lazyRouteComponent(() => import("./pages/errors/ErrorsPage"), "ErrorsPage") },
   "/limits": { title: "Limits · AI Ledger", Page: lazyRouteComponent(() => import("./pages/limits/LimitsPage"), "LimitsPage") },
   "/live": { title: "Live · AI Ledger", Page: lazyRouteComponent(() => import("./pages/live/LivePage"), "LivePage") },
-  // Not a tab: reached from the project sheet, the filter row's "Project page" link and the palette.
+  // Not a tab: reached from the project sheet, the scope bar's Brief link and the palette.
   "/project": { title: "Project · AI Ledger", Page: lazyRouteComponent(() => import("./pages/project/ProjectPage"), "ProjectPage") },
 } as const;
 export type PagePath = keyof typeof ROUTES;
@@ -54,6 +55,8 @@ export function App() {
     {/* A click goes to the page heading itself, and leaves the URL as it is; a focusable main would take focus from every click inside it. */}
     <a className="skip" href="#content" onClick={e => { e.preventDefault(); land(true); }}>Skip to content</a>
     <Nav />
+    {/* The page-wide filters, the same place on every page: after the nav in the tab order, before the page. */}
+    <ScopeBar />
     <AutomatedFileWarning />
     {/* One context menu for every subject the pages and the sheets mark (components/menu), and one host for the project, tool
         and session sheets: every page opens them in place, and no page mounts its own. */}

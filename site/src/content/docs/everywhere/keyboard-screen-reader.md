@@ -28,7 +28,8 @@ Charts with this keyboard reading: the Activity work chart and hours grid, the o
 - On a narrow window (about 780px and below, or zoomed in), a page chooser button replaces the tabs. It is named for the current page, or "Pages" on the Project page, and opens a list of the pages in the same two groups. Esc closes the list and returns focus to the button.
 - Activity's view switch is a group named "Activity view" with two buttons, Overview and Judgments; the pressed one is the view shown. After a switch, focus stays on the switch.
 - After you pick a page in the navigation, focus moves to that page's heading. Loading a page directly, changing a filter, and browser Back and Forward do not move focus.
-- A section or field you jump to, or that takes focus, stays clear of the sticky navigation and the section index.
+- After the navigation, Tab reaches the [scope bar](/ai-ledger/everywhere/filters/#scope-bar): project, clear project, range, source, Include automated and Brief, in that order on every page. Then it enters the page.
+- A section or field you jump to, or that takes focus, stays clear of the sticky navigation and the scope bar.
 - A drawer's title is a heading in the page outline, and its toggle is a button.
 - A sheet is a dialog named by its title. Esc closes it.
 

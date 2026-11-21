@@ -2,7 +2,7 @@
 // frf a family key, whose labels the payload names (the client never re-implements the grouping rules). The list and the chips
 // read them here.
 import { label, outcomeLabel } from "../../../components/facets";
-import { jumpTo } from "../../../components/SectionIndex";
+import { jumpTo } from "../../../components/Drawer";
 import type { InsightSession, InsightsPayload } from "../../../api";
 import { currentRaw, setSearch } from "../../../url";
 import { validateSearch, type InsightsSearch } from "./search";

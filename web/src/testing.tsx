@@ -9,6 +9,7 @@ import { act, render } from "@testing-library/react";
 import type { ReactElement, ReactNode } from "react";
 import type { Status } from "./api";
 import { noteStatus } from "./components/refresh";
+import { ScopeBar } from "./components/ScopeBar";
 import { UsageSheets } from "./components/sheets/UsageSheets";
 import { makeQueryClient } from "./queryClient";
 import { isData } from "./queries";
@@ -58,9 +59,9 @@ export const wrap = (ui: ReactNode, client: QueryClient = makeTestClient()): Rea
 export const renderApp = (ui: ReactNode, client: QueryClient = makeTestClient()) =>
   ({ ...render(ui, { wrapper: wrapper(client) }), client });
 
-/** A page with the app shell's sheet host beside it, as App mounts them: for a test that opens a project, tool or session
- *  sheet from a page. No page mounts the sheets itself. */
-export const renderPage = (page: ReactNode, client: QueryClient = makeTestClient()) => renderApp(<>{page}<UsageSheets /></>, client);
+/** A page with the app shell's scope bar and sheet host around it, as App mounts them: for a test that changes a page-wide
+ *  filter, or opens a project, tool or session sheet from a page. No page mounts either itself. */
+export const renderPage = (page: ReactNode, client: QueryClient = makeTestClient()) => renderApp(<><ScopeBar />{page}<UsageSheets /></>, client);
 
 /** The whole app at the current URL, routes and all, as main.tsx mounts it; the page shows once its route has loaded. */
 export const renderRouter = (client: QueryClient = makeTestClient()) => {

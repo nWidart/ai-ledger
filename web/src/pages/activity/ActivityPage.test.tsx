@@ -396,7 +396,7 @@ describe("automated projects file", () => {
   it("names the file on the automated toggle, from the status the nav polls", async () => {
     serve(usage);
     at();
-    const { client } = renderApp(<ActivityPage />);
+    const { client } = renderPage(<ActivityPage />);
     await loaded();
     act(() => { client.setQueryData(queries.status.queryKey, { ...REFRESHED_STATUS, automated_file: usage.automated_file }); });
     const tip = screen.getByRole("button", { name: "About automated sessions" });
@@ -451,7 +451,7 @@ describe("ActivityPage", () => {
     const codex: UsagePayload = { ...usage, source: "codex", totals: { ...usage.totals, commits: 0, prompts: 1, sessions: 1, active_days: 1 } };
     mockApi({ "/api/usage": q => (q.get("source") === "codex" ? codex : usage), "/api/sessions": () => sessions, "/api/session": () => session });
     at();
-    renderApp(<ActivityPage />);
+    renderPage(<ActivityPage />);
     await loaded();
     await userEvent.click(within(screen.getByRole("group", { name: "Source" })).getByRole("button", { name: "Codex" }));
     expect(location.search).toBe("?range=30&source=codex");
@@ -474,7 +474,7 @@ describe("ActivityPage", () => {
   it("reloads an open sessions table when the source changes", async () => {
     mockApi({ "/api/usage": q => (q.get("source") === "codex" ? { ...usage, source: "codex" } : usage), "/api/sessions": () => sessions, "/api/session": () => session });
     at();
-    renderApp(<ActivityPage />);
+    renderPage(<ActivityPage />);
     await loaded();
     await openTab("Sessions");
     await waitFor(() => expect(fetched()).toContain("/api/sessions?range=30"));
@@ -805,7 +805,7 @@ describe("ActivityPage", () => {
   it("clears the day when the project, range or source changes", async () => {
     mockApi({ "/api/usage": () => usage, "/api/sessions": () => sessions, "/api/day": () => noDay("2026-11-04") });
     at("?range=30&day=2026-11-04&q=api");
-    renderApp(<ActivityPage />);
+    renderPage(<ActivityPage />);
     await loaded();
     await userEvent.click(within(screen.getByRole("group", { name: "Time range" })).getByRole("button", { name: "7d" }));
     await waitFor(() => expect(location.search).toBe("?range=7&q=api"));
@@ -821,7 +821,7 @@ describe("ActivityPage", () => {
   it("keeps the day on the earlier history entry after a filter change and Back", async () => {
     mockApi({ "/api/usage": () => usage, "/api/sessions": () => sessions, "/api/day": () => noDay("2026-11-04") });
     at("?range=30&day=2026-11-04");
-    renderApp(<ActivityPage />);
+    renderPage(<ActivityPage />);
     await loaded();
     await userEvent.click(within(screen.getByRole("group", { name: "Time range" })).getByRole("button", { name: "7d" }));
     await waitFor(() => expect(location.search).toBe("?range=7"));

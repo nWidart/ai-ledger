@@ -22,7 +22,7 @@ For all your projects at once, use the [Weekly 15-minute review](/ai-ledger/impr
 
 Make one pass over the [Project](/ai-ledger/pages/project/) page. At each stop, read the figures named, compare them with the "off" column, and write them down. Fix nothing yet.
 
-To open the page, set the project filter to the project, then select **Project page →** in the filter row. Set the range to the stretch you review: **30d** for a month (an example). Leave the source at **All** and **Include automated sessions** off.
+To open the page, set the project filter to the project, then select **Brief →** at the end of the scope bar. Set the range to the stretch you review: **30d** for a month (an example). Leave the source at **All** and **Include automated sessions** off.
 
 | Stop | Read | Off when | Open |
 | --- | --- | --- | --- |
