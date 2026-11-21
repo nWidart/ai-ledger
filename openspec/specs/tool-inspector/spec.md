@@ -111,10 +111,10 @@ For a skill, the sheet SHALL cover the calls that invoked that skill. It SHALL N
 - **THEN** the sheet shows how often `ship` was invoked, where, how often the invocation failed, and its recent invocations, with no input pattern section
 
 ### Requirement: Open the inspector from tool rows and names
-The inspector SHALL open from tool rows in the Activity tools drawer, from MCP server and skill rows in the Activity extensions drawer, from tool rows in the session sheet, and from tool names on the Errors page.
+The inspector SHALL open from tool, MCP server and skill rows in Activity's Tools and MCP tab, from tool rows in the session sheet, and from tool names on the Errors page.
 
 #### Scenario: From the tools drawer
-- **WHEN** the user clicks the `Bash` row in the Activity tools drawer
+- **WHEN** the user clicks the `Bash` row in Activity's Tools and MCP tab
 - **THEN** the inspector opens for `Bash`
 
 #### Scenario: From the session sheet
@@ -137,7 +137,7 @@ The open inspector SHALL be kept in the page URL, so reload and a copied link re
 - **THEN** the `Bash` inspector shows again
 
 #### Scenario: Back after closing
-- **WHEN** the user opens the `Bash` inspector from the tools drawer, closes it, then presses browser Back
+- **WHEN** the user opens the `Bash` inspector from the Tools and MCP tab, closes it, then presses browser Back
 - **THEN** the browser leaves the page's current view, without reopening the inspector
 
 ### Requirement: Read only what the store already holds
