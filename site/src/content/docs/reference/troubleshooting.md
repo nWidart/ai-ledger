@@ -94,7 +94,7 @@ No. The store keeps every line it has read, and never deletes or alters one beca
 
 ### Which agents does it read?
 
-Claude Code (`~/.claude/projects`) and Codex (`~/.codex`). Both map onto the same pages. Activity's Judgments view covers Claude Code sessions only, because it shows Claude Code's `/insights`.
+Claude Code (`~/.claude/projects`), Codex (`~/.codex`) and Grok (`~/.grok`). All three map onto the same pages. Activity's Judgments view covers Claude Code sessions only, because it shows Claude Code's `/insights`.
 
 ### Where are the store and the configuration files?
 

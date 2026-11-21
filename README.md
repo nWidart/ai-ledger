@@ -1,8 +1,10 @@
 # AI Ledger
 
-**See what Claude Code and Codex did, what it cost, and where they got stuck.**
+**See what Claude Code, Codex and Grok did, what it cost, and where they got stuck.**
 
-AI Ledger reads your Claude Code and Codex transcripts and turns them into six local dashboards. Your agents delete old transcripts; AI Ledger keeps every line.
+AI Ledger reads your Claude Code, Codex and Grok CLI transcripts and turns them into six local dashboards. Your agents delete old transcripts; AI Ledger keeps every line.
+
+It reads Claude Code's `~/.claude/projects`, Codex's `~/.codex` and Grok's `~/.grok/sessions/<folder>/<session>/updates.jsonl` (no other Grok file). A missing folder is skipped.
 
 [Documentation](https://nwidart.github.io/ai-ledger/)
 
@@ -23,7 +25,7 @@ Needs [uv](https://docs.astral.sh/uv/). Runs on macOS and Linux. Your data stays
 | **Live** | Every active session as it runs, sorted by who needs you first. A strip above the stream shows the session's state, context, cost, errors, plan limits and a 10-minute pulse of context growth and tool calls, with Copy resume. When you scroll back, **Jump to latest** shows how many events arrived since. On the Wall, a tile pins up to two streams beside the tiles. Its tab counts the sessions that wait for you. |
 | **Limits** | Each plan limit window with its forecast cone and the safe pace to its reset, what used it, and how past windows ended. Its tab shows how full the fullest window is. |
 | **Activity** | What got done per day or week, by project, and what needs your attention. The work chart puts errors per 100 tool calls on a track under the bars; select a day or a week to narrow the tables. Each tile opens the place that explains it, and the tables sit in tabs: Sessions, Projects, Tools and MCP, Loops and tests. It also shows the output speed per model second, with its trend, and how long sessions wait on the model and tools; that tile opens Sessions sorted by speed, and Sessions also sorts by model time. Its **Judgments** view shows how Claude Code's `/insights` judged your sessions: the outcome mix as one bar and per week, how helpful Claude was, what each judged session cost, and which friction the costliest sessions had. |
-| **Cost** | Estimated spend at API list prices per day, and the month's pace against your plan. One table shows each project's trend, spend, change, cost per commit and cache hit. The tokens chart can show each day's share by token kind, and the Tokens and cache drawer sets each kind's share of tokens beside its share of cost. |
+| **Cost** | Estimated spend at API list prices per day (Grok's reported cost for Grok), and the month's pace against your plan. One table shows each project's trend, spend, change, cost per commit and cache hit. The tokens chart can show each day's share by token kind, and the Tokens and cache drawer sets each kind's share of tokens beside its share of cost. |
 | **Context** | How full the context window gets, how fast it grows, what fills it, and what the prompt cache wastes. |
 | **Errors** | Failed tool calls by type, the time they cost, a fix to paste into `CLAUDE.md` or `AGENTS.md`, and whether each fix worked. |
 | **Project** | One project across all of the above in two columns, each block loading on its own, opened from the **Brief** link in the scope bar, its sheet, or its name in the command palette. |
@@ -36,9 +38,15 @@ The navigation has two groups: **Now** (Live, Limits) and **Review** (Activity, 
 
 The filters sit in one scope bar under the navigation, the same place on every page: project, range, source and **Include automated sessions**. Both bars stay at the top as you scroll, and nothing else does. With a project picked, the bar ends with a **Brief** link to that project's page. On a phone the bar is one **Filters** button that shows how many filters are set and opens them over the page.
 
-Each page shows only the filters that change it. Limits shows the source only, and Live has no range. Activity's Judgments view has no source filter, because `/insights` judges Claude Code sessions only; with Codex as the source, Activity shows Overview and says why Judgments is not available. An old `/insights` link opens the Judgments view with its filters.
+Each page shows only the filters that change it. Limits shows the source only, and Live has no range. Activity's Judgments view has no source filter, because `/insights` judges Claude Code sessions only; with Codex or Grok as the source, Activity shows Overview and says why Judgments is not available. An old `/insights` link opens the Judgments view with its filters.
 
-A session link on any page opens the session's sheet over that page, so the page keeps its state and Back closes the sheet; changing the project or source filter closes it too. **Open session** in Cmd+K and in the right-click menu does the same on every page, Limits included; on Live the stream keeps following its session. A session's sheet shows its model time, tool time, output speed and lines added and removed. These come from the `cost-state` line Claude Code writes when a session ends (from about late October 2026), so Codex and older Claude Code sessions show none.
+A session link on any page opens the session's sheet over that page, so the page keeps its state and Back closes the sheet; changing the project or source filter closes it too. **Open session** in Cmd+K and in the right-click menu does the same on every page, Limits included; on Live the stream keeps following its session. A session's sheet shows its model time, tool time, output speed and lines added and removed. These come from the `cost-state` line Claude Code writes when a session ends (from about late October 2026), so Codex and older Claude Code sessions show none. A Grok session shows model time and output speed, from the API time of each turn, and no tool time or lines.
+
+Grok differs from the other two agents in a few ways:
+
+- Grok writes token usage and cost once per turn, when the turn ends. The app splits a turn over its model calls by each call's context size: totals per turn, session, day, project and model are exact, one call's share is an estimate. A running turn shows no tokens or cost until it ends, and a turn that never ends (a crash, or a headless run killed by a signal) reports no usage.
+- A Grok request costs what Grok reported, not an estimate at list prices.
+- Grok records no reasoning effort, git branch, session title or plan limits, and `/insights` writes no judgments for it. Limits shows no Grok window, and a Grok cache break is never marked expired.
 
 The [documentation site](https://nwidart.github.io/ai-ledger/) describes each page in detail. The top bar's **Docs** link and the command palette's `>docs` commands open the page you are on, and "Learn more" links in the explanations go to the section behind a figure; the app sends nothing to the site until you follow a link.
 
@@ -65,6 +73,7 @@ The first start reads every transcript, about 5 minutes for a month of heavy use
 | `--no-open` | off (opens the browser) |
 | `--projects` | `~/.claude/projects` |
 | `--codex` | `~/.codex` |
+| `--grok` | `~/.grok` |
 | `--usage-data` | `~/.claude/usage-data` |
 | `--db` | `~/Library/Application Support/ai-ledger/ai-ledger.duckdb` (macOS), `~/.local/share/ai-ledger/ai-ledger.duckdb` (Linux) |
 

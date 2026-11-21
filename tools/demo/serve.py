@@ -16,4 +16,4 @@ metrics.USER_PRICES, metrics.USER_AUTOMATED = os.path.join(HERE, "prices.json"),
 LIVE = os.path.join(HERE, "live")  # replay.py's transcript root; never a real one
 os.makedirs(os.path.join(LIVE, "claude"), exist_ok=True)
 app.App.poll = lambda self: None
-app.serve(store.open_store(os.path.join(HERE, "demo.duckdb")), dict(claude=os.path.join(LIVE, "claude"), codex=os.path.join(LIVE, "codex")), int(os.environ.get("DEMO_PORT", 8799)))
+app.serve(store.open_store(os.path.join(HERE, "demo.duckdb")), dict(claude=os.path.join(LIVE, "claude"), codex=os.path.join(LIVE, "codex"), grok=os.path.join(LIVE, "grok")), int(os.environ.get("DEMO_PORT", 8799)))

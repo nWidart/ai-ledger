@@ -315,7 +315,7 @@ class SessionsTest(LiveCase):
         project = live.sessions(self.cur(), now=NOW, prices=PRICES)["sessions"][0]["project"]
         self.assertEqual(len(live.sessions(self.cur(), project=project, now=NOW, prices=PRICES)["sessions"]), 1)
         with self.assertRaises(ValueError):
-            live.sessions(self.cur(), source="grok", now=NOW)
+            live.sessions(self.cur(), source="gemini", now=NOW)
 
     def test_automated_session_hidden_by_default(self):
         self.con.execute("UPDATE sessions SET project = 'observer-sessions' WHERE session_id = 's2'")
@@ -646,6 +646,24 @@ class CodexSessionTest(CodexCase):
         self.assertEqual((got["state"]["kind"], got["window"]), ("tool", 272000))
         self.assertEqual((exec_ev["long"], got["state"]["long"], got["lanes"]), (False, False, {}))
         self.assertEqual([e["quiet"] for e in got["events"] if e["k"] == "tool"], [False, False])
+
+    def test_aborted_turn_ends_its_open_call(self):
+        # A call with no output when the turn is aborted is over: it ends, failed, as the interruption, also on a
+        # catch-up whose window starts after the call.
+        self.place(NAME, meta(THREAD).replace("2026-11-06T10:00:00.000Z", at(0))
+                   + codex_line(1, 1, "event_msg", type="task_started", turn_id="t1")
+                   + codex_line(2, 2, "response_item", type="function_call", name="exec_command", call_id="c1", arguments=json.dumps(dict(cmd="sleep 600")))
+                   + codex_line(3, 70, "event_msg", type="agent_message", message="still going"))
+        self.ingest()
+        cur = self.con.cursor()
+        first = live.session(cur, THREAD, now=NOW, prices=PRICES)
+        self.assertEqual([e["end"] for e in first["events"] if e["k"] == "tool"], [None])
+        self.place(NAME, codex_line(4, 80, "event_msg", type="turn_aborted", turn_id="t1", reason="interrupted"), mode="a")
+        self.ingest()
+        for got in (live.session(cur, THREAD, now=NOW, prices=PRICES), live.session(cur, THREAD, after=first["cursor"], now=NOW, prices=PRICES)):
+            ev, = [e for e in got["events"] if e["k"] == "tool"]
+            self.assertEqual((ev["id"], ev["end"], ev["failed"], ev["error"]), ("c1", at(80), True, live.INTERRUPTED))
+            self.assertEqual(got["state"]["kind"], "you")
 
     def test_window_the_same_on_a_first_load_a_catch_up_and_the_list(self):
         # An unpriced model: only the turn's start states the window, and it is older than a catch-up's one-minute overlap.

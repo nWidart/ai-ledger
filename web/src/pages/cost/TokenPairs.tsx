@@ -1,15 +1,16 @@
 import type { Totals } from "../../api";
 import { ChartTable, DataTable } from "../../components/DataTable";
 import { num, pct } from "../../format";
-import { tokenPairs, type TokenPair } from "./cost";
+import { kindCost, tokenPairs, type TokenPair } from "./cost";
 
 /** A dollar figure to the cent, for the exact table ($10.49, not $10). */
 const cents = (n: number | null) => (n == null ? "–" : "$" + num(n, 2));
 
 /** One sentence above the chart: the kind whose share of tokens and share of cost are furthest apart (the costliest on a tie), however
  *  close; or why no kind has a share of cost (no request priced, or the priced ones cost nothing). */
-function lede(pairs: readonly TokenPair[], cost: number | null): string {
-  if (cost == null) return "No request in this view is priced, so each kind's share of cost is unknown.";
+function lede(pairs: readonly TokenPair[], cost: number | null, reported: boolean): string {
+  if (cost == null) return reported ? "No request in this view is priced from the price table, so each kind's share of cost is unknown."
+    : "No request in this view is priced, so each kind's share of cost is unknown.";
   if (cost === 0) return "The priced requests in this view cost $0.00, so no kind has a share of estimated cost.";
   const far = pairs.reduce((b, p) => (gap(p) > gap(b) + TIE ? p : b));
   return `${far.label} is ${pct(far.tokenShare, 1)} of tokens and ${pct(far.costShare, 1)} of estimated cost.`;
@@ -25,10 +26,13 @@ const fill = (share: number | null, c: string) => (share ? <i style={{ width: `$
  *  bar to the right for cost, each on its own 0 to 100% scale, with the shares as text. The bars are a picture of the figures: each row
  *  reads as one sentence, and the data table holds the exact tokens and cost. t: the view's or a project's totals. */
 export function TokenPairs({ t }: { t: Totals }) {
-  const pairs = tokenPairs(t);
+  const pairs = tokenPairs(t), est = kindCost(t), reported = (t.cost ?? 0) - (est ?? 0);
+  // A cost the agent reported (Grok) has no split by kind: said when it is at least a cent, so the breakdown is not read as the whole cost.
+  const out = reported >= 0.005;
   return (
     <div className="tpairs">
-      <div className="hint">{lede(pairs, t.cost)}</div>
+      <div className="hint">{lede(pairs, est, out)}</div>
+      {out && <p className="hint">{cents(reported)} of this view's {cents(t.cost)} is the cost Grok reported, with no split by kind, so it is not in this breakdown.</p>}
       <div className="tp-head" aria-hidden="true"><span>Share of tokens</span><span /><span>Share of estimated cost</span></div>
       <ul className="tp-chart" aria-label="Share of tokens beside share of estimated cost, by kind">
         {pairs.map(p => <li key={p.key} className="tp-row">

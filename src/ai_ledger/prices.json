@@ -4,6 +4,7 @@
   "openai": "cache_5m is the 30-minute cache write rate; cache_1h is 0 because Codex reports a single cache-write count. long applies above 272K input tokens.",
   "plans_source": "Monthly consumer plan prices in USD, billed monthly: https://claude.com/pricing and https://chatgpt.com/pricing (Codex is included in each ChatGPT plan listed), checked 2026-11-12. Keys are the plan string the limit snapshots record: Claude's is subscriptionType or subscriptionType/rateLimitTier, Codex's is its plan_type.",
   "unit": "USD per million tokens; context in tokens (null when the docs do not state it)",
+  "grok": "Grok entries hold only the context window: Grok reports each request's cost, which the app uses instead of an estimate.",
   "models": {
     "claude-fable-5-2": {"input": 8, "output": 40, "cache_read": 0.2, "cache_5m": 10, "cache_1h": 16, "context": 1000000,
       "fast": {"input": 16, "output": 80, "cache_read": 0.4, "cache_5m": 20, "cache_1h": 32}},
@@ -20,7 +21,8 @@
       "long": {"input": 20, "output": 75, "cache_read": 2, "cache_5m": 25, "cache_1h": 0}},
     "gpt-6.1-sol": {"input": 2, "output": 10, "cache_read": 0.1, "cache_5m": 2.5, "cache_1h": 0, "context": null,
       "long_above": 272000,
-      "long": {"input": 4, "output": 15, "cache_read": 0.2, "cache_5m": 5, "cache_1h": 0}}
+      "long": {"input": 4, "output": 15, "cache_read": 0.2, "cache_5m": 5, "cache_1h": 0}},
+    "grok-4.7-build": {"context": 256000}
   },
   "plans": {
     "claude": {

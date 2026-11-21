@@ -1,32 +1,60 @@
 # Tasks
 
-## 1. Reported cost in the store and metrics
+Each task names the model that does it: Sonnet for mechanical edits, Opus for standard work, Fable for the parts where a wrong design costs most. A group starts when the groups it depends on are merged. Groups 4, 5 and 6 can run in parallel after group 3; group 7 after group 4.
 
-- [ ] 1.1 Add nullable `reported_cost DOUBLE` to `requests` in `DERIVED_SCHEMA`, and add it on open with `ALTER TABLE requests ADD COLUMN IF NOT EXISTS`. Claude and Codex derivers write NULL. Verify with a test that opens a store created by the current schema: the column exists, counts are unchanged, and every existing request has a NULL `reported_cost`.
-- [ ] 1.2 In `metrics.requests_cte`, compute `cost` as `coalesce(r.reported_cost, <estimate>)`. A request with a reported cost no longer counts as unpriced. Verify with a `test_metrics` case: an unpriced model with a reported cost of $0.134844 adds $0.134844 and is not listed in `unpriced`.
+## 1. Store groundwork (no dependency)
 
-## 2. Grok parser
+- [x] 1.1 (Opus) Add nullable `reported_cost DOUBLE` to `requests` in `DERIVED_SCHEMA`, add it on open with `ALTER TABLE requests ADD COLUMN IF NOT EXISTS`, and write it in `Deriver.flush`. Claude and Codex rows carry NULL. Verify with a `test_store` case that opens a store made by the current schema: the column exists, counts are unchanged, every request has a NULL `reported_cost`.
+- [x] 1.2 (Opus) In `metrics.requests_cte`, compute `cost` as `coalesce(r.reported_cost, <estimate>)`. Check every reader of `cost_<kind>` and of `cost IS NULL`: a request with a reported cost and no price is not unpriced, and the cost-by-token-kind chart does not lose its total. Verify with `test_metrics`: an unpriced model with reported costs adding up to $0.134844 adds $0.134844 and is not in `unpriced`.
+- [x] 1.3 (Opus) Give `store.Source` a `type` reader (default `d.get("type")`) and use it in `ingest_chunk` for `raw_lines.type`. Verify that the Claude and Codex tests pass unchanged.
+- [x] 1.4 (Sonnet) Add `grok-4.7-build` to `prices.json` with `context: 256000` and no rates. Verify with a `test_metrics` case that the entry loads, prices nothing, and gives the window.
 
-- [ ] 2.1 Run a probe Grok session in the scratchpad, and cancel its turn while a tool runs. Record whether `turn_completed` is written, and its `stop_reason`. Update the "Cancelled turn" scenario and the design risk with what you find.
-- [ ] 2.2 Build Grok fixtures in `tests/` from trimmed real 1.0.77 lines: the probe parent and child sessions (spawn, finish, failing `ls`, `turn_completed` with `modelUsage`), plus `hook_execution`, `read_file`, `grep`, `search_replace` and one MCP-namespace tool call. Replace message text, paths and ids with neutral values. Verify that the fixtures parse as JSONL and contain no path under the real home.
-- [ ] 2.3 Add `grok.py`: `files(root)` returns `sessions/*/*/updates.jsonl`, sorted. `key` is `grok:<eventId>`. `fields` gives the session id, the event id and the `agentTimestampMs` time. Register `grok` in `store.SOURCES`, add `DEFAULT_GROK = ~/.grok`, and add `--grok` to `app.py`. Verify with tests: a missing Grok home is skipped, a file read twice stores each line once, discovery puts a child after its parent, and the cwd comes from the decoded folder name.
-- [ ] 2.4 Implement `GrokDeriver` sessions and requests. One request per `modelUsage` model per `turn_completed`, with the token mapping and `reported_cost = costUsdTicks / 1e10`. Peak context is the max `_meta.totalTokens`. Verify the spec scenarios: 97,245 / 41,600 / 459 / 230 gives input 55,645 and total 97,704 at $0.134844; two models in one turn give two rows; a turn with no `turn_completed` gives no request.
-- [ ] 2.5 Implement subagent attribution: look up the parent's stored `subagent_spawned` line by `child_session_id`. A child's tool calls and prompts go to the parent with `subagent = true`. Its usage is skipped, and it gets no session row. Verify the probe scenario: one subagent `read_file` on the parent, 5 calls' tokens counted once, and no child session.
-- [ ] 2.6 Implement tool calls and errors from `tool_call` / `tool_call_update`, with `run_terminal_command` added to `SHELL_TOOLS` and non-`grok_build` namespaces mapped to `mcp__<ns>__<name>`. Add follow-ups from agent message chunks, and prompts from `user_message_chunk` (one per turn, interrupted on a cancelled stop reason). Hooks come from `hook_execution`. Verify the spec scenarios: the failing `ls` is an error with category and `Exit code 1`, `git commit` counts as a commit, the MCP tool name and server, two `session_start` hooks, and one prompt per turn.
-- [ ] 2.7 Verify with a test that ingest followed by rebuild gives identical derived rows for a store holding all three sources, `reported_cost` included.
+## 2. Probe and fixtures (no dependency)
 
-## 3. Source filter
+- [x] 2.1 (Opus) Run a headless Grok 1.0.92 probe in the scratchpad: a turn that spawns a subagent, calls an MCP tool, runs a failing command and a `git commit`, then a second turn cancelled while a tool runs. Record in design.md what differs from "Context": the child's lines, the `spawn_subagent` result, the cancelled turn's lines, a prompt in a second turn (`promptIndex`).
+- [x] 2.2 (Opus) Build fixtures under `tests/fixtures/grok/` from trimmed real 1.0.92 lines: the probe's parent and child, one long turn cut to five model calls with out-of-order event ids, a compaction, a `use_tool` call with an error result, a `failed` `grep`, hooks. Replace every text, path, command, id and title with neutral values by script, not by hand. Verify that each file parses as JSONL, holds no path under the real home and no string of the real sessions longer than 20 characters, and that the turn's usage figures still add up.
 
-- [ ] 3.1 Add `grok` to `metrics.SOURCES`, so `source=grok` is accepted and `source=gemini` gets a 400. Extend the `test_metrics` fixture with a Grok session, and regenerate `web/src/__fixtures__/`. Verify that `tests/test_web_fixtures.py` passes and that a second run leaves the fixtures unchanged.
-- [ ] 3.2 Add `grok` to `Source` in `api.ts` and `SOURCES` in `hash.ts`, and label it "Grok" in `Filters`. Change the unknown-source test value from `grok` to `gemini`. Verify with `hash.test.ts` and a page test that picking Grok writes `source=grok` and narrows the figures.
-- [ ] 3.3 Run `npm run check` in `web/`, then verify that `tests/test_web_build.py` passes. Do not commit the build: git ignores `src/ai_ledger/web/`.
+## 3. Grok parser (after 1 and 2)
 
-## 4. Integration
+- [x] 3.1 (Opus) Add `grok.py`: `files(root)` returns `sessions/*/*/updates.jsonl` sorted; `key` is `grok:<eventId>:<agentTimestampMs>`; `fields` gives the session, the event id and the `agentTimestampMs` time in the store's ISO form; `type` as the design says. Register `grok` in `store.SOURCES`, add `DEFAULT_GROK`, add `--grok` to `app.py` and to `roots`. Verify with `test_grok`: a missing home is skipped, a file read twice stores each line once, the working folder is the decoded folder name, a child sorts after its parent.
+- [x] 3.2 (Fable) Implement `GrokDeriver` sessions and requests: model calls from `streamStartMs`, the split by context size with exact sums, the reported cost split, the fallback row, peak context, compactions and the context window. A `turn_completed` in a later chunk than its calls reads the turn's lines back from `raw_lines`. Verify the spec scenarios of "Count Grok usage per model call", "Keep the cost Grok reports" and "Record the context of a Grok session", and that an ingest cut at every line boundary of the long-turn fixture gives the same rows as one ingest of the whole file.
+- [x] 3.3 (Fable) Implement subagent placement from the parent's stored `subagent_spawned` line: the child's lines belong to the parent with `subagent = true`, its usage makes no request, it has no session row. Verify the "Probe with a subagent" and "Rebuild" scenarios. The child's tool calls and prompts come with task 3.4.
+- [x] 3.4 (Opus) Implement tool calls and errors, prompts and hooks as the design says; add `run_terminal_command` to `SHELL_TOOLS`. Verify the spec scenarios of "Record Grok tool calls and errors", "Recognize prompts in Grok sessions" and "Record Grok hooks".
+- [x] 3.5 (Opus) Implement `grok.prompt_text` and the title fallback: a Grok session's title is its first prompt's. Verify with a `test_grok` case through `titles`.
+- [x] 3.6 (Opus) Write one `session_runs` row per turn with `api_ms` and NULL tool time and lines. Check every reader of `session_runs` in `metrics.py` and the web types: a NULL reads "–". Verify the "Output speed" scenario and a `test_metrics` case for a session detail with NULL lines.
+- [x] 3.7 (Opus) Verify with a test that ingest followed by rebuild gives identical derived rows for a store holding all three sources, `reported_cost` and `session_runs` included.
 
-- [ ] 4.1 Against an instant copy of the real store, ingest with the real `~/.grok`. Verify that the review and probe sessions appear, the probe's cost is $0.134844 with 1 subagent tool call and no child session, and Claude and Codex totals are unchanged. Then run `rebuild` and check that totals match.
-- [ ] 4.2 Start the app on the copy with a free port. In the browser, pick Grok on Activity, Cost and Errors, and confirm the failing `ls` appears on Errors. Update the README: what is ingested, `--grok`, usage arriving per turn, and the missing Grok effort, branch and limits.
+## 4. The source on every page, backend (after 3)
+
+- [x] 4.1 (Sonnet) Add `grok` to `metrics.SOURCES`. Move every Python test that uses `grok` as the unknown source to `gemini` (`test_metrics`, `test_live`, `test_context`, `test_insights`, `test_limits`, `test_app`). Verify that `source=grok` is accepted and `source=gemini` gets a 400.
+- [x] 4.2 (Opus) `context.py`: no `expired` cause for a Grok break; `per_agent` and the advice texts for views with Grok sessions; the large-results advice for `run_terminal_command`; the stated window. Verify the context-dashboard delta scenarios in `test_context`.
+- [x] 4.3 (Opus) `insights.py` and `limits.py`: no judgments for a source other than Claude Code; Limits for `source=grok` sends no window and says why. Verify the insights-dashboard and limits-dashboard delta scenarios.
+- [x] 4.4 (Opus) Add a Grok session to the `test_metrics` fixture store and to the stores `tests/test_web_fixtures.py` builds, then regenerate `web/src/__fixtures__/`. Verify that `tests/test_web_fixtures.py` passes and a second run leaves the fixtures unchanged.
+
+## 5. Live (after 3)
+
+- [x] 5.1 (Fable) Make the turn marks a property of the source: `live.recent`, `live.state`, `subagent_work`, `lane_of`, `started_by`, `spawned` and the compaction filters (also `metrics.session_timeline`) read them from `store.SOURCES`, not from `source == "codex"`. Codex behaviour must not change. Verify that `test_live` passes unchanged before any Grok case is added.
+- [x] 5.2 (Opus) Implement `grok.live_items` and `close_type`; add `run_terminal_command` to the approval and read-only rules. Verify the live-sessions delta scenarios in `test_live` with the Grok fixtures: working during a turn, your turn after `turn_completed`, interrupt on `cancelled`, a subagent lane, closed after `session_end`.
+
+## 6. Web (after 4.4)
+
+- [x] 6.1 (Sonnet) Add `grok` to `Source` (`api.ts`), `SOURCES` (`url.ts`), `SOURCE_LABELS` (`Filters.tsx`), `SOURCE_COLORS` (`cost/cost.ts`), the inline scope type in `project/blocks.tsx`, and the palette's `#grok` term. Move the web tests that use `grok` as the unknown source to `gemini` (`url.test.ts`, `Filters.test.tsx`, `errors/model.test.ts`). Verify with `url.test.ts` and `Filters.test.tsx` that picking Grok writes `source=grok`.
+- [x] 6.2 (Opus) Replace every `=== "codex"` that means "not Claude Code" with a test for Claude Code, and name the picked agent in the text: `router.tsx`, `ScopeBar.tsx`, `ActivityPage.tsx`, `ViewSwitch.tsx`, `sheets/session.ts`, `palette/resolve.ts`, `ProjectPage.tsx`, `project/blocks.tsx`, `facets.tsx`. Leave `codexOnly` (no model time) as it is. Verify with the page tests: a Grok view offers no Judgments and says "Grok writes no facets"; a Codex view behaves as before.
+- [x] 6.3 (Sonnet) `menu/resume.ts`: `grok --resume <id>` for a Grok session. Verify with `resume.test.ts`.
+- [x] 6.4 (Opus) Check the pages against the regenerated fixtures: the session sheet with NULL tool time and lines, the Limits text for Grok, the Cost Agent stack with three series, Live's thinking text. Fix `tokenPairs` in `cost/cost.ts`: it divides each kind.s cost by a total that now includes reported costs, so the kind shares fall short of 100% with Grok in view. Run `npm run check` in `web/`, then verify that `tests/test_web_build.py` passes.
+
+## 7. Docs (after 4; parallel with 6)
+
+- [x] 7.1 (Opus, with the `doc-coauthoring` skill) Update the docs site: `how-it-works.md` (paths, `--grok`, one shape for three agents), `compare-sources.md` (what Grok records and what it does not: usage per turn, the per-call split as an estimate, no effort, branch, limits or judgments), `cost-estimates.md` (reported cost), `cli.md`, `storage.md`, `glossary.md`, `filters.md`, `command-palette.mdx`, `context-menu.mdx`, `context.mdx` (cache lifetime), `limits.mdx`, `live.mdx`, `index.mdx`, `install.md`, `privacy-security.md`. Run `npm run check` in `site/`.
+- [x] 7.2 (Sonnet) Update `README.md` (tagline, what is ingested, `--grok`, the Grok caveats) and add the change to `[Unreleased]` in `CHANGELOG.md`.
+- [x] 7.3 (Sonnet) Add Grok sessions to `tools/demo/seed.py` and `serve.py`. Verify that the demo store builds and the source filter shows Grok. Do not record the GIFs again.
+
+## 8. Integration (after all; the lead)
+
+- [x] 8.1 (Fable) Review each group's diff before it merges. Run `uv run ruff check`, the Python tests, `npm run check` in `web/` and `site/`, and `openspec validate --specs --strict`.
+- [x] 8.2 (Fable) Against a copy of the real store, ingest with the real `~/.grok`. Verify: each Grok session's requests equal its `modelCalls`, and its tokens and cost equal the sums of its `turn_completed` lines; the probe has 1 subagent tool call and no child session; Claude and Codex totals are unchanged. Run `rebuild` and check that the totals match. Result: 12 sessions, 391 requests, $30.41; sums equal in every session; requests equal `modelCalls` except the cancelled turn (51 for 50) and the parents of subagents (their own calls only); Claude and Codex totals unchanged; rebuild identical.
+- [x] 8.3 (Fable) Start the app on the copy with a free port. In the browser, pick Grok on Activity, Cost, Context, Errors, Limits and Live; open a Grok session's sheet; confirm the compacted session's curve on Context and a failing command on Errors. Done in part: every page's API answered for `source=grok` with the expected figures (Limits with no window, Context with no overhead, an unknown source refused), and Cost was read in the browser. The session sheet, the Context curve and Errors were not opened in the browser; the page tests cover them with fixtures.
 
 ## Workflow follow-up
 
-- On archive, update the `transcript-store` Purpose to name Claude Code, Codex and Grok.
-- Whichever of this change and `add-command-palette` merges second adds `grok` to the palette's `#` source terms.
+- On archive, update the `transcript-store` Purpose to name Claude Code, Codex and Grok, and the `cost-dashboard`, `context-dashboard`, `live-sessions` and `usage-dashboard` Purposes where they name the agents.

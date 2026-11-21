@@ -375,6 +375,18 @@ describe("LimitsPage", () => {
     expect(vi.mocked(f).mock.calls.at(-1)![0]).toBe("/api/limits?range=30&source=codex");
   });
 
+  it("says in one line that Grok reports no plan limits, with no window, lead, suggestion, history or value", async () => {
+    const grok: LimitsPayload = { ...fixture, plan_limits: false, windows: [], binding: null, suggestion: null, history: [], events: [], unused: [],
+      value: { limits: [], projects: [] }, freshness: [] };
+    const f = show(grok, "?range=30&source=grok", true);
+    expect((await screen.findByRole("heading", { level: 1, name: "Grok reports no plan limits." })).textContent).toBe("Grok reports no plan limits.");
+    expect(vi.mocked(f).mock.calls.at(-1)![0]).toBe("/api/limits?range=30&source=grok");
+    for (const id of ["windows", "history", "value"]) expect(document.getElementById(id)).toBeNull();
+    expect(document.querySelector(".suggest, .fresh")).toBeNull();
+    expect(screen.queryByText(/No open windows/)).toBeNull();
+    expect(location.search).toBe("?range=30&source=grok");
+  });
+
   it("has no project filter, and asks for no project even when the address carries one", async () => {
     const p = fixture.value.projects[0]!;
     const f = show({ ...fixture, value: { ...fixture.value, projects: [{ ...p, points: 12 }, { ...p, project: "foo", points: 0.4 }] } }, "?project=foo&range=30");

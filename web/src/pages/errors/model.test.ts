@@ -530,7 +530,7 @@ describe("hash and storage", () => {
     expect(readView(raw("project=foo&range=7&sub=0&noise=0&gran=week&cat=x"), {}, m).view)
       .toEqual({ project: "foo", source: "", range: 7, sub: false, noise: true, gran: "week", cat: "x", focus: null, at: null, tool: null });
     expect(readView(raw("source=codex"), {}, m).view).toEqual({ ...DEFAULT_VIEW, source: "codex" });
-    expect(readView(raw("source=grok&range=7"), {}, m).view).toEqual({ ...DEFAULT_VIEW, range: 7 });
+    expect(readView(raw("source=gemini&range=7"), {}, m).view).toEqual({ ...DEFAULT_VIEW, range: 7 });
     expect(readView(raw("cat=nope&range=5"), {}, m).view).toMatchObject({ cat: null, range: 30 });
   });
   it("flags a permalink to an example the store lacks; a dead bare ?ex= keeps the default 30 days, not all time", () => {

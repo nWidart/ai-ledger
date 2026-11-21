@@ -22,8 +22,9 @@ export interface Totals extends Tokens {
   interruption_rate: number | null; tokens_per_commit: number | null; cost_per_commit: number | null; errors_per_100_calls: number | null;
   session_seconds: number; median_session_seconds: number | null; near_limit: number;
   /** Model and tool time summed over the sessions that record them (timed_sessions; Claude Code's cost-state line), whole-session;
-   *  output_per_s is those sessions' output tokens over their model time, null when there is none. */
-  model_ms: number; tool_ms: number; timed_sessions: number; output_per_s: number | null;
+   *  output_per_s is those sessions' output tokens over their model time, null when there is none. tool_ms is null when
+   *  timed sessions state no tool time (Grok's record none). */
+  model_ms: number; tool_ms: number | null; timed_sessions: number; output_per_s: number | null;
   /** The sources of the view's sessions (a session is in the view when it has requests in it), A to Z. */
   session_sources: Source[];
 }
@@ -81,7 +82,7 @@ export interface Previous {
 export interface Change { project: string | null; cost: number | null; prev_cost: number | null; delta: number | null; new: boolean }
 
 /** The coding agent a session came from; "" in a filter is every source. */
-export type Source = "claude" | "codex";
+export type Source = "claude" | "codex" | "grok";
 /** One agent's share of the month's run rate. */
 export interface RunRateSource { source: Source; month_cost: number; daily_avg: number; projected: number }
 
@@ -143,7 +144,8 @@ export interface SessionInfo {
   /** From Claude Code's cost-state line, subagents included; null when the session records none (every Codex session). */
   runs: SessionRuns | null;
 }
-export interface SessionRuns { model_ms: number; tool_ms: number; lines_added: number; lines_removed: number; output_per_s: number | null }
+/** tool_ms and lines are null when the runs state none (a Grok session's). */
+export interface SessionRuns { model_ms: number; tool_ms: number | null; lines_added: number | null; lines_removed: number | null; output_per_s: number | null }
 export interface SessionModelRow extends Tokens { model: string | null; effort: string; subagent: boolean; requests: number; tokens: number; cost: number | null }
 /** The session's /insights judgment (a facet): a model's opinion, not a measurement. Name lists run most counted first. */
 export type SessionInsight = Pick<InsightSession, "outcome" | "helpfulness" | "session_type" | "brief_summary" | "friction_detail" | "friction" | "goals" | "satisfaction">;
@@ -152,12 +154,14 @@ export interface SessionDetail {
   /** null when /insights has not analysed the session (every Codex session). */
   insight: SessionInsight | null;
   models: SessionModelRow[];
-  timeline: { minute: Ts; tokens: number; cost: number | null; context: number }[];
+  /** context: the minute's largest request context; null when no request of it states one. */
+  timeline: { minute: Ts; tokens: number; cost: number | null; context: number | null }[];
   tools: { tool: string; calls: number; errors: number; p50_ms: number | null; failure_rate: number | null }[];
   commits: { tool_use_id: string; start_ts: Ts | null; command: string | null }[];
   prompts: { prompts: number; interrupted: number };
   error_loops: ErrorLoop[];
-  requests: { ts: Ts | null; model: string | null; subagent: boolean; context: number; output: number; cost: number | null }[];
+  /** context: null when unknown: a Grok request whose tokens are a whole turn's, not one model call's. */
+  requests: { ts: Ts | null; model: string | null; subagent: boolean; context: number | null; output: number; cost: number | null }[];
   calls: { id: string; tool: string; start_ts: Ts | null; end_ts: Ts | null; is_error: boolean; category: string | null; subagent: boolean; is_commit: boolean | null }[];
   compaction_ts: Ts[];
   first_prompt: string | null; first_prompt_cut: boolean; title: string | null; truncated: boolean;
@@ -280,6 +284,8 @@ export interface LimitsPayload {
   now: Ts; windows: LimitWindow[];
   /** Every project, busiest first, for the picker; the filters leave it alone. */
   projects: string[];
+  /** False when the source reports no plan limits (Grok): the payload then holds no window, lead, suggestion, history or value. */
+  plan_limits: boolean;
   binding: { provider: string; limit_id: string; scope: string; runs_out: boolean } | null;
   suggestion: { provider: string; provider_label: string; label: string; unused_at_reset: number; resets_at: Ts } | null;
   history: LimitHistoryRow[]; events: PlanChange[];

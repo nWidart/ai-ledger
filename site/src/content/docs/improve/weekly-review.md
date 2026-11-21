@@ -116,7 +116,7 @@ Every figure here is **model-judged**: a model's reading of the transcript, not 
 
 For any of these, open [Get sessions to finish](/ai-ledger/improve/finish-sessions/).
 
-The view shows Claude Code sessions only, and with Codex as the source Activity does not offer it. Set the range back to **7d** when you leave.
+The view shows Claude Code sessions only, and with Codex or Grok as the source Activity does not offer it. Set the range back to **7d** when you leave.
 
 ### 7. Live (1 minute)
 

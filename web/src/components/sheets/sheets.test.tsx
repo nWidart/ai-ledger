@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { SessionDetail, ToolPayload } from "../../api";
 import session from "../../__fixtures__/session";
+import sessionGrok from "../../__fixtures__/session-grok";
 import tool from "../../__fixtures__/tool";
 import toolMcp from "../../__fixtures__/tool-mcp";
 import toolSkill from "../../__fixtures__/tool-skill";
@@ -208,6 +209,20 @@ describe("SessionSheet", () => {
     expect(sheet().getAllByText(/From Claude Code's own record of the session, subagent work included/).length).toBeGreaterThan(0);
   });
 
+  it("shows a Grok session's model time and output speed, leaves out the tool time and lines it does not state, and says where they come from", async () => {
+    mockApi({ "/api/session": () => sessionGrok });
+    at("?session=g1");
+    renderApp(<UsageSheets />);
+    await sheet().findByText("model time");
+    expect(sheet().getByText("model time").textContent).toMatch(/^1m model time/);
+    expect(sheet().getByText("output tok/s").textContent).toBe("100 output tok/s");
+    for (const l of ["tool time", "lines"]) expect(sheet().queryByText(l)).toBeNull();
+    await userEvent.click(sheet().getByRole("button", { name: "About model and tool time" }));
+    expect(sheet().getAllByText(/From the API time Grok reports for each turn, subagent work included\. Grok reports no tool time or lines changed/).length).toBeGreaterThan(0);
+    expect(sheet().queryByText(/Claude Code's own record/)).toBeNull();
+    expect(sheet().queryByText(/insights/)).toBeNull(); // no judgment block
+  });
+
   it("shows none of them for a session that records no model time", async () => {
     const info = { ...session.info, source: "codex" as const, runs: null };
     mockApi({ "/api/session": () => ({ ...session, info }) });
@@ -377,6 +392,14 @@ describe("timelineModel", () => {
     expect([n.ph, w.ph]).toEqual([130, 180]);
     expect([n.pb, w.pb]).toEqual([144, 194]);
     expect(w.H - n.H).toBe(50);
+  });
+  it("plots no point for a request whose context is unknown", () => {
+    // A Grok turn whose calls cannot be told: its tokens are a whole turn's, so it states no context.
+    const reqs = sessionGrok.requests.map((r, k) => (k === 1 ? { ...r, context: null } : r));
+    const m = timelineModel({ ...sessionGrok, requests: reqs }, 600)!;
+    const known = sessionGrok.requests.filter((r, k) => k !== 1 && !r.subagent);
+    expect(m.reqs.map(r => r.context)).toEqual(known.map(r => r.context));
+    expect(m.maxC).toBe(Math.max(...known.map(r => r.context!)));
   });
 });
 

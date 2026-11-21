@@ -89,12 +89,15 @@ export function SessionSheet({ id, s, error, retry, range, pageProject, view }: 
       <Stat v={num(i.compactions)} l={i.compactions === 1 ? "compaction" : "compactions"} />
       <Stat v={num(s.commits.length)} l={s.commits.length === 1 ? "commit" : "commits"} />
       <Stat v={dur(i.active_s)} l={<>active<Toggletip term="active time">Pauses over 20 minutes left out</Toggletip></>} />
-      {/* Claude Code's cost-state line: none of these for a session without one (every Codex session). */}
+      {/* Claude Code's cost-state line, or the API time of each Grok turn: none of these for a session without one (every Codex
+          session). A figure the session does not record is left out: a Grok session states no tool time or lines. */}
       {i.runs && <>
-        <Stat v={dur(i.runs.model_ms / 1000)} l={<>model time<Toggletip term="model and tool time">From Claude Code's own record of the session, subagent work included</Toggletip></>} />
-        <Stat v={dur(i.runs.tool_ms / 1000)} l="tool time" />
+        <Stat v={dur(i.runs.model_ms / 1000)} l={<>model time<Toggletip term="model and tool time">{i.source === "grok"
+          ? "From the API time Grok reports for each turn, subagent work included. Grok reports no tool time or lines changed"
+          : "From Claude Code's own record of the session, subagent work included"}</Toggletip></>} />
+        {i.runs.tool_ms != null && <Stat v={dur(i.runs.tool_ms / 1000)} l="tool time" />}
         {i.runs.output_per_s != null && <Stat v={num(i.runs.output_per_s)} l="output tok/s" />}
-        <Stat v={`+${num(i.runs.lines_added)} / −${num(i.runs.lines_removed)}`} l="lines" />
+        {(i.runs.lines_added != null || i.runs.lines_removed != null) && <Stat v={`+${num(i.runs.lines_added)} / −${num(i.runs.lines_removed)}`} l="lines" />}
       </>}
     </div>
     {s.insight && <SessionInsight i={s.insight} view={view} />}

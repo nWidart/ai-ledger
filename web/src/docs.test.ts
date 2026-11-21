@@ -59,6 +59,8 @@ describe("docs registry", () => {
     expect(docsUrl(docsForRoute("/project", { project: "ai-ledger" }))).toBe("https://nwidart.github.io/ai-ledger/pages/project/");
     // The page the route shows: Codex has no judgments, so Overview shows; Project with no project redirects to Activity.
     expect(docsForRoute("/usage", "?view=judgments&source=codex")).toBe("pages/activity");
+    expect(docsForRoute("/usage", "?view=judgments&source=grok")).toBe("pages/activity");
+    expect(docsForRoute("/usage", "?view=judgments&source=gemini")).toBe("pages/insights");  // an unknown source shows All
     expect(docsForRoute("/usage", { view: "judgments", source: "claude" })).toBe("pages/insights");
     expect(docsForRoute("/project", "")).toBe("pages/activity");
     for (const [path, key] of [["/live", "pages/live"], ["/limits", "pages/limits"], ["/context", "pages/context"], ["/errors", "pages/errors"]] as const)

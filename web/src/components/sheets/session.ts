@@ -3,7 +3,7 @@ import type { MouseEvent } from "react";
 import type { SessionDetail, Source, ToolKind, View } from "../../api";
 import { big, num, pct, plural, usd } from "../../format";
 import { subjectAttrs, type Subject } from "../menu/subject";
-import { currentSheetKey, formatSearch, navigate, setSearch, sheetKey } from "../../url";
+import { currentSheetKey, formatSearch, judged, navigate, setSearch, sheetKey } from "../../url";
 
 /** A plain left click, one the app may handle itself: no modifier, not handled already. */
 const plain = (e: MouseEvent) => !(e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey);
@@ -55,10 +55,10 @@ export function errorsHref(project: string | null | undefined, range?: number | 
 /** The Project page for a project, in a range, source and automated toggle. No sheet key goes with it. */
 export const projectHref = (project: string, range: number, source: Source | "", automated: boolean) =>
   "/project" + formatSearch({ project, range: String(range), source, auto: automated ? "1" : "" });
-/** Activity's Judgments view in view v's project, range, source and automated toggle. A Codex source is dropped: Codex sessions
- *  have no judgments, and Activity opens Overview for a link to the judgments of Codex alone. */
+/** Activity's Judgments view in view v's project, range, source and automated toggle. A source other than Claude Code is
+ *  dropped: its sessions have no judgments, and Activity opens Overview for a link to the judgments of such a source alone. */
 export const judgmentsHref = (v: View) =>
-  "/usage" + formatSearch({ project: v.project, range: String(v.range), source: v.source === "codex" ? "" : v.source, auto: v.automated ? "1" : "", view: "judgments" });
+  "/usage" + formatSearch({ project: v.project, range: String(v.range), source: judged(v.source) ? v.source : "", auto: v.automated ? "1" : "", view: "judgments" });
 /** Follows an in-app link without a reload; modified clicks open as the browser does. */
 export function appLink(e: MouseEvent<HTMLAnchorElement>) {
   if (!plain(e)) return;
@@ -93,8 +93,9 @@ export interface TimelineModel {
 /** ts: the browser's text scale (textScale()); the room around the labels grows with it, the plot keeps its size. */
 export function timelineModel(s: SessionDetail, width: number, ts = 1): TimelineModel | null {
   const i = s.info, limit = i.context_limit || null;
-  const reqs: TlReq[] = s.requests.filter(r => !r.subagent && r.ts)
-    .map(r => ({ t: Date.parse(r.ts!), context: r.context, model: r.model ?? "", cost: r.cost }));
+  // A request with no known context (a Grok turn whose calls cannot be told) is no point of the context line.
+  const reqs: TlReq[] = s.requests.filter(r => !r.subagent && r.ts && r.context != null)
+    .map(r => ({ t: Date.parse(r.ts!), context: r.context!, model: r.model ?? "", cost: r.cost }));
   const calls: TlCall[] = s.calls.map(c => ({ id: c.id, tool: c.tool, t: Date.parse(c.start_ts || c.end_ts || ""), is_error: c.is_error,
     category: c.category, is_commit: !!c.is_commit })).filter(c => !isNaN(c.t));
   const comps = (s.compaction_ts || []).map(t => Date.parse(t)).filter(t => !isNaN(t));

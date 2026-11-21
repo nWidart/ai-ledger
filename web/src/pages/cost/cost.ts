@@ -75,7 +75,7 @@ export function costKinds(d: Pick<UsagePayload, "project" | "by_project"> & Stac
   return projectKinds(d.by_project.map(p => ({ project: p.project, v: p.cost ?? 0 })));
 }
 
-const SOURCE_COLORS: Record<Source, string> = { claude: "var(--series-1)", codex: "var(--series-2)" };
+const SOURCE_COLORS: Record<Source, string> = { claude: "var(--series-1)", codex: "var(--series-2)", grok: "var(--series-3)" };
 /** A stacking's total cost per name over the view, costliest first. */
 const spend = (rows: { name: string; cost: number }[]): { name: string; v: number }[] => {
   const by = new Map<string, number>();
@@ -174,11 +174,18 @@ export interface TokenPair { key: "input" | "output" | "write" | "read"; label: 
   /** What the row holds beyond its name: thinking inside Output, the two lifetimes inside Cache write. */
   parts: { label: string; tokens: number; cost: number | null }[] }
 
+type KindCosts = Pick<Totals, "cost_input" | "cost_output" | "cost_cache_read" | "cost_cache_5m" | "cost_cache_1h">;
+/** The cost estimated per token kind: the five kinds' sum, null when no request is priced from the price table. It leaves out
+ *  the cost a source reported with no split by kind (Grok's), which totals.cost includes. */
+export const kindCost = (t: KindCosts): number | null =>
+  t.cost_input == null ? null : t.cost_input + (t.cost_output ?? 0) + (t.cost_cache_read ?? 0) + (t.cost_cache_5m ?? 0) + (t.cost_cache_1h ?? 0);
+
 /** The view's token kinds as billed (thinking inside Output, the two cache write lifetimes joined), each with its share of tokens beside
- *  its share of the estimated cost. Costliest first, by tokens when no request is priced or the priced ones cost nothing. A cost of
- *  null is unknown (no request priced, as the API sends it); a cost of 0 is known (models priced at zero rates). */
-export function tokenPairs(t: Pick<Totals, "tokens" | "cost" | "input" | "output" | "thinking" | "cache_read" | "cache_5m" | "cache_1h" | "cost_input" | "cost_output" | "cost_cache_read" | "cost_cache_5m" | "cost_cache_1h">): TokenPair[] {
-  const all = t.tokens || 1, total = t.cost;
+ *  its share of the cost estimated per kind (kindCost), so the cost shares add up to 100%. Costliest first, by tokens when no request
+ *  is priced or the priced ones cost nothing. A cost of null is unknown (no request priced, as the API sends it); a cost of 0 is
+ *  known (models priced at zero rates). */
+export function tokenPairs(t: Pick<Totals, "tokens" | "input" | "output" | "thinking" | "cache_read" | "cache_5m" | "cache_1h"> & KindCosts): TokenPair[] {
+  const all = t.tokens || 1, total = kindCost(t);
   const sum = (a: number | null, b: number | null) => (a == null || b == null ? null : a + b);
   const row = (key: TokenPair["key"], label: string, c: string, tokens: number, cost: number | null, parts: TokenPair["parts"] = []): TokenPair =>
     ({ key, label, c, tokens, tokenShare: tokens / all, cost, costShare: total == null || cost == null ? null : total > 0 ? cost / total : 0, parts });

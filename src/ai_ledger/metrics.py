@@ -16,7 +16,7 @@ TEMP_PROJECT = "(temp)"  # store.project_of's name for a temporary folder, where
 # an app runs). Counts the whole session's prompts, so a session is automated or not whatever the range.
 HELPER_SESSIONS = f"""SELECT a.session_id FROM sessions a LEFT JOIN prompts ap USING (session_id) GROUP BY a.session_id, a.project
     HAVING count(ap.prompt_id) < CASE WHEN a.project = '{TEMP_PROJECT}' THEN 2 ELSE 1 END"""
-SOURCES = ("claude", "codex")  # the coding agents a session can come from (sessions.source); '' in a filter is all of them
+SOURCES = ("claude", "codex", "grok")  # the coding agents a session can come from (sessions.source); '' in a filter is all of them
 
 
 PRICE_KINDS = ("input", "output", "cache_read", "cache_5m", "cache_1h")  # USD per million tokens, every price entry has each
@@ -292,12 +292,13 @@ def error_detail(cur, tool_use_id):
 # ---------- usage dashboard ----------
 
 def price_cte(prices):
-    """A VALUES table of prices per model. Each model has a base tier and, optionally, a long-prompt tier and a fast-mode tier."""
+    """A VALUES table of prices per model. Each model has a base tier and, optionally, a long-prompt tier and a fast-mode tier.
+    A packaged entry with no rates (only a context window) gives NULL rates, so its requests have no estimate."""
     vals, params = [], []
     for model, p in prices.items():
         long, fast = p.get("long") or {}, p.get("fast") or {}
         vals.append("(" + ",".join("?" * 18) + ")")
-        params += [model, p["context"], p.get("long_above"), p["input"], p["output"], p["cache_read"], p["cache_5m"], p["cache_1h"],
+        params += [model, p.get("context"), p.get("long_above"), *(p.get(k) for k in PRICE_KINDS),
                    *(long.get(k) for k in PRICE_KINDS), *(fast.get(k) for k in PRICE_KINDS)]
     if not vals:
         vals, params = ["(" + ",".join(["NULL"] * 18) + ")"], []
@@ -311,16 +312,30 @@ _RATE = dict(input=("p_in", "l_in", "f_in"), output=("p_out", "l_out", "f_out"),
              cache_5m=("p_5m", "l_5m", "f_5m"), cache_1h=("p_1h", "l_1h", "f_1h"))
 
 
+def context_of(alias=""):
+    """SQL: the context a request read, for every reader of a request as a context or prompt size. It is the context
+    size the source stated (context_tokens: Grok's, whose token columns are a share of its turn's usage); NULL, unknown,
+    when that is 0 (a Grok request whose tokens are not one call's states none); else, for a source that states none
+    (context_tokens NULL), its input and cache tokens. alias is the table's alias with its dot. Sums of token usage and
+    cost read the token columns."""
+    a = alias
+    return (f"CASE WHEN {a}context_tokens IS NULL THEN {a}input + {a}cache_read + {a}cache_5m + {a}cache_1h "
+            f"ELSE nullif({a}context_tokens, 0) END")
+
+
 def requests_cte(pcte, where):
     """Requests with their session's project and source, total tokens, the estimated cost of each priced kind (cost_input, cost_output,
     cost_cache_read, cost_cache_5m, cost_cache_1h) and their sum as cost. All are NULL when the model is unpriced; the tier
-    is chosen once per request, so the kinds always add up to cost. Thinking tokens are billed as output.
+    is chosen once per request, so the kinds add up to cost. A request whose source reported its cost (reported_cost) costs
+    that instead: cost is unknown only with neither, and the kinds of such a request are NULL even when its model has
+    rates (a user can price a Grok model), as the web reads the kinds as the estimated part of cost.
+    Thinking tokens are billed as output.
     A fast-mode request (speed 'fast') on a model with fast rates costs those rates at any prompt size: fast pricing applies
     across the full context window, so it replaces the long-prompt tier. Without fast rates it costs as any other request."""
     rate = lambda k: f"CASE WHEN fst THEN p.{_RATE[k][2]} WHEN lg THEN p.{_RATE[k][1]} ELSE p.{_RATE[k][0]} END"
-    parts = ", ".join(f"r.{k} * {rate(k)} / 1e6 AS cost_{k}" for k in PRICE_KINDS)
+    parts = ", ".join(f"CASE WHEN r.reported_cost IS NULL THEN r.{k} * {rate(k)} / 1e6 END AS cost_{k}" for k in PRICE_KINDS)
     return f"""WITH {pcte}, rq AS (
-        SELECT *, {" + ".join(f"cost_{k}" for k in PRICE_KINDS)} AS cost FROM (
+        SELECT *, coalesce(reported_cost, {" + ".join(f"cost_{k}" for k in PRICE_KINDS)}) AS cost FROM (
           SELECT r.*, s.project, coalesce(s.source, 'claude') AS source, r.input + r.output + r.cache_read + r.cache_5m + r.cache_1h AS tokens,
             coalesce(r.speed = 'fast' AND p.f_in IS NOT NULL, false) AS fst,
             coalesce(p.long_above IS NOT NULL AND r.input + r.cache_read + r.cache_5m + r.cache_1h > p.long_above, false) AS lg,
@@ -498,7 +513,7 @@ def tool_rates(cur, W, fp):
     tc = f"tool_calls t JOIN sessions s USING (session_id) WHERE {W('coalesce(t.start_ts, t.end_ts)')}"
     tools = rows(cur, f"""SELECT tool, count(*) AS calls, count(*) FILTER (WHERE is_error) AS errors,
         quantile_cont({latency()}, 0.5) AS p50_ms, quantile_cont({latency()}, 0.95) AS p95_ms
-        FROM {tc} GROUP BY 1 ORDER BY calls DESC""", fp)
+        FROM {tc} GROUP BY 1 ORDER BY calls DESC, 1""", fp)
     mcp = rows(cur, f"SELECT mcp_server AS name, count(*) AS calls, count(*) FILTER (WHERE is_error) AS errors "
                     f"FROM {tc} AND mcp_server IS NOT NULL GROUP BY 1 ORDER BY calls DESC", fp)
     skills = rows(cur, f"SELECT skill AS name, count(*) AS calls, count(*) FILTER (WHERE is_error) AS errors "
@@ -859,9 +874,11 @@ def speed(output, model_ms):
 def timing(cur, rq, rp):
     """Model time, tool time and output speed over the view's sessions (those with requests in rq, params rp) that record
     runs, each whole-session (runs_cte); the others count in none. session_sources: the sources of the view's sessions, which
-    say why none records model time (Codex transcripts never do)."""
+    say why none records model time (Codex transcripts never do). tool_ms is None when the timed sessions state no tool time
+    (Grok runs state none)."""
     t = rows(cur, f"""{rq}, {runs_cte("SELECT session_id FROM rq")} SELECT coalesce(sum(model_ms), 0) AS model_ms,
-        coalesce(sum(tool_ms), 0) AS tool_ms, count(*) AS timed_sessions, coalesce(sum(output), 0) AS output FROM runs""", rp)[0]
+        CASE WHEN count(*) = 0 THEN 0 ELSE sum(tool_ms) END AS tool_ms, count(*) AS timed_sessions,
+        coalesce(sum(output), 0) AS output FROM runs""", rp)[0]
     srcs = [r["source"] for r in rows(cur, f"{rq} SELECT DISTINCT source FROM rq ORDER BY 1", rp)]
     return dict(model_ms=t["model_ms"], tool_ms=t["tool_ms"], timed_sessions=t["timed_sessions"],
                 output_per_s=speed(t["output"], t["model_ms"]), session_sources=srcs)
@@ -946,7 +963,7 @@ def session_detail(cur, sid, allq, p, prices):
     info["first_ts"], info["last_ts"] = iso(info["first_ts"]), iso(info["last_ts"])
     info["context_limit"] = (prices.get(info["peak_model"]) or {}).get("context")
     info["active_s"] = (cur.execute(f"WITH {active_cte('?')} SELECT active_s FROM act", [sid, sid]).fetchone() or (None,))[0]
-    # Its runs' figures (runs_cte), None without a run: every Codex session.
+    # Its runs' figures (runs_cte), None without a run: every Codex session. A Grok run states no tool time or lines: None.
     run = rows(cur, f"WITH {runs_cte('?')} SELECT * FROM runs", [sid])
     info["runs"] = dict({k: run[0][k] for k in ("model_ms", "tool_ms", "lines_added", "lines_removed")},
                         output_per_s=speed(run[0]["output"], run[0]["model_ms"])) if run else None
@@ -958,11 +975,11 @@ def session_detail(cur, sid, allq, p, prices):
         models=rows(cur, f"{allq} SELECT model, coalesce(effort, '(none)') AS effort, subagent, count(*) AS requests, {sums}, "
                          f"sum(tokens) AS tokens, sum(cost) AS cost FROM rq GROUP BY 1, 2, 3 ORDER BY tokens DESC, model, effort, subagent", p),
         timeline=rows(cur, f"{allq} SELECT strftime(date_trunc('minute', ts), '%Y-%m-%dT%H:%M:00Z') AS minute, "
-                           f"sum(tokens) AS tokens, sum(cost) AS cost, max(input + cache_read + cache_5m + cache_1h) AS context "
+                           f"sum(tokens) AS tokens, sum(cost) AS cost, max({context_of()}) AS context "
                            f"FROM rq GROUP BY 1 ORDER BY 1", p),
         tools=rate_rows(rows(cur, f"""SELECT tool, count(*) AS calls, count(*) FILTER (WHERE is_error) AS errors,
             quantile_cont({latency()}, 0.5) AS p50_ms FROM tool_calls WHERE session_id = ?
-            GROUP BY 1 ORDER BY calls DESC""", [sid])),
+            GROUP BY 1 ORDER BY calls DESC, 1""", [sid])),
         commits=rows(cur, """SELECT tool_use_id, start_ts, left(input_summary, 200) AS command FROM tool_calls
             WHERE session_id = ? AND is_commit AND test_passed ORDER BY start_ts""", [sid]),
         prompts=rows(cur, "SELECT count(*) AS prompts, count(*) FILTER (WHERE interrupted) AS interrupted FROM prompts WHERE session_id = ?", [sid])[0],
@@ -975,8 +992,8 @@ TIMELINE_CAP = 5000  # rows per series in the session timeline; longer sessions 
 
 def session_timeline(cur, sid, allq, p):
     """Per-request and per-tool-call rows for the session sheet's timeline, plus compaction times and the first prompt.
-    context: the prompt size of each request (input plus cache), the same measure as sessions.peak_context."""
-    reqs = rows(cur, f"""{allq} SELECT ts, model, subagent, input + cache_read + cache_5m + cache_1h AS context, output, cost
+    context: the prompt size of each request (context_of), the same measure as sessions.peak_context."""
+    reqs = rows(cur, f"""{allq} SELECT ts, model, subagent, {context_of()} AS context, output, cost
         FROM rq ORDER BY ts, message_id LIMIT {TIMELINE_CAP}""", p)
     calls = rows(cur, f"""SELECT tool_use_id AS id, tool, start_ts, end_ts, is_error, category, subagent,
         is_commit AND coalesce(test_passed, false) AS is_commit
@@ -986,9 +1003,11 @@ def session_timeline(cur, sid, allq, p):
         r["ts"] = iso(r["ts"])
     for c in calls:
         c["start_ts"], c["end_ts"] = iso(c["start_ts"]), iso(c["end_ts"])
-    # Claude Code marks a compaction with a compact_boundary system line, Codex with a compacted line.
-    compactions = [r[0] for r in cur.execute("""SELECT ts FROM raw_lines WHERE session_id = ? AND (type = 'compacted'
-        OR type = 'system' AND json LIKE '%"compact_boundary"%') ORDER BY ts""", [sid]).fetchall()]
+    # Each source marks a compaction with a line of its own (Source.compaction): Claude Code with a compact_boundary
+    # system line, Codex with a compacted line.
+    where, params = store.compaction_filter()
+    compactions = [r[0] for r in cur.execute(f"SELECT ts FROM raw_lines WHERE session_id = ? AND {where} ORDER BY ts",
+                                             [sid] + params).fetchall()]
     full = titles.first_prompts(cur, [sid]).get(sid)
     return dict(requests=reqs, calls=calls, compaction_ts=compactions, first_prompt=titles.cap_prompt(full),
                 first_prompt_cut=bool(full and len(full) > titles.FIRST_PROMPT_CAP), title=titles.titles(cur, [sid]).get(sid, (None,))[0],

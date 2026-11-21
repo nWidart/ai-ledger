@@ -830,7 +830,8 @@ def window_curve(cur, provider, limit_id, scope, start, now=None, prices=None):
 def payload(cur, range_days=0, source="", project="", now=None, today=None, prices=None, tz=None, polls=None):
     """The JSON the Limits page reads. Open windows ignore range_days; history, unused capacity and value use it.
     project narrows only commits per point: limits are per account. projects lists every project for the picker, whatever
-    the filters. polls is each poller's state, by provider."""
+    the filters. polls is each poller's state, by provider. plan_limits is False when the source has no provider, as Grok
+    (it reports no plan limits): the payload then holds no window, lead, suggestion, history or value."""
     if source and source not in metrics.SOURCES:
         raise ValueError(f"unknown source: {source}")
     if range_days < 0:
@@ -869,7 +870,7 @@ def payload(cur, range_days=0, source="", project="", now=None, today=None, pric
     windows.sort(key=lambda w: (names.index(w["provider"]), -(w["window_minutes"] or 0), w["scope"]))
     history.sort(key=lambda h: h["closed_at"], reverse=True)
     events = [e for e in plan_changes(snaps) if start is None or e["at"] >= metrics.iso(start)]
-    return dict(now=metrics.iso(now), projects=metrics.project_list(cur), windows=windows, binding=binding_of(windows), suggestion=suggestion_of(windows),
+    return dict(now=metrics.iso(now), projects=metrics.project_list(cur), plan_limits=bool(names), windows=windows, binding=binding_of(windows), suggestion=suggestion_of(windows),
                 history=history, events=events, unused=unused_of(closed), value=value(cur, usage, cals, spans, latest_plan, start, now, project, prices),
                 freshness=freshness(names, snaps, windows, polls or {}, now))
 

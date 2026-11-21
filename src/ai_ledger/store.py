@@ -44,6 +44,7 @@ DEFAULT_DB = os.path.join(data_dir(), "ai-ledger.duckdb")
 EARLIER_DBS = checkout_stores()
 DEFAULT_ROOT = os.path.expanduser("~/.claude/projects")
 DEFAULT_CODEX = os.path.expanduser("~/.codex")
+DEFAULT_GROK = os.path.expanduser("~/.grok")
 DEFAULT_USAGE_DATA = os.path.expanduser("~/.claude/usage-data")  # Claude Code's /insights facets and session meta
 BUSY = "the app is running and owns the store; use Refresh in the dashboard"
 
@@ -77,7 +78,8 @@ CREATE TABLE IF NOT EXISTS sessions (
 CREATE TABLE IF NOT EXISTS requests (
   message_id VARCHAR PRIMARY KEY, session_id VARCHAR, ts TIMESTAMP, model VARCHAR, effort VARCHAR,
   subagent BOOLEAN, input BIGINT, output BIGINT, thinking BIGINT, cache_read BIGINT,
-  cache_5m BIGINT, cache_1h BIGINT, thinking_ms BIGINT, stop_reason VARCHAR, speed VARCHAR);
+  cache_5m BIGINT, cache_1h BIGINT, thinking_ms BIGINT, stop_reason VARCHAR, speed VARCHAR, reported_cost DOUBLE,
+  context_tokens BIGINT);
 CREATE TABLE IF NOT EXISTS tool_calls (
   tool_use_id VARCHAR PRIMARY KEY, session_id VARCHAR, tool VARCHAR, mcp_server VARCHAR,
   skill VARCHAR, input_summary VARCHAR, start_ts TIMESTAMP, end_ts TIMESTAMP, is_error BOOLEAN,
@@ -186,6 +188,12 @@ def open_store(path=None):
             con.execute("ROLLBACK")
             raise
     con.execute("ALTER TABLE requests ADD COLUMN IF NOT EXISTS speed VARCHAR")  # stores from before fast-mode pricing; NULL until rebuild
+    # The USD cost a source states for a request (Grok's); NULL for sources that state none, so no line is read again.
+    con.execute("ALTER TABLE requests ADD COLUMN IF NOT EXISTS reported_cost DOUBLE")
+    # The context size a source states for a request (Grok's, whose token columns are a share of its turn's); 0 for a
+    # Grok request whose tokens are not one call's, which states no context; NULL for sources that state none, whose
+    # context is the request's input and cache tokens (metrics.context_of).
+    con.execute("ALTER TABLE requests ADD COLUMN IF NOT EXISTS context_tokens BIGINT")
     con.execute("ALTER TABLE tool_calls ADD COLUMN IF NOT EXISTS result_bytes BIGINT")  # stores from before the Context page; NULL until rebuild
     con.execute("ALTER TABLE sessions ADD COLUMN IF NOT EXISTS context_window BIGINT")
     con.execute("ALTER TABLE sessions ADD COLUMN IF NOT EXISTS first_compaction_ts TIMESTAMP")
@@ -407,7 +415,7 @@ def ingest_chunk(cur, projects, name, path, data, offset, lines, seq, st, whole=
             seen.add(key)
             dd = d if ok else {}
             sid, *rest = src.fields(dd, path)
-            rows.append((key, path, lines, pos, dd.get("type"), session or sid, *rest, sub, ok, text))
+            rows.append((key, path, lines, pos, src.type(dd), session or sid, *rest, sub, ok, text))
             if ok:
                 parsed[key] = d
         lines += 1
@@ -419,7 +427,7 @@ def ingest_chunk(cur, projects, name, path, data, offset, lines, seq, st, whole=
         der = src.deriver(cur, projects, name, path, sub, seq)
         for r in rows:
             if r[0] in new and r[0] in parsed:
-                der.add(parsed[r[0]])
+                der.add(parsed[r[0]], r[0])
         der.flush()
         insert(cur, "files", ["path", "size", "read_offset", "lines", "seq", "mtime", "last_ingest", "source"],
                [(path, st.st_size, st.st_size if whole else pos, lines, der.seq, st.st_mtime, datetime.now(timezone.utc).replace(tzinfo=None), name)],
@@ -493,7 +501,8 @@ class Deriver:
                 s[k] = d[src]
         return s
 
-    def add(self, d):
+    def add(self, d, key=None):
+        """Derive line d. key is its raw_lines key, for a source whose rows name the line they came from (Grok's)."""
         t = d.get("type")
         if t in TITLE_LINES:  # written by /rename and by Claude Code itself; a subagent's title is not its session's
             title = d.get(TITLE_LINES[t][0])
@@ -575,7 +584,7 @@ class Deriver:
             sub = self.sub or bool(d.get("isSidechain"))
             self.requests[mid] = (mid, sid, ts, model, d.get("effort"), sub, inp, u.get("output_tokens") or 0,
                                   (u.get("output_tokens_details") or {}).get("thinking_tokens") or 0, cr, c5m or 0, c1h,
-                                  d.get("thinkingDurationMs"), msg.get("stop_reason"), u.get("speed"))
+                                  d.get("thinkingDurationMs"), msg.get("stop_reason"), u.get("speed"), None, None)
             if s and not sub and inp + cr + cw > s["peak"]:
                 s["peak"], s["peak_model"] = inp + cr + cw, model
         if not isinstance(content, list):
@@ -650,7 +659,8 @@ class Deriver:
                     "first_compaction_ts = CASE WHEN sessions.compactions > 0 AND sessions.first_compaction_ts IS NULL THEN NULL "  # an un-rebuilt store: the first is unknown
                     "ELSE least(sessions.first_compaction_ts, excluded.first_compaction_ts) END")
         insert(cur, "requests", ["message_id", "session_id", "ts", "model", "effort", "subagent", "input", "output",
-                                 "thinking", "cache_read", "cache_5m", "cache_1h", "thinking_ms", "stop_reason", "speed"],
+                                 "thinking", "cache_read", "cache_5m", "cache_1h", "thinking_ms", "stop_reason", "speed",
+                                 "reported_cost", "context_tokens"],
                list(self.requests.values()))
         self.flush_tools()
         insert(cur, "prompts", ["prompt_id", "session_id", "ts", "interrupted"], list(self.prompts.values()))
@@ -763,6 +773,11 @@ def line_fields(d, path):
     return d.get("sessionId"), d.get("uuid"), d.get("timestamp")
 
 
+def line_type(d):
+    """The raw_lines type of a Claude Code or Codex line."""
+    return d.get("type")
+
+
 def prompt_text(d, pid):
     """The text of human prompt pid if Claude Code line d holds it, else None."""
     if d.get("promptId") != pid or d.get("isMeta"):
@@ -823,6 +838,21 @@ def read_from(path, offset, size):
         return fh.read(size - offset), False
 
 
+def agent_lane(path):
+    """The id of the Claude Code subagent whose lines file path holds: the <id> of agent-<id>.jsonl."""
+    name = path.rsplit("/", 1)[-1]
+    return name[len("agent-"):-len(".jsonl")] if name.startswith("agent-") and name.endswith(".jsonl") else name
+
+
+class Turns(NamedTuple):
+    """The lines a source writes at a turn's start and end, as Source.turns. Each line is told by a value: its
+    raw_lines.type or, for a source whose marks share one type, the string at a JSON path of the line."""
+    start: tuple  # the values of a turn start
+    end: tuple  # the values of a turn end
+    type: str | None = None  # with path: the raw_lines.type the mark lines share
+    path: str | None = None  # the JSON path of a line's value; None when the value is the line's raw_lines.type
+
+
 class Source(NamedTuple):
     files: Callable  # root -> transcript paths
     key: Callable  # (line, path, offset) -> dedup key
@@ -836,17 +866,46 @@ class Source(NamedTuple):
     prompt_type: str = "user"  # raw_lines.type of the lines that hold prompt text
     live_items: Callable = live_items  # line -> what the Live page shows of it
     # raw_lines.type of the line written as a session closes, or None for a source that writes none. Claude Code writes
-    # cost-state (no timestamp) when it exits; a resumed session writes on after it.
+    # cost-state (no timestamp) when it exits, Grok a session_end hook line (timed); a resumed session writes on after it.
     close_type: str | None = "cost-state"
+    type: Callable = line_type  # line ({} when it is not a JSON object) -> its raw_lines type
+    # The lines that start and end a turn, or None for a source that writes none (Claude Code): the Live page then
+    # reads a thread's state from its prompts, replies and tool results. live_items gives turn_start and turn_end for them.
+    turns: Turns | None = None
+    lane: Callable = agent_lane  # path of a file of subagent lines -> the subagent's id, the lane of its Live events
+    # (raw_lines.type, text in the line) of the lines whose live_items give an agent item: the id of a spawn call and
+    # the subagent it started. None for a source that writes none: Claude Code names the call in agent-<id>.meta.json
+    # beside the subagent's lines, Grok only in the call's result.
+    spawn: tuple | None = None
+    compaction: tuple = ("system", '"compact_boundary"')  # (raw_lines.type, text in the line, '' for any) of a compaction line
+    # (cur, {session: prompt id}) -> {session: the prompt's text}, for a source whose prompt lines do not name their prompt;
+    # None: titles finds the lines by the prompt id and reads them with prompt_text.
+    prompt_texts: Callable | None = None
+
+
+def compaction_filter(alias=""):
+    """(SQL condition, params) that holds for a raw_lines row that marks a compaction, in any source. alias is the
+    table's alias with its dot, when the query gives it one."""
+    marks = sorted({src.compaction for src in SOURCES.values()})
+    return ("(" + " OR ".join(f"{alias}type = ? AND contains({alias}json, ?)" for _ in marks) + ")", [x for mark in marks for x in mark])
 
 
 from . import codex  # noqa: E402  (it subclasses Deriver)
+from . import grok  # noqa: E402  (it subclasses Deriver)
 from . import limits  # noqa: E402  (it writes snapshots through this module)
 from . import insights  # noqa: E402  (it reads usage data through this module)
 
 SOURCES = {"claude": Source(transcript_files, line_key, Deriver, lambda cur, path, lines: (None, "/subagents/" in path)),
            "codex": Source(codex.files, codex.key, codex.CodexDeriver, codex.placement, codex.fields, codex.read,
-                            codex.prompt_text, "event_msg", codex.live_items, None)}
+                            codex.prompt_text, "event_msg", codex.live_items, None,
+                            turns=Turns(("task_started",), ("task_complete", "turn_aborted"), "event_msg", "$.payload.type"),
+                            lane=lambda path: codex.ids(path)[1], spawn=("event_msg", '"SubAgentActivity"'),
+                            compaction=("compacted", "")),
+           "grok": Source(grok.files, grok.key, grok.GrokDeriver, grok.placement, grok.fields,
+                          prompt_text=grok.prompt_text, prompt_type="user_message_chunk", prompt_texts=grok.prompt_texts,
+                          live_items=grok.live_items, close_type="session_end", type=grok.line_type,
+                          turns=Turns(("user_message_chunk",), ("turn_completed",)), lane=lambda path: grok.ids(path)[0],
+                          compaction=("auto_compact_completed", ""))}
 
 
 def rebuild(con, log=None):
@@ -867,8 +926,8 @@ def rebuild(con, log=None):
             if session is not None:  # lines stored before a source placed its files by their own records
                 cur.execute("UPDATE raw_lines SET session_id = ?, subagent = ? WHERE file = ?", [session, sub, path])
             der = src.deriver(cur, projects, name, path, sub, 0)
-            for (text,) in cur.execute("SELECT json FROM raw_lines WHERE file = ? AND parsed ORDER BY byte_offset", [path]).fetchall():
-                der.add(json.loads(text))
+            for key, text in cur.execute("SELECT key, json FROM raw_lines WHERE file = ? AND parsed ORDER BY byte_offset", [path]).fetchall():
+                der.add(json.loads(text), key)
             der.flush()
             cur.execute("UPDATE files SET seq = ? WHERE path = ?", [der.seq, path])
             cur.execute("COMMIT")

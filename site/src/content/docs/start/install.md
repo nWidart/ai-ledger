@@ -3,9 +3,9 @@ title: Install and first run
 description: Install AI Ledger with uvx, run it for the first time and wait for the first ingest.
 ---
 
-In this tutorial we start AI Ledger for the first time, let it read every Claude Code and Codex transcript on the machine, and read the first figure it gives us. It takes about 10 minutes, most of it spent waiting for the first ingest.
+In this tutorial we start AI Ledger for the first time, let it read every Claude Code, Codex and Grok transcript on the machine, and read the first figure it gives us. It takes about 10 minutes, most of it spent waiting for the first ingest.
 
-We need a Mac or a Linux machine where Claude Code or Codex has already run, and a terminal.
+We need a Mac or a Linux machine where Claude Code, Codex or the Grok CLI has already run, and a terminal.
 
 ## Check that uv is installed
 
@@ -37,7 +37,7 @@ Leave the terminal open. The app runs until we stop it there.
 
 ## Wait for the first ingest
 
-The first start reads every transcript on the machine: Claude Code's in `~/.claude/projects` and Codex's in `~/.codex`. While it reads, the navigation bar at the top of the page says **Ingesting…**, next to the **Refresh** button.
+The first start reads every transcript on the machine: Claude Code's in `~/.claude/projects`, Codex's in `~/.codex` and Grok's in `~/.grok`. While it reads, the navigation bar at the top of the page says **Ingesting…**, next to the **Refresh** button.
 
 This takes a few minutes: about 5 minutes for a month of heavy use. The page fills in as it goes.
 

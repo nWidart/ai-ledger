@@ -17,6 +17,7 @@ const c = {
   beta: { kind: "project", value: "beta", label: "beta" },
   codex: { kind: "source", value: "codex", label: "Codex" },
   claude: { kind: "source", value: "claude", label: "Claude Code" },
+  grok: { kind: "source", value: "grok", label: "Grok" },
   d7: { kind: "range", value: "7", label: "7d" },
   d90: { kind: "range", value: "90", label: "90d" },
   auto: { kind: "automated", value: "1", label: "automated" },
@@ -175,6 +176,13 @@ describe("resolve", () => {
     const r = commit("/usage?range=30", c.codex, c.judgments);
     expect(r.href).toBe("/usage?range=30&source=codex&view=judgments");
     expect(r.footer).toBe("Enter: open Judgments · Codex · 30d · Codex has no judgments: Overview opens");
+  });
+  it("names Grok when >judgments is asked of Grok alone", () => {
+    const r = commit("/usage?range=30", c.grok, c.judgments);
+    expect(r.footer).toBe("Enter: open Judgments · Grok · 30d · Grok has no judgments: Overview opens");
+  });
+  it("#grok >activity writes source=grok", () => {
+    expect(commit("/cost?range=30", c.grok, c.activity).href).toBe("/usage?range=30&source=grok");
   });
   it("clears session and inspect on a project change, and keeps tool", () => {
     expect(commit("/usage?range=30&inspect=foo&tool=Bash&session=s1", c.my).href).toBe("/usage?project=myproject&range=30&tool=Bash");

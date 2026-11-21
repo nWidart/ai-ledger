@@ -26,8 +26,8 @@ LAUNCHERS = {"npx", "pnpx", "bunx", "uvx"}
 LAUNCH_SUBCOMMANDS = {"run", "exec", "dlx", "x"}
 # A shell command that runs `git commit`, allowing global options such as `-C <dir>`.
 GIT_COMMIT = re.compile(r"\bgit\b(\s+-\S+(\s+\S+)?)*\s+commit\b")
-# Tool names that run a shell command, per source: Claude Code's and Codex's. runs_tests and GIT_COMMIT apply to these.
-SHELL_TOOLS = {"Bash", "exec_command"}
+# Tool names that run a shell command, per source: Claude Code's, Codex's and Grok's. runs_tests and GIT_COMMIT apply to these.
+SHELL_TOOLS = {"Bash", "exec_command", "run_terminal_command"}
 
 
 def commands(cmd):
@@ -248,7 +248,9 @@ def text_of(content):
 def summarize_input(tool, inp):
     if not isinstance(inp, dict):
         return ""
-    for k in ("command", "file_path", "pattern", "url", "path", "query", "skill", "prompt"):
+    # target_file and target_directory: Grok's read_file and list_dir. After the keys Claude Code and Codex use, so
+    # their summaries stay as they were.
+    for k in ("command", "file_path", "pattern", "url", "path", "query", "skill", "prompt", "target_file", "target_directory"):
         if k in inp and isinstance(inp[k], str):
             return inp[k]
     return json.dumps(inp)[:300]

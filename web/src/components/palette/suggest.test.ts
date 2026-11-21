@@ -50,6 +50,7 @@ describe("suggest", () => {
     expect(rows(">context")[0]).toMatchObject({ kind: "page", value: "/context", label: "Context" });
     expect(rows("#7d")[0]).toMatchObject({ kind: "range", value: "7", text: "7d" });
     expect(rows("#claude code")[0]).toMatchObject({ kind: "source", value: "claude", text: "Claude Code" });
+    expect(rows("#grok")[0]).toMatchObject({ kind: "source", value: "grok", text: "Grok" });
   });
   it("offers the inspector for a tool after #, and no filter", () => {
     const got = rows("#bash");

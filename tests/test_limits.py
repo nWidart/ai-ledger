@@ -735,8 +735,18 @@ class PayloadTest(AnalysisCase):
         out = self.payload(self.NOW, source="codex")
         self.assertEqual({w["provider"] for w in out["windows"]}, {"codex"})
         self.assertEqual([f["provider"] for f in out["freshness"]], ["codex"])
+        self.assertTrue(out["plan_limits"])
+        self.assertTrue(self.payload(self.NOW)["plan_limits"])
         with self.assertRaises(ValueError):
-            self.payload(self.NOW, source="grok")
+            self.payload(self.NOW, source="gemini")
+
+    def test_grok_reports_no_plan_limits(self):
+        self.spend("grok", "grok-4.7-build", (self.NOW - timedelta(hours=1), 2.0))
+        out = self.payload(self.NOW, source="grok")
+        self.assertFalse(out["plan_limits"])
+        self.assertEqual((out["windows"], out["binding"], out["suggestion"], out["history"], out["unused"], out["freshness"]),
+                         ([], None, None, [], [], []))
+        self.assertEqual(out["value"], dict(limits=[], projects=[]))
 
     def test_freshness_flags_failing_polls(self):
         out = self.payload(self.NOW + timedelta(minutes=30), polls=dict(claude=dict(failures=3, last_ok="2026-11-06T12:00:00+00:00",
@@ -1136,7 +1146,7 @@ class WindowCurveTest(AnalysisCase):
     def test_bad_input(self):
         self.measured_week()
         now = T0 + timedelta(days=10)
-        for kw in (dict(provider="grok"), dict(provider=""), dict(start="")):
+        for kw in (dict(provider="gemini"), dict(provider=""), dict(start="")):
             with self.assertRaises(ValueError, msg=kw):
                 self.curve(kw.pop("start", "2026-11-01T05:00:00.000Z"), now, **kw)
         for start in ("yesterday", "2026-13-45", "11/01/2026"):
@@ -1167,7 +1177,8 @@ class ApiTest(AnalysisCase):
                 return r.status, r.read()
             status, body = get("/api/limits?range=30&source=codex")
             self.assertEqual((status, json.loads(body)["windows"]), (200, []))
-            self.assertEqual(get("/api/limits?source=grok")[0], 400)
+            self.assertEqual(get("/api/limits?source=gemini")[0], 400)
+            self.assertEqual(get("/api/limits?source=grok")[0], 200)
             self.assertEqual(get("/limits")[0] in (200, 503), True)
         finally:
             httpd.shutdown()
@@ -1200,7 +1211,7 @@ class ApiTest(AnalysisCase):
             self.assertEqual(get(q + "2026-01-01T00:00:00Z")[0], 404)  # no window starts there
             self.assertEqual(get(q + "2026-01-12T00:00:00Z")[0], 404)  # that one is open or was never there
             self.assertEqual(get("/api/limits/window?provider=codex&limit_id=nope&scope=&start=" + row["start"])[0], 404)
-            for bad in (q + "soon", q, "/api/limits/window?provider=grok&limit_id=codex_10080&start=" + row["start"],
+            for bad in (q + "soon", q, "/api/limits/window?provider=gemini&limit_id=codex_10080&start=" + row["start"],
                         "/api/limits/window?limit_id=codex_10080&start=" + row["start"]):
                 status, body = get(bad)
                 self.assertEqual((status, bool(body["error"])), (400, True), bad)

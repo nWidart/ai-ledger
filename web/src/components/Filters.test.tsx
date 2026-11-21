@@ -52,17 +52,20 @@ describe("Filters", () => {
     history.replaceState(null, "", "/usage?range=30&session=s1");
     renderApp(<Filters projects={["foo"]} automated />);
     const group = within(screen.getByRole("group", { name: "Source" }));
-    expect(group.getAllByRole("button").map(b => b.textContent)).toEqual(["All", "Claude Code", "Codex"]);
+    expect(group.getAllByRole("button").map(b => b.textContent)).toEqual(["All", "Claude Code", "Codex", "Grok"]);
     expect(group.getByRole("button", { name: "All" }).getAttribute("aria-pressed")).toBe("true");
     await userEvent.click(group.getByRole("button", { name: "Codex" }));
     expect(location.search).toBe("?range=30&source=codex");
     expect(group.getByRole("button", { name: "Codex" }).getAttribute("aria-pressed")).toBe("true");
+    await userEvent.click(group.getByRole("button", { name: "Grok" }));
+    expect(location.search).toBe("?range=30&source=grok");
+    expect(group.getByRole("button", { name: "Grok" }).getAttribute("aria-pressed")).toBe("true");
     await userEvent.click(group.getByRole("button", { name: "All" }));
     expect(location.search).toBe("?range=30");
   });
 
   it("shows an unknown source as All, and the scope bar drops it from the URL", () => {
-    history.replaceState(null, "", "/cost?range=30&source=grok");
+    history.replaceState(null, "", "/cost?range=30&source=gemini");
     renderApp(<ScopeBar />);
     expect(within(screen.getByRole("group", { name: "Source" })).getByRole("button", { name: "All" }).getAttribute("aria-pressed")).toBe("true");
     expect(location.search).toBe("?range=30");

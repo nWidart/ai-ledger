@@ -1425,6 +1425,24 @@ describe("ErrorsPage", () => {
     expect(document.querySelector("#uncat .uncat-v")?.textContent).toBe("Uncategorized: 50% of errors");
   });
 
+  it("names all three agents in the uncategorized split", async () => {
+    // t07 (Codex) becomes MCP tool error, t02 (Grok) Other: Grok's one error is a catch-all.
+    const src = (id: string) => (id === "t07" || id === "t08" ? "codex" as const : id === "t02" ? "grok" as const : "claude" as const);
+    const errors = fixture.errors.map(e => ({ ...e, src: src(e.id), c: e.id === "t07" ? "mcp" : e.id === "t02" ? "other" : e.c }));
+    const days = new Map<string, ErrorsPayload["error_days"][number]>();
+    for (const e of errors) {
+      const k = [e.d, e.p, e.c, e.src].join("|"), r = days.get(k) ?? [e.d, e.p, e.c, 0, 0, e.src];
+      r[3]++; r[4] += e.sub; days.set(k, r);
+    }
+    const mixed: ErrorsPayload = { ...fixture, errors, error_days: [...days.values()],
+      calls: [["2026-11-04", "foo", 6, 0, "claude"], ["2026-11-04", "foo", 3, 0, "codex"], ["2026-11-04", "foo", 1, 0, "grok"]] };
+    vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/errors") ? mixed : {})));
+    await page();
+    expect(document.querySelector("#uncat .uncat-v")?.textContent).toMatch(/\(Claude Code [\d.]+%, Codex 50%, Grok 100%\)$/);
+    await userEvent.click(within(screen.getByRole("group", { name: "Source" })).getByRole("button", { name: "Grok" }));
+    expect(document.querySelector("#uncat .uncat-v")?.textContent).toBe("Uncategorized: 100% of errors");
+  });
+
   it("says Agent tool errors for every source, and narrows to Codex in the browser", async () => {
     // t07 and t08 (and 3 of the 10 calls) from Codex; the rest stay Claude's.
     const codexIds = new Set(["t07", "t08"]), errors = fixture.errors.map(e => ({ ...e, src: codexIds.has(e.id) ? "codex" as const : "claude" as const }));

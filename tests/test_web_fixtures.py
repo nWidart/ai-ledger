@@ -118,6 +118,7 @@ class WebFixturesTest(unittest.TestCase):
         tm.MetricsTest.setUpClass()
         tm.SourceFilterTest.setUpClass()
         tm.ToolDetailTest.setUpClass()
+        tm.add_grok_session(tm.SourceFilterTest.con)  # a third agent beside its Claude and Codex sessions
         cls.cur = tm.MetricsTest.con.cursor()
         for con in (tm.MetricsTest.con, tm.SourceFilterTest.con, tm.ToolDetailTest.con):  # local hours the same on every machine
             con.execute("SET GLOBAL TimeZone = 'UTC'")
@@ -132,6 +133,7 @@ class WebFixturesTest(unittest.TestCase):
         os.makedirs(OUT, exist_ok=True)
         c, t = self.cur, tm.ToolDetailTest.con.cursor()
         limits = limits_fixtures()
+        sf = tm.SourceFilterTest.con.cursor()
         got = {
             # 30 days: previous period and changes are set; all time with a session: they are null and the drill-in is in.
             "usage.ts": ("UsagePayload", metrics.usage(c, "", 30, prices=tm.PRICES, today=tm.TODAY)),
@@ -140,9 +142,11 @@ class WebFixturesTest(unittest.TestCase):
             "sessions.ts": ("SessionsPage", metrics.session_list(c, prices=tm.PRICES, today=tm.TODAY)),
             "day.ts": ("DayView", metrics.day_view(c, "", 30, "2026-11-04", tm.TODAY)),
             "session.ts": ("SessionDetail", metrics.session(c, "s1", prices=tm.PRICES)),
-            # A Claude and a Codex session on one day, filtered to Codex.
-            "usage-codex.ts": ("UsagePayload", metrics.usage(tm.SourceFilterTest.con.cursor(), "", 0, prices=tm.PRICES,
-                                                             today=tm.TODAY, source="codex")),
+            # A Claude, a Codex and a Grok session on one day: filtered to Codex, and every source.
+            "usage-codex.ts": ("UsagePayload", metrics.usage(sf, "", 0, prices=tm.PRICES, today=tm.TODAY, source="codex")),
+            "usage-sources.ts": ("UsagePayload", metrics.usage(sf, "", 0, prices=tm.PRICES, today=tm.TODAY)),
+            # The Grok session: reported costs, no effort, model time with no tool time or lines.
+            "session-grok.ts": ("SessionDetail", metrics.session(sf, "g1", prices=tm.PRICES)),
             "errors.ts": ("ErrorsPayload", metrics.errors_payload(c, "2026-11-05T12:00:00+00:00", today=tm.TODAY)),
             # The tool inspector: Bash over 30 days (a previous period, npm at 40% failed), an MCP server and a skill.
             "tool.ts": ("ToolPayload", metrics.tool_detail(t, "tool", "Bash", "", 30, tm.TODAY)),
@@ -163,7 +167,7 @@ class WebFixturesTest(unittest.TestCase):
         got["live-session-codex.ts"] = ("LiveSession", lv["codex"])
         for name in ("live.ts", "live-text.ts"):  # what app adds to /api/live
             got[name][1]["automated_file"] = dict(path="/Users/example/Library/Application Support/ai-ledger/automated.json", error=None, projects=[])
-        for name in ("usage.ts", "usage-all.ts", "usage-codex.ts"):  # not the machine's own data folder
+        for name in ("usage.ts", "usage-all.ts", "usage-codex.ts", "usage-sources.ts"):  # not the machine's own data folder
             got[name][1]["prices_file"] = dict(path="/Users/example/Library/Application Support/ai-ledger/prices.json", error=None)
             got[name][1]["automated_file"] = dict(path="/Users/example/Library/Application Support/ai-ledger/automated.json", error=None, projects=[])
         for name, (typ, obj) in got.items():
