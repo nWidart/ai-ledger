@@ -30,8 +30,10 @@ export interface EChartProps {
   tip?: (i: number) => ReactNode;
   /** The sentence the live region says for point i. */
   read: (i: number) => string;
-  /** Enter on the point being read, or a click on a point. The reading ends with it. */
-  onActivate?: (i: number) => void;
+  /** Enter on the point being read, or a click on a point. The reading ends with it, unless the handler returns false:
+   *  the point has nothing to open, and the reading stays, so the user is not left with silence. The pointer is a hand
+   *  over every point of a chart that has a handler: the wrapper cannot tell which points the handler would decline. */
+  onActivate?: (i: number) => boolean | void;
 }
 
 /** The width a chart is drawn at until its box is laid out, while the box is hidden, and in jsdom, which lays nothing out. */
@@ -72,43 +74,50 @@ export function EChart({ label, describedBy, id, className, hidden, height, opti
   // yet and the old point may not exist. `at` is the cursor: the index of the point, or null.
   const [reading, setReading] = useState<{ on: EChartProps["option"]; i: number } | null>(null);
   const at = reading && reading.on === option && reading.i < points ? reading.i : null;
-  // Where the tooltip points, in px from the plot's top left. Not state: a pointer move inside one point re-renders
-  // nothing, the tooltip is only moved.
-  const pos = useRef({ x: 0, y: 0 });
-
-  /** Reads point i, with the tooltip pointing at [x, y]. */
-  const show = (i: number, x: number, y: number) => {
-    pos.current = { x, y };
-    // A new point: the layout effect places the tooltip once it shows that point.
-    if (i === at) placeTip(box.current!, plot.current!, tipEl.current, pos.current); else setReading({ on: option, i });
-  };
-  useLayoutEffect(() => { if (at != null) placeTip(box.current!, plot.current!, tipEl.current, pos.current); }, [at]);
-  /** Enter or a click on point i. False in a chart that selects nothing. */
+  // Where the pointer's reading points, in px from the plot's top left; null for a key's reading, which points at the
+  // point itself. Not state: a pointer move inside one point re-renders nothing, the tooltip is only moved.
+  const pointer = useRef<{ x: number; y: number } | null>(null);
+  /** Puts the tooltip where the reading of point i points: beside the pointer, or over the point as the chart draws it
+   *  now. Before the chart is there, the point is at its share of the box's width. */
+  const place = useEffectEvent((i: number) => {
+    let to = pointer.current;
+    if (!to) {
+      const [x, y] = chart ? drawnAt(chart, i, height) : [(i + .5) / points * width, 0];
+      to = { x, y: y + KEY_DROP };
+    }
+    placeTip(box.current!, plot.current!, tipEl.current, to);
+  });
+  // Each key sets a new reading, so its tooltip is placed even when the point is the one the pointer was reading.
+  useLayoutEffect(() => { if (at != null) place(at); }, [reading, at]);
+  /** Enter or a click on point i: the reading ends, unless the chart declines. False in a chart that selects nothing. */
   const activate = (i: number) => {
     if (!onActivate) return false;
-    onActivate(i);
-    setReading(null);
+    if (onActivate(i) !== false) setReading(null);
     return true;
   };
 
   const onKey = (ev: KeyboardEvent) => {
     if (modified(ev)) return; // Alt+Left is history, Ctrl+Home the page: not ours
+    // Here as well as on the document: an element around the chart may stop the key before it gets there. The key goes
+    // on, as it does from the hand-written charts: what is around the chart may have its own use for Escape.
+    if (ev.key === "Escape") return setReading(null);
     if (ev.key === "Enter") { if (at != null && activate(at)) ev.preventDefault(); return; }
     const step = STEPS[ev.key];
     if (step == null || !points) return;
     ev.preventDefault();
     const from = at ?? (step > 0 ? -1 : points); // the first Right reads the first point, the first Left the last
-    const i = Math.max(0, Math.min(points - 1, from + step));
-    // Before the chart is there: the point's share of the box's width.
-    const [x, y] = chart ? drawnAt(chart, i, height) : [(i + .5) / points * width, 0];
-    show(i, x, y + KEY_DROP);
+    pointer.current = null;
+    setReading({ on: option, i: Math.max(0, Math.min(points - 1, from + step)) });
   };
 
-  // Escape ends a reading wherever the focus is: the pointer can open one while the focus is elsewhere.
+  // Escape ends a reading wherever the focus is: the pointer can open one while the focus is elsewhere. A key from
+  // inside the box is the box's own.
   const open = at != null;
   useEffect(() => {
     if (!open) return;
-    const end = (ev: globalThis.KeyboardEvent) => { if (ev.key === "Escape" && !modified(ev)) setReading(null); };
+    const end = (ev: globalThis.KeyboardEvent) => {
+      if (ev.key === "Escape" && !modified(ev) && !box.current?.contains(ev.target as Node)) setReading(null);
+    };
     document.addEventListener("keydown", end);
     return () => document.removeEventListener("keydown", end);
   }, [open]);
@@ -123,7 +132,12 @@ export function EChart({ label, describedBy, id, className, hidden, height, opti
   };
   const onMove = useEffectEvent((made: ECharts, e: ElementEvent) => {
     const i = under(made, e);
-    if (i == null) setReading(null); else show(i, e.offsetX, e.offsetY);
+    if (i == null) return setReading(null);
+    // A hand where a click activates. On every move: zrender sets its own cursor again before each one, which also
+    // gives the default cursor everywhere else.
+    if (onActivate) made.getZr().setCursorStyle("pointer");
+    pointer.current = { x: e.offsetX, y: e.offsetY };
+    if (i === at) place(i); else setReading({ on: option, i }); // a new point: placed once the tooltip shows that point
   });
   const onClick = useEffectEvent((made: ECharts, e: ElementEvent) => {
     const i = under(made, e);
@@ -167,13 +181,15 @@ export function EChart({ label, describedBy, id, className, hidden, height, opti
   }, [chart, option, env]);
 
   // The band follows the cursor, here and nowhere else, whatever moved it: a key, the pointer, Escape, a new drawing.
-  // It runs after the draw above and again after each one: a redraw drops ECharts' band and can move the points.
+  // It runs after the draw above and again after each one: a redraw drops ECharts' band and can move the points. A
+  // key's tooltip goes with the band, so the two never sit over different points.
   const banded = useRef(false);
   useEffect(() => {
     if (!chart) return;
     if (at != null) {
       const [x, y] = drawnAt(chart, at, env.height);
       chart.dispatchAction({ type: "updateAxisPointer", currTrigger: "mousemove", x, y });
+      place(at);
     } else if (banded.current) chart.dispatchAction({ type: "updateAxisPointer", currTrigger: "leave" });
     banded.current = at != null;
   }, [chart, at, option, env]);

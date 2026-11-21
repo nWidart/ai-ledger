@@ -23,7 +23,7 @@ const DAYS = ["Mon", "Tue", "Wed"];
 const read = (i: number) => `${DAYS[i]}: $${i + 1}.00`;
 const tip = (i: number) => <b>{DAYS[i]} tip</b>;
 const show = (props: Partial<EChartProps> = {}) => <EChart label={LABEL} height={240} option={option} points={DAYS.length} read={read} tip={tip} {...props} />;
-const box = () => screen.getByLabelText(LABEL); // a hidden group has no accessible name to find it by
+const box = () => screen.getByRole("group", { name: LABEL });
 const plot = () => box().querySelector(".echart-plot")!;
 /** The live region's text: the point being read, or "". */
 const readout = () => document.querySelector(".sr[aria-live=polite]")!.textContent;
@@ -172,7 +172,7 @@ describe("EChart", () => {
     const { rerender } = render(show());
     const chart = await drawn();
     rerender(show({ hidden: true }));
-    expect(box().hidden).toBe(true);
+    expect(screen.getByLabelText(LABEL).hidden).toBe(true); // a hidden group has no accessible name to find it by
     await sized.resize(0); // display: none
     expect(chart.disposed).toBe(false);
     expect(chart.last).toMatchObject({ grid: { width: 600 } });
@@ -270,6 +270,61 @@ describe("EChart reading", () => {
     expect(readout()).toBe("Mon: $1.00");
   });
 
+  it("keeps the reading when the chart declines the activation, by Enter or by a click", async () => {
+    // Tue has nothing to open: the handler says so, and the reading stays for the next key.
+    const onActivate = vi.fn<(i: number) => boolean | void>(i => i !== 1);
+    render(show({ onActivate }));
+    const chart = await drawn();
+    key("ArrowRight");
+    key("ArrowRight");
+    expect(key("Enter")).toBe(false); // still the chart's key
+    expect(onActivate.mock.calls).toEqual([[1]]);
+    expect(readout()).toBe("Tue: $2.00");
+    expect(tooltip()!.textContent).toBe("Tue tip");
+    expect(chart.band).toBe(1);
+    key("ArrowRight");
+    expect(readout()).toBe("Wed: $3.00");
+
+    chart.fire("mousemove", chart.pointAt(1));
+    chart.fire("click", chart.pointAt(1));
+    expect(onActivate.mock.calls).toEqual([[1], [1]]);
+    expect(readout()).toBe("Tue: $2.00");
+    expect(tooltip()!.textContent).toBe("Tue tip");
+
+    chart.fire("click", chart.pointAt(0)); // accepted: the reading ends
+    expect(onActivate.mock.calls).toEqual([[1], [1], [0]]);
+    expect(readout()).toBe("");
+  });
+
+  it("clears the reading on Escape on the box when an element around it stops the key", async () => {
+    // SessionMap's box and Toggletip stop an Escape they handle: it then never reaches the document.
+    render(<div onKeyDown={ev => { if (ev.key === "Escape") ev.stopPropagation(); }}>{show()}</div>);
+    await drawn();
+    key("ArrowRight");
+    key("Escape");
+    expect(readout()).toBe("");
+    expect(tooltip()).toBeNull();
+  });
+
+  it("lets Escape go on to what is around the chart, with a reading open or not", async () => {
+    const around: string[] = [], onDocument: boolean[] = [];
+    const seen = (ev: KeyboardEvent) => { if (ev.key === "Escape") onDocument.push(ev.defaultPrevented); };
+    document.addEventListener("keydown", seen);
+    try {
+      render(<div onKeyDown={ev => { if (ev.key === "Escape") around.push(readout()); }}>{show()}</div>);
+      const chart = await drawn();
+      expect(key("Escape")).toBe(true); // nothing read: not the chart's key
+      key("ArrowRight");
+      expect(key("Escape")).toBe(true); // the reading ends, and a sheet around the chart still gets its Escape
+      expect(readout()).toBe("");
+      expect(around).toHaveLength(2);
+      expect(onDocument).toEqual([false, false]);
+      expect(bands(chart)).toEqual(["at 0", "leave"]); // cleared once, by the box
+    } finally {
+      document.removeEventListener("keydown", seen);
+    }
+  });
+
   it("clears the reading on Escape, on the box and anywhere in the document, and not with a modifier", async () => {
     render(<>{show()}<button type="button">Elsewhere</button></>);
     await drawn();
@@ -325,6 +380,48 @@ describe("EChart reading", () => {
     // The fake's last point is at x 373.33 and its grid starts at y 10: found within 4px, 20px lower, then tipAt's 14 and 10.
     expect(parseFloat(tooltip()!.style.left)).toBeCloseTo(chart.pointAt(2)[0] - 14, 2);
     expect(tooltip()!.style.top).toBe("22px");
+  });
+
+  it("moves a key's tooltip to the drawn point once the chart draws, and again after a redraw that moves the points", async () => {
+    const load = fakeECharts.hold();
+    render(show());
+    key("ArrowRight");
+    key("ArrowRight");
+    expect([tooltip()!.style.left, tooltip()!.style.top]).toEqual(["386px", "10px"]); // no grid yet: its share of the box
+    await load.resolve();
+    const chart = await drawn();
+    expect(chart.band).toBe(1);
+    expect([tooltip()!.style.left, tooltip()!.style.top]).toEqual(["226px", "22px"]); // over the band: the fake's point 1 is at x 240
+
+    chart.grid = { left: 100, top: 30, width: 300, height: 150 }; // what a resize does to the plot
+    act(() => setTheme("dark"));
+    expect(chart.band).toBe(1);
+    expect([tooltip()!.style.left, tooltip()!.style.top]).toEqual(["236px", "42px"]); // point 1 is now at x 250, the grid's top at 30
+  });
+
+  it("leaves the pointer's tooltip beside the pointer after a redraw", async () => {
+    render(show());
+    const chart = await drawn();
+    chart.fire("mousemove", [250, 60]);
+    act(() => setTheme("dark"));
+    expect([tooltip()!.style.left, tooltip()!.style.top]).toEqual(["236px", "50px"]);
+  });
+
+  it("shows a hand over a point that a click activates, and the default cursor elsewhere", async () => {
+    const { rerender } = render(show({ onActivate: () => {} }));
+    const chart = await drawn();
+    expect(chart.zr.cursor).toBe("default");
+    chart.fire("mousemove", chart.pointAt(1));
+    expect(chart.zr.cursor).toBe("pointer");
+    chart.fire("mousemove", [250, 60]); // the same point: zrender sets the default again on each move
+    expect(chart.zr.cursor).toBe("pointer");
+    chart.fire("mousemove", [20, 110]); // over the value labels
+    expect(chart.zr.cursor).toBe("default");
+
+    rerender(show()); // a chart that selects nothing
+    chart.fire("mousemove", chart.pointAt(1));
+    expect(readout()).toBe("Tue: $2.00");
+    expect(chart.zr.cursor).toBe("default");
   });
 
   it("activates the point clicked inside the grid, and none outside it", async () => {

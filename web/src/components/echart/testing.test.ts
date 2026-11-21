@@ -139,6 +139,19 @@ describe("the fake ECharts runtime", () => {
     expect(zr.listening("mousemove")).toBe(0);
   });
 
+  it("keeps the cursor a handler sets, and sets the default again before each pointer move, as zrender does", async () => {
+    const chart = await chartOf();
+    const zr = chart.getZr();
+    expect(chart.zr.cursor).toBe("default");
+    zr.setCursorStyle("pointer");
+    expect(chart.zr.cursor).toBe("pointer");
+    const seen: string[] = [];
+    zr.on("mousemove", () => { seen.push(chart.zr.cursor); });
+    chart.fire("mousemove", chart.pointAt(2));
+    expect(seen).toEqual(["default"]); // a handler that wants a hand asks for it on every move
+    expect(chart.zr.cursor).toBe("default");
+  });
+
   it("throws on a disposed chart and on a second live chart on one element", async () => {
     const chart = await chartOf();
     const { init } = await loadECharts();

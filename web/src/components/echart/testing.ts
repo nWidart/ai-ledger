@@ -21,6 +21,8 @@
 //   `seriesIndex` finder of 0. As in ECharts, convertFromPixel does not clamp: an x left of the grid gives a point
 //   before the first one shown, such as -1, and an x right of it a point after the last; containPixel tells them apart.
 // - getOption: components as arrays, each dataZoom with the window as `startValue`, `endValue`, `start` and `end`.
+// - the pointer's cursor: getZr().setCursorStyle() sets `zr.cursor`, and a fired "mousemove" sets it back to "default"
+//   before the handlers run, as zrender does on each move over no drawn element.
 // It is stricter than ECharts in one way: a call on a disposed chart, or a second live chart on one element, throws where
 // ECharts would log a warning, since either is a wrapper bug.
 import { act, waitFor } from "@testing-library/react";
@@ -114,6 +116,9 @@ export class FakeZr {
   trigger(name: string, event?: unknown) { this.events.trigger(name, event); }
   /** How many handlers listen to `name`. */
   listening(name: string) { return this.events.listeners(name).length; }
+  /** The pointer's cursor over the plot. zrender sets the default on each pointer move, before the handlers run. */
+  cursor = "default";
+  setCursorStyle(cursor: string) { this.cursor = cursor || "default"; }
 }
 
 export class FakeChart {
@@ -236,7 +241,10 @@ export class FakeChart {
       type: name, offsetX: x, offsetY: y, event: new MouseEvent(name === "globalout" ? "mouseout" : name),
       target: undefined, topTarget: undefined, cancelBubble: false, which: 1, stop() {},
     };
-    act(() => { this.zr.trigger(name, event); });
+    act(() => {
+      if (name === "mousemove") this.zr.cursor = "default"; // no drawn element is under the fake's pointer
+      this.zr.trigger(name, event);
+    });
   }
 
   /** An ECharts event, as `chart.on(name)` gets it. */
