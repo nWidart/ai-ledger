@@ -677,21 +677,19 @@ describe("past windows strips", () => {
     expect(hist().getByRole("button", { name: /, ended / }).querySelector("i")!.style.height).toBe("6%");
   });
 
-  it("lists two closed windows that share a bar key as their own rows, and marks only the selected one", async () => {
-    const error = vi.spyOn(console, "error").mockImplementation(() => {});
-    const again = { ...early, closed_at: new Date(Date.parse(early.closed_at) + 3_600_000).toISOString(), final: 41 };
-    showCurve({ ...fixture, history: [early, again, { ...early, start: "2026-01-01T00:00:00Z", closed_at: "2026-01-02T00:00:00Z" }] });
-    await lede();
-    openTable();
-    // Only the strip's bars warn (they key by the bar key, as a strip draws one bar per window); the table's rows have their own keys.
-    const strip = error.mock.calls.filter(c => /same key/.test(String(c[0]))).length;
-    error.mockRestore();
-    expect(strip).toBe(2);
-    const rows = () => [...hist().getByRole("table", { name: "Closed windows" }).querySelectorAll("tbody tr")];
-    expect(rows().map(r => r.children[3]!.textContent)).toEqual(["22%", "41%", "22%"]);
-    expect(rows().map(r => [r.className, r.getAttribute("aria-current")])).toEqual([["", null], ["", null], ["", null]]);
-    fireEvent.click(hist().getAllByRole("button", { name: barName(early) })[0]!);
-    await waitFor(() => expect(rows().map(r => [r.className, r.getAttribute("aria-current")])).toEqual([["sel", "true"], ["sel", "true"], ["", null]]));
+  it("lists two closed windows that share a bar key as their own rows, and marks the selected window's rows", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {}); // the strip's bars share a key too
+    try {
+      const again = { ...early, closed_at: new Date(Date.parse(early.closed_at) + 3_600_000).toISOString(), final: 41 };
+      showCurve({ ...fixture, history: [early, again, { ...early, start: "2026-01-01T00:00:00Z", closed_at: "2026-01-02T00:00:00Z" }] });
+      await lede();
+      openTable();
+      const rows = () => [...hist().getByRole("table", { name: "Closed windows" }).querySelectorAll("tbody tr")];
+      expect(rows().map(r => r.children[3]!.textContent)).toEqual(["22%", "41%", "22%"]);
+      expect(rows().map(r => [r.className, r.getAttribute("aria-current")])).toEqual([["", null], ["", null], ["", null]]);
+      fireEvent.click(hist().getAllByRole("button", { name: barName(early) })[0]!);
+      await waitFor(() => expect(rows().map(r => [r.className, r.getAttribute("aria-current")])).toEqual([["sel", "true"], ["sel", "true"], ["", null]]));
+    } finally { error.mockRestore(); }
   });
 
   it("has no strips, and no key, without closed windows", async () => {
