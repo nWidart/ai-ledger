@@ -66,11 +66,20 @@ const PAGE_GATES: Record<string, number> = {
 
 type Sheet = { name: string; css: string };
 type Decl = { name: string; prop: string; value: string };
-/** Every declaration in a rule body, with its file; `!important` is left off the value. */
-const declsOf = (sheets: Sheet[]): Decl[] => sheets.flatMap(({ name, css }) => [...css.matchAll(/\{([^{}]*)\}/g)].flatMap(([, body = ""]) => body.split(";").flatMap((d) => {
-  const i = d.indexOf(":");
-  return i < 0 ? [] : [{ name, prop: d.slice(0, i).trim(), value: d.slice(i + 1).replace(/!\s*important\s*$/i, "").trim() }];
-})));
+/** Every declaration in a rule body, with its file, nested rules' neighbours included; `!important` is left off the value.
+    At each "{" the text after the last ";" is a selector or an at-rule's prelude, not a declaration. */
+const declsOf = (sheets: Sheet[]): Decl[] => sheets.flatMap(({ name, css }) => {
+  const out: Decl[] = [];
+  const take = (text: string) => text.split(";").forEach((d) => {
+    const i = d.indexOf(":");
+    if (i >= 0) out.push({ name, prop: d.slice(0, i).trim(), value: d.slice(i + 1).replace(/!\s*important\s*$/i, "").trim() });
+  });
+  let buf = "";
+  for (const ch of css) {
+    if (ch === "{") { take(buf.slice(0, buf.lastIndexOf(";") + 1)); buf = ""; } else if (ch === "}") { take(buf); buf = ""; } else buf += ch;
+  }
+  return out;
+});
 const decls = declsOf(files);
 const themeRoot = /(?:^|\n):root \{([^}]*)\}/.exec(files.find((f) => f.name === "theme.css")?.css ?? "")?.[1] ?? "";
 /** One scale's tokens in theme.css, smallest first: [name, value]. */
@@ -80,14 +89,17 @@ const hint = (prefix: string, value: string) => {
   return same ? `use var(${same[0]})` : neg ? `use calc(var(${neg[0]}) * -1)`
     : `use a token from theme.css: ${scale(prefix).map(([n, v]) => `${n} (${v})`).join(", ")}`;
 };
+const tokenNames = (prefix: string) => new Set(scale(prefix).map(([n]) => n));
+/** A scale token itself: "var(--z-nav)". */
+const isToken = (prefix: string, value: string) => tokenNames(prefix).has(/^var\(\s*(--[\w-]+)\s*\)$/.exec(value)?.[1] ?? "");
 /** A scale token, or a calc() of scale tokens and plain numbers: "calc(var(--space-2) * -1)". */
 const fromTokens = (prefix: string, value: string) => {
-  const names = new Set(scale(prefix).map(([n]) => n));
-  if (names.has(/^var\((--[\w-]+)\)$/.exec(value)?.[1] ?? "")) return true;
-  const inner = /^calc\((.*)\)$/.exec(value)?.[1];
+  if (isToken(prefix, value)) return true;
+  const inner = /^calc\((.*)\)$/s.exec(value)?.[1];
   if (inner === undefined) return false;
+  const names = tokenNames(prefix);
   let tokens = 0;
-  const rest = inner.replace(/var\((--[\w-]+)\)/g, (_, n: string) => names.has(n) ? (tokens++, "") : "?");
+  const rest = inner.replace(/var\(\s*(--[\w-]+)\s*\)/g, (_, n: string) => names.has(n) ? (tokens++, "") : "?");
   return tokens > 0 && /^[\d.\s*/+\-()]*$/.test(rest);
 };
 const CSS_WIDE = ["inherit", "initial", "unset", "revert", "revert-layer"];
@@ -119,7 +131,9 @@ const SCALED = [
     // A font shorthand's size counts too: "600 .75rem/1.4 var(--font-mono)".
     values: (prop: string, value: string) => prop === "font-size" ? splitTop(value) : prop === "font" ? shorthandSize(value) : [] },
   { what: "radius", prefix: "radius", list: "RADII", allowed: RADII,
-    values: (prop: string, value: string) => /^border(-(top|bottom|start|end)-(left|right|start|end))?-radius$/.test(prop) ? splitTop(value) : [] },
+    // An elliptical radius is "horizontal / vertical": each side of the slash holds radii.
+    values: (prop: string, value: string) => /^border(-(top|bottom|start|end)-(left|right|start|end))?-radius$/.test(prop)
+      ? splitTop(value, /\//).flatMap((part) => splitTop(part)) : [] },
   { what: "spacing", prefix: "space", list: "SPACING", allowed: SPACING,
     values: (prop: string, value: string) => /^(padding|margin)(-(top|right|bottom|left|inline|block)(-(start|end))?)?$|^(row-|column-)?gap$/.test(prop) ? splitTop(value) : [] },
 ];
@@ -146,12 +160,13 @@ const NAMED_COLORS = `aliceblue antiquewhite aqua aquamarine azure beige bisque 
   yellowgreen`.split(/\s+/);
 const NAMED = new RegExp(`(?<![\\w-])(?:${NAMED_COLORS.join("|")})(?![\\w-])`, "gi");
 /** The properties a named color can sit in; elsewhere ("grid-area: tan", an animation name) the word is not a color. */
-const COLOR_PROP = /^(--|color$|background|border|outline|box-shadow|text-shadow|text-decoration|fill|stroke|caret-color|accent-color|column-rule|scrollbar-color|stop-color|flood-color|lighting-color)/;
-/** Each raw color outside theme.css, as "file: value": a hex, a whole color function, or a named color. Strings are skipped. */
+const COLOR_PROP = /^(--|color$|background|border|outline|box-shadow|text-shadow|text-decoration|text-emphasis|-webkit-text-(fill-color|stroke)|filter$|backdrop-filter$|fill|stroke|caret-color|accent-color|column-rule|scrollbar-color|stop-color|flood-color|lighting-color)/;
+/** Each raw color outside theme.css, as "file: value": a hex, a whole color function, or a named color. Strings and url()
+    references ("url(#fade)", an SVG paint) are skipped; a paint's fallback color after the url() is still read. */
 const rawColors = (sheets: Sheet[]) => declsOf(sheets).flatMap(({ name, prop, value }) => {
   if (name === "theme.css") return [];
-  const v = value.replace(/"[^"]*"|'[^']*'/g, "");
-  const found = [...v.matchAll(/#[0-9a-f]{3,8}\b/gi)].map((m) => m[0]);
+  const v = value.replace(/"[^"]*"|'[^']*'/g, "").replace(/url\([^)]*\)/gi, "");
+  const found = [...v.matchAll(/#[0-9a-f]{3,8}(?![\w-])/gi)].map((m) => m[0]);
   for (const m of v.matchAll(/(?<![\w-])(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\(/gi)) {
     let depth = 1, i = m.index + m[0].length;
     for (; depth && i < v.length; i++) depth += v[i] === "(" ? 1 : v[i] === ")" ? -1 : 0;
@@ -168,12 +183,15 @@ const colorGuard = (sheets: Sheet[], allowed = RAW_COLORS) => {
     return i < 0 || !left.splice(i, 1);
   }).map(({ name, prop, value }) => `${name}: ${prop}: ${value}: add the color to theme.css as a light-dark(light, dark) token and use var(--…) here`);
 };
-const zGuard = (sheets: Sheet[]) => declsOf(sheets).filter(({ prop, value }) => prop === "z-index" && !["auto", "0", "-1", ...CSS_WIDE].includes(value) && !fromTokens("z", value))
+// A calc() of a --z-* token would leave the scale ("calc(var(--z-nav) * 100)" outranks the menu), so z-index takes a token itself.
+const zGuard = (sheets: Sheet[]) => declsOf(sheets).filter(({ prop, value }) => prop === "z-index" && !["auto", "0", "-1", ...CSS_WIDE].includes(value) && !isToken("z", value))
   .map(({ name, value }) => `${name}: z-index: ${value}: ${hint("z", value)}; auto, 0 and -1 may stay raw`);
 const monoEaseGuard = (sheets: Sheet[]) => declsOf(sheets).flatMap(({ name, prop, value }) => {
   // theme.css's tokens define the stack and the curves; a new --ease-* token goes there.
   if (name === "theme.css" && prop.startsWith("--")) return [];
-  const bad = /monospace|Menlo|SF Mono/.test(value) ? [`${name}: ${prop}: ${value}: use var(--font-mono) for the family`] : [];
+  // A family sits in font, font-family or a custom property that holds a stack; "content: \"monospace\"" is text.
+  const family = /^(font|font-family)$/.test(prop) || prop.startsWith("--");
+  const bad = family && /monospace|Menlo|SF Mono/.test(value) ? [`${name}: ${prop}: ${value}: use var(--font-mono) for the family`] : [];
   for (const [curve] of value.matchAll(/cubic-bezier\([^)]*\)/g)) {
     const same = scale("ease").find(([, v]) => v.replace(/\s/g, "") === curve.replace(/\s/g, ""));
     bad.push(`${name}: ${prop}: ${value}: ${same ? `use var(${same[0]})` : "add a named --ease-* token to theme.css"}`);
@@ -244,6 +262,40 @@ describe("the stylesheet guards", () => {
   it("read a font shorthand's size after its style and weight", () => {
     expect(scaleGuard(FS, sheet(".a { font: 600 var(--fs-xs)/1.4 var(--font-mono); } .b { font: italic bold var(--fs-sm) sans-serif; } .c { font: inherit; }"))).toEqual([]);
     expect(scaleGuard(FS, sheet(".a { font: clamp(1rem, 3vw, 2rem)/1.2 sans-serif; } .b { font: 600 calc(1rem + 1px) serif; } .c { font: 700 .7rem / 1 serif; }"))).toHaveLength(3);
+  });
+
+  it("read the declarations beside a nested rule", () => {
+    expect(scaleGuard(SPACE, sheet(".card { gap: 17px; &:hover { color: var(--link); } }"))).toHaveLength(1);
+    expect(colorGuard(sheet(".card { color: red; & .x { gap: var(--space-2); } padding: 0; }"))).toHaveLength(1);
+    expect(declsOf(sheet("@media (width > 40rem) { .a { gap: 0; } } .b:hover { margin: 0; }")).map(({ prop }) => prop)).toEqual(["gap", "margin"]);
+  });
+
+  it("read each radius of an elliptical border-radius", () => {
+    expect(scaleGuard(RADIUS, sheet(".a { border-radius: var(--radius-sm) / var(--radius-md); } .b { border-radius: var(--radius-sm)/var(--radius-md); }"))).toEqual([]);
+    expect(scaleGuard(RADIUS, sheet(".a { border-radius: 4px / 11px; }"))).toHaveLength(1);
+  });
+
+  it("take a scale token written with spaces or over several lines", () => {
+    expect(scaleGuard(SPACE, sheet(".a { gap: var( --space-2 ); margin: calc(\n    var(--space-2) * -1\n  ); }"))).toEqual([]);
+  });
+
+  it("take z-index only from a --z-* token itself, not a calc() of one", () => {
+    expect(zGuard(sheet(".a { z-index: calc(var(--z-nav) * 100); }"))).toHaveLength(1);
+    expect(zGuard(sheet(".a { z-index: var( --z-nav ); }"))).toEqual([]);
+  });
+
+  it("catch a named color in a filter shadow and in text-emphasis", () => {
+    expect(colorGuard(sheet(".a { filter: drop-shadow(0 0 2px red); text-emphasis-color: navy; }"))).toHaveLength(2);
+  });
+
+  it("read an SVG url() reference as no color, and still check its fallback", () => {
+    expect(colorGuard(sheet(".a { fill: url(#fade-out); } .b { stroke: url(#bad); }"))).toEqual([]);
+    expect(colorGuard(sheet(".a { fill: url(#fade-out) red; }"))).toHaveLength(1);
+  });
+
+  it("look for the monospace stack only in font families", () => {
+    expect(monoEaseGuard(sheet(`.hint::before { content: "monospace"; }`))).toEqual([]);
+    expect(monoEaseGuard(sheet(`.a { font-family: Menlo, monospace; } .b { --code: "SF Mono", monospace; } .c { font: 1rem/1 monospace; }`))).toHaveLength(3);
   });
 });
 
