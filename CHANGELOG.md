@@ -7,129 +7,117 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- Activity's Sessions table has a **Columns** button beside the search. It opens a list with one checkbox per column except Session. Untick a column to hide it at every width; tick a column the window's width hides to keep it at every width, and the table scrolls sideways when the columns do not fit. **Reset columns** drops every choice, and the button reads "Columns, N hidden" while columns are hidden. The browser keeps the choice for every view (key `ai-ledger-sessions-columns`); the URL does not. The sorted column always shows, even a hidden one, and unticking the sorted column takes it out of the sort.
-- Activity's Sessions table sorts by up to three columns. Tick **Sort by several columns** beside the search, then press a header to add its column as the last key, most first; press it again to reverse it and a third time to remove it. Shift with a press does the same with the box unticked. At three columns a new column replaces the third. Each sorted header shows its arrow and rank ("↓1", "↓2"); only the first carries `aria-sort`, and the others say their rank and direction in their button's name ("Prompts, sort 2 of 2, descending"). The hint says the whole order ("costliest first, then most prompts first"). Every sorted column shows, and unticking one in Columns takes that key alone out of the sort. The near-limit action and a chart day clear every key; the Output speed tile sorts by output speed alone. The sort is still not kept in the URL.
-- Activity's Sessions table lets you select up to four sessions. Each row starts with a checkbox named "Select" and the session's name; it, or a click anywhere in its cell, selects the session without opening its sheet, and the rest of the row opens the sheet as before. At four, the other rows' checkboxes are disabled. A bar above the table says how many are selected as a polite status ("1 selected. Select 1 more to compare."), and **Clear selection** unselects them all and moves the focus to the search field. The selection lasts through Show more, a sort, a search or the near-limit filter, a refresh and a tab change, and clears when the project, range, source, Include automated, or selected day or week changes. While another view loads, the earlier view's rows keep opening their sheet but their checkboxes are disabled. Neither the URL nor the browser keeps the selection. Rows in every table now ignore clicks on a checkbox or a label inside them, as they ignore links.
-- Activity's Sessions table compares the selected sessions. With two or more selected, **Compare** in the selection bar shows a "Session comparison" table between the bar and the Sessions table, with one column per session in the order selected and one row per figure: Project, Start, then every Sessions column, hidden ones included, each in the table's format. Each figure keeps the scope it has in the list: Start is the session's actual start, Active covers the whole session unless a day or week is selected, Model, Tok/s, Peak context and Compactions are whole-session figures, and the other figures count the range or the selected days. A missing figure reads "–", with a note when a session records no model time. The comparison makes no request: it reads the rows the list has loaded, a refresh updates them, and a session a search leaves out keeps its last figures. Each column header holds the session's name, which opens its sheet, and **Remove**, which moves the focus to the next Remove button, or to **Clear selection** when fewer than two sessions stay.
-- Cost's daily chart zooms. In views of 14 days or more, a slider under the day labels narrows the days the chart draws, down to 7. With the chart focused, plus halves the days shown and minus doubles them, around the day you are reading; while zoomed, "Show all days" beside the legend shows every day again. A screen reader hears the days shown after each change. An arrow key, Home or End that reads a day outside them moves them to include it, and the chart says the day, then the days shown. Zooming changes nothing else: the range, the totals, the other sections and the data table keep every day, and the value axis and the 7-day average stay those of the whole view. The zoom resets when you change the range, project, source, Include automated sessions, Cost or Tokens, stacking or scale, and when the view's first day moves (at midnight, or when older days arrive). It stays when new data arrives and when you hide or show a token kind.
-- Limits shows Grok's plan limit. While it runs, the app asks `https://cli-chat-proxy.grok.com/v1/billing?format=credits` every 5 minutes for the percent of the period's credits used, with the access token of the Grok CLI's grok.com login, read from `~/.grok/auth.json` (or `$GROK_HOME/auth.json`) on each poll. The token goes only to that endpoint and is never stored, logged, shown or refreshed; an expired token skips the poll and marks Grok stale. Without a grok.com login (no Grok, an API key, or a custom endpoint), the app sends nothing and Limits shows no Grok card. The Grok card has the chart, forecast, history, unused capacity and value of the others, and works on macOS and Linux. The response names no plan, so Cost still has no Grok plan from snapshots.
-- The app links to its documentation site. The top bar has a **Docs** link that opens the docs for the page you are on in a new tab (Activity's Judgments view opens the Judgments page); on a phone it is the last row of the page chooser. The command palette has "Docs: this page" and one "Docs: <page title>" per documentation page, found with `>docs`, `>help` or a page's title. "How measured" notes and "?" toggletips can end with a "Learn more" link to the section that explains the figure. A page that failed to load shows a Troubleshooting link beside Retry, the freshness control's details link to Troubleshooting while it says Failed or Offline, and when the store holds no session after an ingest, each page says so and links to Install. The app sends nothing to the documentation site until you follow a link.
-- Grok CLI sessions are read too, from `~/.grok/sessions` (`--grok` sets another Grok home), and every page offers Grok in its source filter (`source=grok`, `#grok` in the command palette). Grok writes usage once per turn, so a session's tokens and cost appear when a turn ends, and the app splits each turn over its model calls by context size: totals are exact, one call's share is an estimate. A Grok request costs what Grok reported, not the list-price estimate. `/insights` does not judge Grok sessions, so Judgments cannot be picked with Grok alone. Copy resume command gives `grok --resume <id>`.
-- Documentation site at https://nwidart.github.io/ai-ledger/: install, playbooks that improve your agent workflow, each page, configuration and the command line, in the app's typeface and colors, light and dark. It replaces the user guide in `docs/guide.md`.
-- Time on the model and on tools, from the `cost-state` line Claude Code writes when a session ends (about late October 2026 on). Activity has a new "Output speed" tile (output tokens per second of model time, compared with the previous period; "n/a" when no session in view records model time), and the "Median session" note adds the time spent waiting on the model and running tools. The session sheet shows model time, tool time, output speed and lines added and removed. Figures include subagent work. Codex and older Claude Code sessions have none. Run `ai-ledger rebuild` once with the app stopped to fill the figures for sessions already ingested.
-- Errors' Where to start lists every applied fix in an "Applied fixes" table: the error rate before the fix and since, and the same verdict as the type detail ("Rate lower", "Not enough calls yet" and so on). It is hidden when no fix is marked.
-- Each incident on Errors shows its attempts on a small time strip: ✕ for each failure, then ✓ when the next call succeeded. A tight retry loop is a short strip of crowded marks, failures minutes apart a long one; a screen reader hears it as text ("3 failed attempts over 4s, 2s apart on average, then the next call succeeded 2s later").
-- Errors' rate chart has a "Show data table" disclosure, as on Activity and Cost.
-- Cost's tokens chart has a Scale switch, Volume or Share. Share draws each day as a 100% bar split by token kind, so each kind's daily share is readable beside the cache reads that dominate Volume. It drops the 7-day average and the peak label, and the tooltip, screen-reader text and data table give each kind's share and the day's total.
-- The Live tab shows a badge with the sessions that wait for you (a likely approval wait, or your turn), on every page. It shows nothing at 0 and "9+" above nine, and the tab's name says the count for a screen reader.
-- The Limits tab shows the percent of your fullest open limit window, on every page ("≈" marks an estimate). It replaces the alert dot: the pill turns amber or red, with a ring, when a window is nearly full, at its limit or forecast to run out. It keeps one width from "7%" to "≈100%", so no tab moves.
-- Judgments' session cards show what the store measured of each session: its estimated cost, its peak context as a share of the window, and its failed tool calls.
-- Judgments' Friction categories can be weighed by the cost or the active time of the sessions that reported each friction, or by reports. Cost is the default, and each row shows the other two beside it. A session with no price adds its active time but no cost.
-- The command palette opens Activity's Judgments view with `>judgments`; `>insights` finds the same row.
-- Activity's Sessions tab has **Model** (model time) and **Tok/s** (output tokens per second of model time) columns, whole-session figures that sort like the others. Sessions that record no model time, Codex and older Claude Code ones, read "–" and sort last either way, and add nothing to the Output speed tile. On a narrow window the sorted column stays shown. `/api/sessions` rows add `model_ms` and `output_per_s` and accept them as `sort`.
-- `/api/sessions` sorts by up to three keys: `sort=-cost,prompts` orders by cost, then prompts among sessions with the same cost, a leading `-` meaning descending, and rows with no value come last for each key. More than three keys, an unknown, repeated or empty key, and `desc=1` beside a list or a `-` key answer 400. A blank `sort=`, ignored before, now answers 400 too. The earlier form, `sort=cost&desc=1`, still works and equals `sort=-cost`. Sessions that every key leaves tied now come in the list's own order, then by session id, so pages of a sorted list never repeat or skip a session.
+- Grok CLI sessions, read from `~/.grok/sessions` (`--grok` sets another Grok home). Every source filter offers Grok. A turn's tokens are split over its model calls, so per-call figures are estimates.
+- Limits shows Grok's plan limit. The app polls Grok's billing endpoint every 5 minutes with the token in `~/.grok/auth.json`, and never stores or logs it. Without a grok.com login it sends nothing.
+- Documentation site at https://nwidart.github.io/ai-ledger/. It replaces `docs/guide.md`.
+- A **Docs** link in the top bar, and "Docs:" commands in the palette, open the docs for the current page. Hints and error states link to the section that explains them.
+- Model and tool time for Claude Code sessions from late October 2026 on: an Output speed tile on Activity, and model time, tool time, output speed and lines changed in the session sheet. Run `ai-ledger rebuild` once to fill them for stored sessions.
+- Activity's Sessions table:
+  - **Model** and **Tok/s** columns. `/api/sessions` rows add `model_ms` and `output_per_s`.
+  - A **Columns** button hides or shows columns. The browser keeps the choice.
+  - Sort by up to three columns: tick **Sort by several columns**, or Shift-click a header.
+  - Select up to four sessions and **Compare** them side by side.
+- `/api/sessions` takes up to three sort keys (`sort=-cost,prompts`). Invalid keys and a blank `sort=` answer 400. `sort=cost&desc=1` still works.
+- Cost's daily chart zooms in views of 14 days or more, with a slider or the plus and minus keys.
+- Cost's tokens chart has a Scale switch: Volume, or Share (each day as a 100% bar).
+- Errors' Where to start lists applied fixes, with the error rate before and since.
+- Each Errors incident shows its attempts on a small time strip.
+- Errors' rate chart has a "Show data table" disclosure.
+- The Live tab shows a badge counting the sessions that wait for you.
+- The Limits tab shows the percent of your fullest open window, amber or red when near or at its limit. It replaces the alert dot.
+- Judgments' session cards show cost, peak context and failed tool calls.
+- Judgments' Friction categories can be weighed by cost, active time or reports.
+- `>judgments` in the command palette opens Judgments.
 
 ### Changed
 
-- The documentation site adds **Concepts → Supported agents** (one matrix of what Claude Code, Codex and Grok record) and **Everywhere → Sheets** (extracting the shared session, project and tool sheets from Activity), groups the 11 workflow playbooks into **Routines**, **Efficiency & limits** and **Reliability & workflow**, renames the comparison playbook to **Compare Claude Code, Codex and Grok**, refreshes every panel screenshot with Grok demo data, and adds theme-token and screenshot-list drift checks to `site/`'s check.
-- The page-wide filters are in one scope bar under the navigation, the same place and the same tab stop on every page: project, range, source, then **Include automated sessions**. It stays at the top with the navigation as you scroll. Each page shows only the filters that change it; a section's own filter (Limits' range) is in that section's header. With a project picked, a ✕ "Clear project filter" button sits beside the picker and the bar ends with a **Brief** link to the Project page. The navigation no longer shows the project chip, and the Search button shows the project's color dot and name while a project filter is set. On a phone the bar is one **Filters** button with the number of filters set, which opens them over the page.
-- Live's agent panel is gone: a status strip above the stream shows the session's state, a context meter, cost, tools, errors (still the failed-calls filter), cache read, each plan limit, its working directory and **Copy resume**. A plan limit's reset time is behind a toggletip that the keyboard reaches. The stream gains the panel's width: 1,102px instead of 798px at 1440 x 900. The strip has no request count; the session sheet lists requests per model. A session that fails to load says so once, in its panel. The session payload's context window no longer disappears on a catch-up of a Codex session on an unpriced model.
-- Live's tokens-per-minute chart is now a pulse of the last 10 minutes: the context of each main-thread request, and a tick for each finished tool call, upright for a success and ✕ for a failure. It reads by keyboard one minute at a time and names its summary, from its lowest to its highest context, for a screen reader. Cache rereads no longer look like work. The session payload's `spark` is now `pulse`, and it adds `cwd`.
-- Each Live rail entry has a third line: a small context meter with its percent, the latest action, and `✕ N` when calls failed. Eight sessions still fit the rail at 1440 x 900.
-- On Live's Wall, selecting a tile pins its stream beside the tiles instead of leaving the Wall. Two pins at most: pinning a third unpins the oldest and says so. A pinned stream has its own filters, Follow, a **Session sheet** link, **Open in Stream** and **Unpin**. A pin says when it is loading, when an update failed, and when its session is not found. The pins are kept in the URL (`pin=`).
-- Live's connection status sits in the bar, and the Full text warning opens over the page with **Dismiss**, so the stream no longer moves down when Full text turns on; the toggle keeps a warning tint while on. On a phone the rail is one row that scrolls sideways, so the page no longer scrolls sideways and the first event shows on the first screen; the strip keeps the working directory, and the pulse's readout stays on the screen.
-- The navigation has two groups: **Now** (Live, Limits) and **Review** (Activity, Cost, Context, Errors). The page chooser on narrow screens lists the same groups. Every tab uses the same active style; Errors no longer has a red one.
-- Insights is now the **Judgments** view of Activity, picked with a switch above the heading and kept in the address (`/usage?view=judgments`). The Insights tab is gone. An old `/insights` link opens the view with its filters, its judgment filters, its open session and its section anchor (`#d-goals`).
-- Judgments shows no source filter, and no longer says "/insights analyses only Claude Code sessions" on an empty page. With Codex as the source, Activity shows Overview, and the Judgments button says why it cannot be picked; so does the Project page's Session judgments block, in place of its link. A judged session's sheet over a Codex view links to Judgments for every source.
-- Judgments' Outcome trend is a chart: one bar per week, each 100% of that week and split by outcome, with the week's sessions over it. A week with fewer than 5 sessions is drawn at half width. Every outcome with a session shows, even 1 in 150, and on a phone the counts thin out instead of overlapping. The arrow keys read each week (Alt, Ctrl, Meta and Shift keys stay the browser's), and a data table lists them.
-- Judgments' Outcomes and Claude's helpfulness are each one stacked bar of the analysed sessions, over a row per outcome or rating with its share and then its count (helpfulness showed the count first). The Outcomes bar has the outcome trend's order and colors; the helpfulness bar runs from essential to unhelpful in two greens, amber and two reds. The rows still filter the session list. A bar that stands on fewer than 5 sessions says "Few sessions: one session moves this bar a lot", and every part with a session is at least 3px wide, so 1 session in 200 still shows. Satisfaction signals and Claude's helpfulness sit side by side on a wide screen and stack on a narrow one, and on a phone with large text each row's name takes its own line over its share and count.
-- The amber warning color is one step darker in the light theme, so it keeps 3:1 contrast as a fill. This applies on every page.
-- Sessions, tools, MCP servers, skills and projects open their sheet over every page, Limits included. From Limits, the command palette and the right-click menu no longer send you to Activity, and the projects in What used this window and Commits a point, by project open the right-click menu.
-- The docs site lists the pages in the navigation's order, and the Insights page is now Judgments, at the same address.
-- Activity's Overview is a workbench. Its tables sit in tabs under the chart: Sessions, Projects, Tools and MCP, and Loops and tests, with the tab kept in the address (`tab=`). Loops and tests shows the five newest error loops and failed test runs, with "Show all" for the rest. The seven drawers and the section index are gone; at 1440×900 the work chart and the tab list fit the first screen.
-- Activity's work chart draws errors per 100 tool calls on its own track under the bars, on the same days or weeks, in place of a line on a second axis. Week bars can be selected now, by click or Enter: a selected day or week narrows every tab to its days (Projects and Failed test runs too), shows a chip beside the metric switch, and clears with the chip or Escape on the chart. The week is kept in the address (`week=`, its Monday). A week the range cuts short counts only its days in the range, active time included, and the tab names those days. A tile or a Needs attention action clears the selection, since its figure covers the range.
-- Activity has five tiles, each a way in: Sessions opens the Sessions tab, Errors per 100 calls opens Errors, Test runs passed opens the failed test runs, Subagents opens Projects by subagent share, Output speed opens Sessions by active time. Output speed gets a trend line per chart bucket, and on a Codex-only view gives way to a note. The median session moves into the Sessions tile, with the total active time and the thinking time, and the prompts interrupted, with their count and the turns and tool calls per prompt, to a line under the heading.
-
-- Context is shorter and leads with what to act on:
-  - The tips are one strip of short items under the heading, at most four before "Show N more"; an item opens its evidence, advice and sessions in place.
-  - Three tabs replace the section index: Overhead and pressure, Growth and bloat, and Cache health. The URL keeps the tab (`tab=growth`, `tab=cache`), and arrow keys, Home and End move between tabs.
-  - The cache chart draws the tokens not read from the cache (uncached input and cache writes) as its bars, the cache breaks by cause on a strip under them, and the cache-hit ratio on its own thin track. Cache reads join the bars only when you turn them on.
-  - The session map names its four quadrants (Lean, Heavy start, Grew full, Heavy and full). Selecting one narrows the window pressure bars to its sessions and lists them; one Escape clears it, with any reading. Sessions show their titles on the map and in the pressure lists.
-  - Overhead and pressure draws the Project page's window grid for each of the six projects with the most sessions that have a measured start, a known window and a peak, drawn from those sessions alone, or the one full grid with a project selected.
-  - The compaction, long-prompt-tier and large-start tips name Codex's commands (`/new`, `/compact`, `codex mcp list`) for Codex sessions, and Claude Code's for Claude Code sessions.
-- Errors puts each control where it acts. The header keeps project, range and source; Day / Week moves into the rate chart's header, and "Include subagents" and "Hide noise and muted" into the type table's toolbar. Links and saved views keep working: the URL keys are the same.
-- Errors' type table has four columns and fits its pane without scrolling sideways: Type; Errors and Rate, with the share as a bar; Time lost, with the share not recovered under it; and Trend, with a tick on the day a fix was applied, and Change under it; select a change to see the two rates behind it, or why it shows "–". All six sorts stay, two to a header where a column holds two figures. "Didn't recover" is now "Not recovered".
-- Errors matches the other pages: panels instead of cards, messages without contractions ("Could not load errors."), no "Ingested …" in the date line or ingest note under Where to start (the navigation shows both), and on a phone the whole summary, vitals two to a row, instead of a "More summary" button.
-- New logo: a bound ledger whose page ends in an accountant's double rule, in place of the bar-chart tile. It shows in the app's navigation, as the app's favicon, and in the docs site's title bar and favicon.
-
-- Tokens and cache on Cost compares each billed kind's share of tokens with its share of estimated cost as a two-sided bar, with a sentence naming the kind where they differ most and a data table of the exact figures (full token counts, dollars to the cent). Models priced at zero rates read $0.00, not unknown. It replaces the plain list. The 5-minute and 1-hour cache writes are one Cache write row; the table keeps both.
-- The Project page shows its blocks in two columns on wide screens (Activity, Cost and Context; then Errors, Plan limits, Sessions and Session judgments) and in one on narrow screens. Its first block is now Activity, with figures the project sheet does not show (prompts, commits, active days, requests, median session, cost per prompt, turns per prompt, interrupted prompts) in place of the sheet's eight. Cost adds each token kind's share of tokens beside its share of cost. The heading, filters and blocks show at once, and each block loads, fails and shows its empty state on its own; a slow or failed usage request no longer holds back or dims the other blocks. A filter change keeps each block's figures, dimmed, until the new ones arrive, and after Refresh only the blocks whose data changed fade in. Activity says "Checking for active sessions…" until Live answers. With no use in the view, the blocks still show under the message, so Context can still show its snapshot and measure from it.
-- Session links on Errors, Activity's Judgments view and Live open the session sheet over the page instead of going to Activity. The page keeps its state, Live keeps its stream and live connection, and Close or Back returns to it. The URL names the open sheet (`sheet=` on Live, where `session=` is the followed session), and middle-click opens it in a new tab.
-- The last ingest and Refresh are one control: a Refresh button (it reads "Retry" after a failed refresh) and the last ingest as a clock time. Clicking or hovering the time shows the exact time, new lines, last data change, interval and the full error. It reads "Stale" when the last ingest is older than three intervals, "Failed" after an ingest error and "Offline" when the app does not answer. "+N lines" appears for a few seconds after an ingest stores new lines.
-- The navigation stays on one row at every width. Narrower windows hide the wordmark, shrink Search to an icon, hide the groups' names and tighten the tabs. On narrow screens a page chooser (the current page's name, or "Pages" on the Project page) replaces the tabs and carries the Live badge and, while a window is in alert, the Limits pill.
-- Screen readers no longer hear every timed ingest; only the result of a manual refresh is announced.
-- Cost puts the daily chart on the first screen. A plan gauge beside the heading shows the month's cost so far and its pace against a tick at your plan's monthly price, with an "N× plan" badge (the pace over the plan price). Without a known plan it shows the cost so far and the pace only. It replaces the sparkline and the "On pace for…" and "You pay about…" sentences. The old prorated "N× your plan" multiple of the range is gone.
-- Cost shows each project once, in "Project spend and change": a daily trend, spend with its share, the change against the previous period (new projects marked; projects used only before listed at $0), cost per commit and cache hit. Every column sorts, small projects fold into one row, and a row opens the project sheet. It replaces What changed, Where the spend went and the Cost by project drawer. Tokens, 1h writes, subagent cost share and cost per prompt per project are in its CSV and Copy export, which also gains the change.
-- Cost's heading keeps the cost and its change. The windows' days with prompts, the sessions, tokens and requests, and how the estimate and the pace are computed move to a "How measured" disclosure. The Biggest spender and Cache hit cards are gone; the project table and Tokens and cache show the same figures.
-- Limits is easier to read:
-  - Each open-window chart draws four things: the line used so far (solid where measured, faded where estimated), the forecast as a shaded cone (amber when its high edge reaches 100% before the reset), now, and a faint safe-pace line from now to 100% at the reset. The chart key is gone.
-  - Each card's header gives the percent and one status ("runs out …", "at its limit until …", "about N% at reset"). A footer gives headroom, pace against the safe pace ("18%/d vs 7%/d safe") and the top project. Everything else, including a table of the chart, is behind **Details**.
-  - The last 24 h pace line is behind one toggle.
-  - The status strip is gone.
-  - Past windows are always on the page, each limit with "avg N% unused · K hits", and replace the Left unused panel. Their table is behind **Show data table**.
-  - The time range moved into the Past windows header. Limits has no project filter: "What a point buys" lists every project, and the Project page still shows one project's plan-limit figures.
-  - The heading gives at most two figures, and the forecast method is behind **How measured**.
-- Shorter pages on Activity, Context, Errors and Insights. On the demo store at 1440×900, Context drops from 8 to 5.5 screens, and every main chart starts on the first screen.
-  - Drawers start closed on every page load, and a page opens one at a time: opening a drawer closes the open one. Drawers you left open before this version start closed.
-  - Each section's hint is one line. Method text sits behind a **How measured** link at its end.
-  - Each heading states at most two figures, and no tile repeats them. Activity reads "N commits from M prompts". Errors reads "N failed tool calls (X%)"; the Error rate tile is gone and a **Top type** tile is new. Context leaves the compacted sessions to its Growth tiles. Insights drops the Sessions analysed tile.
-  - Context's By tool and By MCP server tables are gone: the Largest contributors table gains Calls and Largest columns, sortable columns and **Show all N tools**.
-  - Insights shows the model-judged tag once, in the page heading.
-
-- Text follows the browser's default font size: font sizes are relative, chart labels scale with them, and nothing is cut off at 200%. In Chrome and Edge 146+ the dashboard also follows the operating system's text scale.
-- Activity's Output speed tile opens the Sessions tab sorted by Tok/s, fastest first, instead of by active time. Activity's Overview is 20px shorter above the tabs, so the tab list clears the first screen at 1440 x 900 with room.
-- Cost's daily chart follows a theme change, and an operating-system light or dark change under System, without a reload. Escape closes its tooltip wherever the focus is. In forced colors the day you are reading is a highlight-colored band instead of a thin frame. On a first visit the chart draws a moment after the page, in a box already at its height, and its bars grow once, on that first draw, not each time new data lands. When new data lands, the day you are reading stays read; a screen reader hears it again only if you read it with the keyboard and its figures changed.
+- Insights is now Activity's **Judgments** view (`/usage?view=judgments`). Old `/insights` links still work.
+- One scope bar under the navigation holds the page-wide filters on every page: project, range, source, Include automated sessions. On a phone it is one **Filters** button.
+- The navigation has two groups, **Now** (Live, Limits) and **Review** (Activity, Cost, Context, Errors), and stays on one row at every width. Narrow screens get a page chooser.
+- Last ingest and Refresh are one control. It reads "Stale", "Failed" or "Offline" when the data is not current.
+- Session, tool, MCP server, skill and project sheets open over every page instead of sending you to Activity. Live's open sheet is in the URL as `sheet=`.
+- Text follows the browser's font size and stays readable at 200%.
+- The light theme's amber warning color is darker, for 3:1 contrast.
+- Screen readers hear only the result of a manual refresh, not every timed ingest.
+- New logo: a bound ledger with an accountant's double rule.
+- The docs site adds Supported agents and Sheets pages, groups the playbooks into three sections, and follows the navigation's order.
+- Activity:
+  - The Overview is a workbench: Sessions, Projects, Tools and MCP, and Loops and tests are tabs under the chart (`tab=`). The drawers and section index are gone.
+  - The work chart draws errors per 100 calls on its own track. Week bars can be selected (`week=`).
+  - Five tiles, each opening the matching tab or page. Output speed opens Sessions sorted by Tok/s.
+- Judgments:
+  - No source filter. With Codex selected, the view says why it is unavailable.
+  - Outcome trend is a weekly chart of 100% bars, with a data table.
+  - Outcomes and Claude's helpfulness each show one stacked bar over their rows.
+- Live:
+  - A status strip above the stream replaces the agent panel, so the stream is wider.
+  - The tokens-per-minute chart is a 10-minute pulse of context per request, with a tick per tool call. The session payload's `spark` is now `pulse` and adds `cwd`.
+  - Each rail entry adds a context meter, the latest action and failed calls.
+  - Selecting a Wall tile pins its stream beside the tiles, two at most (`pin=`).
+  - The Full text warning opens over the page, so the stream no longer moves. On a phone the rail scrolls sideways.
+- Cost:
+  - The daily chart is on the first screen, with a plan gauge beside the heading. It replaces the sparkline and the "N× your plan" multiple.
+  - "Project spend and change" shows each project once. It replaces What changed, Where the spend went and Cost by project.
+  - The heading keeps the cost and its change; the rest moves to "How measured". The Biggest spender and Cache hit cards are gone.
+  - Tokens and cache compares each kind's share of tokens with its share of cost.
+  - The daily chart follows theme changes without a reload.
+- Context leads with what to act on:
+  - Tips are one strip of short items, each opening its evidence in place.
+  - Three tabs replace the section index: Overhead and pressure, Growth and bloat, Cache health (`tab=`).
+  - The cache chart's bars show uncached tokens, with cache breaks and hit ratio on their own tracks.
+  - The session map names its four quadrants. Selecting one narrows the pressure bars.
+  - Overhead and pressure shows a window grid for each of the six busiest projects.
+  - Tips name Codex's commands for Codex sessions.
+- Errors:
+  - Each control sits where it acts. URL keys are unchanged.
+  - The type table has four columns and fits without scrolling sideways. "Didn't recover" is now "Not recovered".
+  - Panels and wording match the other pages.
+- Limits:
+  - Each open-window chart draws use so far, a forecast cone, now and a safe-pace line. The chart key is gone.
+  - Each card's header gives the percent and one status. The rest is behind **Details**.
+  - The last 24 h pace line is behind one toggle, and the status strip is gone.
+  - Past windows are always shown and replace the Left unused panel. The time range moved into their header.
+  - No project filter. The Project page still shows one project's plan-limit figures.
+- The Project page uses two columns on wide screens, leads with Activity, and loads each block on its own.
+- Shorter pages on Activity, Context, Errors and Judgments:
+  - Drawers start closed, and opening one closes the other.
+  - Each hint is one line, with method text behind **How measured**.
+  - Each heading states at most two figures. Errors' Error rate tile gives way to **Top type**.
+  - Context's Largest contributors replaces the By tool and By MCP server tables.
 
 ### Removed
 
-- The sticky section index on Cost and on Activity's Judgments view, and its "Jump to" menu on narrow screens. Only the navigation and the scope bar stay at the top now. Each section keeps its heading.
-- Activity's Prompts by hour heatmap, and `work_hours` in `/api/usage`. To spot a script by its hours, sort the Sessions tab by prompts and read the start times.
+- The sticky section index on Cost and Judgments, and its "Jump to" menu.
+- Activity's Prompts by hour heatmap, and `work_hours` in `/api/usage`.
 
 ### Fixed
 
-- Activity's Sessions table names a session with no project "(no project)", as the Context page does, instead of showing a dot with no name.
-- Accessibility: each row of the Error loops, Failed test runs, Closed windows and Errors' Error types tables now has a row header (the session, the window or the type), so a screen reader names the row as you move down a column. Session is now the first column of Error loops and Failed test runs, before When, because a row header names only the cells after it.
-- Limits draws two past windows from the same poll as separate bars: each can be focused and picked on its own, picking one marks only its row in the Closed windows table, and its panel draws that window's own readings. Past windows no longer list an estimated window over the span of a measured one.
-- Judgments' Session types bar shows in a forced-colors (high contrast) mode, where its parts used to vanish.
-- The Activity work chart no longer lets one quiet day set the scale of its errors-per-100-calls line. A day or week with fewer than 50 tool calls draws its rate as a hollow dot, is left out of the right-hand axis, and says "too few calls for a steady rate" in its tooltip and data table, as the Errors chart does. A legend key explains the hollow dot.
-- Escape closes the Activity work chart's tooltip that the pointer opened while the focus is elsewhere, such as on the metric switch.
-- In forced colors, the hovered and selected bars of the Activity, Cost and Judgments charts are framed at full strength, and the work chart's hollow-dot key matches its dot. The Sessions search box has a 3:1 border.
-- Gaps found in a design review of the recent changes:
-  - **Open session** in the command palette and the context menu opens the sheet over Insights and Live too, instead of going to Activity. On Live it keeps the followed session and the live connection, also when the same command changes the project. Session links on Errors' examples and Insights' cards open the context menu, and focus returns to them when the sheet closes.
-  - On a narrow screen, a session or tool sheet opened from an Errors type sheet stacks over it with **← Back**. Back, Close, Esc or a click beside it returns to the type and to the link. A link or reload that names both keeps the session sheet on top.
-  - Cost, Errors and Limits use the same **How measured** toggletip as the other pages. Errors' uncategorized share and incident line explain themselves there instead of in hover text.
-  - Toggletips no longer read their text aloud on hover. Their text follows the button in the page, so a screen reader reaches it once the button is expanded. A long one fits the window and scrolls, by keyboard too.
-  - Limits: the forecast, estimated and safe-pace lines are dotted or dashed at full contrast instead of faint, and keep it while a slow range change dims the page. An estimate between two readings is dashed, with no solid line drawn over it. The percent chip reads "estimated", a missing pace says why behind a **?** (at the limit too), each project in What used this window shows its cost, and a limit's unused summary explains itself behind How measured instead of hover text. Plans show their tier ("max 20x") instead of only in hover text. A scenario that reaches 100% reads in the warning style. The **Last 24 h pace** toggle hides when every window with a scenario is at its limit, and its line goes with it when a refresh brings the last one there. A past window's curve has its data table, What a point buys names its range and keeps its pricing note behind How measured, and the closed windows table gives time at the limit as "4h 15m", as the bars do.
-  - Context's Largest contributors keeps the ten largest tools whatever the sort, scales its bars to them, and draws no bar for Other.
-  - Cost: **Sort by cost again** moves focus to the Spend header, every sort is announced to screen readers (Compare projects, a repeat and a new view's reset too), and the unpriced chip reads "plus an unknown cost for N requests from unpriced models".
-  - Durations read in one unit everywhere and never round across it: 59.6 s reads "1m", not "60s". Errors writes "20m" where it wrote "20 min".
-  - The warning that `automated.json` was ignored shows under the navigation on every page, not only Activity, and every automated toggle names the file.
-  - The Errors chart's keyboard reading says "too few calls for a steady rate" for a hollow point, as Activity does. Hollow points stay visible in Windows high contrast. The weekly work chart's How measured says "per week".
-  - Errors, Insights and Live give each page one heading that names it, while loading, after a failed load and with nothing to show.
-  - Live's wall reads "1 error", not "1 errors". A followed session with no title has its project as the stream's heading.
-  - Activity's Output speed tile says "Codex transcripts record no model time." when every session in the view is a Codex one, priced or not.
-- The right-click menu opens on more sessions, tools, error types and projects: the sessions of Activity's Error loops and Failed test runs, of Context's quadrant list and window pressure list, the rows of Errors' Applied fixes for a type with errors in the view, an Errors example's tool name, and each of Context's small window grids.
-- A thin segment of Activity's work chart no longer vanishes beside a tall one: it keeps at least 1px. Context's cache chart keeps a full bar with thin parts inside its track.
-- The Project page's Errors block explains a type's change in a toggletip instead of a hover-only title. With the source on Codex alone, it no longer asks for session judgments, and shows none kept from another source. Its project picker also lists Context's projects when usage has not answered.
-- Picking or clearing a project, or picking a source, closes Live's open session sheet, as it does on the other pages.
-- Errors' rate chart keeps its hint on a phone, as the other pages' charts do, and the Incidents vital no longer repeats what "recovered" means.
-- Context's "Tool results fill the context" tip no longer tells Codex sessions to hand bulk reading to a subagent; when both agents match, it names Claude Code for that line.
-- Alt+Left (Back), Ctrl+Home and other modified keys work again while a chart or a tab list has focus, on Activity, Cost, Context, Errors and in the session sheet's timeline. The charts and tabs handle their keys only without Alt, Ctrl, Meta or Shift; the timeline keeps Shift for its ten-request step.
-- A screen reader hears all a Live wall tile shows in the tile's name, "Pin" and the session, then its state, latest action, context, tools, errors, cost, branch and model, kept current as the tile updates, with its pressed state.
-- Live shows "N new events" beside **Jump to latest** while Follow is off, at once and then at most every 5 seconds, in a polite status. It was for screen readers only. The count starts when Follow turns off, by the checkbox too, and still counts once the stream holds its 2,000 events.
-- Closing a sheet on Live moves focus to the page heading when the control that opened it is gone, as on the other pages.
-- Tab from Activity's workbench tabs reaches the selected panel, as on Context.
-- In forced colors, Live's pressed Errors figure and Activity's selected workbench tab are outlined in the highlight color, and Limits' pressed **Last 24 h pace** toggle is filled with it, so it reads as pressed with keyboard focus too.
+- One quiet day no longer sets the scale of Activity's error-rate line. Days with under 50 tool calls draw a hollow dot.
+- Limits draws two past windows from the same poll as separate bars.
+- **Open session** opens the sheet over every page, and Live keeps its stream.
+- On a narrow screen, a sheet opened from an Errors type sheet stacks over it with **← Back**.
+- Limits' forecast and estimate lines are full contrast, and plans show their tier ("max 20x").
+- Durations never round across units: 59.6 s reads "1m", not "60s".
+- The ignored-`automated.json` warning shows on every page.
+- The right-click menu opens on more sessions, tools, error types and projects.
+- Thin chart segments no longer vanish beside tall ones.
+- The Project page's Errors block asks for no judgments when the source is Codex alone.
+- Changing the project or source closes Live's open session sheet.
+- Context's tool-results tip no longer suggests subagents for Codex sessions.
+- Context's Largest contributors keeps the ten largest tools whatever the sort.
+- Live shows "N new events" beside **Jump to latest** while Follow is off.
+- Activity's Sessions table names a session with no project "(no project)".
+- Live's wall reads "1 error", not "1 errors".
+- Accessibility:
+  - Alt+Left, Ctrl+Home and other modified keys work while a chart or tab list has focus.
+  - Error loops, Failed test runs, Closed windows and Error types have row headers.
+  - Toggletips no longer read aloud on hover. Cost, Errors and Limits use the shared **How measured** toggletip.
+  - Escape closes the work chart's and the Cost chart's tooltips wherever the focus is.
+  - Cost announces every sort.
+  - A Live wall tile's name gives its full state.
+  - Errors, Judgments and Live have one heading in every state.
+  - Focus lands on the heading when a closed sheet's opener is gone, and Tab from Activity's tabs reaches the selected panel.
+  - Forced colors: chart bars, the Session types bar and pressed controls stay visible and framed.
 
 ## [0.4.0] - 2026-11-15
 
