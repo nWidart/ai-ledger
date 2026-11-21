@@ -379,6 +379,24 @@ class UsageTest(GrokCase):
         # 0: the row's tokens are a whole turn's, not one call's, so its context is unknown (metrics.context_of: NULL).
         self.assertEqual(self.q("SELECT context_tokens FROM requests"), [(0,)])
 
+    def test_fallback_turn_after_a_known_context_shows_none(self):
+        # The newest main-thread request's context is the current one, unknown as it may be: no older context stands in.
+        from ai_ledger import live
+        path, = self.put("long-turn")
+        with open(path) as fh:
+            lines = [json.loads(x) for x in fh]
+        end = next(d for d in lines if grok.update(d).get("sessionUpdate") == "turn_completed")
+        later = json.loads(json.dumps(end))
+        grok.meta(later).update(eventId=grok.meta(later)["eventId"] + "0", agentTimestampMs=grok.meta(later)["agentTimestampMs"] + 60_000)
+        grok.update(later)["prompt_id"] = "no-calls"
+        with open(path, "a") as fh:
+            fh.write(json.dumps(later) + "\n")
+        self.ingest()
+        self.assertEqual(self.q("SELECT count(*) FILTER (WHERE context_tokens > 0), count(*) FILTER (WHERE context_tokens = 0) FROM requests"),
+                         [(5, 1)])
+        (last,) = self.con.execute("SELECT last_ts FROM sessions").fetchone()
+        self.assertIsNone(live.session(self.con.cursor(), SESSION["long-turn"], now=live.aware(last), prices={})["context"])
+
     def test_fallback_turn_shows_no_context(self):
         # A turn of millions of input tokens whose calls cannot be told: its tokens and cost count, its context is no point.
         from ai_ledger import context, live

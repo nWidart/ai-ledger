@@ -425,7 +425,7 @@ def figures(cur, sids, prices):
             SELECT session_id, sum(cost) AS cost, count(*) AS requests,
               sum(cache_read) / nullif(sum(input + cache_read + cache_5m + cache_1h), 0) AS cache_read,
               arg_max(model, ts) FILTER (WHERE NOT subagent) AS model,
-              arg_max({metrics.context_of()}, ts) FILTER (WHERE NOT subagent) AS context
+              arg_max_null({metrics.context_of()}, ts) FILTER (WHERE NOT subagent) AS context  -- the newest's, unknown or not
             FROM rq GROUP BY 1""", pparams + [list(sids)]):
         out[r.pop("session_id")].update(r)
     for sid, n, err in cur.execute("""SELECT session_id, count(*), count(*) FILTER (WHERE is_error) FROM tool_calls
