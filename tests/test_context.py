@@ -227,6 +227,15 @@ class StartingTest(unittest.TestCase):
         self.assertEqual((got["unknown"]["window"], got["unknown"]["window_share"]), (None, None))
         self.assertEqual((p["coverage"]["sessions"], p["coverage"]["with_window"]), (4, 3))
 
+    def test_grok_window_is_the_compaction_notice_s_else_the_table_s(self):
+        b = Builder(self)
+        b.session("g1", "stated", source="grok", peak=60_000, peak_model="m-long", window=256_000, compactions=1)
+        b.turn("g1", 0, 60_000, model="m-long")
+        b.session("g2", "table", source="grok", peak=60_000, peak_model="m-long")  # no compaction: the table's 2,000,000
+        b.turn("g2", 0, 60_000, model="m-long")
+        got = {r["project"]: r["window"] for r in b.payload(source="grok")["starting"]["by_project"]}
+        self.assertEqual(got, {"stated": 256_000, "table": 2_000_000})
+
     def test_window_is_the_most_common_known_window(self):
         b = Builder(self)
         for sid, peak_model, window in (("a", "m-a", None), ("b", "m-a", None), ("c", "m-nowin", 258_400), ("d", "m-nowin", None)):
@@ -619,13 +628,18 @@ class CostTest(unittest.TestCase):
 
     def test_cache_lifetime_follows_the_source(self):
         # Codex's cache lives 30 minutes, Claude Code's 5: the same pause is an expiry for one and not the other
+        # Grok's logs state no lifetime: a Grok break is never an expiry, even 2 hours on, but a model switch still is one
         b = Builder(self)
-        for sid, source, pause in (("cx10", "codex", 10), ("cx40", "codex", 40), ("cc10", "claude", 10), ("cc40", "claude", 40)):
+        for sid, source, pause in (("cx10", "codex", 10), ("cx40", "codex", 40), ("cc10", "claude", 10), ("cc40", "claude", 40),
+                                   ("gk120", "grok", 120)):
             b.session(sid, "foo", peak=60_000, source=source)
             b.turn(sid, 0, 60_000, cache_read=60_000)
             b.turn(sid, pause, 60_000, cache_read=1_000)
-        got = {r["session_id"]: (r["expired"], r["other"]) for r in b.payload()["cost"]["breaks"]}
-        self.assertEqual(got, {"cx10": (0, 1), "cx40": (1, 0), "cc10": (1, 0), "cc40": (1, 0)})
+        b.session("gksw", "foo", peak=60_000, source="grok")
+        b.turn("gksw", 0, 60_000, cache_read=60_000)
+        b.turn("gksw", 120, 60_000, cache_read=1_000, model="m-b")
+        got = {r["session_id"]: (r["model_switch"], r["expired"], r["other"]) for r in b.payload()["cost"]["breaks"]}
+        self.assertEqual(got, {"cx10": (0, 0, 1), "cx40": (0, 1, 0), "cc10": (0, 1, 0), "cc40": (0, 1, 0), "gk120": (0, 0, 1), "gksw": (1, 0, 0)})
 
     def test_break_cost_is_unknown_for_unpriced_models(self):
         b = Builder(self)
@@ -739,6 +753,64 @@ class TipsTest(unittest.TestCase):
         ev = {e["label"]: e["value"] for e in t["evidence"]}
         self.assertEqual((ev["Sessions"], ev["Highest share of the window"], ev["Windows"]), ("1", "85%", "200,000 tokens"))
         self.assertIn("new session", t["advice"])
+
+    def test_near_limit_counts_a_stated_window(self):
+        b = Builder(self)
+        b.session("x", "cdx", source="codex", peak=232_560, peak_model="m-long", window=258_400)  # 90% of 258,400, 12% of the table's
+        b.turn("x", 0, 10_000, model="m-long")
+        b.session("g", "grk", source="grok", peak=230_400, peak_model="m-long", window=256_000)  # 90% of the window its notice stated
+        b.turn("g", 0, 10_000, model="m-long")
+        t = self.tip(b.payload(), "near_limit")
+        self.assertEqual((t["matched"], {e["label"]: e["value"] for e in t["evidence"]}["Highest share of the window"]), (2, "90%"))
+
+    def test_advice_for_grok_sessions_names_no_agent_s_file_or_command(self):
+        b = Builder(self)
+        b.session("g", "grk", source="grok", peak=10_000, compactions=3)
+        b.turn("g", 0, 40_000)
+        b.call("g", "run_terminal_command", 1, 250_000)
+        p = b.payload()
+        named = ("CLAUDE.md", "AGENTS.md", "claude mcp list", "codex mcp list", "/clear", "/new", "subagent")
+        for id in ("large_start", "frequent_compactions", "large_results"):
+            advice = self.tip(p, id)["advice"]
+            for name in named:
+                self.assertNotIn(name, advice, id)
+        self.assertIn("Trim the instruction files and review the configured MCP servers", self.tip(p, "large_start")["advice"])
+        compact = self.tip(p, "frequent_compactions")["advice"]
+        self.assertIn("Start a new session between tasks", compact)
+        self.assertIn("compact before the context fills", compact)
+        self.assertEqual(self.tip(p, "large_results")["advice"], "Pipe shell output through `head`, `tail` or `grep`.")
+        b.session("v", "grk", source="grok")  # a Grok tool with no remedy of its own
+        b.turn("v", 0, 5_000)
+        b.call("v", "view_image", 1, 250_000)
+        self.assertIn("Ask for a smaller part", self.tip(b.payload(), "large_results")["advice"])
+
+    def test_advice_for_claude_code_and_grok_sessions_names_claude_code_s_commands_for_it(self):
+        b = Builder(self)
+        for sid, source in (("c", "claude"), ("g", "grok")):
+            b.session(sid, "foo", source=source, peak=10_000, compactions=3)
+            b.turn(sid, 0, 40_000)
+            b.call(sid, "Bash" if source == "claude" else "run_terminal_command", 1, 250_000)
+        p = b.payload()
+        self.assertEqual(self.tip(p, "frequent_compactions")["advice"],
+                         "Start a new session between tasks (`/clear` in Claude Code); `/compact` before the context fills, while the summary "
+                         "is still cheap; in Claude Code, hand bulk reading to a subagent, so it compacts there and not in the main thread.")
+        self.assertTrue(self.tip(p, "large_start")["advice"].endswith("compare it with `.mcp.json` or `claude mcp list` for Claude Code."))
+        self.assertIn("In Claude Code, hand bulk reading to a subagent", self.tip(p, "large_results")["advice"])
+        b.session("x", "foo", source="codex", peak=10_000, compactions=3)  # all three agents
+        b.turn("x", 0, 40_000)
+        self.assertIn("(`/clear` in Claude Code, `/new` in Codex)", self.tip(b.payload(), "frequent_compactions")["advice"])
+
+    def test_advice_for_codex_and_grok_sessions(self):
+        b = Builder(self)
+        for sid, source in (("x", "codex"), ("g", "grok")):
+            b.session(sid, "foo", source=source, peak=10_000, compactions=3)
+            b.turn(sid, 0, 40_000)
+        p = b.payload()
+        self.assertEqual(self.tip(p, "frequent_compactions")["advice"],
+                         "Start a new session between tasks (`/new` in Codex); `/compact` before the context fills, while the summary is still cheap.")
+        start = self.tip(p, "large_start")["advice"]
+        self.assertTrue(start.startswith("Trim the instruction files"))
+        self.assertTrue(start.endswith("`~/.codex/config.toml` or `codex mcp list` for Codex."))
 
     def test_large_results(self):
         b = Builder(self)
@@ -890,6 +962,7 @@ class OverheadTest(unittest.TestCase):
         self.assertIsNone(b.payload()["overhead"])
         self.assertIsNone(b.payload(project="bar")["overhead"])
         self.assertIsNone(b.payload(project="foo", source="codex")["overhead"])
+        self.assertIsNone(b.payload(project="foo", source="grok")["overhead"])
         self.assertEqual(b.payload(project="foo", source="claude")["overhead"]["session_id"], "m1")
 
     def test_latest_snapshot_of_the_project_whatever_the_range(self):
