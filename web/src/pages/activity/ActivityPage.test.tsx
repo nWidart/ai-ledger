@@ -190,6 +190,14 @@ describe("model time and output speed", () => {
     expect(document.getElementById("vitals")!.textContent).not.toMatch(/waiting on the model|running tools|n\/a tok/);
   });
 
+  it("shows a dash for tool time when the timed sessions state none", async () => {
+    serve({ ...usage, totals: { ...usage.totals, tool_ms: null } });
+    at();
+    renderApp(<ActivityPage />);
+    await loaded();
+    expect(tile("Output speed")[1]).toMatch(/waiting on the model and – running tools, in /);
+  });
+
   it("says no session records model time when Claude Code sessions in the view have none", async () => {
     serve({ ...usage, totals: { ...usage.totals, output_per_s: null, timed_sessions: 0, model_ms: 0, tool_ms: 0 } });
     at();

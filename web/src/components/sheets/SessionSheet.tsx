@@ -92,9 +92,9 @@ export function SessionSheet({ id, s, error, retry, range, pageProject, view }: 
       {/* Claude Code's cost-state line: none of these for a session without one (every Codex session). */}
       {i.runs && <>
         <Stat v={dur(i.runs.model_ms / 1000)} l={<>model time<Toggletip term="model and tool time">From Claude Code's own record of the session, subagent work included</Toggletip></>} />
-        <Stat v={dur(i.runs.tool_ms / 1000)} l="tool time" />
+        <Stat v={i.runs.tool_ms == null ? "–" : dur(i.runs.tool_ms / 1000)} l="tool time" />
         {i.runs.output_per_s != null && <Stat v={num(i.runs.output_per_s)} l="output tok/s" />}
-        <Stat v={`+${num(i.runs.lines_added)} / −${num(i.runs.lines_removed)}`} l="lines" />
+        <Stat v={i.runs.lines_added == null && i.runs.lines_removed == null ? "–" : `+${num(i.runs.lines_added)} / −${num(i.runs.lines_removed)}`} l="lines" />
       </>}
     </div>
     {s.insight && <SessionInsight i={s.insight} view={view} />}

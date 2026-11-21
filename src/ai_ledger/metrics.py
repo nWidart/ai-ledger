@@ -862,9 +862,11 @@ def speed(output, model_ms):
 def timing(cur, rq, rp):
     """Model time, tool time and output speed over the view's sessions (those with requests in rq, params rp) that record
     runs, each whole-session (runs_cte); the others count in none. session_sources: the sources of the view's sessions, which
-    say why none records model time (Codex transcripts never do)."""
+    say why none records model time (Codex transcripts never do). tool_ms is None when the timed sessions state no tool time
+    (Grok runs state none)."""
     t = rows(cur, f"""{rq}, {runs_cte("SELECT session_id FROM rq")} SELECT coalesce(sum(model_ms), 0) AS model_ms,
-        coalesce(sum(tool_ms), 0) AS tool_ms, count(*) AS timed_sessions, coalesce(sum(output), 0) AS output FROM runs""", rp)[0]
+        CASE WHEN count(*) = 0 THEN 0 ELSE sum(tool_ms) END AS tool_ms, count(*) AS timed_sessions,
+        coalesce(sum(output), 0) AS output FROM runs""", rp)[0]
     srcs = [r["source"] for r in rows(cur, f"{rq} SELECT DISTINCT source FROM rq ORDER BY 1", rp)]
     return dict(model_ms=t["model_ms"], tool_ms=t["tool_ms"], timed_sessions=t["timed_sessions"],
                 output_per_s=speed(t["output"], t["model_ms"]), session_sources=srcs)
@@ -949,7 +951,7 @@ def session_detail(cur, sid, allq, p, prices):
     info["first_ts"], info["last_ts"] = iso(info["first_ts"]), iso(info["last_ts"])
     info["context_limit"] = (prices.get(info["peak_model"]) or {}).get("context")
     info["active_s"] = (cur.execute(f"WITH {active_cte('?')} SELECT active_s FROM act", [sid, sid]).fetchone() or (None,))[0]
-    # Its runs' figures (runs_cte), None without a run: every Codex session.
+    # Its runs' figures (runs_cte), None without a run: every Codex session. A Grok run states no tool time or lines: None.
     run = rows(cur, f"WITH {runs_cte('?')} SELECT * FROM runs", [sid])
     info["runs"] = dict({k: run[0][k] for k in ("model_ms", "tool_ms", "lines_added", "lines_removed")},
                         output_per_s=speed(run[0]["output"], run[0]["model_ms"])) if run else None

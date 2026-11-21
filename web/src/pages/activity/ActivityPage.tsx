@@ -80,7 +80,7 @@ function Interrupted({ d }: { d: UsagePayload }) {
 
 /** The time note of the Output speed vital: the model and tool time. */
 const timeNote = (t: Totals): string =>
-  `${dur(t.model_ms / 1000)} waiting on the model and ${dur(t.tool_ms / 1000)} running tools, in ${plural(t.timed_sessions, "session")}.`;
+  `${dur(t.model_ms / 1000)} waiting on the model and ${t.tool_ms == null ? "–" : dur(t.tool_ms / 1000)} running tools, in ${plural(t.timed_sessions, "session")}.`;
 /** The Sessions vital's time: the median session, the active time in all and the thinking, when recorded. Thinking stands
  *  apart from Output speed: a view can record thinking but no model time. */
 const sessionTime = (t: Totals): string =>

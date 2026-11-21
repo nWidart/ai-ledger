@@ -22,8 +22,9 @@ export interface Totals extends Tokens {
   interruption_rate: number | null; tokens_per_commit: number | null; cost_per_commit: number | null; errors_per_100_calls: number | null;
   session_seconds: number; median_session_seconds: number | null; near_limit: number;
   /** Model and tool time summed over the sessions that record them (timed_sessions; Claude Code's cost-state line), whole-session;
-   *  output_per_s is those sessions' output tokens over their model time, null when there is none. */
-  model_ms: number; tool_ms: number; timed_sessions: number; output_per_s: number | null;
+   *  output_per_s is those sessions' output tokens over their model time, null when there is none. tool_ms is null when
+   *  timed sessions state no tool time (Grok's record none). */
+  model_ms: number; tool_ms: number | null; timed_sessions: number; output_per_s: number | null;
   /** The sources of the view's sessions (a session is in the view when it has requests in it), A to Z. */
   session_sources: Source[];
 }
@@ -143,7 +144,8 @@ export interface SessionInfo {
   /** From Claude Code's cost-state line, subagents included; null when the session records none (every Codex session). */
   runs: SessionRuns | null;
 }
-export interface SessionRuns { model_ms: number; tool_ms: number; lines_added: number; lines_removed: number; output_per_s: number | null }
+/** tool_ms and lines are null when the runs state none (a Grok session's). */
+export interface SessionRuns { model_ms: number; tool_ms: number | null; lines_added: number | null; lines_removed: number | null; output_per_s: number | null }
 export interface SessionModelRow extends Tokens { model: string | null; effort: string; subagent: boolean; requests: number; tokens: number; cost: number | null }
 /** The session's /insights judgment (a facet): a model's opinion, not a measurement. Name lists run most counted first. */
 export type SessionInsight = Pick<InsightSession, "outcome" | "helpfulness" | "session_type" | "brief_summary" | "friction_detail" | "friction" | "goals" | "satisfaction">;

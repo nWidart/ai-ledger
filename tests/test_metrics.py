@@ -1310,6 +1310,39 @@ class SessionRunsTest(unittest.TestCase):
         self.assertIsNone(metrics.session(self.con.cursor(), "x", prices=PRICES)["info"]["runs"])  # a Codex session records no run
 
 
+class RunsWithoutToolTimeTest(unittest.TestCase):
+    """A session whose runs state API time only, as Grok's do: tool time and lines stay None, never 0."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.con = store.open_store(os.path.join(self.tmp, "d", "x.duckdb"))
+        c = self.con.cursor()
+        store.insert(c, "sessions", ["session_id", "project", "first_ts", "last_ts", "source"],
+                     [("g", "foo", "2026-11-04 09:00:00", "2026-11-04 11:00:00", "claude")])
+        store.insert(c, "prompts", ["prompt_id", "session_id", "ts", "interrupted"], [("pg", "g", "2026-11-04 09:00:00", False)])
+        store.insert(c, "requests", ["message_id", "session_id", "ts", "model", "subagent", "input", "output", "thinking",
+                                     "cache_read", "cache_5m", "cache_1h"],
+                     [("qg", "g", "2026-11-04 09:01:00", "m-a", False, 1, 100_000, 0, 0, 0, 0)])
+        store.insert(c, "session_runs", ["session_id", "start_ms", "api_ms", "tool_ms", "lines_added", "lines_removed"],
+                     [("g", 1, 1_000_000, None, None, None)])
+
+    def tearDown(self):
+        self.con.close()
+        shutil.rmtree(self.tmp)
+
+    def test_session_detail(self):
+        info = metrics.session(self.con.cursor(), "g", prices=PRICES)["info"]
+        self.assertEqual(info["runs"], dict(model_ms=1_000_000, tool_ms=None, lines_added=None, lines_removed=None, output_per_s=100.0))
+
+    def test_totals_and_list(self):
+        u = metrics.usage(self.con.cursor(), "foo", 7, prices=PRICES, today=TODAY)
+        t = u["totals"]
+        self.assertEqual((t["model_ms"], t["tool_ms"], t["timed_sessions"], t["output_per_s"]), (1_000_000, None, 1, 100.0))
+        self.assertEqual([(r["day"], r["output_per_s"]) for r in u["speed_trend"]], [("2026-11-04", 100.0)])
+        rows = metrics.session_list(self.con.cursor(), today=TODAY)["sessions"]
+        self.assertEqual([(r["model_ms"], r["output_per_s"]) for r in rows], [(1_000_000, 100.0)])
+
+
 class SessionTimeTest(unittest.TestCase):
     """A session resumed the next day: main-thread requests and tool calls 10, 15 and 5 minutes apart, and a 22-hour
     pause between the first and second day. A subagent request in the pause doesn't end it."""

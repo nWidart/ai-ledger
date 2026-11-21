@@ -208,6 +208,17 @@ describe("SessionSheet", () => {
     expect(sheet().getAllByText(/From Claude Code's own record of the session, subagent work included/).length).toBeGreaterThan(0);
   });
 
+  it("shows a dash for the tool time and lines a session's runs do not state", async () => {
+    const info = { ...session.info, runs: { ...session.info.runs!, tool_ms: null, lines_added: null, lines_removed: null } };
+    mockApi({ "/api/session": () => ({ ...session, info }) });
+    at("?session=s1");
+    renderApp(<UsageSheets />);
+    await sheet().findByText("$16");
+    expect(sheet().getByText("model time").textContent).toMatch(/^2\.8h model time/);
+    expect(sheet().getByText("tool time").textContent).toBe("– tool time");
+    expect(sheet().getByText("lines").textContent).toBe("– lines");
+  });
+
   it("shows none of them for a session that records no model time", async () => {
     const info = { ...session.info, source: "codex" as const, runs: null };
     mockApi({ "/api/session": () => ({ ...session, info }) });
