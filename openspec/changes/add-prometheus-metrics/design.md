@@ -6,7 +6,7 @@ The app serves its pages and JSON from one `ThreadingHTTPServer` on `127.0.0.1`.
 
 The figures the pages show come from SQL over the derived tables: `metrics.requests_cte` gives each request its project, source and cost (reported cost, else the list-price estimate, else NULL); `metrics.scope` and `HELPER_SESSIONS` decide which sessions are automated; `live.sessions` derives each active session's state.
 
-The first deployment is a headless home server where the agent CLIs, AI Ledger and Prometheus run side by side; Prometheus scrapes `127.0.0.1` targets with host networking.
+The first deployment is a headless home server where the agent CLIs, AI Ledger and Prometheus run side by side; Prometheus scrapes `127.0.0.1` targets with host networking. A laptop on the same tailnet runs agents and AI Ledger too.
 
 ## Goals / Non-Goals
 
@@ -75,7 +75,18 @@ First match wins; no match is `default`. The prefix stays on the machine; only t
 
 `/metrics` sits on the existing listener behind `checked_host`. Prometheus sends the target's `host:port` as `Host`, which is `127.0.0.1:<port>` for a local target, so the check passes. It is a GET outside `/api`, so `same_site_only` lets it through, and it is not under `/api`, so no page code depends on it.
 
-- *Why not an opt-in listener on another address?* The first deployment needs none, and a second bind address is a new exposure to secure. A remote Prometheus can scrape through an SSH tunnel or a reverse proxy that sets `Host`.
+- *Why not an opt-in listener on another address?* A second bind address is a new exposure to secure, and the reverse proxy below needs none.
+
+### A second machine: `--metrics-host` behind a reverse proxy
+
+The deployment has a second machine, a laptop with its own agents and its own AI Ledger store. One AI Ledger runs per machine, each reading its own transcripts; the home server's Prometheus scrapes both, and the `instance` label tells them apart. The laptop keeps listening on `127.0.0.1` only; `tailscale serve` publishes its `/metrics` path to the tailnet. That proxy passes the tailnet name on as `Host`, which `checked_host` refuses.
+
+`--metrics-host HOST[:PORT]` (repeatable) names a `Host` value that `GET /metrics` accepts as well, matched without case. Every other route and method keeps the strict check.
+
+- *Why keep the check at all for `/metrics`?* It stops DNS rebinding: a page on an attacker's domain that resolves to `127.0.0.1` sends its own domain as `Host`. A tailnet name is one the attacker cannot point at the laptop.
+- *Why not accept any `Host` on `/metrics`?* The figures name projects and models; a rebinding page could read them.
+- *Why not a header the proxy adds, such as `X-Forwarded-Host`?* Any local client can send it; the `Host` a browser sends cannot be chosen by a page.
+- *Cost:* a laptop that sleeps shows as a down target. Its counters are store totals, so nothing is lost; the dashboard has a gap.
 
 ### No dependency
 

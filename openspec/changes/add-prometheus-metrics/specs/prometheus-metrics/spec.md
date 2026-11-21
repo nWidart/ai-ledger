@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: Serve metrics in the Prometheus text format
-The app SHALL answer `GET /metrics` on its listener with the Prometheus text exposition format, version 0.0.4, content type `text/plain; version=0.0.4; charset=utf-8`. Every metric name SHALL start with `ai_ledger_`. Every family SHALL have a `# HELP` and a `# TYPE` line. Label values SHALL be escaped as the format requires. Samples SHALL carry no timestamps. The route SHALL apply the same host check as every other route.
+The app SHALL answer `GET /metrics` on its listener with the Prometheus text exposition format, version 0.0.4, content type `text/plain; version=0.0.4; charset=utf-8`. Every metric name SHALL start with `ai_ledger_`. Every family SHALL have a `# HELP` and a `# TYPE` line. Label values SHALL be escaped as the format requires. Samples SHALL carry no timestamps. The route SHALL apply the same host check as every other route, except for the names `--metrics-host` adds.
 
 #### Scenario: Local scrape
 - **WHEN** a client sends `GET /metrics` with `Host: 127.0.0.1:8765` to an app on port 8765
@@ -14,6 +14,21 @@ The app SHALL answer `GET /metrics` on its listener with the Prometheus text exp
 #### Scenario: Label escaping
 - **WHEN** a project's name holds a double quote
 - **THEN** its label value escapes the quote with a backslash
+
+### Requirement: Accept a proxy's host on /metrics only
+`ai-ledger serve` SHALL take `--metrics-host HOST[:PORT]`, repeatable. `GET /metrics` SHALL accept a `Host` header equal to one of those values, ignoring case, as well as `127.0.0.1:<port>`. Every other route and every other method SHALL keep refusing it. A value that is not a host name with an optional port SHALL be refused at start. The app SHALL keep listening on `127.0.0.1` only.
+
+#### Scenario: Through tailscale serve
+- **WHEN** the app runs with `--metrics-host mac.example.ts.net` and a proxy sends `GET /metrics` with `Host: mac.example.ts.net`
+- **THEN** the answer is 200 with the metrics
+
+#### Scenario: Pages stay closed
+- **WHEN** the same proxy sends `GET /usage` or `GET /api/status` with `Host: mac.example.ts.net`
+- **THEN** the answer is 403
+
+#### Scenario: Not given
+- **WHEN** the app runs without `--metrics-host` and a client sends `GET /metrics` with `Host: mac.example.ts.net`
+- **THEN** the answer is 403
 
 ### Requirement: Counters are totals of the store
 Every `_total` family SHALL be the total over the whole store at scrape time. Every counter family SHALL carry `source`, `project` and `workload` labels, and an `automated` label that is `true` exactly for the sessions the pages leave out when "Include automated sessions" is off. A label set with no rows SHALL have no sample.

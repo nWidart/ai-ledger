@@ -356,7 +356,10 @@ def asset(path):
     return (full, ASSET_TYPES[ext]) if os.path.dirname(full) == base and ext in ASSET_TYPES and os.path.isfile(full) else None
 
 
-def handler(app, port=PORT):
+def handler(app, port=PORT, metrics_hosts=()):
+    """The request handler. metrics_hosts: lowercase Host values that GET /metrics accepts besides 127.0.0.1:<port>."""
+    metrics_hosts = frozenset(metrics_hosts)
+
     class Handler(BaseHTTPRequestHandler):
         def handle(self):
             """Serve the connection. A browser that drops a request (a page cancels a fetch it no longer needs) leaves nothing to
@@ -431,9 +434,12 @@ def handler(app, port=PORT):
             except (ValueError, RecursionError):
                 raise ValueError("body must be JSON") from None
 
-        def checked_host(self):
-            """Serve only 127.0.0.1; send localhost there (fix markers live in that origin); refuse other hosts."""
+        def checked_host(self, metrics=False):
+            """Serve only 127.0.0.1; send localhost there (fix markers live in that origin); refuse other hosts. A GET of
+            /metrics (metrics) also takes a --metrics-host name: the one a proxy such as tailscale serve passes on."""
             host = (self.headers.get("Host") or "").lower()
+            if metrics and host in metrics_hosts:
+                return True
             if host == f"localhost:{port}":
                 self.send(301, "", headers=[("Location", f"http://{HOST}:{port}{self.path}")])
                 return False
@@ -459,7 +465,7 @@ def handler(app, port=PORT):
             return ok
 
         def do_GET(self):
-            if not self.checked_host():
+            if not self.checked_host(metrics=urlsplit(self.path).path == "/metrics"):
                 return
             if not self.same_site_only("GET", urlsplit(self.path).path):
                 return
@@ -605,10 +611,10 @@ def can_open():
     return sys.stdout.isatty() and (sys.platform != "linux" or bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")))
 
 
-def serve(con, roots, port=PORT, open_page=False):
+def serve(con, roots, port=PORT, open_page=False, metrics_hosts=()):
     app = App(con, roots)
     try:
-        httpd = ThreadingHTTPServer((HOST, port), handler(app, port))
+        httpd = ThreadingHTTPServer((HOST, port), handler(app, port, metrics_hosts))
     except OSError as e:
         sys.exit(f"cannot listen on {HOST}:{port}: {e}; pass --port to use another port")
     loop = threading.Thread(target=app.loop, daemon=True)
@@ -628,6 +634,13 @@ def serve(con, roots, port=PORT, open_page=False):
         app.stop(loop)
 
 
+def metrics_host(value):
+    """A --metrics-host value as a Host header carries it: a name, with a port or not, lowercase."""
+    if not re.fullmatch(r"[A-Za-z0-9.-]+(:[0-9]{1,5})?", value):
+        raise argparse.ArgumentTypeError(f"not a host or host:port: {value!r}")
+    return value.lower()
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("command", nargs="?", choices=["serve", "ingest", "rebuild"], default="serve")
@@ -638,6 +651,8 @@ def main(argv=None):
     ap.add_argument("--db", help=f"database file (default {store.DEFAULT_DB})")
     ap.add_argument("--port", type=int, default=PORT, help=f"port to serve on at {HOST} (default {PORT})")
     ap.add_argument("--no-open", action="store_true", help="serve without opening the browser")
+    ap.add_argument("--metrics-host", action="append", default=[], type=metrics_host, metavar="HOST[:PORT]",
+                    help="also answer GET /metrics for this Host header, as a proxy such as tailscale serve sends it; repeatable")
     ap.add_argument("--version", action="version", version=f"ai-ledger {importlib.metadata.version('ai-ledger')}")
     a = ap.parse_args(argv)
     roots = dict(claude=a.projects, codex=a.codex, grok=a.grok, insights=a.usage_data)
@@ -650,7 +665,7 @@ def main(argv=None):
         print(e, file=sys.stderr)
         sys.exit(1)
     if a.command == "serve":
-        serve(con, roots, a.port, open_page=not a.no_open)
+        serve(con, roots, a.port, open_page=not a.no_open, metrics_hosts=a.metrics_host)
     elif a.command == "ingest":
         t = time.time()
         print(store.ingest(con, roots, log=print))

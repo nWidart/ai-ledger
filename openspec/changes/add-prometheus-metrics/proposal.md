@@ -9,6 +9,7 @@ AI Ledger already holds those figures for Claude Code, Codex and Grok. Exposing 
 ## What Changes
 
 - **`GET /metrics`.** The app serves its figures in the Prometheus text exposition format on its existing listener (`127.0.0.1`, same host check). Prometheus on the same machine scrapes it like any other target.
+- **`--metrics-host`.** For a second machine: `GET /metrics` also accepts the `Host` a reverse proxy such as `tailscale serve` passes on, and nothing else does. One AI Ledger runs per machine; one Prometheus scrapes them all.
 - **Counters from the store.** All-time totals per source, project, model and automated flag: requests, tokens by kind, estimated cost, sessions, prompts, compactions, tool calls by result, tool errors by category, commits, test runs by result, model time. A histogram gives tool-call durations per source and tool.
 - **Workloads.** An optional user file, `workloads.json` beside the store, names groups of sessions by the start of their first prompt, such as the pull-request review agents a server runs. Every series carries the session's `workload` label, `default` when no entry matches.
 - **Gauges of now.** Active sessions per source and live state, each open plan-limit window's used share and reset time, the last ingest time, whether the last ingest failed, and the app version.
@@ -38,3 +39,4 @@ None.
 - Loading past data into Prometheus (a backfill with `promtool tsdb create-blocks-from openmetrics`). On the first scrape, the whole history shows as one step; `rate()` and `increase()` are right from the second scrape on.
 - OpenTelemetry export, push gateways and remote write.
 - Listening on any address but `127.0.0.1`.
+- Merging the stores of several machines: each machine keeps its own store and its own pages.

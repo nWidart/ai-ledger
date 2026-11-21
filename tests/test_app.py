@@ -1,3 +1,4 @@
+import argparse
 import base64
 import contextlib
 import hashlib
@@ -281,7 +282,9 @@ class AppTest(unittest.TestCase):
     def test_host_check_on_the_default_and_a_custom_port(self):
         self.assertEqual(self.get("/usage", host="example.com")[0], 403)  # a foreign host, on the default port
         self.assertEqual(self.get("/assets/x.js", host="evil:8765")[0], 403)
-        httpd = ThreadingHTTPServer(("127.0.0.1", 0), app.handler(app.App(self.con, {}, pollers=[]), 8766))
+        self.assertEqual(self.get("/metrics", host="mac.example.ts.net")[0], 403)  # no --metrics-host given
+        httpd = ThreadingHTTPServer(("127.0.0.1", 0), app.handler(app.App(self.con, {}, pollers=[]), 8766,
+                                                                  [app.metrics_host("Mac.example.ts.net")]))
         threading.Thread(target=httpd.serve_forever, daemon=True).start()
         self.addCleanup(httpd.server_close)
         self.addCleanup(httpd.shutdown)
@@ -289,6 +292,12 @@ class AppTest(unittest.TestCase):
         status, headers, _ = self.get("/usage", host="localhost:8766", server=httpd)
         self.assertEqual((status, headers["Location"]), (301, "http://127.0.0.1:8766/usage"))
         self.assertEqual(self.get("/usage", host=f"127.0.0.1:{app.PORT}", server=httpd)[0], 403)
+        # A --metrics-host name opens /metrics only, whatever its case.
+        self.assertEqual(self.get("/metrics", host="mac.EXAMPLE.ts.net", server=httpd)[0], 200)
+        self.assertEqual(self.get("/api/status", host="mac.example.ts.net", server=httpd)[0], 403)
+        self.assertEqual(self.get("/usage", host="mac.example.ts.net", server=httpd)[0], 403)
+        with self.assertRaises(argparse.ArgumentTypeError):
+            app.metrics_host("mac.example.ts.net/metrics")
 
     def test_port_in_use(self):
         with socket.socket() as held:
