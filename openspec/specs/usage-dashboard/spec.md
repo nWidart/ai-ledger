@@ -527,7 +527,7 @@ The Output speed vital SHALL show a sparkline of output speed per chart bucket, 
 - **THEN** the Output speed vital draws a three-point sparkline
 
 ### Requirement: Show the workbench as tabs
-Under the vitals, Activity's Overview SHALL show its tables as tabs, in a tab list named "Activity detail": Sessions, Projects, Tools and MCP (tools, MCP servers, skills and hooks), and Loops and tests. Sessions SHALL be the default. The tabs SHALL follow the WAI-ARIA tabs pattern: one tab stop, Left and Right to move with wrap, Home and End, Enter or Space to activate.
+Under the vitals, Activity's Overview SHALL show its tables as tabs, in a tab list named "Activity detail": Sessions, Projects, Tools and MCP (tools, MCP servers, skills and hooks), and Loops and tests. Sessions SHALL be the default. The tabs SHALL follow the WAI-ARIA tabs pattern: one tab stop, Left and Right to move with wrap, Home and End, Enter or Space to activate, and the selected panel as the next tab stop.
 
 #### Scenario: Keyboard
 - **WHEN** focus is on the Sessions tab and the user presses Left, then Enter
@@ -536,6 +536,10 @@ Under the vitals, Activity's Overview SHALL show its tables as tabs, in a tab li
 #### Scenario: Default
 - **WHEN** the user opens `/usage?range=30`
 - **THEN** the Sessions tab is selected and its panel lists the sessions
+
+#### Scenario: Tab to the panel
+- **WHEN** focus is on the selected tab and the user presses Tab
+- **THEN** focus moves to the selected tab's panel
 
 ### Requirement: Keep the workbench tab in the URL
 The active tab SHALL be kept in the URL as `tab=projects`, `tab=tools` or `tab=loops`, with no key for Sessions, written without a history entry and restored on reload. An unknown tab SHALL read as Sessions.
