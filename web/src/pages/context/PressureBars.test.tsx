@@ -94,6 +94,8 @@ describe("PressureBars", () => {
     renderApp(<PressureBars fill={[{ window: W, sessions: 23, bins: [23, 0, 0, 0, 0] }]} points={many} />);
     await userEvent.click(seg(/peaked at <25%/));
     expect(document.querySelectorAll(".plist [data-session]").length).toBe(20);
+    // Each is its session's subject for the context menu, as every other session link is.
+    for (const b of document.querySelectorAll(".plist [data-session]")) expect(b.getAttribute("data-subject")).toBe(`session:${b.getAttribute("data-session")}`);
     expect(screen.getByText("and 3 more")).toBeTruthy();
   });
 

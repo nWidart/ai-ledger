@@ -20,6 +20,9 @@
 .pg-project .blk-open { font-size: .8125rem; color: var(--link); }
 .pg-project .blk-off { font-size: .8125rem; color: var(--text-secondary); }
 .pg-project .blk-lede { margin: 6px 0 0; color: var(--text-secondary); }
+/* An error type's change, as on Errors: a dotted underline says it explains itself on activation. */
+.pg-project #errors td .tt.chg { text-decoration: underline dotted; text-underline-offset: 2px; }
+.pg-project #errors td .tt.chg:hover, .pg-project #errors td .tt.chg[aria-expanded=true] { text-decoration-style: solid; }
 .pg-project .blk-lede b { color: var(--text-primary); font-weight: 600; }
 .pg-project .empty { padding: 12px 0; color: var(--text-muted); }
 .pg-project p.none { padding: 24px 0; font-size: .9375rem; }

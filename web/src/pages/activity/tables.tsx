@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { ErrorLoop, HookRow, NamedRateRow, ProjectRow, ToolKind, ToolRow, UsagePayload } from "../../api";
 import { useColors } from "../../colors";
 import { DataTable } from "../../components/DataTable";
+import { subjectAttrs } from "../../components/menu/subject";
 import { sortRows, SortTh, type SortBy } from "../../components/Sort";
 import { ProjectName } from "../../components/ProjectDot";
 import { Toned, ToneKey } from "../../components/tone";
@@ -109,7 +110,7 @@ export function LoopsList({ loops, total, range, on }: { loops: ErrorLoop[]; tot
       <div id="loops-table"><DataTable name="Error loops" region="scroll">
         <thead><tr><th scope="col">When</th><th scope="col">Project</th><th scope="col">Session</th><th scope="col">Tool</th><th scope="col" className="num">Failures</th><th scope="col"><span className="sr">Link</span></th></tr></thead>
         <tbody>{shown.length ? shown.map(l => <tr key={l.first_id}><td className="when">{when(utc(l.start_ts))}</td><td className="name"><ProjectName project={l.project} /></td>
-          <td className="when sess"><button type="button" className="cellbtn" data-session={l.session_id} title={l.title || l.session_id}
+          <td className="when sess"><button type="button" className="cellbtn" data-session={l.session_id} {...subjectAttrs("session", l.session_id)} title={l.title || l.session_id}
             onClick={() => openSessionSheet(l.session_id)}>{sessName(l)}</button>{l.title && <div className="muted small">{shortId(l.session_id)}</div>}</td>
           <td className="name" title={l.tool}>{l.tool}</td><td className="num">{num(l.failures)}</td>
           <td><a href={errorsHref(l.project, range, l.first_id)} onClick={appLink}>Open in Errors</a></td></tr>)
@@ -131,7 +132,7 @@ export function TestsList({ tests, total, range, on }: { tests: UsagePayload["fa
       <div id="tests-table"><DataTable name="Failed test runs" region="scroll">
         <thead><tr><th scope="col">When</th><th scope="col">Project</th><th scope="col">Session</th><th scope="col">Command</th><th scope="col"><span className="sr">Link</span></th></tr></thead>
         <tbody>{shown.length ? shown.map(t => <tr key={t.id}><td className="when">{when(t.ts)}</td><td className="name"><ProjectName project={t.project} /></td>
-          <td className="when sess"><button type="button" className="cellbtn" data-session={t.session_id} title={t.title || t.session_id}
+          <td className="when sess"><button type="button" className="cellbtn" data-session={t.session_id} {...subjectAttrs("session", t.session_id)} title={t.title || t.session_id}
             onClick={() => openSessionSheet(t.session_id)}>{sessName(t)}</button>{t.title && <div className="muted small">{shortId(t.session_id)}</div>}</td>
           <td className="name" title={t.command}>{t.command ? <code>{t.command}</code> : "–"}</td>
           <td><a href={errorsHref(t.project, range, t.id, { source: t.source })} onClick={appLink}>Open in Errors</a></td></tr>)

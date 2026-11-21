@@ -32,7 +32,8 @@ export function ProjectPage() {
   const usage = useKept(useApi(project ? queries.usage(want) : null), project);
   const errors = useApi(project ? queries.errors : null);
   const context = useKept(useApi(project ? queries.context(want) : null), project);
-  const insights = useKept(useApi(project ? queries.insights(want) : null), project);
+  // Codex writes no facets: with the source on Codex alone there are no judgments to ask for (the block says why).
+  const insights = useKept(useApi(project && h.source !== "codex" ? queries.insights(want) : null), project);
   const limits = useKept(useApi(project ? queries.limits(want) : null), project);
   const live = useKept(useApi(project ? queries.liveList(want) : null), project);
   const d = usage.data;
@@ -47,7 +48,7 @@ export function ProjectPage() {
   // a snapshot to measure from, and the other requests their own figures or failures.
   const idle = !!d && d.totals.requests === 0;
   // The picker lists the projects of any payload that came, so one failed request does not empty it.
-  useScopeProjects(d?.projects ?? limits.data?.projects ?? insights.data?.projects ?? []);
+  useScopeProjects(d?.projects ?? context.data?.projects ?? limits.data?.projects ?? insights.data?.projects ?? []);
 
   return (
     <main id="content" className="wrap pg-project">

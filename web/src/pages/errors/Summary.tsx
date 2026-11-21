@@ -4,7 +4,7 @@ import { HowMeasured } from "../../components/HowMeasured";
 import { ProjectDot } from "../../components/ProjectDot";
 import { num as fmt } from "../../format";
 import { useErrors } from "./context";
-import { label, RECOVERED_NOTE, summary } from "./model";
+import { label, summary } from "./model";
 
 const Vital = ({ v, l, note, cls = "" }: { v: ReactNode; l: string; note: string; cls?: string }) => (
   <div className="vital"><div className={"v " + cls}>{v}</div><div className="l">{l}</div><div className="d">{note}</div></div>
@@ -37,7 +37,7 @@ export const Summary = memo(function Summary() {
     <section className="vitals" id="kpis" aria-label="Summary">
       <Vital v={d == null ? "–" : `${d > 0 ? "+" : ""}${fmt(d, 0)}%`} l="Change" cls={d == null ? "" : d < -1 ? "delta-down" : d > 1 ? "delta-up" : ""}
         note={idle ? "No tool calls in this period." : why ? `${why}, nothing to compare.` : r0 == null || r1 == null ? "Not enough calls to compare." : `Error rate ${cmp}: ${fmt(r0, 1)}% → ${fmt(r1, 1)}%.`} />
-      <Vital v={n ? fmt(inc.n) : "–"} l="Incidents" note={n ? `${fmt(n)} error${n === 1 ? "" : "s"} in ${fmt(inc.n)} incident${inc.n === 1 ? "" : "s"}, ${fmt(inc.pct, 0)}% did not recover. ${RECOVERED_NOTE} ${fmt(types)} error types.` : "No errors in this period."} />
+      <Vital v={n ? fmt(inc.n) : "–"} l="Incidents" note={n ? `${fmt(n)} error${n === 1 ? "" : "s"} in ${fmt(inc.n)} incident${inc.n === 1 ? "" : "s"}, ${fmt(inc.pct, 0)}% did not recover. ${fmt(types)} error types.` : "No errors in this period."} />
       <Vital v={top ? m.cats[top]!.label : "–"} l="Top type" cls="txt" note={top ? `${fmt(vt.counts[top]! / n * 100, 0)}% of errors.` : "No errors in this period."} />
       <Vital v={fmt(s.nFix)} l="Fixes applied" note={`${fmt(s.withFix)} open type${s.withFix === 1 ? " has" : "s have"} a ready-made fix.`} />
     </section>

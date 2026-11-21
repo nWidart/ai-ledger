@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import type { CacheBucket, ContextPayload } from "../../api";
-import { dayAxis, scaleMargins, textScale, tipAt, useWidth } from "../../components/chart";
+import { dayAxis, scaleMargins, stackHeights, textScale, tipAt, useWidth } from "../../components/chart";
 import { ChartTable, DataTable } from "../../components/DataTable";
 import { dayLabel, dayRange, niceStep, num, pct, plural } from "../../format";
 import { BREAK_CAUSES, causesText, short } from "./context";
@@ -48,17 +48,16 @@ export function cacheSlots(series: Series): Slot[] {
 const CAUSE_NAME = Object.fromEntries(BREAK_CAUSES.map(([k, n]) => [k, n])) as Record<string, string>;
 const causeLabel = (k: string) => { const n = CAUSE_NAME[k]!; return n[0]!.toUpperCase() + n.slice(1); };
 
-/** Rects stacked up from y0, bottom first, scaled by per: a nonzero part is at least MIN_H tall, and each after the first sits SEP above the last. */
-function stack(parts: [string, number][], y0: number, per: number): { key: string; y: number; h: number }[] {
-  const out: { key: string; y: number; h: number }[] = [];
+/** Rects stacked up from y0, bottom first, scaled by per: a nonzero part is at least MIN_H tall, and each after the first sits SEP above the last.
+ *  The parts share the stack's own height (stackHeights): a thin part takes its minimum from its neighbours, so a full stack stays in its track. */
+export function stack(parts: [string, number][], y0: number, per: number): { key: string; y: number; h: number }[] {
+  const on = parts.filter(([, v]) => v > 0), vals = on.map(([, v]) => v);
+  const slots = stackHeights(vals, vals.reduce((s, v) => s + v, 0) * per, on.map((_, k) => (k ? MIN_H + SEP : MIN_H)));
   let top = y0;
-  for (const [key, v] of parts) {
-    if (v <= 0) continue;
-    const gap = out.length ? SEP : 0, h = Math.max(MIN_H, v * per - gap);
-    top -= h + gap;
-    out.push({ key, y: top, h });
-  }
-  return out;
+  return on.map(([key], k) => {
+    top -= slots[k]!;
+    return { key, y: top, h: slots[k]! - (k ? SEP : 0) };
+  });
 }
 
 /** Per day or week, the prompt tokens not read from the cache (uncached input, cache writes) as stacked bars, the cache breaks by

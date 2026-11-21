@@ -17,6 +17,7 @@ import { TokenPairs } from "../cost/TokenPairs";
 import { makeModel } from "../errors/model";
 import { sharePct } from "../limits/limits";
 import { subjectAttrs } from "../../components/menu/subject";
+import { Toggletip } from "../../components/Toggletip";
 import { ContextGrid } from "./ContextGrid";
 import { MeasureNow } from "./MeasureNow";
 import { contextGrid, errorsBlock, limitsBlock } from "./project";
@@ -82,7 +83,7 @@ function Block<T>({ id, title, page, href, off, state, also = [], children }: { 
         {off ? <span className="blk-off">{off}</span> : <a className="blk-open" href={href} onClick={appLink}>Open in {page}</a>}
       </header>
       {error && <div className="empty" role="alert">Could not load {title.toLowerCase()} ({error.message}). <button type="button" className="linkish" onClick={retry}>Retry</button></div>}
-      {data ? children(data) : !error && <p className="empty">Loading…</p>}
+      {data ? children(data) : !error && !off && <p className="empty">Loading…</p>}
     </section>
   );
 }
@@ -170,7 +171,8 @@ export function ErrorsBlock({ errors, scope }: { errors: ApiState<ErrorsPayload>
             <tbody>{e.types.map(t => <tr key={t.cid} {...subjectAttrs("category", t.cid)}>
               <th scope="row" className="name"><a href={errorsHref(scope.project, scope.range, undefined, { source: scope.source, cat: t.cid })} onClick={appLink}>{t.label}</a></th>
               <td className="num">{num(t.n)}</td><td className="num">{t.rate == null ? "–" : `${num(t.rate, 2)}%`}</td>
-              <td className={"num " + t.delta.cls} title={t.delta.title}>{t.delta.text}</td></tr>)}</tbody>
+              <td className={"num " + t.delta.cls}>{t.delta.title
+                ? <Toggletip className="chg" label={t.delta.text} name={`Change: ${t.delta.text}`}>{t.delta.title}</Toggletip> : t.delta.text}</td></tr>)}</tbody>
           </DataTable>
         </>}
       </>}
@@ -205,8 +207,11 @@ export function ContextBlock({ context, usage, scope }: { context: ApiState<Cont
  *  says why in the link's place. */
 export function InsightsBlock({ insights, scope }: { insights: ApiState<InsightsPayload>; scope: Scope }) {
   const href = judgmentsHref({ project: scope.project, range: scope.range, source: scope.source, automated: scope.auto });
+  // On Codex alone the page asks for no judgments; figures kept from another source must not show under it.
+  const codex = scope.source === "codex";
   return (
-    <Block id="insights" title="Session judgments" page="Judgments" href={href} off={scope.source === "codex" ? NO_FACETS : undefined} state={insights}>
+    <Block id="insights" title="Session judgments" page="Judgments" href={href} off={codex ? NO_FACETS : undefined}
+      state={codex ? { ...insights, data: undefined, error: undefined, loading: false } : insights}>
       {d => {
         const c = d.coverage, n = c.facets, top = d.friction_families.slice(0, FRICTION_TOP), max = top[0]?.n ?? 0;
         if (!c.analysed) return <p className="empty">No session is analysed by <code>/insights</code> in this view.</p>;

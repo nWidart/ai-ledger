@@ -16,6 +16,7 @@ import { ProjectSheet } from "../../components/sheets/ProjectSheet";
 import { mockApi } from "../../components/sheets/testing";
 import { big, num, usd } from "../../format";
 import { refreshed, renderApp, renderPage } from "../../testing";
+import { setSearch } from "../../url";
 import { ProjectPage } from "./ProjectPage";
 
 /** The fixture with the fields the grid reads (until the fixtures are regenerated): the peak's share of the window, null for none. */
@@ -77,6 +78,28 @@ describe("ProjectPage", () => {
     expect(judged.queryByRole("link", { name: /^Open in/ })).toBeNull();
     expect(judged.getByText(NO_FACETS)).toBeTruthy();
     expect(within(block("Activity")).getByRole("link", { name: /^Open in/ }).getAttribute("href")).toBe("/usage?project=foo&range=7&source=codex");
+  });
+
+  it("asks for no judgments with the source on Codex alone, and shows none kept from another source", async () => {
+    const { f } = open({}, "?project=foo&range=7");
+    await loaded();
+    expect(await within(block("Session judgments")).findByText(/analysed/)).toBeTruthy();
+    await act(async () => { setSearch({ source: "codex" }); });
+    await waitFor(() => expect(within(block("Session judgments")).getByText(NO_FACETS)).toBeTruthy());
+    const judged = block("Session judgments");
+    expect(judged.querySelector(".blk-lede")).toBeNull();
+    expect(within(judged).queryByText("Loading…")).toBeNull();
+    expect(judged.getAttribute("aria-busy")).toBeNull();
+    const urls = f.mock.calls.map(c => c[0] as string);
+    expect(urls.filter(u => u.startsWith("/api/insights") && u.includes("source=codex"))).toEqual([]);
+  });
+
+  it("lists the Context payload's projects in the scope bar when usage has not answered", async () => {
+    open({ usage: null, limits: null, insights: null, context: { ...withGrid(context, null), projects: ["foo", "ctxonly"] } });
+    await loaded();
+    await within(block("Context")).findByText("median starting context, tokens");
+    await userEvent.click(document.getElementById("fProject")!);
+    expect(screen.getAllByRole("option").map(o => o.textContent)).toContain("ctxonly");
   });
 
   describe("layout", () => {
@@ -223,6 +246,21 @@ describe("ProjectPage", () => {
       expect(rows.length).toBeLessThanOrEqual(5);
       const a = within(rows[0]!).getByRole("link");
       expect(a.getAttribute("href")).toMatch(/^\/errors\?project=foo&range=0&cat=/);
+    });
+
+    it("explains a type's change in a toggletip, as Errors does, with no hover title", async () => {
+      open({}, "?project=foo&range=0");
+      await loaded();
+      const table = await within(block("Errors")).findByRole("table", { name: "Top error types" });
+      const cells = [...table.querySelectorAll("tbody td:last-child")];
+      expect(cells.length).toBeGreaterThan(0);
+      for (const c of cells) expect(c.getAttribute("title")).toBeNull();
+      const tips = within(table).queryAllByRole("button", { name: /^Change: / });
+      // Every change with an explanation is a toggletip; one without one is plain text.
+      expect(tips.length).toBe(cells.filter(c => c.querySelector(".tt")).length);
+      expect(tips.length).toBeGreaterThan(0);
+      await userEvent.click(tips[0]!);
+      expect((await screen.findByRole("tooltip")).textContent).toBeTruthy();
     });
 
     it("says it counts automated sessions when the page leaves them out", async () => {

@@ -71,19 +71,19 @@ export function Filters({ projects, automated = false, project = true, range = t
   if (h.project && !opts.some(o => o.value === h.project)) opts.unshift({ value: h.project });
   // On the Project page, a view with no project opens Activity in its place (router.tsx, needProject).
   const clear = () => {
-    setSearch({ project: null, session: null });
+    setSearch({ project: null, session: null, sheet: null });
     document.getElementById("fProject")?.focus();
   };
   return (
     <div className="filters" role="group" aria-label="Filters">
       {project && <span className="filters-project">
-        <ProjectPicker project={h.project} options={opts} onPick={project => set({ project, session: null, inspect: null })} />
+        <ProjectPicker project={h.project} options={opts} onPick={project => set({ project, session: null, sheet: null, inspect: null })} />
         {h.project && <button type="button" className="filters-clear" aria-label="Clear project filter" title="Show all projects" onClick={clear}>✕</button>}
       </span>}
       {range && <RangeFilter />}
       {source && <div className="seg" id="fSource" role="group" aria-label="Source">
         {(["", ...SOURCES] as const).map(s => (
-          <button key={s} type="button" aria-pressed={h.source === s} onClick={() => set({ source: s, session: null, inspect: null })}>{s ? SOURCE_LABELS[s] : "All"}</button>
+          <button key={s} type="button" aria-pressed={h.source === s} onClick={() => set({ source: s, session: null, sheet: null, inspect: null })}>{s ? SOURCE_LABELS[s] : "All"}</button>
         ))}
       </div>}
       {automated && <span className="filters-auto">

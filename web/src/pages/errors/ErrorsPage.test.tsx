@@ -184,6 +184,9 @@ describe("ErrorsPage", () => {
       // x: no call before its day, so the model gives no verdict; gone has no errors and no row in the view, and still has its line.
       expect(rows).toEqual([["x · Nov 4", "–", "60.00%", "No calls before this date"], ["gone · Oct 1", "–", "0.00%", "No calls before this date"]]);
       expect(table.querySelector('tr[data-c="gone"] button')).toBeNull(); // nothing to open: no error of it in the view
+      // A row with errors in the view is its type's subject for the context menu, as the type table's rows are; gone's is none, as
+      // its Open on Errors would open nothing.
+      expect([...table.querySelectorAll("tbody tr")].map(r => r.getAttribute("data-subject"))).toEqual(["category:x", null]);
       await userEvent.click(within(table).getByRole("button", { name: "x" }));
       expect(location.search).toContain("cat=x");
       expect(document.activeElement?.id).toBe("detailTitle");
@@ -957,6 +960,9 @@ describe("ErrorsPage", () => {
       expect([...vitals.querySelectorAll(".vital .l")].map(l => l.textContent)).toEqual(["Change", "Incidents", "Top type", "Fixes applied"]);
       expect(vitals.textContent).not.toContain("60.0%");
       expect(vitals.querySelector(".vital:nth-child(3) .d")!.textContent).toMatch(/^\d+% of errors\.$/);
+      // What recovered means is said once, behind the open type's How measured, not again in the Incidents vital.
+      expect(vitals.querySelector(".vital:nth-child(2) .d")!.textContent).toMatch(/did not recover\. \d+ error types?\.$/);
+      expect(vitals.textContent).not.toContain("Recovered means");
     });
 
     it("lets the toggle hide a muted type, and the rate follows", async () => {
@@ -1381,7 +1387,7 @@ describe("ErrorsPage", () => {
   });
 
   // jsdom has no media queries, so the stylesheet is read: on a narrow screen the summary keeps every line and vital, two vitals to a row,
-  // as Activity, Cost and Insights do. No fold, no More summary.
+  // as Activity, Cost and Insights do. No fold, no More summary. The chart's hint shows at every width too, as on the other pages.
   it("shows the whole summary on a narrow screen, the vitals two to a row, with no More summary", async () => {
     await page();
     expect(document.getElementById("moreSum")).toBeNull();
@@ -1393,7 +1399,7 @@ describe("ErrorsPage", () => {
     expect(css).not.toMatch(/folded|moresum/);
     // No rule hides a summary part at any width.
     for (const [, sel, body] of css.matchAll(/([^{}]+)\{([^{}]*)\}/g))
-      if (/display\s*:\s*none/.test(body!)) expect(sel, sel).not.toMatch(/\.vitals|\.vital\b|\.sub\b|#gen|#uncat|\.lede/);
+      if (/display\s*:\s*none/.test(body!)) expect(sel, sel).not.toMatch(/\.vitals|\.vital\b|\.sub\b|#gen|#uncat|\.lede|\.chart-card \.hint/);
     const narrow = css.match(/@media \(max-width: 56\.25em\) \{([\s\S]*?)\n\}/)![1]!;
     expect(narrow).toMatch(/\.pg-errors \.vitals \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\); \}/);
   });
@@ -1530,6 +1536,8 @@ describe("ErrorsPage", () => {
     it("opens from an example's tool name in the page's view, automated sessions included, and closing keeps the open type", async () => {
       history.replaceState(null, "", "/errors?range=7&cat=x");
       await page();
+      // The tool name is the tool's subject for the context menu.
+      expect(within(document.getElementById("ex-t07")!).getByRole("button", { name: "Bash" }).getAttribute("data-subject")).toBe("tool:Bash");
       const dlg = await openBash();
       expect(within(dlg).queryByRole("button", { name: "← Back" })).toBeNull(); // nothing under it on a wide screen
       expect(location.search).toBe("?range=7&tool=Bash&cat=x");

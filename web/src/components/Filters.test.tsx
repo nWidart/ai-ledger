@@ -1,5 +1,5 @@
 import { Profiler } from "react";
-import { act, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { setSearch } from "../url";
@@ -195,6 +195,24 @@ describe("Filters Brief link and clear button", () => {
     expect(document.activeElement).toBe(screen.getByRole("combobox", { name: "Project" }));
     expect(clear()).toBeNull();
     expect(screen.queryByRole("link")).toBeNull();
+  });
+
+  it("closes Live's session sheet on a project or source change, as it closes the session sheet elsewhere", async () => {
+    history.replaceState(null, "", "/live?project=foo&session=s1&sheet=s2");
+    renderApp(<Filters projects={["foo", "bar"]} />);
+    await userEvent.click(clear()!);
+    expect(location.search).toBe("");
+    cleanup();
+    history.replaceState(null, "", "/live?sheet=s2");
+    renderApp(<Filters projects={["foo", "bar"]} />);
+    await userEvent.click(screen.getByRole("button", { name: "Codex" }));
+    expect(location.search).toBe("?source=codex");
+    cleanup();
+    history.replaceState(null, "", "/live?project=foo&sheet=s2");
+    renderApp(<Filters projects={["foo", "bar"]} />);
+    await userEvent.click(screen.getByRole("combobox", { name: "Project" }));
+    await userEvent.click(screen.getByRole("option", { name: "bar" }));
+    expect(location.search).toBe("?project=bar");
   });
 
   it("clears the Activity day with the project filter", async () => {

@@ -1,5 +1,6 @@
 import { memo, useId, useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { isCancelledError, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { subjectAttrs } from "../../components/menu/subject";
 import { ProjectName } from "../../components/ProjectDot";
 import { openToolSheet, sessionLink } from "../../components/sheets/session";
 import { dur, num as fmt, plural, when as at } from "../../format";
@@ -79,7 +80,7 @@ export const Example = memo(function Example({ e }: { e: Err }) {
       id={e.id ? "ex-" + e.id : undefined} data-cut={cut ? "" : undefined} onClick={click}>
       <div className="meta">
         <span>{at(e.ts)}</span>
-        <ProjectName project={e.p} /><button type="button" className="linkish" title={`Inspect ${e.t}`} onClick={() => openToolSheet("tool", e.t)}>{e.t}</button>{e.sub ? <span>subagent</span> : null}
+        <ProjectName project={e.p} /><button type="button" className="linkish" {...subjectAttrs("tool", e.t)} title={`Inspect ${e.t}`} onClick={() => openToolSheet("tool", e.t)}>{e.t}</button>{e.sub ? <span>subagent</span> : null}
         {e.s && <a href={sessionHref(x.v, e.s)} title={`Open session ${e.s}`} {...sessionLink(e.s)}>#{e.s.slice(0, 8)}</a>}
         {e.id && <span className="link"><a href={viewLink(x.v, e.id)} data-link={e.id} title="Permalink to this error">🔗 Link</a>
           <button type="button" data-copy={e.id} onClick={copy}>{copied === "ok" ? "Copied ✓" : copied === "fail" ? "Copy failed" : "Copy URL"}</button>
