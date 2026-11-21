@@ -1,7 +1,8 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import { FEW_CALLS, LOW_CALLS, lowVolume, textScale } from "../../components/chart";
-import { ChartTable, DataTable } from "../../components/DataTable";
+import { ChartTable } from "../../components/DataTable";
 import { modified } from "../../components/keys";
+import { Table, type Column } from "../../components/table/Table";
 import { num as fmt, niceStep } from "../../format";
 import { useErrors } from "./context";
 import { bucketLabel, bucketOf, chartData, idle, incSummary, label, linePath, noCalls, pointRows, pointText, pointWhen, selectable, shortLabel, sumCalls, TOPN, typeColor } from "./model";
@@ -11,6 +12,9 @@ const H = 320, MR = 10, rH = 100;
 const T = ({ x, y, a = "end", strong, children }: { x: number; y: number; a?: "start" | "middle" | "end"; strong?: boolean; children: ReactNode }) => (
   <text x={x} y={y} textAnchor={a} fontSize={11 * textScale()} fill={strong ? "var(--text-secondary)" : "var(--text-muted)"} fontWeight={strong ? 500 : undefined}>{children}</text>
 );
+
+/** A row of the chart's data table: a bucket, its rate and whether it has few calls. */
+interface TableRow { p: ReturnType<typeof chartData>["pts"][number]; rate: number | null | undefined; low: boolean }
 
 export const RateChart = memo(function RateChart() {
   const { m, v, f, vt, fixes, pick, after, update, say } = useErrors();
@@ -41,8 +45,20 @@ export const RateChart = memo(function RateChart() {
   const n = keys.length, iw = (W || 800) - ML - MR, bw = iw / n, cx = (i: number) => ML + (i + .5) * bw;
   // The rate panel shows the selected type's rate on its own scale, or the overall rate. Buckets with under LOW_CALLS calls
   // (when others have more) are marked and left out of the scale: one quiet day's 3 of 12 can't flatten the rest.
-  const rates = pts.map(p => (cat ? (p.c ? (p.byAll[cat] || 0) / p.c * 100 : null) : p.r));
-  const low = lowVolume(pts.map(p => p.c));
+  const rates = useMemo(() => pts.map(p => (cat ? (p.c ? (p.byAll[cat] || 0) / p.c * 100 : null) : p.r)), [pts, cat]);
+  const low = useMemo(() => lowVolume(pts.map(p => p.c)), [pts]);
+  // The chart's data table: per bucket its calls, failed calls and rate (the selected type's when one is), then each type layer and Other.
+  const tableRows = useMemo(() => pts.map((p, i): TableRow => ({ p, rate: rates[i], low: !!low[i] })), [pts, rates, low]);
+  const other = pts.some(p => p.other);
+  const columns = useMemo((): Column<TableRow>[] => [
+    { id: "when", header: per === "week" ? "Week" : "Day", cell: r => `${pointWhen(v, r.p)}${r.p.k === v.at && !r.p.to ? " (selected)" : ""}` },
+    { id: "calls", header: "Tool calls", align: "num", cell: r => fmt(r.p.c) },
+    { id: "failed", header: "Failed calls", align: "num", cell: r => fmt(r.p.e) },
+    { id: "rate", header: cat ? `${shortLabel(m.cats[cat]!.label)} rate` : "Error rate", align: "num",
+      cell: r => r.rate == null ? "–" : `${fmt(r.rate, 2)}%${r.low ? ` (${FEW_CALLS})` : ""}` },
+    ...vt.layers.map((c): Column<TableRow> => ({ id: `type:${c}`, header: shortLabel(m.cats[c]!.label), align: "num", cell: r => fmt(r.p.by[c] || 0) })),
+    ...(other ? [{ id: "other", header: "Other types", align: "num", cell: (r: TableRow) => fmt(r.p.other) } as const] : []),
+  ], [m, v, vt, cat, per, other]);
   const rMax0 = Math.max(.1, ...rates.map((r, i) => (low[i] ? 0 : r || 0))) * 1.1, rStep = niceStep(rMax0 / 3), rMax = Math.ceil(rMax0 / rStep) * rStep;
   const yR = (x: number) => rT + rH - Math.min(x, rMax) / rMax * rH;
   // Counts are whole: whole steps.
@@ -199,16 +215,8 @@ export const RateChart = memo(function RateChart() {
   /** The chart's text alternative, as under Activity's and Cost's charts: per bucket its calls, failed calls and the rate the line draws
    *  (the selected type's when one is), then the failed calls of each type layer and Other. */
   function table() {
-    const other = pts.some(p => p.other), rateHead = cat ? `${shortLabel(m.cats[cat]!.label)} rate` : "Error rate";
-    return <ChartTable><DataTable name={`Failed tool calls by type and ${cat ? `${m.cats[cat]!.label} rate` : "error rate"} per ${per}`} region="scroll tall">
-      <thead><tr><th scope="col">{per === "week" ? "Week" : "Day"}</th><th scope="col" className="num">Tool calls</th><th scope="col" className="num">Failed calls</th>
-        <th scope="col" className="num">{rateHead}</th>{vt.layers.map(c => <th key={c} scope="col" className="num">{shortLabel(m.cats[c]!.label)}</th>)}
-        {other && <th scope="col" className="num">Other types</th>}</tr></thead>
-      <tbody>{pts.map((p, i) => <tr key={p.k}><th scope="row">{pointWhen(v, p)}{p.k === v.at && !p.to ? " (selected)" : ""}</th>
-        <td className="num">{fmt(p.c)}</td><td className="num">{fmt(p.e)}</td>
-        <td className="num">{rates[i] == null ? "–" : `${fmt(rates[i], 2)}%`}{low[i] && rates[i] != null ? ` (${FEW_CALLS})` : ""}</td>
-        {vt.layers.map(c => <td key={c} className="num">{fmt(p.by[c] || 0)}</td>)}{other && <td className="num">{fmt(p.other)}</td>}</tr>)}</tbody>
-    </DataTable></ChartTable>;
+    return <ChartTable><Table name={`Failed tool calls by type and ${cat ? `${m.cats[cat]!.label} rate` : "error rate"} per ${per}`} region="scroll tall"
+      rows={tableRows} columns={columns} rowId={r => r.p.k} /></ChartTable>;
   }
 
   /** Each type is a button that selects it; Other and the rate line are keys. */

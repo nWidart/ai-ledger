@@ -3,8 +3,9 @@ import type { DailyWorkRow, UsagePayload } from "../../api";
 import { useColors } from "../../colors";
 import { dayLabel, niceStep, num, plural } from "../../format";
 import { dayAxis, FEW_CALLS, LOW_CALLS, lowVolume, peakLabelAt, roomForLabels, stackHeights, textScale, tipAt, useWidth } from "../../components/chart";
-import { ChartTable, DataTable } from "../../components/DataTable";
+import { ChartTable } from "../../components/DataTable";
 import { HowMeasured } from "../../components/HowMeasured";
+import { Table, type Column } from "../../components/table/Table";
 import type { Kind } from "../cost/cost";
 import { busy, failRate, METRICS, monday, workBuckets, workKinds, workStack, type WorkMetric } from "./work";
 import { modified } from "../../components/keys";
@@ -67,6 +68,9 @@ interface WorkBarsProps extends Omit<WorkPanelProps, "d"> {
   stack: Record<string, number>[];
 }
 
+/** A row of the chart's data table: a bucket with its label, its stacked parts and whether it has few calls. */
+interface WorkRow { p: DailyWorkRow; label: string; stack: Record<string, number> | undefined; few: boolean }
+
 /** The rate track's scale: its top (a nice value over the highest steady rate) and the digits its label needs. Buckets with few
  *  calls (when others have enough) are left out, so one quiet day's 2 of 4 can't flatten the busy days. */
 export function rateScale(rates: readonly (number | null)[], low: readonly boolean[]): { top: number; digits: number } {
@@ -113,6 +117,14 @@ function WorkBars({ rows, week, view, kinds, stack, metric, onMetric, selected, 
   const rs = rateScale(rates, low), ry = (v: number) => rt + rh - Math.min(v, rs.top) / rs.top * rh;
   const line = rates.map((v, i) => (v == null ? "" : `${rates[i - 1] != null ? "L" : "M"}${a.cx(i).toFixed(1)},${ry(v).toFixed(1)}`)).join("");
   const lone = rates.flatMap((v, i) => (v != null && !low[i] && rates[i - 1] == null && rates[i + 1] == null ? [i] : [])); // no line reaches these
+  // The data table: one row per bucket, its figure per kind (by project when stacked), the total and the rate.
+  const tableRows = useMemo(() => rows.map((p, i): WorkRow => ({ p, label: bucketLabel(p.day, week, true, view), stack: stack[i], few: !!low[i] })), [rows, week, view, stack, low]);
+  const columns = useMemo((): Column<WorkRow>[] => [
+    { id: "day", header: week ? "Week" : "Day", cell: r => r.label },
+    ...kinds.map((k): Column<WorkRow> => ({ id: `kind:${k.k}`, header: k.label, align: "num", cell: r => num(r.stack?.[k.k] ?? 0) })),
+    { id: "total", header: kinds.length ? "Total" : M.label, align: "num", cell: r => num(r.p[metric]) },
+    { id: "rate", header: "Errors per 100 calls", align: "num", cell: r => num(failRate(r.p), 1) + (r.few ? ` (${FEW_CALLS})` : "") },
+  ], [week, kinds, M.label, metric]);
   const plain = useMemo<Kind>(() => ({ k: metric, label: M.label, c: BAR }), [metric, M.label]);
   // A bar's parts, bottom first; zero parts left out.
   const parts = useCallback((i: number): [Kind, number][] =>
@@ -244,12 +256,8 @@ function WorkBars({ rows, week, view, kinds, stack, metric, onMetric, selected, 
       <div className="sr" aria-live="polite">{cur ? `${name(cur.day)}: ${bucketText(cur)}${low[at!] ? `, ${FEW_CALLS}` : ""}`
         + (curParts.length ? `. ${M.label} by project: ${curParts.map(([k, v]) => `${k.label} ${num(v)}`).join(", ")}` : "") : said}</div>
       {/* The chart's text alternative: the measure per bucket (by project when stacked), its total and errors per 100 tool calls. */}
-      <ChartTable><DataTable name={`${M.label}${kinds.length ? " by project" : ""} and errors per 100 tool calls per ${unit}`} region="scroll tall">
-        <thead><tr><th scope="col">{week ? "Week" : "Day"}</th>{kinds.map(k => <th key={k.k} scope="col" className="num">{k.label}</th>)}
-          <th scope="col" className="num">{kinds.length ? "Total" : M.label}</th><th scope="col" className="num">Errors per 100 calls</th></tr></thead>
-        <tbody>{rows.map((p, i) => <tr key={p.day}><th scope="row">{name(p.day)}</th>
-          {kinds.map(k => <td key={k.k} className="num">{num(stack[i]?.[k.k] ?? 0)}</td>)}<td className="num">{num(p[metric])}</td><td className="num">{num(failRate(p), 1)}{low[i] ? ` (${FEW_CALLS})` : ""}</td></tr>)}</tbody>
-      </DataTable></ChartTable>
+      <ChartTable><Table name={`${M.label}${kinds.length ? " by project" : ""} and errors per 100 tool calls per ${unit}`} region="scroll tall"
+        rows={tableRows} columns={columns} rowId={r => r.p.day} /></ChartTable>
     </section>
   );
 }
