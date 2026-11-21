@@ -48,13 +48,19 @@ const Row = ({ k, v }: { k: Kind; v: string }) => <div className="row"><span><i 
  *  The figures and the drawing are costDaily.ts's; this component holds the heading, the switches, the legend, the words of the
  *  reading and the data table, and draws through <EChart>, which owns the keys, the pointer, the tooltip and the readout. */
 export function CostChart({ d, metric, onMetric, hidden, onHidden, scale, onScale, stack, onStack, onProject, onSource, onDay }: CostChartProps) {
-  useColors();
+  const color = useColors();
   const legend = useRef<HTMLDivElement>(null);
   // A project or agent key re-renders the legend for the new view: its first key is the way back.
   const refocus = useRef(false);
   useEffect(() => { if (refocus.current) { refocus.current = false; legend.current?.querySelector("button")?.focus(); } }, [d]);
 
-  const m = useMemo(() => costModel(d, metric, hidden, stack, scale), [d, metric, hidden, stack, scale]);
+  // The projects' hues, as costKinds reads them: the page and the nav's status poll set the order, which can come after the
+  // payload, so the model is made again then. A new drawing of the same view: the reading and the zoom stay.
+  const hues = useMemo(() => [d.project, ...d.by_project.map(p => p.project)], [d]).map(color).join(" ");
+  const m = useMemo(() => costModel(d, metric, hidden, stack, scale),
+    // hues: a new project order is a new drawing
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [d, metric, hidden, stack, scale, hues]);
   // One function per set of figures: a new one is drawn. Newer data and a hidden kind give one too, in the same view.
   const option = useCallback((env: ChartEnv) => costOption(m, env), [m]);
   const { cost, share, none, kinds, days: pts, totals, showAvg, zoom, avg, live, peak } = m;
