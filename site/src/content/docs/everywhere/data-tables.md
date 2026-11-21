@@ -42,6 +42,27 @@ A column whose meaning needs a note has a toggletip beside its header. The toggl
 
 Errors' type table also has a "Filter types…" field that lists the types whose label or id contains the text, and announces "N of M types".
 
+## Columns
+
+Activity's Sessions table lets you choose its columns. Every other table shows all of its columns.
+
+Select **Columns** beside the search. A list opens with one checkbox per column, in the table's order. Session is not in the list: it always shows.
+
+A box is ticked when its column shows in the window now. On a narrow window the table hides its least needed columns by width, and their boxes read unticked.
+
+- **Untick** a box to hide its column at every width.
+- **Tick** a column the width hides to keep it at every width. The table scrolls sideways in its region when its columns do not fit.
+- **Tick** a column you hid, at a width that shows it, and it hides by width again, as before your choice.
+- **Reset columns** drops every choice, so each column shows or hides by width.
+
+The button reads "Columns, 2 hidden" while you hide two columns.
+
+The sorted column always shows, even a column you hid; your choice applies again when the sort moves to another column. Unticking the sorted column hides it and takes it out of the sort, so the list returns to its own order.
+
+The browser keeps the choice for every view and after a reload. The URL does not hold it: a shared link opens at the reader's own columns. When the browser blocks site storage, the choice lasts until you reload the page.
+
+From the keyboard, press Enter on **Columns** to open the list and move the focus into it. Tab moves through the checkboxes and Space ticks or unticks one; the list stays open. Esc or a click outside the list closes it and returns the focus to the button. A screen reader hears the button as collapsed or expanded, and the list as a dialog named "Columns".
+
 ## Export
 
 The Cost page's project table and session table have **Download CSV** and **Copy** buttons. Download CSV saves the rows as shown as a `.csv` file. Copy puts the same rows, tab-separated, on the clipboard and reads "Copied" or "Copy failed".
