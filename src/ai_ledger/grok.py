@@ -35,6 +35,11 @@ def ids(path):
     return os.path.basename(folder), unquote(os.path.basename(os.path.dirname(folder)))
 
 
+def grok_home(path):
+    """The Grok home of session log path: the folder that holds sessions/."""
+    return os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(path))))
+
+
 def params(d):
     p = d.get("params") if isinstance(d, dict) else None
     return p if isinstance(p, dict) else {}
@@ -358,16 +363,45 @@ class GrokDeriver(store.Deriver):
         """Make spawned session child this session's subagent work when its lines were stored as a session of their own,
         as happens when its log was read before this one: its lines move here as a rebuild places them, its tool calls
         and hooks move here as subagent work, and its session, requests, runs, prompts and titles go (this session's
-        turns already hold its usage). Nothing to do for a child placed already or not read yet."""
+        turns already hold its usage). Nothing to do for a child placed already or not read yet.
+
+        The id comes from a transcript line, so only a Grok session is adopted: its session row's source is grok and its
+        own log is a Grok file of the same Grok home as this file. Only the Grok files of that home whose lines are the
+        child's (its log, and those of subagents placed under it) move. A child that is this session or one of its
+        spawners is refused: no cycle."""
         cur = self.cur
-        if not child or child == self.sid or not cur.execute(
-                "SELECT 1 FROM raw_lines WHERE session_id = ? AND NOT subagent LIMIT 1", [child]).fetchone():
+        if not child or child in self.ancestors():
             return
-        cur.execute("UPDATE raw_lines SET session_id = ?, subagent = true WHERE session_id = ?", [self.sid, child])
+        row = cur.execute("SELECT source FROM sessions WHERE session_id = ?", [child]).fetchone()
+        if not row or row[0] != "grok":
+            return
+        home = grok_home(self.path)
+        files = [f for (f,) in cur.execute("SELECT DISTINCT r.file FROM raw_lines r JOIN files f ON f.path = r.file "
+                                           "WHERE r.session_id = ? AND f.source = 'grok'", [child]).fetchall()
+                 if grok_home(f) == home]
+        if not any(ids(f)[0] == child for f in files):
+            return
+        cur.execute("UPDATE raw_lines SET session_id = ?, subagent = true WHERE session_id = ? AND list_contains(?, file)",
+                    [self.sid, child, files])
         for table in ("sessions", "requests", "session_runs", "prompts", "session_titles"):
             cur.execute(f"DELETE FROM {table} WHERE session_id = ?", [child])
         cur.execute("UPDATE tool_calls SET session_id = ?, subagent = true WHERE session_id = ?", [self.sid, child])
         cur.execute("UPDATE hooks SET session_id = ? WHERE session_id = ?", [self.sid, child])
+
+    def ancestors(self):
+        """This file's session, the session its lines belong to, and every Grok session that spawned one of them, as the
+        stored subagent_spawned lines tell."""
+        seen, todo = {ids(self.path)[0], self.sid}, [ids(self.path)[0], self.sid]
+        while todo:
+            for sid, f in self.cur.execute(
+                    "SELECT r.session_id, r.file FROM raw_lines r JOIN files f ON f.path = r.file AND f.source = 'grok' "
+                    "WHERE r.type = 'subagent_spawned' AND r.parsed "
+                    "AND json_extract_string(r.json, '$.params.update.child_session_id') = ?", [todo.pop()]).fetchall():
+                for a in (sid, ids(f)[0]):
+                    if a not in seen:
+                        seen.add(a)
+                        todo.append(a)
+        return seen
 
     def tool_call(self, u, ts):
         tid = u["toolCallId"]

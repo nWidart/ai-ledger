@@ -463,6 +463,59 @@ class SubagentTest(GrokCase):
         self.assertEqual({t: self.q(f"SELECT * FROM {t} ORDER BY ALL") for t in store.DERIVED}, healed)
         self.assertEqual(self.q("SELECT key, session_id, subagent FROM raw_lines ORDER BY key"), placed)
 
+    def test_spawn_line_naming_another_source_changes_nothing(self):
+        # A Grok line can name any id: a Claude Code or Codex session it names keeps all its rows.
+        from test_codex import LIVE, fixture
+        from test_derive import assistant, prompt, result, tool_use
+        self.roots = dict(claude=self.root, codex=os.path.join(self.tmp, "codex"), grok=self.home)
+        self.write("a.jsonl", prompt("u1", "2026-11-01T10:00:00Z", "p1", "go")
+                   + assistant("a1", "m1", "2026-11-01T10:00:01Z", [tool_use("t1", "Bash", command="x")])
+                   + result("r1", "2026-11-01T10:00:02Z", "t1", "Exit code 1", error=True)
+                   + line(type="attachment", uuid="h1", timestamp="2026-11-01T10:00:04Z", sessionId="s1",
+                          attachment=dict(type="hook_success", hookName="PostToolUse:Bash", command="lint", durationMs=12)))
+        name, text = fixture("v0156_commit")
+        os.makedirs(os.path.join(self.roots["codex"], LIVE))
+        with open(os.path.join(self.roots["codex"], LIVE, name), "w") as fh:
+            fh.write(text)
+        self.ingest()
+        others = [r[0] for r in self.q("SELECT session_id FROM sessions ORDER BY source")]
+        self.assertEqual(len(others), 2)
+        tables = ("raw_lines", "sessions", "requests", "session_runs", "prompts", "session_titles", "tool_calls", "hooks")
+        before = {t: self.q(f"SELECT * FROM {t} WHERE session_id IN (?, ?) ORDER BY ALL", *others) for t in tables}
+        parent, child = self.put("probe")
+        os.remove(child)
+
+        def change(d):
+            u = grok.update(d)
+            if u.get("sessionUpdate") == "subagent_spawned":
+                spawned = json.loads(json.dumps(d))
+                u["child_session_id"] = others[0]
+                grok.meta(spawned)["eventId"] += "0"
+                grok.update(spawned)["child_session_id"] = others[1]
+                extra.append(spawned)
+        extra = []
+        rewrite(parent, change)
+        with open(parent, "a") as fh:
+            fh.writelines(json.dumps(d) + "\n" for d in extra)
+        self.ingest()
+        self.assertEqual(self.q("SELECT count(*) FROM raw_lines WHERE type = 'subagent_spawned'"), [(2,)])
+        self.assertEqual({t: self.q(f"SELECT * FROM {t} WHERE session_id IN (?, ?) ORDER BY ALL", *others) for t in tables}, before)
+
+    def test_spawn_line_naming_its_own_spawner_changes_nothing(self):
+        # A child that names its parent as its own child: no cycle, the parent stays a session of its own.
+        parent, child = self.put("probe")
+        spawn = next(json.loads(x) for x in open(parent) if '"subagent_spawned"' in x)
+        back = json.loads(json.dumps(spawn))
+        grok.params(back)["sessionId"] = CHILD
+        grok.meta(back)["eventId"] = f"{CHILD}-999"
+        grok.update(back)["child_session_id"] = SESSION["probe"]
+        with open(child, "a") as fh:
+            fh.write(json.dumps(back) + "\n")
+        self.ingest()
+        self.assertEqual(self.q("SELECT session_id FROM sessions"), [(SESSION["probe"],)])
+        self.assertEqual(self.q("SELECT DISTINCT session_id, subagent FROM raw_lines WHERE file = ?", parent), [(SESSION["probe"], False)])
+        self.assertEqual(self.q("SELECT count(*) FROM requests"), [(3,)])
+
     def test_session_spawned_by_none_is_its_own(self):
         self.put("long-turn")
         self.ingest()
