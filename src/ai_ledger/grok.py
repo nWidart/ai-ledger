@@ -135,6 +135,21 @@ def cost_of(u):
     return ticks / 1e10 if isinstance(ticks, (int, float)) and not isinstance(ticks, bool) else None
 
 
+def model_costs(usage, models):
+    """{model: USD} of a turn whose usage is usage and whose per-model usages are models. The turn's cost is the bill:
+    a model's own cost stands when it states one, and the turn's cost less those is shared over the models that state
+    none, by their tokens (equally when none has any), so the models add up to the turn's cost whenever it states one."""
+    costs = {m: cost_of(mu) for m, mu in models.items()}
+    total, missing = cost_of(usage), [m for m, c in costs.items() if c is None]
+    if total is None or not missing:
+        return costs
+    rest = total - sum(c for c in costs.values() if c is not None)
+    weights = [sum(counts(models[m])[i] for i in (0, 1, 3, 4)) for m in missing]  # input, output, cache read and write
+    weights = weights if sum(weights) > 0 else [1] * len(missing)
+    shares = [rest * w / sum(weights) for w in weights[:-1]]
+    return costs | dict(zip(missing, shares + [rest - sum(shares)]))
+
+
 def chunk_text(u):
     """The text of a user, agent message or thought chunk update ({content: {type: text, text}}), else ""."""
     c = u.get("content")
@@ -449,17 +464,18 @@ class GrokDeriver(store.Deriver):
         by_model = usage.get("modelUsage") if isinstance(usage.get("modelUsage"), dict) else {}
         models = {k: v for k, v in by_model.items() if isinstance(v, dict)} or {None: usage}
         calls = self.calls(d, pid) if pid and len(models) == 1 else []
+        billed = model_costs(usage, models)
         if not calls:
             for model, mu in models.items():
                 mid = f"{key(d, self.path, 0)}:{model or ''}"
-                self.request(mid, ts, model, counts(mu), cost_of(mu), stop)
+                self.request(mid, ts, model, counts(mu), billed[model], stop)
             return
         (model, mu), = models.items()
         weights = [max(size, 0) for _, size in calls]
         if sum(weights) <= 0:  # no line stated a context size: equal shares
             weights = [1] * len(calls)
         shares = list(zip(*(split(n, weights) for n in counts(mu))))  # one tuple of TOKEN_KINDS per call
-        cost = cost_of(mu)
+        cost = billed[model]
         costs = [None] * len(calls) if cost is None else [cost * w / sum(weights) for w in weights[:-1]]
         if cost is not None:
             costs.append(cost - sum(costs))  # the last call takes the rest, so the calls add up to the turn's cost

@@ -292,6 +292,39 @@ class UsageTest(GrokCase):
         self.assertNotEqual(got, [r[0] for r in self.q("SELECT input + cache_read + cache_5m + cache_1h FROM requests "
                                                        f"WHERE input + cache_read >= {context.START_MIN_TOKENS} ORDER BY ts")])
 
+    def test_cost_of_the_turn_when_its_model_states_none(self):
+        path, = self.put("long-turn")
+
+        def change(d):
+            u = grok.update(d)
+            if u.get("sessionUpdate") == "turn_completed":
+                for mu in u["usage"]["modelUsage"].values():
+                    del mu["costUsdTicks"]
+        rewrite(path, change)
+        self.ingest()
+        self.assertAlmostEqual(self.q("SELECT sum(reported_cost) FROM requests")[0][0], 0.1805245, places=9)
+        self.assertEqual(self.q("SELECT count(*) FROM requests WHERE reported_cost IS NULL"), [(0,)])
+
+    def test_cost_of_the_turn_shared_over_models_that_state_none(self):
+        # Two models, one without a cost: it takes the rest of the turn's cost, so the requests add up to the turn's.
+        path, = self.put("long-turn")
+
+        def change(d):
+            u = grok.update(d)
+            if u.get("sessionUpdate") == "turn_completed":
+                usage = u["usage"]
+                usage["costUsdTicks"] = 1_000_000_000  # $0.10
+                usage["modelUsage"] = {"a": dict(inputTokens=300, outputTokens=0, costUsdTicks=400_000_000),
+                                       "b": dict(inputTokens=100, outputTokens=0), "c": dict(inputTokens=200, outputTokens=0)}
+        rewrite(path, change)
+        self.ingest()
+        got = dict(self.q("SELECT model, reported_cost FROM requests"))
+        self.assertEqual(set(got), {"a", "b", "c"})
+        self.assertAlmostEqual(got["a"], 0.04)
+        self.assertAlmostEqual(got["b"], 0.02)  # 0.06 left, shared by tokens: 100 to 200
+        self.assertAlmostEqual(got["c"], 0.04)
+        self.assertAlmostEqual(sum(got.values()), 0.1)
+
     def test_call_figures_that_are_text_state_no_call(self):
         # "12" is no streamStartMs: a numeric string would make a call at the Unix epoch. The turn is then one request.
         path, = self.put("long-turn")

@@ -66,7 +66,11 @@ A Grok turn's counts SHALL map onto the shared token columns as: uncached input 
 - **THEN** its requests add up to 55,645 uncached input, 41,600 cache read, 459 output and 230 thinking, 97,704 tokens in all, on model `grok-4.7-build`
 
 ### Requirement: Keep the cost Grok reports
-Each request of a Grok turn SHALL carry a share of the cost the turn reports (`costUsdTicks`, where 10,000,000,000 ticks are one dollar), split as the tokens are, so that the requests add up to the turn's cost.
+Each request of a Grok turn SHALL carry a share of the cost the turn reports (`costUsdTicks`, where 10,000,000,000 ticks are one dollar), split as the tokens are, so that the requests add up to the turn's cost. A model's own cost SHALL stand when its entry states one; the turn's cost less those SHALL go to the models whose entry states none, in proportion to their tokens.
+
+#### Scenario: Model entry without a cost
+- **WHEN** a turn reports a cost and its one model's entry states none
+- **THEN** its requests add up to the turn's cost
 
 #### Scenario: Cost of a turn
 - **WHEN** a turn of three calls reports 1,348,440,000 cost ticks
