@@ -43,7 +43,7 @@ export const TypeTable = memo(function TypeTable() {
   const columns = useMemo((): Column<TypeRow, TypeKey>[] => {
     const tick = ({ pts }: TypeRow, fix: string | undefined) => fix ? pts.findIndex(p => p.k === bucketOf(fix, gran)) : -1;
     return [
-      { id: "type", header: "Type", sort: "asc", value: r => m.cats[r.cid]?.label ?? r.cid, rowHeader: false, col: "c-type", cellProps: () => TYPE_CELL,
+      { id: "type", header: "Type", sort: "asc", value: r => m.cats[r.cid]?.label ?? r.cid, col: "c-type", cellProps: () => TYPE_CELL,
         cell: ({ cid, color }) => {
           const fix = fixes[cid], isMuted = m.muted.has(cid);
           return <><button type="button" className="tbtn" data-c={cid} aria-expanded={cat === cid} aria-controls="detail">

@@ -113,7 +113,10 @@
 .pg-errors .types th .sk { white-space: nowrap; }
 .pg-errors .types th .hd { color: var(--text-muted); }
 .pg-errors .types td { vertical-align: top; }
-.pg-errors .types td.c-type { overflow-wrap: anywhere; }
+/* The type is the row's header: it reads as the data cell beside it, not as a column header. */
+.pg-errors .types tbody th[scope=row] { color: inherit; font-weight: inherit; font-size: inherit; padding-top: var(--space-4); padding-bottom: var(--space-4);
+  text-align: start; vertical-align: top; }
+.pg-errors .types :is(td, th).c-type { overflow-wrap: anywhere; }
 /* A wide count and rate (1,000,000 and 100.00%) wrap onto two lines rather than spill into the next cell (td.num is nowrap): the rate
    stays whole, and the count breaks only after a thousands separator (TypeTable puts a <wbr> there), as on a phone. tools/demo/typefit.mjs checks it. */
 .pg-errors .types td .l1 { white-space: normal; }
@@ -147,10 +150,10 @@
 }
 .pg-errors .tscroll { overflow-x: auto; }
 .pg-errors .tbtn .sw { margin-right: 7px; vertical-align: 0; }
-.pg-errors td .marks { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
-.pg-errors td .marks .chip { white-space: normal; font-size: .6875rem; }
+.pg-errors :is(td, th) .marks { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.pg-errors :is(td, th) .marks .chip { white-space: normal; font-size: .6875rem; }
 /* A muted type: the word "Muted" says it; the dimming only echoes it. The chip and the count keep full strength. */
-.pg-errors tr.is-muted .tbtn, .pg-errors tr.is-muted td { color: var(--text-muted); }
+.pg-errors tr.is-muted .tbtn, .pg-errors tr.is-muted td, .pg-errors .types tbody tr.is-muted th[scope=row] { color: var(--text-muted); }
 .pg-errors tr.is-muted .sw, .pg-errors tr.is-muted .bar, .pg-errors tr.is-muted .spark { opacity: .45; }
 /* Where to start: the applied fixes' scorecard. */
 .pg-errors .score table { margin-top: 4px; }

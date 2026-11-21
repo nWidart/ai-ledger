@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
 import { limitsUrl, viewOf, type LimitHistoryRow, type LimitsPayload, type LimitWindow, type View, type WindowUsedRow } from "../../api";
-import { ChartTable, DataTable } from "../../components/DataTable";
+import { ChartTable } from "../../components/DataTable";
 import { Drawer } from "../../components/Drawer";
 import { RangeFilter, SOURCE_LABELS } from "../../components/Filters";
 import { HowMeasured } from "../../components/HowMeasured";
@@ -220,6 +220,16 @@ function WindowPanel({ h, onClose }: { h: LimitHistoryRow; onClose: () => void }
   );
 }
 
+// The window names its row: the first column is the row header.
+const CLOSED_COLUMNS: Column<LimitHistoryRow>[] = [
+  { id: "window", header: "Window", cellProps: () => ({ className: "win" }), cell: h => windowName(h) },
+  { id: "plan", header: "Plan", cell: h => planName(h.plan) ?? "–" },
+  { id: "ended", header: "Ended", cell: h => whenDay(h.closed_at) },
+  { id: "final", header: "Final", align: "num", cell: h => <>{num(h.final)}%</> },
+  { id: "hit", header: "At 100% for", cell: h => h.hit ? <b className="bad">{h.hit_minutes != null ? span(h.hit_minutes * 60000) : "yes"}</b> : "–" },
+  { id: "note", header: "Note", cell: h => <>{h.early && <span>{h.reason?.startsWith("plan change") ? `ended early by a ${h.reason}` : "reset early"}</span>}{h.estimated && <span className="chip est">estimated</span>}</> },
+];
+
 /** Past windows: one strip of bars per limit with its unused and hits summary, the range they cover, the picked window's
  *  curve, and the table of closed windows behind a toggle. */
 function PastWindows({ d }: { d: LimitsPayload }) {
@@ -244,15 +254,9 @@ function PastWindows({ d }: { d: LimitsPayload }) {
         </ul>
         {pick && <WindowPanel key={barKey(pick)} h={pick} onClose={close} />}
       </div> : <p className="empty">No closed windows in this range.</p>}
-      {d.history.length > 0 && <ChartTable><DataTable name="Closed windows" region="scroll tall">
-        <thead><tr><th scope="col">Window</th><th scope="col">Plan</th><th scope="col">Ended</th><th scope="col" className="num">Final</th><th scope="col">At 100% for</th><th scope="col">Note</th></tr></thead>
-        <tbody>{d.history.map(h => <tr key={`${h.provider}-${h.label}-${h.closed_at}`} className={barKey(h) === selected ? "sel" : undefined}
-          aria-current={barKey(h) === selected || undefined}>
-          <td>{windowName(h)}</td><td>{planName(h.plan) ?? "–"}</td><td>{whenDay(h.closed_at)}</td><td className="num">{num(h.final)}%</td>
-          <td>{h.hit ? <b className="bad">{h.hit_minutes != null ? span(h.hit_minutes * 60000) : "yes"}</b> : "–"}</td>
-          <td>{h.early && <span>{h.reason?.startsWith("plan change") ? `ended early by a ${h.reason}` : "reset early"}</span>}{h.estimated && <span className="chip est">estimated</span>}</td>
-        </tr>)}</tbody>
-      </DataTable></ChartTable>}
+      {d.history.length > 0 && <ChartTable><Table name="Closed windows" region="scroll tall" rows={d.history} columns={CLOSED_COLUMNS}
+        rowId={barKey}
+        rowProps={h => barKey(h) === selected ? { className: "sel", "aria-current": true } : {}} /></ChartTable>}
     </section>
   );
 }
@@ -267,6 +271,15 @@ function projectRows(projects: LimitsPayload["value"]["projects"]) {
       points: ps.reduce((n, p) => n + p.points, 0), commits: ps.reduce((n, p) => n + p.commits, 0), commits_per_point: null }))];
 }
 
+type ProjectRow = ReturnType<typeof projectRows>[number];
+const PROJECT_COLUMNS: Column<ProjectRow>[] = [
+  { id: "project", header: "Project", cell: p => p.name },
+  { id: "limit", header: "Limit", cell: p => windowName(p) },
+  { id: "points", header: "Points", align: "num", cell: p => num(p.points, 1) },
+  { id: "commits", header: "Commits", align: "num", cell: p => num(p.commits) },
+  { id: "perPoint", header: "Commits a point", align: "num", cell: p => num(p.commits_per_point, 2) },
+];
+
 function Value({ d, range }: { d: LimitsPayload; range: number }) {
   const v = d.value, over = range ? `the last ${range} days` : "all time";
   return (
@@ -279,12 +292,7 @@ function Value({ d, range }: { d: LimitsPayload; range: number }) {
       </div>) : <p className="empty">No calibrated limit yet.</p>}
       {v.projects.length > 0 && <div className="val">
         <h3>Commits a point, by project</h3>
-        <DataTable name="Commits a point, by project">
-          <thead><tr><th scope="col">Project</th><th scope="col">Limit</th><th scope="col" className="num">Points</th><th scope="col" className="num">Commits</th><th scope="col" className="num">Commits a point</th></tr></thead>
-          <tbody>{projectRows(v.projects).map(p =>
-            <tr key={p.key} {...subjectAttrs("project", p.subject)}><th scope="row">{p.name}</th><td>{windowName(p)}</td>
-            <td className="num">{num(p.points, 1)}</td><td className="num">{num(p.commits)}</td><td className="num">{num(p.commits_per_point, 2)}</td></tr>)}</tbody>
-        </DataTable>
+        <Table name="Commits a point, by project" rows={projectRows(v.projects)} columns={PROJECT_COLUMNS} rowId={p => p.key} rowProps={p => subjectAttrs("project", p.subject)} />
       </div>}
     </Drawer>
   );

@@ -153,13 +153,14 @@ export function nearestIndex(xs: readonly number[], px: number): number {
   return lo > 0 && px - xs[lo - 1]! < xs[lo]! - px ? lo - 1 : lo;
 }
 
-/** A table row that opens something: a click anywhere on it (not on a link, not while selecting text) runs pick with the
- *  row's button, the keyboard target. The subject, when given, marks the row for the context menu (none for an empty value). */
+/** A table row that opens something: a click anywhere on it (not on a link, a form control or a label, which do their own
+ *  thing, and not while selecting text) runs pick with the row's button, the keyboard target. The subject, when given, marks
+ *  the row for the context menu (none for an empty value). */
 export function pickRow(v: string, pick: (v: string, el: HTMLElement) => void, subject?: Subject, className = "") {
   return {
     className: "pick" + (className ? " " + className : ""), "data-v": v, ...(subject ? subjectAttrs(subject.kind, subject.value) : {}),
     onClick: (e: MouseEvent<HTMLTableRowElement>) => {
-      if ((e.target as Element).closest("a") || String(window.getSelection() ?? "")) return;
+      if ((e.target as Element).closest("a, input, label") || String(window.getSelection() ?? "")) return;
       pick(v, e.currentTarget.querySelector("button") ?? e.currentTarget);
     },
   };

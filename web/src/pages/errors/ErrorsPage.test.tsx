@@ -2268,6 +2268,15 @@ describe("type table: sort and filter", () => {
     // The incident counts are text, for a screen reader, not a hover title.
     expect(table.querySelector('tr[data-c="tests"] .c-unrec .sr')!.textContent).toBe(", 1 of 4 incidents");
     expect(table.querySelectorAll("#catBody [title]")).toHaveLength(0);
+    // Each row is headed by its type.
+    const rows = [...table.querySelectorAll("tbody tr")];
+    expect(rows.length).toBeGreaterThan(0);
+    for (const r of rows) {
+      expect(r.querySelectorAll("th")).toHaveLength(1);
+      expect(r.firstElementChild!.matches('th[scope="row"].c-type')).toBe(true);
+    }
+    expect(within(table).getAllByRole("rowheader")).toHaveLength(rows.length);
+    expect(within(table.querySelector('tr[data-c="tests"] > th')!).getByRole("button", { expanded: false })).toBeTruthy();
   });
 
   it("has four columns: the type, errors and rate with the share, time lost with the share not recovered, and the trend with the change", async () => {
@@ -2275,7 +2284,8 @@ describe("type table: sort and filter", () => {
     const th = [...document.querySelectorAll(".types thead th")];
     expect(th.map(h => h.className)).toEqual(["", "num c-n", "num c-lost", "num c-trend"]);
     expect(th.map(h => [...h.querySelectorAll(".sortbtn")].map(b => b.textContent))).toEqual([["Type"], ["Errors↓", "Rate"], ["Time lost", "Not recovered"], ["Change"]]);
-    expect(document.querySelectorAll('#catBody tr[data-c="tests"] > td')).toHaveLength(4);
+    // The type is the row header, then three data cells.
+    expect(document.querySelectorAll('#catBody tr[data-c="tests"] > :is(td, th)')).toHaveLength(4);
     expect(document.querySelector('#catBody tr[data-c="tests"] .c-share .bar')).not.toBeNull(); // the share bar, under the count
   });
 

@@ -41,12 +41,13 @@ describe("keys", () => {
     expect(isData(queries.errorDetail("x"))).toBe(false);
   });
   it("keep the sessions pages apart from the plain sessions list, and by every filter and the sort", () => {
-    const o = { q: "a", near: true, day: "2026-11-04", sort: "cost" as const, desc: true };
+    const o = { q: "a", near: true, day: "2026-11-04", sort: [{ key: "cost" as const, desc: true }] };
     const pages = queries.sessionPages(v, o).queryKey;
     expect(pages).toEqual(["sessions", "pages", { project: "p", range: 30, automated: false, source: "" }, o]);
     expect(hashKey(pages)).not.toBe(hashKey(queries.sessions(v, { q: "a" }).queryKey));
     expect(isData({ queryKey: pages })).toBe(true);
-    for (const o2 of [{ ...o, q: "b" }, { ...o, near: false }, { ...o, day: "" }, { ...o, sort: "tokens" as const }, { ...o, desc: false }]) {
+    for (const o2 of [{ ...o, q: "b" }, { ...o, near: false }, { ...o, day: "" }, { ...o, sort: [{ key: "tokens" as const, desc: true }] },
+      { ...o, sort: [{ key: "cost" as const, desc: false }] }, { ...o, sort: [...o.sort, { key: "prompts" as const, desc: true }] }]) {
       expect(hashKey(queries.sessionPages(v, o2).queryKey)).not.toBe(hashKey(pages));
     }
   });

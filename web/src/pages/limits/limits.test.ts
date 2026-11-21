@@ -381,9 +381,10 @@ describe("past-window bars", () => {
     expect(barName(row({ estimated: true }))).toMatch(/: 82%, estimated$/);
   });
 
-  it("tells a window from another by its limit and start", () => {
+  it("tells a window from another by its limit, start and reset", () => {
     expect(barKey(row({}))).not.toBe(barKey(row({ scope: "Fable" })));
     expect(barKey(row({}))).not.toBe(barKey(row({ start: "2026-11-07T14:00:00.000Z" })));
+    expect(barKey(row({}))).not.toBe(barKey(row({ resets_at: "2026-11-07T15:00:00.000Z", closed_at: "2026-11-07T15:00:00.000Z" })));
     expect(barKey(row({}))).toBe(barKey(row({ final: 3, hit: true })));
   });
 

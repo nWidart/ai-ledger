@@ -5,7 +5,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import { motion } from "../../components/chart";
 import { askedFor } from "../../components/refresh";
 import type { ContextPayload, ErrorsPayload, InsightsPayload, LimitsPayload, LivePayload, Source, Totals, UsagePayload } from "../../api";
-import { DataTable } from "../../components/DataTable";
 import { Judged, label as facetLabel, noFacets, outcomeLabel } from "../../components/facets";
 import { DocsLink } from "../../components/DocsLink";
 import { judged } from "../../url";
@@ -165,6 +164,22 @@ const COMMIT_COLUMNS: Column<LimitCommitRow>[] = [
   { id: "perPoint", header: "Commits a point", align: "num", cell: c => num(c.commitsPerPoint, 2) },
 ];
 
+type TypeRow = ReturnType<typeof errorsBlock>["types"][number];
+const typeProps = (t: TypeRow) => subjectAttrs("category", t.cid);
+
+/** The top error types: each one's errors, its rate and the change against the comparison period; the type links to the Errors page. */
+function TopErrorTypes({ types, cmp, scope }: { types: TypeRow[]; cmp: string; scope: Scope }) {
+  const columns = useMemo((): Column<TypeRow>[] => [
+    { id: "type", header: "Type", cellProps: () => ({ className: "name" }),
+      cell: t => <a href={errorsHref(scope.project, scope.range, undefined, { source: scope.source, cat: t.cid })} onClick={appLink}>{t.label}</a> },
+    { id: "errors", header: "Errors", align: "num", cell: t => num(t.n) },
+    { id: "rate", header: "Rate", align: "num", cell: t => t.rate == null ? "–" : `${num(t.rate, 2)}%` },
+    { id: "change", header: <>Change {cmp}</>, align: "num", cellProps: t => ({ className: t.delta.cls }),
+      cell: t => t.delta.title ? <Toggletip className="chg" label={t.delta.text} name={`Change: ${t.delta.text}`}>{t.delta.title}</Toggletip> : t.delta.text },
+  ], [scope.project, scope.range, scope.source, cmp]);
+  return <Table name="Top error types" rows={types} columns={columns} rowId={t => t.cid} rowProps={typeProps} />;
+}
+
 /** The project's failed calls, their rate and the top error types, as the Errors page counts them by default. */
 export function ErrorsBlock({ errors, scope }: { errors: ApiState<ErrorsPayload>; scope: Scope }) {
   const model = useMemo(() => (errors.data ? makeModel(errors.data) : undefined), [errors.data]);
@@ -176,14 +191,7 @@ export function ErrorsBlock({ errors, scope }: { errors: ApiState<ErrorsPayload>
         {!scope.auto && <div className="hint">Errors counts automated sessions too, whatever the filter says.</div>}
         {e.errors === 0 ? <p className="empty">No errors in this view.</p> : <>
           <Facts facts={[[num(e.errors), "failed tool calls"], [e.rate == null ? "n/a" : `${num(e.rate, 1)}%`, `error rate, ${num(e.calls)} calls`]]} />
-          <DataTable name="Top error types">
-            <thead><tr><th scope="col">Type</th><th scope="col" className="num">Errors</th><th scope="col" className="num">Rate</th><th scope="col" className="num">Change {e.cmp}</th></tr></thead>
-            <tbody>{e.types.map(t => <tr key={t.cid} {...subjectAttrs("category", t.cid)}>
-              <th scope="row" className="name"><a href={errorsHref(scope.project, scope.range, undefined, { source: scope.source, cat: t.cid })} onClick={appLink}>{t.label}</a></th>
-              <td className="num">{num(t.n)}</td><td className="num">{t.rate == null ? "–" : `${num(t.rate, 2)}%`}</td>
-              <td className={"num " + t.delta.cls}>{t.delta.title
-                ? <Toggletip className="chg" label={t.delta.text} name={`Change: ${t.delta.text}`}>{t.delta.title}</Toggletip> : t.delta.text}</td></tr>)}</tbody>
-          </DataTable>
+          <TopErrorTypes types={e.types} cmp={e.cmp} scope={scope} />
         </>}
       </>}
     </Block>
