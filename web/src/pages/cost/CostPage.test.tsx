@@ -8,9 +8,10 @@ import sources from "../../__fixtures__/usage-sources";
 import sessions from "../../__fixtures__/sessions";
 import session from "../../__fixtures__/session";
 import { openDrawer } from "../../components/Drawer";
+import { drawn } from "../../components/echart/testing";
 import { mockApi } from "../../components/sheets/testing";
 import { dayStamp, download } from "../../components/export";
-import { renderApp, renderPage } from "../../testing";
+import { ingested, renderApp, renderPage } from "../../testing";
 import { num } from "../../format";
 import { compareText, costDays, thinHistory } from "./cost";
 import { CostPage } from "./CostPage";
@@ -451,6 +452,25 @@ describe("CostPage", () => {
     expect(document.getElementById("projects")).toBeNull();
   });
 
+  it("keeps the daily chart's zoom, and the focus on Show all days, when an ingest brings newer figures", async () => {
+    // What the status watcher does about every minute while a session runs: the usage is fetched again, with today's cost up.
+    let served = usage;
+    mockApi({ "/api/usage": () => served, "/api/sessions": () => sessions, "/api/session": () => session });
+    at();
+    const { client } = renderPage(<CostPage />);
+    await loaded();
+    const chart = await drawn();
+    chart.zoomTo(5, 14);
+    act(() => screen.getByRole("button", { name: "Show all days" }).focus());
+    const draws = chart.options.length, status = document.querySelector("#spend .sr")!.textContent;
+    served = { ...usage, daily: usage.daily.map(r => (r.day === usage.end ? { ...r, cost: (r.cost ?? 0) + 5 } : r)) };
+    await ingested(client);
+    await waitFor(() => expect(chart.options.length).toBeGreaterThan(draws)); // the newer figures are drawn
+    expect(chart.shown).toEqual({ from: 5, to: 14 });
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Show all days" }));
+    expect(document.querySelector("#spend .sr")!.textContent).toBe(status);
+  });
+
   it("says when every token kind is hidden and shows them again", async () => {
     localStorage.setItem("claude-usage-metric", JSON.stringify("tokens"));
     localStorage.setItem("claude-usage-hidden", JSON.stringify(["input", "text_out", "thinking", "cache_read", "cache_5m", "cache_1h"]));
@@ -654,5 +674,21 @@ describe("CostPage", () => {
       cost: 10, cost_input: 6, cost_output: 4, cost_cache_read: 0, cost_cache_5m: 0, cost_cache_1h: 0 };
     await show({ ...usage, totals: { ...usage.totals, ...tie } }, ["d-tokens"]);
     expect(within(drawer("d-tokens")).getByText("Input is 70.0% of tokens and 60.0% of estimated cost.")).toBeTruthy();
+  });
+});
+
+describe("daily chart zoom", () => {
+  it("leaves the view alone: the heading, the project table and the URL keep 30 days, nothing is fetched, the data table lists them all", async () => {
+    await show(usage, []);
+    const chart = await drawn();
+    const heading = screen.getByRole("heading", { level: 1 }).textContent, projects = table().textContent, requests = fetched().length;
+    chart.zoomTo(5, 14);
+    expect(await screen.findByRole("button", { name: "Show all days" })).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe(heading);
+    expect(table().textContent).toBe(projects);
+    expect(location.search).toBe("?range=30");
+    expect(fetched()).toHaveLength(requests);
+    await userEvent.click(within(document.getElementById("spend")!).getByRole("button", { name: "Show data table" }));
+    expect(within(screen.getByRole("table", { name: /per day$/ })).getAllByRole("row")).toHaveLength(31);
   });
 });

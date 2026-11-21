@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { dayAxis, scaleMargins, stackHeights, textScale } from "./chart";
+import { dayAxis, niceMax, scaleMargins, stackHeights, textScale } from "./chart";
 
 afterEach(() => { document.documentElement.style.fontSize = ""; });
 
@@ -32,6 +32,16 @@ describe("scaleMargins and dayAxis", () => {
     const a = dayAxis(800, 240, 30, 10, step, m, 2);
     expect(a.m).toEqual({ t: 44, r: 16, b: 52, l: 104 });
     expect(a.every).toBeGreaterThan(dayAxis(800, 240, 30, 10, step).every);
+  });
+});
+
+describe("niceMax", () => {
+  const steps = [(r: number) => Math.max(1, Math.ceil(r)), (r: number) => 10 ** Math.floor(Math.log10(r || 1)), () => .25];
+  it.each([0, .3, 1, 7, 10, 99.5, 1234, 1e6])("gives the max and step dayAxis gives (max %d)", max => {
+    for (const s of steps) {
+      const a = dayAxis(800, 240, 30, max, s);
+      expect(niceMax(max, s)).toEqual({ max: a.yMax, step: a.step });
+    }
   });
 });
 

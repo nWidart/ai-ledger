@@ -1,0 +1,8 @@
+/* The chart box (EChart.tsx). Its height is inline, from the first render; ECharts sizes the svg it draws into the plot.
+   The box is positioned for what sits over the plot. The focus ring is the global outline, held off the plot as .chart has it;
+   forced colors keeps outlines. */
+.echart { position: relative; }
+.echart:focus-visible { outline-offset: var(--space-2); border-radius: var(--radius-sm); }
+/* The runtime failed to load: the words fill the box, outside the plot, which assistive technology does not see. */
+.echart-failed { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; padding: var(--space-7);
+  color: var(--text-muted); text-align: center; }

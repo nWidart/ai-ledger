@@ -189,9 +189,9 @@ dialog.sheet::backdrop { background: var(--scrim); }
     .pg-limits .hs-bar[aria-pressed="true"],
     :is(.pg-activity, .pg-cost, .pg-limits, .pg-judgments, dialog.sheet) tbody tr.sel, .pg-errors tbody tr.sel
   ):not(:focus-visible) { outline: 2px solid Highlight; outline-offset: -2px; }
-  /* The bucket under the keyboard or pointer on the Activity and Cost charts, and the selected one, is a faint wash; frame it
+  /* The bucket under the keyboard or pointer on the Activity charts, and the selected one, is a faint wash; frame it
      at full opacity instead. */
-  :is(.pg-activity, .pg-cost, .pg-judgments) .chart svg > rect:not(.hit) { stroke: Highlight; stroke-width: 2px; fill: none; opacity: 1; }
+  :is(.pg-activity, .pg-judgments) .chart svg > rect:not(.hit) { stroke: Highlight; stroke-width: 2px; fill: none; opacity: 1; }
 
   /* A low-call rate point is hollow: a page-colored center and a text-colored ring, on the charts and in their keys, so it
      reads apart from the solid line whatever the user's Canvas is. */
@@ -226,7 +226,7 @@ dialog.sheet::backdrop { background: var(--scrim); }
   .pg-limits .lim-chart .pick { fill: Highlight; stroke: Canvas; }
   /* The charts' stacked bars: series colors kept, each segment edged in the text color. Context's cache chart edges its own
      segments (CacheChart.css). */
-  :is(.pg-activity, .pg-cost, .pg-judgments) .chart .bar-seg, .pg-errors #chart .layer { forced-color-adjust: none; stroke: CanvasText; stroke-width: .75px; }
+  :is(.pg-activity, .pg-judgments) .chart .bar-seg, .pg-errors #chart .layer { forced-color-adjust: none; stroke: CanvasText; stroke-width: .75px; }
   /* Keys and dots that name a series or a project by color alone. */
   .pdot, :is(.pg-activity, .pg-cost, .pg-judgments) .legend i:not(.line), .pg-context .legend i:not(.line), .pg-errors .sw:not(.line), .pg-judgments .key .sw { forced-color-adjust: none; outline: 1px solid CanvasText; }
 }

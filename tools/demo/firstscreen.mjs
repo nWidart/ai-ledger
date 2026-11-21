@@ -21,12 +21,17 @@ const TITLES = {
 
 /** The other pages: the first chart of each, which must start on the first screen, and its first plotted mark (the first bar, the
  *  measured line), which must be wholly on it. Live's is its stream's first event, from the web tests' fixtures, so it does not
- *  depend on a replay; it has no plot. */
+ *  depend on a replay; it has no plot.
+ *  Cost's chart is ECharts' SVG, which names no element. Its bar segments are the filled paths directly under the svg's group:
+ *  the grid lines there are unfilled, the hatch is filled with a url() pattern, the average lines sit in clipped groups of their
+ *  own and the pattern's paths in <defs>. The bars come first in document order, before any nested group: the zoom slider,
+ *  drawn after the average lines' groups, has filled paths of its own there, which `:not(g ~ path)` leaves out. */
+const COST_BAR = '#spend .echart-plot svg > g > path:not([fill="none"]):not([fill^="url("]):not(g ~ path)';
 const FIRST = [
-  ["Cost's daily cost chart", "/cost?range=30", "#spend .chart", "#spend .bar-seg"],
+  ["Cost's daily cost chart", "/cost?range=30", "#spend .echart", COST_BAR],
   ["Errors' rate chart", "/errors?range=30", ".chart-card", ".chart-card .bars rect"],
   ["Limits' first open window chart", "/limits?range=30", ".lim-grid .lim-chart", ".lim-grid .lim-chart :is(.meas, .meas-one)"],
-  ["the Judgments view's Outcomes ledger", "/usage?view=judgments&range=30", "#outcomes", "#outcomes .ledger .bar"],
+  ["the Judgments view's Outcomes ledger", "/usage?view=judgments&range=30", "#outcomes", "#outcomes .mixbar i"],
   ["Live's first stream event", "/live?session=s1", ".pg-live .stream .ev", null],
 ];
 const FIX = new URL("../../web/src/__fixtures__/", import.meta.url).pathname;

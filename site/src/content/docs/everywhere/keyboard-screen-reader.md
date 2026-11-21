@@ -16,13 +16,15 @@ Every page works from the keyboard and with a screen reader. This page lists the
 | Esc | An open menu, the palette, a sheet, a toggletip, a chart tooltip | Close it. Esc in a menu or on a chart tooltip does not close the sheet or the palette under it. |
 | Left, Right | A focused chart | Read the previous or next point. |
 | Home, End | A focused chart | Read the first or last point. |
+| Plus (or `=`) | The focused Cost daily chart, in a view of 14 days or more | Zoom in: halve the days shown, around the day you are reading, down to 7 days. |
+| Minus | The focused Cost daily chart, in a view of 14 days or more | Zoom out: double the days shown, up to every day. |
 | Enter (Space on Errors) | A focused chart that selects a bucket | Select or clear the point you are reading. |
 | Left, Right, Home, End | A focused tab on Activity's workbench or on Context | Move to the previous, next, first or last tab, wrapping. Context selects it at once; on Activity, Enter or Space selects it. |
 | Tab | A focused tab | Move to the selected tab's panel. |
 
 Charts with this keyboard reading: the Activity work chart, the outcome trend of Activity's Judgments view, the Cost chart, the Errors chart, the Context charts, the Limits chart and Live's 10-minute pulse. A tooltip that a chart opens closes with Esc without changing the selected point.
 
-Charts and tab lists act on these keys only when you hold no Alt, Ctrl, Meta or Shift, so the browser's own shortcuts still work while they have focus: Alt+Left goes back, Ctrl+Home goes to the top of the page. The session sheet's timeline is the one exception for Shift: Shift+Left and Shift+Right move ten requests.
+Charts and tab lists act on these keys only when you hold no Alt, Ctrl, Meta or Shift, so the browser's own shortcuts still work while they have focus: Alt+Left goes back, Ctrl+Home goes to the top of the page. The zoom keys follow the same rule, except that plus may take Shift, as it does on most keyboard layouts: Ctrl+plus and Ctrl+minus still zoom the page. The session sheet's timeline is the one exception for Shift: Shift+Left and Shift+Right move ten requests.
 
 ## Page structure
 

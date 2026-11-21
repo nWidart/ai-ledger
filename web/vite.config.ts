@@ -7,6 +7,6 @@ export default defineConfig({
   server: { host: "127.0.0.1", port: 5173, strictPort: true, proxy: { "/api": { target: "http://127.0.0.1:8765", changeOrigin: true } } },
   // The build goes into the Python package, which serves it and ships it in the wheel.
   // One stylesheet, as before route splitting: lazy pages must not change the cascade order by when they load.
-  build: { outDir: "../src/ai_ledger/web", assetsDir: "assets", emptyOutDir: true, cssCodeSplit: false },
+  build: { outDir: "../src/ai_ledger/web", assetsDir: "assets", emptyOutDir: true, cssCodeSplit: false, chunkSizeWarningLimit: 600 },
   test: { environment: "jsdom", setupFiles: ["src/test-setup.ts"], restoreMocks: true },
 });
