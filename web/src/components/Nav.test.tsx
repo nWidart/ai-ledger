@@ -539,7 +539,9 @@ describe("Nav", () => {
       const wrap = link.querySelector<HTMLElement>("span[title]")!;
       expect(wrap.getAttribute("title")).toBe("Highest open window: Codex weekly at 42%");
       expect(wrap.textContent).toBe("Limits42%");
-      expect(document.querySelector(".appnav-chooser .appnav-pill")).toBeNull(); // the chooser's button carries it in alert only
+      // The chooser's button carries it in alert only; until then it keeps the pill's room, empty and hidden.
+      const slot = document.querySelector<HTMLElement>(".appnav-chooser .appnav-pill")!;
+      expect([slot.hasAttribute("data-slot"), slot.hasAttribute("data-tone"), slot.textContent]).toEqual([true, false, ""]);
     });
 
     it("marks a percent that is not a reading, on the pill and in its words", async () => {
@@ -1085,12 +1087,13 @@ describe("Nav", () => {
       expect(within(list()!).getAllByRole("link").filter(a => a.hasAttribute("aria-current"))).toEqual([]);
     });
 
-    it("carries the pill and says Limits alert while an alert is present; the Limits link is named for the alert", async () => {
+    it("carries the pill and says Limits alert with its percent while an alert is present; the Limits link is named for the alert", async () => {
       const f = vi.fn(() => json({ ...status, limits_alert: alert, limits_peak: { ...alert } }));
       vi.stubGlobal("fetch", f);
       history.replaceState(null, "", "/errors");
       const { client } = renderApp(<Nav />);
-      const btn = await screen.findByRole("button", { name: "Errors, Limits alert" });
+      // The name says what the pill shows.
+      const btn = await screen.findByRole("button", { name: "Errors, Limits alert, highest open window at 100%" });
       expect(btn).toBe(chooser());
       expect(btn.textContent).toBe("Errors100%"); // the name holds the visible label
       const pill = btn.querySelector<HTMLElement>(".appnav-pill")!;
@@ -1104,7 +1107,7 @@ describe("Nav", () => {
       f.mockImplementation(() => json({ ...status, limits_alert: null, limits_peak: { ...alert, current: 30 } }));
       await poll(client);
       expect(screen.getByRole("button", { name: "Errors" })).toBe(btn);
-      expect(btn.querySelector(".appnav-pill")).toBeNull();
+      expect(btn.querySelector(".appnav-pill")!.hasAttribute("data-slot")).toBe(true); // its room kept, so the button keeps its width
       expect(btn.textContent).toBe("Errors");
       await open();
       expect(item(/^Limits/).textContent).toBe("Limits30% Highest open window: Codex weekly at 30%");
@@ -1115,7 +1118,7 @@ describe("Nav", () => {
       vi.stubGlobal("fetch", f);
       history.replaceState(null, "", "/cost");
       const { client } = renderApp(<Nav />);
-      const btn = await screen.findByRole("button", { name: "Cost, Limits alert, 2 sessions waiting for you" });
+      const btn = await screen.findByRole("button", { name: "Cost, Limits alert, highest open window at 100%, 2 sessions waiting for you" });
       const count = btn.querySelector<HTMLElement>(".appnav-count")!;
       expect([count.textContent, count.getAttribute("aria-hidden")]).toEqual(["2", "true"]);
       await open();

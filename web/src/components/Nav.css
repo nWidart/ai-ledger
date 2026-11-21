@@ -19,15 +19,20 @@
 .appnav a:hover, .appnav-chooser-pop a:hover { background: var(--surface-2); color: var(--text-primary); }
 /* The current page's link: one tint for every page. */
 :is(.appnav, .appnav-chooser-pop) a[aria-current=page] { background: var(--accent-soft); color: var(--accent-ink); font-weight: 600; }
-/* The Limits tab's pill: the fullest open window's percent, in the flow after the label. Its width is fixed, so a changed figure
-   moves nothing. Quiet by default; in alert it takes the warning or the critical tint, with a ring, so color is not the only
-   signal. Text on its fill: --text-secondary on --surface-2 6.90 (light) and 8.68 (dark); on the tint over --surface-1,
-   --warning-text 5.12 and 6.61, --critical-text 5.56 and 5.43. */
-.appnav-pill { display: inline-block; box-sizing: border-box; min-width: 2.9em; margin-left: 6px; padding: 0 5px; border-radius: 999px; vertical-align: 1px;
-  font-size: .6875rem; font-weight: 600; line-height: 1.5; text-align: center; font-variant-numeric: tabular-nums;
+/* The Limits tab's pill: the fullest open window's percent, in the flow after the label. Its width is fixed, wide enough for
+   "≈100%" in IBM Plex Sans (3.31em) and in the system fallback (3.66em), so a changed figure moves nothing. Quiet by default; in
+   alert it takes the warning or the critical tint, with a ring, so color is not the only signal. Every fill is opaque: the tint
+   is laid over --surface-1, so the current tab's tint or a hover never shows through. Text on its fill: --text-secondary on
+   --surface-2 6.90 (light) and 8.68 (dark); --warning-text 5.12 and 6.61, --critical-text 5.56 and 5.43. */
+.appnav-pill { display: inline-block; box-sizing: border-box; width: 4.7em; margin-left: 6px; padding: 0 5px; border-radius: 999px; vertical-align: 1px;
+  font-size: .6875rem; font-weight: 600; line-height: 1.5; text-align: center; white-space: nowrap; font-variant-numeric: tabular-nums;
   background: var(--surface-2); color: var(--text-secondary); }
-.appnav-pill[data-tone=warning] { background: var(--warning-soft); color: var(--warning-text); box-shadow: inset 0 0 0 1px var(--warning-text); }
-.appnav-pill[data-tone=critical] { background: var(--critical-soft); color: var(--critical-text); box-shadow: inset 0 0 0 1px var(--critical-text); }
+.appnav-pill[data-tone=warning] { background: linear-gradient(var(--warning-soft), var(--warning-soft)) var(--surface-1); color: var(--warning-text);
+  box-shadow: inset 0 0 0 1px var(--warning-text); }
+.appnav-pill[data-tone=critical] { background: linear-gradient(var(--critical-soft), var(--critical-soft)) var(--surface-1); color: var(--critical-text);
+  box-shadow: inset 0 0 0 1px var(--critical-text); }
+/* The page chooser keeps the pill's room with no alert, so the button does not grow when one starts. */
+.appnav-pill[data-slot] { visibility: hidden; }
 /* The Live tab's badge, and the page chooser's: the sessions waiting on the user, in the corner, out of the flow, so it never
    moves a tab or resizes the button when it comes and goes. The ring is the bar's color, so it reads over the next tab.
    --on-accent on --accent: 5.10 (light) and 6.78 (dark). */
@@ -105,11 +110,13 @@
 .appnav-fresh-note { margin: 0 0 6px; color: var(--text-primary); font-weight: 500; }
 .appnav-fresh-foot { margin: 6px 0 0; padding-top: 6px; border-top: 1px solid var(--border); color: var(--text-muted); }
 /* High contrast: the theme's border colors are dropped, so the group and its line take the system text color; the flash, the
-   pill and the badge keep a frame (their tints and rings are dropped). */
+   pill and the badge keep a frame (their tints and rings are dropped). A pill in alert is drawn in the system's reverse colors,
+   so it still differs from a quiet one. */
 @media (forced-colors: active) {
   .appnav-fresh { border-color: CanvasText; }
   .appnav-fresh .appnav-state { border-left-color: CanvasText; }
   .appnav-flash, .appnav-pill, .appnav-count { border: 1px solid CanvasText; }
+  .appnav-pill[data-tone] { forced-color-adjust: none; background: CanvasText; color: Canvas; box-shadow: none; }
   .appnav-count { line-height: 14px; }
 }
 /* The steps, widest first, each taking room away so the bar stays one row: the wordmark goes; the palette button keeps its icon

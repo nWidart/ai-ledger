@@ -68,7 +68,15 @@ The badge's number SHALL be hidden from assistive technology, and the Live tab's
 - **THEN** the badge reads "9+" and the tab's name says 12 sessions
 
 ### Requirement: Show the fullest limit window on the Limits tab
-The Limits tab SHALL show a pill with the percent of the fullest open limit window while the latest status has one, and no pill otherwise. A percent that is not a reading SHALL be marked "≈". The pill SHALL have a fixed width, so a changed percent moves nothing. Its percent SHALL be hidden from assistive technology, and the tab's name SHALL say it in visually hidden text: "Limits Highest open window: Codex weekly at 42%", with "at an estimated 42%" for an estimate.
+The Limits tab SHALL show a pill with the percent of the status's `limits_peak`; with no `limits_peak`, the percent of its `limits_alert`; with neither, no pill. A percent that is not a reading SHALL be marked "≈". The pill SHALL have one fixed width that fits "≈100%", so no percent moves the next tab. Its percent SHALL be hidden from assistive technology, and the tab's name SHALL say it in hidden text: "Limits Highest open window: Codex weekly at 42%", or "at an estimated 42%".
+
+#### Scenario: From 7% to an estimated 100%
+- **WHEN** the pill goes from "7%" to "≈100%"
+- **THEN** its width stays the same and no tab moves
+
+#### Scenario: An alert from an older app
+- **WHEN** the status has a `limits_alert` at 92% and no `limits_peak`
+- **THEN** the pill reads 92%
 
 #### Scenario: No alert
 - **WHEN** the fullest open window is Codex weekly at 42% and no window is in alert
@@ -79,7 +87,7 @@ The Limits tab SHALL show a pill with the percent of the fullest open limit wind
 - **THEN** the pill reads "≈67%" and the tab's name says "at an estimated 67%"
 
 #### Scenario: No limit data
-- **WHEN** no open window has a percent, or the app sends no fullest window
+- **WHEN** the status has neither a `limits_peak` nor a `limits_alert`, as from an app that sends neither
 - **THEN** the Limits tab shows no pill and is named "Limits"
 
 ### Requirement: Host the sheets once in the app shell
@@ -318,7 +326,7 @@ When working out the limits alert and the fullest window fails, both SHALL be nu
 - **THEN** `limits_alert` and `limits_peak` are null, the next cycle ingests as usual, and the log names the exception's type and not its message
 
 ### Requirement: Show the limits alert on the Limits tab
-While the latest status carries a limits alert, the Limits tab's pill SHALL take the alert's tone, on every page, the Limits page included: critical for `at_limit` and `runs_out`, warning for `high`. A pill in alert SHALL have a ring, so color is not the only signal. With no alert the pill SHALL be quiet. An alert from an app that sends no fullest window SHALL show the alert's own percent. The pill's text SHALL clear 4.5:1 contrast on its fill in both themes.
+While the latest status carries a limits alert, the Limits tab's pill SHALL take the alert's tone on every page: critical for `at_limit` and `runs_out`, warning for `high`. A pill in alert SHALL have a ring, and in forced colors SHALL still differ from a quiet one. With no alert the pill SHALL be quiet. The pill's text SHALL clear 4.5:1 contrast on its fill in both themes, on the current tab and on any other.
 
 #### Scenario: At its limit
 - **WHEN** the status says Codex weekly is at its limit until Saturday 12:00
@@ -336,12 +344,20 @@ While the latest status carries a limits alert, the Limits tab's pill SHALL take
 - **WHEN** Codex 5-hour, at 40%, is forecast to run out, and Codex weekly is the fullest at 70%
 - **THEN** the pill reads 70% in the critical tone
 
+#### Scenario: On the current tab
+- **WHEN** the user views Limits while Codex weekly is at 92%
+- **THEN** the pill's text clears 4.5:1 on its fill over the current tab's tint, in both themes
+
+#### Scenario: Forced colors
+- **WHEN** the system forces its colors and an alert is present
+- **THEN** the pill is drawn in the system's reverse colors, and a quiet pill keeps only a frame
+
 #### Scenario: An older app
 - **WHEN** the status has no `limits_alert` and no `limits_peak`
 - **THEN** the navigation shows no pill
 
 ### Requirement: Show the limits alert on the page chooser
-When the page chooser replaces the tabs, its Limits link SHALL carry the same pill as the Limits tab, under the same rules. The chooser's button SHALL carry the pill only while an alert is present.
+When the page chooser replaces the tabs, its Limits link SHALL carry the same pill as the Limits tab, under the same rules. The chooser's button SHALL carry the pill only while an alert is present, and SHALL keep the pill's room with no alert, so the button does not grow when one starts.
 
 #### Scenario: On a phone
 - **WHEN** the status says Codex weekly is at its limit, and the user views Errors on a phone
@@ -349,7 +365,7 @@ When the page chooser replaces the tabs, its Limits link SHALL carry the same pi
 
 #### Scenario: No alert
 - **WHEN** the fullest window is at 30% and no window is in alert
-- **THEN** the chooser's button shows no pill, and its Limits link shows a quiet one
+- **THEN** the chooser's button shows no pill but keeps its width, and its Limits link shows a quiet one
 
 ### Requirement: Name the Limits tab after its alert
 While an alert is present, the Limits tab's accessible name SHALL be "Limits alert: " and the alert's sentence, the sentence in text visually hidden, after the visible label. For a forecast, whose sentence states no percent, the pill's words SHALL follow it: ". Highest open window: " and the window with its percent. A status with no alert and no fullest window, or from an app that sends none, SHALL leave the tab's name "Limits" with no title.
@@ -457,7 +473,7 @@ On narrow screens the page chooser SHALL be a button that opens a list of links 
 - **THEN** Errors opens in a new browser tab with the same filters, and the current page stays
 
 ### Requirement: Name the page chooser
-The page chooser's button SHALL show and name the current page, or "Pages" on a page that has no entry, and SHALL expose whether its list is open. While a limits alert is present, its accessible name SHALL add "Limits alert"; while sessions wait on the user, it SHALL add their count in words. The full alert sentence SHALL stay on the Limits link and in the alert's status region, said once.
+The page chooser's button SHALL show and name the current page, or "Pages" on a page that has no entry, and SHALL expose whether its list is open. While a limits alert is present, its accessible name SHALL add "Limits alert" and the pill's percent in words; while sessions wait on the user, it SHALL add their count in words. The full alert sentence SHALL stay on the Limits link and in the alert's status region, said once.
 
 #### Scenario: On Errors
 - **WHEN** a screen reader user reaches the page chooser on Errors with no limits alert and no waiting session
@@ -465,7 +481,7 @@ The page chooser's button SHALL show and name the current page, or "Pages" on a 
 
 #### Scenario: With an alert
 - **WHEN** a limits alert is present and the user reaches the page chooser on Errors
-- **THEN** its name says Errors and "Limits alert", and the Limits link in the open list is named "Limits alert: " and the sentence
+- **THEN** its name is "Errors, Limits alert, highest open window at 100%", and the Limits link in the open list is named "Limits alert: " and the sentence
 
 #### Scenario: With waiting sessions
 - **WHEN** two sessions wait on the user and the user reaches the page chooser on Cost

@@ -61,6 +61,8 @@ interface Signals {
   waiting: number;
   /** The Limits pill's text ("72%", "≈72%" for an estimate), or null for no pill. */
   pill: string | null;
+  /** The pill in words ("highest open window at 72%", "… at an estimated 72%"), or null for no pill. */
+  pillSaid: string | null;
   /** The pill's tone: critical at a limit or forecast to run out, warning when nearly full, null otherwise. */
   tone: Tone | null;
   /** The alert's sentence, or null. */
@@ -80,6 +82,7 @@ function signalsOf(st: RefreshState): Signals {
   return {
     waiting: st.waiting, alert, limits, tone: a ? (a.kind === "high" ? "warning" : "critical") : null,
     pill: peak ? `${peak.measured ? "" : "≈"}${num(peak.current)}%` : null,
+    pillSaid: peak ? `highest open window at ${peak.measured ? "" : "an estimated "}${num(peak.current)}%` : null,
   };
 }
 const waitingText = (n: number) => `${plural(n, "session")} waiting for you`;
@@ -133,12 +136,15 @@ function PageLinks({ pages, path, shared, sig, list, onPick }: { pages: readonly
 function PageChooser({ path, shared, sig }: { path: string; shared: string; sig: Signals }) {
   const [open, setOpen] = useState(false), picked = useRef(false);
   const current = PAGES.find(p => p.path === path)?.label ?? "Pages";
-  const said = [sig.alert && "Limits alert", sig.waiting > 0 && waitingText(sig.waiting)].filter(Boolean);
+  // The name says what the pill shows: the alert, and the percent in words.
+  const said = [sig.alert && (sig.pillSaid ? `Limits alert, ${sig.pillSaid}` : "Limits alert"), sig.waiting > 0 && waitingText(sig.waiting)].filter(Boolean);
+  const pill = sig.alert && sig.pill;
   return (
     <Popover.Root open={open} onOpenChange={o => { if (o) picked.current = false; setOpen(o); }}>
       <Popover.Trigger className="appnav-chooser" aria-label={said.length ? [current, ...said].join(", ") : undefined}>
         <span className="appnav-chooser-lbl">{current}
-          {sig.alert && sig.pill && <span className="appnav-pill" data-tone={sig.tone ?? undefined} aria-hidden="true">{sig.pill}</span>}
+          {/* Drawn with no alert too, empty and hidden, so the button keeps its width when one starts. */}
+          <span className="appnav-pill" data-tone={pill ? sig.tone ?? undefined : undefined} data-slot={pill ? undefined : ""} aria-hidden="true">{pill || ""}</span>
           {sig.waiting > 0 && <span className="appnav-count" aria-hidden="true">{badgeText(sig.waiting)}</span>}</span>
         <svg className="appnav-caret" viewBox="0 0 10 10" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m2.5 4 2.5 2.5L7.5 4" /></svg>
       </Popover.Trigger>
