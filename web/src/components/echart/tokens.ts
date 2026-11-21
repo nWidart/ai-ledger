@@ -103,18 +103,22 @@ function subscribe(f: () => void) {
 const getEpoch = () => epoch;
 
 /** The environment a chart's option builder reads: colors, forced colors, text scale, motion and the box size. A new
- *  object when the theme, the OS scheme, forced colors, reduced motion or the size changes; the same one otherwise. */
+ *  object when the theme, the OS scheme, forced colors, reduced motion, the text scale or the size changes; the same one
+ *  otherwise. */
 export function useChartEnv(width: number, height: number): ChartEnv {
   const now = useSyncExternalStore(subscribe, getEpoch, getEpoch);
   const theme = useTheme();
+  // The browser's text size changes with no event, so it is read on each render, as the hand-written charts read it: the
+  // next render, such as one for newer data, draws at the current size. One computed style of the root, with no layout.
+  const scale = textScale();
   return useMemo(() => {
     const forced = matchMedia(FORCED).matches;
     const roles = forced ? FORCED_INK : THEME_INK;
     const ink = Object.fromEntries(Object.entries(roles).map(([k, css]) => [k, resolveColor(css)])) as unknown as Ink;
     ink.cursor = withAlpha(ink.cursor, forced ? CURSOR.forced : CURSOR.theme);
     ink.tint = withAlpha(ink.tint, forced ? TINT.forced : TINT.theme);
-    return { color: resolveColor, ink, forced, textScale: textScale(), motion: motion(), width, height };
+    return { color: resolveColor, ink, forced, textScale: scale, motion: motion(), width, height };
     // now and theme are the change signals; the values are read fresh inside.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [now, theme, width, height]);
+  }, [now, theme, scale, width, height]);
 }

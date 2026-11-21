@@ -233,6 +233,25 @@ describe("useChartEnv", () => {
     }
   });
 
+  it("reads the text scale on each render: a root font size that changed gives a new env, with the box the same", () => {
+    // A change of the browser's text size fires no event: the next render, for newer data, must draw at the new size.
+    fakeMedia();
+    const { result, rerender } = renderHook(() => useChartEnv(600, 200));
+    const first = result.current;
+    expect(first.textScale).toBe(1);
+    root.style.fontSize = "32px";
+    try {
+      rerender();
+      expect(result.current.textScale).toBe(2);
+      expect(result.current).not.toBe(first);
+      const second = result.current;
+      rerender();
+      expect(result.current).toBe(second);
+    } finally {
+      root.style.fontSize = "";
+    }
+  });
+
   it("removes its media listeners when the last chart unmounts", () => {
     const media = fakeMedia();
     const a = renderHook(() => useChartEnv(600, 200));

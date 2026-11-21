@@ -149,6 +149,21 @@ describe("EChart", () => {
     expect(fakeECharts.charts).toEqual([chart]);
   });
 
+  it("draws newer data at the browser's current text size, with the box the same", async () => {
+    const sizes: number[] = [];
+    const sized = () => (env: ChartEnv): EChartsOption => { sizes.push(env.textScale); return option(env); };
+    const { rerender } = render(show({ option: sized(), view: "v" }));
+    await drawn();
+    expect(sizes.at(-1)).toBe(1);
+    document.documentElement.style.fontSize = "32px"; // no event tells of it
+    try {
+      rerender(show({ option: sized(), view: "v" }));
+      expect(sizes.at(-1)).toBe(2);
+    } finally {
+      document.documentElement.style.fontSize = "";
+    }
+  });
+
   it("resizes the chart and draws again at the new size when the box's size changes", async () => {
     const sized = fakeBox(600);
     const { rerender, unmount } = render(show());
