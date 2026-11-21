@@ -783,6 +783,31 @@ class TipsTest(unittest.TestCase):
         self.assertIn("In Claude Code, hand bulk reading to a subagent", both)
         self.assertIn("Hand bulk reading to a subagent", self.tip(b.payload(source="claude"), "large_results")["advice"])
 
+    def test_large_results_advice_for_a_claude_read_and_a_codex_tool_with_no_remedy(self):
+        b = Builder(self)
+        b.session("a", "foo")
+        b.turn("a", 0, 5_000)
+        b.call("a", "Read", 1, 250_000)
+        b.session("y", "cdx", source="codex", window=258_400)
+        b.turn("y", 0, 5_000)
+        b.call("y", "view_image", 1, 250_000)
+        self.assertEqual(self.tip(b.payload(), "large_results")["advice"],
+                         "Use `Read` with `offset` and `limit` to take only the part you need. "
+                         "Ask for a smaller part of a file or command output at a time. "
+                         "In Claude Code, hand bulk reading to a subagent, which returns a short report.")
+
+    def test_large_results_advice_follows_the_results_sessions(self):
+        # The Codex session's only request is on Nov 4, its large result on Nov 5: over one day it matches no session.
+        b = Builder(self)
+        b.session("x", "cdx", source="codex", window=258_400)
+        b.turn("x", 0, 5_000)
+        b.call("x", "exec_command", 27 * 60, 250_000)
+        for p in (b.payload(range_days=1), b.payload(range_days=1, source="codex")):
+            t = self.tip(p, "large_results")
+            self.assertEqual(t["matched"], 0)
+            self.assertIn("`head`, `tail` or `grep`", t["advice"])
+            self.assertNotIn("subagent", t["advice"])
+
     def test_cache_breaks(self):
         b = Builder(self)
         b.session("a", "foo", peak=90_000)
