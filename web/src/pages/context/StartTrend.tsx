@@ -13,11 +13,11 @@ type Week = Trend[number];
 const H = 180, M0 = { t: 10, r: 14, b: 26, l: 52 }; // the margins at the default text size
 // The chart's data table: one row per week.
 const COLUMNS: Column<Week>[] = [
-  { id: "week", header: "Week of", value: w => w.week, cell: w => dayLabel(w.week, true) },
-  { id: "median", header: "Median", align: "num", value: w => w.median, cell: w => short(w.median) },
-  { id: "p25", header: "25th percentile", align: "num", value: w => w.p25, cell: w => short(w.p25) },
-  { id: "p75", header: "75th percentile", align: "num", value: w => w.p75, cell: w => short(w.p75) },
-  { id: "sessions", header: "Sessions", align: "num", value: w => w.sessions, cell: w => num(w.sessions) },
+  { id: "week", header: "Week of", cell: w => dayLabel(w.week, true) },
+  { id: "median", header: "Median", align: "num", cell: w => short(w.median) },
+  { id: "p25", header: "25th percentile", align: "num", cell: w => short(w.p25) },
+  { id: "p75", header: "75th percentile", align: "num", cell: w => short(w.p75) },
+  { id: "sessions", header: "Sessions", align: "num", cell: w => num(w.sessions) },
 ];
 
 /** What the chart reads at a week, in words: "Week of Nov 2: median 24k tokens (25th to 75th percentile 20k to 31k), 9 sessions". */

@@ -1,5 +1,5 @@
 import { createSortedRowModel, rowSortingFeature, tableFeatures, useTable, type ColumnDef, type RowData, type SortFn, type SortingState } from "@tanstack/react-table";
-import { Fragment, useMemo, type ComponentPropsWithRef, type ReactNode } from "react";
+import { Fragment, useMemo, type ComponentPropsWithoutRef, type ComponentPropsWithRef, type ReactNode } from "react";
 import { DataTable } from "../DataTable";
 import type { Subject } from "../menu/subject";
 import { pickRow } from "../sheets/session";
@@ -30,6 +30,8 @@ interface ColumnBase<T, K extends string> {
   /** More of the header after its label, outside the sort button, as a column's scale. */
   after?: ReactNode;
   cell?: (row: T) => ReactNode;
+  /** The cell's own attributes for a row, as a title; its className adds to the column's classes. */
+  cellProps?: (row: T) => Omit<ComponentPropsWithoutRef<"td">, "children">;
   /** "num" right-aligns the header and cells (class num). Default: start. */
   align?: "start" | "num";
   /** Classes on the header and every cell of the column. */
@@ -109,7 +111,9 @@ export function Table<T extends RowData, K extends string = string>({ name, rows
     accessorFn: r => { const v = c.value?.(r); return hasValue(v) ? v : undefined; },
   })), [columns]);
   const sorting = useMemo<SortingState>(() => sort ? [{ id: sort.key, desc: sort.desc }] : [], [sort?.key, sort?.desc]); // eslint-disable-line react-hooks/exhaustive-deps
-  const table = useTable({ features, columns: defs, data: rows, getRowId: rowId, manualSorting: manualSort, state: { sorting } });
+  // TanStack rebuilds its rows, and the values they cache per column id, only for new data: new columns get a fresh copy of the rows.
+  const data = useMemo(() => rows.slice(), [rows, defs]); // eslint-disable-line react-hooks/exhaustive-deps
+  const table = useTable({ features, columns: defs, data, getRowId: rowId, manualSorting: manualSort, state: { sorting } });
 
   const head = (c: Column<T, K>) => {
     const cls = classes(c);
@@ -123,8 +127,9 @@ export function Table<T extends RowData, K extends string = string>({ name, rows
     const v = pick?.value(r), sel = current != null && id === current ? "sel" : "";
     const attrs = pick && v != null ? pickRow(v, (v, el) => pick.open(v, el, r), pick.subject?.(r), sel) : { className: sel || undefined };
     return <tr key={key} {...attrs}>{columns.map((c, i) => {
-      const content = c.cell ? c.cell(r) : c.value?.(r), cls = classes(c);
-      return (c.rowHeader ?? i === 0) ? <th key={c.id} scope="row" className={cls}>{content}</th> : <td key={c.id} className={cls}>{content}</td>;
+      const value = c.cell ? undefined : c.value?.(r), content = c.cell ? c.cell(r) : hasValue(value) ? value : null;
+      const own = c.cellProps?.(r), props = { ...own, className: [classes(c), own?.className].filter(Boolean).join(" ") || undefined };
+      return (c.rowHeader ?? i === 0) ? <th key={c.id} scope="row" {...props}>{content}</th> : <td key={c.id} {...props}>{content}</td>;
     })}</tr>;
   };
   const later = (r: T, i: number) => { const id = rowId(r, i); return row(r, id, `after:${id}`); };

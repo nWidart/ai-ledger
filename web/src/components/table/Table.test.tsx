@@ -217,4 +217,28 @@ describe("Table rows", () => {
     renderApp(<Table name="T" rows={ROWS} columns={COLS} rowId={r => r.n} current="c" />);
     expect(screen.getByRole("rowheader", { name: "c" }).closest("tr")!.className).toBe("sel");
   });
+
+  it("re-sorts when a column's value changes on the same rows and sort", () => {
+    const rows = [{ n: "a", v: 1 }, { n: "b", v: 2 }], sort = { key: "v" as const, desc: false };
+    const cols = (f: (v: number) => number): Column<R, K>[] => [{ id: "n", header: "Name", value: r => r.n }, { id: "v", header: "Value", value: r => f(r.v!), sort: "desc" }];
+    const { rerender } = renderApp(<Table name="T" rows={rows} columns={cols(v => v)} rowId={r => r.n} sort={sort} onSort={() => {}} />);
+    const values = () => [...document.querySelectorAll("tbody td")].map(td => td.textContent);
+    expect(values()).toEqual(["1", "2"]);
+    rerender(<Table name="T" rows={rows} columns={cols(v => -v)} rowId={r => r.n} sort={sort} onSort={() => {}} />);
+    expect(values()).toEqual(["-2", "-1"]);
+    expect(names()).toEqual(["b", "a"]);
+  });
+
+  it("leaves a cell with no value empty: null, undefined or NaN", () => {
+    const rows = [{ n: "a", v: null }, { n: "b", v: NaN }, { n: "c", v: 0 }];
+    renderApp(<Table name="T" rows={rows} columns={COLS} rowId={r => r.n} />);
+    expect(screen.getAllByRole("cell").map(td => td.textContent)).toEqual(["", "", "0"]);
+  });
+
+  it("sets a cell's own attributes and classes per row, after the column's", () => {
+    const cols: Column<R, K>[] = [COLS[0]!, { ...COLS[1]!, hide: 0, cellProps: r => ({ className: r.v ? "bad" : undefined, title: `${r.v ?? "no"} failed` }) }];
+    renderApp(<Table name="T" rows={[{ n: "a", v: 2 }, { n: "b", v: 0 }]} columns={cols} rowId={r => r.n} />);
+    expect(screen.getAllByRole("cell").map(td => [td.className, td.title])).toEqual([["num opt bad", "2 failed"], ["num opt", "0 failed"]]);
+    expect(screen.getAllByRole("columnheader")[1]!.hasAttribute("title")).toBe(false);
+  });
 });
