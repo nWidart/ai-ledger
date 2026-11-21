@@ -21,10 +21,12 @@
 // - a view with no tool calls draws no rate track, no dot, no rate key, and the bars take the room;
 // - by week (all time, with older weeks added to reach the slider): labels, the reading, the zoom words and "Show all
 //   weeks"; the store's own 11 weeks draw no slider;
+// - by week in a 343px box (the store's 11 weeks), and at 32px text in a 900px window (22 weeks): the edges and the labels
+//   of checks.mjs, a click on the newest week selects it with its frame centred on its bar, and its rate point is under it;
 // - newer figures keep the selection, and say nothing; the bars grow once, and not on a theme change, a measure switch, a
 //   zoom out or a refresh.
-import { LOCALE, W, line, sleep, until } from "./harness.mjs";
-import { chart } from "./checks.mjs";
+import { LOCALE, PHONE, W, line, sleep, until } from "./harness.mjs";
+import { chart, root32 } from "./checks.mjs";
 
 const ROOT = "#work";
 const day = (k, long = false) => new Date(k + "T00:00:00Z").toLocaleDateString(LOCALE, { month: "short", day: "numeric", timeZone: "UTC", ...(long ? { year: "numeric" } : {}) });
@@ -149,10 +151,7 @@ export async function activity(h) {
     const p16 = await c.open("16px root, tracks");
     const at16 = await measure(p16);
     await p16.done();
-    const p32 = await c.open("32px root, tracks", {}, () => {
-      const set = () => { if (!document.documentElement) return false; document.documentElement.style.fontSize = "32px"; return true; };
-      if (!set()) new MutationObserver((_, o) => { if (set()) o.disconnect(); }).observe(document, { childList: true });
-    });
+    const p32 = await c.open("32px root, tracks", {}, root32);
     const at32 = await measure(p32);
     line("32px root: the box grows and the bars track keeps its height", at32.box > at16.box && at16.bars === 120 && at32.bars === at16.bars,
       `box ${at16.box}px, then ${at32.box}px; bars track ${at16.bars}px, then ${at32.bars}px`);
@@ -444,12 +443,14 @@ export async function activity(h) {
       return d;
     };
     const WEEKS = buckets(older(structuredClone(real)));
-    const wk = chart(h, {
-      name: "activity-weeks", path: "/usage?range=0", root: ROOT, points: WEEKS, unit: { one: "week", many: "weeks" }, at: 3,
-      label: (k, long = false) => `Week of ${day(k, long)}`, said: k => day(k),
-      data: /\/api\/usage\?/, setup: sessions, answer: older, newer: d => d,
+    const week = (k, long = false) => `Week of ${day(k, long)}`;
+    const weekly = {
+      name: "activity-weeks", path: "/usage?range=0", root: ROOT, unit: { one: "week", many: "weeks" }, at: 3,
+      label: week, said: k => day(k),
+      data: /\/api\/usage\?/, setup: sessions, newer: d => d,
       kept: [["heading", "#workTitle"], ["hint", "#work .chart-head .hint"]],
-    });
+    };
+    const wk = chart(h, { ...weekly, points: WEEKS, answer: older });
     const page = await wk.open("by week");
     const labels = await ev(page, () => { const g = window.chartfit.grid(); return window.chartfit.texts().filter(t => t.t >= g.b).map(t => t.text); });
     line(`by week, ${WEEKS.length} weeks: the labels name weeks`, labels.length > 0 && labels.every(x => /^Week of [A-Z][a-z]{2} \d{1,2}$/.test(x)), labels.join(", "));
@@ -458,6 +459,40 @@ export async function activity(h) {
     await wk.shot(page, "by-week");
     await wk.slider(page);
     await page.done();
+
+    // By week: the store's 11 weeks at a phone's width, then 22 at 32px text. ECharts 6 shrinks a grid whose labels would
+    // leave the box: the frame alone, with the labels, once left the tracks by half a band at the newest week, so the band
+    // and the selection fell beside the bars. Each case: the edges' reading, a click on the newest week, its rate point and
+    // the labels.
+    const narrow = async (on, page, what, file) => {
+      const cols = await on.edges(page, what);
+      const newest = cols.at(-1), want = week(on.P.at(-1)), g = await ev(page, () => window.chartfit.grid());
+      await page.mouse.click(newest.x, g.t + (g.b - g.t) / 3);
+      const s = await until(() => sel(page), s => s.chip === want && s.frame);
+      const at = s.frame ? (s.frame.l + s.frame.r) / 2 : NaN;
+      line(`${what}: a click on the newest week's bar selects it, its frame centred on the bar, within 1px`, s.chip === want && Math.abs(at - newest.x) <= 1,
+        `chip "${s.chip}", frame at ${s.frame ? at.toFixed(1) : "none"}px, bar at ${newest.x.toFixed(1)}px`);
+      await on.shot(page, `${file}-selected`);
+      const rate = await ev(page, () => window.chartfit.strokes());
+      line(`${what}: the newest week's rate point sits under its bar, within 1px`, rate.length === 1 && Math.abs(rate[0].r - newest.x) <= 1,
+        rate.length === 1 ? `rate line ends at ${rate[0].r.toFixed(1)}px, bar at ${newest.x.toFixed(1)}px` : `${rate.length} lines`);
+      if (s.chip) await page.locator("#work .daychip button").click();
+      await until(() => sel(page), s => !s.chip && !s.frame);
+      await on.labelsFit(page, what, true);
+    };
+    const phone = { viewport: { width: PHONE, height: 900 } };
+    const wk11 = chart(h, { ...weekly, points: buckets(real) });
+    const p11 = await wk11.open(`${PHONE}px window, 11 weeks`, phone);
+    const b11 = await ev(p11, () => Math.round(window.chartfit.box().w));
+    await wk11.shot(p11, "narrow");
+    await narrow(wk11, p11, `a ${b11}px box, ${buckets(real).length} weeks`, "narrow");
+    await p11.done();
+    // At 32px text the newest week's label, centred, reached the box's edge in a 900px window, not in a phone's.
+    const p22 = await wk.open(`900px window, ${WEEKS.length} weeks, 32px root`, { viewport: { width: 900, height: 900 } }, root32);
+    const b22 = await ev(p22, () => Math.round(window.chartfit.box().w));
+    await wk.shot(p22, "weeks-32px");
+    await narrow(wk, p22, `a ${b22}px box at 32px text, ${WEEKS.length} weeks`, "weeks-32px");
+    await p22.done();
   }
 
   await c.refresh();

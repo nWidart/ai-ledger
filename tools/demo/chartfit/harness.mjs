@@ -14,6 +14,8 @@ import { readers } from "./readers.mjs";
 export { sleep };
 const DEMO = new URL("..", import.meta.url).pathname, ROOT = join(DEMO, "../..");
 export const W = 1440, H = 900, LOCALE = "en-US";
+/** A phone's window width: the charts' boxes are 343px wide in it. */
+export const PHONE = 417;
 const SHOTS = process.env.SHOTS;
 /** A request the demo server dropped, by its failure, and the loads of a page tried before the run stops on it. */
 const DROPPED = /net::ERR_(CONNECTION_RESET|SOCKET_NOT_CONNECTED)\b/, LOADS = 3;

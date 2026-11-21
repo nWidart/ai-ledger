@@ -20,6 +20,9 @@
 //       and keep the points shown, "Show all" and the focus on it, with nothing said; after the root font size doubles
 //       with the chart mounted, the next such redraw draws the labels at twice their size;
 //     - with motion on, a zoom out draws the points that come back at full height;
+//     - in a narrow box, the pointer on the first and the last bar, over its right third, and Home and End read that point
+//       with the band centred on its bar within 1px; no label is cut by the box or overlaps another, and in a chart of
+//       several tracks the newest point's label ends inside the plot;
 //     - newer figures keep the point read with the keys, and say nothing; Escape with the focus on another control closes
 //       a tooltip the pointer opened; with motion on the bars grow on the first drawing and on no later one; under
 //       reduced motion they never grow;

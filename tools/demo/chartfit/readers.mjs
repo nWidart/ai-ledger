@@ -52,6 +52,9 @@ export function readers(root) {
       .map(i => ({ name: i.parentElement.textContent.trim(), css: i.style.background, color: tri(getComputedStyle(i).backgroundColor) })),
     /** The left edge of each point's bar drawn, in order. */
     points: () => [...new Set(bars().map(b => Math.round(b.l)))].sort((a, b) => a - b),
+    /** Each point's column of bar segments, left first: its edges and its centre. A stack's segments share their edges;
+     *  a half-width bar is centred on its point as a full one is. */
+    columns: () => [...new Map(bars().map(b => [Math.round(b.l), b])).values()].sort((a, b) => a.l - b.l).map(b => ({ l: b.l, r: b.r, x: (b.l + b.r) / 2 })),
     /** The cursor band: a translucent path as tall as the grid, with no stroke. */
     band: () => {
       const g = grid(), e = g && top().find(e => solid(e) && e.hasAttribute("fill-opacity") && !stroked(e) && column(e, g));

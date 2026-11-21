@@ -6,9 +6,10 @@
 //   overlapping, each over its own week (26 weeks, from the store's weeks repeated back);
 // - a week of few sessions is drawn at half the width of the others, in the legend's colors, with the legend's key for it
 //   (the store has none: one week's sessions are cut to 3);
+// - in a 343px box, the edges and the labels of checks.mjs;
 // - newer figures keep the week read and say nothing; the bars grow once, and not on a theme change or a refresh; under
 //   reduced motion they do not grow.
-import { LOCALE, line, sleep, until } from "./harness.mjs";
+import { LOCALE, PHONE, line, sleep, until } from "./harness.mjs";
 import { chart } from "./checks.mjs";
 
 const day = (k, long = false) => new Date(k + "T00:00:00Z").toLocaleDateString(LOCALE, { month: "short", day: "numeric", timeZone: "UTC", ...(long ? { year: "numeric" } : {}) });
@@ -121,6 +122,16 @@ export async function judgments(h) {
       await c.shot(page, `26-weeks-${width}px`);
       await page.done();
     }
+  }
+
+  // At a phone's width: the band on the first and the last week's bars, and no label cut.
+  {
+    const page = await c.open(`${PHONE}px window`, { viewport: { width: PHONE, height: 900 } });
+    const what = `a ${await ev(page, () => Math.round(window.chartfit.box().w))}px box, ${N} weeks`;
+    await c.shot(page, "narrow");
+    await c.edges(page, what);
+    await c.labelsFit(page, what);
+    await page.done();
   }
 
   await c.refreshRead();

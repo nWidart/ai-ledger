@@ -3,8 +3,9 @@
 //   stays; after Escape, a click there with the pointer at rest draws no band;
 // - the hint under the heading is one line at 1440px in every stacking and scale;
 // - in the tokens Share view a kind under 1% of a day is drawn at least 1px tall;
-// - a 7-day view has no slider, and back at 30 days the slider returns with every day shown.
-import { LOCALE, W, line, sleep, until } from "./harness.mjs";
+// - a 7-day view has no slider, and back at 30 days the slider returns with every day shown;
+// - in a 343px box, the edges and the labels of checks.mjs.
+import { LOCALE, PHONE, W, line, sleep, until } from "./harness.mjs";
 import { chart } from "./checks.mjs";
 
 /** The kinds of the tokens views, by their legend names, as the usage answer names them. */
@@ -138,6 +139,16 @@ export async function cost(h) {
     await sleep(300);
     const enter = { open: await drawer(), readout: await ev(page, () => window.chartfit.readout()) };
     line(`Enter on an empty day ${I + 1} opens nothing, and the reading stays`, !enter.open && named(enter.readout) === I, `drawer ${enter.open ? "open" : "closed"}, readout "${enter.readout}"`);
+    await page.done();
+  }
+
+  // At a phone's width: the band on the first and the last day's bars, and no label cut.
+  {
+    const page = await c.open(`${PHONE}px window`, { viewport: { width: PHONE, height: 900 } });
+    const what = `a ${await ev(page, () => Math.round(window.chartfit.box().w))}px box, ${N} days`;
+    await c.shot(page, "narrow");
+    await c.edges(page, what);
+    await c.labelsFit(page, what);
     await page.done();
   }
 

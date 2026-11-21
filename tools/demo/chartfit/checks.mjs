@@ -20,6 +20,12 @@
 // The page module calls the blocks in its order, with its own checks between them.
 import { H, W, line, sleep, until } from "./harness.mjs";
 
+/** An init script for 200% text: the root font size at 32px, set as soon as <html> exists, before the app reads it. */
+export const root32 = () => {
+  const set = () => { if (!document.documentElement) return false; document.documentElement.style.fontSize = "32px"; return true; };
+  if (!set()) new MutationObserver((_, o) => { if (set()) o.disconnect(); }).observe(document, { childList: true });
+};
+
 export function chart(h, d) {
   const P = d.points, N = P.length, I = d.at, { one, many } = d.unit, label = d.label;
   const ev = (page, f, arg) => page.evaluate(f, arg);
@@ -55,6 +61,27 @@ export function chart(h, d) {
   };
   // Beside the point read: right of it, or left of it near the box's right edge, and never over it.
   const beside = (s, x) => s.tip && (s.tip.l >= x + 4 || s.tip.r <= x - 4);
+  /** The texts that leave the box, and the pairs that overlap, each said with its place in the box. Texts overlap when
+   *  their em boxes do. A text's box is its line box, taller than its glyphs: at 32px the line boxes of "$0" and the first
+   *  day's label meet where their glyphs are well apart. */
+  const fit = (texts, box) => {
+    const em = t => ({ ...t, t: (t.t + t.b - t.size) / 2, b: (t.t + t.b + t.size) / 2 });
+    const at = t => `${Math.round(t.l - box.l)}..${Math.round(t.r - box.l)} x ${Math.round(t.t - box.t)}..${Math.round(t.b - box.t)}px`;
+    const out = texts.filter(t => t.l < box.l - .5 || t.r > box.r + .5 || t.t < box.t - .5 || t.b > box.b + .5)
+      .map(t => `"${t.text}" at ${Math.round(t.l - box.l)}..${Math.round(t.r - box.l)}px, ${Math.round(t.t - box.t)}..${Math.round(t.b - box.t)}px of ${Math.round(box.w)}x${Math.round(box.h)}`);
+    const over = [];
+    texts.map(em).forEach((a, i, all) => all.slice(i + 1).forEach(c => { if (a.l < c.r && c.l < a.r && a.t < c.b && c.t < a.b) over.push(`"${a.text}" at ${at(a)} and "${c.text}" at ${at(c)}`); }));
+    return { out, over };
+  };
+  /** Moves the pointer off the chart and waits for its reading to end. */
+  const leave = async page => {
+    await ev(page, () => document.activeElement?.blur());
+    await away(page);
+    await until(() => state(page), s => !s.band && !s.tip);
+  };
+  /** The band's centre's distance from column c's, and where the band, the tooltip and the readout are for point i. */
+  const offBy = (s, c) => (s.band && c ? Math.abs((s.band.l + s.band.r) / 2 - c.x) : Infinity);
+  const where = (s, c, i) => `${one} ${i + 1}: band at ${s.band ? ((s.band.l + s.band.r) / 2).toFixed(1) : "none"}px, its bar at ${c ? c.x.toFixed(1) : "none"}px, tooltip "${s.tip?.day ?? "none"}", readout "${s.readout.split(":")[0]}"`;
   /** Focuses the chart's box and reads point I with the keys. */
   const read = async page => {
     await box(page).focus();
@@ -179,22 +206,12 @@ export function chart(h, d) {
 
     /** 200% text: the axis labels stay in the box and apart. */
     async textSize() {
-      // Set as soon as <html> exists, before the app reads the root font size.
-      const page = await open("32px root", {}, () => {
-        const set = () => { if (!document.documentElement) return false; document.documentElement.style.fontSize = "32px"; return true; };
-        if (!set()) new MutationObserver((_, o) => { if (set()) o.disconnect(); }).observe(document, { childList: true });
-      });
+      const page = await open("32px root", {}, root32);
       const { texts, box, root, size } = await ev(page, () => ({ texts: window.chartfit.texts(), box: window.chartfit.box(), root: getComputedStyle(document.documentElement).fontSize,
         size: window.chartfit.textSize() }));
       line("32px root: the axis labels are drawn at twice their size", root === "32px" && size >= 22, `root ${root}, labels ${size}px`);
-      const out = texts.filter(t => t.l < box.l - .5 || t.r > box.r + .5 || t.t < box.t - .5 || t.b > box.b + .5);
-      const over = [];
-      // Labels overlap when their em boxes do. A text's box is its line box, taller than its glyphs: at 32px the line boxes
-      // of "$0" and the first day's label meet where their glyphs are well apart.
-      const em = t => ({ ...t, t: (t.t + t.b - t.size) / 2, b: (t.t + t.b + t.size) / 2 });
-      const at = t => `${Math.round(t.l - box.l)}..${Math.round(t.r - box.l)} x ${Math.round(t.t - box.t)}..${Math.round(t.b - box.t)}px`;
-      texts.map(em).forEach((a, i, all) => all.slice(i + 1).forEach(c => { if (a.l < c.r && c.l < a.r && a.t < c.b && c.t < a.b) over.push(`"${a.text}" at ${at(a)} and "${c.text}" at ${at(c)}`); }));
-      line("32px root: no axis label leaves the box", texts.length > 0 && !out.length, out.map(t => `"${t.text}" at ${Math.round(t.l - box.l)}..${Math.round(t.r - box.l)}px, ${Math.round(t.t - box.t)}..${Math.round(t.b - box.t)}px of ${Math.round(box.w)}x${Math.round(box.h)}`).join("; ") || `${texts.length} labels`);
+      const { out, over } = fit(texts, box);
+      line("32px root: no axis label leaves the box", texts.length > 0 && !out.length, out.join("; ") || `${texts.length} labels`);
       line("32px root: no two labels overlap", !over.length, over.join("; "));
       await shot(page, "text-32px");
       await page.done();
@@ -445,6 +462,48 @@ export function chart(h, d) {
       const grew = await ev(page, () => window.__grew);
       line("with reduced motion, no bar grows on the first drawing", grew === 0, `${grew} segments grew`);
       await page.done();
+    },
+
+    /** The first and the last point, where a grid that left the others' fit (ECharts 6 shrinks a grid whose labels would
+     *  leave the box) shows first: the pointer at the centre of the point's column of bars, Home and End, and the pointer
+     *  over the column's right third each read the point: the band is centred on the column, within 1px, and the tooltip
+     *  and the readout name the point. what starts each line. Gives the columns, read with the page at rest. */
+    async edges(page, what) {
+      await leave(page);
+      const cols = await ev(page, () => window.chartfit.columns()), g = await ev(page, () => window.chartfit.grid());
+      const counted = cols.length === N ? "" : `; ${cols.length} columns for ${N} ${many}`;
+      // A missing column is read at its place in the grid, and its lines fail on the count.
+      const col = i => cols[i] ?? { l: centre(g, i) - 1, r: centre(g, i) + 1, x: centre(g, i) };
+      // A third of the way down the frame: over the bars, in the first track of a chart of several.
+      const y = g.t + (g.b - g.t) / 3, ends = [0, N - 1];
+      const by = async (move, i, ok) => { await leave(page); await move(); return until(() => state(page), s => ok(s, i)); };
+      /** Point i read: the band centred on its bar, the tooltip and the readout naming it. */
+      const reads = (s, i) => offBy(s, col(i)) <= 1 && named(s.tip?.day ?? "") === i && named(s.readout) === i;
+      const pointed = [], keyed = [], third = [];
+      for (const i of ends) pointed.push([i, await by(() => page.mouse.move(col(i).x, y), i, reads)]);
+      for (const i of ends) keyed.push([i, await by(async () => { await box(page).focus(); await page.keyboard.press(i ? "End" : "Home"); }, i, reads)]);
+      await page.keyboard.press("Escape");
+      for (const i of ends) third.push([i, await by(() => page.mouse.move(col(i).l + (col(i).r - col(i).l) * 5 / 6, y), i, reads)]);
+      await leave(page);
+      const all = got => cols.length === N && got.every(([i, s]) => reads(s, i));
+      const said = got => got.map(([i, s]) => where(s, col(i), i)).join("; ") + counted;
+      line(`${what}: the pointer on the first and the last ${one}'s bar centres the band on it, within 1px`, all(pointed), said(pointed));
+      line(`${what}: Home and End centre the band on the first and the last ${one}'s bar, within 1px`, all(keyed), said(keyed));
+      line(`${what}: the pointer over the right third of the first and the last ${one}'s bar reads that ${one}: band, tooltip and readout`, all(third), said(third));
+      return cols;
+    },
+
+    /** No text of the chart is cut by its box or overlaps another; with newest, the newest point's axis label is drawn and
+     *  ends at or inside the plot's right edge. what starts each line. */
+    async labelsFit(page, what, newest = false) {
+      const { texts, box, g } = await ev(page, () => ({ texts: window.chartfit.texts(), box: window.chartfit.box(), g: window.chartfit.grid() }));
+      const { out, over } = fit(texts, box);
+      line(`${what}: no axis or value label is cut by the chart's box or overlaps another`, texts.length > 0 && !out.length && !over.length,
+        [...out.map(x => `cut: ${x}`), ...over.map(x => `overlap: ${x}`)].join("; ") || `${texts.length} labels in ${Math.round(box.w)}x${Math.round(box.h)}`);
+      if (!newest) return;
+      const want = label(P[N - 1]), got = texts.find(t => t.t >= g.b && t.text === want);
+      line(`${what}: the newest ${one}'s label is drawn and ends at or inside the plot's right edge`, !!got && got.r <= g.r + .5,
+        got ? `"${want}" ${got.l.toFixed(1)}..${got.r.toFixed(1)}px, plot ${g.l.toFixed(1)}..${g.r.toFixed(1)}px` : `no "${want}"; under the plot: ${texts.filter(t => t.t >= g.b).map(t => t.text).join(", ")}`);
     },
 
     /** The theme toggle on a light, dark or system value. */
