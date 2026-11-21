@@ -677,18 +677,48 @@ describe("past windows strips", () => {
     expect(hist().getByRole("button", { name: /, ended / }).querySelector("i")!.style.height).toBe("6%");
   });
 
-  it("lists two closed windows that share a bar key as their own rows, and marks the selected window's rows", async () => {
-    const error = vi.spyOn(console, "error").mockImplementation(() => {}); // the strip's bars share a key too
+  // Two windows of one limit and scope that one poll reported with different resets: with no known duration, both start
+  // at the poll, so only their reset (and close) tells them apart.
+  const later = (t: string) => new Date(Date.parse(t) + 3_600_000).toISOString();
+  const twin = (h: LimitHistoryRow): LimitHistoryRow => ({ ...h, resets_at: later(h.resets_at), closed_at: later(h.closed_at), final: 41 });
+  const rows = () => [...hist().getByRole("table", { name: "Closed windows" }).querySelectorAll("tbody tr")];
+  const marks = () => rows().map(r => [r.className, r.getAttribute("aria-current")]);
+
+  it("lists two closed windows that share a start as their own rows, and marks only the selected window's row", async () => {
+    const error = vi.spyOn(console, "error");
     try {
-      const again = { ...early, closed_at: new Date(Date.parse(early.closed_at) + 3_600_000).toISOString(), final: 41 };
-      showCurve({ ...fixture, history: [early, again, { ...early, start: "2026-01-01T00:00:00Z", closed_at: "2026-01-02T00:00:00Z" }] });
+      showCurve({ ...fixture, history: [early, twin(early), { ...early, start: "2026-01-01T00:00:00Z", closed_at: "2026-01-02T00:00:00Z" }] });
       await lede();
       openTable();
-      const rows = () => [...hist().getByRole("table", { name: "Closed windows" }).querySelectorAll("tbody tr")];
       expect(rows().map(r => r.children[3]!.textContent)).toEqual(["22%", "41%", "22%"]);
-      expect(rows().map(r => [r.className, r.getAttribute("aria-current")])).toEqual([["", null], ["", null], ["", null]]);
+      expect(marks()).toEqual([["", null], ["", null], ["", null]]);
       fireEvent.click(hist().getAllByRole("button", { name: barName(early) })[0]!);
-      await waitFor(() => expect(rows().map(r => [r.className, r.getAttribute("aria-current")])).toEqual([["sel", "true"], ["sel", "true"], ["", null]]));
+      await waitFor(() => expect(marks()).toEqual([["sel", "true"], ["", null], ["", null]]));
+      expect(error).not.toHaveBeenCalled(); // no two bars, and no two rows, share a key
+    } finally { error.mockRestore(); }
+  });
+
+  it("makes each of two windows that share a start its own bar, focus stop and pick", async () => {
+    const error = vi.spyOn(console, "error");
+    try {
+      const two = [{ ...early, window_minutes: null }, twin({ ...early, window_minutes: null })];
+      showCurve({ ...fixture, history: two });
+      await lede();
+      openTable();
+      const bars = within(hist().getByRole("group", { name: /past windows/ })).getAllByRole("button");
+      expect(bars.map(b => b.getAttribute("aria-label"))).toEqual(two.map(barName));
+      expect(bars.map(b => b.tabIndex)).toEqual([-1, 0]);
+      act(() => bars[1]!.focus());
+      await userEvent.keyboard("{ArrowLeft}");
+      expect(document.activeElement).toBe(bars[0]);
+      expect(bars.map(b => b.tabIndex)).toEqual([0, -1]);
+      await userEvent.keyboard("{ArrowRight}");
+      expect(document.activeElement).toBe(bars[1]);
+      await userEvent.keyboard("{Enter}");
+      expect(bars.map(b => b.getAttribute("aria-pressed"))).toEqual(["false", "true"]);
+      expect(within(hist().getByRole("region", { name: WINDOW })).getByText("41%")).toBeTruthy();
+      expect(marks()).toEqual([["", null], ["sel", "true"]]);
+      expect(error).not.toHaveBeenCalled();
     } finally { error.mockRestore(); }
   });
 
