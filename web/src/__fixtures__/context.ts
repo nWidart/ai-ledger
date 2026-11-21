@@ -315,7 +315,33 @@ export default {
   "peak": {
    "sessions": 12,
    "median": 52500.0,
-   "window_share": 0.1875
+   "window_share": 0.1875,
+   "by_project": [
+    {
+     "project": "baz",
+     "sessions": 5,
+     "median": 60000.0,
+     "window_share": 0.3
+    },
+    {
+     "project": "bar",
+     "sessions": 3,
+     "median": 8000.0,
+     "window_share": 0.04
+    },
+    {
+     "project": "foo",
+     "sessions": 3,
+     "median": 150000.0,
+     "window_share": 0.45
+    },
+    {
+     "project": "codex-app",
+     "sessions": 1,
+     "median": 26000.0,
+     "window_share": 0.100619195
+    }
+   ]
   }
  },
  "sessions_map": {
@@ -330,7 +356,8 @@ export default {
     "peak": 26000,
     "window": 258400,
     "turns": 2,
-    "compactions": 0
+    "compactions": 0,
+    "title": null
    },
    {
     "session_id": "b2",
@@ -341,7 +368,8 @@ export default {
     "peak": 9000,
     "window": 200000,
     "turns": 2,
-    "compactions": 0
+    "compactions": 0,
+    "title": null
    },
    {
     "session_id": "b1",
@@ -352,7 +380,8 @@ export default {
     "peak": 8000,
     "window": 200000,
     "turns": 1,
-    "compactions": 0
+    "compactions": 0,
+    "title": null
    },
    {
     "session_id": "f3",
@@ -363,7 +392,8 @@ export default {
     "peak": 150000,
     "window": 2000000,
     "turns": 2,
-    "compactions": 0
+    "compactions": 0,
+    "title": null
    },
    {
     "session_id": "f2",
@@ -374,7 +404,8 @@ export default {
     "peak": 90000,
     "window": 200000,
     "turns": 4,
-    "compactions": 0
+    "compactions": 0,
+    "title": null
    },
    {
     "session_id": "f1",
@@ -385,7 +416,8 @@ export default {
     "peak": 170000,
     "window": 200000,
     "turns": 5,
-    "compactions": 3
+    "compactions": 3,
+    "title": "Fix the importer"
    },
    {
     "session_id": "z0",
@@ -396,7 +428,8 @@ export default {
     "peak": 60000,
     "window": 200000,
     "turns": 5,
-    "compactions": 0
+    "compactions": 0,
+    "title": null
    },
    {
     "session_id": "z1",
@@ -407,7 +440,8 @@ export default {
     "peak": 120000,
     "window": 200000,
     "turns": 4,
-    "compactions": 1
+    "compactions": 1,
+    "title": null
    },
    {
     "session_id": "z2",
@@ -418,7 +452,8 @@ export default {
     "peak": 30000,
     "window": 200000,
     "turns": 4,
-    "compactions": 0
+    "compactions": 0,
+    "title": null
    },
    {
     "session_id": "z3",
@@ -429,7 +464,8 @@ export default {
     "peak": 45000,
     "window": 200000,
     "turns": 4,
-    "compactions": 0
+    "compactions": 0,
+    "title": null
    },
    {
     "session_id": "z4",
@@ -440,7 +476,8 @@ export default {
     "peak": 150000,
     "window": 200000,
     "turns": 4,
-    "compactions": 0
+    "compactions": 0,
+    "title": null
    },
    {
     "session_id": "b3",
@@ -451,7 +488,8 @@ export default {
     "peak": 7000,
     "window": 200000,
     "turns": 1,
-    "compactions": 0
+    "compactions": 0,
+    "title": null
    }
   ]
  },

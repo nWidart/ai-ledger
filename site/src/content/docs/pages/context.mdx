@@ -15,6 +15,8 @@ import starting from "../../../assets/shots/context-starting.png";
 import startingLight from "../../../assets/shots/context-starting-light.png";
 import growth from "../../../assets/shots/context-growth.png";
 import growthLight from "../../../assets/shots/context-growth-light.png";
+import grids from "../../../assets/shots/context-grids.png";
+import gridsLight from "../../../assets/shots/context-grids-light.png";
 import pressure from "../../../assets/shots/context-pressure.png";
 import pressureLight from "../../../assets/shots/context-pressure-light.png";
 import fills from "../../../assets/shots/context-fills.png";
@@ -35,9 +37,19 @@ The header carries the shared filters. Every figure, chart, table and tip on the
 
 A session is in the view when it has a request in the range. Its own figures (starting context, growth, compactions) cover the whole session. See [Filters](/ai-ledger/everywhere/filters/) for how the filters behave on every page.
 
-## Section index
+## Tabs
 
-Links to Overview, Tips, Start (Starting context), Growth, Pressure (Window pressure), Fills (What fills context) and Spend (Cost), then to the two drawers: Results (Largest tool results) and Cache breaks (Sessions where caching broke).
+Under the heading and the tips, three tabs hold the panels and drawers:
+
+| Tab | Panels and drawers |
+| --- | --- |
+| **Overhead and pressure** (the default) | [Starting context](#starting-context), [Window of a typical session](#window-of-a-typical-session), [Window pressure](#window-pressure) |
+| **Growth and bloat** | [Growth](#growth), [What fills context](#what-fills-context), the [Largest tool results](#largest-tool-results) drawer |
+| **Cache health** | [Cost](#cost), with the cache chart, and the [Sessions where caching broke](#sessions-where-caching-broke) drawer |
+
+The URL keeps the tab as `tab=growth` or `tab=cache`; the first tab writes nothing. Changing the tab replaces the history entry, as a filter does. A link to a panel or drawer by its id, such as `/context#d-breaks`, opens the tab that holds it.
+
+**Keyboard** Only the selected tab is a tab stop. The left and right arrow keys select the previous and next tab and wrap around; Home and End select the first and last. Tab moves on to the tab's panel.
 
 ## Panels
 
@@ -60,11 +72,11 @@ With no measured session, the heading reads "No \{agent} session\{ in project} w
 
 ### Tips
 
-<ThemedImage dark={tips} light={tipsLight} alt="Context's Tips cards: each tip that fired says what to change, with its evidence." />
+<ThemedImage dark={tips} light={tipsLight} alt="Context's Tips strip: each tip that fired as a short item above the tabs." />
 
-**Shows** tips from six fixed rules. The app sets the thresholds; nothing is learned or generated. A tip shows only when its rule fires on the view. When none fires, the section reads "Nothing stands out in this view." Each tip card carries its severity mark: **● Act** (critical) or **▲ Watch** (warning). Tips run most severe first, and within a severity in the order below.
+**Shows** tips from six fixed rules, as one strip of short items under the heading. The app sets the thresholds; nothing is learned or generated. A tip shows only when its rule fires on the view. When none fires, the strip reads "Nothing stands out in this view." Each item carries its severity mark: **●** critical or **▲** warning. Tips run most severe first, and within a severity in the order below.
 
-**Figures** Each tip is a small card, side by side with the others in one row, with a severity, a title and a count of the sessions that match. Its evidence and advice open under **Evidence and advice**. A small label names the kind of finding: Starting context, Compactions, Window limit, Tool results, Prompt cache or Long prompts.
+**Figures** The strip shows at most four items, so the tabs and the first chart stay on the first screen of a 1440 × 900 window; **Show N more** reveals the rest. Selecting an item opens it under the strip: a label naming the kind of finding (Starting context, Compactions, Window limit, Tool results, Prompt cache or Long prompts) and the severity, the evidence, the advice and a count of the matching sessions. One item is open at a time; selecting it again closes it.
 
 | Tip (title) | Fires when | Severity |
 | --- | --- | --- |
@@ -76,6 +88,16 @@ With no measured session, the heading reads "No \{agent} session\{ in project} w
 | Requests are priced on the long-prompt tier | The long-prompt-tier cost is at least $1 and at least 10% of the view's estimated cost. | Warning |
 
 The evidence of the large-start tip names the five projects with the largest medians with their window shares, counts the rest, and lists the MCP servers that the transcripts record as called in those projects, fewest calls first. A server that is configured but never called leaves no trace in a transcript, so it is not listed.
+
+The advice names the commands of the agents that ran the matching sessions:
+
+| Tip | Claude Code sessions | Codex sessions |
+| --- | --- | --- |
+| Sessions start with a large context | Trim `CLAUDE.md` or `AGENTS.md`; compare with `.mcp.json` or `claude mcp list`. | Trim `AGENTS.md`; compare with `~/.codex/config.toml` or `codex mcp list`. |
+| Sessions compact repeatedly | A new session or `/clear` between tasks, `/compact` before the context fills. | A new session with `/new` between tasks, `/compact` before the context fills. |
+| Requests are priced on the long-prompt tier | `/compact` or a new session before the threshold. | `/compact` or `/new` before the threshold. |
+
+When both agents' sessions match, the advice names each command for its agent.
 
 **Controls** Selecting the count opens the **Sessions matching** list: the 20 newest matching sessions, with how many more are left out, each with its title, project, source and start time. Selecting a session opens its session sheet. The open tip is in the URL, and browser Back closes it.
 
@@ -96,6 +118,44 @@ The evidence of the large-start tip names the five projects with the largest med
 
 **Controls** Selecting a project row opens its project sheet. On the weekly chart, arrow keys read a week; **Show data table** lists week, median, 25th and 75th percentile, and sessions.
 
+### Window of a typical session
+
+<ThemedImage dark={grids} light={gridsLight} alt="Context's window grids: a small grid of a typical session's window for each of the busiest projects." />
+
+**Shows** the window of a typical session as the [Project page](/ai-ledger/pages/project/) draws it: a grid of 200 cells, each half a percent of the window, filled for the median start, then for what the median peak adds, the rest free.
+
+**Figures**
+
+- With no project selected, one small grid for each of the six projects with the most sessions that have a known start and peak share of the window. Each names its project, its most common window and its sessions, and gives **Start**, **Peak** and **Free** as shares of the window. The hint says how many projects of how many it shows.
+- With one project selected, that project's full grid with its legend, split by its latest `/context` snapshot when there is one, as on the Project page.
+
+Sessions with no known window take no part. With no grid to draw, the panel is not shown.
+
+### Window pressure
+
+<ThemedImage dark={pressure} light={pressureLight} alt="Context's Window pressure panel: how close sessions get to their model's window at their peak, and the session map's quadrants." />
+
+**Shows** how full sessions get at their peak, by the size of their model's window. A session's window is the one its source stated (for Codex, the turn's `model_context_window`), else the `context` of its peak model in the price table, else unknown. See [Windows](/ai-ledger/concepts/windows/).
+
+**Figures**
+
+- **One bar per window size** (for example 200k, 1M), over the sessions with a known window. Each bar splits into five segments: under 25%, 25–50%, 50–80%, 80–90% and 90% or more of the window at the session's peak. A segment is a share of that window's sessions; a segment of 7% or more of the bar shows its count, and one of 20% or more its label. A peak at an edge belongs to the band above it (80% is in 80–90%).
+- **Sessions by start and peak**: one dot per session, placed by starting context (log scale) and peak share of the window, with a line at 30,000 tokens and one at 80% of the window. A ring marks a session that compacted at least once. A dot shows the session's details on hover or focus, named by its title (else its short id). The chart holds at most the 1,000 newest sessions that have a measured start, a known window and a recorded peak, and states "Showing the newest N of M sessions" when there are more.
+- **Quadrants**: the two lines cut the map into four, named in its corners:
+
+  | Quadrant | Start | Peak |
+  | --- | --- | --- |
+  | Lean | under 30,000 tokens | under 80% |
+  | Heavy start | 30,000 tokens or more | under 80% |
+  | Grew full | under 30,000 tokens | 80% or more |
+  | Heavy and full | 30,000 tokens or more | 80% or more |
+
+**Controls**
+
+- Selecting a segment lists its sessions, newest first, up to 20, each with its title, start, peak share and compactions. Selecting a session opens its session sheet. A table of the same counts is behind **Show data table**.
+- A dot opens its session sheet. Arrow keys step from the oldest to the newest session; Escape clears the reading.
+- A button under the map per quadrant gives its count. Selecting one, or clicking the map away from any dot, selects that quadrant: the bars count only its sessions on the map (a line says so), the other dots dim, and a list names its 20 newest sessions. Escape, **Clear**, **Show every session** or selecting it again clears it. The map's data table names each session's quadrant.
+
 ### Growth
 
 <ThemedImage dark={growth} light={growthLight} alt="Context's Growth panel: the median context size at each turn of a session." />
@@ -115,22 +175,6 @@ The evidence of the large-start tip names the five projects with the largest med
 - **Tokens / Share of window** switch: the same curves as tokens, or as a share of each session's window over the sessions with a known window.
 - A project button in the legend draws that project alone against the view, with its band; selecting it again restores every project.
 - Arrow keys, Home and End read a turn; Escape clears the reading. **Show data table** lists each turn with the median, 25th and 75th percentile, sessions, and each project's median (a dash where that curve has ended).
-
-### Window pressure
-
-<ThemedImage dark={pressure} light={pressureLight} alt="Context's Window pressure panel: how close sessions get to their model's window at their peak." />
-
-**Shows** how full sessions get at their peak, by the size of their model's window. A session's window is the one its source stated (for Codex, the turn's `model_context_window`), else the `context` of its peak model in the price table, else unknown. See [Windows](/ai-ledger/concepts/windows/).
-
-**Figures**
-
-- **One bar per window size** (for example 200k, 1M), over the sessions with a known window. Each bar splits into five segments: under 25%, 25–50%, 50–80%, 80–90% and 90% or more of the window at the session's peak. A segment is a share of that window's sessions; a segment of 7% or more of the bar shows its count, and one of 20% or more its label. A peak at an edge belongs to the band above it (80% is in 80–90%).
-- **Sessions by start and peak**: one dot per session, placed by starting context (log scale) and peak share of the window, with a line at 30,000 tokens and one at 80% of the window. A ring marks a session that compacted at least once. A dot shows the session's details on hover or focus. The chart holds at most the 1,000 newest sessions that have a measured start, a known window and a recorded peak, and states "Showing the newest N of M sessions" when there are more.
-
-**Controls**
-
-- Selecting a segment lists its sessions, newest first, up to 20, each showing its start, its peak share and its compactions. Selecting a session opens its session sheet. A table of the same counts is behind **Show data table**.
-- A dot opens its session sheet. Arrow keys step from the oldest to the newest session; Escape clears the reading.
 
 ### What fills context
 
@@ -158,12 +202,20 @@ The evidence of the large-start tip names the five projects with the largest med
 
 **Figures**
 
-- **Cache use over time**: per day, or per week when the view's first request is more than 60 days old, the prompt tokens split into **Cache read**, **Cache write** and **Uncached input**, with each bucket's **Cache-hit ratio** (cache read tokens over all prompt tokens) as a line, and the cache breaks by cause as markers under the bars. A day or week with no request is empty. The caption says that a break's cause is inferred from the gap and the model of the previous request, not reported by the provider. Costs are not stacked in this chart.
+- **Cache use over time**: per day, or per week when the view's first request is more than 60 days old, three tracks over the same days:
+  - **Tokens not read from the cache**: bars of **Uncached input** and **Cache write**, the prompt tokens that cost full price or more. They are the bars' whole scale, so they never shrink to slivers beside the cache reads.
+  - **Cache breaks**: each bucket's breaks by cause (model switch, expired, other).
+  - **Cache-hit ratio**: cache read tokens over all prompt tokens, as a line on its own thin track, from 90% (or lower, to the lowest ratio's tenth) to 100%.
+
+  A day or week with no request is empty on every track. The caption says that a break's cause is inferred from the gap and the model of the previous request, not reported by the provider. Costs are not stacked in this chart.
 - **Cost by project** table: **Whole view** and each project (when there is more than one): **Estimated cost**, **Cache reads** (cost), **Long-prompt tier** (cost), **Long-tier requests**, **Cache-hit ratio**. The long-prompt tier prices a whole request higher once its prompt passes a model's threshold.
 
 A request that carries no time is in no bucket of the chart, but it counts in the table's cache-hit ratio. See [Cost estimates](/ai-ledger/concepts/cost-estimates/).
 
-**Controls** **Show data table** lists each bucket of the chart.
+**Controls**
+
+- **Cache reads** in the chart's legend adds the cache reads on top of each bar and rescales the bars to all prompt tokens; selecting it again takes them away. The tooltip, the reading and the table always include cache reads.
+- Arrow keys, Home and End read a day or week; Escape clears the reading. **Show data table** lists each bucket: uncached input, cache write, cache read, cache-hit ratio and the breaks by cause.
 
 ## Drawers
 
@@ -195,7 +247,7 @@ A cache break is a main-thread request that is not the session's first turn, has
 
 Selecting a row, dot or session opens a sheet over the page and keeps the filters:
 
-- the **session sheet**, from sessions in tips, the pressure lists, the session map and both drawers;
+- the **session sheet**, from sessions in tips, the pressure and quadrant lists, the session map and both drawers;
 - the **project sheet**, from a project row in the Starting context, Growth and Cost tables;
 - the **tool inspector**, from a tool or MCP server row in Largest contributors. It shows that tool's calls, failures and latency for the same view.
 

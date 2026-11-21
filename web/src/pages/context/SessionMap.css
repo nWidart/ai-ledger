@@ -1,3 +1,26 @@
 .session-map { margin-top: 8px; }
 .session-map .smcount { margin: 0 0 6px; font-size: .8125rem; color: var(--text-primary); }
 .session-map .hit { cursor: pointer; }
+.session-map .tip .tname { max-width: 18rem; overflow-wrap: anywhere; }
+/* Quadrants: their names in the plot's corners, the selected one washed, the sessions outside it dimmed */
+.session-map .quad-label { fill: var(--text-muted); pointer-events: none; }
+.session-map .quad-label.on { fill: var(--text-primary); }
+.session-map .quad-on { fill: var(--surface-2); }
+.session-map .pt.out { opacity: .2; }
+.session-map .quads { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; margin: 8px 0 0; }
+.session-map .quads button:not(.clear) { font: inherit; font-size: .78125rem; color: var(--text-secondary); background: var(--surface-1); cursor: pointer;
+  border: 1px solid var(--control-border); border-radius: 6px; padding: 4px 8px; display: inline-flex; flex-wrap: wrap; gap: 2px 6px; align-items: baseline; text-align: left; }
+.session-map .quads button b { color: var(--text-primary); font-weight: 600; }
+.session-map .quads button .n { font-variant-numeric: tabular-nums; color: var(--text-primary); }
+.session-map .quads button .what { color: var(--text-muted); font-size: .71875rem; }
+.session-map .quads button[aria-pressed="true"] { border-color: var(--text-primary); background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--text-primary); }
+.session-map .quads button:focus-visible { outline: 2px solid var(--text-primary); outline-offset: 2px; }
+.session-map .clear { font-size: .78125rem; }
+.session-map .qlist { border: 1px solid var(--border); border-radius: 6px; padding: 8px; margin-top: 8px; display: grid; gap: 4px; }
+.session-map .qlist p { margin: 0; }
+.session-map .qlist ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.session-map .qsess { display: flex; flex-wrap: wrap; gap: 2px 12px; width: 100%; text-align: left; font-size: .78125rem; padding: 4px 6px; }
+.session-map .qname { font-weight: 600; }
+@media (forced-colors: active) {
+  .session-map .quad-on { fill: none; stroke: Highlight; stroke-width: 2; }
+}

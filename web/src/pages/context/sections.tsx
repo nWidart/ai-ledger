@@ -1,4 +1,5 @@
-// Context's sections: starting context, growth, what fills context and cost.
+// Context's sections: starting context, growth, window pressure, what fills context and cost.
+import { useState } from "react";
 import type { ContextPayload } from "../../api";
 import { DataTable } from "../../components/DataTable";
 import { HowMeasured } from "../../components/HowMeasured";
@@ -7,10 +8,10 @@ import { Toggletip } from "../../components/Toggletip";
 import { dur, num, pct, plural, usd, usd0 } from "../../format";
 import { Proj } from "./cells";
 import { CacheChart } from "./CacheChart";
-import { CURVE_MIN_SESSIONS, START_LARGE_TOKENS, short } from "./context";
+import { CURVE_MIN_SESSIONS, QUADS, quadOf, START_LARGE_TOKENS, short, type Quad } from "./context";
 import { Contributors } from "./Contributors";
 import { GrowthChart } from "./GrowthChart";
-import { PressureBars } from "./PressureBars";
+import { fillOf, PressureBars } from "./PressureBars";
 import { SessionMap } from "./SessionMap";
 import { StartRanges } from "./StartRanges";
 import { StartTrend } from "./StartTrend";
@@ -73,18 +74,25 @@ export function Growth({ d }: { d: D }) {
   );
 }
 
-/** How full sessions peak, by window size, and every session by its start and its peak. */
+/** How full sessions peak, by window size, and every session by its start and its peak. A quadrant selected on the map narrows the
+ *  bars to its sessions on the map. */
 export function Pressure({ d }: { d: D }) {
   const g = d.growth, c = d.coverage, m = d.sessions_map;
+  const [quad, setQuad] = useState<Quad | null>(null);
+  const q = quad && QUADS.find(x => x.id === quad)!;
+  const pts = q ? m.points.filter(p => quadOf(p) === q.id) : m.points;
+  const fill = q ? fillOf(pts) : g.fill;
   return (
     <section className="panel sect" id="pressure" aria-labelledby="pressureTitle">
       <h2 id="pressureTitle">Window pressure</h2>
       <div className="hint">How many sessions peaked in each band of their model's window.
         <HowMeasured what="window pressure">Sessions are grouped by the size of their model's window. {num(c.with_window)} of {plural(c.sessions, "session")} have a known window.</HowMeasured></div>
-      {g.fill.length ? <PressureBars fill={g.fill} points={m.points} /> : <p className="empty">No session in this view has a known window.</p>}
+      {q && <p className="lead-line quad-note" role="status">Narrowed to <b>{q.label}</b>: {plural(pts.length, "session")} on the map with {q.what}.{" "}
+        <button type="button" className="linkish" onClick={() => setQuad(null)}>Show every session</button></p>}
+      {fill.length ? <PressureBars key={quad ?? ""} fill={fill} points={pts} /> : <p className="empty">{q ? `No session on the map is in ${q.label}.` : "No session in this view has a known window."}</p>}
       <h3>Sessions by start and peak</h3>
-      <div className="hint">Each dot is a session: how much context it started with, and how much of its window it filled at its peak.</div>
-      <SessionMap map={m} />
+      <div className="hint">Each dot is a session: how much context it started with, and how much of its window it filled at its peak. Select a quadrant to narrow the bars above.</div>
+      <SessionMap map={m} quad={quad} onQuad={setQuad} />
     </section>
   );
 }

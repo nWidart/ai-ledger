@@ -467,6 +467,8 @@ export interface SessionPoint {
   /** The number of turns (main-thread requests of at least 2,000 prompt tokens). */
   turns: number;
   compactions: number;
+  /** The session's name (see titles.titles); null when it has none. */
+  title: string | null;
 }
 /** One bucket (a day, or the Monday of a week) of cache use. input, cache_read and cache_write are prompt tokens summed over the view's requests. */
 export interface CacheBucket {
@@ -513,7 +515,11 @@ export interface ContextPayload {
     /** Five counts per window: <25%, 25-50%, 50-80%, 80-90%, >=90% of the window. */
     fill: { window: number; sessions: number; bins: [number, number, number, number, number] }[];
     /** The median peak context of the view's sessions, in tokens and as a share of the window (over the sessions with a known window). */
-    peak: { sessions: number; median: number | null; window_share: number | null };
+    peak: {
+      sessions: number; median: number | null; window_share: number | null;
+      /** The same per project, most sessions first. */
+      by_project: { project: string | null; sessions: number; median: number | null; window_share: number | null }[];
+    };
   };
   /** The sessions with a measured start, a known window and a peak. `points` holds the newest 1,000 (by first_ts, then session_id); `total` counts them all. */
   sessions_map: { total: number; points: SessionPoint[] };

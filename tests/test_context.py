@@ -357,12 +357,22 @@ class GrowthTest(unittest.TestCase):
         self.assertEqual(peak["median"], 100_000)
         self.assertAlmostEqual(peak["window_share"], 0.375)
 
+    def test_peak_per_project_most_sessions_first(self):
+        b = Builder(self)
+        for sid, project, peak in (("a", "foo", 40_000), ("b", "foo", 120_000), ("c", "foo", 80_000), ("d", "bar", 100_000)):
+            b.session(sid, project, peak=peak)
+            b.turn(sid, 0, 5_000)
+        rows = b.payload()["growth"]["peak"]["by_project"]
+        self.assertEqual([(r["project"], r["sessions"], r["median"]) for r in rows], [("foo", 3, 80_000), ("bar", 1, 100_000)])
+        self.assertAlmostEqual(rows[0]["window_share"], 0.4)  # 80,000 of 200,000
+
     def test_peak_window_share_is_none_without_a_known_window(self):
         b = Builder(self)
         for sid in ("a", "b"):
             b.session(sid, "foo", peak=80_000, peak_model="m-nowin")
             b.turn(sid, 0, 5_000, model="m-nowin")
-        self.assertEqual(b.payload()["growth"]["peak"], dict(sessions=2, median=80_000, window_share=None))
+        self.assertEqual(b.payload()["growth"]["peak"], dict(sessions=2, median=80_000, window_share=None,
+                                                             by_project=[dict(project="foo", sessions=2, median=80_000, window_share=None)]))
 
     def test_fill_bins_by_window(self):
         b = Builder(self)
@@ -380,7 +390,7 @@ class GrowthTest(unittest.TestCase):
 
 
 class SessionsMapTest(unittest.TestCase):
-    def test_eligible_sessions_only_and_no_title(self):
+    def test_eligible_sessions_only_with_their_title(self):
         b = Builder(self)
         b.session("ok", "foo", peak=100_000, compactions=2)
         b.turns("ok", [10_000, 20_000, 30_000])
@@ -394,7 +404,7 @@ class SessionsMapTest(unittest.TestCase):
         m = b.payload()["sessions_map"]
         self.assertEqual(m["total"], 1)
         self.assertEqual(m["points"], [dict(session_id="ok", project="foo", source="claude", first_ts="2026-11-04T09:00:00.000Z", start=10_000, peak=100_000,
-                                            window=200_000, turns=3, compactions=2)])
+                                            window=200_000, turns=3, compactions=2, title="A title")])
         self.assertEqual(Builder(self).payload()["sessions_map"], dict(total=0, points=[]))
 
     def test_the_newest_points_are_kept_and_total_counts_all(self):
@@ -682,6 +692,27 @@ class TipsTest(unittest.TestCase):
         b.session("c", "foo", peak=10_000, compactions=6)
         b.turn("c", 0, 10_000)
         self.assertEqual(self.tip(b.payload(), "frequent_compactions")["severity"], "critical")
+
+    def test_advice_names_the_commands_of_the_matching_sessions_agents(self):
+        b = Builder(self)
+        b.session("x", "cdx", source="codex", peak=10_000, compactions=3, window=258_400)
+        b.turn("x", 0, 40_000)
+        b.session("n", "foo", peak=10_000)  # a Claude Code session that matches no tip
+        b.turn("n", 0, 10_000)
+        for advice in (self.tip(b.payload(), "frequent_compactions")["advice"], self.tip(b.payload(source="codex"), "frequent_compactions")["advice"]):
+            self.assertIn("`/new`", advice)
+            self.assertIn("`/compact`", advice)
+            self.assertNotIn("`/clear`", advice)
+            self.assertNotIn("subagent", advice)
+        start = self.tip(b.payload(source="codex"), "large_start")["advice"]
+        self.assertIn("`codex mcp list`", start)
+        self.assertNotIn("claude mcp list", start)
+        self.assertNotIn("CLAUDE.md", start)
+        b.session("c", "foo", peak=10_000, compactions=4)  # a Claude Code session joins the matching ones
+        b.turn("c", 0, 10_000)
+        both = self.tip(b.payload(), "frequent_compactions")["advice"]
+        self.assertIn("`/clear` in Claude Code, `/new` in Codex", both)
+        self.assertEqual(self.tip(b.payload(source="claude"), "frequent_compactions")["advice"].count("`/new`"), 0)
 
     def test_near_limit(self):
         b = Builder(self)

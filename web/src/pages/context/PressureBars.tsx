@@ -3,7 +3,7 @@ import { useState } from "react";
 import type { ContextPayload, SessionPoint } from "../../api";
 import { ChartTable } from "../../components/DataTable";
 import { SOURCE_LABELS } from "../../components/Filters";
-import { openSessionSheet, shortId } from "../../components/sheets/session";
+import { openSessionSheet, sessName } from "../../components/sheets/session";
 import { num, pct, plural, when } from "../../format";
 import { FILL_LABELS, NEAR_LIMIT, share, windowLabel } from "./context";
 import "./PressureBars.css";
@@ -21,6 +21,17 @@ const TONE = [
 
 /** The band (0-4) of a peak share. */
 const bandOf = (r: number): number => EDGES.filter(e => r >= e).length;
+
+/** The peak-fill bars of some sessions on the map (a quadrant's), as the payload's `growth.fill` counts the view's: per window, smallest first. */
+export function fillOf(points: SessionPoint[]): Fill {
+  const by = new Map<number, Fill[number]>();
+  for (const p of points) {
+    const f = by.get(p.window) ?? { window: p.window, sessions: 0, bins: [0, 0, 0, 0, 0] };
+    f.sessions++; f.bins[bandOf(p.peak / p.window)]!++;
+    by.set(p.window, f);
+  }
+  return [...by.values()].sort((a, b) => a.window - b.window);
+}
 
 /** Per window size, one bar split into the five peak-fill bands as shares of the window's sessions. */
 export function PressureBars({ fill, points }: { fill: Fill; points: SessionPoint[] }) {
@@ -52,8 +63,8 @@ export function PressureBars({ fill, points }: { fill: Fill; points: SessionPoin
           {on != null && <div className="plist" role="group" aria-label={`Sessions that peaked at ${FILL_LABELS[on]} of the ${windowLabel(f.window)} window`}>
             {list.length < f.bins[on]! && <p className="muted small">Showing {num(list.length)} of {num(f.bins[on]!)}: the list covers the sessions on the map below, which holds the newest sessions with a measured start.</p>}
             <ul>{list.slice(0, LIST_MAX).map(p => <li key={p.session_id}>
-              <button type="button" className="cellbtn psess" data-session={p.session_id} onClick={() => openSessionSheet(p.session_id)}>
-                <span className="pname">{shortId(p.session_id)}</span>
+              <button type="button" className="cellbtn psess" data-session={p.session_id} title={p.title || p.session_id} onClick={() => openSessionSheet(p.session_id)}>
+                <span className="pname">{sessName(p)}</span>
                 <span className="muted">{p.project ?? "no project"} · {SOURCE_LABELS[p.source]} · {when(p.first_ts)}</span>
                 <span className="muted">starts {num(p.start)} · peak {share(p.peak / p.window)} · {plural(p.compactions, "compaction")}</span>
               </button>
