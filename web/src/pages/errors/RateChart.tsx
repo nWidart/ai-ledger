@@ -1,5 +1,6 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import { FEW_CALLS, LOW_CALLS, lowVolume, textScale } from "../../components/chart";
+import { ChartTable, DataTable } from "../../components/DataTable";
 import { num as fmt, niceStep } from "../../format";
 import { useErrors } from "./context";
 import { bucketLabel, bucketOf, chartData, idle, incSummary, label, linePath, noCalls, pointRows, pointText, pointWhen, selectable, shortLabel, sumCalls, TOPN, typeColor } from "./model";
@@ -108,7 +109,7 @@ export const RateChart = memo(function RateChart() {
   // Selects a bucket for the type table and the detail, or clears it when it is the selected one. A folded stretch has no calls to explain.
   const toggle = (i: number) => {
     const p = pts[i]!;
-    if (!selectable(p)) return say("A stretch without tool calls can't be selected.");
+    if (!selectable(p)) return say("A stretch without tool calls cannot be selected.");
     const on = v.at === p.k;
     update({ at: on ? null : p.k }, true);
     say(on ? "Selection cleared: the table and detail cover the whole range." : `Selected ${pointWhen(v, p)}: the table and detail show only its errors.`);
@@ -138,9 +139,15 @@ export const RateChart = memo(function RateChart() {
 
   const hp = hover && pts[hover.i], hr = hover ? rates[hover.i] : null;
   return <>
-    <section className="card chart-card" aria-labelledby="chartTitle">
-      <h2 id="chartTitle">{cat ? `Errors by type · ${m.cats[cat]!.label} selected` : "Errors by type"}</h2>
-      <div className="hint" id="chartHint">{`Failed tool calls per ${per}, top ${TOPN} types and Other, with ${cat ? "the selected type's" : "the"} error rate (errors per 100 tool calls) above. Dashed lines mark fixes you applied.`}</div>
+    <section className="panel chart-card" aria-labelledby="chartTitle">
+      {/* The chart's own option in its header, as on Activity and Cost; the URL keeps it under gran. */}
+      <div className="chart-head">
+        <div><h2 id="chartTitle">{cat ? `Errors by type · ${m.cats[cat]!.label} selected` : "Errors by type"}</h2>
+          <div className="hint" id="chartHint">{`Failed tool calls per ${per}, top ${TOPN} types and Other, with ${cat ? "the selected type's" : "the"} error rate (errors per 100 tool calls) above. Dashed lines mark fixes you applied.`}</div></div>
+        <div className="seg" id="fGran" role="group" aria-label="Granularity">
+          {(["day", "week"] as const).map(g => <button key={g} type="button" aria-pressed={v.gran === g} onClick={() => update({ gran: g }, true)}>{g === "day" ? "Day" : "Week"}</button>)}
+        </div>
+      </div>
       {!noErrors && legend(pts.some(idle), low.some(Boolean))}
       {selOut()}
       <div id="chart" ref={box} tabIndex={0} role="group" aria-roledescription="chart" aria-describedby="chartHint" aria-label={`Errors by type and error rate. Use the left and right arrow keys to read each point, Enter or Space to select the ${per} for the table and examples.${v.at ? ` Selected: ${bucketLabel(m, v)}.` : ""}`}
@@ -166,6 +173,7 @@ export const RateChart = memo(function RateChart() {
           </svg>}
       </div>
       <div className="sr" id="chartLive" aria-live="polite">{live}</div>
+      {!bare && table()}
     </section>
     <div className="tip" id="tip" role="tooltip" ref={tipEl} style={{ display: hp ? "block" : "none" }}>
       {hp && tip(hover.i)}
@@ -184,6 +192,21 @@ export const RateChart = memo(function RateChart() {
         {inOther && selN ? <div className="trow on"><span>{shortLabel(m.cats[cat]!.label)}</span><b>{fmt(selN)}</b></div> : null}
       </>}
     </>;
+  }
+
+  /** The chart's text alternative, as under Activity's and Cost's charts: per bucket its calls, failed calls and the rate the line draws
+   *  (the selected type's when one is), then the failed calls of each type layer and Other. */
+  function table() {
+    const other = pts.some(p => p.other), rateHead = cat ? `${shortLabel(m.cats[cat]!.label)} rate` : "Error rate";
+    return <ChartTable><DataTable name={`Failed tool calls by type and ${cat ? `${m.cats[cat]!.label} rate` : "error rate"} per ${per}`} region="scroll tall">
+      <thead><tr><th scope="col">{per === "week" ? "Week" : "Day"}</th><th scope="col" className="num">Tool calls</th><th scope="col" className="num">Failed calls</th>
+        <th scope="col" className="num">{rateHead}</th>{vt.layers.map(c => <th key={c} scope="col" className="num">{shortLabel(m.cats[c]!.label)}</th>)}
+        {other && <th scope="col" className="num">Other types</th>}</tr></thead>
+      <tbody>{pts.map((p, i) => <tr key={p.k}><th scope="row">{pointWhen(v, p)}{p.k === v.at && !p.to ? " (selected)" : ""}</th>
+        <td className="num">{fmt(p.c)}</td><td className="num">{fmt(p.e)}</td>
+        <td className="num">{rates[i] == null ? "–" : `${fmt(rates[i], 2)}%`}{low[i] && rates[i] != null ? ` (${FEW_CALLS})` : ""}</td>
+        {vt.layers.map(c => <td key={c} className="num">{fmt(p.by[c] || 0)}</td>)}{other && <td className="num">{fmt(p.other)}</td>}</tr>)}</tbody>
+    </DataTable></ChartTable>;
   }
 
   /** Each type is a button that selects it; Other and the rate line are keys. */

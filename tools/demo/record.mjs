@@ -308,7 +308,7 @@ const SHOT_PAGES = {
   context: { url: "/context?range=30", panels: [
     ["tips", "#tips"], ["starting", "#starting"], ["growth", "#growth"], ["pressure", "#pressure"], ["fills", "#fills"], ["cost", "#cost"]] },
   errors: { url: "/errors?range=30", panels: [
-    ["summary", "#kpis"], ["chart", ".chart-card"], ["types", ".card.types"], ["detail", "#detail"]] },
+    ["summary", "#kpis"], ["chart", ".chart-card"], ["types", ".panel.types"], ["detail", "#detail"]] },
   limits: { url: "/limits?range=30", panels: [
     ["windows", ".lim-grid"], ["history", "#history"]] },
   insights: { url: "/insights?range=30", panels: [

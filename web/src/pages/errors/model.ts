@@ -1,7 +1,7 @@
 // Errors data logic, ported from dashboard_template.html: the payload indexed once, then pure functions of it and the view.
 // /api/errors returns every error; the page filters on the client, by project and source among others.
 import type { Category, Day, ErrorRow, ErrorsPayload, Incident, Source, Ts } from "../../api";
-import { dayLabel, num as fmt } from "../../format";
+import { dayLabel, dur, num as fmt } from "../../format";
 import { FEW_CALLS } from "../../components/chart";
 import type { SortBy } from "../../components/Sort";
 import { sessionSheetHref } from "../../components/sheets/session";
@@ -265,6 +265,27 @@ export function timeLost(m: Model, errs: readonly Err[], groups: readonly Group[
   const by: Record<string, number> = {};
   for (const g of groups) by[g.errs[0]!.c] = (by[g.errs[0]!.c] || 0) + incSpan(g);
   return by;
+}
+/** An incident's retry episode as a strip: its failures (✕) over time, then the call that recovered (✓). The strip's length grows with
+ *  the failures' span on a square-root scale (STRIP_MIN to STRIP_MAX units over 0 to STRIP_CAP seconds), and each failure sits at its
+ *  start time along it: a tight loop is a short strip of crowded marks, spaced failures a long strip of separate ones. The ✓ follows
+ *  the last failure at a fixed STRIP_OK units, so a recovery much later does not stretch a tight loop; the text says when it came.
+ *  w: the strip's length with the ✓; text: the strip in words, its text alternative. */
+export const STRIP_MIN = 20, STRIP_MAX = 120, STRIP_CAP = 3600, STRIP_OK = 12;
+export interface Strip { w: number; marks: { x: number; ok: boolean }[]; text: string }
+export function attemptStrip(g: Group): Strip {
+  const ts = g.errs.map(e => Date.parse(e.ts)).filter(Number.isFinite), t0 = ts.length ? Math.min(...ts) : 0;
+  const ok = g.outcome === "recovered" && g.rts ? Date.parse(g.rts) : NaN, last = ts.length ? Math.max(...ts) : t0;
+  const fails = (last - t0) / 1000, pad = 6;
+  const w0 = STRIP_MIN + (STRIP_MAX - STRIP_MIN) * Math.sqrt(Math.min(fails, STRIP_CAP) / STRIP_CAP);
+  const x = (t: number) => pad + (fails > 0 ? (t - t0) / 1000 / fails : 0) * (w0 - 2 * pad);
+  const marks = ts.map(t => ({ x: x(t), ok: false }));
+  if (Number.isFinite(ok)) marks.push({ x: w0 - pad + STRIP_OK, ok: true });
+  const w = w0 + (Number.isFinite(ok) ? STRIP_OK : 0), n = g.errs.length;
+  const what = n === 1 ? "1 failed attempt" : `${fmt(n)} failed attempts over ${dur(fails)}, ${dur(fails / (n - 1))} apart on average`;
+  const then = Number.isFinite(ok) ? `, then the next call succeeded ${dur(Math.max(0, ok - Date.parse(g.last ?? "")) / 1000 || 0)} later`
+    : g.outcome === "gave_up" ? ", then no further call" : ", then the next call failed too";
+  return { w, marks, text: what + then };
 }
 export interface IncSummary { n: number; bad: number; pct: number; groups: Group[] }
 /** "1,078 errors in 326 incidents, 3% didn't recover" for a set of errors. */

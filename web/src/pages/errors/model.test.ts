@@ -2,8 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import fixture from "../../__fixtures__/errors";
 import type { ErrorsPayload } from "../../api";
 import {
-  applyRules, beforeAfter, breakdown, bucketLabel, bucketOf, buckets, byWeight, change, chartData, compare, emptyTypes, exList, filtered, inBucket, incidentsOf, inTool, incSummary, makeModel, messageOf, midDay, msgGroups, msgList, normalize, pointText,
-  rangeStart, series, settle, summary, timeLost, typeColors, typeRows, uncategorized, viewTypes, whereToStart, withMuted, errorDays, type Err, type View,
+  applyRules, attemptStrip, beforeAfter, breakdown, bucketLabel, bucketOf, buckets, byWeight, change, chartData, compare, emptyTypes, exList, filtered, inBucket, incidentsOf, inTool, incSummary, makeModel, messageOf, midDay, msgGroups, msgList, normalize, pointText,
+  rangeStart, series, settle, summary, timeLost, typeColors, typeRows, uncategorized, viewTypes, whereToStart, withMuted, errorDays, STRIP_MAX, STRIP_MIN, STRIP_OK, type Err, type Group, type View,
 } from "./model";
 import { parseSearch, validateRoot } from "../../url";
 import { lostPayload } from "./lostData";
@@ -331,6 +331,43 @@ describe("incidents", () => {
     const flat = exList(base, groups, true, "", m.byId.t01);
     expect(flat.items.map(e => (e as { id: string }).id)).toEqual(["t01", "t08", "t07", "t04", "t03", "t02"]);
     expect(flat.count).toBe("6 in range, newest first");
+  });
+});
+
+describe("attempt strip", () => {
+  const T = (s: number) => new Date(Date.UTC(2026, 10, 4, 10, 0, s)).toISOString();
+  const group = (at: number[], outcome: Group["outcome"], rts: number | null = null): Group => ({
+    i: 0, s: "s1", t: "Bash", c: "x", p: "foo", sub: 0, first: T(at[0]!), last: T(at[at.length - 1]!), ok: 0, outcome, rid: null, ri: "", rts: rts == null ? null : T(rts),
+    errs: at.map((s, k) => ({ id: `e${k}`, ts: T(s), d: "2026-11-04", p: "foo", s: "s1", t: "Bash", c: "x", i: "", e: "", r: "", sub: 0, src: "claude", n: 0 })),
+  });
+  it("draws a tight loop as a short strip of crowded marks, and spaced failures as a long strip of separate ones", () => {
+    const tight = attemptStrip(group([0, 2, 4], "recovered", 6)), spaced = attemptStrip(group([0, 300, 600], "gave_up"));
+    expect(tight.w - STRIP_OK).toBeLessThan(30);
+    expect(spaced.w).toBeGreaterThan(60);
+    expect(spaced.w).toBeLessThanOrEqual(STRIP_MAX);
+    const gap = (s: typeof tight) => s.marks[1]!.x - s.marks[0]!.x;
+    expect(gap(tight)).toBeLessThan(6); // under a mark's width: the marks touch
+    expect(gap(spaced)).toBeGreaterThan(15);
+    // Failures, then the call that recovered, in time order.
+    expect(tight.marks.map(k => k.ok)).toEqual([false, false, false, true]);
+    expect(spaced.marks.map(k => k.ok)).toEqual([false, false, false]);
+  });
+  it("grows with the span on a square-root scale, capped at an hour", () => {
+    expect(attemptStrip(group([0], "gave_up")).w).toBe(STRIP_MIN);
+    expect(attemptStrip(group([0, 3600], "gave_up")).w).toBe(STRIP_MAX);
+    expect(attemptStrip(group([0, 7200], "gave_up")).w).toBe(STRIP_MAX);
+    expect(attemptStrip(group([0, 900], "gave_up")).w).toBeCloseTo(STRIP_MIN + (STRIP_MAX - STRIP_MIN) / 2);
+  });
+  it("puts the recovering call just after the last failure, so a late recovery does not stretch a tight loop", () => {
+    const soon = attemptStrip(group([0, 2, 4], "recovered", 6)), late = attemptStrip(group([0, 2, 4], "recovered", 1800));
+    expect(late.w).toBe(soon.w);
+    expect(late.marks).toEqual(soon.marks);
+    expect(late.text).toBe("3 failed attempts over 4s, 2s apart on average, then the next call succeeded 30m later");
+  });
+  it("says the strip in words: the attempts, their span and spacing, and how it ended", () => {
+    expect(attemptStrip(group([0, 2, 4], "recovered", 6)).text).toBe("3 failed attempts over 4s, 2s apart on average, then the next call succeeded 2s later");
+    expect(attemptStrip(group([0, 300, 600], "gave_up")).text).toBe("3 failed attempts over 10m, 5m apart on average, then no further call");
+    expect(attemptStrip(group([0], "failed_again")).text).toBe("1 failed attempt, then the next call failed too");
   });
 });
 

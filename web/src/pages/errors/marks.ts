@@ -35,10 +35,10 @@ import { FIXES_KEY, loadFixes, store } from "./view";
 // One mutation for the fix, the mute and the import: they differ only in URL and body, which are its variables. No signal: a write runs to its end.
 const send = ({ url, body }: { url: string; body: unknown }) => getJson<Marks>(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
 const without = (f: Fixes, c: string): Fixes => { const { [c]: _, ...rest } = f; return rest; };
-const FIX_FAILED = "Couldn't save the fix marker. Check that the app is running.";
-const MUTE_FAILED = "Couldn't save the muted setting. Check that the app is running.";
-const UNKNOWN_SAID = "Couldn't confirm the change. Reload to see what the store holds.";
-const MOVE_FAILED = "Couldn't move the fix markers saved in this browser to the store. They stay here and move on the next load.";
+const FIX_FAILED = "Could not save the fix marker. Check that the app is running.";
+const MUTE_FAILED = "Could not save the muted setting. Check that the app is running.";
+const UNKNOWN_SAID = "Could not confirm the change. Reload to see what the store holds.";
+const MOVE_FAILED = "Could not move the fix markers saved in this browser to the store. They stay here and move on the next load.";
 
 /** A write on its way: mark cat on day, remove it (day null), mute or unmute cat, or import the browser's markers (the import shows nothing: they already do). */
 type Op = { cat: string; day: Day | null } | { cat: string; muted: boolean } | { cat?: undefined; fixes: Fixes };
@@ -49,7 +49,7 @@ interface State { server: Marks | null; ops: Op[]; local: Fixes }
 export interface FixError { cat: string; kind: "fix" | "mute"; unknown: boolean; mute?: boolean }
 /** The message beside the control; name is the type's label. */
 export const errorText = (e: FixError, name: string) =>
-  e.unknown ? `Couldn't confirm the change to ${name}. Reload to see what the store holds.` : e.kind === "fix" ? FIX_FAILED : MUTE_FAILED;
+  e.unknown ? `Could not confirm the change to ${name}. Reload to see what the store holds.` : e.kind === "fix" ? FIX_FAILED : MUTE_FAILED;
 /** A failed step whose resync failed: the write's outcome is unknown. */
 class Unconfirmed extends Error {}
 const EMPTY: Marks = { fixes: {}, muted: [] };
