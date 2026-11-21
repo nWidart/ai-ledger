@@ -85,6 +85,83 @@ class UnpricedRatiosTest(unittest.TestCase):
         self.assertIsNone(u["by_project"][0]["cost_per_commit"])
 
 
+class ReportedCostTest(unittest.TestCase):
+    """A request whose source reported its cost costs that amount; only a request with neither a price nor a reported cost is unpriced."""
+
+    def usage(self, rows, prices=PRICES):
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp)
+        con = store.open_store(os.path.join(tmp, "x.duckdb"))
+        self.addCleanup(con.close)
+        c = con.cursor()
+        store.insert(c, "sessions", ["session_id", "project", "first_ts", "last_ts"], [("s", "foo", "2026-11-05 09:00:00", "2026-11-05 09:30:00")])
+        store.insert(c, "prompts", ["prompt_id", "session_id", "ts", "interrupted"], [("p", "s", "2026-11-05 09:00:00", False)])
+        store.insert(c, "requests", ["message_id", "session_id", "ts", "model", "subagent", "input", "output", "thinking", "cache_read",
+                                     "cache_5m", "cache_1h", "thinking_ms", "reported_cost"],
+                     [(f"r{i}", "s", f"2026-11-05 09:0{i}:00", model, False, 60, 10, 0, 0, 0, 0, 0, cost) for i, (model, cost) in enumerate(rows)])
+        return metrics.usage(con.cursor(), prices=prices, today=TODAY)
+
+    def test_unpriced_model_with_reported_costs_adds_them(self):
+        u = self.usage([("m-unknown", 0.1), ("m-unknown", 0.034844)])
+        t = u["totals"]
+        self.assertAlmostEqual(t["cost"], 0.134844)
+        self.assertEqual(u["unpriced"], [])
+        self.assertAlmostEqual(u["daily"][0]["cost"], 0.134844)
+        self.assertEqual(u["daily"][0]["unpriced"], 0)
+        self.assertAlmostEqual(sum(r["cost"] for r in u["daily_models"]), 0.134844)
+        self.assertAlmostEqual(u["sessions"][0]["cost"], 0.134844)
+        self.assertEqual(u["sessions"][0]["unpriced"], 0)
+        # Its token kinds have no estimate: the cost-by-token-kind chart treats the request as it treats an unpriced one.
+        self.assertEqual([t[f"cost_{k}"] for k in metrics.PRICE_KINDS], [None] * 5)
+
+    def test_reported_cost_beside_an_estimate_and_an_unpriced_request(self):
+        u = self.usage([("m-unknown", 0.134844), ("m-a", None), ("m-other", None)])
+        est = (60 * 1 + 10 * 10) / 1e6
+        self.assertAlmostEqual(u["totals"]["cost"], 0.134844 + est)
+        self.assertAlmostEqual(u["totals"]["cost_input"], 60 / 1e6)  # the priced request's kinds only
+        self.assertEqual([r["model"] for r in u["unpriced"]], ["m-other"])
+
+    def test_reported_cost_wins_over_the_estimate(self):
+        self.assertAlmostEqual(self.usage([("m-a", 0.5)])["totals"]["cost"], 0.5)
+
+    def test_a_price_entry_without_rates_gives_a_window_and_prices_nothing(self):
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp)
+        prices = metrics.load_prices(user=os.path.join(tmp, "prices.json"))  # the packaged file alone
+        self.assertEqual(prices["grok-4.7-build"], {"context": 256000})
+        u = self.usage([("grok-4.7-build", None), ("grok-4.7-build", 0.134844)], prices)
+        self.assertAlmostEqual(u["totals"]["cost"], 0.134844)
+        self.assertEqual([(r["model"], r["requests"]) for r in u["unpriced"]], [("grok-4.7-build", 1)])
+        self.assertEqual([u["totals"][f"cost_{k}"] for k in metrics.PRICE_KINDS], [None] * 5)
+
+
+def add_grok_session(con):
+    """A Grok session (g1, project foo, Nov 5) for the web fixtures, beside SourceFilterTest's Claude and Codex sessions: three
+    model calls of a model with no rates that carry the cost Grok reported ($0.75 in all) and no effort, one turn's run with
+    model time and no tool time or lines, a prompt, a failing run_terminal_command and a read_file. The test classes here
+    leave it out, so their figures stay those of Claude Code and Codex."""
+    c = con.cursor()
+    store.insert(c, "sessions", ["session_id", "project", "cwd", "first_ts", "last_ts", "compactions", "peak_context", "peak_model",
+                                 "source", "context_window"],
+                 [("g1", "foo", "/Users/example/foo", "2026-11-05 14:00:00", "2026-11-05 14:20:00", 0, 120_000, "grok-4.7-build",
+                   "grok", 256_000)])
+    store.insert(c, "requests", ["message_id", "session_id", "ts", "model", "effort", "subagent", "input", "output", "thinking",
+                                 "cache_read", "cache_5m", "cache_1h", "thinking_ms", "reported_cost"],
+                 [("g1-1", "g1", "2026-11-05 14:01:00", "grok-4.7-build", None, False, 40_000, 2_000, 0, 30_000, 0, 0, 0, 0.2),
+                  ("g1-2", "g1", "2026-11-05 14:05:00", "grok-4.7-build", None, False, 20_000, 3_000, 0, 80_000, 0, 0, 0, 0.25),
+                  ("g1-3", "g1", "2026-11-05 14:12:00", "grok-4.7-build", None, False, 10_000, 1_000, 0, 110_000, 0, 0, 0, 0.3)])
+    store.insert(c, "tool_calls", ["tool_use_id", "session_id", "tool", "input_summary", "start_ts", "end_ts", "is_error",
+                                   "category", "subagent", "is_commit", "is_test", "test_passed"],
+                 [("g1-t1", "g1", "run_terminal_command", "npm test", "2026-11-05 14:02:00", "2026-11-05 14:02:09", True, "x", False,
+                   False, True, False),
+                  ("g1-t2", "g1", "read_file", "src/app.ts", "2026-11-05 14:03:00", "2026-11-05 14:03:01", False, None, False,
+                   False, False, None)])
+    store.insert(c, "prompts", ["prompt_id", "session_id", "ts", "interrupted"], [("g1-p1", "g1", "2026-11-05 14:00:00", False)])
+    # one turn: 60 s of model time over its 6,000 output tokens (100 per second); Grok states no tool time or lines
+    store.insert(c, "session_runs", ["session_id", "start_ms", "api_ms", "tool_ms", "lines_added", "lines_removed"],
+                 [("g1", 1_793_800_000_000, 60_000, None, None, None)])
+
+
 class MetricsTest(unittest.TestCase):
     """Fixture: project foo (sessions s1, s2), project bar (s3, outside a 7-day range), and the automated project
     observer-sessions (o1, with a request and a prompt on each of Nov 4 and 5), which every view leaves out by default."""
@@ -754,7 +831,8 @@ class MetricsTest(unittest.TestCase):
         self.assertEqual([empty[k] for k in ("sources", "tools", "mcp", "skills", "categories")], [[], [], [], [], []])
         self.assertEqual(empty["projects"], [dict(name="foo", sessions=2)])
         with self.assertRaises(ValueError):
-            pal(source="grok")
+            pal(source="gemini")
+        pal(source="grok")  # a known source: no error
 
     def codex_models(self, *requests):
         """The model rows of a Codex session holding requests, priced by prices.json. The rows are removed after."""
@@ -928,9 +1006,11 @@ class SourceFilterTest(unittest.TestCase):
 
     def test_unknown_source_is_refused(self):
         with self.assertRaises(ValueError):
-            self.usage("grok")
+            self.usage("gemini")
         with self.assertRaises(ValueError):
-            metrics.session_list(self.con.cursor(), prices=PRICES, today=TODAY, source="grok")
+            metrics.session_list(self.con.cursor(), prices=PRICES, today=TODAY, source="gemini")
+        self.usage("grok")  # a known source with no sessions
+        metrics.session_list(self.con.cursor(), prices=PRICES, today=TODAY, source="grok")
 
     def test_errors_payload_tags_sources(self):
         p = metrics.errors_payload(self.con.cursor(), today=TODAY)
@@ -951,11 +1031,13 @@ class SourceFilterTest(unittest.TestCase):
             self.assertEqual(get("/api/usage?range=0&source=codex")[1]["totals"]["tokens"], 200_000)
             self.assertEqual(get("/api/sessions?source=claude")[1]["total"], 1)
             for path, error in (("/api/sessions?sort=title", "unknown sort: title"), ("/api/day", "Invalid isoformat string: ''"),
-                                ("/api/day?day=nope", "Invalid isoformat string: 'nope'"), ("/api/day?day=2026-11-05&source=grok", "unknown source: grok")):
+                                ("/api/day?day=nope", "Invalid isoformat string: 'nope'"), ("/api/day?day=2026-11-05&source=gemini", "unknown source: gemini")):
                 self.assertEqual(get(path), (400, dict(error=error)), path)
-            for path in ("/api/usage?source=grok", "/api/sessions?source=grok"):
+            for path in ("/api/usage?source=gemini", "/api/sessions?source=gemini"):
                 status, body = get(path)
-                self.assertEqual((status, body), (400, dict(error="unknown source: grok")), path)
+                self.assertEqual((status, body), (400, dict(error="unknown source: gemini")), path)
+            for path in ("/api/usage?source=grok", "/api/sessions?source=grok"):
+                self.assertEqual(get(path)[0], 200, path)
         finally:
             httpd.shutdown()
             httpd.server_close()
@@ -1255,6 +1337,39 @@ class SessionRunsTest(unittest.TestCase):
         self.assertIsNone(metrics.session(self.con.cursor(), "x", prices=PRICES)["info"]["runs"])  # a Codex session records no run
 
 
+class RunsWithoutToolTimeTest(unittest.TestCase):
+    """A session whose runs state API time only, as Grok's do: tool time and lines stay None, never 0."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.con = store.open_store(os.path.join(self.tmp, "d", "x.duckdb"))
+        c = self.con.cursor()
+        store.insert(c, "sessions", ["session_id", "project", "first_ts", "last_ts", "source"],
+                     [("g", "foo", "2026-11-04 09:00:00", "2026-11-04 11:00:00", "claude")])
+        store.insert(c, "prompts", ["prompt_id", "session_id", "ts", "interrupted"], [("pg", "g", "2026-11-04 09:00:00", False)])
+        store.insert(c, "requests", ["message_id", "session_id", "ts", "model", "subagent", "input", "output", "thinking",
+                                     "cache_read", "cache_5m", "cache_1h"],
+                     [("qg", "g", "2026-11-04 09:01:00", "m-a", False, 1, 100_000, 0, 0, 0, 0)])
+        store.insert(c, "session_runs", ["session_id", "start_ms", "api_ms", "tool_ms", "lines_added", "lines_removed"],
+                     [("g", 1, 1_000_000, None, None, None)])
+
+    def tearDown(self):
+        self.con.close()
+        shutil.rmtree(self.tmp)
+
+    def test_session_detail(self):
+        info = metrics.session(self.con.cursor(), "g", prices=PRICES)["info"]
+        self.assertEqual(info["runs"], dict(model_ms=1_000_000, tool_ms=None, lines_added=None, lines_removed=None, output_per_s=100.0))
+
+    def test_totals_and_list(self):
+        u = metrics.usage(self.con.cursor(), "foo", 7, prices=PRICES, today=TODAY)
+        t = u["totals"]
+        self.assertEqual((t["model_ms"], t["tool_ms"], t["timed_sessions"], t["output_per_s"]), (1_000_000, None, 1, 100.0))
+        self.assertEqual([(r["day"], r["output_per_s"]) for r in u["speed_trend"]], [("2026-11-04", 100.0)])
+        rows = metrics.session_list(self.con.cursor(), today=TODAY)["sessions"]
+        self.assertEqual([(r["model_ms"], r["output_per_s"]) for r in rows], [(1_000_000, 100.0)])
+
+
 class SessionTimeTest(unittest.TestCase):
     """A session resumed the next day: main-thread requests and tool calls 10, 15 and 5 minutes apart, and a 22-hour
     pause between the first and second day. A subagent request in the pause doesn't end it."""
@@ -1501,7 +1616,7 @@ class ToolDetailTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.detail("hook", "Bash")
         with self.assertRaises(ValueError):
-            self.detail("tool", "Bash", source="grok")
+            self.detail("tool", "Bash", source="gemini")
 
 
 class UserPricesTest(unittest.TestCase):

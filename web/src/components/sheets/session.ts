@@ -3,7 +3,7 @@ import type { MouseEvent } from "react";
 import type { SessionDetail, Source, ToolKind, View } from "../../api";
 import { big, num, pct, plural, usd } from "../../format";
 import { subjectAttrs, type Subject } from "../menu/subject";
-import { currentSheetKey, formatSearch, navigate, setSearch, sheetKey } from "../../url";
+import { currentSheetKey, formatSearch, judged, navigate, setSearch, sheetKey } from "../../url";
 
 /** A plain left click, one the app may handle itself: no modifier, not handled already. */
 const plain = (e: MouseEvent) => !(e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey);
@@ -55,10 +55,10 @@ export function errorsHref(project: string | null | undefined, range?: number | 
 /** The Project page for a project, in a range, source and automated toggle. No sheet key goes with it. */
 export const projectHref = (project: string, range: number, source: Source | "", automated: boolean) =>
   "/project" + formatSearch({ project, range: String(range), source, auto: automated ? "1" : "" });
-/** Activity's Judgments view in view v's project, range, source and automated toggle. A Codex source is dropped: Codex sessions
- *  have no judgments, and Activity opens Overview for a link to the judgments of Codex alone. */
+/** Activity's Judgments view in view v's project, range, source and automated toggle. A source other than Claude Code is
+ *  dropped: its sessions have no judgments, and Activity opens Overview for a link to the judgments of such a source alone. */
 export const judgmentsHref = (v: View) =>
-  "/usage" + formatSearch({ project: v.project, range: String(v.range), source: v.source === "codex" ? "" : v.source, auto: v.automated ? "1" : "", view: "judgments" });
+  "/usage" + formatSearch({ project: v.project, range: String(v.range), source: judged(v.source) ? v.source : "", auto: v.automated ? "1" : "", view: "judgments" });
 /** Follows an in-app link without a reload; modified clicks open as the browser does. */
 export function appLink(e: MouseEvent<HTMLAnchorElement>) {
   if (!plain(e)) return;

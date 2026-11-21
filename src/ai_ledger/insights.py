@@ -292,8 +292,8 @@ def measured(cur, ids, prices):
 
 
 def payload(cur, project="", range_days=0, source="", automated=False, today=None, usage_dir=None, prices=None):
-    """The JSON the Judgments view reads. Only Claude Code sessions have facets: source codex returns coverage alone, and empty
-    session figures. meta holds the view's session figures (see session_figures; median response time is the median of session
+    """The JSON the Judgments view reads. Only Claude Code sessions have facets: a source other than Claude Code (codex,
+    grok) returns coverage alone, and empty session figures. meta holds the view's session figures (see session_figures; median response time is the median of session
     medians), and each listed session's meta its own figures, or None without a session-meta row. Each listed session also
     carries its cost, errors and context_share (see measured), None without a transcript in the store, and each friction
     family and its labels the cost and active_s of the sessions that reported them.
@@ -316,7 +316,7 @@ def payload(cur, project="", range_days=0, source="", automated=False, today=Non
                                             f"count(*) FILTER (WHERE NOT in_store) FROM v s", wp + asp).fetchone()
     claude = per_source.get("claude", 0)
     by_project, run_list, sizes = [], [], None
-    if source != "codex" and cur.execute("SELECT count(*) FROM session_facets").fetchone()[0]:
+    if source in ("", "claude") and cur.execute("SELECT count(*) FROM session_facets").fetchone()[0]:
         by_project = metrics.rows(cur, f"""SELECT coalesce(s.project, '(unknown)') AS project, count(*) AS sessions, count(sf.session_id) AS analysed
             FROM sessions s LEFT JOIN session_facets sf USING (session_id)
             WHERE {asql} AND s.source = 'claude' AND (CAST(? AS DATE) IS NULL OR s.first_ts >= {since}) GROUP BY 1 ORDER BY 2 DESC, 1""",

@@ -584,13 +584,14 @@ def main(argv=None):
     ap.add_argument("command", nargs="?", choices=["serve", "ingest", "rebuild"], default="serve")
     ap.add_argument("--projects", default=store.DEFAULT_ROOT, help="Claude Code transcript root")
     ap.add_argument("--codex", default=store.DEFAULT_CODEX, help="Codex home")
+    ap.add_argument("--grok", default=store.DEFAULT_GROK, help="Grok home")
     ap.add_argument("--usage-data", default=store.DEFAULT_USAGE_DATA, help="Claude Code /insights usage-data directory")
     ap.add_argument("--db", help=f"database file (default {store.DEFAULT_DB})")
     ap.add_argument("--port", type=int, default=PORT, help=f"port to serve on at {HOST} (default {PORT})")
     ap.add_argument("--no-open", action="store_true", help="serve without opening the browser")
     ap.add_argument("--version", action="version", version=f"ai-ledger {importlib.metadata.version('ai-ledger')}")
     a = ap.parse_args(argv)
-    roots = dict(claude=a.projects, codex=a.codex, insights=a.usage_data)
+    roots = dict(claude=a.projects, codex=a.codex, grok=a.grok, insights=a.usage_data)
     folder = os.path.dirname(os.path.abspath(a.db or store.DEFAULT_DB))  # the user files sit next to the store
     metrics.USER_PRICES, metrics.USER_AUTOMATED = os.path.join(folder, "prices.json"), os.path.join(folder, "automated.json")
     try:

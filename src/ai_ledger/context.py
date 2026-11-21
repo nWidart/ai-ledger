@@ -244,6 +244,7 @@ def breaks_cte():
           lag(model) OVER w AS prev_model, lag(ts) OVER w AS prev_ts, lag(cache_1h) OVER w AS prev_1h FROM turns WINDOW w AS (PARTITION BY session_id ORDER BY turn)),
         brk AS (SELECT l.session_id, l.ts, l.prompt - l.cache_read AS uncached, rq.cost_input + rq.cost_cache_5m + rq.cost_cache_1h AS uncached_cost,
             CASE WHEN l.model <> l.prev_model THEN 'model_switch'
+                 WHEN sess.source = 'grok' THEN 'other'  -- Grok's logs state no cache lifetime: a Grok break is never an expiry
                  WHEN date_diff('second', l.prev_ts, l.ts) > CASE WHEN l.prev_1h > 0 THEN {CACHE_TTL_1H_S} WHEN sess.source = 'codex' THEN {CACHE_TTL_CODEX_S} ELSE {CACHE_TTL_S} END THEN 'expired' ELSE 'other' END AS cause
           FROM lagged l JOIN rq ON rq.message_id = l.message_id JOIN sess ON sess.session_id = l.session_id
           WHERE l.turn > 1 AND l.prompt >= {CACHE_MIN_PROMPT} AND l.cache_read < {CACHE_BREAK_SHARE} * l.prompt)"""
@@ -320,12 +321,25 @@ class Rule:
     matching: Callable
 
 
-def per_agent(sources, claude, codex, both):
-    """The advice for the agents in sources: codex when every matching session is a Codex one, both when Codex and Claude Code
-    sessions match, else claude (Claude Code's commands are the default, as its sessions are)."""
-    if "codex" not in sources:
+def per_agent(sources, claude, codex, mixed, plain):
+    """The advice for the agents in sources: claude when every matching session is a Claude Code one (or none matches: Claude
+    Code's commands are the default, as its sessions are), codex when every one is a Codex one, plain (naming no agent's file or
+    command) when every one is from an agent with none to name, such as Grok, else mixed(named): named is the agents among
+    sources whose commands the advice names, Claude Code first, each to be labelled with its agent."""
+    named = [s for s in ("claude", "codex") if s in sources]
+    if sources <= {"claude"}:
         return claude
-    return codex if sources <= {"codex"} else both
+    if sources == {"codex"}:
+        return codex
+    return mixed(named) if named else plain
+
+
+def labelled(named, parts):
+    """parts[agent] for each agent in named, joined with ", "."""
+    return ", ".join(parts[s] for s in named)
+
+
+_NEW_SESSION = {"claude": "`/clear` in Claude Code", "codex": "`/new` in Codex"}  # the command that starts afresh, labelled
 
 
 def project_match(names, alias="x"):
@@ -367,16 +381,20 @@ _UNCALLED = ("Servers configured but never called leave no trace in transcripts,
              "were called; compare it with ")
 
 
+_CLAUDE_TRIM = ("Trim `CLAUDE.md` or `AGENTS.md` and the files they import, and review the MCP servers configured for the project: "
+                "every server's tool schemas are in every prompt. ")
+_PLAIN_TRIM = "Trim the instruction files and review the configured MCP servers: every server's tool schemas are in every prompt. "
+_MCP_LISTS = {"claude": "`.mcp.json` or `claude mcp list` for Claude Code", "codex": "`~/.codex/config.toml` or `codex mcp list` for Codex"}
+
+
 def large_start_advice(ctx, sources):
     return per_agent(
         sources,
-        "Trim `CLAUDE.md` or `AGENTS.md` and the files they import, and review the MCP servers configured for the project: every server's "
-        f"tool schemas are in every prompt. {_UNCALLED}your `.mcp.json` or `claude mcp list`.",
+        f"{_CLAUDE_TRIM}{_UNCALLED}your `.mcp.json` or `claude mcp list`.",
         "Trim `AGENTS.md` and the files it points to, and review the MCP servers configured for Codex: every server's tool schemas are "
         f"in every prompt. {_UNCALLED}your `~/.codex/config.toml` or `codex mcp list`.",
-        "Trim `CLAUDE.md` or `AGENTS.md` and the files they import, and review the MCP servers configured for the project: every server's "
-        f"tool schemas are in every prompt. {_UNCALLED}`.mcp.json` or `claude mcp list` for Claude Code, and `~/.codex/config.toml` or "
-        "`codex mcp list` for Codex.")
+        lambda named: f"{_CLAUDE_TRIM if 'claude' in named else _PLAIN_TRIM}{_UNCALLED}{', and '.join(_MCP_LISTS[s] for s in named)}.",
+        f"{_PLAIN_TRIM}{_UNCALLED}the MCP servers the agent is configured with.")
 
 
 def large_start_match(ctx):
@@ -410,7 +428,9 @@ def compactions_advice(ctx, sources):
     sub = "hand bulk reading to a subagent, so it compacts there and not in the main thread."
     return per_agent(sources, f"Start a new session or `/clear` between tasks; {cheap}; {sub}",
                      f"Start a new session with `/new` between tasks; {cheap}.",
-                     f"Start a new session between tasks (`/clear` in Claude Code, `/new` in Codex); {cheap}; in Claude Code, {sub}")
+                     lambda named: f"Start a new session between tasks ({labelled(named, _NEW_SESSION)}); {cheap}"
+                                   + (f"; in Claude Code, {sub}" if "claude" in named else "."),
+                     "Start a new session between tasks; compact before the context fills, while the summary is still cheap.")
 
 
 # near_limit
@@ -468,10 +488,10 @@ def large_results_advice(ctx, sources):
         lines.append("Cap search results with `head_limit`, or list file names only with `-l`.")
     if any(r["mcp_server"] for r in rs):
         lines.append("Ask MCP tools for a smaller page (a page size or limit argument).")
-    if any(r["source"] == "codex" and not has_remedy(r) for r in rs):
+    if any(r["source"] != "claude" and not has_remedy(r) for r in rs):
         lines.append("Ask for a smaller part of a file or command output at a time.")
     sub = "hand bulk reading to a subagent, which returns a short report."
-    lines.append(per_agent(sources, sub.capitalize(), "", f"In Claude Code, {sub}"))
+    lines.append(per_agent(sources, sub.capitalize(), "", lambda named: f"In Claude Code, {sub}" if "claude" in named else "", ""))
     return " ".join(x for x in lines if x)
 
 
@@ -535,7 +555,8 @@ def long_tier_evidence(ctx):
 def long_tier_advice(ctx, sources):
     why = "before the prompt passes the model's threshold: every token of the request is priced higher once it does."
     return per_agent(sources, f"`/compact` or start a new session {why}", f"`/compact` or start a new session with `/new` {why}",
-                     f"`/compact` or start a new session (`/clear` in Claude Code, `/new` in Codex) {why}")
+                     lambda named: f"`/compact` or start a new session ({labelled(named, _NEW_SESSION)}) {why}",
+                     f"Compact or start a new session {why}")
 
 
 RULES = (
@@ -582,10 +603,10 @@ def tips(ctx):
 
 def overhead(cur, project, source=""):
     """The project's latest /context snapshot (context_snapshots, by ts then uuid), whatever the range: overhead is the
-    configuration's, not a session's. None without a project, for a Codex-only view (Codex records no /context) or without
-    a snapshot. categories keep the order /context lists them; top holds the OVERHEAD_TOP largest MCP servers (their tools
-    summed), memory files and skills."""
-    if not project or source == "codex":
+    configuration's, not a session's. None without a project, for a view of another source than Claude Code (only Claude
+    Code records /context) or without a snapshot. categories keep the order /context lists them; top holds the OVERHEAD_TOP
+    largest MCP servers (their tools summed), memory files and skills."""
+    if not project or source not in ("", "claude"):
         return None
     snap = metrics.rows(cur, """SELECT uuid, ts, session_id, model, version, context_window AS window FROM context_snapshots
         WHERE project = ? ORDER BY ts DESC NULLS LAST, uuid DESC LIMIT 1""", [project])

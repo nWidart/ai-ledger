@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { ProjectRow, RunRateSource, UsagePayload } from "../../api";
 import usage from "../../__fixtures__/usage";
-import { costDays, gaugeFigures, shares, tokenPairs, type Kind } from "./cost";
+import sources from "../../__fixtures__/usage-sources";
+import { costDays, gaugeFigures, kindCost, shares, tokenPairs, type Kind } from "./cost";
 import { projectMedians } from "./insights";
 import { foldMatrix, projectMatrix, sortMatrix, type MatrixRow } from "./matrix";
 
@@ -162,9 +163,19 @@ describe("tokenPairs", () => {
     const read = p.find(x => x.key === "read")!;
     expect(read.tokens).toBe(t.cache_read);
     expect(read.tokenShare).toBeCloseTo(t.cache_read / t.tokens);
-    expect(read.costShare).toBeCloseTo(t.cost_cache_read! / t.cost!);
+    expect(read.costShare).toBeCloseTo(t.cost_cache_read! / kindCost(t)!);
     expect(p.reduce((s, x) => s + x.tokenShare, 0)).toBeCloseTo(1);
     expect(p.reduce((s, x) => s + (x.costShare ?? 0), 0)).toBeCloseTo(1);
+  });
+
+  it("shares the cost estimated per kind, leaving out the cost Grok reported", () => {
+    // A Claude, a Codex and a Grok session: Grok's $0.75 is reported, with no split by kind, so the view's cost is above the kinds' sum.
+    const m = sources.totals, p = tokenPairs(m);
+    expect(m.cost! - kindCost(m)!).toBeCloseTo(0.75);
+    expect(p.find(x => x.key === "input")!.costShare).toBeCloseTo(m.cost_input! / (m.cost! - 0.75));
+    expect(p.reduce((s, x) => s + (x.costShare ?? 0), 0)).toBeCloseTo(1);
+    expect(pairs({ cost: 0.75, cost_input: null, cost_output: null, cost_cache_read: null, cost_cache_5m: null, cost_cache_1h: null })
+      .map(x => x.costShare)).toEqual([null, null, null, null]);
   });
 
   it("counts thinking inside Output, and joins the two cache write lifetimes", () => {

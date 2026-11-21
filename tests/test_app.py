@@ -209,8 +209,9 @@ class AppTest(unittest.TestCase):
         self.assertEqual((status, json.loads(body)["totals"]["calls"]), (200, 0))
         status, _, body = self.get("/api/tool?kind=hook&name=Bash")
         self.assertEqual((status, json.loads(body)), (400, dict(error="unknown kind: hook")))
-        status, _, body = self.get("/api/tool?kind=tool&name=Bash&source=grok")
-        self.assertEqual((status, json.loads(body)), (400, dict(error="unknown source: grok")))
+        status, _, body = self.get("/api/tool?kind=tool&name=Bash&source=gemini")
+        self.assertEqual((status, json.loads(body)), (400, dict(error="unknown source: gemini")))
+        self.assertEqual(self.get("/api/tool?kind=tool&name=Bash&source=grok")[0], 200)
 
     def test_palette(self):
         status, _, body = self.get("/api/palette?range=0")
@@ -219,8 +220,8 @@ class AppTest(unittest.TestCase):
         for k in ("projects", "sources", "tools", "mcp", "skills", "categories"):
             self.assertIsInstance(got[k], list, k)
         self.assertEqual([(r["name"], r["calls"]) for r in got["tools"]], [("Bash", 1)])
-        status, _, body = self.get("/api/palette?source=grok")
-        self.assertEqual((status, json.loads(body)), (400, dict(error="unknown source: grok")))
+        status, _, body = self.get("/api/palette?source=gemini")
+        self.assertEqual((status, json.loads(body)), (400, dict(error="unknown source: gemini")))
         status, _, body = self.get("/api/palette?range=-1")
         self.assertEqual((status, json.loads(body)), (400, dict(error="range must be >= 0")))
 
@@ -260,8 +261,8 @@ class AppTest(unittest.TestCase):
         got = json.loads(body)
         self.assertEqual((status, got["coverage"]["facets"], got["coverage"]["dir"]), (200, 3, USAGE_DATA))
         self.assertEqual(len(got["sessions"]), 3)
-        status, _, body = self.get("/api/insights?source=grok")
-        self.assertEqual((status, json.loads(body)), (400, dict(error="unknown source: grok")))
+        status, _, body = self.get("/api/insights?source=gemini")
+        self.assertEqual((status, json.loads(body)), (400, dict(error="unknown source: gemini")))
 
     def test_context(self):
         status, _, body = self.get("/api/context?range=7")
@@ -271,8 +272,8 @@ class AppTest(unittest.TestCase):
                                               "coverage", "starting", "growth", "grids", "sessions_map", "fills", "cost", "tips", "overhead"]))
         self.assertEqual((got["range"], got["tips"], got["starting"]["sessions"]), (7, [], 0))
         self.assertEqual(self.get("/api/context?project=foo&source=codex&automated=1")[0], 200)
-        status, _, body = self.get("/api/context?source=grok")
-        self.assertEqual((status, json.loads(body)), (400, dict(error="unknown source: grok")))
+        status, _, body = self.get("/api/context?source=gemini")
+        self.assertEqual((status, json.loads(body)), (400, dict(error="unknown source: gemini")))
         status, _, body = self.get("/api/context?range=-1")
         self.assertEqual((status, json.loads(body)), (400, dict(error="range must be >= 0")))
 
@@ -281,7 +282,7 @@ class AppTest(unittest.TestCase):
         status, _, body = self.get("/api/live")
         self.assertEqual((status, json.loads(body)["sessions"]), (200, []))
         self.assertEqual(json.loads(body)["automated_file"], metrics.automated_file())
-        self.assertEqual(self.get("/api/live?source=grok")[0], 400)
+        self.assertEqual(self.get("/api/live?source=gemini")[0], 400)
         with mock.patch.object(app.live, "sessions", wraps=app.live.sessions) as listed:
             self.assertEqual(self.get("/api/live?text=1")[0], 200)
             self.assertEqual(self.get("/api/live")[0], 200)

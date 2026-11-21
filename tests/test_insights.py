@@ -373,7 +373,7 @@ class PayloadTest(InsightsCase):
 
     def test_unknown_source_raises(self):
         with self.assertRaises(ValueError):
-            self.payload(source="grok")
+            self.payload(source="gemini")
 
     def test_goal_and_success_text_not_sent(self):
         self.ingest()
@@ -458,6 +458,19 @@ class CoverageBreakdownTest(InsightsCase):
         self.assertEqual(self.projects(), [dict(project="demo-app", sessions=2, analysed=1)])
         self.assertEqual(self.projects(project="observer-sessions"), [dict(project="observer-sessions", sessions=1, analysed=0)])  # named, it counts
         self.assertEqual(self.projects(source="claude"), self.projects())
+
+    def test_grok_source_returns_coverage_only(self):
+        self.session("g1", "demo-app", "2026-11-03 12:00:00", source="grok")
+        self.ingest()
+        d = self.payload(source="grok")
+        self.assertEqual((d["coverage"]["claude_sessions"], d["coverage"]["analysed"], d["coverage"]["codex_sessions"]), (0, 0, 0))
+        self.assertEqual((d["coverage"]["by_project"], d["coverage"]["runs"], d["coverage"]["run_sizes"]), ([], [], None))
+        for k in ("outcomes", "helpfulness", "session_types", "satisfaction", "friction", "goals", "goal_families", "friction_families",
+                  "sessions", "trend"):
+            self.assertEqual(d[k], [], k)
+        self.assertEqual(d["meta"]["sessions"], 0)
+        c = self.payload()["coverage"]  # source All: the Grok session counts nowhere
+        self.assertEqual(c["claude_sessions"], self.payload(source="claude")["coverage"]["claude_sessions"])
 
     def test_codex_source_and_an_empty_store_give_no_breakdown(self):
         self.session("x1", "demo-app", "2026-11-03 12:00:00", source="codex")
@@ -558,6 +571,7 @@ class RunSizesTest(InsightsCase):
     def test_codex_source_has_none(self):
         self.ingest()
         self.assertIsNone(self.sizes(source="codex"))
+        self.assertIsNone(self.sizes(source="grok"))
 
 
 class TrendTest(InsightsCase):
@@ -831,6 +845,7 @@ class SessionMetaTest(InsightsCase):
         self.add(1)
         self.ingest()
         self.assertEqual(self.figures(source="codex"), empty)
+        self.assertEqual(self.figures(source="grok"), empty)
         self.assertEqual(self.figures(source="claude")["sessions"], 1)
 
     def test_a_listed_session_carries_its_meta_or_null(self):

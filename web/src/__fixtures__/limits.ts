@@ -6,6 +6,7 @@ export default {
  "projects": [
   "foo"
  ],
+ "plan_limits": true,
  "windows": [
   {
    "provider": "claude",

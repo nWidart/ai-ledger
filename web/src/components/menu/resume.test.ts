@@ -8,6 +8,9 @@ describe("resumeCommand", () => {
   it("resumes a Codex session", () => {
     expect(resumeCommand({ source: "codex", session_id: "def", cwd: null })).toBe("codex resume def");
   });
+  it("resumes a Grok session in its directory", () => {
+    expect(resumeCommand({ source: "grok", session_id: "ghi", cwd: "/Users/me/app" })).toBe("cd '/Users/me/app' && grok --resume ghi");
+  });
   it("changes to the working directory first, quoted", () => {
     expect(resumeCommand({ source: "claude", session_id: "abc", cwd: "/Users/me/my app" })).toBe("cd '/Users/me/my app' && claude --resume abc");
   });

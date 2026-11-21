@@ -2,7 +2,7 @@
 // chip fared. Pure: no React, no DOM. Pages already read every key written here; nothing new goes in the URL.
 import { viewOf, type View } from "../../api";
 import { DOCS, docsForRoute, docsUrl, type DocsKey } from "../../docs";
-import { DEFAULT_RANGE, SHARED_KEYS, applyPatch, formatSearch, parseView, rootState, sheetKey, validateRoot } from "../../url";
+import { DEFAULT_RANGE, SHARED_KEYS, applyPatch, formatSearch, judged, parseView, rootState, sheetKey, validateRoot } from "../../url";
 import { SOURCE_LABELS } from "../Filters";
 import { PAGES } from "../Nav";
 import { JUDGMENTS_PAGE, PROJECT_PAGE, isFilter, rangeName, sourceLabel, type Chip, type Command, type FilterKind } from "./suggest";
@@ -128,8 +128,8 @@ export function resolve(chips: readonly Chip[], here: Here): Resolved {
     parts.push(st.range ? rangeName(st.range) : "all time");
     if (st.auto) parts.push(path === "/errors" ? "Errors always includes automated sessions" : "automated sessions");
   }
-  // Judgments has none for Codex alone: Activity then shows Overview, and says why on its view switch.
-  if (page === JUDGMENTS_PAGE && st.source === "codex" && action) parts.push("Codex has no judgments: Overview opens");
+  // Judgments has none for a source other than Claude Code alone: Activity then shows Overview, and says why on its view switch.
+  if (page === JUDGMENTS_PAGE && !judged(st.source) && action) parts.push(`${sourceLabel(st.source)} has no judgments: Overview opens`);
   chips.forEach((c, i) => { if (status[i]!.state === "dropped") parts.push(`${c.label} not applied on ${pageLabel(page)}`); });
   return { path, raw, href, moved, changed: moved || command != null, command, docs, footer: parts.join(" · "), status, view: viewOf(st) };
 }

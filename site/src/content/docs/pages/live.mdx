@@ -14,7 +14,7 @@ import stripLight from "../../../assets/shots/live-strip-light.png";
 import wall from "../../../assets/shots/live-wall.png";
 import wallLight from "../../../assets/shots/live-wall-light.png";
 
-Live answers one question: which of my sessions are running, and which wait for me? It follows each active Claude Code and Codex session within seconds of its transcript lines being written, from the agent's side: prompts, tool calls, subagents, context and cost.
+Live answers one question: which of my sessions are running, and which wait for me? It follows each active Claude Code, Codex and Grok session within seconds of its transcript lines being written, from the agent's side: prompts, tool calls, subagents, context and cost.
 
 :::caution[Full text shows transcript content, secrets included]
 Live shows word counts, shortened tool inputs and subagent descriptions by default. The **Full text** toggle puts transcript content on screen, secrets included. It is off on every page load. Turn it off before you share your screen. See [Privacy and security](/ai-ledger/concepts/privacy-security/).
@@ -47,7 +47,7 @@ In a background tab, Live stops its requests and timers. When you return, it fet
 
 The tab title carries the number of sessions that need you, as in `(2) Live · AI Ledger`. Sessions that need you are those in **approval?** and **your turn**. With none, the title has no count.
 
-On every page, the **Live** tab in the navigation carries the same kind of count as a badge: the sessions in **approval?** and **your turn**, over every project and both agents, with automated sessions left out. It shows nothing at 0 and "9+" above nine, and it follows the navigation's status check, about once a minute and when you return to the tab. Live's own list is filtered and updates every second, so the two can differ for a moment.
+On every page, the **Live** tab in the navigation carries the same kind of count as a badge: the sessions in **approval?** and **your turn**, over every project and every agent, with automated sessions left out. It shows nothing at 0 and "9+" above nine, and it follows the navigation's status check, about once a minute and when you return to the tab. Live's own list is filtered and updates every second, so the two can differ for a moment.
 
 ## Panels
 
@@ -65,12 +65,12 @@ Each entry shows:
 
 - the session's title as its main line, or the project when the session has no title;
 - its cost so far;
-- on the second line, the project (with its color), the state with its time, and the source (Claude Code or Codex). An entry with no title shows the state, the source and the git branch instead;
+- on the second line, the project (with its color), the state with its time, and the source (Claude Code, Codex or Grok). An entry with no title shows the state, the source and the git branch instead;
 - on the third line, a small context meter with the percent of the window used (left out when the window is not known), the latest action as the wall tile shows it, and `✕ N` when calls failed. A screen reader reads `✕ N` as "N errors".
 
 The footer reads `N sessions working · N waiting for you · $ so far`; the "waiting for you" part shows only when at least one session waits. Working counts the working group. Waiting counts approval? and your turn. Idle and ended count as neither.
 
-A session's title comes from the newest custom title (Claude Code `/rename`), else the agent's own title (a Claude Code AI title or a Codex thread name), else, only with Full text on, a title made from the first prompt. A title has at most 80 characters.
+A session's title comes from the newest custom title (Claude Code `/rename`), else the agent's own title (a Claude Code AI title or a Codex thread name; Grok's title is not recorded), else, only with Full text on, a title made from the first prompt. A title has at most 80 characters.
 
 **Controls** Selecting an entry opens that session in the stream. With no session selected, the page opens the newest active session.
 
@@ -93,7 +93,7 @@ When older events are not shown, the stream says so and links to the session she
 
 A tool row opens its detail in place: the description (shell calls), the input, the start time, the error when it failed, and the result. With Full text off, the result shows only its size in characters. A tool input is cut to 300 characters with Full text off. The error text of a failed call shows with Full text off too, up to 700 characters. A failed command inside a Codex `exec` script gets its own failed row.
 
-**Subagent lanes.** Subagent work shows as a lane inside the stream. The header shows the subagent's name, its description, its tool count, its error count when above zero, its duration, its model and cost when known, and whether it is running (spinner) or done (✓). A finished lane is folded. A running lane with more than 5 rows shows its last 5, with a control under its header ("Show all N rows", then "Show last 5"). The Errors filter opens a finished lane that holds a failed row, unless you folded it. A fold or expansion you chose is kept while the page is open.
+**Subagent lanes.** Subagent work shows as a lane inside the stream. The header shows the subagent's name, its description, its tool count, its error count when above zero, its duration, its model and cost when known, and whether it is running (spinner) or done (✓). A finished lane is folded. A running lane with more than 5 rows shows its last 5, with a control under its header ("Show all N rows", then "Show last 5"). The Errors filter opens a finished lane that holds a failed row, unless you folded it. A fold or expansion you chose is kept while the page is open. A Grok subagent runs as a session of its own in Grok's files; Live shows it as a lane of its parent session, never as an entry of its own.
 
 **Controls**
 
@@ -115,7 +115,7 @@ The filters combine, stay on when you open another session, and change only what
 
 <ThemedImage dark={strip} light={stripLight} alt="Live's status strip above the stream: the state, the context meter, cost, tools, errors, cache read, plan limits, the pulse, the directory and Copy resume." />
 
-**Shows** the selected session's figures, in a strip at the top of the stream, under its head. It belongs to the stream's panel: it is not a bar across the page. It wraps onto a second line when the stream is narrow.
+**Shows** the selected session's figures, in a strip at the top of the stream, under its head. Grok reports its usage once per turn, so a Grok session's tokens, cost and context change when a turn ends, not while it runs. It belongs to the stream's panel: it is not a bar across the page. It wraps onto a second line when the stream is narrow.
 
 **Figures** In order:
 
@@ -136,7 +136,7 @@ The strip shows no request count or model: the model is in the stream's head, an
 **Controls**
 
 - The Errors figure toggles the Errors stream filter.
-- **Copy resume** copies the command that resumes the session in its agent, `claude --resume <id>` or `codex resume <id>`, after `cd '<directory>' && ` when the directory is known. It says "Copied" or "Copy failed", politely to a screen reader too.
+- **Copy resume** copies the command that resumes the session in its agent, `claude --resume <id>`, `codex resume <id>` or `grok --resume <id>`, after `cd '<directory>' && ` when the directory is known. It says "Copied" or "Copy failed", politely to a screen reader too.
 
 ### Wall
 
@@ -175,12 +175,12 @@ Each active session has one state. The rail, the wall and the status strip use t
 
 | State | Group | Meaning |
 | --- | --- | --- |
-| **approval?** | approval? | A shell call (`Bash`, Codex `exec` or `exec_command`) with no result for more than 30 seconds. Inferred: transcripts record no permission prompt. A shell call with a timeout above 120 seconds does not count. |
-| **your turn** | your turn | The agent finished its turn and waits for your prompt. The label counts up how long. |
+| **approval?** | approval? | A shell call (`Bash`, Codex `exec` or `exec_command`, Grok `run_terminal_command`) with no result for more than 30 seconds. Inferred: transcripts record no permission prompt. A shell call with a timeout above 120 seconds does not count. |
+| **your turn** | your turn | The agent finished its turn and waits for your prompt. The label counts up how long. A cancelled Grok turn counts as an interrupt and ends the turn too. |
 | running a tool | working | A tool call has no result. The label names the tool and how long it has run, such as `Read 4.2s`. |
-| **thinking** | working | The newest main-thread line is your prompt or a tool result. Inferred for Claude Code. Not inferred for a Codex turn, which Codex records. A session whose subagent is at work reads thinking, inferred, even when the main thread finished its turn. |
+| **thinking** | working | The newest main-thread line is your prompt or a tool result. Inferred for Claude Code. Not inferred for a Codex or Grok turn, which the agent records: a Grok session reads thinking from its prompt to the end of its turn. A session whose subagent is at work reads thinking, inferred, even when the main thread finished its turn. |
 | **idle** | idle | No line for 5 minutes. |
-| **ended** | ended | A Claude Code session you closed. Codex writes no close, so a Codex session goes from your turn to idle and never reads ended. |
+| **ended** | ended | A Claude Code session you closed, or a Grok session after Grok exits. Codex writes no close, so a Codex session goes from your turn to idle and never reads ended. |
 
 An inferred state shows "(inferred)" beside it, with the reason as hover text, and in the status strip behind its **(inferred)** toggletip.
 

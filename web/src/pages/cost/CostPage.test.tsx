@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { ModelRow, ProjectRow, SessionsPage, UsagePayload } from "../../api";
 import usage from "../../__fixtures__/usage";
 import usageAll from "../../__fixtures__/usage-all";
+import sources from "../../__fixtures__/usage-sources";
 import sessions from "../../__fixtures__/sessions";
 import session from "../../__fixtures__/session";
 import { openDrawer } from "../../components/Drawer";
@@ -489,6 +490,25 @@ describe("CostPage", () => {
       await show(usage);
       expect(screen.getByRole("button", { name: "Agent" }).getAttribute("aria-pressed")).toBe("true");
       expect(screen.getByRole("group", { name: /^Estimated cost by agent per day/ })).toBeTruthy();
+    } finally {
+      localStorage.clear();
+    }
+  });
+
+  it("stacks three agents by Agent, each in its own colour, and leaves Grok's reported cost out of the kind shares", async () => {
+    try {
+      await show(sources);
+      await userEvent.click(screen.getByRole("button", { name: "Agent" }));
+      expect(screen.getByRole("group", { name: /^Estimated cost by agent per day/ })).toBeTruthy();
+      const legend = within(document.querySelector(".legend") as HTMLElement);
+      const keys = ["Claude Code", "Codex", "Grok"].map(name => legend.getByRole("button", { name }));
+      expect(new Set(keys.map(k => k.querySelector("i, span[style]")?.getAttribute("style"))).size).toBe(3);
+      const tokens = drawer("d-tokens");
+      expect(tokens.textContent).toContain("is the cost Grok reported, with no split by kind, so it is not in this breakdown.");
+      const shares = [...tokens.querySelectorAll(".tp-row .sr")].map(d => Number(/([\d.]+)% of estimated cost/.exec(d.textContent!)![1]));
+      expect(shares.reduce((a, b) => a + b, 0)).toBeCloseTo(100, 0);
+      await userEvent.click(legend.getByRole("button", { name: "Grok" }));
+      expect(location.search).toBe("?range=30&source=grok");
     } finally {
       localStorage.clear();
     }

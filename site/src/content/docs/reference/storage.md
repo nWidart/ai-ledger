@@ -29,8 +29,8 @@ With `--db <file>`, the configuration files are `prices.json` and `automated.jso
 
 ## What the store holds
 
-- Every line of every transcript the app has read, from Claude Code (`--projects`) and Codex (`--codex`), as written. A deleted, truncated or rewritten source file does not remove or change the stored lines.
-- The tables derived from those lines: sessions, requests, tool calls and prompts, each linked to its project and session. Both sources map onto the same tables.
+- Every line of every transcript the app has read, from Claude Code (`--projects`), Codex (`--codex`) and Grok (`--grok`), as written. A deleted, truncated or rewritten source file does not remove or change the stored lines.
+- The tables derived from those lines: sessions, requests, tool calls and prompts, each linked to its project and session. All three sources map onto the same tables.
 - Claude Code's `/insights` usage data, plan-limit snapshots and the `/context` snapshots that Claude Code records in transcripts.
 - The Errors page's marks (fix days and muted types). They come from your actions, not from transcripts. `ai-ledger rebuild` leaves them as they are.
 
@@ -43,6 +43,7 @@ The store holds full transcript content, **including any secrets** that appeared
 | Claude Code transcripts (read) | `~/.claude/projects` |
 | Claude Code `/insights` usage data (read) | `~/.claude/usage-data` |
 | Codex sessions (read) | `~/.codex` |
+| Grok sessions (read) | `~/.grok/sessions` |
 | Theme and sheet width | Your browser's local storage, per browser |
 
 The app never writes to the transcript roots.

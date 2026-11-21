@@ -18,6 +18,7 @@ AI Ledger reads no configuration file to measure context. It takes each request'
 To turn tokens into a share of the window, AI Ledger needs the window's size:
 
 - Codex states the window at each turn, so its sessions use that.
+- Grok states the window in a compaction notice. A Grok session that compacted uses that; one that did not uses the window the price table gives the model.
 - Claude Code states none, so its sessions use the window the price table gives the model.
 - A session with neither has no share; the Context page counts how many sessions in the view have a known window.
 
@@ -46,6 +47,7 @@ AI Ledger does not guess the percent. It reads it from the provider:
 
 - **Claude Code.** On macOS, the app asks Anthropic's usage endpoint for the limits at most once every 5 minutes while it runs, with the token Claude Code keeps in the Keychain. Where it cannot read that token, as on Linux, it records no Claude Code reading.
 - **Codex.** Codex writes its limits into its own transcripts, so its readings come with every ingest, on any system.
+- **Grok.** Grok reports no plan limits, so AI Ledger has no Grok window.
 
 Between readings, AI Ledger estimates. It compares how the percent moved with the estimated API cost of the requests counted in the same window, which gives a price per 1% for each limit. Usage since the last reading, divided by that price, gives the percent now. Estimates are marked as such. The same price per 1%, times 100, is the "100% ≈" line on each window's card: the window's cap in list-price dollars. See [How cost is estimated](/ai-ledger/concepts/cost-estimates/).
 

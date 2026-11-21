@@ -7,7 +7,7 @@ import type { LiveEvent, LiveListSession, LivePulse, LiveSession, LiveState, Liv
 export const KEEP = 2000;
 /** A shell call pending this long reads as likely waiting for approval (as live.py's APPROVAL). */
 const APPROVAL_MS = 30_000;
-const APPROVAL_TOOLS = new Set(["Bash", "exec_command", "exec"]); // the shell tools
+const APPROVAL_TOOLS = new Set(["Bash", "exec_command", "exec", "run_terminal_command"]); // the shell tools, as live.py's
 /** Whether a call pending for `pending` ms reads as likely waiting for approval, as live.py's state says it: a shell
  *  call past 30 s, unless it is a long one (its timeout is above 120 s). */
 export const likelyWaiting = (tool: string | null, long: boolean, pending: number | null): boolean =>

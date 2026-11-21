@@ -2,6 +2,7 @@
 // here, through a key: when a docs page moves, its entry's path changes and no call site does. docs.test.ts checks each
 // entry against site/src/content/docs/ (the file exists, the title is the file's, the anchor is one of its headings) and
 // fails when any other module of web/src holds the docs host.
+import { SOURCES } from "./url";
 
 /** The docs site's root. The site sets trailingSlash: "always", so every page path ends with "/". */
 export const DOCS_BASE = "https://nwidart.github.io/ai-ledger/";
@@ -19,7 +20,7 @@ export interface DocsEntry {
 // anchored entries the toggletips link to. A page entry's key is its path without the trailing slash; an anchored entry's
 // key adds "#" and the anchor.
 export const DOCS = {
-  home: { path: "", title: "Dashboards for Claude Code and Codex" },
+  home: { path: "", title: "Dashboards for Claude Code, Codex and Grok" },
 
   "start/install": { path: "start/install/", title: "Install and first run" },
   "start/first-tour": { path: "start/first-tour/", title: "15-minute first tour" },
@@ -89,12 +90,14 @@ const PAGE_DOCS: Readonly<Record<string, DocsKey>> = {
 };
 
 /** The docs page for a route: each page's own, Activity's Judgments view (view=judgments) the Judgments page, anything
- *  else the docs home. It names the page the route shows: Codex has no judgments, so that view shows Overview, and
+ *  else the docs home. It names the page the route shows: only Claude Code has judgments, so for Codex or Grok alone that view shows Overview, and
  *  Project with no project redirects to Activity. `search` is the query string (with or without "?") or the parsed keys. */
 export function docsForRoute(path: string, search: string | Readonly<Record<string, unknown>> = ""): DocsKey {
   const params = typeof search === "string" ? new URLSearchParams(search) : null;
   const get = (k: string) => (params ? params.get(k) : (search as Readonly<Record<string, unknown>>)[k]);
-  if (path === "/usage" && get("view") === "judgments" && get("source") !== "codex") return "pages/insights";
+  const source = get("source");
+  const unjudged = source !== "claude" && (SOURCES as readonly unknown[]).includes(source);  // a source other than Claude Code alone
+  if (path === "/usage" && get("view") === "judgments" && !unjudged) return "pages/insights";
   if (path === "/project" && !get("project")) return "pages/activity";
   return Object.hasOwn(PAGE_DOCS, path) ? PAGE_DOCS[path]! : "home";
 }

@@ -11,7 +11,7 @@ import live from "../../__fixtures__/live";
 import session from "../../__fixtures__/session";
 import usage from "../../__fixtures__/usage";
 import usageAll from "../../__fixtures__/usage-all";
-import { NO_FACETS } from "../../components/facets";
+import { noFacets } from "../../components/facets";
 import { ProjectSheet } from "../../components/sheets/ProjectSheet";
 import { mockApi } from "../../components/sheets/testing";
 import { big, num, usd } from "../../format";
@@ -76,8 +76,17 @@ describe("ProjectPage", () => {
     await loaded();
     const judged = within(block("Session judgments"));
     expect(judged.queryByRole("link", { name: /^Open in/ })).toBeNull();
-    expect(judged.getByText(NO_FACETS)).toBeTruthy();
+    expect(judged.getByText("Codex writes no facets: /insights judges Claude Code sessions only.")).toBeTruthy();
     expect(within(block("Activity")).getByRole("link", { name: /^Open in/ }).getAttribute("href")).toBe("/usage?project=foo&range=7&source=codex");
+  });
+
+  it("offers no Judgments link with the source on Grok alone, says Grok writes no facets, and asks for none", async () => {
+    const { f } = open({}, "?project=foo&range=7&source=grok");
+    await loaded();
+    const judged = within(block("Session judgments"));
+    expect(judged.queryByRole("link", { name: /^Open in/ })).toBeNull();
+    expect(judged.getByText("Grok writes no facets: /insights judges Claude Code sessions only.")).toBeTruthy();
+    expect(f.mock.calls.map(c => c[0] as string).filter(u => u.startsWith("/api/insights"))).toEqual([]);
   });
 
   it("asks for no judgments with the source on Codex alone, and shows none kept from another source", async () => {
@@ -85,7 +94,7 @@ describe("ProjectPage", () => {
     await loaded();
     expect(await within(block("Session judgments")).findByText(/analysed/)).toBeTruthy();
     await act(async () => { setSearch({ source: "codex" }); });
-    await waitFor(() => expect(within(block("Session judgments")).getByText(NO_FACETS)).toBeTruthy());
+    await waitFor(() => expect(within(block("Session judgments")).getByText(noFacets("codex"))).toBeTruthy());
     const judged = block("Session judgments");
     expect(judged.querySelector(".blk-lede")).toBeNull();
     expect(within(judged).queryByText("Loading…")).toBeNull();

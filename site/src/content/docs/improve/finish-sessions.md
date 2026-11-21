@@ -18,7 +18,7 @@ Open Activity, select [Judgments](/ai-ledger/pages/insights/) in the view switch
 
 The same judgments show for one project in the **Session judgments** block of the [Project](/ai-ledger/pages/project/) page.
 
-The view covers Claude Code sessions only: `/insights` analyses no Codex session.
+The view covers Claude Code sessions only: `/insights` analyses no Codex or Grok session.
 
 Two families point to other playbooks first:
 

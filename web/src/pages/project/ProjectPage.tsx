@@ -5,7 +5,7 @@ import { useScopeProjects } from "../../components/ScopeBar";
 import { ProjectName } from "../../components/ProjectDot";
 import { useLanding } from "../../components/useLanding";
 import { queries } from "../../queries";
-import { formatSearch, useView } from "../../url";
+import { formatSearch, judged, useView } from "../../url";
 import { useApi, type ApiState } from "../../useApi";
 import { ActivityBlock, ContextBlock, CostBlock, ErrorsBlock, InsightsBlock, LimitsBlock, SessionsBlock, type Scope } from "./blocks";
 import "./project.css";
@@ -32,8 +32,8 @@ export function ProjectPage() {
   const usage = useKept(useApi(project ? queries.usage(want) : null), project);
   const errors = useApi(project ? queries.errors : null);
   const context = useKept(useApi(project ? queries.context(want) : null), project);
-  // Codex writes no facets: with the source on Codex alone there are no judgments to ask for (the block says why).
-  const insights = useKept(useApi(project && h.source !== "codex" ? queries.insights(want) : null), project);
+  // Only Claude Code writes facets: with the source on another agent alone there are no judgments to ask for (the block says why).
+  const insights = useKept(useApi(project && judged(h.source) ? queries.insights(want) : null), project);
   const limits = useKept(useApi(project ? queries.limits(want) : null), project);
   const live = useKept(useApi(project ? queries.liveList(want) : null), project);
   const d = usage.data;

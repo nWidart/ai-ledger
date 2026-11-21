@@ -4,10 +4,11 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode }
 import { useQueryClient } from "@tanstack/react-query";
 import { motion } from "../../components/chart";
 import { askedFor } from "../../components/refresh";
-import type { ContextPayload, ErrorsPayload, InsightsPayload, LimitsPayload, LivePayload, Totals, UsagePayload } from "../../api";
+import type { ContextPayload, ErrorsPayload, InsightsPayload, LimitsPayload, LivePayload, Source, Totals, UsagePayload } from "../../api";
 import { DataTable } from "../../components/DataTable";
-import { Judged, label as facetLabel, NO_FACETS, outcomeLabel } from "../../components/facets";
+import { Judged, label as facetLabel, noFacets, outcomeLabel } from "../../components/facets";
 import { DocsLink } from "../../components/DocsLink";
+import { judged } from "../../url";
 import { Ledger, LedgerRow } from "../../components/Ledger";
 import { ChangeDetail, Facts, ModelLedger, TopSessions } from "../../components/sheets/ProjectSheet";
 import { appLink, errorsHref, judgmentsHref, openSessionSheet } from "../../components/sheets/session";
@@ -24,7 +25,7 @@ import { MeasureNow } from "./MeasureNow";
 import { contextGrid, errorsBlock, limitsBlock } from "./project";
 
 /** The page's view in words and links: the project and the shared keys, as a query string for another page. */
-export interface Scope { project: string; range: number; source: "claude" | "codex" | ""; auto: boolean; search: string }
+export interface Scope { project: string; range: number; source: Source | ""; auto: boolean; search: string }
 
 const FRICTION_TOP = 3;
 
@@ -204,15 +205,15 @@ export function ContextBlock({ context, usage, scope }: { context: ApiState<Cont
 }
 
 /** How many sessions /insights analysed, their outcomes and the top friction; a model's judgment, so tagged as on Activity's
- *  Judgments view, which it opens. With the source on Codex alone there is no such view, as Activity's switch says: the block
- *  says why in the link's place. */
+ *  Judgments view, which it opens. With the source on another agent than Claude Code alone there is no such view, as Activity's
+ *  switch says: the block says why in the link's place. */
 export function InsightsBlock({ insights, scope }: { insights: ApiState<InsightsPayload>; scope: Scope }) {
   const href = judgmentsHref({ project: scope.project, range: scope.range, source: scope.source, automated: scope.auto });
-  // On Codex alone the page asks for no judgments; figures kept from another source must not show under it.
-  const codex = scope.source === "codex";
+  // On such a source the page asks for no judgments; figures kept from another source must not show under it.
+  const off = scope.source && !judged(scope.source) ? noFacets(scope.source) : undefined;
   return (
-    <Block id="insights" title="Session judgments" page="Judgments" href={href} off={codex ? NO_FACETS : undefined}
-      state={codex ? { ...insights, data: undefined, error: undefined, loading: false } : insights}>
+    <Block id="insights" title="Session judgments" page="Judgments" href={href} off={off}
+      state={off ? { ...insights, data: undefined, error: undefined, loading: false } : insights}>
       {d => {
         const c = d.coverage, n = c.facets, top = d.friction_families.slice(0, FRICTION_TOP), max = top[0]?.n ?? 0;
         if (!c.analysed) return <p className="empty">No session is analysed by <code>/insights</code> in this view.</p>;
