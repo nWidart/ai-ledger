@@ -4,9 +4,10 @@ import { useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type Mo
 import type { ContextPayload, SessionPoint } from "../../api";
 import { useColors } from "../../colors";
 import { scaleMargins, textScale, tipAt, useWidth } from "../../components/chart";
-import { ChartTable, DataTable } from "../../components/DataTable";
+import { ChartTable } from "../../components/DataTable";
 import { subjectAttrs } from "../../components/menu/subject";
-import { openSessionSheet, pickRow, sessName, shortId } from "../../components/sheets/session";
+import { openSessionSheet, sessName, shortId } from "../../components/sheets/session";
+import { Table, type Column, type RowPick } from "../../components/table/Table";
 import { num, plural, when } from "../../format";
 import { Proj, SourceName } from "./cells";
 import { NEAR_LIMIT, QUADS, quadAt, quadOf, START_LARGE_TOKENS, share, short, windowLabel, type Quad } from "./context";
@@ -74,10 +75,22 @@ export function fitLines(label: string, room: number, fs: number): { lines: stri
 const byDate = (a: SessionPoint, b: SessionPoint) => (a.first_ts ?? "").localeCompare(b.first_ts ?? "") || a.session_id.localeCompare(b.session_id);
 const QUAD = Object.fromEntries(QUADS.map(q => [q.id, q])) as Record<Quad, typeof QUADS[number]>;
 
-/** A session as a table's header cell: its name as a button, with its short id under a title. */
-const SessionTh = ({ p }: { p: SessionPoint }) => <th scope="row" className="when sess">
-  <button type="button" className="cellbtn" data-session={p.session_id} title={p.title || p.session_id}>{sessName(p)}</button>
-  {p.title && <div className="muted small">{shortId(p.session_id)}</div>}</th>;
+// The chart's data table: one row per session; the row opens the session's sheet. The session is the row header: its name as a button, with its short id under a title.
+const COLUMNS: Column<SessionPoint>[] = [
+  { id: "session", header: "Session", cellProps: () => ({ className: "when sess" }), cell: p => <>
+    <button type="button" className="cellbtn" data-session={p.session_id} title={p.title || p.session_id}>{sessName(p)}</button>
+    {p.title && <div className="muted small">{shortId(p.session_id)}</div>}</> },
+  { id: "project", header: "Project", cell: p => <Proj project={p.project} /> },
+  { id: "agent", header: "Agent", cell: p => <SourceName source={p.source} /> },
+  { id: "started", header: "Started", cell: p => when(p.first_ts) },
+  { id: "start", header: "Starting context", align: "num", cell: p => short(p.start) },
+  { id: "peak", header: "Peak share", align: "num", cell: p => share(p.peak / p.window) },
+  { id: "window", header: "Window", align: "num", cell: p => windowLabel(p.window) },
+  { id: "turns", header: "Turns", align: "num", cell: p => num(p.turns) },
+  { id: "compactions", header: "Compactions", align: "num", cell: p => num(p.compactions) },
+  { id: "quadrant", header: "Quadrant", cell: p => QUAD[quadOf(p)].label },
+];
+const PICK: RowPick<SessionPoint> = { value: p => p.session_id, open: v => openSessionSheet(v), subject: p => ({ kind: "session", value: p.session_id }) };
 
 /** Every session of the view with a measured start, a known window and a peak, as a dot. quad: the selected quadrant (null for none);
  *  onQuad selects one, or clears it with null. */
@@ -220,15 +233,7 @@ export function SessionMap({ map, quad, onQuad }: { map: SessionsMap; quad: Quad
           </button></li>)}</ul>}
       </div>}
       {/* The chart's text alternative: one row per session shown. */}
-      <ChartTable><DataTable name="Sessions on the map" region="scroll tall">
-        <thead><tr><th scope="col">Session</th><th scope="col">Project</th><th scope="col">Agent</th><th scope="col">Started</th><th scope="col" className="num">Starting context</th>
-          <th scope="col" className="num">Peak share</th><th scope="col" className="num">Window</th><th scope="col" className="num">Turns</th><th scope="col" className="num">Compactions</th>
-          <th scope="col">Quadrant</th></tr></thead>
-        <tbody>{pts.map(p => <tr key={p.session_id} {...pickRow(p.session_id, v => openSessionSheet(v), { kind: "session", value: p.session_id })}>
-          <SessionTh p={p} /><td><Proj project={p.project} /></td><td><SourceName source={p.source} /></td>
-          <td>{when(p.first_ts)}</td><td className="num">{short(p.start)}</td><td className="num">{share(p.peak / p.window)}</td><td className="num">{windowLabel(p.window)}</td>
-          <td className="num">{num(p.turns)}</td><td className="num">{num(p.compactions)}</td><td>{QUAD[quadOf(p)].label}</td></tr>)}</tbody>
-      </DataTable></ChartTable>
+      <ChartTable><Table name="Sessions on the map" region="scroll tall" rows={pts} columns={COLUMNS} rowId={p => p.session_id} pick={PICK} /></ChartTable>
     </div>
   );
 }

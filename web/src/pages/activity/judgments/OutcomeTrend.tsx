@@ -1,7 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import type { TrendWeek } from "../../../api";
 import { stackHeights, textScale, tipAt, useWidth } from "../../../components/chart";
-import { ChartTable, DataTable } from "../../../components/DataTable";
+import { ChartTable } from "../../../components/DataTable";
+import { Table, type Column } from "../../../components/table/Table";
 import { modified } from "../../../components/keys";
 import { HowMeasured } from "../../../components/HowMeasured";
 import { dayLabel, num, pct, plural } from "../../../format";
@@ -10,6 +11,12 @@ import { FEW_SESSIONS, FEW_TEXT, isFew, TREND_PARTS, trendCounts, trendText } fr
 const H = 240, M = { t: 20, r: 8, b: 26, l: 40 }; // chart.css draws the plot 240px tall
 const SEP = 2; // px of surface between two parts of a bar
 const weekName = (w: TrendWeek, long = false) => `Week of ${dayLabel(w.week, long)}`;
+// The chart's data table: each week's sessions, and its count and share per outcome.
+const COLUMNS: Column<TrendWeek>[] = [
+  { id: "week", header: "Week", cell: wk => weekName(wk, true) },
+  { id: "sessions", header: "Sessions", align: "num", cell: wk => num(wk.n) + (isFew(wk) ? " (few)" : "") },
+  ...TREND_PARTS.map((p, j): Column<TrendWeek> => ({ id: p.k, header: p.label, align: "num", cell: wk => `${num(trendCounts(wk)[j]!)} · ${pct(wk.n ? trendCounts(wk)[j]! / wk.n : 0)}` })),
+];
 
 /** The outcome mix per week of session start, as bars that each fill the plot (100%), stacked best outcome first, with the
  *  week's analysed sessions over each bar. A week with few sessions is drawn at half width: its mix swings on one session. Shown from
@@ -109,13 +116,7 @@ export function OutcomeTrend({ weeks }: { weeks: TrendWeek[] }) {
       </div>
       <div className="sr" aria-live="polite">{cur ? `${weekName(cur, true)}: ${trendText(cur)}` : ""}</div>
       {/* The chart's text alternative: each week's sessions, and its count and share per outcome. */}
-      <ChartTable><DataTable name="Analysed sessions by outcome per week" region="scroll tall">
-        <thead><tr><th scope="col">Week</th><th scope="col" className="num">Sessions</th>
-          {TREND_PARTS.map(p => <th key={p.k} scope="col" className="num">{p.label}</th>)}</tr></thead>
-        <tbody>{weeks.map(wk => <tr key={wk.week}><th scope="row">{weekName(wk, true)}</th>
-          <td className="num">{num(wk.n)}{isFew(wk) ? " (few)" : ""}</td>
-          {trendCounts(wk).map((n, j) => <td key={TREND_PARTS[j]!.k} className="num">{num(n)} · {pct(wk.n ? n / wk.n : 0)}</td>)}</tr>)}</tbody>
-      </DataTable></ChartTable>
+      <ChartTable><Table name="Analysed sessions by outcome per week" region="scroll tall" rows={weeks} columns={COLUMNS} rowId={wk => wk.week} /></ChartTable>
     </section>
   );
 }
