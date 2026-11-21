@@ -409,7 +409,7 @@ def ingest_chunk(cur, projects, name, path, data, offset, lines, seq, st, whole=
             seen.add(key)
             dd = d if ok else {}
             sid, *rest = src.fields(dd, path)
-            rows.append((key, path, lines, pos, dd.get("type"), session or sid, *rest, sub, ok, text))
+            rows.append((key, path, lines, pos, src.type(dd), session or sid, *rest, sub, ok, text))
             if ok:
                 parsed[key] = d
         lines += 1
@@ -766,6 +766,11 @@ def line_fields(d, path):
     return d.get("sessionId"), d.get("uuid"), d.get("timestamp")
 
 
+def line_type(d):
+    """The raw_lines type of a Claude Code or Codex line."""
+    return d.get("type")
+
+
 def prompt_text(d, pid):
     """The text of human prompt pid if Claude Code line d holds it, else None."""
     if d.get("promptId") != pid or d.get("isMeta"):
@@ -841,6 +846,7 @@ class Source(NamedTuple):
     # raw_lines.type of the line written as a session closes, or None for a source that writes none. Claude Code writes
     # cost-state (no timestamp) when it exits; a resumed session writes on after it.
     close_type: str | None = "cost-state"
+    type: Callable = line_type  # line ({} when it is not a JSON object) -> its raw_lines type
 
 
 from . import codex  # noqa: E402  (it subclasses Deriver)
