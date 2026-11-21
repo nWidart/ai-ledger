@@ -17,15 +17,10 @@ const opts = (url: string) => queryOptions({ queryKey: ["t", url], queryFn: ({ s
 const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
 
 describe("keys", () => {
-  it("differ only in the view part between two views", () => {
-    const a = queries.usage(v).queryKey, b = queries.usage({ ...v, range: 7 }).queryKey;
-    expect(a[0]).toBe(b[0]);
-    expect(a[2]).toBe(b[2]);
-    expect(hashKey(a)).not.toBe(hashKey(b));
-  });
-  it("ignore key order and extra fields of the view", () => {
+  it("differ by the view's fields, and ignore their order and extra fields", () => {
     const reordered = { source: "", automated: false, range: 30, project: "p" } as View;
     const extra = { ...v, auto: true, extra: 1 } as View;
+    expect(hashKey(queries.usage({ ...v, range: 7 }).queryKey)).not.toBe(hashKey(queries.usage(v).queryKey));
     expect(hashKey(queries.usage(reordered).queryKey)).toBe(hashKey(queries.usage(v).queryKey));
     expect(hashKey(queries.context(extra).queryKey)).toBe(hashKey(queries.context(v).queryKey));
   });
@@ -33,12 +28,13 @@ describe("keys", () => {
     expect(hashKey(queries.limits({ ...v, automated: true }).queryKey)).toBe(hashKey(queries.limits(v).queryKey));
     expect(hashKey(queries.limits({ ...v, range: 7 }).queryKey)).not.toBe(hashKey(queries.limits(v).queryKey));
   });
-  it("tell data from status and live", () => {
+  it("tell data from status and live, and hold a failed call's detail forever", () => {
     expect(isData({ queryKey: ["usage", v, ""] })).toBe(true);
     expect(isData(queries.errors)).toBe(true);
     expect(isData(queries.status)).toBe(false);
     expect(isData({ queryKey: ["live", "x"] })).toBe(false);
     expect(isData(queries.errorDetail("x"))).toBe(false);
+    expect(queries.errorDetail("x").staleTime).toBe(Infinity);
   });
   it("keep the sessions pages apart from the plain sessions list, and by every filter and the sort", () => {
     const o = { q: "a", near: true, day: "2026-11-04", sort: [{ key: "cost" as const, desc: true }] };
@@ -57,9 +53,6 @@ describe("keys", () => {
     expect(next(page(100, 250), [page(100, 250)], 0, [0])).toBe(100);
     expect(next(page(100, 250), [page(100, 250), page(100, 250)], 100, [0, 100])).toBe(200);
     expect(next(page(50, 250), [page(100, 250), page(100, 250), page(50, 250)], 200, [0, 100, 200])).toBeUndefined();
-  });
-  it("hold errorDetail forever", () => {
-    expect(queries.errorDetail("x").staleTime).toBe(Infinity);
   });
 });
 
@@ -149,16 +142,6 @@ describe("live", () => {
     await client.fetchQuery(queries.liveSession("s1", false, low));
     await client.fetchQuery(queries.liveList(v, false, low));
     expect(f.mock.calls.map(c => c[1])).toEqual([{ signal: expect.any(AbortSignal) }, ...[1, 2].map(() => ({ priority: "low", signal: expect.any(AbortSignal) }))]);
-  });
-});
-
-describe("getJson", () => {
-  it("rejects with an AbortError for an aborted signal", async () => {
-    vi.stubGlobal("fetch", (_: string, init?: RequestInit) =>
-      init?.signal?.aborted ? Promise.reject(new DOMException("aborted", "AbortError")) : Promise.resolve(ok({})));
-    const c = new AbortController();
-    c.abort();
-    await expect(getJson("/x", { signal: c.signal })).rejects.toMatchObject({ name: "AbortError" });
   });
 });
 

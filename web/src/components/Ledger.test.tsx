@@ -1,5 +1,6 @@
 import { screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it, vi } from "vitest";
 import { Ledger, LedgerRow } from "./Ledger";
 import { renderApp } from "../testing";
 
@@ -14,16 +15,21 @@ describe("LedgerRow", () => {
     expect(container.querySelector(".bar")).toBeNull();
   });
 
-  it("makes a swatch row with onPick a pressed-state button holding the swatch", () => {
+  it("makes a swatch row with onPick a pressed-state button holding the swatch, handed the button on a click", async () => {
+    const pick = vi.fn<(el: HTMLButtonElement) => void>();
     renderApp(<Ledger keyed empty="none">
-      <LedgerRow name="Achieved" share={0.5} value="50%" side="4" swatch="red" onPick={() => {}} active />
+      <LedgerRow name="Achieved" share={0.5} value="50%" side="4" swatch="red" onPick={pick} active />
       <LedgerRow name="Partial" share={0.5} value="50%" side="4" swatch="blue" onPick={() => {}} active={false} />
+      <LedgerRow name="Plain" share={0.5} value="50%" side="4" swatch="green" />
     </Ledger>);
     const on = screen.getByRole("button", { name: /Achieved/ });
     expect(on.getAttribute("aria-pressed")).toBe("true");
     expect(on.querySelector(".sw")).not.toBeNull();
     expect(on.querySelector(".bar")).toBeNull();
     expect(screen.getByRole("button", { name: /Partial/ }).getAttribute("aria-pressed")).toBe("false");
+    expect(screen.getAllByRole("button")).toHaveLength(2); // a row without onPick is no button
+    await userEvent.click(on);
+    expect(pick).toHaveBeenCalledWith(on);
   });
 
   it("keeps the bar and no swatch for a row without one", () => {

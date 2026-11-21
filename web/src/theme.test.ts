@@ -128,9 +128,6 @@ describe("theme.css tokens", () => {
     expect(resolve(tokens, "--shadow-pop", "light")).toBe("0 6px 24px rgba(20,18,12,.14), 0 8px 28px transparent");
     expect(resolve(tokens, "--shadow-pop", "dark")).toBe("0 6px 24px transparent, 0 8px 28px rgba(0,0,0,.5)");
   });
-  it("keeps tokens that do not differ plain", () => {
-    for (const n of ["--series-6", "--good", "--scrim", "--shadow-sheet"]) expect(tokens.get(n)).not.toContain("light-dark");
-  });
   it("gives control borders 3:1 on surface-1 in both themes", () => {
     for (const t of themes)
       expect(contrast(resolve(tokens, "--control-border", t), resolve(tokens, "--surface-1", t))).toBeGreaterThanOrEqual(3);
@@ -204,14 +201,12 @@ describe("forced colors", () => {
 });
 
 describe("scroll padding", () => {
-  it("reserves the sticky nav and the scope bar once, on the page", () => {
+  it("reserves the sticky nav and the scope bar once, on the page, with no per-element copy of that offset", () => {
     const base = strip(readFileSync("src/base.css", "utf8"));
     expect(base).toMatch(/:root \{ --bars-h: calc\(var\(--appnav-h, 56px\) \+ var\(--scope-h, 0px\)\); \}/);
     expect(base).toMatch(/html \{ scroll-padding-top: calc\(var\(--bars-h\) \+ 12px\); \}/);
     expect(base).not.toContain("scroll-margin-top");
     expect(base).not.toContain("secidx");
-  });
-  it("leaves no per-element copy of that offset", () => {
     for (const f of ["src/components/Drawer.css", "src/components/ScopeBar.css"]) expect(readFileSync(f, "utf8")).not.toContain("scroll-margin-top");
   });
   it("sticks the scope bar under the nav, and every lower sticky element under both bars", () => {

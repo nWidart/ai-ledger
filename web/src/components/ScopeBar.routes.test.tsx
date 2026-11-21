@@ -230,22 +230,4 @@ describe("narrow", () => {
     expect(document.activeElement).toBe(pop.getByRole("combobox", { name: "Project" }));
     expect(document.querySelector(".scopebar-chip")).toBeNull();
   });
-
-  it("closes the popover when Brief opens the Project page, and when the project cleared there opens Activity", async () => {
-    serve();
-    history.replaceState(null, "", "/cost?project=foo&range=30");
-    renderRouter();
-    await screen.findByRole("heading", { level: 1, name: /estimated cost/ });
-    const user = userEvent.setup();
-    await user.click(screen.getByRole("button", { name: /^Filters/ }));
-    await screen.findByRole("dialog", { name: "Filters" });
-    await user.click(bar().getByRole("link", { name: "Brief, foo project page" }));
-    expect(location.pathname).toBe("/project");
-    await waitFor(() => expect(popover()).toBeNull());
-    await user.click(screen.getByRole("button", { name: /^Filters/ }));
-    const pop = within(await screen.findByRole("dialog", { name: "Filters" }));
-    await user.click(pop.getByRole("button", { name: "Clear project filter" }));
-    await waitFor(() => expect(location.pathname).toBe("/usage"));
-    await waitFor(() => expect(popover()).toBeNull());
-  });
 });

@@ -13,7 +13,7 @@ import { openPalette } from "../../components/palette/store";
 import { openSessionSheet } from "../../components/sheets/session";
 import { mockApi } from "../../components/sheets/testing";
 import { usd } from "../../format";
-import { barName, caption, capText, historyStrips, pace, paceRates, recentText, shareText, span, stripSummary, surfacesText, usedHint, whenDay, windowName } from "./limits";
+import { barName, caption, historyStrips, paceRates, recentText, shareText, span, stripSummary, surfacesText, usedHint, whenDay, windowName } from "./limits";
 import { LimitsPage } from "./LimitsPage";
 import { ScopeBar } from "../../components/ScopeBar";
 import { ingested, renderApp, renderPage, renderRouter } from "../../testing";
@@ -31,13 +31,14 @@ const details = (name: string) => {
 };
 /** The Past windows table sits behind its toggle. */
 const openTable = () => fireEvent.click(within(document.getElementById("history")!).getByRole("button", { name: "Show data table" }));
-const show = (d: LimitsPayload, hash = "?range=30", bar = false) => {
+/** The page (under the scope bar with bar) at /limits + hash, answering the API with routes; Drawers open once it is up. */
+const serve = (routes: Parameters<typeof mockApi>[0], hash = "?range=30", bar = false) => {
   openDrawers();
-  const f = mockApi({ "/api/limits": () => d });
+  const f = mockApi(routes);
   history.replaceState(null, "", "/limits" + hash);
-  renderApp(bar ? <><ScopeBar /><LimitsPage /></> : <LimitsPage />);
-  return f;
+  return { f, ...renderApp(bar ? <><ScopeBar /><LimitsPage /></> : <LimitsPage />) };
 };
+const show = (d: LimitsPayload, hash = "?range=30", bar = false) => serve({ "/api/limits": () => d }, hash, bar).f;
 /** A window's panel (not the table's scroll region, which is named for the table). */
 const WINDOW = /^(Claude Code|Codex)/;
 const lede = async () => {
@@ -55,64 +56,7 @@ const capped: LimitWindow = { ...codex, current: 100, at_limit: true, forecast: 
 const out: LimitsPayload = { ...fixture, binding: { provider: "codex", limit_id: "codex_10080", scope: "", runs_out: true }, suggestion: null,
   windows: [claude, fable, capped] };
 
-describe("limit text", () => {
-  it("captions a run-out, a reset-first, a window at its limit and a window without forecast", () => {
-    const f = claude.forecast!;
-    expect(caption(claude)).toBe(`Reaches 100% at ${whenDay(f.hits_at)} (between ${whenDay(f.hits_at_early)} and ${whenDay(f.hits_at_late)})`);
-    expect(caption(codex)).toBe("Resets first at about 33% (29–33%)");
-    expect(caption({ ...codex, forecast: { ...codex.forecast!, at_reset_low: 32.7 } })).toBe("Resets first at about 33%"); // no "(33–33%)"
-    expect(caption(capped)).toBe(`At its limit until ${whenDay(codex.resets_at)}`);
-    expect(caption(fable)).toBe("Not calibrated yet: a window has to reach 5% while its usage is counted");
-  });
-
-  it("shows headroom and pace: behind pace leaves room", () => {
-    // Codex weekly at 20% with 3.5 of 7 days left.
-    const w: LimitWindow = { ...codex, current: 20, resets_at: "2026-11-09T12:00:00.000Z",
-      forecast: { ...codex.forecast!, pace_target: 80 / 3.5, pace_now: 10, pace_usual: 10, pace: "behind", at_reset: 55 } };
-    expect(pace(w, "2026-11-06T00:00:00.000Z")).toEqual({ left: "80% left", reset: "3d 12h to reset",
-      rate: "usual pace 10.0% a day; 22.9% a day would use it all", verdict: "behind pace: about 45% would go unused" });
-    expect(pace(claude, fixture.now).verdict).toBe("ahead of pace: runs out before the reset");
-    expect(pace(claude, fixture.now).rate).toBe("usual pace 17.7% a day; this window 13.2% a day over its last day; 5.9% a day would use it all");
-    const hour: LimitWindow = { ...w, window_minutes: 300, forecast: { ...w.forecast!, pace_usual: 24, pace_window: 1320, pace_window_hours: 300 / 7 / 60 } };
-    expect(pace(hour, "2026-11-06T00:00:00.000Z").rate).toBe("usual pace 1.0% an hour; this window 55.0% an hour over its last 43m; 1.0% an hour would use it all");
-    expect(pace(capped, fixture.now)).toEqual({ left: "0% left", reset: "6d 16h to reset", rate: null, verdict: null });
-    expect(span(45 * 60000)).toBe("45m");
-  });
-});
-
 describe("cap in money", () => {
-  const cal = (calibration: LimitWindow["calibration"], window_minutes: number | null = 10080): LimitWindow => ({ ...codex, calibration, window_minutes });
-
-  it("states the cap in money, the period and the calibration behind it", () => {
-    expect(capText(cal({ per_pct: 4.2, points: 37, windows: 2 }))).toBe(`100% ≈ ${usd(420)} a week at list prices, from 37 points over 2 windows`);
-    expect(capText(cal({ per_pct: 0.05, points: 9.4, windows: 3 }, 300))).toBe(`100% ≈ ${usd(5)} per 5 hours at list prices, from 9 points over 3 windows`);
-    expect(capText(cal({ per_pct: 1, points: 40, windows: 4 }, null))).toBe(`100% ≈ ${usd(100)} a window at list prices, from 40 points over 4 windows`);
-  });
-
-  it("reads one window as one window, with no extra wording", () => {
-    expect(capText(cal({ per_pct: 2.5222, points: 90, windows: 1 }))).toBe(`100% ≈ ${usd(252.22)} a week at list prices, from 90 points over 1 window`);
-  });
-
-  it("names the period for daily, 30-day and other whole-hour windows", () => {
-    const text = (minutes: number) => capText(cal({ per_pct: 1, points: 10, windows: 2 }, minutes));
-    expect(text(1440)).toBe(`100% ≈ ${usd(100)} a day at list prices, from 10 points over 2 windows`);
-    expect(text(43200)).toBe(`100% ≈ ${usd(100)} per 30 days at list prices, from 10 points over 2 windows`);
-    expect(text(720)).toBe(`100% ≈ ${usd(100)} per 12 hours at list prices, from 10 points over 2 windows`);
-    expect(text(90)).toBe(`100% ≈ ${usd(100)} a window at list prices, from 10 points over 2 windows`);
-  });
-
-  it("has no line without a calibration", () => {
-    expect(capText({ ...codex, calibration: null })).toBeNull();
-  });
-
-  it("shows no cap line for a window at its limit that is not calibrated", async () => {
-    show({ ...fixture, windows: [{ ...capped, calibration: null }] });
-    await lede();
-    const c = details(windowName(codex));
-    expect(c.getByText(`At its limit until ${whenDay(codex.resets_at)}`)).toBeTruthy();
-    expect(c.queryByText(/^100% ≈/)).toBeNull();
-  });
-
   it("shows the line in the Details of a calibrated card, and none on an uncalibrated one", async () => {
     show(fixture);
     await lede();
@@ -123,8 +67,6 @@ describe("cap in money", () => {
 });
 
 describe("usage response lines", () => {
-  const bare = (w: LimitWindow): LimitWindow => ({ ...w, weekly_share: null, surfaces: null });
-
   it("shows the share on the scoped card and the surfaces on the unscoped weekly card, in their Details", async () => {
     show(fixture);
     await lede();
@@ -138,27 +80,11 @@ describe("usage response lines", () => {
     expect(within(card("Claude Code weekly · Fable")).queryByText(/use by surface|came from/)).toBeNull();
   });
 
-  it("shows neither line on a card without the field", async () => {
-    show({ ...fixture, windows: fixture.windows.map(bare) });
-    await lede();
-    for (const w of fixture.windows) details(windowName(w));
-    expect(screen.queryByText(/weekly allowance/)).toBeNull();
-    expect(screen.queryByText(/use by surface|came from/)).toBeNull();
-  });
-
   it("shows only the surfaces line when the card has no share, and only the share when it has no surfaces", async () => {
     show({ ...fixture, windows: [{ ...claude, weekly_share: null }, { ...fable, surfaces: null }, codex] });
     await lede();
     expect(details("Claude Code weekly").getByText(/use by surface/)).toBeTruthy();
     expect(details("Claude Code weekly · Fable").getByText(/weekly allowance/)).toBeTruthy();
-  });
-
-  it("says when one surface made all the use, and shows no surfaces line when every surface is 0", async () => {
-    const rows = (...p: number[]) => ({ as_of: null, rows: p.map((percent, i) => ({ key: `s${i}`, label: ["Claude Code", "Chats"][i]!, percent })) });
-    show({ ...fixture, windows: [{ ...claude, surfaces: rows(100, 0) }, { ...codex, surfaces: rows(0, 0) }] });
-    await lede();
-    expect(details("Claude Code weekly").getByText("All of this week's use so far came from Claude Code")).toBeTruthy();
-    expect(details("Codex weekly").queryByText(/use by surface|came from/)).toBeNull();
   });
 });
 
@@ -248,10 +174,7 @@ describe("LimitsPage", () => {
 
   it("takes the line away with the toggle when a refresh brings the last window with a scenario to its limit", async () => {
     let d: LimitsPayload = fixture;
-    openDrawers();
-    mockApi({ "/api/limits": () => d });
-    history.replaceState(null, "", "/limits?range=30");
-    const { client } = renderApp(<LimitsPage />);
+    const { client } = serve({ "/api/limits": () => d });
     await lede();
     await userEvent.click(screen.getByRole("button", { name: "Last 24 h pace" }));
     expect(document.querySelectorAll(".lim-chart .recent")).toHaveLength(2);
@@ -262,17 +185,6 @@ describe("LimitsPage", () => {
     d = fixture; // a window short of its limit has a scenario again: the toggle is back, off
     ingested(client);
     expect((await screen.findByRole("button", { name: "Last 24 h pace" })).getAttribute("aria-pressed")).toBe("false");
-    expect(document.querySelector(".lim-chart .recent")).toBeNull();
-  });
-
-  it("shows no toggle, line or path without a scenario", async () => {
-    const none = (w: LimitWindow): LimitWindow => w.forecast ? { ...w, forecast: { ...w.forecast, recent_pace: null, recent_hits_at: null,
-      recent_at_reset: null, curve: w.forecast.curve.map(p => ({ ...p, recent: null })) } } : w;
-    show({ ...fixture, windows: fixture.windows.map(none) });
-    await lede();
-    for (const w of fixture.windows) details(windowName(w));
-    expect(screen.queryByText(/last 24 hours continue/)).toBeNull();
-    expect(screen.queryByRole("button", { name: "Last 24 h pace" })).toBeNull();
     expect(document.querySelector(".lim-chart .recent")).toBeNull();
   });
 
@@ -333,18 +245,13 @@ describe("LimitsPage", () => {
     expect(within(screen.getByRole("table", { name: "Commits a point, by project" })).getAllByRole("rowheader").length).toBeGreaterThan(0);
   });
 
-  it("shows what a point buys, by model and by project", async () => {
+  it("shows what a point buys, by model and by project, and names the range it covers", async () => {
     show(fixture);
     await lede();
     const value = within(document.getElementById("value")!);
     expect(value.getByText(/^Claude Code weekly: \$/)).toBeTruthy();
     expect(value.getByText("claude-opus-5-5")).toBeTruthy();
     expect(value.getByText("Commits a point, by project")).toBeTruthy();
-  });
-
-  it("names the range what a point buys covers", async () => {
-    show(fixture);
-    await lede();
     expect(document.querySelector("#value .hint")!.textContent).toMatch(/^One point is 1% of a limit, over the last 30 days: the range set in Past windows\./);
     // The pricing is method: behind How measured, not in the hint's line.
     await userEvent.click(screen.getByRole("button", { name: "How measured: what a point buys" }));
@@ -589,7 +496,7 @@ describe("what used this window", () => {
     expect(lists.getByText(/use elsewhere is not in it/).textContent).toBe(`Counted local agent use only, at API list prices (${usd(12.34)} here); use elsewhere is not in it.`);
   });
 
-  it("links each project and the whole window to Cost with the source and the nearest range", async () => {
+  it("links each project and the whole window to Cost with the source and the nearest range, and says the range is the nearest preset", async () => {
     show(only({ ...claude, used }));
     await lede();
     const lists = open(claude);
@@ -597,18 +504,11 @@ describe("what used this window", () => {
     expect(lists.getByText("other app", { selector: "a" }).getAttribute("href")).toBe("/cost?project=other+app&range=7&source=claude&auto=1");
     const all = lists.getByRole("link", { name: "Open in Cost · last 7 days" });
     expect(all.getAttribute("href")).toBe("/cost?range=7&source=claude&auto=1");
-    expect(all.title).toContain("nearest preset");
+    expect(all.title).toBe("Open in Cost: last 7 days, the nearest preset to this window's start (Cost has no custom ranges)");
     expect(lists.queryByText("claude-opus-5-5", { selector: "a" })).toBeNull(); // models are not links
-  });
-
-  it("says on each project link that its range is the nearest preset", async () => {
-    show(only({ ...claude, used }));
-    await lede();
-    const link = open(claude).getByRole("link", { name: "ai-ledger in Cost, last 7 days" });
+    const link = lists.getByRole("link", { name: "ai-ledger in Cost, last 7 days" });
     expect(link.textContent).toBe("ai-ledger");
     expect(link.title).toBe("Open ai-ledger in Cost: last 7 days, the nearest preset to this window's start (Cost has no custom ranges)");
-    expect(within(card(windowName(claude))).getByRole("link", { name: "Open in Cost · last 7 days" }).title).toBe(
-      "Open in Cost: last 7 days, the nearest preset to this window's start (Cost has no custom ranges)");
   });
 
   it("goes to Cost without a page reload", async () => {
@@ -616,12 +516,6 @@ describe("what used this window", () => {
     await lede();
     await userEvent.click(open(claude).getByText("ai-ledger", { selector: "a" }));
     expect(location.pathname + location.search).toBe("/cost?project=ai-ledger&range=7&source=claude&auto=1");
-  });
-
-  it("reads all time for a window that began more than 90 days ago, and takes the window's provider as the source", async () => {
-    show(only({ ...codex, start: "2026-06-01T00:00:00.000Z", used }));
-    await lede();
-    expect(open(codex).getByRole("link", { name: "Open in Cost · all time" }).getAttribute("href")).toBe("/cost?range=0&source=codex&auto=1");
   });
 
   it("has no list, and a dash for the top project, when nothing was counted", async () => {
@@ -646,17 +540,13 @@ describe("past windows strips", () => {
   const early = curve.window; // the Codex weekly window a plan change ended early
   const row = (h: LimitHistoryRow) => screen.getByRole("button", { name: barName(h) });
   const hist = () => within(document.getElementById("history")!);
-  const showCurve = (d: LimitsPayload = fixture, answer: (q: URLSearchParams) => unknown = () => curve, open = true) => {
-    toOpen = open;
-    const f = mockApi({ "/api/limits": () => d, "/api/limits/window": answer });
-    history.replaceState(null, "", "/limits?range=30");
-    renderApp(<LimitsPage />);
-    return f;
-  };
+  const showCurve = (d: LimitsPayload = fixture, answer: (q: URLSearchParams) => unknown = () => curve) =>
+    serve({ "/api/limits": () => d, "/api/limits/window": answer }).f;
 
-  it("shows a strip per limit above the table, a button per window, named by what it shows", async () => {
+  it("shows a strip per limit above the table, a button per window, named by what it shows, with a key to hit, ended early and estimated", async () => {
     showCurve();
     await lede();
+    expect(within(hist().getByRole("list", { name: "Bar key" })).getAllByRole("listitem").map(li => li.textContent)).toEqual(["hit its limit", "ended early", "estimated"]);
     const groups = hist().getAllByRole("group", { name: /past windows/ });
     expect(groups.map(g => g.getAttribute("aria-label")!.split(", past")[0])).toEqual(historyStrips(fixture.history, fixture.freshness.map(f => f.provider)).map(s => s.name));
     openTable();
@@ -768,12 +658,6 @@ describe("past windows strips", () => {
     expect(hist().getByText("No closed windows in this range.")).toBeTruthy();
   });
 
-  it("explains hit, ended early and estimated in a key", async () => {
-    showCurve();
-    await lede();
-    expect(within(hist().getByRole("list", { name: "Bar key" })).getAllByRole("listitem").map(li => li.textContent)).toEqual(["hit its limit", "ended early", "estimated"]);
-  });
-
   it("draws the 60 most recent bars of a limit and says how many there are", async () => {
     const many = Array.from({ length: 70 }, (_, i) => ({ ...early, start: new Date(Date.UTC(2026, 0, 1 + i)).toISOString(), closed_at: new Date(Date.UTC(2026, 0, 2 + i)).toISOString() }));
     showCurve({ ...fixture, history: many });
@@ -784,15 +668,6 @@ describe("past windows strips", () => {
     openTable();
     expect(hist().getAllByRole("row")).toHaveLength(71); // the table lists all of them (and its head)
     expect(hist().queryByText(/most recent of 60/)).toBeNull();
-  });
-
-  it("makes each strip one tab stop, on its newest bar", async () => {
-    showCurve();
-    await lede();
-    for (const g of hist().getAllByRole("group", { name: /past windows/ })) {
-      const bars = within(g).getAllByRole("button");
-      expect(bars.filter(b => b.tabIndex === 0)).toEqual([bars.at(-1)]);
-    }
   });
 
   it("moves between a strip's bars with the arrows, Home and End", async () => {
@@ -934,10 +809,7 @@ describe("past windows strips", () => {
     const left = vi.spyOn(Element.prototype, "scrollLeft", "set");
     const box = resizes();
     let shown = fiveBars;
-    mockApi({ "/api/limits": () => ({ ...fixture, history: shown }), "/api/limits/window": () => curve });
-    openDrawers();
-    history.replaceState(null, "", "/limits?range=30");
-    const { client } = renderApp(<LimitsPage />);
+    const { client } = serve({ "/api/limits": () => ({ ...fixture, history: shown }), "/api/limits/window": () => curve });
     await lede();
     box.fire();
     expect(left).toHaveBeenCalledTimes(1);
@@ -952,10 +824,7 @@ describe("past windows strips", () => {
     const day = (i: number) => new Date(Date.UTC(2026, 0, 1 + i)).toISOString();
     const win = (i: number) => ({ ...early, start: day(i), closed_at: day(i + 1) });
     let shown = Array.from({ length: 60 }, (_, i) => win(i));
-    mockApi({ "/api/limits": () => ({ ...fixture, history: shown }), "/api/limits/window": () => curve });
-    openDrawers();
-    history.replaceState(null, "", "/limits?range=30");
-    const { client } = renderApp(<LimitsPage />);
+    const { client } = serve({ "/api/limits": () => ({ ...fixture, history: shown }), "/api/limits/window": () => curve });
     await lede();
     const group = () => hist().getByRole("group", { name: /past windows/ });
     act(() => within(group()).getByRole("button", { name: barName(win(30)) }).focus());
@@ -973,10 +842,7 @@ describe("past windows strips", () => {
     const day = (i: number) => new Date(Date.UTC(2026, 0, 1 + i)).toISOString();
     const win = (i: number) => ({ ...early, start: day(i), closed_at: day(i + 1) });
     let shown = [0, 1, 2, 3].map(win);
-    mockApi({ "/api/limits": () => ({ ...fixture, history: shown }), "/api/limits/window": () => curve });
-    openDrawers();
-    history.replaceState(null, "", "/limits?range=30");
-    const { client } = renderApp(<LimitsPage />);
+    const { client } = serve({ "/api/limits": () => ({ ...fixture, history: shown }), "/api/limits/window": () => curve });
     await lede();
     act(() => hist().getByRole("button", { name: barName(win(0)) }).focus());
     act(() => (document.activeElement as HTMLElement).blur());
@@ -1012,10 +878,7 @@ describe("past windows strips", () => {
 
   it("shows the error and Retry when a refetch of a loaded curve fails, not the old chart, then the chart again", async () => {
     let fail = false;
-    openDrawers();
-    mockApi({ "/api/limits": () => fixture, "/api/limits/window": () => (fail ? undefined : curve) });
-    history.replaceState(null, "", "/limits?range=30");
-    const { client } = renderApp(<LimitsPage />);
+    const { client } = serve({ "/api/limits": () => fixture, "/api/limits/window": () => (fail ? undefined : curve) });
     await lede();
     await userEvent.click(row(early));
     await hist().findByRole("img", { name: /used when it ended/ });
@@ -1030,13 +893,12 @@ describe("past windows strips", () => {
     expect(hist().queryByRole("alert")).toBeNull();
   });
 
+  /** The limits answer for the source asked: Codex alone holds only its own windows. */
+  const byCodex = (q: URLSearchParams) => (q.get("source") === "codex" ? { ...fixture, history: fixture.history.filter(h => h.provider === "codex"), windows: [codex] } : fixture);
+
   it("closes the panel when the range or source no longer holds the window", async () => {
     const claudeRow = fixture.history.find(h => h.provider === "claude")!;
-    mockApi({ "/api/limits": q => (q.get("source") === "codex" ? { ...fixture, history: fixture.history.filter(h => h.provider === "codex"), windows: [codex] } : fixture),
-      "/api/limits/window": () => ({ ...curve, window: claudeRow }) });
-    openDrawers();
-    history.replaceState(null, "", "/limits?range=30");
-    renderApp(<><ScopeBar /><LimitsPage /></>);
+    serve({ "/api/limits": byCodex, "/api/limits/window": () => ({ ...curve, window: claudeRow }) }, "?range=30", true);
     await lede();
     await userEvent.click(row(claudeRow));
     await hist().findByRole("img", { name: /used when it ended/ });
@@ -1047,11 +909,7 @@ describe("past windows strips", () => {
   });
 
   it("keeps the panel when the new range still holds the window", async () => {
-    mockApi({ "/api/limits": q => (q.get("source") === "codex" ? { ...fixture, history: fixture.history.filter(h => h.provider === "codex"), windows: [codex] } : fixture),
-      "/api/limits/window": () => curve });
-    openDrawers();
-    history.replaceState(null, "", "/limits?range=30");
-    renderApp(<><ScopeBar /><LimitsPage /></>);
+    serve({ "/api/limits": byCodex, "/api/limits/window": () => curve }, "?range=30", true);
     await lede();
     await userEvent.click(row(early));
     await hist().findByRole("img", { name: /used when it ended/ });

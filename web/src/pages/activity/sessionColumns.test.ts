@@ -7,21 +7,9 @@ import { COLUMNS_KEY, getColumnChoice, HIDE_WIDTHS, resetColumnChoice, setColumn
 beforeEach(() => { localStorage.clear(); resetColumnChoice(); });
 afterEach(() => { vi.unstubAllGlobals(); resetColumnChoice(); });
 
+// Writing the choice, reading it on the next visit and removing it are proven through the page (ActivityPage.test, "Sessions
+// columns"); these cover what the page cannot easily set up.
 describe("the Sessions column choice", () => {
-  it("starts with no choice", () => {
-    expect(getColumnChoice()).toEqual({});
-  });
-  it("stores the choice as JSON and reads it back on the next page view", () => {
-    setColumnChoice({ compactions: false, tokens: true });
-    expect(JSON.parse(localStorage.getItem(COLUMNS_KEY)!)).toEqual({ compactions: false, tokens: true });
-    resetColumnChoice();
-    expect(getColumnChoice()).toEqual({ compactions: false, tokens: true });
-  });
-  it("removes the key when no choice is left", () => {
-    setColumnChoice({ compactions: false });
-    setColumnChoice({});
-    expect(localStorage.getItem(COLUMNS_KEY)).toBeNull();
-  });
   it("ignores a stored value that is not a JSON object", () => {
     for (const raw of ["{not json", "[false]", "null", "\"tokens\""]) {
       localStorage.setItem(COLUMNS_KEY, raw);
@@ -33,11 +21,6 @@ describe("the Sessions column choice", () => {
     localStorage.setItem(COLUMNS_KEY, JSON.stringify({ gone: false, first_ts: false, tokens: "yes", commits: 0, compactions: false, model_ms: true }));
     resetColumnChoice();
     expect(getColumnChoice()).toEqual({ compactions: false, model_ms: true });
-  });
-  it("keeps the choice for the page view when storage refuses writes", () => {
-    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("blocked"); });
-    expect(() => setColumnChoice({ compactions: false })).not.toThrow();
-    expect(getColumnChoice()).toEqual({ compactions: false });
   });
   it("reads no choice when storage refuses reads, and still keeps one made on the page", () => {
     vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => { throw new Error("blocked"); });

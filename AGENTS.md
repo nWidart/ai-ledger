@@ -50,6 +50,14 @@ Your goal is to complete the entire specification with maximum quality while min
 - Add user-visible changes to the `[Unreleased]` section of `CHANGELOG.md`.
 - Release: run the Release PR workflow on `main` (`gh workflow run release-pr.yml`; `-f bump=patch|minor|major` overrides the bump it picks). It opens a `release/v<version>` PR that sets the version and dates the `[Unreleased]` section; edit the notes on that branch if needed. Merging it runs `.github/workflows/release.yml`, which checks and smoke-tests the merge commit, then tags it, publishes to PyPI and creates the GitHub release. Never tag or publish by hand; to retry after a fix on `main`, run `gh workflow run release.yml -f tag=v<version>`. The workflow needs the `RELEASE_TOKEN` secret.
 
+## Tests
+
+- Before adding a test, add the assertion to the test that already builds that fixture, payload or render. A new test needs a new fixture or a new branch, not a new field.
+- Test a rule once, at the layer that owns it. A page test proves the wiring once; it does not replay the helper's cases. Do not repeat a shared code path once per source (Claude Code, Codex, Grok) or once per caller.
+- Do not test data the test defines, constants, removed features, browser defaults, or test helpers.
+- Do not export a symbol only so a test can reach it.
+- Advisory: a PR adding more than 400 net test lines should offset them elsewhere or say why in its body.
+
 ## Shell
 
 - Change files with the Edit and Write tools. Never write a file through Bash: no heredocs, `python3 -` scripts, `cat >` or `cat >>`.

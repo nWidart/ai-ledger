@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { loadECharts, preloadECharts } from "./load";
+import { loadECharts } from "./load";
 import { fakeECharts, sliderShadowOf, type FakeChart } from "./testing";
 
 // The fake runtime that every chart test runs on: test-setup puts it in place of the load module.
@@ -12,28 +12,6 @@ const chartOf = async (points = 10, option: Record<string, unknown> = {}) => {
 };
 
 describe("the fake ECharts runtime", () => {
-  it("stands in for the load module, and records each chart it makes", async () => {
-    preloadECharts();
-    const chart = await chartOf();
-    expect(fakeECharts.loads).toBe(1);
-    expect(fakeECharts.preloads).toBe(1);
-    expect(chart.init).toEqual({ renderer: "svg" });
-    expect(chart.options).toHaveLength(1);
-    expect(fakeECharts.live).toEqual([chart]);
-  });
-
-  it("maps points to pixels and back over its grid", async () => {
-    const chart = await chartOf(10);
-    // The default grid is 400px wide from x 40: ten bands of 40px.
-    expect(chart.convertToPixel({ xAxisIndex: 0 }, 3)).toBe(180);
-    expect(chart.convertFromPixel({ xAxisIndex: 0 }, 181)).toBe(3);
-    expect(chart.convertToPixel({ gridIndex: 0 }, [0, 50])).toEqual([60, 110]);
-    expect(chart.convertFromPixel({ gridIndex: 0 }, chart.pointAt(9))).toEqual([9, 50]);
-    expect(chart.containPixel({ gridIndex: 0 }, chart.pointAt(4))).toBe(true);
-    expect(chart.containPixel({ gridIndex: 0 }, [20, 100])).toBe(false);
-    expect(() => chart.convertToPixel({ gridIndex: 1 }, 0)).toThrow("one grid");
-  });
-
   it("does not clamp a pixel outside the grid to the points shown, as ECharts does not", async () => {
     const chart = await chartOf(10, { dataZoom: [{ type: "slider" }] });
     expect([0, 39, 40, 439, 440, 479].map(x => chart.convertFromPixel({ xAxisIndex: 0 }, x))).toEqual([-1, -1, 0, 9, 10, 10]);
@@ -43,15 +21,6 @@ describe("the fake ECharts runtime", () => {
     // The band itself stays on the points shown, up to the grid's right edge.
     chart.dispatchAction({ type: "updateAxisPointer", currTrigger: "mousemove", x: 440, y: 100 });
     expect(chart.band).toBe(5);
-  });
-
-  it("moves the band by action and hides it on leave", async () => {
-    const chart = await chartOf();
-    chart.dispatchAction({ type: "updateAxisPointer", currTrigger: "mousemove", x: chart.pointAt(6)[0], y: 100 });
-    expect(chart.band).toBe(6);
-    chart.dispatchAction({ type: "updateAxisPointer", currTrigger: "leave" });
-    expect(chart.band).toBeNull();
-    expect(chart.actions.map(a => a.currTrigger)).toEqual(["mousemove", "leave"]);
   });
 
   it("moves the band itself on a pointer move or a click, as ECharts does, unless the option turns its triggers off", async () => {
@@ -263,18 +232,6 @@ describe("the fake ECharts runtime", () => {
     expect([list(chart.option.grid).length, chart.points, chart.shown]).toEqual([2, 12, { from: 2, to: 5 }]);
   });
 
-  it("fires zrender events to the handlers on getZr()", async () => {
-    const chart = await chartOf();
-    const seen: { type: string; offsetX: number; offsetY: number }[] = [];
-    const zr = chart.getZr();
-    const onMove = (e: never) => { seen.push(e); };
-    zr.on("mousemove", onMove);
-    chart.fire("mousemove", chart.pointAt(2));
-    expect(seen).toEqual([expect.objectContaining({ type: "mousemove", offsetX: 140, offsetY: 110 })]);
-    zr.off("mousemove", onMove);
-    expect(zr.listening("mousemove")).toBe(0);
-  });
-
   it("keeps the cursor a handler sets, and sets the default again before each pointer move, as zrender does", async () => {
     const chart = await chartOf();
     const zr = chart.getZr();
@@ -296,16 +253,5 @@ describe("the fake ECharts runtime", () => {
     expect(() => chart.resize()).toThrow("disposed");
     expect(fakeECharts.live).toEqual([]);
     expect(() => init(chart.dom)).not.toThrow();
-  });
-
-  it("holds the load until the test settles it", async () => {
-    const load = fakeECharts.hold();
-    let got: unknown = "waiting";
-    void loadECharts().then(r => { got = r; }, (e: unknown) => { got = e; });
-    await Promise.resolve();
-    expect(got).toBe("waiting");
-    await load.reject(new Error("offline"));
-    expect(got).toEqual(new Error("offline"));
-    await expect(loadECharts()).resolves.toHaveProperty("init");
   });
 });

@@ -19,6 +19,7 @@ describe("Toggletip", () => {
     const tip = screen.getByRole("tooltip");
     expect(tip.textContent).toBe("Pauses over 20 minutes are left out.");
     expect(tip.closest("[aria-hidden]")).toBeNull();
+    expect(screen.queryByRole("link")).toBeNull(); // no docs key, no Learn more
     expect(tt.compareDocumentPosition(tip) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(tip.closest(".tt-host")?.parentElement).toBe(tt.parentElement);
     expect(screen.queryByRole("status")).toBeNull();
@@ -50,12 +51,6 @@ describe("Toggletip", () => {
     expect(screen.getByRole("button", { name: "model-judged" })).toBeTruthy();
   });
 
-  it("takes a given name over its visible label", () => {
-    renderApp(<Toggletip label="8:00 PM" name="Ingest status: 8:00 PM">Details.</Toggletip>);
-    const tt = screen.getByRole("button", { name: "Ingest status: 8:00 PM" });
-    expect(tt.textContent).toBe("8:00 PM");
-  });
-
   it("opens on hover and closes when the pointer leaves, unless a click pinned it", async () => {
     renderApp(<><Toggletip term="Time lost">Time from the error to the next success.</Toggletip><p>elsewhere</p></>);
     const tt = screen.getByRole("button", { name: "About Time lost" });
@@ -71,13 +66,6 @@ describe("Toggletip", () => {
     await userEvent.unhover(tt);
     await new Promise(r => setTimeout(r, 50));
     expect(tt.getAttribute("aria-expanded")).toBe("true");
-  });
-
-  it("keeps the tooltip role and shows no link without a docs key", async () => {
-    renderApp(<Toggletip term="Rate">Errors per 100 calls.</Toggletip>);
-    await userEvent.click(screen.getByRole("button", { name: "About Rate" }));
-    expect(screen.getByRole("tooltip").textContent).toBe("Errors per 100 calls.");
-    expect(screen.queryByRole("link")).toBeNull();
   });
 
   it("ends its text with a Learn more link, reached by Tab from the open button, and drops the tooltip role", async () => {
@@ -112,17 +100,6 @@ describe("Toggletip", () => {
     expect(tt.getAttribute("aria-expanded")).toBe("false");
     expect(screen.queryByRole("link")).toBeNull();
     expect(document.activeElement).toBe(tt);
-  });
-
-  it("closes on a second activation and on a click outside with a link", async () => {
-    renderApp(<><Toggletip term="Cost" docs="concepts/cost-estimates">Estimated.</Toggletip><p>elsewhere</p></>);
-    const tt = screen.getByRole("button", { name: "About Cost" });
-    await userEvent.click(tt);
-    await userEvent.click(tt);
-    expect(tt.getAttribute("aria-expanded")).toBe("false");
-    await userEvent.click(tt);
-    await userEvent.click(screen.getByText("elsewhere"));
-    expect(tt.getAttribute("aria-expanded")).toBe("false");
   });
 
   describe("opened by hover, with a link", () => {

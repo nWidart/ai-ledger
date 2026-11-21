@@ -32,27 +32,6 @@ beforeEach(() => {
 });
 
 describe("starting a page from its tab", () => {
-  it("requests a page's own endpoint once when its tab is pointed at and then selected", async () => {
-    const user = userEvent.setup();
-    await open("/usage?range=30");
-    await user.hover(tab("Limits"));
-    await waitFor(() => expect(calls("/api/limits")).toHaveLength(1));
-    await user.click(tab("Limits"));
-    await waitFor(() => expect(document.title).toBe("Limits · AI Ledger"));
-    expect(calls("/api/limits")).toHaveLength(1);
-  });
-
-  it("shows Cost's data, requested once, after pointing at the tab and selecting it", async () => {
-    const user = userEvent.setup();
-    await open("/context?range=30");
-    await user.hover(tab("Cost"));
-    await waitFor(() => expect(calls("/api/usage")).toHaveLength(1));
-    await user.click(tab("Cost"));
-    await waitFor(() => expect(document.title).toBe("Cost · AI Ledger"));
-    expect(await screen.findByRole("heading", { level: 1, name: /cost|spend|\$/i })).toBeTruthy();
-    expect(calls("/api/usage")).toHaveLength(1);
-  });
-
   it("changes nothing the user sees when the pointer moves away", async () => {
     const user = userEvent.setup();
     await open("/usage?project=foo&range=7");
@@ -89,6 +68,18 @@ describe("starting a page from its tab", () => {
     await user.click(tab("Errors"));
     await waitFor(() => expect(document.title).toBe("Errors · AI Ledger"));
     expect(calls("/api/errors")).toHaveLength(1);
+  });
+
+  // Not first in the file: the first test pays for loading the shell's modules, which a slow machine takes over a second for.
+  it("shows Cost's data, requested once, after pointing at the tab and selecting it", async () => {
+    const user = userEvent.setup();
+    await open("/context?range=30");
+    await user.hover(tab("Cost"));
+    await waitFor(() => expect(calls("/api/usage")).toHaveLength(1));
+    await user.click(tab("Cost"));
+    await waitFor(() => expect(document.title).toBe("Cost · AI Ledger"));
+    expect(await screen.findByRole("heading", { level: 1, name: /cost|spend|\$/i })).toBeTruthy();
+    expect(calls("/api/usage")).toHaveLength(1);
   });
 
   it("preloads when the tab is focused with the keyboard", async () => {
@@ -131,15 +122,6 @@ describe("starting a page from its tab", () => {
     await screen.findByRole("heading", { level: 1 });
     expect(calls("/api/usage")).toEqual(["/api/usage?range=7&source=codex"]);
     expect(calls("/api/insights")).toEqual([]);
-  });
-
-  it("does not request the page's data again when a session sheet opens", async () => {
-    await open("/usage?range=30");
-    await waitFor(() => expect(calls("/api/usage")).toHaveLength(1));
-    await screen.findByRole("heading", { level: 1 });
-    act(() => setSearch({ session: "s1" }));
-    await new Promise(r => setTimeout(r, 100));
-    expect(calls("/api/usage")).toHaveLength(1);
   });
 
   // A page whose data failed shows the failure and Retry. Writing the URL (typing in a search box, opening a sheet) must

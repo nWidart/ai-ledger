@@ -2,7 +2,7 @@ import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { renderApp, renderRouter } from "../testing";
-import { ScopeBar, scopeOf, useScopeProjects } from "./ScopeBar";
+import { ScopeBar, useScopeProjects } from "./ScopeBar";
 import context from "../__fixtures__/context";
 import errors from "../__fixtures__/errors";
 import insights from "../__fixtures__/insights";
@@ -19,20 +19,6 @@ const narrow = () => vi.stubGlobal("matchMedia", (q: string) => ({ matches: q.in
 const brief = () => screen.queryByRole("link", { name: /^Brief, / });
 
 afterEach(() => { vi.unstubAllGlobals(); document.documentElement.style.removeProperty("--scope-h"); });
-
-describe("scopeOf", () => {
-  it("shows each page the filters that change it", () => {
-    const all = { project: true, range: true, source: true, automated: true };
-    expect(scopeOf("/usage", false)).toEqual(all);
-    expect(scopeOf("/cost", false)).toEqual(all);
-    expect(scopeOf("/context", false)).toEqual(all);
-    expect(scopeOf("/project", false)).toEqual(all);
-    expect(scopeOf("/usage", true)).toEqual({ ...all, source: false });
-    expect(scopeOf("/errors", false)).toEqual({ ...all, automated: false });
-    expect(scopeOf("/live", false)).toEqual({ ...all, range: false });
-    expect(scopeOf("/limits", false)).toEqual({ project: false, range: false, source: true, automated: false });
-  });
-});
 
 describe("ScopeBar", () => {
   it("lists the projects the page hands it, and none once the page is gone", async () => {
@@ -156,18 +142,5 @@ describe("the app shell's scope bar", () => {
       expect(document.activeElement!.getAttribute("aria-label") ?? document.activeElement!.textContent).toBe(first);
       unmount();
     }
-  });
-
-  it("puts Brief last in the bar, after the automated toggle", async () => {
-    serve();
-    history.replaceState(null, "", "/cost?project=foo&range=30");
-    renderRouter();
-    await screen.findByRole("heading", { level: 1 });
-    const stops = [...document.querySelectorAll<HTMLElement>(".scopebar :is(input, button, a)")].map(e => e.id || e.getAttribute("aria-label") || e.textContent);
-    expect(stops.indexOf("fProject")).toBe(0);
-    expect(stops.indexOf("7d")).toBeGreaterThan(stops.indexOf("Clear project filter"));
-    expect(stops.indexOf("Codex")).toBeGreaterThan(stops.indexOf("All"));
-    expect(stops.indexOf("fAuto")).toBeGreaterThan(stops.indexOf("Codex"));
-    expect(stops.at(-1)).toBe("Brief, foo project page");
   });
 });

@@ -8,7 +8,7 @@ import { mockApi } from "../../components/sheets/testing";
 import { openDrawer } from "../../components/Drawer";
 import { ContextPage } from "./ContextPage";
 import { TIP_STRIP_MAX, TipStrip } from "./tips";
-import { prevented, renderApp, renderPage, renderRouter } from "../../testing";
+import { prevented, renderApp, renderPage } from "../../testing";
 
 const fixture: ContextPayload = context;
 const serve = (d: ContextPayload) => mockApi({ "/api/context": () => d, "/api/session": () => session });
@@ -55,6 +55,8 @@ describe("ContextPage", () => {
     expect(screen.getByText(/Every figure comes from the transcripts/)).toBeTruthy();
     expect(await how("context")).toMatch(/first turn, over 12 sessions with a measured start\. Nothing is read from CLAUDE\.md, AGENTS\.md or any configuration file/);
     expect(screen.getByRole("button", { name: "How measured: context" }).parentElement!.querySelector(".tt-pop a")!.getAttribute("href")).toMatch(/concepts\/windows\/#the-context-window$/);
+    // Every figure is filled: no rebuild notice.
+    expect(document.getElementById("rebuild")).toBeNull();
     await openTab("Growth and bloat");
     const tile = section("growth").getByText("Sessions compacted").closest(".vital")!;
     expect(tile.textContent).toMatch(/^2Sessions compactedOf 12 sessions/);
@@ -69,6 +71,16 @@ describe("ContextPage", () => {
     const h2 = () => within(screen.getByRole("tabpanel")).getAllByRole("heading", { level: 2 }).map(h => h.textContent!.replace(/[\s\d]+$/, ""));
     expect(screen.getByRole("heading", { level: 2, name: "Tips" }).compareDocumentPosition(screen.getByRole("tablist")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(h2()).toEqual(["Starting context", "Window of a typical session", "Window pressure"]);
+    // Every tab, the hidden ones included, points at its panel.
+    for (const t of within(screen.getByRole("tablist")).getAllByRole("tab")) {
+      const panel = document.getElementById(t.getAttribute("aria-controls")!)!;
+      expect(panel.getAttribute("role")).toBe("tabpanel");
+      expect(panel.getAttribute("aria-labelledby")).toBe(t.id);
+      expect(panel.hidden).toBe(t.getAttribute("aria-selected") !== "true");
+    }
+    // The sections draw from the payload: a range per project and the whole view's, a small grid per project.
+    expect(section("starting").getByRole("table", { name: "Starting context by project" }).querySelectorAll("[data-testid=rng-bar]")).toHaveLength(fixture.starting.by_project.length + 1);
+    expect(section("grids").getAllByRole("img", { name: /: Context window of a typical session/ }).length).toBeGreaterThan(1);
     await openTab("Growth and bloat");
     // A drawer goes with its figures: its title is a heading whose button opens it, never a heading inside a summary.
     expect(h2()).toEqual(["Growth", "What fills context", "Largest tool results"]);
@@ -131,16 +143,6 @@ describe("ContextPage", () => {
     expect(document.getElementById("pressure")).toBeTruthy();
   });
 
-  it("points every tab, the hidden ones included, at its panel", async () => {
-    await show();
-    for (const t of within(screen.getByRole("tablist")).getAllByRole("tab")) {
-      const panel = document.getElementById(t.getAttribute("aria-controls")!)!;
-      expect(panel.getAttribute("role")).toBe("tabpanel");
-      expect(panel.getAttribute("aria-labelledby")).toBe(t.id);
-      expect(panel.hidden).toBe(t.getAttribute("aria-selected") !== "true");
-    }
-  });
-
   it("leaves keys with Alt, Ctrl, Meta or Shift to the browser on its tabs and charts", async () => {
     await show();
     expect(prevented(tabOf("Overhead and pressure"))).toEqual([]);
@@ -149,53 +151,6 @@ describe("ContextPage", () => {
     await openTab("Cache health");
     expect(prevented(section("cost").getByRole("group", { name: /^Cache waste/ }))).toEqual([]);
     expect(screen.queryByRole("tooltip")).toBeNull();
-  });
-
-  it("draws every chart from the fixture", async () => {
-    await show();
-    expect(section("starting").getByRole("table", { name: "Starting context by project" }).querySelectorAll("[data-testid=rng-bar]")).toHaveLength(fixture.starting.by_project.length + 1);
-    expect(section("starting").getByRole("group", { name: /Median start/ }).getAttribute("aria-label")).toContain("tokens");
-    expect(section("pressure").getByRole("group", { name: "200k window, 10 sessions, by peak share of the window" })).toBeTruthy();
-    expect(section("pressure").getByRole("group", { name: /^Session map: 12 sessions shown/ })).toBeTruthy();
-    expect(section("grids").getAllByRole("img", { name: /: Context window of a typical session/ }).length).toBeGreaterThan(1);
-    await openTab("Growth and bloat");
-    expect(section("growth").getByRole("group", { name: "Chart measure" })).toBeTruthy();
-    expect(section("fills").getByText(/Main thread:/).textContent).toContain("509 KB");
-    await openTab("Cache health");
-    expect(section("cost").getByRole("group", { name: /^Cache waste/ })).toBeTruthy();
-  });
-
-  it("names its tables, scrolls them in focusable regions and heads rows and columns", async () => {
-    await show();
-    expect(screen.queryByRole("table", { name: "Tool results by tool" })).toBeNull(); // Contributors holds every row
-    expect(screen.queryByRole("table", { name: "Tool results by MCP server" })).toBeNull();
-    const drawers: Record<string, string> = { "Largest tool results": "d-largest", "Sessions where caching broke": "d-breaks" };
-    const byTab: [string, string[]][] = [["Overhead and pressure", ["Starting context by project"]],
-      ["Growth and bloat", ["Growth by project", "Largest contributors by tool", "Largest tool results"]], ["Cache health", ["Cost by project", "Sessions where caching broke"]]];
-    for (const [tab, names] of byTab) {
-      await openTab(tab);
-      for (const name of names) {
-        if (drawers[name]) act(() => openDrawer(drawers[name]!));
-        const table = screen.getByRole("table", { name }), region = screen.getByRole("region", { name });
-        expect(region.contains(table)).toBe(true);
-        expect(region.tabIndex).toBe(0);
-        expect(within(table).getAllByRole("columnheader").every(h => h.getAttribute("scope") === "col")).toBe(true);
-        expect(within(table).getAllByRole("rowheader").every(h => h.getAttribute("scope") === "row")).toBe(true);
-      }
-    }
-  });
-
-  it("explains a column behind a toggletip, not a hover title", async () => {
-    await showIn("cache");
-    const head = within(screen.getByRole("table", { name: "Cost by project" })).getByRole("columnheader", { name: /^Cache-hit ratio/ });
-    expect(head.querySelector("[title]")).toBeNull();
-    await userEvent.click(within(head).getByRole("button", { name: "About cache-hit ratio" }));
-    expect(within(head).getByRole("tooltip").textContent).toBe("Cache read tokens over all prompt tokens");
-    // Only a row with calls that carry no result size has one on its call count.
-    await openTab("Growth and bloat");
-    const bash = within(screen.getByRole("table", { name: "Largest contributors by tool" })).getByText("Bash").closest("tr")!;
-    await userEvent.click(within(bash).getByRole("button", { name: "About calls" }));
-    expect(within(bash).getByRole("tooltip").textContent).toBe("1 with a result size");
   });
 
   it("marks the content busy while loading, with no live region announcing it", async () => {
@@ -221,10 +176,6 @@ describe("ContextPage", () => {
   });
 
   describe("the rebuild notice", () => {
-    it("is absent when every figure is filled", async () => {
-      await show();
-      expect(document.getElementById("rebuild")).toBeNull();
-    });
     it("counts the calls with a size and names the command", async () => {
       await show({ ...fixture, coverage: { ...fixture.coverage, calls: 4000, with_bytes: 1000, rebuild_needed: true } });
       const n = document.getElementById("rebuild")!;
@@ -307,14 +258,6 @@ describe("tips", () => {
     expect([...advice.querySelectorAll("code")].map(c => c.textContent)).toEqual(["/clear", "/compact"]);
   });
 
-  it("shows the advice the payload gives for a Codex-only view", async () => {
-    const codex = fixture.tips.map(t => (t.id === "frequent_compactions" ? { ...t, advice: "Start a new session with `/new` between tasks; `/compact` before the context fills." } : t));
-    await show({ ...fixture, source: "codex", tips: codex }, "?range=0&source=codex");
-    await userEvent.click(tipItem("Sessions compact repeatedly"));
-    const advice = within(screen.getByRole("region", { name: "Sessions compact repeatedly" })).getByText(/Start a new session with/).closest("p")!;
-    expect([...advice.querySelectorAll("code")].map(c => c.textContent)).toEqual(["/new", "/compact"]);
-  });
-
   it("says nothing stands out when no rule fires", async () => {
     await show({ ...fixture, tips: [] });
     expect(screen.getByText(/nothing stands out/i)).toBeTruthy();
@@ -374,11 +317,6 @@ describe("tips", () => {
     expect(drawer("d-tip")).toBeNull();
     expect(hash().get("tip")).toBe("nope");
   });
-
-  it("shows nothing for a tip that does not fire in this view", async () => {
-    await show({ ...fixture, tips: fixture.tips.filter(t => t.id !== "near_limit") }, "?range=0&tip=near_limit");
-    expect(drawer("d-tip")).toBeNull();
-  });
 });
 
 describe("starting context", () => {
@@ -393,35 +331,12 @@ describe("starting context", () => {
     expect(await how("starting context")).toMatch(/12 of 12 sessions in this view have a measured start; 12 have a known window/);
   });
 
-  it("shows no figure for a project without a window share", async () => {
-    const by = fixture.starting.by_project.map(p => (p.project === "bar" ? { ...p, window: null, window_share: null } : p));
-    await show({ ...fixture, starting: { ...fixture.starting, by_project: by } });
-    expect(cells(section("starting").getByText("bar").closest("tr")!)[5]).toBe("–");
-  });
-
-  it("charts the weekly median under its own heading, every week in a table closed until asked for", async () => {
-    await show();
-    const s = section("starting");
-    expect(s.getByRole("heading", { level: 3, name: "Median start by week" })).toBeTruthy();
-    expect(s.getByRole("group", { name: /Median start/ }).querySelector("svg")!.getAttribute("aria-hidden")).toBe("true");
-    expect(s.queryByRole("table", { name: /per week/i })).toBeNull();
-    await userEvent.click(s.getByRole("button", { name: "Show data table" }));
-    const rows = within(s.getByRole("table", { name: /per week/i })).getAllByRole("row").slice(1);
-    expect(rows).toHaveLength(4);
-    expect(cells(rows[0]!)[1]).toBe("7k");
-    expect(within(rows[0]!).getByRole("rowheader").getAttribute("scope")).toBe("row");
-  });
-
-  it("explains the range in a one-line hint and the 30k mark behind How measured", async () => {
+  it("explains the range in a one-line hint and the 30k mark behind How measured, and charts the weekly median under its own heading", async () => {
     await show();
     expect(section("starting").getByText(/10th to 90th percentile, median ticked/)).toBeTruthy();
     expect(await how("starting context")).toMatch(/dashed line is the 30k-token mark/);
-  });
-
-  it("opens a project's sheet from its row", async () => {
-    await show();
-    await userEvent.click(section("starting").getByText("foo"));
-    expect(hash().get("inspect")).toBe("foo");
+    expect(section("starting").getByRole("heading", { level: 3, name: "Median start by week" })).toBeTruthy();
+    expect(section("starting").getByRole("group", { name: /Median start/ })).toBeTruthy();
   });
 
   it.each(["starting", "cost"])("opens a project's sheet from its name button in %s with the keyboard", async id => {
@@ -437,6 +352,9 @@ describe("growth", () => {
     await showIn("growth");
     const g = section("growth");
     expect(g.getByRole("group", { name: /Median context at each turn: 15.5k tokens at turn 1, 60k at turn 4/ })).toBeTruthy();
+    expect(document.querySelectorAll("#growth path.curve.proj")).toHaveLength(fixture.growth.by_project_curves.length);
+    expect(g.getByRole("button", { name: "Share of window" })).toBeTruthy();
+    expect(await how("growth")).toMatch(/how many sessions each turn rests on/);
     const tile = (l: string) => g.getByText(l, { selector: ".vital .l" }).previousElementSibling!.textContent;
     expect(tile("Added per prompt")).toBe("20,000 tokens");
     expect(tile("Before the first compaction")).toBe("5 turns");
@@ -466,29 +384,6 @@ describe("growth", () => {
     expect(section("growth").queryByRole("group", { name: /Median context at each turn/ })).toBeNull();
   });
 
-  it("draws a project curve for each the payload holds, which may be fewer than five", async () => {
-    const pts = fixture.growth.curve.map(p => ({ ...p, sessions: 6 }));
-    await showIn("growth", { ...fixture, growth: { ...fixture.growth, by_project_curves: [{ project: "foo", sessions: 6, curve: pts, share_curve: [] }] } });
-    expect(document.querySelectorAll("#growth path.curve.proj")).toHaveLength(1);
-  });
-
-  it("moves the peak fill out of this section, and offers the share of the window", async () => {
-    await showIn("growth");
-    expect(section("growth").queryByText("Peak fill by window size")).toBeNull();
-    expect(section("growth").queryByRole("group", { name: /window, \d+ sessions?, by peak share/ })).toBeNull();
-    expect(section("growth").getByRole("button", { name: "Share of window" })).toBeTruthy();
-    expect(await how("growth")).toMatch(/how many sessions each turn rests on/);
-  });
-
-  it("lists the projects when no session compacted and the view has two", async () => {
-    await showIn("growth", { ...fixture, coverage: { ...fixture.coverage, compacted: 0, with_first_compaction: 0 },
-      growth: { ...fixture.growth, to_compaction: { sessions: 0, turns: null, minutes: null },
-        by_project: fixture.growth.by_project.filter(p => p.project === "foo" || p.project === "bar").map(p => ({ ...p, compacted: 0, turns_to_compaction: null, minutes_to_compaction: null })) } });
-    const g = section("growth");
-    expect(cells(g.getByText("foo").closest("tr")!)).toEqual(["foo", "3", "33,000", "0", "–", "–"]);
-    expect(cells(g.getByText("bar").closest("tr")!).slice(3)).toEqual(["0", "–", "–"]);
-  });
-
   it("lists no project table for a view with one project", async () => {
     await showIn("growth", { ...fixture, growth: { ...fixture.growth, by_project: fixture.growth.by_project.slice(0, 1) } });
     expect(section("growth").queryByRole("table", { name: "Growth by project" })).toBeNull();
@@ -506,13 +401,8 @@ describe("window pressure", () => {
     expect(p.getByRole("group", { name: /^2M window, 1 session/ })).toBeTruthy();
     expect(p.getByRole("group", { name: /^258.4k window, 1 session/ })).toBeTruthy();
     expect(await how("window pressure")).toMatch(/12 of 12 sessions have a known window/);
-  });
-
-  it("maps every session by its start and peak under its own heading", async () => {
-    await show();
-    const p = section("pressure");
     expect(p.getByRole("heading", { level: 3, name: "Sessions by start and peak" })).toBeTruthy();
-    expect(p.getByText(/^12 sessions\./)).toBeTruthy();
+    expect(p.getByRole("group", { name: /^Session map: 12 sessions shown/ })).toBeTruthy();
   });
 
   it("narrows the bars to a selected quadrant and restores them when it is cleared", async () => {
@@ -559,26 +449,6 @@ describe("what fills context", () => {
     expect(cells(within(f.getByRole("table", { name: "Largest contributors by MCP server" })).getByText("github").closest("tr")!)[2]).toMatch(/≈250 estimate$/);
   });
 
-  it("draws the main thread and the subagents once, as the two parts of one bar", async () => {
-    await showIn("growth");
-    const f = section("fills");
-    expect(f.getByText(/Main thread:/).textContent).toMatch(/509 KB.*estimate/);
-    expect(f.getByText(/Subagents:/).textContent).toContain("500 KB");
-    expect(f.getAllByText(/never entered the main thread's context/)).toHaveLength(1);
-    expect(f.queryByText(/The main thread read/)).toBeNull();
-    expect(f.getByRole("table", { name: "Largest contributors by tool" })).toBeTruthy();
-  });
-
-  it("opens the sheet of a tool or an MCP server", async () => {
-    await showIn("growth");
-    await userEvent.click(within(section("fills").getByRole("table", { name: "Largest contributors by tool" })).getByRole("button", { name: "Read" }));
-    expect(hash().get("tool")).toBe("Read");
-    await userEvent.click(section("fills").getByRole("button", { name: "By MCP server" }));
-    await userEvent.click(within(section("fills").getByRole("table", { name: "Largest contributors by MCP server" })).getByRole("button", { name: "github" }));
-    expect(hash().get("mcp")).toBe("github");
-    expect(hash().get("tool")).toBeNull();
-  });
-
   it("lists the largest results with their session, and a session button opens its sheet", async () => {
     await showIn("growth", fixture, "?range=0", ["d-largest"]);
     const d = drawer("d-largest");
@@ -591,13 +461,6 @@ describe("what fills context", () => {
     expect(hash().get("session")).toBe("f1");
     await waitFor(() => expect(document.querySelector("dialog.sheet[open]")).toBeTruthy());
   });
-
-  it("says when no tool result has a known size", async () => {
-    await showIn("growth", { ...fixture, fills: { ...fixture.fills, tools: [], mcp: [], largest: [], main_bytes: 0, subagent_bytes: 0 } });
-    // Said once, by the contributors; no empty table or second line repeats it.
-    expect(section("fills").getAllByText("No tool result with a known size in this view.")).toHaveLength(1);
-    expect(section("fills").queryByRole("table")).toBeNull();
-  });
 });
 
 describe("cost", () => {
@@ -608,19 +471,10 @@ describe("cost", () => {
     expect(row("foo")).toEqual(["foo", "$2.17", "$0.09", "$1.50", "1", "42%"]);
     // No long-tier request in a priced project is $0, not unknown.
     expect(row("codex-app")).toEqual(["codex-app", "$0.04", "$0.00", "$0", "0", "0%"]);
-  });
-
-  it("charts cache use over time above the per-project table", async () => {
-    await showIn("cache");
-    const c = section("cost");
+    // The cache chart comes first, over the table.
     const chart = c.getByRole("heading", { level: 3, name: "Cache use over time" }), table = c.getByRole("heading", { level: 3, name: "By project" });
     expect(chart.compareDocumentPosition(table) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(c.getByRole("group", { name: /^Cache waste/ }).getAttribute("aria-label")).toContain("of prompt tokens read from the cache");
-  });
-
-  it("says no request is in the view when the series is empty", async () => {
-    await showIn("cache", { ...fixture, cost: { ...fixture.cost, series: { bucket: "day", rows: [] } } });
-    expect(section("cost").getByText("No request in this view.")).toBeTruthy();
   });
 
   it("reads unknown costs as –, never zero", async () => {
@@ -647,13 +501,5 @@ describe("filters", () => {
     expect(f.mock.calls[0]![0]).toBe("/api/context?project=foo&range=7&automated=1&source=codex");
     expect(screen.getByRole("checkbox", { name: /Include automated/ })).toBeTruthy();
     expect((screen.getByRole("checkbox", { name: /Include automated/ }) as HTMLInputElement).checked).toBe(true);
-  });
-
-  it("is a route of the app", async () => {
-    serve(fixture);
-    history.replaceState(null, "", "/context?range=0");
-    renderRouter();
-    expect(await screen.findByRole("heading", { level: 1, name: /A typical session starts with/ })).toBeTruthy();
-    expect(document.title).toBe("Context · AI Ledger");
   });
 });

@@ -9,7 +9,7 @@ import liveText from "../../__fixtures__/live-session-text";
 import liveCodex from "../../__fixtures__/live-session-codex";
 import { mockApi } from "../../components/sheets/testing";
 import { LivePage } from "./LivePage";
-import { groupSessions, KEEP, lanesOf, likelyWaiting, mergeSession, pulseMinutes, pulseSummary, stateNow, stateText, streamRows } from "./live";
+import { groupSessions, KEEP, lanesOf, likelyWaiting, mergeSession, pulseMinutes, pulseSummary, stateNow, stateText } from "./live";
 import { pct, usd } from "../../format";
 import { FakeSource } from "./testing";
 import { queries } from "../../queries";
@@ -96,6 +96,19 @@ const check = (name: string) => screen.getByRole("checkbox", { name }) as HTMLIn
 const entry = async (project: string) => within(await rail()).getAllByRole("button").find(b => b.querySelector(".pname")!.textContent === project)!;
 const headed = () => screen.getByRole("region", { name: "Session" }).querySelector(".stream-head .pname")?.textContent;
 const settle = () => act(async () => { await new Promise(r => setTimeout(r, 20)); });
+/** jsdom lays nothing out: stand each row the stream draws (sel) 30 px under the one before, in a box `room` px high.
+ *  inView: the row shows whole in the box. */
+const layOut = (sel: string, room: number) => {
+  const box = screen.getByLabelText("Session events"), drawn = () => [...box.querySelectorAll(sel)];
+  Object.defineProperty(box, "clientHeight", { value: room, configurable: true });
+  Object.defineProperty(box, "scrollHeight", { get: () => drawn().length * 30, configurable: true });
+  vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+    const top = this === box ? 0 : drawn().indexOf(this) * 30 - box.scrollTop, height = this === box ? room : 30;
+    return { top, height, bottom: top + height } as DOMRect;
+  });
+  const inView = (el: Element) => { const at = drawn().indexOf(el) * 30; return at >= box.scrollTop && at + 30 <= box.scrollTop + room; };
+  return { box, drawn, inView };
+};
 const catchUp = `/api/live/session?id=s1&after=${encodeURIComponent(s1.cursor!)}`;
 /** From this call on, the list and the session answer only when the test says so (answer(), or answer(n) for the n
  *  asked first), each with what the app held when it was asked. sent: the requests since, as URL and abort signal;
@@ -130,19 +143,6 @@ describe("live.ts", () => {
     expect((got.events.find(e => e.key === pending.key) as LiveToolEvent).end).toBe(done.end);
     expect(got.events.at(-1)!.key).toBe("z#0");
     expect(mergeSession(s1, { ...s1, events: [extra] }, false).events).toEqual([extra]);
-  });
-
-  it("places a tied lane after its call", () => {
-    const rows = streamRows(s1.events);
-    const at = rows.findIndex(r => r.kind === "event" && r.e.k === "tool" && r.e.id === "t2");
-    expect(rows[at + 1]).toMatchObject({ kind: "lane", lane: { id: "a7", name: "Agent", description: "find callers of ingest", tools: 3, done: true } });
-  });
-
-  it("keeps every lane whole after a catch-up that brings events of the main thread only", () => {
-    const main = s1.events.find(e => e.k === "tool" && !e.lane) as LiveToolEvent;
-    const got = mergeSession(s1, { ...s1, events: [{ ...main, key: "z#0", id: "t9" }], cursor: "c2" }, true);
-    expect(lanesOf(got.events)).toEqual(lanesOf(s1.events));
-    expect(lanesOf(got.events)[0]!.tools).toBe(3);
   });
 
   it("ties a lane to its call once the call names it, and marks it running until the call ends", () => {
@@ -196,15 +196,6 @@ describe("live.ts", () => {
 });
 
 describe("LivePage", () => {
-  it("names the automated projects file on the automated toggle", async () => {
-    const { r } = show("");
-    await rail();
-    act(() => { r.client.setQueryData(queries.status.queryKey, { ...status, automated_file: list.automated_file }); });
-    expect(list.automated_file.path).toMatch(/automated\.json$/);
-    await userEvent.click(screen.getByRole("button", { name: "About automated sessions" }));
-    expect(screen.getByRole("group", { name: "Filters" }).querySelector(".tt-pop")!.textContent).toContain(list.automated_file.path);
-  });
-
   it("lists the active sessions and opens the newest when the URL names none", async () => {
     const { calls } = show("");
     expect(groups(await rail())).toEqual(["approval? · 1 foo", "your turn · 1 sketchbook", "working · 2 graft jobdesk", "idle · 1 dotfiles", "ended · 1 notes"]);
@@ -275,21 +266,6 @@ describe("LivePage", () => {
     expect(states()).toEqual(["your turn 4m 01s", "thinking 13s"]);
   });
 
-  it("dates an event's time only when it is not from today, and widens the time column for it", async () => {
-    show("?session=s1");
-    const box = (await stream()).querySelector(".stream")!;
-    const times = () => [...box.querySelectorAll(".ev .t")].map(t => t.textContent!).filter(Boolean);
-    expect(box.classList.contains("dated")).toBe(true); // the fixture's events are from Nov 10, the clock is not
-    expect(times().every(t => /^\D+ \d+, \d\d:\d\d:\d\d$/.test(t))).toBe(true);
-    cleanup();
-    fakeClock("2026-11-10T10:01:00.000Z");
-    show("?session=s1");
-    await tick(10);
-    const same = screen.getByRole("region", { name: "Session" }).querySelector(".stream")!;
-    expect(same.classList.contains("dated")).toBe(false);
-    expect([...same.querySelectorAll(".ev .t")].every(t => /^\d\d:\d\d:\d\d$/.test(t.textContent!))).toBe(true);
-  });
-
   it("groups the wall as the rail, and frames the tiles that need the user", async () => {
     const at = "2026-11-10T09:00:00.000Z";
     show("?view=wall", { list: { ...list, sessions: [sess("r2", "tool", "2026-11-10T09:30:00.000Z"), sess("w", "wait", at), sess("r1", "tool", at), sess("y", "you", at)] } });
@@ -346,15 +322,6 @@ describe("LivePage", () => {
     const entries = await within(rail).findAllByRole("button");
     expect(entries.map(b => b.querySelector(".ttl")!.textContent)).toEqual(["Add session titles", "Fix Cost test"]);
     expect(entries.map(b => b.querySelector(".sub .pname")!.textContent)).toEqual(["ai-ledger", "ai-ledger"]);
-  });
-
-  it("shows a first-prompt title only with Full text, refetching the list with text", async () => {
-    const { calls } = show("");
-    const rail = await screen.findByRole("region", { name: "Active sessions" });
-    expect(within(rail).queryByText("Freeze the clock in the snapshot test")).toBeNull();
-    await userEvent.click(screen.getByRole("checkbox", { name: "Full text" }));
-    await waitFor(() => expect(calls()).toContain("/api/live?text=1"));
-    expect(await within(rail).findByText("Freeze the clock in the snapshot test")).toBeTruthy();
   });
 
   it("titles the stream with the session's title, and with the project without one", async () => {
@@ -610,21 +577,6 @@ describe("LivePage", () => {
     expect(terms(toolRow("Bash", 1))[0]).toBe("input: git push origin feat/live-page");
   });
 
-  it("stops following on scroll-up and offers Jump to latest when new events arrive", async () => {
-    const more = { ...s1, events: [...s1.events, { ...(s1.events.at(-1) as LiveToolEvent), key: "n#0", id: "t10", summary: "ls" }], cursor: "c3" };
-    let fresh = false;
-    show("?session=s1", { session: () => (fresh ? more : s1) });
-    const box = await screen.findByRole("region", { name: "Session events" }).catch(() => screen.findByLabelText("Session events"));
-    box.scrollTop = 100; // no size changed: the scroll is the user's
-    fireEvent.scroll(box);
-    expect((screen.getByRole("checkbox", { name: "Follow" }) as HTMLInputElement).checked).toBe(false);
-    fresh = true;
-    FakeSource.last!.notify(["s1"]);
-    const jump = await screen.findByRole("button", { name: "Jump to latest ↓" });
-    await userEvent.click(jump);
-    expect((screen.getByRole("checkbox", { name: "Follow" }) as HTMLInputElement).checked).toBe(true);
-  });
-
   it("is a silent log, and shows the events that came while Follow is off beside Jump to latest, at most every 5 s", async () => {
     fakeClock("2026-11-10T10:01:00.000Z");
     let n = 0;
@@ -729,15 +681,7 @@ describe("LivePage", () => {
     const o = { s: laned(12) };
     show("?session=s1", { session: () => o.s });
     await stream();
-    // jsdom lays nothing out: stand each drawn row 30 px under the one before, in a box that shows three of them.
-    const box = screen.getByLabelText("Session events"), drawn = () => [...box.querySelectorAll(".ev")];
-    Object.defineProperty(box, "clientHeight", { value: 90, configurable: true });
-    Object.defineProperty(box, "scrollHeight", { get: () => drawn().length * 30, configurable: true });
-    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
-      const top = this === box ? 0 : drawn().indexOf(this) * 30 - box.scrollTop, height = this === box ? 90 : 30;
-      return { top, height, bottom: top + height } as DOMRect;
-    });
-    const inView = (el: Element) => { const at = drawn().indexOf(el) * 30; return at >= box.scrollTop && at + 30 <= box.scrollTop + 90; };
+    const { box, inView } = layOut(".ev", 90); // a box that shows three rows
     const follow = () => (screen.getByRole("checkbox", { name: "Follow" }) as HTMLInputElement).checked;
     const arrive = async (n: number) => {
       o.s = { ...o.s, events: [laneCall(n)], cursor: `c${n}` };
@@ -764,13 +708,7 @@ describe("LivePage", () => {
     const mark = { key: "c9#0", k: "compaction", ts: null, lane: null, pre: null } as LiveEvent; // a compaction that carries no time
     show("?session=s1", { session: () => ({ ...s1, events: [...s1.events, mark] }) });
     await stream();
-    const box = screen.getByLabelText("Session events"), drawn = () => [...box.querySelectorAll(".ev, .compact")];
-    Object.defineProperty(box, "clientHeight", { value: 90, configurable: true });
-    Object.defineProperty(box, "scrollHeight", { get: () => drawn().length * 30, configurable: true });
-    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
-      const top = this === box ? 0 : drawn().indexOf(this) * 30 - box.scrollTop, height = this === box ? 90 : 30;
-      return { top, height, bottom: top + height } as DOMRect;
-    });
+    const { box, drawn } = layOut(".ev, .compact", 90);
     expect(drawn().at(-1)!.textContent).toBe("context compacted");
     await userEvent.click(check("Follow"));
     await userEvent.click(check("Follow")); // places the box anew, in this layout
@@ -815,36 +753,26 @@ describe("LivePage", () => {
     const s = { ...laned(12), events: [...laned(12).events, laneCall(30, true), main("f1#0", 15, true), main("f2#0", 16, true), main("ok#0", 50, false)] };
     show("?session=s1", { session: () => s });
     await stream();
-    const box = screen.getByLabelText("Session events"), drawn = () => [...box.querySelectorAll(".ev")];
-    Object.defineProperty(box, "clientHeight", { value: 60, configurable: true });
-    Object.defineProperty(box, "scrollHeight", { get: () => drawn().length * 30, configurable: true });
-    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
-      const top = this === box ? 0 : drawn().indexOf(this) * 30 - box.scrollTop, height = this === box ? 60 : 30;
-      return { top, height, bottom: top + height } as DOMRect;
-    });
+    const { drawn, inView } = layOut(".ev", 60);
     await userEvent.click(within(bar()).getByRole("button"));
-    const at = drawn().indexOf(toolRow("Grepg30").closest(".ev")!) * 30;
-    expect([check("Follow").checked, at >= box.scrollTop && at + 30 <= box.scrollTop + 60, drawn().length]).toEqual([true, true, 5]);
+    expect([check("Follow").checked, inView(toolRow("Grepg30").closest(".ev")!), drawn().length]).toEqual([true, true, 5]);
   });
 
-  it("refetches only the list for another session's notice, and catches up the followed one with the cursor", async () => {
+  it("refetches only the list for another session's notice, the list and the followed session for one that names none, and catches up with the cursor", async () => {
     const { calls } = show();
     await stream();
-    const n = calls().length;
+    let n = calls().length;
     FakeSource.last!.notify(["s2"]);
     await waitFor(() => expect(calls().length).toBe(n + 1));
     expect(calls().at(-1)).toBe("/api/live");
-    FakeSource.last!.notify(["s1"]);
-    await waitFor(() => expect(calls()).toContain(`/api/live/session?id=s1&after=${encodeURIComponent(s1.cursor!)}`));
-  });
-
-  it("refetches the list and the followed session for a notice that names no session", async () => {
-    const { calls } = show();
-    await stream();
-    const n = calls().length;
+    n = calls().length;
     FakeSource.last!.notify(null);
     await settle();
     expect(calls().slice(n)).toEqual(["/api/live", catchUp]);
+    n = calls().length;
+    FakeSource.last!.notify(["s1"]);
+    await settle();
+    expect(calls().slice(n)).toContain(catchUp);
   });
 
   it("leaves the list and the session alone when a status answer tells of an ingest", async () => {
@@ -1080,11 +1008,15 @@ describe("LivePage", () => {
     expect(polls()).toBe(2); // once: the nav would else show the time before the second notice's ingest
   });
 
-  it("holds updates while paused and fetches once on resume", async () => {
+  it("holds updates while paused and fetches once on resume, and nothing when none was held", async () => {
     const { calls } = show();
     await stream();
-    await userEvent.click(screen.getByRole("button", { name: "Pause" }));
     const n = calls().length;
+    await userEvent.click(screen.getByRole("button", { name: "Pause" }));
+    await userEvent.click(screen.getByRole("button", { name: "Resume" }));
+    await settle();
+    expect(calls().length).toBe(n);
+    await userEvent.click(screen.getByRole("button", { name: "Pause" }));
     FakeSource.last!.notify(["s1"]);
     FakeSource.last!.notify(["s1"]);
     FakeSource.last!.notify(["s2"]);
@@ -1124,16 +1056,6 @@ describe("LivePage", () => {
     expect([urls().slice(2), waiting(), conn().textContent]).toEqual([["/api/live", catchUp], 2, "Connecting…"]);
     await answer();
     expect([urls().length, waiting()]).toEqual([4, 0]);
-  });
-
-  it("sends no request on Resume when no update was held", async () => {
-    const { calls } = show();
-    await stream();
-    const n = calls().length;
-    await userEvent.click(screen.getByRole("button", { name: "Pause" }));
-    await userEvent.click(screen.getByRole("button", { name: "Resume" }));
-    await settle();
-    expect(calls().length).toBe(n);
   });
 
   it("shows the status strip: an inferred approval wait with its reason behind a toggletip, the context, the figures and the limits", async () => {
@@ -1470,12 +1392,21 @@ describe("LivePage", () => {
     await waitFor(() => expect(location.search).toBe("?session=s2")); // closing goes back over the sheet alone
   });
 
-  it("dates the time of an event that is not from today", async () => {
+  it("dates the time of an event only when it is not from today, and widens the time column for it", async () => {
+    // On the fixture's day, every time is the time alone, in a column of the usual width.
+    fakeClock("2026-11-10T10:01:00.000Z");
+    show("?session=s1");
+    await tick(10);
+    const same = screen.getByLabelText("Session events");
+    expect(same.classList.contains("dated")).toBe(false);
+    expect([...same.querySelectorAll(".ev .t")].every(t => /^\d\d:\d\d:\d\d$/.test(t.textContent!))).toBe(true);
+    cleanup();
     // The fixture's events are a day old on this clock, in any time zone; one more event is a minute old.
-    fakeClock("2026-11-11T12:07:00.000Z");
+    vi.setSystemTime(Date.parse("2026-11-11T12:07:00.000Z"));
     const fresh = { ...(s1.events.at(-1) as LiveToolEvent), key: "n#0", id: "t10", ts: "2026-11-11T12:06:00.000Z", start: "2026-11-11T12:06:00.000Z" };
     show("?session=s1", { session: () => ({ ...s1, events: [...s1.events, fresh] }) });
     await tick(10);
+    expect(screen.getByLabelText("Session events").classList.contains("dated")).toBe(true);
     const times = [...screen.getByLabelText("Session events").querySelectorAll(".ev > .t")].map(t => t.textContent!);
     const clock = (ts: string) => new Date(ts).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
     const day = (ts: string) => new Date(ts).toLocaleDateString(undefined, { month: "short", day: "numeric" });
@@ -1551,37 +1482,10 @@ describe("LivePage", () => {
     expect(within(el).getByRole("button", { name: tileName("notes") }).className).toBe("panel tile st-ended");
   });
 
-  it("counts an ended session as neither working nor waiting for you", async () => {
-    show("?session=s5", { list: { ...list, sessions: [ended] } });
-    const rail = await screen.findByRole("region", { name: "Active sessions" });
-    expect(rail.querySelector(".foot")!.textContent).toMatch(/^0 sessions working · \$/);
-  });
-
   it("hides Follow on the wall", async () => {
     show("?view=wall");
     await wall();
     expect(screen.queryByRole("checkbox", { name: "Follow" })).toBeNull();
-  });
-
-  it("turns Full text on with its banner and a text fetch, and is off after a reload", async () => {
-    const { calls, r } = show();
-    await stream();
-    expect(screen.getByText(/11 words · turn on Full text/)).toBeTruthy();
-    await userEvent.click(screen.getByRole("checkbox", { name: "Full text" }));
-    expect(screen.getByRole("note").textContent).toContain("secrets included");
-    await waitFor(() => expect(calls()).toContain("/api/live/session?id=s1&text=1"));
-    expect(await screen.findByText("Add a fast ingest pass while the Live page is open")).toBeTruthy();
-    r.unmount();
-    show();
-    await stream();
-    expect((screen.getByRole("checkbox", { name: "Full text" }) as HTMLInputElement).checked).toBe(false);
-    expect(screen.queryByRole("note")).toBeNull();
-  });
-
-  it("shows a Codex session with the same rows", async () => {
-    show("?session=" + codex.session_id, { session: () => codex });
-    await stream();
-    expect(await screen.findByRole("button", { name: /^exec_command/ })).toBeTruthy();
   });
 
   it("names a tile by its pin action and gives a screen reader all it shows, pinned or not", async () => {
@@ -1812,8 +1716,8 @@ describe("LivePage", () => {
     expect(third("s2").querySelector(".act")!.textContent).toBe("▸ prompt");
   });
 
-  it("opens the Full text warning over the page, so the stream keeps its place, and dismisses it in place", async () => {
-    show();
+  it("opens the Full text warning over the page, so the stream keeps its place, dismisses it in place, and has Full text off after a reload", async () => {
+    const { r } = show();
     const region = await stream();
     const grid = region.closest(".grid")!, before = () => [...document.querySelector(".pg-live")!.children].map(c => c.className);
     const shape = before();
@@ -1829,6 +1733,10 @@ describe("LivePage", () => {
     await userEvent.click(check("Full text"));
     await userEvent.click(check("Full text"));
     expect(screen.getByRole("note")).toBeTruthy(); // it opens again each time Full text is turned on
+    r.unmount();
+    show();
+    await stream();
+    expect([check("Full text").checked, screen.queryByRole("note")]).toEqual([false, null]);
   });
 });
 

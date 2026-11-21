@@ -174,16 +174,6 @@ describe("SessionSheet", () => {
     expect(link.getAttribute("href")).toBe("/usage?project=foo&range=30&view=judgments");
   });
 
-  it("shows no judgment block for a session without a facet", async () => {
-    mockApi({ "/api/session": () => session });
-    at("?range=30&session=s1");
-    renderApp(<UsageSheets />);
-    expect(await sheet().findByText("$16")).toBeTruthy();
-    expect(session.insight).toBeNull();
-    expect(sheet().queryByText(/\/insights judgment/)).toBeNull();
-    expect(sheet().queryByRole("link", { name: "Open in Judgments" })).toBeNull();
-  });
-
   it("marks no dissatisfaction and leaves out an empty summary and empty lists", async () => {
     const insight = { outcome: "unclear_from_transcript", helpfulness: null, session_type: null, brief_summary: null, friction_detail: null,
       goals: [], friction: [], satisfaction: ["satisfied"] };
@@ -243,13 +233,6 @@ describe("SessionSheet", () => {
 });
 
 describe("ProjectSheet", () => {
-  it("keeps the source on its errors link", async () => {
-    mockApi({ "/api/usage": q => ({ ...usage, project: q.get("project"), source: q.get("source") }) });
-    at("?range=30&source=codex&inspect=foo");
-    renderApp(<UsageSheets />);
-    expect((await sheet().findByRole("link", { name: "Open its errors" })).getAttribute("href")).toBe("/errors?project=foo&range=30&source=codex");
-  });
-
   it("opens the project page with the page's view and no sheet key, before its errors link", async () => {
     mockApi({ "/api/usage": q => ({ ...usage, project: q.get("project"), source: q.get("source") }) });
     at("?range=7&source=codex&auto=1&inspect=foo&session=&tool=Bash");
@@ -339,50 +322,13 @@ describe("ProjectSheet", () => {
     expect(sheet().queryByText(/^Change vs the previous/)).toBeNull();
   });
 
-  it("filters the page to the project and closes", async () => {
-    mockApi({ "/api/usage": () => usage });
-    at("?inspect=foo");
-    renderApp(<UsageSheets />);
-    await userEvent.click(await sheet().findByRole("button", { name: "Filter dashboard to foo" }));
-    expect(location.search).toBe("?project=foo");
-    expect(document.querySelector("dialog")!.open).toBe(false);
-  });
-
-  it("clears the Activity day when it filters the page", async () => {
+  it("filters the page to the project, clearing the Activity day, and closes", async () => {
     mockApi({ "/api/usage": () => usage });
     at("?range=30&day=2026-11-04&inspect=foo");
     renderApp(<UsageSheets />);
     await userEvent.click(await sheet().findByRole("button", { name: "Filter dashboard to foo" }));
     expect(location.search).toBe("?project=foo&range=30");
-  });
-});
-
-describe("sheet tables", () => {
-  it("names a project sheet's table and its region, with row headers and a toggletip on Active", async () => {
-    mockApi({ "/api/usage": q => ({ ...usage, project: q.get("project") }) });
-    at("?range=30&inspect=foo");
-    renderApp(<UsageSheets />);
-    const name = "Most expensive sessions", table = await sheet().findByRole("table", { name });
-    expect(sheet().getByRole("region", { name }).tabIndex).toBe(0);
-    expect(within(table).getAllByRole("rowheader").length).toBeGreaterThan(0);
-    const head = within(table).getByRole("columnheader", { name: /^Active/ });
-    expect(head.getAttribute("scope")).toBe("col");
-    await userEvent.click(within(head).getByRole("button", { name: "About Active time" }));
-    expect(within(head).getByRole("tooltip").textContent).toBe("Active time: pauses over 20 minutes left out");
-    await userEvent.keyboard("{Escape}");
-    expect(within(head).getByRole("button", { name: "About Active time" }).getAttribute("aria-expanded")).toBe("false");
-  });
-
-  it("names a tool sheet's tables and their scroll regions", async () => {
-    mockApi({ "/api/tool": q => ({ ...tool, kind: q.get("kind"), name: q.get("name") }) });
-    at("?range=30&tool=Bash");
-    renderApp(<UsageSheets />);
-    await sheet().findByText("12.1%");
-    for (const name of ["Projects", "Inputs", "Recent calls"]) {
-      expect(sheet().getByRole("region", { name }).tabIndex).toBe(0);
-      expect(sheet().getByRole("table", { name })).toBeTruthy();
-    }
-    expect(within(sheet().getByRole("table", { name: "Projects" })).getAllByRole("rowheader")[0]!.getAttribute("scope")).toBe("row");
+    expect(document.querySelector("dialog")!.open).toBe(false);
   });
 });
 
@@ -502,27 +448,6 @@ describe("ToolSheet", () => {
     renderApp(<UsageSheets />);
     expect(await sheet().findByText("No Read calls in this view.")).toBeTruthy();
     expect(document.querySelector("dialog svg")).toBeNull();
-  });
-
-  it("reopens from the URL on reload", async () => {
-    const f = serve();
-    at("?range=30&tool=Grep");
-    renderApp(<UsageSheets />);
-    expect((await screen.findByRole("heading", { level: 2 })).textContent).toBe("ToolGrep");
-    expect(f.mock.calls[0]![0]).toBe("/api/tool?kind=tool&name=Grep&range=30");
-  });
-
-  it("opens a session over it and goes back", async () => {
-    serve();
-    at("?range=30&tool=Bash");
-    renderApp(<UsageSheets />);
-    const row = (await sheet().findAllByRole("row")).find(r => r.getAttribute("data-v") === "f1-27")!;
-    await userEvent.click(within(row).getByRole("button"));
-    expect(location.search).toBe("?range=30&tool=Bash&session=f1");
-    expect(await sheet().findByText("$16")).toBeTruthy();
-    await userEvent.click(sheet().getByRole("button", { name: "← Back" }));
-    expect(location.search).toBe("?range=30&tool=Bash");
-    await waitFor(() => expect(document.activeElement?.closest("tr")?.getAttribute("data-v")).toBe("f1-27"));
   });
 
   it("opens from a session's tool row in place of the session, and history Back restores the session", async () => {

@@ -43,24 +43,17 @@ describe("GrowthChart", () => {
     expect(document.querySelector(".readout")!.textContent).toBe("");
   });
 
-  it("reads a turn with the arrow keys", () => {
+  it("reads a turn with the arrow keys, and dismisses it with Escape or on blur", () => {
     renderApp(<GrowthChart curve={view} projects={[foo]} />);
     const chart = screen.getByRole("group");
     act(() => chart.focus());
     fireEvent.keyDown(chart, { key: "ArrowRight" });
     expect(document.querySelector(".readout")!.textContent).toBe(`${readTurn(view[0]!)}; foo ${"36k"}`);
+    fireEvent.keyDown(chart, { key: "Escape" });
+    expect(document.querySelector(".readout")!.textContent).toBe("");
     fireEvent.keyDown(chart, { key: "End" });
     expect(document.querySelector(".readout")!.textContent).toContain("Turn 5: median 70k tokens (25th to 75th percentile 49k to 98k), 9 sessions");
     fireEvent.blur(chart);
-    expect(document.querySelector(".readout")!.textContent).toBe("");
-  });
-
-  it("dismisses the reading with Escape", () => {
-    renderApp(<GrowthChart curve={view} projects={[]} />);
-    const chart = screen.getByRole("group");
-    fireEvent.keyDown(chart, { key: "ArrowRight" });
-    expect(document.querySelector(".readout")!.textContent).not.toBe("");
-    fireEvent.keyDown(chart, { key: "Escape" });
     expect(document.querySelector(".readout")!.textContent).toBe("");
   });
 

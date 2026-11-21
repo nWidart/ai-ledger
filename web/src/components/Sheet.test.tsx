@@ -70,32 +70,14 @@ describe("Sheet", () => {
     expect(document.activeElement).toBe(wide);
   });
 
-  describe("when wide", () => {
-    const open = async () => {
-      renderApp(<Harness widen />);
-      const opener = screen.getByRole("button", { name: "Open s1" });
-      await userEvent.click(opener);
-      await userEvent.click(screen.getByRole("button", { name: "Wide" }));
-      expect(document.querySelector("dialog")!.classList.contains("wide")).toBe(true);
-      return opener;
-    };
-    it("closes on Escape and returns focus to the opener", async () => {
-      const opener = await open();
-      act(() => { document.querySelector("dialog")!.dispatchEvent(new Event("cancel", { cancelable: true })); });
-      expect(screen.queryByText("Body 1")).toBeNull();
-      expect(document.activeElement).toBe(opener);
-    });
-    it("closes on Close and returns focus to the opener", async () => {
-      const opener = await open();
-      await userEvent.click(screen.getByRole("button", { name: "Close" }));
-      expect(screen.queryByText("Body 1")).toBeNull();
-      expect(document.activeElement).toBe(opener);
-    });
-    it("closes on a backdrop click and returns focus to the opener", async () => {
-      const opener = await open();
-      await userEvent.click(document.querySelector("dialog")!);
-      expect(screen.queryByText("Body 1")).toBeNull();
-      expect(document.activeElement).toBe(opener);
-    });
+  it("closes on a backdrop click, wide too, and returns focus to the opener", async () => {
+    renderApp(<Harness widen />);
+    const opener = screen.getByRole("button", { name: "Open s1" });
+    await userEvent.click(opener);
+    await userEvent.click(screen.getByRole("button", { name: "Wide" }));
+    expect(document.querySelector("dialog")!.classList.contains("wide")).toBe(true);
+    await userEvent.click(document.querySelector("dialog")!);
+    expect(screen.queryByText("Body 1")).toBeNull();
+    expect(document.activeElement).toBe(opener);
   });
 });

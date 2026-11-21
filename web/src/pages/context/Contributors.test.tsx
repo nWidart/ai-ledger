@@ -18,12 +18,16 @@ const cells = (row: HTMLElement) => [...row.querySelectorAll("th[scope=row], td"
 beforeEach(() => history.replaceState(null, "", "/context"));
 
 describe("Contributors", () => {
-  it("shows equal totals with ranges far apart for many small and a few huge results", () => {
+  it("shows equal totals with ranges far apart for many small and a few huge results", async () => {
     renderApp(<Contributors fills={fills([row("Read", 2_000_000, { calls: 400, p50_bytes: 4_000, p95_bytes: 12_000 }), row("Bash", 2_000_000, { calls: 8, p50_bytes: 200_000, p95_bytes: 900_000 })])} />);
     const [read, bash] = body(), bar = (r: HTMLElement) => r.querySelector<HTMLElement>(".ctr-bar i")!.style.width;
     const left = (r: HTMLElement) => parseFloat(r.querySelector<HTMLElement>("[data-testid=ctr-range-bar]")!.style.left);
     expect(bar(read!)).toBe(bar(bash!));
     expect(left(bash!)).toBeGreaterThan(left(read!) + 30);
+    // Only a row with calls that carry no result size explains its call count, behind a toggletip.
+    expect(within(bash!).queryByRole("button", { name: "About calls" })).toBeNull();
+    await userEvent.click(within(read!).getByRole("button", { name: "About calls" }));
+    expect(within(read!).getByRole("tooltip").textContent).toBe("10 with a result size");
   });
 
   it("shows ten rows and an Other row summing the remaining four of 14 tools", () => {
@@ -118,17 +122,6 @@ describe("Contributors", () => {
     expect(lo).toBe(1_000);
     expect(hi).toBe(RESULT_LARGE_BYTES);
     expect(rangeScale([{ p50_bytes: 500, p95_bytes: 3_000_000 }])).toEqual({ lo: 100, hi: 10_000_000 });
-  });
-
-  it("labels estimated tokens as estimates", () => {
-    renderApp(<Contributors fills={fills(many(2))} />);
-    expect(screen.getAllByText("estimate").length).toBeGreaterThan(2);
-  });
-
-  it("names both scales in the headings", () => {
-    renderApp(<Contributors fills={fills(many(2))} />);
-    expect(screen.getByRole("columnheader", { name: /Total result size/ })).toBeTruthy();
-    expect(screen.getByRole("columnheader", { name: /Typical result: median to 95th percentile \(log scale\)/ })).toBeTruthy();
   });
 
   it("opens the tool sheet for a tool, and for an MCP server after the switch", async () => {

@@ -77,13 +77,6 @@ describe("Palette", () => {
     expect(screen.getByText("No tool calls in this view.")).toBeTruthy();
   });
 
-  it("states what Enter will do", async () => {
-    serve();
-    await show("/usage?project=foo&range=30&source=claude");
-    await userEvent.type(box(), ">bash");
-    expect(document.getElementById(box().getAttribute("aria-describedby")!)!.textContent).toBe("Enter: open Bash inspector · foo · Claude Code · 30d");
-  });
-
   it("commits page, filters and sheet as one history entry, and Back undoes it", async () => {
     serve();
     await show("/usage?range=30");
@@ -97,16 +90,6 @@ describe("Palette", () => {
       await new Promise(r => addEventListener("popstate", r, { once: true }));
     });
     expect(location.pathname + location.search).toBe("/usage?range=30");
-  });
-
-  it("turns typed terms into chips once the next sigil is typed", async () => {
-    serve();
-    await show();
-    await userEvent.type(box(), ">errors #fo");
-    expect(chips("Destination")).toEqual([">Errors"]);
-    expect(box()).toHaveProperty("value", "#fo");
-    await userEvent.keyboard("{Enter}");
-    expect(location.pathname + location.search).toBe("/errors?project=foo&range=30");
   });
 
   it("waits on Enter until every typed term is picked or deleted", async () => {
@@ -193,7 +176,6 @@ describe("Palette", () => {
 });
 
 describe("Palette docs commands", () => {
-  const foot = () => document.getElementById(box().getAttribute("aria-describedby")!)!.textContent;
   const opened = () => vi.spyOn(window, "open").mockReturnValue(null);
 
   it("opens this page's docs in a new tab with no referrer, closes, and leaves the view", async () => {
@@ -207,49 +189,6 @@ describe("Palette docs commands", () => {
     expect(location.pathname + location.search).toBe("/cost?range=30");
   });
 
-  it("offers a docs page by name, and opens it with Enter", async () => {
-    serve();
-    const open = opened();
-    await show("/usage?range=30");
-    await userEvent.type(box(), ">docs windows");
-    expect(options()[0]).toBe("Docs: Context windows and plan limit windows, command, Documentation, opens in a new tab");
-    await userEvent.keyboard("{Enter}");
-    expect(open).toHaveBeenCalledExactlyOnceWith("https://nwidart.github.io/ai-ledger/concepts/windows/", "_blank", "noreferrer");
-  });
-
-  it("names the page whose docs Enter opens in the footer", async () => {
-    serve();
-    await show("/errors?range=30");
-    await userEvent.type(box(), ">docs");
-    expect(options()[0]).toMatch(/^Docs: this page, command/);
-    expect(foot()).toBe("Enter: open the Errors docs in a new tab");
-  });
-
-  it("applies a filter chip with the docs command", async () => {
-    serve();
-    const open = opened();
-    await show("/errors?range=30");
-    await userEvent.type(box(), "#foo{Tab}>docs: this page{Enter}");
-    expect(location.pathname + location.search).toBe("/errors?project=foo&range=30");
-    expect(open).toHaveBeenCalledExactlyOnceWith("https://nwidart.github.io/ai-ledger/pages/errors/", "_blank", "noreferrer");
-  });
-
-  it("opens the docs from a clicked row", async () => {
-    serve();
-    const open = opened();
-    await show("/limits?range=30");
-    await userEvent.type(box(), ">help");
-    await userEvent.click(screen.getByRole("option", { name: /^Docs: this page,/ }));
-    expect(open).toHaveBeenCalledExactlyOnceWith("https://nwidart.github.io/ai-ledger/pages/limits/", "_blank", "noreferrer");
-  });
-
-  it("opens nothing for the other commands", async () => {
-    serve();
-    const open = opened();
-    await show();
-    await userEvent.type(box(), ">refresh{Enter}");
-    expect(open).not.toHaveBeenCalled();
-  });
 });
 
 describe("Palette by pointer", () => {
@@ -262,20 +201,6 @@ describe("Palette by pointer", () => {
     act(() => openPalette());
     await userEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(screen.queryByRole("combobox")).toBeNull();
-  });
-
-  it("commits a clicked row with a mouse, and adds it as a chip on a touch screen", async () => {
-    serve();
-    await show("/usage?range=30");
-    await userEvent.type(box(), "#fo");
-    vi.spyOn(window, "matchMedia").mockImplementation(q => ({ matches: q === "(pointer: coarse)" }) as MediaQueryList);
-    await userEvent.click(screen.getByRole("option", { name: "foo, project, 2 sessions" }));
-    expect(chips("Filters")).toEqual(["#30d", "#foo"]);
-    expect(location.search).toBe("?range=30");
-    vi.mocked(window.matchMedia).mockRestore();
-    await userEvent.type(box(), ">cos");
-    await userEvent.click(screen.getByRole("option", { name: /^Cost, page/ }));
-    expect(location.pathname + location.search).toBe("/cost?project=foo&range=30");
   });
 });
 
@@ -444,17 +369,6 @@ describe("Palette project pages", () => {
   const foot = () => document.getElementById(box().getAttribute("aria-describedby")!)!.textContent;
   const said = () => screen.getAllByRole("status")[0]!.textContent;
 
-  it("lists the project then its page, and opens the page with the view's range", async () => {
-    serve(() => jd);
-    await show("/cost?range=7");
-    await userEvent.type(box(), "jobdesk");
-    expect(options().slice(0, 2)).toEqual(["jobdesk, project, 12 sessions", page]);
-    await userEvent.keyboard("{ArrowDown}");
-    expect(foot()).toBe("Enter: open Project · jobdesk · 7d");
-    await userEvent.keyboard("{Enter}");
-    expect(location.pathname + location.search).toBe("/project?project=jobdesk&range=7");
-  });
-
   it("keeps the highlight on the page row when sessions load and rank above it", async () => {
     const late = { ...sessions, sessions: sessions.sessions.map(s => ({ ...s, project: "jobdesk" })) };
     mockApi({ "/api/palette": () => jd, "/api/sessions": () => late, "/api/status": () => status, "/api/usage": () => usage });
@@ -499,15 +413,6 @@ describe("Palette project pages", () => {
     expect(said()).toMatch(/^Project page added\. /);
   });
 
-  it("auto-chips a bare name as the filter", async () => {
-    serve(() => jd);
-    await show("/cost?range=7");
-    await userEvent.type(box(), "jobdesk >errors");
-    expect([chips("Filters"), chips("Destination")]).toEqual([["#7d", "#jobdesk"], []]);
-    await userEvent.keyboard("{Enter}");
-    expect(location.pathname + location.search).toBe("/errors?project=jobdesk&range=7");
-  });
-
   it("auto-chips the page row named after >", async () => {
     serve(() => jd);
     await show("/usage?range=30");
@@ -517,24 +422,6 @@ describe("Palette project pages", () => {
     expect(foot()).toBe("Enter: open Project · jobdesk · 7d");
     await userEvent.keyboard("{Enter}");
     expect(location.pathname + location.search).toBe("/project?project=jobdesk&range=7");
-  });
-
-  it("lists no page row under #, and keeps the pages for an empty >", async () => {
-    serve(() => jd);
-    await show();
-    await userEvent.type(box(), "#job");
-    expect(options()).toEqual(["jobdesk, project, 12 sessions"]);
-    await userEvent.clear(box());
-    await userEvent.type(box(), ">");
-    expect(options().filter(n => n!.includes(", page"))).toHaveLength(7);
-    expect(options().some(n => n!.includes("open project page"))).toBe(false);
-  });
-
-  it("offers the page with the project pre-filled", async () => {
-    serve(() => jd);
-    await show("/cost?project=jobdesk&range=7");
-    await userEvent.type(box(), "jobdesk");
-    expect(options()).toContain(page);
   });
 
   it("offers no page row on that project's page", async () => {

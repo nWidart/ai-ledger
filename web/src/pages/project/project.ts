@@ -15,7 +15,7 @@ export interface ErrorsBlock {
 
 /** The Errors page's default view (day granularity, subagents in, noise shown) for the project, range and source. The page's
  *  other filters belong to the Errors page and are not in the Project page's URL. */
-export const errorsView = (v: { project: string; range: number; source: Source | "" }) => ({ ...DEFAULT_VIEW, project: v.project, range: v.range as typeof DEFAULT_VIEW.range, source: v.source });
+const errorsView =(v: { project: string; range: number; source: Source | "" }) => ({ ...DEFAULT_VIEW, project: v.project, range: v.range as typeof DEFAULT_VIEW.range, source: v.source });
 
 /** The project's errors as the Errors page counts them by default: failed calls, their rate, and the top types. */
 export function errorsBlock(m: Model, v: { project: string; range: number; source: Source | "" }): ErrorsBlock {

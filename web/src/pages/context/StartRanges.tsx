@@ -11,7 +11,7 @@ import "./StartRanges.css";
 type Starting = ContextPayload["starting"];
 
 /** Where a 10th to 90th percentile range sits on a track that runs from 0 to `max` tokens: left and width as percentages. */
-export function rangeBox(p10: number, p90: number, max: number): { left: number; width: number } {
+function rangeBox(p10: number, p90: number, max: number): { left: number; width: number } {
   const left = Math.min(100, Math.max(0, p10 / max * 100));
   return { left, width: Math.max(.6, Math.min(100 - left, (p90 - p10) / max * 100)) };
 }

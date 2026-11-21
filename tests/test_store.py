@@ -13,7 +13,7 @@ from unittest import mock
 
 import duckdb
 
-from ai_ledger import limits, metrics, store
+from ai_ledger import metrics, store
 
 
 def line(**kw):
@@ -91,27 +91,13 @@ class ErrorMarksTest(StoreCase):
         store.import_error_fixes(cur, {"new": date(2026, 9, 1)})  # a second import changes nothing
         self.assertEqual(self.marks()[1], ("new", date(2026, 10, 2)))
 
-    def test_survive_rebuild(self):
+    def test_survive_rebuild_and_reopening(self):
         self.assertNotIn("error_marks", store.DERIVED)
         store.set_error_fix(self.con.cursor(), "x", date(2026, 11, 4))
+        store.set_error_muted(self.con.cursor(), "y", True)
         store.rebuild(self.con)
-        self.assertEqual(self.marks(), [("x", date(2026, 11, 4))])
-
-    def test_survive_reopening_the_store(self):
-        store.set_error_fix(self.con.cursor(), "x", date(2026, 11, 4))
-        self.con.close()
-        self.con = store.open_store(self.db)
-        self.assertEqual(self.marks(), [("x", date(2026, 11, 4))])
-
-    def test_payload_carries_the_fixes_by_day(self):
-        self.assertEqual(metrics.errors_payload(self.con.cursor())["fixes"], {})
-        store.set_error_fix(self.con.cursor(), "x", date(2026, 11, 4))
-        store.set_error_fix(self.con.cursor(), "path_missing", date(2026, 10, 1))
-        self.assertEqual(metrics.errors_payload(self.con.cursor())["fixes"], {"path_missing": "2026-10-01", "x": "2026-11-04"})
-
-    def test_a_mark_without_a_fix_day_is_no_fix(self):  # a muted type has a row and no fix day
-        self.con.execute("INSERT INTO error_marks (category, fixed_on) VALUES ('muted-only', NULL)")
-        self.assertEqual(metrics.errors_payload(self.con.cursor())["fixes"], {})
+        self.reopen()
+        self.assertEqual(self.muted(), [("x", date(2026, 11, 4), False), ("y", None, True)])
 
     def muted(self):
         return self.q("SELECT category, fixed_on, muted FROM error_marks ORDER BY 1")
@@ -138,21 +124,6 @@ class ErrorMarksTest(StoreCase):
         store.import_error_fixes(cur, {"x": date(2026, 10, 1), "new": date(2026, 10, 2)})
         self.assertEqual(self.muted(), [("new", date(2026, 10, 2), False), ("x", date(2026, 10, 1), True)])
         self.assertEqual(self.decided(), [("new", True), ("x", True)])
-
-    def test_import_after_a_mute_then_an_unmute_adds_the_marker(self):
-        cur = self.con.cursor()
-        store.set_error_muted(cur, "x", True)
-        store.set_error_muted(cur, "x", False)
-        store.import_error_fixes(cur, {"x": date(2026, 10, 1)})
-        self.assertEqual(self.muted(), [("x", date(2026, 10, 1), False)])
-
-    def test_import_after_an_undo_leaves_the_marker_absent(self):
-        cur = self.con.cursor()
-        store.set_error_fix(cur, "x", date(2026, 11, 4))
-        store.set_error_fix(cur, "x", None)
-        store.set_error_muted(cur, "x", True)  # an undo, then a mute: still decided
-        store.import_error_fixes(cur, {"x": date(2026, 10, 1)})
-        self.assertEqual(self.muted(), [("x", None, True)])
 
     def test_mute_keeps_a_decision_and_a_mark_makes_one(self):
         cur = self.con.cursor()
@@ -186,6 +157,8 @@ class ErrorMarksTest(StoreCase):
         self.con = store.open_store(self.db)
         self.assertEqual(self.decided(), [("a", True), ("b", True)])  # no muted column: a row without a fix day is an undo
         self.assertEqual(self.muted(), [("a", date(2026, 11, 4), False), ("b", None, False)])
+        store.set_error_muted(self.con.cursor(), "a", True)  # the new column takes a mute
+        self.assertEqual(metrics.error_marks(self.con.cursor()), {"fixes": {"a": "2026-11-04"}, "muted": ["a"]})
 
     def test_a_store_with_three_columns_backfills_fix_decided_once(self):
         self.old_store("CREATE TABLE error_marks (category VARCHAR PRIMARY KEY, fixed_on DATE, muted BOOLEAN DEFAULT false)",
@@ -209,49 +182,6 @@ class ErrorMarksTest(StoreCase):
         raw.close()
         self.assertEqual(cols, ["category", "fixed_on", "muted"])
         self.con = duckdb.connect(":memory:")  # the case's cleanup closes self.con
-
-    def test_after_opening_an_old_store_no_row_breaks_the_rule(self):
-        self.old_store("CREATE TABLE error_marks (category VARCHAR PRIMARY KEY, fixed_on DATE, muted BOOLEAN DEFAULT false)",
-                       [("a", date(2026, 11, 4), False), ("b", None, False), ("c", date(2026, 11, 3), True), ("d", None, True)])
-        self.con = store.open_store(self.db)
-        bad = self.q("SELECT category FROM error_marks WHERE fix_decided != (fixed_on IS NOT NULL OR NOT muted) ORDER BY 1")
-        self.assertEqual(bad, [])
-
-    def test_the_finding_sequence_keeps_the_marker(self):
-        """Browser B mutes git before browser A, which kept a fix day in its legacy storage, imports it."""
-        cur = self.con.cursor()
-        store.set_error_muted(cur, "git", True)
-        store.import_error_fixes(cur, {"git": date(2026, 11, 4)})
-        self.assertEqual(metrics.error_marks(cur), {"fixes": {"git": "2026-11-04"}, "muted": ["git"]})
-        store.import_error_fixes(cur, {"git": date(2026, 9, 1)})  # a second import changes nothing
-        self.assertEqual(metrics.error_marks(cur)["fixes"], {"git": "2026-11-04"})
-
-    def test_payload_carries_the_muted_types_sorted(self):
-        self.assertEqual(metrics.errors_payload(self.con.cursor())["muted"], [])
-        for c in ("b", "a"):
-            store.set_error_muted(self.con.cursor(), c, True)
-        store.set_error_muted(self.con.cursor(), "c", False)
-        self.assertEqual(metrics.errors_payload(self.con.cursor())["muted"], ["a", "b"])
-
-    def test_survive_rebuild_and_reopening_with_muted(self):
-        store.set_error_muted(self.con.cursor(), "x", True)
-        store.rebuild(self.con)
-        self.con.close()
-        self.con = store.open_store(self.db)
-        self.assertEqual(self.muted(), [("x", None, True)])
-
-    def test_a_store_without_the_column_gets_it(self):
-        self.con.close()
-        old = duckdb.connect(self.db)  # a store from before muted types: the table without the column, one marked type
-        old.execute("DROP TABLE error_marks")
-        old.execute("CREATE TABLE error_marks (category VARCHAR PRIMARY KEY, fixed_on DATE)")
-        old.execute("INSERT INTO error_marks VALUES ('x', DATE '2026-11-04')")
-        old.close()
-        self.con = store.open_store(self.db)
-        self.assertEqual(self.muted(), [("x", date(2026, 11, 4), False)])
-        self.assertEqual(metrics.error_marks(self.con.cursor()), {"fixes": {"x": "2026-11-04"}, "muted": []})
-        store.set_error_muted(self.con.cursor(), "x", True)
-        self.assertEqual(metrics.error_marks(self.con.cursor()), {"fixes": {"x": "2026-11-04"}, "muted": ["x"]})
 
 
 class IngestTest(StoreCase):
@@ -368,109 +298,57 @@ class TitleTest(StoreCase):
         store.ingest(self.con, self.roots)
         self.assertEqual(self.titles(), [])
 
-    def test_title_split_across_ingests(self):
-        text = self.ai("Add session titles")
-        self.write("a.jsonl", text[:20])
-        store.ingest(self.con, self.roots)
-        self.assertEqual(self.titles(), [])
-        self.write("a.jsonl", text[20:])
-        store.ingest(self.con, self.roots)
-        self.assertEqual(self.titles(), [("s1", None, "Add session titles")])
-
     def test_title_line_makes_no_session(self):
         self.write("a.jsonl", self.ai("Add session titles") + self.custom("") + line(type="ai-title", aiTitle=3, sessionId="s2"))
         store.ingest(self.con, self.roots)
         self.assertEqual(self.q("SELECT count(*) FROM sessions")[0][0], 0)
         self.assertEqual(self.titles(), [("s1", None, "Add session titles")])
 
-    def test_rebuild_after_the_file_is_gone(self):
-        p = self.write("a.jsonl", self.ai("Fix login redirect") + self.custom("auth bug") + self.ai("x", sid="s2"))
-        store.ingest(self.con, self.roots)
-        before = self.titles()
-        os.remove(p)
-        store.rebuild(self.con)
-        self.assertEqual(self.titles(), before)
-        self.assertEqual(len(before), 2)
 
+class MigrationTest(StoreCase):
+    """A store written before a column or table existed gains it on open, empty, keeps its rows, and a second open changes nothing."""
 
-class SourceMigrationTest(StoreCase):
-    def test_store_without_source_marked_claude(self):
-        self.write("a.jsonl", line(type="user", uuid="u1", sessionId="s1", timestamp="2026-11-01T10:00:00Z")
-                   + line(type="user", uuid="u2", sessionId="s2", timestamp="2026-11-01T10:00:01Z"))
-        store.ingest(self.con, self.roots)
-        for t in ("files", "sessions"):  # the schema before sources
-            self.con.execute(f"ALTER TABLE {t} DROP COLUMN source")
-        counts = lambda: [self.q(f"SELECT count(*) FROM {t}")[0][0] for t in ("raw_lines", "files", "sessions")]
-        before = counts()
-        self.con.close()
-        for _ in range(2):  # idempotent
-            self.con = store.open_store(self.db)
-            self.assertEqual(counts(), before)
-            self.assertEqual(self.q("SELECT source, count(*) FROM files GROUP BY 1 UNION ALL "
-                                    "SELECT source, count(*) FROM sessions GROUP BY 1"), [("claude", 1), ("claude", 2)])
-            self.con.close()
-        self.con = store.open_store(self.db)
+    # Each column or table open_store adds to an older store; error_marks' columns have their own tests: they carry a backfill.
+    COLUMNS = [("files", "source"), ("sessions", "source"), ("requests", "speed"), ("requests", "reported_cost"),
+               ("requests", "context_tokens"), ("tool_calls", "result_bytes"), ("sessions", "context_window"),
+               ("sessions", "first_compaction_ts")]
+    TABLES = ["session_runs", "usage_files", "session_facets", "facet_counts", "session_meta"]
 
-
-class ReportedCostMigrationTest(StoreCase):
-    def test_store_without_reported_cost_gains_it_empty(self):
+    def test_older_store_gains_every_later_column_and_table(self):
         S = dict(sessionId="s1", cwd="/nowhere/foo")
-        self.write("a.jsonl", "".join(line(type="assistant", uuid=f"a{i}", timestamp=f"2026-11-01T10:00:0{i}Z",
-                                           message=dict(id=f"m{i}", model="m", usage=dict(input_tokens=1, output_tokens=2)), **S)
-                                      for i in range(2)))
-        store.ingest(self.con, self.roots)
-        self.assertEqual(self.q("SELECT count(*) FROM requests WHERE reported_cost IS NULL"), [(2,)])  # Claude reports no cost
-        self.con.execute("ALTER TABLE requests DROP COLUMN reported_cost")  # the schema before reported costs
-        counts = lambda: [self.q(f"SELECT count(*) FROM {t}")[0][0] for t in ("raw_lines", "sessions", "requests")]
-        before = counts()
-        self.con.close()
-        for _ in range(2):  # idempotent
-            self.con = store.open_store(self.db)
-            self.assertEqual(counts(), before)
-            self.assertEqual(self.q("SELECT count(*), count(reported_cost) FROM requests"), [(2, 0)])
-            self.con.close()
-        self.con = store.open_store(self.db)
-
-
-class SessionRunsStoreTest(StoreCase):
-    def write_session(self):
-        S = dict(sessionId="s1", cwd="/nowhere/foo")
-        run = lambda start, api: line(type="cost-state", sessionId="s1", startTime=start, totalAPIDuration=api, totalToolDuration=4000,
-                                      totalLinesAdded=12, totalLinesRemoved=3, totalCostUSD=0.1)
         self.write("a.jsonl", line(type="user", uuid="u1", timestamp="2026-11-01T10:00:00Z", promptId="p1",
                                    message=dict(role="user", content="go"), **S)
                    + line(type="assistant", uuid="a1", timestamp="2026-11-01T10:00:01Z",
                           message=dict(id="m1", model="m", usage=dict(input_tokens=1, output_tokens=2),
                                        content=[dict(type="tool_use", id="t1", name="Bash", input=dict(command="x"))]), **S)
-                   + run(1000, 9000) + run(1000, 9500) + run(2000, 300))
+                   + line(type="user", uuid="r1", timestamp="2026-11-01T10:00:02Z", promptId="p1", message=dict(
+                       role="user", content=[dict(type="tool_result", tool_use_id="t1", content="ok")]), **S)
+                   + line(type="user", uuid="u2", sessionId="s2", timestamp="2026-11-01T10:00:03Z"))
         store.ingest(self.con, self.roots)
-
-    def counts(self):
-        return [self.q(f"SELECT count(*) FROM {t}")[0][0] for t in ("raw_lines", "sessions", "requests", "tool_calls")]
-
-    def test_store_from_before_the_table_gains_it_empty(self):
-        self.write_session()
-        self.con.execute("DROP TABLE session_runs")  # the schema before session timing
-        before = self.counts()
-        self.assertEqual(before, [5, 1, 1, 1])
+        self.assertEqual(self.q("SELECT count(*) FROM requests WHERE reported_cost IS NULL"), [(1,)])  # Claude reports no cost
+        for table, col in self.COLUMNS:
+            self.con.execute(f"ALTER TABLE {table} DROP COLUMN {col}")
+        for t in self.TABLES:
+            self.con.execute(f"DROP TABLE {t}")
+        counts = lambda: [self.q(f"SELECT count(*) FROM {t}")[0][0]
+                          for t in ("raw_lines", "files", "sessions", "requests", "tool_calls", "projects_by_cwd")]
+        before = counts()
+        self.assertEqual(before, [4, 1, 2, 1, 1, 1])
         self.con.close()
         for _ in range(2):  # opening again adds nothing and breaks nothing
             self.con = store.open_store(self.db)
-            self.assertEqual(self.q("SELECT count(*) FROM session_runs"), [(0,)])
-            self.assertEqual(self.counts(), before)
+            self.assertEqual(counts(), before)
+            self.assertEqual(self.q("SELECT source, count(*) FROM files GROUP BY 1 UNION ALL "
+                                    "SELECT source, count(*) FROM sessions GROUP BY 1"), [("claude", 1), ("claude", 2)])
+            for table, col in self.COLUMNS[2:]:
+                self.assertEqual(self.q(f"SELECT count({col}) FROM {table}"), [(0,)], col)  # NULL until a rebuild
+            for t in self.TABLES:
+                self.assertEqual(self.q(f"SELECT count(*) FROM {t}"), [(0,)], t)
+            cols = [r[0] for r in self.q("SELECT column_name FROM information_schema.columns WHERE table_name = 'usage_files' "
+                                         "ORDER BY ordinal_position")]
+            self.assertEqual(cols, ["path", "kind", "session_id", "size", "mtime", "json", "ingested_at"])
             self.con.close()
         self.con = store.open_store(self.db)
-
-    def test_rebuild_fills_the_table(self):
-        self.write_session()
-        runs = "SELECT * FROM session_runs ORDER BY ALL"
-        before = self.q(runs)
-        self.assertEqual(before, [("s1", 1000, 9500, 4000, 12, 3), ("s1", 2000, 300, 4000, 12, 3)])
-        self.con.execute("DROP TABLE session_runs")
-        self.con.close()
-        self.con = store.open_store(self.db)
-        store.rebuild(self.con)
-        self.assertEqual(self.q(runs), before)
 
 
 class DataDirTest(unittest.TestCase):
@@ -480,14 +358,10 @@ class DataDirTest(unittest.TestCase):
         with mock.patch.object(sys, "platform", platform), mock.patch.dict(os.environ, env, clear=True):
             return store.data_dir()
 
-    def test_macos(self):
+    def test_data_dir(self):
         self.assertEqual(self.data_dir("darwin", dict(HOME="/home/me", XDG_DATA_HOME="/data/me")),
                          "/home/me/Library/Application Support/ai-ledger")
-
-    def test_xdg_data_home(self):
         self.assertEqual(self.data_dir("linux", dict(HOME="/home/me", XDG_DATA_HOME="/data/me")), "/data/me/ai-ledger")
-
-    def test_xdg_data_home_unset_or_empty(self):
         self.assertEqual(self.data_dir("linux", dict(HOME="/home/me")), "/home/me/.local/share/ai-ledger")
         self.assertEqual(self.data_dir("linux", dict(HOME="/home/me", XDG_DATA_HOME="")), "/home/me/.local/share/ai-ledger")
 
@@ -544,22 +418,17 @@ class MoveEarlierStoreTest(unittest.TestCase):
     def keys(self, con):
         return [r[0] for r in con.execute("SELECT key FROM raw_lines ORDER BY key").fetchall()]
 
-    def test_moves_checkout_store(self):
-        self.make(self.earlier, "u1")
-        con = store.open_store()
-        self.assertEqual(self.keys(con), ["u1"])
-        con.close()
-        self.assertFalse(os.path.exists(self.earlier))
-        self.assertEqual(stat.S_IMODE(os.stat(self.new).st_mode), 0o600)
-        self.assertEqual(stat.S_IMODE(os.stat(os.path.dirname(self.new)).st_mode), 0o700)
-
-    def test_moves_earlier_store(self):
-        self.make(self.old, "u1")
-        con = store.open_store()
-        self.assertEqual(self.keys(con), ["u1"])
-        con.close()
-        self.assertFalse(os.path.exists(self.old))
-        self.assertEqual(stat.S_IMODE(os.stat(self.new).st_mode), 0o600)
+    def test_moves_either_earlier_store(self):
+        for earlier in (self.earlier, self.old):
+            with self.subTest(earlier=earlier):
+                self.make(earlier, "u1")
+                con = store.open_store()
+                self.assertEqual(self.keys(con), ["u1"])
+                con.close()
+                self.assertFalse(os.path.exists(earlier))
+                self.assertEqual(stat.S_IMODE(os.stat(self.new).st_mode), 0o600)
+                self.assertEqual(stat.S_IMODE(os.stat(os.path.dirname(self.new)).st_mode), 0o700)
+                os.remove(self.new)
 
     def test_newest_earlier_name_wins(self):
         self.make(self.earlier, "new-name")
@@ -631,11 +500,7 @@ class MoveEarlierStoreTest(unittest.TestCase):
         with mock.patch.object(store, "EARLIER_DBS", []):
             store.open_store().close()
         self.assertTrue(os.path.exists(self.earlier))
-
-    def test_new_store_without_earlier(self):
-        store.open_store().close()
-        self.assertTrue(os.path.exists(self.new))
-        self.assertFalse(os.path.exists(self.old))
+        self.assertTrue(os.path.exists(self.new))  # a new, empty store
 
 
 class LimitStoreTest(StoreCase):
@@ -647,31 +512,8 @@ class LimitStoreTest(StoreCase):
             store.snapshot("claude", "weekly_all", "", 10080, at("2026-11-08T04:59:59.855048"), "2026-11-06 15:05:00", 58)])
         self.assertEqual(self.q("SELECT DISTINCT resets_at FROM limit_snapshots"), [(datetime(2026, 11, 8, 5, 0),)])
 
-    def test_rebuild_keeps_polls_and_their_snapshots(self):
-        poll = dict(plan="max", response=dict(limits=[dict(kind="weekly_all", group="weekly", percent=57,
-                                                            resets_at="2026-11-08T05:00:00+00:00")]))
-        limits.store_poll(self.con.cursor(), "claude", datetime(2026, 11, 6, 15), poll)
-        store.rebuild(self.con)
-        self.assertEqual(self.q("SELECT count(*) FROM limit_polls"), [(1,)])
-        self.assertEqual(self.q("SELECT provider, limit_id, used_percent, plan FROM limit_snapshots"), [("claude", "weekly_all", 57.0, "max")])
-
 
 class UsageDataStoreTest(StoreCase):
-    def test_store_from_before_usage_data_gains_the_tables(self):
-        self.write("a.jsonl", line(type="user", uuid="u1", sessionId="s1", timestamp="2026-11-01T10:00:00Z"))
-        store.ingest(self.con, self.roots)
-        for t in ("usage_files", "session_facets", "facet_counts", "session_meta"):  # the schema before this change
-            self.con.execute(f"DROP TABLE {t}")
-        counts = lambda: {t: self.q(f"SELECT count(*) FROM {t}")[0][0] for t in ("raw_lines", "files", "sessions", "projects_by_cwd")}
-        before = counts()
-        self.con.close()
-        self.con = store.open_store(self.db)
-        self.assertEqual(counts(), before)
-        cols = [r[0] for r in self.q("SELECT column_name FROM information_schema.columns WHERE table_name = 'usage_files' ORDER BY ordinal_position")]
-        self.assertEqual(cols, ["path", "kind", "session_id", "size", "mtime", "json", "ingested_at"])
-        for t in ("session_facets", "facet_counts", "session_meta"):
-            self.assertEqual(self.q(f"SELECT count(*) FROM {t}"), [(0,)])
-
     def test_usage_data_failure_keeps_transcript_ingest(self):
         self.write("a.jsonl", line(type="user", uuid="u1", sessionId="s1"))
         with mock.patch("ai_ledger.insights.ingest", side_effect=RuntimeError("SENTINEL-facet-text")), \
@@ -681,17 +523,6 @@ class UsageDataStoreTest(StoreCase):
         self.assertEqual(self.count(), 1)
         self.assertIn("RuntimeError", err.getvalue())
         self.assertNotIn("SENTINEL", err.getvalue())
-
-
-if __name__ == "__main__":
-    unittest.main()
-
-
-class LiveItemsSourceTest(unittest.TestCase):
-    def test_each_source_has_its_own_live_items(self):
-        from ai_ledger import codex
-        self.assertIs(store.SOURCES["claude"].live_items, store.live_items)
-        self.assertIs(store.SOURCES["codex"].live_items, codex.live_items)
 
 
 class ChangedSessionsTest(StoreCase):
@@ -715,3 +546,7 @@ class ChangedSessionsTest(StoreCase):
             usage.assert_not_called()
             store.ingest(self.con, self.roots)
             usage.assert_called_once()
+
+
+if __name__ == "__main__":
+    unittest.main()

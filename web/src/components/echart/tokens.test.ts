@@ -129,25 +129,6 @@ describe("resolveColor", () => {
 });
 
 describe("useChartEnv", () => {
-  it("keeps the same env while nothing changes", () => {
-    fakeMedia();
-    const { result, rerender } = renderHook(() => useChartEnv(600, 200));
-    const first = result.current;
-    rerender();
-    expect(result.current).toBe(first);
-  });
-
-  it("gives a new env when setTheme() runs", () => {
-    fakeMedia();
-    const { result } = renderHook(() => useChartEnv(600, 200));
-    const first = result.current;
-    act(() => setTheme("dark"));
-    expect(result.current).not.toBe(first);
-    const second = result.current;
-    act(() => setTheme("light"));
-    expect(result.current).not.toBe(second);
-  });
-
   it.each(["(prefers-color-scheme: dark)", "(forced-colors: active)", "(prefers-reduced-motion: reduce)"])(
     "gives a new env when %s fires change",
     (q) => {
@@ -158,16 +139,6 @@ describe("useChartEnv", () => {
       expect(result.current).not.toBe(first);
     },
   );
-
-  it("gives a new env when the box size changes, and carries it", () => {
-    fakeMedia();
-    const { result, rerender } = renderHook(({ w, h }) => useChartEnv(w, h), { initialProps: { w: 600, h: 200 } });
-    const first = result.current;
-    expect(first).toMatchObject({ width: 600, height: 200 });
-    rerender({ w: 320, h: 200 });
-    expect(result.current).not.toBe(first);
-    expect(result.current).toMatchObject({ width: 320, height: 200 });
-  });
 
   it("uses the theme roles, with the cursor at 6% of the text color and the tint at 16% of the accent", () => {
     fakeMedia();

@@ -16,26 +16,12 @@ const ready = (o: Partial<{ source: "claude" | "codex"; cwd: string | null; proj
   ({ session: { state: "ready" as const, source: "claude" as const, cwd: "/Users/me/my app", project: "jobdesk", ...o } });
 
 describe("project menu", () => {
-  it("offers its items in order", () => {
-    expect(labels(items(jobdesk, "/usage?range=7"))).toEqual([
-      ["Open project page", "Open project sheet", "Filter dashboard to jobdesk"],
-      ["Show on Cost", "Show on Errors", "Show on Context", "Show on Live"],
-      ["Copy project name"],
-    ]);
-    expect(text(items(jobdesk, "/usage"), "copy-name")).toBe("jobdesk");
-  });
-  it("opens the project page with the filters kept", () => {
-    expect(href(items(jobdesk, "/cost?range=7"), "project-page")).toBe("/project?project=jobdesk&range=7");
-  });
   it("leaves out Open project page on that project's page, not on another's", () => {
     expect(find(items(jobdesk, "/project?project=jobdesk&range=7"), "project-page")).toBeUndefined();
     expect(href(items(jobdesk, "/project?project=other&range=7"), "project-page")).toBe("/project?project=jobdesk&range=7");
   });
-  it("opens the sheet on the current page", () => {
-    expect(href(items(jobdesk, "/usage?range=7&tool=Bash"), "project-sheet")).toBe("/usage?range=7&inspect=jobdesk");
-  });
-  it("opens the sheet over Activity's Judgments view, and over Live with the followed session kept", () => {
-    expect(href(items(jobdesk, "/usage?range=7&view=judgments&session=s1"), "project-sheet")).toBe("/usage?range=7&view=judgments&inspect=jobdesk");
+  it("opens the sheet on the current page in place of the open one, Activity's Judgments view included, and over Live with the followed session kept", () => {
+    expect(href(items(jobdesk, "/usage?range=7&view=judgments&session=s1&tool=Bash"), "project-sheet")).toBe("/usage?range=7&view=judgments&inspect=jobdesk");
     expect(href(items(jobdesk, "/live?session=s1&sheet=s2"), "project-sheet")).toBe("/live?inspect=jobdesk&session=s1");
   });
   it("filters to the project, or shows all when already filtered to it", () => {
@@ -74,10 +60,6 @@ describe("session menu", () => {
     expect(href(items(sess, "/usage?range=7&view=judgments&outcome=not_achieved"), "open-session")).toBe("/usage?range=7&view=judgments&outcome=not_achieved&session=abc");
     expect(href(items(sess, "/live?range=7&session=s1"), "open-session")).toBe("/live?range=7&session=s1&sheet=abc");
     expect(href(items(sess, "/limits?range=7"), "open-session")).toBe("/limits?range=7&session=abc");
-  });
-  it("copies the resume command for its agent", () => {
-    expect(text(items(sess, "/usage", ready()), "copy-resume")).toBe("cd '/Users/me/my app' && claude --resume abc");
-    expect(text(items(sess, "/usage", ready({ source: "codex", cwd: null })), "copy-resume")).toBe("codex resume abc");
   });
   it("leaves out the working directory and the project page when the store has none", () => {
     for (const cwd of [null, ""]) expect(find(items(sess, "/usage", ready({ cwd })), "copy-cwd")).toBeUndefined();

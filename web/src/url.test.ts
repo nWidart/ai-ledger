@@ -4,7 +4,7 @@ import { viewOf } from "./api";
 import { errorsHref, openSessionSheet, openToolSheet, sessionSheetHref } from "./components/sheets/session";
 import { makeTestClient, routerOf, wrapper } from "./testing";
 import {
-  applyPatch, closeSheets, currentRaw, formatSearch, go, navigate, onNavigate, parseSearch, parseView, rootState, setSearch, sharedOf, sharedSearch, sheetKey,
+  applyPatch, closeSheets, currentRaw, formatSearch, go, onNavigate, parseSearch, parseView, rootState, setSearch, sharedSearch, sheetKey,
   useView, useSearchOf, usePathname, validateRoot, type RootSearch,
 } from "./url";
 
@@ -16,36 +16,27 @@ const sheets = () => (history.state as { sheets?: number } | null)?.sheets;
 const clear = { inspect: null, tool: null, mcp: null, skill: null, session: null };
 
 describe("parseSearch", () => {
-  it("strips one leading ? or #", () => {
+  it("strips one leading ? or #, and keeps the last value of a repeated key", () => {
     expect(parseSearch("")).toEqual({});
     expect(parseSearch("?a=b")).toEqual({ a: "b" });
     expect(parseSearch("#a=b")).toEqual({ a: "b" });
     expect(parseSearch("a=b")).toEqual({ a: "b" });
-  });
-  it("keeps the last value of a repeated key", () => {
     expect(parseSearch("?a=1&a=2")).toEqual({ a: "2" });
   });
 });
 
 describe("formatSearch", () => {
-  it("writes true as 1 and leaves out false, empty, null and undefined", () => {
+  it("writes true as 1 and 0 as 0, leaves out false, empty, null and undefined, and is empty when nothing is written", () => {
     expect(formatSearch({ auto: true, a: false, b: "", c: null, d: undefined })).toBe("?auto=1");
-  });
-  it("writes 0", () => {
     expect(formatSearch({ range: 0 })).toBe("?range=0");
-  });
-  it("is empty when nothing is written", () => {
     expect(formatSearch({})).toBe("");
     expect(formatSearch({ a: false, b: undefined })).toBe("");
   });
-  it("writes keys in the canonical order, not the object's", () => {
+  it("writes keys in the canonical order the pages always did, not the object's", () => {
     expect(formatSearch({ b: "1", a: "2", cat: "x", range: "7", ex: "e", inspect: "i", gran: "w", sub: "0", project: "p" })).toBe("?project=p&range=7&sub=0&gran=w&b=1&a=2&inspect=i&ex=e&cat=x");
-  });
-  it("writes the inspected tool after inspect and before session", () => {
+    // The inspected tool, MCP server and skill after inspect and before session.
     expect(formatSearch({ session: "s", tool: "mcp__a:b", range: "30", ex: "e" })).toBe("?range=30&tool=mcp__a%3Ab&session=s&ex=e");
     expect(formatSearch({ skill: "ship", mcp: "gh", inspect: "p" })).toBe("?inspect=p&mcp=gh&skill=ship");
-  });
-  it("writes keys in the order the pages always did", () => {
     expect(formatSearch({ session: "s", range: "30", project: "a b", inspect: "p" })).toBe("?project=a+b&range=30&inspect=p&session=s");
     expect(formatSearch({ cat: "x", gran: "week", zz: "1", sub: "0", range: "7" })).toBe("?range=7&sub=0&gran=week&zz=1&cat=x");
     expect(formatSearch({ auto: "1", source: "codex", range: "7" })).toBe("?range=7&source=codex&auto=1");
@@ -57,50 +48,6 @@ describe("parseView", () => {
     const s = view("?project=foo&range=14&inspect=bar&session=abc");
     expect(s).toEqual({ project: "foo", range: 14, source: "", auto: false, inspect: "bar", tool: "", mcp: "", skill: "", session: "abc", sheet: "" });
   });
-  it("reads the shared keys of an Errors URL and leaves its page-only keys out", () => {
-    const s = view("?project=foo&range=0&sub=0&noise=0&gran=week&ex=toolu_1");
-    expect(s).toMatchObject({ project: "foo", range: 0 });
-    expect(Object.keys(s)).toEqual(["project", "range", "source", "auto", "inspect", "tool", "mcp", "skill", "session", "sheet"]);
-  });
-  it("defaults the range to 30", () => {
-    expect(view("?ex=toolu_1").range).toBe(30);
-    expect(view("?range=").range).toBe(30);
-    expect(view("?range=12").range).toBe(30);
-    expect(view("").range).toBe(30);
-  });
-  it("reads auto=1 as including automated sessions", () => {
-    expect(view("?auto=1").auto).toBe(true);
-    expect(view("?auto=0").auto).toBe(false);
-  });
-  it("reads a known source, and an unknown one as All", () => {
-    expect(view("?source=codex").source).toBe("codex");
-    expect(view("?source=claude").source).toBe("claude");
-    expect(view("?source=grok").source).toBe("grok");
-    expect(view("?source=gemini").source).toBe("");
-    expect(view("").source).toBe("");
-  });
-  it("reads the inspected tool, MCP server and skill", () => {
-    expect(view("?range=7&tool=Bash")).toMatchObject({ tool: "Bash", mcp: "", skill: "" });
-    expect(view("?mcp=github&session=s1")).toMatchObject({ mcp: "github", session: "s1", tool: "" });
-    expect(view("?skill=ship").skill).toBe("ship");
-  });
-});
-
-describe("legacy hashes", () => {
-  it("moves a Usage hash to the query string, with and without validation", () => {
-    const hash = "#project=foo&range=30&source=claude&auto=1&session=abc", want = "?project=foo&range=30&source=claude&auto=1&session=abc";
-    expect(formatSearch(parseSearch(hash))).toBe(want);
-    expect(formatSearch({ ...validateRoot(parseSearch(hash)) })).toBe(want);
-  });
-  it("keeps page-only keys and unquoted numbers", () => {
-    expect(formatSearch(parseSearch("#ex=12345&cat=timeout"))).toBe("?ex=12345&cat=timeout");
-    expect(formatSearch(parseSearch("#project=123&range=7"))).toBe("?project=123&range=7");
-  });
-  it("keeps strings that look like other types as strings", () => {
-    const out = formatSearch(parseSearch("#project=my%20proj%2Fsub&session=true"));
-    expect(out).toBe("?project=my+proj%2Fsub&session=true");
-    expect(parseSearch(out)).toEqual({ project: "my proj/sub", session: "true" });
-  });
 });
 
 describe("validateRoot", () => {
@@ -109,9 +56,11 @@ describe("validateRoot", () => {
     expect("range" in s).toBe(false);
     expect(rootState(s).range).toBe(30);
   });
-  it("drops an unknown range", () => {
+  it("drops an unknown or empty range, read as 30", () => {
     expect("range" in validateRoot({ range: "999" })).toBe(false);
     expect("range" in validateRoot({ range: "abc" })).toBe(false);
+    expect(view("?range=").range).toBe(30);
+    expect(view("?range=12").range).toBe(30);
   });
   it("accepts a range as a string or a number", () => {
     expect(validateRoot({ range: "7" }).range).toBe(7);
@@ -134,10 +83,6 @@ describe("validateRoot", () => {
   it("drops unknown keys and empty strings", () => {
     expect(validateRoot({ ex: "1", project: "" , tool: "Bash" })).toEqual({ tool: "Bash" });
   });
-  it("writes keys in a fixed order", () => {
-    const s = validateRoot({ session: "s", skill: "k", mcp: "m", tool: "t", inspect: "i", auto: "1", source: "claude", range: "7", project: "p" });
-    expect(Object.keys(s)).toEqual(["project", "range", "source", "auto", "inspect", "tool", "mcp", "skill", "session"]);
-  });
   it("never throws on other types", () => {
     expect(validateRoot({ project: 5, range: {}, auto: null })).toEqual({});
   });
@@ -153,14 +98,6 @@ describe("rootState", () => {
     const s = rootState({});
     expect(s).toEqual({ project: "", range: 30, source: "", auto: false, inspect: "", tool: "", mcp: "", skill: "", session: "", sheet: "" });
     expect(viewOf(rootState({ project: "p", range: 0, auto: true }))).toMatchObject({ project: "p", range: 0, automated: true });
-  });
-});
-
-describe("sharedOf", () => {
-  it("keeps only project, range, source and auto", () => {
-    const raw = { session: "s", auto: "1", tool: "t", source: "claude", range: "0", project: "p", inspect: "i" };
-    expect(Object.entries(sharedOf(raw))).toEqual([["project", "p"], ["range", "0"], ["source", "claude"], ["auto", "1"]]);
-    expect(sharedOf({ session: "s" })).toEqual({});
   });
 });
 
@@ -241,27 +178,6 @@ describe("setSearch", () => {
     expect(added()).toBe(0);
     expect(location.pathname).toBe("/usage");
   });
-  it("adds one entry for a filter change and none for a key that does not push", () => {
-    start("/usage?range=30");
-    const len = history.length;
-    setSearch({ project: "foo" });
-    expect(history.length).toBe(len + 1);
-    setSearch({ q: "api" });
-    expect(history.length).toBe(len + 1);
-    expect(location.search).toBe("?project=foo&range=30&q=api");
-  });
-  it("forces an entry with push: true", () => {
-    start("/usage?range=30");
-    const len = history.length;
-    setSearch({ q: "api" }, { push: true });
-    expect(history.length).toBe(len + 1);
-  });
-  it("sees its own earlier write in the next call", () => {
-    start("/usage?range=30");
-    setSearch({ project: "foo" });
-    setSearch({ q: "api" });
-    expect(location.search).toBe("?project=foo&range=30&q=api");
-  });
   it("opens a tool sheet with a push, clearing the other sheets", () => {
     start("/usage?range=30&inspect=foo&session=s1");
     const len = history.length;
@@ -326,25 +242,6 @@ describe("setSearch", () => {
     setSearch({ session: "s3" });
     expect(sheets()).toBeUndefined();
   });
-  it("returns to the view before two sheets, and leaves history.length as it was", async () => {
-    start("/usage?project=foo&range=30");
-    const len = history.length;
-    setSearch({ inspect: "p" });
-    setSearch({ session: "s1" });
-    expect(location.search).toBe("?project=foo&range=30&inspect=p&session=s1");
-    const back = popped();
-    closeSheets(clear);
-    await back;
-    expect(location.search).toBe("?project=foo&range=30");
-    expect(history.length).toBe(len + 2);
-  });
-  it("closes with a replace when no count is kept", () => {
-    start("/usage?range=30&session=s1&inspect=p");
-    const len = history.length;
-    closeSheets(clear);
-    expect(location.search).toBe("?range=30");
-    expect(history.length).toBe(len);
-  });
   it("rewrites a URL in another key order to the canonical order, adding no entry", () => {
     start("/errors?range=30&cat=x&etool=Edit");
     const len = history.length;
@@ -356,13 +253,6 @@ describe("setSearch", () => {
     expect(errorsHref("foo", 7, undefined, { source: "codex", cat: "tests" })).toBe("/errors?project=foo&range=7&source=codex&cat=tests");
     expect(errorsHref(null, 0, "t1", { source: "" })).toBe("/errors?range=0&ex=t1");
     expect(errorsHref("foo")).toBe("/errors?project=foo");
-  });
-  it("writes auto=1 and removes it when off", () => {
-    start("/cost?range=30");
-    setSearch({ auto: true });
-    expect(location.search).toBe("?range=30&auto=1");
-    setSearch({ auto: false });
-    expect(location.search).toBe("?range=30");
   });
 });
 
@@ -411,21 +301,6 @@ describe("useView", () => {
     });
     expect(result.current[0]).toMatchObject({ project: "", range: 30, auto: true });
   });
-  it("keeps the same view while only a page's own key changes", () => {
-    history.replaceState(null, "", "/usage?project=foo");
-    const { result } = renderHook(() => useView(), { wrapper: wrapper(makeTestClient()) });
-    const first = result.current[0];
-    act(() => setSearch({ q: "x" }));
-    expect(result.current[0]).toBe(first);
-    act(() => setSearch({ session: "s1" }));
-    expect(result.current[0]).toEqual({ ...first, session: "s1" });
-  });
-  it("shows the new view after setSearch within the same act", () => {
-    history.replaceState(null, "", "/usage?range=30");
-    const { result } = renderHook(() => useView(), { wrapper: wrapper(makeTestClient()) });
-    act(() => { setSearch({ range: 7 }); });
-    expect(result.current[0].range).toBe(7);
-  });
 });
 
 describe("usePathname", () => {
@@ -446,13 +321,6 @@ describe("go", () => {
     expect(history.length).toBe(len + 1);
     expect(location.pathname + location.search).toBe("/cost?project=foo&range=7&tool=Bash");
   });
-  it("adds one entry for another page", () => {
-    start("/usage?range=30");
-    const len = history.length;
-    go("/cost?project=foo");
-    expect(history.length).toBe(len + 1);
-    expect(location.pathname + location.search).toBe("/cost?project=foo");
-  });
   it("adds nothing for the current location", () => {
     start("/errors?project=foo");
     const len = history.length;
@@ -466,13 +334,6 @@ describe("go", () => {
     act(() => go("/usage?range=7"));
     expect(result.current[0].range).toBe(7);
     expect(scroll).not.toHaveBeenCalled();
-  });
-  it("keeps navigate's page switch", () => {
-    start("/usage?range=30");
-    const len = history.length;
-    navigate("/errors?range=30");
-    expect(location.pathname).toBe("/errors");
-    expect(history.length).toBe(len + 1);
   });
 });
 

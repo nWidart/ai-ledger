@@ -1,4 +1,3 @@
-import glob
 import json
 import os
 import shutil
@@ -58,29 +57,23 @@ class ProjectTest(unittest.TestCase):
             self.assertEqual(store.resolve_project(wt), "foo")
             self.assertEqual(store.resolve_project(repo), "foo")
 
-    def test_missing_directory_uses_path(self):
-        self.assertEqual(store.resolve_project("/Users/x/Sites/gone-project"), "gone-project")
-
-    def test_claude_worktrees_path(self):
-        self.assertEqual(store.resolve_project("/Users/x/Sites/foo/.claude/worktrees/agent-1"), "foo")
-        self.assertEqual(store.resolve_project("/Users/x/ws/foo/worktrees/thread-9/sub"), "foo")
-        self.assertEqual(store.resolve_project("/Users/x/.t3/worktrees/foo/t3-3fb14cfd"), "foo")
-
-    def test_codex_desktop_workspaces(self):
+    def test_paths_without_a_git_checkout(self):
         codex = os.path.expanduser("~/Documents/Codex")
-        self.assertEqual(store.resolve_project(f"{codex}/2026-10-01/new-chat/work/invoice-export"), "codex-desktop")
-        self.assertEqual(store.resolve_project(f"{codex}/2026-11-02/i"), "codex-desktop")
-        self.assertEqual(store.resolve_project(f"{codex}Other/foo"), "foo")
-
-    def test_renamed_repository_alias(self):
-        self.assertEqual(store.resolve_project("/Users/x/Sites/projects/claude-errors-dashboard"), "ai-ledger")
-        self.assertEqual(store.resolve_project("/Users/x/Sites/projects/claude-errors-dashboard/.claude/worktrees/x"),
-                         "ai-ledger")
-        self.assertEqual(store.resolve_project("/Users/x/Sites/projects/ai-ledger"), "ai-ledger")
-
-    def test_temp_path(self):
-        self.assertEqual(store.resolve_project("/private/var/folders/ab/T/tmp123"), "(temp)")
-        self.assertEqual(store.resolve_project("/tmp/scratch"), "(temp)")
+        for cwd, want in [
+            ("/Users/x/Sites/gone-project", "gone-project"),  # a folder that is gone: its name
+            ("/Users/x/Sites/foo/.claude/worktrees/agent-1", "foo"),  # worktree layouts
+            ("/Users/x/ws/foo/worktrees/thread-9/sub", "foo"),
+            ("/Users/x/.t3/worktrees/foo/t3-3fb14cfd", "foo"),
+            (f"{codex}/2026-10-01/new-chat/work/invoice-export", "codex-desktop"),  # one project per app workspace folder
+            (f"{codex}/2026-11-02/i", "codex-desktop"),
+            (f"{codex}Other/foo", "foo"),
+            ("/Users/x/Sites/projects/claude-errors-dashboard", "ai-ledger"),  # a renamed repository
+            ("/Users/x/Sites/projects/claude-errors-dashboard/.claude/worktrees/x", "ai-ledger"),
+            ("/Users/x/Sites/projects/ai-ledger", "ai-ledger"),
+            ("/private/var/folders/ab/T/tmp123", "(temp)"),
+            ("/tmp/scratch", "(temp)"),
+        ]:
+            self.assertEqual(store.resolve_project(cwd), want, cwd)
 
     def test_cached_per_cwd(self):
         tmp = tempfile.mkdtemp()
@@ -112,32 +105,6 @@ class DeriveTest(StoreCase):
         self.assertEqual(self.q("SELECT message_id, speed FROM requests ORDER BY 1"), want)
         store.rebuild(self.con)
         self.assertEqual(self.q("SELECT message_id, speed FROM requests ORDER BY 1"), want)
-
-    def test_store_from_before_speed_gains_the_column_on_open(self):
-        self.con.execute("ALTER TABLE requests DROP COLUMN speed")
-        self.con.close()
-        self.con = store.open_store(self.db)
-        self.assertEqual(self.q("SELECT count(speed) FROM requests"), [(0,)])
-
-    def test_store_from_before_the_context_columns_gains_them_on_open(self):
-        self.write("a.jsonl", prompt("u1", "2026-11-01T10:00:00Z", "p1", "go")
-                   + assistant("a1", "m1", "2026-11-01T10:00:01Z", [tool_use("t1", "Bash", command="x")])
-                   + result("r1", "2026-11-01T10:00:02Z", "t1", "ok"))
-        self.ingest()
-        counts = "SELECT (SELECT count(*) FROM raw_lines), (SELECT count(*) FROM sessions), (SELECT count(*) FROM requests), (SELECT count(*) FROM tool_calls)"
-        before = self.q(counts)
-        self.assertEqual(before, [(3, 1, 1, 1)])
-        self.con.execute("ALTER TABLE tool_calls DROP COLUMN result_bytes")
-        self.con.execute("ALTER TABLE sessions DROP COLUMN context_window")
-        self.con.execute("ALTER TABLE sessions DROP COLUMN first_compaction_ts")
-        self.con.close()
-        self.con = store.open_store(self.db)
-        self.assertEqual(self.q("SELECT count(result_bytes), count(*) FROM tool_calls"), [(0, 1)])
-        self.assertEqual(self.q("SELECT count(context_window), count(first_compaction_ts), count(*) FROM sessions"), [(0, 0, 1)])
-        self.assertEqual(self.q(counts), before)
-        self.con.close()
-        self.con = store.open_store(self.db)  # opening again adds nothing and breaks nothing
-        self.assertEqual(self.q(counts), before)
 
     def test_result_bytes(self):
         text = "é" * 6000 + "x" * 345  # 12,345 bytes: each é is two
@@ -208,14 +175,6 @@ class DeriveTest(StoreCase):
         self.assertEqual(self.q("SELECT mcp_server, skill FROM tool_calls ORDER BY 1"),
                          [("plugin_x_search", None), (None, "review")])
 
-    def test_compact_boundary_counts(self):
-        cb = lambda u: line(type="system", subtype="compact_boundary", uuid=u, timestamp="2026-11-01T11:00:00Z", **S)
-        self.write("a.jsonl", cb("c1") + cb("c2"))
-        self.ingest()
-        self.write("a.jsonl", cb("c3"))
-        self.ingest()
-        self.assertEqual(self.q("SELECT compactions FROM sessions"), [(3,)])
-
     def test_first_compaction_is_the_earliest_and_a_claude_session_has_no_window(self):
         cb = lambda u, ts: line(type="system", subtype="compact_boundary", uuid=u, timestamp=ts, **S)
         self.write("a.jsonl", cb("c2", "2026-11-01T11:30:00Z") + cb("c1", "2026-11-01T10:42:00Z"))
@@ -274,15 +233,6 @@ class AliasTest(StoreCase):
             self.con.close()
         self.con = store.open_store(self.db)
 
-    def test_rebuild_keeps_alias(self):
-        self.con.execute("INSERT INTO projects_by_cwd VALUES ('/gone/claude-errors-dashboard', 'claude-errors-dashboard')")
-        self.con.close()
-        self.con = store.open_store(self.db)
-        self.write("a.jsonl", prompt("u1", "2026-11-01T10:00:00Z", "p1", "go").replace("/nowhere/foo", "/gone/claude-errors-dashboard"))
-        store.ingest(self.con, self.roots)
-        store.rebuild(self.con)
-        self.assertEqual(self.q("SELECT project FROM sessions"), [("ai-ledger",)])
-
 
 class RebuildTest(StoreCase):
     def counts(self):
@@ -292,11 +242,15 @@ class RebuildTest(StoreCase):
             "tokens": self.q("SELECT sum(input + output) FROM requests")[0][0],
             "compactions": self.q("SELECT sum(compactions) FROM sessions")[0][0],
             "context": self.q("SELECT session_id, context_window, first_compaction_ts FROM sessions ORDER BY ALL"),
-            "result_bytes": self.q("SELECT tool_use_id, result_bytes FROM tool_calls ORDER BY ALL")}
+            "result_bytes": self.q("SELECT tool_use_id, result_bytes FROM tool_calls ORDER BY ALL"),
+            "titles": self.q("SELECT * FROM session_titles ORDER BY ALL")}
 
     def test_rebuild_matches_incremental(self):
         a = self.write("a.jsonl", prompt("u1", "2026-11-01T10:00:00Z", "p1", "go")
-                       + assistant("a1", "m1", "2026-11-01T10:00:01Z", [tool_use("t1", "Bash", command="x")]))
+                       + assistant("a1", "m1", "2026-11-01T10:00:01Z", [tool_use("t1", "Bash", command="x")])
+                       + line(type="ai-title", aiTitle="Fix login redirect", sessionId="s1")
+                       + line(type="custom-title", customTitle="auth bug", sessionId="s1")
+                       + line(type="ai-title", aiTitle="x", sessionId="s2"))
         store.ingest(self.con, self.roots)
         self.write("a.jsonl", result("r1", "2026-11-01T10:00:02Z", "t1", "Exit code 1", error=True)
                    + assistant("a2", "m2", "2026-11-01T10:00:03Z", [dict(type="text", text="Hm.")])
@@ -313,6 +267,7 @@ class RebuildTest(StoreCase):
         self.assertEqual(before["followups"], 1)
         self.assertEqual(before["result_bytes"], [("t1", len("Exit code 1")), ("t2", None)])
         self.assertEqual(before["context"], [("s1", None, datetime(2026, 11, 1, 10, 5))])
+        self.assertEqual(before["titles"], [("s1", "auth bug", "Fix login redirect"), ("s2", None, "x")])
 
 
 def cost_state(start, api, tool, added, removed, sid="s1", **kw):
@@ -334,11 +289,6 @@ class CostStateTest(StoreCase):
     def session_sums(self):
         return self.q("SELECT session_id, sum(api_ms), sum(tool_ms), sum(lines_added), sum(lines_removed) FROM session_runs GROUP BY 1")
 
-    def test_one_run(self):
-        self.write("a.jsonl", prompt("u1", "2026-11-01T10:00:00Z", "p1", "go") + cost_state(self.START, 90_000, 40_000, 120, 30))
-        store.ingest(self.con, self.roots)
-        self.assertEqual(self.runs(), [("s1", self.START, 90_000, 40_000, 120, 30)])
-
     def test_snapshots_of_one_run_keep_the_largest(self):
         self.write("a.jsonl", cost_state(self.START, 60_000, 50_000, 10, 3) + cost_state(self.START, 90_000, 40_000, 120, 30))
         store.ingest(self.con, self.roots)
@@ -347,8 +297,9 @@ class CostStateTest(StoreCase):
         self.assertEqual(self.runs(), [("s1", self.START, 90_000, 50_000, 120, 40)])
 
     def test_two_runs_sum(self):
-        self.write("a.jsonl", cost_state(self.START, 60_000, 10_000, 5, 1))
+        self.write("a.jsonl", prompt("u1", "2026-11-01T10:00:00Z", "p1", "go") + cost_state(self.START, 60_000, 10_000, 5, 1))
         store.ingest(self.con, self.roots)
+        self.assertEqual(self.runs(), [("s1", self.START, 60_000, 10_000, 5, 1)])
         self.write("a.jsonl", cost_state(self.LATER, 20_000, 2_000, 7, 2))
         store.ingest(self.con, self.roots)
         self.assertEqual(len(self.runs()), 2)
@@ -395,56 +346,6 @@ class CostStateTest(StoreCase):
         store.ingest(self.con, self.roots)
         self.assertEqual(self.runs(), [])
 
-    def test_codex_session_records_nothing(self):
-        from test_codex import FIXTURES
-        for p in sorted(glob.glob(os.path.join(FIXTURES, "*.jsonl"))):
-            d = os.path.join(self.roots["codex"], "sessions", "2026", "11", "01")
-            os.makedirs(d, exist_ok=True)
-            shutil.copy(p, os.path.join(d, os.path.basename(p).split("--", 1)[1]))
-            with open(os.path.join(d, os.path.basename(p).split("--", 1)[1]), "a") as fh:  # even a line shaped like Claude Code's
-                fh.write(cost_state(self.START, 1, 1, 1, 1))
-        store.ingest(self.con, self.roots)
-        self.assertGreater(self.q("SELECT count(*) FROM sessions WHERE source = 'codex'")[0][0], 0)
-        self.assertEqual(self.runs(), [])
-
-
-class OtherDeriver(store.Deriver):
-    """A second source's parser: Claude's line shapes under its own session ids."""
-
-    def add(self, d, key=None):
-        super().add(dict(d, sessionId="other-" + d["sessionId"]), key)
-
-
-class TwoSourceRebuildTest(StoreCase):
-    def rows(self):
-        return {t: self.q(f"SELECT * FROM {t} ORDER BY ALL") for t in store.DERIVED} | {
-            "files": self.q("SELECT path, seq, source FROM files ORDER BY ALL")}
-
-    def test_rebuild_uses_each_source_deriver(self):
-        other = os.path.join(self.tmp, "other")
-        os.makedirs(other)
-        src = store.Source(lambda root: sorted(glob.glob(os.path.join(root, "*.jsonl"))),
-                           lambda d, path, offset: "other:" + store.line_key(d, path, offset), OtherDeriver, lambda cur, path, lines: (None, False))
-        with mock.patch.dict(store.SOURCES, other=src):
-            body = (prompt("u1", "2026-11-01T10:00:00Z", "p1", "go")
-                    + assistant("a1", "m1", "2026-11-01T10:00:01Z", [tool_use("t1", "Bash", command="x")]))
-            self.write("a.jsonl", body)
-            with open(os.path.join(other, "b.jsonl"), "w") as fh:
-                fh.write(body.replace('"m1"', '"m2"').replace('"t1"', '"t2"').replace('"p1"', '"p2"'))
-            store.ingest(self.con, self.roots | dict(other=other))
-            self.write("a.jsonl", result("r1", "2026-11-01T10:00:02Z", "t1", "Exit code 1", error=True)
-                       + assistant("a2", "m3", "2026-11-01T10:00:03Z", [dict(type="text", text="Hm.")]))
-            store.ingest(self.con, self.roots | dict(other=other))
-            before = self.rows()
-            store.rebuild(self.con)
-            self.assertEqual(self.rows(), before)
-        self.assertEqual(self.q("SELECT session_id, source FROM sessions ORDER BY 1"), [("other-s1", "other"), ("s1", "claude")])
-        self.assertEqual(self.q("SELECT count(*) FROM requests"), [(3,)])
-
-
-if __name__ == "__main__":
-    unittest.main()
-
 
 class LiveItemsTest(unittest.TestCase):
     """store.live_items: what the Live page shows of one Claude Code line."""
@@ -458,12 +359,6 @@ class LiveItemsTest(unittest.TestCase):
         res, = self.items(result("u1", "2026-11-10T10:00:01Z", "t1", "<tool_use_error>Exit code 2</tool_use_error>", error=True))
         self.assertEqual((res["k"], res["id"], res["error"]), ("tool_result", "t1", "Exit code 2"))
 
-    def test_tool_use_carries_its_timeout(self):
-        use = lambda **inp: self.items(assistant("a1", "m1", "2026-11-10T10:00:00Z", [tool_use("t1", "Bash", command="make", **inp)]))[1]
-        self.assertEqual(use(timeout=600000)["timeout"], 600000)
-        self.assertEqual(use(timeout="600000")["timeout"], None)
-        self.assertEqual(use(run_in_background=True), use())  # no part of the item
-
     def test_request_and_reply_without_thinking(self):
         req, reply = self.items(assistant("a1", "m1", "2026-11-10T10:00:00Z",
                                           [dict(type="thinking", thinking="secret plan"), dict(type="text", text="Done.")]))
@@ -473,20 +368,6 @@ class LiveItemsTest(unittest.TestCase):
     def test_prompt_and_interrupt(self):
         self.assertEqual(self.items(prompt("u1", "2026-11-10T10:00:00Z", "p1", "Fix the build")), [dict(k="prompt", text="Fix the build")])
         self.assertEqual(self.items(prompt("u2", "2026-11-10T10:00:01Z", "p1", "[Request interrupted by user]")), [dict(k="interrupt")])
-
-    def test_compact_boundary(self):
-        text = line(type="system", subtype="compact_boundary", uuid="c1", timestamp="2026-11-10T10:00:00Z",
-                    compactMetadata=dict(preTokens=150000), **S)
-        self.assertEqual(self.items(text), [dict(k="compaction", pre=150000)])
-
-    def test_agent_result_names_the_agent(self):
-        text = line(type="user", uuid="u1", timestamp="2026-11-10T10:00:00Z", promptId="p1", toolUseResult=dict(agentId="a7"),
-                    message=dict(role="user", content=[dict(type="tool_result", tool_use_id="t9", content="found 3")]), **S)
-        res, = self.items(text)
-        self.assertEqual((res["id"], res["agent"], res["error"], res["output"]), ("t9", "a7", None, "found 3"))
-
-    def test_unknown_line_type(self):
-        self.assertEqual(self.items(line(type="file-history-snapshot", uuid="f1")), [])
 
 
 CONTEXT_FIXTURE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "claude", "context-command.jsonl")
@@ -523,9 +404,6 @@ class ContextSnapshotTest(StoreCase):
         self.assertIn(("Autocompact buffer", "buffer", 33000), cats)
         self.assertEqual(cats[-1], ("Free space", "free", 936088))
         self.assertTrue(all(detail is None for *_, detail, _, _ in self.parts("category")))
-
-    def test_parts_of_each_kind(self):
-        self.ingest_fixture()
         rows = lambda kind: [(name, detail, state, tokens) for _, _, _, name, detail, state, tokens in self.parts(kind)]
         mcp = rows("mcp_tool")
         self.assertIn(("mcp__caveman__caveman_compress", "caveman", None, 254), mcp)
@@ -575,3 +453,7 @@ class ContextSnapshotTest(StoreCase):
         self.assertEqual((project, model, window, total), ("foo", None, None, None))
         self.assertEqual([(kind, name, state, tokens) for _, _, kind, name, _, state, tokens in self.parts()],
                          [("category", "System prompt", "used", None), ("category", None, None, None)])
+
+
+if __name__ == "__main__":
+    unittest.main()

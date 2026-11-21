@@ -227,9 +227,7 @@ class ChunkTextTest(GrokLiveCase):
     def test_whitespace_chunk_of_a_reply_is_kept(self):
         self.assertEqual([e["text"] for e in self.chunks("agent_message_chunk", ["one", " ", "two"])], ["one two"])
         self.assertEqual([e["text"] for e in self.chunks("agent_message_chunk", ["one", "\n", "two\n"])], ["one\ntwo"])
-
-    def test_reply_of_whitespace_only_gives_no_event(self):
-        self.assertEqual(self.chunks("agent_message_chunk", [" ", "\n"]), [])
+        self.assertEqual(self.chunks("agent_message_chunk", [" ", "\n"]), [])  # a reply of whitespace only gives no event
 
     def test_prompt_chunks_keep_their_own_whitespace(self):
         self.assertEqual([e["text"] for e in self.chunks("user_message_chunk", [" one ", " ", "two "])], ["one \n \ntwo"])
@@ -369,21 +367,3 @@ class FiguresTest(GrokLiveCase):
         self.assertEqual((one["model"], one["window"]), ("grok-4.7-build", 256000))
         self.assertEqual([c["pre"] for c in one["compactions"]], [204942])
         self.assertGreater(one["context"], 0)
-
-
-class LiveSmokeTest(GrokCase):
-    def test_live_payloads_hold_a_grok_session(self):
-        """The Live payloads answer for a stored Grok session with a subagent, whatever they read of its turns."""
-        self.put("probe")
-        self.ingest()
-        cur = self.con.cursor()
-        sid = SESSION["probe"]
-        (last,) = cur.execute("SELECT last_ts FROM sessions WHERE session_id = ?", [sid]).fetchone()
-        now = live.aware(last) + timedelta(seconds=1)
-        listed = live.sessions(cur, now=now, prices={})
-        self.assertEqual([(s["session_id"], s["source"]) for s in listed["sessions"]], [(sid, "grok")])
-        self.assertIsInstance(live.waiting(cur, now=now), int)
-        one = live.session(cur, sid, now=now, prices={}, text=True)
-        self.assertEqual((one["session_id"], one["source"]), (sid, "grok"))
-        self.assertEqual(live.session(cur, sid, after=one["cursor"], now=now, prices={})["cursor"], one["cursor"])
-        self.assertEqual(metrics.session(cur, sid, prices={})["compaction_ts"], [])

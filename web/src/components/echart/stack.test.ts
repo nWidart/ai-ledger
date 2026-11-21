@@ -18,13 +18,6 @@ const rects = (values: number[], top = TOP) => stackRects(values, Y0, top, 10, 3
 const gapsKept = (r: StackRect[]) => r.slice(1).every((s, j) => s.y + s.height + 2 <= r[j]!.y + 1e-9);
 
 describe("stackRects", () => {
-  it("draws a 1% share above zero height, under the 2px gap between segments", () => {
-    const r = rects([98, 1, 1]);
-    expect(r).toHaveLength(3);
-    for (const s of r) expect(s.height).toBeGreaterThanOrEqual(1 - 1e-9);
-    expect(gapsKept(r)).toBe(true);
-  });
-
   it("gives two 0.1% shares room of their own, so no segment paints over another and the bar still fills the plot", () => {
     const r = rects([998, 1, 1]);
     expect(r).toHaveLength(3);

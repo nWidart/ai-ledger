@@ -40,20 +40,12 @@ describe("router", () => {
     for (const p of PATHS.filter(p => p !== path)) expect(tab(p).getAttribute("aria-current")).toBeNull();
   });
 
-  describe("a canonical URL", () => {
-    const urls = [...PATHS.map(p => p + "?project=foo&range=7"), "/errors?range=30&sub=0&cat=x"];
-    it.each(urls)("is unchanged by loading %s", async url => {
-      const { length } = open(url);
-      await loaded(url.split("?")[0] as keyof typeof ROUTES);
-      expect(here()).toBe(url);
-      expect(history.length).toBe(length);
-    });
-  });
-
   // The routes validate their keys, and the router writes the URL back when validation changes it. A typed value must
   // be written as it was read, and a value that is not valid must stay as the user wrote it.
-  describe("a URL with every key a page reads", () => {
+  describe("a canonical URL, with every key a page reads", () => {
     const urls = [
+      "/errors?range=30&sub=0&cat=x",
+      "/live?project=foo&range=7",
       "/usage?project=foo&range=7&source=claude&auto=1&q=abc&near=1&day=2026-11-03&session=s1",
       "/cost?project=foo&range=14&source=codex&auto=1&session=s1",
       "/context?project=foo&range=90&tip=t1",
@@ -171,22 +163,6 @@ describe("router", () => {
       expect(await screen.findByRole("link", { name: "Brief, foo project page" })).toBeTruthy();
     });
   });
-
-  describe("scrolling", () => {
-    it("moves to the top on a page switch and stays put on a view change", async () => {
-      const scroll = vi.spyOn(window, "scrollTo");
-      open("/usage");
-      await loaded("/usage");
-      await userEvent.click(screen.getByRole("link", { name: "Cost" }));
-      await loaded("/cost");
-      expect(scroll).toHaveBeenCalled();
-      expect(scroll.mock.calls.at(-1)).toEqual([{ top: 0, left: 0 }]);
-      scroll.mockClear();
-      act(() => setSearch({ range: 7 }));
-      await new Promise(r => setTimeout(r, 20));
-      expect(scroll).not.toHaveBeenCalled();
-    });
-  });
 });
 
 describe("the Project page", () => {
@@ -224,22 +200,5 @@ describe("the Project page", () => {
     act(() => history.back());
     await waitFor(() => expect(location.pathname).toBe("/project"));
     expect(location.search).toBe("?project=foo&range=7&source=claude");
-  });
-
-  it("keeps the project when a tab is chosen", async () => {
-    open("/project?project=foo&range=30");
-    await loaded("/project");
-    await userEvent.click(tabs().getByRole("link", { name: "Cost" }));
-    await loaded("/cost");
-    expect(here()).toBe("/cost?project=foo&range=30");
-  });
-});
-
-describe("a key no page knows", () => {
-  it("is ignored: the page shows as it would without it", async () => {
-    open("/cost?project=foo&nosuchkey=1");
-    await loaded("/cost");
-    expect((await screen.findByRole("link", { name: "Brief, foo project page" })).getAttribute("href")).toBe("/project?project=foo");
-    expect(screen.getByRole("link", { name: "Cost" }).getAttribute("aria-current")).toBe("page");
   });
 });

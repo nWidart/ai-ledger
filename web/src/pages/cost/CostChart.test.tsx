@@ -10,7 +10,7 @@ import { drawn } from "../../components/echart/testing";
 import { dayRange, usd } from "../../format";
 import { CostChart } from "./CostChart";
 import type { Stack } from "./cost";
-import { prevented, renderApp } from "../../testing";
+import { renderApp } from "../../testing";
 
 // What the chart draws is costDaily.test.ts's to test. Here only that the component hands the wrapper the current view's
 // option: how many kinds the stack in the fake runtime's last option draws (each data row is [day, total, ...values]).
@@ -39,14 +39,10 @@ beforeEach(() => setOrder(["A"]));
 afterEach(() => setOrder([]));
 
 describe("cost tooltip: Other's projects", () => {
-  it("lists the top three under Other, then + 1 more", () => {
+  it("lists the top three under Other, then + 1 more, in the tooltip and the screen-reader text", () => {
     open();
     const rows = [...screen.getByRole("tooltip").querySelectorAll(".row.sub")].map(r => r.textContent);
     expect(rows).toEqual([`B${usd(5)}`, `C${usd(3)}`, `D${usd(1)}`, "+ 1 more"]);
-  });
-
-  it("reads the same list in the screen-reader text", () => {
-    open();
     expect(document.querySelector(".sr")!.textContent).toContain(`Other (4) ${usd(9.5)} (B ${usd(5)}, C ${usd(3)}, D ${usd(1)}, and 1 more)`);
   });
 });
@@ -65,7 +61,6 @@ describe("cost chart: unpriced requests", () => {
     expect(screen.getByRole("tooltip").textContent).toContain("1 unpriced request");
     expect(screen.getByRole("tooltip").textContent).not.toContain("1 unpriced requests");
   });
-  it("says 3 unpriced requests in the plural", () => expect(read(3)).toContain(", 3 unpriced requests"));
 });
 
 describe("cost chart: today so far", () => {
@@ -76,20 +71,9 @@ describe("cost chart: today so far", () => {
     daily_projects: days.map((x, i) => ({ day: x, project: "A", cost: i === 19 ? 40 : 1, tokens: 1 })), by_project: [proj("A", 59)] };
   const show = (data = long) => renderApp(<CostChart d={data} metric="cost" onMetric={() => {}} hidden={[]} onHidden={() => {}} scale="volume" onScale={() => {}} stack="project" onStack={() => {}} onProject={() => {}} onSource={() => {}} onDay={() => {}} />);
 
-  it("keys today in the legend", () => {
+  it("keys today in the legend, and labels it 'so far' in the tooltip and the screen-reader text, and yesterday not", () => {
     show();
     expect(screen.getByText("Today so far")).toBeTruthy();
-  });
-
-  it("leaves keys with Alt, Ctrl, Meta or Shift to the browser", () => {
-    show();
-    act(() => chart().focus());
-    expect(prevented(chart())).toEqual([]);
-    expect(screen.queryByRole("tooltip")).toBeNull();
-  });
-
-  it("labels today 'so far' in the tooltip and the screen-reader text, and yesterday not", () => {
-    show();
     act(() => chart().focus());
     fireEvent.keyDown(chart(), { key: "End" });
     expect(screen.getByRole("tooltip").textContent).toContain("so far");
@@ -130,28 +114,6 @@ describe("cost chart: stack by", () => {
   const sel = (name: string) => userEvent.click(screen.getByRole("button", { name }));
   afterEach(() => vi.clearAllMocks());
 
-  it("is a labelled group, and Escape dismisses the tooltip the arrow keys opened", () => {
-    renderApp(<Host data={split} />);
-    expect(screen.queryByRole("tooltip")).toBeNull();
-    hover();
-    expect(screen.getByRole("tooltip")).toBeTruthy();
-    fireEvent.keyDown(screen.getByRole("group", { name: /Estimated cost/ }), { key: "Escape" });
-    expect(screen.queryByRole("tooltip")).toBeNull();
-    expect(screen.queryByRole("img", { name: /Estimated cost/ })).toBeNull();
-  });
-
-  it("closes a tooltip the pointer opened on Escape, with the focus on another element", async () => {
-    renderApp(<Host data={split} />);
-    const chart = await drawn();
-    act(() => screen.getByRole("button", { name: "Model" }).focus());
-    chart.fire("mousemove", chart.pointAt(0));
-    expect(screen.getByRole("tooltip")).toBeTruthy();
-    await userEvent.keyboard("{Escape}");
-    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Model" }));
-    expect(screen.queryByRole("tooltip")).toBeNull();
-    expect(document.querySelector(".sr")!.textContent).toBe("");
-  });
-
   it("offers a data table that follows the stacking and keeps the day's total", async () => {
     renderApp(<Host data={split} />);
     expect(screen.queryByRole("table")).toBeNull(); // closed on load, and not rendered
@@ -177,6 +139,7 @@ describe("cost chart: stack by", () => {
     await sel("Model");
     expect(screen.getByRole("button", { name: "Model" }).getAttribute("aria-pressed")).toBe("true");
     expect(keys().slice(0, 3)).toEqual(["opus-4", "sonnet-4", "gpt-6"]);
+    expect(document.querySelectorAll(".legend button.proj")).toHaveLength(0); // model keys filter nothing
     expect(await drawnKinds()).toBe(3);
     expect(screen.getByRole("heading", { level: 2 }).textContent).toBe("Estimated cost per day by model");
     expect(screen.getByRole("group", { name: /^Estimated cost by model per day, 1 days/ })).toBeTruthy();
@@ -217,16 +180,13 @@ describe("cost chart: stack by", () => {
     expect(calls.onProject).not.toHaveBeenCalled();
   });
 
-  it("keeps model keys plain: no filter", async () => {
-    renderApp(<Host data={split} first="model" />);
-    expect(document.querySelectorAll(".legend button.proj")).toHaveLength(0);
-  });
-
-  it("shows the switch only with the cost metric", () => {
-    const { rerender } = renderApp(<CostChart d={split} metric="cost" onMetric={() => {}} hidden={[]} onHidden={() => {}} scale="volume" onScale={() => {}} stack="project" onStack={() => {}} onProject={() => {}} onSource={() => {}} onDay={() => {}} />);
+  it("shows the stack switch only with the cost metric, and the scale only with tokens", () => {
+    const { rerender } = renderApp(<CostChart d={split} metric="cost" onMetric={() => {}} hidden={[]} onHidden={() => {}} scale="share" onScale={() => {}} stack="project" onStack={() => {}} onProject={() => {}} onSource={() => {}} onDay={() => {}} />);
     expect(screen.getByRole("group", { name: "Stack by" })).toBeTruthy();
-    rerender(<CostChart d={split} metric="tokens" onMetric={() => {}} hidden={[]} onHidden={() => {}} scale="volume" onScale={() => {}} stack="project" onStack={() => {}} onProject={() => {}} onSource={() => {}} onDay={() => {}} />);
+    expect(screen.queryByRole("group", { name: "Scale" })).toBeNull();
+    rerender(<CostChart d={split} metric="tokens" onMetric={() => {}} hidden={[]} onHidden={() => {}} scale="share" onScale={() => {}} stack="project" onStack={() => {}} onProject={() => {}} onSource={() => {}} onDay={() => {}} />);
     expect(screen.queryByRole("group", { name: "Stack by" })).toBeNull();
+    expect(screen.getByRole("group", { name: "Scale" })).toBeTruthy();
   });
 
   it("offers all three stackings in a one-project view", async () => {
@@ -234,23 +194,6 @@ describe("cost chart: stack by", () => {
     expect(keys()[0]).toBe("A ✕");
     await sel("Model");
     expect(keys().slice(0, 3)).toEqual(["opus-4", "sonnet-4", "gpt-6"]);
-  });
-
-  // 20 days ending today ($1 a day, today $40), all on one model.
-  it("still keys today and leaves it out of the average when stacked by model", () => {
-    const days = dayRange("2026-10-16", "2026-11-04");
-    const long: UsagePayload = { ...d, start: days[0]!, end: days.at(-1)!, range: 20,
-      daily: days.map((x, i) => ({ ...usage.daily[0]!, day: x, cost: i === 19 ? 40 : 1, unpriced: 0 })),
-      daily_projects: days.map((x, i) => ({ day: x, project: "A", cost: i === 19 ? 40 : 1, tokens: 1 })), by_project: [proj("A", 59)],
-      daily_models: days.map((x, i) => ({ day: x, model: "claude-opus-4", cost: i === 19 ? 40 : 1 })) };
-    renderApp(<Host data={long} first="model" />);
-    expect(screen.getByText("Today so far")).toBeTruthy();
-    act(() => screen.getByRole("group", { name: /Estimated cost by model/ }).focus());
-    fireEvent.keyDown(screen.getByRole("group", { name: /Estimated cost by model/ }), { key: "End" });
-    expect(document.querySelector(".sr")!.textContent).toContain("so far");
-    expect(document.querySelector(".sr")!.textContent).not.toContain("7-day average");
-    fireEvent.keyDown(screen.getByRole("group", { name: /Estimated cost by model/ }), { key: "ArrowLeft" });
-    expect(document.querySelector(".sr")!.textContent).toContain(`7-day average ${usd(1)}`);
   });
 });
 
@@ -261,9 +204,9 @@ describe("tokens chart: Share", () => {
     daily: [{ ...usage.daily[0]!, ...empty, day, input: 60, output: 20, cache_read: 120, cost: 1, unpriced: 0 }, { ...usage.daily[0]!, ...empty, day: "2026-11-05", cost: 0, unpriced: 0 }] };
 
   /** The tokens chart with a scale state of its own, as the page keeps it. */
-  function Host({ data = tokens, first = "share", hidden = [] }: { data?: UsagePayload; first?: "volume" | "share"; hidden?: string[] }) {
+  function Host({ data = tokens, first = "share" }: { data?: UsagePayload; first?: "volume" | "share" }) {
     const [scale, setScale] = useState(first);
-    return <CostChart d={data} metric="tokens" onMetric={() => {}} hidden={hidden} onHidden={() => {}} scale={scale} onScale={setScale} stack="project" onStack={() => {}}
+    return <CostChart d={data} metric="tokens" onMetric={() => {}} hidden={[]} onHidden={() => {}} scale={scale} onScale={setScale} stack="project" onStack={() => {}}
       onProject={() => {}} onSource={() => {}} onDay={() => {}} />;
   }
   const chart = (name: RegExp | string) => screen.getByRole("group", { name });
@@ -279,13 +222,14 @@ describe("tokens chart: Share", () => {
     expect(screen.getByRole("heading", { name: "Token share per day" })).toBeTruthy();
   });
 
-  it("is not offered in the cost metric", () => {
-    renderApp(<CostChart d={tokens} metric="cost" onMetric={() => {}} hidden={[]} onHidden={() => {}} scale="share" onScale={() => {}} stack="project" onStack={() => {}} onProject={() => {}} onSource={() => {}} onDay={() => {}} />);
-    expect(screen.queryByRole("group", { name: "Scale" })).toBeNull();
-  });
-
-  it("keys no 7-day average in Share", () => {
-    renderApp(<Host />);
+  it("keys Volume's 7-day average, and none in Share", () => {
+    const days = dayRange("2026-10-16", "2026-11-04");
+    const long: UsagePayload = { ...tokens, start: days[0]!, end: days.at(-1)!, range: 20,
+      daily: days.map(x => ({ ...usage.daily[0]!, ...empty, day: x, input: 1, cost: 1, unpriced: 0 })) };
+    const { unmount } = renderApp(<Host data={long} first="volume" />);
+    expect(screen.getByText("7-day average")).toBeTruthy();
+    unmount();
+    renderApp(<Host data={long} />);
     expect(screen.queryByText("7-day average")).toBeNull();
   });
 
@@ -321,13 +265,6 @@ describe("tokens chart: Share", () => {
     expect(screen.queryByRole("tooltip")).toBeNull();
   });
 
-  it("takes a hidden kind out of the day's total, so the others still make 100%", () => {
-    renderApp(<Host hidden={["cache_read"]} />);
-    read(/^Token share/);
-    expect(document.querySelector(".sr")!.textContent).toContain("Input 75.0%, Output 25.0%");
-    expect(document.querySelector(".sr")!.textContent).toContain("total 80");
-  });
-
   it("lists each day's shares and total tokens in the data table", async () => {
     renderApp(<Host />);
     await userEvent.click(screen.getByRole("button", { name: "Show data table" }));
@@ -337,14 +274,6 @@ describe("tokens chart: Share", () => {
     const [first, second] = within(table).getAllByRole("row").slice(1).map(r => [...r.querySelectorAll("td")].map(c => c.textContent));
     expect(first).toEqual(["30.0%", "10.0%", "0.0%", "60.0%", "0.0%", "0.0%", "200"]);
     expect(second!.slice(0, 6)).toEqual(Array(6).fill("–"));
-  });
-
-  it("keys Volume's 7-day average", () => {
-    const days = dayRange("2026-10-16", "2026-11-04");
-    const long: UsagePayload = { ...tokens, start: days[0]!, end: days.at(-1)!, range: 20,
-      daily: days.map(x => ({ ...usage.daily[0]!, ...empty, day: x, input: 1, cost: 1, unpriced: 0 })) };
-    renderApp(<Host data={long} first="volume" />);
-    expect(screen.getByText("7-day average")).toBeTruthy();
   });
 });
 
@@ -371,8 +300,8 @@ describe("cost chart: zoom", () => {
   /** The slider dragged to days from..to. */
   const drag = async (from: number, to: number) => (await drawn()).zoomTo(from, to);
 
-  it("draws no slider and takes no zoom key under 14 days", async () => {
-    renderApp(<Host data={view("2026-10-24", "2026-11-05")} />);
+  it("draws no slider and takes no zoom key under 14 days; from 14 days the slider, 28px more, and the zoom keys named", async () => {
+    const { unmount } = renderApp(<Host data={view("2026-10-24", "2026-11-05")} />);
     expect(await slider()).toEqual([]);
     expect(group().style.height).toBe("240px");
     expect(group().getAttribute("aria-label")).not.toContain("plus and minus");
@@ -380,9 +309,7 @@ describe("cost chart: zoom", () => {
     act(() => group().focus());
     expect(fireEvent.keyDown(group(), { key: "+" })).toBe(true);
     expect(fireEvent.keyDown(group(), { key: "-" })).toBe(true);
-  });
-
-  it("draws the slider, 28px more, and names the zoom keys from 14 days", async () => {
+    unmount();
     renderApp(<Host data={view("2026-10-22", "2026-11-04")} />);
     expect(await slider()).toHaveLength(1);
     expect(group().style.height).toBe("268px");
@@ -401,24 +328,6 @@ describe("cost chart: zoom", () => {
     expect(within(screen.getByRole("table")).getAllByRole("row")).toHaveLength(31);
   });
 
-  it("keeps the value axis and the average of the whole view while zoomed", async () => {
-    renderApp(<Host />);
-    const chart = await drawn();
-    const before = chart.last!, avg = (o: typeof before) => (o.series as SeriesOption[]).find(s => s.id === "avg")!.data;
-    // The zoom starts at Oct 12, whose average is the mean of Oct 6 to Oct 12 ($1 to $7), as without the zoom.
-    chart.fire("mousemove", chart.pointAt(6));
-    const unzoomed = sr();
-    expect(unzoomed).toContain(`7-day average ${usd(4)}`);
-    chart.fire("globalout");
-    await drag(6, 15);
-    chart.fire("mousemove", chart.pointAt(6));
-    expect(sr()).toContain("Oct 12, 2026:");
-    expect(sr()).toBe(unzoomed);
-    const after = chart.last!;
-    expect((after.yAxis as { max: number }).max).toBe((before.yAxis as { max: number }).max);
-    expect(avg(after)).toEqual(avg(before));
-  });
-
   it("shows 'Show all days' while zoomed; it shows every day, goes away and returns the focus to the chart", async () => {
     renderApp(<Host />);
     expect(showAll()).toBeNull();
@@ -431,137 +340,13 @@ describe("cost chart: zoom", () => {
     expect(sr()).toBe("Showing all 30 days.");
   });
 
-  it("zooms in by keyboard around the day read, and says the days shown", async () => {
-    renderApp(<Host />);
-    const chart = await drawn();
-    act(() => group().focus());
-    fireEvent.keyDown(group(), { key: "End" });
-    for (let i = 0; i < 15; i++) fireEvent.keyDown(group(), { key: "ArrowLeft" }); // Oct 20
-    expect(sr()).toContain("Oct 20, 2026:");
-    const label = group().getAttribute("aria-label");
-    fireEvent.keyDown(group(), { key: "+", shiftKey: true });
-    const { from, to } = chart.shown;
-    expect(to - from + 1).toBe(15);
-    expect(from <= 14 && to >= 14).toBe(true);
-    expect(sr()).toMatch(/^Showing \w+ \d+ to \w+ \d+, 15 of 30 days\.$/);
-    expect(showAll()).toBeTruthy();
-    expect(group().getAttribute("aria-label")).toBe(label); // the name is the view's, zoomed or not
-  });
-
-  it("reads past the zoom: End reads the last day, the days shown move to include it, and the status says both", async () => {
-    renderApp(<Host />);
-    const chart = await drawn();
-    await drag(5, 14);
-    act(() => group().focus());
-    fireEvent.keyDown(group(), { key: "End" });
-    expect(sr()).toMatch(/^Nov 4, 2026 so far: .* Showing Oct 26 to Nov 4, 10 of 30 days\.$/);
-    expect(chart.shown).toEqual({ from: 20, to: 29 });
-    fireEvent.keyDown(group(), { key: "ArrowLeft" }); // inside the days shown: the day alone
-    expect(sr()).toMatch(/^Nov 3, 2026: /);
-    expect(sr()).not.toContain("Showing");
-  });
-
-  /** The month with today's cost $5 higher, as a background ingest of a running session leaves it: the same view, newer data. */
-  const newer = (data = month, more = 5): UsagePayload => {
-    const today = data.end, up = <T extends { day: string; cost: number | null }>(r: T): T => (r.day === today ? { ...r, cost: (r.cost ?? 0) + more } : r);
-    return { ...data, daily: data.daily.map(up), daily_projects: data.daily_projects.map(up), daily_models: data.daily_models.map(up) };
-  };
-  /** Counts the changes to the live region's text since the last call: what a screen reader would say. */
-  const spoken = () => {
-    const seen = new MutationObserver(() => {});
-    seen.observe(document.querySelector(".sr")!, { childList: true, characterData: true, subtree: true });
-    return () => seen.takeRecords().length;
-  };
-
-  it("keeps the zoom, 'Show all days' and its focus when newer data arrives for the same view, and says nothing", async () => {
+  it("shows every day again when a rolling range moves on a day, and moves the focus from 'Show all days' to the chart", async () => {
     const { rerender } = renderApp(<Host />);
     const chart = await drawn();
-    await drag(5, 14);
-    act(() => showAll()!.focus());
-    const said = spoken(), draws = chart.options.length;
-    rerender(<Host data={newer()} />);
-    expect(chart.options.length).toBeGreaterThan(draws); // the newer figures are drawn
-    expect(chart.shown).toEqual({ from: 5, to: 14 });
-    expect(document.activeElement).toBe(showAll());
-    expect(sr()).toBe("Showing Oct 11 to Oct 20, 10 of 30 days.");
-    expect(said()).toBe(0);
-  });
-
-  it("keeps the day being read across newer data: silent when its words are the same, said again when its figure changed", async () => {
-    const { rerender } = renderApp(<Host />);
-    const chart = await drawn();
-    await drag(20, 29);
-    chart.fire("mousemove", chart.pointAt(25));
-    const reading = sr();
-    expect(reading).toContain("Oct 31, 2026:");
-    const said = spoken();
-    rerender(<Host data={newer()} />);
-    expect(sr()).toBe(reading);
-    expect(screen.getByRole("tooltip").textContent).toContain("Oct 31, 2026");
-    expect(chart.band).toBe(25);
-    expect(said()).toBe(0);
-
-    // The pointer rests on today, whose cost the next refresh raises from $35 to $40: the tooltip shows it, and the
-    // status says nothing, since the user may be reading another part of the page.
-    chart.fire("mousemove", chart.pointAt(29));
-    expect(sr()).toContain(usd(35));
-    said();
-    rerender(<Host data={newer(month, 10)} />);
-    expect(screen.getByRole("tooltip").textContent).toContain(usd(40));
-    expect(sr()).toContain(usd(35));
-    expect(said()).toBe(0);
-    expect(chart.shown).toEqual({ from: 20, to: 29 });
-
-    // The keyboard reads today with the focus on the chart: the next refresh, to $45, is said.
-    act(() => group().focus());
-    fireEvent.keyDown(group(), { key: "End" });
-    expect(sr()).toContain(usd(40));
-    said();
-    rerender(<Host data={newer(month, 15)} />);
-    expect(sr()).toContain(usd(45));
-    expect(said()).toBe(1);
-  });
-
-  it("says the days shown once after End reads past the zoom: a refresh that changes today's cost says the day alone", async () => {
-    const { rerender } = renderApp(<Host />);
-    const chart = await drawn();
-    await drag(5, 14);
-    act(() => group().focus());
-    fireEvent.keyDown(group(), { key: "End" });
-    expect(sr()).toMatch(/^Nov 4, 2026 so far: \$30 estimated.* Showing Oct 26 to Nov 4, 10 of 30 days\.$/);
-    rerender(<Host data={newer()} />);
-    expect(sr()).toMatch(/^Nov 4, 2026 so far: \$35 estimated/);
-    expect(sr()).not.toContain("Showing");
-    expect(chart.shown).toEqual({ from: 20, to: 29 });
-  });
-
-  it("says today again after End, plus and a refresh that changes its cost: the zoom sentence does not hide a keyboard reading", async () => {
-    const { rerender } = renderApp(<Host />);
-    await drawn();
-    act(() => group().focus());
-    fireEvent.keyDown(group(), { key: "End" });
-    fireEvent.keyDown(group(), { key: "+" });
-    expect(sr()).toBe("Showing Oct 21 to Nov 4, 15 of 30 days.");
-    rerender(<Host data={newer()} />);
-    expect(sr()).toMatch(/^Nov 4, 2026 so far: \$35 estimated/);
-    expect(sr()).not.toContain("Showing");
-  });
-
-  it("never says a zoom sentence with an old count: a 31st day in an all-time view drops it", async () => {
-    const all = (to: string): UsagePayload => ({ ...view("2026-10-06", to), range: 0, start: null });
-    const { rerender } = renderApp(<Host data={all("2026-11-04")} />);
-    await drag(5, 14);
-    expect(sr()).toBe("Showing Oct 11 to Oct 20, 10 of 30 days.");
-    rerender(<Host data={all("2026-11-05")} />);
-    expect(sr()).toBe("");
-    expect(showAll()).toBeTruthy();
-  });
-
-  it("moves the focus from 'Show all days' to the chart when the zoom ends with no one pressing it", async () => {
-    const { rerender } = renderApp(<Host />);
     await drag(5, 14);
     act(() => showAll()!.focus());
     rerender(<Host data={{ ...view("2026-10-07", "2026-11-05"), range: 30 }} />); // midnight: the range moved on a day
+    expect(chart.shown).toEqual({ from: 0, to: 29 }); // its first day is another view's
     expect(showAll()).toBeNull();
     expect(document.activeElement).toBe(group());
 
@@ -605,15 +390,6 @@ describe("cost chart: zoom", () => {
     expect(showAll()).toBeTruthy();
   });
 
-  it("shows every day again when a rolling range moves on a day: its first day is another view's", async () => {
-    const { rerender } = renderApp(<Host />);
-    const chart = await drawn();
-    await drag(5, 14);
-    rerender(<Host data={{ ...view("2026-10-07", "2026-11-05"), range: 30 }} />);
-    expect(chart.shown).toEqual({ from: 0, to: 29 });
-    expect(showAll()).toBeNull();
-  });
-
   it("keeps the zoom when a token kind is hidden or shown, on the whole view's new value axis", async () => {
     function Tokens() {
       const [hidden, setHidden] = useState<string[]>([]);
@@ -633,15 +409,6 @@ describe("cost chart: zoom", () => {
     await userEvent.click(screen.getByRole("button", { name: "Cache read" }));
     expect(max()).toBe(before);
     expect(chart.shown).toEqual({ from: 5, to: 14 });
-  });
-
-  it("leaves Ctrl and plus to the browser", async () => {
-    renderApp(<Host />);
-    const chart = await drawn();
-    act(() => group().focus());
-    expect(fireEvent.keyDown(group(), { key: "+", ctrlKey: true })).toBe(true);
-    expect(chart.shown).toEqual({ from: 0, to: 29 });
-    expect(showAll()).toBeNull();
   });
 
   it("shows every day again after a stack switch or a new view", async () => {

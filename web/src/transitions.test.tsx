@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import usage from "./__fixtures__/usage";
 import { ROUTES } from "./App";
 import { renderRouter } from "./testing";
-import { go, setSearch } from "./url";
+import { setSearch } from "./url";
 
 const status = { ingesting: false, last_ingest: null, last_change: null, last_stats: null, error: null, counts: {}, interval: 60, project_order: [] };
 const loaded = (path: keyof typeof ROUTES) => waitFor(() => expect(document.title).toBe(ROUTES[path].title));
@@ -44,28 +44,13 @@ describe("view transitions", () => {
     expect(start.mock.calls[0]![0]).toMatchObject({ types: ["page"] });
   });
 
-  it("starts one for go() to another page", async () => {
-    await open("/usage");
-    await settled();
-    act(() => go("/cost"));
-    await loaded("/cost");
-    await waitFor(() => expect(start).toHaveBeenCalledTimes(1));
-    await settled();
-    expect(start).toHaveBeenCalledTimes(1);
-  });
-
-  it("starts none for a filter change", async () => {
+  it("starts none for a filter change, nor when a session sheet opens", async () => {
     await open("/usage");
     await settled();
     act(() => setSearch({ range: 7 }));
     await waitFor(() => expect(location.search).toContain("range=7"));
     await settled();
     expect(start).not.toHaveBeenCalled();
-  });
-
-  it("starts none when a session sheet opens", async () => {
-    await open("/usage");
-    await settled();
     act(() => setSearch({ session: "s1" }));
     await waitFor(() => expect(location.search).toContain("session=s1"));
     await settled();
