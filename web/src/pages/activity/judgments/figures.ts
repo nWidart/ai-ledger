@@ -46,7 +46,7 @@ export const TREND_PARTS = [
 export type TrendKey = (typeof TREND_PARTS)[number]["k"];
 /** A week's sessions per part, in TREND_PARTS' order. */
 export const trendCounts = (w: TrendWeek): number[] => [w.fully, w.mostly, w.partially, w.not_achieved, Math.max(0, w.n - w.fully - w.mostly - w.partially - w.not_achieved)];
-/** A week with fewer analysed sessions than this swings on one session: its bar is drawn faint and its reading says so. */
+/** A week with fewer analysed sessions than this swings on one session: its bar is drawn at half width and its reading says so. */
 export const FEW_SESSIONS = 5;
 export const FEW_TEXT = "few sessions: one session moves this bar a lot";
 export const isFew = (w: TrendWeek) => w.n < FEW_SESSIONS;

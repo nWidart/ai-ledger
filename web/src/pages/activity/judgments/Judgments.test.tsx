@@ -248,10 +248,14 @@ describe("Judgments view", () => {
       expect(bars[0]!.querySelector("rect")!.getAttribute("fill")).toBe("var(--good)");
     });
 
-    it("marks a week with few sessions: a faint bar, a key for it, and the words in its reading", async () => {
+    it("marks a week with few sessions: a half-width bar in full color, a key for it, and the words in its reading", async () => {
       await up();
       const bars = [...chart().querySelectorAll<SVGGElement>("svg g.bar-seg")];
       expect(bars.map(b => b.classList.contains("few"))).toEqual([false, true, false]);
+      const width = (b: SVGGElement) => +b.querySelector("rect")!.getAttribute("width")!;
+      expect(width(bars[1]!)).toBeCloseTo(width(bars[0]!) / 2, 5);
+      // Not faded: a faint part would drop below 3:1 against the surface and its neighbours.
+      expect(bars[1]!.querySelectorAll("rect[opacity], rect[style]").length).toBe(0);
       expect(FEW_SESSIONS).toBe(5);
       expect(trendText(trend[1]!)).toBe("3 analysed sessions: 1 fully achieved (33%), 1 partially achieved (33%), 1 not achieved (33%); few sessions: one session moves this bar a lot");
       cleanup();
@@ -319,7 +323,41 @@ describe("Judgments view", () => {
       await userEvent.click(within(panel()).getByRole("button", { name: "How measured: the outcome trend" }));
       const how = within(panel()).getAllByRole("tooltip").find(t => t.textContent!.includes("Weeks are by session start"))!.textContent!;
       expect(how).toContain("Every bar is 100% of its week");
-      expect(how).toContain("A week with fewer than 5 sessions is drawn faint.");
+      expect(how).toContain("A week with fewer than 5 sessions is drawn at half width.");
+    });
+
+    it("keeps a part of 1 in 150 visible: at least 1px painted, with the 2px gap below it", async () => {
+      show({ ...fixture, trend: [week("2026-10-19", 149, 0, 0, 1), trend[2]!] });
+      await lede();
+      const plot = +chart().querySelector<SVGRectElement>("svg rect.hit")!.getAttribute("height")!;
+      const h = [...chart().querySelectorAll<SVGGElement>("svg g.bar-seg")[0]!.querySelectorAll("rect")].map(r => +r.getAttribute("height")!);
+      expect(h.length).toBe(2);
+      expect(h[1]!).toBeGreaterThanOrEqual(1);
+      expect(h[0]! + h[1]! + 2).toBeCloseTo(plot, 5); // the slots still fill the bar
+    });
+
+    it("leaves Alt, Ctrl, Meta and Shift keys to the browser", async () => {
+      await up();
+      act(() => chart().focus());
+      for (const init of [{ key: "ArrowLeft", altKey: true }, { key: "Home", ctrlKey: true }, { key: "End", metaKey: true }, { key: "ArrowRight", shiftKey: true }]) {
+        const ev = new KeyboardEvent("keydown", { ...init, bubbles: true, cancelable: true });
+        act(() => { chart().dispatchEvent(ev); });
+        expect(ev.defaultPrevented).toBe(false);
+        expect(readout()).toBe("");
+      }
+    });
+
+    it("thins the sample counts on a phone with 26 weeks, so no two overlap", async () => {
+      // A 320px phone: the panel's plot box is about 254px wide.
+      vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(254);
+      const weeks = Array.from({ length: 26 }, (_, i) => week(new Date(Date.UTC(2026, 4, 4 + 7 * i)).toISOString().slice(0, 10), 10 + i, 2, 1, 1));
+      show({ ...fixture, trend: weeks });
+      await lede();
+      const counts = [...chart().querySelectorAll<SVGTextElement>("svg g.bar-seg > text")].filter(t => /^\d+$/.test(t.textContent!) && +t.getAttribute("y")! < 20);
+      expect(counts.length).toBeGreaterThan(1);
+      expect(counts.length).toBeLessThan(26);
+      const xs = counts.map(t => +t.getAttribute("x")!), wide = (2 * 6.6 + 4); // two digits at 11px, with room around them
+      xs.slice(1).forEach((x, k) => expect(x - xs[k]!).toBeGreaterThanOrEqual(wide));
     });
   });
 

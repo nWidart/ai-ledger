@@ -1,10 +1,10 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import type { Source, UsagePayload } from "../../api";
 import { useColors } from "../../colors";
-import { dayAxis, peakLabelAt, roomForLabels, textScale, tipAt, useWidth } from "../../components/chart";
+import { dayAxis, peakLabelAt, roomForLabels, stackHeights, textScale, tipAt, useWidth } from "../../components/chart";
 import { ChartTable, DataTable } from "../../components/DataTable";
 import { big, dayLabel, niceStep, pct, plural, usd, usd0 } from "../../format";
-import { costDays, costKinds, isOther, KINDS, SCALES, shares, stackHeights, STACKS, STACK_WORD, type CostDay, type Kind, type Stack, type TokenScale } from "./cost";
+import { costDays, costKinds, isOther, KINDS, SCALES, shares, STACKS, STACK_WORD, type CostDay, type Kind, type Stack, type TokenScale } from "./cost";
 
 const H = 240;
 export type CostMetric = "cost" | "tokens";

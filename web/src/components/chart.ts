@@ -85,6 +85,24 @@ export function tipAt(box: HTMLElement, tip: HTMLElement, clientX: number, clien
  *  Always true at the default text size. */
 export const roomForLabels = (a: DayAxis) => a.s === 1 || a.iw >= 300 * a.s;
 
+/** The pixel slot of each stacked segment, bottom first, summing to the bar's height (total). A slot is at least its minimum (mins[j]:
+ *  the segment's painted 1px plus the gap below it), and the other slots share what is left in proportion to their values, so a thin
+ *  segment takes room of its own instead of painting over its neighbour. With less room than the minimums, each slot is its minimum. */
+export function stackHeights(values: readonly number[], total: number, mins: readonly number[]): number[] {
+  const out = values.map(() => 0), fixed = new Set<number>();
+  for (;;) {
+    const room = total - [...fixed].reduce((s, j) => s + mins[j]!, 0);
+    const free = values.reduce((s, v, j) => (fixed.has(j) ? s : s + v), 0);
+    let grew = false;
+    values.forEach((v, j) => {
+      if (fixed.has(j)) { out[j] = mins[j]!; return; }
+      out[j] = free > 0 ? (v / free) * Math.max(0, room) : 0;
+      if (out[j]! < mins[j]!) { fixed.add(j); grew = true; }
+    });
+    if (!grew) return out;
+  }
+}
+
 /** Where the peak day's label goes over its bar: centred, or kept inside the plot at either edge. */
 export function peakLabelAt(a: DayAxis, i: number): { x: number; anchor: "start" | "middle" | "end" } {
   const px = a.cx(i), near = 56 * a.s, anchor = px < a.m.l + near ? "start" : px > a.W - a.m.r - near ? "end" : "middle";

@@ -8,7 +8,7 @@ The `/insights` judgments SHALL be the Judgments view of the Activity page, at `
 - **THEN** Activity shows the judgments, the Activity tab is the current one, and the navigation has no Insights entry
 
 ### Requirement: Read the outcome trend one week at a time
-The outcome trend SHALL be read by pointer or keyboard. Its chart SHALL be a focusable group whose name says what it shows, the weeks and the share fully or mostly achieved. Left and Right SHALL move between weeks, Home and End SHALL go to the first and the last, and Escape SHALL dismiss the readout. The readout SHALL give the week, its analysed sessions, and each outcome's count and share, in a tooltip and in a polite live region.
+The outcome trend SHALL be read by pointer or keyboard. Its chart SHALL be a focusable group whose name says what it shows, the weeks and the share fully or mostly achieved. Left and Right SHALL move between weeks, Home and End SHALL go to the first and the last, and Escape SHALL dismiss the readout; a key with Alt, Ctrl, Meta or Shift is left to the browser. The readout SHALL give the week, its sessions, and each outcome's count and share, in a tooltip and in a polite live region.
 
 #### Scenario: Read a week
 - **WHEN** the user focuses the chart and presses Right on a week of 12 sessions: 7 fully, 2 mostly, 2 partially, 1 not achieved
@@ -18,16 +18,20 @@ The outcome trend SHALL be read by pointer or keyboard. Its chart SHALL be a foc
 - **WHEN** the readout shows and the user presses Escape
 - **THEN** the readout goes and focus stays on the chart
 
+#### Scenario: Modified keys
+- **WHEN** the chart has focus and the user presses Alt+Left or Ctrl+Home
+- **THEN** the chart does not handle the key, so the browser goes back in history or to the page top
+
 ### Requirement: Mark a week with few sessions
-A week with fewer than 5 analysed sessions SHALL be drawn faint, the legend SHALL name that mark when a week has it, and the week's readout and table row SHALL say it has few sessions. The trend's How measured toggletip SHALL say that every bar is 100% of its week, so the figure over a bar says how many sessions it stands on.
+A week with fewer than 5 analysed sessions SHALL be drawn at half width in its full colors, so each part keeps 3:1 against the surface. The legend SHALL name that mark when a week has it, and the week's readout and table row SHALL say it has few sessions. The trend's How measured toggletip SHALL say that every bar is 100% of its week, so the figure over a bar says how many sessions it stands on.
 
 #### Scenario: A week of three sessions
 - **WHEN** a week holds 3 analysed sessions
-- **THEN** its bar is faint, its readout says one session moves the bar a lot, and its table row marks it as few
+- **THEN** its bar is half as wide as the others and not faded, its readout says one session moves the bar a lot, and its table row marks it as few
 
 #### Scenario: No such week
 - **WHEN** every week holds 5 analysed sessions or more
-- **THEN** no bar is faint and the legend names no such mark
+- **THEN** every bar is full width and the legend names no such mark
 
 ### Requirement: Offer the outcome trend as a table
 The trend panel SHALL offer its data as a table behind "Show data table", closed on every load: one row per week with its analysed sessions and, for each outcome, the count and the share of that week.
@@ -217,7 +221,15 @@ The view SHALL offer a closed "How this works" drawer whenever the store has fac
 - **THEN** the drawer is not shown
 
 ### Requirement: Show the outcome trend per week
-The page SHALL show a panel under the outcome and friction row with one bar per week, by the analysed session's start. Each bar SHALL fill the plot (100% of its week) and be stacked by outcome, best first: fully, mostly, partially, not achieved, then no clear outcome. The week's analysed sessions SHALL show over its bar, and a legend SHALL name the parts. Weeks without a session are left out; at most the newest 26 weeks are shown.
+The page SHALL show a panel under the outcome and friction row with one bar per week, by session start. Each bar SHALL fill the plot (100% of its week), stacked best outcome first: fully, mostly, partially, not achieved, no clear outcome. Every part with a session SHALL show at least 1px. The week's sessions SHALL show over its bar, over every few bars when they would overlap. A legend SHALL name the parts. Weeks without a session are left out; at most the newest 26 show.
+
+#### Scenario: One session in 150
+- **WHEN** a week holds 150 analysed sessions, one of them not achieved
+- **THEN** its not-achieved part shows at least 1px tall
+
+#### Scenario: 26 weeks on a phone
+- **WHEN** the trend has 26 weeks on a phone 320px wide
+- **THEN** the counts over the bars do not overlap: they show over every few bars, and the table holds each week's
 
 #### Scenario: Weekly share
 - **WHEN** a week holds 5 analysed sessions, 4 of them fully or mostly achieved

@@ -14,10 +14,10 @@
 .pg-judgments.loading > :not(.top):not(.views):not(.secidx) { opacity: .55; }
 @media (prefers-reduced-motion: no-preference) { .pg-judgments > :not(.top):not(.views):not(.secidx) { transition: opacity .2s; } }
 
-/* The outcome trend: every bar fills the plot, so a faint bar is the cue that few sessions stand behind it. */
+/* The outcome trend: every bar fills the plot, so a half-width bar is the cue that few sessions stand behind it. It keeps its
+   colors, so its parts stand off the surface as a full bar's do. The key is a half-width swatch. */
 .pg-judgments .trend h2 { margin-bottom: 2px; }
-.pg-judgments .trend .bar-seg.few rect { opacity: .45; }
-.pg-judgments .trend .legend i.few { background: var(--text-muted); opacity: .45; }
+.pg-judgments .trend .legend i.few { width: 5px; background: var(--text-muted); }
 /* Friction: the weight switch beside the heading, and room for a cost or a duration with two more figures beside it. */
 .pg-judgments .friction .chart-head { margin-bottom: 4px; }
 .pg-judgments .friction .ledger { --ledger-cols: minmax(0, 10rem) minmax(40px, 1fr) 3.5rem 9.75rem; }
