@@ -1399,6 +1399,33 @@ describe("Sessions columns", () => {
     expect(btn.getAttribute("aria-expanded")).toBe("false");
   });
 
+  it("closes the list on a click outside it, leaving focus on a control the click lands on", async () => {
+    await visit();
+    await userEvent.click(columnsButton());
+    await waitFor(() => expect(list().contains(document.activeElement)).toBe(true));
+    const field = panel().getByRole("searchbox", { name: "Search sessions" });
+    await userEvent.click(field);
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Columns" })).toBeNull());
+    expect(document.activeElement).toBe(field);
+    expect(columnsButton().getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("closes the list on a click on nothing focusable, and returns focus to the Columns button", async () => {
+    // Base UI returns focus after an outside press only where focus() reads its preventScroll option, as desktop browsers do;
+    // jsdom ignores the option, so the test reads it as a browser would.
+    const focus = HTMLElement.prototype.focus;
+    vi.spyOn(HTMLElement.prototype, "focus").mockImplementation(function (this: HTMLElement, o?: FocusOptions) { void o?.preventScroll; focus.call(this, o); });
+    await visit();
+    await userEvent.click(columnsButton());
+    await waitFor(() => expect(list().contains(document.activeElement)).toBe(true));
+    // Plain text with no focusable ancestor: the work chart's hint.
+    const text = document.querySelector<HTMLElement>("#work .hint")!;
+    expect(text.closest("[tabindex], a, button, input")).toBeNull();
+    await userEvent.click(text);
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Columns" })).toBeNull());
+    await waitFor(() => expect(document.activeElement).toBe(columnsButton()));
+  });
+
   it("hides an unticked column at every width, keeps the choice for the next visit, and Reset brings the columns back", async () => {
     await visit();
     await userEvent.click(columnsButton());

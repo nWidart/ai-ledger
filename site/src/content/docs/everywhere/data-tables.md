@@ -61,7 +61,7 @@ The sorted column always shows, even a column you hid; your choice applies again
 
 The browser keeps the choice for every view and after a reload. The URL does not hold it: a shared link opens at the reader's own columns. When the browser blocks site storage, the choice lasts until you reload the page.
 
-From the keyboard, press Enter on **Columns** to open the list and move the focus into it. Tab moves through the checkboxes and Space ticks or unticks one; the list stays open. Esc or a click outside the list closes it and returns the focus to the button. A screen reader hears the button as collapsed or expanded, and the list as a dialog named "Columns".
+From the keyboard, press Enter on **Columns** to open the list and move the focus into it. Tab moves through the checkboxes and Space ticks or unticks one; the list stays open. Esc closes the list and returns the focus to the button. A click outside the list closes it too: a click on a control, such as the search field, leaves the focus there, and a click on plain text or the page background returns the focus to the button. A screen reader hears the button as collapsed or expanded, and the list as a dialog named "Columns".
 
 ## Export
 

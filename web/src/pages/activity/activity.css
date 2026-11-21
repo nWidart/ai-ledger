@@ -151,7 +151,7 @@
 /* The Columns list: a popover of checkboxes under its button, scrolling when the window is short. */
 .pg-activity #sessions .cols-pos { z-index: var(--z-popover); }
 .pg-activity #sessions .cols-pop { box-sizing: border-box; display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-3);
-  min-width: 12rem; max-width: calc(100vw - 16px); max-height: var(--available-height, none); overflow-y: auto; overscroll-behavior: contain;
+  min-width: min(12rem, calc(100vw - 16px)); max-width: calc(100vw - 16px); max-height: var(--available-height, none); overflow-y: auto; overscroll-behavior: contain;
   padding: var(--space-5) var(--space-6); background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-pop); }
 .pg-activity #sessions .cols-pop .linkish { margin-top: var(--space-2); }
 .pg-activity #projects th:first-child, .pg-activity #projects td:first-child { position: sticky; left: 0; background: var(--bg); z-index: var(--z-raised); box-shadow: 1px 0 0 var(--border); }

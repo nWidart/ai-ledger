@@ -132,11 +132,19 @@ Sessions SHALL offer a Columns button that opens a list with one checkbox per co
 - **THEN** the Tokens checkbox is not ticked
 
 ### Requirement: Operate the column list by keyboard and screen reader
-The Columns button SHALL say whether its list is open. Opening it SHALL move focus into the list, which SHALL be named "Columns". Tab SHALL move through its checkboxes and Space SHALL toggle one; the list SHALL stay open while checkboxes change. Escape or a click outside the list SHALL close it and return focus to the button.
+The Columns button SHALL say whether its list is open. Opening it SHALL move focus into the list, which SHALL be named "Columns". Tab SHALL move through its checkboxes and Space SHALL toggle one; the list SHALL stay open while checkboxes change. Escape SHALL close the list and return focus to the button. A click outside the list SHALL close it; focus SHALL stay on the element the click lands on when that element takes focus, and SHALL return to the button when it does not.
 
 #### Scenario: Keyboard
 - **WHEN** the user presses Enter on Columns, Tab to Tokens, Space, then Escape
 - **THEN** the list opened with focus inside it, Tokens changed while the list stayed open, and focus is on the Columns button with the list closed
+
+#### Scenario: Click on a control outside the list
+- **WHEN** the list is open and the user clicks the Search sessions field
+- **THEN** the list closes and focus is in the Search sessions field
+
+#### Scenario: Click on nothing focusable
+- **WHEN** the list is open and the user clicks plain text outside it, such as the work chart's hint
+- **THEN** the list closes and focus is on the Columns button
 
 #### Scenario: Screen reader
 - **WHEN** a screen reader user moves to the Columns button and activates it

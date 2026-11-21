@@ -5,8 +5,9 @@ import { Popover } from "@base-ui/react/popover";
 export interface ChoiceItem<K extends string> { id: K; label: string; shown: boolean }
 
 /** The Sessions table's Columns button: a non-modal dialog named "Columns" with one native checkbox per column, in the table's
- *  order, then Reset columns. Base UI moves focus into the list on open; Escape and a click outside close it and return focus to
- *  the button. The list stays open while boxes change. The popup renders inside the button's wrapper, so the page CSS reaches it,
+ *  order, then Reset columns. Base UI moves focus into the list on open; Escape closes it and returns focus to the button. A click
+ *  outside closes it too: focus stays on what the click lands on when that takes focus, else Base UI returns it to the button
+ *  (where focus() reads its preventScroll option, as desktop browsers do). The list stays open while boxes change. The popup renders inside the button's wrapper, so the page CSS reaches it,
  *  and Base UI places it with fixed positioning inside the viewport. hidden: how many columns the user hid, for the button. */
 export function ColumnChooser<K extends string>({ items, hidden, onChange, onReset }: {
   items: readonly ChoiceItem<K>[]; hidden: number; onChange: (id: K, shown: boolean) => void; onReset: () => void;
