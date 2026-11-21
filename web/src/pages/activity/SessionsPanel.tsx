@@ -30,10 +30,13 @@ export interface SessSelection {
   clear: () => void;
 }
 /** The selection, held as page state with the scope its rows were counted in: the view and the selected day or week asked for,
- *  as one key. A selection held for another scope reads as empty, so a change of project, range, source, automated toggle, day
- *  or week clears it at once; a write stamps it with the scope asked for now. */
+ *  as one key. A change of project, range, source, automated toggle, day or week clears it at once: a selection held for
+ *  another scope reads as empty, and is dropped in the same render, so going back to the earlier scope selects nothing.
+ *  A write stamps it with the scope asked for now. */
 export function useSessSelection(scope: string): SessSelection {
   const [held, setHeld] = useState<{ scope: string; rows: ReadonlyMap<string, ListedSessionRow> }>({ scope, rows: NONE });
+  // State reset on a changed input, set while rendering: React renders again at once, before anything shows.
+  if (held.scope !== scope) setHeld({ scope, rows: NONE });
   // Each write starts from the selection as it reads now; one that changes nothing keeps the state, so no render follows.
   const edit = useCallback((f: (m: Map<string, ListedSessionRow>) => boolean) =>
     setHeld(h => { const m = new Map(h.scope === scope ? h.rows : NONE); return f(m) ? { scope, rows: m } : h; }), [scope]);

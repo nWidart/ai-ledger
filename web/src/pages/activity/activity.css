@@ -156,7 +156,10 @@
   padding: var(--space-5) var(--space-6); background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-pop); }
 .pg-activity #sessions .cols-pop .linkish { margin-top: var(--space-2); }
 /* The selection column: the label fills the cell, so the whole cell toggles the box; a selected row is marked at its start. */
-.pg-activity #sessions :is(td, th).pickcol { position: relative; width: 2.25rem; min-width: 2.25rem; padding: 0; }
+.pg-activity #sessions :is(td, th).pickcol { width: 2.25rem; min-width: 2.25rem; padding: 0; }
+.pg-activity #sessions td.pickcol { position: relative; }
+/* The header stays sticky as the others do, raised over the rows' positioned labels that scroll under it. */
+.pg-activity #sessions th.pickcol { z-index: var(--z-raised); }
 .pg-activity #sessions td.pickcol label { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; cursor: pointer; }
 .pg-activity #sessions td.pickcol input:disabled { cursor: default; }
 .pg-activity #sessions tbody tr.chosen td.pickcol { box-shadow: inset 3px 0 0 var(--accent); }

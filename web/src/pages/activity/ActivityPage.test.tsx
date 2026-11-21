@@ -1896,6 +1896,36 @@ describe("Sessions selection", () => {
     expect(status()).toBe("");
   });
 
+  it.each([
+    ["range", { range: 7 }, { range: 30 }],
+    ["project", { project: "foo" }, { project: null }],
+    ["source", { source: "codex" }, { source: null }],
+    ["automated toggle", { auto: true }, { auto: null }],
+    ["day", { day: "2026-11-04" }, { day: null }],
+    ["week", { week: "2026-11-02" }, { week: null }],
+  ] as const)("drops the selection for good when the %s changes: going back selects nothing", async (_, away, back) => {
+    mockApi({
+      "/api/usage": q => ({ ...usage, range: Number(q.get("range")), project: q.get("project") ?? "", source: q.get("source") ?? "", automated: q.get("automated") === "1" }),
+      "/api/sessions": () => sessions, "/api/day": q => noDay(q.get("day")!, q.get("days") === "7" ? 7 : 1),
+    });
+    at();
+    renderApp(<ActivityPage />);
+    await loaded();
+    await listed(sessions.sessions.length);
+    await userEvent.click(box("#s1"));
+    expect(status()).toBe("1 selected. Select 1 more to compare.");
+    act(() => setSearch(away));
+    await waitFor(() => expect(boxes().length > 0 && boxes().every(b => !b.disabled)).toBe(true));
+    expect(status()).toBe("");
+    act(() => setSearch(back));
+    expect(location.search).toBe("?range=30");
+    await waitFor(() => expect(boxes().length > 0 && boxes().every(b => !b.disabled)).toBe(true));
+    expect(boxes().some(b => b.checked)).toBe(false);
+    expect(status()).toBe("");
+    expect(clearButton()).toBeNull();
+    expect(document.querySelector("#sessions tbody tr.chosen")).toBeNull();
+  });
+
   it("disables the row checkboxes while the rows on screen belong to the view before, and takes nothing from them", async () => {
     const wait = held<unknown>();
     mockApi({ "/api/usage": q => (q.get("range") === "7" ? wait.p : usage), "/api/sessions": () => sessions });
