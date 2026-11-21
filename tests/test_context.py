@@ -147,7 +147,7 @@ class ContextPayloadTest(unittest.TestCase):
                                                 "automated_file", "coverage", "starting", "growth", "grids", "sessions_map", "fills", "cost", "tips",
                                                 "overhead"]), kw)
         with self.assertRaises(ValueError):
-            b.payload(source="grok")
+            b.payload(source="gemini")
         with self.assertRaises(ValueError):
             b.payload(range_days=-1)
         self.assertEqual(b.payload(range_days=7)["start"], "2026-10-30")

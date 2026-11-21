@@ -373,7 +373,7 @@ class PayloadTest(InsightsCase):
 
     def test_unknown_source_raises(self):
         with self.assertRaises(ValueError):
-            self.payload(source="grok")
+            self.payload(source="gemini")
 
     def test_goal_and_success_text_not_sent(self):
         self.ingest()

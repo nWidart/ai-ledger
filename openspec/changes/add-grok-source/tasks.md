@@ -26,7 +26,7 @@ Each task names the model that does it: Sonnet for mechanical edits, Opus for st
 
 ## 4. The source on every page, backend (after 3)
 
-- [ ] 4.1 (Sonnet) Add `grok` to `metrics.SOURCES`. Move every Python test that uses `grok` as the unknown source to `gemini` (`test_metrics`, `test_live`, `test_context`, `test_insights`, `test_limits`, `test_app`). Verify that `source=grok` is accepted and `source=gemini` gets a 400.
+- [x] 4.1 (Sonnet) Add `grok` to `metrics.SOURCES`. Move every Python test that uses `grok` as the unknown source to `gemini` (`test_metrics`, `test_live`, `test_context`, `test_insights`, `test_limits`, `test_app`). Verify that `source=grok` is accepted and `source=gemini` gets a 400.
 - [ ] 4.2 (Opus) `context.py`: no `expired` cause for a Grok break; `per_agent` and the advice texts for views with Grok sessions; the large-results advice for `run_terminal_command`; the stated window. Verify the context-dashboard delta scenarios in `test_context`.
 - [ ] 4.3 (Opus) `insights.py` and `limits.py`: no judgments for a source other than Claude Code; Limits for `source=grok` sends no window and says why. Verify the insights-dashboard and limits-dashboard delta scenarios.
 - [ ] 4.4 (Opus) Add a Grok session to the `test_metrics` fixture store and to the stores `tests/test_web_fixtures.py` builds, then regenerate `web/src/__fixtures__/`. Verify that `tests/test_web_fixtures.py` passes and a second run leaves the fixtures unchanged.

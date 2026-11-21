@@ -315,7 +315,7 @@ class SessionsTest(LiveCase):
         project = live.sessions(self.cur(), now=NOW, prices=PRICES)["sessions"][0]["project"]
         self.assertEqual(len(live.sessions(self.cur(), project=project, now=NOW, prices=PRICES)["sessions"]), 1)
         with self.assertRaises(ValueError):
-            live.sessions(self.cur(), source="grok", now=NOW)
+            live.sessions(self.cur(), source="gemini", now=NOW)
 
     def test_automated_session_hidden_by_default(self):
         self.con.execute("UPDATE sessions SET project = 'observer-sessions' WHERE session_id = 's2'")

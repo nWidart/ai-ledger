@@ -804,7 +804,8 @@ class MetricsTest(unittest.TestCase):
         self.assertEqual([empty[k] for k in ("sources", "tools", "mcp", "skills", "categories")], [[], [], [], [], []])
         self.assertEqual(empty["projects"], [dict(name="foo", sessions=2)])
         with self.assertRaises(ValueError):
-            pal(source="grok")
+            pal(source="gemini")
+        pal(source="grok")  # a known source: no error
 
     def codex_models(self, *requests):
         """The model rows of a Codex session holding requests, priced by prices.json. The rows are removed after."""
@@ -978,9 +979,11 @@ class SourceFilterTest(unittest.TestCase):
 
     def test_unknown_source_is_refused(self):
         with self.assertRaises(ValueError):
-            self.usage("grok")
+            self.usage("gemini")
         with self.assertRaises(ValueError):
-            metrics.session_list(self.con.cursor(), prices=PRICES, today=TODAY, source="grok")
+            metrics.session_list(self.con.cursor(), prices=PRICES, today=TODAY, source="gemini")
+        self.usage("grok")  # a known source with no sessions
+        metrics.session_list(self.con.cursor(), prices=PRICES, today=TODAY, source="grok")
 
     def test_errors_payload_tags_sources(self):
         p = metrics.errors_payload(self.con.cursor(), today=TODAY)
@@ -1001,11 +1004,13 @@ class SourceFilterTest(unittest.TestCase):
             self.assertEqual(get("/api/usage?range=0&source=codex")[1]["totals"]["tokens"], 200_000)
             self.assertEqual(get("/api/sessions?source=claude")[1]["total"], 1)
             for path, error in (("/api/sessions?sort=title", "unknown sort: title"), ("/api/day", "Invalid isoformat string: ''"),
-                                ("/api/day?day=nope", "Invalid isoformat string: 'nope'"), ("/api/day?day=2026-11-05&source=grok", "unknown source: grok")):
+                                ("/api/day?day=nope", "Invalid isoformat string: 'nope'"), ("/api/day?day=2026-11-05&source=gemini", "unknown source: gemini")):
                 self.assertEqual(get(path), (400, dict(error=error)), path)
-            for path in ("/api/usage?source=grok", "/api/sessions?source=grok"):
+            for path in ("/api/usage?source=gemini", "/api/sessions?source=gemini"):
                 status, body = get(path)
-                self.assertEqual((status, body), (400, dict(error="unknown source: grok")), path)
+                self.assertEqual((status, body), (400, dict(error="unknown source: gemini")), path)
+            for path in ("/api/usage?source=grok", "/api/sessions?source=grok"):
+                self.assertEqual(get(path)[0], 200, path)
         finally:
             httpd.shutdown()
             httpd.server_close()
@@ -1551,7 +1556,7 @@ class ToolDetailTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.detail("hook", "Bash")
         with self.assertRaises(ValueError):
-            self.detail("tool", "Bash", source="grok")
+            self.detail("tool", "Bash", source="gemini")
 
 
 class UserPricesTest(unittest.TestCase):

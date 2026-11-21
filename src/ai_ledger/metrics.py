@@ -16,7 +16,7 @@ TEMP_PROJECT = "(temp)"  # store.project_of's name for a temporary folder, where
 # an app runs). Counts the whole session's prompts, so a session is automated or not whatever the range.
 HELPER_SESSIONS = f"""SELECT a.session_id FROM sessions a LEFT JOIN prompts ap USING (session_id) GROUP BY a.session_id, a.project
     HAVING count(ap.prompt_id) < CASE WHEN a.project = '{TEMP_PROJECT}' THEN 2 ELSE 1 END"""
-SOURCES = ("claude", "codex")  # the coding agents a session can come from (sessions.source); '' in a filter is all of them
+SOURCES = ("claude", "codex", "grok")  # the coding agents a session can come from (sessions.source); '' in a filter is all of them
 
 
 PRICE_KINDS = ("input", "output", "cache_read", "cache_5m", "cache_1h")  # USD per million tokens, every price entry has each
