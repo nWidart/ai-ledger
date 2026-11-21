@@ -6,3 +6,5 @@
 /* The runtime failed to load: the words fill the box, outside the plot, which assistive technology does not see. */
 .echart-failed { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; padding: var(--space-7);
   color: var(--text-muted); text-align: center; }
+/* "Show all", while a chart is zoomed (zoomReset.tsx): at the end of its row, apart from the keys. */
+.show-all { margin-left: auto; }
