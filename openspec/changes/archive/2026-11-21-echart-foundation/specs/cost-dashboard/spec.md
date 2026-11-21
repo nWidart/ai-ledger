@@ -62,7 +62,7 @@ Zooming the daily chart SHALL NOT change the page's time range, the URL, the dat
 - **THEN** the average at Oct 11 is the mean of Oct 5 to Oct 11, as without zoom
 
 ### Requirement: Zoom and reset the daily chart by keyboard
-With the chart focused, the plus key SHALL halve the days shown and the minus key SHALL double them, around the day being read, or around the newest day when none is read. While the chart is zoomed, a "Show all days" button beside the legend SHALL reset it. A polite status SHALL say the days shown after each change, a change made by reading included. The arrow keys, Home and End SHALL still reach every day of the view, and the days shown SHALL move to include the day being read.
+With the chart focused and its zoom control available, the plus key SHALL halve the days shown, rounding up and stopping at 7, and the minus key SHALL double them up to the full view, both around the day read or, when none, the newest. While zoomed, a "Show all days" button beside the legend SHALL reset it. A polite status SHALL say the days shown after each change, reading included. The arrow keys, Home and End SHALL still reach every day, moving the days shown to include the day read.
 
 #### Scenario: Zoom in by keyboard
 - **WHEN** the chart shows 30 days, the user reads Oct 20 and presses plus
