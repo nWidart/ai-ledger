@@ -131,8 +131,9 @@ function usePreview<T>(rows: readonly T[], total: number, label: string, id: str
   return { shown, more, cut };
 }
 
-/** A session in a list row that opens nothing itself: its button opens the session, the short id under a titled one. */
-const SESSION = { id: "session", header: "Session", cellProps: () => ({ className: "when sess" }),
+/** A session in a list row that opens nothing itself: its button opens the session, the short id under a titled one. It is the
+ *  row's header; the When column before it is not. */
+const SESSION = { id: "session", header: "Session", rowHeader: true, cellProps: () => ({ className: "when sess" }),
   cell: (s: { session_id: string; title?: string | null }) => <SessionCell s={s} data subject onOpen={openSessionSheet} sub={s.title && shortId(s.session_id)} /> } as const;
 const LINK = <span className="sr">Link</span>;
 

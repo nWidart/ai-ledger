@@ -692,6 +692,20 @@ describe("past windows strips", () => {
     } finally { error.mockRestore(); }
   });
 
+  it("heads each closed window's row with the window's name", async () => {
+    showCurve();
+    await lede();
+    openTable();
+    const table = hist().getByRole("table", { name: "Closed windows" });
+    const rows = [...table.querySelectorAll("tbody tr")];
+    expect(rows.length).toBeGreaterThan(0);
+    for (const r of rows) {
+      expect(r.querySelectorAll("th")).toHaveLength(1);
+      expect(r.firstElementChild!.matches('th[scope="row"]')).toBe(true);
+    }
+    expect(within(table).getAllByRole("rowheader").map(h => h.textContent)).toEqual(fixture.history.map(windowName));
+  });
+
   it("has no strips, and no key, without closed windows", async () => {
     showCurve({ ...fixture, history: [] });
     await lede();

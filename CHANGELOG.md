@@ -92,6 +92,7 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Accessibility: each row of the Error loops, Failed test runs, Closed windows and Errors' Error types tables now has a row header (the session, the window or the type), so a screen reader names the row as you move down a column.
 - Judgments' Session types bar shows in a forced-colors (high contrast) mode, where its parts used to vanish.
 - The Activity work chart no longer lets one quiet day set the scale of its errors-per-100-calls line. A day or week with fewer than 50 tool calls draws its rate as a hollow dot, is left out of the right-hand axis, and says "too few calls for a steady rate" in its tooltip and data table, as the Errors chart does. A legend key explains the hollow dot.
 - Escape closes the Activity work chart's tooltip that the pointer opened while the focus is elsewhere, such as on the metric switch.

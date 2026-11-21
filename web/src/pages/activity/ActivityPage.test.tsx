@@ -1150,6 +1150,26 @@ describe("ActivityPage", () => {
     expect(fetched().some(u => String(u).startsWith("/api/day"))).toBe(false);
   });
 
+  it("heads each row of Error loops and Failed test runs with its session, not its time", async () => {
+    const t = { id: "t9", session_id: "s1", title: "Fix upload", project: "bar", source: "codex" as const, command: "npm test", ts: "2026-11-04T10:07:00.000Z" };
+    serve({ ...usage, totals: { ...usage.totals, tests_failed: 1 }, failed_tests: [t] });
+    at("?range=30&tab=loops");
+    renderApp(<ActivityPage />);
+    await loaded();
+    for (const name of ["Error loops", "Failed test runs"]) {
+      const rows = [...screen.getByRole("table", { name }).querySelectorAll("tbody tr")];
+      expect(rows.length).toBeGreaterThan(0);
+      for (const r of rows) {
+        const heads = r.querySelectorAll("th");
+        expect(heads).toHaveLength(1);
+        expect(heads[0]!.getAttribute("scope")).toBe("row");
+        expect(heads[0]!.className).toBe("when sess");
+        expect(r.querySelector("td")!.className).toBe("when");
+      }
+    }
+    expect(within(screen.getByRole("table", { name: "Failed test runs" })).getByRole("rowheader").textContent).toContain("Fix upload");
+  });
+
   it("opens the failed test runs, each linking to its error", async () => {
     const t = { id: "t9", session_id: "s1", title: "Fix upload", project: "bar", source: "codex" as const, command: "npm test", ts: "2026-11-04T10:07:00.000Z" };
     serve({ ...usage, totals: { ...usage.totals, tests_failed: 4 }, failed_tests: [t] });
