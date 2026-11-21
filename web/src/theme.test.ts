@@ -151,6 +151,8 @@ describe("theme.css tokens", () => {
     const css = themeCss();
     expect(css).toMatch(/select, input\[type=date\], input\[type=search\] \{ border-color: var\(--control-border\); \}/);
     expect(css).toMatch(/\.pick-field \{[^}]*border: 1px solid var\(--control-border\)/);
+    // The Sessions search keeps that border: Activity's rule sets no border of its own.
+    expect(readFileSync("src/pages/activity/activity.css", "utf8")).toMatch(/\.tools-row input\[type=search\] \{ flex: 1 1 16\.25rem; min-width: 0; \}/);
   });
 });
 
@@ -162,6 +164,14 @@ describe("forced colors", () => {
   };
   it("draws low-call rate points hollow in system colors", () => {
     expect(block()).toMatch(/circle\.lowc \{ forced-color-adjust: none; fill: Canvas; stroke: CanvasText; \}/);
+  });
+  it("frames the hovered and selected chart buckets at full opacity", () => {
+    expect(block()).toMatch(/\.chart svg > rect:not\(\.hit\) \{ stroke: Highlight; stroke-width: 2px; fill: none; opacity: 1; \}/);
+  });
+  it("draws the low-call legend key like its point, over the chart stylesheet's theme colors", () => {
+    // chart.css loads after theme.css and styles .pg-activity .legend i.low: the forced-colors rule must be more specific.
+    expect(readFileSync("src/components/chart.css", "utf8")).toMatch(/\.pg-activity \.legend i\.low \{/);
+    expect(block()).toMatch(/\.pg-activity \.legend \.key i\.low[^{]*\{ forced-color-adjust: none; background: Canvas; border-color: CanvasText; \}/);
   });
   it("has one forced-colors block, last in theme.css", () => {
     expect(themeCss().match(/@media \(forced-colors: active\)/g)).toHaveLength(1);

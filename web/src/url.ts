@@ -99,10 +99,10 @@ type ViewState = ReturnType<typeof rootState>;
 /** The view a URL's keys describe, with defaults for what is missing or not valid. */
 export const parseView = (raw: Readonly<Record<string, unknown>>): ViewState => rootState(validateRoot(raw));
 
-// Page-only keys that belong to one view (Activity's selected day): a write that changes the parsed project, range or
-// source drops them in the same write, so Back returns to the view with its day. Writing the value a key already reads
-// as (range=30 with no range, an unknown source cleaned to All) changes no view and keeps them.
-const VIEW_SCOPED = ["day"];
+// Page-only keys that belong to one view (Activity's selected day or week): a write that changes the parsed project, range
+// or source drops them in the same write, so Back returns to the view with its selection. Writing the value a key already
+// reads as (range=30 with no range, an unknown source cleaned to All) changes no view and keeps them.
+const VIEW_SCOPED = ["day", "week"];
 const viewKey = (raw: Readonly<Record<string, string>>) => {
   const { project, range, source } = parseView(raw);
   return [project, range, source].join("\0");

@@ -6,7 +6,6 @@ import usage from "../../__fixtures__/usage";
 import sessions from "../../__fixtures__/sessions";
 import session from "../../__fixtures__/session";
 import { ActivityPage } from "../../pages/activity/ActivityPage";
-import { openDrawer } from "../Drawer";
 import { mockApi } from "../sheets/testing";
 import { UsageSheets } from "../sheets/UsageSheets";
 import { renderApp, renderRouter } from "../../testing";
@@ -15,7 +14,8 @@ import { SubjectMenu } from "./SubjectMenu";
 const at = (search = "?range=30") => history.replaceState(null, "", "/usage" + search);
 const serve = (detail: () => unknown = () => session) => mockApi({ "/api/usage": () => usage, "/api/sessions": () => sessions, "/api/session": detail });
 const loaded = () => screen.findByRole("heading", { level: 1, name: /commit/ });
-const page = async (search?: string) => { at(search); renderApp(<SubjectMenu><ActivityPage /><UsageSheets /></SubjectMenu>); await loaded(); act(() => { openDrawer("d-projects"); }); };
+// Activity opens on its Projects tab, which holds the project rows.
+const page = async (search = "?range=30") => { at(search + "&tab=projects"); renderApp(<SubjectMenu><ActivityPage /><UsageSheets /></SubjectMenu>); await loaded(); };
 const projectRow = (name = "foo") =>
   within(screen.getByRole("table", { name: "Project metrics" })).getAllByRole("row").find(r => r.getAttribute("data-subject") === `project:${name}`)!;
 const sessionInSheet = () => waitFor(() => { const r = sheet().querySelector<HTMLElement>('[data-subject="session:s1"]'); expect(r).toBeTruthy(); return r!; });
@@ -44,7 +44,7 @@ describe("SubjectMenu", () => {
     expect(items().map(i => i.textContent)).toEqual(["Open project page", "Open project sheet", "Filter dashboard to foo",
       "Show on Cost", "Show on Errors", "Show on Context", "Show on Live", "Copy project name"]);
     expect(menu()!.querySelectorAll('[role="separator"]')).toHaveLength(2);
-    expect(location.search).toBe("?range=30");
+    expect(location.search).toBe("?range=30&tab=projects");
     expect(sheet().open).toBe(false);
   });
 
@@ -53,7 +53,7 @@ describe("SubjectMenu", () => {
     at();
     renderRouter();
     await loaded();
-    act(() => { openDrawer("d-projects"); });
+    await userEvent.click(screen.getByRole("tab", { name: "Projects" }));
     expect(document.querySelectorAll(".subject-area")).toHaveLength(1);
     rightClick(within(projectRow()).getByText("foo"));
     expect(screen.getByRole("menu", { name: "foo actions" })).toBeTruthy();
@@ -82,8 +82,8 @@ describe("SubjectMenu", () => {
   it("opens the session's menu for the project name shown in a session row", async () => {
     serve();
     await page();
-    act(() => { openDrawer("d-sessions"); });
-    const row = await waitFor(() => { const r = document.querySelector<HTMLElement>('#d-sessions [data-subject="session:s1"]'); expect(r).toBeTruthy(); return r!; });
+    await userEvent.click(screen.getByRole("tab", { name: "Sessions" }));
+    const row = await waitFor(() => { const r = document.querySelector<HTMLElement>('#sessions [data-subject="session:s1"]'); expect(r).toBeTruthy(); return r!; });
     const name = row.querySelector('[data-subject="project:foo"]')!;
     expect(name).toBeTruthy();
     rightClick(name);
@@ -102,13 +102,13 @@ describe("SubjectMenu", () => {
     expect(screen.getByRole("menu", { name: "foo actions" })).toBeTruthy();
     fireEvent.touchEnd(cell);
     fireEvent.click(cell);
-    expect(location.search).toBe("?range=30");
+    expect(location.search).toBe("?range=30&tab=projects");
     // A later tap is a tap again.
     act(() => { vi.advanceTimersByTime(1000); });
     vi.useRealTimers();
     await userEvent.keyboard("{Escape}");
     fireEvent.click(cell);
-    expect(location.search).toBe("?range=30&inspect=foo");
+    expect(location.search).toBe("?range=30&tab=projects&inspect=foo");
   });
 
   it("opens from Shift+F10 on a focused row with the first item highlighted; Escape closes only the menu, focus back on the row", async () => {
@@ -129,7 +129,7 @@ describe("SubjectMenu", () => {
     expect(document.activeElement).toBe(button);
     expect(cancel).not.toHaveBeenCalled();
     expect(sheet().open).toBe(true);
-    expect(location.search).toBe("?range=30&inspect=foo");
+    expect(location.search).toBe("?range=30&inspect=foo&tab=projects");
     // The ContextMenu key does the same.
     await userEvent.keyboard("{ContextMenu}");
     expect(menu()).toBeTruthy();
@@ -148,7 +148,7 @@ describe("SubjectMenu", () => {
       history.back();
       await new Promise(r => addEventListener("popstate", r, { once: true }));
     });
-    expect(location.pathname + location.search).toBe("/usage?range=30");
+    expect(location.pathname + location.search).toBe("/usage?range=30&tab=projects");
   });
 
   it("says what a copy did in a polite status, there before the copy", async () => {

@@ -1,4 +1,4 @@
-import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { DayView, Previous, ProjectRow, UsagePayload } from "../../api";
@@ -9,7 +9,6 @@ import sessions from "../../__fixtures__/sessions";
 import session from "../../__fixtures__/session";
 import tool from "../../__fixtures__/tool";
 import palette from "../../__fixtures__/palette";
-import { openDrawer } from "../../components/Drawer";
 import { Palette } from "../../components/palette/Palette";
 import { openPalette } from "../../components/palette/store";
 import { mockApi } from "../../components/sheets/testing";
@@ -26,10 +25,19 @@ const serve = (d: UsagePayload) => mockApi({ "/api/usage": () => d, "/api/sessio
 const attention = () => within(document.getElementById("attention")!);
 const loaded = () => screen.findByRole("heading", { level: 1, name: /commit/ });
 const fetched = () => vi.mocked(fetch).mock.calls.map(c => c[0]);
-const noDay = (day: string): DayView => ({ day, tools: [], mcp: [], skills: [], hooks: [], error_loops: [], error_loops_total: 0 });
-/** Whether a drawer is open: its title button says so. */
-const isOpen = (id: string) => document.getElementById(id)!.hasAttribute("data-open");
-const openSessions = () => act(() => { openDrawer("d-sessions"); });
+const noDay = (day: string, days: 1 | 7 = 1): DayView => ({ day, days, start: day, end: day, by_project: [], tools: [], mcp: [], skills: [], hooks: [], error_loops: [], error_loops_total: 0, failed_tests: [], tests_failed: 0 });
+/** The workbench tab that is selected, by its name. */
+const selectedTab = () => screen.getAllByRole("tab").find(t => t.getAttribute("aria-selected") === "true")?.textContent;
+/** Activates a workbench tab by its name, as a click does. */
+const openTab = (name: string) => userEvent.click(screen.getByRole("tab", { name }));
+/** The Sessions tab is the default: nothing to open. Kept so a test reads as before. */
+const openSessions = () => {};
+/** The line under the lede: prompts interrupted, turns and tool calls per prompt. */
+const interrupted = () => document.getElementById("interrupted")!;
+/** The vitals' labels, in order. */
+const labels = () => [...document.querySelectorAll("#vitals .vital .l")].map(l => l.firstChild!.textContent);
+/** A vital's note. */
+const note = (label: string) => vital(label).closest(".vital")!.querySelector(".d")!.textContent;
 /** A promise settled from outside, for a request held in flight. */
 const held = <T,>() => { let resolve!: (v: T) => void; const p = new Promise<T>(r => { resolve = r; }); return { p, resolve }; };
 const paged = (all: { session_id: string }[]) => (q: URLSearchParams) => {
@@ -72,11 +80,12 @@ describe("change against the previous period", () => {
     await loaded();
     expect(vital("Errors per 100 calls").textContent).toBe("Errors per 100 calls, up from 4.0");
     expect(vital("Test runs passed").textContent).toBe("Test runs passed, down from 75%");
-    expect(vital("Prompts interrupted").textContent).toBe("Prompts interrupted, up from 0.0%");
+    expect(interrupted().textContent).toMatch(/^33\.3% of prompts interrupted \(1 of 3\), up from 0\.0%; /);
     expect(vital("Subagents").textContent).toBe("Subagents, down from 20%");
-    expect(vital("Median session").textContent).toBe("Median session, down from 10m");
-    expect([vital("Errors per 100 calls"), vital("Test runs passed"), vital("Prompts interrupted")].map(worse)).toEqual([true, true, true]);
-    expect([vital("Subagents"), vital("Median session")].map(worse)).toEqual([false, false]);
+    expect([vital("Errors per 100 calls"), vital("Test runs passed"), interrupted()].map(worse)).toEqual([true, true, true]);
+    expect(worse(vital("Subagents"))).toBe(false);
+    // The median session, the active time in all and the thinking are in the Sessions note, without a change of their own.
+    expect(note("Sessions")).toMatch(/; median session 5m, 9m active in all, 2s thinking\.$/);
   });
 
   it("does not mark a move the better way", async () => {
@@ -87,10 +96,10 @@ describe("change against the previous period", () => {
     await loaded();
     expect(vital("Errors per 100 calls").textContent).toBe("Errors per 100 calls, down from 80.0");
     expect(vital("Test runs passed").textContent).toBe("Test runs passed, up from 25%");
-    expect(vital("Prompts interrupted").textContent).toBe("Prompts interrupted, down from 50.0%");
+    expect(interrupted().textContent).toMatch(/^33\.3% of prompts interrupted \(1 of 3\), down from 50\.0%; /);
     expect(vital("Subagents").textContent).toBe("Subagents, up from 1%");
-    expect(vital("Median session").textContent).toBe("Median session, up from 1m");
-    for (const l of ["Errors per 100 calls", "Test runs passed", "Prompts interrupted", "Subagents", "Median session"]) expect(worse(vital(l))).toBe(false);
+    for (const l of ["Errors per 100 calls", "Test runs passed", "Subagents"]) expect(worse(vital(l))).toBe(false);
+    expect(worse(interrupted())).toBe(false);
   });
 
   it("says unchanged for a figure that did not move", async () => {
@@ -100,7 +109,7 @@ describe("change against the previous period", () => {
     await loaded();
     expect(vital("Errors per 100 calls").textContent).toBe("Errors per 100 calls, unchanged");
     expect(vital("Test runs passed").textContent).toBe("Test runs passed, unchanged");
-    expect(vital("Prompts interrupted").textContent).toBe("Prompts interrupted, unchanged");
+    expect(interrupted().textContent).toMatch(/^33\.3% of prompts interrupted \(1 of 3\), unchanged; /);
   });
 
   it("shows the headline's commits, sessions and active days against the period before", async () => {
@@ -112,7 +121,7 @@ describe("change against the previous period", () => {
     expect(v.textContent).toBe("2");
     expect(vital("Sessions").textContent).toBe("Sessions, up from 1 session");
     expect(worse(vital("Sessions"))).toBe(false);
-    expect(note.textContent).toBe("2 active days, down from 3 active days.");
+    expect(note.textContent).toBe("2 active days, down from 3 active days; median session 5m, 9m active in all, 2s thinking.");
   });
 
   it("shows no change in the All range", async () => {
@@ -122,6 +131,7 @@ describe("change against the previous period", () => {
     await loaded();
     expect(document.querySelector("#lede")!.textContent).not.toMatch(change);
     expect(document.getElementById("vitals")!.textContent).not.toMatch(change);
+    expect(interrupted().textContent).not.toMatch(change);
   });
 
   it("shows no change for a figure whose previous period has nothing to divide by", async () => {
@@ -145,8 +155,9 @@ describe("model time and output speed", () => {
     at();
     renderApp(<ActivityPage />);
     await loaded();
-    expect(tile("Median session")[1]).toMatch(/ in all; 2\.8h waiting on the model and 50m running tools\.$/);
-    expect(tile("Output speed")).toEqual(["100 tok/s", "Output tokens per second of model time, in 1 session."]);
+    const [v, n] = tile("Output speed");
+    expect(v).toBe("100 tok/s");
+    expect(n).toMatch(/^2\.8h waiting on the model and 50m running tools, in 1 session/);
     expect(vital("Output speed").textContent).toBe("Output speed, down from 150 tok/s");
     expect(worse(vital("Output speed"))).toBe(true);
   });
@@ -169,22 +180,24 @@ describe("model time and output speed", () => {
     expect(vital("Output speed").textContent).toBe("Output speed");
   });
 
-  it("reads not available, with the reason, and names no model or tool time when no session records model time", async () => {
+  it("gives Codex alone a quiet note instead of an Output speed tile, and names no model or tool time", async () => {
     serve(usageCodex);
     at("?range=30&source=codex");
     renderApp(<ActivityPage />);
     await loaded();
-    expect(tile("Output speed")).toEqual(["n/a", "Codex transcripts record no model time."]);
-    expect(tile("Median session")[1]).toMatch(/ in all\.$/);
-    expect(document.getElementById("vitals")!.textContent).not.toMatch(/waiting on the model|running tools/);
+    expect(labels()).toEqual(["Sessions", "Errors per 100 calls", "Test runs passed", "Subagents"]);
+    expect(document.querySelector("#vitals .vitals-note")!.textContent).toBe("Output speed: Codex transcripts record no model time.");
+    expect(document.getElementById("vitals")!.textContent).not.toMatch(/waiting on the model|running tools|n\/a tok/);
   });
 
   it("says no session records model time when Claude Code sessions in the view have none", async () => {
-    serve({ ...usage, totals: { ...usage.totals, output_per_s: null, timed_sessions: 0 } });
+    serve({ ...usage, totals: { ...usage.totals, output_per_s: null, timed_sessions: 0, model_ms: 0, tool_ms: 0 } });
     at();
     renderApp(<ActivityPage />);
     await loaded();
     expect(tile("Output speed")).toEqual(["n/a", "No session in this view records model time."]);
+    // The thinking recorded still shows, on the Sessions vital.
+    expect(note("Sessions")).toMatch(/, 2s thinking\.$/);
   });
 
   // The reason follows the view's sessions, not its priced requests: an unpriced Claude Code model adds no cost row by source.
@@ -202,31 +215,167 @@ describe("model time and output speed", () => {
     at();
     renderApp(<ActivityPage />);
     await loaded();
-    expect(tile("Output speed")).toEqual(["n/a", "Codex transcripts record no model time."]);
+    expect(labels()).not.toContain("Output speed");
+    expect(document.querySelector("#vitals .vitals-note")!.textContent).toBe("Output speed: Codex transcripts record no model time.");
+  });
+
+  it("draws the speed trend as a sparkline hidden from assistive technology, from two buckets", async () => {
+    serve({ ...usage, speed_trend: [{ day: "2026-11-04", output_per_s: 90, sessions: 1 }, { day: "2026-11-05", output_per_s: 110, sessions: 2 }] });
+    at();
+    renderApp(<ActivityPage />);
+    await loaded();
+    const spark = vital("Output speed").closest(".vital")!.querySelector("svg.spark")!;
+    expect(spark.getAttribute("aria-hidden")).toBe("true");
+    expect(spark.querySelector("polyline")!.getAttribute("points")!.split(" ")).toHaveLength(2);
+    cleanup();
+    serve(usage); // one bucket: no line
+    at();
+    renderApp(<ActivityPage />);
+    await loaded();
+    expect(document.querySelector("#vitals svg.spark")).toBeNull();
   });
 });
 
-describe("drawer tables", () => {
-  it("renders none while closed, and names every table with row and column headers once open", async () => {
+describe("vitals lead somewhere", () => {
+  it("are at most six, each a link or a button", async () => {
     serve(usage);
     at();
     renderApp(<ActivityPage />);
     await loaded();
-    expect(screen.getByRole("heading", { level: 2, name: /^Tools/ })).toBeTruthy();
+    const tiles = [...document.querySelectorAll("#vitals .vital")];
+    expect(tiles.length).toBeLessThanOrEqual(6);
+    expect(tiles.map(t => t.tagName)).toEqual(["BUTTON", "A", "BUTTON", "BUTTON", "BUTTON"]);
+  });
+
+  it("open Errors for the same view", async () => {
+    serve({ ...usage, project: "foo", source: "claude" });
+    at("?range=30&project=foo&source=claude");
+    renderApp(<ActivityPage />);
+    await loaded();
+    const a = vital("Errors per 100 calls").closest("a")!;
+    expect(a.getAttribute("href")).toMatch(/^\/errors\?/);
+    const q = new URLSearchParams(a.getAttribute("href")!.split("?")[1]);
+    expect([q.get("project"), q.get("range"), q.get("source")]).toEqual(["foo", "30", "claude"]);
+  });
+
+  it("open the Sessions tab, the failed test runs, Projects by subagent share and Sessions by active time", async () => {
+    serve(usage);
+    at("?range=30&tab=tools");
+    renderApp(<ActivityPage />);
+    await loaded();
+    await userEvent.click(vital("Test runs passed").closest("button")!);
+    expect(selectedTab()).toBe("Loops and tests");
+    expect(location.search).toContain("tab=loops");
+    expect(document.activeElement).toBe(screen.getByRole("heading", { level: 3, name: /^Failed test runs/ }));
+    await userEvent.click(vital("Subagents").closest("button")!);
+    expect(selectedTab()).toBe("Projects");
+    expect(screen.getByRole("columnheader", { name: /Subagents/ }).getAttribute("aria-sort")).toBe("descending");
+    expect(document.activeElement).toBe(screen.getByRole("tabpanel"));
+    await userEvent.click(vital("Output speed").closest("button")!);
+    expect(selectedTab()).toBe("Sessions");
+    expect(location.search).not.toContain("tab=");
+    await waitFor(() => expect(fetched().map(String)).toContain("/api/sessions?range=30&sort=duration_s&desc=1"));
+    await userEvent.click(screen.getByRole("tab", { name: "Projects" }));
+    await userEvent.click(vital("Sessions").closest("button")!);
+    expect(selectedTab()).toBe("Sessions");
+    expect(document.activeElement).toBe(screen.getByRole("tabpanel"));
+  });
+
+  it("move the focus once: a later tab change does not replay it", async () => {
+    serve(usage);
+    at();
+    renderApp(<ActivityPage />);
+    await loaded();
+    await userEvent.click(vital("Test runs passed").closest("button")!);
+    expect(document.activeElement).toBe(screen.getByRole("heading", { level: 3, name: /^Failed test runs/ }));
+    await openTab("Projects");
+    const loops = screen.getByRole("tab", { name: "Loops and tests" });
+    act(() => loops.focus());
+    await userEvent.keyboard("{Enter}");
+    expect(selectedTab()).toBe("Loops and tests");
+    expect(document.activeElement).toBe(loops);
+  });
+});
+
+describe("workbench tabs", () => {
+  it("render only the selected tab's tables, and name every table with row and column headers", async () => {
+    serve(usage);
+    at();
+    renderApp(<ActivityPage />);
+    await loaded();
+    expect(screen.getByRole("tablist", { name: "Activity detail" })).toBeTruthy();
+    expect(screen.getAllByRole("tab").map(t => t.textContent)).toEqual(["Sessions", "Projects", "Tools and MCP", "Loops and tests"]);
+    expect(selectedTab()).toBe("Sessions");
     expect(screen.queryByRole("table", { name: "Tools" })).toBeNull();
-    // One drawer opens at a time: each table is read while its drawer is the open one.
-    const tables: [string, string][] = [["Project metrics", "d-projects"], ["Tools", "d-tools"], ["Error loops", "d-loops"], ["Failed test runs", "d-tests"],
-      ["Sessions", "d-sessions"], ["MCP servers", "d-ext"], ["Skills", "d-ext"], ["Hooks", "d-ext"]];
-    for (const [name, id] of tables) {
-      act(() => openDrawer(id));
+    // Every tab names a panel; only the selected one holds anything.
+    for (const t of screen.getAllByRole("tab")) expect(document.getElementById(t.getAttribute("aria-controls")!)).toBeTruthy();
+    const tables: [string, string][] = [["Projects", "Project metrics"], ["Tools and MCP", "Tools"], ["Tools and MCP", "MCP servers"], ["Tools and MCP", "Skills"],
+      ["Tools and MCP", "Hooks"], ["Loops and tests", "Error loops"], ["Loops and tests", "Failed test runs"], ["Sessions", "Sessions"]];
+    for (const [tab, name] of tables) {
+      await openTab(tab);
       const table = await screen.findByRole("table", { name });
       expect(screen.getByRole("region", { name }).tabIndex).toBe(0);
       expect(within(table).getAllByRole("columnheader").every(h => h.getAttribute("scope") === "col")).toBe(true);
+      expect(screen.getByRole("tabpanel").getAttribute("aria-labelledby")).toBe(screen.getByRole("tab", { name: tab }).id);
     }
-    act(() => openDrawer("d-tools"));
+    await openTab("Tools and MCP");
     expect(within(screen.getByRole("table", { name: "Tools" })).getAllByRole("rowheader")[0]!.getAttribute("scope")).toBe("row");
-    act(() => openDrawer("d-projects"));
+    await openTab("Projects");
     expect(within(screen.getByRole("table", { name: "Project metrics" })).getAllByRole("rowheader").map(h => h.textContent)).toContain("foo");
+  });
+
+  it("follow the WAI-ARIA keys: one tab stop, arrows move with wrap, Home and End, Enter activates", async () => {
+    serve(usage);
+    at();
+    renderApp(<ActivityPage />);
+    await loaded();
+    const tabs = () => screen.getAllByRole("tab");
+    expect(tabs().map(t => t.tabIndex)).toEqual([0, -1, -1, -1]);
+    act(() => tabs()[0]!.focus());
+    await userEvent.keyboard("{ArrowLeft}");
+    expect(document.activeElement).toBe(screen.getByRole("tab", { name: "Loops and tests" }));
+    // Manual activation: moving the focus selects nothing and writes no URL.
+    expect(selectedTab()).toBe("Sessions");
+    expect(location.search).not.toContain("tab=");
+    await userEvent.keyboard("{ArrowRight}");
+    expect(document.activeElement).toBe(tabs()[0]);
+    await userEvent.keyboard("{End}");
+    expect(document.activeElement).toBe(tabs()[3]);
+    await userEvent.keyboard("{Home}{ArrowRight}");
+    expect(document.activeElement).toBe(tabs()[1]);
+    expect(tabs().map(t => t.tabIndex)).toEqual([-1, 0, -1, -1]);
+    const len = history.length;
+    await userEvent.keyboard("{Enter}");
+    expect(selectedTab()).toBe("Projects");
+    expect(location.search).toBe("?range=30&tab=projects");
+    expect(history.length).toBe(len); // written without a history entry
+    await userEvent.keyboard("{ArrowRight} ");
+    expect(selectedTab()).toBe("Tools and MCP");
+    expect(location.search).toContain("tab=tools");
+  });
+
+  it("restore the tab from the URL, and read an unknown one as Sessions", async () => {
+    serve(usage);
+    at("?range=30&tab=loops");
+    renderApp(<ActivityPage />);
+    await loaded();
+    expect(selectedTab()).toBe("Loops and tests");
+    expect(screen.getByRole("table", { name: "Error loops" })).toBeTruthy();
+    cleanup();
+    serve(usage);
+    at("?range=30&tab=hours");
+    renderApp(<ActivityPage />);
+    await loaded();
+    expect(selectedTab()).toBe("Sessions");
+  });
+
+  it("drop the tab and the week on a switch to Judgments", async () => {
+    mockApi({ "/api/usage": () => usage, "/api/sessions": () => sessions, "/api/day": () => noDay("2026-11-02", 7), "/api/insights": () => ({}) });
+    at("?range=30&tab=tools&week=2026-11-02&q=fix");
+    renderApp(<ActivityPage />);
+    await loaded();
+    act(() => { screen.getByRole("button", { name: "Judgments" }).click(); });
+    expect(location.search).toBe("?range=30&view=judgments");
   });
 
   it("explains the Sessions columns behind toggletips beside their sort buttons", async () => {
@@ -258,25 +407,23 @@ describe("automated projects file", () => {
 });
 
 describe("work panel", () => {
-  it("keeps the hours heatmap in a closed drawer, listed in the section index", async () => {
+  it("has no hours heatmap, section index or drawer", async () => {
     serve(usage);
     at();
     renderApp(<ActivityPage />);
     await loaded();
     expect(document.getElementById("hours")).toBeNull();
-    await userEvent.click(within(screen.getByRole("navigation", { name: /sections/i })).getByRole("link", { name: "Hours" }));
-    expect(screen.getByRole("button", { name: "Prompts by hour" }).getAttribute("aria-expanded")).toBe("true");
-    expect(document.getElementById("hours")).toBeTruthy();
+    expect(screen.queryByRole("navigation", { name: /sections/i })).toBeNull();
+    expect(document.querySelector("#content .drawer")).toBeNull();
   });
 
-  it("puts the work chart before the vitals", async () => {
+  it("orders the interrupted line, attention, the work chart, the vitals, then the tabs", async () => {
     serve(usage);
     at();
     renderApp(<ActivityPage />);
     await loaded();
-    const order = ["attention", "work", "vitals"].map(id => document.getElementById(id)!);
-    expect(order[0]!.compareDocumentPosition(order[1]!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(order[1]!.compareDocumentPosition(order[2]!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const order = ["interrupted", "attention", "work", "vitals", "workbench"].map(id => document.getElementById(id)!);
+    order.slice(1).forEach((el, i) => expect(order[i]!.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy());
   });
 });
 
@@ -318,7 +465,7 @@ describe("ActivityPage", () => {
     renderApp(<ActivityPage />);
     await loaded();
     openSessions();
-    const drawer = document.getElementById("d-sessions")!;
+    const drawer = document.getElementById("sessions")!;
     const how = within(drawer).getByRole("button", { name: "How measured: the session count" });
     await userEvent.click(how);
     expect(within(how.parentElement!).getByRole("tooltip").textContent).toMatch(/A session counts here when it has a request in the range; the Judgments view counts sessions by their start time/);
@@ -329,7 +476,7 @@ describe("ActivityPage", () => {
     at();
     renderApp(<ActivityPage />);
     await loaded();
-    act(() => { openDrawer("d-sessions"); });
+    await openTab("Sessions");
     await waitFor(() => expect(fetched()).toContain("/api/sessions?range=30"));
     await userEvent.click(within(screen.getByRole("group", { name: "Source" })).getByRole("button", { name: "Codex" }));
     await waitFor(() => expect(fetched()).toContain("/api/sessions?range=30&source=codex"));
@@ -341,7 +488,7 @@ describe("ActivityPage", () => {
     at();
     const { client } = renderApp(<ActivityPage />);
     await loaded();
-    act(() => { openDrawer("d-sessions"); });
+    await openTab("Sessions");
     await waitFor(() => expect(fetched().filter(u => u === "/api/sessions?range=30")).toHaveLength(1));
     ingested(client);
     // The first page again: the loaded pages are refetched, not one request sized to the rows.
@@ -354,13 +501,13 @@ describe("ActivityPage", () => {
     renderApp(<ActivityPage />);
     await loaded();
     openSessions();
-    const drawer = within(document.getElementById("d-sessions")!);
+    const drawer = within(document.getElementById("sessions")!);
     await drawer.findByRole("button", { name: "Session 99" });
-    expect(document.querySelectorAll("#d-sessions tbody tr")).toHaveLength(100);
-    expect(document.querySelector("#d-sessions .hint [aria-live]")!.textContent).toContain("Showing 100.");
+    expect(document.querySelectorAll("#sessions tbody tr")).toHaveLength(100);
+    expect(document.querySelector("#sessions .hint [aria-live]")!.textContent).toContain("Showing 100.");
     await userEvent.click(drawer.getByRole("button", { name: "Show more sessions" }));
     await waitFor(() => expect(document.activeElement).toBe(drawer.getByRole("button", { name: "Session 100" })));
-    expect(document.querySelectorAll("#d-sessions tbody tr")).toHaveLength(200);
+    expect(document.querySelectorAll("#sessions tbody tr")).toHaveLength(200);
     expect(fetched().filter(u => String(u).startsWith("/api/sessions"))).toEqual(["/api/sessions?range=30", "/api/sessions?range=30&offset=100"]);
   });
 
@@ -371,7 +518,7 @@ describe("ActivityPage", () => {
     renderApp(<ActivityPage />);
     await loaded();
     openSessions();
-    const drawer = within(document.getElementById("d-sessions")!), tbody = () => document.querySelector("#d-sessions tbody")!;
+    const drawer = within(document.getElementById("sessions")!), tbody = () => document.querySelector("#sessions tbody")!;
     await drawer.findByRole("button", { name: "Session 0" });
     vi.useFakeTimers({ shouldAdvanceTime: true });
     try {
@@ -380,7 +527,7 @@ describe("ActivityPage", () => {
       expect(fetched().some(u => String(u).startsWith("/api/sessions") && String(u).includes("q=needle"))).toBe(false);
       await act(async () => { await vi.advanceTimersByTimeAsync(100); });
       await waitFor(() => expect(fetched()).toContain("/api/sessions?range=30&q=needle"));
-      await waitFor(() => expect(document.querySelector("#d-sessions .hint [aria-live]")!.textContent).toBe("Searching for “needle”…"));
+      await waitFor(() => expect(document.querySelector("#sessions .hint [aria-live]")!.textContent).toBe("Searching for “needle”…"));
       expect(tbody().hasAttribute("inert")).toBe(true);
       expect(drawer.getByRole("button", { name: "Session 0" })).toBeTruthy();
       await act(async () => { found.resolve({ total: 1, offset: 0, sessions: many(1, "Hit") }); await found.p; });
@@ -388,7 +535,7 @@ describe("ActivityPage", () => {
     } finally { vi.useRealTimers(); }
     expect(drawer.queryByRole("button", { name: "Session 0" })).toBeNull();
     expect(tbody().hasAttribute("inert")).toBe(false);
-    expect(document.querySelector("#d-sessions .hint [aria-live]")!.textContent).toMatch(/^1 session match/);
+    expect(document.querySelector("#sessions .hint [aria-live]")!.textContent).toMatch(/^1 session match/);
   });
 
   it("says a search failed, with Retry, and shows no rows of the earlier query", async () => {
@@ -398,10 +545,10 @@ describe("ActivityPage", () => {
     renderApp(<ActivityPage />);
     await loaded();
     openSessions();
-    const drawer = within(document.getElementById("d-sessions")!);
+    const drawer = within(document.getElementById("sessions")!);
     expect(await drawer.findByRole("alert")).toBeTruthy();
     expect(drawer.getByRole("alert").textContent).toMatch(/^Could not load sessions \(.+\)\. Retry$/);
-    expect(document.querySelector("#d-sessions .hint [aria-live]")!.textContent).toBe("Search for “needle” failed.");
+    expect(document.querySelector("#sessions .hint [aria-live]")!.textContent).toBe("Search for “needle” failed.");
     expect(drawer.queryByRole("button", { name: "Session 0" })).toBeNull();
     down = false;
     await userEvent.click(drawer.getByRole("button", { name: "Retry" }));
@@ -417,15 +564,15 @@ describe("ActivityPage", () => {
     renderApp(<ActivityPage />);
     await loaded();
     openSessions();
-    const drawer = within(document.getElementById("d-sessions")!);
+    const drawer = within(document.getElementById("sessions")!);
     await drawer.findByRole("button", { name: "Session 99" });
     await userEvent.click(drawer.getByRole("button", { name: "Show more sessions" }));
-    await waitFor(() => expect(document.querySelector("#d-sessions .hint [aria-live]")!.textContent).toMatch(/^Could not load more sessions \(.+\)\. Select Show more to try again\.$/));
-    expect(document.querySelectorAll("#d-sessions tbody tr")).toHaveLength(100);
+    await waitFor(() => expect(document.querySelector("#sessions .hint [aria-live]")!.textContent).toMatch(/^Could not load more sessions \(.+\)\. Select Show more to try again\.$/));
+    expect(document.querySelectorAll("#sessions tbody tr")).toHaveLength(100);
     down = false;
     await userEvent.click(drawer.getByRole("button", { name: "Show more sessions" }));
-    await waitFor(() => expect(document.querySelectorAll("#d-sessions tbody tr")).toHaveLength(200));
-    expect(document.querySelector("#d-sessions .hint [aria-live]")!.textContent).toContain("Showing 200.");
+    await waitFor(() => expect(document.querySelectorAll("#sessions tbody tr")).toHaveLength(200));
+    expect(document.querySelector("#sessions .hint [aria-live]")!.textContent).toContain("Showing 200.");
   });
 
   it("swaps in new data from a background ingest quietly, and replays the landing only after Refresh", async () => {
@@ -457,7 +604,7 @@ describe("ActivityPage", () => {
     at();
     const { client } = renderApp(<ActivityPage />);
     await loaded();
-    act(() => { openDrawer("d-sessions"); });
+    await openTab("Sessions");
     await screen.findByRole("button", { name: "Session 99" });
     await userEvent.click(screen.getByRole("button", { name: "Show more sessions" }));
     const row = await screen.findByRole("button", { name: "Session 150" });
@@ -466,10 +613,10 @@ describe("ActivityPage", () => {
     ingested(client);
     // One request per loaded page, first page first.
     await waitFor(() => expect(fetched().slice(before).filter(u => String(u).startsWith("/api/sessions"))).toEqual(["/api/sessions?range=30", "/api/sessions?range=30&offset=100"]));
-    await waitFor(() => expect(document.querySelector("#d-sessions tbody")!.getAttribute("aria-busy")).toBeNull());
-    expect(document.querySelectorAll("#d-sessions tbody tr")).toHaveLength(200);
+    await waitFor(() => expect(document.querySelector("#sessions tbody")!.getAttribute("aria-busy")).toBeNull());
+    expect(document.querySelectorAll("#sessions tbody tr")).toHaveLength(200);
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "Session 150" }));
-    expect(document.querySelector("#d-sessions tbody")!.hasAttribute("inert")).toBe(false);
+    expect(document.querySelector("#sessions tbody")!.hasAttribute("inert")).toBe(false);
   });
 
   it("names no agent when nothing happened in the range with every source", async () => {
@@ -492,13 +639,14 @@ describe("ActivityPage", () => {
     expect(attention().getByText("1 session").closest("li")!.textContent).toMatch(/reached 80%\+ of the context window/);
     expect(attention().getByText("1 failed test run").closest("li")!.textContent).toMatch(/of 2/);
     await userEvent.click(within(loops).getByRole("button", { name: "See loops" }));
-    expect(isOpen("d-loops")).toBe(true);
-    // The payload carries the newest loops only: the drawer counts them all and says so.
-    const drawer = document.getElementById("d-loops")!;
-    expect(drawer.querySelector("h2")!.textContent).toMatch(/Error loops\s*3/);
-    expect(within(drawer).getByText(/^Showing the 1 newest of 3\./)).toBeTruthy();
+    expect(selectedTab()).toBe("Loops and tests");
+    // The payload carries the newest loops only: the list counts them all and says so.
+    const list = document.getElementById("loops")!;
+    expect(list.querySelector("h3")!.textContent).toMatch(/Error loops\s*3/);
+    expect(document.activeElement).toBe(list.querySelector("h3"));
+    expect(within(list).getByText(/Showing the 1 newest of 3\./)).toBeTruthy();
     await userEvent.click(attention().getByRole("button", { name: "See it" }));
-    expect(isOpen("d-sessions")).toBe(true);
+    expect(selectedTab()).toBe("Sessions");
     expect(screen.getByRole("checkbox", { name: "Near context limit only" })).toHaveProperty("checked", true);
     await waitFor(() => expect(fetched()).toContain("/api/sessions?range=30&near=1"));
   });
@@ -513,16 +661,16 @@ describe("ActivityPage", () => {
     at();
     renderApp(<ActivityPage />);
     await loaded();
-    act(() => { openDrawer("d-sessions"); });
-    const drawer = within(document.getElementById("d-sessions")!);
+    await openTab("Sessions");
+    const drawer = within(document.getElementById("sessions")!);
     await drawer.findByRole("button", { name: "Session 99" });
     expect(drawer.queryByRole("button", { name: "Project" })).toBeNull();
     const cost = drawer.getByRole("button", { name: "Est. cost" });
     await userEvent.click(cost);
     await waitFor(() => expect(fetched()).toContain("/api/sessions?range=30&sort=cost&desc=1"));
-    expect([...document.querySelectorAll("#d-sessions th[aria-sort]")].map(th => [th.textContent, th.getAttribute("aria-sort")])).toEqual([["Est. cost↓", "descending"]]);
+    expect([...document.querySelectorAll("#sessions th[aria-sort]")].map(th => [th.textContent, th.getAttribute("aria-sort")])).toEqual([["Est. cost↓", "descending"]]);
     // The rows keep the server's order: costs 0, 1, 2… are not reordered in the browser.
-    await waitFor(() => expect(document.querySelector("#d-sessions tbody tr button")!.textContent).toBe("Session 0"));
+    await waitFor(() => expect(document.querySelector("#sessions tbody tr button")!.textContent).toBe("Session 0"));
     await userEvent.click(drawer.getByRole("button", { name: "Show more sessions" }));
     await waitFor(() => expect(fetched()).toContain("/api/sessions?range=30&offset=100&sort=cost&desc=1"));
     await userEvent.click(cost);
@@ -537,7 +685,7 @@ describe("ActivityPage", () => {
     renderApp(<ActivityPage />);
     await loaded();
     openSessions();
-    const drawer = within(document.getElementById("d-sessions")!), hint = () => document.querySelector("#d-sessions .hint [aria-live]")!.textContent;
+    const drawer = within(document.getElementById("sessions")!), hint = () => document.querySelector("#sessions .hint [aria-live]")!.textContent;
     const keys: [string, string, string][] = [["Session", "first_ts", "newest first"], ["Active", "duration_s", "longest active time first"],
       ["Prompts", "prompts", "most prompts first"], ["Tokens", "tokens", "most tokens first"], ["Est. cost", "cost", "costliest first"],
       ["Peak context", "peak_context", "largest peak context first"], ["Failed", "errors", "most failed calls first"],
@@ -557,13 +705,13 @@ describe("ActivityPage", () => {
     renderApp(<ActivityPage />);
     await loaded();
     openSessions();
-    await userEvent.click(within(document.getElementById("d-sessions")!).getByRole("button", { name: "Tokens" }));
+    await userEvent.click(within(document.getElementById("sessions")!).getByRole("button", { name: "Tokens" }));
     await waitFor(() => expect(fetched()).toContain("/api/sessions?range=30&sort=tokens&desc=1"));
     await userEvent.click(attention().getByRole("button", { name: "See it" }));
     await waitFor(() => expect(fetched()).toContain("/api/sessions?range=30&near=1"));
-    expect(document.querySelector("#d-sessions th[aria-sort]")).toBeNull();
-    await waitFor(() => expect(document.querySelector("#d-sessions .hint [aria-live]")!.textContent).toContain("nearest the limit first"));
-    await userEvent.click(within(document.getElementById("d-sessions")!).getByRole("button", { name: "Tokens" }));
+    expect(document.querySelector("#sessions th[aria-sort]")).toBeNull();
+    await waitFor(() => expect(document.querySelector("#sessions .hint [aria-live]")!.textContent).toContain("nearest the limit first"));
+    await userEvent.click(within(document.getElementById("sessions")!).getByRole("button", { name: "Tokens" }));
     await waitFor(() => expect(fetched()).toContain("/api/sessions?range=30&near=1&sort=tokens&desc=1"));
     const chart = screen.getByRole("group", { name: /^Commits/ });
     act(() => chart.focus());
@@ -571,8 +719,8 @@ describe("ActivityPage", () => {
     fireEvent.keyDown(chart, { key: "ArrowLeft" });
     fireEvent.keyDown(chart, { key: "Enter" });
     await waitFor(() => expect(fetched()).toContain("/api/sessions?range=30&day=2026-11-04"));
-    expect(document.querySelector("#d-sessions th[aria-sort]")).toBeNull();
-    await waitFor(() => expect(document.querySelector("#d-sessions .hint [aria-live]")!.textContent).toContain("by their cost on that day"));
+    expect(document.querySelector("#sessions th[aria-sort]")).toBeNull();
+    await waitFor(() => expect(document.querySelector("#sessions .hint [aria-live]")!.textContent).toContain("by their cost on that day"));
   });
 
   it("keeps the Sessions sort when new data refreshes the table", async () => {
@@ -582,9 +730,9 @@ describe("ActivityPage", () => {
     const { client } = renderApp(<ActivityPage />);
     await loaded();
     openSessions();
-    await userEvent.click(within(document.getElementById("d-sessions")!).getByRole("button", { name: "Est. cost" }));
+    await userEvent.click(within(document.getElementById("sessions")!).getByRole("button", { name: "Est. cost" }));
     await waitFor(() => expect(fetched()).toContain("/api/sessions?range=30&sort=cost&desc=1"));
-    await waitFor(() => expect(document.querySelector("#d-sessions tbody")!.getAttribute("aria-busy")).toBeNull());
+    await waitFor(() => expect(document.querySelector("#sessions tbody")!.getAttribute("aria-busy")).toBeNull());
     ingested(client);
     await waitFor(() => expect(fetched().filter(u => u === "/api/sessions?range=30&sort=cost&desc=1")).toHaveLength(2));
   });
@@ -596,15 +744,15 @@ describe("ActivityPage", () => {
     renderApp(<ActivityPage />);
     await loaded();
     openSessions();
-    const drawer = within(document.getElementById("d-sessions")!);
+    const drawer = within(document.getElementById("sessions")!);
     await drawer.findByRole("button", { name: "Session 99" });
     await userEvent.click(drawer.getByRole("button", { name: "Show more sessions" }));
     await userEvent.click(drawer.getByRole("button", { name: "Est. cost" }));
     await waitFor(() => expect(fetched()).toContain("/api/sessions?range=30&sort=cost&desc=1"));
-    await waitFor(() => expect(document.querySelector("#d-sessions tbody")!.getAttribute("aria-busy")).toBeNull());
+    await waitFor(() => expect(document.querySelector("#sessions tbody")!.getAttribute("aria-busy")).toBeNull());
     await act(async () => { stale.resolve({ total: 250, offset: 100, sessions: many(100, "Stale") }); await stale.p; });
     expect(drawer.queryByRole("button", { name: "Stale 0" })).toBeNull();
-    expect(document.querySelectorAll("#d-sessions tbody tr")).toHaveLength(100);
+    expect(document.querySelectorAll("#sessions tbody tr")).toHaveLength(100);
   });
 
   it("sorts projects and tools in the browser, projects by sessions first, empty values last", async () => {
@@ -613,25 +761,26 @@ describe("ActivityPage", () => {
     at();
     renderApp(<ActivityPage />);
     await loaded();
-    act(() => { openDrawer("d-projects"); });
+    await openTab("Projects");
     const order = (id: string) => [...document.querySelectorAll(`#${id} tbody tr`)].map(r => r.getAttribute("data-v"));
-    const projects = within(document.getElementById("d-projects")!);
-    expect(order("d-projects")).toEqual(["b", "c", "a"]);
+    const projects = within(document.getElementById("projects")!);
+    expect(order("projects")).toEqual(["b", "c", "a"]);
     expect(projects.getByRole("button", { name: "Sessions" }).closest("th")!.getAttribute("aria-sort")).toBe("descending");
-    expect(document.getElementById("d-projects")!.querySelector("thead")!.textContent).not.toMatch(/cost/i);
+    expect(document.getElementById("projects")!.querySelector("thead")!.textContent).not.toMatch(/cost/i);
     await userEvent.click(projects.getByRole("button", { name: "Tokens / prompt" }));
-    expect(order("d-projects")).toEqual(["c", "b", "a"]);
+    expect(order("projects")).toEqual(["c", "b", "a"]);
     await userEvent.click(projects.getByRole("button", { name: "Tokens / prompt" }));
-    expect(order("d-projects")).toEqual(["b", "c", "a"]);
-    act(() => { openDrawer("d-tools"); });
-    expect(order("d-tools")).toEqual(usage.tools.map(t => t.tool));
-    const failed = within(document.getElementById("d-tools")!).getByRole("button", { name: "Failed" });
+    expect(order("projects")).toEqual(["b", "c", "a"]);
+    await openTab("Tools and MCP");
+    expect(order("tools")).toEqual(usage.tools.map(t => t.tool));
+    const failed = within(document.getElementById("tools")!).getByRole("button", { name: "Failed" });
     await userEvent.click(failed);
-    expect(order("d-tools")[0]).toBe("Edit");
+    expect(order("tools")[0]).toBe("Edit");
     expect(failed.closest("th")!.getAttribute("aria-sort")).toBe("descending");
     await userEvent.click(failed);
-    expect(order("d-tools").at(-1)).toBe("Edit");
-    expect(fetched().filter(u => !String(u).startsWith("/api/usage"))).toEqual([]);
+    expect(order("tools").at(-1)).toBe("Edit");
+    // Only the page and the Sessions tab it opened on asked the server; the sorts asked nothing.
+    expect(fetched().filter(u => !String(u).startsWith("/api/usage") && u !== "/api/sessions?range=30")).toEqual([]);
   });
 
   it("restores the sessions filters from the hash and writes them without new history entries", async () => {
@@ -639,12 +788,13 @@ describe("ActivityPage", () => {
     at("?range=30&day=2026-11-04&q=api&near=1");
     renderApp(<ActivityPage />);
     await loaded();
-    act(() => { openDrawer("d-sessions"); });
+    await openTab("Sessions");
     await waitFor(() => expect(fetched()).toContain("/api/sessions?range=30&q=api&near=1&day=2026-11-04"));
     const search = screen.getByRole<HTMLInputElement>("searchbox", { name: "Search sessions" });
     expect(search.value).toBe("api");
     expect(screen.getByRole("checkbox", { name: "Near context limit only" })).toHaveProperty("checked", true);
-    expect(screen.getByText("Active on Nov 4, 2026")).toBeTruthy();
+    expect(document.querySelector("#work .daychip")!.textContent).toBe("Nov 4✕");
+    expect(screen.getByRole("tabpanel").querySelector(".scope")!.textContent).toMatch(/^Nov 4, 2026 only\./);
     const n = history.length;
     await userEvent.type(search, "x");
     await userEvent.click(screen.getByRole("checkbox", { name: "Near context limit only" }));
@@ -683,42 +833,177 @@ describe("ActivityPage", () => {
     expect(days()).toBe(n);
   });
 
-  it("narrows tools, MCP & hooks and error loops to the selected day", async () => {
+  it("narrows every tab to the selected day: projects, tools, MCP & hooks, error loops and failed tests", async () => {
     const day: DayView = {
-      day: "2026-11-04", tools: [{ tool: "Grep", calls: 2, errors: 0, failure_rate: 0, p50_ms: 10, p95_ms: 20 }],
-      mcp: [{ name: "daysrv", calls: 1, errors: 0, failure_rate: 0 }], skills: [], hooks: [],
-      error_loops: [{ ...usage.error_loops[0]!, first_id: "dl1" }], error_loops_total: 7,
+      ...noDay("2026-11-04"), tools: [{ tool: "Grep", calls: 2, errors: 0, failure_rate: 0, p50_ms: 10, p95_ms: 20 }],
+      mcp: [{ name: "daysrv", calls: 1, errors: 0, failure_rate: 0 }], by_project: [{ ...usage.by_project[0]!, project: "dayproj" }],
+      error_loops: [{ ...usage.error_loops[0]!, first_id: "dl1" }], error_loops_total: 7, tests_failed: 0,
     };
     mockApi({ "/api/usage": () => usage, "/api/sessions": () => sessions, "/api/day": () => day });
     at("?range=30&day=2026-11-04");
     renderApp(<ActivityPage />);
     await loaded();
-    act(() => { openDrawer("d-tools"); });
-    const tools = within(document.getElementById("d-tools")!);
-    expect(await tools.findByRole("button", { name: "Grep" })).toBeTruthy();
-    expect(tools.queryByRole("button", { name: "Edit" })).toBeNull();
+    await openTab("Tools and MCP");
+    const tools = () => within(document.getElementById("tools")!), panel = () => within(screen.getByRole("tabpanel"));
+    expect(await tools().findByRole("button", { name: "Grep" })).toBeTruthy();
+    expect(tools().queryByRole("button", { name: "Edit" })).toBeNull();
     expect(fetched()).toContain("/api/day?range=30&day=2026-11-04");
-    expect(tools.getByText(/^Nov 4, 2026 only\./)).toBeTruthy();
-    act(() => { openDrawer("d-ext"); });
-    expect(within(document.getElementById("d-ext")!).getByRole("button", { name: "daysrv" })).toBeTruthy();
-    act(() => { openDrawer("d-loops"); });
-    const loops = document.getElementById("d-loops")!;
-    expect(loops.querySelector("h2")!.textContent).toMatch(/Error loops\s*7/);
+    expect(panel().getByText(/^Nov 4, 2026 only\./)).toBeTruthy();
+    expect(within(document.getElementById("ext")!).getByRole("button", { name: "daysrv" })).toBeTruthy();
+    await openTab("Loops and tests");
+    const loops = document.getElementById("loops")!;
+    expect(loops.querySelector("h3")!.textContent).toMatch(/Error loops\s*7/);
     expect(loops.querySelector("a")!.getAttribute("href")).toContain("ex=dl1");
-    // Projects and attention stay range-wide; the sessions table says which figures are whole-session.
+    expect(within(document.getElementById("tests")!).getByText("No failed test runs on Nov 4, 2026.")).toBeTruthy();
+    await openTab("Projects");
+    expect(within(document.getElementById("projects")!).getByRole("button", { name: "dayproj" })).toBeTruthy();
+    // Attention stays range-wide; the sessions table says which figures are whole-session.
     expect(attention().getByText("1 failed test run")).toBeTruthy();
-    act(() => { openDrawer("d-sessions"); });
+    await openTab("Sessions");
     await userEvent.click(screen.getByRole("button", { name: "About Peak context" }));
     expect(screen.getByRole("button", { name: "Peak context" }).closest("th")!.querySelector("[role=tooltip]")!.textContent).toMatch(/whole-session/i);
-    act(() => { openDrawer("d-tools"); });
-    await userEvent.click(tools.getByRole("button", { name: "Show the whole range" }));
-    expect(location.search).toBe("?range=30");
-    expect(await tools.findByRole("button", { name: "Edit" })).toBeTruthy();
-    expect(tools.queryByRole("button", { name: "Grep" })).toBeNull();
-    act(() => { openDrawer("d-ext"); });
-    expect(within(document.getElementById("d-ext")!).getByRole("button", { name: "srv" })).toBeTruthy();
-    act(() => { openDrawer("d-sessions"); });
+    await openTab("Tools and MCP");
+    await userEvent.click(panel().getByRole("button", { name: "Show the whole range" }));
+    expect(location.search).toBe("?range=30&tab=tools");
+    expect(await tools().findByRole("button", { name: "Edit" })).toBeTruthy();
+    expect(tools().queryByRole("button", { name: "Grep" })).toBeNull();
+    expect(within(document.getElementById("ext")!).getByRole("button", { name: "srv" })).toBeTruthy();
+    expect(screen.getByRole("tabpanel").querySelector(".scope")).toBeNull();
+    await openTab("Sessions");
     expect(screen.getByRole("button", { name: "Peak context" }).closest("th")!.getAttribute("title")).toBeNull();
+  });
+
+  it("selects a week on the chart by click, narrows the tabs to its seven days, and clears it with the chip or Escape", async () => {
+    const weekly: UsagePayload = { ...usageAll, work_bucket: "week",
+      work: [{ day: "2026-10-26", sessions: 2, prompts: 3, commits: 1, calls: 10, failed_calls: 1 }, { day: "2026-11-02", sessions: 3, prompts: 5, commits: 2, calls: 20, failed_calls: 2 }],
+      work_projects: [] };
+    const week: DayView = { ...noDay("2026-11-02", 7), tools: [{ tool: "Grep", calls: 2, errors: 0, failure_rate: 0, p50_ms: 10, p95_ms: 20 }] };
+    // The week's sessions are not the range's: a wrong day or span would list the range's.
+    const inWeek = { total: 1, offset: 0, sessions: [{ ...sessions.sessions[0]!, session_id: "wk" }] };
+    mockApi({ "/api/usage": () => weekly, "/api/day": () => week,
+      "/api/sessions": q => (q.get("day") === "2026-11-02" && q.get("days") === "7" ? inWeek : q.has("day") || q.has("days") ? undefined : sessions) });
+    at("?range=0&q=fix&tab=tools");
+    renderApp(<ActivityPage />);
+    await loaded();
+    const chart = screen.getByRole("group", { name: /^Commits per week/ });
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({ left: 0, top: 0, right: 800, bottom: 216, width: 800, height: 216, x: 0, y: 0, toJSON: () => ({}) });
+    const n = history.length;
+    fireEvent.click(chart.querySelector(".hit")!, { clientX: 700 }); // the second of two bars: the week of Nov 2
+    expect(location.search).toBe("?range=0&tab=tools&week=2026-11-02");
+    expect(history.length).toBe(n);
+    await waitFor(() => expect(fetched()).toContain("/api/day?range=0&day=2026-11-02&days=7"));
+    expect(await within(document.getElementById("tools")!).findByRole("button", { name: "Grep" })).toBeTruthy();
+    // The view ends on Thursday Nov 5: the panel names the days it counts.
+    expect(screen.getByRole("tabpanel").querySelector(".scope")!.textContent).toMatch(/^Nov 2 – Nov 5, 2026 only\./);
+    expect(document.querySelector("#work .daychip")!.textContent).toBe("Week of Nov 2✕");
+    // The Sessions tab asks for the week's seven days, costliest first.
+    await openTab("Sessions");
+    await waitFor(() => expect(fetched().filter(u => String(u).startsWith("/api/sessions?")).at(-1)).toMatch(/[?&]day=2026-11-02&days=7(&|$)/));
+    await waitFor(() => expect(document.querySelector("#sessions .hint [aria-live]")!.textContent).toContain("by their cost on those days"));
+    const rows = within(document.getElementById("sessions")!);
+    expect(await rows.findByRole("button", { name: "#wk" })).toBeTruthy();
+    expect(rows.queryByRole("button", { name: "#s1" })).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Clear week of Nov 2, 2026" }));
+    expect(location.search).toBe("?range=0");
+    expect(document.querySelector("#work .daychip")).toBeNull();
+    expect(await within(document.getElementById("sessions")!).findByRole("button", { name: "#s1" })).toBeTruthy();
+    // By keyboard: Home, Enter selects the first week; Escape clears it.
+    act(() => chart.focus());
+    fireEvent.keyDown(chart, { key: "Home" });
+    fireEvent.keyDown(chart, { key: "Enter" });
+    expect(location.search).toBe("?range=0&week=2026-10-26");
+    fireEvent.keyDown(chart, { key: "Escape" });
+    expect(location.search).toBe("?range=0");
+    // A day selection replaces a week one, and back.
+    act(() => setSearch({ week: "2026-10-26" }));
+    act(() => setSearch({ day: "2026-10-27", week: null }));
+    expect(location.search).toBe("?range=0&day=2026-10-27");
+  });
+
+  it("takes no pick from the previous view's chart while a new range loads", async () => {
+    const weekly: UsagePayload = { ...usageAll, work_bucket: "week",
+      work: [{ day: "2026-10-26", sessions: 2, prompts: 3, commits: 1, calls: 10, failed_calls: 1 }, { day: "2026-11-02", sessions: 3, prompts: 5, commits: 2, calls: 20, failed_calls: 2 }],
+      work_projects: [] };
+    const wait = held<unknown>();
+    mockApi({ "/api/usage": q => (q.get("range") === "30" ? wait.p : weekly), "/api/sessions": () => sessions, "/api/day": () => noDay("2026-11-02", 7) });
+    at("?range=0");
+    renderApp(<ActivityPage />);
+    await loaded();
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({ left: 0, top: 0, right: 800, bottom: 216, width: 800, height: 216, x: 0, y: 0, toJSON: () => ({}) });
+    act(() => setSearch({ range: 30 }));
+    await waitFor(() => expect(fetched().map(String)).toContain("/api/usage?range=30"));
+    // The all-time weekly chart is still drawn: Enter and a click on it write nothing.
+    const chart = screen.getByRole("group", { name: /^Commits per week/ });
+    act(() => chart.focus());
+    fireEvent.keyDown(chart, { key: "End" });
+    fireEvent.keyDown(chart, { key: "Enter" });
+    fireEvent.click(chart.querySelector(".hit")!, { clientX: 700 });
+    expect(location.search).toBe("?range=30");
+    await act(async () => { wait.resolve(usage); await wait.p; });
+    await waitFor(() => expect(screen.getByRole("group", { name: /^Commits per day/ })).toBeTruthy());
+  });
+
+  it("drops a week the view does not reach, and a day that is not a Monday", async () => {
+    mockApi({ "/api/usage": () => usage, "/api/sessions": () => sessions, "/api/day": () => noDay("2026-09-07", 7) });
+    at("?range=30&week=2026-09-07"); // the view starts on Oct 7
+    renderApp(<ActivityPage />);
+    await loaded();
+    await waitFor(() => expect(location.search).toBe("?range=30"));
+    expect(document.querySelector("#work .daychip")).toBeNull();
+    cleanup();
+    mockApi({ "/api/usage": () => usage, "/api/sessions": () => sessions });
+    at("?range=30&week=2026-11-04");
+    renderApp(<ActivityPage />);
+    await loaded();
+    expect(document.querySelector("#work .daychip")).toBeNull();
+    expect(screen.getByRole("tabpanel").querySelector(".scope")).toBeNull();
+  });
+
+  it("names the days a week keeps when the view starts inside it", async () => {
+    mockApi({ "/api/usage": () => ({ ...usage, work_bucket: "week" }), "/api/sessions": () => sessions, "/api/day": () => noDay("2026-10-05", 7) });
+    at("?range=30&week=2026-10-05"); // the view starts on Wednesday Oct 7
+    renderApp(<ActivityPage />);
+    await loaded();
+    expect(screen.getByRole("tabpanel").querySelector(".scope")!.textContent).toMatch(/^Oct 7 – Oct 11, 2026 only\./);
+    await openTab("Loops and tests");
+    expect(await screen.findByText(/^No failed test runs from Oct 7 to Oct 11, 2026/)).toBeTruthy();
+  });
+
+  it("moves the focus to the chart when the panel's own clear removes its button", async () => {
+    mockApi({ "/api/usage": () => usage, "/api/sessions": () => sessions, "/api/day": () => noDay("2026-11-04") });
+    at("?range=30&day=2026-11-04");
+    renderApp(<ActivityPage />);
+    await loaded();
+    const btn = within(screen.getByRole("tabpanel")).getByRole("button", { name: "Show the whole range" });
+    act(() => btn.focus());
+    await userEvent.keyboard("{Enter}");
+    expect(location.search).toBe("?range=30");
+    expect(document.activeElement).toBe(screen.getByRole("group", { name: /^Commits per day/ }));
+  });
+
+  it("keeps the selection's figures honest: a vital or attention action reports the range, so it clears the selection", async () => {
+    mockApi({ "/api/usage": () => ({ ...usage, work_bucket: "week" }), "/api/sessions": () => sessions, "/api/day": () => noDay("2026-11-02", 7) });
+    at("?range=30&week=2026-11-02");
+    renderApp(<ActivityPage />);
+    await loaded();
+    await userEvent.click(vital("Test runs passed").closest("button")!);
+    expect(location.search).toBe("?range=30&tab=loops");
+    expect(screen.getByRole("heading", { level: 3, name: /^Failed test runs/ }).textContent).not.toMatch(/week|Nov 2/);
+    act(() => setSearch({ week: "2026-11-02" }));
+    await userEvent.click(attention().getByRole("button", { name: "See tests" }));
+    expect(location.search).toBe("?range=30&tab=loops");
+  });
+
+  it("keeps the week when a sheet closes with Escape", async () => {
+    mockApi({ "/api/usage": () => ({ ...usageAll, work_bucket: "week" }), "/api/sessions": () => sessions, "/api/session": () => session, "/api/day": () => noDay("2026-11-02", 7) });
+    at("?range=0&week=2026-11-02");
+    renderPage(<ActivityPage />);
+    await loaded();
+    const row = await within(document.getElementById("sessions")!).findByRole("button", { name: "#s1" });
+    await userEvent.click(row);
+    expect(await within(document.querySelector("dialog")!).findByText("Timeline")).toBeTruthy();
+    act(() => { document.querySelector("dialog")!.dispatchEvent(new Event("cancel", { cancelable: true })); });
+    await waitFor(() => expect(location.search).toBe("?range=0&week=2026-11-02"));
   });
 
   it("does not label the range rows as the day while the day loads or after it fails", async () => {
@@ -728,15 +1013,15 @@ describe("ActivityPage", () => {
     at("?range=30&day=2026-11-04");
     renderApp(<ActivityPage />);
     await loaded();
-    act(() => { openDrawer("d-ext"); openDrawer("d-tools"); }); // both bodies render; the tools stay open
-    const tools = within(document.getElementById("d-tools")!), ext = document.getElementById("d-ext")!;
-    expect(tools.getByText(/^Loading Nov 4, 2026…; showing the whole range\./)).toBeTruthy();
+    await openTab("Tools and MCP");
+    const tools = within(document.getElementById("tools")!), ext = document.getElementById("ext")!, panel = within(screen.getByRole("tabpanel"));
+    expect(panel.getByText(/^Loading Nov 4, 2026…; showing the whole range\./)).toBeTruthy();
     expect(tools.getByRole("button", { name: "Edit" })).toBeTruthy();
     expect(within(ext).getByText("None in this range.")).toBeTruthy();
     expect(document.body.textContent).not.toMatch(/Nov 4, 2026 only|None on Nov 4/);
     fail = true;
     act(() => setSearch({ day: "2026-11-05" }));
-    expect(await tools.findByText(/^Could not load Nov 5, 2026 \(HTTP 404\); showing the whole range\./)).toBeTruthy();
+    expect(await panel.findByText(/^Could not load Nov 5, 2026 \(HTTP 404\); showing the whole range\./)).toBeTruthy();
     expect(within(ext).getByText("None in this range.")).toBeTruthy();
     expect(document.body.textContent).not.toMatch(/Nov 5, 2026 only|None on Nov 5/);
   });
@@ -748,8 +1033,8 @@ describe("ActivityPage", () => {
     at("?range=30&day=2026-11-04");
     renderApp(<ActivityPage />);
     await loaded();
-    act(() => { openDrawer("d-tools"); });
-    const tools = within(document.getElementById("d-tools")!);
+    await openTab("Tools and MCP");
+    const tools = within(document.getElementById("tools")!);
     expect(await tools.findByRole("button", { name: "Grep" })).toBeTruthy();
     act(() => setSearch({ day: "2026-11-05" }));
     await waitFor(() => expect(tools.queryByRole("button", { name: "Grep" })).toBeNull());
@@ -766,9 +1051,9 @@ describe("ActivityPage", () => {
     openSessions();
     await waitFor(() => expect(fetched()).toContain("/api/sessions?range=30"));
     expect(fetched().some(u => String(u).startsWith("/api/day") || String(u).includes("day="))).toBe(false);
-    expect(screen.queryByText(/^Active on/)).toBeNull();
-    act(() => { openDrawer("d-tools"); });
-    expect(within(document.getElementById("d-tools")!).getByRole("button", { name: "Edit" })).toBeTruthy();
+    expect(document.querySelector("#work .daychip, .tabpanel .scope")).toBeNull();
+    await openTab("Tools and MCP");
+    expect(within(document.getElementById("tools")!).getByRole("button", { name: "Edit" })).toBeTruthy();
   });
 
   it("shows the range rows and fetches no day without a day", async () => {
@@ -776,8 +1061,8 @@ describe("ActivityPage", () => {
     at();
     renderApp(<ActivityPage />);
     await loaded();
-    act(() => { openDrawer("d-tools"); });
-    expect(within(document.getElementById("d-tools")!).getByRole("button", { name: "Edit" })).toBeTruthy();
+    await openTab("Tools and MCP");
+    expect(within(document.getElementById("tools")!).getByRole("button", { name: "Edit" })).toBeTruthy();
     expect(fetched().some(u => String(u).startsWith("/api/day"))).toBe(false);
   });
 
@@ -788,15 +1073,34 @@ describe("ActivityPage", () => {
     renderApp(<ActivityPage />);
     await loaded();
     await userEvent.click(attention().getByRole("button", { name: "See tests" }));
-    const drawer = document.getElementById("d-tests")!;
-    expect(isOpen("d-tests")).toBe(true);
-    expect(drawer.contains(document.activeElement)).toBe(true);
-    expect(drawer.querySelector("h2")!.textContent).toMatch(/Failed test runs\s*4/);
-    const row = within(drawer.querySelector("tbody")!);
+    const list = document.getElementById("tests")!;
+    expect(selectedTab()).toBe("Loops and tests");
+    expect(document.activeElement).toBe(list.querySelector("h3"));
+    expect(list.querySelector("h3")!.textContent).toMatch(/Failed test runs\s*4/);
+    const row = within(list.querySelector("tbody")!);
     expect(row.getByText("npm test")).toBeTruthy();
     expect(row.getByRole("button", { name: "Fix upload" })).toBeTruthy();
     expect(row.getByRole("link", { name: "Open in Errors" }).getAttribute("href")).toBe("/errors?project=bar&range=30&source=codex&ex=t9");
-    expect(within(screen.getByRole("navigation", { name: "Page sections" })).getByRole("link", { name: "Tests" }).getAttribute("href")).toBe("#d-tests");
+  });
+
+  it("previews the five newest loops and failed runs, and shows all of them in place", async () => {
+    const loops = Array.from({ length: 12 }, (_, k) => ({ ...usage.error_loops[0]!, first_id: `l${k}`, tool: `Tool${k}` }));
+    const tests = Array.from({ length: 50 }, (_, k) => ({ id: `t${k}`, session_id: "s1", title: null, project: "bar", source: "claude" as const, command: `cmd${k}`, ts: null }));
+    serve({ ...usage, totals: { ...usage.totals, error_loops: 12, tests_failed: 60 }, error_loops: loops, failed_tests: tests });
+    at("?range=30&tab=loops");
+    renderApp(<ActivityPage />);
+    await loaded();
+    const rows = (id: string) => document.querySelectorAll(`#${id} tbody tr`).length;
+    expect([rows("loops"), rows("tests")]).toEqual([5, 5]);
+    const all = screen.getByRole("button", { name: "Show all 12" });
+    expect(all.getAttribute("aria-expanded")).toBe("false");
+    await userEvent.click(all);
+    expect(rows("loops")).toBe(12);
+    expect(screen.getByRole("button", { name: "Show fewer" }).getAttribute("aria-expanded")).toBe("true");
+    // The payload carries the newest 50 of 60: the button and the list say so.
+    await userEvent.click(screen.getByRole("button", { name: "Show the 50 newest runs" }));
+    expect(rows("tests")).toBe(50);
+    expect(within(document.getElementById("tests")!).getByText(/Showing the 50 newest of 60\./)).toBeTruthy();
   });
 
   it("lists a failed test run with no time", async () => {
@@ -805,11 +1109,11 @@ describe("ActivityPage", () => {
     at();
     renderApp(<ActivityPage />);
     await loaded();
-    act(() => { openDrawer("d-tests"); });
-    const row = within(document.getElementById("d-tests")!.querySelector("tbody")!);
+    await openTab("Loops and tests");
+    const row = within(document.getElementById("tests")!.querySelector("tbody")!);
     expect(row.getByText("npm test")).toBeTruthy();
     expect(row.getByRole("link", { name: "Open in Errors" }).getAttribute("href")).toBe("/errors?project=bar&range=30&source=claude&ex=t8");
-    expect(document.querySelector("#d-tests td.when")!.textContent).toBe("–");
+    expect(document.querySelector("#tests td.when")!.textContent).toBe("–");
   });
 
   it("names an error loop's session by its title, with the short id below", async () => {
@@ -818,8 +1122,8 @@ describe("ActivityPage", () => {
     at();
     renderApp(<ActivityPage />);
     await loaded();
-    act(() => { openDrawer("d-loops"); });
-    const drawer = within(document.getElementById("d-loops")!);
+    await openTab("Loops and tests");
+    const drawer = within(document.getElementById("loops")!);
     const cell = drawer.getByRole("button", { name: "Fix flaky upload test" });
     expect(cell.getAttribute("title")).toBe("Fix flaky upload test");
     expect(cell.nextElementSibling!.textContent).toBe("#" + first!.session_id.slice(0, 8));
@@ -843,36 +1147,36 @@ describe("ActivityPage", () => {
     at();
     renderApp(<ActivityPage />);
     await loaded();
-    act(() => { openDrawer("d-tools"); });
+    await openTab("Tools and MCP");
     const item = (await attention().findByText("1 tool")).closest("li")!;
     expect(item.textContent).toMatch(/worst WebFetch \(25%\)/);
-    const first = () => document.querySelector("#d-tools tbody tr :is(th, td)")!.textContent;
+    const first = () => document.querySelector("#tools tbody tr :is(th, td)")!.textContent;
     expect(first()).toBe("Edit");
     // A chosen sort gives way to flaky tools first.
-    const failed = within(document.getElementById("d-tools")!).getByRole("button", { name: "Failed" });
+    const failed = within(document.getElementById("tools")!).getByRole("button", { name: "Failed" });
     await userEvent.click(failed); await userEvent.click(failed);
     expect(first()).toBe("Skill");
     await userEvent.click(within(item).getByRole("button", { name: "See tools" }));
     expect(first()).toBe("WebFetch");
-    expect(document.querySelector("#d-tools th[aria-sort]")).toBeNull();
+    expect(document.querySelector("#tools th[aria-sort]")).toBeNull();
   });
 
   it("selecting a day on the work chart lists that day's sessions", async () => {
     serve(usage);
     at();
     renderApp(<ActivityPage />);
-    const chart = await screen.findByRole("group", { name: /^Commits and errors per 100 tool calls per day, 2 days/ });
+    const chart = await screen.findByRole("group", { name: /^Commits per day, with errors per 100 tool calls on a track below, 2 days/ });
     act(() => chart.focus());
     fireEvent.keyDown(chart, { key: "End" });
     expect(screen.getByText("Nov 5, 2026: 0 commits, 1 prompt, 1 session, 0 failed calls")).toBeTruthy();
     fireEvent.keyDown(chart, { key: "ArrowLeft" });
     fireEvent.keyDown(chart, { key: "Enter" });
-    expect(isOpen("d-sessions")).toBe(true);
-    expect(screen.getByText("Active on Nov 4, 2026")).toBeTruthy();
+    expect(selectedTab()).toBe("Sessions");
+    expect(document.querySelector("#work .daychip")!.textContent).toBe("Nov 4✕");
     await waitFor(() => expect(fetched()).toContain("/api/sessions?range=30&day=2026-11-04"));
     // The bars follow the chosen count.
     await userEvent.click(within(screen.getByRole("group", { name: "Chart metric" })).getByRole("button", { name: "Prompts" }));
-    expect(screen.getByRole("group", { name: /^Prompts and errors per 100 tool calls per day/ })).toBeTruthy();
+    expect(screen.getByRole("group", { name: /^Prompts per day/ })).toBeTruthy();
   });
 
   it("opens a session sheet from the sessions table and closes it again", async () => {
@@ -880,8 +1184,8 @@ describe("ActivityPage", () => {
     at();
     renderPage(<ActivityPage />);
     await loaded();
-    act(() => { openDrawer("d-sessions"); });
-    const row = await within(document.getElementById("d-sessions")!).findByRole("button", { name: "#s1" });
+    await openTab("Sessions");
+    const row = await within(document.getElementById("sessions")!).findByRole("button", { name: "#s1" });
     await userEvent.click(row);
     expect(location.search).toBe("?range=30&session=s1");
     const dlg = within(document.querySelector("dialog")!);
@@ -895,16 +1199,16 @@ describe("ActivityPage", () => {
     at();
     renderPage(<ActivityPage />);
     await loaded();
-    act(() => { openDrawer("d-tools"); });
-    const row = document.querySelector<HTMLElement>('#d-tools tr[data-v="Bash"]')!;
+    await openTab("Tools and MCP");
+    const row = document.querySelector<HTMLElement>('#tools tr[data-v="Bash"]')!;
     await userEvent.click(row.querySelector("button")!);
-    expect(location.search).toBe("?range=30&tool=Bash");
+    expect(location.search).toBe("?range=30&tab=tools&tool=Bash");
     const dlg = within(document.querySelector("dialog")!);
     expect(await dlg.findByText("Recent calls")).toBeTruthy();
     // The browser turns Escape on a modal dialog into a cancel event.
     act(() => { document.querySelector("dialog")!.dispatchEvent(new Event("cancel", { cancelable: true })); });
-    await waitFor(() => expect(location.search).toBe("?range=30")); // closing goes Back over the entry the sheet pushed
-    await waitFor(() => expect(document.activeElement).toBe(within(document.querySelector<HTMLElement>('#d-tools tr[data-v="Bash"]')!).getByRole("button", { name: "Bash" })));
+    await waitFor(() => expect(location.search).toBe("?range=30&tab=tools")); // closing goes Back over the entry the sheet pushed
+    await waitFor(() => expect(document.activeElement).toBe(within(document.querySelector<HTMLElement>('#tools tr[data-v="Bash"]')!).getByRole("button", { name: "Bash" })));
   });
 
   it("opens MCP server and skill sheets from the extensions drawer", async () => {
@@ -912,14 +1216,14 @@ describe("ActivityPage", () => {
     at();
     renderPage(<ActivityPage />);
     await loaded();
-    act(() => { openDrawer("d-ext"); });
-    const ext = within(document.getElementById("d-ext")!);
+    await openTab("Tools and MCP");
+    const ext = within(document.getElementById("ext")!);
     await userEvent.click(ext.getByRole("button", { name: "srv" }));
-    expect(location.search).toBe("?range=30&mcp=srv");
+    expect(location.search).toBe("?range=30&tab=tools&mcp=srv");
     expect((await within(document.querySelector("dialog")!).findByRole("heading", { level: 2 })).textContent).toBe("MCP serversrv");
     await userEvent.click(within(document.querySelector("dialog")!).getByRole("button", { name: "Close" }));
     await userEvent.click(ext.getByRole("button", { name: "review" }));
-    expect(location.search).toBe("?range=30&skill=review");
+    expect(location.search).toBe("?range=30&tab=tools&skill=review");
   });
 
   it("opens the palette over an open tool sheet, and Escape leaves the sheet open", async () => {

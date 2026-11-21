@@ -1,5 +1,6 @@
 // Checks in a real browser that Context's tabs and first plotted mark are on the first screen at 1440 x 900, with every tip rule
-// firing, before and after "Show N more" expands the strip. The jsdom tests cannot lay a page out; this can. It runs locally, not in
+// firing, before and after "Show N more" expands the strip; and that Activity's work chart and workbench tab list are, over 30 days
+// (bars by day) and all time (bars by week). The jsdom tests cannot lay a page out; this can. It runs locally, not in
 // CI. It needs the demo server and the pinned Playwright:
 //   cd web && npm ci && npm run build;  cd tools/demo && npm ci && uv run seed.py && uv run serve.py   (DEMO_PORT moves it)
 //   node firstscreen.mjs        exits 1, naming what falls outside the window
@@ -53,6 +54,18 @@ try {
       const expanded = verdict(await measure(page), `${scheme}, Show more expanded to ${all} tips`);
       console.log(expanded.line);
       failed ||= !expanded.ok;
+    }
+    // Activity's Overview: the work chart and the tab list.
+    for (const range of ["30", "0"]) {
+      await page.goto(`${BASE}/usage?range=${range}`);
+      await page.waitForSelector("#work .bar-seg");
+      const got = await page.evaluate(() => {
+        const box = sel => { const r = document.querySelector(sel)?.getBoundingClientRect(); return r ? { top: r.top, bottom: r.bottom } : null; };
+        return { tabs: box("#workbench [role=tablist]"), mark: box("#work .chart") };
+      });
+      const v = verdict(got, `${scheme}, Activity over ${range === "0" ? "all time" : `${range} days`}`);
+      console.log(v.line.replace("first plotted mark", "work chart"));
+      failed ||= !v.ok;
     }
     await page.context().close();
   }

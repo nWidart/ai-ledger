@@ -112,7 +112,7 @@ If the figure did not move:
 ## Related
 
 - [Project](/ai-ledger/pages/project/): every block read here and how to open the page.
-- [Activity](/ai-ledger/pages/activity/#project-metrics): **Project metrics** and the project sheet.
+- [Activity](/ai-ledger/pages/activity/#projects): **Project metrics** and the project sheet.
 - [Cost](/ai-ledger/pages/cost/): **What stands out** and **Project spend and change**.
 - [Metric glossary](/ai-ledger/reference/glossary/#project): the figures that show only on Project.
 - [Cost estimates](/ai-ledger/concepts/cost-estimates/): why the cost figures are estimates.

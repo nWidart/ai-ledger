@@ -48,10 +48,10 @@ Read the **Needs attention** card. It is off when its title reads "N things to l
 | "N tools fail over 10% of calls" (counted over tools with at least 20 calls) | [Kill repeated tool failures](/ai-ledger/improve/tool-failures/) |
 | "N failed test runs of M." | [Kill repeated tool failures](/ai-ledger/improve/tool-failures/) |
 
-Then read two **Work health** tiles. Each compares the 7 days with the 7 days before, and the app marks the tile when the change is for the worse:
+Then read the **Work health** tile **Errors per 100 calls** and the prompts interrupted line under the heading. Each compares the 7 days with the 7 days before, and the app marks it when the change is for the worse:
 
 - **Errors per 100 calls** reads "up from": open [Kill repeated tool failures](/ai-ledger/improve/tool-failures/).
-- **Prompts interrupted** reads "up from": open [Babysit agents less](/ai-ledger/improve/babysit-less/).
+- The prompts interrupted line under the heading reads "up from": open [Babysit agents less](/ai-ledger/improve/babysit-less/).
 
 ### 2. Cost (2 minutes)
 

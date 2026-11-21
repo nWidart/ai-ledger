@@ -3,6 +3,9 @@ import type { DayView } from "../api";
 
 export default {
  "day": "2026-11-04",
+ "days": 1,
+ "start": "2026-11-04",
+ "end": "2026-11-04",
  "tools": [
   {
    "tool": "Edit",
@@ -63,6 +66,34 @@ export default {
    "failure_rate": 0.5
   }
  ],
+ "by_project": [
+  {
+   "project": "foo",
+   "sessions": 1,
+   "tokens": 12000000,
+   "cost": null,
+   "unpriced": 2,
+   "cache_read": 8000000,
+   "prompt_tokens": 11000000,
+   "cache_1h": 500000,
+   "cache_writes": 1000000,
+   "sub_tokens": 1000000,
+   "sub_cost": null,
+   "calls": 10,
+   "errors": 6,
+   "commits": 1,
+   "prompts": 2,
+   "error_loops": 1,
+   "cache_hit_ratio": 0.727272727,
+   "write_1h_share": 0.5,
+   "subagent_share": 0.083333333,
+   "subagent_cost_share": null,
+   "tokens_per_commit": 12000000.0,
+   "cost_per_commit": null,
+   "errors_per_100_calls": 60.0,
+   "tokens_per_prompt": 6000000.0
+  }
+ ],
  "error_loops": [
   {
    "session_id": "s1",
@@ -74,5 +105,17 @@ export default {
    "title": null
   }
  ],
- "error_loops_total": 1
+ "error_loops_total": 1,
+ "failed_tests": [
+  {
+   "id": "t07",
+   "session_id": "s1",
+   "project": "foo",
+   "source": "claude",
+   "command": "",
+   "ts": "2026-11-04T10:07:00.000Z",
+   "title": null
+  }
+ ],
+ "tests_failed": 1
 } satisfies DayView;

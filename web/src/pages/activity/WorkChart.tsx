@@ -8,7 +8,9 @@ import { HowMeasured } from "../../components/HowMeasured";
 import type { Kind } from "../cost/cost";
 import { busy, failRate, METRICS, monday, workBuckets, workKinds, workStack, type WorkMetric } from "./work";
 
-const H = 240;
+const H = 216;
+// The rate track under the bars: its height and the gap between the two tracks, before scaling with the text.
+const RATE_H = 36, TRACK_GAP = 16;
 const BAR = "var(--series-1)", FAIL = "var(--critical)";
 
 /** The days of a view: a week bar it cuts short is partial. */
@@ -25,24 +27,35 @@ export const bucketLabel = (day: string, week: boolean, long = false, v?: WorkVi
 const bucketText = (p: DailyWorkRow) => `${plural(p.commits, "commit")}, ${plural(p.prompts, "prompt")}, ${plural(p.sessions, "session")}, `
   + `${plural(p.failed_calls, "failed call")}${p.calls ? ` of ${num(p.calls)}, ${num(failRate(p), 1)} per 100` : ""}`;
 
+/** The id of the chart's focusable box. */
+export const CHART_ID = "work-chart";
+
+/** The chart's selection: a day, or a week by its Monday. */
+export interface WorkPick { day: string; week: boolean }
+
 export interface WorkPanelProps {
   d: UsagePayload;
   metric: WorkMetric;
   onMetric: (m: WorkMetric) => void;
-  /** A day was selected (click, or Enter while reading with the arrow keys). Weeks cannot be. */
-  onDay: (day: string) => void;
+  /** The selection (a day, or a week by its Monday); none for the whole range. A link can name a day on a chart by week or
+   *  a week on a chart by day: the chip still names it, and no bar is marked. */
+  selected: WorkPick | null;
+  /** A bucket was selected (click, or Enter while reading with the arrow keys): a day, or a week on a chart by week. None:
+   *  the chart takes no pick (it still shows the previous view while a new one loads). */
+  onPick?: (p: WorkPick) => void;
+  /** The selection was cleared, by its chip or Escape on the chart. */
+  onClear: () => void;
 }
 
 /** The work chart in the payload's buckets, stacked by project. */
-export function WorkPanel({ d, metric, onMetric, onDay }: WorkPanelProps) {
+export function WorkPanel({ d, ...props }: WorkPanelProps) {
   useColors();
   const rows = useMemo(() => workBuckets(d), [d]);
-  const kinds = workKinds(d, rows, metric);
-  return <WorkBars rows={rows} week={d.work_bucket === "week"} view={d} kinds={kinds} stack={workStack(rows, d.work_projects, kinds, metric)}
-    metric={metric} onMetric={onMetric} onDay={onDay} />;
+  const kinds = workKinds(d, rows, props.metric);
+  return <WorkBars rows={rows} week={d.work_bucket === "week"} view={d} kinds={kinds} stack={workStack(rows, d.work_projects, kinds, props.metric)} {...props} />;
 }
 
-const MARGIN = { t: 22, r: 44, b: 26, l: 52 }; // room on the right for the rate axis
+const MARGIN = { t: 20, r: 16, b: 24 + TRACK_GAP + RATE_H, l: 52 }; // room under the bars for the rate track and the bucket labels
 
 interface WorkBarsProps extends Omit<WorkPanelProps, "d"> {
   rows: DailyWorkRow[];
@@ -53,14 +66,23 @@ interface WorkBarsProps extends Omit<WorkPanelProps, "d"> {
   stack: Record<string, number>[];
 }
 
-/** Work per day or week: the chosen count as bars (stacked by project when there are several), errors per 100 tool calls
- *  as a line against its own right-hand axis. */
-function WorkBars({ rows, week, view, kinds, stack, metric, onMetric, onDay }: WorkBarsProps) {
+/** The rate track's scale: its top (a nice value over the highest steady rate) and the digits its label needs. Buckets with few
+ *  calls (when others have enough) are left out, so one quiet day's 2 of 4 can't flatten the busy days. */
+export function rateScale(rates: readonly (number | null)[], low: readonly boolean[]): { top: number; digits: number } {
+  const top = niceStep(Math.max(...rates.map((r, i) => (low[i] ? 0 : r ?? 0)), 0) * 1.08 || 1);
+  return { top, digits: Math.max(0, -Math.floor(Math.log10(top))) };
+}
+
+/** Work per day or week on two tracks over one x-axis: the chosen count as bars (stacked by project when there are several),
+ *  and under them errors per 100 tool calls as a line against its own scale. */
+function WorkBars({ rows, week, view, kinds, stack, metric, onMetric, selected, onPick, onClear }: WorkBarsProps) {
   const box = useRef<HTMLDivElement>(null), tip = useRef<HTMLDivElement>(null), svg = useRef<SVGSVGElement>(null);
   const W = useWidth(box);
   // The bar read (an index) is state; the pointer's position is not, so a move inside one bar re-renders nothing: the
   // tooltip is only moved by hand.
   const [at, setAt] = useState<number | null>(null), pos = useRef({ x: 0, y: 0 });
+  // What the last pick or clear did, read out once.
+  const [said, setSaid] = useState("");
   const place = () => {
     if (!tip.current || !box.current) return;
     const p = tipAt(box.current, tip.current, pos.current.x, pos.current.y);
@@ -68,20 +90,26 @@ function WorkBars({ rows, week, view, kinds, stack, metric, onMetric, onDay }: W
   };
   useEffect(() => setAt(null), [rows, metric]);
   useLayoutEffect(() => { if (at != null) place(); }, [at]);
+  // Escape dismisses an open tooltip wherever the focus is: the pointer can open it while the focus is elsewhere.
+  useEffect(() => {
+    if (at == null) return;
+    const off = (ev: globalThis.KeyboardEvent) => { if (ev.key === "Escape") setAt(null); };
+    document.addEventListener("keydown", off);
+    return () => document.removeEventListener("keydown", off);
+  }, [at]);
 
   const M = METRICS.find(x => x.k === metric)!, unit = week ? "week" : "day";
   const ts = textScale();
   const a = useMemo(() => dayAxis(W, H, rows.length, Math.max(...rows.map(p => p[metric]), 0), niceStep, MARGIN, ts), [W, rows, metric, ts]);
   // Week labels are longer, so fewer of them fit.
   const every = week ? Math.max(1, Math.ceil(rows.length / Math.max(2, Math.floor(a.iw / (100 * ts))))) : a.every;
-  // The rate axis has as many steps as the count axis, so its ticks sit on the same grid lines.
-  // No bar with a tool call: no rate to draw, so no line, axis or legend key.
-  // A bar with few calls (when others have enough) has a noisy rate: it gets a hollow dot and is left out of the scale, so one
-  // quiet day's 2 of 4 can't flatten the busy days. The line still runs through it; a rate above the axis stops at its top.
-  const rates = rows.map(failRate), hasRate = rates.some(r => r != null), n = Math.round(a.yMax / a.step);
+  // The rate track sits under the bars: rt its top, rh its height. No bucket with a tool call: no rate to draw, so no track.
+  // A bucket with few calls (when others have enough) gets a hollow dot and is left out of the scale. The line still runs
+  // through it; a rate above the scale stops at the track's top.
+  const rt = a.m.t + a.ih + TRACK_GAP * ts, rh = RATE_H * ts;
+  const rates = rows.map(failRate), hasRate = rates.some(r => r != null);
   const low = useMemo(() => lowVolume(rows.map(p => p.calls)), [rows]), hasLow = low.some(Boolean);
-  const rStep = niceStep((Math.max(...rates.map((r, i) => (low[i] ? 0 : r ?? 0)), 0) * 1.08 || 1) / n), ry = (v: number) => a.m.t + a.ih - Math.min(v, rStep * n) / (rStep * n) * a.ih;
-  const rDigits = Math.max(0, -Math.floor(Math.log10(rStep))); // a step of 0.5 reads "0.5", not "1"
+  const rs = rateScale(rates, low), ry = (v: number) => rt + rh - Math.min(v, rs.top) / rs.top * rh;
   const line = rates.map((v, i) => (v == null ? "" : `${rates[i - 1] != null ? "L" : "M"}${a.cx(i).toFixed(1)},${ry(v).toFixed(1)}`)).join("");
   const lone = rates.flatMap((v, i) => (v != null && !low[i] && rates[i - 1] == null && rates[i + 1] == null ? [i] : [])); // no line reaches these
   const plain = useMemo<Kind>(() => ({ k: metric, label: M.label, c: BAR }), [metric, M.label]);
@@ -90,18 +118,32 @@ function WorkBars({ rows, week, view, kinds, stack, metric, onMetric, onDay }: W
     (kinds.length ? kinds.map((k): [Kind, number] => [k, stack[i]?.[k.k] ?? 0]) : [[plain, rows[i]![metric]] as [Kind, number]]).filter(([, v]) => v > 0),
   [kinds, stack, plain, rows, metric]);
   const peak = rows.reduce((b, p, i) => (p[metric] > rows[b]![metric] ? i : b), 0), pk = rows[peak];
+  const sel = selected && selected.week === week ? rows.findIndex(p => p.day === selected.day) : -1;
+  const name = (day: string) => bucketLabel(day, week, true, view);
   const indexAt = (clientX: number) => {
     const r = svg.current!.getBoundingClientRect(), px = (clientX - r.left) * W / r.width;
     return Math.max(0, Math.min(rows.length - 1, Math.floor((px - a.m.l) / a.bw)));
   };
-  const pick = (i: number) => { const p = rows[i]; if (!week && p && busy(p)) { setAt(null); onDay(p.day); } };
+  const pick = (i: number) => {
+    const p = rows[i];
+    if (!p || !busy(p) || !onPick) return;
+    setAt(null);
+    setSaid(`${name(p.day)} selected; the tabs below show its ${week ? "days" : "figures"}.`);
+    onPick({ day: p.day, week });
+  };
+  const clear = () => { setSaid("Selection cleared; the tabs below show the whole range."); onClear(); };
   const onMove = (ev: PointerEvent) => {
     const i = indexAt(ev.clientX);
     pos.current = { x: ev.clientX, y: ev.clientY };
     if (i === at) place(); else setAt(i); // a new bar: the layout effect places the tooltip once it shows that bar
   };
   const onKey = (ev: KeyboardEvent) => {
-    if (ev.key === "Escape") return setAt(null);
+    // Escape ends a reading first, then clears the selection. Handled here only: Escape elsewhere (a sheet) keeps it.
+    if (ev.key === "Escape") {
+      if (at != null) return setAt(null);
+      if (selected) { ev.preventDefault(); clear(); }
+      return;
+    }
     if (ev.key === "Enter" && at != null) { ev.preventDefault(); return pick(at); }
     const step = ({ ArrowLeft: -1, ArrowRight: 1, Home: -Infinity, End: Infinity } as Record<string, number>)[ev.key];
     if (step == null || !rows.length) return;
@@ -130,57 +172,61 @@ function WorkBars({ rows, week, view, kinds, stack, metric, onMetric, onDay }: W
       })}</g>}
     </g>;
   }), [rows, a, every, week, parts, ts]);
-  const ticks: number[] = [];
+  const n = Math.round(a.yMax / a.step), ticks: number[] = [];
   for (let v = 0; v <= n; v++) ticks.push(v);
   const cur = at != null ? rows[at] : undefined, curParts = at != null && kinds.length ? parts(at).reverse() : [];
-  const name = (day: string) => bucketLabel(day, week, true, view);
-  const what = `${M.label}${kinds.length ? " by project" : ""}${hasRate ? " and errors per 100 tool calls" : ""} per ${unit}, ${plural(rows.length, unit)}`;
+  const what = `${M.label}${kinds.length ? " by project" : ""} per ${unit}${hasRate ? ", with errors per 100 tool calls on a track below" : ""}, ${plural(rows.length, unit)}`;
   const label = pk && pk[metric] > 0
     ? `${what}, ${M.label.toLowerCase()} peaking at ${num(pk[metric])} ${week ? "in the week of" : "on"} ${dayLabel(pk.day, true)}${week ? weekCut(pk.day, view) : ""}. `
-      + (week ? "Use the left and right arrow keys to read each week. Choose a shorter range to pick a day." : "Use the left and right arrow keys to read each day and Enter to list its sessions.")
+      + `Use the left and right arrow keys to read each ${unit}, Enter to select it and Escape to clear the selection.`
     : `${what}, no ${M.label.toLowerCase()} yet.`;
+  const full = (y0: number, y1: number) => ({ y: y0, height: y1 - y0 });
+  const band = full(a.m.t, hasRate ? rt + rh : a.m.t + a.ih);
 
   return (
     <section className="panel sect work" id="work" aria-labelledby="workTitle">
       <div className="chart-head">
         <div><h2 id="workTitle">Work per {unit}</h2>
-          <div className="hint">{M.label}{kinds.length ? " by project" : ""} per {week ? "week" : "day"}{hasRate
-            ? ", errors per 100 tool calls on the right axis" : ""}. {week ? "Choose a shorter range to pick a day." : "Select a day to list its sessions."}
+          <div className="hint">{M.label}{kinds.length ? " by project" : ""} per {unit}{hasRate ? ", errors per 100 tool calls below" : ""}. Select a {unit} to narrow the tabs.
             <HowMeasured what={`work per ${unit}`}>{kinds.length ? "Projects with a color of their own are drawn apart, the rest in Other. " : ""}{week
-              ? "Weeks start on Monday. " : "With the keyboard, focus the chart, use the arrow keys and press Enter to list a day's sessions. "}
-              {hasRate ? "The line is the failed tool calls per 100 calls, against its own axis." : ""}</HowMeasured></div></div>
-        <div className="seg" role="group" aria-label="Chart metric">
-          {METRICS.map(x => <button key={x.k} type="button" aria-pressed={x.k === metric} onClick={() => onMetric(x.k)}>{x.label}</button>)}
+              ? "Weeks start on Monday. " : ""}With the keyboard, focus the chart, use the arrow keys and press Enter to select a {unit}; Escape clears it.
+              {hasRate ? " The lower track is the failed tool calls per 100 calls, against its own scale." : ""}</HowMeasured></div></div>
+        <div className="head-side">
+          {selected && <span className="daychip"><span>{bucketLabel(selected.day, selected.week)}</span>
+            <button type="button" aria-label={`Clear ${bucketLabel(selected.day, selected.week, true).replace(/^W/, "w")}`} title="Show the whole range"
+              onClick={() => { clear(); box.current?.focus(); }}>✕</button></span>}
+          <div className="seg" role="group" aria-label="Chart metric">
+            {METRICS.map(x => <button key={x.k} type="button" aria-pressed={x.k === metric} onClick={() => onMetric(x.k)}>{x.label}</button>)}
+          </div>
         </div>
       </div>
       <div className="legend" aria-hidden="true">
         {(kinds.length ? kinds : [plain]).map(k => <span key={k.k} className="key"><i style={{ background: k.c }} />{k.label}</span>)}
-        {hasRate && <span className="key"><i className="line fail" />Errors per 100 calls (right axis)</span>}
+        {hasRate && <span className="key"><i className="line fail" />Errors per 100 calls (lower track)</span>}
         {hasLow && <span className="key"><i className="low" />{`Under ${LOW_CALLS} calls`}</span>}
       </div>
-      <div className="chart" ref={box} tabIndex={0} role="group" aria-label={label} onKeyDown={onKey} onBlur={() => setAt(null)}>
+      <div className="chart" id={CHART_ID} ref={box} tabIndex={0} role="group" aria-label={label} onKeyDown={onKey} onBlur={() => setAt(null)}>
         <svg ref={svg} viewBox={`0 0 ${W} ${H}`} aria-hidden="true">
           {ticks.map(t => <g key={t}><line x1={a.m.l} x2={W - a.m.r} y1={a.y(t * a.step)} y2={a.y(t * a.step)} stroke="var(--grid)" />
-            <text x={a.m.l - 6 * ts} y={a.y(t * a.step) + 4 * ts} textAnchor="end" fontSize={11 * ts} fill="var(--text-muted)">{num(t * a.step)}</text>
-            {hasRate && <text className="rtick" x={W - a.m.r + 6 * ts} y={ry(t * rStep) + 4 * ts} fontSize={11 * ts} fill="var(--text-muted)">{num(t * rStep, rDigits)}</text>}</g>)}
-          {hasRate && roomForLabels(a) && <text transform={`translate(${W - 6 * ts},${a.m.t + a.ih / 2}) rotate(90)`} textAnchor="middle" fontSize={11 * ts} fill="var(--text-muted)">Errors per 100 calls</text>}
+            <text x={a.m.l - 6 * ts} y={a.y(t * a.step) + 4 * ts} textAnchor="end" fontSize={11 * ts} fill="var(--text-muted)">{num(t * a.step)}</text></g>)}
+          {sel >= 0 && <rect className="selb" x={a.m.l + sel * a.bw} width={a.bw} {...band} fill="var(--accent)" opacity=".12" />}
           {bars}
-          {/* The rate line, haloed in the surface color so it stays readable across the bars. */}
-          {hasRate && <>
-            <path d={line} fill="none" stroke="var(--surface-1)" strokeWidth="4.5" strokeLinejoin="round" strokeLinecap="round" />
+          {hasRate && <g className="rtrack">
+            {[0, rs.top].map(v => <g key={v}><line x1={a.m.l} x2={W - a.m.r} y1={ry(v)} y2={ry(v)} stroke="var(--grid)" />
+              {/* The top label hangs under its line, clear of the bars' 0 above it. */}
+              <text className="rtick" x={a.m.l - 6 * ts} y={ry(v) + (v ? 9 : 3) * ts} textAnchor="end" fontSize={11 * ts} fill="var(--text-muted)">{num(v, v ? rs.digits : 0)}</text></g>)}
             <path className="rate" d={line} fill="none" stroke={FAIL} strokeWidth="1.75" strokeLinejoin="round" strokeLinecap="round" />
-          </>}
-          {lone.map(i => <circle key={i} className="rate" cx={a.cx(i)} cy={ry(rates[i]!)} r="2.5" fill={FAIL} stroke="var(--surface-1)" strokeWidth="1.5" />)}
-          {rates.map((r, i) => low[i] && r != null && <circle key={"lo" + i} className="lowc" cx={a.cx(i)} cy={ry(r)} r="3" fill="var(--surface-1)" stroke={FAIL} strokeWidth="1.5" />)}
+            {lone.map(i => <circle key={i} className="rate" cx={a.cx(i)} cy={ry(rates[i]!)} r="2.5" fill={FAIL} stroke="var(--surface-1)" strokeWidth="1.5" />)}
+            {rates.map((r, i) => low[i] && r != null && <circle key={"lo" + i} className="lowc" cx={a.cx(i)} cy={ry(r)} r="3" fill="var(--surface-1)" stroke={FAIL} strokeWidth="1.5" />)}
+          </g>}
           {pk && pk[metric] > 0 && roomForLabels(a) && (() => {
             const { x: lx, anchor } = peakLabelAt(a, peak);
-            // A wide halo, so the rate line never strikes through the label.
             return <text x={lx} y={a.y(pk[metric]) - 7 * ts} textAnchor={anchor} fontSize={11 * ts} fontWeight="600" fill="var(--text-primary)"
               stroke="var(--surface-1)" strokeWidth="7" strokeLinejoin="round" paintOrder="stroke">Peak {plural(pk[metric], M.one)} · {bucketLabel(pk.day, week)}</text>;
           })()}
-          {at != null && <rect x={a.m.l + at * a.bw} width={a.bw} y={a.m.t} height={a.ih} fill="var(--text-primary)" opacity=".06" />}
-          <rect x={a.m.l} y={a.m.t} width={a.iw} height={a.ih} fill="transparent" className={week ? "hit" : "hit pick"}
-            onPointerMove={onMove} onPointerLeave={() => setAt(null)} onClick={week ? undefined : ev => pick(indexAt(ev.clientX))} />
+          {at != null && <rect x={a.m.l + at * a.bw} width={a.bw} {...band} fill="var(--text-primary)" opacity=".06" />}
+          <rect x={a.m.l} width={a.iw} {...band} fill="transparent" className="hit pick"
+            onPointerMove={onMove} onPointerLeave={() => setAt(null)} onClick={ev => pick(indexAt(ev.clientX))} />
         </svg>
         <div className="tip" ref={tip} role="tooltip" style={{ display: cur ? "block" : "none" }}>{cur && <>
           <div className="muted">{name(cur.day)}</div>
@@ -193,7 +239,7 @@ function WorkBars({ rows, week, view, kinds, stack, metric, onMetric, onDay }: W
         </>}</div>
       </div>
       <div className="sr" aria-live="polite">{cur ? `${name(cur.day)}: ${bucketText(cur)}${low[at!] ? `, ${FEW_CALLS}` : ""}`
-        + (curParts.length ? `. ${M.label} by project: ${curParts.map(([k, v]) => `${k.label} ${num(v)}`).join(", ")}` : "") : ""}</div>
+        + (curParts.length ? `. ${M.label} by project: ${curParts.map(([k, v]) => `${k.label} ${num(v)}`).join(", ")}` : "") : said}</div>
       {/* The chart's text alternative: the measure per bucket (by project when stacked), its total and errors per 100 tool calls. */}
       <ChartTable><DataTable name={`${M.label}${kinds.length ? " by project" : ""} and errors per 100 tool calls per ${unit}`} region="scroll tall">
         <thead><tr><th scope="col">{week ? "Week" : "Day"}</th>{kinds.map(k => <th key={k.k} scope="col" className="num">{k.label}</th>)}

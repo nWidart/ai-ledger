@@ -57,7 +57,7 @@ See [Activity](/ai-ledger/pages/activity/).
 | Figure | Meaning | Where | Playbook |
 | --- | --- | --- | --- |
 | Commits, prompts, sessions, active days | Counts over the view, with the change against the previous period. | Heading (commits, prompts); **Sessions** tile (sessions, active days) | [Weekly review](/ai-ledger/improve/weekly-review/) |
-| Turns per prompt, tool calls per prompt | Main-thread requests, and main-thread tool calls, per prompt. | **Prompts interrupted** tile | [Babysit agents less](/ai-ledger/improve/babysit-less/) |
+| Turns per prompt, tool calls per prompt | Main-thread requests, and main-thread tool calls, per prompt. | The line under the heading | [Babysit agents less](/ai-ledger/improve/babysit-less/) |
 | N things to look at | How many of the four lines below show. | **Needs attention** | [Weekly review](/ai-ledger/improve/weekly-review/) |
 | N error loops | Error loops in the view. Marks the card **● Act**. | **Needs attention** | [Kill repeated tool failures](/ai-ledger/improve/tool-failures/) |
 | N sessions reached 80%+ of the context window | Sessions whose peak context was near the limit. | **Needs attention** | [Keep context lean](/ai-ledger/improve/lean-context/) |
@@ -65,18 +65,17 @@ See [Activity](/ai-ledger/pages/activity/).
 | N failed test runs of M | Failed test runs out of all test runs. | **Needs attention** | [Kill repeated tool failures](/ai-ledger/improve/tool-failures/) |
 | Errors per 100 calls | Failed tool calls per 100 tool calls. Marked worse when it goes up. | **Work health**; **Project metrics** | [Kill repeated tool failures](/ai-ledger/improve/tool-failures/) |
 | Test runs passed | The share of test runs that passed. Marked worse when it goes down. | **Work health** | [Kill repeated tool failures](/ai-ledger/improve/tool-failures/) |
-| Prompts interrupted | The share of prompts that were interrupted. In Claude Code, a tool call you reject counts as an interruption. Marked worse when it goes up. | **Work health** | [Babysit agents less](/ai-ledger/improve/babysit-less/) |
+| Prompts interrupted | The share and count of prompts that were interrupted. In Claude Code, a tool call you reject counts as an interruption. Marked worse when it goes up. | The line under the heading | [Babysit agents less](/ai-ledger/improve/babysit-less/) |
 | Subagents | The share of tokens that came from subagents. | **Work health**; **Project metrics** | – |
-| Median session | The median active time of a session. Its note adds the time waiting on the model and running tools, over the sessions that record it. | **Work health** | – |
-| Output speed | Output tokens per second of model time, over the sessions that record model time. Claude Code only, whole-session, subagents included. Marked worse when it goes down. | **Work health**; session sheet | – |
-| Work per day, or per week | Commits, prompts or sessions per day, with errors per 100 calls as a line. One bar per week when the view spans more than 60 days. | **Work per day** | [Weekly review](/ai-ledger/improve/weekly-review/) |
-| Prompts by hour | Prompts by weekday and hour, on the machine's clock. | **Prompts by hour** | [Stop hitting plan limits](/ai-ledger/improve/plan-limits/) |
-| Peak context | The largest request of a session, with its share of the window when that is 80% or more. | **Sessions** drawer | [Keep context lean](/ai-ledger/improve/lean-context/) |
-| Failed, Compactions, Commits, Tests | Per session: failed tool calls, compactions, commits, and test runs passed of run. | **Sessions** drawer | [Retro on one project](/ai-ledger/improve/project-retro/) |
-| Tokens / prompt | A project's tokens per prompt. | **Project metrics** drawer | [Retro on one project](/ai-ledger/improve/project-retro/) |
-| Error loops (per project) | A project's error loops. Tinted when 2 or more and above the median project. | **Project metrics** drawer | [Kill repeated tool failures](/ai-ledger/improve/tool-failures/) |
-| Calls, Failed, p50, p95 | Per tool: calls, failure rate, and the median and 95th-percentile time from call to result. | **Tools** drawer | [Kill repeated tool failures](/ai-ledger/improve/tool-failures/) |
-| Hook runs, Failed, Avg | Per hook: runs, failed runs and average time. | **MCP servers, skills and hooks** drawer | – |
+| Median session | The median active time of a session. The tile's note also gives the active time in all and, when recorded, the thinking time. | The **Sessions** tile | – |
+| Output speed | Output tokens per second of model time, over the sessions that record model time. Claude Code only, whole-session, subagents included. Its note adds the time waiting on the model and running tools, and a small line its trend. Marked worse when it goes down. | **Work health**; session sheet | – |
+| Work per day, or per week | Commits, prompts or sessions per day, with errors per 100 calls on a track under the bars. One bar per week when the view spans more than 60 days. Select a bar to narrow the tabs to its days. | **Work per day** | [Weekly review](/ai-ledger/improve/weekly-review/) |
+| Peak context | The largest request of a session, with its share of the window when that is 80% or more. | **Sessions** tab | [Keep context lean](/ai-ledger/improve/lean-context/) |
+| Failed, Compactions, Commits, Tests | Per session: failed tool calls, compactions, commits, and test runs passed of run. | **Sessions** tab | [Retro on one project](/ai-ledger/improve/project-retro/) |
+| Tokens / prompt | A project's tokens per prompt. | **Projects** tab | [Retro on one project](/ai-ledger/improve/project-retro/) |
+| Error loops (per project) | A project's error loops. Tinted when 2 or more and above the median project. | **Projects** tab | [Kill repeated tool failures](/ai-ledger/improve/tool-failures/) |
+| Calls, Failed, p50, p95 | Per tool: calls, failure rate, and the median and 95th-percentile time from call to result. | **Tools and MCP** tab | [Kill repeated tool failures](/ai-ledger/improve/tool-failures/) |
+| Hook runs, Failed, Avg | Per hook: runs, failed runs and average time. | **Tools and MCP** tab | – |
 
 ## Cost
 

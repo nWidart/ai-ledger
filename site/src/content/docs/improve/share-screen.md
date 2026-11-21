@@ -68,7 +68,7 @@ http://127.0.0.1:8765/usage?project=<name>&range=7
 
 Replace `<name>` with the project's name as the picker shows it. `/usage` is Activity, and `range=7` is the last 7 days. The navigation carries the filter to each page you open next.
 
-- Before you share, read that project's session titles in Activity's **Sessions** drawer, and its session cards in Activity's Judgments view. If one is not safe to show, do not show the pages that list session titles: Activity, Cost, Context and Project.
+- Before you share, read that project's session titles in Activity's **Sessions** tab, and its session cards in Activity's Judgments view. If one is not safe to show, do not show the pages that list session titles: Activity, Cost, Context and Project.
 - Leave **Include automated sessions** off.
 - Do not show Cost if your plan's name and price are private: the plan gauge names them.
 - Do not open the project picker or the command palette while you share: both list your other projects.

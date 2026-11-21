@@ -13,7 +13,7 @@ This playbook applies when one of these holds:
 
 - [Live](/ai-ledger/pages/live/): a session sits under **approval?** and you did not know. The app puts a session there when a shell call has had no result for more than 30 seconds.
 - Live: the rail's footer reads "N waiting for you" most times you look, or the tab title carries a count, as in `(2) Live · AI Ledger`. The count adds the sessions under **approval?** and **your turn**.
-- [Activity](/ai-ledger/pages/activity/), **Work health**: the tile **Prompts interrupted** reads "up from". The app marks the tile when the share goes up against the previous period of equal length.
+- [Activity](/ai-ledger/pages/activity/), the line under the heading: **prompts interrupted** reads "up from". The app marks it when the share goes up against the previous period of equal length.
 - Rule of thumb: **Prompts interrupted** is above 5% at **30d**.
 - Rule of thumb: on [Errors](/ai-ledger/pages/errors/), the type **User rejected the action** or **Permission / safety check denied** is among the five types with the most errors.
 
@@ -28,9 +28,9 @@ Find out why the sessions need you. Steps 1 and 2 are on Live, while you work. S
 
 1. Keep Live open in a tab for one working day. When a session moves under **approval?**, select it. The state at the start of the status strip names the call, such as "Bash pending 45s: likely waiting for your approval" (an example). The last tool row of the stream shows its command. Write the command down. The state is inferred: transcripts record no permission prompt. A shell call that the agent started with a timeout above 120 seconds never reads **approval?**, however long it runs.
 2. When a session moves under **your turn**, read the agent's last reply in your terminal. Note what it did: asked a question, asked to go on, reported the task done, or stopped part way. After 5 minutes with no new line, the session reads **idle** instead, so a session you leave waiting long drops out of **your turn**.
-3. On Activity, set the range to **30d**. Write down the **Prompts interrupted** tile and its note: "N of M prompts; N turns and N tool calls per prompt".
+3. On Activity, set the range to **30d**. Write down the line under the heading: "N% of prompts interrupted; N turns and N tool calls per prompt".
 4. On Errors, set the range to **30d** and leave **Hide noise and muted** off: on, it hides user rejections. Open the types **User rejected the action** and **Permission / safety check denied** in turn. In each type's detail, select **By message** and read the examples: they name the calls you rejected, or the calls a permission check blocked.
-5. In the Sessions drawer on Activity, open the session sheet of a session you remember stopping. Its line of figures counts its interrupted prompts. In Claude Code, a tool call you reject counts as an interrupted prompt too.
+5. In the Sessions tab on Activity, open the session sheet of a session you remember stopping. Its line of figures counts its interrupted prompts. In Claude Code, a tool call you reject counts as an interrupted prompt too.
 
 | What you see | Cause | Fix |
 | --- | --- | --- |
@@ -128,10 +128,10 @@ After 7 days of work, read:
 
 | Figure | Where | Expected |
 | --- | --- | --- |
-| **Prompts interrupted** | Activity, **Work health**, at **7d** | The tile reads "down from": the app compares the 7 days since your change with the 7 days before. |
+| **Prompts interrupted** | Activity, the line under the heading, at **7d** | It reads "down from": the app compares the 7 days since your change with the 7 days before. |
 | **User rejected the action** | Errors, the type's detail, **Before and after the fix** | **Rate lower**. Before enough calls, it reads **Not enough calls yet**: wait. |
 | **Change** of **Permission / safety check denied** | Errors, **Error types**, at **7d** | A fall. |
-| "N tool calls per prompt" | Activity, the **Prompts interrupted** note, at **7d** | Higher than your note: the agent does more per prompt. Read it with **Errors per 100 calls**: if errors rose too, the agent works more but not better. |
+| "N tool calls per prompt" | Activity, the line under the heading, at **7d** | Higher than your note: the agent does more per prompt. Read it with **Errors per 100 calls**: if errors rose too, the agent works more but not better. |
 | "N waiting for you" | Live, the rail's footer | Shows less often while you work. |
 
 If a figure did not move:
@@ -143,7 +143,7 @@ If a figure did not move:
 ## Related
 
 - [Live](/ai-ledger/pages/live/#session-states): the session states and how the app infers them.
-- [Activity](/ai-ledger/pages/activity/): **Work health** and **Needs attention**.
+- [Activity](/ai-ledger/pages/activity/): the prompts interrupted line and **Needs attention**.
 - [Errors](/ai-ledger/pages/errors/#type-detail): the type detail, **By message** and **Mark fix applied**.
 - [Metric glossary](/ai-ledger/reference/glossary/#live): the definition of each state and figure.
 - [Kill repeated tool failures](/ai-ledger/improve/tool-failures/): when the agent is stuck, not waiting.

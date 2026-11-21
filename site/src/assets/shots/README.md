@@ -10,11 +10,10 @@ Only the shots a page shows are kept: a shot no page references is deleted, and 
 
 | Name | What it shows | Page |
 | --- | --- | --- |
-| `tour-overview` | The first screen of Activity: header, filters, what needs attention, the vitals row. Still for the `tour` GIF. | Home (tour GIF) |
+| `tour-overview` | The first screen of Activity: header, filters, what needs attention, the work chart, the vitals row and the workbench tabs. Still for the `tour` GIF. | Home (tour GIF) |
 | `activity-attention` | "Needs attention": the short list of things to look at (error loops, sessions near the window, failing tools, failed tests). | Activity, First tour |
-| `activity-vitals` | The work-health row of figures. | Activity |
-| `activity-work` | "Work per day": commits per day by project with errors per 100 calls on the right axis. | Activity |
-| `activity-hours` | "Prompts by hour": when the work happens. | Activity |
+| `activity-vitals` | The work-health row of tiles. | Activity |
+| `activity-work` | "Work per day": commits per day by project, with errors per 100 calls on a track under the bars. | Activity |
 | `cost-overview` | The heading, the filters and the plan gauge. | Cost |
 | `cost-spend` | "Estimated cost per day", stacked by project. | Cost |
 | `cost-projects` | "Project spend and change": trend, spend, change, cost per commit and cache hit per project. | Cost |
@@ -50,6 +49,6 @@ Only the shots a page shows are kept: a shot no page references is deleted, and 
 | `live-strip` | The status strip above the stream: state, context meter, figures, plan limits, the pulse, the directory and Copy resume. | Live |
 | `live-wall` | Wall view: one tile per session. | Live |
 | `everywhere-palette` | The command palette, searching `atlas`: a project, its page and its sessions. | Command palette |
-| `everywhere-context-menu` | The right-click menu on a project row in Activity's Project metrics drawer. | Context menu |
+| `everywhere-context-menu` | The right-click menu on a project row in Activity's Projects tab. | Context menu |
 
 All project names are the demo store's (`atlas-api`, `pixel-studio`, `ledger-web`, `infra-scripts`, `docs-site`), from `tools/demo/seed.py`.

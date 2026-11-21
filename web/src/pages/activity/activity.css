@@ -11,7 +11,7 @@
 :is(.pg-activity, .pg-judgments) .top { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px 32px; align-items: end; margin-bottom: 20px; }
 :is(.pg-activity, .pg-judgments) .top-side { display: flex; flex-direction: column; align-items: flex-end; gap: 12px; min-width: 0; max-width: 600px; }
 :is(.pg-activity, .pg-judgments) .top-side .filters { justify-content: flex-end; }
-.pg-activity .lede { margin: 0; max-width: 26ch; font-size: clamp(1.625rem, 4.2vw, 2.625rem); line-height: 1.12;
+.pg-activity .lede { margin: 0; max-width: 34ch; font-size: clamp(1.625rem, 4.2vw, 2.375rem); line-height: 1.12;
   font-weight: 400; letter-spacing: -.025em; text-wrap: balance; color: var(--text-secondary); }
 .pg-activity .lede:focus { outline: none; }
 /* The figure and the project carry the sentence; the rest recedes. */
@@ -31,26 +31,35 @@
   :is(.pg-activity, .pg-judgments) .top-side .filters { justify-content: flex-start; }
 }
 .pg-activity h2 { font-size: 1rem; font-weight: 600; margin: 0; letter-spacing: -.005em; }
-.pg-activity .pending { margin: -12px 0 12px; min-height: 1.5em; color: var(--text-secondary); font-size: .8125rem; }
+/* In the heading's bottom margin, so the line takes no room of its own. */
+.pg-activity .pending { margin: -20px 0 0; min-height: 20px; color: var(--text-secondary); font-size: .8125rem; }
 .pg-activity .pending:empty { visibility: hidden; }
 .pg-activity.loading > :not(.top):not(.views):not(.secidx) { opacity: .55; }
 @media (prefers-reduced-motion: no-preference) { .pg-activity > :not(.top):not(.views):not(.secidx) { transition: opacity .2s; } }
 
 
-/* Work vitals: seven figures in one ruled strip, then rows of four, then of two (the odd last one spans) */
+/* Work vitals: up to five figures in one ruled strip (--n of them), then rows of three, then of two (the odd last one spans).
+   Each is a button or a link to the place that explains it. */
 /* Every cell pads --vpad on both sides, so the padding is the same at any column count. The strip is pulled left by one
    pad and clipped there, which puts the first column's text flush with the page edge and hides the strip's own edge. */
-.pg-activity .vitals { --vpad: 16px; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 1px; margin: 0 0 20px;
+.pg-activity .vitals-wrap { margin: 0 0 12px; }
+.pg-activity .vitals { --vpad: 14px; display: grid; grid-template-columns: repeat(var(--n, 5), minmax(0, 1fr)); gap: 1px;
   margin-inline-start: calc(var(--vpad) * -1); clip-path: inset(0 0 0 var(--vpad));
   background: var(--border); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
-.pg-activity .vital { padding: 16px var(--vpad); background: var(--bg); min-width: 0; }
+.pg-activity .vital { display: flex; flex-direction: column; justify-content: flex-start; padding: 10px var(--vpad); background: var(--bg); min-width: 0; font: inherit; color: inherit; text-align: left;
+  border: 0; border-radius: 0; cursor: pointer; text-decoration: none; }
+.pg-activity .vital:hover { background: var(--surface-2); }
+.pg-activity .vital:hover .l { text-decoration: underline; text-underline-offset: 2px; }
 .pg-activity .vital:focus { outline: none; }
 .pg-activity .vital:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-.pg-activity .vital .v { font-size: 1.75rem; font-weight: 600; letter-spacing: -.035em; line-height: 1.1; }
+.pg-activity .vital .v { display: flex; align-items: center; gap: 8px; font-size: 1.5rem; font-weight: 600; letter-spacing: -.035em; line-height: 1.1; }
+.pg-activity .vital .v .spark { flex: none; }
 .pg-activity .vital .l { font-weight: 500; margin-top: 4px; }
 .pg-activity .vital .d { color: var(--text-muted); font-size: .78125rem; margin-top: 2px; }
+/* A figure Codex does not record: a quiet line under the strip instead of a tile. */
+.pg-activity .vitals-note { margin: 6px 0 0; color: var(--text-muted); font-size: .78125rem; }
 @media (max-width: 75em) {
-  .pg-activity .vitals { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .pg-activity .vitals { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 @media (max-width: 56.25em) {
   .pg-activity .vitals { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -60,27 +69,51 @@
   .pg-activity .vitals { --vpad: 12px; }
   .pg-activity .vital .v { font-size: 1.5rem; }
 }
+@media (forced-colors: active) { .pg-activity .vital:hover { outline: 1px solid CanvasText; outline-offset: -1px; } }
 
 
-/* Work chart: the project parts of a bar in its tooltip */
+/* Needs attention, compact: the count beside the problems, two to a row, so the chart and the tabs fit the first screen. */
+.pg-activity #attention { margin-bottom: 12px; }
+.pg-activity #attention .insight.primary { grid-template-columns: minmax(0, 11rem) minmax(0, 1fr); gap: 4px 20px; padding: 10px 16px 10px 20px; }
+.pg-activity #attention .insight.primary .lead { gap: 2px; }
+.pg-activity #attention .insight.primary .t { font-size: .9375rem; }
+.pg-activity #attention .insight.primary .rest { padding-top: 0; justify-content: center; }
+.pg-activity #attention .insight ul { margin: 0; display: flex; flex-wrap: wrap; gap: 4px 28px; }
+.pg-activity #attention .insight.primary :is(li, .b) { font-size: .8125rem; }
+
+/* Work chart: two tracks, the bars over the rate; the selection chip beside the metric switch; the project parts of a bar
+   in its tooltip */
+.pg-activity .work.panel { padding-bottom: 12px; }
+.pg-activity .work .legend { margin: 2px 0 4px; }
+.pg-activity .work .chart svg { height: 216px; }
+.pg-activity .work .head-side { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
 .pg-activity .work .tip .parts { padding-left: 14px; color: var(--text-secondary); }
 
-/* Prompts by hour: a weekday by hour grid, darker for more */
-.pg-activity .hours .hint { margin: 4px 0 8px; }
-.pg-activity .heat { width: 100%; table-layout: fixed; border-collapse: separate; border-spacing: 2px; }
-.pg-activity .heat:focus-visible { outline-offset: 4px; border-radius: 4px; }
-.pg-activity .heat th { font-size: .6875rem; font-weight: 400; color: var(--text-muted); padding: 0; }
-.pg-activity .heat thead th { text-align: left; }
-.pg-activity .heat tbody th { width: 3em; text-align: left; padding-right: 4px; }
-.pg-activity .heat td { height: 18px; padding: 0; border-radius: 3px; background: var(--surface-2); }
-.pg-activity .heat td.at { outline: 2px solid var(--text-primary); outline-offset: -1px; }
-.pg-activity .hours .readout { min-height: 1.5em; margin-top: 6px; font-size: .78125rem; color: var(--text-secondary); }
-@media (max-width: 32.5em) { .pg-activity .heat { border-spacing: 1px; } .pg-activity .heat td { height: 14px; } }
+/* Workbench: the WAI-ARIA tabs, as on Context; the selected one is marked by weight and an underline, not colour alone */
+.pg-activity .workbench { margin: 0 0 20px; }
+.pg-activity .tablist { display: flex; gap: 4px; border-bottom: 1px solid var(--border); overflow-x: auto; scrollbar-width: none; }
+.pg-activity .tablist [role=tab] { font: inherit; font-size: .875rem; color: var(--text-secondary); background: none; border: 0; cursor: pointer; white-space: nowrap;
+  padding: 8px 12px; margin-bottom: -1px; border-bottom: 2px solid transparent; border-radius: 0; }
+.pg-activity .tablist [role=tab]:hover { color: var(--text-primary); }
+.pg-activity .tablist [role=tab][aria-selected="true"] { color: var(--text-primary); font-weight: 600; border-bottom-color: var(--text-primary); }
+.pg-activity .tablist [role=tab]:focus-visible { outline: 2px solid var(--text-primary); outline-offset: -2px; border-radius: 4px; }
+.pg-activity .tabpanel { padding-top: 12px; }
+.pg-activity .tabpanel:focus { outline: none; }
+.pg-activity .tabpanel:focus-visible { outline: 2px solid var(--text-primary); outline-offset: 4px; border-radius: 4px; }
+.pg-activity .tabpanel .scope { margin: 0 0 8px; }
+.pg-activity .tabpanel h3 { font-size: .875rem; margin: 0 0 4px; }
+.pg-activity .tabpanel h3:focus { outline: none; }
+.pg-activity .tabpanel h3:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+.pg-activity .tabpanel h3 .count { color: var(--text-muted); font-weight: 500; margin-left: 4px; }
+.pg-activity .tabpanel .hint { margin-bottom: 6px; }
+.pg-activity #tools { margin-bottom: 24px; }
+/* Loops and tests: the two previews side by side when there is room. */
+.pg-activity .loops-tests { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+@media (max-width: 56.25em) { .pg-activity .loops-tests { grid-template-columns: minmax(0, 1fr); } }
 
-/* Drawers: the full tables */
+/* Tables */
 .pg-activity .tools-row { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin-bottom: 6px; }
-.pg-activity .tools-row input[type=search] { font: inherit; color: var(--text-primary); background: var(--surface-1); border: 1px solid var(--border);
-  border-radius: 8px; padding: 6px 10px; flex: 1 1 16.25rem; min-width: 0; }
+.pg-activity .tools-row input[type=search] { flex: 1 1 16.25rem; min-width: 0; }
 .pg-activity .daychip { display: inline-flex; align-items: center; gap: 4px; font-size: .8125rem; padding: 2px 4px 2px 10px; border-radius: 999px;
   background: var(--accent-soft); color: var(--accent-ink); font-weight: 500; }
 .pg-activity .daychip button { border: 0; background: none; padding: 1px 6px; border-radius: 999px; font-size: .75rem; color: inherit; }
@@ -92,21 +125,21 @@
 @media (max-width: 56.25em) { .pg-activity .ext { grid-template-columns: minmax(0, 1fr); } .pg-activity .ext :is(td, th).hook { max-width: 18.75rem; } }
 /* The sessions table fits its box without scrolling sideways: the least needed columns go first. */
 @media (max-width: 78.75em) {
-  .pg-activity #d-sessions .opt2 { display: none; }
-  .pg-activity #d-sessions :is(td, th).sess { max-width: 14.375rem; }
-  .pg-activity #d-sessions :is(td, th).sess .small { overflow: hidden; text-overflow: ellipsis; }
+  .pg-activity #sessions .opt2 { display: none; }
+  .pg-activity #sessions :is(td, th).sess { max-width: 14.375rem; }
+  .pg-activity #sessions :is(td, th).sess .small { overflow: hidden; text-overflow: ellipsis; }
 }
 @media (max-width: 56.25em) {
-  .pg-activity #d-sessions :is(td, th).sess { max-width: 10.625rem; }
-  .pg-activity #d-sessions :is(td, th).name { max-width: 7.5rem; }
+  .pg-activity #sessions :is(td, th).sess { max-width: 10.625rem; }
+  .pg-activity #sessions :is(td, th).name { max-width: 7.5rem; }
 }
 @media (max-width: 43.75em) {
-  .pg-activity #d-sessions :is(.opt, .opt2) { display: none; }
+  .pg-activity #sessions :is(.opt, .opt2) { display: none; }
   .pg-activity .ext :is(td, th).hook { max-width: 9.375rem; }
-  .pg-activity #d-sessions :is(td, th).name { max-width: 5.625rem; }
-  .pg-activity #d-sessions :is(td, th).when { white-space: normal; }
-  .pg-activity #d-sessions :is(td, th).when .small { overflow-wrap: anywhere; }
+  .pg-activity #sessions :is(td, th).name { max-width: 5.625rem; }
+  .pg-activity #sessions :is(td, th).when { white-space: normal; }
+  .pg-activity #sessions :is(td, th).when .small { overflow-wrap: anywhere; }
 }
-.pg-activity #d-projects th:first-child, .pg-activity #d-projects td:first-child { position: sticky; left: 0; background: var(--bg); z-index: 1; box-shadow: 1px 0 0 var(--border); }
-.pg-activity #d-projects th:first-child { z-index: 2; }
-.pg-activity #d-projects tr.sel :is(td, th):first-child { background: color-mix(in srgb, var(--accent) 11%, var(--bg)); }
+.pg-activity #projects th:first-child, .pg-activity #projects td:first-child { position: sticky; left: 0; background: var(--bg); z-index: 1; box-shadow: 1px 0 0 var(--border); }
+.pg-activity #projects th:first-child { z-index: 2; }
+.pg-activity #projects tr.sel :is(td, th):first-child { background: color-mix(in srgb, var(--accent) 11%, var(--bg)); }
