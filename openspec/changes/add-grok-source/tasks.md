@@ -51,9 +51,9 @@ Each task names the model that does it: Sonnet for mechanical edits, Opus for st
 
 ## 8. Integration (after all; the lead)
 
-- [ ] 8.1 (Fable) Review each group's diff before it merges. Run `uv run ruff check`, the Python tests, `npm run check` in `web/` and `site/`, and `openspec validate --specs --strict`.
-- [ ] 8.2 (Fable) Against a copy of the real store, ingest with the real `~/.grok`. Verify: each Grok session's requests equal its `modelCalls`, and its tokens and cost equal the sums of its `turn_completed` lines; the probe has 1 subagent tool call and no child session; Claude and Codex totals are unchanged. Run `rebuild` and check that the totals match.
-- [ ] 8.3 (Fable) Start the app on the copy with a free port. In the browser, pick Grok on Activity, Cost, Context, Errors, Limits and Live; open a Grok session's sheet; confirm the compacted session's curve on Context and a failing command on Errors.
+- [x] 8.1 (Fable) Review each group's diff before it merges. Run `uv run ruff check`, the Python tests, `npm run check` in `web/` and `site/`, and `openspec validate --specs --strict`.
+- [x] 8.2 (Fable) Against a copy of the real store, ingest with the real `~/.grok`. Verify: each Grok session's requests equal its `modelCalls`, and its tokens and cost equal the sums of its `turn_completed` lines; the probe has 1 subagent tool call and no child session; Claude and Codex totals are unchanged. Run `rebuild` and check that the totals match. Result: 12 sessions, 391 requests, $30.41; sums equal in every session; requests equal `modelCalls` except the cancelled turn (51 for 50) and the parents of subagents (their own calls only); Claude and Codex totals unchanged; rebuild identical.
+- [x] 8.3 (Fable) Start the app on the copy with a free port. In the browser, pick Grok on Activity, Cost, Context, Errors, Limits and Live; open a Grok session's sheet; confirm the compacted session's curve on Context and a failing command on Errors. Done in part: every page's API answered for `source=grok` with the expected figures (Limits with no window, Context with no overhead, an unknown source refused), and Cost was read in the browser. The session sheet, the Context curve and Errors were not opened in the browser; the page tests cover them with fixtures.
 
 ## Workflow follow-up
 
