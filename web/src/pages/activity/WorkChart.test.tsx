@@ -397,8 +397,37 @@ describe("weekly buckets", () => {
 // The page's part of a selection: the chart and its chip follow the selection the page holds.
 function Host({ d, start = null }: { d: UsagePayload; start?: WorkPick | null }) {
   const [metric, setMetric] = useState<WorkMetric>("commits"), [selected, setSelected] = useState<WorkPick | null>(start);
-  return <WorkPanel d={d} metric={metric} onMetric={setMetric} selected={selected} onPick={setSelected} onClear={() => setSelected(null)} />;
+  // What changes the selection from outside the chart: the tab note's "Show the whole range", an attention action, the URL.
+  return <>
+    <WorkPanel d={d} metric={metric} onMetric={setMetric} selected={selected} onPick={setSelected} onClear={() => setSelected(null)} />
+    <button type="button" onClick={() => setSelected(null)}>Outside clear</button>
+    <button type="button" onClick={() => setSelected({ day: "2026-11-05", week: false })}>Outside select</button>
+  </>;
 }
+/** Enter on the bar i, with the focus on the chart. */
+const enter = (i: "Home" | "End") => {
+  act(() => chart().focus());
+  fireEvent.keyDown(chart(), { key: i });
+  fireEvent.keyDown(chart(), { key: "Enter" });
+};
+const outside = (name: string) => act(() => screen.getByRole("button", { name }).click());
+
+describe("text size", () => {
+  afterEach(() => { document.documentElement.style.fontSize = ""; });
+  /** The frame's top and the box's height: both are laid out at one text scale (20px of margin times the scale). */
+  const layout = async () => ({ top: ((await drawn()).last!.grid as { top: number }[])[0]!.top, height: chart().style.height });
+
+  it("lays the drawing out for the box it is in when the text size changes before a reading, and grows both with the next render", async () => {
+    const { rerender } = panel(usage);
+    expect(await layout()).toEqual({ top: 20, height: "216px" });
+    document.documentElement.style.fontSize = "32px"; // the browser's text size, changed with no event
+    act(() => chart().focus());
+    fireEvent.keyDown(chart(), { key: "Home" }); // renders the wrapper alone
+    expect(await layout()).toEqual({ top: 20, height: "216px" });
+    rerender(<WorkPanel d={{ ...usage }} metric="commits" onMetric={() => {}} selected={null} onPick={() => {}} onClear={() => {}} />);
+    expect(await layout()).toEqual({ top: 40, height: "312px" }); // 40 + 120 (the bars keep theirs) + 32 + 72 + 48
+  });
+});
 
 describe("what a selection says", () => {
   it("says a selection once, a selection of the same bar again in other words, and a clear by Escape", async () => {
@@ -410,6 +439,10 @@ describe("what a selection says", () => {
     expect((await mark())!.data).toEqual([[0, 0]]);
     fireEvent.keyDown(chart(), { key: "Home" });
     fireEvent.keyDown(chart(), { key: "Enter" });
+    expect(sr()).toBe("Nov 4, 2026 is still selected; the tabs below show its figures.");
+    enter("Home"); // the same bar a third time: the other true sentence, so it is said
+    expect(sr()).toBe("Nov 4, 2026 is already selected; the tabs below show its figures.");
+    enter("Home");
     expect(sr()).toBe("Nov 4, 2026 is still selected; the tabs below show its figures.");
     fireEvent.keyDown(chart(), { key: "End" });
     fireEvent.keyDown(chart(), { key: "Enter" });
@@ -428,6 +461,36 @@ describe("what a selection says", () => {
     expect(sr()).toMatch(/^Nov 5, 2026: /);
     fireEvent.keyDown(chart(), { key: "Escape" });
     expect(sr()).toBe("");
+  });
+
+  it("drops the sentence when the selection is cleared outside the chart, and says a new selection of the same bar as new", () => {
+    renderApp(<Host d={usage} />);
+    enter("Home");
+    expect(sr()).toBe("Nov 4, 2026 selected; the tabs below show its figures.");
+    outside("Outside clear");
+    expect(document.querySelector("#work .daychip")).toBeNull();
+    expect(sr()).toBe(""); // no longer true, and nothing happened on the chart
+    enter("Home");
+    expect(sr()).toBe("Nov 4, 2026 selected; the tabs below show its figures."); // not "still": it was not selected
+    enter("Home");
+    expect(sr()).toBe("Nov 4, 2026 is still selected; the tabs below show its figures.");
+  });
+
+  it("says nothing for a selection made outside the chart, and says a clear on the chart's chip", async () => {
+    renderApp(<Host d={usage} />);
+    enter("Home");
+    outside("Outside select"); // Nov 5, from the URL
+    expect(document.querySelector("#work .daychip")!.textContent).toBe("Nov 5✕");
+    expect(sr()).toBe("");
+    enter("End"); // the bar the page selected: already the selection
+    expect(sr()).toBe("Nov 5, 2026 is still selected; the tabs below show its figures.");
+    await userEvent.click(screen.getByRole("button", { name: "Clear Nov 5, 2026" }));
+    expect(sr()).toBe("Selection cleared; the tabs below show the whole range.");
+    expect(document.activeElement).toBe(chart());
+    outside("Outside select");
+    expect(sr()).toBe("");
+    fireEvent.keyDown(chart(), { key: "Escape" }); // a clear on the chart after one from outside is said
+    expect(sr()).toBe("Selection cleared; the tabs below show the whole range.");
   });
 
   it("says nothing for a selection the page opens with", () => {

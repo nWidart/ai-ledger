@@ -51,15 +51,26 @@ export function WorkPanel({ d, metric, onMetric, selected, onPick, onClear }: Wo
     // hues: a new project order is a new drawing
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [d, metric, pickDay, pickWeek, hues]);
-  // One function per drawing: newer data, a selection and a new project order give one, in the same view.
-  const option = useCallback((env: ChartEnv) => workOption(m, env), [m]);
+  // The text scale the box's height is worked out from, read here, and the option is laid out at the same one: the wrapper
+  // reads the scale again on each of its own renders (a reading), which would lay the drawing out for a box it is not in.
+  const scale = textScale();
+  // One function per drawing: newer data, a selection, a new project order and a new text size give one, in the same view.
+  const option = useCallback((env: ChartEnv) => workOption(m, { ...env, textScale: scale }), [m, scale]);
   const { buckets: rows, week, stacked, kinds, values, low, hasRate, hasLow, peak, zoom, span: view } = m;
   const M = METRICS.find(x => x.k === metric)!, unit = week ? "week" : "day", units = week ? "weeks" : "days";
   const plain = stacked ? undefined : kinds[0]!;
   const { ref: box, onZoom, button: showAll } = useZoomReset();
-  // What the last pick or clear did, said once. Saying the same again would be silent, so a repeat takes the other wording.
-  const [status, setStatus] = useState("");
-  const say = (text: string, again: string) => setStatus(was => (was === text ? again : text));
+  // What the last pick or clear on the chart did, said once, and the selection it left ("" for none). The wrapper says a
+  // status only when its text changes, so selecting the bar already selected alternates two true sentences.
+  // A selection that changes from outside the chart (the tab note's "Show the whole range", an attention action, the URL)
+  // empties the status: the sentence no longer describes the selection, and is never said later out of context.
+  const pickKey = selected ? `${selected.week ? "w" : "d"}${selected.day}` : "";
+  const [status, setStatus] = useState({ text: "", of: pickKey });
+  const [seen, setSeen] = useState(pickKey);
+  if (seen !== pickKey) {
+    setSeen(pickKey);
+    if (status.of !== pickKey) setStatus({ text: "", of: pickKey });
+  }
 
   const name = (day: string) => bucketLabel(day, week, true, view);
   // A bar's parts, top first as the eye reads them, when stacked; zero parts left out.
@@ -85,13 +96,15 @@ export function WorkPanel({ d, metric, onMetric, selected, onPick, onClear }: Wo
   const pick = (i: number) => {
     const p = rows[i];
     if (!p || !busy(p) || !onPick) return false;
-    const shows = `the tabs below show its ${week ? "days" : "figures"}.`;
-    say(`${name(p.day)} selected; ${shows}`, `${name(p.day)} is still selected; ${shows}`);
+    const shows = `the tabs below show its ${week ? "days" : "figures"}.`, of = `${week ? "w" : "d"}${p.day}`;
+    const again = [`${name(p.day)} is still selected; ${shows}`, `${name(p.day)} is already selected; ${shows}`];
+    const text = of !== pickKey ? `${name(p.day)} selected; ${shows}` : status.text === again[0] ? again[1]! : again[0]!;
+    setStatus({ text, of });
     onPick({ day: p.day, week });
     return true;
   };
   const clear = () => {
-    say("Selection cleared; the tabs below show the whole range.", "The selection is cleared; the tabs below show the whole range.");
+    setStatus({ text: "Selection cleared; the tabs below show the whole range.", of: "" });
     onClear();
   };
   // Escape with nothing read clears the selection. Only on the chart: Escape elsewhere (a sheet) keeps it.
@@ -144,8 +157,8 @@ export function WorkPanel({ d, metric, onMetric, selected, onPick, onClear }: Wo
         {hasLow && <span className="key" aria-hidden="true"><i className="low" />{`Under ${LOW_CALLS} calls`}</span>}
         {showAll(week ? "Show all weeks" : "Show all days")}
       </div>
-      <EChart ref={box} id={CHART_ID} label={label} height={workLayout(m, textScale()).height} option={option} view={m.view} points={rows.length}
-        tip={tip} read={read} onActivate={onPick ? pick : undefined} status={status} onEscape={onEscape} zoom={zoom} onZoom={onZoom} readZoom={readZoom} />
+      <EChart ref={box} id={CHART_ID} label={label} height={workLayout(m, scale).height} option={option} view={m.view} points={rows.length}
+        tip={tip} read={read} onActivate={onPick ? pick : undefined} status={status.text}onEscape={onEscape} zoom={zoom} onZoom={onZoom} readZoom={readZoom} />
       {/* The chart's text alternative: the measure per bucket (by project when stacked), its total and errors per 100 tool calls. */}
       <ChartTable><Table name={`${M.label}${stacked ? " by project" : ""} and errors per 100 tool calls per ${unit}`} region="scroll tall"
         rows={tableRows} columns={columns} rowId={r => r.p.day} /></ChartTable>
