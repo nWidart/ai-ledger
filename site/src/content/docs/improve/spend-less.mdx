@@ -106,7 +106,7 @@ Act on the cause that leads in **Breaks by cause**:
 
 Once a prompt passes the threshold, every token of the request is priced higher. In the packaged price table, `claude-haiku-5-5` charges more above 100,000 tokens, and `gpt-6-astra` and `gpt-6.1-sol` above 272,000 tokens.
 
-Habit: when the token count under **Context window**, in a session's agent panel on [Live](/ai-ledger/pages/live/), nears the threshold of its model, run `/compact` or start a new session before the next prompt. To start sessions smaller, follow [Keep context lean](/ai-ledger/improve/lean-context/).
+Habit: when the context's token count, in a session's status strip on [Live](/ai-ledger/pages/live/), nears the threshold of its model, run `/compact` or start a new session before the next prompt. To start sessions smaller, follow [Keep context lean](/ai-ledger/improve/lean-context/).
 
 ### Start a new session for each task
 
@@ -124,7 +124,7 @@ A multiple below 1 means that the same use would have cost less at API list pric
 
 Before you act, note the figures of step 3 of Diagnose, the share of the top row of **Models and effort**, and the cache-break count on Context, at **30d** and with the same project filter. The app has no custom date range, so you need these to compare with.
 
-The same day, open the session on [Live](/ai-ledger/pages/live/): the agent panel's **This session** shows the **Model** you set and its **Cache read** share.
+The same day, open the session on [Live](/ai-ledger/pages/live/): the stream's head shows the model you set, and the status strip its **Cache read** share.
 
 After 14 days, set the range to **14d** with the same project filter: the view then holds only days after the change. Read:
 

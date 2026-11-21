@@ -13,7 +13,7 @@ This playbook applies before every screen share, recording, screenshot or demo o
 
 Act at once when one of these holds:
 
-- [Live](/ai-ledger/pages/live/) shows the banner "**Full text on.** Prompts, replies and tool output show as written, secrets included." This is the app's own warning.
+- [Live](/ai-ledger/pages/live/) shows the warning "**Full text on.** Prompts, replies and tool output show as written, secrets included.", or its **Full text** toggle is tinted, checked. This is the app's own warning. Dismissing the warning leaves the tint.
 - The project picker, or the **Search** button in the navigation, which shows the project's name while a project filter is set, names a project you cannot show, such as a client's.
 - A sheet is open beside the page: the URL holds `session=`, `inspect=`, `tool=`, `mcp=` or `skill=` (on any page but Live).
 - [Errors](/ai-ledger/pages/errors/) has a type open with its list or examples in view.
@@ -24,7 +24,7 @@ Rule of thumb: if you are not sure a panel is safe to show, it is not. Each sess
 
 Find what the screen will show. Do these steps in the browser window you will share, before you share it.
 
-1. On [Live](/ai-ledger/pages/live/), look for the **Full text** banner. **Full text** is off on every page load and is not kept in the URL, but it stays on while the page stays open.
+1. On [Live](/ai-ledger/pages/live/), look at the **Full text** toggle: checked, with a warning tint, it is on. **Full text** is off on every page load and is not kept in the URL, but it stays on while the page stays open.
 2. Read the project picker's field, without opening its list. Every page follows it, but some panels name other projects (see the table below).
 3. Read the URL. It holds the project name, and a session id when a sheet or a Live session is open.
 4. Look for an open sheet beside the page: a session, project, tool, MCP server or skill sheet.
@@ -45,7 +45,7 @@ The table lists what each page can show with **Full text** off. Each row is abou
 | Errors | Each example: the tool input, the error text and the tool's result. Incidents and **By message** rows. | An error example can quote a secret from a command or its output. No toggle hides it. | [Keep Errors at the type table](#keep-errors-at-the-type-table) |
 | Limits | **What used this window**: the top three projects of each window | It ignores the project filter, so it can name other projects. | [Narrow every page to one project](#narrow-every-page-to-one-project) |
 | Activity, Judgments view | Session cards: the model's brief summary, and the **Friction detail** (folded) | The model's words can repeat what you asked. | [Close sheets and keep drawers folded](#close-sheets-and-keep-drawers-folded) |
-| Live, **Full text** off | Tool inputs up to 300 characters, so a short command shows whole; the error text of a failed call; subagent descriptions; git branches; titles that the agent or `/rename` wrote | A short command can hold a token. | [Turn off Full text on Live](#turn-off-full-text-on-live) |
+| Live, **Full text** off | Tool inputs up to 300 characters, so a short command shows whole; the error text of a failed call; subagent descriptions; git branches; titles that the agent or `/rename` wrote; the session's working directory in the status strip, always visible, and the **Copy resume** command on hover | A short command can hold a token. The directory shows your home folder path, which holds your user name. | [Turn off Full text on Live](#turn-off-full-text-on-live) |
 | Live, **Full text** on | Prompts, replies and tool results as written, and titles made from first prompts | Everything, secrets included. | [Turn off Full text on Live](#turn-off-full-text-on-live) |
 
 ## Act
@@ -55,7 +55,7 @@ Do these steps in order before you share. Each one removes rows of the table abo
 ### Turn off Full text on Live
 
 1. On [Live](/ai-ledger/pages/live/), clear the **Full text** checkbox, or reload the page: each load turns it off.
-2. Check that the banner "Full text on." is gone, and that a prompt reads as a word count, such as "42 words · turn on Full text to read it" (an example).
+2. Check that the toggle has no warning tint, and that a prompt reads as a word count, such as "42 words · turn on Full text to read it" (an example).
 3. If a session's commands are not safe to show even cut to 300 characters, do not show Live. With **Full text** off, a short tool input, a failed call's error text and a git branch still show as written.
 
 ### Narrow every page to one project
@@ -103,7 +103,7 @@ Before each share, check these on the tab you will share. Each must hold; there 
 
 | Check | Where | Expected |
 | --- | --- | --- |
-| The **Full text** banner | Live, under the filters | Absent. Prompts and replies read as word counts. |
+| The **Full text** toggle | Live, in the bar | Not checked, no tint, no warning. Prompts and replies read as word counts. |
 | The project filter | The URL and the **Search** button | The one project you chose. |
 | Open sheets | The URL, on every page but Live, where `session=` names the session in the stream | No `session=`, `inspect=`, `tool=`, `mcp=` or `skill=`. |
 | Errors | The URL of Errors | No `cat=` and no `ex=`: no type and no example open. |

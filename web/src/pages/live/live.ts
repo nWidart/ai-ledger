@@ -1,6 +1,7 @@
 // Live page logic with no React: merging a catch-up into the session held, the state as shown now, and the stream's
 // layout of main-thread events and subagent lanes.
-import type { LiveEvent, LiveListSession, LiveSession, LiveState, LiveToolEvent, Ts } from "../../api";
+import { big } from "../../format";
+import type { LiveEvent, LiveListSession, LivePulse, LiveSession, LiveState, LiveToolEvent, Ts } from "../../api";
 
 /** Events kept in memory per session; older ones drop off the top. */
 export const KEEP = 2000;
@@ -166,3 +167,39 @@ export function streamRows(events: readonly LiveEvent[]): StreamRow[] {
   for (const l of lanes) lane(l); // a tied lane whose parent call fell off the top
   return rows;
 }
+
+/** A session's latest action as a wall tile and a rail entry say it: "▸ prompt", or the tool and its summary, with ⤷
+ *  before a subagent's call. */
+export const latestText = (l: LiveListSession["latest"]): string =>
+  !l ? "" : l.kind === "prompt" ? "▸ prompt" : `${l.lane ? "⤷ " : ""}${l.tool} · ${l.summary ?? ""}`;
+
+/** The pulse's minutes: it is read one at a time. */
+export const PULSE_MINUTES = 10;
+/** One minute of the pulse: its bounds (ms), the context at its end (the newest request up to then; null before the
+ *  first), and the tool calls that ended in it. */
+export interface PulseMinute { from: number; to: number; context: number | null; calls: number; failed: number }
+
+/** The pulse in PULSE_MINUTES equal parts of its span, oldest first. A call at the span's end counts in the last part. */
+export function pulseMinutes(p: LivePulse): PulseMinute[] {
+  const start = ms(p.start), span = Math.max(1, ms(p.end) - start), step = span / PULSE_MINUTES;
+  const out = Array.from({ length: PULSE_MINUTES }, (_, i): PulseMinute => ({ from: start + i * step, to: start + (i + 1) * step, context: null, calls: 0, failed: 0 }));
+  const at = (ts: Ts) => Math.min(PULSE_MINUTES - 1, Math.max(0, Math.floor((ms(ts) - start) / step)));
+  for (const t of p.ticks) { const m = out[at(t.ts)]!; m.calls++; m.failed += +t.failed; }
+  let ci = 0, level: number | null = null;
+  for (const m of out) {
+    while (ci < p.context.length && ms(p.context[ci]!.ts) <= m.to) level = p.context[ci++]!.tokens;
+    m.context = level;
+  }
+  return out;
+}
+
+/** The pulse in words, for its name: the context from its lowest level to its highest, the line's scale, and the calls. */
+export function pulseSummary(p: LivePulse): string {
+  const calls = p.ticks.length, failed = p.ticks.filter(t => t.failed).length, levels = p.context.map(c => c.tokens);
+  const lo = levels.length ? tokensShort(Math.min(...levels)) : null, hi = levels.length ? tokensShort(Math.max(...levels)) : null;
+  const ctx = lo == null ? "no request" : lo === hi ? `context ${lo} tokens` : `context ${lo} to ${hi} tokens`;
+  return `Last 10 minutes: ${ctx}, ${calls === 1 ? "1 tool call" : `${calls} tool calls`}, ${failed} failed.`;
+}
+
+/** Tokens as the pulse says them: 40k, 1.2M (as Context's short). */
+export const tokensShort = (n: number): string => big(n).replace(/[.,]0(?=[kMB]$)/, "");
