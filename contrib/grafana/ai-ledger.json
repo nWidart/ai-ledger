@@ -1,0 +1,1113 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "Spend, tokens, tools, sessions, plan limits and ingest health from AI Ledger's /metrics endpoint.",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "links": [],
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 1,
+      "panels": [],
+      "title": "Overview",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "description": "Estimated spend in the selected time range: list prices for Claude Code and Codex, the reported cost for Grok. A range that holds an instance's first scrape can overstate.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "decimals": 2,
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "text", "value": null }] },
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 1 },
+      "id": 2,
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "sum(increase(ai_ledger_cost_usd_total{instance=~\"$instance\", source=~\"$source\", project=~\"$project\", workload=~\"$workload\", automated=~\"$automated\"}[$__range]))",
+          "instant": true,
+          "legendFormat": "Spend",
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "title": "Spend in range",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "description": "Estimated spend over the whole store, read from the counters directly.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "decimals": 2,
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "text", "value": null }] },
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 1 },
+      "id": 3,
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "sum(max by (instance, source, project, workload, automated, model) (ai_ledger_cost_usd_total{instance=~\"$instance\", source=~\"$source\", project=~\"$project\", workload=~\"$workload\", automated=~\"$automated\"}))",
+          "instant": true,
+          "legendFormat": "Spend",
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "title": "Spend all time",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "description": "Model requests in the selected time range.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "decimals": 0,
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "text", "value": null }] },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 1 },
+      "id": 4,
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "sum(increase(ai_ledger_requests_total{instance=~\"$instance\", source=~\"$source\", project=~\"$project\", workload=~\"$workload\", automated=~\"$automated\"}[$__range]))",
+          "instant": true,
+          "legendFormat": "Requests",
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "title": "Requests in range",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "description": "Cache reads as a share of all prompt tokens (input, cache reads and cache writes) in the selected time range.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "decimals": 1,
+          "max": 1,
+          "min": 0,
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "text", "value": null }] },
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 1 },
+      "id": 5,
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "sum(increase(ai_ledger_tokens_total{instance=~\"$instance\", source=~\"$source\", project=~\"$project\", workload=~\"$workload\", automated=~\"$automated\", kind=\"cache_read\"}[$__range])) / sum(increase(ai_ledger_tokens_total{instance=~\"$instance\", source=~\"$source\", project=~\"$project\", workload=~\"$workload\", automated=~\"$automated\", kind=~\"input|cache_read|cache_5m|cache_1h\"}[$__range]))",
+          "instant": true,
+          "legendFormat": "Cache hit share",
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "title": "Cache hit share in range",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "description": "Requests in the selected time range whose model has no price and whose source reported no cost. They add nothing to spend, so above zero the spend figures are partial.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "decimals": 0,
+          "noValue": "0",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "text", "value": null },
+              { "color": "#EAB839", "value": 1 }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 1 },
+      "id": 6,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "sum(increase(ai_ledger_unpriced_requests_total{instance=~\"$instance\", source=~\"$source\", project=~\"$project\", workload=~\"$workload\", automated=~\"$automated\"}[$__range]))",
+          "instant": true,
+          "legendFormat": "Unpriced",
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "title": "Unpriced requests in range",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "description": "Sessions the Live page lists as active now, automated sessions included. The automated filter does not apply.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "decimals": 0,
+          "noValue": "0",
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "text", "value": null }] },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 1 },
+      "id": 7,
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "sum(ai_ledger_active_sessions{instance=~\"$instance\", source=~\"$source\", project=~\"$project\", workload=~\"$workload\"})",
+          "instant": true,
+          "legendFormat": "Active",
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "title": "Active sessions now",
+      "type": "stat"
+    },
+    {
+      "gridPos": { "h": 4, "w": 24, "x": 0, "y": 5 },
+      "id": 8,
+      "options": {
+        "code": { "language": "plaintext", "showLineNumbers": false, "showMiniMap": false },
+        "content": "**Counters are store totals.** Every `_total` series is the all-time total in the AI Ledger store, so an instance's first scrape is one large step. Charts use `increase()` per interval: a window that holds an instance's first scrape can overstate, and a new label set's first sample is its baseline. *Spend all time* reads the totals directly.\n\n**Cost is an estimate** at list prices for Claude Code and Codex; for Grok it is the cost Grok reported. Requests with neither count as unpriced and add nothing to spend.\n\n**Filters:** tool-call duration filters by instance and source only. Active sessions include automated sessions, so the automated filter does not apply to them. Limit windows and health filter by instance only.",
+        "mode": "markdown"
+      },
+      "title": "About these figures",
+      "type": "text"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 9 },
+      "id": 9,
+      "panels": [],
+      "title": "Cost & tokens",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "description": "Estimated spend per day, grouped by the Group by variable. Each bar is the increase of the cost counter over the day before it.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "barAlignment": -1,
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "stacking": { "group": "A", "mode": "normal" }
+          },
+          "decimals": 2,
+          "min": 0,
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 10 },
+      "id": 10,
+      "interval": "1d",
+      "options": {
+        "legend": { "calcs": ["sum"], "displayMode": "table", "placement": "right", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "sum by ($group_by) (increase(ai_ledger_cost_usd_total{instance=~\"$instance\", source=~\"$source\", project=~\"$project\", workload=~\"$workload\", automated=~\"$automated\"}[$__interval]))",
+          "legendFormat": "{{$group_by}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Spend per day by $group_by",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "description": "Tokens per interval by kind: input, output, thinking, cache reads and cache writes (5-minute and 1-hour).",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "barAlignment": -1,
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "stacking": { "group": "A", "mode": "normal" }
+          },
+          "min": 0,
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 10 },
+      "id": 11,
+      "interval": "1h",
+      "options": {
+        "legend": { "calcs": ["sum"], "displayMode": "table", "placement": "right", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "sum by (kind) (increase(ai_ledger_tokens_total{instance=~\"$instance\", source=~\"$source\", project=~\"$project\", workload=~\"$workload\", automated=~\"$automated\"}[$__interval]))",
+          "legendFormat": "{{kind}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Tokens by kind",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "description": "Cache reads as a share of all prompt tokens (input, cache reads and cache writes) per interval, by source. Gaps are intervals with no requests.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "lineWidth": 2,
+            "showPoints": "auto",
+            "spanNulls": false
+          },
+          "max": 1,
+          "min": 0,
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 18 },
+      "id": 12,
+      "interval": "1h",
+      "options": {
+        "legend": { "calcs": ["mean"], "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "sum by (source) (increase(ai_ledger_tokens_total{instance=~\"$instance\", source=~\"$source\", project=~\"$project\", workload=~\"$workload\", automated=~\"$automated\", kind=\"cache_read\"}[$__interval])) / sum by (source) (increase(ai_ledger_tokens_total{instance=~\"$instance\", source=~\"$source\", project=~\"$project\", workload=~\"$workload\", automated=~\"$automated\", kind=~\"input|cache_read|cache_5m|cache_1h\"}[$__interval]))",
+          "legendFormat": "{{source}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Cache hit share",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "description": "Model requests per interval by model.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "barAlignment": -1,
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "stacking": { "group": "A", "mode": "normal" }
+          },
+          "decimals": 0,
+          "min": 0,
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 18 },
+      "id": 13,
+      "interval": "1h",
+      "options": {
+        "legend": { "calcs": ["sum"], "displayMode": "table", "placement": "right", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "sum by (model) (increase(ai_ledger_requests_total{instance=~\"$instance\", source=~\"$source\", project=~\"$project\", workload=~\"$workload\", automated=~\"$automated\"}[$__interval]))",
+          "legendFormat": "{{model}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Requests by model",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 26 },
+      "id": 14,
+      "panels": [],
+      "title": "Tools",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "description": "Failed tool calls as a share of all tool calls per interval, by source.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "lineWidth": 2,
+            "showPoints": "auto",
+            "spanNulls": false
+          },
+          "max": 1,
+          "min": 0,
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 27 },
+      "id": 15,
+      "interval": "1h",
+      "options": {
+        "legend": { "calcs": ["mean"], "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "sum by (source) (increase(ai_ledger_tool_calls_total{instance=~\"$instance\", source=~\"$source\", project=~\"$project\", workload=~\"$workload\", automated=~\"$automated\", result=\"error\"}[$__interval])) / sum by (source) (increase(ai_ledger_tool_calls_total{instance=~\"$instance\", source=~\"$source\", project=~\"$project\", workload=~\"$workload\", automated=~\"$automated\"}[$__interval]))",
+          "legendFormat": "{{source}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Tool error rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "description": "Failed calls as a share of each tool's calls in the selected time range, for the 15 tools with the highest share. Tools with no failure are left out.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "decimals": 1,
+          "max": 1,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "#EAB839", "value": 0.1 },
+              { "color": "red", "value": 0.25 }
+            ]
+          },
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 27 },
+      "id": 16,
+      "options": {
+        "displayMode": "basic",
+        "maxVizHeight": 300,
+        "minVizHeight": 16,
+        "minVizWidth": 8,
+        "namePlacement": "left",
+        "orientation": "horizontal",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "showUnfilled": true,
+        "sizing": "auto",
+        "valueMode": "color"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "sort_desc(topk(15, sum by (tool) (increase(ai_ledger_tool_calls_total{instance=~\"$instance\", source=~\"$source\", project=~\"$project\", workload=~\"$workload\", automated=~\"$automated\", result=\"error\"}[$__range])) / (sum by (tool) (increase(ai_ledger_tool_calls_total{instance=~\"$instance\", source=~\"$source\", project=~\"$project\", workload=~\"$workload\", automated=~\"$automated\"}[$__range])) > 0)))",
+          "instant": true,
+          "legendFormat": "{{tool}}",
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "title": "Tool error rate by tool in range",
+      "type": "bargauge"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "description": "Failed tool calls per interval by the error category the Errors page gives them.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "barAlignment": -1,
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "stacking": { "group": "A", "mode": "normal" }
+          },
+          "decimals": 0,
+          "min": 0,
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 35 },
+      "id": 17,
+      "interval": "1h",
+      "options": {
+        "legend": { "calcs": ["sum"], "displayMode": "table", "placement": "right", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "sum by (category) (increase(ai_ledger_tool_errors_total{instance=~\"$instance\", source=~\"$source\", project=~\"$project\", workload=~\"$workload\", automated=~\"$automated\"}[$__interval]))",
+          "legendFormat": "{{category}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Tool errors by category",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "description": "95th percentile duration of finished tool calls per interval, by tool. The duration histogram has only source and tool labels, so the project, workload and automated filters do not apply.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "lineWidth": 2,
+            "showPoints": "auto",
+            "spanNulls": false
+          },
+          "min": 0,
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 35 },
+      "id": 18,
+      "interval": "1h",
+      "options": {
+        "legend": { "calcs": ["max"], "displayMode": "table", "placement": "right", "showLegend": true, "sortBy": "Max", "sortDesc": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.95, sum by (le, tool) (rate(ai_ledger_tool_call_duration_seconds_bucket{instance=~\"$instance\", source=~\"$source\"}[$__interval])))",
+          "legendFormat": "{{tool}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Tool-call p95 duration by tool",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 43 },
+      "id": 19,
+      "panels": [],
+      "title": "Sessions & limits",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "description": "Sessions the Live page lists as active, by the state Live gives them. Automated sessions are included, so the automated filter does not apply.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 30,
+            "lineInterpolation": "stepAfter",
+            "lineWidth": 1,
+            "showPoints": "never",
+            "stacking": { "group": "A", "mode": "normal" }
+          },
+          "decimals": 0,
+          "min": 0,
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 44 },
+      "id": 20,
+      "options": {
+        "legend": { "calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "right", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "sum by (state) (ai_ledger_active_sessions{instance=~\"$instance\", source=~\"$source\", project=~\"$project\", workload=~\"$workload\"})",
+          "legendFormat": "{{state}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Active sessions by state",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "description": "Sessions the Live page lists as active, by workload. Automated sessions are included, so the automated filter does not apply.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 30,
+            "lineInterpolation": "stepAfter",
+            "lineWidth": 1,
+            "showPoints": "never",
+            "stacking": { "group": "A", "mode": "normal" }
+          },
+          "decimals": 0,
+          "min": 0,
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 44 },
+      "id": 21,
+      "options": {
+        "legend": { "calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "right", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "sum by (workload) (ai_ledger_active_sessions{instance=~\"$instance\", source=~\"$source\", project=~\"$project\", workload=~\"$workload\"})",
+          "legendFormat": "{{workload}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Active sessions by workload",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "description": "Used share of each open plan-limit window the Limits page shows, as of the app's last full cycle. Filtered by instance only.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "decimals": 0,
+          "max": 1,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "#EAB839", "value": 0.8 },
+              { "color": "red", "value": 0.95 }
+            ]
+          },
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 52 },
+      "id": 22,
+      "options": {
+        "minVizHeight": 75,
+        "minVizWidth": 75,
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true,
+        "sizing": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "max by (provider, limit, window) (ai_ledger_limit_used_ratio{instance=~\"$instance\"})",
+          "instant": true,
+          "legendFormat": "{{provider}} {{limit}} {{window}}",
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "title": "Open limit windows",
+      "type": "gauge"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "description": "Time until each open plan-limit window resets. Filtered by instance only.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "text", "value": null }] },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 52 },
+      "id": 23,
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "value_and_name"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "max by (provider, limit, window) (ai_ledger_limit_resets_timestamp_seconds{instance=~\"$instance\"}) - time()",
+          "instant": true,
+          "legendFormat": "{{provider}} {{limit}} {{window}}",
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "title": "Limit windows reset in",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "description": "Used share of each open plan-limit window over time. Filtered by instance only.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "lineInterpolation": "stepAfter",
+            "lineWidth": 2,
+            "showPoints": "never",
+            "thresholdsStyle": { "mode": "line" }
+          },
+          "max": 1,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "transparent", "value": null },
+              { "color": "#EAB839", "value": 0.8 },
+              { "color": "red", "value": 0.95 }
+            ]
+          },
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 60 },
+      "id": 24,
+      "options": {
+        "legend": { "calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "right", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "max by (provider, limit, window) (ai_ledger_limit_used_ratio{instance=~\"$instance\"})",
+          "legendFormat": "{{provider}} {{limit}} {{window}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Limit windows used over time",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 68 },
+      "id": 25,
+      "panels": [],
+      "title": "Health",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "description": "Time since each instance's last finished ingest. Red after five minutes.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 300 }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 69 },
+      "id": 26,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "time() - max by (instance) (ai_ledger_last_ingest_timestamp_seconds{instance=~\"$instance\"})",
+          "instant": true,
+          "legendFormat": "{{instance}}",
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "title": "Time since last ingest",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "description": "Whether each instance's last ingest failed.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [
+            { "options": { "0": { "color": "green", "index": 0, "text": "OK" }, "1": { "color": "red", "index": 1, "text": "Failed" } }, "type": "value" }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 5, "w": 6, "x": 6, "y": 69 },
+      "id": 27,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "max by (instance) (ai_ledger_ingest_failed{instance=~\"$instance\"})",
+          "instant": true,
+          "legendFormat": "{{instance}}",
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "title": "Last ingest",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "description": "The AI Ledger version each instance runs.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "text", "value": null }] }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 5, "w": 12, "x": 12, "y": 69 },
+      "id": 28,
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "/^version$/", "values": true },
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "max by (instance, version) (ai_ledger_build_info{instance=~\"$instance\"})",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "{{version}}",
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "title": "Version",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "description": "Time since each instance's last finished ingest, over time. The line at five minutes marks a stalled ingest.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "lineWidth": 2,
+            "showPoints": "never",
+            "thresholdsStyle": { "mode": "line" }
+          },
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "transparent", "value": null },
+              { "color": "red", "value": 300 }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 7, "w": 24, "x": 0, "y": 74 },
+      "id": 29,
+      "options": {
+        "legend": { "calcs": ["lastNotNull", "max"], "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "time() - max by (instance) (ai_ledger_last_ingest_timestamp_seconds{instance=~\"$instance\"})",
+          "legendFormat": "{{instance}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Ingest lag",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "1m",
+  "schemaVersion": 42,
+  "tags": ["ai-ledger", "prometheus"],
+  "templating": {
+    "list": [
+      {
+        "current": {},
+        "includeAll": false,
+        "label": "Data source",
+        "name": "datasource",
+        "options": [],
+        "query": "prometheus",
+        "refresh": 1,
+        "regex": "",
+        "type": "datasource"
+      },
+      {
+        "allValue": ".*",
+        "current": { "text": ["All"], "value": ["$__all"] },
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "definition": "label_values(ai_ledger_build_info, instance)",
+        "includeAll": true,
+        "label": "Instance",
+        "multi": true,
+        "name": "instance",
+        "options": [],
+        "query": "label_values(ai_ledger_build_info, instance)",
+        "refresh": 2,
+        "regex": "",
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "allValue": ".*",
+        "current": { "text": ["All"], "value": ["$__all"] },
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "definition": "label_values(ai_ledger_sessions_total{instance=~\"$instance\"}, source)",
+        "includeAll": true,
+        "label": "Source",
+        "multi": true,
+        "name": "source",
+        "options": [],
+        "query": "label_values(ai_ledger_sessions_total{instance=~\"$instance\"}, source)",
+        "refresh": 2,
+        "regex": "",
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "allValue": ".*",
+        "current": { "text": ["All"], "value": ["$__all"] },
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "definition": "label_values(ai_ledger_sessions_total{instance=~\"$instance\", source=~\"$source\"}, project)",
+        "includeAll": true,
+        "label": "Project",
+        "multi": true,
+        "name": "project",
+        "options": [],
+        "query": "label_values(ai_ledger_sessions_total{instance=~\"$instance\", source=~\"$source\"}, project)",
+        "refresh": 2,
+        "regex": "",
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "allValue": ".*",
+        "current": { "text": ["All"], "value": ["$__all"] },
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "definition": "label_values(ai_ledger_sessions_total{instance=~\"$instance\", source=~\"$source\", project=~\"$project\"}, workload)",
+        "includeAll": true,
+        "label": "Workload",
+        "multi": true,
+        "name": "workload",
+        "options": [],
+        "query": "label_values(ai_ledger_sessions_total{instance=~\"$instance\", source=~\"$source\", project=~\"$project\"}, workload)",
+        "refresh": 2,
+        "regex": "",
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "allValue": ".*",
+        "current": { "text": ["All"], "value": ["$__all"] },
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "definition": "label_values(ai_ledger_sessions_total{instance=~\"$instance\", source=~\"$source\", project=~\"$project\", workload=~\"$workload\"}, automated)",
+        "includeAll": true,
+        "label": "Automated",
+        "multi": true,
+        "name": "automated",
+        "options": [],
+        "query": "label_values(ai_ledger_sessions_total{instance=~\"$instance\", source=~\"$source\", project=~\"$project\", workload=~\"$workload\"}, automated)",
+        "refresh": 2,
+        "regex": "",
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": { "text": "source", "value": "source" },
+        "includeAll": false,
+        "label": "Group by",
+        "multi": false,
+        "name": "group_by",
+        "options": [
+          { "selected": true, "text": "source", "value": "source" },
+          { "selected": false, "text": "project", "value": "project" },
+          { "selected": false, "text": "workload", "value": "workload" },
+          { "selected": false, "text": "model", "value": "model" }
+        ],
+        "query": "source,project,workload,model",
+        "type": "custom"
+      }
+    ]
+  },
+  "time": { "from": "now-7d", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "AI Ledger",
+  "uid": "ai-ledger",
+  "version": 1
+}
