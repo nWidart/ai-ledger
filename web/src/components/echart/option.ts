@@ -1,6 +1,6 @@
 // The option fragments every ECharts chart repeats, so the charts look alike (design decision 7). Pure: each reads only the
-// environment it is given. Types only from echarts: this module stays out of the ECharts chunk's way.
-import type { CustomSeriesOption, EChartsOption, SliderDataZoomComponentOption, XAXisComponentOption, YAXisComponentOption } from "echarts";
+// environment it is given. Types only, from echarts.ts: this module stays out of the ECharts chunk's way.
+import type { CustomSeriesOption, EChartsOption, SliderDataZoomComponentOption, XAXisComponentOption, YAXisComponentOption } from "./echarts";
 
 /** The part of the chart environment these helpers read: a structural stand-in for `ChartEnv` in `tokens.ts`, which satisfies it. */
 export interface OptionEnv {
@@ -9,12 +9,12 @@ export interface OptionEnv {
   motion: boolean;
 }
 
-/** The body font, as `theme.css` sets it on `body`. */
+/** The body font, as `theme.css` sets it on `body` (option.test.ts checks the two match). */
 const FONT = '"IBM Plex Sans", ui-sans-serif, -apple-system, system-ui, sans-serif';
 const size = (env: OptionEnv) => 11 * env.textScale;
 
 /** Animation (the first draw only, none under reduced motion) and the text style every chart starts from. */
-export const baseOption = (env: OptionEnv): Pick<EChartsOption, "animation" | "animationDuration" | "animationDurationUpdate" | "textStyle"> => ({
+export const baseOption = (env: OptionEnv): Pick<EChartsOption, "animation" | "animationDuration" | "animationDurationUpdate"> & { textStyle: { fontFamily: string; fontSize: number } } => ({
   animation: env.motion,
   animationDuration: 500,
   animationDurationUpdate: 0,

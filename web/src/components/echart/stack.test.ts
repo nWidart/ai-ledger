@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { CustomSeriesRenderItemAPI, CustomSeriesRenderItemParams } from "echarts";
+import type { CustomSeriesRenderItemAPI, CustomSeriesRenderItemParams } from "./echarts";
 import { stackRects, stackSeries, type StackEnv, type StackRect } from "./stack";
 import type { ChartEnv } from "./tokens";
 
@@ -48,6 +48,15 @@ describe("stackRects", () => {
     expect(rects([5]).map(s => s.r)).toEqual([[3, 3, 0, 0]]);
   });
 
+  it("keeps every segment's minimum when they add up to more than the bar, so the bar rises above its top", () => {
+    // Five segments on a 2px bar: 1px, then 1px over a 2px gap four times, a 13px bar from the baseline.
+    const r = rects([1, 1, 1, 1, 1], Y0 - 2);
+    expect(r.map(s => s.height)).toEqual([1, 1, 1, 1, 1]);
+    expect(gapsKept(r)).toBe(true);
+    expect(r[0]!.y + r[0]!.height).toBe(Y0);
+    expect(r.at(-1)!.y).toBe(Y0 - 13);
+  });
+
   it("draws no rectangle for a zero value, and keeps each rectangle's kind", () => {
     expect(rects([0, 0, 0])).toEqual([]);
     expect(rects([5, 0, 5]).map(s => s.j)).toEqual([0, 2]);
@@ -77,7 +86,31 @@ describe("stackSeries", () => {
     // A redraw under replaceMerge keeps the series, so its bars do not grow again.
     expect(s.id).toBe("stack");
     expect(s.encode).toEqual({ x: 0, y: 1 });
+    expect([s.xAxisIndex, s.yAxisIndex]).toEqual([0, 0]);
     expect(s.data).toEqual([[0, 1, .98, .01, .01], [1, 1, .5, .5, 0], [2, 0, 0, 0, 0], [3, 1, .2, .3, .5]]);
+  });
+
+  it("puts two stacks with ids of their own on two grids of one option, in ECharts", async () => {
+    const { init } = await import("./echarts"); // the real runtime, not the fake that test-setup gives the load module
+    const dom = document.createElement("div");
+    const chart = init(dom, null, { renderer: "svg", width: 400, height: 300 });
+    const days = ["d0", "d1", "d2", "d3"];
+    const stack = (over: Partial<Parameters<typeof stackSeries>[0]>) => stackSeries({ kinds, values: shares, hatched: () => false, env: env(), ...over });
+    const option = (series: ReturnType<typeof stackSeries>[]) => ({
+      grid: [{ top: 10, height: 100 }, { top: 160, height: 100 }],
+      xAxis: [{ type: "category" as const, data: days, gridIndex: 0 }, { type: "category" as const, data: days, gridIndex: 1 }],
+      yAxis: [{ type: "value" as const, gridIndex: 0 }, { type: "value" as const, gridIndex: 1 }],
+      series,
+    });
+    try {
+      chart.setOption(option([stack({ id: "work" }), stack({ id: "errors", xAxisIndex: 1, yAxisIndex: 1 })]));
+      const series = chart.getOption().series as { id: string; xAxisIndex: number; yAxisIndex: number }[];
+      expect(series.map(s => [s.id, s.xAxisIndex, s.yAxisIndex])).toEqual([["work", 0, 0], ["errors", 1, 1]]);
+      // Two stacks left on the default id: ECharts throws and draws nothing.
+      expect(() => chart.setOption(option([stack({}), stack({ xAxisIndex: 1, yAxisIndex: 1 })]), { replaceMerge: ["series"] })).toThrow("id duplicates: stack");
+    } finally {
+      chart.dispose();
+    }
   });
 
   it("draws each segment in its kind's resolved color, on the band less min(4, band × .25)", () => {

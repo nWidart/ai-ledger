@@ -1,5 +1,6 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import type { CustomSeriesRenderItemAPI, CustomSeriesRenderItemParams } from "echarts";
+import type { CustomSeriesRenderItemAPI, CustomSeriesRenderItemParams } from "./echarts";
 import { dayAxis, peakLabelAt } from "../chart";
 import { baseOption, categoryAxis, pointLabel, valueAxis, zoomSlider, type OptionEnv } from "./option";
 
@@ -18,6 +19,13 @@ describe("baseOption", () => {
     expect(baseOption(env()).textStyle).toMatchObject({ fontSize: 11 });
     expect(baseOption(env({ textScale: 2 })).textStyle).toMatchObject({ fontSize: 22 });
     expect(baseOption(env()).textStyle?.fontFamily).toContain("IBM Plex Sans");
+  });
+
+  it("uses the font family theme.css gives the body", () => {
+    const body = /(?:^|\n)body \{([^}]*)\}/.exec(readFileSync("src/theme.css", "utf8"))![1]!; // vitest runs from web/
+    const font = /(?:^|[\s;])font:\s*([^;]+);/.exec(body)![1]!.trim();
+    // The shorthand is "<size>/<line-height> <family>": the family is everything after the first space.
+    expect(baseOption(env()).textStyle.fontFamily).toBe(font.slice(font.indexOf(" ") + 1));
   });
 });
 

@@ -1,4 +1,4 @@
-import type { CustomSeriesOption, CustomSeriesRenderItem, CustomSeriesRenderItemAPI } from "echarts";
+import type { CustomSeriesOption, CustomSeriesRenderItem, CustomSeriesRenderItemAPI } from "./echarts";
 import { stackHeights } from "../chart";
 
 /** What the stack reads of the chart environment: a structural slice of `ChartEnv`, which satisfies it. */
@@ -16,8 +16,9 @@ export interface StackRect { j: number; x: number; y: number; width: number; hei
  * The rectangles of one stacked bar, bottom first, from its values, its baseline `y0`, its top `top` (both in px, `top < y0`),
  * its left edge `x` and its width `w`. A zero value has no rectangle. A positive segment keeps at least 1px, so a thin share
  * is never drawn zero tall while its tooltip gives it, and every segment but the first has a 2px gap below it: its slot is at
- * least 3px. The others shrink to keep the bar its height, so no segment paints over another. The top segment gets a 3px
- * top radius when it is taller than 4px.
+ * least 3px. The others shrink to keep the bar its height, so no segment paints over another. When the minimums add up to
+ * more than the bar's height, every segment keeps its minimum and the bar rises above `top`: five segments on a 2px bar
+ * make a 13px bar. The top segment gets a 3px top radius when it is taller than 4px.
  */
 export function stackRects(values: readonly number[], y0: number, top: number, x: number, w: number): StackRect[] {
   const segs = values.flatMap((v, j) => (v > 0 ? [{ v, j }] : []));
@@ -40,6 +41,11 @@ export interface StackSeriesInput {
   env: StackEnv;
   /** The bar's width from the band's. The default is the band less min(4, band × .25). */
   width?: (band: number) => number;
+  /** The series id, "stack" by default. Each stack in one option needs its own: ECharts rejects two series with one id. */
+  id?: string;
+  /** The axes the stack sits on, 0 by default. A chart with several grids gives each stack the axes of its own grid. */
+  xAxisIndex?: number;
+  yAxisIndex?: number;
 }
 
 const barWidth = (band: number) => Math.max(1, band - Math.min(4, band * .25));
@@ -48,7 +54,7 @@ const barWidth = (band: number) => Math.max(1, band - Math.min(4, band * .25));
  * A custom series that draws each day's whole stack from `stackRects`, on a category x axis and a value y axis. Each data row is
  * [day, total, ...values]; the total sets the value axis's extent.
  */
-export function stackSeries({ kinds, values, hatched, env, width = barWidth }: StackSeriesInput): CustomSeriesOption {
+export function stackSeries({ kinds, values, hatched, env, width = barWidth, id = "stack", xAxisIndex = 0, yAxisIndex = 0 }: StackSeriesInput): CustomSeriesOption {
   const colors = kinds.map(k => env.color(k.c));
   // Today's hatch: surface-colored stripes over each segment, so every series color shows through in either theme.
   const decal = { symbol: "rect", color: env.ink.surface, dashArrayX: [1, 0], dashArrayY: [3, 3], rotation: Math.PI / 4 };
@@ -71,8 +77,10 @@ export function stackSeries({ kinds, values, hatched, env, width = barWidth }: S
   };
   return {
     type: "custom",
-    // A fixed id: a redraw under `replaceMerge` updates this series in place, so the bars grow on the first draw only.
-    id: "stack",
+    // A stable id: a redraw under `replaceMerge` updates this series in place, so the bars grow on the first draw only.
+    id,
+    xAxisIndex,
+    yAxisIndex,
     renderItem,
     encode: { x: 0, y: 1 },
     data: values.map((v, i) => [i, v.reduce((s, n) => s + n, 0), ...v]),
