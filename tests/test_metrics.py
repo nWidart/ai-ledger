@@ -85,6 +85,46 @@ class UnpricedRatiosTest(unittest.TestCase):
         self.assertIsNone(u["by_project"][0]["cost_per_commit"])
 
 
+class ReportedCostTest(unittest.TestCase):
+    """A request whose source reported its cost costs that amount; only a request with neither a price nor a reported cost is unpriced."""
+
+    def usage(self, rows, prices=PRICES):
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp)
+        con = store.open_store(os.path.join(tmp, "x.duckdb"))
+        self.addCleanup(con.close)
+        c = con.cursor()
+        store.insert(c, "sessions", ["session_id", "project", "first_ts", "last_ts"], [("s", "foo", "2026-11-05 09:00:00", "2026-11-05 09:30:00")])
+        store.insert(c, "prompts", ["prompt_id", "session_id", "ts", "interrupted"], [("p", "s", "2026-11-05 09:00:00", False)])
+        store.insert(c, "requests", ["message_id", "session_id", "ts", "model", "subagent", "input", "output", "thinking", "cache_read",
+                                     "cache_5m", "cache_1h", "thinking_ms", "reported_cost"],
+                     [(f"r{i}", "s", f"2026-11-05 09:0{i}:00", model, False, 60, 10, 0, 0, 0, 0, 0, cost) for i, (model, cost) in enumerate(rows)])
+        return metrics.usage(con.cursor(), prices=prices, today=TODAY)
+
+    def test_unpriced_model_with_reported_costs_adds_them(self):
+        u = self.usage([("m-unknown", 0.1), ("m-unknown", 0.034844)])
+        t = u["totals"]
+        self.assertAlmostEqual(t["cost"], 0.134844)
+        self.assertEqual(u["unpriced"], [])
+        self.assertAlmostEqual(u["daily"][0]["cost"], 0.134844)
+        self.assertEqual(u["daily"][0]["unpriced"], 0)
+        self.assertAlmostEqual(sum(r["cost"] for r in u["daily_models"]), 0.134844)
+        self.assertAlmostEqual(u["sessions"][0]["cost"], 0.134844)
+        self.assertEqual(u["sessions"][0]["unpriced"], 0)
+        # Its token kinds have no estimate: the cost-by-token-kind chart treats the request as it treats an unpriced one.
+        self.assertEqual([t[f"cost_{k}"] for k in metrics.PRICE_KINDS], [None] * 5)
+
+    def test_reported_cost_beside_an_estimate_and_an_unpriced_request(self):
+        u = self.usage([("m-unknown", 0.134844), ("m-a", None), ("m-other", None)])
+        est = (60 * 1 + 10 * 10) / 1e6
+        self.assertAlmostEqual(u["totals"]["cost"], 0.134844 + est)
+        self.assertAlmostEqual(u["totals"]["cost_input"], 60 / 1e6)  # the priced request's kinds only
+        self.assertEqual([r["model"] for r in u["unpriced"]], ["m-other"])
+
+    def test_reported_cost_wins_over_the_estimate(self):
+        self.assertAlmostEqual(self.usage([("m-a", 0.5)])["totals"]["cost"], 0.5)
+
+
 class MetricsTest(unittest.TestCase):
     """Fixture: project foo (sessions s1, s2), project bar (s3, outside a 7-day range), and the automated project
     observer-sessions (o1, with a request and a prompt on each of Nov 4 and 5), which every view leaves out by default."""
