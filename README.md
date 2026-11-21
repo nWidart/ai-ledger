@@ -26,7 +26,7 @@ Needs [uv](https://docs.astral.sh/uv/). Runs on macOS and Linux. Your data stays
 | **Cost** | Estimated spend at API list prices per day, and the month's pace against your plan. One table shows each project's trend, spend, change, cost per commit and cache hit. The tokens chart can show each day's share by token kind, and the Tokens and cache drawer sets each kind's share of tokens beside its share of cost. |
 | **Context** | How full the context window gets, how fast it grows, what fills it, and what the prompt cache wastes. |
 | **Errors** | Failed tool calls by type, the time they cost, a fix to paste into `CLAUDE.md` or `AGENTS.md`, and whether each fix worked. |
-| **Project** | One project across all of the above in two columns, each block loading on its own, opened from the "Project page" link beside the project filter, its sheet, or its name in the command palette. |
+| **Project** | One project across all of the above in two columns, each block loading on its own, opened from the **Brief** link in the scope bar, its sheet, or its name in the command palette. |
 
 Each page leads with its answer and its main chart. Full tables wait in drawers at the foot of the page, closed on every load, one open at a time; on Activity they sit in tabs under the chart. Method notes wait behind a **How measured** link.
 
@@ -34,7 +34,9 @@ Press **Cmd+K** to jump anywhere, for example `>errors #myproject #7d`. Right-cl
 
 The navigation has two groups: **Now** (Live, Limits) and **Review** (Activity, Cost, Context, Errors). The Live tab shows a badge with the sessions waiting for an approval or for your next prompt. The Limits tab shows the percent of your fullest open limit window, in amber or red when a window is nearly full, at its limit or forecast to run out. The bar stays on one row at every width, and next to Refresh it shows when the data was last ingested.
 
-Each page shows only the filters that change it. Activity's Judgments view has no source filter, because `/insights` judges Claude Code sessions only; with Codex as the source, Activity shows Overview and says why Judgments is not available. An old `/insights` link opens the Judgments view with its filters.
+The filters sit in one scope bar under the navigation, the same place on every page: project, range, source and **Include automated sessions**. Both bars stay at the top as you scroll, and nothing else does. With a project picked, the bar ends with a **Brief** link to that project's page. On a phone the bar is one **Filters** button that shows how many filters are set and opens them over the page.
+
+Each page shows only the filters that change it. Limits shows the source only, and Live has no range. Activity's Judgments view has no source filter, because `/insights` judges Claude Code sessions only; with Codex as the source, Activity shows Overview and says why Judgments is not available. An old `/insights` link opens the Judgments view with its filters.
 
 A session link on any page opens the session's sheet over that page, so the page keeps its state and Back closes the sheet. **Open session** in Cmd+K and in the right-click menu does the same on every page, Limits included; on Live the stream keeps following its session. A session's sheet shows its model time, tool time, output speed and lines added and removed. These come from the `cost-state` line Claude Code writes when a session ends (from about late October 2026), so Codex and older Claude Code sessions show none.
 

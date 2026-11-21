@@ -21,6 +21,7 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- The filters moved out of each page's header into one scope bar under the navigation, the same place and the same tab stop on every page: project, range, source, then **Include automated sessions**. It stays at the top with the navigation as you scroll. A page still shows only the filters that change it. With a project picked, the bar ends with a **Brief** link to the Project page, in place of the "Project page →" link. On a phone the bar is one **Filters** button with the number of filters set, which opens them over the page. Pages start a little higher under it.
 - Live's agent panel is gone: a status strip above the stream shows the session's state, a context meter, cost, tools, errors (still the failed-calls filter), cache read, each plan limit, its working directory and **Copy resume**. A plan limit's reset time is behind a toggletip that the keyboard reaches. The stream gains the panel's width: 1,102px instead of 798px at 1440 x 900. The strip has no request count; the session sheet lists requests per model. A session that fails to load says so once, in its panel. The session payload's context window no longer disappears on a catch-up of a Codex session on an unpriced model.
 - Live's tokens-per-minute chart is now a pulse of the last 10 minutes: the context of each main-thread request, and a tick for each finished tool call, upright for a success and ✕ for a failure. It reads by keyboard one minute at a time and names its summary, from its lowest to its highest context, for a screen reader. Cache rereads no longer look like work. The session payload's `spark` is now `pulse`, and it adds `cwd`.
 - Each Live rail entry has a third line: a small context meter with its percent, the latest action, and `✕ N` when calls failed. Eight sessions still fit the rail at 1440 x 900.
@@ -80,6 +81,7 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ### Removed
 
+- The sticky section index on Cost and on Activity's Judgments view, and its "Jump to" menu on narrow screens. Only the navigation and the scope bar stay at the top now. Each section keeps its heading.
 - Activity's Prompts by hour heatmap, and `work_hours` in `/api/usage`. To spot a script by its hours, sort the Sessions tab by prompts and read the start times.
 
 ### Fixed

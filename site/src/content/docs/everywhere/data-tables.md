@@ -8,7 +8,7 @@ Pages show their figures as charts and as tables. This page describes the contro
 
 ## Drawers
 
-A drawer is a table folded behind its title, at the foot of a page. Every drawer is closed when a page loads, after a reload too. A page shows one open drawer at a time: opening a drawer closes the open one. A section index link, a card action or a chart click that opens a drawer also scrolls to it.
+A drawer is a table folded behind its title, at the foot of a page. Every drawer is closed when a page loads, after a reload too. A page shows one open drawer at a time: opening a drawer closes the open one. A card action, a link or a chart click that opens a drawer also scrolls to it.
 
 ## How measured
 

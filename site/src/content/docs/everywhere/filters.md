@@ -6,7 +6,17 @@ spec: [dashboard-app, command-palette]
 
 Four filters narrow what a page shows: the project, the time range, the source and whether automated sessions count. Every figure, chart and table on a page follows them. The filters live in the page's URL, so a reload or a copied link shows the same view, and the navigation carries them to the next page you open.
 
-A page shows a filter only when it changes what the page shows. A filter a page does not show keeps its value in the URL, for the pages you open next. The filters sit in the page header beside the heading, always in the order project, range, source, Include automated.
+A page shows a filter only when it changes what the page shows. A filter a page does not show keeps its value in the URL, for the pages you open next.
+
+## Scope bar
+
+The filters sit in the scope bar, directly under the navigation. The bar is in the same place on every page, and shows the filters in the order project, range, source, Include automated. It stays at the top with the navigation as you scroll. No other bar sticks there.
+
+A control that changes one part of a page sits in that part, not in the bar: Limits' range in **Past windows**, Errors' Day / Week in its rate chart, and Cost's plan gauge beside its heading.
+
+With the keyboard, Tab goes through the navigation, then the bar, then the page. Changing a filter keeps focus on the control you changed.
+
+On a narrow window (about 900px and below, or zoomed in), the bar is one **Filters** button. A badge on it counts the filters set away from their default, and its name says the count, for example "Filters, 2 filters set". Select it to open the page's filters over the page. They stay open while you change them; Escape closes them and puts focus back on the button. With a project set, the project and its **Brief** link show beside the button.
 
 ## Controls
 
@@ -46,7 +56,9 @@ The picker is one filterable dropdown. Its field shows the selected project, or 
 - Escape closes the popup without a selection and puts the selected project back in the field.
 - Emptying the field lists every project.
 
-When a project is set, the filter row shows a **Project page →** link next to the picker, and a ✕ button named "Clear project filter" that removes the filter. The link goes to the project's Project page and is not on the Project page itself. Clearing the filter on the Project page opens Activity.
+When a project is set, a ✕ button named "Clear project filter" sits next to the picker and removes the filter. Clearing the filter on the Project page opens Activity.
+
+When a project is set, the scope bar also ends with a **Brief →** link, named "Brief, <project> project page". It opens the project's [Project page](/ai-ledger/pages/project/) with the same range, source and Include automated. The Project page itself has no Brief link, and neither does Limits, which has no project picker.
 
 ## Source
 
