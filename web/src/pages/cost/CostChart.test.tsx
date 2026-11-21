@@ -5,28 +5,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Source, UsagePayload } from "../../api";
 import usage from "../../__fixtures__/usage";
 import { setOrder } from "../../colors";
-import type { CustomSeriesOption, CustomSeriesRenderItemAPI, CustomSeriesRenderItemParams, SeriesOption } from "../../components/echart/echarts";
+import type { SeriesOption } from "../../components/echart/echarts";
 import { drawn } from "../../components/echart/testing";
 import { dayRange, usd } from "../../format";
 import { CostChart } from "./CostChart";
 import type { Stack } from "./cost";
 import { prevented, renderApp } from "../../testing";
 
-// The chart draws on the fake ECharts runtime (test-setup): what it draws is read from the option it was given last.
-const lastOption = async () => (await drawn()).last as { series: SeriesOption[]; yAxis: { max: number; interval: number; axisLabel: { formatter: (v: number) => string } } };
-const seriesIds = async () => (await lastOption()).series.map(s => s.id);
-/** Each day's painted rectangles: the stack series' renderItem on a stub axis of 40px bands over a 200px plot. A hatched
- *  rectangle carries a decal. */
-const painted = async () => {
-  const o = await lastOption(), s = o.series.find(x => x.id === "stack") as CustomSeriesOption;
-  return (s.data as number[][]).map(row => {
-    const api = { value: (dim: number) => row[dim]!, coord: ([x, v]: number[]) => [(x! + .5) * 40, 220 - v! / o.yAxis.max * 200],
-      size: ([dx]: number[]) => [dx! * 40, 0] } as unknown as CustomSeriesRenderItemAPI;
-    const out = s.renderItem!({} as CustomSeriesRenderItemParams, api) as unknown as { children: { style: { fill?: string; decal?: unknown } }[] } | null;
-    return out?.children ?? [];
-  });
+// What the chart draws is costDaily.test.ts's to test. Here only that the component hands the wrapper the current view's
+// option: how many kinds the stack in the fake runtime's last option draws (each data row is [day, total, ...values]).
+const drawnKinds = async () => {
+  const series = (await drawn()).last!.series as SeriesOption[];
+  return ((series.find(s => s.id === "stack")!.data as number[][])[0]!.length) - 2;
 };
-const hatchedDays = async () => (await painted()).flatMap((rects, i) => (rects.some(r => r.style.decal) ? [i] : []));
 
 const day = "2026-11-04";
 const base = usage.by_project[0]!;
@@ -44,14 +35,7 @@ const open = () => {
   fireEvent.keyDown(chart(), { key: "Home" });
 };
 
-beforeEach(() => {
-  setOrder(["A"]);
-  // jsdom resolves every color to black; the chart's color probe answers nothing instead, so the drawing keeps each CSS color
-  // as given ("var(--series-1)").
-  const real = window.getComputedStyle.bind(window);
-  vi.spyOn(window, "getComputedStyle").mockImplementation((el: Element, pseudo?: string | null) =>
-    (el instanceof HTMLElement && el.dataset.chartProbe !== undefined ? { color: "" } as CSSStyleDeclaration : real(el, pseudo)));
-});
+beforeEach(() => setOrder(["A"]));
 afterEach(() => setOrder([]));
 
 describe("cost tooltip: Other's projects", () => {
@@ -92,9 +76,8 @@ describe("cost chart: today so far", () => {
     daily_projects: days.map((x, i) => ({ day: x, project: "A", cost: i === 19 ? 40 : 1, tokens: 1 })), by_project: [proj("A", 59)] };
   const show = (data = long) => renderApp(<CostChart d={data} metric="cost" onMetric={() => {}} hidden={[]} onHidden={() => {}} scale="volume" onScale={() => {}} stack="project" onStack={() => {}} onProject={() => {}} onSource={() => {}} onDay={() => {}} />);
 
-  it("hatches only today's bar and keys it in the legend", async () => {
+  it("keys today in the legend", () => {
     show();
-    expect(await hatchedDays()).toEqual([19]);
     expect(screen.getByText("Today so far")).toBeTruthy();
   });
 
@@ -115,16 +98,13 @@ describe("cost chart: today so far", () => {
     expect(document.querySelector(".sr")!.textContent).not.toContain("so far");
   });
 
-  it("leaves today out of the average: the line ends yesterday and has no point for today", async () => {
+  it("leaves today out of the average it reads", () => {
     show();
     act(() => chart().focus());
     fireEvent.keyDown(chart(), { key: "End" });
     expect(document.querySelector(".sr")!.textContent).not.toContain("7-day average");
     fireEvent.keyDown(chart(), { key: "ArrowLeft" });
     expect(document.querySelector(".sr")!.textContent).toContain(`7-day average ${usd(1)}`); // not dragged up by today's $40
-    const line = (await lastOption()).series.find(s => s.id === "avg")!.data as (number | null)[];
-    expect(line.filter(v => v != null)).toHaveLength(13); // the 7th to the 19th day
-    expect(line.at(-1)).toBeNull();
   });
 });
 
@@ -193,12 +173,11 @@ describe("cost chart: stack by", () => {
   it("restacks the bars and the legend, and names the stacking", async () => {
     renderApp(<Host data={split} />);
     expect(keys().slice(0, 2)).toEqual(["A", "Other (4)"]);
-    const fills = async () => (await painted())[0]!.filter(r => !r.style.decal).map(r => r.style.fill);
-    expect(await fills()).toHaveLength(2); // A and Other
+    expect(await drawnKinds()).toBe(2); // A and Other
     await sel("Model");
     expect(screen.getByRole("button", { name: "Model" }).getAttribute("aria-pressed")).toBe("true");
     expect(keys().slice(0, 3)).toEqual(["opus-4", "sonnet-4", "gpt-6"]);
-    expect(await fills()).toEqual(["var(--series-1)", "var(--series-2)", "var(--series-3)"]);
+    expect(await drawnKinds()).toBe(3);
     expect(screen.getByRole("heading", { level: 2 }).textContent).toBe("Estimated cost per day by model");
     expect(screen.getByRole("group", { name: /^Estimated cost by model per day, 1 days/ })).toBeTruthy();
     await sel("Agent");
@@ -258,14 +237,13 @@ describe("cost chart: stack by", () => {
   });
 
   // 20 days ending today ($1 a day, today $40), all on one model.
-  it("still hatches today and leaves it out of the average when stacked by model", async () => {
+  it("still keys today and leaves it out of the average when stacked by model", () => {
     const days = dayRange("2026-10-16", "2026-11-04");
     const long: UsagePayload = { ...d, start: days[0]!, end: days.at(-1)!, range: 20,
       daily: days.map((x, i) => ({ ...usage.daily[0]!, day: x, cost: i === 19 ? 40 : 1, unpriced: 0 })),
       daily_projects: days.map((x, i) => ({ day: x, project: "A", cost: i === 19 ? 40 : 1, tokens: 1 })), by_project: [proj("A", 59)],
       daily_models: days.map((x, i) => ({ day: x, model: "claude-opus-4", cost: i === 19 ? 40 : 1 })) };
     renderApp(<Host data={long} first="model" />);
-    expect(await hatchedDays()).toEqual([19]);
     expect(screen.getByText("Today so far")).toBeTruthy();
     act(() => screen.getByRole("group", { name: /Estimated cost by model/ }).focus());
     fireEvent.keyDown(screen.getByRole("group", { name: /Estimated cost by model/ }), { key: "End" });
@@ -290,11 +268,6 @@ describe("tokens chart: Share", () => {
   }
   const chart = (name: RegExp | string) => screen.getByRole("group", { name });
   const read = (name: RegExp | string, key = "Home") => { act(() => chart(name).focus()); fireEvent.keyDown(chart(name), { key }); };
-  /** The value axis's labels, from 0 to its max by its interval. */
-  const axis = async () => {
-    const { max, interval, axisLabel } = (await lastOption()).yAxis;
-    return Array.from({ length: Math.round(max / interval) + 1 }, (_, i) => axisLabel.formatter(i * interval));
-  };
 
   it("offers the scale only with tokens, Volume first, and switches to Share", async () => {
     renderApp(<Host first="volume" />);
@@ -311,13 +284,9 @@ describe("tokens chart: Share", () => {
     expect(screen.queryByRole("group", { name: "Scale" })).toBeNull();
   });
 
-  it("fills the plot with each day's shares on a 0 to 100% axis, and draws no average or peak", async () => {
+  it("keys no 7-day average in Share", () => {
     renderApp(<Host />);
-    expect(await axis()).toEqual(["0%", "25%", "50%", "75%", "100%"]);
-    // The day with tokens is three segments; the day without is none.
-    expect((await painted()).map(rects => rects.filter(r => !r.style.decal).length)).toEqual([3, 0]);
     expect(screen.queryByText("7-day average")).toBeNull();
-    expect(await seriesIds()).not.toContain("peak");
   });
 
   it("reads a day's shares and total in the tooltip and the screen-reader text", () => {
@@ -370,12 +339,11 @@ describe("tokens chart: Share", () => {
     expect(second!.slice(0, 6)).toEqual(Array(6).fill("–"));
   });
 
-  it("keeps Volume's average line and peak label", async () => {
+  it("keys Volume's 7-day average", () => {
     const days = dayRange("2026-10-16", "2026-11-04");
     const long: UsagePayload = { ...tokens, start: days[0]!, end: days.at(-1)!, range: 20,
       daily: days.map(x => ({ ...usage.daily[0]!, ...empty, day: x, input: 1, cost: 1, unpriced: 0 })) };
     renderApp(<Host data={long} first="volume" />);
     expect(screen.getByText("7-day average")).toBeTruthy();
-    expect(await seriesIds()).toContain("peak");
   });
 });
