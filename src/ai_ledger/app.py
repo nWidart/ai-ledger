@@ -234,12 +234,12 @@ class App:
 
     def metrics_text(self):
         """The /metrics body. The counters are worked out again only when the store changed (an ingest or a limit poll
-        stored something) or the workloads file did, under a lock of their own, so concurrent scrapes build them once; the
+        stored something) or the workloads, prices or automated file did, under a lock of their own, so concurrent scrapes build them once; the
         gauges at every scrape. Reads, as the routes do: no store lock. Raises what a query raises, and the next scrape tries
         again."""
         cur = self.con.cursor()
         with self.counters_lock:
-            key = (self.change_count, self.workloads.stat())
+            key = (self.change_count, self.workloads.stat(), prom.file_key(metrics.USER_PRICES), prom.file_key(metrics.USER_AUTOMATED))
             if self.counters is None or self.counters[0] != key:
                 sids = [r[0] for r in cur.execute("SELECT session_id FROM sessions").fetchall()]
                 self.counters = (key, prom.counters(cur, self.workloads.get(cur, sids)))

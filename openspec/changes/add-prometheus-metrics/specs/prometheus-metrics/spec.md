@@ -75,7 +75,7 @@ The app SHALL expose `ai_ledger_tool_calls_total` labelled `tool` and `result` (
 - **THEN** `ai_ledger_tool_calls_total` is 2 for `result="ok"` and 1 for `result="error"`, and `ai_ledger_tool_errors_total{category="test-failure",…}` is 1
 
 ### Requirement: Histogram of tool-call durations
-The app SHALL expose `ai_ledger_tool_call_duration_seconds`, a histogram labelled `source` and `tool`, over every tool call with both a start and an end time, with buckets 0.1, 0.5, 1, 2, 5, 10, 30, 60, 120, 300, 600 seconds and `+Inf`, and its `_sum` and `_count`.
+The app SHALL expose `ai_ledger_tool_call_duration_seconds`, a histogram labelled `source`, `workload` and `tool`, over every tool call with both a start and an end time, with buckets 0.1, 0.5, 1, 2, 5, 10, 30, 60, 120, 300, 600 seconds and `+Inf`, and its `_sum` and `_count`.
 
 #### Scenario: Durations
 - **WHEN** a `Read` call took 0.3 s and another 7 s
@@ -93,7 +93,7 @@ The app SHALL expose `ai_ledger_active_sessions`, labelled `source`, `project`, 
 - **THEN** each has a sample of 1 under its own source and state
 
 ### Requirement: Gauge open limit windows
-The app SHALL expose `ai_ledger_limit_used_ratio` (0 to 1) and `ai_ledger_limit_resets_timestamp_seconds` (Unix time), labelled `provider`, `limit` and `window`: one sample per open plan-limit window the Limits page shows, as of the app's last full cycle.
+The app SHALL expose `ai_ledger_limit_used_ratio` (0 to 1) and `ai_ledger_limit_resets_timestamp_seconds` (Unix time), labelled `provider`, `limit` and `window`: `limit` is the stored limit id, with `/<scope>` when the limit has a scope, and `window` the name the Limits page gives the window, such as `5-hour`; one sample per open plan-limit window the Limits page shows, as of the app's last full cycle.
 
 #### Scenario: Open window
 - **WHEN** the Claude 5-hour window is 42% used and resets at 15:00 UTC
@@ -111,7 +111,7 @@ The app SHALL expose `ai_ledger_last_ingest_timestamp_seconds`, the Unix time of
 - **THEN** `ai_ledger_ingest_failed` is 1 and `ai_ledger_last_ingest_timestamp_seconds` keeps the time of the last ingest that finished
 
 ### Requirement: Rebuild counters only after data changed
-The app SHALL work out the counters again only when an ingest or a limit poll stored something, or the workloads file changed, since they were last worked out; a scrape in between SHALL reuse them. Concurrent scrapes SHALL work them out once. A scrape SHALL NOT take the store lock. When working them out fails, the answer SHALL be 500 with the error's type only, and the next scrape SHALL try again.
+The app SHALL work out the counters again only when an ingest or a limit poll stored something, or the workloads, prices or automated file changed, since they were last worked out; a scrape in between SHALL reuse them. Concurrent scrapes SHALL work them out once. A scrape SHALL NOT take the store lock. When working them out fails, the answer SHALL be 500 with the error's type only, and the next scrape SHALL try again.
 
 #### Scenario: Two scrapes, no ingest
 - **WHEN** two scrapes arrive with no ingest between them

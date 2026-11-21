@@ -9,7 +9,7 @@ import unittest
 from http.server import ThreadingHTTPServer
 from unittest import mock
 
-from ai_ledger import app, live, prom, store, titles
+from ai_ledger import app, live, metrics, prom, store, titles
 
 PRICES = {"m-a": {"input": 1, "output": 10, "cache_read": 0.1, "cache_5m": 2, "cache_1h": 4, "context": 1000}}
 REVIEW = '{"workloads": [{"name": "pr-review", "prompt_prefix": "You work on pull request #"}]}'
@@ -124,13 +124,13 @@ class PromTest(unittest.TestCase):
                  f'ai_ledger_tool_calls_total{{{review},tool="Bash",result="error"}} 1',
                  f'ai_ledger_tool_calls_total{{{review},tool="Read",result="ok"}} 2',  # the running call is not counted yet
                  f'ai_ledger_tool_errors_total{{{review},category="test-failure"}} 1',
-                 'ai_ledger_tool_call_duration_seconds_bucket{source="claude",tool="Read",le="0.1"} 0',
-                 'ai_ledger_tool_call_duration_seconds_bucket{source="claude",tool="Read",le="0.5"} 1',
-                 'ai_ledger_tool_call_duration_seconds_bucket{source="claude",tool="Read",le="5"} 1',
-                 'ai_ledger_tool_call_duration_seconds_bucket{source="claude",tool="Read",le="10"} 2',
-                 'ai_ledger_tool_call_duration_seconds_bucket{source="claude",tool="Read",le="+Inf"} 2',
-                 'ai_ledger_tool_call_duration_seconds_sum{source="claude",tool="Read"} 7.3',
-                 'ai_ledger_tool_call_duration_seconds_count{source="claude",tool="Read"} 2')
+                 'ai_ledger_tool_call_duration_seconds_bucket{source="claude",workload="pr-review",tool="Read",le="0.1"} 0',
+                 'ai_ledger_tool_call_duration_seconds_bucket{source="claude",workload="pr-review",tool="Read",le="0.5"} 1',
+                 'ai_ledger_tool_call_duration_seconds_bucket{source="claude",workload="pr-review",tool="Read",le="5"} 1',
+                 'ai_ledger_tool_call_duration_seconds_bucket{source="claude",workload="pr-review",tool="Read",le="10"} 2',
+                 'ai_ledger_tool_call_duration_seconds_bucket{source="claude",workload="pr-review",tool="Read",le="+Inf"} 2',
+                 'ai_ledger_tool_call_duration_seconds_sum{source="claude",workload="pr-review",tool="Read"} 7.3',
+                 'ai_ledger_tool_call_duration_seconds_count{source="claude",workload="pr-review",tool="Read"} 2')
 
     def test_no_transcript_text(self):
         for secret in ("SECRET", "sess-", "p-review", "npm test", "pull request"):
@@ -237,7 +237,9 @@ class EndpointTest(unittest.TestCase):
         self.assertEqual(self.get(host="example.com")[0], 403)
 
     def test_counters_are_rebuilt_only_after_a_change(self):
-        with mock.patch.object(prom, "counters", wraps=prom.counters) as built:
+        automated = os.path.join(self.tmp, "automated.json")
+        with mock.patch.object(prom, "counters", wraps=prom.counters) as built, \
+                mock.patch.object(metrics, "USER_PRICES", os.path.join(self.tmp, "prices.json")), mock.patch.object(metrics, "USER_AUTOMATED", automated):
             first = self.get()[2]
             self.assertEqual(self.get()[2], first)
             self.assertEqual(built.call_count, 1)
@@ -247,7 +249,11 @@ class EndpointTest(unittest.TestCase):
             self.assertEqual(self.get()[2], first)  # stored, but no ingest said so
             self.app.changed_at("2026-11-04T10:09:00+00:00")
             second = self.get()[2]
-        self.assertEqual(built.call_count, 2)
+            self.assertEqual(built.call_count, 2)
+            with open(automated, "w") as fh:  # a user file the counters read
+                fh.write('{"projects": ["web"]}')
+            self.assertIn('automated="true",workload="default",model="grok-x"', self.get()[2])
+        self.assertEqual(built.call_count, 3)
         self.assertEqual((self.requests(first)[-2:], self.requests(second)[-2:]), (" 1", " 2"))
 
     def test_a_failure_answers_the_type_only_and_the_next_scrape_tries_again(self):

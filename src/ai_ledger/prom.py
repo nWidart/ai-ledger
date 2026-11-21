@@ -42,6 +42,15 @@ def read_workloads(path=None):
     return [(e["name"], e["prompt_prefix"]) for e in entries], None
 
 
+def file_key(path):
+    """A user file's (mtime_ns, size), which changes with an edit; None when there is none."""
+    try:
+        st = os.stat(path)
+    except OSError:
+        return None
+    return st.st_mtime_ns, st.st_size
+
+
 def workload_of(entries, prompt):
     """The name of the first entry whose prefix starts prompt, else DEFAULT_WORKLOAD."""
     return next((name for name, prefix in entries if prompt.startswith(prefix)), DEFAULT_WORKLOAD)
@@ -58,12 +67,7 @@ class Workloads:
         self.key, self.entries, self.of = (), [], {}  # () is no stat: the first call reads the file
 
     def stat(self):
-        """The file's (mtime_ns, size), or None when there is none."""
-        try:
-            st = os.stat(self.path or USER_WORKLOADS)
-        except OSError:
-            return None
-        return st.st_mtime_ns, st.st_size
+        return file_key(self.path or USER_WORKLOADS)
 
     def get(self, cur, sids):
         """{session_id: workload} for the sessions of sids with a workload other than DEFAULT_WORKLOAD."""
@@ -157,10 +161,10 @@ def counters(cur, workloads, prices=None, user_projects=None):
     errors = cur.execute(f"""WITH {lab} SELECT l.source, l.project, l.automated, l.workload, coalesce(t.category, 'other'), count(*)
         FROM tool_calls t JOIN lab l USING (session_id) WHERE t.is_error GROUP BY ALL ORDER BY ALL""", lp).fetchall()
     # Calls with usable timing (metrics.latency), as the pages time them.
-    hist = cur.execute(f"""SELECT coalesce(s.source, 'claude'), coalesce(t.tool, '{UNKNOWN}'),
+    hist = cur.execute(f"""WITH {lab} SELECT l.source, l.workload, coalesce(t.tool, '{UNKNOWN}'),
         {", ".join(f"count(*) FILTER (WHERE t.ms <= {round(b * 1000)})" for b in BUCKETS)}, count(*), sum(t.ms)
-        FROM (SELECT session_id, tool, {metrics.latency()} AS ms FROM tool_calls) t JOIN sessions s USING (session_id)
-        WHERE t.ms IS NOT NULL GROUP BY ALL ORDER BY ALL""").fetchall()
+        FROM (SELECT session_id, tool, {metrics.latency()} AS ms FROM tool_calls) t JOIN lab l USING (session_id)
+        WHERE t.ms IS NOT NULL GROUP BY ALL ORDER BY ALL""", lp).fetchall()
 
     with_model = lambda r: dict(base(r), model=r[4])
     tokens = [(dict(with_model(r), kind=k), r[8 + i]) for r in req for i, k in enumerate(metrics.TOKEN_KINDS)]
@@ -168,10 +172,10 @@ def counters(cur, workloads, prices=None, user_projects=None):
     tool_calls = [(dict(base(r), tool=r[4], result=res), r[i]) for r in calls for res, i in (("ok", 5), ("error", 6))]
     buckets = []
     for r in hist:
-        lb = dict(source=r[0], tool=r[1])
-        buckets += [("_bucket", dict(lb, le=f"{b:g}"), r[2 + i]) for i, b in enumerate(BUCKETS)]
+        lb = dict(source=r[0], workload=r[1], tool=r[2])
+        buckets += [("_bucket", dict(lb, le=f"{b:g}"), r[3 + i]) for i, b in enumerate(BUCKETS)]
         n = len(BUCKETS)
-        buckets += [("_bucket", dict(lb, le="+Inf"), r[2 + n]), ("_sum", lb, r[3 + n] / 1000), ("_count", lb, r[2 + n])]
+        buckets += [("_bucket", dict(lb, le="+Inf"), r[3 + n]), ("_sum", lb, r[4 + n] / 1000), ("_count", lb, r[3 + n])]
     return "".join([
         family("ai_ledger_requests_total", "counter", "Model requests.", [(with_model(r), r[5]) for r in req]),
         family("ai_ledger_unpriced_requests_total", "counter", "Model requests with no reported cost and no list price.",

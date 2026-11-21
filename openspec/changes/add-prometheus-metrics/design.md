@@ -66,10 +66,10 @@ First match wins; no match is `default`. The prefix stays on the machine; only t
 
 ### Cache by last change
 
-`App` keeps the rendered counter text with the key it was built for: `last_change` and the workloads file's mtime and size. A scrape compares the current key with it and rebuilds the counters only when they differ; the check and the rebuild run under a lock of their own (as `live_waiting` does), so concurrent scrapes build once. Gauges (active sessions, limit windows, ingest state, build info) are cheap and are rendered on every scrape.
+`App` keeps the rendered counter text with the key it was built for: a count of the changes an ingest or a limit poll stored (`last_change` has a one-second resolution), and the mtime and size of the workloads, prices and automated files. A scrape compares the current key with it and rebuilds the counters only when they differ; the check and the rebuild run under a lock of their own (as `live_waiting` does), so concurrent scrapes build once. Gauges (active sessions, limit windows, ingest state, build info) are cheap and are rendered on every scrape.
 
 - Limit windows: `refresh_alert` already builds `limits.payload` once per full cycle. It keeps `payload["windows"]` on `App`, and the scrape reads that list. No second payload build.
-- Active sessions: `live.sessions` over the store with the time of the scrape, grouped by source and state.
+- Active sessions: `live.states` (the states `live.sessions` gives, without titles or figures) over the store with the time of the scrape, grouped by source and state.
 
 ### One listener, same host check
 
@@ -88,5 +88,6 @@ If a query fails, `/metrics` answers 500 with the exception type only (the messa
 ## Risks / Trade-offs
 
 - A store of millions of requests makes the counter rebuild slower. It runs at most once per ingest that changed data, on a scrape thread, not on the ingest thread.
+- The active-session gauge reads the newest lines of each active session at every scrape (`live.states`, the read the Live page and the nav badge use): about 1.6 s on a store of 3,900 sessions with several active, nothing when none is. A faster `live.recent` would help Live as much; it is left for later.
 - The step at the first scrape distorts `increase()` for that window. Acceptable; a backfill can come later.
 - Clock: values carry no timestamps. Prometheus stamps them at scrape time, so a request appears in Prometheus up to one ingest interval plus one scrape interval after it happened.
