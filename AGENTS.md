@@ -30,7 +30,7 @@ Your goal is to complete the entire specification with maximum quality while min
 - `uv sync` — install Python 3.14 and dependencies.
 - `uv run ai-ledger` — serve on `http://127.0.0.1:8765/` (use `127.0.0.1`, not `localhost`). The code lives in `src/ai_ledger/`.
 - `uv run ruff check` — lint Python.
-- `uv run python -m unittest discover -s tests` — Python tests.
+- `uv run pytest` — Python tests, in parallel across cores (pytest-xdist). The tests are `unittest` cases, so `uv run python -m unittest tests.<module>` runs one module serially.
 - `cd web && npm run check` — typecheck, lint (oxlint; warnings do not fail it), web tests and build. Run it before committing any `web/src` change.
 - `cd site && npm run check` — typecheck and build the docs site. Run it before committing any `site/` change.
 - `openspec validate --specs --strict` — validate the specs; CI runs it. Run it after any change under `openspec/specs/`.

@@ -69,7 +69,7 @@ run = "uv run ruff check"
 [tasks.test]
 description = "Run the Python tests"
 depends = ["web:build"]
-run = "uv run python -m unittest discover -s tests"
+run = "uv run pytest"
 
 [tasks.fixtures]
 description = "Regenerate the page-test fixtures in web/src/__fixtures__/ after a payload change"

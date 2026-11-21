@@ -37,7 +37,15 @@ requires = ["uv_build>=0.13,<0.14"]
 build-backend = "uv_build"
 
 [dependency-groups]
-dev = ["ruff==0.17.4"]
+dev = [
+    "pytest==9.2.0",
+    "pytest-xdist==3.8.0",
+    "ruff==0.17.4",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-n auto --dist worksteal" # one worker per core; idle workers take tests from busy ones
 
 [tool.ruff.lint]
 select = ["E4", "E7", "E9", "F"]
