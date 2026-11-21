@@ -1,11 +1,9 @@
 // Context's sections: starting context, growth, window pressure, what fills context and cost.
 import { useState } from "react";
 import type { ContextPayload } from "../../api";
-import { DataTable } from "../../components/DataTable";
 import { HowMeasured } from "../../components/HowMeasured";
-import { openProjectSheet, pickRow } from "../../components/sheets/session";
+import { openProjectSheet } from "../../components/sheets/session";
 import { Table, type Column, type RowPick } from "../../components/table/Table";
-import { Toggletip } from "../../components/Toggletip";
 import { dur, num, pct, plural, usd, usd0 } from "../../format";
 import { Proj } from "./cells";
 import { CacheChart } from "./CacheChart";
@@ -120,11 +118,23 @@ export function Fills({ d }: { d: D }) {
   );
 }
 
+/** A row of Cost by project: a project's, or the whole view's. */
+type CostRow = Pick<D["cost"], "cost" | "cache_read_cost" | "long_cost" | "long_requests" | "cache_hit_ratio"> & { project: string | null; whole: boolean };
+// long_cost is null with no long-tier request and with no priced request alike; the total's null says which.
+const longCost = (r: CostRow) => (r.long_requests ? usd(r.long_cost) : r.cost == null ? "–" : usd0(0));
+const WHOLE_ROW = { className: "all" };
+const COST_COLUMNS: Column<CostRow>[] = [
+  { id: "project", header: "Project", cell: r => r.whole ? "Whole view" : <Proj project={r.project} button={!!r.project} />, cellProps: () => ({ className: "name" }) },
+  { id: "cost", header: "Estimated cost", align: "num", cell: r => usd(r.cost) },
+  { id: "cache", header: "Cache reads", align: "num", cell: r => usd(r.cache_read_cost) },
+  { id: "long", header: "Long-prompt tier", align: "num", cell: longCost },
+  { id: "requests", header: "Long-tier requests", align: "num", cell: r => num(r.long_requests) },
+  { id: "ratio", header: "Cache-hit ratio", tip: "Cache read tokens over all prompt tokens", tipTerm: "cache-hit ratio", align: "num", cell: r => pct(r.cache_hit_ratio) },
+];
+
 /** Cost as the Cost page counts it: the view and each project, the cache reads and the long-prompt tier. */
 export function CostSection({ d }: { d: D }) {
-  const c = d.cost, rows = [{ project: "" as string | null, whole: true, ...c }, ...(c.by_project.length > 1 ? c.by_project.map(p => ({ ...p, whole: false })) : [])];
-  // long_cost is null with no long-tier request and with no priced request alike; the total's null says which.
-  const longCost = (r: { cost: number | null; long_cost: number | null; long_requests: number }) => (r.long_requests ? usd(r.long_cost) : r.cost == null ? "–" : usd0(0));
+  const c = d.cost, whole: CostRow = { ...c, project: "", whole: true };
   return (
     <section className="panel sect" id="cost" aria-labelledby="costTitle">
       <h2 id="costTitle">Cost</h2>
@@ -133,15 +143,8 @@ export function CostSection({ d }: { d: D }) {
       <h3>Cache use over time</h3>
       <CacheChart series={c.series} />
       <h3>By project</h3>
-      <DataTable name="Cost by project">
-        <thead><tr><th scope="col">Project</th><th scope="col" className="num">Estimated cost</th><th scope="col" className="num">Cache reads</th><th scope="col" className="num">Long-prompt tier</th>
-          <th scope="col" className="num">Long-tier requests</th><th scope="col" className="num">Cache-hit ratio<Toggletip term="cache-hit ratio">Cache read tokens over all prompt tokens</Toggletip></th></tr></thead>
-        <tbody>{rows.map(r => <tr key={r.whole ? "total" : `project:${r.project ?? ""}`} className={r.whole ? "all" : undefined}
-          {...(!r.whole && r.project ? pickRow(r.project, v => openProjectSheet(v), { kind: "project", value: r.project }) : {})}>
-          <th scope="row" className="name">{r.whole ? "Whole view" : <Proj project={r.project} button={!!r.project} />}</th>
-          <td className="num">{usd(r.cost)}</td><td className="num">{usd(r.cache_read_cost)}</td><td className="num">{longCost(r)}</td>
-          <td className="num">{num(r.long_requests)}</td><td className="num">{pct(r.cache_hit_ratio)}</td></tr>)}</tbody>
-      </DataTable>
+      <Table name="Cost by project" rows={c.by_project.length > 1 ? c.by_project.map((p): CostRow => ({ ...p, whole: false })) : []} columns={COST_COLUMNS}
+        rowId={r => r.whole ? "total" : `project:${r.project ?? ""}`} pinned={[whole]} pick={PROJECT_PICK} rowProps={r => r.whole ? WHOLE_ROW : {}} />
     </section>
   );
 }
