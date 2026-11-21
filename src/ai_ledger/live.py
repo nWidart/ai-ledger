@@ -184,9 +184,11 @@ def assemble(rows, copied=None):
     LONG; a background call is not, as it returns at once. Lines of a subagent thread of `copied` (as forked tells) below
     its first line of its own give no event. A prompt or reply item with join (Grok's chunks) adds its text, after the
     join text, to its lane's newest event when that is a joining one of the same kind; a turn start between them does
-    not part them. Returns (events, results), where results maps a tool id to its result item when the use is not among
-    the rows."""
+    not part them. A joined event's text is trimmed once whole, as other sources' prompts and replies are, and one with
+    no text left is dropped. Returns (events, results), where results maps a tool id to its result item when the use is
+    not among the rows."""
     events, tools, results, joins = [], {}, {}, {}  # joins: lane -> its newest event when that can take a chunk
+    joined = []
     for key, path, ts, sub, source, text in rows:
         src = store.SOURCES.get(source or "claude")
         try:
@@ -210,6 +212,7 @@ def assemble(rows, copied=None):
                         continue
                     joins[lane] = ev = {x: v for x, v in it.items() if x != "join"} | dict(key=f"{key}#{i}", ts=t, lane=lane)
                     events.append(ev)
+                    joined.append(ev)
                     continue
             if k == "tool_use":
                 ev = dict(key=f"{key}#{i}", k="tool", ts=t, lane=lane, id=it["id"], tool=it["tool"], summary=it["summary"],
@@ -227,7 +230,12 @@ def assemble(rows, copied=None):
                     results[it["id"]] = r
             elif k not in ("request", "agent"):
                 events.append(dict(it, key=f"{key}#{i}", ts=t, lane=lane))
-    return events, results
+    empty = set()
+    for ev in joined:
+        ev["text"] = ev["text"].strip()
+        if not ev["text"]:
+            empty.add(id(ev))
+    return [e for e in events if id(e) not in empty] if empty else events, results
 
 
 def inner_call(r):

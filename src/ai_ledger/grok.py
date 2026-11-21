@@ -130,10 +130,11 @@ def chunk_text(u):
 
 
 def prompt_text(d, pid):
-    """The text of user_message_chunk line d, or None. The line names no prompt (pid is not on it): prompt_texts picks the
-    chunks of a prompt by the user_prompt_submit hook line before them."""
+    """The text of user_message_chunk line d, untrimmed (the whole prompt is trimmed once joined), or None. The line
+    names no prompt (pid is not on it): prompt_texts picks the chunks of a prompt by the user_prompt_submit hook line
+    before them."""
     u = update(d)
-    return (chunk_text(u).strip() or None) if u.get("sessionUpdate") == "user_message_chunk" else None
+    return (chunk_text(u) or None) if u.get("sessionUpdate") == "user_message_chunk" else None
 
 
 def stored_prompt(sid, pid):
@@ -169,7 +170,8 @@ def prompt_texts(cur, pids):
             continue
         if t:
             texts.setdefault(sid, []).append(t)
-    return {sid: "\n".join(ts) for sid, ts in texts.items()}
+    joined = {sid: "\n".join(ts).strip() for sid, ts in texts.items()}
+    return {sid: t for sid, t in joined.items() if t}
 
 
 def content_text(u):
@@ -241,11 +243,11 @@ def live_items(d):
     u = update(d)
     t = u.get("sessionUpdate")
     if t == "user_message_chunk":
-        text = chunk_text(u).strip()
-        return [dict(k="turn_start", window=None)] + ([dict(k="prompt", text=text, join="\n")] if text else [])
-    if t == "agent_message_chunk":
         text = chunk_text(u)
-        return [dict(k="reply", text=text, join="")] if text.strip() else []
+        return [dict(k="turn_start", window=None)] + ([dict(k="prompt", text=text, join="\n")] if text else [])
+    if t == "agent_message_chunk":  # a chunk of only a space still parts two words: live.assemble trims the whole
+        text = chunk_text(u)
+        return [dict(k="reply", text=text, join="")] if text else []
     if t == "turn_completed":
         return ([dict(k="interrupt")] if u.get("stop_reason") == "cancelled" else []) + [dict(k="turn_end")]
     if t == "auto_compact_completed":

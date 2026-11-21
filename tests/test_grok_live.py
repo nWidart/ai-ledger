@@ -96,6 +96,31 @@ class TurnStateTest(GrokLiveCase):
         self.assertEqual(st, dict(kind="wait", tool="run_terminal_command", since=live.iso(self.at(call)), inferred=True, long=False))
 
 
+class ChunkTextTest(GrokLiveCase):
+    def chunks(self, k, texts):
+        """Events of synthetic chunk lines of kind k (a fixture line's copy each, one millisecond apart) with texts."""
+        base = next(d for d in self.lines("long-turn") if kind(d) == k)
+        rows = []
+        for i, text in enumerate(texts):
+            d = copy.deepcopy(base)
+            grok.meta(d)["eventId"] += f"9{i}"
+            grok.meta(d)["agentTimestampMs"] += i if k == "agent_message_chunk" else 0  # a prompt's chunks share their time
+            grok.update(d)["content"]["text"] = text
+            rows.append((f"k{i}", "/x/updates.jsonl", grok.iso(grok.meta(d)["agentTimestampMs"]), False, "grok", json.dumps(d)))
+        return [e for e in live.assemble(rows)[0] if e["k"] in ("reply", "prompt")]
+
+    def test_whitespace_chunk_of_a_reply_is_kept(self):
+        self.assertEqual([e["text"] for e in self.chunks("agent_message_chunk", ["one", " ", "two"])], ["one two"])
+        self.assertEqual([e["text"] for e in self.chunks("agent_message_chunk", ["one", "\n", "two\n"])], ["one\ntwo"])
+
+    def test_reply_of_whitespace_only_gives_no_event(self):
+        self.assertEqual(self.chunks("agent_message_chunk", [" ", "\n"]), [])
+
+    def test_prompt_chunks_keep_their_own_whitespace(self):
+        self.assertEqual([e["text"] for e in self.chunks("user_message_chunk", [" one ", " ", "two "])], ["one \n \ntwo"])
+        self.assertEqual(self.chunks("user_message_chunk", [" ", ""]), [])
+
+
 class ToolUseTest(GrokLiveCase):
     def calls(self, **inputs):
         """Events of synthetic run_terminal_command calls made from a fixture call: one per name, its rawInput replaced."""
