@@ -18,9 +18,10 @@
    colors, so its parts stand off the surface as a full bar's do. The key is a half-width swatch. */
 .pg-judgments .trend h2 { margin-bottom: 2px; }
 .pg-judgments .trend .legend i.few { width: 5px; background: var(--text-muted); }
-/* Friction: the weight switch beside the heading, and room for a cost or a duration with two more figures beside it. */
+/* Friction: the weight switch beside the heading, and room for a cost or a duration with three more figures beside it
+   ("9.7h · 39 reports · 20 sessions") on one line. */
 .pg-judgments .friction .chart-head { margin-bottom: 4px; }
-.pg-judgments .friction .ledger { --ledger-cols: minmax(0, 10rem) minmax(40px, 1fr) 3.5rem 9.75rem; }
+.pg-judgments .friction .ledger { --ledger-cols: minmax(0, 10rem) minmax(40px, 1fr) 3.5rem 12rem; }
 /* Phones: the name keeps the row with the value; the other figures go under it, then the bar. */
 @media (max-width: 32.5em) {
   .pg-judgments .friction .ledger { --ledger-cols: minmax(0, 1fr) 4rem; }
