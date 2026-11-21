@@ -4,7 +4,8 @@ import type { ListedSessionRow, SessionSort, Span, View } from "../../api";
 import { HowMeasured } from "../../components/HowMeasured";
 import { SortTh, type SortBy } from "../../components/Sort";
 import { ProjectName } from "../../components/ProjectDot";
-import { openSessionSheet, sessName, shortId } from "../../components/sheets/session";
+import { openSessionSheet, shortId } from "../../components/sheets/session";
+import { SessionCell } from "../../components/table/cells";
 import { Table, type CellValue, type Column, type RowPick } from "../../components/table/Table";
 import { big, dur, num, pct, plural, usd, when } from "../../format";
 import { useDebouncedValue } from "../../components/useDebounced";
@@ -40,8 +41,7 @@ function sessionColumns(sorted: SessionSort | undefined, day: boolean): Column<L
   return [
     { id: "first_ts", header: "Session", sort: "desc", value: s => s.first_ts, cellProps: () => SESS_CELL,
       th: h => <SortTh k="first_ts" sort={h.sort} onSort={s => h.onSort?.(s)} className={sorted === "first_ts" ? " sorted" : undefined}>Session</SortTh>,
-      cell: s => <><button type="button" className="cellbtn" title={s.title || s.session_id}>{sessName(s)}</button>
-        <div className="muted small">{when(s.first_ts)}{s.git_branch ? ` · ${s.git_branch}` : ""}{s.title ? ` · ${shortId(s.session_id)}` : ""}</div></> },
+      cell: s => <SessionCell s={s} sub={<>{when(s.first_ts)}{s.git_branch ? ` · ${s.git_branch}` : ""}{s.title ? ` · ${shortId(s.session_id)}` : ""}</>} /> },
     { id: "project", header: "Project", cellProps: () => NAME_CELL, cell: s => <ProjectName project={s.project} /> },
     stat("duration_s", "Active", 0, s => dur(s.duration_s), s => s.duration_s, { tip: "Active time: pauses over 20 minutes left out" }),
     stat("model_ms", "Model", 1, s => s.model_ms == null ? "–" : dur(s.model_ms / 1000), s => s.model_ms,
