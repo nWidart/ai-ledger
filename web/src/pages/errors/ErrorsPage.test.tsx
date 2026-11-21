@@ -1457,6 +1457,8 @@ describe("ErrorsPage bucket selection", () => {
     expect(document.getElementById("chart")!.getAttribute("aria-label")).toContain("Selected: Nov 3.");
     expect(chartSaid()).toBe("Selected Nov 3, 2026: the table and detail show only its errors.");
     expect(chartTip()!.textContent).toMatch(/^Nov 3, 2026/); // the reading stays, so the same key acts on the same point
+    // The page's region sets its words on the next frame: a frame asked for now runs after it.
+    await act(() => new Promise<void>(r => { requestAnimationFrame(() => r()); }));
     expect(document.getElementById("detailLive")!.textContent).toBe("");
     await userEvent.keyboard(" ");
     expect(location.search).toBe("?range=30");
@@ -1651,19 +1653,19 @@ describe("ErrorsPage bucket selection", () => {
     expect(location.search).toBe("?range=30");
   });
 
-  // What moves the points (an earlier first day, a fold) is another view: rateTracks.test.ts has its key.
-  it("keeps the point read, with its tooltip, through newer data of the same view, and says nothing", async () => {
+  // What moves the points (an earlier first day, a fold) is another view: rateTracks.test.ts has its key. What the region
+  // says of a reading through newer data is the wrapper's rule, in EChart.test.tsx ("says a key's reading again in place of
+  // a status when newer figures change it, and leaves the pointer's unsaid").
+  it("keeps the point read, with its tooltip, through newer data of the same view", async () => {
     const client = await open("?range=30");
     const fake = await drawn(), drawings = fake.options.length;
     keys();
     await userEvent.keyboard("{Home}{ArrowRight}"); // Nov 4
-    const said = chartSaid();
     // An ingest adds calls on Nov 5, the last point: the same view.
     vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/errors") ? { ...two, calls: [...two.calls, ["2026-11-05", "foo", 10, 0, "claude"]] } : {})));
     refreshed(client);
     await waitFor(() => expect(fake.options.length).toBeGreaterThan(drawings));
     expect(chartTip()!.textContent).toMatch(/^Nov 4, 2026/);
-    expect(chartSaid()).toBe(said);
     await userEvent.keyboard("{Enter}");
     expect(location.search).toBe("?range=30&at=2026-11-04");
   });
