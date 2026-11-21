@@ -99,6 +99,11 @@ and versions follow [Semantic Versioning](https://semver.org/).
   - Errors, Insights and Live give each page one heading that names it, while loading, after a failed load and with nothing to show.
   - Live's wall reads "1 error", not "1 errors". A followed session with no title has its project as the stream's heading.
   - Activity's Output speed tile says "Codex transcripts record no model time." when every session in the view is a Codex one, priced or not.
+- The right-click menu opens on more sessions, tools, error types and projects: the sessions of Activity's Error loops and Failed test runs, of Context's quadrant list and window pressure list, the rows of Errors' Applied fixes, an Errors example's tool name, and each of Context's small window grids.
+- A thin segment of Activity's work chart no longer vanishes beside a tall one: it keeps at least 1px. Context's cache chart keeps a full bar with thin parts inside its track.
+- The Project page's Errors block explains a type's change in a toggletip instead of a hover-only title. With the source on Codex alone, it no longer asks for session judgments, and shows none kept from another source. Its project picker also lists Context's projects when usage has not answered.
+- Picking or clearing a project, or picking a source, closes Live's open session sheet, as it does on the other pages.
+- Errors' rate chart keeps its hint on a phone, as the other pages' charts do, and the Incidents vital no longer repeats what "recovered" means.
 
 ## [0.4.0] - 2026-11-15
 

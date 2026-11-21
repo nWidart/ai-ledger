@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CacheBucket, ContextPayload } from "../../api";
-import { CacheChart, cacheSlots, ratioFloor } from "./CacheChart";
+import { CacheChart, cacheSlots, ratioFloor, stack } from "./CacheChart";
 
 type Series = ContextPayload["cost"]["series"];
 const b = (day: string, o: Partial<CacheBucket> = {}): CacheBucket => ({ day, input: 0, cache_read: 0, cache_write: 0, model_switch: 0, expired: 0, other: 0, ...o });
@@ -103,6 +103,19 @@ describe("cache chart", () => {
   it("draws a tiny nonzero part at least 2px tall", () => {
     render(<CacheChart series={daily(b("2026-11-01", { input: 1_000_000, cache_write: 10 }))} />);
     expect(h(seg("2026-11-01", "seg-write")!)).toBe(2);
+  });
+
+  it("keeps a full stack with thin parts inside its track: the thin parts take their minimum from the tall one", () => {
+    // A stack the whole 180px track tall, of one big part and two thin ones: its top stays at the track's top, every part shows.
+    const parts = stack([["seg-input", 998], ["seg-write", 1], ["seg-read", 1]], 180, 180 / 1000);
+    expect(parts.map(p => p.key)).toEqual(["seg-input", "seg-write", "seg-read"]);
+    expect(parts.at(-1)!.y).toBeCloseTo(0);
+    for (const p of parts) expect(p.h).toBeGreaterThanOrEqual(2);
+    // Bottom first, each part 1px above the last: the surface shows between them.
+    parts.slice(1).forEach((p, k) => expect(p.y + p.h + 1).toBeCloseTo(parts[k]!.y));
+    expect(parts[0]!.y + parts[0]!.h).toBeCloseTo(180);
+    // A zero part takes no room.
+    expect(stack([["seg-input", 5], ["seg-write", 0]], 100, 1).map(p => p.key)).toEqual(["seg-input"]);
   });
 
   it("reads a 90% cache-hit ratio, the breaks by cause and the cache reads, with the reads switched off", () => {

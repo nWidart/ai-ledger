@@ -63,6 +63,16 @@ describe("window grids", () => {
     expect(screen.queryAllByRole("img")).toHaveLength(1);
   });
 
+  it("marks each small grid as its project's subject for the context menu, and an unnamed project's as none", () => {
+    const d = view(2);
+    d.grids = [d.grids[0]!, { ...d.grids[1]!, project: null }];
+    renderApp(<Grids d={d} />);
+    const cards = [...document.querySelectorAll(".cg-compact")];
+    expect(cards.map(c => c.getAttribute("data-subject"))).toEqual(["project:p0", null]);
+    // The card is the subject, not only the name inside it.
+    expect(cards[0]!.hasAttribute("data-subject-inline")).toBe(false);
+  });
+
   it("draws nothing when no project has a grid", () => {
     const { container } = renderApp(<Grids d={view(0)} />);
     expect(container.querySelector("#grids")).toBeNull();

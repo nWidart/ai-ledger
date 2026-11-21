@@ -170,6 +170,8 @@ describe("SessionMap", () => {
     const list = screen.getByRole("region", { name: "Sessions in Lean" });
     const ids = within(list).getAllByRole("button").map(b => b.getAttribute("data-session"));
     expect(ids).toHaveLength(QUAD_LIST_MAX);
+    // Each is its session's subject for the context menu, as every other session link is.
+    for (const b of within(list).getAllByRole("button")) expect(b.getAttribute("data-subject")).toBe(`session:${b.getAttribute("data-session")}`);
     expect(ids[0]).toBe("lean0000024");
     expect(ids.at(-1)).toBe("lean0000005");
     expect(within(list).getByText(/^The 20 newest of 25 sessions on the map/)).toBeTruthy();

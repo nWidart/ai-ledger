@@ -134,6 +134,24 @@ describe("chart by project", () => {
       expect(segs.at(-1)!.top).toBeGreaterThanOrEqual(plotTop);
     });
   });
+
+  it("keeps a thin segment at least 1px tall, inside the bar's height", () => {
+    // 1 commit of c over 1,000 of a: drawn to scale it would be a tenth of a pixel, under the 2px gap.
+    const day = "2026-11-04", rows = [row(day, { commits: 1001 })];
+    panel({ ...usage, work: rows, daily_work: rows, work_projects: [wp(day, "a", { commits: 1000 }), wp(day, "c", { commits: 1 })] });
+    const bar = document.querySelector("#work .bar-seg")!;
+    const hs = [...bar.children].map(seg => {
+      const dd = seg.getAttribute("d");
+      if (!dd) return { top: +seg.getAttribute("y")!, h: +seg.getAttribute("height")! };
+      const m = /^M[\d.]+,([\d.]+) V([\d.]+)/.exec(dd)!;
+      return { top: +m[2]! - 3, h: +m[1]! - (+m[2]! - 3) };
+    });
+    expect(hs).toHaveLength(2);
+    for (const s of hs) expect(s.h).toBeGreaterThanOrEqual(1);
+    expect(hs[0]!.top + hs[0]!.h).toBeCloseTo(BARS_BOTTOM);
+    expect(hs[1]!.top + hs[1]!.h + 2).toBeCloseTo(hs[0]!.top); // the 2px gap below it
+    expect(hs[1]!.top).toBeGreaterThanOrEqual(20); // the bar track's top
+  });
 });
 
 describe("work data table", () => {

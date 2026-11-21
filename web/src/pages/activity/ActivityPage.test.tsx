@@ -645,6 +645,9 @@ describe("ActivityPage", () => {
     expect(list.querySelector("h3")!.textContent).toMatch(/Error loops\s*3/);
     expect(document.activeElement).toBe(list.querySelector("h3"));
     expect(within(list).getByText(/Showing the 1 newest of 3\./)).toBeTruthy();
+    const sess = [...list.querySelectorAll<HTMLElement>("tbody button[data-session]")];
+    expect(sess.length).toBeGreaterThan(0);
+    for (const b of sess) expect(b.getAttribute("data-subject")).toBe(`session:${b.dataset.session}`);
     await userEvent.click(attention().getByRole("button", { name: "See it" }));
     expect(selectedTab()).toBe("Sessions");
     expect(screen.getByRole("checkbox", { name: "Near context limit only" })).toHaveProperty("checked", true);
@@ -1079,7 +1082,8 @@ describe("ActivityPage", () => {
     expect(list.querySelector("h3")!.textContent).toMatch(/Failed test runs\s*4/);
     const row = within(list.querySelector("tbody")!);
     expect(row.getByText("npm test")).toBeTruthy();
-    expect(row.getByRole("button", { name: "Fix upload" })).toBeTruthy();
+    // The session button is the session's subject for the context menu, as every other session link is.
+    expect(row.getByRole("button", { name: "Fix upload" }).getAttribute("data-subject")).toBe("session:s1");
     expect(row.getByRole("link", { name: "Open in Errors" }).getAttribute("href")).toBe("/errors?project=bar&range=30&source=codex&ex=t9");
   });
 

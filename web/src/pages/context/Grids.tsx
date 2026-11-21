@@ -38,7 +38,7 @@ export function Grids({ d }: { d: D }) {
       {one ? <ContextGrid model={single} snapshot={d.overhead} />
         : <div className="grid-multiples"><GridDefs />
           {grids.map(g => <ContextGrid key={g.project ?? ""} model={g.model}
-            compact={{ title: g.project == null ? <span className="muted">(no project)</span> : <ProjectName project={g.project}>{g.project}</ProjectName>, name: g.project ?? "(no project)" }} />)}
+            compact={{ title: g.project == null ? <span className="muted">(no project)</span> : <ProjectName project={g.project}>{g.project}</ProjectName>, name: g.project ?? "(no project)", project: g.project }} />)}
         </div>}
     </section>
   );

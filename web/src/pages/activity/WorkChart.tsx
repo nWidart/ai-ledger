@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import type { DailyWorkRow, UsagePayload } from "../../api";
 import { useColors } from "../../colors";
 import { dayLabel, niceStep, num, plural } from "../../format";
-import { dayAxis, FEW_CALLS, LOW_CALLS, lowVolume, peakLabelAt, roomForLabels, textScale, tipAt, useWidth } from "../../components/chart";
+import { dayAxis, FEW_CALLS, LOW_CALLS, lowVolume, peakLabelAt, roomForLabels, stackHeights, textScale, tipAt, useWidth } from "../../components/chart";
 import { ChartTable, DataTable } from "../../components/DataTable";
 import { HowMeasured } from "../../components/HowMeasured";
 import type { Kind } from "../cost/cost";
@@ -156,16 +156,17 @@ function WorkBars({ rows, week, view, kinds, stack, metric, onMetric, selected, 
   };
   // The bars and their axis labels: drawn again only with the data, the size or the metric, not on every pointer move.
   const bars = useMemo(() => rows.map((p, i) => {
-    const x = a.x(i), segs = parts(i);
-    let base = 0;
+    const x = a.x(i), segs = parts(i), vals = segs.map(([, v]) => v);
+    // 2px surface gap between stacked segments; the top segment gets rounded corners. A positive segment keeps at least 1px, as on
+    // Cost: the slots make room for that pixel and the gap below it, and the others shrink to keep the bar its height.
+    const slots = stackHeights(vals, vals.reduce((s, v) => s + v, 0) / a.yMax * a.ih, segs.map((_, j) => (j ? 3 : 1)));
+    let base = a.y(0);
     return <g key={p.day}>
       {i % every === 0 && <text x={x + a.w / 2} y={H - 6 * ts} textAnchor="middle" fontSize={11 * ts} fill="var(--text-muted)">{bucketLabel(p.day, week)}</text>}
       {/* One group per bar, so the whole stack grows from the baseline when data lands. */}
-      {segs.length > 0 && <g className="bar-seg" style={{ ["--i" as string]: Math.min(i, 60) }}>{segs.map(([k, v], j) => {
-        const top = a.y(base + v), h = v / a.yMax * a.ih;
-        base += v;
-        // 2px surface gap between stacked segments; the top segment gets rounded corners.
-        const hh = Math.max(0, h - (j ? 2 : 0));
+      {segs.length > 0 && <g className="bar-seg" style={{ ["--i" as string]: Math.min(i, 60) }}>{segs.map(([k], j) => {
+        const top = base - slots[j]!, hh = slots[j]! - (j ? 2 : 0);
+        base = top;
         return j === segs.length - 1 && hh > 4
           ? <path key={k.k} d={`M${x},${top + hh} V${top + 3} q0,-3 3,-3 H${x + a.w - 3} q3,0 3,3 V${top + hh} Z`} fill={k.c} />
           : <rect key={k.k} x={x} y={top} width={a.w} height={hh} fill={k.c} />;

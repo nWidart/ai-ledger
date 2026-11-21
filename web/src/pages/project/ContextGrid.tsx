@@ -4,6 +4,7 @@
 import type { ReactNode } from "react";
 import { big, plural, when } from "../../format";
 import type { ContextOverhead, OverheadPart } from "../../api";
+import { subjectAttrs } from "../../components/menu/subject";
 import { share, windowLabel } from "../context/context";
 import "./ContextGrid.css";
 import { GRID_CELLS, gridOverhead, overheadParts, PART_TONES, type ContextGridModel, type GridOverhead, type GridRow, type GridTone } from "./project";
@@ -97,8 +98,8 @@ function Snapshot({ snapshot }: { snapshot: ContextOverhead }) {
 }
 
 /** One of several grids side by side (Context's window grids): its title names it, and `name` starts its text for a screen reader.
- *  The page draws the cell symbols once, with GridDefs. */
-export interface Compact { title: ReactNode; name: string }
+ *  The page draws the cell symbols once, with GridDefs. project: the grid's project, its subject for the context menu (none unnamed). */
+export interface Compact { title: ReactNode; name: string; project?: string | null }
 
 /** The grid of a typical session, or the snapshot alone (snapshot) when there is no grid to draw, so a saved measurement always shows.
  *  compact: the cells over three figures (start, peak, free) and no legend, as one of several grids. */
@@ -112,7 +113,7 @@ export function ContextGrid({ model, snapshot, compact }: { model: ContextGridMo
     const start = rows.filter(r => r.key !== "added" && r.key !== "free").reduce((a, r) => a + r.share, 0);
     const figs: [string, GridTone, number][] = [["Start", "start", start], ["Peak", "added", start + added], ["Free", "free", free]];
     return (
-      <div className="ctx-grid cg-compact">
+      <div className="ctx-grid cg-compact" {...subjectAttrs("project", compact.project)}>
         <div className="cg-cells" role="img" aria-label={`${compact.name}: ${gridLabel(rows)}`} style={{ gridTemplateColumns: `repeat(${COLS}, 1fr)` }} data-cells={GRID_CELLS}>
           {tones.map((t, i) => <Icon key={i} tone={t} className="cg-cell" />)}
         </div>

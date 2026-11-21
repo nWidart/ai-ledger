@@ -5,6 +5,7 @@ import type { ContextPayload, SessionPoint } from "../../api";
 import { useColors } from "../../colors";
 import { scaleMargins, textScale, tipAt, useWidth } from "../../components/chart";
 import { ChartTable, DataTable } from "../../components/DataTable";
+import { subjectAttrs } from "../../components/menu/subject";
 import { openSessionSheet, pickRow, sessName, shortId } from "../../components/sheets/session";
 import { num, plural, when } from "../../format";
 import { Proj, SourceName } from "./cells";
@@ -211,7 +212,7 @@ export function SessionMap({ map, quad, onQuad }: { map: SessionsMap; quad: Quad
         <p className="muted small">{inQuad.length > QUAD_LIST_MAX ? `The ${num(QUAD_LIST_MAX)} newest of ${plural(inQuad.length, "session")}` : plural(inQuad.length, "session")} on the map
           with {QUAD[quad].what}, newest first. The window pressure bars above count these alone.</p>
         {inQuad.length > 0 && <ul>{inQuad.slice(0, QUAD_LIST_MAX).map(p => <li key={p.session_id}>
-          <button type="button" className="cellbtn qsess" data-session={p.session_id} title={p.title || p.session_id} onClick={() => openSessionSheet(p.session_id)}>
+          <button type="button" className="cellbtn qsess" data-session={p.session_id} {...subjectAttrs("session", p.session_id)} title={p.title || p.session_id} onClick={() => openSessionSheet(p.session_id)}>
             <span className="qname">{sessName(p)}</span>
             <span className="muted">{p.project ?? "no project"} · {SOURCE_LABELS[p.source]} · {when(p.first_ts)} · starts {short(p.start)} · peak {share(p.peak / p.window)}</span>
           </button></li>)}</ul>}

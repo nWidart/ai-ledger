@@ -34,7 +34,6 @@
   .pg-errors .lede { font-size: 1.3125rem; margin-bottom: 10px; }
   .pg-errors .sub { margin-bottom: 12px; }
   .pg-errors .top { margin-bottom: 14px; gap: 8px; }
-  .pg-errors .chart-card .hint { display: none; }
 }
 .pg-errors .delta-down { color: var(--good-text); } .pg-errors .delta-up { color: var(--critical-text); }
 .pg-errors .panel h2 { font-size: .9375rem; margin: 0 0 2px; }
