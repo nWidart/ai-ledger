@@ -288,8 +288,9 @@ const TREND = (env: OptionEnv) => ({ lineStyle: { color: env.ink.muted, width: .
  *  be dragged and where its window is.
  *  Its fixed id lets a redraw merge into it, so the days shown survive a theme change (the wrapper replaces dataZoom, so
  *  an option without the slider removes it); with no id the redraw would make a new slider and show every point again.
- *  It drives every x axis: with none named ECharts zooms the first only, and a chart of several tracks would zoom its
- *  frame and leave its tracks. With one x axis this is the same slider. */
+ *  It drives every x axis: with none named a slider drives the first x axis plus every other x axis in its grid and leaves
+ *  the x axes of other grids, and a chart of several tracks would zoom its frame and leave its tracks. With one x axis
+ *  this is the same slider. */
 export const zoomSlider = (env: OptionEnv): SliderDataZoomComponentOption => ({
   type: "slider",
   id: "zoom",
