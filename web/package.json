@@ -8,7 +8,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "oxlint --react-plugin --vitest-plugin src",
     "test": "vitest run",
-    "check": "npm run typecheck && npm run lint && vitest run && npm run build"
+    "check": "npm run typecheck && npm run lint && vitest run && npm run build && node scripts/check-bundle.mjs"
   },
   "dependencies": {
     "@base-ui/react": "1.9.0",
