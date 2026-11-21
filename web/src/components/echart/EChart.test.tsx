@@ -1,15 +1,16 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import { StrictMode } from "react";
+import { createRef, StrictMode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { prevented } from "../../testing";
 import { setTheme } from "../../theme";
-import { EChart, type EChartProps } from "./EChart";
+import { EChart, type EChartHandle, type EChartProps, type Shown } from "./EChart";
 import type { EChartsOption } from "./echarts";
+import { zoomSlider } from "./option";
 import { drawn, fakeECharts, type FakeChart } from "./testing";
 import type { ChartEnv } from "./tokens";
 
 const LABEL = "Estimated cost per day, 3 days.";
-const REPLACE = { replaceMerge: ["series", "xAxis", "yAxis", "grid"] };
+const REPLACE = { replaceMerge: ["series", "xAxis", "yAxis", "grid", "dataZoom"] };
 const FAILED = "The chart could not be drawn. The data table below has its figures.";
 
 // One line in a token color, at the size the env gives: enough to see what a drawing was made from.
@@ -535,5 +536,192 @@ describe("EChart reading", () => {
     unmount();
     expect(count(off)).toBe(count(on));
     expect(chart.disposed).toBe(true);
+  });
+});
+
+describe("EChart zoom", () => {
+  // Thirty days with the zoom slider, as Cost draws a 30-day view.
+  const MONTH = Array.from({ length: 30 }, (_, i) => `Oct ${i + 1}`);
+  const month = (env: ChartEnv): EChartsOption => ({
+    xAxis: { type: "category", data: MONTH },
+    yAxis: { type: "value", max: 10 },
+    series: [{ type: "line", data: MONTH.map((_, i) => i % 10), lineStyle: { color: env.color("var(--proj-1)") } }],
+    dataZoom: [zoomSlider(env)],
+  });
+  const readDay = (i: number) => `${MONTH[i]}: $${i}.00`;
+  const readZoom = (s: { from: number; to: number } | null) =>
+    s ? `Showing ${MONTH[s.from]} to ${MONTH[s.to]}, ${s.to - s.from + 1} of 30 days.` : "Showing all 30 days.";
+  const zoomed = (props: Partial<EChartProps> = {}) =>
+    <EChart label={LABEL} height={268} option={month} points={MONTH.length} read={readDay} zoom readZoom={readZoom} {...props} />;
+  /** The dataZoom actions the chart was sent, as [startValue, endValue], or "all" for a reset. */
+  const zooms = (chart: FakeChart) => chart.actions.filter(a => a.type === "dataZoom")
+    .map(a => (a.startValue == null ? "all" : [a.startValue, a.endValue]));
+  const zoomSpy = () => vi.fn<(s: Shown | null) => void>();
+  /** Reads day i from nothing read: Home, then Right. */
+  const readTo = (i: number) => { key("Home"); for (let n = 0; n < i; n++) key("ArrowRight"); };
+
+  it("halves the span with plus and doubles it with minus, around the last point when nothing is read", async () => {
+    const onZoom = zoomSpy();
+    render(zoomed({ onZoom }));
+    const chart = await drawn();
+    expect(key("+")).toBe(false);
+    expect(chart.shown).toEqual({ from: 15, to: 29 });
+    expect(readout()).toBe("Showing Oct 16 to Oct 30, 15 of 30 days.");
+    expect(key("=")).toBe(false);
+    expect(chart.shown).toEqual({ from: 22, to: 29 });
+    expect(key("-")).toBe(false);
+    expect(chart.shown).toEqual({ from: 14, to: 29 });
+    key("-");
+    expect(chart.shown).toEqual({ from: 0, to: 29 });
+    expect(readout()).toBe("Showing all 30 days.");
+    expect(onZoom.mock.calls).toEqual([[{ from: 15, to: 29 }], [{ from: 22, to: 29 }], [{ from: 14, to: 29 }], [null]]);
+    expect(zooms(chart)).toEqual([[15, 29], [22, 29], [14, 29], "all"]);
+  });
+
+  it("zooms around the point being read, keeps the reading, and moves the band with the point", async () => {
+    render(zoomed());
+    const chart = await drawn();
+    readTo(19);
+    expect(readout()).toBe("Oct 20: $19.00");
+    key("+"); // Oct 20 keeps its place in the window: about two thirds along
+    expect(chart.shown).toEqual({ from: 10, to: 24 });
+    expect(readout()).toBe("Showing Oct 11 to Oct 25, 15 of 30 days.");
+    expect(chart.band).toBe(19);
+    expect(bands(chart).at(-1)).toBe("at 19"); // sent again at the point's new place
+    key("+");
+    expect(chart.shown).toEqual({ from: 14, to: 21 });
+    expect(chart.band).toBe(19);
+    key("ArrowRight"); // the next key reads again
+    expect(readout()).toBe("Oct 21: $20.00");
+  });
+
+  it("stops at 7 points and at every point", async () => {
+    render(zoomed());
+    const chart = await drawn();
+    expect(key("-")).toBe(false); // every point already: the key is the chart's, and nothing changes
+    expect(zooms(chart)).toEqual([]);
+    key("+");
+    key("+");
+    key("+");
+    expect(chart.shown).toEqual({ from: 23, to: 29 });
+    expect(key("+")).toBe(false);
+    expect(zooms(chart)).toHaveLength(3);
+    expect(readout()).toBe("Showing Oct 24 to Oct 30, 7 of 30 days.");
+  });
+
+  it("takes plus with Shift, and leaves it to the browser with Ctrl, Alt or Meta", async () => {
+    render(zoomed());
+    const chart = await drawn();
+    expect(fireEvent.keyDown(box(), { key: "+", ctrlKey: true })).toBe(true);
+    expect(fireEvent.keyDown(box(), { key: "-", metaKey: true })).toBe(true);
+    expect(fireEvent.keyDown(box(), { key: "=", altKey: true })).toBe(true);
+    expect(zooms(chart)).toEqual([]);
+    expect(fireEvent.keyDown(box(), { key: "+", shiftKey: true })).toBe(false);
+    expect(chart.shown).toEqual({ from: 15, to: 29 });
+    expect(fireEvent.keyDown(box(), { key: "ArrowRight", shiftKey: true })).toBe(true); // Shift is the zoom keys' only
+  });
+
+  it("leaves the zoom keys alone without zoom, and before the chart is drawn", async () => {
+    const load = fakeECharts.hold();
+    const { rerender } = render(zoomed());
+    expect(key("+")).toBe(true);
+    await load.resolve();
+    const chart = await drawn();
+    rerender(zoomed({ zoom: false }));
+    expect(key("+")).toBe(true);
+    expect(zooms(chart)).toEqual([]);
+  });
+
+  it("moves the days shown to include the point a key reads", async () => {
+    render(zoomed());
+    const chart = await drawn();
+    chart.zoomTo(5, 14);
+    key("End");
+    expect(readout()).toBe("Oct 30: $29.00"); // the reading is said, not the zoom
+    expect(zooms(chart).at(-1)).toEqual([20, 29]);
+    expect(chart.shown).toEqual({ from: 20, to: 29 });
+    expect(chart.band).toBe(29);
+    key("ArrowLeft");
+    expect(zooms(chart)).toHaveLength(1); // inside: nothing moves
+    key("Home");
+    expect(chart.shown).toEqual({ from: 0, to: 9 });
+    expect(chart.band).toBe(0);
+  });
+
+  it("reports a drag of the slider, says the days shown, and reads the points it shows", async () => {
+    const onZoom = zoomSpy();
+    render(zoomed({ onZoom }));
+    const chart = await drawn();
+    chart.zoomTo(10, 19);
+    expect(onZoom.mock.calls).toEqual([[{ from: 10, to: 19 }]]);
+    expect(readout()).toBe("Showing Oct 11 to Oct 20, 10 of 30 days.");
+    chart.fire("mousemove", chart.pointAt(12));
+    expect(readout()).toBe("Oct 13: $12.00");
+    chart.zoomTo(10, 19); // the same days: nothing to say
+    expect(onZoom).toHaveBeenCalledTimes(1);
+    expect(readout()).toBe("Oct 13: $12.00");
+    chart.zoomTo(0, 29);
+    expect(onZoom.mock.calls.at(-1)).toEqual([null]);
+    expect(readout()).toBe("Showing all 30 days.");
+    expect(zooms(chart)).toEqual([]); // the slider's own: the wrapper sends nothing back
+  });
+
+  it("ends the reading when the slider leaves its point out", async () => {
+    render(zoomed());
+    const chart = await drawn();
+    key("End");
+    chart.zoomTo(0, 9);
+    expect(readout()).toBe("Showing Oct 1 to Oct 10, 10 of 30 days.");
+    expect(tooltip()).toBeNull();
+    expect(chart.band).toBeNull();
+    expect(chart.shown).toEqual({ from: 0, to: 9 }); // the drag is kept
+  });
+
+  it("keeps the days shown on a theme change, and shows every point on a new option function", async () => {
+    themedColors();
+    const onZoom = zoomSpy();
+    const { rerender } = render(zoomed({ onZoom }));
+    const chart = await drawn();
+    key("+");
+    act(() => setTheme("dark"));
+    expect(chart.last).toMatchObject({ series: [{ lineStyle: { color: "rgb(93, 155, 242)" } }] });
+    expect(chart.shown).toEqual({ from: 15, to: 29 });
+    expect(zooms(chart)).toHaveLength(1);
+    expect(readout()).toBe("Showing Oct 16 to Oct 30, 15 of 30 days.");
+    expect(onZoom).toHaveBeenCalledTimes(1);
+
+    rerender(zoomed({ onZoom, option: env => month(env) }));
+    expect(chart.shown).toEqual({ from: 0, to: 29 });
+    expect(zooms(chart).at(-1)).toBe("all");
+    expect(onZoom.mock.calls.at(-1)).toEqual([null]);
+    expect(readout()).toBe(""); // a new drawing: nothing to say
+    key("+"); // and it zooms from every point again
+    expect(chart.shown).toEqual({ from: 15, to: 29 });
+  });
+
+  it("removes the slider when the option drops it", async () => {
+    const { rerender } = render(zoomed());
+    const chart = await drawn();
+    chart.zoomTo(10, 19);
+    const short = (env: ChartEnv): EChartsOption => { const { dataZoom: _, ...rest } = month(env); return rest; };
+    rerender(zoomed({ option: short }));
+    expect(chart.option.dataZoom).toEqual([]);
+    expect(chart.shown).toEqual({ from: 0, to: 29 });
+  });
+
+  it("shows every point again on reset(), and focuses the box on focus()", async () => {
+    const ref = createRef<EChartHandle>(), onZoom = zoomSpy();
+    render(<>{zoomed({ ref, onZoom })}<button type="button">Show all days</button></>);
+    const chart = await drawn();
+    act(() => ref.current!.reset()); // not zoomed: nothing to do
+    expect(zooms(chart)).toEqual([]);
+    chart.zoomTo(10, 19);
+    screen.getByRole("button").focus();
+    act(() => { ref.current!.reset(); ref.current!.focus(); });
+    expect(chart.shown).toEqual({ from: 0, to: 29 });
+    expect(zooms(chart)).toEqual(["all"]);
+    expect(onZoom.mock.calls.at(-1)).toEqual([null]);
+    expect(readout()).toBe("Showing all 30 days.");
+    expect(document.activeElement).toBe(box());
   });
 });

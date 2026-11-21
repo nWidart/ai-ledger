@@ -79,14 +79,20 @@ export const pointLabel = (env: OptionEnv, { index, value, text }: { index: numb
   },
 });
 
-/** The zoom slider under the grid: 20px high, no detail text, no brush, at least 7 points wide, in the ink colors. */
+/** The fewest points the zoom shows: the slider's handles and the plus key both stop there. */
+export const MIN_SHOWN = 7;
+
+/** The zoom slider under the grid: 20px high, no detail text, no brush, at least MIN_SHOWN points wide, in the ink colors.
+ *  Its fixed id lets a redraw merge into it, so the days shown survive a theme change (the wrapper replaces dataZoom, so
+ *  an option without the slider removes it); with no id the redraw would make a new slider and show every point again. */
 export const zoomSlider = (env: OptionEnv): SliderDataZoomComponentOption => ({
   type: "slider",
+  id: "zoom",
   height: 20,
   bottom: 4,
   showDetail: false,
   brushSelect: false,
-  minValueSpan: 6,
+  minValueSpan: MIN_SHOWN - 1,
   backgroundColor: "transparent",
   borderColor: env.ink.border,
   fillerColor: env.ink.cursor,

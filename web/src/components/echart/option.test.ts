@@ -108,6 +108,10 @@ describe("zoomSlider", () => {
     expect(zoomSlider(env())).toMatchObject({ type: "slider", height: 20, showDetail: false, brushSelect: false, minValueSpan: 6 });
   });
 
+  it("has a fixed id, so a redraw merges into it and keeps the window", () => {
+    expect(zoomSlider(env()).id).toBe("zoom");
+  });
+
   it("takes its colors from the ink roles", () => {
     const z = zoomSlider(env());
     expect(z).toMatchObject({ borderColor: "ink-border", fillerColor: "ink-cursor", handleStyle: { color: "ink-surface", borderColor: "ink-border" } });
