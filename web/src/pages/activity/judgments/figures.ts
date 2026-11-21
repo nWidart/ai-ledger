@@ -56,6 +56,31 @@ export const trendText = (w: TrendWeek): string => {
   return `${plural(w.n, "analysed session")}: ${parts.join(", ")}${isFew(w) ? `; ${FEW_TEXT}` : ""}`;
 };
 
+// ---------- stacked-bar mixes ----------
+/** The neutral color of a value the page does not know, and of "unclear". */
+export const NEUTRAL = "var(--proj-other)";
+const trendColor = (k: TrendKey) => TREND_PARTS.find(p => p.k === k)!.c;
+/** Each outcome's color in the Outcomes bar: the trend's, so the two share one source. */
+export const OUTCOME_COLORS: Record<string, string> = {
+  fully_achieved: trendColor("fully"),
+  mostly_achieved: trendColor("mostly"),
+  partially_achieved: trendColor("partially"),
+  not_achieved: trendColor("not_achieved"),
+};
+/** Each helpfulness rating's color: two greens, amber, two reds, from essential to unhelpful. */
+export const HELP_COLORS: Record<string, string> = {
+  essential: "var(--good)",
+  very_helpful: "var(--good-text)",
+  moderately_helpful: "var(--warning)",
+  slightly_helpful: "var(--critical-text)",
+  unhelpful: "var(--critical)",
+};
+/** The parts of a stacked bar from counts: each value's color (NEUTRAL when unknown) and its tooltip. */
+export const mixParts = (rows: readonly FacetCount[], colors: Record<string, string>, name: (raw: string) => string, total: number)
+  : { key: string; n: number; color: string; title: string }[] =>
+  rows.map(r => ({ key: r.name, n: r.n, color: colors[r.name] ?? NEUTRAL,
+    title: `${name(r.name)}: ${plural(r.n, "session")}, ${pct(total ? r.n / total : 0)}` }));
+
 // ---------- friction weights ----------
 /** What a friction row is weighed by: the cost or the active time of the sessions that reported it, or how often it was reported. */
 export type Weight = "cost" | "time" | "reports";

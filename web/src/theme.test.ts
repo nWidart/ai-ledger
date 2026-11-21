@@ -135,6 +135,11 @@ describe("theme.css tokens", () => {
     for (const t of themes)
       expect(contrast(resolve(tokens, "--control-border", t), resolve(tokens, "--surface-1", t))).toBeGreaterThanOrEqual(3);
   });
+  it("keeps the chart fill tokens at 3:1 on surface-1 in both themes", () => {
+    for (const n of ["--good", "--good-text", "--warning", "--critical-text", "--critical", "--proj-other"])
+      for (const t of themes)
+        expect(contrast(resolve(tokens, n, t), resolve(tokens, "--surface-1", t)), `${n} ${t}`).toBeGreaterThanOrEqual(3);
+  });
   it("leaves --border soft, for dividers", () => {
     for (const t of themes)
       expect(contrast(resolve(tokens, "--border", t), resolve(tokens, "--surface-1", t))).toBeLessThan(1.5);
@@ -188,6 +193,10 @@ describe("forced colors", () => {
   it("keeps bars visible and never suppresses a focus ring", () => {
     const css = block();
     expect(css).toMatch(/\.ledger \.bar[^{]*\{ forced-color-adjust: none; outline: 1px solid CanvasText; \}/);
+    for (const sel of [".pg-judgments .mixbar", ".pg-judgments .mixbar i:not(.rest)", ".ledger .sw", ".pg-judgments .key .sw"]) {
+      expect(css).toMatch(new RegExp(`\\.ledger \\.bar[^{]*${sel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[^{]*\\{ forced-color-adjust: none; outline: 1px solid CanvasText; \\}`));
+    }
+    expect(css).toContain(".pg-judgments .mixbar i:not(.rest) { outline-offset: -1px; }");
     expect(css).toContain(".bar-seg");
     expect(css).not.toMatch(/outline: *(none|0)/);
   });

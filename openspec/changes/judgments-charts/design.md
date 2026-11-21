@@ -116,7 +116,7 @@ Outcomes use the trend's `TREND_PARTS` colors by outcome name, so `figures.ts` s
 
 ### 7. Low-count and empty views
 
-- Fewer than `FEW_SESSIONS` (5) analysed sessions: Outcomes and Helpfulness each show the trend's `FEW_TEXT` as a muted line under the bar. One constant and one sentence for "few", on the bar and on the trend.
+- Fewer than `FEW_SESSIONS` (5) analysed sessions: Outcomes and Helpfulness each show the trend's `FEW_TEXT` as a muted line under the bar. One constant and one sentence for "few", on the bar and on the trend. The count is `coverage.facets`, the bar's denominator and the lede's "analysed sessions", so it includes a facet whose session has no transcript in the store.
 - No session with a value (every count is 0): the section shows its empty sentence ("No outcomes in this view.", "No ratings in this view.") and neither bar nor rows. Today it lists five zero rows.
 - No analysed session in the view, or no facet in the store: unchanged. The sections are not rendered (`figures` in `Judgments`).
 - Sessions with no value (a null rating): the spacer leaves the end of the track empty, so the parts stay shares of the analysed sessions and agree with the rows.
@@ -127,7 +127,7 @@ Outcomes use the trend's `TREND_PARTS` colors by outcome name, so `figures.ts` s
 - **Outcomes** keeps its place in the row with Friction. The bar spans the column; the rows sit under it, left-aligned. Its height is about the same as today (five rows plus the bar).
 - **Satisfaction and helpfulness** keeps its place and its heading. Inside, two columns from 56.25em (900px, the breakpoint of `.grid2`): the satisfaction ledger on the left, the helpfulness bar and rows on the right. Below it, one column, satisfaction first. A full-width bar over a short list would leave most of the panel empty, and the two columns halve the panel's height.
 - **390px**: one column everywhere. Rows keep name, share and count on one line; the name truncates with its full text in the title, as ledger rows do.
-- **Text at 200%**: HTML text, so it scales with the root; the bar's height is in `rem`.
+- **Large text**: HTML text, so it scales with the root; the bar's height is in `rem`. Under 20em of page width (a 390px phone at 125% text or zoom and up, and a 320px phone) a keyed row puts its name on its own line, whole, over its share and count. The browser pass found the need: with fixed figure columns the name was cut to one letter at 200%.
 - The page order requirement ("Order the Judgments view") does not change.
 
 ### 9. Payload and Codex

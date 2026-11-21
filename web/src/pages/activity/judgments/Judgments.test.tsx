@@ -15,7 +15,7 @@ import { NO_FACETS } from "../../../components/facets";
 import { ViewSwitch } from "../ViewSwitch";
 import { Judgments } from "./Judgments";
 import { FEW_SESSIONS, stored, trendCounts, trendText, weightSide, weightValue, byWeight } from "./figures";
-import { renderPage, renderRouter } from "../../../testing";
+import { prevented, renderPage, renderRouter } from "../../../testing";
 import { setSearch } from "../../../url";
 
 const fixture = insights as InsightsPayload, none = empty as InsightsPayload;
@@ -151,6 +151,126 @@ describe("Judgments view", () => {
     expect(feel.slice(0, 4)).toEqual(["likely satisfied21 session", "dissatisfied11 session", "satisfied11 session", "unclear11 session"]);
     expect(feel.slice(4).map(t => t!.replace(/\d.*/, ""))).toEqual(["essential", "very helpful", "moderately helpful", "slightly helpful", "unhelpful"]);
     expect(within(drawer("d-types")).getByRole("list").textContent).toBe("iterative refinement 1single task 1quick question 1");
+    expect(drawer("d-types").querySelectorAll(".mixbar i:not(.rest)")).toHaveLength(3);
+  });
+
+  // Outcomes: one stacked bar over keyed rows (a swatch, the share, the count).
+  describe("outcomes bar", () => {
+    const out = () => section(/^Outcomes$/);
+    const parts = () => [...out().querySelectorAll<HTMLElement>(".mixbar i:not(.rest)")];
+    const swatches = () => [...out().querySelectorAll<HTMLElement>("li .sw")];
+    const withOutcomes = (facets: number, outcomes: InsightsPayload["outcomes"]): InsightsPayload =>
+      ({ ...fixture, coverage: { ...fixture.coverage, facets }, outcomes });
+    const FEW = "Few sessions: one session moves this bar a lot.";
+
+    it("draws one part per outcome with sessions, in order, each in its row's swatch color, over rows with share then count", async () => {
+      show(withOutcomes(150, [{ name: "fully_achieved", n: 117 }, { name: "mostly_achieved", n: 20 }, { name: "partially_achieved", n: 8 },
+        { name: "not_achieved", n: 5 }, { name: "unclear_from_transcript", n: 0 }]));
+      await lede();
+      expect(within(out()).getAllByRole("listitem").map(li => li.textContent)).toEqual(
+        ["Fully achieved78%117", "Mostly achieved13%20", "Partially achieved5%8", "Not achieved3%5", "Unclear0%0"]);
+      expect(out().querySelector(".ledger")!.classList.contains("keyed")).toBe(true);
+      expect(parts().map(i => i.style.flexGrow)).toEqual(["117", "20", "8", "5"]);
+      const sw = swatches().map(s => s.style.background);
+      expect(sw.every(Boolean)).toBe(true);
+      expect(parts().map(i => i.style.background)).toEqual(sw.slice(0, 4));
+      expect(within(out()).queryByText(FEW)).toBeNull();
+    });
+
+    it("keeps an unknown outcome's row after the known ones and a neutral part at the end; a zero outcome has a row, no button, no part", async () => {
+      show(fixture);
+      await lede();
+      const names = within(out()).getAllByRole("listitem").map(li => li.querySelector(".n")!.textContent);
+      expect(names).toEqual(["Fully achieved", "Mostly achieved", "Partially achieved", "Not achieved", "Unclear", "abandoned"]);
+      expect(parts().map(i => i.title)).toEqual(["Fully achieved: 1 session, 33%", "Partially achieved: 1 session, 33%", "abandoned: 1 session, 33%"]);
+      const sw = swatches().map(s => s.style.background);
+      expect(parts().map(i => i.style.background)).toEqual([sw[0], sw[2], sw[5]]);
+      expect(sw[5]).toBe(sw[4]); // abandoned and unclear: both neutral
+      expect(sw[5]).not.toBe(sw[0]);
+      expect(within(out()).queryByRole("button", { name: /^Mostly achieved/ })).toBeNull();
+      expect(within(out()).getAllByRole("listitem")[1]!.querySelector("button")).toBeNull();
+    });
+
+    it("says few sessions stand behind the bar with 3 analysed sessions, and not with 5", async () => {
+      show(fixture);
+      await lede();
+      expect(within(out()).getByText(FEW).classList.contains("hint")).toBe(true);
+      cleanup();
+      show(withOutcomes(5, [{ name: "fully_achieved", n: 3 }, { name: "not_achieved", n: 2 }]));
+      await lede();
+      expect(within(out()).queryByText(FEW)).toBeNull();
+    });
+
+    it("says so, with no bar and no rows, when every outcome count is 0", async () => {
+      show(withOutcomes(3, fixture.outcomes.map(o => ({ ...o, n: 0 }))));
+      await lede();
+      expect(within(out()).getByText("No outcomes in this view.")).toBeTruthy();
+      expect(out().querySelector(".mixbar")).toBeNull();
+      expect(out().querySelector(".ledger")).toBeNull();
+      expect(within(out()).queryByText(FEW)).toBeNull();
+    });
+
+    it("filters from a row that shows it is pressed, and leaves modified keys on a row to the browser", async () => {
+      show(fixture);
+      await lede();
+      const btn = within(out()).getByRole("button", { name: /^Partially achieved/ });
+      await userEvent.click(btn);
+      expect(location.search).toBe("?range=0&outcome=partially_achieved");
+      expect(within(out()).getByRole("button", { name: /^Partially achieved/ }).getAttribute("aria-pressed")).toBe("true");
+      expect(prevented(within(out()).getByRole("button", { name: /^Partially achieved/ }))).toEqual([]);
+      expect(prevented(within(out()).getAllByRole("listitem")[1]!)).toEqual([]);
+      expect(out().querySelector(".mixbar button, .mixbar [tabindex]")).toBeNull();
+    });
+  });
+
+  // Satisfaction and helpfulness side by side; helpfulness is a stacked bar over keyed rows (share then count).
+  describe("helpfulness bar", () => {
+    const feel = () => section(/Satisfaction/);
+    const help = () => feel().querySelector<HTMLElement>(".feel > div:nth-child(2)")!;
+    const withHelp = (facets: number, helpfulness: InsightsPayload["helpfulness"]): InsightsPayload =>
+      ({ ...fixture, coverage: { ...fixture.coverage, facets }, helpfulness });
+    const SCALE = [{ name: "essential", n: 26 }, { name: "very_helpful", n: 111 }, { name: "moderately_helpful", n: 11 }, { name: "slightly_helpful", n: 0 }, { name: "unhelpful", n: 0 }];
+
+    it("lists the ratings in scale order, share then count", async () => {
+      show(withHelp(150, SCALE));
+      await lede();
+      expect(within(help()).getAllByRole("listitem").map(li => li.textContent).slice(0, 3)).toEqual(
+        ["essential17%26", "very helpful74%111", "moderately helpful7%11"]);
+      expect(help().querySelector(".ledger")!.classList.contains("keyed")).toBe(true);
+    });
+
+    it("filters from a row with aria-pressed", async () => {
+      show(fixture);
+      await lede();
+      await userEvent.click(within(help()).getByRole("button", { name: /^essential/ }));
+      expect(location.search).toBe("?range=0&help=essential");
+      expect(within(help()).getByRole("button", { name: /^essential/ }).getAttribute("aria-pressed")).toBe("true");
+    });
+
+    it("leaves a rest spacer for unrated sessions, and none when all are rated", async () => {
+      show(withHelp(150, SCALE)); // 148 of 150 rated
+      await lede();
+      expect(help().querySelector<HTMLElement>(".mixbar .rest")!.style.flexGrow).toBe("2");
+      cleanup();
+      show(withHelp(148, SCALE));
+      await lede();
+      expect(help().querySelector(".mixbar .rest")).toBeNull();
+    });
+
+    it("says so, with no bar and no rows, when every rating is 0", async () => {
+      show(withHelp(3, SCALE.map(x => ({ ...x, n: 0 }))));
+      await lede();
+      expect(within(help()).getByText("No ratings in this view.")).toBeTruthy();
+      expect(help().querySelector(".mixbar")).toBeNull();
+      expect(help().querySelector(".ledger")).toBeNull();
+    });
+
+    it("puts satisfaction's heading before helpfulness's, both in the section", async () => {
+      show(fixture);
+      await lede();
+      const a = within(feel()).getByRole("heading", { name: "Satisfaction signals" }), b = within(feel()).getByRole("heading", { name: "Claude's helpfulness" });
+      expect(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
   });
 
   it("orders the page: vitals, outcomes and friction, satisfaction, sessions, then Goals, Session types, Session figures and Coverage as closed drawers", async () => {

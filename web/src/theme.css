@@ -23,7 +23,7 @@
   --grid: light-dark(#e8e6e1, #2b2b28); --track: light-dark(#ebe9e4, #262624); --good: #0ca30c; --good-text: light-dark(#006300, #4cc94c);
   --critical: light-dark(#d03b3b, #e66767); --critical-text: light-dark(#b42318, #f08080);
   --critical-soft: light-dark(rgba(208,59,59,.1), rgba(230,103,103,.16));
-  --warning: light-dark(#c98500, #d99a1e); --warning-text: light-dark(#8a5a00, #e0b04a); --warning-soft: light-dark(rgba(201,133,0,.12), rgba(217,154,30,.16));
+  --warning: light-dark(#c68300, #d99a1e); --warning-text: light-dark(#8a5a00, #e0b04a); --warning-soft: light-dark(rgba(201,133,0,.12), rgba(217,154,30,.16));
   --good-soft: light-dark(rgba(12,163,12,.1), rgba(76,201,76,.13));
   /* Brand: one fired-clay accent (4.96:1 on surface-1) for everything interactive: focus, links, pressed segments,
      checkboxes, primary buttons, the mark and the active Usage tab. Data series keep their own hues. */
@@ -186,7 +186,9 @@ dialog.sheet::backdrop { background: var(--scrim); }
   :is(.pg-activity, .pg-errors) circle.lowc { forced-color-adjust: none; fill: Canvas; stroke: CanvasText; }
   .pg-activity .legend .key i.low, .pg-errors .sw.low { forced-color-adjust: none; background: Canvas; border-color: CanvasText; }
   /* Bars: the fill keeps its color, the track and the fill sit in a frame. */
-  .ledger .bar, :is(.pg-activity, .pg-cost) .ibar, .pg-context :is(.pressure .band, .pressure .pkey i, .rng-bar, .rng-med, .ctr-bar i, .ctr-rbar, .ctr-med, .ctr-split-bar > span, .ctr-key), .pg-errors .bar, .pg-live .meter { forced-color-adjust: none; outline: 1px solid CanvasText; }
+  .ledger .bar, :is(.pg-activity, .pg-cost) .ibar, .pg-context :is(.pressure .band, .pressure .pkey i, .rng-bar, .rng-med, .ctr-bar i, .ctr-rbar, .ctr-med, .ctr-split-bar > span, .ctr-key), .pg-errors .bar, .pg-live .meter, .pg-judgments .mixbar, .pg-judgments .mixbar i:not(.rest), .ledger .sw, .pg-judgments .key .sw { forced-color-adjust: none; outline: 1px solid CanvasText; }
+  /* The stacked bar clips its parts, so each part draws its frame inside itself; the spacer gets none, the framed track shows the empty end. */
+  .pg-judgments .mixbar i:not(.rest) { outline-offset: -1px; }
   /* The frame above outranks the pressure segments' own focus ring; restore it in a system color. */
   .pg-context .pressure .band:focus-visible { outline: 2px solid Highlight; outline-offset: 2px; }
   /* Last 24 h pace, pressed: the system selection pair, as a pressed segment, so it reads as pressed with the focus ring too

@@ -67,13 +67,13 @@ In page order, when the view has analysed sessions.
 
 ### Outcomes
 
-<ThemedImage dark={outcomes} light={outcomesLight} alt="The Judgments view's Outcomes panel (model-judged): the share of analysed sessions in each outcome, from fully achieved to not achieved." />
+<ThemedImage dark={outcomes} light={outcomesLight} alt="The Judgments view's Outcomes panel (model-judged): one stacked bar of the analysed sessions split by outcome, over a row per outcome with its color, share and count." />
 
-**Shows** (model-judged) whether each session met its goal, as a share of the analysed sessions: Fully achieved, Mostly achieved, Partially achieved, Not achieved and Unclear.
+**Shows** (model-judged) whether each session met its goal, as one stacked bar of the analysed sessions, split by outcome. From the left: Fully achieved, Mostly achieved, Partially achieved, Not achieved, then Unclear in grey. The outcomes keep the order and colors of the [outcome trend](#outcome-trend).
 
-**Figures** Each row shows its share and its count. An outcome the page does not know shows under its raw name.
+**Figures** Under the bar, a row per outcome shows its color swatch, its share and its count. Shares are of the analysed sessions. A session with no outcome adds no part, so the end of the bar stays empty. Every part with a session is at least 3px wide, so 1 session in 150 still shows. An outcome with no session has no part and keeps its row, at 0% and 0. An outcome the page does not know, such as one a later `/insights` adds, shows under its raw name with a grey part. Under 5 analysed sessions, the panel says "Few sessions: one session moves this bar a lot."
 
-**Controls** Each row is a button that filters the session list.
+**Controls** Each row with a session is a button that filters the session list; a row at 0 is not. The bar itself is no control: hovering a part names it, and selecting it filters nothing. A screen reader skips the bar and reads the rows, which hold every figure as text. Reach a row with Tab and press it with Enter or Space. In a forced-colors mode the parts and swatches keep their colors inside a frame.
 
 ### Friction categories
 
@@ -108,10 +108,12 @@ Selecting a family row filters the session list by the family (`frf`); selecting
 
 ### Satisfaction and helpfulness
 
-**Shows** (model-judged) two lists:
+**Shows** (model-judged) two parts, side by side on a wide screen and one above the other on a narrow one:
 
-- The user satisfaction signals the model saw, summed over the sessions: satisfied, likely satisfied, dissatisfied, and so on, each with its count and sessions. They are not filters. The list shows the first 12 rows.
-- **Claude's helpfulness**: sessions per rating, from essential to unhelpful, with the count and the share. Each row is a filter.
+- **Satisfaction signals**: a ranked list of the user satisfaction signals the model saw, summed over the sessions: satisfied, likely satisfied, dissatisfied, and so on, each with its count and sessions. They are not filters. The list shows the first 12 rows.
+- **Claude's helpfulness**: a stacked bar like the one in [Outcomes](#outcomes), from essential to unhelpful: two greens (essential, very helpful), amber (moderately helpful) and two reds (slightly helpful, unhelpful). Each row under it shows the share, then the count, and filters the session list. Shares are of the analysed sessions, so sessions with no rating leave the end of the bar empty. Under 5 analysed sessions it says "Few sessions: one session moves this bar a lot." The bar reads by keyboard and screen reader as the Outcomes bar does.
+
+On a phone with large text, such as 390px at 200% zoom, a row's name takes its own line over its figures.
 
 ### Analysed sessions
 
@@ -162,7 +164,7 @@ Closed on every page load. One opens at a time: opening a drawer closes the open
 
 ### Session types
 
-**Shows** (model-judged) a colored strip and a key with the sessions per type, for example multi task 109. Not filters.
+**Shows** (model-judged) the same stacked bar as [Outcomes](#outcomes), with an inline key of the sessions per type, for example multi task 109. Not filters.
 
 ### Session figures
 

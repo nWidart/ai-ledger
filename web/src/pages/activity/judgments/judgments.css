@@ -62,13 +62,38 @@
 .pg-judgments .ledger .none { color: var(--warning-text); font-weight: 500; }
 .pg-judgments .linkish.more { margin-top: 8px; font-size: .8125rem; }
 @media (max-width: 56.25em) { .pg-judgments .grid2 { grid-template-columns: minmax(0, 1fr); } }
+/* Satisfaction and helpfulness: two equal columns, one on a narrow screen. Each column opens with an h3 whose top margin is dropped
+   in the grid, so the h2 and the grid set the space above both. */
+.pg-judgments .feel { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 32px; align-items: start; }
+.pg-judgments .feel > div > h3:first-child { margin-top: 10px; }
+@media (max-width: 56.25em) { .pg-judgments .feel { grid-template-columns: minmax(0, 1fr); } }
 /* Ledgers here carry "N sessions" on the side, wider than the default column. */
 .pg-judgments .ledger { --ledger-cols: minmax(0, 13rem) minmax(40px, 1fr) 3.5rem 5.5rem; }
 @media (max-width: 32.5em) { .pg-judgments .ledger { --ledger-cols: minmax(0, 1fr) 3.5rem 5.5rem; } }
 
-/* Session types: one stacked strip with a key */
-.pg-judgments .strip { display: flex; height: 10px; border-radius: 5px; overflow: hidden; gap: 2px; margin: 10px 0 8px; }
-.pg-judgments .strip i { display: block; height: 100%; }
+/* One stacked bar of the analysed sessions (MixBar): each part's inline flex-grow is its count, min-width keeps a thin part in
+   sight, and the spacer for sessions with no value lets the track show through. */
+.pg-judgments .mixbar { display: flex; gap: 2px; height: .875rem; margin: 8px 0; border-radius: 4px; overflow: hidden;
+  background: var(--track); }
+.pg-judgments .mixbar i { display: block; flex: 0 1 0; min-width: 3px; height: 100%; }
+.pg-judgments .mixbar .rest { min-width: 0; background: none; }
+/* The few-sessions line, close under its bar. */
+.pg-judgments .hint.few { margin: -4px 0 0; }
+/* A keyed ledger (swatch rows under a stacked bar): name, share and count on one line, phones included; this beats both
+   .pg-judgments .ledger rules above, and a button row takes the same columns through var(--ledger-cols). */
+.pg-judgments .ledger.keyed { --ledger-cols: minmax(0, 13rem) 3.5rem 3.5rem; }
+/* Large text on a phone (a page under 20em wide, as 390px at 125% text or more): a keyed row's name takes its own line,
+   whole, over its share and count, so no name is cut to a letter. */
+@media (max-width: 20em) {
+  .pg-judgments .ledger.keyed { --ledger-cols: 3.5rem minmax(0, 1fr); width: auto; }
+  .pg-judgments .ledger.keyed .n { grid-column: 1 / -1; white-space: normal; overflow-wrap: anywhere; }
+  .pg-judgments .ledger.keyed :is(.v, .s) { text-align: left; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .pg-judgments.grow .mixbar { transform-origin: left; animation: grow-x .6s cubic-bezier(.2,.7,.2,1) both; }
+}
+
+/* Session types: the shared stacked bar (MixBar) over an inline key */
 .pg-judgments .key { display: flex; flex-wrap: wrap; gap: 4px 14px; list-style: none; margin: 0; padding: 0; font-size: .8125rem; color: var(--text-secondary); }
 .pg-judgments .key li { display: inline-flex; align-items: center; gap: 6px; }
 .pg-judgments .key .sw { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }

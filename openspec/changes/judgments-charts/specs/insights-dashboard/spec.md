@@ -121,7 +121,7 @@ When the view has fewer than 5 analysed sessions, the Outcomes and helpfulness s
 - **THEN** the section says "No ratings in this view." and shows no bar and no rows
 
 ### Requirement: Fit the stacked bars to wide and narrow screens
-From 900px wide, Satisfaction and Claude's helpfulness SHALL sit side by side in their panel; below it they SHALL stack, satisfaction first. A stacked bar SHALL take the width of its column and its rows SHALL sit under it, with the name, share and count of a row on one line. The page SHALL NOT scroll sideways at 390px, and at 200% text size the rows SHALL wrap or grow, not clip.
+From 900px wide, Satisfaction and Claude's helpfulness SHALL sit side by side in their panel; below it they SHALL stack, satisfaction first. A stacked bar SHALL take the width of its column and its rows SHALL sit under it, with the name, share and count of a row on one line. The page SHALL NOT scroll sideways at 390px. On a page narrower than 20em, as a 390px phone at 200% zoom, a row's name SHALL take its own line, whole, over its share and count.
 
 #### Scenario: Desktop
 - **WHEN** the view shows at 1440 x 900
@@ -130,3 +130,7 @@ From 900px wide, Satisfaction and Claude's helpfulness SHALL sit side by side in
 #### Scenario: Phone
 - **WHEN** the view shows at 390px wide
 - **THEN** each bar spans the panel, its rows sit under it, Satisfaction comes before Claude's helpfulness, and the page has no horizontal scroll
+
+#### Scenario: Large text on a phone
+- **WHEN** the view shows at 390px wide and 200% zoom
+- **THEN** each row of the Outcomes and helpfulness bars shows its whole name on one line of its own, with its share and count under it, and no name is cut short
