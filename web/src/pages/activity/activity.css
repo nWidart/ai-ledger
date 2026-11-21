@@ -166,6 +166,14 @@
 /* The selection bar: the count and its actions, between the hint and the table, while a session is selected. */
 .pg-activity #sessions .selbar.on { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3) var(--space-7); margin-bottom: var(--space-3);
   font-size: .8125rem; color: var(--text-secondary); }
+/* The comparison: under the bar, in its own scroll region, a column per session whose header holds the name over its Remove button. */
+.pg-activity #sessions .cmp { margin-bottom: var(--space-7); }
+.pg-activity #sessions .cmp th.cmp-sess { max-width: 13.75rem; vertical-align: bottom; }
+.pg-activity #sessions .cmp .cmp-rm { display: block; margin-top: var(--space-1); font-size: var(--fs-xs); }
+/* Every cell starts under its session's name: a column holds a project, a time and counts, read across rather than summed down. */
+.pg-activity #sessions .cmp tbody :is(td, th) { text-align: start; }
+.pg-activity #sessions .cmp tbody th[scope=row] { white-space: nowrap; }
+.pg-activity #sessions .cmp .hint { margin-top: var(--space-3); }
 .pg-activity #projects th:first-child, .pg-activity #projects td:first-child { position: sticky; left: 0; background: var(--bg); z-index: var(--z-raised); box-shadow: 1px 0 0 var(--border); }
 .pg-activity #projects th:first-child { z-index: var(--z-raised-2); }
 .pg-activity #projects tr.sel :is(td, th):first-child { background: color-mix(in srgb, var(--accent) 11%, var(--bg)); }
