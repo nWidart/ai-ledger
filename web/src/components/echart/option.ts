@@ -25,14 +25,15 @@ type CategoryAxis = Extract<XAXisComponentOption, { type?: "category" }>;
 type ValueAxis = Extract<YAXisComponentOption, { type?: "value" }>;
 
 /** One band per label (a day, a week), with no tick and no line, muted labels that ECharts thins when they overlap, and the
- *  cursor band: the shadow pointer in the cursor ink, with no label. The wrapper moves and hides it. */
+ *  cursor band: the shadow pointer in the cursor ink, with no label. The wrapper moves and hides it. It jumps to the point
+ *  read: by default ECharts slides it for 200ms over bands wider than 15px, across days the reading no longer names. */
 export const categoryAxis = (env: OptionEnv, labels: readonly string[], format: (label: string) => string): CategoryAxis => ({
   type: "category",
   data: [...labels],
   axisTick: { show: false },
   axisLine: { show: false },
   axisLabel: { color: env.ink.muted, fontSize: size(env), margin: 8 * env.textScale, hideOverlap: true, formatter: (v: string) => format(v) },
-  axisPointer: { show: true, type: "shadow", shadowStyle: { color: env.ink.cursor }, label: { show: false } },
+  axisPointer: { show: true, type: "shadow", animation: false, shadowStyle: { color: env.ink.cursor }, label: { show: false } },
 });
 
 /** A value axis from 0 to max in ticks of step (see `niceMax` in chart.ts), on grid lines, with muted labels. */

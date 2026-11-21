@@ -39,6 +39,9 @@ describe("categoryAxis", () => {
 
   it("puts the shadow pointer in the cursor ink, with no label", () => {
     expect(categoryAxis(env(), [], String).axisPointer).toMatchObject({ show: true, type: "shadow", shadowStyle: { color: "ink-cursor" }, label: { show: false } });
+    // The band jumps to the point read: ECharts would slide it for 200ms over bands wider than 15px, across days the
+    // tooltip and the readout no longer name.
+    expect(categoryAxis(env({ motion: true }), [], String).axisPointer).toMatchObject({ animation: false });
   });
 
   it("grows the label size and margin with the text scale", () => {
