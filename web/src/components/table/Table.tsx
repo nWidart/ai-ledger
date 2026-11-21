@@ -42,6 +42,10 @@ interface ColumnBase<T, K extends string> {
   rowHeader?: boolean;
   /** Renders the whole header cell instead (a th scoped to the column), for a header the defaults cannot draw. */
   th?: (head: HeadContext<K>) => ReactNode;
+  /** More sort keys than the column's own id, each with the value it sorts by: for a header (th) with a sort button per figure. */
+  sorts?: { [S in K]?: (row: T) => CellValue };
+  /** The class of the column's col: any column with one draws a colgroup before the head, as for a fixed layout's widths. */
+  col?: string;
 }
 
 /** What a custom header cell gets: the column's classes and the table's sort. */
@@ -66,6 +70,9 @@ type TableSort<K extends string> =
 
 export type TableProps<T extends RowData, K extends string = string> = TableBase<T, K> & TableSort<K>;
 
+/** What rowProps may set on a row's tr. */
+export type RowAttrs = Omit<ComponentPropsWithoutRef<"tr">, "children"> & { [data: `data-${string}`]: string | undefined };
+
 interface TableBase<T extends RowData, K extends string> {
   /** The table's name, on the table and on the scroll region around it. */
   name: string;
@@ -85,6 +92,8 @@ interface TableBase<T extends RowData, K extends string> {
   /** The id of the selected row (class sel). */
   current?: string | null;
   pick?: RowPick<T>;
+  /** The row's own attributes, as data-* or a click; its className comes after pick and sel, and a pick's own attributes win. */
+  rowProps?: (row: T) => RowAttrs;
   /** The scroll region's classes (DataTable's region). */
   region?: string;
   className?: string;
@@ -105,11 +114,15 @@ const classes = <T, K extends string>(c: Column<T, K>) =>
 /** A data table built from column definitions: native table markup in a named, focusable scroll region (DataTable), sortable by
  *  any column that allows it. The sort is the caller's; rows with no value come last either way and ties keep their order. */
 export function Table<T extends RowData, K extends string = string>({ name, rows, columns, rowId, sort = null, onSort, manualSort, empty, pinned, after,
-  current, pick, region, className, body }: TableProps<T, K>) {
-  const defs = useMemo(() => columns.map((c): ColumnDef<typeof features, T> => ({
-    id: c.id, enableSorting: !!c.sort, sortUndefined: "last", sortFn: compare as SortFn<typeof features, T>,
-    accessorFn: r => { const v = c.value?.(r); return hasValue(v) ? v : undefined; },
-  })), [columns]);
+  current, pick, rowProps, region, className, body }: TableProps<T, K>) {
+  const defs = useMemo(() => {
+    const def = (id: string, value: ((r: T) => CellValue) | undefined, sortable: boolean): ColumnDef<typeof features, T> => ({
+      id, enableSorting: sortable, sortUndefined: "last", sortFn: compare as SortFn<typeof features, T>,
+      accessorFn: r => { const v = value?.(r); return hasValue(v) ? v : undefined; },
+    });
+    return columns.flatMap(c => [def(c.id, c.value, !!c.sort),
+      ...Object.entries<((r: T) => CellValue) | undefined>(c.sorts ?? {}).map(([k, value]) => def(k, value, true))]);
+  }, [columns]);
   const sorting = useMemo<SortingState>(() => sort ? [{ id: sort.key, desc: sort.desc }] : [], [sort?.key, sort?.desc]); // eslint-disable-line react-hooks/exhaustive-deps
   // TanStack rebuilds its rows, and the values they cache per column id, only for new data: new columns get a fresh copy of the rows.
   const data = useMemo(() => rows.slice(), [rows, defs]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -126,7 +139,8 @@ export function Table<T extends RowData, K extends string = string>({ name, rows
   const row = (r: T, id: string, key = id) => {
     const v = pick?.value(r), sel = current != null && id === current ? "sel" : "";
     const attrs = pick && v != null ? pickRow(v, (v, el) => pick.open(v, el, r), pick.subject?.(r), sel) : { className: sel || undefined };
-    return <tr key={key} {...attrs}>{columns.map((c, i) => {
+    const own = rowProps?.(r), cls = [attrs.className, own?.className].filter(Boolean).join(" ") || undefined;
+    return <tr key={key} {...own} {...attrs} className={cls}>{columns.map((c, i) => {
       const value = c.cell ? undefined : c.value?.(r), content = c.cell ? c.cell(r) : hasValue(value) ? value : null;
       const own = c.cellProps?.(r), props = { ...own, className: [classes(c), own?.className].filter(Boolean).join(" ") || undefined };
       return (c.rowHeader ?? i === 0) ? <th key={c.id} scope="row" {...props}>{content}</th> : <td key={c.id} {...props}>{content}</td>;
@@ -135,6 +149,7 @@ export function Table<T extends RowData, K extends string = string>({ name, rows
   const later = (r: T, i: number) => { const id = rowId(r, i); return row(r, id, `after:${id}`); };
 
   return <DataTable name={name} className={className} region={region}>
+    {columns.some(c => c.col) && <colgroup>{columns.map(c => <col key={c.id} className={c.col} />)}</colgroup>}
     <thead><tr>{columns.map(head)}</tr></thead>
     <tbody {...body}>
       {pinned?.map((r, i) => { const id = rowId(r, i); return row(r, id, `pinned:${id}`); })}
