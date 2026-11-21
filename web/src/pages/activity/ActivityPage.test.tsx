@@ -1150,6 +1150,27 @@ describe("ActivityPage", () => {
     expect(fetched().some(u => String(u).startsWith("/api/day"))).toBe(false);
   });
 
+  it("heads each row of Error loops and Failed test runs with its session, in the first column, then its time", async () => {
+    const t = { id: "t9", session_id: "s1", title: "Fix upload", project: "bar", source: "codex" as const, command: "npm test", ts: "2026-11-04T10:07:00.000Z" };
+    serve({ ...usage, totals: { ...usage.totals, tests_failed: 1 }, failed_tests: [t] });
+    at("?range=30&tab=loops");
+    renderApp(<ActivityPage />);
+    await loaded();
+    for (const name of ["Error loops", "Failed test runs"]) {
+      const table = screen.getByRole("table", { name });
+      expect([...table.querySelectorAll("thead th")].slice(0, 2).map(h => h.textContent)).toEqual(["Session", "When"]);
+      const rows = [...table.querySelectorAll("tbody tr")];
+      expect(rows.length).toBeGreaterThan(0);
+      for (const r of rows) {
+        // The row header comes first: it names only the cells after it.
+        expect(r.querySelectorAll("th")).toHaveLength(1);
+        expect(r.firstElementChild!.matches('th[scope="row"].when.sess')).toBe(true);
+        expect(r.children[1]!.matches("td.when")).toBe(true);
+      }
+    }
+    expect(within(screen.getByRole("table", { name: "Failed test runs" })).getByRole("rowheader").textContent).toContain("Fix upload");
+  });
+
   it("opens the failed test runs, each linking to its error", async () => {
     const t = { id: "t9", session_id: "s1", title: "Fix upload", project: "bar", source: "codex" as const, command: "npm test", ts: "2026-11-04T10:07:00.000Z" };
     serve({ ...usage, totals: { ...usage.totals, tests_failed: 4 }, failed_tests: [t] });

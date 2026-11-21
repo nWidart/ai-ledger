@@ -119,6 +119,8 @@
 .pg-activity .ext h3 { font-size: .875rem; margin: 0 0 6px; }
 .pg-activity .ext :is(td, th).hook { max-width: 40rem; }
 @media (max-width: 56.25em) { .pg-activity .ext { grid-template-columns: minmax(0, 1fr); } .pg-activity .ext :is(td, th).hook { max-width: 18.75rem; } }
+/* Error loops and Failed test runs: the session is the row's header and aligns as the data cell it was. */
+.pg-activity :is(#loops, #tests) tbody th[scope=row] { text-align: start; }
 /* The sessions table fits its box without scrolling sideways: the session column gives up room to the model time and
    speed, then the least needed columns go first (opt2, then opt1, then opt). The sorted column always shows. */
 .pg-activity #sessions :is(td, th).sess { max-width: 16rem; }

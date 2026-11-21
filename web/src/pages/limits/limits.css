@@ -148,7 +148,9 @@
 .pg-limits .hs-panel h3 { margin: 0; font-size: .875rem; font-weight: 600; }
 .pg-limits .hs-panel header p { margin: 2px 0 0; font-size: .78125rem; }
 .pg-limits .hs-panel header p b { color: var(--text-primary); font-weight: 600; }
-.pg-limits tr.sel td { background: var(--accent-soft); }
+.pg-limits tr.sel :is(td, th[scope=row]) { background: var(--accent-soft); }
+/* A closed window's name is its row's header: it aligns and wraps as the data cell it was. */
+.pg-limits th.win { text-align: start; white-space: normal; }
 @media (max-width: 45em) {
   .pg-limits .hs-row { grid-template-columns: minmax(0, 1fr); }
   .pg-limits .hs-note { grid-column: 1; }

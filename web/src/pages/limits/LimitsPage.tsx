@@ -220,9 +220,9 @@ function WindowPanel({ h, onClose }: { h: LimitHistoryRow; onClose: () => void }
   );
 }
 
-// No row header: every cell of a closed window is a plain cell.
+// The window names its row: the first column is the row header.
 const CLOSED_COLUMNS: Column<LimitHistoryRow>[] = [
-  { id: "window", header: "Window", rowHeader: false, cell: h => windowName(h) },
+  { id: "window", header: "Window", cellProps: () => ({ className: "win" }), cell: h => windowName(h) },
   { id: "plan", header: "Plan", cell: h => planName(h.plan) ?? "–" },
   { id: "ended", header: "Ended", cell: h => whenDay(h.closed_at) },
   { id: "final", header: "Final", align: "num", cell: h => <>{num(h.final)}%</> },
