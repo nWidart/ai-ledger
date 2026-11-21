@@ -3,7 +3,7 @@
 ## 1. Context menu subjects
 
 - [x] 1.1 Spread `subjectAttrs("session", id)` on the session buttons of `LoopsList` and `TestsList` (`activity/tables.tsx`), SessionMap's quadrant list and PressureBars' band list.
-- [x] 1.2 Spread `subjectAttrs("category", c)` on the Applied fixes rows (`errors/Detail.tsx`) and `subjectAttrs("tool", e.t)` on an example's tool button (`errors/Examples.tsx`).
+- [x] 1.2 Spread `subjectAttrs("category", c)` on the Applied fixes rows whose type has errors in the view (`errors/Detail.tsx`; a row without would offer a dead "Open on Errors") and `subjectAttrs("tool", e.t)` on an example's tool button (`errors/Examples.tsx`).
 - [x] 1.3 `Compact` takes the grid's project; the compact `ContextGrid` spreads `subjectAttrs("project", project)` on its card. Verify with `ActivityPage`, `SessionMap`, `PressureBars`, `ErrorsPage` and `Grids` tests.
 
 ## 2. Stacked bars
@@ -25,5 +25,5 @@
 
 ## 5. Docs and checks
 
-- [x] 5.1 CHANGELOG `[Unreleased]` bullets.
+- [x] 5.1 CHANGELOG `[Unreleased]` bullets; README's session-sheet paragraph and the site's Live, Project page and Context menu pages.
 - [x] 5.2 `cd web && npm run check`, Python tests, ruff, `openspec validate --specs --strict` and `openspec validate cross-page-consistency --strict`.
