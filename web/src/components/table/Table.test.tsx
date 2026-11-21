@@ -19,7 +19,7 @@ const ROWS: R[] = [{ n: "b", v: 2 }, { n: "x", v: null }, { n: "a", v: 3 }, { n:
 const names = () => [...document.querySelectorAll("tbody tr")].map(tr => tr.firstElementChild!.textContent);
 const th = (n: string) => screen.getByRole("button", { name: n }).closest("th")!;
 
-function Sorted({ init = null, ...rest }: { init?: SortBy<K> | null } & Partial<TableProps<R, K>>) {
+function Sorted({ init = null, ...rest }: { init?: SortBy<K> | null } & Pick<TableProps<R, K>, "pinned" | "after">) {
   const [sort, setSort] = useState(init);
   return <Table name="Things" rows={ROWS} columns={COLS} rowId={r => r.n} sort={sort} onSort={setSort} {...rest} />;
 }
@@ -97,7 +97,43 @@ describe("Table markup", () => {
   });
 });
 
+describe("Table types", () => {
+  it("needs a value to sort a column by, and a sort with its onSort", () => {
+    // @ts-expect-error: a sortable column needs a value to sort by
+    const noValue: Column<R, K> = { id: "v", header: "Value", sort: "desc", cell: r => r.v };
+    // @ts-expect-error: a sort needs its onSort
+    const noOnSort = <Table name="T" rows={ROWS} columns={COLS} rowId={r => r.n} sort={{ key: "v", desc: true }} />;
+    // @ts-expect-error: an onSort needs its sort
+    const noSort = <Table name="T" rows={ROWS} columns={COLS} rowId={r => r.n} onSort={() => {}} />;
+    expect([noValue, noOnSort, noSort]).toHaveLength(3);
+  });
+});
+
 describe("Table sorting", () => {
+  it("puts a sortable column's explanation behind a toggletip beside its sort button, next in the keyboard order", async () => {
+    const cols: Column<R, K>[] = [{ ...COLS[0]!, tip: "What the thing is called" },
+      { ...COLS[1]!, header: "Active", tip: "Active time: pauses over 20 minutes left out", tipTerm: "Active time" }];
+    renderApp(<Table name="T" rows={[]} columns={cols} rowId={r => r.n} sort={null} onSort={() => {}} />);
+    const [name, active] = screen.getAllByRole("columnheader");
+    expect([active!.getAttribute("scope"), active!.hasAttribute("title"), active!.dataset.sort]).toEqual(["col", false, "v"]);
+    await userEvent.tab(); // the region
+    await userEvent.tab();
+    expect(document.activeElement).toBe(within(name!).getByRole("button", { name: "Name" }));
+    await userEvent.tab();
+    expect(document.activeElement).toBe(within(name!).getByRole("button", { name: "About Name" }));
+    await userEvent.tab();
+    expect(document.activeElement).toBe(within(active!).getByRole("button", { name: "Active" }));
+    await userEvent.tab();
+    const tt = within(active!).getByRole("button", { name: "About Active time" });
+    expect(document.activeElement).toBe(tt);
+    await userEvent.keyboard("{Enter}");
+    expect(tt.getAttribute("aria-expanded")).toBe("true");
+    expect(within(active!).getByRole("tooltip").textContent).toBe("Active time: pauses over 20 minutes left out");
+    await userEvent.keyboard("{Escape}");
+    expect(tt.getAttribute("aria-expanded")).toBe("false");
+    expect(document.activeElement).toBe(tt);
+  });
+
   it("orders rows both ways, rows with no value last either way, and leaves the given rows alone", async () => {
     renderApp(<Sorted init={{ key: "v", desc: true }} />);
     expect(names()).toEqual(["a", "b", "c", "x"]);

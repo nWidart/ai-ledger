@@ -3,14 +3,23 @@ import { Fragment, useMemo, type ComponentPropsWithRef, type ReactNode } from "r
 import { DataTable } from "../DataTable";
 import type { Subject } from "../menu/subject";
 import { pickRow } from "../sheets/session";
-import { headerTerm, SortTh, type SortBy } from "../Sort";
+import { hasValue, headerTerm, SortTh, type SortBy } from "../Sort";
 import { Toggletip } from "../Toggletip";
 
 /** What a column sorts by and shows by default. null, undefined and NaN read as "no value". */
 export type CellValue = number | string | null | undefined;
 
-/** One column of a Table, as data. */
-export interface Column<T, K extends string = string> {
+/** One column of a Table, as data. A sortable column needs the value it sorts by. */
+export type Column<T, K extends string = string> = ColumnBase<T, K> & (
+  | {
+    /** Sortable, starting in this direction on the first click: "desc" (most first) or "asc" (A to Z first). Default: not sortable. */
+    sort: "desc" | "asc";
+    /** The row's value: what the column sorts by, and the cell when there is no cell renderer. */
+    value: (row: T) => CellValue;
+  }
+  | { sort?: undefined; value?: (row: T) => CellValue });
+
+interface ColumnBase<T, K extends string> {
   /** The column's id, and its key in the table's sort. */
   id: K;
   header: ReactNode;
@@ -20,8 +29,6 @@ export interface Column<T, K extends string = string> {
   tipTerm?: string;
   /** More of the header after its label, outside the sort button, as a column's scale. */
   after?: ReactNode;
-  /** The row's value: what the column sorts by, and the cell when there is no cell renderer. */
-  value?: (row: T) => CellValue;
   cell?: (row: T) => ReactNode;
   /** "num" right-aligns the header and cells (class num). Default: start. */
   align?: "start" | "num";
@@ -31,8 +38,6 @@ export interface Column<T, K extends string = string> {
   hide?: 0 | 1 | 2;
   /** The cell is the row's header, a th scoped to the row. Default: only the first column. */
   rowHeader?: boolean;
-  /** Sortable, starting in this direction on the first click: "desc" (most first) or "asc" (A to Z first). Default: not sortable. */
-  sort?: "desc" | "asc";
   /** Renders the whole header cell instead (a th scoped to the column), for a header the defaults cannot draw. */
   th?: (head: HeadContext<K>) => ReactNode;
 }
@@ -48,15 +53,25 @@ export interface RowPick<T> {
   subject?: (row: T) => Subject | undefined;
 }
 
-export interface TableProps<T extends RowData, K extends string = string> {
+/** A sort and its handler come together: a sort no header can show or change would leave the order unannounced. */
+type TableSort<K extends string> =
+  | {
+    /** The sort, owned by the caller; null: rows in the order given. */
+    sort: SortBy<K> | null;
+    onSort: (s: SortBy<K>) => void;
+  }
+  | { sort?: undefined; onSort?: undefined };
+
+export type TableProps<T extends RowData, K extends string = string> = TableBase<T, K> & TableSort<K>;
+
+interface TableBase<T extends RowData, K extends string> {
   /** The table's name, on the table and on the scroll region around it. */
   name: string;
   rows: readonly T[];
   columns: readonly Column<T, K>[];
+  /** The row's id, for its key and for current. It must be unique across pinned, body and later rows: each set counts its index
+   *  from 0, so an id built from the index alone repeats. */
   rowId: (row: T, index: number) => string;
-  /** The sort, owned by the caller; null: rows in the order given. */
-  sort?: SortBy<K> | null;
-  onSort?: (s: SortBy<K>) => void;
   /** Rows come sorted (by the server): the sort only marks the headers. */
   manualSort?: boolean;
   /** Shown in one full-width row when there are no rows. */
@@ -77,7 +92,6 @@ export interface TableProps<T extends RowData, K extends string = string> {
 
 const features = tableFeatures({ rowSortingFeature, sortedRowModel: createSortedRowModel() });
 const OPT = ["opt", "opt1", "opt2"] as const;
-const has = (v: CellValue): v is number | string => v != null && !(typeof v === "number" && Number.isNaN(v));
 // Ascending only: the table flips it for a descending sort. Rows with no value are undefined, and sortUndefined puts them last.
 const compare: SortFn<typeof features, RowData> = (a, b, id) => {
   const x = a.getValue<number | string>(id), y = b.getValue<number | string>(id);
@@ -92,7 +106,7 @@ export function Table<T extends RowData, K extends string = string>({ name, rows
   current, pick, region, className, body }: TableProps<T, K>) {
   const defs = useMemo(() => columns.map((c): ColumnDef<typeof features, T> => ({
     id: c.id, enableSorting: !!c.sort, sortUndefined: "last", sortFn: compare as SortFn<typeof features, T>,
-    accessorFn: r => { const v = c.value?.(r); return has(v) ? v : undefined; },
+    accessorFn: r => { const v = c.value?.(r); return hasValue(v) ? v : undefined; },
   })), [columns]);
   const sorting = useMemo<SortingState>(() => sort ? [{ id: sort.key, desc: sort.desc }] : [], [sort?.key, sort?.desc]); // eslint-disable-line react-hooks/exhaustive-deps
   const table = useTable({ features, columns: defs, data: rows, getRowId: rowId, manualSorting: manualSort, state: { sorting } });
