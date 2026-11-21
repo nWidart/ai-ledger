@@ -389,13 +389,16 @@ export function EChart({
     // The zoom ended with no one asking: said once, so no one goes on believing the chart shows fewer days.
     if (zoomed && !now) say(null);
   });
-  // Reduced motion is the wrapper's to keep, so no option builder can forget it. A new view shows every point: its
-  // slider merges into the old one by id and would keep the old window, so the window is reset.
+  // The chart is given the caller's option with what the wrapper keeps for itself, so no option builder can forget it:
+  // reduced motion, and the band. Only the wrapper's actions draw the band: left to its own triggers, ECharts also draws
+  // one on a click, over a point nothing reads (a click on a point the chart declines, with the pointer at rest).
+  // A new view shows every point: its slider merges into the old one by id and would keep the old window, so the window
+  // is reset.
   const drew = useRef(shows);
   useEffect(() => {
     if (!chart) return;
     const made = option(env);
-    chart.setOption(env.motion ? made : { ...made, animation: false }, { replaceMerge: REPLACE });
+    chart.setOption({ ...made, ...(env.motion ? {} : { animation: false }), axisPointer: { ...made.axisPointer, triggerOn: "none" } }, { replaceMerge: REPLACE });
     if (drew.current === shows) return keep(chart);
     drew.current = shows;
     unzoom(chart);

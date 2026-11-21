@@ -54,6 +54,27 @@ describe("the fake ECharts runtime", () => {
     expect(chart.actions.map(a => a.currTrigger)).toEqual(["mousemove", "leave"]);
   });
 
+  it("moves the band itself on a pointer move or a click, as ECharts does, unless the option turns its triggers off", async () => {
+    const chart = await chartOf();
+    chart.fire("mousemove", chart.pointAt(4));
+    expect(chart.band).toBe(4);
+    chart.fire("mousemove", [20, 100]); // outside the grid
+    expect(chart.band).toBeNull();
+    chart.fire("click", chart.pointAt(7));
+    expect(chart.band).toBe(7);
+    chart.fire("globalout");
+    expect(chart.band).toBeNull();
+    expect(chart.actions).toEqual([]); // ECharts' own moves are not the wrapper's actions
+
+    chart.setOption({ axisPointer: { triggerOn: "none" } });
+    chart.fire("mousemove", chart.pointAt(4));
+    chart.fire("click", chart.pointAt(7));
+    expect(chart.band).toBeNull();
+    chart.dispatchAction({ type: "updateAxisPointer", currTrigger: "mousemove", x: chart.pointAt(6)[0], y: 100 });
+    chart.fire("globalout");
+    expect(chart.band).toBe(6); // only an action hides what an action showed
+  });
+
   it("keeps a zoom window that an action, a drag and a redraw treat as ECharts does", async () => {
     const chart = await chartOf(30, { dataZoom: [{ type: "slider" }] });
     const zooms: unknown[] = [];

@@ -297,6 +297,26 @@ describe("EChart reading", () => {
     expect(readout()).toBe("");
   });
 
+  it("lets no one but itself draw the band: a click on a declined point after Escape leaves none", async () => {
+    render(show({ onActivate: () => false }));
+    const chart = await drawn();
+    // ECharts moves the band itself on a pointer move and on a click, unless its triggers are off.
+    expect(chart.last).toMatchObject({ axisPointer: { triggerOn: "none" } });
+    chart.fire("mousemove", chart.pointAt(1));
+    expect(chart.band).toBe(1);
+    key("Escape", document.body);
+    expect(chart.band).toBeNull();
+    chart.fire("click", chart.pointAt(1)); // the pointer has not moved: nothing is read, so no band may show
+    expect(readout()).toBe("");
+    expect(tooltip()).toBeNull();
+    expect(chart.band).toBeNull();
+  });
+
+  it("keeps a chart's own axis-pointer settings beside its own", async () => {
+    render(show({ option: env => ({ ...option(env), axisPointer: { link: [{ xAxisIndex: "all" }] } }) }));
+    expect((await drawn()).last).toMatchObject({ axisPointer: { link: [{ xAxisIndex: "all" }], triggerOn: "none" } });
+  });
+
   it("clears the reading on Escape on the box when an element around it stops the key", async () => {
     // SessionMap's box and Toggletip stop an Escape they handle: it then never reaches the document.
     render(<div onKeyDown={ev => { if (ev.key === "Escape") ev.stopPropagation(); }}>{show()}</div>);
