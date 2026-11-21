@@ -508,14 +508,23 @@ class GrokDeriver(store.Deriver):
     def calls(self, d, pid):
         """[(streamStartMs, context size)] of the model calls of turn pid, oldest first: the distinct streamStartMs of the
         turn's stored lines, each with the largest totalTokens its lines state (a call's first value can be stale).
-        Only lines between the file's previous turn_completed line and this one (d) count: the result is then the same
-        however the file was cut into ingests, and a prompt id used again counts no call twice. raw_lines already holds
-        the chunk being derived."""
+        Only lines between this one (d) and the later of the file's previous turn_completed line and the turn's own
+        user_prompt_submit line count: the result is then the same however the file was cut into ingests, a prompt id
+        used again counts no call twice, and an abandoned run's calls go to no turn. raw_lines already holds the chunk
+        being derived."""
         (end,) = self.cur.execute("SELECT byte_offset FROM raw_lines WHERE key = ?", [self.line]).fetchone() or (None,)
         if end is None:
             return []
         (start,) = self.cur.execute("SELECT coalesce(max(byte_offset), -1) FROM raw_lines WHERE file = ? AND type = 'turn_completed' "
                                     "AND byte_offset < ?", [self.path, end]).fetchone()
+        # Nor before the turn's own start, the user_prompt_submit line of its prompt: a run that ended before its
+        # turn_completed (a crash) can leave calls with the same prompt id. With no such line, the bound above stands.
+        opened = self.prompt_of()
+        if opened:
+            (hook,) = self.cur.execute("SELECT byte_offset FROM raw_lines WHERE key = ? AND file = ?",
+                                       [opened[0], self.path]).fetchone() or (None,)
+            if hook is not None and hook < end:
+                start = max(start, hook)
         # Only a JSON integer is a call figure, as store.is_int reads it in live_items: TRY_CAST would take "12".
         whole = lambda f: (f"CASE WHEN json_type(json, '$.params._meta.{f}') IN ('BIGINT', 'UBIGINT') "
                            f"THEN TRY_CAST(json_extract(json, '$.params._meta.{f}') AS BIGINT) END")

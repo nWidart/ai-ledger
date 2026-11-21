@@ -295,6 +295,44 @@ class UsageTest(GrokCase):
         self.assertNotEqual(got, [r[0] for r in self.q("SELECT input + cache_read + cache_5m + cache_1h FROM requests "
                                                        f"WHERE input + cache_read >= {context.START_MIN_TOKENS} ORDER BY ts")])
 
+    def test_abandoned_turn_lends_no_call_to_the_next(self):
+        # A run that ended before its turn_completed (a crash), then a resumed run with the same prompt id that finishes:
+        # the finished turn's requests are its own calls only, at their own times; the abandoned turn has none.
+        path, = self.put("long-turn")
+        with open(path) as fh:
+            lines = [json.loads(x) for x in fh]
+        end = next(i for i, d in enumerate(lines) if grok.update(d).get("sessionUpdate") == "turn_completed")
+        closing = next(d for d in lines if grok.line_type(d) == "session_end")
+        day = 86_400_000
+        abandoned = []
+        for d in lines[:end] + [closing]:
+            d = json.loads(json.dumps(d))
+            m = grok.meta(d)
+            m["eventId"] += "-a"
+            for k in ("agentTimestampMs", "streamStartMs", "turnStartMs"):
+                if k in m:
+                    m[k] -= day
+            abandoned.append(d)
+        with open(path, "w") as fh:
+            fh.writelines(json.dumps(d) + "\n" for d in abandoned + lines)
+        own = sorted({grok.meta(d)["streamStartMs"] for d in lines if "streamStartMs" in grok.meta(d)})
+        texts = open(path).readlines()
+        self.ingest()
+        whole = [self.q(f"SELECT * FROM {t} ORDER BY 1") for t in ("sessions", "requests", "prompts")]
+        rows = self.q("SELECT message_id, ts FROM requests ORDER BY ts")
+        self.assertEqual([int(r[0].rsplit(":", 1)[1]) for r in rows], own)
+        self.assertSums(SESSION["long-turn"], reported(turns(path)))
+        store.rebuild(self.con)
+        self.assertEqual([self.q(f"SELECT * FROM {t} ORDER BY 1") for t in ("sessions", "requests", "prompts")], whole)
+        for t in ("raw_lines", "files", *store.DERIVED):
+            self.con.execute(f"DELETE FROM {t}")
+        open(path, "w").close()
+        for text in texts:  # one more line at each ingest
+            with open(path, "a") as fh:
+                fh.write(text)
+            self.ingest()
+        self.assertEqual([self.q(f"SELECT * FROM {t} ORDER BY 1") for t in ("sessions", "requests", "prompts")], whole)
+
     def test_turns_without_an_event_id_are_two_requests(self):
         # A line with no eventId is stored under <path>:<offset>: each turn keeps its own identity, in ingest and rebuild.
         for cut_calls in (True, False):
