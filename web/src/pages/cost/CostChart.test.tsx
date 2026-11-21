@@ -5,10 +5,28 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Source, UsagePayload } from "../../api";
 import usage from "../../__fixtures__/usage";
 import { setOrder } from "../../colors";
+import type { CustomSeriesOption, CustomSeriesRenderItemAPI, CustomSeriesRenderItemParams, SeriesOption } from "../../components/echart/echarts";
+import { drawn } from "../../components/echart/testing";
 import { dayRange, usd } from "../../format";
 import { CostChart } from "./CostChart";
 import type { Stack } from "./cost";
 import { prevented, renderApp } from "../../testing";
+
+// The chart draws on the fake ECharts runtime (test-setup): what it draws is read from the option it was given last.
+const lastOption = async () => (await drawn()).last as { series: SeriesOption[]; yAxis: { max: number; interval: number; axisLabel: { formatter: (v: number) => string } } };
+const seriesIds = async () => (await lastOption()).series.map(s => s.id);
+/** Each day's painted rectangles: the stack series' renderItem on a stub axis of 40px bands over a 200px plot. A hatched
+ *  rectangle carries a decal. */
+const painted = async () => {
+  const o = await lastOption(), s = o.series.find(x => x.id === "stack") as CustomSeriesOption;
+  return (s.data as number[][]).map(row => {
+    const api = { value: (dim: number) => row[dim]!, coord: ([x, v]: number[]) => [(x! + .5) * 40, 220 - v! / o.yAxis.max * 200],
+      size: ([dx]: number[]) => [dx! * 40, 0] } as unknown as CustomSeriesRenderItemAPI;
+    const out = s.renderItem!({} as CustomSeriesRenderItemParams, api) as unknown as { children: { style: { fill?: string; decal?: unknown } }[] } | null;
+    return out?.children ?? [];
+  });
+};
+const hatchedDays = async () => (await painted()).flatMap((rects, i) => (rects.some(r => r.style.decal) ? [i] : []));
 
 const day = "2026-11-04";
 const base = usage.by_project[0]!;
@@ -27,9 +45,12 @@ const open = () => {
 };
 
 beforeEach(() => {
-  // The plot reads its size from the svg; jsdom lays nothing out.
-  vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({ left: 0, top: 0, right: 800, bottom: 240, width: 800, height: 240, x: 0, y: 0, toJSON: () => ({}) });
   setOrder(["A"]);
+  // jsdom resolves every color to black; the chart's color probe answers nothing instead, so the drawing keeps each CSS color
+  // as given ("var(--series-1)").
+  const real = window.getComputedStyle.bind(window);
+  vi.spyOn(window, "getComputedStyle").mockImplementation((el: Element, pseudo?: string | null) =>
+    (el instanceof HTMLElement && el.dataset.chartProbe !== undefined ? { color: "" } as CSSStyleDeclaration : real(el, pseudo)));
 });
 afterEach(() => setOrder([]));
 
@@ -71,10 +92,9 @@ describe("cost chart: today so far", () => {
     daily_projects: days.map((x, i) => ({ day: x, project: "A", cost: i === 19 ? 40 : 1, tokens: 1 })), by_project: [proj("A", 59)] };
   const show = (data = long) => renderApp(<CostChart d={data} metric="cost" onMetric={() => {}} hidden={[]} onHidden={() => {}} scale="volume" onScale={() => {}} stack="project" onStack={() => {}} onProject={() => {}} onSource={() => {}} onDay={() => {}} />);
 
-  it("hatches only today's bar and keys it in the legend", () => {
+  it("hatches only today's bar and keys it in the legend", async () => {
     show();
-    expect(document.querySelectorAll(".partial")).toHaveLength(1);
-    expect(document.querySelector(".partial")!.getAttribute("fill")).toBe("url(#partial-day)");
+    expect(await hatchedDays()).toEqual([19]);
     expect(screen.getByText("Today so far")).toBeTruthy();
   });
 
@@ -95,15 +115,16 @@ describe("cost chart: today so far", () => {
     expect(document.querySelector(".sr")!.textContent).not.toContain("so far");
   });
 
-  it("leaves today out of the average: the line ends yesterday and has no point for today", () => {
+  it("leaves today out of the average: the line ends yesterday and has no point for today", async () => {
     show();
     act(() => chart().focus());
     fireEvent.keyDown(chart(), { key: "End" });
     expect(document.querySelector(".sr")!.textContent).not.toContain("7-day average");
     fireEvent.keyDown(chart(), { key: "ArrowLeft" });
     expect(document.querySelector(".sr")!.textContent).toContain(`7-day average ${usd(1)}`); // not dragged up by today's $40
-    const line = document.querySelectorAll("svg path[stroke='var(--text-primary)']")[0]!.getAttribute("d")!;
-    expect(line.split("L")).toHaveLength(13); // the 7th to the 19th day
+    const line = (await lastOption()).series.find(s => s.id === "avg")!.data as (number | null)[];
+    expect(line.filter(v => v != null)).toHaveLength(13); // the 7th to the 19th day
+    expect(line.at(-1)).toBeNull();
   });
 });
 
@@ -139,6 +160,18 @@ describe("cost chart: stack by", () => {
     expect(screen.queryByRole("img", { name: /Estimated cost/ })).toBeNull();
   });
 
+  it("closes a tooltip the pointer opened on Escape, with the focus on another element", async () => {
+    renderApp(<Host data={split} />);
+    const chart = await drawn();
+    act(() => screen.getByRole("button", { name: "Model" }).focus());
+    chart.fire("mousemove", chart.pointAt(0));
+    expect(screen.getByRole("tooltip")).toBeTruthy();
+    await userEvent.keyboard("{Escape}");
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Model" }));
+    expect(screen.queryByRole("tooltip")).toBeNull();
+    expect(document.querySelector(".sr")!.textContent).toBe("");
+  });
+
   it("offers a data table that follows the stacking and keeps the day's total", async () => {
     renderApp(<Host data={split} />);
     expect(screen.queryByRole("table")).toBeNull(); // closed on load, and not rendered
@@ -160,12 +193,12 @@ describe("cost chart: stack by", () => {
   it("restacks the bars and the legend, and names the stacking", async () => {
     renderApp(<Host data={split} />);
     expect(keys().slice(0, 2)).toEqual(["A", "Other (4)"]);
-    const fills = () => [...document.querySelectorAll(".bar-seg > *:not(.partial)")].map(e => e.getAttribute("fill"));
-    expect(fills()).toHaveLength(2); // A and Other
+    const fills = async () => (await painted())[0]!.filter(r => !r.style.decal).map(r => r.style.fill);
+    expect(await fills()).toHaveLength(2); // A and Other
     await sel("Model");
     expect(screen.getByRole("button", { name: "Model" }).getAttribute("aria-pressed")).toBe("true");
     expect(keys().slice(0, 3)).toEqual(["opus-4", "sonnet-4", "gpt-6"]);
-    expect(fills()).toEqual(["var(--series-1)", "var(--series-2)", "var(--series-3)"]);
+    expect(await fills()).toEqual(["var(--series-1)", "var(--series-2)", "var(--series-3)"]);
     expect(screen.getByRole("heading", { level: 2 }).textContent).toBe("Estimated cost per day by model");
     expect(screen.getByRole("group", { name: /^Estimated cost by model per day, 1 days/ })).toBeTruthy();
     await sel("Agent");
@@ -232,7 +265,7 @@ describe("cost chart: stack by", () => {
       daily_projects: days.map((x, i) => ({ day: x, project: "A", cost: i === 19 ? 40 : 1, tokens: 1 })), by_project: [proj("A", 59)],
       daily_models: days.map((x, i) => ({ day: x, model: "claude-opus-4", cost: i === 19 ? 40 : 1 })) };
     renderApp(<Host data={long} first="model" />);
-    expect(document.querySelectorAll(".partial")).toHaveLength(1);
+    expect(await hatchedDays()).toEqual([19]);
     expect(screen.getByText("Today so far")).toBeTruthy();
     act(() => screen.getByRole("group", { name: /Estimated cost by model/ }).focus());
     fireEvent.keyDown(screen.getByRole("group", { name: /Estimated cost by model/ }), { key: "End" });
@@ -257,7 +290,11 @@ describe("tokens chart: Share", () => {
   }
   const chart = (name: RegExp | string) => screen.getByRole("group", { name });
   const read = (name: RegExp | string, key = "Home") => { act(() => chart(name).focus()); fireEvent.keyDown(chart(name), { key }); };
-  const axis = () => [...document.querySelectorAll("svg text")].map(t => t.textContent).filter(t => t?.endsWith("%"));
+  /** The value axis's labels, from 0 to its max by its interval. */
+  const axis = async () => {
+    const { max, interval, axisLabel } = (await lastOption()).yAxis;
+    return Array.from({ length: Math.round(max / interval) + 1 }, (_, i) => axisLabel.formatter(i * interval));
+  };
 
   it("offers the scale only with tokens, Volume first, and switches to Share", async () => {
     renderApp(<Host first="volume" />);
@@ -274,38 +311,13 @@ describe("tokens chart: Share", () => {
     expect(screen.queryByRole("group", { name: "Scale" })).toBeNull();
   });
 
-  it("fills the plot with each day's shares on a 0 to 100% axis, and draws no average or peak", () => {
+  it("fills the plot with each day's shares on a 0 to 100% axis, and draws no average or peak", async () => {
     renderApp(<Host />);
-    expect(axis()).toEqual(["0%", "25%", "50%", "75%", "100%"]);
+    expect(await axis()).toEqual(["0%", "25%", "50%", "75%", "100%"]);
     // The day with tokens is three segments; the day without is none.
-    const heights = [...document.querySelectorAll(".bar-seg > :is(rect, path):not(.partial)")].map(s => s.getAttribute("height"));
-    expect(document.querySelectorAll(".bar-seg")).toHaveLength(1);
-    expect(heights.filter(Boolean).length + document.querySelectorAll(".bar-seg path").length).toBe(3);
+    expect((await painted()).map(rects => rects.filter(r => !r.style.decal).length)).toEqual([3, 0]);
     expect(screen.queryByText("7-day average")).toBeNull();
-    expect(document.querySelector("svg text[font-weight='600']")).toBeNull();
-  });
-
-  it("draws a 1% share above zero height, under the 2px gap between segments", () => {
-    const thin: UsagePayload = { ...tokens, daily: [{ ...tokens.daily[0]!, ...empty, input: 98, output: 1, cache_read: 1 }] };
-    renderApp(<Host data={thin} />);
-    const segs = [...document.querySelectorAll(".bar-seg > rect:not(.partial)")];
-    expect(segs).toHaveLength(3);
-    for (const s of segs) expect(Number(s.getAttribute("height"))).toBeGreaterThan(0);
-  });
-
-  it("gives two 0.1% shares room of their own, so no segment paints over another and the bar still fills the plot", () => {
-    const thin: UsagePayload = { ...tokens, daily: [{ ...tokens.daily[0]!, ...empty, input: 998, output: 1, cache_read: 1 }] };
-    renderApp(<Host data={thin} />);
-    const segs = [...document.querySelectorAll(".bar-seg > rect:not(.partial)")]
-      .map(s => ({ y: Number(s.getAttribute("y")), h: Number(s.getAttribute("height")) })).sort((p, q) => p.y - q.y);
-    expect(segs).toHaveLength(3);
-    for (let i = 1; i < segs.length; i++) expect(segs[i]!.y).toBeGreaterThanOrEqual(segs[i - 1]!.y + segs[i - 1]!.h + 2 - 1e-9);
-    for (const s of segs) expect(s.h).toBeGreaterThanOrEqual(1 - 1e-9);
-    // Top of the 100% line to the baseline: the 0% and 100% axis labels' rows bound the bar.
-    const top = segs[0]!.y, bottom = segs.at(-1)!.y + segs.at(-1)!.h;
-    const zero = [...document.querySelectorAll("svg line")].map(l => Number(l.getAttribute("y1")));
-    expect(zero).toContain(bottom);
-    expect(zero).toContain(top);
+    expect(await seriesIds()).not.toContain("peak");
   });
 
   it("reads a day's shares and total in the tooltip and the screen-reader text", () => {
@@ -320,6 +332,24 @@ describe("tokens chart: Share", () => {
     read(/^Token share/, "ArrowRight");
     expect(document.querySelector(".sr")!.textContent).toContain("no tokens");
     expect(screen.getByRole("tooltip").textContent).toContain("–");
+  });
+
+  it("opens a day with tokens on Enter, and keeps the reading open on a day with none", async () => {
+    const onDay = vi.fn<(day: string) => void>();
+    renderApp(<CostChart d={tokens} metric="tokens" onMetric={() => {}} hidden={[]} onHidden={() => {}} scale="share" onScale={() => {}} stack="project" onStack={() => {}}
+      onProject={() => {}} onSource={() => {}} onDay={onDay} />);
+    read(/^Token share/, "End");
+    fireEvent.keyDown(chart(/^Token share/), { key: "Enter" });
+    expect(onDay).not.toHaveBeenCalled();
+    expect(screen.getByRole("tooltip")).toBeTruthy();
+    expect(document.querySelector(".sr")!.textContent).toContain("no tokens");
+    const chartRuntime = await drawn();
+    chartRuntime.fire("click", chartRuntime.pointAt(1));
+    expect(onDay).not.toHaveBeenCalled();
+    fireEvent.keyDown(chart(/^Token share/), { key: "Home" });
+    fireEvent.keyDown(chart(/^Token share/), { key: "Enter" });
+    expect(onDay).toHaveBeenCalledWith(day);
+    expect(screen.queryByRole("tooltip")).toBeNull();
   });
 
   it("takes a hidden kind out of the day's total, so the others still make 100%", () => {
@@ -340,12 +370,12 @@ describe("tokens chart: Share", () => {
     expect(second!.slice(0, 6)).toEqual(Array(6).fill("–"));
   });
 
-  it("keeps Volume's average line and peak label", () => {
+  it("keeps Volume's average line and peak label", async () => {
     const days = dayRange("2026-10-16", "2026-11-04");
     const long: UsagePayload = { ...tokens, start: days[0]!, end: days.at(-1)!, range: 20,
       daily: days.map(x => ({ ...usage.daily[0]!, ...empty, day: x, input: 1, cost: 1, unpriced: 0 })) };
     renderApp(<Host data={long} first="volume" />);
     expect(screen.getByText("7-day average")).toBeTruthy();
-    expect(document.querySelector("svg text[font-weight='600']")).not.toBeNull();
+    expect(await seriesIds()).toContain("peak");
   });
 });

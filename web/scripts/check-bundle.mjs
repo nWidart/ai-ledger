@@ -12,8 +12,8 @@ const LIMITS = {
   CostPage: 20,
   echarts: 195, // the lazy ECharts chunk
 };
-// How many `echarts-*.js` chunks the build must hold. No page loads ECharts yet; step 3.2 sets this to 1.
-const ECHARTS_CHUNKS = 0;
+// How many `echarts-*.js` chunks the build must hold: one, which Cost's daily chart loads.
+const ECHARTS_CHUNKS = 1;
 
 const files = readdirSync(assets).filter((f) => f.endsWith(".js"));
 const chunks = (name) => files.filter((f) => new RegExp(`^${name}-[\\w-]+\\.js$`).test(f));
@@ -36,7 +36,6 @@ for (const name of ["index", "CostPage"]) {
 const echarts = chunks("echarts");
 if (echarts.length !== ECHARTS_CHUNKS) failures.push(`expected ${ECHARTS_CHUNKS} echarts-*.js chunk(s), found ${echarts.length}`);
 for (const file of echarts) report(file, LIMITS.echarts);
-if (!echarts.length) console.log(`ok   no echarts-*.js chunk (expected ${ECHARTS_CHUNKS})`);
 
 if (failures.length) {
   for (const f of failures) console.error(`bundle budget: ${f}`);

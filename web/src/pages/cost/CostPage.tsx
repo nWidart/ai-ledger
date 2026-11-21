@@ -9,6 +9,7 @@ import type { SortBy } from "../../components/Sort";
 import { ModelLedger } from "../../components/sheets/ProjectSheet";
 import { openSessionSheet } from "../../components/sheets/session";
 import { DocsLink } from "../../components/DocsLink";
+import { preloadECharts } from "../../components/echart/load";
 import { PageSkeleton } from "../../components/PageSkeleton";
 import { useLanding } from "../../components/useLanding";
 import { big } from "../../format";
@@ -24,6 +25,9 @@ import { MATRIX_SORT, type MatrixKey } from "./matrix";
 import { PlanGauge } from "./PlanGauge";
 import { ProjectTable, type CostSpot } from "./ProjectTable";
 import "./cost.css";
+
+// The daily chart draws with ECharts: its chunk is requested with this page's, not after the first render.
+preloadECharts();
 
 // The chart's metric, hidden token kinds and cost stacking, under the keys the Usage page kept them in (the stacking is newer).
 const METRIC_KEY = "claude-usage-metric", HIDDEN_KEY = "claude-usage-hidden", STACK_KEY = "claude-usage-stack", SCALE_KEY = "claude-usage-token-scale";

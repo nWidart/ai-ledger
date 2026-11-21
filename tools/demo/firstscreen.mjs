@@ -23,7 +23,7 @@ const TITLES = {
  *  measured line), which must be wholly on it. Live's is its stream's first event, from the web tests' fixtures, so it does not
  *  depend on a replay; it has no plot. */
 const FIRST = [
-  ["Cost's daily cost chart", "/cost?range=30", "#spend .chart", "#spend .bar-seg"],
+  ["Cost's daily cost chart", "/cost?range=30", "#spend .echart", "#spend .echart-plot path"],
   ["Errors' rate chart", "/errors?range=30", ".chart-card", ".chart-card .bars rect"],
   ["Limits' first open window chart", "/limits?range=30", ".lim-grid .lim-chart", ".lim-grid .lim-chart :is(.meas, .meas-one)"],
   ["the Judgments view's Outcomes ledger", "/usage?view=judgments&range=30", "#outcomes", "#outcomes .ledger .bar"],
