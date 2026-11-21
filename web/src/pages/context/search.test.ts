@@ -11,8 +11,12 @@ describe("Context search", () => {
     expect(validateSearch({ tip: 7 })).toEqual({});
   });
 
-  it("accepts a typed tip", () => {
-    expect(validateSearch({ tip: "cache-breaks" })).toEqual({ tip: "cache-breaks" });
+  it("keeps the growth and cache tabs, and drops the default or an unknown one", () => {
+    expect(validateSearch({ tab: "growth" })).toEqual({ tab: "growth" });
+    expect(validateSearch({ tab: "cache", tip: "near_limit" })).toEqual({ tab: "cache", tip: "near_limit" });
+    expect(validateSearch({ tab: "overhead" })).toEqual({});
+    expect(validateSearch({ tab: "fills" })).toEqual({});
+    expect(validateSearch({ tab: 1 })).toEqual({});
   });
 
   it("gives an empty object for an empty record", () => {

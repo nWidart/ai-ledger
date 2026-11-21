@@ -3,7 +3,6 @@ import { setOrder } from "../../colors";
 import { agentName, Filters } from "../../components/Filters";
 import { showModalUnder } from "../../components/Sheet";
 import type { SortBy } from "../../components/Sort";
-import { Toggletip } from "../../components/Toggletip";
 import { num as fmt } from "../../format";
 import { onNavigate, setSearch, useSearchOf, validateRoot } from "../../url";
 import { validateSearch } from "./search";
@@ -244,17 +243,11 @@ export function ErrorsPage() {
       {/* The first load shows the placeholder alone, with the page's heading, as the other pages do; a failed one keeps the header. */}
       {!m && !error ? <PageSkeleton title="Loading errors…" /> : <header className="top">
         <p className="kicker">{view.source ? agentName(view.source) : "Agent"} tool errors</p>
-        <Filters projects={projects}>
-          <div className="seg" id="fGran" role="group" aria-label="Granularity">
-            {(["day", "week"] as const).map(g => <button key={g} type="button" aria-pressed={view.gran === g} onClick={() => update({ gran: g }, true)}>{g === "day" ? "Day" : "Week"}</button>)}
-          </div>
-          <label className="chk"><input type="checkbox" id="fSub" checked={view.sub} onChange={e => update({ sub: e.target.checked }, true)} /> <span><span className="long">Include </span>subagents</span></label>
-          <label className="chk"><input type="checkbox" id="fNoise" checked={view.noise} onChange={e => update({ noise: e.target.checked }, true)} /> <span>Hide noise and muted</span></label>
-          <Toggletip term="hiding noise and muted types">Leaves out harness errors, user rejections and the types you muted</Toggletip>
-        </Filters>
+        {/* Only the page-level filters: Day/Week sits in the chart's header, the subagent and noise toggles in the type table's toolbar. */}
+        <Filters projects={projects} />
         {!m && <h1 className="lede" id="lede" tabIndex={-1}>Errors could not be loaded.</h1>}
       </header>}
-      {!m && error && <div className="card" id="load" role="alert"><b>Couldn't load errors.</b> <span className="muted">{error.message}. Check that the app is running.</span>{" "}
+      {!m && error && <div className="panel" id="load" role="alert"><b>Could not load errors.</b> <span className="muted">{error.message}. Check that the app is running.</span>{" "}
         <button type="button" ref={retryBtn} onClick={() => { retried.current = true; retry(); }}>Retry</button></div>}
       <div className="sr" id="pageLive" aria-live="polite">{pageLive}</div>
       {deadLink && <div className="outnote" id="deadLink"><span>{DEAD_LINK}</span> <button type="button" onClick={dismissDead}>Dismiss</button></div>}
@@ -263,11 +256,11 @@ export function ErrorsPage() {
         <RateChart />
         <div className="grid2">
           <TypeTable />
-          {!toSheet && <><section className="card detail" id="detail"><Detail /></section>{detailLive}</>}
+          {!toSheet && <><section className="panel detail" id="detail"><Detail /></section>{detailLive}</>}
         </div>
         {/* The status region moves with the detail: outside the modal sheet it would be inert. */}
         <dialog className="sheet" id="sheet" aria-labelledby="detailTitle" ref={sheet} onClick={e => { if (e.target === e.currentTarget) e.currentTarget.close(); }}>
-          {toSheet && <><section className="card detail" id="detail"><Detail /></section>{detailLive}</>}
+          {toSheet && <><section className="panel detail" id="detail"><Detail /></section>{detailLive}</>}
         </dialog>
       </RowContext.Provider></Ctx.Provider>}
     </main>

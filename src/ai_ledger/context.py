@@ -149,6 +149,22 @@ def growth(q):
                 to_compaction=to_compaction, fill=[dict(window=w, sessions=sum(b), bins=b) for w, b in sorted(fill.items())], peak=peak)
 
 
+# ---------- the window grids ----------
+
+def grids(q):
+    """Per project, most sessions first: the sessions with a measured start, a known window and a peak (the session map's), their
+    most common window, and the medians of their start and peak in tokens and as shares of each session's window. Start and peak
+    come from the same sessions, so a project's grid and its figures describe one population."""
+    rs = q("""SELECT project, count(*) AS sessions, mode(win) AS win, quantile_cont(start_prompt, 0.5) AS start,
+        quantile_cont(start_prompt / win, 0.5) AS start_share, quantile_cont(peak_context, 0.5) AS peak,
+        quantile_cont(peak_context / win, 0.5) AS peak_share
+        FROM sess JOIN starts USING (session_id) WHERE win IS NOT NULL AND peak_context IS NOT NULL
+        GROUP BY project ORDER BY sessions DESC, project NULLS LAST""")
+    for r in rs:
+        r["window"] = r.pop("win")
+    return rs
+
+
 # ---------- the session map ----------
 
 def sessions_map(q):
@@ -293,13 +309,22 @@ class Ctx:
 @dataclass(frozen=True)
 class Rule:
     """One tip. severity(ctx) is None when the rule does not fire, else "warn" or "critical"; matching(ctx) is an SQL condition over
-    sess (alias x) for the sessions that match the rule, with its params."""
+    sess (alias x) for the sessions that match the rule, with its params. advice(ctx, sources) takes the sources of the matching
+    sessions, so a rule names the commands of the agents its sessions ran in (see per_agent)."""
     id: str
     title: str
     severity: Callable
     evidence: Callable
     advice: Callable
     matching: Callable
+
+
+def per_agent(sources, claude, codex, both):
+    """The advice for the agents in sources: codex when every matching session is a Codex one, both when Codex and Claude Code
+    sessions match, else claude (Claude Code's commands are the default, as its sessions are)."""
+    if "codex" not in sources:
+        return claude
+    return codex if sources <= {"codex"} else both
 
 
 def project_match(names, alias="x"):
@@ -337,9 +362,20 @@ def large_start_evidence(ctx):
     return out
 
 
-LARGE_START_ADVICE = ("Trim `CLAUDE.md` or `AGENTS.md` and the files they import, and review the MCP servers configured for the project: "
-                      "every server's tool schemas are in every prompt. Servers configured but never called leave no trace in transcripts, "
-                      "so the list above shows only the MCP servers that were called; compare it with your `.mcp.json` or `claude mcp list`.")
+_UNCALLED = ("Servers configured but never called leave no trace in transcripts, so the list above shows only the MCP servers that "
+             "were called; compare it with ")
+
+
+def large_start_advice(ctx, sources):
+    return per_agent(
+        sources,
+        "Trim `CLAUDE.md` or `AGENTS.md` and the files they import, and review the MCP servers configured for the project: every server's "
+        f"tool schemas are in every prompt. {_UNCALLED}your `.mcp.json` or `claude mcp list`.",
+        "Trim `AGENTS.md` and the files it points to, and review the MCP servers configured for Codex: every server's tool schemas are "
+        f"in every prompt. {_UNCALLED}your `~/.codex/config.toml` or `codex mcp list`.",
+        "Trim `CLAUDE.md` or `AGENTS.md` and the files they import, and review the MCP servers configured for the project: every server's "
+        f"tool schemas are in every prompt. {_UNCALLED}`.mcp.json` or `claude mcp list` for Claude Code, and `~/.codex/config.toml` or "
+        "`codex mcp list` for Codex.")
 
 
 def large_start_match(ctx):
@@ -368,8 +404,12 @@ def compactions_evidence(ctx):
     return out
 
 
-COMPACTIONS_ADVICE = ("Start a new session or `/clear` between tasks; `/compact` before the context fills, while the summary is still cheap; "
-                      "hand bulk reading to a subagent, so it compacts there and not in the main thread.")
+def compactions_advice(ctx, sources):
+    cheap = "`/compact` before the context fills, while the summary is still cheap"
+    sub = "hand bulk reading to a subagent, so it compacts there and not in the main thread."
+    return per_agent(sources, f"Start a new session or `/clear` between tasks; {cheap}; {sub}",
+                     f"Start a new session with `/new` between tasks; {cheap}.",
+                     f"Start a new session between tasks (`/clear` in Claude Code, `/new` in Codex); {cheap}; in Claude Code, {sub}")
 
 
 # near_limit
@@ -408,7 +448,7 @@ def large_results_evidence(ctx):
     return out
 
 
-def large_results_advice(ctx):
+def large_results_advice(ctx, sources):
     rs = large_results(ctx)
     tools = {r["tool"] for r in rs}
     lines = []
@@ -452,7 +492,7 @@ def cache_breaks_evidence(ctx):
     return out
 
 
-def cache_breaks_advice(ctx):
+def cache_breaks_advice(ctx, sources):
     causes = break_causes(ctx)
     top = max(causes, key=lambda k: causes[k])  # a tie goes to the first in the order model_switch, expired, other
     if top == "model_switch":
@@ -481,16 +521,19 @@ def long_tier_evidence(ctx):
             dict(label="Long-prompt thresholds", value=", ".join(f"{m} {tokens(a)}" for m, a in limits if a))]
 
 
-LONG_TIER_ADVICE = ("`/compact` or start a new session before the prompt passes the model's threshold: every token of the request is "
-                    "priced higher once it does.")
+def long_tier_advice(ctx, sources):
+    why = "before the prompt passes the model's threshold: every token of the request is priced higher once it does."
+    return per_agent(sources, f"`/compact` or start a new session {why}", f"`/compact` or start a new session with `/new` {why}",
+                     f"`/compact` or start a new session (`/clear` in Claude Code, `/new` in Codex) {why}")
+
 
 RULES = (
     Rule("large_start", "Sessions start with a large context", lambda c: "warn" if large_projects(c) else None,
-         large_start_evidence, lambda c: LARGE_START_ADVICE, large_start_match),
+         large_start_evidence, large_start_advice, large_start_match),
     Rule("frequent_compactions", "Sessions compact repeatedly", compactions_severity, compactions_evidence,
-         lambda c: COMPACTIONS_ADVICE, lambda c: ("x.compactions >= ?", [COMPACTIONS_MANY])),
+         compactions_advice, lambda c: ("x.compactions >= ?", [COMPACTIONS_MANY])),
     Rule("near_limit", "Sessions reach the limit of the window", lambda c: "critical" if near_facts(c)["n"] else None,
-         near_evidence, lambda c: NEAR_ADVICE,
+         near_evidence, lambda c, s: NEAR_ADVICE,
          lambda c: ("x.win IS NOT NULL AND x.peak_context IS NOT NULL AND x.peak_context / x.win >= ?", [metrics.NEAR_LIMIT])),
     Rule("large_results", "Tool results fill the context", lambda c: ("critical" if any(r["result_bytes"] >= RESULT_HUGE_BYTES for r in large_results(c))
                                                                         else "warn") if large_results(c) else None,
@@ -499,7 +542,7 @@ RULES = (
          cache_breaks_evidence, cache_breaks_advice,
          lambda c: ("list_contains(?, x.session_id)", [[b["session_id"] for b in break_sessions(c)]])),
     Rule("long_tier", "Requests are priced on the long-prompt tier", lambda c: "warn" if long_tier_facts(c) is not None else None,
-         long_tier_evidence, lambda c: LONG_TIER_ADVICE, lambda c: ("x.session_id IN (SELECT session_id FROM rq WHERE lg)", [])),
+         long_tier_evidence, long_tier_advice, lambda c: ("x.session_id IN (SELECT session_id FROM rq WHERE lg)", [])),
 )
 
 
@@ -515,8 +558,10 @@ def tips(ctx):
         got = ctx.q(f"""SELECT x.session_id, x.project, x.source, x.first_ts, count(*) OVER () AS matched FROM sess x WHERE {where}
             ORDER BY x.first_ts DESC NULLS LAST, x.session_id LIMIT {TIP_SESSIONS}""", params)
         sessions = [dict(session_id=r["session_id"], project=r["project"], source=r["source"], first_ts=metrics.iso(r["first_ts"])) for r in got]
+        # Every matching session's source, not only the newest twenty's: the advice names the commands of each agent they ran in.
+        sources = {r["source"] for r in ctx.q(f"SELECT DISTINCT x.source FROM sess x WHERE {where}", params)}
         fired.append((severity != "critical", i, dict(id=rule.id, severity=severity, title=rule.title, evidence=rule.evidence(ctx),
-                                                       advice=rule.advice(ctx), sessions=sessions, matched=got[0]["matched"] if got else 0)))
+                                                       advice=rule.advice(ctx, sources), sessions=sessions, matched=got[0]["matched"] if got else 0)))
     return [tip for _, _, tip in sorted(fired, key=lambda f: f[:2])]
 
 
@@ -562,11 +607,12 @@ def payload(cur, project="", range_days=0, source="", automated=False, today=Non
     data = dict(project=project, range=range_days, automated=bool(automated), source=source,
                 start=start.isoformat() if start else None, end=today.isoformat(),
                 projects=metrics.project_list(cur, automated, af["projects"]), project_order=metrics.project_order(cur, af["projects"]),
-                automated_file=af, coverage=coverage(cur, q, W, fp), starting=starting(q), growth=growth(q), sessions_map=sessions_map(q), fills=fills(cur, W, fp))
+                automated_file=af, coverage=coverage(cur, q, W, fp), starting=starting(q), growth=growth(q), grids=grids(q), sessions_map=sessions_map(q), fills=fills(cur, W, fp))
     brk = session_breaks(q)
     data["cost"] = dict(cost(q, today), break_sessions=len(brk), breaks=[{k: v for k, v in r.items() if k != "first_ts"} for r in brk[:BREAK_SESSIONS]])
     data["tips"] = tips(Ctx(cur, q, shared, rp, W, fp, prices, data, brk))
     data["overhead"] = overhead(cur, project, source)
     # One title lookup for every session row on the payload: it reads the first prompt of each session that has no title.
-    titles.with_titles(cur, [*data["fills"]["largest"], *data["cost"]["breaks"], *(x for t in data["tips"] for x in t["sessions"])])
+    titles.with_titles(cur, [*data["fills"]["largest"], *data["cost"]["breaks"], *(x for t in data["tips"] for x in t["sessions"]),
+                             *data["sessions_map"]["points"]])
     return data

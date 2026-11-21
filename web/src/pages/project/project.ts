@@ -87,17 +87,32 @@ export function gridOverhead(o: ContextOverhead, start: number | null): GridOver
  *  other"), or among the categories alone when they exceed the median start. */
 export function contextGrid(c: ContextPayload): ContextGridModel | null {
   const s = c.starting, p = c.growth.peak;
-  const ws = s.window_share, pws = p.window_share;
-  if (ws == null || pws == null) return null;
+  return typicalGrid({ start: s.median, startShare: s.window_share, peak: p.median, peakShare: p.window_share, window: s.window,
+    sessions: Math.max(s.sessions, p.sessions) }, c.overhead);
+}
+
+/** The figures of a typical session a grid is drawn from: the median start and peak in tokens and as shares of the window. */
+export interface TypicalSession {
+  start: number | null; startShare: number | null; peak: number | null; peakShare: number | null; window: number | null; sessions: number;
+}
+
+/** The grid of a typical session from its figures (a view's, or one project's on Context), split by a snapshot when there is one;
+ *  null when the start's or the peak's share of the window is not known. */
+export function typicalGrid(t: TypicalSession, snapshot?: ContextOverhead | null): ContextGridModel | null {
+  const ws = t.startShare;
+  if (ws == null || t.peakShare == null) return null;
+  // The peak is drawn from the start up: a median peak under the median start (from different sessions) fills no added cells, and
+  // the free share is what the cells leave free, so the figures match the cells.
+  const pws = Math.max(t.peakShare, ws);
   const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x));
   const start = clamp(Math.round(ws * GRID_CELLS), 0, GRID_CELLS);
   const peakCells = clamp(Math.round(pws * GRID_CELLS), start, GRID_CELLS);
-  const freeTokens = s.window != null && s.window > 0 && p.median != null ? Math.max(0, s.window - p.median) : null;
-  const o = c.overhead ?? null;
-  let starts: GridRow[] = [{ key: "start", tone: "start", label: "Starting context", tokens: s.median, share: ws, cells: start }];
+  const freeTokens = t.window != null && t.window > 0 && t.peak != null ? Math.max(0, t.window - Math.max(t.peak, t.start ?? 0)) : null;
+  const o = snapshot ?? null;
+  let starts: GridRow[] = [{ key: "start", tone: "start", label: "Starting context", tokens: t.start, share: ws, cells: start }];
   let overhead: GridOverhead | null = null;
   if (o) {
-    const parts = overheadParts(o), sum = parts.reduce((a, x) => a + x.tokens, 0), S = s.median;
+    const parts = overheadParts(o), sum = parts.reduce((a, x) => a + x.tokens, 0), S = t.start;
     overhead = gridOverhead(o, S);
     const overflow = overhead.overflow;
     // Without a median start there is nothing to split.
@@ -110,10 +125,10 @@ export function contextGrid(c: ContextPayload): ContextGridModel | null {
     }
   }
   return {
-    start, added: peakCells - start, free: GRID_CELLS - peakCells, window: s.window, sessions: Math.max(s.sessions, p.sessions), overhead,
+    start, added: peakCells - start, free: GRID_CELLS - peakCells, window: t.window, sessions: t.sessions, overhead,
     rows: [
       ...starts,
-      { key: "added", tone: "added", label: "Added by the peak", tokens: s.median != null && p.median != null ? Math.max(0, p.median - s.median) : null, share: Math.max(0, Math.min(pws, 1) - ws), cells: peakCells - start },
+      { key: "added", tone: "added", label: "Added by the peak", tokens: t.start != null && t.peak != null ? Math.max(0, t.peak - t.start) : null, share: Math.max(0, Math.min(pws, 1) - ws), cells: peakCells - start },
       { key: "free", tone: "free", label: "Free space", tokens: freeTokens, share: Math.max(0, 1 - pws), cells: GRID_CELLS - peakCells },
     ],
   };

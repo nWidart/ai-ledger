@@ -3,12 +3,12 @@ import { renderApp } from "../../testing";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { ContextPayload, SessionPoint } from "../../api";
-import { PressureBars } from "./PressureBars";
+import { fillOf, PressureBars } from "./PressureBars";
 
 const W = 200_000;
 const pt = (id: string, ratio: number, day: number, window = W): SessionPoint => ({
   session_id: id.padEnd(12, "0"), project: "app", source: "claude", first_ts: `2026-05-${String(day).padStart(2, "0")}T10:00:00Z`,
-  start: 10_000, peak: ratio * window, window, turns: 10, compactions: 1,
+  start: 10_000, peak: ratio * window, window, turns: 10, compactions: 1, title: null,
 });
 const fill: ContextPayload["growth"]["fill"] = [
   { window: W, sessions: 10, bins: [5, 3, 0, 2, 0] },
@@ -39,6 +39,10 @@ describe("PressureBars", () => {
     await userEvent.click(screen.getByRole("button", { name: "Show data table" }));
     const row = within(screen.getByRole("table", { name: "Sessions by peak share of the window" })).getByRole("row", { name: /^200k/ });
     expect([...row.querySelectorAll("td")].map(c => c.textContent)).toEqual(["5 (50%)", "3 (30%)", "0 (0%)", "2 (20%)", "0 (0%)"]);
+    // It scrolls in its own named region, which the keyboard can reach, not the page.
+    const region = screen.getByRole("region", { name: "Sessions by peak share of the window" });
+    expect(region.tabIndex).toBe(0);
+    expect(region.classList.contains("scroll")).toBe(true);
   });
 
   it("names a segment with its count, share and band", () => {
@@ -91,6 +95,20 @@ describe("PressureBars", () => {
     await userEvent.click(seg(/peaked at <25%/));
     expect(document.querySelectorAll(".plist [data-session]").length).toBe(20);
     expect(screen.getByText("and 3 more")).toBeTruthy();
+  });
+
+  it("names a listed session by its title, else its short id", async () => {
+    const titled = [{ ...pt("ttt", .85, 7), title: "Refactor the parser" }, pt("ddd", .85, 4)];
+    renderApp(<PressureBars fill={[{ window: W, sessions: 2, bins: [0, 0, 0, 2, 0] }]} points={titled} />);
+    await userEvent.click(seg(/peaked at 80–90%/));
+    expect([...document.querySelectorAll(".plist .pname")].map(n => n.textContent)).toEqual(["Refactor the parser", "#ddd00000"]);
+  });
+
+  it("counts some sessions on the map as the payload counts the view (fillOf)", () => {
+    expect(fillOf(points)).toEqual([
+      { window: W, sessions: 5, bins: [1, 2, 0, 1, 1] }, // .9 is in the top band (lower edge inclusive)
+      { window: 1_000_000, sessions: 1, bins: [0, 0, 0, 0, 1] },
+    ]);
   });
 
   it("is operable from the keyboard", async () => {

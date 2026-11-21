@@ -1,7 +1,7 @@
 // Errors data logic, ported from dashboard_template.html: the payload indexed once, then pure functions of it and the view.
 // /api/errors returns every error; the page filters on the client, by project and source among others.
 import type { Category, Day, ErrorRow, ErrorsPayload, Incident, Source, Ts } from "../../api";
-import { dayLabel, num as fmt } from "../../format";
+import { dayLabel, dur, num as fmt } from "../../format";
 import { FEW_CALLS } from "../../components/chart";
 import type { SortBy } from "../../components/Sort";
 import { sessionSheetHref } from "../../components/sheets/session";
@@ -266,6 +266,28 @@ export function timeLost(m: Model, errs: readonly Err[], groups: readonly Group[
   for (const g of groups) by[g.errs[0]!.c] = (by[g.errs[0]!.c] || 0) + incSpan(g);
   return by;
 }
+/** An incident's retry episode as a strip: its failures (✕) over time, then the call that recovered (✓). The strip's length grows with
+ *  the failures' span on a square-root scale (STRIP_MIN to STRIP_MAX units over 0 to STRIP_CAP seconds), and each failure sits at its
+ *  start time along it: a tight loop is a short strip of crowded marks, spaced failures a long strip of separate ones. The ✓ follows
+ *  the last failure at a fixed STRIP_OK units, so a recovery much later does not stretch a tight loop; the text says when it came.
+ *  w: the strip's length with the ✓; text: the strip in words, its text alternative. */
+export const STRIP_MIN = 20, STRIP_MAX = 120, STRIP_CAP = 3600, STRIP_OK = 12;
+export interface Strip { w: number; marks: { x: number; ok: boolean }[]; text: string }
+export function attemptStrip(g: Group): Strip {
+  const ts = g.errs.map(e => Date.parse(e.ts)).filter(Number.isFinite), t0 = ts.length ? Math.min(...ts) : 0;
+  const ok = g.outcome === "recovered" && g.rts ? Date.parse(g.rts) : NaN, last = ts.length ? Math.max(...ts) : t0;
+  const fails = (last - t0) / 1000, pad = 6;
+  const w0 = STRIP_MIN + (STRIP_MAX - STRIP_MIN) * Math.sqrt(Math.min(fails, STRIP_CAP) / STRIP_CAP);
+  const x = (t: number) => pad + (fails > 0 ? (t - t0) / 1000 / fails : 0) * (w0 - 2 * pad);
+  // The ✓ steps STRIP_OK past the last plotted failure, which sits at the strip's start when the failures share one time.
+  const marks = ts.map(t => ({ x: x(t), ok: false })), okX = x(last) + STRIP_OK;
+  if (Number.isFinite(ok)) marks.push({ x: okX, ok: true });
+  const w = Number.isFinite(ok) ? Math.max(w0, okX + pad) : w0, n = g.errs.length;
+  const what = n === 1 ? "1 failed attempt" : `${fmt(n)} failed attempts over ${dur(fails)}, ${dur(fails / (n - 1))} apart on average`;
+  const then = Number.isFinite(ok) ? `, then the next call succeeded ${dur(Math.max(0, ok - Date.parse(g.last ?? "")) / 1000 || 0)} later`
+    : g.outcome === "gave_up" ? ", then no further call" : ", then the next call failed too";
+  return { w, marks, text: what + then };
+}
 export interface IncSummary { n: number; bad: number; pct: number; groups: Group[] }
 /** "1,078 errors in 326 incidents, 3% didn't recover" for a set of errors. */
 export function incSummary(m: Model, errs: readonly Err[]): IncSummary {
@@ -331,10 +353,11 @@ export function linePath(vals: readonly (number | null)[], x: (i: number) => num
 // ---------- category table ----------
 /** lost: the type's time lost in ms (see timeLost). rate: errors per 100 tool calls in the view (the selected bucket's, with one), null
  *  with no calls. inc, bad: its incidents and those whose outcome isn't "recovered"; unrec: bad as a percent of inc, null with no incident.
- *  delta.pts: the change in rate, in points (the Change column's sort). */
+ *  pts: the type's rate per bucket over the whole range, from its first day (not from the first call, as the chart): a fix recorded before
+ *  the view's first call still has its bucket for the tick. delta.pts: the change in rate, in points (the Change column's sort). */
 export interface TypeRow { cid: string; n: number; lost: number; share: number; rate: number | null; inc: number; bad: number; unrec: number | null; color: string; pts: Pt[]; delta: Delta }
 export function typeRows(m: Model, v: View, f: Filtered): TypeRow[] {
-  const errs = inBucket(v, f.errs), counts = countBy(errs), total = errs.length || 1, vt = viewTypes(m, v, f), keys = buckets(m, f.from, v.gran), x = compare(m, v, f), groups = incidentsOf(m, errs), lost = timeLost(m, errs, groups);
+  const errs = inBucket(v, f.errs), counts = countBy(errs), total = errs.length || 1, vt = viewTypes(m, v, f), keys = buckets(m, f.start, v.gran), x = compare(m, v, f), groups = incidentsOf(m, errs), lost = timeLost(m, errs, groups);
   const calls = sumCalls(v, v.at ? f.calls.filter(c => bucketOf(c[0], v.gran) === v.at) : f.calls), inc: Record<string, [number, number]> = {};
   for (const g of groups) { const t = inc[g.errs[0]!.c] ??= [0, 0]; t[0]++; if (g.outcome !== "recovered") t[1]++; }
   return Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([cid, n]) => {

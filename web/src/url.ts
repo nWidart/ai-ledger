@@ -47,6 +47,8 @@ const sheetKeys = (path: string): string[] => ["inspect", "tool", "mcp", "skill"
 export const SHARED_KEYS = ["project", "range", "source", "auto"] as const;
 
 const isRange = (n: number): n is Range => (RANGES as readonly number[]).includes(n);
+/** A real calendar day as YYYY-MM-DD: 2026-02-30 is not one. */
+export const isDay = (s: string): boolean => /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(Date.parse(s)) && new Date(s).toISOString().startsWith(s);
 /** A source value, or "" (all) when missing or unknown. */
 export const sourceOf = (v: string | null | undefined): Source | "" => ((SOURCES as readonly string[]).includes(v ?? "") ? (v as Source) : "");
 
@@ -144,8 +146,9 @@ export const currentSheetKey = () => sheetKey(here().pathname);
 const sheetDepth = (): number | undefined => (here().state as { sheets?: number } | undefined)?.sheets;
 
 /** Changes the view. Pushes when a filter or sheet key changes (or push: true), else replaces; a no-op when nothing changes.
- *  Never moves the scroll position: the page is the same page. */
-export function setSearch(patch: SearchPatch, opts: { push?: boolean } = {}) {
+ *  Never moves the scroll position: the page is the same page. keepHash keeps the URL's fragment (a link to a section), which a
+ *  view change otherwise drops. */
+export function setSearch(patch: SearchPatch, opts: { push?: boolean; keepHash?: boolean } = {}) {
   const loc = here(), was = parseSearch(loc.search), next = applyPatch(was, patch), s = formatSearch(next);
   if (s === formatSearch(was)) {
     // The same view spelled another way (keys in another order): rewrite it in the canonical spelling, as a replace. The
@@ -165,7 +168,7 @@ export function setSearch(patch: SearchPatch, opts: { push?: boolean } = {}) {
     const keys = sheetKeys(loc.pathname), before = keys.some(k => was[k]) ? sheets : 0;
     sheets = keys.some(k => next[k]) && changed.every(k => keys.includes(k)) && before != null ? before + 1 : undefined;
   }
-  void router.navigate({ to: loc.pathname, search: next, replace: !push, resetScroll: false, state: sheets ? { sheets } : {} } as never);
+  void router.navigate({ to: loc.pathname, search: next, ...(opts.keepHash ? { hash: true } : {}), replace: !push, resetScroll: false, state: sheets ? { sheets } : {} } as never);
   router.history.flush();
 }
 

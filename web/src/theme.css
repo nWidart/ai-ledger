@@ -171,6 +171,8 @@ dialog.sheet::backdrop { background: var(--scrim); }
     .pg-cost .legend button.proj[aria-current=true],
     .pg-context .growth .legend button.key[aria-pressed=true],
     .pg-context .pressure .band[aria-pressed=true],
+    .pg-context .cache-chart .legend .toggle[aria-pressed=true],
+    .pg-context .tablist [role=tab][aria-selected=true], .pg-context .tip-btn[aria-expanded=true],
     .pg-judgments .ledger li.pick.on > .rowbtn, .pg-judgments .ledger li.on:not(.pick),
     .pg-judgments button.chip.on, .pg-judgments button.badge.on,
     .pg-limits .hs-bar[aria-pressed="true"],

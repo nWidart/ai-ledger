@@ -151,7 +151,7 @@ A failed import SHALL leave the key in place and the browser's markers shown, an
 - **THEN** the store drops it, the key no longer holds it, and the next load does not bring it back
 
 ### Requirement: Narrow the lists to a chart bucket
-The Errors page SHALL let the user select one day or week of the errors chart by click, or by Enter or Space on the chart's current point, and clear it the same way. A folded stretch without tool calls SHALL NOT be selectable. A selected bucket SHALL narrow the type table and the open type's detail to its errors; the summary, chart, rate trend and change stay range-wide. The table's hint SHALL name the columns that follow the bucket and those that do not.
+The Errors page SHALL let the user select one day or week of the errors chart by click, or by Enter or Space on the chart's current point, and clear it the same way. A folded stretch without tool calls SHALL NOT be selectable. A selected bucket SHALL narrow the type table and the open type's detail to its errors; the summary, chart, rate trend and change stay range-wide. The table's hint SHALL name the figures that follow the bucket and those that do not.
 
 #### Scenario: Select a spike
 - **WHEN** the user clicks the day's bar on the chart
@@ -171,7 +171,7 @@ The Errors page SHALL let the user select one day or week of the errors chart by
 
 #### Scenario: The hint
 - **WHEN** a day is selected
-- **THEN** the table's hint says that the types, Errors, Time lost, Rate, Didn't recover and Share follow it, and Rate trend and Change stay range-wide
+- **THEN** the table's hint says that the types, Errors, Rate, the share, Time lost and Not recovered follow it, and Trend and Change stay range-wide
 
 ### Requirement: Keep the selected bucket in the view
 The selected bucket SHALL be part of the URL view and push a history entry, and SHALL NOT be saved with the last view. The chart SHALL mark it beyond color and name it for assistive tech, and a chip by the type table SHALL name it and clear it. The selection SHALL clear when it is no longer a selectable point of the chart the view draws. An open type with no errors in the bucket SHALL close unless an example is linked.
@@ -379,7 +379,7 @@ The detail of `infra` and `user_denied` SHALL show no mute button. It SHALL say 
 - **THEN** the detail shows no mute button and says the type is always noise
 
 ### Requirement: Count muted types as noise
-A muted type SHALL count as noise, with `infra` and `user_denied`. The toggle SHALL read "Hide noise and muted", keep its `fNoise` id and `noise` URL key, and have a title that says what it leaves out. Wherever it leaves noise out, it SHALL leave muted types out: the error rate, the chart, the type table, the comparison with the period before and the uncategorized share.
+A muted type SHALL count as noise, with `infra` and `user_denied`. The toggle in the type table's toolbar SHALL read "Hide noise and muted", keep its `fNoise` id and `noise` URL key, and have a toggletip that says what it leaves out. Wherever it leaves noise out, it SHALL leave muted types out: the error rate, the chart, the type table, the comparison with the period before and the uncategorized share.
 
 #### Scenario: Toggle on
 - **WHEN** `git` is muted and the page shows 6 failed tool calls, 2 of them `git`, and the user turns "Hide noise and muted" on
@@ -390,11 +390,15 @@ A muted type SHALL count as noise, with `infra` and `user_denied`. The toggle SH
 - **THEN** the `git` row shows with a "Muted" chip, dimmed, and its errors count in the rate
 
 ### Requirement: Never suggest a muted type
-Where to start SHALL NOT list a muted type, neither among the open fixes nor under Rising fastest, whatever the toggle says. The summary's count of open types with a ready-made fix SHALL leave a muted type out too, so the two agree.
+Where to start SHALL NOT list a muted type among its open fixes or under Rising fastest, whatever the toggle says. Its Applied fixes table SHALL still list every recorded fix, a muted type's included. The summary's count of open types with a ready-made fix SHALL leave a muted type out too, so it and the open fixes agree.
 
 #### Scenario: Where to start
 - **WHEN** `git` is muted and has a ready-made fix and the most time lost
-- **THEN** Where to start does not list it, with the toggle on or off
+- **THEN** neither the open fixes nor Rising fastest list it, with the toggle on or off
+
+#### Scenario: A muted type's recorded fix
+- **WHEN** `git` is muted and has a recorded fix
+- **THEN** Applied fixes still lists `git` with its rates and verdict
 
 #### Scenario: The summary's count
 - **WHEN** `git` is the one open type with a ready-made fix and the user mutes it
@@ -409,7 +413,7 @@ When a fix or mute write fails, the page SHALL read the store. If the store show
 
 #### Scenario: Not confirmed
 - **WHEN** a mute fails and the read of the store fails too
-- **THEN** the message reads "Couldn't confirm the change to" the type's label, "Reload to see what the store holds.", and says neither "back in the list" nor "still muted"
+- **THEN** the message reads "Could not confirm the change to" the type's label, "Reload to see what the store holds.", and says neither "back in the list" nor "still muted"
 
 ### Requirement: Keep failed writes by type until dismissed
 The page SHALL keep a failed write's message per type and kind (fix or mute) until the user dismisses it or a later write of the same kind for that type is saved. Another write SHALL NOT clear it. For types whose detail is closed, the type table card SHALL list each pending mute and each failed mute on its own line, a failed one with its own Dismiss. The open type's detail shows its own.
@@ -443,23 +447,8 @@ The app SHALL answer 400 with an error message, and store nothing, unless the re
 - **WHEN** a request names `muted` as `"true"`, `1` or null, or leaves it out
 - **THEN** the endpoint answers 400 and stores nothing
 
-### Requirement: Sort the type table
-The type table SHALL sort by Type (A to Z first), Errors, Time lost, Rate, Didn't recover and Change. Share and the rate trend are plain headers: Share orders as Errors does. The default is Errors, most first. A second click on a header SHALL flip the direction. Only the sorted header SHALL carry `aria-sort`. Ties SHALL keep the default order, and a row whose cell shows "–" for the sorted column SHALL come last in either direction.
-
-#### Scenario: Sort by Didn't recover
-- **WHEN** the user selects the "Didn't recover" header
-- **THEN** the types with the largest share of unrecovered incidents come first, a type with no incident comes last, and only that header has `aria-sort`
-
-#### Scenario: Flip the direction
-- **WHEN** the user selects the sorted header again
-- **THEN** the order reverses, a type with no value is still last, and keyboard focus stays on the header button
-
-#### Scenario: No time lost
-- **WHEN** the user sorts by Time lost, least first, and a type with no measurable time lost shows "–"
-- **THEN** that type comes after the type that shows "1m"
-
 ### Requirement: Show each type's rate and share that did not recover
-The type table SHALL show Rate: the type's errors per 100 tool calls in the view, with two decimals and "%", or "–" with no calls. It SHALL show Didn't recover: the percent of the type's incidents whose outcome is not recovered, with "N of M incidents" as its title, or "–" with no incident. With a chart bucket selected, both SHALL count only that bucket's errors, and Rate SHALL use that bucket's calls.
+The type table SHALL show Rate: the type's errors per 100 tool calls in the view, with two decimals and "%", or "–" with no calls. Under Time lost it SHALL show the percent of the type's incidents whose outcome is not recovered ("37% not recovered"), with "N of M incidents" as text for a screen reader, or "–" with no incident. With a chart bucket selected, both SHALL count only that bucket's errors, and Rate SHALL use that bucket's calls.
 
 #### Scenario: A bucket is selected
 - **WHEN** the type has 2 errors on Mar 3 and 4 on Mar 4, there are 10 calls on each day, and the user selects Mar 3
@@ -484,7 +473,7 @@ The sort and the filter text SHALL be page state: not in the URL, not saved. The
 - **THEN** the table is still sorted by Rate and filtered by "git"
 
 ### Requirement: Sort Change by its change in points
-The Change column SHALL sort by the change in the type's error rate, in percentage points (the rate after minus the rate before, as Rising fastest ranks), for every row with a comparison, a cell that shows counts included. Only a "–" cell SHALL sort last in either direction. The header's title SHALL say that it sorts by the change in error rate, in points.
+The Change column SHALL sort by the change in the type's error rate, in percentage points (the rate after minus the rate before, as Rising fastest ranks), for every row with a comparison, a cell that shows counts included. Only a "–" cell SHALL sort last in either direction. The header's toggletip SHALL say that it sorts by the change in error rate, in points. Each Change figure SHALL be a toggletip that shows the rates before and after, or why it shows "–", without opening the row.
 
 #### Scenario: Counts sort by their points
 - **WHEN** the user sorts by Change, most first, and one type shows "+12%", one "▼ -40%" and one "0 → 48", the last with the largest rise in rate
@@ -493,6 +482,14 @@ The Change column SHALL sort by the change in the type's error rate, in percenta
 #### Scenario: No comparison
 - **WHEN** the view has too few tool calls to compare and every Change cell shows "–"
 - **THEN** the rows keep the default order
+
+#### Scenario: The rates behind a change
+- **WHEN** the user tabs to a Change figure of "1 → 3" and presses Enter
+- **THEN** it shows "Error rate vs previous 30 days: 0.10% → 0.30% (1 → 3 errors)", the type does not open, and Escape hides it
+
+#### Scenario: Why a change shows –
+- **WHEN** the user activates a "–" Change figure in a range with under 200 tool calls in the 30 days before
+- **THEN** it shows "Fewer than 200 tool calls in the 30 days before"
 
 ### Requirement: Open a type over a chart bucket
 Choosing a type from the chart legend or Where to start SHALL open it, and SHALL clear a selected bucket that holds none of its errors, saying "Selection cleared: <type> has no errors in <bucket>." Choosing a type in the command palette SHALL always clear the bucket. A row of the type table is not affected, as its rows are the bucket's.
@@ -597,3 +594,125 @@ The chart's keyboard and pointer reading of a bucket with too few calls for a st
 #### Scenario: A quiet day
 - **WHEN** the user reads, by keyboard, a day with 4 tool calls in a view whose other days have hundreds
 - **THEN** the reading says its rate, errors and calls, then "too few calls for a steady rate"
+
+### Requirement: Place each control where it acts
+The Errors header SHALL hold only the page-level filters: project, range and source. Day / Week SHALL sit in the rate chart's header, as a group named "Granularity". "Include subagents" and "Hide noise and muted" SHALL sit in the type table's toolbar, shown even when the view lists no type. Each SHALL keep its id (`fGran`, `fSub`, `fNoise`) and URL key (`gran`, `sub`, `noise`).
+
+#### Scenario: Day and Week
+- **WHEN** the user selects Week in the rate chart's header
+- **THEN** the URL holds `gran=week`, the chart draws weeks, and the header holds no Day / Week control
+
+#### Scenario: The toggles
+- **WHEN** the user clears "Include subagents" in the type table's toolbar
+- **THEN** the URL holds `sub=0` and the summary, chart and table leave out subagent errors
+
+#### Scenario: A link with the keys
+- **WHEN** the user opens `/errors?gran=week&sub=0&noise=0`
+- **THEN** Week is pressed in the chart's header and the toolbar shows "Include subagents" off and "Hide noise and muted" on
+
+### Requirement: Fit the type table in four columns
+The type table SHALL have four columns: Type, with its swatch and Muted and Fix applied marks; Errors and Rate, with the share of errors as a bar; Time lost, with the share not recovered under it; and Trend, a sparkline with Change under it. At 1280px it SHALL fit the master pane with no sideways scroll, and no width SHALL hide a column. A figure too wide for its line SHALL wrap within its cell, never spill into the next.
+
+#### Scenario: A laptop window
+- **WHEN** the user opens Errors in a 1280px window
+- **THEN** the type table shows its four columns within its panel, and neither it nor the page scrolls sideways
+
+#### Scenario: Wide figures
+- **WHEN** a type shows 1,000,000 errors at 100.00% in a 1280px window
+- **THEN** the rate wraps under the count inside the Errors cell, and nothing overlaps Time lost
+
+#### Scenario: A phone
+- **WHEN** the user opens Errors on a phone 390px wide
+- **THEN** the four columns stay, with tighter figures and no sparkline drawing
+
+### Requirement: Tick the fix on a type's trend
+The Trend sparkline SHALL span the whole range, from its first day, even before the view's first tool call. A type with a recorded fix SHALL show a tick on it at the bucket of the fix day, when that bucket is in the range, and say so to a screen reader. Where the sparkline is not drawn (mid widths and phones), neither the tick nor that note SHALL show; the type's Fix applied mark still names the day.
+
+#### Scenario: A fix in the range
+- **WHEN** `tests` has a fix recorded on Nov 8 and the range holds Nov 8
+- **THEN** its sparkline has one tick at Nov 8's bucket, and its cell says the trend marks the fix
+
+#### Scenario: A fix before the first call
+- **WHEN** a 30-day view of one project has a fix on Nov 8 and its first tool call on Nov 12
+- **THEN** the sparkline starts on the range's first day, and its tick sits at Nov 8's bucket
+
+#### Scenario: A phone
+- **WHEN** the same view is open on a phone 390px wide
+- **THEN** no sparkline or tick is drawn, and the Type column shows "✓ Fix applied Nov 8"
+
+### Requirement: Offer the rate chart as a data table
+Under the rate chart, a "Show data table" disclosure, closed on load, SHALL show per chart point its tool calls, failed calls, the rate the line draws (the selected type's when one is) and the failed calls of each series the chart draws: its type layers, and Other when it draws Other. Its name SHALL say the granularity and the rate. It SHALL be absent when the chart shows a message instead.
+
+#### Scenario: Show the table
+- **WHEN** the user selects "Show data table" under the chart, with days and no type selected
+- **THEN** a table named "Failed tool calls by type and error rate per day" lists each day with its calls, failed calls, rate and failed calls of each series the chart draws
+
+#### Scenario: A selected type
+- **WHEN** type `x` is open, the view is by week and the week of Nov 2 is selected
+- **THEN** the table is named "Failed tool calls by type and x rate per week", its rate column is `x`'s, and the selected week's row header ends "(selected)"
+
+### Requirement: Score the applied fixes
+Where to start SHALL list every recorded fix, newest first, in a table "Applied fixes": the type and fix day, the error rate before and since, and the verdict of the type detail's before and after comparison. A type with errors in the view SHALL open from its row. With no fix recorded the table SHALL be absent.
+
+#### Scenario: Two fixes
+- **WHEN** fixes are recorded for `tests` on Nov 8 and `edit_unread` on Oct 25
+- **THEN** the table lists `tests` then `edit_unread`, each with its rates and a verdict such as "Rate lower" or "Not enough calls yet"
+
+#### Scenario: No fix
+- **WHEN** no fix is recorded
+- **THEN** Where to start shows no Applied fixes table
+
+### Requirement: Draw an incident's attempts on a strip
+Each incident row SHALL draw its failures on a time strip, then the call that recovered after a short fixed step. The strip SHALL grow with the failures' span, so a tight loop reads as a short strip of crowded marks and spaced failures as a long one. Its text alternative SHALL say the attempts, their span and spacing, and how the incident ended.
+
+#### Scenario: A tight loop
+- **WHEN** an incident has 3 failures 2 seconds apart and the next call succeeded 2 seconds later
+- **THEN** its strip is short with touching ✕ marks then a ✓, and reads "3 failed attempts over 4s, 2s apart on average, then the next call succeeded 2s later"
+
+#### Scenario: Spaced failures
+- **WHEN** an incident has 3 failures 5 minutes apart and no later call
+- **THEN** its strip is longer with separate marks, and reads "3 failed attempts over 10m, 5m apart on average, then no further call"
+
+### Requirement: Show the whole summary on a narrow screen
+The Errors summary SHALL show its date line, uncategorized share and four vitals at every width, two vitals to a row on a narrow screen, with no control that hides part of it. The date line SHALL NOT name the last ingest, and Where to start SHALL NOT repeat how often the app ingests: the navigation shows both.
+
+#### Scenario: A phone
+- **WHEN** the user opens Errors on a phone 390px wide
+- **THEN** the summary shows the date line, the uncategorized share and all four vitals, two to a row, and no "More summary"
+
+### Requirement: Word the page without contractions
+The Errors page SHALL word its text without contractions, as the other pages do: "Could not", "did not", "cannot", "does not".
+
+#### Scenario: A failed load
+- **WHEN** the first request for errors fails
+- **THEN** the message reads "Could not load errors."
+
+### Requirement: Sort the four-column type table
+The type table SHALL sort by Type (A to Z first), Errors, Rate, Time lost, Not recovered and Change, each a header button that Enter and Space also press; a header of two figures holds a button for each. The share bar orders as Errors does. The default is Errors, most first; a second press SHALL flip the direction. Only the sorted header SHALL carry `aria-sort`. Ties keep the default order; a "–" value SHALL come last either way.
+
+#### Scenario: Sort by Not recovered
+- **WHEN** the user selects the "Not recovered" button in the Time lost header
+- **THEN** the types with the largest share of unrecovered incidents come first, a type with no incident comes last, and only the Time lost header has `aria-sort`
+
+#### Scenario: Flip the direction
+- **WHEN** the user selects the sorted button again
+- **THEN** the order reverses, a type with no value is still last, and keyboard focus stays on the button
+
+#### Scenario: No time lost
+- **WHEN** the user sorts by Time lost, least first, and a type with no measurable time lost shows "–"
+- **THEN** that type comes after the type that shows "1m"
+
+#### Scenario: Keyboard
+- **WHEN** the user focuses the Rate button and presses Enter, then Space
+- **THEN** the table sorts by Rate, most first, then least first, and focus stays on the button
+
+### Requirement: Say which figure sorts a two-figure header
+In a header of two sort buttons and in Trend's, the button whose figure sorts the table SHALL be pressed (`aria-pressed`) and any other SHALL NOT, so a screen reader tells Errors from Rate when `aria-sort` reads the same. `aria-sort` SHALL stay on the header.
+
+#### Scenario: Errors to Rate
+- **WHEN** the table is sorted by Errors, most first, and the user selects Rate
+- **THEN** the header keeps `aria-sort="descending"`, Rate is pressed and Errors is not
+
+#### Scenario: Another column
+- **WHEN** the user then sorts by Not recovered
+- **THEN** the Errors header has no `aria-sort`, neither of its buttons is pressed, and Not recovered is

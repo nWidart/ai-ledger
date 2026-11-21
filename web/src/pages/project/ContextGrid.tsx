@@ -1,9 +1,11 @@
 // The grid of a typical session's context window, in the style of Claude Code's /context: one cell per half percent, filled for the
 // starting context, then for what the peak adds, the rest free. With a context snapshot the starting cells split by the snapshot's
 // overhead categories. Cells are inline SVG so they do not depend on a font's glyphs.
+import type { ReactNode } from "react";
 import { big, plural, when } from "../../format";
 import type { ContextOverhead, OverheadPart } from "../../api";
 import { share, windowLabel } from "../context/context";
+import "./ContextGrid.css";
 import { GRID_CELLS, gridOverhead, overheadParts, PART_TONES, type ContextGridModel, type GridOverhead, type GridRow, type GridTone } from "./project";
 
 const COLS = 20;
@@ -46,7 +48,7 @@ export function gridLabel(rows: GridRow[]): string {
   return `Context window of a typical session: ${start}, ${pc("added")} added by the peak, ${pc("free")} free`;
 }
 
-const Defs = () => (
+export const GridDefs = () => (
   <svg width="0" height="0" aria-hidden="true" focusable="false" className="cg-defs">
     <defs>
       <symbol id="cg-used" viewBox="0 0 16 16">
@@ -75,7 +77,7 @@ function Snapshot({ snapshot }: { snapshot: ContextOverhead }) {
   const o = gridOverhead(snapshot, null), w = snapshot.window;
   return (
     <div className="ctx-grid">
-      <Defs />
+      <GridDefs />
       <div className="cg-side">
         <h3 className="cg-title">Measured overhead{w != null && w > 0 && ` · ${windowLabel(w)} window`}</h3>
         <Measured o={o} />
@@ -94,14 +96,37 @@ function Snapshot({ snapshot }: { snapshot: ContextOverhead }) {
   );
 }
 
-/** The grid of a typical session, or the snapshot alone (snapshot) when there is no grid to draw, so a saved measurement always shows. */
-export function ContextGrid({ model, snapshot }: { model: ContextGridModel | null; snapshot?: ContextOverhead | null }) {
+/** One of several grids side by side (Context's window grids): its title names it, and `name` starts its text for a screen reader.
+ *  The page draws the cell symbols once, with GridDefs. */
+export interface Compact { title: ReactNode; name: string }
+
+/** The grid of a typical session, or the snapshot alone (snapshot) when there is no grid to draw, so a saved measurement always shows.
+ *  compact: the cells over three figures (start, peak, free) and no legend, as one of several grids. */
+export function ContextGrid({ model, snapshot, compact }: { model: ContextGridModel | null; snapshot?: ContextOverhead | null; compact?: Compact }) {
   if (!model) return snapshot ? <Snapshot snapshot={snapshot} /> : null;
   const { rows, window, sessions, overhead: o } = model;
   const tones = rows.flatMap(r => Array<GridTone>(r.cells).fill(r.tone));
+  if (compact) {
+    // The start (every part before the peak's), the median peak (the start and what the peak adds) and the free space, as shares.
+    const free = rows.find(r => r.key === "free")!.share, added = rows.find(r => r.key === "added")!.share;
+    const start = rows.filter(r => r.key !== "added" && r.key !== "free").reduce((a, r) => a + r.share, 0);
+    const figs: [string, GridTone, number][] = [["Start", "start", start], ["Peak", "added", start + added], ["Free", "free", free]];
+    return (
+      <div className="ctx-grid cg-compact">
+        <div className="cg-cells" role="img" aria-label={`${compact.name}: ${gridLabel(rows)}`} style={{ gridTemplateColumns: `repeat(${COLS}, 1fr)` }} data-cells={GRID_CELLS}>
+          {tones.map((t, i) => <Icon key={i} tone={t} className="cg-cell" />)}
+        </div>
+        <div className="cg-side">
+          <h4 className="cg-title">{compact.title}</h4>
+          <p className="cg-sub muted">{window != null && `${windowLabel(window)} window · `}medians of {plural(sessions, "session")}</p>
+          <dl className="cg-figs">{figs.map(([l, t, v]) => <div key={l}><dt><Icon tone={t} className="cg-key" />{l}</dt><dd>{share(v)}</dd></div>)}</dl>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="ctx-grid">
-      <Defs />
+      <GridDefs />
       <div className="cg-cells" role="img" aria-label={gridLabel(rows)} style={{ gridTemplateColumns: `repeat(${COLS}, 1fr)` }} data-cells={GRID_CELLS}>
         {tones.map((t, i) => <Icon key={i} tone={t} className="cg-cell" />)}
       </div>

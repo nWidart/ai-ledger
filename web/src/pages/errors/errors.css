@@ -30,17 +30,23 @@
 @media (max-width: 32.5em) {
   .pg-errors .vital { padding: 10px 12px 10px 0; } .pg-errors .vital + .vital { padding-left: 12px; } .pg-errors .vital:nth-child(3) { padding-left: 0; }
   .pg-errors .vital .v { font-size: 1.375rem; } .pg-errors .vital .v.txt { font-size: 1rem; }
-  /* Phone: the finding, the rate and its change, then the chart; the rest of the summary waits behind More. */
+  /* Phone: every vital shows, two to a row, as on the other pages; the lede and the gaps tighten. */
   .pg-errors .lede { font-size: 1.3125rem; margin-bottom: 10px; }
-  .pg-errors .vitals { margin-bottom: 8px; }
-  .pg-errors .vitals:not(.open) .vital:nth-child(n+3), .pg-errors .sub.folded:not(.open) { display: none; }
-  .pg-errors .moresum { display: block; margin: 0 0 14px; font-size: .8125rem; }
+  .pg-errors .sub { margin-bottom: 12px; }
   .pg-errors .top { margin-bottom: 14px; gap: 8px; }
   .pg-errors .chart-card .hint { display: none; }
 }
 .pg-errors .delta-down { color: var(--good-text); } .pg-errors .delta-up { color: var(--critical-text); }
-.pg-errors .chart-card h2, .pg-errors .card h2 { font-size: .9375rem; margin: 0 0 2px; }
+.pg-errors .panel h2 { font-size: .9375rem; margin: 0 0 2px; }
 .pg-errors .chart-card .hint { color: var(--text-muted); font-size: .75rem; margin: 0 0 8px; }
+/* The chart's heading row, as on Activity and Cost: the title and hint left, the chart's own option (Day / Week) right. */
+.pg-errors .chart-head { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: flex-start; justify-content: space-between; }
+.pg-errors .chart-head .seg button { font-size: .8125rem; }
+/* The chart's data table, in its own scroll region (sideways and, past 520px, down). */
+.pg-errors .chart-table .scroll { overflow-x: auto; }
+.pg-errors .chart-table .tall { max-height: 520px; overflow: auto; }
+.pg-errors .chart-table thead th { position: sticky; top: 0; background: var(--surface-1); }
+.pg-errors .chart-table tbody th { font-weight: 400; white-space: nowrap; }
 .pg-errors #chart { position: relative; border-radius: 6px; }
 .pg-errors #chart:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
 .pg-errors #chart svg { display: block; width: 100%; height: 320px; overflow: visible; }
@@ -92,21 +98,73 @@
   .pg-errors .types .tscroll { overflow-y: auto; min-height: 0; }
   .pg-errors .types thead th { position: sticky; top: 0; z-index: 1; background: var(--surface-1); }
 }
-/* Two columns at mid widths: the share bar and the trend give their room to the type names and the figures. Neither is the only place
-   a value shows: the share follows the count, the trend's last step is the change. */
-@media (min-width: 56.3125em) and (max-width: 68.75em) { .pg-errors .c-share, .pg-errors .c-trend { display: none; } }
-/* The type filter, above the table. */
-.pg-errors .tfilter { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+/* The type table's toolbar: the filter box, then the view's toggles. */
+.pg-errors .ttools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-bottom: 8px; }
+.pg-errors .tfilter { display: flex; align-items: center; gap: 10px; flex: 1 1 14rem; min-width: 0; }
 .pg-errors .tfilter input { flex: 1; min-width: 0; max-width: 16.25rem; }
 .pg-errors .tfilter .muted { font-size: .75rem; white-space: nowrap; }
-/* The longest header wraps rather than widening the table. */
-.pg-errors th.num.c-unrec { white-space: normal; }
+.pg-errors .tchecks { gap: 4px 14px; font-size: .8125rem; }
+/* Four columns that fit the pane at any width: a fixed layout, the figures in rem (so they follow the text size), the type takes the
+   rest: at 1280px the table is 568px wide, and 23rem (368px) of figures leave the type 200px. The layout test reads these widths. */
+.pg-errors .types table { table-layout: fixed; }
+.pg-errors .types col.c-n { width: 7.5rem; }
+.pg-errors .types col.c-lost { width: 8rem; }
+.pg-errors .types col.c-trend { width: 7.5rem; }
+.pg-errors .types th { vertical-align: bottom; }
+.pg-errors .types th .sk { white-space: nowrap; }
+.pg-errors .types th .hd { color: var(--text-muted); }
+.pg-errors .types td { vertical-align: top; }
+.pg-errors .types td.c-type { overflow-wrap: anywhere; }
+/* A wide count and rate (1,000,000 and 100.00%) wrap onto two lines rather than spill into the next cell (td.num is nowrap): the rate
+   stays whole, and the count breaks only after a thousands separator (TypeTable puts a <wbr> there), as on a phone. tools/demo/typefit.mjs checks it. */
+.pg-errors .types td .l1 { white-space: normal; }
+.pg-errors .types td .l1 .c-rate { white-space: nowrap; }
+.pg-errors .types td .l1 .c-rate { color: var(--text-secondary); margin-left: 6px; }
+.pg-errors .types td .l2 { font-size: .75rem; color: var(--text-muted); margin-top: 3px; white-space: normal; }
+.pg-errors .types td .l2.delta-up { color: var(--critical-text); } .pg-errors .types td .l2.delta-down { color: var(--good-text); }
+.pg-errors .types td .share { margin-top: 5px; }
+.pg-errors .types td .bar { min-width: 2rem; }
+/* Change's figure is a toggletip that shows the rates behind it: it keeps the cell's color, underlined as How measured is. */
+.pg-errors .types td .tt.chg { text-decoration: underline dotted; text-underline-offset: 2px; }
+.pg-errors .types td .tt.chg:hover, .pg-errors .types td .tt.chg[aria-expanded=true] { text-decoration-style: solid; }
+.pg-errors .types td .spark { width: 100%; max-width: 6.5rem; margin-left: auto; }
+/* Mid widths and phones: a narrower pane. The figures tighten, and the sparkline gives its room to the type (Change stays: it sorts). */
+@media (min-width: 56.3125em) and (max-width: 68.75em), (max-width: 32.5em) {
+  .pg-errors .types col.c-n { width: 6.25rem; }
+  .pg-errors .types col.c-lost { width: 6.5rem; }
+  .pg-errors .types col.c-trend { width: 4.75rem; }
+  .pg-errors .types td .spark, .pg-errors .types td .sparknote { display: none; }
+  .pg-errors .types td .l1 .c-rate { display: block; margin: 2px 0 0; }
+}
+/* Phone: narrower still, the share's percent under its bar. */
+@media (max-width: 32.5em) {
+  .pg-errors .types col.c-n { width: 4.5rem; }
+  .pg-errors .types col.c-lost { width: 5rem; }
+  .pg-errors .types col.c-trend { width: 4rem; }
+  .pg-errors .types td .share { flex-direction: column; align-items: stretch; gap: 2px; }
+  .pg-errors .types td .share > span { min-width: 0; }
+  .pg-errors .types td .share .bar { flex: none; }
+  .pg-errors .types th .sk { white-space: normal; }
+}
 .pg-errors .tscroll { overflow-x: auto; }
 .pg-errors .tbtn .sw { margin-right: 7px; vertical-align: 0; }
-.pg-errors td .chip.fixed, .pg-errors td .chip.muted-type { margin-left: 6px; }
+.pg-errors td .marks { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.pg-errors td .marks .chip { white-space: normal; font-size: .6875rem; }
 /* A muted type: the word "Muted" says it; the dimming only echoes it. The chip and the count keep full strength. */
-.pg-errors tr.is-muted .tbtn, .pg-errors tr.is-muted td:not(.c-share):not(.c-trend) { color: var(--text-muted); }
+.pg-errors tr.is-muted .tbtn, .pg-errors tr.is-muted td { color: var(--text-muted); }
 .pg-errors tr.is-muted .sw, .pg-errors tr.is-muted .bar, .pg-errors tr.is-muted .spark { opacity: .45; }
+/* Where to start: the applied fixes' scorecard. */
+.pg-errors .score table { margin-top: 4px; }
+.pg-errors .score tbody th { font-weight: 400; text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+.pg-errors .score td, .pg-errors .score th { padding-top: 6px; padding-bottom: 6px; }
+.pg-errors .score .linkbtn { text-align: left; }
+.pg-errors .sscroll { overflow-x: auto; }
+/* An incident's attempts on a time strip: ✕ failed, ✓ the call that recovered. */
+.pg-errors .inc-h .strip { grid-column: 2 / 4; display: flex; align-items: center; min-height: .75rem; }
+.pg-errors .inc-h .strip svg { display: block; overflow: visible; }
+.pg-errors .inc-h .strip .fail { stroke: var(--critical); }
+/* --good-text, not --good: the stroke keeps 3:1 or more on the row's --surface-2 hover in light mode (--good is 2.92:1 there). */
+.pg-errors .inc-h .strip .ok { stroke: var(--good-text); }
 /* Where to start */
 .pg-errors .pick .phead { display: flex; gap: 12px; justify-content: space-between; align-items: baseline; }
 .pg-errors .pick .phead b { min-width: 0; }
@@ -130,16 +188,15 @@
 .pg-errors .mini { margin: 4px 0 12px; }
 .pg-errors .mini svg { display: block; width: 100%; height: 64px; overflow: visible; }
 .pg-errors .mini[hidden] { display: none; }
-/* Phone: the share and the trend hide as before. The rate and the share that didn't recover stay (no other place shows them): the table
-   scrolls in .tscroll, with tighter cells, and a sort brings its header into view. */
-@media (max-width: 32.5em) { .pg-errors .c-share, .pg-errors .c-trend { display: none; } .pg-errors .types th, .pg-errors .types td { padding-left: 5px; padding-right: 5px; } }
+/* Phone: tighter cells; every column stays. */
+@media (max-width: 32.5em) { .pg-errors .types th, .pg-errors .types td { padding-left: 5px; padding-right: 5px; } }
 .pg-errors table { width: 100%; border-collapse: collapse; font-size: .8125rem; }
 .pg-errors th { text-align: left; color: var(--text-muted); font-weight: 500; font-size: .75rem; padding: 6px 8px; border-bottom: 1px solid var(--border); }
 .pg-errors td { padding: 8px; border-bottom: 1px solid var(--border); vertical-align: middle; }
 .pg-errors td.num, .pg-errors th.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.pg-errors tbody tr { cursor: pointer; }
-.pg-errors tbody tr:hover { background: var(--surface-2); }
-.pg-errors tbody tr.sel { background: var(--critical-soft); }
+.pg-errors .types tbody tr { cursor: pointer; }
+.pg-errors .types tbody tr:hover { background: var(--surface-2); }
+.pg-errors .types tbody tr.sel { background: var(--critical-soft); }
 .pg-errors .tbtn { background: none; border: 0; border-radius: 4px; padding: 0; text-align: left; color: inherit; }
 .pg-errors .tbtn:hover { background: none; }
 .pg-errors .tbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -149,7 +206,7 @@
 .pg-errors .bar > i { display: block; height: 100%; background: var(--text-muted); border-radius: 3px; }
 .pg-errors .share { display: flex; gap: 8px; align-items: center; }
 .pg-errors .share .bar { flex: 1; }
-.pg-errors .share span { font-size: .75rem; color: var(--text-muted); min-width: 2.6em; text-align: right; font-variant-numeric: tabular-nums; }
+.pg-errors .share > span { font-size: .75rem; color: var(--text-muted); min-width: 2.6em; text-align: right; font-variant-numeric: tabular-nums; }
 .pg-errors .chip { padding: 2px 7px; }
 .pg-errors .chip.fixed { border-color: var(--good); color: var(--good-text); }
 .pg-errors .chip.muted-type { border-style: dashed; color: var(--text-secondary); }
@@ -254,14 +311,13 @@
 .pg-errors .exmode button { font-size: .75rem; padding: 3px 10px; }
 .pg-errors .fixout { font-size: .8125rem; margin: 0 0 12px; }
 .pg-errors .fixout b { font-weight: 600; }
-@media (min-width: 32.5625em) { .pg-errors .moresum { display: none; } }
 .pg-errors .outnote { background: var(--surface-2); border-radius: 10px; padding: 10px 12px; margin: 8px 0; }
 .pg-errors #load { margin-bottom: 16px; }
 .pg-errors .linkbtn { background: none; border: 0; padding: 0; color: var(--link); font-size: .8125rem; }
 .pg-errors .linkbtn:hover { background: none; text-decoration: underline; }
 /* Wide screens: the type header and the example search stay in view while the examples scroll. */
 @media (min-width: 56.3125em) {
-  .pg-errors #detail .dhead, .pg-errors #detail .exbar { position: sticky; z-index: 1; background: var(--surface-1); margin: 0 -16px; padding: 10px 16px; }
+  .pg-errors #detail .dhead, .pg-errors #detail .exbar { position: sticky; z-index: 1; background: var(--surface-1); margin: 0 -20px; padding: 10px 20px; }
   .pg-errors #detail .dhead { top: var(--appnav-h, 56px); flex-wrap: nowrap; border-bottom: 1px solid var(--border); margin-bottom: 12px; }
   .pg-errors #detail .dhead h2 { margin: 0; min-width: 0; }
   .pg-errors #detail .exbar { top: calc(var(--appnav-h, 56px) + var(--dhead-h, 0px)); border-bottom: 1px solid var(--border); padding-bottom: 0; }
@@ -272,10 +328,10 @@
 /* Narrow screens: an open type shows in a sheet over the page; the detail renders in it instead of beside the table. */
 .pg-errors dialog.sheet { background: var(--surface-1); }
 .pg-errors .sheet > .detail { border: 0; border-radius: 0; min-height: 100%; padding-top: 0; overflow-wrap: anywhere; }
-.pg-errors .sheet .dhead { position: sticky; top: 0; z-index: 1; flex-wrap: nowrap; margin: 0 -16px 12px; padding: 12px 16px;
+.pg-errors .sheet .dhead { position: sticky; top: 0; z-index: 1; flex-wrap: nowrap; margin: 0 -20px 12px; padding: 12px 20px;
   background: var(--surface-1); border-bottom: 1px solid var(--border); }
 .pg-errors .sheet .dhead h2 { margin: 0; min-width: 0; }
-.pg-errors .sheet .exbar { position: sticky; top: var(--dhead-h, 0px); z-index: 1; margin: 0 -16px; padding: 0 16px;
+.pg-errors .sheet .exbar { position: sticky; top: var(--dhead-h, 0px); z-index: 1; margin: 0 -20px; padding: 0 20px;
   background: var(--surface-1); border-bottom: 1px solid var(--border); }
 .pg-errors .sheet .ex, .pg-errors .sheet .inc { scroll-margin-top: calc(var(--dhead-h, 0px) + var(--exbar-h, 0px) + 12px); }
 /* Phone: only the type header sticks, so the list keeps most of the screen. */

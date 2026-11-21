@@ -1,4 +1,5 @@
-.pressure { display: grid; gap: 14px; margin-top: 8px; }
+/* minmax(0, 1fr): the column is the panel's width, not its widest content's, so the data table scrolls in its region on a phone */
+.pressure { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; margin-top: 8px; }
 .pressure .pkey { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: .71875rem; color: var(--text-muted); }
 .pressure .pkey i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
 .pressure .prow { display: grid; gap: 6px; }
