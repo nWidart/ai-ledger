@@ -34,7 +34,7 @@ A drawn chart SHALL take its colors from the theme's color tokens, and SHALL red
 - **THEN** that project's segments in the chart are the same color
 
 ### Requirement: Use system colors in a drawn chart under forced colors
-In a forced-colors mode, a drawn chart SHALL draw its text, grid lines, reading mark and zoom control in system colors. A series SHALL keep its own color, since the color is the data, with an edge in the system text color. The chart SHALL switch when forced colors turns on or off, without a reload.
+In a forced-colors mode, a chart drawn by the shared chart component SHALL draw its text, grid lines, reading mark and zoom control in system colors. Each colored bar segment SHALL keep its series color, since the color is the data, with an edge in the system text color. A chart not yet drawn by the shared chart component keeps its own forced-colors rules. The chart SHALL switch when forced colors turns on or off, without a reload.
 
 #### Scenario: Cost chart in high contrast
 - **WHEN** forced colors is on and the Cost chart is drawn
