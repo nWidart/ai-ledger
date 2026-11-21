@@ -3,7 +3,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: Show estimated cost
-The dashboard SHALL show an estimated cost per project, model and day, and SHALL label the value as an API-price estimate. A request's cost SHALL be the cost its source reported when it has one. Otherwise it SHALL be computed from per-model prices for each token kind. When a request has no reported cost and its model has no price, the dashboard SHALL name the user prices file by its full path as the place to add one.
+The dashboard SHALL show an estimated cost per project, model and day, computed from per-model prices for each token kind, and SHALL label the value as an API-price estimate. A request that carries a cost its source reported SHALL cost that amount, not the estimate. When a model has no price, the dashboard SHALL name the user prices file by its full path as the place to add one.
 
 #### Scenario: Model without a price
 - **WHEN** a request used a model missing from the price table and has no reported cost
@@ -14,5 +14,5 @@ The dashboard SHALL show an estimated cost per project, model and day, and SHALL
 - **THEN** the model's requests are priced, with no rebuild
 
 #### Scenario: Reported cost
-- **WHEN** a Grok request for `grok-4.7-build` reports a cost of $0.134844, and the price table has no `grok-4.7-build` entry
-- **THEN** the request counts $0.134844 toward every cost figure, and the model is not named as unpriced
+- **WHEN** a Grok turn's requests carry reported costs that add up to $0.134844 and their model has no price
+- **THEN** the turn adds $0.134844 to the cost, and its model is not listed as unpriced

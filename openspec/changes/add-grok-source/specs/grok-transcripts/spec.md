@@ -1,101 +1,138 @@
 # Spec Delta
 
-## Purpose
-
-How xAI Grok CLI session logs become AI Ledger's sessions, requests, tool calls, prompts and hooks, so the dashboards can show Grok work and spend next to Claude Code's and Codex's.
-
 ## ADDED Requirements
 
 ### Requirement: Ingest Grok session logs
-The store SHALL ingest each session's `updates.jsonl` under the Grok home's `sessions/<encoded cwd>/<session>/` folders, incrementally like Claude transcripts. The session's working directory SHALL be the URL-decoded folder name. Other files in a session folder SHALL NOT be ingested.
+Ingest SHALL read the Grok CLI's session logs: the file `updates.jsonl` of every folder `sessions/<encoded cwd>/<session>/` under the Grok home (default `~/.grok`, set with `--grok`). It SHALL read each file incrementally, store each line once, and read no other file of a session folder. A session's working folder SHALL be the folder name with its URL encoding undone. A missing Grok home SHALL be skipped.
 
-#### Scenario: Live session grows
-- **WHEN** a session's `updates.jsonl` gains 40 complete lines since the last ingest
-- **THEN** ingest reads only those 40 lines
+#### Scenario: New lines only
+- **WHEN** a session log of 400 lines was ingested, Grok appends 20 lines and ingest runs again
+- **THEN** the store gains 20 lines and reads none of the first 400 again
 
-#### Scenario: Working directory from the folder name
-- **WHEN** a session lives under `sessions/%2FUsers%2Fme%2FSites%2Fai-ledger/<session>/`
-- **THEN** its session has cwd `/Users/me/Sites/ai-ledger` and belongs to that folder's project
+#### Scenario: Working folder from the folder name
+- **WHEN** a session's folder is `sessions/%2FUsers%2Fme%2Fwork%2Fapp/<session>/`
+- **THEN** the session's working folder is `/Users/me/work/app`
 
-#### Scenario: Grok home missing
+#### Scenario: No Grok home
 - **WHEN** `~/.grok` does not exist
-- **THEN** ingest skips the Grok source without an error and still ingests the other sources
+- **THEN** ingest reads the other sources and reports no error
 
 ### Requirement: Key Grok lines by event id
-Each Grok line SHALL be keyed by its `_meta.eventId`, which names the session and the line's place in it, so a line read twice is stored once.
+Each Grok line SHALL be stored under the key `grok:<event id>`, with its `sessionUpdate` as its type and its `agentTimestampMs` as its time. A `hook_execution` line SHALL take its hook event's name as its type. Lines SHALL be derived by their own times and ids, not by their order in the file.
 
-#### Scenario: File read again from the start
-- **WHEN** a session's `updates.jsonl` is rewritten and ingest reads it from the start
-- **THEN** lines already stored are not stored again, and the session's totals do not change
+#### Scenario: Line read twice
+- **WHEN** a file is truncated and read again from its start
+- **THEN** each line is stored once
 
-### Requirement: Count Grok usage per turn
-Each `turn_completed` line SHALL become one request per model in its `usage.modelUsage`, counted once. A turn that has not completed SHALL have no requests yet. Token counts SHALL keep the shared meaning:
-- uncached input is `inputTokens` minus `cachedReadTokens` and `cacheCreationTokens`
-- cache read is `cachedReadTokens`, cache write is `cacheCreationTokens`
-- output is `outputTokens`, and thinking is `reasoningTokens`, part of output
+#### Scenario: Unknown update
+- **WHEN** a line's `sessionUpdate` is one this version does not know
+- **THEN** the line is stored and derives nothing
 
-#### Scenario: Probe turn
-- **WHEN** a `turn_completed` line reports, for model `grok-4.7-build`, `inputTokens` 97,245, `cachedReadTokens` 41,600, `cacheCreationTokens` 0, `outputTokens` 459 and `reasoningTokens` 230
-- **THEN** one request is stored with model `grok-4.7-build`, input 55,645, cache read 41,600, output 459 and thinking 230, and its total is 97,704 tokens
+### Requirement: Count Grok usage per model call
+A finished Grok turn (a `turn_completed` line) SHALL become one request per model call of the turn. A model call is a distinct `streamStartMs` among the turn's lines; its time is that value and its context size is the largest `totalTokens` on its lines. Each token count of the turn SHALL be split over the calls in proportion to their context sizes, so that the requests add up to the turn's count exactly. A turn with no `turn_completed` SHALL make no request.
 
-#### Scenario: Turn still running
-- **WHEN** a session's current turn has made model calls but has no `turn_completed` line yet
-- **THEN** the session's tool calls appear, and its usage for that turn does not appear until the turn completes
+#### Scenario: Turn of three calls
+- **WHEN** a turn's lines show three model calls and its `turn_completed` reports 459 output tokens
+- **THEN** the session has three requests whose output adds up to 459
 
-#### Scenario: Two models in one turn
-- **WHEN** a turn's `usage.modelUsage` names `grok-4.7-build` and `grok-4.7-build-fast`
-- **THEN** that turn stores two requests, one per model, each with its own counts and cost
-
-### Requirement: Keep the cost Grok reports
-Each Grok request SHALL carry the cost Grok reported for its model in that turn, `costUsdTicks` divided by 10,000,000,000, in US dollars.
-
-#### Scenario: Reported cost
-- **WHEN** a turn's model usage reports `costUsdTicks` 1,348,440,000
-- **THEN** its request costs $0.134844
-
-### Requirement: Peak context of a Grok session
-A Grok session's peak context SHALL be the largest `_meta.totalTokens` seen on its lines, and its peak model the model of the turn where it occurred.
-
-#### Scenario: Context grows across a turn
-- **WHEN** a session's lines report `totalTokens` 4,347, then 28,194, then 146,654
-- **THEN** the session's peak context is 146,654
-
-### Requirement: Attribute Grok subagents to their parent
-A subagent session SHALL be recognized from the parent's `subagent_spawned` line, which names its `child_session_id`. The child's tool calls and prompts SHALL belong to the parent session as subagent work. The child's usage SHALL NOT be counted, because the parent turn's usage already includes it. The child SHALL NOT appear as a session of its own.
-
-#### Scenario: Subagent reads a file
-- **WHEN** a parent turn spawns subagent `C` that makes 2 model calls and 1 `read_file` call, and the parent's `turn_completed` reports 5 model calls in total
-- **THEN** the parent session gains one subagent tool call `read_file`, its requests count all 5 calls' tokens once, and no session `C` appears
-
-### Requirement: Record Grok tool calls and errors
-Each `tool_call` SHALL be one tool call, named by `_meta["x.ai/tool"].name`, with its start time. Its `tool_call_update` with a final `status` SHALL end it. The call SHALL be an error when that status is `failed`, or when `rawOutput.exit_code` is set and not 0. A tool outside the `grok_build` namespace SHALL be recorded as MCP tool `mcp__<namespace>__<name>` with that MCP server.
-
-#### Scenario: Failed shell command
-- **WHEN** `run_terminal_command` runs `ls /definitely-not-here`, and its update has status `completed` and `rawOutput.exit_code` 1
-- **THEN** one tool call is recorded as an error, with the command as input and the exit code and output as error text, and it appears on the Errors page
-
-#### Scenario: Commit command
-- **WHEN** `run_terminal_command` runs `git commit -m "fix"` and exits 0
-- **THEN** it counts as a commit on Activity, as Claude's Bash commits do
-
-#### Scenario: MCP tool
-- **WHEN** a `tool_call` names namespace `t3-code` and tool `preview_status`
-- **THEN** one tool call `mcp__t3-code__preview_status` with MCP server `t3-code` is recorded
-
-### Requirement: Recognize prompts in Grok sessions
-Each turn's `user_message_chunk` lines SHALL make one prompt, timed at the first chunk. A turn whose `turn_completed` `stop_reason` is `cancelled` SHALL mark its prompt interrupted.
-
-#### Scenario: One typed prompt
-- **WHEN** a turn starts with two `user_message_chunk` lines
-- **THEN** the session gains one prompt
+#### Scenario: Larger context, larger share
+- **WHEN** a turn has two calls with context sizes 20,000 and 60,000 and reports 80,000 uncached input tokens
+- **THEN** the first request holds 20,000 of them and the second 60,000
 
 #### Scenario: Cancelled turn
-- **WHEN** a turn's `turn_completed` has `stop_reason` `cancelled`
-- **THEN** that turn's prompt is marked interrupted
+- **WHEN** the user cancels a turn and Grok writes its `turn_completed` with stop reason `cancelled`
+- **THEN** the turn's usage is counted as any other turn's
+
+#### Scenario: Turn still running
+- **WHEN** ingest reads a turn's first 30 calls and no `turn_completed` yet
+- **THEN** the turn has no request; after the turn ends, the next ingest adds them all
+
+### Requirement: Count a Grok turn whose calls cannot be told
+A finished Grok turn with no line that states a model call, or one that names more than one model, SHALL become one request per model at the turn's end, with that model's counts.
+
+#### Scenario: Calls unknown
+- **WHEN** a turn's `turn_completed` reports usage and no line of the turn states a model call
+- **THEN** the turn is one request at the turn's end with the turn's counts
+
+### Requirement: Normalize Grok token counts
+A Grok turn's counts SHALL map onto the shared token columns as: uncached input is `inputTokens` minus `cachedReadTokens` minus `cacheCreationTokens`; cache read is `cachedReadTokens`; cache write is `cacheCreationTokens`; output is `outputTokens`, of which thinking is `reasoningTokens`. The model SHALL be the billed model the turn names.
+
+#### Scenario: Cached input is not counted twice
+- **WHEN** a turn reports 97,245 input tokens of which 41,600 cached, and 459 output tokens of which 230 reasoning, on `grok-4.7-build`
+- **THEN** its requests add up to 55,645 uncached input, 41,600 cache read, 459 output and 230 thinking, 97,704 tokens in all, on model `grok-4.7-build`
+
+### Requirement: Keep the cost Grok reports
+Each request of a Grok turn SHALL carry a share of the cost the turn reports (`costUsdTicks`, where 10,000,000,000 ticks are one dollar), split as the tokens are, so that the requests add up to the turn's cost.
+
+#### Scenario: Cost of a turn
+- **WHEN** a turn of three calls reports 1,348,440,000 cost ticks
+- **THEN** its three requests' reported costs add up to $0.134844
+
+### Requirement: Record the context of a Grok session
+A Grok session's peak context SHALL be the largest context size of its main-thread model calls. Each completed automatic compaction SHALL count as a compaction of the session, and the context window a compaction notice states SHALL be the session's context window.
+
+#### Scenario: Compacted session
+- **WHEN** a session reaches 204,942 tokens, Grok says it compacts at a window of 256,000 and completes the compaction
+- **THEN** the session has 1 compaction, a context window of 256,000 and a peak context of at least 204,942
+
+### Requirement: Record Grok model time
+Each finished Grok turn SHALL add a run to its session with the API time the turn reports. A Grok run SHALL state no tool time and no lines added or removed.
+
+#### Scenario: Output speed
+- **WHEN** a session's one turn reports 100,000 output tokens and 1,000,000 ms of API time
+- **THEN** the session's output speed is 100 tokens per second
+
+### Requirement: Attribute Grok subagents to their parent
+A Grok session that another session spawned SHALL NOT be a session of its own. Its tool calls and prompts SHALL belong to the parent session as subagent work. Its usage SHALL make no request: the parent's turn already includes it. The link SHALL come from the parent's stored `subagent_spawned` line, so that a rebuild gives the same result.
+
+#### Scenario: Probe with a subagent
+- **WHEN** a session spawns a subagent that reads one file, the parent's turn reports 5 model calls and the child's own turn reports 2
+- **THEN** the store has one session, one subagent `read_file` call on it, and requests that add up to the parent's reported usage
+
+#### Scenario: Rebuild
+- **WHEN** the user runs a rebuild after the Grok home was deleted
+- **THEN** the subagent's work still belongs to its parent session
+
+### Requirement: Record Grok tool calls and errors
+Each Grok tool call SHALL become a tool call record with its tool name, an input summary, its start (the `tool_call` line) and its end (the `tool_call_update` line that states a status) and the size of its result's text. A call SHALL be an error when its status is `failed` or when it is a shell command whose exit code is not 0. A shell error's text SHALL start with `Exit code N`. `run_terminal_command` SHALL count as a shell tool for commit and test detection.
+
+#### Scenario: Failing command marked completed
+- **WHEN** `run_terminal_command` runs `ls missing-dir`, Grok marks the call `completed` and the output's exit code is 1
+- **THEN** the call is an error whose text starts with `Exit code 1`, and it has an error category
+
+#### Scenario: Commit
+- **WHEN** `run_terminal_command` runs `git commit -m "x"` and exits 0
+- **THEN** the call counts as a commit
+
+#### Scenario: Call still running
+- **WHEN** a `tool_call` line has only an in-progress update
+- **THEN** the tool call has a start and no end
+
+### Requirement: Record Grok MCP calls under the MCP tool's name
+A Grok call through `use_tool` SHALL be recorded as the MCP tool it calls, `mcp__<server>__<tool>`, with its server. It SHALL be an error when the MCP result says so.
+
+#### Scenario: MCP call
+- **WHEN** `use_tool` calls `t3-code__preview_open`
+- **THEN** the tool call is `mcp__t3-code__preview_open` with MCP server `t3-code`
+
+#### Scenario: MCP error
+- **WHEN** an MCP result of `use_tool` says it is an error
+- **THEN** the tool call is an error with the result's error text
+
+### Requirement: Recognize prompts in Grok sessions
+Each turn of a Grok main session that starts with a user message SHALL be one prompt, whatever the number of chunks the message came in. A turn that ends with stop reason `cancelled` SHALL mark its prompt interrupted.
+
+#### Scenario: Prompt in two chunks
+- **WHEN** a turn's user message is written as two `user_message_chunk` lines
+- **THEN** the session has one prompt for the turn, and its text is the two chunks in order
+
+#### Scenario: Cancelled turn
+- **WHEN** a turn ends with stop reason `cancelled`
+- **THEN** its prompt is interrupted
 
 ### Requirement: Record Grok hooks
-Each run in a `hook_execution` line SHALL be one hook record, with the event name as the hook, the run's name as the command, its `elapsed_ms` as the duration, and an error when its status is not `success`.
+Each run of a `hook_execution` line SHALL become a hook record with the hook event, the run's name, its duration and whether it failed.
 
-#### Scenario: Session-start hooks
-- **WHEN** a `hook_execution` line for `session_start` lists two runs that succeeded in 11 ms and 232 ms
-- **THEN** the session gains two `session_start` hook records with those durations and no error
+#### Scenario: Two hooks on session start
+- **WHEN** a `session_start` hook line lists two runs that succeeded in 12 ms and 40 ms
+- **THEN** the session has two `session_start` hook records with those durations and no error

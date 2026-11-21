@@ -14,22 +14,18 @@ The store SHALL record which coding agent wrote each stored line, file and sessi
 - **THEN** the Claude lines and session are recorded as `claude`, and the Codex lines and session as `codex`
 
 #### Scenario: Lines from Grok
-- **WHEN** one ingest reads a Claude Code transcript and a Grok session's `updates.jsonl`
-- **THEN** the Claude lines and session are recorded as `claude`, and the Grok lines and session as `grok`
+- **WHEN** one ingest reads a Grok session log
+- **THEN** its lines and session are recorded as `grok`
 
 ## ADDED Requirements
 
 ### Requirement: Keep the cost a source reports
-A request SHALL carry the cost in US dollars that its source reported, when the source reports one, and no cost otherwise. Opening a store created before this column existed SHALL add it without losing or re-reading any line, and a rebuild SHALL derive it again from the stored lines.
+A request SHALL carry the cost its source reported for it, when the source reports one. Requests from sources that report no cost SHALL carry none. Opening a store from before this field SHALL add it with no value, and SHALL NOT read any line again.
 
-#### Scenario: Store upgraded
-- **WHEN** the app opens a store whose requests have no cost column
-- **THEN** the column is added, every existing request has no reported cost, and its line, session and request counts are unchanged
-
-#### Scenario: Claude and Codex requests
-- **WHEN** ingest derives a Claude or Codex request
-- **THEN** the request has no reported cost
+#### Scenario: Existing store upgraded
+- **WHEN** the app opens a store whose requests have no reported cost field
+- **THEN** every existing request has no reported cost, and every figure is unchanged
 
 #### Scenario: Rebuild keeps reported costs
-- **WHEN** the user runs a rebuild on a store that holds Grok turns
-- **THEN** every Grok request has the same reported cost as before the rebuild
+- **WHEN** the user runs a rebuild on a store with Grok requests
+- **THEN** each Grok request has the same reported cost as before

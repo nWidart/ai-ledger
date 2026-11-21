@@ -3,11 +3,11 @@
 ## MODIFIED Requirements
 
 ### Requirement: Filter by source
-Activity, Cost, Context, Errors, Limits, Insights and Live SHALL offer a source filter with the choices All, Claude Code, Codex and Grok, defaulting to All. Every figure, chart and table on the page SHALL reflect the chosen source. The choice SHALL be kept in the page URL and carried across pages with the project and time range.
+Activity's Overview, Cost, Context, Errors, Limits and Live SHALL offer a source filter with the choices All, Claude Code, Codex and Grok, defaulting to All. Every figure, chart and table on the page SHALL reflect the chosen source. The choice SHALL be kept in the page URL and carried across pages with the project and time range. Activity's Judgments view SHALL offer no source filter: only Claude Code sessions are judged.
 
 #### Scenario: Default shows every source
-- **WHEN** the user opens Cost with no source in the URL, and the last 30 days hold $120 of Claude usage, $15 of Codex usage and $5 of Grok usage
-- **THEN** Cost shows $140 for the period
+- **WHEN** the user opens Cost with no source in the URL, and the last 30 days hold $120 of Claude usage and $15 of Codex usage
+- **THEN** Cost shows $135 for the period
 
 #### Scenario: Narrow to Codex
 - **WHEN** the user picks Codex on Activity
@@ -26,8 +26,12 @@ Activity, Cost, Context, Errors, Limits, Insights and Live SHALL offer a source 
 - **THEN** the page shows All and replaces the value in the URL
 
 #### Scenario: Codex on Insights
-- **WHEN** the user views Codex on Activity and clicks Insights
-- **THEN** Insights opens with source Codex and says that `/insights` analyses only Claude Code sessions
+- **WHEN** the user views Codex on Activity, whose Judgments view holds what Insights showed
+- **THEN** Activity shows Overview, and its Judgments view cannot be picked and says Codex writes no facets
+
+#### Scenario: Grok on Insights
+- **WHEN** the user views Grok on Activity
+- **THEN** Activity shows Overview, and its Judgments view cannot be picked and says Grok writes no facets
 
 #### Scenario: Codex on Live
 - **WHEN** the user picks Codex on Live
