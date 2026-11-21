@@ -124,6 +124,16 @@ class ReportedCostTest(unittest.TestCase):
     def test_reported_cost_wins_over_the_estimate(self):
         self.assertAlmostEqual(self.usage([("m-a", 0.5)])["totals"]["cost"], 0.5)
 
+    def test_a_price_entry_without_rates_gives_a_window_and_prices_nothing(self):
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp)
+        prices = metrics.load_prices(user=os.path.join(tmp, "prices.json"))  # the packaged file alone
+        self.assertEqual(prices["grok-4.7-build"], {"context": 256000})
+        u = self.usage([("grok-4.7-build", None), ("grok-4.7-build", 0.134844)], prices)
+        self.assertAlmostEqual(u["totals"]["cost"], 0.134844)
+        self.assertEqual([(r["model"], r["requests"]) for r in u["unpriced"]], [("grok-4.7-build", 1)])
+        self.assertEqual([u["totals"][f"cost_{k}"] for k in metrics.PRICE_KINDS], [None] * 5)
+
 
 class MetricsTest(unittest.TestCase):
     """Fixture: project foo (sessions s1, s2), project bar (s3, outside a 7-day range), and the automated project

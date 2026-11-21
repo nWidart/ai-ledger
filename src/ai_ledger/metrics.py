@@ -292,12 +292,13 @@ def error_detail(cur, tool_use_id):
 # ---------- usage dashboard ----------
 
 def price_cte(prices):
-    """A VALUES table of prices per model. Each model has a base tier and, optionally, a long-prompt tier and a fast-mode tier."""
+    """A VALUES table of prices per model. Each model has a base tier and, optionally, a long-prompt tier and a fast-mode tier.
+    A packaged entry with no rates (only a context window) gives NULL rates, so its requests have no estimate."""
     vals, params = [], []
     for model, p in prices.items():
         long, fast = p.get("long") or {}, p.get("fast") or {}
         vals.append("(" + ",".join("?" * 18) + ")")
-        params += [model, p["context"], p.get("long_above"), p["input"], p["output"], p["cache_read"], p["cache_5m"], p["cache_1h"],
+        params += [model, p.get("context"), p.get("long_above"), *(p.get(k) for k in PRICE_KINDS),
                    *(long.get(k) for k in PRICE_KINDS), *(fast.get(k) for k in PRICE_KINDS)]
     if not vals:
         vals, params = ["(" + ",".join(["NULL"] * 18) + ")"], []
