@@ -75,10 +75,13 @@ export const HELP_COLORS: Record<string, string> = {
   slightly_helpful: "var(--critical-text)",
   unhelpful: "var(--critical)",
 };
+/** A value's color in a bar and on its row: its own entry in colors, else NEUTRAL. Names come from /insights, so one such as
+ *  "constructor" must not read a property every object inherits. */
+export const colorOf = (colors: Record<string, string>, name: string): string => (Object.hasOwn(colors, name) ? colors[name]! : NEUTRAL);
 /** The parts of a stacked bar from counts: each value's color (NEUTRAL when unknown) and its tooltip. */
 export const mixParts = (rows: readonly FacetCount[], colors: Record<string, string>, name: (raw: string) => string, total: number)
   : { key: string; n: number; color: string; title: string }[] =>
-  rows.map(r => ({ key: r.name, n: r.n, color: colors[r.name] ?? NEUTRAL,
+  rows.map(r => ({ key: r.name, n: r.n, color: colorOf(colors, r.name),
     title: `${name(r.name)}: ${plural(r.n, "session")}, ${pct(total ? r.n / total : 0)}` }));
 
 // ---------- friction weights ----------

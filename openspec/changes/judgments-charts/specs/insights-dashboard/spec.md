@@ -75,12 +75,20 @@ The Outcomes bar SHALL use the outcome trend's colors for the four outcomes, and
 - **WHEN** facets hold the outcomes `abandoned` and `blocked`
 - **THEN** each has a neutral part and a row of its own, and the rows name them
 
+#### Scenario: A value named like a built-in
+- **WHEN** a facet holds the helpfulness rating `constructor`
+- **THEN** its part and its swatch are the neutral color, as for any unknown value
+
 ### Requirement: Read a stacked bar from its rows
-A stacked bar SHALL be hidden from assistive technology, and the rows under it SHALL be its text alternative: every value of the scale, in order, with its name, share and count as text. The bar SHALL offer no data table, and its parts SHALL NOT be controls: a filter is set from a row, a real button reached with Tab and pressed with Enter or Space. The bar and its rows SHALL handle no other key, so arrow, Home, End and modified keys stay the browser's.
+A stacked bar SHALL be hidden from assistive technology, and the rows or key under it SHALL be its text alternative: every value of the scale, in order, with its name, share and count as text. The bar SHALL offer no data table, and its parts SHALL NOT be controls: a filter is set from a row, a real button reached with Tab and pressed with Enter or Space. The bar and its rows SHALL handle no other key, so arrow, Home, End and modified keys stay the browser's.
 
 #### Scenario: Screen reader
 - **WHEN** a screen reader user moves through the Outcomes section of a view with 117 of 150 sessions fully achieved
 - **THEN** they reach a list item reading "Fully achieved", 78% and 117, and nothing announces the bar
+
+#### Scenario: Session types key
+- **WHEN** the Session types drawer is open in a view of 150 analysed sessions, 109 of them multi task
+- **THEN** the key entry reads multi task, 109 and 73%, so the share a part's tooltip gives is also in the text
 
 #### Scenario: Filter by keyboard
 - **WHEN** the user tabs to the "Partially achieved" row and presses Enter
@@ -121,11 +129,15 @@ When the view has fewer than 5 analysed sessions, the Outcomes and helpfulness s
 - **THEN** the section says "No ratings in this view." and shows no bar and no rows
 
 ### Requirement: Fit the stacked bars to wide and narrow screens
-From 900px wide, Satisfaction and Claude's helpfulness SHALL sit side by side in their panel; below it they SHALL stack, satisfaction first. A stacked bar SHALL take the width of its column and its rows SHALL sit under it, with the name, share and count of a row on one line. The page SHALL NOT scroll sideways at 390px. On a page narrower than 20em, as a 390px phone at 200% zoom, a row's name SHALL take its own line, whole, over its share and count.
+On a page wider than 900px, Satisfaction and Claude's helpfulness SHALL sit side by side in their panel; at 900px or narrower they SHALL stack, satisfaction first. A stacked bar SHALL take the width of its column and its rows SHALL sit under it, with the name, share and count of a row on one line. The page SHALL NOT scroll sideways at 390px. On a page narrower than 20em, as a 390px phone at 200% zoom, a row's name SHALL take its own line, whole, over its share and count.
 
 #### Scenario: Desktop
 - **WHEN** the view shows at 1440 x 900
 - **THEN** the Outcomes bar spans its column beside Friction categories, and Satisfaction and Claude's helpfulness share one row of their panel
+
+#### Scenario: Exactly 900px
+- **WHEN** the view shows at 900px wide
+- **THEN** Satisfaction and Claude's helpfulness stack, as Outcomes and Friction categories do at that width
 
 #### Scenario: Phone
 - **WHEN** the view shows at 390px wide

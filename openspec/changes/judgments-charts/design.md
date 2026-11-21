@@ -70,7 +70,7 @@ Result: two breakdowns change form, one existing bar is brought to the same stan
 
 ### 3. The stacked bar is HTML and CSS, not SVG
 
-A new `MixBar` in `web/src/pages/activity/judgments/` takes parts (`{ key, n, color, title }`) and the total. It renders a flex row on a `--track` background: each part has `flex: n 1 0`, `min-width: 3px`, a 2px gap, and a last spacer with `flex` equal to the sessions with no value, so the track shows through. A part with `n = 0` is not rendered. It replaces `.strip` in `judgments.css`.
+A new `MixBar` in `web/src/pages/activity/judgments/` takes parts (`{ key, n, color, title }`) and the total. It renders a flex row with no background of its own: each part has `flex: n 1 0`, `min-width: 3px` and a 2px gap that shows the surface behind the bar, so a part stands on the color its 3:1 is checked against. A last spacer in `--track`, with `flex` equal to the sessions with no value, is the empty end. A part with `n = 0` is not rendered. It replaces `.strip` in `judgments.css`.
 
 - Why not `stackHeights()`: flex with a `min-width` freezes the thin parts at their floor and shares the rest by `flex-grow`, which is what `stackHeights()` computes for SVG. The browser does it with no measured width, no `ResizeObserver` and no re-render on resize. `stackHeights()` stays the tool for SVG charts.
 - Why not an SVG chart like the trend: one bar has no axis, no ticks and nothing to scan with arrow keys. The trend needs a keyboard reader because 26 weeks x 5 parts do not fit as visible text; five values do.
@@ -104,6 +104,8 @@ Outcomes use the trend's `TREND_PARTS` colors by outcome name, so `figures.ts` s
 - Rejected: an orange mixed from amber and red for "slightly helpful". It lands on the clay accent, which the app keeps for interactive and pressed states, such as the active row right under the bar.
 - Rejected: grey for "moderately helpful". Grey already means "unclear" or "unknown" in both bars.
 - `--warning` in the light theme is 2.99:1 on `--surface-1`, a hair under the 3:1 the trend's spec already claims. This change moves the light value from `#c98500` to `#c68300` (3.08:1), as agreed with the user. The shift is not visible, and it applies wherever `--warning` is a fill. `--warning-soft` and `--warning-text` do not change.
+- A color is looked up as the map's own entry (`colorOf`), never an inherited property: names come from `/insights`, and one such as `constructor` must get the neutral color.
+- Session types' inline key gives each type's share beside its count, so the key holds everything a part's tooltip says.
 - Session types keep `TYPE_COLORS`: four project hues (each at least 3.6:1 on `--surface-1`) and `--proj-other` for an unknown type.
 - Rejected: a new single-hue ramp for helpfulness. It needs new tokens validated in two themes, and it would give "good" two meanings on one page (green in Outcomes, a dark step in Helpfulness).
 
@@ -125,7 +127,7 @@ Outcomes use the trend's `TREND_PARTS` colors by outcome name, so `figures.ts` s
 ### 8. Layout
 
 - **Outcomes** keeps its place in the row with Friction. The bar spans the column; the rows sit under it, left-aligned. Its height is about the same as today (five rows plus the bar).
-- **Satisfaction and helpfulness** keeps its place and its heading. Inside, two columns from 56.25em (900px, the breakpoint of `.grid2`): the satisfaction ledger on the left, the helpfulness bar and rows on the right. Below it, one column, satisfaction first. A full-width bar over a short list would leave most of the panel empty, and the two columns halve the panel's height.
+- **Satisfaction and helpfulness** keeps its place and its heading. Inside, two columns above 56.25em (900px): the satisfaction ledger on the left, the helpfulness bar and rows on the right. At 900px and below, one column, satisfaction first. This is `.grid2`'s breakpoint, so the panel and the Outcomes and Friction row switch at the same width. A full-width bar over a short list would leave most of the panel empty, and the two columns halve the panel's height.
 - **390px**: one column everywhere. Rows keep name, share and count on one line; the name truncates with its full text in the title, as ledger rows do.
 - **Large text**: HTML text, so it scales with the root; the bar's height is in `rem`. Under 20em of page width (a 390px phone at 125% text or zoom and up, and a 320px phone) a keyed row puts its name on its own line, whole, over its share and count. The browser pass found the need: with fixed figure columns the name was cut to one letter at 200%.
 - The page order requirement ("Order the Judgments view") does not change.

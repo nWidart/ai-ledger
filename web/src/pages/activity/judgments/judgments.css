@@ -71,12 +71,12 @@
 .pg-judgments .ledger { --ledger-cols: minmax(0, 13rem) minmax(40px, 1fr) 3.5rem 5.5rem; }
 @media (max-width: 32.5em) { .pg-judgments .ledger { --ledger-cols: minmax(0, 1fr) 3.5rem 5.5rem; } }
 
-/* One stacked bar of the analysed sessions (MixBar): each part's inline flex-grow is its count, min-width keeps a thin part in
-   sight, and the spacer for sessions with no value lets the track show through. */
-.pg-judgments .mixbar { display: flex; gap: 2px; height: .875rem; margin: 8px 0; border-radius: 4px; overflow: hidden;
-  background: var(--track); }
+/* One stacked bar of the analysed sessions (MixBar): each part's inline flex-grow is its count, and min-width keeps a thin part
+   in sight. The 2px between parts show the surface behind the bar, so each part stands on the color its contrast is checked
+   against; only the spacer for sessions with no value takes the track tint. */
+.pg-judgments .mixbar { display: flex; gap: 2px; height: .875rem; margin: 8px 0; border-radius: 4px; overflow: hidden; }
 .pg-judgments .mixbar i { display: block; flex: 0 1 0; min-width: 3px; height: 100%; }
-.pg-judgments .mixbar .rest { min-width: 0; background: none; }
+.pg-judgments .mixbar .rest { min-width: 0; background: var(--track); }
 /* The few-sessions line, close under its bar. */
 .pg-judgments .hint.few { margin: -4px 0 0; }
 /* A keyed ledger (swatch rows under a stacked bar): name, share and count on one line, phones included; this beats both

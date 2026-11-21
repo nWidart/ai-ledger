@@ -150,7 +150,8 @@ describe("Judgments view", () => {
     const feel = within(section(/Satisfaction/)).getAllByRole("listitem").map(li => li.textContent);
     expect(feel.slice(0, 4)).toEqual(["likely satisfied21 session", "dissatisfied11 session", "satisfied11 session", "unclear11 session"]);
     expect(feel.slice(4).map(t => t!.replace(/\d.*/, ""))).toEqual(["essential", "very helpful", "moderately helpful", "slightly helpful", "unhelpful"]);
-    expect(within(drawer("d-types")).getByRole("list").textContent).toBe("iterative refinement 1single task 1quick question 1");
+    // The key is the bar's text alternative: each type's count and its share of the 3 analysed sessions.
+    expect(within(drawer("d-types")).getByRole("list").textContent).toBe("iterative refinement 1 33%single task 1 33%quick question 1 33%");
     expect(drawer("d-types").querySelectorAll(".mixbar i:not(.rest)")).toHaveLength(3);
   });
 
@@ -220,6 +221,19 @@ describe("Judgments view", () => {
       expect(prevented(within(out()).getByRole("button", { name: /^Partially achieved/ }))).toEqual([]);
       expect(prevented(within(out()).getAllByRole("listitem")[1]!)).toEqual([]);
       expect(out().querySelector(".mixbar button, .mixbar [tabindex]")).toBeNull();
+    });
+
+    it("filters from a focused row with Enter, and takes shares of the analysed sessions in a view that also holds Codex sessions", async () => {
+      const p = withOutcomes(40, [{ name: "fully_achieved", n: 30 }, { name: "not_achieved", n: 10 }]);
+      show({ ...p, coverage: { ...p.coverage, codex_sessions: 60 } });
+      await lede();
+      expect(within(out()).getAllByRole("listitem").map(li => li.textContent)).toEqual(["Fully achieved75%30", "Not achieved25%10"]);
+      expect(parts().map(i => i.style.flexGrow)).toEqual(["30", "10"]);
+      expect(out().querySelector(".mixbar .rest")).toBeNull();
+      within(out()).getByRole("button", { name: /^Not achieved/ }).focus();
+      await userEvent.keyboard("{Enter}");
+      expect(location.search).toContain("outcome=not_achieved");
+      expect(within(out()).getByRole("button", { name: /^Not achieved/ }).getAttribute("aria-pressed")).toBe("true");
     });
   });
 

@@ -193,9 +193,12 @@ describe("forced colors", () => {
   it("keeps bars visible and never suppresses a focus ring", () => {
     const css = block();
     expect(css).toMatch(/\.ledger \.bar[^{]*\{ forced-color-adjust: none; outline: 1px solid CanvasText; \}/);
-    for (const sel of [".pg-judgments .mixbar", ".pg-judgments .mixbar i:not(.rest)", ".ledger .sw", ".pg-judgments .key .sw"]) {
+    for (const sel of [".pg-judgments .mixbar", ".pg-judgments .mixbar i:not(.rest)", ".ledger .sw"]) {
       expect(css).toMatch(new RegExp(`\\.ledger \\.bar[^{]*${sel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[^{]*\\{ forced-color-adjust: none; outline: 1px solid CanvasText; \\}`));
     }
+    // Session types' key swatch is framed once, by the rule for legend keys and swatches.
+    expect(css.match(/\.pg-judgments \.key \.sw/g)).toHaveLength(1);
+    expect(css).toMatch(/\.pdot,[^{]*\.pg-judgments \.key \.sw \{ forced-color-adjust: none; outline: 1px solid CanvasText; \}/);
     expect(css).toContain(".pg-judgments .mixbar i:not(.rest) { outline-offset: -1px; }");
     expect(css).toContain(".bar-seg");
     expect(css).not.toMatch(/outline: *(none|0)/);
