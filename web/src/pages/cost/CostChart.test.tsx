@@ -535,6 +535,18 @@ describe("cost chart: zoom", () => {
     expect(chart.shown).toEqual({ from: 20, to: 29 });
   });
 
+  it("says today again after End, plus and a refresh that changes its cost: the zoom sentence does not hide a keyboard reading", async () => {
+    const { rerender } = renderApp(<Host />);
+    await drawn();
+    act(() => group().focus());
+    fireEvent.keyDown(group(), { key: "End" });
+    fireEvent.keyDown(group(), { key: "+" });
+    expect(sr()).toBe("Showing Oct 21 to Nov 4, 15 of 30 days.");
+    rerender(<Host data={newer()} />);
+    expect(sr()).toMatch(/^Nov 4, 2026 so far: \$35 estimated/);
+    expect(sr()).not.toContain("Showing");
+  });
+
   it("never says a zoom sentence with an old count: a 31st day in an all-time view drops it", async () => {
     const all = (to: string): UsagePayload => ({ ...view("2026-10-06", to), range: 0, start: null });
     const { rerender } = renderApp(<Host data={all("2026-11-04")} />);

@@ -1059,6 +1059,37 @@ describe("EChart zoom", () => {
     expect(chart.shown).toEqual({ from: 20, to: 29 });
   });
 
+  it("says a key's reading again after a zoom sentence took the region: End, plus, then newer figures", async () => {
+    const { rerender } = render(viewed());
+    const chart = await drawn();
+    key("End");
+    key("+");
+    expect(readout()).toBe("Showing Oct 16 to Oct 30, 15 of 30 days.");
+    const said = spoken();
+    rerender(viewed()); // the same figures: nothing
+    expect(readout()).toBe("Showing Oct 16 to Oct 30, 15 of 30 days.");
+    expect(said()).toBe(0);
+    rerender(viewed({ read: i => `${MONTH[i]}: $${i + 1}.00` })); // today's figure grew: the day is said, alone
+    expect(readout()).toBe("Oct 30: $30.00");
+    expect(said()).toBe(1);
+    rerender(viewed({ read: i => `${MONTH[i]}: $${i + 1}.00` }));
+    expect(said()).toBe(0);
+    expect(chart.shown).toEqual({ from: 15, to: 29 });
+  });
+
+  it("leaves a pointer's reading unsaid after a zoom sentence too", async () => {
+    const { rerender } = render(viewed());
+    const chart = await drawn();
+    box().focus();
+    chart.fire("mousemove", chart.pointAt(29)); // the pointer reads today, with the focus in the box
+    key("+");
+    expect(readout()).toBe("Showing Oct 16 to Oct 30, 15 of 30 days.");
+    const said = spoken();
+    rerender(viewed({ read: i => `${MONTH[i]}: $${i + 1}.00` }));
+    expect(readout()).toBe("Showing Oct 16 to Oct 30, 15 of 30 days.");
+    expect(said()).toBe(0);
+  });
+
   it("drops a zoom sentence that a redraw made untrue, and never says it with the old count", async () => {
     /** The wording for a view of n days. */
     const of = (n: number) => (s: Shown | null) => (s ? `Showing ${MONTH[s.from]} to ${MONTH[s.to]}, ${s.to - s.from + 1} of ${n} days.` : `Showing all ${n} days.`);
