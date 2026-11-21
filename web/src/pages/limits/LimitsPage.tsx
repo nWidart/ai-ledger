@@ -255,8 +255,8 @@ function PastWindows({ d }: { d: LimitsPayload }) {
         {pick && <WindowPanel key={barKey(pick)} h={pick} onClose={close} />}
       </div> : <p className="empty">No closed windows in this range.</p>}
       {d.history.length > 0 && <ChartTable><Table name="Closed windows" region="scroll tall" rows={d.history} columns={CLOSED_COLUMNS}
-        rowId={h => barKey(h)} current={selected}
-        rowProps={h => ({ "aria-current": barKey(h) === selected || undefined })} /></ChartTable>}
+        rowId={h => `${h.provider}-${h.label}-${h.closed_at}`}
+        rowProps={h => barKey(h) === selected ? { className: "sel", "aria-current": true } : {}} /></ChartTable>}
     </section>
   );
 }

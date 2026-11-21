@@ -141,7 +141,7 @@ export function ProjectTable({ d, sort, onSort, spot: pin, onSpot, smallOpen, on
       <p className="sr" role="status">{said}</p>
       {many && <ToneKey note={`median of the ${m.n} projects with ${pct(OUTLIER_SHARE)}+ of cost or ${COMPARE_PROMPTS}+ prompts`} />}
       <Table name="Project spend and change" className="matrix" rows={head} columns={columns} rowId={projectId} sort={sort} onSort={sortBy} manualSort
-        pick={PICK} rowProps={rowProps} body={{ ref: setBody }} empty={ps.length ? undefined : "No usage in this range."}
+        pick={PICK} rowProps={rowProps} body={{ ref: setBody }} empty="No usage in this range."
         after={row => <>{fold && bucket}{open && small.map(row)}</>} />
     </section>
   );
