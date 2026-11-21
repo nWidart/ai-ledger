@@ -101,6 +101,10 @@ export const zoomSlider = (env: OptionEnv): SliderDataZoomComponentOption => ({
   showDetail: false,
   brushSelect: false,
   minValueSpan: MIN_SHOWN - 1,
+  // Each step of a drag at once. ECharts holds steps back by default (every 20ms with no update animation) and sends
+  // the last one late: after the pointer's release, where the days shown would be said a second time. A step redraws
+  // a chart of this size well inside a frame.
+  throttle: 0,
   backgroundColor: "transparent",
   borderColor: env.ink.muted,
   borderRadius: 3,

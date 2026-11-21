@@ -109,6 +109,9 @@ describe("pointLabel", () => {
 describe("zoomSlider", () => {
   it("is a 20px slider with no detail text and no brush, at least 7 days wide", () => {
     expect(zoomSlider(env())).toMatchObject({ type: "slider", height: 20, showDetail: false, brushSelect: false, minValueSpan: 6 });
+    // The slider sends each step of a drag at once. ECharts would hold steps back (every 20ms here) and send the last
+    // one late, after the pointer's release, where the wrapper would say the days shown a second time.
+    expect(zoomSlider(env())).toMatchObject({ throttle: 0 });
   });
 
   it("has a fixed id, so a redraw merges into it and keeps the window", () => {

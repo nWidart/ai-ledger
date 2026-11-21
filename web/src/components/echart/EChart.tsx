@@ -320,7 +320,7 @@ export function EChart({
   });
   // The slider moved the window (the wrapper's own moves are silent): keep what it shows, so the caller hears of each
   // step. A reading the new window leaves out ends, so the band and the cursor never sit apart. The live region speaks
-  // once per drag: a drag dispatches a step about every 100ms while the pointer is down, and nothing when it lets go,
+  // once per drag: a drag dispatches a step on each move while the pointer is down, and nothing when it lets go,
   // so the points shown are said on the pointer's release. The release is the document's pointerup: zrender reports a
   // mouseup outside the chart only where it captures the pointer, which it does not where touch events exist. A change
   // with the pointer up, such as a click on the slider's track, is said at once.
@@ -334,9 +334,11 @@ export function EChart({
     if (pressed.current) unsaid.current = true;
     else say(now);
   });
-  const onRelease = useEffectEvent(() => {
+  // The window said is the chart's own, read at the release: the last step can come in the same turn, before a render
+  // has brought it here. The slider sends each step at once (`zoomSlider()`), so none comes after the release.
+  const onRelease = useEffectEvent((made: ECharts) => {
     pressed.current = false;
-    if (unsaid.current) say(shown);
+    if (unsaid.current) say(shownOn(made, points));
     unsaid.current = false;
   });
   useEffect(() => {
@@ -350,7 +352,7 @@ export function EChart({
         else document.removeEventListener(name, up, true);
       }
     };
-    const up = () => { listen(false); onRelease(); };
+    const up = () => { listen(false); onRelease(chart); };
     const down = () => { pressed.current = true; listen(true); };
     zr.on("mousemove", move);
     zr.on("click", click);

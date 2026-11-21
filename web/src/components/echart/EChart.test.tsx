@@ -921,6 +921,16 @@ describe("EChart zoom", () => {
     expect(chart.option.dataZoom).toEqual([]);
   });
 
+  it("says the window the chart shows on release, when the last step came just before it", async () => {
+    render(zoomed());
+    const chart = await drawn();
+    chart.fire("mousedown", [200, 250]);
+    chart.zoomTo(10, 24);
+    // The last step and the release in one turn: nothing has rendered between them.
+    act(() => { chart.zoomTo(10, 19); fireEvent.pointerUp(document.body); });
+    expect(readout()).toBe("Showing Oct 11 to Oct 20, 10 of 30 days.");
+  });
+
   it("says nothing on release when the view changed under a drag", async () => {
     const onZoom = zoomSpy();
     const { rerender } = render(zoomed({ onZoom, view: "30 days" }));
