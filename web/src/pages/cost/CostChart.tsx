@@ -1,9 +1,10 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef } from "react";
 import type { Source, UsagePayload } from "../../api";
 import { useColors } from "../../colors";
 import { ChartTable } from "../../components/DataTable";
 import { Table, type Column } from "../../components/table/Table";
-import { EChart, type EChartHandle, type Shown } from "../../components/echart/EChart";
+import { EChart, type Shown } from "../../components/echart/EChart";
+import { useZoomReset } from "../../components/echart/zoomReset";
 import type { ChartEnv } from "../../components/echart/tokens";
 import { big, dayLabel, pct, plural, usd } from "../../format";
 import { isOther, KINDS, SCALES, shares, STACKS, STACK_WORD, type CostDay, type Kind, type Stack, type TokenScale } from "./cost";
@@ -51,13 +52,19 @@ const Row = ({ k, v }: { k: Kind; v: string }) => <div className="row"><span><i 
  *  The figures and the drawing are costDaily.ts's; this component holds the heading, the switches, the legend, the words of the
  *  reading and the data table, and draws through <EChart>, which owns the keys, the pointer, the tooltip and the readout. */
 export function CostChart({ d, metric, onMetric, hidden, onHidden, scale, onScale, stack, onStack, onProject, onSource, onDay }: CostChartProps) {
-  useColors();
+  const color = useColors();
   const legend = useRef<HTMLDivElement>(null);
   // A project or agent key re-renders the legend for the new view: its first key is the way back.
   const refocus = useRef(false);
   useEffect(() => { if (refocus.current) { refocus.current = false; legend.current?.querySelector("button")?.focus(); } }, [d]);
 
-  const m = useMemo(() => costModel(d, metric, hidden, stack, scale), [d, metric, hidden, stack, scale]);
+  // The projects' hues, as costKinds reads them: the page and the nav's status poll set the order, which can come after the
+  // payload, so the model is made again then. A new drawing of the same view: the reading and the zoom stay.
+  const hues = useMemo(() => [d.project, ...d.by_project.map(p => p.project)], [d]).map(color).join(" ");
+  const m = useMemo(() => costModel(d, metric, hidden, stack, scale),
+    // hues: a new project order is a new drawing
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [d, metric, hidden, stack, scale, hues]);
   // One function per set of figures: a new one is drawn. Newer data and a hidden kind give one too, in the same view.
   const option = useCallback((env: ChartEnv) => costOption(m, env), [m]);
   const { cost, share, none, kinds, days: pts, totals, showAvg, zoom, avg, live, peak } = m;
@@ -67,16 +74,8 @@ export function CostChart({ d, metric, onMetric, hidden, onHidden, scale, onScal
   // end keeps the view. A first day that moves makes another: later, when a rolling range moves on at midnight, or
   // earlier, when an all-time view gains older days (older transcripts ingested, a filter that reaches further back).
   const view = [d.range, pts[0]?.day, d.project, d.source, d.automated, metric, stack, scale].join("|");
-  // Whether the chart shows fewer than every day, as the wrapper reports it: it only shows "Show all days", and is no input
-  // of the option, so keeping it leaves the zoom alone. A new view reports every day shown, which clears it.
-  const box = useRef<EChartHandle>(null), showAll = useRef<HTMLButtonElement>(null);
-  const [zoomed, setZoomed] = useState(false);
-  // "Show all days" leaves with the zoom. When the zoom ends with the focus on it and no one pressed it (the range moved
-  // on at midnight), the focus goes where the button sends it, to the chart, and not to the page's body.
-  const onZoom = useCallback((s: Shown | null) => {
-    if (!s && showAll.current && document.activeElement === showAll.current) box.current?.focus();
-    setZoomed(s != null);
-  }, []);
+  // "Show all days", while the wrapper reports a zoom (the range moving on at midnight can end it).
+  const { ref: box, onZoom, button: showAll } = useZoomReset();
   const readZoom = (s: Shown | null) => (s
     ? `Showing ${dayLabel(pts[s.from]!.day)} to ${dayLabel(pts[s.to]!.day)}, ${s.to - s.from + 1} of ${pts.length} days.`
     : `Showing all ${pts.length} days.`);
@@ -185,10 +184,7 @@ export function CostChart({ d, metric, onMetric, hidden, onHidden, scale, onScal
             onClick={() => onHidden(hidden.includes(k.k) ? hidden.filter(x => x !== k.k) : [...hidden, k.k])}><i style={{ background: k.c }} />{k.label}</button>)}
         {showAvg && !none && <span className="key"><i className="line" />7-day average</span>}
         {pts.length > 0 && !none && <span className="key"><i className="hatch" />Today so far</span>}
-        {/* The reset leaves with the zoom: focus goes to the chart it showed every day of. It shows by the wrapper's
-            report alone, not by `zoom`: a view that loses its slider would take the button away in this render, before
-            onZoom could move the focus off it. */}
-        {zoomed && !none && <button ref={showAll} type="button" className="show-all" onClick={() => { box.current?.reset(); box.current?.focus(); }}>Show all days</button>}
+        {!none && showAll("Show all days")}
       </div>
       {none && <div className="empty all-hidden" role="status">All token kinds are hidden.{" "}
         <button type="button" className="linkish" onClick={() => onHidden([])}>Show every kind</button></div>}

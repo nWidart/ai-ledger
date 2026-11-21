@@ -3,7 +3,7 @@
 // case-insensitive file system that name clashes with CostChart.tsx.
 import type { UsagePayload } from "../../api";
 import { niceMax, scaleMargins } from "../../components/chart";
-import { baseOption, categoryAxis, pointLabel, valueAxis, zoomSlider } from "../../components/echart/option";
+import { baseOption, categoryAxis, pointLabel, SLIDER_ROOM, valueAxis, ZOOM_FROM, zoomSlider } from "../../components/echart/option";
 import { stackSeries } from "../../components/echart/stack";
 import type { EChartsOption } from "../../components/echart/echarts";
 import type { ChartEnv } from "../../components/echart/tokens";
@@ -60,14 +60,11 @@ export function costModel(d: UsagePayload, metric: CostMetric, hidden: readonly 
   const avg = days.map((_, i) => (!showAvg || i < 6 || i === live ? null : totals.slice(i - 6, i + 1).reduce((s, t) => s + t, 0) / 7));
   const peak = days.length ? totals.reduce((b, t, i) => (t > totals[b]! ? i : b), 0) : null;
   const axis = share ? { max: 1, step: .25 } : niceMax(Math.max(...totals, 0), niceStep);
-  return { cost, share, none: !cost && !kinds.length, kinds, days, totals, values, showAvg, zoom: days.length >= ZOOM_DAYS, avg, live, peak, axis };
+  return { cost, share, none: !cost && !kinds.length, kinds, days, totals, values, showAvg, zoom: days.length >= ZOOM_FROM, avg, live, peak, axis };
 }
 
-/** The fewest days of a view that the chart can be zoomed in. */
-const ZOOM_DAYS = 14;
-/** What the zoom slider (20px, 4px off the bottom) and a 4px gap above it take under the day labels: the box is this much
- *  taller with the slider, so the plot keeps its height. */
-export const SLIDER_ROOM = 28;
+/** The box is this much taller with the slider; CostChart.tsx reads it from here. */
+export { SLIDER_ROOM };
 /** The plot's margins at the default text size: room for the day labels below and the value labels on the left. */
 const MARGIN = { t: 22, r: 8, b: 26, l: 52 };
 
@@ -84,10 +81,9 @@ export function costOption(m: CostModel, env: ChartEnv): EChartsOption {
   const fy = m.cost ? usd : big, ty = m.share ? (v: number) => pct(v) : m.cost ? usd0 : big;
   const series: Series[] = [stackSeries({ kinds: m.kinds, values: m.values, hatched: i => i === m.live, env })];
   if (m.showAvg) series.push(avgLine("avg-halo", m.avg, env.ink.surface, 4.5), avgLine("avg", m.avg, env.ink.text, 1.75));
-  // With the text scaled up, a plot under 300px times the scale has no room for the peak label (roomForLabels in chart.ts).
-  const room = s === 1 || env.width - g.l - g.r >= 300 * s;
+  // The label keeps inside the plot, and a plot narrower than its text draws none (pointLabel).
   const pk = m.peak;
-  if (pk != null && !m.share && m.totals[pk]! > 0 && room) {
+  if (pk != null && !m.share && m.totals[pk]! > 0) {
     const text = `Peak ${fy(m.totals[pk])} · ${dayLabel(m.days[pk]!.day)}${pk === m.live ? " so far" : ""}`;
     series.push({ ...pointLabel(env, { index: pk, value: m.totals[pk]!, text }), id: "peak" });
   }

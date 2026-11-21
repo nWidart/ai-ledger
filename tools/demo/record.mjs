@@ -130,7 +130,7 @@ const SCENES = {
     await h.wait(1500);
     await h.scrollTo(page.locator("#work"), 20);
     await h.click(btn(page, "Prompts"));
-    const chart = page.locator("#work svg").first();
+    const chart = page.locator("#work .echart");
     await h.click(chart, { dx: 0.82, dy: 0.7, pause: 1200 });
     await h.scrollTo(page.locator("#workbench"), 20);
     await h.click(page.locator("#sessions tr.pick"), { dx: 0.2, pause: 2600 });
@@ -242,7 +242,7 @@ const SCENES = {
     await h.wait(1400);
     await h.click(btn(page, "Active time"), { pause: 1500 });
     await h.scrollTo(page.locator("#trend"), 20);
-    await h.click(page.locator("#trend svg").first(), { dx: 0.6, dy: 0.5, pause: 1800 });
+    await h.click(page.locator("#trend .echart"), { dx: 0.6, dy: 0.5, pause: 1800 });
     await h.scrollTo(page.locator("#log"), 20);
     await h.click(page.getByLabel("Only sessions with friction"), { pause: 1500 });
     await h.click(page.locator("#log a[title*=\"Open session\"]"), { pause: 2600 });

@@ -1,4 +1,4 @@
-import { waitFor } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { UsagePayload } from "../../api";
 import usage from "../../__fixtures__/usage";
@@ -77,4 +77,28 @@ it("draws the stacking's colors on real ECharts, redraws a stack switch without 
   unmount();
   expect(drawing.querySelector("svg")).toBeNull();
   expect(errors).not.toHaveBeenCalled(); // jsdom's "Not implemented" and React's warnings both come through here
+});
+
+// By default ECharts' axis pointer highlights the items on the day read: the stack's segments were redrawn in lifted colors
+// that no token gives, and the 7-day average got a dot in ECharts' own palette (#b6d634). The band alone shows the reading.
+it("keeps the day read in its kinds' colors, and draws nothing new over it but the band", async () => {
+  const { unmount } = renderApp(chart("project"));
+  await drawnWith(["var(--proj-other)"]);
+  // The drawn paths' fills and strokes, as written; not the clip paths' defs.
+  const paints = () => [...plot().querySelectorAll("svg path")].filter(p => !p.closest("clipPath"))
+    .flatMap(p => [p.getAttribute("fill"), p.getAttribute("stroke")]).filter((c): c is string => !!c && c !== "none");
+  // The paths filled with a token's color: the segments, each in its kind's color.
+  const segments = () => { const tokens = new Set(rgb.values()); return [...plot().querySelectorAll("svg path")].filter(p => tokens.has(p.getAttribute("fill") ?? "")).length; };
+  const before = { segments: segments(), paints: new Set(paints()) };
+  const group = screen.getByRole("group", { name: /per day/ });
+  act(() => group.focus());
+  // Day 18 of 20: under the 7-day average, and not today's hatched bar.
+  fireEvent.keyDown(group, { key: "End" });
+  fireEvent.keyDown(group, { key: "ArrowLeft" });
+  const text = rgb.get("var(--text-primary)")!.replaceAll(" ", "");
+  await waitFor(() => expect(paints()).toContain(text)); // the band: the text ink at 6%
+  await new Promise(settled => setTimeout(settled, 100)); // a highlight is drawn on a later frame than the band
+  expect(segments()).toBe(before.segments);
+  expect(paints().filter(c => !before.paints.has(c) && c !== text)).toEqual([]);
+  unmount();
 });

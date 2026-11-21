@@ -89,10 +89,6 @@ export function tipAt(box: HTMLElement, tip: HTMLElement, clientX: number, clien
   return { left: Math.max(4 - r.left, (right ? clientX - tip.offsetWidth - 14 : clientX + 14) - r.left), top: clientY - r.top - 10 };
 }
 
-/** False when the text is scaled up and the plot is too narrow for the peak label and the right axis title: they are left out.
- *  Always true at the default text size. */
-export const roomForLabels = (a: DayAxis) => a.s === 1 || a.iw >= 300 * a.s;
-
 /** The pixel slot of each stacked segment, bottom first, summing to the bar's height (total). A slot is at least its minimum (mins[j]:
  *  the segment's painted 1px plus the gap below it), and the other slots share what is left in proportion to their values, so a thin
  *  segment takes room of its own instead of painting over its neighbour. With less room than the minimums, each slot is its minimum. */

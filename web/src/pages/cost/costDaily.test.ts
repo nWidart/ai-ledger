@@ -142,13 +142,9 @@ describe("costOption: today so far", () => {
     expect(peakText(model(past))).toBe("Peak $50 · Oct 19");
   });
 
-  it("leaves the peak label out when the text is scaled up and the plot is under 300px times the scale", () => {
+  it("hands the peak label to pointLabel at any width and text size, which keeps it inside the plot or draws none", () => {
     const m = model(long);
-    // The plot is the box less 60px times the scale: 800 − 120 = 680 ≥ 600; 600 − 120 = 480 < 600.
-    expect(peakText(m, env({ textScale: 2, width: 800 }))).toBeDefined();
-    expect(peakText(m, env({ textScale: 2, width: 600 }))).toBeUndefined();
-    // At the default size the label is always drawn.
-    expect(peakText(m, env({ width: 200 }))).toBeDefined();
+    for (const e of [env({ textScale: 2, width: 800 }), env({ textScale: 2, width: 600 }), env({ width: 200 })]) expect(peakText(m, e)).toBe("Peak $40 · Nov 4 so far");
   });
 
   it("scales the plot's margins with the text", () => {

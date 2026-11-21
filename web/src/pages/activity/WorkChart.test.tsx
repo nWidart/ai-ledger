@@ -1,13 +1,20 @@
 import { act, cleanup, fireEvent, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DailyWorkRow, UsagePayload } from "../../api";
 import usage from "../../__fixtures__/usage";
 import { color, setOrder } from "../../colors";
-import { workBuckets, workKinds, workStack, type WorkMetric } from "./work";
-import { WorkPanel, type WorkPick } from "./WorkChart";
+import type { SeriesOption } from "../../components/echart/echarts";
+import { drawn } from "../../components/echart/testing";
+import { dayRange } from "../../format";
 import { renderApp } from "../../testing";
+import { workBuckets, workKinds, workStack, type WorkMetric } from "./work";
+import { WorkPanel } from "./WorkChart";
+import type { WorkPick } from "./workTracks";
 
+// What the chart draws (the stack, the rate line and its dots, the scales, the layout, the mark) is workTracks.test.ts's to
+// test. Here: what a user reaches, and that the component hands the wrapper the current view's option.
 const row = (day: string, o: Partial<DailyWorkRow> = {}): DailyWorkRow => ({ day, sessions: 1, prompts: 1, commits: 0, calls: 0, failed_calls: 0, ...o });
 type WP = UsagePayload["work_projects"][number];
 const wp = (day: string, project: string | null, o: Partial<WP> = {}): WP => ({ day, project, sessions: 1, prompts: 1, commits: 0, calls: 0, failed_calls: 0, ...o });
@@ -26,18 +33,19 @@ const weekly: UsagePayload = {
   work_projects: [wp("2026-09-07", "foo", { commits: 3 }), wp("2026-10-19", "foo", { commits: 5 })],
 };
 
-const panel = (d: UsagePayload, metric: WorkMetric = "commits", selected: WorkPick | null = null) => {
+const panel = (d: UsagePayload, metric: WorkMetric = "commits", selected: WorkPick | null = null, pickable = true) => {
   const onPick = vi.fn<(p: WorkPick) => void>(), onClear = vi.fn<() => void>();
-  renderApp(<WorkPanel d={d} metric={metric} onMetric={() => {}} selected={selected} onPick={onPick} onClear={onClear} />);
-  return { onPick, onClear };
+  const view = renderApp(<WorkPanel d={d} metric={metric} onMetric={() => {}} selected={selected} onPick={pickable ? onPick : undefined} onClear={onClear} />);
+  return { onPick, onClear, ...view };
 };
 const chart = () => screen.getByRole("group", { name: /per (day|week)/ });
-// The viewBox's tracks at the default text size: the bars from 20 to 140, the rate track from 156 to 192.
-const BARS_BOTTOM = 140, RATE_TOP = 156, RATE_BOTTOM = 192, RATE_H = RATE_BOTTOM - RATE_TOP;
-const ticks = () => [...document.querySelectorAll("#work svg .rtick")].map(t => t.textContent);
+const sr = () => document.querySelector("#work div.sr[aria-live]")!.textContent;
+/** The series of the fake runtime's last drawing. */
+const series = async () => (await drawn()).last!.series as SeriesOption[];
+const mark = async () => (await series()).find(s => s.id === "selected") as { data: number[][] } | undefined;
 
 beforeEach(() => {
-  // The plot reads its size from the svg; jsdom lays nothing out.
+  // The tooltip is placed inside the box; jsdom lays nothing out.
   vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({ left: 0, top: 0, right: 800, bottom: 240, width: 800, height: 240, x: 0, y: 0, toJSON: () => ({}) });
 });
 
@@ -81,10 +89,13 @@ describe("chart by project", () => {
     expect(workStack(rows, anon.work_projects, ks, "commits")[0]!["p:"]).toBe(62);
   });
 
-  it("names the stacked projects in the legend, and draws plain bars for one project or when no project has a hue", () => {
+  it("names the stacked projects in the legend, draws the view's buckets in that stack, and draws plain bars for one project or when no project has a hue", async () => {
     const legend = () => [...document.querySelectorAll("#work .legend .key")].map(k => k.textContent);
     panel(many);
     expect(legend()).toEqual(["a", "c", "e", "g", "Other (3)", "Errors per 100 calls (lower track)"]);
+    // The option handed to the wrapper: two buckets of five kinds (each data row is [bucket, total, ...values]).
+    const stack = (await series()).find(s => s.id === "stack")!.data as number[][];
+    expect(stack.map(r => r.length - 2)).toEqual([5, 5]);
     cleanup();
     const rows = workBuckets(many);
     expect(workKinds({ ...many, project: "a" }, rows, "commits")).toEqual([]);
@@ -95,54 +106,13 @@ describe("chart by project", () => {
     expect(legend()).toEqual(["Commits", "Errors per 100 calls (lower track)"]);
   });
 
-  it("stacks the segments from the baseline, in one order, scaled to fit", () => {
+  it("stacks the projects once the page sets their order, after the payload lands", async () => {
+    setOrder([]);
     panel(many);
-    const rows = workBuckets(many), ks = workKinds(many, rows, "commits"), st = workStack(rows, many.work_projects, ks, "commits");
-    const bars = [...document.querySelectorAll("#work .bar-seg")];
-    expect(bars).toHaveLength(2);
-    const base = BARS_BOTTOM, plotTop = 20; // the bar track's bottom and top edges in the viewBox
-    let scale: number | undefined;
-    bars.forEach((bar, i) => {
-      const segs = [...bar.children].map(seg => {
-        const dd = seg.getAttribute("d");
-        if (!dd) return { fill: seg.getAttribute("fill"), top: +seg.getAttribute("y")!, bottom: +seg.getAttribute("y")! + +seg.getAttribute("height")! };
-        const m = /^M[\d.]+,([\d.]+) V([\d.]+)/.exec(dd)!;
-        return { fill: seg.getAttribute("fill"), top: +m[2]! - 3, bottom: +m[1]! };
-      });
-      // Bottom first, in the legend's order on every bar.
-      expect(segs.map(s => s.fill)).toEqual(ks.map(k => k.c));
-      expect(segs[0]!.bottom).toBeCloseTo(base);
-      segs.slice(1).forEach((s, j) => expect(s.bottom).toBeCloseTo(segs[j]!.top - 2)); // a 2px gap between segments
-      const k = (base - segs.at(-1)!.top) / rows[i]!.commits;
-      scale ??= k;
-      expect(k).toBeCloseTo(scale);
-      segs.forEach((s, j) => expect(s.bottom - s.top + (j ? 2 : 0)).toBeCloseTo(st[i]![ks[j]!.k]! * scale!));
-      expect(segs.at(-1)!.top).toBeGreaterThanOrEqual(plotTop);
-    });
-  });
-
-  it("keeps a thin segment at least 1px tall, inside the bar's height", () => {
-    // 1 commit of c over 1,000 of a: drawn to scale it would be a tenth of a pixel, under the 2px gap.
-    // The next day: the same 1,001 commits, all of a, as one segment drawn to scale.
-    const day = "2026-11-04", next = "2026-11-05", rows = [row(day, { commits: 1001 }), row(next, { commits: 1001 })];
-    panel({ ...usage, work: rows, daily_work: rows,
-      work_projects: [wp(day, "a", { commits: 1000 }), wp(day, "c", { commits: 1 }), wp(next, "a", { commits: 1001 })] });
-    const segsOf = (bar: Element) => [...bar.children].map(seg => {
-      const dd = seg.getAttribute("d");
-      if (!dd) return { top: +seg.getAttribute("y")!, h: +seg.getAttribute("height")! };
-      const m = /^M[\d.]+,([\d.]+) V([\d.]+)/.exec(dd)!;
-      return { top: +m[2]! - 3, h: +m[1]! - (+m[2]! - 3) };
-    });
-    const [bar, whole] = [...document.querySelectorAll("#work .bar-seg")].map(segsOf);
-    const hs = bar!;
-    expect(hs).toHaveLength(2);
-    // The stack is as tall as its total drawn to scale: the thin segment takes its pixel from a, not from above the bar.
-    expect(whole).toHaveLength(1);
-    expect(hs[1]!.top).toBeCloseTo(whole![0]!.top);
-    for (const s of hs) expect(s.h).toBeGreaterThanOrEqual(1);
-    expect(hs[0]!.top + hs[0]!.h).toBeCloseTo(BARS_BOTTOM);
-    expect(hs[1]!.top + hs[1]!.h + 2).toBeCloseTo(hs[0]!.top); // the 2px gap below it
-    expect(hs[1]!.top).toBeGreaterThanOrEqual(20); // the bar track's top
+    expect([...document.querySelectorAll("#work .legend .key")].map(k => k.textContent)).toEqual(["Commits", "Errors per 100 calls (lower track)"]);
+    act(() => setOrder(["a", "c", "e", "g"]));
+    expect([...document.querySelectorAll("#work .legend .key")].map(k => k.textContent)).toEqual(["a", "c", "e", "g", "Other (3)", "Errors per 100 calls (lower track)"]);
+    expect(((await series()).find(s => s.id === "stack")!.data as number[][])[0]!.length - 2).toBe(5);
   });
 });
 
@@ -191,58 +161,21 @@ describe("failure rate line", () => {
   const gap = [row("2026-11-03", { calls: 4, failed_calls: 2 }), row("2026-11-04"), row("2026-11-05", { calls: 200, failed_calls: 6 })];
   const d: UsagePayload = { ...usage, end: "2026-11-05", work: gap, work_projects: gap.map(r => ({ ...r, project: "foo" })) };
 
-  it("draws on its own track under the bars, with no point for a bucket without calls", () => {
-    panel(d);
-    const svg = document.querySelector("#work svg")!;
-    const line = svg.querySelector(".rtrack path.rate")!.getAttribute("d")!;
-    expect(line.match(/[ML]/g)).toEqual(["M", "M"]);
-    // Every point sits on the rate track, below the bars: 3 per 100 of a top of 5 is 60% up the track.
-    const ys = [...line.matchAll(/[ML][\d.]+,([\d.]+)/g)].map(m => +m[1]!);
-    ys.forEach(y => { expect(y).toBeGreaterThanOrEqual(RATE_TOP); expect(y).toBeLessThanOrEqual(RATE_BOTTOM); });
-    expect(ys[1]).toBeCloseTo(RATE_BOTTOM - 3 / 5 * RATE_H);
-    ys.forEach(y => expect(y).toBeGreaterThan(BARS_BOTTOM));
-    // The 4-call day's 50 is above the scale: it stops at the track's top.
-    expect(ys[0]).toBeCloseTo(RATE_TOP);
-    // Each lone point gets a dot, since no line reaches it: filled for the busy day, hollow for the 4-call day.
-    expect(svg.querySelectorAll("circle.rate")).toHaveLength(1);
-    expect(svg.querySelectorAll("circle.lowc")).toHaveLength(1);
-    // No right-hand axis or its rotated title.
-    expect(svg.querySelector("text[transform]")).toBeNull();
-  });
-
-  it("ticks the rate track at 0 and its top, with decimals for small rates", () => {
-    panel(d);
-    // The 4-call day's 50 is left out, so the top is a nice value over the busy day's 3.
-    expect(ticks()).toEqual(["0", "5"]);
-    cleanup();
-    const low = [row("2026-11-04", { calls: 1000, failed_calls: 1 }), row("2026-11-05", { calls: 1000, failed_calls: 1 })];
-    panel({ ...usage, work: low, work_projects: [] });
-    expect(ticks()).toEqual(["0", "0.2"]);
-  });
-
-  it("reads a bucket's count and rate together, from either track", () => {
+  it("reads a bucket's count and rate together", () => {
     panel(d);
     act(() => chart().focus());
     fireEvent.keyDown(chart(), { key: "End" });
-    expect(document.querySelector("#work div.sr[aria-live]")!.textContent).toBe("Nov 5, 2026: 0 commits, 1 prompt, 1 session, 6 failed calls of 200, 3.0 per 100");
-    // The hover band and the hit area span both tracks.
-    const hit = document.querySelector("#work .hit")!;
-    expect([+hit.getAttribute("y")!, +hit.getAttribute("y")! + +hit.getAttribute("height")!]).toEqual([20, RATE_BOTTOM]);
+    expect(sr()).toBe("Nov 5, 2026: 0 commits, 1 prompt, 1 session, 6 failed calls of 200, 3.0 per 100");
   });
 
-  it("marks a bar with few calls as a hollow dot that sets no axis, and says so in the tooltip, table and key", async () => {
+  it("says a bar with few calls in the tooltip, table and key", async () => {
     const rows = [row("2026-11-04", { calls: 4, failed_calls: 2 }), row("2026-11-05", { calls: 200, failed_calls: 6 }), row("2026-11-06", { calls: 100, failed_calls: 5 })];
     panel({ ...usage, end: "2026-11-06", work: rows, work_projects: [] });
-    const svg = document.querySelector("#work svg")!;
-    // The scale follows the busy days (3 and 5), not the quiet day's 50; the line still runs through the hollow dot.
-    expect(ticks()).toEqual(["0", "10"]); // not 0, 100
-    expect(svg.querySelector("path.rate")!.getAttribute("d")!.match(/[ML]/g)).toEqual(["M", "L", "L"]);
-    expect(svg.querySelectorAll("circle.lowc")).toHaveLength(1);
     expect(document.querySelector("#work .legend")!.textContent).toBe("CommitsErrors per 100 calls (lower track)Under 50 calls");
     act(() => chart().focus());
     fireEvent.keyDown(chart(), { key: "Home" });
     expect(within(screen.getByRole("tooltip")).getByText("too few calls for a steady rate")).toBeTruthy();
-    expect(document.querySelector("#work div.sr[aria-live]")!.textContent).toContain("2 failed calls of 4, 50.0 per 100, too few calls for a steady rate");
+    expect(sr()).toContain("2 failed calls of 4, 50.0 per 100, too few calls for a steady rate");
     fireEvent.keyDown(chart(), { key: "ArrowRight" });
     expect(within(screen.getByRole("tooltip")).queryByText("too few calls for a steady rate")).toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "Show data table" }));
@@ -250,22 +183,18 @@ describe("failure rate line", () => {
     expect(cells.map(c => c.textContent)).toEqual(["50.0 (too few calls for a steady rate)", "3.0", "5.0"]);
   });
 
-  it("marks nothing when every bar has few calls: the view scales to its own rates", () => {
+  it("keys no few-calls dot when every bar has few calls", () => {
     const rows = [row("2026-11-04", { calls: 4, failed_calls: 2 }), row("2026-11-05", { calls: 10, failed_calls: 1 })];
     panel({ ...usage, work: rows, work_projects: [] });
-    const svg = document.querySelector("#work svg")!;
-    expect(svg.querySelectorAll("circle.lowc")).toHaveLength(0);
-    expect(ticks()).toEqual(["0", "100"]);
     expect(document.querySelector("#work .legend")!.textContent).not.toContain("Under");
   });
 
-  it("draws no rate track or key when no bar has a tool call", () => {
+  it("keys no rate track when no bar has a tool call, and draws none", async () => {
     const idle = [row("2026-11-04", { commits: 2 }), row("2026-11-05")];
     panel({ ...usage, work: idle, work_projects: [] });
-    const svg = document.querySelector("#work svg")!;
-    expect(svg.querySelectorAll(".rtrack, .rtick, .rate")).toHaveLength(0);
     expect(document.querySelector("#work .legend")!.textContent).toBe("Commits");
     expect(chart().getAttribute("aria-label")).toMatch(/^Commits per day, 2 days/);
+    expect((await series()).map(s => s.id)).not.toContain("rate");
   });
 
   it("gives the rate and the failed count in the tooltip", () => {
@@ -281,41 +210,65 @@ describe("failure rate line", () => {
 });
 
 describe("chart pointer", () => {
-  it("moves the tooltip with the pointer inside one bar, and re-reads it on the next", () => {
+  it("moves the tooltip with the pointer inside one bar, and re-reads it on the next", async () => {
     panel(many);
-    const hit = document.querySelector<SVGRectElement>("#work .hit")!, tip = () => screen.getByRole("tooltip") as HTMLElement;
-    fireEvent.pointerMove(hit, { clientX: 100, clientY: 50 });
+    const fake = await drawn(), tip = () => screen.getByRole("tooltip") as HTMLElement;
+    const [x, y] = fake.pointAt(0);
+    fake.fire("mousemove", [x, y]);
     const first = within(tip()).getByText(/^[A-Z][a-z]{2} \d+, 2026$/).textContent;
-    expect([tip().style.left, tip().style.top]).toEqual(["114px", "40px"]);
-    fireEvent.pointerMove(hit, { clientX: 101, clientY: 60 });
-    expect([tip().style.left, tip().style.top]).toEqual(["115px", "50px"]);
+    expect([tip().style.left, tip().style.top]).toEqual([`${x + 14}px`, `${y - 10}px`]);
+    fake.fire("mousemove", [x + 1, y + 10]);
+    expect([tip().style.left, tip().style.top]).toEqual([`${x + 15}px`, `${y}px`]);
     expect(within(tip()).getByText(first!)).toBeTruthy();
-    fireEvent.pointerMove(hit, { clientX: 700, clientY: 60 });
+    fake.fire("mousemove", fake.pointAt(1));
     expect(within(tip()).queryByText(first!)).toBeNull();
-    fireEvent.pointerLeave(hit);
+    fake.fire("globalout");
     expect(screen.queryByRole("tooltip")).toBeNull();
   });
 });
 
 describe("chart keys", () => {
-  it("dismisses the tooltip the pointer opened on Escape while the focus is elsewhere, keeping the selection", () => {
+  it("dismisses the tooltip the pointer opened on Escape while the focus is elsewhere, keeping the selection", async () => {
     const { onClear } = panel(many, "commits", { day: "2026-11-04", week: false });
     const metric = screen.getByRole("button", { name: "Prompts" });
     act(() => metric.focus());
-    fireEvent.pointerMove(document.querySelector("#work .hit")!, { clientX: 100, clientY: 50 });
+    const fake = await drawn();
+    fake.fire("mousemove", fake.pointAt(0));
     expect(screen.getByRole("tooltip")).toBeTruthy();
     fireEvent.keyDown(metric, { key: "Escape" });
     expect(screen.queryByRole("tooltip")).toBeNull();
     expect(onClear).not.toHaveBeenCalled();
   });
+
+  it("selects nothing on Enter or a click while the chart takes no pick", async () => {
+    const { onPick } = panel(weekly, "commits", null, false);
+    act(() => chart().focus());
+    fireEvent.keyDown(chart(), { key: "Home" });
+    expect(fireEvent.keyDown(chart(), { key: "Enter" })).toBe(true); // left to the browser
+    const fake = await drawn();
+    fake.fire("click", fake.pointAt(6));
+    expect(onPick).not.toHaveBeenCalled();
+    expect(screen.getByRole("tooltip")).toBeTruthy(); // the reading stays
+    expect(sr()).not.toContain("selected");
+  });
+
+  it("keeps the bar being read when newer data arrives for the same view", () => {
+    const { rerender } = panel(many);
+    act(() => chart().focus());
+    fireEvent.keyDown(chart(), { key: "Home" });
+    const reading = sr();
+    const newer = { ...many, work: many.work.map((r, i) => (i ? { ...r, commits: r.commits + 1 } : r)) };
+    rerender(<WorkPanel d={newer} metric="commits" onMetric={() => {}} selected={null} onPick={() => {}} onClear={() => {}} />);
+    expect(screen.getByRole("tooltip").textContent).toContain("Nov 4, 2026");
+    expect(sr()).toBe(reading);
+  });
 });
 
 describe("weekly buckets", () => {
-  it("label weeks, and select one by keyboard or click", () => {
+  it("label weeks, and select one by keyboard or click", async () => {
     const { onPick } = panel(weekly);
     expect(chart().getAttribute("aria-label")).toMatch(/^Commits per week, with errors per 100 tool calls on a track below, 10 weeks, commits peaking at 5 in the week of Oct 19, 2026/);
     expect(chart().getAttribute("aria-label")).toMatch(/Enter to select it and Escape to clear the selection\.$/);
-    expect(document.querySelector("#work svg")!.textContent).toContain("Week of Sep 7");
     expect(document.querySelector("#work .hint")!.textContent).toMatch(/Select a week to narrow the tabs/);
     expect(screen.getByRole("button", { name: "How measured: work per week" })).toBeTruthy();
     act(() => chart().focus());
@@ -325,12 +278,13 @@ describe("weekly buckets", () => {
     expect(onPick).toHaveBeenLastCalledWith({ day: "2026-09-07", week: true });
     // Reading stops at a pick, and the live region says what it did.
     expect(screen.queryByRole("tooltip")).toBeNull();
-    expect(document.querySelector("#work div.sr[aria-live]")!.textContent).toBe("Week of Sep 7, 2026 selected; the tabs below show its days.");
-    // The seventh bar is the week of Oct 19: 7 of 10 bars across the 732px plot from x 52.
-    fireEvent.click(document.querySelector("#work .hit")!, { clientX: 52 + 6.5 * 73.2 });
+    expect(sr()).toBe("Week of Sep 7, 2026 selected; the tabs below show its days.");
+    // The seventh bar is the week of Oct 19.
+    const fake = await drawn();
+    fake.fire("click", fake.pointAt(6));
     expect(onPick).toHaveBeenLastCalledWith({ day: "2026-10-19", week: true });
     // An idle week selects nothing.
-    fireEvent.click(document.querySelector("#work .hit")!, { clientX: 52 + 1.5 * 73.2 });
+    fake.fire("click", fake.pointAt(1));
     expect(onPick).toHaveBeenCalledTimes(2);
   });
 
@@ -338,7 +292,7 @@ describe("weekly buckets", () => {
     const { onClear } = panel(weekly, "commits", { day: "2026-10-19", week: true });
     const chip = document.querySelector("#work .chart-head .daychip")!;
     expect(chip.textContent).toBe("Week of Oct 19✕");
-    expect(document.querySelectorAll("#work svg rect.selb")).toHaveLength(1);
+    expect((await mark())!.data).toEqual([[6, 0]]);
     await userEvent.click(screen.getByRole("button", { name: "Clear week of Oct 19, 2026" }));
     expect(onClear).toHaveBeenCalledTimes(1);
     expect(document.activeElement).toBe(chart());
@@ -346,7 +300,7 @@ describe("weekly buckets", () => {
     fireEvent.keyDown(chart(), { key: "Escape" }); // ends the reading only
     expect(onClear).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole("tooltip")).toBeNull();
-    fireEvent.keyDown(chart(), { key: "Escape" });
+    expect(fireEvent.keyDown(chart(), { key: "Escape" })).toBe(false); // prevented
     expect(onClear).toHaveBeenCalledTimes(2);
   });
 
@@ -354,7 +308,7 @@ describe("weekly buckets", () => {
     const { onClear } = panel(weekly);
     expect(document.querySelector("#work .daychip")).toBeNull();
     act(() => chart().focus());
-    fireEvent.keyDown(chart(), { key: "Escape" });
+    expect(fireEvent.keyDown(chart(), { key: "Escape" })).toBe(true); // not prevented
     expect(onClear).not.toHaveBeenCalled();
   });
 
@@ -365,7 +319,7 @@ describe("weekly buckets", () => {
     expect(within(screen.getByRole("tooltip")).getByText("Week of Sep 7, 2026, from Sep 9")).toBeTruthy();
     fireEvent.keyDown(chart(), { key: "End" });
     expect(within(screen.getByRole("tooltip")).getByText("Week of Nov 9, 2026, so far")).toBeTruthy();
-    expect(document.querySelector("#work div.sr[aria-live]")!.textContent).toMatch(/^Week of Nov 9, 2026, so far: 0 commits/);
+    expect(sr()).toMatch(/^Week of Nov 9, 2026, so far: 0 commits/);
     fireEvent.keyDown(chart(), { key: "ArrowLeft" });
     expect(within(screen.getByRole("tooltip")).getByText("Week of Nov 2, 2026")).toBeTruthy();
   });
@@ -382,17 +336,204 @@ describe("weekly buckets", () => {
     }
   });
 
-  it("days can be picked with a click", () => {
+  it("days can be picked with a click", async () => {
     const { onPick } = panel(usage);
     expect(chart().getAttribute("aria-label")).toMatch(/^Commits per day, with errors per 100 tool calls on a track below, 2 days/);
-    fireEvent.click(document.querySelector("#work .hit")!, { clientX: 100 });
+    const fake = await drawn();
+    fake.fire("click", fake.pointAt(0));
     expect(onPick).toHaveBeenCalledWith({ day: "2026-11-04", week: false });
     expect(document.querySelector("#work .hint")!.textContent).toMatch(/Select a day to narrow the tabs/);
   });
 
-  it("name a week a link holds on a chart by day, marking no bar", () => {
+  it("name a week a link holds on a chart by day, marking no bar", async () => {
     panel(usage, "commits", { day: "2026-11-02", week: true });
     expect(document.querySelector("#work .daychip")!.textContent).toBe("Week of Nov 2✕");
-    expect(document.querySelector("#work svg rect.selb")).toBeNull();
+    expect(await mark()).toBeUndefined();
+  });
+});
+
+// The page's part of a selection: the chart and its chip follow the selection the page holds.
+function Host({ d, start = null }: { d: UsagePayload; start?: WorkPick | null }) {
+  const [metric, setMetric] = useState<WorkMetric>("commits"), [selected, setSelected] = useState<WorkPick | null>(start);
+  // What changes the selection from outside the chart: the tab note's "Show the whole range", an attention action, the URL.
+  return <>
+    <WorkPanel d={d} metric={metric} onMetric={setMetric} selected={selected} onPick={setSelected} onClear={() => setSelected(null)} />
+    <button type="button" onClick={() => setSelected(null)}>Outside clear</button>
+    <button type="button" onClick={() => setSelected({ day: "2026-11-05", week: false })}>Outside select</button>
+  </>;
+}
+/** Enter on the bar i, with the focus on the chart. */
+const enter = (i: "Home" | "End") => {
+  act(() => chart().focus());
+  fireEvent.keyDown(chart(), { key: i });
+  fireEvent.keyDown(chart(), { key: "Enter" });
+};
+const outside = (name: string) => act(() => screen.getByRole("button", { name }).click());
+
+describe("text size", () => {
+  afterEach(() => { document.documentElement.style.fontSize = ""; });
+  /** The frame's top and the box's height: both are laid out at one text scale (20px of margin times the scale). */
+  const layout = async () => ({ top: ((await drawn()).last!.grid as { top: number }[])[0]!.top, height: chart().style.height });
+
+  it("lays the drawing out for the box it is in when the text size changes before a reading, and grows both with the next render", async () => {
+    const { rerender } = panel(usage);
+    expect(await layout()).toEqual({ top: 20, height: "216px" });
+    document.documentElement.style.fontSize = "32px"; // the browser's text size, changed with no event
+    act(() => chart().focus());
+    fireEvent.keyDown(chart(), { key: "Home" }); // renders the wrapper alone
+    expect(await layout()).toEqual({ top: 20, height: "216px" });
+    rerender(<WorkPanel d={{ ...usage }} metric="commits" onMetric={() => {}} selected={null} onPick={() => {}} onClear={() => {}} />);
+    expect(await layout()).toEqual({ top: 40, height: "312px" }); // 40 + 120 (the bars keep theirs) + 32 + 72 + 48
+  });
+});
+
+describe("what a selection says", () => {
+  it("says a selection once, a selection of the same bar again in other words, and a clear by Escape", async () => {
+    renderApp(<Host d={usage} />);
+    act(() => chart().focus());
+    fireEvent.keyDown(chart(), { key: "Home" });
+    fireEvent.keyDown(chart(), { key: "Enter" });
+    expect(sr()).toBe("Nov 4, 2026 selected; the tabs below show its figures.");
+    expect((await mark())!.data).toEqual([[0, 0]]);
+    fireEvent.keyDown(chart(), { key: "Home" });
+    fireEvent.keyDown(chart(), { key: "Enter" });
+    expect(sr()).toBe("Nov 4, 2026 is still selected; the tabs below show its figures.");
+    enter("Home"); // the same bar a third time: the other true sentence, so it is said
+    expect(sr()).toBe("Nov 4, 2026 is already selected; the tabs below show its figures.");
+    enter("Home");
+    expect(sr()).toBe("Nov 4, 2026 is still selected; the tabs below show its figures.");
+    fireEvent.keyDown(chart(), { key: "End" });
+    fireEvent.keyDown(chart(), { key: "Enter" });
+    expect(sr()).toBe("Nov 5, 2026 selected; the tabs below show its figures.");
+    fireEvent.keyDown(chart(), { key: "Escape" });
+    expect(sr()).toBe("Selection cleared; the tabs below show the whole range.");
+    expect(document.querySelector("#work .daychip")).toBeNull();
+  });
+
+  it("leaves the status empty after a reading that follows a selection ends", () => {
+    renderApp(<Host d={usage} />);
+    act(() => chart().focus());
+    fireEvent.keyDown(chart(), { key: "Home" });
+    fireEvent.keyDown(chart(), { key: "Enter" });
+    fireEvent.keyDown(chart(), { key: "End" });
+    expect(sr()).toMatch(/^Nov 5, 2026: /);
+    fireEvent.keyDown(chart(), { key: "Escape" });
+    expect(sr()).toBe("");
+  });
+
+  it("drops the sentence when the selection is cleared outside the chart, and says a new selection of the same bar as new", () => {
+    renderApp(<Host d={usage} />);
+    enter("Home");
+    expect(sr()).toBe("Nov 4, 2026 selected; the tabs below show its figures.");
+    outside("Outside clear");
+    expect(document.querySelector("#work .daychip")).toBeNull();
+    expect(sr()).toBe(""); // no longer true, and nothing happened on the chart
+    enter("Home");
+    expect(sr()).toBe("Nov 4, 2026 selected; the tabs below show its figures."); // not "still": it was not selected
+    enter("Home");
+    expect(sr()).toBe("Nov 4, 2026 is still selected; the tabs below show its figures.");
+  });
+
+  it("says nothing for a selection made outside the chart, and says a clear on the chart's chip", async () => {
+    renderApp(<Host d={usage} />);
+    enter("Home");
+    outside("Outside select"); // Nov 5, from the URL
+    expect(document.querySelector("#work .daychip")!.textContent).toBe("Nov 5✕");
+    expect(sr()).toBe("");
+    enter("End"); // the bar the page selected: already the selection
+    expect(sr()).toBe("Nov 5, 2026 is still selected; the tabs below show its figures.");
+    await userEvent.click(screen.getByRole("button", { name: "Clear Nov 5, 2026" }));
+    expect(sr()).toBe("Selection cleared; the tabs below show the whole range.");
+    expect(document.activeElement).toBe(chart());
+    outside("Outside select");
+    expect(sr()).toBe("");
+    fireEvent.keyDown(chart(), { key: "Escape" }); // a clear on the chart after one from outside is said
+    expect(sr()).toBe("Selection cleared; the tabs below show the whole range.");
+  });
+
+  it("says nothing for a selection the page opens with", () => {
+    renderApp(<Host d={usage} start={{ day: "2026-11-04", week: false }} />);
+    expect(document.querySelector("#work .daychip")!.textContent).toBe("Nov 4✕");
+    expect(sr()).toBe("");
+  });
+});
+
+describe("zoom", () => {
+  /** A view by day from `from` to `to`, a commit and 60 calls a day. */
+  const view = (from: string, to: string, week = false): UsagePayload => {
+    const keys = dayRange(from, to).filter((_, i) => !week || i % 7 === 0), rows = keys.map(day => row(day, { commits: 1, calls: 60, failed_calls: 1 }));
+    return { ...usage, range: week ? 0 : keys.length, start: week ? null : from, end: to, work_bucket: week ? "week" : "day", work: rows, daily_work: rows, work_projects: [] };
+  };
+  const month = view("2026-10-06", "2026-11-04");
+  const slider = async () => ((await drawn()).last!.dataZoom as unknown[] | undefined) ?? [];
+  const showAll = (name = "Show all days") => screen.queryByRole("button", { name });
+  const hint = () => document.querySelector("#work .hint")!.textContent;
+
+  it("draws no slider and says no zoom keys under 14 bars", async () => {
+    renderApp(<Host d={view("2026-10-23", "2026-11-04")} />);
+    expect(await slider()).toEqual([]);
+    expect(chart().style.height).toBe("216px");
+    expect(chart().getAttribute("aria-label")).not.toContain("plus and minus");
+    expect(hint()).not.toContain("zoom");
+    act(() => chart().focus());
+    expect(fireEvent.keyDown(chart(), { key: "+" })).toBe(true);
+  });
+
+  it("draws the slider, 28px more, and names the zoom keys from 14 bars", async () => {
+    renderApp(<Host d={view("2026-10-22", "2026-11-04")} />);
+    expect(await slider()).toHaveLength(1);
+    expect(chart().style.height).toBe("244px");
+    expect(chart().getAttribute("aria-label")).toContain("and plus and minus to zoom.");
+    expect(hint()).toContain("Plus and minus zoom.");
+  });
+
+  it("zooms in by plus, says the days shown, and keeps the data table to every day", async () => {
+    renderApp(<Host d={month} />);
+    const fake = await drawn();
+    act(() => chart().focus());
+    fireEvent.keyDown(chart(), { key: "End" });
+    for (let i = 0; i < 15; i++) fireEvent.keyDown(chart(), { key: "ArrowLeft" }); // Oct 20
+    fireEvent.keyDown(chart(), { key: "+", shiftKey: true });
+    const { from, to } = fake.shown;
+    expect(to - from + 1).toBe(15);
+    expect(sr()).toMatch(/^Showing \w+ \d+ to \w+ \d+, 15 of 30 days\.$/);
+    await userEvent.click(screen.getByRole("button", { name: "Show data table" }));
+    expect(within(screen.getByRole("table", { name: /per day$/ })).getAllByRole("row")).toHaveLength(31);
+  });
+
+  it("shows 'Show all days' while zoomed; it shows every day, goes away and returns the focus to the chart", async () => {
+    renderApp(<Host d={month} />);
+    const fake = await drawn();
+    expect(showAll()).toBeNull();
+    fake.zoomTo(5, 14);
+    expect(sr()).toBe("Showing Oct 11 to Oct 20, 10 of 30 days.");
+    await userEvent.click(showAll()!);
+    expect(fake.shown).toEqual({ from: 0, to: 29 });
+    expect(showAll()).toBeNull();
+    expect(document.activeElement).toBe(chart());
+    expect(sr()).toBe("Showing all 30 days.");
+  });
+
+  it("words weeks as weeks", async () => {
+    renderApp(<Host d={view("2026-06-01", "2026-10-12", true)} />); // 20 Mondays
+    const fake = await drawn();
+    expect(await slider()).toHaveLength(1);
+    fake.zoomTo(14, 19);
+    expect(sr()).toBe("Showing the weeks of Sep 7 to Oct 12, 6 of 20 weeks.");
+    await userEvent.click(showAll("Show all weeks")!);
+    expect(sr()).toBe("Showing all 20 weeks.");
+  });
+
+  it("keeps the zoom through a selection, and shows every day for another measure", async () => {
+    renderApp(<Host d={month} />);
+    const fake = await drawn();
+    fake.zoomTo(5, 14);
+    fake.fire("click", fake.pointAt(9));
+    expect(document.querySelector("#work .daychip")!.textContent).toBe("Oct 15✕");
+    expect(fake.shown).toEqual({ from: 5, to: 14 });
+    expect(showAll()).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Prompts" }));
+    expect(fake.shown).toEqual({ from: 0, to: 29 });
+    expect(showAll()).toBeNull();
   });
 });

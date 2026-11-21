@@ -59,8 +59,8 @@ const RAW_COLORS = ["pages/context/CacheChart.css: #000"];
 /** Page-list gates (`:is(.pg-a, .pg-b, …)`) per file today. A file may lose gates, never gain one: a rule several pages
     share belongs on the component's own class. */
 const PAGE_GATES: Record<string, number> = {
-  "components/chart.css": 14, "components/facets.css": 3, "components/sheets/sheets.css": 21, "components/tone.css": 11,
-  "pages/activity/activity.css": 4, "theme.css": 7,
+  "components/chart.css": 9, "components/facets.css": 3, "components/sheets/sheets.css": 21, "components/tone.css": 11,
+  "pages/activity/activity.css": 4, "theme.css": 4,
 };
 
 type Sheet = { name: string; css: string };

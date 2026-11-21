@@ -19,6 +19,7 @@ and versions follow [Semantic Versioning](https://semver.org/).
   - Select up to four sessions and **Compare** them side by side.
 - `/api/sessions` takes up to three sort keys (`sort=-cost,prompts`). Invalid keys and a blank `sort=` answer 400. `sort=cost&desc=1` still works.
 - Cost's daily chart zooms in views of 14 days or more, with a slider or the plus and minus keys.
+- Activity's work chart zooms in views of 14 bars or more, with a slider or the plus and minus keys.
 - Cost's tokens chart has a Scale switch: Volume, or Share (each day as a 100% bar).
 - Errors' Where to start lists applied fixes, with the error rate before and since.
 - Each Errors incident shows its attempts on a small time strip.
@@ -44,10 +45,11 @@ and versions follow [Semantic Versioning](https://semver.org/).
 - Activity:
   - The Overview is a workbench: Sessions, Projects, Tools and MCP, and Loops and tests are tabs under the chart (`tab=`). The drawers and section index are gone.
   - The work chart draws errors per 100 calls on its own track. Week bars can be selected (`week=`).
+  - The work chart uses the shared chart component. It follows theme changes without a reload, frames and announces the selected day or week, always shows the newest bar's label, right-aligned, and keeps the peak label inside the plot.
   - Five tiles, each opening the matching tab or page. Output speed opens Sessions sorted by Tok/s.
 - Judgments:
   - No source filter. With Codex selected, the view says why it is unavailable.
-  - Outcome trend is a weekly chart of 100% bars, with a data table.
+  - Outcome trend is a weekly chart of 100% bars, with a data table. It uses the shared chart component, so it follows theme changes without a reload and keeps the week you are reading when new data lands.
   - Outcomes and Claude's helpfulness each show one stacked bar over their rows.
 - Live:
   - A status strip above the stream replaces the agent panel, so the stream is wider.
@@ -61,6 +63,7 @@ and versions follow [Semantic Versioning](https://semver.org/).
   - The heading keeps the cost and its change; the rest moves to "How measured". The Biggest spender and Cache hit cards are gone.
   - Tokens and cache compares each kind's share of tokens with its share of cost.
   - The daily chart follows theme changes without a reload.
+  - The peak label of the daily chart shows at larger text sizes when the plot has room, and stays inside the plot.
 - Context leads with what to act on:
   - Tips are one strip of short items, each opening its evidence in place.
   - Three tabs replace the section index: Overhead and pressure, Growth and bloat, Cache health (`tab=`).
@@ -93,6 +96,8 @@ and versions follow [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 - One quiet day no longer sets the scale of Activity's error-rate line. Days with under 50 tool calls draw a hollow dot.
+- Cost's daily chart no longer recolors the bar you are reading, and the 7-day average no longer gets dots.
+- Cost's projects could all show as "Other" after a reload, until the next refresh.
 - Limits draws two past windows from the same poll as separate bars.
 - **Open session** opens the sheet over every page, and Live keeps its stream.
 - On a narrow screen, a sheet opened from an Errors type sheet stacks over it with **← Back**.

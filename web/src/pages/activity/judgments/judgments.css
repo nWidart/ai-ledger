@@ -1,6 +1,6 @@
 /* Activity's Judgments view (/usage?view=judgments): every rule sits under .pg-judgments, since every page's CSS is loaded at
    once. The view switch and the header's grid (the heading, then the filters, as on Overview) are in activity.css; tables come
-   from sheets.css, the trend chart from chart.css. */
+   from sheets.css, the trend chart's heading and legend from chart.css. */
 .pg-judgments .cov { margin: 0 0 16px; font-size: .8125rem; color: var(--text-secondary); }
 .pg-judgments .cov b { color: var(--text-primary); font-weight: 500; }
 .pg-judgments .lede { margin: 0; max-width: 34ch; font-size: clamp(1.5rem, 4vw, 2.5rem); line-height: 1.14; font-weight: 400;

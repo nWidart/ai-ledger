@@ -123,6 +123,14 @@ describe("stackSeries", () => {
     for (const c of g.children) expect([c.shape.x, c.shape.width]).toEqual([130, 20]);
   });
 
+  it("gives the width rule each point's index, so a point can take a width of its own", () => {
+    const seen: [number, number][] = [];
+    const s = stackSeries({ kinds, values: shares, hatched: () => false, env: env(), width: (band, i) => (seen.push([band, i]), i === 3 ? band / 2 : band) });
+    expect(draw(s, 0)!.children[0]!.shape.width).toBe(40);
+    expect(draw(s, 3)!.children[0]!.shape.width).toBe(20);
+    expect(seen).toEqual([[40, 0], [40, 3]]);
+  });
+
   it("draws nothing for a day of zeros, and skips a zero segment", () => {
     const s = stackSeries({ kinds, values: shares, hatched: () => true, env: env() });
     expect(draw(s, 2)).toBeNull();
@@ -140,6 +148,14 @@ describe("stackSeries", () => {
       expect(t.style.opacity).toBe(.6);
       expect(t.style.fill).toBe("none");
       expect(t.style.decal).toMatchObject({ color: "ink-surface" });
+    }
+  });
+
+  it("gives each bar no highlight state, hatched or not, with motion or not", () => {
+    // ECharts would redraw a highlighted bar's segments in lifted colors that no token gives.
+    for (const motion of [false, true]) {
+      const s = stackSeries({ kinds, values: shares, hatched: i => i === 3, env: env({ motion }) });
+      for (const i of [0, 3]) expect(draw(s, i)).toMatchObject({ emphasisDisabled: true });
     }
   });
 

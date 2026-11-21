@@ -425,3 +425,51 @@ describe("cost chart: zoom", () => {
     expect(showAll()).toBeNull();
   });
 });
+
+// The page sets the project order after its payload lands (and the nav's status poll sets it too), so the chart can be drawn
+// before the order it colors by: it follows the order when it arrives, with the same payload, in the same view.
+describe("cost chart: project order", () => {
+  // 20 days, A and B $1 a day each.
+  const days = dayRange("2026-10-16", "2026-11-04");
+  const two: UsagePayload = { ...d, start: days[0]!, end: days.at(-1)!, range: 20,
+    daily: days.map(x => ({ ...usage.daily[0]!, day: x, cost: 2, unpriced: 0 })),
+    daily_projects: days.flatMap(x => [pd("A", 1), pd("B", 1)].map(r => ({ ...r, day: x }))), by_project: [proj("A", 20), proj("B", 20)] };
+  const NONE: string[] = []; // the page holds the hidden kinds in state: one array while they do not change
+  const chartOf = (data: UsagePayload) => <CostChart d={data} metric="cost" onMetric={() => {}} hidden={NONE} onHidden={() => {}} scale="volume" onScale={() => {}}
+    stack="project" onStack={() => {}} onProject={() => {}} onSource={() => {}} onDay={() => {}} />;
+  const keys = () => [...document.querySelectorAll("#spend .legend > :is(button, .key)")].map(k => k.textContent);
+  const group = () => screen.getByRole("group", { name: /^Estimated cost/ });
+
+  it("stacks the projects in their colors once the order arrives, with the same payload", async () => {
+    setOrder([]);
+    renderApp(chartOf(d));
+    expect(keys()).toEqual(["Other (5)", "Today so far"]);
+    expect(await drawnKinds()).toBe(1);
+    act(() => setOrder(["A"]));
+    expect(keys()).toEqual(["A", "Other (4)", "Today so far"]);
+    expect(await drawnKinds()).toBe(2);
+  });
+
+  it("keeps the day read and the zoom through an order change, and draws nothing again for an unrelated render", async () => {
+    setOrder(["A"]);
+    const { rerender } = renderApp(chartOf(two));
+    const chart = await drawn();
+    chart.zoomTo(5, 14);
+    act(() => group().focus());
+    fireEvent.keyDown(group(), { key: "End" });
+    fireEvent.keyDown(group(), { key: "ArrowLeft" }); // Nov 3, inside the days shown after End moved them
+    const reading = document.querySelector(".sr")!.textContent, shown = chart.shown, draws = chart.options.length;
+    expect(reading).toMatch(/^Nov 3, 2026: /);
+    rerender(chartOf(two));
+    expect(chart.options.length).toBe(draws); // the same drawing
+    act(() => setOrder(["A", "B"]));
+    expect(chart.options.length).toBeGreaterThan(draws); // a new drawing, in the same view
+    expect(keys().slice(0, 2)).toEqual(["A", "B"]);
+    expect(chart.shown).toEqual(shown);
+    expect(screen.getByRole("tooltip").textContent).toContain("Nov 3, 2026");
+    // The day read is still Nov 3. A key made the reading, and its words changed (B is no longer in Other): said again.
+    expect(reading).toContain("Other (1)");
+    expect(document.querySelector(".sr")!.textContent).toMatch(/^Nov 3, 2026: /);
+    expect(document.querySelector(".sr")!.textContent).not.toContain("Other");
+  });
+});

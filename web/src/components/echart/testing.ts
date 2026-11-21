@@ -25,8 +25,27 @@
 //   before the handlers run, as zrender does on each move over no drawn element.
 // - ECharts' own axis-pointer triggers: a fired "mousemove", "click" or "mousewheel" moves `band` to the point under it and a fired
 //   "globalout" hides it, with no action recorded, unless the option's root `axisPointer.triggerOn` is "none".
-// It is stricter than ECharts in one way: a call on a disposed chart, or a second live chart on one element, throws where
-// ECharts would log a warning, since either is a wrapper bug.
+// - the x axes a slider drives (`zoomAxes`), by ECharts' rule for the first slider: an `xAxisIndex` number or list names
+//   them, "all" names every x axis, and with none named the slider drives the first x axis and every other x axis in
+//   its grid, or no x axis when it names a `yAxisIndex`.
+// A chart of several tracks (design decision 1 of echart-activity) draws a frame grid over one grid per track, each with
+// its own x axis. The fake keeps one grid, which is the frame: the first x axis's points and the first y axis's `max` are
+// all it reads, and a finder index other than 0 still throws. The tracks' grids and axes merge like any other item.
+// It is stricter than ECharts in five ways, since each is a bug here, in the wrapper or in a chart:
+// - a call on a disposed chart, or a second live chart on one element, throws where ECharts would log a warning;
+// - setOption throws when the merged option holds a slider and an x axis that slider does not drive, where ECharts
+//   zooms the axes it drives and leaves the others, so one track would zoom and the next would not;
+// - setOption throws when an x axis after the first sets `axisPointer.show` to true, where ECharts draws a second band,
+//   over that axis's grid alone, while the pointer is in it;
+// - setOption throws when the merged option holds a slider and a series with the id "trend" (`sliderTrend()`) that is
+//   not the series the slider draws its faint trend from (`sliderShadowOf`, by ECharts' rule), where ECharts draws
+//   another series' trend with no error;
+// - setOption throws when the merged option holds two grids or more and one of them lacks `outerBoundsMode: "none"`,
+//   where ECharts fits each grid on its own and shrinks the frame alone, the one with visible labels (`tracksOption`).
+// A setOption that throws is not recorded: `options` and `last` hold only the options the chart took.
+// It is simpler than ECharts in what it does not model, so no test may rely on it: a slider's `xAxisId`, a vertical
+// slider (it drives y axes), and which x axes an inside dataZoom drives; and where a series or a mark is drawn, since it
+// draws nothing (a mark outside the zoom window, symbols on single items of a line, how the slider draws its trend).
 import { act, waitFor } from "@testing-library/react";
 import type { ECharts, ElementEvent, Payload, SetOptionOpts } from "./echarts";
 import type { Runtime } from "./load";
@@ -51,6 +70,63 @@ function merge(old: unknown, next: unknown): unknown {
   const out: Option = { ...old };
   for (const [k, v] of Object.entries(next)) out[k] = merge(old[k], v);
   return out;
+}
+
+/** The option's first slider, or undefined. A dataZoom with no type is one: the slider is the only one registered. */
+const sliderOf = (option: Option) => list(option.dataZoom).find(z => z.type == null || z.type === "slider");
+
+/** The x axes the option's first slider drives, by ECharts' rule (see the header), or none without a slider. */
+function zoomAxesOf(option: Option): number[] {
+  const slider = sliderOf(option);
+  const axes = list(option.xAxis);
+  if (!slider) return [];
+  const named = slider.xAxisIndex;
+  if (named === "all") return axes.map((_, i) => i);
+  if (named != null) return (Array.isArray(named) ? named : [named]).map(Number);
+  if (slider.yAxisIndex != null || !axes.length) return [];
+  const grid = axes[0]!.gridIndex ?? 0;
+  return axes.flatMap((a, i) => ((a.gridIndex ?? 0) === grid ? [i] : []));
+}
+
+/** The series types a slider draws its trend from (SHOW_DATA_SHADOW_SERIES_TYPE in ECharts' SliderZoomView). */
+const SHADOW_TYPES = ["line", "bar", "candlestick", "scatter"];
+
+/** The series whose values the option's first slider draws as its faint trend, by ECharts' rule
+ *  (SliderZoomView._prepareDataShadowInfo): it walks the x axes it drives in order and takes, on the first one that
+ *  carries a line, bar, candlestick or scatter series, the first of them in the option's order. The axis comes first: a
+ *  line on x axis 1 wins over every series on x axis 2, wherever each is listed. Undefined without a slider, with
+ *  `showDataShadow: false`, or when no axis it drives carries such a series. */
+export function sliderShadowOf(option: object): Record<string, unknown> | undefined {
+  const o = option as Option, slider = sliderOf(o);
+  if (!slider || slider.showDataShadow === false) return undefined;
+  const series = list(o.series).filter(isPlain);
+  for (const axis of zoomAxesOf(o)) {
+    const found = series.find(s => Number(s.xAxisIndex ?? 0) === axis && (slider.showDataShadow === true || SHADOW_TYPES.includes(String(s.type))));
+    if (found) return found;
+  }
+  return undefined;
+}
+
+/** Throws on an option that is a chart bug here, where ECharts would draw it (the header's stricter rules). */
+function refuse(option: Option) {
+  const axes = list(option.xAxis);
+  if (sliderOf(option)) {
+    const driven = zoomAxesOf(option);
+    const left = axes.flatMap((_, i) => (driven.includes(i) ? [] : [i]));
+    if (left.length) throw new Error(`FakeChart.setOption(): the slider does not drive x axis ${left.join(", ")}; ECharts would zoom the others alone`);
+    const trend = list(option.series).find(s => isPlain(s) && s.id === "trend");
+    const shadow = trend && sliderShadowOf(option);
+    if (trend && shadow !== trend) {
+      const by = shadow ? `series ${String(shadow.id ?? list(option.series).indexOf(shadow))}` : "no series";
+      throw new Error(`FakeChart.setOption(): the slider draws its trend from ${by}, not from "trend"; ECharts takes the first line on the lowest-index x axis it drives`);
+    }
+  }
+  const pointer = axes.findIndex((a, i) => i > 0 && isPlain(a.axisPointer) && a.axisPointer.show === true);
+  if (pointer > 0) throw new Error(`FakeChart.setOption(): x axis ${pointer} shows an axis pointer; only the first x axis may, or ECharts draws a second band`);
+  const grids = list(option.grid), fitted = grids.flatMap((g, i) => (isPlain(g) && g.outerBoundsMode === "none" ? [] : [i]));
+  if (grids.length > 1 && fitted.length) {
+    throw new Error(`FakeChart.setOption(): grid ${fitted.join(", ")} has no outerBoundsMode "none"; ECharts would fit it on its own, and its x axis would leave the others'`);
+  }
 }
 
 /** One component key's items after a setOption: `fresh` holds the items that merged into no old one. */
@@ -124,7 +200,7 @@ export class FakeZr {
 }
 
 export class FakeChart {
-  /** Every setOption call, in order, as it was given. */
+  /** Every setOption call the chart took, in order, as it was given; not one that threw. */
   readonly options: { option: Option; opts: SetOptionOpts }[] = [];
   /** Every dispatchAction payload, in order. */
   readonly actions: Payload[] = [];
@@ -150,6 +226,8 @@ export class FakeChart {
   get last(): Option | undefined { return this.options.at(-1)?.option; }
   /** How many points the category axis has. */
   get points(): number { return list(list(this.current.xAxis)[0]?.data).length; }
+  /** The x axes the first slider drives, by ECharts' rule; none without a slider. */
+  get zoomAxes(): number[] { return zoomAxesOf(this.current); }
   /** The first and last point shown: the zoom window, or every point. */
   get shown(): Window {
     const n = this.points;
@@ -169,7 +247,6 @@ export class FakeChart {
   setOption(option: Option, notMerge?: boolean | SetOptionOpts, lazyUpdate?: boolean) {
     this.alive("setOption");
     const opts: SetOptionOpts = typeof notMerge === "object" ? notMerge : { notMerge, lazyUpdate };
-    this.options.push({ option, opts });
     // notMerge starts from nothing, so there is nothing left to replace.
     const listed: string[] = opts.notMerge || opts.replaceMerge == null ? [] : [opts.replaceMerge].flat();
     const next: Option = opts.notMerge ? {} : { ...this.current };
@@ -180,6 +257,9 @@ export class FakeChart {
       next[key] = items;
       if (key === "dataZoom" && items[0] && fresh.has(items[0])) zoomFresh = true;
     }
+    refuse(next);
+    // Recorded once taken: a refused option is in neither `options` nor `last`, as it is not in `option`.
+    this.options.push({ option, opts });
     this.current = next;
     if (zoomFresh || !list(next.dataZoom).length) this.window = null;
     const zoom = list(option.dataZoom)[0];

@@ -1,4 +1,5 @@
-/* Bar charts of Activity (the work chart, and the Judgments view's outcome trend) and Cost: heading row, legend, plot and tooltip */
+/* Charts of Activity (the work chart, and the Judgments view's outcome trend) and Cost: heading row, legend and tooltip rows.
+   The plot is drawn by components/echart. */
 :is(.pg-activity, .pg-cost, .pg-judgments) .chart-head { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: flex-start; justify-content: space-between; }
 :is(.pg-activity, .pg-cost, .pg-judgments) .legend { display: flex; flex-wrap: wrap; gap: 4px 6px; margin: 4px 0 8px; }
 :is(.pg-activity, .pg-cost, .pg-judgments) .legend .key { font-size: .75rem; padding: 3px 8px; display: inline-flex; gap: 6px; align-items: center; color: var(--text-secondary); }
@@ -7,14 +8,6 @@
 .pg-activity .legend i.line.fail { border-top-color: var(--critical); }
 .pg-activity .legend i.low { width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid var(--critical); background: var(--surface-1); }
 :is(.pg-activity, .pg-cost, .pg-judgments) .legend i.hatch { background: repeating-linear-gradient(135deg, var(--text-muted) 0 2px, transparent 2px 4px); border: 1px solid var(--text-muted); }
-:is(.pg-activity, .pg-judgments) .chart { position: relative; }
-:is(.pg-activity, .pg-judgments) .chart svg { display: block; width: 100%; height: 240px; overflow: visible; }
-:is(.pg-activity, .pg-judgments) .chart:focus-visible { outline-offset: 4px; border-radius: 4px; }
 :is(.pg-activity, .pg-cost, .pg-judgments) .tip i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; margin-right: 6px; }
 :is(.pg-activity, .pg-cost, .pg-judgments) .tip .row { display: flex; gap: 16px; justify-content: space-between; }
 :is(.pg-activity, .pg-cost, .pg-judgments) .tip .tot { border-top: 1px solid var(--border); margin-top: 4px; padding-top: 4px; }
-@media (prefers-reduced-motion: no-preference) {
-  :is(.pg-activity, .pg-judgments).grow .chart .bar-seg { transform-box: fill-box; transform-origin: 50% 100%; animation: grow-y .5s var(--ease-grow) both;
-    animation-delay: calc(var(--i, 0) * 6ms); }
-}
-:is(.pg-activity, .pg-judgments) .chart .hit.pick { cursor: pointer; }

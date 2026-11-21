@@ -14,6 +14,7 @@ import palette from "../../__fixtures__/palette";
 import { Palette } from "../../components/palette/Palette";
 import { openPalette } from "../../components/palette/store";
 import { mockApi } from "../../components/sheets/testing";
+import { drawn } from "../../components/echart/testing";
 import { ActivityPage } from "./ActivityPage";
 import { setSearch } from "../../url";
 import { hookCommand, workDays } from "./work";
@@ -829,9 +830,9 @@ describe("ActivityPage", () => {
     renderApp(<ActivityPage />);
     await loaded();
     const chart = screen.getByRole("group", { name: /^Commits per week/ });
-    vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({ left: 0, top: 0, right: 800, bottom: 216, width: 800, height: 216, x: 0, y: 0, toJSON: () => ({}) });
     const n = history.length;
-    fireEvent.click(chart.querySelector(".hit")!, { clientX: 700 }); // the second of two bars: the week of Nov 2
+    const fake = await drawn();
+    fake.fire("click", fake.pointAt(1)); // the second of two bars: the week of Nov 2
     expect(location.search).toBe("?range=0&tab=tools&week=2026-11-02");
     expect(history.length).toBe(n);
     await waitFor(() => expect(fetched()).toContain("/api/day?range=0&day=2026-11-02&days=7"));
@@ -869,7 +870,7 @@ describe("ActivityPage", () => {
     at("?range=0");
     renderApp(<ActivityPage />);
     await loaded();
-    vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({ left: 0, top: 0, right: 800, bottom: 216, width: 800, height: 216, x: 0, y: 0, toJSON: () => ({}) });
+    const fake = await drawn();
     act(() => setSearch({ range: 30 }));
     await waitFor(() => expect(fetched().map(String)).toContain("/api/usage?range=30"));
     // The all-time weekly chart is still drawn: Enter and a click on it write nothing.
@@ -877,7 +878,7 @@ describe("ActivityPage", () => {
     act(() => chart.focus());
     fireEvent.keyDown(chart, { key: "End" });
     fireEvent.keyDown(chart, { key: "Enter" });
-    fireEvent.click(chart.querySelector(".hit")!, { clientX: 700 });
+    fake.fire("click", fake.pointAt(1));
     expect(location.search).toBe("?range=30");
     await act(async () => { wait.resolve(usage); await wait.p; });
     await waitFor(() => expect(screen.getByRole("group", { name: /^Commits per day/ })).toBeTruthy());
@@ -919,6 +920,29 @@ describe("ActivityPage", () => {
     await userEvent.keyboard("{Enter}");
     expect(location.search).toBe("?range=30");
     expect(document.activeElement).toBe(screen.getByRole("group", { name: /^Commits per day/ }));
+  });
+
+  it("drops the chart's selection sentence when the tab note or an attention action clears the selection, and says the next selection as new", async () => {
+    mockApi({ "/api/usage": () => usage, "/api/sessions": () => sessions, "/api/day": () => noDay("2026-11-04") });
+    at("?range=30");
+    renderApp(<ActivityPage />);
+    await loaded();
+    const chart = screen.getByRole("group", { name: /^Commits per day/ }), sr = () => document.querySelector("#work div.sr[aria-live]")!.textContent;
+    const select = () => { act(() => chart.focus()); fireEvent.keyDown(chart, { key: "Home" }); fireEvent.keyDown(chart, { key: "Enter" }); };
+    const SELECTED = "Nov 4, 2026 selected; the tabs below show its figures.";
+    select();
+    expect(location.search).toBe("?range=30&day=2026-11-04");
+    expect(sr()).toBe(SELECTED);
+    await userEvent.click(within(screen.getByRole("tabpanel")).getByRole("button", { name: "Show the whole range" }));
+    expect(location.search).toBe("?range=30");
+    expect(sr()).toBe("");
+    select();
+    expect(sr()).toBe(SELECTED); // a new selection, not "still selected"
+    await userEvent.click(attention().getByRole("button", { name: "See tests" }));
+    expect(location.search).toBe("?range=30&tab=loops");
+    expect(sr()).toBe("");
+    select();
+    expect(sr()).toBe(SELECTED);
   });
 
   it("keeps the selection's figures honest: a vital or attention action reports the range, so it clears the selection", async () => {
