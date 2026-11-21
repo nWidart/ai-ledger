@@ -32,7 +32,7 @@ const FIRST = [
 const FIX = new URL("../../web/src/__fixtures__/", import.meta.url).pathname;
 /** A generated fixture's object: the JSON between `export default` and `satisfies`. */
 const fixture = name => JSON.parse(readFileSync(FIX + name, "utf8").replace(/^[\s\S]*?export default /, "").replace(/\s*satisfies \w+;\s*$/, ""));
-const live = fixture("live.ts"), liveSession = fixture("live-session.ts");
+const live = fixture("live.ts"), liveSession = fixture("live-session.ts"), limits = fixture("limits.ts");
 
 /** Where the tablist and the first plotted mark (the first range bar of Starting context) sit, in px from the window's top. */
 const measure = page => page.evaluate(() => {
@@ -59,6 +59,8 @@ try {
       await route.fulfill({ response: res, json: d });
     });
     await page.route(/\/api\/live(\?|$)/, route => route.fulfill({ json: { ...live, sessions: live.sessions.map((s, i) => (i ? s : { ...s, session_id: "s1" })) } }));
+    // The synthetic store's seeded open windows age out, so Limits is answered from the fixture, as Live is.
+    await page.route(/\/api\/limits(\?|$)/, route => route.fulfill({ json: limits }));
     await page.route(/\/api\/live\/session\?/, route => route.fulfill({ json: { ...liveSession, session_id: "s1" } }));
     await page.goto(`${BASE}/context?range=30`);
     await page.waitForSelector("#starting .rng-bar");
