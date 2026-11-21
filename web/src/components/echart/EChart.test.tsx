@@ -845,6 +845,23 @@ describe("EChart zoom", () => {
     expect(readout()).toBe("Oct 13: $12.00");
   });
 
+  it("says nothing on release when the view changed under a drag", async () => {
+    const onZoom = zoomSpy();
+    const { rerender } = render(zoomed({ onZoom, view: "30 days" }));
+    const chart = await drawn();
+    chart.fire("mousedown", [200, 250]);
+    chart.zoomTo(10, 19); // a step of the drag: said on release
+    rerender(zoomed({ onZoom, view: "30 days, from another first day" })); // a refresh moved the view's first day
+    expect(chart.shown).toEqual({ from: 0, to: 29 });
+    fireEvent.pointerUp(document.body);
+    expect(readout()).toBe(""); // the drag changed the old view: the new one has nothing to say of it
+
+    chart.fire("mousedown", [200, 250]); // a drag on the new view is said as ever
+    chart.zoomTo(5, 14);
+    fireEvent.pointerUp(document.body);
+    expect(readout()).toBe("Showing Oct 6 to Oct 15, 10 of 30 days.");
+  });
+
   it("lets go of the document once the pointer is up, and on unmount", async () => {
     const { unmount } = render(zoomed());
     const chart = await drawn();

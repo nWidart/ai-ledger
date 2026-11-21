@@ -404,6 +404,7 @@ export function EChart({
     chart.setOption({ ...made, ...(env.motion && first ? {} : { animation: false }), axisPointer: { ...made.axisPointer, triggerOn: "none" } }, { replaceMerge: REPLACE });
     if (drew.current === shows) return keep(chart);
     drew.current = shows;
+    unsaid.current = false; // a drag still going changed the old view: its release has nothing to say of this one
     unzoom(chart);
   }, [chart, option, env, shows]);
   // Without zoom, nothing reads or sets the window: a chart left zoomed would have no way back.
