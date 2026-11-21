@@ -412,6 +412,26 @@ class SourceMigrationTest(StoreCase):
         self.con = store.open_store(self.db)
 
 
+class ReportedCostMigrationTest(StoreCase):
+    def test_store_without_reported_cost_gains_it_empty(self):
+        S = dict(sessionId="s1", cwd="/nowhere/foo")
+        self.write("a.jsonl", "".join(line(type="assistant", uuid=f"a{i}", timestamp=f"2026-11-01T10:00:0{i}Z",
+                                           message=dict(id=f"m{i}", model="m", usage=dict(input_tokens=1, output_tokens=2)), **S)
+                                      for i in range(2)))
+        store.ingest(self.con, self.roots)
+        self.assertEqual(self.q("SELECT count(*) FROM requests WHERE reported_cost IS NULL"), [(2,)])  # Claude reports no cost
+        self.con.execute("ALTER TABLE requests DROP COLUMN reported_cost")  # the schema before reported costs
+        counts = lambda: [self.q(f"SELECT count(*) FROM {t}")[0][0] for t in ("raw_lines", "sessions", "requests")]
+        before = counts()
+        self.con.close()
+        for _ in range(2):  # idempotent
+            self.con = store.open_store(self.db)
+            self.assertEqual(counts(), before)
+            self.assertEqual(self.q("SELECT count(*), count(reported_cost) FROM requests"), [(2, 0)])
+            self.con.close()
+        self.con = store.open_store(self.db)
+
+
 class SessionRunsStoreTest(StoreCase):
     def write_session(self):
         S = dict(sessionId="s1", cwd="/nowhere/foo")
