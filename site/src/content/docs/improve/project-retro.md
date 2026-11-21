@@ -24,20 +24,24 @@ Make one pass over the [Project](/ai-ledger/pages/project/) page. At each stop, 
 
 To open the page, set the project filter to the project, then select **Brief →** at the end of the scope bar. Set the range to the stretch you review: **30d** for a month (an example). Leave the source at **All** and **Include automated sessions** off.
 
+Before the first stop, select the project's name in Cost's **Project spend and change** (or in Activity's **Projects** tab) to open the [project sheet](/ai-ledger/everywhere/sheets/#project-sheet). Write down its **est. cost**, **per commit**, **errors per 100 calls** and **error loops**: the Project page does not repeat these figures. Then select **Open project page** in the sheet.
+
+The stops follow the page: the left column (Activity, Cost, Context), then the right column (Errors, Plan limits, Sessions, Session judgments).
+
 | Stop | Read | Off when | Open |
 | --- | --- | --- | --- |
-| 1. **Summary** | **per commit**, **errors per 100 calls**, **error loops** | A sign above names the project. | The stop's own row below |
-| 2. **Cost** | **Change vs the previous N days**, **Models by estimated cost** | Rule of thumb: the change is a rise, and Activity shows no rise in commits for the project. | [Spend less for the same output](/ai-ledger/improve/spend-less/) |
-| 3. **Sessions** | The first rows of **Most expensive sessions** | Rule of thumb: a session in the top three has no commit. Select it: the session sheet's line of figures counts its commits. | [Spend less for the same output](/ai-ledger/improve/spend-less/) |
+| 1. **Activity** | **estimated cost per prompt**, **turns per prompt**, **of prompts interrupted** | Rule of thumb: a figure is higher than at the last retro. | [Spend less for the same output](/ai-ledger/improve/spend-less/) for cost or turns, [Babysit agents less](/ai-ledger/improve/babysit-less/) for interruptions |
+| 2. **Cost** | The change against the previous period, **Models by estimated cost**, **Tokens beside cost** | Rule of thumb: the change is a rise, and Activity shows no rise in commits for the project; or a token kind's share of cost is far above its share of tokens. | [Spend less for the same output](/ai-ledger/improve/spend-less/) |
+| 3. **Context** | **median starting context, tokens**, **sessions near the context limit** | The median start is 30,000 tokens or more, the app's threshold for its **Sessions start with a large context** tip; or a session came near the limit. | [Keep context lean](/ai-ledger/improve/lean-context/) |
 | 4. **Errors** | **error rate**, the **Change** column of **Top error types** | A type's change is a rise, which the block colors as worse. | [Kill repeated tool failures](/ai-ledger/improve/tool-failures/) |
-| 5. **Context** | **median starting context, tokens**, **sessions near the context limit** | The median start is 30,000 tokens or more, the app's threshold for its **Sessions start with a large context** tip; or a session came near the limit. | [Keep context lean](/ai-ledger/improve/lean-context/) |
-| 6. **Session judgments** | **Outcomes**, **Top friction** | Rule of thumb: **Not achieved** holds more than 10% of the analysed sessions, or one friction family leads by twice the next. | [Get sessions to finish](/ai-ledger/improve/finish-sessions/) |
-| 7. **Plan limits** | **Share of each open window** | Rule of thumb: the project holds over half of an open window. The block shows only when the project is among a window's top three users. | [Stop hitting plan limits](/ai-ledger/improve/plan-limits/) |
+| 5. **Plan limits** | **Share of each open window** | Rule of thumb: the project holds over half of an open window. The block shows only when the project is among a window's top three users. | [Stop hitting plan limits](/ai-ledger/improve/plan-limits/) |
+| 6. **Sessions** | The first rows of the eight most expensive sessions | Rule of thumb: a session in the top three has no commit. Select it: the session sheet's line of figures counts its commits. | [Spend less for the same output](/ai-ledger/improve/spend-less/) |
+| 7. **Session judgments** | **Outcomes**, **Top friction** | Rule of thumb: **Not achieved** holds more than 10% of the analysed sessions, or one friction family leads by twice the next. | [Get sessions to finish](/ai-ledger/improve/finish-sessions/) |
 
 Notes on the stops:
 
-- **Summary** has no comparison of its own. To compare **per commit** with the other projects, open Cost with **All projects**.
-- **Errors** counts automated sessions too, whatever the filter says, so its **error rate** can differ from **errors per 100 calls** in **Summary**.
+- The project sheet's figures have no comparison of their own. To compare **per commit** with the other projects, open Cost with **All projects**; for **errors per 100 calls** and **error loops**, open Activity's **Projects** tab or [Errors](/ai-ledger/pages/errors/).
+- **Errors** counts automated sessions too, whatever the filter says, so its **error rate** can differ from the sheet's **errors per 100 calls**.
 - **Session judgments** covers only Claude Code sessions that `/insights` analysed: "N of M Claude Code sessions analysed". If M is much larger than N, run `/insights` in Claude Code, select **Refresh**, and read the block again.
 - The **Context** block's snapshot is the project's latest, whatever the range. Select **Measure now** if it is older than the stretch you review.
 
@@ -74,13 +78,14 @@ Paste this template into a notes file of your own, such as `ai-ledger-retro.md`,
 
 ```md
 ## Retro of <project>, YYYY-MM-DD (range 30d, all sources)
-- Summary: est. cost $_ · per commit $_ · errors per 100 calls _ · error loops _
+- Project sheet: est. cost $_ · per commit $_ · errors per 100 calls _ · error loops _
+- Activity: cost per prompt $_ · turns per prompt _ · prompts interrupted _%
 - Cost: change vs the previous 30 days _ · top model _
-- Sessions: top session $_ with _ commits
-- Errors: error rate _% · rising types: _
 - Context: median start _ tokens · sessions near the limit _
-- Session judgments: _ of _ analysed · not achieved _% · top friction _
+- Errors: error rate _% · rising types: _
 - Plan limits: largest share of an open window _%
+- Sessions: top session $_ with _ commits
+- Session judgments: _ of _ analysed · not achieved _% · top friction _
 - Stops that are off: _
 - Fix picked: _ · line added to the instruction file: _
 ```
@@ -95,7 +100,7 @@ At the next retro, with the same project and the same range, compare the figure 
 
 | Fix picked | Figure | Where | Expected |
 | --- | --- | --- | --- |
-| Spend | **per commit** | **Summary** | Lower than your note. |
+| Spend | **per commit**, and **estimated cost per prompt** | The project sheet, and the Project page's **Activity** block | Lower than your note. |
 | Errors | The type's **Change** | **Errors**, **Top error types** | A fall. In the type's detail on Errors, **Before and after the fix** reads **Rate lower**. |
 | Context | **median starting context, tokens** | **Context** | Lower than your note, and under 30,000 tokens. |
 | Outcomes | **Not achieved** | **Session judgments**, **Outcomes** | A lower share than your note. |
@@ -112,7 +117,8 @@ If the figure did not move:
 ## Related
 
 - [Project](/ai-ledger/pages/project/): every block read here and how to open the page.
-- [Activity](/ai-ledger/pages/activity/#projects): **Project metrics** and the project sheet.
+- [Sheets](/ai-ledger/everywhere/sheets/#project-sheet): the project sheet and its eight quick figures.
+- [Activity](/ai-ledger/pages/activity/#projects): **Project metrics**.
 - [Cost](/ai-ledger/pages/cost/): **What stands out** and **Project spend and change**.
 - [Metric glossary](/ai-ledger/reference/glossary/#project): the figures that show only on Project.
 - [Cost estimates](/ai-ledger/concepts/cost-estimates/): why the cost figures are estimates.

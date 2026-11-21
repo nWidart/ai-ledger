@@ -83,7 +83,7 @@ The packaged plans:
 An entry in the file adds to these or replaces one of the same name.
 
 - When no snapshot names a known plan, the comparison is left out.
-- When an agent without a known plan also spent, the multiple counts only the agents with a known plan, and names them: "at list prices this period's Codex use is 0.7× your plan."
+- When an agent without a known plan also spent, the multiple counts only the agents with a known plan, and names them: the plan gauge says "Codex use only" beside its "N× plan" badge, such as "0.7× plan". See [How cost is estimated](/ai-ledger/concepts/cost-estimates/).
 
 ## Automated projects
 
@@ -97,6 +97,6 @@ The file `automated.json` lists projects whose sessions count as automated, in a
 | --- | --- | --- | --- |
 | `projects` | list of text | yes | Project names. |
 
-A missing file is no error. The "Include automated" control's hint names the file's path. When the file cannot be read, is not valid JSON, has no `projects` list, or has an entry that is not text, the app ignores the whole file and Activity shows "Automated projects file ignored", with the path and the reason; only the built-in detection applies.
+A missing file is no error. The **Include automated sessions** control's hint names the file's path. When the file cannot be read, is not valid JSON, has no `projects` list, or has an entry that is not text, the app ignores the whole file and a banner under the navigation, on every page, says "Automated projects file ignored", with the path and the reason; only the built-in detection applies.
 
 For the workflow, see the playbook [Separate automated sessions from yours](/ai-ledger/improve/automated-sessions/).

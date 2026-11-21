@@ -4,7 +4,7 @@ description: Estimated spend at API list prices, per project, model and session,
 spec: [cost-dashboard]
 ---
 
-Cost answers three questions: what did this period cost, where did the spend go, and why did it change? Every figure is an estimate. It applies API list prices to the tokens in your transcripts; it is not a bill. See [Cost estimates](/ai-ledger/concepts/cost-estimates/) for what the estimate includes and leaves out.
+Cost answers three questions: what did this period cost, where did the spend go, and why did it change? Every figure is an estimate. It applies API list prices to the tokens in your transcripts, except for Grok, whose requests use the cost Grok reported; it is not a bill. See [Cost estimates](/ai-ledger/concepts/cost-estimates/) for what the estimate includes and leaves out, and [Supported agents](/ai-ledger/concepts/supported-agents/) for how the agents differ.
 
 The page follows the filters in the [scope bar](/ai-ledger/everywhere/filters/#scope-bar) under the navigation. Every figure below describes the selected project, time range and source.
 
@@ -213,10 +213,10 @@ The count is the number of sessions listed: the most expensive sessions of the v
 
 ## Sheets
 
-A sheet opens beside the page and does not change the filters. Its state is in the URL.
+A sheet opens beside the page and does not change the filters. See [Sheets](/ai-ledger/everywhere/sheets/).
 
-- **Project sheet**: Filter dashboard to *project*, Open project page, Open its errors; eight figures (estimated cost, sessions, tokens, cache hit, tokens from subagents, cost per commit, errors per 100 calls, error loops); with a previous period, the "Change vs the previous N days" (both costs, the change with its sign, a "new" mark, and a daily cost sparkline with the split marked); Models and effort; the most expensive sessions. See [Project](/ai-ledger/pages/project/).
-- **Session sheet**: the whole session, its figures, timeline, models and tools, and a Copy button for its resume command. See [Activity](/ai-ledger/pages/activity/#session-sheet).
+- **Project sheet**: a project's cost, with its change against the previous period and its most expensive sessions. See [Project sheet](/ai-ledger/everywhere/sheets/#project-sheet) and the [Project](/ai-ledger/pages/project/) page.
+- **Session sheet**: the whole session, with a Copy button for its resume command. See [Session sheet](/ai-ledger/everywhere/sheets/#session-sheet).
 
 ## Playbooks that start here
 
@@ -224,5 +224,5 @@ A sheet opens beside the page and does not change the filters. Its state is in t
 - [Stop hitting plan limits](/ai-ledger/improve/plan-limits/): how the cost compares with your plan.
 - [Weekly 15-minute review](/ai-ledger/improve/weekly-review/): a pass over Cost and the other pages.
 - [Retro on one project](/ai-ledger/improve/project-retro/): cost per commit and per prompt by project.
-- [Compare Claude Code and Codex](/ai-ledger/improve/compare-sources/): the Agent stacking and the Source filter.
+- [Compare Claude Code, Codex and Grok](/ai-ledger/improve/compare-sources/): the Agent stacking and the Source filter.
 - [Separate automated sessions from yours](/ai-ledger/improve/automated-sessions/): the Include automated sessions toggle.

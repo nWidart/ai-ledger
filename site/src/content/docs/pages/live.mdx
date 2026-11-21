@@ -78,7 +78,7 @@ A session's title comes from the newest custom title (Claude Code `/rename`), el
 
 <ThemedImage dark={stream} light={streamLight} alt="Live's session stream: a prompt, the reply, tool calls, a subagent lane and a failed npm test." />
 
-**Shows** the selected session as a log of its events in order, newest at the bottom. The head shows the session's title as a heading (the project when there is no title), then the project, git branch, source and model, and a **Session sheet** link. The status strip under it shows the state. The link opens the session's sheet over Live: the stream keeps updating under it, and Close or Back returns to it. On Live the URL names the sheet as `sheet`, because `session` names the session the stream follows: `/live?session=abc&sheet=abc`. The time column shows the clock time, with the date for an event not from today.
+**Shows** the selected session as a log of its events in order, newest at the bottom. The head shows the session's title as a heading (the project when there is no title), then the project, git branch, source and model, and a [**Session sheet**](/ai-ledger/everywhere/sheets/#session-sheet) link. The status strip under it shows the state. The link opens the session's sheet over Live: the stream keeps updating under it, and Close or Back returns to it. On Live the URL names the sheet as `sheet`, because `session` names the session the stream follows: `/live?session=abc&sheet=abc`. The time column shows the clock time, with the date for an event not from today.
 
 When older events are not shown, the stream says so and links to the session sheet, which holds the whole session. A session with state your turn ends the stream with "waiting for your next prompt".
 
@@ -131,7 +131,7 @@ The filters combine, stay on when you open another session, and change only what
 
 The strip shows no request count or model: the model is in the stream's head, and the session sheet's Models table counts the requests of each model.
 
-**The pulse** draws the last 10 minutes of the session. A line follows the context of each main-thread request, so it rises as the context grows and stays flat when requests only reread the cache. It is scaled from its lowest to its highest value, so small growth shows; the readout gives the numbers. Along the foot, each tool call that ended has a tick: an upright line for a success, a ✕ for a failure. Subagent calls count too. The pulse's name gives its summary to a screen reader, such as "Last 10 minutes: context 40k to 62k tokens, 18 tool calls, 2 failed." The range is the lowest and highest context the line plots, so a peak shows even when the context fell back; a flat line names one level. Tab to it and use Left and Right to read one minute at a time, Home and End for the first and the last, and Escape to dismiss the readout. The readout, such as "10:04 to 10:05: context 52k, 3 calls, 1 failed", shows under the pulse and is read politely. Below 721 pixels wide it shows under the strip and wraps, so it stays on the screen. Hovering it reads the minute under the pointer.
+**The pulse** draws the last 10 minutes of the session. A line follows the context of each main-thread request, so it rises as the context grows and stays flat when requests only reread the cache. It is scaled from its lowest to its highest value, so small growth shows; the readout gives the numbers. Along the foot, each tool call that ended has a tick: an upright line for a success, a cross (✕) for a failure. Subagent calls count too. The pulse's name gives its summary to a screen reader, such as "Last 10 minutes: context 40k to 62k tokens, 18 tool calls, 2 failed." The range is the lowest and highest context the line plots, so a peak shows even when the context fell back; a flat line names one level. Tab to it and use Left and Right to read one minute at a time, Home and End for the first and the last, and Escape to dismiss the readout. The readout, such as "10:04 to 10:05: context 52k, 3 calls, 1 failed", shows under the pulse and is read politely. Below 721 pixels wide it shows under the strip and wraps, so it stays on the screen. Hovering it reads the minute under the pointer.
 
 **Controls**
 
@@ -159,7 +159,7 @@ A tile's border follows its state: your turn, approval? and running a tool each 
 
 A pinned stream shows its head, a status strip without the directory and Copy resume, and its stream, with its own stream filters and its own Follow, on when pinned. Its head has:
 
-- **Session sheet**, which opens the session's sheet over the Wall. The pinned streams keep updating under it.
+- [**Session sheet**](/ai-ledger/everywhere/sheets/#session-sheet), which opens the session's sheet over the Wall. The pinned streams keep updating under it.
 - **Open in Stream**, which opens the session in the Stream view and puts the keyboard focus on the stream's heading. The pins stay in the URL for when you come back to the Wall.
 - **Unpin**, which removes the stream and puts the keyboard focus on the session's tile. When the session has no tile, because it left the active list or the store does not hold it, the focus goes to the other pin's first button, else the first tile, else the page's heading.
 
@@ -171,7 +171,7 @@ From 1100 pixels wide, the tiles stand in one column with the pinned streams bes
 
 ## Session states
 
-Each active session has one state. The rail, the wall and the status strip use these words.
+Each active session has one state. The rail, the wall and the status strip use these words. Claude Code, Codex and Grok record different things, so some states are inferred for one agent and recorded for another; see [Supported agents](/ai-ledger/concepts/supported-agents/).
 
 | State | Group | Meaning |
 | --- | --- | --- |

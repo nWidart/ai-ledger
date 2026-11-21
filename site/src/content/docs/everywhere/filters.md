@@ -1,6 +1,6 @@
 ---
 title: Filters
-description: The project picker, the range, the source and Include automated, shared by every page.
+description: The project picker, the range, the source and Include automated sessions, shared by every page.
 spec: [dashboard-app, command-palette]
 ---
 
@@ -10,7 +10,7 @@ A page shows a filter only when it changes what the page shows. A filter a page 
 
 ## Scope bar
 
-The filters sit in the scope bar, directly under the navigation. The bar is in the same place on every page, and shows the filters in the order project, range, source, Include automated. It stays at the top with the navigation as you scroll. No other bar sticks there.
+The filters sit in the scope bar, directly under the navigation. The bar is in the same place on every page, and shows the filters in the order project, range, source, **Include automated sessions**. It stays at the top with the navigation as you scroll. No other bar sticks there.
 
 A control that changes one part of a page sits in that part, not in the bar: Limits' range in **Past windows**, Errors' Day / Week in its rate chart, and Cost's plan gauge beside its heading.
 
@@ -25,13 +25,13 @@ On a narrow window (about 900px and below, or zoomed in), the bar is one **Filte
 | Project | A project, or "All projects" | All projects | `project` |
 | Time range | 7d, 14d, 30d, 90d, All | 30d | `range` (`0` is All) |
 | Source | All, Claude Code, Codex, Grok | All | `source` (`claude`, `codex`, `grok`) |
-| Include automated | On or off | Off | `auto=1` |
+| Include automated sessions | On or off | Off | `auto=1` |
 
 The same filters are available in the [command palette](/ai-ledger/everywhere/command-palette/) as `#` terms.
 
 ### Which pages show which control
 
-| Page | Project | Range | Source | Include automated |
+| Page | Project | Range | Source | Include automated sessions |
 | --- | --- | --- | --- | --- |
 | Live | yes | no | yes | yes |
 | Limits | no | in Past windows | yes | no |
@@ -58,17 +58,17 @@ The picker is one filterable dropdown. Its field shows the selected project, or 
 
 When a project is set, a ✕ button named "Clear project filter" sits next to the picker and removes the filter. Clearing the filter on the Project page opens Activity.
 
-When a project is set, the scope bar also ends with a **Brief →** link, named "Brief, <project> project page". It opens the project's [Project page](/ai-ledger/pages/project/) with the same range, source and Include automated. The Project page itself has no Brief link, and neither does Limits, which has no project picker.
+When a project is set, the scope bar also ends with a **Brief →** link, named "Brief, <project> project page". It opens the project's [Project page](/ai-ledger/pages/project/) with the same range, source and **Include automated sessions**. The Project page itself has no Brief link, and neither does Limits, which has no project picker.
 
 ## Source
 
-The source filter has the choices All, Claude Code, Codex and Grok. A value in the URL that is not one of these reads as All, and the URL drops it.
+The source filter has the choices All, Claude Code, Codex and Grok. A value in the URL that is not one of these reads as All, and the URL drops it. For what each agent records, see [Supported agents](/ai-ledger/concepts/supported-agents/).
 
 Activity's [Judgments view](/ai-ledger/pages/insights/) covers Claude Code sessions only, because Claude Code's `/insights` analyses only those. With Codex or Grok selected, Activity shows Overview: the **Judgments** button of its view switch cannot be picked, and the text beside it says why, such as "Grok writes no facets: /insights judges Claude Code sessions only."
 
 ## Include automated
 
-Pages leave out automated sessions from every figure, chart and table. **Include automated** brings them back.
+Pages leave out automated sessions from every figure, chart and table. **Include automated sessions** brings them back.
 
 The app treats a session as automated when:
 

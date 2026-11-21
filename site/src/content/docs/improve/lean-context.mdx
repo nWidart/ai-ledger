@@ -13,27 +13,29 @@ Open [Context](/ai-ledger/pages/context/) with the range at **30d** and read **T
 
 | Tip | The app shows it when | Mark |
 | --- | --- | --- |
-| **Sessions start with a large context** | A project's median starting context is 30,000 tokens or more. | **▲ Watch** |
-| **Sessions compact repeatedly** | A session compacted 3 times or more. | **▲ Watch**; **● Act** from 6 compactions |
-| **Sessions reach the limit of the window** | A session peaked at 80% or more of its window. | **● Act** |
-| **Tool results fill the context** | A main-thread tool result is 100,000 bytes or more. | **▲ Watch**; **● Act** from 400,000 bytes |
+| **Sessions start with a large context** | A project's median starting context is 30,000 tokens or more. | **▲ Warning** |
+| **Sessions compact repeatedly** | A session compacted 3 times or more. | **▲ Warning**; **● Critical** from 6 compactions |
+| **Sessions reach the limit of the window** | A session peaked at 80% or more of its window. | **● Critical** |
+| **Tool results fill the context** | A main-thread tool result is 100,000 bytes or more. | **▲ Warning**; **● Critical** from 400,000 bytes |
 
-With several tips, start from one marked **● Act**.
+With several tips, start from one marked **● Critical**. The strip lists the most severe first.
 
 The same problem shows in three other places:
 
 - [Activity](/ai-ledger/pages/activity/), **Needs attention**: "N sessions reached 80%+ of the context window."
 - [Project](/ai-ledger/pages/project/), **Context**: **sessions near the context limit** is above 0.
-- [Live](/ai-ledger/pages/live/), **Context window**: the meter of a running session is in the warning color, which it takes above 80%.
+- [Live](/ai-ledger/pages/live/): the context meter in the status strip above a running session's stream is in the warning color, which it takes above 80%.
 
 The two other tips, **The prompt cache breaks within sessions** and **Requests are priced on the long-prompt tier**, are about cost. For those, use [Spend less for the same output](/ai-ledger/improve/spend-less/).
 
 ## Diagnose
 
-Find out which of four causes you have. All steps but step 3 are on Context. The project picker and the range are the page's [filters](/ai-ledger/everywhere/filters/).
+Find out which of four causes you have. All steps but step 3 are on Context. The project picker and the range are the page's [filters](/ai-ledger/everywhere/filters/). **Tips** sits above Context's three tabs: **Overhead and pressure** holds **Starting context**, **Window of a typical session** and **Window pressure**; **Growth and bloat** holds **Growth**, **What fills context** and the **Largest tool results** drawer; **Cache health** holds the cost panels.
 
-1. In **Tips**, select the link "N sessions" at the foot of each tip that fired. The **Sessions matching** list opens. If most sessions belong to one project, pick that project in the project picker for the next steps.
-2. In **Starting context**, read the project's row in **Starting context by project**. Compare **10th percentile** with **Median**. The 10th percentile approximates the fixed overhead: what every session reads before your first prompt.
+1. In **Tips**, select each tip that fired to expand it, then select **N matching sessions** under its advice. The **Sessions matching** list opens. If most sessions belong to one project, pick that project in the project picker for the next steps.
+2. On **Overhead and pressure**, start with the map **Sessions by start and peak** in **Window pressure** for a fast split. Its four quadrants cut at a 30,000-token start and an 80% peak. Many dots in **Heavy start** (a heavy start and room left) point to overhead; many in **Grew full** (a light start and a peak at 80% or more) point to growth; **Heavy and full** has both. Select a quadrant to narrow the bars above it to its sessions.
+
+   Then, in **Starting context**, read the project's row in **Starting context by project**. Compare **10th percentile** with **Median**. The 10th percentile approximates the fixed overhead: what every session reads before your first prompt.
    - If the 10th percentile is close to the median, the overhead is the problem. Go to step 3. Rule of thumb: "close" is three quarters of the median or more.
    - If the 10th percentile is far under the median, the first prompts are large (pasted logs, long attached files). Go to [Start a new session for each task](#start-a-new-session-for-each-task).
 3. Split the overhead. Open the project's [Project page](/ai-ledger/pages/project/#open-the-page) and go to **Context**. Select **Measure now**. It runs `claude -p "/context"` in the project's folder: it calls no model, but it starts the project's MCP servers and hooks as a new session does. The grid's legend then lists the overhead by category, such as **Memory files** and **MCP tools**, and **Largest overhead items** names the five largest MCP servers, memory files and skills. Note the largest category and its tokens.
@@ -46,8 +48,8 @@ Find out which of four causes you have. All steps but step 3 are on Context. The
 
    For Codex, the configured servers are the `[mcp_servers.<name>]` tables in `~/.codex/config.toml`.
 
-   A configured server that the line does not list was never called in the range. A server at the front of the line was called least. If that tip did not fire, use the **By MCP server** table in **What fills context**: it lists the servers whose calls returned a result on the main thread.
-5. In **Growth**, read the tiles **Added per prompt**, **Sessions with a compaction** and **Before the first compaction**. Select **Share of window** above the chart and find the turn where the curve crosses the dashed line at 80%. With **All projects** selected, the table **Growth by project** gives the same figures for each project.
+   A configured server that the line does not list was never called in the range. A server at the front of the line was called least. If that tip did not fire, use **Largest contributors** switched to **By MCP server** (in **What fills context**, on **Growth and bloat**): it lists the servers whose calls returned a result on the main thread.
+5. On **Growth and bloat**, in **Growth**, read the tiles **Added per prompt**, **Sessions compacted** and **Before the first compaction**. Select **Share of window** above the chart and find the turn where the curve crosses the dashed line at 80%. With **All projects** selected, the table **Growth by project** gives the same figures for each project.
 6. In **What fills context**, read **Largest contributors**. A row whose range reaches the dashed line at 100,000 bytes has results that large. Then open the drawer **Largest tool results**: **Tool** and **Input** show which file, command or query produced each of the 25 largest results. The bar **Main thread / Subagents** shows how much of the reading the main thread did itself.
 
 import ThemedImage from "../../../components/ThemedImage.astro";
@@ -98,7 +100,7 @@ A configured server puts its tool definitions in the prompt of every session, ca
    ```
 
 2. If the server is defined in the project's `.mcp.json`, delete its entry there. That file is in git, so the change reaches everyone who uses the repository.
-3. For Codex, delete the server's `[mcp_servers.<name>]` table in `~/.codex/config.toml`.
+3. For Codex, delete the server's `[mcp_servers.<name>]` table in `~/.codex/config.toml`. For Grok, remove the server in the Grok CLI's own MCP configuration: `claude mcp` and `.mcp.json` do not reach it. See [Supported agents](/ai-ledger/concepts/supported-agents/).
 4. For a server you call in a few projects only, remove it as in step 1, then run `claude mcp add` for it inside each of those projects. Without a scope option, `claude mcp add` adds the server to the current project only.
 
 Before you remove anything, read the line under the legend in the Project page's **Context**: "N deferred tokens of tools are not loaded". Deferred tools take no context. If most of the tokens of the MCP tools are deferred, removing servers frees little: fix another cause first.
@@ -118,7 +120,7 @@ Paste this into the project's `CLAUDE.md`. It adds six lines to the starting con
 - For bulk reading (many files, a long log, a broad search), use a subagent and keep only its short report.
 ```
 
-For Codex, paste it into `AGENTS.md` without the first and the third line, which name Claude Code tools.
+For Codex or Grok, paste it into the agent's instruction file, such as `AGENTS.md`, without the first and the third line, which name Claude Code tools.
 
 Keep only the lines that match the **Tool** column of **Largest tool results**:
 
@@ -134,8 +136,8 @@ Keep only the lines that match the **Tool** column of **Largest tool results**:
 
 These are habits. Each has a trigger.
 
-- When a task is done and committed, start a new session, or run `/clear` in Claude Code, before the next task.
-- When [Live](/ai-ledger/pages/live/) shows the **Context window** meter of a session in the warning color, finish the step, then run `/compact` or start a new session. As the tip says, the last 20% of the window costs the most and compacts the worst.
+- When a task is done and committed, start a new session, or run `/clear` in Claude Code, before the next task. In Codex or Grok, start a new session: `/clear` and `/compact` below are Claude Code commands.
+- When the context meter in [Live](/ai-ledger/pages/live/)'s status strip turns to the warning color, finish the step, then run `/compact` or start a new session. As the tip says, the last 20% of the window costs the most and compacts the worst.
 - When you are about to paste a log or a long file, give the agent the path instead.
 - When a session has compacted twice (two marks on that meter), start the next task in a new session. The tip **Sessions compact repeatedly** counts a session from its third compaction.
 
@@ -165,7 +167,8 @@ If a figure did not move:
 
 - [Context](/ai-ledger/pages/context/): every panel and tip used here.
 - [Project](/ai-ledger/pages/project/): the context grid, the snapshot and **Measure now**.
-- [Live](/ai-ledger/pages/live/): the **Context window** meter of a running session.
+- [Live](/ai-ledger/pages/live/): the context meter in a running session's status strip.
+- [Supported agents](/ai-ledger/concepts/supported-agents/): what each agent records, and which commands it has.
 - [Context windows and plan limit windows](/ai-ledger/concepts/windows/): what a context window is and how the app measures it.
 - [Metric glossary](/ai-ledger/reference/glossary/#context): the definition of each figure.
 - [Spend less for the same output](/ai-ledger/improve/spend-less/): cache breaks and the long-prompt tier.

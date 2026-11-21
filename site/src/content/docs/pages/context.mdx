@@ -179,7 +179,7 @@ Sessions without a measured start, a known window or a peak take no part. With n
 
 ### What fills context
 
-<ThemedImage dark={fills} light={fillsLight} alt="Context's What fills context panel: the size of tool results, summed by tool, by MCP server and by skill." />
+<ThemedImage dark={fills} light={fillsLight} alt="Context's What fills context panel: the size of tool results, summed by tool and by MCP server." />
 
 **Shows** the size of the main-thread tool results as the transcript stores them, summed by tool and by MCP server. The page marks each token count as an estimate: bytes divided by 4, rounded down. The section's How measured toggletip states how many completed calls have a known size.
 
@@ -246,11 +246,11 @@ A cache break is a main-thread request that is not the session's first turn, has
 
 ## Sheets
 
-Selecting a row, dot or session opens a sheet over the page and keeps the filters:
+Selecting a row, dot or session opens a sheet over the page and keeps the filters. [Sheets](/ai-ledger/everywhere/sheets/) describes each:
 
-- the **session sheet**, from sessions in tips, the pressure and quadrant lists, the session map and both drawers;
-- the **project sheet**, from a project row in the Starting context, Growth and Cost tables;
-- the **tool inspector**, from a tool or MCP server row in Largest contributors. It shows that tool's calls, failures and latency for the same view.
+- the [session sheet](/ai-ledger/everywhere/sheets/#session-sheet), from sessions in tips, the pressure and quadrant lists, the session map and both drawers;
+- the [project sheet](/ai-ledger/everywhere/sheets/#project-sheet), from a project row in the Starting context, Growth and Cost tables;
+- the [tool, MCP server and skill sheet](/ai-ledger/everywhere/sheets/#tool-mcp-server-and-skill-sheet), from a tool or MCP server row in Largest contributors. It shows that tool's calls, failures and latency for the same view.
 
 ## How the figures are measured
 
