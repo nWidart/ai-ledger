@@ -6,7 +6,7 @@ import type { SessionPoint } from "../../api";
 import { setOrder } from "../../colors";
 import { useState } from "react";
 import type { Quad } from "./context";
-import { SessionMap, drawnShare, logFraction, startDomain, startTicks } from "./SessionMap";
+import { QUAD_LIST_MAX, SessionMap, drawnShare, fitLines, logFraction, startDomain, startTicks } from "./SessionMap";
 
 const pt = (id: string, o: Partial<SessionPoint> = {}): SessionPoint =>
   ({ session_id: id, project: "foo", source: "claude", first_ts: "2026-11-04T10:00:00.000Z", start: 10_000, peak: 50_000, window: 200_000, turns: 8, compactions: 0, title: null, ...o });
@@ -150,6 +150,29 @@ describe("SessionMap", () => {
     expect(buttons.map(b => b.textContent)).toEqual([
       "Lean 11 session, a light start and room left", "Heavy start 00 sessions, a heavy start and room left",
       "Grew full 11 session, a light start and a peak at 80% or more", "Heavy and full 11 session, a heavy start and a peak at 80% or more"]);
+    // The visible count is hidden from the name, which says it once with its noun.
+    expect(screen.getByRole("button", { name: "Heavy and full 1 session, a heavy start and a peak at 80% or more" })).toBeTruthy();
+  });
+
+  it("wraps a quadrant's name to the room beside the 30k line", () => {
+    expect(fitLines("Grew full", 200, 11)).toEqual({ lines: ["Grew full"], fs: 11 });
+    expect(fitLines("Grew full", 40, 11)).toEqual({ lines: ["Grew", "full"], fs: 11 });
+    expect(fitLines("Heavy and full", 50, 11).lines).toEqual(["Heavy", "and", "full"]);
+    const tight = fitLines("Heavy and full", 30, 11);
+    expect(tight.fs).toBeLessThan(11);
+    expect(tight.fs).toBeGreaterThanOrEqual(11 * .8);
+  });
+
+  it("lists only the newest 20 sessions of a selected quadrant, and counts the rest", async () => {
+    const many = Array.from({ length: 25 }, (_, i) => pt(`lean${String(i).padStart(7, "0")}`, { first_ts: `2026-11-${String(i + 1).padStart(2, "0")}T10:00:00.000Z` }));
+    renderApp(<Map map={{ total: 25, points: many }} />);
+    await userEvent.click(screen.getByRole("button", { name: /^Lean/ }));
+    const list = screen.getByRole("region", { name: "Sessions in Lean" });
+    const ids = within(list).getAllByRole("button").map(b => b.getAttribute("data-session"));
+    expect(ids).toHaveLength(QUAD_LIST_MAX);
+    expect(ids[0]).toBe("lean0000024");
+    expect(ids.at(-1)).toBe("lean0000005");
+    expect(within(list).getByText(/^The 20 newest of 25 sessions on the map/)).toBeTruthy();
   });
 
   it("selects a quadrant by keyboard, lists its sessions, dims the rest and clears with Escape", async () => {
@@ -165,14 +188,30 @@ describe("SessionMap", () => {
     await userEvent.keyboard("{Escape}");
     expect(grew.getAttribute("aria-pressed")).toBe("false");
     expect(screen.queryByRole("region", { name: /^Sessions in/ })).toBeNull();
-    // Escape on the map clears a reading first, then the quadrant.
+    // One Escape on the map dismisses the reading and clears the quadrant together.
     await userEvent.click(screen.getByRole("button", { name: /^Lean/ }));
     act(() => chartOf().focus());
     fireEvent.keyDown(chartOf(), { key: "Home" });
+    expect(document.querySelector(".readout")!.textContent).not.toBe("");
     fireEvent.keyDown(chartOf(), { key: "Escape" });
-    expect(screen.getByRole("button", { name: /^Lean/ }).getAttribute("aria-pressed")).toBe("true");
-    fireEvent.keyDown(chartOf(), { key: "Escape" });
+    expect(document.querySelector(".readout")!.textContent).toBe("");
     expect(screen.getByRole("button", { name: /^Lean/ }).getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("moves focus from Clear to the quadrant it cleared, not to the page", async () => {
+    renderApp(<Map map={{ total: 3, points }} />);
+    await userEvent.click(screen.getByRole("button", { name: /^Grew full/ }));
+    const clear = screen.getByRole("button", { name: "Clear" });
+    act(() => clear.focus());
+    await userEvent.keyboard("{Enter}");
+    expect(screen.queryByRole("button", { name: "Clear" })).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: /^Grew full/ }));
+    // Escape from Clear does the same.
+    await userEvent.keyboard("{Enter}");
+    act(() => screen.getByRole("button", { name: "Clear" }).focus());
+    await userEvent.keyboard("{Escape}");
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: /^Grew full/ }));
+    expect(screen.queryAllByRole("button", { pressed: true })).toHaveLength(0);
   });
 
   it("selects the quadrant under a click away from any dot, and Clear clears it", async () => {

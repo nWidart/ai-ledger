@@ -23,4 +23,7 @@
 .session-map .qname { font-weight: 600; }
 @media (forced-colors: active) {
   .session-map .quad-on { fill: none; stroke: Highlight; stroke-width: 2; }
+  /* The pressed quadrant is filled in Highlight, so it reads apart from the others with or without the focus ring. */
+  .session-map .quads button[aria-pressed="true"] { forced-color-adjust: none; background: Highlight; border-color: Highlight; }
+  .session-map .quads button[aria-pressed="true"], .session-map .quads button[aria-pressed="true"] :is(b, .n, .what) { color: HighlightText; }
 }

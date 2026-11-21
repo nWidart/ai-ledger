@@ -54,6 +54,21 @@ export const readPoint = (p: SessionPoint): string =>
   `${sessName(p)}: ${p.project ?? "(no project)"}, ${SOURCE_LABELS[p.source]}, started ${when(p.first_ts)}: starting context ${short(p.start)} tokens, peak ${short(p.peak)} tokens, `
   + `${share(p.peak / p.window)} of a ${windowLabel(p.window)} window, ${plural(p.turns, "turn")}, ${plural(p.compactions, "compaction")}`;
 
+/** A quadrant's name as lines that fit room px at font size fs: one line when it fits, else its words wrapped, at a smaller size
+ *  (down to 80%) when even its longest word does not fit. Widths are estimated for the semibold label font. */
+export function fitLines(label: string, room: number, fs: number): { lines: string[]; fs: number } {
+  const w = (s: string, f = fs) => s.length * f * .62;
+  if (w(label) <= room) return { lines: [label], fs };
+  const words = label.split(" "), lines: string[] = [];
+  for (const word of words) {
+    const last = lines.at(-1);
+    if (last != null && w(`${last} ${word}`) <= room) lines[lines.length - 1] = `${last} ${word}`;
+    else lines.push(word);
+  }
+  const longest = Math.max(...lines.map(l => w(l)));
+  return { lines, fs: longest <= room ? fs : Math.max(fs * .8, fs * room / longest) };
+}
+
 const byDate = (a: SessionPoint, b: SessionPoint) => (a.first_ts ?? "").localeCompare(b.first_ts ?? "") || a.session_id.localeCompare(b.session_id);
 const QUAD = Object.fromEntries(QUADS.map(q => [q.id, q])) as Record<Quad, typeof QUADS[number]>;
 
@@ -66,6 +81,13 @@ const SessionTh = ({ p }: { p: SessionPoint }) => <th scope="row" className="whe
  *  onQuad selects one, or clears it with null. */
 export function SessionMap({ map, quad, onQuad }: { map: SessionsMap; quad: Quad | null; onQuad: (q: Quad | null) => void }) {
   const color = useColors(), box = useRef<HTMLDivElement>(null), tip = useRef<HTMLDivElement>(null), W = useWidth(box);
+  const quadsRef = useRef<HTMLDivElement>(null);
+  /** Clears the quadrant from its controls: Clear goes away with it, so focus moves to the quadrant that was pressed, not to the body. */
+  const clearQuad = () => {
+    const group = quadsRef.current;
+    if (group?.contains(document.activeElement)) group.querySelector<HTMLButtonElement>(`button[data-quad="${quad}"]`)?.focus();
+    onQuad(null);
+  };
   const [at, setAt] = useState<number | null>(null), pos = useRef({ x: 0, y: 0 });
   const pts = useMemo(() => map.points.slice().sort(byDate), [map.points]);
   const dom = useMemo(() => startDomain(pts.map(p => p.start)), [pts]);
@@ -87,7 +109,7 @@ export function SessionMap({ map, quad, onQuad }: { map: SessionsMap; quad: Quad
   const xTicks = startTicks(dom), yTicks = [0, .2, .4, .6, .8, 1];
   const cur = at == null ? null : pts[at]!;
   const label = `Session map: ${plural(pts.length, "session")} shown, ${num(counts.full + counts.both)} at or over 80% of their window, ${num(counts.both)} of those started at or over 30k tokens. `
-    + "Use the left and right arrow keys to step through sessions from oldest to newest, Enter to open one, Escape to dismiss it or clear the selected quadrant.";
+    + "Use the left and right arrow keys to step through sessions from oldest to newest, Enter to open one, Escape to dismiss it and clear the selected quadrant.";
   const count = map.total <= pts.length ? plural(pts.length, "session") : `Showing the newest ${num(pts.length)} of ${num(map.total)} sessions`;
   const inQuad = quad ? pts.filter(p => quadOf(p) === quad).reverse() : []; // newest first
 
@@ -118,16 +140,23 @@ export function SessionMap({ map, quad, onQuad }: { map: SessionsMap; quad: Quad
     if (b) pos.current = { x: b.left + (x(p.start) / W) * b.width, y: b.top + (y(drawnShare(p)) / W) * b.width };
   };
   const onKey = (ev: KeyboardEvent) => {
-    if (ev.key === "Escape") { if (at != null) setAt(null); else if (quad) onQuad(null); return; }
+    // One Escape dismisses the reading and clears the quadrant, so the bars never stay narrowed behind a dismissed reading.
+    if (ev.key === "Escape") { setAt(null); if (quad) onQuad(null); return; }
     if (ev.key === "Enter") { if (cur) { ev.preventDefault(); openSessionSheet(cur.session_id); } return; }
     const d = ({ ArrowLeft: -1, ArrowRight: 1, Home: -Infinity, End: Infinity } as Record<string, number>)[ev.key];
     if (d == null) return;
     ev.preventDefault();
     step(Math.max(0, Math.min(pts.length - 1, (at ?? (d > 0 ? -1 : pts.length)) + d)));
   };
-  // Each quadrant's name in its outer corner.
-  const corner = (q: typeof QUADS[number]) => ({ x: q.heavy ? W - M.r - 6 : M.l + 6, y: q.full ? M.t + 13 * ts : M.t + ih - 7 * ts, anchor: q.heavy ? "end" as const : "start" as const });
+  // Each quadrant's name in its outer corner, wrapped to the room between the plot's edge and the 30k line.
+  const x30 = x(START_LARGE_TOKENS);
+  const corner = (q: typeof QUADS[number]) => {
+    const { lines, fs } = fitLines(q.label, Math.max(1, (q.heavy ? W - M.r - x30 : x30 - M.l) - 12), 11 * ts), lh = fs * 1.15;
+    return { x: q.heavy ? W - M.r - 6 : M.l + 6, y: q.full ? M.t + 13 * ts : M.t + ih - 7 * ts - (lines.length - 1) * lh, anchor: q.heavy ? "end" as const : "start" as const, lines, fs, lh };
+  };
   const halo = { stroke: "var(--surface-1)", strokeWidth: 3, paintOrder: "stroke" } as const;
+  // The 80% line's label sits left of the 30k line, or right of it when the plot left of the line is too narrow for it.
+  const nearLeft = x30 - 4 - "80% of window".length * 11 * ts * .56 >= M.l + 2;
 
   return (
     <div className="session-map">
@@ -150,13 +179,14 @@ export function SessionMap({ map, quad, onQuad }: { map: SessionsMap; quad: Quad
           <line className="ref-x" x1={x(START_LARGE_TOKENS)} x2={x(START_LARGE_TOKENS)} y1={M.t} y2={M.t + ih} stroke="var(--text-muted)" strokeDasharray="5 4" />
           <text x={x(START_LARGE_TOKENS) + 4} y={y(.5)} fontSize={11 * ts} fill="var(--text-secondary)" {...halo}>30k start</text>
           <line className="ref-y" x1={M.l} x2={W - M.r} y1={y(NEAR_LIMIT)} y2={y(NEAR_LIMIT)} stroke="var(--text-muted)" strokeDasharray="5 4" />
-          <text x={x(START_LARGE_TOKENS) - 4} y={y(NEAR_LIMIT) + 13 * ts} textAnchor="end" fontSize={11 * ts} fill="var(--text-secondary)" {...halo}>80% of window</text>
+          <text x={nearLeft ? x30 - 4 : x30 + 4} y={y(NEAR_LIMIT) + 13 * ts} textAnchor={nearLeft ? "end" : "start"} fontSize={11 * ts} fill="var(--text-secondary)" {...halo}>80% of window</text>
           {pts.map((p, i) => <g key={p.session_id} className={"pt" + (i === at ? " on" : "") + (quad && quadOf(p) !== quad ? " out" : "")} data-id={p.session_id}>
             {p.compactions > 0 && <circle className="ring" cx={x(p.start)} cy={y(drawnShare(p))} r={RING} fill="none" stroke={color(p.project)} strokeWidth="1.5" />}
             <circle className="dot" cx={x(p.start)} cy={y(drawnShare(p))} r={R} fill={color(p.project)} fillOpacity=".75" stroke="var(--surface-1)" strokeWidth="1" />
           </g>)}
           {QUADS.map(q => { const c = corner(q); return <text key={q.id} className={"quad-label" + (q.id === quad ? " on" : "")} data-quad={q.id} x={c.x} y={c.y}
-            textAnchor={c.anchor} fontSize={11 * ts} fontWeight="600" {...halo}>{q.label}</text>; })}
+            textAnchor={c.anchor} fontSize={c.fs} fontWeight="600" {...halo}>{c.lines.length === 1 ? q.label
+              : c.lines.map((l, k) => <tspan key={k} x={c.x} dy={k ? c.lh : 0}>{l}</tspan>)}</text>; })}
           {cur && <circle className="cursor" cx={x(cur.start)} cy={y(drawnShare(cur))} r={cur.compactions > 0 ? RING + 3 : R + 4} fill="none" stroke="var(--text-primary)" strokeWidth="1.5" />}
           <rect className="hit" x={M.l} y={M.t} width={iw} height={ih} fill="transparent" onPointerMove={onMove} onPointerLeave={() => setAt(null)} onClick={onClick} />
         </svg>
@@ -171,11 +201,11 @@ export function SessionMap({ map, quad, onQuad }: { map: SessionsMap; quad: Quad
         </>}</div>
       </div>
       <div className="readout" aria-live="polite">{cur ? readPoint(cur) : ""}</div>
-      <div className="quads" role="group" aria-label="Quadrants: select one to narrow the window pressure bars to its sessions"
-        onKeyDown={ev => { if (ev.key === "Escape" && quad) { ev.stopPropagation(); onQuad(null); } }}>
+      <div className="quads" ref={quadsRef} role="group" aria-label="Quadrants: select one to narrow the window pressure bars to its sessions"
+        onKeyDown={ev => { if (ev.key === "Escape" && quad) { ev.stopPropagation(); clearQuad(); } }}>
         {QUADS.map(q => <button key={q.id} type="button" aria-pressed={quad === q.id} data-quad={q.id} onClick={() => onQuad(quad === q.id ? null : q.id)}>
-          <b>{q.label}</b> <span className="n">{num(counts[q.id])}</span><span className="sr">{plural(counts[q.id], "session")}, </span><span className="what">{q.what}</span></button>)}
-        {quad && <button type="button" className="linkish clear" onClick={() => onQuad(null)}>Clear</button>}
+          <b>{q.label}</b> <span className="n" aria-hidden="true">{num(counts[q.id])}</span><span className="sr">{plural(counts[q.id], "session")},</span> <span className="what">{q.what}</span></button>)}
+        {quad && <button type="button" className="linkish clear" onClick={clearQuad}>Clear</button>}
       </div>
       {quad && <div className="qlist" role="region" aria-label={`Sessions in ${QUAD[quad].label}`}>
         <p className="muted small">{inQuad.length > QUAD_LIST_MAX ? `The ${num(QUAD_LIST_MAX)} newest of ${plural(inQuad.length, "session")}` : plural(inQuad.length, "session")} on the map
