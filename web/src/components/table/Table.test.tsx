@@ -1,6 +1,6 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { createRef, useState } from "react";
+import { createRef, useState, type ComponentProps } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { DataTable } from "../DataTable";
 import { isSortList, SortTh, type SortBy } from "../Sort";
@@ -129,6 +129,30 @@ describe("Table types", () => {
     const capNone = <Table name="T" rows={ROWS} columns={COLS} rowId={r => r.n} sortMax={2} />;
     expect([...ok, noOnSort, oneKey, addOne, capNone]).toHaveLength(6);
   });
+
+  it("lets a wrapper forward TableProps in either form, and the props type refuses what both forms refuse", () => {
+    const list: SortBy<K>[] = [{ key: "v", desc: true }];
+    function Wrap(props: TableProps<R, K>) { return <Table {...props} />; }
+    type Props = ComponentProps<typeof Table<R, K>>;
+    const base = { name: "T", rows: ROWS, columns: COLS, rowId: (r: R) => r.n };
+    const one: Props = { ...base, sort: null, onSort: (s: SortBy<K>) => s };
+    const many: Props = { ...base, sort: list, onSort: (l: SortBy<K>[]) => l, sortAdd: true, sortMax: 2 };
+    const none: Props = base;
+    const ok = [<Wrap key={0} {...one} />, <Wrap key={1} {...many} />, <Wrap key={2} {...none} />];
+    // @ts-expect-error: a list needs its onSort
+    const listNoOnSort: TableProps<R, K> = { ...base, sort: list };
+    // @ts-expect-error: a list's onSort gets a list, not one key
+    const listOneKey: TableProps<R, K> = { ...base, sort: list, onSort: (s: SortBy<K>) => s.key };
+    // @ts-expect-error: a single sort cannot add keys
+    const oneAdd: TableProps<R, K> = { ...base, sort: null, onSort: (s: SortBy<K>) => s, sortAdd: true };
+    // @ts-expect-error: no sort, no cap
+    const capNone: TableProps<R, K> = { ...base, sortMax: 2 };
+    // @ts-expect-error: a sort needs its onSort
+    const sortNoOnSort: TableProps<R, K> = { ...base, sort: { key: "v", desc: true } };
+    // @ts-expect-error: an onSort needs its sort
+    const onSortNoSort: TableProps<R, K> = { ...base, onSort: (s: SortBy<K>) => s };
+    expect([...ok, listNoOnSort, listOneKey, oneAdd, capNone, sortNoOnSort, onSortNoSort]).toHaveLength(9);
+  });
 });
 
 describe("Table sorting by several keys", () => {
@@ -239,6 +263,33 @@ describe("Table sorting by several keys", () => {
     const mb = screen.getByRole("button", { name: "B, sort 2 of 2, descending" });
     expect([mb.closest("th")!.hasAttribute("aria-sort"), mb.querySelector(".sortmark")!.textContent]).toEqual([false, "↓2"]);
     expect(document.querySelectorAll("[aria-sort]")).toHaveLength(0);
+  });
+
+  it("re-sorts on a new sort whose ids and directions would read the same joined into a string", () => {
+    interface Q { n: string; ab: number; a: number; b: number; ma: number }
+    type QK = "n" | "a,b" | "a" | "b" | "-a";
+    const cols: Column<Q, QK>[] = [{ id: "n", header: "Name", value: r => r.n }, { id: "a,b", header: "AB", value: r => r.ab, sort: "asc" },
+      { id: "a", header: "A", value: r => r.a, sort: "asc" }, { id: "b", header: "B", value: r => r.b, sort: "asc" }, { id: "-a", header: "MA", value: r => r.ma, sort: "asc" }];
+    const rows: Q[] = [{ n: "p", ab: 3, a: 1, b: 2, ma: 1 }, { n: "q", ab: 1, a: 2, b: 1, ma: 3 }, { n: "r", ab: 2, a: 1, b: 1, ma: 2 }];
+    const t = (sort: SortBy<QK>[]) => <Table name="T" rows={rows} columns={cols} rowId={r => r.n} sort={sort} onSort={() => {}} />;
+    const { rerender } = renderApp(t([{ key: "a,b", desc: false }]));
+    expect(names()).toEqual(["q", "r", "p"]);
+    rerender(t([{ key: "a", desc: false }, { key: "b", desc: false }]));
+    expect(names()).toEqual(["r", "p", "q"]);
+    rerender(t([{ key: "a", desc: true }]));
+    expect(names()).toEqual(["q", "p", "r"]);
+    rerender(t([{ key: "-a", desc: false }]));
+    expect(names()).toEqual(["p", "r", "q"]);
+  });
+
+  it("orders rows tied on an infinite value by the next key, and keeps such ties in their order under one key", () => {
+    const rows: P[] = [{ n: "p", a: Infinity, b: 1 }, { n: "q", a: Infinity, b: 3 }, { n: "r", a: 1, b: 5 }, { n: "s", a: -Infinity, b: 1 }, { n: "t", a: -Infinity, b: 2 }];
+    const { rerender } = renderApp(<Table name="T" rows={rows} columns={PC} rowId={r => r.n} sort={[{ key: "a", desc: true }, { key: "b", desc: true }]} onSort={() => {}} />);
+    expect(names()).toEqual(["q", "p", "r", "t", "s"]);
+    rerender(<Table name="T" rows={rows} columns={PC} rowId={r => r.n} sort={{ key: "a", desc: true }} onSort={() => {}} />);
+    expect(names()).toEqual(["p", "q", "r", "s", "t"]);
+    rerender(<Table name="T" rows={rows} columns={PC} rowId={r => r.n} sort={{ key: "a", desc: false }} onSort={() => {}} />);
+    expect(names()).toEqual(["s", "t", "r", "p", "q"]);
   });
 
   it("sorts a list by a column's extra key, then by the next key", () => {

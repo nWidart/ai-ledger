@@ -83,8 +83,8 @@ interface SortList<K extends string> {
   sortMax?: number;
 }
 
-/** Table's props in either form of the sort. Table itself takes one form per use (an overload each), so that onSort reads its argument's
- *  type from the form. */
+/** Table's props in either form of the sort. Table has an overload per form, so that an inline onSort reads its argument's type from
+ *  the form, and one for these props last. */
 export type TableProps<T extends RowData, K extends string = string> = TableBase<T, K> & (SortOne<K> | SortList<K>);
 
 /** What rowProps may set on a row's tr. Not its key: the table keys rows by rowId. */
@@ -123,6 +123,8 @@ const OPT = ["opt", "opt1", "opt2"] as const;
 // Ascending only: the table flips it for a descending sort. Rows with no value are undefined, and sortUndefined puts them last.
 const compare: SortFn<typeof features, RowData> = (a, b, id) => {
   const x = a.getValue<number | string>(id), y = b.getValue<number | string>(id);
+  // Equal first: two infinities would subtract to NaN, which reads as decided and skips the later keys.
+  if (x === y) return 0;
   return typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y));
 };
 const classes = <T, K extends string>(c: Column<T, K>) =>
@@ -133,6 +135,8 @@ const classes = <T, K extends string>(c: Column<T, K>) =>
  *  way, and ties keep their order. */
 export function Table<T extends RowData, K extends string = string>(props: TableBase<T, K> & SortOne<K>): ReactElement;
 export function Table<T extends RowData, K extends string = string>(props: TableBase<T, K> & SortList<K>): ReactElement;
+// Last, for props that hold either form, as a wrapper forwarding TableProps (and what ComponentProps reads).
+export function Table<T extends RowData, K extends string = string>(props: TableProps<T, K>): ReactElement;
 export function Table<T extends RowData, K extends string = string>({ name, rows, columns, rowId, sort = null, onSort, sortAdd, sortMax, manualSort, empty,
   pinned, after, current, pick, rowProps, region, className, body }: TableProps<T, K>): ReactElement {
   const defs = useMemo(() => {
@@ -148,7 +152,7 @@ export function Table<T extends RowData, K extends string = string>({ name, rows
   // rows that come sorted were ordered by every key.
   const list = isSortList(sort) ? manualSort ? sort : sort.filter(s => defs.some(d => d.enableSorting && d.id === s.key)) : sort ? [sort] : [];
   // Keyed by the keys and directions, not the caller's objects, so an equal sort keeps TanStack's sorted rows.
-  const sortKey = list.map(s => `${s.desc ? "-" : ""}${s.key}`).join();
+  const sortKey = JSON.stringify(list.map(s => [s.key, s.desc]));
   const sorting = useMemo<SortingState>(() => list.map(s => ({ id: s.key, desc: s.desc })), [sortKey]); // eslint-disable-line react-hooks/exhaustive-deps
   // TanStack rebuilds its rows, and the values they cache per column id, only for new data: new columns get a fresh copy of the rows.
   const data = useMemo(() => rows.slice(), [rows, defs]); // eslint-disable-line react-hooks/exhaustive-deps
