@@ -299,7 +299,8 @@ def finish(ev, r):
 def state(events, now, source, last, closed=False):
     """One session's state from its events (in order), now, its source, its newest line's time and whether its
     transcript shows it closed. kind: ended, idle, wait (likely waiting for approval), tool, thinking or you (your turn).
-    long: the running call is a long one, which never turns into a wait."""
+    long: the running call is a long one, which never turns into a wait. For a source with turn marks, a call with no
+    result that started before an interrupt of its thread (a cancelled turn) is no running call."""
     def st(kind, since, tool=None, inferred=False, long=False):
         return dict(kind=kind, tool=tool, since=iso(since), inferred=inferred, long=long)
     if closed:  # the close line has no time of its own
@@ -307,6 +308,12 @@ def state(events, now, source, last, closed=False):
     if last is None or now - last > IDLE:
         return st("idle", last)
     pending = [e for e in events if e["k"] == "tool" and e["end"] is None]
+    if pending and source_of(source).turns:  # a call still open when its thread's turn was cancelled (Grok, Codex) is over
+        cut = {}
+        for e in events:
+            if e["k"] == "interrupt" and e["ts"]:
+                cut[e["lane"]] = max(cut.get(e["lane"]) or e["ts"], e["ts"])
+        pending = [e for e in pending if not (e["start"] and e["lane"] in cut and cut[e["lane"]] >= e["start"])]
     if pending:  # a likely approval wait, the oldest first, else the newest call: a newer call in a subagent hides no wait
         waits = [e for e in pending if e["tool"] in APPROVAL_TOOLS and not e["long"] and e["start"] is not None and now - e["start"] > APPROVAL]
         if waits:

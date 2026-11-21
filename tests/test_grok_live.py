@@ -118,6 +118,23 @@ class TurnStateTest(GrokLiveCase):
         self.assertEqual((one["state"]["kind"], one["state"]["inferred"]), ("you", False))
         self.assertEqual([e["k"] for e in one["events"] if e["lane"] is None][-2:], ["interrupt", "turn_end"])
 
+    def test_cancelled_turn_ends_its_open_calls(self):
+        # A call with only its in-progress update when the turn is cancelled is no running call: your turn.
+        lines = self.until(self.lines("cancelled"), "session_end")
+        call = [d for d in lines if kind(d) == "tool_call"][-1]
+        tid = grok.update(call)["toolCallId"]
+        lines = [d for d in lines if not (kind(d) == "tool_call_update" and grok.update(d).get("toolCallId") == tid
+                                          and grok.update(d).get("status"))]
+        ends = [i for i, d in enumerate(lines) if kind(d) == "turn_completed"]
+        self.assertGreater(ends[-1], lines.index(call))
+        grok.update(call)["rawInput"] = dict(command="sleep 600")
+        grok.update(call)["_meta"] = {"x.ai/tool": dict(name="run_terminal_command", kind="execute")}
+        self.store("cancelled", lines)
+        one = self.one("cancelled", self.at(lines[ends[-1]], 45))
+        self.assertEqual((one["state"]["kind"], one["state"]["inferred"]), ("you", False))
+        self.assertIn("interrupt", [e["k"] for e in one["events"]])
+        self.assertIn(tid, [e["id"] for e in one["events"] if e["k"] == "tool" and e["end"] is None])
+
     def test_slow_shell_call_is_a_likely_approval_wait(self):
         lines = self.until(self.lines("probe"), "session_end", 2)  # turn 2's sleep 60 has only its in-progress update
         self.store("probe", lines)
