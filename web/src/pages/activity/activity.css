@@ -122,21 +122,22 @@
 /* Error loops and Failed test runs: the session is the row's header and aligns as the data cell it was. */
 .pg-activity :is(#loops, #tests) tbody th[scope=row] { text-align: start; }
 /* The sessions table fits its box without scrolling sideways: the session column gives up room to the model time and
-   speed, then the least needed columns go first (opt2, then opt1, then opt). Sorted columns always show. */
-.pg-activity #sessions :is(td, th).sess { max-width: 16rem; }
+   speed, then the least needed columns go first (opt2, then opt1, then opt). Sorted columns always show. Each session width
+   leaves room for the selection column (2.25rem, the .pickcol rule below). */
+.pg-activity #sessions :is(td, th).sess { max-width: 13.75rem; }
 .pg-activity #sessions :is(td, th).sess .small { overflow: hidden; text-overflow: ellipsis; }
 @media (max-width: 78.75em) {
   .pg-activity #sessions .opt2 { display: none; }
-  .pg-activity #sessions :is(td, th).sess { max-width: 14.375rem; }
+  .pg-activity #sessions :is(td, th).sess { max-width: 12.125rem; }
 }
 /* A hidden column shown because it is sorted takes its room from the session column. */
 @media (max-width: 66em) {
   .pg-activity #sessions .opt1 { display: none; }
-  .pg-activity #sessions table:has(th.opt1.sorted) :is(td, th).sess { max-width: 12.5rem; }
+  .pg-activity #sessions table:has(th.opt1.sorted) :is(td, th).sess { max-width: 10.25rem; }
 }
 @media (max-width: 56.25em) {
-  .pg-activity #sessions :is(td, th).sess { max-width: 10.625rem; }
-  .pg-activity #sessions table:has(th.opt1.sorted) :is(td, th).sess { max-width: 9.25rem; }
+  .pg-activity #sessions :is(td, th).sess { max-width: 8.375rem; }
+  .pg-activity #sessions table:has(th.opt1.sorted) :is(td, th).sess { max-width: 7rem; }
   .pg-activity #sessions :is(td, th).name { max-width: 7.5rem; }
 }
 @media (max-width: 43.75em) {
