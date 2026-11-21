@@ -8,7 +8,7 @@ import { dayRange } from "../../format";
 import { renderApp } from "../../testing";
 import type { WorkMetric } from "./work";
 import { WorkPanel } from "./WorkChart";
-import type { WorkPick } from "./workTracks";
+import { workLayout, workModel, type WorkPick } from "./workTracks";
 
 // The work chart's one test on real ECharts (echart-activity, decision 11): every other test draws on the fake runtime
 // from test-setup. It checks that the option is one ECharts accepts and draws: the bars in the projects' colors on one
@@ -235,6 +235,35 @@ describe("by week in a narrow box", () => {
     const label = [...plot().querySelectorAll("svg text")].find(t => t.textContent === "Week of Nov 16")!;
     expect(label.getAttribute("text-anchor")).toBe("end");
     expect(Number(/translate\(([\d.]+)/.exec(label.getAttribute("transform") ?? "")?.[1] ?? label.getAttribute("x"))).toBeLessThanOrEqual(width);
+    unmount();
+    expect(errors).not.toHaveBeenCalled();
+  });
+
+  // The peak label, measured as the browser draws it, by a canvas of 5px a character at 11px ("Peak 9 commits · Week of
+  // Sep 28" is 150px; Chromium's real measure of such a label matches its drawn SVG text within 0.02px). Centred over a bar
+  // two from either end of the 275px plot, it would leave the plot by 12.5px.
+  it.each([...Array(11).keys()])("keeps the peak label inside the plot with the peak at week %d of 11, in 343px", async peak => {
+    const per = (t: string, font: string) => t.length * 5 * parseFloat(/(\d+(?:\.\d+)?)px/.exec(font)![1]!) / 11;
+    const ctx = { font: "", measureText(t: string) { return { width: per(t, this.font) }; } };
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(ctx as unknown as CanvasRenderingContext2D);
+    sized(343, "16px");
+    const data = weeks(11);
+    data.work = data.work.map((r, i) => ({ ...r, commits: i === peak ? 9 : 3 }));
+    data.daily_work = data.work;
+    const { unmount } = renderApp(<WorkPanel d={data} metric="commits" onMetric={() => {}} selected={null} onPick={() => {}} onClear={() => {}} />);
+    await waitFor(() => expect(filled("var(--series-1)")).toHaveLength(11));
+    const text = [...plot().querySelectorAll("svg text")].find(t => t.textContent?.startsWith("Peak "))!;
+    expect(text.textContent).toMatch(/^Peak 9 commits · Week of /);
+    const x = Number(/translate\(([\d.]+)/.exec(text.getAttribute("transform") ?? "")?.[1] ?? text.getAttribute("x"));
+    const w = per(text.textContent!, /font-size:\s*([\d.]+px)/.exec(text.getAttribute("style") ?? "")![1]!);
+    const left = x - { start: 0, middle: w / 2, end: w }[text.getAttribute("text-anchor") as "start" | "middle" | "end"];
+    const layout = workLayout(workModel(data, "commits", null), 1);
+    expect(left, `left end, plot from ${layout.left}px`).toBeGreaterThanOrEqual(layout.left);
+    expect(left + w, `right end, plot to ${343 - layout.right}px`).toBeLessThanOrEqual(343 - layout.right);
+    // Over its bar or beside it: the peak bar's middle is under the label.
+    const bar = filled("var(--series-1)").map(p => box(p.getAttribute("d")!)).sort((a, b) => a.top - b.top)[0]!;
+    expect(bar.cx).toBeGreaterThanOrEqual(left);
+    expect(bar.cx).toBeLessThanOrEqual(left + w);
     unmount();
     expect(errors).not.toHaveBeenCalled();
   });

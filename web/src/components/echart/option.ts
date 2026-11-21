@@ -60,17 +60,37 @@ export const valueAxis = (env: OptionEnv, { max, step, format }: { max: number; 
   axisLabel: { color: env.ink.muted, fontSize: size(env), margin: 6 * env.textScale, formatter: (v: number) => format(v) },
 });
 
-/** Where a label over a band goes, by the rule of `peakLabelAt` in chart.ts: centred over the band's centre (cx), or, within
- *  56px (times the text scale) of the plot's edge, anchored at the bar's edge and kept inside the plot. */
-function labelAnchor(cx: number, bar: number, plot: { x: number; width: number }, s: number): { x: number; align: "left" | "center" | "right" } {
+/** Where a label `width` px wide over a band goes, or null when the plot is narrower than the label. First by the rule of
+ *  `peakLabelAt` in chart.ts: centred over the band's centre (cx), or, within 56px (times the text scale) of the plot's
+ *  edge, anchored at the bar's edge. That rule assumes a short label: a long one ("Peak 66 sessions · Week of Nov 2" is
+ *  170px at 11px) centred on a bar 57 to 85px from an edge, or anchored at a bar's edge in a narrow plot, would leave
+ *  the plot. So the label then slides along, its anchor kept, until its whole text is inside the plot; a label that fits
+ *  where the rule puts it stays there. */
+export function labelAnchor(cx: number, bar: number, plot: { x: number; width: number }, s: number, width: number):
+  { x: number; align: "left" | "center" | "right" } | null {
+  if (width > plot.width) return null;
   const near = 56 * s, right = plot.x + plot.width;
-  if (cx < plot.x + near) return { x: Math.max(plot.x, cx - bar / 2), align: "left" };
-  if (cx > right - near) return { x: Math.min(right, cx + bar / 2), align: "right" };
-  return { x: cx, align: "center" };
+  const at = cx < plot.x + near ? { x: Math.max(plot.x, cx - bar / 2), align: "left" as const }
+    : cx > right - near ? { x: Math.min(right, cx + bar / 2), align: "right" as const }
+    : { x: cx, align: "center" as const };
+  const lead = { left: 0, center: width / 2, right: width }[at.align]; // from the text's left end to its anchor
+  return { x: Math.min(Math.max(at.x - lead, plot.x), right - width) + lead, align: at.align };
 }
 
-/** A one-item custom series: a haloed label over the point (index, value), such as a peak, above the lines. It follows the
- *  zoom: a point outside the days shown is filtered out and draws nothing. */
+let measure: CanvasRenderingContext2D | null | undefined;
+/** The width in px of a line of text in a canvas font: the measure zrender lays its text out by (platformApi.measureText
+ *  in zrender/lib/core/platform.js), on a canvas of its own, so this module keeps out of the ECharts chunk. In Chromium it
+ *  matches the drawn SVG text within 0.02px. jsdom has no canvas (test-setup): there it estimates 0.6em a character. */
+function textWidth(text: string, font: string, fontSize: number): number {
+  measure ||= document.createElement("canvas").getContext("2d");
+  if (!measure) return text.length * fontSize * .6;
+  measure.font = font;
+  return measure.measureText(text).width;
+}
+
+/** A one-item custom series: a haloed label over the point (index, value), such as a peak, above the lines, kept inside the
+ *  plot (labelAnchor); in a plot narrower than its text it draws nothing. It follows the zoom: a point outside the days
+ *  shown is filtered out and draws nothing, and the label stays inside the plot of the days shown. */
 export const pointLabel = (env: OptionEnv, { index, value, text }: { index: number; value: number; text: string }): CustomSeriesOption => ({
   type: "custom",
   data: [[index, value]],
@@ -80,7 +100,10 @@ export const pointLabel = (env: OptionEnv, { index, value, text }: { index: numb
   renderItem: (params, api) => {
     const [cx, cy] = api.coord([api.value(0), api.value(1)]) as [number, number];
     const band = (api.size!([1, 0]) as number[])[0]!, bar = Math.max(1, band - Math.min(4, band * .25));
-    const { x, align } = labelAnchor(cx, bar, params.coordSys as unknown as { x: number; width: number }, env.textScale);
+    const width = textWidth(text, `600 ${size(env)}px ${FONT}`, size(env));
+    const at = labelAnchor(cx, bar, params.coordSys as unknown as { x: number; width: number }, env.textScale, width);
+    if (!at) return null;
+    const { x, align } = at;
     return {
       type: "text",
       emphasisDisabled: true, // no highlight state, as the stack has none

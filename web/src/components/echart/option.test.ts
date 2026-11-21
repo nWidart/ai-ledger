@@ -1,9 +1,9 @@
 import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { CustomSeriesRenderItemAPI, CustomSeriesRenderItemParams } from "./echarts";
 import { dayAxis, peakLabelAt } from "../chart";
 import {
-  baseOption, categoryAxis, FRAME_AXES, lineSeries, pointLabel, selectionMark, SLIDER_ROOM, sliderTrend, trackAxes, trackLayout,
+  baseOption, categoryAxis, FRAME_AXES, labelAnchor, lineSeries, pointLabel, selectionMark, SLIDER_ROOM, sliderTrend, trackAxes, trackLayout,
   tracksOption, valueAxis, zoomSlider, type OptionEnv,
 } from "./option";
 import { sliderShadowOf } from "./testing";
@@ -121,6 +121,80 @@ describe("pointLabel", () => {
     const series = pointLabel(env(), { index: 3, value: 5, text: "x" });
     expect(series).toMatchObject({ type: "custom", data: [[3, 5]], silent: true });
     expect(series.z).toBeGreaterThan(2);
+  });
+
+  // The label measured in its drawn font: a canvas whose text is 5px a character at 11px (the long label below is 160px,
+  // as "Peak 66 sessions · Week of Nov 2" is 170px in Chromium), drawn over 11 weekly bars in a 343px box's 275px plot.
+  it("measures the text in its font, keeps it inside the plot at every bar, and draws none in a plot narrower than it", () => {
+    const fonts: string[] = [];
+    const ctx = { font: "", measureText(t: string) { fonts.push(this.font); return { width: t.length * 5 * parseFloat(/(\d+)px/.exec(this.font)![1]!) / 11 }; } };
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(ctx as unknown as CanvasRenderingContext2D);
+    const long = "Peak 66 sessions · Week of Nov 2", plot = { x: 52, y: 20, width: 275, height: 120 }, band = plot.width / 11;
+    const drawAt = (s: number, i: number) => {
+      const series = pointLabel(env({ textScale: s }), { index: i, value: 5, text: long });
+      const api = { value: (dim: number) => [i, 5][dim], coord: ([x]: number[]) => [plot.x + (x! + .5) * band, 40], size: () => [band, 0] };
+      return series.renderItem!({ coordSys: { type: "cartesian2d", ...plot } } as unknown as CustomSeriesRenderItemParams, api as unknown as CustomSeriesRenderItemAPI) as
+        { style: { x: number; align: "left" | "center" | "right" } } | null;
+    };
+    for (let i = 0; i < 11; i++) {
+      const el = drawAt(1, i)!, lead = { left: 0, center: 80, right: 160 }[el.style.align];
+      expect(el.style.x - lead, `bar ${i}: left end`).toBeGreaterThanOrEqual(plot.x);
+      expect(el.style.x - lead + 160, `bar ${i}: right end`).toBeLessThanOrEqual(plot.x + plot.width);
+    }
+    for (let i = 0; i < 11; i++) expect(drawAt(2, i), `bar ${i} at scale 2: a 320px label in a 275px plot`).toBeNull();
+    expect(fonts).toContain(`600 11px ${baseOption(env()).textStyle.fontFamily}`);
+    expect(fonts).toContain(`600 22px ${baseOption(env()).textStyle.fontFamily}`);
+  });
+});
+
+describe("labelAnchor", () => {
+  /** The rule of peakLabelAt, which assumes a short label: where a label goes when it fits there. */
+  const rule = (cx: number, bar: number, plot: { x: number; width: number }, s: number) =>
+    cx < plot.x + 56 * s ? { x: Math.max(plot.x, cx - bar / 2), align: "left" }
+    : cx > plot.x + plot.width - 56 * s ? { x: Math.min(plot.x + plot.width, cx + bar / 2), align: "right" }
+    : { x: cx, align: "center" };
+  /** A label's two ends, from its anchor. */
+  const ends = ({ x, align }: { x: number; align: string }, w: number) => {
+    const left = x - (align === "left" ? 0 : align === "center" ? w / 2 : w);
+    return [left, left + w] as const;
+  };
+  /** n bars over a plot from x 52, as a category axis lays them out. */
+  const bars = (width: number, n = 11) => {
+    const band = width / n;
+    return { plot: { x: 52, width }, bar: Math.max(1, band - Math.min(4, band * .25)), cx: (i: number) => 52 + (i + .5) * band };
+  };
+  // Cost's "Peak $53 · Nov 4" is 86px at 11px, the work chart's "Peak 66 sessions · Week of Nov 2" 170px; a 343px box has
+  // a 275px plot, a 1440px window a 1372px one. The peak at the first bar, early, two in, the middle, late and the last.
+  const cases = [275, 1372].flatMap(pw => [1, 2].flatMap(s => [86, 170].flatMap(w => [0, 1, 2, 5, 8, 9, 10].map(i => ({ pw, s, w: w * s, i })))));
+
+  it.each(cases)("puts a $w px label inside a $pw px plot at scale $s, the peak at bar $i, or none when it cannot fit", ({ pw, s, w, i }) => {
+    const { plot, bar, cx } = bars(pw), at = labelAnchor(cx(i), bar, plot, s, w);
+    if (w > pw) return void expect(at).toBeNull();
+    const [l, r] = ends(at!, w);
+    expect(l).toBeGreaterThanOrEqual(plot.x);
+    expect(r).toBeLessThanOrEqual(plot.x + pw);
+    // Where the old rule's place fits, the label stays there; elsewhere it keeps the rule's anchor and slides inside.
+    const old = rule(cx(i), bar, plot, s), [ol, or] = ends(old, w);
+    if (ol >= plot.x && or <= plot.x + pw) expect(at).toEqual(old);
+    else expect(at!.align).toBe(old.align);
+  });
+
+  it("moves the long label that the old rule put out of a phone's plot, by just as much as it left", () => {
+    const { plot, bar, cx } = bars(275);
+    // Two bars in, the label centred over the bar would start 22.5px left of the plot; two from the end, end 22.5px right.
+    expect(ends(rule(cx(2), bar, plot, 1), 170)[0]).toBeCloseTo(29.5);
+    expect(labelAnchor(cx(2), bar, plot, 1, 170)).toEqual({ x: 52 + 85, align: "center" });
+    expect(ends(rule(cx(8), bar, plot, 1), 170)[1]).toBeCloseTo(349.5);
+    expect(labelAnchor(cx(8), bar, plot, 1, 170)).toEqual({ x: 327 - 85, align: "center" });
+    // The edge bars' labels, anchored at the bar's outer edge, fit as they are.
+    expect(labelAnchor(cx(0), bar, plot, 1, 170)).toEqual(rule(cx(0), bar, plot, 1));
+    expect(labelAnchor(cx(10), bar, plot, 1, 170)).toEqual(rule(cx(10), bar, plot, 1));
+  });
+
+  it("fills a plot exactly as wide as the label, and draws none in a narrower one", () => {
+    const { plot, bar, cx } = bars(275);
+    for (const i of [0, 5, 10]) expect(ends(labelAnchor(cx(i), bar, plot, 1, 275)!, 275)).toEqual([52, 327]);
+    expect(labelAnchor(cx(5), bar, plot, 1, 275.5)).toBeNull();
   });
 });
 

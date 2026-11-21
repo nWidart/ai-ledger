@@ -216,14 +216,14 @@ describe("workModel", () => {
     expect(workOption(model(gap), env()).dataZoom).toBeUndefined();
   });
 
-  it("labels the peak bar, and draws no label at a zero peak or without room at a large text size", () => {
+  it("labels the peak bar at any width and text size, and draws no label at a zero peak", () => {
     expect(peakText(model(weekly))).toBe("Peak 5 commits · Week of Oct 19");
     expect(byId(model(weekly), "peak")).toMatchObject({ xAxisIndex: 1, yAxisIndex: 1 });
     expect(peakText(model(gap, "prompts"))).toBe("Peak 1 prompt · Nov 3");
     expect(peakText(model(idle, "sessions"))).toBe("Peak 1 session · Nov 4");
     expect(byId(model(gap), "peak")).toBeUndefined(); // no commits
-    expect(byId(model(weekly), "peak", env({ textScale: 2, width: 600 }))).toBeUndefined();
-    expect(byId(model(weekly), "peak", env({ textScale: 2, width: 800 }))).toBeDefined();
+    // pointLabel keeps it inside the plot, or draws none in a plot narrower than it (option.test.ts).
+    expect(peakText(model(weekly), env({ textScale: 2, width: 600 }))).toBe("Peak 5 commits · Week of Oct 19");
   });
 
   it("labels the frame's axis by day or week, and hides the tracks' axes", () => {

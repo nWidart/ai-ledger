@@ -23,6 +23,8 @@
 //   weeks"; the store's own 11 weeks draw no slider;
 // - by week in a 343px box (the store's 11 weeks), and at 32px text in a 900px window (22 weeks): the edges and the labels
 //   of checks.mjs, a click on the newest week selects it with its frame centred on its bar, and its rate point is under it;
+// - in a 343px box, with the peak two weeks in, then two weeks into the window the plus key zooms to: the labels fit and
+//   the peak label is inside the plot;
 // - newer figures keep the selection, and say nothing; the bars grow once, and not on a theme change, a measure switch, a
 //   zoom out or a refresh.
 import { LOCALE, PHONE, W, line, sleep, until } from "./harness.mjs";
@@ -487,6 +489,37 @@ export async function activity(h) {
     await wk11.shot(p11, "narrow");
     await narrow(wk11, p11, `a ${b11}px box, ${buckets(real).length} weeks`, "narrow");
     await p11.done();
+
+    // The peak label ("Peak 66 sessions · Week of Nov 2" is 170px) keeps inside the plot wherever the peak is: centred over
+    // a bar two from the plot's edge it once left it, by the right in the store's own weeks. Here the peak is two weeks in,
+    // then two weeks into the window the plus key zooms to (the newest 11 of 22 weeks).
+    const peakAt = (d, k) => {
+      const wk = buckets(d)[k];
+      for (const list of ["work", "daily_work"]) if (Array.isArray(d[list])) d[list] = d[list].map(r => (r.day === wk ? { ...r, sessions: r.sessions + 50 } : r));
+      const i = d.work_projects.findIndex(r => r.day === wk);
+      if (i >= 0) d.work_projects[i] = { ...d.work_projects[i], sessions: d.work_projects[i].sessions + 50 };
+      return d;
+    };
+    const peakIn = async (page, what) => {
+      const { t, g } = await ev(page, () => ({ t: window.chartfit.texts().find(x => x.text.startsWith("Peak ")), g: window.chartfit.grid() }));
+      line(`${what}: the peak label is drawn inside the plot`, !!t && t.l >= g.l - .5 && t.r <= g.r + .5,
+        t ? `"${t.text}" ${t.l.toFixed(1)}..${t.r.toFixed(1)}px, plot ${g.l.toFixed(1)}..${g.r.toFixed(1)}px` : "no peak label");
+    };
+    const early = chart(h, { ...weekly, points: buckets(real), answer: d => peakAt(d, 2) });
+    const pe = await early.open(`${PHONE}px window, 11 weeks, the peak two weeks in`, phone);
+    await early.shot(pe, "narrow-peak-early");
+    await early.labelsFit(pe, `a ${b11}px box, the peak two weeks in`);
+    await peakIn(pe, `a ${b11}px box, the peak two weeks in`);
+    await pe.done();
+    const zoomed = chart(h, { ...weekly, points: WEEKS, answer: d => peakAt(older(d), WEEKS.length - 9) });
+    const pz = await zoomed.open(`${PHONE}px window, ${WEEKS.length} weeks, zoomed, the peak two weeks into the window`, phone);
+    await box(pz).focus();
+    await pz.keyboard.press("+");
+    const shownZ = await until(() => drawn(pz), n => n === 11);
+    await zoomed.shot(pz, "narrow-peak-zoomed");
+    await zoomed.labelsFit(pz, `a ${b11}px box zoomed to ${shownZ} of ${WEEKS.length} weeks, the peak two weeks into them`);
+    await peakIn(pz, `a ${b11}px box zoomed to ${shownZ} of ${WEEKS.length} weeks, the peak two weeks into them`);
+    await pz.done();
     // At 32px text the newest week's label, centred, reached the box's edge in a 900px window, not in a phone's.
     const p22 = await wk.open(`900px window, ${WEEKS.length} weeks, 32px root`, { viewport: { width: 900, height: 900 } }, root32);
     const b22 = await ev(p22, () => Math.round(window.chartfit.box().w));

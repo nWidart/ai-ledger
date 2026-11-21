@@ -136,10 +136,9 @@ export function workOption(m: WorkModel, env: ChartEnv): EChartsOption {
   if (m.selected != null) series.push(selectionMark(env, { index: m.selected }));
   series.push(stackSeries({ kinds: m.kinds, values: m.values, hatched: () => false, env, ...bars }));
   if (m.hasRate) series.push(lineSeries(env, { id: "rate", data: m.drawn, color: FAIL, dots: i => m.dots[i], ...trackAxes(1) }));
-  // With the text scaled up, a plot under 300px times the scale has no room for the peak label, as on Cost.
-  const room = s === 1 || env.width - layout.left - layout.right >= 300 * s;
+  // The label keeps inside the plot, and a plot narrower than its text draws none (pointLabel), as on Cost.
   const pk = m.peak;
-  if (pk != null && m.totals[pk]! > 0 && room) {
+  if (pk != null && m.totals[pk]! > 0) {
     const text = `Peak ${plural(m.totals[pk]!, M.one)} · ${bucketLabel(m.buckets[pk]!.day, m.week)}`;
     series.push({ ...pointLabel(env, { index: pk, value: m.totals[pk]!, text }), ...bars, id: "peak" });
   }
