@@ -64,6 +64,7 @@ export const DOCS = {
   "reference/glossary": { path: "reference/glossary/", title: "Metric glossary" },
   "reference/cli": { path: "reference/cli/", title: "CLI and options" },
   "reference/configuration": { path: "reference/configuration/", title: "Configuration" },
+  "reference/metrics": { path: "reference/metrics/", title: "Prometheus metrics and Grafana dashboard" },
   "reference/storage": { path: "reference/storage/", title: "Data files and storage locations" },
   "reference/troubleshooting": { path: "reference/troubleshooting/", title: "Troubleshooting and FAQ" },
 
