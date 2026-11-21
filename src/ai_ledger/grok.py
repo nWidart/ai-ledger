@@ -22,7 +22,10 @@ LOG = "updates.jsonl"
 
 
 def files(root):
-    return sorted(glob.glob(os.path.join(root, "sessions", "*", "*", LOG)))
+    """The session logs under root, by session id and then path: ids are UUIDv7, so a parent comes before the subagents
+    it spawned, whatever their working folders. A child read first would be a session of its own until its parent's
+    subagent_spawned line is stored (GrokDeriver.adopt then moves it)."""
+    return sorted(glob.glob(os.path.join(root, "sessions", "*", "*", LOG)), key=lambda p: (ids(p)[0], p))
 
 
 @lru_cache(maxsize=4096)
@@ -311,6 +314,8 @@ class GrokDeriver(store.Deriver):
                 self.followup(said[:500])
         elif t == "hook_execution":
             self.hook(u, when)
+        elif t == "subagent_spawned":
+            self.adopt(string(u.get("child_session_id")))
         elif t == "user_message_chunk" and not self.sub:
             pid = stored_prompt(self.sid, self.prompt_of(d))
             if pid and pid not in self.prompts:
@@ -329,6 +334,21 @@ class GrokDeriver(store.Deriver):
             s["compactions"] += 1
             if when:
                 s["first_compaction"] = min(s["first_compaction"] or when, when)
+
+    def adopt(self, child):
+        """Make spawned session child this session's subagent work when its lines were stored as a session of their own,
+        as happens when its log was read before this one: its lines move here as a rebuild places them, its tool calls
+        and hooks move here as subagent work, and its session, requests, runs, prompts and titles go (this session's
+        turns already hold its usage). Nothing to do for a child placed already or not read yet."""
+        cur = self.cur
+        if not child or child == self.sid or not cur.execute(
+                "SELECT 1 FROM raw_lines WHERE session_id = ? AND NOT subagent LIMIT 1", [child]).fetchone():
+            return
+        cur.execute("UPDATE raw_lines SET session_id = ?, subagent = true WHERE session_id = ?", [self.sid, child])
+        for table in ("sessions", "requests", "session_runs", "prompts", "session_titles"):
+            cur.execute(f"DELETE FROM {table} WHERE session_id = ?", [child])
+        cur.execute("UPDATE tool_calls SET session_id = ?, subagent = true WHERE session_id = ?", [self.sid, child])
+        cur.execute("UPDATE hooks SET session_id = ? WHERE session_id = ?", [self.sid, child])
 
     def tool_call(self, u, ts):
         tid = u["toolCallId"]

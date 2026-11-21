@@ -317,6 +317,54 @@ class SubagentTest(GrokCase):
         self.assertEqual(self.q("SELECT DISTINCT session_id FROM hooks"), [(sid,)])
         self.assertEqual(self.q("SELECT count(*) FROM session_runs"), [(1,)])  # the parent's one finished turn
 
+    def child_first(self):
+        """The probe with the child's log under a working folder that sorts before the parent's; returns its path."""
+        _, child = self.put("probe")
+        moved = os.path.join(self.home, "sessions", "%2Fa", CHILD, grok.LOG)
+        os.makedirs(os.path.dirname(moved))
+        shutil.move(child, moved)
+        shutil.rmtree(os.path.dirname(child))
+        return moved
+
+    def assertOneSession(self, parent):
+        sid = SESSION["probe"]
+        self.assertEqual(self.q("SELECT session_id FROM sessions"), [(sid,)])
+        self.assertEqual(self.q("SELECT count(*), bool_or(subagent) FROM requests"), [(3, False)])
+        got, want = self.q(f"SELECT {SUMS} FROM requests")[0], reported(turns(parent))
+        self.assertEqual(got[:5], want[:5])
+        self.assertAlmostEqual(got[5], want[5], places=9)
+        self.assertEqual(self.q("SELECT DISTINCT session_id FROM tool_calls"), [(sid,)])
+        self.assertEqual(self.q("SELECT session_id, tool FROM tool_calls WHERE subagent"), [(sid, "read_file")])
+        self.assertEqual(self.q("SELECT DISTINCT session_id FROM hooks"), [(sid,)])
+        self.assertEqual(self.q("SELECT count(*) FROM prompts"), [(2,)])
+        self.assertEqual(self.q("SELECT count(*) FROM session_runs"), [(1,)])
+
+    def test_files_sort_by_session_across_working_folders(self):
+        moved = self.child_first()
+        parent = os.path.join(self.home, "sessions", "%2Fwork%2Fapp", SESSION["probe"], grok.LOG)
+        self.assertEqual(grok.files(self.home), [parent, moved])
+        self.ingest()  # one ingest: the parent's subagent_spawned line is stored before the child's file is placed
+        self.assertOneSession(parent)
+        self.assertEqual(self.q("SELECT DISTINCT session_id, subagent FROM raw_lines WHERE file = ?", moved), [(SESSION["probe"], True)])
+
+    def test_child_read_alone_first_is_moved_to_its_parent(self):
+        parent = os.path.join(self.home, "sessions", "%2Fwork%2Fapp", SESSION["probe"], grok.LOG)
+        self.put("probe")
+        aside = os.path.join(self.tmp, "parent.jsonl")
+        shutil.move(parent, aside)
+        self.ingest()  # the child alone: a session of its own until its parent's spawn line is stored
+        self.assertEqual(self.q("SELECT session_id FROM sessions"), [(CHILD,)])
+        self.assertGreater(self.q("SELECT count(*) FROM requests WHERE session_id = ?", CHILD)[0][0], 0)
+        shutil.move(aside, parent)
+        self.ingest()
+        self.assertOneSession(parent)
+        self.assertEqual(self.q("SELECT DISTINCT session_id, subagent FROM raw_lines WHERE file <> ?", parent), [(SESSION["probe"], True)])
+        healed = {t: self.q(f"SELECT * FROM {t} ORDER BY ALL") for t in store.DERIVED}
+        placed = self.q("SELECT key, session_id, subagent FROM raw_lines ORDER BY key")
+        store.rebuild(self.con)
+        self.assertEqual({t: self.q(f"SELECT * FROM {t} ORDER BY ALL") for t in store.DERIVED}, healed)
+        self.assertEqual(self.q("SELECT key, session_id, subagent FROM raw_lines ORDER BY key"), placed)
+
     def test_session_spawned_by_none_is_its_own(self):
         self.put("long-turn")
         self.ingest()
