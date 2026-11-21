@@ -1399,6 +1399,19 @@ class WindowCurveTest(AnalysisCase):
         for h in history:
             self.assertEqual(self.curve(h["start"], now, resets_at=h["resets_at"])["window"], h)
 
+    def test_estimated_windows_step_back_from_the_earliest_measured_one(self):
+        # A Dec 7 poll lists the Dec 13 reset (a window from Dec 6) before the Dec 10 one (from Dec 3, 3 days earlier). The
+        # estimates belong on the Dec 3 window's grid: Nov 26 to Dec 3, then Nov 19 to Nov 26, with no gap before Dec 3.
+        day = lambda d, m=12: datetime(2026, m, d, 5)
+        self.spend("claude", "claude-opus-5-5", (day(20, 11), 40), (day(28, 11), 40), (day(4), 40))
+        self.snap("claude", "weekly_all", day(7), 1, resets=day(13))
+        self.snap("claude", "weekly_all", day(7), 5, resets=day(10))
+        history = self.payload(day(11))["history"]
+        self.assertEqual([(h["start"], h["closed_at"]) for h in history if h["estimated"]],
+                         [("2026-11-26T05:00:00.000Z", "2026-12-03T05:00:00.000Z"), ("2026-11-19T05:00:00.000Z", "2026-11-26T05:00:00.000Z")])
+        measured = min(h["start"] for h in history if not h["estimated"])
+        self.assertEqual(measured, "2026-12-03T05:00:00.000Z")  # the last estimate ends where the earliest measured window starts
+
     def test_a_start_a_little_off_finds_the_window_and_a_far_one_does_not(self):
         self.measured_week()
         now = T0 + timedelta(days=10)

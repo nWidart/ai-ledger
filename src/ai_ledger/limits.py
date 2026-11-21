@@ -560,20 +560,19 @@ def series(w, usage, cal, end):
 
 
 def earlier_windows(ws, usage, cal, horizon):
-    """Estimated windows before a limit's first snapshot, stepped back by its window length to horizon: the history of
-    a limit from before the app saw it (Claude Code before polling started). Windows with no counted usage are left out, and
-    so are those over the span of a measured window: the first window listed need not be the earliest (one poll can list a
-    later reset first), and an estimate there would repeat a window the snapshots already give."""
-    first = ws[0]
+    """Estimated windows before a limit's earliest measured window, stepped back by its window length to horizon: the
+    history of a limit from before the app saw it (Claude Code before polling started). They step from the earliest start,
+    not from the first window listed (one poll can list a later reset first), so they keep the provider's reset grid and
+    never overlap a measured window. Windows with no counted usage are left out."""
+    first = min(ws, key=lambda m: m.start)
     if not first.minutes or cal is None or not fixed(first.provider, first.minutes):
         return []
     out, end = [], first.start
     source = PROVIDERS[first.provider].source if first.provider in PROVIDERS else first.provider
-    measured = [(m.start, m.closed_at or m.resets_at) for m in ws]
     while end > horizon:
         w = Window(first.key, first.minutes, end, estimated=True)
         cost = usage.cost(source, w.scope, w.start, end)
-        if cost > 0 and not any(a < end and w.start < b for a, b in measured):
+        if cost > 0:
             w.closed_at, w.final = end, min(100.0, cost / cal["per_pct"])
             if w.final >= 100:  # when the estimate first reached the cap, to the step
                 t, step = w.start, step_of(w)
