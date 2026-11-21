@@ -257,7 +257,7 @@
       "id": 8,
       "options": {
         "code": { "language": "plaintext", "showLineNumbers": false, "showMiniMap": false },
-        "content": "**Counters are store totals.** Every `_total` series is the all-time total in the AI Ledger store, so an instance's first scrape is one large step. Charts use `increase()` per interval: a window that holds an instance's first scrape can overstate, and a new label set's first sample is its baseline. *Spend all time* reads the totals directly.\n\n**Cost is an estimate** at list prices for Claude Code and Codex; for Grok it is the cost Grok reported. Requests with neither count as unpriced and add nothing to spend.\n\n**Filters:** tool-call duration filters by instance and source only. Active sessions include automated sessions, so the automated filter does not apply to them. Limit windows and health filter by instance only.",
+        "content": "**Counters are store totals.** Every `_total` series is the all-time total in the AI Ledger store, so an instance's first scrape is one large step. Charts use `increase()` per interval: a window that holds an instance's first scrape can overstate, and a new label set's first sample is its baseline. *Spend all time* reads the totals directly.\n\n**Cost is an estimate** at list prices for Claude Code and Codex; for Grok it is the cost Grok reported. Requests with neither count as unpriced and add nothing to spend.\n\n**Filters:** tool-call duration filters by instance, source and workload only. Active sessions include automated sessions, so the automated filter does not apply to them. Limit windows and health filter by instance only.",
         "mode": "markdown"
       },
       "title": "About these figures",
@@ -567,7 +567,7 @@
     },
     {
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "description": "95th percentile duration of finished tool calls per interval, by tool. The duration histogram has only source and tool labels, so the project, workload and automated filters do not apply.",
+      "description": "95th percentile duration of finished tool calls per interval, by tool. The duration histogram has only source, workload and tool labels, so the project and automated filters do not apply.",
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "palette-classic" },
@@ -594,7 +594,7 @@
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum by (le, tool) (rate(ai_ledger_tool_call_duration_seconds_bucket{instance=~\"$instance\", source=~\"$source\"}[$__interval])))",
+          "expr": "histogram_quantile(0.95, sum by (le, tool) (rate(ai_ledger_tool_call_duration_seconds_bucket{instance=~\"$instance\", source=~\"$source\", workload=~\"$workload\"}[$__interval])))",
           "legendFormat": "{{tool}}",
           "range": true,
           "refId": "A"
