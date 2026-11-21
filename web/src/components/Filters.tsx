@@ -32,7 +32,7 @@ export interface FiltersProps extends Partial<FilterSet> {
 }
 
 const rangeLabel = (r: number) => (r ? `${r}d` : "All");
-export const SOURCE_LABELS: Record<Source, string> = { claude: "Claude Code", codex: "Codex" };
+export const SOURCE_LABELS: Record<Source, string> = { claude: "Claude Code", codex: "Codex", grok: "Grok" };
 /** A view in words for banners and status lines: "atlas-api, Codex, last 30 days". */
 export const viewName = (v: { project: string; range: number; source: Source | "" }) =>
   [v.project || "all projects", v.source && SOURCE_LABELS[v.source], v.range ? `last ${v.range} days` : "all time"].filter(Boolean).join(", ");

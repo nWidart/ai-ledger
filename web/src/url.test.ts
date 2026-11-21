@@ -75,7 +75,8 @@ describe("parseView", () => {
   it("reads a known source, and an unknown one as All", () => {
     expect(view("?source=codex").source).toBe("codex");
     expect(view("?source=claude").source).toBe("claude");
-    expect(view("?source=grok").source).toBe("");
+    expect(view("?source=grok").source).toBe("grok");
+    expect(view("?source=gemini").source).toBe("");
     expect(view("").source).toBe("");
   });
   it("reads the inspected tool, MCP server and skill", () => {
@@ -119,10 +120,11 @@ describe("validateRoot", () => {
     expect(validateRoot({ range: 0 }).range).toBe(0);
   });
   it("drops an unknown source, read as All", () => {
-    const s = validateRoot({ source: "grok" });
+    const s = validateRoot({ source: "gemini" });
     expect("source" in s).toBe(false);
     expect(rootState(s).source).toBe("");
     expect(validateRoot({ source: "codex" }).source).toBe("codex");
+    expect(validateRoot({ source: "grok" }).source).toBe("grok");
   });
   it("reads auto=1 and true only", () => {
     expect("auto" in validateRoot({ auto: "0" })).toBe(false);

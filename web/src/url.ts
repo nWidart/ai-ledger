@@ -9,7 +9,9 @@ import type { Source } from "./api";
 export const RANGES = [7, 14, 30, 90, 0] as const;
 export type Range = (typeof RANGES)[number];
 export const DEFAULT_RANGE: Range = 30;
-export const SOURCES = ["claude", "codex"] as const satisfies readonly Source[];
+export const SOURCES = ["claude", "codex", "grok"] as const satisfies readonly Source[];
+/** Whether a source filter's sessions can have /insights judgments: All and Claude Code. Any other source alone has none. */
+export const judged = (source: Source | ""): boolean => source === "" || source === "claude";
 
 /** The keys every page shares and the sheets that open over it, typed; a key is present only when it holds a valid value,
  *  so range says whether the URL names one. A type, not an interface, so a value of it can be given to formatSearch as it is.

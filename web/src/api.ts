@@ -82,7 +82,7 @@ export interface Previous {
 export interface Change { project: string | null; cost: number | null; prev_cost: number | null; delta: number | null; new: boolean }
 
 /** The coding agent a session came from; "" in a filter is every source. */
-export type Source = "claude" | "codex";
+export type Source = "claude" | "codex" | "grok";
 /** One agent's share of the month's run rate. */
 export interface RunRateSource { source: Source; month_cost: number; daily_avg: number; projected: number }
 
