@@ -1266,6 +1266,31 @@ describe("Activity's view switch", () => {
     expect(within(screen.getByRole("group", { name: "Source" })).getByRole("button", { name: "Claude Code" }).getAttribute("aria-pressed")).toBe("true");
   });
 
+  // The view picked first loads with a placeholder; the switch stays drawn over it, with the focus on it and the tab order intact.
+  it.each([
+    ["Judgments", "?range=30", "/api/insights", /Loading judgments/],
+    ["Overview", "?range=30&view=judgments", "/api/usage", /Loading activity/],
+  ])("keeps the focus on the switch while %s's first request is pending, keyboard and all", async (to, search, path, title) => {
+    let resolve!: (v: unknown) => void;
+    const gate = new Promise(r => { resolve = r; });
+    // The first view's request answers at once; only the one the switch starts is held.
+    open(search);
+    await (to === "Judgments" ? overview : judgments)();
+    mockApi({ "/api/usage": () => usage, "/api/insights": () => fixture, "/api/sessions": () => sessions, "/api/session": () => session, [path]: () => gate });
+    act(() => btn(to).focus());
+    await userEvent.keyboard("{Enter}");
+    expect(screen.getByRole("heading", { level: 1, name: title })).toBeTruthy(); // still pending: the placeholder shows
+    expect(document.activeElement).toBe(btn(to));
+    const other = to === "Judgments" ? "Overview" : "Judgments";
+    await userEvent.tab({ shift: to === "Judgments" });
+    expect(document.activeElement).toBe(btn(other));
+    await userEvent.tab({ shift: to !== "Judgments" });
+    expect(document.activeElement).toBe(btn(to));
+    await act(async () => { resolve(path === "/api/usage" ? usage : fixture); await gate; });
+    await (to === "Judgments" ? judgments : overview)();
+    expect(document.activeElement).toBe(btn(to));
+  });
+
   it("does nothing when the view shown is picked again", async () => {
     open("?range=30");
     await overview();

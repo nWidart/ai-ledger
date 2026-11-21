@@ -373,8 +373,9 @@ export function Judgments({ views }: { views: ReactNode }) {
   const counted = d && d.meta.sessions > 0;
   return (
     <main id="content" className={"wrap pg-judgments" + (slow && !first ? " loading" : "") + (grow ? " grow" : "")} ref={wrap} aria-busy={loading || undefined}>
+      {/* Drawn through every state, as Overview draws it: a switch keeps its focus while this view's first request is pending. */}
+      {views}
       {first ? <PageSkeleton title="Loading judgments…" /> : <>
-        {views}
         <header className="top sect" id="overview">
           <div>{d ? <Lede d={d} /> : <h1 className="lede" id="lede" tabIndex={-1}>Judgments could not be loaded.</h1>}</div>
           {/* No source filter: it would change nothing here. */}

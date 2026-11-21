@@ -169,8 +169,9 @@ function Overview({ views }: { views: ReactNode }) {
 
   return (
     <main id="content" className={cls} ref={wrap} aria-busy={loading || undefined}>
+      {/* Drawn through every state, so a switch made while this view's first request is pending keeps its focus. */}
+      {views}
       {first ? <PageSkeleton title="Loading activity…" /> : <>
-        {views}
         <header className="top sect" id="overview">
           <div>{d ? <Lede d={d} before={before} /> : <h1 className="lede" id="lede" tabIndex={-1}>Activity could not be loaded.</h1>}</div>
           <div className="top-side"><Filters projects={d?.projects ?? []} automated /></div>
