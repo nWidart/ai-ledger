@@ -109,7 +109,7 @@ A "+?" chip beside a cost means the figure leaves out some requests from unprice
 - **Tokens measure.** Each bar is stacked by token kind: Input, Output, Thinking, Cache read, Cache write 5m, Cache write 1h. In **Volume**, a bar is the day's tokens, and cache reads usually dwarf the rest. In **Share**, every bar fills the plot from 0% to 100%, and each kind's segment is its share of that day's tokens, so you can see whether output grew or shrank. The title reads "Token share per day". Share draws no 7-day average and no peak label, since both describe the day's total; the tooltip, the screen-reader text and the data table give each kind's share and the day's total tokens. A day with no tokens has no bar.
 - A 7-day average line, in the Cost measure and in Volume, drawn when the view has 14 or more days. At a day, it is the mean of the 7 complete days ending there; today has none.
 - Today's bar is hatched over each segment's color, and the legend adds "Today so far". The tooltip and the label say "so far".
-- A label names the peak, in the Cost measure and in Volume.
+- A label names the peak, in the Cost measure and in Volume. It stays inside the plot: near an edge it slides in, and a chart narrower than the label draws none.
 - The tooltip lists the day's parts, the total, and the unpriced requests. For Other, it lists the three costliest names inside it, with their cost, and "+ N more" when there are more. A project with no name reads "(no project)".
 
 **Controls**

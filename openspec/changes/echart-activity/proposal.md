@@ -14,6 +14,9 @@ The owner is moving every chart in the web UI from hand-written SVG to Apache EC
 - **New: the reading survives newer data.** A background ingest no longer ends the reading on either chart.
 - **New: Escape closes the outcome trend's tooltip wherever the focus is**, as on Cost and the work chart.
 - **Changed: the work chart grows with the text size.** Its bars keep their height at 200% text; today they shrink to 24px.
+- **Changed: the newest bucket's label always shows**, right-aligned on its bar, at every width, so the tracks stay on the same points in a narrow box.
+- **Changed: the peak label stays inside the plot**, on the work chart and on Cost. Near an edge it slides in; a plot narrower than the label draws none. At a larger text size a mid-width plot now shows it.
+- **Fixed on Cost, found while building:** the bar being read no longer changes color and the 7-day average no longer gets dots in ECharts' palette; on a reload that lands on Cost, projects no longer show as "Other" until the next data arrives.
 - **Wrapper additions**, reserved by the foundation: `status` (a sentence said once, such as "selected") and `onEscape` (Escape with no reading open). Shared option helpers for tracks, the selection mark, a line with dots, and the slider.
 - **The browser check is split** into a harness, shared checks and one module per page, and gains Activity and Judgments.
 - **Sparklines and Live's pulse stay hand-written SVG.** The data tables stay as they are.
@@ -34,8 +37,8 @@ None.
 
 - **Code.** `web/src/components/echart/`: `EChart.tsx` gains `status` and `onEscape`; `option.ts` gains the track, selection, line and slider helpers; `stack.ts` passes the point's index to `width`; `testing.ts` models the slider's axes; a new `zoomReset.tsx` shares "Show all" with Cost. `web/src/pages/activity/WorkChart.tsx` and `judgments/OutcomeTrend.tsx` are rewritten around `<EChart>`, with their figures and options in the new pure modules `workTracks.ts` and `judgments/outcomeWeeks.ts`. `ActivityPage.tsx` preloads the chunk. `chart.css`, `theme.css`, `activity.css` and `chart.ts` lose what only these two charts used.
 - **Dependencies.** None added. No ECharts component is added to `echarts.ts`: the line series, the custom series, the grid and the slider are already registered.
-- **Tests.** SVG geometry tests move to tests of the pure models and option builders. Component tests run on the fake runtime, which now refuses a slider that does not drive every x axis and a second axis pointer. One smoke test per chart draws on real ECharts in jsdom.
-- **Tooling.** `web/scripts/check-bundle.mjs` gains a budget for `ActivityPage`. `tools/demo/chartfit.mjs` becomes a runner over `tools/demo/chartfit/`. `tools/demo/firstscreen.mjs` and `tools/demo/record.mjs` get the new selectors.
+- **Tests.** SVG geometry tests move to tests of the pure models and option builders. Component tests run on the fake runtime, which now refuses a slider that does not drive every x axis, a second axis pointer, a slider trend drawn from another series than `trend`, and a chart of several grids that leaves one to ECharts' own fit. One smoke test per chart draws on real ECharts in jsdom.
+- **Tooling.** `web/scripts/check-bundle.mjs` gains budgets for `ActivityPage` and for the chart chunk Cost and Activity share (`zoomReset-*.js`). `tools/demo/chartfit.mjs` becomes a runner over `tools/demo/chartfit/`. `tools/demo/firstscreen.mjs` and `tools/demo/record.mjs` get the new selectors.
 - **Images.** The docs site's `activity-work` and `tour-overview` shots, and the README's `activity`, `insights` and `tour` recordings, are recorded again.
 - **Docs.** `CHANGELOG.md`, the Activity row of `README.md`, and the docs site's Activity, Judgments and keyboard pages.
-- **Not changed.** The API, every payload, the page fixtures, stored data, the Content-Security-Policy, the ECharts chunk's budget and Cost's behavior.
+- **Not changed.** The API, every payload, the page fixtures, stored data, the Content-Security-Policy, the ECharts chunk's budget, and Cost's behavior beyond the peak label and the two fixes above.

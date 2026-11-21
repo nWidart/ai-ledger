@@ -22,7 +22,7 @@ See `proposal.md` for the motivation. `echart-foundation` (archived under `opens
 |---|---|
 | Two grids with `axisPointer.link` and `triggerOn: "none"`: what does one `updateAxisPointer` action draw? | Two bands, one per grid, with the space between the grids unmarked. An action whose `y` is between the grids draws no band. `containPixel({ gridIndex: 0 })` is false there. |
 | One grid over both tracks (a frame), holding the only axis with a pointer? | One band from the top of the first track to the bottom of the last. `containPixel({ gridIndex: 0 })` is true on both tracks and between them, false under and above. `convertToPixel` gives one x for a point on the frame's axis and on each track's axis. In Chromium a pointer in the bars, between the tracks and in the rate track reads the same point and draws the same band. |
-| A slider with no `xAxisIndex`, over three x axes? | It zooms the first axis only: the frame's points move and the tracks' do not. |
+| A slider with no `xAxisIndex`, over three x axes? | It zooms the first x axis and every other x axis in that axis's grid. On three grids that is the frame alone: the frame's points move and the tracks' do not. On one grid with a second x axis (the outcome trend's counts) both move. |
 | A slider with `xAxisIndex: "all"`, or `[0, 1, 2]`? | Every axis shows the same window. `getOption().dataZoom[0]` gives `startValue` and `endValue` as point indexes, as with one axis. A silent `dataZoom` action sends no event, a plain one sends one. A real drag of a handle in Chromium sent one `datazoom` per move and moved all three axes together. A redraw under `replaceMerge` keeps the window. |
 | A custom series on the frame, one item at the selected point? | Drawn as one rectangle over the frame's whole height, after the grid lines and before the bars (`z: 1`). With the point outside the zoom window it is not drawn; back inside, it is. |
 | A line series with `symbol: "none"` and a symbol on single data items? | Only those items draw a symbol, with their own size, fill and border. `connectNulls: false` breaks the line at a null. |
@@ -32,6 +32,7 @@ See `proposal.md` for the motivation. `echart-foundation` (archived under `opens
 | A second x axis on the top of a grid, labels from a formatter? | Drawn, and thinned by ECharts: 26 of 26 counts at 800px, 9 of 26 at 254px. |
 | Where do Activity's chart and tab list sit at 1440×900 on the demo store? | Chart 408 to 624px. Tab list ends at 842px (30 days, 29 bars) and 839px (all time, 11 weeks). 58px are free. |
 | How big is `ActivityPage-*.js`? | 22.4 kB gzip -9. The entry is 109.1 kB and the ECharts chunk 176.5 kB at this change's base. |
+| Three grids left to ECharts 6's own fit (`outerBoundsMode` unset), 11 weeks in a 343px box? (measured while building, in jsdom and Chromium) | ECharts shrinks only a grid whose axis labels would leave the box: the frame, the one grid with visible x labels. The frame's newest point is at 301.4px and the tracks' at 314.5px, so the band, the selection and the pointer's reading leave the bars by half a band. With `outerBoundsMode: "none"` on every grid the points agree. In Chromium the newest label right-aligned on its point is enough by itself to stop the shrink; jsdom's measures needed the grid setting. |
 
 ## Goals / Non-Goals
 
@@ -67,7 +68,8 @@ Alternative: one grid per track with `axisPointer.link`. Rejected by the spike: 
 Rules that follow:
 
 - Only the frame's x axis may set `axisPointer.show`. The wrapper sets `triggerOn: "none"` as before.
-- The slider drives every x axis: `zoomSlider()` sets `xAxisIndex: "all"`, so no chart can forget it. For a chart with one axis this is the same slider.
+- The slider drives every x axis: `zoomSlider()` sets `xAxisIndex: "all"`, so no chart can forget it. With no `xAxisIndex`, ECharts drives the first x axis and every other x axis in its grid, which on a chart of several tracks is the frame alone. For a chart with one grid this is the same slider.
+- Every grid of a chart of several tracks sets `outerBoundsMode: "none"`, so each sits exactly where the layout puts it. ECharts 6 otherwise fits each grid on its own and shrinks only the one whose labels would leave the box, the frame, which then leaves the tracks (spike: 11 weeks at 343px, newest point at 301.4px on the frame and 314.5px on the tracks). The layout keeps the labels inside instead: the left margin holds the value labels and half the first bucket label, and the frame's newest label is always shown, right-aligned on its point, so it ends inside the plot; labels it overlaps are hidden. In a browser the label's alignment alone stops the shrink; the grid setting stays because jsdom's measures needed it. The fake runtime refuses an option of two grids or more where one leaves it out. Later charts must keep their value labels inside their left margin: a wider label is clipped, not fitted.
 - A series names its axes: `trackAxes(t)` gives `{ xAxisIndex: t + 1, yAxisIndex: t + 1 }`, and `FRAME_AXES` is `{ xAxisIndex: 0, yAxisIndex: 0 }`.
 - A chart with one track needs no frame: its grid is grid 0. The outcome trend and Cost are such charts.
 - The frame is a rule about indexes, not about category axes. A later chart on a value or time axis (Growth, the timeline) makes its frame the same way, and adds the foundation's reserved `locate` prop for its pointer.
@@ -88,6 +90,8 @@ onEscape?: () => boolean | void;
 
 - `status` is a prop and not a method on the handle. The work chart sets it inside `onActivate`, and the wrapper ends the reading right after the handler returns, which empties the region. A method called from the handler would be wiped by that. The wrapper compares the prop with the last one it saw, in render, as it does for `view`, so the sentence lands after the reading has ended.
 - The live region then holds one of: a status, a reading, a zoom sentence, or a reading and then a zoom sentence.
+- A chart that uses `status` must pass `view`. A status that arrives with a new view is not said, nor one present at mount. The same text twice says nothing, so a chart that wants a sentence said again words it differently. An empty text drops a status the region still holds, and leaves a reading or a zoom sentence alone.
+- A new status that is not empty, arriving in the same render as a redraw's own sentence (a zoom that ended with no one asking, or a key's reading said again with newer figures), wins: it is said alone, in one change of the region. The zoom still ends and `onZoom(null)` still fires; only its sentence is not said. The status is what the user's own act did, and the draw effect, which finds an ended zoom after the status is in the region, cannot take the status back; the other order would change the region twice. A redraw's sentence in a later render replaces the status as ever. When an empty status that drops a held one arrives with a zoom end the draw effect finds, the region is emptied by the render and then says the zoom's end: two changes, the second the one heard.
 - `onEscape` runs from the box's own `keydown` only. The document listener (Escape anywhere) keeps ending readings only, so Escape in a sheet never clears a selection.
 - `points`' comment gains: in a chart of several tracks, the first x axis is the frame's.
 
@@ -101,10 +105,11 @@ All in `web/src/components/echart/option.ts` unless said, pure, and typed from `
 - `selectionMark(env, { index })`: decision 4.
 - `lineSeries(env, { id, data, color, dots, ...axes })`: a line with no symbols, broken at nulls, not clipped, silent. `dots(i)` gives `"solid"`, `"hollow"` or nothing for point `i`. Colors by decision 5.
 - `sliderTrend(data, axes)`: a hidden line (`id: "trend"`, no symbol, line opacity 0, transparent). The slider draws its faint trend from the first line, bar, candlestick or scatter series on the lowest-index x axis it drives that carries one; the series' order counts only among the series on that axis (`SliderZoomView._prepareDataShadowInfo`, ECharts 6.1.0). So the trend line goes on the first track that has a line, listed before that track's lines, with no line on an axis before it: on the work chart, on the bars' track, over the rate line's track. The fake runtime throws when the slider would draw another series, by the same rule (`sliderShadowOf` in `testing.ts`).
-- `zoomSlider(env)`: gains `xAxisIndex: "all"`.
+- `zoomSlider(env)`: gains `xAxisIndex: "all"` (decision 1).
+- `pointLabel` (the peak label) measures its text as zrender does, with `measureText` on a canvas of its own, so `option.ts` imports nothing from ECharts at runtime; jsdom has no canvas, and there it estimates 0.6em a character. `labelAnchor` keeps the old anchor rule (centred over the bar, or anchored at the bar's edge within 56px times the text scale of the plot's edge), then slides the label along, its anchor kept, until its whole text is inside the plot. A plot narrower than the text draws no label. This replaces the rule "no peak label in a plot under 300px times the text scale at a larger text size", on the work chart and on Cost: at a larger text size a mid-width plot now shows the label. Known limits: the width is not measured again when the font loads after the first drawing, and the label's 3px halo may pass the plot's edge by 1.5px.
 - `SLIDER_ROOM` (28) and `ZOOM_FROM` (14, `ZOOM_DAYS` in `costDaily.ts` today) move here from `costDaily.ts`, which imports them and still exports `SLIDER_ROOM`, so `CostChart.tsx` is not touched by this.
 - `stack.ts`: `width` becomes `(band, i) => number`. The outcome trend halves the width of a week with few sessions.
-- No highlight: the band alone shows the reading. By default ECharts' axis pointer highlights every item on the point read (`dispatchHighDownActually` in `axisTrigger.js`), and `silent` does not stop it, since it only mutes the pointer's own events. A highlighted custom series is redrawn in lifted colors that no token gives (`createEmphasisDefaultState`), and a line with no symbols gets a dot in ECharts' own palette (`LineView.highlight`). Measured on Cost and the outcome trend before this fix. So `categoryAxis()` sets `axisPointer.triggerEmphasis: false`. The shapes of `stackSeries()`, `selectionMark()` and `pointLabel()` also set `emphasisDisabled: true`, so a highlight from any other source leaves them as drawn. A series-level `emphasis.disabled` would not do this for a custom series: there it only stops the blur of other series.
+- No highlight: the band alone shows the reading. By default ECharts' axis pointer highlights every item on the point read (`dispatchHighDownActually` in `axisTrigger.js`), and `silent` does not stop it, since it only mutes the pointer's own events. A highlighted custom series is redrawn in lifted colors that no token gives (`createEmphasisDefaultState`), and a line with no symbols gets a dot in ECharts' own palette (`LineView.highlight`). Measured on Cost and the outcome trend before this fix; on Cost, which shipped with it, the bar being read changed color and the 7-day average got dots in ECharts' palette. Two guards, each enough alone: `categoryAxis()` sets `axisPointer.triggerEmphasis: false`, so the frame's pointer (or a one-grid chart's) highlights nothing; and the shapes of `stackSeries()`, `selectionMark()` and `pointLabel()` set `emphasisDisabled: true`, so a highlight from any other source leaves them as drawn. A series-level `emphasis.disabled` would not do this for a custom series: there it only stops the blur of other series. Bars on a track's axis are never highlighted by the pointer in any case: ECharts highlights only the items on the axis that shows the pointer, the frame's, where only the selection mark sits.
 
 Cost's `avgLine` stays as it is: a haloed text-colored line is another thing than a series-colored line with dots.
 
@@ -114,7 +119,14 @@ Cost's `avgLine` stays as it is: a haloed text-colored line is another thing tha
 - **How it is drawn.** A custom series with `id: "selected"` on the frame, `z: 1` (over the grid lines, under the marks), one item, silent. Its rectangle is the point's whole band over the frame's height, inset by half the frame line. Theme: fill `ink.tint` (the accent at 16%), a 1.5px frame in `ink.accent`. Forced colors: no fill, a 2px frame in `ink.accent`, which is `Highlight` there.
 - **Apart from the reading.** The reading band has no frame and sits over the marks: a neutral wash in the theme, a `Highlight` wash in forced colors. The frame is the selection in both modes, so the two differ by shape and not by hue alone. Both show on a point that is selected and read. Reading a point changes no color of what is drawn: the helpers turn ECharts' own highlight off (decision 3).
 - **Zoom.** A selected point outside the points shown draws nothing (spike). The chip still names it. An index outside the axis draws nothing either: ECharts would place it by extrapolation, in a margin or off the box.
-- **Words.** The chip names the selection, and `status` says a selection or a clear once. A bar's reading does not say "selected": it does not today.
+- **Words.** The chip names the selection, and `status` says a selection or a clear once. A bar's reading does not say "selected": it does not today. The work chart words its status from the selection it leaves:
+
+| What happened | Status |
+|---|---|
+| A click or Enter selects a bar | "Week of Sep 7, 2026 selected; the tabs below show its days." (a day: "Nov 4, 2026 selected; the tabs below show its figures.") |
+| The bar already selected is selected again | "… is still selected; …", and on the next such press "… is already selected; …", alternating, since the same text twice says nothing |
+| The chip's ✕, or Escape on the chart with nothing read | "Selection cleared; the tabs below show the whole range." |
+| The selection changes from outside the chart (the tab note's "Show the whole range", an attention action, a tile, the URL) | Nothing: the status empties, which drops a sentence the region still holds, so it is never said later out of context |
 
 Alternative: a `selected` prop on the wrapper. Rejected: the wrapper would add a series to an option it does not own, for a mark that needs no React state. The peak label is drawn the same way, by the option.
 
@@ -175,7 +187,7 @@ Layout at the default text size: margins top 20, right 16, bottom 24, left 52; b
 | Dot on a point no line reaches | `dots: "solid"` |
 | No tool calls: no rate track, no key | One track; the bars take the rate track's room |
 | Legend: project keys, rate key, "Under 50 calls" | Unchanged HTML, static |
-| Peak label | `pointLabel` on `trackAxes(0)`, `id: "peak"`; left out at a zero peak and by the room rule, as on Cost |
+| Peak label | `pointLabel` on `trackAxes(0)`, `id: "peak"`; left out at a zero peak, kept inside the plot and left out when the plot is narrower than its text, as on Cost (decision 3) |
 | Hover or keys read a bar on both tracks | The wrapper, on the frame |
 | Tooltip rows and readout wording | Unchanged, in `tip(i)` and `read(i)` |
 | Escape ends the reading, from anywhere | The wrapper |
@@ -202,12 +214,15 @@ What will look or behave differently:
 6. Bars grow once, when the chart first draws, not each time data lands.
 7. ECharts picks which bucket labels fit.
 8. In forced colors the bar being read is a highlight-colored band with no frame. Today it has the same 2px frame as the selected bar, so the two cannot be told apart. The rate line is in the system text color, where it kept the theme's red.
-9. The pointer is a hand only over a bar, and only while the chart takes a pick.
+9. The pointer is a hand over every bar, idle ones included, while the chart takes a pick, and nowhere while it does not. It is the wrapper's rule: the wrapper cannot tell which points `onActivate` would decline.
 10. At a larger text size the box grows and the bars keep their height. Today the box stays 216px and the bars shrink, to 24px at 200%.
 11. In a view with no tool calls the bars fill the box. Today 52px stay empty over the labels.
 12. The peak label is not drawn while the zoom leaves the peak bar out.
 13. Enter on a chart that still shows the previous view is left to the browser.
 14. Label positions, dot sizes and the grid's pixels may differ by a pixel or two.
+15. The newest bucket's label is always shown, right-aligned on its point, at every width; a label it would overlap is hidden (decision 1).
+16. The peak label stays inside the plot: near an edge it slides in, and a plot narrower than its text draws none. At a larger text size a mid-width plot now shows it (decision 3). Cost's peak label follows the same rule.
+17. Re-selecting the selected bar says "is still selected", then "is already selected"; a selection changed from outside the chart says nothing (decision 4).
 
 ### 9. The outcome trend: every behavior and its form
 
@@ -267,7 +282,9 @@ No new name matches an existing file's name in another case: `workChart.ts` and 
 
 | Reliance | Real ECharts | Fake runtime |
 |---|---|---|
-| The slider drives only the x axes it names | Work's smoke test: after a zoom, a rate dot is still over the middle of its bucket's bar | New: `zoomAxes` follows ECharts' rule (none named: the first), and `setOption` throws when an option has a slider and an x axis it does not drive |
+| The slider drives only the x axes it names | Work's smoke test: after a zoom, a rate dot is still over the middle of its bucket's bar | New: `zoomAxes` follows ECharts' rule (none named: the first x axis and every other x axis in its grid), and `setOption` throws when an option has a slider and an x axis it does not drive |
+| Each grid sits where the layout puts it | Work's smoke test at narrow widths (11 weeks at 343px, 13 weeks at 600px and 200% text): the frame's points over the tracks'; `chartfit` at 343px and at 32px text |
+| The peak label stays inside the plot | Work's smoke test: the peak at each of 11 weeks in 343px; `chartfit` at 343px, zoomed and not | Not modelled: the fake draws nothing | New: `setOption` throws when an option of two grids or more leaves one without `outerBoundsMode: "none"` |
 | Only an axis that shows a pointer draws a band | Both smoke tests: one band path after a key reads a point | New: `setOption` throws when an x axis after the first sets `axisPointer.show` |
 | The frame answers the pointer over every track | `chartfit`: the pointer in each track and between them | Already so: the fake's one grid is the frame, and a finder index other than 0 throws |
 | A mark outside the zoom window is not drawn | Work's smoke test | Not modelled: no component test depends on it |
@@ -284,7 +301,8 @@ Rules kept from the foundation: component tests assert what a user reaches; geom
 
 | File | What |
 |---|---|
-| `tools/demo/chartfit/harness.mjs` | The store, the server and its stop, the browser, `line()`, `until()`, `open()`, what the pages reported |
+| `tools/demo/chartfit.mjs` | The runner: the pages named, every page when none is |
+| `tools/demo/chartfit/harness.mjs` | The store, the server and its stop, the browser, `line()`, `until()`, `open()`, what the pages reported, and `PHONE`, a 417px window, in which a chart's box is 343px wide |
 | `tools/demo/chartfit/readers.mjs` | The in-page readers, for a chart found by its root selector: the frame from the grid lines, bars, the band, the selection frame, lines and dots, slider handles, texts, tooltip, readout, legend keys |
 | `tools/demo/chartfit/checks.mjs` | The checks every chart runs, from a descriptor (path, root, points, names): colors in light, dark and a system flip; forced colors; 32px text; pointer and keys on the same point; zoom; newer figures; no CSP or console error |
 | `tools/demo/chartfit/cost.mjs` | Cost's descriptor and its own checks, moved with no check dropped |
@@ -292,19 +310,27 @@ Rules kept from the foundation: component tests assert what a user reaches; geom
 
 A later page adds one module and one line in the runner.
 
-The work chart's own checks: one band from the top of the bars to the bottom of the rate track, for the pointer in each track and between them, and for the keys; the rate line in `--critical` and in `CanvasText` under forced colors; the hollow dot's center and ring; a click and Enter select (URL, chip, frame, status), an idle bar declines, two Escapes end the reading and then clear; the frame stays while other bars are read and is not the band; zoomed, a rate point sits under its bar, the frame goes when its bar is left out and comes back; the slider said once; "Show all days"; the URL, the requests, the heading and the data table unchanged by a zoom; newer figures keep the zoom, the reading and the selection; at 32px the bars track is as tall as at 16px; the all-time view by week has no slider at 11 bars.
+- **A dropped load is retried.** The demo server's listen queue is 5, and on a loaded machine it drops connections. `open()` throws away a page load during which the server dropped a request, and loads the page again in a fresh browser context, up to 3 loads; on the third drop the run stops and names the page. The drops of a discarded load go unreported; any other console error, page error or CSP violation of that load still fails the run. A drop after the kept load, during the checks, still fails.
+- **Narrow widths.** Each page also runs in the `PHONE` window (a 343px box): no label is cut by the box or overlaps another, the pointer and Home and End read the first and last bars with the band centred on its bar, and, on a chart of several tracks, the newest point's label ends inside the plot. The work chart also runs by week at 32px text in a 900px window (22 weeks).
+- The pages load IBM Plex Sans from Google Fonts, as the app does, so the text measures need the network.
 
-The trend's own checks: the five parts in the legend's colors; a half-width bar for a week of few sessions; the counts thinned with none overlapping at 320px with 26 weeks; Escape from another control closes the tooltip; no slider.
+The work chart's checks run on the Sessions measure: every day of the demo store has a session, so every day draws a bar and the readers count every point.
+
+The work chart's own checks: one band from the top of the bars to the bottom of the rate track, for the pointer in each track and between them, and for the keys; the rate line in `--critical` and in `CanvasText` under forced colors; the hollow dot's center and ring; a click and Enter select (URL, chip, frame, status), an idle bar declines, two Escapes end the reading and then clear; the frame stays while other bars are read and is not the band; zoomed, a rate point sits under its bar, the frame goes when its bar is left out and comes back; the slider said once; "Show all days"; the URL, the requests, the heading and the data table unchanged by a zoom; newer figures keep the zoom, the reading and the selection; at 32px the bars track is as tall as at 16px; the all-time view by week has no slider at 11 bars; re-selecting says "is still selected", then "is already selected", and the tab note's "Show the whole range" says nothing; by week in a 343px box, a click on the newest week frames it centred on its bar with its rate point under it; in a 343px box, with the peak two weeks in and zoomed, the peak label stays inside the plot.
+
+The trend's own checks: the five parts in the legend's colors; a half-width bar for a week of few sessions; the counts thinned with none overlapping in a 320px window with 26 weeks; Escape from another control closes the tooltip; no slider; in a 343px box, the edges and labels of the shared checks.
 
 Where the demo store lacks a case (a bucket of few calls, a week of few sessions, 26 weeks), the check answers the request with the store's payload changed, as Cost's empty-day check does.
 
-`tools/demo/firstscreen.mjs` waits for `#work .bar-seg` and measures `#work .chart`: both selectors change to the new box and its first drawn bar. `tools/demo/record.mjs` clicks `#work svg` and `#trend svg`: both become the chart's box.
+`tools/demo/firstscreen.mjs` waited for `#work .bar-seg` and measured `#work .chart`: it now waits for the first filled path under the plot's svg group (`WORK_BAR`, as `COST_BAR` is for Cost) and measures `#work .echart`. `tools/demo/record.mjs` clicked `#work svg` and `#trend svg`: it now clicks `#work .echart` and `#trend .echart`.
 
 ### 13. Bundle
 
 - **ECharts chunk.** Nothing is added to `echarts.ts`. Two tracks are grids, the rate is a line series, the mark and the bars are custom series, and the slider is registered. Expected size: 176.5 kB, as now. The 195 kB limit stays.
 - **Entry.** `ActivityPage` is a lazy route, so the entry does not change. The 130 kB limit stays.
-- **`ActivityPage`.** New limit: **28 kB** (22.4 kB now; Cost grew by 4.2 kB for one chart). `check-bundle.mjs` reads its page limits from one list, so a later page adds a line.
+- **`ActivityPage`.** New limit: **28 kB** (22.4 kB at the spike; Cost grew by 4.2 kB for one chart). `check-bundle.mjs` reads its page and shared chunks from one list (`SINGLE`), each of which must match exactly one file, so a later page adds a line.
+- **Shared chunk.** The chart code Cost and Activity share (the wrapper, the stack, the option helpers, `useZoomReset`) is split by Vite into its own chunk, named after its first module: `zoomReset-*.js`, limit **9 kB**. A move of modules can rename it; the check then fails on "found 0" rather than skip it.
+- Sizes as built, gzip -9: entry 109.1 kB (limit 130), `CostPage` 12.1 kB (20), `ActivityPage` 23.7 kB (28), `zoomReset` 7.6 kB (9), ECharts 176.5 kB (195).
 - `ActivityPage.tsx` calls `preloadECharts()` at module load, as `CostPage.tsx` does.
 
 ### 14. What this change removes, and what stays
@@ -317,7 +343,8 @@ Removed:
 - From `theme.css`: `@keyframes grow-y`; the forced-colors rule for `.chart svg > rect:not(.hit)`; `.chart .bar-seg` in the bars' edge rule (Errors' `#chart .layer` stays); `.pg-activity` in the `circle.lowc` rule (Errors' stays).
 - From `activity.css`: `.pg-activity .work .chart svg`.
 - From `cost.css`: `.pg-cost .legend .show-all`, replaced by `.show-all` in `EChart.css`.
-- In `css.test.ts`: the `PAGE_GATES` counts of `components/chart.css` and `theme.css` go down to what is left, and any allow-list value that no stylesheet uses any more is removed. Nothing is added to an allow-list.
+- In `css.test.ts`: the `PAGE_GATES` counts of `components/chart.css` and `theme.css` go down to what is left (9, from 14, and 4, from 7), and any allow-list value that no stylesheet uses any more is removed. Nothing is added to an allow-list.
+- In `theme.test.ts`: the test "frames the hovered and selected chart buckets", which asserted the removed forced-colors rule for `.chart svg > rect:not(.hit)`.
 
 Stays:
 
@@ -336,7 +363,7 @@ Stays:
 
 ## What later changes inherit
 
-A chart with several tracks puts a frame at grid 0, over every track: the frame holds the one visible x axis, the only axis pointer and whatever crosses the tracks, and each track is a grid of its own with a hidden x axis over the same points (`trackLayout`, `tracksOption`, `trackAxes`). The wrapper is not changed for it: it reads grid 0, so one band, one tooltip and one sentence cover every track, and `zoomSlider()` drives every axis. A persistent selection is `selectionMark()` in the option, a frame, never the reading band; what a selection did is said through `status`, and Escape with no reading goes to `onEscape`. Under forced colors bar segments keep their colors inside a text-colored edge, a lone line is the system text color (`lineSeries`), and lines that only their colors tell apart keep them over a halo in the page color. Each chart splits into a pure model and option module with its own tests, a component that keeps the words, one smoke test on real ECharts, and one module under `tools/demo/chartfit/`.
+A chart with several tracks puts a frame at grid 0, over every track: the frame holds the one visible x axis, the only axis pointer and whatever crosses the tracks, and each track is a grid of its own with a hidden x axis over the same points (`trackLayout`, `tracksOption`, `trackAxes`). The wrapper is not changed for it: it reads grid 0, so one band, one tooltip and one sentence cover every track, and `zoomSlider()` drives every axis. Every grid sets `outerBoundsMode: "none"` (`tracksOption` does it), so the layout's margins must hold the labels: value labels inside the left margin, and the newest bucket label right-aligned on its point. A persistent selection is `selectionMark()` in the option, a frame, never the reading band; what a selection did is said through `status`, and Escape with no reading goes to `onEscape`. Under forced colors bar segments keep their colors inside a text-colored edge, a lone line is the system text color (`lineSeries`), and lines that only their colors tell apart keep them over a halo in the page color. Each chart splits into a pure model and option module with its own tests, a component that keeps the words, one smoke test on real ECharts, and one module under `tools/demo/chartfit/`.
 
 For the next builders: Errors needs `keys={{ space: true }}`, marks that cross the tracks (fix lines, no-activity bands) as series on the frame, and its own bar width. Context's cache chart needs a reading that skips empty slots, which is a new wrapper rule to design in its change. Growth and the timeline need `locate` for a value or time axis.
 

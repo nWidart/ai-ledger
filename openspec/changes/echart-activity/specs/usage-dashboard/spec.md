@@ -92,7 +92,7 @@ While a day or a week is selected and the chart has its bar, the chart SHALL mar
 - **THEN** no bar is marked and the chip still reads "Nov 4"
 
 ### Requirement: Say what a work chart selection did
-After a selection by a click or Enter, a polite status SHALL say once the bucket selected and what the tabs now show. After a clear by the chip or by Escape, it SHALL say once that the tabs show the whole range. A reading SHALL replace the sentence, and the end of that reading SHALL NOT say it again. Opening a page with a selection in the URL SHALL say nothing.
+After a selection by a click or Enter, a polite status SHALL say once the bucket selected and what the tabs now show; selecting the selected bar again SHALL say it is still selected. After a clear by the chip or by Escape, it SHALL say once that the tabs show the whole range. A reading SHALL replace the sentence, and its end SHALL NOT say it again. It SHALL win over a redraw's sentence of the same moment. A selection changed from outside the chart, or opened from the URL, SHALL say nothing.
 
 #### Scenario: Select a week
 - **WHEN** the user presses Enter on the week of Sep 7
@@ -109,6 +109,18 @@ After a selection by a click or Enter, a polite status SHALL say once the bucket
 #### Scenario: A link with a selection
 - **WHEN** the user opens a link with `day=2026-11-04`
 - **THEN** the chip names Nov 4 and the status says nothing
+
+#### Scenario: Select the selected bar again
+- **WHEN** Nov 4 is selected and the user presses Enter on Nov 4, then reads it again and presses Enter once more
+- **THEN** the status says "Nov 4, 2026 is still selected; the tabs below show its figures.", then "Nov 4, 2026 is already selected; the tabs below show its figures."
+
+#### Scenario: A clear from outside the chart
+- **WHEN** a day is selected, the status still says so, and the user presses the tab note's "Show the whole range"
+- **THEN** the selection is cleared, the status is emptied and says nothing, and the focus moves to the chart
+
+#### Scenario: A selection and a zoom that ends at the same moment
+- **WHEN** a selection's sentence and the sentence of a zoom that ended with no one asking come in the same redraw
+- **THEN** the status says the selection's sentence alone, and the chart shows every bar
 
 ### Requirement: Keep the work chart's bars their height at a larger text size
 The bars track SHALL keep its height at every browser text size up to 200%. The chart's box SHALL grow by the room that its labels and the rate track need at that size.

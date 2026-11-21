@@ -10,7 +10,7 @@ Only the shots a page shows are kept: a shot no page references is deleted, and 
 
 | Name | What it shows | Page |
 | --- | --- | --- |
-| `tour-overview` | The first screen of Activity: header, filters, what needs attention, the work chart, the vitals row and the workbench tabs. Poster and reduced-motion still for the `tour` video. | Home (tour video) |
+| `tour-overview` | The first screen of Activity: header, filters, what needs attention, the work chart with its zoom slider, and the vitals row. Poster and reduced-motion still for the `tour` video. | Home (tour video) |
 | `activity-attention` | "Needs attention": the short list of things to look at (error loops, sessions near the window, failing tools, failed tests). | Activity, First tour |
 | `activity-vitals` | The work-health row of tiles. | Activity |
 | `activity-work` | "Work per day": commits per day by project, with errors per 100 calls on a track under the bars and the zoom slider under both. | Activity |

@@ -30,6 +30,17 @@ In a chart drawn by the shared chart component with two tracks or more, a zoom S
 - **WHEN** the user reads Oct 15 and presses plus
 - **THEN** the band is over Oct 15 at its new place on both tracks
 
+### Requirement: Keep the tracks of a drawn chart aligned at every width
+In a chart drawn by the shared chart component with two tracks or more, each point SHALL sit at the same place on every track at every box width and text size. The newest point's label SHALL always show, right-aligned on its point, inside the plot; a label it would overlap SHALL be hidden.
+
+#### Scenario: Phone width
+- **WHEN** the work chart shows 11 weeks in a 343px box
+- **THEN** the newest week's rate point is under the middle of its bar, its label ends inside the plot, and a click on it frames that week's bar
+
+#### Scenario: Large text
+- **WHEN** the browser's default font size is 32px
+- **THEN** the band over a point covers its bar and its rate point on both tracks
+
 ### Requirement: Mark the selected point of a drawn chart
 A chart drawn by the shared chart component that keeps a selection SHALL mark the selected point with a tinted band in a frame, across every track and under the marks. The mark SHALL stay while other points are read. The band over the point being read SHALL have no frame. In a forced-colors mode the frame SHALL be in the system highlight color with no tint. A selected point that the zoom leaves out SHALL have no mark.
 
