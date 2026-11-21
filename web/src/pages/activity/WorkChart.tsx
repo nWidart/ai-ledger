@@ -69,7 +69,7 @@ interface WorkBarsProps extends Omit<WorkPanelProps, "d"> {
 }
 
 /** A row of the chart's data table: a bucket with its label, its stacked parts and whether it has few calls. */
-interface WorkRow { p: DailyWorkRow; label: string; stack: Record<string, number> | undefined; few: boolean }
+interface WorkRow { p: DailyWorkRow; stack: Record<string, number> | undefined; few: boolean }
 
 /** The rate track's scale: its top (a nice value over the highest steady rate) and the digits its label needs. Buckets with few
  *  calls (when others have enough) are left out, so one quiet day's 2 of 4 can't flatten the busy days. */
@@ -118,13 +118,13 @@ function WorkBars({ rows, week, view, kinds, stack, metric, onMetric, selected, 
   const line = rates.map((v, i) => (v == null ? "" : `${rates[i - 1] != null ? "L" : "M"}${a.cx(i).toFixed(1)},${ry(v).toFixed(1)}`)).join("");
   const lone = rates.flatMap((v, i) => (v != null && !low[i] && rates[i - 1] == null && rates[i + 1] == null ? [i] : [])); // no line reaches these
   // The data table: one row per bucket, its figure per kind (by project when stacked), the total and the rate.
-  const tableRows = useMemo(() => rows.map((p, i): WorkRow => ({ p, label: bucketLabel(p.day, week, true, view), stack: stack[i], few: !!low[i] })), [rows, week, view, stack, low]);
+  const tableRows = useMemo(() => rows.map((p, i): WorkRow => ({ p, stack: stack[i], few: !!low[i] })), [rows, stack, low]);
   const columns = useMemo((): Column<WorkRow>[] => [
-    { id: "day", header: week ? "Week" : "Day", cell: r => r.label },
+    { id: "day", header: week ? "Week" : "Day", cell: r => bucketLabel(r.p.day, week, true, view) },
     ...kinds.map((k): Column<WorkRow> => ({ id: `kind:${k.k}`, header: k.label, align: "num", cell: r => num(r.stack?.[k.k] ?? 0) })),
     { id: "total", header: kinds.length ? "Total" : M.label, align: "num", cell: r => num(r.p[metric]) },
     { id: "rate", header: "Errors per 100 calls", align: "num", cell: r => num(failRate(r.p), 1) + (r.few ? ` (${FEW_CALLS})` : "") },
-  ], [week, kinds, M.label, metric]);
+  ], [week, view, kinds, M.label, metric]);
   const plain = useMemo<Kind>(() => ({ k: metric, label: M.label, c: BAR }), [metric, M.label]);
   // A bar's parts, bottom first; zero parts left out.
   const parts = useCallback((i: number): [Kind, number][] =>
