@@ -19,7 +19,9 @@ const TITLE = 28, DATES = 24;
 const MIN_H = 2, SEP = 1;
 
 /** A bucket's prompt tokens: uncached input, cache read and cache write. */
-const prompt = (r: CacheBucket) => r.input + r.cache_read + r.cache_write;
+const prompt = (r: { input: number; cache_read: number; cache_write: number }) => r.input + r.cache_read + r.cache_write;
+/** A rough width of a label in px: wide enough for the digits and lowercase of these titles at their font size. */
+const textWidth = (s: string, fs: number, bold = false) => s.length * fs * (bold ? .62 : .56);
 /** The prompt tokens not read from the cache: uncached input and cache writes, the part that costs full price or more. */
 export const waste = (r: { input: number; cache_write: number }) => r.input + r.cache_write;
 /** cache_read over the prompt tokens, null when the bucket has none. */
@@ -124,9 +126,17 @@ export function CacheChart({ series }: { series: Series }) {
     show(next, r.left + a.cx(next), r.top + M.t + WASTE / 2);
   };
 
-  const fs = 11 * ts, title = (y: number, left: string, right: string) => <>
-    <text x={M.l} y={y} fontSize={fs} fontWeight="600" fill="var(--text-secondary)">{left}</text>
-    <text x={W - M.r} y={y} textAnchor="end" fontSize={fs} fill="var(--text-muted)">{right}</text></>;
+  // A track's title over the plot, and its figure at the right: the figure's shorter form (compact) when the plot is too narrow for
+  // both, and the title starts at the left edge rather than the plot's when even that does not fit.
+  const fs = 11 * ts, title = (y: number, left: string, right: string, compact = right) => {
+    const fits = (x: number, r: string) => x + textWidth(left, fs, true) + 12 * ts + textWidth(r, fs) <= W - M.r;
+    const r = fits(M.l, right) ? right : compact, x = fits(M.l, r) ? M.l : 0;
+    return <>
+      <text x={x} y={y} fontSize={fs} fontWeight="600" fill="var(--text-secondary)">{left}</text>
+      <text x={W - M.r} y={y} textAnchor="end" fontSize={fs} fill="var(--text-muted)">{r}</text></>;
+  };
+  // The total of what the bars draw: the waste, or every prompt token with the cache reads on.
+  const drawn = short(reads ? prompt(all) : waste(all));
   return (
     <div className="cache-chart">
       <div className="legend">
@@ -138,22 +148,22 @@ export function CacheChart({ series }: { series: Series }) {
       </div>
       <div className="chart" ref={box} tabIndex={0} role="group" aria-label={label} onKeyDown={onKey} onBlur={() => setAt(null)}>
         <svg viewBox={`0 0 ${W} ${H}`} height={H} aria-hidden="true">
-          {title(M.t - 10 * ts, reads ? "Prompt tokens" : "Tokens not read from the cache", `${short(waste(all))} in this view`)}
+          {title(M.t - 10 * ts, reads ? "Prompt tokens" : "Tokens not read from the cache", `${drawn} in this view`, drawn)}
           {yTicks.map(v => <g key={v}><line x1={M.l} x2={W - M.r} y1={a.y(v)} y2={a.y(v)} stroke="var(--grid)" />
             <text x={M.l - 6 * ts} y={a.y(v) + 4 * ts} textAnchor="end" fontSize={fs} fill="var(--text-muted)">{short(v)}</text></g>)}
           {slots.map((s, i) => {
             if (!s.row) return null;
             const r = s.row, parts: [string, number][] = [["seg-input", r.input], ["seg-write", r.cache_write], ...(reads ? [["seg-read", r.cache_read] as [string, number]] : [])];
-            return <g key={s.day} opacity={cur && cur !== s ? .55 : 1}>{stack(parts, base, per).map(p =>
+            return <g key={s.day} className={cur === s ? "on" : undefined}>{stack(parts, base, per).map(p =>
               <rect key={p.key} className={"seg " + p.key} data-seg={p.key} data-day={s.day} x={a.x(i)} y={p.y} width={a.w} height={p.h} />)}</g>;
           })}
 
-          {title(sy0 - 8 * ts, "Cache breaks", all.b ? `most in a ${unit}: ${num(maxB)}` : "none in this view")}
+          {title(sy0 - 8 * ts, "Cache breaks", all.b ? `most in a ${unit}: ${num(maxB)}` : "none in this view", all.b ? `most: ${num(maxB)}` : "none")}
           <line x1={M.l} x2={W - M.r} y1={sy1} y2={sy1} stroke="var(--grid)" />
-          {slots.map((s, i) => s.row && <g key={s.day} opacity={cur && cur !== s ? .55 : 1}>{stack(BREAK_CAUSES.map(([k]) => [`seg-${k}`, s.row![k]]), sy1, sh).map(p =>
+          {slots.map((s, i) => s.row && <g key={s.day} className={cur === s ? "on" : undefined}>{stack(BREAK_CAUSES.map(([k]) => [`seg-${k}`, s.row![k]]), sy1, sh).map(p =>
             <rect key={p.key} className={"seg " + p.key} data-cause={p.key.slice(4)} data-day={s.day} x={a.x(i)} y={p.y} width={a.w} height={p.h} />)}</g>)}
 
-          {title(ry0 - 8 * ts, "Cache-hit ratio", overall == null ? "" : `${pct(overall)} in this view`)}
+          {title(ry0 - 8 * ts, "Cache-hit ratio", overall == null ? "" : `${pct(overall)} in this view`, overall == null ? "" : pct(overall))}
           {[lo, 1].map(v => <g key={v}><line x1={M.l} x2={W - M.r} y1={ry(v)} y2={ry(v)} stroke="var(--grid)" />
             <text x={M.l - 6 * ts} y={ry(v) + 4 * ts} textAnchor="end" fontSize={fs} fill="var(--text-muted)" data-ratio-tick={v}>{pct(v)}</text></g>)}
           {line.length > 0 && <>
@@ -161,8 +171,13 @@ export function CacheChart({ series }: { series: Series }) {
             <path className="ratio" d={path} fill="none" stroke="var(--text-primary)" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
             {line.map(p => <circle key={p.i} className="ratio-dot" cx={a.cx(p.i)} cy={ry(p.r)} r="3" fill="var(--text-primary)" stroke="var(--surface-1)" strokeWidth="1.5" />)}</>}
 
-          {slots.map((s, i) => i % a.every === 0 && <text key={s.day} x={a.cx(i)} y={ry1 + 16 * ts} textAnchor="middle" fontSize={fs} fill="var(--text-muted)">{dayLabel(s.day)}</text>)}
-          {cur && row && <line x1={a.cx(at!)} x2={a.cx(at!)} y1={M.t} y2={ry1} stroke="var(--text-muted)" strokeDasharray="3 3" />}
+          {slots.map((s, i) => {
+            // Each date stays inside the plot, so the first never runs into the ratio track's bottom label in the margin.
+            if (i % a.every) return null;
+            const t = dayLabel(s.day), half = textWidth(t, fs) / 2, x = Math.min(W - M.r - half, Math.max(M.l + half, a.cx(i)));
+            return <text key={s.day} x={x} y={ry1 + 16 * ts} textAnchor="middle" fontSize={fs} fill="var(--text-muted)">{t}</text>;
+          })}
+          {cur && row && <line className="cursor" x1={a.cx(at!)} x2={a.cx(at!)} y1={M.t} y2={ry1} stroke="var(--text-primary)" strokeDasharray="3 3" />}
           <rect x={M.l} y={0} width={a.iw} height={H} fill="transparent"
             onPointerMove={ev => { const i = nearest(ev); if (i == null) setAt(null); else show(i, ev.clientX, ev.clientY); }} onPointerLeave={() => setAt(null)} />
         </svg>

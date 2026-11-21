@@ -17,6 +17,9 @@
 .pg-context .cache-chart i.seg-model_switch { background: var(--cc-model_switch); }
 .pg-context .cache-chart i.seg-expired { background: var(--cc-expired); }
 .pg-context .cache-chart i.seg-other { background: var(--cc-other); }
+/* The bucket being read: its bars keep their fills and are outlined, with the cursor through them; the others stay as they are, so
+   every bar keeps its contrast. */
+.pg-context .cache-chart svg g.on .seg { stroke: var(--text-primary); stroke-width: 1.5; }
 .pg-context .cache-chart .tip .head { font-weight: 600; margin-bottom: 4px; }
 .pg-context .cache-chart .tip .row.sum b { color: var(--text-primary); }
 /* The cache reads switch sits in the legend, as a key that toggles */
@@ -30,6 +33,8 @@
 @media (forced-colors: active) {
   .pg-context .cache-chart svg .seg { forced-color-adjust: none; stroke: CanvasText; stroke-width: 1; }
   .pg-context .cache-chart svg .seg-read { fill: Canvas; }
+  .pg-context .cache-chart svg g.on .seg { stroke: Highlight; stroke-width: 2; }
+  .pg-context .cache-chart svg .cursor { stroke: Highlight; }
   .pg-context .cache-chart svg .ratio { stroke: CanvasText; }
   .pg-context .cache-chart svg .ratio-halo { stroke: Canvas; }
   .pg-context .cache-chart svg .ratio-dot { fill: CanvasText; stroke: Canvas; }

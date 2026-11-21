@@ -69,6 +69,37 @@ describe("cache chart", () => {
     expect(h(seg("2026-11-01", "seg-input")!)).toBeCloseTo(before);
   });
 
+  it("labels the waste track's total with what the bars draw, in each mode", async () => {
+    render(<CacheChart series={daily(b("2026-11-01", DAY), b("2026-11-02", DAY))} />);
+    const texts = () => [...document.querySelectorAll(".cache-chart svg text")].map(t => t.textContent);
+    // Off: the waste, 2 x (40k + 60k). On: every prompt token, 2 x 1M.
+    expect(texts()).toContain("Tokens not read from the cache");
+    expect(texts()).toContain("200k in this view");
+    await userEvent.click(reads());
+    expect(texts()).toContain("Prompt tokens");
+    expect(texts()).toContain("2M in this view");
+    expect(texts()).not.toContain("200k in this view");
+  });
+
+  it("marks the bucket being read by an outline, leaving every bar at full strength", () => {
+    render(<CacheChart series={daily(b("2026-11-01", DAY), b("2026-11-02", { ...DAY, expired: 1 }))} />);
+    key("ArrowRight");
+    const on = seg("2026-11-01", "seg-input")!.parentElement!;
+    expect(on.classList.contains("on")).toBe(true);
+    expect(seg("2026-11-02", "seg-input")!.parentElement!.classList.contains("on")).toBe(false);
+    expect(document.querySelectorAll(".cache-chart svg [opacity]")).toHaveLength(0);
+    expect(document.querySelector(".cache-chart svg line.cursor")).toBeTruthy();
+  });
+
+  it("shortens a track's figure when the plot is too narrow for the title beside it", () => {
+    const w = vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(260);
+    render(<CacheChart series={daily(b("2026-11-01", DAY))} />);
+    const texts = [...document.querySelectorAll(".cache-chart svg text")].map(t => t.textContent);
+    expect(texts).toContain("100k");
+    expect(texts).not.toContain("100k in this view");
+    w.mockRestore();
+  });
+
   it("draws a tiny nonzero part at least 2px tall", () => {
     render(<CacheChart series={daily(b("2026-11-01", { input: 1_000_000, cache_write: 10 }))} />);
     expect(h(seg("2026-11-01", "seg-write")!)).toBe(2);
