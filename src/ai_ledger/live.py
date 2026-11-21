@@ -23,10 +23,10 @@ OVERLAP = timedelta(seconds=60)  # a catch-up reads again this far before its cu
 STATE_LINES = 200  # newest lines read per session for the active list
 TEXT_CAP = 4096  # characters of one tool result sent with text
 INPUT_CAP = 300  # characters of a tool input or description sent without text, as Codex's live summaries
-PROMPT_TOOLS = {"Agent", "Task", "spawn_agent"}  # their input is a prompt: without text, their description stands in
+PROMPT_TOOLS = {"Agent", "Task", "spawn_agent", "spawn_subagent"}  # their input is a prompt: without text, their description stands in
 ERROR_CAP = 700  # as tool_calls.error
 PULSE = timedelta(minutes=10)  # the span of a session's pulse: context growth and tool calls
-QUIET_TOOLS = {"Read", "Grep", "Glob"}  # tools that only read: the page can hide their calls
+QUIET_TOOLS = {"Read", "Grep", "Glob", "read_file", "grep", "list_dir"}  # tools that only read (Grok's last three): the page can hide their calls
 # Shell commands that only read, search or print. Codex names no Read or Grep tool: its exec_command reads and searches
 # through these. A command with no flag that writes or runs a program reads whatever its words. One with such a flag
 # (sed -i, sort -o, find -delete, rg --pre) reads only when each word that starts with - is in full a flag listed here,
@@ -182,9 +182,11 @@ def assemble(rows, copied=None):
     """Events in line order from raw rows (key, file, ts, subagent, source, json). A tool use and its result become one
     tool event; requests are left out, as the page shows none. A tool event is long when its input sets a timeout above
     LONG; a background call is not, as it returns at once. Lines of a subagent thread of `copied` (as forked tells) below
-    its first line of its own give no event. Returns (events, results), where results maps a tool id to its result item
-    when the use is not among the rows."""
-    events, tools, results = [], {}, {}
+    its first line of its own give no event. A prompt or reply item with join (Grok's chunks) adds its text, after the
+    join text, to its lane's newest event when that is a joining one of the same kind; a turn start between them does
+    not part them. Returns (events, results), where results maps a tool id to its result item when the use is not among
+    the rows."""
+    events, tools, results, joins = [], {}, {}, {}  # joins: lane -> its newest event when that can take a chunk
     for key, path, ts, sub, source, text in rows:
         src = store.SOURCES.get(source or "claude")
         try:
@@ -199,6 +201,16 @@ def assemble(rows, copied=None):
         t = parse_ts(ts)
         for i, it in enumerate(src.live_items(d)):
             k = it["k"]
+            if k not in ("request", "agent", "turn_start"):
+                prev, joins[lane] = joins.get(lane), None
+                if "join" in it:
+                    if prev is not None and prev["k"] == k:
+                        prev["text"] += it["join"] + it["text"]
+                        joins[lane] = prev
+                        continue
+                    joins[lane] = ev = {x: v for x, v in it.items() if x != "join"} | dict(key=f"{key}#{i}", ts=t, lane=lane)
+                    events.append(ev)
+                    continue
             if k == "tool_use":
                 ev = dict(key=f"{key}#{i}", k="tool", ts=t, lane=lane, id=it["id"], tool=it["tool"], summary=it["summary"],
                           description=it.get("description"), start=t, end=None, failed=False, error=None, output=None, agent=None,
@@ -307,16 +319,19 @@ def subagent_work(events, source, since):
 
 def closed(cur, sids):
     """The sessions among sids whose transcript shows they closed: their source's close line (Source.close_type) comes
-    after the last timed line of the main file that wrote last. A source with no close line never has one."""
+    after the last timed line of the main file that wrote last. A timed close line (Grok's session_end) is after when no
+    line is newer: lines of the same time follow it, as the stop hook Grok runs as it exits. A source with no close
+    line never has one."""
     kinds = [f"{name}:{src.close_type}" for name, src in store.SOURCES.items() if src.close_type]
     if not sids or not kinds:
         return set()
     return {r[0] for r in cur.execute("""SELECT session_id FROM (
             SELECT r.session_id, r.file, max(r.ts) AS ts, coalesce(
-              max(r.line_no) FILTER (WHERE list_contains(?, coalesce(f.source, 'claude') || ':' || r.type))
-              > max(r.line_no) FILTER (WHERE r.ts IS NOT NULL), false) AS closed
-            FROM raw_lines r LEFT JOIN files f ON f.path = r.file
-            WHERE list_contains(?, r.session_id) AND r.parsed AND NOT r.subagent GROUP BY 1, 2)
+              max(r.ts) FILTER (WHERE close) >= max(r.ts),
+              max(r.line_no) FILTER (WHERE close) > max(r.line_no) FILTER (WHERE r.ts IS NOT NULL), false) AS closed
+            FROM (SELECT r.*, list_contains(?, coalesce(f.source, 'claude') || ':' || r.type) AS close
+                  FROM raw_lines r LEFT JOIN files f ON f.path = r.file
+                  WHERE list_contains(?, r.session_id) AND r.parsed AND NOT r.subagent) r GROUP BY 1, 2)
         GROUP BY 1 HAVING arg_max(closed, ts)""", [kinds, list(sids)]).fetchall()}
 
 

@@ -860,7 +860,7 @@ class Source(NamedTuple):
     prompt_type: str = "user"  # raw_lines.type of the lines that hold prompt text
     live_items: Callable = live_items  # line -> what the Live page shows of it
     # raw_lines.type of the line written as a session closes, or None for a source that writes none. Claude Code writes
-    # cost-state (no timestamp) when it exits; a resumed session writes on after it.
+    # cost-state (no timestamp) when it exits, Grok a session_end hook line (timed); a resumed session writes on after it.
     close_type: str | None = "cost-state"
     type: Callable = line_type  # line ({} when it is not a JSON object) -> its raw_lines type
     # The lines that start and end a turn, or None for a source that writes none (Claude Code): the Live page then
@@ -869,7 +869,7 @@ class Source(NamedTuple):
     lane: Callable = agent_lane  # path of a file of subagent lines -> the subagent's id, the lane of its Live events
     # (raw_lines.type, text in the line) of the lines whose live_items give an agent item: the id of a spawn call and
     # the subagent it started. None for a source that writes none: Claude Code names the call in agent-<id>.meta.json
-    # beside the subagent's lines.
+    # beside the subagent's lines, Grok only in the call's result.
     spawn: tuple | None = None
     compaction: tuple = ("system", '"compact_boundary"')  # (raw_lines.type, text in the line, '' for any) of a compaction line
     # (cur, {session: prompt id}) -> {session: the prompt's text}, for a source whose prompt lines do not name their prompt;
@@ -897,8 +897,9 @@ SOURCES = {"claude": Source(transcript_files, line_key, Deriver, lambda cur, pat
                             compaction=("compacted", "")),
            "grok": Source(grok.files, grok.key, grok.GrokDeriver, grok.placement, grok.fields,
                           prompt_text=grok.prompt_text, prompt_type="user_message_chunk", prompt_texts=grok.prompt_texts,
-                          live_items=grok.live_items,
-                          close_type="session_end", type=grok.line_type)}
+                          live_items=grok.live_items, close_type="session_end", type=grok.line_type,
+                          turns=Turns(("user_message_chunk",), ("turn_completed",)), lane=lambda path: grok.ids(path)[0],
+                          compaction=("auto_compact_completed", ""))}
 
 
 def rebuild(con, log=None):

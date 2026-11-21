@@ -225,8 +225,43 @@ def error_of(tool, u):
     return content_text(u).strip() or json.dumps(out)[:700]
 
 
+def number(v):
+    return v if isinstance(v, (int, float)) and not isinstance(v, bool) else None
+
+
 def live_items(d):
-    """What the Live page shows of Grok line d. Nothing until Live reads Grok turns."""
+    """What the Live page shows of Grok line d, in store.live_items' shape, plus turn_start and turn_end.
+
+    A turn starts at its prompt line (user_message_chunk) and ends at turn_completed, which a cancelled turn writes too.
+    A prompt can come as several chunk lines, and a reply as many: each chunk is an item with join, the text that goes
+    between it and the chunk before, so live.assemble makes one event of a run of them. Grok states its window only in
+    a compaction notice, so turn_start has none. The spawn_subagent call names its subagent (the child session) from
+    its result, as no line ties the call to the child while it runs. A background shell call has no timeout: it
+    returns at once. Thought chunks give nothing, and no request: Grok's usage comes once a turn ends."""
+    u = update(d)
+    t = u.get("sessionUpdate")
+    if t == "user_message_chunk":
+        text = chunk_text(u).strip()
+        return [dict(k="turn_start", window=None)] + ([dict(k="prompt", text=text, join="\n")] if text else [])
+    if t == "agent_message_chunk":
+        text = chunk_text(u)
+        return [dict(k="reply", text=text, join="")] if text.strip() else []
+    if t == "turn_completed":
+        return ([dict(k="interrupt")] if u.get("stop_reason") == "cancelled" else []) + [dict(k="turn_end")]
+    if t == "auto_compact_completed":
+        return [dict(k="compaction", pre=u.get("tokens_before") if store.is_int(u.get("tokens_before")) else None)]
+    if t == "tool_call" and u.get("toolCallId"):
+        name, _, summary = tool_of(u)
+        raw = u.get("rawInput") if isinstance(u.get("rawInput"), dict) else {}
+        background = raw.get("is_background") is True or raw.get("background") is True
+        return [dict(k="tool_use", id=u["toolCallId"], tool=name, summary=summary,
+                     description=raw.get("description") if isinstance(raw.get("description"), str) else None,
+                     timeout=None if background else number(raw.get("timeout_ms")))]
+    if t == "tool_call_update" and u.get("toolCallId") and u.get("status"):
+        out = u.get("rawOutput") if isinstance(u.get("rawOutput"), dict) else {}
+        agent = out.get("subagent_id") if out.get("type") == "SubagentCompleted" and isinstance(out.get("subagent_id"), str) else None
+        shell = "run_terminal_command" if out.get("type") == "Bash" else None  # the update does not name its tool; its output's type does
+        return [dict(k="tool_result", id=u["toolCallId"], error=error_of(shell, u), output=content_text(u) or mcp_text(out), agent=agent)]
     return []
 
 
