@@ -6,7 +6,7 @@ Activity's Judgments view (`/usage?view=judgments`, once the Insights page): sho
 ## Requirements
 
 ### Requirement: Filter by project, range, source and automated sessions
-The Judgments view SHALL offer the shared project, time range and automated-session filters, in the header beside the heading, and no source filter: every figure is of Claude Code sessions, and the view SHALL ask the app for every source whatever the URL's source. Every figure and list SHALL count only facets of sessions in the view. A session belongs to a range by its start time. The filters SHALL be kept in the page URL and carried across pages.
+The Judgments view SHALL offer the shared project, time range and automated-session filters, in the scope bar, and no source filter: every figure is of Claude Code sessions, and the view SHALL ask the app for every source whatever the URL's source. Every figure and list SHALL count only facets of sessions in the view. A session belongs to a range by its start time. The filters SHALL be kept in the page URL and carried across pages.
 
 #### Scenario: One project
 - **WHEN** the user opens `/usage?project=ai-ledger&range=30&view=judgments`
@@ -157,34 +157,15 @@ The Judgments view SHALL say, behind the sub line's How measured toggletip, that
 - **THEN** the toggletip says a session counts by its start time and that Overview counts a session with a request in the range
 
 ### Requirement: Order the Judgments view
-When the view has analysed sessions, the Judgments view SHALL show, in this order: Activity's view switch, the lede with the filters beside it, its sub line, the coverage note, the section index, the vitals, one row holding Outcomes and Friction categories, the Trend panel when it is shown, Satisfaction and helpfulness, the analysed sessions, then the drawers: Goals, Session types, Session figures, Coverage and How this works. Each drawer SHALL be closed by default.
+When the view has analysed sessions, the Judgments view SHALL show, in this order: Activity's view switch, the lede, its sub line, the coverage note, the vitals, one row holding Outcomes and Friction categories, the Trend panel when it is shown, Satisfaction and helpfulness, the analysed sessions, then the drawers: Goals, Session types, Session figures, Coverage and How this works. Each drawer SHALL be closed by default. Its filters are in the scope bar.
 
 #### Scenario: Order with figures
-- **WHEN** the view holds analysed sessions across 2 or more weeks
+- **WHEN** the view holds facets of analysed sessions across 2 or more weeks, and session-meta rows
 - **THEN** the sections read in the order Outcomes, Friction categories, Outcome trend, Satisfaction and helpfulness, Analysed sessions, Goals, Session types, Session figures, Coverage, How this works, and the drawers are closed
 
 #### Scenario: Order without a trend
 - **WHEN** the view holds analysed sessions from one week only
 - **THEN** the Trend panel is left out and the other sections keep their order
-
-### Requirement: Index the Judgments view's sections
-With analysed sessions, the Judgments view SHALL show a section index after the coverage note: Summary, Outcomes, Friction, Trend when shown, Satisfaction, Sessions, then the drawers. With none, it SHALL list Summary and the drawers it has: Session figures for session-meta rows in the view, How this works for facets in the store. An empty store, with no facet and no session-meta row, SHALL show no index. Choosing a drawer SHALL open it and scroll to it. No entry SHALL be named Overview.
-
-#### Scenario: Jump to a drawer
-- **WHEN** the user chooses Goals in the section index
-- **THEN** the Goals drawer opens and scrolls into view
-
-#### Scenario: No figures
-- **WHEN** the store holds no facet and no session-meta row
-- **THEN** no section index is shown
-
-#### Scenario: No analysed sessions
-- **WHEN** the store has facets, and the view has no facet and no session-meta row
-- **THEN** the index lists Summary and How this works only
-
-#### Scenario: Session figures but no judgments
-- **WHEN** the store has facets, and the filtered view has session-meta rows but no facet
-- **THEN** the index lists Summary, Session figures and How this works
 
 ### Requirement: Sort analysed sessions
 The page SHALL let the user order the listed sessions by Newest (the default), Oldest or Outcome. Outcome SHALL put the worst first: not achieved, partially achieved, unclear or unknown, mostly achieved, fully achieved, and sessions with the same outcome newest first. The choice SHALL last for the page visit, also across a view with no list, and SHALL NOT be kept in the page URL. The list's description SHALL say the order in words.
@@ -394,14 +375,14 @@ The drawer SHALL list every language the view's session-meta rows name, most cou
 - **THEN** the ledger shows 12 and a control to show all 15
 
 ### Requirement: Show session figures only when counted
-The drawer SHALL appear, and be listed in the section index, only when the view has a session-meta row. It SHALL appear in a view with no analysed session. For source Codex the app SHALL send empty figures.
+The drawer SHALL appear only when the view has a session-meta row. It SHALL appear in a view with no analysed session. For source Codex the app SHALL send empty figures.
 
 #### Scenario: Codex
 - **WHEN** the app is asked for the judgments of source Codex
 - **THEN** the figures count no sessions
 
 #### Scenario: No analysed session
-- **WHEN** the view has session-meta rows and no facet
+- **WHEN** the view has session-meta rows and no facet, and the store has facets of other sessions
 - **THEN** the drawer is shown beside the How this works drawer
 
 ### Requirement: Show a measured line on each session

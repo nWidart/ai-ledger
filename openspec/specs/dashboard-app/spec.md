@@ -695,11 +695,15 @@ The border of an input and a select SHALL have a contrast of at least 3:1 agains
 - **THEN** the text has at least 4.5:1 against its background
 
 ### Requirement: Keep targets clear of the sticky navigation
-A section or field that the user jumps to, or that takes keyboard focus, SHALL NOT end up under the sticky navigation or the section index.
+A section or field that the user jumps to, or that takes keyboard focus, SHALL NOT end up under the sticky navigation or the scope bar.
 
 #### Scenario: Jump to a section
-- **WHEN** the user chooses a section in the section index of Activity's Judgments view
-- **THEN** the section's heading shows below the sticky navigation and the index, not under them
+- **WHEN** the user follows "by project and run" in the coverage note of Activity's Judgments view
+- **THEN** the Coverage drawer opens, and its heading shows below the navigation and the scope bar, not under them
+
+#### Scenario: Tab to a control
+- **WHEN** the user tabs to a control that is above the scope bar's bottom edge after a scroll
+- **THEN** the page scrolls so the control shows below the scope bar
 
 ### Requirement: Pause the status poll in a hidden tab
 The navigation's status poll, and any other background poll the page makes, SHALL stop while the tab is hidden, and SHALL fetch once on return to the tab, then resume its interval. Background polls SHALL use low fetch priority. A poll SHALL NOT delay the page's own data requests.
@@ -1105,7 +1109,7 @@ Every drawer SHALL be closed when its page loads, on every page and after every 
 - **THEN** every drawer on the page is closed
 
 ### Requirement: Open one drawer at a time
-A page SHALL show at most one open drawer. Opening a drawer, by its toggle, the section index or an action that opens it, SHALL close the page's other open drawer. Closing a drawer SHALL open no other.
+A page SHALL show at most one open drawer. Opening a drawer, by its toggle or an action that opens it, SHALL close the page's other open drawer. Closing a drawer SHALL open no other.
 
 #### Scenario: Open a second drawer
 - **WHEN** the Tokens and cache drawer on Cost is open and the user opens the Most expensive sessions drawer
@@ -1154,21 +1158,6 @@ A sheet opened while another modal sheet is open SHALL stack over it and offer "
 #### Scenario: A deep link to both
 - **WHEN** on a narrow screen the user opens `/errors?range=30&session=abc&cat=x`
 - **THEN** the session sheet is on top with "← Back" and focus, Escape closes it first, and the type sheet stays open under it
-
-### Requirement: Keep the section index current
-The section index SHALL mark the section in view again after a drawer opens or closes, since that moves what is in view. Its links SHALL stay on one line: when they do not fit, the index SHALL scroll sideways and keep the marked link in view, also after a resize or a change of its links that leaves the same section marked.
-
-#### Scenario: A drawer brings the page's end into view
-- **WHEN** the user opens the last drawer and the page's end comes into view
-- **THEN** the index marks that drawer
-
-#### Scenario: A narrow window
-- **WHEN** the window is 1,000 px wide and the index has more links than fit
-- **THEN** the links stay on one line and the index scrolls sideways
-
-#### Scenario: Narrowed with the last link marked
-- **WHEN** the last link is marked and the user narrows the window until the links no longer fit
-- **THEN** the index scrolls sideways to keep the last link in view
 
 ### Requirement: Write durations in one unit
 A duration SHALL read in one unit: seconds under a minute ("42s"), minutes under an hour ("7m"), then hours with one decimal under 10 hours ("1.5h", "2h") and none from 10 ("13h"). The unit SHALL be picked after rounding. Two formats MAY use two units: Limits' spans (headroom, freshness and time at a limit), the same wherever Limits shows them, and Live's ticking timer.
@@ -1298,23 +1287,23 @@ The app SHALL mount the project, tool, MCP server, skill and session sheets once
 - **THEN** the app holds one shared sheet host, the shell's, and no page mounts another; Errors' own type sheet still stacks with it as stacking allows
 
 ### Requirement: Show a page only the filters that change it
-Each page SHALL show a shared filter only when it changes what the page shows; a filter not shown SHALL keep its URL value for the other pages. The filters shown SHALL keep one order: project, range, source, then the automated toggle. A filter that applies to the whole page SHALL sit in the page header beside the heading; one that sets some sections only SHALL sit in the header of the section it sets, as Limits' range does. A page's own controls sit where they act, as on Errors.
+Each page SHALL show a shared filter only when it changes what the page shows; a filter not shown SHALL keep its URL value for the other pages. The filters shown SHALL sit in the scope bar in one order: project, range, source, then the automated toggle. A filter that sets some sections only SHALL sit in the header of the section it sets, as Limits' range does. A page's own controls sit where they act, as on Errors.
 
 #### Scenario: Judgments has no source filter
 - **WHEN** the user opens Activity's Judgments view with `source=claude` in the URL
-- **THEN** the view shows the project, range and automated filters and no source filter, and a range change keeps `source=claude` in the URL
+- **THEN** the scope bar shows the project, range and automated filters and no source filter, and a range change keeps `source=claude` in the URL
 
 #### Scenario: Limits
 - **WHEN** the user opens Limits
-- **THEN** its header shows the source filter, Past windows' header shows the range, and there is no project filter or automated toggle
+- **THEN** the scope bar shows the source filter only, Past windows' header shows the range, and there is no project filter or automated toggle
 
 #### Scenario: Errors
 - **WHEN** the user opens Errors
-- **THEN** its header holds only the project, range and source filters, and Day / Week sits in the rate chart's header
+- **THEN** the scope bar holds only the project, range and source filters, and Day / Week sits in the rate chart's header
 
 #### Scenario: Live
 - **WHEN** the user opens Live
-- **THEN** it shows the project and source filters and the automated toggle, and no range
+- **THEN** the scope bar shows the project and source filters and the automated toggle, and no range
 
 ### Requirement: Redirect the old Insights address
 `/insights` SHALL open Activity's Judgments view. The app SHALL replace the address with `/usage`, add `view=judgments` and keep every other key (the filters, the judgment filters and an open sheet) and a section anchor. It SHALL add no history entry. A link in the earlier hash form SHALL open the same way. For `source=codex`, the rule that opens Overview for the judgments of Codex overrides keeping every key.
@@ -1349,3 +1338,71 @@ An explanation that a page gave only as hover text on a column header, a filter 
 #### Scenario: Status strip figure
 - **WHEN** a screen reader user reaches the cache-read share in the Live status strip
 - **THEN** its explanation is available without a pointer
+
+### Requirement: Show the page-wide filters in one scope bar
+The page-wide filters SHALL sit in one scope bar directly under the navigation, the same place on every page, and no page header SHALL hold one. The bar SHALL stick under the navigation while the page scrolls. A page that shows none of the shared filters SHALL show no bar. A control that sets some sections only SHALL stay where it acts: Limits' range in Past windows, Errors' Day / Week in the rate chart, Cost's plan gauge beside Cost's heading.
+
+#### Scenario: Same place on every page
+- **WHEN** the user goes from Cost to Errors, then to Limits
+- **THEN** each page shows its filters in the bar under the navigation, at the same height, and its header holds none
+
+#### Scenario: Scrolled
+- **WHEN** the user scrolls Cost down to its drawers
+- **THEN** the navigation and the scope bar stay at the top of the window
+
+#### Scenario: Cost's plan gauge
+- **WHEN** the user opens Cost for a view with a monthly projection
+- **THEN** the plan gauge sits beside the heading, not in the scope bar
+
+### Requirement: Keep at most two bars stuck to the top
+No page SHALL keep more than two bars stuck to the top of the window: the navigation and the scope bar. No page SHALL show a sticky section index. A header that sticks inside a pane, as Errors' type header and example bar do on a wide screen, SHALL stick under both bars.
+
+#### Scenario: Cost
+- **WHEN** the user scrolls Cost at 1440×900
+- **THEN** only the navigation and the scope bar are stuck to the top, and there is no section index
+
+#### Scenario: Judgments
+- **WHEN** the user scrolls Activity's Judgments view to its drawers at 1440×900
+- **THEN** only the navigation and the scope bar are stuck to the top, and there is no section index
+
+#### Scenario: A phone
+- **WHEN** the user scrolls any page on a phone 390px wide
+- **THEN** only the navigation and the scope bar are stuck to the top
+
+#### Scenario: Errors' examples
+- **WHEN** the user scrolls through a type's examples on Errors at 1440×900
+- **THEN** the type header sticks right under the scope bar, and the example bar right under the type header
+
+### Requirement: Collapse the scope bar on narrow screens
+On a narrow screen the scope bar SHALL be one row: a Filters button, named with how many of the page's filters are off their default and showing that count, then, with a project picked, the project and its Brief link. The button SHALL open the page's filters over the page, so nothing on it moves. A filter change SHALL keep them open and focus on the control; Escape SHALL close them and return focus to the button.
+
+#### Scenario: A phone with filters set
+- **WHEN** the user views Cost for `foo` and the last 7 days on a phone 390px wide
+- **THEN** the bar is one row, no taller than the navigation, with "Filters" showing 2, `foo` and Brief, and the page does not scroll sideways
+
+#### Scenario: Change the range
+- **WHEN** the user opens Filters on a phone and picks 7d
+- **THEN** the filters stay open, focus stays on 7d, and the button's count follows
+
+#### Scenario: Close
+- **WHEN** the user presses Escape in the open filters
+- **THEN** they close and focus is on the Filters button
+
+#### Scenario: Only the page's filters count
+- **WHEN** the user views Limits on a phone with `project=foo`, `range=7` and `source=codex` in the URL
+- **THEN** the button says one filter is set: Limits shows only the source
+
+### Requirement: Keep one keyboard order through the bars
+On every page Tab SHALL reach the navigation, then the scope bar's controls in this order: project, clear project, range, source, automated, Brief, then the page. Skip to content SHALL still move focus to the page heading. Changing a filter SHALL keep focus on the control that changed it.
+
+#### Scenario: Cost
+- **WHEN** the user tabs past the navigation's last control on Cost with a project picked
+- **THEN** focus moves to the project picker, and Brief is the bar's last stop before the page
+
+#### Scenario: Limits
+- **WHEN** the user tabs past the navigation's last control on Limits
+- **THEN** focus moves to the source filter's first choice
+
+#### Scenario: Skip to content
+- **WHEN** the user activates Skip to content on any page
+- **THEN** focus moves to the page heading, past both bars
