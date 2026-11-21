@@ -10,7 +10,7 @@ How to read a step:
 
 ## 1. Dependency
 
-- [ ] 1.1 Add `echarts` 6.1.0 (exact version) to `dependencies` in `web/package.json` and update `web/package-lock.json`. Import it nowhere yet. Verify: `cd web && npm ci && npm run check` passes, and `ls src/ai_ledger/web/assets` shows no `echarts-*.js`. **Order:** first. **Model:** Sonnet.
+- [x] 1.1 Add `echarts` 6.1.0 (exact version) to `dependencies` in `web/package.json` and update `web/package-lock.json`. Import it nowhere yet. Verify: `cd web && npm ci && npm run check` passes, and `ls src/ai_ledger/web/assets` shows no `echarts-*.js`. **Order:** first. **Model:** Sonnet.
 
 ## 2. Foundation
 
