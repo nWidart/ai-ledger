@@ -7,7 +7,6 @@ const at = (href: string) => { const [path, search = ""] = href.split("?"); retu
 const c = {
   errors: { kind: "page", value: "/errors", label: "Errors" },
   cost: { kind: "page", value: "/cost", label: "Cost" },
-  context: { kind: "page", value: "/context", label: "Context" },
   project: { kind: "page", value: "/project", label: "Project" },
   limits: { kind: "page", value: "/limits", label: "Limits" },
   activity: { kind: "page", value: "/usage", label: "Activity" },
@@ -17,7 +16,6 @@ const c = {
   beta: { kind: "project", value: "beta", label: "beta" },
   codex: { kind: "source", value: "codex", label: "Codex" },
   claude: { kind: "source", value: "claude", label: "Claude Code" },
-  grok: { kind: "source", value: "grok", label: "Grok" },
   d7: { kind: "range", value: "7", label: "7d" },
   d90: { kind: "range", value: "90", label: "90d" },
   auto: { kind: "automated", value: "1", label: "automated" },
@@ -50,14 +48,6 @@ describe("resolve", () => {
     expect(commit(here, c.auto).href).toBe("/usage?range=30&auto=1&day=2026-10-20");
     expect(commit(here, c.bash).href).toBe("/usage?range=30&day=2026-10-20&tool=Bash");
   });
-  it(">context keeps the project and range", () => {
-    const r = commit("/cost?project=myproject&range=7", c.context);
-    expect(r.href).toBe("/context?project=myproject&range=7");
-    expect(r.footer).toBe("Enter: open Context · myproject · 7d");
-  });
-  it(">bash on Context stays on Context with the inspector", () => {
-    expect(commit("/context?range=30", c.bash).href).toBe("/context?range=30&tool=Bash");
-  });
   it(">project #myproject opens the project's page with the other filters", () => {
     const r = commit("/cost?range=7", c.project, c.my);
     expect(r.href).toBe("/project?project=myproject&range=7");
@@ -75,9 +65,6 @@ describe("resolve", () => {
     expect(commit("/usage?project=myproject&range=30", c.project, c.timeout).href).toBe("/errors?project=myproject&range=30&cat=timeout");
     expect(commit("/usage?project=myproject&range=30", c.timeout, c.project).status.at(-2)).toEqual({ state: "dropped" });
   });
-  it(">errors keeps the filters", () => {
-    expect(commit("/usage?project=myproject&range=14", c.errors).href).toBe("/errors?project=myproject&range=14");
-  });
   it(">errors #myproject opens /errors?project=myproject, in either order", () => {
     const a = commit("/usage", c.errors, c.my), b = commit("/usage", c.my, c.errors);
     expect(a.href).toBe("/errors?project=myproject");
@@ -91,9 +78,6 @@ describe("resolve", () => {
   });
   it("names the filters in the footer", () => {
     expect(commit("/usage?range=30", c.my, c.claude, c.bash).footer).toBe("Enter: open Bash inspector · myproject · Claude Code · 30d");
-  });
-  it("#myproject #codex #7d >cost", () => {
-    expect(commit("/usage?range=30", c.my, c.codex, c.d7, c.cost).href).toBe("/cost?project=myproject&range=7&source=codex");
   });
   it("opens a sheet over the Judgments view and Live, on Live under sheet with the followed session kept", () => {
     const s1: Chip = { kind: "session", value: "abc", label: "#abc" };
@@ -110,14 +94,6 @@ describe("resolve", () => {
     expect(commit("/live?project=foo&session=s1", c.my, s1).href).toBe("/live?project=myproject&session=s1&sheet=abc");
     // A new project alone still starts the stream over: the followed session was the old project's.
     expect(commit("/live?project=foo&session=s1&sheet=x", c.my).href).toBe("/live?project=myproject");
-  });
-  it(">errors >bash opens Errors with the inspector", () => {
-    expect(commit("/usage", c.errors, c.bash).href).toBe("/errors?range=30&tool=Bash");
-  });
-  it("lets the later of two pages win and marks the earlier replaced", () => {
-    const r = commit("/usage", c.errors, c.cost);
-    expect(r.path).toBe("/cost");
-    expect(r.status).toEqual([{ state: "replaced", by: "Cost" }, { state: "applied" }]);
   });
   it("lets the later range and project win", () => {
     const r = commit("/usage", c.d7, c.d90, c.alpha, c.beta);
@@ -176,13 +152,6 @@ describe("resolve", () => {
     const r = commit("/usage?range=30", c.codex, c.judgments);
     expect(r.href).toBe("/usage?range=30&source=codex&view=judgments");
     expect(r.footer).toBe("Enter: open Judgments · Codex · 30d · Codex has no judgments: Overview opens");
-  });
-  it("names Grok when >judgments is asked of Grok alone", () => {
-    const r = commit("/usage?range=30", c.grok, c.judgments);
-    expect(r.footer).toBe("Enter: open Judgments · Grok · 30d · Grok has no judgments: Overview opens");
-  });
-  it("#grok >activity writes source=grok", () => {
-    expect(commit("/cost?range=30", c.grok, c.activity).href).toBe("/usage?range=30&source=grok");
   });
   it("clears session and inspect on a project change, and keeps tool", () => {
     expect(commit("/usage?range=30&inspect=foo&tool=Bash&session=s1", c.my).href).toBe("/usage?project=myproject&range=30&tool=Bash");

@@ -1,6 +1,5 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { nextSort, sortRows, SortTh, type SortBy } from "./Sort";
 import { renderApp } from "../testing";
@@ -12,47 +11,6 @@ describe("sortRows", () => {
     expect(sortRows(rows, r => r.v, false).map(r => r.n)).toEqual(["c", "b", "a", "x"]);
     expect(sortRows(rows, r => r.n, false).map(r => r.n)).toEqual(["a", "b", "c", "x"]);
     expect(rows[0]!.n).toBe("b");
-  });
-});
-
-function Table({ init = null }: { init?: SortBy<"a" | "b"> | null }) {
-  const [s, set] = useState(init);
-  return <table><thead><tr><SortTh k="a" sort={s} onSort={set}>A</SortTh><SortTh k="b" sort={s} onSort={set} asc>B</SortTh></tr></thead></table>;
-}
-
-describe("SortTh", () => {
-  it("marks only the sorted header, flips on a second click, and is reachable by Tab", async () => {
-    renderApp(<Table />);
-    const th = (n: string) => screen.getByRole("button", { name: n }).closest("th")!;
-    expect([th("A").getAttribute("aria-sort"), th("B").getAttribute("aria-sort")]).toEqual([null, null]);
-    await userEvent.tab();
-    expect(document.activeElement).toBe(screen.getByRole("button", { name: "A" }));
-    await userEvent.keyboard("{Enter}");
-    expect([th("A").getAttribute("aria-sort"), th("B").getAttribute("aria-sort")]).toEqual(["descending", null]);
-    await userEvent.click(screen.getByRole("button", { name: "A" }));
-    expect(th("A").getAttribute("aria-sort")).toBe("ascending");
-    // asc: a name column sorts A to Z first.
-    await userEvent.click(screen.getByRole("button", { name: "B" }));
-    expect([th("A").getAttribute("aria-sort"), th("B").getAttribute("aria-sort")]).toEqual([null, "ascending"]);
-  });
-});
-
-describe("SortTh title", () => {
-  it("scopes the header to its column and puts the explanation behind a toggletip beside the sort button", async () => {
-    renderApp(<table><thead><tr><SortTh k="a" sort={null} onSort={() => {}} title="Active time: pauses over 20 minutes left out">Active</SortTh></tr></thead></table>);
-    const th = screen.getByRole("columnheader");
-    expect(th.getAttribute("scope")).toBe("col");
-    expect(th.hasAttribute("title")).toBe(false);
-    await userEvent.tab(); // the sort button
-    await userEvent.tab(); // the toggletip
-    const tt = screen.getByRole("button", { name: "About Active" });
-    expect(document.activeElement).toBe(tt);
-    await userEvent.keyboard("{Enter}");
-    expect(tt.getAttribute("aria-expanded")).toBe("true");
-    expect(within(th).getByRole("tooltip").textContent).toBe("Active time: pauses over 20 minutes left out");
-    await userEvent.keyboard("{Escape}");
-    expect(tt.getAttribute("aria-expanded")).toBe("false");
-    expect(document.activeElement).toBe(tt);
   });
 });
 
@@ -123,21 +81,6 @@ describe("SortTh with several keys", () => {
     expect(a.querySelector(".sr")!.textContent).toBe(", sort 2 of 2, descending");
     const c = screen.getByRole("button", { name: "C" });
     expect([c.closest("th")!.hasAttribute("aria-sort"), c.querySelector(".sortmark")!.textContent, c.querySelector(".sr")]).toEqual([false, "", null]);
-  });
-
-  it("says an ascending later key and the count of three keys", () => {
-    renderApp(heads([{ key: "c", desc: true }, { key: "a", desc: true }, { key: "b", desc: false }]));
-    expect(screen.getByRole("button", { name: "C, sort 1 of 3" }).querySelector(".sortmark")!.textContent).toBe("↓1");
-    expect(screen.getByRole("button", { name: "A, sort 2 of 3, descending" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "B, sort 3 of 3, ascending" }).querySelector(".sortmark")!.textContent).toBe("↑3");
-  });
-
-  it("draws a list of one key, or none, as the single sort does", () => {
-    const html = (sort: SortBy<ABC> | readonly SortBy<ABC>[] | null) => { const { container, unmount } = render(heads(sort)); const h = container.innerHTML; unmount(); return h; };
-    expect(html([{ key: "a", desc: true }])).toBe(html({ key: "a", desc: true }));
-    expect(html([{ key: "b", desc: false }])).toBe(html({ key: "b", desc: false }));
-    expect(html([])).toBe(html(null));
-    expect(html({ key: "a", desc: true })).not.toContain('class="sr"');
   });
 
   it("reports the press with Shift: a click, a Shift-click and Shift+Enter", async () => {

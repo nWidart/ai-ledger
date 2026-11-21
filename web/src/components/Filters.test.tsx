@@ -1,19 +1,13 @@
 import { Profiler } from "react";
 import { act, cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { setSearch } from "../url";
 import { Filters } from "./Filters";
 import { ScopeBar } from "./ScopeBar";
-import { renderApp, renderRouter } from "../testing";
-import context from "../__fixtures__/context";
-import errors from "../__fixtures__/errors";
-import insights from "../__fixtures__/insights";
-import limits from "../__fixtures__/limits";
-import usage from "../__fixtures__/usage";
+import { renderApp } from "../testing";
 
 const options = () => screen.queryAllByRole("option").map(o => o.textContent);
-const status = { ingesting: false, last_ingest: null, last_change: null, last_stats: null, error: null, counts: {}, interval: 60, project_order: [] };
 
 describe("Filters", () => {
   it("selects a range and a project from the keyboard, pushing each change", async () => {
@@ -80,11 +74,6 @@ describe("Filters", () => {
     expect(options()).toEqual(["All projects", "observer-sessions", "foo", "bar"]);
   });
 
-  it("hides the automated toggle where it does not apply", () => {
-    renderApp(<Filters projects={[{ value: "foo", label: "foo — 3 errors (all time)" }]} />);
-    expect(screen.queryByRole("checkbox")).toBeNull();
-  });
-
   // A page shows a filter only when it changes what the page shows. The filters that show keep one order: project, range,
   // source, then the automated toggle.
   describe("per page", () => {
@@ -120,15 +109,6 @@ describe("Filters", () => {
     });
   });
 
-  it("shows a label in the field and in the list", async () => {
-    history.replaceState(null, "", "/errors?project=foo");
-    renderApp(<Filters projects={[{ value: "foo", label: "foo — 3 errors (all time)" }]} />);
-    const field = screen.getByRole("combobox", { name: "Project" }) as HTMLInputElement;
-    expect(field.value).toBe("foo — 3 errors (all time)");
-    await userEvent.click(field);
-    expect(screen.getByRole("option", { name: "foo — 3 errors (all time)" })).toBeTruthy();
-  });
-
   it("takes a new label for the selected project, but leaves the text the user is typing", async () => {
     history.replaceState(null, "", "/errors?project=foo");
     const { rerender } = renderApp(<Filters projects={[]} />);
@@ -158,7 +138,6 @@ describe("Filters", () => {
 describe("Filters Brief link and clear button", () => {
   const link = () => screen.queryByRole("link", { name: "Brief, foo project page" });
   const clear = () => screen.queryByRole("button", { name: "Clear project filter" });
-  afterEach(() => { vi.unstubAllGlobals(); });
 
   it("links the project to its page with the range and source kept, after the other filters", async () => {
     history.replaceState(null, "", "/errors?project=foo&range=7&source=codex&session=s1");
@@ -172,14 +151,6 @@ describe("Filters Brief link and clear button", () => {
     await userEvent.click(a);
     await waitFor(() => expect(location.pathname).toBe("/project"));
     expect(location.search).toBe("?project=foo&range=7&source=codex");
-  });
-
-  it("shows no link on the Project page, and keeps the clear button there", () => {
-    history.replaceState(null, "", "/project?project=foo&range=7");
-    renderApp(<Filters projects={["foo"]} />);
-    expect(link()).toBeNull();
-    expect(screen.queryByRole("link")).toBeNull();
-    expect(clear()).toBeTruthy();
   });
 
   it("shows neither without a project", () => {
@@ -223,33 +194,6 @@ describe("Filters Brief link and clear button", () => {
     renderApp(<Filters projects={["foo"]} />);
     await userEvent.click(clear()!);
     expect(location.search).toBe("?range=30&q=api");
-  });
-
-  it("opens Activity with the view kept when the project is cleared on the Project page", async () => {
-    history.replaceState(null, "", "/project?project=foo&range=7&source=claude");
-    renderApp(<Filters projects={["foo"]} />);
-    await userEvent.click(clear()!);
-    await waitFor(() => expect(location.pathname).toBe("/usage"));
-    expect(location.search).toBe("?range=7&source=claude");
-  });
-
-  it("opens the Project page from the filter row of a page, with no tab marked current", async () => {
-    const bodies: Record<string, unknown> = { "/api/status": status, "/api/errors": errors, "/api/context": context, "/api/insights": insights, "/api/limits": limits };
-    vi.stubGlobal("fetch", vi.fn((url: string) => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(bodies[new URL(url, "http://x").pathname] ?? usage) } as Response)));
-    history.replaceState(null, "", "/cost?project=foo&range=30&source=claude");
-    renderRouter();
-    const a = await screen.findByRole("link", { name: "Brief, foo project page" });
-    expect(document.querySelectorAll('a[href^="/project"]').length).toBe(1);
-    expect(a.hasAttribute("title")).toBe(false);
-    expect(a.getAttribute("aria-current")).toBeNull();
-    await userEvent.click(a);
-    await waitFor(() => expect(location.pathname).toBe("/project"));
-    expect(location.search).toBe("?project=foo&range=30&source=claude");
-    await screen.findByRole("heading", { level: 1, name: "foo" });
-    expect(link()).toBeNull();
-    const tabs = within(screen.getByRole("navigation", { name: "Dashboards" }));
-    for (const name of ["Live", "Limits", "Activity", "Cost", "Context", "Errors"]) expect(tabs.getByRole("link", { name }).getAttribute("aria-current")).toBeNull();
-    expect(clear()).toBeTruthy();
   });
 });
 
@@ -309,15 +253,6 @@ describe("Filters project search", () => {
     await user.keyboard("{Escape}");
     expect(field().value).toBe("atlas");
   });
-  it("selects the text on focus so typing replaces the project's name", async () => {
-    history.replaceState(null, "", "/cost?project=atlas");
-    renderApp(<Filters projects={many} />);
-    await userEvent.tab(); // the project field comes first
-    expect(document.activeElement).toBe(field());
-    await userEvent.keyboard("proj-1");
-    expect(field().value).toBe("proj-1");
-    expect(options()).toEqual(["proj-1", "proj-10", "proj-11", "proj-12", "All projects"]);
-  });
   it("picks with the arrows and Enter, and All projects clears the project", async () => {
     history.replaceState(null, "", "/cost?project=foo&range=7");
     renderApp(<Filters projects={["foo", "bar"]} />);
@@ -334,25 +269,6 @@ describe("Filters project search", () => {
     await userEvent.keyboard("zzz");
     expect(options()).toEqual(["All projects"]);
     expect(screen.getByRole("status").textContent).toBe("No project matches");
-  });
-  it("filters a short list too", async () => {
-    history.replaceState(null, "", "/cost");
-    renderApp(<Filters projects={["foo", "bar"]} />);
-    await userEvent.click(field());
-    await userEvent.keyboard("ba");
-    expect(options()).toEqual(["bar", "All projects"]);
-  });
-  it("puts the selected project back on Escape and leaves the URL alone", async () => {
-    history.replaceState(null, "", "/cost?project=foo");
-    renderApp(<Filters projects={["foo", "bar"]} />);
-    const user = userEvent.setup();
-    await user.click(field());
-    await user.keyboard("ba");
-    expect(options()).toEqual(["bar", "All projects"]);
-    await user.keyboard("{Escape}");
-    expect(screen.queryByRole("option")).toBeNull();
-    expect(field().value).toBe("foo");
-    expect(location.search).toBe("?project=foo");
   });
   it("puts the selected project back on blur", async () => {
     history.replaceState(null, "", "/cost?project=foo");

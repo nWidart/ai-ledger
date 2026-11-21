@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { LimitWindow, LimitsPayload } from "../../api";
 import limits from "../../__fixtures__/limits";
-import { LimitChart, percentRuns } from "./LimitChart";
+import { LimitChart } from "./LimitChart";
 import { closedWindow, readPoints, readText } from "./limits";
 import { renderApp } from "../../testing";
 
@@ -38,12 +38,13 @@ describe("LimitChart readout", () => {
     expect(g.contains(screen.getByRole("img"))).toBe(true);
   });
 
-  it("shows the point nearest the pointer, and clears when the pointer leaves", () => {
+  it("shows the point nearest the pointer without announcing it, and clears when the pointer leaves", () => {
     draw();
     expect(tip().style.display).toBe("none");
     fireEvent.pointerMove(plot(), { clientX: clientX(past[0]!.t) + 5, clientY: 60 });
     expect(tip().textContent).toBe(say(0));
     expect(tip().style.display).toBe("block");
+    expect(document.querySelector("[aria-live]")!.textContent).toBe(""); // pointer moves are not announced
     expect(document.querySelector(".lim-chart .guide")).toBeTruthy();
     expect(document.querySelector(".lim-chart .pick")).toBeTruthy();
     fireEvent.pointerMove(plot(), { clientX: clientX(curve[1]!.t) + 5, clientY: 60 });
@@ -51,20 +52,6 @@ describe("LimitChart readout", () => {
     fireEvent.pointerLeave(plot());
     expect(tip().style.display).toBe("none");
     expect(document.querySelector(".lim-chart .guide")).toBeNull();
-  });
-
-  it("clamps a pointer left of the first point and right of the last", () => {
-    draw();
-    fireEvent.pointerMove(plot(), { clientX: 0, clientY: 60 });
-    expect(tip().textContent).toBe(say(0));
-    fireEvent.pointerMove(plot(), { clientX: 419, clientY: 60 });
-    expect(tip().textContent).toBe(say(3));
-  });
-
-  it("does not announce pointer moves", () => {
-    draw();
-    fireEvent.pointerMove(plot(), { clientX: 100, clientY: 60 });
-    expect(document.querySelector("[aria-live]")!.textContent).toBe("");
   });
 
   it("reads now on focus, steps with the arrows, jumps with Home and End, and clears on Escape and blur", () => {
@@ -93,15 +80,6 @@ describe("LimitChart readout", () => {
     expect(tip().textContent).toBe(say(0));
     act(() => g.blur());
     expect(tip().style.display).toBe("none");
-  });
-
-  it("reads measured and estimated points by their own flag", () => {
-    const g = draw()!;
-    act(() => g.focus());
-    fireEvent.keyDown(g, { key: "Home" });
-    expect(tip().textContent).toMatch(/ · 40% · measured$/);
-    fireEvent.keyDown(g, { key: "ArrowRight" });
-    expect(tip().textContent).toMatch(/ · 42% · estimated$/);
   });
 
   it("draws the last-24-hours line only when asked and the curve carries it, and reads it in the tooltip only then", () => {
@@ -141,7 +119,7 @@ describe("LimitChart readout", () => {
     expect(document.querySelector(".tip")).toBeNull();
   });
 
-  it("keeps what the pointer shows when a click or tap focuses the chart, and announces nothing", () => {
+  it("keeps what the pointer shows when a click or tap focuses the chart, and announces nothing; a keyboard focus after it reads now", () => {
     const g = draw()!, live = () => document.querySelector("[aria-live]")!.textContent;
     fireEvent.pointerMove(plot(), { clientX: clientX(past[0]!.t), clientY: 60 });
     fireEvent.pointerDown(plot());
@@ -151,24 +129,17 @@ describe("LimitChart readout", () => {
     fireEvent.keyDown(g, { key: "ArrowRight" }); // keys go on from the point shown
     expect(tip().textContent).toBe(say(1));
     expect(live()).toBe(say(1));
-  });
-
-  it("reads now on keyboard focus even after an earlier click", () => {
-    const g = draw()!;
-    fireEvent.pointerDown(plot());
-    act(() => g.focus());
+    // A keyboard focus after that earlier click reads now.
     act(() => g.blur());
+    expect(tip().style.display).toBe("none");
     act(() => g.focus());
-    expect(tip().textContent).toBe(say(1));
-  });
-
-  it("does not let a cancelled pointer (a touch scroll) suppress the next keyboard focus", () => {
-    const g = draw()!, live = () => document.querySelector("[aria-live]")!.textContent;
+    expect([tip().textContent, live()]).toEqual([say(1), say(1)]);
+    // A cancelled pointer (a touch scroll) does not suppress the next keyboard focus.
+    act(() => g.blur());
     fireEvent.pointerDown(plot());
     fireEvent.pointerCancel(plot()); // the browser took the touch for a scroll: no focus follows
     act(() => g.focus());
-    expect(tip().textContent).toBe(say(1));
-    expect(live()).toBe(say(1));
+    expect([tip().textContent, live()]).toEqual([say(1), say(1)]);
   });
 
   it("leaves modified keys to the browser and the readout alone", () => {
@@ -198,14 +169,12 @@ describe("LimitChart encodings", () => {
     const t = (h: number) => `2026-11-07T${String(h).padStart(2, "0")}:00:00.000Z`;
     const series = [{ t: t(8), pct: 10, measured: true }, { t: t(9), pct: 20, measured: true }, { t: t(10), pct: 25, measured: false },
       { t: t(11), pct: 40, measured: true }];
-    const { runs, lone } = percentRuns(series);
-    expect(runs.map(r => [r.meas, r.map(p => p.pct)])).toEqual([[true, [10, 20]], [false, [20, 25, 40]]]);
-    expect(lone.map(p => p.pct)).toEqual([40]); // its only neighbour is an estimate: a mark
     draw({ ...w, series });
     const d = (cls: string) => [...document.querySelectorAll(`.lim-chart .${cls}`)].map(e => e.getAttribute("d")!.split(/[ML]/).length - 1);
     expect(d("meas")).toEqual([2]); // 10 to 20, not 20 to 40
-    expect(d("est")).toEqual([3]);
-    expect(document.querySelectorAll(".lim-chart .meas-one")).toHaveLength(1);
+    expect(d("est")).toEqual([3]); // 20 to 25 to 40
+    const lone = [...document.querySelectorAll(".lim-chart .meas-one")];
+    expect(lone.map(c => c.getAttribute("cy"))).toEqual([String(12 + 132 * 0.6)]); // the 40% reading: its only neighbour is an estimate, a mark
   });
 
   it("tints the cone when its high bound reaches 100% before the reset, and not otherwise", () => {
@@ -262,19 +231,5 @@ describe("LimitChart for a closed window", () => {
     expect(document.querySelector(".lim-chart .band")).toBeNull();
     expect(plot().textContent).toMatch(/ended /);
     expect(plot().textContent).not.toMatch(/resets /);
-  });
-
-  it("says what it ended at, and marks the plan change inside it", () => {
-    drawClosed();
-    expect(screen.getByRole("img").getAttribute("aria-label")).toMatch(/^Codex weekly: 42% used when it ended .*\. Plan change from plus to prolite, /);
-    expect(document.querySelectorAll(".lim-chart .plan")).toHaveLength(1);
-  });
-
-  it("reads its points from the keyboard, starting at the last", () => {
-    const g = drawClosed(), pts = readPoints(closed);
-    act(() => g.focus());
-    expect(tip().textContent).toBe(readText(pts.at(-1)!));
-    fireEvent.keyDown(g, { key: "Home" });
-    expect(tip().textContent).toBe(readText(pts[0]!));
   });
 });

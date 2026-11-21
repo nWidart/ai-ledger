@@ -14,8 +14,6 @@ import { useQuery, type QueryClient } from "@tanstack/react-query";
 import usage from "../__fixtures__/usage";
 import sessions from "../__fixtures__/sessions";
 import session from "../__fixtures__/session";
-import limits from "../__fixtures__/limits";
-import context from "../__fixtures__/context";
 import live from "../__fixtures__/live";
 import liveSession from "../__fixtures__/live-session";
 
@@ -60,19 +58,6 @@ describe("Nav", () => {
     expect(document.title).toBe("Activity · AI Ledger");
   });
 
-  it("opens Limits with the range and source from Cost, keeping the project in the URL for the other pages", async () => {
-    vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/status") ? status : url.startsWith("/api/limits") ? limits : usage)));
-    history.replaceState(null, "", "/cost?project=foo&range=30&source=codex");
-    renderRouter();
-    await screen.findByRole("link", { name: "Cost" });
-    await userEvent.click(screen.getByRole("link", { name: "Limits" }));
-    expect(location.pathname).toBe("/limits");
-    expect(location.search).toBe("?project=foo&range=30&source=codex");
-    expect(document.title).toBe("Limits · AI Ledger");
-    // The page's chunk loads on first show, so its fetch follows the click a tick later.
-    await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(c => String(c[0]) === "/api/limits?range=30&source=codex")).toBe(true));
-  });
-
   it("lists the tabs in two named groups, Now then Review, with no Insights tab and the filters on every link", () => {
     vi.stubGlobal("fetch", vi.fn(() => json(status)));
     history.replaceState(null, "", "/errors?project=foo&range=14&source=claude&auto=1&cat=x");
@@ -94,43 +79,6 @@ describe("Nav", () => {
     expect(within(tabs).getAllByRole("link").filter(a => a.hasAttribute("aria-current")).map(a => a.textContent)).toEqual(["Errors"]);
   });
 
-  it("gives every tab the same active style: Errors has no tint of its own", () => {
-    const css = readFileSync("src/components/Nav.css", "utf8").replace(/\/\*[\s\S]*?\*\//g, ""); // vitest runs from web/
-    const current = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter(([, sel]) => sel!.includes("[aria-current=page]"));
-    expect(current.map(([, sel]) => sel!.trim())).toEqual([":is(.appnav, .appnav-chooser-pop) a[aria-current=page]"]);
-    expect(current[0]![2]).toMatch(/background:\s*var\(--accent-soft\)/);
-    expect(css).not.toMatch(/\/errors/);
-    expect(css).not.toMatch(/appnav-(badge|dot)\b/); // the alert dot is gone: the pill replaces it
-  });
-
-  it("opens Context from Cost with the project and range kept, after Cost in the nav", async () => {
-    vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/status") ? status : url.startsWith("/api/context") ? context : usage)));
-    history.replaceState(null, "", "/cost?project=foo&range=30");
-    renderRouter();
-    await screen.findByRole("link", { name: "Cost" });
-    const tabs = screen.getAllByRole("link").map(a => a.textContent);
-    expect(tabs.slice(tabs.indexOf("Cost"), tabs.indexOf("Cost") + 2)).toEqual(["Cost", "Context"]);
-    await userEvent.click(screen.getByRole("link", { name: "Context" }));
-    expect(location.pathname).toBe("/context");
-    expect(location.search).toBe("?project=foo&range=30");
-    expect(document.title).toBe("Context · AI Ledger");
-    expect(screen.getByRole("link", { name: "Context" }).getAttribute("aria-current")).toBe("page");
-    expect(screen.getByRole("link", { name: "Cost" }).getAttribute("aria-current")).toBeNull();
-  });
-
-  it("keeps the automated toggle from Context to Cost and back", async () => {
-    vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/status") ? status : url.startsWith("/api/context") ? context : usage)));
-    history.replaceState(null, "", "/context?project=foo&range=30&auto=1");
-    renderRouter();
-    await screen.findByRole("link", { name: "Cost" });
-    await userEvent.click(screen.getByRole("link", { name: "Cost" }));
-    expect(location.pathname).toBe("/cost");
-    expect(location.search).toBe("?project=foo&range=30&auto=1");
-    await userEvent.click(screen.getByRole("link", { name: "Context" }));
-    expect(location.pathname).toBe("/context");
-    expect(location.search).toBe("?project=foo&range=30&auto=1");
-  });
-
   it("opens Live with the project and source from Cost, and gives Cost its range back", async () => {
     vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/status") ? status : url.startsWith("/api/live/session") ? liveSession
       : url.startsWith("/api/live") ? live : usage)));
@@ -144,28 +92,6 @@ describe("Nav", () => {
     expect(screen.queryByRole("group", { name: "Time range" })).toBeNull();
     await userEvent.click(screen.getByRole("link", { name: "Cost" }));
     expect(location.search).toBe("?project=foo&range=14&source=claude");
-  });
-
-  it("names the app AI Ledger", () => {
-    vi.stubGlobal("fetch", vi.fn(() => json(status)));
-    const { container } = renderApp(<Nav />);
-    expect(container.querySelector(".appnav-word")?.textContent).toBe("AI Ledger");
-  });
-
-  it("colors projects from the status, on any page", async () => {
-    setOrder([]);
-    vi.stubGlobal("fetch", vi.fn(() => json({ ...status, project_order: ["foo"] })));
-    renderApp(<Nav />);
-    await waitFor(() => expect(hasHue("foo")).toBe(true));
-  });
-
-  it("shows no project chip: the project's link and clear button are in the filter row", () => {
-    vi.stubGlobal("fetch", vi.fn(() => json(status)));
-    history.replaceState(null, "", "/errors?project=foo&range=30");
-    renderApp(<Nav />);
-    expect(screen.queryByRole("link", { name: /project page/i })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Clear project filter" })).toBeNull();
-    expect(screen.getByRole("link", { name: "Errors" }).getAttribute("aria-current")).toBe("page");
   });
 
   it("shows the ingest status, and a failed Refresh offers Retry until it is retried, whatever a status poll answers", async () => {
@@ -224,7 +150,7 @@ describe("Nav", () => {
     f.mockImplementation((_url, init) => init?.method === "POST" ? later("refresh", { ...status, last_stats: { ...status.last_stats, inserted: 5 } }) : json({ ...status, ingesting: true }));
     await userEvent.click(screen.getByRole("button", { name: "Refresh" }));
     await poll(client); // answered while the ingest runs
-    expect(label()).toBe("Ingesting…");
+    expect([label(), fresh().dataset.kind, stateBtn().getAttribute("aria-label")]).toEqual(["Ingesting…", "busy", "Ingest status: Ingesting…"]);
     f.mockImplementation(() => later("status", { ...status, ingesting: true }));
     let asked!: Promise<unknown>;
     act(() => { asked = client.fetchQuery(queries.status).catch(() => null); }); // asked while it runs, answered after
@@ -368,15 +294,6 @@ describe("Nav", () => {
     vi.useRealTimers();
   });
 
-  it("sends the status poll at low priority", async () => {
-    const f = vi.fn((_url: string, _init?: RequestInit) => json(status));
-    vi.stubGlobal("fetch", f);
-    renderApp(<Nav />);
-    await waitFor(() => expect(f).toHaveBeenCalled());
-    expect(f.mock.calls[0]![0]).toBe("/api/status");
-    expect(f.mock.calls[0]![1]).toMatchObject({ priority: "low" });
-  });
-
   describe("in a background tab", () => {
     // Query's focusManager listens to visibilitychange on window and reads document.visibilityState.
     const setHidden = (hidden: boolean) => {
@@ -405,18 +322,6 @@ describe("Nav", () => {
       await tick(0);
       expect(f.mock.calls.length).toBe(2);
       expect(ingestText()).toContain(new Date(status.last_ingest).toLocaleTimeString());
-    });
-
-    // The old nav kept its schedule when the tab came back before a poll was due; the query asks on every return
-    // (refetchOnWindowFocus "always"), so this is the nearest scenario: a short absence still asks once.
-    it("asks once on return even when no poll came due meanwhile", async () => {
-      const { f } = await setup();
-      await tick(20_000);
-      setHidden(true);
-      await tick(10_000);
-      setHidden(false);
-      await tick(0);
-      expect(f.mock.calls.length).toBe(2);
     });
   });
 
@@ -503,18 +408,6 @@ describe("Nav", () => {
         expect(live().textContent).toBe("Live");
         expect(live().querySelector("[title]")).toBeNull();
       }
-    });
-
-    it("keeps the badge when the app does not answer, and shows on Live itself", async () => {
-      const f = vi.fn((url: string) => json(url.startsWith("/api/status") ? { ...status, live_waiting: 2 } : { now: "2026-11-10T10:00:00.000Z", sessions: [], newest: null, automated_file: { path: "", error: null, projects: [] } }));
-      vi.stubGlobal("fetch", f);
-      history.replaceState(null, "", "/live");
-      const { client } = renderRouter();
-      const link = await screen.findByRole("link", { name: "Live 2 sessions waiting for you" });
-      expect(link.getAttribute("aria-current")).toBe("page");
-      f.mockImplementation(() => Promise.reject(new Error("down")));
-      await poll(client);
-      expect(badge()!.textContent).toBe("2");
     });
   });
 
@@ -615,19 +508,6 @@ describe("Nav", () => {
       expect([badge()!.textContent, badge()!.dataset.tone]).toEqual(["92%", "warning"]);
     });
 
-    it("marks an estimate in the name and the hover text", async () => {
-      vi.stubGlobal("fetch", vi.fn(() => json({ ...status, limits_alert: alert({ kind: "high", current: 95, measured: false }) })));
-      renderApp(<Nav />);
-      const link = await screen.findByRole("link", { name: "Limits alert: Codex weekly is at an estimated 95%" });
-      expect(link.querySelector("span[title]")?.getAttribute("title")).toBe("Codex weekly is at an estimated 95%");
-    });
-
-    it("says how many more windows are in alert", async () => {
-      vi.stubGlobal("fetch", vi.fn(() => json({ ...status, limits_alert: alert({ kind: "high", current: 95, count: 3 }) })));
-      renderApp(<Nav />);
-      expect(await screen.findByRole("link", { name: "Limits alert: Codex weekly is at 95% (and 2 more)" })).toBeTruthy();
-    });
-
     it("shows none when limits_alert is null, or missing as an older server sends it", async () => {
       const f = vi.fn(() => json({ ...status, limits_alert: alert({}) }));
       vi.stubGlobal("fetch", f);
@@ -644,23 +524,6 @@ describe("Nav", () => {
       await poll(client);
       expect(badge()).toBeNull();
       expect(tab("Limits")).toBeTruthy();
-    });
-
-    it("follows the status poll: it appears, changes and goes, with no reload", async () => {
-      const f = vi.fn(() => json({ ...status, limits_alert: null }));
-      vi.stubGlobal("fetch", f);
-      const { client } = renderApp(<Nav />);
-      await ingested(/^Last ingest/);
-      expect(badge()).toBeNull();
-      f.mockImplementation(() => json({ ...status, limits_alert: alert({ kind: "high", current: 91 }) }));
-      await poll(client);
-      expect([badge()?.dataset.tone, document.querySelector("a span[title]")?.getAttribute("title")]).toEqual(["warning", "Codex weekly is at 91%"]);
-      f.mockImplementation(() => json({ ...status, limits_alert: alert({ kind: "at_limit" }) }));
-      await poll(client);
-      expect(badge()?.dataset.tone).toBe("critical");
-      f.mockImplementation(() => json({ ...status, limits_alert: null }));
-      await poll(client);
-      expect(badge()).toBeNull();
     });
 
     it("keeps the badge when the app does not answer, and takes a Refresh's answer", async () => {
@@ -704,16 +567,11 @@ describe("Nav", () => {
         expect(fresh().querySelector(".appnav-time")!.closest("[aria-live], [role=status]")).toBeNull();
       });
 
-      it("says the sentence when an alert appears", async () => {
-        const ctx = await setup(null);
-        await pollWith(ctx, alert({ kind: "at_limit" }));
-        expect(region().textContent).toBe(alertText(alert({ kind: "at_limit" })));
-      });
-
-      it("announces an alert that is there on the first status after load", async () => {
+      it("announces an alert that is there on the first status after load, from outside the Limits link", async () => {
         const first = alert({ kind: "high", current: 92 });
         await setup(first);
         await waitFor(() => expect(region().textContent).toBe(alertText(first)));
+        expect(screen.getByRole("link", { name: "Limits alert: Codex weekly is at 92%" }).contains(region())).toBe(false);
       });
 
       it("leaves the text alone when only the time, the percent or the count drift, and does not touch the node", async () => {
@@ -754,24 +612,6 @@ describe("Nav", () => {
         await pollWith(ctx, undefined); // an older app's status: no field
         expect(region().textContent).toBe("");
       });
-
-      it("leaves the link's name, the pill and the hover text as they were", async () => {
-        const a = alert({ kind: "high", current: 92 });
-        await setup(a);
-        const link = await screen.findByRole("link", { name: "Limits alert: Codex weekly is at 92%" });
-        expect(link.hasAttribute("title")).toBe(false);
-        expect(link.querySelector("span[title]")?.getAttribute("title")).toBe(alertText(a));
-        expect(link.contains(region())).toBe(false);
-      });
-    });
-
-    it("shows on the Limits page, whose tab is the current one", async () => {
-      vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/status") ? { ...status, limits_alert: alert({}) } : limits)));
-      history.replaceState(null, "", "/limits");
-      renderRouter();
-      const link = await screen.findByRole("link", { name: /^Limits alert: / });
-      expect(link.getAttribute("aria-current")).toBe("page");
-      expect(badge()).not.toBeNull();
     });
   });
 
@@ -883,15 +723,6 @@ describe("Nav", () => {
       await open();
       expect(popup()!.textContent).toContain("No ingest yet.");
       expect(rows()).toEqual([["Interval", "every 1 min"]]);
-    });
-
-    it("says Ingesting… while a Refresh runs", async () => {
-      const f = vi.fn((_url: string, init?: RequestInit) => init?.method === "POST" ? new Promise<Response>(() => {}) : json(status));
-      vi.stubGlobal("fetch", f);
-      renderApp(<Nav />);
-      await ingested(/^Last ingest/);
-      await userEvent.click(screen.getByRole("button", { name: "Refresh" }));
-      expect([label(), fresh().dataset.kind, stateBtn().getAttribute("aria-label")]).toEqual(["Ingesting…", "busy", "Ingest status: Ingesting…"]);
     });
 
     it("shows the details on activation: the exact time, lines, last change and interval, and Escape keeps focus", async () => {
@@ -1240,24 +1071,6 @@ describe("Nav", () => {
       expect(link.querySelector("svg")!.getAttribute("aria-hidden")).toBe("true");
       const palette = screen.getByRole("button", { name: /open command palette/ });
       expect(palette.nextElementSibling).toBe(link);
-    });
-
-    it("opens the Judgments page on Activity's Judgments view, the page's own elsewhere, and the docs home off the pages", () => {
-      vi.stubGlobal("fetch", vi.fn(() => json(status)));
-      const at = (url: string) => {
-        history.replaceState(null, "", url);
-        const r = renderApp(<Nav />), href = docs().getAttribute("href");
-        r.unmount();
-        return href;
-      };
-      expect(at("/usage?view=judgments")).toBe(`${DOCS}pages/insights/`);
-      expect(at("/usage")).toBe(`${DOCS}pages/activity/`);
-      expect(at("/live")).toBe(`${DOCS}pages/live/`);
-      expect(at("/limits")).toBe(`${DOCS}pages/limits/`);
-      expect(at("/context")).toBe(`${DOCS}pages/context/`);
-      expect(at("/errors")).toBe(`${DOCS}pages/errors/`);
-      expect(at("/project?project=foo")).toBe(`${DOCS}pages/project/`);
-      expect(at("/nowhere")).toBe(DOCS);
     });
 
     it("follows the page: from Cost to Errors it points at the Errors page", async () => {

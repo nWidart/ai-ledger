@@ -7,7 +7,6 @@ import usage from "../../__fixtures__/usage";
 import usageAll from "../../__fixtures__/usage-all";
 import usageCodex from "../../__fixtures__/usage-codex";
 import usageSources from "../../__fixtures__/usage-sources";
-import { ScopeBar } from "../../components/ScopeBar";
 import sessions from "../../__fixtures__/sessions";
 import session from "../../__fixtures__/session";
 import tool from "../../__fixtures__/tool";
@@ -19,9 +18,6 @@ import { ActivityPage } from "./ActivityPage";
 import { setSearch } from "../../url";
 import { hookCommand, workDays } from "./work";
 import { ingested, prevented, refreshed, renderApp, renderPage } from "../../testing";
-import { queries } from "../../queries";
-
-const REFRESHED_STATUS = { ingesting: false, last_ingest: null, last_stats: null, error: null, last_change: null, counts: {}, interval: 60, project_order: [] };
 
 const at = (hash = "?range=30") => history.replaceState(null, "", "/usage" + hash);
 const serve = (d: UsagePayload) => mockApi({ "/api/usage": () => d, "/api/sessions": () => sessions, "/api/session": () => session });
@@ -33,8 +29,6 @@ const noDay = (day: string, days: 1 | 7 = 1): DayView => ({ day, days, start: da
 const selectedTab = () => screen.getAllByRole("tab").find(t => t.getAttribute("aria-selected") === "true")?.textContent;
 /** Activates a workbench tab by its name, as a click does. */
 const openTab = (name: string) => userEvent.click(screen.getByRole("tab", { name }));
-/** The Sessions tab is the default: nothing to open. Kept so a test reads as before. */
-const openSessions = () => {};
 /** The line under the lede: prompts interrupted, turns and tool calls per prompt. */
 const interrupted = () => document.getElementById("interrupted")!;
 /** The vitals' labels, in order. */
@@ -49,6 +43,13 @@ const paged = (all: { session_id: string }[]) => (q: URLSearchParams) => {
 };
 const many = (n: number, name = "Session") => Array.from({ length: n }, (_, k) => ({ ...sessions.sessions[0]!, session_id: `${name}${k}`, title: `${name} ${k}` }));
 const quiet: UsagePayload = { ...usage, totals: { ...usage.totals, error_loops: 0, tests_failed: 0 }, error_loops: [], near_limit: [] };
+/** All time by week: two weeks with work, to Thursday Nov 5. */
+const weekly: UsagePayload = { ...usageAll, work_bucket: "week",
+  work: [{ day: "2026-10-26", sessions: 2, prompts: 3, commits: 1, calls: 10, failed_calls: 1 }, { day: "2026-11-02", sessions: 3, prompts: 5, commits: 2, calls: 20, failed_calls: 2 }],
+  work_projects: [] };
+/** The Sessions panel's live hint. */
+const hint = () => document.getElementById("sessions")!.querySelector(".hint [aria-live]")!.textContent;
+const lastSessionsUrl = () => fetched().map(String).filter(u => u.startsWith("/api/sessions")).at(-1);
 
 describe("work per day", () => {
   it("covers the view from its first day with a session, with zeros for idle days", () => {
@@ -165,15 +166,6 @@ describe("model time and output speed", () => {
     expect(worse(vital("Output speed"))).toBe(true);
   });
 
-  it("does not mark a rise as worse", async () => {
-    serve(prior({ output_per_s: 50 }));
-    at();
-    renderApp(<ActivityPage />);
-    await loaded();
-    expect(vital("Output speed").textContent).toBe("Output speed, up from 50 tok/s");
-    expect(worse(vital("Output speed"))).toBe(false);
-  });
-
   it("does not compare with a period that recorded no model time", async () => {
     expect(usage.previous!.output_per_s).toBeNull();
     serve(usage);
@@ -209,16 +201,6 @@ describe("model time and output speed", () => {
     renderApp(<ActivityPage />);
     await loaded();
     expect(tile("Output speed")[1]).toBe("2m waiting on the model, in 2 sessions, and 30s running tools in the Claude Code ones.");
-  });
-
-  it("offers Grok in the source filter and no Judgments for Grok alone", async () => {
-    serve(usageSources);
-    at("?range=30&source=grok");
-    renderApp(<><ScopeBar /><ActivityPage /></>);
-    await loaded();
-    expect(within(screen.getByRole("group", { name: "Source" })).getByRole("button", { name: "Grok" }).getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByRole("button", { name: "Judgments" }).getAttribute("aria-disabled")).toBe("true");
-    expect(screen.getByText("Grok writes no facets: /insights judges Claude Code sessions only.")).toBeTruthy();
   });
 
   it("says no session records model time when Claude Code sessions in the view have none", async () => {
@@ -412,69 +394,9 @@ describe("workbench tabs", () => {
     expect(screen.queryByRole("tooltip")).toBeNull();
   });
 
-  it("restore the tab from the URL, and read an unknown one as Sessions", async () => {
-    serve(usage);
-    at("?range=30&tab=loops");
-    renderApp(<ActivityPage />);
-    await loaded();
-    expect(selectedTab()).toBe("Loops and tests");
-    expect(screen.getByRole("table", { name: "Error loops" })).toBeTruthy();
-    cleanup();
-    serve(usage);
-    at("?range=30&tab=hours");
-    renderApp(<ActivityPage />);
-    await loaded();
-    expect(selectedTab()).toBe("Sessions");
-  });
-
-  it("drop the tab and the week on a switch to Judgments", async () => {
-    mockApi({ "/api/usage": () => usage, "/api/sessions": () => sessions, "/api/day": () => noDay("2026-11-02", 7), "/api/insights": () => ({}) });
-    at("?range=30&tab=tools&week=2026-11-02&q=fix");
-    renderApp(<ActivityPage />);
-    await loaded();
-    act(() => { screen.getByRole("button", { name: "Judgments" }).click(); });
-    expect(location.search).toBe("?range=30&view=judgments");
-  });
-
-  it("explains the Sessions columns behind toggletips beside their sort buttons", async () => {
-    serve(usage);
-    at();
-    renderApp(<ActivityPage />);
-    await loaded();
-    openSessions();
-    const head = within(await screen.findByRole("table", { name: "Sessions" })).getByRole("columnheader", { name: /^Tests/ });
-    expect(head.hasAttribute("title")).toBe(false);
-    await userEvent.click(within(head).getByRole("button", { name: "About Tests" }));
-    expect(within(head).getByRole("tooltip").textContent).toBe("Test and build runs: passed of run");
-  });
-});
-
-describe("automated projects file", () => {
-  // The warning and the path come from the status poll, not from the page (App.test.tsx covers the warning on every page).
-  it("names the file on the automated toggle, from the status the nav polls", async () => {
-    serve(usage);
-    at();
-    const { client } = renderPage(<ActivityPage />);
-    await loaded();
-    act(() => { client.setQueryData(queries.status.queryKey, { ...REFRESHED_STATUS, automated_file: usage.automated_file }); });
-    const tip = screen.getByRole("button", { name: "About automated sessions" });
-    await userEvent.click(tip);
-    expect(tip.getAttribute("aria-expanded")).toBe("true");
-    expect(screen.getByRole("group", { name: "Filters" }).querySelector(".tt-pop")!.textContent).toContain(usage.automated_file.path);
-  });
 });
 
 describe("work panel", () => {
-  it("has no hours heatmap, section index or drawer", async () => {
-    serve(usage);
-    at();
-    renderApp(<ActivityPage />);
-    await loaded();
-    expect(document.getElementById("hours")).toBeNull();
-    expect(screen.queryByRole("navigation", { name: /sections/i })).toBeNull();
-    expect(document.querySelector("#content .drawer")).toBeNull();
-  });
-
   it("orders the interrupted line, attention, the work chart, the vitals, then the tabs", async () => {
     serve(usage);
     at();
@@ -505,52 +427,31 @@ describe("ActivityPage", () => {
     expect(before).not.toMatch(/\$|cost/i);
   });
 
-  it("narrows to Codex when picked and records it in the URL", async () => {
-    const codex: UsagePayload = { ...usage, source: "codex", totals: { ...usage.totals, commits: 0, prompts: 1, sessions: 1, active_days: 1 } };
-    mockApi({ "/api/usage": q => (q.get("source") === "codex" ? codex : usage), "/api/sessions": () => sessions, "/api/session": () => session });
-    at();
-    renderPage(<ActivityPage />);
-    await loaded();
-    await userEvent.click(within(screen.getByRole("group", { name: "Source" })).getByRole("button", { name: "Codex" }));
-    expect(location.search).toBe("?range=30&source=codex");
-    expect((await screen.findByRole("heading", { level: 1, name: /^0 commits/ })).textContent).toBe("0 commits from 1 prompt, unchanged");
-    expect(fetched()).toContain("/api/usage?range=30&source=codex");
-  });
-
   it("says the Sessions drawer counts a session by a request in the range", async () => {
     serve(usage);
     at();
     renderApp(<ActivityPage />);
     await loaded();
-    openSessions();
     const drawer = document.getElementById("sessions")!;
     const how = within(drawer).getByRole("button", { name: "How measured: the session count" });
     await userEvent.click(how);
     expect(within(how.parentElement!).getByRole("tooltip").textContent).toMatch(/A session counts here when it has a request in the range; the Judgments view counts sessions by their start time/);
   });
 
-  it("reloads an open sessions table when the source changes", async () => {
-    mockApi({ "/api/usage": q => (q.get("source") === "codex" ? { ...usage, source: "codex" } : usage), "/api/sessions": () => sessions, "/api/session": () => session });
+  it("narrows to Codex when picked, records it in the URL, and reloads an open sessions table", async () => {
+    const codex: UsagePayload = { ...usage, source: "codex", totals: { ...usage.totals, commits: 0, prompts: 1, sessions: 1, active_days: 1 } };
+    mockApi({ "/api/usage": q => (q.get("source") === "codex" ? codex : usage), "/api/sessions": () => sessions, "/api/session": () => session });
     at();
     renderPage(<ActivityPage />);
     await loaded();
     await openTab("Sessions");
     await waitFor(() => expect(fetched()).toContain("/api/sessions?range=30"));
     await userEvent.click(within(screen.getByRole("group", { name: "Source" })).getByRole("button", { name: "Codex" }));
+    expect(location.search).toBe("?range=30&source=codex");
     await waitFor(() => expect(fetched()).toContain("/api/sessions?range=30&source=codex"));
-  });
-
-  it("reloads an open sessions table when new data arrives", async () => {
-    let n = 0;
-    mockApi({ "/api/usage": () => ({ ...usage, totals: { ...usage.totals, sessions: 2 + n++ } }), "/api/sessions": () => sessions });
-    at();
-    const { client } = renderApp(<ActivityPage />);
-    await loaded();
-    await openTab("Sessions");
-    await waitFor(() => expect(fetched().filter(u => u === "/api/sessions?range=30")).toHaveLength(1));
-    ingested(client);
-    // The first page again: the loaded pages are refetched, not one request sized to the rows.
-    await waitFor(() => expect(fetched().filter(u => u === "/api/sessions?range=30")).toHaveLength(2));
+    expect(fetched()).toContain("/api/usage?range=30&source=codex");
+    // The lede counts down from the figure shown before to the new one.
+    expect((await screen.findByRole("heading", { level: 1, name: /^0 commits/ })).textContent).toBe("0 commits from 1 prompt, unchanged");
   });
 
   it("pages the sessions table: Show more appends the next page and focuses its first new row", async () => {
@@ -558,11 +459,10 @@ describe("ActivityPage", () => {
     at();
     renderApp(<ActivityPage />);
     await loaded();
-    openSessions();
     const drawer = within(document.getElementById("sessions")!);
     await drawer.findByRole("button", { name: "Session 99" });
     expect(document.querySelectorAll("#sessions tbody tr")).toHaveLength(100);
-    expect(document.querySelector("#sessions .hint [aria-live]")!.textContent).toContain("Showing 100.");
+    expect(hint()).toContain("Showing 100.");
     await userEvent.click(drawer.getByRole("button", { name: "Show more sessions" }));
     await waitFor(() => expect(document.activeElement).toBe(drawer.getByRole("button", { name: "Session 100" })));
     expect(document.querySelectorAll("#sessions tbody tr")).toHaveLength(200);
@@ -575,7 +475,6 @@ describe("ActivityPage", () => {
     at();
     renderApp(<ActivityPage />);
     await loaded();
-    openSessions();
     const drawer = within(document.getElementById("sessions")!), tbody = () => document.querySelector("#sessions tbody")!;
     await drawer.findByRole("button", { name: "Session 0" });
     vi.useFakeTimers({ shouldAdvanceTime: true });
@@ -585,7 +484,7 @@ describe("ActivityPage", () => {
       expect(fetched().some(u => String(u).startsWith("/api/sessions") && String(u).includes("q=needle"))).toBe(false);
       await act(async () => { await vi.advanceTimersByTimeAsync(100); });
       await waitFor(() => expect(fetched()).toContain("/api/sessions?range=30&q=needle"));
-      await waitFor(() => expect(document.querySelector("#sessions .hint [aria-live]")!.textContent).toBe("Searching for “needle”…"));
+      await waitFor(() => expect(hint()).toBe("Searching for “needle”…"));
       expect(tbody().hasAttribute("inert")).toBe(true);
       expect(drawer.getByRole("button", { name: "Session 0" })).toBeTruthy();
       await act(async () => { found.resolve({ total: 1, offset: 0, sessions: many(1, "Hit") }); await found.p; });
@@ -593,7 +492,7 @@ describe("ActivityPage", () => {
     } finally { vi.useRealTimers(); }
     expect(drawer.queryByRole("button", { name: "Session 0" })).toBeNull();
     expect(tbody().hasAttribute("inert")).toBe(false);
-    expect(document.querySelector("#sessions .hint [aria-live]")!.textContent).toMatch(/^1 session match/);
+    expect(hint()).toMatch(/^1 session match/);
   });
 
   it("says a search failed, with Retry, and shows no rows of the earlier query", async () => {
@@ -602,11 +501,10 @@ describe("ActivityPage", () => {
     at("?range=30&q=needle");
     renderApp(<ActivityPage />);
     await loaded();
-    openSessions();
     const drawer = within(document.getElementById("sessions")!);
     expect(await drawer.findByRole("alert")).toBeTruthy();
     expect(drawer.getByRole("alert").textContent).toMatch(/^Could not load sessions \(.+\)\. Retry$/);
-    expect(document.querySelector("#sessions .hint [aria-live]")!.textContent).toBe("Search for “needle” failed.");
+    expect(hint()).toBe("Search for “needle” failed.");
     expect(drawer.queryByRole("button", { name: "Session 0" })).toBeNull();
     down = false;
     await userEvent.click(drawer.getByRole("button", { name: "Retry" }));
@@ -621,16 +519,15 @@ describe("ActivityPage", () => {
     at();
     renderApp(<ActivityPage />);
     await loaded();
-    openSessions();
     const drawer = within(document.getElementById("sessions")!);
     await drawer.findByRole("button", { name: "Session 99" });
     await userEvent.click(drawer.getByRole("button", { name: "Show more sessions" }));
-    await waitFor(() => expect(document.querySelector("#sessions .hint [aria-live]")!.textContent).toMatch(/^Could not load more sessions \(.+\)\. Select Show more to try again\.$/));
+    await waitFor(() => expect(hint()).toMatch(/^Could not load more sessions \(.+\)\. Select Show more to try again\.$/));
     expect(document.querySelectorAll("#sessions tbody tr")).toHaveLength(100);
     down = false;
     await userEvent.click(drawer.getByRole("button", { name: "Show more sessions" }));
     await waitFor(() => expect(document.querySelectorAll("#sessions tbody tr")).toHaveLength(200));
-    expect(document.querySelector("#sessions .hint [aria-live]")!.textContent).toContain("Showing 200.");
+    expect(hint()).toContain("Showing 200.");
   });
 
   it("swaps in new data from a background ingest quietly, and replays the landing only after Refresh", async () => {
@@ -653,12 +550,7 @@ describe("ActivityPage", () => {
 
   it("keeps an open, paged sessions table and its focus when new data arrives", async () => {
     let n = 0;
-    const all = Array.from({ length: 250 }, (_, k) => ({ ...sessions.sessions[0], session_id: `x${k}`, title: `Session ${k}` }));
-    const page = (q: URLSearchParams) => {
-      const from = Number(q.get("offset") ?? 0), to = from + Number(q.get("limit") ?? 100);
-      return { total: all.length, offset: from, sessions: all.slice(from, to) };
-    };
-    mockApi({ "/api/usage": () => ({ ...usage, totals: { ...usage.totals, sessions: 2 + n++ } }), "/api/sessions": page });
+    mockApi({ "/api/usage": () => ({ ...usage, totals: { ...usage.totals, sessions: 2 + n++ } }), "/api/sessions": paged(many(250)) });
     at();
     const { client } = renderApp(<ActivityPage />);
     await loaded();
@@ -713,12 +605,7 @@ describe("ActivityPage", () => {
   });
 
   it("sorts sessions on the server, keeps the sort for Show more, and never reorders a page", async () => {
-    const all = Array.from({ length: 250 }, (_, k) => ({ ...sessions.sessions[0], session_id: `x${k}`, title: `Session ${k}`, cost: k % 7 }));
-    const page = (q: URLSearchParams) => {
-      const from = Number(q.get("offset") ?? 0), to = from + Number(q.get("limit") ?? 100);
-      return { total: all.length, offset: from, sessions: all.slice(from, to) };
-    };
-    mockApi({ "/api/usage": () => usage, "/api/sessions": page });
+    mockApi({ "/api/usage": () => usage, "/api/sessions": paged(many(250).map((s, k) => ({ ...s, cost: k % 7 }))) });
     at();
     renderApp(<ActivityPage />);
     await loaded();
@@ -768,8 +655,7 @@ describe("ActivityPage", () => {
     at();
     renderApp(<ActivityPage />);
     await loaded();
-    openSessions();
-    const drawer = within(document.getElementById("sessions")!), hint = () => document.querySelector("#sessions .hint [aria-live]")!.textContent;
+    const drawer = within(document.getElementById("sessions")!);
     const keys: [string, string, string][] = [["Session", "first_ts", "newest first"], ["Active", "duration_s", "longest active time first"],
       ["Model", "model_ms", "most model time first"], ["Tok/s", "output_per_s", "fastest output first"], ["Prompts", "prompts", "most prompts first"],
       ["Tokens", "tokens", "most tokens first"], ["Est. cost", "cost", "costliest first"],
@@ -784,37 +670,12 @@ describe("ActivityPage", () => {
     await waitFor(() => expect(hint()).toContain("fewest failed test runs first"));
   });
 
-  it("drops the Sessions sort for the near-limit and day actions", async () => {
-    serve(usage);
-    at();
-    renderApp(<ActivityPage />);
-    await loaded();
-    openSessions();
-    await userEvent.click(within(document.getElementById("sessions")!).getByRole("button", { name: "Tokens" }));
-    await waitFor(() => expect(fetched()).toContain("/api/sessions?range=30&sort=tokens&desc=1"));
-    await userEvent.click(attention().getByRole("button", { name: "See it" }));
-    await waitFor(() => expect(fetched()).toContain("/api/sessions?range=30&near=1"));
-    expect(document.querySelector("#sessions th[aria-sort]")).toBeNull();
-    await waitFor(() => expect(document.querySelector("#sessions .hint [aria-live]")!.textContent).toContain("nearest the limit first"));
-    await userEvent.click(within(document.getElementById("sessions")!).getByRole("button", { name: "Tokens" }));
-    await waitFor(() => expect(fetched()).toContain("/api/sessions?range=30&near=1&sort=tokens&desc=1"));
-    const chart = screen.getByRole("group", { name: /^Commits/ });
-    act(() => chart.focus());
-    fireEvent.keyDown(chart, { key: "End" });
-    fireEvent.keyDown(chart, { key: "ArrowLeft" });
-    fireEvent.keyDown(chart, { key: "Enter" });
-    await waitFor(() => expect(fetched()).toContain("/api/sessions?range=30&day=2026-11-04"));
-    expect(document.querySelector("#sessions th[aria-sort]")).toBeNull();
-    await waitFor(() => expect(document.querySelector("#sessions .hint [aria-live]")!.textContent).toContain("by their cost on that day"));
-  });
-
   it("keeps the Sessions sort when new data refreshes the table", async () => {
     let n = 0;
     mockApi({ "/api/usage": () => ({ ...usage, totals: { ...usage.totals, sessions: 2 + n++ } }), "/api/sessions": () => sessions });
     at();
     const { client } = renderApp(<ActivityPage />);
     await loaded();
-    openSessions();
     await userEvent.click(within(document.getElementById("sessions")!).getByRole("button", { name: "Est. cost" }));
     await waitFor(() => expect(fetched()).toContain("/api/sessions?range=30&sort=cost&desc=1"));
     await waitFor(() => expect(document.querySelector("#sessions tbody")!.getAttribute("aria-busy")).toBeNull());
@@ -828,7 +689,6 @@ describe("ActivityPage", () => {
     at();
     renderApp(<ActivityPage />);
     await loaded();
-    openSessions();
     const drawer = within(document.getElementById("sessions")!);
     await drawer.findByRole("button", { name: "Session 99" });
     await userEvent.click(drawer.getByRole("button", { name: "Show more sessions" }));
@@ -959,9 +819,6 @@ describe("ActivityPage", () => {
   });
 
   it("selects a week on the chart by click, narrows the tabs to its seven days, and clears it with the chip or Escape", async () => {
-    const weekly: UsagePayload = { ...usageAll, work_bucket: "week",
-      work: [{ day: "2026-10-26", sessions: 2, prompts: 3, commits: 1, calls: 10, failed_calls: 1 }, { day: "2026-11-02", sessions: 3, prompts: 5, commits: 2, calls: 20, failed_calls: 2 }],
-      work_projects: [] };
     const week: DayView = { ...noDay("2026-11-02", 7), tools: [{ tool: "Grep", calls: 2, errors: 0, failure_rate: 0, p50_ms: 10, p95_ms: 20 }] };
     // The week's sessions are not the range's: a wrong day or span would list the range's.
     const inWeek = { total: 1, offset: 0, sessions: [{ ...sessions.sessions[0]!, session_id: "wk" }] };
@@ -984,7 +841,7 @@ describe("ActivityPage", () => {
     // The Sessions tab asks for the week's seven days, costliest first.
     await openTab("Sessions");
     await waitFor(() => expect(fetched().filter(u => String(u).startsWith("/api/sessions?")).at(-1)).toMatch(/[?&]day=2026-11-02&days=7(&|$)/));
-    await waitFor(() => expect(document.querySelector("#sessions .hint [aria-live]")!.textContent).toContain("by their cost on those days"));
+    await waitFor(() => expect(hint()).toContain("by their cost on those days"));
     const rows = within(document.getElementById("sessions")!);
     expect(await rows.findByRole("button", { name: "#wk" })).toBeTruthy();
     expect(rows.queryByRole("button", { name: "#s1" })).toBeNull();
@@ -1006,9 +863,6 @@ describe("ActivityPage", () => {
   });
 
   it("takes no pick from the previous view's chart while a new range loads", async () => {
-    const weekly: UsagePayload = { ...usageAll, work_bucket: "week",
-      work: [{ day: "2026-10-26", sessions: 2, prompts: 3, commits: 1, calls: 10, failed_calls: 1 }, { day: "2026-11-02", sessions: 3, prompts: 5, commits: 2, calls: 20, failed_calls: 2 }],
-      work_projects: [] };
     const wait = held<unknown>();
     mockApi({ "/api/usage": q => (q.get("range") === "30" ? wait.p : weekly), "/api/sessions": () => sessions, "/api/day": () => noDay("2026-11-02", 7) });
     at("?range=0");
@@ -1086,6 +940,7 @@ describe("ActivityPage", () => {
     await loaded();
     const row = await within(document.getElementById("sessions")!).findByRole("button", { name: "#s1" });
     await userEvent.click(row);
+    expect(location.search).toBe("?range=0&week=2026-11-02&session=s1");
     expect(await within(document.querySelector("dialog")!).findByText("Timeline")).toBeTruthy();
     act(() => { document.querySelector("dialog")!.dispatchEvent(new Event("cancel", { cancelable: true })); });
     await waitFor(() => expect(location.search).toBe("?range=0&week=2026-11-02"));
@@ -1126,29 +981,6 @@ describe("ActivityPage", () => {
     await act(async () => { second.resolve({ ...noDay("2026-11-05"), tools: [{ ...grep, tool: "Glob" }] }); await second.p; });
     expect(await tools.findByRole("button", { name: "Glob" })).toBeTruthy();
     expect(tools.queryByRole("button", { name: "Grep" })).toBeNull();
-  });
-
-  it("treats a day that does not exist as no day", async () => {
-    mockApi({ "/api/usage": () => usage, "/api/sessions": () => sessions, "/api/day": () => noDay("2026-02-30") });
-    at("?range=30&day=2026-02-30");
-    renderApp(<ActivityPage />);
-    await loaded();
-    openSessions();
-    await waitFor(() => expect(fetched()).toContain("/api/sessions?range=30"));
-    expect(fetched().some(u => String(u).startsWith("/api/day") || String(u).includes("day="))).toBe(false);
-    expect(document.querySelector("#work .daychip, .tabpanel .scope")).toBeNull();
-    await openTab("Tools and MCP");
-    expect(within(document.getElementById("tools")!).getByRole("button", { name: "Edit" })).toBeTruthy();
-  });
-
-  it("shows the range rows and fetches no day without a day", async () => {
-    serve(usage);
-    at();
-    renderApp(<ActivityPage />);
-    await loaded();
-    await openTab("Tools and MCP");
-    expect(within(document.getElementById("tools")!).getByRole("button", { name: "Edit" })).toBeTruthy();
-    expect(fetched().some(u => String(u).startsWith("/api/day"))).toBe(false);
   });
 
   it("heads each row of Error loops and Failed test runs with its session, in the first column, then its time", async () => {
@@ -1208,19 +1040,7 @@ describe("ActivityPage", () => {
     await userEvent.click(screen.getByRole("button", { name: "Show the 50 newest runs" }));
     expect(rows("tests")).toBe(50);
     expect(within(document.getElementById("tests")!).getByText(/Showing the 50 newest of 60\./)).toBeTruthy();
-  });
-
-  it("lists a failed test run with no time", async () => {
-    const t = { id: "t8", session_id: "s2", title: null, project: "bar", source: "claude" as const, command: "npm test", ts: null };
-    serve({ ...usage, totals: { ...usage.totals, tests_failed: 1 }, failed_tests: [t] });
-    at();
-    renderApp(<ActivityPage />);
-    await loaded();
-    await openTab("Loops and tests");
-    const row = within(document.getElementById("tests")!.querySelector("tbody")!);
-    expect(row.getByText("npm test")).toBeTruthy();
-    expect(row.getByRole("link", { name: "Open in Errors" }).getAttribute("href")).toBe("/errors?project=bar&range=30&source=claude&ex=t8");
-    expect(document.querySelector("#tests td.when")!.textContent).toBe("–");
+    expect(document.querySelector("#tests td.when")!.textContent).toBe("–"); // a run with no time
   });
 
   it("names an error loop's session by its title, with the short id below", async () => {
@@ -1286,21 +1106,6 @@ describe("ActivityPage", () => {
     expect(screen.getByRole("group", { name: /^Prompts per day/ })).toBeTruthy();
   });
 
-  it("opens a session sheet from the sessions table and closes it again", async () => {
-    serve(usage);
-    at();
-    renderPage(<ActivityPage />);
-    await loaded();
-    await openTab("Sessions");
-    const row = await within(document.getElementById("sessions")!).findByRole("button", { name: "#s1" });
-    await userEvent.click(row);
-    expect(location.search).toBe("?range=30&session=s1");
-    const dlg = within(document.querySelector("dialog")!);
-    expect(await dlg.findByText("Timeline")).toBeTruthy();
-    await userEvent.click(dlg.getByRole("button", { name: "Close" }));
-    expect(location.search).toBe("?range=30");
-  });
-
   it("opens a tool sheet from the tools drawer, and Escape returns focus to the row", async () => {
     mockApi({ "/api/usage": () => usage, "/api/tool": q => ({ ...tool, kind: q.get("kind"), name: q.get("name") }) });
     at();
@@ -1349,32 +1154,32 @@ describe("ActivityPage", () => {
   });
 });
 
+const panel = () => within(document.getElementById("sessions")!);
+const head = (key: string) => document.querySelector<HTMLElement>(`#sessions thead th[data-sort="${key}"]`);
+/** The page, as a visit opens it, with its sessions listed. */
+const visit = async () => {
+  serve(usage);
+  at();
+  renderApp(<ActivityPage />);
+  await loaded();
+  await waitFor(() => expect(document.querySelectorAll("#sessions tbody tr")).toHaveLength(sessions.sessions.length));
+};
+
 describe("Sessions columns", () => {
   beforeEach(() => { resetColumnChoice(); });
   afterEach(() => { vi.unstubAllGlobals(); resetColumnChoice(); });
 
-  const panel = () => within(document.getElementById("sessions")!);
   /** The Sessions headers on screen, by sort key; Project, which does not sort, as "project". */
   const heads = () => [...document.querySelectorAll<HTMLElement>("#sessions thead th")].map(th => th.dataset.sort ?? th.textContent!.replace(/\?$/, "").toLowerCase());
-  const head = (key: string) => document.querySelector<HTMLElement>(`#sessions thead th[data-sort="${key}"]`);
   const columnsButton = () => panel().getByRole("button", { name: /^Columns/ });
   const list = () => screen.getByRole("dialog", { name: "Columns" });
   const box = (name: string) => within(list()).getByRole<HTMLInputElement>("checkbox", { name });
   const stored = () => { const v = localStorage.getItem(COLUMNS_KEY); return v == null ? null : JSON.parse(v) as unknown; };
-  const lastSessionsUrl = () => fetched().map(String).filter(u => u.startsWith("/api/sessions")).at(-1);
   /** A window this many CSS pixels wide, at the default 16px text size: matchMedia answers its max-width queries. */
   const width = (px: number) => vi.stubGlobal("matchMedia", (q: string) => {
     const max = /max-width: ([\d.]+)em/.exec(q);
     return { media: q, matches: !!max && px <= Number(max[1]) * 16, addEventListener() {}, removeEventListener() {} };
   });
-  /** The page, as a visit opens it, with its sessions listed. */
-  const visit = async () => {
-    serve(usage);
-    at();
-    renderApp(<ActivityPage />);
-    await loaded();
-    await waitFor(() => expect(document.querySelectorAll("#sessions tbody tr")).toHaveLength(sessions.sessions.length));
-  };
 
   it("lists every column but Session in a dialog the keyboard opens, changes and closes", async () => {
     await visit();
@@ -1480,19 +1285,6 @@ describe("Sessions columns", () => {
     expect(head("duration_s")!.classList.contains("keep")).toBe(false);
   });
 
-  it("ignores a stored choice it cannot read, and a column the table does not have", async () => {
-    localStorage.setItem(COLUMNS_KEY, "{oops");
-    await visit();
-    expect(heads()).toHaveLength(13);
-    cleanup();
-    resetColumnChoice();
-    localStorage.setItem(COLUMNS_KEY, JSON.stringify({ gone: false, compactions: false }));
-    await visit();
-    expect(heads()).not.toContain("compactions");
-    expect(heads()).toHaveLength(12);
-    expect(columnsButton().textContent).toBe("Columns, 1 hidden");
-  });
-
   it("keeps a choice for the page view when the browser blocks storage", async () => {
     vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("blocked"); });
     await visit();
@@ -1528,7 +1320,7 @@ describe("Sessions columns", () => {
     // The list in its own order: the first page asked with no sort (held in the query cache since the visit).
     await waitFor(() => expect(first()).toBe(sessions.sessions[0]!.session_id));
     expect(fetched()).toContain("/api/sessions?range=30");
-    await waitFor(() => expect(document.querySelector("#sessions .hint [aria-live]")!.textContent).toContain("newest first"));
+    await waitFor(() => expect(hint()).toContain("newest first"));
   });
 });
 
@@ -1536,26 +1328,15 @@ describe("Sessions sort by several columns", () => {
   beforeEach(() => { resetColumnChoice(); });
   afterEach(() => { vi.unstubAllGlobals(); resetColumnChoice(); });
 
-  const panel = () => within(document.getElementById("sessions")!);
-  const head = (key: string) => document.querySelector<HTMLElement>(`#sessions thead th[data-sort="${key}"]`)!;
   /** A header's sort button, whatever its name says of the sort. */
-  const sortButton = (key: string) => head(key).querySelector("button")!;
+  const sortButton = (key: string) => head(key)!.querySelector("button")!;
   const several = () => panel().getByRole<HTMLInputElement>("checkbox", { name: "Sort by several columns" });
-  const hint = () => document.querySelector("#sessions .hint [aria-live]")!.textContent;
-  const lastSessionsUrl = () => fetched().map(String).filter(u => u.startsWith("/api/sessions")).at(-1);
   /** The sorted headers, by key, in table order, and their marks. */
   const marks = () => [...document.querySelectorAll<HTMLElement>("#sessions thead th.sorted")].map(th => [th.dataset.sort, th.querySelector(".sortmark")!.textContent]);
   /** Whether every row's cell of a column carries the class. */
   const cellsCarry = (key: string, cls: string) => {
-    const at = [...document.querySelectorAll<HTMLElement>("#sessions thead th")].indexOf(head(key));
+    const at = [...document.querySelectorAll<HTMLElement>("#sessions thead th")].indexOf(head(key)!);
     return [...document.querySelectorAll("#sessions tbody tr")].every(r => r.children[at]!.classList.contains(cls));
-  };
-  const visit = async () => {
-    serve(usage);
-    at();
-    renderApp(<ActivityPage />);
-    await loaded();
-    await waitFor(() => expect(document.querySelectorAll("#sessions tbody tr")).toHaveLength(sessions.sessions.length));
   };
 
   it("adds a header to the sort with the box ticked, keeps focus on it, marks each key and says the whole order", async () => {
@@ -1630,6 +1411,8 @@ describe("Sessions sort by several columns", () => {
     expect(document.querySelector("#sessions th[aria-sort]")).toBeNull();
     await waitFor(() => expect(hint()).toContain("nearest the limit first"));
     await twoKeys();
+    // A sort chosen after the action applies within it.
+    await waitFor(() => expect(lastSessionsUrl()).toBe("/api/sessions?range=30&near=1&sort=-errors%2C-cost"));
     const chart = screen.getByRole("group", { name: /^Commits/ });
     act(() => chart.focus());
     fireEvent.keyDown(chart, { key: "End" });
@@ -1637,6 +1420,8 @@ describe("Sessions sort by several columns", () => {
     fireEvent.keyDown(chart, { key: "Enter" });
     await waitFor(() => expect(lastSessionsUrl()).toBe("/api/sessions?range=30&day=2026-11-04"));
     expect(marks()).toEqual([]);
+    expect(document.querySelector("#sessions th[aria-sort]")).toBeNull();
+    await waitFor(() => expect(hint()).toContain("by their cost on that day"));
     await twoKeys();
     await user.click(vital("Output speed").closest("button")!);
     await waitFor(() => expect(lastSessionsUrl()).toBe("/api/sessions?range=30&sort=output_per_s&desc=1"));

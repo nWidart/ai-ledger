@@ -6,16 +6,11 @@ beforeEach(() => { localStorage.clear(); resetSheetWide(); });
 afterEach(() => { vi.restoreAllMocks(); });
 
 describe("sheetWide", () => {
-  it("defaults to narrow", () => {
+  it("defaults to narrow, stores wide as \"1\" and reads it back, and removes the key when set narrow", () => {
     expect(getSheetWide()).toBe(false);
-  });
-  it("stores wide as \"1\" and reads it back", () => {
     setSheetWide(true);
     expect(getSheetWide()).toBe(true);
     expect(localStorage.getItem(SHEET_WIDE_KEY)).toBe("1");
-  });
-  it("removes the key when set narrow", () => {
-    setSheetWide(true);
     setSheetWide(false);
     expect(getSheetWide()).toBe(false);
     expect(localStorage.getItem(SHEET_WIDE_KEY)).toBeNull();

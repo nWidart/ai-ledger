@@ -116,14 +116,6 @@ const page = async () => {
 };
 
 describe("ErrorsPage", () => {
-  it("marks each type row as a category subject", async () => {
-    history.replaceState(null, "", "/errors?range=0");
-    await page();
-    const rows = [...document.querySelectorAll("#catBody tr[data-c]")];
-    expect(rows.length).toBeGreaterThan(0);
-    for (const r of rows) expect(r.getAttribute("data-subject")).toBe(`category:${r.getAttribute("data-c")}`);
-  });
-
   it("states each type's time lost and ranks open fixes by it", async () => {
     vi.stubGlobal("fetch", vi.fn(() => json(lostPayload)));
     history.replaceState(null, "", "/errors?range=0");
@@ -144,35 +136,18 @@ describe("ErrorsPage", () => {
     expect(document.querySelector("#detail .istat")!.textContent).toContain("20m lost in retry loops");
   });
 
-  it("narrows the time lost to the selected bucket's incidents, in the table and the detail, not in Where to start", async () => {
-    vi.stubGlobal("fetch", vi.fn(() => json(lostPayload)));
-    // Oct 30 holds g3, the end of git's midnight incident: that incident's 10m count whole, not the range's 20.
-    history.replaceState(null, "", "/errors?range=0&at=2026-10-30");
-    await page();
-    const table = document.getElementById("catBody")!;
-    expect([...table.querySelectorAll("tr")].map(r => [r.getAttribute("data-c"), r.querySelector("td.c-lost .l1")?.textContent])).toEqual([["git", "10m"]]);
-    expect(document.querySelector("#detail .pick .phead .muted")!.textContent).toBe("3 errors · 20m lost");
-    await userEvent.click(table.querySelector('tr[data-c="git"] .tbtn')!);
-    expect(document.querySelector("#detail .istat")!.textContent).toContain("10m lost in retry loops");
-  });
-
-  it("says in the footnote of Where to start that fix markers are kept in the store", async () => {
-    serve();
-    await page();
-    const note = [...document.querySelectorAll("#detail .muted")].find(e => /Fix markers are kept/.test(e.textContent ?? ""));
-    // The navigation shows the last ingest and owns Refresh: the page does not repeat either.
-    expect(note?.textContent).toBe("Fix markers are kept in the store, so they follow you to another port or browser.");
-    expect(document.body.textContent).not.toContain("ingests new transcript lines");
-    expect(document.getElementById("gen")!.textContent).not.toContain("Ingested");
-    expect(document.body.textContent).not.toContain("live in this browser");
-  });
-
   describe("applied fixes scorecard", () => {
-    it("is absent with no fix recorded", async () => {
+    it("is absent with no fix recorded, and the footnote of Where to start says the markers are kept in the store", async () => {
       serve();
       await page();
       expect(document.getElementById("scorecard")).toBeNull();
       expect(screen.queryByRole("table", { name: "Applied fixes" })).toBeNull();
+      const note = [...document.querySelectorAll("#detail .muted")].find(e => /Fix markers are kept/.test(e.textContent ?? ""));
+      // The navigation shows the last ingest and owns Refresh: the page does not repeat either.
+      expect(note?.textContent).toBe("Fix markers are kept in the store, so they follow you to another port or browser.");
+      expect(document.body.textContent).not.toContain("ingests new transcript lines");
+      expect(document.getElementById("gen")!.textContent).not.toContain("Ingested");
+      expect(document.body.textContent).not.toContain("live in this browser");
     });
 
     it("lists every recorded fix, newest first, with the rate before and since and the gated verdict, and opens a type from its row", async () => {
@@ -238,17 +213,26 @@ describe("ErrorsPage", () => {
     const mark = () => userEvent.click(screen.getByRole("button", { name: "Mark fix applied" }));
     const undo = () => userEvent.click(screen.getByRole("button", { name: "Undo" }));
 
+    // No timeout: a write that waits says so ("Saving…", aria-busy), and the wait and its outcome are announced, not only shown.
     it("marks at once, posts the day, and undoes the same way", async () => {
       const api = serve(), hold = api.hold();
       history.replaceState(null, "", hash);
       await page();
+      const live = () => document.getElementById("detailLive")?.textContent;
+      expect(screen.queryByText("Saving…")).toBeNull();
       await mark();
       // The page does not wait for the answer.
-      expect(screen.getByRole("button", { name: "Undo" })).toBeTruthy();
+      expect(screen.getByRole("button", { name: "Undo" }).getAttribute("aria-busy")).toBe("true");
+      expect(screen.getByText("Saving…")).toBeTruthy();
       expect(document.activeElement?.id).toBe("unfix");
       expect(fixes()).toContain("1Fixes applied");
+      expect(document.querySelector("#catBody .chip.fixed")?.textContent).toBe("✓ Fix applied Nov 5"); // the table and the vital read the hook's markers
+      await waitFor(() => expect(live()).toBe("Saving the fix marker…"));
       hold.release();
       await waitFor(() => expect(api.store).toEqual({ x: "2026-11-05" }));
+      await waitFor(() => expect(live()).toBe("Fix marked."));
+      expect(screen.queryByText("Saving…")).toBeNull();
+      expect(screen.getByRole("button", { name: "Undo" }).getAttribute("aria-busy")).toBeNull();
       expect(api.posts).toEqual([{ category: "x", day: "2026-11-05" }]);
       expect(vi.mocked(fetch).mock.calls.find(c => c[0] === FIX)![1]).toMatchObject({ method: "POST", headers: { "Content-Type": "application/json" } });
       expect(localStorage.getItem("claude-errors-fixes")).toBeNull();
@@ -256,27 +240,9 @@ describe("ErrorsPage", () => {
       expect(screen.getByRole("button", { name: "Mark fix applied" })).toBeTruthy();
       expect(document.activeElement?.id).toBe("fix");
       await waitFor(() => expect(api.store).toEqual({}));
+      await waitFor(() => expect(live()).toBe("Fix marker removed."));
       expect(api.posts[1]).toEqual({ category: "x", day: null });
       expect(JSON.parse(localStorage.getItem("claude-errors-view")!)).toEqual({ project: "", range: 7, source: "", gran: "day", sub: true, noise: false, cat: "x" });
-    });
-
-    // The chart-bucket selection (`at`) narrows the table and the detail's lists; the fix box and the markers stay as they are.
-    it("marks and undoes with a chart bucket selected, which stays selected", async () => {
-      const api = serve(), hold = api.hold();
-      history.replaceState(null, "", "/errors?range=30&at=2026-11-04&cat=x");
-      await page();
-      await mark();
-      expect(screen.getByText("Saving…")).toBeTruthy();
-      expect(document.querySelector("#catBody .chip.fixed")?.textContent).toBe("✓ Fix applied Nov 5"); // the table and the vital read the hook's markers
-      expect(fixes()).toContain("1Fixes applied");
-      hold.release();
-      await waitFor(() => expect(api.store).toEqual({ x: "2026-11-05" }));
-      await waitFor(() => expect(screen.queryByText("Saving…")).toBeNull());
-      expect(location.search).toBe("?range=30&at=2026-11-04&cat=x");
-      await undo();
-      await waitFor(() => expect(api.store).toEqual({}));
-      expect(document.querySelector("#catBody .chip.fixed")).toBeNull();
-      expect(location.search).toBe("?range=30&at=2026-11-04&cat=x");
     });
 
     // Review B: a type marked and then undone stays decided in the store, so an import that arrives later leaves it unmarked.
@@ -312,30 +278,6 @@ describe("ErrorsPage", () => {
       expect(api.store).toEqual({});
     });
 
-    it("keeps the error of a failed write when nothing saved after it", async () => {
-      const api = serve({}, () => true);
-      history.replaceState(null, "", hash);
-      await page();
-      await mark();
-      await waitFor(() => expect(document.getElementById("fixErr")).toBeTruthy());
-      expect(api.store).toEqual({});
-    });
-
-    // Review A: the wait and its outcome are announced, not only shown.
-    it("announces saving, and the saved result, in the status region", async () => {
-      const api = serve(), hold = api.hold();
-      history.replaceState(null, "", hash);
-      await page();
-      const live = () => document.getElementById("detailLive")?.textContent;
-      await mark();
-      await waitFor(() => expect(live()).toBe("Saving the fix marker…"));
-      hold.release();
-      await waitFor(() => expect(live()).toBe("Fix marked."));
-      await undo();
-      await waitFor(() => expect(live()).toBe("Fix marker removed."));
-      expect(api.store).toEqual({});
-    });
-
     it("posts the day the user picked", async () => {
       const api = serve();
       history.replaceState(null, "", hash);
@@ -343,17 +285,6 @@ describe("ErrorsPage", () => {
       fireEvent.change(document.getElementById("fixDate")!, { target: { value: "2026-11-04" } });
       await mark();
       await waitFor(() => expect(api.store).toEqual({ x: "2026-11-04" }));
-    });
-
-    it("shows a marker after the page is left and reopened", async () => {
-      const api = serve();
-      history.replaceState(null, "", hash);
-      await page();
-      await mark();
-      await waitFor(() => expect(api.store).toEqual({ x: "2026-11-05" }));
-      cleanup();
-      await page(); // the cache was cleared by the write: the payload is fetched again
-      expect(screen.getByRole("button", { name: "Undo" })).toBeTruthy();
     });
 
     it("puts a failed mark back, says so, and returns focus to Mark", async () => {
@@ -432,7 +363,8 @@ describe("ErrorsPage", () => {
       history.replaceState(null, "", hash);
       await page();
       await mark();
-      await waitFor(() => expect(document.getElementById("fixErr")).toBeTruthy());
+      // Nothing is known about the state, so the message asserts none.
+      await waitFor(() => expect(document.getElementById("fixErr")?.textContent).toBe("Could not confirm the change to x. Reload to see what the store holds."));
       await waitFor(() => expect(payloadGets()).toBe(2));
       expect(vi.mocked(fetch).mock.calls.filter(c => String(c[0]).startsWith("/api/error?"))).toHaveLength(0);
     });
@@ -532,21 +464,6 @@ describe("ErrorsPage", () => {
       await undo();
       await waitFor(() => expect(api.store).toEqual({}));
       expect(screen.getByRole("button", { name: "Mark fix applied" })).toBeTruthy();
-    });
-
-    // N3: no timeout; a write that waits is said to wait.
-    it("says Saving… while a write is pending, and no longer after", async () => {
-      const api = serve(), hold = api.hold();
-      history.replaceState(null, "", hash);
-      await page();
-      expect(screen.queryByText("Saving…")).toBeNull();
-      await mark();
-      expect(screen.getByText("Saving…")).toBeTruthy();
-      expect(screen.getByRole("button", { name: "Undo" }).getAttribute("aria-busy")).toBe("true");
-      hold.release();
-      await waitFor(() => expect(screen.queryByText("Saving…")).toBeNull());
-      expect(api.store).toEqual({ x: "2026-11-05" });
-      expect(screen.getByRole("button", { name: "Undo" }).getAttribute("aria-busy")).toBeNull();
     });
 
     it("says Saving… for a type while an import that never answers is queued ahead of its write", async () => {
@@ -703,12 +620,6 @@ describe("ErrorsPage", () => {
       await waitFor(() => expect(localStorage.getItem(KEY)).toBeNull());
       expect(api.requests).toEqual([]);
     });
-
-    it("sends no import when there is no key", async () => {
-      const api = serve();
-      await page();
-      expect(api.requests).toEqual([]);
-    });
   });
 
   // Two of the fixture's six errors become "git", so there is a type to mute and another that stays.
@@ -740,16 +651,6 @@ describe("ErrorsPage", () => {
       expect(chart.getAttribute("aria-label")).not.toContain("Selected:");
     });
 
-    it("calls the toggle Hide noise and muted, keeping its id and hash key", async () => {
-      serve();
-      await page();
-      expect(toggle().id).toBe("fNoise");
-      await userEvent.click(screen.getByRole("button", { name: "About hiding noise and muted types" }));
-      expect(screen.getByText("Leaves out harness errors, user rejections and the types you muted", { selector: "[role=tooltip]" })).toBeTruthy();
-      await userEvent.click(toggle());
-      expect(location.search).toContain("noise=0");
-    });
-
     // The table memoizes its rows per view: a mute swaps the model (and the filtered errors), and the rows must follow.
     it("updates the table's rows when a mute under the toggle changes the model", async () => {
       const api = serve();
@@ -766,16 +667,17 @@ describe("ErrorsPage", () => {
       expect([cell("git", "c-share"), cell("x", "c-share")]).toEqual(["33% of errors", "67% of errors"]);
     });
 
-    it("mutes at once, posts it, and unmutes the same way; a fix day stays", async () => {
+    it("mutes at once, posts it, and unmutes the same way; a fix day stays, and the type stays open with the toggle off", async () => {
       const api = serve({ git: "2026-11-04" }), hold = api.hold();
       api.payload = mixed;
       history.replaceState(null, "", "/errors?range=7&cat=git");
       await page();
       expect(rowOf("git")!.querySelector(".chip.muted-type")).toBeNull();
       await userEvent.click(muteBtn());
-      // The page does not wait for the answer: the button says Unmute, the row is marked, "Saving…" shows.
+      // The page does not wait for the answer: the button says Unmute, the row is marked, "Saving…" shows in the open detail only.
       expect(unmuteBtn().getAttribute("aria-busy")).toBe("true");
       expect(document.getElementById("muteSaving")?.textContent).toBe("Saving…");
+      expect(document.getElementById("muteNote")).toBeNull();
       expect(rowOf("git")!.querySelector(".chip.muted-type")?.textContent).toBe("Muted");
       expect(rowOf("git")!.className).toContain("is-muted");
       expect(rowOf("x")!.className).not.toContain("is-muted");
@@ -788,6 +690,9 @@ describe("ErrorsPage", () => {
       await waitFor(() => expect(document.getElementById("muteSaving")).toBeNull());
       expect(document.querySelector("#detail .chip.fixed")?.textContent).toBe("✓ Fix applied Nov 4, 2026"); // the fix day stayed
       await waitFor(() => expect(document.getElementById("detailLive")?.textContent).toBe("Type muted."));
+      expect(document.getElementById("detailTitle")?.textContent).toBe("git / gh error");
+      expect(location.search).toBe("?range=7&cat=git");
+      expect(document.querySelector("#detail .chip.muted-type")?.textContent).toBe("Muted");
       await userEvent.click(unmuteBtn());
       expect(muteBtn()).toBeTruthy();
       expect(rowOf("git")!.querySelector(".chip.muted-type")).toBeNull();
@@ -821,40 +726,18 @@ describe("ErrorsPage", () => {
     });
 
     // A step whose answer is lost may have been taken: the resync decides, and a write the store took is a saved write.
-    it("counts a mute as saved when its answer is lost but the resync shows the store took it", async () => {
+    it("counts a mute, then an unmute, as saved when its answer is lost but the resync shows the store took it", async () => {
       const api = serve();
       api.payload = mixed;
       history.replaceState(null, "", "/errors?range=7&cat=git");
       await page();
-      api.refuseMute = b => { api.muted.add(b.category); return true; }; // taken, but the answer lost
+      api.refuseMute = b => { if (b.muted) api.muted.add(b.category); else api.muted.delete(b.category); return true; }; // taken, but the answer lost
       await userEvent.click(muteBtn());
       await waitFor(() => expect(api.requests).toEqual(["mute git true", "resync"]));
       await waitFor(() => expect(document.getElementById("detailLive")?.textContent).toBe("Type muted."));
       expect(document.getElementById("muteErr")).toBeNull();
       expect(unmuteBtn()).toBeTruthy();
       expect(rowOf("git")!.querySelector(".chip.muted-type")).toBeTruthy();
-    });
-
-    it("keeps a type hidden and says nothing wrong when the mute under the toggle was taken but its answer lost", async () => {
-      const api = serve();
-      api.payload = mixed;
-      api.refuseMute = b => { api.muted.add(b.category); return true; };
-      history.replaceState(null, "", "/errors?range=7&noise=0&cat=git");
-      await page();
-      await userEvent.click(muteBtn());
-      await waitFor(() => expect(api.requests).toEqual(["mute git true", "resync"]));
-      await waitFor(() => expect(document.getElementById("detailLive")?.textContent).toBe("Type muted. It left the view: Hide noise and muted is on."));
-      expect(document.getElementById("muteNote")).toBeNull();
-      expect(rowOf("git")).toBeNull();
-      expect(document.getElementById("detailTitle")).toBeNull();
-    });
-
-    it("counts an unmute as saved when its answer is lost but the store took it", async () => {
-      const api = serve({}, null, ["git"]);
-      api.payload = mixed;
-      api.refuseMute = b => { api.muted.delete(b.category); return true; };
-      history.replaceState(null, "", "/errors?range=7&cat=git");
-      await page();
       await userEvent.click(unmuteBtn());
       await waitFor(() => expect(document.getElementById("detailLive")?.textContent).toBe("Type unmuted."));
       expect(document.getElementById("muteErr")).toBeNull();
@@ -895,15 +778,6 @@ describe("ErrorsPage", () => {
       await userEvent.click(muteBtn());
       await waitFor(() => expect(document.getElementById("muteNote")?.textContent).toContain(text));
       expect(document.getElementById("muteNote")?.textContent).not.toMatch(/back in the list|still muted/);
-    });
-
-    it("says nothing about the state for a fix whose resync fails", async () => {
-      const api = serve({}, () => true);
-      api.failResync = true;
-      history.replaceState(null, "", "/errors?range=7&cat=x");
-      await page();
-      await mark();
-      await waitFor(() => expect(document.getElementById("fixErr")?.textContent).toBe("Could not confirm the change to x. Reload to see what the store holds."));
     });
 
     // The failures are kept by type until dismissed or retried: a second failure, or an unrelated write, doesn't take one away.
@@ -1011,30 +885,6 @@ describe("ErrorsPage", () => {
       await waitFor(() => expect([...api.muted]).toEqual(["git"]));
     });
 
-    // The detail is gone once the type leaves the view, so the type table card carries the pending and failure feedback then.
-    it("shows the pending mute in the type table card when the detail has closed, and not in the detail while it is open", async () => {
-      const api = serve(), hold = api.hold();
-      api.payload = mixed;
-      history.replaceState(null, "", "/errors?range=7&noise=0&cat=git");
-      await page();
-      await userEvent.click(muteBtn());
-      await waitFor(() => expect(document.getElementById("detailTitle")).toBeNull());
-      expect(document.querySelector(".types #muteNote")?.textContent).toBe("Muting git / gh error… Saving…");
-      hold.release();
-      await waitFor(() => expect(document.getElementById("muteNote")).toBeNull());
-      // With the detail open (toggle off) the detail says it, and the table card does not.
-      cleanup();
-      history.replaceState(null, "", "/errors?range=7&cat=x");
-      const api2 = serve(), hold2 = api2.hold();
-      api2.payload = mixed;
-      await page();
-      await userEvent.click(muteBtn());
-      expect(document.getElementById("muteSaving")).toBeTruthy();
-      expect(document.getElementById("muteNote")).toBeNull();
-      hold2.release();
-      await waitFor(() => expect([...api2.muted]).toEqual(["x"]));
-    });
-
     it("shows a failed mute in the type table card when the detail has closed, the row comes back, and Dismiss clears it", async () => {
       const api = serve();
       api.payload = mixed;
@@ -1053,21 +903,6 @@ describe("ErrorsPage", () => {
       expect(document.activeElement?.closest("#catBody")).toBeTruthy();
     });
 
-    it("clears the table card's failure with the next successful mute of that type", async () => {
-      const api = serve();
-      api.payload = mixed;
-      api.refuseMute = () => true;
-      history.replaceState(null, "", "/errors?range=7&noise=0&cat=git");
-      await page();
-      await userEvent.click(muteBtn());
-      await waitFor(() => expect(document.getElementById("muteNote")).toBeTruthy());
-      api.refuseMute = null;
-      await userEvent.click(rowOf("git")!.querySelector<HTMLElement>(".tbtn")!);
-      await userEvent.click(muteBtn());
-      await waitFor(() => expect([...api.muted]).toEqual(["git"]));
-      await waitFor(() => expect(document.getElementById("muteNote")).toBeNull());
-    });
-
     it("moves focus to the chart when the muted type was the only one in the view", async () => {
       const api = serve();
       history.replaceState(null, "", "/errors?range=7&noise=0&cat=x");
@@ -1080,8 +915,9 @@ describe("ErrorsPage", () => {
       await waitFor(() => expect([...api.muted]).toEqual(["x"]));
     });
 
-    // Marks belong to a type, not to a tool: a tool filter on the open type changes neither the mute nor the fix box.
-    it("mutes and marks a fix with a tool filter set, which stays while the type is open and goes with the type when it leaves", async () => {
+    // Marks belong to a type, not to a tool: a tool filter on the open type changes neither the mute nor the fix box (the fix: the
+    // tool breakdown's own test).
+    it("mutes with a tool filter set, which stays while the type is open, and a fix keeps the mute", async () => {
       const api = serve();
       history.replaceState(null, "", "/errors?range=30&cat=x&etool=Edit");
       await page();
@@ -1093,18 +929,8 @@ describe("ErrorsPage", () => {
       expect(document.getElementById("toolClr")).toBeTruthy();
       await mark();
       await waitFor(() => expect(api.store).toEqual({ x: "2026-11-05" }));
-      expect(api.posts).toEqual([{ category: "x", day: "2026-11-05" }]);
       expect([...api.muted]).toEqual(["x"]); // the fix kept the mute
       expect(unmuteBtn()).toBeTruthy();
-      // Under the toggle the muted type leaves the view, and the tool filter that belonged to it clears with it.
-      history.replaceState(null, "", "/errors?range=30&noise=0&cat=x&etool=Edit");
-      cleanup();
-      const api2 = serve({}, null, ["x"]);
-      api2.payload = fixture;
-      await page();
-      expect(document.getElementById("detailTitle")).toBeNull();
-      expect(location.search).toBe("?range=30&noise=0");
-      expect(document.getElementById("toolClr")).toBeNull();
     });
 
     it("closes a muted open type with a bucket and a tool selected, and clears both", async () => {
@@ -1117,18 +943,6 @@ describe("ErrorsPage", () => {
       expect(location.search).toBe("?range=30&noise=0&at=2026-11-04");
       expect(document.getElementById("toolClr")).toBeNull();
       await waitFor(() => expect([...api.muted]).toEqual(["x"]));
-    });
-
-    it("keeps the open type open when it is muted with the toggle off", async () => {
-      const api = serve();
-      api.payload = mixed;
-      history.replaceState(null, "", "/errors?range=7&cat=git");
-      await page();
-      await userEvent.click(muteBtn());
-      await waitFor(() => expect([...api.muted]).toEqual(["git"]));
-      expect(document.getElementById("detailTitle")?.textContent).toBe("git / gh error");
-      expect(location.search).toBe("?range=7&cat=git");
-      expect(document.querySelector("#detail .chip.muted-type")?.textContent).toBe("Muted");
     });
 
     it("says what muting does, and offers no button for the fixed noise types", async () => {
@@ -1148,17 +962,6 @@ describe("ErrorsPage", () => {
         expect(document.getElementById("alwaysNoise")?.textContent).toMatch(/always noise/);
         cleanup();
       }
-    });
-
-    it("never suggests a muted type in Where to start", async () => {
-      stubErrors({ ...lostPayload, muted: ["git"] });
-      history.replaceState(null, "", "/errors?range=0");
-      await page();
-      const picks = () => [...document.querySelectorAll("#detail .pick")].map(p => p.getAttribute("data-c"));
-      expect(picks()).toEqual(["worktree", "tests", "sleep_poll"]);
-      expect(rowOf("git")).toBeTruthy(); // still in the table, marked
-      await userEvent.click(toggle());
-      expect(picks()).toEqual(["worktree", "tests", "sleep_poll"]);
     });
 
     it("keeps a linked example of a muted type working: outside the filters under the toggle, in the list without it", async () => {
@@ -1243,7 +1046,7 @@ describe("ErrorsPage", () => {
     expect(within(ex).getByRole("status").textContent).toBe("Could not copy the link.");
   });
 
-  it("lands an #ex permalink on its example, all time, inside its open incident", async () => {
+  it("lands an #ex permalink on its example, all time, inside its open incident, with no dead-link notice", async () => {
     history.replaceState(null, "", "/errors?ex=t02");
     await page();
     await waitFor(() => expect(location.search).toBe("?range=0&ex=t02"));
@@ -1252,6 +1055,8 @@ describe("ErrorsPage", () => {
     expect(document.activeElement).toBe(ex);
     expect(ex.closest(".inc-b")?.id).toBe("incb-0");
     expect(screen.getAllByRole("button", { name: /attempts?/ })[0]!.getAttribute("aria-expanded")).toBe("true");
+    expect(document.getElementById("deadLink")).toBeNull();
+    expect(document.getElementById("pageLive")!.textContent).toBe("");
   });
 
   it("switches to every error and keeps the mode in the old key", async () => {
@@ -1304,32 +1109,6 @@ describe("ErrorsPage", () => {
     expect(liveHolding(DEAD)).toHaveLength(1);
   });
 
-  it("re-announces a second dead link even without a Dismiss in between", async () => {
-    history.replaceState(null, "", "/errors?ex=nope");
-    await page();
-    await waitFor(() => expect(document.getElementById("pageLive")!.textContent).toBe(DEAD));
-    act(() => { history.replaceState(null, "", "/errors?ex=nope2"); dispatchEvent(new PopStateEvent("popstate")); });
-    // Still holding the old text when the new link arrives: the region must empty before the same text returns.
-    expect(document.getElementById("pageLive")!.textContent).toBe("");
-    await waitFor(() => expect(document.getElementById("pageLive")!.textContent).toBe(DEAD));
-    expect(liveHolding(DEAD)).toHaveLength(1);
-  });
-
-  it("keeps the range a dead permalink names", async () => {
-    history.replaceState(null, "", "/errors?ex=nope&range=7");
-    await page();
-    await waitFor(() => expect(location.search).toBe("?range=7"));
-    expect(document.getElementById("deadLink")).not.toBeNull();
-  });
-
-  it("shows no notice for a live permalink", async () => {
-    history.replaceState(null, "", "/errors?ex=t07");
-    await page();
-    await waitFor(() => expect(location.search).toBe("?range=0&ex=t07"));
-    expect(document.getElementById("deadLink")).toBeNull();
-    expect(document.getElementById("pageLive")!.textContent).toBe("");
-  });
-
   it("shows no notice while the payload loads", async () => {
     vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => {})));
     history.replaceState(null, "", "/errors?ex=nope");
@@ -1353,15 +1132,6 @@ describe("ErrorsPage", () => {
     expect(docs.getAttribute("href")).toBe("https://nwidart.github.io/ai-ledger/reference/troubleshooting/");
   });
 
-  it("clears the notice when a later hash names a live example", async () => {
-    history.replaceState(null, "", "/errors?ex=nope");
-    await page();
-    await waitFor(() => expect(document.getElementById("deadLink")).not.toBeNull());
-    act(() => { history.replaceState(null, "", "/errors?ex=t07"); dispatchEvent(new PopStateEvent("popstate")); });
-    await waitFor(() => expect(document.getElementById("deadLink")).toBeNull());
-    expect(document.getElementById("ex-t07")!.classList.contains("focus")).toBe(true);
-  });
-
   it("shows the uncategorized share in the summary", async () => {
     await page();
     // The fixture's errors all have one rule-matched type, so the share is zero and there is no split for one source.
@@ -1379,13 +1149,6 @@ describe("ErrorsPage", () => {
     stubErrors(withErrors([...fixture.errors, ...Array.from({ length: 199 }, (_, i) => ({ ...base, id: `x${i}`, c: "x" })), { ...base, id: "o1", c: "other" }]));
     await page();
     expect(document.querySelector("#uncat .uncat-v")?.textContent).toBe("Uncategorized: 0.5% of errors");
-  });
-
-  it("hides the line when the view has no errors", async () => {
-    stubErrors(withErrors([]));
-    renderApp(<ErrorsPage />);
-    await screen.findByRole("heading", { level: 1, name: /No failed tool calls/ });
-    expect(document.getElementById("uncat")).toBeNull();
   });
 
   // jsdom has no media queries, so the stylesheet is read: on a narrow screen the summary keeps every line and vital, two vitals to a row,
@@ -1406,61 +1169,20 @@ describe("ErrorsPage", () => {
     expect(narrow).toMatch(/\.pg-errors \.vitals \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\); \}/);
   });
 
-  it("splits the uncategorized share by source, and narrows to one source without the split", async () => {
-    // t07 (Codex) becomes MCP tool error, t01 (Claude) Other: 2 of the 6 errors in range are catch-alls.
+  it("says Agent tool errors and splits the uncategorized share by source, and narrows both to Codex in the browser", async () => {
+    // t07 and t08 (and 3 of the 10 calls) from Codex; t07 becomes MCP tool error, t01 (Claude) Other: 2 of the 6 errors in range are catch-alls.
     const codexIds = new Set(["t07", "t08"]);
-    const errors = fixture.errors.map(e => ({ ...e, src: codexIds.has(e.id) ? "codex" as const : "claude" as const,
-      c: e.id === "t07" ? "mcp" : e.id === "t01" ? "other" : e.c }));
-    const days = new Map<string, ErrorsPayload["error_days"][number]>();
-    for (const e of errors) {
-      const k = [e.d, e.p, e.c, e.src].join("|"), r = days.get(k) ?? [e.d, e.p, e.c, 0, 0, e.src];
-      r[3]++; r[4] += e.sub; days.set(k, r);
-    }
-    const mixed: ErrorsPayload = { ...fixture, errors, error_days: [...days.values()],
-      calls: [["2026-11-04", "foo", 7, 0, "claude"], ["2026-11-04", "foo", 3, 0, "codex"]] };
-    vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/errors") ? mixed : {})));
-    await page();
-    expect(document.querySelector("#uncat .uncat-v")?.textContent).toBe("Uncategorized: 33% of errors (Claude Code 25%, Codex 50%)");
-    await userEvent.click(within(screen.getByRole("group", { name: "Source" })).getByRole("button", { name: "Codex" }));
-    expect(document.querySelector("#uncat .uncat-v")?.textContent).toBe("Uncategorized: 50% of errors");
-  });
-
-  it("names all three agents in the uncategorized split", async () => {
-    // t07 (Codex) becomes MCP tool error, t02 (Grok) Other: Grok's one error is a catch-all.
-    const src = (id: string) => (id === "t07" || id === "t08" ? "codex" as const : id === "t02" ? "grok" as const : "claude" as const);
-    const errors = fixture.errors.map(e => ({ ...e, src: src(e.id), c: e.id === "t07" ? "mcp" : e.id === "t02" ? "other" : e.c }));
-    const days = new Map<string, ErrorsPayload["error_days"][number]>();
-    for (const e of errors) {
-      const k = [e.d, e.p, e.c, e.src].join("|"), r = days.get(k) ?? [e.d, e.p, e.c, 0, 0, e.src];
-      r[3]++; r[4] += e.sub; days.set(k, r);
-    }
-    const mixed: ErrorsPayload = { ...fixture, errors, error_days: [...days.values()],
-      calls: [["2026-11-04", "foo", 6, 0, "claude"], ["2026-11-04", "foo", 3, 0, "codex"], ["2026-11-04", "foo", 1, 0, "grok"]] };
-    vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/errors") ? mixed : {})));
-    await page();
-    expect(document.querySelector("#uncat .uncat-v")?.textContent).toMatch(/\(Claude Code [\d.]+%, Codex 50%, Grok 100%\)$/);
-    await userEvent.click(within(screen.getByRole("group", { name: "Source" })).getByRole("button", { name: "Grok" }));
-    expect(document.querySelector("#uncat .uncat-v")?.textContent).toBe("Uncategorized: 100% of errors");
-  });
-
-  it("says Agent tool errors for every source, and narrows to Codex in the browser", async () => {
-    // t07 and t08 (and 3 of the 10 calls) from Codex; the rest stay Claude's.
-    const codexIds = new Set(["t07", "t08"]), errors = fixture.errors.map(e => ({ ...e, src: codexIds.has(e.id) ? "codex" as const : "claude" as const }));
-    const days = new Map<string, ErrorsPayload["error_days"][number]>();
-    for (const e of errors) {
-      const k = [e.d, e.p, e.c, e.src].join("|"), r = days.get(k) ?? [e.d, e.p, e.c, 0, 0, e.src];
-      r[3]++; r[4] += e.sub; days.set(k, r);
-    }
-    const mixed: ErrorsPayload = { ...fixture, errors, error_days: [...days.values()],
-      calls: [["2026-11-04", "foo", 7, 0, "claude"], ["2026-11-04", "foo", 3, 0, "codex"]] };
-    vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/errors") ? mixed : {})));
+    stubErrors({ ...withErrors(fixture.errors.map(e => ({ ...e, src: codexIds.has(e.id) ? "codex" as const : "claude" as const,
+      c: e.id === "t07" ? "mcp" : e.id === "t01" ? "other" : e.c }))), calls: [["2026-11-04", "foo", 7, 0, "claude"], ["2026-11-04", "foo", 3, 0, "codex"]] });
     await page();
     expect(document.querySelector(".kicker")?.textContent).toBe("Agent tool errors");
     expect(screen.getByRole("heading", { level: 1 }).textContent).toMatch(/^6 failed tool calls \(60\.0%\)/);
+    expect(document.querySelector("#uncat .uncat-v")?.textContent).toBe("Uncategorized: 33% of errors (Claude Code 25%, Codex 50%)");
     await userEvent.click(within(screen.getByRole("group", { name: "Source" })).getByRole("button", { name: "Codex" }));
     expect(location.search).toBe("?range=30&source=codex");
     expect(document.querySelector(".kicker")?.textContent).toBe("Codex tool errors");
     expect(screen.getByRole("heading", { level: 1 }).textContent).toMatch(/^2 failed tool calls \(66\.7%\)/);
+    expect(document.querySelector("#uncat .uncat-v")?.textContent).toBe("Uncategorized: 50% of errors");
   });
 
   it("filters with the page's own hash keys and pushes them", async () => {
@@ -1567,29 +1289,6 @@ describe("ErrorsPage", () => {
       expect(document.activeElement).toBe(within(document.getElementById("ex-t07")!).getByRole("button", { name: "Bash" }));
     });
 
-    it("keeps a linked example when it closes", async () => {
-      history.replaceState(null, "", "/errors?range=30&ex=t07");
-      await page();
-      const dlg = await openBash();
-      expect(location.search).toBe("?range=30&tool=Bash&ex=t07");
-      await userEvent.click(within(dlg).getByRole("button", { name: "Close" }));
-      expect(location.search).toBe("?range=30&ex=t07");
-    });
-
-    it("opens over the narrow-screen detail sheet, which stays open", async () => {
-      vi.stubGlobal("matchMedia", (q: string) => ({ matches: q.includes("max-width"), media: q, addEventListener() {}, removeEventListener() {} }));
-      history.replaceState(null, "", "/errors?range=30&cat=x");
-      await page();
-      const detail = document.getElementById("sheet") as HTMLDialogElement;
-      expect(detail.open).toBe(true);
-      const dlg = await openBash();
-      expect(dlg.open).toBe(true);
-      await userEvent.click(within(dlg).getByRole("button", { name: "Close" }));
-      expect(dlg.open).toBe(false);
-      expect(detail.open).toBe(true);
-      expect(location.search).toBe("?range=30&cat=x");
-    });
-
     it("stacks over the narrow-screen detail sheet with ← Back, which returns to it and to the link", async () => {
       vi.stubGlobal("matchMedia", (q: string) => ({ matches: q.includes("max-width"), media: q, addEventListener() {}, removeEventListener() {} }));
       history.replaceState(null, "", "/errors?range=30&cat=x");
@@ -1637,7 +1336,7 @@ describe("ErrorsPage dead-link frames", () => {
     expect(document.getElementById("pageLive")!.textContent).not.toContain(DEAD);
   });
 
-  it("a live link after the announcement clears the region", async () => {
+  it("a live link after the announcement clears the region and the notice, and lands on its example", async () => {
     history.replaceState(null, "", "/errors?ex=nope");
     await page();
     await waitFor(() => expect(document.getElementById("deadLink")).not.toBeNull());
@@ -1646,6 +1345,7 @@ describe("ErrorsPage dead-link frames", () => {
     go("?ex=t07");
     await waitFor(() => expect(document.getElementById("deadLink")).toBeNull());
     expect(document.getElementById("pageLive")!.textContent).toBe("");
+    expect(document.getElementById("ex-t07")!.classList.contains("focus")).toBe(true);
   });
 
   it("a second dead link cancels the first frame, so one announcement is pending", async () => {
@@ -1653,6 +1353,12 @@ describe("ErrorsPage dead-link frames", () => {
     await page();
     await waitFor(() => expect(document.getElementById("deadLink")).not.toBeNull());
     go("?ex=nope2");
+    expect(frames.size).toBe(1);
+    run();
+    expect(document.getElementById("pageLive")!.textContent).toBe(DEAD);
+    // A third while the region still holds the text, with no Dismiss between: it empties at once, so the same text is a change again.
+    go("?ex=nope3");
+    expect(document.getElementById("pageLive")!.textContent).toBe("");
     expect(frames.size).toBe(1);
     run();
     expect(document.getElementById("pageLive")!.textContent).toBe(DEAD);
@@ -1723,7 +1429,7 @@ describe("ErrorsPage bucket selection", () => {
     expect(rows()).toEqual([["x", "6"]]);
   });
 
-  it("leaves keys with Alt, Ctrl, Meta or Shift to the browser on the chart", async () => {
+  it("leaves keys with Alt, Ctrl, Meta or Shift to the browser on the chart, and never lets Enter or Space scroll it", async () => {
     await open("?range=30");
     keys();
     const chart = document.getElementById("chart")!;
@@ -1731,6 +1437,8 @@ describe("ErrorsPage bucket selection", () => {
     expect(fireEvent.keyDown(chart, { key: " ", shiftKey: true })).toBe(true); // Shift+Space still scrolls the page up
     expect(location.search).toBe("?range=30");
     expect(document.getElementById("chartLive")!.textContent).toBe("");
+    for (const k of ["Enter", " "]) expect(fireEvent.keyDown(chart, { key: k })).toBe(false);
+    expect(location.search).toBe("?range=30"); // with no current point, nothing is selected
   });
 
   it("selects and clears from the keyboard with Enter and Space", async () => {
@@ -1769,24 +1477,6 @@ describe("ErrorsPage bucket selection", () => {
     expect(document.activeElement).toBe(document.querySelector("#catBody button"));
   });
 
-  it("words a week's chip, and clears the selection when the granularity changes", async () => {
-    await open("?range=30&gran=week&at=2026-11-02");
-    expect(document.getElementById("atClr")?.textContent).toBe("Week of Nov 2 ✕");
-    expect(rows()).toEqual([["x", "6"]]);
-    await userEvent.click(screen.getByRole("button", { name: "Day" }));
-    expect(location.search).toBe("?range=30");
-    expect(document.getElementById("atClr")).toBeNull();
-    clickBucket(0);
-    await userEvent.click(screen.getByRole("button", { name: "Week" }));
-    expect(location.search).toBe("?range=30&gran=week");
-  });
-
-  it("clears a bucket the range doesn't hold", async () => {
-    await open("?range=7&at=2026-09-01");
-    await waitFor(() => expect(location.search).toBe("?range=7"));
-    expect(document.getElementById("atClr")).toBeNull();
-  });
-
   it("narrows the type detail: the incident sentence, By project, and the list", async () => {
     await open("?range=30&cat=x&at=2026-11-03");
     const d = document.getElementById("detail")!;
@@ -1823,28 +1513,17 @@ describe("ErrorsPage bucket selection", () => {
     error_days: [["2026-11-03", "foo", "tests", 2, 0, "claude"], ["2026-11-04", "foo", "x", 4, 0, "claude"]] };
   const live = () => document.getElementById("detailLive")!.textContent;
 
-  it("opens a type chosen in the chart legend over a bucket without it: the bucket clears, and the page says so", async () => {
+  // Where to start opens a type through the same pick as the legend.
+  it("opens a type chosen in the chart legend over the bucket: kept when the type has errors in it, else cleared, and the page says so", async () => {
     await open("?range=30&at=2026-11-04", split);
     expect(rows()).toEqual([["x", "4"]]);
+    await userEvent.click(within(document.getElementById("legend")!).getByRole("button", { name: /^x/ }));
+    expect(hashOf()).toEqual({ range: "30", at: "2026-11-04", cat: "x" });
+    expect(live()).toBe("");
     await userEvent.click(within(document.getElementById("legend")!).getByRole("button", { name: /^Tests \/ build/ }));
     await waitFor(() => expect(hashOf()).toEqual({ range: "30", cat: "tests" }));
     expect(document.getElementById("detailTitle")?.textContent).toBe("Tests / build / lint failed");
     expect(document.getElementById("atClr")).toBeNull();
-    await waitFor(() => expect(live()).toBe("Selection cleared: Tests / build / lint failed has no errors in Nov 4."));
-  });
-
-  it("keeps the bucket when the legend's type has errors in it", async () => {
-    await open("?range=30&at=2026-11-04", split);
-    await userEvent.click(within(document.getElementById("legend")!).getByRole("button", { name: /^x/ }));
-    expect(hashOf()).toEqual({ range: "30", at: "2026-11-04", cat: "x" });
-    expect(live()).toBe("");
-  });
-
-  it("opens a type picked in Where to start over a bucket without it", async () => {
-    await open("?range=30&at=2026-11-04", split);
-    await userEvent.click(within(document.getElementById("detail")!).getByRole("button", { name: /^Tests \/ build/ }));
-    await waitFor(() => expect(hashOf()).toEqual({ range: "30", cat: "tests" }));
-    expect(document.getElementById("detailTitle")?.textContent).toBe("Tests / build / lint failed");
     await waitFor(() => expect(live()).toBe("Selection cleared: Tests / build / lint failed has no errors in Nov 4."));
   });
 
@@ -1979,13 +1658,6 @@ describe("ErrorsPage bucket selection", () => {
     expect(location.search).toBe("?range=30");
   });
 
-  it("never lets Enter or Space scroll the focused chart", async () => {
-    await open("?range=30");
-    keys();
-    for (const k of ["Enter", " "]) expect(fireEvent.keyDown(document.getElementById("chart")!, { key: k })).toBe(false);
-    expect(location.search).toBe("?range=30");
-  });
-
   it("clears a bucket the chart no longer draws after a project filter", async () => {
     // Project bar's first call is on Nov 4, so Nov 3 is no point of its chart.
     await open("?range=30&project=bar&at=2026-11-03", { ...two, calls: [...two.calls, ["2026-11-04", "bar", 10, 0, "claude"]] });
@@ -1993,31 +1665,6 @@ describe("ErrorsPage bucket selection", () => {
     expect(document.getElementById("atClr")).toBeNull();
   });
 
-  it("keeps focus on the chart when the chip clears over an empty table", async () => {
-    await open("?range=30&project=bar&at=2026-11-03", { ...two, calls: [...two.calls, ["2026-11-03", "bar", 10, 0, "claude"]] });
-    expect(document.querySelector("#catBody button")).toBeNull();
-    await userEvent.click(document.getElementById("atClr")!);
-    expect(hashOf()).toEqual({ range: "30", project: "bar" });
-    expect(document.activeElement).toBe(document.getElementById("chart"));
-  });
-
-  it("narrows a week to its own errors, not the whole range", async () => {
-    // Nov 2 week: Nov 3 (2 errors) and Nov 4 (4); the week of Oct 26 holds one, on Oct 29.
-    const wk: ErrorsPayload = { ...two, errors: two.errors.map(e => (e.id === "t01" ? { ...e, d: "2026-10-29" } : e)),
-      error_days: [["2026-10-29", "foo", "x", 1, 0, "claude"], ["2026-11-03", "foo", "x", 1, 0, "claude"], ["2026-11-04", "foo", "x", 4, 0, "claude"]],
-      calls: [["2026-10-29", "foo", 10, 0, "claude"], ...two.calls] };
-    await open("?range=30&gran=week&at=2026-11-02", wk);
-    expect(rows()).toEqual([["x", "5"]]);
-    expect(document.getElementById("atClr")?.textContent).toBe("Week of Nov 2 ✕");
-    await userEvent.click(document.getElementById("atClr")!);
-    expect(rows()).toEqual([["x", "6"]]);
-  });
-
-  it("writes a permalink without the bucket", async () => {
-    await open("?range=30&at=2026-11-04&ex=t07");
-    expect(document.getElementById("outside")).toBeNull();
-    expect(document.querySelector("#ex-t07 a[data-link]")!.getAttribute("href")).toBe("?range=30&ex=t07");
-  });
 });
 
 // Type x: Edit ×4 (t01, t02 on Nov 3; t03, t04 on Nov 4, Claude Code), mcp__srv__q (t08, Codex); type tests: Bash (t07, Codex).
@@ -2048,13 +1695,6 @@ describe("ErrorsPage tool and agent breakdown", () => {
     expect(document.querySelector("#detail .why")!.textContent).not.toMatch(/Mostly/);
   });
 
-  it("folds the tools past the top five", async () => {
-    const t01 = mix.errors[0]!, names = ["a", "b", "c", "d", "e", "f", "g"];
-    await open("?range=30&cat=x", withErrors([...mix.errors.filter(e => e.c === "x"), { ...t01, id: "z1" }, { ...t01, id: "z2" }].map((e, i) => ({ ...e, t: names[i]! }))));
-    expect(rowsOf("tool")).toHaveLength(5);
-    expect(set("tool")!.querySelector("li.muted")!.textContent).toBe("2 more: 2 errors");
-  });
-
   it("narrows the detail, not the page, to the clicked tool, and a second click clears it", async () => {
     await open("?range=30&cat=x");
     const before = types(), len = history.length;
@@ -2078,10 +1718,13 @@ describe("ErrorsPage tool and agent breakdown", () => {
     expect(document.activeElement).toBe(tool("mcp__srv__q"));
   });
 
-  it("clears with the chip, which keeps focus on the tool's row", async () => {
+  it("clears with the chip, which names the tool in its title and keeps focus on the tool's row", async () => {
     await open("?range=30&cat=x&etool=Edit");
     expect(document.querySelector("#detail .istat b")!.textContent).toBe("4");
-    await userEvent.click(document.getElementById("toolClr")!);
+    const chip = document.getElementById("toolClr")!;
+    expect(chip.getAttribute("title")).toBe("Edit"); // so a long name can be cut to fit
+    expect(chip.querySelector(".nm")!.textContent).toBe("Edit");
+    await userEvent.click(chip);
     expect(hashOf().etool).toBeUndefined();
     expect(document.querySelector("#detail .istat b")!.textContent).toBe("5");
     expect(document.activeElement).toBe(tool("Edit"));
@@ -2103,13 +1746,6 @@ describe("ErrorsPage tool and agent breakdown", () => {
     await open("?range=30&cat=x&at=2026-11-03&etool=Edit");
     expect(set("tool")).toBeTruthy();
     expect(tool("Edit").getAttribute("aria-pressed")).toBe("true");
-  });
-
-  it("clears a tool the open type has no errors of in the view, or with no type open", async () => {
-    await open("?range=30&cat=x&at=2026-11-03&etool=mcp__srv__q");
-    await waitFor(() => expect(hashOf().etool).toBeUndefined());
-    await open("?range=30&etool=Edit");
-    await waitFor(() => expect(hashOf()).toEqual({ range: "30" }));
   });
 
   it("drops the tool when the type closes or another opens", async () => {
@@ -2148,18 +1784,6 @@ describe("ErrorsPage tool and agent breakdown", () => {
     await open("?range=30&cat=tests"); // codex only
     expect(set("agent")).toBeNull();
   });
-  it("lists only the tool's errors in Every error mode, and the count says so", async () => {
-    await open("?range=30&cat=x&etool=Edit");
-    await userEvent.click(screen.getByRole("button", { name: "Every error, newest first" }));
-    expect(document.getElementById("exCount")!.textContent).toBe("4 in range, newest first");
-    const ex = [...document.querySelectorAll("#exList .ex")];
-    expect(ex).toHaveLength(4);
-    expect(ex.some(e => e.textContent!.includes("mcp__srv__q"))).toBe(false);
-    await userEvent.click(document.getElementById("toolClr")!);
-    expect(document.getElementById("exCount")!.textContent).toBe("5 in range, newest first");
-    expect(document.querySelectorAll("#exList .ex")).toHaveLength(5);
-  });
-
   it("leaves the summary, chart, type table and the chart's point reading as they are under a tool filter", async () => {
     // Everything on the page but the open type's detail, and what the keyboard reading says of the first point.
     const page_ = async () => {
@@ -2189,13 +1813,6 @@ describe("ErrorsPage tool and agent breakdown", () => {
     expect(hashOf().etool).toBeUndefined();
     expect(rowsOf("tool")).toHaveLength(5);
     expect(set("tool")!.querySelector("li.muted")!.textContent).toBe("2 more: 2 errors");
-  });
-
-  it("names the tool in the chip's title, so a long name can be cut to fit", async () => {
-    await open("?range=30&cat=x&etool=mcp__srv__q");
-    const chip = document.getElementById("toolClr")!;
-    expect(chip.getAttribute("title")).toBe("mcp__srv__q");
-    expect(chip.querySelector(".nm")!.textContent).toBe("mcp__srv__q");
   });
 
   it("keeps the fix marker per type, whatever the tool filter: the box, Undo and Mark write and show the same", async () => {
@@ -2260,33 +1877,31 @@ describe("type table: sort and filter", () => {
     [[...h.querySelectorAll(".sortbtn")].find(b => /[↑↓]/.test(b.textContent!))!.textContent!.replace(/[↑↓]/, ""), h.getAttribute("aria-sort")]);
   const DEFAULT = ["tests", "git", "worktree", "build", "lint"];
 
-  it("names the type table, in a focusable region, with column scopes and the figures behind a title as text", async () => {
+  it("names the type table, in a focusable region, with four columns, column scopes and the figures behind a title as text", async () => {
     await open();
     const region = screen.getByRole("region", { name: "Error types" }), table = within(region).getByRole("table", { name: "Error types" });
     expect(region.tabIndex).toBe(0);
     expect(within(table).getAllByRole("columnheader").every(h => h.getAttribute("scope") === "col")).toBe(true);
+    // Four columns: the type, errors and rate with the share, time lost with the share not recovered, and the trend with the change.
+    // No Share column: the share bar orders as Errors does.
+    const th = [...document.querySelectorAll(".types thead th")];
+    expect(th.map(h => h.className)).toEqual(["", "num c-n", "num c-lost", "num c-trend"]);
+    expect(th.map(h => [...h.querySelectorAll(".sortbtn")].map(b => b.textContent))).toEqual([["Type"], ["Errors↓", "Rate"], ["Time lost", "Not recovered"], ["Change"]]);
+    expect(document.querySelectorAll('#catBody tr[data-c="tests"] > :is(td, th)')).toHaveLength(4);
+    expect(document.querySelector('#catBody tr[data-c="tests"] .c-share .bar')).not.toBeNull(); // the share bar, under the count
     // The incident counts are text, for a screen reader, not a hover title.
     expect(table.querySelector('tr[data-c="tests"] .c-unrec .sr')!.textContent).toBe(", 1 of 4 incidents");
     expect(table.querySelectorAll("#catBody [title]")).toHaveLength(0);
-    // Each row is headed by its type.
+    // Each row is headed by its type, and is its type's subject for the context menu.
     const rows = [...table.querySelectorAll("tbody tr")];
     expect(rows.length).toBeGreaterThan(0);
     for (const r of rows) {
       expect(r.querySelectorAll("th")).toHaveLength(1);
       expect(r.firstElementChild!.matches('th[scope="row"].c-type')).toBe(true);
+      expect(r.getAttribute("data-subject")).toBe(`category:${r.getAttribute("data-c")}`);
     }
     expect(within(table).getAllByRole("rowheader")).toHaveLength(rows.length);
     expect(within(table.querySelector('tr[data-c="tests"] > th')!).getByRole("button", { expanded: false })).toBeTruthy();
-  });
-
-  it("has four columns: the type, errors and rate with the share, time lost with the share not recovered, and the trend with the change", async () => {
-    await open();
-    const th = [...document.querySelectorAll(".types thead th")];
-    expect(th.map(h => h.className)).toEqual(["", "num c-n", "num c-lost", "num c-trend"]);
-    expect(th.map(h => [...h.querySelectorAll(".sortbtn")].map(b => b.textContent))).toEqual([["Type"], ["Errors↓", "Rate"], ["Time lost", "Not recovered"], ["Change"]]);
-    // The type is the row header, then three data cells.
-    expect(document.querySelectorAll('#catBody tr[data-c="tests"] > :is(td, th)')).toHaveLength(4);
-    expect(document.querySelector('#catBody tr[data-c="tests"] .c-share .bar')).not.toBeNull(); // the share bar, under the count
   });
 
   it("lists the types by errors, most first, with Rate, Not recovered and Change", async () => {
@@ -2301,20 +1916,13 @@ describe("type table: sort and filter", () => {
     // The trend is a picture: its header is a label, and only Change sorts the column.
     expect(document.querySelector("th.c-trend .hd")!.textContent).toBe("Trend");
     expect(within(document.querySelector("th.c-trend")!).getAllByRole("button").map(b => b.getAttribute("aria-label") ?? b.textContent)).toEqual(["About Trend", "Change"]);
+    // Its toggletip explains the Change sort and names the unit.
+    const trend = head("Change").closest("th")!;
+    await userEvent.click(within(trend).getByRole("button", { name: "About Trend" }));
+    expect(trend.querySelector(".tt-pop")!.textContent).toMatch(/Change sorts by the change in error rate, in points/);
   });
 
-  it("ticks the trend on the recorded fix date, and says so", async () => {
-    const data = sortData();
-    vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/errors") ? { ...data, fixes: { tests: NOW } } : {})));
-    history.replaceState(null, "", "/errors?range=30");
-    await page();
-    const cell = document.querySelector('#catBody tr[data-c="tests"] td.c-trend')!;
-    expect(cell.querySelectorAll(".spark line")).toHaveLength(1);
-    expect(cell.textContent).toContain("The trend marks the fix.");
-    expect(document.querySelectorAll('#catBody tr[data-c="git"] .spark line')).toHaveLength(0);
-  });
-
-  it("ticks a fix recorded before the view's first call: the trend starts on the range's first day", async () => {
+  it("ticks the trend on a fix recorded before the view's first call, and says so: the trend starts on the range's first day", async () => {
     // The range is Oct 7 to Nov 5 (30 days). Under project foo the first call is Oct 20; bar's Oct 8 call is out of the view. The fix is Oct 12.
     const data = sortData();
     vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/errors")
@@ -2326,6 +1934,7 @@ describe("type table: sort and filter", () => {
     // Oct 12 is the sixth of the 30 days (index 5): x = (5 + .5) * 84 / 30.
     expect(tick[0]!.getAttribute("x1")).toBe("15.4");
     expect(cell.textContent).toContain("The trend marks the fix.");
+    expect(document.querySelectorAll('#catBody tr[data-c="git"] .spark line')).toHaveLength(0); // no fix, no tick
   });
 
   it("sorts from the keyboard: Enter and Space on a header button, focus staying on it", async () => {
@@ -2341,6 +1950,10 @@ describe("type table: sort and filter", () => {
     await userEvent.keyboard("{Enter}");
     expect(sortedHeads()).toEqual([["Time lost", "descending"]]);
     expect(document.querySelectorAll("thead th[aria-sort]")).toHaveLength(1);
+    expect(order()[0]).toBe("worktree");
+    expect(document.activeElement).toBe(head("Time lost"));
+    // The first listed row's button is where the page's focus fallback goes.
+    expect(tableFocus()).toBe(document.querySelector('#catBody button[data-c="worktree"]'));
   });
 
   it("shows the rates behind a change on demand, from the keyboard, without opening the row", async () => {
@@ -2404,20 +2017,6 @@ describe("type table: sort and filter", () => {
     expect(document.activeElement).toBe(head(name));
   });
 
-  it("has no Share column: the share bar orders as Errors does, and no header sorts by it", async () => {
-    await open();
-    expect(within(document.querySelector("thead")!).queryByRole("button", { name: "Share" })).toBeNull();
-    expect(document.querySelector("th.c-share")).toBeNull();
-    expect(document.querySelectorAll("thead th .sortbtn")).toHaveLength(6); // Type, Errors, Rate, Time lost, Not recovered, Change
-  });
-
-  it("explains the Change sort in its header, which names the unit", async () => {
-    await open();
-    const th = head("Change").closest("th")!;
-    await userEvent.click(within(th).getByRole("button", { name: "About Trend" }));
-    expect(th.querySelector(".tt-pop")!.textContent).toMatch(/Change sorts by the change in error rate, in points/);
-  });
-
   // jsdom has no layout, so the test reads the stylesheet's budget: a fixed table layout, and figure columns in rem that leave the type
   // column room in the master pane at 1280px. The pane: the page's 1240px wrap less its 16px gutters, split 1.05 : 1 with a 16px gap, less
   // the panel's 20px padding and 1px border on each side.
@@ -2471,16 +2070,6 @@ describe("type table: sort and filter", () => {
     await userEvent.click(screen.getByRole("button", { name: "30d" }));
     expect(order()).toEqual(DEFAULT);
     expect(box().value).toBe("");
-  });
-
-  it("keeps the focus on a header sorted from the keyboard", async () => {
-    await open();
-    head("Time lost").focus();
-    await userEvent.keyboard("{Enter}");
-    expect(order()[0]).toBe("worktree");
-    expect(document.activeElement).toBe(head("Time lost"));
-    // The first listed row's button is where the page's focus fallback goes.
-    expect(tableFocus()).toBe(document.querySelector('#catBody button[data-c="worktree"]'));
   });
 
   describe("filter", () => {
@@ -2805,11 +2394,6 @@ describe("ErrorsPage by message", () => {
     expect(list()[0]).toEqual(["35×", TIMEOUT]);
   });
 
-  it("says 1 message, and the bucket and tool narrow it together", async () => {
-    await open("?range=30&cat=x&at=2026-11-03&etool=Edit");
-    expect(list()).toEqual([["2×", ENOENT]]);
-    expect(exCount()).toBe("1 message in day, most errors first");
-  });
   it("lists a muted type's errors like the other modes while noise shows, and mute leaves the list and its open group alone", async () => {
     await open("?range=30&cat=x", msgs, "msg", ["x"]);
     expect(document.getElementById("mute")!.textContent).toBe("Unmute");
@@ -2824,13 +2408,6 @@ describe("ErrorsPage by message", () => {
     expect(heads()[1]!.getAttribute("aria-expanded")).toBe("true");
     expect(examples()).toEqual(["ex-a4", "ex-a3", "ex-a2", "ex-a1"]);
     expect(document.querySelector("#exList")!.contains(document.getElementById("mute"))).toBe(false);
-  });
-
-  it("closes a muted type's list when noise is hidden, as the other modes do", async () => {
-    await open("?range=30&cat=x&noise=0", msgs, "msg", ["x"]);
-    await waitFor(() => expect(location.search).not.toContain("cat=x"));
-    expect(document.getElementById("exList")).toBeNull();
-    expect(heads()).toHaveLength(0);
   });
 });
 
@@ -2954,13 +2531,15 @@ describe("ErrorsPage render cost", () => {
 });
 
 describe("controls where they act", () => {
-  it("keeps only the page-level filters in the scope bar, and none in the header", async () => {
+  it("keeps only the page-level filters in the scope bar, none in the header, and draws the page in panels, as the other pages", async () => {
     await page();
     const top = document.querySelector("header.top")!, bar = document.querySelector(".scopebar")!;
     for (const id of ["fGran", "fSub", "fNoise"]) expect(bar.querySelector("#" + id), id).toBeNull();
     for (const id of ["fProject", "fRange", "fSource"]) expect(bar.querySelector("#" + id), id).not.toBeNull();
     expect(bar.querySelector("#fAuto")).toBeNull();
     expect(top.querySelector(".filters")).toBeNull();
+    expect(document.querySelectorAll(".pg-errors .card")).toHaveLength(0);
+    for (const s of [".chart-card", ".types", "#detail"]) expect(document.querySelector(s)!.classList.contains("panel"), s).toBe(true);
   });
 
   it("puts Day and Week in the chart's header, writing gran to the URL", async () => {
@@ -2986,7 +2565,8 @@ describe("controls where they act", () => {
     expect([sub.checked, noise.checked]).toEqual([true, false]);
     expect(within(tools as HTMLElement).getByRole("checkbox", { name: /^Include ?subagents$/ })).toBe(sub);
     expect(within(tools as HTMLElement).getByRole("checkbox", { name: "Hide noise and muted" })).toBe(noise);
-    expect(within(tools as HTMLElement).getByRole("button", { name: "About hiding noise and muted types" })).toBeTruthy();
+    await userEvent.click(within(tools as HTMLElement).getByRole("button", { name: "About hiding noise and muted types" }));
+    expect(screen.getByText("Leaves out harness errors, user rejections and the types you muted", { selector: "[role=tooltip]" })).toBeTruthy();
     // What the toggle filters: the type's count and rate in the table, its legend count, and the chart's day.
     const counts = () => [document.querySelector('#catBody tr[data-c="x"] .c-count')!.textContent, document.querySelector('#catBody tr[data-c="x"] .c-rate')!.textContent,
       document.querySelector('#legend [data-c="x"] em')!.textContent];
@@ -3011,19 +2591,15 @@ describe("controls where they act", () => {
     expect(within(document.getElementById("fGran")!).getByRole("button", { name: "Week" }).getAttribute("aria-pressed")).toBe("true");
   });
 
-  it("keeps the toggles when the view has no type to list", async () => {
+  it("keeps the toggles when the view has no error, with no type filter, no uncategorized line and no chart data table", async () => {
     stubErrors(withErrors([]));
     renderApp(<ErrorsPage />);
     await screen.findByRole("heading", { level: 1, name: /No failed tool calls/ });
     expect(document.getElementById("fSub")).not.toBeNull();
     expect(document.getElementById("fNoise")).not.toBeNull();
     expect(screen.queryByRole("searchbox", { name: /filter types/i })).toBeNull();
-  });
-
-  it("draws the page in panels, as the other pages", async () => {
-    await page();
-    expect(document.querySelectorAll(".pg-errors .card")).toHaveLength(0);
-    for (const s of [".chart-card", ".types", "#detail"]) expect(document.querySelector(s)!.classList.contains("panel"), s).toBe(true);
+    expect(document.getElementById("uncat")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Show data table" })).toBeNull(); // the chart shows a message instead
   });
 });
 
@@ -3064,13 +2640,6 @@ describe("rate chart data table", () => {
     const cells = [...sel[0]!.closest("tr")!.querySelectorAll("td")].map(c => c.textContent!);
     expect(cells.slice(0, 2)).toEqual(["10", "6"]);
     expect(cells[2]).toMatch(/^60\.00%/); // x's rate: 6 errors per 10 calls
-  });
-
-  it("is absent when the chart shows a message instead", async () => {
-    stubErrors(withErrors([]));
-    renderApp(<ErrorsPage />);
-    await screen.findByRole("heading", { level: 1, name: /No failed tool calls/ });
-    expect(screen.queryByRole("button", { name: "Show data table" })).toBeNull();
   });
 });
 

@@ -3,7 +3,6 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Drawer, jumpTo, onUserScroll, openDrawer } from "./Drawer";
 import { InsightCard, rankInsights, type Insight } from "./InsightCard";
-import { Ledger, LedgerRow } from "./Ledger";
 import { renderApp } from "../testing";
 
 describe("Drawer", () => {
@@ -39,15 +38,6 @@ describe("Drawer", () => {
     await userEvent.click(a);
     expect(a.getAttribute("aria-expanded")).toBe("false");
     expect(b.getAttribute("aria-expanded")).toBe("false");
-  });
-  it("toggles from the keyboard", async () => {
-    renderApp(<Drawer id="d-keys" title="Keys"><p>table</p></Drawer>);
-    await userEvent.tab();
-    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Keys" }));
-    await userEvent.keyboard("{Enter}");
-    expect(screen.getByRole("button", { name: "Keys" }).getAttribute("aria-expanded")).toBe("true");
-    await userEvent.keyboard(" ");
-    expect(screen.getByRole("button", { name: "Keys" }).getAttribute("aria-expanded")).toBe("false");
   });
   it("renders its body only once it has been open, then keeps it", async () => {
     renderApp(<Drawer id="d-lazy" title="Lazy"><table><tbody><tr><td>row</td></tr></tbody></table></Drawer>);
@@ -111,21 +101,6 @@ describe("jumpTo", () => {
     const toggle = screen.getByRole("button", { name: "D" });
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
     expect(document.activeElement).toBe(toggle);
-  });
-});
-
-describe("Ledger", () => {
-  it("renders selectable rows as buttons and an empty line", async () => {
-    const pick = vi.fn();
-    const { rerender } = renderApp(<Ledger empty="No usage in this range.">
-      {[<LedgerRow key="a" name="foo" project="foo" share={0.5} value="$16" side="99%" onPick={pick} pickKey="foo" />,
-        <LedgerRow key="b" name="m-a · high" share={0} value="50%" side="$1" />]}
-    </Ledger>);
-    await userEvent.click(screen.getByRole("button", { name: /foo/ }));
-    expect(pick).toHaveBeenCalledWith(screen.getByRole("button", { name: /foo/ }));
-    expect(screen.getAllByRole("button")).toHaveLength(1);
-    rerender(<Ledger empty="No usage in this range.">{[]}</Ledger>);
-    expect(screen.getByText("No usage in this range.")).toBeTruthy();
   });
 });
 

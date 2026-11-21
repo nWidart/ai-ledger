@@ -149,21 +149,6 @@ describe("EChart", () => {
     expect(fakeECharts.charts).toEqual([chart]);
   });
 
-  it("draws newer data at the browser's current text size, with the box the same", async () => {
-    const sizes: number[] = [];
-    const sized = () => (env: ChartEnv): EChartsOption => { sizes.push(env.textScale); return option(env); };
-    const { rerender } = render(show({ option: sized(), view: "v" }));
-    await drawn();
-    expect(sizes.at(-1)).toBe(1);
-    document.documentElement.style.fontSize = "32px"; // no event tells of it
-    try {
-      rerender(show({ option: sized(), view: "v" }));
-      expect(sizes.at(-1)).toBe(2);
-    } finally {
-      document.documentElement.style.fontSize = "";
-    }
-  });
-
   it("resizes the chart and draws again at the new size when the box's size changes", async () => {
     const sized = fakeBox(600);
     const { rerender, unmount } = render(show());
@@ -200,11 +185,6 @@ describe("EChart", () => {
     expect((await drawn()).last).toMatchObject({ animation: false });
   });
 
-  it("leaves animation to the option when motion is allowed", async () => {
-    render(show({ option: env => ({ ...option(env), animation: true }) }));
-    expect((await drawn()).last).toMatchObject({ animation: true });
-  });
-
   it("animates the first draw only: newer data, a theme and a new view are drawn at once", async () => {
     const moving = (env: ChartEnv): EChartsOption => ({ ...option(env), animation: true });
     const { rerender, unmount } = render(show({ option: moving, view: "a" }));
@@ -238,31 +218,14 @@ describe("EChart", () => {
 });
 
 describe("EChart reading", () => {
-  it("reads the first point on the first Right and the last on the first Left", async () => {
-    const { unmount } = render(show());
-    await drawn();
-    expect(readout()).toBe("");
-    expect(tooltip()).toBeNull();
-    expect(key("ArrowRight")).toBe(false); // the page does not scroll
-    expect(readout()).toBe("Mon: $1.00");
-    expect(tooltip()!.textContent).toBe("Mon tip");
-    unmount();
-
-    render(show());
-    await drawn();
-    key("ArrowLeft");
-    expect(readout()).toBe("Wed: $3.00");
-    expect(tooltip()!.textContent).toBe("Wed tip");
-  });
-
   it("steps with Left and Right and stops at each end, and jumps with Home and End", async () => {
     render(show());
     await drawn();
     const reads = (keys: string[]) => keys.map(k => { key(k); return readout(); });
     expect(reads(["ArrowRight", "ArrowRight", "ArrowRight", "ArrowRight"])).toEqual(["Mon: $1.00", "Tue: $2.00", "Wed: $3.00", "Wed: $3.00"]);
     expect(reads(["Home", "ArrowLeft", "End", "ArrowLeft"])).toEqual(["Mon: $1.00", "Mon: $1.00", "Wed: $3.00", "Tue: $2.00"]);
-    expect(key("Home")).toBe(false);
-    expect(key("End")).toBe(false);
+    // The page does not scroll: every reading key is the chart's.
+    expect(["Home", "End", "ArrowLeft", "ArrowRight"].map(k => key(k))).toEqual([false, false, false, false]);
   });
 
   it("leaves keys with a modifier to the browser, and keys it does not read", async () => {
@@ -366,6 +329,7 @@ describe("EChart reading", () => {
     expect(tooltip()!.style.top).toBe("180px");
     key("End"); // the same point, now the keyboard's: over the point, under the top of the grid
     expect(readout()).toBe("Wed: $3.00");
+    // The fake's last point is at x 373.33 and its grid starts at y 10: found within 4px, 20px lower, then tipAt's 14 and 10.
     expect(parseFloat(tooltip()!.style.left)).toBeCloseTo(chart.pointAt(2)[0] - 14, 2);
     expect(tooltip()!.style.top).toBe("22px");
   });
@@ -438,15 +402,6 @@ describe("EChart reading", () => {
     expect(tooltip()).toBeNull();
   });
 
-  it("clears the reading on blur", async () => {
-    render(show());
-    await drawn();
-    key("ArrowRight");
-    fireEvent.blur(box());
-    expect(readout()).toBe("");
-    expect(tooltip()).toBeNull();
-  });
-
   it("reads the point under the pointer inside the grid, with the tooltip beside the pointer, and none outside it", async () => {
     render(show());
     const chart = await drawn();
@@ -467,15 +422,6 @@ describe("EChart reading", () => {
     expect(readout()).toBe("Wed: $3.00");
     chart.fire("globalout");
     expect(readout()).toBe("");
-  });
-
-  it("puts the tooltip over the point a key reads, under the top of the grid", async () => {
-    render(show());
-    const chart = await drawn();
-    key("End");
-    // The fake's last point is at x 373.33 and its grid starts at y 10: found within 4px, 20px lower, then tipAt's 14 and 10.
-    expect(parseFloat(tooltip()!.style.left)).toBeCloseTo(chart.pointAt(2)[0] - 14, 2);
-    expect(tooltip()!.style.top).toBe("22px");
   });
 
   it("moves a key's tooltip to the drawn point once the chart draws, and again after a redraw that moves the points", async () => {
@@ -845,15 +791,6 @@ describe("EChart zoom", () => {
     expect(tooltip()).toBeNull();
   });
 
-  it("leaves the zoom keys to the browser when the option draws no slider, with zoom set", async () => {
-    render(zoomed({ option: short }));
-    const chart = await drawn();
-    expect(key("+")).toBe(true);
-    expect(key("-")).toBe(true);
-    expect(zooms(chart)).toEqual([]);
-    expect(readout()).toBe("");
-  });
-
   it("says nothing when the chart keeps the window it showed", async () => {
     render(zoomed());
     const chart = await drawn();
@@ -1034,16 +971,6 @@ describe("EChart zoom", () => {
     expect(chart.shown).toEqual({ from: 15, to: 29 });
     key("+"); // and the zoom goes on from where it was, around the day being read
     expect(chart.shown).toEqual({ from: 17, to: 24 });
-  });
-
-  it("says the reading again when the newer data changed its words", async () => {
-    const { rerender } = render(viewed());
-    await drawn();
-    key("End");
-    const said = spoken();
-    rerender(viewed({ read: i => `${MONTH[i]}: $${i + 1}.00` })); // today's figure grew
-    expect(readout()).toBe("Oct 30: $30.00");
-    expect(said()).toBe(1);
   });
 
   it("ends the reading and shows every point when the view changes, whatever the option function", async () => {

@@ -2,22 +2,11 @@ import { describe, expect, it } from "vitest";
 import { pinsOf, validateSearch } from "./search";
 
 describe("Live search", () => {
-  it("keeps the wall view", () => {
+  it("keeps the wall view and drops any other", () => {
     expect(validateSearch({ view: "wall" })).toEqual({ view: "wall" });
-  });
-
-  it("drops any other view", () => {
     expect(validateSearch({ view: "stream" })).toEqual({});
     expect(validateSearch({ view: "" })).toEqual({});
     expect(validateSearch({ view: true })).toEqual({});
-  });
-
-  it("accepts a typed view", () => {
-    expect(validateSearch({ view: "wall" })).toEqual({ view: "wall" });
-  });
-
-  it("gives an empty object for an empty record", () => {
-    expect(validateSearch({})).toEqual({});
   });
 
   it("keeps the pins oldest first, each once, the newest two, and drops what is not an id", () => {

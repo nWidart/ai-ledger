@@ -181,14 +181,10 @@ export function closeSheets(patch: SearchPatch) {
   if (n) router.history.go(-n); else setSearch(patch, { push: false });
 }
 
-/** The shared keys of a URL's keys, for a link to another page. */
-export function sharedOf(raw: Readonly<Record<string, unknown>>): Record<string, unknown> {
-  const out: Record<string, unknown> = {};
-  for (const k of SHARED_KEYS) if (raw[k]) out[k] = raw[k];
-  return out;
-}
-/** The shared keys of the current URL as a query string: "?project=foo&range=30" or "". */
-export const sharedSearch = (raw: Readonly<Record<string, unknown>> = currentRaw()): string => formatSearch(sharedOf(raw));
+/** The shared keys of a URL's keys (the current URL's by default) as a query string, for a link to another page:
+ *  "?project=foo&range=30" or "". */
+export const sharedSearch = (raw: Readonly<Record<string, unknown>> = currentRaw()): string =>
+  formatSearch(Object.fromEntries(SHARED_KEYS.filter(k => raw[k]).map(k => [k, raw[k]])));
 
 /** The keys of the current URL as validate types them, narrowed by select; re-read on every change of the URL. The
  *  component re-renders only when its selection changes: the result is compared deeply, so validate and select may build

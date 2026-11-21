@@ -13,9 +13,8 @@ const FONT = /(?<![\w-])(font-size|font)\s*:\s*([^;}]*)/g;
 const files = cssFiles(SRC).map((f) => ({ name: f.slice(SRC.length + 1), css: readFileSync(f, "utf8").replace(/\/\*[\s\S]*?\*\//g, "") }));
 
 describe("stylesheets respect the browser text size", () => {
-  it("find stylesheets", () => expect(files.length).toBeGreaterThan(0));
-
   it("declare no px font size", () => {
+    expect(files.length).toBeGreaterThan(0); // the guards below pass on no stylesheet at all
     const bad: string[] = [];
     for (const { name, css } of files)
       for (const m of css.matchAll(FONT)) if (/\d(?:\.\d+)?px\b/.test(m[2] ?? "")) bad.push(`${name}: ${m[1]}: ${m[2]?.trim()}`);
@@ -228,8 +227,9 @@ describe("stylesheets stay on the theme's tokens and scales", () => {
 describe("the stylesheet guards", () => {
   const sheet = (css: string, name = "pages/x/x.css"): Sheet[] => [{ name, css }];
 
-  it("catch named colors and color(), not keywords or system colors", () => {
+  it("catch named colors and color(), in a filter shadow and in text-emphasis too, not keywords or system colors", () => {
     expect(colorGuard(sheet(".a { color: white; background: red; box-shadow: 0 1px 2px black; border-color: silver; fill: color(srgb 1 0 0); }"))).toHaveLength(5);
+    expect(colorGuard(sheet(".a { filter: drop-shadow(0 0 2px red); text-emphasis-color: navy; }"))).toHaveLength(2);
     expect(colorGuard(sheet(`.a { color: currentColor; background: transparent; border-color: inherit; outline: 1px solid Highlight; fill: Canvas;
       stroke: CanvasText; color: GrayText; animation: red-glow 1s; grid-area: tan; content: "black"; } .tan { color: var(--white); }`))).toEqual([]);
   });
@@ -240,23 +240,28 @@ describe("the stylesheet guards", () => {
     expect(rawColors(sheet(".a { color: rgb(0 0 0); }", "a.css")).map(({ at }) => at)).toEqual(["a.css: rgb(0 0 0)"]);
   });
 
-  it("let theme.css define a new --ease-* token, and send every curve elsewhere to the tokens", () => {
+  it("let theme.css define a new --ease-* token, send every curve elsewhere to the tokens, and look for the monospace stack only in font families", () => {
     expect(monoEaseGuard(sheet(":root { --ease-in-out: cubic-bezier(.4, 0, .2, 1); }", "theme.css"))).toEqual([]);
     expect(monoEaseGuard(sheet(".a { transition: opacity .2s cubic-bezier(.2,.7,.2,1); }"))).toEqual([
       "pages/x/x.css: transition: opacity .2s cubic-bezier(.2,.7,.2,1): use var(--ease-grow)",
     ]);
+    expect(monoEaseGuard(sheet(`.hint::before { content: "monospace"; }`))).toEqual([]);
+    expect(monoEaseGuard(sheet(`.a { font-family: Menlo, monospace; } .b { --code: "SF Mono", monospace; } .c { font: 1rem/1 monospace; }`))).toHaveLength(3);
   });
 
-  it("take a negative token through calc(), CSS-wide keywords and !important", () => {
+  it("take a negative token through calc(), a token written with spaces or over several lines, CSS-wide keywords and !important", () => {
     expect(scaleGuard(SPACE, sheet(".a { margin: calc(var(--space-2) * -1) unset; padding: var(--space-2) !important; gap: revert; row-gap: initial; }"))).toEqual([]);
+    expect(scaleGuard(SPACE, sheet(".a { gap: var( --space-2 ); margin: calc(\n    var(--space-2) * -1\n  ); }"))).toEqual([]);
     expect(scaleGuard(SPACE, sheet(".a { margin: calc(var(--space-2) + 1px); padding: calc(var(--nope) * 2); }"))).toHaveLength(2);
     expect(scaleGuard(SPACE, sheet(".a { margin: -10px; }"))[0]).toContain("use calc(var(--space-5) * -1)");
     expect(scaleGuard(RADIUS, sheet(".a { border-radius: var(--radius-sm) !important; }"))).toEqual([]);
   });
 
-  it("allow z-index auto, 0 and -1, and nothing else raw", () => {
+  it("allow z-index auto, 0 and -1, and nothing else raw: a --z-* token itself, not a calc() of one", () => {
     expect(zGuard(sheet(".a { z-index: auto; } .b { z-index: 0; } .c { z-index: -1; } .d { z-index: var(--z-nav) !important; }"))).toEqual([]);
     expect(zGuard(sheet(".a { z-index: -2; } .b { z-index: 3; }"))).toHaveLength(2);
+    expect(zGuard(sheet(".a { z-index: calc(var(--z-nav) * 100); }"))).toHaveLength(1);
+    expect(zGuard(sheet(".a { z-index: var( --z-nav ); }"))).toEqual([]);
   });
 
   it("read a font shorthand's size after its style and weight", () => {
@@ -275,27 +280,9 @@ describe("the stylesheet guards", () => {
     expect(scaleGuard(RADIUS, sheet(".a { border-radius: 4px / 11px; }"))).toHaveLength(1);
   });
 
-  it("take a scale token written with spaces or over several lines", () => {
-    expect(scaleGuard(SPACE, sheet(".a { gap: var( --space-2 ); margin: calc(\n    var(--space-2) * -1\n  ); }"))).toEqual([]);
-  });
-
-  it("take z-index only from a --z-* token itself, not a calc() of one", () => {
-    expect(zGuard(sheet(".a { z-index: calc(var(--z-nav) * 100); }"))).toHaveLength(1);
-    expect(zGuard(sheet(".a { z-index: var( --z-nav ); }"))).toEqual([]);
-  });
-
-  it("catch a named color in a filter shadow and in text-emphasis", () => {
-    expect(colorGuard(sheet(".a { filter: drop-shadow(0 0 2px red); text-emphasis-color: navy; }"))).toHaveLength(2);
-  });
-
   it("read an SVG url() reference as no color, and still check its fallback", () => {
     expect(colorGuard(sheet(".a { fill: url(#fade-out); } .b { stroke: url(#bad); }"))).toEqual([]);
     expect(colorGuard(sheet(".a { fill: url(#fade-out) red; }"))).toHaveLength(1);
-  });
-
-  it("look for the monospace stack only in font families", () => {
-    expect(monoEaseGuard(sheet(`.hint::before { content: "monospace"; }`))).toEqual([]);
-    expect(monoEaseGuard(sheet(`.a { font-family: Menlo, monospace; } .b { --code: "SF Mono", monospace; } .c { font: 1rem/1 monospace; }`))).toHaveLength(3);
   });
 });
 
@@ -320,11 +307,10 @@ const forcedRules = files.flatMap(({ name, css }) => {
 });
 
 describe("forced-colors rules", () => {
-  it("find forced-colors rules", () => expect(forcedRules.length).toBeGreaterThan(10));
-
   // A class renamed in a component leaves its forced-colors rule matching nothing. A class built from a prefix ("st-" + kind)
   // counts when the prefix is in the source.
   it("name only classes the components set", () => {
+    expect(forcedRules.length).toBeGreaterThan(10); // the rules below pass on none at all
     const set = (cls: string) => new RegExp(`(?<![\\w-])${cls}(?![\\w-])`).test(source)
       || [...cls.matchAll(/-/g)].some((d) => source.includes(`"${cls.slice(0, d.index + 1)}`) || source.includes(`\`${cls.slice(0, d.index + 1)}`));
     const bad = forcedRules.flatMap(({ name, sel }) => [...sel.matchAll(/\.(-?[a-zA-Z_][\w-]*)/g)].map((m) => m[1]!)

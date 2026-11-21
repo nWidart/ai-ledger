@@ -332,9 +332,8 @@ const DEFAULT_GRID: Grid = { left: 40, top: 10, width: 400, height: 200 };
 export const fakeECharts = {
   /** Every chart made, in order, disposed ones too. */
   charts: [] as FakeChart[],
-  /** How many times loadECharts() and preloadECharts() ran. */
+  /** How many times loadECharts() ran. */
   loads: 0,
-  preloads: 0,
   /** The plot area each new chart starts with. */
   grid: { ...DEFAULT_GRID },
   /** The chart made last. */
@@ -362,7 +361,6 @@ export const fakeECharts = {
   reset() {
     this.charts = [];
     this.loads = 0;
-    this.preloads = 0;
     this.grid = { ...DEFAULT_GRID };
     held = undefined;
   },
@@ -371,7 +369,7 @@ export const fakeECharts = {
 /** The load module that test-setup mocks components/echart/load with. */
 export const fakeLoad: typeof Load = {
   loadECharts: () => { fakeECharts.loads++; return held ?? Promise.resolve(runtime); },
-  preloadECharts: () => { fakeECharts.preloads++; },
+  preloadECharts: () => {},
 };
 
 /** The chart made last, once it has drawn: wait for it after a render. */

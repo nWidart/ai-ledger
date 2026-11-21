@@ -20,11 +20,9 @@ describe("project colors", () => {
     expect(color("")).toBe("var(--proj-other)");
     expect(color(null)).toBe("var(--proj-other)");
   });
-  it("matches nav.html's hashed slots, stepping on a clash", () => {
+  it("matches nav.html's hashed slots, stepping on a clash, and keeps them when the clashing projects swap ranks", () => {
     // From nav.html's setOrder: FNV-1a("foo") % 6 = 3, "bar" = 2, "jobdesk" = 3, which steps to 4.
     expect(Object.fromEntries(slotsFor(["foo", "bar", "jobdesk"]))).toEqual({ foo: 3, bar: 2, jobdesk: 4 });
-  });
-  it("keeps clashing hues when the two projects swap ranks", () => {
     expect(Object.fromEntries(slotsFor(["jobdesk", "foo", "bar"]))).toEqual({ foo: 3, bar: 2, jobdesk: 4 });
   });
 });

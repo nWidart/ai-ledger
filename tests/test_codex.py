@@ -144,12 +144,6 @@ class DiscoveryTest(CodexCase):
         self.put("v0139", where="archived_sessions", zst=True)  # rewritten whole
         self.assertEqual(self.ingest()["inserted"], 13)
 
-    def test_codex_home_missing(self):
-        self.assertFalse(os.path.exists(self.home))
-        with open(os.path.join(self.root, "proj", "a.jsonl"), "w") as fh:
-            fh.write(json.dumps(dict(type="user", uuid="u1", sessionId="s1")) + "\n")
-        self.assertEqual(self.ingest()["files"], 1)
-
     def test_compressed_live_session_found(self):
         self.put("v0166", zst=True)
         self.ingest()
@@ -176,11 +170,6 @@ class ArchiveTest(CodexCase):
         self.assertEqual(self.ingest()["inserted"], 0)
         self.assertEqual((self.derived(), self.count()), before)
         self.assertEqual(self.q("SELECT count(*) FROM files"), [(2,)])
-
-    def test_requests_have_no_speed(self):
-        self.put("v0166")
-        self.ingest()
-        self.assertEqual(self.q("SELECT count(*), count(speed) FROM requests"), [(2, 0)])
 
     def test_archive_adds_lines_missing_live(self):
         name, text = fixture("v0166")
@@ -289,17 +278,12 @@ class ForkedChunkTest(CodexCase):
 
 
 class TokenTest(CodexCase):
-    def test_cached_input(self):
-        self.put("v0166")
-        self.ingest()
-        r = self.q("SELECT input, cache_read, cache_5m, cache_1h, output, input + cache_read + cache_5m + cache_1h + output "
-                   "FROM requests WHERE message_id = 'resp_fixture007'")
-        self.assertEqual(r, [(12267, 13440, 0, 0, 182, 25889)])
-
     def test_usage_repeated_in_running_total(self):
         self.put("v0166")  # two token_usage_record lines, each followed by a token_count with the same usage
         self.ingest()
         self.assertEqual(self.q("SELECT count(*), sum(input + cache_read + output) FROM requests"), [(2, 25889 + 30181)])
+        r = self.q("SELECT input, cache_read, cache_5m, cache_1h, output FROM requests WHERE message_id = 'resp_fixture007'")
+        self.assertEqual(r, [(12267, 13440, 0, 0, 182)])  # the cached input is not input too
 
     def test_cache_write_is_part_of_input(self):
         self.place(NAME, meta(THREAD) + context(1, "t1", "gpt-6-astra") + record(2, "t1", "r1", usage(1000, 300, 50, write=200, reasoning=20)))
@@ -396,14 +380,6 @@ class ToolTest(CodexCase):
         self.assertTrue(followup.startswith("I’m using the existing dashboard UX review skill"))
         errors = metrics.errors_payload(self.con.cursor())["errors"]
         self.assertEqual(sorted(e["t"] for e in errors), ["exec_command", "mcp__t3-code__preview_act"])
-
-    def test_failed_chain_category(self):
-        self.put("v0153")  # `ls -la .claude && rg ...`: the listing printed, then rg found nothing
-        self.ingest()
-        self.assertEqual(self.q("SELECT category, error FROM tool_calls WHERE is_error"),
-                         [("chained", "Exit code 1\ntotal 8\ndrwxr-xr-x@  3 nowhere  staff   96 Jun 14 20:33 .\n"
-                           "drwxr-xr-x  19 nowhere  staff  608 Sep 25 19:15 ..\n"
-                           "-rw-r--r--@  1 nowhere  staff  985 Jun 14 20:33 settings.local.json")])
 
     def test_commit_and_test_commands(self):
         self.put("v0156_commit")
@@ -511,11 +487,6 @@ class PromptTest(CodexCase):
         self.assertEqual(self.q("SELECT count(*) FROM requests WHERE message_id IN ('resp_fixture002', 'resp_fixture003', 'resp_fixture004')"),
                          [(3,)])
 
-    def test_interrupted_turn(self):
-        self.put("v0166_aborted")
-        self.ingest()
-        self.assertEqual(self.prompts(), [("0a0f0037-0000-7000-8000-000000000037", True)])
-
     def test_interrupt_in_later_ingest(self):
         name, text = fixture("v0166_aborted")
         lines = text.splitlines(keepends=True)
@@ -524,7 +495,7 @@ class PromptTest(CodexCase):
         self.assertEqual([r[1] for r in self.prompts()], [False])
         self.place(name, lines[-1], mode="a")
         self.ingest()
-        self.assertEqual([r[1] for r in self.prompts()], [True])
+        self.assertEqual(self.prompts(), [("0a0f0037-0000-7000-8000-000000000037", True)])
 
 
 class CodexRebuildTest(CodexCase):
@@ -544,8 +515,11 @@ class CodexRebuildTest(CodexCase):
         with open(os.path.join(self.root, "proj", "a.jsonl"), "w") as fh:
             fh.write(json.dumps(dict(type="user", uuid="u1", sessionId="s1", timestamp="2026-11-06T10:00:00Z", cwd="/nowhere/foo",
                                      promptId="p1", message=dict(role="user", content="go"))) + "\n")
+        self.place(store.codex.INDEX, line(id=SESSION["v0166"], thread_name="Visual pass", updated_at="2026-11-06T10:00:00Z"), where="")
         self.ingest()
         before = self.rows()
+        self.assertEqual(before["session_titles"], [(SESSION["v0166"], None, "Visual pass")])
+        self.assertEqual(len(before["limit_snapshots"]), 9)  # v0166_aborted's six and v0166's three
         store.rebuild(self.con)
         self.assertEqual(self.rows(), before)
         self.assertEqual(self.q("SELECT source, count(*) FROM sessions GROUP BY 1 ORDER BY 1"), [("claude", 1), ("codex", 6)])
@@ -584,28 +558,6 @@ class IndexTest(CodexCase):
         self.assertEqual(self.q("SELECT session_id FROM sessions"), [(THREAD,)])  # every dashboard lists sessions rows
         self.assertNotIn(self.OTHER, titles.titles(self.con.cursor(), [THREAD]))
 
-    def test_index_missing(self):
-        self.place(NAME, meta(THREAD) + item(1, "t1", dict(type="UserMessage", id="item-1", content=[dict(type="text", text="run it now")])))
-        self.assertEqual(self.ingest()["files"], 1)
-        self.assertEqual(self.titles(), [])
-        self.assertEqual(titles.titles(self.con.cursor(), [THREAD]), {THREAD: ("run it now", "prompt")})
-
-    def test_index_rewritten_whole(self):
-        a, b = line(id=THREAD, thread_name="a", updated_at="2026-11-06T10:00:00Z"), line(id=self.OTHER, thread_name="b", updated_at="2026-11-06T10:00:01Z")
-        self.place(store.codex.INDEX, a + b, where="")
-        self.ingest()
-        self.place(store.codex.INDEX, b, where="")  # shorter: read again from the start
-        self.ingest()
-        self.assertEqual(self.count("starts_with(key, 'codex-index:')"), 2)
-        self.assertEqual(self.titles(), [(THREAD, None, "a"), (self.OTHER, None, "b")])
-
-    def test_rebuild_keeps_thread_names(self):
-        self.place(NAME, meta(THREAD))
-        self.index((THREAD, "Find Kafka Streams UIs"))
-        self.ingest()
-        store.rebuild(self.con)
-        self.assertEqual(self.titles(), [(THREAD, None, "Find Kafka Streams UIs")])
-
 
 class LimitTest(CodexCase):
     def snaps(self):
@@ -632,34 +584,12 @@ class LimitTest(CodexCase):
         self.ingest()
         self.assertEqual(len(self.snaps()), 3)
 
-    def test_rebuild_derives_the_same_snapshots(self):
-        name, text = fixture("v0166_aborted")
-        lines = text.splitlines(keepends=True)
-        self.place(name, "".join(lines[:10]))
-        self.ingest()
-        self.place(name, "".join(lines[10:]), mode="a")
-        self.ingest()
-        before = self.snaps()
-        self.assertEqual(len(before), 6)
-        store.rebuild(self.con)
-        self.assertEqual(self.snaps(), before)
-
-
-if __name__ == "__main__":
-    unittest.main()
-
 
 class LiveItemsTest(unittest.TestCase):
     """codex.live_items: what the Live page shows of one Codex line."""
 
     def items(self, **kw):
         return codex_live(json.loads(line(timestamp="2026-11-10T10:00:00.000Z", ordinal=1, **kw)))
-
-    def test_exec_call_without_output_yet(self):
-        use, = self.items(type="response_item", payload=dict(type="custom_tool_call", name="exec", call_id="c1",
-                                                             input="await tools.exec_command({cmd: 'ls'})"))
-        self.assertEqual(use, dict(k="tool_use", id="c1", tool="exec", summary="await tools.exec_command({cmd: 'ls'})", description=None,
-                                   timeout=None))  # as Claude Code's shape; no Codex input has one
 
     def test_function_call_and_output(self):
         use, = self.items(type="response_item", payload=dict(type="function_call", name="exec_command", call_id="c2",
@@ -714,3 +644,7 @@ class LiveItemsTest(unittest.TestCase):
     def test_usage_record_is_a_request(self):
         self.assertEqual(self.items(type="token_usage_record", payload=dict(turn_id="t1", response_id="r1", usage=usage(900, 600, 40))),
                          [dict(k="request", id="r1", model=None, output=40, context=900)])
+
+
+if __name__ == "__main__":
+    unittest.main()

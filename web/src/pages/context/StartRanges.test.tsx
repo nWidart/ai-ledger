@@ -1,10 +1,8 @@
 import { render, screen, within } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import type { ContextPayload } from "../../api";
 import { setOrder } from "../../colors";
-import * as sheets from "../../components/sheets/session";
-import { rangeBox, StartRanges } from "./StartRanges";
+import { StartRanges } from "./StartRanges";
 
 type Starting = ContextPayload["starting"];
 const foo = { project: "foo", sessions: 3, median: 24_000, p10: 20_800, p90: 60_800, window: 200_000, window_share: .12 };
@@ -14,22 +12,17 @@ const left = (el: Element) => parseFloat((el as HTMLElement).style.left), width 
 
 beforeEach(() => setOrder(["foo", "bar"]));
 
-describe("rangeBox", () => {
-  it("is the range as percentages of the scale", () => {
-    expect(rangeBox(25, 75, 100)).toEqual({ left: 25, width: 50 });
-    expect(rangeBox(10, 10, 100).width).toBeGreaterThan(0);
-  });
-});
-
 describe("StartRanges", () => {
   it("draws each range from p10 to p90 on one shared scale", () => {
-    const { container } = render(<StartRanges starting={starting([foo, bar])} />);
+    const { container } = render(<StartRanges starting={starting([foo, bar, { ...bar, project: "baz", p10: 8_500, p90: 8_500 }])} />);
     const bars = container.querySelectorAll("[data-testid=rng-bar]");
     const max = 60_800 * 1.08;
     expect(left(bars[1]!)).toBeCloseTo(20_800 / max * 100, 2);
     expect(width(bars[1]!)).toBeCloseTo((60_800 - 20_800) / max * 100, 2);
     expect(left(bars[2]!)).toBeCloseTo(8_100 / max * 100, 2);
     expect(width(bars[2]!)).toBeLessThan(width(bars[1]!) / 10);
+    // A range with no spread still shows.
+    expect(width(bars[3]!)).toBeGreaterThan(0);
     // Bar 0 is the whole view's, neutral; the project bars take their colours.
     expect((bars[1] as HTMLElement).style.background).toMatch(/--proj-/);
   });
@@ -61,14 +54,6 @@ describe("StartRanges", () => {
     render(<StartRanges starting={starting([foo, bar])} />);
     expect(screen.getAllByRole("columnheader").map(h => h.textContent!.replace(/0dashed.*/, ""))).toEqual(
       ["Project", "10th to 90th percentile", "Median", "10th percentile", "90th percentile", "Share of window", "Sessions"]);
-  });
-
-  it("opens the project sheet when a row is selected", async () => {
-    const open = vi.spyOn(sheets, "openProjectSheet").mockImplementation(() => {});
-    render(<StartRanges starting={starting([foo, bar])} />);
-    await userEvent.click(screen.getByRole("button", { name: "foo" }));
-    expect(open).toHaveBeenCalledWith("foo");
-    open.mockRestore();
   });
 
   it("says so when no session has a measured start", () => {

@@ -25,6 +25,23 @@ PRICES = {
 TODAY = date(2026, 11, 5)
 
 
+def serve(test, con, tmp):
+    """Serves con until the test ends; returns get(path, status=None) giving (status, JSON body), checking status when given."""
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), app.handler(app.App(con, dict(claude=tmp))))
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    test.addCleanup(httpd.server_close)
+    test.addCleanup(httpd.shutdown)
+
+    def get(path, status=None):
+        h = http.client.HTTPConnection("127.0.0.1", httpd.server_address[1])
+        h.request("GET", path, headers={"Host": f"{app.HOST}:{app.PORT}"})
+        r = h.getresponse()
+        if status is not None:
+            test.assertEqual(r.status, status, path)
+        return r.status, json.loads(r.read())
+    return get
+
+
 class FastPricingTest(unittest.TestCase):
     """A request costs the fast rates when its speed is 'fast' and its model has them; fast replaces the long-prompt tier."""
 
@@ -41,20 +58,17 @@ class FastPricingTest(unittest.TestCase):
                      [("r", "s", "2026-11-05 09:01:00", model, False, inp, 10, 0, cr, 0, 0, 0, speed)])
         return metrics.usage(con.cursor(), prices=PRICES, today=TODAY)
 
-    def test_fast_costs_the_fast_rates_and_otherwise_the_standard_ones(self):
-        self.assertAlmostEqual(self.cost("m-fast", "fast")["totals"]["cost"], (60 * 2 + 10 * 20 + 60 * 0.2) / 1e6)
-        for speed in ("standard", None):
-            self.assertAlmostEqual(self.cost("m-fast", speed)["totals"]["cost"], (60 * 1 + 10 * 10 + 60 * 0.1) / 1e6)
-
-    def test_fast_on_a_model_without_fast_rates_keeps_the_standard_price(self):
-        got = self.cost("m-a", "fast")
-        self.assertAlmostEqual(got["totals"]["cost"], (60 * 1 + 10 * 10 + 60 * 0.1) / 1e6)
-        self.assertEqual(got["unpriced"], [])
-
-    def test_fast_replaces_the_long_prompt_tier(self):
-        self.assertAlmostEqual(self.cost("m-both", "fast")["totals"]["cost"], 130 * 2 / 1e6)  # 120 > long_above, still fast
-        self.assertAlmostEqual(self.cost("m-both", "standard")["totals"]["cost"], 130 * 3 / 1e6)
-        self.assertAlmostEqual(self.cost("m-both", "standard", inp=10, cr=10)["totals"]["cost"], 30 / 1e6)
+    def test_a_request_costs_the_rates_of_its_speed_and_tier(self):
+        standard = (60 * 1 + 10 * 10 + 60 * 0.1) / 1e6
+        for model, speed, tokens, want in (("m-fast", "fast", {}, (60 * 2 + 10 * 20 + 60 * 0.2) / 1e6),
+                                           ("m-fast", "standard", {}, standard), ("m-fast", None, {}, standard),
+                                           ("m-a", "fast", {}, standard),  # no fast rates: the standard price, not unpriced
+                                           ("m-both", "fast", {}, 130 * 2 / 1e6),  # 120 > long_above, still fast: fast replaces the long tier
+                                           ("m-both", "standard", {}, 130 * 3 / 1e6),
+                                           ("m-both", "standard", dict(inp=10, cr=10), 30 / 1e6)):
+            got = self.cost(model, speed, **tokens)
+            self.assertAlmostEqual(got["totals"]["cost"], want, msg=(model, speed, tokens))
+            self.assertEqual(got["unpriced"], [], (model, speed))
 
     def test_models_ledger_separates_fast_requests(self):
         m = self.cost("m-fast", "fast")["models"]
@@ -121,14 +135,12 @@ class ReportedCostTest(unittest.TestCase):
         self.assertAlmostEqual(u["totals"]["cost_input"], 60 / 1e6)  # the priced request's kinds only
         self.assertEqual([r["model"] for r in u["unpriced"]], ["m-other"])
 
-    def test_reported_cost_wins_over_the_estimate(self):
+    def test_kind_costs_leave_out_a_reported_cost(self):
+        # The reported cost wins over the estimate. Rates for its model (a user can add some for a Grok model) give the request
+        # no kind costs: the web reads the kinds as the estimated part of cost and the rest as the reported part.
         t = self.usage([("m-a", 0.5)])["totals"]
         self.assertAlmostEqual(t["cost"], 0.5)
-        # Rates for its model (a user can add some for a Grok model) give the request no kind costs: the web reads the
-        # kinds as the estimated part of cost and the rest as the reported part.
         self.assertEqual([t[f"cost_{k}"] for k in metrics.PRICE_KINDS], [None] * 5)
-
-    def test_kind_costs_leave_out_a_reported_cost(self):
         t = self.usage([("m-a", 0.5), ("m-a", None)])["totals"]
         est = (60 * 1 + 10 * 10) / 1e6
         self.assertAlmostEqual(t["cost"], 0.5 + est)
@@ -233,12 +245,6 @@ class MetricsTest(unittest.TestCase):
         cls.con.close()
         shutil.rmtree(cls.tmp)
 
-    def test_filters(self):
-        self.assertEqual(self.foo7["start"], "2026-10-30")
-        self.assertEqual(self.foo7["totals"]["requests"], 3)
-        self.assertEqual(self.all["totals"]["requests"], 4)
-        self.assertEqual([p["project"] for p in self.foo7["by_project"]], ["foo"])
-
     def test_session_alone_matches_drill_in(self):
         self.assertEqual(metrics.session(self.con.cursor(), "s1", prices=PRICES), self.foo7["session"])
         self.assertIsNone(metrics.session(self.con.cursor(), "nope", prices=PRICES))
@@ -252,19 +258,21 @@ class MetricsTest(unittest.TestCase):
         page = metrics.session_list(self.con.cursor(), offset=1, limit=1, prices=PRICES, today=TODAY)
         self.assertEqual((page["total"], len(page["sessions"])), (all_["total"], 1))
 
-    def test_tokens_per_day(self):
+    def test_tokens_and_cost_per_day_and_project(self):
         days = {d["day"]: d for d in self.foo7["daily"]}
         self.assertEqual(days["2026-11-04"]["input"], 2_000_000)
         self.assertEqual(days["2026-11-04"]["cache_read"], 8_000_000)
         self.assertEqual(days["2026-11-04"]["thinking"], 500_000)
         self.assertEqual(days["2026-11-05"]["unpriced"], 1)
-
-    def test_cost_per_day_and_project(self):
         by = {(d["day"], d["project"]): d for d in self.all["daily_projects"]}
         self.assertAlmostEqual(by[("2026-11-04", "foo")]["cost"], 15.8)
         self.assertIsNone(by[("2026-11-05", "foo")]["cost"])  # only an unpriced model that day
         self.assertAlmostEqual(by[("2026-10-01", "bar")]["cost"], 130 * 2 / 1e6)
         self.assertEqual({d["project"] for d in self.foo7["daily_projects"]}, {"foo"})
+        # The headline cost: the priced requests', with the unpriced model listed.
+        self.assertAlmostEqual(self.foo7["totals"]["cost"], 15.8)
+        self.assertEqual([u["model"] for u in self.foo7["unpriced"]], ["m-unknown"])
+        self.assertAlmostEqual(self.all["totals"]["cost"], 15.8 + 130 * 2 / 1e6)
 
     def test_cost_per_day_and_model(self):
         for u in (self.all, self.foo7, self.auto):
@@ -277,24 +285,6 @@ class MetricsTest(unittest.TestCase):
                     self.assertAlmostEqual(by[d["day"]], d["cost"])
         self.assertEqual({(r["day"], r["model"]) for r in self.foo7["daily_models"]}, {("2026-11-04", "m-a")})  # m-unknown adds none
         self.assertEqual({(r["day"], r["source"]) for r in self.all["daily_sources"]}, {("2026-11-04", "claude"), ("2026-10-01", "claude")})
-
-    def test_project_order_ignores_filters(self):
-        self.assertEqual(self.foo7["project_order"], ["foo", "bar"])
-        self.assertEqual(metrics.errors_payload(self.con.cursor())["project_order"], ["foo", "bar"])
-
-    def test_cost_and_unpriced(self):
-        t = self.foo7["totals"]
-        self.assertAlmostEqual(t["cost"], 15.8)
-        self.assertEqual([u["model"] for u in self.foo7["unpriced"]], ["m-unknown"])
-        self.assertAlmostEqual(self.all["totals"]["cost"], 15.8 + 130 * 2 / 1e6)
-
-    def test_project_view_carries_its_change_for_the_project_sheet(self):
-        # The project sheet reads a one-project payload: its previous daily costs add up to the previous cost it reports.
-        u = metrics.usage(self.con.cursor(), "foo", 1, prices=PRICES, today=TODAY)
-        prev = u["previous"]
-        self.assertAlmostEqual(sum(d["cost"] for d in prev["daily"]), prev["cost"])
-        self.assertEqual([(c["project"], c["new"]) for c in u["changes"]], [("foo", False)])
-        self.assertAlmostEqual(u["changes"][0]["prev_cost"], prev["cost"])
 
     def test_cost_by_kind(self):
         # The five kinds add up to the cost, on the base tier (r1, r2), the long tier (r4) and with an unpriced request (r3).
@@ -313,10 +303,15 @@ class MetricsTest(unittest.TestCase):
 
     def test_previous_period(self):
         # One day ending today (s2) against the day before it (s1); same project filter, nothing before all time.
-        prev = metrics.usage(self.con.cursor(), "foo", 1, prices=PRICES, today=TODAY)["previous"]
+        u = metrics.usage(self.con.cursor(), "foo", 1, prices=PRICES, today=TODAY)
+        prev = u["previous"]
         self.assertEqual((prev["start"], prev["end"], prev["requests"], prev["sessions"]), ("2026-11-04", "2026-11-04", 2, 1))
         self.assertAlmostEqual(prev["cost"], 15.8)
         self.assertEqual([d["day"] for d in prev["daily"]], ["2026-11-04"])
+        # The project sheet reads a one-project payload: its previous daily costs add up to the previous cost, and its change too.
+        self.assertAlmostEqual(sum(d["cost"] for d in prev["daily"]), prev["cost"])
+        self.assertEqual([(c["project"], c["new"]) for c in u["changes"]], [("foo", False)])
+        self.assertAlmostEqual(u["changes"][0]["prev_cost"], prev["cost"])
         self.assertEqual(metrics.usage(self.con.cursor(), "bar", 1, prices=PRICES, today=TODAY)["previous"]["requests"], 0)
         self.assertIsNone(self.all["previous"])
         self.assertEqual(self.foo7["previous"]["start"], "2026-10-23")
@@ -346,6 +341,9 @@ class MetricsTest(unittest.TestCase):
         self.assertEqual(t("x" * 100), "x" * 79 + "…")
         self.assertIsNone(t("<system-reminder>only this</system-reminder>"))
         self.assertIsNone(t(None))
+        self.assertEqual(titles.short_title("z" * 80), "z" * 80)  # at the cap: not cut
+        self.assertIsNone(titles.short_title(" "))
+        self.assertIsNone(titles.short_title(None))
 
     def test_titles(self):
         c = self.con.cursor()
@@ -370,12 +368,6 @@ class MetricsTest(unittest.TestCase):
         finally:
             c.execute("DELETE FROM raw_lines WHERE key = 'x4'")
             c.execute("DELETE FROM session_titles")
-
-    def test_short_title(self):
-        self.assertEqual(titles.short_title("  a \t b\n"), "a b")
-        self.assertEqual(titles.short_title("z" * 80), "z" * 80)
-        self.assertIsNone(titles.short_title(" "))
-        self.assertIsNone(titles.short_title(None))
 
     def test_session_list_by_day(self):
         day = metrics.session_list(self.con.cursor(), day="2026-11-04", prices=PRICES, today=TODAY)
@@ -480,9 +472,7 @@ class MetricsTest(unittest.TestCase):
         self.assertAlmostEqual(t["cost_per_commit"], 15.8)
         self.assertEqual(t["tokens_per_commit"], 12_000_200)
         self.assertAlmostEqual(t["errors_per_100_calls"], 60)
-
-    def test_no_commits_gives_null_ratios(self):
-        bar = metrics.usage(self.con.cursor(), "bar", 0, prices=PRICES, today=TODAY)
+        bar = metrics.usage(self.con.cursor(), "bar", 0, prices=PRICES, today=TODAY)  # no commit: no per-commit ratio
         self.assertIsNone(bar["totals"]["cost_per_commit"])
         self.assertIsNone(bar["totals"]["tokens_per_commit"])
         self.assertIsNone(bar["by_project"][0]["cost_per_commit"])
@@ -499,10 +489,6 @@ class MetricsTest(unittest.TestCase):
         self.assertEqual(edit["failure_rate"], 1)
 
 
-    def test_errors_payload_splits_subagent_calls(self):
-        calls = metrics.errors_payload(self.con.cursor())["calls"]
-        self.assertEqual(calls, [["2026-11-04", "foo", 10, 0, "claude"]])
-
     def test_error_days_counts_per_day_project_and_category(self):
         c = self.con.cursor()
         store.insert(c, "tool_calls", ["tool_use_id", "session_id", "tool", "start_ts", "end_ts", "is_error", "category", "subagent"], [
@@ -514,11 +500,10 @@ class MetricsTest(unittest.TestCase):
             self.assertEqual(p["error_days"], [["2026-11-04", "foo", "x", 6, 0, "claude"], ["2026-11-05", "foo", "y", 2, 1, "claude"]])
             # The counts agree with the error list they summarize.
             self.assertEqual(sum(r[3] for r in p["error_days"]), len(p["errors"]))
+            # Calls per day and project: all of them, then the subagent ones among them.
+            self.assertEqual(p["calls"], [["2026-11-04", "foo", 10, 0, "claude"], ["2026-11-05", "foo", 3, 1, "claude"]])
         finally:
             c.execute("DELETE FROM tool_calls WHERE tool_use_id IN ('k1', 'k2', 'k3')")
-
-    def test_errors_payload_anchors_on_today(self):
-        self.assertEqual(metrics.errors_payload(self.con.cursor(), today=TODAY)["today"], "2026-11-05")
 
     def test_error_detail_returns_full_text(self):
         c = self.con.cursor()
@@ -611,9 +596,10 @@ class MetricsTest(unittest.TestCase):
         self.assertEqual(self.all["projects"], ["foo", "bar"])
         self.assertEqual(set(self.auto["projects"]), {"foo", "bar", "observer-sessions"})
         self.assertEqual(metrics.project_list(self.con.cursor()), self.all["projects"])
-        # project_order never lists automated projects, whatever the view.
-        self.assertEqual(self.auto["project_order"], ["foo", "bar"])
-        self.assertEqual(metrics.project_order(self.con.cursor()), ["foo", "bar"])
+        # project_order never lists automated projects and ignores the filters, whatever the view.
+        for order in (self.auto["project_order"], self.foo7["project_order"], metrics.project_order(self.con.cursor()),
+                      metrics.errors_payload(self.con.cursor())["project_order"]):
+            self.assertEqual(order, ["foo", "bar"])
         ids = lambda **k: [x["session_id"] for x in metrics.session_list(self.con.cursor(), prices=PRICES, today=TODAY, **k)["sessions"]]
         self.assertEqual(ids(), [x["session_id"] for x in self.all["sessions"]])
         self.assertEqual(ids(automated=True), [x["session_id"] for x in self.auto["sessions"]])
@@ -662,9 +648,8 @@ class MetricsTest(unittest.TestCase):
             # o1 works on Nov 4 and 5: on both days, but once in their week.
             self.assertEqual(u["work"][1]["sessions"], 3 if auto else 2)
             self.assertEqual(sum(r["sessions"] for r in u["daily_work"] if r["day"] >= "2026-11-02"), 4 if auto else 2)
-
-    def test_work_projects_sum_to_work(self):
-        weekly = metrics.usage(self.con.cursor(), "", 0, prices=PRICES, today=date(2026, 12, 1), automated=True)
+        # work_projects splits each work row by project, by day or by week.
+        weekly = usage(date(2026, 12, 1), automated=True)
         keys = ("sessions", "prompts", "commits", "calls", "failed_calls")
         for u in (self.all, self.foo7, self.auto, weekly):
             by = {}
@@ -713,20 +698,6 @@ class MetricsTest(unittest.TestCase):
             median_session_seconds=540, sessions=1, requests=2, tokens=12_000_000, active_days=1, output_per_s=100.0))
         self.assertFalse({"model_ms", "tool_ms", "timed_sessions", "timed_output"} & prev.keys())
 
-    def test_session_sort(self):
-        ids = lambda **k: [x["session_id"] for x in metrics.session_list(self.con.cursor(), prices=PRICES, today=TODAY, **k)["sessions"]]
-        self.assertEqual(ids(sort=""), ["s2", "s1", "s3"])  # newest first
-        self.assertEqual(ids(sort="cost", desc=True), ["s1", "s3", "s2"])  # s2's cost is unknown: last either way
-        self.assertEqual(ids(sort="cost"), ["s3", "s1", "s2"])
-        self.assertEqual(ids(sort="tokens"), ["s3", "s2", "s1"])
-        self.assertEqual(ids(sort="first_ts"), ["s3", "s1", "s2"])
-        self.assertEqual(ids(sort="errors", desc=True)[0], "s1")
-        # The sort comes before the page.
-        page = metrics.session_list(self.con.cursor(), sort="tokens", desc=True, offset=1, limit=1, prices=PRICES, today=TODAY)
-        self.assertEqual((page["total"], [x["session_id"] for x in page["sessions"]]), (3, ["s2"]))
-        for key in metrics.SESSION_SORTS:
-            self.assertEqual(sorted(ids(sort=key)), ["s1", "s2", "s3"], key)
-
     def test_unknown_sort_never_reaches_sql(self):
         with mock.patch.object(metrics, "rows") as rows, self.assertRaises(ValueError):
             metrics.session_list(self.con.cursor(), sort="cost; DROP TABLE sessions", prices=PRICES, today=TODAY)
@@ -734,10 +705,7 @@ class MetricsTest(unittest.TestCase):
 
     def test_day_view(self):
         c = self.con.cursor()
-        with mock.patch.object(metrics, "on_day", wraps=metrics.on_day) as narrow:
-            d = metrics.day_view(c, "foo", 7, "2026-11-04", today=TODAY)
-            metrics.session_list(c, "foo", 7, day="2026-11-04", prices=PRICES, today=TODAY)
-        self.assertEqual(narrow.call_count, 2)
+        d = metrics.day_view(c, "foo", 7, "2026-11-04", today=TODAY)
         # Every call of foo's 7 days falls on Nov 4.
         self.assertEqual((d["day"], d["days"]), ("2026-11-04", 1))
         for k in ("tools", "mcp", "skills", "hooks", "error_loops", "failed_tests"):
@@ -803,58 +771,29 @@ class MetricsTest(unittest.TestCase):
         self.assertNotIn("bar", u["projects"] + u["project_order"])
         self.assertEqual([r["project"] for r in u["previous"]["by_project"]], [])  # bar's only day is in the previous period
 
-    def test_api_reads_automated_param(self):
-        httpd = ThreadingHTTPServer(("127.0.0.1", 0), app.handler(app.App(self.con, dict(claude=self.tmp))))
-        threading.Thread(target=httpd.serve_forever, daemon=True).start()
-        try:
-            def get(path):
-                h = http.client.HTTPConnection("127.0.0.1", httpd.server_address[1])
-                h.request("GET", path, headers={"Host": f"{app.HOST}:{app.PORT}"})
-                r = h.getresponse()
-                self.assertEqual(r.status, 200)
-                return json.loads(r.read())
-            self.assertEqual((get("/api/usage")["totals"]["sessions"], get("/api/usage?automated=1")["totals"]["sessions"]), (3, 4))
-            self.assertEqual((get("/api/sessions")["total"], get("/api/sessions?automated=1")["total"]), (3, 4))
-            self.assertEqual(len(get("/api/sessions?limit=2")["sessions"]), 2)  # a refresh refetches as many rows as are shown
-            self.assertEqual([x["session_id"] for x in get("/api/sessions?sort=tokens&desc=1")["sessions"]], ["s1", "s2", "s3"])
-            self.assertEqual([x["session_id"] for x in get("/api/sessions?sort=tokens")["sessions"]], ["s3", "s2", "s1"])
-            self.assertEqual(get("/api/day?day=2026-11-04&range=0")["error_loops_total"], 1)
-        finally:
-            httpd.shutdown()
-            httpd.server_close()
-
-    def test_api_sessions_sort_list(self):
-        httpd = ThreadingHTTPServer(("127.0.0.1", 0), app.handler(app.App(self.con, dict(claude=self.tmp))))
-        threading.Thread(target=httpd.serve_forever, daemon=True).start()
-        try:
-            def get(path):
-                h = http.client.HTTPConnection("127.0.0.1", httpd.server_address[1])
-                h.request("GET", path, headers={"Host": f"{app.HOST}:{app.PORT}"})
-                r = h.getresponse()
-                return r.status, json.loads(r.read())
-            ids = lambda path: [x["session_id"] for x in get(path)[1]["sessions"]]
-            self.assertEqual(get("/api/sessions?sort=-tokens,cost")[0], 200)
-            self.assertEqual(ids("/api/sessions?sort=-tokens,cost"), ["s1", "s2", "s3"])
-            # s2 and s3 tie on failed calls: the second key puts s3 (130 tokens) before s2 (200), against the list's order.
-            self.assertEqual(ids("/api/sessions?sort=-errors,tokens"), ["s1", "s3", "s2"])
-            self.assertEqual(ids("/api/sessions?sort=cost&desc=1"), ids("/api/sessions?sort=-cost"))
-            # No sort key keeps the default order (newest first); a blank one is refused.
-            self.assertEqual(get("/api/sessions")[0], 200)
-            self.assertEqual(ids("/api/sessions"), ["s2", "s1", "s3"])
-            self.assertEqual(get("/api/sessions?sort="), (400, dict(error="empty sort key")))
-            self.assertEqual(get("/api/sessions?sort=&desc=1"), (400, dict(error="empty sort key")))
-            # A blank among several sort values is refused wherever it stands; otherwise the first value counts.
-            for path in ("sort=cost&sort=", "sort=&sort=cost"):
-                self.assertEqual(get(f"/api/sessions?{path}"), (400, dict(error="empty sort key")), path)
-            self.assertEqual(ids("/api/sessions?sort=-tokens&sort=cost"), ["s1", "s2", "s3"])
-            for path, error in (("sort=cost,cost", "repeated sort key: cost"), ("sort=cost,-cost", "repeated sort key: cost"),
-                                ("sort=cost,tokens,prompts,errors", "too many sort keys: at most 3"), ("sort=cost,", "empty sort key"),
-                                ("sort=cost,title", "unknown sort: title"), ("sort=-cost,prompts&desc=1", "desc cannot go with a sort list or a - key"),
-                                ("sort=-cost&desc=1", "desc cannot go with a sort list or a - key")):
-                self.assertEqual(get(f"/api/sessions?{path}"), (400, dict(error=error)), path)
-        finally:
-            httpd.shutdown()
-            httpd.server_close()
+    def test_api_reads_session_params(self):
+        get = serve(self, self.con, self.tmp)
+        body = lambda path: get(path, 200)[1]
+        self.assertEqual((body("/api/usage")["totals"]["sessions"], body("/api/usage?automated=1")["totals"]["sessions"]), (3, 4))
+        self.assertEqual((body("/api/sessions")["total"], body("/api/sessions?automated=1")["total"]), (3, 4))
+        self.assertEqual(len(body("/api/sessions?limit=2")["sessions"]), 2)  # a refresh refetches as many rows as are shown
+        self.assertEqual(body("/api/day?day=2026-11-04&range=0")["error_loops_total"], 1)
+        ids = lambda path: [x["session_id"] for x in body(path)["sessions"]]
+        self.assertEqual(ids("/api/sessions?sort=-tokens,cost"), ["s1", "s2", "s3"])
+        # s2 and s3 tie on failed calls: the second key puts s3 (130 tokens) before s2 (200), against the list's order.
+        self.assertEqual(ids("/api/sessions?sort=-errors,tokens"), ["s1", "s3", "s2"])
+        self.assertEqual(ids("/api/sessions?sort=cost&desc=1"), ids("/api/sessions?sort=-cost"))
+        # No sort key keeps the default order (newest first); a blank one is refused.
+        self.assertEqual(ids("/api/sessions"), ["s2", "s1", "s3"])
+        self.assertEqual(get("/api/sessions?sort="), (400, dict(error="empty sort key")))
+        self.assertEqual(get("/api/sessions?sort=&desc=1"), (400, dict(error="empty sort key")))
+        # A blank among several sort values is refused wherever it stands; otherwise the first value counts.
+        for path in ("sort=cost&sort=", "sort=&sort=cost"):
+            self.assertEqual(get(f"/api/sessions?{path}"), (400, dict(error="empty sort key")), path)
+        self.assertEqual(ids("/api/sessions?sort=-tokens&sort=cost"), ["s1", "s2", "s3"])
+        # The list's own refusals (SessionSortKeysTest.test_refusals) answer 400, desc included.
+        for path, error in (("sort=cost,", "empty sort key"), ("sort=-cost&desc=1", "desc cannot go with a sort list or a - key")):
+            self.assertEqual(get(f"/api/sessions?{path}"), (400, dict(error=error)), path)
 
     def test_palette(self):
         c = self.con.cursor()
@@ -901,10 +840,6 @@ class MetricsTest(unittest.TestCase):
         self.assertAlmostEqual(m["gpt-6.1-sol"]["cost"], (12_267 * 2 + 182 * 10 + 13_440 * 0.1) / 1e6)
         self.assertAlmostEqual(m["gpt-6-astra"]["cost"], (100_000 * 20 + 1_000 * 75 + 150_000 * 2 + 50_000 * 25) / 1e6)
 
-    def test_unlisted_codex_model_unpriced(self):
-        m = self.codex_models(("gpt-5.5", None, False, 1_000, 10, 0, 0, 0, 0))  # seen in Codex sessions, not in prices.json
-        self.assertIsNone(m["gpt-5.5"]["cost"])
-
 
 class SessionSortKeysTest(unittest.TestCase):
     """Sessions sorted by one to three keys. Fixture rows are (id, first_ts, compactions, prompts, model, output in millions):
@@ -932,7 +867,7 @@ class SessionSortKeysTest(unittest.TestCase):
     def ids(self, con, **k):
         return [x["session_id"] for x in metrics.session_list(con.cursor(), prices=PRICES, today=TODAY, **k)["sessions"]]
 
-    def test_two_keys_in_both_directions(self):
+    def test_two_and_three_keys_in_both_directions(self):
         con = self.store(self.ROWS)
         self.assertEqual(self.ids(con), list("efdcba"))
         # Ties after the last key keep the list's order (d is newer than a).
@@ -940,9 +875,10 @@ class SessionSortKeysTest(unittest.TestCase):
         self.assertEqual(self.ids(con, sort="-compactions,-prompts"), list("cdabef"))
         self.assertEqual(self.ids(con, sort="compactions,prompts"), list("efbdac"))
         self.assertEqual(self.ids(con, sort="compactions,-prompts"), list("efdabc"))
-
-    def test_three_keys(self):
-        con = self.store(self.ROWS)
+        self.assertEqual(self.ids(con, sort="first_ts"), list("abcdef"))
+        # The sort comes before the page.
+        page = metrics.session_list(con.cursor(), sort="-compactions,prompts", offset=1, limit=2, prices=PRICES, today=TODAY)
+        self.assertEqual((page["total"], [x["session_id"] for x in page["sessions"]]), (6, ["b", "d"]))
         self.assertEqual(self.ids(con, sort="-compactions,-prompts,tokens"), list("cadbef"))
         self.assertEqual(self.ids(con, sort="-compactions,-prompts,-tokens"), list("cdabef"))
         self.assertEqual(self.ids(con, sort="prompts,-tokens,compactions"), list("bdefac"))
@@ -1046,12 +982,10 @@ class RunRateTest(unittest.TestCase):
         self.assertAlmostEqual(sum(s["projected"] for s in r["by_source"]), r["projected"])
         self.assertEqual([s["source"] for s in self.rate(source="codex")["by_source"]], ["codex"])
 
-    def test_project_and_source_filters_apply(self):
+    def test_project_and_source_filters_apply_and_the_range_does_not(self):
         self.assertEqual(self.rate(project="foo")["projected"], 19 + 11)
         self.assertEqual(self.rate(source="codex")["projected"], 20 + 2 * 11)
         self.assertEqual(self.rate(project="foo", source="codex"), None)
-
-    def test_range_does_not_change_it(self):
         u = metrics.usage(self.con.cursor(), "foo", 7, prices=PRICES, today=date(2026, 11, 20))
         self.assertEqual(u["run_rate"], self.rate(project="foo"))
 
@@ -1060,12 +994,10 @@ class RunRateTest(unittest.TestCase):
         self.assertEqual((r["month_cost"], r["days_left"]), (0, 30))
         self.assertAlmostEqual(r["projected"], 5 / 7 * 30)
 
-    def test_needs_seven_days_of_history(self):
+    def test_needs_seven_days_of_priced_history(self):
         self.assertIsNone(self.rate(date(2026, 10, 28), project="foo"))
         self.assertIsNone(self.rate(project="nope"))
-
-    def test_unpriced_history_has_no_projection(self):
-        self.assertIsNone(self.rate(project="u"))
+        self.assertIsNone(self.rate(project="u"))  # unpriced history: no projection
 
 
 class SourceFilterTest(unittest.TestCase):
@@ -1103,9 +1035,6 @@ class SourceFilterTest(unittest.TestCase):
         self.assertEqual(u["source"], "")
         self.assertEqual({d["day"]: d["input"] + d["output"] + d["cache_read"] for d in u["daily"]}, {"2026-11-05": 1_200_000})
         self.assertEqual((u["totals"]["tokens"], u["totals"]["sessions"], u["totals"]["prompts"], u["totals"]["errors"]), (1_200_000, 2, 2, 2))
-
-    def test_cost_per_day_by_model_and_source(self):
-        u = self.usage()
         cost = {d["day"]: d["cost"] for d in u["daily"]}
         for rows in (u["daily_models"], u["daily_sources"]):
             self.assertAlmostEqual(sum(r["cost"] for r in rows), cost["2026-11-05"])
@@ -1146,43 +1075,24 @@ class SourceFilterTest(unittest.TestCase):
         finally:
             c.execute("DELETE FROM tool_calls WHERE tool_use_id = 'tt'")
 
-    def test_unknown_source_is_refused(self):
-        with self.assertRaises(ValueError):
-            self.usage("gemini")
-        with self.assertRaises(ValueError):
-            metrics.session_list(self.con.cursor(), prices=PRICES, today=TODAY, source="gemini")
-        self.usage("grok")  # a known source with no sessions
-        metrics.session_list(self.con.cursor(), prices=PRICES, today=TODAY, source="grok")
-
     def test_errors_payload_tags_sources(self):
         p = metrics.errors_payload(self.con.cursor(), today=TODAY)
+        self.assertEqual(p["today"], "2026-11-05")  # the page's ranges end on it
         self.assertEqual({e["id"]: e["src"] for e in p["errors"]}, {"tc": "claude", "tx": "codex"})
         self.assertEqual(p["calls"], [["2026-11-05", "foo", 1, 0, "claude"], ["2026-11-05", "foo", 1, 0, "codex"]])
         self.assertEqual(p["error_days"], [["2026-11-05", "foo", "x", 1, 0, "claude"], ["2026-11-05", "foo", "x", 1, 0, "codex"]])
 
     def test_api_reads_source_param(self):
-        httpd = ThreadingHTTPServer(("127.0.0.1", 0), app.handler(app.App(self.con, dict(claude=self.tmp))))
-        threading.Thread(target=httpd.serve_forever, daemon=True).start()
-        try:
-            def get(path):
-                h = http.client.HTTPConnection("127.0.0.1", httpd.server_address[1])
-                h.request("GET", path, headers={"Host": f"{app.HOST}:{app.PORT}"})
-                r = h.getresponse()
-                return r.status, json.loads(r.read())
-            self.assertEqual(get("/api/usage?range=0")[1]["totals"]["tokens"], 1_200_000)
-            self.assertEqual(get("/api/usage?range=0&source=codex")[1]["totals"]["tokens"], 200_000)
-            self.assertEqual(get("/api/sessions?source=claude")[1]["total"], 1)
-            for path, error in (("/api/sessions?sort=title", "unknown sort: title"), ("/api/day", "Invalid isoformat string: ''"),
-                                ("/api/day?day=nope", "Invalid isoformat string: 'nope'"), ("/api/day?day=2026-11-05&source=gemini", "unknown source: gemini")):
-                self.assertEqual(get(path), (400, dict(error=error)), path)
-            for path in ("/api/usage?source=gemini", "/api/sessions?source=gemini"):
-                status, body = get(path)
-                self.assertEqual((status, body), (400, dict(error="unknown source: gemini")), path)
-            for path in ("/api/usage?source=grok", "/api/sessions?source=grok"):
-                self.assertEqual(get(path)[0], 200, path)
-        finally:
-            httpd.shutdown()
-            httpd.server_close()
+        get = serve(self, self.con, self.tmp)
+        self.assertEqual(get("/api/usage?range=0")[1]["totals"]["tokens"], 1_200_000)
+        self.assertEqual(get("/api/usage?range=0&source=codex")[1]["totals"]["tokens"], 200_000)
+        self.assertEqual(get("/api/sessions?source=claude")[1]["total"], 1)
+        for path, error in (("/api/sessions?sort=title", "unknown sort: title"), ("/api/day", "Invalid isoformat string: ''"),
+                            ("/api/day?day=nope", "Invalid isoformat string: 'nope'"), ("/api/day?day=2026-11-05&source=gemini", "unknown source: gemini"),
+                            ("/api/usage?source=gemini", "unknown source: gemini"), ("/api/sessions?source=gemini", "unknown source: gemini")):
+            self.assertEqual(get(path), (400, dict(error=error)), path)
+        for path in ("/api/usage?source=grok", "/api/sessions?source=grok"):
+            self.assertEqual(get(path)[0], 200, path)
 
 
 class SpeedTrendByWeekTest(unittest.TestCase):
@@ -1250,10 +1160,8 @@ class WeekClipTest(unittest.TestCase):
         self.assertEqual([(x["duration_s"], x["requests"], x["tests_failed"]) for x in got], [(1200, 6, 1)])
         one = metrics.day_view(self.con.cursor(), "", 2, "2026-11-18", today=today, prices=PRICES)
         self.assertEqual((one["start"], one["end"]), ("2026-11-18", "2026-11-18"))
-
-    def test_a_span_needs_a_day(self):
-        with self.assertRaises(ValueError):
-            metrics.session_list(self.con.cursor(), days=7, prices=PRICES, today=date(2026, 11, 19))
+        with self.assertRaises(ValueError):  # a span needs a day
+            metrics.session_list(self.con.cursor(), days=7, prices=PRICES, today=today)
 
 
 class LocalDayTest(unittest.TestCase):
@@ -1304,13 +1212,10 @@ class LocalDayTest(unittest.TestCase):
         week = metrics.session_list(self.con.cursor(), day="2026-03-02", days=7, prices=PRICES, today=date(2026, 5, 15))
         self.assertEqual([x["session_id"] for x in week["sessions"]], ["z1"])
 
-    def test_day_view_by_local_day(self):
-        for day, tool_id in (("2026-03-08", "ta"), ("2026-03-09", "tb")):
+    def test_day_lists_by_local_day(self):
+        for day, sid in (("2026-03-08", "z1"), ("2026-03-09", "z2")):
             got = metrics.day_view(self.con.cursor(), day=day, today=date(2026, 3, 9))
             self.assertEqual([(t["tool"], t["calls"]) for t in got["tools"]], [("Bash", 1)], day)
-
-    def test_session_list_by_local_day(self):
-        for day, sid in (("2026-03-08", "z1"), ("2026-03-09", "z2")):
             got = metrics.session_list(self.con.cursor(), day=day, prices=PRICES, today=date(2026, 3, 9))
             self.assertEqual([x["session_id"] for x in got["sessions"]], [sid], day)
 
@@ -1420,6 +1325,11 @@ class SessionRunsTest(unittest.TestCase):
         # 40 minutes waiting on the model and 25 running tools; c counts in neither. 235,200 tokens over 2,400 s is 98 per second.
         self.assertEqual(self.totals(), dict(model_ms=40 * 60_000, tool_ms=25 * 60_000, timed_sessions=2, output_per_s=98.0))
         self.assertEqual(self.totals(today=date(2026, 11, 11), prev=True), dict(output_per_s=98.0))  # the previous period counts the same way
+        # Nothing recorded (x, the Codex session): zero time and no speed. The view's sessions' sources say why: priced or not, each counts.
+        self.assertEqual(self.totals(source="codex"), dict(model_ms=0, tool_ms=0, timed_sessions=0, output_per_s=None))
+        self.assertEqual(self.totals(source="codex", today=date(2026, 11, 11), prev=True)["output_per_s"], None)
+        u = lambda source: metrics.usage(self.con.cursor(), "foo", 7, prices=PRICES, today=TODAY, source=source)["totals"]["session_sources"]
+        self.assertEqual((u(""), u("codex")), (["claude", "codex"], ["codex"]))
 
     def test_a_session_cut_by_the_range_counts_its_whole_output(self):
         runs = {r["session_id"]: r for r in metrics.rows(self.con.cursor(), f"WITH {metrics.runs_cte('SELECT session_id FROM sessions')} SELECT * FROM runs")}
@@ -1465,13 +1375,6 @@ class SessionRunsTest(unittest.TestCase):
                          [("2026-10-20", 83.3, 1), ("2026-11-04", 142.0, 1)])
         self.assertEqual(trend(7, "codex"), [])
 
-    def test_nothing_recorded(self):
-        self.assertEqual(self.totals(source="codex"), dict(model_ms=0, tool_ms=0, timed_sessions=0, output_per_s=None))
-        # The view's sessions' sources say why: priced or not, each session counts.
-        u = lambda source: metrics.usage(self.con.cursor(), "foo", 7, prices=PRICES, today=TODAY, source=source)["totals"]["session_sources"]
-        self.assertEqual((u(""), u("codex")), (["claude", "codex"], ["codex"]))
-        self.assertEqual(self.totals(source="codex", today=date(2026, 11, 11), prev=True)["output_per_s"], None)
-
     def test_session_sheet(self):
         info = metrics.session(self.con.cursor(), "d", prices=PRICES)["info"]
         self.assertEqual(info["runs"], dict(model_ms=15 * 60_000, tool_ms=6 * 60_000, lines_added=120, lines_removed=30, output_per_s=90.0))
@@ -1499,10 +1402,7 @@ class RunsWithoutToolTimeTest(unittest.TestCase):
         self.con.close()
         shutil.rmtree(self.tmp)
 
-    def test_session_detail(self):
-        info = metrics.session(self.con.cursor(), "g", prices=PRICES)["info"]
-        self.assertEqual(info["runs"], dict(model_ms=1_000_000, tool_ms=None, lines_added=None, lines_removed=None, output_per_s=100.0))
-
+    # The session sheet's runs: test_grok.RunTest.test_output_speed, through the parser.
     def test_totals_and_list(self):
         u = metrics.usage(self.con.cursor(), "foo", 7, prices=PRICES, today=TODAY)
         t = u["totals"]
@@ -1666,8 +1566,7 @@ class ToolDetailTest(unittest.TestCase):
         self.assertEqual(rate(self.detail("tool", "Bash", "foo", 7)), [("git", 20, 0), ("npm", 10, 0.4), ("ls", 1, 0)])
         self.assertEqual(rate(self.detail("tool", "Edit")), [(".py", 2, 0), (".tsx", 1, 0)])
         self.assertEqual(rate(self.detail("tool", "WebFetch")), [("docs.python.org", 3, 1 / 3)])
-
-    def test_patterns_keep_the_top_groups(self):
+        # The top TOP_PATTERNS groups, then the rest as other.
         c = self.con.cursor()
         store.insert(c, "tool_calls", ["tool_use_id", "session_id", "tool", "input_summary", "start_ts", "end_ts", "is_error"],
                      [(f"many{i}", "f2", "Glob", f"p{i:02d}" if i < 17 else "", "2026-11-05 11:00:00", "2026-11-05 11:00:01", False)
@@ -1678,30 +1577,26 @@ class ToolDetailTest(unittest.TestCase):
         finally:
             c.execute("DELETE FROM tool_calls WHERE tool_use_id LIKE 'many%'")
 
-    def test_failures_by_category(self):
-        cats = self.detail("tool", "Bash", "foo", 7)["categories"]
-        self.assertEqual([(r["id"], r["label"], r["errors"]) for r in cats], [("tests", "Tests / build / lint failed", 4)])
-        self.assertTrue(cats[0]["why"] and cats[0]["fix"])
-
-    def test_recovery_matches_errors_page(self):
+    def test_failures_by_category_and_their_recovery(self):
+        d = self.detail("tool", "Bash", "foo", 7)
+        self.assertEqual([(r["id"], r["label"], r["errors"]) for r in d["categories"]], [("tests", "Tests / build / lint failed", 4)])
+        self.assertTrue(d["categories"][0]["why"] and d["categories"][0]["fix"])
+        self.assertEqual(d["recovery"], dict(incidents=1, recovered=1, failed_again=0, gave_up=0))
+        # The recovery agrees with the Errors page's incidents.
         r = self.detail("tool", "Grep")["recovery"]
         self.assertEqual(r, dict(incidents=3, recovered=1, failed_again=0, gave_up=2))
         on_page = metrics.errors_payload(self.con.cursor(), today=TODAY)["incidents"]
         self.assertEqual(r["gave_up"], sum(1 for i in on_page if i["t"] == "Grep" and i["outcome"] == "gave_up"))
         self.assertEqual(self.detail("tool", "Grep", "foo")["recovery"]["gave_up"], 1)
-        self.assertEqual(self.detail("tool", "Bash", "foo", 7)["recovery"], dict(incidents=1, recovered=1, failed_again=0, gave_up=0))
 
-    def test_error_loops(self):
-        loops = self.detail("tool", "Bash", "foo", 7)["error_loops"]
-        self.assertEqual([(lp["session_id"], lp["failures"], lp["first_id"]) for lp in loops], [("f1", 4, "f1-26")])
+    def test_error_loops_carry_titles_as_recent_calls_do(self):
         self.assertEqual(self.detail("tool", "Read")["error_loops"], [])
-
-    def test_titles_on_loops_and_recent_calls(self):
         c = self.con.cursor()
         store.insert(c, "session_titles", ["session_id", "custom", "agent"], [("f1", None, "Fix flaky upload test")])
         try:
             d = self.detail("tool", "Bash", "foo", 7)
-            self.assertEqual([lp["title"] for lp in d["error_loops"]], ["Fix flaky upload test"])
+            self.assertEqual([(lp["session_id"], lp["failures"], lp["first_id"], lp["title"]) for lp in d["error_loops"]],
+                             [("f1", 4, "f1-26", "Fix flaky upload test")])
             self.assertEqual({r["title"] for r in d["recent"]}, {"Fix flaky upload test"})
         finally:
             c.execute("DELETE FROM session_titles")
@@ -1754,12 +1649,6 @@ class ToolDetailTest(unittest.TestCase):
         self.assertEqual((tools["Bash"]["calls"], tools["Bash"]["errors"]), (31, 4))
         self.assertNotIn("Bash", {r["name"] for r in metrics.palette(self.con.cursor(), source="codex")["tools"]})
 
-    def test_unknown_kind_and_source(self):
-        with self.assertRaises(ValueError):
-            self.detail("hook", "Bash")
-        with self.assertRaises(ValueError):
-            self.detail("tool", "Bash", source="gemini")
-
 
 class UserPricesTest(unittest.TestCase):
     """The user prices file next to the store: its models add to or replace the packaged ones; a bad file is reported and ignored."""
@@ -1777,24 +1666,18 @@ class UserPricesTest(unittest.TestCase):
         with open(self.path, "w") as fh:
             fh.write(text)
 
-    def test_missing_file_adds_nothing(self):
-        self.assertEqual(metrics.user_prices(), ({}, None))
-        self.assertEqual(metrics.prices_file(), dict(path=self.path, error=None))
-
     def test_entries_add_and_override(self):
+        self.assertEqual(metrics.user_prices(), ({}, None))  # no file is no error
+        self.assertEqual(metrics.prices_file(), dict(path=self.path, error=None))
         known = next(iter(self.packaged))
-        self.write(json.dumps({"models": {"m-new": {"input": 1, "output": 2, "cache_read": 0, "cache_5m": 0, "cache_1h": 0},
+        fast = {"input": 2, "output": 2, "cache_read": 2, "cache_5m": 2, "cache_1h": 2}
+        self.write(json.dumps({"models": {"m-new": {"input": 1, "output": 2, "cache_read": 0, "cache_5m": 0, "cache_1h": 0, "fast": fast},
                                           known: dict(self.packaged[known], input=999)}}))
         got = metrics.load_prices()
         self.assertEqual(got["m-new"]["context"], None)  # optional, as in the packaged file
+        self.assertEqual(got["m-new"]["fast"], fast)
         self.assertEqual(got[known]["input"], 999)
         self.assertEqual(len(got), len(self.packaged) + 1)
-        self.assertIsNone(metrics.prices_file()["error"])
-
-    def test_fast_rates_are_kept(self):
-        fast = {"input": 2, "output": 2, "cache_read": 2, "cache_5m": 2, "cache_1h": 2}
-        self.write(json.dumps({"models": {"m-new": {"input": 1, "output": 1, "cache_read": 1, "cache_5m": 1, "cache_1h": 1, "fast": fast}}}))
-        self.assertEqual(metrics.load_prices()["m-new"]["fast"], fast)
         self.assertIsNone(metrics.prices_file()["error"])
 
     def test_bad_file_is_reported_and_ignored(self):

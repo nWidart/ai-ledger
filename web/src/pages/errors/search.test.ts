@@ -22,9 +22,7 @@ describe("validateSearch", () => {
       .toEqual({ sub: "0", noise: "1", gran: "week", at: "2026-11-03", cat: "x" });
     expect(validateSearch({ sub: 0, noise: 1 })).toEqual({ sub: "0", noise: "1" });
     expect(validateSearch({ cat: 5, at: 20261103, gran: true, ex: null, etool: undefined })).toEqual({});
-  });
-  it("never throws", () => {
-    expect(validateSearch({ sub: {}, cat: [], at: () => 1, ex: Symbol("x") })).toEqual({});
+    expect(validateSearch({ sub: {}, cat: [], at: () => 1, ex: Symbol("x") })).toEqual({}); // never throws
   });
   it("round-trips: each valid key is written back as it was", () => {
     for (const s of ["?sub=0", "?noise=0", "?sub=0&noise=0&gran=week", "?etool=Bash&at=2026-11-03&cat=x", "?ex=t07", "?sub=1&noise=1"])

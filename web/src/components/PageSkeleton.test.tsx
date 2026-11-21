@@ -31,7 +31,7 @@ describe("PageSkeleton", () => {
     expect(skel.contains(lede)).toBe(false);
   });
 
-  it("marks the content area busy while loading, and no longer once the data shows", async () => {
+  it("marks the content area busy while loading, and once the data shows is neither busy nor shown: the page takes its place", async () => {
     // The route's loader starts the data with the page's code, so the page can mount with its data already there; hold the
     // answer back to see it loading.
     let answer!: () => void;
@@ -44,12 +44,6 @@ describe("PageSkeleton", () => {
     answer();
     await screen.findByRole("heading", { level: 1, name: /requests|prompts|tool calls|sessions/i });
     expect(main("pg-activity")!.hasAttribute("aria-busy")).toBe(false);
-  });
-
-  it("is gone once the data shows: the page takes its place", async () => {
-    mockApi({ "/api/usage": () => usage, "/api/status": () => status });
-    await open("/usage?range=30", "pg-activity");
-    await screen.findByRole("heading", { level: 1, name: /requests|prompts|tool calls|sessions/i });
     expect(blocks()).toBeNull();
     expect(document.getElementById("lede")!.classList.contains("sr")).toBe(false);
   });

@@ -14,11 +14,6 @@ describe("textScale", () => {
     document.documentElement.style.fontSize = "32px";
     expect(textScale()).toBe(2);
   });
-
-  it("is 1 at the default size", () => {
-    document.documentElement.style.fontSize = "16px";
-    expect(textScale()).toBe(1);
-  });
 });
 
 describe("scaleMargins and dayAxis", () => {

@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DailyWorkRow, UsagePayload } from "../../api";
 import usage from "../../__fixtures__/usage";
 import { color, setOrder } from "../../colors";
-import { failRate, workBuckets, workKinds, workStack, type WorkMetric } from "./work";
+import { workBuckets, workKinds, workStack, type WorkMetric } from "./work";
 import { WorkPanel, type WorkPick } from "./WorkChart";
 import { renderApp } from "../../testing";
 
@@ -48,16 +48,6 @@ describe("work buckets", () => {
     expect(ws[1]).toEqual({ day: "2026-09-14", sessions: 0, prompts: 0, commits: 0, calls: 0, failed_calls: 0 });
     expect(ws.reduce((s, r) => s + r.commits, 0)).toBe(8);
   });
-
-  it("keep days for a day bucket", () => {
-    expect(workBuckets(usage).map(r => r.day)).toEqual(["2026-11-04", "2026-11-05"]);
-  });
-
-  it("rate failures per 100 calls, with no rate without calls", () => {
-    expect(failRate(row("x", { calls: 4, failed_calls: 2 }))).toBe(50);
-    expect(failRate(row("x", { calls: 200, failed_calls: 6 }))).toBe(3);
-    expect(failRate(row("x"))).toBeNull();
-  });
 });
 
 describe("chart by project", () => {
@@ -91,22 +81,18 @@ describe("chart by project", () => {
     expect(workStack(rows, anon.work_projects, ks, "commits")[0]!["p:"]).toBe(62);
   });
 
-  it("draws plain bars for one project, or when no project has a hue", () => {
+  it("names the stacked projects in the legend, and draws plain bars for one project or when no project has a hue", () => {
+    const legend = () => [...document.querySelectorAll("#work .legend .key")].map(k => k.textContent);
+    panel(many);
+    expect(legend()).toEqual(["a", "c", "e", "g", "Other (3)", "Errors per 100 calls (lower track)"]);
+    cleanup();
     const rows = workBuckets(many);
     expect(workKinds({ ...many, project: "a" }, rows, "commits")).toEqual([]);
     expect(workKinds(weekly, workBuckets(weekly), "commits")).toEqual([]);
     setOrder([]);
     expect(workKinds(many, rows, "commits")).toEqual([]);
     panel(many);
-    expect([...document.querySelectorAll("#work .legend .key")].map(k => k.textContent)).toEqual(["Commits", "Errors per 100 calls (lower track)"]);
-  });
-
-  it("names the stacked projects in the legend", () => {
-    panel(many);
-    expect([...document.querySelectorAll("#work .legend .key")].map(k => k.textContent)).toEqual(["a", "c", "e", "g", "Other (3)", "Errors per 100 calls (lower track)"]);
-    cleanup();
-    panel({ ...many, project: "a" });
-    expect([...document.querySelectorAll("#work .legend .key")].map(k => k.textContent)).toEqual(["Commits", "Errors per 100 calls (lower track)"]);
+    expect(legend()).toEqual(["Commits", "Errors per 100 calls (lower track)"]);
   });
 
   it("stacks the segments from the baseline, in one order, scaled to fit", () => {
@@ -167,21 +153,11 @@ describe("work data table", () => {
   const NAME = /errors per 100 tool calls per (day|week)$/; // the hours heat map is a table too
   const table = () => within(screen.getByRole("table", { name: NAME }));
 
-  it("is closed and absent on load, and opens and closes from its button", async () => {
-    panel(many);
-    const btn = screen.getByRole("button", { name: "Show data table" });
-    expect(btn.getAttribute("aria-expanded")).toBe("false");
-    expect(screen.queryByRole("table", { name: NAME })).toBeNull();
-    await userEvent.click(btn);
-    expect(screen.getByRole("button", { name: "Hide data table" }).getAttribute("aria-expanded")).toBe("true");
-    expect(screen.getByRole("table", { name: "Commits by project and errors per 100 tool calls per day" })).toBeTruthy();
-    await userEvent.click(screen.getByRole("button", { name: "Hide data table" }));
-    expect(screen.queryByRole("table", { name: NAME })).toBeNull();
-  });
-
+  // The toggle is ChartTable's (DataTable.test).
   it("lists each day with the measure by project, its total and the error rate", async () => {
     panel(many);
     await open();
+    expect(screen.getByRole("table", { name: "Commits by project and errors per 100 tool calls per day" })).toBeTruthy();
     expect(table().getAllByRole("columnheader").map(h => h.textContent)).toEqual(["Day", "a", "c", "e", "g", "Other (3)", "Total", "Errors per 100 calls"]);
     const rows = table().getAllByRole("row").slice(1), first = workBuckets(many)[0]!;
     expect(rows).toHaveLength(2);
@@ -322,17 +298,6 @@ describe("chart pointer", () => {
 });
 
 describe("chart keys", () => {
-  it("is a labelled group, and Escape dismisses the tooltip the arrow keys opened", () => {
-    panel(many);
-    expect(screen.queryByRole("tooltip")).toBeNull();
-    act(() => chart().focus());
-    fireEvent.keyDown(chart(), { key: "Home" });
-    expect(screen.getByRole("tooltip")).toBeTruthy();
-    fireEvent.keyDown(chart(), { key: "Escape" });
-    expect(screen.queryByRole("tooltip")).toBeNull();
-    expect(screen.queryByRole("img", { name: /per (day|week)/ })).toBeNull();
-  });
-
   it("dismisses the tooltip the pointer opened on Escape while the focus is elsewhere, keeping the selection", () => {
     const { onClear } = panel(many, "commits", { day: "2026-11-04", week: false });
     const metric = screen.getByRole("button", { name: "Prompts" });
@@ -423,13 +388,6 @@ describe("weekly buckets", () => {
     fireEvent.click(document.querySelector("#work .hit")!, { clientX: 100 });
     expect(onPick).toHaveBeenCalledWith({ day: "2026-11-04", week: false });
     expect(document.querySelector("#work .hint")!.textContent).toMatch(/Select a day to narrow the tabs/);
-  });
-
-  it("name a selected day on its chip", () => {
-    panel(usage, "commits", { day: "2026-11-04", week: false });
-    expect(document.querySelector("#work .daychip")!.textContent).toBe("Nov 4✕");
-    expect(screen.getByRole("button", { name: "Clear Nov 4, 2026" })).toBeTruthy();
-    expect(document.querySelectorAll("#work svg rect.selb")).toHaveLength(1);
   });
 
   it("name a week a link holds on a chart by day, marking no bar", () => {

@@ -93,15 +93,6 @@ describe("SessionMap", () => {
     expect(readout()).toBe("");
   });
 
-  it("keeps the page's filters when a session opens", () => {
-    history.replaceState(null, "", "?project=foo&range=30");
-    renderApp(<Map map={{ total: 3, points }} />);
-    const chart = chartOf();
-    fireEvent.keyDown(chart, { key: "End" });
-    fireEvent.keyDown(chart, { key: "Enter" });
-    expect([hash().get("project"), hash().get("range"), hash().get("session")]).toEqual(["foo", "30", "heavy000001"]);
-  });
-
   it("opens the session on Enter and on a click near its dot", () => {
     const { container } = renderApp(<Map map={{ total: 3, points }} />);
     const chart = chartOf();

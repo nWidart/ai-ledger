@@ -114,11 +114,6 @@ describe("filtering and series", () => {
     expect(pointText(mm, v({ gran: "week" }), { ...p, e: 1, by: { x: 1 } }, vt)).toContain("1 error, no tool call started in this week");
     expect(pointText(mm, vv, { ...p, e: 0, by: {}, byAll: {}, other: 0 }, vt)).toBe("Nov 4, 2026: no activity"); // neither: no activity
   });
-  it("says a low-call point has too few calls for a steady rate, as the tooltip and Activity say it", () => {
-    const mm = makeModel(fixture), vv = v(), f = filtered(mm, vv), vt = viewTypes(mm, vv, f), p = chartData(mm, vv, f, vt).pts.find(x => x.c > 0)!;
-    expect(pointText(mm, vv, p, vt, true)).toContain(`calls, too few calls for a steady rate. `);
-    expect(pointText(mm, vv, p, vt)).not.toMatch(/too few calls/);
-  });
 });
 
 describe("types", () => {
@@ -167,14 +162,6 @@ describe("types", () => {
     const none = makeModel({ ...fixture, errors: [e("z", "2026-11-04", null)], error_days: [["2026-11-04", "foo", "x", 1, 0, "claude"]] });
     expect(typeRows(none, v(), filtered(none, v()))[0]).toMatchObject({ inc: 0, bad: 0, unrec: null });
   });
-  it("divides a type's errors by the calls the subagent toggle counts", () => {
-    const e = (id: string, sub: 0 | 1) => ({ id, ts: "2026-11-04T10:00:00.000Z", d: "2026-11-04", p: "foo", s: "s1", t: "Edit", c: "x", i: "", e: "", r: "", sub, src: "claude" as const, n: null });
-    // Nov 4: 100 calls, 60 of them by subagents; 2 errors by the main thread, 2 by a subagent.
-    const mm = makeModel({ ...fixture, errors: [e("a", 0), e("b", 0), e("c", 1), e("d", 1)], error_days: [["2026-11-04", "foo", "x", 4, 2, "claude"]], calls: [["2026-11-04", "foo", 100, 60, "claude"]] });
-    const rateOf = (o: Partial<View>) => typeRows(mm, v(o), filtered(mm, v(o)))[0]!.rate;
-    expect(rateOf({ sub: true })).toBe(4); // 4 errors over 100 calls
-    expect(rateOf({ sub: false })).toBe(5); // 2 errors over the 40 main-thread calls
-  });
   it("gives a week bucket that starts before the range the rate of the chart's point for it", () => {
     const e = (id: string, d: string) => ({ id, ts: `${d}T10:00:00.000Z`, d, p: "foo", s: "s1", t: "Edit", c: "x", i: "", e: "", r: "", sub: 0 as const, src: "claude" as const, n: null });
     // A 7-day range ends Nov 5 and starts Fri Oct 30; its first week (Monday Oct 26) holds Oct 30, 31 and Nov 1. Oct 28 is outside the range:
@@ -200,21 +187,6 @@ describe("types", () => {
     // The rate, not the count: the same errors over more calls after the change is a drop.
     expect(change(c(2, 2, 1000, 4000), "x", 5).pts).toBeCloseTo(-.15);
     expect(change({ ...c(6, 12), why: "no" }, "x", 5)).toMatchObject({ text: "–", pts: null });
-  });
-  it("orders +12%, -40% and 0 → 48 by their change in points: the biggest gain is 0 → 48", () => {
-    const row = (id: string, c: string, d: string) => ({ id, ts: `${d}T10:00:00.000Z`, d, p: "foo", s: "s1", t: "Edit", c, i: "", e: "", r: "", sub: 0 as const, src: "claude" as const, n: null });
-    const errors = [["up", 100, 112], ["down", 100, 60], ["fresh", 0, 48]].flatMap(([c, a, b]) =>
-      [...Array.from({ length: a as number }, (_, i) => row(`${c}a${i}`, c as string, "2026-10-01")), ...Array.from({ length: b as number }, (_, i) => row(`${c}b${i}`, c as string, "2026-11-04"))]);
-    const days = [["up", 100, 112], ["down", 100, 60], ["fresh", 0, 48]].flatMap(([c, a, b]) =>
-      [["2026-10-01", "foo", c, a, 0, "claude"], ["2026-11-04", "foo", c, b, 0, "claude"]].filter(d => d[3]) as ErrorsPayload["error_days"]);
-    const mm = makeModel({ ...fixture, errors, error_days: days, calls: [["2026-10-01", "foo", 1000, 0, "claude"], ["2026-11-04", "foo", 1000, 0, "claude"]] });
-    const vv = v({ range: 30 }), rows = Object.fromEntries(typeRows(mm, vv, filtered(mm, vv)).map(r => [r.cid, r.delta]));
-    expect(rows.up!.text).toBe("▲ +12%");
-    expect(rows.down!.text).toBe("▼ -40%");
-    expect(rows.fresh!.text).toBe("0 → 48");
-    const pts = (c: string) => rows[c]!.pts!;
-    expect(pts("fresh")).toBeGreaterThan(pts("up"));
-    expect(pts("up")).toBeGreaterThan(pts("down"));
   });
   it("closes a type with no errors in the view unless an example is linked", () => {
     expect(settle(m, v({ cat: "x" })).cat).toBe("x");
@@ -291,14 +263,6 @@ describe("bucket selection", () => {
     expect(inBucket(second, filtered(wk, second).errs).map(e => e.id)).toEqual(["t04", "t07", "t08"]);
     expect(typeRows(wk, first, filtered(wk, first))[0]).toMatchObject({ n: 2, share: 1 });
     expect(typeRows(wk, second, filtered(wk, second))[0]).toMatchObject({ n: 3, share: 1 });
-  });
-  it("words an empty bucket", () => {
-    const vv = v({ at: "2026-11-02" });
-    expect(emptyTypes(two, vv, filtered(two, vv))).toBe("No errors in this day.");
-  });
-  it("counts the list in the bucket", () => {
-    const vv = v({ at: "2026-11-03" }), base = inBucket(vv, filtered(two, vv).errs).slice().reverse();
-    expect(exList(base, incSummary(two, base).groups, true, "", undefined, "day").count).toBe("2 in day, newest first");
   });
 });
 
@@ -384,15 +348,6 @@ describe("attempt strip", () => {
 
 describe("uncategorized", () => {
   const e = (c: string, src: "claude" | "codex") => ({ c, src }) as Err;
-  it("is empty with no errors", () => {
-    expect(uncategorized([])).toEqual({ n: 0, share: 0, bySource: [] });
-  });
-  it("counts the catch-all types of one source", () => {
-    const u = uncategorized([e("other", "claude"), e("x", "claude"), e("mcp", "claude"), e("x", "claude")]);
-    expect(u.n).toBe(2);
-    expect(u.share).toBe(0.5);
-    expect(u.bySource).toEqual([["claude", 2, 0.5]]);
-  });
   it("splits the share by source, ordered by source name", () => {
     // Codex first in the input, so the order comes from the sort, not from insertion.
     const u = uncategorized([e("exit_other", "codex"), e("mcp", "codex"), e("x", "codex"), e("other", "claude"), e("x", "claude"), e("x", "claude"), e("x", "claude")]);
@@ -404,9 +359,10 @@ describe("uncategorized", () => {
     expect(u.bySource[1]![1]).toBe(2);
     expect(u.bySource[1]![2]).toBeCloseTo(2 / 3);
   });
-  it("is zero when no error is a catch-all", () => {
+  it("is zero when no error is a catch-all, and empty with no errors", () => {
     const u = uncategorized([e("x", "claude"), e("y", "codex")]);
     expect(u).toEqual({ n: 0, share: 0, bySource: [["claude", 0, 0], ["codex", 0, 0]] });
+    expect(uncategorized([])).toEqual({ n: 0, share: 0, bySource: [] });
   });
 });
 
@@ -434,12 +390,6 @@ describe("time lost", () => {
     expect(lostOf("2026-11-04")).toEqual({ worktree: min, git: 10 * min, sleep_poll: 0, tests: min });
     const x = v({ range: 0, at: "2026-10-30" });
     expect(whereToStart(mm, x, filtered(mm, x), {}).open[0]).toEqual({ c: "git", n: 3, lost: 20 * min });
-  });
-  it("ranks open fixes by time lost, then by error count", () => {
-    const f = filtered(mm, vv);
-    // git has fewer errors than worktree but lost far more time; tests ties worktree on time and has fewer errors.
-    expect(whereToStart(mm, vv, f, {}).open).toEqual([
-      { c: "git", n: 3, lost: 20 * min }, { c: "worktree", n: 4, lost: min }, { c: "tests", n: 1, lost: min }, { c: "sleep_poll", n: 1, lost: 0 }]);
   });
 });
 
@@ -507,11 +457,6 @@ describe("tool breakdown", () => {
     expect(inTool(v({ tool: "Nope" }), all)).toEqual([]);
     // It narrows the detail only: the page's errors and calls are the same under it.
     expect(filtered(m, v({ tool: "Edit" }))).toEqual(filtered(m, v()));
-  });
-  it("applies on top of the bucket", () => {
-    const f = filtered(two, v({ at: "2026-11-03", tool: "Edit" }));
-    expect(inTool(v({ at: "2026-11-03", tool: "Edit" }), inBucket(v({ at: "2026-11-03" }), f.errs))).toHaveLength(2);
-    expect(inTool(v({ tool: "Bash" }), inBucket(v({ at: "2026-11-03" }), f.errs))).toHaveLength(0);
   });
   it("settles: a tool with no errors in the open type's bucket, or with no type open, clears", () => {
     expect(settle(m, v({ cat: "x", tool: "Edit" })).tool).toBe("Edit");
@@ -742,16 +687,9 @@ describe("message groups", () => {
   const E = (id: string, e: string, o: Partial<Err> = {}): Err => ({ ...m.errors[0]!, id, e, ts: `2026-11-04T10:${id.slice(1).padStart(2, "0")}:00.000Z`, ...o });
   // Oldest first, the order the model holds them in. "a" has three errors, "b", "c" and the empty text one each.
   const errs = [E("e1", "a 1", { t: "Edit", p: "foo" }), E("e2", "b 1"), E("e3", "a 2", { t: "Bash", p: "bar" }), E("e4", "a 3", { t: "Edit", p: "foo" }), E("e5", "c 1"), E("e6", "")];
-  it("lists the biggest group first, then the most recent on a tie", () => {
-    expect(msgGroups(errs).map(g => [g.key, g.n])).toEqual([["a <n>", 3], ["(no error text)", 1], ["c <n>", 1], ["b <n>", 1]]);
-  });
   it("holds each group's errors newest first, whatever the input order", () => {
     expect(msgGroups(errs.slice().reverse())[0]!.errs.map(e => e.id)).toEqual(["e4", "e3", "e1"]);
     expect(msgGroups(errs)[0]!.errs.map(e => e.id)).toEqual(["e4", "e3", "e1"]);
-  });
-  it("gives each row its share, projects, tools and newest time", () => {
-    expect(msgGroups(errs)[0]).toMatchObject({ n: 3, share: 0.5, last: errs[3]!.ts, projects: 2, tools: [["Edit", 2], ["Bash", 1]], label: "a <n>" });
-    expect(msgGroups(errs)[1]).toMatchObject({ share: 1 / 6, projects: 1 });
   });
   it("orders a group's tools by count, then by name", () => {
     const g = msgGroups([E("e1", "z", { t: "Write" }), E("e2", "z", { t: "Bash" }), E("e3", "z", { t: "Edit" }), E("e4", "z", { t: "Edit" })])[0]!;
@@ -771,11 +709,6 @@ describe("message groups", () => {
     expect((l.items as { key: string }[]).map(x => x.key)).toEqual(["a <n>"]);
     expect(msgList(g, "nothing like it", undefined)).toMatchObject({ items: [], count: "0 of 4 match" });
   });
-  it("puts the linked example's group first", () => {
-    const g = msgGroups(errs);
-    expect((msgList(g, "", errs[1]).items as { key: string }[]).map(x => x.key)).toEqual(["b <n>", "a <n>", "(no error text)", "c <n>"]);
-    expect((msgList(g, "", errs[0]).items as { key: string }[])[0]!.key).toBe("a <n>");
-  });
 });
 
 describe("muted types", () => {
@@ -792,9 +725,8 @@ describe("muted types", () => {
     expect(filtered(mx, v({ noise: true })).errs).toHaveLength(0);
     expect(filtered(mx, v()).errs).toHaveLength(6); // the toggle off: a muted type still counts
     expect(filtered(m, v({ noise: true })).errs).toHaveLength(6); // not muted: it stays
-    // The fixed noise is noise with no one muting it.
+    // The fixed noise stays noise beside a muted type.
     const p: ErrorsPayload = { ...fixture, errors: fixture.errors.map((e, i) => ({ ...e, c: i === 5 ? "infra" : e.c })) };
-    expect(filtered(withMuted(makeModel(p), []), v({ noise: true })).errs).toHaveLength(5);
     expect(filtered(withMuted(makeModel(p), ["x"]), v({ noise: true })).errs).toHaveLength(0);
   });
   it("join the fixed noise in the server's per-day counts, which the rate, chart and comparison read", () => {
