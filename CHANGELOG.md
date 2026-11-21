@@ -29,6 +29,10 @@ and versions follow [Semantic Versioning](https://semver.org/).
 - Judgments' session cards show cost, peak context and failed tool calls.
 - Judgments' Friction categories can be weighed by cost, active time or reports.
 - `>judgments` in the command palette opens Judgments.
+- `GET /metrics` serves the store's figures to Prometheus: requests, tokens, cost, sessions, tool calls and errors, active sessions, plan limits and ingest state. No label holds transcript text.
+- `--metrics-host HOST[:PORT]` lets `/metrics` answer through a proxy such as `tailscale serve`, so one Prometheus can scrape several machines. Pages and `/api` keep the strict host check.
+- `workloads.json` beside the store names groups of sessions by the start of their first prompt, such as review agents. `/metrics` carries it as a `workload` label.
+- A Grafana dashboard for the metrics, in `contrib/grafana/ai-ledger.json`.
 
 ### Changed
 

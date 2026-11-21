@@ -4,11 +4,11 @@ description: Prices, plans and automated projects, where their files live and wh
 spec: [distribution, dashboard-app]
 ---
 
-AI Ledger has two optional configuration files: `prices.json` (model prices and plan prices) and `automated.json` (extra automated projects). Neither exists by default. There are no environment variables or other settings; the command-line options are in [CLI and options](/ai-ledger/reference/cli/).
+AI Ledger has three optional configuration files: `prices.json` (model prices and plan prices), `automated.json` (extra automated projects) and `workloads.json` (named groups of sessions for `/metrics`). None exists by default. There are no environment variables or other settings; the command-line options are in [CLI and options](/ai-ledger/reference/cli/).
 
 ## Location and reload
 
-Both files sit in the folder that holds the store:
+The files sit in the folder that holds the store:
 
 | Setup | Folder |
 | --- | --- |
@@ -18,7 +18,7 @@ Both files sit in the folder that holds the store:
 
 See [Data files and storage locations](/ai-ledger/reference/storage/).
 
-The app reads each file on every page load. A change applies when you reload the page, with no restart and no `rebuild`: costs are computed from stored token counts when a page loads. An upgrade does not change either file.
+The app reads `prices.json` and `automated.json` on every page load. A change applies when you reload the page, with no restart and no `rebuild`: costs are computed from stored token counts when a page loads. The app checks `workloads.json` at each `/metrics` scrape and uses a change at the next one. An upgrade does not change any of the files.
 
 A file that cannot be used is ignored whole, and the page that uses it says why (see each section).
 
@@ -100,3 +100,21 @@ The file `automated.json` lists projects whose sessions count as automated, in a
 A missing file is no error. The **Include automated sessions** control's hint names the file's path. When the file cannot be read, is not valid JSON, has no `projects` list, or has an entry that is not text, the app ignores the whole file and a banner under the navigation, on every page, says "Automated projects file ignored", with the path and the reason; only the built-in detection applies.
 
 For the workflow, see the playbook [Separate automated sessions from yours](/ai-ledger/improve/automated-sessions/).
+
+## Workloads
+
+The file `workloads.json` names groups of sessions for the `workload` label of [`/metrics`](/ai-ledger/reference/metrics/#name-workloads). It changes no page.
+
+```json
+{"workloads": [{"name": "pr-review", "prompt_prefix": "You work on pull request #"}]}
+```
+
+| Field | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `workloads` | list of objects | yes | The entries, in order. |
+| `name` | text | yes, in each entry | The label value. Not empty. |
+| `prompt_prefix` | text | yes, in each entry | The start of a session's first prompt. Not empty. Case counts. |
+
+A session's workload is the `name` of the first entry whose `prompt_prefix` starts its first prompt, else `default`. A session with no prompt yet is `default` until it has one. Only the name leaves the store.
+
+A missing file is no error. When the file cannot be read, is not valid JSON, has no `workloads` list, or has an entry without a non-empty `name` and `prompt_prefix`, the app ignores the whole file: every session is `default`, and standard error says why once for each change to the file. No page shows a banner for it.

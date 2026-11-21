@@ -77,6 +77,7 @@ const sidebar = [
     items: [
       "reference/cli",
       "reference/configuration",
+      "reference/metrics",
       "reference/glossary",
       "reference/storage",
       "reference/troubleshooting",

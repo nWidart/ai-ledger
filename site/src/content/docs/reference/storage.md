@@ -24,8 +24,9 @@ The app creates the folder on first start, readable by your user only.
 | `ai-ledger.duckdb.wal` | DuckDB's write-ahead log of the store, and its temporary files. They hold transcript text too. | DuckDB. |
 | `prices.json` | Model prices and plan prices. See [Configuration](/ai-ledger/reference/configuration/#pricesjson). | You, optional. |
 | `automated.json` | Extra automated projects. See [Configuration](/ai-ledger/reference/configuration/#automated-projects). | You, optional. |
+| `workloads.json` | Named groups of sessions for `/metrics`. See [Configuration](/ai-ledger/reference/configuration/#workloads). | You, optional. |
 
-With `--db <file>`, the configuration files are `prices.json` and `automated.json` next to that file, and the app uses that file as the store.
+With `--db <file>`, the configuration files are `prices.json`, `automated.json` and `workloads.json` next to that file, and the app uses that file as the store.
 
 ## What the store holds
 

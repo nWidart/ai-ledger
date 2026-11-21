@@ -1,3 +1,4 @@
+import argparse
 import base64
 import contextlib
 import hashlib
@@ -20,7 +21,7 @@ from http.server import ThreadingHTTPServer
 
 import duckdb
 
-from ai_ledger import app, limits, live, metrics, store
+from ai_ledger import app, limits, live, metrics, prom, store
 
 USAGE_DATA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "usage-data")
 
@@ -281,7 +282,9 @@ class AppTest(unittest.TestCase):
     def test_host_check_on_the_default_and_a_custom_port(self):
         self.assertEqual(self.get("/usage", host="example.com")[0], 403)  # a foreign host, on the default port
         self.assertEqual(self.get("/assets/x.js", host="evil:8765")[0], 403)
-        httpd = ThreadingHTTPServer(("127.0.0.1", 0), app.handler(app.App(self.con, {}, pollers=[]), 8766))
+        self.assertEqual(self.get("/metrics", host="mac.example.ts.net")[0], 403)  # no --metrics-host given
+        httpd = ThreadingHTTPServer(("127.0.0.1", 0), app.handler(app.App(self.con, {}, pollers=[]), 8766,
+                                                                  [app.metrics_host("Mac.example.ts.net")]))
         threading.Thread(target=httpd.serve_forever, daemon=True).start()
         self.addCleanup(httpd.server_close)
         self.addCleanup(httpd.shutdown)
@@ -289,6 +292,12 @@ class AppTest(unittest.TestCase):
         status, headers, _ = self.get("/usage", host="localhost:8766", server=httpd)
         self.assertEqual((status, headers["Location"]), (301, "http://127.0.0.1:8766/usage"))
         self.assertEqual(self.get("/usage", host=f"127.0.0.1:{app.PORT}", server=httpd)[0], 403)
+        # A --metrics-host name opens /metrics only, whatever its case.
+        self.assertEqual(self.get("/metrics", host="mac.EXAMPLE.ts.net", server=httpd)[0], 200)
+        self.assertEqual(self.get("/api/status", host="mac.example.ts.net", server=httpd)[0], 403)
+        self.assertEqual(self.get("/usage", host="mac.example.ts.net", server=httpd)[0], 403)
+        with self.assertRaises(argparse.ArgumentTypeError):
+            app.metrics_host("mac.example.ts.net/metrics")
 
     def test_port_in_use(self):
         with socket.socket() as held:
@@ -324,12 +333,13 @@ class AppTest(unittest.TestCase):
         seen = {}
 
         def refuse(db):
-            seen.update(prices=metrics.USER_PRICES, automated=metrics.USER_AUTOMATED)
+            seen.update(prices=metrics.USER_PRICES, automated=metrics.USER_AUTOMATED, workloads=prom.USER_WORKLOADS)
             raise store.StoreBusy("busy")
-        with mock.patch.object(metrics, "USER_PRICES"), mock.patch.object(metrics, "USER_AUTOMATED"), \
+        with mock.patch.object(metrics, "USER_PRICES"), mock.patch.object(metrics, "USER_AUTOMATED"), mock.patch.object(prom, "USER_WORKLOADS"), \
                 mock.patch.object(store, "open_store", side_effect=refuse), contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
             app.main(["--db", "/data/ledger/x.duckdb"])
-        self.assertEqual(seen, dict(prices="/data/ledger/prices.json", automated="/data/ledger/automated.json"))
+        self.assertEqual(seen, dict(prices="/data/ledger/prices.json", automated="/data/ledger/automated.json",
+                                    workloads="/data/ledger/workloads.json"))
 
     def test_day(self):
         status, _, body = self.get("/api/day?day=2026-11-04&range=0")
@@ -637,9 +647,11 @@ class LimitsAlertTest(unittest.TestCase):
         got = self.app.status()
         self.assertEqual((got["limits_alert"], got["limits_peak"]),
                          (None, dict(provider="claude", provider_label="Claude Code", label="5-hour", current=62.0, measured=False)))
+        self.assertEqual(self.app.limit_windows, ws)  # kept for /metrics
         with mock.patch.object(limits, "payload", side_effect=RuntimeError("secret text")), contextlib.redirect_stderr(io.StringIO()):
             self.app.refresh_alert()
-        self.assertIsNone(self.app.status()["limits_peak"])  # a failure clears both
+        self.assertIsNone(self.app.status()["limits_peak"])  # a failure clears both, and the windows
+        self.assertEqual(self.app.limit_windows, [])
 
     def test_the_waiting_count_is_worked_out_on_a_status_request_and_kept_for_a_while(self):
         with mock.patch.object(live, "waiting", side_effect=[2, 5]) as waiting:

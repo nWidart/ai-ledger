@@ -76,14 +76,77 @@ The first start reads every transcript, about 5 minutes for a month of heavy use
 | `--grok` | `~/.grok` |
 | `--usage-data` | `~/.claude/usage-data` |
 | `--db` | `~/Library/Application Support/ai-ledger/ai-ledger.duckdb` (macOS), `~/.local/share/ai-ledger/ai-ledger.duckdb` (Linux) |
+| `--metrics-host HOST[:PORT]` | none; repeatable (see [Prometheus and Grafana](#prometheus-and-grafana)) |
 
 With the app stopped, `ai-ledger ingest` reads new lines once and `ai-ledger rebuild` recomputes the derived tables. After an upgrade that asks for it, run `ai-ledger rebuild` once.
 
 To set your own model prices or plan prices, or to hide more automated projects, see [Configuration](https://nwidart.github.io/ai-ledger/reference/configuration/). If the automated projects file (`automated.json`) cannot be used, one warning under the navigation says so on every page.
 
+## Prometheus and Grafana
+
+The app serves its figures in the Prometheus text format at `GET /metrics`, on the same listener as the pages. Prometheus on the same machine scrapes it like any other target:
+
+```yaml
+scrape_configs:
+  - job_name: ai-ledger
+    scrape_interval: 30s
+    static_configs:
+      - targets: ["127.0.0.1:8765"]
+        labels: {instance: server}
+```
+
+Counters are totals over the whole store, so they survive a restart. The first scrape shows the whole history as one step; `rate()` and `increase()` are right from the second scrape on. The counters are worked out again only after an ingest stored something; the active-sessions gauge reads each active session's newest lines at every scrape, as the Live page does.
+
+**A second machine.** Run one AI Ledger per machine and let one Prometheus scrape them all. The app keeps listening on `127.0.0.1`; publish only its `/metrics` path to your tailnet with `tailscale serve`:
+
+```bash
+tailscale serve --bg --https=8766 --set-path=/metrics http://127.0.0.1:8765/metrics
+ai-ledger --metrics-host <machine>.<tailnet>.ts.net:8766
+```
+
+The proxy passes `Host: <machine>.<tailnet>.ts.net:8766`, which `--metrics-host` lets `GET /metrics` accept. Pages and `/api` still refuse it. In Prometheus, scrape the tailnet name over HTTPS and set an `instance` label per machine:
+
+```yaml
+  - job_name: ai-ledger-laptop
+    scheme: https
+    static_configs:
+      - targets: ["<machine>.<tailnet>.ts.net:8766"]
+        labels: {instance: laptop}
+```
+
+A laptop that sleeps shows as a down target and loses nothing: the next scrape reads the store totals.
+
+**Workloads.** To tell groups of sessions apart, such as pull-request review agents next to sessions you start by hand, add `workloads.json` beside the store. The first entry whose `prompt_prefix` starts a session's first prompt names its workload; the others are `default`.
+
+```json
+{"workloads": [{"name": "pr-review", "prompt_prefix": "You work on pull request #"}]}
+```
+
+| Family | Type | Labels besides `source`, `project`, `automated`, `workload` |
+| --- | --- | --- |
+| `ai_ledger_requests_total`, `ai_ledger_unpriced_requests_total`, `ai_ledger_cost_usd_total` | counter | `model` |
+| `ai_ledger_tokens_total` | counter | `model`, `kind` (`input`, `output`, `thinking`, `cache_read`, `cache_5m`, `cache_1h`) |
+| `ai_ledger_sessions_total`, `ai_ledger_prompts_total`, `ai_ledger_compactions_total`, `ai_ledger_commits_total`, `ai_ledger_model_seconds_total` | counter | |
+| `ai_ledger_test_runs_total` | counter | `result` (`passed`, `failed`) |
+| `ai_ledger_tool_calls_total` | counter | `tool`, `result` (`ok`, `error`) |
+| `ai_ledger_tool_errors_total` | counter | `category` |
+| `ai_ledger_tool_call_duration_seconds` | histogram | `tool`; only `source`, `workload` and `tool` |
+| `ai_ledger_active_sessions` | gauge | `state`; no `automated` |
+| `ai_ledger_limit_used_ratio`, `ai_ledger_limit_resets_timestamp_seconds` | gauge | `provider`, `limit`, `window` only |
+| `ai_ledger_last_ingest_timestamp_seconds`, `ai_ledger_ingest_failed` | gauge | none |
+| `ai_ledger_build_info` | gauge | `version` |
+
+Cost is the reported cost, else the list-price estimate, as on Cost; a request with neither counts in `ai_ledger_unpriced_requests_total`.
+
+**What leaves the store.** Project, model, tool, error-category and workload names, and the app version. Never a prompt, command, path, error text or session id.
+
+**Grafana.** Import [`contrib/grafana/ai-ledger.json`](contrib/grafana/ai-ledger.json) (Dashboards, New, Import) and pick your Prometheus data source. It filters by instance, source, project, workload and automated flag, and shows spend, tokens, cache hit, requests by model, tool errors and latency, active sessions, plan limits and ingest freshness.
+
+The [documentation site](https://nwidart.github.io/ai-ledger/reference/metrics/) lists every metric and panel.
+
 ## Privacy
 
-- The server listens on `127.0.0.1` only, and refuses requests that another site makes from your browser.
+- The server listens on `127.0.0.1` only, and refuses requests that another site makes from your browser. `GET /metrics` serves project, model and tool names to any Prometheus that can reach it; see [Prometheus and Grafana](#prometheus-and-grafana).
 - The store keeps every transcript line, **including any secrets** that appeared in a session. Only your user can read it. Do not share it.
 - On macOS, the Limits page sends your Claude Code OAuth token from the Keychain to Anthropic's usage endpoint every 5 minutes. The token goes nowhere else and is never stored or logged. On Linux there is no Keychain to read, so Limits shows no Claude Code window.
 - If the Grok CLI is signed in with grok.com, the Limits page sends that login's access token, read from `~/.grok/auth.json` (or `$GROK_HOME/auth.json`), to `https://cli-chat-proxy.grok.com/v1/billing?format=credits` every 5 minutes. The token goes nowhere else, is never stored, logged or shown, and is never refreshed. With an API key or no login, nothing is sent.

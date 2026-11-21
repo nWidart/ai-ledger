@@ -351,11 +351,19 @@ def scope(project, automated, source="", user_projects=None):
     (sql, params). Raises ValueError for a source not in SOURCES."""
     if source and source not in SOURCES:
         raise ValueError(f"unknown source: {source}")
+    auto, ap = automated_session(project, user_projects)
+    return (f"(? = '' OR s.project = ?) AND (? OR NOT {auto}) AND (? = '' OR s.source = ?)",
+            [project, project, bool(automated), *ap, source, source])
+
+
+def automated_session(project="", user_projects=None):
+    """SQL over sessions s, true for an automated session: one of AUTOMATED_PROJECTS or the user automated file's projects
+    (user_projects, read from the file when None), unless project names its project, or one of HELPER_SESSIONS. Never NULL.
+    Returns (sql, params)."""
     names = [*AUTOMATED_PROJECTS, *(user_automated()[0] if user_projects is None else user_projects)]
     marks = ",".join("?" * len(names))
-    return (f"(? = '' OR s.project = ?) AND (? OR (s.project = ? OR coalesce(s.project, '') NOT IN ({marks})) "
-            f"AND s.session_id NOT IN ({HELPER_SESSIONS})) AND (? = '' OR s.source = ?)",
-            [project, project, bool(automated), project, *names, source, source])
+    return (f"((coalesce(s.project, '') IN ({marks}) AND s.project IS DISTINCT FROM ?) OR s.session_id IN ({HELPER_SESSIONS}))",
+            [*names, project])
 
 
 def view(project, range_days, prices, today, automated=False, source="", user_projects=None):
