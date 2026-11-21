@@ -1,9 +1,9 @@
 import { createSortedRowModel, rowSortingFeature, tableFeatures, useTable, type ColumnDef, type RowData, type SortFn, type SortingState } from "@tanstack/react-table";
-import { Fragment, useMemo, type ComponentPropsWithoutRef, type ComponentPropsWithRef, type ReactNode } from "react";
+import { Fragment, useMemo, type ComponentPropsWithoutRef, type ComponentPropsWithRef, type ReactElement, type ReactNode } from "react";
 import { DataTable } from "../DataTable";
 import type { Subject } from "../menu/subject";
 import { pickRow } from "../sheets/session";
-import { hasValue, headerTerm, SortTh, type SortBy } from "../Sort";
+import { hasValue, headerTerm, isSortList, nextSort, SortTh, type SortBy } from "../Sort";
 import { Toggletip } from "../Toggletip";
 
 /** What a column sorts by and shows by default. null, undefined and NaN read as "no value". */
@@ -48,7 +48,8 @@ interface ColumnBase<T, K extends string> {
   col?: string;
 }
 
-/** What a custom header cell gets: the column's classes and the table's sort. */
+/** What a custom header cell gets: the column's classes and the table's sort (with a list, its first key).
+ *  onSort sorts by that key alone, in the list form too. */
 export interface HeadContext<K extends string> { className: string | undefined; sort: SortBy<K> | null; onSort?: (s: SortBy<K>) => void }
 
 /** A row that opens something (a sheet): value, the row's data-v (null: the row opens nothing); open, run with the row's button;
@@ -59,16 +60,32 @@ export interface RowPick<T> {
   subject?: (row: T) => Subject | undefined;
 }
 
-/** A sort and its handler come together: a sort no header can show or change would leave the order unannounced. */
-type TableSort<K extends string> =
+/** A sort and its handler come together: a sort no header can show or change would leave the order unannounced. One key, or none. */
+type SortOne<K extends string> =
   | {
     /** The sort, owned by the caller; null: rows in the order given. */
     sort: SortBy<K> | null;
     onSort: (s: SortBy<K>) => void;
+    sortAdd?: undefined;
+    sortMax?: undefined;
   }
-  | { sort?: undefined; onSort?: undefined };
+  | { sort?: undefined; onSort?: undefined; sortAdd?: undefined; sortMax?: undefined };
 
-export type TableProps<T extends RowData, K extends string = string> = TableBase<T, K> & TableSort<K>;
+/** The list form: a sort by several keys, selected by an array. */
+interface SortList<K extends string> {
+  /** The sort keys, first key first, owned by the caller; empty: rows in the order given. */
+  sort: readonly SortBy<K>[];
+  /** The next list after a header press (nextSort). */
+  onSort: (s: SortBy<K>[]) => void;
+  /** A header press adds its column to the sort (the caller's checkbox); Shift does it whatever this says. */
+  sortAdd?: boolean;
+  /** The most keys; a key added beyond it replaces the last. Default 3. */
+  sortMax?: number;
+}
+
+/** Table's props in either form of the sort. Table has an overload per form, so that an inline onSort reads its argument's type from
+ *  the form, and one for these props last. */
+export type TableProps<T extends RowData, K extends string = string> = TableBase<T, K> & (SortOne<K> | SortList<K>);
 
 /** What rowProps may set on a row's tr. Not its key: the table keys rows by rowId. */
 export type RowAttrs = Omit<ComponentPropsWithoutRef<"tr">, "children" | "key"> & { [data: `data-${string}`]: string | undefined };
@@ -106,15 +123,22 @@ const OPT = ["opt", "opt1", "opt2"] as const;
 // Ascending only: the table flips it for a descending sort. Rows with no value are undefined, and sortUndefined puts them last.
 const compare: SortFn<typeof features, RowData> = (a, b, id) => {
   const x = a.getValue<number | string>(id), y = b.getValue<number | string>(id);
+  // Equal first: two infinities would subtract to NaN, which reads as decided and skips the later keys.
+  if (x === y) return 0;
   return typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y));
 };
 const classes = <T, K extends string>(c: Column<T, K>) =>
   [c.align === "num" && "num", c.hide != null && OPT[c.hide], c.className].filter(Boolean).join(" ") || undefined;
 
 /** A data table built from column definitions: native table markup in a named, focusable scroll region (DataTable), sortable by
- *  any column that allows it. The sort is the caller's; rows with no value come last either way and ties keep their order. */
-export function Table<T extends RowData, K extends string = string>({ name, rows, columns, rowId, sort = null, onSort, manualSort, empty, pinned, after,
-  current, pick, rowProps, region, className, body }: TableProps<T, K>) {
+ *  any column that allows it, by one key or a list of keys. The sort is the caller's; rows with no value come last for each key, either
+ *  way, and ties keep their order. */
+export function Table<T extends RowData, K extends string = string>(props: TableBase<T, K> & SortOne<K>): ReactElement;
+export function Table<T extends RowData, K extends string = string>(props: TableBase<T, K> & SortList<K>): ReactElement;
+// Last, for props that hold either form, as a wrapper forwarding TableProps (and what ComponentProps reads).
+export function Table<T extends RowData, K extends string = string>(props: TableProps<T, K>): ReactElement;
+export function Table<T extends RowData, K extends string = string>({ name, rows, columns, rowId, sort = null, onSort, sortAdd, sortMax, manualSort, empty,
+  pinned, after, current, pick, rowProps, region, className, body }: TableProps<T, K>): ReactElement {
   const defs = useMemo(() => {
     const def = (id: string, value: ((r: T) => CellValue) | undefined, sortable: boolean): ColumnDef<typeof features, T> => ({
       id, enableSorting: sortable, sortUndefined: "last", sortFn: compare as SortFn<typeof features, T>,
@@ -124,15 +148,26 @@ export function Table<T extends RowData, K extends string = string>({ name, rows
     // One TanStack column per id, the sortable one: a display-only column whose id is also an extra sort key registers none.
     return [...columns.filter(c => c.sort || !extra.some(d => d.id === c.id)).map(c => def(c.id, c.value, !!c.sort)), ...extra];
   }, [columns]);
-  const sorting = useMemo<SortingState>(() => sort ? [{ id: sort.key, desc: sort.desc }] : [], [sort?.key, sort?.desc]); // eslint-disable-line react-hooks/exhaustive-deps
+  // A list sorted here keeps only the keys a column sorts by (TanStack skips the others), so the headers rank what orders the rows;
+  // rows that come sorted were ordered by every key.
+  const list = isSortList(sort) ? manualSort ? sort : sort.filter(s => defs.some(d => d.enableSorting && d.id === s.key)) : sort ? [sort] : [];
+  // Keyed by the keys and directions, not the caller's objects, so an equal sort keeps TanStack's sorted rows.
+  const sortKey = JSON.stringify(list.map(s => [s.key, s.desc]));
+  const sorting = useMemo<SortingState>(() => list.map(s => ({ id: s.key, desc: s.desc })), [sortKey]); // eslint-disable-line react-hooks/exhaustive-deps
   // TanStack rebuilds its rows, and the values they cache per column id, only for new data: new columns get a fresh copy of the rows.
   const data = useMemo(() => rows.slice(), [rows, defs]); // eslint-disable-line react-hooks/exhaustive-deps
   const table = useTable({ features, columns: defs, data, getRowId: rowId, manualSorting: manualSort, state: { sorting } });
 
+  // The list form hands onSort the next list; a press with Shift adds as sortAdd does. The single form hands on the header's sort.
+  const toList = isSortList(sort) ? onSort as ((s: SortBy<K>[]) => void) | undefined : undefined;
+  const toOne = isSortList(sort) ? toList && ((s: SortBy<K>) => toList([s])) : onSort as ((s: SortBy<K>) => void) | undefined;
+  const press = (c: Column<T, K>) => (s: SortBy<K>, shift: boolean) =>
+    toList ? toList(nextSort(list, c.id, c.sort !== "asc", !!sortAdd || shift, sortMax)) : toOne?.(s);
+
   const head = (c: Column<T, K>) => {
     const cls = classes(c);
-    if (c.th) return <Fragment key={c.id}>{c.th({ className: cls, sort, onSort })}</Fragment>;
-    if (c.sort && onSort) return <SortTh key={c.id} k={c.id} sort={sort} onSort={onSort} asc={c.sort === "asc"} className={cls} title={c.tip} term={c.tipTerm}
+    if (c.th) return <Fragment key={c.id}>{c.th({ className: cls, sort: list[0] ?? null, onSort: toOne })}</Fragment>;
+    if (c.sort && onSort) return <SortTh key={c.id} k={c.id} sort={isSortList(sort) ? list : sort} onSort={press(c)} asc={c.sort === "asc"} className={cls} title={c.tip} term={c.tipTerm}
       after={c.after}>{c.header}</SortTh>;
     return <th key={c.id} scope="col" className={cls}>{c.header}{c.tip && <Toggletip term={c.tipTerm ?? headerTerm(c.header)}>{c.tip}</Toggletip>}{c.after}</th>;
   };
