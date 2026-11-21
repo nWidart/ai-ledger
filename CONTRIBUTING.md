@@ -11,6 +11,8 @@ cd web && npm ci && npm run build         # build the frontend once; the app ser
 
 Without the build, the app answers 503 and the Python tests fail.
 
+If you use [mise](https://mise.jdx.dev/), `mise.toml` installs uv and Node and wraps these commands as tasks. Run `mise run setup` for the steps above and `mise tasks` to list the rest. `serve`, `test` and `fixtures` rebuild the frontend first when `web/src` has changed. Extra arguments go to the task's last command, as in `mise run serve --db <copy> --port 8766`.
+
 Never run the app against your live store while you develop. Copy the store and point the app at the copy:
 
 ```bash

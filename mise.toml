@@ -1,0 +1,133 @@
+# Project tasks. List them with `mise tasks`; run one with `mise run <task>` (or `mise <task>`).
+# Extra arguments go to the task's last command: `mise run serve --port 8790 --no-open`.
+# uv installs Python 3.14 itself (pyproject.toml), so mise manages only uv and Node.
+
+[tools]
+uv = "latest"
+node = "26" # the version CI uses
+
+# --- Setup ---------------------------------------------------------------------------------------------------------
+
+[tasks.setup]
+description = "Install Python and web dependencies, then build the pages"
+depends = ["sync", "web:build"]
+
+[tasks.sync]
+description = "Install Python 3.14 and the Python dependencies"
+run = "uv sync"
+
+[tasks."web:install"]
+description = "Install the web dependencies"
+dir = "web"
+run = "npm ci"
+sources = ["package-lock.json"]
+outputs = ["node_modules/.package-lock.json"]
+
+[tasks."web:build"]
+description = "Build the pages into src/ai_ledger/web/ (the app answers 503 without it)"
+depends = ["web:install"]
+dir = "web"
+run = "npm run build"
+sources = ["src/**/*", "index.html", "vite.config.*", "tsconfig*.json", "package-lock.json"]
+outputs = ["../src/ai_ledger/web/index.html"]
+
+# --- App -----------------------------------------------------------------------------------------------------------
+
+[tasks.serve]
+description = "Serve on http://127.0.0.1:8765/ (builds the pages first if they changed)"
+depends = ["web:build"]
+run = "uv run ai-ledger"
+
+[tasks.ingest]
+description = "Ingest new transcript lines once, then exit (stop the app first)"
+run = "uv run ai-ledger ingest"
+
+[tasks.rebuild]
+description = "Regenerate the derived tables after a parser or categorize.py change (stop the app first)"
+run = "uv run ai-ledger rebuild"
+
+[tasks."web:dev"]
+description = "Vite dev server on http://127.0.0.1:5173/, proxying the API to a running app on port 8765"
+depends = ["web:install"]
+dir = "web"
+run = "npm run dev"
+
+[tasks."explore:sync"]
+description = "Create or refresh explore.duckdb, a copy of the store to browse in a DuckDB client"
+run = "tools/explore-copy.sh sync"
+
+[tasks."explore:delete"]
+description = "Remove the explore.duckdb copy"
+run = "tools/explore-copy.sh delete"
+
+# --- Checks --------------------------------------------------------------------------------------------------------
+
+[tasks.lint]
+description = "Lint Python with ruff"
+run = "uv run ruff check"
+
+[tasks.test]
+description = "Run the Python tests"
+depends = ["web:build"]
+run = "uv run python -m unittest discover -s tests"
+
+[tasks.fixtures]
+description = "Regenerate the page-test fixtures in web/src/__fixtures__/ after a payload change"
+depends = ["web:build"]
+run = "uv run python -m unittest tests.test_web_fixtures"
+
+[tasks."web:check"]
+description = "Typecheck, lint, test and build the web app"
+depends = ["web:install"]
+dir = "web"
+run = "npm run check"
+
+[tasks."site:install"]
+description = "Install the docs site dependencies"
+dir = "site"
+run = "npm ci"
+sources = ["package-lock.json"]
+outputs = ["node_modules/.package-lock.json"]
+
+[tasks."site:dev"]
+description = "Serve the docs site locally"
+depends = ["site:install"]
+dir = "site"
+run = "npm run dev"
+
+[tasks."site:check"]
+description = "Typecheck and build the docs site"
+depends = ["site:install"]
+dir = "site"
+run = "npm run check"
+
+[tasks.specs]
+description = "Validate the OpenSpec specs, as CI does"
+run = "npx --yes @fission-ai/openspec@1.16.0 validate --specs --strict"
+
+[tasks.check]
+description = "Run every check: ruff, Python tests, web, docs site and specs"
+depends = ["lint", "test", "web:check", "site:check", "specs"]
+
+# --- Demo recordings -----------------------------------------------------------------------------------------------
+
+[tasks."demo:seed"]
+description = "Write the synthetic store tools/demo/demo.duckdb"
+run = "uv run tools/demo/seed.py"
+
+[tasks."demo:serve"]
+description = "Serve the demo store on http://127.0.0.1:8799/"
+depends = ["web:build"]
+run = "uv run tools/demo/serve.py"
+
+[tasks."demo:record"]
+description = "Record the README GIFs and docs videos (args: scenes, or `shots [page...]`)"
+depends = ["web:build", "site:install"]
+dir = "tools/demo"
+run = ["npm ci", "node record.mjs"]
+
+# --- Release -------------------------------------------------------------------------------------------------------
+
+[tasks."release:pr"]
+description = "Open the release PR from main (pass `-f bump=patch|minor|major` to override the bump)"
+run = "gh workflow run release-pr.yml"
