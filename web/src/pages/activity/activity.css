@@ -9,6 +9,9 @@
 
 /* Briefing: the period's work as the page heading. Both views lay their header out the same way. */
 :is(.pg-activity, .pg-judgments) .top { margin-bottom: 20px; }
+/* Overview packs its first screen 20px tighter, so the workbench tab list clears the fold at 1440×900 with room. */
+.pg-activity .views { margin-bottom: 10px; }
+.pg-activity .top { margin-bottom: 16px; }
 /* The header has the whole row (the filters are in the scope bar), so the lede can hold a period's sentence on one line. */
 .pg-activity .lede { margin: 0; max-width: 50ch; font-size: clamp(1.625rem, 4.2vw, 2.375rem); line-height: 1.12;
   font-weight: 400; letter-spacing: -.025em; text-wrap: balance; color: var(--text-secondary); }
@@ -25,7 +28,7 @@
 .pg-activity .sub { color: var(--text-muted); font-size: .8125rem; margin: 8px 0 0; }
 .pg-activity h2 { font-size: 1rem; font-weight: 600; margin: 0; letter-spacing: -.005em; }
 /* In the heading's bottom margin, so the line takes no room of its own. */
-.pg-activity .pending { margin: -20px 0 0; min-height: 20px; color: var(--text-secondary); font-size: .8125rem; }
+.pg-activity .pending { margin: -16px 0 0; min-height: 16px; line-height: 16px; color: var(--text-secondary); font-size: .8125rem; }
 .pg-activity .pending:empty { visibility: hidden; }
 .pg-activity.loading > :not(.top):not(.views) { opacity: .55; }
 @media (prefers-reduced-motion: no-preference) { .pg-activity > :not(.top):not(.views) { transition: opacity .2s; } }
@@ -35,11 +38,11 @@
    Each is a button or a link to the place that explains it. */
 /* Every cell pads --vpad on both sides, so the padding is the same at any column count. The strip is pulled left by one
    pad and clipped there, which puts the first column's text flush with the page edge and hides the strip's own edge. */
-.pg-activity .vitals-wrap { margin: 0 0 12px; }
+.pg-activity .vitals-wrap { margin: 0 0 8px; }
 .pg-activity .vitals { --vpad: 14px; display: grid; grid-template-columns: repeat(var(--n, 5), minmax(0, 1fr)); gap: 1px;
   margin-inline-start: calc(var(--vpad) * -1); clip-path: inset(0 0 0 var(--vpad));
   background: var(--border); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
-.pg-activity .vital { display: flex; flex-direction: column; justify-content: flex-start; padding: 10px var(--vpad); background: var(--bg); min-width: 0; font: inherit; color: inherit; text-align: left;
+.pg-activity .vital { display: flex; flex-direction: column; justify-content: flex-start; padding: 8px var(--vpad); background: var(--bg); min-width: 0; font: inherit; color: inherit; text-align: left;
   border: 0; border-radius: 0; cursor: pointer; text-decoration: none; }
 .pg-activity .vital:hover { background: var(--surface-2); }
 .pg-activity .vital:hover .l { text-decoration: underline; text-underline-offset: 2px; }
@@ -76,7 +79,7 @@
 
 /* Work chart: two tracks, the bars over the rate; the selection chip beside the metric switch; the project parts of a bar
    in its tooltip */
-.pg-activity .work.panel { padding-bottom: 12px; }
+.pg-activity .work.panel { padding-top: 14px; padding-bottom: 12px; }
 .pg-activity .work .legend { margin: 2px 0 4px; }
 .pg-activity .work .chart svg { height: 216px; }
 .pg-activity .work .head-side { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
@@ -116,23 +119,32 @@
 .pg-activity .ext h3 { font-size: .875rem; margin: 0 0 6px; }
 .pg-activity .ext :is(td, th).hook { max-width: 40rem; }
 @media (max-width: 56.25em) { .pg-activity .ext { grid-template-columns: minmax(0, 1fr); } .pg-activity .ext :is(td, th).hook { max-width: 18.75rem; } }
-/* The sessions table fits its box without scrolling sideways: the least needed columns go first. */
+/* The sessions table fits its box without scrolling sideways: the session column gives up room to the model time and
+   speed, then the least needed columns go first (opt2, then opt1, then opt). The sorted column always shows. */
+.pg-activity #sessions :is(td, th).sess { max-width: 16rem; }
+.pg-activity #sessions :is(td, th).sess .small { overflow: hidden; text-overflow: ellipsis; }
 @media (max-width: 78.75em) {
   .pg-activity #sessions .opt2 { display: none; }
   .pg-activity #sessions :is(td, th).sess { max-width: 14.375rem; }
-  .pg-activity #sessions :is(td, th).sess .small { overflow: hidden; text-overflow: ellipsis; }
+}
+/* A hidden column shown because it is sorted takes its room from the session column. */
+@media (max-width: 66em) {
+  .pg-activity #sessions .opt1 { display: none; }
+  .pg-activity #sessions table:has(th.opt1.sorted) :is(td, th).sess { max-width: 12.5rem; }
 }
 @media (max-width: 56.25em) {
   .pg-activity #sessions :is(td, th).sess { max-width: 10.625rem; }
+  .pg-activity #sessions table:has(th.opt1.sorted) :is(td, th).sess { max-width: 9.25rem; }
   .pg-activity #sessions :is(td, th).name { max-width: 7.5rem; }
 }
 @media (max-width: 43.75em) {
-  .pg-activity #sessions :is(.opt, .opt2) { display: none; }
+  .pg-activity #sessions :is(.opt, .opt1, .opt2) { display: none; }
   .pg-activity .ext :is(td, th).hook { max-width: 9.375rem; }
   .pg-activity #sessions :is(td, th).name { max-width: 5.625rem; }
   .pg-activity #sessions :is(td, th).when { white-space: normal; }
   .pg-activity #sessions :is(td, th).when .small { overflow-wrap: anywhere; }
 }
+.pg-activity #sessions :is(td, th).sorted { display: table-cell; }
 .pg-activity #projects th:first-child, .pg-activity #projects td:first-child { position: sticky; left: 0; background: var(--bg); z-index: 1; box-shadow: 1px 0 0 var(--border); }
 .pg-activity #projects th:first-child { z-index: 2; }
 .pg-activity #projects tr.sel :is(td, th):first-child { background: color-mix(in srgb, var(--accent) 11%, var(--bg)); }

@@ -301,8 +301,9 @@ class Ctx:
         return self.memo[key]
 
     def calls(self, extra, params=()):
-        """The view's tool calls (t, with their session s) that also match extra, an SQL condition; returns rows of the columns tool, mcp_server, result_bytes."""
-        return metrics.rows(self.cur, f"""SELECT t.tool, t.mcp_server, t.result_bytes FROM tool_calls t JOIN sessions s USING (session_id)
+        """The view's tool calls (t, with their session s) that also match extra, an SQL condition; returns rows of the columns tool, mcp_server,
+        result_bytes and the session's source."""
+        return metrics.rows(self.cur, f"""SELECT t.tool, t.mcp_server, t.result_bytes, s.source FROM tool_calls t JOIN sessions s USING (session_id)
             WHERE {self.W('coalesce(t.start_ts, t.end_ts)')} AND NOT t.subagent AND {extra}""", self.fp + list(params))
 
 
@@ -448,8 +449,15 @@ def large_results_evidence(ctx):
     return out
 
 
+def has_remedy(r):
+    """Whether a large result's tool has advice of its own in large_results_advice."""
+    return r["tool"] in {"Read", "Grep", "Glob"} | SHELL_TOOLS or bool(r["mcp_server"])
+
+
 def large_results_advice(ctx, sources):
     rs = large_results(ctx)
+    # The agents of the results' own sessions: one whose requests all fall outside the view is not among the matching sessions.
+    sources = {r["source"] for r in rs} or sources
     tools = {r["tool"] for r in rs}
     lines = []
     if "Read" in tools:
@@ -460,8 +468,11 @@ def large_results_advice(ctx, sources):
         lines.append("Cap search results with `head_limit`, or list file names only with `-l`.")
     if any(r["mcp_server"] for r in rs):
         lines.append("Ask MCP tools for a smaller page (a page size or limit argument).")
-    lines.append("Hand bulk reading to a subagent, which returns a short report.")
-    return " ".join(lines)
+    if any(r["source"] == "codex" and not has_remedy(r) for r in rs):
+        lines.append("Ask for a smaller part of a file or command output at a time.")
+    sub = "hand bulk reading to a subagent, which returns a short report."
+    lines.append(per_agent(sources, sub.capitalize(), "", f"In Claude Code, {sub}"))
+    return " ".join(x for x in lines if x)
 
 
 def large_results_match(ctx):

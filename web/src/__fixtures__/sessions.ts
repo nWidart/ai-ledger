@@ -32,6 +32,8 @@ export default {
    "near_limit": false,
    "tokens_per_prompt": 200.0,
    "error_loops": 0,
+   "model_ms": null,
+   "output_per_s": null,
    "title": null
   },
   {
@@ -61,6 +63,8 @@ export default {
    "near_limit": true,
    "tokens_per_prompt": 6000000.0,
    "error_loops": 0,
+   "model_ms": 10000000,
+   "output_per_s": 100.0,
    "title": null
   },
   {
@@ -90,6 +94,8 @@ export default {
    "near_limit": false,
    "tokens_per_prompt": 130.0,
    "error_loops": 0,
+   "model_ms": null,
+   "output_per_s": null,
    "title": null
   }
  ]

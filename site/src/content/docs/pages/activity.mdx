@@ -121,7 +121,7 @@ The selection is kept in the URL, as `day=2026-11-04` or `week=2026-11-02` (the 
 | Errors per 100 calls | Failed calls per 100 tool calls | "N failed of M tool calls." | It goes up. | [Errors](/ai-ledger/pages/errors/), for the same project, range and source. |
 | Test runs passed | Share of test and build runs that passed, or "n/a" | "N passed, M failed of K test or build runs." | It goes down. | The Loops and tests tab, on Failed test runs. |
 | Subagents | Share of tokens that came from subagents | "of tokens came from subagents." | Never judged. | The Projects tab, sorted by Subagents. |
-| Output speed | Output tokens per second of model time, as "98 tok/s", or "n/a" | "X waiting on the model and Y running tools, in N sessions.", or "No session in this view records model time." | It goes down. | The Sessions tab, sorted by active time. |
+| Output speed | Output tokens per second of model time, as "98 tok/s", or "n/a" | "X waiting on the model and Y running tools, in N sessions.", or "No session in this view records model time." | It goes down. | The Sessions tab, sorted by Tok/s, fastest first. |
 
 The Output speed tile draws a small line of output speed per bar of the work chart, when two bars or more hold a session that records model time. A session counts in the bar of its first request in the view. When every session in the view is a Codex session, the tile gives way to a note under the row: "Output speed: Codex transcripts record no model time."
 
@@ -148,6 +148,8 @@ The Sessions, Project metrics and Tools tables sort by a column: select a header
 | Session | Title, or its id; under it the start time, git branch and short id. |
 | Project | The session's project. |
 | Active | Active time. Pauses over 20 minutes are left out. |
+| Model | Model time: time waiting on the model, over the whole session, or "–" when the session records none. |
+| Tok/s | Output speed: output tokens per second of model time, over the whole session, or "–" when the session records no model time. |
 | Prompts | User prompts. |
 | Tokens | Tokens of the session. |
 | Est. cost | Estimated cost at API list prices. |
@@ -161,11 +163,11 @@ The Sessions, Project metrics and Tools tables sort by a column: select a header
 
 - Search by title, session id, project or branch.
 - **Near context limit only** limits the list to sessions at 80% or more of the context window.
-- Every column except Project sorts, over the whole matching list on the server. Without a chosen sort, the order is newest first; with the near-limit filter, nearest the limit first; with a day or week selected on the chart, by cost on those days, all of them on one page.
+- Every column except Project sorts, over the whole matching list on the server. Without a chosen sort, the order is newest first; with the near-limit filter, nearest the limit first; with a day or week selected on the chart, by cost on those days, all of them on one page. Sessions with no model time sort last under Model and Tok/s, in either direction. On a narrow window some columns hide; the sorted column always shows.
 - A row opens the session sheet.
 - **Show more sessions** loads the next page.
 - The search text and near-limit filter are kept in the URL and restored on reload. The sort is not kept.
-- With a day or week selected, every figure is those days', except Peak context and Compactions, which stay whole-session figures; a tooltip says so.
+- With a day or week selected, every figure is those days', except Model, Tok/s, Peak context and Compactions, which stay whole-session figures; a tooltip says so.
 
 ### Projects
 

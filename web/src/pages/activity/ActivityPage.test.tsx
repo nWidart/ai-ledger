@@ -258,7 +258,7 @@ describe("vitals lead somewhere", () => {
     expect([q.get("project"), q.get("range"), q.get("source")]).toEqual(["foo", "30", "claude"]);
   });
 
-  it("open the Sessions tab, the failed test runs, Projects by subagent share and Sessions by active time", async () => {
+  it("open the Sessions tab, the failed test runs, Projects by subagent share and Sessions by output speed", async () => {
     serve(usage);
     at("?range=30&tab=tools");
     renderApp(<ActivityPage />);
@@ -274,7 +274,7 @@ describe("vitals lead somewhere", () => {
     await userEvent.click(vital("Output speed").closest("button")!);
     expect(selectedTab()).toBe("Sessions");
     expect(location.search).not.toContain("tab=");
-    await waitFor(() => expect(fetched().map(String)).toContain("/api/sessions?range=30&sort=duration_s&desc=1"));
+    await waitFor(() => expect(fetched().map(String)).toContain("/api/sessions?range=30&sort=output_per_s&desc=1"));
     await userEvent.click(screen.getByRole("tab", { name: "Projects" }));
     await userEvent.click(vital("Sessions").closest("button")!);
     expect(selectedTab()).toBe("Sessions");
@@ -682,6 +682,29 @@ describe("ActivityPage", () => {
     expect(location.search).toBe("?range=30");
   });
 
+  it("shows each session's model time and output speed, a dash for one that records none", async () => {
+    serve(usage);
+    at();
+    renderApp(<ActivityPage />);
+    await loaded();
+    const body = await waitFor(() => { const b = document.querySelector("#sessions tbody")!; expect(b.querySelectorAll("tr")).toHaveLength(3); return b; });
+    const keys = [...document.querySelectorAll<HTMLElement>("#sessions thead th")].map(c => c.dataset.sort), col = (k: string) => keys.indexOf(k);
+    expect([col("model_ms"), col("output_per_s")]).toEqual([col("duration_s") + 1, col("duration_s") + 2]);
+    const figures = (id: string) => {
+      const cells = [...body.querySelectorAll("tr")][sessions.sessions.findIndex(s => s.session_id === id)]!.querySelectorAll(":scope > *");
+      return [cells[col("model_ms")]!.textContent, cells[col("output_per_s")]!.textContent];
+    };
+    expect(figures("s1")).toEqual(["2.8h", "100"]);
+    expect(figures("s2")).toEqual(["–", "–"]);
+    // The sorted column is marked on its header and every cell, so a narrow screen keeps it shown.
+    const sortedCols = () => [...document.querySelectorAll<HTMLElement>("#sessions thead th.sorted")].map(c => c.dataset.sort);
+    expect(sortedCols()).toEqual([]);
+    await userEvent.click(vital("Output speed").closest("button")!);
+    await waitFor(() => expect(sortedCols()).toEqual(["output_per_s"]));
+    await waitFor(() => expect([...body.querySelectorAll("tr")].every(r => r.querySelectorAll(":scope > *")[col("output_per_s")]!.classList.contains("sorted"))).toBe(true));
+    expect(body.querySelectorAll(".sorted")).toHaveLength(body.querySelectorAll("tr").length);
+  });
+
   it("sends each sortable Sessions column's own key, and the hint says the order", async () => {
     serve(usage);
     at();
@@ -690,7 +713,8 @@ describe("ActivityPage", () => {
     openSessions();
     const drawer = within(document.getElementById("sessions")!), hint = () => document.querySelector("#sessions .hint [aria-live]")!.textContent;
     const keys: [string, string, string][] = [["Session", "first_ts", "newest first"], ["Active", "duration_s", "longest active time first"],
-      ["Prompts", "prompts", "most prompts first"], ["Tokens", "tokens", "most tokens first"], ["Est. cost", "cost", "costliest first"],
+      ["Model", "model_ms", "most model time first"], ["Tok/s", "output_per_s", "fastest output first"], ["Prompts", "prompts", "most prompts first"],
+      ["Tokens", "tokens", "most tokens first"], ["Est. cost", "cost", "costliest first"],
       ["Peak context", "peak_context", "largest peak context first"], ["Failed", "errors", "most failed calls first"],
       ["Compactions", "compactions", "most compactions first"], ["Commits", "commits", "most commits first"], ["Tests", "tests_failed", "most failed test runs first"]];
     for (const [label, key, order] of keys) {

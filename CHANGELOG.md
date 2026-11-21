@@ -18,6 +18,7 @@ and versions follow [Semantic Versioning](https://semver.org/).
 - Judgments' session cards show what the store measured of each session: its estimated cost, its peak context as a share of the window, and its failed tool calls.
 - Judgments' Friction categories can be weighed by the cost or the active time of the sessions that reported each friction, or by reports. Cost is the default, and each row shows the other two beside it. A session with no price adds its active time but no cost.
 - The command palette opens Activity's Judgments view with `>judgments`; `>insights` finds the same row.
+- Activity's Sessions tab has **Model** (model time) and **Tok/s** (output tokens per second of model time) columns, whole-session figures that sort like the others. Sessions that record no model time, Codex and older Claude Code ones, read "–" and sort last either way, and add nothing to the Output speed tile. On a narrow window the sorted column stays shown. `/api/sessions` rows add `model_ms` and `output_per_s` and accept them as `sort`.
 
 ### Changed
 
@@ -74,6 +75,7 @@ and versions follow [Semantic Versioning](https://semver.org/).
   - Insights shows the model-judged tag once, in the page heading.
 
 - Text follows the browser's default font size: font sizes are relative, chart labels scale with them, and nothing is cut off at 200%. In Chrome and Edge 146+ the dashboard also follows the operating system's text scale.
+- Activity's Output speed tile opens the Sessions tab sorted by Tok/s, fastest first, instead of by active time. Activity's Overview is 20px shorter above the tabs, so the tab list clears the first screen at 1440 x 900 with room.
 
 ### Removed
 
@@ -104,6 +106,7 @@ and versions follow [Semantic Versioning](https://semver.org/).
 - The Project page's Errors block explains a type's change in a toggletip instead of a hover-only title. With the source on Codex alone, it no longer asks for session judgments, and shows none kept from another source. Its project picker also lists Context's projects when usage has not answered.
 - Picking or clearing a project, or picking a source, closes Live's open session sheet, as it does on the other pages.
 - Errors' rate chart keeps its hint on a phone, as the other pages' charts do, and the Incidents vital no longer repeats what "recovered" means.
+- Context's "Tool results fill the context" tip no longer tells Codex sessions to hand bulk reading to a subagent; when both agents match, it names Claude Code for that line.
 
 ## [0.4.0] - 2026-11-15
 
