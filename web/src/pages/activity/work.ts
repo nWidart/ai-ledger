@@ -26,6 +26,18 @@ export const monday = (k: string): string => {
   const t = new Date(k + "T00:00:00Z");
   return new Date(+t - ((t.getUTCDay() + 6) % 7) * 864e5).toISOString().slice(0, 10);
 };
+/** The YYYY-MM-DD day n days after the day k. */
+const plus = (k: string, n: number): string => new Date(Date.parse(k + "T00:00:00Z") + n * 864e5).toISOString().slice(0, 10);
+type Days = Pick<UsagePayload, "start" | "end">;
+/** The first and last day a selection (a day, or the 7 days from a Monday) counts in a view: a week's days inside the view,
+ *  as the server clips them. */
+export const spanDays = (s: { day: string; days: 1 | 7 }, v: Days): [string, string] => {
+  if (s.days === 1) return [s.day, s.day];
+  const sun = plus(s.day, 6);
+  return [v.start && v.start > s.day ? v.start : s.day, sun < v.end ? sun : v.end];
+};
+/** The week from Monday k has a day in the view. */
+export const reaches = (k: string, v: Days): boolean => k <= v.end && (!v.start || plus(k, 6) >= v.start);
 /** The chart's bars: the work rows in the payload's buckets from the first with a session, with zeros for idle ones. Days
  *  as workDays; weeks one per Monday up to the week of the end. */
 export function workBuckets(d: Pick<UsagePayload, "start" | "end" | "work" | "work_bucket">): DailyWorkRow[] {

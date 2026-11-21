@@ -16,6 +16,8 @@ describe("Activity search", () => {
     expect(validateSearch({ week: "2026-11-02", tab: "loops" })).toEqual({ week: "2026-11-02", tab: "loops" });
     expect(validateSearch({ day: "2026-11-04", week: "2026-11-02" })).toEqual({ day: "2026-11-04" });
     expect(validateSearch({ week: "2026-02-30", tab: "hours" })).toEqual({});
+    // A week is named by its Monday: another day names no bar.
+    expect(validateSearch({ week: "2026-11-18" })).toEqual({});
     // Sessions is the default: it has no key.
     expect(validateSearch({ tab: "sessions" })).toEqual({});
   });

@@ -14,33 +14,68 @@ The work chart SHALL draw its bars on a top track and errors per 100 tool calls 
 - **THEN** the chart shows the bars only, with no rate track and no rate legend entry
 
 ### Requirement: Select a week on the work chart
-A weekly work chart SHALL let the user select a week by clicking its bar, or by Enter on the bar the arrow keys read. The selection SHALL narrow every workbench tab to that week's days in the view, and SHALL be kept in the URL as `week=` with the week's Monday, written without a history entry. Selecting a week SHALL clear a selected day, and selecting a day a selected week.
+A weekly work chart SHALL let the user select a week by clicking its bar, or by Enter on the bar the arrow keys read. The selection SHALL narrow every workbench tab to that week's days in the view, and SHALL be kept in the URL as `week=` with the week's Monday, written without a history entry. A `week=` that is not a Monday, or that the view does not reach, SHALL be dropped. Selecting a week SHALL clear a selected day, and selecting a day a selected week.
 
 #### Scenario: Pick a week by keyboard
 - **WHEN** the chart is weekly and the user focuses it, presses Right twice and Enter
 - **THEN** the second week is selected, the URL holds `week=` with its Monday, and the Sessions tab lists that week's sessions
 
 #### Scenario: A week cut by the range
-- **WHEN** the range starts on a Wednesday and the user selects its first week
-- **THEN** the tabs cover Wednesday to Sunday, not the days before the range
+- **WHEN** the range starts on Wednesday Nov 4 and the user selects its first week
+- **THEN** every figure in the tabs, active time included, covers Wednesday to Sunday only, and the panel says "Nov 4 – Nov 8"
+
+#### Scenario: Not a Monday
+- **WHEN** the user opens a URL with `week=2026-11-18`, a Wednesday
+- **THEN** Activity shows no selected week
+
+#### Scenario: A week outside the view
+- **WHEN** the user opens the last 30 days with a `week=` from four months earlier
+- **THEN** the URL drops `week` and Activity shows no selected week
+
+### Requirement: Count a selection's days only inside the range
+A selected day or week SHALL count only its days from the range's start to today, for every figure: requests, tool calls, prompts and active time. `/api/day` and `/api/sessions` SHALL take `days=1` or `days=7` with a `day`, and SHALL answer 400 for any other `days`, a blank one, or `days` without `day`. While a new view loads, the chart still showing the previous view SHALL take no pick.
+
+#### Scenario: Future-dated record
+- **WHEN** the view ends on Thursday and a record is dated Friday of the same week
+- **THEN** the week's figures leave that record out
+
+#### Scenario: Unsupported span
+- **WHEN** a client asks for `/api/sessions?days=3`, or `days=` blank with a `day`
+- **THEN** the server answers 400
+
+#### Scenario: Pick during a range change
+- **WHEN** the user changes the range and presses Enter on the old chart before the new range loads
+- **THEN** the URL holds no `week` or `day`
 
 ### Requirement: Show the selection as a chip
-While a day or a week is selected, the chart header SHALL show a chip naming it, "Week of Nov 9" or "Nov 4", with a button that clears it. Escape on the chart, while no bucket is being read, SHALL clear it too. Escape elsewhere, such as closing a sheet, SHALL NOT clear it. Each narrowed tab panel SHALL say which days it shows.
+While a day or a week is selected, the chart header SHALL show a chip naming it, "Week of Nov 9" or "Nov 4", with a button that clears it. Escape on the chart, while no bucket is being read, SHALL clear it too. Escape elsewhere, such as closing a sheet, SHALL NOT clear it. Each narrowed tab panel SHALL name the days it counts, with a button that shows the whole range and then moves focus to the chart.
 
 #### Scenario: Clear with the chip
 - **WHEN** a week is selected and the user activates the chip's button
 - **THEN** the week is cleared, the tabs show the range again and the URL drops `week`
+
+#### Scenario: Clear from the panel
+- **WHEN** a day is selected and the user activates "Show the whole range" by keyboard
+- **THEN** the day is cleared and focus is on the chart
 
 #### Scenario: Clear with Escape
 - **WHEN** a week is selected and the user presses Escape twice on the chart after reading a bucket
 - **THEN** the first Escape ends the reading and the second clears the week
 
 ### Requirement: Link each vital to its destination
-Each vital SHALL be a link or a button to the place that explains it: Sessions to the Sessions tab, Errors per 100 calls to the Errors page for the same view, Test runs passed to the failed test runs, Subagents to Project metrics sorted by subagent share, and Output speed to the Sessions tab sorted by active time. Activity SHALL show at most six vitals.
+Each vital SHALL be a link or a button to the place that explains it: Sessions to the Sessions tab, Errors per 100 calls to the Errors page for the same view, Test runs passed to the failed test runs, Subagents to Project metrics sorted by subagent share, and Output speed to the Sessions tab sorted by active time. A vital or attention action SHALL clear a selected day or week, since its figure covers the range, and SHALL move focus only once. Activity SHALL show at most six vitals.
 
 #### Scenario: Tests tile
 - **WHEN** the user activates the Test runs passed tile
 - **THEN** the Loops and tests tab opens and focus moves to its Failed test runs list
+
+#### Scenario: Tests tile with a week selected
+- **WHEN** a week is selected and the user activates the Test runs passed tile or "See tests"
+- **THEN** the week is cleared and the Failed test runs list the range's runs, as the tile counts them
+
+#### Scenario: Focus moves once
+- **WHEN** the user activates the Test runs passed tile, opens Projects, then activates Loops and tests from the tab list
+- **THEN** focus stays on the Loops and tests tab
 
 #### Scenario: Errors tile
 - **WHEN** the user views project `foo` for the last 30 days and activates Errors per 100 calls
@@ -76,11 +111,15 @@ The active tab SHALL be kept in the URL as `tab=projects`, `tab=tools` or `tab=l
 - **THEN** the Sessions tab is selected
 
 ### Requirement: Preview error loops and failed test runs
-The Loops and tests tab SHALL show the five newest error loops and the five newest failed test runs, each list headed with its count and followed by a "Show all N" button with `aria-expanded` when it holds more. The button SHALL expand the list in place to every row the payload carries.
+The Loops and tests tab SHALL show the five newest error loops and the five newest failed test runs, each list headed with its count and followed by a button with `aria-expanded` when it holds more. The button SHALL read "Show all N", or "Show the 50 newest" when the view holds more than the payload's 50, and SHALL expand the list in place to every row the payload carries.
 
 #### Scenario: More loops than the preview
 - **WHEN** the view has 12 error loops and the user opens Loops and tests
 - **THEN** 5 loops show, and "Show all 12" shows the rest
+
+#### Scenario: More runs than the payload
+- **WHEN** the view has 60 failed test runs
+- **THEN** the button reads "Show the 50 newest"
 
 ## MODIFIED Requirements
 
@@ -107,11 +146,15 @@ The day and the week SHALL be cleared in the same URL write as any change of pro
 - **THEN** the week is cleared in the same step
 
 ### Requirement: Count sessions and active days
-A Sessions vital SHALL state the view's sessions, active days and median session. A line under the lede SHALL state the share of prompts interrupted, with the turns and tool calls per prompt. An active day SHALL be a day with at least one user prompt in the view. When the view has a previous period, the sessions, active days and share interrupted SHALL each show their change, or "unchanged".
+A Sessions vital SHALL state the view's sessions, active days, median session, active time in all and, when recorded, thinking time. A line under the lede SHALL state the share and count of prompts interrupted, with the turns and tool calls per prompt. An active day SHALL be a day with at least one user prompt in the view. When the view has a previous period, the sessions, active days and share interrupted SHALL each show their change, or "unchanged".
 
 #### Scenario: Thirty-day view
 - **WHEN** the user opens Activity for the last 30 days
-- **THEN** the Sessions vital shows the sessions, active days and median session of those 30 days, the sessions and active days each with their change
+- **THEN** the Sessions vital shows the sessions, active days, median session and active time of those 30 days, the sessions and active days each with their change
+
+#### Scenario: Thinking without model time
+- **WHEN** a Claude Code view records thinking but no session records model time
+- **THEN** the Sessions vital still states the thinking time
 
 #### Scenario: Requests without a prompt
 - **WHEN** a session works on its own on a day with no user prompt

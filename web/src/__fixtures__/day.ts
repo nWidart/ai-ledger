@@ -4,6 +4,8 @@ import type { DayView } from "../api";
 export default {
  "day": "2026-11-04",
  "days": 1,
+ "start": "2026-11-04",
+ "end": "2026-11-04",
  "tools": [
   {
    "tool": "Edit",

@@ -22,7 +22,9 @@ The low-call guard is the one in `components/chart.ts` (`lowVolume`, `LOW_CALLS`
 
 Week bars select the way day bars do: click, or Enter on the bar the arrow keys read. A selection is kept in the URL: `day=YYYY-MM-DD` for a day, as now, and `week=YYYY-MM-DD` (the Monday) for a week. Only one is set; writing one clears the other. `week` joins `day` in `url.ts`'s view-scoped keys, so a change of project, range or source drops it in the same write, and Back restores it.
 
-The server takes a span instead of a second filter. `on_day()` takes `days` (1 or 7, anything else is a 400) and `/api/day` and `/api/sessions` pass it through. The view's own range still applies, so a first week cut by the start of the range covers only its days in the view. The selection narrows every tab: Sessions (each session's figures for those days), Project metrics, Tools, MCP servers, skills and hooks, Error loops and Failed test runs. `/api/day` gains `by_project`, `failed_tests` and `tests_failed` for that. The lede, attention summary, chart and vitals keep the range's figures.
+The server takes a span instead of a second filter. `on_day()` takes `days` (1 or 7) and `/api/day` and `/api/sessions` pass it through. Any other `days`, a blank one, or `days` without `day` is a 400. `on_day()` clips the span to the range, from its start to today, and every figure of a selection uses those clipped days: requests, tool calls, prompts and active time alike. A first week cut by the start of the range covers only its days in the view, and a future-dated record stays out of the week that holds today. `/api/day` names the clipped days as `start` and `end`, and the panel note names them ("Oct 7 – Oct 11, 2026 only").
+
+A `week=` must be a Monday; another day reads as none. A week the view does not reach is dropped from the URL once the view's own figures load. While a new view loads, the chart still shows the old one, and it takes no pick then: a pick would write the old view's bucket into the new view. The selection narrows every tab: Sessions (each session's figures for those days), Project metrics, Tools, MCP servers, skills and hooks, Error loops and Failed test runs. `/api/day` gains `by_project`, `failed_tests` and `tests_failed` for that. The lede, attention summary, chart and vitals keep the range's figures.
 
 Project metrics used to keep the range's figures for a day. They now narrow too: a tab that ignored the chip would contradict it.
 
@@ -36,13 +38,13 @@ Five tiles, each one control:
 
 | Tile | Note | Destination |
 | --- | --- | --- |
-| Sessions | active days, median session | Sessions tab |
+| Sessions | active days, median session, active time in all, thinking | Sessions tab |
 | Errors per 100 calls | failed of calls | Errors page, same view (a link) |
 | Test runs passed | passed and failed | Loops and tests tab, focus on Failed test runs |
 | Subagents | share of tokens | Projects tab, sorted by subagent share |
 | Output speed, with a sparkline | model and tool time | Sessions tab, sorted by active time |
 
-Prompts interrupted has no destination: no table lists interruptions, and the Judgments view is not there for Codex. It moves to a line under the lede, with its turns and tool calls per prompt and its change. Median session folds into the Sessions note. Its change against the previous period goes; the sessions and active days keep theirs.
+Prompts interrupted has no destination: no table lists interruptions, and the Judgments view is not there for Codex. It moves to a line under the lede, with its count ("1 of 3"), its turns and tool calls per prompt and its change. Median session folds into the Sessions note, with the total active time and the thinking time that the Median session tile used to give. The median's change against the previous period goes; the sessions and active days keep theirs. Thinking stays on the Sessions note, not the Output speed note: a view can record thinking but no model time, and Output speed is then "n/a" or absent.
 
 A tile is a `<button>` (or an `<a>` for Errors). Its name is the figure, the label and the change as text, so the change is read. The sparkline is `aria-hidden`.
 
@@ -56,7 +58,7 @@ A WAI-ARIA tab list named "Activity detail" follows the vitals: Sessions, Projec
 
 Keyboard: the tab list is one tab stop (roving `tabindex`). Left and Right move focus and wrap, Home and End jump to the ends. Activation is manual (Enter or Space), so arrowing past Sessions does not fetch its list or write the URL. Each panel is a `tabpanel`, labelled by its tab, focusable. Inactive panels are not rendered, except that the Sessions query stays cached, so a return is instant.
 
-An action that opens a tab (a tile, an attention action, a chart pick) activates it, scrolls it into view and moves focus to the panel, or to the Failed test runs heading.
+An action that opens a tab (a tile, an attention action) activates it, scrolls it into view and moves focus to the panel, or to the Failed test runs heading, once: a later tab change moves nothing. A tile or attention action reports the range, so it also clears a selected day or week; the tab it opens then shows the figures it promised. Showing the selected week's figures on the tiles instead would mean a second set of totals per selection. The panel note's "Show the whole range" button moves focus to the chart, as the chip's button does, since clearing removes it.
 
 The drawers map to tabs:
 
@@ -70,7 +72,7 @@ The drawers map to tabs:
 | Failed test runs | Loops and tests: five newest, "Show all N" |
 | Prompts by hour | Dropped, see below |
 
-"Show all N" expands the list in place. It is a button with `aria-expanded`. Error loops and failed test runs already link each row to its error on Errors. Errors has no list of only loops or only test runs, so the full view is the in-page list.
+"Show all N" expands the list in place. When the view holds more than the payload carries (50), the button reads "Show the 50 newest" and the expanded list says "Showing the 50 newest of N". It is a button with `aria-expanded`. Error loops and failed test runs already link each row to its error on Errors. Errors has no list of only loops or only test runs, so the full view is the in-page list.
 
 The section index goes, with no replacement: the tab list is the index of the tables, and the four sections above it fit in one screen. Neither the tab list nor the view switch is sticky. At most two sticky bars: the nav and the filter bar. A later change adds that filter bar; the Judgments view keeps its own section index until then.
 

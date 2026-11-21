@@ -26,3 +26,11 @@
 - [x] 4.3 README, docs site (`pages/activity.mdx` and the pages that name Activity's drawers), CHANGELOG `[Unreleased]`.
 - [x] 4.4 Regenerate the Activity screenshots and GIFs that change.
 - [x] 4.5 Run `uv run ruff check`, the Python tests, `npm run check` in `web/` and `site/`, `openspec validate --specs --strict` and `openspec validate activity-workbench --strict`.
+
+## 5. Review fixes
+
+- [x] 5.1 Clip every figure of a selected day or week, active time included, to the range's days up to today; name the clipped days in the panel. Validate `days` whenever present (1 or 7, with a `day`).
+- [x] 5.2 Take no pick from a chart still showing the previous view; accept only a Monday for `week=` and drop a week the view does not reach.
+- [x] 5.3 Move the focus once per tile or attention action; send the focus to the chart from the panel's "Show the whole range". Tiles and attention actions clear the selection.
+- [x] 5.4 Forced colors: frame the hovered and selected bucket at full opacity, match the hollow-dot key to its dot; give the Sessions search the control border. Escape closes a pointer tooltip wherever the focus is.
+- [x] 5.5 Restore the total active time, the thinking time and the interrupted count.

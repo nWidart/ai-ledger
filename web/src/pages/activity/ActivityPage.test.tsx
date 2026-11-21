@@ -25,7 +25,7 @@ const serve = (d: UsagePayload) => mockApi({ "/api/usage": () => d, "/api/sessio
 const attention = () => within(document.getElementById("attention")!);
 const loaded = () => screen.findByRole("heading", { level: 1, name: /commit/ });
 const fetched = () => vi.mocked(fetch).mock.calls.map(c => c[0]);
-const noDay = (day: string, days: 1 | 7 = 1): DayView => ({ day, days, by_project: [], tools: [], mcp: [], skills: [], hooks: [], error_loops: [], error_loops_total: 0, failed_tests: [], tests_failed: 0 });
+const noDay = (day: string, days: 1 | 7 = 1): DayView => ({ day, days, start: day, end: day, by_project: [], tools: [], mcp: [], skills: [], hooks: [], error_loops: [], error_loops_total: 0, failed_tests: [], tests_failed: 0 });
 /** The workbench tab that is selected, by its name. */
 const selectedTab = () => screen.getAllByRole("tab").find(t => t.getAttribute("aria-selected") === "true")?.textContent;
 /** Activates a workbench tab by its name, as a click does. */
@@ -80,12 +80,12 @@ describe("change against the previous period", () => {
     await loaded();
     expect(vital("Errors per 100 calls").textContent).toBe("Errors per 100 calls, up from 4.0");
     expect(vital("Test runs passed").textContent).toBe("Test runs passed, down from 75%");
-    expect(interrupted().textContent).toMatch(/^33\.3% of prompts interrupted, up from 0\.0%; /);
+    expect(interrupted().textContent).toMatch(/^33\.3% of prompts interrupted \(1 of 3\), up from 0\.0%; /);
     expect(vital("Subagents").textContent).toBe("Subagents, down from 20%");
     expect([vital("Errors per 100 calls"), vital("Test runs passed"), interrupted()].map(worse)).toEqual([true, true, true]);
     expect(worse(vital("Subagents"))).toBe(false);
-    // The median session is in the Sessions note, without a change of its own.
-    expect(note("Sessions")).toMatch(/; median session 5m\.$/);
+    // The median session, the active time in all and the thinking are in the Sessions note, without a change of their own.
+    expect(note("Sessions")).toMatch(/; median session 5m, 9m active in all, 2s thinking\.$/);
   });
 
   it("does not mark a move the better way", async () => {
@@ -96,7 +96,7 @@ describe("change against the previous period", () => {
     await loaded();
     expect(vital("Errors per 100 calls").textContent).toBe("Errors per 100 calls, down from 80.0");
     expect(vital("Test runs passed").textContent).toBe("Test runs passed, up from 25%");
-    expect(interrupted().textContent).toMatch(/^33\.3% of prompts interrupted, down from 50\.0%; /);
+    expect(interrupted().textContent).toMatch(/^33\.3% of prompts interrupted \(1 of 3\), down from 50\.0%; /);
     expect(vital("Subagents").textContent).toBe("Subagents, up from 1%");
     for (const l of ["Errors per 100 calls", "Test runs passed", "Subagents"]) expect(worse(vital(l))).toBe(false);
     expect(worse(interrupted())).toBe(false);
@@ -109,7 +109,7 @@ describe("change against the previous period", () => {
     await loaded();
     expect(vital("Errors per 100 calls").textContent).toBe("Errors per 100 calls, unchanged");
     expect(vital("Test runs passed").textContent).toBe("Test runs passed, unchanged");
-    expect(interrupted().textContent).toMatch(/^33\.3% of prompts interrupted, unchanged; /);
+    expect(interrupted().textContent).toMatch(/^33\.3% of prompts interrupted \(1 of 3\), unchanged; /);
   });
 
   it("shows the headline's commits, sessions and active days against the period before", async () => {
@@ -121,7 +121,7 @@ describe("change against the previous period", () => {
     expect(v.textContent).toBe("2");
     expect(vital("Sessions").textContent).toBe("Sessions, up from 1 session");
     expect(worse(vital("Sessions"))).toBe(false);
-    expect(note.textContent).toBe("2 active days, down from 3 active days; median session 5m.");
+    expect(note.textContent).toBe("2 active days, down from 3 active days; median session 5m, 9m active in all, 2s thinking.");
   });
 
   it("shows no change in the All range", async () => {
@@ -191,11 +191,13 @@ describe("model time and output speed", () => {
   });
 
   it("says no session records model time when Claude Code sessions in the view have none", async () => {
-    serve({ ...usage, totals: { ...usage.totals, output_per_s: null, timed_sessions: 0 } });
+    serve({ ...usage, totals: { ...usage.totals, output_per_s: null, timed_sessions: 0, model_ms: 0, tool_ms: 0 } });
     at();
     renderApp(<ActivityPage />);
     await loaded();
     expect(tile("Output speed")).toEqual(["n/a", "No session in this view records model time."]);
+    // The thinking recorded still shows, on the Sessions vital.
+    expect(note("Sessions")).toMatch(/, 2s thinking\.$/);
   });
 
   // The reason follows the view's sessions, not its priced requests: an unpriced Claude Code model adds no cost row by source.
@@ -277,6 +279,21 @@ describe("vitals lead somewhere", () => {
     await userEvent.click(vital("Sessions").closest("button")!);
     expect(selectedTab()).toBe("Sessions");
     expect(document.activeElement).toBe(screen.getByRole("tabpanel"));
+  });
+
+  it("move the focus once: a later tab change does not replay it", async () => {
+    serve(usage);
+    at();
+    renderApp(<ActivityPage />);
+    await loaded();
+    await userEvent.click(vital("Test runs passed").closest("button")!);
+    expect(document.activeElement).toBe(screen.getByRole("heading", { level: 3, name: /^Failed test runs/ }));
+    await openTab("Projects");
+    const loops = screen.getByRole("tab", { name: "Loops and tests" });
+    act(() => loops.focus());
+    await userEvent.keyboard("{Enter}");
+    expect(selectedTab()).toBe("Loops and tests");
+    expect(document.activeElement).toBe(loops);
   });
 });
 
@@ -861,7 +878,10 @@ describe("ActivityPage", () => {
       work: [{ day: "2026-10-26", sessions: 2, prompts: 3, commits: 1, calls: 10, failed_calls: 1 }, { day: "2026-11-02", sessions: 3, prompts: 5, commits: 2, calls: 20, failed_calls: 2 }],
       work_projects: [] };
     const week: DayView = { ...noDay("2026-11-02", 7), tools: [{ tool: "Grep", calls: 2, errors: 0, failure_rate: 0, p50_ms: 10, p95_ms: 20 }] };
-    mockApi({ "/api/usage": () => weekly, "/api/sessions": () => sessions, "/api/day": () => week });
+    // The week's sessions are not the range's: a wrong day or span would list the range's.
+    const inWeek = { total: 1, offset: 0, sessions: [{ ...sessions.sessions[0]!, session_id: "wk" }] };
+    mockApi({ "/api/usage": () => weekly, "/api/day": () => week,
+      "/api/sessions": q => (q.get("day") === "2026-11-02" && q.get("days") === "7" ? inWeek : q.has("day") || q.has("days") ? undefined : sessions) });
     at("?range=0&q=fix&tab=tools");
     renderApp(<ActivityPage />);
     await loaded();
@@ -873,15 +893,20 @@ describe("ActivityPage", () => {
     expect(history.length).toBe(n);
     await waitFor(() => expect(fetched()).toContain("/api/day?range=0&day=2026-11-02&days=7"));
     expect(await within(document.getElementById("tools")!).findByRole("button", { name: "Grep" })).toBeTruthy();
-    expect(screen.getByRole("tabpanel").querySelector(".scope")!.textContent).toMatch(/^Week of Nov 2, 2026 only\./);
+    // The view ends on Thursday Nov 5: the panel names the days it counts.
+    expect(screen.getByRole("tabpanel").querySelector(".scope")!.textContent).toMatch(/^Nov 2 – Nov 5, 2026 only\./);
     expect(document.querySelector("#work .daychip")!.textContent).toBe("Week of Nov 2✕");
     // The Sessions tab asks for the week's seven days, costliest first.
     await openTab("Sessions");
     await waitFor(() => expect(fetched().filter(u => String(u).startsWith("/api/sessions?")).at(-1)).toMatch(/[?&]day=2026-11-02&days=7(&|$)/));
     await waitFor(() => expect(document.querySelector("#sessions .hint [aria-live]")!.textContent).toContain("by their cost on those days"));
+    const rows = within(document.getElementById("sessions")!);
+    expect(await rows.findByRole("button", { name: "#wk" })).toBeTruthy();
+    expect(rows.queryByRole("button", { name: "#s1" })).toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "Clear week of Nov 2, 2026" }));
     expect(location.search).toBe("?range=0");
     expect(document.querySelector("#work .daychip")).toBeNull();
+    expect(await within(document.getElementById("sessions")!).findByRole("button", { name: "#s1" })).toBeTruthy();
     // By keyboard: Home, Enter selects the first week; Escape clears it.
     act(() => chart.focus());
     fireEvent.keyDown(chart, { key: "Home" });
@@ -893,6 +918,80 @@ describe("ActivityPage", () => {
     act(() => setSearch({ week: "2026-10-26" }));
     act(() => setSearch({ day: "2026-10-27", week: null }));
     expect(location.search).toBe("?range=0&day=2026-10-27");
+  });
+
+  it("takes no pick from the previous view's chart while a new range loads", async () => {
+    const weekly: UsagePayload = { ...usageAll, work_bucket: "week",
+      work: [{ day: "2026-10-26", sessions: 2, prompts: 3, commits: 1, calls: 10, failed_calls: 1 }, { day: "2026-11-02", sessions: 3, prompts: 5, commits: 2, calls: 20, failed_calls: 2 }],
+      work_projects: [] };
+    const wait = held<unknown>();
+    mockApi({ "/api/usage": q => (q.get("range") === "30" ? wait.p : weekly), "/api/sessions": () => sessions, "/api/day": () => noDay("2026-11-02", 7) });
+    at("?range=0");
+    renderApp(<ActivityPage />);
+    await loaded();
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({ left: 0, top: 0, right: 800, bottom: 216, width: 800, height: 216, x: 0, y: 0, toJSON: () => ({}) });
+    act(() => setSearch({ range: 30 }));
+    await waitFor(() => expect(fetched().map(String)).toContain("/api/usage?range=30"));
+    // The all-time weekly chart is still drawn: Enter and a click on it write nothing.
+    const chart = screen.getByRole("group", { name: /^Commits per week/ });
+    act(() => chart.focus());
+    fireEvent.keyDown(chart, { key: "End" });
+    fireEvent.keyDown(chart, { key: "Enter" });
+    fireEvent.click(chart.querySelector(".hit")!, { clientX: 700 });
+    expect(location.search).toBe("?range=30");
+    await act(async () => { wait.resolve(usage); await wait.p; });
+    await waitFor(() => expect(screen.getByRole("group", { name: /^Commits per day/ })).toBeTruthy());
+  });
+
+  it("drops a week the view does not reach, and a day that is not a Monday", async () => {
+    mockApi({ "/api/usage": () => usage, "/api/sessions": () => sessions, "/api/day": () => noDay("2026-09-07", 7) });
+    at("?range=30&week=2026-09-07"); // the view starts on Oct 7
+    renderApp(<ActivityPage />);
+    await loaded();
+    await waitFor(() => expect(location.search).toBe("?range=30"));
+    expect(document.querySelector("#work .daychip")).toBeNull();
+    cleanup();
+    mockApi({ "/api/usage": () => usage, "/api/sessions": () => sessions });
+    at("?range=30&week=2026-11-04");
+    renderApp(<ActivityPage />);
+    await loaded();
+    expect(document.querySelector("#work .daychip")).toBeNull();
+    expect(screen.getByRole("tabpanel").querySelector(".scope")).toBeNull();
+  });
+
+  it("names the days a week keeps when the view starts inside it", async () => {
+    mockApi({ "/api/usage": () => ({ ...usage, work_bucket: "week" }), "/api/sessions": () => sessions, "/api/day": () => noDay("2026-10-05", 7) });
+    at("?range=30&week=2026-10-05"); // the view starts on Wednesday Oct 7
+    renderApp(<ActivityPage />);
+    await loaded();
+    expect(screen.getByRole("tabpanel").querySelector(".scope")!.textContent).toMatch(/^Oct 7 – Oct 11, 2026 only\./);
+    await openTab("Loops and tests");
+    expect(await screen.findByText(/^No failed test runs from Oct 7 to Oct 11, 2026/)).toBeTruthy();
+  });
+
+  it("moves the focus to the chart when the panel's own clear removes its button", async () => {
+    mockApi({ "/api/usage": () => usage, "/api/sessions": () => sessions, "/api/day": () => noDay("2026-11-04") });
+    at("?range=30&day=2026-11-04");
+    renderApp(<ActivityPage />);
+    await loaded();
+    const btn = within(screen.getByRole("tabpanel")).getByRole("button", { name: "Show the whole range" });
+    act(() => btn.focus());
+    await userEvent.keyboard("{Enter}");
+    expect(location.search).toBe("?range=30");
+    expect(document.activeElement).toBe(screen.getByRole("group", { name: /^Commits per day/ }));
+  });
+
+  it("keeps the selection's figures honest: a vital or attention action reports the range, so it clears the selection", async () => {
+    mockApi({ "/api/usage": () => ({ ...usage, work_bucket: "week" }), "/api/sessions": () => sessions, "/api/day": () => noDay("2026-11-02", 7) });
+    at("?range=30&week=2026-11-02");
+    renderApp(<ActivityPage />);
+    await loaded();
+    await userEvent.click(vital("Test runs passed").closest("button")!);
+    expect(location.search).toBe("?range=30&tab=loops");
+    expect(screen.getByRole("heading", { level: 3, name: /^Failed test runs/ }).textContent).not.toMatch(/week|Nov 2/);
+    act(() => setSearch({ week: "2026-11-02" }));
+    await userEvent.click(attention().getByRole("button", { name: "See tests" }));
+    expect(location.search).toBe("?range=30&tab=loops");
   });
 
   it("keeps the week when a sheet closes with Escape", async () => {

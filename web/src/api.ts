@@ -120,9 +120,9 @@ export interface SessionsPage { total: number; offset: number; sessions: TitledS
 export type SessionSort = "first_ts" | "duration_s" | "prompts" | "tokens" | "cost" | "peak_context" | "errors" | "compactions" | "commits" | "tests_failed";
 
 /** /api/day: the usage payload's project, tool, hook, error-loop and failed-test rows, limited to the view's local days from
- *  day: one, or the week a work chart bar holds (days 7). */
+ *  day: one, or the week a work chart bar holds (days 7), clipped to the view's range: start and end are the days counted. */
 export interface DayView {
-  day: Day; days: Span; by_project: ProjectRow[]; tools: ToolRow[]; mcp: NamedRateRow[]; skills: NamedRateRow[]; hooks: HookRow[];
+  day: Day; days: Span; start: Day; end: Day; by_project: ProjectRow[]; tools: ToolRow[]; mcp: NamedRateRow[]; skills: NamedRateRow[]; hooks: HookRow[];
   error_loops: ErrorLoop[]; error_loops_total: number; failed_tests: UsagePayload["failed_tests"]; tests_failed: number;
 }
 /** The days a selection of the work chart covers: a day, or a week from its Monday. */

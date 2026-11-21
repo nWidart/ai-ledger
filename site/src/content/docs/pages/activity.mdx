@@ -57,7 +57,7 @@ The page reads top to bottom: the view switch, the heading with the prompts inte
 - With one project selected, the heading adds "on" and the project. With the All range, it adds "since" and the first day with a session, and shows no change.
 - Commits show their change against the previous period of equal length: "up from", "down from", or "unchanged".
 - With no requests in the view, the heading reads "No agent activity in the last 30 days." (or "yet" for All). With a source selected, it names the source in place of "agent".
-- A line under the heading gives the share of prompts interrupted, with its change (marked worse when it goes up), then the turns and tool calls per prompt: "11.2% of prompts interrupted, up from 10.6%; 4.8 turns and 7.3 tool calls per prompt."
+- A line under the heading gives the share and count of prompts interrupted, with its change (marked worse when it goes up), then the turns and tool calls per prompt: "11.2% of prompts interrupted (28 of 250), up from 10.6%; 4.8 turns and 7.3 tool calls per prompt."
 
 **Banner** "Automated projects file ignored" appears under the navigation, on every page, when the automated projects file cannot be used. It names the file and the reason. See [Filters](/ai-ledger/everywhere/filters/#include-automated).
 
@@ -103,9 +103,11 @@ The card's title reads "N things to look at". With none of the four, it reads "N
 - A chip beside the metric switch names the selection, "Nov 4" or "Week of Nov 2". Its ✕ clears it. Escape on the chart clears it too: the first Escape ends a reading with the arrow keys, the next one clears the selection. Escape in a sheet leaves it.
 - **Show data table** opens a named table under the chart: one row per day or week, the measure by project with Other, its total, and errors per 100 calls. It is closed on every page load.
 
-A selected day or week narrows every tab to its days in the view: Sessions (each session's figures for those days), Project metrics, Tools, MCP servers, skills and hooks, Error loops and Failed test runs. A first week cut by the start of the range covers only its days in the range. The active tab stays. A selection drops the session search, the near-limit filter and the Sessions sort. A note at the top of the tab names the days and offers "Show the whole range". The heading, Needs attention, the chart and Work health keep the range's figures.
+A selected day or week narrows every tab to its days in the view: Sessions (each session's figures for those days), Project metrics, Tools, MCP servers, skills and hooks, Error loops and Failed test runs. A week counts only its days from the start of the range to today, for every figure, active time included: a first week cut by the start of the range covers only its days in the range. The active tab stays. A selection drops the session search, the near-limit filter and the Sessions sort. A note at the top of the tab names the days it counts, such as "Oct 7 – Oct 11, 2026 only.", and offers "Show the whole range", which moves the focus to the chart. The heading, Needs attention, the chart and Work health keep the range's figures. A tile or a Needs attention action reports the range, so it clears the selection before it opens its tab.
 
-The selection is kept in the URL, as `day=2026-11-04` or `week=2026-11-02` (the week's Monday), without a history entry. A date that is not a real calendar date reads as none.
+While a new range or project loads, the chart still shows the previous view and selects nothing.
+
+The selection is kept in the URL, as `day=2026-11-04` or `week=2026-11-02` (the week's Monday), without a history entry. A date that is not a real calendar date reads as none, and so does a `week=` that is not a Monday. A week the view does not reach is dropped from the URL.
 
 ### Work health
 
@@ -115,11 +117,11 @@ The selection is kept in the URL, as `day=2026-11-04` or `week=2026-11-02` (the 
 
 | Tile | Figure | Note under it | Marked worse when | Opens |
 | --- | --- | --- | --- | --- |
-| Sessions | Sessions in the view | "N active days, across M projects; median session X." Active days show their change too. An active day is a day with at least one user prompt; a session that works alone on a day with no prompt does not make it active. | Never judged. | The Sessions tab. |
+| Sessions | Sessions in the view | "N active days, across M projects; median session X, Y active in all, Z thinking." The thinking shows when the view records it. Active days show their change too. An active day is a day with at least one user prompt; a session that works alone on a day with no prompt does not make it active. | Never judged. | The Sessions tab. |
 | Errors per 100 calls | Failed calls per 100 tool calls | "N failed of M tool calls." | It goes up. | [Errors](/ai-ledger/pages/errors/), for the same project, range and source. |
 | Test runs passed | Share of test and build runs that passed, or "n/a" | "N passed, M failed of K test or build runs." | It goes down. | The Loops and tests tab, on Failed test runs. |
 | Subagents | Share of tokens that came from subagents | "of tokens came from subagents." | Never judged. | The Projects tab, sorted by Subagents. |
-| Output speed | Output tokens per second of model time, as "98 tok/s", or "n/a" | "X waiting on the model and Y running tools, in N sessions; Z thinking.", or "No session in this view records model time." | It goes down. | The Sessions tab, sorted by active time. |
+| Output speed | Output tokens per second of model time, as "98 tok/s", or "n/a" | "X waiting on the model and Y running tools, in N sessions.", or "No session in this view records model time." | It goes down. | The Sessions tab, sorted by active time. |
 
 The Output speed tile draws a small line of output speed per bar of the work chart, when two bars or more hold a session that records model time. A session counts in the bar of its first request in the view. When every session in the view is a Codex session, the tile gives way to a note under the row: "Output speed: Codex transcripts record no model time."
 

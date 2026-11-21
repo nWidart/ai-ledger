@@ -19,8 +19,8 @@ import { SessionsPanel, type SessFilter } from "./SessionsPanel";
 import { NO_JUDGMENTS_KEYS, validateSearch, type ActivitySearch, type WorkTab } from "./search";
 import { ViewSwitch } from "./ViewSwitch";
 import { ExtTables, LoopsList, PROJECT_SORT, ProjectsTable, TestsList, ToolsTable, type ProjectKey, type ToolKey } from "./tables";
-import { firstWorkDay, flakyTools, shortTool, type WorkMetric } from "./work";
-import { bucketLabel, WorkPanel, type WorkPick } from "./WorkChart";
+import { firstWorkDay, flakyTools, reaches, shortTool, spanDays, type WorkMetric } from "./work";
+import { CHART_ID, WorkPanel, type WorkPick } from "./WorkChart";
 import { panelId, Workbench } from "./Workbench";
 import "./activity.css";
 
@@ -72,15 +72,17 @@ const tokS = (n: number) => `${num(n)} tok/s`;
 /** Under the lede: how often the user stopped the agent, and how much it did per prompt. */
 function Interrupted({ d }: { d: UsagePayload }) {
   const t = d.totals, p = d.previous;
-  return <p className="sub" id="interrupted">{pct(t.interruption_rate, 1)} of prompts interrupted<Vs cur={t.interruption_rate} prev={p && ratio(p.interrupted, p.prompts)}
+  return <p className="sub" id="interrupted">{pct(t.interruption_rate, 1)} of prompts interrupted ({num(t.interrupted)} of {num(t.prompts)})<Vs cur={t.interruption_rate} prev={p && ratio(p.interrupted, p.prompts)}
     fmt={n => pct(n, 1)} worse="up" />; {num(t.turns_per_prompt, 1)} turns and {num(t.tool_calls_per_prompt, 1)} tool calls per prompt.</p>;
 }
 
-/** The time note of the Output speed vital: the model and tool time, and the thinking, when recorded. */
-function timeNote(t: Totals): string {
-  const thinking = t.thinking_ms ? `; ${dur(t.thinking_ms / 1000)} thinking` : "";
-  return `${dur(t.model_ms / 1000)} waiting on the model and ${dur(t.tool_ms / 1000)} running tools, in ${plural(t.timed_sessions, "session")}${thinking}.`;
-}
+/** The time note of the Output speed vital: the model and tool time. */
+const timeNote = (t: Totals): string =>
+  `${dur(t.model_ms / 1000)} waiting on the model and ${dur(t.tool_ms / 1000)} running tools, in ${plural(t.timed_sessions, "session")}.`;
+/** The Sessions vital's time: the median session, the active time in all and the thinking, when recorded. Thinking stands
+ *  apart from Output speed: a view can record thinking but no model time. */
+const sessionTime = (t: Totals): string =>
+  `median session ${dur(t.median_session_seconds)}, ${dur(t.session_seconds)} active in all${t.thinking_ms ? `, ${dur(t.thinking_ms / 1000)} thinking` : ""}.`;
 
 /** Output speed per chart bucket as a small line; none with fewer than two points. Hidden from assistive technology: the
  *  vital says the figure and its change. */
@@ -107,7 +109,7 @@ function Vitals({ d, go }: { d: UsagePayload; go: { sessions: () => void; tests:
   const vs: Vital[] = [
     { v: num(t.sessions), l: "Sessions", cur: t.sessions, prev: p?.sessions, fmt: n => plural(n, "session"), to: { run: go.sessions },
       n: <>{plural(t.active_days, "active day")}<Vs cur={t.active_days} prev={p?.active_days} fmt={n => plural(n, "active day")} />
-        {!d.project && d.by_project.length > 1 ? `, across ${plural(d.by_project.length, "project")}` : ""}; median session {dur(t.median_session_seconds)}.</> },
+        {!d.project && d.by_project.length > 1 ? `, across ${plural(d.by_project.length, "project")}` : ""}; {sessionTime(t)}</> },
     { v: num(t.errors_per_100_calls, 1), l: "Errors per 100 calls", n: `${num(t.errors)} failed of ${plural(t.calls, "tool call")}.`, to: { href: errors },
       cur: t.errors_per_100_calls, prev: p && ratio(100 * p.errors, p.calls), worse: "up", fmt: n => num(n, 1) },
     { v: t.test_runs ? pct(t.tests_passed / t.test_runs) : "n/a", l: "Test runs passed", to: { run: go.tests },
@@ -156,7 +158,7 @@ function Overview({ views }: { views: ReactNode }) {
   const [h] = useView();
   const search = useSearchOf(validateSearch);
   const want: View = viewOf(h), url = usageUrl(want), viewKey = url;
-  const { data, error, loading, retry } = useApi(queries.usage(want), { keepPrevious: true });
+  const { data, error, loading, previous, retry } = useApi(queries.usage(want), { keepPrevious: true });
   useEffect(() => { if (data) setOrder(data.project_order); }, [data]);
 
   // Page-only state: flaky tools first resets when the view changes; the sorts stay.
@@ -173,23 +175,35 @@ function Overview({ views }: { views: ReactNode }) {
   }, [viewKey]);
   // A selected day or week narrows every tab to its days; the lede, attention, chart and vitals stay range-wide.
   const dayApi = useApi(sel ? queries.day(want, sel.day, sel.days) : null), dv = sel ? dayApi.data : undefined;
+  // The payload on screen is the previous view's while a new view loads: the chart then takes no pick, which would write
+  // that view's day or week into the new one.
+  const d = data, current = !!d && !previous;
+  // A week in the URL that the view does not reach is dropped, once the view's own figures are in.
+  useEffect(() => {
+    if (d && current && search.week && !reaches(search.week, d)) setSearch({ week: null }, { push: false });
+  }, [current, search.week, d]);
 
   // Opening a tab from elsewhere (a vital, an attention action) brings it into view and moves the focus into it: to the
-  // element named, or the panel. Done once the tab's panel is drawn.
-  const [goal, setGoal] = useState<{ tab: WorkTab; to: string; n: number } | null>(null);
-  const go = (t: WorkTab, to = panelId(t)) => { setTab(t); setGoal(g => ({ tab: t, to, n: (g?.n ?? 0) + 1 })); };
+  // element named, or the panel. Done once the tab's panel is drawn, then forgotten, so a later tab change moves nothing.
+  // Every such action reports the range, so it clears the selection: the tab then shows the figures it was opened for.
+  const [goal, setGoal] = useState<{ tab: WorkTab; to: string } | null>(null);
+  const go = (t: WorkTab, to = panelId(t), patch: Record<string, string | true | null> = {}) => {
+    setSearch({ tab: t === "sessions" ? null : t, day: null, week: null, ...patch }, { push: false });
+    setGoal({ tab: t, to });
+  };
   useLayoutEffect(() => {
     if (!goal || goal.tab !== tab) return;
     const el = document.getElementById(goal.to) ?? document.getElementById(panelId(tab));
     el?.scrollIntoView?.({ behavior: motion() ? "smooth" : "auto", block: "start" });
     el?.focus({ preventScroll: true });
+    setGoal(null);
   }, [goal, tab]);
 
   const { slow, grow, before, wrap, retryBtn } = useLanding(data, url, loading, error, ":scope > :is(.insights, .panel, .vitals-wrap, .workbench)");
   // The attention actions and the vitals show the table in the order they promise.
   const acts = {
     loops: () => go("loops", "loops-h"),
-    near: () => { setSearch({ q: null, near: true, day: null, week: null }, { push: false }); setSessSort(null); go("sessions"); },
+    near: () => { setSessSort(null); go("sessions", undefined, { q: null, near: true }); },
     flaky: () => { setFlaky(true); setToolSort(null); go("tools"); },
     tests: () => go("loops", "tests-h"),
   };
@@ -199,18 +213,23 @@ function Overview({ views }: { views: ReactNode }) {
     subagents: () => { setProjSort({ key: "subagent_share", desc: true }); go("projects"); },
     speed: () => { setSessSort({ key: "duration_s", desc: true }); go("sessions"); },
   };
-  // A pick lists the bucket's sessions as such: the search, the near-limit filter and the sort go.
+  // A pick lists the bucket's sessions as such: the search, the near-limit filter and the sort go. Only the current view's
+  // chart takes one.
   const pick = (p: WorkPick) => {
     setSearch({ q: null, near: null, ...(p.week ? { week: p.day, day: null } : { day: p.day, week: null }) }, { push: false });
     setSessSort(null);
   };
   const clear = () => setSearch({ day: null, week: null }, { push: false });
-  const d = data, has = !!d && d.totals.requests > 0;
-  const named = sel ? (sel.days === 7 ? bucketLabel(sel.day, true, true) : dayLabel(sel.day, true)) : "";
+  // The panel's own clear removes its button: the focus goes to the chart, as the chip's does.
+  const clearToChart = () => { clear(); document.getElementById(CHART_ID)?.focus(); };
+  const has = !!d && d.totals.requests > 0;
+  // The days a selection counts, as the server clips them: a week the view cuts short names the days it keeps.
+  const [from, to] = sel && d ? spanDays(sel, d) : ["", ""];
+  const named = !from ? "" : from === to ? dayLabel(from, true) : `${dayLabel(from)} – ${dayLabel(to, true)}`;
   // What a narrowed tab says: the days it shows, or that it still shows the range while they load or failed to.
-  const on = sel && dv ? (sel.days === 7 ? `in the ${named.replace(/^W/, "w")}` : `on ${named}`) : "in this range";
+  const on = sel && dv ? (from === to ? `on ${named}` : `from ${dayLabel(from)} to ${dayLabel(to, true)}`) : "in this range";
   const note = sel ? <div className="hint scope">{dv || tab === "sessions" ? `${named} only. ` : dayApi.error ? `Could not load ${named} (${dayApi.error.message}); showing the whole range. `
-    : `Loading ${named}…; showing the whole range. `}<button type="button" className="linkish" onClick={clear}>Show the whole range</button></div> : undefined;
+    : `Loading ${named}…; showing the whole range. `}<button type="button" className="linkish" onClick={clearToChart}>Show the whole range</button></div> : undefined;
   // The first load shows the placeholder; the loading look (dimmed figures) belongs to a page that has figures.
   const first = !d && !error;
   const cls = "wrap pg-activity" + (slow && !first ? " loading" : "") + (grow ? " grow" : "");
@@ -231,7 +250,7 @@ function Overview({ views }: { views: ReactNode }) {
       <p className="pending">{loading && d ? `Loading ${viewName(want)}…` : ""}</p>
       {d && <>
         {has && <section className="insights sect" id="attention" aria-label="What needs attention"><InsightCard insight={attentionInsight(d, acts)} primary /></section>}
-        <WorkPanel d={d} metric={metric} onMetric={setMetric} selected={sel && { day: sel.day, week: sel.days === 7 }} onPick={pick} onClear={clear} />
+        <WorkPanel d={d} metric={metric} onMetric={setMetric} selected={sel && { day: sel.day, week: sel.days === 7 }} onPick={current ? pick : undefined} onClear={clear} />
         {has && <Vitals d={d} go={toVital} />}
         <Workbench tab={tab} onTab={setTab} note={note}>
           {tab === "sessions" && <SessionsPanel view={{ project: d.project, range: d.range, automated: d.automated, source: d.source }} filter={sess} onFilter={setSess}

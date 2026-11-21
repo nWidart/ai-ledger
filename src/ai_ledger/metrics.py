@@ -512,27 +512,31 @@ def tool_rates(cur, W, fp):
 SPANS = (1, 7)  # the days a selection covers: one day of the work chart, or one of its weeks
 
 
-def on_day(d, pcte, pparams, W, fp, days=1):
-    """A view's filter (view()) limited to the local days d (YYYY-MM-DD) to d + days - 1: (date, W, fp, rq, rp). days is one
-    of SPANS. Raises ValueError for a bad day or span."""
+def on_day(d, start, today, pcte, pparams, W, fp, days=1):
+    """A view's filter (view(), whose range runs from start, None for all time, to today) limited to the local days d
+    (YYYY-MM-DD) to d + days - 1 that fall in the range: (date, (first, last), W, fp, rq, rp), first and last the clipped
+    days. days is one of SPANS. Raises ValueError for a bad day or span."""
     if days not in SPANS:
         raise ValueError(f"days must be one of {SPANS}")
     d, by_view = date.fromisoformat(d), W
-    W = lambda ts: f"{by_view(ts)} AND {ts} >= {day_start('CAST(? AS DATE)')} AND {ts} < {day_start(f'CAST(? AS DATE) + {days}')}"
-    fp = fp + [d, d]
-    return d, W, fp, requests_cte(pcte, W("r.ts")), pparams + fp
+    first, last = max(d, start) if start else d, min(d + timedelta(days=days - 1), today)
+    W = lambda ts: f"{by_view(ts)} AND {ts} >= {day_start('CAST(? AS DATE)')} AND {ts} < {day_start('CAST(? AS DATE) + 1')}"
+    fp = fp + [first, last]
+    return d, (first, last), W, fp, requests_cte(pcte, W("r.ts")), pparams + fp
 
 
 def day_view(cur, project="", range_days=0, day="", today=None, automated=False, source="", days=1, prices=None):
     """Project metrics, tools, MCP servers, skills, hooks, error loops and failed test runs as usage() has them, limited to
-    the view's local days from day (YYYY-MM-DD): one, or a week of the work chart (days=7). Raises ValueError for a bad day,
-    span or source."""
+    the view's local days from day (YYYY-MM-DD): one, or a week of the work chart (days=7), clipped to the range; start and
+    end name the days counted. Raises ValueError for a bad day, span or source."""
     prices = load_prices() if prices is None else prices
-    _, pcte, pparams, fp, W, _, _ = view(project, range_days, prices, today or local_today(cur), automated, source)
-    d, W, fp, rq, rp = on_day(day, pcte, pparams, W, fp, days)
+    today = today or local_today(cur)
+    start, pcte, pparams, fp, W, _, _ = view(project, range_days, prices, today, automated, source)
+    d, (first, last), W, fp, rq, rp = on_day(day, start, today, pcte, pparams, W, fp, days)
     loops = error_loops(cur, W, fp)
     tests = failed_test_runs(cur, W, fp)
-    return dict(day=d.isoformat(), days=days, **tool_rates(cur, W, fp), by_project=projects(cur, rq, rp, W, fp, loops),
+    return dict(day=d.isoformat(), days=days, start=first.isoformat(), end=last.isoformat(), **tool_rates(cur, W, fp),
+                by_project=projects(cur, rq, rp, W, fp, loops),
                 error_loops=titles.with_titles(cur, loops[:50]), error_loops_total=len(loops),
                 failed_tests=titles.with_titles(cur, tests), tests_failed=call_totals(cur, W, fp)["tests_failed"])
 
@@ -701,20 +705,23 @@ SESSION_SORTS = ("first_ts", "duration_s", "prompts", "tokens", "cost", "peak_co
 
 
 def session_list(cur, project="", range_days=0, q="", near=False, offset=0, limit=100, prices=None, today=None, day="", automated=False,
-                 source="", sort="", desc=False, days=1):
+                 source="", sort="", desc=False, days=None):
     """One page of the view's sessions, newest first (or nearest the context limit first), matching q on title, id, project
     or branch. day (YYYY-MM-DD): the sessions with requests on that day, or in the week from it (days=7), every figure (active
-    time included) limited to those days, costliest first and all of them, so their costs add up to the days'. sort (one of
-    SESSION_SORTS, ascending unless desc) orders them instead, before the page; rows without a value come last. Raises
-    ValueError for another sort or span."""
+    time included) limited to those days in the range, costliest first and all of them, so their costs add up to the days'.
+    sort (one of SESSION_SORTS, ascending unless desc) orders them instead, before the page; rows without a value come last.
+    Raises ValueError for another sort or span, or a span without a day."""
     if sort and sort not in SESSION_SORTS:
         raise ValueError(f"unknown sort: {sort}")
     prices = load_prices() if prices is None else prices
-    _, pcte, pparams, fp, W, rq, rp = view(project, range_days, prices, today or local_today(cur), automated, source)
+    if days is not None and not day:
+        raise ValueError("days needs a day")
+    today = today or local_today(cur)
+    start, pcte, pparams, fp, W, rq, rp = view(project, range_days, prices, today, automated, source)
     on = None
     if day:
-        on, W, fp, rq, rp = on_day(day, pcte, pparams, W, fp, days)
-    sess = sessions(cur, rq, rp, W, fp, prices, on, days)
+        _, on, W, fp, rq, rp = on_day(day, start, today, pcte, pparams, W, fp, days or 1)
+    sess = sessions(cur, rq, rp, W, fp, prices, on)
     q = q.strip().lower()
     hits = [x for x in sess if not near or x["near_limit"]]
     named = titles.titles(cur, [x["session_id"] for x in hits]) if q else {}
@@ -806,11 +813,11 @@ def error_loops(cur, W, fp):
 IDLE_GAP_S = 20 * 60  # a pause longer than this between a session's requests and tool calls is idle, as on its timeline
 
 
-def active_cte(ids, days=0):
+def active_cte(ids, on_days=False):
     """CTEs ending in act(session_id, active_s): the whole active time of each session that ids (SQL) selects, the time
-    between its main-thread requests and tool calls less every pause over IDLE_GAP_S. days: only the time between events
-    of that many local days, from a first day given as two more params (that day, twice)."""
-    within = f"WHERE t >= {day_start('CAST(? AS DATE)')} AND t < {day_start(f'CAST(? AS DATE) + {int(days)}')}" if days else ""
+    between its main-thread requests and tool calls less every pause over IDLE_GAP_S. on_days: only the time between events
+    of the local days from a first to a last day, given as two more params."""
+    within = f"WHERE t >= {day_start('CAST(? AS DATE)')} AND t < {day_start('CAST(? AS DATE) + 1')}" if on_days else ""
     return f"""ev AS (SELECT session_id, ts AS t FROM requests WHERE NOT subagent AND ts IS NOT NULL AND session_id IN ({ids})
                UNION ALL SELECT session_id, coalesce(start_ts, end_ts) FROM tool_calls
                WHERE coalesce(start_ts, end_ts) IS NOT NULL AND session_id IN ({ids})),
@@ -846,9 +853,9 @@ def timing(cur, rq, rp):
                 output_per_s=speed(t["output"], t["model_ms"]), session_sources=srcs)
 
 
-def sessions(cur, rq, rp, W, fp, prices, on=None, days=1):
+def sessions(cur, rq, rp, W, fp, prices, on=None):
     """Sessions with requests in the view; every count is limited to the view's range. duration_s is the whole session's
-    active time (active_cte), or that of the days local days from the date on alone."""
+    active time (active_cte), or that of the local days from on[0] to on[1] alone."""
     rs = rows(cur, f"""{rq}, agg AS (
           SELECT session_id, count(*) AS requests, sum(tokens) AS tokens, sum(cost) AS cost,
                  count(*) FILTER (WHERE cost IS NULL) AS unpriced, coalesce(sum(thinking_ms), 0) AS thinking_ms
@@ -860,14 +867,14 @@ def sessions(cur, rq, rp, W, fp, prices, on=None, days=1):
                FROM tool_calls t JOIN sessions s USING (session_id) WHERE {W('coalesce(t.start_ts, t.end_ts)')} GROUP BY 1),
         pr AS (SELECT session_id, count(*) AS prompts, count(*) FILTER (WHERE interrupted) AS interrupted
                FROM prompts p JOIN sessions s USING (session_id) WHERE {W('p.ts')} GROUP BY 1),
-        {active_cte("SELECT session_id FROM agg", days if on is not None else 0)}
+        {active_cte("SELECT session_id FROM agg", on is not None)}
         SELECT s.session_id, s.project, s.git_branch, s.first_ts, s.last_ts, act.active_s AS duration_s,
                s.compactions, s.peak_context, s.peak_model, agg.requests, agg.tokens, agg.cost, agg.unpriced, agg.thinking_ms,
                coalesce(tc.tool_calls, 0) AS tool_calls, coalesce(tc.errors, 0) AS errors, coalesce(tc.commits, 0) AS commits,
                coalesce(tc.tests_passed, 0) AS tests_passed, coalesce(tc.tests_failed, 0) AS tests_failed,
                coalesce(pr.prompts, 0) AS prompts, coalesce(pr.interrupted, 0) AS interrupted
         FROM agg JOIN sessions s USING (session_id) LEFT JOIN tc USING (session_id) LEFT JOIN pr USING (session_id)
-        LEFT JOIN act USING (session_id)""", rp + fp + fp + ([on, on] if on else []))
+        LEFT JOIN act USING (session_id)""", rp + fp + fp + (list(on) if on else []))
     for r in rs:
         limit = (prices.get(r["peak_model"]) or {}).get("context")
         r["context_limit"] = limit

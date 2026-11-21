@@ -65,9 +65,9 @@ See [Activity](/ai-ledger/pages/activity/).
 | N failed test runs of M | Failed test runs out of all test runs. | **Needs attention** | [Kill repeated tool failures](/ai-ledger/improve/tool-failures/) |
 | Errors per 100 calls | Failed tool calls per 100 tool calls. Marked worse when it goes up. | **Work health**; **Project metrics** | [Kill repeated tool failures](/ai-ledger/improve/tool-failures/) |
 | Test runs passed | The share of test runs that passed. Marked worse when it goes down. | **Work health** | [Kill repeated tool failures](/ai-ledger/improve/tool-failures/) |
-| Prompts interrupted | The share of prompts that were interrupted. In Claude Code, a tool call you reject counts as an interruption. Marked worse when it goes up. | The line under the heading | [Babysit agents less](/ai-ledger/improve/babysit-less/) |
+| Prompts interrupted | The share and count of prompts that were interrupted. In Claude Code, a tool call you reject counts as an interruption. Marked worse when it goes up. | The line under the heading | [Babysit agents less](/ai-ledger/improve/babysit-less/) |
 | Subagents | The share of tokens that came from subagents. | **Work health**; **Project metrics** | – |
-| Median session | The median active time of a session. | The **Sessions** tile | – |
+| Median session | The median active time of a session. The tile's note also gives the active time in all and, when recorded, the thinking time. | The **Sessions** tile | – |
 | Output speed | Output tokens per second of model time, over the sessions that record model time. Claude Code only, whole-session, subagents included. Its note adds the time waiting on the model and running tools, and a small line its trend. Marked worse when it goes down. | **Work health**; session sheet | – |
 | Work per day, or per week | Commits, prompts or sessions per day, with errors per 100 calls on a track under the bars. One bar per week when the view spans more than 60 days. Select a bar to narrow the tabs to its days. | **Work per day** | [Weekly review](/ai-ledger/improve/weekly-review/) |
 | Peak context | The largest request of a session, with its share of the window when that is 80% or more. | **Sessions** tab | [Keep context lean](/ai-ledger/improve/lean-context/) |

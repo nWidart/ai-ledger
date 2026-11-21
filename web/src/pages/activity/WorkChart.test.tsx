@@ -308,6 +308,17 @@ describe("chart keys", () => {
     expect(screen.queryByRole("tooltip")).toBeNull();
     expect(screen.queryByRole("img", { name: /per (day|week)/ })).toBeNull();
   });
+
+  it("dismisses the tooltip the pointer opened on Escape while the focus is elsewhere, keeping the selection", () => {
+    const { onClear } = panel(many, "commits", { day: "2026-11-04", week: false });
+    const metric = screen.getByRole("button", { name: "Prompts" });
+    act(() => metric.focus());
+    fireEvent.pointerMove(document.querySelector("#work .hit")!, { clientX: 100, clientY: 50 });
+    expect(screen.getByRole("tooltip")).toBeTruthy();
+    fireEvent.keyDown(metric, { key: "Escape" });
+    expect(screen.queryByRole("tooltip")).toBeNull();
+    expect(onClear).not.toHaveBeenCalled();
+  });
 });
 
 describe("weekly buckets", () => {

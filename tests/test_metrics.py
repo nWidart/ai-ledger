@@ -961,6 +961,77 @@ class SourceFilterTest(unittest.TestCase):
             httpd.server_close()
 
 
+class SpeedTrendByWeekTest(unittest.TestCase):
+    """Output speed per week over all time (work from Sep 1 to Nov 17, 2026: by week). Each week sums its sessions' output
+    and model time before dividing: the week of Oct 5 is 120,000 tokens over 1,800 s, not the mean of 50 and 75 per second."""
+
+    def test_three_timed_weeks(self):
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp)
+        con = store.open_store(os.path.join(tmp, "x.duckdb"))
+        self.addCleanup(con.close)
+        con.execute("SET GLOBAL TimeZone = 'UTC'")
+        c = con.cursor()
+        runs = [("s1", "2026-09-01 10:00:00", 60_000, 10), ("s2", "2026-10-06 10:00:00", 30_000, 10),
+                ("s3", "2026-10-08 10:00:00", 90_000, 20), ("s4", "2026-11-17 10:00:00", 40_000, 5)]
+        store.insert(c, "sessions", ["session_id", "project", "first_ts", "last_ts"], [(s, "foo", ts, ts) for s, ts, _, _ in runs])
+        store.insert(c, "prompts", ["prompt_id", "session_id", "ts", "interrupted"], [("p" + s, s, ts, False) for s, ts, _, _ in runs])
+        store.insert(c, "requests", ["message_id", "session_id", "ts", "model", "subagent", "input", "output", "thinking",
+                                     "cache_read", "cache_5m", "cache_1h"], [("r" + s, s, ts, "m-a", False, 1, out, 0, 0, 0, 0) for s, ts, out, _ in runs])
+        store.insert(c, "session_runs", ["session_id", "start_ms", "api_ms", "tool_ms", "lines_added", "lines_removed"],
+                     [(s, 1, mins * 60_000, 0, 0, 0) for s, _, _, mins in runs])
+        u = metrics.usage(con.cursor(), "", 0, prices=PRICES, today=date(2026, 11, 19))
+        self.assertEqual(u["work_bucket"], "week")
+        self.assertEqual([(r["day"], round(r["output_per_s"], 1), r["sessions"]) for r in u["speed_trend"]],
+                         [("2026-08-31", 100.0, 1), ("2026-10-05", 66.7, 2), ("2026-11-16", 133.3, 1)])
+
+
+class WeekClipTest(unittest.TestCase):
+    """A week the range cuts: a 2-day view ending Thursday Nov 19, 2026 starts on Wednesday Nov 18, inside the week of
+    Monday Nov 16. s works 15 minutes on Tuesday (before the range), 5 on Wednesday and, future-dated, on Friday."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.mkdtemp()
+        cls.con = store.open_store(os.path.join(cls.tmp, "x.duckdb"))
+        cls.con.execute("SET GLOBAL TimeZone = 'UTC'")
+        c = cls.con.cursor()
+        store.insert(c, "sessions", ["session_id", "project", "first_ts", "last_ts"], [("s", "foo", "2026-11-17 10:00:00", "2026-11-20 10:05:00")])
+        times = ["2026-11-17 10:00:00", "2026-11-17 10:05:00", "2026-11-17 10:10:00", "2026-11-17 10:15:00",
+                 "2026-11-18 10:00:00", "2026-11-18 10:05:00", "2026-11-20 10:00:00", "2026-11-20 10:05:00"]
+        store.insert(c, "requests", ["message_id", "session_id", "ts", "model", "subagent", "input", "output", "thinking",
+                                     "cache_read", "cache_5m", "cache_1h"], [(f"r{i}", "s", t, "m-a", False, 10, 0, 0, 0, 0, 0) for i, t in enumerate(times)])
+        store.insert(c, "prompts", ["prompt_id", "session_id", "ts", "interrupted"], [(f"p{i}", "s", t, False) for i, t in enumerate(times[::2])])
+        store.insert(c, "tool_calls", ["tool_use_id", "session_id", "tool", "start_ts", "end_ts", "is_error", "category", "subagent",
+                                       "is_test", "test_passed"], [
+            ("t0", "s", "Bash", "2026-11-17 10:01:00", "2026-11-17 10:01:01", True, "x", False, True, False),
+            ("t1", "s", "Bash", "2026-11-18 10:01:00", "2026-11-18 10:01:01", False, None, False, False, None),
+            ("t2", "s", "Bash", "2026-11-20 10:01:00", "2026-11-20 10:01:01", True, "x", False, True, False)])
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.con.close()
+        shutil.rmtree(cls.tmp)
+
+    def test_a_week_counts_only_its_days_in_the_range(self):
+        today = date(2026, 11, 19)
+        got = metrics.session_list(self.con.cursor(), "", 2, day="2026-11-16", days=7, prices=PRICES, today=today)["sessions"]
+        self.assertEqual([(x["duration_s"], x["requests"], x["prompts"], x["tool_calls"], x["tests_failed"]) for x in got], [(300, 2, 1, 1, 0)])
+        week = metrics.day_view(self.con.cursor(), "", 2, "2026-11-16", today=today, days=7, prices=PRICES)
+        self.assertEqual((week["start"], week["end"], week["tests_failed"], week["failed_tests"]), ("2026-11-18", "2026-11-19", 0, []))
+        self.assertEqual([(t["tool"], t["calls"]) for t in week["tools"]], [("Bash", 1)])
+        self.assertEqual([(p["sessions"], p["calls"], p["prompts"]) for p in week["by_project"]], [(1, 1, 1)])
+        # All time still ends today: Friday's future-dated work stays out of the week.
+        got = metrics.session_list(self.con.cursor(), "", 0, day="2026-11-16", days=7, prices=PRICES, today=today)["sessions"]
+        self.assertEqual([(x["duration_s"], x["requests"], x["tests_failed"]) for x in got], [(1200, 6, 1)])
+        one = metrics.day_view(self.con.cursor(), "", 2, "2026-11-18", today=today, prices=PRICES)
+        self.assertEqual((one["start"], one["end"]), ("2026-11-18", "2026-11-18"))
+
+    def test_a_span_needs_a_day(self):
+        with self.assertRaises(ValueError):
+            metrics.session_list(self.con.cursor(), days=7, prices=PRICES, today=date(2026, 11, 19))
+
+
 class LocalDayTest(unittest.TestCase):
     """Days on the server's clock, here America/Los_Angeles, the day after US daylight saving starts (Mar 8, 2026).
     z1 works at 06:30 UTC on Mar 9 (23:30 on Mar 8, local), z2 at 07:30 UTC (00:30 on Mar 9, local; 23:30 at a fixed -8)."""

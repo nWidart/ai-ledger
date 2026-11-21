@@ -27,6 +27,9 @@ export const bucketLabel = (day: string, week: boolean, long = false, v?: WorkVi
 const bucketText = (p: DailyWorkRow) => `${plural(p.commits, "commit")}, ${plural(p.prompts, "prompt")}, ${plural(p.sessions, "session")}, `
   + `${plural(p.failed_calls, "failed call")}${p.calls ? ` of ${num(p.calls)}, ${num(failRate(p), 1)} per 100` : ""}`;
 
+/** The id of the chart's focusable box. */
+export const CHART_ID = "work-chart";
+
 /** The chart's selection: a day, or a week by its Monday. */
 export interface WorkPick { day: string; week: boolean }
 
@@ -37,8 +40,9 @@ export interface WorkPanelProps {
   /** The selection (a day, or a week by its Monday); none for the whole range. A link can name a day on a chart by week or
    *  a week on a chart by day: the chip still names it, and no bar is marked. */
   selected: WorkPick | null;
-  /** A bucket was selected (click, or Enter while reading with the arrow keys): a day, or a week on a chart by week. */
-  onPick: (p: WorkPick) => void;
+  /** A bucket was selected (click, or Enter while reading with the arrow keys): a day, or a week on a chart by week. None:
+   *  the chart takes no pick (it still shows the previous view while a new one loads). */
+  onPick?: (p: WorkPick) => void;
   /** The selection was cleared, by its chip or Escape on the chart. */
   onClear: () => void;
 }
@@ -86,6 +90,13 @@ function WorkBars({ rows, week, view, kinds, stack, metric, onMetric, selected, 
   };
   useEffect(() => setAt(null), [rows, metric]);
   useLayoutEffect(() => { if (at != null) place(); }, [at]);
+  // Escape dismisses an open tooltip wherever the focus is: the pointer can open it while the focus is elsewhere.
+  useEffect(() => {
+    if (at == null) return;
+    const off = (ev: globalThis.KeyboardEvent) => { if (ev.key === "Escape") setAt(null); };
+    document.addEventListener("keydown", off);
+    return () => document.removeEventListener("keydown", off);
+  }, [at]);
 
   const M = METRICS.find(x => x.k === metric)!, unit = week ? "week" : "day";
   const ts = textScale();
@@ -115,7 +126,7 @@ function WorkBars({ rows, week, view, kinds, stack, metric, onMetric, selected, 
   };
   const pick = (i: number) => {
     const p = rows[i];
-    if (!p || !busy(p)) return;
+    if (!p || !busy(p) || !onPick) return;
     setAt(null);
     setSaid(`${name(p.day)} selected; the tabs below show its ${week ? "days" : "figures"}.`);
     onPick({ day: p.day, week });
@@ -194,7 +205,7 @@ function WorkBars({ rows, week, view, kinds, stack, metric, onMetric, selected, 
         {hasRate && <span className="key"><i className="line fail" />Errors per 100 calls (lower track)</span>}
         {hasLow && <span className="key"><i className="low" />{`Under ${LOW_CALLS} calls`}</span>}
       </div>
-      <div className="chart" ref={box} tabIndex={0} role="group" aria-label={label} onKeyDown={onKey} onBlur={() => setAt(null)}>
+      <div className="chart" id={CHART_ID} ref={box} tabIndex={0} role="group" aria-label={label} onKeyDown={onKey} onBlur={() => setAt(null)}>
         <svg ref={svg} viewBox={`0 0 ${W} ${H}`} aria-hidden="true">
           {ticks.map(t => <g key={t}><line x1={a.m.l} x2={W - a.m.r} y1={a.y(t * a.step)} y2={a.y(t * a.step)} stroke="var(--grid)" />
             <text x={a.m.l - 6 * ts} y={a.y(t * a.step) + 4 * ts} textAnchor="end" fontSize={11 * ts} fill="var(--text-muted)">{num(t * a.step)}</text></g>)}

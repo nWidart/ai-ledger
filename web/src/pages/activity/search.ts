@@ -1,6 +1,6 @@
 // The Activity keys of the query string, typed: view (the page's view: Overview when absent, Judgments), and Overview's q (the
 // sessions table's text filter), near (the near-work flag, near=1), day (one calendar day of the work chart), week (the
-// Monday of one of its weeks) and tab (the workbench tab: Sessions when absent). The Judgments view's own keys are in
+// Monday of one of its weeks; Overview drops one its view does not reach) and tab (the workbench tab: Sessions when absent). The Judgments view's own keys are in
 // judgments/search.ts. The keys every page shares (project, range, source, auto) come from validateRoot.
 import { isDay } from "../../url";
 import { validateSearch as judgmentsSearch, type InsightsSearch } from "./judgments/search";
@@ -22,7 +22,7 @@ export function validateSearch(raw: Readonly<Record<string, unknown>>): Activity
   if (typeof raw.q === "string" && raw.q !== "") out.q = raw.q;
   if (raw.near === "1" || raw.near === true) out.near = true;
   if (typeof raw.day === "string" && isDay(raw.day)) out.day = raw.day;
-  else if (typeof raw.week === "string" && isDay(raw.week)) out.week = raw.week;
+  else if (typeof raw.week === "string" && isDay(raw.week) && new Date(raw.week + "T00:00:00Z").getUTCDay() === 1) out.week = raw.week;
   if (raw.tab === "projects" || raw.tab === "tools" || raw.tab === "loops") out.tab = raw.tab;
   return out;
 }

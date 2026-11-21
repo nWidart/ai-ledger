@@ -91,6 +91,17 @@ def check_day(day, today):
     return day
 
 
+def parse_span(query):
+    """The days= of a /api/sessions or /api/day query string as an int of metrics.SPANS; None when the key is absent. A blank
+    or other value raises ValueError (parse_qs would drop a blank one)."""
+    got = parse_qs(query, keep_blank_values=True).get("days")
+    if got is None:
+        return None
+    if got[0] not in [str(n) for n in metrics.SPANS]:
+        raise ValueError(f"days must be one of {metrics.SPANS}")
+    return int(got[0])
+
+
 def parse_fix(body, today):
     """(error type, day) from the JSON body of POST /api/errors/fix; day None removes the marker. Raises ValueError."""
     if not isinstance(body, dict):
@@ -456,10 +467,10 @@ def handler(app, port=PORT):
                     self.json(metrics.session_list(app.con.cursor(), q.get("project", ""), int(q.get("range") or 0), q.get("q", ""),
                                                    q.get("near") == "1", int(q.get("offset") or 0), max(1, int(q.get("limit") or 100)),
                                                    day=q.get("day", ""), automated=q.get("automated") == "1", source=q.get("source", ""),
-                                                   sort=q.get("sort", ""), desc=q.get("desc") == "1", days=int(q.get("days") or 1)))
+                                                   sort=q.get("sort", ""), desc=q.get("desc") == "1", days=parse_span(url.query)))
                 elif url.path == "/api/day":
                     self.json(metrics.day_view(app.con.cursor(), q.get("project", ""), int(q.get("range") or 0), q.get("day", ""),
-                                               automated=q.get("automated") == "1", source=q.get("source", ""), days=int(q.get("days") or 1)))
+                                               automated=q.get("automated") == "1", source=q.get("source", ""), days=parse_span(url.query) or 1))
                 elif url.path == "/api/palette":
                     self.json(metrics.palette(app.con.cursor(), q.get("project", ""), int(q.get("range") or 0),
                                               automated=q.get("automated") == "1", source=q.get("source", "")))

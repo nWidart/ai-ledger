@@ -13,6 +13,8 @@ export interface ApiState<T> {
   error: Error | undefined;
   /** A request is under way (data may still be the previous answer). */
   loading: boolean;
+  /** data is the last key's, kept (keepPrevious) while this key loads or after it failed. */
+  previous: boolean;
   retry: () => void;
 }
 
@@ -30,6 +32,7 @@ export function useApi<T, K extends QueryKey = QueryKey>(options: UseQueryOption
     data: q.data ?? (opts.keepPrevious ? kept : undefined),
     error: q.isFetching ? undefined : q.error ?? undefined,
     loading: q.isFetching || (options != null && q.isPending),
+    previous: q.data === undefined && !!opts.keepPrevious && kept !== undefined,
     retry: useCallback(() => { void refetch(); }, [refetch]),
   };
 }
