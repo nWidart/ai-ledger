@@ -10,9 +10,15 @@ const assets = fileURLToPath(new URL("../../src/ai_ledger/web/assets/", import.m
 const LIMITS = {
   index: 130, // catches a static import of ECharts into the entry (121.7 kB since main's shared tables)
   CostPage: 20,
-  echarts: 195, // the lazy ECharts chunk
+  ActivityPage: 28,
+  // The chart code Cost's and Activity's charts share. Vite names a shared chunk after its first module, so the name
+  // (`zoomReset`) can change when modules move: the check then fails on "found 0" rather than skipping the chunk.
+  zoomReset: 9,
+  echarts: 195, // the lazy ECharts chunk, which Cost's and Activity's charts load
 };
-// How many `echarts-*.js` chunks the build must hold: one, which Cost's daily chart loads.
+// The page chunks and the shared chunk, each of which must match exactly one file.
+const SINGLE = ["index", "CostPage", "ActivityPage", "zoomReset"];
+// How many `echarts-*.js` chunks the build must hold: one, which the charts of Cost and Activity load.
 const ECHARTS_CHUNKS = 1;
 
 const files = readdirSync(assets).filter((f) => f.endsWith(".js"));
@@ -27,9 +33,9 @@ const report = (file, limit) => {
   if (over) failures.push(`${file} is ${size.toFixed(1)} kB gzip, over its ${limit} kB limit`);
 };
 
-for (const name of ["index", "CostPage"]) {
+for (const name of SINGLE) {
   const found = chunks(name);
-  if (found.length !== 1) failures.push(`expected exactly one ${name}-*.js chunk, found ${found.length}`);
+  if (found.length !== 1) failures.push(`expected exactly one ${name}-*.js chunk, found ${found.length}${found.length ? "" : " (renamed? the shared chart chunk is named after its first module)"}`);
   for (const file of found) report(file, LIMITS[name]);
 }
 
