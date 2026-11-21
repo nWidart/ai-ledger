@@ -79,7 +79,7 @@
 .pg-errors .tip .tot { border-bottom: 1px solid var(--border); margin-bottom: 4px; padding-bottom: 4px; }
 /* Motion only for readers who haven't asked for less. */
 @media (prefers-reduced-motion: no-preference) {
-  .pg-errors #chart svg.grow .bars { animation: err-grow .55s var(--ease-out) both; transform-box: view-box; }
+  .pg-errors #chart svg.grow .bars { animation: err-grow .55s var(--ease-grow) both; transform-box: view-box; }
   .pg-errors #chart svg.grow .rline { stroke-dasharray: 1; animation: err-draw .7s .15s ease-out both; }
   .pg-errors .bar > i { animation: err-bar-in .45s ease-out both; transform-origin: left; }
   @keyframes err-grow { from { transform: scaleY(0); } }

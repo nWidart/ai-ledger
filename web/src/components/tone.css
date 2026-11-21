@@ -10,5 +10,5 @@
 :is(.pg-activity, .pg-cost, .pg-context) .tone-key .worse { background: var(--critical-soft); color: var(--critical-text); font-weight: 600; }
 :is(.pg-activity, .pg-cost, .pg-context) .tone-key .better { background: var(--good-soft); color: var(--good-text); }
 @media (prefers-reduced-motion: no-preference) {
-  :is(.pg-activity, .pg-cost, .pg-context).grow .ibar i { transform-origin: left; animation: grow-x .6s var(--ease-out) both; }
+  :is(.pg-activity, .pg-cost, .pg-context).grow .ibar i { transform-origin: left; animation: grow-x .6s var(--ease-grow) both; }
 }

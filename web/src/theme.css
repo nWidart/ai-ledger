@@ -51,7 +51,7 @@
      the context menu and the skip link. */
   --z-raised: 1; --z-raised-2: 2; --z-sticky: 4; --z-nav: 5; --z-toast: 20; --z-popover: 30; --z-tooltip: 40; --z-menu: 50;
   --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
-  --ease-out: cubic-bezier(.2, .7, .2, 1); /* the bars' grow-in */
+  --ease-grow: cubic-bezier(.2, .7, .2, 1); /* the bars' grow-in */
 }
 :root[data-theme="light"] { color-scheme: light; }
 :root[data-theme="dark"] { color-scheme: dark; }
