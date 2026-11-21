@@ -184,6 +184,21 @@ describe("useChartEnv", () => {
     });
   });
 
+  it("draws the cursor transparent, not opaque, when the text color is in a form it cannot make translucent", () => {
+    fakeMedia();
+    const table: Record<string, string> = {};
+    fakeComputed(table);
+    for (const computed of ["color(srgb 0.04 0.04 0.04)", "rgb(11 11 11 / 50%)", "none", ""]) {
+      table["var(--text-primary)"] = computed;
+      const { result, unmount } = renderHook(() => useChartEnv(600, 200)); // a first mount clears the cache
+      expect({ computed, cursor: result.current.ink.cursor }).toEqual({ computed, cursor: "transparent" });
+      unmount();
+    }
+    table["var(--text-primary)"] = "rgba(11, 11, 11, 0.5)";
+    const { result } = renderHook(() => useChartEnv(600, 200));
+    expect(result.current.ink.cursor).toBe("rgba(11, 11, 11, 0.03)");
+  });
+
   it("switches to system colors when forced colors turns on, and back when it turns off", () => {
     const media = fakeMedia();
     fakeComputed({

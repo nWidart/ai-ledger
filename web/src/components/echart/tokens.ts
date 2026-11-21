@@ -69,11 +69,12 @@ export function resolveColor(css: string): string {
   return c;
 }
 
-/** An rgb() or rgba() color at a share of its alpha; the color as given when it is neither. */
+/** An rgb() or rgba() color at a share of its alpha. Any other form, such as color(srgb …), a percentage alpha or an
+ *  unresolved var(), gives transparent: a translucent band drawn opaque would hide the bars under it. */
 function withAlpha(color: string, a: number): string {
   const m = /^rgba?\(([^()]*)\)$/.exec(color);
   const n = m ? m[1]!.split(/[\s,/]+/).filter(Boolean).map(Number) : [];
-  if (n.length < 3 || n.some(Number.isNaN)) return color;
+  if (n.length < 3 || n.length > 4 || n.some(Number.isNaN)) return "transparent";
   return `rgba(${n[0]}, ${n[1]}, ${n[2]}, ${Number(((n[3] ?? 1) * a).toFixed(4))})`;
 }
 
