@@ -445,13 +445,10 @@ describe("Table rows", () => {
     expect([own.mock.calls.length, open.mock.calls.length]).toEqual([1, 1]);
   });
 
+  // React's duplicate-key warning fails the test (test-setup.ts).
   it("keeps its own row keys: a key from rowProps never replaces the row's id", () => {
-    const error = vi.spyOn(console, "error").mockImplementation(() => {});
-    try {
-      renderApp(<Table name="T" rows={ROWS} columns={COLS} rowId={r => r.n} rowProps={() => ({ key: "same" }) as RowAttrs} />);
-      expect(names()).toEqual(["b", "x", "a", "c"]);
-      expect(error.mock.calls.filter(c => /same key/.test(String(c[0])))).toEqual([]);
-    } finally { error.mockRestore(); }
+    renderApp(<Table name="T" rows={ROWS} columns={COLS} rowId={r => r.n} rowProps={() => ({ key: "same" }) as RowAttrs} />);
+    expect(names()).toEqual(["b", "x", "a", "c"]);
   });
 
   it("re-sorts when a column's value changes on the same rows and sort", () => {

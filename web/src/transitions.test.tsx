@@ -1,13 +1,16 @@
 import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import session from "./__fixtures__/session";
 import usage from "./__fixtures__/usage";
 import { ROUTES } from "./App";
 import { renderRouter } from "./testing";
 import { setSearch } from "./url";
 
 const status = { ingesting: false, last_ingest: null, last_change: null, last_stats: null, error: null, counts: {}, interval: 60, project_order: [] };
-const loaded = (path: keyof typeof ROUTES) => waitFor(() => expect(document.title).toBe(ROUTES[path].title));
+const answer = (url: string) => url.startsWith("/api/status") ? status : url.startsWith("/api/usage") ? usage
+  : url.startsWith("/api/sessions") ? { total: 0, offset: 0, sessions: [] } : url.startsWith("/api/session?") ? session : {};
+const loaded =(path: keyof typeof ROUTES) => waitFor(() => expect(document.title).toBe(ROUTES[path].title));
 let start: ReturnType<typeof vi.fn>;
 
 // The router starts a transition once the new page's route has loaded, which can be after the title changes.
@@ -22,7 +25,7 @@ const open = async (url: string, reduced = false) => {
 };
 
 beforeEach(() => {
-  vi.stubGlobal("fetch", vi.fn((url: string) => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(url.startsWith("/api/status") ? status : url.startsWith("/api/usage") ? usage : {}) } as Response)));
+  vi.stubGlobal("fetch", vi.fn((url: string) => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(answer(url)) } as Response)));
   // jsdom has no View Transitions: the stub runs the update, as a browser does, and resolves.
   start = vi.fn((arg: unknown) => {
     const update = typeof arg === "function" ? arg : (arg as { update: () => unknown }).update;

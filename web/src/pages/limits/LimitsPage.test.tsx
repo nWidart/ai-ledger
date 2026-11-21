@@ -574,42 +574,35 @@ describe("past windows strips", () => {
   const rows = () => [...hist().getByRole("table", { name: "Closed windows" }).querySelectorAll("tbody tr")];
   const marks = () => rows().map(r => [r.className, r.getAttribute("aria-current")]);
 
+  // React's duplicate-key warning fails either test (test-setup.ts): no two bars, and no two rows, share a key.
   it("lists two closed windows that share a start as their own rows, and marks only the selected window's row", async () => {
-    const error = vi.spyOn(console, "error");
-    try {
-      showCurve({ ...fixture, history: [early, twin(early), { ...early, start: "2026-01-01T00:00:00Z", closed_at: "2026-01-02T00:00:00Z" }] });
-      await lede();
-      openTable();
-      expect(rows().map(r => r.children[3]!.textContent)).toEqual(["22%", "41%", "22%"]);
-      expect(marks()).toEqual([["", null], ["", null], ["", null]]);
-      fireEvent.click(hist().getAllByRole("button", { name: barName(early) })[0]!);
-      await waitFor(() => expect(marks()).toEqual([["sel", "true"], ["", null], ["", null]]));
-      expect(error).not.toHaveBeenCalled(); // no two bars, and no two rows, share a key
-    } finally { error.mockRestore(); }
+    showCurve({ ...fixture, history: [early, twin(early), { ...early, start: "2026-01-01T00:00:00Z", closed_at: "2026-01-02T00:00:00Z" }] });
+    await lede();
+    openTable();
+    expect(rows().map(r => r.children[3]!.textContent)).toEqual(["22%", "41%", "22%"]);
+    expect(marks()).toEqual([["", null], ["", null], ["", null]]);
+    fireEvent.click(hist().getAllByRole("button", { name: barName(early) })[0]!);
+    await waitFor(() => expect(marks()).toEqual([["sel", "true"], ["", null], ["", null]]));
   });
 
   it("makes each of two windows that share a start its own bar, focus stop and pick", async () => {
-    const error = vi.spyOn(console, "error");
-    try {
-      const two = [{ ...early, window_minutes: null }, twin({ ...early, window_minutes: null })];
-      showCurve({ ...fixture, history: two });
-      await lede();
-      openTable();
-      const bars = within(hist().getByRole("group", { name: /past windows/ })).getAllByRole("button");
-      expect(bars.map(b => b.getAttribute("aria-label"))).toEqual(two.map(barName));
-      expect(bars.map(b => b.tabIndex)).toEqual([-1, 0]);
-      act(() => bars[1]!.focus());
-      await userEvent.keyboard("{ArrowLeft}");
-      expect(document.activeElement).toBe(bars[0]);
-      expect(bars.map(b => b.tabIndex)).toEqual([0, -1]);
-      await userEvent.keyboard("{ArrowRight}");
-      expect(document.activeElement).toBe(bars[1]);
-      await userEvent.keyboard("{Enter}");
-      expect(bars.map(b => b.getAttribute("aria-pressed"))).toEqual(["false", "true"]);
-      expect(within(hist().getByRole("region", { name: WINDOW })).getByText("41%")).toBeTruthy();
-      expect(marks()).toEqual([["", null], ["sel", "true"]]);
-      expect(error).not.toHaveBeenCalled();
-    } finally { error.mockRestore(); }
+    const two = [{ ...early, window_minutes: null }, twin({ ...early, window_minutes: null })];
+    showCurve({ ...fixture, history: two });
+    await lede();
+    openTable();
+    const bars = within(hist().getByRole("group", { name: /past windows/ })).getAllByRole("button");
+    expect(bars.map(b => b.getAttribute("aria-label"))).toEqual(two.map(barName));
+    expect(bars.map(b => b.tabIndex)).toEqual([-1, 0]);
+    act(() => bars[1]!.focus());
+    await userEvent.keyboard("{ArrowLeft}");
+    expect(document.activeElement).toBe(bars[0]);
+    expect(bars.map(b => b.tabIndex)).toEqual([0, -1]);
+    await userEvent.keyboard("{ArrowRight}");
+    expect(document.activeElement).toBe(bars[1]);
+    await userEvent.keyboard("{Enter}");
+    expect(bars.map(b => b.getAttribute("aria-pressed"))).toEqual(["false", "true"]);
+    expect(within(hist().getByRole("region", { name: WINDOW })).getByText("41%")).toBeTruthy();
+    expect(marks()).toEqual([["", null], ["sel", "true"]]);
   });
 
   it("asks for, and draws, each of two windows that share a start by its own reset", async () => {

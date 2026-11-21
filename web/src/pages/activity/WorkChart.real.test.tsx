@@ -85,7 +85,6 @@ const band = () => paths().filter(p => tokenOf(p.getAttribute("fill")) === "var(
 const selection = () => paths().filter(p => tokenOf(p.getAttribute("fill")) === "var(--accent)" && p.getAttribute("fill-opacity") === "0.16"
   && tokenOf(p.getAttribute("stroke")) === "var(--accent)");
 
-let errors: ReturnType<typeof vi.spyOn>;
 beforeEach(() => {
   setOrder(PROJECTS);
   COLORS = PROJECTS.map(color);
@@ -94,7 +93,6 @@ beforeEach(() => {
     if (!(el instanceof HTMLElement) || el.dataset.chartProbe === undefined) return real(el, pseudo);
     return { color: resolved(/;color:(.*)$/.exec(el.getAttribute("style") ?? "")![1]!) } as CSSStyleDeclaration;
   });
-  errors = vi.spyOn(console, "error");
 });
 afterEach(() => setOrder([]));
 
@@ -159,7 +157,6 @@ it("draws both tracks, one band over them, the selection apart from it, a zoom o
   expect(drawing.querySelector("svg")).not.toBeNull();
   unmount();
   expect(drawing.querySelector("svg")).toBeNull();
-  expect(errors).not.toHaveBeenCalled(); // jsdom's "Not implemented" and React's warnings both come through here
 });
 
 // Tool calls on two days next to each other: one line between them, no dot. A zoom that leaves one of them out leaves the
@@ -179,7 +176,6 @@ it("draws a dot on a rate point whose neighbour the zoom leaves out, over its ba
     expect(segments().filter(s => Math.abs(s.cx - mid) <= .5)).toHaveLength(3);
   }
   unmount();
-  expect(errors).not.toHaveBeenCalled();
 });
 
 // The pointer reads a day through the frame, which spans both tracks and the gap between them: over the bars, the gap and
@@ -201,7 +197,6 @@ it("reads the day under the pointer over the bars, the gap between the tracks an
     await waitFor(() => expect(band()).toHaveLength(1));
   }
   unmount();
-  expect(errors).not.toHaveBeenCalled();
 });
 
 // The selected day, read: its mark keeps the selection's tint and frame. ECharts' pointer highlights the items on the
@@ -260,7 +255,6 @@ describe("by week in a narrow box", () => {
     expect(label.getAttribute("text-anchor")).toBe("end");
     expect(Number(/translate\(([\d.]+)/.exec(label.getAttribute("transform") ?? "")?.[1] ?? label.getAttribute("x"))).toBeLessThanOrEqual(width);
     unmount();
-    expect(errors).not.toHaveBeenCalled();
   });
 
   // The peak label, measured as the browser draws it, by a canvas of 5px a character at 11px ("Peak 9 commits · Week of
@@ -289,6 +283,5 @@ describe("by week in a narrow box", () => {
     expect(bar.cx).toBeGreaterThanOrEqual(left);
     expect(bar.cx).toBeLessThanOrEqual(left + w);
     unmount();
-    expect(errors).not.toHaveBeenCalled();
   });
 });

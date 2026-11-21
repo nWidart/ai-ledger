@@ -153,7 +153,6 @@ describe("Abandon a request the user left", () => {
   });
 
   it("abandons Cost's request when the user goes to Errors, and Errors loads", async () => {
-    vi.stubGlobal("IntersectionObserver", class { observe() {} unobserve() {} disconnect() {} });
     const s = server(u => answers(u, withPrompts(3)), u => u.pathname === "/api/usage");
     open("/cost?range=30");
     await waitFor(() => expect(s.to("/api/usage").length).toBe(1));

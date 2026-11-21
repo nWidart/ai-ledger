@@ -4,13 +4,16 @@
 import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import session from "./__fixtures__/session";
 import usage from "./__fixtures__/usage";
 import { ROUTES } from "./App";
 import { renderRouter } from "./testing";
 import { closeSheets, go, setSearch } from "./url";
 
 const status = { ingesting: false, last_ingest: null, last_change: null, last_stats: null, error: null, counts: {}, interval: 60, project_order: [] };
-const loaded = (path: keyof typeof ROUTES) => waitFor(() => expect(document.title).toBe(ROUTES[path].title));
+const answer = (url: string) => url.startsWith("/api/status") ? status : url.startsWith("/api/usage") ? usage
+  : url.startsWith("/api/sessions") ? { total: 0, offset: 0, sessions: [] } : url.startsWith("/api/session?") ? session : {};
+const loaded =(path: keyof typeof ROUTES) => waitFor(() => expect(document.title).toBe(ROUTES[path].title));
 const settle = () => new Promise(r => setTimeout(r, 30));
 let y = 0, scrollTo: ReturnType<typeof vi.fn>;
 /** The user scrolls the window to `top`. */
@@ -23,7 +26,7 @@ beforeEach(() => {
   scrollTo = vi.fn((o: ScrollToOptions) => { y = o.top ?? 0; });
   vi.stubGlobal("scrollTo", scrollTo);
   Object.defineProperty(window, "scrollY", { configurable: true, get: () => y });
-  vi.stubGlobal("fetch", vi.fn((url: string) => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(url.startsWith("/api/status") ? status : url.startsWith("/api/usage") ? usage : {}) } as Response)));
+  vi.stubGlobal("fetch", vi.fn((url: string) => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(answer(url)) } as Response)));
 });
 afterEach(() => { vi.unstubAllGlobals(); delete (window as { scrollY?: number }).scrollY; try { sessionStorage.clear(); } catch { /* off */ } });
 
