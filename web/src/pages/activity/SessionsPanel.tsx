@@ -1,5 +1,5 @@
 import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { ListedSessionRow, SessionSort, Span, View } from "../../api";
 import { HowMeasured } from "../../components/HowMeasured";
 import type { SortBy } from "../../components/Sort";
@@ -11,6 +11,7 @@ import { big, dur, num, pct, plural, usd, when } from "../../format";
 import { useDebouncedValue } from "../../components/useDebounced";
 import { queries } from "../../queries";
 import { ColumnChooser } from "./ColumnChooser";
+import { Comparison } from "./Comparison";
 import { choosable, setColumnChoice, useColumnChoice, useWidthHides, type ChoosableId, type ColumnChoice } from "./sessionColumns";
 
 /** What the sessions table is limited to: a search, sessions near the context limit, and the chart's selection (day, its
@@ -68,12 +69,12 @@ const ORDER: Record<SessionSort, [string, string]> = {
 };
 
 type Key = SessionSort | "project" | "select";
-const SESS_CELL = { className: "when sess" }, NAME_CELL = { className: "name" }, CHOSEN: RowAttrs = { className: "chosen" }, PLAIN: RowAttrs = {};
+const SESS_CELL = { className: "when sess" }, WHEN_CELL = { className: "when" }, NAME_CELL = { className: "name" }, CHOSEN: RowAttrs = { className: "chosen" }, PLAIN: RowAttrs = {};
 const PICK: RowPick<ListedSessionRow> = { value: s => s.session_id, open: openSessionSheet, subject: s => ({ kind: "session", value: s.session_id }) };
 
 /** The table's columns, all of them. sorted: the sort's keys, whose cells add "sorted"; kept: the columns the user keeps, whose cells
  *  add "keep"; either class shows a column at any width. day: a day is selected, so the whole-session figures say so. */
-function sessionColumns(sorted: ReadonlySet<Key>, kept: ColumnChoice, day: boolean): Column<ListedSessionRow, Key>[] {
+export function sessionColumns(sorted: ReadonlySet<Key>, kept: ColumnChoice, day: boolean): Column<ListedSessionRow, Key>[] {
   const className = (id: Key) => [sorted.has(id) && "sorted", choosable(id) && kept[id] && "keep"].filter(Boolean).join(" ") || undefined;
   // A sortable figure: hide, its narrow-width priority; whole, a whole-session figure on a day.
   const stat = (id: Exclude<SessionSort, "first_ts">, header: string, hide: 0 | 1 | 2 | undefined, cell: (s: ListedSessionRow) => ReactNode, value: (s: ListedSessionRow) => CellValue,
@@ -105,6 +106,12 @@ function sessionColumns(sorted: ReadonlySet<Key>, kept: ColumnChoice, day: boole
   ];
 }
 
+// The session's actual start, as the Session cell's muted line reads it.
+const START: Column<ListedSessionRow, Key> = { id: "first_ts", header: "Start", cell: s => when(s.first_ts), cellProps: () => WHEN_CELL };
+/** The comparison's figures, from the table's columns: Project, Start, then every figure in the table's order, hidden or not. */
+export const comparedFigures = (all: readonly Column<ListedSessionRow, Key>[]): Column<ListedSessionRow, Key>[] =>
+  all.flatMap(c => c.id === "first_ts" ? [] : c.id === "project" ? [c, START] : [c]);
+
 /** Every session in the view, paged on the server so search finds old ones too, and sorted there so a sort orders them all.
  *  The Sessions tab's panel: an infinite query on the view, the filters and the sort, loaded while the tab shows, from the
  *  first page when any of them changes (the rows shown stay, inert, until the new first page lands). When an ingest or
@@ -115,13 +122,15 @@ function sessionColumns(sorted: ReadonlySet<Key>, kept: ColumnChoice, day: boole
  *  one carries "keep"; every sorted column always shows.
  *  view: the view of the /api/usage response on screen, which the rows are counted in; asked: the view the URL asks for. They
  *  differ while a new view loads (or after it failed), and the earlier view's rows stay on screen meanwhile.
- *  selection: the page's (a checkbox column first in each row, a bar over the table). A tick is taken only from rows of the view
+ *  selection: the page's (a checkbox column first in each row, a bar over the table, and from two sessions Compare, which shows the
+ *  held rows side by side between the bar and the table). A tick is taken only from rows of the view
  *  asked for: the two views equal and the rows not left over from an earlier query; otherwise the row checkboxes are disabled. */
 export function SessionsPanel({ view, asked, filter, onFilter, sort, onSort, selected, selection }: {
   view: View; asked: View; filter: SessFilter; onFilter: (f: SessFilter) => void; sort: readonly SortBy<SessionSort>[]; onSort: (s: readonly SortBy<SessionSort>[]) => void;
   selected: string; selection: SessSelection;
 }) {
-  const [several, setSeveral] = useState(false);
+  const [several, setSeveral] = useState(false), [comparing, setComparing] = useState(false), cmpId = useId();
+  const clearButton = useRef<HTMLButtonElement>(null), cmpFocus = useRef<string | null>(null);
   const root = useRef<HTMLDivElement>(null), body = useRef<HTMLTableSectionElement>(null), search = useRef<HTMLInputElement>(null), focusRow = useRef(-1);
   // Searching waits for a pause in typing; clearing the box searches at once.
   const debounced = useDebouncedValue(filter.q, 200), qt = (filter.q ? debounced : "").trim();
@@ -171,6 +180,7 @@ export function SessionsPanel({ view, asked, filter, onFilter, sort, onSort, sel
   // The sorted keys, as a set that changes only with the keys, so the columns are not rebuilt for a new list of the same keys.
   const keys = sort.map(s => s.key).join(), sorted = useMemo(() => new Set<Key>(keys ? keys.split(",") as SessionSort[] : []), [keys]);
   const all = useMemo(() => sessionColumns(sorted, choice, day), [sorted, choice, day]);
+  const figures = useMemo(() => comparedFigures(all), [all]);
   const columns = useMemo(() => [selectColumn, ...all.filter(c => sorted.has(c.id) || !choosable(c.id) || choice[c.id] !== false)], [selectColumn, all, sorted, choice]);
   // A box is ticked when its column shows now: sorted, kept, or left to a width that does not hide it.
   const widthHides = (c: Column<ListedSessionRow, Key>) => c.hide != null && hides(c.hide);
@@ -198,6 +208,21 @@ export function SessionsPanel({ view, asked, filter, onFilter, sort, onSort, sel
   // The bar's status is always in the page, empty with nothing selected, so its first count is announced.
   const n = picked.size;
   const count = !n ? "" : `${num(n)} selected.` + (n === 1 ? " Select 1 more to compare." : full ? ` ${MAX_SELECTED} is the most that compare.` : "");
+  // The comparison shows from two sessions on, from the held rows alone; under two it closes, so a later pair does not reopen it unasked.
+  if (comparing && n < 2) setComparing(false);
+  const shown = comparing && n >= 2;
+  // Removing a session moves focus to the next session's Remove button, else the previous one's; under two, to Clear selection.
+  const remove = (s: ListedSessionRow) => {
+    const ids = [...picked.keys()], rest = ids.filter(id => id !== s.session_id);
+    cmpFocus.current = rest.length < 2 ? "" : rest[Math.min(ids.indexOf(s.session_id), rest.length - 1)]!;
+    toggle(s, false);
+  };
+  useEffect(() => {
+    const to = cmpFocus.current;
+    if (to == null) return;
+    cmpFocus.current = null;
+    (to ? [...document.getElementById(cmpId)?.querySelectorAll<HTMLElement>("[data-remove]") ?? []].find(b => b.dataset.remove === to) : clearButton.current)?.focus();
+  }, [picked, cmpId]);
   return (
     <div id="sessions" ref={root}>
       <div className="tools-row">
@@ -211,8 +236,10 @@ export function SessionsPanel({ view, asked, filter, onFilter, sort, onSort, sel
         <HowMeasured what="the session count">A session counts here when it has a request in the range; the Judgments view counts sessions by their start time, so the two totals can differ slightly.</HowMeasured></div>
       <div className={"selbar" + (n ? " on" : "")}>
         <span role="status">{count}</span>
-        {n > 0 && <button type="button" className="linkish" onClick={() => { clear(); search.current?.focus(); }}>Clear selection</button>}
+        {n > 1 && <button type="button" className="linkish" aria-expanded={shown} aria-controls={shown ? cmpId : undefined} onClick={() => setComparing(!shown)}>Compare</button>}
+        {n > 0 && <button type="button" className="linkish" ref={clearButton} onClick={() => { clear(); search.current?.focus(); }}>Clear selection</button>}
       </div>
+      {shown && <Comparison id={cmpId} sessions={[...picked.values()]} figures={figures} onRemove={remove} />}
       <Table name="Sessions" region="scroll tall" rows={rows} columns={columns} rowId={s => s.session_id} manualSort sort={sort}
         onSort={s => sortBy(s as SortBy<SessionSort>[])} sortAdd={several} current={selected} pick={PICK}
         rowProps={s => (picked.has(s.session_id) ? CHOSEN : PLAIN)}

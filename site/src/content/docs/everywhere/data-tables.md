@@ -89,7 +89,18 @@ The selection lasts through Show more, a sort, a search, **Near context limit on
 
 While another view loads, the rows of the view before stay on screen. Their checkboxes are disabled until the new rows arrive, so no session joins the selection with figures from the view before. The rows still open their sheet. If the new view fails to load, the checkboxes stay disabled until the view asked for and the rows shown agree again.
 
-The URL and the browser keep no selection: a reload or a shared link shows no session selected.
+The URL and the browser keep no selection and no comparison: a reload or a shared link shows no session selected.
+
+## Comparison
+
+With two or more sessions selected, **Compare** in the selection bar shows the selected sessions side by side, in a table named "Session comparison" between the bar and the Sessions table. It is the Sessions table turned on its side: one row per figure, one column per session, in the order you selected them.
+
+- Each figure reads as its Sessions cell does and keeps the scope it has there. [Compare sessions](/ai-ledger/pages/activity/#sessions) on the Activity page lists each figure's scope.
+- Every figure has its row, even a column you hid or the width hides.
+- Ticking another row while the comparison shows adds its column.
+- The comparison reads the rows the list has loaded and makes no request. A refresh updates the figures of each session the list holds; a session a search leaves out keeps its last figures.
+
+**Compare** is a disclosure button: a screen reader hears it as collapsed or expanded, and the focus stays on it when the comparison shows or hides. Each figure's row starts with its name as a row header, and each session's column header holds the session's name, so a screen reader hears both with every cell. The name opens the session sheet, and closing the sheet returns the focus to it. **Remove** unselects its session and moves the focus to the next session's Remove button, or to the previous one's after the last. When fewer than two sessions stay selected, the comparison closes and the focus moves to **Clear selection**. While a new sort or search loads, Remove still works. On a narrow window the comparison scrolls sideways in its own region.
 
 ## Export
 
