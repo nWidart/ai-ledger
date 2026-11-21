@@ -17,8 +17,9 @@ import { failRate, METRICS, monday, workBuckets, workKinds, workStack, type Work
 /** One series of the option: the series types the runtime registers. */
 type Series = Exclude<NonNullable<EChartsOption["series"]>, readonly unknown[]>;
 
-/** The plain bars' color, and the rate line's. */
-const BAR = "var(--series-1)", FAIL = "var(--critical)";
+/** The plain bars' color, and the rate line's (the tooltip keys it too). */
+const BAR = "var(--series-1)";
+export const FAIL = "var(--critical)";
 
 /** The days of a view: a week bar it cuts short is partial. */
 export interface WorkView { start: string | null; end: string }

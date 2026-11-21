@@ -14,6 +14,7 @@ import palette from "../../__fixtures__/palette";
 import { Palette } from "../../components/palette/Palette";
 import { openPalette } from "../../components/palette/store";
 import { mockApi } from "../../components/sheets/testing";
+import { drawn } from "../../components/echart/testing";
 import { ActivityPage } from "./ActivityPage";
 import { setSearch } from "../../url";
 import { hookCommand, workDays } from "./work";
@@ -970,9 +971,9 @@ describe("ActivityPage", () => {
     renderApp(<ActivityPage />);
     await loaded();
     const chart = screen.getByRole("group", { name: /^Commits per week/ });
-    vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({ left: 0, top: 0, right: 800, bottom: 216, width: 800, height: 216, x: 0, y: 0, toJSON: () => ({}) });
     const n = history.length;
-    fireEvent.click(chart.querySelector(".hit")!, { clientX: 700 }); // the second of two bars: the week of Nov 2
+    const fake = await drawn();
+    fake.fire("click", fake.pointAt(1)); // the second of two bars: the week of Nov 2
     expect(location.search).toBe("?range=0&tab=tools&week=2026-11-02");
     expect(history.length).toBe(n);
     await waitFor(() => expect(fetched()).toContain("/api/day?range=0&day=2026-11-02&days=7"));
@@ -1013,7 +1014,7 @@ describe("ActivityPage", () => {
     at("?range=0");
     renderApp(<ActivityPage />);
     await loaded();
-    vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({ left: 0, top: 0, right: 800, bottom: 216, width: 800, height: 216, x: 0, y: 0, toJSON: () => ({}) });
+    const fake = await drawn();
     act(() => setSearch({ range: 30 }));
     await waitFor(() => expect(fetched().map(String)).toContain("/api/usage?range=30"));
     // The all-time weekly chart is still drawn: Enter and a click on it write nothing.
@@ -1021,7 +1022,7 @@ describe("ActivityPage", () => {
     act(() => chart.focus());
     fireEvent.keyDown(chart, { key: "End" });
     fireEvent.keyDown(chart, { key: "Enter" });
-    fireEvent.click(chart.querySelector(".hit")!, { clientX: 700 });
+    fake.fire("click", fake.pointAt(1));
     expect(location.search).toBe("?range=30");
     await act(async () => { wait.resolve(usage); await wait.p; });
     await waitFor(() => expect(screen.getByRole("group", { name: /^Commits per day/ })).toBeTruthy());

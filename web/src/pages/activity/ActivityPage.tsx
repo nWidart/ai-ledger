@@ -23,9 +23,14 @@ import { NO_JUDGMENTS_KEYS, validateSearch, type ActivitySearch, type WorkTab } 
 import { ViewSwitch } from "./ViewSwitch";
 import { ExtTables, LoopsList, PROJECT_SORT, ProjectsTable, TestsList, ToolsTable, type ProjectKey, type ToolKey } from "./tables";
 import { firstWorkDay, flakyTools, reaches, shortTool, spanDays, type WorkMetric } from "./work";
-import { CHART_ID, WorkPanel, type WorkPick } from "./WorkChart";
+import { CHART_ID, WorkPanel } from "./WorkChart";
+import type { WorkPick } from "./workTracks";
 import { panelId, Workbench } from "./Workbench";
+import { preloadECharts } from "../../components/echart/load";
 import "./activity.css";
+
+// The work chart draws with ECharts: its chunk is requested with this page's, not after the first render.
+preloadECharts();
 
 const METRIC_KEY = "claude-activity-metric";
 const loadMetric = (): WorkMetric => { try { const v = localStorage.getItem(METRIC_KEY); return v === "prompts" || v === "sessions" ? v : "commits"; } catch { return "commits"; } };
