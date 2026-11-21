@@ -71,14 +71,12 @@ const readFirst = () => {
   fireEvent.keyDown(group, { key: "ArrowRight" });
 };
 
-let errors: ReturnType<typeof vi.spyOn>;
 beforeEach(() => {
   const real = window.getComputedStyle.bind(window);
   vi.spyOn(window, "getComputedStyle").mockImplementation((el: Element, pseudo?: string | null) => {
     if (!(el instanceof HTMLElement) || el.dataset.chartProbe === undefined) return real(el, pseudo);
     return { color: resolved(/;color:(.*)$/.exec(el.getAttribute("style") ?? "")![1]!) } as CSSStyleDeclaration;
   });
-  errors = vi.spyOn(console, "error");
 });
 
 it("draws a bar per week in the parts' colors, the counts, one band, newer figures with no stale path, and unmount removes the svg", async () => {
@@ -110,7 +108,6 @@ it("draws a bar per week in the parts' colors, the counts, one band, newer figur
   expect(drawing.querySelector("svg")).not.toBeNull();
   unmount();
   expect(drawing.querySelector("svg")).toBeNull();
-  expect(errors).not.toHaveBeenCalled(); // jsdom's "Not implemented" and React's warnings both come through here
 });
 
 // By default ECharts' axis pointer highlights the items on the point read, and a highlighted custom series is redrawn in

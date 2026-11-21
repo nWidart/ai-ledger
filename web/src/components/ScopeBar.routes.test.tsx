@@ -45,7 +45,7 @@ const back = () => act(async () => { history.back(); await new Promise(r => setT
 const forward = () => act(async () => { history.forward(); await new Promise(r => setTimeout(r, 0)); });
 const popover = () => screen.queryByRole("dialog", { name: "Filters" });
 
-beforeEach(() => { width(false); vi.stubGlobal("IntersectionObserver", class { observe() {} disconnect() {} }); Element.prototype.scrollIntoView ??= () => {}; });
+beforeEach(() => { width(false); Element.prototype.scrollIntoView ??= () => {}; });
 afterEach(() => { vi.unstubAllGlobals(); });
 
 describe("the scope bar follows the page on screen", () => {

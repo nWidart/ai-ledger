@@ -36,7 +36,6 @@ const stubErrors = (payload: ErrorsPayload) => vi.stubGlobal("fetch", vi.fn((url
 
 beforeEach(() => {
   vi.stubGlobal("fetch", vi.fn((url: string) => json(url.startsWith("/api/errors") ? fixture : { id: "t07", i: "full input", e: "full error", r: "", cut: [] })));
-  vi.stubGlobal("IntersectionObserver", class { observe() {} disconnect() {} });
   Element.prototype.scrollIntoView ??= () => {};
   history.replaceState(null, "", "/errors");
 });

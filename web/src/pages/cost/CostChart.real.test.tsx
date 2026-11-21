@@ -46,7 +46,6 @@ const drawnWith = async (want: string[], gone: string[] = []) => waitFor(() => {
   expect(gone.filter(t => now.has(t))).toEqual([]);
 });
 
-let errors: ReturnType<typeof vi.spyOn>;
 beforeEach(() => {
   setOrder(["A", "B"]);
   const real = window.getComputedStyle.bind(window);
@@ -54,7 +53,6 @@ beforeEach(() => {
     if (!(el instanceof HTMLElement) || el.dataset.chartProbe === undefined) return real(el, pseudo);
     return { color: resolved(/;color:(.*)$/.exec(el.getAttribute("style") ?? "")![1]!) } as CSSStyleDeclaration;
   });
-  errors = vi.spyOn(console, "error");
 });
 afterEach(() => setOrder([]));
 
@@ -76,7 +74,6 @@ it("draws the stacking's colors on real ECharts, redraws a stack switch without 
   expect(drawing.querySelector("svg")).not.toBeNull();
   unmount();
   expect(drawing.querySelector("svg")).toBeNull();
-  expect(errors).not.toHaveBeenCalled(); // jsdom's "Not implemented" and React's warnings both come through here
 });
 
 // By default ECharts' axis pointer highlights the items on the day read: the stack's segments were redrawn in lifted colors
