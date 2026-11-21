@@ -153,7 +153,11 @@ POLL_PARSERS = {"claude": claude_rows}
 
 def percent_of(v):
     """v when it is a whole-or-decimal percent from 0 to 100, else None (a bool, a string, NaN and out-of-range values are not)."""
-    return v if isinstance(v, (int, float)) and not isinstance(v, bool) and 0 <= v <= 100 else None
+    try:
+        v = float(v)
+    except (TypeError, ValueError):
+        return None
+    return v if 0 <= v <= 100 else None
 
 
 def as_list(v):
