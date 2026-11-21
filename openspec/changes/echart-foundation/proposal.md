@@ -12,7 +12,7 @@ Every chart in the web UI is hand-written SVG: eleven components that each repea
 - **Cost's daily chart on ECharts.** Same stackings, metrics, scales, 7-day average, legend, today-so-far hatch, peak label, day selection, tooltip, readout and data table. The thin-segment rule is kept exactly: the stack is drawn from the same slot arithmetic as today.
 - **New: a zoom slider under Cost's daily chart**, in views of 14 days or more. It narrows the days the chart shows, down to 7. It does not change the page's range, the URL, the request, the totals or the data table. The keyboard zooms with plus and minus, and "Show all days" resets it. The zoom and the day being read belong to the view: newer data for the same view (a background ingest) and a hidden token kind keep them, and a new view resets them. The wrapper's `view` prop names the view.
 - **New: Escape dismisses Cost's tooltip wherever the focus is**, as the spec already asks and Activity already does.
-- **A bundle budget** in `npm run check` and CI: the ECharts chunk stays under 195 kB gzip (176.5 kB built), and the entry chunk does not grow past 120 kB.
+- **A bundle budget** in `npm run check` and CI: the ECharts chunk stays under 195 kB gzip (176.5 kB built), and the entry chunk does not grow past 130 kB (121.7 kB built).
 - **Sparklines stay hand-written SVG.** Every other chart stays as it is until its own change.
 
 ## Capabilities

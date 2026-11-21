@@ -8,7 +8,7 @@ const assets = fileURLToPath(new URL("../../src/ai_ledger/web/assets/", import.m
 
 // Limits in kB (1 kB = 1000 bytes) of gzip -9.
 const LIMITS = {
-  index: 120, // catches a static import of ECharts into the entry
+  index: 130, // catches a static import of ECharts into the entry (121.7 kB since main's shared tables)
   CostPage: 20,
   echarts: 195, // the lazy ECharts chunk
 };

@@ -366,7 +366,7 @@ What will look or behave differently:
 `web/scripts/check-bundle.mjs`, run at the end of `npm run check` and in CI's `web-build` job after the build. It reads `src/ai_ledger/web/assets/`, gzips at level 9 and fails when:
 
 - there is not exactly one `echarts-*.js`, or it is over **195 kB** (spike: 181.4 kB; built at the change's head: 176.5 kB);
-- `index-*.js` is over **120 kB** (before the change: 111.3 kB; at its head: 111.5 kB), which catches a static import of ECharts;
+- `index-*.js` is over **130 kB**, which catches a static import of ECharts. The limit was 120 kB (111.3 kB before the change, 111.5 kB with it) until main's move of its tables onto the shared table component grew the entry to 121.6 kB on its own; with this change it is 121.7 kB;
 - `CostPage-*.js` is over **20 kB** (before the change: 12.5 kB; at its head: 16.7 kB).
 
 It prints each size, and exits 1 naming each chunk over its limit or missing. `vite.config.ts` sets `chunkSizeWarningLimit: 600`, so the build stays quiet about the one large chunk.
