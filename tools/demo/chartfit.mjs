@@ -11,6 +11,8 @@
 // - a pointer move over day 10, and ten presses of Right, put the band over the day the tooltip and the readout name, the
 //   tooltip beside it and left of it on the last day; after a zoom the band is over that day's place in the days shown;
 // - a click and Enter open the sessions drawer for that day, and on a day with nothing in it neither does, and the reading stays;
+//   after Escape, a click there with the pointer at rest draws no band;
+// - with motion on, a zoom out draws the days that come back at full height: the bars grow on the first drawing only;
 // - the pointer is a hand over a day and not over the day labels;
 // - plus and minus zoom, Ctrl+plus is left to the browser; dragging a slider handle changes the days drawn, not the heading,
 //   the lede, the URL or the requests made; the live region says the days shown once, on release; "Show all days" resets
@@ -464,6 +466,16 @@ try {
     const click = { open: await drawer(), readout: await ev(page, () => window.chartfit.readout()), tip: await ev(page, () => window.chartfit.tip()) };
     line(`a click on an empty day ${I + 1} opens nothing, and the reading stays`, !click.open && named(click.readout) === I && named(click.tip?.day ?? "") === I,
       `drawer ${click.open ? "open" : "closed"}, readout "${click.readout}"`);
+    // Escape ends the reading; a click on the same spot, with the pointer at rest, reads nothing: no band may show. ECharts'
+    // own axis pointer would draw one on the click.
+    await page.keyboard.press("Escape");
+    await until(() => ev(page, () => window.chartfit.readout()), r => r === "");
+    await page.mouse.down();
+    await page.mouse.up();
+    await sleep(300);
+    const rest = await ev(page, () => ({ band: window.chartfit.band(), tip: window.chartfit.tip(), readout: window.chartfit.readout() }));
+    line("after Escape, a click with the pointer at rest on the empty day draws no band", !rest.band && !rest.tip && rest.readout === "",
+      `${rest.band ? `band at ${Math.round((rest.band.l + rest.band.r) / 2)}px` : "no band"}, readout "${rest.readout}"`);
     await away(page);
     await ev(page, () => document.activeElement?.blur());
     await page.locator("#spend .echart").focus();
@@ -513,6 +525,27 @@ try {
     line("newer figures for the same view are drawn", after !== before);
     line('the refresh keeps the days shown, "Show all days" and the focus on it, and says nothing', kept.days === zoomed && kept.focus && !kept.said.length,
       `${kept.days} of ${N} days drawn, ${zoomed} before; focus ${kept.focus ? "on the button" : "lost"}; said ${JSON.stringify(kept.said)}`);
+    await page.done();
+  }
+
+  // With motion on, the bars grow once, on the first drawing. A zoom out makes ECharts create the bars the zoom left out:
+  // they stand at their full height at once, the same as a moment later.
+  {
+    const page = await open("motion", { reducedMotion: "no-preference" });
+    await sleep(1500); // the first drawing's growth
+    const drawnDays = () => ev(page, () => window.chartfit.days().length);
+    const heights = () => ev(page, () => JSON.stringify(window.chartfit.bars().map(r => [Math.round(r.l), Math.round(r.h)])));
+    await page.locator("#spend .echart").focus();
+    await page.keyboard.press("+");
+    const zoomed = await until(drawnDays, n => n < N);
+    await sleep(700);
+    await page.keyboard.press("-");
+    const back = await until(drawnDays, n => n === N);
+    const atOnce = await heights();
+    await sleep(1200);
+    const settled = await heights();
+    line("with motion on, a zoom out draws the days that come back at full height, at once", zoomed < N && back === N && atOnce === settled,
+      `${zoomed} days zoomed, ${back} back; ${atOnce === settled ? "no bar grew" : "bars grew again"}`);
     await page.done();
   }
 
