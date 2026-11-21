@@ -5,6 +5,8 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-21
+
 ### Added
 
 - Grok CLI sessions, read from `~/.grok/sessions` (`--grok` sets another Grok home). Every source filter offers Grok. A turn's tokens are split over its model calls, so per-call figures are estimates.
@@ -311,6 +313,7 @@ First release on PyPI.
   `$XDG_DATA_HOME/ai-ledger/` (or `~/.local/share/ai-ledger/`) elsewhere. A source checkout's `data/ai-ledger.duckdb`
   moves there on the first start.
 
+[0.5.0]: https://github.com/nWidart/ai-ledger/releases/tag/v0.5.0
 [0.4.0]: https://github.com/nWidart/ai-ledger/releases/tag/v0.4.0
 [0.3.0]: https://github.com/nWidart/ai-ledger/releases/tag/v0.3.0
 [0.2.0]: https://github.com/nWidart/ai-ledger/releases/tag/v0.2.0
