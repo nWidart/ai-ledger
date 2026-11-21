@@ -3,7 +3,7 @@
 // case-insensitive file system that name clashes with CostChart.tsx.
 import type { UsagePayload } from "../../api";
 import { niceMax, scaleMargins } from "../../components/chart";
-import { baseOption, categoryAxis, pointLabel, valueAxis, zoomSlider } from "../../components/echart/option";
+import { baseOption, categoryAxis, pointLabel, SLIDER_ROOM, valueAxis, ZOOM_FROM, zoomSlider } from "../../components/echart/option";
 import { stackSeries } from "../../components/echart/stack";
 import type { EChartsOption } from "../../components/echart/echarts";
 import type { ChartEnv } from "../../components/echart/tokens";
@@ -60,14 +60,11 @@ export function costModel(d: UsagePayload, metric: CostMetric, hidden: readonly 
   const avg = days.map((_, i) => (!showAvg || i < 6 || i === live ? null : totals.slice(i - 6, i + 1).reduce((s, t) => s + t, 0) / 7));
   const peak = days.length ? totals.reduce((b, t, i) => (t > totals[b]! ? i : b), 0) : null;
   const axis = share ? { max: 1, step: .25 } : niceMax(Math.max(...totals, 0), niceStep);
-  return { cost, share, none: !cost && !kinds.length, kinds, days, totals, values, showAvg, zoom: days.length >= ZOOM_DAYS, avg, live, peak, axis };
+  return { cost, share, none: !cost && !kinds.length, kinds, days, totals, values, showAvg, zoom: days.length >= ZOOM_FROM, avg, live, peak, axis };
 }
 
-/** The fewest days of a view that the chart can be zoomed in. */
-const ZOOM_DAYS = 14;
-/** What the zoom slider (20px, 4px off the bottom) and a 4px gap above it take under the day labels: the box is this much
- *  taller with the slider, so the plot keeps its height. */
-export const SLIDER_ROOM = 28;
+/** The box is this much taller with the slider; CostChart.tsx reads it from here. */
+export { SLIDER_ROOM };
 /** The plot's margins at the default text size: room for the day labels below and the value labels on the left. */
 const MARGIN = { t: 22, r: 8, b: 26, l: 52 };
 

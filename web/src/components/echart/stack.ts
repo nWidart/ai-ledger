@@ -39,8 +39,8 @@ export interface StackSeriesInput {
   /** Whether day i is drawn hatched, as a day still in progress. */
   hatched: (i: number) => boolean;
   env: StackEnv;
-  /** The bar's width from the band's. The default is the band less min(4, band × .25). */
-  width?: (band: number) => number;
+  /** The bar's width from the band's, for point i. The default is the band less min(4, band × .25). */
+  width?: (band: number, i: number) => number;
   /** The series id, "stack" by default. Each stack in one option needs its own: ECharts rejects two series with one id. */
   id?: string;
   /** The axes the stack sits on, 0 by default. A chart with several grids gives each stack the axes of its own grid. */
@@ -61,7 +61,7 @@ export function stackSeries({ kinds, values, hatched, env, width = barWidth, id 
   const renderItem: CustomSeriesRenderItem = (params, api: CustomSeriesRenderItemAPI) => {
     const i = Number(api.value(0)), total = Number(api.value(1));
     const [cx, y0] = api.coord([i, 0]) as [number, number], [, top] = api.coord([i, total]) as [number, number];
-    const band = (api.size!([1, 0]) as number[])[0]!, w = width(band);
+    const band = (api.size!([1, 0]) as number[])[0]!, w = width(band, i);
     const rects = stackRects(kinds.map((_, j) => Number(api.value(2 + j))), y0, top, cx - w / 2, w);
     if (!rects.length) return null;
     const shape = ({ x, y, width, height, r }: StackRect) => ({ x, y, width, height, r });

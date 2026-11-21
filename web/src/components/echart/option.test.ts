@@ -2,11 +2,18 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import type { CustomSeriesRenderItemAPI, CustomSeriesRenderItemParams } from "./echarts";
 import { dayAxis, peakLabelAt } from "../chart";
-import { baseOption, categoryAxis, pointLabel, valueAxis, zoomSlider, type OptionEnv } from "./option";
+import {
+  baseOption, categoryAxis, FRAME_AXES, lineSeries, pointLabel, selectionMark, SLIDER_ROOM, sliderTrend, trackAxes, trackLayout,
+  tracksOption, valueAxis, zoomSlider, type OptionEnv,
+} from "./option";
+import type { ChartEnv } from "./tokens";
+
+// Type-level: a chart passes its own `ChartEnv` to these helpers; tsc fails here if that stops holding.
+export const chartEnvIsOptionEnv = (e: ChartEnv): OptionEnv => e;
 
 const ink = { text: "ink-text", secondary: "ink-secondary", muted: "ink-muted", grid: "ink-grid", surface: "ink-surface",
   border: "ink-border", cursor: "ink-cursor", accent: "ink-accent", tint: "ink-tint" };
-const env = (over: Partial<OptionEnv> = {}): OptionEnv => ({ ink, textScale: 1, motion: true, ...over });
+const env = (over: Partial<OptionEnv> = {}): OptionEnv => ({ color: s => `resolved(${s})`, ink, forced: false, textScale: 1, motion: true, ...over });
 const step = (r: number) => Math.max(1, Math.ceil(r));
 
 describe("baseOption", () => {
@@ -118,6 +125,10 @@ describe("zoomSlider", () => {
     expect(zoomSlider(env()).id).toBe("zoom");
   });
 
+  it("drives every x axis: with none named, ECharts zooms a frame and leaves its tracks", () => {
+    expect(zoomSlider(env()).xAxisIndex).toBe("all");
+  });
+
   it("tints the days shown and fills both handles with the accent, in a muted frame, over a muted trend", () => {
     const z = zoomSlider(env());
     expect(z).toMatchObject({ borderColor: "ink-muted", fillerColor: "ink-tint", handleStyle: { color: "ink-accent", borderColor: "ink-accent" } });
@@ -132,5 +143,159 @@ describe("zoomSlider", () => {
     const z = zoomSlider(env());
     const colors = JSON.stringify(z).match(/"(#|rgb)[^"]*"/g);
     expect(colors).toBeNull(); // no color but the ink roles
+  });
+});
+
+// The work chart's tracks at the default text size: bars 120px that keep their height, a 16px gap, a rate track of 36px
+// that grows with the text, under margins for the labels.
+const WORK = { margin: { t: 20, r: 16, b: 24, l: 52 }, tracks: [{ fixed: 120 }, { scaled: 36 }], gap: 16 };
+
+describe("trackLayout", () => {
+  it("gives the work chart's tracks 216px, and 244px with the slider", () => {
+    expect(trackLayout(1, { ...WORK, slider: false })).toEqual({
+      height: 216, left: 52, right: 16, frame: { top: 20, height: 172 }, tracks: [{ top: 20, height: 120 }, { top: 156, height: 36 }],
+    });
+    expect(trackLayout(1, { ...WORK, slider: true }).height).toBe(244);
+    expect(SLIDER_ROOM).toBe(28);
+  });
+
+  it("keeps a fixed track's height at twice the text size, and doubles a scaled track, the gap and the margins", () => {
+    const l = trackLayout(2, { ...WORK, slider: true });
+    expect(l.tracks).toEqual([{ top: 40, height: 120 }, { top: 192, height: 72 }]);
+    expect([l.left, l.right]).toEqual([104, 32]);
+    expect(l.height).toBe(40 + 120 + 32 + 72 + 48 + SLIDER_ROOM);
+  });
+
+  it("runs the frame from the first track's top to the last track's bottom", () => {
+    for (const s of [1, 1.5, 2]) {
+      const l = trackLayout(s, { margin: WORK.margin, tracks: [{ fixed: 80 }, { scaled: 30 }, { fixed: 10, scaled: 20 }], gap: 12, slider: false });
+      const first = l.tracks[0]!, last = l.tracks.at(-1)!;
+      expect(l.frame).toEqual({ top: first.top, height: last.top + last.height - first.top });
+      expect(l.height - last.top - last.height).toBeCloseTo(24 * s);
+    }
+  });
+});
+
+describe("trackAxes and FRAME_AXES", () => {
+  it("puts track t on the axes t + 1, behind the frame's axes 0", () => {
+    expect(trackAxes(0)).toEqual({ xAxisIndex: 1, yAxisIndex: 1 });
+    expect(trackAxes(1)).toEqual({ xAxisIndex: 2, yAxisIndex: 2 });
+    expect(FRAME_AXES).toEqual({ xAxisIndex: 0, yAxisIndex: 0 });
+  });
+});
+
+describe("tracksOption", () => {
+  const labels = ["2026-10-01", "2026-10-02", "2026-10-03"];
+  const y = (max: number) => valueAxis(env(), { max, step: max, format: String });
+  const option = () => tracksOption(env(), { layout: trackLayout(1, { ...WORK, slider: false }), labels, format: d => d.slice(5), y: [y(10), y(.2)] });
+  type Axis = { type?: string; gridIndex?: number; data?: string[]; show?: boolean; axisPointer?: { show?: boolean }; axisLabel?: { formatter?: unknown } };
+
+  it("gives the frame and each track a grid, an x axis and a y axis, all on one left and right", () => {
+    const o = option();
+    expect([o.grid.length, o.xAxis.length, o.yAxis.length]).toEqual([3, 3, 3]);
+    expect(o.grid).toEqual([
+      { left: 52, right: 16, top: 20, height: 172 },
+      { left: 52, right: 16, top: 20, height: 120 },
+      { left: 52, right: 16, top: 156, height: 36 },
+    ]);
+  });
+
+  it("puts the labels and the only axis pointer on x axis 0, the frame's", () => {
+    const [frame, ...tracks] = option().xAxis as Axis[];
+    expect(frame).toMatchObject({ type: "category", gridIndex: 0, data: labels, axisPointer: { show: true } });
+    expect((frame!.axisLabel!.formatter as (v: string) => string)("2026-10-02")).toBe("10-02");
+    expect((option().xAxis as Axis[]).filter(a => a.axisPointer?.show)).toHaveLength(1);
+    // Each track's x axis: hidden, on its own grid, over the same labels, with no pointer.
+    tracks.forEach((a, t) => expect(a).toEqual({ type: "category", gridIndex: t + 1, data: labels, show: false, axisPointer: { show: false } }));
+  });
+
+  it("gives the frame a hidden value axis from 0 to 1, and each track its own value axis on its grid", () => {
+    const [frame, bars, rate] = option().yAxis as (Axis & { min?: number; max?: number })[];
+    expect(frame).toEqual({ type: "value", gridIndex: 0, min: 0, max: 1, show: false });
+    expect(bars).toMatchObject({ type: "value", gridIndex: 1, max: 10 });
+    expect(rate).toMatchObject({ type: "value", gridIndex: 2, max: .2 });
+  });
+
+  it("refuses a list of value axes that does not match the tracks", () => {
+    expect(() => tracksOption(env(), { layout: trackLayout(1, { ...WORK, slider: false }), labels, format: String, y: [y(1)] })).toThrow("2 tracks, 1 value axes");
+  });
+});
+
+describe("selectionMark", () => {
+  // Drawn through renderItem over a stubbed frame: from y 20, 172px tall, with 40px bands from x 52.
+  const draw = (e: OptionEnv, index: number) => {
+    const s = selectionMark(e, { index }), row = (s.data as number[][])[0]!;
+    const api = { value: (dim: number) => row[dim], coord: ([x]: number[]) => [52 + (x! + .5) * 40, 0], size: ([dx]: number[]) => [dx! * 40, 0] };
+    const params = { coordSys: { type: "cartesian2d", x: 52, y: 20, width: 532, height: 172 } };
+    return s.renderItem!(params as unknown as CustomSeriesRenderItemParams, api as unknown as CustomSeriesRenderItemAPI) as
+      { type: string; shape: Record<string, number>; style: Record<string, unknown> };
+  };
+
+  it("is one silent item on the frame's axes, with a fixed id, over the grid lines and under the marks", () => {
+    const s = selectionMark(env(), { index: 3 });
+    expect(s).toMatchObject({ type: "custom", id: "selected", xAxisIndex: 0, yAxisIndex: 0, z: 1, silent: true });
+    expect(s.data).toEqual([[3, 0]]);
+  });
+
+  it("frames the point's band over the frame's height, tinted, in a 1.5px accent line inside the band", () => {
+    const r = draw(env(), 3); // band 3 runs from x 172 to 212
+    expect(r.type).toBe("rect");
+    expect(r.shape).toEqual({ x: 172.75, y: 20.75, width: 38.5, height: 170.5 });
+    expect(r.style).toEqual({ fill: "ink-tint", stroke: "ink-accent", lineWidth: 1.5 });
+  });
+
+  it("is an unfilled 2px frame in the accent, Highlight there, under forced colors", () => {
+    const r = draw(env({ forced: true }), 0); // band 0 runs from x 52 to 92
+    expect(r.shape).toEqual({ x: 53, y: 21, width: 38, height: 170 });
+    expect(r.style).toEqual({ fill: "none", stroke: "ink-accent", lineWidth: 2 });
+  });
+});
+
+describe("lineSeries", () => {
+  type Item = { value: number; symbol: string; symbolSize: number; itemStyle: Record<string, unknown> };
+  const dots = (i: number) => (i === 2 ? "solid" as const : i === 4 ? "hollow" as const : undefined);
+  const line = (e = env()) => lineSeries(e, { id: "rate", data: [.1, null, .3, .2, .05], color: "var(--critical)", dots, ...trackAxes(1) });
+
+  it("is a silent line on its axes, broken at a null, not clipped, with no symbol but on the points named", () => {
+    expect(line()).toMatchObject({
+      type: "line", id: "rate", xAxisIndex: 2, yAxisIndex: 2, symbol: "none", showAllSymbol: true, connectNulls: false, clip: false, silent: true,
+    });
+  });
+
+  it("draws in the color env.color resolves", () => {
+    expect(line().lineStyle).toMatchObject({ color: "resolved(var(--critical))", width: 1.75 });
+  });
+
+  it("keeps each null, and sets a symbol only on the points dots names", () => {
+    const d = line().data as (number | null | Item)[];
+    expect([d[0], d[1], d[3]]).toEqual([.1, null, .2]);
+    expect(d[2]).toMatchObject({ value: .3, symbol: "circle" });
+    expect(d[4]).toMatchObject({ value: .05, symbol: "circle" });
+    // No dot on a point with no value.
+    expect(lineSeries(env(), { id: "r", data: [null], color: "x", dots: () => "hollow", ...trackAxes(0) }).data).toEqual([null]);
+  });
+
+  it("swaps a solid dot's fill and ring for a hollow one", () => {
+    const d = line().data as Item[];
+    expect(d[2]).toMatchObject({ symbolSize: 5, itemStyle: { color: "resolved(var(--critical))", borderColor: "ink-surface", borderWidth: 1.5 } });
+    expect(d[4]).toMatchObject({ symbolSize: 6, itemStyle: { color: "ink-surface", borderColor: "resolved(var(--critical))", borderWidth: 1.5 } });
+  });
+
+  it("is the text ink under forced colors, its hollow dot a surface centre in a text ring", () => {
+    const l = line(env({ forced: true })), d = l.data as Item[];
+    expect(l.lineStyle!.color).toBe("ink-text");
+    expect(d[2]!.itemStyle).toMatchObject({ color: "ink-text", borderColor: "ink-surface" });
+    expect(d[4]!.itemStyle).toMatchObject({ color: "ink-surface", borderColor: "ink-text" });
+    expect(JSON.stringify(l)).not.toContain("critical");
+  });
+});
+
+describe("sliderTrend", () => {
+  it("is a line of the given values on the given axes that draws nothing", () => {
+    const t = sliderTrend([3, 1, 4], trackAxes(0));
+    expect(t).toMatchObject({ type: "line", id: "trend", xAxisIndex: 1, yAxisIndex: 1, data: [3, 1, 4], symbol: "none", showSymbol: false, silent: true });
+    // Transparent too: ECharts writes the path, and with no color it would take one of its default palette's.
+    expect(t.lineStyle).toEqual({ color: "transparent", opacity: 0 });
+    expect(t.areaStyle).toBeUndefined();
   });
 });

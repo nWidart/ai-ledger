@@ -1,10 +1,19 @@
 // The option fragments every ECharts chart repeats, so the charts look alike (design decision 7). Pure: each reads only the
 // environment it is given. Types only, from echarts.ts: this module stays out of the ECharts chunk's way.
-import type { CustomSeriesOption, EChartsOption, SliderDataZoomComponentOption, XAXisComponentOption, YAXisComponentOption } from "./echarts";
+// A chart of several tracks (echart-activity, decision 1) puts a frame at grid 0, over every track: the frame holds the one
+// visible x axis, the only axis pointer and what crosses the tracks, such as the selection mark; each track is a grid of
+// its own with a hidden x axis over the same points (trackLayout, tracksOption, trackAxes).
+import type {
+  CustomSeriesOption, EChartsOption, LineSeriesOption, SliderDataZoomComponentOption, XAXisComponentOption, YAXisComponentOption,
+} from "./echarts";
 
 /** The part of the chart environment these helpers read: a structural stand-in for `ChartEnv` in `tokens.ts`, which satisfies it. */
 export interface OptionEnv {
+  /** A CSS color, such as "var(--critical)", as a concrete color. */
+  color(css: string): string;
   ink: { text: string; muted: string; grid: string; surface: string; border: string; cursor: string; accent: string; tint: string };
+  /** (forced-colors: active): the ink roles are system colors. */
+  forced: boolean;
   textScale: number;
   motion: boolean;
 }
@@ -82,6 +91,149 @@ export const pointLabel = (env: OptionEnv, { index, value, text }: { index: numb
 
 /** The fewest points the zoom shows: the slider's handles and the plus key both stop there. */
 export const MIN_SHOWN = 7;
+/** The fewest points of a view that a chart can be zoomed in: from here on it draws the slider. */
+export const ZOOM_FROM = 14;
+/** What the zoom slider (20px, 4px off the bottom) and a 4px gap above it take under the point labels: the box is this much
+ *  taller with the slider, so the plot keeps its height. */
+export const SLIDER_ROOM = 28;
+
+type GridOption = Exclude<NonNullable<EChartsOption["grid"]>, readonly unknown[]>;
+/** The axes a series sits on: a track's (`trackAxes`) or the frame's (`FRAME_AXES`). */
+export interface SeriesAxes { xAxisIndex: number; yAxisIndex: number }
+
+/** One track's height before the text scale: `fixed` px that keep their size, plus `scaled` px that grow with the text. */
+export interface TrackSpec { fixed?: number; scaled?: number }
+/** Where the box puts its grids, in px from its top and from its sides. */
+export interface TrackLayout {
+  /** The box's height: the margins, the tracks, the gaps between them and, with the slider, SLIDER_ROOM. */
+  height: number;
+  left: number;
+  right: number;
+  /** The frame: from the first track's top to the last track's bottom. */
+  frame: { top: number; height: number };
+  tracks: { top: number; height: number }[];
+}
+
+/** The box's height and each grid's place for tracks stacked top to bottom. A track is `fixed + scaled × textScale` tall; the
+ *  margins (room for the labels) and the gap between two tracks grow with the text; `slider` adds SLIDER_ROOM under the
+ *  bottom margin. It takes the text scale, not the environment: the box's height is needed before any environment exists. */
+export function trackLayout(textScale: number, { margin, tracks, gap, slider }: {
+  margin: { t: number; r: number; b: number; l: number }; tracks: readonly TrackSpec[]; gap: number; slider: boolean;
+}): TrackLayout {
+  let y = margin.t * textScale;
+  const placed = tracks.map((t, i) => {
+    if (i) y += gap * textScale;
+    const top = y, height = (t.fixed ?? 0) + (t.scaled ?? 0) * textScale;
+    y += height;
+    return { top, height };
+  });
+  const top = placed[0]?.top ?? y;
+  return {
+    height: y + margin.b * textScale + (slider ? SLIDER_ROOM : 0),
+    left: margin.l * textScale,
+    right: margin.r * textScale,
+    frame: { top, height: y - top },
+    tracks: placed,
+  };
+}
+
+/** The axes of track t: grid t + 1, behind the frame. */
+export const trackAxes = (t: number): SeriesAxes => ({ xAxisIndex: t + 1, yAxisIndex: t + 1 });
+/** The frame's axes: the visible category axis and a hidden value axis from 0 to 1. */
+export const FRAME_AXES: Readonly<SeriesAxes> = { xAxisIndex: 0, yAxisIndex: 0 };
+
+/** The grids and axes of a chart of several tracks, from one layout and one label list, so the tracks cannot drift apart:
+ *  grid 0 is the frame, with the labels (under the last track) and the only axis pointer, over a hidden 0-to-1 value axis;
+ *  grid t + 1 is track t, with a hidden category axis over the same labels and `y[t]`, its own value axis. */
+export function tracksOption(env: OptionEnv, { layout, labels, format, y }: {
+  layout: TrackLayout; labels: readonly string[]; format: (label: string) => string; y: readonly ValueAxis[];
+}): { grid: GridOption[]; xAxis: XAXisComponentOption[]; yAxis: YAXisComponentOption[] } {
+  if (y.length !== layout.tracks.length) throw new Error(`tracksOption: ${layout.tracks.length} tracks, ${y.length} value axes`);
+  const side = { left: layout.left, right: layout.right };
+  return {
+    grid: [{ ...side, ...layout.frame }, ...layout.tracks.map(t => ({ ...side, ...t }))],
+    xAxis: [
+      { ...categoryAxis(env, labels, format), gridIndex: 0 },
+      ...layout.tracks.map((_, t): CategoryAxis => ({ type: "category", gridIndex: t + 1, data: [...labels], show: false, axisPointer: { show: false } })),
+    ],
+    yAxis: [{ type: "value", gridIndex: 0, min: 0, max: 1, show: false }, ...y.map((a, t) => ({ ...a, gridIndex: t + 1 }))],
+  };
+}
+
+/** The selected point's mark: a one-item custom series on the frame, drawn over the grid lines and under the marks (z 1). It
+ *  frames the point's whole band over the frame's height, inset by half its line, so it reads apart from the reading band,
+ *  which has no frame: tinted in a 1.5px accent frame in the theme, unfilled in a 2px frame in forced colors, where the
+ *  accent is Highlight. A point outside the zoom window is filtered out and draws nothing. */
+export const selectionMark = (env: OptionEnv, { index }: { index: number }): CustomSeriesOption => ({
+  type: "custom",
+  id: "selected",
+  ...FRAME_AXES,
+  data: [[index, 0]],
+  encode: { x: 0, y: 1 },
+  silent: true,
+  z: 1,
+  renderItem: (params, api) => {
+    const frame = params.coordSys as unknown as { y: number; height: number };
+    const [cx] = api.coord([api.value(0), 0]) as [number, number];
+    const band = (api.size!([1, 0]) as number[])[0]!, line = env.forced ? 2 : 1.5;
+    return {
+      type: "rect",
+      shape: { x: cx - band / 2 + line / 2, y: frame.y + line / 2, width: band - line, height: frame.height - line },
+      style: { fill: env.forced ? "none" : env.ink.tint, stroke: env.ink.accent, lineWidth: line },
+    };
+  },
+});
+
+/** A dot on a line's point: solid, or hollow (a surface center inside a ring of the line's color). */
+export type Dot = "solid" | "hollow";
+
+/** A line with no symbols, broken at a null, not clipped and deaf to the pointer, in its resolved color; `dots(i)` puts a
+ *  solid or a hollow dot on point i. Under forced colors the line is the text ink (CanvasText): it is the only line on its
+ *  track, told apart by its track and its legend key, and a theme color has no sure contrast on the user's Canvas. */
+export function lineSeries(env: OptionEnv, { id, data, color, dots, xAxisIndex, yAxisIndex }: {
+  id: string; data: readonly (number | null)[]; color: string; dots?: (i: number) => Dot | undefined;
+} & SeriesAxes): LineSeriesOption {
+  const ink = env.forced ? env.ink.text : env.color(color), surface = env.ink.surface;
+  const dot: Record<Dot, { symbolSize: number; itemStyle: { color: string; borderColor: string; borderWidth: number } }> = {
+    solid: { symbolSize: 5, itemStyle: { color: ink, borderColor: surface, borderWidth: 1.5 } },
+    hollow: { symbolSize: 6, itemStyle: { color: surface, borderColor: ink, borderWidth: 1.5 } },
+  };
+  return {
+    type: "line",
+    id,
+    xAxisIndex,
+    yAxisIndex,
+    data: data.map((v, i) => {
+      const d = v == null ? undefined : dots?.(i);
+      return d ? { value: v, symbol: "circle", ...dot[d] } : v;
+    }),
+    // No symbol but on the points `dots` names, and every one of those: "auto" would thin them on a long axis.
+    symbol: "none",
+    showAllSymbol: true,
+    connectNulls: false,
+    clip: false,
+    silent: true,
+    lineStyle: { color: ink, width: 1.75, join: "round", cap: "round" },
+    itemStyle: { color: ink },
+    emphasis: { disabled: true },
+  };
+}
+
+/** A line that draws nothing, for the slider's faint trend: the slider draws the first line on an axis it drives, so this
+ *  one, listed before any other line, makes the trend these values (such as the bars' totals) and not another line's.
+ *  ECharts still writes its path, so it is transparent too: with no color it would take one of the default palette's. */
+export const sliderTrend = (data: readonly number[], axes: SeriesAxes): LineSeriesOption => ({
+  type: "line",
+  id: "trend",
+  ...axes,
+  data: [...data],
+  symbol: "none",
+  showSymbol: false,
+  silent: true,
+  lineStyle: { color: "transparent", opacity: 0 },
+  itemStyle: { color: "transparent" },
+  emphasis: { disabled: true },
+});
 
 /** A slider handle: a bar with round corners, 8 by 20, drawn at the slider's height. */
 const HANDLE = "path://M2,0h4a2,2,0,0,1,2,2v16a2,2,0,0,1-2,2h-4a2,2,0,0,1-2-2v-16a2,2,0,0,1,2-2Z";
@@ -92,10 +244,13 @@ const TREND = (env: OptionEnv) => ({ lineStyle: { color: env.ink.muted, width: .
  *  The days shown are tinted with the accent between two solid accent handles, in a muted frame, so the slider shows it can
  *  be dragged and where its window is.
  *  Its fixed id lets a redraw merge into it, so the days shown survive a theme change (the wrapper replaces dataZoom, so
- *  an option without the slider removes it); with no id the redraw would make a new slider and show every point again. */
+ *  an option without the slider removes it); with no id the redraw would make a new slider and show every point again.
+ *  It drives every x axis: with none named ECharts zooms the first only, and a chart of several tracks would zoom its
+ *  frame and leave its tracks. With one x axis this is the same slider. */
 export const zoomSlider = (env: OptionEnv): SliderDataZoomComponentOption => ({
   type: "slider",
   id: "zoom",
+  xAxisIndex: "all",
   height: 20,
   bottom: 4,
   showDetail: false,

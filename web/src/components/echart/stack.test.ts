@@ -130,6 +130,14 @@ describe("stackSeries", () => {
     for (const c of g.children) expect([c.shape.x, c.shape.width]).toEqual([130, 20]);
   });
 
+  it("gives the width rule each point's index, so a point can take a width of its own", () => {
+    const seen: [number, number][] = [];
+    const s = stackSeries({ kinds, values: shares, hatched: () => false, env: env(), width: (band, i) => (seen.push([band, i]), i === 3 ? band / 2 : band) });
+    expect(draw(s, 0)!.children[0]!.shape.width).toBe(40);
+    expect(draw(s, 3)!.children[0]!.shape.width).toBe(20);
+    expect(seen).toEqual([[40, 0], [40, 3]]);
+  });
+
   it("draws nothing for a day of zeros, and skips a zero segment", () => {
     const s = stackSeries({ kinds, values: shares, hatched: () => true, env: env() });
     expect(draw(s, 2)).toBeNull();
