@@ -61,7 +61,7 @@ export interface RateModel {
   titles: { rate: string; bars: string };
   /** The index of the selected point (`v.at`) when it can be selected; else null. */
   selected: number | null;
-  /** Whether the chart can be zoomed, with the slider under it: ZOOM_FROM points or more. */
+  /** Whether the chart can be zoomed, with the slider under it: ZOOM_FROM points or more, and a chart drawn (not `bare`). */
   zoom: boolean;
   /** Per point, how many buckets (days or weeks) it stands for: more than 1 for a folded stretch. */
   span: number[];
@@ -104,6 +104,7 @@ export function rateModel(m: Model, v: View, f: Filtered, vt: ViewTypes, fixes: 
   }
   const at = v.at ? pts.findIndex(p => p.k === v.at && selectable(p)) : -1;
   const per = week ? 7 : 1, line = cat ? typeColor(cat, vt) : "var(--text-primary)";
+  const bare = !pts.some(p => p.c) ? "empty" : !pts.some(p => p.e) ? "noErrors" : null;
   return {
     week, pts, rates, drawn: rates.map(r => (r == null ? null : Math.min(r, rate.max))), low, rate,
     count: { max: Math.ceil(e0 / eStep) * eStep, step: eStep },
@@ -113,9 +114,9 @@ export function rateModel(m: Model, v: View, f: Filtered, vt: ViewTypes, fixes: 
       rate: cat ? `${shortLabel(m.cats[cat]!.label)} rate, % of tool calls` : "Error rate, % of tool calls",
       bars: `Failed calls per ${v.gran}, by type`,
     },
-    selected: at < 0 ? null : at, zoom: pts.length >= ZOOM_FROM,
+    selected: at < 0 ? null : at, zoom: !bare && pts.length >= ZOOM_FROM,
     span: pts.map(p => (p.to ? Math.round((+toDate(p.to) - +toDate(p.k)) / DAY / per) + 1 : 1)),
-    bare: !pts.some(p => p.c) ? "empty" : !pts.some(p => p.e) ? "noErrors" : null,
+    bare,
     view: [v.range, v.gran, v.project, v.source, v.sub, v.noise, pts[0]?.k, ...pts.flatMap(p => (p.to ? [`${p.k}-${p.to}`] : []))].join("|"),
   };
 }

@@ -645,14 +645,17 @@ describe("ErrorsPage", () => {
     const mark = () => userEvent.click(screen.getByRole("button", { name: "Mark fix applied" }));
 
     it("leaves the chart's keys alone once the last visible type is muted out and no errors are left to draw", async () => {
-      serve();
-      history.replaceState(null, "", "/errors?range=7&cat=x&noise=0");
+      // Thirty days with tool calls: enough points for a zoom, had a chart been drawn.
+      serve().payload = { ...fixture, calls: dayRange("2026-10-07", "2026-11-05").map(d => [d, "foo", 10, 0, "claude"]) };
+      history.replaceState(null, "", "/errors?range=30&cat=x&noise=0");
       await page();
       await userEvent.click(muteBtn());
       await waitFor(() => expect(document.querySelector("#chart .empty")).toBeTruthy());
       const chart = document.getElementById("chart")!, hash = location.search;
       expect(fakeECharts.live).toEqual([]); // the message's box, with no chart in it
       expect(chart.textContent).toMatch(/No failed tool calls in this range/);
+      expect(chart.getAttribute("aria-label")).not.toContain("zoom"); // no chart, no zoom to name
+      expect(document.getElementById("chartHint")!.textContent).not.toContain("zoom");
       chart.focus();
       // React reports an error thrown in a handler on the window, not out of fireEvent.
       const thrown: string[] = [], onError = (e: ErrorEvent) => { e.preventDefault(); thrown.push(e.message); };

@@ -142,6 +142,9 @@ describe("rateModel", () => {
     expect(model(quiet).bare).toBeNull();
     expect(model(payload([["2026-11-05", 0, {}]])).bare).toBe("empty");
     expect(model(payload([["2026-11-05", 40, {}]])).bare).toBe("noErrors");
+    // Nothing drawn, nothing to zoom, at 14 points or more too.
+    const calm = model(payload(long.calls.map(c => [c[0], c[2], {}] as Row)));
+    expect([calm.pts.length, calm.bare, calm.zoom]).toEqual([20, "noErrors", false]);
   });
 
   it("keeps the view through the type, the selection, the fixes and a new last point, not through what moves the points", () => {
