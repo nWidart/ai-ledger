@@ -10,10 +10,6 @@ import { appLink, errorsHref, openToolSheet, sessName, shortId, utc } from "./se
 
 export const TOOL_KINDS: Record<ToolKind, string> = { tool: "Tool", mcp: "MCP server", skill: "Skill" };
 
-/** Calls and the share that failed, as table cells; a failure rate over 10% reads as bad. */
-export const RateCells = ({ r, n }: { r: { failure_rate: number | null }; n: number }) =>
-  <><td className="num">{num(n)}</td><td className={"num" + ((r.failure_rate ?? 0) > .1 ? " bad" : "")}>{pct(r.failure_rate, 1)}</td></>;
-
 /** "up from 5.0%" against the previous period; worse marks a move that way as bad ("unchanged" when both read the same). */
 export function Vs({ cur, prev, fmt, worse }: { cur: number | null; prev: number | null | undefined; fmt: (n: number) => string; worse?: "up" | "down" }) {
   if (cur == null || prev == null) return null;

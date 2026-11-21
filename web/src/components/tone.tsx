@@ -18,17 +18,27 @@ export function toneOf(v: number | null, med: number | null, better: "up" | "dow
   if (r < 1.5 && r > 1 / 1.5) return null;
   return { worse: (r > 1) === (better === "down"), above: r > 1, by: mult(r > 1 ? r : 1 / r) };
 }
+export interface ToneInput { v: number | null; med: number | null; better: "up" | "down"; kind: Kind; medText: string; zeroText?: string }
+/** What a tinted cell adds to its number: its classes and title (how far from the median), and the marker and screen-reader
+ *  text after the number; null when the value sits near the median. */
+export function tint({ v, med, better, kind, medText, zeroText }: ToneInput): { className: string; title: string; mark: ReactNode } | null {
+  const t = toneOf(v, med, better, kind);
+  if (!t) return null;
+  const what = t.zero ? `${zeroText || `zero; median ${medText}`}, ${t.worse ? "worse" : "better"}`
+    : `${t.above ? "above" : "below"} the median (${medText}) by ${t.by}, ${t.worse ? "worse" : "better"}`;
+  return { className: `tone ${t.worse ? "worse" : "better"}`, title: what,
+    mark: <><span className="mk" aria-hidden="true">{t.above ? "▲" : "▼"}</span><span className="sr">, {what}</span></> };
+}
+
 /** A number cell tinted, weighted and marked when far from the median, so color is never the only cue. */
-export function Toned({ v, text, med, better, kind, medText, zeroText, opt }: {
-  v: number | null; text: ReactNode; med: number | null; better: "up" | "down"; kind: Kind; medText: string; zeroText?: string;
+export function Toned({ text, opt, ...tone }: ToneInput & {
+  text: ReactNode;
   /** A column a narrow table may hide. */
   opt?: boolean;
 }) {
-  const t = toneOf(v, med, better, kind), num = opt ? "num opt" : "num";
+  const t = tint(tone), num = opt ? "num opt" : "num";
   if (!t) return <td className={num}>{text}</td>;
-  const what = t.zero ? `${zeroText || `zero; median ${medText}`}, ${t.worse ? "worse" : "better"}`
-    : `${t.above ? "above" : "below"} the median (${medText}) by ${t.by}, ${t.worse ? "worse" : "better"}`;
-  return <td className={`${num} tone ${t.worse ? "worse" : "better"}`} title={what}>{text}<span className="mk" aria-hidden="true">{t.above ? "▲" : "▼"}</span><span className="sr">, {what}</span></td>;
+  return <td className={`${num} ${t.className}`} title={t.title}>{text}{t.mark}</td>;
 }
 /** The key to the tints; note says which projects the median covers when it is not all of them. */
 export const ToneKey = ({ note }: { note?: string }) => <div className="tone-key">Compared with the median project{note ? ` (${note})` : ""}: <span className="worse">worse ▲▼</span><span className="better">better ▲▼</span>
